@@ -1,0 +1,17 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# 编辑器 / 工具本地配置
+.claude/settings.local.json
+.vscode/*.local
+*.swp
+
+# Obsidian 工作区本地状态（保留 vault 配置，忽略个人工作区，任意层级）
+**/workspace.json
+**/workspace-mobile.json
+
+# 日志 / 临时
+*.log
+tmp/
+.tmp/
