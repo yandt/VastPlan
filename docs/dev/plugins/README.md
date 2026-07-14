@@ -8,7 +8,7 @@
 
 - [x] [`插件清单规范.md`](插件清单规范.md)——manifest 格式、贡献点（contribution points）模型
 - [x] [`插件宿主协议.md`](插件宿主协议.md)——宿主↔插件的握手/贡献注册/调用/事件/生命周期协议
-- [ ] `契约字段.md`——CallContext / CallTarget / CallResult / CallEvent 不可变契约（协议的承载物）
+- [x] [`契约字段.md`](契约字段.md)——CallContext / CallTarget / CallResult / CallEvent 不可变契约（协议的承载物）
 - [ ] `插件生命周期.md`——安装 / 激活 / 停用 / 卸载 / 升级
 - [ ] ~~后端隔离与沙箱~~——已废弃（基于第三方不可信代码的误解，第一方插件不需要；第三方开放时再议）
 - [ ] `前端宿主与通信.md`——插件 UI 的加载、隔离与跨端通信
