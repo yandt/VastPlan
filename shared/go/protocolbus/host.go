@@ -74,7 +74,7 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 	}
 
 	// 插件把监听地址经 stdout 回报宿主（go-plugin 同款握手）
-	addr, err := readAddr(stdout)
+	addr, err := readAddr(stdout, addrReportTimeout)
 	if err != nil {
 		_ = cmd.Process.Kill()
 		return nil, err
@@ -200,8 +200,13 @@ func (h *Host) Close(p *PluginProcess) error {
 	return nil
 }
 
+// addrReportTimeout 等待插件回报地址的上限：插件卡住时宿主必须能脱身，
+// 不能被一个坏插件永久拖住（ADR-0004 故障隔离的前提）。
+const addrReportTimeout = 10 * time.Second
+
 // readAddr 读插件经 stdout 回报的监听地址，格式：VASTPLAN_PLUGIN_ADDR|<addr>
-func readAddr(stdout interface{ Read([]byte) (int, error) }) (string, error) {
+// timeout 作参数传入而非硬编码，使超时分支可被快速测试覆盖。
+func readAddr(stdout interface{ Read([]byte) (int, error) }, timeout time.Duration) (string, error) {
 	type result struct {
 		addr string
 		err  error
@@ -221,8 +226,8 @@ func readAddr(stdout interface{ Read([]byte) (int, error) }) (string, error) {
 	select {
 	case r := <-ch:
 		return r.addr, r.err
-	case <-time.After(10 * time.Second):
-		return "", fmt.Errorf("等待插件回报地址超时")
+	case <-time.After(timeout):
+		return "", fmt.Errorf("等待插件回报地址超时（%s）", timeout)
 	}
 }
 
