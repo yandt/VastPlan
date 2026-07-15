@@ -43,3 +43,4 @@
 - [ADR-0010 插件服务与部署编排](ADR-0010-插件服务与部署编排.md)
 - [ADR-0011 组合是通用内核能力（服务/门户/客户端App，RC→APP 改名）](ADR-0011-组合是通用内核能力.md)
 - [ADR-0012 APP 内核运行模型：预编译 + 整体热升级](ADR-0012-APP内核运行模型.md)
+- [ADR-0013 APP 多档能力：桌面完整 runner + 手机 Companion](ADR-0013-APP多档能力与手机Companion.md)
