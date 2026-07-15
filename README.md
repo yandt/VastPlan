@@ -34,7 +34,8 @@
 ./bin/backend-kernel ./bin/com.vastplan.hello-world
 
 # 4. 测试
-go test ./shared/go/...
+./tools/test.sh          # 单元测试（快，日常）
+./tools/test.sh --e2e    # 单元 + E2E（跨进程真实链路）
 ```
 
 预期输出：内核版本 → 扩展点声明 → 握手/协议协商 → **engines 校验** → 贡献注册/激活 →
