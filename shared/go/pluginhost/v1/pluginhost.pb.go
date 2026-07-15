@@ -148,14 +148,18 @@ func (x *Hello) GetSessionId() string {
 	return ""
 }
 
-// 插件→宿主：协商结果 + 自报身份
+// 插件→宿主：协商结果 + 自报身份 + engines 兼容声明
 type HelloAck struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	NegotiatedProto int32                  `protobuf:"varint,1,opt,name=negotiated_proto,json=negotiatedProto,proto3" json:"negotiated_proto,omitempty"`
 	PluginId        string                 `protobuf:"bytes,2,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
 	PluginVersion   string                 `protobuf:"bytes,3,opt,name=plugin_version,json=pluginVersion,proto3" json:"plugin_version,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// 清单 engines：{内核规范ID: SemVer 范围}，如 {"backend": "^0.1"}。
+	// 宿主用它校验自身版本是否满足（ADR-0017 §4 强制点 2）；
+	// 未声明本内核 → fail-closed 拒绝装载。
+	Engines       map[string]string `protobuf:"bytes,4,rep,name=engines,proto3" json:"engines,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *HelloAck) Reset() {
@@ -207,6 +211,13 @@ func (x *HelloAck) GetPluginVersion() string {
 		return x.PluginVersion
 	}
 	return ""
+}
+
+func (x *HelloAck) GetEngines() map[string]string {
+	if x != nil {
+		return x.Engines
+	}
+	return nil
 }
 
 type Contribution struct {
@@ -585,11 +596,15 @@ const file_pluginhost_v1_pluginhost_proto_rawDesc = "" +
 	"\x0eproto_versions\x18\x01 \x03(\x05R\rprotoVersions\x12\x14\n" +
 	"\x05magic\x18\x02 \x01(\tR\x05magic\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x03 \x01(\tR\tsessionId\"y\n" +
+	"session_id\x18\x03 \x01(\tR\tsessionId\"\xfe\x01\n" +
 	"\bHelloAck\x12)\n" +
 	"\x10negotiated_proto\x18\x01 \x01(\x05R\x0fnegotiatedProto\x12\x1b\n" +
 	"\tplugin_id\x18\x02 \x01(\tR\bpluginId\x12%\n" +
-	"\x0eplugin_version\x18\x03 \x01(\tR\rpluginVersion\"\x8c\x01\n" +
+	"\x0eplugin_version\x18\x03 \x01(\tR\rpluginVersion\x12G\n" +
+	"\aengines\x18\x04 \x03(\v2-.vastplan.pluginhost.v1.HelloAck.EnginesEntryR\aengines\x1a:\n" +
+	"\fEnginesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8c\x01\n" +
 	"\fContribution\x12'\n" +
 	"\x0fextension_point\x18\x01 \x01(\tR\x0eextensionPoint\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x1a\n" +
@@ -640,7 +655,7 @@ func file_pluginhost_v1_pluginhost_proto_rawDescGZIP() []byte {
 }
 
 var file_pluginhost_v1_pluginhost_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pluginhost_v1_pluginhost_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_pluginhost_v1_pluginhost_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_pluginhost_v1_pluginhost_proto_goTypes = []any{
 	(Lifecycle_Op)(0),      // 0: vastplan.pluginhost.v1.Lifecycle.Op
 	(*Hello)(nil),          // 1: vastplan.pluginhost.v1.Hello
@@ -652,29 +667,31 @@ var file_pluginhost_v1_pluginhost_proto_goTypes = []any{
 	(*InvokeResponse)(nil), // 7: vastplan.pluginhost.v1.InvokeResponse
 	(*Lifecycle)(nil),      // 8: vastplan.pluginhost.v1.Lifecycle
 	(*LifecycleAck)(nil),   // 9: vastplan.pluginhost.v1.LifecycleAck
-	(*v1.CallTarget)(nil),  // 10: vastplan.contract.v1.CallTarget
-	(*v1.CallContext)(nil), // 11: vastplan.contract.v1.CallContext
-	(*v1.CallResult)(nil),  // 12: vastplan.contract.v1.CallResult
+	nil,                    // 10: vastplan.pluginhost.v1.HelloAck.EnginesEntry
+	(*v1.CallTarget)(nil),  // 11: vastplan.contract.v1.CallTarget
+	(*v1.CallContext)(nil), // 12: vastplan.contract.v1.CallContext
+	(*v1.CallResult)(nil),  // 13: vastplan.contract.v1.CallResult
 }
 var file_pluginhost_v1_pluginhost_proto_depIdxs = []int32{
-	3,  // 0: vastplan.pluginhost.v1.Declaration.contributions:type_name -> vastplan.pluginhost.v1.Contribution
-	10, // 1: vastplan.pluginhost.v1.InvokeRequest.target:type_name -> vastplan.contract.v1.CallTarget
-	11, // 2: vastplan.pluginhost.v1.InvokeRequest.context:type_name -> vastplan.contract.v1.CallContext
-	12, // 3: vastplan.pluginhost.v1.InvokeResponse.result:type_name -> vastplan.contract.v1.CallResult
-	0,  // 4: vastplan.pluginhost.v1.Lifecycle.op:type_name -> vastplan.pluginhost.v1.Lifecycle.Op
-	1,  // 5: vastplan.pluginhost.v1.PluginHost.Handshake:input_type -> vastplan.pluginhost.v1.Hello
-	4,  // 6: vastplan.pluginhost.v1.PluginHost.Declare:input_type -> vastplan.pluginhost.v1.DeclareRequest
-	6,  // 7: vastplan.pluginhost.v1.PluginHost.Invoke:input_type -> vastplan.pluginhost.v1.InvokeRequest
-	8,  // 8: vastplan.pluginhost.v1.PluginHost.Lifecycle:input_type -> vastplan.pluginhost.v1.Lifecycle
-	2,  // 9: vastplan.pluginhost.v1.PluginHost.Handshake:output_type -> vastplan.pluginhost.v1.HelloAck
-	5,  // 10: vastplan.pluginhost.v1.PluginHost.Declare:output_type -> vastplan.pluginhost.v1.Declaration
-	7,  // 11: vastplan.pluginhost.v1.PluginHost.Invoke:output_type -> vastplan.pluginhost.v1.InvokeResponse
-	9,  // 12: vastplan.pluginhost.v1.PluginHost.Lifecycle:output_type -> vastplan.pluginhost.v1.LifecycleAck
-	9,  // [9:13] is the sub-list for method output_type
-	5,  // [5:9] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	10, // 0: vastplan.pluginhost.v1.HelloAck.engines:type_name -> vastplan.pluginhost.v1.HelloAck.EnginesEntry
+	3,  // 1: vastplan.pluginhost.v1.Declaration.contributions:type_name -> vastplan.pluginhost.v1.Contribution
+	11, // 2: vastplan.pluginhost.v1.InvokeRequest.target:type_name -> vastplan.contract.v1.CallTarget
+	12, // 3: vastplan.pluginhost.v1.InvokeRequest.context:type_name -> vastplan.contract.v1.CallContext
+	13, // 4: vastplan.pluginhost.v1.InvokeResponse.result:type_name -> vastplan.contract.v1.CallResult
+	0,  // 5: vastplan.pluginhost.v1.Lifecycle.op:type_name -> vastplan.pluginhost.v1.Lifecycle.Op
+	1,  // 6: vastplan.pluginhost.v1.PluginHost.Handshake:input_type -> vastplan.pluginhost.v1.Hello
+	4,  // 7: vastplan.pluginhost.v1.PluginHost.Declare:input_type -> vastplan.pluginhost.v1.DeclareRequest
+	6,  // 8: vastplan.pluginhost.v1.PluginHost.Invoke:input_type -> vastplan.pluginhost.v1.InvokeRequest
+	8,  // 9: vastplan.pluginhost.v1.PluginHost.Lifecycle:input_type -> vastplan.pluginhost.v1.Lifecycle
+	2,  // 10: vastplan.pluginhost.v1.PluginHost.Handshake:output_type -> vastplan.pluginhost.v1.HelloAck
+	5,  // 11: vastplan.pluginhost.v1.PluginHost.Declare:output_type -> vastplan.pluginhost.v1.Declaration
+	7,  // 12: vastplan.pluginhost.v1.PluginHost.Invoke:output_type -> vastplan.pluginhost.v1.InvokeResponse
+	9,  // 13: vastplan.pluginhost.v1.PluginHost.Lifecycle:output_type -> vastplan.pluginhost.v1.LifecycleAck
+	10, // [10:14] is the sub-list for method output_type
+	6,  // [6:10] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_pluginhost_v1_pluginhost_proto_init() }
@@ -689,7 +706,7 @@ func file_pluginhost_v1_pluginhost_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pluginhost_v1_pluginhost_proto_rawDesc), len(file_pluginhost_v1_pluginhost_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

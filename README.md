@@ -27,18 +27,32 @@
 # 1. 契约 codegen（改了 proto/ 后必跑）
 ./tools/gen-proto.sh
 
-# 2. 构建
-go build -o bin/hello-world ./plugins/com.vastplan.hello-world/backend
-go build -o bin/backend-kernel ./kernels/backend
+# 2. 构建（内核版本从 kernels/<name>/VERSION 经 ldflags 注入）
+./tools/build.sh
 
 # 3. 跑 MVP 闭环：内核拉起插件并调用它
-./bin/backend-kernel ./bin/hello-world
+./bin/backend-kernel ./bin/com.vastplan.hello-world
 
 # 4. 测试
 go test ./shared/go/...
 ```
 
-预期输出：扩展点声明 → 插件握手/注册/激活 → `greet`/`echo` 调用成功 → 参数错误与未实现操作各自返回**应用层错误**（与传输层错误区分）→ 未注册能力被拒 → 贡献摘除。
+预期输出：内核版本 → 扩展点声明 → 握手/协议协商 → **engines 校验** → 贡献注册/激活 →
+`greet`/`echo` 调用成功 → 参数错误与未实现操作各自返回**应用层错误**（与传输层错误区分）
+→ 未注册能力被拒 → 贡献摘除。
+
+验证 fail-closed（不兼容内核应被拒绝装载）：
+
+```bash
+go build -ldflags "-X main.version=0.2.0" -o /tmp/k ./kernels/backend
+/tmp/k ./bin/com.vastplan.hello-world   # → 内核 backend@0.2.0 不满足插件要求的 "^0.1"
+```
+
+## 版本机制
+
+见 [ADR-0017](docs/dev/decisions/ADR-0017-版本定义与兼容性机制.md)。要点：内核/插件用 SemVer（真源分别是
+`kernels/<name>/VERSION` 与 `vastplan.plugin.json#version`），协议用单调整数（握手取交集），
+契约用包级 `vN`；兼容性在**五处 fail-closed 强制**（握手/激活/注册/调用/装配）。
 
 ## 代码布局
 

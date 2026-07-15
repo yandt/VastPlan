@@ -24,11 +24,15 @@ message Hello {
   string session_id = 3;             // 宿主签发的会话票据：审计与回调鉴权
 }
 
-// 插件→宿主：协商结果 + 自报身份
+// 插件→宿主：协商结果 + 自报身份 + engines 兼容声明
 message HelloAck {
   int32 negotiated_proto = 1;
   string plugin_id = 2;
   string plugin_version = 3;
+  // 清单 engines：{内核规范ID: SemVer 范围}，如 {"backend": "^0.1"}。
+  // 宿主用它校验自身版本是否满足（ADR-0017 §4 强制点 2）；
+  // 未声明本内核 → fail-closed 拒绝装载。
+  map<string, string> engines = 4;
 }
 
 // ── 贡献声明与注册（第二章 §2.5）─────────────────────────

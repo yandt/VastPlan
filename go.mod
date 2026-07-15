@@ -3,6 +3,7 @@ module github.com/yandt/VastPlan
 go 1.26.1
 
 require (
+	github.com/Masterminds/semver/v3 v3.5.0
 	google.golang.org/grpc v1.82.0
 	google.golang.org/protobuf v1.36.11
 )

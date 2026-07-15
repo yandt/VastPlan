@@ -14,13 +14,8 @@ import (
 
 	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
 	pluginhostv1 "github.com/yandt/VastPlan/shared/go/pluginhost/v1"
+	"github.com/yandt/VastPlan/shared/go/protocol"
 )
-
-// MagicCookie 必须与宿主一致，否则握手被拒（fail-closed）。
-const MagicCookie = "VASTPLAN_PLUGIN_V1"
-
-// ProtocolVersion 本 SDK 支持的协议版本集。
-var ProtocolVersion = []int32{1}
 
 // Handler 处理一次扩展点调用：收 CallContext + payload，回 CallResult + payload。
 type Handler func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error)
@@ -38,15 +33,20 @@ type Contribution struct {
 // Plugin 一个插件进程。
 type Plugin struct {
 	ID      string
-	Version string
+	Version string // SemVer，单一真源 = vastplan.plugin.json#version（ADR-0017 §1）
+	// Engines 清单 engines：{内核规范ID: SemVer 范围}。宿主据此校验自身版本（ADR-0017 §4）。
+	Engines map[string]string
 
 	contribs []Contribution
 	// (extensionPoint, id, operation) -> Handler
 	routes map[string]Handler
 }
 
-func New(id, version string) *Plugin {
-	return &Plugin{ID: id, Version: version, routes: map[string]Handler{}}
+func New(id, version string, engines map[string]string) *Plugin {
+	if engines == nil {
+		engines = map[string]string{}
+	}
+	return &Plugin{ID: id, Version: version, Engines: engines, routes: map[string]Handler{}}
 }
 
 // Contribute 登记一条贡献（在 Serve 前调用）。
@@ -62,7 +62,7 @@ func routeKey(ep, id, op string) string { return ep + "|" + id + "|" + op }
 // Serve 启动插件 gRPC 服务并把监听地址经 stdout 回报宿主，然后阻塞。
 func (p *Plugin) Serve() error {
 	// magic 校验：宿主经 env 注入，防止被当普通程序误启
-	if os.Getenv("VASTPLAN_PLUGIN_MAGIC") != MagicCookie {
+	if os.Getenv(protocol.MagicEnvKey) != protocol.MagicCookie {
 		return fmt.Errorf("magic cookie 不匹配：本程序是 VastPlan 插件，须由宿主拉起")
 	}
 
@@ -75,7 +75,7 @@ func (p *Plugin) Serve() error {
 	pluginhostv1.RegisterPluginHostServer(srv, &server{p: p})
 
 	// 回报监听地址（宿主经 stdout 读取，go-plugin 同款握手）
-	fmt.Printf("VASTPLAN_PLUGIN_ADDR|%s\n", lis.Addr().String())
+	fmt.Printf("%s%s\n", protocol.AddrPrefix, lis.Addr().String())
 	os.Stdout.Sync()
 
 	return srv.Serve(lis)
@@ -90,26 +90,20 @@ type server struct {
 }
 
 func (s *server) Handshake(ctx context.Context, in *pluginhostv1.Hello) (*pluginhostv1.HelloAck, error) {
-	if in.Magic != MagicCookie {
+	if in.Magic != protocol.MagicCookie {
 		return nil, fmt.Errorf("magic cookie 不匹配")
 	}
-	// 版本协商：取交集里最高的；无交集则拒绝（fail-closed）
-	best := int32(-1)
-	for _, hv := range in.ProtoVersions {
-		for _, pv := range ProtocolVersion {
-			if hv == pv && hv > best {
-				best = hv
-			}
-		}
-	}
+	// 版本协商：取交集里最高的；无交集则拒绝（fail-closed，ADR-0017 §4 强制点 1）
+	best := protocol.Negotiate(in.ProtoVersions, protocol.SupportedVersions)
 	if best < 0 {
-		return nil, fmt.Errorf("协议版本无交集：宿主 %v，插件 %v", in.ProtoVersions, ProtocolVersion)
+		return nil, fmt.Errorf("协议版本无交集：宿主 %v，插件 %v", in.ProtoVersions, protocol.SupportedVersions)
 	}
 	s.sessionID = in.SessionId
 	return &pluginhostv1.HelloAck{
 		NegotiatedProto: best,
 		PluginId:        s.p.ID,
 		PluginVersion:   s.p.Version,
+		Engines:         s.p.Engines, // 宿主据此校验自身版本
 	}, nil
 }
 

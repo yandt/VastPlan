@@ -21,6 +21,13 @@ import (
 	"github.com/yandt/VastPlan/shared/go/registry"
 )
 
+// KernelName 本内核的规范 ID（ADR-0015）。
+const KernelName = "backend"
+
+// version 由构建时注入：-ldflags "-X main.version=$(cat kernels/backend/VERSION)"
+// 单一真源是 kernels/backend/VERSION（ADR-0017 §1）；devel 仅用于未经构建脚本的本地跑。
+var version = "0.0.0-devel"
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "用法: %s <插件可执行文件路径>\n", filepath.Base(os.Args[0]))
@@ -31,6 +38,8 @@ func main() {
 	logf := func(format string, args ...any) { log.Printf("[kernel] "+format, args...) }
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	logf("内核 %s@%s 启动", KernelName, version)
 
 	// ── 1. 内核声明扩展点（系统架构 §1.5；契约见第四章）────────
 	reg := registry.New()
@@ -48,7 +57,7 @@ func main() {
 	logf("已声明 %d 个扩展点", len(reg.Points()))
 
 	// ── 2. 拉起插件：握手 → 贡献注册 → 激活 ──────────────────
-	host := protocolbus.NewHost(reg, logf)
+	host := protocolbus.NewHost(KernelName, version, reg, logf)
 	p, err := host.Launch(ctx, pluginBin)
 	if err != nil {
 		log.Fatalf("[kernel] 装载插件失败: %v", err)

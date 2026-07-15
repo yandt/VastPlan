@@ -20,14 +20,9 @@ import (
 
 	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
 	pluginhostv1 "github.com/yandt/VastPlan/shared/go/pluginhost/v1"
+	"github.com/yandt/VastPlan/shared/go/protocol"
 	"github.com/yandt/VastPlan/shared/go/registry"
 )
-
-// ProtocolVersion 宿主支持的协议版本集（握手取交集，无交集拒绝 = fail-closed）。
-var ProtocolVersion = []int32{1}
-
-// MagicCookie 防止误把普通进程当插件（第二章 §2.2）。
-const MagicCookie = "VASTPLAN_PLUGIN_V1"
 
 // PluginProcess 宿主侧持有的一个已接入插件。
 type PluginProcess struct {
@@ -42,15 +37,20 @@ type PluginProcess struct {
 
 // Host 插件宿主：拉起插件进程、握手、把贡献接入扩展点注册表、路由调用。
 type Host struct {
+	// KernelName 本内核的规范 ID（backend/frontend/runner/mobile，ADR-0015）。
+	KernelName string
+	// KernelVersion 本内核 SemVer 版本，单一真源 = kernels/<name>/VERSION（ADR-0017 §1）。
+	KernelVersion string
+
 	Registry *registry.Registry
 	Logf     func(format string, args ...any)
 }
 
-func NewHost(r *registry.Registry, logf func(string, ...any)) *Host {
+func NewHost(kernelName, kernelVersion string, r *registry.Registry, logf func(string, ...any)) *Host {
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
-	return &Host{Registry: r, Logf: logf}
+	return &Host{KernelName: kernelName, KernelVersion: kernelVersion, Registry: r, Logf: logf}
 }
 
 // Launch 拉起插件进程并完成握手 + 贡献注册 + 激活。
@@ -61,7 +61,7 @@ func NewHost(r *registry.Registry, logf func(string, ...any)) *Host {
 //	→ RegisterContributions → 注册进 Registry → Lifecycle{ACTIVATE}
 func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, error) {
 	cmd := exec.Command(binPath)
-	cmd.Env = append(cmd.Environ(), "VASTPLAN_PLUGIN_MAGIC="+MagicCookie)
+	cmd.Env = append(cmd.Environ(), protocol.MagicEnvKey+"="+protocol.MagicCookie)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -88,11 +88,11 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 	}
 	client := pluginhostv1.NewPluginHostClient(conn)
 
-	// 1) 握手：magic 校验 + 版本协商 + 下发会话票据
+	// 1) 握手：magic 校验 + 版本协商 + 下发会话票据（ADR-0017 §4 强制点 1）
 	sessionID := newSessionID()
 	ack, err := client.Handshake(ctx, &pluginhostv1.Hello{
-		ProtoVersions: ProtocolVersion,
-		Magic:         MagicCookie,
+		ProtoVersions: protocol.SupportedVersions,
+		Magic:         protocol.MagicCookie,
 		SessionId:     sessionID,
 	})
 	if err != nil {
@@ -101,10 +101,17 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 		return nil, fmt.Errorf("握手失败: %w", err)
 	}
 	// 无交集即拒绝（fail-closed）
-	if !containsInt32(ProtocolVersion, ack.NegotiatedProto) {
+	if !protocol.Supports(ack.NegotiatedProto) {
 		_ = conn.Close()
 		_ = cmd.Process.Kill()
-		return nil, fmt.Errorf("协议版本无交集：插件回 %d，宿主支持 %v", ack.NegotiatedProto, ProtocolVersion)
+		return nil, fmt.Errorf("协议版本无交集：插件回 %d，宿主支持 %v", ack.NegotiatedProto, protocol.SupportedVersions)
+	}
+
+	// 2) engines 校验：本内核版本须满足插件声明的 SemVer 范围（ADR-0017 §4 强制点 2）
+	if err := protocol.CheckEngine(h.KernelName, h.KernelVersion, ack.Engines[h.KernelName]); err != nil {
+		_ = conn.Close()
+		_ = cmd.Process.Kill()
+		return nil, fmt.Errorf("插件 %s@%s 与内核不兼容: %w", ack.PluginId, ack.PluginVersion, err)
 	}
 
 	p := &PluginProcess{
@@ -115,15 +122,17 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 	}
 	h.Logf("协议版本已协商 v%d，插件=%s@%s，session=%s",
 		ack.NegotiatedProto, ack.PluginId, ack.PluginVersion, sessionID)
+	h.Logf("engines 校验通过：内核 %s@%s 满足插件要求 %q",
+		h.KernelName, h.KernelVersion, ack.Engines[h.KernelName])
 
-	// 2) 贡献声明：插件声明它填充哪些扩展点
+	// 3) 贡献声明：插件声明它填充哪些扩展点
 	decl, err := client.Declare(ctx, &pluginhostv1.DeclareRequest{SessionId: sessionID})
 	if err != nil {
 		_ = h.Close(p)
 		return nil, fmt.Errorf("拉取贡献声明失败: %w", err)
 	}
 
-	// 3) 接入扩展点注册表（非法者拒绝，fail-closed）
+	// 4) 接入扩展点注册表（非法者拒绝，fail-closed；ADR-0017 §4 强制点 3）
 	accepted, rejected := 0, 0
 	for _, c := range decl.Contributions {
 		err := h.Registry.Register(registry.Contribution{
@@ -143,7 +152,7 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 	}
 	h.Logf("贡献注册完成：接受 %d，拒绝 %d", accepted, rejected)
 
-	// 4) 激活
+	// 5) 激活
 	if _, err := client.Lifecycle(ctx, &pluginhostv1.Lifecycle{Op: pluginhostv1.Lifecycle_OP_ACTIVATE}); err != nil {
 		_ = h.Close(p)
 		return nil, fmt.Errorf("激活失败: %w", err)
@@ -202,7 +211,7 @@ func readAddr(stdout interface{ Read([]byte) (int, error) }) (string, error) {
 		sc := bufio.NewScanner(stdout)
 		for sc.Scan() {
 			line := strings.TrimSpace(sc.Text())
-			if a, ok := strings.CutPrefix(line, "VASTPLAN_PLUGIN_ADDR|"); ok {
+				if a, ok := strings.CutPrefix(line, protocol.AddrPrefix); ok {
 				ch <- result{addr: a}
 				return
 			}
@@ -215,15 +224,6 @@ func readAddr(stdout interface{ Read([]byte) (int, error) }) (string, error) {
 	case <-time.After(10 * time.Second):
 		return "", fmt.Errorf("等待插件回报地址超时")
 	}
-}
-
-func containsInt32(s []int32, v int32) bool {
-	for _, x := range s {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }
 
 // newSessionID 签发会话票据（宿主侧），用于审计与插件回调鉴权。
