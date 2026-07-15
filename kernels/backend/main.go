@@ -62,7 +62,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("[kernel] 装载插件失败: %v", err)
 	}
-	defer host.Close(p)
+	// 关闭失败不影响主流程结论（进程退出即回收），但须记录以免静默
+	defer func() {
+		if err := host.Close(p); err != nil {
+			logf("关闭插件时出错: %v", err)
+		}
+	}()
 
 	// ── 3. 调用插件贡献的能力（契约全程透传）──────────────────
 	callCtx := &contractv1.CallContext{
@@ -81,8 +86,8 @@ func main() {
 	}{
 		{"greet", `{"name":"VastPlan"}`},
 		{"echo", `{"text":"契约与协议跑通了"}`},
-		{"greet", `{"name":""}`},        // 触发应用层错误
-		{"nope", `{}`},                  // 触发未实现操作
+		{"greet", `{"name":""}`}, // 触发应用层错误
+		{"nope", `{}`},           // 触发未实现操作
 	} {
 		op := tc.op
 		target := &contractv1.CallTarget{

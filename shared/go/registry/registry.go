@@ -23,7 +23,7 @@ const (
 
 // ExtensionPoint 扩展点定义（内核开放的"可被插件填充的位置"）。
 type ExtensionPoint struct {
-	Name     string   // 如 tool.package（= CallTarget.extension_point）
+	Name     string // 如 tool.package（= CallTarget.extension_point）
 	Dispatch Dispatch
 }
 

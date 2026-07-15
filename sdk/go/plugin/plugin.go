@@ -75,8 +75,9 @@ func (p *Plugin) Serve() error {
 	pluginhostv1.RegisterPluginHostServer(srv, &server{p: p})
 
 	// 回报监听地址（宿主经 stdout 读取，go-plugin 同款握手）
+	// 宿主正阻塞等这一行。无需 Sync：os.Stdout 在 Go 里不带缓冲，Printf 直接落 syscall；
+	// 且此处 stdout 是管道，对管道 fsync 必然返回 EINVAL（曾误把它当致命错误导致插件自杀）。
 	fmt.Printf("%s%s\n", protocol.AddrPrefix, lis.Addr().String())
-	os.Stdout.Sync()
 
 	return srv.Serve(lis)
 }

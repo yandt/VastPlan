@@ -1,0 +1,101 @@
+# CI 门禁（ADR-0019）。
+#
+# 把工程规范里标 🤖 的规则变成真正拦得住人的检查——否则 ADR-0019 只是又一条君子协定。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # 钉死版本：codegen 输出随 protoc/插件版本漂移，不钉住会产生假失败
+  PROTOC_VERSION: "25.3"
+  PROTOC_GEN_GO_VERSION: "v1.36.11"
+  PROTOC_GEN_GO_GRPC_VERSION: "v1.6.2"
+
+jobs:
+  lint:
+    name: 格式与静态检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod # 单一真源：Go 版本随 go.mod
+      - name: golangci-lint（含 gofmt/goimports/vet）
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.1.6
+
+  test:
+    name: 单元测试 + 架构守护
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: 单元测试与架构守护（arch/ 无 build tag，随此步执行）
+        run: go test -race ./...
+
+  e2e:
+    name: E2E（跨进程真实链路）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: E2E
+        run: go test -tags=e2e ./e2e/...
+
+  codegen:
+    name: codegen 与 proto 同步
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: 安装 protoc（钉版本）
+        run: |
+          curl -sSLo /tmp/protoc.zip \
+            "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          unzip -q /tmp/protoc.zip -d /tmp/protoc
+          echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
+      - name: 安装 protoc 插件（钉版本）
+        run: |
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@${PROTOC_GEN_GO_VERSION}
+          go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@${PROTOC_GEN_GO_GRPC_VERSION}
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: 重跑 codegen 后不得有差异
+        run: |
+          ./tools/gen-proto.sh
+          if ! git diff --exit-code -- shared/go; then
+            echo "::error::proto 改了但 codegen 生成物未同步提交。请本地跑 ./tools/gen-proto.sh 并提交产物（ADR-0016 §6）"
+            exit 1
+          fi
+
+  security:
+    name: 漏洞与许可证
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: 漏洞扫描（只对**可达**漏洞报错）
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          "$(go env GOPATH)/bin/govulncheck" ./...
+      - name: 依赖许可证白名单（ADR-0019 §3）
+        run: |
+          go install github.com/google/go-licenses@latest
+          # --ignore 本仓模块：本规则约束的是**第三方依赖**的许可证
+          "$(go env GOPATH)/bin/go-licenses" check ./... \
+            --ignore github.com/yandt/VastPlan \
+            --allowed_licenses=Apache-2.0,MIT,BSD-3-Clause,BSD-2-Clause,ISC,MPL-2.0

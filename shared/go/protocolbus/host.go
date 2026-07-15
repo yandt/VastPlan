@@ -216,7 +216,7 @@ func readAddr(stdout interface{ Read([]byte) (int, error) }, timeout time.Durati
 		sc := bufio.NewScanner(stdout)
 		for sc.Scan() {
 			line := strings.TrimSpace(sc.Text())
-				if a, ok := strings.CutPrefix(line, protocol.AddrPrefix); ok {
+			if a, ok := strings.CutPrefix(line, protocol.AddrPrefix); ok {
 				ch <- result{addr: a}
 				return
 			}

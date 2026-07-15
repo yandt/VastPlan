@@ -11,8 +11,8 @@ import (
 	"log"
 	"time"
 
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
 	sdk "github.com/yandt/VastPlan/sdk/go/plugin"
+	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
 )
 
 // descriptor 对应清单 contributes.backend.tools[0]，与 vastplan.plugin.json 保持一致。

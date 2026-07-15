@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# 提交信息门禁（ADR-0019 §1 / 工程规范 §1）。
+# 安装：./tools/setup-hooks.sh
+#
+# 本地拦截，与 CI 同规则——本地早拦一秒，胜过 PR 上红一次。
+set -euo pipefail
+
+msg_file="$1"
+subject="$(head -1 "$msg_file")"
+
+# 允许 merge/revert 等 git 自动生成的提交
+if [[ "$subject" =~ ^(Merge|Revert) ]]; then
+  exit 0
+fi
+
+fail() {
+  echo "✗ 提交被拒：$1" >&2
+  echo "" >&2
+  echo "  规范：<type>(<scope>): <subject>" >&2
+  echo "  type：feat|fix|docs|test|refactor|perf|build|ci|chore" >&2
+  echo "  详见：docs/dev/guides/工程规范.md §1" >&2
+  exit 1
+}
+
+# 1) Conventional Commits 格式
+if ! [[ "$subject" =~ ^(feat|fix|docs|test|refactor|perf|build|ci|chore)(\([a-z0-9._/-]+\))?!?:\ .+ ]]; then
+  fail "首行不符合 Conventional Commits：'$subject'"
+fi
+
+# 2) 禁止任何 AI 生成署名（ADR-0019 §1）
+if grep -qiE '^(Co-Authored-By:.*(Claude|Copilot|AI)|.*Generated with .*(Claude|Copilot))' "$msg_file"; then
+  fail "提交信息含 AI 生成署名，请移除"
+fi
+
+exit 0

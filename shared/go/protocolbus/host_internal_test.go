@@ -141,4 +141,3 @@ func TestNewSessionID_Unique(t *testing.T) {
 		}
 	}
 }
-

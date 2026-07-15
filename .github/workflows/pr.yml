@@ -1,0 +1,50 @@
+# PR 专项检查（ADR-0019 §1/§2）。
+name: PR
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  commits:
+    name: 提交信息规范
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 需要完整历史以枚举 PR 内提交
+      - name: 校验本 PR 每条提交（复用本地钩子，同一套规则）
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          fail=0
+          for sha in $(git rev-list "$base".."$head"); do
+            git log -1 --format=%B "$sha" > /tmp/msg
+            if ! .githooks/commit-msg /tmp/msg; then
+              echo "::error::提交 $(git log -1 --format='%h %s' "$sha") 不合规"
+              fail=1
+            fi
+          done
+          exit $fail
+
+  size:
+    name: PR 体量提示
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 超过 400 行仅提示（不硬卡，避免鼓励无意义碎 PR）
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          # 排除生成物与依赖锁：它们体量大但不需人工评审
+          lines=$(git diff --numstat "$base".."$head" \
+            -- . ':(exclude)*.pb.go' ':(exclude)go.sum' \
+            | awk '{a+=$1+$2} END {print a+0}')
+          echo "本 PR 需评审的变更行数：$lines"
+          if [ "$lines" -gt 400 ]; then
+            echo "::warning::PR 体量 $lines 行（>400 经验阈值），建议拆分以便评审（工程规范 §2）"
+          fi

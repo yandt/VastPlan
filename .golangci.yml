@@ -1,0 +1,37 @@
+# golangci-lint 配置（ADR-0019 §5）。
+#
+# 取舍：规则集刻意保守——噪声淹没真问题比漏报更糟。
+# 只启用"报出来基本都是真缺陷"的 linter；风格类交给 gofmt，设计类交给评审。
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck     # 未处理的 error —— 对齐工程规范"不吞错误"
+    - govet        # 官方静态检查
+    - ineffassign  # 无效赋值
+    - staticcheck  # 高信噪比的正确性检查
+    - unused       # 死代码
+
+  settings:
+    errcheck:
+      # 显式 `_ =` 视为已声明意图（工程规范要求旁边写理由注释，由评审把关）
+      check-blank: false
+
+  exclusions:
+    rules:
+      # 生成物不归我们管
+      - path: '\.pb\.go$'
+        linters: [errcheck, govet, ineffassign, staticcheck, unused]
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

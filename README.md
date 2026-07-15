@@ -34,8 +34,11 @@
 ./bin/backend-kernel ./bin/com.vastplan.hello-world
 
 # 4. 测试
-./tools/test.sh          # 单元测试（快，日常）
-./tools/test.sh --e2e    # 单元 + E2E（跨进程真实链路）
+./tools/test.sh          # 单元 + 架构守护（快，日常）
+./tools/test.sh --e2e    # 再加 E2E（跨进程真实链路）
+
+# 5. 启用本地提交钩子（一次性；与 CI 同规则）
+./tools/setup-hooks.sh
 ```
 
 预期输出：内核版本 → 扩展点声明 → 握手/协议协商 → **engines 校验** → 贡献注册/激活 →
@@ -48,6 +51,15 @@
 go build -ldflags "-X main.version=0.2.0" -o /tmp/k ./kernels/backend
 /tmp/k ./bin/com.vastplan.hello-world   # → 内核 backend@0.2.0 不满足插件要求的 "^0.1"
 ```
+
+## 工程门禁
+
+CI（`.github/workflows/`）五道关：**lint**（gofmt/vet/staticcheck…）、**test + 架构守护**、
+**E2E**、**codegen 与 proto 同步**、**security**（govulncheck 可达漏洞 + 依赖许可证白名单）。
+PR 另检查提交规范与体量。
+
+**架构守护**（`arch/`）把文档里的架构约束变成可执行断言——依赖方向、单一真源、布局纪律、文档死链，
+违规即构建失败。规则见 [工程规范](docs/dev/guides/工程规范.md)。
 
 ## 版本机制
 
