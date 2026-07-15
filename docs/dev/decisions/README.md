@@ -45,3 +45,4 @@
 - [ADR-0012 APP 内核运行模型：预编译 + 整体热升级](ADR-0012-APP内核运行模型.md)
 - [ADR-0013 APP 多档能力：桌面完整 runner + 手机 Companion](ADR-0013-APP多档能力与手机Companion.md)
 - [ADR-0014 四内核结构：拆出 Runner 内核与移动 Companion 内核](ADR-0014-四内核结构.md)
+- [ADR-0015 内核与贡献面命名规范（backend/frontend/runner/mobile）](ADR-0015-内核与贡献面命名规范.md)
