@@ -3,39 +3,61 @@
 // 范围是内核内：一套内核宿主与它在本节点管辖的独立进程插件（ADR-0004）。
 // 跨服务/跨机器不归本协议（走寻址层 + NATS，系统架构 第二章）。
 // 规格见 docs/dev/architecture/插件契约与协议.md 第二章。
+//
+// 方向：宿主是 gRPC 服务端，插件回连（§2.2）。插件→宿主的回调因此天然可行；
+// 宿主→插件的调用经 Channel 双向流下发，用 request_id 关联请求与响应。
 package protocolbus
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"os/exec"
-	"strings"
+	"net"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
 	pluginhostv1 "github.com/yandt/VastPlan/shared/go/pluginhost/v1"
-	"github.com/yandt/VastPlan/shared/go/protocol"
 	"github.com/yandt/VastPlan/shared/go/registry"
 )
+
+// randomHex 生成随机十六进制串（会话票据 / launch token 用）。
+func randomHex(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand 失败极罕见；退化为时间戳仍保证本进程内唯一
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
+
+// KernelPluginID 内核自身在注册表中的身份：内核直接提供的能力挂在它名下，
+// 使插件回调宿主与调用别的插件共用同一套 capability 寻址（§2.4）。
+const KernelPluginID = "__kernel__"
+
+// 时限：均可经 Host 字段覆盖，便于测试注入短值（勿硬编码，见 host_internal_test）。
+const (
+	defaultLaunchTimeout    = 15 * time.Second
+	defaultCallTimeout      = 30 * time.Second
+	defaultHeartbeatEvery   = 5 * time.Second
+	defaultHeartbeatTimeout = 15 * time.Second
+)
+
+// HostService 内核自身提供的能力实现（插件经 HostCall 回调它）。
+type HostService func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error)
 
 // PluginProcess 宿主侧持有的一个已接入插件。
 type PluginProcess struct {
 	PluginID  string
 	Version   string
 	SessionID string
-
-	cmd    *exec.Cmd
-	conn   *grpc.ClientConn
-	client pluginhostv1.PluginHostClient
 }
 
-// Host 插件宿主：拉起插件进程、握手、把贡献接入扩展点注册表、路由调用。
+// Host 插件宿主：拉起插件进程、握手、把贡献接入扩展点注册表、路由调用、探活。
 type Host struct {
 	// KernelName 本内核的规范 ID（backend/frontend/runner/mobile，ADR-0015）。
 	KernelName string
@@ -44,198 +66,119 @@ type Host struct {
 
 	Registry *registry.Registry
 	Logf     func(format string, args ...any)
+
+	// 时限（零值时用默认）。
+	LaunchTimeout    time.Duration
+	CallTimeout      time.Duration
+	HeartbeatEvery   time.Duration
+	HeartbeatTimeout time.Duration
+
+	pluginhostv1.UnimplementedPluginHostServer
+
+	srv  *grpc.Server
+	lis  net.Listener
+	addr string
+
+	mu       sync.RWMutex
+	sessions map[string]*session // sessionID → session
+	byPlugin map[string]*session // pluginID  → session
+	launches map[string]chan launchResult
+	services map[string]HostService // 内核自身能力：capability → 实现
+
+	stopped atomic.Bool
+}
+
+type launchResult struct {
+	sess *session
+	err  error
 }
 
 func NewHost(kernelName, kernelVersion string, r *registry.Registry, logf func(string, ...any)) *Host {
 	if logf == nil {
 		logf = func(string, ...any) {}
 	}
-	return &Host{KernelName: kernelName, KernelVersion: kernelVersion, Registry: r, Logf: logf}
+	return &Host{
+		KernelName:    kernelName,
+		KernelVersion: kernelVersion,
+		Registry:      r,
+		Logf:          logf,
+		sessions:      map[string]*session{},
+		byPlugin:      map[string]*session{},
+		launches:      map[string]chan launchResult{},
+		services:      map[string]HostService{},
+	}
 }
 
-// Launch 拉起插件进程并完成握手 + 贡献注册 + 激活。
-//
-// 流程（第二章 §2.2）：
-//
-//	拉起进程（注入 magic cookie）→ 插件回报监听地址 → Hello/HelloAck 协商版本
-//	→ RegisterContributions → 注册进 Registry → Lifecycle{ACTIVATE}
-func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, error) {
-	cmd := exec.Command(binPath)
-	cmd.Env = append(cmd.Environ(), protocol.MagicEnvKey+"="+protocol.MagicCookie)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("接管插件 stdout: %w", err)
+func (h *Host) launchTimeout() time.Duration {
+	if h.LaunchTimeout > 0 {
+		return h.LaunchTimeout
 	}
-	cmd.Stderr = nil
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("拉起插件进程: %w", err)
-	}
-
-	// 插件把监听地址经 stdout 回报宿主（go-plugin 同款握手）
-	addr, err := readAddr(stdout, addrReportTimeout)
-	if err != nil {
-		_ = cmd.Process.Kill()
-		return nil, err
-	}
-	h.Logf("插件进程已启动 pid=%d addr=%s", cmd.Process.Pid, addr)
-
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		_ = cmd.Process.Kill()
-		return nil, fmt.Errorf("连接插件: %w", err)
-	}
-	client := pluginhostv1.NewPluginHostClient(conn)
-
-	// 1) 握手：magic 校验 + 版本协商 + 下发会话票据（ADR-0017 §4 强制点 1）
-	sessionID := newSessionID()
-	ack, err := client.Handshake(ctx, &pluginhostv1.Hello{
-		ProtoVersions: protocol.SupportedVersions,
-		Magic:         protocol.MagicCookie,
-		SessionId:     sessionID,
-	})
-	if err != nil {
-		_ = conn.Close()
-		_ = cmd.Process.Kill()
-		return nil, fmt.Errorf("握手失败: %w", err)
-	}
-	// 无交集即拒绝（fail-closed）
-	if !protocol.Supports(ack.NegotiatedProto) {
-		_ = conn.Close()
-		_ = cmd.Process.Kill()
-		return nil, fmt.Errorf("协议版本无交集：插件回 %d，宿主支持 %v", ack.NegotiatedProto, protocol.SupportedVersions)
-	}
-
-	// 2) engines 校验：本内核版本须满足插件声明的 SemVer 范围（ADR-0017 §4 强制点 2）
-	if err := protocol.CheckEngine(h.KernelName, h.KernelVersion, ack.Engines[h.KernelName]); err != nil {
-		_ = conn.Close()
-		_ = cmd.Process.Kill()
-		return nil, fmt.Errorf("插件 %s@%s 与内核不兼容: %w", ack.PluginId, ack.PluginVersion, err)
-	}
-
-	p := &PluginProcess{
-		PluginID:  ack.PluginId,
-		Version:   ack.PluginVersion,
-		SessionID: sessionID,
-		cmd:       cmd, conn: conn, client: client,
-	}
-	h.Logf("协议版本已协商 v%d，插件=%s@%s，session=%s",
-		ack.NegotiatedProto, ack.PluginId, ack.PluginVersion, sessionID)
-	h.Logf("engines 校验通过：内核 %s@%s 满足插件要求 %q",
-		h.KernelName, h.KernelVersion, ack.Engines[h.KernelName])
-
-	// 3) 贡献声明：插件声明它填充哪些扩展点
-	decl, err := client.Declare(ctx, &pluginhostv1.DeclareRequest{SessionId: sessionID})
-	if err != nil {
-		_ = h.Close(p)
-		return nil, fmt.Errorf("拉取贡献声明失败: %w", err)
-	}
-
-	// 4) 接入扩展点注册表（非法者拒绝，fail-closed；ADR-0017 §4 强制点 3）
-	accepted, rejected := 0, 0
-	for _, c := range decl.Contributions {
-		err := h.Registry.Register(registry.Contribution{
-			ExtensionPoint: c.ExtensionPoint,
-			ID:             c.Id,
-			PluginID:       p.PluginID,
-			Priority:       int(c.Priority),
-			Descriptor:     c.DescriptorJson,
-		})
-		if err != nil {
-			rejected++
-			h.Logf("贡献被拒 %s (%s): %v", c.Id, c.ExtensionPoint, err)
-			continue
-		}
-		accepted++
-		h.Logf("贡献已注册 %s → 扩展点 %s", c.Id, c.ExtensionPoint)
-	}
-	h.Logf("贡献注册完成：接受 %d，拒绝 %d", accepted, rejected)
-
-	// 5) 激活
-	if _, err := client.Lifecycle(ctx, &pluginhostv1.Lifecycle{Op: pluginhostv1.Lifecycle_OP_ACTIVATE}); err != nil {
-		_ = h.Close(p)
-		return nil, fmt.Errorf("激活失败: %w", err)
-	}
-	h.Logf("插件已激活 %s@%s", p.PluginID, p.Version)
-	return p, nil
+	return defaultLaunchTimeout
 }
 
-// Invoke 扩展点被触发时，宿主把 CallContext 经总线转给插件，收 CallResult。
-// 先查注册表解析能力（本地命中），再路由到提供它的插件。
-func (h *Host) Invoke(ctx context.Context, p *PluginProcess, target *contractv1.CallTarget,
-	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
-
-	c, ok := h.Registry.Lookup(target.ExtensionPoint, target.Capability)
-	if !ok {
-		return nil, fmt.Errorf("能力未注册：%s/%s", target.ExtensionPoint, target.Capability)
+func (h *Host) callTimeout() time.Duration {
+	if h.CallTimeout > 0 {
+		return h.CallTimeout
 	}
-	if c.PluginID != p.PluginID {
-		return nil, fmt.Errorf("能力 %s 由插件 %s 提供，非 %s", target.Capability, c.PluginID, p.PluginID)
-	}
-	return p.client.Invoke(ctx, &pluginhostv1.InvokeRequest{
-		Target: target, Context: callCtx, Payload: payload,
-	})
+	return defaultCallTimeout
 }
 
-// Close 优雅关闭插件：SHUTDOWN 指令 → 摘除贡献 → 断连 → 回收进程。
-// 插件崩溃时同样摘除其贡献（ADR-0004 故障隔离）。
-func (h *Host) Close(p *PluginProcess) error {
-	if p.client != nil {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		_, _ = p.client.Lifecycle(shutdownCtx, &pluginhostv1.Lifecycle{Op: pluginhostv1.Lifecycle_OP_SHUTDOWN})
-		cancel()
+// RegisterHostService 登记一个内核自身提供的能力，并把它注册进扩展点注册表，
+// 使插件可用与调用别的插件完全相同的方式（capability 寻址）回调它。
+func (h *Host) RegisterHostService(extensionPoint, capability string, fn HostService) error {
+	if err := h.Registry.Register(registry.Contribution{
+		ExtensionPoint: extensionPoint,
+		ID:             capability,
+		PluginID:       KernelPluginID,
+	}); err != nil {
+		return err
 	}
-	if p.PluginID != "" {
-		n := h.Registry.UnregisterPlugin(p.PluginID)
-		h.Logf("已摘除插件 %s 的 %d 条贡献", p.PluginID, n)
-	}
-	if p.conn != nil {
-		_ = p.conn.Close()
-	}
-	if p.cmd != nil && p.cmd.Process != nil {
-		_ = p.cmd.Process.Kill()
-		_, _ = p.cmd.Process.Wait()
-	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.services[capability] = fn
 	return nil
 }
 
-// addrReportTimeout 等待插件回报地址的上限：插件卡住时宿主必须能脱身，
-// 不能被一个坏插件永久拖住（ADR-0004 故障隔离的前提）。
-const addrReportTimeout = 10 * time.Second
+// Start 开始监听并提供 PluginHost 服务。插件经注入的地址回连本宿主。
+func (h *Host) Start() error {
+	lis, err := net.Listen("tcp", "127.0.0.1:0") // 仅本机：协议总线范围是内核内
+	if err != nil {
+		return fmt.Errorf("宿主监听失败: %w", err)
+	}
+	h.lis = lis
+	h.addr = lis.Addr().String()
+	h.srv = grpc.NewServer()
+	pluginhostv1.RegisterPluginHostServer(h.srv, h)
 
-// readAddr 读插件经 stdout 回报的监听地址，格式：VASTPLAN_PLUGIN_ADDR|<addr>
-// timeout 作参数传入而非硬编码，使超时分支可被快速测试覆盖。
-func readAddr(stdout interface{ Read([]byte) (int, error) }, timeout time.Duration) (string, error) {
-	type result struct {
-		addr string
-		err  error
-	}
-	ch := make(chan result, 1)
 	go func() {
-		sc := bufio.NewScanner(stdout)
-		for sc.Scan() {
-			line := strings.TrimSpace(sc.Text())
-			if a, ok := strings.CutPrefix(line, protocol.AddrPrefix); ok {
-				ch <- result{addr: a}
-				return
-			}
+		if err := h.srv.Serve(lis); err != nil && !h.stopped.Load() {
+			h.Logf("宿主 gRPC 服务退出: %v", err)
 		}
-		ch <- result{err: fmt.Errorf("插件未回报监听地址（stdout 已结束）")}
 	}()
-	select {
-	case r := <-ch:
-		return r.addr, r.err
-	case <-time.After(timeout):
-		return "", fmt.Errorf("等待插件回报地址超时（%s）", timeout)
-	}
+	h.Logf("宿主已监听 %s", h.addr)
+	return nil
 }
 
-// newSessionID 签发会话票据（宿主侧），用于审计与插件回调鉴权。
-func newSessionID() string {
-	b := make([]byte, 12)
-	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("sess-%d", time.Now().UnixNano())
+// Addr 宿主监听地址（Start 之后有效）。
+func (h *Host) Addr() string { return h.addr }
+
+// Stop 停服并回收全部插件。
+func (h *Host) Stop() {
+	h.stopped.Store(true)
+	h.mu.RLock()
+	sessions := make([]*session, 0, len(h.sessions))
+	for _, s := range h.sessions {
+		sessions = append(sessions, s)
 	}
-	return "sess-" + hex.EncodeToString(b)
+	h.mu.RUnlock()
+
+	for _, s := range sessions {
+		// 停服时逐个回收；单个插件关闭失败不影响其余（teardown 会强制杀进程）
+		if err := h.Close(&PluginProcess{PluginID: s.pluginID, SessionID: s.id}); err != nil {
+			h.Logf("回收插件 %s 时出错: %v", s.pluginID, err)
+		}
+	}
+	if h.srv != nil {
+		h.srv.Stop()
+	}
 }

@@ -44,17 +44,43 @@ func repoRoot(t *testing.T) string {
 	return filepath.Dir(wd) // e2e/ 的上一级
 }
 
-// newHost 造一个指定内核版本的宿主 + 声明扩展点。
+// newHost 造一个指定内核版本的宿主：声明扩展点、登记内核能力、开始监听。
 func newHost(t *testing.T, kernelVersion string) *protocolbus.Host {
 	t.Helper()
 	reg := registry.New()
 	for _, p := range []registry.ExtensionPoint{
 		{Name: "tool.package", Dispatch: registry.DispatchSingle},
 		{Name: "event.sink", Dispatch: registry.DispatchFanout},
+		{Name: "kernel.service", Dispatch: registry.DispatchSingle},
 	} {
 		reg.DefinePoint(p)
 	}
-	return protocolbus.NewHost(kernelName, kernelVersion, reg, func(string, ...any) {})
+
+	h := protocolbus.NewHost(kernelName, kernelVersion, reg, func(string, ...any) {})
+	// 缩短时限：让"失联/超时"类用例秒级完成，不必真等生产默认值
+	h.LaunchTimeout = 20 * time.Second
+	h.CallTimeout = 5 * time.Second
+	h.HeartbeatEvery = 200 * time.Millisecond
+	h.HeartbeatTimeout = 2 * time.Second
+
+	if err := h.Start(); err != nil {
+		t.Fatalf("宿主启动失败: %v", err)
+	}
+	t.Cleanup(h.Stop)
+
+	// 内核自身能力：供插件回调（§2.4）
+	err := h.RegisterHostService("kernel.service", "kernel.info",
+		func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+			out, _ := json.Marshal(map[string]any{
+				"kernel": kernelName, "version": kernelVersion,
+				"callerKind": callCtx.Caller.Kind.String(), "tenant": callCtx.TenantId,
+			})
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, out, nil
+		})
+	if err != nil {
+		t.Fatalf("登记内核能力失败: %v", err)
+	}
+	return h
 }
 
 func testCallContext() *contractv1.CallContext {
@@ -67,7 +93,11 @@ func testCallContext() *contractv1.CallContext {
 	}
 }
 
-// 完整生命周期：拉起 → 握手 → engines 校验 → 贡献注册 → 激活 → 调用 → 摘除。
+func toolTarget(capability, op string) *contractv1.CallTarget {
+	return &contractv1.CallTarget{ExtensionPoint: "tool.package", Capability: capability, Operation: &op}
+}
+
+// 完整生命周期：拉起 → 回连 → 握手 → engines 校验 → 贡献注册 → 激活 → 调用 → 摘除。
 func TestPluginLifecycle_HappyPath(t *testing.T) {
 	bin := buildPlugin(t, "./plugins/com.vastplan.hello-world/backend")
 	host := newHost(t, "0.1.0") // 满足插件的 engines ^0.1
@@ -79,7 +109,6 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("装载插件失败: %v", err)
 	}
-	defer host.Close(p)
 
 	if p.PluginID != "com.vastplan.hello-world" {
 		t.Fatalf("插件 id = %q，期望 com.vastplan.hello-world", p.PluginID)
@@ -94,10 +123,7 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 	}
 
 	// 调用成功，且 CallContext 全程透传到插件
-	op := "greet"
-	resp, err := host.Invoke(ctx, p, &contractv1.CallTarget{
-		ExtensionPoint: "tool.package", Capability: "vastplan.hello", Operation: &op,
-	}, testCallContext(), []byte(`{"name":"E2E"}`))
+	resp, err := host.Invoke(ctx, toolTarget("vastplan.hello", "greet"), testCallContext(), []byte(`{"name":"E2E"}`))
 	if err != nil {
 		t.Fatalf("调用 greet 传输层失败: %v", err)
 	}
@@ -109,7 +135,6 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 	if err := json.Unmarshal(resp.Payload, &got); err != nil {
 		t.Fatalf("结果解析失败: %v", err)
 	}
-	// 契约透传：插件确实看到了调用方/租户/场景/trace
 	if got["calledBy"] != "tester" || got["tenant"] != "acme" ||
 		got["scene"] != "agent.tool_call" || got["traceId"] != "trace-e2e" {
 		t.Fatalf("CallContext 未如实透传到插件，实际: %v", got)
@@ -122,7 +147,46 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 	}
 }
 
-// 应用层错误须经 CallResult 返回，且与传输层错误严格区分（插件契约与协议 §2.7）。
+// 插件回调宿主（§2.4）：经 capability 寻址内核能力，且 CallContext 在反方向同样透传。
+// 这是 Channel 双向流的核心价值——插件能用内核服务，而不只是被动被调。
+func TestPluginHostCall_PluginCallsBackIntoKernel(t *testing.T) {
+	bin := buildPlugin(t, "./plugins/com.vastplan.hello-world/backend")
+	host := newHost(t, "0.1.0")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	p, err := host.Launch(ctx, bin)
+	if err != nil {
+		t.Fatalf("装载插件失败: %v", err)
+	}
+	defer func() { _ = host.Close(p) }()
+
+	// whoami 内部会回调宿主的 kernel.info
+	resp, err := host.Invoke(ctx, toolTarget("vastplan.hello", "whoami"), testCallContext(), []byte(`{}`))
+	if err != nil {
+		t.Fatalf("调用 whoami 传输层失败: %v", err)
+	}
+	if resp.Result.Status != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("whoami 应成功，实际 %v", resp.Result.Error)
+	}
+
+	var got struct {
+		Plugin       string         `json:"plugin"`
+		HostReported map[string]any `json:"hostReported"`
+	}
+	if err := json.Unmarshal(resp.Payload, &got); err != nil {
+		t.Fatalf("结果解析失败: %v", err)
+	}
+	if got.HostReported["kernel"] != kernelName || got.HostReported["version"] != "0.1.0" {
+		t.Fatalf("插件未拿到正确的内核信息，实际: %v", got.HostReported)
+	}
+	// CallContext 在"插件→宿主"方向也必须透传
+	if got.HostReported["tenant"] != "acme" || got.HostReported["callerKind"] != "CALLER_KIND_AGENT" {
+		t.Fatalf("CallContext 未在回调方向透传，实际: %v", got.HostReported)
+	}
+}
+
+// 应用层错误须经 CallResult 返回，且与传输层错误严格区分（工程规范 §4.2）。
 func TestPluginInvoke_ApplicationErrorsAreNotTransportErrors(t *testing.T) {
 	bin := buildPlugin(t, "./plugins/com.vastplan.hello-world/backend")
 	host := newHost(t, "0.1.0")
@@ -133,7 +197,7 @@ func TestPluginInvoke_ApplicationErrorsAreNotTransportErrors(t *testing.T) {
 	if err != nil {
 		t.Fatalf("装载插件失败: %v", err)
 	}
-	defer host.Close(p)
+	defer func() { _ = host.Close(p) }()
 
 	cases := []struct {
 		name      string
@@ -147,10 +211,7 @@ func TestPluginInvoke_ApplicationErrorsAreNotTransportErrors(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			op := c.op
-			resp, err := host.Invoke(ctx, p, &contractv1.CallTarget{
-				ExtensionPoint: "tool.package", Capability: "vastplan.hello", Operation: &op,
-			}, testCallContext(), []byte(c.payload))
+			resp, err := host.Invoke(ctx, toolTarget("vastplan.hello", c.op), testCallContext(), []byte(c.payload))
 			// 关键：应用层错误不得表现为传输层错误
 			if err != nil {
 				t.Fatalf("应用层错误不应冒泡为传输层错误，实际: %v", err)
@@ -179,17 +240,16 @@ func TestPluginInvoke_UnregisteredCapabilityRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("装载插件失败: %v", err)
 	}
-	defer host.Close(p)
+	defer func() { _ = host.Close(p) }()
 
-	_, err = host.Invoke(ctx, p, &contractv1.CallTarget{
+	if _, err := host.Invoke(ctx, &contractv1.CallTarget{
 		ExtensionPoint: "tool.package", Capability: "not.registered",
-	}, testCallContext(), nil)
-	if err == nil {
+	}, testCallContext(), nil); err == nil {
 		t.Fatal("未注册能力应被拒绝，实际通过了")
 	}
 }
 
-// engines fail-closed：内核版本不满足插件声明范围时，必须拒绝装载
+// engines fail-closed：内核版本不满足插件声明范围时必须拒绝装载
 // （ADR-0017 §4 强制点 2）。这是版本机制的核心保障，必须由真实链路验证。
 func TestPluginLaunch_IncompatibleKernelVersionRejected(t *testing.T) {
 	bin := buildPlugin(t, "./plugins/com.vastplan.hello-world/backend")
@@ -200,13 +260,12 @@ func TestPluginLaunch_IncompatibleKernelVersionRejected(t *testing.T) {
 
 	p, err := host.Launch(ctx, bin)
 	if err == nil {
-		host.Close(p)
+		_ = host.Close(p)
 		t.Fatal("内核版本不兼容时应拒绝装载，实际装上了")
 	}
 	if !strings.Contains(err.Error(), "不满足插件要求") {
 		t.Fatalf("错误信息应说明版本不满足，实际: %v", err)
 	}
-	// 被拒绝的插件不得留下任何贡献
 	if got := host.Registry.List("tool.package"); len(got) != 0 {
 		t.Fatalf("装载被拒后不应残留贡献，实际 %d 条", len(got))
 	}
@@ -222,10 +281,59 @@ func TestPluginLaunch_MissingEnginesRejected(t *testing.T) {
 
 	p, err := host.Launch(ctx, bin)
 	if err == nil {
-		host.Close(p)
+		_ = host.Close(p)
 		t.Fatal("未声明本内核 engines 的插件应被拒绝，实际装上了")
 	}
 	if !strings.Contains(err.Error(), "未声明") {
 		t.Fatalf("错误信息应说明未声明 engines，实际: %v", err)
 	}
+}
+
+// 插件崩溃（SIGKILL，不走优雅退出）时：宿主须感知断连、摘除其贡献，
+// 且**在途调用立刻脱身**而非挂到超时——这是 ADR-0004 故障隔离的实质。
+func TestPluginCrash_ContributionsRemovedAndInflightCallsFail(t *testing.T) {
+	bin := buildPlugin(t, "./e2e/fixtures/plugins/crasher")
+	host := newHost(t, "0.1.0")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	p, err := host.Launch(ctx, bin)
+	if err != nil {
+		t.Fatalf("装载夹具插件失败: %v", err)
+	}
+	_ = p
+
+	// 先确认它是活的
+	if _, err := host.Invoke(ctx, toolTarget("fixture.crasher", "ping"), testCallContext(), []byte(`{}`)); err != nil {
+		t.Fatalf("崩溃前 ping 应成功，实际: %v", err)
+	}
+	if _, ok := host.Registry.Lookup("tool.package", "fixture.crasher"); !ok {
+		t.Fatal("贡献应已注册")
+	}
+
+	// 触发崩溃：该调用永不会有响应，插件会自杀
+	start := time.Now()
+	_, err = host.Invoke(ctx, toolTarget("fixture.crasher", "crash"), testCallContext(), []byte(`{}`))
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("插件崩溃后在途调用应失败，实际成功了")
+	}
+	// 关键：靠"感知断连"脱身，而不是靠调用超时（CallTimeout=5s）
+	if elapsed >= 5*time.Second {
+		t.Fatalf("在途调用应在插件崩溃时立刻失败，实际等了 %v（疑似挂到了超时）", elapsed)
+	}
+	if !strings.Contains(err.Error(), "失联") {
+		t.Fatalf("错误应说明插件失联，实际: %v", err)
+	}
+
+	// 崩溃后贡献必须被摘除，否则宿主会把调用继续路由给一个死掉的插件
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, ok := host.Registry.Lookup("tool.package", "fixture.crasher"); !ok {
+			return // 已摘除
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("插件崩溃后其贡献应被摘除，实际仍在注册表中")
 }

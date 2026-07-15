@@ -13,11 +13,19 @@ import (
 // MagicCookie 防止误把普通进程当插件（插件契约与协议 §2.2）。
 const MagicCookie = "VASTPLAN_PLUGIN_V1"
 
-// MagicEnvKey 宿主经该环境变量把 magic 注入插件进程。
-const MagicEnvKey = "VASTPLAN_PLUGIN_MAGIC"
+// 宿主拉起插件时经环境变量注入的三件套（§2.2「注入连接端点 + magic cookie」）。
+const (
+	// MagicEnvKey magic cookie。
+	MagicEnvKey = "VASTPLAN_PLUGIN_MAGIC"
+	// HostAddrEnvKey 宿主的监听地址——插件回连它（宿主是服务端）。
+	HostAddrEnvKey = "VASTPLAN_HOST_ADDR"
+	// LaunchTokenEnvKey 一次性令牌，用于把握手对应回那次 Launch。
+	LaunchTokenEnvKey = "VASTPLAN_LAUNCH_TOKEN"
+)
 
-// AddrPrefix 插件经 stdout 回报监听地址的前缀。
-const AddrPrefix = "VASTPLAN_PLUGIN_ADDR|"
+// SessionMetadataKey 插件在 Channel 流的 gRPC metadata 中携带会话票据的键。
+// 必须小写：gRPC metadata 键大小写不敏感但规范化为小写。
+const SessionMetadataKey = "vastplan-session-id"
 
 // SupportedVersions 本代码库支持的协议版本集。
 //

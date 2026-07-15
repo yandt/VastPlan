@@ -7,12 +7,9 @@
 // 插件-宿主协议（Plugin-Host Protocol）——内核内：宿主 ↔ 本内核插件
 // 规格见 docs/dev/architecture/插件契约与协议.md 第二章
 //
-// MVP 范围与偏离（如实记录）：
-//   1) 仅 Handshake + Declare + Invoke + Lifecycle 四个 unary RPC；
-//      设计中的 Channel 双向流（宿主↔插件多路复用调用/事件/心跳、插件回调宿主）后续补。
-//   2) 方向：MVP 中宿主是 gRPC client、插件是 server，故握手由宿主发起（Hello 宿主→插件），
-//      与第二章"插件连上后主动 Hello"方向相反；会话票据仍由宿主签发。
-//      待 Channel 落地后回归设计方向。
+// 方向：**宿主是 gRPC 服务端，插件是客户端**。宿主拉起插件时注入连接端点，
+// 插件回连并主动 Hello（第二章 §2.2）。这样插件→宿主的回调是天然的，
+// 宿主→插件的调用则经 Channel 双向流下发。
 
 package pluginhostv1
 
@@ -30,19 +27,18 @@ const _ = grpc.SupportPackageIsVersion9
 
 const (
 	PluginHost_Handshake_FullMethodName = "/vastplan.pluginhost.v1.PluginHost/Handshake"
-	PluginHost_Declare_FullMethodName   = "/vastplan.pluginhost.v1.PluginHost/Declare"
-	PluginHost_Invoke_FullMethodName    = "/vastplan.pluginhost.v1.PluginHost/Invoke"
-	PluginHost_Lifecycle_FullMethodName = "/vastplan.pluginhost.v1.PluginHost/Lifecycle"
+	PluginHost_Channel_FullMethodName   = "/vastplan.pluginhost.v1.PluginHost/Channel"
 )
 
 // PluginHostClient is the client API for PluginHost service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PluginHostClient interface {
+	// 握手：校验 magic、协商版本、校验 engines、签发会话票据。
 	Handshake(ctx context.Context, in *Hello, opts ...grpc.CallOption) (*HelloAck, error)
-	Declare(ctx context.Context, in *DeclareRequest, opts ...grpc.CallOption) (*Declaration, error)
-	Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
-	Lifecycle(ctx context.Context, in *Lifecycle, opts ...grpc.CallOption) (*LifecycleAck, error)
+	// 运行态双向流：调用/事件/生命周期/心跳多路复用。
+	// 插件须在 metadata 中携带 session_id（键见 shared/go/protocol）。
+	Channel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FromPlugin, FromHost], error)
 }
 
 type pluginHostClient struct {
@@ -63,44 +59,28 @@ func (c *pluginHostClient) Handshake(ctx context.Context, in *Hello, opts ...grp
 	return out, nil
 }
 
-func (c *pluginHostClient) Declare(ctx context.Context, in *DeclareRequest, opts ...grpc.CallOption) (*Declaration, error) {
+func (c *pluginHostClient) Channel(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[FromPlugin, FromHost], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Declaration)
-	err := c.cc.Invoke(ctx, PluginHost_Declare_FullMethodName, in, out, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &PluginHost_ServiceDesc.Streams[0], PluginHost_Channel_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	return out, nil
+	x := &grpc.GenericClientStream[FromPlugin, FromHost]{ClientStream: stream}
+	return x, nil
 }
 
-func (c *pluginHostClient) Invoke(ctx context.Context, in *InvokeRequest, opts ...grpc.CallOption) (*InvokeResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(InvokeResponse)
-	err := c.cc.Invoke(ctx, PluginHost_Invoke_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *pluginHostClient) Lifecycle(ctx context.Context, in *Lifecycle, opts ...grpc.CallOption) (*LifecycleAck, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(LifecycleAck)
-	err := c.cc.Invoke(ctx, PluginHost_Lifecycle_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PluginHost_ChannelClient = grpc.BidiStreamingClient[FromPlugin, FromHost]
 
 // PluginHostServer is the server API for PluginHost service.
 // All implementations must embed UnimplementedPluginHostServer
 // for forward compatibility.
 type PluginHostServer interface {
+	// 握手：校验 magic、协商版本、校验 engines、签发会话票据。
 	Handshake(context.Context, *Hello) (*HelloAck, error)
-	Declare(context.Context, *DeclareRequest) (*Declaration, error)
-	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
-	Lifecycle(context.Context, *Lifecycle) (*LifecycleAck, error)
+	// 运行态双向流：调用/事件/生命周期/心跳多路复用。
+	// 插件须在 metadata 中携带 session_id（键见 shared/go/protocol）。
+	Channel(grpc.BidiStreamingServer[FromPlugin, FromHost]) error
 	mustEmbedUnimplementedPluginHostServer()
 }
 
@@ -114,14 +94,8 @@ type UnimplementedPluginHostServer struct{}
 func (UnimplementedPluginHostServer) Handshake(context.Context, *Hello) (*HelloAck, error) {
 	return nil, status.Error(codes.Unimplemented, "method Handshake not implemented")
 }
-func (UnimplementedPluginHostServer) Declare(context.Context, *DeclareRequest) (*Declaration, error) {
-	return nil, status.Error(codes.Unimplemented, "method Declare not implemented")
-}
-func (UnimplementedPluginHostServer) Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Invoke not implemented")
-}
-func (UnimplementedPluginHostServer) Lifecycle(context.Context, *Lifecycle) (*LifecycleAck, error) {
-	return nil, status.Error(codes.Unimplemented, "method Lifecycle not implemented")
+func (UnimplementedPluginHostServer) Channel(grpc.BidiStreamingServer[FromPlugin, FromHost]) error {
+	return status.Error(codes.Unimplemented, "method Channel not implemented")
 }
 func (UnimplementedPluginHostServer) mustEmbedUnimplementedPluginHostServer() {}
 func (UnimplementedPluginHostServer) testEmbeddedByValue()                    {}
@@ -162,59 +136,12 @@ func _PluginHost_Handshake_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PluginHost_Declare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeclareRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PluginHostServer).Declare(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PluginHost_Declare_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PluginHostServer).Declare(ctx, req.(*DeclareRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+func _PluginHost_Channel_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(PluginHostServer).Channel(&grpc.GenericServerStream[FromPlugin, FromHost]{ServerStream: stream})
 }
 
-func _PluginHost_Invoke_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InvokeRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PluginHostServer).Invoke(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PluginHost_Invoke_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PluginHostServer).Invoke(ctx, req.(*InvokeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _PluginHost_Lifecycle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(Lifecycle)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PluginHostServer).Lifecycle(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PluginHost_Lifecycle_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PluginHostServer).Lifecycle(ctx, req.(*Lifecycle))
-	}
-	return interceptor(ctx, in, info, handler)
-}
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type PluginHost_ChannelServer = grpc.BidiStreamingServer[FromPlugin, FromHost]
 
 // PluginHost_ServiceDesc is the grpc.ServiceDesc for PluginHost service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -227,19 +154,14 @@ var PluginHost_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "Handshake",
 			Handler:    _PluginHost_Handshake_Handler,
 		},
+	},
+	Streams: []grpc.StreamDesc{
 		{
-			MethodName: "Declare",
-			Handler:    _PluginHost_Declare_Handler,
-		},
-		{
-			MethodName: "Invoke",
-			Handler:    _PluginHost_Invoke_Handler,
-		},
-		{
-			MethodName: "Lifecycle",
-			Handler:    _PluginHost_Lifecycle_Handler,
+			StreamName:    "Channel",
+			Handler:       _PluginHost_Channel_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
 	Metadata: "pluginhost/v1/pluginhost.proto",
 }

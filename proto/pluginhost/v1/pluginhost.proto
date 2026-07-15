@@ -3,39 +3,39 @@ syntax = "proto3";
 // 插件-宿主协议（Plugin-Host Protocol）——内核内：宿主 ↔ 本内核插件
 // 规格见 docs/dev/architecture/插件契约与协议.md 第二章
 //
-// MVP 范围与偏离（如实记录）：
-//   1) 仅 Handshake + Declare + Invoke + Lifecycle 四个 unary RPC；
-//      设计中的 Channel 双向流（宿主↔插件多路复用调用/事件/心跳、插件回调宿主）后续补。
-//   2) 方向：MVP 中宿主是 gRPC client、插件是 server，故握手由宿主发起（Hello 宿主→插件），
-//      与第二章"插件连上后主动 Hello"方向相反；会话票据仍由宿主签发。
-//      待 Channel 落地后回归设计方向。
+// 方向：**宿主是 gRPC 服务端，插件是客户端**。宿主拉起插件时注入连接端点，
+// 插件回连并主动 Hello（第二章 §2.2）。这样插件→宿主的回调是天然的，
+// 宿主→插件的调用则经 Channel 双向流下发。
 package vastplan.pluginhost.v1;
 
 import "contract/v1/contract.proto";
 
 option go_package = "github.com/yandt/VastPlan/shared/go/pluginhost/v1;pluginhostv1";
 
-// ── 握手（第二章 §2.2）───────────────────────────────────
+// ── 握手（§2.2）─────────────────────────────────────────
 
-// 宿主→插件：magic 校验 + 版本协商 + 下发会话票据
+// 插件→宿主：自报身份、版本集与 engines 兼容声明。
 message Hello {
-  repeated int32 proto_versions = 1; // 宿主支持的协议版本集
+  repeated int32 proto_versions = 1; // 插件支持的协议版本集
   string magic = 2;                  // magic cookie，防误把普通进程当插件
-  string session_id = 3;             // 宿主签发的会话票据：审计与回调鉴权
-}
-
-// 插件→宿主：协商结果 + 自报身份 + engines 兼容声明
-message HelloAck {
-  int32 negotiated_proto = 1;
-  string plugin_id = 2;
-  string plugin_version = 3;
+  string plugin_id = 3;
+  string plugin_version = 4;
   // 清单 engines：{内核规范ID: SemVer 范围}，如 {"backend": "^0.1"}。
   // 宿主用它校验自身版本是否满足（ADR-0017 §4 强制点 2）；
   // 未声明本内核 → fail-closed 拒绝装载。
-  map<string, string> engines = 4;
+  map<string, string> engines = 5;
+  // 宿主拉起插件时注入的一次性令牌，用于把本次握手对应回那次 Launch。
+  string launch_token = 6;
 }
 
-// ── 贡献声明与注册（第二章 §2.5）─────────────────────────
+// 宿主→插件：协商结果 + 会话票据。
+message HelloAck {
+  int32 negotiated_proto = 1;
+  string session_id = 2; // 宿主签发的会话票据：审计与回调鉴权
+  repeated string host_capabilities = 3;
+}
+
+// ── 贡献注册（§2.5）─────────────────────────────────────
 
 message Contribution {
   string extension_point = 1; // 目标 Registry 名（= CallTarget.extension_point）
@@ -46,29 +46,39 @@ message Contribution {
   bytes descriptor_json = 4;
 }
 
-message DeclareRequest {
-  string session_id = 1;
-}
-
-// 插件声明它填充哪些扩展点；宿主据此接入注册表，非法者拒绝（fail-closed）
+// 插件声明它填充哪些扩展点（Channel 上的首条消息）。
 message Declaration {
   repeated Contribution contributions = 1;
 }
 
-// ── 调用（第二章 §2.4）───────────────────────────────────
+// 宿主逐条接受/拒绝（非法者 fail-closed）。
+message Registered {
+  repeated string accepted = 1;
+  map<string, string> rejected = 2; // id -> 原因
+}
+
+// ── 调用（§2.4）─────────────────────────────────────────
 
 message InvokeRequest {
-  vastplan.contract.v1.CallTarget target = 1;
-  vastplan.contract.v1.CallContext context = 2;
-  bytes payload = 3;
+  string request_id = 1; // 双向流上关联请求与响应
+  vastplan.contract.v1.CallTarget target = 2;
+  vastplan.contract.v1.CallContext context = 3;
+  bytes payload = 4;
 }
 
 message InvokeResponse {
-  vastplan.contract.v1.CallResult result = 1;
-  bytes payload = 2;
+  string request_id = 1;
+  vastplan.contract.v1.CallResult result = 2;
+  bytes payload = 3;
 }
 
-// ── 生命周期（第二章 §2.6）───────────────────────────────
+// ── 事件（§2.6）─────────────────────────────────────────
+
+message EventEnvelope {
+  vastplan.contract.v1.CallEvent event = 1;
+}
+
+// ── 生命周期（§2.6）─────────────────────────────────────
 
 message Lifecycle {
   enum Op {
@@ -78,19 +88,51 @@ message Lifecycle {
     OP_DRAIN = 3;
     OP_SHUTDOWN = 4;
   }
-  Op op = 1;
+  string request_id = 1;
+  Op op = 2;
 }
 
 message LifecycleAck {
-  bool ready = 1;
-  optional string message = 2;
+  string request_id = 1;
+  bool ready = 2;
+  optional string message = 3;
 }
 
-// ── 服务 ────────────────────────────────────────────────
+// ── 心跳（§2.6）─────────────────────────────────────────
+
+message Ping { string request_id = 1; }
+message Pong { string request_id = 1; }
+
+// ── 双向流（§2.3 四类消息多路复用于单连接）───────────────
+
+message FromPlugin {
+  oneof msg {
+    Declaration declare = 1;
+    InvokeResponse invoke_result = 2; // 回应宿主的 Invoke
+    InvokeRequest host_call = 3;      // 回调宿主内核服务 / 经寻址层调别的能力
+    EventEnvelope event = 4;          // 发布事件
+    LifecycleAck lifecycle_ack = 5;
+    Pong pong = 6;
+  }
+}
+
+message FromHost {
+  oneof msg {
+    Registered registered = 1;
+    InvokeRequest invoke = 2;          // 触发扩展点
+    InvokeResponse host_call_result = 3; // 回应插件的 HostCall
+    EventEnvelope event = 4;           // 下发事件
+    Lifecycle lifecycle = 5;
+    Ping ping = 6;
+  }
+}
+
+// ── 服务（由**宿主**实现）───────────────────────────────
 
 service PluginHost {
+  // 握手：校验 magic、协商版本、校验 engines、签发会话票据。
   rpc Handshake(Hello) returns (HelloAck);
-  rpc Declare(DeclareRequest) returns (Declaration);
-  rpc Invoke(InvokeRequest) returns (InvokeResponse);
-  rpc Lifecycle(vastplan.pluginhost.v1.Lifecycle) returns (LifecycleAck);
+  // 运行态双向流：调用/事件/生命周期/心跳多路复用。
+  // 插件须在 metadata 中携带 session_id（键见 shared/go/protocol）。
+  rpc Channel(stream FromPlugin) returns (stream FromHost);
 }

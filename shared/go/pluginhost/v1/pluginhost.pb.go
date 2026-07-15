@@ -7,12 +7,9 @@
 // 插件-宿主协议（Plugin-Host Protocol）——内核内：宿主 ↔ 本内核插件
 // 规格见 docs/dev/architecture/插件契约与协议.md 第二章
 //
-// MVP 范围与偏离（如实记录）：
-//   1) 仅 Handshake + Declare + Invoke + Lifecycle 四个 unary RPC；
-//      设计中的 Channel 双向流（宿主↔插件多路复用调用/事件/心跳、插件回调宿主）后续补。
-//   2) 方向：MVP 中宿主是 gRPC client、插件是 server，故握手由宿主发起（Hello 宿主→插件），
-//      与第二章"插件连上后主动 Hello"方向相反；会话票据仍由宿主签发。
-//      待 Channel 落地后回归设计方向。
+// 方向：**宿主是 gRPC 服务端，插件是客户端**。宿主拉起插件时注入连接端点，
+// 插件回连并主动 Hello（第二章 §2.2）。这样插件→宿主的回调是天然的，
+// 宿主→插件的调用则经 Channel 双向流下发。
 
 package pluginhostv1
 
@@ -84,15 +81,22 @@ func (x Lifecycle_Op) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Lifecycle_Op.Descriptor instead.
 func (Lifecycle_Op) EnumDescriptor() ([]byte, []int) {
-	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{7, 0}
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{8, 0}
 }
 
-// 宿主→插件：magic 校验 + 版本协商 + 下发会话票据
+// 插件→宿主：自报身份、版本集与 engines 兼容声明。
 type Hello struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ProtoVersions []int32                `protobuf:"varint,1,rep,packed,name=proto_versions,json=protoVersions,proto3" json:"proto_versions,omitempty"` // 宿主支持的协议版本集
+	ProtoVersions []int32                `protobuf:"varint,1,rep,packed,name=proto_versions,json=protoVersions,proto3" json:"proto_versions,omitempty"` // 插件支持的协议版本集
 	Magic         string                 `protobuf:"bytes,2,opt,name=magic,proto3" json:"magic,omitempty"`                                              // magic cookie，防误把普通进程当插件
-	SessionId     string                 `protobuf:"bytes,3,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`                     // 宿主签发的会话票据：审计与回调鉴权
+	PluginId      string                 `protobuf:"bytes,3,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
+	PluginVersion string                 `protobuf:"bytes,4,opt,name=plugin_version,json=pluginVersion,proto3" json:"plugin_version,omitempty"`
+	// 清单 engines：{内核规范ID: SemVer 范围}，如 {"backend": "^0.1"}。
+	// 宿主用它校验自身版本是否满足（ADR-0017 §4 强制点 2）；
+	// 未声明本内核 → fail-closed 拒绝装载。
+	Engines map[string]string `protobuf:"bytes,5,rep,name=engines,proto3" json:"engines,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// 宿主拉起插件时注入的一次性令牌，用于把本次握手对应回那次 Launch。
+	LaunchToken   string `protobuf:"bytes,6,opt,name=launch_token,json=launchToken,proto3" json:"launch_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -141,25 +145,42 @@ func (x *Hello) GetMagic() string {
 	return ""
 }
 
-func (x *Hello) GetSessionId() string {
+func (x *Hello) GetPluginId() string {
 	if x != nil {
-		return x.SessionId
+		return x.PluginId
 	}
 	return ""
 }
 
-// 插件→宿主：协商结果 + 自报身份 + engines 兼容声明
+func (x *Hello) GetPluginVersion() string {
+	if x != nil {
+		return x.PluginVersion
+	}
+	return ""
+}
+
+func (x *Hello) GetEngines() map[string]string {
+	if x != nil {
+		return x.Engines
+	}
+	return nil
+}
+
+func (x *Hello) GetLaunchToken() string {
+	if x != nil {
+		return x.LaunchToken
+	}
+	return ""
+}
+
+// 宿主→插件：协商结果 + 会话票据。
 type HelloAck struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	NegotiatedProto int32                  `protobuf:"varint,1,opt,name=negotiated_proto,json=negotiatedProto,proto3" json:"negotiated_proto,omitempty"`
-	PluginId        string                 `protobuf:"bytes,2,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
-	PluginVersion   string                 `protobuf:"bytes,3,opt,name=plugin_version,json=pluginVersion,proto3" json:"plugin_version,omitempty"`
-	// 清单 engines：{内核规范ID: SemVer 范围}，如 {"backend": "^0.1"}。
-	// 宿主用它校验自身版本是否满足（ADR-0017 §4 强制点 2）；
-	// 未声明本内核 → fail-closed 拒绝装载。
-	Engines       map[string]string `protobuf:"bytes,4,rep,name=engines,proto3" json:"engines,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	NegotiatedProto  int32                  `protobuf:"varint,1,opt,name=negotiated_proto,json=negotiatedProto,proto3" json:"negotiated_proto,omitempty"`
+	SessionId        string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // 宿主签发的会话票据：审计与回调鉴权
+	HostCapabilities []string               `protobuf:"bytes,3,rep,name=host_capabilities,json=hostCapabilities,proto3" json:"host_capabilities,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *HelloAck) Reset() {
@@ -199,23 +220,16 @@ func (x *HelloAck) GetNegotiatedProto() int32 {
 	return 0
 }
 
-func (x *HelloAck) GetPluginId() string {
+func (x *HelloAck) GetSessionId() string {
 	if x != nil {
-		return x.PluginId
+		return x.SessionId
 	}
 	return ""
 }
 
-func (x *HelloAck) GetPluginVersion() string {
+func (x *HelloAck) GetHostCapabilities() []string {
 	if x != nil {
-		return x.PluginVersion
-	}
-	return ""
-}
-
-func (x *HelloAck) GetEngines() map[string]string {
-	if x != nil {
-		return x.Engines
+		return x.HostCapabilities
 	}
 	return nil
 }
@@ -290,51 +304,7 @@ func (x *Contribution) GetDescriptorJson() []byte {
 	return nil
 }
 
-type DeclareRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DeclareRequest) Reset() {
-	*x = DeclareRequest{}
-	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DeclareRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DeclareRequest) ProtoMessage() {}
-
-func (x *DeclareRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DeclareRequest.ProtoReflect.Descriptor instead.
-func (*DeclareRequest) Descriptor() ([]byte, []int) {
-	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *DeclareRequest) GetSessionId() string {
-	if x != nil {
-		return x.SessionId
-	}
-	return ""
-}
-
-// 插件声明它填充哪些扩展点；宿主据此接入注册表，非法者拒绝（fail-closed）
+// 插件声明它填充哪些扩展点（Channel 上的首条消息）。
 type Declaration struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Contributions []*Contribution        `protobuf:"bytes,1,rep,name=contributions,proto3" json:"contributions,omitempty"`
@@ -344,7 +314,7 @@ type Declaration struct {
 
 func (x *Declaration) Reset() {
 	*x = Declaration{}
-	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[4]
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -356,7 +326,7 @@ func (x *Declaration) String() string {
 func (*Declaration) ProtoMessage() {}
 
 func (x *Declaration) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[4]
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -369,7 +339,7 @@ func (x *Declaration) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Declaration.ProtoReflect.Descriptor instead.
 func (*Declaration) Descriptor() ([]byte, []int) {
-	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{4}
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Declaration) GetContributions() []*Contribution {
@@ -379,11 +349,65 @@ func (x *Declaration) GetContributions() []*Contribution {
 	return nil
 }
 
+// 宿主逐条接受/拒绝（非法者 fail-closed）。
+type Registered struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Accepted      []string               `protobuf:"bytes,1,rep,name=accepted,proto3" json:"accepted,omitempty"`
+	Rejected      map[string]string      `protobuf:"bytes,2,rep,name=rejected,proto3" json:"rejected,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // id -> 原因
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Registered) Reset() {
+	*x = Registered{}
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Registered) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Registered) ProtoMessage() {}
+
+func (x *Registered) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Registered.ProtoReflect.Descriptor instead.
+func (*Registered) Descriptor() ([]byte, []int) {
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Registered) GetAccepted() []string {
+	if x != nil {
+		return x.Accepted
+	}
+	return nil
+}
+
+func (x *Registered) GetRejected() map[string]string {
+	if x != nil {
+		return x.Rejected
+	}
+	return nil
+}
+
 type InvokeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Target        *v1.CallTarget         `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	Context       *v1.CallContext        `protobuf:"bytes,2,opt,name=context,proto3" json:"context,omitempty"`
-	Payload       []byte                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 双向流上关联请求与响应
+	Target        *v1.CallTarget         `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	Context       *v1.CallContext        `protobuf:"bytes,3,opt,name=context,proto3" json:"context,omitempty"`
+	Payload       []byte                 `protobuf:"bytes,4,opt,name=payload,proto3" json:"payload,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -418,6 +442,13 @@ func (*InvokeRequest) Descriptor() ([]byte, []int) {
 	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{5}
 }
 
+func (x *InvokeRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 func (x *InvokeRequest) GetTarget() *v1.CallTarget {
 	if x != nil {
 		return x.Target
@@ -441,8 +472,9 @@ func (x *InvokeRequest) GetPayload() []byte {
 
 type InvokeResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Result        *v1.CallResult         `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	Payload       []byte                 `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Result        *v1.CallResult         `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
+	Payload       []byte                 `protobuf:"bytes,3,opt,name=payload,proto3" json:"payload,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -477,6 +509,13 @@ func (*InvokeResponse) Descriptor() ([]byte, []int) {
 	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{6}
 }
 
+func (x *InvokeResponse) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
 func (x *InvokeResponse) GetResult() *v1.CallResult {
 	if x != nil {
 		return x.Result
@@ -491,16 +530,61 @@ func (x *InvokeResponse) GetPayload() []byte {
 	return nil
 }
 
+type EventEnvelope struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Event         *v1.CallEvent          `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EventEnvelope) Reset() {
+	*x = EventEnvelope{}
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EventEnvelope) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EventEnvelope) ProtoMessage() {}
+
+func (x *EventEnvelope) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EventEnvelope.ProtoReflect.Descriptor instead.
+func (*EventEnvelope) Descriptor() ([]byte, []int) {
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *EventEnvelope) GetEvent() *v1.CallEvent {
+	if x != nil {
+		return x.Event
+	}
+	return nil
+}
+
 type Lifecycle struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Op            Lifecycle_Op           `protobuf:"varint,1,opt,name=op,proto3,enum=vastplan.pluginhost.v1.Lifecycle_Op" json:"op,omitempty"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Op            Lifecycle_Op           `protobuf:"varint,2,opt,name=op,proto3,enum=vastplan.pluginhost.v1.Lifecycle_Op" json:"op,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Lifecycle) Reset() {
 	*x = Lifecycle{}
-	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[7]
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -512,7 +596,7 @@ func (x *Lifecycle) String() string {
 func (*Lifecycle) ProtoMessage() {}
 
 func (x *Lifecycle) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[7]
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -525,7 +609,14 @@ func (x *Lifecycle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Lifecycle.ProtoReflect.Descriptor instead.
 func (*Lifecycle) Descriptor() ([]byte, []int) {
-	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{7}
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *Lifecycle) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
 }
 
 func (x *Lifecycle) GetOp() Lifecycle_Op {
@@ -537,15 +628,16 @@ func (x *Lifecycle) GetOp() Lifecycle_Op {
 
 type LifecycleAck struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Ready         bool                   `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
-	Message       *string                `protobuf:"bytes,2,opt,name=message,proto3,oneof" json:"message,omitempty"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Ready         bool                   `protobuf:"varint,2,opt,name=ready,proto3" json:"ready,omitempty"`
+	Message       *string                `protobuf:"bytes,3,opt,name=message,proto3,oneof" json:"message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LifecycleAck) Reset() {
 	*x = LifecycleAck{}
-	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[8]
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -557,7 +649,7 @@ func (x *LifecycleAck) String() string {
 func (*LifecycleAck) ProtoMessage() {}
 
 func (x *LifecycleAck) ProtoReflect() protoreflect.Message {
-	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[8]
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -570,7 +662,14 @@ func (x *LifecycleAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LifecycleAck.ProtoReflect.Descriptor instead.
 func (*LifecycleAck) Descriptor() ([]byte, []int) {
-	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{8}
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *LifecycleAck) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
 }
 
 func (x *LifecycleAck) GetReady() bool {
@@ -587,60 +686,479 @@ func (x *LifecycleAck) GetMessage() string {
 	return ""
 }
 
+type Ping struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Ping) Reset() {
+	*x = Ping{}
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Ping) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Ping) ProtoMessage() {}
+
+func (x *Ping) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Ping.ProtoReflect.Descriptor instead.
+func (*Ping) Descriptor() ([]byte, []int) {
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *Ping) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type Pong struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Pong) Reset() {
+	*x = Pong{}
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Pong) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Pong) ProtoMessage() {}
+
+func (x *Pong) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Pong.ProtoReflect.Descriptor instead.
+func (*Pong) Descriptor() ([]byte, []int) {
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *Pong) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+type FromPlugin struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Msg:
+	//
+	//	*FromPlugin_Declare
+	//	*FromPlugin_InvokeResult
+	//	*FromPlugin_HostCall
+	//	*FromPlugin_Event
+	//	*FromPlugin_LifecycleAck
+	//	*FromPlugin_Pong
+	Msg           isFromPlugin_Msg `protobuf_oneof:"msg"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FromPlugin) Reset() {
+	*x = FromPlugin{}
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FromPlugin) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FromPlugin) ProtoMessage() {}
+
+func (x *FromPlugin) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FromPlugin.ProtoReflect.Descriptor instead.
+func (*FromPlugin) Descriptor() ([]byte, []int) {
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *FromPlugin) GetMsg() isFromPlugin_Msg {
+	if x != nil {
+		return x.Msg
+	}
+	return nil
+}
+
+func (x *FromPlugin) GetDeclare() *Declaration {
+	if x != nil {
+		if x, ok := x.Msg.(*FromPlugin_Declare); ok {
+			return x.Declare
+		}
+	}
+	return nil
+}
+
+func (x *FromPlugin) GetInvokeResult() *InvokeResponse {
+	if x != nil {
+		if x, ok := x.Msg.(*FromPlugin_InvokeResult); ok {
+			return x.InvokeResult
+		}
+	}
+	return nil
+}
+
+func (x *FromPlugin) GetHostCall() *InvokeRequest {
+	if x != nil {
+		if x, ok := x.Msg.(*FromPlugin_HostCall); ok {
+			return x.HostCall
+		}
+	}
+	return nil
+}
+
+func (x *FromPlugin) GetEvent() *EventEnvelope {
+	if x != nil {
+		if x, ok := x.Msg.(*FromPlugin_Event); ok {
+			return x.Event
+		}
+	}
+	return nil
+}
+
+func (x *FromPlugin) GetLifecycleAck() *LifecycleAck {
+	if x != nil {
+		if x, ok := x.Msg.(*FromPlugin_LifecycleAck); ok {
+			return x.LifecycleAck
+		}
+	}
+	return nil
+}
+
+func (x *FromPlugin) GetPong() *Pong {
+	if x != nil {
+		if x, ok := x.Msg.(*FromPlugin_Pong); ok {
+			return x.Pong
+		}
+	}
+	return nil
+}
+
+type isFromPlugin_Msg interface {
+	isFromPlugin_Msg()
+}
+
+type FromPlugin_Declare struct {
+	Declare *Declaration `protobuf:"bytes,1,opt,name=declare,proto3,oneof"`
+}
+
+type FromPlugin_InvokeResult struct {
+	InvokeResult *InvokeResponse `protobuf:"bytes,2,opt,name=invoke_result,json=invokeResult,proto3,oneof"` // 回应宿主的 Invoke
+}
+
+type FromPlugin_HostCall struct {
+	HostCall *InvokeRequest `protobuf:"bytes,3,opt,name=host_call,json=hostCall,proto3,oneof"` // 回调宿主内核服务 / 经寻址层调别的能力
+}
+
+type FromPlugin_Event struct {
+	Event *EventEnvelope `protobuf:"bytes,4,opt,name=event,proto3,oneof"` // 发布事件
+}
+
+type FromPlugin_LifecycleAck struct {
+	LifecycleAck *LifecycleAck `protobuf:"bytes,5,opt,name=lifecycle_ack,json=lifecycleAck,proto3,oneof"`
+}
+
+type FromPlugin_Pong struct {
+	Pong *Pong `protobuf:"bytes,6,opt,name=pong,proto3,oneof"`
+}
+
+func (*FromPlugin_Declare) isFromPlugin_Msg() {}
+
+func (*FromPlugin_InvokeResult) isFromPlugin_Msg() {}
+
+func (*FromPlugin_HostCall) isFromPlugin_Msg() {}
+
+func (*FromPlugin_Event) isFromPlugin_Msg() {}
+
+func (*FromPlugin_LifecycleAck) isFromPlugin_Msg() {}
+
+func (*FromPlugin_Pong) isFromPlugin_Msg() {}
+
+type FromHost struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Msg:
+	//
+	//	*FromHost_Registered
+	//	*FromHost_Invoke
+	//	*FromHost_HostCallResult
+	//	*FromHost_Event
+	//	*FromHost_Lifecycle
+	//	*FromHost_Ping
+	Msg           isFromHost_Msg `protobuf_oneof:"msg"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FromHost) Reset() {
+	*x = FromHost{}
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FromHost) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FromHost) ProtoMessage() {}
+
+func (x *FromHost) ProtoReflect() protoreflect.Message {
+	mi := &file_pluginhost_v1_pluginhost_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FromHost.ProtoReflect.Descriptor instead.
+func (*FromHost) Descriptor() ([]byte, []int) {
+	return file_pluginhost_v1_pluginhost_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *FromHost) GetMsg() isFromHost_Msg {
+	if x != nil {
+		return x.Msg
+	}
+	return nil
+}
+
+func (x *FromHost) GetRegistered() *Registered {
+	if x != nil {
+		if x, ok := x.Msg.(*FromHost_Registered); ok {
+			return x.Registered
+		}
+	}
+	return nil
+}
+
+func (x *FromHost) GetInvoke() *InvokeRequest {
+	if x != nil {
+		if x, ok := x.Msg.(*FromHost_Invoke); ok {
+			return x.Invoke
+		}
+	}
+	return nil
+}
+
+func (x *FromHost) GetHostCallResult() *InvokeResponse {
+	if x != nil {
+		if x, ok := x.Msg.(*FromHost_HostCallResult); ok {
+			return x.HostCallResult
+		}
+	}
+	return nil
+}
+
+func (x *FromHost) GetEvent() *EventEnvelope {
+	if x != nil {
+		if x, ok := x.Msg.(*FromHost_Event); ok {
+			return x.Event
+		}
+	}
+	return nil
+}
+
+func (x *FromHost) GetLifecycle() *Lifecycle {
+	if x != nil {
+		if x, ok := x.Msg.(*FromHost_Lifecycle); ok {
+			return x.Lifecycle
+		}
+	}
+	return nil
+}
+
+func (x *FromHost) GetPing() *Ping {
+	if x != nil {
+		if x, ok := x.Msg.(*FromHost_Ping); ok {
+			return x.Ping
+		}
+	}
+	return nil
+}
+
+type isFromHost_Msg interface {
+	isFromHost_Msg()
+}
+
+type FromHost_Registered struct {
+	Registered *Registered `protobuf:"bytes,1,opt,name=registered,proto3,oneof"`
+}
+
+type FromHost_Invoke struct {
+	Invoke *InvokeRequest `protobuf:"bytes,2,opt,name=invoke,proto3,oneof"` // 触发扩展点
+}
+
+type FromHost_HostCallResult struct {
+	HostCallResult *InvokeResponse `protobuf:"bytes,3,opt,name=host_call_result,json=hostCallResult,proto3,oneof"` // 回应插件的 HostCall
+}
+
+type FromHost_Event struct {
+	Event *EventEnvelope `protobuf:"bytes,4,opt,name=event,proto3,oneof"` // 下发事件
+}
+
+type FromHost_Lifecycle struct {
+	Lifecycle *Lifecycle `protobuf:"bytes,5,opt,name=lifecycle,proto3,oneof"`
+}
+
+type FromHost_Ping struct {
+	Ping *Ping `protobuf:"bytes,6,opt,name=ping,proto3,oneof"`
+}
+
+func (*FromHost_Registered) isFromHost_Msg() {}
+
+func (*FromHost_Invoke) isFromHost_Msg() {}
+
+func (*FromHost_HostCallResult) isFromHost_Msg() {}
+
+func (*FromHost_Event) isFromHost_Msg() {}
+
+func (*FromHost_Lifecycle) isFromHost_Msg() {}
+
+func (*FromHost_Ping) isFromHost_Msg() {}
+
 var File_pluginhost_v1_pluginhost_proto protoreflect.FileDescriptor
 
 const file_pluginhost_v1_pluginhost_proto_rawDesc = "" +
 	"\n" +
-	"\x1epluginhost/v1/pluginhost.proto\x12\x16vastplan.pluginhost.v1\x1a\x1acontract/v1/contract.proto\"c\n" +
+	"\x1epluginhost/v1/pluginhost.proto\x12\x16vastplan.pluginhost.v1\x1a\x1acontract/v1/contract.proto\"\xad\x02\n" +
 	"\x05Hello\x12%\n" +
 	"\x0eproto_versions\x18\x01 \x03(\x05R\rprotoVersions\x12\x14\n" +
-	"\x05magic\x18\x02 \x01(\tR\x05magic\x12\x1d\n" +
-	"\n" +
-	"session_id\x18\x03 \x01(\tR\tsessionId\"\xfe\x01\n" +
-	"\bHelloAck\x12)\n" +
-	"\x10negotiated_proto\x18\x01 \x01(\x05R\x0fnegotiatedProto\x12\x1b\n" +
-	"\tplugin_id\x18\x02 \x01(\tR\bpluginId\x12%\n" +
-	"\x0eplugin_version\x18\x03 \x01(\tR\rpluginVersion\x12G\n" +
-	"\aengines\x18\x04 \x03(\v2-.vastplan.pluginhost.v1.HelloAck.EnginesEntryR\aengines\x1a:\n" +
+	"\x05magic\x18\x02 \x01(\tR\x05magic\x12\x1b\n" +
+	"\tplugin_id\x18\x03 \x01(\tR\bpluginId\x12%\n" +
+	"\x0eplugin_version\x18\x04 \x01(\tR\rpluginVersion\x12D\n" +
+	"\aengines\x18\x05 \x03(\v2*.vastplan.pluginhost.v1.Hello.EnginesEntryR\aengines\x12!\n" +
+	"\flaunch_token\x18\x06 \x01(\tR\vlaunchToken\x1a:\n" +
 	"\fEnginesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8c\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x81\x01\n" +
+	"\bHelloAck\x12)\n" +
+	"\x10negotiated_proto\x18\x01 \x01(\x05R\x0fnegotiatedProto\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12+\n" +
+	"\x11host_capabilities\x18\x03 \x03(\tR\x10hostCapabilities\"\x8c\x01\n" +
 	"\fContribution\x12'\n" +
 	"\x0fextension_point\x18\x01 \x01(\tR\x0eextensionPoint\x12\x0e\n" +
 	"\x02id\x18\x02 \x01(\tR\x02id\x12\x1a\n" +
 	"\bpriority\x18\x03 \x01(\x05R\bpriority\x12'\n" +
-	"\x0fdescriptor_json\x18\x04 \x01(\fR\x0edescriptorJson\"/\n" +
-	"\x0eDeclareRequest\x12\x1d\n" +
-	"\n" +
-	"session_id\x18\x01 \x01(\tR\tsessionId\"Y\n" +
+	"\x0fdescriptor_json\x18\x04 \x01(\fR\x0edescriptorJson\"Y\n" +
 	"\vDeclaration\x12J\n" +
-	"\rcontributions\x18\x01 \x03(\v2$.vastplan.pluginhost.v1.ContributionR\rcontributions\"\xa0\x01\n" +
-	"\rInvokeRequest\x128\n" +
-	"\x06target\x18\x01 \x01(\v2 .vastplan.contract.v1.CallTargetR\x06target\x12;\n" +
-	"\acontext\x18\x02 \x01(\v2!.vastplan.contract.v1.CallContextR\acontext\x12\x18\n" +
-	"\apayload\x18\x03 \x01(\fR\apayload\"d\n" +
-	"\x0eInvokeResponse\x128\n" +
-	"\x06result\x18\x01 \x01(\v2 .vastplan.contract.v1.CallResultR\x06result\x12\x18\n" +
-	"\apayload\x18\x02 \x01(\fR\apayload\"\x9e\x01\n" +
-	"\tLifecycle\x124\n" +
-	"\x02op\x18\x01 \x01(\x0e2$.vastplan.pluginhost.v1.Lifecycle.OpR\x02op\"[\n" +
+	"\rcontributions\x18\x01 \x03(\v2$.vastplan.pluginhost.v1.ContributionR\rcontributions\"\xb3\x01\n" +
+	"\n" +
+	"Registered\x12\x1a\n" +
+	"\baccepted\x18\x01 \x03(\tR\baccepted\x12L\n" +
+	"\brejected\x18\x02 \x03(\v20.vastplan.pluginhost.v1.Registered.RejectedEntryR\brejected\x1a;\n" +
+	"\rRejectedEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbf\x01\n" +
+	"\rInvokeRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x128\n" +
+	"\x06target\x18\x02 \x01(\v2 .vastplan.contract.v1.CallTargetR\x06target\x12;\n" +
+	"\acontext\x18\x03 \x01(\v2!.vastplan.contract.v1.CallContextR\acontext\x12\x18\n" +
+	"\apayload\x18\x04 \x01(\fR\apayload\"\x83\x01\n" +
+	"\x0eInvokeResponse\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x128\n" +
+	"\x06result\x18\x02 \x01(\v2 .vastplan.contract.v1.CallResultR\x06result\x12\x18\n" +
+	"\apayload\x18\x03 \x01(\fR\apayload\"F\n" +
+	"\rEventEnvelope\x125\n" +
+	"\x05event\x18\x01 \x01(\v2\x1f.vastplan.contract.v1.CallEventR\x05event\"\xbd\x01\n" +
+	"\tLifecycle\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x124\n" +
+	"\x02op\x18\x02 \x01(\x0e2$.vastplan.pluginhost.v1.Lifecycle.OpR\x02op\"[\n" +
 	"\x02Op\x12\x12\n" +
 	"\x0eOP_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vOP_ACTIVATE\x10\x01\x12\x11\n" +
 	"\rOP_DEACTIVATE\x10\x02\x12\f\n" +
 	"\bOP_DRAIN\x10\x03\x12\x0f\n" +
-	"\vOP_SHUTDOWN\x10\x04\"O\n" +
-	"\fLifecycleAck\x12\x14\n" +
-	"\x05ready\x18\x01 \x01(\bR\x05ready\x12\x1d\n" +
-	"\amessage\x18\x02 \x01(\tH\x00R\amessage\x88\x01\x01B\n" +
+	"\vOP_SHUTDOWN\x10\x04\"n\n" +
+	"\fLifecycleAck\x12\x1d\n" +
 	"\n" +
-	"\b_message2\xe1\x02\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x14\n" +
+	"\x05ready\x18\x02 \x01(\bR\x05ready\x12\x1d\n" +
+	"\amessage\x18\x03 \x01(\tH\x00R\amessage\x88\x01\x01B\n" +
+	"\n" +
+	"\b_message\"%\n" +
+	"\x04Ping\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\"%\n" +
+	"\x04Pong\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\"\xa9\x03\n" +
+	"\n" +
+	"FromPlugin\x12?\n" +
+	"\adeclare\x18\x01 \x01(\v2#.vastplan.pluginhost.v1.DeclarationH\x00R\adeclare\x12M\n" +
+	"\rinvoke_result\x18\x02 \x01(\v2&.vastplan.pluginhost.v1.InvokeResponseH\x00R\finvokeResult\x12D\n" +
+	"\thost_call\x18\x03 \x01(\v2%.vastplan.pluginhost.v1.InvokeRequestH\x00R\bhostCall\x12=\n" +
+	"\x05event\x18\x04 \x01(\v2%.vastplan.pluginhost.v1.EventEnvelopeH\x00R\x05event\x12K\n" +
+	"\rlifecycle_ack\x18\x05 \x01(\v2$.vastplan.pluginhost.v1.LifecycleAckH\x00R\flifecycleAck\x122\n" +
+	"\x04pong\x18\x06 \x01(\v2\x1c.vastplan.pluginhost.v1.PongH\x00R\x04pongB\x05\n" +
+	"\x03msg\"\xa2\x03\n" +
+	"\bFromHost\x12D\n" +
+	"\n" +
+	"registered\x18\x01 \x01(\v2\".vastplan.pluginhost.v1.RegisteredH\x00R\n" +
+	"registered\x12?\n" +
+	"\x06invoke\x18\x02 \x01(\v2%.vastplan.pluginhost.v1.InvokeRequestH\x00R\x06invoke\x12R\n" +
+	"\x10host_call_result\x18\x03 \x01(\v2&.vastplan.pluginhost.v1.InvokeResponseH\x00R\x0ehostCallResult\x12=\n" +
+	"\x05event\x18\x04 \x01(\v2%.vastplan.pluginhost.v1.EventEnvelopeH\x00R\x05event\x12A\n" +
+	"\tlifecycle\x18\x05 \x01(\v2!.vastplan.pluginhost.v1.LifecycleH\x00R\tlifecycle\x122\n" +
+	"\x04ping\x18\x06 \x01(\v2\x1c.vastplan.pluginhost.v1.PingH\x00R\x04pingB\x05\n" +
+	"\x03msg2\xaf\x01\n" +
 	"\n" +
 	"PluginHost\x12L\n" +
-	"\tHandshake\x12\x1d.vastplan.pluginhost.v1.Hello\x1a .vastplan.pluginhost.v1.HelloAck\x12V\n" +
-	"\aDeclare\x12&.vastplan.pluginhost.v1.DeclareRequest\x1a#.vastplan.pluginhost.v1.Declaration\x12W\n" +
-	"\x06Invoke\x12%.vastplan.pluginhost.v1.InvokeRequest\x1a&.vastplan.pluginhost.v1.InvokeResponse\x12T\n" +
-	"\tLifecycle\x12!.vastplan.pluginhost.v1.Lifecycle\x1a$.vastplan.pluginhost.v1.LifecycleAckB@Z>github.com/yandt/VastPlan/shared/go/pluginhost/v1;pluginhostv1b\x06proto3"
+	"\tHandshake\x12\x1d.vastplan.pluginhost.v1.Hello\x1a .vastplan.pluginhost.v1.HelloAck\x12S\n" +
+	"\aChannel\x12\".vastplan.pluginhost.v1.FromPlugin\x1a .vastplan.pluginhost.v1.FromHost(\x010\x01B@Z>github.com/yandt/VastPlan/shared/go/pluginhost/v1;pluginhostv1b\x06proto3"
 
 var (
 	file_pluginhost_v1_pluginhost_proto_rawDescOnce sync.Once
@@ -655,43 +1173,60 @@ func file_pluginhost_v1_pluginhost_proto_rawDescGZIP() []byte {
 }
 
 var file_pluginhost_v1_pluginhost_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_pluginhost_v1_pluginhost_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_pluginhost_v1_pluginhost_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_pluginhost_v1_pluginhost_proto_goTypes = []any{
 	(Lifecycle_Op)(0),      // 0: vastplan.pluginhost.v1.Lifecycle.Op
 	(*Hello)(nil),          // 1: vastplan.pluginhost.v1.Hello
 	(*HelloAck)(nil),       // 2: vastplan.pluginhost.v1.HelloAck
 	(*Contribution)(nil),   // 3: vastplan.pluginhost.v1.Contribution
-	(*DeclareRequest)(nil), // 4: vastplan.pluginhost.v1.DeclareRequest
-	(*Declaration)(nil),    // 5: vastplan.pluginhost.v1.Declaration
+	(*Declaration)(nil),    // 4: vastplan.pluginhost.v1.Declaration
+	(*Registered)(nil),     // 5: vastplan.pluginhost.v1.Registered
 	(*InvokeRequest)(nil),  // 6: vastplan.pluginhost.v1.InvokeRequest
 	(*InvokeResponse)(nil), // 7: vastplan.pluginhost.v1.InvokeResponse
-	(*Lifecycle)(nil),      // 8: vastplan.pluginhost.v1.Lifecycle
-	(*LifecycleAck)(nil),   // 9: vastplan.pluginhost.v1.LifecycleAck
-	nil,                    // 10: vastplan.pluginhost.v1.HelloAck.EnginesEntry
-	(*v1.CallTarget)(nil),  // 11: vastplan.contract.v1.CallTarget
-	(*v1.CallContext)(nil), // 12: vastplan.contract.v1.CallContext
-	(*v1.CallResult)(nil),  // 13: vastplan.contract.v1.CallResult
+	(*EventEnvelope)(nil),  // 8: vastplan.pluginhost.v1.EventEnvelope
+	(*Lifecycle)(nil),      // 9: vastplan.pluginhost.v1.Lifecycle
+	(*LifecycleAck)(nil),   // 10: vastplan.pluginhost.v1.LifecycleAck
+	(*Ping)(nil),           // 11: vastplan.pluginhost.v1.Ping
+	(*Pong)(nil),           // 12: vastplan.pluginhost.v1.Pong
+	(*FromPlugin)(nil),     // 13: vastplan.pluginhost.v1.FromPlugin
+	(*FromHost)(nil),       // 14: vastplan.pluginhost.v1.FromHost
+	nil,                    // 15: vastplan.pluginhost.v1.Hello.EnginesEntry
+	nil,                    // 16: vastplan.pluginhost.v1.Registered.RejectedEntry
+	(*v1.CallTarget)(nil),  // 17: vastplan.contract.v1.CallTarget
+	(*v1.CallContext)(nil), // 18: vastplan.contract.v1.CallContext
+	(*v1.CallResult)(nil),  // 19: vastplan.contract.v1.CallResult
+	(*v1.CallEvent)(nil),   // 20: vastplan.contract.v1.CallEvent
 }
 var file_pluginhost_v1_pluginhost_proto_depIdxs = []int32{
-	10, // 0: vastplan.pluginhost.v1.HelloAck.engines:type_name -> vastplan.pluginhost.v1.HelloAck.EnginesEntry
+	15, // 0: vastplan.pluginhost.v1.Hello.engines:type_name -> vastplan.pluginhost.v1.Hello.EnginesEntry
 	3,  // 1: vastplan.pluginhost.v1.Declaration.contributions:type_name -> vastplan.pluginhost.v1.Contribution
-	11, // 2: vastplan.pluginhost.v1.InvokeRequest.target:type_name -> vastplan.contract.v1.CallTarget
-	12, // 3: vastplan.pluginhost.v1.InvokeRequest.context:type_name -> vastplan.contract.v1.CallContext
-	13, // 4: vastplan.pluginhost.v1.InvokeResponse.result:type_name -> vastplan.contract.v1.CallResult
-	0,  // 5: vastplan.pluginhost.v1.Lifecycle.op:type_name -> vastplan.pluginhost.v1.Lifecycle.Op
-	1,  // 6: vastplan.pluginhost.v1.PluginHost.Handshake:input_type -> vastplan.pluginhost.v1.Hello
-	4,  // 7: vastplan.pluginhost.v1.PluginHost.Declare:input_type -> vastplan.pluginhost.v1.DeclareRequest
-	6,  // 8: vastplan.pluginhost.v1.PluginHost.Invoke:input_type -> vastplan.pluginhost.v1.InvokeRequest
-	8,  // 9: vastplan.pluginhost.v1.PluginHost.Lifecycle:input_type -> vastplan.pluginhost.v1.Lifecycle
-	2,  // 10: vastplan.pluginhost.v1.PluginHost.Handshake:output_type -> vastplan.pluginhost.v1.HelloAck
-	5,  // 11: vastplan.pluginhost.v1.PluginHost.Declare:output_type -> vastplan.pluginhost.v1.Declaration
-	7,  // 12: vastplan.pluginhost.v1.PluginHost.Invoke:output_type -> vastplan.pluginhost.v1.InvokeResponse
-	9,  // 13: vastplan.pluginhost.v1.PluginHost.Lifecycle:output_type -> vastplan.pluginhost.v1.LifecycleAck
-	10, // [10:14] is the sub-list for method output_type
-	6,  // [6:10] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	16, // 2: vastplan.pluginhost.v1.Registered.rejected:type_name -> vastplan.pluginhost.v1.Registered.RejectedEntry
+	17, // 3: vastplan.pluginhost.v1.InvokeRequest.target:type_name -> vastplan.contract.v1.CallTarget
+	18, // 4: vastplan.pluginhost.v1.InvokeRequest.context:type_name -> vastplan.contract.v1.CallContext
+	19, // 5: vastplan.pluginhost.v1.InvokeResponse.result:type_name -> vastplan.contract.v1.CallResult
+	20, // 6: vastplan.pluginhost.v1.EventEnvelope.event:type_name -> vastplan.contract.v1.CallEvent
+	0,  // 7: vastplan.pluginhost.v1.Lifecycle.op:type_name -> vastplan.pluginhost.v1.Lifecycle.Op
+	4,  // 8: vastplan.pluginhost.v1.FromPlugin.declare:type_name -> vastplan.pluginhost.v1.Declaration
+	7,  // 9: vastplan.pluginhost.v1.FromPlugin.invoke_result:type_name -> vastplan.pluginhost.v1.InvokeResponse
+	6,  // 10: vastplan.pluginhost.v1.FromPlugin.host_call:type_name -> vastplan.pluginhost.v1.InvokeRequest
+	8,  // 11: vastplan.pluginhost.v1.FromPlugin.event:type_name -> vastplan.pluginhost.v1.EventEnvelope
+	10, // 12: vastplan.pluginhost.v1.FromPlugin.lifecycle_ack:type_name -> vastplan.pluginhost.v1.LifecycleAck
+	12, // 13: vastplan.pluginhost.v1.FromPlugin.pong:type_name -> vastplan.pluginhost.v1.Pong
+	5,  // 14: vastplan.pluginhost.v1.FromHost.registered:type_name -> vastplan.pluginhost.v1.Registered
+	6,  // 15: vastplan.pluginhost.v1.FromHost.invoke:type_name -> vastplan.pluginhost.v1.InvokeRequest
+	7,  // 16: vastplan.pluginhost.v1.FromHost.host_call_result:type_name -> vastplan.pluginhost.v1.InvokeResponse
+	8,  // 17: vastplan.pluginhost.v1.FromHost.event:type_name -> vastplan.pluginhost.v1.EventEnvelope
+	9,  // 18: vastplan.pluginhost.v1.FromHost.lifecycle:type_name -> vastplan.pluginhost.v1.Lifecycle
+	11, // 19: vastplan.pluginhost.v1.FromHost.ping:type_name -> vastplan.pluginhost.v1.Ping
+	1,  // 20: vastplan.pluginhost.v1.PluginHost.Handshake:input_type -> vastplan.pluginhost.v1.Hello
+	13, // 21: vastplan.pluginhost.v1.PluginHost.Channel:input_type -> vastplan.pluginhost.v1.FromPlugin
+	2,  // 22: vastplan.pluginhost.v1.PluginHost.Handshake:output_type -> vastplan.pluginhost.v1.HelloAck
+	14, // 23: vastplan.pluginhost.v1.PluginHost.Channel:output_type -> vastplan.pluginhost.v1.FromHost
+	22, // [22:24] is the sub-list for method output_type
+	20, // [20:22] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_pluginhost_v1_pluginhost_proto_init() }
@@ -699,14 +1234,30 @@ func file_pluginhost_v1_pluginhost_proto_init() {
 	if File_pluginhost_v1_pluginhost_proto != nil {
 		return
 	}
-	file_pluginhost_v1_pluginhost_proto_msgTypes[8].OneofWrappers = []any{}
+	file_pluginhost_v1_pluginhost_proto_msgTypes[9].OneofWrappers = []any{}
+	file_pluginhost_v1_pluginhost_proto_msgTypes[12].OneofWrappers = []any{
+		(*FromPlugin_Declare)(nil),
+		(*FromPlugin_InvokeResult)(nil),
+		(*FromPlugin_HostCall)(nil),
+		(*FromPlugin_Event)(nil),
+		(*FromPlugin_LifecycleAck)(nil),
+		(*FromPlugin_Pong)(nil),
+	}
+	file_pluginhost_v1_pluginhost_proto_msgTypes[13].OneofWrappers = []any{
+		(*FromHost_Registered)(nil),
+		(*FromHost_Invoke)(nil),
+		(*FromHost_HostCallResult)(nil),
+		(*FromHost_Event)(nil),
+		(*FromHost_Lifecycle)(nil),
+		(*FromHost_Ping)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pluginhost_v1_pluginhost_proto_rawDesc), len(file_pluginhost_v1_pluginhost_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
