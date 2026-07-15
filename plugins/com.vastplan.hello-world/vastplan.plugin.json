@@ -1,0 +1,50 @@
+{
+  "id": "com.vastplan.hello-world",
+  "name": "Hello World",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "description": "MVP 骨架验证插件：向 Agent 暴露一个工具包，验证握手→贡献注册→调用闭环",
+  "engines": { "backend": "^0.1" },
+
+  "capabilities": {
+    "kernelServices": [],
+    "credentials": [],
+    "resources": []
+  },
+
+  "activation": ["onAgentTool:vastplan.hello"],
+
+  "entry": { "backend": "backend/hello-world" },
+
+  "contributes": {
+    "backend": {
+      "tools": [
+        {
+          "id": "vastplan.hello",
+          "service_role": "backend",
+          "title": "Hello 工具包",
+          "subcommands": [
+            {
+              "name": "greet",
+              "description": "向指定对象问好",
+              "paramsSchema": {
+                "type": "object",
+                "properties": { "name": { "type": "string" } },
+                "required": ["name"]
+              }
+            },
+            {
+              "name": "echo",
+              "description": "原样回显",
+              "paramsSchema": {
+                "type": "object",
+                "properties": { "text": { "type": "string" } },
+                "required": ["text"]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

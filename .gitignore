@@ -15,3 +15,6 @@ Thumbs.db
 *.log
 tmp/
 .tmp/
+
+# 构建产物
+bin/

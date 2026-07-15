@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+// 插件-宿主协议（Plugin-Host Protocol）——内核内：宿主 ↔ 本内核插件
+// 规格见 docs/dev/architecture/插件契约与协议.md 第二章
+//
+// MVP 范围与偏离（如实记录）：
+//   1) 仅 Handshake + Declare + Invoke + Lifecycle 四个 unary RPC；
+//      设计中的 Channel 双向流（宿主↔插件多路复用调用/事件/心跳、插件回调宿主）后续补。
+//   2) 方向：MVP 中宿主是 gRPC client、插件是 server，故握手由宿主发起（Hello 宿主→插件），
+//      与第二章"插件连上后主动 Hello"方向相反；会话票据仍由宿主签发。
+//      待 Channel 落地后回归设计方向。
+package vastplan.pluginhost.v1;
+
+import "contract/v1/contract.proto";
+
+option go_package = "github.com/yandt/VastPlan/shared/go/pluginhost/v1;pluginhostv1";
+
+// ── 握手（第二章 §2.2）───────────────────────────────────
+
+// 宿主→插件：magic 校验 + 版本协商 + 下发会话票据
+message Hello {
+  repeated int32 proto_versions = 1; // 宿主支持的协议版本集
+  string magic = 2;                  // magic cookie，防误把普通进程当插件
+  string session_id = 3;             // 宿主签发的会话票据：审计与回调鉴权
+}
+
+// 插件→宿主：协商结果 + 自报身份
+message HelloAck {
+  int32 negotiated_proto = 1;
+  string plugin_id = 2;
+  string plugin_version = 3;
+}
+
+// ── 贡献声明与注册（第二章 §2.5）─────────────────────────
+
+message Contribution {
+  string extension_point = 1; // 目标 Registry 名（= CallTarget.extension_point）
+  string id = 2;              // 贡献稳定逻辑名（= CallTarget.capability），四处同名
+  int32 priority = 3;
+  // 该扩展点要求的贡献契约（JSON，见第四章）。
+  // 命名带 _json 后缀以避开 protobuf 生成的 Descriptor() 方法冲突。
+  bytes descriptor_json = 4;
+}
+
+message DeclareRequest {
+  string session_id = 1;
+}
+
+// 插件声明它填充哪些扩展点；宿主据此接入注册表，非法者拒绝（fail-closed）
+message Declaration {
+  repeated Contribution contributions = 1;
+}
+
+// ── 调用（第二章 §2.4）───────────────────────────────────
+
+message InvokeRequest {
+  vastplan.contract.v1.CallTarget target = 1;
+  vastplan.contract.v1.CallContext context = 2;
+  bytes payload = 3;
+}
+
+message InvokeResponse {
+  vastplan.contract.v1.CallResult result = 1;
+  bytes payload = 2;
+}
+
+// ── 生命周期（第二章 §2.6）───────────────────────────────
+
+message Lifecycle {
+  enum Op {
+    OP_UNSPECIFIED = 0;
+    OP_ACTIVATE = 1;
+    OP_DEACTIVATE = 2;
+    OP_DRAIN = 3;
+    OP_SHUTDOWN = 4;
+  }
+  Op op = 1;
+}
+
+message LifecycleAck {
+  bool ready = 1;
+  optional string message = 2;
+}
+
+// ── 服务 ────────────────────────────────────────────────
+
+service PluginHost {
+  rpc Handshake(Hello) returns (HelloAck);
+  rpc Declare(DeclareRequest) returns (Declaration);
+  rpc Invoke(InvokeRequest) returns (InvokeResponse);
+  rpc Lifecycle(vastplan.pluginhost.v1.Lifecycle) returns (LifecycleAck);
+}
