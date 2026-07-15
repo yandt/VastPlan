@@ -1,0 +1,298 @@
+// Package arch 是**架构守护测试**（architecture fitness functions）。
+//
+// 我们对插件坚持 fail-closed，对自身架构约束却一度只靠自觉——并已被现实打脸：
+// ADR-0017 §3 明写"协议常量禁止两处声明"，而 MVP 里 MagicCookie/ProtocolVersion
+// 恰恰在 protocolbus 与 sdk 各写了一份，两轮后才发现。君子协定连规则作者都拦不住。
+//
+// 本包把文档里的架构约束变成**可执行断言**：违规即构建失败。
+// 无 build tag —— 这些检查很快（只解析 import 与扫文件），应在每次 go test ./... 时生效。
+package arch
+
+import (
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strconv"
+	"strings"
+	"testing"
+
+	"github.com/yandt/VastPlan/shared/go/protocol"
+)
+
+const modulePath = "github.com/yandt/VastPlan"
+
+// ── 基础设施 ────────────────────────────────────────────
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("取工作目录失败: %v", err)
+	}
+	return filepath.Dir(wd) // arch/ 的上一级
+}
+
+// goFile 一个 Go 源文件及其解析出的导入。
+type goFile struct {
+	relPath   string // 相对仓库根，如 kernels/backend/main.go
+	imports   []string
+	generated bool // 由 codegen 产出（.pb.go）
+}
+
+// collectGoFiles 遍历仓库所有 Go 文件并解析其 import。
+func collectGoFiles(t *testing.T) []goFile {
+	t.Helper()
+	root := repoRoot(t)
+	var out []goFile
+
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			switch d.Name() {
+			case ".git", "bin", "node_modules", ".obsidian":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if err != nil {
+			return err
+		}
+		gf := goFile{
+			relPath:   filepath.ToSlash(rel),
+			generated: strings.HasSuffix(path, ".pb.go"),
+		}
+		for _, imp := range f.Imports {
+			gf.imports = append(gf.imports, strings.Trim(imp.Path.Value, `"`))
+		}
+		out = append(out, gf)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("遍历仓库失败: %v", err)
+	}
+	if len(out) == 0 {
+		t.Fatal("未扫描到任何 Go 文件——守护测试可能失效")
+	}
+	return out
+}
+
+// assertNoImport 断言 fromPrefix 下的文件不得 import toPrefix 下的包。
+func assertNoImport(t *testing.T, files []goFile, fromPrefix, toPrefix, why string) {
+	t.Helper()
+	to := modulePath + "/" + toPrefix
+	for _, f := range files {
+		if !strings.HasPrefix(f.relPath, fromPrefix) {
+			continue
+		}
+		for _, imp := range f.imports {
+			if strings.HasPrefix(imp, to) {
+				t.Errorf("依赖方向违规：%s 不得 import %s\n  文件: %s\n  导入: %s\n  原因: %s",
+					fromPrefix, toPrefix, f.relPath, imp, why)
+			}
+		}
+	}
+}
+
+// ── 依赖方向（工程规范 §6）────────────────────────────────
+
+// 内核不认识任何具体插件——否则微内核就名存实亡。
+func TestArch_KernelsMustNotImportPlugins(t *testing.T) {
+	files := collectGoFiles(t)
+	assertNoImport(t, files, "kernels/", "plugins/",
+		"内核只提供骨架与扩展点，不得依赖任何具体插件（ADR-0001/0016）")
+}
+
+// 共享库不得反向依赖具体组件。
+func TestArch_SharedMustNotImportComponents(t *testing.T) {
+	files := collectGoFiles(t)
+	assertNoImport(t, files, "shared/", "kernels/", "共享库不得反向依赖内核实现")
+	assertNoImport(t, files, "shared/", "plugins/", "共享库不得依赖具体插件")
+}
+
+// SDK 是给插件开发者用的，不该依赖内核实现。
+func TestArch_SDKMustNotImportKernels(t *testing.T) {
+	files := collectGoFiles(t)
+	assertNoImport(t, files, "sdk/", "kernels/",
+		"SDK 面向插件开发者，只应依赖 proto 契约与 shared，不得依赖内核实现")
+	assertNoImport(t, files, "sdk/", "plugins/", "SDK 不得依赖具体插件")
+}
+
+// 插件之间不得直接 import——只能经能力名寻址，否则绕过扩展点、架构失效。
+func TestArch_PluginsMustNotImportEachOther(t *testing.T) {
+	files := collectGoFiles(t)
+	for _, f := range files {
+		if !strings.HasPrefix(f.relPath, "plugins/") {
+			continue
+		}
+		// 本插件自身的目录，如 plugins/com.vastplan.hello-world
+		parts := strings.SplitN(f.relPath, "/", 3)
+		if len(parts) < 2 {
+			continue
+		}
+		own := modulePath + "/plugins/" + parts[1]
+
+		for _, imp := range f.imports {
+			if !strings.HasPrefix(imp, modulePath+"/plugins/") {
+				continue
+			}
+			if !strings.HasPrefix(imp, own) {
+				t.Errorf("插件间直接依赖违规：%s 不得 import 其他插件\n  导入: %s\n  原因: 插件间只能经 capability 名寻址（系统架构 §2.7）",
+					f.relPath, imp)
+			}
+		}
+	}
+}
+
+// clientcore 只服务 Runner 与 Mobile（ADR-0014），后端不得使用。
+func TestArch_ClientCoreOnlyForRunnerAndMobile(t *testing.T) {
+	files := collectGoFiles(t)
+	cc := modulePath + "/shared/go/clientcore"
+	for _, f := range files {
+		for _, imp := range f.imports {
+			if !strings.HasPrefix(imp, cc) {
+				continue
+			}
+			allowed := strings.HasPrefix(f.relPath, "kernels/runner/") ||
+				strings.HasPrefix(f.relPath, "kernels/mobile/") ||
+				strings.HasPrefix(f.relPath, "shared/go/clientcore/")
+			if !allowed {
+				t.Errorf("clientcore 使用越界：%s 不得 import clientcore\n  原因: clientcore 只放 Runner 与 Mobile 共用的东西（ADR-0014）",
+					f.relPath)
+			}
+		}
+	}
+}
+
+// ── 单一真源（工程规范 §5）──────────────────────────────
+
+// 协议常量只许在 shared/go/protocol 定义。
+// 这正是 ADR-0017 §3 曾被违反的那条——本测试确保它不再重演。
+//
+// 注意：needle 由真源常量在运行时构造（而非在本文件硬编码字面量），
+// 既避免守护测试自我误报，也使常量改值时守护自动跟随。
+func TestArch_ProtocolConstantsSingleSource(t *testing.T) {
+	root := repoRoot(t)
+	magicLiteral := strconv.Quote(protocol.MagicCookie)
+	const singleSource = "shared/go/protocol/"
+
+	for _, f := range collectGoFiles(t) {
+		if strings.HasPrefix(f.relPath, singleSource) {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(root, f.relPath))
+		if err != nil {
+			t.Fatalf("读取 %s 失败: %v", f.relPath, err)
+		}
+		if strings.Contains(string(b), magicLiteral) {
+			t.Errorf("协议常量重复声明：%s 出现了 magic cookie 字面量\n  原因: 协议常量只许在 %s 定义（ADR-0017 §3）——两处声明会导致版本协商因两侧漂移而失效",
+				f.relPath, singleSource)
+		}
+	}
+}
+
+// 契约结构只由 proto 生成，不得手写。
+func TestArch_ContractStructsAreGeneratedOnly(t *testing.T) {
+	root := repoRoot(t)
+	contractTypes := []string{"CallContext", "CallTarget", "CallResult", "CallEvent"}
+
+	for _, f := range collectGoFiles(t) {
+		if f.generated || strings.HasSuffix(f.relPath, "_test.go") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(root, f.relPath))
+		if err != nil {
+			t.Fatalf("读取 %s 失败: %v", f.relPath, err)
+		}
+		src := string(b)
+		for _, ct := range contractTypes {
+			re := regexp.MustCompile(`(?m)^type\s+` + ct + `\s+struct`)
+			if re.MatchString(src) {
+				t.Errorf("契约结构被手写：%s 声明了 type %s struct\n  原因: 契约只由 proto/ 生成（ADR-0016 §6），手写副本必然与真源漂移",
+					f.relPath, ct)
+			}
+		}
+	}
+}
+
+// ── 布局纪律（ADR-0016）─────────────────────────────────
+
+// 服务组合是配置不是代码：不得出现 services/<role>/ 这类目录，
+// 否则会诱导把 backend/workspace/rs 分叉成三份代码。
+func TestArch_NoPerServiceDirectories(t *testing.T) {
+	root := repoRoot(t)
+	if _, err := os.Stat(filepath.Join(root, "services")); err == nil {
+		t.Errorf("布局违规：出现了 services/ 目录\n  原因: backend/workspace/rs 是同一 backend 内核二进制 + 不同期望态 service_role，" +
+			"服务组合是配置不是代码（ADR-0016 §3）")
+	}
+}
+
+// plugins/ 下只放产品插件，每个必须有清单；测试夹具插件应在 e2e/fixtures/。
+func TestArch_EveryPluginHasManifest(t *testing.T) {
+	root := repoRoot(t)
+	pluginsDir := filepath.Join(root, "plugins")
+	entries, err := os.ReadDir(pluginsDir)
+	if err != nil {
+		t.Fatalf("读取 plugins/ 失败: %v", err)
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		manifest := filepath.Join(pluginsDir, e.Name(), "vastplan.plugin.json")
+		if _, err := os.Stat(manifest); err != nil {
+			t.Errorf("插件缺少清单：plugins/%s 没有 vastplan.plugin.json\n  原因: plugins/ 只放产品插件且必须声明清单；"+
+				"测试夹具插件应放 e2e/fixtures/plugins/（ADR-0018 §3）", e.Name())
+		}
+	}
+}
+
+// ── 文档纪律 ────────────────────────────────────────────
+
+var mdLinkRe = regexp.MustCompile(`\]\(([^)]+\.md)(#[^)]*)?\)`)
+
+// 文档不得有死链——此前一直靠手工 grep，现固化为测试。
+func TestArch_DocsHaveNoDeadLinks(t *testing.T) {
+	root := repoRoot(t)
+	docsRoot := filepath.Join(root, "docs")
+
+	err := filepath.WalkDir(docsRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		for _, m := range mdLinkRe.FindAllStringSubmatch(string(b), -1) {
+			link := m[1]
+			if strings.HasPrefix(link, "http") || strings.HasPrefix(link, "/") {
+				continue
+			}
+			target := filepath.Join(filepath.Dir(path), link)
+			if _, err := os.Stat(target); err != nil {
+				rel, _ := filepath.Rel(root, path)
+				t.Errorf("文档死链：%s → %s（目标不存在）", filepath.ToSlash(rel), link)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("遍历文档失败: %v", err)
+	}
+}
