@@ -46,3 +46,4 @@
 - [ADR-0013 客户端多档能力：桌面完整 runner + 手机 Companion](ADR-0013-APP多档能力与手机Companion.md)
 - [ADR-0014 四内核结构：拆出 Runner 内核与移动 Companion 内核](ADR-0014-四内核结构.md)
 - [ADR-0015 内核与贡献面命名规范（backend/frontend/runner/mobile）](ADR-0015-内核与贡献面命名规范.md)
+- [ADR-0016 单仓（monorepo）与代码目录布局](ADR-0016-单仓与代码目录布局.md)
