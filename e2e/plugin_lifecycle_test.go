@@ -50,13 +50,16 @@ func newHost(t *testing.T, kernelVersion string) *protocolbus.Host {
 	reg := registry.New()
 	for _, p := range []registry.ExtensionPoint{
 		{Name: "tool.package", Dispatch: registry.DispatchSingle},
+		{Name: "permission.checker", Dispatch: registry.DispatchSelect},
 		{Name: "event.sink", Dispatch: registry.DispatchFanout},
 		{Name: "kernel.service", Dispatch: registry.DispatchSingle},
 	} {
 		reg.DefinePoint(p)
 	}
 
-	h := protocolbus.NewHost(kernelName, kernelVersion, reg, func(string, ...any) {})
+	// 日志接到 t：否则"贡献被拒"这类关键信息进黑洞，失败时无从排障
+	h := protocolbus.NewHost(kernelName, kernelVersion, reg,
+		func(format string, args ...any) { t.Logf("[host] "+format, args...) })
 	// 缩短时限：让"失联/超时"类用例秒级完成，不必真等生产默认值
 	h.LaunchTimeout = 20 * time.Second
 	h.CallTimeout = 5 * time.Second
@@ -83,6 +86,23 @@ func newHost(t *testing.T, kernelVersion string) *protocolbus.Host {
 	return h
 }
 
+// allowAllPermissions 让本测试显式声明"放行一切"。
+//
+// 供**不测权限**的用例使用：它们测协议/生命周期，但 Invoke 会强制权限判定
+// （零校验器 → fail-closed 拒绝，ADR-0021）。与其偷偷跳过校验，不如让每个测试
+// 把自己的策略摆到明面上。测权限的用例不要调它——它们装真的权限插件。
+func allowAllPermissions(t *testing.T, h *protocolbus.Host) {
+	t.Helper()
+	err := h.RegisterHostService("permission.checker", "test.allow-all",
+		func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK},
+				[]byte(`{"decision":"allow","reason":"测试放行策略"}`), nil
+		})
+	if err != nil {
+		t.Fatalf("注册测试放行策略失败: %v", err)
+	}
+}
+
 func testCallContext() *contractv1.CallContext {
 	return &contractv1.CallContext{
 		Principal: &contractv1.Principal{UserId: "u-1", Username: "tester", TenantId: "acme"},
@@ -100,7 +120,8 @@ func toolTarget(capability, op string) *contractv1.CallTarget {
 // 完整生命周期：拉起 → 回连 → 握手 → engines 校验 → 贡献注册 → 激活 → 调用 → 摘除。
 func TestPluginLifecycle_HappyPath(t *testing.T) {
 	bin := buildPlugin(t, "./plugins/com.vastplan.hello-world/backend")
-	host := newHost(t, "0.1.0") // 满足插件的 engines ^0.1
+	host := newHost(t, "0.1.0")  // 满足插件的 engines ^0.1
+	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -152,6 +173,7 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 func TestPluginHostCall_PluginCallsBackIntoKernel(t *testing.T) {
 	bin := buildPlugin(t, "./plugins/com.vastplan.hello-world/backend")
 	host := newHost(t, "0.1.0")
+	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -190,6 +212,7 @@ func TestPluginHostCall_PluginCallsBackIntoKernel(t *testing.T) {
 func TestPluginInvoke_ApplicationErrorsAreNotTransportErrors(t *testing.T) {
 	bin := buildPlugin(t, "./plugins/com.vastplan.hello-world/backend")
 	host := newHost(t, "0.1.0")
+	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -233,6 +256,7 @@ func TestPluginInvoke_ApplicationErrorsAreNotTransportErrors(t *testing.T) {
 func TestPluginInvoke_UnregisteredCapabilityRejected(t *testing.T) {
 	bin := buildPlugin(t, "./plugins/com.vastplan.hello-world/backend")
 	host := newHost(t, "0.1.0")
+	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -294,6 +318,7 @@ func TestPluginLaunch_MissingEnginesRejected(t *testing.T) {
 func TestPluginCrash_ContributionsRemovedAndInflightCallsFail(t *testing.T) {
 	bin := buildPlugin(t, "./e2e/fixtures/plugins/crasher")
 	host := newHost(t, "0.1.0")
+	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

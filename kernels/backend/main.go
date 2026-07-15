@@ -31,10 +31,10 @@ var version = "0.0.0-devel"
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "用法: %s <插件可执行文件路径>\n", filepath.Base(os.Args[0]))
+		fmt.Fprintf(os.Stderr, "用法: %s <插件可执行文件路径>...\n", filepath.Base(os.Args[0]))
 		os.Exit(2)
 	}
-	pluginBin := os.Args[1]
+	pluginBins := os.Args[1:]
 
 	logf := func(format string, args ...any) { log.Printf("[kernel] "+format, args...) }
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -72,9 +72,12 @@ func main() {
 	logf("已登记内核能力 kernel.info")
 
 	// ── 3. 装载插件：握手 → engines 校验 → 贡献注册 → 激活 ──
-	p, err := host.Launch(ctx, pluginBin)
-	if err != nil {
-		log.Fatalf("[kernel] 装载插件失败: %v", err)
+	// 权限校验器由插件提供（ADR-0001 一切功能皆插件）；没装它则所有调用被
+	// fail-closed 拒绝（ADR-0021）——这正是要演示的。
+	for _, bin := range pluginBins {
+		if _, err := host.Launch(ctx, bin); err != nil {
+			log.Fatalf("[kernel] 装载插件 %s 失败: %v", filepath.Base(bin), err)
+		}
 	}
 
 	// ── 4. 调用插件贡献的能力（契约全程透传）─────────────────
@@ -121,9 +124,38 @@ func main() {
 		logf("未注册能力被正确拒绝: %v", err)
 	}
 
+	// ── 6. fanout：发布事件，扇出给所有订阅者 ────────────────
+	outcomes := host.PublishEvent(ctx, &contractv1.CallEvent{
+		Id: "evt-1", Type: "task.completed", Source: "kernel",
+		TenantId: "acme", OccurredAtUnixMs: time.Now().UnixMilli(),
+		Trace:   callCtx.Trace,
+		Payload: []byte(`{"taskId":"t-1"}`),
+	})
+	for _, o := range outcomes {
+		if o.Err != nil {
+			logf("事件汇 %s 失败: %v", o.SinkID, o.Err)
+		} else {
+			logf("事件已投递给 %s", o.SinkID)
+		}
+	}
+	// 未被任何 sink 订阅的类型：不应投递
+	if n := len(host.PublishEvent(ctx, &contractv1.CallEvent{
+		Id: "evt-2", Type: "unsubscribed.type", Source: "kernel", TenantId: "acme",
+	})); n == 0 {
+		logf("未订阅的事件类型无人接收（符合预期）")
+	}
+
+	// 向审计插件查账：验证事件**真的送达了插件**，而非宿主自说自话
+	if resp, err := host.Invoke(ctx, &contractv1.CallTarget{
+		ExtensionPoint: "tool.package", Capability: "demo.audit", Operation: ptr("list"),
+	}, callCtx, nil); err == nil && resp.Result.Status == contractv1.CallResult_STATUS_OK {
+		logf("审计插件账本 → %s", pretty(resp.Payload))
+	}
+
 	logf("MVP 闭环完成")
-	_ = host.Close(p)
 }
+
+func ptr(s string) *string { return &s }
 
 // kernelInfo 内核自身的能力：回报内核身份——供插件验证它连上的是谁。
 func kernelInfo(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {

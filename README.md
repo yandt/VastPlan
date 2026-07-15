@@ -11,13 +11,16 @@
 
 已实现：
 - `proto/` 契约与协议单一真源（CallContext/CallTarget/CallResult/CallEvent + PluginHost 协议）
-- `shared/go/registry` 扩展点注册表（single/select/fanout/mount 分发语义、热装解绑）
-- `shared/go/protocolbus` 协议总线宿主侧（进程拉起、握手、注册、调用、故障摘除）
+- `shared/go/registry` 扩展点注册表（分发语义、热装解绑、崩溃批量摘除）
+- `shared/go/extpoint` 扩展点 descriptor 契约（宿主按它分发、插件按它声明）
+- `shared/go/protocolbus` 协议总线宿主侧：**Channel 双向流**（宿主为服务端、插件回连）、
+  **插件回调宿主**、心跳与崩溃探活、**select 权限判定**、**fanout 事件扇出**
 - `sdk/go/plugin` 插件 SDK（插件只写贡献 + 处理器）
 - `kernels/backend` 后端内核骨架
-- `plugins/com.vastplan.hello-world` 验证插件
+- `plugins/` 三个第一方插件：hello-world（工具）、demo-permission（select 演示）、
+  demo-audit（fanout 演示）
 
-尚未实现（见文档待决）：Channel 双向流、节点代理 reconcile、内置插件服务、寻址层、NATS 控制面、frontend/runner/mobile 内核。
+尚未实现（见文档待决）：hook 分发、节点代理 reconcile、内置插件服务、寻址层、NATS 控制面、frontend/runner/mobile 内核。
 
 ## 快速开始
 
@@ -30,8 +33,12 @@
 # 2. 构建（内核版本从 kernels/<name>/VERSION 经 ldflags 注入）
 ./tools/build.sh
 
-# 3. 跑 MVP 闭环：内核拉起插件并调用它
-./bin/backend-kernel ./bin/com.vastplan.hello-world
+# 3. 跑 MVP 闭环：内核拉起三个插件并调用
+#    权限插件必须装——没有它，所有调用被 fail-closed 拒绝（ADR-0021）
+./bin/backend-kernel \
+  ./bin/com.vastplan.demo-permission \
+  ./bin/com.vastplan.demo-audit \
+  ./bin/com.vastplan.hello-world
 
 # 4. 测试
 ./tools/test.sh          # 单元 + 架构守护（快，日常）
@@ -41,9 +48,10 @@
 ./tools/setup-hooks.sh
 ```
 
-预期输出：内核版本 → 扩展点声明 → 握手/协议协商 → **engines 校验** → 贡献注册/激活 →
-`greet`/`echo` 调用成功 → 参数错误与未实现操作各自返回**应用层错误**（与传输层错误区分）
-→ 未注册能力被拒 → 贡献摘除。
+预期输出：内核版本 → 扩展点声明 → 三个插件回连/握手/**engines 校验**/贡献注册/激活 →
+`greet`/`echo` 成功 → `whoami` **插件回调宿主**取内核信息 → 参数错误与未实现操作各自返回
+**应用层错误**（与传输层错误区分）→ 未注册能力被拒 → **事件扇出**给审计插件（并可查账本验证
+真送达）→ 未订阅类型无人接收 → 贡献摘除。
 
 验证 fail-closed（不兼容内核应被拒绝装载）：
 

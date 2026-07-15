@@ -87,9 +87,27 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 	}
 }
 
-// Invoke 扩展点被触发时，宿主把 CallContext 经双向流转给插件，收 CallResult。
-// 先查注册表解析能力（本地命中），再路由到提供它的插件——调用方无需知道是谁提供的。
+// Invoke 扩展点被触发时的**公开入口**：先做权限判定，再分发。
+//
+// 权限判定按 select 语义走 permission.checker 扩展点；未获放行即返回应用层错误
+// `permission.denied`（权限拒绝属应用层错误，非传输层——工程规范 §4.2）。
+// 零校验器 → fail-closed 拒绝（ADR-0021）。
 func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
+	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
+
+	if res := h.CheckPermission(ctx, callCtx, target); !res.Allowed() {
+		h.Logf("权限拒绝 %s/%s：%s（由 %q 判定）",
+			target.ExtensionPoint, target.Capability, res.Reason, res.DecidedBy)
+		return errorResponse("permission.denied", res.Reason, false), nil
+	}
+	return h.invoke(ctx, target, callCtx, payload)
+}
+
+// invoke 内部分发：**不做权限判定**。
+//
+// 供两处使用：① 权限校验器自身的调用（否则自我递归）；② 事件扇出（内核发起的投递，
+// 非用户调用）。业务路径一律走 Invoke。
+func (h *Host) invoke(ctx context.Context, target *contractv1.CallTarget,
 	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
 
 	c, ok := h.Registry.Lookup(target.ExtensionPoint, target.Capability)
