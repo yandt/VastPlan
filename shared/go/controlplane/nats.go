@@ -22,6 +22,7 @@ const (
 	CapabilitiesBucket = "VASTPLAN_CAPABILITIES_V1"
 	DeploymentsBucket  = "VASTPLAN_DEPLOYMENTS_V2"
 	AssignmentsBucket  = "VASTPLAN_ASSIGNMENTS_V1"
+	ControllersBucket  = "VASTPLAN_CONTROLLERS_V1"
 
 	MaxDesiredStateBytes = 1 << 20
 )
@@ -34,6 +35,7 @@ type Buckets struct {
 	Capabilities jetstream.KeyValue
 	Deployments  jetstream.KeyValue
 	Assignments  jetstream.KeyValue
+	Controllers  jetstream.KeyValue
 }
 
 // Connect 建立可无限重连的 NATS 连接。首次连接仍 fail-fast，让启动配置错误明确暴露；
@@ -94,9 +96,17 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	if err != nil {
 		return Buckets{}, fmt.Errorf("创建节点分配 bucket: %w", err)
 	}
+	controllers, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket: ControllersBucket, Description: "VastPlan controller leader leases v1",
+		History: 1, TTL: 15 * time.Second, LimitMarkerTTL: time.Minute,
+		MaxValueSize: 16 << 10, Replicas: replicas, Storage: storage,
+	})
+	if err != nil {
+		return Buckets{}, fmt.Errorf("创建控制器选主 bucket: %w", err)
+	}
 	return Buckets{
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
-		Deployments: deployments, Assignments: assignments,
+		Deployments: deployments, Assignments: assignments, Controllers: controllers,
 	}, nil
 }
 
@@ -127,9 +137,13 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开节点分配 bucket: %w", err)
 	}
+	controllers, err := js.KeyValue(ctx, ControllersBucket)
+	if err != nil {
+		return Buckets{}, fmt.Errorf("打开控制器选主 bucket: %w", err)
+	}
 	return Buckets{
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
-		Deployments: deployments, Assignments: assignments,
+		Deployments: deployments, Assignments: assignments, Controllers: controllers,
 	}, nil
 }
 

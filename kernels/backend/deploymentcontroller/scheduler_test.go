@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -115,6 +116,8 @@ func TestControllerWatchesDeploymentUpdates(t *testing.T) {
 	controller := Controller{
 		Deployments: buckets.Deployments, DeploymentKey: key, Interval: time.Hour,
 		Scheduler: Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments}, Logf: t.Logf,
+		Leaders: buckets.Controllers, Identity: "controller-a",
+		Election: controlplane.LeaderElectionOptions{LeaseDuration: time.Second, RenewEvery: 100 * time.Millisecond, RetryEvery: 20 * time.Millisecond},
 	}
 	done := make(chan error, 1)
 	go func() { done <- controller.Run(ctx) }()
@@ -131,6 +134,75 @@ func TestControllerWatchesDeploymentUpdates(t *testing.T) {
 	case <-done:
 	case <-time.After(3 * time.Second):
 		t.Fatal("controller 未响应 context 取消")
+	}
+}
+
+func TestControllerLeaderFailoverKeepsSingleActiveWriter(t *testing.T) {
+	_, buckets := startSchedulerNATS(t)
+	rootCtx := context.Background()
+	lease, err := controlplane.StartNodeLease(rootCtx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lease.Close(context.Background()) })
+	deployment := testDeployment(1)
+	raw, _ := json.Marshal(deployment)
+	key := controlplane.DeploymentKey(deployment.Metadata.Tenant, deployment.Metadata.Name)
+	if _, _, err := controlplane.ApplyDeployment(rootCtx, buckets.Deployments, key, raw); err != nil {
+		t.Fatal(err)
+	}
+	options := controlplane.LeaderElectionOptions{
+		LeaseDuration: 500 * time.Millisecond, RenewEvery: 50 * time.Millisecond, RetryEvery: 20 * time.Millisecond,
+	}
+	leaderA, leaderB := make(chan struct{}, 2), make(chan struct{}, 2)
+	newController := func(identity string, elected chan<- struct{}) Controller {
+		return Controller{
+			Deployments: buckets.Deployments, DeploymentKey: key, Interval: time.Hour,
+			Scheduler: Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments},
+			Leaders:   buckets.Controllers, Identity: identity, Election: options,
+			Logf: func(format string, _ ...any) {
+				if strings.Contains(format, "获得领导权") {
+					select {
+					case elected <- struct{}{}:
+					default:
+					}
+				}
+			},
+		}
+	}
+	ctxA, cancelA := context.WithCancel(rootCtx)
+	doneA := make(chan error, 1)
+	go func() { doneA <- newController("controller-a", leaderA).Run(ctxA) }()
+	select {
+	case <-leaderA:
+	case <-time.After(2 * time.Second):
+		t.Fatal("controller-a 未获得初始领导权")
+	}
+	ctxB, cancelB := context.WithCancel(rootCtx)
+	doneB := make(chan error, 1)
+	go func() { doneB <- newController("controller-b", leaderB).Run(ctxB) }()
+	select {
+	case <-leaderB:
+		t.Fatal("controller-a 存活时 controller-b 不得同时成为 leader")
+	case <-time.After(150 * time.Millisecond):
+	}
+	waitAssignedReplicas(t, buckets.Assignments, deployment, 1)
+	cancelA()
+	select {
+	case <-doneA:
+	case <-time.After(2 * time.Second):
+		t.Fatal("controller-a 取消后未释放领导权")
+	}
+	select {
+	case <-leaderB:
+	case <-time.After(2 * time.Second):
+		t.Fatal("controller-b 未在 leader 退出后接管")
+	}
+	cancelB()
+	select {
+	case <-doneB:
+	case <-time.After(2 * time.Second):
+		t.Fatal("controller-b 未响应取消")
 	}
 }
 

@@ -33,8 +33,10 @@ type session struct {
 	// lastSeen 最近一次收到插件消息的时刻（任何消息都算活着）。
 	lastSeen atomic.Int64
 
-	closeOnce sync.Once
-	done      chan struct{}
+	closeOnce    sync.Once
+	done         chan struct{}
+	teardownOnce sync.Once
+	teardownDone chan struct{}
 	// deadErr 会话死亡原因（崩溃/心跳超时/主动关闭）。
 	deadErr atomic.Value
 }
@@ -46,6 +48,7 @@ func newSession(id, pluginID, pluginVersion string) *session {
 		pluginVersion: pluginVersion,
 		pending:       map[string]chan *pluginhostv1.FromPlugin{},
 		done:          make(chan struct{}),
+		teardownDone:  make(chan struct{}),
 	}
 	s.touch()
 	return s

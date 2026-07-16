@@ -6,6 +6,7 @@ package protocolbus
 // 正是"单元测试与源码同目录"的理由（ADR-0018 §1）。
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
 
 // 双向流上的请求/响应关联：deliver 必须把响应交给对应 request_id 的等待者。
@@ -116,6 +118,30 @@ func TestSession_MarkDeadIsIdempotent(t *testing.T) {
 		}()
 	}
 	wg.Wait() // 不 panic 即通过（close(done) 二次调用会 panic）
+}
+
+func TestHostDrain_RejectsNewCallsAndWaitsForInflight(t *testing.T) {
+	host := NewHost("backend", "0.1.0", registry.New(), nil)
+	if err := host.enterCall(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- host.Drain(ctx) }()
+	time.Sleep(20 * time.Millisecond)
+	if err := host.enterCall(); !errors.Is(err, ErrHostDraining) {
+		t.Fatalf("drain 开始后新调用必须被拒绝: %v", err)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("仍有在途调用时 Drain 不应提前返回: %v", err)
+	default:
+	}
+	host.leaveCall()
+	if err := <-done; err != nil {
+		t.Fatalf("在途调用结束后 Drain 应收敛: %v", err)
+	}
 }
 
 // request_id 必须唯一，否则响应会串台。

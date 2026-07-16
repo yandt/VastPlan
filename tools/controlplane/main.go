@@ -30,9 +30,14 @@ func main() {
 	desiredPath := flag.String("desired", "", "要发布的 DesiredState v1 或 Deployment v2 JSON")
 	key := flag.String("key", "", "KV key；默认从 metadata.tenant/name 生成")
 	controllerMode := flag.Bool("controller", false, "持续 watch v2 部署与节点租约并生成每节点 assignment")
+	controllerID := flag.String("controller-id", "", "controller 选主身份；默认 hostname-pid")
 	bootstrap := flag.Bool("bootstrap", false, "创建/校准控制面 bucket")
 	replicas := flag.Int("replicas", 1, "bootstrap 时的 JetStream 副本数；生产建议至少 3")
 	flag.Parse()
+	if *controllerID == "" {
+		hostname, _ := os.Hostname()
+		*controllerID = fmt.Sprintf("%s-%d", hostname, os.Getpid())
+	}
 	if *desiredPath == "" && !*controllerMode {
 		fmt.Fprintln(os.Stderr, "发布模式必须提供 -desired")
 		os.Exit(2)
@@ -123,7 +128,8 @@ func main() {
 		controller := deploymentcontroller.Controller{
 			Deployments: buckets.Deployments, DeploymentKey: *key,
 			Scheduler: deploymentcontroller.Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments},
-			Logf:      func(format string, args ...any) { fmt.Fprintf(os.Stderr, format+"\n", args...) },
+			Leaders:   buckets.Controllers, Identity: *controllerID,
+			Logf: func(format string, args ...any) { fmt.Fprintf(os.Stderr, format+"\n", args...) },
 		}
 		if err := controller.Run(runCtx); err != nil && !errors.Is(err, context.Canceled) {
 			fatalf("controller 退出: %v", err)

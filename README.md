@@ -26,6 +26,7 @@
 - `shared/go/controlplane` NATS KV bucket、CAS 发布、节点/capability 租约；`shared/go/addressing` 本地直调与远端 NATS request-reply
 - `kernels/backend/nodeagent` 自动装配：KV watch、内容寻址安装、真实健康与崩溃恢复、DRAIN、实际态复制、幂等与回滚
 - `kernels/backend/deploymentcontroller` 多节点调度：rendezvous hashing、标签放置、持久 assignment generation 与节点漂移恢复
+- Controller 按 Deployment 独立 CAS 选主并支持多副本接管；宿主 Drain 原子摘流并等待在途调用（ADR-0028）
 - `plugins/` 四个第一方插件：hello-world（工具）、demo-permission（select 演示）、
   demo-audit（fanout 演示）、demo-quota（Hook 的配额限流与计量演示）
 

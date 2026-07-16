@@ -127,6 +127,12 @@ type Host struct {
 	services map[string]HostService // 内核自身能力：capability → 实现
 
 	stopped atomic.Bool
+
+	callMu    sync.Mutex
+	draining  bool
+	inflight  int
+	drainDone chan struct{}
+	drainOnce sync.Once
 }
 
 type launchResult struct {
@@ -147,6 +153,7 @@ func NewHost(kernelName, kernelVersion string, r *registry.Registry, logf func(s
 		byPlugin:      map[string]*session{},
 		launches:      map[string]chan launchResult{},
 		services:      map[string]HostService{},
+		drainDone:     make(chan struct{}),
 	}
 }
 
@@ -206,6 +213,9 @@ func (h *Host) Addr() string { return h.addr }
 // Stop 停服并回收全部插件。
 func (h *Host) Stop() {
 	h.stopped.Store(true)
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	_ = h.waitForInflight(stopCtx)
+	stopCancel()
 	h.mu.RLock()
 	sessions := make([]*session, 0, len(h.sessions))
 	for _, s := range h.sessions {
@@ -227,6 +237,9 @@ func (h *Host) Stop() {
 // Drain 让全部插件停止接收新调用，并等待已经进入处理器的调用完成。
 // 调用方应先把新流量切到候选宿主，再 drain/stop 旧宿主。
 func (h *Host) Drain(ctx context.Context) error {
+	if err := h.waitForInflight(ctx); err != nil {
+		return fmt.Errorf("等待宿主在途调用完成: %w", err)
+	}
 	h.mu.RLock()
 	sessions := make([]*session, 0, len(h.sessions))
 	for _, sess := range h.sessions {

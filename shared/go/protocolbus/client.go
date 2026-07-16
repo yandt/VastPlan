@@ -102,6 +102,12 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 // 未获放行/被否决均返回**应用层错误**（非传输层——工程规范 §4.2）。
 func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
+	if err := h.enterCall(); err != nil {
+		// Drain 是宿主的可用状态，不是 wire 故障；调用方应得到可重试的应用层结论，
+		// 才能按正常路由切到候选实例，而不是把它误报为网络中断。
+		return errorResponse("plugin.inactive", err.Error(), true), nil
+	}
+	defer h.leaveCall()
 
 	// 1) before 钩子：限流/配额等可在此否决
 	if err := h.runBeforeHooks(ctx, extpoint.PointInvoke, callCtx, target); err != nil {

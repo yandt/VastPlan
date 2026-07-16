@@ -115,6 +115,10 @@ type SinkOutcome struct {
 // 失败隔离：某个汇失败不影响其余——审计插件挂了不该连带可观测插件一起哑火。
 // 返回逐个结果（顺序与匹配顺序一致，便于确定性报告），调用方可据此告警。
 func (h *Host) PublishEvent(ctx context.Context, event *contractv1.CallEvent) []SinkOutcome {
+	if err := h.enterCall(); err != nil {
+		return []SinkOutcome{{Err: err}}
+	}
+	defer h.leaveCall()
 	sinks := h.Registry.List(extpoint.EventSink) // List 已排序，此处仅用于确定性报告
 
 	matched := make([]registry.Contribution, 0, len(sinks))

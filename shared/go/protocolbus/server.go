@@ -280,26 +280,25 @@ func (h *Host) heartbeat(sess *session) {
 
 // teardown 会话终结：摘除其全部贡献、唤醒在途等待者、回收进程（ADR-0004 故障隔离）。
 func (h *Host) teardown(sess *session, cause error) {
-	select {
-	case <-sess.done:
-		return // 已终结
-	default:
-	}
+	sess.teardownOnce.Do(func() {
+		defer close(sess.teardownDone)
+		sess.markDead(cause)
 
-	sess.markDead(cause)
+		if n := h.Registry.UnregisterPlugin(sess.pluginID); n > 0 {
+			h.Logf("已摘除插件 %s 的 %d 条贡献（原因: %v）", sess.pluginID, n, cause)
+		}
 
-	if n := h.Registry.UnregisterPlugin(sess.pluginID); n > 0 {
-		h.Logf("已摘除插件 %s 的 %d 条贡献（原因: %v）", sess.pluginID, n, cause)
-	}
+		h.mu.Lock()
+		delete(h.sessions, sess.id)
+		if cur, ok := h.byPlugin[sess.pluginID]; ok && cur == sess {
+			delete(h.byPlugin, sess.pluginID)
+		}
+		h.mu.Unlock()
 
-	h.mu.Lock()
-	delete(h.sessions, sess.id)
-	if cur, ok := h.byPlugin[sess.pluginID]; ok && cur == sess {
-		delete(h.byPlugin, sess.pluginID)
-	}
-	h.mu.Unlock()
-
-	h.failLaunch(sess.launchToken, cause) // 若仍在 Launch 等待中，让它立刻脱身
-
-	sess.killProcess()
+		h.failLaunch(sess.launchToken, cause) // 若仍在 Launch 等待中，让它立刻脱身
+		sess.killProcess()
+	})
+	// done 只表示流已死亡；teardownDone 才证明贡献、会话表和进程已经全部收敛。
+	// Close/Stop 的调用者据此获得同步完成语义，不再与读循环的 defer teardown 竞态。
+	<-sess.teardownDone
 }

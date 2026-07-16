@@ -305,14 +305,17 @@ func assignmentsEqual(planned map[string]deploymentv1.DesiredState, existing map
 type Controller struct {
 	Deployments   jetstream.KeyValue
 	Scheduler     Scheduler
+	Leaders       jetstream.KeyValue
 	DeploymentKey string
+	Identity      string
 	Interval      time.Duration
+	Election      controlplane.LeaderElectionOptions
 	Logf          func(string, ...any)
 }
 
 func (c Controller) Run(ctx context.Context) error {
-	if c.Deployments == nil || c.DeploymentKey == "" {
-		return errors.New("controller deployment KV/key 未配置")
+	if c.Deployments == nil || c.DeploymentKey == "" || c.Leaders == nil || c.Identity == "" {
+		return errors.New("controller deployment/leader KV、deployment key 与 identity 未配置")
 	}
 	if c.Scheduler.Nodes == nil || c.Scheduler.Assignments == nil {
 		return errors.New("controller scheduler KV 未配置")
@@ -323,6 +326,49 @@ func (c Controller) Run(ctx context.Context) error {
 	if c.Logf == nil {
 		c.Logf = func(string, ...any) {}
 	}
+	c.Election.Logf = c.Logf
+	elector := controlplane.LeaderElector{
+		KV: c.Leaders, Election: c.DeploymentKey, Identity: c.Identity,
+		Options: c.Election,
+	}
+	for {
+		leadership, err := elector.Acquire(ctx)
+		if err != nil {
+			return err
+		}
+		record := leadership.Record()
+		c.Logf("controller 获得领导权 identity=%s election=%s token=%s", c.Identity, c.DeploymentKey, record.Token)
+		leaderCtx, cancel := context.WithCancel(ctx)
+		done := make(chan error, 1)
+		go func() { done <- c.runAsLeader(leaderCtx) }()
+		select {
+		case <-ctx.Done():
+			cancel()
+			<-done
+			closeCtx, closeCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_ = leadership.Close(closeCtx)
+			closeCancel()
+			return ctx.Err()
+		case lost := <-leadership.Lost():
+			cancel()
+			<-done
+			c.Logf("controller 失去领导权 identity=%s: %v", c.Identity, lost)
+			closeCtx, closeCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_ = leadership.Close(closeCtx)
+			closeCancel()
+			// 领导权丢失不是进程故障；回到 Acquire 等待当前 leader 退出或租约过期。
+			continue
+		case runErr := <-done:
+			cancel()
+			closeCtx, closeCancel := context.WithTimeout(context.Background(), 3*time.Second)
+			_ = leadership.Close(closeCtx)
+			closeCancel()
+			return runErr
+		}
+	}
+}
+
+func (c Controller) runAsLeader(ctx context.Context) error {
 	deploymentWatcher, err := c.Deployments.Watch(ctx, c.DeploymentKey)
 	if err != nil {
 		return fmt.Errorf("watch 集群部署: %w", err)

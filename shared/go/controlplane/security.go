@@ -138,11 +138,12 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 	case RoleController:
 		return SubjectACL{
 			PublishAllow: append(kvAPIForOpenAll(), append(
-				kvAPIForRead(DeploymentsBucket, NodesBucket, AssignmentsBucket),
-				"$KV."+AssignmentsBucket+".>",
+				kvAPIForRead(DeploymentsBucket, NodesBucket, AssignmentsBucket, ControllersBucket),
+				"$KV."+AssignmentsBucket+".>", "$KV."+ControllersBucket+".>",
 			)...),
 			SubscribeAllow: []string{
-				"_INBOX.>", "$KV." + DeploymentsBucket + ".>", "$KV." + NodesBucket + ".>", "$KV." + AssignmentsBucket + ".>",
+				"_INBOX.>", "$KV." + DeploymentsBucket + ".>", "$KV." + NodesBucket + ".>",
+				"$KV." + AssignmentsBucket + ".>", "$KV." + ControllersBucket + ".>",
 			},
 		}, nil
 	case RoleNode:
@@ -174,7 +175,7 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 }
 
 func kvAPIForOpenAll() []string {
-	return kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket)
+	return kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, ControllersBucket)
 }
 
 func kvAPIForInfo(buckets ...string) []string {
