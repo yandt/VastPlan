@@ -11,6 +11,7 @@ import (
 	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/shared/go/addressing"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
@@ -32,12 +33,13 @@ type ProtocolRuntime struct {
 	KernelVersion string
 	Logf          func(string, ...any)
 
-	mu     sync.RWMutex
-	units  map[string]*runningUnit
-	closed bool
-	events chan RuntimeEvent
-	nextID uint64
-	router *addressing.Router
+	mu           sync.RWMutex
+	units        map[string]*runningUnit
+	closed       bool
+	events       chan RuntimeEvent
+	nextID       uint64
+	router       *addressing.Router
+	Dependencies kernelspi.Dependencies
 }
 
 // AttachRouter 在首个 unit 启动前接入全局能力寻址。运行中切换 Router 会让已经发布的
@@ -71,7 +73,13 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	if r.IsRunning(unit.ID, unit.Fingerprint) {
 		return nil
 	}
-	candidate, err := hostfactory.New(r.KernelVersion, r.Logf)
+	configProvider, err := kernelspi.NewMapConfig(unit.Config)
+	if err != nil {
+		return fmt.Errorf("冻结 unit 配置: %w", err)
+	}
+	dependencies := r.Dependencies
+	dependencies.Config = configProvider
+	candidate, err := hostfactory.NewWithDependencies(r.KernelVersion, r.Logf, dependencies)
 	if err != nil {
 		return fmt.Errorf("创建候选宿主: %w", err)
 	}

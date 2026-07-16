@@ -66,3 +66,4 @@
 - [ADR-0033 Backend 插件状态迁移事务](ADR-0033-Backend插件状态迁移事务.md)
 - [ADR-0034 Backend 协议资源边界](ADR-0034-Backend协议资源边界.md)
 - [ADR-0035 Backend 可观测与健康契约](ADR-0035-Backend可观测与健康契约.md)
+- [ADR-0036 Backend 核心 SPI 边界](ADR-0036-Backend核心SPI边界.md)

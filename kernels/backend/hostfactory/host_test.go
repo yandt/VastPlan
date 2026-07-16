@@ -1,11 +1,15 @@
 package hostfactory
 
 import (
+	"context"
+	"encoding/json"
 	"reflect"
 	"sort"
 	"testing"
 
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/shared/go/kernelspi"
 )
 
 func TestNew_DefinesClosedBackendCatalogAndInternalService(t *testing.T) {
@@ -32,5 +36,25 @@ func TestNew_DefinesClosedBackendCatalogAndInternalService(t *testing.T) {
 	diagnostics, ok := host.Registry.Lookup(extpoint.KernelService, "kernel.diagnostics")
 	if !ok || diagnostics.PluginID != "__kernel__" {
 		t.Fatalf("kernel.diagnostics 必须仅由内核登记: %+v ok=%v", diagnostics, ok)
+	}
+}
+
+func TestKernelConfigGetRequiresAuthenticatedPluginAndReturnsFrozenValue(t *testing.T) {
+	provider, err := kernelspi.NewMapConfig(map[string]any{"retries": 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := kernelConfigGet(provider)
+	pluginCtx := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "plugin.a"}}
+	result, payload, err := service(context.Background(), pluginCtx, []byte(`{"key":"retries"}`))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("读取配置失败: %v %+v", err, result)
+	}
+	var retries int
+	if err := json.Unmarshal(payload, &retries); err != nil || retries != 3 {
+		t.Fatalf("配置值错误: %s", payload)
+	}
+	if _, _, err := service(context.Background(), &contractv1.CallContext{}, []byte(`{"key":"retries"}`)); err == nil {
+		t.Fatal("非插件调用必须 fail-closed")
 	}
 }

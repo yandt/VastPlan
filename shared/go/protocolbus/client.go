@@ -272,14 +272,23 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 	defer cancel()
 
 	h.Logf("插件 %s 回调宿主：%s/%s", sess.pluginID, req.Target.ExtensionPoint, req.Target.Capability)
-
-	resp, err := h.Invoke(ctx, req.Target, req.Context, req.Payload)
+	callCtx := authenticatedPluginContext(req.Context, sess.pluginID)
+	resp, err := h.Invoke(ctx, req.Target, callCtx, req.Payload)
 	if err != nil {
 		// 寻址/传输层失败 → 转为应用层错误回给插件，避免它把两类错误混为一谈
 		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.HostCallFailed, err.Error(), false))
 		return
 	}
 	h.replyHostCall(sess, req.RequestId, resp)
+}
+
+func authenticatedPluginContext(callCtx *contractv1.CallContext, pluginID string) *contractv1.CallContext {
+	bounded := &contractv1.CallContext{}
+	if callCtx != nil {
+		bounded = proto.Clone(callCtx).(*contractv1.CallContext)
+	}
+	bounded.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: pluginID}
+	return bounded
 }
 
 func (h *Host) replyHostCall(sess *session, requestID string, resp *pluginhostv1.InvokeResponse) {

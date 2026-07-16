@@ -193,6 +193,17 @@ func TestHostDiagnosticSnapshotReportsHealthReadinessAndInflight(t *testing.T) {
 	host.leaveCall()
 }
 
+func TestAuthenticatedPluginContextOverridesForgedCallerWithoutMutatingInput(t *testing.T) {
+	original := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "forged"}, TenantId: "tenant-a"}
+	got := authenticatedPluginContext(original, "plugin.real")
+	if got.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || got.GetCaller().GetId() != "plugin.real" || got.GetTenantId() != "tenant-a" {
+		t.Fatalf("插件身份注入错误: %+v", got)
+	}
+	if original.GetCaller().GetId() != "forged" {
+		t.Fatal("不得修改插件传入的原始 CallContext")
+	}
+}
+
 // markDead 可被重复调用（崩溃与主动关闭可能并发到达），不得 panic。
 func TestSession_MarkDeadIsIdempotent(t *testing.T) {
 	s := newSession("sess-1", "p1", "0.1.0")

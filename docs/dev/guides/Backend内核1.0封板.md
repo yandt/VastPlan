@@ -17,7 +17,7 @@
 | 生命周期 | 显式状态机、幂等转换、升级迁移、失败回滚、实际态诊断 | 已完成：actual state v2、当前/候选双视图、检查点、copy-on-write 三阶段迁移、逆序 rollback 与真实进程 E2E |
 | 协议资源边界 | payload/metadata/并发/队列/deadline/drain 有界且可配置 | 已完成：统一 `protocollimit`、每跳输入输出门禁、有界 dispatch/pending/NATS 队列、deadline 传播与 drain 时限，race/E2E 通过 |
 | 可观测与健康 | `slog`、trace、metric、health/readiness、诊断快照 | 已完成：JSON `slog` 出口、span 派生、可替换 metric sink、Host 健康/就绪与 `kernel.diagnostics` 无敏感快照 |
-| 核心 SPI | 配置、凭证引用、persistence/transaction 边界可替换 | 未完成 |
+| 核心 SPI | 配置、凭证引用、persistence/transaction 边界可替换 | 已完成：`kernelspi.Dependencies`、unit 配置服务、凭证回调代理、强制 scope、事务冲突/回滚语义与会话插件身份注入 |
 | 可靠性 | race、fuzz、故障注入、泄漏检查、24h soak | 部分完成：race/E2E 已有 |
 | 性能 | 核心 benchmark 基线与 CI 回归阈值 | 未完成 |
 | 安全与供应链 | mTLS/NKey/ACL、漏洞/许可证、签名制品、SBOM | 部分完成：运行链路和签名制品已有 |
