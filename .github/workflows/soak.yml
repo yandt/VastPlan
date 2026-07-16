@@ -1,0 +1,33 @@
+name: Backend Kernel Soak
+
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: 稳定负载时长（发布候选必须为 24h）
+        required: true
+        default: 24h
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    runs-on: ubuntu-latest
+    timeout-minutes: 1500
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Backend Kernel soak
+        env:
+          VASTPLAN_SOAK_DURATION: ${{ inputs.duration }}
+          VASTPLAN_SOAK_REPORT: ${{ runner.temp }}/backend-soak.json
+          VASTPLAN_SOAK_REQUIRE_FD: "true"
+        run: go test -tags='e2e soak' -run='^TestBackendKernelSoak$' -timeout=25h -v ./e2e
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-kernel-soak-report
+          path: ${{ runner.temp }}/backend-soak.json
+          if-no-files-found: error

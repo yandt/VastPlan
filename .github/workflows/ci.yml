@@ -53,6 +53,28 @@ jobs:
       - name: E2E
         run: go test -tags=e2e ./e2e/...
 
+  reliability:
+    name: Fuzz smoke + 性能回归
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Schema fuzz smoke
+        run: |
+          go test -run='^$' -fuzz=FuzzParseManifest -fuzztime=10s ./schemas/plugin/v1
+          go test -run='^$' -fuzz=FuzzValidateDescriptor -fuzztime=10s ./schemas/plugin/v1
+          go test -run='^$' -fuzz=FuzzParseDeployment -fuzztime=10s ./schemas/deployment/v2
+      - name: Backend benchmark
+        if: github.event_name == 'push'
+        run: ./tools/benchmark.sh
+      - name: Backend benchmark base/head 回归
+        if: github.event_name == 'pull_request'
+        run: ./tools/benchmark.sh --compare '${{ github.event.pull_request.base.sha }}'
+
   codegen:
     name: codegen 与 proto 同步
     runs-on: ubuntu-latest
