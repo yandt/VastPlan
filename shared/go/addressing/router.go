@@ -40,18 +40,22 @@ type EventHandler func(context.Context, *contractv1.CallContext, *contractv1.Cal
 
 // Announcement 是全局能力目录的一条实例租约。
 type Announcement struct {
-	SchemaVersion  int       `json:"schema_version"`
-	Capability     string    `json:"capability"`
-	ExtensionPoint string    `json:"extension_point"`
-	ServiceRole    string    `json:"service_role"`
-	InstanceID     string    `json:"instance_id"`
-	NodeID         string    `json:"node_id"`
-	UnitID         string    `json:"unit_id"`
-	Subject        string    `json:"subject"`
-	StreamEndpoint string    `json:"stream_endpoint,omitempty"`
-	Version        string    `json:"version,omitempty"`
-	Health         string    `json:"health"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	SchemaVersion      int       `json:"schema_version"`
+	Capability         string    `json:"capability"`
+	ExtensionPoint     string    `json:"extension_point"`
+	ServiceRole        string    `json:"service_role"`
+	InstanceID         string    `json:"instance_id"`
+	NodeID             string    `json:"node_id"`
+	UnitID             string    `json:"unit_id"`
+	Subject            string    `json:"subject"`
+	StreamEndpoint     string    `json:"stream_endpoint,omitempty"`
+	Version            string    `json:"version,omitempty"`
+	Health             string    `json:"health"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	TransportPublicKey string    `json:"transport_public_key,omitempty"`
+	TransportTimestamp string    `json:"transport_timestamp,omitempty"`
+	TransportNonce     string    `json:"transport_nonce,omitempty"`
+	TransportSignature string    `json:"transport_signature,omitempty"`
 }
 
 type localHandler struct {
@@ -76,6 +80,9 @@ type Router struct {
 	Limits   protocollimit.Limits
 	Logf     func(string, ...any)
 	Observer *observability.Observer
+	// Transport 在生产模式下必须配置：它对 NATS/stream 信封签名，并在处理前
+	// 重建权威工作负载身份。nil 仅保留给显式本地开发和测试。
+	Transport *TransportSecurity
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -104,6 +111,21 @@ type Router struct {
 }
 
 func NewRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf func(string, ...any)) (*Router, error) {
+	return newRouter(nc, directory, nodeID, logf, nil)
+}
+
+func NewSecureRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf func(string, ...any), security *TransportSecurity) (*Router, error) {
+	if security == nil {
+		return nil, errors.New("生产 addressing router 必须配置传输身份")
+	}
+	identity := security.SelfIdentity()
+	if identity.NodeID == "" || identity.NodeID != nodeID {
+		return nil, fmt.Errorf("传输身份 nodeID %q 与 router nodeID %q 不一致", identity.NodeID, nodeID)
+	}
+	return newRouter(nc, directory, nodeID, logf, security)
+}
+
+func newRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf func(string, ...any), security *TransportSecurity) (*Router, error) {
 	if nc == nil || directory == nil || nodeID == "" {
 		return nil, errors.New("addressing router 的 NATS、目录和 node id 必须配置")
 	}
@@ -123,7 +145,7 @@ func NewRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf 
 	}
 	r := &Router{
 		NC: nc, Directory: directory, JetStream: js, Events: events,
-		NodeID: nodeID, Limits: protocollimit.Default(), Logf: logf, Observer: observability.New(nil, nil),
+		NodeID: nodeID, Limits: protocollimit.Default(), Logf: logf, Observer: observability.New(nil, nil), Transport: security,
 		ctx: ctx, cancel: cancel, local: map[string][]localHandler{}, localCursor: map[string]uint64{},
 		streamLocal: map[string][]localStreamHandler{}, streamCursor: map[string]uint64{},
 		streamResolve: map[string]uint64{},
@@ -206,12 +228,25 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	if err != nil {
 		return nil, nil, fmt.Errorf("编码远端调用: %w", err)
 	}
-	msg, err := r.NC.RequestWithContext(ctx, controlplane.RPCSubject(target.Capability), raw)
+	subject := controlplane.RPCSubject(target.Capability)
+	request := nats.NewMsg(subject)
+	request.Data = raw
+	if r.Transport != nil {
+		if err := r.Transport.signMessage(request); err != nil {
+			return nil, nil, err
+		}
+	}
+	msg, err := r.NC.RequestMsgWithContext(ctx, request)
 	if err != nil {
 		if ctx.Err() != nil {
 			_ = r.NC.Publish(cancelSubject, []byte(requestID))
 		}
 		return nil, nil, fmt.Errorf("NATS 调用 %s: %w", target.Capability, err)
+	}
+	if r.Transport != nil {
+		if _, err := r.Transport.verifyMessage(msg); err != nil {
+			return nil, nil, fmt.Errorf("验证 NATS 响应身份: %w", err)
+		}
 	}
 	var resp addressingv1.InvokeResponse
 	if err := proto.Unmarshal(msg.Data, &resp); err != nil {
@@ -313,7 +348,14 @@ func (r *Router) Publish(ctx context.Context, callCtx *contractv1.CallContext, e
 	if err != nil {
 		return err
 	}
-	if err := r.NC.Publish(controlplane.EventSubject(event.Type), raw); err != nil {
+	message := nats.NewMsg(controlplane.EventSubject(event.Type))
+	message.Data = raw
+	if r.Transport != nil {
+		if err := r.Transport.signMessage(message); err != nil {
+			return err
+		}
+	}
+	if err := r.NC.PublishMsg(message); err != nil {
 		return err
 	}
 	flushCtx, cancel := deadlineContext(ctx, 5*time.Second)
@@ -335,6 +377,15 @@ func (r *Router) Subscribe(eventType string, handler EventHandler) (*Subscriptio
 			r.Logf("丢弃超过协议消息上限的事件 subject=%s", msg.Subject)
 			return
 		}
+		var identity TransportIdentity
+		if r.Transport != nil {
+			var err error
+			identity, err = r.Transport.verifyMessage(msg)
+			if err != nil {
+				r.Logf("丢弃身份无效的事件 subject=%s: %v", msg.Subject, err)
+				return
+			}
+		}
 		var envelope addressingv1.EventEnvelope
 		if err := proto.Unmarshal(msg.Data, &envelope); err != nil {
 			r.Logf("丢弃非法事件信封 subject=%s: %v", msg.Subject, err)
@@ -343,6 +394,14 @@ func (r *Router) Subscribe(eventType string, handler EventHandler) (*Subscriptio
 		if !limits.MetadataAllowed(proto.Size(envelope.Context)) || envelope.Event == nil || !limits.PayloadAllowed(envelope.Event.Payload) {
 			r.Logf("丢弃超过资源边界的事件 subject=%s", msg.Subject)
 			return
+		}
+		if r.Transport != nil {
+			authenticated, err := authenticatedTransportContext(identity, envelope.Context)
+			if err != nil {
+				r.Logf("丢弃租户身份不一致的事件 subject=%s: %v", msg.Subject, err)
+				return
+			}
+			envelope.Context = authenticated
 		}
 		if err := handler(r.ctx, envelope.Context, envelope.Event); err != nil {
 			r.Logf("事件 handler 失败 type=%s: %v", envelope.Event.GetType(), err)
@@ -374,6 +433,53 @@ func (r *Router) Instances(capability string) []Announcement {
 		}
 	}
 	return out
+}
+
+func (r *Router) prepareAnnouncement(key string, record Announcement) (Announcement, error) {
+	if err := validateAnnouncementShape(key, record); err != nil {
+		return Announcement{}, err
+	}
+	if record.NodeID != r.NodeID {
+		return Announcement{}, fmt.Errorf("能力目录 node_id %q 与 router node_id %q 不一致", record.NodeID, r.NodeID)
+	}
+	if r.Transport == nil {
+		return record, nil
+	}
+	identity := r.Transport.SelfIdentity()
+	if identity.NodeID == "" || identity.NodeID != r.NodeID {
+		return Announcement{}, errors.New("传输身份未绑定当前 router node_id")
+	}
+	return r.Transport.signAnnouncement(key, record)
+}
+
+func validateAnnouncementShape(key string, record Announcement) error {
+	if key != controlplane.CapabilityKey(record.Capability, record.InstanceID) {
+		return fmt.Errorf("能力目录 key 与记录身份不一致: %s", key)
+	}
+	if record.NodeID == "" {
+		return errors.New("能力目录 node_id 不能为空")
+	}
+	if record.Subject != controlplane.RPCSubject(record.Capability) {
+		return errors.New("能力目录 subject 与 capability 不一致")
+	}
+	return nil
+}
+
+func (r *Router) validateAnnouncement(key string, record Announcement) error {
+	if err := validateAnnouncementShape(key, record); err != nil {
+		return err
+	}
+	if r.Transport == nil {
+		return nil
+	}
+	identity, err := r.Transport.verifyAnnouncement(key, record)
+	if err != nil {
+		return fmt.Errorf("能力目录传输签名无效: %w", err)
+	}
+	if identity.NodeID != r.NodeID {
+		return fmt.Errorf("能力目录签名身份 node_id %q 与 router node_id %q 不一致", identity.NodeID, r.NodeID)
+	}
+	return nil
 }
 
 func (r *Router) Close() error {
@@ -501,6 +607,10 @@ func (r *Router) applyDirectoryEntry(entry jetstream.KeyValueEntry) {
 		r.Logf("忽略非法能力目录记录 key=%s: %v", entry.Key(), err)
 		return
 	}
+	if err := r.validateAnnouncement(entry.Key(), announcement); err != nil {
+		r.Logf("忽略未通过身份校验的能力目录记录 key=%s: %v", entry.Key(), err)
+		return
+	}
 	if r.instances[announcement.Capability] == nil {
 		r.instances[announcement.Capability] = map[string]Announcement{}
 	}
@@ -541,6 +651,9 @@ func (r *Router) refreshDirectory() {
 		}
 		var announcement Announcement
 		if json.Unmarshal(entry.Value(), &announcement) != nil {
+			continue
+		}
+		if err := r.validateAnnouncement(key, announcement); err != nil {
 			continue
 		}
 		if next[announcement.Capability] == nil {

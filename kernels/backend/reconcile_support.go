@@ -21,7 +21,7 @@ type reconcileOptions struct {
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                       string
 	capacityCPU, capacityMemory, capacityGPU                                                   int64
 	interval                                                                                   time.Duration
-	natsURL, natsCA, natsCert, natsKey, natsSeed                                               string
+	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                string
 	natsAllowInsecure, natsBootstrap                                                           bool
 	desiredKey, assignmentKey, deploymentName, deploymentTenant                                string
 	natsReplicas                                                                               int
@@ -50,6 +50,8 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.natsCert, "nats-cert", "", "NATS mTLS 客户端证书 PEM")
 	flags.StringVar(&options.natsKey, "nats-key", "", "NATS mTLS 客户端私钥 PEM")
 	flags.StringVar(&options.natsSeed, "nats-seed", "", "NATS 角色 NKey seed 文件（0600）")
+	flags.StringVar(&options.transportSeed, "transport-seed", "", "addressing 传输身份 NKey seed 文件（0600）")
+	flags.StringVar(&options.transportTrust, "transport-trust", "", "addressing 传输身份信任文档 JSON")
 	flags.BoolVar(&options.natsAllowInsecure, "nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
 	flags.StringVar(&options.desiredKey, "desired-key", controlplane.DesiredKey("", "local-development"), "NATS DesiredState key")
 	flags.BoolVar(&options.natsBootstrap, "nats-bootstrap", false, "创建/校准控制面 KV bucket（仅初始化/开发使用）")
@@ -112,6 +114,7 @@ type nodeControlPlane struct {
 	source     nodeagent.DesiredStateSource
 	stateStore nodeagent.StateStore
 	router     *addressing.Router
+	transport  *addressing.TransportSecurity
 	buckets    controlplane.Buckets
 	closeNATS  func()
 }
@@ -124,12 +127,28 @@ func newNodeControlPlane(options reconcileOptions, logf func(string, ...any)) (*
 	if options.natsURL == "" {
 		return plane, nil
 	}
+	if (options.transportSeed == "") != (options.transportTrust == "") {
+		return nil, errors.New("addressing 传输身份必须同时配置 -transport-seed 和 -transport-trust")
+	}
+	if !options.natsAllowInsecure && options.transportSeed == "" {
+		return nil, errors.New("生产控制面必须配置 addressing 传输身份；本地开发请显式使用 -nats-allow-insecure")
+	}
+	var err error
+	if options.transportSeed != "" {
+		plane.transport, err = addressing.LoadTransportSecurity(options.transportSeed, options.transportTrust)
+		if err != nil {
+			return nil, err
+		}
+	}
 	nc, err := controlplane.ConnectWithConfig(controlplane.ConnectionConfig{
 		URL: options.natsURL, ClientName: "vastplan-node-" + options.nodeID,
 		CAFile: options.natsCA, CertFile: options.natsCert, KeyFile: options.natsKey, SeedFile: options.natsSeed,
 		Insecure: options.natsAllowInsecure, Logf: logf,
 	})
 	if err != nil {
+		if plane.transport != nil {
+			plane.transport.Close()
+		}
 		return nil, err
 	}
 	plane.closeNATS = nc.Close
@@ -160,7 +179,11 @@ func newNodeControlPlane(options reconcileOptions, logf func(string, ...any)) (*
 			nodeagent.NATSStateStore{KV: plane.buckets.Actual, Key: controlplane.ActualKey(options.nodeID)},
 		},
 	}
-	plane.router, err = addressing.NewRouter(nc, plane.buckets.Capabilities, options.nodeID, logf)
+	if plane.transport != nil {
+		plane.router, err = addressing.NewSecureRouter(nc, plane.buckets.Capabilities, options.nodeID, logf, plane.transport)
+	} else {
+		plane.router, err = addressing.NewRouter(nc, plane.buckets.Capabilities, options.nodeID, logf)
+	}
 	if err != nil {
 		_ = plane.Close() // 初始化尚未交给调用方，优先返回 router 失败。
 		return nil, fmt.Errorf("创建 capability router: %w", err)
@@ -175,6 +198,9 @@ func (p *nodeControlPlane) Close() error {
 	}
 	if p != nil && p.closeNATS != nil {
 		p.closeNATS()
+	}
+	if p != nil && p.transport != nil {
+		p.transport.Close()
 	}
 	return err
 }

@@ -7,12 +7,14 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"google.golang.org/protobuf/proto"
 
 	addressingv1 "cdsoft.com.cn/VastPlan/shared/go/addressing/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 )
 
 var durableNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
@@ -49,11 +51,26 @@ func (r *Router) PublishPersistent(ctx context.Context, callCtx *contractv1.Call
 	if event.Id == "" {
 		return errors.New("持久事件 id 不能为空")
 	}
+	limits := r.Limits.Normalize()
+	if !limits.MetadataAllowed(proto.Size(callCtx)) {
+		return &TransportError{Code: errorcode.MetadataTooLarge, Message: "持久事件 CallContext 超过 metadata 上限"}
+	}
+	if !limits.PayloadAllowed(event.Payload) {
+		return &TransportError{Code: errorcode.PayloadTooLarge, Message: "持久事件 payload 超过上限"}
+	}
 	raw, err := proto.Marshal(&addressingv1.EventEnvelope{Context: callCtx, Event: event})
 	if err != nil {
 		return fmt.Errorf("编码持久事件: %w", err)
 	}
-	ack, err := r.JetStream.Publish(ctx, controlplane.PersistentEventSubject(event.Type), raw, jetstream.WithMsgID(event.Id))
+	subject := controlplane.PersistentEventSubject(event.Type)
+	message := nats.NewMsg(subject)
+	message.Data = raw
+	if r.Transport != nil {
+		if err := r.Transport.signMessage(message); err != nil {
+			return err
+		}
+	}
+	ack, err := r.JetStream.PublishMsg(ctx, message, jetstream.WithMsgID(event.Id))
 	if err != nil {
 		return fmt.Errorf("发布持久事件 %s: %w", event.Type, err)
 	}
@@ -98,11 +115,44 @@ func (r *Router) SubscribePersistent(ctx context.Context, options PersistentSubs
 		return nil, fmt.Errorf("创建持久事件订阅 %s: %w", options.Durable, err)
 	}
 	consume, err := consumer.Consume(func(msg jetstream.Msg) {
+		if len(msg.Data()) > r.Limits.Normalize().MaxMessageBytes() {
+			_ = msg.Term()
+			return
+		}
+		var identity TransportIdentity
+		if r.Transport != nil {
+			var verifyErr error
+			identity, verifyErr = r.Transport.verifyNoReplay(msg.Subject(), msg.Data(), transportHeaderValues(msg.Headers()))
+			if verifyErr != nil {
+				r.Logf("持久事件传输身份校验失败 subject=%s: %v", msg.Subject(), verifyErr)
+				_ = msg.Term()
+				return
+			}
+		}
 		var envelope addressingv1.EventEnvelope
 		if err := proto.Unmarshal(msg.Data(), &envelope); err != nil || envelope.Event == nil {
 			r.Logf("终止非法持久事件 subject=%s: %v", msg.Subject(), err)
 			_ = msg.Term()
 			return
+		}
+		if controlplane.PersistentEventSubject(envelope.Event.Type) != msg.Subject() {
+			r.Logf("持久事件 type 与 subject 不一致 subject=%s type=%s", msg.Subject(), envelope.Event.Type)
+			_ = msg.Term()
+			return
+		}
+		limits := r.Limits.Normalize()
+		if !limits.MetadataAllowed(proto.Size(envelope.Context)) || !limits.PayloadAllowed(envelope.Event.Payload) {
+			_ = msg.Term()
+			return
+		}
+		if r.Transport != nil {
+			authenticated, authErr := authenticatedTransportContext(identity, envelope.Context)
+			if authErr != nil {
+				r.Logf("持久事件身份上下文校验失败 subject=%s: %v", msg.Subject(), authErr)
+				_ = msg.Term()
+				return
+			}
+			envelope.Context = authenticated
 		}
 		if err := handler(r.ctx, envelope.Context, envelope.Event); err != nil {
 			r.Logf("持久事件 handler 失败 type=%s: %v", envelope.Event.Type, err)

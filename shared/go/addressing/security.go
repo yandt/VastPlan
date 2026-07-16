@@ -1,0 +1,328 @@
+package addressing
+
+import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nkeys"
+	"google.golang.org/protobuf/proto"
+
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+)
+
+const (
+	transportPublicKeyHeader = "VastPlan-Identity"
+	transportTimestampHeader = "VastPlan-Timestamp"
+	transportNonceHeader     = "VastPlan-Nonce"
+	transportSignatureHeader = "VastPlan-Signature"
+	transportIdentityMeta    = "vastplan.transport.identity"
+	transportRoleMeta        = "vastplan.transport.role"
+	defaultTransportSkew     = 5 * time.Minute
+)
+
+// TransportIdentity 是跨节点传输层认可的工作负载身份。AllowDelegation 仅授予
+// 已验证边缘/节点代用户传递 Principal/Caller 的能力；未授予时接收端会清空
+// 自报 Principal，并把 Caller 重建为该工作负载。
+type TransportIdentity struct {
+	Name            string `json:"name"`
+	Role            string `json:"role"`
+	PublicKey       string `json:"publicKey"`
+	TenantID        string `json:"tenantId,omitempty"`
+	NodeID          string `json:"nodeId,omitempty"`
+	AllowDelegation bool   `json:"allowDelegation,omitempty"`
+}
+
+type TransportTrustDocument struct {
+	Version    int                 `json:"version"`
+	Identities []TransportIdentity `json:"identities"`
+}
+
+// TransportSecurity 使用现有 NKey 对传输信封签名，并按本地信任文档验证远端。
+// replay 表只保留一个时间窗，避免无界增长。
+type TransportSecurity struct {
+	pair      nkeys.KeyPair
+	publicKey string
+	self      TransportIdentity
+	trusted   map[string]TransportIdentity
+	maxSkew   time.Duration
+
+	replayMu sync.Mutex
+	replay   map[string]time.Time
+}
+
+func LoadTransportSecurity(seedFile, trustFile string) (*TransportSecurity, error) {
+	if seedFile == "" || trustFile == "" {
+		return nil, errors.New("传输安全必须同时配置 NKey seed 和身份信任文档")
+	}
+	info, err := os.Stat(seedFile)
+	if err != nil {
+		return nil, fmt.Errorf("读取传输 NKey seed 属性: %w", err)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return nil, fmt.Errorf("传输 NKey seed 权限过宽 %o，要求 0600 或更严格", info.Mode().Perm())
+	}
+	seed, err := os.ReadFile(seedFile)
+	if err != nil {
+		return nil, fmt.Errorf("读取传输 NKey seed: %w", err)
+	}
+	rawTrust, err := os.ReadFile(trustFile)
+	if err != nil {
+		return nil, fmt.Errorf("读取传输身份信任文档: %w", err)
+	}
+	var document TransportTrustDocument
+	if err := json.Unmarshal(rawTrust, &document); err != nil {
+		return nil, fmt.Errorf("解析传输身份信任文档: %w", err)
+	}
+	return newTransportSecurity(seed, document)
+}
+
+func newTransportSecurity(seed []byte, document TransportTrustDocument) (*TransportSecurity, error) {
+	if document.Version != 1 || len(document.Identities) == 0 {
+		return nil, errors.New("传输身份信任文档必须是 version=1 且至少包含一个身份")
+	}
+	pair, err := nkeys.FromSeed([]byte(strings.TrimSpace(string(seed))))
+	if err != nil {
+		return nil, fmt.Errorf("加载传输 NKey: %w", err)
+	}
+	publicKey, err := pair.PublicKey()
+	if err != nil {
+		pair.Wipe()
+		return nil, fmt.Errorf("读取传输 NKey 公钥: %w", err)
+	}
+	security := &TransportSecurity{
+		pair: pair, publicKey: publicKey, trusted: map[string]TransportIdentity{},
+		maxSkew: defaultTransportSkew, replay: map[string]time.Time{},
+	}
+	for _, identity := range document.Identities {
+		if identity.Name == "" || identity.Role == "" || !nkeys.IsValidPublicUserKey(identity.PublicKey) {
+			pair.Wipe()
+			return nil, fmt.Errorf("传输信任身份字段非法: %+v", identity)
+		}
+		if _, exists := security.trusted[identity.PublicKey]; exists {
+			pair.Wipe()
+			return nil, fmt.Errorf("传输信任公钥重复: %s", identity.PublicKey)
+		}
+		security.trusted[identity.PublicKey] = identity
+	}
+	self, ok := security.trusted[publicKey]
+	if !ok {
+		pair.Wipe()
+		return nil, errors.New("当前 NKey 公钥不在传输身份信任文档中")
+	}
+	security.self = self
+	return security, nil
+}
+
+func (s *TransportSecurity) Close() {
+	if s != nil && s.pair != nil {
+		s.pair.Wipe()
+	}
+}
+
+// SelfIdentity 返回当前进程在传输信任文档中的只读身份快照。
+func (s *TransportSecurity) SelfIdentity() TransportIdentity {
+	if s == nil {
+		return TransportIdentity{}
+	}
+	return s.self
+}
+
+func (s *TransportSecurity) sign(subject string, payload []byte) (map[string]string, error) {
+	if s == nil || s.pair == nil {
+		return nil, errors.New("传输签名器未配置")
+	}
+	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	nonce := randomID()
+	signature, err := s.pair.Sign(transportSigningBytes(subject, timestamp, nonce, payload))
+	if err != nil {
+		return nil, fmt.Errorf("签名传输信封: %w", err)
+	}
+	return map[string]string{
+		transportPublicKeyHeader: s.publicKey,
+		transportTimestampHeader: timestamp,
+		transportNonceHeader:     nonce,
+		transportSignatureHeader: base64.RawURLEncoding.EncodeToString(signature),
+	}, nil
+}
+
+func (s *TransportSecurity) signMessage(message *nats.Msg) error {
+	headers, err := s.sign(message.Subject, message.Data)
+	if err != nil {
+		return err
+	}
+	if message.Header == nil {
+		message.Header = nats.Header{}
+	}
+	for key, value := range headers {
+		message.Header.Set(key, value)
+	}
+	return nil
+}
+
+func (s *TransportSecurity) verifyMessage(message *nats.Msg) (TransportIdentity, error) {
+	return s.verify(message.Subject, message.Data, transportHeaderValues(message.Header))
+}
+
+func (s *TransportSecurity) signAnnouncement(key string, record Announcement) (Announcement, error) {
+	record.TransportPublicKey = ""
+	record.TransportTimestamp = ""
+	record.TransportNonce = ""
+	record.TransportSignature = ""
+	payload, err := announcementPayload(record)
+	if err != nil {
+		return Announcement{}, err
+	}
+	headers, err := s.sign(key, payload)
+	if err != nil {
+		return Announcement{}, err
+	}
+	record.TransportPublicKey = headers[transportPublicKeyHeader]
+	record.TransportTimestamp = headers[transportTimestampHeader]
+	record.TransportNonce = headers[transportNonceHeader]
+	record.TransportSignature = headers[transportSignatureHeader]
+	return record, nil
+}
+
+func (s *TransportSecurity) verifyAnnouncement(key string, record Announcement) (TransportIdentity, error) {
+	values := map[string]string{
+		transportPublicKeyHeader: record.TransportPublicKey,
+		transportTimestampHeader: record.TransportTimestamp,
+		transportNonceHeader:     record.TransportNonce,
+		transportSignatureHeader: record.TransportSignature,
+	}
+	record.TransportPublicKey = ""
+	record.TransportTimestamp = ""
+	record.TransportNonce = ""
+	record.TransportSignature = ""
+	payload, err := announcementPayload(record)
+	if err != nil {
+		return TransportIdentity{}, err
+	}
+	return s.verify(key, payload, values)
+}
+
+func announcementPayload(record Announcement) ([]byte, error) {
+	return json.Marshal(record)
+}
+
+func (s *TransportSecurity) verify(subject string, payload []byte, values map[string]string) (TransportIdentity, error) {
+	return s.verifyWithReplay(subject, payload, values, true)
+}
+
+func (s *TransportSecurity) verifyNoReplay(subject string, payload []byte, values map[string]string) (TransportIdentity, error) {
+	return s.verifyWithReplay(subject, payload, values, false)
+}
+
+func (s *TransportSecurity) verifyWithReplay(subject string, payload []byte, values map[string]string, checkReplay bool) (TransportIdentity, error) {
+	if s == nil {
+		return TransportIdentity{}, errors.New("传输验证器未配置")
+	}
+	publicKey := values[transportPublicKeyHeader]
+	identity, trusted := s.trusted[publicKey]
+	if !trusted {
+		return TransportIdentity{}, errors.New("传输身份不受信任")
+	}
+	timestamp := values[transportTimestampHeader]
+	millis, err := strconv.ParseInt(timestamp, 10, 64)
+	if err != nil {
+		return TransportIdentity{}, errors.New("传输签名时间非法")
+	}
+	when := time.UnixMilli(millis)
+	if delta := time.Since(when); delta > s.maxSkew || delta < -s.maxSkew {
+		return TransportIdentity{}, errors.New("传输签名超出允许时间窗")
+	}
+	nonce := values[transportNonceHeader]
+	if nonce == "" {
+		return TransportIdentity{}, errors.New("传输签名缺少 nonce")
+	}
+	signature, err := base64.RawURLEncoding.DecodeString(values[transportSignatureHeader])
+	if err != nil {
+		return TransportIdentity{}, errors.New("传输签名编码非法")
+	}
+	publicPair, err := nkeys.FromPublicKey(publicKey)
+	if err != nil {
+		return TransportIdentity{}, errors.New("传输身份公钥非法")
+	}
+	if err := publicPair.Verify(transportSigningBytes(subject, timestamp, nonce, payload), signature); err != nil {
+		return TransportIdentity{}, errors.New("传输签名校验失败")
+	}
+	if checkReplay {
+		if err := s.markNonce(publicKey+":"+nonce, when); err != nil {
+			return TransportIdentity{}, err
+		}
+	}
+	return identity, nil
+}
+
+func transportHeaderValues(headers nats.Header) map[string]string {
+	values := map[string]string{}
+	for _, key := range transportHeaderKeys() {
+		values[key] = headers.Get(key)
+	}
+	return values
+}
+
+func (s *TransportSecurity) markNonce(key string, when time.Time) error {
+	now := time.Now()
+	s.replayMu.Lock()
+	defer s.replayMu.Unlock()
+	for existing, seenAt := range s.replay {
+		if now.Sub(seenAt) > s.maxSkew {
+			delete(s.replay, existing)
+		}
+	}
+	if _, exists := s.replay[key]; exists {
+		return errors.New("检测到传输信封重放")
+	}
+	s.replay[key] = when
+	return nil
+}
+
+func transportSigningBytes(subject, timestamp, nonce string, payload []byte) []byte {
+	digest := sha256.Sum256(payload)
+	return []byte(subject + "\n" + timestamp + "\n" + nonce + "\n" + base64.RawURLEncoding.EncodeToString(digest[:]))
+}
+
+func transportHeaderKeys() []string {
+	keys := []string{transportPublicKeyHeader, transportTimestampHeader, transportNonceHeader, transportSignatureHeader}
+	sort.Strings(keys)
+	return keys
+}
+
+func authenticatedTransportContext(identity TransportIdentity, untrusted *contractv1.CallContext) (*contractv1.CallContext, error) {
+	callCtx := &contractv1.CallContext{}
+	if untrusted != nil {
+		callCtx = proto.Clone(untrusted).(*contractv1.CallContext)
+	}
+	if identity.TenantID != "" {
+		if callCtx.TenantId != "" && callCtx.TenantId != identity.TenantID {
+			return nil, errors.New("调用租户与传输身份租户不一致")
+		}
+		if principalTenant := callCtx.GetPrincipal().GetTenantId(); principalTenant != "" && principalTenant != identity.TenantID {
+			return nil, errors.New("Principal 租户与传输身份租户不一致")
+		}
+		callCtx.TenantId = identity.TenantID
+	}
+	if !identity.AllowDelegation {
+		callCtx.Principal = nil
+		callCtx.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: identity.Name}
+	} else if callCtx.Caller == nil {
+		callCtx.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: identity.Name}
+	}
+	if callCtx.Metadata == nil {
+		callCtx.Metadata = map[string]string{}
+	}
+	callCtx.Metadata[transportIdentityMeta] = identity.Name
+	callCtx.Metadata[transportRoleMeta] = identity.Role
+	return callCtx, nil
+}

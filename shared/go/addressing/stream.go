@@ -137,7 +137,7 @@ func (r *Router) RegisterStream(ctx context.Context, options RegisterOptions, ha
 		StreamEndpoint: endpoint, Health: "healthy", UpdatedAt: nowUTC(),
 	}
 	key := controlplane.CapabilityKey(options.Capability, options.InstanceID)
-	if err := putAnnouncement(ctx, r.Directory, key, record); err != nil {
+	if err := r.putAnnouncement(ctx, r.Directory, key, record); err != nil {
 		return nil, err
 	}
 	id := randomID()

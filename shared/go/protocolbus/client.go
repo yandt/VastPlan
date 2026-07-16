@@ -280,6 +280,8 @@ func (h *Host) invokeOn(ctx context.Context, sess *session, target *contractv1.C
 	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
 
 	reqID := sess.nextRequestID()
+	delegationToken, forwardedCallCtx := sess.issueDelegation(callCtx)
+	defer sess.releaseDelegation(delegationToken)
 	ch, err := sess.await(reqID, h.limits().MaxPendingRequests)
 	if err != nil {
 		return nil, err
@@ -289,7 +291,7 @@ func (h *Host) invokeOn(ctx context.Context, sess *session, target *contractv1.C
 	if err := sess.send(&pluginhostv1.FromHost{
 		Msg: &pluginhostv1.FromHost_Invoke{
 			Invoke: &pluginhostv1.InvokeRequest{
-				RequestId: reqID, Target: target, Context: callCtx, Payload: payload,
+				RequestId: reqID, Target: target, Context: forwardedCallCtx, Payload: payload,
 			},
 		},
 	}); err != nil {
@@ -341,7 +343,17 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 	defer cancel()
 
 	h.Logf("插件 %s 回调宿主：%s/%s", sess.pluginID, req.Target.ExtensionPoint, req.Target.Capability)
-	callCtx := authenticatedPluginContext(req.Context, sess.pluginID)
+	callCtx, ok := authenticatedPluginContext(sess, req.Context, sess.pluginID)
+	if !ok {
+		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.PermissionDenied,
+			"HostCall 缺少有效的宿主身份委托", false))
+		return
+	}
+	if req.Target.ExtensionPoint == extpoint.KernelService && !kernelServiceAllowed(sess.policy, req.Target.Capability) {
+		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.PermissionDenied,
+			"插件未在签名清单中声明该内核服务", false))
+		return
+	}
 	resp, err := h.Invoke(ctx, req.Target, callCtx, req.Payload)
 	if err != nil {
 		// 寻址/传输层失败 → 转为应用层错误回给插件，避免它把两类错误混为一谈
@@ -351,13 +363,29 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 	h.replyHostCall(sess, req.RequestId, resp)
 }
 
-func authenticatedPluginContext(callCtx *contractv1.CallContext, pluginID string) *contractv1.CallContext {
-	bounded := &contractv1.CallContext{}
+func kernelServiceAllowed(policy LaunchPolicy, capability string) bool {
+	if capability == "" {
+		return false
+	}
+	for _, allowed := range policy.KernelServices {
+		if allowed == capability {
+			return true
+		}
+	}
+	return false
+}
+
+func authenticatedPluginContext(sess *session, callCtx *contractv1.CallContext, pluginID string) (*contractv1.CallContext, bool) {
+	token := ""
 	if callCtx != nil {
-		bounded = proto.Clone(callCtx).(*contractv1.CallContext)
+		token = callCtx.GetMetadata()[delegationMetadataKey]
+	}
+	bounded, ok := sess.delegatedContext(token)
+	if !ok {
+		return nil, false
 	}
 	bounded.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: pluginID}
-	return bounded
+	return bounded, true
 }
 
 func (h *Host) replyHostCall(sess *session, requestID string, resp *pluginhostv1.InvokeResponse) {

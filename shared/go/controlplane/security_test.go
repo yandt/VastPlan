@@ -40,7 +40,11 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	seedFiles := map[SecurityRole]string{}
 	for _, role := range roles {
 		publicKey, seed := generateNKey(t)
-		identities = append(identities, NKeyIdentity{Role: role, PublicKey: publicKey})
+		nodeID := ""
+		if role == RoleNode {
+			nodeID = "node-1"
+		}
+		identities = append(identities, NKeyIdentity{Role: role, PublicKey: publicKey, NodeID: nodeID})
 		seedFiles[role] = writeTestFile(t, string(role)+".seed", append(seed, '\n'), 0o600)
 	}
 	systemPublic, _ := generateNKey(t)
@@ -107,7 +111,7 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	if entry, err := nodeBuckets.Assignments.Get(ctx, "tenant.unit"); err != nil || string(entry.Value()) != "assignment" {
 		t.Fatalf("node 应能读取 assignment KV: entry=%v err=%v", entry, err)
 	}
-	if _, err := nodeBuckets.Actual.Put(ctx, "node-1", []byte("healthy")); err != nil {
+	if _, err := nodeBuckets.Actual.Put(ctx, ActualKey("node-1"), []byte("healthy")); err != nil {
 		t.Fatalf("node 应能写 actual KV: %v", err)
 	}
 	runtimeJS, _ := jetstream.New(runtime)
@@ -166,7 +170,7 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	actual := "$KV." + ActualBucket + ".node-1"
+	actual := "$KV." + ActualBucket + "." + ActualKey("node-1")
 	actualMessages := make(chan []byte, 1)
 	_, _ = bootstrap.Subscribe(actual, func(message *nats.Msg) { actualMessages <- message.Data })
 	_ = bootstrap.Flush()
@@ -185,7 +189,7 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 }
 
 func TestRoleACL_NodeCannotMutateGlobalIntent(t *testing.T) {
-	acl, err := RoleACL(RoleNode)
+	acl, err := RoleACLForIdentity(NKeyIdentity{Role: RoleNode, NodeID: "node-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,6 +197,11 @@ func TestRoleACL_NodeCannotMutateGlobalIntent(t *testing.T) {
 	for _, bucket := range []string{DesiredBucket, DeploymentsBucket, AssignmentsBucket} {
 		if !strings.Contains(joined, "$KV."+bucket+".>") {
 			t.Fatalf("node publish deny 缺少 %s", bucket)
+		}
+	}
+	for _, subject := range acl.PublishAllow {
+		if strings.Contains(subject, "$JS.API.CONSUMER.DELETE") {
+			t.Fatalf("node ACL 不得删除任意 consumer: %s", subject)
 		}
 	}
 }

@@ -14,6 +14,7 @@ permissions:
 env:
   # 钉死版本：codegen 输出随 protoc/插件版本漂移，不钉住会产生假失败
   PROTOC_VERSION: "25.3"
+  PROTOC_LINUX_X86_64_SHA256: "f853e691868d0557425ea290bf7ba6384eef2fa9b04c323afab49a770ba9da80"
   PROTOC_GEN_GO_VERSION: "v1.36.11"
   PROTOC_GEN_GO_GRPC_VERSION: "v1.6.2"
   GOVULNCHECK_VERSION: "v1.1.4"
@@ -109,6 +110,7 @@ jobs:
         run: |
           curl -sSLo /tmp/protoc.zip \
             "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
+          echo "${PROTOC_LINUX_X86_64_SHA256}  /tmp/protoc.zip" | sha256sum -c -
           unzip -q /tmp/protoc.zip -d /tmp/protoc
           echo "/tmp/protoc/bin" >> "$GITHUB_PATH"
       - name: 安装 protoc 插件（钉版本）

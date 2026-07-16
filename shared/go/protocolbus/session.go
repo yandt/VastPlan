@@ -8,7 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 var errPendingQueueFull = errors.New("会话 pending 请求队列已满")
@@ -32,6 +34,12 @@ type session struct {
 	pendingMu sync.Mutex
 	pending   map[string]chan *pluginhostv1.FromPlugin
 
+	// delegations 保存宿主为当前入站调用签发的短生命周期身份委托。插件只拿到
+	// 随机引用，HostCall 时宿主据此重建权威 CallContext，而不信任插件回传的
+	// principal / tenant / caller。委托随对应 Invoke 完成而销毁。
+	delegationMu sync.RWMutex
+	delegations  map[string]*contractv1.CallContext
+
 	seq atomic.Uint64
 
 	// lastSeen 最近一次收到插件消息的时刻（任何消息都算活着）。
@@ -51,11 +59,50 @@ func newSession(id, pluginID, pluginVersion string) *session {
 		pluginID:      pluginID,
 		pluginVersion: pluginVersion,
 		pending:       map[string]chan *pluginhostv1.FromPlugin{},
+		delegations:   map[string]*contractv1.CallContext{},
 		done:          make(chan struct{}),
 		teardownDone:  make(chan struct{}),
 	}
 	s.touch()
 	return s
+}
+
+func (s *session) issueDelegation(callCtx *contractv1.CallContext) (string, *contractv1.CallContext) {
+	token := randomHex(32)
+	trusted := &contractv1.CallContext{}
+	if callCtx != nil {
+		trusted = proto.Clone(callCtx).(*contractv1.CallContext)
+	}
+	delete(trusted.Metadata, delegationMetadataKey)
+	forwarded := proto.Clone(trusted).(*contractv1.CallContext)
+	if forwarded.Metadata == nil {
+		forwarded.Metadata = map[string]string{}
+	}
+	forwarded.Metadata[delegationMetadataKey] = token
+
+	s.delegationMu.Lock()
+	s.delegations[token] = trusted
+	s.delegationMu.Unlock()
+	return token, forwarded
+}
+
+func (s *session) delegatedContext(token string) (*contractv1.CallContext, bool) {
+	if token == "" {
+		return nil, false
+	}
+	s.delegationMu.RLock()
+	trusted, ok := s.delegations[token]
+	s.delegationMu.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	return proto.Clone(trusted).(*contractv1.CallContext), true
+}
+
+func (s *session) releaseDelegation(token string) {
+	s.delegationMu.Lock()
+	delete(s.delegations, token)
+	s.delegationMu.Unlock()
 }
 
 func (s *session) touch() { s.lastSeen.Store(time.Now().UnixNano()) }

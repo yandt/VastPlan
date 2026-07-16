@@ -37,20 +37,21 @@ func main() {
 	}
 	identities := make([]controlplane.NKeyIdentity, 0, 1+*nodeCount+*controllerCount+*runtimeCount)
 	seeds := map[string][]byte{"system.seed": systemSeed}
-	addIdentity := func(role controlplane.SecurityRole, name string) {
+	addIdentity := func(role controlplane.SecurityRole, name, nodeID string) {
 		publicKey, seed := generateIdentity()
-		identities = append(identities, controlplane.NKeyIdentity{Name: name, Role: role, PublicKey: publicKey})
+		identities = append(identities, controlplane.NKeyIdentity{Name: name, Role: role, PublicKey: publicKey, NodeID: nodeID})
 		seeds[name+".seed"] = seed
 	}
-	addIdentity(controlplane.RoleBootstrap, "bootstrap")
+	addIdentity(controlplane.RoleBootstrap, "bootstrap", "")
 	for index := 1; index <= *controllerCount; index++ {
-		addIdentity(controlplane.RoleController, fmt.Sprintf("controller-%d", index))
+		addIdentity(controlplane.RoleController, fmt.Sprintf("controller-%d", index), "")
 	}
 	for index := 1; index <= *nodeCount; index++ {
-		addIdentity(controlplane.RoleNode, fmt.Sprintf("node-%d", index))
+		name := fmt.Sprintf("node-%d", index)
+		addIdentity(controlplane.RoleNode, name, name)
 	}
 	for index := 1; index <= *runtimeCount; index++ {
-		addIdentity(controlplane.RoleRuntime, fmt.Sprintf("runtime-%d", index))
+		addIdentity(controlplane.RoleRuntime, fmt.Sprintf("runtime-%d", index), "")
 	}
 	config, err := controlplane.RenderNATSServerConfig(controlplane.ServerSecurityConfig{
 		ServerName: "vastplan-controlplane", Listen: *listen, StoreDir: *storeDir,

@@ -226,13 +226,50 @@ func TestHostDiagnosticSnapshotReportsHealthReadinessAndInflight(t *testing.T) {
 }
 
 func TestAuthenticatedPluginContextOverridesForgedCallerWithoutMutatingInput(t *testing.T) {
-	original := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "forged"}, TenantId: "tenant-a"}
-	got := authenticatedPluginContext(original, "plugin.real")
+	sess := newSession("sess-1", "plugin.real", "0.1.0")
+	trusted := &contractv1.CallContext{
+		Principal: &contractv1.Principal{UserId: "u-1", TenantId: "tenant-a", IsAdmin: false},
+		Caller:    &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_AGENT, Id: "agent.real"},
+		TenantId:  "tenant-a",
+	}
+	token, _ := sess.issueDelegation(trusted)
+	original := &contractv1.CallContext{
+		Principal: &contractv1.Principal{UserId: "attacker", TenantId: "tenant-b", IsAdmin: true},
+		Caller:    &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "forged"},
+		TenantId:  "tenant-b", Metadata: map[string]string{delegationMetadataKey: token},
+	}
+	got, ok := authenticatedPluginContext(sess, original, "plugin.real")
+	if !ok {
+		t.Fatal("有效委托应被接受")
+	}
 	if got.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || got.GetCaller().GetId() != "plugin.real" || got.GetTenantId() != "tenant-a" {
 		t.Fatalf("插件身份注入错误: %+v", got)
 	}
+	if got.GetPrincipal().GetUserId() != "u-1" || got.GetPrincipal().GetIsAdmin() {
+		t.Fatalf("权威 principal 必须来自宿主委托: %+v", got.GetPrincipal())
+	}
 	if original.GetCaller().GetId() != "forged" {
 		t.Fatal("不得修改插件传入的原始 CallContext")
+	}
+	if _, ok := authenticatedPluginContext(sess, &contractv1.CallContext{}, "plugin.real"); ok {
+		t.Fatal("没有委托的 HostCall 必须拒绝")
+	}
+	sess.releaseDelegation(token)
+	if _, ok := authenticatedPluginContext(sess, original, "plugin.real"); ok {
+		t.Fatal("调用结束后的委托必须失效")
+	}
+}
+
+func TestKernelServicePolicyRequiresSignedManifestDeclaration(t *testing.T) {
+	policy := LaunchPolicy{KernelServices: []string{"kernel.info"}}
+	if !kernelServiceAllowed(policy, "kernel.info") {
+		t.Fatal("已声明内核服务必须允许调用")
+	}
+	if kernelServiceAllowed(policy, "kernel.config.get") {
+		t.Fatal("未声明内核服务必须拒绝调用")
+	}
+	if kernelServiceAllowed(LaunchPolicy{}, "kernel.info") {
+		t.Fatal("空策略不得允许任意内核服务")
 	}
 }
 

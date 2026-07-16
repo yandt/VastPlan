@@ -132,6 +132,17 @@ type SubjectACL struct {
 
 // RoleACL 是代码中的权限单一真相源，配置生成和测试都引用同一份策略。
 func RoleACL(role SecurityRole) (SubjectACL, error) {
+	return roleACL(role, "")
+}
+
+// RoleACLForIdentity 在生成服务端配置时把节点身份绑定到自己的状态 key。
+// Node 角色若没有 NodeID 不允许生成生产 ACL；无节点范围的 RoleACL 仅供策略检查，
+// 不得直接用于 NATS 用户配置。
+func RoleACLForIdentity(identity NKeyIdentity) (SubjectACL, error) {
+	return roleACL(identity.Role, identity.NodeID)
+}
+
+func roleACL(role SecurityRole, nodeID string) (SubjectACL, error) {
 	switch role {
 	case RoleBootstrap:
 		return SubjectACL{PublishAllow: []string{">"}, SubscribeAllow: []string{">"}}, nil
@@ -147,12 +158,14 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 			},
 		}, nil
 	case RoleNode:
+		if nodeID == "" {
+			return SubjectACL{}, errors.New("node NATS ACL 必须绑定 node id")
+		}
 		return SubjectACL{
 			PublishAllow: append(openAllAPI(), append(
-				kvAPIForRead(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, AssignmentsBucket),
-				"$KV."+ActualBucket+".>", "$KV."+NodesBucket+".>",
+				kvAPIForRead(DesiredBucket, AssignmentsBucket, CapabilitiesBucket),
+				"$KV."+ActualBucket+"."+ActualKey(nodeID), "$KV."+NodesBucket+"."+NodeKey(nodeID),
 				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
-				"$KV."+AutoscalingBucket+".>",
 				"vp.event.persist.v1.>",
 				"$JS.API.CONSUMER.CREATE."+EventsStream, "$JS.API.CONSUMER.CREATE."+EventsStream+".>",
 				"$JS.API.CONSUMER.DURABLE.CREATE."+EventsStream+".>", "$JS.API.CONSUMER.INFO."+EventsStream+".>",
@@ -197,7 +210,7 @@ func kvAPIForInfo(buckets ...string) []string {
 }
 
 func kvAPIForRead(buckets ...string) []string {
-	patterns := make([]string, 0, len(buckets)*9)
+	patterns := make([]string, 0, len(buckets)*8)
 	for _, bucket := range buckets {
 		stream := "KV_" + bucket
 		patterns = append(patterns,
@@ -208,7 +221,6 @@ func kvAPIForRead(buckets ...string) []string {
 			"$JS.API.CONSUMER.CREATE."+stream+".>",
 			"$JS.API.CONSUMER.DURABLE.CREATE."+stream+".>",
 			"$JS.API.CONSUMER.INFO."+stream+".>",
-			"$JS.API.CONSUMER.DELETE."+stream+".>",
 			"$JS.API.CONSUMER.MSG.NEXT."+stream+".>",
 		)
 	}
@@ -219,6 +231,7 @@ type NKeyIdentity struct {
 	Name      string
 	Role      SecurityRole
 	PublicKey string
+	NodeID    string
 }
 
 type ServerSecurityConfig struct {
@@ -273,7 +286,7 @@ func RenderNATSServerConfig(config ServerSecurityConfig) (string, error) {
 		if !nkeys.IsValidPublicUserKey(identity.PublicKey) {
 			return "", fmt.Errorf("NATS %s 用户公钥无效", identity.Role)
 		}
-		acl, err := RoleACL(identity.Role)
+		acl, err := RoleACLForIdentity(identity)
 		if err != nil {
 			return "", err
 		}

@@ -23,6 +23,8 @@ go run ./tools/natssecurity \
 
 工具不会覆盖已有文件。`*.seed` 均为 `0600` 且每个实例独立；`nats-server.conf` 只含公钥、ACL 和证书路径。
 
+除 NATS 连接用的角色 seed 外，跨节点 addressing 还需要为每个 Node Agent 单独生成一枚传输签名 NKey，并把所有允许互调的公钥登记到 `transport-trust.json`（文件权限至少 `0600`）。传输 seed 不得复用 bootstrap/controller/node 的 NATS seed；信任文档随发布配置原子更新并纳入密钥轮换流程。
+
 ## 3. 启动 NATS
 
 ```bash
@@ -69,8 +71,12 @@ bin/backend-kernel reconcile \
   -nats-cert /etc/vastplan/pki/node-1.crt \
   -nats-key /etc/vastplan/pki/node-1.key \
   -nats-seed /secure/node-1.seed \
+  -transport-seed /secure/node-1.transport.seed \
+  -transport-trust /secure/transport-trust.json \
   -deployment cluster -node-id node-1
 ```
+
+未显式配置 `-transport-seed` 与 `-transport-trust` 时，控制面 Node Agent 会拒绝启动；仅本地开发可以显式使用 `-nats-allow-insecure` 绕过 NATS 与 addressing 的生产门禁。传输信封会绑定 subject、payload、时间戳和 nonce，接收端据此校验签名并重建可信调用身份；JetStream 重投只跳过 nonce 重放检查，不跳过签名和身份校验。
 
 ## 6. 权限边界
 

@@ -104,7 +104,7 @@ func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOption
 		_ = sub.Unsubscribe()
 		return nil, fmt.Errorf("确认 capability 订阅: %w", err)
 	}
-	if err := putAnnouncement(ctx, r.Directory, registration.key, record); err != nil {
+	if err := r.putAnnouncement(ctx, r.Directory, registration.key, record); err != nil {
 		cancel()
 		_ = sub.Unsubscribe()
 		return nil, err
@@ -165,12 +165,12 @@ func ActivateRegistrations(ctx context.Context, registrations []*Registration) e
 		record := registration.record
 		record.Health = "healthy"
 		record.UpdatedAt = time.Now().UTC()
-		if err := putAnnouncement(ctx, router.Directory, registration.key, record); err != nil {
+		if err := router.putAnnouncement(ctx, router.Directory, registration.key, record); err != nil {
 			for _, previous := range activated {
 				rollback := previous.record
 				rollback.Health = "starting"
 				rollback.UpdatedAt = time.Now().UTC()
-				_ = putAnnouncement(context.Background(), router.Directory, previous.key, rollback)
+				_ = router.putAnnouncement(context.Background(), router.Directory, previous.key, rollback)
 				previous.record = rollback
 			}
 			return fmt.Errorf("激活 capability %s: %w", registration.record.Capability, err)
@@ -185,7 +185,7 @@ func ActivateRegistrations(ctx context.Context, registrations []*Registration) e
 		for _, registration := range activated {
 			record := registration.record
 			record.Health = "starting"
-			_ = putAnnouncement(context.Background(), router.Directory, registration.key, record)
+			_ = router.putAnnouncement(context.Background(), router.Directory, registration.key, record)
 			registration.record = record
 		}
 		return errors.New("addressing router 已关闭")
@@ -210,6 +210,15 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 		r.respondTransportError(msg, errorcode.PayloadTooLarge, "请求信封超过协议消息上限", false, "")
 		return
 	}
+	var identity TransportIdentity
+	if r.Transport != nil {
+		var err error
+		identity, err = r.Transport.verifyMessage(msg)
+		if err != nil {
+			r.respondTransportError(msg, errorcode.PermissionDenied, "远端调用身份校验失败", false, "")
+			return
+		}
+	}
 	var req addressingv1.InvokeRequest
 	if err := proto.Unmarshal(msg.Data, &req); err != nil {
 		r.respondTransportError(msg, errorcode.WireInvalidRequest, err.Error(), false, "")
@@ -226,6 +235,14 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 	if !limits.MetadataAllowed(proto.Size(req.Context)) {
 		r.respondTransportError(msg, errorcode.MetadataTooLarge, "请求 CallContext 超过 metadata 上限", false, req.RequestId)
 		return
+	}
+	if r.Transport != nil {
+		authenticated, err := authenticatedTransportContext(identity, req.Context)
+		if err != nil {
+			r.respondTransportError(msg, errorcode.PermissionDenied, err.Error(), false, req.RequestId)
+			return
+		}
+		req.Context = authenticated
 	}
 	handlerCtx, boundedCallCtx, cancel := r.boundedCallContext(r.ctx, req.Context)
 	if !r.enterHandlerCall() {
@@ -276,7 +293,15 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 		r.Logf("编码 capability 响应失败 id=%s: %v", registrationID, marshalErr)
 		return
 	}
-	if err := msg.Respond(raw); err != nil {
+	responseMessage := nats.NewMsg(msg.Reply)
+	responseMessage.Data = raw
+	if r.Transport != nil {
+		if err := r.Transport.signMessage(responseMessage); err != nil {
+			r.Logf("签名 capability 响应失败 id=%s: %v", registrationID, err)
+			return
+		}
+	}
+	if err := msg.RespondMsg(responseMessage); err != nil {
 		r.Logf("回应 capability %s 失败: %v", capability, err)
 	}
 }
@@ -286,7 +311,14 @@ func (r *Router) respondTransportError(msg *nats.Msg, code, message string, retr
 		RequestId:      requestID,
 		TransportError: &addressingv1.TransportError{Code: code, Message: message, Retryable: retryable},
 	})
-	_ = msg.Respond(raw)
+	response := nats.NewMsg(msg.Reply)
+	response.Data = raw
+	if r.Transport != nil {
+		if err := r.Transport.signMessage(response); err != nil {
+			return
+		}
+	}
+	_ = msg.RespondMsg(response)
 }
 
 func (registration *Registration) heartbeat(ctx context.Context) {
@@ -301,7 +333,7 @@ func (registration *Registration) heartbeat(ctx context.Context) {
 			record := registration.record
 			record.UpdatedAt = time.Now().UTC()
 			heartbeatCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			err := putAnnouncement(heartbeatCtx, registration.router.Directory, registration.key, record)
+			err := registration.router.putAnnouncement(heartbeatCtx, registration.router.Directory, registration.key, record)
 			cancel()
 			if err == nil {
 				registration.record = record
@@ -371,10 +403,14 @@ func (registration *Registration) Close(ctx context.Context) error {
 	return registration.closeErr
 }
 
-func putAnnouncement(ctx context.Context, directory interface {
+func (r *Router) putAnnouncement(ctx context.Context, directory interface {
 	Put(context.Context, string, []byte) (uint64, error)
 }, key string, record Announcement) error {
-	raw, err := json.Marshal(record)
+	prepared, err := r.prepareAnnouncement(key, record)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(prepared)
 	if err != nil {
 		return err
 	}
