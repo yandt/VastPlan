@@ -11,11 +11,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/protobuf/proto"
 
 	addressingv1 "cdsoft.com.cn/VastPlan/shared/go/addressing/v1"
@@ -42,6 +45,7 @@ type Announcement struct {
 	NodeID         string    `json:"node_id"`
 	UnitID         string    `json:"unit_id"`
 	Subject        string    `json:"subject"`
+	StreamEndpoint string    `json:"stream_endpoint,omitempty"`
 	Version        string    `json:"version,omitempty"`
 	Health         string    `json:"health"`
 	UpdatedAt      time.Time `json:"updated_at"`
@@ -52,10 +56,17 @@ type localHandler struct {
 	handler        InvokeHandler
 }
 
+type localStreamHandler struct {
+	registrationID string
+	handler        StreamHandler
+}
+
 // Router 同时持有本地 fast path、NATS 数据面和能力目录缓存。
 type Router struct {
 	NC          *nats.Conn
 	Directory   jetstream.KeyValue
+	JetStream   jetstream.JetStream
+	Events      jetstream.Stream
 	NodeID      string
 	CallTimeout time.Duration
 	Logf        func(string, ...any)
@@ -66,6 +77,9 @@ type Router struct {
 	mu             sync.RWMutex
 	local          map[string][]localHandler
 	localCursor    map[string]uint64
+	streamLocal    map[string][]localStreamHandler
+	streamCursor   map[string]uint64
+	streamResolve  map[string]uint64
 	instances      map[string]map[string]Announcement // capability -> directory key -> record
 	registrations  map[string]*Registration
 	inflight       map[string]context.CancelFunc
@@ -74,6 +88,11 @@ type Router struct {
 	closeOnce      sync.Once
 	cancelSub      *nats.Subscription
 	directoryW     jetstream.KeyWatcher
+	streamServer   *grpc.Server
+	streamListener net.Listener
+	streamEndpoint string
+	streamCreds    credentials.TransportCredentials
+	streamInsecure bool
 }
 
 func NewRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf func(string, ...any)) (*Router, error) {
@@ -84,10 +103,23 @@ func NewRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf 
 		logf = func(string, ...any) {}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	js, err := jetstream.New(nc)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("初始化 JetStream: %w", err)
+	}
+	events, err := js.Stream(ctx, controlplane.EventsStream)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("打开持久事件 stream: %w", err)
+	}
 	r := &Router{
-		NC: nc, Directory: directory, NodeID: nodeID, CallTimeout: 30 * time.Second, Logf: logf,
+		NC: nc, Directory: directory, JetStream: js, Events: events,
+		NodeID: nodeID, CallTimeout: 30 * time.Second, Logf: logf,
 		ctx: ctx, cancel: cancel, local: map[string][]localHandler{}, localCursor: map[string]uint64{},
-		instances: map[string]map[string]Announcement{}, registrations: map[string]*Registration{},
+		streamLocal: map[string][]localStreamHandler{}, streamCursor: map[string]uint64{},
+		streamResolve: map[string]uint64{},
+		instances:     map[string]map[string]Announcement{}, registrations: map[string]*Registration{},
 		inflight: map[string]context.CancelFunc{}, pendingCancels: map[string]time.Time{},
 	}
 	sub, err := nc.Subscribe(cancelSubject, r.handleCancel)
@@ -240,6 +272,14 @@ func (r *Router) Close() error {
 		}
 
 		r.cancel()
+		if r.streamServer != nil {
+			r.streamServer.Stop()
+		}
+		if r.streamListener != nil {
+			if err := r.streamListener.Close(); err != nil && !errors.Is(err, net.ErrClosed) {
+				closeErr = errors.Join(closeErr, err)
+			}
+		}
 		if r.directoryW != nil {
 			closeErr = errors.Join(closeErr, r.directoryW.Stop())
 		}
@@ -254,6 +294,9 @@ func (r *Router) Close() error {
 		r.pendingCancels = map[string]time.Time{}
 		r.local = map[string][]localHandler{}
 		r.localCursor = map[string]uint64{}
+		r.streamLocal = map[string][]localStreamHandler{}
+		r.streamCursor = map[string]uint64{}
+		r.streamResolve = map[string]uint64{}
 		r.mu.Unlock()
 	})
 	return closeErr

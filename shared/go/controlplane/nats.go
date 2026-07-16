@@ -23,6 +23,7 @@ const (
 	DeploymentsBucket  = "VASTPLAN_DEPLOYMENTS_V2"
 	AssignmentsBucket  = "VASTPLAN_ASSIGNMENTS_V1"
 	ControllersBucket  = "VASTPLAN_CONTROLLERS_V1"
+	EventsStream       = "VASTPLAN_EVENTS_V1"
 
 	MaxDesiredStateBytes = 1 << 20
 )
@@ -36,6 +37,7 @@ type Buckets struct {
 	Deployments  jetstream.KeyValue
 	Assignments  jetstream.KeyValue
 	Controllers  jetstream.KeyValue
+	Events       jetstream.Stream
 }
 
 // Connect 建立可无限重连的 NATS 连接。首次连接仍 fail-fast，让启动配置错误明确暴露；
@@ -104,9 +106,18 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	if err != nil {
 		return Buckets{}, fmt.Errorf("创建控制器选主 bucket: %w", err)
 	}
+	events, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+		Name: EventsStream, Description: "VastPlan durable domain events v1",
+		Subjects: []string{"vp.event.persist.v1.>"}, Retention: jetstream.LimitsPolicy,
+		MaxAge: 7 * 24 * time.Hour, MaxBytes: 10 << 30, Discard: jetstream.DiscardOld,
+		Duplicates: 10 * time.Minute, Replicas: replicas, Storage: storage,
+	})
+	if err != nil {
+		return Buckets{}, fmt.Errorf("创建持久事件 stream: %w", err)
+	}
 	return Buckets{
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
-		Deployments: deployments, Assignments: assignments, Controllers: controllers,
+		Deployments: deployments, Assignments: assignments, Controllers: controllers, Events: events,
 	}, nil
 }
 
@@ -141,9 +152,13 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开控制器选主 bucket: %w", err)
 	}
+	events, err := js.Stream(ctx, EventsStream)
+	if err != nil {
+		return Buckets{}, fmt.Errorf("打开持久事件 stream: %w", err)
+	}
 	return Buckets{
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
-		Deployments: deployments, Assignments: assignments, Controllers: controllers,
+		Deployments: deployments, Assignments: assignments, Controllers: controllers, Events: events,
 	}, nil
 }
 
@@ -196,6 +211,9 @@ func CapabilityKey(capability, instanceID string) string {
 func RPCSubject(capability string) string  { return "vp.rpc.v1." + keyToken(capability) }
 func RPCQueue(capability string) string    { return "vp.rpc.v1." + keyToken(capability) }
 func EventSubject(eventType string) string { return "vp.event.v1." + keyToken(eventType) }
+func PersistentEventSubject(eventType string) string {
+	return "vp.event.persist.v1." + keyToken(eventType)
+}
 
 func keyToken(value string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(value))

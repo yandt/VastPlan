@@ -137,7 +137,7 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 		return SubjectACL{PublishAllow: []string{">"}, SubscribeAllow: []string{">"}}, nil
 	case RoleController:
 		return SubjectACL{
-			PublishAllow: append(kvAPIForOpenAll(), append(
+			PublishAllow: append(openAllAPI(), append(
 				kvAPIForRead(DeploymentsBucket, NodesBucket, AssignmentsBucket, ControllersBucket),
 				"$KV."+AssignmentsBucket+".>", "$KV."+ControllersBucket+".>",
 			)...),
@@ -148,10 +148,14 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 		}, nil
 	case RoleNode:
 		return SubjectACL{
-			PublishAllow: append(kvAPIForOpenAll(), append(
+			PublishAllow: append(openAllAPI(), append(
 				kvAPIForRead(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, AssignmentsBucket),
 				"$KV."+ActualBucket+".>", "$KV."+NodesBucket+".>",
 				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
+				"vp.event.persist.v1.>",
+				"$JS.API.CONSUMER.CREATE."+EventsStream, "$JS.API.CONSUMER.CREATE."+EventsStream+".>",
+				"$JS.API.CONSUMER.DURABLE.CREATE."+EventsStream+".>", "$JS.API.CONSUMER.INFO."+EventsStream+".>",
+				"$JS.API.CONSUMER.MSG.NEXT."+EventsStream+".>",
 			)...),
 			PublishDeny: []string{
 				"$KV." + DesiredBucket + ".>", "$KV." + DeploymentsBucket + ".>", "$KV." + AssignmentsBucket + ".>",
@@ -163,8 +167,12 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 		}, nil
 	case RoleRuntime:
 		return SubjectACL{
-			PublishAllow: append(kvAPIForRead(CapabilitiesBucket),
-				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>"),
+			PublishAllow: append(append(kvAPIForRead(CapabilitiesBucket), "$JS.API.STREAM.INFO."+EventsStream),
+				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
+				"vp.event.persist.v1.>",
+				"$JS.API.CONSUMER.CREATE."+EventsStream, "$JS.API.CONSUMER.CREATE."+EventsStream+".>",
+				"$JS.API.CONSUMER.DURABLE.CREATE."+EventsStream+".>", "$JS.API.CONSUMER.INFO."+EventsStream+".>",
+				"$JS.API.CONSUMER.MSG.NEXT."+EventsStream+".>"),
 			SubscribeAllow: []string{
 				"_INBOX.>", "$KV." + CapabilitiesBucket + ".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
 			},
@@ -174,8 +182,8 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 	}
 }
 
-func kvAPIForOpenAll() []string {
-	return kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, ControllersBucket)
+func openAllAPI() []string {
+	return append(kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, ControllersBucket), "$JS.API.STREAM.INFO."+EventsStream)
 }
 
 func kvAPIForInfo(buckets ...string) []string {

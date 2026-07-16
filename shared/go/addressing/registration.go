@@ -33,6 +33,7 @@ type Registration struct {
 	key      string
 	id       string
 	sub      *nats.Subscription
+	stream   bool
 	cancel   context.CancelFunc
 	once     sync.Once
 	closeErr error
@@ -185,6 +186,21 @@ func (registration *Registration) Close(ctx context.Context) error {
 			delete(registration.router.localCursor, registration.record.Capability)
 		} else {
 			registration.router.local[registration.record.Capability] = locals
+		}
+		if registration.stream {
+			streams := registration.router.streamLocal[registration.record.Capability]
+			for index := range streams {
+				if streams[index].registrationID == registration.id {
+					streams = append(streams[:index], streams[index+1:]...)
+					break
+				}
+			}
+			if len(streams) == 0 {
+				delete(registration.router.streamLocal, registration.record.Capability)
+				delete(registration.router.streamCursor, registration.record.Capability)
+			} else {
+				registration.router.streamLocal[registration.record.Capability] = streams
+			}
 		}
 		delete(registration.router.registrations, registration.id)
 		if instances := registration.router.instances[registration.record.Capability]; instances != nil {
