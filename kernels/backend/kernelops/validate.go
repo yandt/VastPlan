@@ -1,0 +1,85 @@
+package kernelops
+
+import (
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+
+	"cdsoft.com.cn/VastPlan/kernels/backend/nodeagent"
+	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
+	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
+)
+
+const (
+	ConfigKindDesiredV1    = "desired-v1"
+	ConfigKindDeploymentV2 = "deployment-v2"
+	ConfigKindActualState  = "actual-state"
+)
+
+type validationResult struct {
+	Kind          string `json:"kind"`
+	SchemaVersion int    `json:"schema_version"`
+	Revision      uint64 `json:"revision,omitempty"`
+	Digest        string `json:"digest,omitempty"`
+	Units         int    `json:"units"`
+	NodeID        string `json:"node_id,omitempty"`
+	Valid         bool   `json:"valid"`
+}
+
+// RunValidate 对即将上线的配置执行与运行时完全相同的 Schema 和语义校验。
+// actual-state 只做读取迁移演练，不写回原文件。
+func RunValidate(output io.Writer, args []string) error {
+	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	kind := flags.String("kind", "", "desired-v1、deployment-v2 或 actual-state")
+	filename := flags.String("file", "", "待校验 JSON 文件")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if flags.NArg() != 0 || *kind == "" || *filename == "" {
+		return errors.New("用法: validate -kind <desired-v1|deployment-v2|actual-state> -file <配置.json>")
+	}
+
+	result := validationResult{Kind: *kind, Valid: true}
+	switch *kind {
+	case ConfigKindDesiredV1:
+		state, err := deploymentv1.ParseFile(*filename)
+		if err != nil {
+			return err
+		}
+		result.SchemaVersion = state.Version
+		result.Revision = state.Revision
+		result.Digest = state.Digest()
+		result.Units = len(state.Units)
+	case ConfigKindDeploymentV2:
+		deployment, err := deploymentv2.ParseFile(*filename)
+		if err != nil {
+			return err
+		}
+		result.SchemaVersion = deployment.Version
+		result.Revision = deployment.Revision
+		result.Digest = deployment.Digest()
+		result.Units = len(deployment.Units)
+	case ConfigKindActualState:
+		if err := checkRegularFile(*filename, maxActualStateBytes); err != nil {
+			return fmt.Errorf("实际态文件: %w", err)
+		}
+		state, err := (nodeagent.FileStateStore{Path: *filename}).Load()
+		if err != nil {
+			return err
+		}
+		result.SchemaVersion = state.Version
+		result.Revision = state.AppliedRevision
+		result.Units = len(state.Units)
+		result.NodeID = state.NodeID
+	default:
+		return fmt.Errorf("未知配置类型 %q", *kind)
+	}
+
+	encoder := json.NewEncoder(output)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(result)
+}

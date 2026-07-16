@@ -18,15 +18,19 @@ import (
 )
 
 type soakReport struct {
-	Duration           string `json:"duration"`
-	Calls              uint64 `json:"calls"`
-	Restarts           uint64 `json:"restarts"`
-	BaselineGoroutines int    `json:"baseline_goroutines"`
-	FinalGoroutines    int    `json:"final_goroutines"`
-	MaxGoroutines      int    `json:"max_goroutines"`
-	BaselineFDs        int    `json:"baseline_fds"`
-	FinalFDs           int    `json:"final_fds"`
-	MaxFDs             int    `json:"max_fds"`
+	Commit                   string  `json:"commit"`
+	RequestedDurationSeconds float64 `json:"requested_duration_seconds"`
+	ElapsedDurationSeconds   float64 `json:"elapsed_duration_seconds"`
+	Duration                 string  `json:"duration"`
+	Calls                    uint64  `json:"calls"`
+	Restarts                 uint64  `json:"restarts"`
+	MaxSessionPending        int     `json:"max_session_pending"`
+	BaselineGoroutines       int     `json:"baseline_goroutines"`
+	FinalGoroutines          int     `json:"final_goroutines"`
+	MaxGoroutines            int     `json:"max_goroutines"`
+	BaselineFDs              int     `json:"baseline_fds"`
+	FinalFDs                 int     `json:"final_fds"`
+	MaxFDs                   int     `json:"max_fds"`
 }
 
 func TestBackendKernelSoak(t *testing.T) {
@@ -52,6 +56,7 @@ func TestBackendKernelSoak(t *testing.T) {
 	maxG, maxFD := baselineG, baselineFD
 	started := time.Now()
 	var calls, restarts uint64
+	maxPending := 0
 	for time.Since(started) < duration {
 		response, err := host.Invoke(ctx, toolTarget("fixture.legacy-v1", "echo"), testCallContext(), []byte(`{"soak":true}`))
 		if err != nil || response.Result.GetStatus() != contractv1.CallResult_STATUS_OK {
@@ -78,6 +83,9 @@ func TestBackendKernelSoak(t *testing.T) {
 			}
 			snapshot := host.DiagnosticSnapshot()
 			for _, session := range snapshot.Sessions {
+				if session.Pending > maxPending {
+					maxPending = session.Pending
+				}
 				if session.Pending > 1 {
 					t.Fatalf("pending 持续增长: %+v", session)
 				}
@@ -90,7 +98,13 @@ func TestBackendKernelSoak(t *testing.T) {
 	}
 	time.Sleep(500 * time.Millisecond)
 	runtime.GC()
-	report := soakReport{Duration: time.Since(started).String(), Calls: calls, Restarts: restarts, BaselineGoroutines: baselineG, FinalGoroutines: runtime.NumGoroutine(), MaxGoroutines: maxG, BaselineFDs: baselineFD, FinalFDs: openFDs(), MaxFDs: maxFD}
+	elapsed := time.Since(started)
+	report := soakReport{
+		Commit: os.Getenv("VASTPLAN_SOAK_COMMIT"), RequestedDurationSeconds: duration.Seconds(),
+		ElapsedDurationSeconds: elapsed.Seconds(), Duration: elapsed.String(), Calls: calls, Restarts: restarts,
+		MaxSessionPending: maxPending, BaselineGoroutines: baselineG, FinalGoroutines: runtime.NumGoroutine(),
+		MaxGoroutines: maxG, BaselineFDs: baselineFD, FinalFDs: openFDs(), MaxFDs: maxFD,
+	}
 	if path := os.Getenv("VASTPLAN_SOAK_REPORT"); path != "" {
 		raw, _ := json.MarshalIndent(report, "", "  ")
 		if err := os.WriteFile(path, raw, 0o644); err != nil {

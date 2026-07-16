@@ -5,7 +5,7 @@
   "publisher": "vastplan",
   "description": "演示 hook 分发：before 钩子按配额限流（可否决），after 钩子计量",
 
-  "engines": { "backend": "^0.1" },
+  "engines": { "backend": "^0.1 || ^1.0" },
 
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
 

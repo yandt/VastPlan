@@ -79,7 +79,8 @@ func newHost(t *testing.T, kernelVersion string) *protocolbus.Host {
 		func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 			out, _ := json.Marshal(map[string]any{
 				"kernel": kernelName, "version": kernelVersion,
-				"callerKind": callCtx.Caller.Kind.String(), "tenant": callCtx.TenantId,
+				"callerKind": callCtx.Caller.Kind.String(), "callerId": callCtx.Caller.Id,
+				"tenant": callCtx.TenantId, "traceId": callCtx.GetTrace().GetTraceId(),
 			})
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, out, nil
 		})
@@ -118,6 +119,30 @@ func testCallContext() *contractv1.CallContext {
 
 func toolTarget(capability, op string) *contractv1.CallTarget {
 	return &contractv1.CallTarget{ExtensionPoint: "tool.package", Capability: capability, Operation: &op}
+}
+
+func TestFirstPartyReferencePluginsSupportBackend1(t *testing.T) {
+	plugins := []string{
+		"./plugins/com.vastplan.demo-audit/backend",
+		"./plugins/com.vastplan.demo-permission/backend",
+		"./plugins/com.vastplan.demo-quota/backend",
+		"./plugins/com.vastplan.hello-world/backend",
+	}
+	for _, pluginPath := range plugins {
+		t.Run(filepath.Base(filepath.Dir(filepath.Dir(pluginPath))), func(t *testing.T) {
+			bin := buildPlugin(t, pluginPath)
+			host := newHost(t, "1.0.0")
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			process, err := host.Launch(ctx, bin)
+			if err != nil {
+				t.Fatalf("第一方参考插件必须通过 Backend 1.0 engines 握手: %v", err)
+			}
+			if err := host.Close(process); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
 }
 
 // 兼容性夹具绕过当前 sdk/go/plugin，直接使用 Plugin-Host v1 消息集。
@@ -364,9 +389,12 @@ func TestPluginHostCall_PluginCallsBackIntoKernel(t *testing.T) {
 	if got.HostReported["kernel"] != kernelName || got.HostReported["version"] != "0.1.0" {
 		t.Fatalf("插件未拿到正确的内核信息，实际: %v", got.HostReported)
 	}
-	// CallContext 在"插件→宿主"方向也必须透传
-	if got.HostReported["tenant"] != "acme" || got.HostReported["callerKind"] != "CALLER_KIND_AGENT" {
-		t.Fatalf("CallContext 未在回调方向透传，实际: %v", got.HostReported)
+	// 插件回调是新的信任边界：租户和 trace 继续传播，但 Caller 必须由宿主按
+	// 已认证 session 重建，不能让插件冒用原始 Agent 身份。
+	if got.HostReported["tenant"] != "acme" || got.HostReported["traceId"] != "trace-e2e" ||
+		got.HostReported["callerKind"] != "CALLER_KIND_PLUGIN" ||
+		got.HostReported["callerId"] != "com.vastplan.hello-world" {
+		t.Fatalf("HostCall 信任边界裁剪错误，实际: %v", got.HostReported)
 	}
 }
 

@@ -30,7 +30,7 @@ const descriptor = `{
 func main() {
 	// id/version/engines 与 vastplan.plugin.json 保持一致（清单是单一真源，ADR-0017 §1）
 	p := sdk.New("com.vastplan.hello-world", "0.1.0", map[string]string{
-		"backend": "^0.1", // 只贡献 backend 面；宿主据此校验内核版本
+		"backend": "^0.1 || ^1.0", // 只贡献 backend 面；已通过 Backend 0.1/1.0 兼容门禁
 	})
 
 	p.Contribute(sdk.Contribution{

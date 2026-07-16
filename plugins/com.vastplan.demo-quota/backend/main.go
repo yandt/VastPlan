@@ -42,7 +42,7 @@ type meterRecord struct {
 
 func main() {
 	q := &quota{calls: map[string]int{}}
-	p := sdk.New("com.vastplan.demo-quota", "0.1.0", map[string]string{"backend": "^0.1"})
+	p := sdk.New("com.vastplan.demo-quota", "0.1.0", map[string]string{"backend": "^0.1 || ^1.0"})
 
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.Hook,

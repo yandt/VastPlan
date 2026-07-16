@@ -20,8 +20,8 @@
 | 核心 SPI | 配置、凭证引用、persistence/transaction 边界可替换 | 已完成：`kernelspi.Dependencies`、unit 配置服务、凭证回调代理、强制 scope、事务冲突/回滚语义与会话插件身份注入 |
 | 可靠性 | race、fuzz、故障注入、泄漏检查、24h soak | 进行中：race、Schema fuzz、崩溃/迁移/断连故障 E2E、session/pending 收敛检查与 24h soak 工作流已就绪；发布候选仍须附 24h 报告 |
 | 性能 | 核心 benchmark 基线与 CI 回归阈值 | 已完成：注册/协议/本地寻址/调度/persistence 基准，PR 在同一 runner 比较 base/head；耗时 >50% 且 >100ns 或分配 >25% 阻断 |
-| 安全与供应链 | mTLS/NKey/ACL、漏洞/许可证、签名制品、SBOM | 部分完成：运行链路和签名制品已有 |
-| 发布运维 | 可复现构建、版本升级、回滚、配置迁移、诊断 runbook | 未完成 |
+| 安全与供应链 | mTLS/NKey/ACL、漏洞/许可证、签名制品、SBOM | 已完成：运行链路、发布者签名、漏洞/许可证 CI、逐目标 CycloneDX SBOM 与 OIDC 来源/SBOM 证明均有机器门禁 |
+| 发布运维 | 可复现构建、版本升级、回滚、配置迁移、诊断 runbook | 已完成：逐字节复现门禁、内置 version/validate/support-bundle、tag/version 守卫及可执行升级回滚手册 |
 
 只有全部门禁都有当前仓库或运行记录证据，才允许把 `kernels/backend/VERSION` 更新为 `1.0.0`。
 
@@ -35,9 +35,12 @@ go vet ./...
 ./tools/benchmark.sh
 ./tools/benchmark.sh --compare <base-ref>
 go test -run='^$' -fuzz=FuzzParseManifest -fuzztime=30s ./schemas/plugin/v1
+./tools/verify-release.sh
 ```
 
 发布候选的 24 小时稳定性记录由 GitHub Actions `Backend Kernel Soak` 手工工作流产生，输入必须保持 `24h`。报告检查真实插件调用和周期重启，并验证 goroutine、文件句柄、session pending 不持续增长；短时 smoke 只能验证入口，不能替代发布证据。
+
+Release 只接受 `kernels/backend/SOAKED_COMMIT` 指向提交的合格报告，并通过 `tools/soakreport` 复验。被测提交之后若出现任何非版本推广白名单改动，必须对新的冻结提交重新运行 24 小时 soak。
 
 封板新增的兼容、fuzz、benchmark、故障和 soak 入口落地后，继续登记在本节；不得把只存在个人命令历史里的验证当作发布证据。
 

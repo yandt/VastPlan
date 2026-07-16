@@ -75,6 +75,15 @@ jobs:
         if: github.event_name == 'pull_request'
         run: ./tools/benchmark.sh --compare '${{ github.event.pull_request.base.sha }}'
 
+  reproducible:
+    name: 可复现构建与发布自检
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: {go-version-file: go.mod}
+      - run: ./tools/verify-release.sh
+
   codegen:
     name: codegen 与 proto 同步
     runs-on: ubuntu-latest

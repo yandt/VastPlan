@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "publisher": "vastplan",
   "description": "MVP 骨架验证插件：向 Agent 暴露一个工具包，验证握手→贡献注册→调用闭环",
-  "engines": { "backend": "^0.1" },
+  "engines": { "backend": "^0.1 || ^1.0" },
 
   "capabilities": {
     "kernelServices": [],

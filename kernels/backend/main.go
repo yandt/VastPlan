@@ -30,6 +30,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
+	"cdsoft.com.cn/VastPlan/kernels/backend/kernelops"
 	"cdsoft.com.cn/VastPlan/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/shared/go/addressing"
@@ -59,7 +60,23 @@ func main() {
 		printUsage()
 		os.Exit(2)
 	}
-	if os.Args[1] == "reconcile" {
+	switch os.Args[1] {
+	case "version":
+		if err := kernelops.PrintVersion(os.Stdout, version, os.Args[2:]); err != nil {
+			log.Fatalf("[version] %v", err)
+		}
+		return
+	case "validate":
+		if err := kernelops.RunValidate(os.Stdout, os.Args[2:]); err != nil {
+			log.Fatalf("[validate] %v", err)
+		}
+		return
+	case "support-bundle":
+		if err := kernelops.RunSupportBundle(os.Stdout, version, os.Args[2:]); err != nil {
+			log.Fatalf("[support-bundle] %v", err)
+		}
+		return
+	case "reconcile":
 		if err := runReconcile(os.Args[2:]); err != nil {
 			log.Fatalf("[node-agent] %v", err)
 		}
@@ -70,7 +87,7 @@ func main() {
 
 func printUsage() {
 	name := filepath.Base(os.Args[0])
-	fmt.Fprintf(os.Stderr, "用法:\n  %s <插件可执行文件路径>...\n  %s reconcile -desired <期望态.json> [参数]\n  %s reconcile -nats-url <URL> -deployment <name> -node-id <id> [参数]\n", name, name, name)
+	fmt.Fprintf(os.Stderr, "用法:\n  %s version [--json]\n  %s validate -kind <desired-v1|deployment-v2|actual-state> -file <配置.json>\n  %s support-bundle -actual-state <实际态.json> -output <支持包.tar.gz> [参数]\n  %s <插件可执行文件路径>...\n  %s reconcile -desired <期望态.json> [参数]\n  %s reconcile -nats-url <URL> -deployment <name> -node-id <id> [参数]\n", name, name, name, name, name, name)
 }
 
 func runDemo(pluginBins []string) {

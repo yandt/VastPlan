@@ -6,12 +6,16 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-mkdir -p bin
+OUT_DIR="${OUT_DIR:-bin}"
+mkdir -p "$OUT_DIR"
+export CGO_ENABLED="${CGO_ENABLED:-0}"
+BUILD_FLAGS=(-trimpath -buildvcs=false)
+COMMON_LDFLAGS="-s -w -buildid="
 
 # ── 内核 ──────────────────────────────────────────────
 BACKEND_VERSION="$(tr -d '[:space:]' < kernels/backend/VERSION)"
-go build -ldflags "-X main.version=${BACKEND_VERSION}" -o bin/backend-kernel ./kernels/backend
-echo "已构建 bin/backend-kernel  (backend@${BACKEND_VERSION})"
+go build "${BUILD_FLAGS[@]}" -ldflags "${COMMON_LDFLAGS} -X main.version=${BACKEND_VERSION}" -o "$OUT_DIR/backend-kernel" ./kernels/backend
+echo "已构建 $OUT_DIR/backend-kernel  (backend@${BACKEND_VERSION})"
 
 # ── 插件 ──────────────────────────────────────────────
 # 插件版本单一真源 = vastplan.plugin.json#version
@@ -19,6 +23,6 @@ for dir in plugins/*/; do
   id="$(basename "$dir")"
   [ -f "$dir/backend/main.go" ] || continue
   ver="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$dir/vastplan.plugin.json" | head -1)"
-  go build -o "bin/${id}" "./${dir}backend"
-  echo "已构建 bin/${id}  (${id}@${ver})"
+  go build "${BUILD_FLAGS[@]}" -ldflags "$COMMON_LDFLAGS" -o "$OUT_DIR/${id}" "./${dir}backend"
+  echo "已构建 $OUT_DIR/${id}  (${id}@${ver})"
 done
