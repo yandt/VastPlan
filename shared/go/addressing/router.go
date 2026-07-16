@@ -25,6 +25,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
+	"cdsoft.com.cn/VastPlan/shared/go/observability"
 	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
 )
 
@@ -72,8 +73,9 @@ type Router struct {
 	NodeID      string
 	CallTimeout time.Duration
 	// Limits 约束一元调用和流式调用的资源占用。CallTimeout 仅作为旧配置兼容覆盖项。
-	Limits protocollimit.Limits
-	Logf   func(string, ...any)
+	Limits   protocollimit.Limits
+	Logf     func(string, ...any)
+	Observer *observability.Observer
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -121,7 +123,7 @@ func NewRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf 
 	}
 	r := &Router{
 		NC: nc, Directory: directory, JetStream: js, Events: events,
-		NodeID: nodeID, Limits: protocollimit.Default(), Logf: logf,
+		NodeID: nodeID, Limits: protocollimit.Default(), Logf: logf, Observer: observability.New(nil, nil),
 		ctx: ctx, cancel: cancel, local: map[string][]localHandler{}, localCursor: map[string]uint64{},
 		streamLocal: map[string][]localStreamHandler{}, streamCursor: map[string]uint64{},
 		streamResolve: map[string]uint64{},
@@ -148,7 +150,7 @@ func NewRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf 
 	return r, nil
 }
 
-func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, callCtx *contractv1.CallContext, payload []byte) (result *contractv1.CallResult, responsePayload []byte, callErr error) {
 	if target == nil || target.Capability == "" {
 		return nil, nil, errors.New("调用目标 capability 不能为空")
 	}
@@ -163,6 +165,17 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	}
 	ctx, callCtx, cancel := r.boundedCallContext(ctx, callCtx)
 	defer cancel()
+	if r.Observer != nil {
+		var finish func(string, error)
+		callCtx, finish = r.Observer.BeginCall(ctx, callCtx, "addressing.invoke", map[string]string{"transport": "auto"})
+		defer func() {
+			status := "transport_error"
+			if callErr == nil && result != nil {
+				status = result.Status.String()
+			}
+			finish(status, callErr)
+		}()
+	}
 	if !r.enterOutboundCall() {
 		return nil, nil, &TransportError{Code: errorcode.ConcurrencyLimited, Message: "addressing 调用并发达到上限", Retryable: true}
 	}

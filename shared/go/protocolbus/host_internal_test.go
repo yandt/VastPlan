@@ -8,6 +8,7 @@ package protocolbus
 import (
 	"context"
 	"errors"
+	"google.golang.org/grpc"
 	"strings"
 	"sync"
 	"testing"
@@ -170,6 +171,26 @@ func TestBoundedCallContext_PropagatesEarliestDeadlineWithoutMutatingInput(t *te
 	if *original.DeadlineUnixMs != declared {
 		t.Fatal("不得修改调用方持有的 CallContext")
 	}
+}
+
+func TestHostDiagnosticSnapshotReportsHealthReadinessAndInflight(t *testing.T) {
+	host := NewHost("backend", "1.0.0", registry.New(), nil)
+	if host.Healthy() || host.Ready() {
+		t.Fatal("未启动宿主不能健康或就绪")
+	}
+	host.srv = grpc.NewServer() // 单元测试只验证状态事实，不占用真实监听端口。
+	defer host.Stop()
+	if err := host.enterCall(); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := host.DiagnosticSnapshot()
+	if !snapshot.Healthy || !snapshot.Ready || snapshot.Inflight != 1 || snapshot.Kernel != "backend" {
+		t.Fatalf("诊断快照错误: %+v", snapshot)
+	}
+	if snapshot.Metrics.Gauges["kernel_inflight_calls"] != 1 {
+		t.Fatalf("诊断 gauge 未更新: %+v", snapshot.Metrics)
+	}
+	host.leaveCall()
 }
 
 // markDead 可被重复调用（崩溃与主动关闭可能并发到达），不得 panic。

@@ -36,7 +36,20 @@ func New(version string, logf func(string, ...any)) (*protocolbus.Host, error) {
 	if err := host.RegisterHostService(extpoint.KernelService, "kernel.info", kernelInfo(version)); err != nil {
 		return nil, err
 	}
+	if err := host.RegisterHostService(extpoint.KernelService, "kernel.diagnostics", kernelDiagnostics(host)); err != nil {
+		return nil, err
+	}
 	return host, nil
+}
+
+func kernelDiagnostics(host *protocolbus.Host) protocolbus.HostService {
+	return func(_ context.Context, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+		out, err := json.Marshal(host.DiagnosticSnapshot())
+		if err != nil {
+			return nil, nil, err
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, out, nil
+	}
 }
 
 func kernelInfo(version string) protocolbus.HostService {

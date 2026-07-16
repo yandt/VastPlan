@@ -104,7 +104,7 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 // 钩子按 fanout 语义顺序执行，承载限流/配额/计量等横切关注点（皆为插件）。
 // 未获放行/被否决均返回**应用层错误**（非传输层——工程规范 §4.2）。
 func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
-	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
+	callCtx *contractv1.CallContext, payload []byte) (response *pluginhostv1.InvokeResponse, invokeErr error) {
 	if target == nil || target.ExtensionPoint == "" || target.Capability == "" {
 		return errorResponse(errorcode.WireInvalidRequest, "调用目标不能为空", false), nil
 	}
@@ -130,6 +130,19 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 
 	ctx, callCtx, cancel := boundedCallContext(ctx, callCtx, limits)
 	defer cancel()
+	if h.Observer != nil {
+		var finish func(string, error)
+		callCtx, finish = h.Observer.BeginCall(ctx, callCtx, "protocolbus.invoke", map[string]string{
+			"extension_point": target.ExtensionPoint,
+		})
+		defer func() {
+			status := "transport_error"
+			if invokeErr == nil && response != nil && response.Result != nil {
+				status = response.Result.Status.String()
+			}
+			finish(status, invokeErr)
+		}()
+	}
 
 	// 1) before 钩子：限流/配额等可在此否决
 	if err := h.runBeforeHooks(ctx, extpoint.PointInvoke, callCtx, target); err != nil {

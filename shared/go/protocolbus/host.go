@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/observability"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
 	"cdsoft.com.cn/VastPlan/shared/go/registry"
@@ -129,6 +130,7 @@ type Host struct {
 
 	Registry *registry.Registry
 	Logf     func(format string, args ...any)
+	Observer *observability.Observer
 
 	// 时限（零值时用默认）。
 	LaunchTimeout    time.Duration
@@ -177,6 +179,7 @@ func NewHost(kernelName, kernelVersion string, r *registry.Registry, logf func(s
 		KernelVersion: kernelVersion,
 		Registry:      r,
 		Logf:          logf,
+		Observer:      observability.New(nil, nil),
 		sessions:      map[string]*session{},
 		byPlugin:      map[string]*session{},
 		launches:      map[string]chan launchResult{},

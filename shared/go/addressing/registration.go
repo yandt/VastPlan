@@ -247,7 +247,18 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 		r.mu.Unlock()
 		r.leaveHandlerCall()
 	}()
+	var finish func(string, error)
+	if r.Observer != nil {
+		boundedCallCtx, finish = r.Observer.BeginCall(handlerCtx, boundedCallCtx, "addressing.handler", map[string]string{"transport": "nats"})
+	}
 	result, payload, err := handler(handlerCtx, req.Target, boundedCallCtx, req.Payload)
+	if finish != nil {
+		status := "transport_error"
+		if err == nil && result != nil {
+			status = result.Status.String()
+		}
+		finish(status, err)
+	}
 	response := &addressingv1.InvokeResponse{RequestId: req.RequestId, Result: result, Payload: payload}
 	if err != nil {
 		response.Result = nil

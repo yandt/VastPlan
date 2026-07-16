@@ -29,4 +29,8 @@ func TestNew_DefinesClosedBackendCatalogAndInternalService(t *testing.T) {
 	if !ok || service.PluginID != "__kernel__" {
 		t.Fatalf("kernel.info 必须仅由内核登记: %+v ok=%v", service, ok)
 	}
+	diagnostics, ok := host.Registry.Lookup(extpoint.KernelService, "kernel.diagnostics")
+	if !ok || diagnostics.PluginID != "__kernel__" {
+		t.Fatalf("kernel.diagnostics 必须仅由内核登记: %+v ok=%v", diagnostics, ok)
+	}
 }

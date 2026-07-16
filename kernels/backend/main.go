@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -43,6 +44,16 @@ const KernelName = hostfactory.KernelName
 // 单一真源是 kernels/backend/VERSION（ADR-0017 §1）；devel 仅用于未经构建脚本的本地跑。
 var version = "0.0.0-devel"
 
+func init() {
+	// JSONHandler 是 Backend 进程的统一结构化出口；slog.SetDefault 同时接管
+	// 标准 log 包，保证仍使用 log.Fatal 的启动失败也输出结构化记录。
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stderr, nil)))
+}
+
+func componentLogf(component string) func(string, ...any) {
+	return func(format string, values ...any) { slog.Info(fmt.Sprintf(format, values...), "component", component) }
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		printUsage()
@@ -63,7 +74,7 @@ func printUsage() {
 }
 
 func runDemo(pluginBins []string) {
-	logf := func(format string, args ...any) { log.Printf("[kernel] "+format, args...) }
+	logf := componentLogf("kernel")
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -245,7 +256,7 @@ func runReconcile(args []string) (runErr error) {
 			BaseURL: *repositoryURL, Token: *repositoryToken, Trust: trust, Client: httpClient,
 		}
 	}
-	logf := func(format string, values ...any) { log.Printf("[node-agent] "+format, values...) }
+	logf := componentLogf("node-agent")
 	var source nodeagent.DesiredStateSource = nodeagent.FileSource{Path: *desiredPath}
 	var stateStore nodeagent.StateStore = nodeagent.FileStateStore{Path: *actualPath}
 	var meshRouter *addressing.Router
