@@ -36,6 +36,10 @@ type Host interface {
 // host 参数使处理器可回调宿主（不需要它时忽略即可）。
 type Handler func(ctx context.Context, host Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error)
 
+// invocationCallPathKey 只在一次处理器调用的 context 内携带宿主已验证的调用路径。
+// Plugin.Call 会用它覆盖处理器可能传入的旧副本，保证链路继续向下游传播。
+type invocationCallPathKey struct{}
+
 // MigrationPhase 是插件私有状态 copy-on-write 事务的阶段。COMMIT 只提交候选视图，
 // 在宿主切换路由所有权前仍必须允许 ROLLBACK；插件不得修改旧实例正在读取的视图。
 type MigrationPhase string
@@ -330,6 +334,9 @@ func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.I
 		ctx, cancel = context.WithTimeout(ctx, limits.DefaultDeadline)
 	}
 	defer cancel()
+	if req.Context != nil {
+		ctx = context.WithValue(ctx, invocationCallPathKey{}, append([]string(nil), req.Context.CallPath...))
+	}
 
 	res, payload, err := h(ctx, p, req.Context, req.Payload)
 	if err != nil {
@@ -520,6 +527,9 @@ func pluginCallContext(ctx context.Context, callCtx *contractv1.CallContext, tim
 	bounded := &contractv1.CallContext{}
 	if callCtx != nil {
 		bounded = proto.Clone(callCtx).(*contractv1.CallContext)
+	}
+	if inherited, ok := ctx.Value(invocationCallPathKey{}).([]string); ok {
+		bounded.CallPath = append([]string(nil), inherited...)
 	}
 	deadlineUnixMs := deadline.UnixMilli()
 	bounded.DeadlineUnixMs = &deadlineUnixMs

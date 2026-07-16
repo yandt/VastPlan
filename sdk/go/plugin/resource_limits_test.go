@@ -73,6 +73,19 @@ func TestPluginDispatchAppliesDefaultDeadline(t *testing.T) {
 	}
 }
 
+func TestPluginCallContextInheritsInvocationPath(t *testing.T) {
+	ctx := context.WithValue(context.Background(), invocationCallPathKey{}, []string{"tool.package/first"})
+	original := &contractv1.CallContext{CallPath: []string{"forged/path"}}
+	_, propagated, cancel := pluginCallContext(ctx, original, time.Second)
+	defer cancel()
+	if len(propagated.CallPath) != 1 || propagated.CallPath[0] != "tool.package/first" {
+		t.Fatalf("SDK 必须继承处理器所属调用链，实际 %+v", propagated.CallPath)
+	}
+	if original.CallPath[0] != "forged/path" {
+		t.Fatal("不得修改处理器持有的 CallContext")
+	}
+}
+
 func TestDrainDoesNotBlockReadLoopWhileInflightCallWaits(t *testing.T) {
 	p := New("test.plugin", "1.0.0", nil)
 	p.active = true

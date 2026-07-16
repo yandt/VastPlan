@@ -36,7 +36,8 @@ func TestCompatibility_BackendV1Matrix(t *testing.T) {
 		"agent", "api.route", "event.sink", "hook", "permission.checker", "runner.capability", "tool.package",
 	})
 	assertStringSet(t, "内核稳定错误码", errorcode.KernelCodes(), []string{
-		"capability.not_found", "hook.aborted", "hostcall.failed", "kernel.service_error",
+		"call.cycle_detected", "call.depth_exceeded", "capability.not_found",
+		"hook.aborted", "hostcall.failed", "kernel.service_error",
 		"permission.denied", "plugin.handler_error", "plugin.inactive",
 		"remote.invalid_response", "remote.invoke_failed", "remote.stream_failed",
 		"resource.concurrency_limited", "resource.metadata_too_large", "resource.payload_too_large", "resource.queue_full",
@@ -75,6 +76,7 @@ func assertContractV1(t *testing.T) {
 			"project_id": {5, protoreflect.StringKind}, "trace": {6, protoreflect.MessageKind},
 			"deadline_unix_ms": {7, protoreflect.Int64Kind}, "credentials": {8, protoreflect.MessageKind},
 			"idempotency_key": {9, protoreflect.StringKind}, "metadata": {10, protoreflect.MessageKind},
+			"call_path": {11, protoreflect.StringKind},
 		},
 		"CallTarget": {
 			"extension_point": {1, protoreflect.StringKind}, "capability": {2, protoreflect.StringKind},

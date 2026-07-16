@@ -12,6 +12,7 @@ const (
 	DefaultMaxMetadataBytes    = 16 << 10
 	DefaultMaxConcurrentCalls  = 256
 	DefaultMaxPendingRequests  = 512
+	DefaultMaxCallDepth        = 16
 	DefaultDeadline            = 30 * time.Second
 	DefaultDrainTimeout        = 30 * time.Second
 	protobufEnvelopeAllowance  = 256 << 10
@@ -25,6 +26,7 @@ type Limits struct {
 	MaxMetadataBytes    uint32
 	MaxConcurrentCalls  int
 	MaxPendingRequests  int
+	MaxCallDepth        int
 	DefaultDeadline     time.Duration
 	DrainTimeout        time.Duration
 }
@@ -37,6 +39,7 @@ func Default() Limits {
 		MaxMetadataBytes:    DefaultMaxMetadataBytes,
 		MaxConcurrentCalls:  DefaultMaxConcurrentCalls,
 		MaxPendingRequests:  DefaultMaxPendingRequests,
+		MaxCallDepth:        DefaultMaxCallDepth,
 		DefaultDeadline:     DefaultDeadline,
 		DrainTimeout:        DefaultDrainTimeout,
 	}
@@ -59,6 +62,9 @@ func (l Limits) Normalize() Limits {
 	}
 	if l.MaxPendingRequests <= 0 {
 		l.MaxPendingRequests = d.MaxPendingRequests
+	}
+	if l.MaxCallDepth <= 0 {
+		l.MaxCallDepth = d.MaxCallDepth
 	}
 	if l.DefaultDeadline <= 0 {
 		l.DefaultDeadline = d.DefaultDeadline

@@ -156,6 +156,37 @@ func TestHostInvoke_RejectsOversizedPayloadWithStableCode(t *testing.T) {
 	}
 }
 
+func TestHostInvokeRejectsCapabilityCycleWithoutMutatingInput(t *testing.T) {
+	target := &contractv1.CallTarget{ExtensionPoint: "test.point", Capability: "echo"}
+	original := &contractv1.CallContext{CallPath: []string{"test.point/echo"}}
+	host := NewHost("backend", "0.1.0", registry.New(), nil)
+
+	resp, err := host.Invoke(context.Background(), target, original, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := resp.Result.GetError().GetCode(); got != errorcode.CallCycleDetected {
+		t.Fatalf("调用环必须返回稳定错误码，实际 %q", got)
+	}
+	if len(original.CallPath) != 1 {
+		t.Fatalf("不得修改调用方持有的 CallContext: %+v", original)
+	}
+}
+
+func TestHostInvokeRejectsCallDepthBeforeDispatch(t *testing.T) {
+	host := NewHost("backend", "0.1.0", registry.New(), nil)
+	host.Limits.MaxCallDepth = 2
+	resp, err := host.Invoke(context.Background(),
+		&contractv1.CallTarget{ExtensionPoint: "test.point", Capability: "third"},
+		&contractv1.CallContext{CallPath: []string{"test.point/first", "test.point/second"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := resp.Result.GetError().GetCode(); got != errorcode.CallDepthExceeded {
+		t.Fatalf("超深调用必须返回稳定错误码，实际 %q", got)
+	}
+}
+
 func TestBoundedCallContext_PropagatesEarliestDeadlineWithoutMutatingInput(t *testing.T) {
 	declared := time.Now().Add(10 * time.Second).UnixMilli()
 	original := &contractv1.CallContext{Scene: "test", DeadlineUnixMs: &declared}

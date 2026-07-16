@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
@@ -113,6 +114,11 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 		return errorResponse(errorcode.PayloadTooLarge,
 			fmt.Sprintf("payload 为 %d bytes，超过上限 %d bytes", len(payload), limits.MaxPayloadBytes), false), nil
 	}
+	ctx, callCtx, cancel := boundedCallContext(ctx, callCtx, limits)
+	defer cancel()
+	if code, message := appendCallTarget(callCtx, target, limits.MaxCallDepth); code != "" {
+		return errorResponse(code, message, false), nil
+	}
 	if !limits.MetadataAllowed(proto.Size(callCtx)) {
 		return errorResponse(errorcode.MetadataTooLarge,
 			fmt.Sprintf("CallContext 为 %d bytes，超过 metadata 上限 %d bytes", proto.Size(callCtx), limits.MaxMetadataBytes), false), nil
@@ -128,8 +134,6 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	}
 	defer h.leaveCall()
 
-	ctx, callCtx, cancel := boundedCallContext(ctx, callCtx, limits)
-	defer cancel()
 	if h.Observer != nil {
 		var finish func(string, error)
 		callCtx, finish = h.Observer.BeginCall(ctx, callCtx, "protocolbus.invoke", map[string]string{
@@ -178,6 +182,31 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	// 4) after 钩子：计量/审计等只观察，不改变结论
 	h.runAfterHooks(ctx, extpoint.PointInvoke, callCtx, target, resp.Result)
 	return resp, nil
+}
+
+// appendCallTarget 在公开调用入口维护能力调用链。CallContext 已由
+// boundedCallContext 克隆，因此这里不会修改调用方持有的对象。
+func appendCallTarget(callCtx *contractv1.CallContext, target *contractv1.CallTarget, maxDepth int) (string, string) {
+	key := callTargetKey(target)
+	for _, ancestor := range callCtx.CallPath {
+		if ancestor == key {
+			return errorcode.CallCycleDetected,
+				fmt.Sprintf("检测到能力调用环：%s -> %s", strings.Join(callCtx.CallPath, " -> "), key)
+		}
+	}
+	if len(callCtx.CallPath) >= maxDepth {
+		return errorcode.CallDepthExceeded, fmt.Sprintf("能力调用深度达到上限 %d", maxDepth)
+	}
+	callCtx.CallPath = append(callCtx.CallPath, key)
+	return "", ""
+}
+
+func callTargetKey(target *contractv1.CallTarget) string {
+	key := target.ExtensionPoint + "/" + target.Capability
+	if operation := target.GetOperation(); operation != "" {
+		key += "#" + operation
+	}
+	return key
 }
 
 // invoke 内部分发：**不做权限判定**。

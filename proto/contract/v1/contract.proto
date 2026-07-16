@@ -66,6 +66,8 @@ message CallContext {
   repeated CredentialRef credentials = 8; // 句柄，非明文
   optional string idempotency_key = 9;
   map<string, string> metadata = 10;
+  // 宿主维护的能力调用路径。SDK 必须原样继承，宿主只追加并据此拒绝调用环。
+  repeated string call_path = 11;
 }
 
 // 调用目标（第三章 §3.3）——调哪个扩展点·能力·操作

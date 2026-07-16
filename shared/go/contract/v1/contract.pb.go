@@ -452,8 +452,10 @@ type CallContext struct {
 	Credentials    []*CredentialRef       `protobuf:"bytes,8,rep,name=credentials,proto3" json:"credentials,omitempty"` // 句柄，非明文
 	IdempotencyKey *string                `protobuf:"bytes,9,opt,name=idempotency_key,json=idempotencyKey,proto3,oneof" json:"idempotency_key,omitempty"`
 	Metadata       map[string]string      `protobuf:"bytes,10,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 宿主维护的能力调用路径。SDK 必须原样继承，宿主只追加并据此拒绝调用环。
+	CallPath      []string `protobuf:"bytes,11,rep,name=call_path,json=callPath,proto3" json:"call_path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CallContext) Reset() {
@@ -552,6 +554,13 @@ func (x *CallContext) GetIdempotencyKey() string {
 func (x *CallContext) GetMetadata() map[string]string {
 	if x != nil {
 		return x.Metadata
+	}
+	return nil
+}
+
+func (x *CallContext) GetCallPath() []string {
+	if x != nil {
+		return x.CallPath
 	}
 	return nil
 }
@@ -988,7 +997,7 @@ const file_contract_v1_contract_proto_rawDesc = "" +
 	"\rCredentialRef\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x19\n" +
 	"\x05scope\x18\x02 \x01(\tH\x00R\x05scope\x88\x01\x01B\b\n" +
-	"\x06_scope\"\xf2\x04\n" +
+	"\x06_scope\"\x8f\x05\n" +
 	"\vCallContext\x12=\n" +
 	"\tprincipal\x18\x01 \x01(\v2\x1f.vastplan.contract.v1.PrincipalR\tprincipal\x124\n" +
 	"\x06caller\x18\x02 \x01(\v2\x1c.vastplan.contract.v1.CallerR\x06caller\x12\x14\n" +
@@ -1001,7 +1010,8 @@ const file_contract_v1_contract_proto_rawDesc = "" +
 	"\vcredentials\x18\b \x03(\v2#.vastplan.contract.v1.CredentialRefR\vcredentials\x12,\n" +
 	"\x0fidempotency_key\x18\t \x01(\tH\x02R\x0eidempotencyKey\x88\x01\x01\x12K\n" +
 	"\bmetadata\x18\n" +
-	" \x03(\v2/.vastplan.contract.v1.CallContext.MetadataEntryR\bmetadata\x1a;\n" +
+	" \x03(\v2/.vastplan.contract.v1.CallContext.MetadataEntryR\bmetadata\x12\x1b\n" +
+	"\tcall_path\x18\v \x03(\tR\bcallPath\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\r\n" +

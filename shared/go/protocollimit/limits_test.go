@@ -11,6 +11,7 @@ func TestLimitsNormalize_ZeroValueUsesSafeDefaults(t *testing.T) {
 	got := (protocollimit.Limits{}).Normalize()
 	if got.MaxPayloadBytes != protocollimit.DefaultMaxPayloadBytes ||
 		got.MaxPendingRequests != protocollimit.DefaultMaxPendingRequests ||
+		got.MaxCallDepth != protocollimit.DefaultMaxCallDepth ||
 		got.DefaultDeadline != protocollimit.DefaultDeadline {
 		t.Fatalf("零值没有收敛到统一默认：%+v", got)
 	}
@@ -19,7 +20,7 @@ func TestLimitsNormalize_ZeroValueUsesSafeDefaults(t *testing.T) {
 func TestLimitsNormalize_PreservesExplicitOverrides(t *testing.T) {
 	want := protocollimit.Limits{
 		MaxPayloadBytes: 99, MaxStreamFrameBytes: 88, MaxMetadataBytes: 77,
-		MaxConcurrentCalls: 6, MaxPendingRequests: 5,
+		MaxConcurrentCalls: 6, MaxPendingRequests: 5, MaxCallDepth: 4,
 		DefaultDeadline: 4 * time.Second, DrainTimeout: 3 * time.Second,
 	}
 	if got := want.Normalize(); got != want {

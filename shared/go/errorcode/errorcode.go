@@ -10,6 +10,8 @@ import "regexp"
 const (
 	// 应用层错误：放在 contract.v1.Error，由调用方正常接收。
 	CapabilityNotFound = "capability.not_found"
+	CallCycleDetected  = "call.cycle_detected"
+	CallDepthExceeded  = "call.depth_exceeded"
 	HookAborted        = "hook.aborted"
 	HostCallFailed     = "hostcall.failed"
 	KernelServiceError = "kernel.service_error"
@@ -33,6 +35,8 @@ var (
 	codePattern = regexp.MustCompile(`^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$`)
 	kernelCodes = map[string]struct{}{
 		CapabilityNotFound:    {},
+		CallCycleDetected:     {},
+		CallDepthExceeded:     {},
 		HookAborted:           {},
 		HostCallFailed:        {},
 		KernelServiceError:    {},
