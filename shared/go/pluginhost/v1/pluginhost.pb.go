@@ -14,7 +14,7 @@
 package pluginhostv1
 
 import (
-	v1 "github.com/yandt/VastPlan/shared/go/contract/v1"
+	v1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -1158,7 +1158,7 @@ const file_pluginhost_v1_pluginhost_proto_rawDesc = "" +
 	"\n" +
 	"PluginHost\x12L\n" +
 	"\tHandshake\x12\x1d.vastplan.pluginhost.v1.Hello\x1a .vastplan.pluginhost.v1.HelloAck\x12S\n" +
-	"\aChannel\x12\".vastplan.pluginhost.v1.FromPlugin\x1a .vastplan.pluginhost.v1.FromHost(\x010\x01B@Z>github.com/yandt/VastPlan/shared/go/pluginhost/v1;pluginhostv1b\x06proto3"
+	"\aChannel\x12\".vastplan.pluginhost.v1.FromPlugin\x1a .vastplan.pluginhost.v1.FromHost(\x010\x01B=Z;cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1;pluginhostv1b\x06proto3"
 
 var (
 	file_pluginhost_v1_pluginhost_proto_rawDescOnce sync.Once

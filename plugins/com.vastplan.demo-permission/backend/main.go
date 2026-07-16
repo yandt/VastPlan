@@ -15,9 +15,9 @@ import (
 	"encoding/json"
 	"log"
 
-	sdk "github.com/yandt/VastPlan/sdk/go/plugin"
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
-	"github.com/yandt/VastPlan/shared/go/extpoint"
+	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 )
 
 // deniedCapabilities 拒绝名单：无论谁调用都不放行。

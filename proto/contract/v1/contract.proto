@@ -5,7 +5,7 @@ syntax = "proto3";
 // 规格见 docs/dev/architecture/插件契约与协议.md 第三章
 package vastplan.contract.v1;
 
-option go_package = "github.com/yandt/VastPlan/shared/go/contract/v1;contractv1";
+option go_package = "cdsoft.com.cn/VastPlan/shared/go/contract/v1;contractv1";
 
 // ── 身份与调用方 ───────────────────────────────────────────
 

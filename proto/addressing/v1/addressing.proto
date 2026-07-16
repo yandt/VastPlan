@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+// 后端服务间寻址 Wire v1。业务契约复用 contract.v1，本文件只定义远端传输信封。
+package vastplan.addressing.v1;
+
+option go_package = "cdsoft.com.cn/VastPlan/shared/go/addressing/v1;addressingv1";
+
+import "contract/v1/contract.proto";
+
+message InvokeRequest {
+  string request_id = 1;
+  vastplan.contract.v1.CallTarget target = 2;
+  vastplan.contract.v1.CallContext context = 3;
+  bytes payload = 4;
+}
+
+message InvokeResponse {
+  string request_id = 1;
+  vastplan.contract.v1.CallResult result = 2;
+  bytes payload = 3;
+  optional TransportError transport_error = 4;
+}
+
+message TransportError {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+message EventEnvelope {
+  vastplan.contract.v1.CallContext context = 1;
+  vastplan.contract.v1.CallEvent event = 2;
+}

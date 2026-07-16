@@ -12,6 +12,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -20,9 +21,9 @@ import (
 
 	"google.golang.org/grpc"
 
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
-	pluginhostv1 "github.com/yandt/VastPlan/shared/go/pluginhost/v1"
-	"github.com/yandt/VastPlan/shared/go/registry"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
 
 // randomHex 生成随机十六进制串（会话票据 / launch token 用）。
@@ -55,6 +56,46 @@ type PluginProcess struct {
 	PluginID  string
 	Version   string
 	SessionID string
+	PID       int
+	session   *session
+}
+
+var closedProcessDone = func() <-chan struct{} {
+	done := make(chan struct{})
+	close(done)
+	return done
+}()
+
+// Done 在插件会话因崩溃、心跳超时或主动关闭而终结时关闭。
+// Node Agent 依赖这个真实死亡信号，不能只凭启动记录判断进程仍健康。
+func (p *PluginProcess) Done() <-chan struct{} {
+	if p == nil || p.session == nil {
+		return closedProcessDone
+	}
+	return p.session.done
+}
+
+// Err 返回会话终结原因；进程仍运行时为 nil。
+func (p *PluginProcess) Err() error {
+	if p == nil || p.session == nil {
+		return nil
+	}
+	select {
+	case <-p.session.done:
+		return p.session.err()
+	default:
+		return nil
+	}
+}
+
+// Alive 同时检查会话是否仍连通，而非仅检查 PID 曾经存在。
+func (p *PluginProcess) Alive() bool {
+	select {
+	case <-p.Done():
+		return false
+	default:
+		return true
+	}
 }
 
 // Host 插件宿主：拉起插件进程、握手、把贡献接入扩展点注册表、路由调用、探活。
@@ -181,4 +222,34 @@ func (h *Host) Stop() {
 	if h.srv != nil {
 		h.srv.Stop()
 	}
+}
+
+// Drain 让全部插件停止接收新调用，并等待已经进入处理器的调用完成。
+// 调用方应先把新流量切到候选宿主，再 drain/stop 旧宿主。
+func (h *Host) Drain(ctx context.Context) error {
+	h.mu.RLock()
+	sessions := make([]*session, 0, len(h.sessions))
+	for _, sess := range h.sessions {
+		sessions = append(sessions, sess)
+	}
+	h.mu.RUnlock()
+
+	errs := make(chan error, len(sessions))
+	var wg sync.WaitGroup
+	for _, sess := range sessions {
+		wg.Add(1)
+		go func(sess *session) {
+			defer wg.Done()
+			if _, err := h.lifecycle(ctx, sess, pluginhostv1.Lifecycle_OP_DRAIN); err != nil {
+				errs <- fmt.Errorf("drain 插件 %s: %w", sess.pluginID, err)
+			}
+		}(sess)
+	}
+	wg.Wait()
+	close(errs)
+	var joined error
+	for err := range errs {
+		joined = errors.Join(joined, err)
+	}
+	return joined
 }

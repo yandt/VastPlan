@@ -97,5 +97,5 @@ jobs:
           go install github.com/google/go-licenses@latest
           # --ignore 本仓模块：本规则约束的是**第三方依赖**的许可证
           "$(go env GOPATH)/bin/go-licenses" check ./... \
-            --ignore github.com/yandt/VastPlan \
+            --ignore cdsoft.com.cn/VastPlan \
             --allowed_licenses=Apache-2.0,MIT,BSD-3-Clause,BSD-2-Clause,ISC,MPL-2.0

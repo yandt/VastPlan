@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
-	"github.com/yandt/VastPlan/shared/go/extpoint"
-	"github.com/yandt/VastPlan/shared/go/registry"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
 
 // ── select 语义：permission.checker（§4.2/§4.3）──────────
@@ -107,13 +107,15 @@ type SinkOutcome struct {
 	Err    error
 }
 
-// PublishEvent 按 fanout 语义把事件投递给所有**订阅了该类型**的 event.sink，
-// 按 priority 高→低。
+// PublishEvent 按 fanout 语义把事件投递给所有**订阅了该类型**的 event.sink。
+//
+// **并行投递、不保证顺序**：事件汇是彼此独立的消费者，隔离与延迟优先于排序——
+// 一个慢汇（如写远端存储）不该拖住其余。需要顺序或需要否决调用的是 hook，不是 event.sink。
 //
 // 失败隔离：某个汇失败不影响其余——审计插件挂了不该连带可观测插件一起哑火。
-// 返回逐个结果，调用方可据此告警。
+// 返回逐个结果（顺序与匹配顺序一致，便于确定性报告），调用方可据此告警。
 func (h *Host) PublishEvent(ctx context.Context, event *contractv1.CallEvent) []SinkOutcome {
-	sinks := h.Registry.List(extpoint.EventSink) // 已按 priority 降序
+	sinks := h.Registry.List(extpoint.EventSink) // List 已排序，此处仅用于确定性报告
 
 	matched := make([]registry.Contribution, 0, len(sinks))
 	for _, s := range sinks {

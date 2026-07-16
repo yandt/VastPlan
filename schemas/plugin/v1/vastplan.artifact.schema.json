@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/plugin/v1/vastplan.artifact.schema.json",
+  "title": "VastPlan Plugin Artifact Metadata v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "pluginId", "version", "channel", "sha256", "size", "object", "manifest"],
+  "properties": {
+    "schemaVersion": { "const": "v1" },
+    "pluginId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+    "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+    "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "size": { "type": "integer", "minimum": 1 },
+    "object": { "type": "string", "pattern": "^[a-f0-9]{64}\\.tar\\.gz$" },
+    "manifest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/plugin/v1/vastplan.plugin.schema.json" }
+  }
+}

@@ -5,25 +5,36 @@
 //
 // 本 MVP 跑通最小闭环：声明扩展点 → 拉起插件 → 握手/engines 校验 → 贡献注册
 // → 激活 → 调用（含插件回调宿主）→ 摘除。
-// 尚未实现：节点代理 reconcile、内置插件服务、寻址层、NATS 控制面（见 docs 待决）。
+// 支持两条入口：直接传插件二进制用于协议演示；reconcile 子命令运行 Node Agent 自动装配。
+// 控制面模式同时接入 NATS KV 与跨节点 capability 寻址。
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"time"
 
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
-	"github.com/yandt/VastPlan/shared/go/protocolbus"
-	"github.com/yandt/VastPlan/shared/go/registry"
+	"github.com/nats-io/nats.go/jetstream"
+
+	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
+	"cdsoft.com.cn/VastPlan/kernels/backend/nodeagent"
+	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/shared/go/addressing"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
 )
 
 // KernelName 本内核的规范 ID（ADR-0015）。
-const KernelName = "backend"
+const KernelName = hostfactory.KernelName
 
 // version 由构建时注入：-ldflags "-X main.version=$(cat kernels/backend/VERSION)"
 // 单一真源是 kernels/backend/VERSION（ADR-0017 §1）；devel 仅用于未经构建脚本的本地跑。
@@ -31,47 +42,41 @@ var version = "0.0.0-devel"
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "用法: %s <插件可执行文件路径>...\n", filepath.Base(os.Args[0]))
+		printUsage()
 		os.Exit(2)
 	}
-	pluginBins := os.Args[1:]
+	if os.Args[1] == "reconcile" {
+		if err := runReconcile(os.Args[2:]); err != nil {
+			log.Fatalf("[node-agent] %v", err)
+		}
+		return
+	}
+	runDemo(os.Args[1:])
+}
 
+func printUsage() {
+	name := filepath.Base(os.Args[0])
+	fmt.Fprintf(os.Stderr, "用法:\n  %s <插件可执行文件路径>...\n  %s reconcile -desired <期望态.json> [参数]\n  %s reconcile -nats-url <URL> -deployment <name> -node-id <id> [参数]\n", name, name, name)
+}
+
+func runDemo(pluginBins []string) {
 	logf := func(format string, args ...any) { log.Printf("[kernel] "+format, args...) }
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	logf("内核 %s@%s 启动", KernelName, version)
 
-	// ── 1. 声明扩展点（系统架构 §1.5；契约见第四章）──────────
-	reg := registry.New()
-	for _, p := range []registry.ExtensionPoint{
-		{Name: "tool.package", Dispatch: registry.DispatchSingle},
-		{Name: "agent", Dispatch: registry.DispatchSingle},
-		{Name: "api.route", Dispatch: registry.DispatchSingle},
-		{Name: "permission.checker", Dispatch: registry.DispatchSelect},
-		{Name: "event.sink", Dispatch: registry.DispatchFanout},
-		{Name: "hook", Dispatch: registry.DispatchFanout},
-		{Name: "runner.capability", Dispatch: registry.DispatchSingle},
-		{Name: "kernel.service", Dispatch: registry.DispatchSingle}, // 内核自身能力
-	} {
-		reg.DefinePoint(p)
+	// ── 1. 起宿主（扩展点与内置能力由两条启动路径共享）────────
+	host, err := hostfactory.New(version, logf)
+	if err != nil {
+		log.Fatalf("[kernel] 创建宿主失败: %v", err)
 	}
-	logf("已声明 %d 个扩展点", len(reg.Points()))
-
-	// ── 2. 起宿主（gRPC 服务端，插件回连它）+ 登记内核能力 ──
-	host := protocolbus.NewHost(KernelName, version, reg, logf)
 	if err := host.Start(); err != nil {
 		log.Fatalf("[kernel] 宿主启动失败: %v", err)
 	}
 	defer host.Stop()
 
-	// 内核自身提供的能力：插件可用与调用别的插件完全相同的方式（capability 寻址）回调它
-	if err := host.RegisterHostService("kernel.service", "kernel.info", kernelInfo); err != nil {
-		log.Fatalf("[kernel] 登记内核能力失败: %v", err)
-	}
-	logf("已登记内核能力 kernel.info")
-
-	// ── 3. 装载插件：握手 → engines 校验 → 贡献注册 → 激活 ──
+	// ── 2. 装载插件：握手 → engines 校验 → 贡献注册 → 激活 ──
 	// 权限校验器由插件提供（ADR-0001 一切功能皆插件）；没装它则所有调用被
 	// fail-closed 拒绝（ADR-0021）——这正是要演示的。
 	for _, bin := range pluginBins {
@@ -80,7 +85,7 @@ func main() {
 		}
 	}
 
-	// ── 4. 调用插件贡献的能力（契约全程透传）─────────────────
+	// ── 3. 调用插件贡献的能力（契约全程透传）─────────────────
 	callCtx := &contractv1.CallContext{
 		Principal: &contractv1.Principal{
 			UserId: "u-1001", Username: "zhanghui", TenantId: "acme", IsAdmin: true,
@@ -117,14 +122,14 @@ func main() {
 		}
 	}
 
-	// ── 5. 未注册能力的解析应失败（fail-closed）──────────────
+	// ── 4. 未注册能力的解析应失败（fail-closed）──────────────
 	if _, err := host.Invoke(ctx, &contractv1.CallTarget{
 		ExtensionPoint: "tool.package", Capability: "not.registered",
 	}, callCtx, nil); err != nil {
 		logf("未注册能力被正确拒绝: %v", err)
 	}
 
-	// ── 6. fanout：发布事件，扇出给所有订阅者 ────────────────
+	// ── 5. fanout：发布事件，扇出给所有订阅者 ────────────────
 	outcomes := host.PublishEvent(ctx, &contractv1.CallEvent{
 		Id: "evt-1", Type: "task.completed", Source: "kernel",
 		TenantId: "acme", OccurredAtUnixMs: time.Now().UnixMilli(),
@@ -155,19 +160,198 @@ func main() {
 	logf("MVP 闭环完成")
 }
 
-func ptr(s string) *string { return &s }
-
-// kernelInfo 内核自身的能力：回报内核身份——供插件验证它连上的是谁。
-func kernelInfo(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
-	out, _ := json.Marshal(map[string]any{
-		"kernel":  KernelName,
-		"version": version,
-		// 回显调用方，证明 CallContext 在"插件→宿主"方向同样透传
-		"callerKind": callCtx.Caller.Kind.String(),
-		"tenant":     callCtx.TenantId,
-	})
-	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, out, nil
+func runReconcile(args []string) (runErr error) {
+	flags := flag.NewFlagSet("reconcile", flag.ContinueOnError)
+	desiredPath := flags.String("desired", "", "本地 DesiredState v1 JSON 文件")
+	repositoryRoot := flags.String("repository", ".vastplan/repository", "本地插件制品仓库")
+	runtimeRoot := flags.String("runtime-root", ".vastplan/runtime/plugins", "内容寻址安装目录")
+	actualPath := flags.String("actual-state", ".vastplan/runtime/actual-state.json", "实际态报告文件")
+	lockPath := flags.String("lock", "", "单实例锁文件；默认 <actual-state>.lock")
+	nodeID := flags.String("node-id", "local", "当前节点 ID")
+	labelsRaw := flags.String("labels", "", "节点标签，逗号分隔 key=value")
+	interval := flags.Duration("interval", 5*time.Second, "本地期望态轮询间隔")
+	natsURL := flags.String("nats-url", "", "NATS URL；设置后从 JetStream KV watch 期望态")
+	desiredKey := flags.String("desired-key", controlplane.DesiredKey("", "local-development"), "NATS DesiredState key")
+	natsBootstrap := flags.Bool("nats-bootstrap", false, "创建/校准控制面 KV bucket（仅初始化/开发使用）")
+	natsReplicas := flags.Int("nats-replicas", 1, "初始化 KV bucket 的 JetStream 副本数；生产建议至少 3")
+	assignmentKey := flags.String("assignment-key", "", "节点级 assignment key；设置后从 ASSIGNMENTS_V1 消费，覆盖 -desired-key")
+	deploymentName := flags.String("deployment", "", "集群 Deployment v2 名称；自动生成当前节点 assignment key")
+	deploymentTenant := flags.String("tenant", "", "集群 Deployment v2 租户；与 -deployment 一起使用")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+	if *deploymentName != "" {
+		if *assignmentKey != "" {
+			return errors.New("-deployment 与 -assignment-key 不能同时设置")
+		}
+		*assignmentKey = controlplane.AssignmentKey(*deploymentTenant, *deploymentName, *nodeID)
+	}
+	if *desiredPath == "" && *natsURL == "" {
+		return errors.New("本地模式必须提供 -desired；控制面模式须提供 -nats-url")
+	}
+	if *lockPath == "" {
+		*lockPath = *actualPath + ".lock"
+	}
+	processLock, err := nodeagent.AcquireProcessLock(*lockPath)
+	if err != nil {
+		return err
+	}
+	defer func() { runErr = errors.Join(runErr, processLock.Close()) }()
+	labels, err := parseLabels(*labelsRaw)
+	if err != nil {
+		return err
+	}
+	repository, err := pluginservice.NewRepository(*repositoryRoot)
+	if err != nil {
+		return err
+	}
+	logf := func(format string, values ...any) { log.Printf("[node-agent] "+format, values...) }
+	var source nodeagent.DesiredStateSource = nodeagent.FileSource{Path: *desiredPath}
+	var stateStore nodeagent.StateStore = nodeagent.FileStateStore{Path: *actualPath}
+	var meshRouter *addressing.Router
+	var natsBuckets controlplane.Buckets
+	var closeNATS func()
+	if *natsURL != "" {
+		nc, err := controlplane.Connect(*natsURL, "vastplan-node-"+*nodeID, logf)
+		if err != nil {
+			return err
+		}
+		closeNATS = nc.Close
+		defer closeNATS()
+		js, err := jetstream.New(nc)
+		if err != nil {
+			return fmt.Errorf("创建 JetStream 客户端: %w", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		var buckets controlplane.Buckets
+		if *natsBootstrap {
+			buckets, err = controlplane.EnsureBuckets(ctx, js, *natsReplicas, jetstream.FileStorage)
+		} else {
+			buckets, err = controlplane.OpenBuckets(ctx, js)
+		}
+		if err != nil {
+			return err
+		}
+		natsBuckets = buckets
+		if *assignmentKey != "" {
+			source = nodeagent.NATSDesiredStateSource{KV: buckets.Assignments, Key: *assignmentKey, Conn: nc}
+		} else {
+			source = nodeagent.NATSDesiredStateSource{KV: buckets.Desired, Key: *desiredKey, Conn: nc}
+		}
+		stateStore = nodeagent.ReplicatedStateStore{
+			Primary: nodeagent.FileStateStore{Path: *actualPath},
+			Replicas: []nodeagent.StateStore{
+				nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey(*nodeID)},
+			},
+		}
+		meshRouter, err = addressing.NewRouter(nc, buckets.Capabilities, *nodeID, logf)
+		if err != nil {
+			return fmt.Errorf("创建 capability router: %w", err)
+		}
+		defer func() { runErr = errors.Join(runErr, meshRouter.Close()) }()
+	}
+	runtime := nodeagent.NewProtocolRuntime(version, logf)
+	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
+	if meshRouter != nil {
+		if err := runtime.AttachRouter(meshRouter); err != nil {
+			return err
+		}
+	}
+	reconciler := &nodeagent.Reconciler{
+		NodeID: *nodeID, NodeLabels: labels, Repository: repository,
+		Installer: nodeagent.LocalInstaller{Root: *runtimeRoot}, Runtime: runtime,
+		StateStore: stateStore,
+	}
+	agent := &nodeagent.Agent{
+		Source: source, Reconciler: reconciler,
+		Interval: *interval, Logf: logf,
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	var nodeLease *controlplane.NodeLease
+	var leaseLost <-chan error
+	var leaseFailure chan error
+	if *natsURL != "" {
+		if *assignmentKey != "" {
+			assignmentNodeID, parseErr := controlplane.AssignmentKeyNodeID(*assignmentKey)
+			if parseErr != nil || assignmentNodeID != *nodeID {
+				return fmt.Errorf("assignment key 不属于当前节点 %s", *nodeID)
+			}
+			// 先删除同 node id 上一进程遗留的快照，再发布新租约。控制器观察到租约后会
+			// 重新下发当前计划；若控制器不可用，本节点保持空载而不是执行陈旧 assignment。
+			if deleteErr := natsBuckets.Assignments.Delete(ctx, *assignmentKey); deleteErr != nil && !errors.Is(deleteErr, jetstream.ErrKeyNotFound) {
+				return fmt.Errorf("作废旧 assignment: %w", deleteErr)
+			}
+		}
+		nodeLease, err = controlplane.StartNodeLease(ctx, natsBuckets.Nodes, *nodeID, labels, controlplane.NodeLeaseOptions{Logf: logf})
+		if err != nil {
+			return err
+		}
+		leaseLost = nodeLease.Lost()
+		leaseFailure = make(chan error, 1)
+		defer func() {
+			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = nodeLease.Close(closeCtx)
+		}()
+		go func() {
+			select {
+			case leaseErr := <-leaseLost:
+				leaseFailure <- leaseErr
+				logf("节点失去控制面租约，将自我隔离并停止 unit: %v", leaseErr)
+				stop()
+			case <-ctx.Done():
+			}
+		}()
+	}
+	if *natsURL != "" {
+		activeKey := *desiredKey
+		if *assignmentKey != "" {
+			activeKey = *assignmentKey
+		}
+		logf("节点 %s 启动，NATS=%s desired-key=%s", *nodeID, *natsURL, activeKey)
+	} else {
+		logf("节点 %s 启动，期望态=%s", *nodeID, *desiredPath)
+	}
+	err = agent.Run(ctx)
+	if errors.Is(err, context.Canceled) {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if nodeLease != nil {
+			_ = nodeLease.Close(shutdownCtx)
+		}
+		shutdownErr := reconciler.Shutdown(shutdownCtx)
+		select {
+		case leaseErr := <-leaseFailure:
+			return errors.Join(leaseErr, shutdownErr)
+		default:
+			return shutdownErr
+		}
+	}
+	return err
 }
+
+func parseLabels(raw string) (map[string]string, error) {
+	labels := map[string]string{}
+	if strings.TrimSpace(raw) == "" {
+		return labels, nil
+	}
+	for _, item := range strings.Split(raw, ",") {
+		key, value, ok := strings.Cut(item, "=")
+		key, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		if !ok || key == "" || value == "" {
+			return nil, fmt.Errorf("非法节点标签 %q，须为 key=value", item)
+		}
+		if _, exists := labels[key]; exists {
+			return nil, fmt.Errorf("节点标签重复: %s", key)
+		}
+		labels[key] = value
+	}
+	return labels, nil
+}
+
+func ptr(s string) *string { return &s }
 
 func pretty(b []byte) string {
 	var v any

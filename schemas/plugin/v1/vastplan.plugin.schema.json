@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/plugin/v1/vastplan.plugin.schema.json",
+  "title": "VastPlan Plugin Manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "name", "description", "version", "publisher", "engines", "activation", "entry", "contributes"],
+  "properties": {
+    "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+    "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+    "publisher": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel" },
+    "engines": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "frontend": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "runner": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "mobile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" }
+      }
+    },
+    "capabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kernelServices": { "$ref": "#/$defs/stringList" },
+        "credentials": { "$ref": "#/$defs/stringList" },
+        "resources": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "activation": { "$ref": "#/$defs/stringList" },
+    "dependencies": {
+      "type": "object",
+      "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+      "additionalProperties": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" }
+    },
+    "entry": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
+        "frontend": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
+        "runner": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
+        "mobile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" }
+      }
+    },
+    "contributes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "$ref": "#/$defs/backendContributes" },
+        "frontend": { "$ref": "#/$defs/frontendContributes" },
+        "runner": { "$ref": "#/$defs/runnerContributes" },
+        "mobile": { "$ref": "#/$defs/mobileContributes" }
+      }
+    }
+  },
+  "$defs": {
+    "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "baseContribution": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "service_role": { "enum": ["backend", "workspace", "rs"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000 }
+      }
+    },
+    "tool": {
+      "allOf": [
+        { "$ref": "#/$defs/baseContribution" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "id": true, "service_role": true, "title": true, "priority": true,
+            "subcommands": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["name", "description"],
+                "properties": {
+                  "name": { "type": "string", "minLength": 1 },
+                  "description": { "type": "string", "minLength": 1 },
+                  "paramsSchema": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "permissionChecker": {
+      "allOf": [
+        { "$ref": "#/$defs/baseContribution" },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "id": true, "service_role": true, "title": true, "priority": true,
+            "applies": {
+              "type": "object", "additionalProperties": false,
+              "properties": { "caller": { "type": "string" }, "scene": { "type": "string" }, "target": { "type": "string" } }
+            }
+          }
+        }
+      ]
+    },
+    "eventSink": {
+      "allOf": [
+        { "$ref": "#/$defs/baseContribution" },
+        {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "id": true, "service_role": true, "title": true, "priority": true,
+            "subscribe": { "$ref": "#/$defs/stringList" }
+          }
+        }
+      ]
+    },
+    "hook": {
+      "allOf": [
+        { "$ref": "#/$defs/baseContribution" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["point", "phase"],
+          "properties": {
+            "id": true, "service_role": true, "title": true, "priority": true,
+            "point": { "enum": ["invoke"] },
+            "phase": { "enum": ["before", "after"] }
+          }
+        }
+      ]
+    },
+    "genericContribution": {
+      "allOf": [
+        { "$ref": "#/$defs/baseContribution" },
+        { "type": "object" }
+      ]
+    },
+    "backendContributes": {
+      "type": "object", "minProperties": 1, "additionalProperties": false,
+      "properties": {
+        "tools": { "type": "array", "items": { "$ref": "#/$defs/tool" } },
+        "agents": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "apiRoutes": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "permissionCheckers": { "type": "array", "items": { "$ref": "#/$defs/permissionChecker" } },
+        "eventSinks": { "type": "array", "items": { "$ref": "#/$defs/eventSink" } },
+        "hooks": { "type": "array", "items": { "$ref": "#/$defs/hook" } },
+        "runnerCapabilities": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } }
+      }
+    },
+    "frontendContributes": {
+      "type": "object", "minProperties": 1, "additionalProperties": false,
+      "properties": {
+        "views": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "editors": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "commands": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "menus": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "settings": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } }
+      }
+    },
+    "runnerContributes": {
+      "type": "object", "minProperties": 1, "additionalProperties": false,
+      "properties": {
+        "scripts": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "workflows": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "runtimeRequirements": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "mobileContributes": {
+      "type": "object", "minProperties": 1, "additionalProperties": false,
+      "properties": {
+        "views": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "approvals": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "triggers": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } }
+      }
+    }
+  }
+}

@@ -12,9 +12,9 @@ import (
 	"log"
 	"sync"
 
-	sdk "github.com/yandt/VastPlan/sdk/go/plugin"
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
-	"github.com/yandt/VastPlan/shared/go/extpoint"
+	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 )
 
 // ledger 已记录的事件。演示用的内存账本——真实审计插件会落存储。

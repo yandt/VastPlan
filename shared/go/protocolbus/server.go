@@ -9,9 +9,10 @@ import (
 
 	"google.golang.org/grpc/metadata"
 
-	pluginhostv1 "github.com/yandt/VastPlan/shared/go/pluginhost/v1"
-	"github.com/yandt/VastPlan/shared/go/protocol"
-	"github.com/yandt/VastPlan/shared/go/registry"
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/protocol"
+	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
 
 // Handshake 校验 magic、协商协议版本、校验 engines，通过后签发会话票据（§2.2）。
@@ -138,6 +139,13 @@ func (h *Host) registerContributions(sess *session, decl *pluginhostv1.Declarati
 	rejected := map[string]string{}
 
 	for _, c := range decl.Contributions {
+		// 注册时再次走正式 JSON Schema：清单是发布阶段的声明真源，
+		// 而协议消息来自正在运行的进程，二者都必须防止 descriptor 漂移。
+		if err := pluginv1.ValidateDescriptor(c.ExtensionPoint, c.DescriptorJson); err != nil {
+			rejected[c.Id] = err.Error()
+			h.Logf("贡献被拒 %s (%s): %v", c.Id, c.ExtensionPoint, err)
+			continue
+		}
 		err := h.Registry.Register(registry.Contribution{
 			ExtensionPoint: c.ExtensionPoint,
 			ID:             c.Id,
@@ -167,7 +175,7 @@ func (h *Host) registerContributions(sess *session, decl *pluginhostv1.Declarati
 }
 
 func (h *Host) activate(sess *session) error {
-	ack, err := h.lifecycle(sess, pluginhostv1.Lifecycle_OP_ACTIVATE)
+	ack, err := h.lifecycle(sess.stream.Context(), sess, pluginhostv1.Lifecycle_OP_ACTIVATE)
 	if err != nil {
 		return fmt.Errorf("激活失败: %w", err)
 	}
@@ -183,7 +191,7 @@ func (h *Host) activate(sess *session) error {
 }
 
 // lifecycle 下发生命周期指令并等待 Ack。
-func (h *Host) lifecycle(sess *session, op pluginhostv1.Lifecycle_Op) (*pluginhostv1.LifecycleAck, error) {
+func (h *Host) lifecycle(ctx context.Context, sess *session, op pluginhostv1.Lifecycle_Op) (*pluginhostv1.LifecycleAck, error) {
 	reqID := sess.nextRequestID()
 	ch := sess.await(reqID)
 	defer sess.release(reqID)
@@ -204,6 +212,8 @@ func (h *Host) lifecycle(sess *session, op pluginhostv1.Lifecycle_Op) (*pluginho
 		return msg.GetLifecycleAck(), nil
 	case <-time.After(h.callTimeout()):
 		return nil, errors.New("等待生命周期 Ack 超时")
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -291,8 +301,5 @@ func (h *Host) teardown(sess *session, cause error) {
 
 	h.failLaunch(sess.launchToken, cause) // 若仍在 Launch 等待中，让它立刻脱身
 
-	if sess.cmd != nil && sess.cmd.Process != nil {
-		_ = sess.cmd.Process.Kill()
-		_, _ = sess.cmd.Process.Wait()
-	}
+	sess.killProcess()
 }

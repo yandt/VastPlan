@@ -7,24 +7,33 @@
 
 ## 当前状态
 
-**MVP 骨架**——已跑通最小闭环：内核声明扩展点 → 拉起插件进程 → 握手（magic + 版本协商 + 会话票据）→ 贡献注册进注册表 → 激活 → 按契约调用 → 摘除贡献。
+**可运行的多节点骨架**——已跑通：全局部署规格 → 确定性多节点 assignment → Node Agent 自动装配 → 真实插件进程 → capability mesh → queue group 调用 → 健康恢复与实际态上报。
 
 已实现：
 - `proto/` 契约与协议单一真源（CallContext/CallTarget/CallResult/CallEvent + PluginHost 协议）
 - `shared/go/registry` 扩展点注册表（分发语义、热装解绑、崩溃批量摘除）
 - `shared/go/extpoint` 扩展点 descriptor 契约（宿主按它分发、插件按它声明）
+- `schemas/plugin/v1` 插件清单、运行态 descriptor、制品元数据的 Draft 2020-12 Schema；
+  协议注册与制品入库均 fail-closed 校验
+- `schemas/deployment/v1` 单节点 DesiredState v1 Schema：service、固定单副本、启停、插件版本与节点标签
+- `schemas/deployment/v2` 集群 Deployment v2 Schema：整数副本与精确标签放置；控制器展开为每节点 v1 assignment
 - `shared/go/protocolbus` 协议总线宿主侧：**Channel 双向流**（宿主为服务端、插件回连）、
-  **插件回调宿主**、心跳与崩溃探活、**select 权限判定**、**fanout 事件扇出**
+  **插件回调宿主**、心跳与崩溃探活、**select 权限判定**、**fanout 事件扇出**、
+  **有序 Hook 分发**（before 可否决、after 只观察）
 - `sdk/go/plugin` 插件 SDK（插件只写贡献 + 处理器）
 - `kernels/backend` 后端内核骨架
-- `plugins/` 三个第一方插件：hello-world（工具）、demo-permission（select 演示）、
-  demo-audit（fanout 演示）
+- `kernels/backend/pluginservice` 本地制品仓库：gzip tar 包、不可变版本索引、SHA-256 读取复核
+- `shared/go/controlplane` NATS KV bucket、CAS 发布、节点/capability 租约；`shared/go/addressing` 本地直调与远端 NATS request-reply
+- `kernels/backend/nodeagent` 自动装配：KV watch、内容寻址安装、真实健康与崩溃恢复、DRAIN、实际态复制、幂等与回滚
+- `kernels/backend/deploymentcontroller` 多节点调度：rendezvous hashing、标签放置、持久 assignment generation 与节点漂移恢复
+- `plugins/` 四个第一方插件：hello-world（工具）、demo-permission（select 演示）、
+  demo-audit（fanout 演示）、demo-quota（Hook 的配额限流与计量演示）
 
-尚未实现（见文档待决）：hook 分发、节点代理 reconcile、内置插件服务、寻址层、NATS 控制面、frontend/runner/mobile 内核。
+尚未实现（见文档待决）：远端制品服务/签名、NATS TLS 与细粒度账号权限、资源/亲和调度、流式 RPC、持久事件、frontend/runner/mobile 内核。
 
 ## 快速开始
 
-前置：Go 1.24+、protoc、`protoc-gen-go` 与 `protoc-gen-go-grpc`（`go install`）。
+前置：Go 1.26.5+、protoc、`protoc-gen-go` 与 `protoc-gen-go-grpc`（`go install`）；集群演示另需启用 JetStream 的 `nats-server`。
 
 ```bash
 # 1. 契约 codegen（改了 proto/ 后必跑）
@@ -32,6 +41,38 @@
 
 # 2. 构建（内核版本从 kernels/<name>/VERSION 经 ldflags 注入）
 ./tools/build.sh
+
+# 2.1 把已构建二进制写入清单 entry.backend，并直接发布到本地仓库
+go run ./tools/pluginpackage \
+  -source plugins/com.vastplan.hello-world \
+  -backend-bin bin/com.vastplan.hello-world \
+  -repository .vastplan/repository
+
+go run ./tools/pluginpackage \
+  -source plugins/com.vastplan.demo-permission \
+  -backend-bin bin/com.vastplan.demo-permission \
+  -repository .vastplan/repository
+
+# 2.2 启动单节点自动装配；修改 revision/plugins/enabled 后会自动对账
+./bin/backend-kernel reconcile \
+  -desired deploy/local.desired-state.json \
+  -repository .vastplan/repository \
+  -labels environment=local
+
+# 2.3 集群模式（需本机或远端 nats-server 已启用 JetStream）
+# 终端 A：发布 v2 并持续运行调度控制器
+go run ./tools/controlplane -nats-url nats://127.0.0.1:4222 -bootstrap \
+  -desired deploy/cluster.deployment.json -controller
+
+# 终端 B/C：两个节点使用独立运行目录；同 capability 自动进入同一 queue group
+./bin/backend-kernel reconcile -nats-url nats://127.0.0.1:4222 \
+  -deployment cluster-demo -tenant acme -node-id node-a -labels region=cn \
+  -repository .vastplan/repository -runtime-root .vastplan/nodes/node-a/plugins \
+  -actual-state .vastplan/nodes/node-a/actual.json
+./bin/backend-kernel reconcile -nats-url nats://127.0.0.1:4222 \
+  -deployment cluster-demo -tenant acme -node-id node-b -labels region=cn \
+  -repository .vastplan/repository -runtime-root .vastplan/nodes/node-b/plugins \
+  -actual-state .vastplan/nodes/node-b/actual.json
 
 # 3. 跑 MVP 闭环：内核拉起三个插件并调用
 #    权限插件必须装——没有它，所有调用被 fail-closed 拒绝（ADR-0021）
@@ -52,6 +93,9 @@
 `greet`/`echo` 成功 → `whoami` **插件回调宿主**取内核信息 → 参数错误与未实现操作各自返回
 **应用层错误**（与传输层错误区分）→ 未注册能力被拒 → **事件扇出**给审计插件（并可查账本验证
 真送达）→ 未订阅类型无人接收 → 贡献摘除。
+
+Hook 闭环由 `demo-quota` 与 E2E 覆盖：`invoke` 的 before Hook 按 priority 顺序执行、可返回
+`hook.aborted` 否决调用；after Hook 仅接收已完成调用的结果并做计量，不能改写结论。
 
 验证 fail-closed（不兼容内核应被拒绝装载）：
 

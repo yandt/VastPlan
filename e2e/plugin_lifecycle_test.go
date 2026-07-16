@@ -9,6 +9,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
-	"github.com/yandt/VastPlan/shared/go/protocolbus"
-	"github.com/yandt/VastPlan/shared/go/registry"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
 
 const kernelName = "backend"
@@ -52,6 +53,7 @@ func newHost(t *testing.T, kernelVersion string) *protocolbus.Host {
 		{Name: "tool.package", Dispatch: registry.DispatchSingle},
 		{Name: "permission.checker", Dispatch: registry.DispatchSelect},
 		{Name: "event.sink", Dispatch: registry.DispatchFanout},
+		{Name: "hook", Dispatch: registry.DispatchFanout},
 		{Name: "kernel.service", Dispatch: registry.DispatchSingle},
 	} {
 		reg.DefinePoint(p)
@@ -313,6 +315,26 @@ func TestPluginLaunch_MissingEnginesRejected(t *testing.T) {
 	}
 }
 
+// descriptor 是协议消息的一部分，不能只相信制品发布时的清单校验。真实插件进程
+// 若上报了不符合对应扩展点 Schema 的 descriptor，宿主应拒绝该贡献而不是污染 Registry。
+// 协议允许部分接受，所以插件仍可完成激活；关键断言是非法能力绝不进入分发表。
+func TestPluginRegistration_InvalidDescriptorRejected(t *testing.T) {
+	bin := buildPlugin(t, "./e2e/fixtures/plugins/invalid-descriptor")
+	host := newHost(t, "0.1.0")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	p, err := host.Launch(ctx, bin)
+	if err != nil {
+		t.Fatalf("包含被拒贡献的插件仍应按协议完成激活: %v", err)
+	}
+	defer func() { _ = host.Close(p) }()
+
+	if got := host.Registry.List("hook"); len(got) != 0 {
+		t.Fatalf("非法 hook descriptor 不得进入 Registry，实际: %+v", got)
+	}
+}
+
 // 插件崩溃（SIGKILL，不走优雅退出）时：宿主须感知断连、摘除其贡献，
 // 且**在途调用立刻脱身**而非挂到超时——这是 ADR-0004 故障隔离的实质。
 func TestPluginCrash_ContributionsRemovedAndInflightCallsFail(t *testing.T) {
@@ -361,4 +383,46 @@ func TestPluginCrash_ContributionsRemovedAndInflightCallsFail(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatal("插件崩溃后其贡献应被摘除，实际仍在注册表中")
+}
+
+// DRAIN 必须先拒绝新调用，再等待已经进入插件处理器的调用完成；只有枚举和 Ack
+// 而不等待在途工作，会让自动升级在切换时截断用户请求。
+func TestPluginDrain_WaitsForInflightAndRejectsNewCalls(t *testing.T) {
+	bin := buildPlugin(t, "./e2e/fixtures/plugins/crasher")
+	host := newHost(t, "0.1.0")
+	allowAllPermissions(t, host)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	p, err := host.Launch(ctx, bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = host.Close(p) }()
+
+	callDone := make(chan error, 1)
+	go func() {
+		resp, err := host.Invoke(ctx, toolTarget("fixture.crasher", "slow"), testCallContext(), nil)
+		if err == nil && resp.Result.Status != contractv1.CallResult_STATUS_OK {
+			err = fmt.Errorf("slow 返回非 OK: %v", resp.Result)
+		}
+		callDone <- err
+	}()
+	time.Sleep(100 * time.Millisecond) // slow 已进入 400ms 处理器，留下约 300ms 在途窗口。
+	started := time.Now()
+	if err := host.Drain(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(started); elapsed < 200*time.Millisecond {
+		t.Fatalf("DRAIN 未等待在途调用，耗时仅 %v", elapsed)
+	}
+	if err := <-callDone; err != nil {
+		t.Fatalf("在途调用应正常完成: %v", err)
+	}
+	resp, err := host.Invoke(ctx, toolTarget("fixture.crasher", "ping"), testCallContext(), nil)
+	if err != nil {
+		t.Fatalf("drain 后拒绝应是应用层结果，不是传输错误: %v", err)
+	}
+	if resp.Result.Status != contractv1.CallResult_STATUS_ERROR || resp.Result.Error.Code != "plugin.inactive" {
+		t.Fatalf("drain 后新调用应被 plugin.inactive 拒绝: %+v", resp.Result)
+	}
 }

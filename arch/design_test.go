@@ -28,7 +28,7 @@ var junkDrawerNames = map[string]bool{
 }
 
 // sourceTrees 我们自己写的代码（生成物与夹具不在此列）。
-var sourceTrees = []string{"kernels", "shared", "sdk", "plugins", "arch", "e2e"}
+var sourceTrees = []string{"kernels", "shared", "sdk", "plugins", "schemas", "arch", "e2e"}
 
 // 不得出现垃圾抽屉包——按能力命名，一包一职责（ADR-0020 §3）。
 func TestDesign_NoJunkDrawerPackages(t *testing.T) {

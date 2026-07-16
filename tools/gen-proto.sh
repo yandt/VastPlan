@@ -11,9 +11,10 @@ mkdir -p "$OUT"
 
 protoc \
   -I "$ROOT/proto" \
-  --go_out="$OUT" --go_opt=module=github.com/yandt/VastPlan/shared/go \
-  --go-grpc_out="$OUT" --go-grpc_opt=module=github.com/yandt/VastPlan/shared/go \
-  "$ROOT/proto/contract/v1/contract.proto" \
-  "$ROOT/proto/pluginhost/v1/pluginhost.proto"
+  --go_out="$OUT" --go_opt=module=cdsoft.com.cn/VastPlan/shared/go \
+  --go-grpc_out="$OUT" --go-grpc_opt=module=cdsoft.com.cn/VastPlan/shared/go \
+	"$ROOT/proto/contract/v1/contract.proto" \
+	"$ROOT/proto/addressing/v1/addressing.proto" \
+	"$ROOT/proto/pluginhost/v1/pluginhost.proto"
 
 echo "codegen 完成 → $OUT"

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/plugin/v1/vastplan.descriptor.schema.json",
+  "title": "VastPlan Runtime Contribution Descriptor v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["extensionPoint", "descriptor"],
+  "properties": {
+    "extensionPoint": { "type": "string", "minLength": 1 },
+    "descriptor": { "type": "object" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "extensionPoint": { "const": "tool.package" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object", "additionalProperties": false,
+            "properties": {
+              "title": { "type": "string", "minLength": 1 },
+              "service_role": { "enum": ["backend", "workspace", "rs"] },
+              "subcommands": {
+                "type": "array",
+                "items": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["name", "description"],
+                  "properties": {
+                    "name": { "type": "string", "minLength": 1 },
+                    "description": { "type": "string", "minLength": 1 },
+                    "paramsSchema": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "extensionPoint": { "const": "permission.checker" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object", "additionalProperties": false,
+            "properties": {
+              "title": { "type": "string", "minLength": 1 },
+              "service_role": { "enum": ["backend", "workspace", "rs"] },
+              "applies": {
+                "type": "object", "additionalProperties": false,
+                "properties": { "caller": { "type": "string" }, "scene": { "type": "string" }, "target": { "type": "string" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "extensionPoint": { "const": "event.sink" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object", "additionalProperties": false,
+            "properties": {
+              "title": { "type": "string", "minLength": 1 },
+              "service_role": { "enum": ["backend", "workspace", "rs"] },
+              "subscribe": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "extensionPoint": { "const": "hook" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object", "additionalProperties": false,
+            "required": ["point", "phase"],
+            "properties": {
+              "title": { "type": "string", "minLength": 1 },
+              "service_role": { "enum": ["backend", "workspace", "rs"] },
+              "point": { "enum": ["invoke"] },
+              "phase": { "enum": ["before", "after"] }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

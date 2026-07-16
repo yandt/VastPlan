@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
-	"github.com/yandt/VastPlan/shared/go/extpoint"
-	"github.com/yandt/VastPlan/shared/go/protocolbus"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
 )
 
 // launchAll 装载多个插件（顺序即启动顺序）。
@@ -211,6 +211,62 @@ func TestFanout_SubscribeGlobMatching(t *testing.T) {
 	for _, c := range cases {
 		if got := d.Subscribes(c.eventType); got != c.want {
 			t.Errorf("Subscribes(%q) = %v，期望 %v", c.eventType, got, c.want)
+		}
+	}
+}
+
+// Hook 是有序中间件而非事件汇：before 可否决，after 只观察已完成的结论。
+// 该用例走真实进程、真实贡献注册与真实 Channel，确认示例配额插件不是仅有声明。
+func TestHook_BeforeAbortsAndAfterMeters(t *testing.T) {
+	host := newHost(t, "0.1.0")
+	launchAll(t, host,
+		"./plugins/com.vastplan.demo-permission/backend",
+		"./plugins/com.vastplan.demo-quota/backend",
+		"./plugins/com.vastplan.hello-world/backend")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// demo.quota.limit 的上限为 3：前三次应放行，且 each completion 应被 after 钩子计量。
+	for i := 1; i <= 3; i++ {
+		resp, err := host.Invoke(ctx, toolTarget("vastplan.hello", "greet"), testCallContext(), []byte(`{"name":"Hook"}`))
+		if err != nil {
+			t.Fatalf("第 %d 次调用出现传输层错误: %v", i, err)
+		}
+		if resp.Result.Status != contractv1.CallResult_STATUS_OK {
+			t.Fatalf("第 %d 次调用应被配额放行，实际: %+v", i, resp.Result)
+		}
+	}
+
+	// 第四次由 before 钩子直接否决；它不应继续进入目标工具或 after 计量。
+	resp, err := host.Invoke(ctx, toolTarget("vastplan.hello", "greet"), testCallContext(), []byte(`{"name":"Hook"}`))
+	if err != nil {
+		t.Fatalf("配额否决应是应用层结果，不应冒泡为传输层错误: %v", err)
+	}
+	if resp.Result.Status != contractv1.CallResult_STATUS_ERROR || resp.Result.Error.GetCode() != "hook.aborted" {
+		t.Fatalf("第四次调用应返回 hook.aborted，实际: %+v", resp.Result)
+	}
+
+	// 通过插件公开工具查账，证明 after 钩子收到的是前三次真实调用，而不是宿主侧的虚假记录。
+	resp, err = host.Invoke(ctx, toolTarget("demo.quota", "usage"), testCallContext(), nil)
+	if err != nil {
+		t.Fatalf("查询配额计量失败: %v", err)
+	}
+	var usage struct {
+		Metered []struct {
+			Capability string `json:"capability"`
+			Status     string `json:"status"`
+		} `json:"metered"`
+	}
+	if err := json.Unmarshal(resp.Payload, &usage); err != nil {
+		t.Fatalf("配额计量结果解析失败: %v", err)
+	}
+	if len(usage.Metered) != 3 {
+		t.Fatalf("after 钩子应只计量 3 次已放行调用，实际: %+v", usage.Metered)
+	}
+	for i, record := range usage.Metered {
+		if record.Capability != "vastplan.hello" || record.Status != "STATUS_OK" {
+			t.Fatalf("第 %d 条计量记录不符合预期: %+v", i, record)
 		}
 	}
 }

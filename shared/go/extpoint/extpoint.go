@@ -75,6 +75,9 @@ func (d *CheckerDescriptor) Matches(callerKind, scene, capability string) bool {
 // ── event.sink（fanout 语义）────────────────────────────
 
 // SinkDescriptor event.sink 的贡献契约。
+//
+// 注意：事件汇是**独立消费者**，宿主并行投递、**不保证顺序**（隔离与延迟优先）。
+// 需要顺序或需要否决调用的，那是 hook 而非 event.sink。
 type SinkDescriptor struct {
 	Title string `json:"title,omitempty"`
 	// Subscribe 订阅的事件类型 glob 列表，如 ["task.*", "plugin.activated"]。
@@ -95,6 +98,73 @@ func (d *SinkDescriptor) Subscribes(eventType string) bool {
 	return false
 }
 
+// ── hook（fanout 语义，但**顺序**执行）───────────────────
+
+// Phase 钩子阶段。
+type Phase string
+
+const (
+	// PhaseBefore 调用前：可一票否决（限流/配额等横切关注点）。
+	PhaseBefore Phase = "before"
+	// PhaseAfter 调用后：只观察结果（计量/审计等），不影响调用结论。
+	PhaseAfter Phase = "after"
+)
+
+// 内核开放的钩子位（point）。新增钩子位须在此登记，插件才能挂上去。
+const (
+	// PointInvoke 每次扩展点调用的前后。
+	PointInvoke = "invoke"
+)
+
+// HookDescriptor hook 的贡献契约。
+//
+// 与 event.sink 的区别：钩子是**链式中间件**——按 priority 高→低**顺序**执行，
+// 且 before 阶段任一钩子否决即中止调用。事件汇则是独立消费者、并行、不能否决。
+type HookDescriptor struct {
+	Title string `json:"title,omitempty"`
+	Point string `json:"point"` // 钩子位，如 invoke
+	Phase Phase  `json:"phase"` // before | after
+}
+
+// HookRequest 宿主发给钩子的 payload。
+type HookRequest struct {
+	Point  string `json:"point"`
+	Phase  Phase  `json:"phase"`
+	Target Target `json:"target"` // 被拦截的调用目标
+	// Result 仅 after 阶段有：被拦截调用的结论摘要。
+	Result *HookResult `json:"result,omitempty"`
+}
+
+// Target 被拦截/被检查的调用目标（三元组之 target）。
+type Target struct {
+	ExtensionPoint string `json:"extensionPoint"`
+	Capability     string `json:"capability"`
+	Operation      string `json:"operation,omitempty"`
+}
+
+// HookResult after 阶段可见的调用结论。
+type HookResult struct {
+	Status     string `json:"status"` // OK / ERROR / PARTIAL
+	ErrorCode  string `json:"errorCode,omitempty"`
+	DurationMs int64  `json:"durationMs"`
+}
+
+// HookResponse 钩子的回答。after 阶段的回答被忽略（只观察，不改变结论）。
+type HookResponse struct {
+	// Abort 仅 before 阶段有效：true 表示否决本次调用。
+	Abort bool `json:"abort,omitempty"`
+	// Reason 否决理由，会作为应用层错误消息回给调用方。
+	Reason string `json:"reason,omitempty"`
+}
+
+// Matches 判断该钩子是否挂在指定的钩子位与阶段。
+func (d *HookDescriptor) Matches(point string, phase Phase) bool {
+	if d == nil {
+		return false
+	}
+	return d.Point == point && d.Phase == phase
+}
+
 // ── 解析 ────────────────────────────────────────────────
 
 // ParseChecker 解析 permission.checker 的 descriptor；解析失败返回零值（=范围不限）。
@@ -112,6 +182,18 @@ func ParseChecker(raw []byte) (*CheckerDescriptor, error) {
 // ParseSink 解析 event.sink 的 descriptor。
 func ParseSink(raw []byte) (*SinkDescriptor, error) {
 	d := &SinkDescriptor{}
+	if len(raw) == 0 {
+		return d, nil
+	}
+	if err := json.Unmarshal(raw, d); err != nil {
+		return nil, err
+	}
+	return d, nil
+}
+
+// ParseHook 解析 hook 的 descriptor。
+func ParseHook(raw []byte) (*HookDescriptor, error) {
+	d := &HookDescriptor{}
 	if len(raw) == 0 {
 		return d, nil
 	}

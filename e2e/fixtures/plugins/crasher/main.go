@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	sdk "github.com/yandt/VastPlan/sdk/go/plugin"
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
+	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 )
 
 func main() {
@@ -26,11 +26,21 @@ func main() {
 		Handlers: map[string]sdk.Handler{
 			"ping":  ping,
 			"crash": crash,
+			"slow":  slow,
 		},
 	})
 
 	if err := p.Serve(); err != nil {
 		log.Fatalf("夹具插件退出: %v", err)
+	}
+}
+
+func slow(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+	select {
+	case <-time.After(400 * time.Millisecond):
+		return sdk.OK(400), []byte(`{"done":true}`), nil
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
 }
 

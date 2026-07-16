@@ -1,0 +1,314 @@
+package nodeagent
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"sort"
+	"sync"
+	"time"
+
+	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
+	"cdsoft.com.cn/VastPlan/shared/go/addressing"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/shared/go/registry"
+)
+
+type runningUnit struct {
+	fingerprint   string
+	host          *protocolbus.Host
+	processes     []*protocolbus.PluginProcess
+	registrations []*addressing.Registration
+	startedAt     time.Time
+	restarts      uint64
+	generation    uint64
+	notified      bool
+}
+
+// ProtocolRuntime 为每个 service unit 创建独立 backend 宿主。候选宿主先完成全部插件
+// 握手和激活，再原子替换 map 中的当前实例，随后才关闭旧宿主。
+type ProtocolRuntime struct {
+	KernelVersion string
+	Logf          func(string, ...any)
+
+	mu     sync.RWMutex
+	units  map[string]*runningUnit
+	closed bool
+	events chan RuntimeEvent
+	nextID uint64
+	router *addressing.Router
+}
+
+// AttachRouter 在首个 unit 启动前接入全局能力寻址。运行中切换 Router 会让已经发布的
+// 租约和实际 handler 分离，因此明确拒绝这种隐式重配。
+func (r *ProtocolRuntime) AttachRouter(router *addressing.Router) error {
+	if router == nil {
+		return errors.New("addressing router 不能为空")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return errors.New("运行时已关闭")
+	}
+	if len(r.units) != 0 {
+		return errors.New("已有 unit 运行时不能接入 addressing router")
+	}
+	r.router = router
+	return nil
+}
+
+func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *ProtocolRuntime {
+	return &ProtocolRuntime{
+		KernelVersion: kernelVersion,
+		Logf:          logf,
+		units:         map[string]*runningUnit{},
+		events:        make(chan RuntimeEvent, 64),
+	}
+}
+
+func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) error {
+	if r.IsRunning(unit.ID, unit.Fingerprint) {
+		return nil
+	}
+	candidate, err := hostfactory.New(r.KernelVersion, r.Logf)
+	if err != nil {
+		return fmt.Errorf("创建候选宿主: %w", err)
+	}
+	if err := candidate.Start(); err != nil {
+		return err
+	}
+	ok := false
+	defer func() {
+		if !ok {
+			candidate.Stop()
+		}
+	}()
+	processes := make([]*protocolbus.PluginProcess, 0, len(unit.Plugins))
+	for _, plugin := range unit.Plugins {
+		process, err := candidate.Launch(ctx, plugin.EntryPath)
+		if err != nil {
+			return fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)
+		}
+		processes = append(processes, process)
+	}
+	for _, process := range processes {
+		if !process.Alive() {
+			return fmt.Errorf("候选插件 %s@%s 在发布能力前已退出: %v", process.PluginID, process.Version, process.Err())
+		}
+	}
+	r.mu.RLock()
+	router := r.router
+	r.mu.RUnlock()
+	registrations, err := registerCandidate(ctx, router, candidate, unit, processes)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !ok {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			closeRegistrations(cleanupCtx, registrations)
+		}
+	}()
+
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return errors.New("运行时已关闭")
+	}
+	old, hadOld := r.units[unit.ID]
+	restarts := unit.RestartBase
+	if hadOld && old.fingerprint == unit.Fingerprint {
+		if old.restarts > restarts {
+			restarts = old.restarts
+		}
+		restarts++
+	}
+	r.nextID++
+	current := &runningUnit{
+		fingerprint:   unit.Fingerprint,
+		host:          candidate,
+		processes:     processes,
+		registrations: registrations,
+		startedAt:     time.Now().UTC(),
+		restarts:      restarts,
+		generation:    r.nextID,
+	}
+	r.units[unit.ID] = current
+	r.mu.Unlock()
+	ok = true
+	for _, process := range processes {
+		go r.monitor(unit.ID, current.generation, process)
+	}
+	if hadOld {
+		closeRegistrations(ctx, old.registrations)
+		if err := old.host.Drain(ctx); err != nil && r.Logf != nil {
+			r.Logf("旧 unit %s drain 未完整完成，将强制回收: %v", unit.ID, err)
+		}
+		old.host.Stop()
+	}
+	return nil
+}
+
+func (r *ProtocolRuntime) Stop(ctx context.Context, unitID string) error {
+	r.mu.Lock()
+	unit, ok := r.units[unitID]
+	if ok {
+		delete(r.units, unitID)
+	}
+	r.mu.Unlock()
+	if ok {
+		closeRegistrations(ctx, unit.registrations)
+		if err := unit.host.Drain(ctx); err != nil && r.Logf != nil {
+			r.Logf("unit %s drain 未完整完成，将强制回收: %v", unitID, err)
+		}
+		unit.host.Stop()
+	}
+	return nil
+}
+
+func (r *ProtocolRuntime) IsRunning(unitID, fingerprint string) bool {
+	status, ok := r.Status(unitID)
+	if !ok || !status.Healthy {
+		return false
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	unit, ok := r.units[unitID]
+	return ok && unit.fingerprint == fingerprint
+}
+
+func (r *ProtocolRuntime) Status(unitID string) (RuntimeStatus, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	unit, ok := r.units[unitID]
+	if !ok {
+		return RuntimeStatus{}, false
+	}
+	status := RuntimeStatus{
+		Healthy:      len(unit.processes) > 0,
+		StartedAt:    unit.startedAt,
+		RestartCount: unit.restarts,
+	}
+	for _, process := range unit.processes {
+		status.PIDs = append(status.PIDs, process.PID)
+		if !process.Alive() {
+			status.Healthy = false
+		}
+	}
+	return status, true
+}
+
+func (r *ProtocolRuntime) Events() <-chan RuntimeEvent { return r.events }
+
+func (r *ProtocolRuntime) monitor(unitID string, generation uint64, process *protocolbus.PluginProcess) {
+	<-process.Done()
+	r.mu.Lock()
+	unit, ok := r.units[unitID]
+	if !ok || unit.generation != generation || unit.notified {
+		r.mu.Unlock()
+		return
+	}
+	unit.notified = true
+	event := RuntimeEvent{
+		UnitID:      unitID,
+		Fingerprint: unit.fingerprint,
+		Type:        "process_exited",
+		Message:     fmt.Sprint(process.Err()),
+		OccurredAt:  time.Now().UTC(),
+	}
+	r.mu.Unlock()
+	select {
+	case r.events <- event:
+	default:
+		if r.Logf != nil {
+			r.Logf("运行时事件队列已满，丢弃 unit=%s type=%s", event.UnitID, event.Type)
+		}
+	}
+}
+
+func (r *ProtocolRuntime) UnitIDs() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	ids := make([]string, 0, len(r.units))
+	for id := range r.units {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// Host 暴露只读宿主句柄，供内核服务层和端到端测试调用当前 unit 的贡献。
+func (r *ProtocolRuntime) Host(unitID string) (*protocolbus.Host, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	unit, ok := r.units[unitID]
+	if !ok {
+		return nil, false
+	}
+	return unit.host, true
+}
+
+func (r *ProtocolRuntime) Close() error {
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return nil
+	}
+	r.closed = true
+	units := r.units
+	r.units = map[string]*runningUnit{}
+	r.mu.Unlock()
+	for _, unit := range units {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		closeRegistrations(ctx, unit.registrations)
+		_ = unit.host.Drain(ctx)
+		cancel()
+		unit.host.Stop()
+	}
+	return nil
+}
+
+func registerCandidate(ctx context.Context, router *addressing.Router, host *protocolbus.Host, unit RuntimeUnit, processes []*protocolbus.PluginProcess) ([]*addressing.Registration, error) {
+	if router == nil {
+		return nil, nil
+	}
+	versions := make(map[string]string, len(processes))
+	for _, process := range processes {
+		versions[process.PluginID] = process.Version
+	}
+	var registrations []*addressing.Registration
+	for _, point := range host.Registry.Points() {
+		if point.Dispatch != registry.DispatchSingle {
+			continue
+		}
+		for _, contribution := range host.Registry.List(point.Name) {
+			if contribution.PluginID == protocolbus.KernelPluginID {
+				continue
+			}
+			registration, err := router.Register(ctx, addressing.RegisterOptions{
+				Capability: contribution.ID, ExtensionPoint: point.Name,
+				ServiceRole: unit.ServiceRole, UnitID: unit.ID, Version: versions[contribution.PluginID],
+			}, addressing.HostHandler(func(invokeCtx context.Context, target *contractv1.CallTarget, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+				response, err := host.Invoke(invokeCtx, target, callCtx, payload)
+				if err != nil {
+					return nil, nil, err
+				}
+				return response.Result, response.Payload, nil
+			}))
+			if err != nil {
+				closeRegistrations(context.Background(), registrations)
+				return nil, fmt.Errorf("发布 unit %s capability %s: %w", unit.ID, contribution.ID, err)
+			}
+			registrations = append(registrations, registration)
+		}
+	}
+	return registrations, nil
+}
+
+func closeRegistrations(ctx context.Context, registrations []*addressing.Registration) {
+	for _, registration := range registrations {
+		_ = registration.Close(ctx)
+	}
+}

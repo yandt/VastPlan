@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	pluginhostv1 "github.com/yandt/VastPlan/shared/go/pluginhost/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
 )
 
 // session 一个已接入插件的运行态：持有双向流，并把流上的消息按 request_id
@@ -17,6 +17,7 @@ type session struct {
 	pluginID      string
 	pluginVersion string
 	launchToken   string // 关联到发起它的那次 Launch
+	cmdMu         sync.Mutex
 	cmd           *exec.Cmd
 
 	stream pluginhostv1.PluginHost_ChannelServer
@@ -122,6 +123,29 @@ func (s *session) err() error {
 		return v.(errBox).err
 	}
 	return nil
+}
+
+// bindProcess 在握手完成后把进程句柄交给会话；若会话已经死亡则拒绝绑定，
+// 避免“刚激活就崩溃”被 Launch 误报为成功。
+func (s *session) bindProcess(cmd *exec.Cmd) bool {
+	s.cmdMu.Lock()
+	defer s.cmdMu.Unlock()
+	select {
+	case <-s.done:
+		return false
+	default:
+		s.cmd = cmd
+		return true
+	}
+}
+
+func (s *session) killProcess() {
+	s.cmdMu.Lock()
+	defer s.cmdMu.Unlock()
+	if s.cmd != nil && s.cmd.Process != nil {
+		// cmd.Wait 由 Launch 创建的唯一 goroutine 负责，避免重复 Wait 的竞态。
+		_ = s.cmd.Process.Kill()
+	}
 }
 
 // errBox 让 atomic.Value 能存 nil 之外的 error（类型必须一致）。

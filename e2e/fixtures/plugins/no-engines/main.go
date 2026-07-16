@@ -9,7 +9,7 @@ package main
 import (
 	"log"
 
-	sdk "github.com/yandt/VastPlan/sdk/go/plugin"
+	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
 )
 
 func main() {

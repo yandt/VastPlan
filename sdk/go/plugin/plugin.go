@@ -17,9 +17,9 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
-	pluginhostv1 "github.com/yandt/VastPlan/shared/go/pluginhost/v1"
-	"github.com/yandt/VastPlan/shared/go/protocol"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/protocol"
 )
 
 // hostCallTimeout 插件回调宿主的等待上限——宿主无响应时处理器必须能脱身。
@@ -56,10 +56,15 @@ type Plugin struct {
 	contribs []Contribution
 	routes   map[string]Handler // (extensionPoint, id, operation) → Handler
 
-	stream    pluginhostv1.PluginHost_ChannelClient
-	sendMu    sync.Mutex
-	active    atomic.Bool
-	sessionID string
+	stream pluginhostv1.PluginHost_ChannelClient
+	sendMu sync.Mutex
+
+	// lifecycleMu 把“是否接受新调用”与 inflight.Add 做成一个门闩。
+	// DRAIN 关门后再 Wait，保证不会发生 Wait 与后续 Add 竞态。
+	lifecycleMu sync.Mutex
+	active      bool
+	inflight    sync.WaitGroup
+	sessionID   string
 
 	pendingMu sync.Mutex
 	pending   map[string]chan *pluginhostv1.FromHost
@@ -206,9 +211,10 @@ func (p *Plugin) handleInvoke(req *pluginhostv1.InvokeRequest) {
 }
 
 func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.InvokeResponse {
-	if !p.active.Load() {
+	if !p.beginInvoke() {
 		return errResult("plugin.inactive", "插件未激活", false)
 	}
+	defer p.inflight.Done()
 	op := ""
 	if req.Target.Operation != nil {
 		op = *req.Target.Operation
@@ -237,6 +243,16 @@ func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.I
 	return &pluginhostv1.InvokeResponse{Result: res, Payload: payload}
 }
 
+func (p *Plugin) beginInvoke() bool {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+	if !p.active {
+		return false
+	}
+	p.inflight.Add(1)
+	return true
+}
+
 // handleLifecycle 处理生命周期指令；返回 true 表示应退出。
 func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) bool {
 	ack := &pluginhostv1.LifecycleAck{RequestId: lc.RequestId, Ready: true}
@@ -244,11 +260,23 @@ func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) bool {
 
 	switch lc.Op {
 	case pluginhostv1.Lifecycle_OP_ACTIVATE:
-		p.active.Store(true)
-	case pluginhostv1.Lifecycle_OP_DEACTIVATE, pluginhostv1.Lifecycle_OP_DRAIN:
-		p.active.Store(false)
+		p.lifecycleMu.Lock()
+		p.active = true
+		p.lifecycleMu.Unlock()
+	case pluginhostv1.Lifecycle_OP_DEACTIVATE:
+		p.lifecycleMu.Lock()
+		p.active = false
+		p.lifecycleMu.Unlock()
+	case pluginhostv1.Lifecycle_OP_DRAIN:
+		p.lifecycleMu.Lock()
+		p.active = false
+		p.lifecycleMu.Unlock()
+		p.inflight.Wait()
 	case pluginhostv1.Lifecycle_OP_SHUTDOWN:
-		p.active.Store(false)
+		p.lifecycleMu.Lock()
+		p.active = false
+		p.lifecycleMu.Unlock()
+		p.inflight.Wait()
 		shutdown = true
 	default:
 		msg := "未知生命周期指令"

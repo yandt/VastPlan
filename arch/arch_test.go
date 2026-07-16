@@ -18,10 +18,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yandt/VastPlan/shared/go/protocol"
+	"cdsoft.com.cn/VastPlan/shared/go/protocol"
 )
 
-const modulePath = "github.com/yandt/VastPlan"
+const modulePath = "cdsoft.com.cn/VastPlan"
 
 // ── 基础设施 ────────────────────────────────────────────
 

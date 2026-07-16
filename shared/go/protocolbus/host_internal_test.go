@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	pluginhostv1 "github.com/yandt/VastPlan/shared/go/pluginhost/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
 )
 
 // 双向流上的请求/响应关联：deliver 必须把响应交给对应 request_id 的等待者。

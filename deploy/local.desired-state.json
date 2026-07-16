@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "revision": 1,
+  "metadata": {
+    "name": "local-development"
+  },
+  "units": [
+    {
+      "id": "backend-main",
+      "kind": "service",
+      "plugins": [
+        {
+          "id": "com.vastplan.demo-permission",
+          "version": "0.1.0",
+          "channel": "stable"
+        },
+        {
+          "id": "com.vastplan.hello-world",
+          "version": "0.1.0",
+          "channel": "stable"
+        }
+      ],
+      "enabled": true,
+      "service_role": "backend",
+      "replicas": 1,
+      "placement": {
+        "nodeSelector": {
+          "environment": "local"
+        }
+      }
+    }
+  ]
+}

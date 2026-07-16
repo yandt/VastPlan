@@ -1,0 +1,34 @@
+{
+  "version": 2,
+  "revision": 1,
+  "metadata": {
+    "name": "cluster-demo",
+    "tenant": "acme"
+  },
+  "units": [
+    {
+      "id": "backend-main",
+      "kind": "service",
+      "enabled": true,
+      "service_role": "backend",
+      "replicas": 2,
+      "placement": {
+        "nodeSelector": {
+          "region": "cn"
+        }
+      },
+      "plugins": [
+        {
+          "id": "com.vastplan.demo-permission",
+          "version": "0.1.0",
+          "channel": "stable"
+        },
+        {
+          "id": "com.vastplan.hello-world",
+          "version": "0.1.0",
+          "channel": "stable"
+        }
+      ]
+    }
+  ]
+}

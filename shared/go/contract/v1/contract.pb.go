@@ -1079,7 +1079,7 @@ const file_contract_v1_contract_proto_rawDesc = "" +
 	"\x11CALLER_KIND_AGENT\x10\x02\x12\x16\n" +
 	"\x12CALLER_KIND_PLUGIN\x10\x03\x12\x16\n" +
 	"\x12CALLER_KIND_SYSTEM\x10\x04\x12\x16\n" +
-	"\x12CALLER_KIND_RUNNER\x10\x05B<Z:github.com/yandt/VastPlan/shared/go/contract/v1;contractv1b\x06proto3"
+	"\x12CALLER_KIND_RUNNER\x10\x05B9Z7cdsoft.com.cn/VastPlan/shared/go/contract/v1;contractv1b\x06proto3"
 
 var (
 	file_contract_v1_contract_proto_rawDescOnce sync.Once

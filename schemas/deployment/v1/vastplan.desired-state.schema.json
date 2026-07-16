@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/deployment/v1/vastplan.desired-state.schema.json",
+  "title": "VastPlan Local Desired State v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "revision", "metadata", "units"],
+  "properties": {
+    "version": { "const": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "tenant": { "type": "string", "minLength": 1, "maxLength": 160 }
+      }
+    },
+    "units": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/serviceUnit" }
+    }
+  },
+  "$defs": {
+    "pluginRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+        "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "serviceUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "plugins", "enabled", "service_role", "replicas"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+        "kind": { "const": "service" },
+        "plugins": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/pluginRef" }
+        },
+        "config": { "type": "object" },
+        "enabled": { "type": "boolean" },
+        "service_role": { "enum": ["backend", "workspace", "rs"] },
+        "replicas": { "const": 1 },
+        "placement": { "$ref": "#/$defs/placement" }
+      }
+    }
+  }
+}

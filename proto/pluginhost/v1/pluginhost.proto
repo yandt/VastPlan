@@ -10,7 +10,7 @@ package vastplan.pluginhost.v1;
 
 import "contract/v1/contract.proto";
 
-option go_package = "github.com/yandt/VastPlan/shared/go/pluginhost/v1;pluginhostv1";
+option go_package = "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1;pluginhostv1";
 
 // ── 握手（§2.2）─────────────────────────────────────────
 

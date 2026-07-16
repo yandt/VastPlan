@@ -1,0 +1,48 @@
+{
+  "id": "com.vastplan.demo-quota",
+  "name": "示例配额",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "description": "演示 hook 分发：before 钩子按配额限流（可否决），after 钩子计量",
+
+  "engines": { "backend": "^0.1" },
+
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+
+  "activation": ["onStartup"],
+
+  "entry": { "backend": "backend/demo-quota" },
+
+  "contributes": {
+    "backend": {
+      "hooks": [
+        {
+          "id": "demo.quota.limit",
+          "service_role": "backend",
+          "title": "配额限流（before，可否决）",
+          "point": "invoke",
+          "phase": "before",
+          "priority": 100
+        },
+        {
+          "id": "demo.quota.meter",
+          "service_role": "backend",
+          "title": "配额计量（after，只观察）",
+          "point": "invoke",
+          "phase": "after",
+          "priority": 50
+        }
+      ],
+      "tools": [
+        {
+          "id": "demo.quota",
+          "service_role": "backend",
+          "title": "配额查询",
+          "subcommands": [
+            { "name": "usage", "description": "查询各能力的调用计量" }
+          ]
+        }
+      ]
+    }
+  }
+}

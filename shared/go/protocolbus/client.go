@@ -7,9 +7,10 @@ import (
 	"os/exec"
 	"time"
 
-	contractv1 "github.com/yandt/VastPlan/shared/go/contract/v1"
-	pluginhostv1 "github.com/yandt/VastPlan/shared/go/pluginhost/v1"
-	"github.com/yandt/VastPlan/shared/go/protocol"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/protocol"
 )
 
 // Launch 拉起插件进程并等待它完成回连、握手、贡献注册与激活（§2.2）。
@@ -59,11 +60,16 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 			kill()
 			return nil, res.err
 		}
-		res.sess.cmd = cmd // 交由 session 负责回收
+		if !res.sess.bindProcess(cmd) {
+			kill()
+			return nil, fmt.Errorf("插件完成接入后立即失联: %w", res.sess.err())
+		}
 		return &PluginProcess{
 			PluginID:  res.sess.pluginID,
 			Version:   res.sess.pluginVersion,
 			SessionID: res.sess.id,
+			PID:       cmd.Process.Pid,
+			session:   res.sess,
 		}, nil
 
 	case err := <-exited:
@@ -87,20 +93,43 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 	}
 }
 
-// Invoke 扩展点被触发时的**公开入口**：先做权限判定，再分发。
+// Invoke 扩展点被触发时的**公开入口**，是完整的调用管道：
 //
-// 权限判定按 select 语义走 permission.checker 扩展点；未获放行即返回应用层错误
-// `permission.denied`（权限拒绝属应用层错误，非传输层——工程规范 §4.2）。
-// 零校验器 → fail-closed 拒绝（ADR-0021）。
+//	before 钩子（可一票否决）→ 权限判定 → 分发 → after 钩子（只观察）
+//
+// 权限按 select 语义走 permission.checker，零校验器 → fail-closed 拒绝（ADR-0021）。
+// 钩子按 fanout 语义顺序执行，承载限流/配额/计量等横切关注点（皆为插件）。
+// 未获放行/被否决均返回**应用层错误**（非传输层——工程规范 §4.2）。
 func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
 
+	// 1) before 钩子：限流/配额等可在此否决
+	if err := h.runBeforeHooks(ctx, extpoint.PointInvoke, callCtx, target); err != nil {
+		var abort *HookAbort
+		if errors.As(err, &abort) {
+			h.Logf("调用被钩子否决 %s/%s：%s（由 %q）",
+				target.ExtensionPoint, target.Capability, abort.Reason, abort.HookID)
+			return errorResponse("hook.aborted", abort.Reason, false), nil
+		}
+		return nil, err
+	}
+
+	// 2) 权限判定
 	if res := h.CheckPermission(ctx, callCtx, target); !res.Allowed() {
 		h.Logf("权限拒绝 %s/%s：%s（由 %q 判定）",
 			target.ExtensionPoint, target.Capability, res.Reason, res.DecidedBy)
 		return errorResponse("permission.denied", res.Reason, false), nil
 	}
-	return h.invoke(ctx, target, callCtx, payload)
+
+	// 3) 分发
+	resp, err := h.invoke(ctx, target, callCtx, payload)
+	if err != nil {
+		return nil, err // 传输层失败：无结论可供 after 钩子观察
+	}
+
+	// 4) after 钩子：计量/审计等只观察，不改变结论
+	h.runAfterHooks(ctx, extpoint.PointInvoke, callCtx, target, resp.Result)
+	return resp, nil
 }
 
 // invoke 内部分发：**不做权限判定**。
@@ -213,7 +242,7 @@ func (h *Host) Close(p *PluginProcess) error {
 		return nil // 已经走了
 	}
 	// 尽力而为地通知插件优雅退出；它随后关流，读循环的 teardown 收尾
-	if _, err := h.lifecycle(sess, pluginhostv1.Lifecycle_OP_SHUTDOWN); err != nil {
+	if _, err := h.lifecycle(context.Background(), sess, pluginhostv1.Lifecycle_OP_SHUTDOWN); err != nil {
 		h.Logf("下发 SHUTDOWN 失败（将强制回收）: %v", err)
 	}
 	h.teardown(sess, errors.New("宿主主动关闭"))

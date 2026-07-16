@@ -1,0 +1,368 @@
+// Package pluginservice 实现后端内核内置的插件服务最小制品能力。
+//
+// 它只负责制品的验证、不可变存储和校验读取；部署执行属于 Node Agent reconcile，
+// 不可把拉起进程、节点选择或 NATS 控制面混进这里（ADR-0010）。
+package pluginservice
+
+import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+)
+
+const (
+	manifestName      = "vastplan.plugin.json"
+	artifactExtension = ".tar.gz"
+	maxManifestBytes  = 1 << 20 // 清单是声明，不允许被超大内容拖垮制品检查。
+)
+
+var channelPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
+
+// Ref 唯一定位一个已发布制品。插件 id + version + channel 三元组一经发布不可改写。
+type Ref struct {
+	PluginID string
+	Version  string
+	Channel  string
+}
+
+// Artifact 是存储在本地制品仓库索引中的可审计元数据。
+// Manifest 保存经 Schema 验证的原始声明，使期望态读取制品信息时无须解包执行任何代码。
+type Artifact struct {
+	SchemaVersion string          `json:"schemaVersion"`
+	PluginID      string          `json:"pluginId"`
+	Version       string          `json:"version"`
+	Channel       string          `json:"channel"`
+	SHA256        string          `json:"sha256"`
+	Size          int64           `json:"size"`
+	Object        string          `json:"object"`
+	Manifest      json.RawMessage `json:"manifest"`
+}
+
+// Repository 是本地制品仓库。Root 由插件服务配置；其磁盘布局是实现细节，
+// 调用方必须通过 Publish/Read 而非拼接路径访问，才能保留 SHA-256 fail-closed 语义。
+type Repository struct {
+	root string
+}
+
+// NewRepository 创建本地仓库句柄。目录延迟到首次发布时才创建，方便只读调用方
+// 在尚未初始化的机器上得到清晰的 not found 错误。
+func NewRepository(root string) (*Repository, error) {
+	if strings.TrimSpace(root) == "" {
+		return nil, errors.New("制品仓库根目录不能为空")
+	}
+	return &Repository{root: filepath.Clean(root)}, nil
+}
+
+// PackageDirectory 将一个插件目录打成 gzip tar 包。它首先校验根目录的清单，
+// 且拒绝符号链接和目录逃逸路径，避免制品在未来被 Node Agent 解包时突破安装目录。
+func PackageDirectory(dir string) ([]byte, pluginv1.Manifest, error) {
+	manifestPath := filepath.Join(dir, manifestName)
+	manifestRaw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return nil, pluginv1.Manifest{}, fmt.Errorf("读取插件清单: %w", err)
+	}
+	manifest, err := pluginv1.ParseManifest(manifestRaw)
+	if err != nil {
+		return nil, pluginv1.Manifest{}, err
+	}
+
+	var out bytes.Buffer
+	gz := gzip.NewWriter(&out)
+	tw := tar.NewWriter(gz)
+	err = filepath.WalkDir(dir, func(filename string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if filename == dir {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, filename)
+		if err != nil {
+			return err
+		}
+		name, err := archiveName(rel)
+		if err != nil {
+			return err
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("插件包不允许符号链接: %s", name)
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("插件包只允许普通文件: %s", name)
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		header.Name = name
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		f, err := os.Open(filename)
+		if err != nil {
+			return err
+		}
+		_, copyErr := io.Copy(tw, f)
+		closeErr := f.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		return closeErr
+	})
+	if err != nil {
+		_ = tw.Close()
+		_ = gz.Close()
+		return nil, pluginv1.Manifest{}, fmt.Errorf("打包插件目录: %w", err)
+	}
+	if err := tw.Close(); err != nil {
+		_ = gz.Close()
+		return nil, pluginv1.Manifest{}, fmt.Errorf("完成 tar 包: %w", err)
+	}
+	if err := gz.Close(); err != nil {
+		return nil, pluginv1.Manifest{}, fmt.Errorf("完成 gzip 包: %w", err)
+	}
+	return out.Bytes(), manifest, nil
+}
+
+// Publish 校验并不可变地保存一个插件包。相同 ref 仅允许幂等重传完全相同的字节；
+// 任何不同 SHA 都会被拒绝，防止版本标签被悄悄改指向另一份代码。
+func (r *Repository) Publish(channel string, packageBytes []byte) (Artifact, error) {
+	if !channelPattern.MatchString(channel) {
+		return Artifact{}, fmt.Errorf("非法发布 channel %q", channel)
+	}
+	if len(packageBytes) == 0 {
+		return Artifact{}, errors.New("插件包不能为空")
+	}
+	manifest, manifestRaw, err := inspectPackage(packageBytes)
+	if err != nil {
+		return Artifact{}, err
+	}
+
+	digest := sha256.Sum256(packageBytes)
+	sha := hex.EncodeToString(digest[:])
+	artifact := Artifact{
+		SchemaVersion: "v1",
+		PluginID:      manifest.ID,
+		Version:       manifest.Version,
+		Channel:       channel,
+		SHA256:        sha,
+		Size:          int64(len(packageBytes)),
+		Object:        sha + artifactExtension,
+		Manifest:      manifestRaw,
+	}
+	metadata, err := json.Marshal(artifact)
+	if err != nil {
+		return Artifact{}, fmt.Errorf("序列化制品元数据: %w", err)
+	}
+	if err := pluginv1.ValidateArtifactMetadata(metadata); err != nil {
+		return Artifact{}, err
+	}
+
+	dir, err := r.artifactDir(Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: channel})
+	if err != nil {
+		return Artifact{}, err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return Artifact{}, fmt.Errorf("创建制品目录: %w", err)
+	}
+	indexPath := filepath.Join(dir, "artifact.json")
+	if existing, err := readArtifact(indexPath); err == nil {
+		if existing.SHA256 != artifact.SHA256 {
+			return Artifact{}, fmt.Errorf("制品 %s@%s/%s 已存在且 SHA-256 不同，版本不可变",
+				artifact.PluginID, artifact.Version, channel)
+		}
+		return existing, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return Artifact{}, fmt.Errorf("读取既有制品索引: %w", err)
+	}
+
+	if err := writeFileAtomically(filepath.Join(dir, artifact.Object), packageBytes, 0o644); err != nil {
+		return Artifact{}, fmt.Errorf("写入制品对象: %w", err)
+	}
+	if err := writeFileAtomically(indexPath, append(metadata, '\n'), 0o644); err != nil {
+		return Artifact{}, fmt.Errorf("写入制品索引: %w", err)
+	}
+	return artifact, nil
+}
+
+// Read 读取一个制品并在交付前复算 SHA-256、重新检查 tar 内清单和索引绑定。
+// 因而磁盘损坏、对象被替换或索引被手工改错都不会被下游节点当作可安装制品。
+func (r *Repository) Read(ref Ref) (Artifact, []byte, error) {
+	dir, err := r.artifactDir(ref)
+	if err != nil {
+		return Artifact{}, nil, err
+	}
+	artifact, err := readArtifact(filepath.Join(dir, "artifact.json"))
+	if err != nil {
+		return Artifact{}, nil, fmt.Errorf("读取制品索引: %w", err)
+	}
+	if artifact.PluginID != ref.PluginID || artifact.Version != ref.Version || artifact.Channel != ref.Channel {
+		return Artifact{}, nil, errors.New("制品索引与请求引用不一致")
+	}
+	packagePath := filepath.Join(dir, artifact.Object)
+	packageBytes, err := os.ReadFile(packagePath)
+	if err != nil {
+		return Artifact{}, nil, fmt.Errorf("读取制品对象: %w", err)
+	}
+	digest := sha256.Sum256(packageBytes)
+	if actual := hex.EncodeToString(digest[:]); actual != artifact.SHA256 {
+		return Artifact{}, nil, fmt.Errorf("制品 SHA-256 不匹配：期望 %s，实际 %s", artifact.SHA256, actual)
+	}
+	if int64(len(packageBytes)) != artifact.Size {
+		return Artifact{}, nil, fmt.Errorf("制品大小不匹配：期望 %d，实际 %d", artifact.Size, len(packageBytes))
+	}
+	manifest, manifestRaw, err := inspectPackage(packageBytes)
+	if err != nil {
+		return Artifact{}, nil, fmt.Errorf("制品包内容无效: %w", err)
+	}
+	if manifest.ID != artifact.PluginID || manifest.Version != artifact.Version || !sameJSON(manifestRaw, artifact.Manifest) {
+		return Artifact{}, nil, errors.New("制品清单与索引绑定不一致")
+	}
+	return artifact, packageBytes, nil
+}
+
+func (r *Repository) artifactDir(ref Ref) (string, error) {
+	if _, err := pluginv1.ParseManifest(minimalManifest(ref.PluginID, ref.Version)); err != nil {
+		return "", fmt.Errorf("非法制品引用: %w", err)
+	}
+	if !channelPattern.MatchString(ref.Channel) {
+		return "", fmt.Errorf("非法发布 channel %q", ref.Channel)
+	}
+	return filepath.Join(r.root, "artifacts", ref.PluginID, ref.Version, ref.Channel), nil
+}
+
+func minimalManifest(id, version string) []byte {
+	return []byte(fmt.Sprintf(`{"id":%q,"name":"reference","description":"reference","version":%q,"publisher":"reference","engines":{"backend":"^0.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`, id, version))
+}
+
+func readArtifact(filename string) (Artifact, error) {
+	raw, err := os.ReadFile(filename)
+	if err != nil {
+		return Artifact{}, err
+	}
+	if err := pluginv1.ValidateArtifactMetadata(raw); err != nil {
+		return Artifact{}, err
+	}
+	var artifact Artifact
+	if err := json.Unmarshal(raw, &artifact); err != nil {
+		return Artifact{}, fmt.Errorf("解析制品索引: %w", err)
+	}
+	return artifact, nil
+}
+
+func writeFileAtomically(filename string, data []byte, mode os.FileMode) error {
+	f, err := os.CreateTemp(filepath.Dir(filename), ".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer func() { _ = os.Remove(tmp) }()
+	if err := f.Chmod(mode); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, filename)
+}
+
+// sameJSON 以规范化 JSON 文本比较。索引经 json.Marshal 后会压缩 RawMessage 的空白，
+// 但空白差异不是清单内容变更；结构或值一旦变化则仍会被拒绝。
+func sameJSON(left, right []byte) bool {
+	var a, b bytes.Buffer
+	if json.Compact(&a, left) != nil || json.Compact(&b, right) != nil {
+		return false
+	}
+	return bytes.Equal(a.Bytes(), b.Bytes())
+}
+
+// inspectPackage 只读取 archive metadata 和根清单，绝不执行包内内容。
+func inspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, error) {
+	gz, err := gzip.NewReader(bytes.NewReader(packageBytes))
+	if err != nil {
+		return pluginv1.Manifest{}, nil, fmt.Errorf("插件包不是 gzip tar: %w", err)
+	}
+	defer func() {
+		_ = gz.Close() // 只读检查不依赖 Close 提交状态，包内容错误优先。
+	}()
+
+	tr := tar.NewReader(gz)
+	var manifestRaw []byte
+	for {
+		header, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return pluginv1.Manifest{}, nil, fmt.Errorf("读取 tar 条目: %w", err)
+		}
+		name, err := archiveName(header.Name)
+		if err != nil {
+			return pluginv1.Manifest{}, nil, err
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != 0 { // 兼容旧 tar 的普通文件标记。
+			return pluginv1.Manifest{}, nil, fmt.Errorf("插件包只允许普通文件: %s", name)
+		}
+		if name != manifestName {
+			continue
+		}
+		if manifestRaw != nil {
+			return pluginv1.Manifest{}, nil, errors.New("插件包包含多个根清单")
+		}
+		manifestRaw, err = io.ReadAll(io.LimitReader(tr, maxManifestBytes+1))
+		if err != nil {
+			return pluginv1.Manifest{}, nil, fmt.Errorf("读取插件清单: %w", err)
+		}
+		if len(manifestRaw) > maxManifestBytes {
+			return pluginv1.Manifest{}, nil, fmt.Errorf("插件清单超过 %d 字节上限", maxManifestBytes)
+		}
+	}
+	if manifestRaw == nil {
+		return pluginv1.Manifest{}, nil, errors.New("插件包缺少根清单 vastplan.plugin.json")
+	}
+	manifest, err := pluginv1.ParseManifest(manifestRaw)
+	if err != nil {
+		return pluginv1.Manifest{}, nil, err
+	}
+	return manifest, json.RawMessage(manifestRaw), nil
+}
+
+func archiveName(name string) (string, error) {
+	if name == "" || path.IsAbs(name) {
+		return "", fmt.Errorf("非法插件包路径 %q", name)
+	}
+	clean := path.Clean(strings.ReplaceAll(name, "\\", "/"))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+		return "", fmt.Errorf("插件包路径逃逸 %q", name)
+	}
+	return clean, nil
+}
