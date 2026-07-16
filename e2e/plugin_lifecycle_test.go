@@ -68,6 +68,7 @@ func newHost(t *testing.T, kernelVersion string) *protocolbus.Host {
 	h.CallTimeout = 5 * time.Second
 	h.HeartbeatEvery = 200 * time.Millisecond
 	h.HeartbeatTimeout = 2 * time.Second
+	h.PluginEnvironmentAllowlist = []string{"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"}
 
 	if err := h.Start(); err != nil {
 		t.Fatalf("宿主启动失败: %v", err)

@@ -182,6 +182,10 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, entry string) (In
 	if manifest.ID != artifact.PluginID || manifest.Version != artifact.Version {
 		return InstalledPlugin{}, errors.New("安装清单身份不一致")
 	}
+	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
+	if err != nil {
+		return InstalledPlugin{}, fmt.Errorf("冻结运行时贡献: %w", err)
+	}
 	entryPath := filepath.Join(root, filepath.FromSlash(entry))
 	info, err := os.Stat(entryPath)
 	if err != nil {
@@ -193,6 +197,10 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, entry string) (In
 	installed := InstalledPlugin{
 		ID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel,
 		SHA256: artifact.SHA256, Root: root, EntryPath: entryPath,
+		Contract: PluginRuntimeContract{Contributions: contributions},
+	}
+	if manifest.Capabilities != nil {
+		installed.Contract.KernelServices = append([]string(nil), manifest.Capabilities.KernelServices...)
 	}
 	if manifest.State != nil && manifest.State.Backend != nil {
 		state := manifest.State.Backend

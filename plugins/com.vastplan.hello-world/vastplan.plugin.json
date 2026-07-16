@@ -7,7 +7,7 @@
   "engines": { "backend": "^0.1 || ^1.0" },
 
   "capabilities": {
-    "kernelServices": [],
+    "kernelServices": ["kernel.info"],
     "credentials": [],
     "resources": []
   },
@@ -39,8 +39,12 @@
               "paramsSchema": {
                 "type": "object",
                 "properties": { "text": { "type": "string" } },
-                "required": ["text"]
+              "required": ["text"]
               }
+            },
+            {
+              "name": "whoami",
+              "description": "回调宿主取内核信息"
             }
           ]
         }

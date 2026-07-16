@@ -62,7 +62,7 @@ func main() {
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage,
 		ID:             "demo.audit",
-		Descriptor:     []byte(`{"title":"审计查询","subcommands":[{"name":"list","description":"列出已记录的事件"}]}`),
+		Descriptor:     []byte(`{"title":"审计查询","subcommands":[{"name":"list","description":"列出已记录的事件类型"}]}`),
 		Handlers:       map[string]sdk.Handler{"list": book.list},
 	})
 

@@ -19,10 +19,9 @@ import (
 // 扩展点 tool.package 的贡献契约见《插件契约与协议》第四章 §4.3。
 const descriptor = `{
   "title": "Hello 工具包",
-  "service_role": "backend",
   "subcommands": [
-    {"name": "greet",  "description": "向指定对象问好"},
-    {"name": "echo",   "description": "原样回显"},
+    {"name": "greet", "description": "向指定对象问好", "paramsSchema": {"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
+    {"name": "echo", "description": "原样回显", "paramsSchema": {"type":"object","properties":{"text":{"type":"string"}},"required":["text"]}},
     {"name": "whoami", "description": "回调宿主取内核信息"}
   ]
 }`

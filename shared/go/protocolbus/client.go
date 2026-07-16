@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"runtime"
+	"sort"
 	"strings"
 	"time"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
@@ -22,6 +26,12 @@ import (
 // 宿主注入连接端点 + magic cookie + 一次性 launch token；插件回连本宿主。
 // 握手失败（magic/版本/engines）的原因经 launch token 回传，故此处能给出确切错误。
 func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, error) {
+	return h.LaunchWithPolicy(ctx, binPath, LaunchPolicy{})
+}
+
+// LaunchWithPolicy 启动插件，并把已验签清单中的身份、贡献和内核服务依赖绑定到
+// 一次性 launch token。空 Policy 只用于本地演示/兼容夹具，但仍强制 token 认证。
+func (h *Host) LaunchWithPolicy(ctx context.Context, binPath string, policy LaunchPolicy) (*PluginProcess, error) {
 	if h.addr == "" {
 		return nil, errors.New("宿主尚未 Start，插件无处回连")
 	}
@@ -29,7 +39,7 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 	token := newToken()
 	resultCh := make(chan launchResult, 1)
 	h.mu.Lock()
-	h.launches[token] = resultCh
+	h.launches[token] = &launchAttempt{result: resultCh, policy: cloneLaunchPolicy(policy)}
 	h.mu.Unlock()
 	defer func() {
 		h.mu.Lock()
@@ -38,7 +48,9 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 	}()
 
 	cmd := exec.Command(binPath)
-	cmd.Env = append(cmd.Environ(),
+	environmentAllowlist := append([]string(nil), h.PluginEnvironmentAllowlist...)
+	environmentAllowlist = append(environmentAllowlist, policy.EnvironmentAllowlist...)
+	cmd.Env = append(pluginEnvironment(environmentAllowlist),
 		protocol.MagicEnvKey+"="+protocol.MagicCookie,
 		protocol.HostAddrEnvKey+"="+h.addr,
 		protocol.LaunchTokenEnvKey+"="+token,
@@ -95,6 +107,34 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 		kill()
 		return nil, ctx.Err()
 	}
+}
+
+func cloneLaunchPolicy(policy LaunchPolicy) LaunchPolicy {
+	policy.Contributions = append([]pluginv1.RuntimeContribution(nil), policy.Contributions...)
+	policy.KernelServices = append([]string(nil), policy.KernelServices...)
+	policy.EnvironmentAllowlist = append([]string(nil), policy.EnvironmentAllowlist...)
+	return policy
+}
+
+func pluginEnvironment(allowlist []string) []string {
+	allowed := append([]string(nil), allowlist...)
+	// Windows 进程创建和部分系统库依赖这两个环境变量；它们不承载应用秘密。
+	if runtime.GOOS == "windows" {
+		allowed = append(allowed, "SystemRoot", "WINDIR")
+	}
+	sort.Strings(allowed)
+	out := make([]string, 0, len(allowed))
+	last := ""
+	for _, key := range allowed {
+		if key == "" || key == last {
+			continue
+		}
+		last = key
+		if value, ok := os.LookupEnv(key); ok {
+			out = append(out, key+"="+value)
+		}
+	}
+	return out
 }
 
 // Invoke 扩展点被触发时的**公开入口**，是完整的调用管道：
@@ -402,11 +442,11 @@ func (h *Host) failLaunch(token string, err error) {
 		return
 	}
 	h.mu.RLock()
-	ch, ok := h.launches[token]
+	attempt, ok := h.launches[token]
 	h.mu.RUnlock()
 	if ok {
 		select {
-		case ch <- launchResult{err: err}:
+		case attempt.result <- launchResult{err: err}:
 		default:
 		}
 	}
@@ -417,11 +457,11 @@ func (h *Host) readyLaunch(sess *session) {
 		return
 	}
 	h.mu.RLock()
-	ch, ok := h.launches[sess.launchToken]
+	attempt, ok := h.launches[sess.launchToken]
 	h.mu.RUnlock()
 	if ok {
 		select {
-		case ch <- launchResult{sess: sess}:
+		case attempt.result <- launchResult{sess: sess}:
 		default:
 		}
 	}

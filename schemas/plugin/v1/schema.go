@@ -10,6 +10,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"sync"
 
 	commonv1 "cdsoft.com.cn/VastPlan/schemas/common/v1"
@@ -96,6 +97,85 @@ type Capabilities struct {
 	KernelServices []string `json:"kernelServices,omitempty"`
 	Credentials    []string `json:"credentials,omitempty"`
 	Resources      []string `json:"resources,omitempty"`
+}
+
+// RuntimeContribution 是签名清单对运行时声明的授权边界。运行进程只能声明这里
+// 已登记的扩展点、ID、优先级和 descriptor，不能在启动后临时扩大权限面。
+type RuntimeContribution struct {
+	ExtensionPoint string          `json:"extensionPoint"`
+	ID             string          `json:"id"`
+	Priority       int32           `json:"priority"`
+	Descriptor     json.RawMessage `json:"descriptor"`
+}
+
+var backendContributionPoints = map[string]string{
+	"tools":              "tool.package",
+	"agents":             "agent",
+	"apiRoutes":          "api.route",
+	"permissionCheckers": "permission.checker",
+	"eventSinks":         "event.sink",
+	"hooks":              "hook",
+	"runnerCapabilities": "runner.capability",
+}
+
+// BackendRuntimeContributions 把已经通过 Schema 的 backend 清单贡献规范化为协议总线
+// 可比较的声明。id/priority 属于注册元数据，其余字段构成运行态 descriptor。
+func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, error) {
+	raw := manifest.Contributes["backend"]
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var groups map[string][]map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&groups); err != nil {
+		return nil, fmt.Errorf("解析 backend contributions: %w", err)
+	}
+	var out []RuntimeContribution
+	seen := map[string]struct{}{}
+	for group, entries := range groups {
+		point, ok := backendContributionPoints[group]
+		if !ok {
+			return nil, fmt.Errorf("未知 backend contribution 组 %q", group)
+		}
+		for _, entry := range entries {
+			id, _ := entry["id"].(string)
+			if id == "" {
+				return nil, fmt.Errorf("%s contribution 缺少 id", group)
+			}
+			priority := int32(0)
+			if number, ok := entry["priority"].(json.Number); ok {
+				parsed, err := number.Int64()
+				if err != nil {
+					return nil, fmt.Errorf("%s/%s priority 非整数: %w", point, id, err)
+				}
+				priority = int32(parsed)
+			}
+			delete(entry, "id")
+			delete(entry, "priority")
+			delete(entry, "service_role") // 装配归属由签名清单和 RuntimeUnit 单独强制。
+			descriptor, err := json.Marshal(entry)
+			if err != nil {
+				return nil, fmt.Errorf("规范化 %s/%s descriptor: %w", point, id, err)
+			}
+			if err := ValidateDescriptor(point, descriptor); err != nil {
+				return nil, err
+			}
+			key := point + "\x00" + id
+			if _, duplicate := seen[key]; duplicate {
+				return nil, fmt.Errorf("运行时贡献重复: %s/%s", point, id)
+			}
+			seen[key] = struct{}{}
+			out = append(out, RuntimeContribution{ExtensionPoint: point, ID: id, Priority: priority, Descriptor: descriptor})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].ExtensionPoint != out[j].ExtensionPoint {
+			return out[i].ExtensionPoint < out[j].ExtensionPoint
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
 }
 
 func schemas() error {

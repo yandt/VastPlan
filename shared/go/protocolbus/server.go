@@ -1,7 +1,9 @@
 package protocolbus
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +20,9 @@ import (
 // Handshake 校验 magic、协商协议版本、校验 engines，通过后签发会话票据（§2.2）。
 // 任一关不过即拒绝——fail-closed（ADR-0017 §4 强制点 1/2）。
 func (h *Host) Handshake(ctx context.Context, in *pluginhostv1.Hello) (*pluginhostv1.HelloAck, error) {
+	if in == nil {
+		return nil, errors.New("握手请求不能为空")
+	}
 	fail := func(err error) (*pluginhostv1.HelloAck, error) {
 		// 把失败原因回传给正在等待的 Launch，否则它只能看到"插件退出"这种无用信息
 		h.failLaunch(in.LaunchToken, err)
@@ -26,6 +31,10 @@ func (h *Host) Handshake(ctx context.Context, in *pluginhostv1.Hello) (*pluginho
 
 	if in.Magic != protocol.MagicCookie {
 		return fail(errors.New("magic cookie 不匹配"))
+	}
+	policy, err := h.claimLaunch(in.LaunchToken, in.PluginId, in.PluginVersion)
+	if err != nil {
+		return fail(err)
 	}
 
 	negotiated := protocol.Negotiate(in.ProtoVersions, protocol.SupportedVersions)
@@ -40,6 +49,7 @@ func (h *Host) Handshake(ctx context.Context, in *pluginhostv1.Hello) (*pluginho
 	}
 
 	sess := newSession(newSessionID(), in.PluginId, in.PluginVersion)
+	sess.policy = policy
 	h.mu.Lock()
 	h.sessions[sess.id] = sess
 	h.mu.Unlock()
@@ -61,6 +71,26 @@ func (h *Host) Handshake(ctx context.Context, in *pluginhostv1.Hello) (*pluginho
 			fmt.Sprintf("kernel=%s@%s", h.KernelName, h.KernelVersion),
 		},
 	}, nil
+}
+
+func (h *Host) claimLaunch(token, pluginID, version string) (LaunchPolicy, error) {
+	if token == "" {
+		return LaunchPolicy{}, errors.New("插件缺少一次性 launch token")
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	attempt, ok := h.launches[token]
+	if !ok || attempt.claimed {
+		return LaunchPolicy{}, errors.New("launch token 无效、已使用或已过期")
+	}
+	if attempt.policy.PluginID != "" && attempt.policy.PluginID != pluginID {
+		return LaunchPolicy{}, fmt.Errorf("插件身份与验签清单不一致: 期望 %s，实际 %s", attempt.policy.PluginID, pluginID)
+	}
+	if attempt.policy.Version != "" && attempt.policy.Version != version {
+		return LaunchPolicy{}, fmt.Errorf("插件版本与验签清单不一致: 期望 %s，实际 %s", attempt.policy.Version, version)
+	}
+	attempt.claimed = true
+	return cloneLaunchPolicy(attempt.policy), nil
 }
 
 // Channel 运行态双向流：接收插件消息并按类型分发；宿主经 session.send 下发。
@@ -135,6 +165,9 @@ func (h *Host) sessionFromStream(stream pluginhostv1.PluginHost_ChannelServer) (
 
 // registerContributions 把插件声明的贡献接入扩展点注册表（fail-closed：非法者拒绝）。
 func (h *Host) registerContributions(sess *session, decl *pluginhostv1.Declaration) error {
+	if err := validateDeclaredContributions(sess.policy.Contributions, decl.Contributions); err != nil {
+		return err
+	}
 	accepted := make([]string, 0, len(decl.Contributions))
 	rejected := map[string]string{}
 
@@ -172,6 +205,48 @@ func (h *Host) registerContributions(sess *session, decl *pluginhostv1.Declarati
 			Registered: &pluginhostv1.Registered{Accepted: accepted, Rejected: rejected},
 		},
 	})
+}
+
+func validateDeclaredContributions(expected []pluginv1.RuntimeContribution, declared []*pluginhostv1.Contribution) error {
+	if expected == nil {
+		return nil // 仅兼容直接二进制演示；生产 Node Agent 始终传入签名清单策略。
+	}
+	if len(expected) != len(declared) {
+		return fmt.Errorf("运行时贡献数量与验签清单不一致: 期望 %d，实际 %d", len(expected), len(declared))
+	}
+	want := make(map[string]pluginv1.RuntimeContribution, len(expected))
+	for _, contribution := range expected {
+		want[contribution.ExtensionPoint+"\x00"+contribution.ID] = contribution
+	}
+	seen := make(map[string]struct{}, len(declared))
+	for _, contribution := range declared {
+		if contribution == nil {
+			return errors.New("运行时贡献不能为空")
+		}
+		key := contribution.ExtensionPoint + "\x00" + contribution.Id
+		if _, duplicate := seen[key]; duplicate {
+			return fmt.Errorf("运行时贡献重复: %s/%s", contribution.ExtensionPoint, contribution.Id)
+		}
+		seen[key] = struct{}{}
+		expectedContribution, ok := want[key]
+		if !ok {
+			return fmt.Errorf("运行时声明了验签清单未授权的贡献: %s/%s", contribution.ExtensionPoint, contribution.Id)
+		}
+		if expectedContribution.Priority != contribution.Priority || !sameDescriptor(expectedContribution.Descriptor, contribution.DescriptorJson) {
+			return fmt.Errorf("运行时贡献与验签清单不一致: %s/%s", contribution.ExtensionPoint, contribution.Id)
+		}
+	}
+	return nil
+}
+
+func sameDescriptor(left, right []byte) bool {
+	var a, b any
+	if json.Unmarshal(left, &a) != nil || json.Unmarshal(right, &b) != nil {
+		return false
+	}
+	canonicalA, _ := json.Marshal(a)
+	canonicalB, _ := json.Marshal(b)
+	return bytes.Equal(canonicalA, canonicalB)
 }
 
 func (h *Host) activate(sess *session) error {

@@ -49,7 +49,7 @@ func main() {
 		ID:             "demo.quota.limit",
 		Priority:       100,
 		Descriptor: mustJSON(extpoint.HookDescriptor{
-			Title: "配额限流", Point: extpoint.PointInvoke, Phase: extpoint.PhaseBefore,
+			Title: "配额限流（before，可否决）", Point: extpoint.PointInvoke, Phase: extpoint.PhaseBefore,
 		}),
 		Handlers: map[string]sdk.Handler{"run": q.limit},
 	})
@@ -59,7 +59,7 @@ func main() {
 		ID:             "demo.quota.meter",
 		Priority:       50,
 		Descriptor: mustJSON(extpoint.HookDescriptor{
-			Title: "配额计量", Point: extpoint.PointInvoke, Phase: extpoint.PhaseAfter,
+			Title: "配额计量（after，只观察）", Point: extpoint.PointInvoke, Phase: extpoint.PhaseAfter,
 		}),
 		Handlers: map[string]sdk.Handler{"run": q.meter},
 	})
@@ -67,7 +67,7 @@ func main() {
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage,
 		ID:             "demo.quota",
-		Descriptor:     []byte(`{"title":"配额查询","subcommands":[{"name":"usage","description":"查询计量"}]}`),
+		Descriptor:     []byte(`{"title":"配额查询","subcommands":[{"name":"usage","description":"查询各能力的调用计量"}]}`),
 		Handlers:       map[string]sdk.Handler{"usage": q.usage},
 	})
 

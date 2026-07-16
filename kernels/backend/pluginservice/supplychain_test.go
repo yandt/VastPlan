@@ -51,6 +51,33 @@ func TestAttestation_SignVerifyRotateAndRevoke(t *testing.T) {
 	}
 }
 
+func TestAttestation_ExpiredKeyCannotBackdateNewArtifact(t *testing.T) {
+	_, artifact := testArtifact(t)
+	publicKey, privateKey, _ := ed25519.GenerateKey(nil)
+	now := time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
+	notAfter := now.Add(-time.Hour)
+	trust, err := NewTrustStore(TrustDocumentForPublicKeys(TrustKey{
+		Publisher: "example", KeyID: "expired", PublicKey: base64.StdEncoding.EncodeToString(publicKey), NotAfter: &notAfter,
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	backdated, err := SignArtifact(artifact, "example", "expired", privateKey, notAfter.Add(-time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := trust.verifyAt(backdated, now); err == nil {
+		t.Fatal("已过期私钥不得通过回填 signedAt 恢复签署权限")
+	}
+	future, err := SignArtifact(artifact, "example", "expired", privateKey, now.Add(maximumSigningClockSkew+time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := trust.verifyAt(future, now); err == nil {
+		t.Fatal("未来签署时间超过时钟偏差必须拒绝")
+	}
+}
+
 func TestSignedRepository_RequiresAttestationAndKeepsItImmutable(t *testing.T) {
 	packageBytes, artifact := testArtifact(t)
 	publicKey, privateKey, _ := ed25519.GenerateKey(nil)

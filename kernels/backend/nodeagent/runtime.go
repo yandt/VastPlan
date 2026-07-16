@@ -94,7 +94,11 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	}()
 	processes := make([]*protocolbus.PluginProcess, 0, len(unit.Plugins))
 	for _, plugin := range unit.Plugins {
-		process, err := candidate.Launch(ctx, plugin.EntryPath)
+		process, err := candidate.LaunchWithPolicy(ctx, plugin.EntryPath, protocolbus.LaunchPolicy{
+			PluginID: plugin.ID, Version: plugin.Version,
+			Contributions:  plugin.Contract.Contributions,
+			KernelServices: plugin.Contract.KernelServices,
+		})
 		if err != nil {
 			return fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)
 		}

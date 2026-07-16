@@ -54,6 +54,21 @@ const (
 // HostService 内核自身提供的能力实现（插件经 HostCall 回调它）。
 type HostService func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error)
 
+// LaunchPolicy 把已验证制品身份和签名清单授权绑定到一次插件启动。
+type LaunchPolicy struct {
+	PluginID             string
+	Version              string
+	Contributions        []pluginv1.RuntimeContribution
+	KernelServices       []string
+	EnvironmentAllowlist []string
+}
+
+type launchAttempt struct {
+	result  chan launchResult
+	policy  LaunchPolicy
+	claimed bool
+}
+
 // MigrationOperation 是插件私有状态 copy-on-write 事务的三个可回滚阶段。
 type MigrationOperation string
 
@@ -139,6 +154,8 @@ type Host struct {
 	CallTimeout      time.Duration
 	HeartbeatEvery   time.Duration
 	HeartbeatTimeout time.Duration
+	// PluginEnvironmentAllowlist 是显式允许传给子进程的宿主环境变量名；默认空。
+	PluginEnvironmentAllowlist []string
 	// Limits 控制 payload、metadata、并发、pending 队列、默认 deadline 与 drain。
 	// 零值字段使用 protocollimit 的统一安全默认，不能通过零值关闭保护。
 	Limits protocollimit.Limits
@@ -152,7 +169,7 @@ type Host struct {
 	mu       sync.RWMutex
 	sessions map[string]*session // sessionID → session
 	byPlugin map[string]*session // pluginID  → session
-	launches map[string]chan launchResult
+	launches map[string]*launchAttempt
 	services map[string]HostService // 内核自身能力：capability → 实现
 
 	stopped atomic.Bool
@@ -184,7 +201,7 @@ func NewHost(kernelName, kernelVersion string, r *registry.Registry, logf func(s
 		Observer:      observability.New(nil, nil),
 		sessions:      map[string]*session{},
 		byPlugin:      map[string]*session{},
-		launches:      map[string]chan launchResult{},
+		launches:      map[string]*launchAttempt{},
 		services:      map[string]HostService{},
 		drainDone:     make(chan struct{}),
 		Limits:        protocollimit.Default(),

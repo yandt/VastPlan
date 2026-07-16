@@ -22,6 +22,8 @@ import (
 
 const attestationSchemaVersion = "v1"
 
+const maximumSigningClockSkew = 5 * time.Minute
+
 // Attestation 把发布者身份绑定到不可变制品元数据。签名覆盖除 Signature 外的全部字段，
 // 因而 ref、摘要、大小、对象名、清单和签署时间中任何一项被改写都会验证失败。
 type Attestation struct {
@@ -113,6 +115,10 @@ func LoadTrustStore(filename string) (*TrustStore, error) {
 
 // Verify 先确认清单发布者，再验证密钥状态、签署时刻和 Ed25519 签名。
 func (s *TrustStore) Verify(attestation Attestation) error {
+	return s.verifyAt(attestation, time.Now().UTC())
+}
+
+func (s *TrustStore) verifyAt(attestation Attestation, now time.Time) error {
 	if s == nil {
 		return errors.New("制品信任根未配置")
 	}
@@ -121,6 +127,9 @@ func (s *TrustStore) Verify(attestation Attestation) error {
 	}
 	if attestation.SignedAt.IsZero() || attestation.SignedAt.Location() != time.UTC {
 		return errors.New("制品证明 signedAt 必须是 UTC 时间")
+	}
+	if attestation.SignedAt.After(now.Add(maximumSigningClockSkew)) {
+		return errors.New("制品证明 signedAt 晚于可信时钟允许范围")
 	}
 	manifest, err := pluginv1.ParseManifest(attestation.Artifact.Manifest)
 	if err != nil {
@@ -137,6 +146,14 @@ func (s *TrustStore) Verify(attestation Attestation) error {
 	meta := s.meta[id]
 	if meta.Revoked {
 		return fmt.Errorf("发布者密钥已撤销: %s/%s", attestation.Publisher, attestation.KeyID)
+	}
+	// 没有可信时间戳服务时，不能用签名者自报的历史时间证明“当时有效”。因此
+	// NotBefore/NotAfter 同时约束当前验签时刻；过期密钥签署的历史制品须先重签。
+	if meta.NotBefore != nil && now.Before(*meta.NotBefore) {
+		return errors.New("发布者密钥尚未生效")
+	}
+	if meta.NotAfter != nil && now.After(*meta.NotAfter) {
+		return errors.New("发布者密钥已经失效；无可信时间戳时不得接受历史签名")
 	}
 	if meta.NotBefore != nil && attestation.SignedAt.Before(*meta.NotBefore) {
 		return errors.New("制品签署时间早于密钥生效时间")

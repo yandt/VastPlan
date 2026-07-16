@@ -32,7 +32,7 @@ func main() {
 		ExtensionPoint: extpoint.PermissionChecker,
 		ID:             "demo.denylist",
 		Priority:       100, // 高优先级：先于基线策略被问
-		Descriptor:     mustJSON(extpoint.CheckerDescriptor{Title: "拒绝名单（高优先级）"}),
+		Descriptor:     mustJSON(extpoint.CheckerDescriptor{Title: "拒绝名单（高优先级）", Applies: &extpoint.Applies{}}),
 		Handlers:       map[string]sdk.Handler{"check": denylist},
 	})
 
@@ -40,7 +40,7 @@ func main() {
 		ExtensionPoint: extpoint.PermissionChecker,
 		ID:             "demo.baseline",
 		Priority:       10, // 低优先级：仅当上面弃权才被问
-		Descriptor:     mustJSON(extpoint.CheckerDescriptor{Title: "基线策略（低优先级）"}),
+		Descriptor:     mustJSON(extpoint.CheckerDescriptor{Title: "基线策略（低优先级）", Applies: &extpoint.Applies{}}),
 		Handlers:       map[string]sdk.Handler{"check": baseline},
 	})
 

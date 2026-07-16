@@ -19,6 +19,7 @@ type session struct {
 	id            string
 	pluginID      string
 	pluginVersion string
+	policy        LaunchPolicy
 	launchToken   string // 关联到发起它的那次 Launch
 	cmdMu         sync.Mutex
 	cmd           *exec.Cmd
