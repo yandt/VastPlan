@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
@@ -23,10 +25,18 @@ func main() {
 	backendBin := flag.String("backend-bin", "", "写入清单 entry.backend 的已构建可执行文件")
 	out := flag.String("out", "", "可选：输出 .tar.gz 文件")
 	repositoryRoot := flag.String("repository", "", "可选：直接发布到本地制品仓库")
+	remoteRepository := flag.String("remote-repository", "", "可选：发布到 HTTPS 远端制品仓库")
+	remoteToken := flag.String("remote-token", "", "远端仓库发布令牌；建议通过环境注入")
+	trustFile := flag.String("trust", "", "远端仓库发布者信任文档")
+	signKey := flag.String("sign-key", "", "Ed25519 PKCS#8 PEM 发布私钥")
+	keyID := flag.String("key-id", "", "发布密钥 ID")
 	channel := flag.String("channel", "stable", "发布 channel")
 	flag.Parse()
-	if *source == "" || (*out == "" && *repositoryRoot == "") {
-		fmt.Fprintln(os.Stderr, "用法: go run ./tools/pluginpackage -source <插件目录> [-backend-bin <二进制>] [-out <制品.tar.gz>] [-repository <仓库>]")
+	if *remoteToken == "" {
+		*remoteToken = os.Getenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN")
+	}
+	if *source == "" || (*out == "" && *repositoryRoot == "" && *remoteRepository == "") {
+		fmt.Fprintln(os.Stderr, "用法: go run ./tools/pluginpackage -source <插件目录> [-backend-bin <二进制>] [-out <制品.tar.gz>] [-repository <仓库>] [-remote-repository <HTTPS URL> -trust <trust.json> -sign-key <key.pem> -key-id <id>]")
 		os.Exit(2)
 	}
 
@@ -68,6 +78,36 @@ func main() {
 			os.Exit(1)
 		}
 		fmt.Printf("已发布: %s@%s/%s (%s)\n", artifact.PluginID, artifact.Version, artifact.Channel, artifact.Object)
+	}
+	if *remoteRepository != "" {
+		if *trustFile == "" || *signKey == "" || *keyID == "" || *remoteToken == "" {
+			fatalf("远端发布必须配置 -trust、-sign-key、-key-id 和发布令牌")
+		}
+		artifact, err := pluginservice.Describe(*channel, packageBytes)
+		if err != nil {
+			fatalf("生成制品元数据失败: %v", err)
+		}
+		privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(*signKey)
+		if err != nil {
+			fatalf("加载发布私钥失败: %v", err)
+		}
+		trust, err := pluginservice.LoadTrustStore(*trustFile)
+		if err != nil {
+			fatalf("加载信任文档失败: %v", err)
+		}
+		attestation, err := pluginservice.SignArtifact(artifact, manifest.Publisher, *keyID, privateKey, time.Now().UTC())
+		if err != nil {
+			fatalf("签署制品失败: %v", err)
+		}
+		remote := &pluginservice.RemoteRepository{
+			BaseURL: *remoteRepository, Token: *remoteToken, Trust: trust,
+		}
+		published, err := remote.PublishRemote(context.Background(), attestation, packageBytes)
+		if err != nil {
+			fatalf("远端发布失败: %v", err)
+		}
+		fmt.Printf("已签名并发布到远端: %s@%s/%s publisher=%s keyId=%s sha256=%s\n",
+			published.PluginID, published.Version, published.Channel, manifest.Publisher, *keyID, published.SHA256)
 	}
 }
 

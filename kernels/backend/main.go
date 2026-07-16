@@ -11,11 +11,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -164,6 +167,10 @@ func runReconcile(args []string) (runErr error) {
 	flags := flag.NewFlagSet("reconcile", flag.ContinueOnError)
 	desiredPath := flags.String("desired", "", "本地 DesiredState v1 JSON 文件")
 	repositoryRoot := flags.String("repository", ".vastplan/repository", "本地插件制品仓库")
+	repositoryURL := flags.String("repository-url", "", "HTTPS 远端签名制品仓库；设置后替代本地仓库")
+	repositoryTrust := flags.String("repository-trust", "", "远端制品发布者信任文档")
+	repositoryToken := flags.String("repository-token", "", "远端制品读令牌；默认读取 VASTPLAN_ARTIFACT_READ_TOKEN")
+	repositoryCA := flags.String("repository-ca", "", "远端制品仓库自定义 CA PEM")
 	runtimeRoot := flags.String("runtime-root", ".vastplan/runtime/plugins", "内容寻址安装目录")
 	actualPath := flags.String("actual-state", ".vastplan/runtime/actual-state.json", "实际态报告文件")
 	lockPath := flags.String("lock", "", "单实例锁文件；默认 <actual-state>.lock")
@@ -201,9 +208,34 @@ func runReconcile(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
-	repository, err := pluginservice.NewRepository(*repositoryRoot)
-	if err != nil {
-		return err
+	var repository nodeagent.ArtifactRepository
+	if *repositoryURL == "" {
+		localRepository, createErr := pluginservice.NewRepository(*repositoryRoot)
+		if createErr != nil {
+			return createErr
+		}
+		repository = localRepository
+	} else {
+		if *repositoryTrust == "" {
+			return errors.New("远端制品仓库必须配置 -repository-trust")
+		}
+		trust, loadErr := pluginservice.LoadTrustStore(*repositoryTrust)
+		if loadErr != nil {
+			return loadErr
+		}
+		if *repositoryToken == "" {
+			*repositoryToken = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
+		}
+		if *repositoryToken == "" {
+			return errors.New("远端制品仓库必须配置读令牌")
+		}
+		httpClient, clientErr := artifactHTTPClient(*repositoryCA)
+		if clientErr != nil {
+			return clientErr
+		}
+		repository = &pluginservice.RemoteRepository{
+			BaseURL: *repositoryURL, Token: *repositoryToken, Trust: trust, Client: httpClient,
+		}
 	}
 	logf := func(format string, values ...any) { log.Printf("[node-agent] "+format, values...) }
 	var source nodeagent.DesiredStateSource = nodeagent.FileSource{Path: *desiredPath}
@@ -330,6 +362,25 @@ func runReconcile(args []string) (runErr error) {
 		}
 	}
 	return err
+}
+
+func artifactHTTPClient(caFile string) (*http.Client, error) {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	if caFile != "" {
+		raw, err := os.ReadFile(caFile)
+		if err != nil {
+			return nil, fmt.Errorf("读取远端制品仓库 CA: %w", err)
+		}
+		roots, err := x509.SystemCertPool()
+		if err != nil || roots == nil {
+			roots = x509.NewCertPool()
+		}
+		if !roots.AppendCertsFromPEM(raw) {
+			return nil, errors.New("远端制品仓库 CA PEM 不包含有效证书")
+		}
+		transport.TLSClientConfig = &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}
+	}
+	return &http.Client{Transport: transport, Timeout: 5 * time.Minute}, nil
 }
 
 func parseLabels(raw string) (map[string]string, error) {

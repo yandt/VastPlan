@@ -1,8 +1,6 @@
 package nodeagent
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -91,9 +89,12 @@ func testPackage(t *testing.T, mode os.FileMode) ([]byte, pluginservice.Artifact
 	if err != nil {
 		t.Fatal(err)
 	}
-	digest := sha256.Sum256(packageBytes)
-	return packageBytes, pluginservice.Artifact{
-		SchemaVersion: "v1", PluginID: parsed.ID, Version: parsed.Version, Channel: "stable",
-		SHA256: hex.EncodeToString(digest[:]), Size: int64(len(packageBytes)), Manifest: manifest,
+	artifact, err := pluginservice.Describe("stable", packageBytes)
+	if err != nil {
+		t.Fatal(err)
 	}
+	if artifact.PluginID != parsed.ID {
+		t.Fatal("制品描述与已解析清单不一致")
+	}
+	return packageBytes, artifact
 }

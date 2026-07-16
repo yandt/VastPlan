@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 )
@@ -55,6 +56,7 @@ type Artifact struct {
 // 调用方必须通过 Publish/Read 而非拼接路径访问，才能保留 SHA-256 fail-closed 语义。
 type Repository struct {
 	root string
+	mu   sync.Mutex // 单进程发布串行化，保证索引检查与不可变写入不可交错。
 }
 
 // NewRepository 创建本地仓库句柄。目录延迟到首次发布时才创建，方便只读调用方
@@ -147,6 +149,18 @@ func PackageDirectory(dir string) ([]byte, pluginv1.Manifest, error) {
 // Publish 校验并不可变地保存一个插件包。相同 ref 仅允许幂等重传完全相同的字节；
 // 任何不同 SHA 都会被拒绝，防止版本标签被悄悄改指向另一份代码。
 func (r *Repository) Publish(channel string, packageBytes []byte) (Artifact, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	artifact, err := Describe(channel, packageBytes)
+	if err != nil {
+		return Artifact{}, err
+	}
+	return r.publishArtifact(artifact, packageBytes)
+}
+
+// Describe 只根据待发布字节生成确定性的制品元数据，不产生存储副作用。
+// 供应链签名必须先得到这份精确元数据再签名，不能签一个会被服务端重新解释的版本标签。
+func Describe(channel string, packageBytes []byte) (Artifact, error) {
 	if !channelPattern.MatchString(channel) {
 		return Artifact{}, fmt.Errorf("非法发布 channel %q", channel)
 	}
@@ -178,7 +192,18 @@ func (r *Repository) Publish(channel string, packageBytes []byte) (Artifact, err
 		return Artifact{}, err
 	}
 
-	dir, err := r.artifactDir(Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: channel})
+	return artifact, nil
+}
+
+func (r *Repository) publishArtifact(artifact Artifact, packageBytes []byte) (Artifact, error) {
+	if err := ValidateArtifact(artifact, packageBytes); err != nil {
+		return Artifact{}, err
+	}
+	metadata, err := json.Marshal(artifact)
+	if err != nil {
+		return Artifact{}, fmt.Errorf("序列化制品元数据: %w", err)
+	}
+	dir, err := r.artifactDir(Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
 	if err != nil {
 		return Artifact{}, err
 	}
@@ -189,7 +214,7 @@ func (r *Repository) Publish(channel string, packageBytes []byte) (Artifact, err
 	if existing, err := readArtifact(indexPath); err == nil {
 		if existing.SHA256 != artifact.SHA256 {
 			return Artifact{}, fmt.Errorf("制品 %s@%s/%s 已存在且 SHA-256 不同，版本不可变",
-				artifact.PluginID, artifact.Version, channel)
+				artifact.PluginID, artifact.Version, artifact.Channel)
 		}
 		return existing, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
@@ -224,21 +249,37 @@ func (r *Repository) Read(ref Ref) (Artifact, []byte, error) {
 	if err != nil {
 		return Artifact{}, nil, fmt.Errorf("读取制品对象: %w", err)
 	}
+	if err := ValidateArtifact(artifact, packageBytes); err != nil {
+		return Artifact{}, nil, err
+	}
+	return artifact, packageBytes, nil
+}
+
+// ValidateArtifact 对任意来源的制品执行与本地仓库 Read 相同的 fail-closed 校验。
+// 远端客户端下载后必须调用它，不能因为 HTTPS 或签名正确就跳过内容和清单绑定检查。
+func ValidateArtifact(artifact Artifact, packageBytes []byte) error {
+	metadata, err := json.Marshal(artifact)
+	if err != nil {
+		return fmt.Errorf("序列化制品元数据: %w", err)
+	}
+	if err := pluginv1.ValidateArtifactMetadata(metadata); err != nil {
+		return err
+	}
 	digest := sha256.Sum256(packageBytes)
 	if actual := hex.EncodeToString(digest[:]); actual != artifact.SHA256 {
-		return Artifact{}, nil, fmt.Errorf("制品 SHA-256 不匹配：期望 %s，实际 %s", artifact.SHA256, actual)
+		return fmt.Errorf("制品 SHA-256 不匹配：期望 %s，实际 %s", artifact.SHA256, actual)
 	}
 	if int64(len(packageBytes)) != artifact.Size {
-		return Artifact{}, nil, fmt.Errorf("制品大小不匹配：期望 %d，实际 %d", artifact.Size, len(packageBytes))
+		return fmt.Errorf("制品大小不匹配：期望 %d，实际 %d", artifact.Size, len(packageBytes))
 	}
 	manifest, manifestRaw, err := inspectPackage(packageBytes)
 	if err != nil {
-		return Artifact{}, nil, fmt.Errorf("制品包内容无效: %w", err)
+		return fmt.Errorf("制品包内容无效: %w", err)
 	}
 	if manifest.ID != artifact.PluginID || manifest.Version != artifact.Version || !sameJSON(manifestRaw, artifact.Manifest) {
-		return Artifact{}, nil, errors.New("制品清单与索引绑定不一致")
+		return errors.New("制品清单与索引绑定不一致")
 	}
-	return artifact, packageBytes, nil
+	return nil
 }
 
 func (r *Repository) artifactDir(ref Ref) (string, error) {

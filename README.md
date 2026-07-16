@@ -22,14 +22,14 @@
   **有序 Hook 分发**（before 可否决、after 只观察）
 - `sdk/go/plugin` 插件 SDK（插件只写贡献 + 处理器）
 - `kernels/backend` 后端内核骨架
-- `kernels/backend/pluginservice` 本地制品仓库：gzip tar 包、不可变版本索引、SHA-256 读取复核
+- `kernels/backend/pluginservice` 本地及远端制品仓库：不可变索引、SHA-256、Ed25519 发布者证明、HTTPS 双重校验
 - `shared/go/controlplane` NATS KV bucket、CAS 发布、节点/capability 租约；`shared/go/addressing` 本地直调与远端 NATS request-reply
 - `kernels/backend/nodeagent` 自动装配：KV watch、内容寻址安装、真实健康与崩溃恢复、DRAIN、实际态复制、幂等与回滚
 - `kernels/backend/deploymentcontroller` 多节点调度：rendezvous hashing、标签放置、持久 assignment generation 与节点漂移恢复
 - `plugins/` 四个第一方插件：hello-world（工具）、demo-permission（select 演示）、
   demo-audit（fanout 演示）、demo-quota（Hook 的配额限流与计量演示）
 
-尚未实现（见文档待决）：远端制品服务/签名、NATS TLS 与细粒度账号权限、资源/亲和调度、流式 RPC、持久事件、frontend/runner/mobile 内核。
+尚未实现（见文档待决）：NATS TLS 与细粒度账号权限、资源/亲和调度、流式 RPC、持久事件、frontend/runner/mobile 内核。
 
 ## 快速开始
 
