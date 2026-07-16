@@ -13,25 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/internal/soakreport"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/observability"
 )
-
-type soakReport struct {
-	Commit                   string  `json:"commit"`
-	RequestedDurationSeconds float64 `json:"requested_duration_seconds"`
-	ElapsedDurationSeconds   float64 `json:"elapsed_duration_seconds"`
-	Duration                 string  `json:"duration"`
-	Calls                    uint64  `json:"calls"`
-	Restarts                 uint64  `json:"restarts"`
-	MaxSessionPending        int     `json:"max_session_pending"`
-	BaselineGoroutines       int     `json:"baseline_goroutines"`
-	FinalGoroutines          int     `json:"final_goroutines"`
-	MaxGoroutines            int     `json:"max_goroutines"`
-	BaselineFDs              int     `json:"baseline_fds"`
-	FinalFDs                 int     `json:"final_fds"`
-	MaxFDs                   int     `json:"max_fds"`
-}
 
 func TestBackendKernelSoak(t *testing.T) {
 	duration := 24 * time.Hour
@@ -99,7 +84,7 @@ func TestBackendKernelSoak(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 	runtime.GC()
 	elapsed := time.Since(started)
-	report := soakReport{
+	report := soakreport.Report{
 		Commit: os.Getenv("VASTPLAN_SOAK_COMMIT"), RequestedDurationSeconds: duration.Seconds(),
 		ElapsedDurationSeconds: elapsed.Seconds(), Duration: elapsed.String(), Calls: calls, Restarts: restarts,
 		MaxSessionPending: maxPending, BaselineGoroutines: baselineG, FinalGoroutines: runtime.NumGoroutine(),

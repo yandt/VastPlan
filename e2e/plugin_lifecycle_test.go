@@ -183,7 +183,7 @@ func TestPluginMigrationLifecycle_ThreePhaseAndMissingHandlerFailClosed(t *testi
 	if err != nil {
 		t.Fatalf("迁移夹具接入失败: %v", err)
 	}
-	request := protocolbus.MigrationRequest{
+	request := protocolbus.MigrationCommand{
 		TransactionID: "migration-e2e-1",
 		From:          protocolbus.StateIdentity{Format: "com.example.state", FormatVersion: 1},
 		To:            protocolbus.StateIdentity{Format: "com.example.state", FormatVersion: 2},

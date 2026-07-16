@@ -70,16 +70,10 @@ type Placement struct {
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
-type ResourceList struct {
-	CPUMillis   int64 `json:"cpu_millis,omitempty"`
-	MemoryBytes int64 `json:"memory_bytes,omitempty"`
-	GPU         int64 `json:"gpu,omitempty"`
-}
-
-// ResourceRequirements 是控制器已决策后的资源占用凭据，不授权 Node Agent 改变落点。
-type ResourceRequirements struct {
-	Requests ResourceList `json:"requests,omitempty"`
-}
+// ResourceList 和 ResourceRequirements 是 common/v1 稳定 DTO 的兼容别名。
+// v1 中它们表示控制器已决策的占用凭据，不授权 Node Agent 改变落点。
+type ResourceList = commonv1.ResourceList
+type ResourceRequirements = commonv1.ResourceRequirements
 
 func schema() (*jsonschema.Schema, error) {
 	compileOnce.Do(func() {

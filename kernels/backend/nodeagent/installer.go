@@ -197,14 +197,12 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, entry string) (In
 	if manifest.State != nil && manifest.State.Backend != nil {
 		state := manifest.State.Backend
 		installed.State = &PluginStateContract{
-			PluginStateIdentity: PluginStateIdentity{Format: state.Format, FormatVersion: state.FormatVersion},
+			PluginStateIdentity: pluginStateIdentity(state.StateIdentity),
 		}
 		if state.Migration != nil {
 			installed.State.MigrationProtocol = state.Migration.Protocol
 			for _, from := range state.Migration.From {
-				installed.State.MigrationFrom = append(installed.State.MigrationFrom, PluginStateIdentity{
-					Format: from.Format, FormatVersion: from.FormatVersion,
-				})
+				installed.State.MigrationFrom = append(installed.State.MigrationFrom, pluginStateIdentity(from))
 			}
 		}
 	}

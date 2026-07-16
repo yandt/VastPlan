@@ -62,6 +62,14 @@ type PluginStateIdentity struct {
 	FormatVersion int32  `json:"format_version"`
 }
 
+func pluginStateIdentity(identity pluginv1.StateIdentity) PluginStateIdentity {
+	return PluginStateIdentity{Format: identity.Format, FormatVersion: identity.FormatVersion}
+}
+
+func (i PluginStateIdentity) contractIdentity() pluginv1.StateIdentity {
+	return pluginv1.StateIdentity{Format: i.Format, FormatVersion: i.FormatVersion}
+}
+
 // PluginStateContract 随已安装制品持久化，使下一次升级无需重新信任外部清单。
 type PluginStateContract struct {
 	PluginStateIdentity

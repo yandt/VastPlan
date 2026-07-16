@@ -51,16 +51,9 @@ type ServiceUnit struct {
 	Placement   Placement                `json:"placement,omitempty"`
 }
 
-// ResourceList 使用规范化整数，避免不同组件对 "500m"、"2Gi" 等文本单位产生歧义。
-type ResourceList struct {
-	CPUMillis   int64 `json:"cpu_millis,omitempty"`
-	MemoryBytes int64 `json:"memory_bytes,omitempty"`
-	GPU         int64 `json:"gpu,omitempty"`
-}
-
-type ResourceRequirements struct {
-	Requests ResourceList `json:"requests,omitempty"`
-}
+// ResourceList 和 ResourceRequirements 是 common/v1 稳定 DTO 的兼容别名。
+type ResourceList = commonv1.ResourceList
+type ResourceRequirements = commonv1.ResourceRequirements
 
 type LabelTerm struct {
 	MatchLabels map[string]string `json:"match_labels"`

@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
@@ -50,16 +51,9 @@ const (
 	MigrationRollback MigrationPhase = "rollback"
 )
 
-type StateIdentity struct {
-	Format        string
-	FormatVersion int32
-}
+type StateIdentity = pluginv1.StateIdentity
 
-type MigrationRequest struct {
-	TransactionID string
-	From          StateIdentity
-	To            StateIdentity
-}
+type MigrationRequest = pluginv1.MigrationRequest
 
 // MigrationHandler 必须按 TransactionID 幂等。重复 PREPARE/COMMIT/ROLLBACK 不得
 // 产生额外副作用；返回错误会使候选启动失败并保留当前版本。

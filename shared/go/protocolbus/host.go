@@ -21,6 +21,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/observability"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
@@ -62,17 +63,18 @@ const (
 	MigrationRollback MigrationOperation = "rollback"
 )
 
-type StateIdentity struct {
-	Format        string
-	FormatVersion int32
-}
+type StateIdentity = pluginv1.StateIdentity
 
-type MigrationRequest struct {
+// MigrationCommand 是宿主发给候选插件的一次迁移阶段命令。
+type MigrationCommand struct {
 	Operation     MigrationOperation
 	TransactionID string
 	From          StateIdentity
 	To            StateIdentity
 }
+
+// MigrationRequest 保留为源代码兼容别名；新代码使用语义更准确的 MigrationCommand。
+type MigrationRequest = MigrationCommand
 
 // PluginProcess 宿主侧持有的一个已接入插件。
 type PluginProcess struct {

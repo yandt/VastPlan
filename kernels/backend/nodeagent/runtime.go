@@ -214,11 +214,11 @@ func prepareMigrations(ctx context.Context, host *protocolbus.Host, plans []Stat
 	return prepared, nil
 }
 
-func migrationRequest(plan StateMigrationPlan, operation protocolbus.MigrationOperation) protocolbus.MigrationRequest {
-	return protocolbus.MigrationRequest{
+func migrationRequest(plan StateMigrationPlan, operation protocolbus.MigrationOperation) protocolbus.MigrationCommand {
+	return protocolbus.MigrationCommand{
 		Operation: operation, TransactionID: plan.TransactionID,
-		From: protocolbus.StateIdentity{Format: plan.From.Format, FormatVersion: plan.From.FormatVersion},
-		To:   protocolbus.StateIdentity{Format: plan.To.Format, FormatVersion: plan.To.FormatVersion},
+		From: plan.From.contractIdentity(),
+		To:   plan.To.contractIdentity(),
 	}
 }
 

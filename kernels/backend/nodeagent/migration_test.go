@@ -1,6 +1,18 @@
 package nodeagent
 
-import "testing"
+import (
+	"testing"
+
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+)
+
+func TestPluginStateIdentityConversionPreservesSchemaIdentity(t *testing.T) {
+	contract := pluginv1.StateIdentity{Format: "com.example.state", FormatVersion: 2}
+	actualState := pluginStateIdentity(contract)
+	if got := actualState.contractIdentity(); got != contract {
+		t.Fatalf("状态身份转换漂移: got=%+v want=%+v", got, contract)
+	}
+}
 
 func statefulPlugin(id, version, format string, formatVersion int32, from ...PluginStateIdentity) InstalledPlugin {
 	return InstalledPlugin{

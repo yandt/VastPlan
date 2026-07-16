@@ -1,7 +1,7 @@
-// Package commonv1 登记多个 VastPlan JSON Schema 共用的标识符定义。
+// Package commonv1 登记多个 VastPlan JSON Schema 版本共用的稳定基础定义。
 //
-// 插件清单、制品索引和期望态都引用同一份 plugin ID、SemVer、channel 与相对路径规则，
-// 避免复制正则后各自漂移。
+// 插件清单、制品索引和期望态引用同一份标识规则；部署 v1/v2 共用同一份资源 DTO，
+// 避免正则或完全同义的 Go 结构在版本包之间漂移。
 package commonv1
 
 import (

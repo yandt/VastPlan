@@ -72,6 +72,13 @@ type StateIdentity struct {
 	FormatVersion int32  `json:"formatVersion"`
 }
 
+// MigrationRequest 是插件迁移处理器接收的稳定事务负载；阶段由生命周期操作单独表达。
+type MigrationRequest struct {
+	TransactionID string        `json:"transactionId"`
+	From          StateIdentity `json:"from"`
+	To            StateIdentity `json:"to"`
+}
+
 // BackendState 声明当前格式，以及新版本可通过 lifecycle.v1 从哪些旧格式迁移。
 // 首次引入持久状态时 Migration 可省略；一旦升级改变格式，Reconciler 会强制要求。
 type BackendState struct {
