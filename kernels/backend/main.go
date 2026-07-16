@@ -29,6 +29,8 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	artifactservercommand "cdsoft.com.cn/VastPlan/kernels/backend/commands/artifactserver"
+	controlplanecommand "cdsoft.com.cn/VastPlan/kernels/backend/commands/controlplane"
 	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/kernels/backend/kernelops"
 	"cdsoft.com.cn/VastPlan/kernels/backend/nodeagent"
@@ -81,13 +83,31 @@ func main() {
 			log.Fatalf("[node-agent] %v", err)
 		}
 		return
+	case "controlplane":
+		runProductionCommand("controlplane", func(ctx context.Context) error {
+			return controlplanecommand.Run(ctx, os.Args[2:], os.Stdout, os.Stderr)
+		})
+		return
+	case "artifact-server":
+		runProductionCommand("artifact-server", func(ctx context.Context) error {
+			return artifactservercommand.Run(ctx, os.Args[2:], os.Stderr)
+		})
+		return
 	}
 	runDemo(os.Args[1:])
 }
 
 func printUsage() {
 	name := filepath.Base(os.Args[0])
-	fmt.Fprintf(os.Stderr, "用法:\n  %s version [--json]\n  %s validate -kind <desired-v1|deployment-v2|actual-state> -file <配置.json>\n  %s support-bundle -actual-state <实际态.json> -output <支持包.tar.gz> [参数]\n  %s <插件可执行文件路径>...\n  %s reconcile -desired <期望态.json> [参数]\n  %s reconcile -nats-url <URL> -deployment <name> -node-id <id> [参数]\n", name, name, name, name, name, name)
+	fmt.Fprintf(os.Stderr, "用法:\n  %s version [--json]\n  %s validate -kind <desired-v1|deployment-v2|actual-state> -file <配置.json>\n  %s support-bundle -actual-state <实际态.json> -output <支持包.tar.gz> [参数]\n  %s <插件可执行文件路径>...\n  %s reconcile -desired <期望态.json> [参数]\n  %s reconcile -nats-url <URL> -deployment <name> -node-id <id> [参数]\n  %s controlplane [参数]\n  %s artifact-server [参数]\n", name, name, name, name, name, name, name, name)
+}
+
+func runProductionCommand(component string, run func(context.Context) error) {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx); err != nil && !errors.Is(err, flag.ErrHelp) && !errors.Is(err, context.Canceled) {
+		log.Fatalf("[%s] %v", component, err)
+	}
 }
 
 func runDemo(pluginBins []string) {

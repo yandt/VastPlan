@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 )
 
 func TestLocalInstaller_ContentAddressedAndIdempotent(t *testing.T) {
@@ -71,7 +72,7 @@ func TestLocalInstaller_GarbageCollectOnlyContentDirectories(t *testing.T) {
 	}
 }
 
-func testPackage(t *testing.T, mode os.FileMode) ([]byte, pluginservice.Artifact) {
+func testPackage(t *testing.T, mode os.FileMode) ([]byte, pluginv1.Artifact) {
 	t.Helper()
 	dir := t.TempDir()
 	manifest := []byte(`{

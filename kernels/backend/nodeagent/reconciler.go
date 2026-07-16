@@ -7,8 +7,8 @@ import (
 	"sort"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 )
 
 // Reconciler 把一份完整期望态收敛到当前节点。
@@ -400,7 +400,7 @@ func (r *Reconciler) Shutdown(ctx context.Context) error {
 func (r *Reconciler) prepare(unit deploymentv1.Unit) ([]InstalledPlugin, string, error) {
 	plugins := make([]InstalledPlugin, 0, len(unit.Plugins))
 	for _, ref := range unit.Plugins {
-		artifact, packageBytes, err := r.Repository.Read(pluginservice.Ref{PluginID: ref.ID, Version: ref.Version, Channel: ref.Channel})
+		artifact, packageBytes, err := r.Repository.Read(pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: ref.Channel})
 		if err != nil {
 			return nil, "download", fmt.Errorf("读取 %s@%s/%s: %w", ref.ID, ref.Version, ref.Channel, err)
 		}

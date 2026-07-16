@@ -15,7 +15,6 @@ import (
 	"regexp"
 	"strings"
 
-	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 )
 
@@ -28,7 +27,7 @@ type LocalInstaller struct {
 }
 
 // Install 复验字节摘要并以临时目录原子发布安装结果。
-func (i LocalInstaller) Install(artifact pluginservice.Artifact, packageBytes []byte) (InstalledPlugin, error) {
+func (i LocalInstaller) Install(artifact pluginv1.Artifact, packageBytes []byte) (InstalledPlugin, error) {
 	if strings.TrimSpace(i.Root) == "" {
 		return InstalledPlugin{}, errors.New("安装根目录不能为空")
 	}
@@ -171,7 +170,7 @@ func safeArchiveName(name string) (string, error) {
 	return clean, nil
 }
 
-func inspectInstalled(root string, artifact pluginservice.Artifact, entry string) (InstalledPlugin, error) {
+func inspectInstalled(root string, artifact pluginv1.Artifact, entry string) (InstalledPlugin, error) {
 	manifestRaw, err := os.ReadFile(filepath.Join(root, "vastplan.plugin.json"))
 	if err != nil {
 		return InstalledPlugin{}, err

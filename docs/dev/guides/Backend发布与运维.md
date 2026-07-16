@@ -123,7 +123,7 @@ canary 观察窗通过后再逐节点执行，不同时替换全部 Controller/N
 配置回滚必须发布备份快照本身，保留其原 revision；不要复制内容后沿用当前 revision。集群模式可使用控制面发布工具：
 
 ```bash
-go run ./tools/controlplane \
+go run ./kernels/backend controlplane \
   -nats-url tls://nats.example.com:4222 \
   -nats-ca /etc/vastplan/pki/ca.crt \
   -nats-cert /etc/vastplan/pki/controller.crt \

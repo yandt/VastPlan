@@ -70,3 +70,4 @@
 - [ADR-0037 Backend 可靠性与性能门禁](ADR-0037-Backend可靠性与性能门禁.md)
 - [ADR-0038 Backend 可复现发布与运维交付](ADR-0038-Backend可复现发布与运维交付.md)
 - [ADR-0039 Backend 能力调用环保护](ADR-0039-Backend能力调用环保护.md)
+- [ADR-0040 Backend 生产入口与包边界](ADR-0040-Backend生产入口与包边界.md)

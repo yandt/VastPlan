@@ -34,7 +34,7 @@ nats-server -c /secure/vastplan-nats/nats-server.conf
 ## 4. 初始化 Bucket
 
 ```bash
-go run ./tools/controlplane \
+go run ./kernels/backend controlplane \
   -nats-url tls://nats.example.com:4222 \
   -nats-ca /etc/vastplan/pki/ca.crt \
   -nats-cert /etc/vastplan/pki/bootstrap.crt \
@@ -51,7 +51,7 @@ bootstrap seed 只在初始化/迁移作业中挂载，常驻 controller 和 nod
 Controller 使用独立 `controller-N.seed`：
 
 ```bash
-go run ./tools/controlplane -controller \
+go run ./kernels/backend controlplane -controller \
   -nats-url tls://nats.example.com:4222 \
   -nats-ca /etc/vastplan/pki/ca.crt \
   -nats-cert /etc/vastplan/pki/controller-1.crt \

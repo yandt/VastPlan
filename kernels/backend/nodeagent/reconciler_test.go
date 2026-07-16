@@ -6,22 +6,22 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 )
 
 type fakeRepository struct{}
 
-func (fakeRepository) Read(ref pluginservice.Ref) (pluginservice.Artifact, []byte, error) {
+func (fakeRepository) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
 	if ref.Version == "9.9.9" {
-		return pluginservice.Artifact{}, nil, errors.New("制品不存在")
+		return pluginv1.Artifact{}, nil, errors.New("制品不存在")
 	}
-	return pluginservice.Artifact{PluginID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: ref.Version, Size: 1}, []byte{1}, nil
+	return pluginv1.Artifact{PluginID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: ref.Version, Size: 1}, []byte{1}, nil
 }
 
 type fakeInstaller struct{}
 
-func (fakeInstaller) Install(a pluginservice.Artifact, _ []byte) (InstalledPlugin, error) {
+func (fakeInstaller) Install(a pluginv1.Artifact, _ []byte) (InstalledPlugin, error) {
 	return InstalledPlugin{ID: a.PluginID, Version: a.Version, Channel: a.Channel, SHA256: a.SHA256, EntryPath: "/" + a.Version}, nil
 }
 
@@ -29,7 +29,7 @@ type statefulInstaller struct {
 	allowV2FromV1 bool
 }
 
-func (i statefulInstaller) Install(a pluginservice.Artifact, _ []byte) (InstalledPlugin, error) {
+func (i statefulInstaller) Install(a pluginv1.Artifact, _ []byte) (InstalledPlugin, error) {
 	plugin := InstalledPlugin{ID: a.PluginID, Version: a.Version, Channel: a.Channel, SHA256: a.SHA256, EntryPath: "/" + a.Version}
 	switch a.Version {
 	case "1.0.0":

@@ -19,6 +19,8 @@ grep -Fq '"kernel":"backend"' "$TMP/version.json"
 grep -Fq "\"version\":\"${version}\"" "$TMP/version.json"
 "$backend" validate -kind desired-v1 -file deploy/local.desired-state.json >/dev/null
 "$backend" validate -kind deployment-v2 -file deploy/cluster.deployment.json >/dev/null
+"$backend" controlplane -help >/dev/null 2>&1
+"$backend" artifact-server -help >/dev/null 2>&1
 
 go run ./tools/sbom -binary "$backend" -output "$TMP/first.cdx.json" -version "$version"
 go run ./tools/sbom -binary "$backend" -output "$TMP/second.cdx.json" -version "$version"

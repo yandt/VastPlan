@@ -62,7 +62,7 @@ go run ./tools/pluginpackage \
 
 # 2.3 本地开发集群模式（明文仅因显式 -nats-allow-insecure；生产见 NATS 安全指南）
 # 终端 A：发布 v2 并持续运行调度控制器
-go run ./tools/controlplane -nats-url nats://127.0.0.1:4222 -nats-allow-insecure -bootstrap \
+go run ./kernels/backend controlplane -nats-url nats://127.0.0.1:4222 -nats-allow-insecure -bootstrap \
   -desired deploy/cluster.deployment.json -controller
 
 # 终端 B/C：两个节点使用独立运行目录；同 capability 自动进入同一 queue group

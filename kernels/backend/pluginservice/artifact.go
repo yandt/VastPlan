@@ -32,25 +32,9 @@ const (
 
 var channelPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 
-// Ref 唯一定位一个已发布制品。插件 id + version + channel 三元组一经发布不可改写。
-type Ref struct {
-	PluginID string
-	Version  string
-	Channel  string
-}
-
-// Artifact 是存储在本地制品仓库索引中的可审计元数据。
-// Manifest 保存经 Schema 验证的原始声明，使期望态读取制品信息时无须解包执行任何代码。
-type Artifact struct {
-	SchemaVersion string          `json:"schemaVersion"`
-	PluginID      string          `json:"pluginId"`
-	Version       string          `json:"version"`
-	Channel       string          `json:"channel"`
-	SHA256        string          `json:"sha256"`
-	Size          int64           `json:"size"`
-	Object        string          `json:"object"`
-	Manifest      json.RawMessage `json:"manifest"`
-}
+// Ref 与 Artifact 保留为兼容别名；稳定 DTO 的单一真源在 schemas/plugin/v1。
+type Ref = pluginv1.ArtifactRef
+type Artifact = pluginv1.Artifact
 
 // Repository 是本地制品仓库。Root 由插件服务配置；其磁盘布局是实现细节，
 // 调用方必须通过 Publish/Read 而非拼接路径访问，才能保留 SHA-256 fail-closed 语义。
