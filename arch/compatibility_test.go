@@ -39,6 +39,7 @@ func TestCompatibility_BackendV1Matrix(t *testing.T) {
 		"capability.not_found", "hook.aborted", "hostcall.failed", "kernel.service_error",
 		"permission.denied", "plugin.handler_error", "plugin.inactive",
 		"remote.invalid_response", "remote.invoke_failed", "remote.stream_failed",
+		"resource.concurrency_limited", "resource.metadata_too_large", "resource.payload_too_large", "resource.queue_full",
 		"wire.invalid_request", "wire.target_mismatch",
 	})
 

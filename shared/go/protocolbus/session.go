@@ -1,6 +1,7 @@
 package protocolbus
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 	"sync"
@@ -9,6 +10,8 @@ import (
 
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
 )
+
+var errPendingQueueFull = errors.New("会话 pending 请求队列已满")
 
 // session 一个已接入插件的运行态：持有双向流，并把流上的消息按 request_id
 // 关联回各自的等待者（§2.3 四类消息多路复用于单连接）。
@@ -77,12 +80,15 @@ func (s *session) send(msg *pluginhostv1.FromHost) error {
 }
 
 // await 注册一个等待者并返回其接收通道；调用方须在用完后 release。
-func (s *session) await(requestID string) chan *pluginhostv1.FromPlugin {
+func (s *session) await(requestID string, maxPending int) (chan *pluginhostv1.FromPlugin, error) {
 	ch := make(chan *pluginhostv1.FromPlugin, 1)
 	s.pendingMu.Lock()
+	defer s.pendingMu.Unlock()
+	if len(s.pending) >= maxPending {
+		return nil, errPendingQueueFull
+	}
 	s.pending[requestID] = ch
-	s.pendingMu.Unlock()
-	return ch
+	return ch, nil
 }
 
 func (s *session) release(requestID string) {

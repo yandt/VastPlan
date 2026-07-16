@@ -64,3 +64,4 @@
 - [ADR-0031 Backend 内核 1.0 封板与工程门禁](ADR-0031-Backend内核1.0封板与工程门禁.md)
 - [ADR-0032 Backend 插件生命周期与实际态 v2](ADR-0032-Backend插件生命周期实际态v2.md)
 - [ADR-0033 Backend 插件状态迁移事务](ADR-0033-Backend插件状态迁移事务.md)
+- [ADR-0034 Backend 协议资源边界](ADR-0034-Backend协议资源边界.md)

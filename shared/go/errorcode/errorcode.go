@@ -16,6 +16,10 @@ const (
 	PermissionDenied   = "permission.denied"
 	PluginHandlerError = "plugin.handler_error"
 	PluginInactive     = "plugin.inactive"
+	PayloadTooLarge    = "resource.payload_too_large"
+	MetadataTooLarge   = "resource.metadata_too_large"
+	QueueFull          = "resource.queue_full"
+	ConcurrencyLimited = "resource.concurrency_limited"
 
 	// 传输层错误：表示请求没有得到可信的应用层 CallResult。
 	RemoteInvalidResponse = "remote.invalid_response"
@@ -35,6 +39,10 @@ var (
 		PermissionDenied:      {},
 		PluginHandlerError:    {},
 		PluginInactive:        {},
+		PayloadTooLarge:       {},
+		MetadataTooLarge:      {},
+		QueueFull:             {},
+		ConcurrencyLimited:    {},
 		RemoteInvalidResponse: {},
 		RemoteInvokeFailed:    {},
 		RemoteStreamFailed:    {},

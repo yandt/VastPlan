@@ -91,6 +91,12 @@ func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOption
 		return nil, fmt.Errorf("订阅远端 capability %s: %w", options.Capability, err)
 	}
 	registration.sub = sub
+	limits := r.Limits.Normalize()
+	if err := sub.SetPendingLimits(limits.MaxPendingRequests, limits.MaxPendingRequests*limits.MaxMessageBytes()); err != nil {
+		cancel()
+		_ = sub.Unsubscribe()
+		return nil, fmt.Errorf("配置 capability 有界 pending 队列: %w", err)
+	}
 	flushCtx, flushCancel := deadlineContext(ctx, 5*time.Second)
 	defer flushCancel()
 	if err := r.NC.FlushWithContext(flushCtx); err != nil {
@@ -199,6 +205,11 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 	if msg.Reply == "" {
 		return
 	}
+	limits := r.Limits.Normalize()
+	if len(msg.Data) > limits.MaxMessageBytes() {
+		r.respondTransportError(msg, errorcode.PayloadTooLarge, "请求信封超过协议消息上限", false, "")
+		return
+	}
 	var req addressingv1.InvokeRequest
 	if err := proto.Unmarshal(msg.Data, &req); err != nil {
 		r.respondTransportError(msg, errorcode.WireInvalidRequest, err.Error(), false, "")
@@ -208,14 +219,19 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 		r.respondTransportError(msg, errorcode.WireTargetMismatch, "请求 capability 与 subject 不一致", false, req.RequestId)
 		return
 	}
-	handlerCtx := r.ctx
-	var cancel context.CancelFunc
-	if req.Context != nil && req.Context.DeadlineUnixMs != nil {
-		handlerCtx, cancel = context.WithDeadline(handlerCtx, time.UnixMilli(*req.Context.DeadlineUnixMs))
-	} else if r.CallTimeout > 0 {
-		handlerCtx, cancel = context.WithTimeout(handlerCtx, r.CallTimeout)
-	} else {
-		handlerCtx, cancel = context.WithCancel(handlerCtx)
+	if !limits.PayloadAllowed(req.Payload) {
+		r.respondTransportError(msg, errorcode.PayloadTooLarge, "请求 payload 超过上限", false, req.RequestId)
+		return
+	}
+	if !limits.MetadataAllowed(proto.Size(req.Context)) {
+		r.respondTransportError(msg, errorcode.MetadataTooLarge, "请求 CallContext 超过 metadata 上限", false, req.RequestId)
+		return
+	}
+	handlerCtx, boundedCallCtx, cancel := r.boundedCallContext(r.ctx, req.Context)
+	if !r.enterHandlerCall() {
+		cancel()
+		r.respondTransportError(msg, errorcode.ConcurrencyLimited, "addressing handler 并发达到上限", true, req.RequestId)
+		return
 	}
 	r.mu.Lock()
 	r.inflight[req.RequestId] = cancel
@@ -229,8 +245,9 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 		r.mu.Lock()
 		delete(r.inflight, req.RequestId)
 		r.mu.Unlock()
+		r.leaveHandlerCall()
 	}()
-	result, payload, err := handler(handlerCtx, req.Target, req.Context, req.Payload)
+	result, payload, err := handler(handlerCtx, req.Target, boundedCallCtx, req.Payload)
 	response := &addressingv1.InvokeResponse{RequestId: req.RequestId, Result: result, Payload: payload}
 	if err != nil {
 		response.Result = nil
@@ -238,6 +255,10 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 		response.TransportError = &addressingv1.TransportError{Code: errorcode.RemoteInvokeFailed, Message: err.Error(), Retryable: true}
 	} else if result == nil {
 		response.TransportError = &addressingv1.TransportError{Code: errorcode.RemoteInvalidResponse, Message: "handler 未返回 CallResult"}
+	} else if !limits.PayloadAllowed(payload) {
+		response.Result = nil
+		response.Payload = nil
+		response.TransportError = &addressingv1.TransportError{Code: errorcode.PayloadTooLarge, Message: "handler 响应 payload 超过上限"}
 	}
 	raw, marshalErr := proto.Marshal(response)
 	if marshalErr != nil {

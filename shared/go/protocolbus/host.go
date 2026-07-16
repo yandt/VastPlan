@@ -23,6 +23,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
 	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
 
@@ -134,6 +135,9 @@ type Host struct {
 	CallTimeout      time.Duration
 	HeartbeatEvery   time.Duration
 	HeartbeatTimeout time.Duration
+	// Limits 控制 payload、metadata、并发、pending 队列、默认 deadline 与 drain。
+	// 零值字段使用 protocollimit 的统一安全默认，不能通过零值关闭保护。
+	Limits protocollimit.Limits
 
 	pluginhostv1.UnimplementedPluginHostServer
 
@@ -154,6 +158,9 @@ type Host struct {
 	inflight  int
 	drainDone chan struct{}
 	drainOnce sync.Once
+
+	callbackMu    sync.Mutex
+	callbackSlots chan struct{}
 }
 
 type launchResult struct {
@@ -175,8 +182,11 @@ func NewHost(kernelName, kernelVersion string, r *registry.Registry, logf func(s
 		launches:      map[string]chan launchResult{},
 		services:      map[string]HostService{},
 		drainDone:     make(chan struct{}),
+		Limits:        protocollimit.Default(),
 	}
 }
+
+func (h *Host) limits() protocollimit.Limits { return h.Limits.Normalize() }
 
 func (h *Host) launchTimeout() time.Duration {
 	if h.LaunchTimeout > 0 {
@@ -216,7 +226,16 @@ func (h *Host) Start() error {
 	}
 	h.lis = lis
 	h.addr = lis.Addr().String()
-	h.srv = grpc.NewServer()
+	limits := h.limits()
+	h.callbackMu.Lock()
+	h.callbackSlots = make(chan struct{}, limits.MaxConcurrentCalls)
+	h.callbackMu.Unlock()
+	h.srv = grpc.NewServer(
+		grpc.MaxRecvMsgSize(limits.MaxMessageBytes()),
+		grpc.MaxSendMsgSize(limits.MaxMessageBytes()),
+		grpc.MaxHeaderListSize(limits.MaxMetadataBytes),
+		grpc.MaxConcurrentStreams(uint32(limits.MaxConcurrentCalls)),
+	)
 	pluginhostv1.RegisterPluginHostServer(h.srv, h)
 
 	go func() {
@@ -234,7 +253,7 @@ func (h *Host) Addr() string { return h.addr }
 // Stop 停服并回收全部插件。
 func (h *Host) Stop() {
 	h.stopped.Store(true)
-	stopCtx, stopCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), h.limits().DrainTimeout)
 	_ = h.waitForInflight(stopCtx)
 	stopCancel()
 	h.mu.RLock()
@@ -258,6 +277,11 @@ func (h *Host) Stop() {
 // Drain 让全部插件停止接收新调用，并等待已经进入处理器的调用完成。
 // 调用方应先把新流量切到候选宿主，再 drain/stop 旧宿主。
 func (h *Host) Drain(ctx context.Context) error {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, h.limits().DrainTimeout)
+		defer cancel()
+	}
 	if err := h.waitForInflight(ctx); err != nil {
 		return fmt.Errorf("等待宿主在途调用完成: %w", err)
 	}

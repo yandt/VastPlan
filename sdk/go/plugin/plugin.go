@@ -16,15 +16,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/proto"
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/protocol"
+	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
 )
-
-// hostCallTimeout 插件回调宿主的等待上限——宿主无响应时处理器必须能脱身。
-const hostCallTimeout = 30 * time.Second
 
 // Host 是插件回调宿主的入口：取内核服务、或经 capability 寻址调别的能力（§2.4）。
 // 插件**不得**直接 import 别的插件，只能经它按能力名寻址（工程规范 §七）。
@@ -78,6 +77,8 @@ type Plugin struct {
 	Version string // SemVer，单一真源 = vastplan.plugin.json#version（ADR-0017 §1）
 	// Engines 清单 engines：{内核规范ID: SemVer 范围}。宿主据此校验自身版本（ADR-0017 §4）。
 	Engines map[string]string
+	// Limits 与宿主使用同一资源契约；零值字段自动采用统一安全默认。
+	Limits protocollimit.Limits
 
 	contribs []Contribution
 	routes   map[string]Handler // (extensionPoint, id, operation) → Handler
@@ -89,6 +90,7 @@ type Plugin struct {
 	// DRAIN 关门后再 Wait，保证不会发生 Wait 与后续 Add 竞态。
 	lifecycleMu sync.Mutex
 	active      bool
+	inflightN   int
 	inflight    sync.WaitGroup
 	sessionID   string
 	migration   MigrationHandler
@@ -96,6 +98,8 @@ type Plugin struct {
 	pendingMu sync.Mutex
 	pending   map[string]chan *pluginhostv1.FromHost
 	seq       atomic.Uint64
+	// shuttingDown 让宿主在收到异步 SHUTDOWN Ack 后关流时被识别为正常退出。
+	shuttingDown atomic.Bool
 }
 
 // OnMigration 登记插件私有状态迁移处理器。只有清单 state.backend 声明了
@@ -110,7 +114,7 @@ func New(id, version string, engines map[string]string) *Plugin {
 	}
 	return &Plugin{
 		ID: id, Version: version, Engines: engines,
-		routes:  map[string]Handler{},
+		Limits: protocollimit.Default(), routes: map[string]Handler{},
 		pending: map[string]chan *pluginhostv1.FromHost{},
 	}
 }
@@ -136,7 +140,15 @@ func (p *Plugin) Serve() error {
 		return fmt.Errorf("未注入宿主地址（%s）", protocol.HostAddrEnvKey)
 	}
 
-	conn, err := grpc.NewClient(hostAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	limits := p.Limits.Normalize()
+	conn, err := grpc.NewClient(hostAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithMaxHeaderListSize(limits.MaxMetadataBytes),
+		grpc.WithDefaultCallOptions(
+			grpc.MaxCallRecvMsgSize(limits.MaxMessageBytes()),
+			grpc.MaxCallSendMsgSize(limits.MaxMessageBytes()),
+		),
+	)
 	if err != nil {
 		return fmt.Errorf("回连宿主失败: %w", err)
 	}
@@ -204,9 +216,16 @@ func (p *Plugin) send(msg *pluginhostv1.FromPlugin) error {
 
 // readLoop 收宿主消息并分发；宿主断开或下发 SHUTDOWN 时返回。
 func (p *Plugin) readLoop() error {
+	lifecycleQueue := make(chan *pluginhostv1.Lifecycle, p.Limits.Normalize().MaxPendingRequests)
+	lifecycleDone := make(chan struct{})
+	defer close(lifecycleDone)
+	go p.lifecycleLoop(lifecycleQueue, lifecycleDone)
 	for {
 		msg, err := p.stream.Recv()
 		if err != nil {
+			if p.shuttingDown.Load() {
+				return nil
+			}
 			return err // 宿主断开 → 插件退出（内核内协议，宿主没了插件无意义）
 		}
 
@@ -216,10 +235,23 @@ func (p *Plugin) readLoop() error {
 				fmt.Fprintf(os.Stderr, "贡献 %s 被宿主拒绝: %s\n", id, why)
 			}
 		case *pluginhostv1.FromHost_Invoke:
-			go p.handleInvoke(m.Invoke) // 不阻塞读循环：慢处理器不得拖住心跳
+			if rejected := p.beginInvoke(m.Invoke); rejected != nil {
+				p.sendInvokeResponse(m.Invoke, rejected)
+				continue
+			}
+			go p.handleInvoke(m.Invoke) // 已占固定并发槽，不会形成无界 goroutine
 		case *pluginhostv1.FromHost_Lifecycle:
-			if shutdown := p.handleLifecycle(m.Lifecycle); shutdown {
-				return nil
+			if m.Lifecycle == nil {
+				fmt.Fprintln(os.Stderr, "忽略空生命周期消息")
+				continue
+			}
+			select {
+			case lifecycleQueue <- m.Lifecycle:
+			default:
+				message := "生命周期 pending 队列已满"
+				_ = p.send(&pluginhostv1.FromPlugin{Msg: &pluginhostv1.FromPlugin_LifecycleAck{
+					LifecycleAck: &pluginhostv1.LifecycleAck{RequestId: m.Lifecycle.RequestId, Ready: false, Message: &message},
+				}})
 			}
 		case *pluginhostv1.FromHost_Ping:
 			_ = p.send(&pluginhostv1.FromPlugin{
@@ -233,8 +265,29 @@ func (p *Plugin) readLoop() error {
 	}
 }
 
+// lifecycleLoop 串行执行生命周期操作但与 Recv 循环分离。这样迁移或 drain 等待期间
+// 仍能接收 Ping 与 HostCallResult，同时生命周期之间继续保持严格顺序。
+func (p *Plugin) lifecycleLoop(queue <-chan *pluginhostv1.Lifecycle, done <-chan struct{}) {
+	for {
+		select {
+		case lc := <-queue:
+			p.handleLifecycle(lc)
+		case <-done:
+			return
+		}
+	}
+}
+
 func (p *Plugin) handleInvoke(req *pluginhostv1.InvokeRequest) {
+	defer p.endInvoke()
 	resp := p.dispatchInvoke(req)
+	p.sendInvokeResponse(req, resp)
+}
+
+func (p *Plugin) sendInvokeResponse(req *pluginhostv1.InvokeRequest, resp *pluginhostv1.InvokeResponse) {
+	if req == nil {
+		return
+	}
 	resp.RequestId = req.RequestId
 	if err := p.send(&pluginhostv1.FromPlugin{
 		Msg: &pluginhostv1.FromPlugin_InvokeResult{InvokeResult: resp},
@@ -244,10 +297,18 @@ func (p *Plugin) handleInvoke(req *pluginhostv1.InvokeRequest) {
 }
 
 func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.InvokeResponse {
-	if !p.beginInvoke() {
-		return errResult(errorcode.PluginInactive, "插件未激活", false)
+	limits := p.Limits.Normalize()
+	if req == nil || req.Target == nil {
+		return errResult(errorcode.WireInvalidRequest, "调用请求不完整", false)
 	}
-	defer p.inflight.Done()
+	if !limits.PayloadAllowed(req.Payload) {
+		return errResult(errorcode.PayloadTooLarge,
+			fmt.Sprintf("payload 为 %d bytes，超过上限 %d bytes", len(req.Payload), limits.MaxPayloadBytes), false)
+	}
+	if !limits.MetadataAllowed(proto.Size(req.Context)) {
+		return errResult(errorcode.MetadataTooLarge,
+			fmt.Sprintf("CallContext 为 %d bytes，超过 metadata 上限 %d bytes", proto.Size(req.Context), limits.MaxMetadataBytes), false)
+	}
 	op := ""
 	if req.Target.Operation != nil {
 		op = *req.Target.Operation
@@ -262,34 +323,52 @@ func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.I
 	}
 
 	ctx := context.Background()
+	var cancel context.CancelFunc
 	if req.Context != nil && req.Context.DeadlineUnixMs != nil {
-		var cancel context.CancelFunc
 		ctx, cancel = context.WithDeadline(ctx, time.UnixMilli(*req.Context.DeadlineUnixMs))
-		defer cancel()
+	} else {
+		ctx, cancel = context.WithTimeout(ctx, limits.DefaultDeadline)
 	}
+	defer cancel()
 
 	res, payload, err := h(ctx, p, req.Context, req.Payload)
 	if err != nil {
 		// 应用层错误进 CallResult，不与传输层错误混淆（工程规范 §4.2）
 		return errResult(errorcode.PluginHandlerError, err.Error(), true)
 	}
+	if !limits.PayloadAllowed(payload) {
+		return errResult(errorcode.PayloadTooLarge,
+			fmt.Sprintf("响应 payload 为 %d bytes，超过上限 %d bytes", len(payload), limits.MaxPayloadBytes), false)
+	}
 	return &pluginhostv1.InvokeResponse{Result: res, Payload: payload}
 }
 
-func (p *Plugin) beginInvoke() bool {
+func (p *Plugin) beginInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.InvokeResponse {
 	p.lifecycleMu.Lock()
 	defer p.lifecycleMu.Unlock()
 	if !p.active {
-		return false
+		return errResult(errorcode.PluginInactive, "插件未激活", false)
 	}
+	if p.inflightN >= p.Limits.Normalize().MaxConcurrentCalls {
+		return errResult(errorcode.ConcurrencyLimited, "插件处理器并发达到上限", true)
+	}
+	p.inflightN++
 	p.inflight.Add(1)
-	return true
+	return nil
 }
 
-// handleLifecycle 处理生命周期指令；返回 true 表示应退出。
-func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) bool {
+func (p *Plugin) endInvoke() {
+	p.lifecycleMu.Lock()
+	if p.inflightN > 0 {
+		p.inflightN--
+	}
+	p.lifecycleMu.Unlock()
+	p.inflight.Done()
+}
+
+// handleLifecycle 在独立的串行 worker 中处理生命周期指令。
+func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) {
 	ack := &pluginhostv1.LifecycleAck{RequestId: lc.RequestId, Ready: true}
-	shutdown := false
 
 	switch lc.Op {
 	case pluginhostv1.Lifecycle_OP_ACTIVATE:
@@ -310,7 +389,7 @@ func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) bool {
 		p.active = false
 		p.lifecycleMu.Unlock()
 		p.inflight.Wait()
-		shutdown = true
+		p.shuttingDown.Store(true)
 	case pluginhostv1.Lifecycle_OP_MIGRATION_PREPARE,
 		pluginhostv1.Lifecycle_OP_MIGRATION_COMMIT,
 		pluginhostv1.Lifecycle_OP_MIGRATION_ROLLBACK:
@@ -339,7 +418,10 @@ func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) bool {
 			ack.Message = &msg
 			break
 		}
-		if err := p.migration(context.Background(), phase, request); err != nil {
+		migrationCtx, cancel := context.WithTimeout(context.Background(), p.Limits.Normalize().DefaultDeadline)
+		err = p.migration(migrationCtx, phase, request)
+		cancel()
+		if err != nil {
 			ack.Ready = false
 			msg := err.Error()
 			ack.Message = &msg
@@ -352,7 +434,6 @@ func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) bool {
 	_ = p.send(&pluginhostv1.FromPlugin{
 		Msg: &pluginhostv1.FromPlugin_LifecycleAck{LifecycleAck: ack},
 	})
-	return shutdown
 }
 
 func migrationPhase(op pluginhostv1.Lifecycle_Op) (MigrationPhase, error) {
@@ -371,11 +452,27 @@ func migrationPhase(op pluginhostv1.Lifecycle_Op) (MigrationPhase, error) {
 // Call 实现 Host：插件回调宿主（内核服务，或经 capability 寻址调别的插件）。
 func (p *Plugin) Call(ctx context.Context, target *contractv1.CallTarget,
 	callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+	limits := p.Limits.Normalize()
+	if target == nil || target.Capability == "" {
+		return nil, nil, errors.New("回调宿主的目标 capability 不能为空")
+	}
+	if !limits.PayloadAllowed(payload) {
+		return nil, nil, fmt.Errorf("回调宿主 payload 为 %d bytes，超过上限 %d bytes", len(payload), limits.MaxPayloadBytes)
+	}
+	if !limits.MetadataAllowed(proto.Size(callCtx)) {
+		return nil, nil, fmt.Errorf("回调宿主 CallContext 为 %d bytes，超过 metadata 上限 %d bytes", proto.Size(callCtx), limits.MaxMetadataBytes)
+	}
+	ctx, callCtx, cancel := pluginCallContext(ctx, callCtx, limits.DefaultDeadline)
+	defer cancel()
 
 	reqID := fmt.Sprintf("hc-%d", p.seq.Add(1))
 	ch := make(chan *pluginhostv1.FromHost, 1)
 
 	p.pendingMu.Lock()
+	if len(p.pending) >= limits.MaxPendingRequests {
+		p.pendingMu.Unlock()
+		return nil, nil, errors.New("回调宿主 pending 请求队列已满")
+	}
 	p.pending[reqID] = ch
 	p.pendingMu.Unlock()
 	defer func() {
@@ -397,12 +494,37 @@ func (p *Plugin) Call(ctx context.Context, target *contractv1.CallTarget,
 	select {
 	case msg := <-ch:
 		r := msg.GetHostCallResult()
+		if r == nil {
+			return nil, nil, errors.New("宿主回调响应为空")
+		}
+		if !limits.PayloadAllowed(r.Payload) {
+			return nil, nil, fmt.Errorf("宿主回调响应 payload 为 %d bytes，超过上限 %d bytes", len(r.Payload), limits.MaxPayloadBytes)
+		}
 		return r.Result, r.Payload, nil
-	case <-time.After(hostCallTimeout):
-		return nil, nil, fmt.Errorf("回调宿主超时（%v）", hostCallTimeout)
 	case <-ctx.Done():
 		return nil, nil, ctx.Err()
 	}
+}
+
+func pluginCallContext(ctx context.Context, callCtx *contractv1.CallContext, timeout time.Duration) (context.Context, *contractv1.CallContext, context.CancelFunc) {
+	deadline := time.Now().Add(timeout)
+	if callerDeadline, ok := ctx.Deadline(); ok && callerDeadline.Before(deadline) {
+		deadline = callerDeadline
+	}
+	if callCtx != nil && callCtx.DeadlineUnixMs != nil {
+		declared := time.UnixMilli(*callCtx.DeadlineUnixMs)
+		if declared.Before(deadline) {
+			deadline = declared
+		}
+	}
+	bounded := &contractv1.CallContext{}
+	if callCtx != nil {
+		bounded = proto.Clone(callCtx).(*contractv1.CallContext)
+	}
+	deadlineUnixMs := deadline.UnixMilli()
+	bounded.DeadlineUnixMs = &deadlineUnixMs
+	boundedCtx, cancel := context.WithDeadline(ctx, deadline)
+	return boundedCtx, bounded, cancel
 }
 
 func (p *Plugin) deliver(reqID string, msg *pluginhostv1.FromHost) {

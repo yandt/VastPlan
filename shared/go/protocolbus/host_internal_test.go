@@ -13,7 +13,10 @@ import (
 	"testing"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
 	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
 
@@ -21,8 +24,8 @@ import (
 func TestSession_AwaitDeliverCorrelation(t *testing.T) {
 	s := newSession("sess-1", "p1", "0.1.0")
 
-	chA := s.await("req-A")
-	chB := s.await("req-B")
+	chA := mustAwait(t, s, "req-A")
+	chB := mustAwait(t, s, "req-B")
 
 	s.deliver("req-B", &pluginhostv1.FromPlugin{
 		Msg: &pluginhostv1.FromPlugin_Pong{Pong: &pluginhostv1.Pong{RequestId: "req-B"}},
@@ -63,7 +66,7 @@ func TestSession_DeliverToUnknownRequestIsDropped(t *testing.T) {
 // release 之后再投递同样不得阻塞（等待者已超时走人）。
 func TestSession_DeliverAfterReleaseIsDropped(t *testing.T) {
 	s := newSession("sess-1", "p1", "0.1.0")
-	s.await("req-A")
+	mustAwait(t, s, "req-A")
 	s.release("req-A")
 
 	done := make(chan struct{})
@@ -85,7 +88,7 @@ func TestSession_MarkDeadWakesAllWaiters(t *testing.T) {
 
 	chs := make([]chan *pluginhostv1.FromPlugin, 5)
 	for i := range chs {
-		chs[i] = s.await(requestIDFor(i))
+		chs[i] = mustAwait(t, s, requestIDFor(i))
 	}
 
 	s.markDead(errors.New("插件崩溃"))
@@ -103,6 +106,69 @@ func TestSession_MarkDeadWakesAllWaiters(t *testing.T) {
 
 	if s.err() == nil || !strings.Contains(s.err().Error(), "崩溃") {
 		t.Fatalf("会话应记录死亡原因，实际: %v", s.err())
+	}
+}
+
+func mustAwait(t *testing.T, s *session, requestID string) chan *pluginhostv1.FromPlugin {
+	t.Helper()
+	ch, err := s.await(requestID, 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ch
+}
+
+func TestSession_AwaitRejectsFullPendingQueue(t *testing.T) {
+	s := newSession("sess-1", "p1", "0.1.0")
+	if _, err := s.await("req-A", 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.await("req-B", 1); !errors.Is(err, errPendingQueueFull) {
+		t.Fatalf("pending 队列满时必须 fail-fast: %v", err)
+	}
+}
+
+func TestHostEnterCall_RejectsConcurrencyOverflow(t *testing.T) {
+	host := NewHost("backend", "0.1.0", registry.New(), nil)
+	host.Limits.MaxConcurrentCalls = 1
+	if err := host.enterCall(); err != nil {
+		t.Fatal(err)
+	}
+	defer host.leaveCall()
+	if err := host.enterCall(); !errors.Is(err, ErrConcurrencyLimited) {
+		t.Fatalf("并发达到上限时必须 fail-fast: %v", err)
+	}
+}
+
+func TestHostInvoke_RejectsOversizedPayloadWithStableCode(t *testing.T) {
+	host := NewHost("backend", "0.1.0", registry.New(), nil)
+	host.Limits.MaxPayloadBytes = 4
+	resp, err := host.Invoke(context.Background(), &contractv1.CallTarget{
+		ExtensionPoint: "test.point", Capability: "test",
+	}, nil, make([]byte, 5))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Result.GetError().GetCode() != errorcode.PayloadTooLarge {
+		t.Fatalf("超限 payload 必须是应用层稳定错误: %+v", resp)
+	}
+}
+
+func TestBoundedCallContext_PropagatesEarliestDeadlineWithoutMutatingInput(t *testing.T) {
+	declared := time.Now().Add(10 * time.Second).UnixMilli()
+	original := &contractv1.CallContext{Scene: "test", DeadlineUnixMs: &declared}
+	ctx, propagated, cancel := boundedCallContext(context.Background(), original,
+		protocollimit.Limits{DefaultDeadline: 100 * time.Millisecond})
+	defer cancel()
+	deadline, ok := ctx.Deadline()
+	if !ok || time.Until(deadline) > time.Second {
+		t.Fatalf("必须使用更早的统一默认 deadline: %v", deadline)
+	}
+	if propagated.DeadlineUnixMs == nil || *propagated.DeadlineUnixMs == declared {
+		t.Fatalf("更早 deadline 必须写入传给插件的 CallContext: %+v", propagated)
+	}
+	if *original.DeadlineUnixMs != declared {
+		t.Fatal("不得修改调用方持有的 CallContext")
 	}
 }
 

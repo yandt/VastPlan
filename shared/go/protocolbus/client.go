@@ -12,6 +12,8 @@ import (
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/protocol"
+	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
+	"google.golang.org/protobuf/proto"
 )
 
 // Launch 拉起插件进程并等待它完成回连、握手、贡献注册与激活（§2.2）。
@@ -103,12 +105,31 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 // 未获放行/被否决均返回**应用层错误**（非传输层——工程规范 §4.2）。
 func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
+	if target == nil || target.ExtensionPoint == "" || target.Capability == "" {
+		return errorResponse(errorcode.WireInvalidRequest, "调用目标不能为空", false), nil
+	}
+	limits := h.limits()
+	if !limits.PayloadAllowed(payload) {
+		return errorResponse(errorcode.PayloadTooLarge,
+			fmt.Sprintf("payload 为 %d bytes，超过上限 %d bytes", len(payload), limits.MaxPayloadBytes), false), nil
+	}
+	if !limits.MetadataAllowed(proto.Size(callCtx)) {
+		return errorResponse(errorcode.MetadataTooLarge,
+			fmt.Sprintf("CallContext 为 %d bytes，超过 metadata 上限 %d bytes", proto.Size(callCtx), limits.MaxMetadataBytes), false), nil
+	}
 	if err := h.enterCall(); err != nil {
 		// Drain 是宿主的可用状态，不是 wire 故障；调用方应得到可重试的应用层结论，
 		// 才能按正常路由切到候选实例，而不是把它误报为网络中断。
-		return errorResponse(errorcode.PluginInactive, err.Error(), true), nil
+		code := errorcode.PluginInactive
+		if errors.Is(err, ErrConcurrencyLimited) {
+			code = errorcode.ConcurrencyLimited
+		}
+		return errorResponse(code, err.Error(), true), nil
 	}
 	defer h.leaveCall()
+
+	ctx, callCtx, cancel := boundedCallContext(ctx, callCtx, limits)
+	defer cancel()
 
 	// 1) before 钩子：限流/配额等可在此否决
 	if err := h.runBeforeHooks(ctx, extpoint.PointInvoke, callCtx, target); err != nil {
@@ -131,7 +152,14 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	// 3) 分发
 	resp, err := h.invoke(ctx, target, callCtx, payload)
 	if err != nil {
+		if errors.Is(err, errPendingQueueFull) {
+			return errorResponse(errorcode.QueueFull, err.Error(), true), nil
+		}
 		return nil, err // 传输层失败：无结论可供 after 钩子观察
+	}
+	if resp != nil && !limits.PayloadAllowed(resp.Payload) {
+		return errorResponse(errorcode.PayloadTooLarge,
+			fmt.Sprintf("响应 payload 为 %d bytes，超过上限 %d bytes", len(resp.Payload), limits.MaxPayloadBytes), false), nil
 	}
 
 	// 4) after 钩子：计量/审计等只观察，不改变结论
@@ -170,7 +198,10 @@ func (h *Host) invokeOn(ctx context.Context, sess *session, target *contractv1.C
 	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
 
 	reqID := sess.nextRequestID()
-	ch := sess.await(reqID)
+	ch, err := sess.await(reqID, h.limits().MaxPendingRequests)
+	if err != nil {
+		return nil, err
+	}
 	defer sess.release(reqID)
 
 	if err := sess.send(&pluginhostv1.FromHost{
@@ -190,37 +221,86 @@ func (h *Host) invokeOn(ctx context.Context, sess *session, target *contractv1.C
 			return nil, fmt.Errorf("插件 %s 已失联: %w", sess.pluginID, sess.err())
 		}
 		return msg.GetInvokeResult(), nil
-	case <-time.After(h.callTimeout()):
-		return nil, fmt.Errorf("调用超时（%v）", h.callTimeout())
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
 }
 
+func boundedCallContext(ctx context.Context, callCtx *contractv1.CallContext, limits protocollimit.Limits) (context.Context, *contractv1.CallContext, context.CancelFunc) {
+	limits = limits.Normalize()
+	deadline := time.Now().Add(limits.DefaultDeadline)
+	if callerDeadline, ok := ctx.Deadline(); ok && callerDeadline.Before(deadline) {
+		deadline = callerDeadline
+	}
+	if callCtx != nil && callCtx.DeadlineUnixMs != nil {
+		declared := time.UnixMilli(*callCtx.DeadlineUnixMs)
+		if declared.Before(deadline) {
+			deadline = declared
+		}
+	}
+	bounded := &contractv1.CallContext{}
+	if callCtx != nil {
+		bounded = proto.Clone(callCtx).(*contractv1.CallContext)
+	}
+	deadlineUnixMs := deadline.UnixMilli()
+	bounded.DeadlineUnixMs = &deadlineUnixMs
+	boundedCtx, cancel := context.WithDeadline(ctx, deadline)
+	return boundedCtx, bounded, cancel
+}
+
 // serveHostCall 处理插件的回调：本地命中即内核服务，否则转给提供该能力的插件
 // （即插件→插件也只经 capability 寻址，不得互相 import——见工程规范 §七）。
 func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
+	if req == nil || req.Target == nil {
+		h.replyHostCall(sess, "", errorResponse(errorcode.WireInvalidRequest, "HostCall 请求不完整", false))
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), h.callTimeout())
 	defer cancel()
-
-	reply := func(resp *pluginhostv1.InvokeResponse) {
-		resp.RequestId = req.RequestId
-		if err := sess.send(&pluginhostv1.FromHost{
-			Msg: &pluginhostv1.FromHost_HostCallResult{HostCallResult: resp},
-		}); err != nil {
-			h.Logf("回应插件 HostCall 失败: %v", err)
-		}
-	}
 
 	h.Logf("插件 %s 回调宿主：%s/%s", sess.pluginID, req.Target.ExtensionPoint, req.Target.Capability)
 
 	resp, err := h.Invoke(ctx, req.Target, req.Context, req.Payload)
 	if err != nil {
 		// 寻址/传输层失败 → 转为应用层错误回给插件，避免它把两类错误混为一谈
-		reply(errorResponse(errorcode.HostCallFailed, err.Error(), false))
+		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.HostCallFailed, err.Error(), false))
 		return
 	}
-	reply(resp)
+	h.replyHostCall(sess, req.RequestId, resp)
+}
+
+func (h *Host) replyHostCall(sess *session, requestID string, resp *pluginhostv1.InvokeResponse) {
+	resp.RequestId = requestID
+	if err := sess.send(&pluginhostv1.FromHost{
+		Msg: &pluginhostv1.FromHost_HostCallResult{HostCallResult: resp},
+	}); err != nil {
+		h.Logf("回应插件 HostCall 失败: %v", err)
+	}
+}
+
+// dispatchHostCall 在创建 goroutine 前先占用固定槽位。即使插件被攻破并高速发包，
+// 宿主也不会形成无界 goroutine 队列；满载时返回可重试的应用层错误。
+func (h *Host) dispatchHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
+	h.callbackMu.Lock()
+	if h.callbackSlots == nil {
+		h.callbackSlots = make(chan struct{}, h.limits().MaxConcurrentCalls)
+	}
+	slots := h.callbackSlots
+	h.callbackMu.Unlock()
+	select {
+	case slots <- struct{}{}:
+		go func() {
+			defer func() { <-slots }()
+			h.serveHostCall(sess, req)
+		}()
+	default:
+		requestID := ""
+		if req != nil {
+			requestID = req.RequestId
+		}
+		h.replyHostCall(sess, requestID, errorResponse(errorcode.ConcurrencyLimited,
+			"宿主 HostCall 并发达到上限", true))
+	}
 }
 
 // callHostService 调用内核自身提供的能力。

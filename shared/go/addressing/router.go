@@ -24,6 +24,8 @@ import (
 	addressingv1 "cdsoft.com.cn/VastPlan/shared/go/addressing/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
+	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
 )
 
 const cancelSubject = "vp.rpc.cancel.v1"
@@ -69,7 +71,9 @@ type Router struct {
 	Events      jetstream.Stream
 	NodeID      string
 	CallTimeout time.Duration
-	Logf        func(string, ...any)
+	// Limits 约束一元调用和流式调用的资源占用。CallTimeout 仅作为旧配置兼容覆盖项。
+	Limits protocollimit.Limits
+	Logf   func(string, ...any)
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -83,6 +87,8 @@ type Router struct {
 	instances      map[string]map[string]Announcement // capability -> directory key -> record
 	registrations  map[string]*Registration
 	inflight       map[string]context.CancelFunc
+	outboundCalls  int
+	activeCalls    int
 	pendingCancels map[string]time.Time
 	closed         bool
 	closeOnce      sync.Once
@@ -115,7 +121,7 @@ func NewRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf 
 	}
 	r := &Router{
 		NC: nc, Directory: directory, JetStream: js, Events: events,
-		NodeID: nodeID, CallTimeout: 30 * time.Second, Logf: logf,
+		NodeID: nodeID, Limits: protocollimit.Default(), Logf: logf,
 		ctx: ctx, cancel: cancel, local: map[string][]localHandler{}, localCursor: map[string]uint64{},
 		streamLocal: map[string][]localStreamHandler{}, streamCursor: map[string]uint64{},
 		streamResolve: map[string]uint64{},
@@ -146,6 +152,21 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	if target == nil || target.Capability == "" {
 		return nil, nil, errors.New("调用目标 capability 不能为空")
 	}
+	limits := r.Limits.Normalize()
+	if !limits.PayloadAllowed(payload) {
+		return nil, nil, &TransportError{Code: errorcode.PayloadTooLarge,
+			Message: fmt.Sprintf("payload 为 %d bytes，超过上限 %d bytes", len(payload), limits.MaxPayloadBytes)}
+	}
+	if !limits.MetadataAllowed(proto.Size(callCtx)) {
+		return nil, nil, &TransportError{Code: errorcode.MetadataTooLarge,
+			Message: fmt.Sprintf("CallContext 为 %d bytes，超过 metadata 上限 %d bytes", proto.Size(callCtx), limits.MaxMetadataBytes)}
+	}
+	ctx, callCtx, cancel := r.boundedCallContext(ctx, callCtx)
+	defer cancel()
+	if !r.enterOutboundCall() {
+		return nil, nil, &TransportError{Code: errorcode.ConcurrencyLimited, Message: "addressing 调用并发达到上限", Retryable: true}
+	}
+	defer r.leaveOutboundCall()
 	r.mu.Lock()
 	locals := r.local[target.Capability]
 	var local localHandler
@@ -156,7 +177,12 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	}
 	r.mu.Unlock()
 	if local.handler != nil {
-		return local.handler(ctx, target, callCtx, payload)
+		result, out, err := local.handler(ctx, target, callCtx, payload)
+		if err == nil && !limits.PayloadAllowed(out) {
+			return nil, nil, &TransportError{Code: errorcode.PayloadTooLarge,
+				Message: fmt.Sprintf("响应 payload 为 %d bytes，超过上限 %d bytes", len(out), limits.MaxPayloadBytes)}
+		}
+		return result, out, err
 	}
 	if len(r.Instances(target.Capability)) == 0 {
 		return nil, nil, fmt.Errorf("%w: %s", ErrCapabilityNotFound, target.Capability)
@@ -167,15 +193,9 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	if err != nil {
 		return nil, nil, fmt.Errorf("编码远端调用: %w", err)
 	}
-	requestCtx := ctx
-	if _, ok := ctx.Deadline(); !ok && r.CallTimeout > 0 {
-		var cancel context.CancelFunc
-		requestCtx, cancel = context.WithTimeout(ctx, r.CallTimeout)
-		defer cancel()
-	}
-	msg, err := r.NC.RequestWithContext(requestCtx, controlplane.RPCSubject(target.Capability), raw)
+	msg, err := r.NC.RequestWithContext(ctx, controlplane.RPCSubject(target.Capability), raw)
 	if err != nil {
-		if requestCtx.Err() != nil {
+		if ctx.Err() != nil {
 			_ = r.NC.Publish(cancelSubject, []byte(requestID))
 		}
 		return nil, nil, fmt.Errorf("NATS 调用 %s: %w", target.Capability, err)
@@ -193,13 +213,88 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	if resp.Result == nil {
 		return nil, nil, errors.New("远端响应缺少 CallResult")
 	}
+	if !limits.PayloadAllowed(resp.Payload) {
+		return nil, nil, &TransportError{Code: errorcode.PayloadTooLarge,
+			Message: fmt.Sprintf("远端响应 payload 为 %d bytes，超过上限 %d bytes", len(resp.Payload), limits.MaxPayloadBytes)}
+	}
 	return resp.Result, resp.Payload, nil
+}
+
+func (r *Router) callTimeout() time.Duration {
+	if r.CallTimeout > 0 {
+		return r.CallTimeout
+	}
+	return r.Limits.Normalize().DefaultDeadline
+}
+
+func (r *Router) enterOutboundCall() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.outboundCalls >= r.Limits.Normalize().MaxConcurrentCalls {
+		return false
+	}
+	r.outboundCalls++
+	return true
+}
+
+func (r *Router) leaveOutboundCall() {
+	r.mu.Lock()
+	if r.outboundCalls > 0 {
+		r.outboundCalls--
+	}
+	r.mu.Unlock()
+}
+
+func (r *Router) enterHandlerCall() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.activeCalls >= r.Limits.Normalize().MaxConcurrentCalls {
+		return false
+	}
+	r.activeCalls++
+	return true
+}
+
+func (r *Router) leaveHandlerCall() {
+	r.mu.Lock()
+	if r.activeCalls > 0 {
+		r.activeCalls--
+	}
+	r.mu.Unlock()
+}
+
+func (r *Router) boundedCallContext(ctx context.Context, callCtx *contractv1.CallContext) (context.Context, *contractv1.CallContext, context.CancelFunc) {
+	deadline := time.Now().Add(r.callTimeout())
+	if callerDeadline, ok := ctx.Deadline(); ok && callerDeadline.Before(deadline) {
+		deadline = callerDeadline
+	}
+	if callCtx != nil && callCtx.DeadlineUnixMs != nil {
+		declared := time.UnixMilli(*callCtx.DeadlineUnixMs)
+		if declared.Before(deadline) {
+			deadline = declared
+		}
+	}
+	bounded := &contractv1.CallContext{}
+	if callCtx != nil {
+		bounded = proto.Clone(callCtx).(*contractv1.CallContext)
+	}
+	deadlineUnixMs := deadline.UnixMilli()
+	bounded.DeadlineUnixMs = &deadlineUnixMs
+	boundedCtx, cancel := context.WithDeadline(ctx, deadline)
+	return boundedCtx, bounded, cancel
 }
 
 // Publish 使用 Core NATS 发布非持久事件；需持久化/至少一次的事件后续显式使用 JetStream。
 func (r *Router) Publish(ctx context.Context, callCtx *contractv1.CallContext, event *contractv1.CallEvent) error {
 	if event == nil || event.Type == "" {
 		return errors.New("事件 type 不能为空")
+	}
+	limits := r.Limits.Normalize()
+	if !limits.MetadataAllowed(proto.Size(callCtx)) {
+		return &TransportError{Code: errorcode.MetadataTooLarge, Message: "事件 CallContext 超过 metadata 上限"}
+	}
+	if !limits.PayloadAllowed(event.Payload) {
+		return &TransportError{Code: errorcode.PayloadTooLarge, Message: "事件 payload 超过上限"}
 	}
 	raw, err := proto.Marshal(&addressingv1.EventEnvelope{Context: callCtx, Event: event})
 	if err != nil {
@@ -222,9 +317,18 @@ func (r *Router) Subscribe(eventType string, handler EventHandler) (*Subscriptio
 		subject = "vp.event.v1.>"
 	}
 	sub, err := r.NC.Subscribe(subject, func(msg *nats.Msg) {
+		limits := r.Limits.Normalize()
+		if len(msg.Data) > limits.MaxMessageBytes() {
+			r.Logf("丢弃超过协议消息上限的事件 subject=%s", msg.Subject)
+			return
+		}
 		var envelope addressingv1.EventEnvelope
 		if err := proto.Unmarshal(msg.Data, &envelope); err != nil {
 			r.Logf("丢弃非法事件信封 subject=%s: %v", msg.Subject, err)
+			return
+		}
+		if !limits.MetadataAllowed(proto.Size(envelope.Context)) || envelope.Event == nil || !limits.PayloadAllowed(envelope.Event.Payload) {
+			r.Logf("丢弃超过资源边界的事件 subject=%s", msg.Subject)
 			return
 		}
 		if err := handler(r.ctx, envelope.Context, envelope.Event); err != nil {
@@ -233,6 +337,11 @@ func (r *Router) Subscribe(eventType string, handler EventHandler) (*Subscriptio
 	})
 	if err != nil {
 		return nil, err
+	}
+	limits := r.Limits.Normalize()
+	if err := sub.SetPendingLimits(limits.MaxPendingRequests, limits.MaxPendingRequests*limits.MaxMessageBytes()); err != nil {
+		_ = sub.Unsubscribe()
+		return nil, fmt.Errorf("配置事件有界 pending 队列: %w", err)
 	}
 	if err := r.NC.Flush(); err != nil {
 		_ = sub.Unsubscribe()

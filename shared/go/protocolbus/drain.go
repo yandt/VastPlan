@@ -6,12 +6,16 @@ import (
 )
 
 var ErrHostDraining = errors.New("插件宿主正在 drain，不再接受新调用")
+var ErrConcurrencyLimited = errors.New("插件宿主并发调用达到上限")
 
 func (h *Host) enterCall() error {
 	h.callMu.Lock()
 	defer h.callMu.Unlock()
 	if h.draining {
 		return ErrHostDraining
+	}
+	if h.inflight >= h.limits().MaxConcurrentCalls {
+		return ErrConcurrencyLimited
 	}
 	h.inflight++
 	return nil

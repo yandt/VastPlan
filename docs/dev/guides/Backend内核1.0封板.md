@@ -15,7 +15,7 @@
 | 公共扩展点目录 | 7 个插件扩展点均有严格 manifest/runtime Schema；未知点和 `kernel.service` fail-closed | 已完成：Schema 枚举与内核常量有漂移守护，race/E2E 通过 |
 | 契约兼容 | 兼容矩阵、稳定错误码、旧 SDK/插件夹具、破坏性变更门禁 | 已完成：可执行矩阵、错误码单一真源、proto 只增不改守护与独立 raw v1 客户端 E2E |
 | 生命周期 | 显式状态机、幂等转换、升级迁移、失败回滚、实际态诊断 | 已完成：actual state v2、当前/候选双视图、检查点、copy-on-write 三阶段迁移、逆序 rollback 与真实进程 E2E |
-| 协议资源边界 | payload/metadata/并发/队列/deadline/drain 有界且可配置 | 未完成 |
+| 协议资源边界 | payload/metadata/并发/队列/deadline/drain 有界且可配置 | 已完成：统一 `protocollimit`、每跳输入输出门禁、有界 dispatch/pending/NATS 队列、deadline 传播与 drain 时限，race/E2E 通过 |
 | 可观测与健康 | `slog`、trace、metric、health/readiness、诊断快照 | 未完成 |
 | 核心 SPI | 配置、凭证引用、persistence/transaction 边界可替换 | 未完成 |
 | 可靠性 | race、fuzz、故障注入、泄漏检查、24h soak | 部分完成：race/E2E 已有 |

@@ -247,9 +247,21 @@ func migrationLifecycleOp(operation MigrationOperation) (pluginhostv1.Lifecycle_
 }
 
 func (h *Host) lifecycleRequest(ctx context.Context, sess *session, request *pluginhostv1.Lifecycle) (*pluginhostv1.LifecycleAck, error) {
+	timeout := h.callTimeout()
+	if request.Op == pluginhostv1.Lifecycle_OP_DRAIN || request.Op == pluginhostv1.Lifecycle_OP_SHUTDOWN {
+		timeout = h.limits().DrainTimeout
+	}
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
 	reqID := sess.nextRequestID()
 	request.RequestId = reqID
-	ch := sess.await(reqID)
+	ch, err := sess.await(reqID, h.limits().MaxPendingRequests)
+	if err != nil {
+		return nil, err
+	}
 	defer sess.release(reqID)
 
 	if err := sess.send(&pluginhostv1.FromHost{
@@ -266,8 +278,6 @@ func (h *Host) lifecycleRequest(ctx context.Context, sess *session, request *plu
 			return nil, fmt.Errorf("插件已失联: %w", sess.err())
 		}
 		return msg.GetLifecycleAck(), nil
-	case <-time.After(h.callTimeout()):
-		return nil, errors.New("等待生命周期 Ack 超时")
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
@@ -283,7 +293,7 @@ func (h *Host) dispatch(sess *session, msg *pluginhostv1.FromPlugin) {
 	case *pluginhostv1.FromPlugin_Pong:
 		sess.deliver(m.Pong.RequestId, msg)
 	case *pluginhostv1.FromPlugin_HostCall:
-		go h.serveHostCall(sess, m.HostCall) // 不阻塞读循环
+		h.dispatchHostCall(sess, m.HostCall)
 	case *pluginhostv1.FromPlugin_Event:
 		h.Logf("收到插件事件 type=%s source=%s", m.Event.Event.Type, m.Event.Event.Source)
 	default:
@@ -316,7 +326,11 @@ func (h *Host) heartbeat(sess *session) {
 				return
 			}
 			reqID := sess.nextRequestID()
-			ch := sess.await(reqID)
+			ch, err := sess.await(reqID, h.limits().MaxPendingRequests)
+			if err != nil {
+				h.Logf("跳过插件 %s 心跳：%v", sess.pluginID, err)
+				continue
+			}
 			if err := sess.send(&pluginhostv1.FromHost{
 				Msg: &pluginhostv1.FromHost_Ping{Ping: &pluginhostv1.Ping{RequestId: reqID}},
 			}); err != nil {
