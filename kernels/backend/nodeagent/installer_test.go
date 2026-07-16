@@ -74,7 +74,7 @@ func testPackage(t *testing.T, mode os.FileMode) ([]byte, pluginservice.Artifact
   "id":"com.example.installer","name":"installer test","description":"installer test",
   "version":"1.0.0","publisher":"example","engines":{"backend":"^0.1"},
   "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
-  "contributes":{"backend":{"tools":[{"id":"example.tool"}]}}
+	  "contributes":{"backend":{"tools":[{"id":"example.tool","service_role":"backend"}]}}
 }`)
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifest, 0o644); err != nil {
 		t.Fatal(err)

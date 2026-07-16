@@ -1,9 +1,14 @@
 package pluginv1
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"testing"
+
+	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 )
 
 func TestParseManifest_ExistingPluginsConform(t *testing.T) {
@@ -45,8 +50,87 @@ func TestValidateDescriptor_RejectsInvalidHookPhase(t *testing.T) {
 	}
 }
 
-func TestValidateDescriptor_AllowsFuturePointWithJSONObject(t *testing.T) {
-	if err := ValidateDescriptor("future.point", []byte(`{"vendorField":"kept"}`)); err != nil {
-		t.Fatalf("未实现的未来扩展点应只要求 descriptor 为对象，实际: %v", err)
+func TestValidateDescriptor_BackendPublicCatalog(t *testing.T) {
+	valid := map[string]string{
+		"tool.package":       `{"title":"工具","subcommands":[{"name":"run","description":"运行"}]}`,
+		"agent":              `{"systemPrompt":"你是助手","tools":[{"extensionPoint":"tool.package","capability":"demo.tool","operation":"run"}]}`,
+		"api.route":          `{"service_role":"backend","method":"POST","path":"/v1/demo","auth":"session"}`,
+		"permission.checker": `{"applies":{"caller":"CALLER_KIND_*"}}`,
+		"event.sink":         `{"subscribe":["task.*"]}`,
+		"hook":               `{"point":"invoke","phase":"before"}`,
+		"runner.capability":  `{"service_role":"rs","kind":"process.exec","params":{"sandbox":true}}`,
+	}
+	for point, descriptor := range valid {
+		t.Run(point, func(t *testing.T) {
+			if err := ValidateDescriptor(point, []byte(descriptor)); err != nil {
+				t.Fatalf("公开扩展点 descriptor 应通过校验: %v", err)
+			}
+		})
+	}
+}
+
+func TestDescriptorSchema_PublicCatalogMatchesKernelConstants(t *testing.T) {
+	var schema struct {
+		Properties struct {
+			ExtensionPoint struct {
+				Enum []string `json:"enum"`
+			} `json:"extensionPoint"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(descriptorSchemaJSON, &schema); err != nil {
+		t.Fatalf("解析内置 descriptor Schema 失败: %v", err)
+	}
+	want := extpoint.BackendPluginPoints()
+	got := append([]string(nil), schema.Properties.ExtensionPoint.Enum...)
+	sort.Strings(want)
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Schema 与内核公开扩展点目录漂移: got=%v want=%v", got, want)
+	}
+}
+
+func TestValidateDescriptor_RejectsUnpublishedOrInvalidPoint(t *testing.T) {
+	tests := map[string]struct {
+		point      string
+		descriptor string
+	}{
+		"未知扩展点":       {point: "future.point", descriptor: `{"vendorField":"kept"}`},
+		"内核内部能力":      {point: "kernel.service", descriptor: `{"title":"伪造服务"}`},
+		"agent 缺系统提示": {point: "agent", descriptor: `{}`},
+		"API 路径非法":    {point: "api.route", descriptor: `{"service_role":"backend","method":"GET","path":"relative","auth":"session"}`},
+		"Runner 角色非法": {point: "runner.capability", descriptor: `{"service_role":"backend","kind":"process.exec"}`},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			if err := ValidateDescriptor(test.point, []byte(test.descriptor)); err == nil {
+				t.Fatal("未发布或非法 descriptor 必须 fail-closed")
+			}
+		})
+	}
+}
+
+func TestParseManifest_BackendDescriptorsAreClosed(t *testing.T) {
+	valid := []byte(`{
+		"id":"com.example.closed-contract","name":"closed","description":"closed contract",
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{
+			"agents":[{"id":"demo.agent","service_role":"backend","systemPrompt":"你是助手","tools":[{"extensionPoint":"tool.package","capability":"demo.tool"}]}],
+			"apiRoutes":[{"id":"demo.api","service_role":"backend","method":"GET","path":"/v1/demo","auth":"session"}],
+			"runnerCapabilities":[{"id":"demo.exec","service_role":"rs","kind":"process.exec"}]
+		}}
+	}`)
+	if _, err := ParseManifest(valid); err != nil {
+		t.Fatalf("完整 Backend descriptor 清单应通过: %v", err)
+	}
+
+	missingContract := []byte(`{
+		"id":"com.example.open-contract","name":"open","description":"open contract",
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{"agents":[{"id":"demo.agent","service_role":"backend"}]}}
+	}`)
+	if _, err := ParseManifest(missingContract); err == nil {
+		t.Fatal("缺少 agent 核心契约字段的清单必须被拒绝")
 	}
 }

@@ -13,11 +13,33 @@ import (
 // 扩展点名（= CallTarget.extension_point，四处同名之一）。
 const (
 	ToolPackage       = "tool.package"
+	Agent             = "agent"
+	APIRoute          = "api.route"
 	PermissionChecker = "permission.checker"
 	EventSink         = "event.sink"
 	Hook              = "hook"
-	KernelService     = "kernel.service"
+	RunnerCapability  = "runner.capability"
+	// KernelService 是宿主内部能力命名空间，不是插件可贡献的公共扩展点。
+	// 插件只能在清单 capabilities.kernelServices 中声明依赖，再经 HostCall 调用；
+	// 运行态声明 kernel.service contribution 必须被 descriptor Schema 拒绝。
+	KernelService = "kernel.service"
 )
+
+var backendPluginPoints = []string{
+	ToolPackage,
+	Agent,
+	APIRoute,
+	PermissionChecker,
+	EventSink,
+	Hook,
+	RunnerCapability,
+}
+
+// BackendPluginPoints 返回 Backend 1.0 对插件公开的封闭扩展点目录。
+// 返回副本，避免调用方修改包内单一真源。kernel.service 故意不在其中。
+func BackendPluginPoints() []string {
+	return append([]string(nil), backendPluginPoints...)
+}
 
 // ── permission.checker（select 语义）─────────────────────
 

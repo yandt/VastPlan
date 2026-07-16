@@ -6,8 +6,44 @@
   "additionalProperties": false,
   "required": ["extensionPoint", "descriptor"],
   "properties": {
-    "extensionPoint": { "type": "string", "minLength": 1 },
+    "extensionPoint": {
+      "enum": [
+        "tool.package",
+        "agent",
+        "api.route",
+        "permission.checker",
+        "event.sink",
+        "hook",
+        "runner.capability"
+      ]
+    },
     "descriptor": { "type": "object" }
+  },
+  "$defs": {
+    "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "serviceRole": { "enum": ["backend", "workspace", "rs"] },
+    "capabilityRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extensionPoint", "capability"],
+      "properties": {
+        "extensionPoint": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "capability": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "operation": { "type": "string", "minLength": 1, "maxLength": 160 }
+      }
+    },
+    "subcommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "paramsSchema": { "type": "object" },
+        "resultSchema": { "type": "object" }
+      }
+    }
   },
   "allOf": [
     {
@@ -15,22 +51,60 @@
       "then": {
         "properties": {
           "descriptor": {
-            "type": "object", "additionalProperties": false,
+            "type": "object",
+            "additionalProperties": false,
             "properties": {
-              "title": { "type": "string", "minLength": 1 },
-              "service_role": { "enum": ["backend", "workspace", "rs"] },
+              "title": { "$ref": "#/$defs/title" },
+              "service_role": { "$ref": "#/$defs/serviceRole" },
               "subcommands": {
                 "type": "array",
-                "items": {
-                  "type": "object", "additionalProperties": false,
-                  "required": ["name", "description"],
-                  "properties": {
-                    "name": { "type": "string", "minLength": 1 },
-                    "description": { "type": "string", "minLength": 1 },
-                    "paramsSchema": { "type": "object" }
-                  }
-                }
+                "items": { "$ref": "#/$defs/subcommand" },
+                "uniqueItems": true
               }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "extensionPoint": { "const": "agent" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["systemPrompt"],
+            "properties": {
+              "title": { "$ref": "#/$defs/title" },
+              "service_role": { "$ref": "#/$defs/serviceRole" },
+              "role": { "type": "string", "minLength": 1, "maxLength": 160 },
+              "systemPrompt": { "type": "string", "minLength": 1 },
+              "tools": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/capabilityRef" },
+                "uniqueItems": true
+              },
+              "model": { "type": "string", "minLength": 1, "maxLength": 160 },
+              "defaultScene": { "type": "string", "minLength": 1, "maxLength": 160 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "extensionPoint": { "const": "api.route" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["method", "path", "auth", "service_role"],
+            "properties": {
+              "title": { "$ref": "#/$defs/title" },
+              "service_role": { "$ref": "#/$defs/serviceRole" },
+              "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+              "path": { "type": "string", "pattern": "^/", "minLength": 1, "maxLength": 512 },
+              "auth": { "enum": ["session", "service", "public"] }
             }
           }
         }
@@ -41,13 +115,19 @@
       "then": {
         "properties": {
           "descriptor": {
-            "type": "object", "additionalProperties": false,
+            "type": "object",
+            "additionalProperties": false,
             "properties": {
-              "title": { "type": "string", "minLength": 1 },
-              "service_role": { "enum": ["backend", "workspace", "rs"] },
+              "title": { "$ref": "#/$defs/title" },
+              "service_role": { "$ref": "#/$defs/serviceRole" },
               "applies": {
-                "type": "object", "additionalProperties": false,
-                "properties": { "caller": { "type": "string" }, "scene": { "type": "string" }, "target": { "type": "string" } }
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "caller": { "type": "string" },
+                  "scene": { "type": "string" },
+                  "target": { "type": "string" }
+                }
               }
             }
           }
@@ -59,11 +139,16 @@
       "then": {
         "properties": {
           "descriptor": {
-            "type": "object", "additionalProperties": false,
+            "type": "object",
+            "additionalProperties": false,
             "properties": {
-              "title": { "type": "string", "minLength": 1 },
-              "service_role": { "enum": ["backend", "workspace", "rs"] },
-              "subscribe": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+              "title": { "$ref": "#/$defs/title" },
+              "service_role": { "$ref": "#/$defs/serviceRole" },
+              "subscribe": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 },
+                "uniqueItems": true
+              }
             }
           }
         }
@@ -74,13 +159,36 @@
       "then": {
         "properties": {
           "descriptor": {
-            "type": "object", "additionalProperties": false,
+            "type": "object",
+            "additionalProperties": false,
             "required": ["point", "phase"],
             "properties": {
-              "title": { "type": "string", "minLength": 1 },
-              "service_role": { "enum": ["backend", "workspace", "rs"] },
+              "title": { "$ref": "#/$defs/title" },
+              "service_role": { "$ref": "#/$defs/serviceRole" },
               "point": { "enum": ["invoke"] },
               "phase": { "enum": ["before", "after"] }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "extensionPoint": { "const": "runner.capability" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["service_role", "kind"],
+            "properties": {
+              "title": { "$ref": "#/$defs/title" },
+              "service_role": { "const": "rs" },
+              "kind": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+                "maxLength": 160
+              },
+              "params": { "type": "object" }
             }
           }
         }

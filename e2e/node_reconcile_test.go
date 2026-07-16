@@ -638,7 +638,7 @@ func publishBrokenPlugin(t *testing.T, repository *pluginservice.Repository) {
   "id":"com.vastplan.broken","name":"broken","description":"broken candidate",
   "version":"2.0.0","publisher":"vastplan","engines":{"backend":"^0.1"},
   "activation":["onStartup"],"entry":{"backend":"backend/broken"},
-  "contributes":{"backend":{"tools":[{"id":"broken.tool"}]}}
+  "contributes":{"backend":{"tools":[{"id":"broken.tool","service_role":"backend"}]}}
 }`)
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifest, 0o644); err != nil {
 		t.Fatal(err)
@@ -666,7 +666,7 @@ func publishCrasherPlugin(t *testing.T, repository *pluginservice.Repository) {
   "id":"com.vastplan.fixture.crasher","name":"crasher","description":"crash recovery fixture",
   "version":"0.1.0","publisher":"vastplan","engines":{"backend":"^0.1"},
   "activation":["onStartup"],"entry":{"backend":"backend/crasher"},
-  "contributes":{"backend":{"tools":[{"id":"fixture.crasher","title":"Crash fixture"}]}}
+  "contributes":{"backend":{"tools":[{"id":"fixture.crasher","service_role":"backend","title":"Crash fixture"}]}}
 }`)
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifest, 0o644); err != nil {
 		t.Fatal(err)

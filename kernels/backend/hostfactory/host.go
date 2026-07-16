@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
@@ -20,19 +21,19 @@ const KernelName = "backend"
 func New(version string, logf func(string, ...any)) (*protocolbus.Host, error) {
 	reg := registry.New()
 	for _, point := range []registry.ExtensionPoint{
-		{Name: "tool.package", Dispatch: registry.DispatchSingle},
-		{Name: "agent", Dispatch: registry.DispatchSingle},
-		{Name: "api.route", Dispatch: registry.DispatchSingle},
-		{Name: "permission.checker", Dispatch: registry.DispatchSelect},
-		{Name: "event.sink", Dispatch: registry.DispatchFanout},
-		{Name: "hook", Dispatch: registry.DispatchFanout},
-		{Name: "runner.capability", Dispatch: registry.DispatchSingle},
-		{Name: "kernel.service", Dispatch: registry.DispatchSingle},
+		{Name: extpoint.ToolPackage, Dispatch: registry.DispatchSingle},
+		{Name: extpoint.Agent, Dispatch: registry.DispatchSingle},
+		{Name: extpoint.APIRoute, Dispatch: registry.DispatchSingle},
+		{Name: extpoint.PermissionChecker, Dispatch: registry.DispatchSelect},
+		{Name: extpoint.EventSink, Dispatch: registry.DispatchFanout},
+		{Name: extpoint.Hook, Dispatch: registry.DispatchFanout},
+		{Name: extpoint.RunnerCapability, Dispatch: registry.DispatchSingle},
+		{Name: extpoint.KernelService, Dispatch: registry.DispatchSingle},
 	} {
 		reg.DefinePoint(point)
 	}
 	host := protocolbus.NewHost(KernelName, version, reg, logf)
-	if err := host.RegisterHostService("kernel.service", "kernel.info", kernelInfo(version)); err != nil {
+	if err := host.RegisterHostService(extpoint.KernelService, "kernel.info", kernelInfo(version)); err != nil {
 		return nil, err
 	}
 	return host, nil
