@@ -18,7 +18,7 @@
 | 协议资源边界 | payload/metadata/并发/队列/deadline/drain 有界且可配置 | 已完成：统一 `protocollimit`、每跳输入输出门禁、有界 dispatch/pending/NATS 队列、deadline 传播与 drain 时限，race/E2E 通过 |
 | 可观测与健康 | `slog`、trace、metric、health/readiness、诊断快照 | 已完成：JSON `slog` 出口、span 派生、可替换 metric sink、Host 健康/就绪与 `kernel.diagnostics` 无敏感快照 |
 | 核心 SPI | 配置、凭证引用、persistence/transaction 边界可替换 | 已完成：`kernelspi.Dependencies`、unit 配置服务、凭证回调代理、强制 scope、事务冲突/回滚语义与会话插件身份注入 |
-| 可靠性 | race、fuzz、故障注入、泄漏检查、24h soak | 进行中：race、Schema fuzz、崩溃/迁移/断连故障 E2E、session/pending 收敛检查与 24h soak 工作流已就绪；发布候选仍须附 24h 报告 |
+| 可靠性 | race、fuzz、故障注入、泄漏检查、24h soak | 主动延期：race、Schema fuzz、崩溃/迁移/断连故障 E2E、session/pending 收敛检查与 24h soak 工作流已就绪；待形成有代表性的插件与真实调用组合后重新冻结候选并执行，发布候选仍须附合格 24h 报告 |
 | 性能 | 核心 benchmark 基线与 CI 回归阈值 | 已完成：注册/协议/本地寻址/调度/persistence 基准，PR 在同一 runner 比较 base/head；耗时 >50% 且 >100ns 或分配 >25% 阻断 |
 | 安全与供应链 | mTLS/NKey/ACL、漏洞/许可证、签名制品、SBOM | 已完成：运行链路、发布者签名、漏洞/许可证 CI、逐目标 CycloneDX SBOM 与 OIDC 来源/SBOM 证明均有机器门禁 |
 | 发布运维 | 可复现构建、版本升级、回滚、配置迁移、诊断 runbook | 已完成：逐字节复现门禁、内置 version/validate/support-bundle、tag/version 守卫及可执行升级回滚手册 |
@@ -39,6 +39,8 @@ go test -run='^$' -fuzz=FuzzParseManifest -fuzztime=30s ./schemas/plugin/v1
 ```
 
 发布候选的 24 小时稳定性记录由 GitHub Actions `Backend Kernel Soak` 手工工作流产生，输入必须保持 `24h`。报告检查真实插件调用和周期重启，并验证 goroutine、文件句柄、session pending 不持续增长；短时 smoke 只能验证入口，不能替代发布证据。
+
+2026-07-16 决定暂缓正式 soak：当前只有单一 `legacy-v1/echo` 合成链路，尚不足以代表后续插件生态的混合负载。已取消提交 `0c128a7692da48845c70b2d6472b013a50bac37b` 对应的 run `29480318827`；该运行及其任何部分结果不得作为发布证据。恢复条件是至少具备可代表实际业务路径的多类插件与负载模型，届时必须以新的冻结提交重新运行完整 24 小时，不得续跑或复用本次记录。
 
 Release 只接受 `kernels/backend/SOAKED_COMMIT` 指向提交的合格报告，并通过 `tools/soakreport` 复验。被测提交之后若出现任何非版本推广白名单改动，必须对新的冻结提交重新运行 24 小时 soak。
 
