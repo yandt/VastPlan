@@ -119,6 +119,33 @@ func toolTarget(capability, op string) *contractv1.CallTarget {
 	return &contractv1.CallTarget{ExtensionPoint: "tool.package", Capability: capability, Operation: &op}
 }
 
+// 兼容性夹具绕过当前 sdk/go/plugin，直接使用 Plugin-Host v1 消息集。
+// 因此 SDK 内部实现即使重构，也不能掩盖宿主对既有 wire 客户端的破坏。
+func TestPluginHost_LegacyV1RawClientRemainsCompatible(t *testing.T) {
+	bin := buildPlugin(t, "./e2e/fixtures/plugins/legacy-v1")
+	host := newHost(t, "1.0.0")
+	allowAllPermissions(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	process, err := host.Launch(ctx, bin)
+	if err != nil {
+		t.Fatalf("旧 v1 客户端接入失败: %v", err)
+	}
+
+	payload := []byte(`{"wire":"v1"}`)
+	response, err := host.Invoke(ctx, toolTarget("fixture.legacy-v1", "echo"), testCallContext(), payload)
+	if err != nil {
+		t.Fatalf("旧 v1 客户端调用失败: %v", err)
+	}
+	if response.Result.GetStatus() != contractv1.CallResult_STATUS_OK || string(response.Payload) != string(payload) {
+		t.Fatalf("旧 v1 客户端响应漂移: %+v payload=%s", response.Result, response.Payload)
+	}
+	if err := host.Close(process); err != nil {
+		t.Fatalf("关闭旧 v1 客户端失败: %v", err)
+	}
+}
+
 // 完整生命周期：拉起 → 回连 → 握手 → engines 校验 → 贡献注册 → 激活 → 调用 → 摘除。
 func TestPluginLifecycle_HappyPath(t *testing.T) {
 	bin := buildPlugin(t, "./plugins/com.vastplan.hello-world/backend")

@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/protocol"
 )
 
@@ -199,6 +200,28 @@ func TestArch_ProtocolConstantsSingleSource(t *testing.T) {
 		if strings.Contains(string(b), magicLiteral) {
 			t.Errorf("协议常量重复声明：%s 出现了 magic cookie 字面量\n  原因: 协议常量只许在 %s 定义（ADR-0017 §3）——两处声明会导致版本协商因两侧漂移而失效",
 				f.relPath, singleSource)
+		}
+	}
+}
+
+// 内核稳定错误码只许在 shared/go/errorcode 定义；调用链必须引用常量。
+// 否则字符串改名不会触发编译失败，旧插件和调用方会在运行时静默分叉。
+func TestArch_KernelErrorCodesSingleSource(t *testing.T) {
+	root := repoRoot(t)
+	const singleSource = "shared/go/errorcode/"
+	for _, f := range collectGoFiles(t) {
+		if strings.HasPrefix(f.relPath, singleSource) || strings.HasSuffix(f.relPath, "_test.go") {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(root, f.relPath))
+		if err != nil {
+			t.Fatalf("读取 %s 失败: %v", f.relPath, err)
+		}
+		for _, code := range errorcode.KernelCodes() {
+			if strings.Contains(string(b), strconv.Quote(code)) {
+				t.Errorf("稳定错误码被散写：%s 出现 %q 字面量\n  原因: 内核错误码只许在 %s 定义并通过常量引用（ADR-0031）",
+					f.relPath, code, singleSource)
+			}
 		}
 	}
 }

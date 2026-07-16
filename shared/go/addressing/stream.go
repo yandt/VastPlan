@@ -20,6 +20,7 @@ import (
 	addressingv1 "cdsoft.com.cn/VastPlan/shared/go/addressing/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 )
 
 // StreamHandler 直接在双向流上处理分片。HTTP/2 流控会在对端处理速度不足时阻塞 Send，
@@ -354,9 +355,9 @@ func (service *capabilityStreamService) Open(raw grpc.BidiStreamingServer[addres
 	if handlerErr != nil {
 		response.Result = nil
 		response.Payload = nil
-		response.TransportError = &addressingv1.TransportError{Code: "remote.stream_failed", Message: handlerErr.Error(), Retryable: true}
+		response.TransportError = &addressingv1.TransportError{Code: errorcode.RemoteStreamFailed, Message: handlerErr.Error(), Retryable: true}
 	} else if result == nil {
-		response.TransportError = &addressingv1.TransportError{Code: "remote.invalid_response", Message: "stream handler 未返回 CallResult"}
+		response.TransportError = &addressingv1.TransportError{Code: errorcode.RemoteInvalidResponse, Message: "stream handler 未返回 CallResult"}
 	}
 	stream.sendMu.Lock()
 	defer stream.sendMu.Unlock()

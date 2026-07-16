@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/protocol"
 )
@@ -212,7 +213,7 @@ func (p *Plugin) handleInvoke(req *pluginhostv1.InvokeRequest) {
 
 func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.InvokeResponse {
 	if !p.beginInvoke() {
-		return errResult("plugin.inactive", "插件未激活", false)
+		return errResult(errorcode.PluginInactive, "插件未激活", false)
 	}
 	defer p.inflight.Done()
 	op := ""
@@ -224,7 +225,7 @@ func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.I
 		h, ok = p.routes[routeKey(req.Target.ExtensionPoint, req.Target.Capability, "")] // 默认处理器
 	}
 	if !ok {
-		return errResult("capability.not_found",
+		return errResult(errorcode.CapabilityNotFound,
 			fmt.Sprintf("未实现 %s/%s 的操作 %q", req.Target.ExtensionPoint, req.Target.Capability, op), false)
 	}
 
@@ -238,7 +239,7 @@ func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.I
 	res, payload, err := h(ctx, p, req.Context, req.Payload)
 	if err != nil {
 		// 应用层错误进 CallResult，不与传输层错误混淆（工程规范 §4.2）
-		return errResult("plugin.handler_error", err.Error(), true)
+		return errResult(errorcode.PluginHandlerError, err.Error(), true)
 	}
 	return &pluginhostv1.InvokeResponse{Result: res, Payload: payload}
 }

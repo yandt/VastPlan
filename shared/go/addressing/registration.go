@@ -15,6 +15,7 @@ import (
 	addressingv1 "cdsoft.com.cn/VastPlan/shared/go/addressing/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 )
 
 // RegisterOptions 描述一个可被本地直调和远端 queue group 调用的实例。
@@ -93,11 +94,11 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 	}
 	var req addressingv1.InvokeRequest
 	if err := proto.Unmarshal(msg.Data, &req); err != nil {
-		r.respondTransportError(msg, "wire.invalid_request", err.Error(), false, "")
+		r.respondTransportError(msg, errorcode.WireInvalidRequest, err.Error(), false, "")
 		return
 	}
 	if req.Target == nil || req.Target.Capability != capability {
-		r.respondTransportError(msg, "wire.target_mismatch", "请求 capability 与 subject 不一致", false, req.RequestId)
+		r.respondTransportError(msg, errorcode.WireTargetMismatch, "请求 capability 与 subject 不一致", false, req.RequestId)
 		return
 	}
 	handlerCtx := r.ctx
@@ -127,9 +128,9 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 	if err != nil {
 		response.Result = nil
 		response.Payload = nil
-		response.TransportError = &addressingv1.TransportError{Code: "remote.invoke_failed", Message: err.Error(), Retryable: true}
+		response.TransportError = &addressingv1.TransportError{Code: errorcode.RemoteInvokeFailed, Message: err.Error(), Retryable: true}
 	} else if result == nil {
-		response.TransportError = &addressingv1.TransportError{Code: "remote.invalid_response", Message: "handler 未返回 CallResult"}
+		response.TransportError = &addressingv1.TransportError{Code: errorcode.RemoteInvalidResponse, Message: "handler 未返回 CallResult"}
 	}
 	raw, marshalErr := proto.Marshal(response)
 	if marshalErr != nil {

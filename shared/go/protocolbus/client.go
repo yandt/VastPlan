@@ -8,6 +8,7 @@ import (
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/protocol"
@@ -105,7 +106,7 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	if err := h.enterCall(); err != nil {
 		// Drain 是宿主的可用状态，不是 wire 故障；调用方应得到可重试的应用层结论，
 		// 才能按正常路由切到候选实例，而不是把它误报为网络中断。
-		return errorResponse("plugin.inactive", err.Error(), true), nil
+		return errorResponse(errorcode.PluginInactive, err.Error(), true), nil
 	}
 	defer h.leaveCall()
 
@@ -115,7 +116,7 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 		if errors.As(err, &abort) {
 			h.Logf("调用被钩子否决 %s/%s：%s（由 %q）",
 				target.ExtensionPoint, target.Capability, abort.Reason, abort.HookID)
-			return errorResponse("hook.aborted", abort.Reason, false), nil
+			return errorResponse(errorcode.HookAborted, abort.Reason, false), nil
 		}
 		return nil, err
 	}
@@ -124,7 +125,7 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	if res := h.CheckPermission(ctx, callCtx, target); !res.Allowed() {
 		h.Logf("权限拒绝 %s/%s：%s（由 %q 判定）",
 			target.ExtensionPoint, target.Capability, res.Reason, res.DecidedBy)
-		return errorResponse("permission.denied", res.Reason, false), nil
+		return errorResponse(errorcode.PermissionDenied, res.Reason, false), nil
 	}
 
 	// 3) 分发
@@ -216,7 +217,7 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 	resp, err := h.Invoke(ctx, req.Target, req.Context, req.Payload)
 	if err != nil {
 		// 寻址/传输层失败 → 转为应用层错误回给插件，避免它把两类错误混为一谈
-		reply(errorResponse("hostcall.failed", err.Error(), false))
+		reply(errorResponse(errorcode.HostCallFailed, err.Error(), false))
 		return
 	}
 	reply(resp)
@@ -234,7 +235,7 @@ func (h *Host) callHostService(ctx context.Context, target *contractv1.CallTarge
 	}
 	res, out, err := fn(ctx, callCtx, payload)
 	if err != nil {
-		return errorResponse("kernel.service_error", err.Error(), true), nil
+		return errorResponse(errorcode.KernelServiceError, err.Error(), true), nil
 	}
 	return &pluginhostv1.InvokeResponse{Result: res, Payload: out}, nil
 }
