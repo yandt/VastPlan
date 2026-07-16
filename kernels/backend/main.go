@@ -27,17 +27,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nats-io/nats.go/jetstream"
-
 	artifactservercommand "cdsoft.com.cn/VastPlan/kernels/backend/commands/artifactserver"
 	controlplanecommand "cdsoft.com.cn/VastPlan/kernels/backend/commands/controlplane"
 	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/kernels/backend/kernelops"
 	"cdsoft.com.cn/VastPlan/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/shared/go/addressing"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
 )
 
 // KernelName 本内核的规范 ID（ADR-0015）。
@@ -212,218 +207,56 @@ func runDemo(pluginBins []string) {
 }
 
 func runReconcile(args []string) (runErr error) {
-	flags := flag.NewFlagSet("reconcile", flag.ContinueOnError)
-	desiredPath := flags.String("desired", "", "本地 DesiredState v1 JSON 文件")
-	repositoryRoot := flags.String("repository", ".vastplan/repository", "本地插件制品仓库")
-	repositoryURL := flags.String("repository-url", "", "HTTPS 远端签名制品仓库；设置后替代本地仓库")
-	repositoryTrust := flags.String("repository-trust", "", "远端制品发布者信任文档")
-	repositoryToken := flags.String("repository-token", "", "远端制品读令牌；默认读取 VASTPLAN_ARTIFACT_READ_TOKEN")
-	repositoryCA := flags.String("repository-ca", "", "远端制品仓库自定义 CA PEM")
-	runtimeRoot := flags.String("runtime-root", ".vastplan/runtime/plugins", "内容寻址安装目录")
-	actualPath := flags.String("actual-state", ".vastplan/runtime/actual-state.json", "实际态报告文件")
-	lockPath := flags.String("lock", "", "单实例锁文件；默认 <actual-state>.lock")
-	nodeID := flags.String("node-id", "local", "当前节点 ID")
-	labelsRaw := flags.String("labels", "", "节点标签，逗号分隔 key=value")
-	capacityCPU := flags.Int64("capacity-cpu-millis", 0, "节点可分配 CPU，单位 millicores")
-	capacityMemory := flags.Int64("capacity-memory-bytes", 0, "节点可分配内存，单位 bytes")
-	capacityGPU := flags.Int64("capacity-gpu", 0, "节点可分配 GPU 数量")
-	interval := flags.Duration("interval", 5*time.Second, "本地期望态轮询间隔")
-	natsURL := flags.String("nats-url", "", "NATS URL；设置后从 JetStream KV watch 期望态")
-	natsCA := flags.String("nats-ca", "", "NATS 服务端/客户端证书 CA PEM")
-	natsCert := flags.String("nats-cert", "", "NATS mTLS 客户端证书 PEM")
-	natsKey := flags.String("nats-key", "", "NATS mTLS 客户端私钥 PEM")
-	natsSeed := flags.String("nats-seed", "", "NATS 角色 NKey seed 文件（0600）")
-	natsAllowInsecure := flags.Bool("nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
-	desiredKey := flags.String("desired-key", controlplane.DesiredKey("", "local-development"), "NATS DesiredState key")
-	natsBootstrap := flags.Bool("nats-bootstrap", false, "创建/校准控制面 KV bucket（仅初始化/开发使用）")
-	natsReplicas := flags.Int("nats-replicas", 1, "初始化 KV bucket 的 JetStream 副本数；生产建议至少 3")
-	assignmentKey := flags.String("assignment-key", "", "节点级 assignment key；设置后从 ASSIGNMENTS_V1 消费，覆盖 -desired-key")
-	deploymentName := flags.String("deployment", "", "集群 Deployment v2 名称；自动生成当前节点 assignment key")
-	deploymentTenant := flags.String("tenant", "", "集群 Deployment v2 租户；与 -deployment 一起使用")
-	if err := flags.Parse(args); err != nil {
+	options, err := parseReconcileOptions(args)
+	if err != nil {
 		return err
 	}
-	if *deploymentName != "" {
-		if *assignmentKey != "" {
-			return errors.New("-deployment 与 -assignment-key 不能同时设置")
-		}
-		*assignmentKey = controlplane.AssignmentKey(*deploymentTenant, *deploymentName, *nodeID)
-	}
-	if *desiredPath == "" && *natsURL == "" {
-		return errors.New("本地模式必须提供 -desired；控制面模式须提供 -nats-url")
-	}
-	if *lockPath == "" {
-		*lockPath = *actualPath + ".lock"
-	}
-	processLock, err := nodeagent.AcquireProcessLock(*lockPath)
+	processLock, err := nodeagent.AcquireProcessLock(options.lockPath)
 	if err != nil {
 		return err
 	}
 	defer func() { runErr = errors.Join(runErr, processLock.Close()) }()
-	labels, err := parseLabels(*labelsRaw)
+	labels, err := parseLabels(options.labelsRaw)
 	if err != nil {
 		return err
 	}
-	var repository nodeagent.ArtifactRepository
-	if *repositoryURL == "" {
-		localRepository, createErr := pluginservice.NewRepository(*repositoryRoot)
-		if createErr != nil {
-			return createErr
-		}
-		repository = localRepository
-	} else {
-		if *repositoryTrust == "" {
-			return errors.New("远端制品仓库必须配置 -repository-trust")
-		}
-		trust, loadErr := pluginservice.LoadTrustStore(*repositoryTrust)
-		if loadErr != nil {
-			return loadErr
-		}
-		if *repositoryToken == "" {
-			*repositoryToken = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
-		}
-		if *repositoryToken == "" {
-			return errors.New("远端制品仓库必须配置读令牌")
-		}
-		httpClient, clientErr := artifactHTTPClient(*repositoryCA)
-		if clientErr != nil {
-			return clientErr
-		}
-		repository = &pluginservice.RemoteRepository{
-			BaseURL: *repositoryURL, Token: *repositoryToken, Trust: trust, Client: httpClient,
-		}
+	repository, err := buildArtifactRepository(options)
+	if err != nil {
+		return err
 	}
 	logf := componentLogf("node-agent")
-	var source nodeagent.DesiredStateSource = nodeagent.FileSource{Path: *desiredPath}
-	var stateStore nodeagent.StateStore = nodeagent.FileStateStore{Path: *actualPath}
-	var meshRouter *addressing.Router
-	var natsBuckets controlplane.Buckets
-	var closeNATS func()
-	if *natsURL != "" {
-		nc, err := controlplane.ConnectWithConfig(controlplane.ConnectionConfig{
-			URL: *natsURL, ClientName: "vastplan-node-" + *nodeID,
-			CAFile: *natsCA, CertFile: *natsCert, KeyFile: *natsKey, SeedFile: *natsSeed,
-			Insecure: *natsAllowInsecure, Logf: logf,
-		})
-		if err != nil {
-			return err
-		}
-		closeNATS = nc.Close
-		defer closeNATS()
-		js, err := jetstream.New(nc)
-		if err != nil {
-			return fmt.Errorf("创建 JetStream 客户端: %w", err)
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		var buckets controlplane.Buckets
-		if *natsBootstrap {
-			buckets, err = controlplane.EnsureBuckets(ctx, js, *natsReplicas, jetstream.FileStorage)
-		} else {
-			buckets, err = controlplane.OpenBuckets(ctx, js)
-		}
-		if err != nil {
-			return err
-		}
-		natsBuckets = buckets
-		if *assignmentKey != "" {
-			source = nodeagent.NATSDesiredStateSource{KV: buckets.Assignments, Key: *assignmentKey, Conn: nc}
-		} else {
-			source = nodeagent.NATSDesiredStateSource{KV: buckets.Desired, Key: *desiredKey, Conn: nc}
-		}
-		stateStore = nodeagent.ReplicatedStateStore{
-			Primary: nodeagent.FileStateStore{Path: *actualPath},
-			Replicas: []nodeagent.StateStore{
-				nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey(*nodeID)},
-			},
-		}
-		meshRouter, err = addressing.NewRouter(nc, buckets.Capabilities, *nodeID, logf)
-		if err != nil {
-			return fmt.Errorf("创建 capability router: %w", err)
-		}
-		defer func() { runErr = errors.Join(runErr, meshRouter.Close()) }()
+	plane, err := newNodeControlPlane(options, logf)
+	if err != nil {
+		return err
 	}
+	defer func() { runErr = errors.Join(runErr, plane.Close()) }()
 	runtime := nodeagent.NewProtocolRuntime(version, logf)
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
-	if meshRouter != nil {
-		if err := runtime.AttachRouter(meshRouter); err != nil {
+	if plane.router != nil {
+		if err := runtime.AttachRouter(plane.router); err != nil {
 			return err
 		}
 	}
 	reconciler := &nodeagent.Reconciler{
-		NodeID: *nodeID, NodeLabels: labels, Repository: repository,
-		Installer: nodeagent.LocalInstaller{Root: *runtimeRoot}, Runtime: runtime,
-		StateStore: stateStore,
+		NodeID: options.nodeID, NodeLabels: labels, Repository: repository,
+		Installer: nodeagent.LocalInstaller{Root: options.runtimeRoot}, Runtime: runtime,
+		StateStore: plane.stateStore,
 	}
 	agent := &nodeagent.Agent{
-		Source: source, Reconciler: reconciler,
-		Interval: *interval, Logf: logf,
+		Source: plane.source, Reconciler: reconciler,
+		Interval: options.interval, Logf: logf,
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	var nodeLease *controlplane.NodeLease
-	var leaseLost <-chan error
-	var leaseFailure chan error
-	if *natsURL != "" {
-		if *assignmentKey != "" {
-			assignmentNodeID, parseErr := controlplane.AssignmentKeyNodeID(*assignmentKey)
-			if parseErr != nil || assignmentNodeID != *nodeID {
-				return fmt.Errorf("assignment key 不属于当前节点 %s", *nodeID)
-			}
-			// 先删除同 node id 上一进程遗留的快照，再发布新租约。控制器观察到租约后会
-			// 重新下发当前计划；若控制器不可用，本节点保持空载而不是执行陈旧 assignment。
-			if deleteErr := natsBuckets.Assignments.Delete(ctx, *assignmentKey); deleteErr != nil && !errors.Is(deleteErr, jetstream.ErrKeyNotFound) {
-				return fmt.Errorf("作废旧 assignment: %w", deleteErr)
-			}
-		}
-		nodeLease, err = controlplane.StartNodeLease(ctx, natsBuckets.Nodes, *nodeID, labels, controlplane.NodeLeaseOptions{
-			Logf: logf, Capacity: controlplane.ResourceCapacity{
-				CPUMillis: *capacityCPU, MemoryBytes: *capacityMemory, GPU: *capacityGPU,
-			},
-		})
-		if err != nil {
-			return err
-		}
-		leaseLost = nodeLease.Lost()
-		leaseFailure = make(chan error, 1)
-		defer func() {
-			closeCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = nodeLease.Close(closeCtx)
-		}()
-		go func() {
-			select {
-			case leaseErr := <-leaseLost:
-				leaseFailure <- leaseErr
-				logf("节点失去控制面租约，将自我隔离并停止 unit: %v", leaseErr)
-				stop()
-			case <-ctx.Done():
-			}
-		}()
+	leaseGuard, err := startNodeLeaseGuard(ctx, stop, options, labels, plane.buckets, logf)
+	if err != nil {
+		return err
 	}
-	if *natsURL != "" {
-		activeKey := *desiredKey
-		if *assignmentKey != "" {
-			activeKey = *assignmentKey
-		}
-		logf("节点 %s 启动，NATS=%s desired-key=%s", *nodeID, *natsURL, activeKey)
-	} else {
-		logf("节点 %s 启动，期望态=%s", *nodeID, *desiredPath)
-	}
+	defer leaseGuard.closeEventually()
+	logNodeStartup(options, logf)
 	err = agent.Run(ctx)
 	if errors.Is(err, context.Canceled) {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if nodeLease != nil {
-			_ = nodeLease.Close(shutdownCtx)
-		}
-		shutdownErr := reconciler.Shutdown(shutdownCtx)
-		select {
-		case leaseErr := <-leaseFailure:
-			return errors.Join(leaseErr, shutdownErr)
-		default:
-			return shutdownErr
-		}
+		return finishCanceledAgent(leaseGuard, reconciler)
 	}
 	return err
 }

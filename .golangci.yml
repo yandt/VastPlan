@@ -11,6 +11,8 @@ linters:
   default: none
   enable:
     - errcheck     # 未处理的 error —— 对齐工程规范"不吞错误"
+    - dupl         # 生产代码块重复，防止修复只落一份
+    - gocyclo      # 复杂分支必须拆成可命名、可测试阶段
     - govet        # 官方静态检查
     - ineffassign  # 无效赋值
     - staticcheck  # 高信噪比的正确性检查
@@ -20,12 +22,19 @@ linters:
     errcheck:
       # 显式 `_ =` 视为已声明意图（工程规范要求旁边写理由注释，由评审把关）
       check-blank: false
+    dupl:
+      threshold: 100
+    gocyclo:
+      min-complexity: 30
 
   exclusions:
     rules:
       # 生成物不归我们管
       - path: '\.pb\.go$'
-        linters: [errcheck, govet, ineffassign, staticcheck, unused]
+        linters: [dupl, errcheck, gocyclo, govet, ineffassign, staticcheck, unused]
+      # 测试表格会自然集中大量断言分支；复杂度门禁约束生产控制流。
+      - path: '_test\.go$'
+        linters: [gocyclo]
 
 issues:
   max-issues-per-linter: 0

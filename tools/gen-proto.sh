@@ -4,7 +4,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export PATH="$(go env GOPATH)/bin:$PATH"
+GO_PATH="$(go env GOPATH)"
+export PATH="$GO_PATH/bin:$PATH"
 
 OUT="$ROOT/shared/go"
 mkdir -p "$OUT"

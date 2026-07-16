@@ -265,16 +265,7 @@ func (r *Router) InvokeStream(ctx context.Context, target *contractv1.CallTarget
 }
 
 func (s *RemoteStream) Send(payload []byte) error {
-	if len(payload) > s.maxFrame {
-		return fmt.Errorf("流式请求帧为 %d bytes，超过上限 %d bytes", len(payload), s.maxFrame)
-	}
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	err := s.raw.Send(&addressingv1.StreamFrame{RequestId: s.requestID, Sequence: s.sendSeq, Body: &addressingv1.StreamFrame_Payload{Payload: &addressingv1.StreamPayload{Data: payload}}})
-	if err == nil {
-		s.sendSeq++
-	}
-	return err
+	return sendStreamPayload(s.raw, &s.sendMu, &s.sendSeq, s.requestID, s.maxFrame, "请求", payload)
 }
 
 func (s *RemoteStream) CloseSend() error {
@@ -359,14 +350,22 @@ type ServerStream struct {
 }
 
 func (s *ServerStream) Send(payload []byte) error {
-	if len(payload) > s.maxFrame {
-		return fmt.Errorf("流式响应帧为 %d bytes，超过上限 %d bytes", len(payload), s.maxFrame)
+	return sendStreamPayload(s.raw, &s.sendMu, &s.sendSeq, s.requestID, s.maxFrame, "响应", payload)
+}
+
+type streamFrameSender interface {
+	Send(*addressingv1.StreamFrame) error
+}
+
+func sendStreamPayload(sender streamFrameSender, mu *sync.Mutex, sequence *uint64, requestID string, maxFrame int, direction string, payload []byte) error {
+	if len(payload) > maxFrame {
+		return fmt.Errorf("流式%s帧为 %d bytes，超过上限 %d bytes", direction, len(payload), maxFrame)
 	}
-	s.sendMu.Lock()
-	defer s.sendMu.Unlock()
-	err := s.raw.Send(&addressingv1.StreamFrame{RequestId: s.requestID, Sequence: s.sendSeq, Body: &addressingv1.StreamFrame_Payload{Payload: &addressingv1.StreamPayload{Data: payload}}})
+	mu.Lock()
+	defer mu.Unlock()
+	err := sender.Send(&addressingv1.StreamFrame{RequestId: requestID, Sequence: *sequence, Body: &addressingv1.StreamFrame_Payload{Payload: &addressingv1.StreamPayload{Data: payload}}})
 	if err == nil {
-		s.sendSeq++
+		*sequence = *sequence + 1
 	}
 	return err
 }

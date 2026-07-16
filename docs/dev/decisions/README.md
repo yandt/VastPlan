@@ -72,3 +72,4 @@
 - [ADR-0039 Backend 能力调用环保护](ADR-0039-Backend能力调用环保护.md)
 - [ADR-0040 Backend 生产入口与包边界](ADR-0040-Backend生产入口与包边界.md)
 - [ADR-0041 Go 契约类型与 CAS 模板单一真源](ADR-0041-Go契约类型与CAS模板单一真源.md)
+- [ADR-0042 复杂度分层与 CI 质量门禁](ADR-0042-复杂度分层与CI质量门禁.md)

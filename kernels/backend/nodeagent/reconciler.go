@@ -25,201 +25,22 @@ type Reconciler struct {
 // Reconcile 每次执行都是幂等的。当前实例与候选实例分别持久化；候选插件全部安装且
 // 启动成功后 Runtime 才替换旧实例，任一阶段失败都保留旧实例并留下候选失败实际态。
 func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.DesiredState) (Result, error) {
-	if err := r.validate(); err != nil {
-		return Result{}, err
-	}
-	actual, err := r.StateStore.Load()
+	actual, err := r.beginReconcile(desired)
 	if err != nil {
 		return Result{}, err
 	}
-	if actual.NodeID != "" && actual.NodeID != r.NodeID {
-		return Result{}, fmt.Errorf("实际态属于节点 %q，当前节点为 %q", actual.NodeID, r.NodeID)
+	targets := r.targetUnits(desired)
+	changed, err := r.reconcileTargets(ctx, desired.Revision, targets, &actual)
+	if err != nil {
+		return Result{Changed: changed, State: actual}, err
 	}
-	digest := desired.Digest()
-	if actual.ObservedRevision == desired.Revision && actual.ObservedDigest != "" && actual.ObservedDigest != digest {
-		return Result{}, fmt.Errorf("revision %d 的期望态内容发生冲突", desired.Revision)
-	}
-	actual.Version = actualStateVersion
-	actual.NodeID = r.NodeID
-	actual.ObservedRevision = desired.Revision
-	actual.ObservedDigest = digest
-	actual.Errors = nil
-
-	targets := make(map[string]deploymentv1.Unit)
-	for _, unit := range desired.Units {
-		if unit.Enabled && unit.MatchesNode(r.NodeLabels) {
-			targets[unit.ID] = unit
-		}
-	}
-	ids := sortedUnitIDs(targets)
-	changed := false
-	for _, id := range ids {
-		unit := targets[id]
-		fingerprint := unit.Fingerprint()
-		if current, ok := actual.Units[id]; ok && current.Fingerprint == fingerprint && r.Runtime.IsRunning(id, fingerprint) {
-			if err := r.setUnitPhase(&current, PhaseActive); err != nil {
-				return Result{Changed: changed, State: actual}, err
-			}
-			current.LastError = ""
-			current.Candidate = nil
-			if err := r.refreshRuntimeState(&current, id); err != nil {
-				return Result{Changed: changed, State: actual}, err
-			}
-			actual.Units[id] = current
-			continue
-		}
-		current := actual.Units[id]
-		if current.Fingerprint != "" {
-			if err := r.refreshRuntimeState(&current, id); err != nil {
-				return Result{Changed: changed, State: actual}, err
-			}
-		}
-		current.Candidate = &CandidateState{
-			Fingerprint: fingerprint, Phase: PhaseUninstalled, PhaseChangedAt: r.now(),
-		}
-		if current.Fingerprint == "" {
-			if err := r.setUnitPhase(&current, PhaseUninstalled); err != nil {
-				return Result{Changed: changed, State: actual}, err
-			}
-		}
-		actual.Units[id] = current
-		if err := r.checkpoint(&actual); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-
-		installed, stage, installErr := r.prepare(unit)
-		if installErr != nil {
-			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: stage, Message: installErr.Error()})
-			current = actual.Units[id]
-			if err := r.failCandidate(&current, id, installErr); err != nil {
-				return Result{Changed: changed, State: actual}, err
-			}
-			actual.Units[id] = current
-			if err := r.checkpoint(&actual); err != nil {
-				return Result{Changed: changed, State: actual}, err
-			}
-			continue
-		}
-		current = actual.Units[id]
-		current.Candidate.Plugins = installed
-		if err := r.setCandidatePhase(&current, PhaseInstalledInactive); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		actual.Units[id] = current
-		if err := r.checkpoint(&actual); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		migrations, migrationErr := planStateMigrations(id, fingerprint, current.Plugins, installed)
-		if migrationErr != nil {
-			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: "migration_contract", Message: migrationErr.Error()})
-			if err := r.failCandidate(&current, id, migrationErr); err != nil {
-				return Result{Changed: changed, State: actual}, err
-			}
-			actual.Units[id] = current
-			if err := r.checkpoint(&actual); err != nil {
-				return Result{Changed: changed, State: actual}, err
-			}
-			continue
-		}
-		if err := r.setCandidatePhase(&current, PhaseActivating); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		actual.Units[id] = current
-		if err := r.checkpoint(&actual); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		runtimeUnit := RuntimeUnit{
-			ID: id, Fingerprint: fingerprint, ServiceRole: unit.ServiceRole,
-			Config: RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
-			RestartBase: current.RestartCount,
-		}
-		if err := r.Runtime.Apply(ctx, runtimeUnit); err != nil {
-			stage := "launch"
-			var migrationErr *StateMigrationError
-			if errors.As(err, &migrationErr) {
-				stage = "migration_" + migrationErr.Phase
-			}
-			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: stage, Message: err.Error()})
-			current = actual.Units[id]
-			if phaseErr := r.failCandidate(&current, id, err); phaseErr != nil {
-				return Result{Changed: changed, State: actual}, phaseErr
-			}
-			actual.Units[id] = current
-			if saveErr := r.checkpoint(&actual); saveErr != nil {
-				return Result{Changed: changed, State: actual}, saveErr
-			}
-			continue
-		}
-		state := UnitState{
-			Fingerprint: fingerprint, AppliedRevision: desired.Revision,
-			Phase: PhaseActive, PhaseChangedAt: r.now(), Plugins: installed,
-		}
-		if err := r.refreshRuntimeState(&state, id); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		actual.Units[id] = state
-		if err := r.checkpoint(&actual); err != nil {
-			return Result{Changed: true, State: actual}, err
-		}
-		changed = true
+	removed, err := r.removeObsoleteUnits(ctx, targets, &actual)
+	changed = changed || removed
+	if err != nil {
+		return Result{Changed: changed, State: actual}, err
 	}
 
-	for _, id := range unionUnitIDs(actual.Units, r.Runtime.UnitIDs()) {
-		if _, keep := targets[id]; keep {
-			continue
-		}
-		state, ok := actual.Units[id]
-		if !ok {
-			state = UnitState{Phase: PhaseActive, PhaseChangedAt: r.now()}
-		}
-		if err := r.setUnitPhase(&state, PhaseDraining); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		actual.Units[id] = state
-		if err := r.checkpoint(&actual); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		if err := r.setUnitPhase(&state, PhaseDeactivating); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		actual.Units[id] = state
-		if err := r.checkpoint(&actual); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		if err := r.Runtime.Stop(ctx, id); err != nil {
-			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: "stop", Message: err.Error()})
-			state.LastError = err.Error()
-			if phaseErr := r.setUnitPhase(&state, PhaseFailed); phaseErr != nil {
-				return Result{Changed: changed, State: actual}, phaseErr
-			}
-			actual.Units[id] = state
-			if saveErr := r.checkpoint(&actual); saveErr != nil {
-				return Result{Changed: changed, State: actual}, saveErr
-			}
-			continue
-		}
-		if err := r.setUnitPhase(&state, PhaseRemoved); err != nil {
-			return Result{Changed: changed, State: actual}, err
-		}
-		actual.Units[id] = state
-		if err := r.checkpoint(&actual); err != nil {
-			return Result{Changed: true, State: actual}, err
-		}
-		delete(actual.Units, id)
-		changed = true
-	}
-
-	converged := len(actual.Errors) == 0
-	if converged {
-		for id, unit := range targets {
-			fingerprint := unit.Fingerprint()
-			state, ok := actual.Units[id]
-			if !ok || state.Fingerprint != fingerprint || !r.Runtime.IsRunning(id, fingerprint) {
-				converged = false
-				break
-			}
-		}
-	}
+	converged := r.isConverged(targets, actual)
 	if converged {
 		actual.AppliedRevision = desired.Revision
 	}
@@ -240,6 +61,205 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 		return result, fmt.Errorf("节点 %s 未收敛：%d 个操作失败", r.NodeID, len(actual.Errors))
 	}
 	return result, nil
+}
+
+func (r *Reconciler) beginReconcile(desired deploymentv1.DesiredState) (ActualState, error) {
+	if err := r.validate(); err != nil {
+		return ActualState{}, err
+	}
+	actual, err := r.StateStore.Load()
+	if err != nil {
+		return ActualState{}, err
+	}
+	if actual.NodeID != "" && actual.NodeID != r.NodeID {
+		return ActualState{}, fmt.Errorf("实际态属于节点 %q，当前节点为 %q", actual.NodeID, r.NodeID)
+	}
+	digest := desired.Digest()
+	if actual.ObservedRevision == desired.Revision && actual.ObservedDigest != "" && actual.ObservedDigest != digest {
+		return ActualState{}, fmt.Errorf("revision %d 的期望态内容发生冲突", desired.Revision)
+	}
+	actual.Version = actualStateVersion
+	actual.NodeID = r.NodeID
+	actual.ObservedRevision = desired.Revision
+	actual.ObservedDigest = digest
+	actual.Errors = nil
+	return actual, nil
+}
+
+func (r *Reconciler) targetUnits(desired deploymentv1.DesiredState) map[string]deploymentv1.Unit {
+	targets := make(map[string]deploymentv1.Unit)
+	for _, unit := range desired.Units {
+		if unit.Enabled && unit.MatchesNode(r.NodeLabels) {
+			targets[unit.ID] = unit
+		}
+	}
+	return targets
+}
+
+func (r *Reconciler) reconcileTargets(ctx context.Context, revision uint64, targets map[string]deploymentv1.Unit, actual *ActualState) (bool, error) {
+	changed := false
+	for _, id := range sortedUnitIDs(targets) {
+		unitChanged, err := r.reconcileTarget(ctx, revision, targets[id], actual)
+		changed = changed || unitChanged
+		if err != nil {
+			return changed, err
+		}
+	}
+	return changed, nil
+}
+
+func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit deploymentv1.Unit, actual *ActualState) (bool, error) {
+	id, fingerprint := unit.ID, unit.Fingerprint()
+	if current, ok := actual.Units[id]; ok && current.Fingerprint == fingerprint && r.Runtime.IsRunning(id, fingerprint) {
+		if err := r.setUnitPhase(&current, PhaseActive); err != nil {
+			return false, err
+		}
+		current.LastError, current.Candidate = "", nil
+		if err := r.refreshRuntimeState(&current, id); err != nil {
+			return false, err
+		}
+		actual.Units[id] = current
+		return false, nil
+	}
+	current := actual.Units[id]
+	if current.Fingerprint != "" {
+		if err := r.refreshRuntimeState(&current, id); err != nil {
+			return false, err
+		}
+	}
+	current.Candidate = &CandidateState{Fingerprint: fingerprint, Phase: PhaseUninstalled, PhaseChangedAt: r.now()}
+	if current.Fingerprint == "" {
+		if err := r.setUnitPhase(&current, PhaseUninstalled); err != nil {
+			return false, err
+		}
+	}
+	actual.Units[id] = current
+	if err := r.checkpoint(actual); err != nil {
+		return false, err
+	}
+
+	installed, stage, err := r.prepare(unit)
+	if err != nil {
+		return false, r.recordCandidateFailure(actual, id, stage, err)
+	}
+	current = actual.Units[id]
+	current.Candidate.Plugins = installed
+	if err := r.setCandidatePhase(&current, PhaseInstalledInactive); err != nil {
+		return false, err
+	}
+	actual.Units[id] = current
+	if err := r.checkpoint(actual); err != nil {
+		return false, err
+	}
+	migrations, err := planStateMigrations(id, fingerprint, current.Plugins, installed)
+	if err != nil {
+		return false, r.recordCandidateFailure(actual, id, "migration_contract", err)
+	}
+	if err := r.setCandidatePhase(&current, PhaseActivating); err != nil {
+		return false, err
+	}
+	actual.Units[id] = current
+	if err := r.checkpoint(actual); err != nil {
+		return false, err
+	}
+	runtimeUnit := RuntimeUnit{
+		ID: id, Fingerprint: fingerprint, ServiceRole: unit.ServiceRole,
+		Config: RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
+		RestartBase: current.RestartCount,
+	}
+	if err := r.Runtime.Apply(ctx, runtimeUnit); err != nil {
+		return false, r.recordCandidateFailure(actual, id, runtimeFailureStage(err), err)
+	}
+	state := UnitState{
+		Fingerprint: fingerprint, AppliedRevision: revision,
+		Phase: PhaseActive, PhaseChangedAt: r.now(), Plugins: installed,
+	}
+	if err := r.refreshRuntimeState(&state, id); err != nil {
+		return false, err
+	}
+	actual.Units[id] = state
+	return true, r.checkpoint(actual)
+}
+
+func runtimeFailureStage(err error) string {
+	var migrationErr *StateMigrationError
+	if errors.As(err, &migrationErr) {
+		return "migration_" + migrationErr.Phase
+	}
+	return "launch"
+}
+
+func (r *Reconciler) recordCandidateFailure(actual *ActualState, id, stage string, cause error) error {
+	actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: stage, Message: cause.Error()})
+	current := actual.Units[id]
+	if err := r.failCandidate(&current, id, cause); err != nil {
+		return err
+	}
+	actual.Units[id] = current
+	return r.checkpoint(actual)
+}
+
+func (r *Reconciler) removeObsoleteUnits(ctx context.Context, targets map[string]deploymentv1.Unit, actual *ActualState) (bool, error) {
+	changed := false
+	for _, id := range unionUnitIDs(actual.Units, r.Runtime.UnitIDs()) {
+		if _, keep := targets[id]; keep {
+			continue
+		}
+		removed, err := r.removeUnit(ctx, actual, id)
+		changed = changed || removed
+		if err != nil {
+			return changed, err
+		}
+	}
+	return changed, nil
+}
+
+func (r *Reconciler) removeUnit(ctx context.Context, actual *ActualState, id string) (bool, error) {
+	state, ok := actual.Units[id]
+	if !ok {
+		state = UnitState{Phase: PhaseActive, PhaseChangedAt: r.now()}
+	}
+	for _, phase := range []UnitPhase{PhaseDraining, PhaseDeactivating} {
+		if err := r.setUnitPhase(&state, phase); err != nil {
+			return false, err
+		}
+		actual.Units[id] = state
+		if err := r.checkpoint(actual); err != nil {
+			return false, err
+		}
+	}
+	if err := r.Runtime.Stop(ctx, id); err != nil {
+		actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: "stop", Message: err.Error()})
+		state.LastError = err.Error()
+		if phaseErr := r.setUnitPhase(&state, PhaseFailed); phaseErr != nil {
+			return false, phaseErr
+		}
+		actual.Units[id] = state
+		return false, r.checkpoint(actual)
+	}
+	if err := r.setUnitPhase(&state, PhaseRemoved); err != nil {
+		return false, err
+	}
+	actual.Units[id] = state
+	if err := r.checkpoint(actual); err != nil {
+		return true, err
+	}
+	delete(actual.Units, id)
+	return true, nil
+}
+
+func (r *Reconciler) isConverged(targets map[string]deploymentv1.Unit, actual ActualState) bool {
+	if len(actual.Errors) != 0 {
+		return false
+	}
+	for id, unit := range targets {
+		fingerprint := unit.Fingerprint()
+		state, ok := actual.Units[id]
+		if !ok || state.Fingerprint != fingerprint || !r.Runtime.IsRunning(id, fingerprint) {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *Reconciler) refreshRuntimeState(state *UnitState, unitID string) error {

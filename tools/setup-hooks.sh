@@ -10,4 +10,7 @@ git config core.hooksPath .githooks
 chmod +x .githooks/*
 
 echo "已启用本地钩子（core.hooksPath=.githooks）："
-ls .githooks | sed 's/^/  - /'
+for hook in .githooks/*; do
+  [ -f "$hook" ] || continue
+  printf '  - %s\n' "${hook#.githooks/}"
+done

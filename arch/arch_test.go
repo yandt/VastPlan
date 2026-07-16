@@ -131,6 +131,37 @@ func TestArch_SDKMustNotImportKernels(t *testing.T) {
 	assertNoImport(t, files, "sdk/", "plugins/", "SDK 不得依赖具体插件")
 }
 
+// Backend 普通子包不得横向抓取同级实现。组合只发生在根 main 与 commands；
+// 其余少数有向依赖逐项登记，新增边必须先做架构决策。
+func TestArch_BackendSiblingImportsAreExplicit(t *testing.T) {
+	allowed := map[string]map[string]bool{
+		"kernelops": {"nodeagent": true},
+		"nodeagent": {"hostfactory": true},
+	}
+	backendImport := modulePath + "/kernels/backend/"
+	for _, file := range collectGoFiles(t) {
+		if !strings.HasPrefix(file.relPath, "kernels/backend/") || strings.HasSuffix(file.relPath, "_test.go") {
+			continue
+		}
+		rel := strings.TrimPrefix(file.relPath, "kernels/backend/")
+		parts := strings.Split(rel, "/")
+		if len(parts) == 1 || parts[0] == "commands" {
+			continue // 根 main 与命令包是显式组合根。
+		}
+		source := parts[0]
+		for _, imported := range file.imports {
+			if !strings.HasPrefix(imported, backendImport) {
+				continue
+			}
+			target := strings.Split(strings.TrimPrefix(imported, backendImport), "/")[0]
+			if target != source && !allowed[source][target] {
+				t.Errorf("Backend 横向依赖未登记：%s (%s -> %s)\n  原因: 普通子包依赖 DTO/接口，不直接抓取同级实现（ADR-0040）",
+					file.relPath, source, target)
+			}
+		}
+	}
+}
+
 // 插件之间不得直接 import——只能经能力名寻址，否则绕过扩展点、架构失效。
 func TestArch_PluginsMustNotImportEachOther(t *testing.T) {
 	files := collectGoFiles(t)
@@ -250,6 +281,36 @@ func TestArch_ContractStructsAreGeneratedOnly(t *testing.T) {
 	}
 }
 
+func TestArch_StableDTOsHaveSingleStructSource(t *testing.T) {
+	root := repoRoot(t)
+	want := map[string]string{
+		"StateIdentity":        "schemas/plugin/v1/schema.go",
+		"MigrationRequest":     "schemas/plugin/v1/schema.go",
+		"ResourceList":         "schemas/common/v1/resources.go",
+		"ResourceRequirements": "schemas/common/v1/resources.go",
+	}
+	found := make(map[string][]string)
+	for _, file := range collectGoFiles(t) {
+		if file.generated || strings.HasSuffix(file.relPath, "_test.go") {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(root, file.relPath))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for name := range want {
+			if regexp.MustCompile(`(?m)^type\s+` + name + `\s+struct\s*\{`).Match(raw) {
+				found[name] = append(found[name], file.relPath)
+			}
+		}
+	}
+	for name, source := range want {
+		if len(found[name]) != 1 || found[name][0] != source {
+			t.Errorf("稳定 DTO %s 必须只在 %s 定义一次，实际: %v（ADR-0041）", name, source, found[name])
+		}
+	}
+}
+
 // ── 布局纪律（ADR-0016）─────────────────────────────────
 
 // 服务组合是配置不是代码：不得出现 services/<role>/ 这类目录，
@@ -259,6 +320,15 @@ func TestArch_NoPerServiceDirectories(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "services")); err == nil {
 		t.Errorf("布局违规：出现了 services/ 目录\n  原因: backend/workspace/rs 是同一 backend 内核二进制 + 不同期望态 service_role，" +
 			"服务组合是配置不是代码（ADR-0016 §3）")
+	}
+}
+
+func TestArch_ToolsMustNotContainProductionEntrypoints(t *testing.T) {
+	root := repoRoot(t)
+	for _, name := range []string{"controlplane", "artifactserver"} {
+		if _, err := os.Stat(filepath.Join(root, "tools", name, "main.go")); err == nil {
+			t.Errorf("tools/%s 不得承载生产入口；使用 Backend 子命令组合根（ADR-0040）", name)
+		}
 	}
 }
 
