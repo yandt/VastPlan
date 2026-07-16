@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 type Scheduler struct {
 	Nodes       jetstream.KeyValue
 	Assignments jetstream.KeyValue
+	Metrics     jetstream.KeyValue
 }
 
 type Plan struct {
@@ -57,28 +59,57 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 			Units:    []deploymentv1.Unit{},
 		}
 	}
+	available := make(map[string]controlplane.ResourceCapacity, len(nodes))
+	occupied, err := s.occupiedResources(ctx, controlplane.AssignmentPrefix(deployment.Metadata.Tenant, deployment.Metadata.Name))
+	if err != nil {
+		return Plan{}, err
+	}
+	for nodeID, node := range nodes {
+		capacity := node.Capacity
+		capacity.CPUMillis -= occupied[nodeID].CPUMillis
+		capacity.MemoryBytes -= occupied[nodeID].MemoryBytes
+		capacity.GPU -= occupied[nodeID].GPU
+		available[nodeID] = capacity
+	}
 	for _, unit := range deployment.Units {
 		if !unit.Enabled {
 			continue
 		}
-		eligible := eligibleNodes(nodes, unit.Placement.NodeSelector)
-		if len(eligible) < unit.Replicas {
-			return Plan{}, fmt.Errorf("unit %s 需要 %d 副本，但只有 %d 个节点匹配 selector", unit.ID, unit.Replicas, len(eligible))
+		replicas, err := s.desiredReplicas(ctx, deployment, unit)
+		if err != nil {
+			return Plan{}, err
+		}
+		eligible := eligibleNodes(nodes, available, unit)
+		if len(eligible) < replicas {
+			return Plan{}, fmt.Errorf("unit %s 需要 %d 副本，但只有 %d 个节点满足标签、亲和与资源约束", unit.ID, replicas, len(eligible))
 		}
 		sort.Slice(eligible, func(i, j int) bool {
+			leftPreference := preferenceScore(nodes[eligible[i]].Labels, unit.Placement)
+			rightPreference := preferenceScore(nodes[eligible[j]].Labels, unit.Placement)
+			if leftPreference != rightPreference {
+				return leftPreference > rightPreference
+			}
 			left, right := placementScore(unit.ID, eligible[i]), placementScore(unit.ID, eligible[j])
 			if left != right {
 				return left > right
 			}
 			return eligible[i] < eligible[j]
 		})
-		for _, nodeID := range eligible[:unit.Replicas] {
+		for _, nodeID := range eligible[:replicas] {
 			assignment := assignments[nodeID]
 			assignment.Units = append(assignment.Units, deploymentv1.Unit{
 				ID: unit.ID, Kind: unit.Kind, Plugins: append([]deploymentv1.PluginRef(nil), unit.Plugins...),
 				Config: cloneConfig(unit.Config), Enabled: true, ServiceRole: unit.ServiceRole, Replicas: 1,
+				Resources: deploymentv1.ResourceRequirements{Requests: deploymentv1.ResourceList{
+					CPUMillis: unit.Resources.Requests.CPUMillis, MemoryBytes: unit.Resources.Requests.MemoryBytes, GPU: unit.Resources.Requests.GPU,
+				}},
 			})
 			assignments[nodeID] = assignment
+			capacity := available[nodeID]
+			capacity.CPUMillis -= unit.Resources.Requests.CPUMillis
+			capacity.MemoryBytes -= unit.Resources.Requests.MemoryBytes
+			capacity.GPU -= unit.Resources.Requests.GPU
+			available[nodeID] = capacity
 		}
 	}
 	for nodeID, assignment := range assignments {
@@ -134,6 +165,67 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 		}
 	}
 	return Plan{Generation: generation, Assignments: assignments}, nil
+}
+
+func (s Scheduler) occupiedResources(ctx context.Context, currentPrefix string) (map[string]controlplane.ResourceCapacity, error) {
+	keys, err := s.Assignments.Keys(ctx)
+	if errors.Is(err, jetstream.ErrNoKeysFound) {
+		return map[string]controlplane.ResourceCapacity{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("列出资源占用 assignment: %w", err)
+	}
+	occupied := map[string]controlplane.ResourceCapacity{}
+	for _, key := range keys {
+		if strings.HasPrefix(key, currentPrefix) || strings.HasSuffix(key, ".schedule") {
+			continue
+		}
+		entry, err := s.Assignments.Get(ctx, key)
+		if err != nil {
+			continue
+		}
+		state, err := deploymentv1.Parse(entry.Value())
+		if err != nil {
+			return nil, fmt.Errorf("资源占用 assignment %s 损坏: %w", key, err)
+		}
+		nodeID, err := controlplane.AssignmentKeyNodeID(key)
+		if err != nil {
+			return nil, err
+		}
+		capacity := occupied[nodeID]
+		for _, unit := range state.Units {
+			capacity.CPUMillis += unit.Resources.Requests.CPUMillis
+			capacity.MemoryBytes += unit.Resources.Requests.MemoryBytes
+			capacity.GPU += unit.Resources.Requests.GPU
+		}
+		occupied[nodeID] = capacity
+	}
+	return occupied, nil
+}
+
+func (s Scheduler) desiredReplicas(ctx context.Context, deployment deploymentv2.Deployment, unit deploymentv2.ServiceUnit) (int, error) {
+	if unit.Autoscaling == nil {
+		return unit.Replicas, nil
+	}
+	if unit.Autoscaling.MinReplicas < 1 || unit.Autoscaling.MaxReplicas < unit.Autoscaling.MinReplicas || unit.Autoscaling.TargetValuePerReplica <= 0 || math.IsNaN(unit.Autoscaling.TargetValuePerReplica) || math.IsInf(unit.Autoscaling.TargetValuePerReplica, 0) {
+		return 0, fmt.Errorf("unit %s 自动伸缩配置无效", unit.ID)
+	}
+	metric, err := controlplane.ReadAutoscalingMetric(ctx, s.Metrics, deployment.Metadata.Tenant, deployment.Metadata.Name, unit.ID, unit.Autoscaling.Metric)
+	if err != nil {
+		return 0, fmt.Errorf("unit %s 自动伸缩 fail-closed: %w", unit.ID, err)
+	}
+	desired := math.Ceil(metric.Value / unit.Autoscaling.TargetValuePerReplica)
+	if desired >= float64(unit.Autoscaling.MaxReplicas) {
+		return unit.Autoscaling.MaxReplicas, nil
+	}
+	replicas := int(desired)
+	if replicas < unit.Autoscaling.MinReplicas {
+		replicas = unit.Autoscaling.MinReplicas
+	}
+	if replicas > unit.Autoscaling.MaxReplicas {
+		replicas = unit.Autoscaling.MaxReplicas
+	}
+	return replicas, nil
 }
 
 func (s Scheduler) scheduleGeneration(ctx context.Context, tenant, name string) (uint64, error) {
@@ -205,7 +297,7 @@ func (s Scheduler) liveNodes(ctx context.Context) (map[string]controlplane.NodeR
 			continue
 		}
 		var record controlplane.NodeRecord
-		if err := json.Unmarshal(entry.Value(), &record); err != nil || record.SchemaVersion != 1 || record.NodeID == "" {
+		if err := json.Unmarshal(entry.Value(), &record); err != nil || (record.SchemaVersion != 1 && record.SchemaVersion != 2) || record.NodeID == "" {
 			return nil, fmt.Errorf("节点租约 %s 无效", key)
 		}
 		nodes[record.NodeID] = record
@@ -248,21 +340,58 @@ func (s Scheduler) existingAssignments(ctx context.Context, tenant, name string)
 	return existing, maxGeneration, nil
 }
 
-func eligibleNodes(nodes map[string]controlplane.NodeRecord, selector map[string]string) []string {
+func eligibleNodes(nodes map[string]controlplane.NodeRecord, available map[string]controlplane.ResourceCapacity, unit deploymentv2.ServiceUnit) []string {
 	var eligible []string
 	for nodeID, node := range nodes {
-		matches := true
-		for key, value := range selector {
-			if node.Labels[key] != value {
-				matches = false
-				break
-			}
-		}
-		if matches {
+		if matchesLabels(node.Labels, unit.Placement.NodeSelector) &&
+			matchesRequiredAffinity(node.Labels, unit.Placement) &&
+			fitsResources(available[nodeID], unit.Resources.Requests) {
 			eligible = append(eligible, nodeID)
 		}
 	}
 	return eligible
+}
+
+func matchesRequiredAffinity(labels map[string]string, placement deploymentv2.Placement) bool {
+	for _, term := range placement.Affinity.Required {
+		if !matchesLabels(labels, term.MatchLabels) {
+			return false
+		}
+	}
+	for _, term := range placement.AntiAffinity.Required {
+		if matchesLabels(labels, term.MatchLabels) {
+			return false
+		}
+	}
+	return true
+}
+
+func preferenceScore(labels map[string]string, placement deploymentv2.Placement) int {
+	score := 0
+	for _, term := range placement.Affinity.Preferred {
+		if matchesLabels(labels, term.MatchLabels) {
+			score += term.Weight
+		}
+	}
+	for _, term := range placement.AntiAffinity.Preferred {
+		if matchesLabels(labels, term.MatchLabels) {
+			score -= term.Weight
+		}
+	}
+	return score
+}
+
+func matchesLabels(labels, selector map[string]string) bool {
+	for key, value := range selector {
+		if labels[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func fitsResources(capacity controlplane.ResourceCapacity, request deploymentv2.ResourceList) bool {
+	return capacity.CPUMillis >= request.CPUMillis && capacity.MemoryBytes >= request.MemoryBytes && capacity.GPU >= request.GPU
 }
 
 func placementScore(unitID, nodeID string) uint64 {

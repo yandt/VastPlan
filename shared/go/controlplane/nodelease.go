@@ -16,6 +16,7 @@ type NodeRecord struct {
 	SchemaVersion int               `json:"schema_version"`
 	NodeID        string            `json:"node_id"`
 	Labels        map[string]string `json:"labels,omitempty"`
+	Capacity      ResourceCapacity  `json:"capacity,omitempty"`
 	UpdatedAt     time.Time         `json:"updated_at"`
 }
 
@@ -23,6 +24,13 @@ type NodeLeaseOptions struct {
 	HeartbeatEvery time.Duration
 	FailureTimeout time.Duration
 	Logf           func(string, ...any)
+	Capacity       ResourceCapacity
+}
+
+type ResourceCapacity struct {
+	CPUMillis   int64 `json:"cpu_millis,omitempty"`
+	MemoryBytes int64 `json:"memory_bytes,omitempty"`
+	GPU         int64 `json:"gpu,omitempty"`
 }
 
 // NodeLease 周期续租节点身份；连续无法续租时通过 Lost 通知主进程自我隔离。
@@ -52,7 +60,11 @@ func StartNodeLease(parent context.Context, kv jetstream.KeyValue, nodeID string
 	ctx, cancel := context.WithCancel(parent)
 	lease := &NodeLease{
 		kv: kv, key: NodeKey(nodeID), cancel: cancel, done: make(chan struct{}), lost: make(chan error, 1),
-		record: NodeRecord{SchemaVersion: 1, NodeID: nodeID, Labels: cloneLabels(labels)},
+		record: NodeRecord{SchemaVersion: 2, NodeID: nodeID, Labels: cloneLabels(labels), Capacity: options.Capacity},
+	}
+	if options.Capacity.CPUMillis < 0 || options.Capacity.MemoryBytes < 0 || options.Capacity.GPU < 0 {
+		cancel()
+		return nil, errors.New("节点资源容量不能为负数")
 	}
 	if err := lease.heartbeat(ctx); err != nil {
 		cancel()

@@ -127,7 +127,7 @@ func main() {
 		defer stop()
 		controller := deploymentcontroller.Controller{
 			Deployments: buckets.Deployments, DeploymentKey: *key,
-			Scheduler: deploymentcontroller.Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments},
+			Scheduler: deploymentcontroller.Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments, Metrics: buckets.Autoscaling},
 			Leaders:   buckets.Controllers, Identity: *controllerID,
 			Logf: func(format string, args ...any) { fmt.Fprintf(os.Stderr, format+"\n", args...) },
 		}

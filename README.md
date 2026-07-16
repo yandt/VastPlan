@@ -23,14 +23,14 @@
 - `sdk/go/plugin` 插件 SDK（插件只写贡献 + 处理器）
 - `kernels/backend` 后端内核骨架
 - `kernels/backend/pluginservice` 本地及远端制品仓库：不可变索引、SHA-256、Ed25519 发布者证明、HTTPS 双重校验
-- `shared/go/controlplane` NATS KV bucket、CAS 发布、节点/capability 租约；`shared/go/addressing` 本地直调与远端 NATS request-reply
+- `shared/go/controlplane` NATS KV/JetStream、CAS 发布、节点/capability 租约与自动伸缩指标；`shared/go/addressing` 本地直调、远端 NATS request-reply、gRPC 双向流和持久事件
 - `kernels/backend/nodeagent` 自动装配：KV watch、内容寻址安装、真实健康与崩溃恢复、DRAIN、实际态复制、幂等与回滚
-- `kernels/backend/deploymentcontroller` 多节点调度：rendezvous hashing、标签放置、持久 assignment generation 与节点漂移恢复
+- `kernels/backend/deploymentcontroller` 多节点调度：资源容量、亲和/反亲和、指标自动伸缩、rendezvous hashing、持久 assignment generation 与节点漂移恢复
 - Controller 按 Deployment 独立 CAS 选主并支持多副本接管；宿主 Drain 原子摘流并等待在途调用（ADR-0028）
 - `plugins/` 四个第一方插件：hello-world（工具）、demo-permission（select 演示）、
   demo-audit（fanout 演示）、demo-quota（Hook 的配额限流与计量演示）
 
-尚未实现（见文档待决）：资源/亲和调度、流式 RPC、持久事件、frontend/runner/mobile 内核。
+尚未实现（见文档待决）：frontend/runner/mobile 内核、强资源原子预留、跨地域流量与有状态服务迁移。
 
 ## 快速开始
 

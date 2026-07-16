@@ -1,7 +1,7 @@
 // Package deploymentv1 定义单节点自动装配使用的 DesiredState v1 契约。
 //
-// v1 只接受 service 单元和固定 replicas=1；portal/app、多副本调度与亲和规则属于后续
-// 控制面版本，不能让本地代理假装已经具备集群调度能力。
+// v1 只接受 service 单元和固定 replicas=1；资源请求由 v2 控制器复制进来用于全局
+// 占用核算，Node Agent 不在本地重新调度。portal/app、多副本与亲和规则只属于 v2。
 package deploymentv1
 
 import (
@@ -47,14 +47,15 @@ type Metadata struct {
 
 // Unit 是 v1 唯一支持的 service 组合单元。
 type Unit struct {
-	ID          string         `json:"id"`
-	Kind        string         `json:"kind"`
-	Plugins     []PluginRef    `json:"plugins"`
-	Config      map[string]any `json:"config,omitempty"`
-	Enabled     bool           `json:"enabled"`
-	ServiceRole string         `json:"service_role"`
-	Replicas    int            `json:"replicas"`
-	Placement   Placement      `json:"placement,omitempty"`
+	ID          string               `json:"id"`
+	Kind        string               `json:"kind"`
+	Plugins     []PluginRef          `json:"plugins"`
+	Config      map[string]any       `json:"config,omitempty"`
+	Enabled     bool                 `json:"enabled"`
+	ServiceRole string               `json:"service_role"`
+	Replicas    int                  `json:"replicas"`
+	Placement   Placement            `json:"placement,omitempty"`
+	Resources   ResourceRequirements `json:"resources,omitempty"`
 }
 
 // PluginRef 通过不可变制品三元组引用一个插件；channel 留空时规范化为 stable。
@@ -67,6 +68,17 @@ type PluginRef struct {
 // Placement 在本地版本只实现标签全匹配的 nodeSelector。
 type Placement struct {
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+}
+
+type ResourceList struct {
+	CPUMillis   int64 `json:"cpu_millis,omitempty"`
+	MemoryBytes int64 `json:"memory_bytes,omitempty"`
+	GPU         int64 `json:"gpu,omitempty"`
+}
+
+// ResourceRequirements 是控制器已决策后的资源占用凭据，不授权 Node Agent 改变落点。
+type ResourceRequirements struct {
+	Requests ResourceList `json:"requests,omitempty"`
 }
 
 func schema() (*jsonschema.Schema, error) {

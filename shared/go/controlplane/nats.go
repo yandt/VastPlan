@@ -23,6 +23,7 @@ const (
 	DeploymentsBucket  = "VASTPLAN_DEPLOYMENTS_V2"
 	AssignmentsBucket  = "VASTPLAN_ASSIGNMENTS_V1"
 	ControllersBucket  = "VASTPLAN_CONTROLLERS_V1"
+	AutoscalingBucket  = "VASTPLAN_AUTOSCALING_V1"
 	EventsStream       = "VASTPLAN_EVENTS_V1"
 
 	MaxDesiredStateBytes = 1 << 20
@@ -37,6 +38,7 @@ type Buckets struct {
 	Deployments  jetstream.KeyValue
 	Assignments  jetstream.KeyValue
 	Controllers  jetstream.KeyValue
+	Autoscaling  jetstream.KeyValue
 	Events       jetstream.Stream
 }
 
@@ -106,6 +108,14 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	if err != nil {
 		return Buckets{}, fmt.Errorf("创建控制器选主 bucket: %w", err)
 	}
+	autoscaling, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket: AutoscalingBucket, Description: "VastPlan autoscaling metrics v1",
+		History: 1, TTL: AutoscalingMetricMaxAge, LimitMarkerTTL: time.Minute,
+		MaxValueSize: 16 << 10, Replicas: replicas, Storage: storage,
+	})
+	if err != nil {
+		return Buckets{}, fmt.Errorf("创建自动伸缩指标 bucket: %w", err)
+	}
 	events, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name: EventsStream, Description: "VastPlan durable domain events v1",
 		Subjects: []string{"vp.event.persist.v1.>"}, Retention: jetstream.LimitsPolicy,
@@ -117,7 +127,7 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	}
 	return Buckets{
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
-		Deployments: deployments, Assignments: assignments, Controllers: controllers, Events: events,
+		Deployments: deployments, Assignments: assignments, Controllers: controllers, Autoscaling: autoscaling, Events: events,
 	}, nil
 }
 
@@ -152,13 +162,17 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开控制器选主 bucket: %w", err)
 	}
+	autoscaling, err := js.KeyValue(ctx, AutoscalingBucket)
+	if err != nil {
+		return Buckets{}, fmt.Errorf("打开自动伸缩指标 bucket: %w", err)
+	}
 	events, err := js.Stream(ctx, EventsStream)
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开持久事件 stream: %w", err)
 	}
 	return Buckets{
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
-		Deployments: deployments, Assignments: assignments, Controllers: controllers, Events: events,
+		Deployments: deployments, Assignments: assignments, Controllers: controllers, Autoscaling: autoscaling, Events: events,
 	}, nil
 }
 
@@ -182,6 +196,10 @@ func AssignmentKey(tenant, name, nodeID string) string {
 
 func ScheduleKey(tenant, name string) string {
 	return DeploymentKey(tenant, name) + ".schedule"
+}
+
+func AutoscalingMetricKey(tenant, deployment, unit, metric string) string {
+	return "tenants." + keyToken(tenant) + ".deployments." + keyToken(deployment) + ".units." + keyToken(unit) + ".metrics." + keyToken(metric)
 }
 
 func AssignmentNodeID(tenant, name, key string) (string, error) {

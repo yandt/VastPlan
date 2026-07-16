@@ -77,8 +77,8 @@ bin/backend-kernel reconcile \
 | 角色 | 允许 | 明确禁止 |
 |---|---|---|
 | bootstrap | 创建/校准全部 KV 与发布初始配置 | 常驻业务进程持有 |
-| controller | 读 Deployment/Node，写 Assignment | 改 Stream、写 Actual/Capability |
-| node | 读 Desired/Assignment，写 Actual/Node/Capability，RPC/事件 | 写 Deployment/Desired/Assignment |
-| runtime | Capability、RPC、事件 | 读取或改写部署控制面 |
+| controller | 读 Deployment/Node/Autoscaling Metric，写 Assignment/Controller Lease | 改 Stream、写 Actual/Capability/Metric |
+| node | 读 Desired/Assignment，写 Actual/Node/Capability/Autoscaling Metric，RPC/事件 | 写 Deployment/Desired/Assignment |
+| runtime | Capability、RPC、事件、写 Autoscaling Metric | 读取或改写部署控制面 |
 
 新增 bucket 或 Subject 时，必须先修改 `RoleACL` 并增加真实权限允许/拒绝测试，不得在部署配置里临时放开 `>`。

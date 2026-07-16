@@ -46,7 +46,47 @@ type ServiceUnit struct {
 	Enabled     bool                     `json:"enabled"`
 	ServiceRole string                   `json:"service_role"`
 	Replicas    int                      `json:"replicas"`
-	Placement   deploymentv1.Placement   `json:"placement,omitempty"`
+	Autoscaling *Autoscaling             `json:"autoscaling,omitempty"`
+	Resources   ResourceRequirements     `json:"resources,omitempty"`
+	Placement   Placement                `json:"placement,omitempty"`
+}
+
+// ResourceList 使用规范化整数，避免不同组件对 "500m"、"2Gi" 等文本单位产生歧义。
+type ResourceList struct {
+	CPUMillis   int64 `json:"cpu_millis,omitempty"`
+	MemoryBytes int64 `json:"memory_bytes,omitempty"`
+	GPU         int64 `json:"gpu,omitempty"`
+}
+
+type ResourceRequirements struct {
+	Requests ResourceList `json:"requests,omitempty"`
+}
+
+type LabelTerm struct {
+	MatchLabels map[string]string `json:"match_labels"`
+}
+
+type WeightedLabelTerm struct {
+	MatchLabels map[string]string `json:"match_labels"`
+	Weight      int               `json:"weight"`
+}
+
+type LabelPolicy struct {
+	Required  []LabelTerm         `json:"required,omitempty"`
+	Preferred []WeightedLabelTerm `json:"preferred,omitempty"`
+}
+
+type Placement struct {
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+	Affinity     LabelPolicy       `json:"affinity,omitempty"`
+	AntiAffinity LabelPolicy       `json:"antiAffinity,omitempty"`
+}
+
+type Autoscaling struct {
+	MinReplicas           int     `json:"min_replicas"`
+	MaxReplicas           int     `json:"max_replicas"`
+	Metric                string  `json:"metric"`
+	TargetValuePerReplica float64 `json:"target_value_per_replica"`
 }
 
 func schema() (*jsonschema.Schema, error) {
@@ -96,6 +136,14 @@ func Parse(raw []byte) (Deployment, error) {
 			return Deployment{}, fmt.Errorf("集群部署 unit id 重复: %q", unit.ID)
 		}
 		unitIDs[unit.ID] = struct{}{}
+		if unit.Autoscaling != nil {
+			if unit.Autoscaling.MinReplicas > unit.Autoscaling.MaxReplicas {
+				return Deployment{}, fmt.Errorf("unit %q autoscaling min_replicas 不能大于 max_replicas", unit.ID)
+			}
+			if unit.Replicas < unit.Autoscaling.MinReplicas || unit.Replicas > unit.Autoscaling.MaxReplicas {
+				return Deployment{}, fmt.Errorf("unit %q replicas 必须位于 autoscaling min/max 区间", unit.ID)
+			}
+		}
 		pluginIDs := map[string]struct{}{}
 		for j := range unit.Plugins {
 			plugin := &unit.Plugins[j]

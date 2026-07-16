@@ -87,7 +87,7 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "mesh", Tenant: "acme"},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "backend-api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 2,
-			Placement: deploymentv1.Placement{NodeSelector: map[string]string{"region": "cn"}},
+			Placement: deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},
 			Plugins: []deploymentv1.PluginRef{
 				{ID: "com.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
 				{ID: "com.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},

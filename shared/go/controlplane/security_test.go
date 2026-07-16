@@ -84,7 +84,8 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	bootstrap := connect(RoleBootstrap)
 	controller := connect(RoleController)
 	node := connect(RoleNode)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	runtime := connect(RoleRuntime)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	bootstrapJS, _ := jetstream.New(bootstrap)
 	if _, err := EnsureBuckets(ctx, bootstrapJS, 1, jetstream.MemoryStorage); err != nil {
@@ -109,8 +110,27 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	if _, err := nodeBuckets.Actual.Put(ctx, "node-1", []byte("healthy")); err != nil {
 		t.Fatalf("node 应能写 actual KV: %v", err)
 	}
-	if _, err := nodeBuckets.Deployments.Put(ctx, "forbidden", []byte("tampered")); err == nil {
+	runtimeJS, _ := jetstream.New(runtime)
+	runtimeMetrics, err := runtimeJS.KeyValue(ctx, AutoscalingBucket)
+	if err != nil {
+		t.Fatalf("runtime 应能打开自动伸缩指标 bucket: %v", err)
+	}
+	metric := AutoscalingMetric{Tenant: "acme", Deployment: "prod", Unit: "api", Metric: "queue.depth", Value: 42}
+	if err := PublishAutoscalingMetric(ctx, runtimeMetrics, metric); err != nil {
+		t.Fatalf("runtime 应能发布自动伸缩指标: %v", err)
+	}
+	if got, err := ReadAutoscalingMetric(ctx, controllerBuckets.Autoscaling, "acme", "prod", "api", "queue.depth"); err != nil || got.Value != 42 {
+		t.Fatalf("controller 应能读取自动伸缩指标: got=%+v err=%v", got, err)
+	}
+	nodeDeniedCtx, nodeDeniedCancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer nodeDeniedCancel()
+	if _, err := nodeBuckets.Deployments.Put(nodeDeniedCtx, "forbidden", []byte("tampered")); err == nil {
 		t.Fatal("node 不得写全局 deployment KV")
+	}
+	controllerDeniedCtx, controllerDeniedCancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer controllerDeniedCancel()
+	if _, err := controllerBuckets.Autoscaling.Put(controllerDeniedCtx, "forbidden", []byte("metric")); err == nil {
+		t.Fatal("controller 不得伪造自动伸缩指标")
 	}
 
 	assignment := "$KV." + AssignmentsBucket + ".tenant.unit"

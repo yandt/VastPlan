@@ -3,6 +3,7 @@ package deploymentcontroller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net"
 	"path/filepath"
 	"strings"
@@ -206,12 +207,152 @@ func TestControllerLeaderFailoverKeepsSingleActiveWriter(t *testing.T) {
 	}
 }
 
+func TestSchedulerResourceAccountingAndAffinity(t *testing.T) {
+	_, buckets := startSchedulerNATS(t)
+	ctx := context.Background()
+	leases := []*controlplane.NodeLease{}
+	nodes := []struct {
+		id       string
+		labels   map[string]string
+		capacity controlplane.ResourceCapacity
+	}{
+		{"node-a", map[string]string{"region": "cn", "disk": "hdd"}, controlplane.ResourceCapacity{CPUMillis: 1000, MemoryBytes: 2000}},
+		{"node-b", map[string]string{"region": "cn", "disk": "ssd"}, controlplane.ResourceCapacity{CPUMillis: 2000, MemoryBytes: 2000}},
+		{"node-c", map[string]string{"region": "cn", "disk": "ssd", "maintenance": "true"}, controlplane.ResourceCapacity{CPUMillis: 4000, MemoryBytes: 4000}},
+	}
+	for _, node := range nodes {
+		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, node.id, node.labels, controlplane.NodeLeaseOptions{Capacity: node.capacity})
+		if err != nil {
+			t.Fatal(err)
+		}
+		leases = append(leases, lease)
+	}
+	defer func() {
+		for _, lease := range leases {
+			_ = lease.Close(context.Background())
+		}
+	}()
+	deployment := testDeployment(1)
+	deployment.Units[0].Resources.Requests = deploymentv2.ResourceList{CPUMillis: 1500, MemoryBytes: 1000}
+	deployment.Units[0].Placement.AntiAffinity.Required = []deploymentv2.LabelTerm{{MatchLabels: map[string]string{"maintenance": "true"}}}
+	deployment.Units[0].Placement.Affinity.Preferred = []deploymentv2.WeightedLabelTerm{{MatchLabels: map[string]string{"disk": "ssd"}, Weight: 100}}
+	deployment.Units = append(deployment.Units, deploymentv2.ServiceUnit{
+		ID: "worker", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
+		Plugins:   []deploymentv1.PluginRef{{ID: "com.example.worker", Version: "1.0.0", Channel: "stable"}},
+		Resources: deploymentv2.ResourceRequirements{Requests: deploymentv2.ResourceList{CPUMillis: 1000, MemoryBytes: 1000}},
+		Placement: deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}, AntiAffinity: deploymentv2.LabelPolicy{
+			Required: []deploymentv2.LabelTerm{{MatchLabels: map[string]string{"maintenance": "true"}}},
+		}},
+	})
+	scheduler := Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments}
+	plan, err := scheduler.Reconcile(ctx, deployment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selectedNode(plan.Assignments, "api") != "node-b" {
+		t.Fatalf("资源硬过滤和 SSD 亲和应选择 node-b: %+v", plan.Assignments)
+	}
+	if selectedNode(plan.Assignments, "worker") != "node-a" {
+		t.Fatalf("node-b 剩余 CPU 不足后 worker 应选择 node-a: %+v", plan.Assignments)
+	}
+	foreign := deploymentv1.DesiredState{
+		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "foreign", Tenant: "acme"},
+		Units: []deploymentv1.Unit{{
+			ID: "foreign", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
+			Plugins:   []deploymentv1.PluginRef{{ID: "com.example.foreign", Version: "1.0.0", Channel: "stable"}},
+			Resources: deploymentv1.ResourceRequirements{Requests: deploymentv1.ResourceList{CPUMillis: 600}},
+		}},
+	}
+	foreignRaw, _ := json.Marshal(foreign)
+	if _, _, err := controlplane.ApplyDesiredState(ctx, buckets.Assignments, controlplane.AssignmentKey("acme", "foreign", "node-b"), foreignRaw); err != nil {
+		t.Fatal(err)
+	}
+	deployment.Revision++
+	if _, err := scheduler.Reconcile(ctx, deployment); err == nil {
+		t.Fatal("其他 deployment 已占用 node-b 资源时必须计入容量并 fail-closed")
+	}
+	if err := buckets.Assignments.Delete(ctx, controlplane.AssignmentKey("acme", "foreign", "node-b")); err != nil {
+		t.Fatal(err)
+	}
+
+	deployment.Revision++
+	deployment.Units[1].Resources.Requests.CPUMillis = 1100
+	if _, err := scheduler.Reconcile(ctx, deployment); err == nil {
+		t.Fatal("排除维护节点后总容量不足必须 fail-closed")
+	}
+	kept := loadAssignment(t, buckets.Assignments, deployment, "node-a")
+	if countUnit(map[string]deploymentv1.DesiredState{"node-a": kept}, "worker") != 1 {
+		t.Fatal("资源不足不得破坏最近健康 assignment")
+	}
+}
+
+func TestSchedulerAutoscalingMetricBoundsAndMissingMetric(t *testing.T) {
+	_, buckets := startSchedulerNATS(t)
+	ctx := context.Background()
+	leases := []*controlplane.NodeLease{}
+	for i := 0; i < 5; i++ {
+		id := fmt.Sprintf("node-%d", i)
+		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, id, map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		leases = append(leases, lease)
+	}
+	defer func() {
+		for _, lease := range leases {
+			_ = lease.Close(context.Background())
+		}
+	}()
+	deployment := testDeployment(2)
+	deployment.Units[0].Autoscaling = &deploymentv2.Autoscaling{MinReplicas: 2, MaxReplicas: 5, Metric: "queue.depth", TargetValuePerReplica: 10}
+	scheduler := Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments, Metrics: buckets.Autoscaling}
+	publish := func(value float64) {
+		t.Helper()
+		if err := controlplane.PublishAutoscalingMetric(ctx, buckets.Autoscaling, controlplane.AutoscalingMetric{
+			Tenant: "acme", Deployment: "prod", Unit: "api", Metric: "queue.depth", Value: value,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	publish(21)
+	plan, err := scheduler.Reconcile(ctx, deployment)
+	if err != nil || countUnit(plan.Assignments, "api") != 3 {
+		t.Fatalf("21/10 应扩为 3 副本: count=%d err=%v", countUnit(plan.Assignments, "api"), err)
+	}
+	deployment.Revision++
+	publish(100)
+	plan, err = scheduler.Reconcile(ctx, deployment)
+	if err != nil || countUnit(plan.Assignments, "api") != 5 {
+		t.Fatalf("自动伸缩应受 max=5 限制: count=%d err=%v", countUnit(plan.Assignments, "api"), err)
+	}
+	deployment.Revision++
+	publish(0)
+	plan, err = scheduler.Reconcile(ctx, deployment)
+	if err != nil || countUnit(plan.Assignments, "api") != 2 {
+		t.Fatalf("零负载应保持 min=2: count=%d err=%v", countUnit(plan.Assignments, "api"), err)
+	}
+	deployment.Units[0].Autoscaling.Metric = "missing"
+	if _, err := scheduler.Reconcile(ctx, deployment); err == nil {
+		t.Fatal("自动伸缩指标缺失必须 fail-closed")
+	}
+	deployment.Units[0].Autoscaling.Metric = "queue.depth"
+	if err := controlplane.PublishAutoscalingMetric(ctx, buckets.Autoscaling, controlplane.AutoscalingMetric{
+		Tenant: "acme", Deployment: "prod", Unit: "api", Metric: "queue.depth", Value: 10,
+		ObservedAt: time.Now().Add(-controlplane.AutoscalingMetricMaxAge - time.Second),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := scheduler.Reconcile(ctx, deployment); err == nil {
+		t.Fatal("时间戳过期的自动伸缩指标必须 fail-closed")
+	}
+}
+
 func testDeployment(replicas int) deploymentv2.Deployment {
 	return deploymentv2.Deployment{
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "prod", Tenant: "acme"},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: replicas,
-			Placement: deploymentv1.Placement{NodeSelector: map[string]string{"region": "cn"}},
+			Placement: deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},
 			Plugins:   []deploymentv1.PluginRef{{ID: "com.example.api", Version: "1.0.0", Channel: "stable"}},
 		}},
 	}

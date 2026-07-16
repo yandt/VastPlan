@@ -43,6 +43,22 @@
         }
       }
     },
+    "resourceList": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cpu_millis": { "type": "integer", "minimum": 0 },
+        "memory_bytes": { "type": "integer", "minimum": 0 },
+        "gpu": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": { "$ref": "#/$defs/resourceList" }
+      }
+    },
     "serviceUnit": {
       "type": "object",
       "additionalProperties": false,
@@ -59,6 +75,7 @@
         "enabled": { "type": "boolean" },
         "service_role": { "enum": ["backend", "workspace", "rs"] },
         "replicas": { "const": 1 },
+        "resources": { "$ref": "#/$defs/resources" },
         "placement": { "$ref": "#/$defs/placement" }
       }
     }

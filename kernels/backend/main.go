@@ -176,6 +176,9 @@ func runReconcile(args []string) (runErr error) {
 	lockPath := flags.String("lock", "", "单实例锁文件；默认 <actual-state>.lock")
 	nodeID := flags.String("node-id", "local", "当前节点 ID")
 	labelsRaw := flags.String("labels", "", "节点标签，逗号分隔 key=value")
+	capacityCPU := flags.Int64("capacity-cpu-millis", 0, "节点可分配 CPU，单位 millicores")
+	capacityMemory := flags.Int64("capacity-memory-bytes", 0, "节点可分配内存，单位 bytes")
+	capacityGPU := flags.Int64("capacity-gpu", 0, "节点可分配 GPU 数量")
 	interval := flags.Duration("interval", 5*time.Second, "本地期望态轮询间隔")
 	natsURL := flags.String("nats-url", "", "NATS URL；设置后从 JetStream KV watch 期望态")
 	natsCA := flags.String("nats-ca", "", "NATS 服务端/客户端证书 CA PEM")
@@ -325,7 +328,11 @@ func runReconcile(args []string) (runErr error) {
 				return fmt.Errorf("作废旧 assignment: %w", deleteErr)
 			}
 		}
-		nodeLease, err = controlplane.StartNodeLease(ctx, natsBuckets.Nodes, *nodeID, labels, controlplane.NodeLeaseOptions{Logf: logf})
+		nodeLease, err = controlplane.StartNodeLease(ctx, natsBuckets.Nodes, *nodeID, labels, controlplane.NodeLeaseOptions{
+			Logf: logf, Capacity: controlplane.ResourceCapacity{
+				CPUMillis: *capacityCPU, MemoryBytes: *capacityMemory, GPU: *capacityGPU,
+			},
+		})
 		if err != nil {
 			return err
 		}

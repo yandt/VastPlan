@@ -138,12 +138,12 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 	case RoleController:
 		return SubjectACL{
 			PublishAllow: append(openAllAPI(), append(
-				kvAPIForRead(DeploymentsBucket, NodesBucket, AssignmentsBucket, ControllersBucket),
+				kvAPIForRead(DeploymentsBucket, NodesBucket, AssignmentsBucket, ControllersBucket, AutoscalingBucket),
 				"$KV."+AssignmentsBucket+".>", "$KV."+ControllersBucket+".>",
 			)...),
 			SubscribeAllow: []string{
 				"_INBOX.>", "$KV." + DeploymentsBucket + ".>", "$KV." + NodesBucket + ".>",
-				"$KV." + AssignmentsBucket + ".>", "$KV." + ControllersBucket + ".>",
+				"$KV." + AssignmentsBucket + ".>", "$KV." + ControllersBucket + ".>", "$KV." + AutoscalingBucket + ".>",
 			},
 		}, nil
 	case RoleNode:
@@ -152,6 +152,7 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 				kvAPIForRead(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, AssignmentsBucket),
 				"$KV."+ActualBucket+".>", "$KV."+NodesBucket+".>",
 				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
+				"$KV."+AutoscalingBucket+".>",
 				"vp.event.persist.v1.>",
 				"$JS.API.CONSUMER.CREATE."+EventsStream, "$JS.API.CONSUMER.CREATE."+EventsStream+".>",
 				"$JS.API.CONSUMER.DURABLE.CREATE."+EventsStream+".>", "$JS.API.CONSUMER.INFO."+EventsStream+".>",
@@ -167,8 +168,9 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 		}, nil
 	case RoleRuntime:
 		return SubjectACL{
-			PublishAllow: append(append(kvAPIForRead(CapabilitiesBucket), "$JS.API.STREAM.INFO."+EventsStream),
+			PublishAllow: append(append(kvAPIForRead(CapabilitiesBucket), "$JS.API.STREAM.INFO."+EventsStream, "$JS.API.STREAM.INFO.KV_"+AutoscalingBucket),
 				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
+				"$KV."+AutoscalingBucket+".>",
 				"vp.event.persist.v1.>",
 				"$JS.API.CONSUMER.CREATE."+EventsStream, "$JS.API.CONSUMER.CREATE."+EventsStream+".>",
 				"$JS.API.CONSUMER.DURABLE.CREATE."+EventsStream+".>", "$JS.API.CONSUMER.INFO."+EventsStream+".>",
@@ -183,7 +185,7 @@ func RoleACL(role SecurityRole) (SubjectACL, error) {
 }
 
 func openAllAPI() []string {
-	return append(kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, ControllersBucket), "$JS.API.STREAM.INFO."+EventsStream)
+	return append(kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, ControllersBucket, AutoscalingBucket), "$JS.API.STREAM.INFO."+EventsStream)
 }
 
 func kvAPIForInfo(buckets ...string) []string {
