@@ -2,6 +2,7 @@ package pluginv1
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -132,5 +133,36 @@ func TestParseManifest_BackendDescriptorsAreClosed(t *testing.T) {
 	}`)
 	if _, err := ParseManifest(missingContract); err == nil {
 		t.Fatal("缺少 agent 核心契约字段的清单必须被拒绝")
+	}
+}
+
+func TestParseManifest_BackendStateMigrationContract(t *testing.T) {
+	valid := []byte(`{
+		"id":"com.example.stateful","name":"stateful","description":"stateful plugin",
+		"version":"2.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"state":{"backend":{"format":"com.example.stateful.data","formatVersion":2,
+			"migration":{"protocol":"lifecycle.v1","from":[{"format":"com.example.stateful.data","formatVersion":1}]}}},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{"tools":[{"id":"demo.tool","service_role":"backend"}]}}
+	}`)
+	manifest, err := ParseManifest(valid)
+	if err != nil {
+		t.Fatalf("合法状态迁移契约应通过: %v", err)
+	}
+	if manifest.State == nil || manifest.State.Backend == nil || manifest.State.Backend.FormatVersion != 2 {
+		t.Fatalf("状态契约未解析: %+v", manifest.State)
+	}
+
+	invalid := []string{
+		`"state":{"backend":{"format":"com.example.stateful.data","formatVersion":0}}`,
+		`"state":{"backend":{"format":"invalid","formatVersion":1}}`,
+		`"state":{"backend":{"format":"com.example.stateful.data","formatVersion":2,"migration":{"protocol":"future.v2","from":[{"format":"com.example.stateful.data","formatVersion":1}]}}}`,
+		`"state":{"backend":{"format":"com.example.stateful.data","formatVersion":2,"migration":{"protocol":"lifecycle.v1","from":[]}}}`,
+	}
+	base := `{"id":"com.example.stateful","name":"stateful","description":"stateful plugin","version":"2.0.0","publisher":"example","engines":{"backend":"^1.0"},%s,"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[{"id":"demo.tool","service_role":"backend"}]}}}`
+	for _, state := range invalid {
+		if _, err := ParseManifest([]byte(fmt.Sprintf(base, state))); err == nil {
+			t.Errorf("非法状态契约必须被拒绝: %s", state)
+		}
 	}
 }

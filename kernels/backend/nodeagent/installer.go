@@ -191,8 +191,23 @@ func inspectInstalled(root string, artifact pluginservice.Artifact, entry string
 	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 		return InstalledPlugin{}, fmt.Errorf("backend 入口不可执行: %s", entry)
 	}
-	return InstalledPlugin{
+	installed := InstalledPlugin{
 		ID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel,
 		SHA256: artifact.SHA256, Root: root, EntryPath: entryPath,
-	}, nil
+	}
+	if manifest.State != nil && manifest.State.Backend != nil {
+		state := manifest.State.Backend
+		installed.State = &PluginStateContract{
+			PluginStateIdentity: PluginStateIdentity{Format: state.Format, FormatVersion: state.FormatVersion},
+		}
+		if state.Migration != nil {
+			installed.State.MigrationProtocol = state.Migration.Protocol
+			for _, from := range state.Migration.From {
+				installed.State.MigrationFrom = append(installed.State.MigrationFrom, PluginStateIdentity{
+					Format: from.Format, FormatVersion: from.FormatVersion,
+				})
+			}
+		}
+	}
+	return installed, nil
 }

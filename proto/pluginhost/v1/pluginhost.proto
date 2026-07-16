@@ -87,9 +87,19 @@ message Lifecycle {
     OP_DEACTIVATE = 2;
     OP_DRAIN = 3;
     OP_SHUTDOWN = 4;
+    // 有状态升级采用 copy-on-write 三阶段事务。PREPARE/COMMIT 后、候选取得
+    // 路由所有权前仍必须支持 ROLLBACK；旧实例始终读取旧状态视图。
+    OP_MIGRATION_PREPARE = 5;
+    OP_MIGRATION_COMMIT = 6;
+    OP_MIGRATION_ROLLBACK = 7;
   }
   string request_id = 1;
   Op op = 2;
+  string transaction_id = 3;
+  string from_state_format = 4;
+  int32 from_state_version = 5;
+  string to_state_format = 6;
+  int32 to_state_version = 7;
 }
 
 message LifecycleAck {

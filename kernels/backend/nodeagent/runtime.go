@@ -67,7 +67,7 @@ func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *Protoc
 	}
 }
 
-func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) error {
+func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr error) {
 	if r.IsRunning(unit.ID, unit.Fingerprint) {
 		return nil
 	}
@@ -90,11 +90,31 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) error {
 		if err != nil {
 			return fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)
 		}
+		if process.PluginID != plugin.ID || process.Version != plugin.Version {
+			return fmt.Errorf("候选进程身份与验签清单不一致: 期望 %s@%s，实际 %s@%s",
+				plugin.ID, plugin.Version, process.PluginID, process.Version)
+		}
 		processes = append(processes, process)
 	}
 	for _, process := range processes {
 		if !process.Alive() {
 			return fmt.Errorf("候选插件 %s@%s 在发布能力前已退出: %v", process.PluginID, process.Version, process.Err())
+		}
+	}
+	prepared, err := prepareMigrations(ctx, candidate, unit.Migrations, processes)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if !ok {
+			if rollbackErr := rollbackMigrations(candidate, prepared, r.Logf); rollbackErr != nil {
+				applyErr = errors.Join(applyErr, rollbackErr)
+			}
+		}
+	}()
+	for _, migration := range prepared {
+		if err := candidate.Migrate(ctx, migration.process, migrationRequest(migration.plan, protocolbus.MigrationCommit)); err != nil {
+			return &StateMigrationError{PluginID: migration.plan.PluginID, Phase: "commit", Err: err}
 		}
 	}
 	r.mu.RLock()
@@ -116,6 +136,12 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) error {
 	if r.closed {
 		r.mu.Unlock()
 		return errors.New("运行时已关闭")
+	}
+	// 迁移已提交，但 registration 门闩仍关闭。全部租约成功激活后，在同一个
+	// Runtime 临界区立即切换当前指针；从此路径起没有可失败步骤。
+	if err := addressing.ActivateRegistrations(ctx, registrations); err != nil {
+		r.mu.Unlock()
+		return fmt.Errorf("激活 unit %s 候选能力组: %w", unit.ID, err)
 	}
 	old, hadOld := r.units[unit.ID]
 	restarts := unit.RestartBase
@@ -149,6 +175,63 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) error {
 		old.host.Stop()
 	}
 	return nil
+}
+
+type preparedMigration struct {
+	plan    StateMigrationPlan
+	process *protocolbus.PluginProcess
+}
+
+func prepareMigrations(ctx context.Context, host *protocolbus.Host, plans []StateMigrationPlan, processes []*protocolbus.PluginProcess) ([]preparedMigration, error) {
+	byPlugin := make(map[string]*protocolbus.PluginProcess, len(processes))
+	for _, process := range processes {
+		byPlugin[process.PluginID] = process
+	}
+	prepared := make([]preparedMigration, 0, len(plans))
+	for _, plan := range plans {
+		process := byPlugin[plan.PluginID]
+		if process == nil {
+			err := &StateMigrationError{PluginID: plan.PluginID, Phase: "prepare", Err: errors.New("迁移计划引用未启动的候选插件")}
+			return nil, errors.Join(err, rollbackMigrations(host, prepared, nil))
+		}
+		migration := preparedMigration{plan: plan, process: process}
+		// 即使 PREPARE 返回错误，也可能已经产生了部分候选状态；先登记再调用，
+		// 失败路径才能把本插件一并纳入逆序 ROLLBACK。
+		prepared = append(prepared, migration)
+		if err := host.Migrate(ctx, process, migrationRequest(plan, protocolbus.MigrationPrepare)); err != nil {
+			prepareErr := &StateMigrationError{PluginID: plan.PluginID, Phase: "prepare", Err: err}
+			return nil, errors.Join(prepareErr, rollbackMigrations(host, prepared, nil))
+		}
+	}
+	return prepared, nil
+}
+
+func migrationRequest(plan StateMigrationPlan, operation protocolbus.MigrationOperation) protocolbus.MigrationRequest {
+	return protocolbus.MigrationRequest{
+		Operation: operation, TransactionID: plan.TransactionID,
+		From: protocolbus.StateIdentity{Format: plan.From.Format, FormatVersion: plan.From.FormatVersion},
+		To:   protocolbus.StateIdentity{Format: plan.To.Format, FormatVersion: plan.To.FormatVersion},
+	}
+}
+
+func rollbackMigrations(host *protocolbus.Host, prepared []preparedMigration, logf func(string, ...any)) error {
+	var rollbackErr error
+	for index := len(prepared) - 1; index >= 0; index-- {
+		migration := prepared[index]
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		err := host.Migrate(ctx, migration.process, migrationRequest(migration.plan, protocolbus.MigrationRollback))
+		cancel()
+		if err != nil && logf != nil {
+			logf("回滚插件 %s 状态迁移失败 transaction=%s: %v",
+				migration.plan.PluginID, migration.plan.TransactionID, err)
+		}
+		if err != nil {
+			rollbackErr = errors.Join(rollbackErr, &StateMigrationError{
+				PluginID: migration.plan.PluginID, Phase: "rollback", Err: err,
+			})
+		}
+	}
+	return rollbackErr
 }
 
 func (r *ProtocolRuntime) Stop(ctx context.Context, unitID string) error {
@@ -287,7 +370,7 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 			if contribution.PluginID == protocolbus.KernelPluginID {
 				continue
 			}
-			registration, err := router.Register(ctx, addressing.RegisterOptions{
+			registration, err := router.PrepareRegistration(ctx, addressing.RegisterOptions{
 				Capability: contribution.ID, ExtensionPoint: point.Name,
 				ServiceRole: unit.ServiceRole, UnitID: unit.ID, Version: versions[contribution.PluginID],
 			}, addressing.HostHandler(func(invokeCtx context.Context, target *contractv1.CallTarget, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {

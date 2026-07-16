@@ -109,6 +109,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 		if err := r.checkpoint(&actual); err != nil {
 			return Result{Changed: changed, State: actual}, err
 		}
+		migrations, migrationErr := planStateMigrations(id, fingerprint, current.Plugins, installed)
+		if migrationErr != nil {
+			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: "migration_contract", Message: migrationErr.Error()})
+			if err := r.failCandidate(&current, id, migrationErr); err != nil {
+				return Result{Changed: changed, State: actual}, err
+			}
+			actual.Units[id] = current
+			if err := r.checkpoint(&actual); err != nil {
+				return Result{Changed: changed, State: actual}, err
+			}
+			continue
+		}
 		if err := r.setCandidatePhase(&current, PhaseActivating); err != nil {
 			return Result{Changed: changed, State: actual}, err
 		}
@@ -118,10 +130,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 		}
 		runtimeUnit := RuntimeUnit{
 			ID: id, Fingerprint: fingerprint, ServiceRole: unit.ServiceRole,
-			Config: RawConfig(unit.Config), Plugins: installed, RestartBase: current.RestartCount,
+			Config: RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
+			RestartBase: current.RestartCount,
 		}
 		if err := r.Runtime.Apply(ctx, runtimeUnit); err != nil {
-			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: "launch", Message: err.Error()})
+			stage := "launch"
+			var migrationErr *StateMigrationError
+			if errors.As(err, &migrationErr) {
+				stage = "migration_" + migrationErr.Phase
+			}
+			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: stage, Message: err.Error()})
 			current = actual.Units[id]
 			if phaseErr := r.failCandidate(&current, id, err); phaseErr != nil {
 				return Result{Changed: changed, State: actual}, phaseErr

@@ -37,6 +37,11 @@ const (
 	Lifecycle_OP_DEACTIVATE  Lifecycle_Op = 2
 	Lifecycle_OP_DRAIN       Lifecycle_Op = 3
 	Lifecycle_OP_SHUTDOWN    Lifecycle_Op = 4
+	// 有状态升级采用 copy-on-write 三阶段事务。PREPARE/COMMIT 后、候选取得
+	// 路由所有权前仍必须支持 ROLLBACK；旧实例始终读取旧状态视图。
+	Lifecycle_OP_MIGRATION_PREPARE  Lifecycle_Op = 5
+	Lifecycle_OP_MIGRATION_COMMIT   Lifecycle_Op = 6
+	Lifecycle_OP_MIGRATION_ROLLBACK Lifecycle_Op = 7
 )
 
 // Enum value maps for Lifecycle_Op.
@@ -47,13 +52,19 @@ var (
 		2: "OP_DEACTIVATE",
 		3: "OP_DRAIN",
 		4: "OP_SHUTDOWN",
+		5: "OP_MIGRATION_PREPARE",
+		6: "OP_MIGRATION_COMMIT",
+		7: "OP_MIGRATION_ROLLBACK",
 	}
 	Lifecycle_Op_value = map[string]int32{
-		"OP_UNSPECIFIED": 0,
-		"OP_ACTIVATE":    1,
-		"OP_DEACTIVATE":  2,
-		"OP_DRAIN":       3,
-		"OP_SHUTDOWN":    4,
+		"OP_UNSPECIFIED":        0,
+		"OP_ACTIVATE":           1,
+		"OP_DEACTIVATE":         2,
+		"OP_DRAIN":              3,
+		"OP_SHUTDOWN":           4,
+		"OP_MIGRATION_PREPARE":  5,
+		"OP_MIGRATION_COMMIT":   6,
+		"OP_MIGRATION_ROLLBACK": 7,
 	}
 )
 
@@ -575,11 +586,16 @@ func (x *EventEnvelope) GetEvent() *v1.CallEvent {
 }
 
 type Lifecycle struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	Op            Lifecycle_Op           `protobuf:"varint,2,opt,name=op,proto3,enum=vastplan.pluginhost.v1.Lifecycle_Op" json:"op,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	RequestId        string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Op               Lifecycle_Op           `protobuf:"varint,2,opt,name=op,proto3,enum=vastplan.pluginhost.v1.Lifecycle_Op" json:"op,omitempty"`
+	TransactionId    string                 `protobuf:"bytes,3,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	FromStateFormat  string                 `protobuf:"bytes,4,opt,name=from_state_format,json=fromStateFormat,proto3" json:"from_state_format,omitempty"`
+	FromStateVersion int32                  `protobuf:"varint,5,opt,name=from_state_version,json=fromStateVersion,proto3" json:"from_state_version,omitempty"`
+	ToStateFormat    string                 `protobuf:"bytes,6,opt,name=to_state_format,json=toStateFormat,proto3" json:"to_state_format,omitempty"`
+	ToStateVersion   int32                  `protobuf:"varint,7,opt,name=to_state_version,json=toStateVersion,proto3" json:"to_state_version,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Lifecycle) Reset() {
@@ -624,6 +640,41 @@ func (x *Lifecycle) GetOp() Lifecycle_Op {
 		return x.Op
 	}
 	return Lifecycle_OP_UNSPECIFIED
+}
+
+func (x *Lifecycle) GetTransactionId() string {
+	if x != nil {
+		return x.TransactionId
+	}
+	return ""
+}
+
+func (x *Lifecycle) GetFromStateFormat() string {
+	if x != nil {
+		return x.FromStateFormat
+	}
+	return ""
+}
+
+func (x *Lifecycle) GetFromStateVersion() int32 {
+	if x != nil {
+		return x.FromStateVersion
+	}
+	return 0
+}
+
+func (x *Lifecycle) GetToStateFormat() string {
+	if x != nil {
+		return x.ToStateFormat
+	}
+	return ""
+}
+
+func (x *Lifecycle) GetToStateVersion() int32 {
+	if x != nil {
+		return x.ToStateVersion
+	}
+	return 0
 }
 
 type LifecycleAck struct {
@@ -1112,17 +1163,25 @@ const file_pluginhost_v1_pluginhost_proto_rawDesc = "" +
 	"\x06result\x18\x02 \x01(\v2 .vastplan.contract.v1.CallResultR\x06result\x12\x18\n" +
 	"\apayload\x18\x03 \x01(\fR\apayload\"F\n" +
 	"\rEventEnvelope\x125\n" +
-	"\x05event\x18\x01 \x01(\v2\x1f.vastplan.contract.v1.CallEventR\x05event\"\xbd\x01\n" +
+	"\x05event\x18\x01 \x01(\v2\x1f.vastplan.contract.v1.CallEventR\x05event\"\xdf\x03\n" +
 	"\tLifecycle\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x124\n" +
-	"\x02op\x18\x02 \x01(\x0e2$.vastplan.pluginhost.v1.Lifecycle.OpR\x02op\"[\n" +
+	"\x02op\x18\x02 \x01(\x0e2$.vastplan.pluginhost.v1.Lifecycle.OpR\x02op\x12%\n" +
+	"\x0etransaction_id\x18\x03 \x01(\tR\rtransactionId\x12*\n" +
+	"\x11from_state_format\x18\x04 \x01(\tR\x0ffromStateFormat\x12,\n" +
+	"\x12from_state_version\x18\x05 \x01(\x05R\x10fromStateVersion\x12&\n" +
+	"\x0fto_state_format\x18\x06 \x01(\tR\rtoStateFormat\x12(\n" +
+	"\x10to_state_version\x18\a \x01(\x05R\x0etoStateVersion\"\xa9\x01\n" +
 	"\x02Op\x12\x12\n" +
 	"\x0eOP_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vOP_ACTIVATE\x10\x01\x12\x11\n" +
 	"\rOP_DEACTIVATE\x10\x02\x12\f\n" +
 	"\bOP_DRAIN\x10\x03\x12\x0f\n" +
-	"\vOP_SHUTDOWN\x10\x04\"n\n" +
+	"\vOP_SHUTDOWN\x10\x04\x12\x18\n" +
+	"\x14OP_MIGRATION_PREPARE\x10\x05\x12\x17\n" +
+	"\x13OP_MIGRATION_COMMIT\x10\x06\x12\x19\n" +
+	"\x15OP_MIGRATION_ROLLBACK\x10\a\"n\n" +
 	"\fLifecycleAck\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x14\n" +

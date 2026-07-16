@@ -27,6 +27,10 @@ func TestLocalInstaller_ContentAddressedAndIdempotent(t *testing.T) {
 	if info, err := os.Stat(first.EntryPath); err != nil || info.Mode().Perm()&0o111 == 0 {
 		t.Fatalf("backend 入口没有保留可执行位: info=%v err=%v", info, err)
 	}
+	if first.State == nil || first.State.Format != "com.example.installer.state" ||
+		first.State.FormatVersion != 2 || len(first.State.MigrationFrom) != 1 {
+		t.Fatalf("安装结果没有保留验签清单的状态契约: %+v", first.State)
+	}
 }
 
 func TestLocalInstaller_RejectsCorruptBytesAndNonExecutableEntry(t *testing.T) {
@@ -73,6 +77,8 @@ func testPackage(t *testing.T, mode os.FileMode) ([]byte, pluginservice.Artifact
 	manifest := []byte(`{
   "id":"com.example.installer","name":"installer test","description":"installer test",
   "version":"1.0.0","publisher":"example","engines":{"backend":"^0.1"},
+  "state":{"backend":{"format":"com.example.installer.state","formatVersion":2,
+    "migration":{"protocol":"lifecycle.v1","from":[{"format":"com.example.installer.state","formatVersion":1}]}}},
   "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
 	  "contributes":{"backend":{"tools":[{"id":"example.tool","service_role":"backend"}]}}
 }`)

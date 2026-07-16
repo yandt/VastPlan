@@ -25,11 +25,31 @@ func (fakeInstaller) Install(a pluginservice.Artifact, _ []byte) (InstalledPlugi
 	return InstalledPlugin{ID: a.PluginID, Version: a.Version, Channel: a.Channel, SHA256: a.SHA256, EntryPath: "/" + a.Version}, nil
 }
 
+type statefulInstaller struct {
+	allowV2FromV1 bool
+}
+
+func (i statefulInstaller) Install(a pluginservice.Artifact, _ []byte) (InstalledPlugin, error) {
+	plugin := InstalledPlugin{ID: a.PluginID, Version: a.Version, Channel: a.Channel, SHA256: a.SHA256, EntryPath: "/" + a.Version}
+	switch a.Version {
+	case "1.0.0":
+		plugin.State = &PluginStateContract{PluginStateIdentity: PluginStateIdentity{Format: "com.example.demo.state", FormatVersion: 1}}
+	case "2.0.0":
+		plugin.State = &PluginStateContract{PluginStateIdentity: PluginStateIdentity{Format: "com.example.demo.state", FormatVersion: 2}}
+		if i.allowV2FromV1 {
+			plugin.State.MigrationProtocol = stateMigrationProtocolV1
+			plugin.State.MigrationFrom = []PluginStateIdentity{{Format: "com.example.demo.state", FormatVersion: 1}}
+		}
+	}
+	return plugin, nil
+}
+
 type fakeRuntime struct {
 	units      map[string]RuntimeUnit
 	applyCalls int
 	stopCalls  int
 	failEntry  string
+	applyErr   error
 	events     chan RuntimeEvent
 }
 
@@ -39,6 +59,9 @@ func newFakeRuntime() *fakeRuntime {
 
 func (r *fakeRuntime) Apply(_ context.Context, unit RuntimeUnit) error {
 	r.applyCalls++
+	if r.applyErr != nil {
+		return r.applyErr
+	}
 	for _, plugin := range unit.Plugins {
 		if plugin.EntryPath == r.failEntry {
 			return errors.New("候选进程启动失败")
@@ -146,6 +169,58 @@ func TestReconcile_FailedUpgradePreservesOldAndRollbackConverges(t *testing.T) {
 	}
 	if rolledBack.State.AppliedRevision != 1 || len(rolledBack.State.Errors) != 0 {
 		t.Fatalf("回滚状态不正确: %+v", rolledBack.State)
+	}
+}
+
+func TestReconcile_StateMigrationPlanAndContractFailure(t *testing.T) {
+	runtime := newFakeRuntime()
+	store := NewMemoryStateStore()
+	r := newTestReconciler(runtime, store)
+	r.Installer = statefulInstaller{allowV2FromV1: true}
+	if _, err := r.Reconcile(context.Background(), desired(1, "1.0.0", true)); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := r.Reconcile(context.Background(), desired(2, "2.0.0", true))
+	if err != nil || !upgraded.Converged {
+		t.Fatalf("声明完整的状态迁移应收敛: result=%+v err=%v", upgraded, err)
+	}
+	runtimeUnit := runtime.units["backend-main"]
+	if len(runtimeUnit.Migrations) != 1 || runtimeUnit.Migrations[0].From.FormatVersion != 1 ||
+		runtimeUnit.Migrations[0].To.FormatVersion != 2 || runtimeUnit.Migrations[0].TransactionID == "" {
+		t.Fatalf("Reconciler 未把状态迁移计划交给 Runtime: %+v", runtimeUnit.Migrations)
+	}
+
+	// 从 v2 回到未声明任何 state 的 v9.9.9 会先在下载阶段失败，改用一个可下载的
+	// 1.0.0 并移除迁移来源，证明契约检查发生在 Runtime.Apply 之前。
+	r.Installer = statefulInstaller{allowV2FromV1: false}
+	failed, err := r.Reconcile(context.Background(), desired(3, "1.0.0", true))
+	if err == nil || failed.Converged {
+		t.Fatal("未声明 v2 -> v1 来源的状态回退必须 fail-closed")
+	}
+	if runtime.applyCalls != 2 || runtime.units["backend-main"].Fingerprint != runtimeUnit.Fingerprint {
+		t.Fatalf("迁移契约失败仍触发了 Runtime 或覆盖旧实例: calls=%d unit=%+v", runtime.applyCalls, runtime.units["backend-main"])
+	}
+	state := failed.State.Units["backend-main"]
+	if state.Phase != PhaseActive || state.Candidate == nil || state.Candidate.Phase != PhaseFailed ||
+		len(failed.State.Errors) != 1 || failed.State.Errors[0].Stage != "migration_contract" {
+		t.Fatalf("迁移契约失败实际态不完整: %+v", failed.State)
+	}
+}
+
+func TestReconcile_StateMigrationExecutionErrorIsDiagnosable(t *testing.T) {
+	runtime := newFakeRuntime()
+	r := newTestReconciler(runtime, NewMemoryStateStore())
+	if _, err := r.Reconcile(context.Background(), desired(1, "1.0.0", true)); err != nil {
+		t.Fatal(err)
+	}
+	runtime.applyErr = &StateMigrationError{PluginID: "com.example.demo", Phase: "commit", Err: errors.New("事务提交失败")}
+	result, err := r.Reconcile(context.Background(), desired(2, "2.0.0", true))
+	if err == nil || len(result.State.Errors) != 1 || result.State.Errors[0].Stage != "migration_commit" {
+		t.Fatalf("迁移执行错误没有进入稳定诊断阶段: result=%+v err=%v", result, err)
+	}
+	state := result.State.Units["backend-main"]
+	if state.Phase != PhaseActive || state.Candidate == nil || state.Candidate.Phase != PhaseFailed {
+		t.Fatalf("迁移执行失败没有保留旧实例和失败候选: %+v", state)
 	}
 }
 

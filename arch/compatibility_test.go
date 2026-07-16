@@ -144,6 +144,9 @@ func assertPluginHostV1(t *testing.T) {
 		"EventEnvelope": {"event": {1, protoreflect.MessageKind}},
 		"Lifecycle": {
 			"request_id": {1, protoreflect.StringKind}, "op": {2, protoreflect.EnumKind},
+			"transaction_id": {3, protoreflect.StringKind}, "from_state_format": {4, protoreflect.StringKind},
+			"from_state_version": {5, protoreflect.Int32Kind}, "to_state_format": {6, protoreflect.StringKind},
+			"to_state_version": {7, protoreflect.Int32Kind},
 		},
 		"LifecycleAck": {
 			"request_id": {1, protoreflect.StringKind}, "ready": {2, protoreflect.BoolKind},
@@ -165,6 +168,7 @@ func assertPluginHostV1(t *testing.T) {
 	lifecycle := fd.Messages().ByName("Lifecycle")
 	assertEnum(t, lifecycle.Enums().ByName("Op"), map[string]protoreflect.EnumNumber{
 		"OP_UNSPECIFIED": 0, "OP_ACTIVATE": 1, "OP_DEACTIVATE": 2, "OP_DRAIN": 3, "OP_SHUTDOWN": 4,
+		"OP_MIGRATION_PREPARE": 5, "OP_MIGRATION_COMMIT": 6, "OP_MIGRATION_ROLLBACK": 7,
 	})
 	assertMethod(t, fd, "PluginHost", "Handshake", false, false)
 	assertMethod(t, fd, "PluginHost", "Channel", true, true)

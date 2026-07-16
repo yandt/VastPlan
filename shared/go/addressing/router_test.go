@@ -54,6 +54,59 @@ func TestRouterLocalAndRemoteInvoke(t *testing.T) {
 	}
 }
 
+func TestPreparedRegistrationGroupIsInvisibleUntilAtomicActivation(t *testing.T) {
+	server, buckets := startAddressingNATS(t)
+	caller := newTestRouter(t, server, buckets.Capabilities, "caller")
+	worker := newTestRouter(t, server, buckets.Capabilities, "worker")
+	var hits atomic.Int64
+	registrations := make([]*Registration, 0, 2)
+	for _, capability := range []string{"demo.staged-a", "demo.staged-b"} {
+		registration, err := worker.PrepareRegistration(context.Background(), RegisterOptions{
+			Capability: capability, ExtensionPoint: "tool.package", UnitID: "candidate",
+		}, func(_ context.Context, _ *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+			hits.Add(1)
+			return okResult(), payload, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		registrations = append(registrations, registration)
+	}
+	t.Cleanup(func() {
+		for _, registration := range registrations {
+			_ = registration.Close(context.Background())
+		}
+	})
+	// starting 租约不进入健康目录，本地 handler 也尚未加入；准备阶段绝不能
+	// 让迁移候选处理任何业务调用。
+	time.Sleep(50 * time.Millisecond)
+	if len(caller.Instances("demo.staged-a")) != 0 || len(caller.Instances("demo.staged-b")) != 0 {
+		t.Fatal("准备态 capability 被当成健康实例公开")
+	}
+	if _, _, err := worker.Invoke(context.Background(), target("demo.staged-a"), nil, nil); !errors.Is(err, ErrCapabilityNotFound) {
+		t.Fatalf("准备态本地调用应不可见，实际 err=%v", err)
+	}
+	if hits.Load() != 0 {
+		t.Fatal("准备态 handler 收到了调用")
+	}
+
+	if err := ActivateRegistrations(context.Background(), registrations); err != nil {
+		t.Fatal(err)
+	}
+	// 重复激活整个组必须幂等，不能重复插入本地 handler。
+	if err := ActivateRegistrations(context.Background(), registrations); err != nil {
+		t.Fatal(err)
+	}
+	waitInstances(t, caller, "demo.staged-a", 1)
+	waitInstances(t, caller, "demo.staged-b", 1)
+	if _, _, err := worker.Invoke(context.Background(), target("demo.staged-a"), nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if hits.Load() != 1 {
+		t.Fatalf("激活后 handler 次数=%d，可能发生重复注册", hits.Load())
+	}
+}
+
 func TestRouterQueueGroupErrorsCancellationAndWithdraw(t *testing.T) {
 	server, buckets := startAddressingNATS(t)
 	caller := newTestRouter(t, server, buckets.Capabilities, "caller")

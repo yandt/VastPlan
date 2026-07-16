@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/kernels/backend/nodeagent"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/shared/go/registry"
@@ -143,6 +144,138 @@ func TestPluginHost_LegacyV1RawClientRemainsCompatible(t *testing.T) {
 	}
 	if err := host.Close(process); err != nil {
 		t.Fatalf("关闭旧 v1 客户端失败: %v", err)
+	}
+}
+
+func TestPluginMigrationLifecycle_ThreePhaseAndMissingHandlerFailClosed(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "migration.log")
+	t.Setenv("VASTPLAN_MIGRATION_LOG", logPath)
+	bin := buildPlugin(t, "./e2e/fixtures/plugins/migrator")
+	host := newHost(t, "0.1.0")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	process, err := host.Launch(ctx, bin)
+	if err != nil {
+		t.Fatalf("迁移夹具接入失败: %v", err)
+	}
+	request := protocolbus.MigrationRequest{
+		TransactionID: "migration-e2e-1",
+		From:          protocolbus.StateIdentity{Format: "com.example.state", FormatVersion: 1},
+		To:            protocolbus.StateIdentity{Format: "com.example.state", FormatVersion: 2},
+	}
+	for _, operation := range []protocolbus.MigrationOperation{
+		protocolbus.MigrationPrepare, protocolbus.MigrationCommit, protocolbus.MigrationRollback,
+	} {
+		request.Operation = operation
+		if err := host.Migrate(ctx, process, request); err != nil {
+			t.Fatalf("迁移阶段 %s 失败: %v", operation, err)
+		}
+	}
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "prepare migration-e2e-1 com.example.state@1 com.example.state@2\n" +
+		"commit migration-e2e-1 com.example.state@1 com.example.state@2\n" +
+		"rollback migration-e2e-1 com.example.state@1 com.example.state@2\n"
+	if string(raw) != want {
+		t.Fatalf("迁移阶段或字段漂移:\n%s\n期望:\n%s", raw, want)
+	}
+
+	if err := host.Close(process); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := host.Launch(ctx, buildPlugin(t, "./plugins/com.vastplan.hello-world/backend"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Operation = protocolbus.MigrationPrepare
+	if err := host.Migrate(ctx, plain, request); err == nil || !strings.Contains(err.Error(), "未实现") {
+		t.Fatalf("未实现迁移处理器必须 fail-closed，实际 err=%v", err)
+	}
+}
+
+func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "runtime-migration.log")
+	t.Setenv("VASTPLAN_MIGRATION_LOG", logPath)
+	v1Bin := buildPlugin(t, "./e2e/fixtures/plugins/migrator-v1")
+	v2Bin := buildPlugin(t, "./e2e/fixtures/plugins/migrator")
+	runtime := nodeagent.NewProtocolRuntime("0.1.0", t.Logf)
+	t.Cleanup(func() { _ = runtime.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := runtime.Apply(ctx, nodeagent.RuntimeUnit{
+		ID: "backend-main", Fingerprint: "v1", ServiceRole: "backend",
+		Plugins: []nodeagent.InstalledPlugin{{
+			ID: "com.vastplan.fixture.migrator", Version: "1.0.0", EntryPath: v1Bin,
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	plan12 := nodeagent.StateMigrationPlan{
+		PluginID: "com.vastplan.fixture.migrator", TransactionID: "runtime-v1-v2",
+		From: nodeagent.PluginStateIdentity{Format: "com.example.state", FormatVersion: 1},
+		To:   nodeagent.PluginStateIdentity{Format: "com.example.state", FormatVersion: 2},
+	}
+	if err := runtime.Apply(ctx, nodeagent.RuntimeUnit{
+		ID: "backend-main", Fingerprint: "v2", ServiceRole: "backend",
+		Plugins: []nodeagent.InstalledPlugin{{
+			ID: "com.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
+		}},
+		Migrations: []nodeagent.StateMigrationPlan{plan12},
+	}); err != nil {
+		t.Fatalf("状态迁移升级失败: %v", err)
+	}
+	if !runtime.IsRunning("backend-main", "v2") {
+		t.Fatal("迁移成功后候选没有取得运行所有权")
+	}
+
+	t.Setenv("VASTPLAN_MIGRATION_FAIL", "commit")
+	plan23 := nodeagent.StateMigrationPlan{
+		PluginID: "com.vastplan.fixture.migrator", TransactionID: "runtime-v2-v3",
+		From: nodeagent.PluginStateIdentity{Format: "com.example.state", FormatVersion: 2},
+		To:   nodeagent.PluginStateIdentity{Format: "com.example.state", FormatVersion: 3},
+	}
+	err := runtime.Apply(ctx, nodeagent.RuntimeUnit{
+		ID: "backend-main", Fingerprint: "v3", ServiceRole: "backend",
+		Plugins: []nodeagent.InstalledPlugin{{
+			ID: "com.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
+		}},
+		Migrations: []nodeagent.StateMigrationPlan{plan23},
+	})
+	if err == nil || !strings.Contains(err.Error(), "commit") {
+		t.Fatalf("提交失败必须阻止升级: %v", err)
+	}
+	if !runtime.IsRunning("backend-main", "v2") || runtime.IsRunning("backend-main", "v3") {
+		t.Fatal("迁移失败没有保留旧运行实例")
+	}
+	t.Setenv("VASTPLAN_MIGRATION_FAIL", "prepare")
+	plan23.TransactionID = "runtime-v2-v3-prepare-fails"
+	err = runtime.Apply(ctx, nodeagent.RuntimeUnit{
+		ID: "backend-main", Fingerprint: "v3-prepare-fails", ServiceRole: "backend",
+		Plugins: []nodeagent.InstalledPlugin{{
+			ID: "com.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
+		}},
+		Migrations: []nodeagent.StateMigrationPlan{plan23},
+	})
+	if err == nil || !strings.Contains(err.Error(), "prepare") || !runtime.IsRunning("backend-main", "v2") {
+		t.Fatalf("PREPARE 部分失败必须回滚并保留旧实例: %v", err)
+	}
+	raw, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantLines := []string{
+		"prepare runtime-v1-v2 com.example.state@1 com.example.state@2",
+		"commit runtime-v1-v2 com.example.state@1 com.example.state@2",
+		"prepare runtime-v2-v3 com.example.state@2 com.example.state@3",
+		"commit runtime-v2-v3 com.example.state@2 com.example.state@3",
+		"rollback runtime-v2-v3 com.example.state@2 com.example.state@3",
+		"prepare runtime-v2-v3-prepare-fails com.example.state@2 com.example.state@3",
+		"rollback runtime-v2-v3-prepare-fails com.example.state@2 com.example.state@3",
+	}
+	if got := strings.Split(strings.TrimSpace(string(raw)), "\n"); strings.Join(got, "|") != strings.Join(wantLines, "|") {
+		t.Fatalf("Runtime 迁移事务序列错误:\n%s", raw)
 	}
 }
 

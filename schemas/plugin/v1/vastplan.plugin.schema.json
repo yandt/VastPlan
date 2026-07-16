@@ -37,6 +37,14 @@
       "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
       "additionalProperties": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" }
     },
+    "state": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "$ref": "#/$defs/backendState" }
+      }
+    },
     "entry": {
       "type": "object",
       "minProperties": 1,
@@ -62,6 +70,46 @@
   },
   "$defs": {
     "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "stateIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "formatVersion"],
+      "properties": {
+        "format": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
+          "maxLength": 160
+        },
+        "formatVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 }
+      }
+    },
+    "backendState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "formatVersion"],
+      "properties": {
+        "format": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$",
+          "maxLength": 160
+        },
+        "formatVersion": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "migration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol", "from"],
+          "properties": {
+            "protocol": { "const": "lifecycle.v1" },
+            "from": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "$ref": "#/$defs/stateIdentity" }
+            }
+          }
+        }
+      }
+    },
     "baseContribution": {
       "type": "object",
       "required": ["id"],

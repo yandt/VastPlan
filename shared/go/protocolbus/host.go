@@ -51,6 +51,27 @@ const (
 // HostService 内核自身提供的能力实现（插件经 HostCall 回调它）。
 type HostService func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error)
 
+// MigrationOperation 是插件私有状态 copy-on-write 事务的三个可回滚阶段。
+type MigrationOperation string
+
+const (
+	MigrationPrepare  MigrationOperation = "prepare"
+	MigrationCommit   MigrationOperation = "commit"
+	MigrationRollback MigrationOperation = "rollback"
+)
+
+type StateIdentity struct {
+	Format        string
+	FormatVersion int32
+}
+
+type MigrationRequest struct {
+	Operation     MigrationOperation
+	TransactionID string
+	From          StateIdentity
+	To            StateIdentity
+}
+
 // PluginProcess 宿主侧持有的一个已接入插件。
 type PluginProcess struct {
 	PluginID  string

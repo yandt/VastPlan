@@ -37,6 +37,31 @@ type Host interface {
 // host 参数使处理器可回调宿主（不需要它时忽略即可）。
 type Handler func(ctx context.Context, host Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error)
 
+// MigrationPhase 是插件私有状态 copy-on-write 事务的阶段。COMMIT 只提交候选视图，
+// 在宿主切换路由所有权前仍必须允许 ROLLBACK；插件不得修改旧实例正在读取的视图。
+type MigrationPhase string
+
+const (
+	MigrationPrepare  MigrationPhase = "prepare"
+	MigrationCommit   MigrationPhase = "commit"
+	MigrationRollback MigrationPhase = "rollback"
+)
+
+type StateIdentity struct {
+	Format        string
+	FormatVersion int32
+}
+
+type MigrationRequest struct {
+	TransactionID string
+	From          StateIdentity
+	To            StateIdentity
+}
+
+// MigrationHandler 必须按 TransactionID 幂等。重复 PREPARE/COMMIT/ROLLBACK 不得
+// 产生额外副作用；返回错误会使候选启动失败并保留当前版本。
+type MigrationHandler func(context.Context, MigrationPhase, MigrationRequest) error
+
 // Contribution 插件对某扩展点的一条贡献。
 type Contribution struct {
 	ExtensionPoint string // 如 tool.package
@@ -66,10 +91,17 @@ type Plugin struct {
 	active      bool
 	inflight    sync.WaitGroup
 	sessionID   string
+	migration   MigrationHandler
 
 	pendingMu sync.Mutex
 	pending   map[string]chan *pluginhostv1.FromHost
 	seq       atomic.Uint64
+}
+
+// OnMigration 登记插件私有状态迁移处理器。只有清单 state.backend 声明了
+// lifecycle.v1 的插件才应设置；未设置却收到迁移指令时 SDK 会 fail-closed。
+func (p *Plugin) OnMigration(handler MigrationHandler) {
+	p.migration = handler
 }
 
 func New(id, version string, engines map[string]string) *Plugin {
@@ -279,6 +311,39 @@ func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) bool {
 		p.lifecycleMu.Unlock()
 		p.inflight.Wait()
 		shutdown = true
+	case pluginhostv1.Lifecycle_OP_MIGRATION_PREPARE,
+		pluginhostv1.Lifecycle_OP_MIGRATION_COMMIT,
+		pluginhostv1.Lifecycle_OP_MIGRATION_ROLLBACK:
+		phase, err := migrationPhase(lc.Op)
+		if err != nil {
+			ack.Ready = false
+			msg := err.Error()
+			ack.Message = &msg
+			break
+		}
+		if p.migration == nil {
+			ack.Ready = false
+			msg := "插件未实现清单声明的状态迁移处理器"
+			ack.Message = &msg
+			break
+		}
+		request := MigrationRequest{
+			TransactionID: lc.TransactionId,
+			From:          StateIdentity{Format: lc.FromStateFormat, FormatVersion: lc.FromStateVersion},
+			To:            StateIdentity{Format: lc.ToStateFormat, FormatVersion: lc.ToStateVersion},
+		}
+		if request.TransactionID == "" || request.From.Format == "" || request.From.FormatVersion <= 0 ||
+			request.To.Format == "" || request.To.FormatVersion <= 0 {
+			ack.Ready = false
+			msg := "状态迁移请求字段不完整"
+			ack.Message = &msg
+			break
+		}
+		if err := p.migration(context.Background(), phase, request); err != nil {
+			ack.Ready = false
+			msg := err.Error()
+			ack.Message = &msg
+		}
 	default:
 		msg := "未知生命周期指令"
 		ack.Ready, ack.Message = false, &msg
@@ -288,6 +353,19 @@ func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) bool {
 		Msg: &pluginhostv1.FromPlugin_LifecycleAck{LifecycleAck: ack},
 	})
 	return shutdown
+}
+
+func migrationPhase(op pluginhostv1.Lifecycle_Op) (MigrationPhase, error) {
+	switch op {
+	case pluginhostv1.Lifecycle_OP_MIGRATION_PREPARE:
+		return MigrationPrepare, nil
+	case pluginhostv1.Lifecycle_OP_MIGRATION_COMMIT:
+		return MigrationCommit, nil
+	case pluginhostv1.Lifecycle_OP_MIGRATION_ROLLBACK:
+		return MigrationRollback, nil
+	default:
+		return "", fmt.Errorf("生命周期指令 %s 不是迁移阶段", op)
+	}
 }
 
 // Call 实现 Host：插件回调宿主（内核服务，或经 capability 寻址调别的插件）。

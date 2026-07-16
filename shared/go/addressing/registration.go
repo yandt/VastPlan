@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -31,16 +32,35 @@ type RegisterOptions struct {
 type Registration struct {
 	router   *Router
 	record   Announcement
+	recordMu sync.Mutex
+	handler  InvokeHandler
 	key      string
 	id       string
 	sub      *nats.Subscription
 	stream   bool
 	cancel   context.CancelFunc
+	active   atomic.Bool
 	once     sync.Once
 	closeErr error
 }
 
+// Register 保持普通调用方的一步注册语义；需要候选原子发布的 Runtime 使用
+// PrepareRegistration + ActivateRegistrations，把多条能力的可见性门闩一起打开。
 func (r *Router) Register(ctx context.Context, options RegisterOptions, handler InvokeHandler) (*Registration, error) {
+	registration, err := r.PrepareRegistration(ctx, options, handler)
+	if err != nil {
+		return nil, err
+	}
+	if err := ActivateRegistrations(ctx, []*Registration{registration}); err != nil {
+		_ = registration.Close(context.Background())
+		return nil, err
+	}
+	return registration, nil
+}
+
+// PrepareRegistration 完成订阅和 starting 租约等所有可能失败的准备工作，但不把
+// handler 放入本地路由，也不允许 NATS 回调进入插件。准备态只用于候选切换。
+func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOptions, handler InvokeHandler) (*Registration, error) {
 	if options.Capability == "" || options.ExtensionPoint == "" || handler == nil {
 		return nil, errors.New("capability、extension point 和 handler 不能为空")
 	}
@@ -51,41 +71,128 @@ func (r *Router) Register(ctx context.Context, options RegisterOptions, handler 
 		SchemaVersion: 1, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint,
 		ServiceRole: options.ServiceRole, InstanceID: options.InstanceID, NodeID: r.NodeID,
 		UnitID: options.UnitID, Version: options.Version,
-		Subject: controlplane.RPCSubject(options.Capability), Health: "healthy", UpdatedAt: time.Now().UTC(),
+		Subject: controlplane.RPCSubject(options.Capability), Health: "starting", UpdatedAt: time.Now().UTC(),
 	}
 	registrationID := randomID()
+	registrationCtx, cancel := context.WithCancel(r.ctx)
+	registration := &Registration{
+		router: r, record: record, key: controlplane.CapabilityKey(options.Capability, options.InstanceID),
+		id: registrationID, handler: handler, cancel: cancel,
+	}
 	sub, err := r.NC.QueueSubscribe(record.Subject, controlplane.RPCQueue(options.Capability), func(msg *nats.Msg) {
+		if !registration.active.Load() {
+			r.respondTransportError(msg, errorcode.RemoteInvokeFailed, "候选 capability 尚未激活", true, "")
+			return
+		}
 		r.serveInvoke(registrationID, options.Capability, handler, msg)
 	})
 	if err != nil {
+		cancel()
 		return nil, fmt.Errorf("订阅远端 capability %s: %w", options.Capability, err)
 	}
+	registration.sub = sub
 	flushCtx, flushCancel := deadlineContext(ctx, 5*time.Second)
 	defer flushCancel()
 	if err := r.NC.FlushWithContext(flushCtx); err != nil {
+		cancel()
 		_ = sub.Unsubscribe()
 		return nil, fmt.Errorf("确认 capability 订阅: %w", err)
 	}
-	key := controlplane.CapabilityKey(options.Capability, options.InstanceID)
-	if err := putAnnouncement(ctx, r.Directory, key, record); err != nil {
+	if err := putAnnouncement(ctx, r.Directory, registration.key, record); err != nil {
+		cancel()
 		_ = sub.Unsubscribe()
 		return nil, err
 	}
-	registrationCtx, cancel := context.WithCancel(r.ctx)
-	registration := &Registration{router: r, record: record, key: key, id: registrationID, sub: sub, cancel: cancel}
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
 		cancel()
 		_ = sub.Unsubscribe()
-		_ = r.Directory.Delete(ctx, key)
+		_ = r.Directory.Delete(ctx, registration.key)
 		return nil, errors.New("addressing router 已关闭")
 	}
-	r.local[options.Capability] = append(r.local[options.Capability], localHandler{registrationID: registrationID, handler: handler})
 	r.registrations[registrationID] = registration
 	r.mu.Unlock()
 	go registration.heartbeat(registrationCtx)
 	return registration, nil
+}
+
+// ActivateRegistrations 先把整组租约改为 healthy，全部成功后才在一个临界区加入
+// 本地路由并打开共享门闩。任何租约发布失败都会恢复 starting，候选不会处理调用。
+func ActivateRegistrations(ctx context.Context, registrations []*Registration) error {
+	if len(registrations) == 0 {
+		return nil
+	}
+	router := registrations[0].router
+	if router == nil {
+		return errors.New("registration 缺少 router")
+	}
+	seen := make(map[*Registration]struct{}, len(registrations))
+	allActive := true
+	for _, registration := range registrations {
+		if registration == nil || registration.router != router {
+			return errors.New("registration group 必须来自同一个 router")
+		}
+		if _, duplicate := seen[registration]; duplicate {
+			return errors.New("registration group 不能包含重复项")
+		}
+		seen[registration] = struct{}{}
+		allActive = allActive && registration.active.Load()
+	}
+	if allActive {
+		return nil
+	}
+	for _, registration := range registrations {
+		if registration.active.Load() {
+			return errors.New("registration group 不能混合已激活和准备态")
+		}
+		registration.recordMu.Lock()
+	}
+	defer func() {
+		for index := len(registrations) - 1; index >= 0; index-- {
+			registrations[index].recordMu.Unlock()
+		}
+	}()
+
+	activated := make([]*Registration, 0, len(registrations))
+	for _, registration := range registrations {
+		record := registration.record
+		record.Health = "healthy"
+		record.UpdatedAt = time.Now().UTC()
+		if err := putAnnouncement(ctx, router.Directory, registration.key, record); err != nil {
+			for _, previous := range activated {
+				rollback := previous.record
+				rollback.Health = "starting"
+				rollback.UpdatedAt = time.Now().UTC()
+				_ = putAnnouncement(context.Background(), router.Directory, previous.key, rollback)
+				previous.record = rollback
+			}
+			return fmt.Errorf("激活 capability %s: %w", registration.record.Capability, err)
+		}
+		registration.record = record
+		activated = append(activated, registration)
+	}
+
+	router.mu.Lock()
+	if router.closed {
+		router.mu.Unlock()
+		for _, registration := range activated {
+			record := registration.record
+			record.Health = "starting"
+			_ = putAnnouncement(context.Background(), router.Directory, registration.key, record)
+			registration.record = record
+		}
+		return errors.New("addressing router 已关闭")
+	}
+	for _, registration := range registrations {
+		capability := registration.record.Capability
+		router.local[capability] = append(router.local[capability], localHandler{
+			registrationID: registration.id, handler: registration.handler,
+		})
+		registration.active.Store(true)
+	}
+	router.mu.Unlock()
+	return nil
 }
 
 func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHandler, msg *nats.Msg) {
@@ -158,11 +265,16 @@ func (registration *Registration) heartbeat(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			registration.recordMu.Lock()
 			record := registration.record
 			record.UpdatedAt = time.Now().UTC()
 			heartbeatCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			err := putAnnouncement(heartbeatCtx, registration.router.Directory, registration.key, record)
 			cancel()
+			if err == nil {
+				registration.record = record
+			}
+			registration.recordMu.Unlock()
 			if err != nil {
 				registration.router.Logf("刷新 capability 租约失败 %s: %v", record.Capability, err)
 			}
@@ -172,9 +284,13 @@ func (registration *Registration) heartbeat(ctx context.Context) {
 
 func (registration *Registration) Close(ctx context.Context) error {
 	registration.once.Do(func() {
+		registration.active.Store(false)
 		registration.cancel()
+		registration.recordMu.Lock()
+		record := registration.record
+		registration.recordMu.Unlock()
 		registration.router.mu.Lock()
-		locals := registration.router.local[registration.record.Capability]
+		locals := registration.router.local[record.Capability]
 		for index := range locals {
 			if locals[index].registrationID != registration.id {
 				continue
@@ -183,13 +299,13 @@ func (registration *Registration) Close(ctx context.Context) error {
 			break
 		}
 		if len(locals) == 0 {
-			delete(registration.router.local, registration.record.Capability)
-			delete(registration.router.localCursor, registration.record.Capability)
+			delete(registration.router.local, record.Capability)
+			delete(registration.router.localCursor, record.Capability)
 		} else {
-			registration.router.local[registration.record.Capability] = locals
+			registration.router.local[record.Capability] = locals
 		}
 		if registration.stream {
-			streams := registration.router.streamLocal[registration.record.Capability]
+			streams := registration.router.streamLocal[record.Capability]
 			for index := range streams {
 				if streams[index].registrationID == registration.id {
 					streams = append(streams[:index], streams[index+1:]...)
@@ -197,17 +313,17 @@ func (registration *Registration) Close(ctx context.Context) error {
 				}
 			}
 			if len(streams) == 0 {
-				delete(registration.router.streamLocal, registration.record.Capability)
-				delete(registration.router.streamCursor, registration.record.Capability)
+				delete(registration.router.streamLocal, record.Capability)
+				delete(registration.router.streamCursor, record.Capability)
 			} else {
-				registration.router.streamLocal[registration.record.Capability] = streams
+				registration.router.streamLocal[record.Capability] = streams
 			}
 		}
 		delete(registration.router.registrations, registration.id)
-		if instances := registration.router.instances[registration.record.Capability]; instances != nil {
+		if instances := registration.router.instances[record.Capability]; instances != nil {
 			delete(instances, registration.key)
 			if len(instances) == 0 {
-				delete(registration.router.instances, registration.record.Capability)
+				delete(registration.router.instances, record.Capability)
 			}
 		}
 		registration.router.mu.Unlock()

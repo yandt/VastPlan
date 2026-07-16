@@ -52,10 +52,36 @@ type Manifest struct {
 	Publisher    string                     `json:"publisher"`
 	Engines      map[string]string          `json:"engines"`
 	Capabilities *Capabilities              `json:"capabilities,omitempty"`
+	State        *State                     `json:"state,omitempty"`
 	Activation   []string                   `json:"activation"`
 	Dependencies map[string]string          `json:"dependencies,omitempty"`
 	Entry        map[string]string          `json:"entry"`
 	Contributes  map[string]json.RawMessage `json:"contributes"`
+}
+
+// State 声明各运行面的插件私有持久状态。Backend 1.0 只发布 backend 契约；
+// 其他运行面在各自内核封板时追加，不能借 additionalProperties 提前占位。
+type State struct {
+	Backend *BackendState `json:"backend,omitempty"`
+}
+
+// StateIdentity 是一个不可猜测的插件私有状态格式。FormatVersion 只在同一 Format
+// 内递增；跨 Format 迁移也必须在 Migration.From 中逐项声明。
+type StateIdentity struct {
+	Format        string `json:"format"`
+	FormatVersion int32  `json:"formatVersion"`
+}
+
+// BackendState 声明当前格式，以及新版本可通过 lifecycle.v1 从哪些旧格式迁移。
+// 首次引入持久状态时 Migration 可省略；一旦升级改变格式，Reconciler 会强制要求。
+type BackendState struct {
+	StateIdentity
+	Migration *StateMigration `json:"migration,omitempty"`
+}
+
+type StateMigration struct {
+	Protocol string          `json:"protocol"`
+	From     []StateIdentity `json:"from"`
 }
 
 // Capabilities 是装配元数据，不承担运行时权限强制职责。

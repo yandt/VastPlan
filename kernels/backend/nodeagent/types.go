@@ -47,12 +47,26 @@ type StateStore interface {
 
 // InstalledPlugin 是经安装器校验后可交给 backend 宿主启动的插件。
 type InstalledPlugin struct {
-	ID        string `json:"id"`
-	Version   string `json:"version"`
-	Channel   string `json:"channel"`
-	SHA256    string `json:"sha256"`
-	Root      string `json:"root"`
-	EntryPath string `json:"entry_path"`
+	ID        string               `json:"id"`
+	Version   string               `json:"version"`
+	Channel   string               `json:"channel"`
+	SHA256    string               `json:"sha256"`
+	Root      string               `json:"root"`
+	EntryPath string               `json:"entry_path"`
+	State     *PluginStateContract `json:"state,omitempty"`
+}
+
+// PluginStateIdentity 只标识插件私有状态格式，不暴露其存储结构。
+type PluginStateIdentity struct {
+	Format        string `json:"format"`
+	FormatVersion int32  `json:"format_version"`
+}
+
+// PluginStateContract 随已安装制品持久化，使下一次升级无需重新信任外部清单。
+type PluginStateContract struct {
+	PluginStateIdentity
+	MigrationProtocol string                `json:"migration_protocol,omitempty"`
+	MigrationFrom     []PluginStateIdentity `json:"migration_from,omitempty"`
 }
 
 // RuntimeUnit 是运行时需要的完整、不可变组合。
@@ -62,7 +76,17 @@ type RuntimeUnit struct {
 	ServiceRole string
 	Config      map[string]any
 	Plugins     []InstalledPlugin
+	Migrations  []StateMigrationPlan
 	RestartBase uint64
+}
+
+// StateMigrationPlan 由 Reconciler 从旧/新签名清单计算，Runtime 只负责按协议执行。
+// TransactionID 对同一次逻辑升级稳定，插件可据此实现幂等 prepare/commit/rollback。
+type StateMigrationPlan struct {
+	PluginID      string
+	TransactionID string
+	From          PluginStateIdentity
+	To            PluginStateIdentity
 }
 
 // RuntimeStatus 来自真实插件会话，不由持久化文件反推。

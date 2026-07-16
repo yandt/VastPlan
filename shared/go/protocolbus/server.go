@@ -192,13 +192,69 @@ func (h *Host) activate(sess *session) error {
 
 // lifecycle 下发生命周期指令并等待 Ack。
 func (h *Host) lifecycle(ctx context.Context, sess *session, op pluginhostv1.Lifecycle_Op) (*pluginhostv1.LifecycleAck, error) {
+	return h.lifecycleRequest(ctx, sess, &pluginhostv1.Lifecycle{Op: op})
+}
+
+// Migrate 向指定候选进程发送状态迁移事务阶段。调用方只可在候选尚未取得路由
+// 所有权时调用；任一阶段拒绝都会返回错误，由 Runtime 负责逆序 rollback。
+func (h *Host) Migrate(ctx context.Context, process *PluginProcess, request MigrationRequest) error {
+	if process == nil || process.session == nil {
+		return errors.New("迁移目标插件进程无有效会话")
+	}
+	op, err := migrationLifecycleOp(request.Operation)
+	if err != nil {
+		return err
+	}
+	if request.TransactionID == "" || request.From.Format == "" || request.From.FormatVersion <= 0 ||
+		request.To.Format == "" || request.To.FormatVersion <= 0 {
+		return errors.New("状态迁移请求字段不完整")
+	}
+	h.mu.RLock()
+	sess, ok := h.sessions[process.SessionID]
+	h.mu.RUnlock()
+	if !ok || sess != process.session {
+		return errors.New("迁移目标插件会话不属于当前宿主")
+	}
+	ack, err := h.lifecycleRequest(ctx, sess, &pluginhostv1.Lifecycle{
+		Op: op, TransactionId: request.TransactionID,
+		FromStateFormat: request.From.Format, FromStateVersion: request.From.FormatVersion,
+		ToStateFormat: request.To.Format, ToStateVersion: request.To.FormatVersion,
+	})
+	if err != nil {
+		return err
+	}
+	if !ack.Ready {
+		message := "插件拒绝状态迁移"
+		if ack.Message != nil && *ack.Message != "" {
+			message += ": " + *ack.Message
+		}
+		return errors.New(message)
+	}
+	return nil
+}
+
+func migrationLifecycleOp(operation MigrationOperation) (pluginhostv1.Lifecycle_Op, error) {
+	switch operation {
+	case MigrationPrepare:
+		return pluginhostv1.Lifecycle_OP_MIGRATION_PREPARE, nil
+	case MigrationCommit:
+		return pluginhostv1.Lifecycle_OP_MIGRATION_COMMIT, nil
+	case MigrationRollback:
+		return pluginhostv1.Lifecycle_OP_MIGRATION_ROLLBACK, nil
+	default:
+		return pluginhostv1.Lifecycle_OP_UNSPECIFIED, fmt.Errorf("未知状态迁移阶段 %q", operation)
+	}
+}
+
+func (h *Host) lifecycleRequest(ctx context.Context, sess *session, request *pluginhostv1.Lifecycle) (*pluginhostv1.LifecycleAck, error) {
 	reqID := sess.nextRequestID()
+	request.RequestId = reqID
 	ch := sess.await(reqID)
 	defer sess.release(reqID)
 
 	if err := sess.send(&pluginhostv1.FromHost{
 		Msg: &pluginhostv1.FromHost_Lifecycle{
-			Lifecycle: &pluginhostv1.Lifecycle{RequestId: reqID, Op: op},
+			Lifecycle: request,
 		},
 	}); err != nil {
 		return nil, err
