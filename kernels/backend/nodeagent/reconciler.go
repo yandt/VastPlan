@@ -22,8 +22,8 @@ type Reconciler struct {
 	Now        func() time.Time
 }
 
-// Reconcile 每次执行都是幂等的。候选插件全部安装且启动成功后 Runtime 才替换旧实例；
-// 任一阶段失败会保留旧 UnitState，并把错误写入 ActualState。
+// Reconcile 每次执行都是幂等的。当前实例与候选实例分别持久化；候选插件全部安装且
+// 启动成功后 Runtime 才替换旧实例，任一阶段失败都保留旧实例并留下候选失败实际态。
 func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.DesiredState) (Result, error) {
 	if err := r.validate(); err != nil {
 		return Result{}, err
@@ -39,7 +39,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 	if actual.ObservedRevision == desired.Revision && actual.ObservedDigest != "" && actual.ObservedDigest != digest {
 		return Result{}, fmt.Errorf("revision %d 的期望态内容发生冲突", desired.Revision)
 	}
-	actual.Version = 1
+	actual.Version = actualStateVersion
 	actual.NodeID = r.NodeID
 	actual.ObservedRevision = desired.Revision
 	actual.ObservedDigest = digest
@@ -57,23 +57,64 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 		unit := targets[id]
 		fingerprint := unit.Fingerprint()
 		if current, ok := actual.Units[id]; ok && current.Fingerprint == fingerprint && r.Runtime.IsRunning(id, fingerprint) {
-			current.Status = "running"
+			if err := r.setUnitPhase(&current, PhaseActive); err != nil {
+				return Result{Changed: changed, State: actual}, err
+			}
 			current.LastError = ""
-			r.refreshRuntimeState(&current, id)
+			current.Candidate = nil
+			if err := r.refreshRuntimeState(&current, id); err != nil {
+				return Result{Changed: changed, State: actual}, err
+			}
 			actual.Units[id] = current
 			continue
 		}
 		current := actual.Units[id]
+		if current.Fingerprint != "" {
+			if err := r.refreshRuntimeState(&current, id); err != nil {
+				return Result{Changed: changed, State: actual}, err
+			}
+		}
+		current.Candidate = &CandidateState{
+			Fingerprint: fingerprint, Phase: PhaseUninstalled, PhaseChangedAt: r.now(),
+		}
+		if current.Fingerprint == "" {
+			if err := r.setUnitPhase(&current, PhaseUninstalled); err != nil {
+				return Result{Changed: changed, State: actual}, err
+			}
+		}
+		actual.Units[id] = current
+		if err := r.checkpoint(&actual); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
+
 		installed, stage, installErr := r.prepare(unit)
 		if installErr != nil {
 			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: stage, Message: installErr.Error()})
-			current.Status = "degraded"
-			current.LastError = installErr.Error()
-			r.refreshRuntimeState(&current, id)
-			if current.Fingerprint != "" {
-				actual.Units[id] = current
+			current = actual.Units[id]
+			if err := r.failCandidate(&current, id, installErr); err != nil {
+				return Result{Changed: changed, State: actual}, err
+			}
+			actual.Units[id] = current
+			if err := r.checkpoint(&actual); err != nil {
+				return Result{Changed: changed, State: actual}, err
 			}
 			continue
+		}
+		current = actual.Units[id]
+		current.Candidate.Plugins = installed
+		if err := r.setCandidatePhase(&current, PhaseInstalledInactive); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
+		actual.Units[id] = current
+		if err := r.checkpoint(&actual); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
+		if err := r.setCandidatePhase(&current, PhaseActivating); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
+		actual.Units[id] = current
+		if err := r.checkpoint(&actual); err != nil {
+			return Result{Changed: changed, State: actual}, err
 		}
 		runtimeUnit := RuntimeUnit{
 			ID: id, Fingerprint: fingerprint, ServiceRole: unit.ServiceRole,
@@ -81,17 +122,27 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 		}
 		if err := r.Runtime.Apply(ctx, runtimeUnit); err != nil {
 			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: "launch", Message: err.Error()})
-			current.Status = "degraded"
-			current.LastError = err.Error()
-			r.refreshRuntimeState(&current, id)
-			if current.Fingerprint != "" {
-				actual.Units[id] = current
+			current = actual.Units[id]
+			if phaseErr := r.failCandidate(&current, id, err); phaseErr != nil {
+				return Result{Changed: changed, State: actual}, phaseErr
+			}
+			actual.Units[id] = current
+			if saveErr := r.checkpoint(&actual); saveErr != nil {
+				return Result{Changed: changed, State: actual}, saveErr
 			}
 			continue
 		}
-		state := UnitState{Fingerprint: fingerprint, AppliedRevision: desired.Revision, Status: "running", Plugins: installed}
-		r.refreshRuntimeState(&state, id)
+		state := UnitState{
+			Fingerprint: fingerprint, AppliedRevision: desired.Revision,
+			Phase: PhaseActive, PhaseChangedAt: r.now(), Plugins: installed,
+		}
+		if err := r.refreshRuntimeState(&state, id); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
 		actual.Units[id] = state
+		if err := r.checkpoint(&actual); err != nil {
+			return Result{Changed: true, State: actual}, err
+		}
 		changed = true
 	}
 
@@ -99,9 +150,42 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 		if _, keep := targets[id]; keep {
 			continue
 		}
+		state, ok := actual.Units[id]
+		if !ok {
+			state = UnitState{Phase: PhaseActive, PhaseChangedAt: r.now()}
+		}
+		if err := r.setUnitPhase(&state, PhaseDraining); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
+		actual.Units[id] = state
+		if err := r.checkpoint(&actual); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
+		if err := r.setUnitPhase(&state, PhaseDeactivating); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
+		actual.Units[id] = state
+		if err := r.checkpoint(&actual); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
 		if err := r.Runtime.Stop(ctx, id); err != nil {
 			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: "stop", Message: err.Error()})
+			state.LastError = err.Error()
+			if phaseErr := r.setUnitPhase(&state, PhaseFailed); phaseErr != nil {
+				return Result{Changed: changed, State: actual}, phaseErr
+			}
+			actual.Units[id] = state
+			if saveErr := r.checkpoint(&actual); saveErr != nil {
+				return Result{Changed: changed, State: actual}, saveErr
+			}
 			continue
+		}
+		if err := r.setUnitPhase(&state, PhaseRemoved); err != nil {
+			return Result{Changed: changed, State: actual}, err
+		}
+		actual.Units[id] = state
+		if err := r.checkpoint(&actual); err != nil {
+			return Result{Changed: true, State: actual}, err
 		}
 		delete(actual.Units, id)
 		changed = true
@@ -121,16 +205,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 	if converged {
 		actual.AppliedRevision = desired.Revision
 	}
-	actual.UpdatedAt = r.now()
-	if err := r.StateStore.Save(actual); err != nil {
+	if err := r.checkpoint(&actual); err != nil {
 		return Result{}, err
 	}
 	if converged {
 		if collector, ok := r.Installer.(GarbageCollector); ok {
 			if err := collector.GarbageCollect(referencedSHA256(actual)); err != nil {
 				actual.Errors = append(actual.Errors, OperationError{Stage: "gc", Message: err.Error()})
-				actual.UpdatedAt = r.now()
-				_ = r.StateStore.Save(actual)
+				_ = r.checkpoint(&actual)
 				return Result{Changed: changed, Converged: false, State: actual}, fmt.Errorf("安装目录垃圾回收失败: %w", err)
 			}
 		}
@@ -142,20 +224,80 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 	return result, nil
 }
 
-func (r *Reconciler) refreshRuntimeState(state *UnitState, unitID string) {
+func (r *Reconciler) refreshRuntimeState(state *UnitState, unitID string) error {
 	status, ok := r.Runtime.Status(unitID)
 	if !ok {
 		state.PIDs = nil
 		state.StartedAt = nil
-		return
+		if state.Fingerprint != "" && state.Phase == PhaseActive {
+			state.LastError = "运行时实例不存在"
+			return r.setUnitPhase(state, PhaseFailed)
+		}
+		return nil
 	}
 	state.PIDs = append(state.PIDs[:0], status.PIDs...)
 	startedAt := status.StartedAt
 	state.StartedAt = &startedAt
 	state.RestartCount = status.RestartCount
-	if !status.Healthy && state.Status == "running" {
-		state.Status = "degraded"
+	if !status.Healthy {
+		state.LastError = "运行时健康检查失败"
+		return r.setUnitPhase(state, PhaseFailed)
 	}
+	if state.Fingerprint != "" && state.Phase == PhaseFailed {
+		state.LastError = ""
+		return r.setUnitPhase(state, PhaseActive)
+	}
+	return nil
+}
+
+func (r *Reconciler) setUnitPhase(state *UnitState, phase UnitPhase) error {
+	if err := transitionPhase(state.Phase, phase); err != nil {
+		return err
+	}
+	if state.Phase != phase || state.PhaseChangedAt.IsZero() {
+		state.Phase = phase
+		state.PhaseChangedAt = r.now()
+	}
+	return nil
+}
+
+func (r *Reconciler) setCandidatePhase(state *UnitState, phase UnitPhase) error {
+	if state.Candidate == nil {
+		return errors.New("候选实际态不存在")
+	}
+	if err := transitionPhase(state.Candidate.Phase, phase); err != nil {
+		return fmt.Errorf("候选状态: %w", err)
+	}
+	if state.Candidate.Phase != phase || state.Candidate.PhaseChangedAt.IsZero() {
+		state.Candidate.Phase = phase
+		state.Candidate.PhaseChangedAt = r.now()
+	}
+	// 首次安装没有稳定实例，顶层状态与候选同步；升级时顶层继续如实报告旧实例。
+	if state.Fingerprint == "" {
+		return r.setUnitPhase(state, phase)
+	}
+	return nil
+}
+
+func (r *Reconciler) failCandidate(state *UnitState, unitID string, cause error) error {
+	if err := r.setCandidatePhase(state, PhaseFailed); err != nil {
+		return err
+	}
+	state.Candidate.LastError = cause.Error()
+	if state.Fingerprint != "" {
+		if err := r.refreshRuntimeState(state, unitID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkpoint 在长操作前后写入实际态，使控制面不仅能看到最终结果，也能看到
+// 安装、激活、排空和停用等中间状态。写入失败时调用方必须停止后续副作用。
+func (r *Reconciler) checkpoint(actual *ActualState) error {
+	actual.Version = actualStateVersion
+	actual.UpdatedAt = r.now()
+	return r.StateStore.Save(*actual)
 }
 
 func referencedSHA256(actual ActualState) []string {
@@ -173,7 +315,8 @@ func referencedSHA256(actual ActualState) []string {
 	return refs
 }
 
-// Shutdown 在 Node Agent 优雅退出时停止本进程管理的 unit，并把本地报告改为 stopped。
+// Shutdown 在 Node Agent 优雅退出时按 draining -> deactivating -> installed_inactive
+// 记录检查点并停止本进程管理的 unit。
 // 它不修改 DesiredState；下一次启动会因运行时为空而重新装配仍启用的 unit。
 func (r *Reconciler) Shutdown(ctx context.Context) error {
 	if err := r.validate(); err != nil {
@@ -185,19 +328,49 @@ func (r *Reconciler) Shutdown(ctx context.Context) error {
 	}
 	actual.Errors = nil
 	for _, id := range r.Runtime.UnitIDs() {
+		state, ok := actual.Units[id]
+		if !ok {
+			state = UnitState{Phase: PhaseActive, PhaseChangedAt: r.now()}
+		}
+		if err := r.setUnitPhase(&state, PhaseDraining); err != nil {
+			return err
+		}
+		actual.Units[id] = state
+		if err := r.checkpoint(&actual); err != nil {
+			return err
+		}
+		if err := r.setUnitPhase(&state, PhaseDeactivating); err != nil {
+			return err
+		}
+		actual.Units[id] = state
+		if err := r.checkpoint(&actual); err != nil {
+			return err
+		}
 		if err := r.Runtime.Stop(ctx, id); err != nil {
 			actual.Errors = append(actual.Errors, OperationError{UnitID: id, Stage: "shutdown", Message: err.Error()})
+			state.LastError = err.Error()
+			if phaseErr := r.setUnitPhase(&state, PhaseFailed); phaseErr != nil {
+				return phaseErr
+			}
+			actual.Units[id] = state
+			if saveErr := r.checkpoint(&actual); saveErr != nil {
+				return saveErr
+			}
 			continue
 		}
-		if state, ok := actual.Units[id]; ok {
-			state.Status = "stopped"
-			actual.Units[id] = state
+		if err := r.setUnitPhase(&state, PhaseInstalledInactive); err != nil {
+			return err
+		}
+		state.PIDs = nil
+		state.StartedAt = nil
+		actual.Units[id] = state
+		if err := r.checkpoint(&actual); err != nil {
+			return err
 		}
 	}
 	// 进程退出后，即使实际态里留有历史 unit，本节点也不再满足当前期望态。
 	actual.AppliedRevision = 0
-	actual.UpdatedAt = r.now()
-	if err := r.StateStore.Save(actual); err != nil {
+	if err := r.checkpoint(&actual); err != nil {
 		return err
 	}
 	if len(actual.Errors) > 0 {

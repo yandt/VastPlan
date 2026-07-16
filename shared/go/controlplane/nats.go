@@ -27,6 +27,7 @@ const (
 	EventsStream       = "VASTPLAN_EVENTS_V1"
 
 	MaxDesiredStateBytes = 1 << 20
+	ActualStateHistory   = 16
 )
 
 // Buckets 集中返回控制面的版本化 KV 句柄，避免组件各自拼 bucket 名。
@@ -51,7 +52,8 @@ func Connect(url, clientName string, logf func(string, ...any)) (*nats.Conn, err
 }
 
 // EnsureBuckets 创建或校准控制面 bucket。生产集群 replicas 应至少为 3；本地和 E2E
-// 可显式传 1。节点租约使用短 TTL，实际态与期望态分别保留 1 和 64 份历史。
+// 可显式传 1。节点租约使用短 TTL；实际态保留最近 16 个生命周期检查点，期望态
+// 保留 64 份历史。两者均有硬上限，不能把 KV 误用成无限增长的审计日志。
 func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, storage jetstream.StorageType) (Buckets, error) {
 	if replicas <= 0 {
 		replicas = 1
@@ -64,8 +66,8 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 		return Buckets{}, fmt.Errorf("创建期望态 bucket: %w", err)
 	}
 	actual, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket: ActualBucket, Description: "VastPlan node actual state v1",
-		History: 1, MaxValueSize: MaxDesiredStateBytes, Replicas: replicas, Storage: storage,
+		Bucket: ActualBucket, Description: "VastPlan node actual state v2",
+		History: ActualStateHistory, MaxValueSize: MaxDesiredStateBytes, Replicas: replicas, Storage: storage,
 	})
 	if err != nil {
 		return Buckets{}, fmt.Errorf("创建实际态 bucket: %w", err)

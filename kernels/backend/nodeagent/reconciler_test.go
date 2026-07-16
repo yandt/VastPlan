@@ -186,7 +186,7 @@ func TestShutdown_StopsRuntimeAndUpdatesActualState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(runtime.units) != 0 || actual.AppliedRevision != 0 || actual.Units["backend-main"].Status != "stopped" {
+	if len(runtime.units) != 0 || actual.AppliedRevision != 0 || actual.Units["backend-main"].Phase != PhaseInstalledInactive {
 		t.Fatalf("优雅退出实际态不正确: runtime=%v actual=%+v", runtime.units, actual)
 	}
 }

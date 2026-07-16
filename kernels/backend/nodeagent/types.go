@@ -94,16 +94,29 @@ type ActualState struct {
 	UpdatedAt        time.Time            `json:"updated_at"`
 }
 
-// UnitState 记录已成功切换的 service unit；失败升级不会覆盖此记录。
+// UnitState 同时记录当前稳定实例和可选的升级候选。候选失败不会覆盖当前实例，
+// 控制面因此能区分“当前实例失效”和“新版本尝试失败”两种完全不同的事实。
 type UnitState struct {
 	Fingerprint     string            `json:"fingerprint"`
 	AppliedRevision uint64            `json:"applied_revision"`
-	Status          string            `json:"status"`
+	Phase           UnitPhase         `json:"phase"`
+	PhaseChangedAt  time.Time         `json:"phase_changed_at"`
 	Plugins         []InstalledPlugin `json:"plugins"`
 	PIDs            []int             `json:"pids,omitempty"`
 	StartedAt       *time.Time        `json:"started_at,omitempty"`
 	RestartCount    uint64            `json:"restart_count"`
 	LastError       string            `json:"last_error,omitempty"`
+	Candidate       *CandidateState   `json:"candidate,omitempty"`
+}
+
+// CandidateState 描述尚未替换当前实例的候选组合。Plugins 只有在制品全部安装并
+// 校验后才出现；PhaseFailed 会保留失败原因，供控制面诊断和下一轮对账覆盖。
+type CandidateState struct {
+	Fingerprint    string            `json:"fingerprint"`
+	Phase          UnitPhase         `json:"phase"`
+	PhaseChangedAt time.Time         `json:"phase_changed_at"`
+	Plugins        []InstalledPlugin `json:"plugins,omitempty"`
+	LastError      string            `json:"last_error,omitempty"`
 }
 
 // OperationError 是可上报的阶段错误，Stage 用于区分 download/install/launch/stop。

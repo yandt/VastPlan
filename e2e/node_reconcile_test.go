@@ -345,7 +345,7 @@ func TestNodeAgent_ProcessCrashTriggersImmediateRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if state := actual.Units["backend-main"]; state.RestartCount != 1 || state.Status != "running" || len(state.PIDs) != 2 {
+	if state := actual.Units["backend-main"]; state.RestartCount != 1 || state.Phase != nodeagent.PhaseActive || len(state.PIDs) != 2 {
 		t.Fatalf("恢复后的实际态不完整: %+v", state)
 	}
 }

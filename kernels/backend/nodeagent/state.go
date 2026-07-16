@@ -7,7 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
+
+const actualStateVersion = 2
 
 // FileStateStore 将实际态原子写入单个 JSON 文件，既能断点恢复也便于本地审计。
 type FileStateStore struct {
@@ -22,15 +25,9 @@ func (s FileStateStore) Load() (ActualState, error) {
 	if err != nil {
 		return ActualState{}, fmt.Errorf("读取实际态: %w", err)
 	}
-	var state ActualState
-	if err := json.Unmarshal(raw, &state); err != nil {
+	state, err := decodeActualState(raw)
+	if err != nil {
 		return ActualState{}, fmt.Errorf("解析实际态: %w", err)
-	}
-	if state.Version != 1 {
-		return ActualState{}, fmt.Errorf("不支持的实际态版本 %d", state.Version)
-	}
-	if state.Units == nil {
-		state.Units = map[string]UnitState{}
 	}
 	return state, nil
 }
@@ -38,6 +35,9 @@ func (s FileStateStore) Load() (ActualState, error) {
 func (s FileStateStore) Save(state ActualState) error {
 	if s.Path == "" {
 		return errors.New("实际态文件路径不能为空")
+	}
+	if err := validateActualState(state); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(s.Path), 0o755); err != nil {
 		return fmt.Errorf("创建实际态目录: %w", err)
@@ -87,12 +87,15 @@ func (s *MemoryStateStore) Load() (ActualState, error) {
 func (s *MemoryStateStore) Save(state ActualState) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := validateActualState(state); err != nil {
+		return err
+	}
 	s.state = cloneState(state)
 	return nil
 }
 
 func emptyActualState() ActualState {
-	return ActualState{Version: 1, Units: map[string]UnitState{}}
+	return ActualState{Version: actualStateVersion, Units: map[string]UnitState{}}
 }
 
 func cloneState(state ActualState) ActualState {
@@ -103,4 +106,102 @@ func cloneState(state ActualState) ActualState {
 		clone.Units = map[string]UnitState{}
 	}
 	return clone
+}
+
+type legacyActualStateV1 struct {
+	Version          int                          `json:"version"`
+	NodeID           string                       `json:"node_id"`
+	ObservedRevision uint64                       `json:"observed_revision"`
+	ObservedDigest   string                       `json:"observed_digest"`
+	AppliedRevision  uint64                       `json:"applied_revision"`
+	Units            map[string]legacyUnitStateV1 `json:"units"`
+	Errors           []OperationError             `json:"errors,omitempty"`
+	UpdatedAt        time.Time                    `json:"updated_at"`
+}
+
+type legacyUnitStateV1 struct {
+	Fingerprint     string            `json:"fingerprint"`
+	AppliedRevision uint64            `json:"applied_revision"`
+	Status          string            `json:"status"`
+	Plugins         []InstalledPlugin `json:"plugins"`
+	PIDs            []int             `json:"pids,omitempty"`
+	StartedAt       *time.Time        `json:"started_at,omitempty"`
+	RestartCount    uint64            `json:"restart_count"`
+	LastError       string            `json:"last_error,omitempty"`
+}
+
+// decodeActualState 是所有持久化后端共享的版本入口。v1 的自由字符串 status 会在
+// 读取时迁移为 v2 的封闭 Phase；写回始终只产生 v2，避免双写两套语义。
+func decodeActualState(raw []byte) (ActualState, error) {
+	var header struct {
+		Version int `json:"version"`
+	}
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return ActualState{}, err
+	}
+	switch header.Version {
+	case 1:
+		var legacy legacyActualStateV1
+		if err := json.Unmarshal(raw, &legacy); err != nil {
+			return ActualState{}, err
+		}
+		state := ActualState{
+			Version: actualStateVersion, NodeID: legacy.NodeID,
+			ObservedRevision: legacy.ObservedRevision, ObservedDigest: legacy.ObservedDigest,
+			AppliedRevision: legacy.AppliedRevision, Units: make(map[string]UnitState, len(legacy.Units)),
+			Errors: legacy.Errors, UpdatedAt: legacy.UpdatedAt,
+		}
+		for id, old := range legacy.Units {
+			phase, err := legacyPhase(old.Status)
+			if err != nil {
+				return ActualState{}, fmt.Errorf("unit %s: %w", id, err)
+			}
+			state.Units[id] = UnitState{
+				Fingerprint: old.Fingerprint, AppliedRevision: old.AppliedRevision,
+				Phase: phase, PhaseChangedAt: legacy.UpdatedAt, Plugins: old.Plugins,
+				PIDs: old.PIDs, StartedAt: old.StartedAt, RestartCount: old.RestartCount,
+				LastError: old.LastError,
+			}
+		}
+		return state, validateActualState(state)
+	case actualStateVersion:
+		var state ActualState
+		if err := json.Unmarshal(raw, &state); err != nil {
+			return ActualState{}, err
+		}
+		if state.Units == nil {
+			state.Units = map[string]UnitState{}
+		}
+		return state, validateActualState(state)
+	default:
+		return ActualState{}, fmt.Errorf("不支持的实际态版本 %d", header.Version)
+	}
+}
+
+func legacyPhase(status string) (UnitPhase, error) {
+	switch status {
+	case "running":
+		return PhaseActive, nil
+	case "stopped":
+		return PhaseInstalledInactive, nil
+	case "degraded":
+		return PhaseFailed, nil
+	default:
+		return "", fmt.Errorf("不支持的 v1 status %q", status)
+	}
+}
+
+func validateActualState(state ActualState) error {
+	if state.Version != actualStateVersion {
+		return fmt.Errorf("实际态版本必须为 %d，实际为 %d", actualStateVersion, state.Version)
+	}
+	for id, unit := range state.Units {
+		if !unit.Phase.Valid() {
+			return fmt.Errorf("unit %s 的生命周期状态 %q 非法", id, unit.Phase)
+		}
+		if unit.Candidate != nil && !unit.Candidate.Phase.Valid() {
+			return fmt.Errorf("unit %s 的候选生命周期状态 %q 非法", id, unit.Candidate.Phase)
+		}
+	}
+	return nil
 }

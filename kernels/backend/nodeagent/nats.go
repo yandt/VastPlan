@@ -155,12 +155,9 @@ func (s NATSStateStore) Load() (ActualState, error) {
 	if err != nil {
 		return ActualState{}, fmt.Errorf("读取 NATS 实际态 key %s: %w", s.Key, err)
 	}
-	var state ActualState
-	if err := json.Unmarshal(entry.Value(), &state); err != nil {
+	state, err := decodeActualState(entry.Value())
+	if err != nil {
 		return ActualState{}, fmt.Errorf("解析 NATS 实际态: %w", err)
-	}
-	if state.Units == nil {
-		state.Units = map[string]UnitState{}
 	}
 	return state, nil
 }
@@ -168,6 +165,9 @@ func (s NATSStateStore) Load() (ActualState, error) {
 func (s NATSStateStore) Save(state ActualState) error {
 	if s.KV == nil || s.Key == "" {
 		return errors.New("NATS 实际态 store 未配置")
+	}
+	if err := validateActualState(state); err != nil {
+		return err
 	}
 	raw, err := json.Marshal(state)
 	if err != nil {
