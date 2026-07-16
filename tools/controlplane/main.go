@@ -21,7 +21,12 @@ import (
 )
 
 func main() {
-	natsURL := flag.String("nats-url", "nats://127.0.0.1:4222", "NATS URL")
+	natsURL := flag.String("nats-url", "tls://127.0.0.1:4222", "NATS URL")
+	natsCA := flag.String("nats-ca", "", "NATS CA PEM")
+	natsCert := flag.String("nats-cert", "", "NATS mTLS 客户端证书 PEM")
+	natsKey := flag.String("nats-key", "", "NATS mTLS 客户端私钥 PEM")
+	natsSeed := flag.String("nats-seed", "", "bootstrap 或 controller 角色 NKey seed（0600）")
+	natsAllowInsecure := flag.Bool("nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
 	desiredPath := flag.String("desired", "", "要发布的 DesiredState v1 或 Deployment v2 JSON")
 	key := flag.String("key", "", "KV key；默认从 metadata.tenant/name 生成")
 	controllerMode := flag.Bool("controller", false, "持续 watch v2 部署与节点租约并生成每节点 assignment")
@@ -52,8 +57,11 @@ func main() {
 		}
 		version = header.Version
 	}
-	nc, err := controlplane.Connect(*natsURL, "vastplan-controlplane", func(format string, args ...any) {
-		fmt.Fprintf(os.Stderr, format+"\n", args...)
+	nc, err := controlplane.ConnectWithConfig(controlplane.ConnectionConfig{
+		URL: *natsURL, ClientName: "vastplan-controlplane",
+		CAFile: *natsCA, CertFile: *natsCert, KeyFile: *natsKey, SeedFile: *natsSeed,
+		Insecure: *natsAllowInsecure,
+		Logf:     func(format string, args ...any) { fmt.Fprintf(os.Stderr, format+"\n", args...) },
 	})
 	if err != nil {
 		fatalf("%v", err)

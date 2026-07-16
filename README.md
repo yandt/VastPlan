@@ -29,7 +29,7 @@
 - `plugins/` 四个第一方插件：hello-world（工具）、demo-permission（select 演示）、
   demo-audit（fanout 演示）、demo-quota（Hook 的配额限流与计量演示）
 
-尚未实现（见文档待决）：NATS TLS 与细粒度账号权限、资源/亲和调度、流式 RPC、持久事件、frontend/runner/mobile 内核。
+尚未实现（见文档待决）：资源/亲和调度、流式 RPC、持久事件、frontend/runner/mobile 内核。
 
 ## 快速开始
 
@@ -59,17 +59,17 @@ go run ./tools/pluginpackage \
   -repository .vastplan/repository \
   -labels environment=local
 
-# 2.3 集群模式（需本机或远端 nats-server 已启用 JetStream）
+# 2.3 本地开发集群模式（明文仅因显式 -nats-allow-insecure；生产见 NATS 安全指南）
 # 终端 A：发布 v2 并持续运行调度控制器
-go run ./tools/controlplane -nats-url nats://127.0.0.1:4222 -bootstrap \
+go run ./tools/controlplane -nats-url nats://127.0.0.1:4222 -nats-allow-insecure -bootstrap \
   -desired deploy/cluster.deployment.json -controller
 
 # 终端 B/C：两个节点使用独立运行目录；同 capability 自动进入同一 queue group
-./bin/backend-kernel reconcile -nats-url nats://127.0.0.1:4222 \
+./bin/backend-kernel reconcile -nats-url nats://127.0.0.1:4222 -nats-allow-insecure \
   -deployment cluster-demo -tenant acme -node-id node-a -labels region=cn \
   -repository .vastplan/repository -runtime-root .vastplan/nodes/node-a/plugins \
   -actual-state .vastplan/nodes/node-a/actual.json
-./bin/backend-kernel reconcile -nats-url nats://127.0.0.1:4222 \
+./bin/backend-kernel reconcile -nats-url nats://127.0.0.1:4222 -nats-allow-insecure \
   -deployment cluster-demo -tenant acme -node-id node-b -labels region=cn \
   -repository .vastplan/repository -runtime-root .vastplan/nodes/node-b/plugins \
   -actual-state .vastplan/nodes/node-b/actual.json

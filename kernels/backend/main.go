@@ -178,6 +178,11 @@ func runReconcile(args []string) (runErr error) {
 	labelsRaw := flags.String("labels", "", "节点标签，逗号分隔 key=value")
 	interval := flags.Duration("interval", 5*time.Second, "本地期望态轮询间隔")
 	natsURL := flags.String("nats-url", "", "NATS URL；设置后从 JetStream KV watch 期望态")
+	natsCA := flags.String("nats-ca", "", "NATS 服务端/客户端证书 CA PEM")
+	natsCert := flags.String("nats-cert", "", "NATS mTLS 客户端证书 PEM")
+	natsKey := flags.String("nats-key", "", "NATS mTLS 客户端私钥 PEM")
+	natsSeed := flags.String("nats-seed", "", "NATS 角色 NKey seed 文件（0600）")
+	natsAllowInsecure := flags.Bool("nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
 	desiredKey := flags.String("desired-key", controlplane.DesiredKey("", "local-development"), "NATS DesiredState key")
 	natsBootstrap := flags.Bool("nats-bootstrap", false, "创建/校准控制面 KV bucket（仅初始化/开发使用）")
 	natsReplicas := flags.Int("nats-replicas", 1, "初始化 KV bucket 的 JetStream 副本数；生产建议至少 3")
@@ -244,7 +249,11 @@ func runReconcile(args []string) (runErr error) {
 	var natsBuckets controlplane.Buckets
 	var closeNATS func()
 	if *natsURL != "" {
-		nc, err := controlplane.Connect(*natsURL, "vastplan-node-"+*nodeID, logf)
+		nc, err := controlplane.ConnectWithConfig(controlplane.ConnectionConfig{
+			URL: *natsURL, ClientName: "vastplan-node-" + *nodeID,
+			CAFile: *natsCA, CertFile: *natsCert, KeyFile: *natsKey, SeedFile: *natsSeed,
+			Insecure: *natsAllowInsecure, Logf: logf,
+		})
 		if err != nil {
 			return err
 		}

@@ -7,7 +7,6 @@ package controlplane
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -40,28 +39,9 @@ type Buckets struct {
 // Connect 建立可无限重连的 NATS 连接。首次连接仍 fail-fast，让启动配置错误明确暴露；
 // 已运行后的短暂断线由客户端恢复订阅和 KV watcher。
 func Connect(url, clientName string, logf func(string, ...any)) (*nats.Conn, error) {
-	if url == "" {
-		return nil, errors.New("NATS URL 不能为空")
-	}
-	if clientName == "" {
-		clientName = "vastplan"
-	}
-	if logf == nil {
-		logf = func(string, ...any) {}
-	}
-	nc, err := nats.Connect(url,
-		nats.Name(clientName),
-		nats.Timeout(5*time.Second),
-		nats.MaxReconnects(-1),
-		nats.ReconnectWait(500*time.Millisecond),
-		nats.DisconnectErrHandler(func(_ *nats.Conn, err error) { logf("NATS 已断开: %v", err) }),
-		nats.ReconnectHandler(func(conn *nats.Conn) { logf("NATS 已重连 %s", conn.ConnectedUrl()) }),
-		nats.ClosedHandler(func(conn *nats.Conn) { logf("NATS 连接已关闭: %v", conn.LastError()) }),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("连接 NATS %s: %w", url, err)
-	}
-	return nc, nil
+	return ConnectWithConfig(ConnectionConfig{
+		URL: url, ClientName: clientName, Insecure: true, Logf: logf,
+	})
 }
 
 // EnsureBuckets 创建或校准控制面 bucket。生产集群 replicas 应至少为 3；本地和 E2E
