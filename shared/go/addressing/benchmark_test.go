@@ -1,10 +1,11 @@
 package addressing
 
 import (
-	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
 	"context"
 	"testing"
+
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
 )
 
 func BenchmarkBackend_AddressingLocalInvoke(b *testing.B) {

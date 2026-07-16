@@ -16,8 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 1500
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version-file: go.mod
       - name: Backend Kernel soak
@@ -27,7 +27,7 @@ jobs:
           VASTPLAN_SOAK_REQUIRE_FD: "true"
           VASTPLAN_SOAK_COMMIT: ${{ github.sha }}
         run: go test -tags='e2e soak' -run='^TestBackendKernelSoak$' -timeout=25h -v ./e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: backend-kernel-soak-report
           path: ${{ runner.temp }}/backend-soak.json

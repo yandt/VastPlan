@@ -3,7 +3,6 @@ package pluginservice
 import (
 	"crypto/ed25519"
 	"encoding/base64"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -115,14 +114,4 @@ func testArtifact(t *testing.T) ([]byte, Artifact) {
 		t.Fatal(err)
 	}
 	return packageBytes, artifact
-}
-
-func writeTrustFile(t *testing.T, document TrustDocument) string {
-	t.Helper()
-	raw, _ := json.Marshal(document)
-	filename := filepath.Join(t.TempDir(), "trust.json")
-	if err := os.WriteFile(filename, raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return filename
 }

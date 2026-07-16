@@ -152,12 +152,20 @@ func readBundle(t *testing.T, path string) map[string][]byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("关闭支持包文件: %v", err)
+		}
+	}()
 	gzipReader, err := gzip.NewReader(file)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer gzipReader.Close()
+	defer func() {
+		if err := gzipReader.Close(); err != nil {
+			t.Errorf("关闭支持包 gzip: %v", err)
+		}
+	}()
 	tarReader := tar.NewReader(gzipReader)
 	result := map[string][]byte{}
 	for {

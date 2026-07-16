@@ -1,10 +1,11 @@
 package kernelspi_test
 
 import (
-	"cdsoft.com.cn/VastPlan/shared/go/kernelspi"
 	"context"
 	"errors"
 	"testing"
+
+	"cdsoft.com.cn/VastPlan/shared/go/kernelspi"
 )
 
 func TestMapConfigIsImmutableAndScopeFailsClosed(t *testing.T) {

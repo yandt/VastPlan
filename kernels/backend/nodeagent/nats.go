@@ -59,7 +59,7 @@ func (s NATSDesiredStateSource) Watch(ctx context.Context) (<-chan SourceEvent, 
 				_ = watcher.Stop()
 			}
 		}()
-		var updates <-chan jetstream.KeyValueEntry = watcher.Updates()
+		updates := watcher.Updates()
 		var statusChanges <-chan nats.Status
 		if s.Conn != nil {
 			statusChanges = s.Conn.StatusChanged(nats.CONNECTED)

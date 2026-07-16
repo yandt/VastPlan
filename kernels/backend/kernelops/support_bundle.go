@@ -261,9 +261,12 @@ func fileSHA256(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer file.Close()
 	digest := sha256.New()
 	if _, err := io.Copy(digest, file); err != nil {
+		_ = file.Close() // 主读取错误优先；这里只做资源回收。
+		return "", err
+	}
+	if err := file.Close(); err != nil {
 		return "", err
 	}
 	return hex.EncodeToString(digest.Sum(nil)), nil
@@ -294,7 +297,7 @@ func writeTarGzipAtomic(outputPath string, files map[string][]byte, modTime time
 		return err
 	}
 	gzipWriter := gzip.NewWriter(temporary)
-	gzipWriter.Header.ModTime = modTime
+	gzipWriter.ModTime = modTime
 	tarWriter := tar.NewWriter(gzipWriter)
 	names := make([]string, 0, len(files))
 	for name := range files {

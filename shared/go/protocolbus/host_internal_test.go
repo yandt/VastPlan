@@ -8,11 +8,12 @@ package protocolbus
 import (
 	"context"
 	"errors"
-	"google.golang.org/grpc"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc"
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"

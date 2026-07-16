@@ -3,6 +3,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -21,7 +22,6 @@ func read(path string) (map[string][]sample, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
 	out := map[string][]sample{}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -34,7 +34,7 @@ func read(path string) (map[string][]sample, error) {
 		allocs, _ := strconv.ParseFloat(match[4], 64)
 		out[match[1]] = append(out[match[1]], sample{ns, bytes, allocs})
 	}
-	return out, scanner.Err()
+	return out, errors.Join(scanner.Err(), file.Close())
 }
 func median(values []float64) float64 {
 	sort.Float64s(values)

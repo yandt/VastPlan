@@ -72,7 +72,7 @@ func (r *RemoteRepository) validate() (*url.URL, *http.Client, int64, error) {
 		return nil, nil, 0, errors.New("远端制品仓库及信任根必须配置")
 	}
 	base, err := url.Parse(strings.TrimRight(strings.TrimSpace(r.BaseURL), "/"))
-	if err != nil || base.Host == "" || (base.Scheme != "https" && !(r.AllowHTTP && base.Scheme == "http")) {
+	if err != nil || base.Host == "" || (base.Scheme != "https" && (!r.AllowHTTP || base.Scheme != "http")) {
 		return nil, nil, 0, errors.New("远端制品仓库必须使用合法 HTTPS URL")
 	}
 	client := r.Client

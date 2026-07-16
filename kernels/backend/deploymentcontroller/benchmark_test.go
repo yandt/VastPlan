@@ -1,10 +1,11 @@
 package deploymentcontroller
 
 import (
-	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
-	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
 	"fmt"
 	"testing"
+
+	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
+	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
 )
 
 func BenchmarkBackend_SchedulerEligibleNodes100(b *testing.B) {

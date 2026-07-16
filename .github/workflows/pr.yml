@@ -12,7 +12,7 @@ jobs:
     name: 提交信息规范
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0 # 需要完整历史以枚举 PR 内提交
       - name: 校验本 PR 每条提交（复用本地钩子，同一套规则）
@@ -33,7 +33,7 @@ jobs:
     name: PR 体量提示
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
       - name: 超过 400 行仅提示（不硬卡，避免鼓励无意义碎 PR）
