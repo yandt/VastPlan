@@ -22,7 +22,11 @@ func TestRuntimeDriversResolveLanguageAndEnforcePublisherIsolation(t *testing.T)
 		Execution: pluginv1.BackendExecution{Driver: "python", Args: []string{"--worker"}, MinimumIsolation: "trusted-process"},
 	}
 	runtime := NewProtocolRuntime("1.0.0", nil)
-	runtime.ExecutionPolicy = NewExecutionPolicy([]string{"vastplan"}, true)
+	policy, err := ParseExecutionPolicy("require-isolation", "", []string{"vastplan"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime.ExecutionPolicy = policy
 	spec, err := runtime.launchSpec(plugin)
 	if err != nil {
 		t.Fatal(err)
@@ -44,6 +48,61 @@ func TestRuntimeDriversResolveLanguageAndEnforcePublisherIsolation(t *testing.T)
 	plugin.Execution.Driver = "sandbox.test"
 	if _, err := runtime.launchSpec(plugin); err != nil {
 		t.Fatalf("隔离驱动应允许第三方发布者: %v", err)
+	}
+}
+
+func TestExecutionPolicyPublisherOverridePrecedenceAndManifestFloor(t *testing.T) {
+	policy, err := ParseExecutionPolicy(
+		"require-isolation",
+		"vastplan=deny,partner=allow-trusted,sensitive=require-isolation",
+		[]string{"vastplan"},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plugin := InstalledPlugin{ID: "p", Execution: pluginv1.BackendExecution{MinimumIsolation: "trusted-process"}}
+
+	plugin.Publisher = "vastplan"
+	if _, err := policy.RequiredIsolation(plugin); err == nil || !strings.Contains(err.Error(), "被内核运行策略拒绝") {
+		t.Fatalf("显式 deny 必须覆盖旧第一方兼容名单: %v", err)
+	}
+
+	plugin.Publisher = "partner"
+	if got, err := policy.RequiredIsolation(plugin); err != nil || got != IsolationTrustedProcess {
+		t.Fatalf("发布者 allow-trusted 必须覆盖全局隔离策略: isolation=%s err=%v", got, err)
+	}
+
+	plugin.Publisher = "unknown"
+	if got, err := policy.RequiredIsolation(plugin); err != nil || got != IsolationProcessSandbox {
+		t.Fatalf("未匹配发布者必须使用全局策略: isolation=%s err=%v", got, err)
+	}
+
+	plugin.Publisher = "partner"
+	plugin.Execution.MinimumIsolation = "container"
+	if got, err := policy.RequiredIsolation(plugin); err != nil || got != IsolationContainer {
+		t.Fatalf("allow-trusted 不得降低签名清单下限: isolation=%s err=%v", got, err)
+	}
+
+	plugin.Publisher = "sensitive"
+	plugin.Execution.MinimumIsolation = "trusted-process"
+	if got, err := policy.RequiredIsolation(plugin); err != nil || got != IsolationProcessSandbox {
+		t.Fatalf("发布者 require-isolation 必须提高隔离下限: isolation=%s err=%v", got, err)
+	}
+}
+
+func TestParseExecutionPolicyRejectsInvalidOrAmbiguousRules(t *testing.T) {
+	tests := []struct {
+		global, publishers string
+	}{
+		{global: "invalid"},
+		{global: "deny", publishers: "missing-separator"},
+		{global: "deny", publishers: "acme=invalid"},
+		{global: "deny", publishers: "acme=deny,acme=allow-trusted"},
+	}
+	for _, test := range tests {
+		if _, err := ParseExecutionPolicy(test.global, test.publishers, nil); err == nil {
+			t.Fatalf("无效/歧义策略必须拒绝: %+v", test)
+		}
 	}
 }
 

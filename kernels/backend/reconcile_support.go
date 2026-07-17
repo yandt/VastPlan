@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
@@ -20,11 +21,13 @@ type reconcileOptions struct {
 	desiredPath, repositoryRoot, repositoryURL, repositoryTrust, repositoryToken, repositoryCA string
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                       string
 	firstPartyPublishers                                                                       string
+	thirdPartyPluginPolicy, publisherPluginPolicies                                            string
 	capacityCPU, capacityMemory, capacityGPU                                                   int64
 	interval                                                                                   time.Duration
 	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                string
 	natsAllowInsecure, natsBootstrap                                                           bool
 	requireThirdPartyIsolation                                                                 bool
+	executionPolicy                                                                            nodeagent.ExecutionPolicy
 	desiredKey, assignmentKey, deploymentName, deploymentTenant                                string
 	natsReplicas                                                                               int
 }
@@ -43,8 +46,10 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.lockPath, "lock", "", "单实例锁文件；默认 <actual-state>.lock")
 	flags.StringVar(&options.nodeID, "node-id", "local", "当前节点 ID")
 	flags.StringVar(&options.labelsRaw, "labels", "", "节点标签，逗号分隔 key=value")
-	flags.StringVar(&options.firstPartyPublishers, "first-party-publishers", "vastplan", "允许 trusted-process 的第一方发布者，逗号分隔")
-	flags.BoolVar(&options.requireThirdPartyIsolation, "require-third-party-isolation", true, "未知发布者必须使用隔离运行驱动")
+	flags.StringVar(&options.thirdPartyPluginPolicy, "third-party-plugin-policy", string(nodeagent.PublisherPolicyRequireIsolation), "未单独配置发布者时的策略: require-isolation, allow-trusted, deny")
+	flags.StringVar(&options.publisherPluginPolicies, "publisher-plugin-policies", "", "发布者级策略，逗号分隔 publisher=policy；优先于全局策略")
+	flags.StringVar(&options.firstPartyPublishers, "first-party-publishers", "vastplan", "兼容参数：隐式配置 allow-trusted 的发布者，逗号分隔；显式发布者策略优先")
+	flags.BoolVar(&options.requireThirdPartyIsolation, "require-third-party-isolation", true, "已弃用兼容参数；请使用 -third-party-plugin-policy")
 	flags.Int64Var(&options.capacityCPU, "capacity-cpu-millis", 0, "节点可分配 CPU，单位 millicores")
 	flags.Int64Var(&options.capacityMemory, "capacity-memory-bytes", 0, "节点可分配内存，单位 bytes")
 	flags.Int64Var(&options.capacityGPU, "capacity-gpu", 0, "节点可分配 GPU 数量")
@@ -64,6 +69,27 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.deploymentName, "deployment", "", "集群 Deployment v2 名称；自动生成当前节点 assignment key")
 	flags.StringVar(&options.deploymentTenant, "tenant", "", "集群 Deployment v2 租户；与 -deployment 一起使用")
 	if err := flags.Parse(args); err != nil {
+		return reconcileOptions{}, err
+	}
+	visited := map[string]bool{}
+	flags.Visit(func(item *flag.Flag) { visited[item.Name] = true })
+	if visited["require-third-party-isolation"] {
+		if visited["third-party-plugin-policy"] {
+			return reconcileOptions{}, errors.New("-require-third-party-isolation 与 -third-party-plugin-policy 不能同时设置")
+		}
+		if options.requireThirdPartyIsolation {
+			options.thirdPartyPluginPolicy = string(nodeagent.PublisherPolicyRequireIsolation)
+		} else {
+			options.thirdPartyPluginPolicy = string(nodeagent.PublisherPolicyAllowTrusted)
+		}
+	}
+	var err error
+	options.executionPolicy, err = nodeagent.ParseExecutionPolicy(
+		options.thirdPartyPluginPolicy,
+		options.publisherPluginPolicies,
+		strings.Split(options.firstPartyPublishers, ","),
+	)
+	if err != nil {
 		return reconcileOptions{}, err
 	}
 	if options.deploymentName != "" {
@@ -273,6 +299,8 @@ func finishCanceledAgent(guard *nodeLeaseGuard, reconciler *nodeagent.Reconciler
 }
 
 func logNodeStartup(options reconcileOptions, logf func(string, ...any)) {
+	logf("插件运行策略 global=%s publisher-overrides=%s trusted-compat=%s",
+		options.thirdPartyPluginPolicy, options.publisherPluginPolicies, options.firstPartyPublishers)
 	if options.natsURL == "" {
 		logf("节点 %s 启动，期望态=%s", options.nodeID, options.desiredPath)
 		return

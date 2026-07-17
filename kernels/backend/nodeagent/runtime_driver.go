@@ -12,7 +12,7 @@ import (
 )
 
 // IsolationLevel 按强度单调递增。插件清单只能提高最低要求，节点发布者策略还能
-// 继续提高；任何一方都不能把未知发布者降级到 trusted-process。
+// 继续提高；宿主策略不能降低签名清单声明的下限。
 type IsolationLevel string
 
 const (
@@ -122,21 +122,80 @@ func launchSpec(plugin InstalledPlugin, command string, args []string) protocolb
 	}
 }
 
-// ExecutionPolicy 将发布者来源转成宿主强制的隔离下限。零值保持既有第一方行为；
-// 生产入口会显式配置 vastplan 为第一方，并要求所有未知发布者至少 process-sandbox。
-type ExecutionPolicy struct {
-	FirstPartyPublishers               map[string]struct{}
-	RequireIsolationForOtherPublishers bool
+// PublisherPluginPolicy 是内核使用者对某个发布者插件的运行决策。
+// allow-trusted 只允许使用可信进程驱动，不会降低签名清单声明的 minimumIsolation。
+type PublisherPluginPolicy string
+
+const (
+	PublisherPolicyRequireIsolation PublisherPluginPolicy = "require-isolation"
+	PublisherPolicyAllowTrusted     PublisherPluginPolicy = "allow-trusted"
+	PublisherPolicyDeny             PublisherPluginPolicy = "deny"
+)
+
+func validatePublisherPluginPolicy(policy PublisherPluginPolicy) error {
+	switch policy {
+	case PublisherPolicyRequireIsolation, PublisherPolicyAllowTrusted, PublisherPolicyDeny:
+		return nil
+	default:
+		return fmt.Errorf("插件发布者策略无效: %q（可选: %s, %s, %s）", policy,
+			PublisherPolicyRequireIsolation, PublisherPolicyAllowTrusted, PublisherPolicyDeny)
+	}
 }
 
-func NewExecutionPolicy(firstParty []string, requireOtherIsolation bool) ExecutionPolicy {
-	policy := ExecutionPolicy{FirstPartyPublishers: map[string]struct{}{}, RequireIsolationForOtherPublishers: requireOtherIsolation}
-	for _, publisher := range firstParty {
-		if publisher = strings.TrimSpace(publisher); publisher != "" {
-			policy.FirstPartyPublishers[publisher] = struct{}{}
+// ExecutionPolicy 由内核使用者配置全局策略和发布者级覆盖。发布者级规则优先；
+// 零值只为嵌入兼容而等价于 allow-trusted，生产入口会显式使用安全默认值。
+type ExecutionPolicy struct {
+	DefaultPolicy     PublisherPluginPolicy
+	PublisherPolicies map[string]PublisherPluginPolicy
+}
+
+// ParseExecutionPolicy 解析生产配置。trustedPublishers 是旧
+// -first-party-publishers 参数的兼容输入，只在没有显式发布者规则时补 allow-trusted。
+func ParseExecutionPolicy(defaultPolicy, publisherPolicies string, trustedPublishers []string) (ExecutionPolicy, error) {
+	policy := ExecutionPolicy{
+		DefaultPolicy:     PublisherPluginPolicy(strings.TrimSpace(defaultPolicy)),
+		PublisherPolicies: map[string]PublisherPluginPolicy{},
+	}
+	if err := validatePublisherPluginPolicy(policy.DefaultPolicy); err != nil {
+		return ExecutionPolicy{}, err
+	}
+	if strings.TrimSpace(publisherPolicies) != "" {
+		for _, rawRule := range strings.Split(publisherPolicies, ",") {
+			publisher, rawPolicy, ok := strings.Cut(rawRule, "=")
+			publisher = strings.TrimSpace(publisher)
+			pluginPolicy := PublisherPluginPolicy(strings.TrimSpace(rawPolicy))
+			if !ok || publisher == "" || pluginPolicy == "" {
+				return ExecutionPolicy{}, fmt.Errorf("发布者策略格式无效: %q（应为 publisher=policy）", rawRule)
+			}
+			if _, exists := policy.PublisherPolicies[publisher]; exists {
+				return ExecutionPolicy{}, fmt.Errorf("发布者策略重复: %s", publisher)
+			}
+			if err := validatePublisherPluginPolicy(pluginPolicy); err != nil {
+				return ExecutionPolicy{}, fmt.Errorf("发布者 %s: %w", publisher, err)
+			}
+			policy.PublisherPolicies[publisher] = pluginPolicy
 		}
 	}
-	return policy
+	for _, publisher := range trustedPublishers {
+		publisher = strings.TrimSpace(publisher)
+		if publisher == "" {
+			continue
+		}
+		if _, explicitlyConfigured := policy.PublisherPolicies[publisher]; !explicitlyConfigured {
+			policy.PublisherPolicies[publisher] = PublisherPolicyAllowTrusted
+		}
+	}
+	return policy, nil
+}
+
+func (p ExecutionPolicy) policyFor(publisher string) PublisherPluginPolicy {
+	if policy, ok := p.PublisherPolicies[publisher]; ok {
+		return policy
+	}
+	if p.DefaultPolicy == "" {
+		return PublisherPolicyAllowTrusted
+	}
+	return p.DefaultPolicy
 }
 
 func (p ExecutionPolicy) RequiredIsolation(plugin InstalledPlugin) (IsolationLevel, error) {
@@ -144,10 +203,17 @@ func (p ExecutionPolicy) RequiredIsolation(plugin InstalledPlugin) (IsolationLev
 	if _, ok := isolationRank[required]; !ok {
 		return "", fmt.Errorf("插件 %s 的最低隔离等级无效: %s", plugin.ID, required)
 	}
-	if p.RequireIsolationForOtherPublishers {
-		if _, firstParty := p.FirstPartyPublishers[plugin.Publisher]; !firstParty && isolationRank[required] < isolationRank[IsolationProcessSandbox] {
+	switch policy := p.policyFor(plugin.Publisher); policy {
+	case PublisherPolicyDeny:
+		return "", fmt.Errorf("插件 %s 的发布者 %s 被内核运行策略拒绝", plugin.ID, plugin.Publisher)
+	case PublisherPolicyRequireIsolation:
+		if isolationRank[required] < isolationRank[IsolationProcessSandbox] {
 			required = IsolationProcessSandbox
 		}
+	case PublisherPolicyAllowTrusted:
+		// 签名清单 minimumIsolation 仍是不可降低的下限。
+	default:
+		return "", fmt.Errorf("发布者 %s: %w", plugin.Publisher, validatePublisherPluginPolicy(policy))
 	}
 	return required, nil
 }
