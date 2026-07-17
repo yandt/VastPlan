@@ -110,6 +110,10 @@ func (r *Reconciler) reconcileTargets(ctx context.Context, revision uint64, targ
 
 func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit deploymentv1.Unit, actual *ActualState) (bool, error) {
 	id, fingerprint := unit.ID, unit.Fingerprint()
+	policy, err := unitPolicy(unit)
+	if err != nil {
+		return false, err
+	}
 	if current, ok := actual.Units[id]; ok && current.Fingerprint == fingerprint && r.Runtime.IsRunning(id, fingerprint) {
 		if err := r.setUnitPhase(&current, PhaseActive); err != nil {
 			return false, err
@@ -164,6 +168,8 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 	}
 	runtimeUnit := RuntimeUnit{
 		ID: id, Fingerprint: fingerprint, ServiceRole: unit.ServiceRole,
+		LogicalService: unit.LogicalService, InstancePolicy: policy.InstancePolicy,
+		StateModel: policy.StateModel, Visibility: policy.Visibility, Routing: policy.Routing,
 		Config: RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
 		RestartBase: current.RestartCount,
 	}

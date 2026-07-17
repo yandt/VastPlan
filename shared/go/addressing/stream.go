@@ -22,6 +22,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
 // StreamHandler 直接在双向流上处理分片。HTTP/2 流控会在对端处理速度不足时阻塞 Send，
@@ -121,6 +122,18 @@ func (r *Router) RegisterStream(ctx context.Context, options RegisterOptions, ha
 	if options.Capability == "" || options.ExtensionPoint == "" || handler == nil {
 		return nil, errors.New("stream capability、extension point 和 handler 不能为空")
 	}
+	policy := servicemodel.Normalize(servicemodel.Policy{
+		InstancePolicy: options.InstancePolicy, StateModel: options.StateModel,
+		Visibility: options.Visibility, Routing: options.Routing,
+	})
+	if err := servicemodel.Validate(policy); err != nil {
+		return nil, fmt.Errorf("stream capability %s 运行策略无效: %w", options.Capability, err)
+	}
+	if policy.Visibility == servicemodel.VisibilityLocal {
+		return nil, errors.New("local capability 不能注册到全局 stream 目录")
+	}
+	options.InstancePolicy, options.StateModel = policy.InstancePolicy, policy.StateModel
+	options.Visibility, options.Routing = policy.Visibility, policy.Routing
 	r.mu.RLock()
 	endpoint := r.streamEndpoint
 	r.mu.RUnlock()
@@ -132,7 +145,10 @@ func (r *Router) RegisterStream(ctx context.Context, options RegisterOptions, ha
 	}
 	record := Announcement{
 		SchemaVersion: 1, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint,
-		ServiceRole: options.ServiceRole, InstanceID: options.InstanceID, NodeID: r.NodeID,
+		ServiceRole: options.ServiceRole, LogicalService: options.LogicalService,
+		InstancePolicy: options.InstancePolicy, StateModel: options.StateModel,
+		Visibility: options.Visibility, Routing: options.Routing,
+		InstanceID: options.InstanceID, NodeID: r.NodeID,
 		UnitID: options.UnitID, Version: options.Version, Subject: controlplane.RPCSubject(options.Capability),
 		StreamEndpoint: endpoint, Health: "healthy", UpdatedAt: nowUTC(),
 	}

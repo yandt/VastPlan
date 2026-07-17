@@ -27,6 +27,7 @@ import (
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/observability"
 	"cdsoft.com.cn/VastPlan/shared/go/protocollimit"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
 const cancelSubject = "vp.rpc.cancel.v1"
@@ -44,6 +45,11 @@ type Announcement struct {
 	Capability         string    `json:"capability"`
 	ExtensionPoint     string    `json:"extension_point"`
 	ServiceRole        string    `json:"service_role"`
+	LogicalService     string    `json:"logical_service,omitempty"`
+	InstancePolicy     string    `json:"instance_policy,omitempty"`
+	StateModel         string    `json:"state_model,omitempty"`
+	Visibility         string    `json:"visibility,omitempty"`
+	Routing            string    `json:"routing,omitempty"`
 	InstanceID         string    `json:"instance_id"`
 	NodeID             string    `json:"node_id"`
 	UnitID             string    `json:"unit_id"`
@@ -461,6 +467,16 @@ func validateAnnouncementShape(key string, record Announcement) error {
 	}
 	if record.Subject != controlplane.RPCSubject(record.Capability) {
 		return errors.New("能力目录 subject 与 capability 不一致")
+	}
+	policy := servicemodel.Normalize(servicemodel.Policy{
+		InstancePolicy: record.InstancePolicy, StateModel: record.StateModel,
+		Visibility: record.Visibility, Routing: record.Routing,
+	})
+	if err := servicemodel.Validate(policy); err != nil {
+		return fmt.Errorf("能力目录运行策略无效: %w", err)
+	}
+	if policy.Visibility == servicemodel.VisibilityLocal {
+		return errors.New("local capability 不得写入全局能力目录")
 	}
 	return nil
 }

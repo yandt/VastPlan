@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	commonv1 "cdsoft.com.cn/VastPlan/schemas/common/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
@@ -53,11 +54,29 @@ type Manifest struct {
 	Publisher    string                     `json:"publisher"`
 	Engines      map[string]string          `json:"engines"`
 	Capabilities *Capabilities              `json:"capabilities,omitempty"`
+	Runtime      *RuntimePolicy             `json:"runtime,omitempty"`
 	State        *State                     `json:"state,omitempty"`
 	Activation   []string                   `json:"activation"`
 	Dependencies map[string]string          `json:"dependencies,omitempty"`
 	Entry        map[string]string          `json:"entry"`
 	Contributes  map[string]json.RawMessage `json:"contributes"`
+}
+
+// RuntimePolicy 声明插件贡献的实例化策略和默认能力边界。
+// Provides 可按 extensionPoint + capability 覆盖顶层策略。
+type RuntimePolicy struct {
+	InstancePolicy string                    `json:"instancePolicy"`
+	StateModel     string                    `json:"stateModel"`
+	Visibility     string                    `json:"visibility"`
+	Routing        string                    `json:"routing"`
+	Provides       []RuntimeCapabilityPolicy `json:"provides,omitempty"`
+}
+
+type RuntimeCapabilityPolicy struct {
+	ExtensionPoint string `json:"extensionPoint"`
+	Capability     string `json:"capability"`
+	Visibility     string `json:"visibility,omitempty"`
+	Routing        string `json:"routing,omitempty"`
 }
 
 // State 声明各运行面的插件私有持久状态。Backend 1.0 只发布 backend 契约；
@@ -106,6 +125,10 @@ type RuntimeContribution struct {
 	ID             string          `json:"id"`
 	Priority       int32           `json:"priority"`
 	Descriptor     json.RawMessage `json:"descriptor"`
+	InstancePolicy string          `json:"instancePolicy,omitempty"`
+	StateModel     string          `json:"stateModel,omitempty"`
+	Visibility     string          `json:"visibility,omitempty"`
+	Routing        string          `json:"routing,omitempty"`
 }
 
 var backendContributionPoints = map[string]string{
@@ -132,6 +155,10 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 		return nil, fmt.Errorf("解析 backend contributions: %w", err)
 	}
 	var out []RuntimeContribution
+	defaultPolicy, overrides, err := runtimePolicies(manifest)
+	if err != nil {
+		return nil, err
+	}
 	seen := map[string]struct{}{}
 	for group, entries := range groups {
 		point, ok := backendContributionPoints[group]
@@ -161,12 +188,22 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 			if err := ValidateDescriptor(point, descriptor); err != nil {
 				return nil, err
 			}
+			policy := defaultPolicy
+			if override, ok := overrides[point+"\x00"+id]; ok {
+				policy.Visibility = override.Visibility
+				policy.Routing = override.Routing
+				policy = servicemodel.Normalize(policy)
+			}
 			key := point + "\x00" + id
 			if _, duplicate := seen[key]; duplicate {
 				return nil, fmt.Errorf("运行时贡献重复: %s/%s", point, id)
 			}
 			seen[key] = struct{}{}
-			out = append(out, RuntimeContribution{ExtensionPoint: point, ID: id, Priority: priority, Descriptor: descriptor})
+			out = append(out, RuntimeContribution{
+				ExtensionPoint: point, ID: id, Priority: priority, Descriptor: descriptor,
+				InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
+				Visibility: policy.Visibility, Routing: policy.Routing,
+			})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -176,6 +213,44 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 		return out[i].ID < out[j].ID
 	})
 	return out, nil
+}
+
+func runtimePolicies(manifest Manifest) (servicemodel.Policy, map[string]RuntimeCapabilityPolicy, error) {
+	if manifest.Runtime == nil {
+		return servicemodel.Normalize(servicemodel.Policy{}), nil, nil
+	}
+	policy := servicemodel.Policy{
+		InstancePolicy: manifest.Runtime.InstancePolicy,
+		StateModel:     manifest.Runtime.StateModel,
+		Visibility:     manifest.Runtime.Visibility,
+		Routing:        manifest.Runtime.Routing,
+	}
+	policy = servicemodel.Normalize(policy)
+	if err := servicemodel.Validate(policy); err != nil {
+		return servicemodel.Policy{}, nil, fmt.Errorf("runtime 策略无效: %w", err)
+	}
+	overrides := make(map[string]RuntimeCapabilityPolicy, len(manifest.Runtime.Provides))
+	for _, provide := range manifest.Runtime.Provides {
+		if provide.ExtensionPoint == "" || provide.Capability == "" {
+			return servicemodel.Policy{}, nil, fmt.Errorf("runtime.provides 必须填写 extensionPoint 和 capability")
+		}
+		key := provide.ExtensionPoint + "\x00" + provide.Capability
+		if _, exists := overrides[key]; exists {
+			return servicemodel.Policy{}, nil, fmt.Errorf("runtime.provides 重复: %s/%s", provide.ExtensionPoint, provide.Capability)
+		}
+		override := provide
+		overridePolicy := policy
+		overridePolicy.Visibility = provide.Visibility
+		overridePolicy.Routing = provide.Routing
+		overridePolicy = servicemodel.Normalize(overridePolicy)
+		if err := servicemodel.Validate(overridePolicy); err != nil {
+			return servicemodel.Policy{}, nil, fmt.Errorf("runtime.provides %s/%s 策略无效: %w", provide.ExtensionPoint, provide.Capability, err)
+		}
+		override.Visibility = overridePolicy.Visibility
+		override.Routing = overridePolicy.Routing
+		overrides[key] = override
+	}
+	return policy, overrides, nil
 }
 
 func schemas() error {
@@ -234,6 +309,11 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	var manifest Manifest
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		return Manifest{}, fmt.Errorf("解析插件清单字段: %w", err)
+	}
+	if manifest.Runtime != nil {
+		if _, _, err := runtimePolicies(manifest); err != nil {
+			return Manifest{}, err
+		}
 	}
 	return manifest, nil
 }

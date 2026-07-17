@@ -54,6 +54,20 @@ func TestRouterLocalAndRemoteInvoke(t *testing.T) {
 	}
 }
 
+func TestRouterRejectsLocalCapabilityRegistration(t *testing.T) {
+	server, buckets := startAddressingNATS(t)
+	worker := newTestRouter(t, server, buckets.Capabilities, "worker-local")
+	_, err := worker.Register(context.Background(), RegisterOptions{
+		Capability: "demo.local", ExtensionPoint: "tool.package", UnitID: "local",
+		InstancePolicy: "per-kernel", StateModel: "local-ephemeral", Visibility: "local", Routing: "direct",
+	}, func(context.Context, *contractv1.CallTarget, *contractv1.CallContext, []byte) (*contractv1.CallResult, []byte, error) {
+		return okResult(), nil, nil
+	})
+	if err == nil {
+		t.Fatal("local capability 不得注册到全局 Router")
+	}
+}
+
 func TestPreparedRegistrationGroupIsInvisibleUntilAtomicActivation(t *testing.T) {
 	server, buckets := startAddressingNATS(t)
 	caller := newTestRouter(t, server, buckets.Capabilities, "caller")

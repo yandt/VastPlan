@@ -74,6 +74,11 @@
         "config": { "type": "object" },
         "enabled": { "type": "boolean" },
         "service_role": { "enum": ["backend", "workspace", "rs"] },
+        "logical_service": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "instance_policy": { "enum": ["per-kernel", "active-active", "leader", "partitioned"] },
+        "state_model": { "enum": ["local-ephemeral", "external-shared", "leader-owned", "partition-owned"] },
+        "visibility": { "enum": ["local", "service", "cluster", "global"] },
+        "routing": { "enum": ["direct", "queue", "leader", "shard"] },
         "replicas": { "const": 1 },
         "resources": { "$ref": "#/$defs/resources" },
         "placement": { "$ref": "#/$defs/placement" }

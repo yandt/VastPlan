@@ -9,11 +9,14 @@ import (
 	"time"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
+	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/addressing"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/shared/go/registry"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
 type runningUnit struct {
@@ -72,6 +75,13 @@ func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *Protoc
 func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr error) {
 	if r.IsRunning(unit.ID, unit.Fingerprint) {
 		return nil
+	}
+	policy, err := unitPolicy(deploymentUnitForRuntime(unit))
+	if err != nil {
+		return err
+	}
+	if err := validateInstalledPolicies(policy, unit.Plugins); err != nil {
+		return err
 	}
 	configProvider, err := kernelspi.NewMapConfig(unit.Config)
 	if err != nil {
@@ -187,6 +197,13 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 		old.host.Stop()
 	}
 	return nil
+}
+
+func deploymentUnitForRuntime(unit RuntimeUnit) deploymentv1.Unit {
+	return deploymentv1.Unit{
+		ID: unit.ID, InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
+		Visibility: unit.Visibility, Routing: unit.Routing,
+	}
 }
 
 type preparedMigration struct {
@@ -373,6 +390,16 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 	for _, process := range processes {
 		versions[process.PluginID] = process.Version
 	}
+	policies := make(map[string]pluginv1.RuntimeContribution)
+	for _, plugin := range unit.Plugins {
+		for _, contribution := range plugin.Contract.Contributions {
+			policies[plugin.ID+"\x00"+contribution.ExtensionPoint+"\x00"+contribution.ID] = contribution
+		}
+	}
+	logicalService := unit.LogicalService
+	if logicalService == "" {
+		logicalService = unit.ID
+	}
 	var registrations []*addressing.Registration
 	for _, point := range host.Registry.Points() {
 		if point.Dispatch != registry.DispatchSingle {
@@ -382,9 +409,20 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 			if contribution.PluginID == protocolbus.KernelPluginID {
 				continue
 			}
+			declared := policies[contribution.PluginID+"\x00"+point.Name+"\x00"+contribution.ID]
+			policy, err := contributionPolicy(declared)
+			if err != nil {
+				return nil, err
+			}
+			if policy.Visibility == servicemodel.VisibilityLocal {
+				continue
+			}
 			registration, err := router.PrepareRegistration(ctx, addressing.RegisterOptions{
 				Capability: contribution.ID, ExtensionPoint: point.Name,
-				ServiceRole: unit.ServiceRole, UnitID: unit.ID, Version: versions[contribution.PluginID],
+				ServiceRole: unit.ServiceRole, LogicalService: logicalService,
+				InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
+				Visibility: policy.Visibility, Routing: policy.Routing,
+				UnitID: unit.ID, Version: versions[contribution.PluginID],
 			}, addressing.HostHandler(func(invokeCtx context.Context, target *contractv1.CallTarget, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 				response, err := host.Invoke(invokeCtx, target, callCtx, payload)
 				if err != nil {

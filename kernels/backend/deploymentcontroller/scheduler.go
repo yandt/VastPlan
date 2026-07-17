@@ -21,6 +21,7 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
 type Scheduler struct {
@@ -83,6 +84,13 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 		if len(eligible) < replicas {
 			return Plan{}, fmt.Errorf("unit %s 需要 %d 副本，但只有 %d 个节点满足标签、亲和与资源约束", unit.ID, replicas, len(eligible))
 		}
+		policy := servicemodel.Normalize(servicemodel.Policy{
+			InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
+			Visibility: unit.Visibility, Routing: unit.Routing,
+		})
+		if err := servicemodel.Validate(policy); err != nil {
+			return Plan{}, fmt.Errorf("unit %s 运行策略无效: %w", unit.ID, err)
+		}
 		sort.Slice(eligible, func(i, j int) bool {
 			leftPreference := preferenceScore(nodes[eligible[i]].Labels, unit.Placement)
 			rightPreference := preferenceScore(nodes[eligible[j]].Labels, unit.Placement)
@@ -99,7 +107,9 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 			assignment := assignments[nodeID]
 			assignment.Units = append(assignment.Units, deploymentv1.Unit{
 				ID: unit.ID, Kind: unit.Kind, Plugins: append([]deploymentv1.PluginRef(nil), unit.Plugins...),
-				Config: cloneConfig(unit.Config), Enabled: true, ServiceRole: unit.ServiceRole, Replicas: 1,
+				Config: cloneConfig(unit.Config), Enabled: true, ServiceRole: unit.ServiceRole,
+				LogicalService: unit.LogicalService, InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
+				Visibility: policy.Visibility, Routing: policy.Routing, Replicas: 1,
 				Resources: deploymentv1.ResourceRequirements{Requests: deploymentv1.ResourceList{
 					CPUMillis: unit.Resources.Requests.CPUMillis, MemoryBytes: unit.Resources.Requests.MemoryBytes, GPU: unit.Resources.Requests.GPU,
 				}},

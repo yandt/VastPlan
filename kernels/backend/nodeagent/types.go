@@ -86,13 +86,18 @@ type PluginStateContract struct {
 
 // RuntimeUnit 是运行时需要的完整、不可变组合。
 type RuntimeUnit struct {
-	ID          string
-	Fingerprint string
-	ServiceRole string
-	Config      map[string]any
-	Plugins     []InstalledPlugin
-	Migrations  []StateMigrationPlan
-	RestartBase uint64
+	ID             string
+	Fingerprint    string
+	ServiceRole    string
+	LogicalService string
+	InstancePolicy string
+	StateModel     string
+	Visibility     string
+	Routing        string
+	Config         map[string]any
+	Plugins        []InstalledPlugin
+	Migrations     []StateMigrationPlan
+	RestartBase    uint64
 }
 
 // StateMigrationPlan 由 Reconciler 从旧/新签名清单计算，Runtime 只负责按协议执行。

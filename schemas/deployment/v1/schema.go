@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	commonv1 "cdsoft.com.cn/VastPlan/schemas/common/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
@@ -47,15 +48,20 @@ type Metadata struct {
 
 // Unit 是 v1 唯一支持的 service 组合单元。
 type Unit struct {
-	ID          string               `json:"id"`
-	Kind        string               `json:"kind"`
-	Plugins     []PluginRef          `json:"plugins"`
-	Config      map[string]any       `json:"config,omitempty"`
-	Enabled     bool                 `json:"enabled"`
-	ServiceRole string               `json:"service_role"`
-	Replicas    int                  `json:"replicas"`
-	Placement   Placement            `json:"placement,omitempty"`
-	Resources   ResourceRequirements `json:"resources,omitempty"`
+	ID             string               `json:"id"`
+	Kind           string               `json:"kind"`
+	Plugins        []PluginRef          `json:"plugins"`
+	Config         map[string]any       `json:"config,omitempty"`
+	Enabled        bool                 `json:"enabled"`
+	ServiceRole    string               `json:"service_role"`
+	LogicalService string               `json:"logical_service,omitempty"`
+	InstancePolicy string               `json:"instance_policy,omitempty"`
+	StateModel     string               `json:"state_model,omitempty"`
+	Visibility     string               `json:"visibility,omitempty"`
+	Routing        string               `json:"routing,omitempty"`
+	Replicas       int                  `json:"replicas"`
+	Placement      Placement            `json:"placement,omitempty"`
+	Resources      ResourceRequirements `json:"resources,omitempty"`
 }
 
 // PluginRef 通过不可变制品三元组引用一个插件；channel 留空时规范化为 stable。
@@ -123,6 +129,15 @@ func Parse(raw []byte) (DesiredState, error) {
 			return DesiredState{}, fmt.Errorf("期望态 unit id 重复: %q", unit.ID)
 		}
 		unitIDs[unit.ID] = struct{}{}
+		policy := servicemodel.Normalize(servicemodel.Policy{
+			InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
+			Visibility: unit.Visibility, Routing: unit.Routing,
+		})
+		if err := servicemodel.Validate(policy); err != nil {
+			return DesiredState{}, fmt.Errorf("unit %q 运行策略无效: %w", unit.ID, err)
+		}
+		unit.InstancePolicy, unit.StateModel = policy.InstancePolicy, policy.StateModel
+		unit.Visibility, unit.Routing = policy.Visibility, policy.Routing
 		pluginIDs := map[string]struct{}{}
 		for j := range unit.Plugins {
 			plugin := &unit.Plugins[j]

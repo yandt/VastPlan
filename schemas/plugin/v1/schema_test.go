@@ -136,6 +136,37 @@ func TestParseManifest_BackendDescriptorsAreClosed(t *testing.T) {
 	}
 }
 
+func TestParseManifest_RuntimePolicies(t *testing.T) {
+	local := []byte(`{
+		"id":"com.example.local","name":"local","description":"local",
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct"},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{"tools":[{"id":"local.tool","service_role":"backend","title":"local","subcommands":[]}]}}
+	}`)
+	manifest, err := ParseManifest(local)
+	if err != nil {
+		t.Fatalf("本地 runtime 策略应通过: %v", err)
+	}
+	contributions, err := BackendRuntimeContributions(manifest)
+	if err != nil || len(contributions) != 1 {
+		t.Fatalf("本地贡献规范化失败: %v %+v", err, contributions)
+	}
+	if contributions[0].Visibility != "local" || contributions[0].Routing != "direct" {
+		t.Fatalf("本地贡献策略错误: %+v", contributions[0])
+	}
+
+	invalid := []byte(`{
+		"id":"com.example.invalid","name":"invalid","description":"invalid",
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"cluster","routing":"queue"},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
+	}`)
+	if _, err := ParseManifest(invalid); err == nil {
+		t.Fatal("per-kernel 与 cluster/queue 冲突时必须拒绝")
+	}
+}
+
 func TestParseManifest_BackendStateMigrationContract(t *testing.T) {
 	valid := []byte(`{
 		"id":"com.example.stateful","name":"stateful","description":"stateful plugin",

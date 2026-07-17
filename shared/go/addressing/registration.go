@@ -17,6 +17,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
 // RegisterOptions 描述一个可被本地直调和远端 queue group 调用的实例。
@@ -24,6 +25,11 @@ type RegisterOptions struct {
 	Capability     string
 	ExtensionPoint string
 	ServiceRole    string
+	LogicalService string
+	InstancePolicy string
+	StateModel     string
+	Visibility     string
+	Routing        string
 	UnitID         string
 	Version        string
 	InstanceID     string
@@ -64,12 +70,27 @@ func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOption
 	if options.Capability == "" || options.ExtensionPoint == "" || handler == nil {
 		return nil, errors.New("capability、extension point 和 handler 不能为空")
 	}
+	policy := servicemodel.Normalize(servicemodel.Policy{
+		InstancePolicy: options.InstancePolicy, StateModel: options.StateModel,
+		Visibility: options.Visibility, Routing: options.Routing,
+	})
+	if err := servicemodel.Validate(policy); err != nil {
+		return nil, fmt.Errorf("capability %s 运行策略无效: %w", options.Capability, err)
+	}
+	if policy.Visibility == servicemodel.VisibilityLocal {
+		return nil, errors.New("local capability 不能注册到全局 addressing router")
+	}
+	options.InstancePolicy, options.StateModel = policy.InstancePolicy, policy.StateModel
+	options.Visibility, options.Routing = policy.Visibility, policy.Routing
 	if options.InstanceID == "" {
 		options.InstanceID = r.NodeID + "." + options.UnitID + "." + randomID()
 	}
 	record := Announcement{
 		SchemaVersion: 1, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint,
-		ServiceRole: options.ServiceRole, InstanceID: options.InstanceID, NodeID: r.NodeID,
+		ServiceRole: options.ServiceRole, LogicalService: options.LogicalService,
+		InstancePolicy: options.InstancePolicy, StateModel: options.StateModel,
+		Visibility: options.Visibility, Routing: options.Routing,
+		InstanceID: options.InstanceID, NodeID: r.NodeID,
 		UnitID: options.UnitID, Version: options.Version,
 		Subject: controlplane.RPCSubject(options.Capability), Health: "starting", UpdatedAt: time.Now().UTC(),
 	}

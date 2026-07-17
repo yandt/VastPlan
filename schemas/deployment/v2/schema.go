@@ -18,6 +18,7 @@ import (
 
 	commonv1 "cdsoft.com.cn/VastPlan/schemas/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
 const DeploymentSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/deployment/v2/vastplan.deployment.schema.json"
@@ -39,16 +40,21 @@ type Deployment struct {
 }
 
 type ServiceUnit struct {
-	ID          string                   `json:"id"`
-	Kind        string                   `json:"kind"`
-	Plugins     []deploymentv1.PluginRef `json:"plugins"`
-	Config      map[string]any           `json:"config,omitempty"`
-	Enabled     bool                     `json:"enabled"`
-	ServiceRole string                   `json:"service_role"`
-	Replicas    int                      `json:"replicas"`
-	Autoscaling *Autoscaling             `json:"autoscaling,omitempty"`
-	Resources   ResourceRequirements     `json:"resources,omitempty"`
-	Placement   Placement                `json:"placement,omitempty"`
+	ID             string                   `json:"id"`
+	Kind           string                   `json:"kind"`
+	Plugins        []deploymentv1.PluginRef `json:"plugins"`
+	Config         map[string]any           `json:"config,omitempty"`
+	Enabled        bool                     `json:"enabled"`
+	ServiceRole    string                   `json:"service_role"`
+	LogicalService string                   `json:"logical_service,omitempty"`
+	InstancePolicy string                   `json:"instance_policy,omitempty"`
+	StateModel     string                   `json:"state_model,omitempty"`
+	Visibility     string                   `json:"visibility,omitempty"`
+	Routing        string                   `json:"routing,omitempty"`
+	Replicas       int                      `json:"replicas"`
+	Autoscaling    *Autoscaling             `json:"autoscaling,omitempty"`
+	Resources      ResourceRequirements     `json:"resources,omitempty"`
+	Placement      Placement                `json:"placement,omitempty"`
 }
 
 // ResourceList 和 ResourceRequirements 是 common/v1 稳定 DTO 的兼容别名。
@@ -129,6 +135,15 @@ func Parse(raw []byte) (Deployment, error) {
 			return Deployment{}, fmt.Errorf("集群部署 unit id 重复: %q", unit.ID)
 		}
 		unitIDs[unit.ID] = struct{}{}
+		policy := servicemodel.Normalize(servicemodel.Policy{
+			InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
+			Visibility: unit.Visibility, Routing: unit.Routing,
+		})
+		if err := servicemodel.Validate(policy); err != nil {
+			return Deployment{}, fmt.Errorf("unit %q 运行策略无效: %w", unit.ID, err)
+		}
+		unit.InstancePolicy, unit.StateModel = policy.InstancePolicy, policy.StateModel
+		unit.Visibility, unit.Routing = policy.Visibility, policy.Routing
 		if unit.Autoscaling != nil {
 			if unit.Autoscaling.MinReplicas > unit.Autoscaling.MaxReplicas {
 				return Deployment{}, fmt.Errorf("unit %q autoscaling min_replicas 不能大于 max_replicas", unit.ID)

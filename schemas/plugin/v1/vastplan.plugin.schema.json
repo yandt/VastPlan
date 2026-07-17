@@ -31,6 +31,7 @@
         "resources": { "$ref": "#/$defs/stringList" }
       }
     },
+    "runtime": { "$ref": "#/$defs/runtimePolicy" },
     "activation": { "$ref": "#/$defs/stringList" },
     "dependencies": {
       "type": "object",
@@ -70,6 +71,33 @@
   },
   "$defs": {
     "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "runtimePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instancePolicy", "stateModel", "visibility", "routing"],
+      "properties": {
+        "instancePolicy": { "enum": ["per-kernel", "active-active", "leader", "partitioned"] },
+        "stateModel": { "enum": ["local-ephemeral", "external-shared", "leader-owned", "partition-owned"] },
+        "visibility": { "enum": ["local", "service", "cluster", "global"] },
+        "routing": { "enum": ["direct", "queue", "leader", "shard"] },
+        "provides": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/runtimeCapabilityPolicy" }
+        }
+      }
+    },
+    "runtimeCapabilityPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extensionPoint", "capability"],
+      "properties": {
+        "extensionPoint": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "capability": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "visibility": { "enum": ["local", "service", "cluster", "global"] },
+        "routing": { "enum": ["direct", "queue", "leader", "shard"] }
+      }
+    },
     "stateIdentity": {
       "type": "object",
       "additionalProperties": false,
