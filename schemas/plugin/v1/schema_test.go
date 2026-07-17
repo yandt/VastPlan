@@ -80,6 +80,26 @@ func TestParseManifest_LicenseFieldsArePaired(t *testing.T) {
 	}
 }
 
+func TestParseManifest_DesignSystemContributionIsClosedAndComplete(t *testing.T) {
+	base := `{
+  "id":"com.vastplan.foundation.frontend.design-system.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan",
+  "engines":{"frontend":"^1.0"},"activation":["onStartup"],"entry":{"frontend":"frontend/remoteEntry.js"},
+  "contributes":{"frontend":{"designSystems":[%s]}}
+}`
+	valid := `{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}`
+	if _, err := ParseManifest([]byte(fmt.Sprintf(base, valid))); err != nil {
+		t.Fatalf("完整的设计系统贡献应通过校验: %v", err)
+	}
+	missing := `{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback"]}`
+	if _, err := ParseManifest([]byte(fmt.Sprintf(base, missing))); err == nil {
+		t.Fatal("缺少基础 UI 能力的设计系统贡献必须被拒绝")
+	}
+	unknown := `{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme"],"rawFrameworkToken":true}`
+	if _, err := ParseManifest([]byte(fmt.Sprintf(base, unknown))); err == nil {
+		t.Fatal("设计系统 descriptor 的未知字段必须被拒绝")
+	}
+}
+
 func TestValidateDescriptor_RejectsInvalidHookPhase(t *testing.T) {
 	err := ValidateDescriptor("hook", []byte(`{"point":"invoke","phase":"later"}`))
 	if err == nil {

@@ -18,6 +18,7 @@ tmp/
 
 # 构建产物
 bin/
+node_modules/
 .gstack/
 __pycache__/
 *.py[cod]

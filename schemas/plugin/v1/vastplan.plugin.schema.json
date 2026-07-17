@@ -392,7 +392,35 @@
         "editors": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "commands": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "menus": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
-        "settings": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } }
+        "settings": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "designSystems": { "type": "array", "items": { "$ref": "#/$defs/designSystemContribution" } }
+      }
+    },
+    "designSystemContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "uiContract", "framework", "capabilities"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "framework": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
+        "capabilities": {
+          "type": "array",
+          "minItems": 7,
+          "uniqueItems": true,
+          "items": { "enum": ["layout", "menu", "overlay", "form", "data", "feedback", "theme"] },
+          "allOf": [
+            { "contains": { "const": "layout" } },
+            { "contains": { "const": "menu" } },
+            { "contains": { "const": "overlay" } },
+            { "contains": { "const": "form" } },
+            { "contains": { "const": "data" } },
+            { "contains": { "const": "feedback" } },
+            { "contains": { "const": "theme" } }
+          ]
+        }
       }
     },
     "runnerContributes": {

@@ -1,0 +1,21 @@
+{
+  "id": "com.vastplan.platform.configuration.portal-composer",
+  "name": "VastPlan Portal Composer",
+  "description": "以统一 Portal UI 契约管理系统配置和插件在线组合",
+  "version": "1.0.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "frontend": "^1.0" },
+  "capabilities": { "kernelServices": ["kernel.config.get"], "credentials": [], "resources": [] },
+  "activation": ["onPortalStartup"],
+  "entry": { "frontend": "frontend/src/index.tsx" },
+  "dependencies": { "com.vastplan.foundation.frontend.design-system.arco": "^1.0.0" },
+  "contributes": {
+    "frontend": {
+      "views": [{ "id": "platform.portal-composer", "title": "门户与插件组合" }],
+      "menus": [{ "id": "platform.portal-composer.menu", "title": "系统配置" }]
+    }
+  }
+}

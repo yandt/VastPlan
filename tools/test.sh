@@ -11,6 +11,13 @@ cd "$ROOT"
 echo "── 单元测试 ──"
 go test ./...
 
+if command -v pnpm >/dev/null 2>&1; then
+  echo
+  echo "── 前端类型与运行时测试 ──"
+  pnpm typecheck
+  pnpm test:frontend
+fi
+
 if [[ "${1:-}" == "--e2e" ]]; then
   echo
   echo "── E2E（跨进程真实链路）──"

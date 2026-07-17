@@ -1,0 +1,9 @@
+{
+  "name": "vastplan-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.11.0",
+  "scripts": {
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test:frontend": "pnpm -r --if-present test"
+  }
+}
