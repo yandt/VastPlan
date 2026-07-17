@@ -1,6 +1,7 @@
 package pluginservice
 
 import (
+	"context"
 	"crypto/ed25519"
 	"encoding/base64"
 	"os"
@@ -93,6 +94,10 @@ func TestSignedRepository_RequiresAttestationAndKeepsItImmutable(t *testing.T) {
 	ref := Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 	if _, _, err := repository.Read(ref); err != nil {
 		t.Fatalf("读取可信制品失败: %v", err)
+	}
+	envelope, err := repository.Fetch(context.Background(), ref)
+	if err != nil || len(envelope.Proof) == 0 {
+		t.Fatalf("签名种子源必须返回未信任证明供内核复验: proof=%d err=%v", len(envelope.Proof), err)
 	}
 
 	different, _ := SignArtifact(artifact, "example", "primary", privateKey, time.Now().UTC().Add(time.Second))

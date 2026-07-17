@@ -14,11 +14,11 @@ import (
 func TestLocalInstaller_ContentAddressedAndIdempotent(t *testing.T) {
 	packageBytes, artifact := testPackage(t, 0o755)
 	installer := LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")}
-	first, err := installer.Install(artifact, packageBytes)
+	first, err := installer.Install(verifiedForTest(artifact, packageBytes))
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := installer.Install(artifact, packageBytes)
+	second, err := installer.Install(verifiedForTest(artifact, packageBytes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,12 +39,12 @@ func TestLocalInstaller_RejectsCorruptBytesAndNonExecutableEntry(t *testing.T) {
 	installer := LocalInstaller{Root: t.TempDir()}
 	corrupt := append([]byte(nil), packageBytes...)
 	corrupt[len(corrupt)-1] ^= 0xff
-	if _, err := installer.Install(artifact, corrupt); err == nil {
+	if _, err := installer.Install(verifiedForTest(artifact, corrupt)); err == nil {
 		t.Fatal("损坏字节必须被 SHA-256 拒绝")
 	}
 
 	packageBytes, artifact = testPackage(t, 0o644)
-	if _, err := installer.Install(artifact, packageBytes); err == nil {
+	if _, err := installer.Install(verifiedForTest(artifact, packageBytes)); err == nil {
 		t.Fatal("不可执行 backend 入口必须被拒绝")
 	}
 }
@@ -74,7 +74,7 @@ func TestLocalInstaller_PythonEntryNeedNotBeExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	installed, err := (LocalInstaller{Root: t.TempDir()}).Install(artifact, packageBytes)
+	installed, err := (LocalInstaller{Root: t.TempDir()}).Install(verifiedForTest(artifact, packageBytes))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,11 +91,15 @@ func TestLocalInstaller_EnforcesExpandedPackageQuotas(t *testing.T) {
 		"expanded": {Root: t.TempDir(), MaxExpandedBytes: 1},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := installer.Install(artifact, packageBytes); err == nil {
+			if _, err := installer.Install(verifiedForTest(artifact, packageBytes)); err == nil {
 				t.Fatal("超过解包资源配额的插件包必须拒绝")
 			}
 		})
 	}
+}
+
+func verifiedForTest(artifact pluginv1.Artifact, packageBytes []byte) VerifiedArtifact {
+	return VerifiedArtifact{artifact: artifact, packageBytes: packageBytes, verified: true}
 }
 
 func TestLocalInstaller_GarbageCollectOnlyContentDirectories(t *testing.T) {

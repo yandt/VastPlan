@@ -235,7 +235,7 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", func(format string, args ...any) { t.Logf("[runtime] "+format, args...) })
 	t.Cleanup(func() { _ = runtime.Close() })
 	reconciler := &nodeagent.Reconciler{
-		NodeID: "e2e-node", Repository: repository,
+		NodeID: "e2e-node", Sources: []nodeagent.ArtifactSource{repository}, Verifier: nodeagent.NewLocalDevelopmentArtifactVerifier(),
 		Installer: nodeagent.LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")},
 		Runtime:   runtime, StateStore: nodeagent.NewMemoryStateStore(),
 	}
@@ -319,7 +319,7 @@ func TestNodeAgent_ProcessCrashTriggersImmediateRecovery(t *testing.T) {
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", func(format string, args ...any) { t.Logf("[runtime] "+format, args...) })
 	store := nodeagent.NewMemoryStateStore()
 	reconciler := &nodeagent.Reconciler{
-		NodeID: "recovery-node", Repository: repository,
+		NodeID: "recovery-node", Sources: []nodeagent.ArtifactSource{repository}, Verifier: nodeagent.NewLocalDevelopmentArtifactVerifier(),
 		Installer: nodeagent.LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")},
 		Runtime:   runtime, StateStore: store,
 	}
@@ -401,7 +401,7 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 	localStore := nodeagent.FileStateStore{Path: filepath.Join(t.TempDir(), "actual.json")}
 	remoteStore := nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey("nats-node")}
 	reconciler := &nodeagent.Reconciler{
-		NodeID: "nats-node", Repository: repository,
+		NodeID: "nats-node", Sources: []nodeagent.ArtifactSource{repository}, Verifier: nodeagent.NewLocalDevelopmentArtifactVerifier(),
 		Installer: nodeagent.LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")}, Runtime: runtime,
 		StateStore: nodeagent.ReplicatedStateStore{Primary: localStore, Replicas: []nodeagent.StateStore{remoteStore}},
 	}
@@ -537,7 +537,8 @@ func startClusterNode(t *testing.T, server *natsserver.Server, buckets controlpl
 	}
 	store := nodeagent.NewMemoryStateStore()
 	reconciler := &nodeagent.Reconciler{
-		NodeID: nodeID, NodeLabels: map[string]string{"region": "cn"}, Repository: repository,
+		NodeID: nodeID, NodeLabels: map[string]string{"region": "cn"},
+		Sources: []nodeagent.ArtifactSource{repository}, Verifier: nodeagent.NewLocalDevelopmentArtifactVerifier(),
 		Installer: nodeagent.LocalInstaller{Root: runtimeRoot}, Runtime: runtime,
 		StateStore: nodeagent.ReplicatedStateStore{Primary: store, Replicas: []nodeagent.StateStore{
 			nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey(nodeID)},

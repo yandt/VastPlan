@@ -40,9 +40,13 @@ func TestReconciler_RemoteSignedArtifactToInstalledRuntime(t *testing.T) {
 		BaseURL: "https://artifacts.example.test", Token: "node-token", Trust: trust,
 		Client: &http.Client{Transport: nodeHandlerTransport{handler: handler}},
 	}
+	verifier, err := NewSignedArtifactVerifier(trust)
+	if err != nil {
+		t.Fatal(err)
+	}
 	runtime := newFakeRuntime()
 	reconciler := &Reconciler{
-		NodeID: "node-remote", Repository: remote,
+		NodeID: "node-remote", Sources: []ArtifactSource{remote}, Verifier: verifier,
 		Installer: LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")},
 		Runtime:   runtime, StateStore: NewMemoryStateStore(),
 	}

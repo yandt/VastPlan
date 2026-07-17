@@ -8,20 +8,25 @@ import (
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 )
 
-type fakeRepository struct{}
+type fakeArtifactSource struct{}
 
-func (fakeRepository) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
+func (fakeArtifactSource) Fetch(_ context.Context, ref pluginv1.ArtifactRef) (artifacttrust.Envelope, error) {
 	if ref.Version == "9.9.9" {
-		return pluginv1.Artifact{}, nil, errors.New("制品不存在")
+		return artifacttrust.Envelope{}, artifacttrust.ErrNotFound
 	}
-	return pluginv1.Artifact{PluginID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: ref.Version, Size: 1}, []byte{1}, nil
+	return artifacttrust.Envelope{
+		Artifact:     pluginv1.Artifact{PluginID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: ref.Version, Size: 1},
+		PackageBytes: []byte{1},
+	}, nil
 }
 
 type fakeInstaller struct{}
 
-func (fakeInstaller) Install(a pluginv1.Artifact, _ []byte) (InstalledPlugin, error) {
+func (fakeInstaller) Install(verified VerifiedArtifact) (InstalledPlugin, error) {
+	a := verified.Artifact()
 	return InstalledPlugin{ID: a.PluginID, Version: a.Version, Channel: a.Channel, SHA256: a.SHA256, EntryPath: "/" + a.Version}, nil
 }
 
@@ -29,7 +34,8 @@ type statefulInstaller struct {
 	allowV2FromV1 bool
 }
 
-func (i statefulInstaller) Install(a pluginv1.Artifact, _ []byte) (InstalledPlugin, error) {
+func (i statefulInstaller) Install(verified VerifiedArtifact) (InstalledPlugin, error) {
+	a := verified.Artifact()
 	plugin := InstalledPlugin{ID: a.PluginID, Version: a.Version, Channel: a.Channel, SHA256: a.SHA256, EntryPath: "/" + a.Version}
 	switch a.Version {
 	case "1.0.0":
@@ -117,8 +123,16 @@ func desired(revision uint64, version string, enabled bool) deploymentv1.Desired
 
 func newTestReconciler(runtime *fakeRuntime, store StateStore) *Reconciler {
 	return &Reconciler{
-		NodeID: "node-1", Repository: fakeRepository{}, Installer: fakeInstaller{}, Runtime: runtime, StateStore: store,
+		NodeID: "node-1", Sources: []ArtifactSource{fakeArtifactSource{}}, Verifier: testArtifactVerifier(),
+		Installer: fakeInstaller{}, Runtime: runtime, StateStore: store,
 		Now: func() time.Time { return time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC) },
+	}
+}
+
+func testArtifactVerifier() ArtifactVerifier {
+	return ArtifactVerifier{
+		allowUnsigned: true, configured: true,
+		validate: func(pluginv1.Artifact, []byte) error { return nil },
 	}
 }
 

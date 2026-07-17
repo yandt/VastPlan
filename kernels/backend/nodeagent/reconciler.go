@@ -9,6 +9,7 @@ import (
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
@@ -16,7 +17,8 @@ import (
 type Reconciler struct {
 	NodeID     string
 	NodeLabels map[string]string
-	Repository ArtifactRepository
+	Sources    []ArtifactSource
+	Verifier   ArtifactVerifier
 	Installer  Installer
 	Runtime    Runtime
 	StateStore StateStore
@@ -155,7 +157,7 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 		return false, err
 	}
 
-	installed, stage, err := r.prepare(unit)
+	installed, stage, err := r.prepare(ctx, unit)
 	if err != nil {
 		return false, r.recordCandidateFailure(actual, id, stage, err)
 	}
@@ -441,14 +443,15 @@ func (r *Reconciler) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-func (r *Reconciler) prepare(unit deploymentv1.Unit) ([]InstalledPlugin, string, error) {
+func (r *Reconciler) prepare(ctx context.Context, unit deploymentv1.Unit) ([]InstalledPlugin, string, error) {
 	plugins := make([]InstalledPlugin, 0, len(unit.Plugins))
 	for _, ref := range unit.Plugins {
-		artifact, packageBytes, err := r.Repository.Read(pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: ref.Channel})
+		artifactRef := pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: ref.Channel}
+		verified, err := r.resolveArtifact(ctx, artifactRef)
 		if err != nil {
 			return nil, "download", fmt.Errorf("读取 %s@%s/%s: %w", ref.ID, ref.Version, ref.Channel, err)
 		}
-		installed, err := r.Installer.Install(artifact, packageBytes)
+		installed, err := r.Installer.Install(verified)
 		if err != nil {
 			return nil, "install", fmt.Errorf("安装 %s@%s/%s: %w", ref.ID, ref.Version, ref.Channel, err)
 		}
@@ -457,11 +460,38 @@ func (r *Reconciler) prepare(unit deploymentv1.Unit) ([]InstalledPlugin, string,
 	return plugins, "", nil
 }
 
+func (r *Reconciler) resolveArtifact(ctx context.Context, ref pluginv1.ArtifactRef) (VerifiedArtifact, error) {
+	var notFound error
+	for _, source := range r.Sources {
+		if source == nil {
+			return VerifiedArtifact{}, errors.New("制品源不能为空")
+		}
+		envelope, err := source.Fetch(ctx, ref)
+		if errors.Is(err, artifacttrust.ErrNotFound) {
+			notFound = errors.Join(notFound, fmt.Errorf("%s: %w", sourceName(source), err))
+			continue
+		}
+		if err != nil {
+			return VerifiedArtifact{}, fmt.Errorf("制品源 %s 失败: %w", sourceName(source), err)
+		}
+		verified, err := r.Verifier.Verify(ref, envelope)
+		if err != nil {
+			// 来源一旦返回内容，任何格式、摘要或证明失败都是安全事件；不得换源掩盖。
+			return VerifiedArtifact{}, fmt.Errorf("制品源 %s 返回不可信内容: %w", sourceName(source), err)
+		}
+		return verified, nil
+	}
+	if notFound != nil {
+		return VerifiedArtifact{}, fmt.Errorf("所有制品源均无此制品: %w", notFound)
+	}
+	return VerifiedArtifact{}, errors.New("没有可用制品源")
+}
+
 func (r *Reconciler) validate() error {
 	if r.NodeID == "" {
 		return errors.New("node id 不能为空")
 	}
-	if r.Repository == nil || r.Installer == nil || r.Runtime == nil || r.StateStore == nil {
+	if len(r.Sources) == 0 || !r.Verifier.configured || r.Installer == nil || r.Runtime == nil || r.StateStore == nil {
 		return errors.New("reconciler 依赖未完整配置")
 	}
 	return nil

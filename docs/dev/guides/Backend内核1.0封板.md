@@ -21,7 +21,7 @@
 | 核心 SPI | 配置、凭证引用、persistence/transaction 边界可替换 | 已完成：`kernelspi.Dependencies`、unit 配置服务、凭证回调代理、强制 scope、事务冲突/回滚语义与会话插件身份注入 |
 | 可靠性 | race、fuzz、故障注入、泄漏检查、24h soak | 主动延期：race、Schema fuzz、崩溃/迁移/断连故障 E2E、session/pending 收敛检查与 24h soak 工作流已就绪；待形成有代表性的插件与真实调用组合后重新冻结候选并执行，发布候选仍须附合格 24h 报告 |
 | 性能 | 核心 benchmark 基线与 CI 回归阈值 | 已完成：注册/协议/本地寻址/调度/persistence 基准，PR 在同一 runner 比较 base/head；耗时 >50% 且 >100ns 或分配 >25% 阻断 |
-| 安全与供应链 | mTLS/NKey/ACL、漏洞/许可证、签名制品、SBOM | 已完成：运行链路、发布者签名、漏洞/许可证 CI、逐目标 CycloneDX SBOM 与 OIDC 来源/SBOM 证明均有机器门禁 |
+| 安全与供应链 | mTLS/NKey/ACL、漏洞/许可证、签名制品、SBOM | 已完成：运行链路、发布者签名、不可信 ArtifactSource → 内核 Verifier → VerifiedArtifact 强制链、签名种子源、漏洞/许可证 CI、逐目标 CycloneDX SBOM 与 OIDC 来源/SBOM 证明均有机器门禁 |
 | 发布运维 | 可复现构建、版本升级、回滚、配置迁移、诊断 runbook | 已完成：逐字节复现门禁、内置 version/validate/support-bundle、tag/version 守卫及可执行升级回滚手册 |
 | 代码质量 | 分层依赖、单一类型真源、重复度、生产函数复杂度、Shell 脚本 | 已完成：Backend 横向依赖/生产入口/DTO 架构守护，dupl/gocyclo/ShellCheck CI 与安全工具精确版本 |
 

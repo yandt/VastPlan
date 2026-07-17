@@ -19,6 +19,7 @@ import (
 
 type reconcileOptions struct {
 	desiredPath, repositoryRoot, repositoryURL, repositoryTrust, repositoryToken, repositoryCA string
+	bootstrapRepository                                                                        string
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                       string
 	firstPartyPublishers                                                                       string
 	thirdPartyPluginPolicy, publisherPluginPolicies                                            string
@@ -41,6 +42,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.repositoryTrust, "repository-trust", "", "远端制品发布者信任文档")
 	flags.StringVar(&options.repositoryToken, "repository-token", "", "远端制品读令牌；默认读取 VASTPLAN_ARTIFACT_READ_TOKEN")
 	flags.StringVar(&options.repositoryCA, "repository-ca", "", "远端制品仓库自定义 CA PEM")
+	flags.StringVar(&options.bootstrapRepository, "bootstrap-repository", "", "预置签名种子仓库；精确命中时优先于远端源")
 	flags.StringVar(&options.runtimeRoot, "runtime-root", ".vastplan/runtime/plugins", "内容寻址安装目录")
 	flags.StringVar(&options.actualPath, "actual-state", ".vastplan/runtime/actual-state.json", "实际态报告文件")
 	flags.StringVar(&options.lockPath, "lock", "", "单实例锁文件；默认 <actual-state>.lock")
@@ -113,31 +115,57 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	return options, nil
 }
 
-func buildArtifactRepository(options reconcileOptions) (nodeagent.ArtifactRepository, error) {
-	if options.repositoryURL == "" {
-		return pluginservice.NewRepository(options.repositoryRoot)
+type artifactResolution struct {
+	sources  []nodeagent.ArtifactSource
+	verifier nodeagent.ArtifactVerifier
+}
+
+func buildArtifactResolution(options reconcileOptions) (artifactResolution, error) {
+	if options.repositoryURL == "" && options.bootstrapRepository == "" {
+		local, err := pluginservice.NewRepository(options.repositoryRoot)
+		if err != nil {
+			return artifactResolution{}, err
+		}
+		return artifactResolution{
+			sources: []nodeagent.ArtifactSource{local}, verifier: nodeagent.NewLocalDevelopmentArtifactVerifier(),
+		}, nil
 	}
 	if options.repositoryTrust == "" {
-		return nil, errors.New("远端制品仓库必须配置 -repository-trust")
+		return artifactResolution{}, errors.New("远端或种子制品源必须配置 -repository-trust")
 	}
 	trust, err := pluginservice.LoadTrustStore(options.repositoryTrust)
 	if err != nil {
-		return nil, err
+		return artifactResolution{}, err
 	}
-	token := options.repositoryToken
-	if token == "" {
-		token = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
-	}
-	if token == "" {
-		return nil, errors.New("远端制品仓库必须配置读令牌")
-	}
-	httpClient, err := artifactHTTPClient(options.repositoryCA)
+	verifier, err := nodeagent.NewSignedArtifactVerifier(trust)
 	if err != nil {
-		return nil, err
+		return artifactResolution{}, err
 	}
-	return &pluginservice.RemoteRepository{
-		BaseURL: options.repositoryURL, Token: token, Trust: trust, Client: httpClient,
-	}, nil
+	resolution := artifactResolution{verifier: verifier}
+	if options.bootstrapRepository != "" {
+		local, err := pluginservice.NewRepository(options.bootstrapRepository)
+		if err != nil {
+			return artifactResolution{}, err
+		}
+		resolution.sources = append(resolution.sources, &pluginservice.SignedRepository{Local: local, Trust: trust})
+	}
+	if options.repositoryURL != "" {
+		token := options.repositoryToken
+		if token == "" {
+			token = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
+		}
+		if token == "" {
+			return artifactResolution{}, errors.New("远端制品仓库必须配置读令牌")
+		}
+		httpClient, err := artifactHTTPClient(options.repositoryCA)
+		if err != nil {
+			return artifactResolution{}, err
+		}
+		resolution.sources = append(resolution.sources, &pluginservice.RemoteRepository{
+			BaseURL: options.repositoryURL, Token: token, Trust: trust, Client: httpClient,
+		})
+	}
+	return resolution, nil
 }
 
 type nodeControlPlane struct {

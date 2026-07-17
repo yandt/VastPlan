@@ -5,11 +5,16 @@ import (
 	"crypto/ed25519"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 )
 
 func TestRemoteRepository_TLSAuthPublishAndRead(t *testing.T) {
@@ -70,5 +75,25 @@ func TestRemoteRepository_RejectsPlainHTTPByDefault(t *testing.T) {
 	repository.AllowHTTP = true
 	if _, _, _, err := repository.validate(); err != nil {
 		t.Fatalf("显式本地开发模式应允许 HTTP: %v", err)
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestRemoteRepositoryOnlyTreatsMissingAttestationAsSourceNotFound(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusNotFound, Status: "404 Not Found",
+			Body: io.NopCloser(strings.NewReader("missing")),
+		}, nil
+	})}
+	repository := &RemoteRepository{}
+	if _, err := repository.get(context.Background(), client, "https://example/attestation", 1024, true); !errors.Is(err, artifacttrust.ErrNotFound) {
+		t.Fatalf("证明不存在应允许尝试下一来源: %v", err)
+	}
+	if _, err := repository.get(context.Background(), client, "https://example/package", 1024, false); err == nil || errors.Is(err, artifacttrust.ErrNotFound) {
+		t.Fatalf("证明存在后包体缺失是仓库损坏，不得静默换源: %v", err)
 	}
 }

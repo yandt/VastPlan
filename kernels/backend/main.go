@@ -220,7 +220,7 @@ func runReconcile(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
-	repository, err := buildArtifactRepository(options)
+	artifacts, err := buildArtifactResolution(options)
 	if err != nil {
 		return err
 	}
@@ -241,7 +241,7 @@ func runReconcile(args []string) (runErr error) {
 		}
 	}
 	reconciler := &nodeagent.Reconciler{
-		NodeID: options.nodeID, NodeLabels: labels, Repository: repository,
+		NodeID: options.nodeID, NodeLabels: labels, Sources: artifacts.sources, Verifier: artifacts.verifier,
 		Installer: nodeagent.LocalInstaller{Root: options.runtimeRoot}, Runtime: runtime,
 		StateStore: plane.stateStore,
 	}

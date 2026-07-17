@@ -58,6 +58,30 @@ func TestParseReconcileOptionsSupportsPublisherOverridesAndLegacyMigration(t *te
 	}
 }
 
+func TestBuildArtifactResolutionSeparatesLocalDevelopmentAndSignedBootstrap(t *testing.T) {
+	local, err := parseReconcileOptions([]string{"-desired", "desired.json", "-repository", t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolution, err := buildArtifactResolution(local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolution.sources) != 1 {
+		t.Fatalf("本地开发模式应只有一个 file source: %+v", resolution.sources)
+	}
+
+	signedSeed, err := parseReconcileOptions([]string{
+		"-desired", "desired.json", "-bootstrap-repository", t.TempDir(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := buildArtifactResolution(signedSeed); err == nil || !strings.Contains(err.Error(), "repository-trust") {
+		t.Fatalf("签名种子源不得退化为无信任根模式: %v", err)
+	}
+}
+
 func TestParseReconcileOptionsRejectsConflictingOrInvalidPluginPolicies(t *testing.T) {
 	tests := [][]string{
 		{"-desired", "desired.json", "-third-party-plugin-policy", "deny", "-require-third-party-isolation=false"},

@@ -8,6 +8,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -22,12 +23,12 @@ import (
 	"sync"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 )
 
 const (
 	manifestName      = "vastplan.plugin.json"
 	artifactExtension = ".tar.gz"
-	maxManifestBytes  = 1 << 20 // 清单是声明，不允许被超大内容拖垮制品检查。
 	maxLegalFileBytes = 1 << 20 // 法律声明是文本；限制大小避免被用作绕过制品检查的大对象。
 )
 
@@ -43,6 +44,8 @@ type Repository struct {
 	root string
 	mu   sync.Mutex // 单进程发布串行化，保证索引检查与不可变写入不可交错。
 }
+
+func (r *Repository) SourceName() string { return "local-file" }
 
 // NewRepository 创建本地仓库句柄。目录延迟到首次发布时才创建，方便只读调用方
 // 在尚未初始化的机器上得到清晰的 not found 错误。
@@ -243,31 +246,23 @@ func (r *Repository) Read(ref Ref) (Artifact, []byte, error) {
 	return artifact, packageBytes, nil
 }
 
+// Fetch 实现内核 ArtifactSource。返回值仍被视为未信任 Envelope；本地仓库的
+// Read 校验只是纵深防御，不能替代 Node Agent 的统一验证强制点。
+func (r *Repository) Fetch(_ context.Context, ref Ref) (artifacttrust.Envelope, error) {
+	artifact, packageBytes, err := r.Read(ref)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return artifacttrust.Envelope{}, fmt.Errorf("%w: %s@%s/%s", artifacttrust.ErrNotFound, ref.PluginID, ref.Version, ref.Channel)
+		}
+		return artifacttrust.Envelope{}, err
+	}
+	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes}, nil
+}
+
 // ValidateArtifact 对任意来源的制品执行与本地仓库 Read 相同的 fail-closed 校验。
 // 远端客户端下载后必须调用它，不能因为 HTTPS 或签名正确就跳过内容和清单绑定检查。
 func ValidateArtifact(artifact Artifact, packageBytes []byte) error {
-	metadata, err := json.Marshal(artifact)
-	if err != nil {
-		return fmt.Errorf("序列化制品元数据: %w", err)
-	}
-	if err := pluginv1.ValidateArtifactMetadata(metadata); err != nil {
-		return err
-	}
-	digest := sha256.Sum256(packageBytes)
-	if actual := hex.EncodeToString(digest[:]); actual != artifact.SHA256 {
-		return fmt.Errorf("制品 SHA-256 不匹配：期望 %s，实际 %s", artifact.SHA256, actual)
-	}
-	if int64(len(packageBytes)) != artifact.Size {
-		return fmt.Errorf("制品大小不匹配：期望 %d，实际 %d", artifact.Size, len(packageBytes))
-	}
-	manifest, manifestRaw, err := inspectPackage(packageBytes)
-	if err != nil {
-		return fmt.Errorf("制品包内容无效: %w", err)
-	}
-	if manifest.ID != artifact.PluginID || manifest.Version != artifact.Version || !sameJSON(manifestRaw, artifact.Manifest) {
-		return errors.New("制品清单与索引绑定不一致")
-	}
-	return nil
+	return artifacttrust.ValidateContent(artifact, packageBytes)
 }
 
 func (r *Repository) artifactDir(ref Ref) (string, error) {
@@ -369,80 +364,7 @@ func validateLegalFile(dir, declaredName, kind string) error {
 
 // inspectPackage 只读取 archive metadata 和根清单，绝不执行包内内容。
 func inspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, error) {
-	gz, err := gzip.NewReader(bytes.NewReader(packageBytes))
-	if err != nil {
-		return pluginv1.Manifest{}, nil, fmt.Errorf("插件包不是 gzip tar: %w", err)
-	}
-	defer func() {
-		_ = gz.Close() // 只读检查不依赖 Close 提交状态，包内容错误优先。
-	}()
-
-	tr := tar.NewReader(gz)
-	var manifestRaw []byte
-	entrySizes := map[string][]int64{}
-	for {
-		header, err := tr.Next()
-		if errors.Is(err, io.EOF) {
-			break
-		}
-		if err != nil {
-			return pluginv1.Manifest{}, nil, fmt.Errorf("读取 tar 条目: %w", err)
-		}
-		name, err := archiveName(header.Name)
-		if err != nil {
-			return pluginv1.Manifest{}, nil, err
-		}
-		if header.Typeflag != tar.TypeReg && header.Typeflag != 0 { // 兼容旧 tar 的普通文件标记。
-			return pluginv1.Manifest{}, nil, fmt.Errorf("插件包只允许普通文件: %s", name)
-		}
-		entrySizes[name] = append(entrySizes[name], header.Size)
-		if name != manifestName {
-			continue
-		}
-		if manifestRaw != nil {
-			return pluginv1.Manifest{}, nil, errors.New("插件包包含多个根清单")
-		}
-		manifestRaw, err = io.ReadAll(io.LimitReader(tr, maxManifestBytes+1))
-		if err != nil {
-			return pluginv1.Manifest{}, nil, fmt.Errorf("读取插件清单: %w", err)
-		}
-		if len(manifestRaw) > maxManifestBytes {
-			return pluginv1.Manifest{}, nil, fmt.Errorf("插件清单超过 %d 字节上限", maxManifestBytes)
-		}
-	}
-	if manifestRaw == nil {
-		return pluginv1.Manifest{}, nil, errors.New("插件包缺少根清单 vastplan.plugin.json")
-	}
-	manifest, err := pluginv1.ParseManifest(manifestRaw)
-	if err != nil {
-		return pluginv1.Manifest{}, nil, err
-	}
-	if manifest.License != "" {
-		if err := validatePackagedLegalFile(entrySizes, manifest.LicenseFile, "许可证"); err != nil {
-			return pluginv1.Manifest{}, nil, err
-		}
-		if manifest.NoticeFile != "" {
-			if err := validatePackagedLegalFile(entrySizes, manifest.NoticeFile, "归属告示"); err != nil {
-				return pluginv1.Manifest{}, nil, err
-			}
-		}
-	}
-	return manifest, json.RawMessage(manifestRaw), nil
-}
-
-func validatePackagedLegalFile(entrySizes map[string][]int64, declaredName, kind string) error {
-	name, err := archiveName(declaredName)
-	if err != nil {
-		return fmt.Errorf("非法%s文件路径: %w", kind, err)
-	}
-	sizes := entrySizes[name]
-	if len(sizes) != 1 {
-		return fmt.Errorf("插件包必须包含且仅包含一份%s文件 %s", kind, name)
-	}
-	if sizes[0] <= 0 || sizes[0] > maxLegalFileBytes {
-		return fmt.Errorf("%s文件 %s 大小必须在 1..%d 字节内", kind, name, maxLegalFileBytes)
-	}
-	return nil
+	return artifacttrust.InspectPackage(packageBytes)
 }
 
 func archiveName(name string) (string, error) {

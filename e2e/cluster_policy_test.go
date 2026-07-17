@@ -16,6 +16,7 @@ import (
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	addressing "cdsoft.com.cn/VastPlan/shared/go/addressing"
+	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
 )
@@ -113,7 +114,14 @@ func TestProtocolRuntimeLeaderRollingUpgradeKeepsMonotonicFencing(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	installed, err := (nodeagent.LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")}).Install(artifact, packageBytes)
+	verified, err := nodeagent.NewLocalDevelopmentArtifactVerifier().Verify(
+		pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel},
+		artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed, err := (nodeagent.LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")}).Install(verified)
 	if err != nil {
 		t.Fatal(err)
 	}

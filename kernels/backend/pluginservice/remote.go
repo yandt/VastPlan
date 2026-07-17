@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 )
 
 const (
@@ -34,38 +36,55 @@ type RemoteRepository struct {
 }
 
 func (r *RemoteRepository) Read(ref Ref) (Artifact, []byte, error) {
-	base, client, maxBytes, err := r.validate()
+	envelope, err := r.Fetch(context.Background(), ref)
 	if err != nil {
 		return Artifact{}, nil, err
 	}
-	endpoint := artifactEndpoint(base, ref)
-	attestationRaw, err := r.get(client, endpoint+"/attestation", maxAttestationBytes)
+	if err := r.Trust.VerifyProof(envelope); err != nil {
+		return Artifact{}, nil, fmt.Errorf("远端制品证明不可信: %w", err)
+	}
+	if err := ValidateArtifact(envelope.Artifact, envelope.PackageBytes); err != nil {
+		return Artifact{}, nil, fmt.Errorf("远端制品内容校验失败: %w", err)
+	}
+	return envelope.Artifact, envelope.PackageBytes, nil
+}
+
+// Fetch 只获取远端未信任 Envelope。证明与内容的最终判定由 Node Agent 内核验证器
+// 完成，避免未来可插拔制品源拥有“自证可信”的能力。
+func (r *RemoteRepository) Fetch(ctx context.Context, ref Ref) (artifacttrust.Envelope, error) {
+	base, client, maxBytes, err := r.validate()
 	if err != nil {
-		return Artifact{}, nil, err
+		return artifacttrust.Envelope{}, err
+	}
+	endpoint := artifactEndpoint(base, ref)
+	attestationRaw, err := r.get(ctx, client, endpoint+"/attestation", maxAttestationBytes, true)
+	if err != nil {
+		return artifacttrust.Envelope{}, err
 	}
 	var attestation Attestation
 	if err := decodeJSONStrict(attestationRaw, &attestation); err != nil {
-		return Artifact{}, nil, fmt.Errorf("解析远端制品证明: %w", err)
+		return artifacttrust.Envelope{}, fmt.Errorf("解析远端制品证明: %w", err)
 	}
 	artifact := attestation.Artifact
 	if artifact.PluginID != ref.PluginID || artifact.Version != ref.Version || artifact.Channel != ref.Channel {
-		return Artifact{}, nil, errors.New("远端制品证明与请求引用不一致")
+		return artifacttrust.Envelope{}, errors.New("远端制品证明与请求引用不一致")
 	}
+	// 内置 HTTPS 来源在下载大包前先做证明预检，避免明显不可信元数据消耗带宽；
+	// Node Agent 收到完整 Envelope 后仍会在独立内核强制点再次验证，不能依赖此处。
 	if err := r.Trust.Verify(attestation); err != nil {
-		return Artifact{}, nil, fmt.Errorf("远端制品证明不可信: %w", err)
+		return artifacttrust.Envelope{}, fmt.Errorf("远端制品证明预检失败: %w", err)
 	}
 	if artifact.Size > maxBytes {
-		return Artifact{}, nil, fmt.Errorf("远端制品大小 %d 超过客户端上限 %d", artifact.Size, maxBytes)
+		return artifacttrust.Envelope{}, fmt.Errorf("远端制品大小 %d 超过客户端上限 %d", artifact.Size, maxBytes)
 	}
-	packageBytes, err := r.get(client, endpoint+"/package", maxBytes)
+	packageBytes, err := r.get(ctx, client, endpoint+"/package", maxBytes, false)
 	if err != nil {
-		return Artifact{}, nil, err
+		return artifacttrust.Envelope{}, err
 	}
-	if err := ValidateArtifact(artifact, packageBytes); err != nil {
-		return Artifact{}, nil, fmt.Errorf("远端制品内容校验失败: %w", err)
-	}
-	return artifact, packageBytes, nil
+	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: attestationRaw}, nil
 }
+
+func (r *RemoteRepository) SourceName() string { return "remote-https" }
 
 func (r *RemoteRepository) validate() (*url.URL, *http.Client, int64, error) {
 	if r == nil || r.Trust == nil {
@@ -86,8 +105,8 @@ func (r *RemoteRepository) validate() (*url.URL, *http.Client, int64, error) {
 	return base, client, maxBytes, nil
 }
 
-func (r *RemoteRepository) get(client *http.Client, endpoint string, limit int64) ([]byte, error) {
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, endpoint, nil)
+func (r *RemoteRepository) get(ctx context.Context, client *http.Client, endpoint string, limit int64, allowNotFound bool) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +117,9 @@ func (r *RemoteRepository) get(client *http.Client, endpoint string, limit int64
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
+		if allowNotFound && resp.StatusCode == http.StatusNotFound {
+			return nil, fmt.Errorf("%w: %s", artifacttrust.ErrNotFound, endpoint)
+		}
 		message, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 		return nil, fmt.Errorf("远端制品服务返回 %s: %s", resp.Status, strings.TrimSpace(string(message)))
 	}

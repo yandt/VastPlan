@@ -12,14 +12,9 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 )
 
-// ArtifactRepository 提供已经过索引绑定与 SHA-256 验证的制品字节。
-type ArtifactRepository interface {
-	Read(pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error)
-}
-
 // Installer 把不可变制品安装到本机内容寻址目录。
 type Installer interface {
-	Install(pluginv1.Artifact, []byte) (InstalledPlugin, error)
+	Install(VerifiedArtifact) (InstalledPlugin, error)
 }
 
 // GarbageCollector 是安装器的可选能力。只有一次 reconcile 完全收敛并持久化实际态后

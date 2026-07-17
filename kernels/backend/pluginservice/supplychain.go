@@ -2,6 +2,7 @@ package pluginservice
 
 import (
 	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/base64"
@@ -18,6 +19,7 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 )
 
 const attestationSchemaVersion = "v1"
@@ -116,6 +118,22 @@ func LoadTrustStore(filename string) (*TrustStore, error) {
 // Verify 先确认清单发布者，再验证密钥状态、签署时刻和 Ed25519 签名。
 func (s *TrustStore) Verify(attestation Attestation) error {
 	return s.verifyAt(attestation, time.Now().UTC())
+}
+
+// VerifyProof 实现 Node Agent 的内核证明验证边界。Proof 必须严格解析，且其
+// Artifact 必须与来源 Envelope 完全一致，来源不能用另一份有效证明替换当前元数据。
+func (s *TrustStore) VerifyProof(envelope artifacttrust.Envelope) error {
+	if len(bytes.TrimSpace(envelope.Proof)) == 0 {
+		return errors.New("制品缺少发布者证明")
+	}
+	var attestation Attestation
+	if err := decodeJSONStrict(envelope.Proof, &attestation); err != nil {
+		return fmt.Errorf("解析制品证明: %w", err)
+	}
+	if !sameArtifact(attestation.Artifact, envelope.Artifact) {
+		return errors.New("发布者证明与制品 Envelope 不一致")
+	}
+	return s.Verify(attestation)
 }
 
 func (s *TrustStore) verifyAt(attestation Attestation, now time.Time) error {
@@ -253,6 +271,8 @@ type SignedRepository struct {
 	mu    sync.Mutex // 证明写入与不可变性检查必须在同一临界区。
 }
 
+func (r *SignedRepository) SourceName() string { return "bootstrap-signed-file" }
+
 func (r *SignedRepository) Publish(attestation Attestation, packageBytes []byte) (Artifact, error) {
 	if r == nil || r.Local == nil || r.Trust == nil {
 		return Artifact{}, errors.New("签名制品仓库未完整配置")
@@ -298,29 +318,41 @@ func (r *SignedRepository) Read(ref Ref) (Artifact, []byte, error) {
 	if r == nil || r.Local == nil || r.Trust == nil {
 		return Artifact{}, nil, errors.New("签名制品仓库未完整配置")
 	}
-	artifact, packageBytes, err := r.Local.Read(ref)
+	envelope, err := r.Fetch(context.Background(), ref)
 	if err != nil {
 		return Artifact{}, nil, err
+	}
+	if err := r.Trust.VerifyProof(envelope); err != nil {
+		return Artifact{}, nil, err
+	}
+	return envelope.Artifact, envelope.PackageBytes, nil
+}
+
+// Fetch 返回带原始证明的未信任 Envelope，供 Node Agent 在自己的强制点复验。
+// SignedRepository.Read 的服务端预验证只是纵深防御。
+func (r *SignedRepository) Fetch(_ context.Context, ref Ref) (artifacttrust.Envelope, error) {
+	if r == nil || r.Local == nil || r.Trust == nil {
+		return artifacttrust.Envelope{}, errors.New("签名制品仓库未完整配置")
+	}
+	artifact, packageBytes, err := r.Local.Read(ref)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return artifacttrust.Envelope{}, fmt.Errorf("%w: %s@%s/%s", artifacttrust.ErrNotFound, ref.PluginID, ref.Version, ref.Channel)
+		}
+		return artifacttrust.Envelope{}, err
 	}
 	dir, err := r.Local.artifactDir(ref)
 	if err != nil {
-		return Artifact{}, nil, err
+		return artifacttrust.Envelope{}, err
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "attestation.json"))
 	if err != nil {
-		return Artifact{}, nil, fmt.Errorf("读取签名证明: %w", err)
+		if errors.Is(err, os.ErrNotExist) {
+			return artifacttrust.Envelope{}, errors.New("签名制品缺少发布者证明")
+		}
+		return artifacttrust.Envelope{}, fmt.Errorf("读取签名证明: %w", err)
 	}
-	var attestation Attestation
-	if err := decodeJSONStrict(raw, &attestation); err != nil {
-		return Artifact{}, nil, fmt.Errorf("解析签名证明: %w", err)
-	}
-	if !sameArtifact(attestation.Artifact, artifact) {
-		return Artifact{}, nil, errors.New("签名证明与仓库制品索引不一致")
-	}
-	if err := r.Trust.Verify(attestation); err != nil {
-		return Artifact{}, nil, err
-	}
-	return artifact, packageBytes, nil
+	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: raw}, nil
 }
 
 func sameArtifact(left, right Artifact) bool {

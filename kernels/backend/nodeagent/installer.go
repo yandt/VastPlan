@@ -16,14 +16,15 @@ import (
 	"strings"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 )
 
 var sha256DirectoryPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 const (
-	DefaultMaxPackageFiles         = 10_000
-	DefaultMaxPackageFileBytes     = int64(256 << 20)
-	DefaultMaxPackageExpandedBytes = int64(1 << 30)
+	DefaultMaxPackageFiles         = artifacttrust.DefaultMaxPackageFiles
+	DefaultMaxPackageFileBytes     = artifacttrust.DefaultMaxPackageFileBytes
+	DefaultMaxPackageExpandedBytes = artifacttrust.DefaultMaxPackageExpandedBytes
 )
 
 // LocalInstaller 把插件解包到 Root/<sha256>。目录名绑定内容而非版本标签，
@@ -35,8 +36,13 @@ type LocalInstaller struct {
 	MaxExpandedBytes int64
 }
 
-// Install 复验字节摘要并以临时目录原子发布安装结果。
-func (i LocalInstaller) Install(artifact pluginv1.Artifact, packageBytes []byte) (InstalledPlugin, error) {
+// Install 只接受内核验证器产生的 VerifiedArtifact，并再次复验摘要后以临时目录
+// 原子发布安装结果。零值或由来源绕过验证构造的输入会被拒绝。
+func (i LocalInstaller) Install(verified VerifiedArtifact) (InstalledPlugin, error) {
+	if !verified.verified {
+		return InstalledPlugin{}, errors.New("安装器拒绝未经内核验证的制品")
+	}
+	artifact, packageBytes := verified.artifact, verified.packageBytes
 	if strings.TrimSpace(i.Root) == "" {
 		return InstalledPlugin{}, errors.New("安装根目录不能为空")
 	}
