@@ -6,6 +6,8 @@
 
 > 本 README 是插件开发与验证入口。权威架构决策见
 > [ADR-0050](../../docs/dev/decisions/ADR-0050-首方插件多级命名空间与自举权限基线.md)，
+> 混合运行边界见
+> [ADR-0051](../../docs/dev/decisions/ADR-0051-Backend混合插件运行与受控内嵌边界.md)，
 > 完整插件说明见
 > [插件文档](../../docs/dev/plugins/com.vastplan.foundation.security.bootstrap-policy.md)。
 
@@ -38,6 +40,12 @@ com.vastplan.<layer>.<category...>.<component>
 | 可见性 | `local` | 不发布为跨内核集群服务 |
 | 路由 | `direct` | 内核本地直接调用 |
 | 运行时依赖 | 无 | 避免 settings 权限检查形成自举循环 |
+
+策略代码支持三种承载方式：默认由 Manifest 的 backend 入口以独立进程运行；Backend
+发布物也登记了 `0.1.0` 静态定义；共同构建的签名制品还可携带 dynamic-go `.so`。
+内嵌权限来自部署方而不是 Manifest。首方硬身份、精确版本、验签贡献清单、隔离下限、
+放置策略必须同时匹配；dynamic-go 还要匹配 ABI 与构建指纹。三种方式使用同一
+`policy` 与 `embedded` 适配，不维护多份权限逻辑。
 
 ## 权限检查器
 
@@ -73,9 +81,14 @@ bootstrap-policy 主动调用 settings；代码内部还会再次核对 capabili
 .
 ├── README.md
 ├── vastplan.plugin.json   # 身份、运行模型和贡献声明
-└── backend
-    ├── main.go            # 插件入口和贡献注册
-    ├── policy.go          # 权限判定实现
+├── backend
+│   └── main.go            # 独立进程入口和 SDK 适配
+├── dynamic
+│   └── main.go            # dynamic-go .so 的窄导出入口
+├── embedded
+│   └── definition.go      # 静态/dynamic-go 共用的 protocolbus 适配
+└── policy
+    ├── policy.go          # 与运行形态无关的权限判定单一真源
     └── policy_test.go     # 权限矩阵单元测试
 ```
 
@@ -90,9 +103,14 @@ go build \
   ./plugins/com.vastplan.foundation.security.bootstrap-policy/backend
 
 go test \
-  ./plugins/com.vastplan.foundation.security.bootstrap-policy/backend \
+  ./plugins/com.vastplan.foundation.security.bootstrap-policy/... \
+  ./composition/backendplugins \
+  ./shared/go/protocolbus \
   ./shared/go/pluginid \
   ./schemas/plugin/v1
+
+# 原生 CGO 平台共同构建 Backend、进程入口、.so 和签名待发布包
+OUT_DIR=bin/dynamic-go ./tools/build-dynamic-go.sh
 
 go test -tags=e2e ./e2e \
   -run TestBootstrapPolicy_RealProcessEnforcesSettingsBaseline \
@@ -107,6 +125,8 @@ go test -tags=e2e ./e2e \
 go run ./tools/pluginpackage \
   -source plugins/com.vastplan.foundation.security.bootstrap-policy \
   -backend-bin bin/com.vastplan.foundation.security.bootstrap-policy \
+  -dynamic-go-bin bin/dynamic-go/com.vastplan.foundation.security.bootstrap-policy.so \
+  -dynamic-go-fingerprint "$(go run ./tools/dynamicgofingerprint -root .)" \
   -out /tmp/com.vastplan.foundation.security.bootstrap-policy.tar.gz
 ```
 
@@ -116,6 +136,29 @@ go run ./tools/pluginpackage \
 ## 修改规则
 
 - 新增只读操作时，同时更新 `settingsReadOperations`、权限矩阵测试和本文档。
-- 修改优先级或调用身份规则时，同步更新 ADR-0050 和插件文档。
+- 修改优先级或调用身份规则时，新增后继 ADR 并同步更新插件文档；既有 ADR 只追加不覆盖。
 - 不允许读取 settings 或其他需要权限判定的服务来配置本插件，避免权限递归。
 - 未知操作继续按写操作处理，保持 fail-closed。
+- 修改插件版本、贡献 descriptor 或优先级时，必须同步更新共用 `embedded` 适配，并通过静态/dynamic-go 定义与 Manifest 精确一致测试。
+
+## 选择内嵌运行
+
+默认不需要任何配置，插件以独立进程运行。明确接受同进程故障域时，可在 Backend
+`reconcile` 启动参数中配置精确插件规则：
+
+```bash
+-plugin-placements=com.vastplan.foundation.security.bootstrap-policy=prefer-embedded
+```
+
+`prefer-embedded` 按静态、dynamic-go、进程顺序选择；有效隔离要求更高时直接回退进程。
+`require-embedded` 不允许最终回退进程。不要用发布者级规则批量内嵌全部第一方插件，除非已经
+逐个完成故障域和性能评审。
+
+要明确验证 dynamic-go 而跳过当前已有的静态目录，可使用：
+
+```bash
+-plugin-placements=com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go
+```
+
+该模式只接受共同构建、指纹一致的签名 `.so`，仅支持 Linux/FreeBSD/macOS 且
+`CGO_ENABLED=1`。Go plugin 不能卸载；升级 dynamic-go 插件必须滚动重启 Backend。

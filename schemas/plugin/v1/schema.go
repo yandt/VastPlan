@@ -77,12 +77,21 @@ type ExecutionPolicy struct {
 // BackendExecution 是语言无关的 Backend 启动契约。Driver 是可扩展标识，不把内核
 // 锁死在当前 native/python 实现；未来 OCI/WASM 驱动沿用同一结构。
 type BackendExecution struct {
-	Driver           string            `json:"driver"`
-	Args             []string          `json:"args,omitempty"`
-	Requirements     map[string]string `json:"requirements,omitempty"`
-	Platforms        []string          `json:"platforms,omitempty"`
-	MinimumIsolation string            `json:"minimumIsolation,omitempty"`
-	Features         []string          `json:"features,omitempty"`
+	Driver           string              `json:"driver"`
+	Args             []string            `json:"args,omitempty"`
+	Requirements     map[string]string   `json:"requirements,omitempty"`
+	Platforms        []string            `json:"platforms,omitempty"`
+	MinimumIsolation string              `json:"minimumIsolation,omitempty"`
+	Features         []string            `json:"features,omitempty"`
+	DynamicGo        *DynamicGoExecution `json:"dynamicGo,omitempty"`
+}
+
+// DynamicGoExecution 声明制品内可选的首方 Go 动态内嵌入口。它只描述已签名内容，
+// 是否允许加载仍由节点 PlacementPolicy 决定。
+type DynamicGoExecution struct {
+	Entry       string `json:"entry"`
+	ABI         string `json:"abi"`
+	Fingerprint string `json:"fingerprint,omitempty"`
 }
 
 // BackendExecutionContract 返回向后兼容的冻结执行契约。旧 v1 清单等价于 native
@@ -95,6 +104,10 @@ func BackendExecutionContract(manifest Manifest) BackendExecution {
 	execution.Args = append([]string(nil), execution.Args...)
 	execution.Platforms = append([]string(nil), execution.Platforms...)
 	execution.Features = append([]string(nil), execution.Features...)
+	if execution.DynamicGo != nil {
+		dynamic := *execution.DynamicGo
+		execution.DynamicGo = &dynamic
+	}
 	if execution.MinimumIsolation == "" {
 		execution.MinimumIsolation = "trusted-process"
 	}

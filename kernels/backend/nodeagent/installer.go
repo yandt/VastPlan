@@ -246,9 +246,26 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, publisher, entry 
 	if execution.Driver == "native" && info.Mode().Perm()&0o111 == 0 {
 		return InstalledPlugin{}, fmt.Errorf("native backend 入口不可执行: %s", entry)
 	}
+	var dynamicGoPath string
+	if execution.DynamicGo != nil {
+		if execution.DynamicGo.ABI != "vastplan.dynamic-go.v1" {
+			return InstalledPlugin{}, fmt.Errorf("dynamic-go ABI 不受支持: %s", execution.DynamicGo.ABI)
+		}
+		if !sha256DirectoryPattern.MatchString(execution.DynamicGo.Fingerprint) {
+			return InstalledPlugin{}, errors.New("dynamic-go 制品缺少构建时注入的 SHA-256 指纹")
+		}
+		dynamicGoPath = filepath.Join(root, filepath.FromSlash(execution.DynamicGo.Entry))
+		dynamicInfo, err := os.Stat(dynamicGoPath)
+		if err != nil {
+			return InstalledPlugin{}, fmt.Errorf("dynamic-go 入口不存在: %w", err)
+		}
+		if !dynamicInfo.Mode().IsRegular() {
+			return InstalledPlugin{}, fmt.Errorf("dynamic-go 入口不是普通文件: %s", execution.DynamicGo.Entry)
+		}
+	}
 	installed := InstalledPlugin{
 		ID: artifact.PluginID, Publisher: publisher, Version: artifact.Version, Channel: artifact.Channel,
-		SHA256: artifact.SHA256, Root: root, EntryPath: entryPath,
+		SHA256: artifact.SHA256, Root: root, EntryPath: entryPath, DynamicGoPath: dynamicGoPath,
 		Execution: execution,
 		Contract:  PluginRuntimeContract{Contributions: contributions},
 	}

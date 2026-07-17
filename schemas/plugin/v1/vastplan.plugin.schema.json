@@ -114,7 +114,18 @@
         "minimumIsolation": {
           "enum": ["trusted-process", "process-sandbox", "container", "wasm"]
         },
-        "features": { "$ref": "#/$defs/stringList" }
+        "features": { "$ref": "#/$defs/stringList" },
+        "dynamicGo": { "$ref": "#/$defs/dynamicGoExecution" }
+      }
+    },
+    "dynamicGoExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry", "abi"],
+      "properties": {
+        "entry": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
+        "abi": { "const": "vastplan.dynamic-go.v1" },
+        "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
       }
     },
     "runtimePolicy": {

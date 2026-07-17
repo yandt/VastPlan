@@ -1,6 +1,6 @@
 // Package protocolbus 实现宿主 ↔ 插件的协议总线（内核内通信）。
 //
-// 范围是内核内：一套内核宿主与它在本节点管辖的独立进程插件（ADR-0004）。
+// 范围是内核内：一套内核宿主与它在本节点管辖的进程/静态内嵌插件实例（ADR-0051）。
 // 跨服务/跨机器不归本协议（走寻址层 + NATS，系统架构 第二章）。
 // 规格见 docs/dev/architecture/插件契约与协议.md 第二章。
 //
@@ -112,6 +112,7 @@ type PluginProcess struct {
 	SessionID string
 	PID       int
 	session   *session
+	embedded  *embeddedInstance
 }
 
 var closedProcessDone = func() <-chan struct{} {
@@ -123,6 +124,9 @@ var closedProcessDone = func() <-chan struct{} {
 // Done 在插件会话因崩溃、心跳超时或主动关闭而终结时关闭。
 // Node Agent 依赖这个真实死亡信号，不能只凭启动记录判断进程仍健康。
 func (p *PluginProcess) Done() <-chan struct{} {
+	if p != nil && p.embedded != nil {
+		return p.embedded.done
+	}
 	if p == nil || p.session == nil {
 		return closedProcessDone
 	}
@@ -131,6 +135,9 @@ func (p *PluginProcess) Done() <-chan struct{} {
 
 // Err 返回会话终结原因；进程仍运行时为 nil。
 func (p *PluginProcess) Err() error {
+	if p != nil && p.embedded != nil {
+		return p.embedded.terminalError()
+	}
 	if p == nil || p.session == nil {
 		return nil
 	}
@@ -140,6 +147,14 @@ func (p *PluginProcess) Err() error {
 	default:
 		return nil
 	}
+}
+
+// RuntimeKind 返回实例的运行形态，供状态与故障事件区分进程和内嵌实例。
+func (p *PluginProcess) RuntimeKind() string {
+	if p != nil && p.embedded != nil {
+		return "embedded"
+	}
+	return "process"
 }
 
 // Alive 同时检查会话是否仍连通，而非仅检查 PID 曾经存在。
@@ -152,7 +167,7 @@ func (p *PluginProcess) Alive() bool {
 	}
 }
 
-// Host 插件宿主：拉起插件进程、握手、把贡献接入扩展点注册表、路由调用、探活。
+// Host 插件宿主：接入插件实例、把贡献接入扩展点注册表、路由调用并管理生命周期。
 type Host struct {
 	// KernelName 本内核的规范 ID（backend/frontend/runner/mobile，ADR-0015）。
 	KernelName string
@@ -180,11 +195,13 @@ type Host struct {
 	lis  net.Listener
 	addr string
 
-	mu       sync.RWMutex
-	sessions map[string]*session // sessionID → session
-	byPlugin map[string]*session // pluginID  → session
-	launches map[string]*launchAttempt
-	services map[string]HostService // 内核自身能力：capability → 实现
+	mu               sync.RWMutex
+	sessions         map[string]*session          // sessionID → session
+	byPlugin         map[string]*session          // pluginID  → session
+	embedded         map[string]*embeddedInstance // instanceID → embedded instance
+	embeddedByPlugin map[string]*embeddedInstance // pluginID → embedded instance
+	launches         map[string]*launchAttempt
+	services         map[string]HostService // 内核自身能力：capability → 实现
 
 	stopped atomic.Bool
 
@@ -208,17 +225,19 @@ func NewHost(kernelName, kernelVersion string, r *registry.Registry, logf func(s
 		logf = func(string, ...any) {}
 	}
 	return &Host{
-		KernelName:    kernelName,
-		KernelVersion: kernelVersion,
-		Registry:      r,
-		Logf:          logf,
-		Observer:      observability.New(nil, nil),
-		sessions:      map[string]*session{},
-		byPlugin:      map[string]*session{},
-		launches:      map[string]*launchAttempt{},
-		services:      map[string]HostService{},
-		drainDone:     make(chan struct{}),
-		Limits:        protocollimit.Default(),
+		KernelName:       kernelName,
+		KernelVersion:    kernelVersion,
+		Registry:         r,
+		Logf:             logf,
+		Observer:         observability.New(nil, nil),
+		sessions:         map[string]*session{},
+		byPlugin:         map[string]*session{},
+		embedded:         map[string]*embeddedInstance{},
+		embeddedByPlugin: map[string]*embeddedInstance{},
+		launches:         map[string]*launchAttempt{},
+		services:         map[string]HostService{},
+		drainDone:        make(chan struct{}),
+		Limits:           protocollimit.Default(),
 	}
 }
 
@@ -297,12 +316,22 @@ func (h *Host) Stop() {
 	for _, s := range h.sessions {
 		sessions = append(sessions, s)
 	}
+	embedded := make([]*embeddedInstance, 0, len(h.embedded))
+	for _, instance := range h.embedded {
+		embedded = append(embedded, instance)
+	}
 	h.mu.RUnlock()
 
 	for _, s := range sessions {
 		// 停服时逐个回收；单个插件关闭失败不影响其余（teardown 会强制杀进程）
 		if err := h.Close(&PluginProcess{PluginID: s.pluginID, SessionID: s.id}); err != nil {
 			h.Logf("回收插件 %s 时出错: %v", s.pluginID, err)
+		}
+	}
+	for _, instance := range embedded {
+		if err := h.Close(&PluginProcess{PluginID: instance.pluginID, Version: instance.version,
+			SessionID: instance.id, embedded: instance}); err != nil {
+			h.Logf("回收内嵌插件 %s 时出错: %v", instance.pluginID, err)
 		}
 	}
 	if h.srv != nil {
@@ -326,9 +355,13 @@ func (h *Host) Drain(ctx context.Context) error {
 	for _, sess := range h.sessions {
 		sessions = append(sessions, sess)
 	}
+	embedded := make([]*embeddedInstance, 0, len(h.embedded))
+	for _, instance := range h.embedded {
+		embedded = append(embedded, instance)
+	}
 	h.mu.RUnlock()
 
-	errs := make(chan error, len(sessions))
+	errs := make(chan error, len(sessions)+len(embedded))
 	var wg sync.WaitGroup
 	for _, sess := range sessions {
 		wg.Add(1)
@@ -338,6 +371,15 @@ func (h *Host) Drain(ctx context.Context) error {
 				errs <- fmt.Errorf("drain 插件 %s: %w", sess.pluginID, err)
 			}
 		}(sess)
+	}
+	for _, instance := range embedded {
+		wg.Add(1)
+		go func(instance *embeddedInstance) {
+			defer wg.Done()
+			if err := instance.drain(ctx); err != nil {
+				errs <- fmt.Errorf("drain 内嵌插件 %s: %w", instance.pluginID, err)
+			}
+		}(instance)
 	}
 	wg.Wait()
 	close(errs)

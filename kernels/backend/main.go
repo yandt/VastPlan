@@ -27,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/composition/backendplugins"
 	artifactservercommand "cdsoft.com.cn/VastPlan/kernels/backend/commands/artifactserver"
 	controlplanecommand "cdsoft.com.cn/VastPlan/kernels/backend/commands/controlplane"
 	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
@@ -41,6 +42,9 @@ const KernelName = hostfactory.KernelName
 // version 由构建时注入：-ldflags "-X main.version=$(cat kernels/backend/VERSION)"
 // 单一真源是 kernels/backend/VERSION（ADR-0017 §1）；devel 仅用于未经构建脚本的本地跑。
 var version = "0.0.0-devel"
+
+// dynamicGoHostFingerprint 由正式构建同时注入 Backend 与首方 .so；空值安全禁用动态加载。
+var dynamicGoHostFingerprint string
 
 func init() {
 	// JSONHandler 是 Backend 进程的统一结构化出口；slog.SetDefault 同时接管
@@ -232,6 +236,12 @@ func runReconcile(args []string) (runErr error) {
 	defer func() { runErr = errors.Join(runErr, plane.Close()) }()
 	runtime := nodeagent.NewProtocolRuntime(version, logf)
 	runtime.ExecutionPolicy = options.executionPolicy
+	runtime.PlacementPolicy = options.placementPolicy
+	runtime.EmbeddedCatalog, err = backendplugins.DefaultCatalog()
+	if err != nil {
+		return fmt.Errorf("构建内嵌插件静态目录: %w", err)
+	}
+	runtime.DynamicGoLoader = nodeagent.NewDynamicGoLoader(dynamicGoHostFingerprint)
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()

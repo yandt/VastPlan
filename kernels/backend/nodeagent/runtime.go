@@ -54,6 +54,9 @@ type ProtocolRuntime struct {
 	Dependencies    kernelspi.Dependencies
 	Drivers         *RuntimeDriverRegistry
 	ExecutionPolicy ExecutionPolicy
+	EmbeddedCatalog *EmbeddedCatalog
+	DynamicGoLoader DynamicGoModuleLoader
+	PlacementPolicy PlacementPolicy
 }
 
 // AttachRouter 在首个 unit 启动前接入全局能力寻址。运行中切换 Router 会让已经发布的
@@ -127,11 +130,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	}()
 	processes := make([]*protocolbus.PluginProcess, 0, len(unit.Plugins))
 	for _, plugin := range unit.Plugins {
-		spec, err := r.launchSpec(plugin)
-		if err != nil {
-			return err
-		}
-		process, err := candidate.LaunchSpecWithPolicy(ctx, spec, protocolbus.LaunchPolicy{
+		process, err := r.startPlugin(ctx, candidate, plugin, protocolbus.LaunchPolicy{
 			PluginID: plugin.ID, Version: plugin.Version,
 			Contributions:        plugin.Contract.Contributions,
 			KernelServices:       plugin.Contract.KernelServices,
@@ -518,7 +517,9 @@ func (r *ProtocolRuntime) Status(unitID string) (RuntimeStatus, bool) {
 		RestartCount:     unit.restarts,
 	}
 	for _, process := range unit.processes {
-		status.PIDs = append(status.PIDs, process.PID)
+		if process.PID > 0 {
+			status.PIDs = append(status.PIDs, process.PID)
+		}
 		if !process.Alive() {
 			status.Healthy = false
 		}
@@ -543,7 +544,7 @@ func (r *ProtocolRuntime) monitor(unitID string, generation uint64, process *pro
 	event := RuntimeEvent{
 		UnitID:      unitID,
 		Fingerprint: unit.fingerprint,
-		Type:        "process_exited",
+		Type:        "instance_exited",
 		Message:     fmt.Sprint(process.Err()),
 		OccurredAt:  time.Now().UTC(),
 	}

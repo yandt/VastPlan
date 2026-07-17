@@ -3,7 +3,10 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 )
 
 func TestCopyTreeSkipsPythonBytecode(t *testing.T) {
@@ -27,5 +30,40 @@ func TestCopyTreeSkipsPythonBytecode(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(target, "__pycache__")); !os.IsNotExist(err) {
 		t.Fatalf("Python 字节码缓存不得进入制品: %v", err)
+	}
+}
+
+func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
+	source := t.TempDir()
+	manifest := []byte(`{
+  "id":"com.vastplan.foundation.test.dynamic","name":"dynamic","description":"dynamic","version":"1.0.0","publisher":"vastplan",
+  "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"native","minimumIsolation":"trusted-process",
+    "dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1"}}},
+  "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
+  "contributes":{"backend":{"tools":[{"id":"foundation.test.dynamic.tool","service_role":"backend"}]}}
+}`)
+	if err := os.WriteFile(filepath.Join(source, "vastplan.plugin.json"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	backend, dynamic := filepath.Join(t.TempDir(), "plugin"), filepath.Join(t.TempDir(), "plugin.so")
+	if err := os.WriteFile(backend, []byte("process"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dynamic, []byte("module"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	fingerprint := strings.Repeat("a", 64)
+	staged, cleanup := stagePackage(source, backend, dynamic, fingerprint, "", "")
+	defer cleanup()
+	raw, err := os.ReadFile(filepath.Join(staged, "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Execution.Backend.DynamicGo.Fingerprint != fingerprint {
+		t.Fatalf("签名清单没有冻结 dynamic-go 构建指纹: %+v", got.Execution.Backend.DynamicGo)
 	}
 }

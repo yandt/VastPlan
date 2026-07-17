@@ -1,52 +1,53 @@
-package main
+// Package bootstrappolicy 提供自举权限基线的运行时无关实现。进程插件入口和
+// Backend 静态内嵌目录都只做适配，策略逻辑因此保持单一真源。
+package bootstrappolicy
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 
-	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/shared/go/pluginid"
 )
 
-const settingsCapability = "platform.settings"
+const (
+	PluginID           = "com.vastplan.foundation.security.bootstrap-policy"
+	PluginVersion      = "0.1.0"
+	WriteGuardID       = "foundation.security.bootstrap-policy.write-guard"
+	BaselineID         = "foundation.security.bootstrap-policy.baseline"
+	SettingsCapability = "platform.settings"
+)
 
 var settingsReadOperations = map[string]struct{}{
 	"get": {}, "list": {}, "changesSince": {},
 }
 
-func checkerDescriptor(title string) []byte {
+func CheckerDescriptor(title string) []byte {
 	raw, err := json.Marshal(extpoint.CheckerDescriptor{
-		Title: title, Applies: &extpoint.Applies{Target: settingsCapability},
+		Title: title, Applies: &extpoint.Applies{Target: SettingsCapability},
 	})
 	if err != nil {
-		panic(err) // 常量 descriptor 无法序列化属于开发期错误。
+		panic(err)
 	}
 	return raw
 }
 
-// writeGuard 是高优先级安全护栏：除 system 和直接登录的管理员用户外，
-// 未登记为只读的操作一律拒绝。插件不能借管理员调用链继承系统设置写权限。
-func writeGuard(_ context.Context, _ sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+func WriteGuard(_ context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 	request, err := permissionRequest(payload)
 	if err != nil {
 		return nil, nil, err
 	}
-	decision := evaluateWriteGuard(callCtx, request)
-	return permissionDecision(decision)
+	return permissionDecision(evaluateWriteGuard(callCtx, request))
 }
 
-// baseline 是最低优先级兜底：更高优先级的正式策略可以收紧或扩展读取授权，
-// 但没有任何动态设置时仍能让系统与基础层插件完成安全自举。
-func baseline(_ context.Context, _ sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+func Baseline(_ context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 	request, err := permissionRequest(payload)
 	if err != nil {
 		return nil, nil, err
 	}
-	decision := evaluateBaseline(callCtx, request)
-	return permissionDecision(decision)
+	return permissionDecision(evaluateBaseline(callCtx, request))
 }
 
 func permissionRequest(payload []byte) (extpoint.PermissionRequest, error) {
@@ -61,7 +62,7 @@ func permissionRequest(payload []byte) (extpoint.PermissionRequest, error) {
 }
 
 func evaluateWriteGuard(callCtx *contractv1.CallContext, request extpoint.PermissionRequest) extpoint.PermissionResponse {
-	if request.Capability != settingsCapability {
+	if request.Capability != SettingsCapability {
 		return decision(extpoint.DecisionAbstain, "非系统设置能力")
 	}
 	if privilegedSettingsWriter(callCtx) || isSettingsRead(request.Operation) {
@@ -71,7 +72,7 @@ func evaluateWriteGuard(callCtx *contractv1.CallContext, request extpoint.Permis
 }
 
 func evaluateBaseline(callCtx *contractv1.CallContext, request extpoint.PermissionRequest) extpoint.PermissionResponse {
-	if request.Capability != settingsCapability {
+	if request.Capability != SettingsCapability {
 		return decision(extpoint.DecisionAbstain, "非系统设置能力")
 	}
 	if privilegedSettingsWriter(callCtx) {
@@ -119,5 +120,8 @@ func permissionDecision(value extpoint.PermissionResponse) (*contractv1.CallResu
 	if err != nil {
 		return nil, nil, err
 	}
-	return sdk.OK(0), raw, nil
+	return &contractv1.CallResult{
+		Status: contractv1.CallResult_STATUS_OK,
+		Usage:  &contractv1.Usage{},
+	}, raw, nil
 }

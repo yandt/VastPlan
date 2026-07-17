@@ -23,12 +23,14 @@ type reconcileOptions struct {
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                       string
 	firstPartyPublishers                                                                       string
 	thirdPartyPluginPolicy, publisherPluginPolicies                                            string
+	pluginPlacementDefault, publisherPluginPlacements, pluginPlacements                        string
 	capacityCPU, capacityMemory, capacityGPU                                                   int64
 	interval                                                                                   time.Duration
 	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                string
 	natsAllowInsecure, natsBootstrap                                                           bool
 	requireThirdPartyIsolation                                                                 bool
 	executionPolicy                                                                            nodeagent.ExecutionPolicy
+	placementPolicy                                                                            nodeagent.PlacementPolicy
 	desiredKey, assignmentKey, deploymentName, deploymentTenant                                string
 	natsReplicas                                                                               int
 }
@@ -51,6 +53,9 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.thirdPartyPluginPolicy, "third-party-plugin-policy", string(nodeagent.PublisherPolicyRequireIsolation), "未单独配置发布者时的策略: require-isolation, allow-trusted, deny")
 	flags.StringVar(&options.publisherPluginPolicies, "publisher-plugin-policies", "", "发布者级策略，逗号分隔 publisher=policy；优先于全局策略")
 	flags.StringVar(&options.firstPartyPublishers, "first-party-publishers", "vastplan", "兼容参数：隐式配置 allow-trusted 的发布者，逗号分隔；显式发布者策略优先")
+	flags.StringVar(&options.pluginPlacementDefault, "plugin-placement-default", string(nodeagent.PlacementProcessOnly), "插件默认放置: process-only, prefer-embedded, require-embedded, prefer-dynamic-go, require-dynamic-go")
+	flags.StringVar(&options.publisherPluginPlacements, "publisher-plugin-placements", "", "发布者级放置策略，逗号分隔 publisher=mode")
+	flags.StringVar(&options.pluginPlacements, "plugin-placements", "", "插件级放置策略，逗号分隔 pluginID=mode；优先级最高")
 	flags.BoolVar(&options.requireThirdPartyIsolation, "require-third-party-isolation", true, "已弃用兼容参数；请使用 -third-party-plugin-policy")
 	flags.Int64Var(&options.capacityCPU, "capacity-cpu-millis", 0, "节点可分配 CPU，单位 millicores")
 	flags.Int64Var(&options.capacityMemory, "capacity-memory-bytes", 0, "节点可分配内存，单位 bytes")
@@ -90,6 +95,12 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 		options.thirdPartyPluginPolicy,
 		options.publisherPluginPolicies,
 		strings.Split(options.firstPartyPublishers, ","),
+	)
+	if err != nil {
+		return reconcileOptions{}, err
+	}
+	options.placementPolicy, err = nodeagent.ParsePlacementPolicy(
+		options.pluginPlacementDefault, options.publisherPluginPlacements, options.pluginPlacements,
 	)
 	if err != nil {
 		return reconcileOptions{}, err

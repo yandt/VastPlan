@@ -18,6 +18,17 @@
     "routing": "direct"
   },
 
+  "execution": {
+    "backend": {
+      "driver": "native",
+      "minimumIsolation": "trusted-process",
+      "dynamicGo": {
+        "entry": "backend/bootstrap-policy.so",
+        "abi": "vastplan.dynamic-go.v1"
+      }
+    }
+  },
+
   "activation": ["onStartup"],
   "entry": { "backend": "backend/bootstrap-policy" },
 

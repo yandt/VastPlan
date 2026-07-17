@@ -83,6 +83,38 @@ chmod 0755 backend-kernel-linux-amd64
 - 所有待运行插件的 `engines.backend` 必须显式包含目标 Backend 1.0；`^0.1` 不会被 1.0 宿主默认为兼容。
 - 升级插件状态格式时，候选插件必须声明 `state.backend.migration`；内核不会猜测、复制或修改插件私有数据。
 
+### 3.1 插件运行形态
+
+Backend 默认用独立进程运行所有插件。内嵌是独立的部署策略轴，不能用发布者信任
+策略代替：
+
+```text
+-plugin-placement-default=process-only
+-publisher-plugin-placements=vastplan=prefer-embedded
+-plugin-placements=com.vastplan.foundation.security.bootstrap-policy=require-embedded
+# 明确要求从已签名 .so 加载时：
+-plugin-placements=com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go
+```
+
+规则优先级为“插件 > 发布者 > 全局”，可选值为 `process-only`、
+`prefer-embedded`、`require-embedded`、`prefer-dynamic-go`、`require-dynamic-go`。
+生产建议保持全局 `process-only`，逐插件启用；发布者级规则适合已经完成统一评审的封闭
+发布物。只有 `publisher=vastplan + com.vastplan.*` 首方硬身份、精确 ID/版本、验签贡献
+清单和 `trusted-process` 隔离下限同时满足时才会内嵌。
+
+`prefer-embedded` 按静态目录、dynamic-go、进程回退；dynamic-go 专用值跳过静态目录。
+代码定义与清单不一致属于发布漂移，直接拒绝。dynamic-go 只支持 Linux/FreeBSD/macOS
+原生 `CGO_ENABLED=1` 共同构建，Backend、`.so` 与签名 Manifest 的构建指纹必须一致；
+加载器会在 `plugin.Open` 前先校验签名指纹，再验证模块导出信息。标准库 plugin
+不能卸载，所以升级必须滚动重启 Backend，不做同进程热替换。共同构建命令为：
+
+```bash
+OUT_DIR=bin/dynamic-go ./tools/build-dynamic-go.sh
+```
+
+其他平台或 `CGO_ENABLED=0` 的 Backend 保留进程/静态能力并拒绝 dynamic-go。具体安全与
+故障边界见 [ADR-0051](../decisions/ADR-0051-Backend混合插件运行与受控内嵌边界.md)。
+
 ## 4. 升级
 
 以下目录只作为标准布局示例；服务管理器可以替换，但必须保留“版本目录 + 原子切换 + 旧版本保留”语义：

@@ -9,6 +9,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -25,6 +26,8 @@ import (
 func main() {
 	source := flag.String("source", "", "插件目录（须含 vastplan.plugin.json）")
 	backendBin := flag.String("backend-bin", "", "写入清单 entry.backend 的已构建可执行文件")
+	dynamicGoBin := flag.String("dynamic-go-bin", "", "写入 execution.backend.dynamicGo.entry 的首方 Go .so")
+	dynamicGoFingerprint := flag.String("dynamic-go-fingerprint", "", "写入签名清单并在 plugin.Open 前校验的 64 位构建指纹")
 	licenseFile := flag.String("license-file", "LICENSE", "清单声明 license 时注入制品的许可证文本；默认仓库根 LICENSE")
 	noticeFile := flag.String("notice-file", "NOTICE", "清单声明 noticeFile 时注入制品的归属告示；默认仓库根 NOTICE")
 	out := flag.String("out", "", "可选：输出 .tar.gz 文件")
@@ -44,7 +47,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	packageSource, cleanup := stagePackage(*source, *backendBin, *licenseFile, *noticeFile)
+	packageSource, cleanup := stagePackage(*source, *backendBin, *dynamicGoBin, *dynamicGoFingerprint,
+		*licenseFile, *noticeFile)
 	defer cleanup()
 	packageBytes, manifest, err := pluginservice.PackageDirectory(packageSource)
 	if err != nil {
@@ -113,7 +117,7 @@ func main() {
 
 // stagePackage 只在需要注入已构建二进制或许可证文本时创建临时目录。
 // 许可证目的路径来自已校验清单，不能由命令行改写（ADR-0046）。
-func stagePackage(source, backendBin, licenseSource, noticeSource string) (string, func()) {
+func stagePackage(source, backendBin, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
 	manifestRaw, err := os.ReadFile(filepath.Join(source, "vastplan.plugin.json"))
 	if err != nil {
 		fatalf("读取插件清单失败: %v", err)
@@ -136,8 +140,28 @@ func stagePackage(source, backendBin, licenseSource, noticeSource string) (strin
 			fatalf("读取插件归属告示失败: %v", err)
 		}
 	}
-	if backendBin == "" && licensePresent && noticePresent {
+	if backendBin == "" && dynamicGoBin == "" && licensePresent && noticePresent {
 		return source, func() {}
+	}
+	var dynamicGoEntry string
+	if dynamicGoBin != "" {
+		if manifest.Execution == nil || manifest.Execution.Backend == nil || manifest.Execution.Backend.DynamicGo == nil {
+			fatalf("清单未声明 execution.backend.dynamicGo")
+		}
+		dynamicGoEntry = manifest.Execution.Backend.DynamicGo.Entry
+		dynamicGoFingerprint = strings.TrimSpace(dynamicGoFingerprint)
+		decoded, decodeErr := hex.DecodeString(dynamicGoFingerprint)
+		if decodeErr != nil || len(decoded) != sha256.Size || dynamicGoFingerprint != strings.ToLower(dynamicGoFingerprint) {
+			fatalf("-dynamic-go-fingerprint 必须是 64 位小写 SHA-256 十六进制值")
+		}
+		manifest.Execution.Backend.DynamicGo.Fingerprint = dynamicGoFingerprint
+		info, statErr := os.Stat(dynamicGoBin)
+		if statErr != nil {
+			fatalf("读取 dynamic-go 模块失败: %v", statErr)
+		}
+		if !info.Mode().IsRegular() || info.Size() == 0 {
+			fatalf("dynamic-go 模块不是非空普通文件: %s", dynamicGoBin)
+		}
 	}
 
 	var entry string
@@ -173,6 +197,27 @@ func stagePackage(source, backendBin, licenseSource, noticeSource string) (strin
 		if err := copyFile(backendBin, target, 0o755); err != nil {
 			cleanup()
 			fatalf("写入 backend 入口失败: %v", err)
+		}
+	}
+	if dynamicGoBin != "" {
+		target := filepath.Join(staging, filepath.FromSlash(dynamicGoEntry))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			cleanup()
+			fatalf("创建 dynamic-go 入口目录失败: %v", err)
+		}
+		if err := copyFile(dynamicGoBin, target, 0o644); err != nil {
+			cleanup()
+			fatalf("写入 dynamic-go 模块失败: %v", err)
+		}
+		manifestJSON, marshalErr := json.MarshalIndent(manifest, "", "  ")
+		if marshalErr != nil {
+			cleanup()
+			fatalf("编码 dynamic-go 签名清单失败: %v", marshalErr)
+		}
+		manifestJSON = append(manifestJSON, '\n')
+		if err := os.WriteFile(filepath.Join(staging, "vastplan.plugin.json"), manifestJSON, 0o644); err != nil {
+			cleanup()
+			fatalf("写入 dynamic-go 签名清单失败: %v", err)
 		}
 	}
 	if !licensePresent {

@@ -20,6 +20,9 @@ func TestParseReconcileOptionsNormalizesLocalAndDeploymentModes(t *testing.T) {
 		local.executionPolicy.PublisherPolicies["vastplan"] != nodeagent.PublisherPolicyAllowTrusted {
 		t.Fatalf("默认插件策略必须安全并兼容 vastplan: %+v", local.executionPolicy)
 	}
+	if local.placementPolicy.Default != nodeagent.PlacementProcessOnly {
+		t.Fatalf("默认必须保持进程隔离: %+v", local.placementPolicy)
+	}
 
 	cluster, err := parseReconcileOptions([]string{
 		"-nats-url", "nats://127.0.0.1:4222", "-deployment", "api", "-tenant", "acme", "-node-id", "node-a",
@@ -29,6 +32,22 @@ func TestParseReconcileOptionsNormalizesLocalAndDeploymentModes(t *testing.T) {
 	}
 	if cluster.assignmentKey != controlplane.AssignmentKey("acme", "api", "node-a") {
 		t.Fatalf("deployment 应生成当前节点 assignment key: %+v", cluster)
+	}
+}
+
+func TestParseReconcileOptionsSupportsPlacementPrecedence(t *testing.T) {
+	configured, err := parseReconcileOptions([]string{
+		"-desired", "desired.json",
+		"-plugin-placement-default", "process-only",
+		"-publisher-plugin-placements", "vastplan=prefer-embedded",
+		"-plugin-placements", "com.vastplan.foundation.security.bootstrap-policy=require-embedded",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configured.placementPolicy.PublisherPolicies["vastplan"] != nodeagent.PlacementPreferEmbedded ||
+		configured.placementPolicy.PluginPolicies["com.vastplan.foundation.security.bootstrap-policy"] != nodeagent.PlacementRequireEmbedded {
+		t.Fatalf("放置策略未正确解析: %+v", configured.placementPolicy)
 	}
 }
 
@@ -87,6 +106,8 @@ func TestParseReconcileOptionsRejectsConflictingOrInvalidPluginPolicies(t *testi
 		{"-desired", "desired.json", "-third-party-plugin-policy", "deny", "-require-third-party-isolation=false"},
 		{"-desired", "desired.json", "-third-party-plugin-policy", "invalid"},
 		{"-desired", "desired.json", "-publisher-plugin-policies", "acme=deny,acme=allow-trusted"},
+		{"-desired", "desired.json", "-plugin-placement-default", "in-process"},
+		{"-desired", "desired.json", "-plugin-placements", "one=prefer-embedded,one=process-only"},
 	}
 	for _, args := range tests {
 		if _, err := parseReconcileOptions(args); err == nil {

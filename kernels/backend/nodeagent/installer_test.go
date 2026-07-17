@@ -2,6 +2,7 @@ package nodeagent
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,6 +81,68 @@ func TestLocalInstaller_PythonEntryNeedNotBeExecutable(t *testing.T) {
 	}
 	if installed.Publisher != "example" || installed.Execution.Driver != "python" {
 		t.Fatalf("安装器没有冻结发布者和执行契约: %+v", installed)
+	}
+}
+
+func TestLocalInstallerFreezesDynamicGoEntryFromSignedManifest(t *testing.T) {
+	makePackage := func(t *testing.T, includeModule, includeFingerprint bool) ([]byte, pluginv1.Artifact) {
+		t.Helper()
+		dir := t.TempDir()
+		fingerprint := ""
+		if includeFingerprint {
+			fingerprint = `,"fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`
+		}
+		manifest := []byte(fmt.Sprintf(`{
+  "id":"com.vastplan.foundation.test.dynamic","name":"dynamic","description":"dynamic","version":"1.0.0","publisher":"vastplan",
+  "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"native","minimumIsolation":"trusted-process",
+    "dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1"%s}}},
+  "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
+  "contributes":{"backend":{"tools":[{"id":"foundation.test.dynamic.tool","service_role":"backend"}]}}
+}`, fingerprint))
+		if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifest, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "backend"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "backend", "plugin"), []byte("process"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if includeModule {
+			if err := os.WriteFile(filepath.Join(dir, "backend", "plugin.so"), []byte("signed-so"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		packageBytes, _, err := pluginservice.PackageDirectory(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		artifact, err := pluginservice.Describe("stable", packageBytes)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return packageBytes, artifact
+	}
+
+	packageBytes, artifact := makePackage(t, true, true)
+	installed, err := (LocalInstaller{Root: t.TempDir()}).Install(verifiedForTest(artifact, packageBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(installed.DynamicGoPath) != "plugin.so" || installed.Execution.DynamicGo == nil {
+		t.Fatalf("安装结果没有冻结 dynamic-go 入口: %+v", installed)
+	}
+
+	packageBytes, artifact = makePackage(t, false, true)
+	if _, err := (LocalInstaller{Root: t.TempDir()}).Install(verifiedForTest(artifact, packageBytes)); err == nil ||
+		!strings.Contains(err.Error(), "dynamic-go 入口不存在") {
+		t.Fatalf("清单声明但制品缺少 .so 时必须拒绝: %v", err)
+	}
+
+	packageBytes, artifact = makePackage(t, true, false)
+	if _, err := (LocalInstaller{Root: t.TempDir()}).Install(verifiedForTest(artifact, packageBytes)); err == nil ||
+		!strings.Contains(err.Error(), "缺少构建时注入") {
+		t.Fatalf("未冻结共同构建指纹的发布包必须拒绝: %v", err)
 	}
 }
 

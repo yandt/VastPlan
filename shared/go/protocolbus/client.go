@@ -302,8 +302,12 @@ func (h *Host) invoke(ctx context.Context, target *contractv1.CallTarget,
 	}
 
 	h.mu.RLock()
+	embedded := h.embeddedByPlugin[c.PluginID]
 	sess, ok := h.byPlugin[c.PluginID]
 	h.mu.RUnlock()
+	if embedded != nil {
+		return embedded.invoke(ctx, h, target, callCtx, payload)
+	}
 	if !ok {
 		return nil, fmt.Errorf("能力 %s 的提供者 %s 当前未接入", target.Capability, c.PluginID)
 	}
@@ -487,6 +491,12 @@ func (h *Host) callHostService(ctx context.Context, target *contractv1.CallTarge
 
 // Close 优雅关闭插件：SHUTDOWN 指令 → 摘除贡献 → 回收进程。
 func (h *Host) Close(p *PluginProcess) error {
+	if p == nil {
+		return nil
+	}
+	if p.embedded != nil {
+		return h.closeEmbedded(p.embedded)
+	}
 	h.mu.RLock()
 	sess, ok := h.sessions[p.SessionID]
 	h.mu.RUnlock()

@@ -1,4 +1,4 @@
-// Package nodeagent 把一份节点级 DesiredState 收敛为真实插件进程与实际态。
+// Package nodeagent 把一份节点级 DesiredState 收敛为真实插件实例与实际态。
 //
 // 本包只依赖可替换的制品源、安装器、运行时和状态存储接口；本地文件和 NATS assignment
 // 共享同一 reconcile 事务、回滚与故障恢复语义。
@@ -42,16 +42,17 @@ type StateStore interface {
 
 // InstalledPlugin 是经安装器校验后可交给 backend 宿主启动的插件。
 type InstalledPlugin struct {
-	ID        string                    `json:"id"`
-	Publisher string                    `json:"publisher"`
-	Version   string                    `json:"version"`
-	Channel   string                    `json:"channel"`
-	SHA256    string                    `json:"sha256"`
-	Root      string                    `json:"root"`
-	EntryPath string                    `json:"entry_path"`
-	Execution pluginv1.BackendExecution `json:"execution"`
-	State     *PluginStateContract      `json:"state,omitempty"`
-	Contract  PluginRuntimeContract     `json:"contract"`
+	ID            string                    `json:"id"`
+	Publisher     string                    `json:"publisher"`
+	Version       string                    `json:"version"`
+	Channel       string                    `json:"channel"`
+	SHA256        string                    `json:"sha256"`
+	Root          string                    `json:"root"`
+	EntryPath     string                    `json:"entry_path"`
+	DynamicGoPath string                    `json:"dynamic_go_path,omitempty"`
+	Execution     pluginv1.BackendExecution `json:"execution"`
+	State         *PluginStateContract      `json:"state,omitempty"`
+	Contract      PluginRuntimeContract     `json:"contract"`
 }
 
 // PluginRuntimeContract 是安装时从已验签清单冻结的运行授权，宿主不再相信进程自报。
