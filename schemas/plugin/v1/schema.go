@@ -69,7 +69,9 @@ type RuntimePolicy struct {
 	StateModel     string                    `json:"stateModel"`
 	Visibility     string                    `json:"visibility"`
 	Routing        string                    `json:"routing"`
+	RoutingDomain  string                    `json:"routingDomain,omitempty"`
 	Provides       []RuntimeCapabilityPolicy `json:"provides,omitempty"`
+	Requires       []RuntimeRequirement      `json:"requires,omitempty"`
 }
 
 type RuntimeCapabilityPolicy struct {
@@ -77,6 +79,19 @@ type RuntimeCapabilityPolicy struct {
 	Capability     string `json:"capability"`
 	Visibility     string `json:"visibility,omitempty"`
 	Routing        string `json:"routing,omitempty"`
+	RoutingDomain  string `json:"routingDomain,omitempty"`
+}
+
+// RuntimeRequirement 描述跨插件/跨服务的运行时能力依赖，不与制品 dependencies 混用。
+type RuntimeRequirement struct {
+	Capability     string `json:"capability"`
+	Version        string `json:"version,omitempty"`
+	Scope          string `json:"scope"`
+	Kind           string `json:"kind"`
+	Ready          string `json:"ready"`
+	FailurePolicy  string `json:"failurePolicy"`
+	LogicalService string `json:"logicalService,omitempty"`
+	RoutingDomain  string `json:"routingDomain,omitempty"`
 }
 
 // State 声明各运行面的插件私有持久状态。Backend 1.0 只发布 backend 契约；
@@ -129,6 +144,7 @@ type RuntimeContribution struct {
 	StateModel     string          `json:"stateModel,omitempty"`
 	Visibility     string          `json:"visibility,omitempty"`
 	Routing        string          `json:"routing,omitempty"`
+	RoutingDomain  string          `json:"routingDomain,omitempty"`
 }
 
 var backendContributionPoints = map[string]string{
@@ -192,6 +208,7 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 			if override, ok := overrides[point+"\x00"+id]; ok {
 				policy.Visibility = override.Visibility
 				policy.Routing = override.Routing
+				policy.RoutingDomain = override.RoutingDomain
 				policy = servicemodel.Normalize(policy)
 			}
 			key := point + "\x00" + id
@@ -202,7 +219,7 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 			out = append(out, RuntimeContribution{
 				ExtensionPoint: point, ID: id, Priority: priority, Descriptor: descriptor,
 				InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
-				Visibility: policy.Visibility, Routing: policy.Routing,
+				Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain,
 			})
 		}
 	}
@@ -224,6 +241,7 @@ func runtimePolicies(manifest Manifest) (servicemodel.Policy, map[string]Runtime
 		StateModel:     manifest.Runtime.StateModel,
 		Visibility:     manifest.Runtime.Visibility,
 		Routing:        manifest.Runtime.Routing,
+		RoutingDomain:  manifest.Runtime.RoutingDomain,
 	}
 	policy = servicemodel.Normalize(policy)
 	if err := servicemodel.Validate(policy); err != nil {
@@ -242,15 +260,47 @@ func runtimePolicies(manifest Manifest) (servicemodel.Policy, map[string]Runtime
 		overridePolicy := policy
 		overridePolicy.Visibility = provide.Visibility
 		overridePolicy.Routing = provide.Routing
+		overridePolicy.RoutingDomain = provide.RoutingDomain
 		overridePolicy = servicemodel.Normalize(overridePolicy)
 		if err := servicemodel.Validate(overridePolicy); err != nil {
 			return servicemodel.Policy{}, nil, fmt.Errorf("runtime.provides %s/%s 策略无效: %w", provide.ExtensionPoint, provide.Capability, err)
 		}
 		override.Visibility = overridePolicy.Visibility
 		override.Routing = overridePolicy.Routing
+		override.RoutingDomain = overridePolicy.RoutingDomain
 		overrides[key] = override
 	}
+	if err := validateRuntimeRequirements(manifest.Runtime.Requires); err != nil {
+		return servicemodel.Policy{}, nil, err
+	}
 	return policy, overrides, nil
+}
+
+func validateRuntimeRequirements(requirements []RuntimeRequirement) error {
+	seen := make(map[string]struct{}, len(requirements))
+	for _, requirement := range requirements {
+		if requirement.Capability == "" {
+			return fmt.Errorf("runtime.requires capability 不能为空")
+		}
+		if requirement.Scope != "same-node" && requirement.Scope != "same-kernel" && requirement.Scope != "remote" {
+			return fmt.Errorf("runtime.requires %s scope 无效: %q", requirement.Capability, requirement.Scope)
+		}
+		if requirement.Kind != "strong" && requirement.Kind != "soft" && requirement.Kind != "lazy" && requirement.Kind != "data" {
+			return fmt.Errorf("runtime.requires %s kind 无效: %q", requirement.Capability, requirement.Kind)
+		}
+		if requirement.Ready != "readiness" && requirement.Ready != "health" {
+			return fmt.Errorf("runtime.requires %s ready 无效: %q", requirement.Capability, requirement.Ready)
+		}
+		if requirement.FailurePolicy != "fail" && requirement.FailurePolicy != "degrade" && requirement.FailurePolicy != "retry" {
+			return fmt.Errorf("runtime.requires %s failurePolicy 无效: %q", requirement.Capability, requirement.FailurePolicy)
+		}
+		key := requirement.Capability + "\x00" + requirement.LogicalService + "\x00" + requirement.RoutingDomain
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("runtime.requires 重复: %s", requirement.Capability)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
 }
 
 func schemas() error {

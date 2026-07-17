@@ -18,6 +18,7 @@ type LeaderRecord struct {
 	Election      string    `json:"election"`
 	Holder        string    `json:"holder"`
 	Token         string    `json:"token"`
+	Epoch         uint64    `json:"epoch"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
@@ -77,7 +78,7 @@ func (e LeaderElector) tryAcquire(parent context.Context, options LeaderElection
 	key := "leaders." + keyToken(e.Election)
 	record := LeaderRecord{
 		SchemaVersion: 1, Election: e.Election, Holder: e.Identity,
-		Token: randomLeaderToken(), UpdatedAt: time.Now().UTC(),
+		Token: randomLeaderToken(), Epoch: 1, UpdatedAt: time.Now().UTC(),
 	}
 	raw, _ := json.Marshal(record)
 	revision, err := e.KV.Create(parent, key, raw)
@@ -98,6 +99,7 @@ func (e LeaderElector) tryAcquire(parent context.Context, options LeaderElection
 	if time.Since(current.UpdatedAt) < options.LeaseDuration {
 		return nil, false, nil
 	}
+	record.Epoch = current.Epoch + 1
 	revision, err = e.KV.Update(parent, key, raw, entry.Revision())
 	if err != nil {
 		return nil, false, nil // 另一候选者先完成 CAS；回到等待循环。
@@ -121,6 +123,7 @@ func (l *Leadership) Record() LeaderRecord {
 	return l.record
 }
 func (l *Leadership) Lost() <-chan error { return l.lost }
+func (l *Leadership) Done() <-chan struct{} { return l.done }
 
 func (l *Leadership) renew(ctx context.Context) {
 	defer close(l.done)

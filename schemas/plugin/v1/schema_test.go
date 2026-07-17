@@ -167,6 +167,31 @@ func TestParseManifest_RuntimePolicies(t *testing.T) {
 	}
 }
 
+func TestParseManifest_RuntimeRequirements(t *testing.T) {
+	raw := []byte(`{
+		"id":"com.example.consumer","name":"consumer","description":"consumer",
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue",
+			"requires":[{"capability":"platform.database","version":"^1.0.0","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"retry","logicalService":"platform.database","routingDomain":"core"}]},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{"tools":[{"id":"consumer.tool","service_role":"backend","title":"consumer","subcommands":[]}]}}
+	}`)
+	manifest, err := ParseManifest(raw)
+	if err != nil || manifest.Runtime == nil || len(manifest.Runtime.Requires) != 1 {
+		t.Fatalf("runtime requires 应通过并被解析: manifest=%+v err=%v", manifest, err)
+	}
+	invalid := []byte(`{
+		"id":"com.example.invalid-requirement","name":"invalid","description":"invalid",
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue",
+			"requires":[{"capability":"platform.database","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"unknown"}]},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
+	}`)
+	if _, err := ParseManifest(invalid); err == nil {
+		t.Fatal("非法 runtime failurePolicy 必须拒绝")
+	}
+}
+
 func TestParseManifest_BackendStateMigrationContract(t *testing.T) {
 	valid := []byte(`{
 		"id":"com.example.stateful","name":"stateful","description":"stateful plugin",

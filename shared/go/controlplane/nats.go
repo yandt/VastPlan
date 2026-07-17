@@ -228,8 +228,26 @@ func CapabilityKey(capability, instanceID string) string {
 	return "capabilities." + keyToken(capability) + "." + keyToken(instanceID)
 }
 
-func RPCSubject(capability string) string  { return "vp.rpc.v1." + keyToken(capability) }
-func RPCQueue(capability string) string    { return "vp.rpc.v1." + keyToken(capability) }
+func RPCSubject(capability string) string { return "vp.rpc.v1." + keyToken(capability) }
+func RPCQueue(capability string) string   { return "vp.rpc.v1." + keyToken(capability) }
+func RPCSubjectFor(capability, logicalService, routingDomain string) string {
+	if logicalService == "" && routingDomain == "" {
+		return RPCSubject(capability)
+	}
+	return "vp.rpc.v1." + keyToken(logicalService) + "." + keyToken(capability) + "." + keyToken(routingDomain)
+}
+func RPCQueueFor(capability, logicalService, routingDomain string) string {
+	return RPCSubjectFor(capability, logicalService, routingDomain)
+}
+func RPCSubjectForPartition(capability, logicalService, routingDomain, partitionKey string) string {
+	if partitionKey == "" {
+		return RPCSubjectFor(capability, logicalService, routingDomain)
+	}
+	return RPCSubjectFor(capability, logicalService, routingDomain+"/partition/"+partitionKey)
+}
+func RPCQueueForPartition(capability, logicalService, routingDomain, partitionKey string) string {
+	return RPCSubjectForPartition(capability, logicalService, routingDomain, partitionKey)
+}
 func EventSubject(eventType string) string { return "vp.event.v1." + keyToken(eventType) }
 func PersistentEventSubject(eventType string) string {
 	return "vp.event.persist.v1." + keyToken(eventType)

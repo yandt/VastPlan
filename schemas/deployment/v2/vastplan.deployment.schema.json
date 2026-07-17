@@ -125,6 +125,8 @@
         "state_model": { "enum": ["local-ephemeral", "external-shared", "leader-owned", "partition-owned"] },
         "visibility": { "enum": ["local", "service", "cluster", "global"] },
         "routing": { "enum": ["direct", "queue", "leader", "shard"] },
+        "routing_domain": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "depends_on": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 160 } },
         "replicas": { "type": "integer", "minimum": 1 },
         "autoscaling": { "$ref": "#/$defs/autoscaling" },
         "resources": { "$ref": "#/$defs/resources" },

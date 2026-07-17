@@ -12,6 +12,7 @@ import (
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"google.golang.org/protobuf/proto"
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/controlplane"
@@ -66,6 +67,104 @@ func TestRouterRejectsLocalCapabilityRegistration(t *testing.T) {
 	if err == nil {
 		t.Fatal("local capability 不得注册到全局 Router")
 	}
+}
+
+func TestRouterLocalRegistrationStaysOutOfGlobalDirectory(t *testing.T) {
+	server, buckets := startAddressingNATS(t)
+	caller := newTestRouter(t, server, buckets.Capabilities, "caller-local")
+	worker := newTestRouter(t, server, buckets.Capabilities, "worker-local")
+	registration, err := worker.PrepareLocalRegistration(context.Background(), RegisterOptions{
+		Capability: "demo.local.ready", ExtensionPoint: "tool.package", UnitID: "local",
+		InstancePolicy: "per-kernel", StateModel: "local-ephemeral", Visibility: "local", Routing: "direct",
+	}, func(context.Context, *contractv1.CallTarget, *contractv1.CallContext, []byte) (*contractv1.CallResult, []byte, error) {
+		return okResult(), []byte("local"), nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ActivateRegistrations(context.Background(), []*Registration{registration}); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = registration.Close(context.Background()) })
+	if !worker.HasLocal("demo.local.ready") || caller.HasLocal("demo.local.ready") || len(caller.Instances("demo.local.ready")) != 0 {
+		t.Fatal("local capability 不得出现在其他 Router")
+	}
+	result, payload, err := worker.Invoke(context.Background(), target("demo.local.ready"), nil, nil)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || string(payload) != "local" {
+		t.Fatalf("本地 capability 应可直调: result=%v payload=%q err=%v", result, payload, err)
+	}
+}
+
+func TestRouterSeparatesLogicalServicesAndPartitions(t *testing.T) {
+	server, buckets := startAddressingNATS(t)
+	caller := newTestRouter(t, server, buckets.Capabilities, "caller-routing")
+	worker := newTestRouter(t, server, buckets.Capabilities, "worker-routing")
+	register := func(service, domain, partition, value string) *Registration {
+		registration, err := worker.Register(context.Background(), RegisterOptions{
+			Capability: "demo.routed", ExtensionPoint: "tool.package", UnitID: service,
+			LogicalService: service, RoutingDomain: domain, PartitionKey: partition,
+			InstancePolicy: func() string {
+				if partition != "" {
+					return "partitioned"
+				}
+				return "active-active"
+			}(),
+			StateModel: func() string {
+				if partition != "" {
+					return "partition-owned"
+				}
+				return "external-shared"
+			}(),
+			Visibility: "cluster", Routing: func() string {
+				if partition != "" {
+					return "shard"
+				}
+				return "queue"
+			}(),
+			FencingToken: partition,
+		}, func(context.Context, *contractv1.CallTarget, *contractv1.CallContext, []byte) (*contractv1.CallResult, []byte, error) {
+			return okResult(), []byte(value), nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return registration
+	}
+	a := register("svc-a", "domain-a", "", "a")
+	b := register("svc-b", "domain-b", "", "b")
+	p := register("svc-p", "domain-p", "tenant-7", "p")
+	t.Cleanup(func() {
+		_ = a.Close(context.Background())
+		_ = b.Close(context.Background())
+		_ = p.Close(context.Background())
+	})
+	waitInstances(t, caller, "demo.routed", 3)
+	call := func(service, domain, partition string) string {
+		result, payload, err := caller.Invoke(context.Background(), &contractv1.CallTarget{
+			ExtensionPoint: "tool.package", Capability: "demo.routed",
+			LogicalService: proto.String(service), RoutingDomain: proto.String(domain), PartitionKey: optionalString(partition),
+		}, nil, nil)
+		if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+			t.Fatalf("路由调用失败 service=%s domain=%s partition=%s: result=%v err=%v", service, domain, partition, result, err)
+		}
+		return string(payload)
+	}
+	if got := call("svc-a", "domain-a", ""); got != "a" {
+		t.Fatalf("逻辑服务路由错误: %q", got)
+	}
+	if got := call("svc-b", "domain-b", ""); got != "b" {
+		t.Fatalf("路由域隔离错误: %q", got)
+	}
+	if got := call("svc-p", "domain-p", "tenant-7"); got != "p" {
+		t.Fatalf("分片路由错误: %q", got)
+	}
+}
+
+func optionalString(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return proto.String(value)
 }
 
 func TestPreparedRegistrationGroupIsInvisibleUntilAtomicActivation(t *testing.T) {

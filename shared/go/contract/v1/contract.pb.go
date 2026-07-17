@@ -573,6 +573,9 @@ type CallTarget struct {
 	Version        *string                `protobuf:"bytes,3,opt,name=version,proto3,oneof" json:"version,omitempty"`
 	Operation      *string                `protobuf:"bytes,4,opt,name=operation,proto3,oneof" json:"operation,omitempty"` // 子命令
 	PayloadSchema  *string                `protobuf:"bytes,5,opt,name=payload_schema,json=payloadSchema,proto3,oneof" json:"payload_schema,omitempty"`
+	LogicalService *string                `protobuf:"bytes,6,opt,name=logical_service,json=logicalService,proto3,oneof" json:"logical_service,omitempty"` // 目标服务副本组的逻辑身份
+	RoutingDomain  *string                `protobuf:"bytes,7,opt,name=routing_domain,json=routingDomain,proto3,oneof" json:"routing_domain,omitempty"`    // 同 capability 下隔离 queue/leader/shard 路由域
+	PartitionKey   *string                `protobuf:"bytes,8,opt,name=partition_key,json=partitionKey,proto3,oneof" json:"partition_key,omitempty"`       // partitioned 服务选择 owner 的稳定分片键
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -638,6 +641,27 @@ func (x *CallTarget) GetOperation() string {
 func (x *CallTarget) GetPayloadSchema() string {
 	if x != nil && x.PayloadSchema != nil {
 		return *x.PayloadSchema
+	}
+	return ""
+}
+
+func (x *CallTarget) GetLogicalService() string {
+	if x != nil && x.LogicalService != nil {
+		return *x.LogicalService
+	}
+	return ""
+}
+
+func (x *CallTarget) GetRoutingDomain() string {
+	if x != nil && x.RoutingDomain != nil {
+		return *x.RoutingDomain
+	}
+	return ""
+}
+
+func (x *CallTarget) GetPartitionKey() string {
+	if x != nil && x.PartitionKey != nil {
+		return *x.PartitionKey
 	}
 	return ""
 }
@@ -1017,7 +1041,7 @@ const file_contract_v1_contract_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\r\n" +
 	"\v_project_idB\x13\n" +
 	"\x11_deadline_unix_msB\x12\n" +
-	"\x10_idempotency_key\"\xf0\x01\n" +
+	"\x10_idempotency_key\"\xad\x03\n" +
 	"\n" +
 	"CallTarget\x12'\n" +
 	"\x0fextension_point\x18\x01 \x01(\tR\x0eextensionPoint\x12\x1e\n" +
@@ -1026,12 +1050,18 @@ const file_contract_v1_contract_proto_rawDesc = "" +
 	"capability\x12\x1d\n" +
 	"\aversion\x18\x03 \x01(\tH\x00R\aversion\x88\x01\x01\x12!\n" +
 	"\toperation\x18\x04 \x01(\tH\x01R\toperation\x88\x01\x01\x12*\n" +
-	"\x0epayload_schema\x18\x05 \x01(\tH\x02R\rpayloadSchema\x88\x01\x01B\n" +
+	"\x0epayload_schema\x18\x05 \x01(\tH\x02R\rpayloadSchema\x88\x01\x01\x12,\n" +
+	"\x0flogical_service\x18\x06 \x01(\tH\x03R\x0elogicalService\x88\x01\x01\x12*\n" +
+	"\x0erouting_domain\x18\a \x01(\tH\x04R\rroutingDomain\x88\x01\x01\x12(\n" +
+	"\rpartition_key\x18\b \x01(\tH\x05R\fpartitionKey\x88\x01\x01B\n" +
 	"\n" +
 	"\b_versionB\f\n" +
 	"\n" +
 	"_operationB\x11\n" +
-	"\x0f_payload_schema\"\xd3\x01\n" +
+	"\x0f_payload_schemaB\x12\n" +
+	"\x10_logical_serviceB\x11\n" +
+	"\x0f_routing_domainB\x10\n" +
+	"\x0e_partition_key\"\xd3\x01\n" +
 	"\x05Error\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x1c\n" +

@@ -28,6 +28,7 @@ type Scheduler struct {
 	Nodes       jetstream.KeyValue
 	Assignments jetstream.KeyValue
 	Metrics     jetstream.KeyValue
+	Actual      jetstream.KeyValue
 }
 
 type Plan struct {
@@ -47,6 +48,13 @@ type scheduleState struct {
 func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deployment) (Plan, error) {
 	if s.Nodes == nil || s.Assignments == nil {
 		return Plan{}, errors.New("scheduler 的节点与 assignment KV 必须配置")
+	}
+	graph := make(map[string][]string, len(deployment.Units))
+	for _, unit := range deployment.Units {
+		graph[unit.ID] = append([]string(nil), unit.DependsOn...)
+	}
+	if _, err := servicemodel.TopologicalOrder(graph); err != nil {
+		return Plan{}, fmt.Errorf("部署依赖图无效: %w", err)
 	}
 	nodes, err := s.liveNodes(ctx)
 	if err != nil {
@@ -86,7 +94,7 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 		}
 		policy := servicemodel.Normalize(servicemodel.Policy{
 			InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
-			Visibility: unit.Visibility, Routing: unit.Routing,
+			Visibility: unit.Visibility, Routing: unit.Routing, RoutingDomain: unit.RoutingDomain,
 		})
 		if err := servicemodel.Validate(policy); err != nil {
 			return Plan{}, fmt.Errorf("unit %s 运行策略无效: %w", unit.ID, err)
@@ -109,7 +117,8 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 				ID: unit.ID, Kind: unit.Kind, Plugins: append([]deploymentv1.PluginRef(nil), unit.Plugins...),
 				Config: cloneConfig(unit.Config), Enabled: true, ServiceRole: unit.ServiceRole,
 				LogicalService: unit.LogicalService, InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
-				Visibility: policy.Visibility, Routing: policy.Routing, Replicas: 1,
+				Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain, Replicas: 1,
+				DependsOn: append([]string(nil), unit.DependsOn...),
 				Resources: deploymentv1.ResourceRequirements{Requests: deploymentv1.ResourceList{
 					CPUMillis: unit.Resources.Requests.CPUMillis, MemoryBytes: unit.Resources.Requests.MemoryBytes, GPU: unit.Resources.Requests.GPU,
 				}},
@@ -534,6 +543,13 @@ func (c Controller) runAsLeader(ctx context.Context) error {
 			plan, err = c.Scheduler.Reconcile(ctx, deployment)
 			if err == nil {
 				c.Logf("调度已收敛 reason=%s generation=%d nodes=%d", reason, plan.Generation, len(plan.Assignments))
+				if c.Scheduler.Actual != nil {
+					if report, observeErr := c.Scheduler.ObserveComposition(ctx, deployment); observeErr == nil {
+						c.Logf("组合状态 reason=%s status=%s units=%d", reason, report.Status, len(report.Units))
+					} else {
+						c.Logf("组合状态观测失败 reason=%s: %v", reason, observeErr)
+					}
+				}
 			}
 		}
 		if err != nil {

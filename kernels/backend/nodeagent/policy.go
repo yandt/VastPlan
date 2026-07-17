@@ -2,11 +2,41 @@ package nodeagent
 
 import (
 	"fmt"
+	"sort"
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
+
+func partitionKeys(config map[string]any) []string {
+	raw, ok := config["partition_keys"]
+	if !ok {
+		return nil
+	}
+	var keys []string
+	switch values := raw.(type) {
+	case []string:
+		keys = append(keys, values...)
+	case []any:
+		for _, value := range values {
+			if key, ok := value.(string); ok && key != "" {
+				keys = append(keys, key)
+			}
+		}
+	}
+	sort.Strings(keys)
+	seen := make(map[string]struct{}, len(keys))
+	unique := keys[:0]
+	for _, key := range keys {
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, key)
+	}
+	return unique
+}
 
 func unitPolicy(unit deploymentv1.Unit) (servicemodel.Policy, error) {
 	policy := servicemodel.Normalize(servicemodel.Policy{
@@ -14,12 +44,10 @@ func unitPolicy(unit deploymentv1.Unit) (servicemodel.Policy, error) {
 		StateModel:     unit.StateModel,
 		Visibility:     unit.Visibility,
 		Routing:        unit.Routing,
+		RoutingDomain:  unit.RoutingDomain,
 	})
 	if err := servicemodel.Validate(policy); err != nil {
 		return servicemodel.Policy{}, fmt.Errorf("unit %s 运行策略无效: %w", unit.ID, err)
-	}
-	if policy.InstancePolicy == servicemodel.PolicyLeader || policy.InstancePolicy == servicemodel.PolicyPartitioned {
-		return servicemodel.Policy{}, fmt.Errorf("unit %s 使用 %s 策略，但当前 Node Agent 尚未实现该集群协议", unit.ID, policy.InstancePolicy)
 	}
 	return policy, nil
 }
@@ -30,13 +58,11 @@ func contributionPolicy(contribution pluginv1.RuntimeContribution) (servicemodel
 		StateModel:     contribution.StateModel,
 		Visibility:     contribution.Visibility,
 		Routing:        contribution.Routing,
+		RoutingDomain:  contribution.RoutingDomain,
 	}
 	policy = servicemodel.Normalize(policy)
 	if err := servicemodel.Validate(policy); err != nil {
 		return servicemodel.Policy{}, fmt.Errorf("贡献 %s/%s 运行策略无效: %w", contribution.ExtensionPoint, contribution.ID, err)
-	}
-	if policy.InstancePolicy == servicemodel.PolicyLeader || policy.InstancePolicy == servicemodel.PolicyPartitioned {
-		return servicemodel.Policy{}, fmt.Errorf("贡献 %s/%s 使用 %s 策略，但当前 Node Agent 尚未实现该集群协议", contribution.ExtensionPoint, contribution.ID, policy.InstancePolicy)
 	}
 	return policy, nil
 }

@@ -46,6 +46,8 @@ type Announcement struct {
 	ExtensionPoint     string    `json:"extension_point"`
 	ServiceRole        string    `json:"service_role"`
 	LogicalService     string    `json:"logical_service,omitempty"`
+	RoutingDomain      string    `json:"routing_domain,omitempty"`
+	PartitionKey       string    `json:"partition_key,omitempty"`
 	InstancePolicy     string    `json:"instance_policy,omitempty"`
 	StateModel         string    `json:"state_model,omitempty"`
 	Visibility         string    `json:"visibility,omitempty"`
@@ -57,6 +59,11 @@ type Announcement struct {
 	StreamEndpoint     string    `json:"stream_endpoint,omitempty"`
 	Version            string    `json:"version,omitempty"`
 	Health             string    `json:"health"`
+	Readiness          string    `json:"readiness,omitempty"`
+	ReadinessReason    string    `json:"readiness_reason,omitempty"`
+	Generation         uint64    `json:"generation,omitempty"`
+	FencingToken       string    `json:"fencing_token,omitempty"`
+	LeaseExpiresAt     time.Time `json:"lease_expires_at,omitempty"`
 	UpdatedAt          time.Time `json:"updated_at"`
 	TransportPublicKey string    `json:"transport_public_key,omitempty"`
 	TransportTimestamp string    `json:"transport_timestamp,omitempty"`
@@ -225,7 +232,7 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 		}
 		return result, out, err
 	}
-	if len(r.Instances(target.Capability)) == 0 {
+	if len(r.instancesFor(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey())) == 0 {
 		return nil, nil, fmt.Errorf("%w: %s", ErrCapabilityNotFound, target.Capability)
 	}
 	requestID := randomID()
@@ -234,7 +241,7 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	if err != nil {
 		return nil, nil, fmt.Errorf("编码远端调用: %w", err)
 	}
-	subject := controlplane.RPCSubject(target.Capability)
+	subject := controlplane.RPCSubjectForPartition(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey())
 	request := nats.NewMsg(subject)
 	request.Data = raw
 	if r.Transport != nil {
@@ -429,16 +436,53 @@ func (r *Router) Subscribe(eventType string, handler EventHandler) (*Subscriptio
 }
 
 func (r *Router) Instances(capability string) []Announcement {
+	return r.InstancesFor(capability, "", "")
+}
+
+// HasLocal 用于同节点依赖 gate；local capability 刻意不进入全局目录，但仍必须可被
+// 后续 unit 观察到。它只报告已激活的本地 handler。
+func (r *Router) HasLocal(capability string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.local[capability]) > 0
+}
+
+// InstancesFor 只返回指定逻辑服务和路由域中的健康实例。空过滤条件保持 v1 兼容行为。
+func (r *Router) InstancesFor(capability, logicalService, routingDomain string) []Announcement {
+	return r.instancesFor(capability, logicalService, routingDomain, "")
+}
+
+func (r *Router) instancesFor(capability, logicalService, routingDomain, partitionKey string) []Announcement {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	entries := r.instances[capability]
 	out := make([]Announcement, 0, len(entries))
 	for _, entry := range entries {
-		if entry.Health == "healthy" {
+		if entry.Health == "healthy" && (logicalService == "" || entry.LogicalService == logicalService) &&
+			(routingDomain == "" || entry.RoutingDomain == routingDomain) &&
+			(partitionKey == "" || entry.PartitionKey == partitionKey) &&
+			(entry.Readiness == "" || entry.Readiness == "ready" || entry.Readiness == "degraded") {
 			out = append(out, entry)
 		}
 	}
 	return out
+}
+
+// WaitReady 等待指定 capability 至少出现一个可接收调用的 readiness lease。
+func (r *Router) WaitReady(ctx context.Context, capability, logicalService, routingDomain string) (Announcement, error) {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		instances := r.InstancesFor(capability, logicalService, routingDomain)
+		if len(instances) > 0 {
+			return instances[0], nil
+		}
+		select {
+		case <-ctx.Done():
+			return Announcement{}, fmt.Errorf("等待 capability %s readiness: %w", capability, ctx.Err())
+		case <-ticker.C:
+		}
+	}
 }
 
 func (r *Router) prepareAnnouncement(key string, record Announcement) (Announcement, error) {
@@ -465,8 +509,16 @@ func validateAnnouncementShape(key string, record Announcement) error {
 	if record.NodeID == "" {
 		return errors.New("能力目录 node_id 不能为空")
 	}
-	if record.Subject != controlplane.RPCSubject(record.Capability) {
+	if record.Subject != controlplane.RPCSubjectForPartition(record.Capability, record.LogicalService, record.RoutingDomain, record.PartitionKey) {
 		return errors.New("能力目录 subject 与 capability 不一致")
+	}
+	if record.Readiness == "" {
+		record.Readiness = "ready"
+	}
+	switch record.Readiness {
+	case "ready", "degraded", "draining":
+	default:
+		return fmt.Errorf("能力目录 readiness 无效: %q", record.Readiness)
 	}
 	policy := servicemodel.Normalize(servicemodel.Policy{
 		InstancePolicy: record.InstancePolicy, StateModel: record.StateModel,
@@ -477,6 +529,9 @@ func validateAnnouncementShape(key string, record Announcement) error {
 	}
 	if policy.Visibility == servicemodel.VisibilityLocal {
 		return errors.New("local capability 不得写入全局能力目录")
+	}
+	if (policy.InstancePolicy == servicemodel.PolicyLeader || policy.InstancePolicy == servicemodel.PolicyPartitioned) && record.FencingToken == "" {
+		return errors.New("leader/partitioned capability 缺少 fencing token")
 	}
 	return nil
 }

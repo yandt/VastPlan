@@ -9,6 +9,7 @@ import (
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
 // Reconciler 把一份完整期望态收敛到当前节点。
@@ -98,7 +99,15 @@ func (r *Reconciler) targetUnits(desired deploymentv1.DesiredState) map[string]d
 
 func (r *Reconciler) reconcileTargets(ctx context.Context, revision uint64, targets map[string]deploymentv1.Unit, actual *ActualState) (bool, error) {
 	changed := false
-	for _, id := range sortedUnitIDs(targets) {
+	graph := make(map[string][]string, len(targets))
+	for id, unit := range targets {
+		graph[id] = append([]string(nil), unit.DependsOn...)
+	}
+	ordered, err := servicemodel.TopologicalOrder(graph)
+	if err != nil {
+		return false, fmt.Errorf("节点 %s 本地 unit 依赖图无效: %w", r.NodeID, err)
+	}
+	for _, id := range ordered {
 		unitChanged, err := r.reconcileTarget(ctx, revision, targets[id], actual)
 		changed = changed || unitChanged
 		if err != nil {
@@ -170,7 +179,9 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 		ID: id, Fingerprint: fingerprint, ServiceRole: unit.ServiceRole,
 		LogicalService: unit.LogicalService, InstancePolicy: policy.InstancePolicy,
 		StateModel: policy.StateModel, Visibility: policy.Visibility, Routing: policy.Routing,
-		Config: RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
+		RoutingDomain: policy.RoutingDomain,
+		PartitionKeys: partitionKeys(unit.Config),
+		Config:        RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
 		RestartBase: current.RestartCount,
 	}
 	if err := r.Runtime.Apply(ctx, runtimeUnit); err != nil {
@@ -283,6 +294,8 @@ func (r *Reconciler) refreshRuntimeState(state *UnitState, unitID string) error 
 	startedAt := status.StartedAt
 	state.StartedAt = &startedAt
 	state.RestartCount = status.RestartCount
+	state.Readiness = status.Readiness
+	state.DependencyIssues = append(state.DependencyIssues[:0], status.DependencyIssues...)
 	if !status.Healthy {
 		state.LastError = "运行时健康检查失败"
 		return r.setUnitPhase(state, PhaseFailed)

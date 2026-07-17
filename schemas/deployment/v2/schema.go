@@ -51,6 +51,8 @@ type ServiceUnit struct {
 	StateModel     string                   `json:"state_model,omitempty"`
 	Visibility     string                   `json:"visibility,omitempty"`
 	Routing        string                   `json:"routing,omitempty"`
+	RoutingDomain  string                   `json:"routing_domain,omitempty"`
+	DependsOn      []string                 `json:"depends_on,omitempty"`
 	Replicas       int                      `json:"replicas"`
 	Autoscaling    *Autoscaling             `json:"autoscaling,omitempty"`
 	Resources      ResourceRequirements     `json:"resources,omitempty"`
@@ -137,13 +139,14 @@ func Parse(raw []byte) (Deployment, error) {
 		unitIDs[unit.ID] = struct{}{}
 		policy := servicemodel.Normalize(servicemodel.Policy{
 			InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
-			Visibility: unit.Visibility, Routing: unit.Routing,
+			Visibility: unit.Visibility, Routing: unit.Routing, RoutingDomain: unit.RoutingDomain,
 		})
 		if err := servicemodel.Validate(policy); err != nil {
 			return Deployment{}, fmt.Errorf("unit %q 运行策略无效: %w", unit.ID, err)
 		}
 		unit.InstancePolicy, unit.StateModel = policy.InstancePolicy, policy.StateModel
 		unit.Visibility, unit.Routing = policy.Visibility, policy.Routing
+		unit.RoutingDomain = policy.RoutingDomain
 		if unit.Autoscaling != nil {
 			if unit.Autoscaling.MinReplicas > unit.Autoscaling.MaxReplicas {
 				return Deployment{}, fmt.Errorf("unit %q autoscaling min_replicas 不能大于 max_replicas", unit.ID)
@@ -163,6 +166,13 @@ func Parse(raw []byte) (Deployment, error) {
 			}
 			pluginIDs[plugin.ID] = struct{}{}
 		}
+	}
+	graph := make(map[string][]string, len(deployment.Units))
+	for _, unit := range deployment.Units {
+		graph[unit.ID] = append([]string(nil), unit.DependsOn...)
+	}
+	if _, err := servicemodel.TopologicalOrder(graph); err != nil {
+		return Deployment{}, fmt.Errorf("集群部署依赖图无效: %w", err)
 	}
 	return deployment, nil
 }

@@ -199,6 +199,9 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, entry string) (In
 		SHA256: artifact.SHA256, Root: root, EntryPath: entryPath,
 		Contract: PluginRuntimeContract{Contributions: contributions},
 	}
+	if manifest.Runtime != nil {
+		installed.Contract.Requires = append([]pluginv1.RuntimeRequirement(nil), manifest.Runtime.Requires...)
+	}
 	if manifest.Capabilities != nil {
 		installed.Contract.KernelServices = append([]string(nil), manifest.Capabilities.KernelServices...)
 	}

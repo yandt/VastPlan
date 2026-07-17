@@ -132,8 +132,17 @@ func (r *Router) RegisterStream(ctx context.Context, options RegisterOptions, ha
 	if policy.Visibility == servicemodel.VisibilityLocal {
 		return nil, errors.New("local capability 不能注册到全局 stream 目录")
 	}
+	if (policy.InstancePolicy == servicemodel.PolicyLeader || policy.InstancePolicy == servicemodel.PolicyPartitioned) && options.FencingToken == "" {
+		return nil, fmt.Errorf("%s stream capability 必须携带 fencing token", policy.InstancePolicy)
+	}
 	options.InstancePolicy, options.StateModel = policy.InstancePolicy, policy.StateModel
 	options.Visibility, options.Routing = policy.Visibility, policy.Routing
+	if options.Readiness == "" {
+		options.Readiness = "ready"
+	}
+	if options.LeaseExpiresAt.IsZero() {
+		options.LeaseExpiresAt = nowUTC().Add(30 * time.Second)
+	}
 	r.mu.RLock()
 	endpoint := r.streamEndpoint
 	r.mu.RUnlock()
@@ -145,11 +154,13 @@ func (r *Router) RegisterStream(ctx context.Context, options RegisterOptions, ha
 	}
 	record := Announcement{
 		SchemaVersion: 1, Capability: options.Capability, ExtensionPoint: options.ExtensionPoint,
-		ServiceRole: options.ServiceRole, LogicalService: options.LogicalService,
+		ServiceRole: options.ServiceRole, LogicalService: options.LogicalService, RoutingDomain: options.RoutingDomain, PartitionKey: options.PartitionKey,
 		InstancePolicy: options.InstancePolicy, StateModel: options.StateModel,
 		Visibility: options.Visibility, Routing: options.Routing,
+		Readiness: options.Readiness, ReadinessReason: options.ReadinessReason,
+		Generation: options.Generation, FencingToken: options.FencingToken, LeaseExpiresAt: options.LeaseExpiresAt,
 		InstanceID: options.InstanceID, NodeID: r.NodeID,
-		UnitID: options.UnitID, Version: options.Version, Subject: controlplane.RPCSubject(options.Capability),
+		UnitID: options.UnitID, Version: options.Version, Subject: controlplane.RPCSubjectForPartition(options.Capability, options.LogicalService, options.RoutingDomain, options.PartitionKey),
 		StreamEndpoint: endpoint, Health: "healthy", UpdatedAt: nowUTC(),
 	}
 	key := controlplane.CapabilityKey(options.Capability, options.InstanceID)
@@ -213,7 +224,7 @@ func (r *Router) InvokeStream(ctx context.Context, target *contractv1.CallTarget
 		}
 	}()
 	ctx, callCtx, deadlineCancel := r.boundedCallContext(ctx, callCtx)
-	instances := r.Instances(target.Capability)
+	instances := r.instancesFor(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey())
 	streamInstances := instances[:0]
 	for _, instance := range instances {
 		if instance.StreamEndpoint != "" {

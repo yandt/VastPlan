@@ -31,6 +31,7 @@ type Policy struct {
 	StateModel     string `json:"stateModel,omitempty"`
 	Visibility     string `json:"visibility,omitempty"`
 	Routing        string `json:"routing,omitempty"`
+	RoutingDomain  string `json:"routingDomain,omitempty"`
 }
 
 // Normalize 补齐策略默认值。无 runtime 的旧清单按历史 mesh 行为解释为 active-active。
@@ -119,4 +120,13 @@ func Validate(raw Policy) error {
 // Equal 判断两个策略在规范化后是否完全一致。
 func Equal(left, right Policy) bool {
 	return Normalize(left) == Normalize(right)
+}
+
+// QueueIdentity 返回 active-active/leader/partitioned 数据面使用的稳定 queue 身份。
+// 空逻辑服务和路由域保留 v1 capability-only 行为，避免旧实例与新实例互相摘流。
+func QueueIdentity(logicalService, capability, routingDomain string) string {
+	if logicalService == "" && routingDomain == "" {
+		return capability
+	}
+	return logicalService + "\x00" + capability + "\x00" + routingDomain
 }

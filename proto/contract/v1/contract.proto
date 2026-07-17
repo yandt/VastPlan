@@ -77,6 +77,9 @@ message CallTarget {
   optional string version = 3;
   optional string operation = 4; // 子命令
   optional string payload_schema = 5;
+  optional string logical_service = 6; // 目标服务副本组的逻辑身份
+  optional string routing_domain = 7; // 同 capability 下隔离 queue/leader/shard 路由域
+  optional string partition_key = 8; // partitioned 服务选择 owner 的稳定分片键
 }
 
 // 错误（应用层，与传输层错误严格区分）

@@ -88,7 +88,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	controller := deploymentcontroller.Controller{
 		Deployments: buckets.Deployments, DeploymentKey: *key,
-		Scheduler: deploymentcontroller.Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments, Metrics: buckets.Autoscaling},
+		Scheduler: deploymentcontroller.Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments, Metrics: buckets.Autoscaling, Actual: buckets.Actual},
 		Leaders:   buckets.Controllers, Identity: *controllerID,
 		Logf: func(format string, values ...any) { _, _ = fmt.Fprintf(stderr, format+"\n", values...) },
 	}

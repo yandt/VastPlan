@@ -59,6 +59,8 @@ type Unit struct {
 	StateModel     string               `json:"state_model,omitempty"`
 	Visibility     string               `json:"visibility,omitempty"`
 	Routing        string               `json:"routing,omitempty"`
+	RoutingDomain  string               `json:"routing_domain,omitempty"`
+	DependsOn      []string             `json:"depends_on,omitempty"`
 	Replicas       int                  `json:"replicas"`
 	Placement      Placement            `json:"placement,omitempty"`
 	Resources      ResourceRequirements `json:"resources,omitempty"`
@@ -132,12 +134,14 @@ func Parse(raw []byte) (DesiredState, error) {
 		policy := servicemodel.Normalize(servicemodel.Policy{
 			InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
 			Visibility: unit.Visibility, Routing: unit.Routing,
+			RoutingDomain: unit.RoutingDomain,
 		})
 		if err := servicemodel.Validate(policy); err != nil {
 			return DesiredState{}, fmt.Errorf("unit %q 运行策略无效: %w", unit.ID, err)
 		}
 		unit.InstancePolicy, unit.StateModel = policy.InstancePolicy, policy.StateModel
 		unit.Visibility, unit.Routing = policy.Visibility, policy.Routing
+		unit.RoutingDomain = policy.RoutingDomain
 		pluginIDs := map[string]struct{}{}
 		for j := range unit.Plugins {
 			plugin := &unit.Plugins[j]
@@ -149,6 +153,13 @@ func Parse(raw []byte) (DesiredState, error) {
 			}
 			pluginIDs[plugin.ID] = struct{}{}
 		}
+	}
+	graph := make(map[string][]string, len(state.Units))
+	for _, unit := range state.Units {
+		graph[unit.ID] = append([]string(nil), unit.DependsOn...)
+	}
+	if _, err := servicemodel.TopologicalOrder(graph); err != nil {
+		return DesiredState{}, fmt.Errorf("期望态依赖图无效: %w", err)
 	}
 	return state, nil
 }

@@ -39,3 +39,14 @@ func TestParseRejectsInvalidClusterDeployment(t *testing.T) {
 		})
 	}
 }
+
+func TestParseValidatesUnitDependencyDAG(t *testing.T) {
+	valid := `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"database","kind":"service","plugins":[{"id":"com.example.db","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1},{"id":"api","kind":"service","plugins":[{"id":"com.example.api","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1,"depends_on":["database"]}]}`
+	if _, err := Parse([]byte(valid)); err != nil {
+		t.Fatalf("有效依赖 DAG 不应拒绝: %v", err)
+	}
+	cycle := `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"a","kind":"service","plugins":[{"id":"com.example.a","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1,"depends_on":["b"]},{"id":"b","kind":"service","plugins":[{"id":"com.example.b","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1,"depends_on":["a"]}]}`
+	if _, err := Parse([]byte(cycle)); err == nil {
+		t.Fatal("循环 unit 依赖必须拒绝")
+	}
+}

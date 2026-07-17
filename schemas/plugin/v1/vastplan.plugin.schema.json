@@ -80,10 +80,16 @@
         "stateModel": { "enum": ["local-ephemeral", "external-shared", "leader-owned", "partition-owned"] },
         "visibility": { "enum": ["local", "service", "cluster", "global"] },
         "routing": { "enum": ["direct", "queue", "leader", "shard"] },
+        "routingDomain": { "type": "string", "minLength": 1, "maxLength": 160 },
         "provides": {
           "type": "array",
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/runtimeCapabilityPolicy" }
+        },
+        "requires": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/runtimeRequirement" }
         }
       }
     },
@@ -95,7 +101,23 @@
         "extensionPoint": { "type": "string", "minLength": 1, "maxLength": 160 },
         "capability": { "type": "string", "minLength": 1, "maxLength": 160 },
         "visibility": { "enum": ["local", "service", "cluster", "global"] },
-        "routing": { "enum": ["direct", "queue", "leader", "shard"] }
+        "routing": { "enum": ["direct", "queue", "leader", "shard"] },
+        "routingDomain": { "type": "string", "minLength": 1, "maxLength": 160 }
+      }
+    },
+    "runtimeRequirement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability", "scope", "kind", "ready", "failurePolicy"],
+      "properties": {
+        "capability": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "scope": { "enum": ["same-node", "same-kernel", "remote"] },
+        "kind": { "enum": ["strong", "soft", "lazy", "data"] },
+        "ready": { "enum": ["readiness", "health"] },
+        "failurePolicy": { "enum": ["fail", "degrade", "retry"] },
+        "logicalService": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "routingDomain": { "type": "string", "minLength": 1, "maxLength": 160 }
       }
     },
     "stateIdentity": {

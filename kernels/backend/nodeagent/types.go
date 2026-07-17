@@ -60,6 +60,7 @@ type InstalledPlugin struct {
 // PluginRuntimeContract 是安装时从已验签清单冻结的运行授权，宿主不再相信进程自报。
 type PluginRuntimeContract struct {
 	Contributions  []pluginv1.RuntimeContribution `json:"contributions"`
+	Requires       []pluginv1.RuntimeRequirement  `json:"requires,omitempty"`
 	KernelServices []string                       `json:"kernel_services,omitempty"`
 }
 
@@ -86,18 +87,24 @@ type PluginStateContract struct {
 
 // RuntimeUnit 是运行时需要的完整、不可变组合。
 type RuntimeUnit struct {
-	ID             string
-	Fingerprint    string
-	ServiceRole    string
-	LogicalService string
-	InstancePolicy string
-	StateModel     string
-	Visibility     string
-	Routing        string
-	Config         map[string]any
-	Plugins        []InstalledPlugin
-	Migrations     []StateMigrationPlan
-	RestartBase    uint64
+	ID                     string
+	Fingerprint            string
+	ServiceRole            string
+	LogicalService         string
+	InstancePolicy         string
+	StateModel             string
+	Visibility             string
+	Routing                string
+	RoutingDomain          string
+	Generation             uint64
+	FencingToken           string
+	PartitionKeys          []string
+	PartitionGenerations   map[string]uint64
+	PartitionFencingTokens map[string]string
+	Config                 map[string]any
+	Plugins                []InstalledPlugin
+	Migrations             []StateMigrationPlan
+	RestartBase            uint64
 }
 
 // StateMigrationPlan 由 Reconciler 从旧/新签名清单计算，Runtime 只负责按协议执行。
@@ -111,10 +118,12 @@ type StateMigrationPlan struct {
 
 // RuntimeStatus 来自真实插件会话，不由持久化文件反推。
 type RuntimeStatus struct {
-	Healthy      bool
-	PIDs         []int
-	StartedAt    time.Time
-	RestartCount uint64
+	Healthy          bool
+	Readiness        string
+	DependencyIssues []string
+	PIDs             []int
+	StartedAt        time.Time
+	RestartCount     uint64
 }
 
 // RuntimeEvent 通知 Agent 某 unit 的运行事实发生变化，使崩溃恢复无需等待配置轮询。
@@ -141,16 +150,18 @@ type ActualState struct {
 // UnitState 同时记录当前稳定实例和可选的升级候选。候选失败不会覆盖当前实例，
 // 控制面因此能区分“当前实例失效”和“新版本尝试失败”两种完全不同的事实。
 type UnitState struct {
-	Fingerprint     string            `json:"fingerprint"`
-	AppliedRevision uint64            `json:"applied_revision"`
-	Phase           UnitPhase         `json:"phase"`
-	PhaseChangedAt  time.Time         `json:"phase_changed_at"`
-	Plugins         []InstalledPlugin `json:"plugins"`
-	PIDs            []int             `json:"pids,omitempty"`
-	StartedAt       *time.Time        `json:"started_at,omitempty"`
-	RestartCount    uint64            `json:"restart_count"`
-	LastError       string            `json:"last_error,omitempty"`
-	Candidate       *CandidateState   `json:"candidate,omitempty"`
+	Fingerprint      string            `json:"fingerprint"`
+	AppliedRevision  uint64            `json:"applied_revision"`
+	Phase            UnitPhase         `json:"phase"`
+	PhaseChangedAt   time.Time         `json:"phase_changed_at"`
+	Plugins          []InstalledPlugin `json:"plugins"`
+	PIDs             []int             `json:"pids,omitempty"`
+	StartedAt        *time.Time        `json:"started_at,omitempty"`
+	RestartCount     uint64            `json:"restart_count"`
+	LastError        string            `json:"last_error,omitempty"`
+	Readiness        string            `json:"readiness,omitempty"`
+	DependencyIssues []string          `json:"dependency_issues,omitempty"`
+	Candidate        *CandidateState   `json:"candidate,omitempty"`
 }
 
 // CandidateState 描述尚未替换当前实例的候选组合。Plugins 只有在制品全部安装并
