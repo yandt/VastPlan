@@ -83,6 +83,21 @@ func TestLocalInstaller_PythonEntryNeedNotBeExecutable(t *testing.T) {
 	}
 }
 
+func TestLocalInstaller_EnforcesExpandedPackageQuotas(t *testing.T) {
+	packageBytes, artifact := testPackage(t, 0o755)
+	for name, installer := range map[string]LocalInstaller{
+		"files":    {Root: t.TempDir(), MaxFiles: 1},
+		"fileSize": {Root: t.TempDir(), MaxFileBytes: 1},
+		"expanded": {Root: t.TempDir(), MaxExpandedBytes: 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := installer.Install(artifact, packageBytes); err == nil {
+				t.Fatal("超过解包资源配额的插件包必须拒绝")
+			}
+		})
+	}
+}
+
 func TestLocalInstaller_GarbageCollectOnlyContentDirectories(t *testing.T) {
 	root := t.TempDir()
 	keep := strings.Repeat("a", 64)

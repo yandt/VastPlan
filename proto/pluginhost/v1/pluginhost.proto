@@ -26,6 +26,8 @@ message Hello {
   map<string, string> engines = 5;
   // 宿主拉起插件时注入的一次性令牌，用于把本次握手对应回那次 Launch。
   string launch_token = 6;
+  // 可选协议能力。旧客户端不发送；宿主只返回双方交集。
+  repeated string features = 7;
 }
 
 // 宿主→插件：协商结果 + 会话票据。
@@ -33,6 +35,7 @@ message HelloAck {
   int32 negotiated_proto = 1;
   string session_id = 2; // 宿主签发的会话票据：审计与回调鉴权
   repeated string host_capabilities = 3;
+  repeated string negotiated_features = 4;
 }
 
 // ── 贡献注册（§2.5）─────────────────────────────────────
@@ -55,6 +58,27 @@ message Declaration {
 message Registered {
   repeated string accepted = 1;
   map<string, string> rejected = 2; // id -> 原因
+}
+
+message ContributionRef {
+  string extension_point = 1;
+  string id = 2;
+}
+
+message RegisterContributions {
+  string request_id = 1;
+  repeated Contribution contributions = 2;
+}
+
+message UnregisterContributions {
+  string request_id = 1;
+  repeated ContributionRef contributions = 2;
+}
+
+message ContributionUpdateAck {
+  string request_id = 1;
+  repeated string accepted = 2;
+  map<string, string> rejected = 3;
 }
 
 // ── 调用（§2.4）─────────────────────────────────────────
@@ -113,6 +137,12 @@ message LifecycleAck {
 message Ping { string request_id = 1; }
 message Pong { string request_id = 1; }
 
+// Cancel 取消同一 Channel 上尚未完成的 Invoke/HostCall。重复或迟到取消幂等忽略。
+message Cancel {
+  string request_id = 1;
+  optional string reason = 2;
+}
+
 // ── 双向流（§2.3 四类消息多路复用于单连接）───────────────
 
 message FromPlugin {
@@ -123,6 +153,9 @@ message FromPlugin {
     EventEnvelope event = 4;          // 发布事件
     LifecycleAck lifecycle_ack = 5;
     Pong pong = 6;
+    RegisterContributions register = 7;
+    UnregisterContributions unregister = 8;
+    Cancel cancel = 9;
   }
 }
 
@@ -134,6 +167,8 @@ message FromHost {
     EventEnvelope event = 4;           // 下发事件
     Lifecycle lifecycle = 5;
     Ping ping = 6;
+    ContributionUpdateAck contribution_update_ack = 7;
+    Cancel cancel = 8;
   }
 }
 

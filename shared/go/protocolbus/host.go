@@ -65,6 +65,7 @@ type LaunchPolicy struct {
 	Contributions        []pluginv1.RuntimeContribution
 	KernelServices       []string
 	EnvironmentAllowlist []string
+	RequiredFeatures     []string
 }
 
 // LaunchSpec 是运行驱动交给协议宿主的语言无关启动结果。Command/Args 直接传给

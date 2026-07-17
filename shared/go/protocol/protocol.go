@@ -33,6 +33,43 @@ const SessionMetadataKey = "vastplan-session-id"
 // 握手取交集即可，MINOR/PATCH 语义对它无意义。
 var SupportedVersions = []int32{1}
 
+const (
+	FeatureDynamicContributions = "contribution.dynamic.v1"
+	FeatureCancellation         = "channel.cancel.v1"
+	FeatureEventPublish         = "event.publish.v1"
+)
+
+// SupportedFeatures 允许在不抬高 wire 主版本的前提下协商可选能力。新增能力只追加。
+var SupportedFeatures = []string{
+	FeatureCancellation,
+	FeatureDynamicContributions,
+	FeatureEventPublish,
+}
+
+// NegotiateFeatures 返回双方交集并保持宿主声明顺序，便于日志和测试确定化。
+func NegotiateFeatures(offered, supported []string) []string {
+	want := make(map[string]struct{}, len(offered))
+	for _, feature := range offered {
+		want[feature] = struct{}{}
+	}
+	result := make([]string, 0, len(supported))
+	for _, feature := range supported {
+		if _, ok := want[feature]; ok {
+			result = append(result, feature)
+		}
+	}
+	return result
+}
+
+func HasFeature(features []string, feature string) bool {
+	for _, candidate := range features {
+		if candidate == feature {
+			return true
+		}
+	}
+	return false
+}
+
 // Negotiate 取双方版本集交集里最高的；无交集返回 -1（调用方据此 fail-closed 拒绝）。
 func Negotiate(a, b []int32) int32 {
 	best := int32(-1)

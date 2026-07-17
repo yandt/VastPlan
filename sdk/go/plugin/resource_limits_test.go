@@ -73,6 +73,31 @@ func TestPluginDispatchAppliesDefaultDeadline(t *testing.T) {
 	}
 }
 
+func TestPluginCancellationCannotRaceAheadOfHandlerStart(t *testing.T) {
+	p := New("test.plugin", "1.0.0", nil)
+	p.active = true
+	p.Contribute(Contribution{
+		ExtensionPoint: "test.point", ID: "test",
+		Handlers: map[string]Handler{"": func(ctx context.Context, _ Host, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+			if ctx.Err() == nil {
+				t.Fatal("在处理器启动前到达的 Cancel 必须被保留并传播")
+			}
+			return OK(0), nil, nil
+		}},
+	})
+	req := &pluginhostv1.InvokeRequest{RequestId: "cancel-before-start",
+		Target: &contractv1.CallTarget{ExtensionPoint: "test.point", Capability: "test"}}
+	if rejected := p.beginInvoke(req); rejected != nil {
+		t.Fatal(rejected)
+	}
+	p.cancelInvoke(req.RequestId)
+	response := p.dispatchInvoke(req)
+	p.endInvoke(req.RequestId)
+	if response.Result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("协作取消测试处理器返回异常: %+v", response)
+	}
+}
+
 func TestPluginCallContextInheritsInvocationPath(t *testing.T) {
 	ctx := context.WithValue(context.Background(), invocationCallPathKey{}, []string{"tool.package/first"})
 	original := &contractv1.CallContext{CallPath: []string{"forged/path"}}

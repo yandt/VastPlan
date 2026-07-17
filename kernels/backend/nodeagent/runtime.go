@@ -136,6 +136,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 			Contributions:        plugin.Contract.Contributions,
 			KernelServices:       plugin.Contract.KernelServices,
 			EnvironmentAllowlist: append([]string(nil), unit.EnvironmentAllowlist...),
+			RequiredFeatures:     append([]string(nil), plugin.Execution.Features...),
 		})
 		if err != nil {
 			return fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)

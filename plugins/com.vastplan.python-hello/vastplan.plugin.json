@@ -1,0 +1,43 @@
+{
+  "id": "com.vastplan.python-hello",
+  "name": "Python Hello",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "Python SDK 参考插件：验证异构运行驱动、协议协商与工具调用闭环",
+  "engines": { "backend": "^0.1 || ^1.0" },
+  "execution": {
+    "backend": {
+      "driver": "python",
+      "requirements": { "python": ">=3.8", "grpcio": "1.70.0", "protobuf": "4.25.8" },
+      "minimumIsolation": "trusted-process",
+      "features": ["channel.cancel.v1", "event.publish.v1"]
+    }
+  },
+  "activation": ["onAgentTool:vastplan.python-hello"],
+  "entry": { "backend": "backend/main.py" },
+  "contributes": {
+    "backend": {
+      "tools": [
+        {
+          "id": "vastplan.python-hello",
+          "service_role": "backend",
+          "title": "Python Hello 工具包",
+          "subcommands": [
+            {
+              "name": "echo",
+              "description": "由 Python 插件回显输入",
+              "paramsSchema": {
+                "type": "object",
+                "properties": { "text": { "type": "string" } },
+                "required": ["text"]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,6 +1,7 @@
 package protocolbus
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -26,13 +27,18 @@ type session struct {
 	cmdMu         sync.Mutex
 	cmd           *exec.Cmd
 
-	stream pluginhostv1.PluginHost_ChannelServer
+	streamMu      sync.Mutex
+	stream        pluginhostv1.PluginHost_ChannelServer
+	streamClaimed bool
+	features      map[string]bool
 
 	// gRPC 规定：同一个流上 SendMsg 不可并发调用（RecvMsg 与 SendMsg 可并发）。
 	sendMu sync.Mutex
 
-	pendingMu sync.Mutex
-	pending   map[string]chan *pluginhostv1.FromPlugin
+	pendingMu  sync.Mutex
+	pending    map[string]chan *pluginhostv1.FromPlugin
+	hostCallMu sync.Mutex
+	hostCalls  map[string]context.CancelFunc
 
 	// delegations 保存宿主为当前入站调用签发的短生命周期身份委托。插件只拿到
 	// 随机引用，HostCall 时宿主据此重建权威 CallContext，而不信任插件回传的
@@ -59,12 +65,64 @@ func newSession(id, pluginID, pluginVersion string) *session {
 		pluginID:      pluginID,
 		pluginVersion: pluginVersion,
 		pending:       map[string]chan *pluginhostv1.FromPlugin{},
+		hostCalls:     map[string]context.CancelFunc{},
+		features:      map[string]bool{},
 		delegations:   map[string]*contractv1.CallContext{},
 		done:          make(chan struct{}),
 		teardownDone:  make(chan struct{}),
 	}
 	s.touch()
 	return s
+}
+
+func (s *session) claimStream(stream pluginhostv1.PluginHost_ChannelServer) bool {
+	s.streamMu.Lock()
+	defer s.streamMu.Unlock()
+	if s.streamClaimed {
+		return false
+	}
+	s.stream = stream
+	s.streamClaimed = true
+	return true
+}
+
+func (s *session) hasFeature(feature string) bool {
+	s.streamMu.Lock()
+	defer s.streamMu.Unlock()
+	return s.features[feature]
+}
+
+func (s *session) beginHostCall(requestID string, cancel context.CancelFunc) bool {
+	if requestID == "" {
+		return false
+	}
+	s.hostCallMu.Lock()
+	defer s.hostCallMu.Unlock()
+	select {
+	case <-s.done:
+		return false
+	default:
+	}
+	if _, duplicate := s.hostCalls[requestID]; duplicate {
+		return false
+	}
+	s.hostCalls[requestID] = cancel
+	return true
+}
+
+func (s *session) endHostCall(requestID string) {
+	s.hostCallMu.Lock()
+	delete(s.hostCalls, requestID)
+	s.hostCallMu.Unlock()
+}
+
+func (s *session) cancelHostCall(requestID string) {
+	s.hostCallMu.Lock()
+	cancel := s.hostCalls[requestID]
+	s.hostCallMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func (s *session) issueDelegation(callCtx *contractv1.CallContext) (string, *contractv1.CallContext) {
@@ -172,6 +230,13 @@ func (s *session) markDead(err error) {
 			delete(s.pending, id)
 		}
 		s.pendingMu.Unlock()
+
+		s.hostCallMu.Lock()
+		for id, cancel := range s.hostCalls {
+			cancel()
+			delete(s.hostCalls, id)
+		}
+		s.hostCallMu.Unlock()
 	})
 }
 

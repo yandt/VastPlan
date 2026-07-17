@@ -4,12 +4,30 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/protocol"
 	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
+
+func TestHostCallRequestIDCannotBeClaimedTwice(t *testing.T) {
+	sess := newSession("session", "plugin", "1.0.0")
+	ctx, cancel := context.WithCancel(context.Background())
+	if !sess.beginHostCall("same", cancel) {
+		t.Fatal("首个 HostCall request_id 应认领成功")
+	}
+	if sess.beginHostCall("same", func() {}) {
+		t.Fatal("重复 HostCall request_id 必须拒绝")
+	}
+	sess.cancelHostCall("same")
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("Cancel 必须命中原始 HostCall")
+	}
+}
 
 func TestHandshakeRequiresAndConsumesPendingLaunchToken(t *testing.T) {
 	host := NewHost("backend", "0.1.0", registry.New(), nil)
@@ -47,7 +65,7 @@ func TestDeclaredContributionsMustMatchSignedManifest(t *testing.T) {
 		ExtensionPoint: "permission.checker", Id: "safe.policy", Priority: 100,
 		DescriptorJson: []byte(`{"applies":{},"title":"安全策略"}`),
 	}}
-	if err := validateDeclaredContributions(expected, valid); err != nil {
+	if err := validateDeclaredContributions(expected, valid, true); err != nil {
 		t.Fatalf("字段顺序不同但语义相同的 descriptor 应通过: %v", err)
 	}
 	for name, declared := range map[string][]*pluginhostv1.Contribution{
@@ -56,10 +74,51 @@ func TestDeclaredContributionsMustMatchSignedManifest(t *testing.T) {
 		"descriptor": {{ExtensionPoint: "permission.checker", Id: "safe.policy", Priority: 100, DescriptorJson: []byte(`{"title":"被替换"}`)}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if err := validateDeclaredContributions(expected, declared); err == nil {
+			if err := validateDeclaredContributions(expected, declared, true); err == nil {
 				t.Fatal("超出验签清单的运行时声明必须拒绝")
 			}
 		})
+	}
+}
+
+func TestDynamicDeclarationAllowsAuthorizedSubsetOnly(t *testing.T) {
+	expected := []pluginv1.RuntimeContribution{
+		{ExtensionPoint: "tool.package", ID: "one", Descriptor: []byte(`{"title":"one"}`)},
+		{ExtensionPoint: "tool.package", ID: "two", Descriptor: []byte(`{"title":"two"}`)},
+	}
+	declared := []*pluginhostv1.Contribution{{ExtensionPoint: "tool.package", Id: "one", DescriptorJson: []byte(`{"title":"one"}`)}}
+	if err := validateDeclaredContributions(expected, declared, false); err != nil {
+		t.Fatalf("动态贡献客户端的初始授权子集应通过: %v", err)
+	}
+	declared[0].Id = "unsigned"
+	if err := validateDeclaredContributions(expected, declared, false); err == nil {
+		t.Fatal("动态贡献仍不得越过签名清单授权")
+	}
+}
+
+func TestHandshakeRequiresManifestFeatures(t *testing.T) {
+	newAttempt := func() (*Host, *pluginhostv1.Hello) {
+		host := NewHost("backend", "1.0.0", registry.New(), nil)
+		host.launches["feature-token"] = &launchAttempt{result: make(chan launchResult, 1), policy: LaunchPolicy{
+			PluginID: "com.example.features", Version: "1.0.0", RequiredFeatures: []string{protocol.FeatureCancellation},
+		}}
+		return host, &pluginhostv1.Hello{
+			Magic: protocol.MagicCookie, ProtoVersions: []int32{1}, PluginId: "com.example.features",
+			PluginVersion: "1.0.0", Engines: map[string]string{"backend": "^1.0"}, LaunchToken: "feature-token",
+		}
+	}
+	host, hello := newAttempt()
+	if _, err := host.Handshake(context.Background(), hello); err == nil {
+		t.Fatal("清单要求的能力未被客户端提供时必须拒绝")
+	}
+	host, hello = newAttempt()
+	hello.Features = []string{protocol.FeatureCancellation}
+	ack, err := host.Handshake(context.Background(), hello)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !protocol.HasFeature(ack.NegotiatedFeatures, protocol.FeatureCancellation) {
+		t.Fatalf("握手未返回协商能力: %v", ack.NegotiatedFeatures)
 	}
 }
 

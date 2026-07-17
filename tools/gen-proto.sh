@@ -8,7 +8,9 @@ GO_PATH="$(go env GOPATH)"
 export PATH="$GO_PATH/bin:$PATH"
 
 OUT="$ROOT/shared/go"
+PY_OUT="$ROOT/sdk/python"
 mkdir -p "$OUT"
+mkdir -p "$PY_OUT"
 
 protoc \
   -I "$ROOT/proto" \
@@ -18,4 +20,12 @@ protoc \
 	"$ROOT/proto/addressing/v1/addressing.proto" \
 	"$ROOT/proto/pluginhost/v1/pluginhost.proto"
 
-echo "codegen 完成 → $OUT"
+# Python 使用 protoc 内建生成器；gRPC 客户端薄封装由 sdk/python/pluginhost/v1/
+# 下的稳定文件提供，避免 codegen 依赖 grpcio-tools。
+protoc \
+  -I "$ROOT/proto" \
+  --python_out="$PY_OUT" \
+	"$ROOT/proto/contract/v1/contract.proto" \
+	"$ROOT/proto/pluginhost/v1/pluginhost.proto"
+
+echo "codegen 完成 → $OUT, $PY_OUT"

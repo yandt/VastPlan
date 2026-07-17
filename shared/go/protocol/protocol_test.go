@@ -61,3 +61,13 @@ func TestSupports(t *testing.T) {
 		t.Fatal("不应支持协议 v99")
 	}
 }
+
+func TestNegotiateFeatures(t *testing.T) {
+	got := NegotiateFeatures([]string{FeatureEventPublish, "unknown", FeatureCancellation}, SupportedFeatures)
+	if len(got) != 2 || got[0] != FeatureCancellation || got[1] != FeatureEventPublish {
+		t.Fatalf("特性协商应只返回交集并保持宿主顺序: %v", got)
+	}
+	if !HasFeature(got, FeatureCancellation) || HasFeature(got, "unknown") {
+		t.Fatalf("特性查询错误: %v", got)
+	}
+}

@@ -78,8 +78,9 @@ type Plugin struct {
 	// Limits 与宿主使用同一资源契约；零值字段自动采用统一安全默认。
 	Limits protocollimit.Limits
 
-	contribs []Contribution
-	routes   map[string]Handler // (extensionPoint, id, operation) → Handler
+	contribs  []Contribution
+	routes    map[string]Handler // (extensionPoint, id, operation) → Handler
+	contribMu sync.RWMutex
 
 	stream pluginhostv1.PluginHost_ChannelClient
 	sendMu sync.Mutex
@@ -93,9 +94,13 @@ type Plugin struct {
 	sessionID   string
 	migration   MigrationHandler
 
-	pendingMu sync.Mutex
-	pending   map[string]chan *pluginhostv1.FromHost
-	seq       atomic.Uint64
+	pendingMu      sync.Mutex
+	pending        map[string]chan *pluginhostv1.FromHost
+	invokeMu       sync.Mutex
+	invokeContexts map[string]context.Context
+	invokeCancels  map[string]context.CancelFunc
+	features       map[string]bool
+	seq            atomic.Uint64
 	// shuttingDown 让宿主在收到异步 SHUTDOWN Ack 后关流时被识别为正常退出。
 	shuttingDown atomic.Bool
 }
@@ -113,12 +118,16 @@ func New(id, version string, engines map[string]string) *Plugin {
 	return &Plugin{
 		ID: id, Version: version, Engines: engines,
 		Limits: protocollimit.Default(), routes: map[string]Handler{},
-		pending: map[string]chan *pluginhostv1.FromHost{},
+		pending:        map[string]chan *pluginhostv1.FromHost{},
+		invokeContexts: map[string]context.Context{}, invokeCancels: map[string]context.CancelFunc{},
+		features: map[string]bool{},
 	}
 }
 
 // Contribute 登记一条贡献（在 Serve 前调用）。
 func (p *Plugin) Contribute(c Contribution) {
+	p.contribMu.Lock()
+	defer p.contribMu.Unlock()
 	p.contribs = append(p.contribs, c)
 	for op, h := range c.Handlers {
 		p.routes[routeKey(c.ExtensionPoint, c.ID, op)] = h
@@ -164,6 +173,7 @@ func (p *Plugin) Serve() error {
 		PluginVersion: p.Version,
 		Engines:       p.Engines,
 		LaunchToken:   os.Getenv(protocol.LaunchTokenEnvKey),
+		Features:      protocol.SupportedFeatures,
 	})
 	if err != nil {
 		return fmt.Errorf("握手被拒: %w", err) // 宿主已说明原因（magic/版本/engines）
@@ -172,6 +182,9 @@ func (p *Plugin) Serve() error {
 		return fmt.Errorf("宿主回了本插件不支持的协议版本 %d", ack.NegotiatedProto)
 	}
 	p.sessionID = ack.SessionId
+	for _, feature := range ack.NegotiatedFeatures {
+		p.features[feature] = true
+	}
 
 	// 2) 建立双向流：会话票据经 metadata 携带
 	streamCtx := metadata.AppendToOutgoingContext(ctx, protocol.SessionMetadataKey, p.sessionID)
@@ -193,6 +206,8 @@ func (p *Plugin) Serve() error {
 }
 
 func (p *Plugin) declaration() *pluginhostv1.Declaration {
+	p.contribMu.RLock()
+	defer p.contribMu.RUnlock()
 	out := &pluginhostv1.Declaration{}
 	for _, c := range p.contribs {
 		out.Contributions = append(out.Contributions, &pluginhostv1.Contribution{
@@ -257,6 +272,12 @@ func (p *Plugin) readLoop() error {
 			})
 		case *pluginhostv1.FromHost_HostCallResult:
 			p.deliver(m.HostCallResult.RequestId, msg)
+		case *pluginhostv1.FromHost_ContributionUpdateAck:
+			p.deliver(m.ContributionUpdateAck.RequestId, msg)
+		case *pluginhostv1.FromHost_Cancel:
+			if p.hasFeature(protocol.FeatureCancellation) && m.Cancel != nil {
+				p.cancelInvoke(m.Cancel.RequestId)
+			}
 		case *pluginhostv1.FromHost_Event:
 			// 事件订阅待 event.sink 扩展点落地后接入
 		}
@@ -277,7 +298,7 @@ func (p *Plugin) lifecycleLoop(queue <-chan *pluginhostv1.Lifecycle, done <-chan
 }
 
 func (p *Plugin) handleInvoke(req *pluginhostv1.InvokeRequest) {
-	defer p.endInvoke()
+	defer p.endInvoke(req.GetRequestId())
 	resp := p.dispatchInvoke(req)
 	p.sendInvokeResponse(req, resp)
 }
@@ -311,16 +332,23 @@ func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.I
 	if req.Target.Operation != nil {
 		op = *req.Target.Operation
 	}
+	p.contribMu.RLock()
 	h, ok := p.routes[routeKey(req.Target.ExtensionPoint, req.Target.Capability, op)]
 	if !ok {
 		h, ok = p.routes[routeKey(req.Target.ExtensionPoint, req.Target.Capability, "")] // 默认处理器
 	}
+	p.contribMu.RUnlock()
 	if !ok {
 		return errResult(errorcode.CapabilityNotFound,
 			fmt.Sprintf("未实现 %s/%s 的操作 %q", req.Target.ExtensionPoint, req.Target.Capability, op), false)
 	}
 
 	ctx := context.Background()
+	p.invokeMu.Lock()
+	if registered := p.invokeContexts[req.RequestId]; registered != nil {
+		ctx = registered
+	}
+	p.invokeMu.Unlock()
 	var cancel context.CancelFunc
 	if req.Context != nil && req.Context.DeadlineUnixMs != nil {
 		ctx, cancel = context.WithDeadline(ctx, time.UnixMilli(*req.Context.DeadlineUnixMs))
@@ -355,10 +383,27 @@ func (p *Plugin) beginInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.Invo
 	}
 	p.inflightN++
 	p.inflight.Add(1)
+	if req != nil && req.RequestId != "" {
+		invokeCtx, cancel := context.WithCancel(context.Background())
+		p.invokeMu.Lock()
+		p.invokeContexts[req.RequestId] = invokeCtx
+		p.invokeCancels[req.RequestId] = cancel
+		p.invokeMu.Unlock()
+	}
 	return nil
 }
 
-func (p *Plugin) endInvoke() {
+func (p *Plugin) endInvoke(requestID ...string) {
+	if len(requestID) > 0 && requestID[0] != "" {
+		p.invokeMu.Lock()
+		cancel := p.invokeCancels[requestID[0]]
+		delete(p.invokeContexts, requestID[0])
+		delete(p.invokeCancels, requestID[0])
+		p.invokeMu.Unlock()
+		if cancel != nil {
+			cancel()
+		}
+	}
 	p.lifecycleMu.Lock()
 	if p.inflightN > 0 {
 		p.inflightN--
@@ -503,8 +548,147 @@ func (p *Plugin) Call(ctx context.Context, target *contractv1.CallTarget,
 		}
 		return r.Result, r.Payload, nil
 	case <-ctx.Done():
+		if p.hasFeature(protocol.FeatureCancellation) {
+			_ = p.send(&pluginhostv1.FromPlugin{Msg: &pluginhostv1.FromPlugin_Cancel{
+				Cancel: &pluginhostv1.Cancel{RequestId: reqID},
+			}})
+		}
 		return nil, nil, ctx.Err()
 	}
+}
+
+func (p *Plugin) hasFeature(feature string) bool { return p.features[feature] }
+
+func (p *Plugin) cancelInvoke(requestID string) {
+	p.invokeMu.Lock()
+	cancel := p.invokeCancels[requestID]
+	p.invokeMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// PublishEvent 把插件事件发布到宿主事件总线。宿主会覆盖 source 并清除
+// principal_ref；调用方不能借事件字段伪造权威身份。
+func (p *Plugin) PublishEvent(event *contractv1.CallEvent) error {
+	if !p.hasFeature(protocol.FeatureEventPublish) {
+		return errors.New("宿主未协商插件事件发布能力")
+	}
+	if event == nil || event.Id == "" || event.Type == "" {
+		return errors.New("事件 id 和 type 不能为空")
+	}
+	if !p.Limits.Normalize().PayloadAllowed(event.Payload) {
+		return errors.New("事件 payload 超过协议上限")
+	}
+	return p.send(&pluginhostv1.FromPlugin{Msg: &pluginhostv1.FromPlugin_Event{
+		Event: &pluginhostv1.EventEnvelope{Event: event},
+	}})
+}
+
+// RegisterContribution 在运行期启用一条已被签名清单声明的贡献。
+func (p *Plugin) RegisterContribution(ctx context.Context, contribution Contribution) error {
+	// 先安装本地路由，再让宿主暴露路由，避免宿主 ACK 后的首个调用撞上空窗口。
+	p.installLocalContribution(contribution)
+	ack, err := p.updateContribution(ctx, &pluginhostv1.FromPlugin{Msg: &pluginhostv1.FromPlugin_Register{
+		Register: &pluginhostv1.RegisterContributions{Contributions: []*pluginhostv1.Contribution{wireContribution(contribution)}},
+	}})
+	if err != nil {
+		p.removeLocalContribution(contribution.ExtensionPoint, contribution.ID)
+		return err
+	}
+	if len(ack.Rejected) > 0 {
+		p.removeLocalContribution(contribution.ExtensionPoint, contribution.ID)
+		return fmt.Errorf("宿主拒绝动态贡献: %v", ack.Rejected)
+	}
+	return nil
+}
+
+// UnregisterContribution 在运行期停用当前插件拥有的贡献。
+func (p *Plugin) UnregisterContribution(ctx context.Context, extensionPoint, id string) error {
+	ack, err := p.updateContribution(ctx, &pluginhostv1.FromPlugin{Msg: &pluginhostv1.FromPlugin_Unregister{
+		Unregister: &pluginhostv1.UnregisterContributions{Contributions: []*pluginhostv1.ContributionRef{{
+			ExtensionPoint: extensionPoint, Id: id,
+		}}},
+	}})
+	if err != nil {
+		return err
+	}
+	if len(ack.Rejected) > 0 {
+		return fmt.Errorf("宿主拒绝动态卸载贡献: %v", ack.Rejected)
+	}
+	p.removeLocalContribution(extensionPoint, id)
+	return nil
+}
+
+func (p *Plugin) installLocalContribution(contribution Contribution) {
+	p.contribMu.Lock()
+	defer p.contribMu.Unlock()
+	p.contribs = append(p.contribs, contribution)
+	for operation, handler := range contribution.Handlers {
+		p.routes[routeKey(contribution.ExtensionPoint, contribution.ID, operation)] = handler
+	}
+}
+
+func (p *Plugin) removeLocalContribution(extensionPoint, id string) {
+	p.contribMu.Lock()
+	defer p.contribMu.Unlock()
+	filtered := p.contribs[:0]
+	for _, contribution := range p.contribs {
+		if contribution.ExtensionPoint != extensionPoint || contribution.ID != id {
+			filtered = append(filtered, contribution)
+		}
+	}
+	p.contribs = filtered
+	prefix := extensionPoint + "|" + id + "|"
+	for key := range p.routes {
+		if len(key) >= len(prefix) && key[:len(prefix)] == prefix {
+			delete(p.routes, key)
+		}
+	}
+}
+
+func (p *Plugin) updateContribution(ctx context.Context, message *pluginhostv1.FromPlugin) (*pluginhostv1.ContributionUpdateAck, error) {
+	if !p.hasFeature(protocol.FeatureDynamicContributions) {
+		return nil, errors.New("宿主未协商动态贡献能力")
+	}
+	reqID := fmt.Sprintf("cu-%d", p.seq.Add(1))
+	switch typed := message.Msg.(type) {
+	case *pluginhostv1.FromPlugin_Register:
+		typed.Register.RequestId = reqID
+	case *pluginhostv1.FromPlugin_Unregister:
+		typed.Unregister.RequestId = reqID
+	}
+	ch := make(chan *pluginhostv1.FromHost, 1)
+	p.pendingMu.Lock()
+	if len(p.pending) >= p.Limits.Normalize().MaxPendingRequests {
+		p.pendingMu.Unlock()
+		return nil, errors.New("动态贡献 pending 请求队列已满")
+	}
+	p.pending[reqID] = ch
+	p.pendingMu.Unlock()
+	defer func() {
+		p.pendingMu.Lock()
+		delete(p.pending, reqID)
+		p.pendingMu.Unlock()
+	}()
+	if err := p.send(message); err != nil {
+		return nil, err
+	}
+	select {
+	case response := <-ch:
+		ack := response.GetContributionUpdateAck()
+		if ack == nil {
+			return nil, errors.New("动态贡献响应为空")
+		}
+		return ack, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func wireContribution(c Contribution) *pluginhostv1.Contribution {
+	return &pluginhostv1.Contribution{ExtensionPoint: c.ExtensionPoint, Id: c.ID,
+		Priority: c.Priority, DescriptorJson: c.Descriptor}
 }
 
 func pluginCallContext(ctx context.Context, callCtx *contractv1.CallContext, timeout time.Duration) (context.Context, *contractv1.CallContext, context.CancelFunc) {

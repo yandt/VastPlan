@@ -20,10 +20,19 @@ import (
 
 var sha256DirectoryPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
+const (
+	DefaultMaxPackageFiles         = 10_000
+	DefaultMaxPackageFileBytes     = int64(256 << 20)
+	DefaultMaxPackageExpandedBytes = int64(1 << 30)
+)
+
 // LocalInstaller 把插件解包到 Root/<sha256>。目录名绑定内容而非版本标签，
 // 使升级候选可与当前实例并存，运行时成功切换前不会破坏旧版本。
 type LocalInstaller struct {
-	Root string
+	Root             string
+	MaxFiles         int
+	MaxFileBytes     int64
+	MaxExpandedBytes int64
 }
 
 // Install 复验字节摘要并以临时目录原子发布安装结果。
@@ -67,7 +76,7 @@ func (i LocalInstaller) Install(artifact pluginv1.Artifact, packageBytes []byte)
 	defer func() {
 		_ = os.RemoveAll(tmp) // 成功 Rename 后路径已不存在；失败路径保留原始安装错误。
 	}()
-	if err := extractPackage(tmp, packageBytes); err != nil {
+	if err := extractPackage(tmp, packageBytes, i.packageLimits()); err != nil {
 		return InstalledPlugin{}, err
 	}
 	if _, err := inspectInstalled(tmp, artifact, manifest.Publisher, entry, execution); err != nil {
@@ -80,6 +89,26 @@ func (i LocalInstaller) Install(artifact pluginv1.Artifact, packageBytes []byte)
 		return InstalledPlugin{}, fmt.Errorf("发布安装目录: %w", err)
 	}
 	return inspectInstalled(target, artifact, manifest.Publisher, entry, execution)
+}
+
+type packageLimits struct {
+	maxFiles         int
+	maxFileBytes     int64
+	maxExpandedBytes int64
+}
+
+func (i LocalInstaller) packageLimits() packageLimits {
+	limits := packageLimits{maxFiles: i.MaxFiles, maxFileBytes: i.MaxFileBytes, maxExpandedBytes: i.MaxExpandedBytes}
+	if limits.maxFiles <= 0 {
+		limits.maxFiles = DefaultMaxPackageFiles
+	}
+	if limits.maxFileBytes <= 0 {
+		limits.maxFileBytes = DefaultMaxPackageFileBytes
+	}
+	if limits.maxExpandedBytes <= 0 {
+		limits.maxExpandedBytes = DefaultMaxPackageExpandedBytes
+	}
+	return limits
 }
 
 // GarbageCollect 删除 Root 下未被实际态引用的内容寻址目录。
@@ -113,7 +142,7 @@ func (i LocalInstaller) GarbageCollect(keepSHA256 []string) error {
 	return nil
 }
 
-func extractPackage(root string, packageBytes []byte) error {
+func extractPackage(root string, packageBytes []byte, limits packageLimits) error {
 	gz, err := gzip.NewReader(bytes.NewReader(packageBytes))
 	if err != nil {
 		return fmt.Errorf("打开插件包: %w", err)
@@ -122,6 +151,8 @@ func extractPackage(root string, packageBytes []byte) error {
 		_ = gz.Close() // 只读 reader 无待提交数据，解析错误优先返回。
 	}()
 	tr := tar.NewReader(gz)
+	files := 0
+	var expandedBytes int64
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -137,6 +168,17 @@ func extractPackage(root string, packageBytes []byte) error {
 		if h.Typeflag != tar.TypeReg && h.Typeflag != 0 { // 0 是旧 tar 规范的普通文件标记。
 			return fmt.Errorf("插件包只允许普通文件: %s", name)
 		}
+		if h.Size < 0 || h.Size > limits.maxFileBytes {
+			return fmt.Errorf("插件包文件 %s 大小 %d 超过单文件上限 %d", name, h.Size, limits.maxFileBytes)
+		}
+		files++
+		if files > limits.maxFiles {
+			return fmt.Errorf("插件包文件数超过上限 %d", limits.maxFiles)
+		}
+		expandedBytes += h.Size
+		if expandedBytes > limits.maxExpandedBytes {
+			return fmt.Errorf("插件包展开大小 %d 超过上限 %d", expandedBytes, limits.maxExpandedBytes)
+		}
 		filename := filepath.Join(root, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
 			return err
@@ -149,7 +191,7 @@ func extractPackage(root string, packageBytes []byte) error {
 		if err != nil {
 			return fmt.Errorf("创建安装文件 %s: %w", name, err)
 		}
-		_, copyErr := io.Copy(f, tr)
+		_, copyErr := io.CopyN(f, tr, h.Size)
 		closeErr := f.Close()
 		if copyErr != nil {
 			return fmt.Errorf("写入安装文件 %s: %w", name, copyErr)

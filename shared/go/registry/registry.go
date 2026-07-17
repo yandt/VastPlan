@@ -85,14 +85,31 @@ func (r *Registry) Register(c Contribution) error {
 	if c.ID == "" {
 		return fmt.Errorf("贡献 id 不能为空")
 	}
-	if p.Dispatch == DispatchSingle {
-		if exist, dup := r.contribs[c.ExtensionPoint][c.ID]; dup {
-			return fmt.Errorf("扩展点 %q 为 single 语义，能力 %q 已由插件 %q 提供",
+	if exist, dup := r.contribs[c.ExtensionPoint][c.ID]; dup {
+		if p.Dispatch == DispatchSingle || exist.PluginID != c.PluginID {
+			return fmt.Errorf("扩展点 %q 的能力 id %q 已由插件 %q 占用",
 				c.ExtensionPoint, c.ID, exist.PluginID)
 		}
 	}
 	r.contribs[c.ExtensionPoint][c.ID] = c
 	return nil
+}
+
+// Unregister 精确摘除一条属于指定插件的贡献。pluginID 是所有权条件，防止一个
+// 插件通过动态协议卸载另一个插件的能力。不存在或所有权不匹配时返回 false。
+func (r *Registry) Unregister(extensionPoint, id, pluginID string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	m, ok := r.contribs[extensionPoint]
+	if !ok {
+		return false
+	}
+	contribution, ok := m[id]
+	if !ok || contribution.PluginID != pluginID {
+		return false
+	}
+	delete(m, id)
+	return true
 }
 
 // Lookup 按 (扩展点, 能力 id) 查一条贡献——single 语义的解析路径。

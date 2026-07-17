@@ -1,0 +1,1 @@
+"""Generated VastPlan contract namespace."""

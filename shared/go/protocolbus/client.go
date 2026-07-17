@@ -147,6 +147,7 @@ func cloneLaunchPolicy(policy LaunchPolicy) LaunchPolicy {
 	policy.Contributions = append([]pluginv1.RuntimeContribution(nil), policy.Contributions...)
 	policy.KernelServices = append([]string(nil), policy.KernelServices...)
 	policy.EnvironmentAllowlist = append([]string(nil), policy.EnvironmentAllowlist...)
+	policy.RequiredFeatures = append([]string(nil), policy.RequiredFeatures...)
 	return policy
 }
 
@@ -340,6 +341,11 @@ func (h *Host) invokeOn(ctx context.Context, sess *session, target *contractv1.C
 		}
 		return msg.GetInvokeResult(), nil
 	case <-ctx.Done():
+		if sess.hasFeature(protocol.FeatureCancellation) {
+			_ = sess.send(&pluginhostv1.FromHost{Msg: &pluginhostv1.FromHost_Cancel{
+				Cancel: &pluginhostv1.Cancel{RequestId: reqID},
+			}})
+		}
 		return nil, ctx.Err()
 	}
 }
@@ -369,12 +375,18 @@ func boundedCallContext(ctx context.Context, callCtx *contractv1.CallContext, li
 // serveHostCall 处理插件的回调：本地命中即内核服务，否则转给提供该能力的插件
 // （即插件→插件也只经 capability 寻址，不得互相 import——见工程规范 §七）。
 func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
-	if req == nil || req.Target == nil {
+	if req == nil || req.Target == nil || req.RequestId == "" {
 		h.replyHostCall(sess, "", errorResponse(errorcode.WireInvalidRequest, "HostCall 请求不完整", false))
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), h.callTimeout())
 	defer cancel()
+	if !sess.beginHostCall(req.RequestId, cancel) {
+		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.WireInvalidRequest,
+			"HostCall request_id 重复或会话已结束", false))
+		return
+	}
+	defer sess.endHostCall(req.RequestId)
 
 	h.Logf("插件 %s 回调宿主：%s/%s", sess.pluginID, req.Target.ExtensionPoint, req.Target.Capability)
 	callCtx, ok := authenticatedPluginContext(sess, req.Context, sess.pluginID)

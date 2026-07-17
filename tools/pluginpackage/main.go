@@ -15,6 +15,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
@@ -228,6 +229,12 @@ func copyTree(source, target string) error {
 			return err
 		}
 		if rel == "." {
+			return nil
+		}
+		if entry.IsDir() && entry.Name() == "__pycache__" {
+			return filepath.SkipDir
+		}
+		if !entry.IsDir() && (strings.HasSuffix(entry.Name(), ".pyc") || strings.HasSuffix(entry.Name(), ".pyo")) {
 			return nil
 		}
 		if entry.Type()&os.ModeSymlink != 0 {

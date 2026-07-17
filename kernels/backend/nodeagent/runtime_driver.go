@@ -153,6 +153,14 @@ func (p ExecutionPolicy) RequiredIsolation(plugin InstalledPlugin) (IsolationLev
 }
 
 func (r *ProtocolRuntime) launchSpec(plugin InstalledPlugin) (protocolbus.LaunchSpec, error) {
+	// 兼容升级前实际态和直接构造 InstalledPlugin 的嵌入方；正式安装路径已经
+	// 冻结同样的默认值，这里是运行边界上的最后一道归一化。
+	if strings.TrimSpace(plugin.Execution.Driver) == "" {
+		plugin.Execution.Driver = "native"
+	}
+	if strings.TrimSpace(plugin.Execution.MinimumIsolation) == "" {
+		plugin.Execution.MinimumIsolation = string(IsolationTrustedProcess)
+	}
 	if len(plugin.Execution.Platforms) != 0 {
 		current := runtime.GOOS + "/" + runtime.GOARCH
 		matched := false

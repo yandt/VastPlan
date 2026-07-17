@@ -16,4 +16,4 @@
 
 ## 当前插件文档
 
-- _（暂无——具体插件开始开发后在此登记）_
+- [com.vastplan.python-hello](com.vastplan.python-hello.md) —— Python SDK 与异构运行参考插件

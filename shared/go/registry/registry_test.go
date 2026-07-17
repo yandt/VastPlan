@@ -51,6 +51,19 @@ func TestList_FanoutOrderedByPriority(t *testing.T) {
 	}
 }
 
+func TestRegister_FanoutIDCannotOverwriteOtherPlugin(t *testing.T) {
+	r := newWithPoints()
+	if err := r.Register(Contribution{ExtensionPoint: "event.sink", ID: "same", PluginID: "owner"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Register(Contribution{ExtensionPoint: "event.sink", ID: "same", PluginID: "attacker"}); err == nil {
+		t.Fatal("fanout 的相同稳定 id 也不能覆盖其他插件")
+	}
+	if got, _ := r.Lookup("event.sink", "same"); got.PluginID != "owner" {
+		t.Fatalf("原贡献所有权被覆盖: %+v", got)
+	}
+}
+
 // Lookup 是 single 语义的解析路径。
 func TestLookup(t *testing.T) {
 	r := newWithPoints()
@@ -90,5 +103,19 @@ func TestReregisterAfterUnregister(t *testing.T) {
 
 	if err := r.Register(Contribution{ExtensionPoint: "tool.package", ID: "a.b", PluginID: "p2"}); err != nil {
 		t.Fatalf("解绑后应可重新注册（热装），实际: %v", err)
+	}
+}
+
+func TestUnregisterRequiresContributionOwnership(t *testing.T) {
+	r := newWithPoints()
+	_ = r.Register(Contribution{ExtensionPoint: "tool.package", ID: "a.b", PluginID: "owner"})
+	if r.Unregister("tool.package", "a.b", "attacker") {
+		t.Fatal("其他插件不能动态摘除不属于自己的贡献")
+	}
+	if _, ok := r.Lookup("tool.package", "a.b"); !ok {
+		t.Fatal("所有权不匹配时贡献必须保留")
+	}
+	if !r.Unregister("tool.package", "a.b", "owner") {
+		t.Fatal("贡献所有者应能精确摘除自己的贡献")
 	}
 }
