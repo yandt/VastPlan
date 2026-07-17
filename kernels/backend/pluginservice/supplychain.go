@@ -315,17 +315,46 @@ func (r *SignedRepository) Publish(attestation Attestation, packageBytes []byte)
 }
 
 func (r *SignedRepository) Read(ref Ref) (Artifact, []byte, error) {
+	artifact, packageBytes, _, err := r.ReadWithAttestation(ref)
+	return artifact, packageBytes, err
+}
+
+// ReadWithAttestation 返回通过内核信任根验证的制品、原始包和签名证明。
+// 对外 HTTP 层只能转发这份已验证的结果，不能自行读取仓库目录或绕过验签。
+func (r *SignedRepository) ReadWithAttestation(ref Ref) (Artifact, []byte, []byte, error) {
 	if r == nil || r.Local == nil || r.Trust == nil {
-		return Artifact{}, nil, errors.New("签名制品仓库未完整配置")
+		return Artifact{}, nil, nil, errors.New("签名制品仓库未完整配置")
 	}
 	envelope, err := r.Fetch(context.Background(), ref)
 	if err != nil {
-		return Artifact{}, nil, err
+		return Artifact{}, nil, nil, err
 	}
 	if err := r.Trust.VerifyProof(envelope); err != nil {
-		return Artifact{}, nil, err
+		return Artifact{}, nil, nil, err
 	}
-	return envelope.Artifact, envelope.PackageBytes, nil
+	return envelope.Artifact, envelope.PackageBytes, append([]byte(nil), envelope.Proof...), nil
+}
+
+// HTTPRepositoryAdapter 是 HTTP 传输层使用的窄适配器。它把不可信网络字节
+// 交给内核的签名与内容强制点处理，而不向 HTTP 层暴露信任根或磁盘布局。
+type HTTPRepositoryAdapter struct{ Repository *SignedRepository }
+
+func (a HTTPRepositoryAdapter) Publish(attestationRaw, packageBytes []byte) (Artifact, error) {
+	if a.Repository == nil {
+		return Artifact{}, errors.New("签名制品仓库未完整配置")
+	}
+	var attestation Attestation
+	if err := decodeJSONStrict(attestationRaw, &attestation); err != nil {
+		return Artifact{}, fmt.Errorf("解析制品证明: %w", err)
+	}
+	return a.Repository.Publish(attestation, packageBytes)
+}
+
+func (a HTTPRepositoryAdapter) Read(ref Ref) (Artifact, []byte, []byte, error) {
+	if a.Repository == nil {
+		return Artifact{}, nil, nil, errors.New("签名制品仓库未完整配置")
+	}
+	return a.Repository.ReadWithAttestation(ref)
 }
 
 // Fetch 返回带原始证明的未信任 Envelope，供 Node Agent 在自己的强制点复验。

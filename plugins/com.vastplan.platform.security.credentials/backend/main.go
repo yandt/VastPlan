@@ -1,3 +1,4 @@
+// Command credentials 启动只暴露凭证元数据的 Vault Transit 凭证插件进程。
 package main
 
 import (

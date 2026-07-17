@@ -3,7 +3,6 @@ package pluginservice
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,8 +10,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -203,170 +200,4 @@ func setBearer(req *http.Request, token string) {
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
-}
-
-// ArtifactHTTPServer 暴露最小远端制品 API。读写令牌分离；RequireTLS 默认应为 true，
-// 只有进程内测试或明确的本地开发反向代理场景才关闭。
-type ArtifactHTTPServer struct {
-	Repository   *SignedRepository
-	ReadToken    string
-	PublishToken string
-	RequireTLS   bool
-	MaxBytes     int64
-	Logf         func(string, ...any)
-}
-
-func (s *ArtifactHTTPServer) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	if s.Repository == nil || s.Repository.Local == nil || s.Repository.Trust == nil {
-		http.Error(w, "repository unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	if s.RequireTLS && req.TLS == nil {
-		http.Error(w, "TLS required", http.StatusUpgradeRequired)
-		return
-	}
-	if req.Method == http.MethodPost && req.URL.Path == "/v1/artifacts" {
-		s.publish(w, req)
-		return
-	}
-	if req.Method == http.MethodGet {
-		s.read(w, req)
-		return
-	}
-	w.Header().Set("Allow", "GET, POST")
-	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-}
-
-func (s *ArtifactHTTPServer) publish(w http.ResponseWriter, req *http.Request) {
-	if !authorized(req, s.PublishToken) {
-		s.log("artifact.publish_denied remote=%s", req.RemoteAddr)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-	maxBytes := s.maxBytes()
-	req.Body = http.MaxBytesReader(w, req.Body, maxBytes+maxAttestationBytes+(1<<20))
-	reader, err := req.MultipartReader()
-	if err != nil {
-		http.Error(w, "multipart required", http.StatusBadRequest)
-		return
-	}
-	var attestationRaw, packageBytes []byte
-	for {
-		part, partErr := reader.NextPart()
-		if errors.Is(partErr, io.EOF) {
-			break
-		}
-		if partErr != nil {
-			http.Error(w, "invalid multipart", http.StatusBadRequest)
-			return
-		}
-		switch part.FormName() {
-		case "attestation":
-			attestationRaw, err = readLimited(part, maxAttestationBytes)
-		case "package":
-			packageBytes, err = readLimited(part, maxBytes)
-		}
-		_ = part.Close()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
-			return
-		}
-	}
-	if len(attestationRaw) == 0 || len(packageBytes) == 0 {
-		http.Error(w, "attestation and package are required", http.StatusBadRequest)
-		return
-	}
-	var attestation Attestation
-	if err := decodeJSONStrict(attestationRaw, &attestation); err != nil {
-		http.Error(w, "invalid attestation", http.StatusBadRequest)
-		return
-	}
-	artifact, err := s.Repository.Publish(attestation, packageBytes)
-	if err != nil {
-		s.log("artifact.publish_rejected plugin=%s version=%s key=%s error=%v", attestation.Artifact.PluginID, attestation.Artifact.Version, attestation.KeyID, err)
-		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
-		return
-	}
-	s.log("artifact.published plugin=%s version=%s channel=%s sha256=%s publisher=%s key=%s", artifact.PluginID, artifact.Version, artifact.Channel, artifact.SHA256, attestation.Publisher, attestation.KeyID)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(artifact)
-}
-
-func (s *ArtifactHTTPServer) read(w http.ResponseWriter, req *http.Request) {
-	if !authorized(req, s.ReadToken) {
-		s.log("artifact.read_denied remote=%s", req.RemoteAddr)
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
-	}
-	parts := strings.Split(strings.Trim(req.URL.EscapedPath(), "/"), "/")
-	if len(parts) != 6 || parts[0] != "v1" || parts[1] != "artifacts" {
-		http.NotFound(w, req)
-		return
-	}
-	pluginID, err1 := url.PathUnescape(parts[2])
-	version, err2 := url.PathUnescape(parts[3])
-	channel, err3 := url.PathUnescape(parts[4])
-	if err1 != nil || err2 != nil || err3 != nil {
-		http.Error(w, "invalid artifact reference", http.StatusBadRequest)
-		return
-	}
-	ref := Ref{PluginID: pluginID, Version: version, Channel: channel}
-	artifact, packageBytes, err := s.Repository.Read(ref)
-	if err != nil {
-		http.Error(w, "artifact not found or untrusted", http.StatusNotFound)
-		return
-	}
-	switch parts[5] {
-	case "package":
-		w.Header().Set("Content-Type", "application/gzip")
-		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(packageBytes)))
-		_, _ = w.Write(packageBytes)
-	case "attestation":
-		dir, _ := s.Repository.Local.artifactDir(ref)
-		raw, readErr := os.ReadFile(filepath.Join(dir, "attestation.json"))
-		if readErr != nil {
-			http.Error(w, "attestation unavailable", http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(raw)
-	default:
-		http.NotFound(w, req)
-		return
-	}
-	s.log("artifact.read plugin=%s version=%s channel=%s sha256=%s", artifact.PluginID, artifact.Version, artifact.Channel, artifact.SHA256)
-}
-
-func (s *ArtifactHTTPServer) maxBytes() int64 {
-	if s.MaxBytes > 0 {
-		return s.MaxBytes
-	}
-	return defaultMaxArtifactBytes
-}
-
-func (s *ArtifactHTTPServer) log(format string, values ...any) {
-	if s.Logf != nil {
-		s.Logf(format, values...)
-	}
-}
-
-func authorized(req *http.Request, token string) bool {
-	if token == "" {
-		return false // 生产接口不允许用“空 token”表达匿名访问。
-	}
-	want := "Bearer " + token
-	got := req.Header.Get("Authorization")
-	return len(got) == len(want) && subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
-}
-
-func readLimited(reader io.Reader, limit int64) ([]byte, error) {
-	raw, err := io.ReadAll(io.LimitReader(reader, limit+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(raw)) > limit {
-		return nil, fmt.Errorf("请求部分超过 %d 字节上限", limit)
-	}
-	return raw, nil
 }

@@ -1,3 +1,4 @@
+// Command connectionmanager 启动数据库连接定义与受控连通性检查插件进程。
 package main
 
 import (

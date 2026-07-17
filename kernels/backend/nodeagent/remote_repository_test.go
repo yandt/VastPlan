@@ -13,6 +13,7 @@ import (
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/artifactapi"
 )
 
 func TestReconciler_RemoteSignedArtifactToInstalledRuntime(t *testing.T) {
@@ -33,8 +34,9 @@ func TestReconciler_RemoteSignedArtifactToInstalledRuntime(t *testing.T) {
 	if _, err := signed.Publish(attestation, packageBytes); err != nil {
 		t.Fatal(err)
 	}
-	handler := &pluginservice.ArtifactHTTPServer{
-		Repository: signed, ReadToken: "node-token", PublishToken: "publisher-token", RequireTLS: true,
+	handler := &artifactapi.Server{
+		Repository: pluginservice.HTTPRepositoryAdapter{Repository: signed},
+		ReadToken:  "node-token", PublishToken: "publisher-token", RequireTLS: true,
 	}
 	remote := &pluginservice.RemoteRepository{
 		BaseURL: "https://artifacts.example.test", Token: "node-token", Trust: trust,

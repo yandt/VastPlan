@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/shared/go/artifactapi"
 	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 )
 
@@ -24,8 +25,8 @@ func TestRemoteRepository_TLSAuthPublishAndRead(t *testing.T) {
 		Publisher: "example", KeyID: "release", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}))
 	local, _ := NewRepository(filepath.Join(t.TempDir(), "repository"))
-	handler := &ArtifactHTTPServer{
-		Repository: &SignedRepository{Local: local, Trust: trust},
+	handler := &artifactapi.Server{
+		Repository: HTTPRepositoryAdapter{Repository: &SignedRepository{Local: local, Trust: trust}},
 		ReadToken:  "reader-secret", PublishToken: "publisher-secret", RequireTLS: true,
 	}
 	client := &http.Client{Transport: handlerTransport{handler: handler}}

@@ -1,3 +1,4 @@
+// Command globalsettings 启动租户隔离的全局设置基础插件进程。
 package main
 
 import (

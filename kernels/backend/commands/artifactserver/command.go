@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/shared/go/artifactapi"
 )
 
 // Run 启动只接受可信签名制品的 HTTPS 仓库服务，并在 context 取消时优雅关闭。
@@ -48,8 +49,8 @@ func Run(ctx context.Context, args []string, stderr io.Writer) error {
 		return err
 	}
 	logger := log.New(stderr, "", log.LstdFlags)
-	handler := &pluginservice.ArtifactHTTPServer{
-		Repository: &pluginservice.SignedRepository{Local: local, Trust: trust},
+	handler := &artifactapi.Server{
+		Repository: pluginservice.HTTPRepositoryAdapter{Repository: &pluginservice.SignedRepository{Local: local, Trust: trust}},
 		ReadToken:  readToken, PublishToken: publishToken, RequireTLS: true,
 		Logf: func(format string, values ...any) { logger.Printf("[artifact-audit] "+format, values...) },
 	}
