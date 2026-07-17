@@ -22,6 +22,7 @@ const (
 	CapabilitiesBucket = "VASTPLAN_CAPABILITIES_V1"
 	DeploymentsBucket  = "VASTPLAN_DEPLOYMENTS_V2"
 	AssignmentsBucket  = "VASTPLAN_ASSIGNMENTS_V1"
+	CompositionsBucket = "VASTPLAN_COMPOSITIONS_V1"
 	ControllersBucket  = "VASTPLAN_CONTROLLERS_V1"
 	AutoscalingBucket  = "VASTPLAN_AUTOSCALING_V1"
 	EventsStream       = "VASTPLAN_EVENTS_V1"
@@ -38,6 +39,7 @@ type Buckets struct {
 	Capabilities jetstream.KeyValue
 	Deployments  jetstream.KeyValue
 	Assignments  jetstream.KeyValue
+	Compositions jetstream.KeyValue
 	Controllers  jetstream.KeyValue
 	Autoscaling  jetstream.KeyValue
 	Events       jetstream.Stream
@@ -102,9 +104,16 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	if err != nil {
 		return Buckets{}, fmt.Errorf("创建节点分配 bucket: %w", err)
 	}
+	compositions, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket: CompositionsBucket, Description: "VastPlan deployment composition status v1",
+		History: 16, MaxValueSize: MaxDesiredStateBytes, Replicas: replicas, Storage: storage,
+	})
+	if err != nil {
+		return Buckets{}, fmt.Errorf("创建组合状态 bucket: %w", err)
+	}
 	controllers, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
 		Bucket: ControllersBucket, Description: "VastPlan controller leader leases v1",
-		History: 1, TTL: 15 * time.Second, LimitMarkerTTL: time.Minute,
+		History:      1,
 		MaxValueSize: 16 << 10, Replicas: replicas, Storage: storage,
 	})
 	if err != nil {
@@ -129,7 +138,8 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	}
 	return Buckets{
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
-		Deployments: deployments, Assignments: assignments, Controllers: controllers, Autoscaling: autoscaling, Events: events,
+		Deployments: deployments, Assignments: assignments, Compositions: compositions,
+		Controllers: controllers, Autoscaling: autoscaling, Events: events,
 	}, nil
 }
 
@@ -160,6 +170,10 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开节点分配 bucket: %w", err)
 	}
+	compositions, err := js.KeyValue(ctx, CompositionsBucket)
+	if err != nil {
+		return Buckets{}, fmt.Errorf("打开组合状态 bucket: %w", err)
+	}
 	controllers, err := js.KeyValue(ctx, ControllersBucket)
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开控制器选主 bucket: %w", err)
@@ -174,7 +188,8 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 	}
 	return Buckets{
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
-		Deployments: deployments, Assignments: assignments, Controllers: controllers, Autoscaling: autoscaling, Events: events,
+		Deployments: deployments, Assignments: assignments, Compositions: compositions,
+		Controllers: controllers, Autoscaling: autoscaling, Events: events,
 	}, nil
 }
 
@@ -199,6 +214,8 @@ func AssignmentKey(tenant, name, nodeID string) string {
 func ScheduleKey(tenant, name string) string {
 	return DeploymentKey(tenant, name) + ".schedule"
 }
+
+func CompositionKey(tenant, name string) string { return DeploymentKey(tenant, name) }
 
 func AutoscalingMetricKey(tenant, deployment, unit, metric string) string {
 	return "tenants." + keyToken(tenant) + ".deployments." + keyToken(deployment) + ".units." + keyToken(unit) + ".metrics." + keyToken(metric)
@@ -234,7 +251,7 @@ func RPCSubjectFor(capability, logicalService, routingDomain string) string {
 	if logicalService == "" && routingDomain == "" {
 		return RPCSubject(capability)
 	}
-	return "vp.rpc.v1." + keyToken(logicalService) + "." + keyToken(capability) + "." + keyToken(routingDomain)
+	return "vp.rpc.v1." + subjectToken(logicalService) + "." + keyToken(capability) + "." + subjectToken(routingDomain)
 }
 func RPCQueueFor(capability, logicalService, routingDomain string) string {
 	return RPCSubjectFor(capability, logicalService, routingDomain)
@@ -255,4 +272,11 @@ func PersistentEventSubject(eventType string) string {
 
 func keyToken(value string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(value))
+}
+
+func subjectToken(value string) string {
+	if value == "" {
+		return "_"
+	}
+	return keyToken(value)
 }

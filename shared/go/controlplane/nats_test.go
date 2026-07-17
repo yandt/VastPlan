@@ -1,6 +1,9 @@
 package controlplane
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestKeysAreStableAndDoNotLeakHierarchy(t *testing.T) {
 	if got, want := DesiredKey("acme.cn", "prod/main"), "tenants.YWNtZS5jbg.states.cHJvZC9tYWlu"; got != want {
@@ -14,5 +17,16 @@ func TestKeysAreStableAndDoNotLeakHierarchy(t *testing.T) {
 	}
 	if got, want := AssignmentKey("acme", "prod", "node.1"), "tenants.YWNtZQ.states.cHJvZA.nodes.bm9kZS4x"; got != want {
 		t.Fatalf("AssignmentKey=%q want=%q", got, want)
+	}
+}
+
+func TestRPCSubjectForAllowsOneOptionalRoutingDimension(t *testing.T) {
+	for _, subject := range []string{
+		RPCSubjectFor("platform.database", "platform.database", ""),
+		RPCSubjectFor("platform.database", "", "core"),
+	} {
+		if strings.HasSuffix(subject, ".") || strings.Contains(subject, "..") {
+			t.Fatalf("NATS subject 不得包含空 token: %q", subject)
+		}
 	}
 }

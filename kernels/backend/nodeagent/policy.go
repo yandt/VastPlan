@@ -10,7 +10,15 @@ import (
 )
 
 func partitionKeys(config map[string]any) []string {
-	raw, ok := config["partition_keys"]
+	return normalizedStringList(config, "partition_keys")
+}
+
+func environmentAllowlist(config map[string]any) []string {
+	return normalizedStringList(config, "environment_allowlist")
+}
+
+func normalizedStringList(config map[string]any, key string) []string {
+	raw, ok := config[key]
 	if !ok {
 		return nil
 	}
@@ -74,8 +82,9 @@ func validateInstalledPolicies(unit servicemodel.Policy, plugins []InstalledPlug
 			if err != nil {
 				return fmt.Errorf("插件 %s: %w", plugin.ID, err)
 			}
-			if unit.InstancePolicy == servicemodel.PolicyPerKernel && !servicemodel.Equal(unit, policy) {
-				return fmt.Errorf("插件 %s 的贡献 %s/%s 不是 per-kernel 本地策略", plugin.ID, contribution.ExtensionPoint, contribution.ID)
+			if !servicemodel.Equal(unit, policy) {
+				return fmt.Errorf("插件 %s 的贡献 %s/%s 运行策略与部署不一致: manifest=%+v deployment=%+v",
+					plugin.ID, contribution.ExtensionPoint, contribution.ID, policy, unit)
 			}
 		}
 	}

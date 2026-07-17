@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/addressing"
+	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
 func TestValidateRuntimeRequirements_LocalAndDegraded(t *testing.T) {
@@ -32,5 +34,28 @@ func TestVersionsMatch(t *testing.T) {
 	}
 	if versionsMatch([]string{"2.0.0"}, "^1.0.0") {
 		t.Fatal("不兼容版本不得匹配")
+	}
+}
+
+func TestRequirementSatisfied_DataRejectsDegraded(t *testing.T) {
+	requirement := pluginv1.RuntimeRequirement{Version: "^1.0.0", Kind: "data", Ready: "health"}
+	if requirementSatisfied(addressing.Announcement{Version: "1.2.0", Readiness: "degraded"}, requirement) {
+		t.Fatal("data 依赖不得以 degraded health 代替完整 readiness")
+	}
+	if !requirementSatisfied(addressing.Announcement{Version: "1.2.0", Readiness: "ready"}, requirement) {
+		t.Fatal("ready 且版本兼容的 data 依赖应满足")
+	}
+}
+
+func TestValidateInstalledPoliciesRejectsVisibilityElevation(t *testing.T) {
+	deploymentPolicy := servicemodel.Normalize(servicemodel.Policy{
+		InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "global", Routing: "queue",
+	})
+	plugins := []InstalledPlugin{{ID: "settings", Contract: PluginRuntimeContract{Contributions: []pluginv1.RuntimeContribution{{
+		ExtensionPoint: "tool.package", ID: "platform.settings", InstancePolicy: "active-active",
+		StateModel: "external-shared", Visibility: "cluster", Routing: "queue",
+	}}}}}
+	if err := validateInstalledPolicies(deploymentPolicy, plugins); err == nil {
+		t.Fatal("部署不得把 manifest 的 cluster capability 提升为 global")
 	}
 }

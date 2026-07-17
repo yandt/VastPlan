@@ -129,6 +129,7 @@ go run ./kernels/backend controlplane \
   -nats-cert /etc/vastplan/pki/controller.crt \
   -nats-key /etc/vastplan/pki/controller.key \
   -nats-seed /secure/controller.seed \
+  -repository /var/lib/vastplan/repository \
   -desired /var/lib/vastplan/backups/deployment.before-1.0.0.json
 ```
 

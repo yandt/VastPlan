@@ -25,10 +25,12 @@ import (
 )
 
 type Scheduler struct {
-	Nodes       jetstream.KeyValue
-	Assignments jetstream.KeyValue
-	Metrics     jetstream.KeyValue
-	Actual      jetstream.KeyValue
+	Nodes        jetstream.KeyValue
+	Assignments  jetstream.KeyValue
+	Metrics      jetstream.KeyValue
+	Actual       jetstream.KeyValue
+	Compositions jetstream.KeyValue
+	Artifacts    ArtifactReader
 }
 
 type Plan struct {
@@ -53,8 +55,18 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 	for _, unit := range deployment.Units {
 		graph[unit.ID] = append([]string(nil), unit.DependsOn...)
 	}
-	if _, err := servicemodel.TopologicalOrder(graph); err != nil {
+	if s.Artifacts != nil {
+		if err := validateDeploymentContracts(deployment, graph, s.Artifacts); err != nil {
+			return Plan{}, err
+		}
+	}
+	order, err := servicemodel.TopologicalOrder(graph)
+	if err != nil {
 		return Plan{}, fmt.Errorf("部署依赖图无效: %w", err)
+	}
+	unitsByID := make(map[string]deploymentv2.ServiceUnit, len(deployment.Units))
+	for _, unit := range deployment.Units {
+		unitsByID[unit.ID] = unit
 	}
 	nodes, err := s.liveNodes(ctx)
 	if err != nil {
@@ -80,7 +92,8 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 		capacity.GPU -= occupied[nodeID].GPU
 		available[nodeID] = capacity
 	}
-	for _, unit := range deployment.Units {
+	for _, unitID := range order {
+		unit := unitsByID[unitID]
 		if !unit.Enabled {
 			continue
 		}
@@ -88,16 +101,20 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 		if err != nil {
 			return Plan{}, err
 		}
-		eligible := eligibleNodes(nodes, available, unit)
-		if len(eligible) < replicas {
-			return Plan{}, fmt.Errorf("unit %s 需要 %d 副本，但只有 %d 个节点满足标签、亲和与资源约束", unit.ID, replicas, len(eligible))
-		}
 		policy := servicemodel.Normalize(servicemodel.Policy{
 			InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
 			Visibility: unit.Visibility, Routing: unit.Routing, RoutingDomain: unit.RoutingDomain,
 		})
 		if err := servicemodel.Validate(policy); err != nil {
 			return Plan{}, fmt.Errorf("unit %s 运行策略无效: %w", unit.ID, err)
+		}
+		eligible := eligibleNodes(nodes, available, unit)
+		if len(eligible) < replicas {
+			if policy.InstancePolicy == servicemodel.PolicyPartitioned && len(eligible) > 0 {
+				replicas = len(eligible) // 节点故障时允许剩余 owner 接管全部分片并上报组合降级。
+			} else {
+				return Plan{}, fmt.Errorf("unit %s 需要 %d 副本，但只有 %d 个节点满足标签、亲和与资源约束", unit.ID, replicas, len(eligible))
+			}
 		}
 		sort.Slice(eligible, func(i, j int) bool {
 			leftPreference := preferenceScore(nodes[eligible[i]].Labels, unit.Placement)
@@ -111,11 +128,24 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 			}
 			return eligible[i] < eligible[j]
 		})
-		for _, nodeID := range eligible[:replicas] {
+		selected := eligible[:replicas]
+		partitionAssignments := assignPartitions(unit, selected)
+		for _, nodeID := range selected {
+			partitionKeys := partitionAssignments[nodeID]
+			if policy.InstancePolicy == servicemodel.PolicyPartitioned && len(partitionKeys) == 0 {
+				continue
+			}
+			config := cloneConfig(unit.Config)
+			if policy.InstancePolicy == servicemodel.PolicyPartitioned {
+				if config == nil {
+					config = map[string]any{}
+				}
+				config["partition_keys"] = append([]string(nil), partitionKeys...)
+			}
 			assignment := assignments[nodeID]
 			assignment.Units = append(assignment.Units, deploymentv1.Unit{
 				ID: unit.ID, Kind: unit.Kind, Plugins: append([]deploymentv1.PluginRef(nil), unit.Plugins...),
-				Config: cloneConfig(unit.Config), Enabled: true, ServiceRole: unit.ServiceRole,
+				Config: config, Enabled: true, ServiceRole: unit.ServiceRole,
 				LogicalService: unit.LogicalService, InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
 				Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain, Replicas: 1,
 				DependsOn: append([]string(nil), unit.DependsOn...),
@@ -132,6 +162,19 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 		}
 	}
 	for nodeID, assignment := range assignments {
+		localUnits := make(map[string]struct{}, len(assignment.Units))
+		for _, unit := range assignment.Units {
+			localUnits[unit.ID] = struct{}{}
+		}
+		for i := range assignment.Units {
+			localDependencies := assignment.Units[i].DependsOn[:0]
+			for _, dependency := range assignment.Units[i].DependsOn {
+				if _, local := localUnits[dependency]; local {
+					localDependencies = append(localDependencies, dependency)
+				}
+			}
+			assignment.Units[i].DependsOn = localDependencies
+		}
 		sort.Slice(assignment.Units, func(i, j int) bool { return assignment.Units[i].ID < assignment.Units[j].ID })
 		assignments[nodeID] = assignment
 	}
@@ -418,6 +461,44 @@ func placementScore(unitID, nodeID string) uint64 {
 	return binary.BigEndian.Uint64(digest[:8])
 }
 
+// assignPartitions 为每个分片选择稳定 owner。先用 rendezvous 为每个候选节点保留
+// 一个分片，再为剩余分片选择最高分节点，既避免空副本，也尽量减少节点变化时的迁移。
+func assignPartitions(unit deploymentv2.ServiceUnit, nodes []string) map[string][]string {
+	assigned := make(map[string][]string, len(nodes))
+	if unit.InstancePolicy != servicemodel.PolicyPartitioned {
+		for _, nodeID := range nodes {
+			assigned[nodeID] = nil
+		}
+		return assigned
+	}
+	keys := append([]string(nil), unit.PartitionKeys...)
+	sort.Strings(keys)
+	remaining := append([]string(nil), keys...)
+	for _, nodeID := range nodes {
+		best := 0
+		for index := 1; index < len(remaining); index++ {
+			if placementScore(unit.ID+"\x00"+remaining[index], nodeID) > placementScore(unit.ID+"\x00"+remaining[best], nodeID) {
+				best = index
+			}
+		}
+		assigned[nodeID] = append(assigned[nodeID], remaining[best])
+		remaining = append(remaining[:best], remaining[best+1:]...)
+	}
+	for _, key := range remaining {
+		owner := nodes[0]
+		for _, nodeID := range nodes[1:] {
+			if placementScore(unit.ID+"\x00"+key, nodeID) > placementScore(unit.ID+"\x00"+key, owner) {
+				owner = nodeID
+			}
+		}
+		assigned[owner] = append(assigned[owner], key)
+	}
+	for nodeID := range assigned {
+		sort.Strings(assigned[nodeID])
+	}
+	return assigned
+}
+
 func cloneConfig(config map[string]any) map[string]any {
 	if config == nil {
 		return nil
@@ -531,6 +612,18 @@ func (c Controller) runAsLeader(ctx context.Context) error {
 	defer func() {
 		_ = nodeWatcher.Stop() // 同上；停止失败不覆盖 controller 的退出原因。
 	}()
+	var actualWatcher jetstream.KeyWatcher
+	if c.Scheduler.Actual != nil {
+		actualWatcher, err = c.Scheduler.Actual.WatchAll(ctx)
+		if err != nil {
+			return fmt.Errorf("watch 节点实际态: %w", err)
+		}
+		defer func() { _ = actualWatcher.Stop() }()
+	}
+	var actualUpdates <-chan jetstream.KeyValueEntry
+	if actualWatcher != nil {
+		actualUpdates = actualWatcher.Updates()
+	}
 	reconcile := func(reason string) {
 		entry, err := c.Deployments.Get(ctx, c.DeploymentKey)
 		if err != nil {
@@ -575,6 +668,11 @@ func (c Controller) runAsLeader(ctx context.Context) error {
 				return errors.New("节点 watcher 已关闭")
 			}
 			reconcile("node_watch")
+		case _, ok := <-actualUpdates:
+			if !ok {
+				return errors.New("节点实际态 watcher 已关闭")
+			}
+			reconcile("actual_watch")
 		}
 	}
 }

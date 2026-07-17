@@ -34,6 +34,8 @@ func validateRuntimeRequirements(ctx context.Context, plugins []InstalledPlugin,
 	for _, plugin := range plugins {
 		for _, requirement := range plugin.Contract.Requires {
 			if requirement.Kind == "lazy" {
+				// lazy 不阻塞激活；首次真实调用仍由 Router 的 fail-closed capability
+				// 解析执行就绪检查，缺失实例会返回明确的 capability-not-found。
 				continue
 			}
 			ok, err := dependencyReady(ctx, requirement, local, router, timeout)
@@ -59,8 +61,12 @@ func validateRuntimeRequirements(ctx context.Context, plugins []InstalledPlugin,
 
 func dependencyReady(ctx context.Context, requirement pluginv1.RuntimeRequirement, local map[string][]string, router *addressing.Router, timeout time.Duration) (bool, error) {
 	if requirement.Scope == "same-node" || requirement.Scope == "same-kernel" {
-		if router != nil && router.HasLocal(requirement.Capability) {
-			return true, nil
+		if router != nil {
+			for _, instance := range router.LocalInstances(requirement.Capability) {
+				if requirementSatisfied(instance, requirement) {
+					return true, nil
+				}
+			}
 		}
 		return versionsMatch(local[requirement.Capability], requirement.Version), nil
 	}
@@ -73,10 +79,8 @@ func dependencyReady(ctx context.Context, requirement pluginv1.RuntimeRequiremen
 	defer ticker.Stop()
 	for {
 		for _, instance := range router.InstancesFor(requirement.Capability, requirement.LogicalService, requirement.RoutingDomain) {
-			if requirement.Ready == "health" || instance.Readiness == "" || instance.Readiness == "ready" {
-				if versionsMatch([]string{instance.Version}, requirement.Version) {
-					return true, nil
-				}
+			if requirementSatisfied(instance, requirement) {
+				return true, nil
 			}
 		}
 		select {
@@ -85,6 +89,15 @@ func dependencyReady(ctx context.Context, requirement pluginv1.RuntimeRequiremen
 		case <-ticker.C:
 		}
 	}
+}
+
+func requirementSatisfied(instance addressing.Announcement, requirement pluginv1.RuntimeRequirement) bool {
+	ready := requirement.Ready == "health" || instance.Readiness == "" || instance.Readiness == "ready"
+	if requirement.Kind == "data" {
+		// data 依赖必须达到完整 readiness，不能以仅健康或 degraded 代替迁移/数据就绪。
+		ready = instance.Readiness == "ready"
+	}
+	return ready && versionsMatch([]string{instance.Version}, requirement.Version)
 }
 
 func versionsMatch(versions []string, constraint string) bool {

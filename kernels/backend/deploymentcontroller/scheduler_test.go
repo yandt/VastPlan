@@ -347,6 +347,95 @@ func TestSchedulerAutoscalingMetricBoundsAndMissingMetric(t *testing.T) {
 	}
 }
 
+func TestSchedulerPartitionsAreUniqueAndRebalanceAfterNodeLoss(t *testing.T) {
+	_, buckets := startSchedulerNATS(t)
+	ctx := context.Background()
+	leases := map[string]*controlplane.NodeLease{}
+	for _, nodeID := range []string{"node-a", "node-b"} {
+		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		leases[nodeID] = lease
+	}
+	t.Cleanup(func() {
+		for _, lease := range leases {
+			_ = lease.Close(context.Background())
+		}
+	})
+	deployment := testDeployment(2)
+	unit := &deployment.Units[0]
+	unit.LogicalService = "platform.database"
+	unit.InstancePolicy = "partitioned"
+	unit.StateModel = "partition-owned"
+	unit.Visibility = "cluster"
+	unit.Routing = "shard"
+	unit.RoutingDomain = "core"
+	unit.PartitionKeys = []string{"tenant-a", "tenant-b", "tenant-c", "tenant-d"}
+	scheduler := Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments}
+	plan, err := scheduler.Reconcile(ctx, deployment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertPartitionCoverage(t, plan.Assignments, unit.PartitionKeys)
+	if countUnit(plan.Assignments, "api") != 2 {
+		t.Fatalf("两个 owner 节点都应收到 partitioned unit: %+v", plan.Assignments)
+	}
+	if err := leases["node-a"].Close(ctx); err != nil {
+		t.Fatal(err)
+	}
+	delete(leases, "node-a")
+	rebalanced, err := scheduler.Reconcile(ctx, deployment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertPartitionCoverage(t, rebalanced.Assignments, unit.PartitionKeys)
+	if countUnit(rebalanced.Assignments, "api") != 1 || len(rebalanced.Assignments["node-a"].Units) != 0 {
+		t.Fatalf("节点失联后全部分片必须迁往存活 owner: %+v", rebalanced.Assignments)
+	}
+}
+
+func assertPartitionCoverage(t *testing.T, assignments map[string]deploymentv1.DesiredState, want []string) {
+	t.Helper()
+	seen := map[string]string{}
+	for nodeID, assignment := range assignments {
+		for _, unit := range assignment.Units {
+			if unit.ID != "api" {
+				continue
+			}
+			raw, ok := unit.Config["partition_keys"].([]any)
+			if !ok {
+				// 计划写入 KV 前仍保留 []string；JSON round-trip 后是 []any。
+				if stringsRaw, stringsOK := unit.Config["partition_keys"].([]string); stringsOK {
+					for _, key := range stringsRaw {
+						if previous := seen[key]; previous != "" {
+							t.Fatalf("分片 %s 同时分配给 %s 和 %s", key, previous, nodeID)
+						}
+						seen[key] = nodeID
+					}
+					continue
+				}
+				t.Fatalf("partition_keys 类型错误: %#v", unit.Config["partition_keys"])
+			}
+			for _, value := range raw {
+				key, _ := value.(string)
+				if previous := seen[key]; previous != "" {
+					t.Fatalf("分片 %s 同时分配给 %s 和 %s", key, previous, nodeID)
+				}
+				seen[key] = nodeID
+			}
+		}
+	}
+	if len(seen) != len(want) {
+		t.Fatalf("分片覆盖不完整: got=%v want=%v", seen, want)
+	}
+	for _, key := range want {
+		if seen[key] == "" {
+			t.Fatalf("分片 %s 未分配", key)
+		}
+	}
+}
+
 func testDeployment(replicas int) deploymentv2.Deployment {
 	return deploymentv2.Deployment{
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "prod", Tenant: "acme"},

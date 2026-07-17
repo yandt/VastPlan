@@ -50,3 +50,20 @@ func TestParseValidatesUnitDependencyDAG(t *testing.T) {
 		t.Fatal("循环 unit 依赖必须拒绝")
 	}
 }
+
+func TestParseValidatesLeaderAndPartitionOwnership(t *testing.T) {
+	partitioned := `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"db","kind":"service","plugins":[{"id":"com.example.db","version":"1.0.0"}],"enabled":true,"service_role":"backend","logical_service":"platform.database","instance_policy":"partitioned","state_model":"partition-owned","visibility":"cluster","routing":"shard","replicas":2,"partition_keys":["a","b","c"]}]}`
+	deployment, err := Parse([]byte(partitioned))
+	if err != nil || len(deployment.Units[0].PartitionKeys) != 3 {
+		t.Fatalf("合法分片部署应通过: deployment=%+v err=%v", deployment, err)
+	}
+	invalid := []string{
+		`{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"leader","kind":"service","plugins":[{"id":"com.example.leader","version":"1.0.0"}],"enabled":true,"service_role":"backend","instance_policy":"leader","state_model":"leader-owned","visibility":"cluster","routing":"leader","replicas":2}]}`,
+		`{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"db","kind":"service","plugins":[{"id":"com.example.db","version":"1.0.0"}],"enabled":true,"service_role":"backend","instance_policy":"partitioned","state_model":"partition-owned","visibility":"cluster","routing":"shard","replicas":1}]}`,
+	}
+	for _, raw := range invalid {
+		if _, err := Parse([]byte(raw)); err == nil {
+			t.Fatal("无 fencing/分片所有权边界的部署必须拒绝")
+		}
+	}
+}

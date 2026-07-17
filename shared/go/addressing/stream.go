@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
@@ -177,7 +178,7 @@ func (r *Router) RegisterStream(ctx context.Context, options RegisterOptions, ha
 		_ = r.Directory.Delete(ctx, key)
 		return nil, errors.New("addressing router 已关闭")
 	}
-	r.streamLocal[options.Capability] = append(r.streamLocal[options.Capability], localStreamHandler{registrationID: id, handler: handler})
+	r.streamLocal[options.Capability] = append(r.streamLocal[options.Capability], localStreamHandler{registrationID: id, handler: handler, record: record})
 	r.registrations[id] = registration
 	r.mu.Unlock()
 	go registration.heartbeat(registrationCtx)
@@ -263,6 +264,29 @@ func (r *Router) InvokeStream(ctx context.Context, target *contractv1.CallTarget
 		return nil, fmt.Errorf("连接流式端点: %w", err)
 	}
 	streamCtx, cancelStream := context.WithCancel(ctx)
+	openRequest := &addressingv1.StreamOpen{Target: target, Context: callCtx, InitialPayload: initialPayload}
+	if r.Transport != nil {
+		payload, marshalErr := proto.Marshal(openRequest)
+		if marshalErr != nil {
+			cancelStream()
+			deadlineCancel()
+			_ = conn.Close()
+			return nil, marshalErr
+		}
+		headers, signErr := r.Transport.sign(streamAuthorizationSubject(target), payload)
+		if signErr != nil {
+			cancelStream()
+			deadlineCancel()
+			_ = conn.Close()
+			return nil, signErr
+		}
+		streamCtx = metadata.NewOutgoingContext(streamCtx, metadata.Pairs(
+			streamIdentityHeader, headers[transportPublicKeyHeader],
+			streamTimestampHeader, headers[transportTimestampHeader],
+			streamNonceHeader, headers[transportNonceHeader],
+			streamSignatureHeader, headers[transportSignatureHeader],
+		))
+	}
 	cancel := func() {
 		cancelStream()
 		deadlineCancel()
@@ -274,9 +298,7 @@ func (r *Router) InvokeStream(ctx context.Context, target *contractv1.CallTarget
 		return nil, fmt.Errorf("打开 capability 流: %w", err)
 	}
 	requestID := randomID()
-	if err := raw.Send(&addressingv1.StreamFrame{RequestId: requestID, Sequence: 0, Body: &addressingv1.StreamFrame_Open{Open: &addressingv1.StreamOpen{
-		Target: target, Context: callCtx, InitialPayload: initialPayload,
-	}}}); err != nil {
+	if err := raw.Send(&addressingv1.StreamFrame{RequestId: requestID, Sequence: 0, Body: &addressingv1.StreamFrame_Open{Open: openRequest}}); err != nil {
 		cancel()
 		_ = conn.Close()
 		return nil, fmt.Errorf("发送流式调用起始帧: %w", err)
@@ -448,14 +470,50 @@ func (service *capabilityStreamService) Open(raw grpc.BidiStreamingServer[addres
 	defer service.router.leaveHandlerCall()
 	service.router.mu.Lock()
 	handlers := service.router.streamLocal[open.Target.Capability]
-	if len(handlers) == 0 {
+	matching := make([]localStreamHandler, 0, len(handlers))
+	for _, candidate := range handlers {
+		if (open.Target.GetLogicalService() == "" || candidate.record.LogicalService == open.Target.GetLogicalService()) &&
+			(open.Target.GetRoutingDomain() == "" || candidate.record.RoutingDomain == open.Target.GetRoutingDomain()) &&
+			(open.Target.GetPartitionKey() == "" || candidate.record.PartitionKey == open.Target.GetPartitionKey()) {
+			matching = append(matching, candidate)
+		}
+	}
+	if len(matching) == 0 {
 		service.router.mu.Unlock()
 		return status.Error(codes.NotFound, "流式 capability 不存在")
 	}
 	cursor := service.router.streamCursor[open.Target.Capability]
-	handler := handlers[cursor%uint64(len(handlers))].handler
+	selected := matching[cursor%uint64(len(matching))]
+	handler := selected.handler
 	service.router.streamCursor[open.Target.Capability] = cursor + 1
 	service.router.mu.Unlock()
+	if service.router.Transport != nil {
+		incoming, ok := metadata.FromIncomingContext(raw.Context())
+		if !ok {
+			return status.Error(codes.PermissionDenied, "流式调用缺少传输身份")
+		}
+		payload, marshalErr := proto.Marshal(open)
+		if marshalErr != nil {
+			return status.Error(codes.InvalidArgument, "流式起始帧无法验证")
+		}
+		identity, verifyErr := service.router.Transport.verify(streamAuthorizationSubject(open.Target), payload, map[string]string{
+			transportPublicKeyHeader: firstMetadataValue(incoming, streamIdentityHeader),
+			transportTimestampHeader: firstMetadataValue(incoming, streamTimestampHeader),
+			transportNonceHeader:     firstMetadataValue(incoming, streamNonceHeader),
+			transportSignatureHeader: firstMetadataValue(incoming, streamSignatureHeader),
+		})
+		if verifyErr != nil {
+			return status.Error(codes.PermissionDenied, "流式调用身份校验失败")
+		}
+		if authorizeErr := authorizeCapability(identity, selected.record); authorizeErr != nil {
+			return status.Error(codes.PermissionDenied, authorizeErr.Error())
+		}
+		authenticated, authErr := authenticatedTransportContext(identity, open.Context)
+		if authErr != nil {
+			return status.Error(codes.PermissionDenied, authErr.Error())
+		}
+		open.Context = authenticated
+	}
 	handlerCtx, boundedCallCtx, cancel := service.router.boundedCallContext(raw.Context(), open.Context)
 	defer cancel()
 	stream := &ServerStream{raw: raw, requestID: first.RequestId, recvSeq: 1, maxFrame: limits.MaxStreamFrameBytes}
@@ -478,3 +536,22 @@ func (service *capabilityStreamService) Open(raw grpc.BidiStreamingServer[addres
 }
 
 func nowUTC() time.Time { return time.Now().UTC() }
+
+const (
+	streamIdentityHeader  = "vastplan-identity"
+	streamTimestampHeader = "vastplan-timestamp"
+	streamNonceHeader     = "vastplan-nonce"
+	streamSignatureHeader = "vastplan-signature"
+)
+
+func streamAuthorizationSubject(target *contractv1.CallTarget) string {
+	return "vp.stream.v1\x00" + target.GetCapability() + "\x00" + target.GetLogicalService() + "\x00" + target.GetRoutingDomain() + "\x00" + target.GetPartitionKey()
+}
+
+func firstMetadataValue(values metadata.MD, key string) string {
+	all := values.Get(key)
+	if len(all) == 0 {
+		return ""
+	}
+	return all[0]
+}

@@ -94,7 +94,9 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 			},
 		}},
 	}
-	scheduler := deploymentcontroller.Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments}
+	scheduler := deploymentcontroller.Scheduler{
+		Nodes: buckets.Nodes, Assignments: buckets.Assignments, Actual: buckets.Actual, Compositions: buckets.Compositions,
+	}
 	plan, err := scheduler.Reconcile(context.Background(), deployment)
 	if err != nil {
 		t.Fatal(err)
@@ -111,6 +113,10 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 		waitMemoryUnits(t, node.store, plan.Generation, want)
 	}
 	waitAddressingInstances(t, caller, "vastplan.hello", 2)
+	composition, err := scheduler.ObserveComposition(context.Background(), deployment)
+	if err != nil || composition.Status != deploymentcontroller.CompositionReady || composition.Generation != plan.Generation {
+		t.Fatalf("初始组合状态未收敛: report=%+v err=%v", composition, err)
+	}
 
 	failedID := ""
 	for nodeID := range selected {
@@ -139,6 +145,10 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 		waitMemoryUnits(t, node.store, rescheduled.Generation, want)
 	}
 	waitAddressingInstances(t, caller, "vastplan.hello", 2)
+	composition, err = scheduler.ObserveComposition(context.Background(), deployment)
+	if err != nil || composition.Status != deploymentcontroller.CompositionReady || composition.Generation != rescheduled.Generation {
+		t.Fatalf("故障漂移后组合状态未恢复: report=%+v err=%v", composition, err)
+	}
 	result, payload, err := caller.Invoke(context.Background(), toolTarget("vastplan.hello", "greet"), testCallContext(), []byte(`{"name":"replica recovery"}`))
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !strings.Contains(string(payload), "replica recovery") {
 		t.Fatalf("漂移后 queue group 不可调用: result=%+v payload=%s err=%v", result, payload, err)
@@ -409,7 +419,15 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 		<-done
 		_ = runtime.Close()
 	})
-	waitForRuntimeHost(t, runtime, nil, desired.Units[0].Fingerprint())
+	normalizedRaw, err := json.Marshal(desired)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsedDesired, err := deploymentv1.Parse(normalizedRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForRuntimeHost(t, runtime, nil, parsedDesired.Units[0].Fingerprint())
 	waitActualRevision(t, remoteStore, 1, 1)
 
 	desired.Revision = 2
@@ -520,7 +538,10 @@ func startClusterNode(t *testing.T, server *natsserver.Server, buckets controlpl
 	store := nodeagent.NewMemoryStateStore()
 	reconciler := &nodeagent.Reconciler{
 		NodeID: nodeID, NodeLabels: map[string]string{"region": "cn"}, Repository: repository,
-		Installer: nodeagent.LocalInstaller{Root: runtimeRoot}, Runtime: runtime, StateStore: store,
+		Installer: nodeagent.LocalInstaller{Root: runtimeRoot}, Runtime: runtime,
+		StateStore: nodeagent.ReplicatedStateStore{Primary: store, Replicas: []nodeagent.StateStore{
+			nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey(nodeID)},
+		}},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
@@ -666,7 +687,7 @@ func publishCrasherPlugin(t *testing.T, repository *pluginservice.Repository) {
   "id":"com.vastplan.fixture.crasher","name":"crasher","description":"crash recovery fixture",
   "version":"0.1.0","publisher":"vastplan","engines":{"backend":"^0.1"},
   "activation":["onStartup"],"entry":{"backend":"backend/crasher"},
-  "contributes":{"backend":{"tools":[{"id":"fixture.crasher","service_role":"backend","title":"Crash fixture"}]}}
+  "contributes":{"backend":{"tools":[{"id":"fixture.crasher","service_role":"backend","title":"故意崩溃的夹具"}]}}
 }`)
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifest, 0o644); err != nil {
 		t.Fatal(err)

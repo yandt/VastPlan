@@ -59,8 +59,11 @@ go run ./kernels/backend controlplane -controller \
   -nats-cert /etc/vastplan/pki/controller-1.crt \
   -nats-key /etc/vastplan/pki/controller-1.key \
   -nats-seed /secure/controller-1.seed \
+  -repository /var/lib/vastplan/repository \
   -key tenants.X2dsb2JhbA.states.Y2x1c3Rlcg
 ```
+
+Controller 必须能读取与 Node Agent 同源的不可变制品仓库，用于在生成 Assignment 前解析制品中的完整 manifest，包括 runtime capability、包依赖和版本范围。仓库不可读、制品缺失或清单身份不一致时调度 fail-closed，不发布半份计划；制品签名仍由 Node Agent 安装链路验证。
 
 Node Agent 使用属于本节点的 `node-N.seed`：
 
@@ -78,12 +81,32 @@ bin/backend-kernel reconcile \
 
 未显式配置 `-transport-seed` 与 `-transport-trust` 时，控制面 Node Agent 会拒绝启动；仅本地开发可以显式使用 `-nats-allow-insecure` 绕过 NATS 与 addressing 的生产门禁。传输信封会绑定 subject、payload、时间戳和 nonce，接收端据此校验签名并重建可信调用身份；JetStream 重投只跳过 nonce 重放检查，不跳过签名和身份校验。
 
+`transport-trust.json` 中每个身份还必须显式声明调用边界：
+
+```json
+{
+  "version": 1,
+  "identities": [{
+    "name": "database-node-1",
+    "role": "node",
+    "publicKey": "U...",
+    "nodeId": "node-1",
+    "serviceRoles": ["backend"],
+    "logicalServices": ["platform.database"],
+    "allowedCapabilities": ["platform.settings", "platform.credentials"],
+    "allowGlobal": false
+  }]
+}
+```
+
+`allowedCapabilities` 是第一道 capability allowlist；`service` 还要求 service role 匹配，`cluster` 还要求 logical service 匹配，`global` 必须单独设置 `allowGlobal=true`。`*` 只允许在受控迁移期使用，不应作为生产默认值。一元 NATS 调用和 gRPC 双向流使用同一授权规则。
+
 ## 6. 权限边界
 
 | 角色 | 允许 | 明确禁止 |
 |---|---|---|
 | bootstrap | 创建/校准全部 KV 与发布初始配置 | 常驻业务进程持有 |
-| controller | 读 Deployment/Node/Autoscaling Metric，写 Assignment/Controller Lease | 改 Stream、写 Actual/Capability/Metric |
+| controller | 读 Deployment/Node/Actual/Autoscaling Metric，写 Assignment/Composition/Controller Lease | 改 Stream、写 Actual/Capability/Metric |
 | node | 读 Desired/Assignment，写 Actual/Node/Capability/Autoscaling Metric，RPC/事件 | 写 Deployment/Desired/Assignment |
 | runtime | Capability、RPC、事件、写 Autoscaling Metric | 读取或改写部署控制面 |
 

@@ -34,12 +34,16 @@ const (
 // 已验证边缘/节点代用户传递 Principal/Caller 的能力；未授予时接收端会清空
 // 自报 Principal，并把 Caller 重建为该工作负载。
 type TransportIdentity struct {
-	Name            string `json:"name"`
-	Role            string `json:"role"`
-	PublicKey       string `json:"publicKey"`
-	TenantID        string `json:"tenantId,omitempty"`
-	NodeID          string `json:"nodeId,omitempty"`
-	AllowDelegation bool   `json:"allowDelegation,omitempty"`
+	Name                string   `json:"name"`
+	Role                string   `json:"role"`
+	PublicKey           string   `json:"publicKey"`
+	TenantID            string   `json:"tenantId,omitempty"`
+	NodeID              string   `json:"nodeId,omitempty"`
+	ServiceRoles        []string `json:"serviceRoles,omitempty"`
+	LogicalServices     []string `json:"logicalServices,omitempty"`
+	AllowedCapabilities []string `json:"allowedCapabilities"`
+	AllowGlobal         bool     `json:"allowGlobal,omitempty"`
+	AllowDelegation     bool     `json:"allowDelegation,omitempty"`
 }
 
 type TransportTrustDocument struct {
@@ -108,6 +112,10 @@ func newTransportSecurity(seed []byte, document TransportTrustDocument) (*Transp
 			pair.Wipe()
 			return nil, fmt.Errorf("传输信任身份字段非法: %+v", identity)
 		}
+		if len(identity.AllowedCapabilities) == 0 {
+			pair.Wipe()
+			return nil, fmt.Errorf("传输信任身份 %s 必须声明 allowedCapabilities", identity.Name)
+		}
 		if _, exists := security.trusted[identity.PublicKey]; exists {
 			pair.Wipe()
 			return nil, fmt.Errorf("传输信任公钥重复: %s", identity.PublicKey)
@@ -121,6 +129,44 @@ func newTransportSecurity(seed []byte, document TransportTrustDocument) (*Transp
 	}
 	security.self = self
 	return security, nil
+}
+
+func authorizeCapability(identity TransportIdentity, record Announcement) error {
+	if !containsIdentityValue(identity.AllowedCapabilities, record.Capability) {
+		return fmt.Errorf("身份 %s 未获 capability %s 调用授权", identity.Name, record.Capability)
+	}
+	switch record.Visibility {
+	case "local":
+		if identity.NodeID == "" || identity.NodeID != record.NodeID {
+			return errors.New("local capability 只允许同一内核调用")
+		}
+	case "service":
+		if (record.ServiceRole == "" && !containsIdentityValue(identity.ServiceRoles, "*")) ||
+			(record.ServiceRole != "" && !containsIdentityValue(identity.ServiceRoles, record.ServiceRole)) {
+			return fmt.Errorf("身份 %s 不属于 service role %s", identity.Name, record.ServiceRole)
+		}
+	case "cluster":
+		if (record.LogicalService == "" && !containsIdentityValue(identity.LogicalServices, "*")) ||
+			(record.LogicalService != "" && !containsIdentityValue(identity.LogicalServices, record.LogicalService)) {
+			return fmt.Errorf("身份 %s 不属于 logical service %s", identity.Name, record.LogicalService)
+		}
+	case "global":
+		if !identity.AllowGlobal {
+			return fmt.Errorf("身份 %s 未获 global capability 授权", identity.Name)
+		}
+	default:
+		return fmt.Errorf("capability visibility 非法: %q", record.Visibility)
+	}
+	return nil
+}
+
+func containsIdentityValue(values []string, want string) bool {
+	for _, value := range values {
+		if value == "*" || value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *TransportSecurity) Close() {

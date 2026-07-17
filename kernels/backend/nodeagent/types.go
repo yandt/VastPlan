@@ -101,6 +101,7 @@ type RuntimeUnit struct {
 	PartitionKeys          []string
 	PartitionGenerations   map[string]uint64
 	PartitionFencingTokens map[string]string
+	EnvironmentAllowlist   []string
 	Config                 map[string]any
 	Plugins                []InstalledPlugin
 	Migrations             []StateMigrationPlan

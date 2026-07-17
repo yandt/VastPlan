@@ -52,6 +52,7 @@ type ServiceUnit struct {
 	Visibility     string                   `json:"visibility,omitempty"`
 	Routing        string                   `json:"routing,omitempty"`
 	RoutingDomain  string                   `json:"routing_domain,omitempty"`
+	PartitionKeys  []string                 `json:"partition_keys,omitempty"`
 	DependsOn      []string                 `json:"depends_on,omitempty"`
 	Replicas       int                      `json:"replicas"`
 	Autoscaling    *Autoscaling             `json:"autoscaling,omitempty"`
@@ -147,6 +148,26 @@ func Parse(raw []byte) (Deployment, error) {
 		unit.InstancePolicy, unit.StateModel = policy.InstancePolicy, policy.StateModel
 		unit.Visibility, unit.Routing = policy.Visibility, policy.Routing
 		unit.RoutingDomain = policy.RoutingDomain
+		if policy.InstancePolicy == servicemodel.PolicyLeader && unit.Replicas != 1 {
+			return Deployment{}, fmt.Errorf("unit %q leader 当前只允许 replicas=1；高可用由节点失联后的重新调度提供", unit.ID)
+		}
+		if policy.InstancePolicy == servicemodel.PolicyPartitioned {
+			if len(unit.PartitionKeys) == 0 {
+				return Deployment{}, fmt.Errorf("unit %q partitioned 必须声明 partition_keys", unit.ID)
+			}
+			if unit.Replicas > len(unit.PartitionKeys) {
+				return Deployment{}, fmt.Errorf("unit %q replicas 不能大于 partition_keys 数量", unit.ID)
+			}
+			seenPartitions := map[string]struct{}{}
+			for _, key := range unit.PartitionKeys {
+				if _, duplicate := seenPartitions[key]; duplicate {
+					return Deployment{}, fmt.Errorf("unit %q partition_key 重复: %q", unit.ID, key)
+				}
+				seenPartitions[key] = struct{}{}
+			}
+		} else if len(unit.PartitionKeys) > 0 {
+			return Deployment{}, fmt.Errorf("unit %q 只有 partitioned 策略可以声明 partition_keys", unit.ID)
+		}
 		if unit.Autoscaling != nil {
 			if unit.Autoscaling.MinReplicas > unit.Autoscaling.MaxReplicas {
 				return Deployment{}, fmt.Errorf("unit %q autoscaling min_replicas 不能大于 max_replicas", unit.ID)

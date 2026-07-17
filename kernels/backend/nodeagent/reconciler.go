@@ -59,7 +59,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 	}
 	result := Result{Changed: changed, Converged: converged, State: actual}
 	if !converged {
-		return result, fmt.Errorf("节点 %s 未收敛：%d 个操作失败", r.NodeID, len(actual.Errors))
+		failure := fmt.Errorf("节点 %s 未收敛：%d 个操作失败", r.NodeID, len(actual.Errors))
+		for _, operation := range actual.Errors {
+			failure = errors.Join(failure, fmt.Errorf("unit=%s stage=%s: %s", operation.UnitID, operation.Stage, operation.Message))
+		}
+		return result, failure
 	}
 	return result, nil
 }
@@ -179,9 +183,10 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 		ID: id, Fingerprint: fingerprint, ServiceRole: unit.ServiceRole,
 		LogicalService: unit.LogicalService, InstancePolicy: policy.InstancePolicy,
 		StateModel: policy.StateModel, Visibility: policy.Visibility, Routing: policy.Routing,
-		RoutingDomain: policy.RoutingDomain,
-		PartitionKeys: partitionKeys(unit.Config),
-		Config:        RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
+		RoutingDomain:        policy.RoutingDomain,
+		PartitionKeys:        partitionKeys(unit.Config),
+		EnvironmentAllowlist: environmentAllowlist(unit.Config),
+		Config:               RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
 		RestartBase: current.RestartCount,
 	}
 	if err := r.Runtime.Apply(ctx, runtimeUnit); err != nil {

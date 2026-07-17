@@ -74,11 +74,13 @@ type Announcement struct {
 type localHandler struct {
 	registrationID string
 	handler        InvokeHandler
+	record         Announcement
 }
 
 type localStreamHandler struct {
 	registrationID string
 	handler        StreamHandler
+	record         Announcement
 }
 
 // Router 同时持有本地 fast path、NATS 数据面和能力目录缓存。
@@ -225,6 +227,11 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	}
 	r.mu.Unlock()
 	if local.handler != nil {
+		if r.Transport != nil {
+			if err := authorizeCapability(r.Transport.SelfIdentity(), local.record); err != nil {
+				return nil, nil, &TransportError{Code: errorcode.PermissionDenied, Message: err.Error()}
+			}
+		}
 		result, out, err := local.handler(ctx, target, callCtx, payload)
 		if err == nil && !limits.PayloadAllowed(out) {
 			return nil, nil, &TransportError{Code: errorcode.PayloadTooLarge,
@@ -232,8 +239,15 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 		}
 		return result, out, err
 	}
-	if len(r.instancesFor(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey())) == 0 {
+	instances := r.instancesFor(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey())
+	if len(instances) == 0 {
 		return nil, nil, fmt.Errorf("%w: %s", ErrCapabilityNotFound, target.Capability)
+	}
+	subject := instances[0].Subject
+	for _, instance := range instances[1:] {
+		if instance.Subject != subject && target.GetLogicalService() == "" && target.GetRoutingDomain() == "" && target.GetPartitionKey() == "" {
+			return nil, nil, fmt.Errorf("capability %s 存在多个路由域，调用方必须指定 logical_service/routing_domain", target.Capability)
+		}
 	}
 	requestID := randomID()
 	req := &addressingv1.InvokeRequest{RequestId: requestID, Target: target, Context: callCtx, Payload: payload}
@@ -241,7 +255,6 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	if err != nil {
 		return nil, nil, fmt.Errorf("编码远端调用: %w", err)
 	}
-	subject := controlplane.RPCSubjectForPartition(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey())
 	request := nats.NewMsg(subject)
 	request.Data = raw
 	if r.Transport != nil {
@@ -447,6 +460,21 @@ func (r *Router) HasLocal(capability string) bool {
 	return len(r.local[capability]) > 0
 }
 
+// LocalInstances 返回当前内核中已激活的本地 capability 元数据。它供 same-node /
+// same-kernel 依赖校验版本与 readiness 使用，但不会把 local capability 泄漏到全局目录。
+func (r *Router) LocalInstances(capability string) []Announcement {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	entries := r.local[capability]
+	out := make([]Announcement, 0, len(entries))
+	for _, entry := range entries {
+		if entry.record.Health == "healthy" && (entry.record.Readiness == "" || entry.record.Readiness == "ready" || entry.record.Readiness == "degraded") {
+			out = append(out, entry.record)
+		}
+	}
+	return out
+}
+
 // InstancesFor 只返回指定逻辑服务和路由域中的健康实例。空过滤条件保持 v1 兼容行为。
 func (r *Router) InstancesFor(capability, logicalService, routingDomain string) []Announcement {
 	return r.instancesFor(capability, logicalService, routingDomain, "")
@@ -462,6 +490,9 @@ func (r *Router) instancesFor(capability, logicalService, routingDomain, partiti
 			(routingDomain == "" || entry.RoutingDomain == routingDomain) &&
 			(partitionKey == "" || entry.PartitionKey == partitionKey) &&
 			(entry.Readiness == "" || entry.Readiness == "ready" || entry.Readiness == "degraded") {
+			if r.Transport != nil && authorizeCapability(r.Transport.SelfIdentity(), entry) != nil {
+				continue
+			}
 			out = append(out, entry)
 		}
 	}

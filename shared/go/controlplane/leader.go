@@ -100,6 +100,7 @@ func (e LeaderElector) tryAcquire(parent context.Context, options LeaderElection
 		return nil, false, nil
 	}
 	record.Epoch = current.Epoch + 1
+	raw, _ = json.Marshal(record)
 	revision, err = e.KV.Update(parent, key, raw, entry.Revision())
 	if err != nil {
 		return nil, false, nil // 另一候选者先完成 CAS；回到等待循环。
@@ -122,7 +123,7 @@ func (l *Leadership) Record() LeaderRecord {
 	defer l.mu.Unlock()
 	return l.record
 }
-func (l *Leadership) Lost() <-chan error { return l.lost }
+func (l *Leadership) Lost() <-chan error    { return l.lost }
 func (l *Leadership) Done() <-chan struct{} { return l.done }
 
 func (l *Leadership) renew(ctx context.Context) {
@@ -164,9 +165,14 @@ func (l *Leadership) Close(ctx context.Context) error {
 			closeErr = ctx.Err()
 		}
 		l.mu.Lock()
+		record := l.record
 		revision := l.revision
 		l.mu.Unlock()
-		if err := l.kv.Delete(ctx, l.key, jetstream.LastRevision(revision)); err != nil && !errors.Is(err, jetstream.ErrKeyNotFound) {
+		// 保留 epoch 记录并把租约显式置为过期。直接删除 key 会让下一任通过 Create
+		// 从 epoch=1 重新开始，破坏跨正常交接的 fencing 单调性。
+		record.UpdatedAt = time.Now().UTC().Add(-2 * l.options.LeaseDuration)
+		raw, _ := json.Marshal(record)
+		if _, err := l.kv.Update(ctx, l.key, raw, revision); err != nil && !errors.Is(err, jetstream.ErrKeyNotFound) {
 			closeErr = errors.Join(closeErr, fmt.Errorf("释放 controller 领导权: %w", err))
 		}
 	})

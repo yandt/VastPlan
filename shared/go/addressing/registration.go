@@ -157,7 +157,7 @@ func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOption
 			r.respondTransportError(msg, errorcode.RemoteInvokeFailed, "候选 capability 尚未激活", true, "")
 			return
 		}
-		r.serveInvoke(registrationID, options.Capability, handler, msg)
+		r.serveInvoke(registrationID, record, handler, msg)
 	})
 	if err != nil {
 		cancel()
@@ -283,7 +283,7 @@ func ActivateRegistrations(ctx context.Context, registrations []*Registration) e
 	for _, registration := range registrations {
 		capability := registration.record.Capability
 		router.local[capability] = append(router.local[capability], localHandler{
-			registrationID: registration.id, handler: registration.handler,
+			registrationID: registration.id, handler: registration.handler, record: registration.record,
 		})
 		registration.active.Store(true)
 	}
@@ -291,7 +291,7 @@ func ActivateRegistrations(ctx context.Context, registrations []*Registration) e
 	return nil
 }
 
-func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHandler, msg *nats.Msg) {
+func (r *Router) serveInvoke(registrationID string, record Announcement, handler InvokeHandler, msg *nats.Msg) {
 	if msg.Reply == "" {
 		return
 	}
@@ -314,7 +314,7 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 		r.respondTransportError(msg, errorcode.WireInvalidRequest, err.Error(), false, "")
 		return
 	}
-	if req.Target == nil || req.Target.Capability != capability {
+	if req.Target == nil || req.Target.Capability != record.Capability {
 		r.respondTransportError(msg, errorcode.WireTargetMismatch, "请求 capability 与 subject 不一致", false, req.RequestId)
 		return
 	}
@@ -327,6 +327,10 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 		return
 	}
 	if r.Transport != nil {
+		if err := authorizeCapability(identity, record); err != nil {
+			r.respondTransportError(msg, errorcode.PermissionDenied, err.Error(), false, req.RequestId)
+			return
+		}
 		authenticated, err := authenticatedTransportContext(identity, req.Context)
 		if err != nil {
 			r.respondTransportError(msg, errorcode.PermissionDenied, err.Error(), false, req.RequestId)
@@ -392,7 +396,7 @@ func (r *Router) serveInvoke(registrationID, capability string, handler InvokeHa
 		}
 	}
 	if err := msg.RespondMsg(responseMessage); err != nil {
-		r.Logf("回应 capability %s 失败: %v", capability, err)
+		r.Logf("回应 capability %s 失败: %v", record.Capability, err)
 	}
 }
 

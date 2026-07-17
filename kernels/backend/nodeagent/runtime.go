@@ -33,6 +33,7 @@ type runningUnit struct {
 	leaderships      []*controlplane.Leadership
 	plugins          []InstalledPlugin
 	dependencyIssues []string
+	spec             RuntimeUnit
 }
 
 // ProtocolRuntime 为每个 service unit 创建独立 backend 宿主。候选宿主先完成全部插件
@@ -92,19 +93,6 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	if err := validateInstalledPolicies(policy, unit.Plugins); err != nil {
 		return err
 	}
-	if policy.InstancePolicy == servicemodel.PolicyLeader || policy.InstancePolicy == servicemodel.PolicyPartitioned {
-		// 候选不能在旧 owner 仍持有同一 fencing lease 时等待自己。先摘除旧
-		// registration 并释放 lease，随后候选取得更高优先级的新 token。
-		r.mu.RLock()
-		old := r.units[unit.ID]
-		r.mu.RUnlock()
-		if old != nil {
-			closeRegistrations(ctx, old.registrations)
-			for _, leadership := range old.leaderships {
-				_ = leadership.Close(context.Background())
-			}
-		}
-	}
 	degradedDependencies, err := validateRuntimeRequirements(ctx, unit.Plugins, r.router, r.DependencyTimeout)
 	if err != nil {
 		return err
@@ -116,62 +104,6 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	}
 	ok := false
 	var leaderships []*controlplane.Leadership
-	if policy.InstancePolicy == servicemodel.PolicyLeader || policy.InstancePolicy == servicemodel.PolicyPartitioned {
-		if r.LeaderKV == nil {
-			return errors.New("leader unit 未配置控制面 lease KV")
-		}
-		logicalService := unit.LogicalService
-		if logicalService == "" {
-			logicalService = unit.ID
-		}
-		identity := r.Identity
-		if identity == "" {
-			identity = unit.ID
-		}
-		keys := []string{""}
-		if policy.InstancePolicy == servicemodel.PolicyPartitioned {
-			keys = append([]string(nil), unit.PartitionKeys...)
-			if len(keys) == 0 {
-				return errors.New("partitioned unit 必须配置至少一个 partition key")
-			}
-		}
-		for _, partitionKey := range keys {
-			election := "plugin/" + logicalService + "/" + unit.RoutingDomain
-			if partitionKey != "" {
-				election += "/partition/" + partitionKey
-			}
-			elector := controlplane.LeaderElector{KV: r.LeaderKV, Election: election, Identity: identity + "/" + unit.ID + "/" + partitionKey, Options: controlplane.LeaderElectionOptions{Logf: r.Logf}}
-			leadership, acquireErr := elector.Acquire(ctx)
-			if acquireErr != nil {
-				for _, previous := range leaderships {
-					_ = previous.Close(context.Background())
-				}
-				return fmt.Errorf("unit %s 获取 %s lease: %w", unit.ID, election, acquireErr)
-			}
-			leaderships = append(leaderships, leadership)
-			if unit.PartitionGenerations == nil {
-				unit.PartitionGenerations = map[string]uint64{}
-			}
-			if unit.PartitionFencingTokens == nil {
-				unit.PartitionFencingTokens = map[string]string{}
-			}
-			unit.PartitionGenerations[partitionKey] = leadership.Record().Epoch
-			unit.PartitionFencingTokens[partitionKey] = leadership.Record().Token
-			if unit.Generation == 0 || leadership.Record().Epoch < unit.Generation {
-				unit.Generation = leadership.Record().Epoch
-			}
-			if unit.FencingToken == "" {
-				unit.FencingToken = leadership.Record().Token
-			}
-		}
-		defer func() {
-			if !ok {
-				for _, leadership := range leaderships {
-					_ = leadership.Close(context.Background())
-				}
-			}
-		}()
-	}
 	configProvider, err := kernelspi.NewMapConfig(unit.Config)
 	if err != nil {
 		return fmt.Errorf("冻结 unit 配置: %w", err)
@@ -194,8 +126,9 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	for _, plugin := range unit.Plugins {
 		process, err := candidate.LaunchWithPolicy(ctx, plugin.EntryPath, protocolbus.LaunchPolicy{
 			PluginID: plugin.ID, Version: plugin.Version,
-			Contributions:  plugin.Contract.Contributions,
-			KernelServices: plugin.Contract.KernelServices,
+			Contributions:        plugin.Contract.Contributions,
+			KernelServices:       plugin.Contract.KernelServices,
+			EnvironmentAllowlist: append([]string(nil), unit.EnvironmentAllowlist...),
 		})
 		if err != nil {
 			return fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)
@@ -226,6 +159,47 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 		if err := candidate.Migrate(ctx, migration.process, migrationRequest(migration.plan, protocolbus.MigrationCommit)); err != nil {
 			return &StateMigrationError{PluginID: migration.plan.PluginID, Phase: "commit", Err: err}
 		}
+	}
+	var handoffOld *runningUnit
+	if policy.InstancePolicy == servicemodel.PolicyLeader || policy.InstancePolicy == servicemodel.PolicyPartitioned {
+		r.mu.RLock()
+		handoffOld = r.units[unit.ID]
+		r.mu.RUnlock()
+		if handoffOld != nil {
+			// 候选已经完成启动、健康和迁移后才进入短暂的 fencing 交接窗。
+			// 交接后的任何失败都会用旧宿主重新取得租约并恢复原 registration。
+			r.mu.Lock()
+			oldRegistrations := handoffOld.registrations
+			oldLeaderships := handoffOld.leaderships
+			handoffOld.registrations, handoffOld.leaderships = nil, nil
+			r.mu.Unlock()
+			// 先从 runningUnit 摘除，确保主动 Close 触发的 monitor 不会把这次
+			// 正常升级交接误判为领导权丢失并停止旧宿主。
+			closeRegistrations(ctx, oldRegistrations)
+			for _, leadership := range oldLeaderships {
+				_ = leadership.Close(context.Background())
+			}
+			defer func() {
+				if !ok {
+					restoreCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					if restoreErr := r.restoreOwnership(restoreCtx, unit.ID, handoffOld); restoreErr != nil && r.Logf != nil {
+						r.Logf("unit %s 候选失败后恢复旧 owner 失败: %v", unit.ID, restoreErr)
+					}
+				}
+			}()
+		}
+		unit, leaderships, err = r.acquireUnitLeaderships(ctx, unit, policy)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if !ok {
+				for _, leadership := range leaderships {
+					_ = leadership.Close(context.Background())
+				}
+			}
+		}()
 	}
 	r.mu.RLock()
 	router := r.router
@@ -272,6 +246,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 		generation:    r.nextID,
 		leaderships:   leaderships,
 		plugins:       append([]InstalledPlugin(nil), unit.Plugins...),
+		spec:          cloneRuntimeUnit(unit),
 	}
 	r.units[unit.ID] = current
 	r.mu.Unlock()
@@ -301,6 +276,133 @@ func deploymentUnitForRuntime(unit RuntimeUnit) deploymentv1.Unit {
 		ID: unit.ID, InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
 		Visibility: unit.Visibility, Routing: unit.Routing, RoutingDomain: unit.RoutingDomain,
 	}
+}
+
+func (r *ProtocolRuntime) acquireUnitLeaderships(ctx context.Context, unit RuntimeUnit, policy servicemodel.Policy) (RuntimeUnit, []*controlplane.Leadership, error) {
+	if r.LeaderKV == nil {
+		return unit, nil, errors.New("leader unit 未配置控制面 lease KV")
+	}
+	logicalService := unit.LogicalService
+	if logicalService == "" {
+		logicalService = unit.ID
+	}
+	identity := r.Identity
+	if identity == "" {
+		identity = unit.ID
+	}
+	keys := []string{""}
+	if policy.InstancePolicy == servicemodel.PolicyPartitioned {
+		keys = append([]string(nil), unit.PartitionKeys...)
+		if len(keys) == 0 {
+			return unit, nil, errors.New("partitioned unit 必须配置至少一个 partition key")
+		}
+	}
+	unit.PartitionGenerations = map[string]uint64{}
+	unit.PartitionFencingTokens = map[string]string{}
+	unit.Generation, unit.FencingToken = 0, ""
+	leaderships := make([]*controlplane.Leadership, 0, len(keys))
+	for _, partitionKey := range keys {
+		election := "plugin/" + logicalService + "/" + unit.RoutingDomain
+		if partitionKey != "" {
+			election += "/partition/" + partitionKey
+		}
+		elector := controlplane.LeaderElector{KV: r.LeaderKV, Election: election, Identity: identity + "/" + unit.ID + "/" + partitionKey, Options: controlplane.LeaderElectionOptions{Logf: r.Logf}}
+		leadership, err := elector.Acquire(ctx)
+		if err != nil {
+			for _, previous := range leaderships {
+				_ = previous.Close(context.Background())
+			}
+			return unit, nil, fmt.Errorf("unit %s 获取 %s lease: %w", unit.ID, election, err)
+		}
+		leaderships = append(leaderships, leadership)
+		record := leadership.Record()
+		unit.PartitionGenerations[partitionKey] = record.Epoch
+		unit.PartitionFencingTokens[partitionKey] = record.Token
+		if unit.Generation == 0 || record.Epoch < unit.Generation {
+			unit.Generation = record.Epoch
+		}
+		if unit.FencingToken == "" {
+			unit.FencingToken = record.Token
+		}
+	}
+	return unit, leaderships, nil
+}
+
+func (r *ProtocolRuntime) restoreOwnership(ctx context.Context, unitID string, old *runningUnit) error {
+	if old == nil {
+		return nil
+	}
+	policy, err := unitPolicy(deploymentUnitForRuntime(old.spec))
+	if err != nil {
+		return err
+	}
+	restoredSpec, leaderships, err := r.acquireUnitLeaderships(ctx, cloneRuntimeUnit(old.spec), policy)
+	if err != nil {
+		return err
+	}
+	r.mu.RLock()
+	router := r.router
+	r.mu.RUnlock()
+	registrations, err := registerCandidate(ctx, router, old.host, restoredSpec, old.processes)
+	if err == nil {
+		err = addressing.ActivateRegistrations(ctx, registrations)
+	}
+	if err != nil {
+		closeRegistrations(context.Background(), registrations)
+		for _, leadership := range leaderships {
+			_ = leadership.Close(context.Background())
+		}
+		return err
+	}
+	r.mu.Lock()
+	current, exists := r.units[unitID]
+	if !exists || current != old {
+		r.mu.Unlock()
+		closeRegistrations(context.Background(), registrations)
+		for _, leadership := range leaderships {
+			_ = leadership.Close(context.Background())
+		}
+		return errors.New("旧 owner 已不再是当前 unit")
+	}
+	old.registrations, old.leaderships, old.spec = registrations, leaderships, restoredSpec
+	r.mu.Unlock()
+	for _, leadership := range leaderships {
+		go r.monitorLeadership(unitID, old.generation, leadership)
+	}
+	return nil
+}
+
+func cloneRuntimeUnit(unit RuntimeUnit) RuntimeUnit {
+	unit.PartitionKeys = append([]string(nil), unit.PartitionKeys...)
+	unit.EnvironmentAllowlist = append([]string(nil), unit.EnvironmentAllowlist...)
+	unit.Plugins = append([]InstalledPlugin(nil), unit.Plugins...)
+	unit.Migrations = append([]StateMigrationPlan(nil), unit.Migrations...)
+	unit.PartitionGenerations = cloneUint64Map(unit.PartitionGenerations)
+	unit.PartitionFencingTokens = cloneStringMap(unit.PartitionFencingTokens)
+	unit.Config = RawConfig(unit.Config)
+	return unit
+}
+
+func cloneUint64Map(input map[string]uint64) map[string]uint64 {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]uint64, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
+}
+
+func cloneStringMap(input map[string]string) map[string]string {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 type preparedMigration struct {
@@ -467,6 +569,10 @@ func (r *ProtocolRuntime) monitorDependencies(unitID string, generation uint64) 
 				r.Logf("unit %s 依赖丢失，停止数据面: %v", unitID, err)
 			}
 			_ = r.Stop(context.Background(), unitID)
+			select {
+			case r.events <- RuntimeEvent{UnitID: unitID, Fingerprint: unit.fingerprint, Type: "dependency_lost", Message: err.Error(), OccurredAt: time.Now().UTC()}:
+			default:
+			}
 			return
 		}
 		r.mu.Lock()

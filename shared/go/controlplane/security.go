@@ -149,12 +149,12 @@ func roleACL(role SecurityRole, nodeID string) (SubjectACL, error) {
 	case RoleController:
 		return SubjectACL{
 			PublishAllow: append(openAllAPI(), append(
-				kvAPIForRead(DeploymentsBucket, NodesBucket, AssignmentsBucket, ControllersBucket, AutoscalingBucket),
-				"$KV."+AssignmentsBucket+".>", "$KV."+ControllersBucket+".>",
+				kvAPIForRead(DeploymentsBucket, NodesBucket, ActualBucket, AssignmentsBucket, CompositionsBucket, ControllersBucket, AutoscalingBucket),
+				"$KV."+AssignmentsBucket+".>", "$KV."+CompositionsBucket+".>", "$KV."+ControllersBucket+".>",
 			)...),
 			SubscribeAllow: []string{
-				"_INBOX.>", "$KV." + DeploymentsBucket + ".>", "$KV." + NodesBucket + ".>",
-				"$KV." + AssignmentsBucket + ".>", "$KV." + ControllersBucket + ".>", "$KV." + AutoscalingBucket + ".>",
+				"_INBOX.>", "$KV." + DeploymentsBucket + ".>", "$KV." + NodesBucket + ".>", "$KV." + ActualBucket + ".>",
+				"$KV." + AssignmentsBucket + ".>", "$KV." + CompositionsBucket + ".>", "$KV." + ControllersBucket + ".>", "$KV." + AutoscalingBucket + ".>",
 			},
 		}, nil
 	case RoleNode:
@@ -198,7 +198,7 @@ func roleACL(role SecurityRole, nodeID string) (SubjectACL, error) {
 }
 
 func openAllAPI() []string {
-	return append(kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, ControllersBucket, AutoscalingBucket), "$JS.API.STREAM.INFO."+EventsStream)
+	return append(kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, CompositionsBucket, ControllersBucket, AutoscalingBucket), "$JS.API.STREAM.INFO."+EventsStream)
 }
 
 func kvAPIForInfo(buckets ...string) []string {

@@ -14,6 +14,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/deploymentcontroller"
+	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/shared/go/controlplane"
@@ -33,6 +34,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	key := flags.String("key", "", "KV key；默认从 metadata.tenant/name 生成")
 	controllerMode := flags.Bool("controller", false, "持续 watch v2 部署与节点租约并生成每节点 assignment")
 	controllerID := flags.String("controller-id", "", "controller 选主身份；默认 hostname-pid")
+	repositoryRoot := flags.String("repository", ".vastplan/repository", "controller 读取完整 manifest 的本地不可变制品仓库")
 	bootstrap := flags.Bool("bootstrap", false, "创建/校准控制面 bucket")
 	replicas := flags.Int("replicas", 1, "bootstrap 时的 JetStream 副本数；生产建议至少 3")
 	if err := flags.Parse(args); err != nil {
@@ -86,10 +88,17 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if !*controllerMode {
 		return nil
 	}
+	artifacts, err := pluginservice.NewRepository(*repositoryRoot)
+	if err != nil {
+		return err
+	}
 	controller := deploymentcontroller.Controller{
 		Deployments: buckets.Deployments, DeploymentKey: *key,
-		Scheduler: deploymentcontroller.Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments, Metrics: buckets.Autoscaling, Actual: buckets.Actual},
-		Leaders:   buckets.Controllers, Identity: *controllerID,
+		Scheduler: deploymentcontroller.Scheduler{
+			Nodes: buckets.Nodes, Assignments: buckets.Assignments, Metrics: buckets.Autoscaling,
+			Actual: buckets.Actual, Compositions: buckets.Compositions, Artifacts: artifacts,
+		},
+		Leaders: buckets.Controllers, Identity: *controllerID,
 		Logf: func(format string, values ...any) { _, _ = fmt.Fprintf(stderr, format+"\n", values...) },
 	}
 	if err := controller.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
