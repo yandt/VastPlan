@@ -190,7 +190,7 @@ func TestParseManifest_BackendExecutionIsLanguageNeutralAndBackwardCompatible(t 
   "engines":{"backend":"^1.0"},
   "execution":{"backend":{"driver":"python","args":["--mode","worker"],"requirements":{"python":">=3.11"},
     "platforms":["linux/amd64","darwin/arm64"],"minimumIsolation":"process-sandbox","features":["channel.cancel.v1"],
-		"dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1","fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}},
+		"dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1","fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","required":true}}},
   "activation":["onStartup"],"entry":{"backend":"backend/main.py"},
   "contributes":{"backend":{"tools":[{"id":"example.python","service_role":"backend"}]}}
 }`))
@@ -201,7 +201,7 @@ func TestParseManifest_BackendExecutionIsLanguageNeutralAndBackwardCompatible(t 
 	if got.Driver != "python" || got.MinimumIsolation != "process-sandbox" || got.Requirements["python"] != ">=3.11" || len(got.Args) != 2 {
 		t.Fatalf("python 执行契约解析错误: %+v", got)
 	}
-	if got.DynamicGo == nil || got.DynamicGo.Entry != "backend/plugin.so" || got.DynamicGo.ABI != "vastplan.dynamic-go.v1" || len(got.DynamicGo.Fingerprint) != 64 {
+	if got.DynamicGo == nil || got.DynamicGo.Entry != "backend/plugin.so" || got.DynamicGo.ABI != "vastplan.dynamic-go.v1" || len(got.DynamicGo.Fingerprint) != 64 || !got.DynamicGo.Required {
 		t.Fatalf("dynamic-go 执行契约解析错误: %+v", got.DynamicGo)
 	}
 

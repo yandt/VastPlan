@@ -90,20 +90,20 @@ Backend 默认用独立进程运行所有插件。内嵌是独立的部署策略
 
 ```text
 -plugin-placement-default=process-only
--publisher-plugin-placements=vastplan=prefer-embedded
--plugin-placements=com.vastplan.foundation.security.bootstrap-policy=require-embedded
-# 明确要求从已签名 .so 加载时：
+-publisher-plugin-placements=vastplan=prefer-dynamic-go
 -plugin-placements=com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go
 ```
 
 规则优先级为“插件 > 发布者 > 全局”，可选值为 `process-only`、
-`prefer-embedded`、`require-embedded`、`prefer-dynamic-go`、`require-dynamic-go`。
+`prefer-dynamic-go`、`require-dynamic-go`。
 生产建议保持全局 `process-only`，逐插件启用；发布者级规则适合已经完成统一评审的封闭
 发布物。只有 `publisher=vastplan + com.vastplan.*` 首方硬身份、精确 ID/版本、验签贡献
 清单和 `trusted-process` 隔离下限同时满足时才会内嵌。
 
-`prefer-embedded` 按静态目录、dynamic-go、进程回退；dynamic-go 专用值跳过静态目录。
-代码定义与清单不一致属于发布漂移，直接拒绝。dynamic-go 只支持 Linux/FreeBSD/macOS
+`prefer-dynamic-go` 在 dynamic-go 不可用时回退独立进程；`require-dynamic-go` 不允许回退。
+代码定义与清单不一致属于发布漂移，直接拒绝。`execution.backend.dynamicGo.required=true`
+的签名制品必须匹配部署方的 `require-dynamic-go`，否则拒绝启动；该字段不授予内嵌权限。
+dynamic-go 只支持 Linux/FreeBSD/macOS
 原生 `CGO_ENABLED=1` 共同构建，Backend、`.so` 与签名 Manifest 的构建指纹必须一致；
 加载器会在 `plugin.Open` 前先校验签名指纹，再验证模块导出信息。标准库 plugin
 不能卸载，所以升级必须滚动重启 Backend，不做同进程热替换。共同构建命令为：
@@ -112,7 +112,7 @@ Backend 默认用独立进程运行所有插件。内嵌是独立的部署策略
 OUT_DIR=bin/dynamic-go ./tools/build-dynamic-go.sh
 ```
 
-其他平台或 `CGO_ENABLED=0` 的 Backend 保留进程/静态能力并拒绝 dynamic-go。具体安全与
+其他平台或 `CGO_ENABLED=0` 的 Backend 保留进程能力并拒绝 dynamic-go。具体安全与
 故障边界见 [ADR-0051](../decisions/ADR-0051-Backend混合插件运行与受控内嵌边界.md)。
 
 ## 4. 升级

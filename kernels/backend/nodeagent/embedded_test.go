@@ -11,53 +11,24 @@ import (
 	"cdsoft.com.cn/VastPlan/shared/go/registry"
 )
 
-func TestPlacementPolicyPrecedence(t *testing.T) {
-	policy, err := ParsePlacementPolicy("process-only", "vastplan=prefer-embedded",
-		"com.vastplan.foundation.security.bootstrap-policy=require-embedded")
+func TestPlacementPolicyPrecedenceAndRejectsStaticModes(t *testing.T) {
+	policy, err := ParsePlacementPolicy("process-only", "vastplan=prefer-dynamic-go",
+		"com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go")
 	if err != nil {
 		t.Fatal(err)
 	}
 	plugin := InstalledPlugin{ID: "com.vastplan.foundation.security.bootstrap-policy", Publisher: "vastplan"}
-	if got := policy.modeFor(plugin); got != PlacementRequireEmbedded {
+	if got := policy.modeFor(plugin); got != PlacementRequireDynamicGo {
 		t.Fatalf("插件级规则应优先，实际 %s", got)
 	}
 	plugin.ID = "com.vastplan.platform.settings"
-	if got := policy.modeFor(plugin); got != PlacementPreferEmbedded {
+	if got := policy.modeFor(plugin); got != PlacementPreferDynamicGo {
 		t.Fatalf("发布者级规则应次优先，实际 %s", got)
 	}
-	plugin.Publisher = "other"
-	if got := policy.modeFor(plugin); got != PlacementProcessOnly {
-		t.Fatalf("应回退全局规则，实际 %s", got)
-	}
-}
-
-func TestRequireEmbeddedRejectsHigherIsolationAndMissingCatalog(t *testing.T) {
-	catalog, err := NewEmbeddedCatalog(func() protocolbus.EmbeddedPlugin {
-		return protocolbus.EmbeddedPlugin{ID: "com.vastplan.foundation.test.module", Version: "1.0.0"}
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	runtime := NewProtocolRuntime("1.0.0", nil)
-	runtime.EmbeddedCatalog = catalog
-	runtime.PlacementPolicy = PlacementPolicy{Default: PlacementRequireEmbedded}
-	runtime.ExecutionPolicy = ExecutionPolicy{DefaultPolicy: PublisherPolicyAllowTrusted}
-	host := protocolbus.NewHost("backend", "1.0.0", registry.New(), nil)
-	plugin := InstalledPlugin{ID: "com.vastplan.foundation.test.module", Version: "1.0.0", Publisher: "vastplan"}
-	plugin.Execution.MinimumIsolation = string(IsolationProcessSandbox)
-	_, err = runtime.startPlugin(context.Background(), host, plugin, protocolbus.LaunchPolicy{
-		PluginID: plugin.ID, Version: plugin.Version, Contributions: []pluginv1.RuntimeContribution{},
-	})
-	if err == nil || !strings.Contains(err.Error(), "不能放入内核进程") {
-		t.Fatalf("高隔离下限必须拒绝内嵌: %v", err)
-	}
-	plugin.ID = "com.vastplan.foundation.test.missing"
-	plugin.Execution.MinimumIsolation = string(IsolationTrustedProcess)
-	_, err = runtime.startPlugin(context.Background(), host, plugin, protocolbus.LaunchPolicy{
-		PluginID: plugin.ID, Version: plugin.Version, Contributions: []pluginv1.RuntimeContribution{},
-	})
-	if err == nil || !strings.Contains(err.Error(), "既不在静态目录") {
-		t.Fatalf("require-embedded 不得回退进程: %v", err)
+	for _, mode := range []string{"prefer-embedded", "require-embedded"} {
+		if _, err := ParsePlacementPolicy(mode, "", ""); err == nil {
+			t.Fatalf("静态内嵌模式必须被删除后拒绝: %s", mode)
+		}
 	}
 }
 
@@ -72,17 +43,19 @@ func (l *fakeDynamicGoLoader) Load(_, _, _, _ string) (protocolbus.EmbeddedPlugi
 	return l.value, l.err
 }
 
-func TestRequireDynamicGoLoadsOnlyFirstPartySignedEntry(t *testing.T) {
-	plugin := InstalledPlugin{
+func dynamicPlugin() InstalledPlugin {
+	return InstalledPlugin{
 		ID: "com.vastplan.foundation.test.dynamic", Publisher: "vastplan", Version: "1.0.0",
 		DynamicGoPath: "/signed/content/plugin.so",
-		Execution: pluginv1.BackendExecution{
-			MinimumIsolation: string(IsolationTrustedProcess),
+		Execution: pluginv1.BackendExecution{MinimumIsolation: string(IsolationTrustedProcess),
 			DynamicGo: &pluginv1.DynamicGoExecution{Entry: "backend/plugin.so", ABI: protocolbus.DynamicGoABIV1,
-				Fingerprint: strings.Repeat("a", 64)},
-		},
+				Fingerprint: strings.Repeat("a", 64)}},
 		Contract: PluginRuntimeContract{Contributions: []pluginv1.RuntimeContribution{}},
 	}
+}
+
+func TestRequireDynamicGoLoadsOnlyFirstPartySignedEntry(t *testing.T) {
+	plugin := dynamicPlugin()
 	loader := &fakeDynamicGoLoader{value: protocolbus.EmbeddedPlugin{ID: plugin.ID, Version: plugin.Version}}
 	runtime := NewProtocolRuntime("1.0.0", nil)
 	runtime.DynamicGoLoader = loader
@@ -109,15 +82,50 @@ func TestRequireDynamicGoLoadsOnlyFirstPartySignedEntry(t *testing.T) {
 	}
 }
 
+func TestRequiredDynamicGoContractRejectsAnyNonDynamicPlacement(t *testing.T) {
+	plugin := dynamicPlugin()
+	plugin.Execution.DynamicGo.Required = true
+	runtime := NewProtocolRuntime("1.0.0", nil)
+	runtime.ExecutionPolicy = ExecutionPolicy{DefaultPolicy: PublisherPolicyAllowTrusted}
+	host := protocolbus.NewHost("backend", "1.0.0", registry.New(), nil)
+	for _, mode := range []PlacementMode{PlacementProcessOnly, PlacementPreferDynamicGo} {
+		runtime.PlacementPolicy = PlacementPolicy{Default: mode}
+		_, err := runtime.startPlugin(context.Background(), host, plugin, protocolbus.LaunchPolicy{
+			PluginID: plugin.ID, Version: plugin.Version, Contributions: []pluginv1.RuntimeContribution{},
+		})
+		if err == nil || !strings.Contains(err.Error(), "要求 require-dynamic-go") {
+			t.Fatalf("required dynamic-go 不得降级为 %s: %v", mode, err)
+		}
+	}
+}
+
+func TestRequireDynamicGoRejectsHigherIsolationAndMissingModule(t *testing.T) {
+	plugin := dynamicPlugin()
+	plugin.Execution.MinimumIsolation = string(IsolationProcessSandbox)
+	runtime := NewProtocolRuntime("1.0.0", nil)
+	runtime.PlacementPolicy = PlacementPolicy{Default: PlacementRequireDynamicGo}
+	runtime.ExecutionPolicy = ExecutionPolicy{DefaultPolicy: PublisherPolicyAllowTrusted}
+	host := protocolbus.NewHost("backend", "1.0.0", registry.New(), nil)
+	_, err := runtime.startPlugin(context.Background(), host, plugin, protocolbus.LaunchPolicy{
+		PluginID: plugin.ID, Version: plugin.Version, Contributions: []pluginv1.RuntimeContribution{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "不能放入内核进程") {
+		t.Fatalf("高隔离下限必须拒绝 dynamic-go: %v", err)
+	}
+	plugin.Execution.MinimumIsolation = string(IsolationTrustedProcess)
+	plugin.DynamicGoPath = ""
+	_, err = runtime.startPlugin(context.Background(), host, plugin, protocolbus.LaunchPolicy{
+		PluginID: plugin.ID, Version: plugin.Version, Contributions: []pluginv1.RuntimeContribution{},
+	})
+	if err == nil || !strings.Contains(err.Error(), "没有已验签的 dynamic-go 入口") {
+		t.Fatalf("require-dynamic-go 不得回退进程: %v", err)
+	}
+}
+
 func TestPreferDynamicGoFallsBackToProcessWhenModuleIsUnavailable(t *testing.T) {
 	dynamicErr := errors.New("dynamic-go 当前平台不可用")
-	plugin := InstalledPlugin{
-		ID: "com.vastplan.foundation.test.dynamic", Publisher: "vastplan", Version: "1.0.0",
-		DynamicGoPath: "/signed/content/plugin.so",
-		Execution: pluginv1.BackendExecution{Driver: "native", MinimumIsolation: string(IsolationTrustedProcess),
-			DynamicGo: &pluginv1.DynamicGoExecution{Entry: "backend/plugin.so", ABI: protocolbus.DynamicGoABIV1,
-				Fingerprint: strings.Repeat("a", 64)}},
-	}
+	plugin := dynamicPlugin()
+	plugin.Execution.Driver = "native"
 	loader := &fakeDynamicGoLoader{err: dynamicErr}
 	runtime := NewProtocolRuntime("1.0.0", nil)
 	runtime.DynamicGoLoader = loader
@@ -129,38 +137,5 @@ func TestPreferDynamicGoFallsBackToProcessWhenModuleIsUnavailable(t *testing.T) 
 	})
 	if !loader.called || err == nil || errors.Is(err, dynamicErr) {
 		t.Fatalf("prefer-dynamic-go 应尝试模块后回退进程: called=%v err=%v", loader.called, err)
-	}
-}
-
-func TestEmbeddedCatalogRequiresExactVersionAndStableIdentity(t *testing.T) {
-	catalog, err := NewEmbeddedCatalog(func() protocolbus.EmbeddedPlugin {
-		return protocolbus.EmbeddedPlugin{ID: "com.vastplan.test", Version: "1.0.0"}
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, found, err := catalog.Resolve("com.vastplan.test", "1.0.1"); err != nil || found {
-		t.Fatalf("静态目录不得跨版本匹配: found=%v err=%v", found, err)
-	}
-	if _, found, err := catalog.Resolve("com.vastplan.test", "1.0.0"); err != nil || !found {
-		t.Fatalf("精确版本应命中: found=%v err=%v", found, err)
-	}
-}
-
-func TestParsePlacementPolicyRejectsInvalidRules(t *testing.T) {
-	valid, err := ParsePlacementPolicy("process-only", "vastplan=prefer-dynamic-go",
-		"com.vastplan.foundation.test.dynamic=require-dynamic-go")
-	if err != nil || valid.PublisherPolicies["vastplan"] != PlacementPreferDynamicGo ||
-		valid.PluginPolicies["com.vastplan.foundation.test.dynamic"] != PlacementRequireDynamicGo {
-		t.Fatalf("dynamic-go 放置策略应可解析: %+v err=%v", valid, err)
-	}
-	for _, input := range []struct{ defaultMode, publishers, plugins string }{
-		{"embedded", "", ""},
-		{"process-only", "vastplan", ""},
-		{"process-only", "", "one=prefer-embedded,one=require-embedded"},
-	} {
-		if _, err := ParsePlacementPolicy(input.defaultMode, input.publishers, input.plugins); err == nil {
-			t.Fatalf("应拒绝无效放置策略: %+v", input)
-		}
 	}
 }

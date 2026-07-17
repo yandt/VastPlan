@@ -87,11 +87,12 @@ type BackendExecution struct {
 }
 
 // DynamicGoExecution 声明制品内可选的首方 Go 动态内嵌入口。它只描述已签名内容，
-// 是否允许加载仍由节点 PlacementPolicy 决定。
+// 是否允许加载仍由节点 PlacementPolicy 决定；Required 只能禁止进程回退，不能授予内嵌权限。
 type DynamicGoExecution struct {
 	Entry       string `json:"entry"`
 	ABI         string `json:"abi"`
 	Fingerprint string `json:"fingerprint,omitempty"`
+	Required    bool   `json:"required,omitempty"`
 }
 
 // BackendExecutionContract 返回向后兼容的冻结执行契约。旧 v1 清单等价于 native

@@ -125,7 +125,8 @@
       "properties": {
         "entry": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
         "abi": { "const": "vastplan.dynamic-go.v1" },
-        "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        "fingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "required": { "type": "boolean" }
       }
     },
     "runtimePolicy": {

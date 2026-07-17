@@ -54,7 +54,6 @@ type ProtocolRuntime struct {
 	Dependencies    kernelspi.Dependencies
 	Drivers         *RuntimeDriverRegistry
 	ExecutionPolicy ExecutionPolicy
-	EmbeddedCatalog *EmbeddedCatalog
 	DynamicGoLoader DynamicGoModuleLoader
 	PlacementPolicy PlacementPolicy
 }

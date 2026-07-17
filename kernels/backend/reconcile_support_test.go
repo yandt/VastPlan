@@ -39,14 +39,14 @@ func TestParseReconcileOptionsSupportsPlacementPrecedence(t *testing.T) {
 	configured, err := parseReconcileOptions([]string{
 		"-desired", "desired.json",
 		"-plugin-placement-default", "process-only",
-		"-publisher-plugin-placements", "vastplan=prefer-embedded",
-		"-plugin-placements", "com.vastplan.foundation.security.bootstrap-policy=require-embedded",
+		"-publisher-plugin-placements", "vastplan=prefer-dynamic-go",
+		"-plugin-placements", "com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if configured.placementPolicy.PublisherPolicies["vastplan"] != nodeagent.PlacementPreferEmbedded ||
-		configured.placementPolicy.PluginPolicies["com.vastplan.foundation.security.bootstrap-policy"] != nodeagent.PlacementRequireEmbedded {
+	if configured.placementPolicy.PublisherPolicies["vastplan"] != nodeagent.PlacementPreferDynamicGo ||
+		configured.placementPolicy.PluginPolicies["com.vastplan.foundation.security.bootstrap-policy"] != nodeagent.PlacementRequireDynamicGo {
 		t.Fatalf("放置策略未正确解析: %+v", configured.placementPolicy)
 	}
 }
@@ -107,7 +107,8 @@ func TestParseReconcileOptionsRejectsConflictingOrInvalidPluginPolicies(t *testi
 		{"-desired", "desired.json", "-third-party-plugin-policy", "invalid"},
 		{"-desired", "desired.json", "-publisher-plugin-policies", "acme=deny,acme=allow-trusted"},
 		{"-desired", "desired.json", "-plugin-placement-default", "in-process"},
-		{"-desired", "desired.json", "-plugin-placements", "one=prefer-embedded,one=process-only"},
+		{"-desired", "desired.json", "-plugin-placements", "one=prefer-dynamic-go,one=process-only"},
+		{"-desired", "desired.json", "-plugin-placements", "one=prefer-embedded"},
 	}
 	for _, args := range tests {
 		if _, err := parseReconcileOptions(args); err == nil {

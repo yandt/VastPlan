@@ -1,6 +1,4 @@
-// Package bootstrapembedded 是 bootstrap-policy 对 protocolbus 内嵌 ABI 的唯一适配。
-// 静态组合与 dynamic-go .so 共用它，避免贡献 descriptor 或 handler 路由漂移。
-package bootstrapembedded
+package main
 
 import (
 	"context"
@@ -11,7 +9,8 @@ import (
 	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
 )
 
-func Definition() protocolbus.EmbeddedPlugin {
+// definition 是 dynamic-go 模块唯一的 protocolbus 适配，避免内核编译任何具体插件代码。
+func definition() protocolbus.EmbeddedPlugin {
 	return protocolbus.EmbeddedPlugin{
 		ID: bootstrappolicy.PluginID, Version: bootstrappolicy.PluginVersion,
 		Contributions: []protocolbus.EmbeddedContribution{

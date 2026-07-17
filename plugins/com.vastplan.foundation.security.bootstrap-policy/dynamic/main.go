@@ -2,7 +2,6 @@
 package main
 
 import (
-	bootstrapembedded "cdsoft.com.cn/VastPlan/plugins/com.vastplan.foundation.security.bootstrap-policy/embedded"
 	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
 )
 
@@ -13,7 +12,7 @@ var dynamicGoBuildFingerprint string
 func VastPlanDynamicGo() protocolbus.DynamicGoModule {
 	return protocolbus.DynamicGoModule{
 		ABI: protocolbus.DynamicGoABIV1, BuildFingerprint: dynamicGoBuildFingerprint,
-		Plugin: bootstrapembedded.Definition(),
+		Plugin: definition(),
 	}
 }
 

@@ -27,7 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/composition/backendplugins"
 	artifactservercommand "cdsoft.com.cn/VastPlan/kernels/backend/commands/artifactserver"
 	controlplanecommand "cdsoft.com.cn/VastPlan/kernels/backend/commands/controlplane"
 	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
@@ -237,10 +236,6 @@ func runReconcile(args []string) (runErr error) {
 	runtime := nodeagent.NewProtocolRuntime(version, logf)
 	runtime.ExecutionPolicy = options.executionPolicy
 	runtime.PlacementPolicy = options.placementPolicy
-	runtime.EmbeddedCatalog, err = backendplugins.DefaultCatalog()
-	if err != nil {
-		return fmt.Errorf("构建内嵌插件静态目录: %w", err)
-	}
 	runtime.DynamicGoLoader = nodeagent.NewDynamicGoLoader(dynamicGoHostFingerprint)
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers

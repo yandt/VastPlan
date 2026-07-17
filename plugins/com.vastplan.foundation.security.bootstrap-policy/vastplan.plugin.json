@@ -24,7 +24,8 @@
       "minimumIsolation": "trusted-process",
       "dynamicGo": {
         "entry": "backend/bootstrap-policy.so",
-        "abi": "vastplan.dynamic-go.v1"
+        "abi": "vastplan.dynamic-go.v1",
+        "required": true
       }
     }
   },

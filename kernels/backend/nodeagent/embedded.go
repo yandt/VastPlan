@@ -5,95 +5,25 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
 )
-
-type EmbeddedFactory func() protocolbus.EmbeddedPlugin
-
-type embeddedCatalogEntry struct {
-	id, version string
-	factory     EmbeddedFactory
-}
-
-// EmbeddedCatalog 是内核编译时静态目录。远端制品和插件清单都不能向它动态写入，
-// 因而“被验签”不等于“可进入内核进程”。
-type EmbeddedCatalog struct {
-	mu      sync.RWMutex
-	entries map[string]embeddedCatalogEntry
-}
-
-func NewEmbeddedCatalog(factories ...EmbeddedFactory) (*EmbeddedCatalog, error) {
-	catalog := &EmbeddedCatalog{entries: map[string]embeddedCatalogEntry{}}
-	for _, factory := range factories {
-		if err := catalog.Register(factory); err != nil {
-			return nil, err
-		}
-	}
-	return catalog, nil
-}
-
-func embeddedCatalogKey(id, version string) string { return id + "\x00" + version }
-
-func (c *EmbeddedCatalog) Register(factory EmbeddedFactory) error {
-	if c == nil || factory == nil {
-		return errors.New("内嵌插件工厂不能为空")
-	}
-	definition := factory()
-	if strings.TrimSpace(definition.ID) == "" || strings.TrimSpace(definition.Version) == "" {
-		return errors.New("内嵌插件工厂必须提供身份和版本")
-	}
-	key := embeddedCatalogKey(definition.ID, definition.Version)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.entries == nil {
-		c.entries = map[string]embeddedCatalogEntry{}
-	}
-	if _, exists := c.entries[key]; exists {
-		return fmt.Errorf("内嵌插件目录重复: %s@%s", definition.ID, definition.Version)
-	}
-	c.entries[key] = embeddedCatalogEntry{id: definition.ID, version: definition.Version, factory: factory}
-	return nil
-}
-
-func (c *EmbeddedCatalog) Resolve(id, version string) (protocolbus.EmbeddedPlugin, bool, error) {
-	if c == nil {
-		return protocolbus.EmbeddedPlugin{}, false, nil
-	}
-	c.mu.RLock()
-	entry, ok := c.entries[embeddedCatalogKey(id, version)]
-	c.mu.RUnlock()
-	if !ok {
-		return protocolbus.EmbeddedPlugin{}, false, nil
-	}
-	definition := entry.factory()
-	if definition.ID != entry.id || definition.Version != entry.version {
-		return protocolbus.EmbeddedPlugin{}, false, fmt.Errorf("内嵌插件工厂身份漂移: 登记 %s@%s，返回 %s@%s",
-			entry.id, entry.version, definition.ID, definition.Version)
-	}
-	return definition, true, nil
-}
 
 type PlacementMode string
 
 const (
 	PlacementProcessOnly      PlacementMode = "process-only"
-	PlacementPreferEmbedded   PlacementMode = "prefer-embedded"
-	PlacementRequireEmbedded  PlacementMode = "require-embedded"
 	PlacementPreferDynamicGo  PlacementMode = "prefer-dynamic-go"
 	PlacementRequireDynamicGo PlacementMode = "require-dynamic-go"
 )
 
 func validatePlacementMode(mode PlacementMode) error {
 	switch mode {
-	case PlacementProcessOnly, PlacementPreferEmbedded, PlacementRequireEmbedded,
-		PlacementPreferDynamicGo, PlacementRequireDynamicGo:
+	case PlacementProcessOnly, PlacementPreferDynamicGo, PlacementRequireDynamicGo:
 		return nil
 	default:
-		return fmt.Errorf("插件放置策略无效: %q（可选: %s, %s, %s, %s, %s）", mode,
-			PlacementProcessOnly, PlacementPreferEmbedded, PlacementRequireEmbedded,
-			PlacementPreferDynamicGo, PlacementRequireDynamicGo)
+		return fmt.Errorf("插件放置策略无效: %q（可选: %s, %s, %s）", mode,
+			PlacementProcessOnly, PlacementPreferDynamicGo, PlacementRequireDynamicGo)
 	}
 }
 
@@ -162,10 +92,14 @@ func (r *ProtocolRuntime) startPlugin(ctx context.Context, host *protocolbus.Hos
 	if err := validatePlacementMode(mode); err != nil {
 		return nil, err
 	}
+	if plugin.Execution.DynamicGo != nil && plugin.Execution.DynamicGo.Required && mode != PlacementRequireDynamicGo {
+		return nil, fmt.Errorf("插件 %s@%s 的签名执行契约要求 require-dynamic-go，实际为 %s",
+			plugin.ID, plugin.Version, mode)
+	}
 	if mode == PlacementProcessOnly {
 		return r.startProcessPlugin(ctx, host, plugin, policy)
 	}
-	required := mode == PlacementRequireEmbedded || mode == PlacementRequireDynamicGo
+	required := mode == PlacementRequireDynamicGo
 	fallbackProcess := func(reason error) (*protocolbus.PluginProcess, error) {
 		if required {
 			return nil, reason
@@ -196,15 +130,6 @@ func (r *ProtocolRuntime) startPlugin(ctx context.Context, host *protocolbus.Hos
 		return r.startProcessPlugin(ctx, host, plugin, policy)
 	}
 
-	if mode != PlacementPreferDynamicGo && mode != PlacementRequireDynamicGo {
-		definition, found, err := r.EmbeddedCatalog.Resolve(plugin.ID, plugin.Version)
-		if err != nil {
-			return nil, err
-		}
-		if found {
-			return host.LaunchEmbeddedWithPolicy(ctx, definition, policy)
-		}
-	}
 	if plugin.DynamicGoPath != "" {
 		if plugin.Execution.DynamicGo == nil || plugin.Execution.DynamicGo.ABI != protocolbus.DynamicGoABIV1 {
 			return fallbackProcess(errors.New("dynamic-go 安装契约缺失或 ABI 无效"))
@@ -220,10 +145,7 @@ func (r *ProtocolRuntime) startPlugin(ctx context.Context, host *protocolbus.Hos
 		return host.LaunchEmbeddedWithPolicy(ctx, definition, policy)
 	}
 	if required {
-		if mode == PlacementRequireDynamicGo {
-			return nil, fmt.Errorf("插件 %s@%s 没有已验签的 dynamic-go 入口", plugin.ID, plugin.Version)
-		}
-		return nil, fmt.Errorf("插件 %s@%s 既不在静态目录中，也没有 dynamic-go 入口", plugin.ID, plugin.Version)
+		return nil, fmt.Errorf("插件 %s@%s 没有已验签的 dynamic-go 入口", plugin.ID, plugin.Version)
 	}
 	return r.startProcessPlugin(ctx, host, plugin, policy)
 }

@@ -53,7 +53,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.thirdPartyPluginPolicy, "third-party-plugin-policy", string(nodeagent.PublisherPolicyRequireIsolation), "未单独配置发布者时的策略: require-isolation, allow-trusted, deny")
 	flags.StringVar(&options.publisherPluginPolicies, "publisher-plugin-policies", "", "发布者级策略，逗号分隔 publisher=policy；优先于全局策略")
 	flags.StringVar(&options.firstPartyPublishers, "first-party-publishers", "vastplan", "兼容参数：隐式配置 allow-trusted 的发布者，逗号分隔；显式发布者策略优先")
-	flags.StringVar(&options.pluginPlacementDefault, "plugin-placement-default", string(nodeagent.PlacementProcessOnly), "插件默认放置: process-only, prefer-embedded, require-embedded, prefer-dynamic-go, require-dynamic-go")
+	flags.StringVar(&options.pluginPlacementDefault, "plugin-placement-default", string(nodeagent.PlacementProcessOnly), "插件默认放置: process-only, prefer-dynamic-go, require-dynamic-go")
 	flags.StringVar(&options.publisherPluginPlacements, "publisher-plugin-placements", "", "发布者级放置策略，逗号分隔 publisher=mode")
 	flags.StringVar(&options.pluginPlacements, "plugin-placements", "", "插件级放置策略，逗号分隔 pluginID=mode；优先级最高")
 	flags.BoolVar(&options.requireThirdPartyIsolation, "require-third-party-isolation", true, "已弃用兼容参数；请使用 -third-party-plugin-policy")

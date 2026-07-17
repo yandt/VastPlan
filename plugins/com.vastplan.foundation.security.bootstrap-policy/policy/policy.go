@@ -1,5 +1,5 @@
 // Package bootstrappolicy 提供自举权限基线的运行时无关实现。进程插件入口和
-// Backend 静态内嵌目录都只做适配，策略逻辑因此保持单一真源。
+// dynamic-go 模块都只做适配，策略逻辑因此保持单一真源。
 package bootstrappolicy
 
 import (

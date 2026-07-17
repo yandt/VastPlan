@@ -35,7 +35,7 @@ type EmbeddedContribution struct {
 // EmbeddedLifecycle 与进程协议使用同一套生命周期操作。migration 只在迁移阶段非空。
 type EmbeddedLifecycle func(context.Context, pluginhostv1.Lifecycle_Op, *MigrationCommand) error
 
-// EmbeddedPlugin 是编译进内核二进制的静态插件定义。它不是插件清单的替代品；
+// EmbeddedPlugin 是 dynamic-go 模块返回的进程内定义。它不是插件清单的替代品；
 // LaunchEmbeddedWithPolicy 仍会逐项核对已经验签的 LaunchPolicy。
 type EmbeddedPlugin struct {
 	ID            string

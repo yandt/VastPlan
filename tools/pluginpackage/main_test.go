@@ -38,7 +38,7 @@ func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
 	manifest := []byte(`{
   "id":"com.vastplan.foundation.test.dynamic","name":"dynamic","description":"dynamic","version":"1.0.0","publisher":"vastplan",
   "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"native","minimumIsolation":"trusted-process",
-    "dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1"}}},
+    "dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1","required":true}}},
   "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
   "contributes":{"backend":{"tools":[{"id":"foundation.test.dynamic.tool","service_role":"backend"}]}}
 }`)
@@ -63,7 +63,7 @@ func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Execution.Backend.DynamicGo.Fingerprint != fingerprint {
+	if got.Execution.Backend.DynamicGo.Fingerprint != fingerprint || !got.Execution.Backend.DynamicGo.Required {
 		t.Fatalf("签名清单没有冻结 dynamic-go 构建指纹: %+v", got.Execution.Backend.DynamicGo)
 	}
 }

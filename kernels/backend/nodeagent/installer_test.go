@@ -95,7 +95,7 @@ func TestLocalInstallerFreezesDynamicGoEntryFromSignedManifest(t *testing.T) {
 		manifest := []byte(fmt.Sprintf(`{
   "id":"com.vastplan.foundation.test.dynamic","name":"dynamic","description":"dynamic","version":"1.0.0","publisher":"vastplan",
   "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"native","minimumIsolation":"trusted-process",
-    "dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1"%s}}},
+    "dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1","required":true%s}}},
   "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
   "contributes":{"backend":{"tools":[{"id":"foundation.test.dynamic.tool","service_role":"backend"}]}}
 }`, fingerprint))
@@ -129,7 +129,8 @@ func TestLocalInstallerFreezesDynamicGoEntryFromSignedManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(installed.DynamicGoPath) != "plugin.so" || installed.Execution.DynamicGo == nil {
+	if filepath.Base(installed.DynamicGoPath) != "plugin.so" || installed.Execution.DynamicGo == nil ||
+		!installed.Execution.DynamicGo.Required {
 		t.Fatalf("安装结果没有冻结 dynamic-go 入口: %+v", installed)
 	}
 
