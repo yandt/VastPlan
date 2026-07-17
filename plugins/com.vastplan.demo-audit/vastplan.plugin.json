@@ -3,6 +3,9 @@
   "name": "示例审计",
   "version": "0.1.0",
   "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
   "description": "演示 fanout 分发：订阅 task.* 事件并记录，另提供工具查询已记录的事件",
   "engines": { "backend": "^0.1 || ^1.0" },
 

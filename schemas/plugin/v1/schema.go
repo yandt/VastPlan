@@ -52,6 +52,9 @@ type Manifest struct {
 	Description  string                     `json:"description"`
 	Version      string                     `json:"version"`
 	Publisher    string                     `json:"publisher"`
+	License      string                     `json:"license,omitempty"`
+	LicenseFile  string                     `json:"licenseFile,omitempty"`
+	NoticeFile   string                     `json:"noticeFile,omitempty"`
 	Engines      map[string]string          `json:"engines"`
 	Capabilities *Capabilities              `json:"capabilities,omitempty"`
 	Runtime      *RuntimePolicy             `json:"runtime,omitempty"`

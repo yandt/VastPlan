@@ -632,6 +632,24 @@ func publishBuiltPlugin(t *testing.T, repository *pluginservice.Repository, pack
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifestRaw, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if manifest.License != "" {
+		licenseRaw, err := os.ReadFile(filepath.Join(repoRoot(t), "LICENSE"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(manifest.LicenseFile)), licenseRaw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if manifest.NoticeFile != "" {
+		noticeRaw, err := os.ReadFile(filepath.Join(repoRoot(t), "NOTICE"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(manifest.NoticeFile)), noticeRaw, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	entry := filepath.Join(dir, filepath.FromSlash(manifest.Entry["backend"]))
 	if err := os.MkdirAll(filepath.Dir(entry), 0o755); err != nil {
 		t.Fatal(err)

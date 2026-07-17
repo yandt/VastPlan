@@ -1,7 +1,8 @@
 // pluginpackage 把一个插件目录和已构建 backend 二进制打成可发布制品。
 //
 //	用法：go run ./tools/pluginpackage -source plugins/com.example.demo \
-//	  -backend-bin dist/demo -out /tmp/demo.tar.gz -repository .vastplan/repository
+//	  -backend-bin dist/demo -license-file LICENSE -notice-file NOTICE \
+//	  -out /tmp/demo.tar.gz -repository .vastplan/repository
 package main
 
 import (
@@ -23,6 +24,8 @@ import (
 func main() {
 	source := flag.String("source", "", "插件目录（须含 vastplan.plugin.json）")
 	backendBin := flag.String("backend-bin", "", "写入清单 entry.backend 的已构建可执行文件")
+	licenseFile := flag.String("license-file", "LICENSE", "清单声明 license 时注入制品的许可证文本；默认仓库根 LICENSE")
+	noticeFile := flag.String("notice-file", "NOTICE", "清单声明 noticeFile 时注入制品的归属告示；默认仓库根 NOTICE")
 	out := flag.String("out", "", "可选：输出 .tar.gz 文件")
 	repositoryRoot := flag.String("repository", "", "可选：直接发布到本地制品仓库")
 	remoteRepository := flag.String("remote-repository", "", "可选：发布到 HTTPS 远端制品仓库")
@@ -40,12 +43,8 @@ func main() {
 		os.Exit(2)
 	}
 
-	packageSource := *source
-	if *backendBin != "" {
-		stagedSource, cleanup := stageBackendBinary(*source, *backendBin)
-		packageSource = stagedSource
-		defer cleanup()
-	}
+	packageSource, cleanup := stagePackage(*source, *backendBin, *licenseFile, *noticeFile)
+	defer cleanup()
 	packageBytes, manifest, err := pluginservice.PackageDirectory(packageSource)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "打包失败: %v\n", err)
@@ -111,7 +110,9 @@ func main() {
 	}
 }
 
-func stageBackendBinary(source, backendBin string) (string, func()) {
+// stagePackage 只在需要注入已构建二进制或许可证文本时创建临时目录。
+// 许可证目的路径来自已校验清单，不能由命令行改写（ADR-0046）。
+func stagePackage(source, backendBin, licenseSource, noticeSource string) (string, func()) {
 	manifestRaw, err := os.ReadFile(filepath.Join(source, "vastplan.plugin.json"))
 	if err != nil {
 		fatalf("读取插件清单失败: %v", err)
@@ -120,16 +121,38 @@ func stageBackendBinary(source, backendBin string) (string, func()) {
 	if err != nil {
 		fatalf("插件清单无效: %v", err)
 	}
-	entry, ok := manifest.Entry["backend"]
-	if !ok {
-		fatalf("清单未声明 entry.backend")
+	licensePresent := true
+	if manifest.License != "" {
+		licensePresent, err = regularNonempty(filepath.Join(source, filepath.FromSlash(manifest.LicenseFile)))
+		if err != nil {
+			fatalf("读取插件许可证文件失败: %v", err)
+		}
 	}
-	info, err := os.Stat(backendBin)
-	if err != nil {
-		fatalf("读取 backend 二进制失败: %v", err)
+	noticePresent := true
+	if manifest.NoticeFile != "" {
+		noticePresent, err = regularNonempty(filepath.Join(source, filepath.FromSlash(manifest.NoticeFile)))
+		if err != nil {
+			fatalf("读取插件归属告示失败: %v", err)
+		}
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
-		fatalf("backend 二进制不是可执行普通文件: %s", backendBin)
+	if backendBin == "" && licensePresent && noticePresent {
+		return source, func() {}
+	}
+
+	var entry string
+	if backendBin != "" {
+		var ok bool
+		entry, ok = manifest.Entry["backend"]
+		if !ok {
+			fatalf("清单未声明 entry.backend")
+		}
+		info, statErr := os.Stat(backendBin)
+		if statErr != nil {
+			fatalf("读取 backend 二进制失败: %v", statErr)
+		}
+		if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+			fatalf("backend 二进制不是可执行普通文件: %s", backendBin)
+		}
 	}
 	staging, err := os.MkdirTemp("", "vastplan-package-*")
 	if err != nil {
@@ -140,16 +163,59 @@ func stageBackendBinary(source, backendBin string) (string, func()) {
 		cleanup()
 		fatalf("复制插件目录失败: %v", err)
 	}
-	target := filepath.Join(staging, filepath.FromSlash(entry))
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		cleanup()
-		fatalf("创建 backend 入口目录失败: %v", err)
+	if backendBin != "" {
+		target := filepath.Join(staging, filepath.FromSlash(entry))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			cleanup()
+			fatalf("创建 backend 入口目录失败: %v", err)
+		}
+		if err := copyFile(backendBin, target, 0o755); err != nil {
+			cleanup()
+			fatalf("写入 backend 入口失败: %v", err)
+		}
 	}
-	if err := copyFile(backendBin, target, 0o755); err != nil {
-		cleanup()
-		fatalf("写入 backend 入口失败: %v", err)
+	if !licensePresent {
+		if licenseSource == "" {
+			cleanup()
+			fatalf("清单声明了 %s，但未提供 -license-file", manifest.License)
+		}
+		target := filepath.Join(staging, filepath.FromSlash(manifest.LicenseFile))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			cleanup()
+			fatalf("创建许可证文件目录失败: %v", err)
+		}
+		if err := copyFile(licenseSource, target, 0o644); err != nil {
+			cleanup()
+			fatalf("注入许可证文件失败: %v", err)
+		}
+	}
+	if !noticePresent {
+		if noticeSource == "" {
+			cleanup()
+			fatalf("清单声明了 noticeFile，但未提供 -notice-file")
+		}
+		target := filepath.Join(staging, filepath.FromSlash(manifest.NoticeFile))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			cleanup()
+			fatalf("创建归属告示目录失败: %v", err)
+		}
+		if err := copyFile(noticeSource, target, 0o644); err != nil {
+			cleanup()
+			fatalf("注入归属告示失败: %v", err)
+		}
 	}
 	return staging, cleanup
+}
+
+func regularNonempty(filename string) (bool, error) {
+	info, err := os.Stat(filename)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return info.Mode().IsRegular() && info.Size() > 0, nil
 }
 
 func copyTree(source, target string) error {

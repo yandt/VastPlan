@@ -3,6 +3,9 @@
   "name": "示例权限策略",
   "version": "0.1.0",
   "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
   "description": "演示 select 分发：两个不同优先级的权限校验器（拒绝名单 + 基线策略）",
   "engines": { "backend": "^0.1 || ^1.0" },
 

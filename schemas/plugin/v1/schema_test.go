@@ -44,6 +44,28 @@ func TestParseManifest_RejectsUnknownField(t *testing.T) {
 	}
 }
 
+func TestParseManifest_LicenseFieldsArePaired(t *testing.T) {
+	base := `{"id":"com.example.demo","name":"demo","description":"demo","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}%s}`
+	for name, fields := range map[string]string{
+		"仅 license":     `,"license":"Apache-2.0"`,
+		"仅 licenseFile": `,"licenseFile":"LICENSE"`,
+		"仅 noticeFile":  `,"noticeFile":"NOTICE"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := ParseManifest([]byte(fmt.Sprintf(base, fields))); err == nil {
+				t.Fatal("许可证标识与文本路径必须成对声明")
+			}
+		})
+	}
+	manifest, err := ParseManifest([]byte(fmt.Sprintf(base, `,"license":"Apache-2.0","licenseFile":"LICENSE","noticeFile":"NOTICE"`)))
+	if err != nil {
+		t.Fatalf("成对的许可证字段应通过校验: %v", err)
+	}
+	if manifest.License != "Apache-2.0" || manifest.LicenseFile != "LICENSE" || manifest.NoticeFile != "NOTICE" {
+		t.Fatalf("许可证字段解析错误: %+v", manifest)
+	}
+}
+
 func TestValidateDescriptor_RejectsInvalidHookPhase(t *testing.T) {
 	err := ValidateDescriptor("hook", []byte(`{"point":"invoke","phase":"later"}`))
 	if err == nil {

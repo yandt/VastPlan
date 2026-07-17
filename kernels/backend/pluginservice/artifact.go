@@ -28,6 +28,7 @@ const (
 	manifestName      = "vastplan.plugin.json"
 	artifactExtension = ".tar.gz"
 	maxManifestBytes  = 1 << 20 // 清单是声明，不允许被超大内容拖垮制品检查。
+	maxLegalFileBytes = 1 << 20 // 法律声明是文本；限制大小避免被用作绕过制品检查的大对象。
 )
 
 var channelPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
@@ -62,6 +63,9 @@ func PackageDirectory(dir string) ([]byte, pluginv1.Manifest, error) {
 	}
 	manifest, err := pluginv1.ParseManifest(manifestRaw)
 	if err != nil {
+		return nil, pluginv1.Manifest{}, err
+	}
+	if err := validateLegalFiles(dir, manifest); err != nil {
 		return nil, pluginv1.Manifest{}, err
 	}
 
@@ -330,6 +334,39 @@ func sameJSON(left, right []byte) bool {
 	return bytes.Equal(a.Bytes(), b.Bytes())
 }
 
+// validateLegalFiles 在打包前确认清单声明的许可证与归属文本确实位于插件目录内。
+// 旧 v1 清单可不声明许可证；一旦声明则必须随制品提供完整文本（ADR-0046）。
+func validateLegalFiles(dir string, manifest pluginv1.Manifest) error {
+	if manifest.License == "" {
+		return nil
+	}
+	if err := validateLegalFile(dir, manifest.LicenseFile, "许可证"); err != nil {
+		return err
+	}
+	if manifest.NoticeFile != "" {
+		return validateLegalFile(dir, manifest.NoticeFile, "归属告示")
+	}
+	return nil
+}
+
+func validateLegalFile(dir, declaredName, kind string) error {
+	name, err := archiveName(declaredName)
+	if err != nil {
+		return fmt.Errorf("非法%s文件路径: %w", kind, err)
+	}
+	info, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(name)))
+	if err != nil {
+		return fmt.Errorf("读取%s文件 %s: %w", kind, name, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return fmt.Errorf("%s文件必须是普通文件: %s", kind, name)
+	}
+	if info.Size() == 0 || info.Size() > maxLegalFileBytes {
+		return fmt.Errorf("%s文件 %s 大小必须在 1..%d 字节内", kind, name, maxLegalFileBytes)
+	}
+	return nil
+}
+
 // inspectPackage 只读取 archive metadata 和根清单，绝不执行包内内容。
 func inspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, error) {
 	gz, err := gzip.NewReader(bytes.NewReader(packageBytes))
@@ -342,6 +379,7 @@ func inspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 
 	tr := tar.NewReader(gz)
 	var manifestRaw []byte
+	entrySizes := map[string][]int64{}
 	for {
 		header, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -357,6 +395,7 @@ func inspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 		if header.Typeflag != tar.TypeReg && header.Typeflag != 0 { // 兼容旧 tar 的普通文件标记。
 			return pluginv1.Manifest{}, nil, fmt.Errorf("插件包只允许普通文件: %s", name)
 		}
+		entrySizes[name] = append(entrySizes[name], header.Size)
 		if name != manifestName {
 			continue
 		}
@@ -378,7 +417,32 @@ func inspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 	if err != nil {
 		return pluginv1.Manifest{}, nil, err
 	}
+	if manifest.License != "" {
+		if err := validatePackagedLegalFile(entrySizes, manifest.LicenseFile, "许可证"); err != nil {
+			return pluginv1.Manifest{}, nil, err
+		}
+		if manifest.NoticeFile != "" {
+			if err := validatePackagedLegalFile(entrySizes, manifest.NoticeFile, "归属告示"); err != nil {
+				return pluginv1.Manifest{}, nil, err
+			}
+		}
+	}
 	return manifest, json.RawMessage(manifestRaw), nil
+}
+
+func validatePackagedLegalFile(entrySizes map[string][]int64, declaredName, kind string) error {
+	name, err := archiveName(declaredName)
+	if err != nil {
+		return fmt.Errorf("非法%s文件路径: %w", kind, err)
+	}
+	sizes := entrySizes[name]
+	if len(sizes) != 1 {
+		return fmt.Errorf("插件包必须包含且仅包含一份%s文件 %s", kind, name)
+	}
+	if sizes[0] <= 0 || sizes[0] > maxLegalFileBytes {
+		return fmt.Errorf("%s文件 %s 大小必须在 1..%d 字节内", kind, name, maxLegalFileBytes)
+	}
+	return nil
 }
 
 func archiveName(name string) (string, error) {

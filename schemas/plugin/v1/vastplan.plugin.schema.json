@@ -11,6 +11,14 @@
     "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
     "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
     "publisher": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel" },
+    "license": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9 .()+-]*$"
+    },
+    "licenseFile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
+    "noticeFile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
     "engines": {
       "type": "object",
       "minProperties": 1,
@@ -69,6 +77,11 @@
       }
     }
   },
+  "allOf": [
+    { "if": { "required": ["license"] }, "then": { "required": ["licenseFile"] } },
+    { "if": { "required": ["licenseFile"] }, "then": { "required": ["license"] } },
+    { "if": { "required": ["noticeFile"] }, "then": { "required": ["license"] } }
+  ],
   "$defs": {
     "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
     "runtimePolicy": {

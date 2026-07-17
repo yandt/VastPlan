@@ -3,6 +3,9 @@
   "name": "示例配额",
   "version": "0.1.0",
   "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
   "description": "演示 hook 分发：before 钩子按配额限流（可否决），after 钩子计量",
 
   "engines": { "backend": "^0.1 || ^1.0" },

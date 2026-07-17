@@ -75,6 +75,38 @@ func TestRepository_PublishRejectsPackageWithoutManifest(t *testing.T) {
 	}
 }
 
+func TestPackageDirectory_RequiresDeclaredLicenseFile(t *testing.T) {
+	dir := writeTestPlugin(t)
+	manifestPath := filepath.Join(dir, manifestName)
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = bytes.Replace(raw, []byte(`"publisher":"example",`), []byte(`"publisher":"example","license":"Apache-2.0","licenseFile":"LICENSE","noticeFile":"NOTICE",`), 1)
+	if err := os.WriteFile(manifestPath, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := PackageDirectory(dir); err == nil {
+		t.Fatal("声明许可证但未携带许可证文本的插件必须拒绝打包")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "LICENSE"), []byte("Apache License 2.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := PackageDirectory(dir); err == nil {
+		t.Fatal("声明归属告示但未携带 NOTICE 的插件必须拒绝打包")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "NOTICE"), []byte("Copyright example\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	packageBytes, _, err := PackageDirectory(dir)
+	if err != nil {
+		t.Fatalf("携带许可证文本后应可打包: %v", err)
+	}
+	if _, _, err := inspectPackage(packageBytes); err != nil {
+		t.Fatalf("制品读取必须接受唯一、非空的许可证文本: %v", err)
+	}
+}
+
 func writeTestPlugin(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

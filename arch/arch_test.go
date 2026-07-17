@@ -18,6 +18,7 @@ import (
 	"strings"
 	"testing"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/protocol"
 )
@@ -345,10 +346,48 @@ func TestArch_EveryPluginHasManifest(t *testing.T) {
 			continue
 		}
 		manifest := filepath.Join(pluginsDir, e.Name(), "vastplan.plugin.json")
-		if _, err := os.Stat(manifest); err != nil {
+		raw, err := os.ReadFile(manifest)
+		if err != nil {
 			t.Errorf("插件缺少清单：plugins/%s 没有 vastplan.plugin.json\n  原因: plugins/ 只放产品插件且必须声明清单；"+
 				"测试夹具插件应放 e2e/fixtures/plugins/（ADR-0018 §3）", e.Name())
+			continue
 		}
+		parsed, err := pluginv1.ParseManifest(raw)
+		if err != nil {
+			t.Errorf("插件清单无效：plugins/%s/vastplan.plugin.json: %v", e.Name(), err)
+			continue
+		}
+		if parsed.License != "Apache-2.0" || parsed.LicenseFile != "LICENSE" || parsed.NoticeFile != "NOTICE" {
+			t.Errorf("第一方插件 %s 必须声明 license=Apache-2.0、licenseFile=LICENSE、noticeFile=NOTICE（ADR-0046）", e.Name())
+		}
+	}
+}
+
+func TestArch_ProjectLicenseDeclaration(t *testing.T) {
+	root := repoRoot(t)
+	license, err := os.ReadFile(filepath.Join(root, "LICENSE"))
+	if err != nil {
+		t.Fatalf("仓库根目录必须包含 LICENSE: %v", err)
+	}
+	if !strings.Contains(string(license), "Apache License") ||
+		!strings.Contains(string(license), "Version 2.0, January 2004") ||
+		!strings.Contains(string(license), "Copyright [yyyy] [name of copyright owner]") {
+		t.Fatal("LICENSE 必须保持可识别的 Apache-2.0 官方文本，不得写入项目自定义条款（ADR-0046）")
+	}
+	notice, err := os.ReadFile(filepath.Join(root, "NOTICE"))
+	if err != nil {
+		t.Fatalf("仓库根目录必须包含 NOTICE: %v", err)
+	}
+	if !strings.Contains(string(notice), "Copyright 2026 zhanghui") {
+		t.Fatal("NOTICE 必须保留当前个人版权主体（ADR-0046）")
+	}
+	readme, err := os.ReadFile(filepath.Join(root, "README.md"))
+	if err != nil {
+		t.Fatalf("读取 README: %v", err)
+	}
+	if !strings.Contains(string(readme), "[Apache License 2.0](LICENSE)") ||
+		!strings.Contains(string(readme), "[NOTICE](NOTICE)") {
+		t.Fatal("README 必须提供 LICENSE 与 NOTICE 的可点击入口（ADR-0046）")
 	}
 }
 
