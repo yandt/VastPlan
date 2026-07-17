@@ -231,6 +231,7 @@ func runReconcile(args []string) (runErr error) {
 	}
 	defer func() { runErr = errors.Join(runErr, plane.Close()) }()
 	runtime := nodeagent.NewProtocolRuntime(version, logf)
+	runtime.ExecutionPolicy = nodeagent.NewExecutionPolicy(strings.Split(options.firstPartyPublishers, ","), options.requireThirdPartyIsolation)
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()

@@ -47,14 +47,16 @@ type StateStore interface {
 
 // InstalledPlugin 是经安装器校验后可交给 backend 宿主启动的插件。
 type InstalledPlugin struct {
-	ID        string                `json:"id"`
-	Version   string                `json:"version"`
-	Channel   string                `json:"channel"`
-	SHA256    string                `json:"sha256"`
-	Root      string                `json:"root"`
-	EntryPath string                `json:"entry_path"`
-	State     *PluginStateContract  `json:"state,omitempty"`
-	Contract  PluginRuntimeContract `json:"contract"`
+	ID        string                    `json:"id"`
+	Publisher string                    `json:"publisher"`
+	Version   string                    `json:"version"`
+	Channel   string                    `json:"channel"`
+	SHA256    string                    `json:"sha256"`
+	Root      string                    `json:"root"`
+	EntryPath string                    `json:"entry_path"`
+	Execution pluginv1.BackendExecution `json:"execution"`
+	State     *PluginStateContract      `json:"state,omitempty"`
+	Contract  PluginRuntimeContract     `json:"contract"`
 }
 
 // PluginRuntimeContract 是安装时从已验签清单冻结的运行授权，宿主不再相信进程自报。

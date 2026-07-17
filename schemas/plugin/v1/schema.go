@@ -10,6 +10,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 	"sync"
 
@@ -58,11 +59,48 @@ type Manifest struct {
 	Engines      map[string]string          `json:"engines"`
 	Capabilities *Capabilities              `json:"capabilities,omitempty"`
 	Runtime      *RuntimePolicy             `json:"runtime,omitempty"`
+	Execution    *ExecutionPolicy           `json:"execution,omitempty"`
 	State        *State                     `json:"state,omitempty"`
 	Activation   []string                   `json:"activation"`
 	Dependencies map[string]string          `json:"dependencies,omitempty"`
 	Entry        map[string]string          `json:"entry"`
 	Contributes  map[string]json.RawMessage `json:"contributes"`
+}
+
+// ExecutionPolicy 描述各运行面的启动方式。它只声明驱动与最低要求；发布者信任级别
+// 和最终隔离强度由节点策略决定，插件不能通过自报把自己提升为第一方。
+type ExecutionPolicy struct {
+	Backend *BackendExecution `json:"backend,omitempty"`
+}
+
+// BackendExecution 是语言无关的 Backend 启动契约。Driver 是可扩展标识，不把内核
+// 锁死在当前 native/python 实现；未来 OCI/WASM 驱动沿用同一结构。
+type BackendExecution struct {
+	Driver           string            `json:"driver"`
+	Args             []string          `json:"args,omitempty"`
+	Requirements     map[string]string `json:"requirements,omitempty"`
+	Platforms        []string          `json:"platforms,omitempty"`
+	MinimumIsolation string            `json:"minimumIsolation,omitempty"`
+	Features         []string          `json:"features,omitempty"`
+}
+
+// BackendExecutionContract 返回向后兼容的冻结执行契约。旧 v1 清单等价于 native
+// trusted-process，仍从 entry.backend 启动。
+func BackendExecutionContract(manifest Manifest) BackendExecution {
+	if manifest.Execution == nil || manifest.Execution.Backend == nil {
+		return BackendExecution{Driver: "native", MinimumIsolation: "trusted-process"}
+	}
+	execution := *manifest.Execution.Backend
+	execution.Args = append([]string(nil), execution.Args...)
+	execution.Platforms = append([]string(nil), execution.Platforms...)
+	execution.Features = append([]string(nil), execution.Features...)
+	if execution.MinimumIsolation == "" {
+		execution.MinimumIsolation = "trusted-process"
+	}
+	if execution.Requirements != nil {
+		execution.Requirements = maps.Clone(execution.Requirements)
+	}
+	return execution
 }
 
 // RuntimePolicy 声明插件贡献的实例化策略和默认能力边界。

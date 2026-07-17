@@ -49,9 +49,10 @@ func (i LocalInstaller) Install(artifact pluginv1.Artifact, packageBytes []byte)
 	if !ok {
 		return InstalledPlugin{}, errors.New("service 插件缺少 backend 入口")
 	}
+	execution := pluginv1.BackendExecutionContract(manifest)
 
 	target := filepath.Join(filepath.Clean(i.Root), artifact.SHA256)
-	if installed, err := inspectInstalled(target, artifact, entry); err == nil {
+	if installed, err := inspectInstalled(target, artifact, manifest.Publisher, entry, execution); err == nil {
 		return installed, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return InstalledPlugin{}, fmt.Errorf("既有安装目录无效: %w", err)
@@ -69,16 +70,16 @@ func (i LocalInstaller) Install(artifact pluginv1.Artifact, packageBytes []byte)
 	if err := extractPackage(tmp, packageBytes); err != nil {
 		return InstalledPlugin{}, err
 	}
-	if _, err := inspectInstalled(tmp, artifact, entry); err != nil {
+	if _, err := inspectInstalled(tmp, artifact, manifest.Publisher, entry, execution); err != nil {
 		return InstalledPlugin{}, fmt.Errorf("校验安装结果: %w", err)
 	}
 	if err := os.Rename(tmp, target); err != nil {
-		if installed, checkErr := inspectInstalled(target, artifact, entry); checkErr == nil {
+		if installed, checkErr := inspectInstalled(target, artifact, manifest.Publisher, entry, execution); checkErr == nil {
 			return installed, nil // 并发安装同一内容时接受另一方已完成的原子结果。
 		}
 		return InstalledPlugin{}, fmt.Errorf("发布安装目录: %w", err)
 	}
-	return inspectInstalled(target, artifact, entry)
+	return inspectInstalled(target, artifact, manifest.Publisher, entry, execution)
 }
 
 // GarbageCollect 删除 Root 下未被实际态引用的内容寻址目录。
@@ -170,7 +171,7 @@ func safeArchiveName(name string) (string, error) {
 	return clean, nil
 }
 
-func inspectInstalled(root string, artifact pluginv1.Artifact, entry string) (InstalledPlugin, error) {
+func inspectInstalled(root string, artifact pluginv1.Artifact, publisher, entry string, execution pluginv1.BackendExecution) (InstalledPlugin, error) {
 	manifestRaw, err := os.ReadFile(filepath.Join(root, "vastplan.plugin.json"))
 	if err != nil {
 		return InstalledPlugin{}, err
@@ -191,13 +192,17 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, entry string) (In
 	if err != nil {
 		return InstalledPlugin{}, fmt.Errorf("backend 入口不存在: %w", err)
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
-		return InstalledPlugin{}, fmt.Errorf("backend 入口不可执行: %s", entry)
+	if !info.Mode().IsRegular() {
+		return InstalledPlugin{}, fmt.Errorf("backend 入口不是普通文件: %s", entry)
+	}
+	if execution.Driver == "native" && info.Mode().Perm()&0o111 == 0 {
+		return InstalledPlugin{}, fmt.Errorf("native backend 入口不可执行: %s", entry)
 	}
 	installed := InstalledPlugin{
-		ID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel,
+		ID: artifact.PluginID, Publisher: publisher, Version: artifact.Version, Channel: artifact.Channel,
 		SHA256: artifact.SHA256, Root: root, EntryPath: entryPath,
-		Contract: PluginRuntimeContract{Contributions: contributions},
+		Execution: execution,
+		Contract:  PluginRuntimeContract{Contributions: contributions},
 	}
 	if manifest.Runtime != nil {
 		installed.Contract.Requires = append([]pluginv1.RuntimeRequirement(nil), manifest.Runtime.Requires...)

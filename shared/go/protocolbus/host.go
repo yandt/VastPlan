@@ -67,6 +67,15 @@ type LaunchPolicy struct {
 	EnvironmentAllowlist []string
 }
 
+// LaunchSpec 是运行驱动交给协议宿主的语言无关启动结果。Command/Args 直接传给
+// os/exec，不经过 shell；Dir 和 ExtraEnv 由可信驱动生成，插件清单不能注入宿主票据。
+type LaunchSpec struct {
+	Command  string
+	Args     []string
+	Dir      string
+	ExtraEnv []string
+}
+
 type launchAttempt struct {
 	result  chan launchResult
 	policy  LaunchPolicy

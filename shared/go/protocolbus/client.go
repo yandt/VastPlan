@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -21,6 +22,23 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type processLogWriter struct {
+	logf   func(string, ...any)
+	prefix string
+}
+
+func (w processLogWriter) Write(raw []byte) (int, error) {
+	const maxLine = 64 << 10
+	line := strings.TrimSpace(string(raw))
+	if len(line) > maxLine {
+		line = line[:maxLine] + "…[truncated]"
+	}
+	if line != "" && w.logf != nil {
+		w.logf("%s %s", w.prefix, line)
+	}
+	return len(raw), nil
+}
+
 // Launch 拉起插件进程并等待它完成回连、握手、贡献注册与激活（§2.2）。
 //
 // 宿主注入连接端点 + magic cookie + 一次性 launch token；插件回连本宿主。
@@ -32,8 +50,16 @@ func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, erro
 // LaunchWithPolicy 启动插件，并把已验签清单中的身份、贡献和内核服务依赖绑定到
 // 一次性 launch token。空 Policy 只用于本地演示/兼容夹具，但仍强制 token 认证。
 func (h *Host) LaunchWithPolicy(ctx context.Context, binPath string, policy LaunchPolicy) (*PluginProcess, error) {
+	return h.LaunchSpecWithPolicy(ctx, LaunchSpec{Command: binPath}, policy)
+}
+
+// LaunchSpecWithPolicy 通过运行驱动生成的无 shell 规格启动插件。
+func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy LaunchPolicy) (*PluginProcess, error) {
 	if h.addr == "" {
 		return nil, errors.New("宿主尚未 Start，插件无处回连")
+	}
+	if strings.TrimSpace(spec.Command) == "" {
+		return nil, errors.New("插件启动命令不能为空")
 	}
 
 	token := newToken()
@@ -47,14 +73,22 @@ func (h *Host) LaunchWithPolicy(ctx context.Context, binPath string, policy Laun
 		h.mu.Unlock()
 	}()
 
-	cmd := exec.Command(binPath)
+	cmd := exec.Command(spec.Command, spec.Args...)
+	cmd.Dir = spec.Dir
 	environmentAllowlist := append([]string(nil), h.PluginEnvironmentAllowlist...)
 	environmentAllowlist = append(environmentAllowlist, policy.EnvironmentAllowlist...)
-	cmd.Env = append(pluginEnvironment(environmentAllowlist),
+	cmd.Env = append(pluginEnvironment(environmentAllowlist), spec.ExtraEnv...)
+	cmd.Env = append(cmd.Env,
 		protocol.MagicEnvKey+"="+protocol.MagicCookie,
 		protocol.HostAddrEnvKey+"="+h.addr,
 		protocol.LaunchTokenEnvKey+"="+token,
 	)
+	logID := policy.PluginID
+	if logID == "" {
+		logID = filepath.Base(spec.Command)
+	}
+	cmd.Stdout = processLogWriter{logf: h.Logf, prefix: "plugin=" + logID + " stream=stdout"}
+	cmd.Stderr = processLogWriter{logf: h.Logf, prefix: "plugin=" + logID + " stream=stderr"}
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("拉起插件进程: %w", err)
 	}

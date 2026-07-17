@@ -45,13 +45,15 @@ type ProtocolRuntime struct {
 	Identity          string
 	LeaderKV          jetstream.KeyValue
 
-	mu           sync.RWMutex
-	units        map[string]*runningUnit
-	closed       bool
-	events       chan RuntimeEvent
-	nextID       uint64
-	router       *addressing.Router
-	Dependencies kernelspi.Dependencies
+	mu              sync.RWMutex
+	units           map[string]*runningUnit
+	closed          bool
+	events          chan RuntimeEvent
+	nextID          uint64
+	router          *addressing.Router
+	Dependencies    kernelspi.Dependencies
+	Drivers         *RuntimeDriverRegistry
+	ExecutionPolicy ExecutionPolicy
 }
 
 // AttachRouter 在首个 unit 启动前接入全局能力寻址。运行中切换 Router 会让已经发布的
@@ -77,6 +79,7 @@ func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *Protoc
 		KernelVersion:     kernelVersion,
 		Logf:              logf,
 		DependencyTimeout: 5 * time.Second,
+		Drivers:           DefaultRuntimeDrivers(),
 		units:             map[string]*runningUnit{},
 		events:            make(chan RuntimeEvent, 64),
 	}
@@ -124,7 +127,11 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	}()
 	processes := make([]*protocolbus.PluginProcess, 0, len(unit.Plugins))
 	for _, plugin := range unit.Plugins {
-		process, err := candidate.LaunchWithPolicy(ctx, plugin.EntryPath, protocolbus.LaunchPolicy{
+		spec, err := r.launchSpec(plugin)
+		if err != nil {
+			return err
+		}
+		process, err := candidate.LaunchSpecWithPolicy(ctx, spec, protocolbus.LaunchPolicy{
 			PluginID: plugin.ID, Version: plugin.Version,
 			Contributions:        plugin.Contract.Contributions,
 			KernelServices:       plugin.Contract.KernelServices,

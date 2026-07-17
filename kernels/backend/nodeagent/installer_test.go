@@ -49,6 +49,40 @@ func TestLocalInstaller_RejectsCorruptBytesAndNonExecutableEntry(t *testing.T) {
 	}
 }
 
+func TestLocalInstaller_PythonEntryNeedNotBeExecutable(t *testing.T) {
+	dir := t.TempDir()
+	manifest := []byte(`{
+  "id":"com.example.python","name":"python","description":"python","version":"1.0.0","publisher":"example",
+  "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"python","requirements":{"python":">=3.11"}}},
+  "activation":["onStartup"],"entry":{"backend":"backend/main.py"},
+  "contributes":{"backend":{"tools":[{"id":"example.python","service_role":"backend"}]}}
+}`)
+	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "backend"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "backend", "main.py"), []byte("print('ok')\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	packageBytes, _, err := pluginservice.PackageDirectory(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := pluginservice.Describe("stable", packageBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed, err := (LocalInstaller{Root: t.TempDir()}).Install(artifact, packageBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if installed.Publisher != "example" || installed.Execution.Driver != "python" {
+		t.Fatalf("安装器没有冻结发布者和执行契约: %+v", installed)
+	}
+}
+
 func TestLocalInstaller_GarbageCollectOnlyContentDirectories(t *testing.T) {
 	root := t.TempDir()
 	keep := strings.Repeat("a", 64)

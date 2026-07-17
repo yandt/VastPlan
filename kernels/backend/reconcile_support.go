@@ -19,10 +19,12 @@ import (
 type reconcileOptions struct {
 	desiredPath, repositoryRoot, repositoryURL, repositoryTrust, repositoryToken, repositoryCA string
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                       string
+	firstPartyPublishers                                                                       string
 	capacityCPU, capacityMemory, capacityGPU                                                   int64
 	interval                                                                                   time.Duration
 	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                string
 	natsAllowInsecure, natsBootstrap                                                           bool
+	requireThirdPartyIsolation                                                                 bool
 	desiredKey, assignmentKey, deploymentName, deploymentTenant                                string
 	natsReplicas                                                                               int
 }
@@ -41,6 +43,8 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.lockPath, "lock", "", "单实例锁文件；默认 <actual-state>.lock")
 	flags.StringVar(&options.nodeID, "node-id", "local", "当前节点 ID")
 	flags.StringVar(&options.labelsRaw, "labels", "", "节点标签，逗号分隔 key=value")
+	flags.StringVar(&options.firstPartyPublishers, "first-party-publishers", "vastplan", "允许 trusted-process 的第一方发布者，逗号分隔")
+	flags.BoolVar(&options.requireThirdPartyIsolation, "require-third-party-isolation", true, "未知发布者必须使用隔离运行驱动")
 	flags.Int64Var(&options.capacityCPU, "capacity-cpu-millis", 0, "节点可分配 CPU，单位 millicores")
 	flags.Int64Var(&options.capacityMemory, "capacity-memory-bytes", 0, "节点可分配内存，单位 bytes")
 	flags.Int64Var(&options.capacityGPU, "capacity-gpu", 0, "节点可分配 GPU 数量")

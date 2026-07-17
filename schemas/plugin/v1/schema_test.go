@@ -158,6 +158,46 @@ func TestParseManifest_BackendDescriptorsAreClosed(t *testing.T) {
 	}
 }
 
+func TestParseManifest_BackendExecutionIsLanguageNeutralAndBackwardCompatible(t *testing.T) {
+	legacy, err := ParseManifest([]byte(`{
+  "id":"com.example.legacy","name":"legacy","description":"legacy","version":"1.0.0","publisher":"example",
+  "engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},
+  "contributes":{"backend":{"tools":[{"id":"example.tool","service_role":"backend"}]}}
+}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := BackendExecutionContract(legacy); got.Driver != "native" || got.MinimumIsolation != "trusted-process" {
+		t.Fatalf("旧清单执行契约应保持 native 兼容: %+v", got)
+	}
+
+	python, err := ParseManifest([]byte(`{
+  "id":"com.example.python","name":"python","description":"python","version":"1.0.0","publisher":"example",
+  "engines":{"backend":"^1.0"},
+  "execution":{"backend":{"driver":"python","args":["--mode","worker"],"requirements":{"python":">=3.11"},
+    "platforms":["linux/amd64","darwin/arm64"],"minimumIsolation":"process-sandbox","features":["channel.cancel.v1"]}},
+  "activation":["onStartup"],"entry":{"backend":"backend/main.py"},
+  "contributes":{"backend":{"tools":[{"id":"example.python","service_role":"backend"}]}}
+}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := BackendExecutionContract(python)
+	if got.Driver != "python" || got.MinimumIsolation != "process-sandbox" || got.Requirements["python"] != ">=3.11" || len(got.Args) != 2 {
+		t.Fatalf("python 执行契约解析错误: %+v", got)
+	}
+
+	invalid := []byte(`{
+  "id":"com.example.invalid","name":"invalid","description":"invalid","version":"1.0.0","publisher":"example",
+  "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"bad driver"}},
+  "activation":["onStartup"],"entry":{"backend":"backend/main"},
+  "contributes":{"backend":{"tools":[{"id":"example.invalid","service_role":"backend"}]}}
+}`)
+	if _, err := ParseManifest(invalid); err == nil {
+		t.Fatal("非法运行驱动标识必须被 Schema 拒绝")
+	}
+}
+
 func TestParseManifest_RuntimePolicies(t *testing.T) {
 	local := []byte(`{
 		"id":"com.example.local","name":"local","description":"local",
