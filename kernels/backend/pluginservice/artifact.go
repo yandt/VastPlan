@@ -24,6 +24,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/shared/go/pluginid"
 )
 
 const (
@@ -276,7 +277,13 @@ func (r *Repository) artifactDir(ref Ref) (string, error) {
 }
 
 func minimalManifest(id, version string) []byte {
-	return []byte(fmt.Sprintf(`{"id":%q,"name":"reference","description":"reference","version":%q,"publisher":"reference","engines":{"backend":"^0.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`, id, version))
+	publisher := "reference"
+	if pluginid.IsFirstPartyID(id) {
+		// ArtifactRef 本身不携带 publisher；这里仅复用 Manifest Schema 校验
+		// ID/版本，所以合成清单必须遵守首方命名空间所有权约束。
+		publisher = pluginid.FirstPartyPublisher
+	}
+	return []byte(fmt.Sprintf(`{"id":%q,"name":"reference","description":"reference","version":%q,"publisher":%q,"engines":{"backend":"^0.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`, id, version, publisher))
 }
 
 func readArtifact(filename string) (Artifact, error) {

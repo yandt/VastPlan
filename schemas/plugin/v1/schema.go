@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	commonv1 "cdsoft.com.cn/VastPlan/schemas/common/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/pluginid"
 	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -400,6 +401,9 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	var manifest Manifest
 	if err := json.Unmarshal(raw, &manifest); err != nil {
 		return Manifest{}, fmt.Errorf("解析插件清单字段: %w", err)
+	}
+	if err := pluginid.ValidatePublisherOwnership(manifest.ID, manifest.Publisher); err != nil {
+		return Manifest{}, err
 	}
 	if manifest.Runtime != nil {
 		if _, _, err := runtimePolicies(manifest); err != nil {

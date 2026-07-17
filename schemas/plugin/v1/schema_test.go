@@ -44,6 +44,20 @@ func TestParseManifest_RejectsUnknownField(t *testing.T) {
 	}
 }
 
+func TestParseManifest_BindsFirstPartyNamespaceToPublisher(t *testing.T) {
+	base := `{"id":%q,"name":"demo","description":"demo","version":"1.0.0","publisher":%q,"engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`
+	for name, values := range map[string][2]string{
+		"第三方抢占首方命名空间": {"com.vastplan.platform.security.fake", "example"},
+		"首方使用外部命名空间":  {"com.example.platform.security.fake", "vastplan"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := ParseManifest([]byte(fmt.Sprintf(base, values[0], values[1]))); err == nil {
+				t.Fatal("插件 ID 命名空间必须与发布者绑定")
+			}
+		})
+	}
+}
+
 func TestParseManifest_LicenseFieldsArePaired(t *testing.T) {
 	base := `{"id":"com.example.demo","name":"demo","description":"demo","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}%s}`
 	for name, fields := range map[string]string{

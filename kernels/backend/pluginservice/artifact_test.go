@@ -65,6 +65,21 @@ func TestRepository_ReadFailsClosedOnCorruption(t *testing.T) {
 	}
 }
 
+func TestRepositoryArtifactRefAcceptsFirstPartyNamespace(t *testing.T) {
+	repo, err := NewRepository(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range []Ref{
+		{PluginID: "com.vastplan.platform.data.database", Version: "1.0.0", Channel: "stable"},
+		{PluginID: "com.example.integration.reader", Version: "1.0.0", Channel: "stable"},
+	} {
+		if _, err := repo.artifactDir(ref); err != nil {
+			t.Fatalf("合法制品引用 %s 应通过: %v", ref.PluginID, err)
+		}
+	}
+}
+
 func TestRepository_PublishRejectsPackageWithoutManifest(t *testing.T) {
 	repo, err := NewRepository(t.TempDir())
 	if err != nil {

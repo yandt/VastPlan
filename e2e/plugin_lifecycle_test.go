@@ -124,6 +124,7 @@ func toolTarget(capability, op string) *contractv1.CallTarget {
 
 func TestFirstPartyReferencePluginsSupportBackend1(t *testing.T) {
 	plugins := []string{
+		"./plugins/com.vastplan.foundation.security.bootstrap-policy/backend",
 		"./plugins/com.vastplan.demo-audit/backend",
 		"./plugins/com.vastplan.demo-permission/backend",
 		"./plugins/com.vastplan.demo-quota/backend",
@@ -143,6 +144,44 @@ func TestFirstPartyReferencePluginsSupportBackend1(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestBootstrapPolicy_RealProcessEnforcesSettingsBaseline(t *testing.T) {
+	bin := buildPlugin(t, "./plugins/com.vastplan.foundation.security.bootstrap-policy/backend")
+	host := newHost(t, "1.0.0")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	process, err := host.Launch(ctx, bin)
+	if err != nil {
+		t.Fatalf("装载 bootstrap-policy 失败: %v", err)
+	}
+	defer func() { _ = host.Close(process) }()
+
+	settingsTarget := func(operation string) *contractv1.CallTarget {
+		return &contractv1.CallTarget{ExtensionPoint: "service.api", Capability: "platform.settings", Operation: &operation}
+	}
+	system := &contractv1.CallContext{Caller: &contractv1.Caller{
+		Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "kernel",
+	}}
+	reader := &contractv1.CallContext{Caller: &contractv1.Caller{
+		Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "com.vastplan.platform.data.database",
+	}}
+	foreign := &contractv1.CallContext{Caller: &contractv1.Caller{
+		Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "com.example.integration.reader",
+	}}
+
+	if result := host.CheckPermission(ctx, system, settingsTarget("put")); !result.Allowed() {
+		t.Fatalf("system 写设置应通过真实插件链: %+v", result)
+	}
+	if result := host.CheckPermission(ctx, reader, settingsTarget("get")); !result.Allowed() {
+		t.Fatalf("首方 platform 插件读设置应通过真实插件链: %+v", result)
+	}
+	if result := host.CheckPermission(ctx, reader, settingsTarget("put")); result.Allowed() {
+		t.Fatalf("插件写设置必须被写保护拒绝: %+v", result)
+	}
+	if result := host.CheckPermission(ctx, foreign, settingsTarget("get")); result.Allowed() {
+		t.Fatalf("外部插件读系统设置必须默认拒绝: %+v", result)
 	}
 }
 

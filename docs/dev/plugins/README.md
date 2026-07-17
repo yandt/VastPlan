@@ -17,3 +17,4 @@
 ## 当前插件文档
 
 - [com.vastplan.python-hello](com.vastplan.python-hello.md) —— Python SDK 与异构运行参考插件
+- [com.vastplan.foundation.security.bootstrap-policy](com.vastplan.foundation.security.bootstrap-policy.md) —— 系统设置之前启动的首方权限基线
