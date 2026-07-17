@@ -29,7 +29,10 @@ type ConfigProvider interface {
 	Lookup(context.Context, string) (json.RawMessage, bool, error)
 }
 
-type CredentialRef struct{ Name, Scope string }
+type CredentialRef struct {
+	Name  string `json:"name"`
+	Scope string `json:"scope"`
+}
 
 // CredentialMaterial 只允许可信宿主适配器在回调期间使用；不得序列化或返回插件。
 type CredentialMaterial interface{ Bytes() []byte }
@@ -37,6 +40,20 @@ type CredentialMaterial interface{ Bytes() []byte }
 // CredentialBroker 通过回调缩短明文生命周期。插件只能请求具体宿主操作，不能取得 material。
 type CredentialBroker interface {
 	WithCredential(context.Context, Scope, CredentialRef, func(CredentialMaterial) error) error
+}
+
+// DatabaseConnection 是数据库插件交给可信部署适配器的非敏感连接定义。密码不属于
+// 此契约，适配器只能通过 CredentialBroker 在受控回调中使用 CredentialRef。
+type DatabaseConnection struct {
+	Driver      string        `json:"driver"`
+	Endpoint    string        `json:"endpoint"`
+	Database    string        `json:"database,omitempty"`
+	Credentials CredentialRef `json:"credentials"`
+}
+
+// DatabaseBroker 在可信宿主内执行数据库连通性检查；它不得将凭证明文返回给插件。
+type DatabaseBroker interface {
+	Probe(context.Context, Scope, DatabaseConnection) error
 }
 
 type Persistence interface {
@@ -61,6 +78,7 @@ type Dependencies struct {
 	Credentials  CredentialBroker
 	Persistence  Persistence
 	Transactions TransactionManager
+	Database     DatabaseBroker
 }
 
 type MapConfig struct{ values map[string]json.RawMessage }

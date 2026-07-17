@@ -1,0 +1,56 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+)
+
+type probeHost struct{ payload []byte }
+
+var _ sdk.Host = (*probeHost)(nil)
+
+func (h *probeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+	if target.GetCapability() != "kernel.database.probe" {
+		return nil, nil, errors.New("unexpected capability")
+	}
+	h.payload = append([]byte(nil), payload...)
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"ready":true}`), nil
+}
+func dbContext() *contractv1.CallContext { return &contractv1.CallContext{TenantId: "tenant-a"} }
+func TestConnectionDefinitionPersistsAndProbeHasNoSecret(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "connections.json")
+	s, err := newService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = s.handle(context.Background(), nil, dbContext(), []byte(`{"name":"primary","driver":"postgres","endpoint":"db.internal:5432","database":"app","credential":"postgres-main"}`), "define")
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := newService(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := &probeHost{}
+	_, raw, err := reopened.handle(context.Background(), host, dbContext(), []byte(`{"name":"primary"}`), "probe")
+	if err != nil || string(raw) != "{\"ready\":true}" {
+		t.Fatalf("probe failed raw=%s err=%v", raw, err)
+	}
+	if strings.Contains(string(host.payload), "password") || strings.Contains(string(host.payload), "secret") {
+		t.Fatalf("probe payload leaked secret: %s", host.payload)
+	}
+	var request map[string]any
+	if err := json.Unmarshal(host.payload, &request); err != nil {
+		t.Fatal(err)
+	}
+	if request["credentials"].(map[string]any)["name"] != "postgres-main" {
+		t.Fatalf("credential reference missing: %s", host.payload)
+	}
+}
