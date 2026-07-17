@@ -56,6 +56,7 @@ function FormRenderer({ schema, value, onChange, readOnly, submitting }: FormRen
 const ui: PortalUI = {
   Page,
   Panel,
+  Button: ({ children, ...props }) => <Button {...props}>{children}</Button>,
   Menu,
   FormRenderer,
   EmptyState: ({ title, description }) => <Result status="404" title={title} subTitle={description} />,

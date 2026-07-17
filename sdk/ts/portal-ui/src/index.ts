@@ -94,9 +94,17 @@ export interface PanelProps {
   children: ReactNode;
 }
 
+export interface ButtonProps {
+  children: ReactNode;
+  onClick?(): void;
+  disabled?: boolean;
+  loading?: boolean;
+}
+
 export interface PortalUI {
   Page: ComponentType<PageProps>;
   Panel: ComponentType<PanelProps>;
+  Button: ComponentType<ButtonProps>;
   Menu: ComponentType<{ items: MenuItem[]; activeID?: string; onSelect?(id: string): void }>;
   FormRenderer: ComponentType<FormRendererProps>;
   EmptyState: ComponentType<{ title: string; description?: string }>;

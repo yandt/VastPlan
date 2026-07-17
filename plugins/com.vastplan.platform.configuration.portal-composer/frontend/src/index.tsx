@@ -17,7 +17,29 @@ export const portalCompositionSchema: FormSchema = {
 export function PortalComposerView() {
   const ui = usePortalUI();
   const [value, setValue] = useState<Record<string, unknown>>({ route: "/", designSystem: "com.vastplan.foundation.frontend.design-system.arco" });
-  return <ui.Page title="门户与插件组合"><ui.Panel title="草稿"><ui.FormRenderer schema={portalCompositionSchema} value={value} onChange={setValue} /><button type="button" onClick={() => ui.notify({ title: "草稿已校验", content: "提交、审批和发布由受保护的 BFF API 执行。", kind: "success" })}>校验草稿</button></ui.Panel></ui.Page>;
+  const [saving, setSaving] = useState(false);
+  const createDraft = async () => {
+    setSaving(true);
+    try {
+      const csrf = await fetch("/v1/csrf", { credentials: "same-origin" });
+      if (!csrf.ok) throw new Error("会话已失效");
+      const { token } = await csrf.json() as { token: string };
+      const response = await fetch("/v1/portal-drafts", {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": token },
+        body: JSON.stringify({
+          id: value.name ?? "portal", route: value.route,
+          designSystem: { id: value.designSystem, version: "1.0.0", uiContract: "^1.0.0" },
+          plugins: [{ id: value.designSystem, version: "1.0.0" }],
+        }),
+      });
+      if (!response.ok) throw new Error("草稿被控制面拒绝");
+      ui.notify({ title: "草稿已创建", content: "可提交给另一位审批人。", kind: "success" });
+    } catch (error) {
+      ui.notify({ title: "无法创建草稿", content: error instanceof Error ? error.message : "未知错误", kind: "error" });
+    } finally { setSaving(false); }
+  };
+  return <ui.Page title="门户与插件组合"><ui.Panel title="草稿"><ui.FormRenderer schema={portalCompositionSchema} value={value} onChange={setValue} /><ui.Button onClick={createDraft} loading={saving}>创建草稿</ui.Button></ui.Panel></ui.Page>;
 }
 
 export default {
