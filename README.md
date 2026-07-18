@@ -161,6 +161,8 @@ go run ./core/kernels/backend controlplane \
 
 更完整的生产发布、升级和回滚流程见[Backend 发布与运维](docs/dev/guides/Backend发布与运维.md)。
 
+生产 Linux 新节点使用一次性 SSH 引导安装内核和 systemd Node Agent；接管后所有服务组合、插件与副本变化都由控制面下发，不再依赖 SSH。严格的 `known_hosts`、节点身份文件和执行命令见[Linux 节点 SSH 首次引导](docs/dev/guides/Linux节点SSH引导.md)。
+
 ## 安全模型
 
 VastPlan 默认采用 fail-closed：无法确认身份、清单、依赖、版本、权限或所有权时，不发布 Assignment、不激活候选、也不接受调用。
