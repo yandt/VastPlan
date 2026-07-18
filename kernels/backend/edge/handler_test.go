@@ -8,7 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	uiv1 "cdsoft.com.cn/VastPlan/schemas/ui/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
+	"cdsoft.com.cn/VastPlan/shared/go/interactionapi"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
 
@@ -68,6 +70,29 @@ func (*service) Audit(context.Context, portalapi.Principal, uint64) ([]portalapi
 	return nil, nil
 }
 
+type interactionService struct {
+	principal portalapi.Principal
+	presented string
+	response  uiv1.InteractionResponse
+}
+
+func (s *interactionService) List(_ context.Context, p portalapi.Principal) ([]interactionapi.Record, error) {
+	s.principal = p
+	return []interactionapi.Record{{Request: uiv1.InteractionRequest{ID: "interaction-0001"}, State: interactionapi.StateCreated}}, nil
+}
+func (s *interactionService) Get(_ context.Context, p portalapi.Principal, id string) (interactionapi.Record, error) {
+	s.principal = p
+	return interactionapi.Record{Request: uiv1.InteractionRequest{ID: id}, State: interactionapi.StateCreated}, nil
+}
+func (s *interactionService) Present(_ context.Context, p portalapi.Principal, id string) (interactionapi.Record, error) {
+	s.principal, s.presented = p, id
+	return interactionapi.Record{Request: uiv1.InteractionRequest{ID: id}, State: interactionapi.StatePresented}, nil
+}
+func (s *interactionService) Respond(_ context.Context, p portalapi.Principal, id string, response uiv1.InteractionResponse) (interactionapi.Record, error) {
+	s.principal, s.response = p, response
+	return interactionapi.Record{Request: uiv1.InteractionRequest{ID: id}, State: interactionapi.StateAnswered, Response: &response}, nil
+}
+
 func TestBFFRejectsMissingSessionAndCSRFBeforeCallingPortalService(t *testing.T) {
 	s := &service{}
 	h := New(identity(func(*http.Request) (portalapi.Principal, error) { return portalapi.Principal{}, errors.New("missing") }), s)
@@ -120,5 +145,55 @@ func TestBFFUsesVerifiedPrincipalAndStrictCSRF(t *testing.T) {
 	}
 	if !cookie.Secure || cookie.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("CSRF cookie 安全属性错误: %+v", cookie)
+	}
+}
+
+func TestBFFInteractionEndpointsUseVerifiedPrincipalAndWebOnlySurface(t *testing.T) {
+	portal := &service{}
+	interactions := &interactionService{}
+	h := NewWithInteraction(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "verified-user", TenantID: "tenant-a", Roles: []string{"approver"}}, nil
+	}), portal, interactions)
+
+	list := httptest.NewRequest(http.MethodGet, "/v1/interactions", nil)
+	listW := httptest.NewRecorder()
+	h.ServeHTTP(listW, list)
+	if listW.Code != http.StatusOK || interactions.principal.ID != "verified-user" || interactions.principal.TenantID != "tenant-a" {
+		t.Fatalf("读取交互必须使用服务端 Principal: status=%d principal=%+v", listW.Code, interactions.principal)
+	}
+
+	csrfRequest := httptest.NewRequest(http.MethodGet, "/v1/csrf", nil)
+	csrfW := httptest.NewRecorder()
+	h.ServeHTTP(csrfW, csrfRequest)
+	cookie := csrfW.Result().Cookies()[0]
+	present := httptest.NewRequest(http.MethodPost, "/v1/interactions/interaction-0001/present", strings.NewReader(`{}`))
+	present.AddCookie(cookie)
+	present.Header.Set("X-VastPlan-CSRF", cookie.Value)
+	presentW := httptest.NewRecorder()
+	h.ServeHTTP(presentW, present)
+	if presentW.Code != http.StatusOK || interactions.presented != "interaction-0001" {
+		t.Fatalf("呈现交互应经 CSRF 保护后调用: status=%d id=%q", presentW.Code, interactions.presented)
+	}
+
+	// 交互端点只接受 response 本体；tenant、surface 等浏览器不应有权决定的
+	// 字段在 Edge JSON 边界被拒绝，而 Web surface 由服务端固定注入。
+	body := `{"interactionId":"interaction-0001","decision":"answered","tenantId":"attacker","surface":"mobile"}`
+	respond := httptest.NewRequest(http.MethodPost, "/v1/interactions/interaction-0001/respond", strings.NewReader(body))
+	respond.AddCookie(cookie)
+	respond.Header.Set("X-VastPlan-CSRF", cookie.Value)
+	respondW := httptest.NewRecorder()
+	h.ServeHTTP(respondW, respond)
+	if respondW.Code != http.StatusBadRequest || interactions.response.InteractionID != "" {
+		t.Fatalf("浏览器不得伪造交互 tenant/surface: status=%d response=%+v", respondW.Code, interactions.response)
+	}
+
+	body = `{"interactionId":"interaction-0001","decision":"answered"}`
+	respond = httptest.NewRequest(http.MethodPost, "/v1/interactions/interaction-0001/respond", strings.NewReader(body))
+	respond.AddCookie(cookie)
+	respond.Header.Set("X-VastPlan-CSRF", cookie.Value)
+	respondW = httptest.NewRecorder()
+	h.ServeHTTP(respondW, respond)
+	if respondW.Code != http.StatusOK || interactions.response.InteractionID != "interaction-0001" || interactions.principal.ID != "verified-user" {
+		t.Fatalf("交互响应应经验证主体转发: status=%d response=%+v principal=%+v", respondW.Code, interactions.response, interactions.principal)
 	}
 }

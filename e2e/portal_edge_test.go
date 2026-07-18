@@ -45,6 +45,12 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	publishBuiltPlugin(t, repository,
 		"./plugins/com.vastplan.platform.configuration.portal-composer/backend",
 		"plugins/com.vastplan.platform.configuration.portal-composer/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository,
+		"./plugins/com.vastplan.foundation.security.interaction-access-policy/backend",
+		"plugins/com.vastplan.foundation.security.interaction-access-policy/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository,
+		"./plugins/com.vastplan.platform.interaction.broker/backend",
+		"plugins/com.vastplan.platform.interaction.broker/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "plugins/com.vastplan.foundation.frontend.design-system.arco/vastplan.plugin.json")
 
 	dir := t.TempDir()
@@ -57,6 +63,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 		"reader-token":    {ID: "reader", Roles: []string{"portal.read"}},
 	})
 	stateFile := filepath.Join(dir, "composer-state.json")
+	interactionStateFile := filepath.Join(dir, "interaction-state.json")
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -79,6 +86,8 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 			"-allow-unsigned-local",
 			"-composer-version", "1.0.0",
 			"-composer-state-file", stateFile,
+			"-interaction-broker-version", "0.1.0",
+			"-interaction-broker-state-file", interactionStateFile,
 		}, "1.0.0", func(format string, args ...any) { t.Logf("[portal-edge] "+format, args...) })
 	}()
 	t.Cleanup(func() {

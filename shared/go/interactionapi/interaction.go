@@ -65,6 +65,7 @@ type Service interface {
 	Open(context.Context, Subject, uiv1.InteractionRequest) (Record, error)
 	List(context.Context, Subject, uiv1.InteractionSurface) ([]Record, error)
 	Get(context.Context, Subject, string) (Record, error)
+	Watch(context.Context, Subject, string, time.Time) (Record, error)
 	Present(context.Context, Subject, string, uiv1.InteractionSurface) (Record, error)
 	Respond(context.Context, Subject, string, uiv1.InteractionSurface, uiv1.InteractionResponse) (Record, error)
 	Cancel(context.Context, Subject, string) (Record, error)

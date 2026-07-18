@@ -49,10 +49,11 @@ type Service struct {
 	state     persistedState
 	stateFile string
 	now       func() time.Time
+	watchers  map[string]map[chan struct{}]struct{}
 }
 
 func New(stateFile string) (*Service, error) {
-	s := &Service{state: persistedState{Records: map[string]storedRecord{}}, now: time.Now}
+	s := &Service{state: persistedState{Records: map[string]storedRecord{}}, now: time.Now, watchers: map[string]map[chan struct{}]struct{}{}}
 	if strings.TrimSpace(stateFile) != "" {
 		if err := s.configure(stateFile); err != nil {
 			return nil, err
@@ -212,6 +213,78 @@ func (s *Service) Get(_ context.Context, subject interactionapi.Subject, id stri
 	return copyRecord(stored.Record), nil
 }
 
+// Watch is a reconnect-safe long-poll primitive for Runner and backend sources.
+// The caller retains Record.UpdatedAt as its cursor; reconnecting with that
+// cursor returns after a mutation, expiry, or context deadline without any
+// dependency on Portal or Mobile runtime code.
+func (s *Service) Watch(ctx context.Context, source interactionapi.Subject, id string, after time.Time) (interactionapi.Record, error) {
+	if !validSubject(source) || strings.TrimSpace(id) == "" {
+		return interactionapi.Record{}, ErrForbidden
+	}
+	for {
+		s.mu.Lock()
+		now := s.now().UTC()
+		expired := s.expireLocked(now)
+		stored, ok := s.state.Records[id]
+		if !ok || stored.Request.TenantID != source.TenantID {
+			if expired {
+				if err := s.save(); err != nil {
+					s.mu.Unlock()
+					return interactionapi.Record{}, err
+				}
+			}
+			s.mu.Unlock()
+			return interactionapi.Record{}, ErrNotFound
+		}
+		if !source.System && stored.Request.Source.Capability != source.ID {
+			s.mu.Unlock()
+			return interactionapi.Record{}, ErrForbidden
+		}
+		if expired {
+			if err := s.save(); err != nil {
+				s.mu.Unlock()
+				return interactionapi.Record{}, err
+			}
+			s.notifyLocked(id)
+			stored = s.state.Records[id]
+		}
+		if stored.State.Terminal() || stored.UpdatedAt.After(after) {
+			record := copyRecord(stored.Record)
+			s.mu.Unlock()
+			return record, nil
+		}
+		wait := make(chan struct{})
+		if s.watchers[id] == nil {
+			s.watchers[id] = map[chan struct{}]struct{}{}
+		}
+		s.watchers[id][wait] = struct{}{}
+		expiresIn := stored.Request.ExpiresAt.Sub(now)
+		s.mu.Unlock()
+
+		timer := time.NewTimer(expiresIn)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			s.removeWatcher(id, wait)
+			return interactionapi.Record{}, ctx.Err()
+		case <-wait:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+		case <-timer.C:
+			s.removeWatcher(id, wait)
+		}
+	}
+}
+
 func (s *Service) Present(_ context.Context, subject interactionapi.Subject, id string, surface uiv1.InteractionSurface) (interactionapi.Record, error) {
 	return s.mutateRenderer(subject, id, surface, func(record *interactionapi.Record, now time.Time) error {
 		if record.State != interactionapi.StateCreated && record.State != interactionapi.StatePresented {
@@ -289,6 +362,7 @@ func (s *Service) Cancel(_ context.Context, source interactionapi.Subject, id st
 	if err := s.save(); err != nil {
 		return interactionapi.Record{}, err
 	}
+	s.notifyLocked(id)
 	return copyRecord(stored.Record), nil
 }
 
@@ -324,6 +398,7 @@ func (s *Service) mutateRenderer(subject interactionapi.Subject, id string, surf
 	if err := s.save(); err != nil {
 		return interactionapi.Record{}, err
 	}
+	s.notifyLocked(id)
 	return copyRecord(stored.Record), nil
 }
 
@@ -339,6 +414,24 @@ func (s *Service) expireLocked(now time.Time) bool {
 		}
 	}
 	return changed
+}
+
+func (s *Service) notifyLocked(id string) {
+	for wait := range s.watchers[id] {
+		close(wait)
+	}
+	delete(s.watchers, id)
+}
+
+func (s *Service) removeWatcher(id string, wait chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if waiting := s.watchers[id]; waiting != nil {
+		delete(waiting, wait)
+		if len(waiting) == 0 {
+			delete(s.watchers, id)
+		}
+	}
 }
 
 func validSurface(surface uiv1.InteractionSurface) bool {

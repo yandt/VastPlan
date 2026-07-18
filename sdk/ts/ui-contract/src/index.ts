@@ -46,3 +46,17 @@ export interface InteractionResponse {
   values?: Record<string, unknown>;
   credentialRefs?: Record<string, string>;
 }
+
+export type InteractionState = "created" | "presented" | "answered" | "rejected" | "cancelled" | "expired";
+export interface InteractionAuditEvent { action: string; actorId: string; surface?: string; at: string; }
+
+/** Persisted Broker view; it stays serializable and contains no renderer code. */
+export interface InteractionRecord {
+  request: InteractionRequest;
+  state: InteractionState;
+  response?: InteractionResponse;
+  createdAt: string;
+  updatedAt: string;
+  presentedBy?: string;
+  audit: InteractionAuditEvent[];
+}

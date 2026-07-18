@@ -122,6 +122,57 @@ func TestService_ExpiresFailClosed(t *testing.T) {
 	}
 }
 
+func TestService_WatchResumesFromCursorAfterRendererResponse(t *testing.T) {
+	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
+	service, err := New(t.TempDir() + "/interactions.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.now = func() time.Time { return now }
+	source := interactionapi.Subject{ID: "com.vastplan.runner.workflow", TenantID: "tenant-a"}
+	alice := interactionapi.Subject{ID: "alice", TenantID: "tenant-a", Roles: []string{"approver"}}
+	created, err := service.Open(context.Background(), source, testRequest(now))
+	if err != nil {
+		t.Fatal(err)
+	}
+	watchContext, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	result := make(chan interactionapi.Record, 1)
+	errs := make(chan error, 1)
+	go func() {
+		record, err := service.Watch(watchContext, source, created.Request.ID, created.UpdatedAt)
+		if err != nil {
+			errs <- err
+			return
+		}
+		result <- record
+	}()
+	if _, err := service.Respond(context.Background(), alice, created.Request.ID, uiv1.SurfaceFrontend, uiv1.InteractionResponse{InteractionID: created.Request.ID, Decision: uiv1.DecisionAnswered, CredentialRef: map[string]string{"password": "credential://tenant-a/temporary/123"}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-errs:
+		t.Fatalf("watch 不应失败: %v", err)
+	case record := <-result:
+		if record.State != interactionapi.StateAnswered || record.Response == nil {
+			t.Fatalf("watch 必须返回终态记录: %+v", record)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("watch 未在响应后恢复")
+	}
+
+	// 断线重连使用旧 cursor 时，持久化终态必须立即返回而无需重新创建任务。
+	restarted, err := New(service.stateFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restarted.now = func() time.Time { return now }
+	record, err := restarted.Watch(context.Background(), source, created.Request.ID, created.UpdatedAt)
+	if err != nil || record.State != interactionapi.StateAnswered {
+		t.Fatalf("重连 watch 必须恢复已持久化终态: record=%+v err=%v", record, err)
+	}
+}
+
 func testRequest(now time.Time) uiv1.InteractionRequest {
 	return uiv1.InteractionRequest{
 		ID:              "interaction-0001",

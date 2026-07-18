@@ -31,6 +31,7 @@
           { "name": "open", "description": "创建交互任务" },
           { "name": "list", "description": "列出当前用户可处理的交互" },
           { "name": "get", "description": "读取交互任务状态" },
+          { "name": "watch", "description": "以更新游标等待交互状态变化" },
           { "name": "present", "description": "标记交互已呈现" },
           { "name": "respond", "description": "提交一次性终态响应" },
           { "name": "cancel", "description": "取消来源侧交互任务" }

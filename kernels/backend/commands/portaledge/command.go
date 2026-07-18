@@ -50,12 +50,19 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	policyID := flags.String("policy-plugin", "com.vastplan.foundation.security.portal-access-policy", "Portal authorization policy plugin ID")
 	policyVersion := flags.String("policy-version", "0.1.0", "Portal authorization policy artifact version")
 	policyChannel := flags.String("policy-channel", "stable", "Portal authorization policy artifact channel")
+	interactionPolicyID := flags.String("interaction-policy-plugin", "com.vastplan.foundation.security.interaction-access-policy", "Interaction authorization policy plugin ID")
+	interactionPolicyVersion := flags.String("interaction-policy-version", "0.1.0", "Interaction authorization policy artifact version")
+	interactionPolicyChannel := flags.String("interaction-policy-channel", "stable", "Interaction authorization policy artifact channel")
+	brokerID := flags.String("interaction-broker-plugin", "com.vastplan.platform.interaction.broker", "Interaction Broker plugin ID")
+	brokerVersion := flags.String("interaction-broker-version", "", "Interaction Broker artifact version")
+	brokerChannel := flags.String("interaction-broker-channel", "stable", "Interaction Broker artifact channel")
 	stateFile := flags.String("composer-state-file", "", "Composer governed-state file")
+	brokerStateFile := flags.String("interaction-broker-state-file", "", "Interaction Broker governed-state file")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *cert == "" || *key == "" || *sessions == "" || *pluginVersion == "" || *stateFile == "" {
-		return errors.New("portal-edge 必须配置 TLS、session、Composer 制品版本及状态文件")
+	if *cert == "" || *key == "" || *sessions == "" || *pluginVersion == "" || *stateFile == "" || *brokerVersion == "" || *brokerStateFile == "" {
+		return errors.New("portal-edge 必须配置 TLS、session、Composer 与 Interaction Broker 制品版本及状态文件")
 	}
 	if *allowUnsigned && *trustFile != "" {
 		return errors.New("allow-unsigned-local 与 trust-store 不能同时使用")
@@ -101,7 +108,10 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return err
 	}
-	config, err := kernelspi.NewMapConfig(map[string]any{"platform.portal-composer.stateFile": *stateFile})
+	config, err := kernelspi.NewMapConfig(map[string]any{
+		"platform.portal-composer.stateFile":    *stateFile,
+		"platform.interaction-broker.stateFile": *brokerStateFile,
+	})
 	if err != nil {
 		return err
 	}
@@ -129,11 +139,43 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return fmt.Errorf("安装门户访问策略制品: %w", err)
 	}
+	interactionPolicyRef := pluginv1.ArtifactRef{PluginID: *interactionPolicyID, Version: *interactionPolicyVersion, Channel: *interactionPolicyChannel}
+	interactionPolicyEnvelope, err := repository.Fetch(ctx, interactionPolicyRef)
+	if err != nil {
+		return fmt.Errorf("读取交互访问策略制品: %w", err)
+	}
+	verifiedInteractionPolicy, err := verifier.Verify(interactionPolicyRef, interactionPolicyEnvelope)
+	if err != nil {
+		return fmt.Errorf("验证交互访问策略制品: %w", err)
+	}
+	installedInteractionPolicy, err := (nodeagent.LocalInstaller{Root: *installRoot}).Install(verifiedInteractionPolicy)
+	if err != nil {
+		return fmt.Errorf("安装交互访问策略制品: %w", err)
+	}
+	brokerRef := pluginv1.ArtifactRef{PluginID: *brokerID, Version: *brokerVersion, Channel: *brokerChannel}
+	brokerEnvelope, err := repository.Fetch(ctx, brokerRef)
+	if err != nil {
+		return fmt.Errorf("读取 Interaction Broker 制品: %w", err)
+	}
+	verifiedBroker, err := verifier.Verify(brokerRef, brokerEnvelope)
+	if err != nil {
+		return fmt.Errorf("验证 Interaction Broker 制品: %w", err)
+	}
+	installedBroker, err := (nodeagent.LocalInstaller{Root: *installRoot}).Install(verifiedBroker)
+	if err != nil {
+		return fmt.Errorf("安装 Interaction Broker 制品: %w", err)
+	}
 	if _, err := host.LaunchWithPolicy(ctx, installedPolicy.EntryPath, protocolbus.LaunchPolicy{PluginID: installedPolicy.ID, Version: installedPolicy.Version, Contributions: installedPolicy.Contract.Contributions, KernelServices: installedPolicy.Contract.KernelServices}); err != nil {
 		return fmt.Errorf("启动门户访问策略: %w", err)
 	}
+	if _, err := host.LaunchWithPolicy(ctx, installedInteractionPolicy.EntryPath, protocolbus.LaunchPolicy{PluginID: installedInteractionPolicy.ID, Version: installedInteractionPolicy.Version, Contributions: installedInteractionPolicy.Contract.Contributions, KernelServices: installedInteractionPolicy.Contract.KernelServices}); err != nil {
+		return fmt.Errorf("启动交互访问策略: %w", err)
+	}
 	if _, err := host.LaunchWithPolicy(ctx, installed.EntryPath, protocolbus.LaunchPolicy{PluginID: installed.ID, Version: installed.Version, Contributions: installed.Contract.Contributions, KernelServices: installed.Contract.KernelServices}); err != nil {
 		return fmt.Errorf("启动 Composer: %w", err)
+	}
+	if _, err := host.LaunchWithPolicy(ctx, installedBroker.EntryPath, protocolbus.LaunchPolicy{PluginID: installedBroker.ID, Version: installedBroker.Version, Contributions: installedBroker.Contract.Contributions, KernelServices: installedBroker.Contract.KernelServices}); err != nil {
+		return fmt.Errorf("启动 Interaction Broker: %w", err)
 	}
 	client, err := edge.NewProtocolBusCapabilityClient(host)
 	if err != nil {
@@ -143,7 +185,15 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Addr: *listen, Handler: edge.New(identity, service), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
+	interactionClient, err := edge.NewProtocolBusInteractionClient(host)
+	if err != nil {
+		return err
+	}
+	interactionService, err := edge.NewCapabilityInteractionService(interactionClient)
+	if err != nil {
+		return err
+	}
+	server := &http.Server{Addr: *listen, Handler: edge.NewWithInteraction(identity, service, interactionService), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() { <-ctx.Done(); _ = server.Shutdown(context.Background()) }()
 	err = server.ListenAndServeTLS(*cert, *key)
 	if errors.Is(err, http.ErrServerClosed) {

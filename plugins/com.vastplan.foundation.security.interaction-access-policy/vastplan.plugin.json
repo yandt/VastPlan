@@ -1,0 +1,27 @@
+{
+  "id": "com.vastplan.foundation.security.interaction-access-policy",
+  "name": "VastPlan 交互访问策略",
+  "description": "以经验证调用身份约束跨端交互 Broker 的入口权限",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "runtime": { "instancePolicy": "per-kernel", "stateModel": "local-ephemeral", "visibility": "local", "routing": "direct" },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/interaction-access-policy" },
+  "contributes": {
+    "backend": {
+      "permissionCheckers": [{
+        "id": "foundation.security.interaction-access-policy",
+        "service_role": "backend",
+        "title": "交互入口访问策略",
+        "priority": 1000,
+        "applies": {}
+      }]
+    }
+  }
+}

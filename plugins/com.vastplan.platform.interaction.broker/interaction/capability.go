@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	uiv1 "cdsoft.com.cn/VastPlan/schemas/ui/v1"
 	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
@@ -45,7 +46,7 @@ func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *
 // identity the broker needs. The request payload never supplies an identity.
 func Contribution(service *Service) sdk.Contribution {
 	handlers := map[string]sdk.Handler{}
-	for _, operation := range []string{"open", "list", "get", "present", "respond", "cancel"} {
+	for _, operation := range []string{"open", "list", "get", "watch", "present", "respond", "cancel"} {
 		op := operation
 		handlers[op] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 			if err := service.ensureConfigured(ctx, host, callCtx); err != nil {
@@ -65,7 +66,7 @@ func Contribution(service *Service) sdk.Contribution {
 }
 
 func Descriptor() []byte {
-	return []byte(`{"title":"跨端交互协调","subcommands":[{"name":"open","description":"创建交互任务"},{"name":"list","description":"列出当前用户可处理的交互"},{"name":"get","description":"读取交互任务状态"},{"name":"present","description":"标记交互已呈现"},{"name":"respond","description":"提交一次性终态响应"},{"name":"cancel","description":"取消来源侧交互任务"}]}`)
+	return []byte(`{"title":"跨端交互协调","subcommands":[{"name":"open","description":"创建交互任务"},{"name":"list","description":"列出当前用户可处理的交互"},{"name":"get","description":"读取交互任务状态"},{"name":"watch","description":"以更新游标等待交互状态变化"},{"name":"present","description":"标记交互已呈现"},{"name":"respond","description":"提交一次性终态响应"},{"name":"cancel","description":"取消来源侧交互任务"}]}`)
 }
 
 func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, operation string, payload []byte) ([]byte, error) {
@@ -104,6 +105,19 @@ func (s *Service) Handle(ctx context.Context, callCtx *contractv1.CallContext, o
 			return nil, err
 		}
 		return marshal(s.Get(ctx, subject, request.ID))
+	case "watch":
+		source, err := sourceSubject(callCtx)
+		if err != nil {
+			return nil, err
+		}
+		var request struct {
+			ID    string    `json:"id"`
+			After time.Time `json:"after"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return marshal(s.Watch(ctx, source, request.ID, request.After))
 	case "present":
 		subject, err := rendererSubject(callCtx)
 		if err != nil {

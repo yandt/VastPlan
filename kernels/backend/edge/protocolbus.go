@@ -9,6 +9,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/shared/go/interactionapi"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 	"cdsoft.com.cn/VastPlan/shared/go/protocolbus"
 )
@@ -26,17 +27,37 @@ func NewProtocolBusCapabilityClient(host *protocolbus.Host) (*ProtocolBusCapabil
 }
 
 func (c *ProtocolBusCapabilityClient) Call(ctx context.Context, p portalapi.Principal, operation string, payload []byte) ([]byte, error) {
+	return invokeCapability(ctx, c.host, p, portalapi.ComposerCapability, operation, payload)
+}
+
+// ProtocolBusInteractionClient uses the same authenticated Edge-to-host bridge
+// as Portal governance, but targets the independent interaction capability.
+// Keeping the target here prevents HTTP handlers from knowing plugin transport.
+type ProtocolBusInteractionClient struct{ host *protocolbus.Host }
+
+func NewProtocolBusInteractionClient(host *protocolbus.Host) (*ProtocolBusInteractionClient, error) {
+	if host == nil {
+		return nil, errors.New("Interaction capability protocol host 不能为空")
+	}
+	return &ProtocolBusInteractionClient{host: host}, nil
+}
+
+func (c *ProtocolBusInteractionClient) Call(ctx context.Context, p portalapi.Principal, operation string, payload []byte) ([]byte, error) {
+	return invokeCapability(ctx, c.host, p, interactionapi.Capability, operation, payload)
+}
+
+func invokeCapability(ctx context.Context, host *protocolbus.Host, p portalapi.Principal, capability, operation string, payload []byte) ([]byte, error) {
 	if p.ID == "" || p.TenantID == "" || operation == "" {
-		return nil, errors.New("Portal capability 调用身份或操作不能为空")
+		return nil, errors.New("能力调用身份或操作不能为空")
 	}
 	callerKind := contractv1.CallerKind_CALLER_KIND_USER
 	if p.System {
 		callerKind = contractv1.CallerKind_CALLER_KIND_SYSTEM
 	}
 	op := operation
-	response, err := c.host.Invoke(ctx, &contractv1.CallTarget{
+	response, err := host.Invoke(ctx, &contractv1.CallTarget{
 		ExtensionPoint: extpoint.ToolPackage,
-		Capability:     portalapi.ComposerCapability,
+		Capability:     capability,
 		Operation:      &op,
 	}, &contractv1.CallContext{
 		Caller:    &contractv1.Caller{Kind: callerKind, Id: p.ID},
@@ -45,16 +66,16 @@ func (c *ProtocolBusCapabilityClient) Call(ctx context.Context, p portalapi.Prin
 		Scene:     "portal.bff",
 	}, payload)
 	if err != nil {
-		return nil, fmt.Errorf("调用 Portal Composer capability: %w", err)
+		return nil, fmt.Errorf("调用 capability %s: %w", capability, err)
 	}
 	if response == nil || response.Result == nil {
-		return nil, errors.New("Portal Composer capability 响应为空")
+		return nil, fmt.Errorf("capability %s 响应为空", capability)
 	}
 	if response.Result.Status != contractv1.CallResult_STATUS_OK {
 		if response.Result.Error != nil {
 			return nil, &CapabilityError{Code: response.Result.Error.Code, Message: response.Result.Error.Message}
 		}
-		return nil, &CapabilityError{Message: "Portal Composer capability 未成功"}
+		return nil, &CapabilityError{Message: fmt.Sprintf("capability %s 未成功", capability)}
 	}
 	return append([]byte(nil), response.Payload...), nil
 }

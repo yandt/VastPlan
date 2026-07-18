@@ -8,4 +8,4 @@
 - `secretRef` 字段只接受 `credentialRefs`，拒绝把秘密内容写入交互状态或审计；
 - 状态文件由宿主的 `kernel.config.get` 提供 `platform.interaction-broker.stateFile`，插件进程不从环境变量取得其位置。
 
-当前实现提供 `open/list/get/present/respond/cancel` 持久化闭环。Runner 的长连接 `watch` 与 Portal Edge/Mobile Gateway 的传输适配会在下一阶段接入，服务本身不依赖任何浏览器或原生 UI 运行时。
+当前实现提供 `open/list/get/watch/present/respond/cancel` 持久化闭环。`watch` 使用最后一次 `updatedAt` 作为游标，Runner/后端来源可在断线重连后恢复观察；Portal Edge 传输适配已接入，Mobile Gateway/Native Adapter 仍待实现。服务本身不依赖任何浏览器或原生 UI 运行时。

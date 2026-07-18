@@ -11,7 +11,9 @@ import (
 	"net/http"
 	"strings"
 
+	uiv1 "cdsoft.com.cn/VastPlan/schemas/ui/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
+	"cdsoft.com.cn/VastPlan/shared/go/interactionapi"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
 
@@ -22,15 +24,20 @@ type IdentityProvider interface {
 }
 
 type Handler struct {
-	identity IdentityProvider
-	service  portalapi.Service
+	identity    IdentityProvider
+	service     portalapi.Service
+	interaction InteractionService
 }
 
 func New(identity IdentityProvider, service portalapi.Service) *Handler {
+	return NewWithInteraction(identity, service, nil)
+}
+
+func NewWithInteraction(identity IdentityProvider, service portalapi.Service, interaction InteractionService) *Handler {
 	if identity == nil || service == nil {
 		panic("Edge BFF 必须注入身份提供方和 Portal 服务")
 	}
-	return &Handler{identity: identity, service: service}
+	return &Handler{identity: identity, service: service, interaction: interaction}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +48,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.csrf(w, r)
 		return
 	}
-	if !strings.HasPrefix(r.URL.Path, "/v1/portal-drafts") {
+	portalPath := strings.HasPrefix(r.URL.Path, "/v1/portal-drafts")
+	interactionPath := strings.HasPrefix(r.URL.Path, "/v1/interactions")
+	if !portalPath && !interactionPath {
 		http.NotFound(w, r)
 		return
 	}
@@ -54,7 +63,61 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusForbidden, "csrf_rejected")
 		return
 	}
-	h.route(w, r, p)
+	if portalPath {
+		h.route(w, r, p)
+		return
+	}
+	h.interactionRoute(w, r, p)
+}
+
+func (h *Handler) interactionRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
+	if h.interaction == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.URL.Path == "/v1/interactions" {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		value, err := h.interaction.List(r.Context(), p)
+		respondInteraction(w, value, err)
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/interactions"), "/")
+	if len(parts) < 2 || len(parts) > 3 || parts[0] != "" || parts[1] == "" {
+		http.NotFound(w, r)
+		return
+	}
+	id := parts[1]
+	if len(parts) == 2 {
+		if r.Method == http.MethodGet {
+			value, err := h.interaction.Get(r.Context(), p, id)
+			respondInteraction(w, value, err)
+			return
+		}
+		methodNotAllowed(w)
+		return
+	}
+	switch parts[2] {
+	case "present":
+		if r.Method == http.MethodPost {
+			value, err := h.interaction.Present(r.Context(), p, id)
+			respondInteraction(w, value, err)
+			return
+		}
+	case "respond":
+		if r.Method == http.MethodPost {
+			var response uiv1.InteractionResponse
+			if !decode(w, r, &response) {
+				return
+			}
+			value, err := h.interaction.Respond(r.Context(), p, id, response)
+			respondInteraction(w, value, err)
+			return
+		}
+	}
+	methodNotAllowed(w)
 }
 
 func (h *Handler) csrf(w http.ResponseWriter, r *http.Request) {
@@ -191,6 +254,28 @@ func respond(w http.ResponseWriter, v any, err error) {
 	case errors.Is(err, portalapi.ErrForbidden), errors.Is(err, portalapi.ErrSelfApproval):
 		writeError(w, http.StatusForbidden, "forbidden")
 	case errors.Is(err, portalapi.ErrInvalidState), errors.Is(err, portalapi.ErrRouteConflict), errors.Is(err, portalapi.ErrCatalogRejected):
+		writeError(w, http.StatusConflict, "transition_rejected")
+	default:
+		writeError(w, http.StatusBadRequest, "request_rejected")
+	}
+}
+
+func respondInteraction(w http.ResponseWriter, value any, err error) {
+	if err == nil {
+		writeJSON(w, http.StatusOK, value)
+		return
+	}
+	var capabilityErr *CapabilityError
+	if errors.As(err, &capabilityErr) && capabilityErr.Code == errorcode.PermissionDenied {
+		writeError(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	switch {
+	case errors.Is(err, interactionapi.ErrNotFound):
+		writeError(w, http.StatusNotFound, "not_found")
+	case errors.Is(err, interactionapi.ErrForbidden):
+		writeError(w, http.StatusForbidden, "forbidden")
+	case errors.Is(err, interactionapi.ErrConflict), errors.Is(err, interactionapi.ErrInvalidState), errors.Is(err, interactionapi.ErrExpired):
 		writeError(w, http.StatusConflict, "transition_rejected")
 	default:
 		writeError(w, http.StatusBadRequest, "request_rejected")
