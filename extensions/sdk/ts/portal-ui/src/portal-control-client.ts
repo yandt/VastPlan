@@ -38,6 +38,8 @@ export interface PortalRevision {
     audience?: string[];
     branding?: Record<string, JSONValue>;
     designSystem: PortalPluginRef & { uiContract: string };
+    composition: PortalPluginRef & { uiContract: string };
+    layout: PortalPluginRef & { uiContract: string; config?: Record<string, JSONValue> };
     plugins: PortalPluginRef[];
     config?: Record<string, JSONValue>;
   };

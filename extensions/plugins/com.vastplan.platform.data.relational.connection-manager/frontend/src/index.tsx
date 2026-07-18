@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createBrowserPlatformAdminClient, type DatabaseConnection, type PlatformAdminClient } from "@vastplan/platform-admin";
-import { jsonSchemaDialect, usePortalUI, type FormSchema } from "@vastplan/portal-ui";
+import { jsonSchemaDialect, usePortalUI, type FormSchema, type FrontendPluginContext } from "@vastplan/portal-ui";
 
 const schema: FormSchema = {
   id: "platform-database-connection.v1",
@@ -50,7 +50,7 @@ export function DatabaseConnectionsView({ client: supplied }: { client?: Platfor
     finally { setBusy(false); }
   };
 
-  return <ui.Page title="数据库连接" actions={<ui.Button onClick={() => void load()} loading={busy}>刷新</ui.Button>}>
+  return <ui.Stack gap="md"><ui.Stack direction="row" justify="end"><ui.Button onClick={() => void load()} loading={busy}>刷新</ui.Button></ui.Stack>
     {error === undefined ? null : <ui.ErrorState title={error} retry={() => void load()} />}
     <ui.Grid columns={{ xs: 1, lg: 2 }} gap="lg">
       <ui.GridItem><ui.Panel title="连接定义"><ui.Table rowKey="name" rows={items as unknown as Array<Record<string, unknown>>} loading={busy} empty={<ui.EmptyState title="尚无数据库连接" />} columns={[
@@ -62,13 +62,12 @@ export function DatabaseConnectionsView({ client: supplied }: { client?: Platfor
         <ui.Stack direction="row" gap="sm"><ui.Button kind="primary" onClick={() => void save()} loading={busy}>保存</ui.Button><ui.Button kind="secondary" onClick={() => setEditor({ driver: "postgres" })}>清空</ui.Button></ui.Stack>
       </ui.Panel></ui.GridItem>
     </ui.Grid>
-  </ui.Page>;
+  </ui.Stack>;
 }
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : "数据库连接请求失败"; }
 export default {
-  register(context: { addRoute(route: { path: string; component: typeof DatabaseConnectionsView }): void; addMenu(item: { id: string; title: string; route: string }): void }) {
-    context.addRoute({ path: "/settings/databases", component: DatabaseConnectionsView });
-    context.addMenu({ id: "platform.database-connections", title: "数据库连接", route: "/settings/databases" });
+  register(context: FrontendPluginContext) {
+    context.addPage({ id: "platform.database-connections", path: "/settings/databases", title: "数据库连接", description: "管理连接定义与凭证引用", navigation: { id: "platform.database-connections", label: "数据库连接", zone: "settings", order: 40 }, slots: [{ id: "body", slot: "page.body.main", component: DatabaseConnectionsView }] });
   },
 };

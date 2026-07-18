@@ -8,7 +8,7 @@
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
-  "capabilities": { "kernelServices": ["kernel.config.get", "kernel.portal.catalog.validate"], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.config.get", "kernel.portal.catalog.validate", "kernel.portal.catalog.materialize"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles", "authorization.admin"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "leader",

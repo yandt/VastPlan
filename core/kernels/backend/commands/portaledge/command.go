@@ -21,6 +21,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 
@@ -45,6 +46,7 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	sessions := flags.String("session-file", "", "0600 session digest JSON")
 	repositoryRoot := flags.String("repository", ".vastplan/repository", "local immutable artifact repository")
 	installRoot := flags.String("install-root", ".vastplan/portal-edge/plugins", "content-addressed plugin install root")
+	deliveryRoot := flags.String("frontend-delivery-root", ".vastplan/portal-edge/frontend-delivery", "content-addressed Portal frontend delivery root")
 	trustFile := flags.String("trust-store", "", "artifact publisher trust document")
 	allowUnsigned := flags.Bool("allow-unsigned-local", false, "local development only: permit unsigned artifacts")
 	pluginID := flags.String("composer-plugin", "com.vastplan.platform.configuration.portal-composer", "Composer plugin ID")
@@ -126,7 +128,7 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return fmt.Errorf("加载 Portal 静态产物: %w", err)
 	}
-	catalog, err := edge.NewTrustedCatalog([]edge.ArtifactSource{repository}, verifierAdapter{verifier})
+	catalog, err := edge.NewTrustedCatalog([]edge.ArtifactSource{repository}, verifierAdapter{verifier}, edge.WithFrontendDeliveryRoot(*deliveryRoot))
 	if err != nil {
 		return err
 	}
@@ -154,7 +156,10 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return err
 	}
-	if err := host.RegisterHostService(extpoint.KernelService, "kernel.portal.catalog.validate", edge.CatalogValidationService(catalog)); err != nil {
+	if err := host.RegisterHostService(extpoint.KernelService, portalapi.KernelCatalogValidationCapability, edge.CatalogValidationService(catalog)); err != nil {
+		return err
+	}
+	if err := host.RegisterHostService(extpoint.KernelService, portalapi.KernelCatalogMaterializationCapability, edge.CatalogMaterializationService(catalog)); err != nil {
 		return err
 	}
 	if err := host.Start(); err != nil {

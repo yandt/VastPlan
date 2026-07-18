@@ -31,7 +31,7 @@ func decide(c *contractv1.CallContext, request extpoint.PermissionRequest) (extp
 	if c == nil || c.Caller == nil {
 		return extpoint.DecisionDeny, "缺少经验证调用身份"
 	}
-	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && (request.Capability == "kernel.config.get" || request.Capability == portalapi.KernelCatalogValidationCapability) {
+	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && (request.Capability == "kernel.config.get" || request.Capability == portalapi.KernelCatalogValidationCapability || request.Capability == portalapi.KernelCatalogMaterializationCapability) {
 		return extpoint.DecisionAllow, "Composer 受限宿主回调"
 	}
 	if request.Capability != portalapi.ComposerCapability {

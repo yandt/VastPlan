@@ -33,6 +33,17 @@ func (s *Service) validateCatalog(ctx context.Context, tenantID string, spec por
 	return catalog.ValidatePortal(ctx, tenantID, spec)
 }
 
+func (s *Service) materializeCatalog(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+	catalog, _ := ctx.Value(catalogContextKey{}).(Catalog)
+	if catalog == nil {
+		catalog = s.catalog
+	}
+	if catalog == nil {
+		return fmt.Errorf("Portal Composer 未获得受信任制品目录")
+	}
+	return catalog.MaterializePortal(ctx, tenantID, spec)
+}
+
 // hostCatalog makes the artifact decision in the trusted kernel boundary. The
 // plugin can ask whether a spec is valid, but never receives repository
 // credentials, verification keys, or an unverified artifact envelope.
@@ -42,6 +53,14 @@ type hostCatalog struct {
 }
 
 func (c hostCatalog) ValidatePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+	return c.call(ctx, tenantID, spec, portalapi.KernelCatalogValidationCapability, "validate")
+}
+
+func (c hostCatalog) MaterializePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+	return c.call(ctx, tenantID, spec, portalapi.KernelCatalogMaterializationCapability, "materialize")
+}
+
+func (c hostCatalog) call(ctx context.Context, tenantID string, spec portalapi.PortalSpec, capability, operation string) error {
 	if c.host == nil || c.callCtx == nil || strings.TrimSpace(tenantID) == "" {
 		return fmt.Errorf("Portal 制品目录调用上下文不完整")
 	}
@@ -52,14 +71,14 @@ func (c hostCatalog) ValidatePortal(ctx context.Context, tenantID string, spec p
 	if err != nil {
 		return err
 	}
-	op := "validate"
+	op := operation
 	result, _, err := c.host.Call(ctx, &contractv1.CallTarget{
 		ExtensionPoint: extpoint.KernelService,
-		Capability:     portalapi.KernelCatalogValidationCapability,
+		Capability:     capability,
 		Operation:      &op,
 	}, c.callCtx, payload)
 	if err != nil {
-		return fmt.Errorf("调用可信 Portal 制品目录: %w", err)
+		return fmt.Errorf("调用可信 Portal 制品目录 %s: %w", operation, err)
 	}
 	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
 		return fmt.Errorf("可信 Portal 制品目录拒绝校验")

@@ -14,7 +14,7 @@ func TestResolveInjectsPlatformDesignSystemAndLocksInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resolved.Revision != 7 || len(resolved.Plugins) != 2 || resolved.DesignSystem.ID != profile.DesignSystem.ID {
+	if resolved.Revision != 7 || len(resolved.Plugins) != 4 || resolved.DesignSystem.ID != profile.DesignSystem.ID || resolved.Composition.ID != profile.Composition.ID || resolved.Layout.ID != profile.Layout.ID {
 		t.Fatalf("解析结果错误: %+v", resolved)
 	}
 	if resolved.Resolution.PluginOrigins[profile.DesignSystem.ID] != compositioncommonv1.OriginPlatformProfile || resolved.Resolution.PluginOrigins[app.Plugins[0].ID] != compositioncommonv1.OriginApplication {
@@ -35,8 +35,10 @@ func TestResolveRejectsApplicationOverride(t *testing.T) {
 }
 
 func testProfile() frontendcompositionv1.PlatformProfile {
-	ref := frontendcompositionv1.PluginRef{ID: "com.vastplan.foundation.frontend.design-system.arco", Version: "1.0.0", Channel: "stable"}
-	return frontendcompositionv1.PlatformProfile{Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "portal-default"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend}, DesignSystem: frontendcompositionv1.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Plugins: []frontendcompositionv1.PluginRef{ref}, Security: frontendcompositionv1.SecurityPolicy{FirstPartyOnly: true, RequireIntegrity: true}}
+	design := frontendcompositionv1.PluginRef{ID: "com.vastplan.foundation.frontend.design-system.arco", Version: "1.0.0", Channel: "stable"}
+	composition := frontendcompositionv1.PluginRef{ID: "com.vastplan.foundation.frontend.composition.standard", Version: "1.0.0", Channel: "stable"}
+	layout := frontendcompositionv1.PluginRef{ID: "com.vastplan.foundation.frontend.layout.standard", Version: "1.0.0", Channel: "stable"}
+	return frontendcompositionv1.PlatformProfile{Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "portal-default"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend}, DesignSystem: frontendcompositionv1.DesignSystem{PluginRef: design, UIContract: "^1.0.0"}, Composition: frontendcompositionv1.ShellComposition{PluginRef: composition, UIContract: "^1.0.0"}, Layout: frontendcompositionv1.ShellLayout{PluginRef: layout, UIContract: "^1.0.0"}, Plugins: []frontendcompositionv1.PluginRef{design, composition, layout}, Security: frontendcompositionv1.SecurityPolicy{FirstPartyOnly: true, RequireIntegrity: true}}
 }
 
 func testComposition(route string) frontendcompositionv1.ApplicationComposition {

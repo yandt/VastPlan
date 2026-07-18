@@ -63,6 +63,8 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 		publishBuiltPlugin(t, repository, plugin.packageDir, plugin.manifest)
 	}
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.design-system.arco/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.composition.standard/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.layout.standard/vastplan.plugin.json")
 
 	dir := t.TempDir()
 	certFile, keyFile := writePortalTLSCertificate(t, dir)
@@ -95,6 +97,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 			"-session-file", sessionFile,
 			"-repository", repositoryRoot,
 			"-install-root", filepath.Join(dir, "installed"),
+			"-frontend-delivery-root", filepath.Join(dir, "frontend-delivery"),
 			"-allow-unsigned-local",
 			"-composer-version", "1.0.0",
 			"-composer-state-file", stateFile,
@@ -203,7 +206,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != published.ID || len(runtime.Modules) != 6 || runtime.Modules[0].ID != "com.vastplan.foundation.frontend.design-system.arco" || runtime.Modules[1].ID != "com.vastplan.platform.configuration.portal-composer" || runtime.Modules[5].ID != "com.vastplan.platform.artifacts.repository" {
+	if runtime.Portal.Revision != published.ID || len(runtime.Modules) != 8 || runtime.Modules[0].ID != "com.vastplan.foundation.frontend.design-system.arco" || runtime.Modules[1].ID != "com.vastplan.foundation.frontend.composition.standard" || runtime.Modules[2].ID != "com.vastplan.foundation.frontend.layout.standard" || runtime.Modules[3].ID != "com.vastplan.platform.configuration.portal-composer" || runtime.Modules[7].ID != "com.vastplan.platform.artifacts.repository" {
 		t.Fatalf("unexpected governed runtime: %+v", runtime)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, runtime.Modules[0].URL, map[string]any{})

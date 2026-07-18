@@ -19,8 +19,16 @@ import (
 const maxFrontendModuleBytes = int64(32 << 20)
 
 type FrontendModuleAsset struct {
-	Descriptor portalapi.FrontendModule
-	Content    []byte
+	Descriptor  portalapi.FrontendModule
+	Content     []byte
+	GzipContent []byte
+}
+
+type verifiedPortalPlugin struct {
+	ref          portalapi.PluginRef
+	artifact     pluginv1.Artifact
+	packageBytes []byte
+	manifest     pluginv1.Manifest
 }
 
 // TrustedCatalog reuses the kernel artifact-verification boundary. An artifact
@@ -29,6 +37,7 @@ type FrontendModuleAsset struct {
 type TrustedCatalog struct {
 	sources  []ArtifactSource
 	verifier ArtifactVerifier
+	delivery *frontendDeliveryStore
 }
 
 // ArtifactSource and ArtifactVerifier are stable Edge ports. The Backend
@@ -41,83 +50,136 @@ type ArtifactVerifier interface {
 	Verify(context.Context, pluginv1.ArtifactRef, artifacttrust.Envelope) (pluginv1.Artifact, error)
 }
 
-func NewTrustedCatalog(sources []ArtifactSource, verifier ArtifactVerifier) (*TrustedCatalog, error) {
+type TrustedCatalogOption func(*TrustedCatalog) error
+
+func WithFrontendDeliveryRoot(root string) TrustedCatalogOption {
+	return func(c *TrustedCatalog) error {
+		store, err := newFrontendDeliveryStore(root)
+		c.delivery = store
+		return err
+	}
+}
+
+func NewTrustedCatalog(sources []ArtifactSource, verifier ArtifactVerifier, options ...TrustedCatalogOption) (*TrustedCatalog, error) {
 	if len(sources) == 0 {
 		return nil, errors.New("Portal Catalog 至少需要一个制品来源")
 	}
 	if verifier == nil {
 		return nil, errors.New("Portal Catalog 必须注入内核制品验证器")
 	}
-	return &TrustedCatalog{sources: append([]ArtifactSource(nil), sources...), verifier: verifier}, nil
+	store, err := newFrontendDeliveryStore("")
+	if err != nil {
+		return nil, err
+	}
+	catalog := &TrustedCatalog{sources: append([]ArtifactSource(nil), sources...), verifier: verifier, delivery: store}
+	for _, option := range options {
+		if err := option(catalog); err != nil {
+			return nil, err
+		}
+	}
+	return catalog, nil
 }
 
 func (c *TrustedCatalog) ValidatePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+	_, err := c.verifyPortal(ctx, tenantID, spec)
+	return err
+}
+
+// verifyPortal is the single package-fetch and signature-verification pass used
+// by publication. The returned immutable inputs are consumed directly by
+// materialization, so an artifact is never downloaded again between trust
+// validation and snapshot creation.
+func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) ([]verifiedPortalPlugin, error) {
 	if spec.Revision == 0 || tenantID == "" || spec.TenantID != tenantID {
-		return errors.New("Portal 解析结果的 revision 或 tenant 无效")
+		return nil, errors.New("Portal 解析结果的 revision 或 tenant 无效")
 	}
 	if !validCompositionRef(spec.Resolution.PlatformProfile) || !validCompositionRef(spec.Resolution.ApplicationComposition) {
-		return errors.New("Portal 解析结果缺少有效输入锁")
+		return nil, errors.New("Portal 解析结果缺少有效输入锁")
 	}
 	if !pluginid.IsFirstPartyID(spec.DesignSystem.ID) {
-		return errors.New("Portal 设计系统必须是第一方插件")
+		return nil, errors.New("Portal 设计系统必须是第一方插件")
+	}
+	if !pluginid.IsFirstPartyID(spec.Composition.ID) || !pluginid.IsFirstPartyID(spec.Layout.ID) {
+		return nil, errors.New("Portal Shell 组合与布局必须是第一方插件")
+	}
+	if spec.DesignSystem.ID == spec.Composition.ID || spec.DesignSystem.ID == spec.Layout.ID || spec.Composition.ID == spec.Layout.ID {
+		return nil, errors.New("Portal 设计系统、Shell 组合与布局必须来自独立插件")
 	}
 	seen := map[string]struct{}{}
-	var selected pluginv1.Manifest
+	selected := map[string]pluginv1.Manifest{}
+	verified := make([]verifiedPortalPlugin, 0, len(spec.Plugins))
 	for _, ref := range spec.Plugins {
 		if !pluginid.IsFirstPartyID(ref.ID) {
-			return fmt.Errorf("Portal v1 不允许第三方前端插件: %s", ref.ID)
+			return nil, fmt.Errorf("Portal v1 不允许第三方前端插件: %s", ref.ID)
 		}
 		key := ref.ID + "@" + ref.Version + "/" + channel(ref.Channel)
 		if _, duplicate := seen[key]; duplicate {
-			return fmt.Errorf("Portal 插件引用重复: %s", key)
+			return nil, fmt.Errorf("Portal 插件引用重复: %s", key)
 		}
 		seen[key] = struct{}{}
-		manifest, err := c.manifest(ctx, ref)
+		artifact, packageBytes, manifest, err := c.verifiedManifest(ctx, ref)
 		if err != nil {
-			return err
+			return nil, err
 		}
+		verified = append(verified, verifiedPortalPlugin{ref: ref, artifact: artifact, packageBytes: packageBytes, manifest: manifest})
 		if manifest.Engines["frontend"] == "" {
-			return fmt.Errorf("插件 %s 未声明 frontend engine", ref.ID)
+			return nil, fmt.Errorf("插件 %s 未声明 frontend engine", ref.ID)
 		}
 		origin, ok := spec.Resolution.PluginOrigins[ref.ID]
 		if !ok {
-			return fmt.Errorf("Portal 插件 %s 缺少解析来源", ref.ID)
+			return nil, fmt.Errorf("Portal 插件 %s 缺少解析来源", ref.ID)
 		}
 		if err := compositioncommonv1.ValidateOrigin(origin); err != nil {
-			return err
+			return nil, err
 		}
 		class, err := pluginid.ClassifyManagement(manifest.ID, manifest.Publisher)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if origin == compositioncommonv1.OriginApplication && class == pluginid.ManagementPlatform {
-			return fmt.Errorf("Frontend Application Composition 不能选择平台插件 %s", ref.ID)
+			return nil, fmt.Errorf("Frontend Application Composition 不能选择平台插件 %s", ref.ID)
 		}
 		if class == pluginid.ManagementDevelopment {
-			return fmt.Errorf("Portal v1 不允许开发插件 %s", ref.ID)
+			return nil, fmt.Errorf("Portal v1 不允许开发插件 %s", ref.ID)
 		}
-		isSelectedDesignSystem := ref.ID == spec.DesignSystem.ID && ref.Version == spec.DesignSystem.Version && channel(ref.Channel) == channel(spec.DesignSystem.Channel)
+		isSelectedDesignSystem := samePortalRef(ref, spec.DesignSystem.PluginRef)
+		isSelectedComposition := samePortalRef(ref, spec.Composition.PluginRef)
+		isSelectedLayout := samePortalRef(ref, spec.Layout.PluginRef)
 		var frontendContributions struct {
-			DesignSystems []json.RawMessage `json:"designSystems"`
+			DesignSystems     []json.RawMessage `json:"designSystems"`
+			ShellCompositions []json.RawMessage `json:"shellCompositions"`
+			ShellLayouts      []json.RawMessage `json:"shellLayouts"`
 		}
 		if err := json.Unmarshal(manifest.Contributes["frontend"], &frontendContributions); err != nil {
-			return fmt.Errorf("解析插件 %s 前端贡献: %w", ref.ID, err)
+			return nil, fmt.Errorf("解析插件 %s 前端贡献: %w", ref.ID, err)
 		}
 		if len(frontendContributions.DesignSystems) > 0 && !isSelectedDesignSystem {
-			return fmt.Errorf("Portal 不允许第二个设计系统插件 %s", ref.ID)
+			return nil, fmt.Errorf("Portal 不允许第二个设计系统插件 %s", ref.ID)
+		}
+		if len(frontendContributions.ShellCompositions) > 0 && !isSelectedComposition {
+			return nil, fmt.Errorf("Portal 不允许第二个 Shell 组合插件 %s", ref.ID)
+		}
+		if len(frontendContributions.ShellLayouts) > 0 && !isSelectedLayout {
+			return nil, fmt.Errorf("Portal 不允许第二个 Shell 布局插件 %s", ref.ID)
 		}
 		if isSelectedDesignSystem {
-			selected = manifest
+			selected["design"] = manifest
+		}
+		if isSelectedComposition {
+			selected["composition"] = manifest
+		}
+		if isSelectedLayout {
+			selected["layout"] = manifest
 		}
 	}
 	if len(seen) != len(spec.Resolution.PluginOrigins) {
-		return errors.New("Portal 解析来源包含未部署插件")
+		return nil, errors.New("Portal 解析来源包含未部署插件")
 	}
-	if spec.Resolution.PluginOrigins[spec.DesignSystem.ID] != compositioncommonv1.OriginPlatformProfile {
-		return errors.New("Portal 设计系统必须来自 Platform Profile")
+	if spec.Resolution.PluginOrigins[spec.DesignSystem.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.Composition.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.Layout.ID] != compositioncommonv1.OriginPlatformProfile {
+		return nil, errors.New("Portal 设计系统、Shell 组合与布局必须来自 Platform Profile")
 	}
-	if selected.ID == "" {
-		return errors.New("所选设计系统不在 Portal plugins 中")
+	if selected["design"].ID == "" || selected["composition"].ID == "" || selected["layout"].ID == "" {
+		return nil, errors.New("所选设计系统、Shell 组合或布局不在 Portal plugins 中")
 	}
 	var contribution struct {
 		DesignSystems []struct {
@@ -127,33 +189,71 @@ func (c *TrustedCatalog) ValidatePortal(ctx context.Context, tenantID string, sp
 			Capabilities []string `json:"capabilities"`
 		} `json:"designSystems"`
 	}
-	if err := json.Unmarshal(selected.Contributes["frontend"], &contribution); err != nil {
-		return fmt.Errorf("解析设计系统贡献: %w", err)
+	if err := json.Unmarshal(selected["design"].Contributes["frontend"], &contribution); err != nil {
+		return nil, fmt.Errorf("解析设计系统贡献: %w", err)
 	}
 	for _, ds := range contribution.DesignSystems {
 		if ds.ID == "ui.design-system" && ds.UIContract == spec.DesignSystem.UIContract && ds.Framework != "" && completeCapabilities(ds.Capabilities) {
-			return nil
+			if !hasShellFoundationContribution(selected["composition"], "shellCompositions", "ui.shell-composition", spec.Composition.UIContract) {
+				return nil, errors.New("Shell 组合插件未提供匹配的 ui.shell-composition 贡献")
+			}
+			if !hasShellFoundationContribution(selected["layout"], "shellLayouts", "ui.shell-layout", spec.Layout.UIContract) {
+				return nil, errors.New("Shell 布局插件未提供匹配的 ui.shell-layout 贡献")
+			}
+			return verified, nil
 		}
 	}
-	return errors.New("设计系统未提供匹配且完整的 ui.design-system 贡献")
+	return nil, errors.New("设计系统未提供匹配且完整的 ui.design-system 贡献")
 }
 
-// ResolveRuntime converts a governed PortalSpec into the only bootstrap
-// document accepted by the browser. Every module digest is calculated from a
-// freshly verified package, never from a manifest claim.
-func (c *TrustedCatalog) ResolveRuntime(ctx context.Context, tenantID string, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
-	if err := c.ValidatePortal(ctx, tenantID, spec); err != nil {
-		return portalapi.RuntimeSpec{}, err
+func hasShellFoundationContribution(manifest pluginv1.Manifest, field, id, contract string) bool {
+	var frontend map[string][]struct {
+		ID         string `json:"id"`
+		UIContract string `json:"uiContract"`
 	}
-	runtime := portalapi.RuntimeSpec{Portal: spec, Modules: make([]portalapi.FrontendModule, 0, len(spec.Plugins))}
-	for _, ref := range spec.Plugins {
-		asset, err := c.frontendModule(ctx, spec.Revision, ref)
-		if err != nil {
-			return portalapi.RuntimeSpec{}, err
+	if json.Unmarshal(manifest.Contributes["frontend"], &frontend) != nil {
+		return false
+	}
+	for _, contribution := range frontend[field] {
+		if contribution.ID == id && contribution.UIContract == contract {
+			return true
 		}
-		runtime.Modules = append(runtime.Modules, asset.Descriptor)
 	}
-	return runtime, nil
+	return false
+}
+
+func samePortalRef(left, right portalapi.PluginRef) bool {
+	return left.ID == right.ID && left.Version == right.Version && channel(left.Channel) == channel(right.Channel)
+}
+
+// MaterializePortal is the only transition from verified plugin packages to
+// browser delivery objects. It runs before publication and never on a browser
+// request path.
+func (c *TrustedCatalog) MaterializePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+	verified, err := c.verifyPortal(ctx, tenantID, spec)
+	if err != nil {
+		return err
+	}
+	assets := make([]FrontendModuleAsset, 0, len(spec.Plugins))
+	for _, plugin := range verified {
+		asset, err := frontendModule(spec.Revision, plugin)
+		if err != nil {
+			return err
+		}
+		asset.GzipContent, err = gzipBytes(asset.Content)
+		if err != nil {
+			return fmt.Errorf("压缩插件 %s frontend 入口: %w", plugin.ref.ID, err)
+		}
+		assets = append(assets, asset)
+	}
+	return c.delivery.put(tenantID, spec, assets)
+}
+
+// ResolveRuntime reads an immutable publication snapshot. Missing snapshots
+// fail closed instead of performing package verification on the request path.
+func (c *TrustedCatalog) ResolveRuntime(ctx context.Context, tenantID string, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
+	_ = ctx
+	return c.delivery.runtime(tenantID, spec)
 }
 
 // ResolveRecoveryRuntime binds every historical module URL to both the current
@@ -168,7 +268,7 @@ func (c *TrustedCatalog) ResolveRecoveryRuntime(ctx context.Context, tenantID st
 		return portalapi.RuntimeSpec{}, err
 	}
 	for i := range runtime.Modules {
-		runtime.Modules[i].URL = fmt.Sprintf("/v1/portal-recovery-modules/%d/%d/%s.js", activeRevision, spec.Revision, runtime.Modules[i].ID)
+		runtime.Modules[i].URL = fmt.Sprintf("/v1/portal-recovery-modules/%d/%d/%s.js", activeRevision, spec.Revision, runtime.Modules[i].SHA256)
 	}
 	return runtime, nil
 }
@@ -176,23 +276,13 @@ func (c *TrustedCatalog) ResolveRecoveryRuntime(ctx context.Context, tenantID st
 // ReadFrontendModule serves only a module locked into the supplied active
 // revision. A caller cannot turn the asset endpoint into an arbitrary artifact
 // reader by choosing its own plugin version or entry path.
-func (c *TrustedCatalog) ReadFrontendModule(ctx context.Context, tenantID string, spec portalapi.PortalSpec, pluginID string) (FrontendModuleAsset, error) {
-	if err := c.ValidatePortal(ctx, tenantID, spec); err != nil {
-		return FrontendModuleAsset{}, err
-	}
-	for _, ref := range spec.Plugins {
-		if ref.ID == pluginID {
-			return c.frontendModule(ctx, spec.Revision, ref)
-		}
-	}
-	return FrontendModuleAsset{}, fmt.Errorf("Portal revision 未锁定前端插件 %s", pluginID)
+func (c *TrustedCatalog) ReadFrontendModule(ctx context.Context, tenantID string, spec portalapi.PortalSpec, digest string) (FrontendModuleAsset, error) {
+	_ = ctx
+	return c.delivery.module(tenantID, spec, digest)
 }
 
-func (c *TrustedCatalog) frontendModule(ctx context.Context, revision uint64, ref portalapi.PluginRef) (FrontendModuleAsset, error) {
-	artifact, packageBytes, manifest, err := c.verifiedManifest(ctx, ref)
-	if err != nil {
-		return FrontendModuleAsset{}, err
-	}
+func frontendModule(revision uint64, plugin verifiedPortalPlugin) (FrontendModuleAsset, error) {
+	ref, artifact, packageBytes, manifest := plugin.ref, plugin.artifact, plugin.packageBytes, plugin.manifest
 	entry := manifest.Entry["frontend"]
 	if entry == "" || (!strings.HasSuffix(entry, ".js") && !strings.HasSuffix(entry, ".mjs")) {
 		return FrontendModuleAsset{}, fmt.Errorf("插件 %s 缺少已构建的 JavaScript frontend 入口", ref.ID)
@@ -219,11 +309,6 @@ func validCompositionRef(ref compositioncommonv1.Ref) bool {
 	}
 	_, err := hex.DecodeString(ref.Digest)
 	return err == nil
-}
-
-func (c *TrustedCatalog) manifest(ctx context.Context, ref portalapi.PluginRef) (pluginv1.Manifest, error) {
-	_, _, manifest, err := c.verifiedManifest(ctx, ref)
-	return manifest, err
 }
 
 func (c *TrustedCatalog) verifiedManifest(ctx context.Context, ref portalapi.PluginRef) (pluginv1.Artifact, []byte, pluginv1.Manifest, error) {

@@ -155,6 +155,30 @@ type catalogValidationRequest struct {
 
 type PortalCatalog interface {
 	ValidatePortal(context.Context, string, portalapi.PortalSpec) error
+	MaterializePortal(context.Context, string, portalapi.PortalSpec) error
+}
+
+// CatalogMaterializationService performs the same authenticated tenant
+// projection but commits immutable browser delivery objects before publish.
+func CatalogMaterializationService(catalog PortalCatalog) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if catalog == nil {
+			return nil, nil, errors.New("可信 Portal 制品目录未配置")
+		}
+		if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() == "" {
+			return nil, nil, errors.New("Portal 制品物化只接受已认证插件会话")
+		}
+		var request catalogValidationRequest
+		decoder := json.NewDecoder(bytes.NewReader(payload))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || request.TenantID == "" || request.TenantID != callCtx.GetTenantId() {
+			return nil, nil, errors.New("Portal 制品物化请求 tenant 无效")
+		}
+		if err := catalog.MaterializePortal(ctx, request.TenantID, request.Spec); err != nil {
+			return nil, nil, err
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"materialized":true}`), nil
+	}
 }
 
 // CatalogValidationService exposes just one kernel service to the Composer:

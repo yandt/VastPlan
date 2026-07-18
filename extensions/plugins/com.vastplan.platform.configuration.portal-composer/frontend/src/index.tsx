@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FormSchema, JSONValue, PortalApplicationComposition, PortalAuditEvent, PortalFetch, PortalRevision, StatusTone } from "@vastplan/portal-ui";
+import type { FormSchema, FrontendPluginContext, JSONValue, PortalApplicationComposition, PortalAuditEvent, PortalFetch, PortalRevision, StatusTone } from "@vastplan/portal-ui";
 import { jsonSchemaDialect, PortalControlClient, PortalControlError, usePortalUI } from "@vastplan/portal-ui";
 
 type EditorValue = Record<string, unknown>;
@@ -219,10 +219,10 @@ export function PortalComposerView({ client: suppliedClient }: { client?: Portal
   const rows = revisions.map((revision) => ({ ...revision, key: String(revision.id) }));
   const editorReadOnly = !creating && selected?.status !== "Draft";
 
-  return <ui.Page title="门户与插件组合" actions={<ui.Stack direction="row" gap="sm">
+  return <ui.Stack gap="md"><ui.Stack direction="row" gap="sm" justify="end">
     <ui.Button kind="secondary" onClick={() => void load()} loading={loading}>刷新</ui.Button>
     <ui.Button kind="primary" onClick={startNew}>新建草稿</ui.Button>
-  </ui.Stack>}>
+  </ui.Stack>
     {error === undefined ? null : <ui.ErrorState title={error} retry={() => void load()} />}
     <ui.Grid columns={{ xs: 1, lg: 2 }} gap="lg">
       <ui.GridItem><ui.Panel title="Revisions">
@@ -285,7 +285,7 @@ export function PortalComposerView({ client: suppliedClient }: { client?: Portal
         { key: "reason", title: "原因", render: (cell) => typeof cell === "string" && cell !== "" ? cell : "-" },
       ]} />
     </ui.Drawer>
-  </ui.Page>;
+  </ui.Stack>;
 }
 
 function DiffDocument({ title, value }: { title: string; value: unknown }) {
@@ -303,9 +303,13 @@ function formatTime(value: unknown): string {
   return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString();
 }
 
+function PortalGovernanceBadge() {
+  const ui = usePortalUI();
+  return <ui.Status tone="info">平台治理</ui.Status>;
+}
+
 export default {
-  register(context: { addRoute(route: { path: string; component: typeof PortalComposerView }): void; addMenu(item: { id: string; title: string; route: string }): void }) {
-    context.addRoute({ path: "/settings/portals", component: PortalComposerView });
-    context.addMenu({ id: "platform.portal-composer", title: "系统配置", route: "/settings/portals" });
+  register(context: FrontendPluginContext) {
+    context.addPage({ id: "platform.portal-composer", path: "/settings/portals", title: "门户与插件组合", description: "治理 Portal 草稿、审批、发布与回滚", navigation: { id: "platform.portal-composer", label: "门户组合", zone: "settings", order: 10 }, slots: [{ id: "governance", slot: "page.header.end", component: PortalGovernanceBadge, order: 10 }, { id: "body", slot: "page.body.main", component: PortalComposerView }] });
   },
 };

@@ -19,6 +19,9 @@ type acceptingCatalog struct{}
 func (acceptingCatalog) ValidatePortal(context.Context, string, portalapi.PortalSpec) error {
 	return nil
 }
+func (acceptingCatalog) MaterializePortal(context.Context, string, portalapi.PortalSpec) error {
+	return nil
+}
 
 func principal(id string, roles ...string) portalapi.Principal {
 	return portalapi.Principal{ID: id, TenantID: "tenant-a", Roles: roles}

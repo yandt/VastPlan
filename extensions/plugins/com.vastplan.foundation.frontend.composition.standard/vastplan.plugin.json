@@ -1,0 +1,15 @@
+{
+  "id": "com.vastplan.foundation.frontend.composition.standard",
+  "name": "VastPlan Standard Shell Composition",
+  "description": "统一管理 Portal 页面、导航语义区与稳定 Slot 拓扑",
+  "version": "1.0.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "frontend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "activation": ["onPortalStartup"],
+  "entry": { "frontend": "frontend/dist/index.js" },
+  "contributes": { "frontend": { "shellCompositions": [{ "id": "ui.shell-composition", "title": "Standard Shell Composition", "uiContract": "^1.0.0" }] } }
+}

@@ -22,6 +22,16 @@ func (s catalogSource) Fetch(_ context.Context, ref pluginv1.ArtifactRef) (artif
 	return s[ref.PluginID+"@"+ref.Version], nil
 }
 
+type countingCatalogSource struct {
+	catalogSource
+	calls int
+}
+
+func (s *countingCatalogSource) Fetch(ctx context.Context, ref pluginv1.ArtifactRef) (artifacttrust.Envelope, error) {
+	s.calls++
+	return s.catalogSource.Fetch(ctx, ref)
+}
+
 type contentVerifier struct{}
 
 func (contentVerifier) Verify(_ context.Context, ref pluginv1.ArtifactRef, envelope artifacttrust.Envelope) (pluginv1.Artifact, error) {
@@ -56,30 +66,48 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 		t.Fatal(err)
 	}
 	source := catalogSource{artifact.PluginID + "@" + artifact.Version: {Artifact: artifact, PackageBytes: pkg}}
-	catalog, err := NewTrustedCatalog([]ArtifactSource{source}, contentVerifier{})
+	compositionArtifact, compositionPackage := packageFrontendFixture(t, `{"id":"com.vastplan.foundation.frontend.composition.test","name":"composition","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellCompositions":[{"id":"ui.shell-composition","uiContract":"^1.0.0"}]}}}`, []byte(`export default { id: "ui.shell-composition" };`))
+	layoutArtifact, layoutPackage := packageFrontendFixture(t, `{"id":"com.vastplan.foundation.frontend.layout.test","name":"layout","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellLayouts":[{"id":"ui.shell-layout","uiContract":"^1.0.0"}]}}}`, []byte(`export default { id: "ui.shell-layout" };`))
+	source[compositionArtifact.PluginID+"@"+compositionArtifact.Version] = artifacttrust.Envelope{Artifact: compositionArtifact, PackageBytes: compositionPackage}
+	source[layoutArtifact.PluginID+"@"+layoutArtifact.Version] = artifacttrust.Envelope{Artifact: layoutArtifact, PackageBytes: layoutPackage}
+	counted := &countingCatalogSource{catalogSource: source}
+	catalog, err := NewTrustedCatalog([]ArtifactSource{counted}, contentVerifier{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	ref := portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version}
-	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile}}}
+	compositionRef := portalapi.PluginRef{ID: compositionArtifact.PluginID, Version: compositionArtifact.Version}
+	layoutRef := portalapi.PluginRef{ID: layoutArtifact.PluginID, Version: layoutArtifact.Version}
+	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Composition: portalapi.ShellComposition{PluginRef: compositionRef, UIContract: "^1.0.0"}, Layout: portalapi.ShellLayout{PluginRef: layoutRef, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref, compositionRef, layoutRef}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, compositionRef.ID: compositioncommonv1.OriginPlatformProfile, layoutRef.ID: compositioncommonv1.OriginPlatformProfile}}}
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err != nil {
 		t.Fatalf("有效且已验证的设计系统应通过: %v", err)
 	}
+	beforeMaterialization := counted.calls
+	if err := catalog.MaterializePortal(context.Background(), "tenant-a", spec); err != nil {
+		t.Fatal(err)
+	}
+	if got := counted.calls - beforeMaterialization; got != len(spec.Plugins) {
+		t.Fatalf("物化期间每个制品应只获取和验证一次: got=%d want=%d", got, len(spec.Plugins))
+	}
+	materializationFetches := counted.calls
 	runtime, err := catalog.ResolveRuntime(context.Background(), "tenant-a", spec)
 	if err != nil {
 		t.Fatalf("有效 Portal 应解析浏览器运行描述: %v", err)
 	}
 	wantDigest := sha256.Sum256(module)
-	if len(runtime.Modules) != 1 || runtime.Modules[0].SHA256 != hex.EncodeToString(wantDigest[:]) || runtime.Modules[0].PackageSHA256 != artifact.SHA256 {
+	if len(runtime.Modules) != 3 || runtime.Modules[0].SHA256 != hex.EncodeToString(wantDigest[:]) || runtime.Modules[0].PackageSHA256 != artifact.SHA256 {
 		t.Fatalf("模块摘要未绑定已验证制品: %+v", runtime.Modules)
 	}
 	recovery, err := catalog.ResolveRecoveryRuntime(context.Background(), "tenant-a", 2, spec)
-	if err != nil || len(recovery.Modules) != 1 || recovery.Modules[0].URL != "/v1/portal-recovery-modules/2/1/"+ref.ID+".js" {
+	if err != nil || len(recovery.Modules) != 3 || recovery.Modules[0].URL != "/v1/portal-recovery-modules/2/1/"+runtime.Modules[0].SHA256+".js" {
 		t.Fatalf("恢复模块 URL 未同时绑定 active/fallback revision: %+v %v", recovery.Modules, err)
 	}
-	asset, err := catalog.ReadFrontendModule(context.Background(), "tenant-a", spec, ref.ID)
+	asset, err := catalog.ReadFrontendModule(context.Background(), "tenant-a", spec, runtime.Modules[0].SHA256)
 	if err != nil || string(asset.Content) != string(module) {
 		t.Fatalf("读取已锁定模块失败: asset=%+v err=%v", asset.Descriptor, err)
+	}
+	if counted.calls != materializationFetches {
+		t.Fatalf("运行时热路径不得重新读取制品包: before=%d after=%d", materializationFetches, counted.calls)
 	}
 	spec.Resolution.PluginOrigins[ref.ID] = compositioncommonv1.OriginApplication
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {
@@ -90,4 +118,27 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {
 		t.Fatal("不兼容 UI 契约必须拒绝")
 	}
+}
+
+func packageFrontendFixture(t *testing.T, manifest string, module []byte) (pluginv1.Artifact, []byte) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "frontend"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "frontend", "main.js"), module, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkg, _, err := pluginservice.PackageDirectory(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := pluginservice.Describe("stable", pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return artifact, pkg
 }

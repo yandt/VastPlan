@@ -40,6 +40,7 @@ var (
 // plugin may not publish merely because a browser passed a plugin ID.
 type Catalog interface {
 	ValidatePortal(context.Context, string, portalapi.PortalSpec) error
+	MaterializePortal(context.Context, string, portalapi.PortalSpec) error
 }
 
 type state struct {
@@ -313,11 +314,11 @@ func (s *Service) Publish(ctx context.Context, principal portalapi.Principal, id
 	if err != nil {
 		return portalapi.Revision{}, err
 	}
-	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
-		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
-	}
 	if s.routeConflictLocked(*r) {
 		return portalapi.Revision{}, ErrRouteConflict
+	}
+	if err := s.materializeCatalog(ctx, principal.TenantID, resolved); err != nil {
+		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	r.Status = portalapi.StatusPublished
 	r.Spec = cloneSpec(resolved)
@@ -362,14 +363,14 @@ func (s *Service) Rollback(ctx context.Context, principal portalapi.Principal, i
 	if err != nil {
 		return portalapi.Revision{}, err
 	}
-	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
-		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
-	}
 	s.state.NextRevision++
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	r := portalapi.Revision{ID: s.state.NextRevision, TenantID: principal.TenantID, PortalID: source.PortalID, Status: portalapi.StatusPublished, Composition: cloneComposition(source.Composition), Spec: cloneSpec(resolved), PublishedBy: principal.ID, CreatedAt: now, UpdatedAt: now}
 	if s.routeConflictLocked(r) {
 		return portalapi.Revision{}, ErrRouteConflict
+	}
+	if err := s.materializeCatalog(ctx, principal.TenantID, resolved); err != nil {
+		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	s.state.Revisions = append(s.state.Revisions, r)
 	s.activateLocked(&s.state.Revisions[len(s.state.Revisions)-1])
@@ -469,6 +470,7 @@ func cloneSpec(in portalapi.PortalSpec) portalapi.PortalSpec {
 	out.Plugins = append([]portalapi.PluginRef(nil), in.Plugins...)
 	out.Branding = cloneMap(in.Branding)
 	out.Config = cloneMap(in.Config)
+	out.Layout.Config = cloneMap(in.Layout.Config)
 	out.Resolution.PluginOrigins = cloneStringMap(in.Resolution.PluginOrigins)
 	return out
 }

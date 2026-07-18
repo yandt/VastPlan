@@ -42,6 +42,23 @@ type DesignSystem struct {
 	UIContract string `json:"uiContract"`
 }
 
+// ShellComposition fixes the platform-owned semantic page and slot topology.
+// It is deliberately separate from ShellLayout so changing CSS/layout cannot
+// silently rename or remove extension slots consumed by functional plugins.
+type ShellComposition struct {
+	PluginRef
+	UIContract string `json:"uiContract"`
+}
+
+// ShellLayout selects the visual arrangement for an already normalized shell
+// composition. Config is layout-private, non-sensitive JSON owned by the
+// Platform Profile rather than an Application Composition.
+type ShellLayout struct {
+	PluginRef
+	UIContract string         `json:"uiContract"`
+	Config     map[string]any `json:"config,omitempty"`
+}
+
 type SecurityPolicy struct {
 	FirstPartyOnly   bool `json:"firstPartyOnly"`
 	RequireIntegrity bool `json:"requireIntegrity"`
@@ -51,6 +68,8 @@ type PlatformProfile struct {
 	compositioncommonv1.Document
 	Target       compositioncommonv1.Target `json:"target"`
 	DesignSystem DesignSystem               `json:"designSystem"`
+	Composition  ShellComposition           `json:"composition"`
+	Layout       ShellLayout                `json:"layout"`
 	Plugins      []PluginRef                `json:"plugins"`
 	Security     SecurityPolicy             `json:"security,omitempty"`
 }
@@ -120,14 +139,21 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 		return PlatformProfile{}, err
 	}
 	value.DesignSystem.Channel = channel(value.DesignSystem.Channel)
-	found := false
+	value.Composition.Channel = channel(value.Composition.Channel)
+	value.Layout.Channel = channel(value.Layout.Channel)
+	if value.DesignSystem.ID == value.Composition.ID || value.DesignSystem.ID == value.Layout.ID || value.Composition.ID == value.Layout.ID {
+		return PlatformProfile{}, fmt.Errorf("设计系统、Shell 组合与布局必须由三个独立插件提供")
+	}
+	found := map[string]bool{}
 	for _, ref := range value.Plugins {
-		if same(ref, value.DesignSystem.PluginRef) {
-			found = true
+		for _, selected := range []PluginRef{value.DesignSystem.PluginRef, value.Composition.PluginRef, value.Layout.PluginRef} {
+			if same(ref, selected) {
+				found[selected.ID] = true
+			}
 		}
 	}
-	if !found {
-		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含设计系统")
+	if !found[value.DesignSystem.ID] || !found[value.Composition.ID] || !found[value.Layout.ID] {
+		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含设计系统、Shell 组合与布局插件")
 	}
 	return value, nil
 }

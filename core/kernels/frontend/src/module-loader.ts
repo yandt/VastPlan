@@ -1,4 +1,4 @@
-import type { DesignSystemAdapter } from "@vastplan/portal-ui";
+import type { DesignSystemAdapter, ShellCompositionAdapter, ShellLayoutAdapter } from "@vastplan/portal-ui";
 import type { FrontendPluginLoader, FrontendPluginModule, PluginRef, PortalSpec } from "./portal-runtime";
 
 export interface FrontendModuleDescriptor extends PluginRef {
@@ -54,7 +54,7 @@ export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
   }
 
   private async loadVerified(descriptor: FrontendModuleDescriptor): Promise<FrontendPluginModule> {
-    const response = await this.fetcher(descriptor.url, { credentials: "same-origin", cache: "no-store" });
+    const response = await this.fetcher(descriptor.url, { credentials: "same-origin", cache: "force-cache" });
     if (!response.ok) {
       throw new ModuleLoadError("MODULE_FETCH_FAILED", `前端模块获取失败: ${descriptor.id} (${response.status})`);
     }
@@ -101,10 +101,16 @@ function normalizeModule(namespace: unknown, descriptor: FrontendModuleDescripto
   if (exported.id === "ui.design-system" && typeof exported.Provider === "function") {
     return { provenance, designSystem: exported as unknown as DesignSystemAdapter };
   }
+  if (exported.id === "ui.shell-composition" && typeof exported.compose === "function") {
+    return { provenance, composition: exported as unknown as ShellCompositionAdapter };
+  }
+  if (exported.id === "ui.shell-layout" && typeof exported.Shell === "function") {
+    return { provenance, layout: exported as unknown as ShellLayoutAdapter };
+  }
   if (typeof exported.register === "function") {
     return { provenance, register: exported.register.bind(exported) as FrontendPluginModule["register"] };
   }
-  throw new ModuleLoadError("MODULE_EXPORT_INVALID", `前端模块未导出设计系统或 register: ${descriptor.id}`);
+  throw new ModuleLoadError("MODULE_EXPORT_INVALID", `前端模块未导出设计系统、Shell 组合、布局或 register: ${descriptor.id}`);
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -131,12 +137,15 @@ function ownedBuffer(source: Uint8Array): ArrayBuffer {
 }
 
 function validateDescriptor(descriptor: FrontendModuleDescriptor): void {
-  const governedURL = descriptor.url.startsWith("/v1/portal-modules/") || descriptor.url.startsWith("/v1/portal-recovery-modules/");
-  if (!descriptor.id || !descriptor.version || !governedURL ||
+  const active = /^\/v1\/portal-modules\/[1-9]\d*\/([a-f0-9]{64})\.js$/.exec(descriptor.url);
+  const recovery = /^\/v1\/portal-recovery-modules\/[1-9]\d*\/[1-9]\d*\/([a-f0-9]{64})\.js$/.exec(descriptor.url);
+  const governedDigest = active?.[1] ?? recovery?.[1];
+  if (!descriptor.id || !descriptor.version || governedDigest === undefined ||
       !/^[a-f0-9]{64}$/.test(descriptor.sha256) || !/^[a-f0-9]{64}$/.test(descriptor.packageSha256) ||
       (!descriptor.entry.endsWith(".js") && !descriptor.entry.endsWith(".mjs"))) {
     throw new ModuleLoadError("MODULE_DESCRIPTOR_INVALID", `前端模块描述无效: ${descriptor.id || "unknown"}`);
   }
+  if (governedDigest !== descriptor.sha256) throw new ModuleLoadError("MODULE_DESCRIPTOR_INVALID", `前端模块 URL 未按内容摘要寻址: ${descriptor.id}`);
 }
 
 function moduleKey(ref: PluginRef): string {

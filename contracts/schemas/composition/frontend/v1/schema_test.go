@@ -3,7 +3,7 @@ package frontendcompositionv1
 import "testing"
 
 func TestFrontendInputsSeparatePlatformAndApplication(t *testing.T) {
-	profile, err := ParsePlatformProfile([]byte(`{"version":1,"revision":2,"id":"portal-default","target":{"kernel":"frontend"},"designSystem":{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0","uiContract":"^1.0.0"},"plugins":[{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`))
+	profile, err := ParsePlatformProfile([]byte(`{"version":1,"revision":2,"id":"portal-default","target":{"kernel":"frontend"},"designSystem":{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0","uiContract":"^1.0.0"},"composition":{"id":"com.vastplan.foundation.frontend.composition.standard","version":"1.0.0","uiContract":"^1.0.0"},"layout":{"id":"com.vastplan.foundation.frontend.layout.standard","version":"1.0.0","uiContract":"^1.0.0"},"plugins":[{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0"},{"id":"com.vastplan.foundation.frontend.composition.standard","version":"1.0.0"},{"id":"com.vastplan.foundation.frontend.layout.standard","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`))
 	if err != nil || profile.Plugins[0].Channel != "stable" || len(profile.Digest()) != 64 {
 		t.Fatalf("profile 无效: %+v %v", profile, err)
 	}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createBrowserPlatformAdminClient, type CredentialMetadata, type PlatformAdminClient } from "@vastplan/platform-admin";
-import { jsonSchemaDialect, usePortalUI, type FormSchema } from "@vastplan/portal-ui";
+import { jsonSchemaDialect, usePortalUI, type FormSchema, type FrontendPluginContext } from "@vastplan/portal-ui";
 
 const schema: FormSchema = {
   id: "platform-credential.v1",
@@ -47,7 +47,7 @@ export function CredentialsView({ client: supplied }: { client?: PlatformAdminCl
     finally { setBusy(false); }
   };
 
-  return <ui.Page title="凭证引用" actions={<ui.Button onClick={() => void load()} loading={busy}>刷新</ui.Button>}>
+  return <ui.Stack gap="md"><ui.Stack direction="row" justify="end"><ui.Button onClick={() => void load()} loading={busy}>刷新</ui.Button></ui.Stack>
     {error === undefined ? null : <ui.ErrorState title={error} retry={() => void load()} />}
     <ui.Panel title="保存或替换凭证"><ui.FormRenderer schema={schema} value={editor} onChange={setEditor} submitting={busy} />
       <ui.Button kind="primary" onClick={() => void save()} loading={busy}>安全保存</ui.Button>
@@ -62,15 +62,14 @@ export function CredentialsView({ client: supplied }: { client?: PlatformAdminCl
         { key: "actions", title: "操作", render: (_cell, row) => <ui.Stack direction="row" gap="sm"><ui.Button kind="secondary" onClick={() => void action(row as unknown as CredentialMetadata, "rotate")}>轮换</ui.Button><ui.Button kind="danger" onClick={() => void action(row as unknown as CredentialMetadata, "revoke")}>撤销</ui.Button></ui.Stack> },
       ]} />
     </ui.Panel>
-  </ui.Page>;
+  </ui.Stack>;
 }
 
 function formatTime(value: unknown): string { return typeof value === "string" && value !== "" ? new Date(value).toLocaleString() : "-"; }
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : "凭证请求失败"; }
 
 export default {
-  register(context: { addRoute(route: { path: string; component: typeof CredentialsView }): void; addMenu(item: { id: string; title: string; route: string }): void }) {
-    context.addRoute({ path: "/settings/credentials", component: CredentialsView });
-    context.addMenu({ id: "platform.credentials", title: "凭证引用", route: "/settings/credentials" });
+  register(context: FrontendPluginContext) {
+    context.addPage({ id: "platform.credentials", path: "/settings/credentials", title: "凭证引用", description: "管理不返回明文的凭证元数据", navigation: { id: "platform.credentials", label: "凭证引用", zone: "settings", order: 30 }, slots: [{ id: "body", slot: "page.body.main", component: CredentialsView }] });
   },
 };

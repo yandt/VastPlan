@@ -39,6 +39,8 @@ func resolve(profile frontendcompositionv1.PlatformProfile, application frontend
 		Domains: append([]string(nil), application.Domains...), Audience: append([]string(nil), application.Audience...),
 		Branding: cloneMap(application.Branding), Config: cloneMap(application.Config), Plugins: plugins,
 		DesignSystem: portalapi.DesignSystem{PluginRef: portalRef(profile.DesignSystem.PluginRef), UIContract: profile.DesignSystem.UIContract},
+		Composition:  portalapi.ShellComposition{PluginRef: portalRef(profile.Composition.PluginRef), UIContract: profile.Composition.UIContract},
+		Layout:       portalapi.ShellLayout{PluginRef: portalRef(profile.Layout.PluginRef), UIContract: profile.Layout.UIContract, Config: cloneMap(profile.Layout.Config)},
 		Resolution: portalapi.Resolution{
 			PlatformProfile:        compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()},
 			ApplicationComposition: compositioncommonv1.Ref{ID: application.ID, Revision: application.Revision, Digest: application.Digest()},

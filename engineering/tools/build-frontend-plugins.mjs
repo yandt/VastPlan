@@ -15,6 +15,8 @@ const common = {
 const plugins = [
   ["com.vastplan.foundation.frontend.design-system.arco", { loader: { ".css": "text" } }],
   ["com.vastplan.foundation.frontend.design-system.mui", {}],
+  ["com.vastplan.foundation.frontend.composition.standard", {}],
+  ["com.vastplan.foundation.frontend.layout.standard", {}],
   ["com.vastplan.platform.configuration.portal-composer", {}],
   ["com.vastplan.platform.configuration.global-settings", {}],
   ["com.vastplan.platform.security.credentials", {}],
@@ -26,7 +28,7 @@ for (const [id, options] of plugins) {
   await build({
     ...common,
     ...options,
-    entryPoints: [`extensions/plugins/${id}/frontend/src/index.tsx`],
+    entryPoints: [`extensions/plugins/${id}/frontend/src/index.${id === "com.vastplan.foundation.frontend.composition.standard" ? "ts" : "tsx"}`],
     outfile: `extensions/plugins/${id}/frontend/dist/index.js`,
   });
   if (id === "com.vastplan.foundation.frontend.design-system.arco") {

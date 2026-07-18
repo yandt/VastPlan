@@ -170,6 +170,89 @@ export interface DesignSystemAdapter {
   Provider: ComponentType<{ children: ReactNode }>;
 }
 
+export type NavigationZone = "primary" | "settings" | "secondary";
+
+export type ShellSlotID =
+  | "shell.header.start" | "shell.header.center" | "shell.header.end"
+  | "shell.navigation.before" | "shell.navigation.after"
+  | "page.header.start" | "page.header.center" | "page.header.end"
+  | "page.body.before" | "page.body.main" | "page.body.after"
+  | "page.aside" | "shell.footer";
+
+export interface PortalPageNavigation {
+  id: string;
+  label: string;
+  zone: NavigationZone;
+  group?: string;
+  order?: number;
+}
+
+export interface PortalSlotContribution {
+  id: string;
+  slot: ShellSlotID;
+  component: ComponentType;
+  order?: number;
+}
+
+export interface PortalPageDefinition {
+  id: string;
+  path: string;
+  title: string;
+  description?: string;
+  navigation?: PortalPageNavigation;
+  slots: readonly PortalSlotContribution[];
+}
+
+export interface FrontendPluginContext {
+  readonly portal: Readonly<{ revision: number; id: string; tenantId: string; route: string }>;
+  addPage(page: PortalPageDefinition): void;
+}
+
+export interface PortalRegisteredPage extends PortalPageDefinition {
+  pluginID: string;
+}
+
+export interface ShellCompositionInput {
+  pages: readonly PortalRegisteredPage[];
+  activePageID?: string;
+}
+
+export interface ShellCompositionModel {
+  pages: readonly PortalRegisteredPage[];
+  activePage?: PortalRegisteredPage;
+  navigation: Readonly<Record<NavigationZone, readonly PortalPageNavigation[]>>;
+  slots: Readonly<Partial<Record<ShellSlotID, readonly PortalSlotContribution[]>>>;
+}
+
+/** Owns the stable shell/page topology, slot validation and deterministic order. */
+export interface ShellCompositionAdapter {
+  id: "ui.shell-composition";
+  uiContract: string;
+  compose(input: ShellCompositionInput): ShellCompositionModel;
+}
+
+export interface ShellBranding {
+  name: string;
+  logoURL?: string;
+  shortName?: string;
+}
+
+export interface ShellLayoutProps {
+  composition: ShellCompositionModel;
+  branding: ShellBranding;
+  config: Readonly<Record<string, unknown>>;
+  pathname: string;
+  recoveryNotice?: ReactNode;
+  onNavigate(pageID: string): void;
+}
+
+/** Applies visual arrangement only; slot names and content come from composition. */
+export interface ShellLayoutAdapter {
+  id: "ui.shell-layout";
+  uiContract: string;
+  Shell: ComponentType<ShellLayoutProps>;
+}
+
 const portalUIContext = createContext<PortalUI | null>(null);
 
 export function PortalUIProvider({ ui, children }: { ui: PortalUI; children?: ReactNode }) {

@@ -135,6 +135,7 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 			writeError(w, http.StatusConflict, "portal_runtime_rejected")
 			return
 		}
+		addModulePreloads(w, runtime)
 		writeJSON(w, http.StatusOK, runtime)
 		return
 	}
@@ -151,6 +152,7 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 		}
 		w.Header().Set("X-VastPlan-Recovery-From", fmt.Sprint(active.ID))
 		w.Header().Set("X-VastPlan-Recovery-Revision", fmt.Sprint(fallback.ID))
+		addModulePreloads(w, runtime)
 		writeJSON(w, http.StatusOK, runtime)
 		return
 	}
@@ -186,8 +188,8 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 	h.serveFrontendModule(w, r, p, revision, pluginID)
 }
 
-func (h *Handler) serveFrontendModule(w http.ResponseWriter, r *http.Request, p portalapi.Principal, revision portalapi.Revision, pluginID string) {
-	asset, err := h.catalog.ReadFrontendModule(r.Context(), p.TenantID, revision.Spec, pluginID)
+func (h *Handler) serveFrontendModule(w http.ResponseWriter, r *http.Request, p portalapi.Principal, revision portalapi.Revision, digest string) {
+	asset, err := h.catalog.ReadFrontendModule(r.Context(), p.TenantID, revision.Spec, digest)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "portal_module_not_found")
 		return
@@ -195,13 +197,38 @@ func (h *Handler) serveFrontendModule(w http.ResponseWriter, r *http.Request, p 
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
-	w.Header().Set("ETag", `"sha256-`+asset.Descriptor.SHA256+`"`)
 	w.Header().Set("X-VastPlan-Module-SHA256", asset.Descriptor.SHA256)
 	w.Header().Set("X-VastPlan-Package-SHA256", asset.Descriptor.PackageSHA256)
+	etag := `"sha256-` + asset.Descriptor.SHA256 + `"`
+	w.Header().Set("ETag", etag)
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	content := asset.Content
+	if len(asset.GzipContent) > 0 && acceptsEncoding(r.Header.Get("Accept-Encoding"), "gzip") {
+		content = asset.GzipContent
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Vary", "Accept-Encoding")
+	}
 	w.WriteHeader(http.StatusOK)
 	if r.Method == http.MethodGet {
-		_, _ = w.Write(asset.Content)
+		_, _ = w.Write(content)
 	}
+}
+
+func addModulePreloads(w http.ResponseWriter, runtime portalapi.RuntimeSpec) {
+	for _, module := range runtime.Modules {
+		w.Header().Add("Link", fmt.Sprintf("<%s>; rel=preload; as=fetch; crossorigin=use-credentials", module.URL))
+	}
+}
+func acceptsEncoding(header, encoding string) bool {
+	for _, value := range strings.Split(header, ",") {
+		if strings.TrimSpace(strings.SplitN(value, ";", 2)[0]) == encoding {
+			return true
+		}
+	}
+	return false
 }
 
 func selectRecoveryPortal(revisions []portalapi.Revision, tenantID, requestedPath, host string) (portalapi.Revision, portalapi.Revision, bool) {
@@ -304,11 +331,14 @@ func parseModulePath(value string) (uint64, string, bool) {
 	if _, err := fmtSscan(parts[0], &revision); err != nil || revision == 0 {
 		return 0, "", false
 	}
-	pluginID := strings.TrimSuffix(parts[1], ".js")
-	if pluginID == "" || strings.ContainsAny(pluginID, "/\\") {
+	digest := strings.TrimSuffix(parts[1], ".js")
+	if len(digest) != 64 {
 		return 0, "", false
 	}
-	return revision, pluginID, true
+	if _, err := hex.DecodeString(digest); err != nil {
+		return 0, "", false
+	}
+	return revision, digest, true
 }
 
 func parseRecoveryModulePath(value string) (uint64, uint64, string, bool) {
@@ -323,11 +353,14 @@ func parseRecoveryModulePath(value string) (uint64, uint64, string, bool) {
 	if _, err := fmtSscan(parts[1], &fallback); err != nil || fallback == 0 || fallback == active {
 		return 0, 0, "", false
 	}
-	pluginID := strings.TrimSuffix(parts[2], ".js")
-	if pluginID == "" || strings.ContainsAny(pluginID, "/\\") {
+	digest := strings.TrimSuffix(parts[2], ".js")
+	if len(digest) != 64 {
 		return 0, 0, "", false
 	}
-	return active, fallback, pluginID, true
+	if _, err := hex.DecodeString(digest); err != nil {
+		return 0, 0, "", false
+	}
+	return active, fallback, digest, true
 }
 
 func (h *Handler) interactionRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {

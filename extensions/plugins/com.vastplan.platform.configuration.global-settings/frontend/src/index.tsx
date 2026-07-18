@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createBrowserPlatformAdminClient, type PlatformAdminClient, type Setting } from "@vastplan/platform-admin";
-import { jsonSchemaDialect, usePortalUI, type FormSchema } from "@vastplan/portal-ui";
+import { jsonSchemaDialect, usePortalUI, type FormSchema, type FrontendPluginContext } from "@vastplan/portal-ui";
 
 const schema: FormSchema = {
   id: "platform-setting.v1",
@@ -55,7 +55,7 @@ export function GlobalSettingsView({ client: supplied }: { client?: PlatformAdmi
   };
 
   const select = (setting: Setting) => { setSelected(setting); setEditor({ key: setting.key, value: JSON.stringify(setting.value, null, 2) }); };
-  return <ui.Page title="全局设置" actions={<ui.Button onClick={() => void load()} loading={busy}>刷新</ui.Button>}>
+  return <ui.Stack gap="md"><ui.Stack direction="row" justify="end"><ui.Button onClick={() => void load()} loading={busy}>刷新</ui.Button></ui.Stack>
     {error === undefined ? null : <ui.ErrorState title={error} retry={() => void load()} />}
     <ui.Grid columns={{ xs: 1, lg: 2 }} gap="lg">
       <ui.GridItem><ui.Panel title="租户设置">
@@ -74,15 +74,14 @@ export function GlobalSettingsView({ client: supplied }: { client?: PlatformAdmi
         </ui.Stack>
       </ui.Panel></ui.GridItem>
     </ui.Grid>
-  </ui.Page>;
+  </ui.Stack>;
 }
 
 function formatTime(value: unknown): string { return typeof value === "string" && value !== "" ? new Date(value).toLocaleString() : "-"; }
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : "平台设置请求失败"; }
 
 export default {
-  register(context: { addRoute(route: { path: string; component: typeof GlobalSettingsView }): void; addMenu(item: { id: string; title: string; route: string }): void }) {
-    context.addRoute({ path: "/settings/global", component: GlobalSettingsView });
-    context.addMenu({ id: "platform.global-settings", title: "全局设置", route: "/settings/global" });
+  register(context: FrontendPluginContext) {
+    context.addPage({ id: "platform.global-settings", path: "/settings/global", title: "全局设置", description: "管理平台级非敏感配置", navigation: { id: "platform.global-settings", label: "全局设置", zone: "settings", order: 20 }, slots: [{ id: "body", slot: "page.body.main", component: GlobalSettingsView }] });
   },
 };

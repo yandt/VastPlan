@@ -9,8 +9,28 @@
     "channel": "stable",
     "uiContract": "^1.0.0"
   },
+  "composition": {
+    "id": "com.vastplan.foundation.frontend.composition.standard",
+    "version": "1.0.0",
+    "channel": "stable",
+    "uiContract": "^1.0.0"
+  },
+  "layout": {
+    "id": "com.vastplan.foundation.frontend.layout.standard",
+    "version": "1.0.0",
+    "channel": "stable",
+    "uiContract": "^1.0.0",
+    "config": {
+      "navigation": "sidebar",
+      "logoPlacement": "navigation",
+      "settingsPlacement": "navigation-bottom",
+      "pageBodyWidth": "fluid"
+    }
+  },
   "plugins": [
     { "id": "com.vastplan.foundation.frontend.design-system.arco", "version": "1.0.0", "channel": "stable" },
+    { "id": "com.vastplan.foundation.frontend.composition.standard", "version": "1.0.0", "channel": "stable" },
+    { "id": "com.vastplan.foundation.frontend.layout.standard", "version": "1.0.0", "channel": "stable" },
     { "id": "com.vastplan.platform.configuration.portal-composer", "version": "1.0.0", "channel": "stable" },
     { "id": "com.vastplan.platform.configuration.global-settings", "version": "0.2.0", "channel": "stable" },
     { "id": "com.vastplan.platform.security.credentials", "version": "0.2.0", "channel": "stable" },

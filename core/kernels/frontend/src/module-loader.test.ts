@@ -10,7 +10,7 @@ async function descriptor(overrides: Partial<FrontendModuleDescriptor> = {}): Pr
   return {
     ...ref,
     entry: "frontend/dist/index.js",
-    url: `/v1/portal-modules/7/${ref.id}.js`,
+    url: `/v1/portal-modules/7/${sha256}.js`,
     sha256,
     packageSha256: "a".repeat(64),
     ...overrides,
@@ -28,12 +28,12 @@ describe("VerifiedFrontendPluginLoader", () => {
     const loaded = await loader.load(ref);
     expect(loaded.provenance).toEqual({ signed: true, firstParty: true, integrity: `sha256:${locked.sha256}` });
     expect(loaded.register).toBeTypeOf("function");
-    expect(fetcher).toHaveBeenCalledWith(locked.url, { credentials: "same-origin", cache: "no-store" });
+    expect(fetcher).toHaveBeenCalledWith(locked.url, { credentials: "same-origin", cache: "force-cache" });
     expect(importer).toHaveBeenCalledOnce();
   });
 
   it("fails closed before import when bytes do not match the runtime lock", async () => {
-    const locked = await descriptor({ sha256: "b".repeat(64) });
+    const locked = await descriptor({ sha256: "b".repeat(64), url: `/v1/portal-modules/7/${"b".repeat(64)}.js` });
     const importer = vi.fn();
     const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source, { status: 200 }), importer);
     await expect(loader.load(ref)).rejects.toMatchObject({ code: "MODULE_INTEGRITY_MISMATCH" } satisfies Partial<ModuleLoadError>);
@@ -52,7 +52,8 @@ describe("VerifiedFrontendPluginLoader", () => {
   });
 
   it("accepts only governed active or recovery module URLs", async () => {
-    const locked = await descriptor({ url: `/v1/portal-recovery-modules/8/7/${ref.id}.js` });
+    const base = await descriptor();
+    const locked = await descriptor({ url: `/v1/portal-recovery-modules/8/7/${base.sha256}.js` });
     expect(parsePortalRuntimeSpec({ portal: { revision: 7 }, modules: [locked] }).modules[0].url).toBe(locked.url);
     expect(() => parsePortalRuntimeSpec({ portal: {}, modules: [{ ...locked, url: "/assets/history/module.js" }] })).toThrowError(ModuleLoadError);
   });

@@ -29,6 +29,11 @@ const ComposerCapability = "platform.portal-composer"
 // artifact catalog. It is intentionally not a browser-facing API.
 const KernelCatalogValidationCapability = "kernel.portal.catalog.validate"
 
+// KernelCatalogMaterializationCapability is the publish-boundary operation
+// that verifies and extracts immutable browser delivery objects before a
+// revision can become active.
+const KernelCatalogMaterializationCapability = "kernel.portal.catalog.materialize"
+
 type Principal struct {
 	ID       string   `json:"id"`
 	TenantID string   `json:"tenantId"`
@@ -47,18 +52,31 @@ type DesignSystem struct {
 	UIContract string `json:"uiContract"`
 }
 
+type ShellComposition struct {
+	PluginRef
+	UIContract string `json:"uiContract"`
+}
+
+type ShellLayout struct {
+	PluginRef
+	UIContract string         `json:"uiContract"`
+	Config     map[string]any `json:"config,omitempty"`
+}
+
 type PortalSpec struct {
-	Revision     uint64         `json:"revision"`
-	ID           string         `json:"id"`
-	TenantID     string         `json:"tenantId"`
-	Route        string         `json:"route"`
-	Domains      []string       `json:"domains,omitempty"`
-	Audience     []string       `json:"audience,omitempty"`
-	Branding     map[string]any `json:"branding,omitempty"`
-	DesignSystem DesignSystem   `json:"designSystem"`
-	Plugins      []PluginRef    `json:"plugins"`
-	Config       map[string]any `json:"config,omitempty"`
-	Resolution   Resolution     `json:"resolution"`
+	Revision     uint64           `json:"revision"`
+	ID           string           `json:"id"`
+	TenantID     string           `json:"tenantId"`
+	Route        string           `json:"route"`
+	Domains      []string         `json:"domains,omitempty"`
+	Audience     []string         `json:"audience,omitempty"`
+	Branding     map[string]any   `json:"branding,omitempty"`
+	DesignSystem DesignSystem     `json:"designSystem"`
+	Composition  ShellComposition `json:"composition"`
+	Layout       ShellLayout      `json:"layout"`
+	Plugins      []PluginRef      `json:"plugins"`
+	Config       map[string]any   `json:"config,omitempty"`
+	Resolution   Resolution       `json:"resolution"`
 }
 
 type Resolution struct {

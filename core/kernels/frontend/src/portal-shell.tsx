@@ -19,6 +19,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   const endpoint = options.runtimeEndpoint ?? "/v1/portal-runtime";
   const recoveryEndpoint = options.recoveryEndpoint ?? "/v1/portal-recovery";
   const root = createRoot(options.element);
+  root.render(<PortalStarting />);
   try {
     const prepared = await preparePortal(fetcher, endpoint, pathname);
     root.render(<PortalApplication prepared={prepared} initialPath={pathname} />);
@@ -57,33 +58,46 @@ export function PortalApplication({ prepared, initialPath, recoveryMode = false 
     globalThis.addEventListener?.("popstate", onPopState);
     return () => globalThis.removeEventListener?.("popstate", onPopState);
   }, []);
-  const route = useMemo(() => selectRoute(prepared, pathname), [prepared, pathname]);
+  const page = useMemo(() => selectPage(prepared, pathname), [prepared, pathname]);
   const Provider = prepared.designSystem.Provider;
-  return <Provider><PortalContent prepared={prepared} pathname={pathname} onNavigate={setPathname} route={route} recoveryMode={recoveryMode} /></Provider>;
+  return <Provider><PortalContent prepared={prepared} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} /></Provider>;
 }
 
-function PortalContent({ prepared, pathname, onNavigate, route, recoveryMode }: {
+function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode }: {
   prepared: PreparedPortal;
   pathname: string;
   onNavigate(path: string): void;
-  route: PreparedPortal["routes"][number] | undefined;
+  page: PreparedPortal["pages"][number] | undefined;
   recoveryMode: boolean;
 }) {
   const ui = usePortalUI();
-  const View = route?.component;
-  const menuItems = prepared.menus.map((item) => ({ id: item.id, label: item.title, href: item.route }));
-  const activeMenu = prepared.menus.find((item) => item.route === route?.path)?.id;
-  const navigate = (id: string) => {
-    const item = prepared.menus.find((candidate) => candidate.id === id);
-    if (item === undefined) return;
-    globalThis.history?.pushState({}, "", item.route);
-    onNavigate(item.route);
+  const composition = prepared.composition.compose({ pages: prepared.pages, activePageID: page?.id });
+  const Layout = prepared.layout.Shell;
+  const navigate = (pageID: string) => {
+    const target = prepared.pages.find((candidate) => candidate.id === pageID);
+    if (target === undefined) return;
+    globalThis.history?.pushState({}, "", target.path);
+    onNavigate(target.path);
   };
-  return <ui.Page title={prepared.portal.id}>
-    {recoveryMode ? <ui.Panel title="安全恢复模式"><ui.Status tone="warning">正在运行上一条仍可信的已发布 revision #{prepared.portal.revision}。请由平台管理员检查当前设计系统并执行正式回滚或修复。</ui.Status></ui.Panel> : null}
-    <ui.Menu items={menuItems} activeID={activeMenu} onSelect={navigate} />
-    {View === undefined ? <ui.EmptyState title="页面不存在" description={`Portal 没有注册路径 ${pathname}`} /> : <View />}
-  </ui.Page>;
+  const branding = prepared.portal.branding ?? {};
+  return <Layout
+    composition={composition}
+    branding={{
+      name: typeof branding.name === "string" && branding.name !== "" ? branding.name : typeof branding.title === "string" && branding.title !== "" ? branding.title : prepared.portal.id,
+      shortName: typeof branding.shortName === "string" ? branding.shortName : undefined,
+      logoURL: typeof branding.logoURL === "string" ? branding.logoURL : undefined,
+    }}
+    config={prepared.portal.layout.config ?? {}}
+    pathname={pathname}
+    onNavigate={navigate}
+    recoveryNotice={recoveryMode ? <ui.Status tone="warning">正在运行上一条仍可信的已发布 revision #{prepared.portal.revision}。</ui.Status> : undefined}
+  />;
+}
+
+export function PortalStarting() {
+  return <main aria-busy="true" style={{ fontFamily: "system-ui", minHeight: "100vh", display: "grid", placeItems: "center", background: "#f7f8fa", color: "#4e5969" }}>
+    <div><strong>VastPlan</strong><p>正在验证并装配平台模块…</p></div>
+  </main>;
 }
 
 export function PortalRecovery({ error, onRecover }: { error: unknown; onRecover?(): Promise<void> }) {
@@ -115,9 +129,9 @@ export function PortalRecovery({ error, onRecover }: { error: unknown; onRecover
   </main>;
 }
 
-function selectRoute(prepared: PreparedPortal, pathname: string) {
-  return [...prepared.routes]
-    .filter((route) => pathname === route.path || pathname.startsWith(`${route.path.replace(/\/$/, "")}/`))
+function selectPage(prepared: PreparedPortal, pathname: string) {
+  return [...prepared.pages]
+    .filter((page) => pathname === page.path || pathname.startsWith(`${page.path.replace(/\/$/, "")}/`))
     .sort((left, right) => right.path.length - left.path.length)[0];
 }
 

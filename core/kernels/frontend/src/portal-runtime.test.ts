@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { DesignSystemAdapter } from "@vastplan/portal-ui";
+import type { DesignSystemAdapter, ShellCompositionAdapter, ShellLayoutAdapter } from "@vastplan/portal-ui";
 import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type PluginRef } from "./portal-runtime";
 
 const arcoRef: PluginRef = { id: "com.vastplan.foundation.frontend.design-system.arco", version: "1.0.0" };
 const muiRef: PluginRef = { id: "com.vastplan.foundation.frontend.design-system.mui", version: "1.0.0" };
 const composerRef: PluginRef = { id: "com.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
+const compositionRef: PluginRef = { id: "com.vastplan.foundation.frontend.composition.standard", version: "1.0.0" };
+const layoutRef: PluginRef = { id: "com.vastplan.foundation.frontend.layout.standard", version: "1.0.0" };
+
+const composition: ShellCompositionAdapter = { id: "ui.shell-composition", uiContract: "1.0.0", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, slots: {} }) };
+const layout: ShellLayoutAdapter = { id: "ui.shell-layout", uiContract: "1.0.0", Shell: () => null };
 
 function designSystem(framework: string): DesignSystemAdapter {
   return {
@@ -27,11 +32,12 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
       if (ref.id === arcoRef.id || ref.id === muiRef.id) {
         return { ...base, designSystem: designSystem(ref.id === arcoRef.id ? "arco" : "mui"), ...(overrides[ref.id] as object) };
       }
+      if (ref.id === compositionRef.id) return { ...base, composition, ...(overrides[ref.id] as object) };
+      if (ref.id === layoutRef.id) return { ...base, layout, ...(overrides[ref.id] as object) };
       return {
         ...base,
         async register(context) {
-          context.addRoute({ path: "/settings/portals", component: () => null });
-          context.addMenu({ id: "portal-composer", title: "门户组合", route: "/settings/portals" });
+          context.addPage({ id: "portal-composer", path: "/settings/portals", title: "门户组合", navigation: { id: "portal-composer", label: "门户组合", zone: "settings" }, slots: [{ id: "center", slot: "page.header.center", component: () => null }, { id: "actions", slot: "page.header.end", component: () => null }, { id: "body", slot: "page.body.main", component: () => null }] });
         },
         ...(overrides[ref.id] as object),
       };
@@ -40,11 +46,11 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
 }
 
 const portal = {
-  revision: 1, id: "admin", tenantId: "acme", route: "/", designSystem: { ...arcoRef, uiContract: "^1.0.0" }, plugins: [arcoRef, composerRef],
+  revision: 1, id: "admin", tenantId: "acme", route: "/", designSystem: { ...arcoRef, uiContract: "^1.0.0" }, composition: { ...compositionRef, uiContract: "^1.0.0" }, layout: { ...layoutRef, uiContract: "^1.0.0" }, plugins: [arcoRef, compositionRef, layoutRef, composerRef],
   resolution: {
     platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) },
     applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) },
-    pluginOrigins: { [arcoRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
+    pluginOrigins: { [arcoRef.id]: "platform-profile" as const, [compositionRef.id]: "platform-profile" as const, [layoutRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
   },
 };
 
@@ -52,23 +58,23 @@ describe("PortalRuntime", () => {
   it("only assembles one signed first-party design system and framework-neutral plugins", async () => {
     const prepared = await new PortalRuntime(loader()).prepare(portal);
     expect(prepared.designSystem.framework).toBe("arco");
-    expect(prepared.routes).toHaveLength(1);
-    expect(prepared.routes[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
+    expect(prepared.pages).toHaveLength(1);
+    expect(prepared.pages[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
   });
 
   it("assembles the same functional plugin against a second UI framework", async () => {
     const muiPortal = {
       ...portal,
       designSystem: { ...muiRef, uiContract: "^1.0.0" },
-      plugins: [muiRef, composerRef],
+      plugins: [muiRef, compositionRef, layoutRef, composerRef],
       resolution: {
         ...portal.resolution,
-        pluginOrigins: { [muiRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
+        pluginOrigins: { [muiRef.id]: "platform-profile" as const, [compositionRef.id]: "platform-profile" as const, [layoutRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
       },
     };
     const prepared = await new PortalRuntime(loader()).prepare(muiPortal);
     expect(prepared.designSystem.framework).toBe("mui");
-    expect(prepared.routes[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
+    expect(prepared.pages[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
   });
 
   it("fails closed for an untrusted design system", async () => {
@@ -78,7 +84,7 @@ describe("PortalRuntime", () => {
 
   it("rejects a second design system contribution", async () => {
     const runtime = new PortalRuntime(loader({ [composerRef.id]: { designSystem: adapter } }));
-    await expect(runtime.prepare(portal)).rejects.toMatchObject({ code: "SECOND_DESIGN_SYSTEM" } satisfies Partial<PortalAssemblyError>);
+    await expect(runtime.prepare(portal)).rejects.toMatchObject({ code: "SECOND_SHELL_FOUNDATION" } satisfies Partial<PortalAssemblyError>);
   });
 
   it("rejects a design system selected by the application input", async () => {

@@ -414,7 +414,9 @@
         "commands": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "menus": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "settings": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
-        "designSystems": { "type": "array", "items": { "$ref": "#/$defs/designSystemContribution" } }
+        "designSystems": { "type": "array", "items": { "$ref": "#/$defs/designSystemContribution" } },
+        "shellCompositions": { "type": "array", "items": { "$ref": "#/$defs/shellFoundationContribution" } },
+        "shellLayouts": { "type": "array", "items": { "$ref": "#/$defs/shellFoundationContribution" } }
       }
     },
     "designSystemContribution": {
@@ -442,6 +444,17 @@
             { "contains": { "const": "theme" } }
           ]
         }
+      }
+    },
+    "shellFoundationContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "uiContract"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" }
       }
     },
     "runnerContributes": {

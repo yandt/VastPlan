@@ -18,6 +18,10 @@ func (c *recordingCatalog) ValidatePortal(_ context.Context, tenant string, spec
 	c.tenant, c.spec = tenant, spec
 	return nil
 }
+func (c *recordingCatalog) MaterializePortal(_ context.Context, tenant string, spec portalapi.PortalSpec) error {
+	c.tenant, c.spec = tenant, spec
+	return nil
+}
 
 func TestCatalogValidationServiceOnlyAcceptsPluginForDelegatedTenant(t *testing.T) {
 	catalog := &recordingCatalog{}
