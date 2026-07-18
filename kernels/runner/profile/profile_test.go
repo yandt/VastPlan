@@ -17,3 +17,17 @@ func TestValidateAndEligibility(t *testing.T) {
 		t.Fatal("领取约束错误")
 	}
 }
+
+func TestClaimLaunchBindsVerifiedIdentityToTenantAndAssignment(t *testing.T) {
+	p := Profile{ID: "collector", Revision: 1, TenantID: "tenant-a", AssignedTo: []string{"runner-a"}, Plugins: []PluginRef{{ID: "x", Version: "1"}}}
+	claim, err := ClaimLaunch(context.Background(), RunnerIdentity{ID: "runner-a", TenantID: "tenant-a"}, p)
+	if err != nil || claim.RunnerID != "runner-a" || claim.TenantID != "tenant-a" {
+		t.Fatalf("领取应绑定身份: %+v %v", claim, err)
+	}
+	if _, err := ClaimLaunch(context.Background(), RunnerIdentity{ID: "runner-a", TenantID: "tenant-b"}, p); err == nil {
+		t.Fatal("跨 tenant 领取必须拒绝")
+	}
+	if _, err := ClaimLaunch(context.Background(), RunnerIdentity{ID: "runner-b", TenantID: "tenant-a"}, p); err == nil {
+		t.Fatal("未分配 Runner 必须拒绝")
+	}
+}
