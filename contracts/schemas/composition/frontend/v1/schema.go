@@ -5,9 +5,11 @@ package frontendcompositionv1
 import (
 	"bytes"
 	_ "embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -19,6 +21,7 @@ import (
 const (
 	PlatformProfileSchemaURL        = "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.platform-profile.schema.json"
 	ApplicationCompositionSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.application-composition.schema.json"
+	PortalPlatformCatalogSchemaURL  = "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.portal-platform-catalog.schema.json"
 )
 
 //go:embed vastplan.platform-profile.schema.json
@@ -27,8 +30,11 @@ var platformSchemaJSON []byte
 //go:embed vastplan.application-composition.schema.json
 var applicationSchemaJSON []byte
 
+//go:embed vastplan.portal-platform-catalog.schema.json
+var portalPlatformCatalogSchemaJSON []byte
+
 var compileOnce sync.Once
-var platformSchema, applicationSchema *jsonschema.Schema
+var platformSchema, applicationSchema, portalPlatformCatalogSchema *jsonschema.Schema
 var compileErr error
 
 type PluginRef struct {
@@ -85,7 +91,42 @@ type ApplicationComposition struct {
 	Config   map[string]any             `json:"config,omitempty"`
 }
 
-func schemas() (*jsonschema.Schema, *jsonschema.Schema, error) {
+// PortalPlatformCatalog is the platform-owned authority for selecting a shared
+// Frontend Platform Profile and granting a portal access to exact backend
+// logical services. Application Composition cannot alter these bindings.
+type PortalPlatformCatalog struct {
+	compositioncommonv1.Document
+	Profiles []PlatformProfile `json:"profiles"`
+	Bindings []PortalBinding   `json:"bindings"`
+}
+
+type PortalBinding struct {
+	TenantID        string                  `json:"tenantId"`
+	PortalID        string                  `json:"portalId"`
+	PlatformProfile compositioncommonv1.Ref `json:"platformProfile"`
+	Services        []ManagedService        `json:"services"`
+}
+
+// ManagedService.ID is the only browser-visible selector. The BFF resolves it
+// to the exact logicalService/routingDomain pair and never accepts either
+// routing field directly from a browser.
+type ManagedService struct {
+	ID             string            `json:"id"`
+	Label          string            `json:"label,omitempty"`
+	LogicalService string            `json:"logicalService"`
+	RoutingDomain  string            `json:"routingDomain"`
+	Capabilities   []CapabilityGrant `json:"capabilities"`
+}
+
+// CapabilityGrant separates read and write operations so a read-only portal
+// cannot gain mutation authority merely because a new HTTP route is added.
+type CapabilityGrant struct {
+	Capability string   `json:"capability"`
+	Read       []string `json:"read,omitempty"`
+	Write      []string `json:"write,omitempty"`
+}
+
+func schemas() (*jsonschema.Schema, *jsonschema.Schema, *jsonschema.Schema, error) {
 	compileOnce.Do(func() {
 		compiler := jsonschema.NewCompiler()
 		if err := commonv1.AddResources(compiler); err != nil {
@@ -99,7 +140,7 @@ func schemas() (*jsonschema.Schema, *jsonschema.Schema, error) {
 		for _, resource := range []struct {
 			url string
 			raw []byte
-		}{{PlatformProfileSchemaURL, platformSchemaJSON}, {ApplicationCompositionSchemaURL, applicationSchemaJSON}} {
+		}{{PlatformProfileSchemaURL, platformSchemaJSON}, {ApplicationCompositionSchemaURL, applicationSchemaJSON}, {PortalPlatformCatalogSchemaURL, portalPlatformCatalogSchemaJSON}} {
 			doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(resource.raw))
 			if err != nil {
 				compileErr = err
@@ -115,12 +156,16 @@ func schemas() (*jsonschema.Schema, *jsonschema.Schema, error) {
 			return
 		}
 		applicationSchema, compileErr = compiler.Compile(ApplicationCompositionSchemaURL)
+		if compileErr != nil {
+			return
+		}
+		portalPlatformCatalogSchema, compileErr = compiler.Compile(PortalPlatformCatalogSchemaURL)
 	})
-	return platformSchema, applicationSchema, compileErr
+	return platformSchema, applicationSchema, portalPlatformCatalogSchema, compileErr
 }
 
 func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
-	p, _, err := schemas()
+	p, _, _, err := schemas()
 	if err != nil {
 		return PlatformProfile{}, err
 	}
@@ -159,7 +204,7 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 }
 
 func ParseApplicationComposition(raw []byte) (ApplicationComposition, error) {
-	_, a, err := schemas()
+	_, a, _, err := schemas()
 	if err != nil {
 		return ApplicationComposition{}, err
 	}
@@ -180,6 +225,21 @@ func ParseApplicationComposition(raw []byte) (ApplicationComposition, error) {
 	return value, nil
 }
 
+func ParsePortalPlatformCatalog(raw []byte) (PortalPlatformCatalog, error) {
+	_, _, schema, err := schemas()
+	if err != nil {
+		return PortalPlatformCatalog{}, err
+	}
+	if err := validateJSON(schema, raw, "Portal Platform Catalog"); err != nil {
+		return PortalPlatformCatalog{}, err
+	}
+	var value PortalPlatformCatalog
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return PortalPlatformCatalog{}, err
+	}
+	return validatePortalPlatformCatalog(value)
+}
+
 func ValidatePlatformProfile(v PlatformProfile) (PlatformProfile, error) {
 	raw, err := json.Marshal(v)
 	if err != nil {
@@ -193,6 +253,13 @@ func ValidateApplicationComposition(v ApplicationComposition) (ApplicationCompos
 		return ApplicationComposition{}, err
 	}
 	return ParseApplicationComposition(raw)
+}
+func ValidatePortalPlatformCatalog(v PortalPlatformCatalog) (PortalPlatformCatalog, error) {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return PortalPlatformCatalog{}, err
+	}
+	return ParsePortalPlatformCatalog(raw)
 }
 func ParsePlatformProfileFile(path string) (PlatformProfile, error) {
 	raw, err := os.ReadFile(path)
@@ -208,8 +275,125 @@ func ParseApplicationCompositionFile(path string) (ApplicationComposition, error
 	}
 	return ParseApplicationComposition(raw)
 }
+func ParsePortalPlatformCatalogFile(path string) (PortalPlatformCatalog, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return PortalPlatformCatalog{}, err
+	}
+	return ParsePortalPlatformCatalog(raw)
+}
 func (v PlatformProfile) Digest() string        { return compositioncommonv1.Digest(v) }
 func (v ApplicationComposition) Digest() string { return compositioncommonv1.Digest(v) }
+func (v PortalPlatformCatalog) Digest() string  { return compositioncommonv1.Digest(v) }
+
+func (v PortalPlatformCatalog) Resolve(tenantID, portalID string) (PlatformProfile, PortalBinding, error) {
+	for _, binding := range v.Bindings {
+		if binding.TenantID != tenantID || binding.PortalID != portalID {
+			continue
+		}
+		for _, profile := range v.Profiles {
+			if profile.ID == binding.PlatformProfile.ID {
+				return profile, binding, nil
+			}
+		}
+	}
+	return PlatformProfile{}, PortalBinding{}, fmt.Errorf("Portal %s/%s 没有平台管理绑定", tenantID, portalID)
+}
+
+func validatePortalPlatformCatalog(value PortalPlatformCatalog) (PortalPlatformCatalog, error) {
+	profiles := make(map[string]PlatformProfile, len(value.Profiles))
+	for i := range value.Profiles {
+		profile, err := ValidatePlatformProfile(value.Profiles[i])
+		if err != nil {
+			return PortalPlatformCatalog{}, fmt.Errorf("验证 Platform Profile %q: %w", value.Profiles[i].ID, err)
+		}
+		if _, duplicate := profiles[profile.ID]; duplicate {
+			return PortalPlatformCatalog{}, fmt.Errorf("Platform Profile id 重复: %s", profile.ID)
+		}
+		profiles[profile.ID] = profile
+		value.Profiles[i] = profile
+	}
+	seenBindings := map[string]struct{}{}
+	for i := range value.Bindings {
+		binding := &value.Bindings[i]
+		bindingKey := binding.TenantID + "\x00" + binding.PortalID
+		if _, duplicate := seenBindings[bindingKey]; duplicate {
+			return PortalPlatformCatalog{}, fmt.Errorf("Portal 平台绑定重复: %s/%s", binding.TenantID, binding.PortalID)
+		}
+		seenBindings[bindingKey] = struct{}{}
+		if err := ValidatePortalBinding(*binding); err != nil {
+			return PortalPlatformCatalog{}, fmt.Errorf("Portal %s/%s 管理绑定无效: %w", binding.TenantID, binding.PortalID, err)
+		}
+		profile, ok := profiles[binding.PlatformProfile.ID]
+		if !ok || binding.PlatformProfile.Revision != profile.Revision || binding.PlatformProfile.Digest != profile.Digest() {
+			return PortalPlatformCatalog{}, fmt.Errorf("Portal %s/%s 的 Platform Profile 锁无效", binding.TenantID, binding.PortalID)
+		}
+	}
+	return value, nil
+}
+
+func ValidatePortalBinding(binding PortalBinding) error {
+	if binding.TenantID == "" || !managementName.MatchString(binding.PortalID) {
+		return fmt.Errorf("tenantId 或 portalId 无效")
+	}
+	if binding.PlatformProfile.ID == "" || binding.PlatformProfile.Revision == 0 || len(binding.PlatformProfile.Digest) != 64 {
+		return fmt.Errorf("Platform Profile 引用无效")
+	}
+	if _, err := hex.DecodeString(binding.PlatformProfile.Digest); err != nil {
+		return fmt.Errorf("Platform Profile 摘要无效")
+	}
+	if len(binding.Services) == 0 {
+		return fmt.Errorf("Portal 至少需要一个受管服务")
+	}
+	return validateManagedServices(binding.Services)
+}
+
+var managementName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$`)
+
+func validateManagedServices(services []ManagedService) error {
+	seenIDs, seenTargets := map[string]struct{}{}, map[string]struct{}{}
+	for _, service := range services {
+		if !managementName.MatchString(service.ID) || !managementName.MatchString(service.LogicalService) || !managementName.MatchString(service.RoutingDomain) {
+			return fmt.Errorf("服务 id、logicalService 或 routingDomain 格式无效: %s", service.ID)
+		}
+		if _, duplicate := seenIDs[service.ID]; duplicate {
+			return fmt.Errorf("服务 id 重复: %s", service.ID)
+		}
+		seenIDs[service.ID] = struct{}{}
+		target := service.LogicalService + "\x00" + service.RoutingDomain
+		if _, duplicate := seenTargets[target]; duplicate {
+			return fmt.Errorf("服务路由目标重复: %s/%s", service.LogicalService, service.RoutingDomain)
+		}
+		seenTargets[target] = struct{}{}
+		seenCapabilities := map[string]struct{}{}
+		for _, grant := range service.Capabilities {
+			if !managementName.MatchString(grant.Capability) {
+				return fmt.Errorf("capability 格式无效: %s", grant.Capability)
+			}
+			if _, duplicate := seenCapabilities[grant.Capability]; duplicate {
+				return fmt.Errorf("capability 重复: %s", grant.Capability)
+			}
+			seenCapabilities[grant.Capability] = struct{}{}
+			seenOperations := map[string]struct{}{}
+			for _, operation := range append(append([]string(nil), grant.Read...), grant.Write...) {
+				if !managementName.MatchString(operation) {
+					return fmt.Errorf("operation 格式无效: %s", operation)
+				}
+				if _, duplicate := seenOperations[operation]; duplicate {
+					return fmt.Errorf("operation 在 read/write 中重复: %s/%s", grant.Capability, operation)
+				}
+				seenOperations[operation] = struct{}{}
+			}
+			if len(seenOperations) == 0 {
+				return fmt.Errorf("capability 未授予任何 operation: %s", grant.Capability)
+			}
+		}
+		if len(seenCapabilities) == 0 {
+			return fmt.Errorf("服务未授予任何 capability: %s", service.ID)
+		}
+	}
+	return nil
+}
 
 func validateJSON(schema *jsonschema.Schema, raw []byte, noun string) error {
 	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))

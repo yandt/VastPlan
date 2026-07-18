@@ -8,16 +8,20 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
-func resolve(profile frontendcompositionv1.PlatformProfile, application frontendcompositionv1.ApplicationComposition, tenantID string, revision uint64) (portalapi.PortalSpec, error) {
+func resolve(catalog frontendcompositionv1.PortalPlatformCatalog, application frontendcompositionv1.ApplicationComposition, tenantID string, revision uint64) (portalapi.PortalSpec, error) {
 	if tenantID == "" || revision == 0 {
 		return portalapi.PortalSpec{}, fmt.Errorf("Portal 解析需要 tenant 和发布 revision")
 	}
 	var err error
-	profile, err = frontendcompositionv1.ValidatePlatformProfile(profile)
+	catalog, err = frontendcompositionv1.ValidatePortalPlatformCatalog(catalog)
 	if err != nil {
 		return portalapi.PortalSpec{}, err
 	}
 	application, err = frontendcompositionv1.ValidateApplicationComposition(application)
+	if err != nil {
+		return portalapi.PortalSpec{}, err
+	}
+	profile, binding, err := catalog.Resolve(tenantID, application.ID)
 	if err != nil {
 		return portalapi.PortalSpec{}, err
 	}
@@ -38,13 +42,16 @@ func resolve(profile frontendcompositionv1.PlatformProfile, application frontend
 		Revision: revision, ID: application.ID, TenantID: tenantID, Route: application.Route,
 		Domains: append([]string(nil), application.Domains...), Audience: append([]string(nil), application.Audience...),
 		Branding: cloneMap(application.Branding), Config: cloneMap(application.Config), Plugins: plugins,
+		Management:   binding,
 		DesignSystem: portalapi.DesignSystem{PluginRef: portalRef(profile.DesignSystem.PluginRef), UIContract: profile.DesignSystem.UIContract},
 		Composition:  portalapi.ShellComposition{PluginRef: portalRef(profile.Composition.PluginRef), UIContract: profile.Composition.UIContract},
 		Layout:       portalapi.ShellLayout{PluginRef: portalRef(profile.Layout.PluginRef), UIContract: profile.Layout.UIContract, Config: cloneMap(profile.Layout.Config)},
 		Resolution: portalapi.Resolution{
-			PlatformProfile:        compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()},
-			ApplicationComposition: compositioncommonv1.Ref{ID: application.ID, Revision: application.Revision, Digest: application.Digest()},
-			PluginOrigins:          origins,
+			PlatformCatalog:         compositioncommonv1.Ref{ID: catalog.ID, Revision: catalog.Revision, Digest: catalog.Digest()},
+			PlatformProfile:         compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()},
+			ApplicationComposition:  compositioncommonv1.Ref{ID: application.ID, Revision: application.Revision, Digest: application.Digest()},
+			ManagementBindingDigest: compositioncommonv1.Digest(binding),
+			PluginOrigins:           origins,
 		},
 	}, nil
 }

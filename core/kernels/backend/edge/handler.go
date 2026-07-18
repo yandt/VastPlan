@@ -58,7 +58,7 @@ func NewPortal(identity IdentityProvider, service portalapi.Service, interaction
 }
 
 // NewPlatformPortal adds the allowlisted platform administration surface. A
-// nil service keeps the entire /v1/platform namespace unavailable.
+// nil service keeps every portal-scoped platform namespace unavailable.
 func NewPlatformPortal(identity IdentityProvider, service portalapi.Service, interaction InteractionService, platform platformadminapi.Service, catalog *TrustedCatalog, assets http.Handler) *Handler {
 	if identity == nil || service == nil {
 		panic("Edge BFF 必须注入身份提供方和 Portal 服务")
@@ -77,7 +77,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	runtimePath := r.URL.Path == "/v1/portal-runtime" || r.URL.Path == "/v1/portal-recovery" || strings.HasPrefix(r.URL.Path, "/v1/portal-modules/") || strings.HasPrefix(r.URL.Path, "/v1/portal-recovery-modules/")
 	portalPath := strings.HasPrefix(r.URL.Path, "/v1/portal-drafts")
 	interactionPath := strings.HasPrefix(r.URL.Path, "/v1/interactions")
-	platformPath := strings.HasPrefix(r.URL.Path, "/v1/platform/")
+	platformPath := strings.HasPrefix(r.URL.Path, "/v1/portals/")
 	if !runtimePath && !portalPath && !interactionPath && !platformPath {
 		if h.assets != nil && !strings.HasPrefix(r.URL.Path, "/v1/") && r.URL.Path != "/v1" {
 			h.assets.ServeHTTP(w, r)
@@ -104,7 +104,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if platformPath {
-		h.platformRoute(w, r, p)
+		target, parts, ok := h.resolvePlatformRequest(w, r, p)
+		if ok {
+			h.platformRoute(w, r, p, target, parts)
+		}
 		return
 	}
 	h.interactionRoute(w, r, p)
@@ -130,6 +133,10 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 			writeError(w, http.StatusNotFound, "portal_not_found")
 			return
 		}
+		if !audienceAllows(revision.Spec.Audience, p) {
+			writeError(w, http.StatusForbidden, "portal_audience_forbidden")
+			return
+		}
 		runtime, err := h.catalog.ResolveRuntime(r.Context(), p.TenantID, revision.Spec)
 		if err != nil {
 			writeError(w, http.StatusConflict, "portal_runtime_rejected")
@@ -143,6 +150,10 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 		active, fallback, ok := selectRecoveryPortal(revisions, p.TenantID, r.URL.Query().Get("path"), requestHost(r))
 		if !ok {
 			writeError(w, http.StatusNotFound, "portal_recovery_not_found")
+			return
+		}
+		if !audienceAllows(active.Spec.Audience, p) {
+			writeError(w, http.StatusForbidden, "portal_audience_forbidden")
 			return
 		}
 		runtime, err := h.catalog.ResolveRecoveryRuntime(r.Context(), p.TenantID, active.ID, fallback.Spec)
@@ -167,6 +178,10 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 			writeError(w, http.StatusNotFound, "portal_revision_not_found")
 			return
 		}
+		if !audienceAllows(active.Spec.Audience, p) {
+			writeError(w, http.StatusForbidden, "portal_audience_forbidden")
+			return
+		}
 		fallback, ok := recoveryRevision(revisions, active, fallbackID)
 		if !ok {
 			writeError(w, http.StatusNotFound, "portal_recovery_not_found")
@@ -183,6 +198,10 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 	revision, ok := activeRevision(revisions, p.TenantID, revisionID)
 	if !ok {
 		writeError(w, http.StatusNotFound, "portal_revision_not_found")
+		return
+	}
+	if !audienceAllows(revision.Spec.Audience, p) {
+		writeError(w, http.StatusForbidden, "portal_audience_forbidden")
 		return
 	}
 	h.serveFrontendModule(w, r, p, revision, pluginID)
@@ -312,6 +331,27 @@ func domainMatches(domains []string, host string) bool {
 		}
 	}
 	return false
+}
+
+func audienceAllows(audience []string, principal portalapi.Principal) bool {
+	if principal.System || len(audience) == 0 {
+		return true
+	}
+	for _, required := range audience {
+		if hasRole(principal.Roles, required) {
+			return true
+		}
+	}
+	return false
+}
+
+func activePortalByID(revisions []portalapi.Revision, tenantID, portalID, host string) (portalapi.Revision, bool) {
+	for _, revision := range revisions {
+		if isActiveRevision(revision, tenantID) && revision.PortalID == portalID && revision.Spec.ID == portalID && domainMatches(revision.Spec.Domains, host) {
+			return revision, true
+		}
+	}
+	return portalapi.Revision{}, false
 }
 
 func requestHost(r *http.Request) string {

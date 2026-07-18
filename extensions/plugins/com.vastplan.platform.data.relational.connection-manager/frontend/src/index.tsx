@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createBrowserPlatformAdminClient, type DatabaseConnection, type PlatformAdminClient } from "@vastplan/platform-admin";
-import { jsonSchemaDialect, usePortalUI, type FormSchema, type FrontendPluginContext } from "@vastplan/portal-ui";
+import { jsonSchemaDialect, managementServicesFor, usePortalUI, type FormSchema, type FrontendPluginContext } from "@vastplan/portal-ui";
 
 const schema: FormSchema = {
   id: "platform-database-connection.v1",
@@ -19,9 +19,8 @@ const schema: FormSchema = {
 
 type Editor = Partial<DatabaseConnection>;
 
-export function DatabaseConnectionsView({ client: supplied }: { client?: PlatformAdminClient } = {}) {
-  const ui = usePortalUI();
-  const client = useMemo(() => supplied ?? createBrowserPlatformAdminClient(), [supplied]);
+export function DatabaseConnectionsView({ client }: { client: PlatformAdminClient }) {
+	const ui = usePortalUI();
   const [items, setItems] = useState<DatabaseConnection[]>([]);
   const [editor, setEditor] = useState<Editor>({ driver: "postgres" });
   const [busy, setBusy] = useState(false);
@@ -67,7 +66,14 @@ export function DatabaseConnectionsView({ client: supplied }: { client?: Platfor
 
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : "数据库连接请求失败"; }
 export default {
-  register(context: FrontendPluginContext) {
-    context.addPage({ id: "platform.database-connections", path: "/settings/databases", title: "数据库连接", description: "管理连接定义与凭证引用", navigation: { id: "platform.database-connections", label: "数据库连接", zone: "settings", order: 40 }, slots: [{ id: "body", slot: "page.body.main", component: DatabaseConnectionsView }] });
-  },
+	register(context: FrontendPluginContext) {
+		const services = managementServicesFor(context.portal, "platform.database");
+		if (services.length === 0) throw new Error("Portal 未绑定 platform.database 服务");
+		for (const service of services) {
+			const client = createBrowserPlatformAdminClient(context.portal.id, service.id);
+			const suffix = services.length === 1 ? "" : `/${service.id}`;
+			const label = services.length === 1 ? "数据库连接" : `数据库连接 · ${service.label ?? service.id}`;
+			context.addPage({ id: `platform.database-connections.${service.id}`, path: `/settings/databases${suffix}`, title: label, description: "管理连接定义与凭证引用", navigation: { id: `platform.database-connections.${service.id}`, label, zone: "settings", order: 40 }, slots: [{ id: "body", slot: "page.body.main", component: () => <DatabaseConnectionsView client={client} /> }] });
+		}
+	},
 };

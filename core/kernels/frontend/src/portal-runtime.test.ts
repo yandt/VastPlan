@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DesignSystemAdapter, ShellCompositionAdapter, ShellLayoutAdapter } from "@vastplan/portal-ui";
+import { managementServicesFor, type DesignSystemAdapter, type FrontendPluginContext, type ShellCompositionAdapter, type ShellLayoutAdapter } from "@vastplan/portal-ui";
 import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type PluginRef } from "./portal-runtime";
 
 const arcoRef: PluginRef = { id: "com.vastplan.foundation.frontend.design-system.arco", version: "1.0.0" };
@@ -46,10 +46,13 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
 }
 
 const portal = {
-  revision: 1, id: "admin", tenantId: "acme", route: "/", designSystem: { ...arcoRef, uiContract: "^1.0.0" }, composition: { ...compositionRef, uiContract: "^1.0.0" }, layout: { ...layoutRef, uiContract: "^1.0.0" }, plugins: [arcoRef, compositionRef, layoutRef, composerRef],
-  resolution: {
-    platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) },
-    applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) },
+	revision: 1, id: "admin", tenantId: "acme", route: "/", designSystem: { ...arcoRef, uiContract: "^1.0.0" }, composition: { ...compositionRef, uiContract: "^1.0.0" }, layout: { ...layoutRef, uiContract: "^1.0.0" }, plugins: [arcoRef, compositionRef, layoutRef, composerRef],
+	management: { tenantId: "acme", portalId: "admin", platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, services: [{ id: "settings", logicalService: "platform.settings", routingDomain: "platform", capabilities: [{ capability: "platform.settings", read: ["list"] }] }] },
+	resolution: {
+		platformCatalog: { id: "portal-platform", revision: 1, digest: "c".repeat(64) },
+		platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) },
+		applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) },
+		managementBindingDigest: "d".repeat(64),
     pluginOrigins: { [arcoRef.id]: "platform-profile" as const, [compositionRef.id]: "platform-profile" as const, [layoutRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
   },
 };
@@ -90,5 +93,42 @@ describe("PortalRuntime", () => {
   it("rejects a design system selected by the application input", async () => {
     const invalid = { ...portal, resolution: { ...portal.resolution, pluginOrigins: { ...portal.resolution.pluginOrigins, [arcoRef.id]: "application" as const } } };
     await expect(new PortalRuntime(loader()).prepare(invalid)).rejects.toMatchObject({ code: "ORIGIN_LOCK_INVALID" } satisfies Partial<PortalAssemblyError>);
+  });
+
+  it("exposes every explicitly bound service to functional plugins without exposing routing input", async () => {
+    const multiService = {
+      ...portal,
+      management: {
+        ...portal.management,
+        services: [
+          portal.management.services[0],
+          { id: "settings-dr", label: "灾备设置", logicalService: "platform.settings.dr", routingDomain: "platform-dr", capabilities: [{ capability: "platform.settings", read: ["list"] }] },
+        ],
+      },
+    };
+    const runtime = new PortalRuntime(loader({
+      [composerRef.id]: {
+        async register(context: FrontendPluginContext) {
+          for (const service of managementServicesFor(context.portal, "platform.settings")) {
+            context.addPage({ id: `settings-${service.id}`, path: `/settings/${service.id}`, title: service.label ?? service.id, slots: [{ id: "body", slot: "page.body.main", component: () => null }] });
+          }
+        },
+      },
+    }));
+    const prepared = await runtime.prepare(multiService);
+    expect(prepared.pages.map((page) => page.id)).toEqual(["settings-settings", "settings-settings-dr"]);
+    expect(Object.isFrozen(prepared.portal.management.services)).toBe(true);
+    expect(Object.isFrozen(prepared.portal.management.services[0].capabilities)).toBe(true);
+  });
+
+  it("rejects duplicated management operations in the browser trust boundary", async () => {
+    const invalid = {
+      ...portal,
+      management: {
+        ...portal.management,
+        services: [{ ...portal.management.services[0], capabilities: [{ capability: "platform.settings", read: ["list"], write: ["list"] }] }],
+      },
+    };
+    await expect(new PortalRuntime(loader()).prepare(invalid)).rejects.toMatchObject({ code: "MANAGEMENT_GRANT_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 });

@@ -106,6 +106,7 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 		Revision: 7, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Composition: portalapi.ShellComposition{PluginRef: compositionRef, UIContract: "^1.0.0"}, Layout: portalapi.ShellLayout{PluginRef: layoutRef, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref, compositionRef, layoutRef},
 		Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, compositionRef.ID: compositioncommonv1.OriginPlatformProfile, layoutRef.ID: compositioncommonv1.OriginPlatformProfile}},
 	}
+	lockTestManagement(&spec)
 	fallbackSpec := spec
 	fallbackSpec.Revision = 6
 	if err := catalog.MaterializePortal(context.Background(), "tenant-a", spec); err != nil {

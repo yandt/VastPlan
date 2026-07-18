@@ -64,25 +64,69 @@ type ShellLayout struct {
 }
 
 type PortalSpec struct {
-	Revision     uint64           `json:"revision"`
-	ID           string           `json:"id"`
-	TenantID     string           `json:"tenantId"`
-	Route        string           `json:"route"`
-	Domains      []string         `json:"domains,omitempty"`
-	Audience     []string         `json:"audience,omitempty"`
-	Branding     map[string]any   `json:"branding,omitempty"`
-	DesignSystem DesignSystem     `json:"designSystem"`
-	Composition  ShellComposition `json:"composition"`
-	Layout       ShellLayout      `json:"layout"`
-	Plugins      []PluginRef      `json:"plugins"`
-	Config       map[string]any   `json:"config,omitempty"`
-	Resolution   Resolution       `json:"resolution"`
+	Revision     uint64                              `json:"revision"`
+	ID           string                              `json:"id"`
+	TenantID     string                              `json:"tenantId"`
+	Route        string                              `json:"route"`
+	Domains      []string                            `json:"domains,omitempty"`
+	Audience     []string                            `json:"audience,omitempty"`
+	Branding     map[string]any                      `json:"branding,omitempty"`
+	DesignSystem DesignSystem                        `json:"designSystem"`
+	Composition  ShellComposition                    `json:"composition"`
+	Layout       ShellLayout                         `json:"layout"`
+	Plugins      []PluginRef                         `json:"plugins"`
+	Config       map[string]any                      `json:"config,omitempty"`
+	Management   frontendcompositionv1.PortalBinding `json:"management"`
+	Resolution   Resolution                          `json:"resolution"`
+}
+
+type ManagementTarget struct {
+	Service frontendcompositionv1.ManagedService
+}
+
+func (p PortalSpec) ManagementTarget(serviceID string) (ManagementTarget, bool) {
+	if p.Management.TenantID != p.TenantID || p.Management.PortalID != p.ID {
+		return ManagementTarget{}, false
+	}
+	for _, service := range p.Management.Services {
+		if service.ID == serviceID {
+			return ManagementTarget{Service: service}, true
+		}
+	}
+	return ManagementTarget{}, false
+}
+
+func (t ManagementTarget) Allows(capability, operation string, write bool) bool {
+	if t.Service.ID == "" || t.Service.LogicalService == "" || t.Service.RoutingDomain == "" {
+		return false
+	}
+	for _, grant := range t.Service.Capabilities {
+		if grant.Capability != capability {
+			continue
+		}
+		operations := grant.Read
+		if write {
+			operations = grant.Write
+		}
+		for _, candidate := range operations {
+			if candidate == operation {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (t ManagementTarget) AllowsOperation(capability, operation string) bool {
+	return t.Allows(capability, operation, false) || t.Allows(capability, operation, true)
 }
 
 type Resolution struct {
-	PlatformProfile        compositioncommonv1.Ref `json:"platformProfile"`
-	ApplicationComposition compositioncommonv1.Ref `json:"applicationComposition"`
-	PluginOrigins          map[string]string       `json:"pluginOrigins"`
+	PlatformCatalog         compositioncommonv1.Ref `json:"platformCatalog"`
+	PlatformProfile         compositioncommonv1.Ref `json:"platformProfile"`
+	ApplicationComposition  compositioncommonv1.Ref `json:"applicationComposition"`
+	ManagementBindingDigest string                  `json:"managementBindingDigest"`
+	PluginOrigins           map[string]string       `json:"pluginOrigins"`
 }
 
 // FrontendModule is an Edge-issued, content-bound browser module descriptor.

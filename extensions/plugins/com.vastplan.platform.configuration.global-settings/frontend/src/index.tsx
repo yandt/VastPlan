@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createBrowserPlatformAdminClient, type PlatformAdminClient, type Setting } from "@vastplan/platform-admin";
-import { jsonSchemaDialect, usePortalUI, type FormSchema, type FrontendPluginContext } from "@vastplan/portal-ui";
+import { jsonSchemaDialect, managementServicesFor, usePortalUI, type FormSchema, type FrontendPluginContext } from "@vastplan/portal-ui";
 
 const schema: FormSchema = {
   id: "platform-setting.v1",
@@ -16,9 +16,8 @@ const schema: FormSchema = {
 
 type Editor = { key?: string; value?: string };
 
-export function GlobalSettingsView({ client: supplied }: { client?: PlatformAdminClient } = {}) {
-  const ui = usePortalUI();
-  const client = useMemo(() => supplied ?? createBrowserPlatformAdminClient(), [supplied]);
+export function GlobalSettingsView({ client }: { client: PlatformAdminClient }) {
+	const ui = usePortalUI();
   const [items, setItems] = useState<Setting[]>([]);
   const [editor, setEditor] = useState<Editor>({ value: "{}" });
   const [selected, setSelected] = useState<Setting>();
@@ -81,7 +80,14 @@ function formatTime(value: unknown): string { return typeof value === "string" &
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : "平台设置请求失败"; }
 
 export default {
-  register(context: FrontendPluginContext) {
-    context.addPage({ id: "platform.global-settings", path: "/settings/global", title: "全局设置", description: "管理平台级非敏感配置", navigation: { id: "platform.global-settings", label: "全局设置", zone: "settings", order: 20 }, slots: [{ id: "body", slot: "page.body.main", component: GlobalSettingsView }] });
-  },
+	register(context: FrontendPluginContext) {
+		const services = managementServicesFor(context.portal, "platform.settings");
+		if (services.length === 0) throw new Error("Portal 未绑定 platform.settings 服务");
+		for (const service of services) {
+			const client = createBrowserPlatformAdminClient(context.portal.id, service.id);
+			const suffix = services.length === 1 ? "" : `/${service.id}`;
+			const label = services.length === 1 ? "全局设置" : `全局设置 · ${service.label ?? service.id}`;
+			context.addPage({ id: `platform.global-settings.${service.id}`, path: `/settings/global${suffix}`, title: label, description: "管理平台级非敏感配置", navigation: { id: `platform.global-settings.${service.id}`, label, zone: "settings", order: 20 }, slots: [{ id: "body", slot: "page.body.main", component: () => <GlobalSettingsView client={client} /> }] });
+		}
+	},
 };

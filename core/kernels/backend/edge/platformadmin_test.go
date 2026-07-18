@@ -3,11 +3,14 @@ package edge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
@@ -17,69 +20,86 @@ type platformService struct {
 	secret    string
 }
 
-func (s *platformService) ListSettings(_ context.Context, p portalapi.Principal, _ string) ([]platformadminapi.Setting, error) {
+func (s *platformService) ListSettings(_ context.Context, p portalapi.Principal, _ portalapi.ManagementTarget, _ string) ([]platformadminapi.Setting, error) {
 	s.principal = p
 	return []platformadminapi.Setting{{Key: "portal.title", Value: json.RawMessage(`"VastPlan"`), Version: 2}}, nil
 }
-func (s *platformService) PutSetting(_ context.Context, p portalapi.Principal, key string, request platformadminapi.PutSettingRequest) (platformadminapi.Setting, error) {
+func (s *platformService) PutSetting(_ context.Context, p portalapi.Principal, _ portalapi.ManagementTarget, key string, request platformadminapi.PutSettingRequest) (platformadminapi.Setting, error) {
 	s.principal = p
 	return platformadminapi.Setting{Key: key, Value: request.Value, Version: 3}, nil
 }
-func (*platformService) DeleteSetting(context.Context, portalapi.Principal, string, *int64) error {
+func (*platformService) DeleteSetting(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, *int64) error {
 	return nil
 }
-func (s *platformService) ListCredentials(_ context.Context, p portalapi.Principal, _ string) ([]platformadminapi.CredentialMetadata, error) {
+func (s *platformService) ListCredentials(_ context.Context, p portalapi.Principal, _ portalapi.ManagementTarget, _ string) ([]platformadminapi.CredentialMetadata, error) {
 	s.principal = p
 	return []platformadminapi.CredentialMetadata{}, nil
 }
-func (s *platformService) PutCredential(_ context.Context, p portalapi.Principal, name string, request platformadminapi.PutCredentialRequest) (platformadminapi.CredentialMetadata, error) {
+func (s *platformService) PutCredential(_ context.Context, p portalapi.Principal, _ portalapi.ManagementTarget, name string, request platformadminapi.PutCredentialRequest) (platformadminapi.CredentialMetadata, error) {
 	s.principal, s.secret = p, request.Value
 	return platformadminapi.CredentialMetadata{Name: name, Version: 1}, nil
 }
-func (*platformService) RotateCredential(context.Context, portalapi.Principal, string) (platformadminapi.CredentialMetadata, error) {
+func (*platformService) RotateCredential(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (platformadminapi.CredentialMetadata, error) {
 	return platformadminapi.CredentialMetadata{}, nil
 }
-func (*platformService) RevokeCredential(context.Context, portalapi.Principal, string) (platformadminapi.CredentialMetadata, error) {
+func (*platformService) RevokeCredential(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (platformadminapi.CredentialMetadata, error) {
 	return platformadminapi.CredentialMetadata{}, nil
 }
-func (*platformService) ListDatabaseConnections(context.Context, portalapi.Principal) ([]platformadminapi.DatabaseConnection, error) {
+func (*platformService) ListDatabaseConnections(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]platformadminapi.DatabaseConnection, error) {
 	return []platformadminapi.DatabaseConnection{}, nil
 }
-func (*platformService) PutDatabaseConnection(_ context.Context, _ portalapi.Principal, name string, value platformadminapi.DatabaseConnection) (platformadminapi.DatabaseConnection, error) {
+func (*platformService) PutDatabaseConnection(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, name string, value platformadminapi.DatabaseConnection) (platformadminapi.DatabaseConnection, error) {
 	value.Name = name
 	return value, nil
 }
-func (*platformService) DeleteDatabaseConnection(context.Context, portalapi.Principal, string) error {
+func (*platformService) DeleteDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) error {
 	return nil
 }
-func (*platformService) ProbeDatabaseConnection(context.Context, portalapi.Principal, string) (platformadminapi.DatabaseProbe, error) {
+func (*platformService) ProbeDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (platformadminapi.DatabaseProbe, error) {
 	return platformadminapi.DatabaseProbe{Ready: true}, nil
 }
-func (*platformService) ArtifactRepositoryStatus(context.Context, portalapi.Principal) (platformadminapi.ArtifactRepositoryStatus, error) {
+func (*platformService) ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryStatus, error) {
 	return platformadminapi.ArtifactRepositoryStatus{Ready: true}, nil
 }
-func (*platformService) ListManagedNodes(context.Context, portalapi.Principal) ([]platformadminapi.ManagedNode, error) {
+func (*platformService) ListManagedNodes(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]platformadminapi.ManagedNode, error) {
 	return []platformadminapi.ManagedNode{}, nil
 }
-func (*platformService) PutManagedNode(_ context.Context, _ portalapi.Principal, id string, request platformadminapi.PutManagedNodeRequest) (platformadminapi.ManagedNode, error) {
+func (*platformService) PutManagedNode(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id string, request platformadminapi.PutManagedNodeRequest) (platformadminapi.ManagedNode, error) {
 	return platformadminapi.ManagedNode{ID: id, Plan: request.Plan, Version: 1}, nil
 }
-func (*platformService) ListBootstrapJobs(context.Context, portalapi.Principal) ([]platformadminapi.BootstrapJob, error) {
+func (*platformService) ListBootstrapJobs(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]platformadminapi.BootstrapJob, error) {
 	return []platformadminapi.BootstrapJob{}, nil
 }
-func (*platformService) CreateBootstrapJob(_ context.Context, _ portalapi.Principal, nodeID string) (platformadminapi.BootstrapJob, error) {
+func (*platformService) CreateBootstrapJob(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, nodeID string) (platformadminapi.BootstrapJob, error) {
 	return platformadminapi.BootstrapJob{ID: "job-1", NodeID: nodeID, State: platformadminapi.BootstrapPending}, nil
 }
-func (*platformService) ApproveBootstrapJob(_ context.Context, _ portalapi.Principal, jobID string) (platformadminapi.BootstrapJob, error) {
+func (*platformService) ApproveBootstrapJob(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, jobID string) (platformadminapi.BootstrapJob, error) {
 	return platformadminapi.BootstrapJob{ID: jobID, State: platformadminapi.BootstrapSystemdActive}, nil
+}
+
+func platformPortalService() *service {
+	profile := compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}
+	binding := frontendcompositionv1.PortalBinding{TenantID: "tenant-a", PortalID: "operations", PlatformProfile: profile, Services: []frontendcompositionv1.ManagedService{
+		{ID: "settings", LogicalService: "platform.settings", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.SettingsCapability, Read: []string{"list"}, Write: []string{"put", "delete"}}}},
+		{ID: "credentials", LogicalService: "platform.credentials", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.CredentialsCapability, Read: []string{"list"}, Write: []string{"put", "rotate", "revoke"}}}},
+		{ID: "database", LogicalService: "platform.database", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DatabaseCapability, Read: []string{"list"}, Write: []string{"define", "remove", "probe"}}}},
+		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status"}}}},
+		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap"}}}},
+	}}
+	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a", Route: "/operations", Management: binding, Resolution: portalapi.Resolution{PlatformProfile: profile, ManagementBindingDigest: compositioncommonv1.Digest(binding)}}
+	return &service{revisions: []portalapi.Revision{{ID: 1, TenantID: "tenant-a", PortalID: "operations", Status: portalapi.StatusPublished, Active: true, Spec: spec}}}
+}
+
+func platformPath(serviceID, path string) string {
+	return "/v1/portals/operations/platform/services/" + serviceID + "/" + path
 }
 
 func TestPlatformAdminBFFUsesVerifiedPrincipalAndRoles(t *testing.T) {
 	admin := &platformService{}
 	h := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "operator", TenantID: "tenant-a", Roles: []string{"platform.settings.read"}}, nil
-	}), &service{}, nil, admin, nil, nil)
-	request := httptest.NewRequest(http.MethodGet, "/v1/platform/settings", nil)
+	}), platformPortalService(), nil, admin, nil, nil)
+	request := httptest.NewRequest(http.MethodGet, platformPath("settings", "settings"), nil)
 	response := httptest.NewRecorder()
 	h.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || admin.principal.ID != "operator" || admin.principal.TenantID != "tenant-a" {
@@ -88,7 +108,7 @@ func TestPlatformAdminBFFUsesVerifiedPrincipalAndRoles(t *testing.T) {
 
 	h = NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "operator", TenantID: "tenant-a", Roles: []string{"portal.read"}}, nil
-	}), &service{}, nil, admin, nil, nil)
+	}), platformPortalService(), nil, admin, nil, nil)
 	response = httptest.NewRecorder()
 	h.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden {
@@ -100,9 +120,9 @@ func TestPlatformAdminCredentialIsWriteOnlyAndCSRFProtected(t *testing.T) {
 	admin := &platformService{}
 	h := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "vault-admin", TenantID: "tenant-a", Roles: []string{"platform.credentials.write"}}, nil
-	}), &service{}, nil, admin, nil, nil)
+	}), platformPortalService(), nil, admin, nil, nil)
 	body := `{"value":"top-secret"}`
-	request := httptest.NewRequest(http.MethodPut, "/v1/platform/credentials/database.main", strings.NewReader(body))
+	request := httptest.NewRequest(http.MethodPut, platformPath("credentials", "credentials/database.main"), strings.NewReader(body))
 	response := httptest.NewRecorder()
 	h.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden {
@@ -113,7 +133,7 @@ func TestPlatformAdminCredentialIsWriteOnlyAndCSRFProtected(t *testing.T) {
 	csrfResponse := httptest.NewRecorder()
 	h.ServeHTTP(csrfResponse, csrfRequest)
 	cookie := csrfResponse.Result().Cookies()[0]
-	request = httptest.NewRequest(http.MethodPut, "/v1/platform/credentials/database.main", strings.NewReader(body))
+	request = httptest.NewRequest(http.MethodPut, platformPath("credentials", "credentials/database.main"), strings.NewReader(body))
 	request.AddCookie(cookie)
 	request.Header.Set("X-VastPlan-CSRF", cookie.Value)
 	response = httptest.NewRecorder()
@@ -132,7 +152,7 @@ func TestPlatformAdminDoesNotExposeGenericCapabilityProxy(t *testing.T) {
 	}
 	h := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "admin", TenantID: "tenant-a", Roles: []string{"platform.admin"}}, nil
-	}), &service{}, nil, &platformService{}, nil, nil)
+	}), platformPortalService(), nil, &platformService{}, nil, nil)
 	request := httptest.NewRequest(http.MethodGet, "/v1/platform/capabilities/platform.settings/list", nil)
 	response := httptest.NewRecorder()
 	h.ServeHTTP(response, request)
@@ -141,22 +161,45 @@ func TestPlatformAdminDoesNotExposeGenericCapabilityProxy(t *testing.T) {
 	}
 }
 
+func TestPortalManagementBindingRejectsCrossServiceAndAudienceWidening(t *testing.T) {
+	admin := &platformService{}
+	portalService := platformPortalService()
+	h := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "operator", TenantID: "tenant-a", Roles: []string{"platform.credentials.read"}}, nil
+	}), portalService, nil, admin, nil, nil)
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, platformPath("settings", "credentials"), nil))
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("设置服务绑定不得跨界访问凭证 capability: %d", response.Code)
+	}
+
+	portalService.revisions[0].Spec.Audience = []string{"portal.operations"}
+	h = NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "operator", TenantID: "tenant-a", Roles: []string{"platform.settings.read"}}, nil
+	}), portalService, nil, admin, nil, nil)
+	response = httptest.NewRecorder()
+	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, platformPath("settings", "settings"), nil))
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("未进入 Portal audience 不得调用其管理 API: %d", response.Code)
+	}
+}
+
 func TestDeploymentRoutesAreRoleSeparatedAndAllowlisted(t *testing.T) {
 	admin := &platformService{}
 	h := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "operator", TenantID: "tenant-a", Roles: []string{"platform.deployment.read"}}, nil
-	}), &service{}, nil, admin, nil, nil)
+	}), platformPortalService(), nil, admin, nil, nil)
 	response := httptest.NewRecorder()
-	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/platform/deployment/nodes", nil))
+	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, platformPath("deployment", "deployment/nodes"), nil))
 	if response.Code != http.StatusOK {
 		t.Fatalf("部署读取角色应可列出节点: %d", response.Code)
 	}
 
 	h = NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "requester", TenantID: "tenant-a", Roles: []string{"platform.deployment.bootstrap"}}, nil
-	}), &service{}, nil, admin, nil, nil)
+	}), platformPortalService(), nil, admin, nil, nil)
 	response = httptest.NewRecorder()
-	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/platform/deployment/bootstrap-jobs", nil))
+	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, platformPath("deployment", "deployment/bootstrap-jobs"), nil))
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("引导申请角色不能隐含读取权限: %d", response.Code)
 	}
@@ -167,11 +210,12 @@ func TestDeploymentRoutesAreRoleSeparatedAndAllowlisted(t *testing.T) {
 
 type recordingPlatformCaller struct {
 	capability, operation string
+	target                portalapi.ManagementTarget
 	payload               []byte
 }
 
-func (c *recordingPlatformCaller) Call(_ context.Context, _ portalapi.Principal, capability, operation string, payload []byte) ([]byte, error) {
-	c.capability, c.operation, c.payload = capability, operation, append([]byte(nil), payload...)
+func (c *recordingPlatformCaller) Call(_ context.Context, _ portalapi.Principal, target portalapi.ManagementTarget, capability, operation string, payload []byte) ([]byte, error) {
+	c.target, c.capability, c.operation, c.payload = target, capability, operation, append([]byte(nil), payload...)
 	return []byte(`{"items":[{"key":"x","value":true,"version":1,"updatedAt":"now"}]}`), nil
 }
 
@@ -181,8 +225,22 @@ func TestCapabilityPlatformAdminServiceOwnsCapabilitySelection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	items, err := service.ListSettings(context.Background(), portalapi.Principal{ID: "u", TenantID: "t"}, "x")
-	if err != nil || len(items) != 1 || caller.capability != platformadminapi.SettingsCapability || caller.operation != "list" {
+	target := portalapi.ManagementTarget{Service: frontendcompositionv1.ManagedService{ID: "settings", LogicalService: "platform.settings.primary", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.SettingsCapability, Read: []string{"list"}}}}}
+	items, err := service.ListSettings(context.Background(), portalapi.Principal{ID: "u", TenantID: "t"}, target, "x")
+	if err != nil || len(items) != 1 || caller.capability != platformadminapi.SettingsCapability || caller.operation != "list" || caller.target.Service.LogicalService != "platform.settings.primary" {
 		t.Fatalf("设置映射错误: items=%+v capability=%s operation=%s err=%v", items, caller.capability, caller.operation, err)
+	}
+}
+
+func TestCapabilityPlatformAdminServiceRejectsReadOnlyBindingMutation(t *testing.T) {
+	caller := &recordingPlatformCaller{}
+	service, err := NewCapabilityPlatformAdminService(caller)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := portalapi.ManagementTarget{Service: frontendcompositionv1.ManagedService{ID: "settings", LogicalService: "platform.settings", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.SettingsCapability, Read: []string{"list"}}}}}
+	_, err = service.PutSetting(context.Background(), portalapi.Principal{ID: "u", TenantID: "t"}, target, "portal.title", platformadminapi.PutSettingRequest{Value: json.RawMessage(`"title"`)})
+	if !errors.Is(err, portalapi.ErrForbidden) || caller.capability != "" {
+		t.Fatalf("只读绑定不得触发写 capability: caller=%s err=%v", caller.capability, err)
 	}
 }

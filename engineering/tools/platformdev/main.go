@@ -309,9 +309,10 @@ func (r *runtime) start(ctx context.Context) error {
 		"-tls-cert", filepath.Join(r.runDir, "secrets", "tls-cert.pem"), "-tls-key", filepath.Join(r.runDir, "secrets", "tls-key.pem"),
 		"-session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json"),
 		"-repository", filepath.Join(r.runDir, "repository"), "-install-root", filepath.Join(r.runDir, "installed", "portal"), "-allow-unsigned-local",
-		"-frontend-delivery-root", filepath.Join(r.runDir, "frontend-delivery"),
+		"-frontend-delivery-origin", filepath.Join(r.runDir, "frontend-delivery-origin"),
+		"-frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
 		"-composer-version", "1.0.0", "-composer-state-file", filepath.Join(r.runDir, "state", "portal-composer.json"),
-		"-portal-platform-profile", filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-profile.json"),
+		"-portal-platform-catalog", filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json"),
 		"-interaction-broker-version", "0.1.0", "-interaction-broker-state-file", filepath.Join(r.runDir, "state", "interaction-broker.json"),
 		"-portal-assets", filepath.Join(r.runDir, "portal-assets"), "-nats-url", natsURL, "-nats-allow-insecure",
 	}

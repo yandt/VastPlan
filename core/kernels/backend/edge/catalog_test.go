@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
@@ -71,7 +72,9 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 	source[compositionArtifact.PluginID+"@"+compositionArtifact.Version] = artifacttrust.Envelope{Artifact: compositionArtifact, PackageBytes: compositionPackage}
 	source[layoutArtifact.PluginID+"@"+layoutArtifact.Version] = artifacttrust.Envelope{Artifact: layoutArtifact, PackageBytes: layoutPackage}
 	counted := &countingCatalogSource{catalogSource: source}
-	catalog, err := NewTrustedCatalog([]ArtifactSource{counted}, contentVerifier{})
+	deliveryRoot := t.TempDir()
+	originRoot := filepath.Join(deliveryRoot, "origin")
+	catalog, err := NewTrustedCatalog([]ArtifactSource{counted}, contentVerifier{}, WithFrontendDeliveryDistribution(originRoot, filepath.Join(deliveryRoot, "edge-a")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +82,7 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 	compositionRef := portalapi.PluginRef{ID: compositionArtifact.PluginID, Version: compositionArtifact.Version}
 	layoutRef := portalapi.PluginRef{ID: layoutArtifact.PluginID, Version: layoutArtifact.Version}
 	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Composition: portalapi.ShellComposition{PluginRef: compositionRef, UIContract: "^1.0.0"}, Layout: portalapi.ShellLayout{PluginRef: layoutRef, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref, compositionRef, layoutRef}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, compositionRef.ID: compositioncommonv1.OriginPlatformProfile, layoutRef.ID: compositioncommonv1.OriginPlatformProfile}}}
+	lockTestManagement(&spec)
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err != nil {
 		t.Fatalf("有效且已验证的设计系统应通过: %v", err)
 	}
@@ -109,6 +113,17 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 	if counted.calls != materializationFetches {
 		t.Fatalf("运行时热路径不得重新读取制品包: before=%d after=%d", materializationFetches, counted.calls)
 	}
+	edgeB, err := NewTrustedCatalog([]ArtifactSource{counted}, contentVerifier{}, WithFrontendDeliveryDistribution(originRoot, filepath.Join(deliveryRoot, "edge-b")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeColdFill := counted.calls
+	if _, err := edgeB.ResolveRuntime(context.Background(), "tenant-a", spec); err != nil || counted.calls != beforeColdFill {
+		t.Fatalf("新 Portal Edge 应从中央交付快照冷填充且不读制品包: calls=%d err=%v", counted.calls-beforeColdFill, err)
+	}
+	if err := edgeB.PrefetchPortal(context.Background(), "tenant-a", spec); err != nil || counted.calls != beforeColdFill {
+		t.Fatalf("已就绪 Portal Edge 的后台预取应无副作用: calls=%d err=%v", counted.calls-beforeColdFill, err)
+	}
 	spec.Resolution.PluginOrigins[ref.ID] = compositioncommonv1.OriginApplication
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {
 		t.Fatal("应用输入选择 foundation 设计系统必须拒绝")
@@ -118,6 +133,16 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {
 		t.Fatal("不兼容 UI 契约必须拒绝")
 	}
+}
+
+func lockTestManagement(spec *portalapi.PortalSpec) {
+	profile := spec.Resolution.PlatformProfile
+	spec.Resolution.PlatformCatalog = compositioncommonv1.Ref{ID: "catalog", Revision: 1, Digest: strings.Repeat("c", 64)}
+	spec.Management = frontendcompositionv1.PortalBinding{
+		TenantID: spec.TenantID, PortalID: spec.ID, PlatformProfile: profile,
+		Services: []frontendcompositionv1.ManagedService{{ID: "settings", LogicalService: "platform.settings", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: "platform.settings", Read: []string{"list"}}}}},
+	}
+	spec.Resolution.ManagementBindingDigest = compositioncommonv1.Digest(spec.Management)
 }
 
 func packageFrontendFixture(t *testing.T, manifest string, module []byte) (pluginv1.Artifact, []byte) {

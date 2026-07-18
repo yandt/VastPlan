@@ -8,7 +8,7 @@ export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contr
 export { PortalInteractionClient, PortalInteractionError } from "./interaction-client.js";
 export type { PortalFetch, PortalFetchResponse, PortalInteractionClientOptions } from "./interaction-client.js";
 export { PortalControlClient, PortalControlError } from "./portal-control-client.js";
-export type { PortalApplicationComposition, PortalAuditEvent, PortalControlClientOptions, PortalPluginRef, PortalRevision, PortalRevisionStatus } from "./portal-control-client.js";
+export type { PortalApplicationComposition, PortalAuditEvent, PortalCompositionRef, PortalControlClientOptions, PortalManagementBinding, PortalManagementGrant, PortalPluginRef, PortalRevision, PortalRevisionStatus } from "./portal-control-client.js";
 
 export interface FormRendererProps {
   schema: FormSchema;
@@ -203,9 +203,43 @@ export interface PortalPageDefinition {
   slots: readonly PortalSlotContribution[];
 }
 
+export interface PortalManagementCapability {
+  capability: string;
+  read?: readonly string[];
+  write?: readonly string[];
+}
+
+export interface PortalManagementService {
+  id: string;
+  label?: string;
+  logicalService: string;
+  routingDomain: string;
+  capabilities: readonly PortalManagementCapability[];
+}
+
+export interface PortalPluginRuntime {
+  revision: number;
+  id: string;
+  tenantId: string;
+  route: string;
+  management: { services: readonly PortalManagementService[] };
+}
+
 export interface FrontendPluginContext {
-  readonly portal: Readonly<{ revision: number; id: string; tenantId: string; route: string }>;
-  addPage(page: PortalPageDefinition): void;
+	readonly portal: Readonly<PortalPluginRuntime>;
+	addPage(page: PortalPageDefinition): void;
+}
+
+export function managementServicesFor(portal: Readonly<PortalPluginRuntime>, capability: string): readonly PortalManagementService[] {
+  return portal.management.services.filter((service) => service.capabilities.some((grant) => grant.capability === capability));
+}
+
+export function requireManagementService(portal: Readonly<PortalPluginRuntime>, capability: string): PortalManagementService {
+  const matches = managementServicesFor(portal, capability);
+  if (matches.length !== 1) {
+    throw new Error(`Portal 必须为 ${capability} 精确绑定一个管理服务，当前为 ${matches.length} 个`);
+  }
+  return matches[0];
 }
 
 export interface PortalRegisteredPage extends PortalPageDefinition {

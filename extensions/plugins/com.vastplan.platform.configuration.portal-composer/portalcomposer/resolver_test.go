@@ -10,7 +10,7 @@ import (
 func TestResolveInjectsPlatformDesignSystemAndLocksInputs(t *testing.T) {
 	profile := testProfile()
 	app := testComposition("/")
-	resolved, err := resolve(profile, app, "tenant-a", 7)
+	resolved, err := resolve(testPlatformCatalog(), app, "tenant-a", 7)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,8 +20,11 @@ func TestResolveInjectsPlatformDesignSystemAndLocksInputs(t *testing.T) {
 	if resolved.Resolution.PluginOrigins[profile.DesignSystem.ID] != compositioncommonv1.OriginPlatformProfile || resolved.Resolution.PluginOrigins[app.Plugins[0].ID] != compositioncommonv1.OriginApplication {
 		t.Fatalf("来源锁错误: %+v", resolved.Resolution)
 	}
-	if len(resolved.Resolution.PlatformProfile.Digest) != 64 || len(resolved.Resolution.ApplicationComposition.Digest) != 64 {
+	if len(resolved.Resolution.PlatformCatalog.Digest) != 64 || len(resolved.Resolution.PlatformProfile.Digest) != 64 || len(resolved.Resolution.ApplicationComposition.Digest) != 64 || len(resolved.Resolution.ManagementBindingDigest) != 64 {
 		t.Fatal("输入摘要未锁定")
+	}
+	if resolved.Management.TenantID != "tenant-a" || resolved.Management.Services[0].LogicalService != "platform.settings" {
+		t.Fatalf("管理绑定未锁定: %+v", resolved.Management)
 	}
 }
 
@@ -29,8 +32,21 @@ func TestResolveRejectsApplicationOverride(t *testing.T) {
 	profile := testProfile()
 	app := testComposition("/")
 	app.Plugins[0] = profile.Plugins[0]
-	if _, err := resolve(profile, app, "tenant-a", 1); err == nil {
+	if _, err := resolve(testPlatformCatalog(), app, "tenant-a", 1); err == nil {
 		t.Fatal("应用覆盖平台插件必须拒绝")
+	}
+}
+
+func testPlatformCatalog() frontendcompositionv1.PortalPlatformCatalog {
+	profile := testProfile()
+	return frontendcompositionv1.PortalPlatformCatalog{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "portal-platform"},
+		Profiles: []frontendcompositionv1.PlatformProfile{profile},
+		Bindings: []frontendcompositionv1.PortalBinding{{
+			TenantID: "tenant-a", PortalID: "admin",
+			PlatformProfile: compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()},
+			Services:        []frontendcompositionv1.ManagedService{{ID: "settings", LogicalService: "platform.settings", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: "platform.settings", Read: []string{"list"}, Write: []string{"put", "delete"}}}}},
+		}},
 	}
 }
 

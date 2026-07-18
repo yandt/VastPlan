@@ -111,23 +111,25 @@ type BootstrapJob struct {
 }
 
 // Service is the narrow BFF port consumed by HTTP handlers. Implementations
-// may reach local or cluster capabilities, but callers cannot select a target.
+// may reach local or cluster capabilities. Target is resolved from the active
+// Portal management binding by Edge and cannot be supplied as routing fields by
+// a browser.
 type Service interface {
-	ListSettings(context.Context, portalapi.Principal, string) ([]Setting, error)
-	PutSetting(context.Context, portalapi.Principal, string, PutSettingRequest) (Setting, error)
-	DeleteSetting(context.Context, portalapi.Principal, string, *int64) error
-	ListCredentials(context.Context, portalapi.Principal, string) ([]CredentialMetadata, error)
-	PutCredential(context.Context, portalapi.Principal, string, PutCredentialRequest) (CredentialMetadata, error)
-	RotateCredential(context.Context, portalapi.Principal, string) (CredentialMetadata, error)
-	RevokeCredential(context.Context, portalapi.Principal, string) (CredentialMetadata, error)
-	ListDatabaseConnections(context.Context, portalapi.Principal) ([]DatabaseConnection, error)
-	PutDatabaseConnection(context.Context, portalapi.Principal, string, DatabaseConnection) (DatabaseConnection, error)
-	DeleteDatabaseConnection(context.Context, portalapi.Principal, string) error
-	ProbeDatabaseConnection(context.Context, portalapi.Principal, string) (DatabaseProbe, error)
-	ArtifactRepositoryStatus(context.Context, portalapi.Principal) (ArtifactRepositoryStatus, error)
-	ListManagedNodes(context.Context, portalapi.Principal) ([]ManagedNode, error)
-	PutManagedNode(context.Context, portalapi.Principal, string, PutManagedNodeRequest) (ManagedNode, error)
-	ListBootstrapJobs(context.Context, portalapi.Principal) ([]BootstrapJob, error)
-	CreateBootstrapJob(context.Context, portalapi.Principal, string) (BootstrapJob, error)
-	ApproveBootstrapJob(context.Context, portalapi.Principal, string) (BootstrapJob, error)
+	ListSettings(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) ([]Setting, error)
+	PutSetting(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, PutSettingRequest) (Setting, error)
+	DeleteSetting(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, *int64) error
+	ListCredentials(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) ([]CredentialMetadata, error)
+	PutCredential(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, PutCredentialRequest) (CredentialMetadata, error)
+	RotateCredential(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (CredentialMetadata, error)
+	RevokeCredential(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (CredentialMetadata, error)
+	ListDatabaseConnections(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]DatabaseConnection, error)
+	PutDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, DatabaseConnection) (DatabaseConnection, error)
+	DeleteDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) error
+	ProbeDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (DatabaseProbe, error)
+	ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryStatus, error)
+	ListManagedNodes(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]ManagedNode, error)
+	PutManagedNode(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, PutManagedNodeRequest) (ManagedNode, error)
+	ListBootstrapJobs(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]BootstrapJob, error)
+	CreateBootstrapJob(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (BootstrapJob, error)
+	ApproveBootstrapJob(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (BootstrapJob, error)
 }

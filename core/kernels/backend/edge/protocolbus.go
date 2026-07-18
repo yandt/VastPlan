@@ -60,16 +60,16 @@ func NewAddressingPlatformCapabilityClient(router *addressing.Router) (*Addressi
 	return &AddressingPlatformCapabilityClient{router: router}, nil
 }
 
-func (c *AddressingPlatformCapabilityClient) Call(ctx context.Context, p portalapi.Principal, capability, operation string, payload []byte) ([]byte, error) {
-	if !platformCapabilityAllowed(capability, operation) {
+func (c *AddressingPlatformCapabilityClient) Call(ctx context.Context, p portalapi.Principal, management portalapi.ManagementTarget, capability, operation string, payload []byte) ([]byte, error) {
+	if !platformCapabilityAllowed(capability, operation) || !management.AllowsOperation(capability, operation) {
 		return nil, errors.New("平台管理能力或操作不在 Edge 白名单")
 	}
 	trusted, err := trustedPortalCallContext(p)
 	if err != nil {
 		return nil, err
 	}
-	routingDomain := "platform"
-	target := &contractv1.CallTarget{ExtensionPoint: extpoint.ToolPackage, Capability: capability, Operation: &operation, RoutingDomain: &routingDomain}
+	logicalService, routingDomain := management.Service.LogicalService, management.Service.RoutingDomain
+	target := &contractv1.CallTarget{ExtensionPoint: extpoint.ToolPackage, Capability: capability, Operation: &operation, LogicalService: &logicalService, RoutingDomain: &routingDomain}
 	result, response, err := c.router.Invoke(callcontext.WithTrusted(ctx, trusted), target, trusted.Wire(), payload)
 	if err != nil {
 		return nil, fmt.Errorf("调用远端 capability %s: %w", capability, err)

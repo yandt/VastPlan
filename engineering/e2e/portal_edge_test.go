@@ -78,6 +78,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	stateFile := filepath.Join(dir, "composer-state.json")
 	interactionStateFile := filepath.Join(dir, "interaction-state.json")
 	portalAssets := writePortalAssets(t, dir)
+	portalCatalog := writePortalCatalogForTenant(t, dir, "acme")
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -97,11 +98,12 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 			"-session-file", sessionFile,
 			"-repository", repositoryRoot,
 			"-install-root", filepath.Join(dir, "installed"),
-			"-frontend-delivery-root", filepath.Join(dir, "frontend-delivery"),
+			"-frontend-delivery-origin", filepath.Join(dir, "frontend-delivery-origin"),
+			"-frontend-delivery-cache", filepath.Join(dir, "frontend-delivery-cache"),
 			"-allow-unsigned-local",
 			"-composer-version", "1.0.0",
 			"-composer-state-file", stateFile,
-			"-portal-platform-profile", filepath.Join(repoRoot(t), "engineering", "deploy", "portal-platform-profile.json"),
+			"-portal-platform-catalog", portalCatalog,
 			"-interaction-broker-version", "0.1.0",
 			"-interaction-broker-state-file", interactionStateFile,
 			"-portal-assets", portalAssets,
@@ -275,6 +277,26 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if len(audit) != 1 || audit[0].Action != "revision.rolled_back" {
 		t.Fatalf("rollback audit missing: %+v", audit)
 	}
+}
+
+func writePortalCatalogForTenant(t *testing.T, dir, tenantID string) string {
+	t.Helper()
+	catalog, err := frontendcompositionv1.ParsePortalPlatformCatalogFile(filepath.Join(repoRoot(t), "engineering", "deploy", "portal-platform-catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range catalog.Bindings {
+		catalog.Bindings[i].TenantID = tenantID
+	}
+	raw, err := json.Marshal(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "portal-platform-catalog.json")
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 type portalSession struct {

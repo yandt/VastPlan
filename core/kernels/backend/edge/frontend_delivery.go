@@ -92,6 +92,35 @@ func (s *frontendDeliveryStore) runtime(tenantID string, spec portalapi.PortalSp
 	return snapshot.Runtime, nil
 }
 
+func (s *frontendDeliveryStore) prefetchFrom(origin *frontendDeliveryStore, tenantID string, spec portalapi.PortalSpec) error {
+	if origin == nil {
+		return errors.New("Portal 中央交付 origin 未配置")
+	}
+	runtime, err := origin.runtime(tenantID, spec)
+	if err != nil {
+		return fmt.Errorf("读取 Portal 中央快照: %w", err)
+	}
+	assets := make([]FrontendModuleAsset, 0, len(runtime.Modules))
+	for _, descriptor := range runtime.Modules {
+		asset, err := origin.module(tenantID, spec, descriptor.SHA256)
+		if err != nil {
+			return fmt.Errorf("预取 Portal 内容对象 %s: %w", descriptor.SHA256, err)
+		}
+		actual := sha256.Sum256(asset.Content)
+		if hex.EncodeToString(actual[:]) != descriptor.SHA256 {
+			return errors.New("Portal 预取内容对象与中央快照摘要不一致")
+		}
+		// PackageSHA256 belongs to the Runtime descriptor, not the content
+		// object. Two packages can produce the same JavaScript bytes while
+		// retaining different package provenance in the snapshot.
+		asset.Descriptor = descriptor
+		assets = append(assets, asset)
+	}
+	// put writes every object first and the revision snapshot last. The local
+	// revision therefore becomes visible only after the full module set exists.
+	return s.put(tenantID, spec, assets)
+}
+
 func (s *frontendDeliveryStore) module(tenantID string, spec portalapi.PortalSpec, digest string) (FrontendModuleAsset, error) {
 	runtime, err := s.runtime(tenantID, spec)
 	if err != nil {
@@ -112,6 +141,10 @@ func (s *frontendDeliveryStore) module(tenantID string, spec portalapi.PortalSpe
 	asset, ok := s.objects[digest]
 	s.mu.RUnlock()
 	if ok {
+		// The content digest identifies bytes, not a plugin. Different plugin
+		// packages may intentionally produce identical entry bytes, so always
+		// take authorization metadata from this revision's Runtime snapshot.
+		asset.Descriptor = descriptor
 		return cloneFrontendAsset(asset), nil
 	}
 	if s.root == "" {

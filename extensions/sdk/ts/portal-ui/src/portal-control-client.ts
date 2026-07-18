@@ -7,6 +7,31 @@ export interface PortalPluginRef {
   channel?: string;
 }
 
+export interface PortalCompositionRef {
+  id: string;
+  revision: number;
+  digest: string;
+}
+
+export interface PortalManagementGrant {
+  capability: string;
+  read?: string[];
+  write?: string[];
+}
+
+export interface PortalManagementBinding {
+  tenantId: string;
+  portalId: string;
+  platformProfile: PortalCompositionRef;
+  services: Array<{
+    id: string;
+    label?: string;
+    logicalService: string;
+    routingDomain: string;
+    capabilities: PortalManagementGrant[];
+  }>;
+}
+
 export interface PortalApplicationComposition {
   version: 1;
   revision: number;
@@ -42,6 +67,14 @@ export interface PortalRevision {
     layout: PortalPluginRef & { uiContract: string; config?: Record<string, JSONValue> };
     plugins: PortalPluginRef[];
     config?: Record<string, JSONValue>;
+    management: PortalManagementBinding;
+    resolution: {
+      platformCatalog: PortalCompositionRef;
+      platformProfile: PortalCompositionRef;
+      applicationComposition: PortalCompositionRef;
+      managementBindingDigest: string;
+      pluginOrigins: Record<string, "platform-profile" | "application">;
+    };
   };
   submittedBy?: string;
   approvedBy?: string;

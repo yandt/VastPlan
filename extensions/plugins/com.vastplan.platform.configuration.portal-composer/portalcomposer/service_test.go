@@ -37,7 +37,7 @@ func newTestService(t *testing.T) *Service {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.BindPlatformProfile(testProfile()); err != nil {
+	if err := s.BindPlatformCatalog(testPlatformCatalog()); err != nil {
 		t.Fatal(err)
 	}
 	return s
@@ -71,7 +71,7 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 	}
 	if reopened, err := New(filepath.Join(filepath.Dir(s.stateFile), "portals.json"), acceptingCatalog{}); err != nil {
 		t.Fatal(err)
-	} else if err := reopened.BindPlatformProfile(testProfile()); err != nil {
+	} else if err := reopened.BindPlatformCatalog(testPlatformCatalog()); err != nil {
 		t.Fatal(err)
 	} else if got, err := reopened.List(context.Background(), publisher); err != nil || len(got) != 1 || got[0].Status != portalapi.StatusPublished {
 		t.Fatalf("持久化状态错误: %+v %v", got, err)
@@ -198,8 +198,8 @@ func (h *configuredHost) Call(_ context.Context, target *contractv1.CallTarget, 
 		switch request["key"] {
 		case StateFileConfigKey:
 			value = h.stateFile
-		case PlatformProfileConfigKey:
-			raw, _ := json.Marshal(testProfile())
+		case PlatformCatalogConfigKey:
+			raw, _ := json.Marshal(testPlatformCatalog())
 			value = string(raw)
 		default:
 			return nil, nil, errors.New("unexpected configuration key")

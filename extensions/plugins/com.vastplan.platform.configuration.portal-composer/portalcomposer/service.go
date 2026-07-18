@@ -24,7 +24,7 @@ const (
 	// StateFileConfigKey is read only through the authenticated host callback;
 	// plugin process environment must not decide where governed state is stored.
 	StateFileConfigKey       = "platform.portal-composer.stateFile"
-	PlatformProfileConfigKey = "platform.portal-composer.platformProfile"
+	PlatformCatalogConfigKey = "platform.portal-composer.platformCatalog"
 )
 
 var (
@@ -54,31 +54,31 @@ type Service struct {
 	mu                sync.Mutex
 	state             state
 	stateFile         string
-	catalog           Catalog
-	profile           frontendcompositionv1.PlatformProfile
-	profileConfigured bool
+	artifactCatalog   Catalog
+	platformCatalog   frontendcompositionv1.PortalPlatformCatalog
+	catalogConfigured bool
 	now               func() time.Time
 }
 
-func (s *Service) BindPlatformProfile(profile frontendcompositionv1.PlatformProfile) error {
-	profile, err := frontendcompositionv1.ValidatePlatformProfile(profile)
+func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatformCatalog) error {
+	catalog, err := frontendcompositionv1.ValidatePortalPlatformCatalog(catalog)
 	if err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.profileConfigured {
-		if s.profile.Digest() != profile.Digest() {
-			return errors.New("Portal Platform Profile 不允许在运行中切换")
+	if s.catalogConfigured {
+		if s.platformCatalog.Digest() != catalog.Digest() {
+			return errors.New("Portal Platform Catalog 不允许在运行中切换")
 		}
 		return nil
 	}
-	s.profile, s.profileConfigured = profile, true
+	s.platformCatalog, s.catalogConfigured = catalog, true
 	return nil
 }
 
 func New(stateFile string, catalog Catalog) (*Service, error) {
-	s := &Service{catalog: catalog, now: time.Now}
+	s := &Service{artifactCatalog: catalog, now: time.Now}
 	if strings.TrimSpace(stateFile) != "" {
 		if err := s.configure(stateFile); err != nil {
 			return nil, err
@@ -458,10 +458,10 @@ func require(p portalapi.Principal, role string) error {
 	return ErrForbidden
 }
 func (s *Service) resolveCurrent(composition frontendcompositionv1.ApplicationComposition, tenantID string, revision uint64) (portalapi.PortalSpec, error) {
-	if !s.profileConfigured {
-		return portalapi.PortalSpec{}, errors.New("Portal Composer 尚未绑定 Frontend Platform Profile")
+	if !s.catalogConfigured {
+		return portalapi.PortalSpec{}, errors.New("Portal Composer 尚未绑定 Portal Platform Catalog")
 	}
-	return resolve(s.profile, composition, tenantID, revision)
+	return resolve(s.platformCatalog, composition, tenantID, revision)
 }
 func cloneSpec(in portalapi.PortalSpec) portalapi.PortalSpec {
 	out := in
@@ -471,7 +471,21 @@ func cloneSpec(in portalapi.PortalSpec) portalapi.PortalSpec {
 	out.Branding = cloneMap(in.Branding)
 	out.Config = cloneMap(in.Config)
 	out.Layout.Config = cloneMap(in.Layout.Config)
+	out.Management.Services = cloneManagedServices(in.Management.Services)
 	out.Resolution.PluginOrigins = cloneStringMap(in.Resolution.PluginOrigins)
+	return out
+}
+func cloneManagedServices(in []frontendcompositionv1.ManagedService) []frontendcompositionv1.ManagedService {
+	out := make([]frontendcompositionv1.ManagedService, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].Capabilities = make([]frontendcompositionv1.CapabilityGrant, len(in[i].Capabilities))
+		for j := range in[i].Capabilities {
+			out[i].Capabilities[j] = in[i].Capabilities[j]
+			out[i].Capabilities[j].Read = append([]string(nil), in[i].Capabilities[j].Read...)
+			out[i].Capabilities[j].Write = append([]string(nil), in[i].Capabilities[j].Write...)
+		}
+	}
 	return out
 }
 func cloneComposition(in frontendcompositionv1.ApplicationComposition) frontendcompositionv1.ApplicationComposition {

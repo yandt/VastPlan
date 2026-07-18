@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.portal-platform-catalog.schema.json",
+  "title": "VastPlan Portal Platform Catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "revision", "id", "profiles", "bindings"],
+  "properties": {
+    "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
+    "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
+    "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
+    "profiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.platform-profile.schema.json" }
+    },
+    "bindings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/portalBinding" }
+    }
+  },
+  "$defs": {
+    "governedName": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
+    "operationList": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/governedName" }
+    },
+    "capabilityGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability"],
+      "anyOf": [{ "required": ["read"] }, { "required": ["write"] }],
+      "properties": {
+        "capability": { "$ref": "#/$defs/governedName" },
+        "read": { "$ref": "#/$defs/operationList" },
+        "write": { "$ref": "#/$defs/operationList" }
+      }
+    },
+    "managedService": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "logicalService", "routingDomain", "capabilities"],
+      "properties": {
+        "id": { "$ref": "#/$defs/governedName" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "logicalService": { "$ref": "#/$defs/governedName" },
+        "routingDomain": { "$ref": "#/$defs/governedName" },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/capabilityGrant" }
+        }
+      }
+    },
+    "portalBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tenantId", "portalId", "platformProfile", "services"],
+      "properties": {
+        "tenantId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "portalId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
+        "platformProfile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionRef" },
+        "services": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/managedService" }
+        }
+      }
+    }
+  }
+}

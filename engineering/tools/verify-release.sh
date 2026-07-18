@@ -20,7 +20,7 @@ grep -Fq "\"version\":\"${version}\"" "$TMP/version.json"
 "$backend" validate -kind desired-v1 -file engineering/deploy/local.desired-state.json >/dev/null
 "$backend" validate -kind platform-profile-v1 -file engineering/deploy/platform-profile.json >/dev/null
 "$backend" validate -kind application-composition-v1 -file engineering/deploy/application-composition.json >/dev/null
-"$backend" validate -kind portal-platform-profile-v1 -file engineering/deploy/portal-platform-profile.json >/dev/null
+"$backend" validate -kind portal-platform-catalog-v1 -file engineering/deploy/portal-platform-catalog.json >/dev/null
 "$backend" validate -kind portal-application-composition-v1 -file engineering/deploy/portal-application-composition.json >/dev/null
 "$backend" validate -kind deployment-v2 -file engineering/deploy/cluster.deployment.json >/dev/null
 "$backend" controlplane -help >/dev/null 2>&1

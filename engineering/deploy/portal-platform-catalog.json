@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "revision": 1,
+  "id": "local-portal-platform",
+  "profiles": [
+    {
+      "version": 1,
+      "revision": 1,
+      "id": "portal-default",
+      "target": { "kernel": "frontend" },
+      "designSystem": {
+        "id": "com.vastplan.foundation.frontend.design-system.arco",
+        "version": "1.0.0",
+        "channel": "stable",
+        "uiContract": "^1.0.0"
+      },
+      "composition": {
+        "id": "com.vastplan.foundation.frontend.composition.standard",
+        "version": "1.0.0",
+        "channel": "stable",
+        "uiContract": "^1.0.0"
+      },
+      "layout": {
+        "id": "com.vastplan.foundation.frontend.layout.standard",
+        "version": "1.0.0",
+        "channel": "stable",
+        "uiContract": "^1.0.0",
+        "config": {
+          "navigation": "sidebar",
+          "logoPlacement": "navigation",
+          "settingsPlacement": "navigation-bottom",
+          "pageBodyWidth": "fluid"
+        }
+      },
+      "plugins": [
+        { "id": "com.vastplan.foundation.frontend.design-system.arco", "version": "1.0.0", "channel": "stable" },
+        { "id": "com.vastplan.foundation.frontend.composition.standard", "version": "1.0.0", "channel": "stable" },
+        { "id": "com.vastplan.foundation.frontend.layout.standard", "version": "1.0.0", "channel": "stable" },
+        { "id": "com.vastplan.platform.configuration.portal-composer", "version": "1.0.0", "channel": "stable" },
+        { "id": "com.vastplan.platform.configuration.global-settings", "version": "0.2.0", "channel": "stable" },
+        { "id": "com.vastplan.platform.security.credentials", "version": "0.2.0", "channel": "stable" },
+        { "id": "com.vastplan.platform.data.relational.connection-manager", "version": "0.2.0", "channel": "stable" },
+        { "id": "com.vastplan.platform.artifacts.repository", "version": "0.2.0", "channel": "stable" }
+      ],
+      "security": { "firstPartyOnly": true, "requireIntegrity": true }
+    }
+  ],
+  "bindings": [
+    {
+      "tenantId": "local",
+      "portalId": "operations",
+      "platformProfile": {
+        "id": "portal-default",
+        "revision": 1,
+        "digest": "b21855d97dfdccc816a3db3cf9e553eef1950b8dfda646fc5b4bc2a7b84af22f"
+      },
+      "services": [
+        {
+          "id": "settings",
+          "label": "全局设置服务",
+          "logicalService": "platform.settings",
+          "routingDomain": "platform",
+          "capabilities": [
+            { "capability": "platform.settings", "read": ["list"], "write": ["put", "delete"] }
+          ]
+        },
+        {
+          "id": "credentials",
+          "label": "凭证管理服务",
+          "logicalService": "platform.credentials",
+          "routingDomain": "platform",
+          "capabilities": [
+            { "capability": "platform.credentials", "read": ["list"], "write": ["put", "rotate", "revoke"] }
+          ]
+        },
+        {
+          "id": "database",
+          "label": "数据库服务",
+          "logicalService": "platform.database",
+          "routingDomain": "platform",
+          "capabilities": [
+            { "capability": "platform.database", "read": ["list"], "write": ["define", "remove", "probe"] }
+          ]
+        },
+        {
+          "id": "artifacts",
+          "label": "制品仓库服务",
+          "logicalService": "platform.artifacts.repository",
+          "routingDomain": "platform",
+          "capabilities": [
+            { "capability": "platform.artifacts.repository", "read": ["status"] }
+          ]
+        },
+        {
+          "id": "deployment",
+          "label": "部署管理服务",
+          "logicalService": "platform.deployment",
+          "routingDomain": "platform",
+          "capabilities": [
+            { "capability": "platform.deployment", "read": ["listNodes", "listBootstrapJobs"], "write": ["putNode", "createBootstrap", "approveBootstrap"] }
+          ]
+        }
+      ]
+    }
+  ]
+}

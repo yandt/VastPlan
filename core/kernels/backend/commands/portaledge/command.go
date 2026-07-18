@@ -46,7 +46,9 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	sessions := flags.String("session-file", "", "0600 session digest JSON")
 	repositoryRoot := flags.String("repository", ".vastplan/repository", "local immutable artifact repository")
 	installRoot := flags.String("install-root", ".vastplan/portal-edge/plugins", "content-addressed plugin install root")
-	deliveryRoot := flags.String("frontend-delivery-root", ".vastplan/portal-edge/frontend-delivery", "content-addressed Portal frontend delivery root")
+	deliveryOrigin := flags.String("frontend-delivery-origin", "", "shared trusted Portal frontend delivery origin")
+	deliveryCache := flags.String("frontend-delivery-cache", ".vastplan/portal-edge/frontend-cache", "this Portal Edge node's private frontend cache")
+	prefetchInterval := flags.Duration("frontend-prefetch-interval", 2*time.Second, "active Portal snapshot prefetch interval")
 	trustFile := flags.String("trust-store", "", "artifact publisher trust document")
 	allowUnsigned := flags.Bool("allow-unsigned-local", false, "local development only: permit unsigned artifacts")
 	pluginID := flags.String("composer-plugin", "com.vastplan.platform.configuration.portal-composer", "Composer plugin ID")
@@ -62,7 +64,7 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	brokerVersion := flags.String("interaction-broker-version", "", "Interaction Broker artifact version")
 	brokerChannel := flags.String("interaction-broker-channel", "stable", "Interaction Broker artifact channel")
 	stateFile := flags.String("composer-state-file", "", "Composer governed-state file")
-	platformProfileFile := flags.String("portal-platform-profile", "", "Frontend Platform Profile v1 JSON")
+	platformCatalogFile := flags.String("portal-platform-catalog", "", "Portal Platform Catalog v1 JSON")
 	brokerStateFile := flags.String("interaction-broker-state-file", "", "Interaction Broker governed-state file")
 	portalAssetsDir := flags.String("portal-assets", "", "Portal Shell 静态产物目录")
 	natsURL := flags.String("nats-url", "", "平台管理远端 capability NATS URL；留空关闭平台管理 API")
@@ -77,8 +79,8 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *cert == "" || *key == "" || *sessions == "" || *pluginVersion == "" || *stateFile == "" || *platformProfileFile == "" || *brokerVersion == "" || *brokerStateFile == "" || *portalAssetsDir == "" {
-		return errors.New("portal-edge 必须配置 TLS、session、Frontend Platform Profile、Portal 静态产物、Composer 与 Interaction Broker 制品版本及状态文件")
+	if *cert == "" || *key == "" || *sessions == "" || *pluginVersion == "" || *stateFile == "" || *platformCatalogFile == "" || *brokerVersion == "" || *brokerStateFile == "" || *portalAssetsDir == "" || *deliveryOrigin == "" || *deliveryCache == "" || *prefetchInterval <= 0 {
+		return errors.New("portal-edge 必须配置 TLS、session、Portal Platform Catalog、Portal 静态产物、中央交付 origin、本地缓存、Composer 与 Interaction Broker 制品版本及状态文件")
 	}
 	if *allowUnsigned && *trustFile != "" {
 		return errors.New("allow-unsigned-local 与 trust-store 不能同时使用")
@@ -128,25 +130,25 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return fmt.Errorf("加载 Portal 静态产物: %w", err)
 	}
-	catalog, err := edge.NewTrustedCatalog([]edge.ArtifactSource{repository}, verifierAdapter{verifier}, edge.WithFrontendDeliveryRoot(*deliveryRoot))
+	catalog, err := edge.NewTrustedCatalog([]edge.ArtifactSource{repository}, verifierAdapter{verifier}, edge.WithFrontendDeliveryDistribution(*deliveryOrigin, *deliveryCache))
 	if err != nil {
 		return err
 	}
-	profileRaw, err := os.ReadFile(*platformProfileFile)
+	catalogRaw, err := os.ReadFile(*platformCatalogFile)
 	if err != nil {
-		return fmt.Errorf("读取 Frontend Platform Profile: %w", err)
+		return fmt.Errorf("读取 Portal Platform Catalog: %w", err)
 	}
-	profile, err := frontendcompositionv1.ParsePlatformProfile(profileRaw)
+	platformCatalog, err := frontendcompositionv1.ParsePortalPlatformCatalog(catalogRaw)
 	if err != nil {
 		return err
 	}
-	canonicalProfile, err := json.Marshal(profile)
+	canonicalCatalog, err := json.Marshal(platformCatalog)
 	if err != nil {
 		return err
 	}
 	config, err := kernelspi.NewMapConfig(map[string]any{
 		"platform.portal-composer.stateFile":       *stateFile,
-		"platform.portal-composer.platformProfile": string(canonicalProfile),
+		"platform.portal-composer.platformCatalog": string(canonicalCatalog),
 		"platform.interaction-broker.stateFile":    *brokerStateFile,
 	})
 	if err != nil {
@@ -225,6 +227,11 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return err
 	}
+	tenantIDs := make([]string, 0, len(platformCatalog.Bindings))
+	for _, binding := range platformCatalog.Bindings {
+		tenantIDs = append(tenantIDs, binding.TenantID)
+	}
+	go edge.RunFrontendPrefetcher(ctx, service, catalog, tenantIDs, *prefetchInterval, logf)
 	interactionClient, err := edge.NewProtocolBusInteractionClient(host)
 	if err != nil {
 		return err

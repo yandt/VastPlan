@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
@@ -38,6 +39,7 @@ type TrustedCatalog struct {
 	sources  []ArtifactSource
 	verifier ArtifactVerifier
 	delivery *frontendDeliveryStore
+	origin   *frontendDeliveryStore
 }
 
 // ArtifactSource and ArtifactVerifier are stable Edge ports. The Backend
@@ -55,8 +57,30 @@ type TrustedCatalogOption func(*TrustedCatalog) error
 func WithFrontendDeliveryRoot(root string) TrustedCatalogOption {
 	return func(c *TrustedCatalog) error {
 		store, err := newFrontendDeliveryStore(root)
-		c.delivery = store
+		c.delivery, c.origin = store, store
 		return err
+	}
+}
+
+// WithFrontendDeliveryDistribution separates the shared, trusted publication
+// origin from this Portal Edge node's private local cache. Only Portal Edge
+// nodes receive the cache; ordinary Backend service nodes never pull browser
+// snapshots.
+func WithFrontendDeliveryDistribution(originRoot, cacheRoot string) TrustedCatalogOption {
+	return func(c *TrustedCatalog) error {
+		if strings.TrimSpace(originRoot) == "" || strings.TrimSpace(cacheRoot) == "" {
+			return errors.New("Portal 交付 origin 与 cache 路径不能为空")
+		}
+		origin, err := newFrontendDeliveryStore(originRoot)
+		if err != nil {
+			return err
+		}
+		cache, err := newFrontendDeliveryStore(cacheRoot)
+		if err != nil {
+			return err
+		}
+		c.origin, c.delivery = origin, cache
+		return nil
 	}
 }
 
@@ -71,7 +95,7 @@ func NewTrustedCatalog(sources []ArtifactSource, verifier ArtifactVerifier, opti
 	if err != nil {
 		return nil, err
 	}
-	catalog := &TrustedCatalog{sources: append([]ArtifactSource(nil), sources...), verifier: verifier, delivery: store}
+	catalog := &TrustedCatalog{sources: append([]ArtifactSource(nil), sources...), verifier: verifier, delivery: store, origin: store}
 	for _, option := range options {
 		if err := option(catalog); err != nil {
 			return nil, err
@@ -93,8 +117,14 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 	if spec.Revision == 0 || tenantID == "" || spec.TenantID != tenantID {
 		return nil, errors.New("Portal 解析结果的 revision 或 tenant 无效")
 	}
-	if !validCompositionRef(spec.Resolution.PlatformProfile) || !validCompositionRef(spec.Resolution.ApplicationComposition) {
+	if !validCompositionRef(spec.Resolution.PlatformCatalog) || !validCompositionRef(spec.Resolution.PlatformProfile) || !validCompositionRef(spec.Resolution.ApplicationComposition) {
 		return nil, errors.New("Portal 解析结果缺少有效输入锁")
+	}
+	if err := frontendcompositionv1.ValidatePortalBinding(spec.Management); err != nil {
+		return nil, fmt.Errorf("Portal 管理绑定无效: %w", err)
+	}
+	if spec.Management.TenantID != tenantID || spec.Management.PortalID != spec.ID || spec.Management.PlatformProfile != spec.Resolution.PlatformProfile || compositioncommonv1.Digest(spec.Management) != spec.Resolution.ManagementBindingDigest {
+		return nil, errors.New("Portal 管理绑定与解析锁不一致")
 	}
 	if !pluginid.IsFirstPartyID(spec.DesignSystem.ID) {
 		return nil, errors.New("Portal 设计系统必须是第一方插件")
@@ -246,13 +276,51 @@ func (c *TrustedCatalog) MaterializePortal(ctx context.Context, tenantID string,
 		}
 		assets = append(assets, asset)
 	}
-	return c.delivery.put(tenantID, spec, assets)
+	if err := c.origin.put(tenantID, spec, assets); err != nil {
+		return err
+	}
+	if c.origin == c.delivery {
+		return nil
+	}
+	return c.delivery.prefetchFrom(c.origin, tenantID, spec)
 }
 
-// ResolveRuntime reads an immutable publication snapshot. Missing snapshots
-// fail closed instead of performing package verification on the request path.
-func (c *TrustedCatalog) ResolveRuntime(ctx context.Context, tenantID string, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
+// PrefetchPortal verifies a central immutable snapshot and every referenced
+// content object before atomically exposing the revision in the local Edge
+// cache. It never reads plugin packages or executes frontend code.
+func (c *TrustedCatalog) PrefetchPortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
 	_ = ctx
+	if runtime, err := c.delivery.runtime(tenantID, spec); err == nil {
+		ready := true
+		for _, module := range runtime.Modules {
+			if _, err := c.delivery.module(tenantID, spec, module.SHA256); err != nil {
+				ready = false
+				break
+			}
+		}
+		if ready {
+			return nil
+		}
+	}
+	if c.origin == c.delivery {
+		_, err := c.delivery.runtime(tenantID, spec)
+		return err
+	}
+	return c.delivery.prefetchFrom(c.origin, tenantID, spec)
+}
+
+// ResolveRuntime reads an immutable publication snapshot from the local Edge
+// cache. A newly added Edge may cold-fill that cache from the trusted delivery
+// origin, but it never falls back to package download, signature verification,
+// or archive extraction on the browser request path.
+func (c *TrustedCatalog) ResolveRuntime(ctx context.Context, tenantID string, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
+	runtime, err := c.delivery.runtime(tenantID, spec)
+	if err == nil || c.origin == c.delivery {
+		return runtime, err
+	}
+	if err := c.PrefetchPortal(ctx, tenantID, spec); err != nil {
+		return portalapi.RuntimeSpec{}, fmt.Errorf("Portal Edge 本地快照不可用且冷预取失败: %w", err)
+	}
 	return c.delivery.runtime(tenantID, spec)
 }
 

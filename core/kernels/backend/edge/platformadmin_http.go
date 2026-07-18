@@ -7,35 +7,78 @@ import (
 	"strconv"
 	"strings"
 
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
-func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
+func (h *Handler) resolvePlatformRequest(w http.ResponseWriter, r *http.Request, p portalapi.Principal) (portalapi.ManagementTarget, []string, bool) {
 	if h.platform == nil {
 		http.NotFound(w, r)
-		return
+		return portalapi.ManagementTarget{}, nil, false
 	}
-	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/platform/"), "/")
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/portals/"), "/")
+	if len(parts) < 5 || parts[1] != "platform" || parts[2] != "services" {
+		http.NotFound(w, r)
+		return portalapi.ManagementTarget{}, nil, false
+	}
+	portalID, portalErr := url.PathUnescape(parts[0])
+	serviceID, serviceErr := url.PathUnescape(parts[3])
+	if portalErr != nil || serviceErr != nil || validResourceName(portalID, 128) != nil || validResourceName(serviceID, 160) != nil {
+		writeError(w, http.StatusBadRequest, "invalid_management_target")
+		return portalapi.ManagementTarget{}, nil, false
+	}
+	revisions, err := h.service.List(r.Context(), p)
+	if err != nil {
+		respond(w, nil, err)
+		return portalapi.ManagementTarget{}, nil, false
+	}
+	revision, ok := activePortalByID(revisions, p.TenantID, portalID, requestHost(r))
+	if !ok {
+		writeError(w, http.StatusNotFound, "portal_not_found")
+		return portalapi.ManagementTarget{}, nil, false
+	}
+	if !audienceAllows(revision.Spec.Audience, p) {
+		writeError(w, http.StatusForbidden, "portal_audience_forbidden")
+		return portalapi.ManagementTarget{}, nil, false
+	}
+	binding := revision.Spec.Management
+	if frontendcompositionv1.ValidatePortalBinding(binding) != nil || binding.PlatformProfile != revision.Spec.Resolution.PlatformProfile || compositioncommonv1.Digest(binding) != revision.Spec.Resolution.ManagementBindingDigest {
+		writeError(w, http.StatusConflict, "portal_management_binding_rejected")
+		return portalapi.ManagementTarget{}, nil, false
+	}
+	target, ok := revision.Spec.ManagementTarget(serviceID)
+	if !ok {
+		writeError(w, http.StatusNotFound, "managed_service_not_found")
+		return portalapi.ManagementTarget{}, nil, false
+	}
+	return target, parts[4:], true
+}
+
+func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget, parts []string) {
 	if len(parts) >= 2 && parts[0] == "deployment" {
-		h.deploymentRoute(w, r, p, parts[1:])
+		h.deploymentRoute(w, r, p, target, parts[1:])
 		return
 	}
 	if len(parts) == 1 {
 		switch parts[0] {
 		case "settings":
-			h.listSettings(w, r, p)
+			h.listSettings(w, r, p, target)
 			return
 		case "credentials":
-			h.listCredentials(w, r, p)
+			h.listCredentials(w, r, p, target)
 			return
 		case "database-connections":
-			h.listDatabaseConnections(w, r, p)
+			h.listDatabaseConnections(w, r, p, target)
 			return
 		}
 	}
 	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "status" {
+		if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "status", false) {
+			return
+		}
 		if !requirePlatformRole(w, p, "platform.artifacts.read") {
 			return
 		}
@@ -43,7 +86,7 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 			methodNotAllowed(w)
 			return
 		}
-		value, err := h.platform.ArtifactRepositoryStatus(r.Context(), p)
+		value, err := h.platform.ArtifactRepositoryStatus(r.Context(), p, target)
 		respondPlatform(w, value, err)
 		return
 	}
@@ -58,18 +101,21 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 	}
 	switch parts[0] {
 	case "settings":
-		h.settingItem(w, r, p, name, parts)
+		h.settingItem(w, r, p, target, name, parts)
 	case "credentials":
-		h.credentialItem(w, r, p, name, parts)
+		h.credentialItem(w, r, p, target, name, parts)
 	case "database-connections":
-		h.databaseConnectionItem(w, r, p, name, parts)
+		h.databaseConnectionItem(w, r, p, target, name, parts)
 	default:
 		http.NotFound(w, r)
 	}
 }
 
-func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal, parts []string) {
+func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget, parts []string) {
 	if len(parts) == 1 && parts[0] == "nodes" {
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "listNodes", false) {
+			return
+		}
 		if !requirePlatformRole(w, p, "platform.deployment.read") {
 			return
 		}
@@ -77,11 +123,14 @@ func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p port
 			methodNotAllowed(w)
 			return
 		}
-		value, err := h.platform.ListManagedNodes(r.Context(), p)
+		value, err := h.platform.ListManagedNodes(r.Context(), p, target)
 		respondPlatform(w, value, err)
 		return
 	}
 	if len(parts) == 1 && parts[0] == "bootstrap-jobs" {
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "listBootstrapJobs", false) {
+			return
+		}
 		if !requirePlatformRole(w, p, "platform.deployment.read") {
 			return
 		}
@@ -89,11 +138,14 @@ func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p port
 			methodNotAllowed(w)
 			return
 		}
-		value, err := h.platform.ListBootstrapJobs(r.Context(), p)
+		value, err := h.platform.ListBootstrapJobs(r.Context(), p, target)
 		respondPlatform(w, value, err)
 		return
 	}
 	if len(parts) == 2 && parts[0] == "nodes" {
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "putNode", true) {
+			return
+		}
 		if !requirePlatformRole(w, p, "platform.deployment.write") {
 			return
 		}
@@ -109,11 +161,14 @@ func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p port
 		if !decode(w, r, &request) {
 			return
 		}
-		value, err := h.platform.PutManagedNode(r.Context(), p, id, request)
+		value, err := h.platform.PutManagedNode(r.Context(), p, target, id, request)
 		respondPlatform(w, value, err)
 		return
 	}
 	if len(parts) == 3 && parts[0] == "nodes" && parts[2] == "bootstrap" {
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "createBootstrap", true) {
+			return
+		}
 		if !requirePlatformRole(w, p, "platform.deployment.bootstrap") {
 			return
 		}
@@ -125,11 +180,14 @@ func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p port
 		if !ok {
 			return
 		}
-		value, err := h.platform.CreateBootstrapJob(r.Context(), p, id)
+		value, err := h.platform.CreateBootstrapJob(r.Context(), p, target, id)
 		respondPlatform(w, value, err)
 		return
 	}
 	if len(parts) == 3 && parts[0] == "bootstrap-jobs" && parts[2] == "approve" {
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "approveBootstrap", true) {
+			return
+		}
 		if !requirePlatformRole(w, p, "platform.deployment.approve") {
 			return
 		}
@@ -141,7 +199,7 @@ func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p port
 		if !ok {
 			return
 		}
-		value, err := h.platform.ApproveBootstrapJob(r.Context(), p, id)
+		value, err := h.platform.ApproveBootstrapJob(r.Context(), p, target, id)
 		respondPlatform(w, value, err)
 		return
 	}
@@ -157,7 +215,10 @@ func deploymentResourceName(w http.ResponseWriter, raw string) (string, bool) {
 	return value, true
 }
 
-func (h *Handler) listSettings(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
+func (h *Handler) listSettings(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget) {
+	if !requireManagementOperation(w, target, platformadminapi.SettingsCapability, "list", false) {
+		return
+	}
 	if !requirePlatformRole(w, p, "platform.settings.read") {
 		return
 	}
@@ -165,11 +226,11 @@ func (h *Handler) listSettings(w http.ResponseWriter, r *http.Request, p portala
 		methodNotAllowed(w)
 		return
 	}
-	value, err := h.platform.ListSettings(r.Context(), p, r.URL.Query().Get("prefix"))
+	value, err := h.platform.ListSettings(r.Context(), p, target, r.URL.Query().Get("prefix"))
 	respondPlatform(w, value, err)
 }
 
-func (h *Handler) settingItem(w http.ResponseWriter, r *http.Request, p portalapi.Principal, key string, parts []string) {
+func (h *Handler) settingItem(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget, key string, parts []string) {
 	if len(parts) != 2 {
 		http.NotFound(w, r)
 		return
@@ -179,24 +240,33 @@ func (h *Handler) settingItem(w http.ResponseWriter, r *http.Request, p portalap
 	}
 	switch r.Method {
 	case http.MethodPut:
+		if !requireManagementOperation(w, target, platformadminapi.SettingsCapability, "put", true) {
+			return
+		}
 		var request platformadminapi.PutSettingRequest
 		if !decode(w, r, &request) {
 			return
 		}
-		value, err := h.platform.PutSetting(r.Context(), p, key, request)
+		value, err := h.platform.PutSetting(r.Context(), p, target, key, request)
 		respondPlatform(w, value, err)
 	case http.MethodDelete:
+		if !requireManagementOperation(w, target, platformadminapi.SettingsCapability, "delete", true) {
+			return
+		}
 		version, ok := optionalVersion(w, r)
 		if !ok {
 			return
 		}
-		respondPlatform(w, map[string]bool{"deleted": true}, h.platform.DeleteSetting(r.Context(), p, key, version))
+		respondPlatform(w, map[string]bool{"deleted": true}, h.platform.DeleteSetting(r.Context(), p, target, key, version))
 	default:
 		methodNotAllowed(w)
 	}
 }
 
-func (h *Handler) listCredentials(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
+func (h *Handler) listCredentials(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget) {
+	if !requireManagementOperation(w, target, platformadminapi.CredentialsCapability, "list", false) {
+		return
+	}
 	if !requirePlatformRole(w, p, "platform.credentials.read") {
 		return
 	}
@@ -204,12 +274,15 @@ func (h *Handler) listCredentials(w http.ResponseWriter, r *http.Request, p port
 		methodNotAllowed(w)
 		return
 	}
-	value, err := h.platform.ListCredentials(r.Context(), p, r.URL.Query().Get("prefix"))
+	value, err := h.platform.ListCredentials(r.Context(), p, target, r.URL.Query().Get("prefix"))
 	respondPlatform(w, value, err)
 }
 
-func (h *Handler) credentialItem(w http.ResponseWriter, r *http.Request, p portalapi.Principal, name string, parts []string) {
+func (h *Handler) credentialItem(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget, name string, parts []string) {
 	if len(parts) == 2 && r.Method == http.MethodPut {
+		if !requireManagementOperation(w, target, platformadminapi.CredentialsCapability, "put", true) {
+			return
+		}
 		if !requirePlatformRole(w, p, "platform.credentials.write") {
 			return
 		}
@@ -217,7 +290,7 @@ func (h *Handler) credentialItem(w http.ResponseWriter, r *http.Request, p porta
 		if !decode(w, r, &request) {
 			return
 		}
-		value, err := h.platform.PutCredential(r.Context(), p, name, request)
+		value, err := h.platform.PutCredential(r.Context(), p, target, name, request)
 		respondPlatform(w, value, err)
 		return
 	}
@@ -226,15 +299,21 @@ func (h *Handler) credentialItem(w http.ResponseWriter, r *http.Request, p porta
 		var err error
 		switch parts[2] {
 		case "rotate":
+			if !requireManagementOperation(w, target, platformadminapi.CredentialsCapability, "rotate", true) {
+				return
+			}
 			if !requirePlatformRole(w, p, "platform.credentials.rotate") {
 				return
 			}
-			value, err = h.platform.RotateCredential(r.Context(), p, name)
+			value, err = h.platform.RotateCredential(r.Context(), p, target, name)
 		case "revoke":
+			if !requireManagementOperation(w, target, platformadminapi.CredentialsCapability, "revoke", true) {
+				return
+			}
 			if !requirePlatformRole(w, p, "platform.credentials.revoke") {
 				return
 			}
-			value, err = h.platform.RevokeCredential(r.Context(), p, name)
+			value, err = h.platform.RevokeCredential(r.Context(), p, target, name)
 		default:
 			http.NotFound(w, r)
 			return
@@ -245,7 +324,10 @@ func (h *Handler) credentialItem(w http.ResponseWriter, r *http.Request, p porta
 	methodNotAllowed(w)
 }
 
-func (h *Handler) listDatabaseConnections(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
+func (h *Handler) listDatabaseConnections(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget) {
+	if !requireManagementOperation(w, target, platformadminapi.DatabaseCapability, "list", false) {
+		return
+	}
 	if !requirePlatformRole(w, p, "platform.database.read") {
 		return
 	}
@@ -253,35 +335,44 @@ func (h *Handler) listDatabaseConnections(w http.ResponseWriter, r *http.Request
 		methodNotAllowed(w)
 		return
 	}
-	value, err := h.platform.ListDatabaseConnections(r.Context(), p)
+	value, err := h.platform.ListDatabaseConnections(r.Context(), p, target)
 	respondPlatform(w, value, err)
 }
 
-func (h *Handler) databaseConnectionItem(w http.ResponseWriter, r *http.Request, p portalapi.Principal, name string, parts []string) {
+func (h *Handler) databaseConnectionItem(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget, name string, parts []string) {
 	if len(parts) == 2 {
 		if !requirePlatformRole(w, p, "platform.database.write") {
 			return
 		}
 		switch r.Method {
 		case http.MethodPut:
+			if !requireManagementOperation(w, target, platformadminapi.DatabaseCapability, "define", true) {
+				return
+			}
 			var request platformadminapi.DatabaseConnection
 			if !decode(w, r, &request) {
 				return
 			}
-			value, err := h.platform.PutDatabaseConnection(r.Context(), p, name, request)
+			value, err := h.platform.PutDatabaseConnection(r.Context(), p, target, name, request)
 			respondPlatform(w, value, err)
 		case http.MethodDelete:
-			respondPlatform(w, map[string]bool{"deleted": true}, h.platform.DeleteDatabaseConnection(r.Context(), p, name))
+			if !requireManagementOperation(w, target, platformadminapi.DatabaseCapability, "remove", true) {
+				return
+			}
+			respondPlatform(w, map[string]bool{"deleted": true}, h.platform.DeleteDatabaseConnection(r.Context(), p, target, name))
 		default:
 			methodNotAllowed(w)
 		}
 		return
 	}
 	if len(parts) == 3 && parts[2] == "probe" && r.Method == http.MethodPost {
+		if !requireManagementOperation(w, target, platformadminapi.DatabaseCapability, "probe", true) {
+			return
+		}
 		if !requirePlatformRole(w, p, "platform.database.probe") {
 			return
 		}
-		value, err := h.platform.ProbeDatabaseConnection(r.Context(), p, name)
+		value, err := h.platform.ProbeDatabaseConnection(r.Context(), p, target, name)
 		respondPlatform(w, value, err)
 		return
 	}
@@ -306,6 +397,14 @@ func requirePlatformRole(w http.ResponseWriter, p portalapi.Principal, role stri
 		return true
 	}
 	writeError(w, http.StatusForbidden, "forbidden")
+	return false
+}
+
+func requireManagementOperation(w http.ResponseWriter, target portalapi.ManagementTarget, capability, operation string, write bool) bool {
+	if target.Allows(capability, operation, write) {
+		return true
+	}
+	writeError(w, http.StatusForbidden, "management_binding_forbidden")
 	return false
 }
 
@@ -346,6 +445,8 @@ func respondPlatform(w http.ResponseWriter, value any, err error) {
 		return
 	}
 	switch {
+	case errors.Is(err, portalapi.ErrForbidden):
+		writeError(w, http.StatusForbidden, "management_binding_forbidden")
 	case errors.Is(err, platformadminapi.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found")
 	case errors.Is(err, platformadminapi.ErrConflict):

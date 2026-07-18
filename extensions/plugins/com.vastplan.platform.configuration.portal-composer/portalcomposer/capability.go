@@ -25,7 +25,7 @@ func withCatalog(ctx context.Context, catalog Catalog) context.Context {
 func (s *Service) validateCatalog(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
 	catalog, _ := ctx.Value(catalogContextKey{}).(Catalog)
 	if catalog == nil {
-		catalog = s.catalog
+		catalog = s.artifactCatalog
 	}
 	if catalog == nil {
 		return fmt.Errorf("Portal Composer 未获得受信任制品目录")
@@ -36,7 +36,7 @@ func (s *Service) validateCatalog(ctx context.Context, tenantID string, spec por
 func (s *Service) materializeCatalog(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
 	catalog, _ := ctx.Value(catalogContextKey{}).(Catalog)
 	if catalog == nil {
-		catalog = s.catalog
+		catalog = s.artifactCatalog
 	}
 	if catalog == nil {
 		return fmt.Errorf("Portal Composer 未获得受信任制品目录")
@@ -88,7 +88,7 @@ func (c hostCatalog) call(ctx context.Context, tenantID string, spec portalapi.P
 
 func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext) error {
 	s.mu.Lock()
-	configured := s.stateFile != "" && s.profileConfigured
+	configured := s.stateFile != "" && s.catalogConfigured
 	s.mu.Unlock()
 	if configured {
 		return nil
@@ -101,15 +101,15 @@ func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *
 	if err := json.Unmarshal(raw, &stateFile); err != nil || strings.TrimSpace(stateFile) == "" {
 		return fmt.Errorf("%s 必须是非空 JSON 字符串", StateFileConfigKey)
 	}
-	profileRaw, err := readConfig(ctx, host, callCtx, PlatformProfileConfigKey)
+	catalogRaw, err := readConfig(ctx, host, callCtx, PlatformCatalogConfigKey)
 	if err != nil {
 		return err
 	}
-	var encodedProfile string
-	if err := json.Unmarshal(profileRaw, &encodedProfile); err != nil || strings.TrimSpace(encodedProfile) == "" {
-		return fmt.Errorf("%s 必须是非空 JSON 字符串", PlatformProfileConfigKey)
+	var encodedCatalog string
+	if err := json.Unmarshal(catalogRaw, &encodedCatalog); err != nil || strings.TrimSpace(encodedCatalog) == "" {
+		return fmt.Errorf("%s 必须是非空 JSON 字符串", PlatformCatalogConfigKey)
 	}
-	profile, err := frontendcompositionv1.ParsePlatformProfile([]byte(encodedProfile))
+	catalog, err := frontendcompositionv1.ParsePortalPlatformCatalog([]byte(encodedCatalog))
 	if err != nil {
 		return err
 	}
@@ -119,7 +119,7 @@ func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *
 	if err != nil {
 		return err
 	}
-	return s.BindPlatformProfile(profile)
+	return s.BindPlatformCatalog(catalog)
 }
 
 func readConfig(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, key string) ([]byte, error) {

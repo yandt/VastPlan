@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createBrowserPlatformAdminClient, type ArtifactRepositoryStatus, type PlatformAdminClient } from "@vastplan/platform-admin";
-import { usePortalUI, type FrontendPluginContext } from "@vastplan/portal-ui";
+import { managementServicesFor, usePortalUI, type FrontendPluginContext } from "@vastplan/portal-ui";
 
-export function ArtifactRepositoryView({ client: supplied }: { client?: PlatformAdminClient } = {}) {
-  const ui = usePortalUI();
-  const client = useMemo(() => supplied ?? createBrowserPlatformAdminClient(), [supplied]);
+export function ArtifactRepositoryView({ client }: { client: PlatformAdminClient }) {
+	const ui = usePortalUI();
   const [status, setStatus] = useState<ArtifactRepositoryStatus>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -22,7 +21,14 @@ export function ArtifactRepositoryView({ client: supplied }: { client?: Platform
 }
 
 export default {
-  register(context: FrontendPluginContext) {
-    context.addPage({ id: "platform.artifact-repository", path: "/settings/artifacts", title: "制品仓库", description: "查看可信制品服务运行状态", navigation: { id: "platform.artifact-repository", label: "制品仓库", zone: "settings", order: 50 }, slots: [{ id: "body", slot: "page.body.main", component: ArtifactRepositoryView }] });
-  },
+	register(context: FrontendPluginContext) {
+		const services = managementServicesFor(context.portal, "platform.artifacts.repository");
+		if (services.length === 0) throw new Error("Portal 未绑定 platform.artifacts.repository 服务");
+		for (const service of services) {
+			const client = createBrowserPlatformAdminClient(context.portal.id, service.id);
+			const suffix = services.length === 1 ? "" : `/${service.id}`;
+			const label = services.length === 1 ? "制品仓库" : `制品仓库 · ${service.label ?? service.id}`;
+			context.addPage({ id: `platform.artifact-repository.${service.id}`, path: `/settings/artifacts${suffix}`, title: label, description: "查看可信制品服务运行状态", navigation: { id: `platform.artifact-repository.${service.id}`, label, zone: "settings", order: 50 }, slots: [{ id: "body", slot: "page.body.main", component: () => <ArtifactRepositoryView client={client} /> }] });
+		}
+	},
 };

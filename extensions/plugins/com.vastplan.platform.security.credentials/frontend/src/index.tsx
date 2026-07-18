@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createBrowserPlatformAdminClient, type CredentialMetadata, type PlatformAdminClient } from "@vastplan/platform-admin";
-import { jsonSchemaDialect, usePortalUI, type FormSchema, type FrontendPluginContext } from "@vastplan/portal-ui";
+import { jsonSchemaDialect, managementServicesFor, usePortalUI, type FormSchema, type FrontendPluginContext } from "@vastplan/portal-ui";
 
 const schema: FormSchema = {
   id: "platform-credential.v1",
@@ -16,9 +16,8 @@ const schema: FormSchema = {
 
 type Editor = { name?: string; value?: string };
 
-export function CredentialsView({ client: supplied }: { client?: PlatformAdminClient } = {}) {
-  const ui = usePortalUI();
-  const client = useMemo(() => supplied ?? createBrowserPlatformAdminClient(), [supplied]);
+export function CredentialsView({ client }: { client: PlatformAdminClient }) {
+	const ui = usePortalUI();
   const [items, setItems] = useState<CredentialMetadata[]>([]);
   const [editor, setEditor] = useState<Editor>({});
   const [busy, setBusy] = useState(false);
@@ -69,7 +68,14 @@ function formatTime(value: unknown): string { return typeof value === "string" &
 function message(cause: unknown): string { return cause instanceof Error ? cause.message : "凭证请求失败"; }
 
 export default {
-  register(context: FrontendPluginContext) {
-    context.addPage({ id: "platform.credentials", path: "/settings/credentials", title: "凭证引用", description: "管理不返回明文的凭证元数据", navigation: { id: "platform.credentials", label: "凭证引用", zone: "settings", order: 30 }, slots: [{ id: "body", slot: "page.body.main", component: CredentialsView }] });
-  },
+	register(context: FrontendPluginContext) {
+		const services = managementServicesFor(context.portal, "platform.credentials");
+		if (services.length === 0) throw new Error("Portal 未绑定 platform.credentials 服务");
+		for (const service of services) {
+			const client = createBrowserPlatformAdminClient(context.portal.id, service.id);
+			const suffix = services.length === 1 ? "" : `/${service.id}`;
+			const label = services.length === 1 ? "凭证引用" : `凭证引用 · ${service.label ?? service.id}`;
+			context.addPage({ id: `platform.credentials.${service.id}`, path: `/settings/credentials${suffix}`, title: label, description: "管理不返回明文的凭证元数据", navigation: { id: `platform.credentials.${service.id}`, label, zone: "settings", order: 30 }, slots: [{ id: "body", slot: "page.body.main", component: () => <CredentialsView client={client} /> }] });
+		}
+	},
 };

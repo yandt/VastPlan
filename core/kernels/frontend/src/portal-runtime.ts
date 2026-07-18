@@ -1,4 +1,4 @@
-import type { DesignSystemAdapter, FrontendPluginContext, PortalRegisteredPage, ShellCompositionAdapter, ShellLayoutAdapter, UICapability } from "@vastplan/portal-ui";
+import type { DesignSystemAdapter, FrontendPluginContext, PortalManagementService, PortalRegisteredPage, ShellCompositionAdapter, ShellLayoutAdapter, UICapability } from "@vastplan/portal-ui";
 
 export interface PluginRef {
   id: string;
@@ -22,7 +22,13 @@ export interface PortalSpec {
   designSystem: DesignSystemSelection;
   composition: ShellCompositionSelection;
   layout: ShellLayoutSelection;
-  plugins: PluginRef[];
+  plugins: readonly PluginRef[];
+  management: {
+    tenantId: string;
+    portalId: string;
+    platformProfile: CompositionRef;
+    services: readonly PortalManagementService[];
+  };
   resolution: PortalResolution;
 }
 
@@ -33,9 +39,11 @@ export interface CompositionRef {
 }
 
 export interface PortalResolution {
+  platformCatalog: CompositionRef;
   platformProfile: CompositionRef;
   applicationComposition: CompositionRef;
-  pluginOrigins: Record<string, "platform-profile" | "application">;
+  managementBindingDigest: string;
+  pluginOrigins: Readonly<Record<string, "platform-profile" | "application">>;
 }
 
 export interface RemoteProvenance {
@@ -129,7 +137,7 @@ export class PortalRuntime {
     const seenPaths = new Set<string>();
     const seenNavigationIDs = new Set<string>();
     const seenSlotIDs = new Set<string>();
-    const portalSnapshot = Object.freeze({ ...portal, plugins: [...portal.plugins] });
+    const portalSnapshot = snapshotPortal(portal);
 
     for (const ref of portal.plugins) {
       if ([portal.designSystem, portal.composition, portal.layout].some((foundation) => samePlugin(ref, foundation))) {
@@ -174,7 +182,7 @@ export class PortalRuntime {
     if (!Number.isSafeInteger(portal.revision) || portal.revision <= 0 || !portal.id || !portal.tenantId || !portal.route.startsWith("/")) {
       throw new PortalAssemblyError("PORTAL_INVALID", "Portal 必须包含 revision、ID、租户和绝对根路由");
     }
-    const refs = [portal.resolution.platformProfile, portal.resolution.applicationComposition];
+    const refs = [portal.resolution.platformCatalog, portal.resolution.platformProfile, portal.resolution.applicationComposition];
     if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
       throw new PortalAssemblyError("RESOLUTION_INVALID", "Portal 输入解析锁无效");
     }
@@ -187,6 +195,31 @@ export class PortalRuntime {
         Object.keys(portal.resolution.pluginOrigins).length !== pluginIDs.size ||
         [...pluginIDs].some((id) => portal.resolution.pluginOrigins[id] === undefined)) {
       throw new PortalAssemblyError("ORIGIN_LOCK_INVALID", "Portal 插件来源锁缺失或设计系统并非平台基线");
+    }
+    if (portal.management.tenantId !== portal.tenantId || portal.management.portalId !== portal.id ||
+        !sameCompositionRef(portal.management.platformProfile, portal.resolution.platformProfile) ||
+        !/^[a-f0-9]{64}$/.test(portal.resolution.managementBindingDigest) || portal.management.services.length === 0) {
+      throw new PortalAssemblyError("MANAGEMENT_BINDING_INVALID", "Portal 管理绑定与解析锁不一致");
+    }
+    const serviceIDs = new Set<string>();
+    const serviceTargets = new Set<string>();
+    for (const service of portal.management.services) {
+      const target = `${service.logicalService}\u0000${service.routingDomain}`;
+      if (!managementName(service.id) || !managementName(service.logicalService) || !managementName(service.routingDomain) ||
+          serviceIDs.has(service.id) || serviceTargets.has(target) || service.capabilities.length === 0) {
+        throw new PortalAssemblyError("MANAGEMENT_SERVICE_INVALID", `Portal 管理服务重复或无效: ${service.id}`);
+      }
+      serviceIDs.add(service.id);
+      serviceTargets.add(target);
+      const capabilities = new Set<string>();
+      for (const grant of service.capabilities) {
+        const operations = [...(grant.read ?? []), ...(grant.write ?? [])];
+        if (!managementName(grant.capability) || capabilities.has(grant.capability) || operations.length === 0 ||
+            operations.some((operation) => !managementName(operation)) || new Set(operations).size !== operations.length) {
+          throw new PortalAssemblyError("MANAGEMENT_GRANT_INVALID", `Portal 管理授权无效: ${service.id}/${grant.capability}`);
+        }
+        capabilities.add(grant.capability);
+      }
     }
   }
 
@@ -204,6 +237,31 @@ function requiredModule(modules: ReadonlyMap<string, FrontendPluginModule>, ref:
 }
 
 function moduleKey(ref: PluginRef): string { return `${ref.id}@${ref.version}/${ref.channel ?? "stable"}`; }
+
+function managementName(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value) && value !== "*";
+}
+
+function sameCompositionRef(left: CompositionRef, right: CompositionRef): boolean {
+  return left.id === right.id && left.revision === right.revision && left.digest === right.digest;
+}
+
+function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
+  const services = portal.management.services.map((service) => Object.freeze({
+    ...service,
+    capabilities: Object.freeze(service.capabilities.map((grant) => Object.freeze({
+      ...grant,
+      read: grant.read === undefined ? undefined : Object.freeze([...grant.read]),
+      write: grant.write === undefined ? undefined : Object.freeze([...grant.write]),
+    }))),
+  }));
+  return Object.freeze({
+    ...portal,
+    plugins: Object.freeze(portal.plugins.map((ref) => Object.freeze({ ...ref }))),
+    management: Object.freeze({ ...portal.management, services: Object.freeze(services) }),
+    resolution: Object.freeze({ ...portal.resolution, pluginOrigins: Object.freeze({ ...portal.resolution.pluginOrigins }) }),
+  });
+}
 
 export class PortalAssemblyError extends Error {
   public constructor(public readonly code: string, message: string) {

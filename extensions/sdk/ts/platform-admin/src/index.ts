@@ -59,7 +59,10 @@ export interface BootstrapJob {
 }
 
 export class PlatformAdminClient {
-  public constructor(private readonly fetcher: PlatformFetch, private readonly basePath = "/v1/platform", private readonly csrfPath = "/v1/csrf") {}
+	private readonly basePath: string;
+	public constructor(private readonly fetcher: PlatformFetch, portalID: string, serviceID: string, private readonly csrfPath = "/v1/csrf") {
+		this.basePath = `/v1/portals/${segment(portalID)}/platform/services/${segment(serviceID)}`;
+	}
 
   public listSettings(prefix = ""): Promise<Setting[]> { return this.get(`${this.basePath}/settings${query({ prefix })}`); }
   public putSetting(key: string, value: unknown, ifVersion?: number): Promise<Setting> {
@@ -123,9 +126,9 @@ export class PlatformAdminClient {
   }
 }
 
-export function createBrowserPlatformAdminClient(): PlatformAdminClient {
-  const fetcher: PlatformFetch = (input, init) => globalThis.fetch(input, init as RequestInit);
-  return new PlatformAdminClient(fetcher);
+export function createBrowserPlatformAdminClient(portalID: string, serviceID: string): PlatformAdminClient {
+	const fetcher: PlatformFetch = (input, init) => globalThis.fetch(input, init as RequestInit);
+	return new PlatformAdminClient(fetcher, portalID, serviceID);
 }
 
 export class PlatformAdminError extends Error {
