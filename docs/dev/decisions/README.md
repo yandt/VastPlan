@@ -102,3 +102,4 @@
 - [ADR-0069 Linux SSH 首次引导与 Node Agent 接管](ADR-0069-SSH首次引导与Node-Agent接管.md)
 - [ADR-0070 Deployment Manager 与可信引导执行边界](ADR-0070-Deployment-Manager与可信引导执行边界.md)
 - [ADR-0071 签名 Node Lease 与可信就绪判定](ADR-0071-签名Node-Lease与可信就绪判定.md)
+- [ADR-0072 CSP 安全的浏览器 JSON Schema 校验](ADR-0072-CSP安全JSON-Schema校验.md)

@@ -545,7 +545,7 @@ func startClusterNode(t *testing.T, server *natsserver.Server, buckets controlpl
 		}},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{TenantID: "acme", Deployment: "prod", AllowUnattested: true})
+	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{TenantID: "acme", Deployment: "mesh", AllowUnattested: true})
 	if err != nil {
 		cancel()
 		_ = runtime.Close()

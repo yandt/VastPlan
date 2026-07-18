@@ -7,7 +7,7 @@
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "提供租户隔离、版本化且可审计的全局平台设置；单活写入由 leader fencing 保证",
-  "engines": { "backend": "^1.0", "frontend": "^1.0" },
+  "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "capabilities": {
     "kernelServices": ["kernel.config.get"],
     "credentials": [],

@@ -35,7 +35,7 @@ import {
   IconSettings,
 } from "./arco-components";
 import { useMemo, useRef } from "react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type {
   ButtonProps,
   CommandItem,
@@ -102,9 +102,10 @@ function Grid({ columns = 1, gap = "md", children }: GridProps) {
   return <ArcoGrid cols={columns} rowGap={gapPixels[gap]} colGap={gapPixels[gap]}>{children}</ArcoGrid>;
 }
 
-function GridItem({ span = 1, children }: GridItemProps) {
-  return <ArcoGrid.GridItem span={span}>{children}</ArcoGrid.GridItem>;
-}
+// Arco Grid only retains direct children carrying its private GridItem marker.
+// A wrapper component looks equivalent in JSX but is silently filtered out,
+// so expose the native item through the framework-neutral contract.
+const GridItem = ArcoGrid.GridItem as unknown as ComponentType<GridItemProps>;
 
 function renderMenuItems(items: MenuItem[], parentDisabled = false): ReactNode[] {
   return items.map((item) => item.children?.length

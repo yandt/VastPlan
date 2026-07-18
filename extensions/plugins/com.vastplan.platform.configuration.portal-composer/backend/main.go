@@ -15,7 +15,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化 Portal Composer 服务失败: %v", err)
 	}
-	p := sdk.New(portalcomposer.PluginID, portalcomposer.PluginVersion, map[string]string{"backend": "^1.0"})
+	p := sdk.New(portalcomposer.PluginID, portalcomposer.PluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(portalcomposer.Contribution(service))
 	if err := p.Serve(); err != nil {
 		log.Fatalf("Portal Composer 插件退出: %v", err)

@@ -7,7 +7,7 @@
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "engines": { "backend": "^1.0" },
+  "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "subject.id", "authorization.roles", "authorization.admin", "trace", "request.deadline", "propagation.callPath"] },
   "runtime": { "instancePolicy": "per-kernel", "stateModel": "local-ephemeral", "visibility": "local", "routing": "direct" },

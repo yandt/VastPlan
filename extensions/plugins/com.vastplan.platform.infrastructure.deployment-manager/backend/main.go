@@ -14,7 +14,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化 deployment-manager 失败: %v", err)
 	}
-	plugin := sdk.New(deploymentmanager.PluginID, deploymentmanager.PluginVersion, map[string]string{"backend": "^1.0"})
+	plugin := sdk.New(deploymentmanager.PluginID, deploymentmanager.PluginVersion, map[string]string{"backend": "^0.1"})
 	plugin.Contribute(deploymentmanager.Contribution(service))
 	if err := plugin.Serve(); err != nil {
 		log.Fatalf("deployment-manager 退出: %v", err)

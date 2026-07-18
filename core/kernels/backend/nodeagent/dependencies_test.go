@@ -59,3 +59,20 @@ func TestValidateInstalledPoliciesRejectsVisibilityElevation(t *testing.T) {
 		t.Fatal("部署不得把 manifest 的 cluster capability 提升为 global")
 	}
 }
+
+func TestValidateInstalledPoliciesAllowsLocalPermissionAuxiliary(t *testing.T) {
+	deploymentPolicy := servicemodel.Normalize(servicemodel.Policy{
+		InstancePolicy: "leader", StateModel: "leader-owned", Visibility: "cluster", Routing: "leader", RoutingDomain: "platform",
+	})
+	plugins := []InstalledPlugin{
+		{ID: "settings", Contract: PluginRuntimeContract{Contributions: []pluginv1.RuntimeContribution{{
+			ExtensionPoint: "tool.package", ID: "platform.settings", InstancePolicy: "leader", StateModel: "leader-owned", Visibility: "cluster", Routing: "leader", RoutingDomain: "platform",
+		}}}},
+		{ID: "platform-admin-policy", Contract: PluginRuntimeContract{Contributions: []pluginv1.RuntimeContribution{{
+			ExtensionPoint: "permission.checker", ID: "platform.admin", InstancePolicy: "per-kernel", StateModel: "local-ephemeral", Visibility: "local", Routing: "direct",
+		}}}},
+	}
+	if err := validateInstalledPolicies(deploymentPolicy, plugins); err != nil {
+		t.Fatalf("本地权限辅助插件应允许与集群 service unit 共置: %v", err)
+	}
+}

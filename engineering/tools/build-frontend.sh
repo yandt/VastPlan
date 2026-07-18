@@ -17,9 +17,24 @@ common=(--bundle --format=esm --platform=browser --target=es2022 --legal-comment
 shared=(--external:react --external:react/jsx-runtime --external:react-dom --external:react-dom/client --external:@vastplan/portal-ui --external:@vastplan/ui-contract)
 
 pnpm exec esbuild core/kernels/frontend/src/browser.tsx "${common[@]}" "${shared[@]}" --outfile="$ASSETS/portal-kernel.js"
-pnpm exec esbuild core/kernels/frontend/src/vendor/react.ts "${common[@]}" --outfile="$VENDOR/react.js"
-pnpm exec esbuild core/kernels/frontend/src/vendor/react-jsx-runtime.ts "${common[@]}" --outfile="$VENDOR/react-jsx-runtime.js"
-pnpm exec esbuild core/kernels/frontend/src/vendor/react-dom.ts "${common[@]}" --external:react --outfile="$VENDOR/react-dom.js"
+pnpm exec esbuild core/kernels/frontend/src/vendor/react-stack.ts "${common[@]}" --outfile="$VENDOR/react-stack.js"
+pnpm exec esbuild core/kernels/frontend/src/vendor/react.ts "${common[@]}" --external:./react-stack.js --outfile="$VENDOR/react.js"
+pnpm exec esbuild core/kernels/frontend/src/vendor/react-jsx-runtime.ts "${common[@]}" --external:./react-stack.js --outfile="$VENDOR/react-jsx-runtime.js"
+pnpm exec esbuild core/kernels/frontend/src/vendor/react-dom.ts "${common[@]}" --external:./react-stack.js --outfile="$VENDOR/react-dom.js"
+node --no-warnings --input-type=module -e '
+  import { pathToFileURL } from "node:url";
+  const root = pathToFileURL(process.argv[1]).href;
+  const react = await import(new URL("react.js", root));
+  const runtime = await import(new URL("react-jsx-runtime.js", root));
+  const dom = await import(new URL("react-dom.js", root));
+  const missing = [
+    [react, "useState"], [runtime, "Fragment"], [runtime, "jsx"],
+    [runtime, "jsxs"], [dom, "createRoot"], [dom, "createPortal"],
+  ].filter(([module, name]) => typeof module[name] === "undefined").map(([, name]) => name);
+  if (missing.length > 0) {
+    throw new Error(`React ESM 适配产物缺少导出: ${missing.join(", ")}`);
+  }
+' "$VENDOR/"
 pnpm exec esbuild core/kernels/frontend/src/vendor/ui-contract.ts "${common[@]}" --outfile="$VENDOR/ui-contract.js"
 pnpm exec esbuild core/kernels/frontend/src/vendor/portal-ui.ts "${common[@]}" --external:react --external:@vastplan/ui-contract --outfile="$VENDOR/portal-ui.js"
 

@@ -1,41 +1,5 @@
-import React, {
-  Children,
-  Component,
-  Fragment,
-  Profiler,
-  PureComponent,
-  StrictMode,
-  Suspense,
-  cloneElement,
-  createContext,
-  createElement,
-  createFactory,
-  createRef,
-  forwardRef,
-  isValidElement,
-  lazy,
-  memo,
-  startTransition,
-  useCallback,
-  useContext,
-  useDebugValue,
-  useDeferredValue,
-  useEffect,
-  useId,
-  useImperativeHandle,
-  useInsertionEffect,
-  useLayoutEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  useTransition,
-  version,
-} from "react";
-
-export default React;
 export {
+  React as default,
   Children,
   Component,
   Fragment,
@@ -69,4 +33,4 @@ export {
   useSyncExternalStore,
   useTransition,
   version,
-};
+} from "./react-stack.js";

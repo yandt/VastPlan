@@ -374,11 +374,13 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, callCtx *contractv
 }
 
 func Descriptor() []byte {
-	raw, err := json.Marshal(map[string]any{"title": "全局设置", "subcommands": []map[string]string{{"name": "get", "description": "读取一个设置"}, {"name": "list", "description": "按前缀列出设置"}, {"name": "put", "description": "写入设置"}, {"name": "delete", "description": "删除设置"}, {"name": "changesSince", "description": "读取设置变更"}}})
-	if err != nil {
-		panic(err)
-	}
-	return raw
+	return []byte(`{"title":"全局设置","subcommands":[
+		{"name":"get","description":"读取一个设置","paramsSchema":{"type":"object","properties":{"key":{"type":"string"}},"required":["key"]}},
+		{"name":"list","description":"按前缀列出设置","paramsSchema":{"type":"object","properties":{"prefix":{"type":"string"}}}},
+		{"name":"put","description":"以可选版本前置条件写入设置","paramsSchema":{"type":"object","properties":{"key":{"type":"string"},"value":{},"ifVersion":{"type":"integer","minimum":0}},"required":["key","value"]}},
+		{"name":"delete","description":"以可选版本前置条件删除设置","paramsSchema":{"type":"object","properties":{"key":{"type":"string"},"ifVersion":{"type":"integer","minimum":0}},"required":["key"]}},
+		{"name":"changesSince","description":"读取指定版本后的变更","paramsSchema":{"type":"object","properties":{"version":{"type":"integer","minimum":0}},"required":["version"]}}
+	]}`)
 }
 
 func Contribution(service *Service) sdk.Contribution {

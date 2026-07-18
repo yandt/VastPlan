@@ -75,7 +75,7 @@ func main() {
 		}
 	}()
 
-	p := sdk.New(pluginID, pluginVersion, map[string]string{"backend": "^1.0"})
+	p := sdk.New(pluginID, pluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage, ID: "platform.artifacts.repository",
 		Descriptor: []byte(`{"title":"制品仓库状态","subcommands":[{"name":"status","description":"读取仓库运行状态"}]}`),

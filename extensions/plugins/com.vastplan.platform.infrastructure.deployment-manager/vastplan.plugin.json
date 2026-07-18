@@ -7,7 +7,7 @@
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "保存非敏感节点计划和首次引导审批状态；凭证解析与 SSH 执行仅由可信内核完成",
-  "engines": { "backend": "^1.0" },
+  "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": ["kernel.node.bootstrap", "kernel.node.readiness"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {

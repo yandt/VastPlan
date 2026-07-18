@@ -6,11 +6,11 @@
 
 功能插件只能从 `@vastplan/portal-ui` 获取语义化组件与 hooks，不能直接导入 Arco、修改全局 CSS 或管理顶级弹窗栈。Portal 内核在执行远程模块前验证该插件为已签名第一方制品、`uiContract` 兼容且基础 UI 能力完整。Arco 的 Overlay holder 位于当前 Portal Shadow DOM 内，不使用全局 `document.body` 服务。
 
-动态表单在插件内部使用 RJSF 6 + AJV 8，接收 JSON Schema Draft 7 与可选 `uiSchema`。插件提供 Arco 文本、多行、数字、布尔、枚举/多选、日期、对象、数组、组合选择、增删排序、错误摘要和自定义凭证引用 widget；默认值、组合、条件与同步校验均遵循标准 JSON Schema。服务端校验通过可取消的异步 validator 注入。
+动态表单在插件内部使用 RJSF 6 + CSP 安全的解释式校验器，接收 JSON Schema Draft 7 与可选 `uiSchema`。插件提供 Arco 文本、多行、数字、布尔、枚举/多选、日期、对象、数组、组合选择、增删排序、错误摘要和自定义凭证引用 widget；默认值、组合、条件与同步校验均遵循标准 JSON Schema。服务端校验通过可取消的异步 validator 注入，浏览器无需 `unsafe-eval`。
 
 凭证字段必须同时声明 `format: vastplan-credential-ref` 和 `writeOnly: true`，值只能是 `credential://...` 引用；`ui:widget: secretRef` 只控制 Arco 呈现，不是后端放行依据。表单禁止远程 `$ref`，公共 Portal SDK 不暴露 RJSF 或 Arco 类型。
 
-Arco 采用编译期按需加载：`arco-components.ts` 只暴露实际使用的组件和图标直接 ESM 入口，`arco-styles.ts` 只合并这些组件的传递样式闭包。插件仍构建为一个可签名 ESM，不产生运行时未锁定 chunk。`pnpm run build:frontend:plugins` 会拒绝组件与样式不一致、全量 Arco 入口或超过 1,600,000 字节预算的产物。
+Arco 采用编译期按需加载：`arco-components.ts` 只暴露实际使用的组件和图标直接 ESM 入口，`arco-styles.ts` 只合并这些组件的传递样式闭包。插件仍构建为一个可签名 ESM，不产生运行时未锁定 chunk。`pnpm run build:frontend:plugins` 会拒绝组件与样式不一致、全量 Arco 入口或超过 1,700,000 字节预算的产物。
 
 ```bash
 pnpm --filter @vastplan/design-system-arco typecheck

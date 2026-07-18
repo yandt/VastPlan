@@ -7,7 +7,7 @@
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "在全局设置服务启动前提供本地、无状态、默认拒绝的最小权限基线",
-  "engines": { "backend": "^1.0" },
+  "engines": { "backend": "^0.1" },
 
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["caller", "authorization.admin"], "optional": ["scope.tenant", "scene", "subject.id", "authorization.roles", "trace", "request.deadline", "propagation.callPath"] },

@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	p := sdk.New(policy.PluginID, policy.PluginVersion, map[string]string{"backend": "^1.0"})
+	p := sdk.New(policy.PluginID, policy.PluginVersion, map[string]string{"backend": "^0.1"})
 	descriptor, _ := json.Marshal(extpoint.CheckerDescriptor{Title: "平台管理角色访问策略", Applies: &extpoint.Applies{}})
 	p.Contribute(sdk.Contribution{ExtensionPoint: extpoint.PermissionChecker, ID: policy.Capability, Priority: 1000, Descriptor: descriptor, Handlers: map[string]sdk.Handler{"check": func(ctx context.Context, _ sdk.Host, c *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
 		return policy.Check(ctx, c, raw)

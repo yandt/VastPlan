@@ -321,7 +321,7 @@ func TestArch_TopLevelDirectoriesAreClosed(t *testing.T) {
 	allowed := map[string]bool{
 		"core": true, "extensions": true, "contracts": true, "engineering": true, "docs": true,
 		".git": true, ".github": true, ".githooks": true, ".claude": true, ".codex": true,
-		".gstack": true, ".obsidian": true, ".pnpm-store": true,
+		".gstack": true, ".obsidian": true, ".pnpm-store": true, ".vastplan": true,
 		"bin": true, "graphify-out": true, "node_modules": true,
 	}
 	entries, err := os.ReadDir(repoRoot(t))

@@ -4,12 +4,46 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
+
+func TestDescriptorMatchesSignedManifest(t *testing.T) {
+	assertDescriptorMatchesManifest(t, Capability, Descriptor())
+}
+
+func assertDescriptorMatchesManifest(t *testing.T, capability string, descriptor []byte) {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, contribution := range contributions {
+		if contribution.ID != capability {
+			continue
+		}
+		var signed, runtime any
+		if json.Unmarshal(contribution.Descriptor, &signed) != nil || json.Unmarshal(descriptor, &runtime) != nil || !reflect.DeepEqual(signed, runtime) {
+			t.Fatalf("运行时 descriptor 与签名 Manifest 不一致\nsigned=%s\nruntime=%s", contribution.Descriptor, descriptor)
+		}
+		return
+	}
+	t.Fatalf("Manifest 未声明 capability %s", capability)
+}
 
 func testCallContext(tenant string) *contractv1.CallContext {
 	return &contractv1.CallContext{TenantId: tenant}

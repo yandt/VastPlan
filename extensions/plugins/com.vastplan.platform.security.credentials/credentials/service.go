@@ -373,8 +373,13 @@ func (s *Service) Handler(ctx context.Context, _ sdk.Host, call *contractv1.Call
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 }
 func Descriptor() []byte {
-	raw, _ := json.Marshal(map[string]any{"title": "凭证管理", "subcommands": []map[string]string{{"name": "put", "description": "保存凭证"}, {"name": "describe", "description": "读取元数据"}, {"name": "list", "description": "列出元数据"}, {"name": "rotate", "description": "轮换包裹密钥"}, {"name": "revoke", "description": "撤销凭证"}}})
-	return raw
+	return []byte(`{"title":"凭证管理","subcommands":[
+		{"name":"put","description":"以 Vault Transit 加密后保存凭证","paramsSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}},
+		{"name":"describe","description":"读取凭证元数据，不返回明文或密文","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
+		{"name":"list","description":"列出当前租户的凭证元数据","paramsSchema":{"type":"object","properties":{"prefix":{"type":"string"}}}},
+		{"name":"rotate","description":"通过 Vault Transit rewrap 轮换凭证包裹密钥","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
+		{"name":"revoke","description":"撤销凭证引用","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}
+	]}`)
 }
 func Contribution(s *Service) sdk.Contribution {
 	h := func(op string) sdk.Handler {

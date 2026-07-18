@@ -8,6 +8,7 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/compositioncore"
 )
 
@@ -61,7 +62,13 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 				return deploymentv2.Deployment{}, fmt.Errorf("平台插件 %q 不能同时作为本地 attachment 和独立 service", ref.ID)
 			}
 			if previousUnit := servicePluginUnits[ref.ID]; previousUnit != "" && previousUnit != unit.ID {
-				return deploymentv2.Deployment{}, fmt.Errorf("平台插件 %q 不能同时属于 service unit %q 和 %q", ref.ID, previousUnit, unit.ID)
+				reusable, err := reusableLocalPermissionPlugin(ref, artifacts)
+				if err != nil {
+					return deploymentv2.Deployment{}, err
+				}
+				if !reusable {
+					return deploymentv2.Deployment{}, fmt.Errorf("平台插件 %q 不能同时属于 service unit %q 和 %q", ref.ID, previousUnit, unit.ID)
+				}
 			}
 			if err := compositioncore.VerifyRef(selection(ref), compositioncommonv1.OriginPlatformProfile, platformRefs, artifacts, options); err != nil {
 				return deploymentv2.Deployment{}, fmt.Errorf("Platform Profile service %s: %w", unit.ID, err)
@@ -132,6 +139,37 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 		return deploymentv2.Deployment{}, fmt.Errorf("解析后的 Deployment 无效: %w", err)
 	}
 	return resolved, nil
+}
+
+// reusableLocalPermissionPlugin permits one exact, immutable authorization
+// plugin to guard multiple platform service hosts. It must contribute only
+// local permission checkers; a shared/cluster capability remains single-owner.
+func reusableLocalPermissionPlugin(ref deploymentv1.PluginRef, artifacts ArtifactReader) (bool, error) {
+	channel := ref.Channel
+	if channel == "" {
+		channel = "stable"
+	}
+	artifact, _, err := artifacts.Read(pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: channel})
+	if err != nil {
+		return false, fmt.Errorf("读取可复用本地权限插件 %s@%s/%s: %w", ref.ID, ref.Version, channel, err)
+	}
+	manifest, err := pluginv1.ParseManifest(artifact.Manifest)
+	if err != nil {
+		return false, fmt.Errorf("解析可复用本地权限插件 %s: %w", ref.ID, err)
+	}
+	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
+	if err != nil {
+		return false, fmt.Errorf("解析可复用本地权限插件 %s runtime: %w", ref.ID, err)
+	}
+	if len(contributions) == 0 {
+		return false, nil
+	}
+	for _, contribution := range contributions {
+		if !pluginv1.IsLocalPermissionAuxiliary(contribution) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func selection(ref deploymentv1.PluginRef) compositioncore.Selection {

@@ -15,7 +15,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化凭证服务失败: %v", err)
 	}
-	p := sdk.New(credentials.PluginID, credentials.PluginVersion, map[string]string{"backend": "^1.0"})
+	p := sdk.New(credentials.PluginID, credentials.PluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(credentials.Contribution(service))
 	if err := p.Serve(); err != nil {
 		log.Fatalf("凭证插件退出: %v", err)

@@ -3,12 +3,34 @@ package credentials
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 )
+
+func TestDescriptorMatchesSignedManifest(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var signed, runtime any
+	if len(contributions) != 1 || json.Unmarshal(contributions[0].Descriptor, &signed) != nil || json.Unmarshal(Descriptor(), &runtime) != nil || !reflect.DeepEqual(signed, runtime) {
+		t.Fatalf("运行时 descriptor 与签名 Manifest 不一致\nsigned=%s\nruntime=%s", contributions[0].Descriptor, Descriptor())
+	}
+}
 
 type fakeTransit struct{ encrypts, rewraps int }
 

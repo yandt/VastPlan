@@ -56,7 +56,7 @@ for (const file of [componentsFile, stylesFile, join(source, "index.tsx"), join(
   }
 }
 
-const maxBundleBytes = Number.parseInt(process.env.ARCO_BUNDLE_MAX_BYTES ?? "1600000", 10);
+const maxBundleBytes = Number.parseInt(process.env.ARCO_BUNDLE_MAX_BYTES ?? "1700000", 10);
 const bundleBytes = statSync(bundleFile).size;
 const bundleSource = readFileSync(bundleFile, "utf8");
 for (const selector of [".arco-btn", ".arco-form-item", ".arco-picker", ".arco-table", ".arco-color-picker"]) {

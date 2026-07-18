@@ -44,10 +44,10 @@ import type {
   WidgetProps,
   WrapIfAdditionalTemplateProps,
 } from "@rjsf/utils";
-import { customizeValidator } from "@rjsf/validator-ajv8";
 import { useEffect, useMemo, useState } from "react";
 import type { FormRendererProps, FormValidationIssue } from "@vastplan/portal-ui";
 import { jsonSchemaDialect } from "@vastplan/portal-ui";
+import { cspJSONSchemaValidator } from "./csp-json-schema-validator";
 
 type FormData = Record<string, unknown>;
 type FormContext = Readonly<Record<string, unknown>>;
@@ -55,16 +55,7 @@ type Schema = RJSFSchema;
 
 const emptyContext: FormContext = {};
 
-export const arcoJSONSchemaValidator = customizeValidator<FormData, Schema, FormContext>({
-  customFormats: {
-    "vastplan-credential-ref": /^credential:\/\/[A-Za-z0-9][A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]*$/,
-  },
-  ajvOptionsOverrides: {
-    allErrors: true,
-    strict: false,
-    loadSchema: undefined,
-  },
-});
+export const arcoJSONSchemaValidator = cspJSONSchemaValidator;
 
 function controlDisabled(props: Pick<WidgetProps, "disabled" | "readonly">): boolean {
   return Boolean(props.disabled || props.readonly);

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "revision": 1,
+  "id": "local-platform-management",
+  "target": { "kernel": "backend" },
+  "metadata": {
+    "name": "platform-management",
+    "tenant": "local"
+  },
+  "units": []
+}

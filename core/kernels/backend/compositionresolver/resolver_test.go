@@ -124,6 +124,30 @@ func TestResolveRejectsPlatformPluginWithConflictingTopology(t *testing.T) {
 	}
 }
 
+func TestResolveAllowsExactLocalPermissionPluginInMultiplePlatformServices(t *testing.T) {
+	profile, application, reader := baseInputs()
+	policyID := "com.vastplan.foundation.security.platform-admin-access-policy"
+	policyManifest := []byte(`{
+		"id":"com.vastplan.foundation.security.platform-admin-access-policy","name":"policy","description":"policy",
+		"version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
+		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct"},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{"permissionCheckers":[{"id":"platform.admin","service_role":"backend","title":"policy","priority":1000,"applies":{}}]}}
+	}`)
+	reader[policyID+"@1.0.0/stable"] = pluginv1.Artifact{PluginID: policyID, Version: "1.0.0", Channel: "stable", Manifest: policyManifest}
+	profile.Services = []deploymentv2.ServiceUnit{
+		{ID: "settings", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{ref(policyID)}},
+		{ID: "credentials", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{ref(policyID)}},
+	}
+	resolved, err := Resolve(profile, application, 1, reader, Options{})
+	if err != nil {
+		t.Fatalf("同一精确本地权限插件应可保护多个平台 unit: %v", err)
+	}
+	if len(resolved.Units) != 3 {
+		t.Fatalf("平台 unit 未完整保留: %+v", resolved.Units)
+	}
+}
+
 func TestDeploySampleIsResolverOutput(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..")
 	profile, err := backendcompositionv1.ParsePlatformProfileFile(filepath.Join(root, "engineering", "deploy", "platform-profile.json"))

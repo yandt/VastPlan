@@ -310,6 +310,20 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 	return out, nil
 }
 
+// IsLocalPermissionAuxiliary reports whether a contribution is a host-local
+// authorization guard that may be co-located with a service unit whose
+// schedulable capability uses a cluster policy. The exception is intentionally
+// narrow: arbitrary local tools must remain separate units and cannot use this
+// predicate to escape deployment-policy validation.
+func IsLocalPermissionAuxiliary(contribution RuntimeContribution) bool {
+	return contribution.ExtensionPoint == "permission.checker" &&
+		contribution.InstancePolicy == "per-kernel" &&
+		contribution.StateModel == "local-ephemeral" &&
+		contribution.Visibility == "local" &&
+		contribution.Routing == "direct" &&
+		contribution.RoutingDomain == ""
+}
+
 func runtimePolicies(manifest Manifest) (servicemodel.Policy, map[string]RuntimeCapabilityPolicy, error) {
 	if manifest.Runtime == nil {
 		return servicemodel.Normalize(servicemodel.Policy{}), nil, nil

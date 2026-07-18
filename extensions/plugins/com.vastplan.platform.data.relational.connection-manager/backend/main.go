@@ -173,14 +173,24 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	p := sdk.New(id, version, map[string]string{"backend": "^1.0"})
+	p := sdk.New(id, version, map[string]string{"backend": "^0.1"})
 	handler := func(op string) sdk.Handler {
 		return func(ctx context.Context, h sdk.Host, c *contractv1.CallContext, b []byte) (*contractv1.CallResult, []byte, error) {
 			return s.handle(ctx, h, c, b, op)
 		}
 	}
-	p.Contribute(sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: capability, Descriptor: []byte(`{"title":"数据库连接","subcommands":[{"name":"define","description":"定义连接"},{"name":"describe","description":"读取连接"},{"name":"list","description":"列出连接"},{"name":"remove","description":"删除连接"},{"name":"probe","description":"探测连接"}]}`), Handlers: map[string]sdk.Handler{"define": handler("define"), "describe": handler("describe"), "list": handler("list"), "remove": handler("remove"), "probe": handler("probe")}})
+	p.Contribute(sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: capability, Descriptor: descriptor(), Handlers: map[string]sdk.Handler{"define": handler("define"), "describe": handler("describe"), "list": handler("list"), "remove": handler("remove"), "probe": handler("probe")}})
 	if err := p.Serve(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func descriptor() []byte {
+	return []byte(`{"title":"数据库连接","subcommands":[
+		{"name":"define","description":"定义不含密码的连接引用","paramsSchema":{"type":"object","properties":{"name":{"type":"string"},"driver":{"type":"string"},"endpoint":{"type":"string"},"database":{"type":"string"},"credential":{"type":"string"}},"required":["name","driver","endpoint","credential"]}},
+		{"name":"describe","description":"读取连接定义","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
+		{"name":"list","description":"列出连接定义","paramsSchema":{"type":"object","properties":{}}},
+		{"name":"remove","description":"删除连接定义","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
+		{"name":"probe","description":"由可信宿主使用凭证探测连接","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}
+	]}`)
 }

@@ -716,8 +716,13 @@ func randomID() (string, error) {
 }
 
 func Descriptor() []byte {
-	raw, _ := json.Marshal(map[string]any{"title": "节点部署管理", "subcommands": []map[string]string{{"name": "listNodes", "description": "列出节点定义"}, {"name": "putNode", "description": "保存节点定义"}, {"name": "listBootstrapJobs", "description": "列出引导作业"}, {"name": "createBootstrap", "description": "申请首次引导"}, {"name": "approveBootstrap", "description": "审批并执行首次引导"}}})
-	return raw
+	return []byte(`{"title":"节点部署管理","subcommands":[
+		{"name":"listNodes","description":"列出当前租户的节点计划","paramsSchema":{"type":"object","properties":{}}},
+		{"name":"putNode","description":"以 CAS 保存不含明文凭证的节点计划","paramsSchema":{"type":"object","properties":{"id":{"type":"string"},"plan":{"type":"object"},"ifVersion":{"type":"integer","minimum":0}},"required":["id","plan"]}},
+		{"name":"listBootstrapJobs","description":"列出首次引导审批作业","paramsSchema":{"type":"object","properties":{}}},
+		{"name":"createBootstrap","description":"申请指定节点的首次引导","paramsSchema":{"type":"object","properties":{"nodeId":{"type":"string"}},"required":["nodeId"]}},
+		{"name":"approveBootstrap","description":"由不同审批人批准并触发可信内核引导","paramsSchema":{"type":"object","properties":{"jobId":{"type":"string"}},"required":["jobId"]}}
+	]}`)
 }
 
 func Contribution(service *Service) sdk.Contribution {

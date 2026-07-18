@@ -7,7 +7,7 @@
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "以经验证角色授权设置、凭证、数据库连接、制品状态和节点部署管理",
-  "engines": { "backend": "^1.0" },
+  "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["caller", "authorization.roles"], "optional": ["scope.tenant", "scene", "subject.id", "authorization.admin", "trace", "request.deadline", "propagation.callPath"] },
   "runtime": { "instancePolicy": "per-kernel", "stateModel": "local-ephemeral", "visibility": "local", "routing": "direct" },

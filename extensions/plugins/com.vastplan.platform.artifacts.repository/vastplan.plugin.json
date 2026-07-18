@@ -1,5 +1,5 @@
 {
-  "id":"com.vastplan.platform.artifacts.repository","name":"VastPlan 制品仓库服务","version":"0.2.0","publisher":"vastplan","license":"Apache-2.0","licenseFile":"LICENSE","noticeFile":"NOTICE","description":"以预置基础插件提供 HTTPS 制品发布与读取；内核仍独占制品验签和安装授权","engines":{"backend":"^1.0","frontend":"^1.0"},
+  "id":"com.vastplan.platform.artifacts.repository","name":"VastPlan 制品仓库服务","version":"0.2.0","publisher":"vastplan","license":"Apache-2.0","licenseFile":"LICENSE","noticeFile":"NOTICE","description":"以预置基础插件提供 HTTPS 制品发布与读取；内核仍独占制品验签和安装授权","engines":{"backend":"^0.1","frontend":"^1.0"},
   "capabilities":{"kernelServices":[],"credentials":[],"resources":[]},
   "contextAccess":{"optional":["scope.tenant","caller","scene","trace","request.deadline","propagation.callPath"]},
   "runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","routingDomain":"platform","provides":[{"extensionPoint":"tool.package","capability":"platform.artifacts.repository","visibility":"cluster","routing":"leader","routingDomain":"platform"}]},

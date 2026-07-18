@@ -83,7 +83,7 @@ func validateDeploymentContracts(deployment deploymentv2.Deployment, graph map[s
 					InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel,
 					Visibility: unit.Visibility, Routing: unit.Routing, RoutingDomain: unit.RoutingDomain,
 				}
-				if !servicemodel.Equal(contributionPolicy, unitPolicy) {
+				if !servicemodel.Equal(contributionPolicy, unitPolicy) && !pluginv1.IsLocalPermissionAuxiliary(contribution) {
 					return fmt.Errorf("unit %s 部署策略与签名清单 %s/%s 不一致", unit.ID, ref.ID, contribution.ID)
 				}
 				providers[contribution.ID] = append(providers[contribution.ID], capabilityProvider{

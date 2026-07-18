@@ -82,7 +82,7 @@ func validateInstalledPolicies(unit servicemodel.Policy, plugins []InstalledPlug
 			if err != nil {
 				return fmt.Errorf("插件 %s: %w", plugin.ID, err)
 			}
-			if !servicemodel.Equal(unit, policy) {
+			if !servicemodel.Equal(unit, policy) && !pluginv1.IsLocalPermissionAuxiliary(contribution) {
 				return fmt.Errorf("插件 %s 的贡献 %s/%s 运行策略与部署不一致: manifest=%+v deployment=%+v",
 					plugin.ID, contribution.ExtensionPoint, contribution.ID, policy, unit)
 			}

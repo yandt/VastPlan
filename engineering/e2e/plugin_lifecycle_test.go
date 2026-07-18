@@ -123,7 +123,7 @@ func toolTarget(capability, op string) *contractv1.CallTarget {
 	return &contractv1.CallTarget{ExtensionPoint: "tool.package", Capability: capability, Operation: &op}
 }
 
-func TestFirstPartyReferencePluginsSupportBackend1(t *testing.T) {
+func TestFirstPartyReferencePluginsSupportCurrentBackend(t *testing.T) {
 	plugins := []string{
 		"./extensions/plugins/com.vastplan.foundation.security.bootstrap-policy/backend",
 		"./extensions/plugins/com.vastplan.foundation.security.portal-access-policy/backend",
@@ -135,12 +135,12 @@ func TestFirstPartyReferencePluginsSupportBackend1(t *testing.T) {
 	for _, pluginPath := range plugins {
 		t.Run(filepath.Base(filepath.Dir(filepath.Dir(pluginPath))), func(t *testing.T) {
 			bin := buildPlugin(t, pluginPath)
-			host := newHost(t, "1.0.0")
+			host := newHost(t, "0.1.0")
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			process, err := host.Launch(ctx, bin)
 			if err != nil {
-				t.Fatalf("第一方参考插件必须通过 Backend 1.0 engines 握手: %v", err)
+				t.Fatalf("第一方参考插件必须通过当前 Backend engines 握手: %v", err)
 			}
 			if err := host.Close(process); err != nil {
 				t.Fatal(err)
@@ -151,7 +151,7 @@ func TestFirstPartyReferencePluginsSupportBackend1(t *testing.T) {
 
 func TestBootstrapPolicy_RealProcessEnforcesSettingsBaseline(t *testing.T) {
 	bin := buildPlugin(t, "./extensions/plugins/com.vastplan.foundation.security.bootstrap-policy/backend")
-	host := newHost(t, "1.0.0")
+	host := newHost(t, "0.1.0")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	process, err := host.Launch(ctx, bin)

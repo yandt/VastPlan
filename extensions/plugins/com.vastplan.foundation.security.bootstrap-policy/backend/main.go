@@ -5,14 +5,14 @@ import (
 	"context"
 	"log"
 
-	bootstrappolicy "cdsoft.com.cn/VastPlan/extensions/plugins/com.vastplan.foundation.security.bootstrap-policy/policy"
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	bootstrappolicy "cdsoft.com.cn/VastPlan/extensions/plugins/com.vastplan.foundation.security.bootstrap-policy/policy"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 func main() {
-	p := sdk.New(bootstrappolicy.PluginID, bootstrappolicy.PluginVersion, map[string]string{"backend": "^1.0"})
+	p := sdk.New(bootstrappolicy.PluginID, bootstrappolicy.PluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.PermissionChecker,
 		ID:             bootstrappolicy.WriteGuardID,

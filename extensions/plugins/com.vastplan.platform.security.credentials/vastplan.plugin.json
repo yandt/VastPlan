@@ -7,7 +7,7 @@
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "使用 Vault Transit/KMS 信封加密保存凭证密文；任何插件调用均不可读取凭证明文",
-  "engines": { "backend": "^1.0", "frontend": "^1.0" },
+  "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "capabilities": { "kernelServices": ["kernel.config.get"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {

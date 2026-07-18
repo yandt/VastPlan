@@ -20,6 +20,19 @@ describe("Arco portal UI adapter", () => {
     ]));
   });
 
+  it("preserves framework-neutral GridItem children through Arco Grid", () => {
+    const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.Grid, {
+      columns: 2,
+      children: [
+        createElement(arcoPortalUIComponents.GridItem, { key: "left", span: 1, children: "left" }),
+        createElement(arcoPortalUIComponents.GridItem, { key: "right", span: 1, children: "right" }),
+      ],
+    }));
+
+    expect(html).toContain("left");
+    expect(html).toContain("right");
+  });
+
   it("validates standard JSON Schema constraints and credential references through AJV", () => {
     const schema: RJSFSchema = {
       $schema: "http://json-schema.org/draft-07/schema#",

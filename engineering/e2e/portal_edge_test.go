@@ -102,7 +102,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 			"-interaction-broker-version", "0.1.0",
 			"-interaction-broker-state-file", interactionStateFile,
 			"-portal-assets", portalAssets,
-		}, "1.0.0", func(format string, args ...any) { t.Logf("[portal-edge] "+format, args...) })
+		}, "0.1.0", func(format string, args ...any) { t.Logf("[portal-edge] "+format, args...) })
 	}()
 	t.Cleanup(func() {
 		cancel()

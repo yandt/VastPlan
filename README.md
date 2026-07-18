@@ -16,9 +16,9 @@ VastPlan 已经完成一套**可运行、可扩展、可部署、可验证的 Ba
 |---|---|---|
 | Backend 微内核 | 目标代码路径已基本完成 | 插件宿主、协议、编排、寻址、安全、发布与工程门禁已落地 |
 | 插件机制 | 已完成 | 已有 4 个示例插件验证工具、权限、审计和 Hook 机制 |
-| 平台基础插件 | 首批已实现 | 全局设置、凭证、数据库连接和 HTTPS 制品仓库均已按插件边界提供；种子 Bundle 与 Edge 接入仍待完成 |
+| 平台基础插件 | 首批已实现 | 全局设置、凭证、数据库连接、HTTPS 制品仓库和节点部署均已按插件边界提供；生产级签名种子 Bundle 仍待完成 |
 | Backend 正式 1.0 | 待真实负载验证 | 版本仍为 `0.1.0`，Soak 已主动延期，不使用无代表性的空载结果 |
-| Portal 前端内核 | 基础骨架已实现 | 已有动态组合、UI 契约、设计系统插件和服务端权威解析接入；不包含具体业务页面 |
+| Portal 前端内核 | 管理闭环可试用 | 已有动态组合、UI 契约、Arco 设计系统、服务端权威解析和四个平台管理页面；不包含上层业务页面 |
 | 第三方插件 | 当前不开放 | 已预留三态全局策略和发布者级覆盖；真正隔离驱动仍是开放前置条件 |
 
 面向管理层和非技术人员的阶段成果说明见[当前系统开发成果](docs/dev/guides/当前系统开发成果.md)。
@@ -101,6 +101,24 @@ flowchart LR
 ./engineering/tools/test.sh          # 单元测试 + 架构守护
 ./engineering/tools/test.sh --e2e    # 再运行真实插件进程与多节点 E2E
 ```
+
+### 一键试用平台管理中心
+
+以下命令会在本机回环地址构建并启动完整开发组合，无需单独安装 NATS 或 Vault：
+
+```bash
+./engineering/tools/platform-dev.sh up
+```
+
+就绪后打开 <http://127.0.0.1:18080/operations>。查看状态、日志和停止服务：
+
+```bash
+./engineering/tools/platform-dev.sh status
+./engineering/tools/platform-dev.sh logs
+./engineering/tools/platform-dev.sh down
+```
+
+该入口包含开发身份注入、嵌入式 NATS 和 Vault 兼容桩，不等同于生产部署。完整边界见[本地平台管理中心指南](docs/dev/guides/本地平台管理中心.md)。
 
 ### 单节点自动装配
 
