@@ -1,0 +1,49 @@
+// Keep every Arco dependency behind direct ESM entry points. Importing from the
+// package barrel retains unrelated modules because Arco marks component styles as
+// side effects, which defeats tree shaking in the signed single-file plugin.
+export { default as Alert } from "@arco-design/web-react/es/Alert";
+export { default as Breadcrumb } from "@arco-design/web-react/es/Breadcrumb";
+export { default as Button } from "@arco-design/web-react/es/Button";
+export { default as Card } from "@arco-design/web-react/es/Card";
+export { default as ColorPicker } from "@arco-design/web-react/es/ColorPicker";
+export { default as ConfigProvider } from "@arco-design/web-react/es/ConfigProvider";
+export { default as DatePicker } from "@arco-design/web-react/es/DatePicker";
+export { default as Descriptions } from "@arco-design/web-react/es/Descriptions";
+export { default as Divider } from "@arco-design/web-react/es/Divider";
+export { default as Drawer } from "@arco-design/web-react/es/Drawer";
+export { default as Empty } from "@arco-design/web-react/es/Empty";
+export { default as Form } from "@arco-design/web-react/es/Form";
+export { default as Grid } from "@arco-design/web-react/es/Grid";
+export { default as Input } from "@arco-design/web-react/es/Input";
+export { default as InputNumber } from "@arco-design/web-react/es/InputNumber";
+export { default as Layout } from "@arco-design/web-react/es/Layout";
+export { default as Menu } from "@arco-design/web-react/es/Menu";
+export { default as Modal } from "@arco-design/web-react/es/Modal";
+export { default as Notification } from "@arco-design/web-react/es/Notification";
+export { default as Pagination } from "@arco-design/web-react/es/Pagination";
+export { default as Rate } from "@arco-design/web-react/es/Rate";
+export { default as Select } from "@arco-design/web-react/es/Select";
+export { default as Skeleton } from "@arco-design/web-react/es/Skeleton";
+export { default as Space } from "@arco-design/web-react/es/Space";
+export { default as Spin } from "@arco-design/web-react/es/Spin";
+export { default as Switch } from "@arco-design/web-react/es/Switch";
+export { default as Table } from "@arco-design/web-react/es/Table";
+export { default as Tabs } from "@arco-design/web-react/es/Tabs";
+export { default as Tag } from "@arco-design/web-react/es/Tag";
+export { default as TimePicker } from "@arco-design/web-react/es/TimePicker";
+export { default as Typography } from "@arco-design/web-react/es/Typography";
+
+export { default as IconCheckCircle } from "@arco-design/web-react/icon/react-icon/IconCheckCircle";
+export { default as IconClose } from "@arco-design/web-react/icon/react-icon/IconClose";
+export { default as IconCloseCircle } from "@arco-design/web-react/icon/react-icon/IconCloseCircle";
+export { default as IconCopy } from "@arco-design/web-react/icon/react-icon/IconCopy";
+export { default as IconDelete } from "@arco-design/web-react/icon/react-icon/IconDelete";
+export { default as IconDown } from "@arco-design/web-react/icon/react-icon/IconDown";
+export { default as IconEdit } from "@arco-design/web-react/icon/react-icon/IconEdit";
+export { default as IconExclamationCircle } from "@arco-design/web-react/icon/react-icon/IconExclamationCircle";
+export { default as IconInfoCircle } from "@arco-design/web-react/icon/react-icon/IconInfoCircle";
+export { default as IconMenu } from "@arco-design/web-react/icon/react-icon/IconMenu";
+export { default as IconPlus } from "@arco-design/web-react/icon/react-icon/IconPlus";
+export { default as IconSearch } from "@arco-design/web-react/icon/react-icon/IconSearch";
+export { default as IconSettings } from "@arco-design/web-react/icon/react-icon/IconSettings";
+export { default as IconUp } from "@arco-design/web-react/icon/react-icon/IconUp";

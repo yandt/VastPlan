@@ -13,14 +13,12 @@ import {
   Switch,
   TimePicker,
   Typography,
-} from "@arco-design/web-react";
-import {
   IconCopy,
   IconDelete,
   IconDown,
   IconPlus,
   IconUp,
-} from "@arco-design/web-react/icon";
+} from "./arco-components";
 import RJSFForm from "@rjsf/core";
 import {
   canExpand,

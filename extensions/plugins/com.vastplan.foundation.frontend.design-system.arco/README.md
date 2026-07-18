@@ -10,9 +10,12 @@
 
 凭证字段必须同时声明 `format: vastplan-credential-ref` 和 `writeOnly: true`，值只能是 `credential://...` 引用；`ui:widget: secretRef` 只控制 Arco 呈现，不是后端放行依据。表单禁止远程 `$ref`，公共 Portal SDK 不暴露 RJSF 或 Arco 类型。
 
+Arco 采用编译期按需加载：`arco-components.ts` 只暴露实际使用的组件和图标直接 ESM 入口，`arco-styles.ts` 只合并这些组件的传递样式闭包。插件仍构建为一个可签名 ESM，不产生运行时未锁定 chunk。`pnpm run build:frontend:plugins` 会拒绝组件与样式不一致、全量 Arco 入口或超过 1,600,000 字节预算的产物。
+
 ```bash
 pnpm --filter @vastplan/design-system-arco typecheck
 pnpm --filter @vastplan/design-system-arco test
+pnpm run build:frontend:plugins
 ```
 
-详见《[前端门户内核](../../../docs/dev/architecture/前端门户内核.md)》、[ADR-0052](../../../docs/dev/decisions/ADR-0052-前端门户内核与多UI设计系统插件.md)、[ADR-0064](../../../docs/dev/decisions/ADR-0064-Portal语义组件契约与动态表单运行时.md) 与 [ADR-0065](../../../docs/dev/decisions/ADR-0065-通用JSON-Schema表单与Arco主题适配.md)。
+详见《[前端门户内核](../../../docs/dev/architecture/前端门户内核.md)》、[ADR-0052](../../../docs/dev/decisions/ADR-0052-前端门户内核与多UI设计系统插件.md)、[ADR-0064](../../../docs/dev/decisions/ADR-0064-Portal语义组件契约与动态表单运行时.md)、[ADR-0065](../../../docs/dev/decisions/ADR-0065-通用JSON-Schema表单与Arco主题适配.md) 与 [ADR-0066](../../../docs/dev/decisions/ADR-0066-Arco按需构建与单文件制品边界.md)。

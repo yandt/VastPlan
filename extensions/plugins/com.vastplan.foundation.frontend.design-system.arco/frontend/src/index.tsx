@@ -7,6 +7,7 @@ import {
   Descriptions as ArcoDescriptions,
   Divider as ArcoDivider,
   Drawer as ArcoDrawer,
+  Empty,
   Grid as ArcoGrid,
   Input,
   Layout,
@@ -14,7 +15,6 @@ import {
   Modal,
   Notification,
   Pagination as ArcoPagination,
-  Result,
   Skeleton as ArcoSkeleton,
   Space,
   Spin,
@@ -22,8 +22,6 @@ import {
   Tabs as ArcoTabs,
   Tag,
   Typography,
-} from "@arco-design/web-react";
-import {
   IconCheckCircle,
   IconClose,
   IconCloseCircle,
@@ -35,8 +33,7 @@ import {
   IconPlus,
   IconSearch,
   IconSettings,
-} from "@arco-design/web-react/icon";
-import arcoCSS from "@arco-design/web-react/dist/css/arco.css";
+} from "./arco-components";
 import { useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import type {
@@ -57,6 +54,7 @@ import type {
   TableProps,
 } from "@vastplan/portal-ui";
 import { PortalUIProvider } from "@vastplan/portal-ui";
+import { arcoCSS } from "./arco-styles";
 import { ArcoJSONSchemaForm } from "./json-schema-form";
 import { scopeDocumentCSS } from "./scope-css";
 
@@ -124,7 +122,7 @@ function CommandPalette({ open, commands, query, onQueryChange, onClose }: { ope
   return <Modal visible={open} title="命令" footer={null} onCancel={onClose} unmountOnExit>
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
       <Input autoFocus value={query} placeholder="搜索命令" onChange={onQueryChange} />
-      {visible.length === 0 ? <Result status="404" title="没有匹配命令" /> : visible.map((command) => <Button
+      {visible.length === 0 ? <Empty description="没有匹配命令" /> : visible.map((command) => <Button
         key={command.id}
         long
         disabled={command.disabled}
@@ -239,7 +237,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
       spacing: gapPixels,
     },
   },
-  EmptyState: ({ title, description }) => <Result status="404" title={title} subTitle={description} />,
+  EmptyState: ({ title, description }) => <Empty description={<><strong>{title}</strong>{description === undefined ? null : <div>{description}</div>}</>} />,
   ErrorState: ({ title, retry }) => <Alert type="error" title={title} action={retry ? <Button onClick={retry}>重试</Button> : undefined} />,
   Skeleton: ({ rows = 3 }) => <ArcoSkeleton animation text={{ rows }} />,
   Busy: ({ label }) => <Spin tip={label} />,
