@@ -125,6 +125,7 @@ func toolTarget(capability, op string) *contractv1.CallTarget {
 func TestFirstPartyReferencePluginsSupportBackend1(t *testing.T) {
 	plugins := []string{
 		"./plugins/com.vastplan.foundation.security.bootstrap-policy/backend",
+		"./plugins/com.vastplan.foundation.security.portal-access-policy/backend",
 		"./plugins/com.vastplan.demo-audit/backend",
 		"./plugins/com.vastplan.demo-permission/backend",
 		"./plugins/com.vastplan.demo-quota/backend",
