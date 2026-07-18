@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/schemas/composition/common/v1"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
 
@@ -28,14 +30,14 @@ func TestCapabilityServiceForwardsOnlyVerifiedPrincipalAndOperation(t *testing.T
 		t.Fatal(err)
 	}
 	p := portalapi.Principal{ID: "verified", TenantID: "tenant-a", Roles: []string{"portal.compose"}}
-	_, err = s.CreateDraft(context.Background(), p, portalapi.PortalSpec{ID: "admin", Route: "/"})
+	_, err = s.CreateDraft(context.Background(), p, frontendcompositionv1.ApplicationComposition{Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "admin"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend}, Route: "/", Plugins: []frontendcompositionv1.PluginRef{}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if c.operation != "createDraft" || c.principal.ID != "verified" || c.principal.TenantID != "tenant-a" {
 		t.Fatalf("capability 调用未保留宿主身份: op=%s principal=%+v", c.operation, c.principal)
 	}
-	var got portalapi.PortalSpec
+	var got frontendcompositionv1.ApplicationComposition
 	if err := json.Unmarshal(c.payload, &got); err != nil || got.ID != "admin" {
 		t.Fatalf("草稿负载错误: %s %v", c.payload, err)
 	}

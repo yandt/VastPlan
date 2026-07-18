@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
 
@@ -42,8 +43,8 @@ func NewCapabilityService(client CapabilityClient) (*CapabilityService, error) {
 	return &CapabilityService{client: client}, nil
 }
 
-func (s *CapabilityService) CreateDraft(ctx context.Context, p portalapi.Principal, spec portalapi.PortalSpec) (portalapi.Revision, error) {
-	return call[portalapi.Revision](ctx, s.client, p, "createDraft", spec)
+func (s *CapabilityService) CreateDraft(ctx context.Context, p portalapi.Principal, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
+	return call[portalapi.Revision](ctx, s.client, p, "createDraft", composition)
 }
 func (s *CapabilityService) List(ctx context.Context, p portalapi.Principal) ([]portalapi.Revision, error) {
 	return call[[]portalapi.Revision](ctx, s.client, p, "list", struct{}{})

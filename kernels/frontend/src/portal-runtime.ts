@@ -11,11 +11,25 @@ export interface DesignSystemSelection extends PluginRef {
 }
 
 export interface PortalSpec {
+  revision: number;
   id: string;
-  tenant: string;
+  tenantId: string;
   route: string;
   designSystem: DesignSystemSelection;
   plugins: PluginRef[];
+  resolution: PortalResolution;
+}
+
+export interface CompositionRef {
+  id: string;
+  revision: number;
+  digest: string;
+}
+
+export interface PortalResolution {
+  platformProfile: CompositionRef;
+  applicationComposition: CompositionRef;
+  pluginOrigins: Record<string, "platform-profile" | "application">;
 }
 
 export interface RemoteProvenance {
@@ -132,13 +146,23 @@ export class PortalRuntime {
   }
 
   private validatePortalShape(portal: PortalSpec): void {
-    if (!portal.id || !portal.tenant || !portal.route.startsWith("/")) {
-      throw new PortalAssemblyError("PORTAL_INVALID", "Portal 必须包含 ID、租户和绝对根路由");
+    if (!Number.isSafeInteger(portal.revision) || portal.revision <= 0 || !portal.id || !portal.tenantId || !portal.route.startsWith("/")) {
+      throw new PortalAssemblyError("PORTAL_INVALID", "Portal 必须包含 revision、ID、租户和绝对根路由");
     }
+	const refs = [portal.resolution.platformProfile, portal.resolution.applicationComposition];
+	if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
+	  throw new PortalAssemblyError("RESOLUTION_INVALID", "Portal 输入解析锁无效");
+	}
     const count = portal.plugins.filter((ref) => samePlugin(ref, portal.designSystem)).length;
     if (count !== 1) {
       throw new PortalAssemblyError("DESIGN_SYSTEM_SELECTION", "Portal 插件列表必须精确包含一个已选设计系统");
     }
+	const pluginIDs = new Set(portal.plugins.map((ref) => ref.id));
+	if (portal.resolution.pluginOrigins[portal.designSystem.id] !== "platform-profile" ||
+	    Object.keys(portal.resolution.pluginOrigins).length !== pluginIDs.size ||
+	    [...pluginIDs].some((id) => portal.resolution.pluginOrigins[id] === undefined)) {
+	  throw new PortalAssemblyError("ORIGIN_LOCK_INVALID", "Portal 插件来源锁缺失或设计系统并非平台基线");
+	}
   }
 
   private assertTrustedFirstParty(module: FrontendPluginModule, pluginID: string): void {

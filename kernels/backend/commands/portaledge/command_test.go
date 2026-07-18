@@ -15,7 +15,7 @@ func TestRunRejectsMissingRequiredSecurityInputs(t *testing.T) {
 
 func TestRunRejectsUnsignedModeWithTrustStore(t *testing.T) {
 	err := Run(context.Background(), []string{
-		"-tls-cert", "cert", "-tls-key", "key", "-session-file", "sessions", "-composer-version", "1.0.0", "-composer-state-file", "state", "-interaction-broker-version", "0.1.0", "-interaction-broker-state-file", "broker-state",
+		"-tls-cert", "cert", "-tls-key", "key", "-session-file", "sessions", "-composer-version", "1.0.0", "-composer-state-file", "state", "-portal-platform-profile", "profile.json", "-interaction-broker-version", "0.1.0", "-interaction-broker-state-file", "broker-state",
 		"-allow-unsigned-local", "-trust-store", "trust.json",
 	}, "1.0.0", func(string, ...any) {})
 	if err == nil || !strings.Contains(err.Error(), "不能同时使用") {

@@ -2,11 +2,13 @@ package edge
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/shared/go/pluginid"
@@ -41,7 +43,13 @@ func NewTrustedCatalog(sources []ArtifactSource, verifier ArtifactVerifier) (*Tr
 	return &TrustedCatalog{sources: append([]ArtifactSource(nil), sources...), verifier: verifier}, nil
 }
 
-func (c *TrustedCatalog) ValidatePortal(ctx context.Context, _ string, spec portalapi.PortalSpec) error {
+func (c *TrustedCatalog) ValidatePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+	if spec.Revision == 0 || tenantID == "" || spec.TenantID != tenantID {
+		return errors.New("Portal 解析结果的 revision 或 tenant 无效")
+	}
+	if !validCompositionRef(spec.Resolution.PlatformProfile) || !validCompositionRef(spec.Resolution.ApplicationComposition) {
+		return errors.New("Portal 解析结果缺少有效输入锁")
+	}
 	if !pluginid.IsFirstPartyID(spec.DesignSystem.ID) {
 		return errors.New("Portal 设计系统必须是第一方插件")
 	}
@@ -63,9 +71,42 @@ func (c *TrustedCatalog) ValidatePortal(ctx context.Context, _ string, spec port
 		if manifest.Engines["frontend"] == "" {
 			return fmt.Errorf("插件 %s 未声明 frontend engine", ref.ID)
 		}
-		if ref.ID == spec.DesignSystem.ID && ref.Version == spec.DesignSystem.Version && channel(ref.Channel) == channel(spec.DesignSystem.Channel) {
+		origin, ok := spec.Resolution.PluginOrigins[ref.ID]
+		if !ok {
+			return fmt.Errorf("Portal 插件 %s 缺少解析来源", ref.ID)
+		}
+		if err := compositioncommonv1.ValidateOrigin(origin); err != nil {
+			return err
+		}
+		class, err := pluginid.ClassifyManagement(manifest.ID, manifest.Publisher)
+		if err != nil {
+			return err
+		}
+		if origin == compositioncommonv1.OriginApplication && class == pluginid.ManagementPlatform {
+			return fmt.Errorf("Frontend Application Composition 不能选择平台插件 %s", ref.ID)
+		}
+		if class == pluginid.ManagementDevelopment {
+			return fmt.Errorf("Portal v1 不允许开发插件 %s", ref.ID)
+		}
+		isSelectedDesignSystem := ref.ID == spec.DesignSystem.ID && ref.Version == spec.DesignSystem.Version && channel(ref.Channel) == channel(spec.DesignSystem.Channel)
+		var frontendContributions struct {
+			DesignSystems []json.RawMessage `json:"designSystems"`
+		}
+		if err := json.Unmarshal(manifest.Contributes["frontend"], &frontendContributions); err != nil {
+			return fmt.Errorf("解析插件 %s 前端贡献: %w", ref.ID, err)
+		}
+		if len(frontendContributions.DesignSystems) > 0 && !isSelectedDesignSystem {
+			return fmt.Errorf("Portal 不允许第二个设计系统插件 %s", ref.ID)
+		}
+		if isSelectedDesignSystem {
 			selected = manifest
 		}
+	}
+	if len(seen) != len(spec.Resolution.PluginOrigins) {
+		return errors.New("Portal 解析来源包含未部署插件")
+	}
+	if spec.Resolution.PluginOrigins[spec.DesignSystem.ID] != compositioncommonv1.OriginPlatformProfile {
+		return errors.New("Portal 设计系统必须来自 Platform Profile")
 	}
 	if selected.ID == "" {
 		return errors.New("所选设计系统不在 Portal plugins 中")
@@ -87,6 +128,14 @@ func (c *TrustedCatalog) ValidatePortal(ctx context.Context, _ string, spec port
 		}
 	}
 	return errors.New("设计系统未提供匹配且完整的 ui.design-system 贡献")
+}
+
+func validCompositionRef(ref compositioncommonv1.Ref) bool {
+	if ref.ID == "" || ref.Revision == 0 || len(ref.Digest) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(ref.Digest)
+	return err == nil
 }
 
 func (c *TrustedCatalog) manifest(ctx context.Context, ref portalapi.PluginRef) (pluginv1.Manifest, error) {

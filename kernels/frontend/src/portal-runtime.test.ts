@@ -35,7 +35,12 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
 }
 
 const portal = {
-  id: "admin", tenant: "acme", route: "/", designSystem: { ...arcoRef, uiContract: "^1.0.0" }, plugins: [arcoRef, composerRef],
+  revision: 1, id: "admin", tenantId: "acme", route: "/", designSystem: { ...arcoRef, uiContract: "^1.0.0" }, plugins: [arcoRef, composerRef],
+  resolution: {
+    platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) },
+    applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) },
+    pluginOrigins: { [arcoRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
+  },
 };
 
 describe("PortalRuntime", () => {
@@ -53,5 +58,10 @@ describe("PortalRuntime", () => {
   it("rejects a second design system contribution", async () => {
     const runtime = new PortalRuntime(loader({ [composerRef.id]: { designSystem: adapter } }));
     await expect(runtime.prepare(portal)).rejects.toMatchObject({ code: "SECOND_DESIGN_SYSTEM" } satisfies Partial<PortalAssemblyError>);
+  });
+
+  it("rejects a design system selected by the application input", async () => {
+    const invalid = { ...portal, resolution: { ...portal.resolution, pluginOrigins: { ...portal.resolution.pluginOrigins, [arcoRef.id]: "application" as const } } };
+    await expect(new PortalRuntime(loader()).prepare(invalid)).rejects.toMatchObject({ code: "ORIGIN_LOCK_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 });

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
@@ -68,31 +69,51 @@ func (c hostCatalog) ValidatePortal(ctx context.Context, tenantID string, spec p
 
 func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext) error {
 	s.mu.Lock()
-	configured := s.stateFile != ""
+	configured := s.stateFile != "" && s.profileConfigured
 	s.mu.Unlock()
 	if configured {
 		return nil
 	}
-	op := "get"
-	payload, _ := json.Marshal(map[string]string{"key": StateFileConfigKey})
-	result, raw, err := host.Call(ctx, &contractv1.CallTarget{
-		ExtensionPoint: extpoint.KernelService,
-		Capability:     "kernel.config.get",
-		Operation:      &op,
-	}, callCtx, payload)
+	raw, err := readConfig(ctx, host, callCtx, StateFileConfigKey)
 	if err != nil {
-		return fmt.Errorf("读取 Portal Composer 部署配置: %w", err)
-	}
-	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
-		return fmt.Errorf("未提供 Portal Composer 部署配置")
+		return err
 	}
 	var stateFile string
 	if err := json.Unmarshal(raw, &stateFile); err != nil || strings.TrimSpace(stateFile) == "" {
 		return fmt.Errorf("%s 必须是非空 JSON 字符串", StateFileConfigKey)
 	}
+	profileRaw, err := readConfig(ctx, host, callCtx, PlatformProfileConfigKey)
+	if err != nil {
+		return err
+	}
+	var encodedProfile string
+	if err := json.Unmarshal(profileRaw, &encodedProfile); err != nil || strings.TrimSpace(encodedProfile) == "" {
+		return fmt.Errorf("%s 必须是非空 JSON 字符串", PlatformProfileConfigKey)
+	}
+	profile, err := frontendcompositionv1.ParsePlatformProfile([]byte(encodedProfile))
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.configure(stateFile)
+	err = s.configure(stateFile)
+	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	return s.BindPlatformProfile(profile)
+}
+
+func readConfig(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, key string) ([]byte, error) {
+	op := "get"
+	payload, _ := json.Marshal(map[string]string{"key": key})
+	result, raw, err := host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: "kernel.config.get", Operation: &op}, callCtx, payload)
+	if err != nil {
+		return nil, fmt.Errorf("读取 Portal Composer 部署配置 %s: %w", key, err)
+	}
+	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return nil, fmt.Errorf("未提供 Portal Composer 部署配置 %s", key)
+	}
+	return raw, nil
 }
 
 // Handle is the wire boundary used by the plugin capability adapter. Principal
@@ -101,11 +122,11 @@ func (s *Service) Handle(ctx context.Context, principal portalapi.Principal, ope
 	var result any
 	switch operation {
 	case "createDraft":
-		var spec portalapi.PortalSpec
-		if err := decode(payload, &spec); err != nil {
+		var composition frontendcompositionv1.ApplicationComposition
+		if err := decode(payload, &composition); err != nil {
 			return nil, err
 		}
-		value, err := s.CreateDraft(ctx, principal, spec)
+		value, err := s.CreateDraft(ctx, principal, composition)
 		if err != nil {
 			return nil, err
 		}

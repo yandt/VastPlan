@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "revision": 1,
+  "id": "operations",
+  "target": { "kernel": "frontend" },
+  "route": "/operations",
+  "audience": ["portal.read"],
+  "plugins": [],
+  "config": {}
+}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
@@ -22,16 +23,25 @@ func (acceptingCatalog) ValidatePortal(context.Context, string, portalapi.Portal
 func principal(id string, roles ...string) portalapi.Principal {
 	return portalapi.Principal{ID: id, TenantID: "tenant-a", Roles: roles}
 }
-func spec(route string) portalapi.PortalSpec {
-	ds := portalapi.PluginRef{ID: "com.vastplan.foundation.frontend.design-system.arco", Version: "1.0.0"}
-	return portalapi.PortalSpec{ID: "admin", Route: route, DesignSystem: portalapi.DesignSystem{PluginRef: ds, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ds}}
+func spec(route string) frontendcompositionv1.ApplicationComposition {
+	value := testComposition(route)
+	value.Plugins = []frontendcompositionv1.PluginRef{}
+	return value
 }
-
-func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) {
+func newTestService(t *testing.T) *Service {
+	t.Helper()
 	s, err := New(filepath.Join(t.TempDir(), "portals.json"), acceptingCatalog{})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := s.BindPlatformProfile(testProfile()); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) {
+	s := newTestService(t)
 	author := principal("author", "portal.compose", "portal.approve")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
@@ -58,16 +68,15 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 	}
 	if reopened, err := New(filepath.Join(filepath.Dir(s.stateFile), "portals.json"), acceptingCatalog{}); err != nil {
 		t.Fatal(err)
+	} else if err := reopened.BindPlatformProfile(testProfile()); err != nil {
+		t.Fatal(err)
 	} else if got, err := reopened.List(context.Background(), publisher); err != nil || len(got) != 1 || got[0].Status != portalapi.StatusPublished {
 		t.Fatalf("持久化状态错误: %+v %v", got, err)
 	}
 }
 
 func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
-	s, err := New(filepath.Join(t.TempDir(), "portals.json"), acceptingCatalog{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := newTestService(t)
 	author := principal("author", "portal.compose")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
@@ -108,10 +117,7 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 }
 
 func TestRollbackUsesInactivePublishedRevisionAndReturnsActiveCopy(t *testing.T) {
-	s, err := New(filepath.Join(t.TempDir(), "portals.json"), acceptingCatalog{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := newTestService(t)
 	author := principal("author", "portal.compose")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
@@ -159,10 +165,20 @@ func (h *configuredHost) Call(_ context.Context, target *contractv1.CallTarget, 
 	switch target.GetCapability() {
 	case "kernel.config.get":
 		var request map[string]string
-		if err := json.Unmarshal(payload, &request); err != nil || request["key"] != StateFileConfigKey {
+		if err := json.Unmarshal(payload, &request); err != nil {
 			return nil, nil, errors.New("unexpected state configuration request")
 		}
-		raw, _ := json.Marshal(h.stateFile)
+		var value string
+		switch request["key"] {
+		case StateFileConfigKey:
+			value = h.stateFile
+		case PlatformProfileConfigKey:
+			raw, _ := json.Marshal(testProfile())
+			value = string(raw)
+		default:
+			return nil, nil, errors.New("unexpected configuration key")
+		}
+		raw, _ := json.Marshal(value)
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 	case portalapi.KernelCatalogValidationCapability:
 		var request struct {
@@ -194,7 +210,7 @@ func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) 
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("通过可信宿主创建草稿失败: result=%+v err=%v", result, err)
 	}
-	if len(host.calls) != 2 || host.calls[0] != "kernel.config.get" || host.calls[1] != portalapi.KernelCatalogValidationCapability {
+	if len(host.calls) != 3 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.config.get" || host.calls[2] != portalapi.KernelCatalogValidationCapability {
 		t.Fatalf("宿主调用路径错误: %v", host.calls)
 	}
 	var revision portalapi.Revision

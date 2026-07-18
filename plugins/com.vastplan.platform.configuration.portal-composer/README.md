@@ -1,6 +1,8 @@
 # Portal Composer Plugin
 
-`com.vastplan.platform.configuration.portal-composer` 是系统配置与插件在线组合的前端参考插件。它把 Portal 名称、路由、设计系统和功能插件组合为草稿表单，并只依赖 `@vastplan/portal-ui`，因此不绑定 Arco 或后续任何特定 UI 框架。
+`com.vastplan.platform.configuration.portal-composer` 是系统配置与插件在线组合的前端参考插件。普通草稿只编辑 Portal 路由、受众、品牌、非敏感配置和应用功能插件；设计系统及平台基础插件由环境绑定的 Frontend Platform Profile 注入，不能由应用草稿替换。
+
+发布端执行服务端双输入解析，生成包含 Platform Profile 与 Application Composition 摘要、逐插件来源和 Portal revision 的锁定结果。可信内核 Catalog 复核精确制品、发布者分类、单一设计系统和 UI 契约，Composer 本身不接触仓库凭据或验签密钥。
 
 该插件只负责呈现与提交意图；草稿校验、提交、双人审批、发布、回滚与审计必须通过 Edge/BFF 的受保护 API 完成。浏览器不得直接获得服务凭据、内部服务地址或原始身份令牌。
 

@@ -5,6 +5,9 @@ package portalapi
 import (
 	"context"
 	"errors"
+
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/schemas/composition/common/v1"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 )
 
 var (
@@ -45,7 +48,9 @@ type DesignSystem struct {
 }
 
 type PortalSpec struct {
+	Revision     uint64         `json:"revision"`
 	ID           string         `json:"id"`
+	TenantID     string         `json:"tenantId"`
 	Route        string         `json:"route"`
 	Domains      []string       `json:"domains,omitempty"`
 	Audience     []string       `json:"audience,omitempty"`
@@ -53,6 +58,13 @@ type PortalSpec struct {
 	DesignSystem DesignSystem   `json:"designSystem"`
 	Plugins      []PluginRef    `json:"plugins"`
 	Config       map[string]any `json:"config,omitempty"`
+	Resolution   Resolution     `json:"resolution"`
+}
+
+type Resolution struct {
+	PlatformProfile        compositioncommonv1.Ref `json:"platformProfile"`
+	ApplicationComposition compositioncommonv1.Ref `json:"applicationComposition"`
+	PluginOrigins          map[string]string       `json:"pluginOrigins"`
 }
 
 type Status string
@@ -65,17 +77,18 @@ const (
 )
 
 type Revision struct {
-	ID          uint64     `json:"id"`
-	TenantID    string     `json:"tenantId"`
-	PortalID    string     `json:"portalId"`
-	Status      Status     `json:"status"`
-	Active      bool       `json:"active"`
-	Spec        PortalSpec `json:"spec"`
-	SubmittedBy string     `json:"submittedBy,omitempty"`
-	ApprovedBy  string     `json:"approvedBy,omitempty"`
-	PublishedBy string     `json:"publishedBy,omitempty"`
-	CreatedAt   string     `json:"createdAt"`
-	UpdatedAt   string     `json:"updatedAt"`
+	ID          uint64                                       `json:"id"`
+	TenantID    string                                       `json:"tenantId"`
+	PortalID    string                                       `json:"portalId"`
+	Status      Status                                       `json:"status"`
+	Active      bool                                         `json:"active"`
+	Composition frontendcompositionv1.ApplicationComposition `json:"composition"`
+	Spec        PortalSpec                                   `json:"resolved"`
+	SubmittedBy string                                       `json:"submittedBy,omitempty"`
+	ApprovedBy  string                                       `json:"approvedBy,omitempty"`
+	PublishedBy string                                       `json:"publishedBy,omitempty"`
+	CreatedAt   string                                       `json:"createdAt"`
+	UpdatedAt   string                                       `json:"updatedAt"`
 }
 
 type AuditEvent struct {
@@ -97,7 +110,7 @@ type PublishRequest struct {
 // Service is implemented by the configuration/composition plugin and consumed
 // through an authenticated Edge adapter. Every method scopes itself to principal.TenantID.
 type Service interface {
-	CreateDraft(context.Context, Principal, PortalSpec) (Revision, error)
+	CreateDraft(context.Context, Principal, frontendcompositionv1.ApplicationComposition) (Revision, error)
 	List(context.Context, Principal) ([]Revision, error)
 	Submit(context.Context, Principal, uint64) (Revision, error)
 	Approve(context.Context, Principal, uint64) (Revision, error)

@@ -4,16 +4,19 @@ package portaledgecommand
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/edge"
 	"cdsoft.com.cn/VastPlan/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
@@ -57,12 +60,13 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	brokerVersion := flags.String("interaction-broker-version", "", "Interaction Broker artifact version")
 	brokerChannel := flags.String("interaction-broker-channel", "stable", "Interaction Broker artifact channel")
 	stateFile := flags.String("composer-state-file", "", "Composer governed-state file")
+	platformProfileFile := flags.String("portal-platform-profile", "", "Frontend Platform Profile v1 JSON")
 	brokerStateFile := flags.String("interaction-broker-state-file", "", "Interaction Broker governed-state file")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *cert == "" || *key == "" || *sessions == "" || *pluginVersion == "" || *stateFile == "" || *brokerVersion == "" || *brokerStateFile == "" {
-		return errors.New("portal-edge 必须配置 TLS、session、Composer 与 Interaction Broker 制品版本及状态文件")
+	if *cert == "" || *key == "" || *sessions == "" || *pluginVersion == "" || *stateFile == "" || *platformProfileFile == "" || *brokerVersion == "" || *brokerStateFile == "" {
+		return errors.New("portal-edge 必须配置 TLS、session、Frontend Platform Profile、Composer 与 Interaction Broker 制品版本及状态文件")
 	}
 	if *allowUnsigned && *trustFile != "" {
 		return errors.New("allow-unsigned-local 与 trust-store 不能同时使用")
@@ -108,9 +112,22 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return err
 	}
+	profileRaw, err := os.ReadFile(*platformProfileFile)
+	if err != nil {
+		return fmt.Errorf("读取 Frontend Platform Profile: %w", err)
+	}
+	profile, err := frontendcompositionv1.ParsePlatformProfile(profileRaw)
+	if err != nil {
+		return err
+	}
+	canonicalProfile, err := json.Marshal(profile)
+	if err != nil {
+		return err
+	}
 	config, err := kernelspi.NewMapConfig(map[string]any{
-		"platform.portal-composer.stateFile":    *stateFile,
-		"platform.interaction-broker.stateFile": *brokerStateFile,
+		"platform.portal-composer.stateFile":       *stateFile,
+		"platform.portal-composer.platformProfile": string(canonicalProfile),
+		"platform.interaction-broker.stateFile":    *brokerStateFile,
 	})
 	if err != nil {
 		return err

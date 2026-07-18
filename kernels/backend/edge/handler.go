@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 	uiv1 "cdsoft.com.cn/VastPlan/schemas/ui/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/interactionapi"
@@ -189,11 +190,11 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request, p portalapi.Prin
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
-	var spec portalapi.PortalSpec
-	if !decode(w, r, &spec) {
+	var composition frontendcompositionv1.ApplicationComposition
+	if !decode(w, r, &composition) {
 		return
 	}
-	v, err := h.service.CreateDraft(r.Context(), p, spec)
+	v, err := h.service.CreateDraft(r.Context(), p, composition)
 	respond(w, v, err)
 }
 func (h *Handler) list(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {

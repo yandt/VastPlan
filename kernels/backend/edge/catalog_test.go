@@ -4,9 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
@@ -50,10 +52,15 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 		t.Fatal(err)
 	}
 	ref := portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version}
-	spec := portalapi.PortalSpec{ID: "admin", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref}}
+	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile}}}
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err != nil {
 		t.Fatalf("有效且已验证的设计系统应通过: %v", err)
 	}
+	spec.Resolution.PluginOrigins[ref.ID] = compositioncommonv1.OriginApplication
+	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {
+		t.Fatal("应用输入选择 foundation 设计系统必须拒绝")
+	}
+	spec.Resolution.PluginOrigins[ref.ID] = compositioncommonv1.OriginPlatformProfile
 	spec.DesignSystem.UIContract = "^2.0.0"
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {
 		t.Fatal("不兼容 UI 契约必须拒绝")

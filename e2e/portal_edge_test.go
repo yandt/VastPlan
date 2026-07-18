@@ -26,6 +26,8 @@ import (
 
 	portaledgecommand "cdsoft.com.cn/VastPlan/kernels/backend/commands/portaledge"
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/schemas/composition/common/v1"
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
@@ -86,6 +88,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 			"-allow-unsigned-local",
 			"-composer-version", "1.0.0",
 			"-composer-state-file", stateFile,
+			"-portal-platform-profile", filepath.Join(repoRoot(t), "deploy", "portal-platform-profile.json"),
 			"-interaction-broker-version", "0.1.0",
 			"-interaction-broker-state-file", interactionStateFile,
 		}, "1.0.0", func(format string, args ...any) { t.Logf("[portal-edge] "+format, args...) })
@@ -368,7 +371,6 @@ func portalRevisionPath(id uint64, operation string) string {
 	return fmt.Sprintf("/v1/portal-drafts/%d/%s", id, operation)
 }
 
-func portalSpec() portalapi.PortalSpec {
-	ref := portalapi.PluginRef{ID: "com.vastplan.foundation.frontend.design-system.arco", Version: "1.0.0", Channel: "stable"}
-	return portalapi.PortalSpec{ID: "operations", Route: "/operations", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref}}
+func portalSpec() frontendcompositionv1.ApplicationComposition {
+	return frontendcompositionv1.ApplicationComposition{Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "operations"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend}, Route: "/operations", Plugins: []frontendcompositionv1.PluginRef{}}
 }

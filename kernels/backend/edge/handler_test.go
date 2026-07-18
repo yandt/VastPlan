@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 	uiv1 "cdsoft.com.cn/VastPlan/schemas/ui/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/interactionapi"
@@ -20,11 +21,11 @@ func (f identity) Authenticate(r *http.Request) (portalapi.Principal, error) { r
 
 type service struct {
 	seen      portalapi.Principal
-	created   portalapi.PortalSpec
+	created   frontendcompositionv1.ApplicationComposition
 	createErr error
 }
 
-func (s *service) CreateDraft(_ context.Context, p portalapi.Principal, v portalapi.PortalSpec) (portalapi.Revision, error) {
+func (s *service) CreateDraft(_ context.Context, p portalapi.Principal, v frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
 	s.seen = p
 	s.created = v
 	if s.createErr != nil {
@@ -125,7 +126,7 @@ func TestBFFUsesVerifiedPrincipalAndStrictCSRF(t *testing.T) {
 		t.Fatal(csrfW.Code)
 	}
 	cookie := csrfW.Result().Cookies()[0]
-	body := `{"id":"admin","route":"/","designSystem":{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0","uiContract":"^1.0.0"},"plugins":[{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0"}],"tenantId":"attacker"}`
+	body := `{"version":1,"revision":1,"id":"admin","target":{"kernel":"frontend"},"route":"/","plugins":[],"tenantId":"attacker"}`
 	r := httptest.NewRequest(http.MethodPost, "/v1/portal-drafts", strings.NewReader(body))
 	r.AddCookie(cookie)
 	r.Header.Set("X-VastPlan-CSRF", cookie.Value)

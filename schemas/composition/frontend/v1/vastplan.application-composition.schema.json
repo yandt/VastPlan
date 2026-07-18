@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.application-composition.schema.json",
+  "title": "VastPlan Frontend Application Composition v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "revision", "id", "target", "route", "plugins"],
+  "properties": {
+    "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
+    "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
+    "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
+    "target": { "type": "object", "additionalProperties": false, "required": ["kernel"], "properties": { "kernel": { "const": "frontend" } } },
+    "route": { "type": "string", "pattern": "^/", "maxLength": 512 },
+    "domains": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 253 } },
+    "audience": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 160 } },
+    "branding": { "type": "object" },
+    "plugins": { "type": "array", "items": { "$ref": "#/$defs/pluginRef" } },
+    "config": { "type": "object" }
+  },
+  "$defs": {
+    "pluginRef": {
+      "type": "object", "additionalProperties": false, "required": ["id", "version"],
+      "properties": {
+        "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+        "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" }
+      }
+    }
+  }
+}

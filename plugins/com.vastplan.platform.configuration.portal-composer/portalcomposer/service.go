@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
 
@@ -22,7 +23,8 @@ const (
 	Capability    = portalapi.ComposerCapability
 	// StateFileConfigKey is read only through the authenticated host callback;
 	// plugin process environment must not decide where governed state is stored.
-	StateFileConfigKey = "platform.portal-composer.stateFile"
+	StateFileConfigKey       = "platform.portal-composer.stateFile"
+	PlatformProfileConfigKey = "platform.portal-composer.platformProfile"
 )
 
 var (
@@ -48,11 +50,30 @@ type state struct {
 }
 
 type Service struct {
-	mu        sync.Mutex
-	state     state
-	stateFile string
-	catalog   Catalog
-	now       func() time.Time
+	mu                sync.Mutex
+	state             state
+	stateFile         string
+	catalog           Catalog
+	profile           frontendcompositionv1.PlatformProfile
+	profileConfigured bool
+	now               func() time.Time
+}
+
+func (s *Service) BindPlatformProfile(profile frontendcompositionv1.PlatformProfile) error {
+	profile, err := frontendcompositionv1.ValidatePlatformProfile(profile)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.profileConfigured {
+		if s.profile.Digest() != profile.Digest() {
+			return errors.New("Portal Platform Profile 不允许在运行中切换")
+		}
+		return nil
+	}
+	s.profile, s.profileConfigured = profile, true
+	return nil
 }
 
 func New(stateFile string, catalog Catalog) (*Service, error) {
@@ -126,21 +147,30 @@ func (s *Service) save() error {
 	return os.Rename(name, s.stateFile)
 }
 
-func (s *Service) CreateDraft(ctx context.Context, principal portalapi.Principal, spec portalapi.PortalSpec) (portalapi.Revision, error) {
+func (s *Service) CreateDraft(ctx context.Context, principal portalapi.Principal, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
 	if err := require(principal, "portal.compose"); err != nil {
 		return portalapi.Revision{}, err
 	}
-	if err := validateSpec(spec); err != nil {
+	composition, err := frontendcompositionv1.ValidateApplicationComposition(composition)
+	if err != nil {
 		return portalapi.Revision{}, err
 	}
-	if err := s.validateCatalog(ctx, principal.TenantID, spec); err != nil {
+	preview, err := s.resolveCurrent(composition, principal.TenantID, 1)
+	if err != nil {
+		return portalapi.Revision{}, err
+	}
+	if err := s.validateCatalog(ctx, principal.TenantID, preview); err != nil {
 		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	s.state.NextRevision++
-	r := portalapi.Revision{ID: s.state.NextRevision, TenantID: principal.TenantID, PortalID: spec.ID, Status: portalapi.StatusDraft, Spec: cloneSpec(spec), CreatedAt: now, UpdatedAt: now}
+	resolved, err := s.resolveCurrent(composition, principal.TenantID, s.state.NextRevision)
+	if err != nil {
+		return portalapi.Revision{}, err
+	}
+	r := portalapi.Revision{ID: s.state.NextRevision, TenantID: principal.TenantID, PortalID: composition.ID, Status: portalapi.StatusDraft, Composition: cloneComposition(composition), Spec: cloneSpec(resolved), CreatedAt: now, UpdatedAt: now}
 	s.state.Revisions = append(s.state.Revisions, r)
 	s.auditLocked(r, "draft.created", principal, "", "normal")
 	if err := s.save(); err != nil {
@@ -179,10 +209,15 @@ func (s *Service) Submit(ctx context.Context, principal portalapi.Principal, id 
 	if r.Status != portalapi.StatusDraft {
 		return portalapi.Revision{}, ErrInvalidState
 	}
-	if err := s.validateCatalog(ctx, principal.TenantID, r.Spec); err != nil {
+	resolved, err := s.resolveCurrent(r.Composition, principal.TenantID, r.ID)
+	if err != nil {
+		return portalapi.Revision{}, err
+	}
+	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
 		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	r.Status = portalapi.StatusPendingApproval
+	r.Spec = cloneSpec(resolved)
 	r.SubmittedBy = principal.ID
 	r.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 	s.auditLocked(*r, "draft.submitted", principal, "", "normal")
@@ -238,13 +273,18 @@ func (s *Service) Publish(ctx context.Context, principal portalapi.Principal, id
 	} else if strings.TrimSpace(request.BreakGlassReason) == "" {
 		return portalapi.Revision{}, errors.New("system break-glass 发布必须说明原因")
 	}
-	if err := s.validateCatalog(ctx, principal.TenantID, r.Spec); err != nil {
+	resolved, err := s.resolveCurrent(r.Composition, principal.TenantID, r.ID)
+	if err != nil {
+		return portalapi.Revision{}, err
+	}
+	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
 		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	if s.routeConflictLocked(*r) {
 		return portalapi.Revision{}, ErrRouteConflict
 	}
 	r.Status = portalapi.StatusPublished
+	r.Spec = cloneSpec(resolved)
 	s.activateLocked(r)
 	r.PublishedBy = principal.ID
 	r.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
@@ -282,12 +322,16 @@ func (s *Service) Rollback(ctx context.Context, principal portalapi.Principal, i
 	if source.Status != portalapi.StatusPublished || source.Active {
 		return portalapi.Revision{}, ErrInvalidState
 	}
-	if err := s.validateCatalog(ctx, principal.TenantID, source.Spec); err != nil {
+	resolved, err := s.resolveCurrent(source.Composition, principal.TenantID, s.state.NextRevision+1)
+	if err != nil {
+		return portalapi.Revision{}, err
+	}
+	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
 		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	s.state.NextRevision++
 	now := s.now().UTC().Format(time.RFC3339Nano)
-	r := portalapi.Revision{ID: s.state.NextRevision, TenantID: principal.TenantID, PortalID: source.PortalID, Status: portalapi.StatusPublished, Spec: cloneSpec(source.Spec), PublishedBy: principal.ID, CreatedAt: now, UpdatedAt: now}
+	r := portalapi.Revision{ID: s.state.NextRevision, TenantID: principal.TenantID, PortalID: source.PortalID, Status: portalapi.StatusPublished, Composition: cloneComposition(source.Composition), Spec: cloneSpec(resolved), PublishedBy: principal.ID, CreatedAt: now, UpdatedAt: now}
 	if s.routeConflictLocked(r) {
 		return portalapi.Revision{}, ErrRouteConflict
 	}
@@ -376,37 +420,28 @@ func require(p portalapi.Principal, role string) error {
 	}
 	return ErrForbidden
 }
-func validateSpec(s portalapi.PortalSpec) error {
-	if strings.TrimSpace(s.ID) == "" || !strings.HasPrefix(s.Route, "/") {
-		return errors.New("Portal 必须有 ID 和绝对 route")
+func (s *Service) resolveCurrent(composition frontendcompositionv1.ApplicationComposition, tenantID string, revision uint64) (portalapi.PortalSpec, error) {
+	if !s.profileConfigured {
+		return portalapi.PortalSpec{}, errors.New("Portal Composer 尚未绑定 Frontend Platform Profile")
 	}
-	if !strings.HasPrefix(s.DesignSystem.ID, "com.vastplan.foundation.frontend.design-system.") || s.DesignSystem.Version == "" || s.DesignSystem.UIContract == "" {
-		return errors.New("Portal 必须选择精确版本的第一方设计系统和 UI 契约")
-	}
-	found := false
-	seen := map[string]struct{}{}
-	for _, p := range s.Plugins {
-		if p.ID == "" || p.Version == "" {
-			return errors.New("Portal 插件必须有精确 ID 和版本")
-		}
-		if _, ok := seen[p.ID]; ok {
-			return errors.New("Portal 插件不能重复")
-		}
-		seen[p.ID] = struct{}{}
-		if p.ID == s.DesignSystem.ID && p.Version == s.DesignSystem.Version {
-			found = true
-		}
-	}
-	if !found {
-		return errors.New("Portal plugins 必须精确包含所选设计系统")
-	}
-	return nil
+	return resolve(s.profile, composition, tenantID, revision)
 }
 func cloneSpec(in portalapi.PortalSpec) portalapi.PortalSpec {
 	out := in
 	out.Domains = append([]string(nil), in.Domains...)
 	out.Audience = append([]string(nil), in.Audience...)
 	out.Plugins = append([]portalapi.PluginRef(nil), in.Plugins...)
+	out.Branding = cloneMap(in.Branding)
+	out.Config = cloneMap(in.Config)
+	out.Resolution.PluginOrigins = cloneStringMap(in.Resolution.PluginOrigins)
+	return out
+}
+func cloneComposition(in frontendcompositionv1.ApplicationComposition) frontendcompositionv1.ApplicationComposition {
+	out := in
+	out.Domains = append([]string(nil), in.Domains...)
+	out.Audience = append([]string(nil), in.Audience...)
+	out.Plugins = make([]frontendcompositionv1.PluginRef, len(in.Plugins))
+	copy(out.Plugins, in.Plugins)
 	out.Branding = cloneMap(in.Branding)
 	out.Config = cloneMap(in.Config)
 	return out
@@ -421,4 +456,15 @@ func cloneMap(in map[string]any) map[string]any {
 	}
 	return out
 }
-func cloneRevision(in portalapi.Revision) portalapi.Revision { in.Spec = cloneSpec(in.Spec); return in }
+func cloneStringMap(in map[string]string) map[string]string {
+	out := map[string]string{}
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+func cloneRevision(in portalapi.Revision) portalapi.Revision {
+	in.Composition = cloneComposition(in.Composition)
+	in.Spec = cloneSpec(in.Spec)
+	return in
+}
