@@ -63,6 +63,15 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	platformProfileFile := flags.String("portal-platform-profile", "", "Frontend Platform Profile v1 JSON")
 	brokerStateFile := flags.String("interaction-broker-state-file", "", "Interaction Broker governed-state file")
 	portalAssetsDir := flags.String("portal-assets", "", "Portal Shell 静态产物目录")
+	natsURL := flags.String("nats-url", "", "平台管理远端 capability NATS URL；留空关闭平台管理 API")
+	natsCA := flags.String("nats-ca", "", "NATS CA PEM")
+	natsCert := flags.String("nats-cert", "", "NATS mTLS 客户端证书 PEM")
+	natsKey := flags.String("nats-key", "", "NATS mTLS 客户端私钥 PEM")
+	natsSeed := flags.String("nats-seed", "", "Portal Edge NKey seed（0600）")
+	natsAllowInsecure := flags.Bool("nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
+	transportSeed := flags.String("transport-seed", "", "Portal Edge addressing 签名 NKey seed（0600）")
+	transportTrust := flags.String("transport-trust", "", "addressing 传输身份信任文档")
+	nodeID := flags.String("node-id", "portal-edge", "Portal Edge addressing 节点身份")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -71,6 +80,10 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	}
 	if *allowUnsigned && *trustFile != "" {
 		return errors.New("allow-unsigned-local 与 trust-store 不能同时使用")
+	}
+	platformOptions := platformRouterOptions{URL: *natsURL, CA: *natsCA, Cert: *natsCert, Key: *natsKey, NKeySeed: *natsSeed, TransportSeed: *transportSeed, TransportTrust: *transportTrust, NodeID: *nodeID, AllowInsecure: *natsAllowInsecure}
+	if err := platformOptions.validate(); err != nil {
+		return err
 	}
 	var verifier nodeagent.ArtifactVerifier
 	if *allowUnsigned {
@@ -215,7 +228,25 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Addr: *listen, Handler: edge.NewPortal(identity, service, interactionService, catalog, portalAssets), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
+	cluster, err := newPlatformRouter(ctx, platformOptions, logf)
+	if err != nil {
+		return err
+	}
+	if cluster != nil {
+		defer cluster.Close()
+	}
+	var platformService *edge.CapabilityPlatformAdminService
+	if cluster != nil {
+		platformCaller, err := edge.NewAddressingPlatformCapabilityClient(cluster.router)
+		if err != nil {
+			return err
+		}
+		platformService, err = edge.NewCapabilityPlatformAdminService(platformCaller)
+		if err != nil {
+			return err
+		}
+	}
+	server := &http.Server{Addr: *listen, Handler: edge.NewPlatformPortal(identity, service, interactionService, platformService, catalog, portalAssets), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() { <-ctx.Done(); _ = server.Shutdown(context.Background()) }()
 	err = server.ListenAndServeTLS(*cert, *key)
 	if errors.Is(err, http.ErrServerClosed) {

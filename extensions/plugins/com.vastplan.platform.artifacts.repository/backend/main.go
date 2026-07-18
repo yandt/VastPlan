@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const pluginID, pluginVersion = "com.vastplan.platform.artifacts.repository", "0.1.0"
+const pluginID, pluginVersion = "com.vastplan.platform.artifacts.repository", "0.2.0"
 
 type serverConfig struct {
 	addr, repository, trust, cert, key, readToken, publishToken string

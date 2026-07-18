@@ -33,6 +33,27 @@ func TestCopyTreeSkipsPythonBytecode(t *testing.T) {
 	}
 }
 
+func TestCopyTreeSkipsNodeModules(t *testing.T) {
+	source := t.TempDir()
+	target := t.TempDir()
+	modules := filepath.Join(source, "frontend", "node_modules", "dependency")
+	if err := os.MkdirAll(modules, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(modules, "index.js"), []byte("dependency"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "vastplan.plugin.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyTree(source, target); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(target, "frontend", "node_modules")); !os.IsNotExist(err) {
+		t.Fatalf("node_modules 不得进入插件制品: %v", err)
+	}
+}
+
 func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
 	source := t.TempDir()
 	manifest := []byte(`{

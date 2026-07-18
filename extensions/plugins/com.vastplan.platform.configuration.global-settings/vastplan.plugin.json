@@ -1,13 +1,13 @@
 {
   "id": "com.vastplan.platform.configuration.global-settings",
   "name": "VastPlan 全局设置服务",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "提供租户隔离、版本化且可审计的全局平台设置；单活写入由 leader fencing 保证",
-  "engines": { "backend": "^1.0" },
+  "engines": { "backend": "^1.0", "frontend": "^1.0" },
   "capabilities": {
     "kernelServices": ["kernel.config.get"],
     "credentials": [],
@@ -36,8 +36,8 @@
   "state": {
     "backend": { "format": "com.vastplan.platform.settings", "formatVersion": 1 }
   },
-  "activation": ["onStartup"],
-  "entry": { "backend": "backend/global-settings" },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/global-settings", "frontend": "frontend/dist/index.js" },
   "contributes": {
     "backend": {
       "tools": [
@@ -54,6 +54,10 @@
           ]
         }
       ]
+    },
+    "frontend": {
+      "views": [{ "id": "platform.global-settings", "title": "全局设置" }],
+      "menus": [{ "id": "platform.global-settings.menu", "title": "全局设置" }]
     }
   }
 }

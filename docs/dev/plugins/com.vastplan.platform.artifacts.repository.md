@@ -1,6 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`com.vastplan.platform.artifacts.repository`
+当前制品版本：`0.2.0`
 
 能力：`tool.package/platform.artifacts.repository`
 
@@ -40,3 +41,7 @@
 ## 验证
 
 `core/kernels/backend/pluginservice/remote_test.go` 通过该共享 HTTP 传输层覆盖 TLS、读写 token、签名发布与再次读取；仓库插件本身只负责配置、进程生命周期和对外贡献。ADR-0049 是该边界的权威决策记录。
+
+## Portal 管理页
+
+同一签名制品提供 `/settings/artifacts` 只读状态页。v1 仅显示就绪和监听状态，不返回令牌、信任根、存储路径，也不复用仓库上传 API。目录、审批与供应链证明浏览将在独立管理契约封板后扩展。

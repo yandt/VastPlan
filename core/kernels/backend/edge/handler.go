@@ -17,6 +17,7 @@ import (
 	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
@@ -30,6 +31,7 @@ type Handler struct {
 	identity    IdentityProvider
 	service     portalapi.Service
 	interaction InteractionService
+	platform    platformadminapi.Service
 	catalog     *TrustedCatalog
 	assets      http.Handler
 }
@@ -52,10 +54,16 @@ func NewWithRuntime(identity IdentityProvider, service portalapi.Service, intera
 // NewPortal assembles both the authenticated BFF and the deployable shell.
 // API paths never fall back to static content; client-side routes do.
 func NewPortal(identity IdentityProvider, service portalapi.Service, interaction InteractionService, catalog *TrustedCatalog, assets http.Handler) *Handler {
+	return NewPlatformPortal(identity, service, interaction, nil, catalog, assets)
+}
+
+// NewPlatformPortal adds the allowlisted platform administration surface. A
+// nil service keeps the entire /v1/platform namespace unavailable.
+func NewPlatformPortal(identity IdentityProvider, service portalapi.Service, interaction InteractionService, platform platformadminapi.Service, catalog *TrustedCatalog, assets http.Handler) *Handler {
 	if identity == nil || service == nil {
 		panic("Edge BFF 必须注入身份提供方和 Portal 服务")
 	}
-	return &Handler{identity: identity, service: service, interaction: interaction, catalog: catalog, assets: assets}
+	return &Handler{identity: identity, service: service, interaction: interaction, platform: platform, catalog: catalog, assets: assets}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +77,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	runtimePath := r.URL.Path == "/v1/portal-runtime" || r.URL.Path == "/v1/portal-recovery" || strings.HasPrefix(r.URL.Path, "/v1/portal-modules/") || strings.HasPrefix(r.URL.Path, "/v1/portal-recovery-modules/")
 	portalPath := strings.HasPrefix(r.URL.Path, "/v1/portal-drafts")
 	interactionPath := strings.HasPrefix(r.URL.Path, "/v1/interactions")
-	if !runtimePath && !portalPath && !interactionPath {
+	platformPath := strings.HasPrefix(r.URL.Path, "/v1/platform/")
+	if !runtimePath && !portalPath && !interactionPath && !platformPath {
 		if h.assets != nil && !strings.HasPrefix(r.URL.Path, "/v1/") && r.URL.Path != "/v1" {
 			h.assets.ServeHTTP(w, r)
 			return
@@ -92,6 +101,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if portalPath {
 		h.route(w, r, p)
+		return
+	}
+	if platformPath {
+		h.platformRoute(w, r, p)
 		return
 	}
 	h.interactionRoute(w, r, p)

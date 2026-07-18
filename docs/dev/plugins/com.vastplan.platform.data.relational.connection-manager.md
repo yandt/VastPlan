@@ -2,6 +2,7 @@
 
 插件 ID：`com.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
+当前制品版本：`0.2.0`
 
 ## 边界
 
@@ -25,3 +26,7 @@
 | `probe` | 让可信宿主以凭证引用执行连通性检查 |
 
 没有返回或解密凭证的 API。生产部署未注入 `DatabaseBroker` 时，`probe` 会 fail-closed。
+
+## Portal 管理页
+
+同一签名制品提供 `/settings/databases` 页面，管理非敏感连接定义并触发可信宿主 probe。CredentialRef 只填写凭证名称；页面和 BFF 均没有密码字段。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。

@@ -13,14 +13,14 @@ import (
 	"sync"
 	"time"
 
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
 	PluginID           = "com.vastplan.platform.configuration.global-settings"
-	PluginVersion      = "0.1.0"
+	PluginVersion      = "0.2.0"
 	Capability         = "platform.settings"
 	StateFileConfigKey = "platform.settings.stateFile"
 	changeLimit        = 512
@@ -357,7 +357,14 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, callCtx *contractv
 		err = fmt.Errorf("不支持的全局设置操作 %q", operation)
 	}
 	if err != nil {
-		return nil, nil, err
+		code := "platform.settings.invalid"
+		switch {
+		case errors.Is(err, os.ErrNotExist):
+			code = "platform.settings.not_found"
+		case errors.Is(err, ErrVersionConflict):
+			code = "platform.settings.version_conflict"
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error()}}, nil, nil
 	}
 	raw, err := json.Marshal(out)
 	if err != nil {

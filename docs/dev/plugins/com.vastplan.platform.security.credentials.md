@@ -3,6 +3,7 @@
 插件 ID：`com.vastplan.platform.security.credentials`
 能力：`tool.package/platform.credentials`
 运行模型：`leader + leader-owned + cluster + leader`
+当前制品版本：`0.2.0`
 
 ## 安全模型
 
@@ -36,3 +37,7 @@
 | `revoke(name)` | 撤销凭证引用 |
 
 该 API **没有** `get` 或 `decrypt` 操作。数据库服务不能向它索取明文；后续数据库适配将通过可信宿主的受限操作使用 `CredentialRef`。
+
+## Portal 管理页
+
+同一签名制品提供 `/settings/credentials` 页面。列表只渲染 `Metadata`；保存字段使用 password widget，明文只进入 TLS + CSRF 写请求，请求完成后立即从编辑状态清空。轮换与撤销使用独立角色，详见《[平台管理中心](../architecture/平台管理中心.md)》。

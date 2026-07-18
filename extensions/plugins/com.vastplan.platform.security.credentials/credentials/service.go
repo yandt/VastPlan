@@ -16,14 +16,14 @@ import (
 	"sync"
 	"time"
 
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
 	PluginID          = "com.vastplan.platform.security.credentials"
-	PluginVersion     = "0.1.0"
+	PluginVersion     = "0.2.0"
 	Capability        = "platform.credentials"
 	stateFileKey      = "platform.credentials.stateFile"
 	vaultAddressKey   = "platform.credentials.vault.address"
@@ -360,7 +360,11 @@ func (s *Service) Handler(ctx context.Context, _ sdk.Host, call *contractv1.Call
 		err = fmt.Errorf("不支持的凭证操作 %q", op)
 	}
 	if err != nil {
-		return nil, nil, err
+		code := "platform.credentials.invalid"
+		if errors.Is(err, os.ErrNotExist) {
+			code = "platform.credentials.not_found"
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error()}}, nil, nil
 	}
 	raw, err := json.Marshal(out)
 	if err != nil {

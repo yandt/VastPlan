@@ -304,7 +304,7 @@ func copyTree(source, target string) error {
 		if rel == "." {
 			return nil
 		}
-		if entry.IsDir() && entry.Name() == "__pycache__" {
+		if entry.IsDir() && (entry.Name() == "__pycache__" || entry.Name() == "node_modules") {
 			return filepath.SkipDir
 		}
 		if !entry.IsDir() && (strings.HasSuffix(entry.Name(), ".pyc") || strings.HasSuffix(entry.Name(), ".pyo")) {

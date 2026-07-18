@@ -120,6 +120,44 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
+  extensions/plugins/com.vastplan.platform.artifacts.repository/frontend:
+    dependencies:
+      '@vastplan/platform-admin':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/platform-admin
+      '@vastplan/portal-ui':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/portal-ui
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.23
+        version: 18.3.31
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  extensions/plugins/com.vastplan.platform.configuration.global-settings/frontend:
+    dependencies:
+      '@vastplan/platform-admin':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/platform-admin
+      '@vastplan/portal-ui':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/portal-ui
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.23
+        version: 18.3.31
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   extensions/plugins/com.vastplan.platform.configuration.portal-composer/frontend:
     dependencies:
       '@vastplan/portal-ui':
@@ -138,6 +176,53 @@ importers:
       '@types/react-dom':
         specifier: ^18.3.7
         version: 18.3.7(@types/react@18.3.31)
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7
+
+  extensions/plugins/com.vastplan.platform.data.relational.connection-manager/frontend:
+    dependencies:
+      '@vastplan/platform-admin':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/platform-admin
+      '@vastplan/portal-ui':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/portal-ui
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.23
+        version: 18.3.31
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  extensions/plugins/com.vastplan.platform.security.credentials/frontend:
+    dependencies:
+      '@vastplan/platform-admin':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/platform-admin
+      '@vastplan/portal-ui':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/portal-ui
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.23
+        version: 18.3.31
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  extensions/sdk/ts/platform-admin:
+    devDependencies:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3

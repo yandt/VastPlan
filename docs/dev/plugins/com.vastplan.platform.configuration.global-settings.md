@@ -3,6 +3,7 @@
 插件 ID：`com.vastplan.platform.configuration.global-settings`
 状态：已实现（首个基础服务）
 能力：`tool.package/platform.settings`
+当前制品版本：`0.2.0`
 
 ## 边界
 
@@ -49,3 +50,7 @@ go run ./engineering/tools/pluginpackage \
 ```
 
 制品安装、leader 选举与启动依赖仍由 Node Agent 和 Deployment Controller 按签名 Manifest 执行。
+
+## Portal 管理页
+
+同一签名制品提供 `/settings/global` 页面。页面经强类型平台 BFF 列表、写入和带版本删除设置；JSON 值保存前在浏览器和后端分别校验。页面不允许保存凭证，权限与远端寻址边界见《[平台管理中心](../architecture/平台管理中心.md)》。

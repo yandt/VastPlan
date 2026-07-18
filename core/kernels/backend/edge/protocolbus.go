@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
@@ -47,30 +49,67 @@ func (c *ProtocolBusInteractionClient) Call(ctx context.Context, p portalapi.Pri
 	return invokeCapability(ctx, c.host, p, interactionapi.Capability, operation, payload)
 }
 
+// AddressingPlatformCapabilityClient is a deliberately allowlisted bridge to
+// shared platform services. It does not expose a generic capability proxy.
+type AddressingPlatformCapabilityClient struct{ router *addressing.Router }
+
+func NewAddressingPlatformCapabilityClient(router *addressing.Router) (*AddressingPlatformCapabilityClient, error) {
+	if router == nil {
+		return nil, errors.New("平台管理 addressing router 不能为空")
+	}
+	return &AddressingPlatformCapabilityClient{router: router}, nil
+}
+
+func (c *AddressingPlatformCapabilityClient) Call(ctx context.Context, p portalapi.Principal, capability, operation string, payload []byte) ([]byte, error) {
+	if !platformCapabilityAllowed(capability, operation) {
+		return nil, errors.New("平台管理能力或操作不在 Edge 白名单")
+	}
+	trusted, err := trustedPortalCallContext(p)
+	if err != nil {
+		return nil, err
+	}
+	routingDomain := "platform"
+	target := &contractv1.CallTarget{ExtensionPoint: extpoint.ToolPackage, Capability: capability, Operation: &operation, RoutingDomain: &routingDomain}
+	result, response, err := c.router.Invoke(callcontext.WithTrusted(ctx, trusted), target, trusted.Wire(), payload)
+	if err != nil {
+		return nil, fmt.Errorf("调用远端 capability %s: %w", capability, err)
+	}
+	if result == nil {
+		return nil, fmt.Errorf("capability %s 响应为空", capability)
+	}
+	if result.Status != contractv1.CallResult_STATUS_OK {
+		if result.Error != nil {
+			return nil, &CapabilityError{Code: result.Error.Code, Message: result.Error.Message}
+		}
+		return nil, &CapabilityError{Message: fmt.Sprintf("capability %s 未成功", capability)}
+	}
+	return append([]byte(nil), response...), nil
+}
+
+func platformCapabilityAllowed(capability, operation string) bool {
+	operations := map[string]map[string]struct{}{
+		platformadminapi.SettingsCapability:    {"list": {}, "put": {}, "delete": {}},
+		platformadminapi.CredentialsCapability: {"list": {}, "put": {}, "rotate": {}, "revoke": {}},
+		platformadminapi.DatabaseCapability:    {"list": {}, "define": {}, "remove": {}, "probe": {}},
+		platformadminapi.ArtifactsCapability:   {"status": {}},
+	}
+	_, ok := operations[capability][operation]
+	return ok
+}
+
 func invokeCapability(ctx context.Context, host *protocolbus.Host, p portalapi.Principal, capability, operation string, payload []byte) ([]byte, error) {
 	if p.ID == "" || p.TenantID == "" || operation == "" {
 		return nil, errors.New("能力调用身份或操作不能为空")
 	}
-	callerKind := contractv1.CallerKind_CALLER_KIND_USER
-	if p.System {
-		callerKind = contractv1.CallerKind_CALLER_KIND_SYSTEM
-	}
-	op := operation
-	wire := &contractv1.CallContext{
-		Caller:    &contractv1.Caller{Kind: callerKind, Id: p.ID},
-		Principal: &contractv1.Principal{UserId: p.ID, TenantId: p.TenantID, SystemRoles: append([]string(nil), p.Roles...)},
-		TenantId:  p.TenantID,
-		Scene:     "portal.bff",
-	}
-	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{Source: "portal.edge", AuthenticatedBy: "edge.identity"})
+	trusted, err := trustedPortalCallContext(p)
 	if err != nil {
-		return nil, fmt.Errorf("构造可信 Portal 调用上下文: %w", err)
+		return nil, err
 	}
 	ctx = callcontext.WithTrusted(ctx, trusted)
 	response, err := host.Invoke(ctx, &contractv1.CallTarget{
 		ExtensionPoint: extpoint.ToolPackage,
 		Capability:     capability,
-		Operation:      &op,
+		Operation:      &operation,
 	}, trusted.Wire(), payload)
 	if err != nil {
 		return nil, fmt.Errorf("调用 capability %s: %w", capability, err)
@@ -85,6 +124,27 @@ func invokeCapability(ctx context.Context, host *protocolbus.Host, p portalapi.P
 		return nil, &CapabilityError{Message: fmt.Sprintf("capability %s 未成功", capability)}
 	}
 	return append([]byte(nil), response.Payload...), nil
+}
+
+func trustedPortalCallContext(p portalapi.Principal) (callcontext.Trusted, error) {
+	if p.ID == "" || p.TenantID == "" {
+		return callcontext.Trusted{}, errors.New("能力调用身份不能为空")
+	}
+	callerKind := contractv1.CallerKind_CALLER_KIND_USER
+	if p.System {
+		callerKind = contractv1.CallerKind_CALLER_KIND_SYSTEM
+	}
+	wire := &contractv1.CallContext{
+		Caller:    &contractv1.Caller{Kind: callerKind, Id: p.ID},
+		Principal: &contractv1.Principal{UserId: p.ID, TenantId: p.TenantID, SystemRoles: append([]string(nil), p.Roles...), IsAdmin: hasRole(p.Roles, "platform.admin")},
+		TenantId:  p.TenantID,
+		Scene:     "portal.bff",
+	}
+	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{Source: "portal.edge", AuthenticatedBy: "edge.identity"})
+	if err != nil {
+		return callcontext.Trusted{}, fmt.Errorf("构造可信 Portal 调用上下文: %w", err)
+	}
+	return trusted, nil
 }
 
 type catalogValidationRequest struct {

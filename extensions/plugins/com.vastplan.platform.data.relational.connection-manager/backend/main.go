@@ -11,13 +11,15 @@ import (
 	"sort"
 	"sync"
 
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const id, version, capability = "com.vastplan.platform.data.relational.connection-manager", "0.1.0", "platform.database"
+const id, version, capability = "com.vastplan.platform.data.relational.connection-manager", "0.2.0", "platform.database"
+
+var errConnectionNotFound = errors.New("数据库连接不存在")
 
 type definition struct {
 	Name       string `json:"name"`
@@ -120,7 +122,7 @@ func (s *service) handle(ctx context.Context, host sdk.Host, c *contractv1.CallC
 		var ok bool
 		out, ok = defs[in.Name]
 		if !ok {
-			return nil, nil, errors.New("数据库连接不存在")
+			return domainError("platform.database.not_found", errConnectionNotFound)
 		}
 	case "list":
 		items := make([]definition, 0, len(defs))
@@ -131,7 +133,7 @@ func (s *service) handle(ctx context.Context, host sdk.Host, c *contractv1.CallC
 		out = items
 	case "remove":
 		if _, ok := defs[in.Name]; !ok {
-			return nil, nil, errors.New("数据库连接不存在")
+			return domainError("platform.database.not_found", errConnectionNotFound)
 		}
 		delete(defs, in.Name)
 		if err := s.save(); err != nil {
@@ -141,7 +143,7 @@ func (s *service) handle(ctx context.Context, host sdk.Host, c *contractv1.CallC
 	case "probe":
 		d, ok := defs[in.Name]
 		if !ok {
-			return nil, nil, errors.New("数据库连接不存在")
+			return domainError("platform.database.not_found", errConnectionNotFound)
 		}
 		operation := "probe"
 		request, _ := json.Marshal(kernelspi.DatabaseConnection{Driver: d.Driver, Endpoint: d.Endpoint, Database: d.Database, Credentials: kernelspi.CredentialRef{Name: d.Credential, Scope: "tenant"}})
@@ -161,6 +163,10 @@ func (s *service) handle(ctx context.Context, host sdk.Host, c *contractv1.CallC
 		return nil, nil, err
 	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+}
+
+func domainError(code string, err error) (*contractv1.CallResult, []byte, error) {
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error()}}, nil, nil
 }
 func main() {
 	s, err := newService(os.Getenv("VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"))

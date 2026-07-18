@@ -11,7 +11,11 @@
   },
   "plugins": [
     { "id": "com.vastplan.foundation.frontend.design-system.arco", "version": "1.0.0", "channel": "stable" },
-    { "id": "com.vastplan.platform.configuration.portal-composer", "version": "1.0.0", "channel": "stable" }
+    { "id": "com.vastplan.platform.configuration.portal-composer", "version": "1.0.0", "channel": "stable" },
+    { "id": "com.vastplan.platform.configuration.global-settings", "version": "0.2.0", "channel": "stable" },
+    { "id": "com.vastplan.platform.security.credentials", "version": "0.2.0", "channel": "stable" },
+    { "id": "com.vastplan.platform.data.relational.connection-manager", "version": "0.2.0", "channel": "stable" },
+    { "id": "com.vastplan.platform.artifacts.repository", "version": "0.2.0", "channel": "stable" }
   ],
   "security": { "firstPartyOnly": true, "requireIntegrity": true }
 }

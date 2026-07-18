@@ -1,0 +1,18 @@
+{
+  "id": "com.vastplan.foundation.security.platform-admin-access-policy",
+  "name": "VastPlan 平台管理访问策略",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "以经验证角色授权设置、凭证、数据库连接和制品状态管理",
+  "engines": { "backend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": { "required": ["caller", "authorization.roles"], "optional": ["scope.tenant", "scene", "subject.id", "authorization.admin", "trace", "request.deadline", "propagation.callPath"] },
+  "runtime": { "instancePolicy": "per-kernel", "stateModel": "local-ephemeral", "visibility": "local", "routing": "direct" },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/platform-admin-access-policy" },
+  "contributes": { "backend": { "permissionCheckers": [{ "id": "foundation.security.platform-admin-access-policy", "service_role": "backend", "title": "平台管理角色访问策略", "priority": 1000, "applies": {} }] } }
+}
