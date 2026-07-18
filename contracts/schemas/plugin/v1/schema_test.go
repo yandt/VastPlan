@@ -86,7 +86,7 @@ func TestParseManifest_DesignSystemContributionIsClosedAndComplete(t *testing.T)
   "engines":{"frontend":"^1.0"},"activation":["onStartup"],"entry":{"frontend":"frontend/remoteEntry.js"},
   "contributes":{"frontend":{"designSystems":[%s]}}
 }`
-	valid := `{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}`
+	valid := `{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme","navigation"]}`
 	if _, err := ParseManifest([]byte(fmt.Sprintf(base, valid))); err != nil {
 		t.Fatalf("完整的设计系统贡献应通过校验: %v", err)
 	}

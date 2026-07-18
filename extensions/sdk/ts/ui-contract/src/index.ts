@@ -23,6 +23,17 @@ export interface FormField {
 }
 export interface FormSchema { id: string; title?: string; fields: FormField[]; }
 
+export type FormValidationCode = "required" | "min" | "max" | "pattern" | "invalidPattern";
+export interface FormValidationIssue {
+  path: string;
+  code: FormValidationCode;
+  message?: string;
+  limit?: number;
+}
+export interface FormValidationResult { valid: boolean; issues: FormValidationIssue[]; }
+
+export { applyFormDefaults, getFormValue, isFormFieldVisible, validateForm } from "./form-runtime.js";
+
 export type InteractionKind = "confirm" | "form" | "approval" | "notification" | "progress";
 export type InteractionSurface = "frontend" | "mobile" | "runner.local";
 export interface InteractionSource { workflowRunId?: string; capability: string; operation?: string; }

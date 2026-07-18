@@ -24,7 +24,21 @@ export const portalCompositionSchema: FormSchema = {
   fields: [
     { key: "name", type: "text", title: "名称", validation: { required: true } },
     { key: "route", type: "text", title: "访问路径", help: "必须以 / 开始", validation: { required: true, pattern: "^/" } },
-    { key: "plugins", type: "array", title: "应用功能插件", help: "这里只能选择应用插件；设计系统和平台插件由 Platform Profile 管理" }
+    {
+      key: "plugins",
+      type: "array",
+      title: "应用功能插件",
+      help: "这里只能选择应用插件；设计系统和平台插件由 Platform Profile 管理",
+      validation: { min: 1 },
+      fields: [
+        { key: "id", type: "text", title: "插件 ID", validation: { required: true, pattern: "^[a-z0-9]+(?:[.-][a-z0-9]+)+$" } },
+        { key: "version", type: "text", title: "精确版本", validation: { required: true, pattern: "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$" } },
+        { key: "channel", type: "select", title: "发布通道", defaultValue: "stable", options: [
+          { label: "稳定版", value: "stable" },
+          { label: "预发布", value: "preview" },
+        ] },
+      ],
+    }
   ]
 };
 
@@ -55,6 +69,7 @@ export function PortalComposerView() {
   const ui = usePortalUI();
   const [value, setValue] = useState<Record<string, unknown>>({ route: "/", plugins: [] });
   const [saving, setSaving] = useState(false);
+  const [valid, setValid] = useState(false);
   const createDraft = async () => {
     setSaving(true);
     try {
@@ -72,7 +87,7 @@ export function PortalComposerView() {
       ui.notify({ title: "无法创建草稿", content: error instanceof Error ? error.message : "未知错误", kind: "error" });
     } finally { setSaving(false); }
   };
-  return <ui.Page title="门户与插件组合"><ui.Panel title="草稿"><ui.FormRenderer schema={portalCompositionSchema} value={value} onChange={setValue} /><ui.Button onClick={createDraft} loading={saving}>创建草稿</ui.Button></ui.Panel></ui.Page>;
+  return <ui.Page title="门户与插件组合"><ui.Panel title="草稿"><ui.FormRenderer schema={portalCompositionSchema} value={value} onChange={setValue} onValidationChange={(result) => setValid(result.valid)} /><ui.Button kind="primary" onClick={createDraft} loading={saving} disabled={!valid}>创建草稿</ui.Button></ui.Panel></ui.Page>;
 }
 
 export default {

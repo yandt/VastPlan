@@ -18,7 +18,7 @@
         "title": "Arco Design System",
         "uiContract": "^1.0.0",
         "framework": "arco",
-        "capabilities": ["layout", "menu", "overlay", "form", "data", "feedback", "theme"]
+        "capabilities": ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"]
       }]
     }
   }

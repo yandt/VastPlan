@@ -431,7 +431,7 @@
           "type": "array",
           "minItems": 7,
           "uniqueItems": true,
-          "items": { "enum": ["layout", "menu", "overlay", "form", "data", "feedback", "theme"] },
+          "items": { "enum": ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"] },
           "allOf": [
             { "contains": { "const": "layout" } },
             { "contains": { "const": "menu" } },
