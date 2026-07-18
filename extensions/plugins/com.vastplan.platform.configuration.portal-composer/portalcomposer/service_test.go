@@ -8,10 +8,10 @@ import (
 	"testing"
 
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 type acceptingCatalog struct{}
@@ -72,6 +72,29 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 		t.Fatal(err)
 	} else if got, err := reopened.List(context.Background(), publisher); err != nil || len(got) != 1 || got[0].Status != portalapi.StatusPublished {
 		t.Fatalf("持久化状态错误: %+v %v", got, err)
+	}
+}
+
+func TestDraftCanBeUpdatedOnlyBeforeSubmission(t *testing.T) {
+	s := newTestService(t)
+	author := principal("author", "portal.compose")
+	draft, err := s.CreateDraft(context.Background(), author, spec("/old"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := s.UpdateDraft(context.Background(), author, draft.ID, spec("/new"))
+	if err != nil || updated.Composition.Route != "/new" || updated.Spec.Route != "/new" {
+		t.Fatalf("更新草稿失败: revision=%+v err=%v", updated, err)
+	}
+	audit, err := s.Audit(context.Background(), author, draft.ID)
+	if err != nil || len(audit) != 2 || audit[1].Action != "draft.updated" {
+		t.Fatalf("更新草稿审计缺失: %+v %v", audit, err)
+	}
+	if _, err := s.Submit(context.Background(), author, draft.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.UpdateDraft(context.Background(), author, draft.ID, spec("/forbidden")); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("提交后不得更新草稿: %v", err)
 	}
 }
 

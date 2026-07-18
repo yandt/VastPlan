@@ -7,6 +7,8 @@ export { jsonSchemaDialect } from "@vastplan/ui-contract";
 export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contract";
 export { PortalInteractionClient, PortalInteractionError } from "./interaction-client.js";
 export type { PortalFetch, PortalFetchResponse, PortalInteractionClientOptions } from "./interaction-client.js";
+export { PortalControlClient, PortalControlError } from "./portal-control-client.js";
+export type { PortalApplicationComposition, PortalAuditEvent, PortalControlClientOptions, PortalPluginRef, PortalRevision, PortalRevisionStatus } from "./portal-control-client.js";
 
 export interface FormRendererProps {
   schema: FormSchema;

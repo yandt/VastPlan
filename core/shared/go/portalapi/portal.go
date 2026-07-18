@@ -129,6 +129,7 @@ type PublishRequest struct {
 // through an authenticated Edge adapter. Every method scopes itself to principal.TenantID.
 type Service interface {
 	CreateDraft(context.Context, Principal, frontendcompositionv1.ApplicationComposition) (Revision, error)
+	UpdateDraft(context.Context, Principal, uint64, frontendcompositionv1.ApplicationComposition) (Revision, error)
 	List(context.Context, Principal) ([]Revision, error)
 	Submit(context.Context, Principal, uint64) (Revision, error)
 	Approve(context.Context, Principal, uint64) (Revision, error)

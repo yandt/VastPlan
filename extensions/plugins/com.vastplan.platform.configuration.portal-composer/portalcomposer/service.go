@@ -179,6 +179,42 @@ func (s *Service) CreateDraft(ctx context.Context, principal portalapi.Principal
 	return r, nil
 }
 
+func (s *Service) UpdateDraft(ctx context.Context, principal portalapi.Principal, id uint64, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
+	if err := require(principal, "portal.compose"); err != nil {
+		return portalapi.Revision{}, err
+	}
+	composition, err := frontendcompositionv1.ValidateApplicationComposition(composition)
+	if err != nil {
+		return portalapi.Revision{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i, err := s.revisionIndex(principal.TenantID, id)
+	if err != nil {
+		return portalapi.Revision{}, err
+	}
+	r := &s.state.Revisions[i]
+	if r.Status != portalapi.StatusDraft {
+		return portalapi.Revision{}, ErrInvalidState
+	}
+	resolved, err := s.resolveCurrent(composition, principal.TenantID, r.ID)
+	if err != nil {
+		return portalapi.Revision{}, err
+	}
+	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
+		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
+	}
+	r.PortalID = composition.ID
+	r.Composition = cloneComposition(composition)
+	r.Spec = cloneSpec(resolved)
+	r.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
+	s.auditLocked(*r, "draft.updated", principal, "", "normal")
+	if err := s.save(); err != nil {
+		return portalapi.Revision{}, err
+	}
+	return cloneRevision(*r), nil
+}
+
 func (s *Service) List(_ context.Context, principal portalapi.Principal) ([]portalapi.Revision, error) {
 	if principal.TenantID == "" || principal.ID == "" {
 		return nil, ErrForbidden

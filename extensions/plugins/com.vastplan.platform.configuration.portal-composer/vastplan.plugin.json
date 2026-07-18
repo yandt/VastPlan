@@ -22,7 +22,6 @@
   "state": { "backend": { "format": "com.vastplan.platform.portal-composer", "formatVersion": 1 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/portal-composer", "frontend": "frontend/dist/index.js" },
-  "dependencies": { "com.vastplan.foundation.frontend.design-system.arco": "^1.0.0" },
   "contributes": {
     "backend": {
       "tools": [{
@@ -31,6 +30,7 @@
         "title": "门户组合治理",
         "subcommands": [
           { "name": "createDraft", "description": "创建 Portal 草稿" },
+          { "name": "updateDraft", "description": "更新 Portal 草稿" },
           { "name": "list", "description": "列出 Portal revisions" },
           { "name": "submit", "description": "提交草稿审批" },
           { "name": "approve", "description": "审批草稿" },

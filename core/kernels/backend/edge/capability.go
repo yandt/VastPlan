@@ -46,6 +46,12 @@ func NewCapabilityService(client CapabilityClient) (*CapabilityService, error) {
 func (s *CapabilityService) CreateDraft(ctx context.Context, p portalapi.Principal, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
 	return call[portalapi.Revision](ctx, s.client, p, "createDraft", composition)
 }
+func (s *CapabilityService) UpdateDraft(ctx context.Context, p portalapi.Principal, id uint64, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
+	return call[portalapi.Revision](ctx, s.client, p, "updateDraft", struct {
+		RevisionID  uint64                                       `json:"revisionId"`
+		Composition frontendcompositionv1.ApplicationComposition `json:"composition"`
+	}{RevisionID: id, Composition: composition})
+}
 func (s *CapabilityService) List(ctx context.Context, p portalapi.Principal) ([]portalapi.Revision, error) {
 	return call[[]portalapi.Revision](ctx, s.client, p, "list", struct{}{})
 }

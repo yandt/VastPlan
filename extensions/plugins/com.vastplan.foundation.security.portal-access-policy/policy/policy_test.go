@@ -29,6 +29,9 @@ func TestPortalRolesAndSystemBreakGlass(t *testing.T) {
 	if got := decisionFor(t, user, portalapi.ComposerCapability, "createDraft"); got.Decision != extpoint.DecisionAllow {
 		t.Fatalf("compose 应放行: %+v", got)
 	}
+	if got := decisionFor(t, user, portalapi.ComposerCapability, "updateDraft"); got.Decision != extpoint.DecisionAllow {
+		t.Fatalf("compose 应允许更新草稿: %+v", got)
+	}
 	if got := decisionFor(t, user, portalapi.ComposerCapability, "publish"); got.Decision != extpoint.DecisionDeny {
 		t.Fatalf("publish 应拒绝: %+v", got)
 	}

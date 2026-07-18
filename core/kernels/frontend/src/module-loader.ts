@@ -131,7 +131,8 @@ function ownedBuffer(source: Uint8Array): ArrayBuffer {
 }
 
 function validateDescriptor(descriptor: FrontendModuleDescriptor): void {
-  if (!descriptor.id || !descriptor.version || !descriptor.url.startsWith("/v1/portal-modules/") ||
+  const governedURL = descriptor.url.startsWith("/v1/portal-modules/") || descriptor.url.startsWith("/v1/portal-recovery-modules/");
+  if (!descriptor.id || !descriptor.version || !governedURL ||
       !/^[a-f0-9]{64}$/.test(descriptor.sha256) || !/^[a-f0-9]{64}$/.test(descriptor.packageSha256) ||
       (!descriptor.entry.endsWith(".js") && !descriptor.entry.endsWith(".mjs"))) {
     throw new ModuleLoadError("MODULE_DESCRIPTOR_INVALID", `前端模块描述无效: ${descriptor.id || "unknown"}`);

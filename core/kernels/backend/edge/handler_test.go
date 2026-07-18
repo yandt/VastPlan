@@ -40,6 +40,11 @@ func (s *service) CreateDraft(_ context.Context, p portalapi.Principal, v fronte
 	}
 	return portalapi.Revision{ID: 1, TenantID: p.TenantID, PortalID: v.ID, Status: portalapi.StatusDraft}, nil
 }
+func (s *service) UpdateDraft(_ context.Context, p portalapi.Principal, id uint64, v frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
+	s.seen = p
+	s.created = v
+	return portalapi.Revision{ID: id, TenantID: p.TenantID, PortalID: v.ID, Status: portalapi.StatusDraft}, nil
+}
 
 func TestBFFMapsKernelPermissionDenialToForbidden(t *testing.T) {
 	s := &service{createErr: &CapabilityError{Code: errorcode.PermissionDenied, Message: "缺少门户角色"}}
@@ -94,7 +99,12 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 		Revision: 7, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref},
 		Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile}},
 	}
-	s := &service{revisions: []portalapi.Revision{{ID: 7, TenantID: "tenant-a", PortalID: "admin", Status: portalapi.StatusPublished, Active: true, Spec: spec}}}
+	fallbackSpec := spec
+	fallbackSpec.Revision = 6
+	s := &service{revisions: []portalapi.Revision{
+		{ID: 7, TenantID: "tenant-a", PortalID: "admin", Status: portalapi.StatusPublished, Active: true, Spec: spec},
+		{ID: 6, TenantID: "tenant-a", PortalID: "admin", Status: portalapi.StatusPublished, Active: false, Spec: fallbackSpec},
+	}}
 	h := NewWithRuntime(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "reader", TenantID: "tenant-a", Roles: []string{"portal.read"}}, nil
 	}), s, nil, catalog)
@@ -125,6 +135,32 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	h.ServeHTTP(missingW, missing)
 	if missingW.Code != http.StatusNotFound {
 		t.Fatalf("非 active revision 不得读取模块: %d", missingW.Code)
+	}
+
+	recoveryRequest := httptest.NewRequest(http.MethodGet, "/v1/portal-recovery?path=/settings", nil)
+	recoveryW := httptest.NewRecorder()
+	h.ServeHTTP(recoveryW, recoveryRequest)
+	if recoveryW.Code != http.StatusOK {
+		t.Fatalf("应返回服务端选择的安全恢复版本: status=%d body=%s", recoveryW.Code, recoveryW.Body.String())
+	}
+	var recovery portalapi.RuntimeSpec
+	if err := json.Unmarshal(recoveryW.Body.Bytes(), &recovery); err != nil {
+		t.Fatal(err)
+	}
+	if recovery.Portal.Revision != 6 || len(recovery.Modules) != 1 || recovery.Modules[0].URL != "/v1/portal-recovery-modules/7/6/"+ref.ID+".js" {
+		t.Fatalf("恢复描述未绑定 active/fallback revision: %+v", recovery)
+	}
+	recoveryModule := httptest.NewRequest(http.MethodGet, recovery.Modules[0].URL, nil)
+	recoveryModuleW := httptest.NewRecorder()
+	h.ServeHTTP(recoveryModuleW, recoveryModule)
+	if recoveryModuleW.Code != http.StatusOK || recoveryModuleW.Body.String() != string(module) {
+		t.Fatalf("读取恢复模块失败: status=%d body=%s", recoveryModuleW.Code, recoveryModuleW.Body.String())
+	}
+	tamperedRecovery := httptest.NewRequest(http.MethodGet, "/v1/portal-recovery-modules/7/5/"+ref.ID+".js", nil)
+	tamperedRecoveryW := httptest.NewRecorder()
+	h.ServeHTTP(tamperedRecoveryW, tamperedRecovery)
+	if tamperedRecoveryW.Code != http.StatusNotFound {
+		t.Fatalf("浏览器指定非服务端选择的历史版本必须拒绝: %d", tamperedRecoveryW.Code)
 	}
 }
 func (*service) Submit(context.Context, portalapi.Principal, uint64) (portalapi.Revision, error) {

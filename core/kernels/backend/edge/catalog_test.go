@@ -73,6 +73,10 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 	if len(runtime.Modules) != 1 || runtime.Modules[0].SHA256 != hex.EncodeToString(wantDigest[:]) || runtime.Modules[0].PackageSHA256 != artifact.SHA256 {
 		t.Fatalf("模块摘要未绑定已验证制品: %+v", runtime.Modules)
 	}
+	recovery, err := catalog.ResolveRecoveryRuntime(context.Background(), "tenant-a", 2, spec)
+	if err != nil || len(recovery.Modules) != 1 || recovery.Modules[0].URL != "/v1/portal-recovery-modules/2/1/"+ref.ID+".js" {
+		t.Fatalf("恢复模块 URL 未同时绑定 active/fallback revision: %+v %v", recovery.Modules, err)
+	}
 	asset, err := catalog.ReadFrontendModule(context.Background(), "tenant-a", spec, ref.ID)
 	if err != nil || string(asset.Content) != string(module) {
 		t.Fatalf("读取已锁定模块失败: asset=%+v err=%v", asset.Descriptor, err)

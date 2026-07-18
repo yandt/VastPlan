@@ -43,7 +43,7 @@ func decide(c *contractv1.CallContext, request extpoint.PermissionRequest) (extp
 	if c.Caller.Kind != contractv1.CallerKind_CALLER_KIND_USER {
 		return extpoint.DecisionDeny, "仅已认证用户可调用门户组合"
 	}
-	needed := map[string]string{"createDraft": "portal.compose", "submit": "portal.compose", "approve": "portal.approve", "publish": "portal.publish", "rollback": "portal.publish", "list": "portal.read", "audit": "portal.read"}[request.Operation]
+	needed := map[string]string{"createDraft": "portal.compose", "updateDraft": "portal.compose", "submit": "portal.compose", "approve": "portal.approve", "publish": "portal.publish", "rollback": "portal.publish", "list": "portal.read", "audit": "portal.read"}[request.Operation]
 	if needed == "" {
 		return extpoint.DecisionDeny, "未知门户操作"
 	}

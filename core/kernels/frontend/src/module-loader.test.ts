@@ -50,4 +50,10 @@ describe("VerifiedFrontendPluginLoader", () => {
     expect(parsePortalRuntimeSpec({ portal: { revision: 7 }, modules: [locked] }).modules).toHaveLength(1);
     expect(() => parsePortalRuntimeSpec({ portal: {}, modules: [{ ...locked, url: "https://attacker.invalid/module.js" }] })).toThrowError(ModuleLoadError);
   });
+
+  it("accepts only governed active or recovery module URLs", async () => {
+    const locked = await descriptor({ url: `/v1/portal-recovery-modules/8/7/${ref.id}.js` });
+    expect(parsePortalRuntimeSpec({ portal: { revision: 7 }, modules: [locked] }).modules[0].url).toBe(locked.url);
+    expect(() => parsePortalRuntimeSpec({ portal: {}, modules: [{ ...locked, url: "/assets/history/module.js" }] })).toThrowError(ModuleLoadError);
+  });
 });

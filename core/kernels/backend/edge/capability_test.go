@@ -42,3 +42,26 @@ func TestCapabilityServiceForwardsOnlyVerifiedPrincipalAndOperation(t *testing.T
 		t.Fatalf("草稿负载错误: %s %v", c.payload, err)
 	}
 }
+
+func TestCapabilityServiceForwardsDraftUpdateWithRevision(t *testing.T) {
+	c := &recordingClient{}
+	s, err := NewCapabilityService(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := portalapi.Principal{ID: "verified", TenantID: "tenant-a", Roles: []string{"portal.compose"}}
+	composition := frontendcompositionv1.ApplicationComposition{Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "admin"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend}, Route: "/", Plugins: []frontendcompositionv1.PluginRef{}}
+	if _, err := s.UpdateDraft(context.Background(), p, 7, composition); err != nil {
+		t.Fatal(err)
+	}
+	if c.operation != "updateDraft" {
+		t.Fatalf("更新草稿 operation=%q", c.operation)
+	}
+	var payload struct {
+		RevisionID  uint64                                       `json:"revisionId"`
+		Composition frontendcompositionv1.ApplicationComposition `json:"composition"`
+	}
+	if err := json.Unmarshal(c.payload, &payload); err != nil || payload.RevisionID != 7 || payload.Composition.ID != "admin" {
+		t.Fatalf("更新草稿负载错误: %s %v", c.payload, err)
+	}
+}

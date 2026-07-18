@@ -9,11 +9,11 @@ import (
 	"strings"
 
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 type catalogContextKey struct{}
@@ -131,6 +131,22 @@ func (s *Service) Handle(ctx context.Context, principal portalapi.Principal, ope
 			return nil, err
 		}
 		result = value
+	case "updateDraft":
+		var request struct {
+			RevisionID  uint64                                       `json:"revisionId"`
+			Composition frontendcompositionv1.ApplicationComposition `json:"composition"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		if request.RevisionID == 0 {
+			return nil, fmt.Errorf("revisionId 必须大于 0")
+		}
+		value, err := s.UpdateDraft(ctx, principal, request.RevisionID, request.Composition)
+		if err != nil {
+			return nil, err
+		}
+		result = value
 	case "list":
 		value, err := s.List(ctx, principal)
 		if err != nil {
@@ -199,7 +215,7 @@ func decode(raw []byte, target any) error {
 // minimum fields required by the portal API.
 func Contribution(service *Service) sdk.Contribution {
 	handlers := map[string]sdk.Handler{}
-	for _, operation := range []string{"createDraft", "list", "submit", "approve", "publish", "rollback", "audit"} {
+	for _, operation := range []string{"createDraft", "updateDraft", "list", "submit", "approve", "publish", "rollback", "audit"} {
 		op := operation
 		handlers[op] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 			if err := service.ensureConfigured(ctx, host, callCtx); err != nil {
@@ -223,7 +239,7 @@ func Contribution(service *Service) sdk.Contribution {
 }
 
 func Descriptor() []byte {
-	return []byte(`{"title":"门户组合治理","subcommands":[{"name":"createDraft","description":"创建 Portal 草稿"},{"name":"list","description":"列出 Portal revisions"},{"name":"submit","description":"提交草稿审批"},{"name":"approve","description":"审批草稿"},{"name":"publish","description":"发布 Portal revision"},{"name":"rollback","description":"回滚到历史 revision"},{"name":"audit","description":"读取 revision 审计"}]}`)
+	return []byte(`{"title":"门户组合治理","subcommands":[{"name":"createDraft","description":"创建 Portal 草稿"},{"name":"updateDraft","description":"更新 Portal 草稿"},{"name":"list","description":"列出 Portal revisions"},{"name":"submit","description":"提交草稿审批"},{"name":"approve","description":"审批草稿"},{"name":"publish","description":"发布 Portal revision"},{"name":"rollback","description":"回滚到历史 revision"},{"name":"audit","description":"读取 revision 审计"}]}`)
 }
 func projectPrincipal(callCtx *contractv1.CallContext) (portalapi.Principal, error) {
 	if callCtx == nil || callCtx.Principal == nil || callCtx.Principal.UserId == "" || callCtx.TenantId == "" {

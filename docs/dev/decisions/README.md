@@ -97,3 +97,4 @@
 - [ADR-0064 Portal 语义组件契约与动态表单运行时](ADR-0064-Portal语义组件契约与动态表单运行时.md)
 - [ADR-0065 通用 JSON Schema 表单与 Arco 主题适配](ADR-0065-通用JSON-Schema表单与Arco主题适配.md)
 - [ADR-0066 Arco 按需构建与单文件制品边界](ADR-0066-Arco按需构建与单文件制品边界.md)
+- [ADR-0067 Portal 控制面闭环、安全恢复与第二适配器验收](ADR-0067-Portal控制面闭环安全恢复与第二适配器验收.md)

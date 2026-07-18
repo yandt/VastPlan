@@ -156,6 +156,23 @@ func (c *TrustedCatalog) ResolveRuntime(ctx context.Context, tenantID string, sp
 	return runtime, nil
 }
 
+// ResolveRecoveryRuntime binds every historical module URL to both the current
+// active revision and the server-selected fallback revision. The browser cannot
+// turn recovery mode into an arbitrary historical artifact reader.
+func (c *TrustedCatalog) ResolveRecoveryRuntime(ctx context.Context, tenantID string, activeRevision uint64, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
+	if activeRevision == 0 || spec.Revision == 0 || activeRevision == spec.Revision {
+		return portalapi.RuntimeSpec{}, errors.New("Portal 恢复 revision 无效")
+	}
+	runtime, err := c.ResolveRuntime(ctx, tenantID, spec)
+	if err != nil {
+		return portalapi.RuntimeSpec{}, err
+	}
+	for i := range runtime.Modules {
+		runtime.Modules[i].URL = fmt.Sprintf("/v1/portal-recovery-modules/%d/%d/%s.js", activeRevision, spec.Revision, runtime.Modules[i].ID)
+	}
+	return runtime, nil
+}
+
 // ReadFrontendModule serves only a module locked into the supplied active
 // revision. A caller cannot turn the asset endpoint into an arbitrary artifact
 // reader by choosing its own plugin version or entry path.

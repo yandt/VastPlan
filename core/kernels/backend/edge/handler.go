@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -65,7 +66,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.csrf(w, r)
 		return
 	}
-	runtimePath := r.URL.Path == "/v1/portal-runtime" || strings.HasPrefix(r.URL.Path, "/v1/portal-modules/")
+	runtimePath := r.URL.Path == "/v1/portal-runtime" || r.URL.Path == "/v1/portal-recovery" || strings.HasPrefix(r.URL.Path, "/v1/portal-modules/") || strings.HasPrefix(r.URL.Path, "/v1/portal-recovery-modules/")
 	portalPath := strings.HasPrefix(r.URL.Path, "/v1/portal-drafts")
 	interactionPath := strings.HasPrefix(r.URL.Path, "/v1/interactions")
 	if !runtimePath && !portalPath && !interactionPath {
@@ -124,6 +125,41 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 		writeJSON(w, http.StatusOK, runtime)
 		return
 	}
+	if r.URL.Path == "/v1/portal-recovery" {
+		active, fallback, ok := selectRecoveryPortal(revisions, p.TenantID, r.URL.Query().Get("path"), requestHost(r))
+		if !ok {
+			writeError(w, http.StatusNotFound, "portal_recovery_not_found")
+			return
+		}
+		runtime, err := h.catalog.ResolveRecoveryRuntime(r.Context(), p.TenantID, active.ID, fallback.Spec)
+		if err != nil {
+			writeError(w, http.StatusConflict, "portal_recovery_rejected")
+			return
+		}
+		w.Header().Set("X-VastPlan-Recovery-From", fmt.Sprint(active.ID))
+		w.Header().Set("X-VastPlan-Recovery-Revision", fmt.Sprint(fallback.ID))
+		writeJSON(w, http.StatusOK, runtime)
+		return
+	}
+	if strings.HasPrefix(r.URL.Path, "/v1/portal-recovery-modules/") {
+		activeID, fallbackID, pluginID, ok := parseRecoveryModulePath(r.URL.Path)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		active, ok := activeRevision(revisions, p.TenantID, activeID)
+		if !ok {
+			writeError(w, http.StatusNotFound, "portal_revision_not_found")
+			return
+		}
+		fallback, ok := recoveryRevision(revisions, active, fallbackID)
+		if !ok {
+			writeError(w, http.StatusNotFound, "portal_recovery_not_found")
+			return
+		}
+		h.serveFrontendModule(w, r, p, fallback, pluginID)
+		return
+	}
 	revisionID, pluginID, ok := parseModulePath(r.URL.Path)
 	if !ok {
 		http.NotFound(w, r)
@@ -134,6 +170,10 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 		writeError(w, http.StatusNotFound, "portal_revision_not_found")
 		return
 	}
+	h.serveFrontendModule(w, r, p, revision, pluginID)
+}
+
+func (h *Handler) serveFrontendModule(w http.ResponseWriter, r *http.Request, p portalapi.Principal, revision portalapi.Revision, pluginID string) {
 	asset, err := h.catalog.ReadFrontendModule(r.Context(), p.TenantID, revision.Spec, pluginID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "portal_module_not_found")
@@ -149,6 +189,37 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 	if r.Method == http.MethodGet {
 		_, _ = w.Write(asset.Content)
 	}
+}
+
+func selectRecoveryPortal(revisions []portalapi.Revision, tenantID, requestedPath, host string) (portalapi.Revision, portalapi.Revision, bool) {
+	active, ok := selectActivePortal(revisions, tenantID, requestedPath, host)
+	if !ok {
+		return portalapi.Revision{}, portalapi.Revision{}, false
+	}
+	fallback, ok := latestRecoveryRevision(revisions, active)
+	return active, fallback, ok
+}
+
+func latestRecoveryRevision(revisions []portalapi.Revision, active portalapi.Revision) (portalapi.Revision, bool) {
+	var fallback portalapi.Revision
+	for _, candidate := range revisions {
+		if candidate.TenantID != active.TenantID || candidate.PortalID != active.PortalID || candidate.Active || candidate.Status != portalapi.StatusPublished ||
+			candidate.ID == 0 || candidate.Spec.Revision != candidate.ID {
+			continue
+		}
+		if fallback.ID == 0 || candidate.ID > fallback.ID {
+			fallback = candidate
+		}
+	}
+	return fallback, fallback.ID != 0
+}
+
+func recoveryRevision(revisions []portalapi.Revision, active portalapi.Revision, fallbackID uint64) (portalapi.Revision, bool) {
+	fallback, ok := latestRecoveryRevision(revisions, active)
+	if !ok || fallback.ID != fallbackID || fallback.PortalID != active.PortalID {
+		return portalapi.Revision{}, false
+	}
+	return fallback, true
 }
 
 func selectActivePortal(revisions []portalapi.Revision, tenantID, requestedPath, host string) (portalapi.Revision, bool) {
@@ -225,6 +296,25 @@ func parseModulePath(value string) (uint64, string, bool) {
 		return 0, "", false
 	}
 	return revision, pluginID, true
+}
+
+func parseRecoveryModulePath(value string) (uint64, uint64, string, bool) {
+	parts := strings.Split(strings.TrimPrefix(value, "/v1/portal-recovery-modules/"), "/")
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || !strings.HasSuffix(parts[2], ".js") {
+		return 0, 0, "", false
+	}
+	var active, fallback uint64
+	if _, err := fmtSscan(parts[0], &active); err != nil || active == 0 {
+		return 0, 0, "", false
+	}
+	if _, err := fmtSscan(parts[1], &fallback); err != nil || fallback == 0 || fallback == active {
+		return 0, 0, "", false
+	}
+	pluginID := strings.TrimSuffix(parts[2], ".js")
+	if pluginID == "" || strings.ContainsAny(pluginID, "/\\") {
+		return 0, 0, "", false
+	}
+	return active, fallback, pluginID, true
 }
 
 func (h *Handler) interactionRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
@@ -306,6 +396,19 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request, p portalapi.Prin
 		}
 		return
 	}
+	if len(parts) == 2 && parts[0] == "" && parts[1] != "" {
+		var id uint64
+		if _, err := fmtSscan(parts[1], &id); err != nil || id == 0 {
+			writeError(w, http.StatusBadRequest, "invalid_revision")
+			return
+		}
+		if r.Method == http.MethodPut {
+			h.update(w, r, p, id)
+			return
+		}
+		methodNotAllowed(w)
+		return
+	}
 	if len(parts) != 3 || parts[0] != "" || parts[1] == "" {
 		http.NotFound(w, r)
 		return
@@ -351,6 +454,14 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request, p portalapi.Pri
 		return
 	}
 	v, err := h.service.CreateDraft(r.Context(), p, composition)
+	respond(w, v, err)
+}
+func (h *Handler) update(w http.ResponseWriter, r *http.Request, p portalapi.Principal, id uint64) {
+	var composition frontendcompositionv1.ApplicationComposition
+	if !decode(w, r, &composition) {
+		return
+	}
+	v, err := h.service.UpdateDraft(r.Context(), p, id, composition)
 	respond(w, v, err)
 }
 func (h *Handler) list(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {

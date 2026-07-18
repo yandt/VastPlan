@@ -3,15 +3,20 @@ import type { DesignSystemAdapter } from "@vastplan/portal-ui";
 import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type PluginRef } from "./portal-runtime";
 
 const arcoRef: PluginRef = { id: "com.vastplan.foundation.frontend.design-system.arco", version: "1.0.0" };
+const muiRef: PluginRef = { id: "com.vastplan.foundation.frontend.design-system.mui", version: "1.0.0" };
 const composerRef: PluginRef = { id: "com.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 
-const adapter = {
+function designSystem(framework: string): DesignSystemAdapter {
+  return {
   id: "ui.design-system",
-  framework: "arco",
+  framework,
   uiContract: "1.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"],
   Provider: () => null,
-} satisfies DesignSystemAdapter;
+  };
+}
+
+const adapter = designSystem("arco");
 
 function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
   return {
@@ -19,8 +24,8 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
       const base = {
         provenance: { signed: true, firstParty: true, integrity: "sha256:test" },
       };
-      if (ref.id === arcoRef.id) {
-        return { ...base, designSystem: adapter, ...(overrides[ref.id] as object) };
+      if (ref.id === arcoRef.id || ref.id === muiRef.id) {
+        return { ...base, designSystem: designSystem(ref.id === arcoRef.id ? "arco" : "mui"), ...(overrides[ref.id] as object) };
       }
       return {
         ...base,
@@ -48,6 +53,21 @@ describe("PortalRuntime", () => {
     const prepared = await new PortalRuntime(loader()).prepare(portal);
     expect(prepared.designSystem.framework).toBe("arco");
     expect(prepared.routes).toHaveLength(1);
+    expect(prepared.routes[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
+  });
+
+  it("assembles the same functional plugin against a second UI framework", async () => {
+    const muiPortal = {
+      ...portal,
+      designSystem: { ...muiRef, uiContract: "^1.0.0" },
+      plugins: [muiRef, composerRef],
+      resolution: {
+        ...portal.resolution,
+        pluginOrigins: { [muiRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
+      },
+    };
+    const prepared = await new PortalRuntime(loader()).prepare(muiPortal);
+    expect(prepared.designSystem.framework).toBe("mui");
     expect(prepared.routes[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
   });
 

@@ -149,6 +149,20 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if draft.ID == 0 || draft.Status != portalapi.StatusDraft {
 		t.Fatalf("unexpected created revision: %+v", draft)
 	}
+	updatedComposition := portalSpec()
+	updatedComposition.Branding = map[string]any{"title": "Operations Portal"}
+	csrf = portalCSRF(t, client, baseURL, "author-token")
+	status, raw = portalHTTPRequest(t, client, baseURL, "author-token", csrf, http.MethodPut, fmt.Sprintf("/v1/portal-drafts/%d", draft.ID), updatedComposition)
+	if status != http.StatusOK {
+		t.Fatalf("update portal draft status=%d body=%s", status, raw)
+	}
+	var updated portalapi.Revision
+	if err := json.Unmarshal(raw, &updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Composition.Branding["title"] != "Operations Portal" {
+		t.Fatalf("updated composition was not persisted: %+v", updated.Composition)
+	}
 
 	csrf = portalCSRF(t, client, baseURL, "author-token")
 	if status, raw = portalHTTPRequest(t, client, baseURL, "author-token", csrf, http.MethodPost, portalRevisionPath(draft.ID, "submit"), map[string]any{}); status != http.StatusOK {
@@ -211,6 +225,21 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 		if status, raw = portalHTTPRequest(t, client, baseURL, step.token, csrf, http.MethodPost, portalRevisionPath(newer.ID, step.operation), map[string]any{}); status != http.StatusOK {
 			t.Fatalf("%s newer portal draft status=%d body=%s", step.operation, status, raw)
 		}
+	}
+	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-recovery?path=/operations", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("read governed recovery runtime status=%d body=%s", status, raw)
+	}
+	var recovery portalapi.RuntimeSpec
+	if err := json.Unmarshal(raw, &recovery); err != nil {
+		t.Fatal(err)
+	}
+	if recovery.Portal.Revision != draft.ID || len(recovery.Modules) == 0 || !strings.HasPrefix(recovery.Modules[0].URL, fmt.Sprintf("/v1/portal-recovery-modules/%d/%d/", newer.ID, draft.ID)) {
+		t.Fatalf("unexpected governed recovery runtime: %+v", recovery)
+	}
+	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, recovery.Modules[0].URL, map[string]any{})
+	if status != http.StatusOK || !bytes.Contains(raw, []byte("ui.design-system")) {
+		t.Fatalf("read verified recovery module status=%d body=%s", status, raw)
 	}
 	csrf = portalCSRF(t, client, baseURL, "publisher-token")
 	status, raw = portalHTTPRequest(t, client, baseURL, "publisher-token", csrf, http.MethodPost, portalRevisionPath(draft.ID, "rollback"), map[string]any{})
