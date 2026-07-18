@@ -27,11 +27,14 @@ import (
 	"syscall"
 	"time"
 
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	artifactservercommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/artifactserver"
 	controlplanecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/controlplane"
 	nodebootstrapcommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/nodebootstrap"
 	portaledgecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/portaledge"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/credentialbroker"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentpublisher"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/kernelops"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
@@ -273,6 +276,17 @@ func runReconcile(args []string) (runErr error) {
 		}
 		runtime.Dependencies.Credentials = credentials
 		runtime.Dependencies.NodeBootstrap = bootstrapBroker
+	}
+	if options.backendPlatformCatalog != "" {
+		catalog, err := backendcompositionv1.ParseBackendPlatformCatalogFile(options.backendPlatformCatalog)
+		if err != nil {
+			return err
+		}
+		publisher, err := deploymentpublisher.New(catalog, artifacts, deploymentpublisher.KVApplier{KV: plane.buckets.Deployments}, compositionresolver.Options{AllowDevelopmentPlugins: options.allowDevelopmentPlugins}, compositionresolver.Resolve)
+		if err != nil {
+			return err
+		}
+		runtime.Dependencies.DeploymentPublication = publisher
 	}
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
 	if plane.router != nil {

@@ -201,6 +201,71 @@ func (s *CapabilityPlatformAdminService) ApproveBootstrapJob(ctx context.Context
 	return response, err
 }
 
+func (s *CapabilityPlatformAdminService) ListDeploymentTargets(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) ([]platformadminapi.DeploymentTarget, error) {
+	var response struct {
+		Items []platformadminapi.DeploymentTarget `json:"items"`
+	}
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "listDeploymentTargets", false, struct{}{}, &response)
+	return response.Items, err
+}
+
+func (s *CapabilityPlatformAdminService) ListServiceRevisions(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) ([]platformadminapi.ServiceRevision, error) {
+	var response struct {
+		Items []platformadminapi.ServiceRevision `json:"items"`
+	}
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "listServiceRevisions", false, struct{}{}, &response)
+	return response.Items, err
+}
+
+func (s *CapabilityPlatformAdminService) CreateServiceDraft(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, request platformadminapi.ServiceCompositionRequest) (platformadminapi.ServiceRevision, error) {
+	var response platformadminapi.ServiceRevision
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "createServiceDraft", true, request, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) UpdateServiceDraft(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id uint64, request platformadminapi.ServiceCompositionRequest) (platformadminapi.ServiceRevision, error) {
+	var response platformadminapi.ServiceRevision
+	payload := struct {
+		RevisionID uint64 `json:"revisionId"`
+		platformadminapi.ServiceCompositionRequest
+	}{RevisionID: id, ServiceCompositionRequest: request}
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "updateServiceDraft", true, payload, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) SubmitServiceDraft(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id uint64) (platformadminapi.ServiceRevision, error) {
+	return s.serviceRevisionAction(ctx, p, target, id, "submitServiceDraft")
+}
+
+func (s *CapabilityPlatformAdminService) ApproveServiceRevision(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id uint64) (platformadminapi.ServiceRevision, error) {
+	return s.serviceRevisionAction(ctx, p, target, id, "approveServiceRevision")
+}
+
+func (s *CapabilityPlatformAdminService) PublishServiceRevision(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id uint64) (platformadminapi.ServiceRevision, error) {
+	return s.serviceRevisionAction(ctx, p, target, id, "publishServiceRevision")
+}
+
+func (s *CapabilityPlatformAdminService) RollbackServiceRevision(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id uint64) (platformadminapi.ServiceRevision, error) {
+	return s.serviceRevisionAction(ctx, p, target, id, "rollbackServiceRevision")
+}
+
+func (s *CapabilityPlatformAdminService) ListServiceRevisionAudit(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id uint64) ([]platformadminapi.ServiceAuditEvent, error) {
+	var response struct {
+		Items []platformadminapi.ServiceAuditEvent `json:"items"`
+	}
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "listServiceRevisionAudit", false, map[string]uint64{"revisionId": id}, &response)
+	return response.Items, err
+}
+
+func (s *CapabilityPlatformAdminService) serviceRevisionAction(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id uint64, operation string) (platformadminapi.ServiceRevision, error) {
+	if id == 0 {
+		return platformadminapi.ServiceRevision{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.ServiceRevision
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, operation, true, map[string]uint64{"revisionId": id}, &response)
+	return response, err
+}
+
 func validResourceName(value string, max int) error {
 	if strings.TrimSpace(value) == "" || len(value) > max || strings.ContainsAny(value, "/\\\x00") {
 		return platformadminapi.ErrInvalid

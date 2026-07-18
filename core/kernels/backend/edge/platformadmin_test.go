@@ -76,6 +76,33 @@ func (*platformService) CreateBootstrapJob(_ context.Context, _ portalapi.Princi
 func (*platformService) ApproveBootstrapJob(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, jobID string) (platformadminapi.BootstrapJob, error) {
 	return platformadminapi.BootstrapJob{ID: jobID, State: platformadminapi.BootstrapSystemdActive}, nil
 }
+func (*platformService) ListDeploymentTargets(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]platformadminapi.DeploymentTarget, error) {
+	return []platformadminapi.DeploymentTarget{{DeploymentName: "agent-services"}}, nil
+}
+func (*platformService) ListServiceRevisions(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]platformadminapi.ServiceRevision, error) {
+	return []platformadminapi.ServiceRevision{{ID: 1, Deployment: "agent-services", Status: platformadminapi.ServiceDraft}}, nil
+}
+func (*platformService) CreateServiceDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, platformadminapi.ServiceCompositionRequest) (platformadminapi.ServiceRevision, error) {
+	return platformadminapi.ServiceRevision{ID: 1, Status: platformadminapi.ServiceDraft}, nil
+}
+func (*platformService) UpdateServiceDraft(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id uint64, _ platformadminapi.ServiceCompositionRequest) (platformadminapi.ServiceRevision, error) {
+	return platformadminapi.ServiceRevision{ID: id, Status: platformadminapi.ServiceDraft}, nil
+}
+func (*platformService) SubmitServiceDraft(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id uint64) (platformadminapi.ServiceRevision, error) {
+	return platformadminapi.ServiceRevision{ID: id, Status: platformadminapi.ServicePendingApproval}, nil
+}
+func (*platformService) ApproveServiceRevision(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id uint64) (platformadminapi.ServiceRevision, error) {
+	return platformadminapi.ServiceRevision{ID: id, Status: platformadminapi.ServiceApproved}, nil
+}
+func (*platformService) PublishServiceRevision(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id uint64) (platformadminapi.ServiceRevision, error) {
+	return platformadminapi.ServiceRevision{ID: id, Status: platformadminapi.ServicePublished, Active: true}, nil
+}
+func (*platformService) RollbackServiceRevision(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id uint64) (platformadminapi.ServiceRevision, error) {
+	return platformadminapi.ServiceRevision{ID: id + 1, Status: platformadminapi.ServicePublished, Active: true}, nil
+}
+func (*platformService) ListServiceRevisionAudit(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id uint64) ([]platformadminapi.ServiceAuditEvent, error) {
+	return []platformadminapi.ServiceAuditEvent{{ID: 1, RevisionID: id}}, nil
+}
 
 func platformPortalService() *service {
 	profile := compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}
@@ -84,7 +111,7 @@ func platformPortalService() *service {
 		{ID: "credentials", LogicalService: "platform.credentials", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.CredentialsCapability, Read: []string{"list"}, Write: []string{"put", "rotate", "revoke"}}}},
 		{ID: "database", LogicalService: "platform.database", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DatabaseCapability, Read: []string{"list"}, Write: []string{"define", "remove", "probe"}}}},
 		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status"}}}},
-		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap"}}}},
+		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision"}}}},
 	}}
 	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a", Route: "/operations", Management: binding, Resolution: portalapi.Resolution{PlatformProfile: profile, ManagementBindingDigest: compositioncommonv1.Digest(binding)}}
 	return &service{revisions: []portalapi.Revision{{ID: 1, TenantID: "tenant-a", PortalID: "operations", Status: portalapi.StatusPublished, Active: true, Spec: spec}}}

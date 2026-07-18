@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
@@ -27,7 +28,7 @@ import (
 
 const (
 	PluginID      = "com.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.2.0"
+	PluginVersion = "0.3.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 16 << 20
@@ -40,11 +41,17 @@ var (
 	errJobConflict     = errors.New("节点已有未完成引导作业")
 	errSeparation      = errors.New("引导请求人与审批人必须不同")
 	errBootstrapFailed = errors.New("可信节点引导执行失败")
+	errServiceState    = errors.New("服务组合状态不允许此操作")
+	errServicePublish  = errors.New("可信服务组合发布失败")
 )
 
 type tenantState struct {
-	Nodes map[string]platformadminapi.ManagedNode  `json:"nodes"`
-	Jobs  map[string]platformadminapi.BootstrapJob `json:"jobs"`
+	Nodes        map[string]platformadminapi.ManagedNode  `json:"nodes"`
+	Jobs         map[string]platformadminapi.BootstrapJob `json:"jobs"`
+	NextRevision uint64                                   `json:"nextRevision"`
+	NextAudit    uint64                                   `json:"nextAudit"`
+	Revisions    []platformadminapi.ServiceRevision       `json:"revisions"`
+	ServiceAudit []platformadminapi.ServiceAuditEvent     `json:"serviceAudit"`
 }
 
 type persisted struct {
@@ -116,6 +123,11 @@ func (s *Service) validateLoaded() error {
 		}
 		if state.Jobs == nil {
 			state.Jobs = map[string]platformadminapi.BootstrapJob{}
+		}
+		for _, revision := range state.Revisions {
+			if revision.ID == 0 || revision.Deployment == "" || revision.Composition.Metadata.Tenant != tenant || revision.Composition.Metadata.Name != revision.Deployment || revision.PreviewDigest == "" || !validServiceRevisionState(revision.Status) {
+				return fmt.Errorf("deployment-manager 状态包含无效服务组合 revision %d", revision.ID)
+			}
 		}
 		for id, node := range state.Nodes {
 			if id == "" || node.ID != id || node.Version < 1 || node.Plan.Node.ID != id || node.Plan.Node.Tenant != tenant || node.Plan.Validate() != nil {
@@ -249,6 +261,15 @@ func (s *Service) tenantLocked(tenant string) *tenantState {
 		state.Jobs = map[string]platformadminapi.BootstrapJob{}
 	}
 	return state
+}
+
+func validServiceRevisionState(state platformadminapi.ServiceRevisionStatus) bool {
+	switch state {
+	case platformadminapi.ServiceDraft, platformadminapi.ServicePendingApproval, platformadminapi.ServiceApproved, platformadminapi.ServicePublishing, platformadminapi.ServicePublished:
+		return true
+	default:
+		return false
+	}
 }
 
 func callTenant(call *contractv1.CallContext) (string, error) {
@@ -612,11 +633,13 @@ func terminal(state platformadminapi.BootstrapJobState) bool {
 
 func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
 	var request struct {
-		ID        string             `json:"id"`
-		NodeID    string             `json:"nodeId"`
-		JobID     string             `json:"jobId"`
-		Plan      nodebootstrap.Plan `json:"plan"`
-		IfVersion *int64             `json:"ifVersion,omitempty"`
+		ID          string                                      `json:"id"`
+		NodeID      string                                      `json:"nodeId"`
+		JobID       string                                      `json:"jobId"`
+		Plan        nodebootstrap.Plan                          `json:"plan"`
+		IfVersion   *int64                                      `json:"ifVersion,omitempty"`
+		RevisionID  uint64                                      `json:"revisionId"`
+		Composition backendcompositionv1.ApplicationComposition `json:"composition"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
@@ -665,6 +688,30 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 			}
 		}
 		out = job
+	case "listDeploymentTargets":
+		var items []platformadminapi.DeploymentTarget
+		items, err = s.ListDeploymentTargets(ctx, host, call)
+		out = map[string]any{"items": items}
+	case "listServiceRevisions":
+		var items []platformadminapi.ServiceRevision
+		items, err = s.ListServiceRevisions(call)
+		out = map[string]any{"items": items}
+	case "createServiceDraft":
+		out, err = s.CreateServiceDraft(ctx, host, call, request.Composition)
+	case "updateServiceDraft":
+		out, err = s.UpdateServiceDraft(ctx, host, call, request.RevisionID, request.Composition)
+	case "submitServiceDraft":
+		out, err = s.SubmitServiceDraft(ctx, host, call, request.RevisionID)
+	case "approveServiceRevision":
+		out, err = s.ApproveServiceRevision(call, request.RevisionID)
+	case "publishServiceRevision":
+		out, err = s.PublishServiceRevision(ctx, host, call, request.RevisionID)
+	case "rollbackServiceRevision":
+		out, err = s.RollbackServiceRevision(ctx, host, call, request.RevisionID)
+	case "listServiceRevisionAudit":
+		var items []platformadminapi.ServiceAuditEvent
+		items, err = s.ListServiceRevisionAudit(call, request.RevisionID)
+		out = map[string]any{"items": items}
 	default:
 		err = errInvalid
 	}
@@ -698,6 +745,10 @@ func errorCode(err error) string {
 		return "platform.deployment.separation_required"
 	case errors.Is(err, errBootstrapFailed):
 		return "platform.deployment.bootstrap_failed"
+	case errors.Is(err, errServiceState):
+		return "platform.deployment.service_state_conflict"
+	case errors.Is(err, errServicePublish):
+		return "platform.deployment.service_publish_failed"
 	default:
 		return "platform.deployment.invalid"
 	}
@@ -722,6 +773,15 @@ func Descriptor() []byte {
 		{"name":"listBootstrapJobs","description":"列出首次引导审批作业","paramsSchema":{"type":"object","properties":{}}},
 		{"name":"createBootstrap","description":"申请指定节点的首次引导","paramsSchema":{"type":"object","properties":{"nodeId":{"type":"string"}},"required":["nodeId"]}},
 		{"name":"approveBootstrap","description":"由不同审批人批准并触发可信内核引导","paramsSchema":{"type":"object","properties":{"jobId":{"type":"string"}},"required":["jobId"]}}
+		,{"name":"listDeploymentTargets","description":"列出平台预授权的部署目标","paramsSchema":{"type":"object","properties":{}}}
+		,{"name":"listServiceRevisions","description":"列出服务组合修订","paramsSchema":{"type":"object","properties":{}}}
+		,{"name":"createServiceDraft","description":"创建仅含应用配置的服务草稿","paramsSchema":{"type":"object","properties":{"composition":{"type":"object"}},"required":["composition"]}}
+		,{"name":"updateServiceDraft","description":"更新服务组合草稿","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1},"composition":{"type":"object"}},"required":["revisionId","composition"]}}
+		,{"name":"submitServiceDraft","description":"提交服务组合审批","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
+		,{"name":"approveServiceRevision","description":"批准服务组合修订","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
+		,{"name":"publishServiceRevision","description":"通过可信内核发布服务组合","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
+		,{"name":"rollbackServiceRevision","description":"以新修订回滚到历史服务组合","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
+		,{"name":"listServiceRevisionAudit","description":"列出服务组合审计记录","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
 	]}`)
 }
 
@@ -731,5 +791,10 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"listNodes": handler("listNodes"), "putNode": handler("putNode"), "listBootstrapJobs": handler("listBootstrapJobs"), "createBootstrap": handler("createBootstrap"), "approveBootstrap": handler("approveBootstrap")}}
+	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "listServiceRevisionAudit"}
+	handlers := make(map[string]sdk.Handler, len(operations))
+	for _, operation := range operations {
+		handlers[operation] = handler(operation)
+	}
+	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: handlers}
 }

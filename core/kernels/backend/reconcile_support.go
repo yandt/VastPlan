@@ -12,9 +12,11 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
@@ -23,6 +25,7 @@ type reconcileOptions struct {
 	bootstrapRepository                                                                        string
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                       string
 	credentialRoot                                                                             string
+	backendPlatformCatalog                                                                     string
 	firstPartyPublishers                                                                       string
 	thirdPartyPluginPolicy, publisherPluginPolicies                                            string
 	defaultPluginContextAccess, publisherPluginContextAccess                                   string
@@ -30,7 +33,7 @@ type reconcileOptions struct {
 	capacityCPU, capacityMemory, capacityGPU                                                   int64
 	interval                                                                                   time.Duration
 	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                string
-	natsAllowInsecure, natsBootstrap                                                           bool
+	natsAllowInsecure, natsBootstrap, allowDevelopmentPlugins                                  bool
 	requireThirdPartyIsolation                                                                 bool
 	executionPolicy                                                                            nodeagent.ExecutionPolicy
 	contextPolicy                                                                              nodeagent.ContextPolicy
@@ -55,6 +58,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.nodeID, "node-id", "local", "当前节点 ID")
 	flags.StringVar(&options.labelsRaw, "labels", "", "节点标签，逗号分隔 key=value")
 	flags.StringVar(&options.credentialRoot, "credential-root", "", "可信凭证挂载根目录：<root>/<tenant>/<credential-name>；留空不启用节点引导 Broker")
+	flags.StringVar(&options.backendPlatformCatalog, "backend-platform-catalog", "", "平台签发的 Backend Platform Catalog；配置后向 deployment-manager 开放在线编排")
 	flags.StringVar(&options.thirdPartyPluginPolicy, "third-party-plugin-policy", string(nodeagent.PublisherPolicyRequireIsolation), "未单独配置发布者时的策略: require-isolation, allow-trusted, deny")
 	flags.StringVar(&options.publisherPluginPolicies, "publisher-plugin-policies", "", "发布者级策略，逗号分隔 publisher=policy；优先于全局策略")
 	flags.StringVar(&options.defaultPluginContextAccess, "default-plugin-context-access", "", "未知发布者的 CallContext 字段上限，逗号分隔；空值使用安全默认")
@@ -76,6 +80,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.transportSeed, "transport-seed", "", "addressing 传输身份 NKey seed 文件（0600）")
 	flags.StringVar(&options.transportTrust, "transport-trust", "", "addressing 传输身份信任文档 JSON")
 	flags.BoolVar(&options.natsAllowInsecure, "nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
+	flags.BoolVar(&options.allowDevelopmentPlugins, "allow-development-plugins", false, "仅本地开发：允许在线组合使用 example 或历史未分类首方插件")
 	flags.StringVar(&options.desiredKey, "desired-key", controlplane.DesiredKey("", "local-development"), "NATS DesiredState key")
 	flags.BoolVar(&options.natsBootstrap, "nats-bootstrap", false, "创建/校准控制面 KV bucket（仅初始化/开发使用）")
 	flags.IntVar(&options.natsReplicas, "nats-replicas", 1, "初始化 KV bucket 的 JetStream 副本数；生产建议至少 3")
@@ -125,6 +130,9 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	if options.desiredPath == "" && options.natsURL == "" {
 		return reconcileOptions{}, errors.New("本地模式必须提供 -desired；控制面模式须提供 -nats-url")
 	}
+	if options.backendPlatformCatalog != "" && options.natsURL == "" {
+		return reconcileOptions{}, errors.New("在线部署发布必须同时配置 -backend-platform-catalog 与 -nats-url")
+	}
 	if options.lockPath == "" {
 		options.lockPath = options.actualPath + ".lock"
 	}
@@ -143,6 +151,36 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 type artifactResolution struct {
 	sources  []nodeagent.ArtifactSource
 	verifier nodeagent.ArtifactVerifier
+}
+
+// Read implements the resolver's synchronous immutable ArtifactReader on top
+// of the same ordered sources and mandatory verifier used by Node Agent. A
+// source that returns untrusted bytes is a hard failure and cannot be hidden by
+// trying the next source.
+func (r artifactResolution) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
+	var notFound error
+	for _, source := range r.sources {
+		if source == nil {
+			return pluginv1.Artifact{}, nil, errors.New("制品源不能为空")
+		}
+		envelope, err := source.Fetch(context.Background(), ref)
+		if errors.Is(err, artifacttrust.ErrNotFound) {
+			notFound = errors.Join(notFound, err)
+			continue
+		}
+		if err != nil {
+			return pluginv1.Artifact{}, nil, fmt.Errorf("制品源 %T 失败: %w", source, err)
+		}
+		verified, err := r.verifier.Verify(ref, envelope)
+		if err != nil {
+			return pluginv1.Artifact{}, nil, fmt.Errorf("制品源 %T 返回不可信内容: %w", source, err)
+		}
+		return verified.Artifact(), verified.PackageBytes(), nil
+	}
+	if notFound != nil {
+		return pluginv1.Artifact{}, nil, fmt.Errorf("所有制品源均无此制品: %w", notFound)
+	}
+	return pluginv1.Artifact{}, nil, errors.New("没有可用制品源")
 }
 
 func buildArtifactResolution(options reconcileOptions) (artifactResolution, error) {

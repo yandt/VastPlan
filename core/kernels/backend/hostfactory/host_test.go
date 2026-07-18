@@ -8,7 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
@@ -17,6 +20,19 @@ import (
 type bootstrapBroker struct{ called bool }
 
 type readinessObserver struct{ called bool }
+
+type deploymentController struct{ tenant string }
+
+func (c *deploymentController) Targets(_ context.Context, tenant string) ([]deploymentpublication.Target, error) {
+	c.tenant = tenant
+	return []deploymentpublication.Target{{DeploymentName: "services"}}, nil
+}
+func (*deploymentController) Preview(_ context.Context, _ string, _ backendcompositionv1.ApplicationComposition, revision uint64) (deploymentpublication.Result, error) {
+	return deploymentpublication.Result{Deployment: deploymentv2.Deployment{Revision: revision}}, nil
+}
+func (*deploymentController) Publish(_ context.Context, _ string, _ backendcompositionv1.ApplicationComposition, revision uint64, digest string) (deploymentpublication.Result, error) {
+	return deploymentpublication.Result{Deployment: deploymentv2.Deployment{Revision: revision}, Digest: digest}, nil
+}
 
 func (o *readinessObserver) Observe(_ context.Context, expectation nodebootstrap.ReadinessExpectation) (nodebootstrap.ReadinessObservation, error) {
 	o.called = expectation.TenantID == "tenant-a" && expectation.NodeID == "node-a"
@@ -106,6 +122,23 @@ func TestKernelNodeReadinessAcceptsOnlyDeploymentManagerAndTenant(t *testing.T) 
 	payload, _ = json.Marshal(wrongTenant)
 	if _, _, err := service(context.Background(), trusted, payload); err == nil {
 		t.Fatal("跨租户就绪观察必须 fail-closed")
+	}
+}
+
+func TestKernelDeploymentPublicationAcceptsOnlyDeploymentManager(t *testing.T) {
+	controller := &deploymentController{}
+	service := kernelDeploymentTargets(controller)
+	trusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: deploymentpublication.DeploymentManagerPluginID}}
+	result, raw, err := service(context.Background(), trusted, []byte(`{}`))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || controller.tenant != "tenant-a" || !strings.Contains(string(raw), "services") {
+		t.Fatalf("deployment-manager 目标查询失败: result=%+v raw=%s err=%v", result, raw, err)
+	}
+	untrusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "third.party"}}
+	if _, _, err := service(context.Background(), untrusted, []byte(`{}`)); err == nil {
+		t.Fatal("其他插件不得调用在线部署内核服务")
+	}
+	if _, _, err := service(context.Background(), trusted, []byte(`{"routingDomain":"attacker"}`)); err == nil {
+		t.Fatal("内核部署服务必须拒绝未知路由字段")
 	}
 }
 

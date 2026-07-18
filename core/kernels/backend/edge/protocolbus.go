@@ -92,7 +92,7 @@ func platformCapabilityAllowed(capability, operation string) bool {
 		platformadminapi.CredentialsCapability: {"list": {}, "put": {}, "rotate": {}, "revoke": {}},
 		platformadminapi.DatabaseCapability:    {"list": {}, "define": {}, "remove": {}, "probe": {}},
 		platformadminapi.ArtifactsCapability:   {"status": {}},
-		platformadminapi.DeploymentCapability:  {"listNodes": {}, "putNode": {}, "listBootstrapJobs": {}, "createBootstrap": {}, "approveBootstrap": {}},
+		platformadminapi.DeploymentCapability:  {"listNodes": {}, "putNode": {}, "listBootstrapJobs": {}, "createBootstrap": {}, "approveBootstrap": {}, "listDeploymentTargets": {}, "listServiceRevisions": {}, "createServiceDraft": {}, "updateServiceDraft": {}, "submitServiceDraft": {}, "approveServiceRevision": {}, "publishServiceRevision": {}, "rollbackServiceRevision": {}, "listServiceRevisionAudit": {}},
 	}
 	_, ok := operations[capability][operation]
 	return ok

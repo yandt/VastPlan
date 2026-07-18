@@ -80,7 +80,7 @@ func operationRole(capability, operation string) string {
 		platformadminapi.CredentialsCapability: {"describe": "platform.credentials.read", "list": "platform.credentials.read", "put": "platform.credentials.write", "rotate": "platform.credentials.rotate", "revoke": "platform.credentials.revoke"},
 		platformadminapi.DatabaseCapability:    {"describe": "platform.database.read", "list": "platform.database.read", "define": "platform.database.write", "remove": "platform.database.write", "probe": "platform.database.probe"},
 		platformadminapi.ArtifactsCapability:   {"status": "platform.artifacts.read"},
-		platformadminapi.DeploymentCapability:  {"listNodes": "platform.deployment.read", "putNode": "platform.deployment.write", "listBootstrapJobs": "platform.deployment.read", "createBootstrap": "platform.deployment.bootstrap", "approveBootstrap": "platform.deployment.approve"},
+		platformadminapi.DeploymentCapability:  {"listNodes": "platform.deployment.read", "putNode": "platform.deployment.write", "listBootstrapJobs": "platform.deployment.read", "createBootstrap": "platform.deployment.bootstrap", "approveBootstrap": "platform.deployment.approve", "listDeploymentTargets": "platform.deployment.read", "listServiceRevisions": "platform.deployment.read", "listServiceRevisionAudit": "platform.deployment.read", "createServiceDraft": "platform.deployment.compose", "updateServiceDraft": "platform.deployment.compose", "submitServiceDraft": "platform.deployment.compose", "approveServiceRevision": "platform.deployment.approve", "publishServiceRevision": "platform.deployment.publish", "rollbackServiceRevision": "platform.deployment.publish"},
 	}
 	return roles[capability][operation]
 }
@@ -95,7 +95,7 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	case "com.vastplan.platform.data.relational.connection-manager":
 		return request.Capability == "kernel.database.probe"
 	case "com.vastplan.platform.infrastructure.deployment-manager":
-		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness"
+		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness" || request.Capability == "kernel.deployment.targets" || request.Capability == "kernel.deployment.preview" || request.Capability == "kernel.deployment.publish"
 	default:
 		return false
 	}

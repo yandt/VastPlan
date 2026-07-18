@@ -58,6 +58,29 @@ export interface BootstrapJob {
   createdAt: string; updatedAt: string; expiresAt: string;
 }
 
+export interface CompositionRef { id: string; revision: number; digest: string; }
+export interface DeploymentTarget { deploymentName: string; platformProfile: CompositionRef; }
+export interface BackendPluginRef { id: string; version: string; channel?: string; }
+export interface BackendServiceUnit {
+  id: string; kind: string; plugins: BackendPluginRef[]; config?: Record<string, unknown>; enabled: boolean;
+  service_role: string; logical_service?: string; instance_policy?: string; state_model?: string;
+  visibility?: string; routing?: string; routing_domain?: string; partition_keys?: string[];
+  depends_on?: string[]; replicas: number; autoscaling?: Record<string, unknown>;
+  resources?: Record<string, unknown>; placement?: Record<string, unknown>;
+}
+export interface BackendApplicationComposition {
+  version: 1; revision: number; id: string; target: { kernel: "backend" };
+  metadata: { name: string; tenant?: string };
+  units: Array<{ serviceClass: string; spec: BackendServiceUnit }>;
+}
+export type ServiceRevisionStatus = "Draft" | "PendingApproval" | "Approved" | "Publishing" | "Published";
+export interface ServiceRevision {
+  id: number; deployment: string; status: ServiceRevisionStatus; active: boolean;
+  composition: BackendApplicationComposition; preview: Record<string, unknown>; previewDigest: string; kvRevision?: number;
+  submittedBy?: string; approvedBy?: string; publishedBy?: string; createdAt: string; updatedAt: string;
+}
+export interface ServiceAuditEvent { id: number; revisionId: number; deployment: string; action: string; actorId: string; at: string; }
+
 export class PlatformAdminClient {
 	private readonly basePath: string;
 	public constructor(private readonly fetcher: PlatformFetch, portalID: string, serviceID: string, private readonly csrfPath = "/v1/csrf") {
@@ -96,6 +119,24 @@ export class PlatformAdminClient {
   }
   public approveBootstrapJob(jobId: string): Promise<BootstrapJob> {
     return this.mutate(`${this.basePath}/deployment/bootstrap-jobs/${segment(jobId)}/approve`, "POST", {});
+  }
+
+  public listDeploymentTargets(): Promise<DeploymentTarget[]> { return this.get(`${this.basePath}/deployment/targets`); }
+  public listServiceRevisions(): Promise<ServiceRevision[]> { return this.get(`${this.basePath}/deployment/service-revisions`); }
+  public createServiceDraft(composition: BackendApplicationComposition): Promise<ServiceRevision> {
+    return this.mutate(`${this.basePath}/deployment/service-revisions`, "POST", { composition });
+  }
+  public updateServiceDraft(id: number, composition: BackendApplicationComposition): Promise<ServiceRevision> {
+    return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}`, "PUT", { composition });
+  }
+  public submitServiceDraft(id: number): Promise<ServiceRevision> { return this.serviceRevisionAction(id, "submit"); }
+  public approveServiceRevision(id: number): Promise<ServiceRevision> { return this.serviceRevisionAction(id, "approve"); }
+  public publishServiceRevision(id: number): Promise<ServiceRevision> { return this.serviceRevisionAction(id, "publish"); }
+  public rollbackServiceRevision(id: number): Promise<ServiceRevision> { return this.serviceRevisionAction(id, "rollback"); }
+  public listServiceRevisionAudit(id: number): Promise<ServiceAuditEvent[]> { return this.get(`${this.basePath}/deployment/service-revisions/${revision(id)}/audit`); }
+
+  private serviceRevisionAction(id: number, action: string): Promise<ServiceRevision> {
+    return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}/${action}`, "POST", {});
   }
 
   private get<T>(path: string): Promise<T> { return this.call<T>(path, { method: "GET" }); }
@@ -141,6 +182,11 @@ export class PlatformAdminError extends Error {
 function segment(value: string): string {
   if (value.trim() === "" || value.includes("/") || value.includes("\\")) throw new PlatformAdminError(400, "invalid_resource_name");
   return encodeURIComponent(value);
+}
+
+function revision(value: number): string {
+  if (!Number.isSafeInteger(value) || value < 1) throw new PlatformAdminError(400, "invalid_revision_id");
+  return String(value);
 }
 
 function query(values: Record<string, string>): string {

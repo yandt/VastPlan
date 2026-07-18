@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 )
 
@@ -76,13 +77,14 @@ type TransactionManager interface {
 
 // Dependencies 是一个 backend Host 的可替换依赖集合。nil 表示该能力不可用并 fail-closed。
 type Dependencies struct {
-	Config        ConfigProvider
-	Credentials   CredentialBroker
-	Persistence   Persistence
-	Transactions  TransactionManager
-	Database      DatabaseBroker
-	NodeBootstrap nodebootstrap.Broker
-	NodeReadiness nodebootstrap.ReadinessObserver
+	Config                ConfigProvider
+	Credentials           CredentialBroker
+	Persistence           Persistence
+	Transactions          TransactionManager
+	Database              DatabaseBroker
+	NodeBootstrap         nodebootstrap.Broker
+	NodeReadiness         nodebootstrap.ReadinessObserver
+	DeploymentPublication deploymentpublication.Controller
 }
 
 type MapConfig struct{ values map[string]json.RawMessage }

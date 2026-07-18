@@ -21,6 +21,7 @@ import (
 const (
 	PlatformProfileSchemaURL        = "https://schemas.cdsoft.com.cn/vastplan/composition/backend/v1/vastplan.platform-profile.schema.json"
 	ApplicationCompositionSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/composition/backend/v1/vastplan.application-composition.schema.json"
+	BackendPlatformCatalogSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/composition/backend/v1/vastplan.backend-platform-catalog.schema.json"
 )
 
 //go:embed vastplan.platform-profile.schema.json
@@ -29,10 +30,14 @@ var platformProfileSchemaJSON []byte
 //go:embed vastplan.application-composition.schema.json
 var applicationCompositionSchemaJSON []byte
 
+//go:embed vastplan.backend-platform-catalog.schema.json
+var backendPlatformCatalogSchemaJSON []byte
+
 var (
 	compileOnce           sync.Once
 	platformProfileSchema *jsonschema.Schema
 	applicationSchema     *jsonschema.Schema
+	backendCatalogSchema  *jsonschema.Schema
 	compileErr            error
 )
 
@@ -61,6 +66,22 @@ type ApplicationUnit struct {
 	Spec         deploymentv2.ServiceUnit `json:"spec"`
 }
 
+// BackendPlatformCatalog is the platform-owned authority for selecting the
+// immutable Platform Profile used by an online-managed deployment. Application
+// administrators may edit only ApplicationComposition; they cannot add or
+// replace bindings through the deployment-manager API.
+type BackendPlatformCatalog struct {
+	compositioncommonv1.Document
+	Profiles []PlatformProfile        `json:"profiles"`
+	Bindings []BackendPlatformBinding `json:"bindings"`
+}
+
+type BackendPlatformBinding struct {
+	TenantID        string                  `json:"tenantId"`
+	DeploymentName  string                  `json:"deploymentName"`
+	PlatformProfile compositioncommonv1.Ref `json:"platformProfile"`
+}
+
 func schemas() (*jsonschema.Schema, *jsonschema.Schema, error) {
 	compileOnce.Do(func() {
 		compiler := jsonschema.NewCompiler()
@@ -71,7 +92,7 @@ func schemas() (*jsonschema.Schema, *jsonschema.Schema, error) {
 		for _, resource := range []struct {
 			url string
 			raw []byte
-		}{{PlatformProfileSchemaURL, platformProfileSchemaJSON}, {ApplicationCompositionSchemaURL, applicationCompositionSchemaJSON}} {
+		}{{PlatformProfileSchemaURL, platformProfileSchemaJSON}, {ApplicationCompositionSchemaURL, applicationCompositionSchemaJSON}, {BackendPlatformCatalogSchemaURL, backendPlatformCatalogSchemaJSON}} {
 			document, err := jsonschema.UnmarshalJSON(bytes.NewReader(resource.raw))
 			if err != nil {
 				compileErr = fmt.Errorf("解析 Backend 组合 Schema %s: %w", resource.url, err)
@@ -90,9 +111,19 @@ func schemas() (*jsonschema.Schema, *jsonschema.Schema, error) {
 		applicationSchema, compileErr = compiler.Compile(ApplicationCompositionSchemaURL)
 		if compileErr != nil {
 			compileErr = fmt.Errorf("编译 Backend Application Composition Schema: %w", compileErr)
+			return
+		}
+		backendCatalogSchema, compileErr = compiler.Compile(BackendPlatformCatalogSchemaURL)
+		if compileErr != nil {
+			compileErr = fmt.Errorf("编译 Backend Platform Catalog Schema: %w", compileErr)
 		}
 	})
 	return platformProfileSchema, applicationSchema, compileErr
+}
+
+func catalogSchema() (*jsonschema.Schema, error) {
+	_, _, err := schemas()
+	return backendCatalogSchema, err
 }
 
 func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
@@ -183,6 +214,91 @@ func ValidateApplicationComposition(composition ApplicationComposition) (Applica
 	return ParseApplicationComposition(raw)
 }
 
+func ParseBackendPlatformCatalog(raw []byte) (BackendPlatformCatalog, error) {
+	schema, err := catalogSchema()
+	if err != nil {
+		return BackendPlatformCatalog{}, err
+	}
+	if err := validateJSON(schema, raw, "Backend Platform Catalog"); err != nil {
+		return BackendPlatformCatalog{}, err
+	}
+	var catalog BackendPlatformCatalog
+	if err := json.Unmarshal(raw, &catalog); err != nil {
+		return BackendPlatformCatalog{}, fmt.Errorf("解析 Backend Platform Catalog 字段: %w", err)
+	}
+	profiles := make(map[string]PlatformProfile, len(catalog.Profiles))
+	for i := range catalog.Profiles {
+		profile, err := ValidatePlatformProfile(catalog.Profiles[i])
+		if err != nil {
+			return BackendPlatformCatalog{}, fmt.Errorf("Backend Platform Catalog profile[%d]: %w", i, err)
+		}
+		key := profileRefKey(profile.ID, profile.Revision, profile.Digest())
+		if _, duplicate := profiles[key]; duplicate {
+			return BackendPlatformCatalog{}, fmt.Errorf("Backend Platform Catalog profile 重复: %s", profile.ID)
+		}
+		profiles[key] = profile
+		catalog.Profiles[i] = profile
+	}
+	bindings := map[string]struct{}{}
+	for _, binding := range catalog.Bindings {
+		key := binding.TenantID + "\x00" + binding.DeploymentName
+		if _, duplicate := bindings[key]; duplicate {
+			return BackendPlatformCatalog{}, fmt.Errorf("Backend Platform Catalog binding 重复: tenant=%q deployment=%q", binding.TenantID, binding.DeploymentName)
+		}
+		bindings[key] = struct{}{}
+		refKey := profileRefKey(binding.PlatformProfile.ID, binding.PlatformProfile.Revision, binding.PlatformProfile.Digest)
+		if _, ok := profiles[refKey]; !ok {
+			return BackendPlatformCatalog{}, fmt.Errorf("Backend Platform Catalog binding 引用未登记的精确 Platform Profile: tenant=%q deployment=%q", binding.TenantID, binding.DeploymentName)
+		}
+	}
+	return catalog, nil
+}
+
+func ValidateBackendPlatformCatalog(catalog BackendPlatformCatalog) (BackendPlatformCatalog, error) {
+	raw, err := json.Marshal(catalog)
+	if err != nil {
+		return BackendPlatformCatalog{}, fmt.Errorf("编码 Backend Platform Catalog: %w", err)
+	}
+	return ParseBackendPlatformCatalog(raw)
+}
+
+func ParseBackendPlatformCatalogFile(filename string) (BackendPlatformCatalog, error) {
+	raw, err := os.ReadFile(filename)
+	if err != nil {
+		return BackendPlatformCatalog{}, fmt.Errorf("读取 Backend Platform Catalog 文件: %w", err)
+	}
+	return ParseBackendPlatformCatalog(raw)
+}
+
+func (c BackendPlatformCatalog) Resolve(tenantID, deploymentName string) (PlatformProfile, compositioncommonv1.Ref, error) {
+	for _, binding := range c.Bindings {
+		if binding.TenantID != tenantID || binding.DeploymentName != deploymentName {
+			continue
+		}
+		for _, profile := range c.Profiles {
+			if profile.ID == binding.PlatformProfile.ID && profile.Revision == binding.PlatformProfile.Revision && profile.Digest() == binding.PlatformProfile.Digest {
+				return profile, binding.PlatformProfile, nil
+			}
+		}
+		return PlatformProfile{}, compositioncommonv1.Ref{}, fmt.Errorf("Backend Platform Catalog binding 的 Platform Profile 不可解析")
+	}
+	return PlatformProfile{}, compositioncommonv1.Ref{}, fmt.Errorf("Backend Platform Catalog 未授权 tenant=%q deployment=%q", tenantID, deploymentName)
+}
+
+func (c BackendPlatformCatalog) Targets(tenantID string) []BackendPlatformBinding {
+	out := make([]BackendPlatformBinding, 0)
+	for _, binding := range c.Bindings {
+		if binding.TenantID == tenantID {
+			out = append(out, binding)
+		}
+	}
+	return out
+}
+
+func profileRefKey(id string, revision uint64, digest string) string {
+	return fmt.Sprintf("%s\x00%d\x00%s", id, revision, digest)
+}
+
 func validateJSON(schema *jsonschema.Schema, raw []byte, noun string) error {
 	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 	if err != nil {
@@ -213,3 +329,4 @@ func ParseApplicationCompositionFile(filename string) (ApplicationComposition, e
 func (p PlatformProfile) Digest() string { return compositioncommonv1.Digest(p) }
 
 func (c ApplicationComposition) Digest() string { return compositioncommonv1.Digest(c) }
+func (c BackendPlatformCatalog) Digest() string { return compositioncommonv1.Digest(c) }

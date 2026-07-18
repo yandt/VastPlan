@@ -9,15 +9,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
+	"sync"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
-	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
@@ -33,6 +35,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	natsAllowInsecure := flags.Bool("nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
 	platformProfilePath := flags.String("platform-profile", "", "平台管理员发布的 Platform Profile v1 JSON")
 	applicationPath := flags.String("application-composition", "", "应用配置人员发布的 Application Composition v1 JSON")
+	backendCatalogPath := flags.String("backend-platform-catalog", "", "平台签发的 Backend Platform Catalog；controller 为全部预授权目标持续调度")
 	deploymentRevision := flags.Uint64("deployment-revision", 0, "Resolver 输出的独立单调 Deployment revision")
 	allowDevelopmentPlugins := flags.Bool("allow-development-plugins", false, "仅本地开发：允许 example 或历史未分类首方插件")
 	key := flags.String("key", "", "KV key；默认从 metadata.tenant/name 生成")
@@ -55,8 +58,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if !publish && !*controllerMode {
 		return errors.New("发布模式必须提供 -platform-profile 与 -application-composition")
 	}
-	if !publish && *key == "" {
-		return errors.New("仅运行 controller 时必须提供 v2 部署 -key")
+	if !publish && *controllerMode && *key == "" && *backendCatalogPath == "" {
+		return errors.New("仅运行 controller 时必须提供 v2 部署 -key 或 -backend-platform-catalog")
 	}
 	if publish && *deploymentRevision == 0 {
 		return errors.New("发布服务配置必须提供大于 0 的 -deployment-revision")
@@ -65,6 +68,16 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	artifacts, err := pluginservice.NewRepository(*repositoryRoot)
 	if err != nil {
 		return err
+	}
+	var backendCatalog backendcompositionv1.BackendPlatformCatalog
+	if *backendCatalogPath != "" {
+		backendCatalog, err = backendcompositionv1.ParseBackendPlatformCatalogFile(*backendCatalogPath)
+		if err != nil {
+			return err
+		}
+		if !*controllerMode {
+			return errors.New("-backend-platform-catalog 只用于 controller fleet 模式")
+		}
 	}
 	var raw []byte
 	if publish {
@@ -119,7 +132,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	controller := deploymentcontroller.Controller{
-		Deployments: buckets.Deployments, DeploymentKey: *key,
+		Deployments: buckets.Deployments,
 		Scheduler: deploymentcontroller.Scheduler{
 			Nodes: buckets.Nodes, Assignments: buckets.Assignments, Metrics: buckets.Autoscaling,
 			Actual: buckets.Actual, Compositions: buckets.Compositions, Artifacts: artifacts,
@@ -127,10 +140,55 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		Leaders: buckets.Controllers, Identity: *controllerID,
 		Logf: func(format string, values ...any) { _, _ = fmt.Fprintf(stderr, format+"\n", values...) },
 	}
-	if err := controller.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+	keys := make([]string, 0, len(backendCatalog.Bindings)+1)
+	if *key != "" {
+		keys = append(keys, *key)
+	}
+	for _, binding := range backendCatalog.Bindings {
+		keys = append(keys, sharedcontrolplane.DeploymentKey(binding.TenantID, binding.DeploymentName))
+	}
+	if err := runControllerFleet(ctx, controller, keys); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("controller 退出: %w", err)
 	}
 	return nil
+}
+
+func runControllerFleet(ctx context.Context, template deploymentcontroller.Controller, keys []string) error {
+	unique := map[string]struct{}{}
+	for _, key := range keys {
+		if key != "" {
+			unique[key] = struct{}{}
+		}
+	}
+	keys = keys[:0]
+	for key := range unique {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	if len(keys) == 0 {
+		return errors.New("controller fleet 没有部署目标")
+	}
+	controllerCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	errorsOut := make(chan error, len(keys))
+	var workers sync.WaitGroup
+	for i, key := range keys {
+		controller := template
+		controller.DeploymentKey = key
+		controller.Identity = fmt.Sprintf("%s-%d", template.Identity, i+1)
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			errorsOut <- controller.Run(controllerCtx)
+		}()
+	}
+	first := <-errorsOut
+	cancel()
+	workers.Wait()
+	if errors.Is(first, context.Canceled) && ctx.Err() != nil {
+		return ctx.Err()
+	}
+	return first
 }
 
 func publishDeployment(ctx context.Context, stdout io.Writer, buckets sharedcontrolplane.Buckets, key *string, raw []byte) error {

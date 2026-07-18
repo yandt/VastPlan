@@ -112,6 +112,116 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 }
 
 func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget, parts []string) {
+	if len(parts) == 1 && parts[0] == "targets" {
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "listDeploymentTargets", false) || !requirePlatformRole(w, p, "platform.deployment.read") {
+			return
+		}
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		value, err := h.platform.ListDeploymentTargets(r.Context(), p, target)
+		respondPlatform(w, value, err)
+		return
+	}
+	if len(parts) == 1 && parts[0] == "service-revisions" {
+		switch r.Method {
+		case http.MethodGet:
+			if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "listServiceRevisions", false) || !requirePlatformRole(w, p, "platform.deployment.read") {
+				return
+			}
+			value, err := h.platform.ListServiceRevisions(r.Context(), p, target)
+			respondPlatform(w, value, err)
+		case http.MethodPost:
+			if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "createServiceDraft", true) || !requirePlatformRole(w, p, "platform.deployment.compose") {
+				return
+			}
+			var request platformadminapi.ServiceCompositionRequest
+			if !decode(w, r, &request) {
+				return
+			}
+			value, err := h.platform.CreateServiceDraft(r.Context(), p, target, request)
+			respondPlatform(w, value, err)
+		default:
+			methodNotAllowed(w)
+		}
+		return
+	}
+	if len(parts) >= 2 && parts[0] == "service-revisions" {
+		id, ok := deploymentRevisionID(w, parts[1])
+		if !ok {
+			return
+		}
+		if len(parts) == 2 {
+			if r.Method != http.MethodPut {
+				methodNotAllowed(w)
+				return
+			}
+			if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "updateServiceDraft", true) || !requirePlatformRole(w, p, "platform.deployment.compose") {
+				return
+			}
+			var request platformadminapi.ServiceCompositionRequest
+			if !decode(w, r, &request) {
+				return
+			}
+			value, err := h.platform.UpdateServiceDraft(r.Context(), p, target, id, request)
+			respondPlatform(w, value, err)
+			return
+		}
+		if len(parts) != 3 {
+			http.NotFound(w, r)
+			return
+		}
+		if parts[2] == "audit" {
+			if r.Method != http.MethodGet {
+				methodNotAllowed(w)
+				return
+			}
+			if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "listServiceRevisionAudit", false) || !requirePlatformRole(w, p, "platform.deployment.read") {
+				return
+			}
+			value, err := h.platform.ListServiceRevisionAudit(r.Context(), p, target, id)
+			respondPlatform(w, value, err)
+			return
+		}
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		var operation, role string
+		var action func() (platformadminapi.ServiceRevision, error)
+		switch parts[2] {
+		case "submit":
+			operation, role = "submitServiceDraft", "platform.deployment.compose"
+			action = func() (platformadminapi.ServiceRevision, error) {
+				return h.platform.SubmitServiceDraft(r.Context(), p, target, id)
+			}
+		case "approve":
+			operation, role = "approveServiceRevision", "platform.deployment.approve"
+			action = func() (platformadminapi.ServiceRevision, error) {
+				return h.platform.ApproveServiceRevision(r.Context(), p, target, id)
+			}
+		case "publish":
+			operation, role = "publishServiceRevision", "platform.deployment.publish"
+			action = func() (platformadminapi.ServiceRevision, error) {
+				return h.platform.PublishServiceRevision(r.Context(), p, target, id)
+			}
+		case "rollback":
+			operation, role = "rollbackServiceRevision", "platform.deployment.publish"
+			action = func() (platformadminapi.ServiceRevision, error) {
+				return h.platform.RollbackServiceRevision(r.Context(), p, target, id)
+			}
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, operation, true) || !requirePlatformRole(w, p, role) {
+			return
+		}
+		value, err := action()
+		respondPlatform(w, value, err)
+		return
+	}
 	if len(parts) == 1 && parts[0] == "nodes" {
 		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "listNodes", false) {
 			return
@@ -204,6 +314,15 @@ func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p port
 		return
 	}
 	http.NotFound(w, r)
+}
+
+func deploymentRevisionID(w http.ResponseWriter, raw string) (uint64, bool) {
+	value, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil || value == 0 {
+		writeError(w, http.StatusBadRequest, "invalid_revision_id")
+		return 0, false
+	}
+	return value, true
 }
 
 func deploymentResourceName(w http.ResponseWriter, raw string) (string, bool) {
@@ -435,10 +554,14 @@ func respondPlatform(w http.ResponseWriter, value any, err error) {
 			writeError(w, http.StatusConflict, "separation_required")
 		case "platform.deployment.job_conflict":
 			writeError(w, http.StatusConflict, "job_conflict")
+		case "platform.deployment.service_state_conflict":
+			writeError(w, http.StatusConflict, "service_state_conflict")
 		case "platform.settings.invalid", "platform.credentials.invalid", "platform.database.invalid", "platform.deployment.invalid":
 			writeError(w, http.StatusBadRequest, "invalid_request")
 		case "platform.deployment.bootstrap_failed":
 			writeError(w, http.StatusBadGateway, "bootstrap_failed")
+		case "platform.deployment.service_publish_failed":
+			writeError(w, http.StatusBadGateway, "service_publish_failed")
 		default:
 			writeError(w, http.StatusBadGateway, "platform_service_unavailable")
 		}

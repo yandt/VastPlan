@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
@@ -110,6 +113,50 @@ type BootstrapJob struct {
 	ExpiresAt   string            `json:"expiresAt"`
 }
 
+type DeploymentTarget struct {
+	DeploymentName  string                  `json:"deploymentName"`
+	PlatformProfile compositioncommonv1.Ref `json:"platformProfile"`
+}
+
+type ServiceRevisionStatus string
+
+const (
+	ServiceDraft           ServiceRevisionStatus = "Draft"
+	ServicePendingApproval ServiceRevisionStatus = "PendingApproval"
+	ServiceApproved        ServiceRevisionStatus = "Approved"
+	ServicePublishing      ServiceRevisionStatus = "Publishing"
+	ServicePublished       ServiceRevisionStatus = "Published"
+)
+
+type ServiceRevision struct {
+	ID            uint64                                      `json:"id"`
+	Deployment    string                                      `json:"deployment"`
+	Status        ServiceRevisionStatus                       `json:"status"`
+	Active        bool                                        `json:"active"`
+	Composition   backendcompositionv1.ApplicationComposition `json:"composition"`
+	Preview       deploymentv2.Deployment                     `json:"preview"`
+	PreviewDigest string                                      `json:"previewDigest"`
+	KVRevision    uint64                                      `json:"kvRevision,omitempty"`
+	SubmittedBy   string                                      `json:"submittedBy,omitempty"`
+	ApprovedBy    string                                      `json:"approvedBy,omitempty"`
+	PublishedBy   string                                      `json:"publishedBy,omitempty"`
+	CreatedAt     string                                      `json:"createdAt"`
+	UpdatedAt     string                                      `json:"updatedAt"`
+}
+
+type ServiceAuditEvent struct {
+	ID         uint64 `json:"id"`
+	RevisionID uint64 `json:"revisionId"`
+	Deployment string `json:"deployment"`
+	Action     string `json:"action"`
+	ActorID    string `json:"actorId"`
+	At         string `json:"at"`
+}
+
+type ServiceCompositionRequest struct {
+	Composition backendcompositionv1.ApplicationComposition `json:"composition"`
+}
+
 // Service is the narrow BFF port consumed by HTTP handlers. Implementations
 // may reach local or cluster capabilities. Target is resolved from the active
 // Portal management binding by Edge and cannot be supplied as routing fields by
@@ -132,4 +179,13 @@ type Service interface {
 	ListBootstrapJobs(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]BootstrapJob, error)
 	CreateBootstrapJob(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (BootstrapJob, error)
 	ApproveBootstrapJob(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (BootstrapJob, error)
+	ListDeploymentTargets(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]DeploymentTarget, error)
+	ListServiceRevisions(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]ServiceRevision, error)
+	CreateServiceDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, ServiceCompositionRequest) (ServiceRevision, error)
+	UpdateServiceDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64, ServiceCompositionRequest) (ServiceRevision, error)
+	SubmitServiceDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) (ServiceRevision, error)
+	ApproveServiceRevision(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) (ServiceRevision, error)
+	PublishServiceRevision(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) (ServiceRevision, error)
+	RollbackServiceRevision(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) (ServiceRevision, error)
+	ListServiceRevisionAudit(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) ([]ServiceAuditEvent, error)
 }

@@ -77,10 +77,13 @@ chmod 0755 backend-kernel-linux-amd64
   -kind application-composition-v1 -file /etc/vastplan/application-composition.json
 
 ./backend-kernel-linux-amd64 validate \
+  -kind backend-platform-catalog-v1 -file /etc/vastplan/backend-platform-catalog.json
+
+./backend-kernel-linux-amd64 validate \
   -kind actual-state -file /var/lib/vastplan/actual-state.json
 ```
 
-- 本地 Node Agent 可使用 DesiredState v1 进行开发；集群服务配置必须同时提交 Platform Profile 与 Application Composition。Deployment v2 只由 Resolver 生成并供 Controller 消费，不接受人工提交。
+- 本地 Node Agent 可使用 DesiredState v1 进行开发；集群服务配置必须同时具备 Platform Profile 与 Application Composition。在线入口通过 Backend Platform Catalog 固定 Profile 后只接收应用输入。Deployment v2 只由 Resolver 生成并供 Controller 消费，不接受人工提交。
 - actual-state v1 在预检中只于内存转换为 v2，不修改源文件。正式进程加载后，下一次成功保存只写 v2。
 - 未知 actual-state 版本、未知 v1 status、Schema 错误或同 revision 内容冲突必须先处理，不得跳过预检启动。
 - 所有待运行插件的 `engines.backend` 必须显式包含目标 Backend 1.0；`^0.1` 不会被 1.0 宿主默认为兼容。

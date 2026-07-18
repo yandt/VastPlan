@@ -1,6 +1,11 @@
 package backendcompositionv1
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+)
 
 func TestParsePlatformProfileAndApplicationComposition(t *testing.T) {
 	profile, err := ParsePlatformProfile([]byte(`{
@@ -25,6 +30,43 @@ func TestParsePlatformProfileAndApplicationComposition(t *testing.T) {
 	}
 	if application.Units[0].Spec.Plugins[0].Channel != "stable" || len(application.Digest()) != 64 {
 		t.Fatalf("Backend Application Composition 未规范化: %+v", application)
+	}
+}
+
+func TestBackendPlatformCatalogAuthorizesExactDeployment(t *testing.T) {
+	profile, err := ParsePlatformProfile([]byte(`{
+		"version":1,"revision":2,"id":"backend-default","target":{"kernel":"backend"},
+		"serviceClasses":["application.backend"],"attachments":[],"services":[]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := BackendPlatformCatalog{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 3, ID: "production-backend"},
+		Profiles: []PlatformProfile{profile},
+		Bindings: []BackendPlatformBinding{{
+			TenantID: "acme", DeploymentName: "agent-services",
+			PlatformProfile: compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()},
+		}},
+	}
+	raw, err := json.Marshal(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := ParseBackendPlatformCatalog(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, _, err := parsed.Resolve("acme", "agent-services")
+	if err != nil || resolved.ID != profile.ID {
+		t.Fatalf("精确绑定未解析: profile=%+v err=%v", resolved, err)
+	}
+	if _, _, err := parsed.Resolve("acme", "unapproved"); err == nil {
+		t.Fatal("未授权部署名必须 fail-closed")
+	}
+	catalog.Bindings = append(catalog.Bindings, catalog.Bindings[0])
+	if _, err := ValidateBackendPlatformCatalog(catalog); err == nil {
+		t.Fatal("重复 tenant/deployment 绑定必须拒绝")
 	}
 }
 

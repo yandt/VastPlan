@@ -13,6 +13,7 @@ import (
 	"io"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
@@ -69,7 +70,88 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			return nil, err
 		}
 	}
+	if dependencies.DeploymentPublication != nil {
+		if err := host.RegisterHostService(extpoint.KernelService, deploymentpublication.KernelTargetsService, kernelDeploymentTargets(dependencies.DeploymentPublication)); err != nil {
+			return nil, err
+		}
+		if err := host.RegisterHostService(extpoint.KernelService, deploymentpublication.KernelPreviewService, kernelDeploymentPreview(dependencies.DeploymentPublication)); err != nil {
+			return nil, err
+		}
+		if err := host.RegisterHostService(extpoint.KernelService, deploymentpublication.KernelPublishService, kernelDeploymentPublish(dependencies.DeploymentPublication)); err != nil {
+			return nil, err
+		}
+	}
 	return host, nil
+}
+
+func authenticatedDeploymentManager(callCtx *contractv1.CallContext) bool {
+	return callCtx.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_PLUGIN && callCtx.GetCaller().GetId() == deploymentpublication.DeploymentManagerPluginID && callCtx.GetTenantId() != ""
+}
+
+func kernelDeploymentTargets(controller deploymentpublication.Controller) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if !authenticatedDeploymentManager(callCtx) {
+			return nil, nil, errors.New("kernel.deployment.targets 只接受 deployment-manager 认证会话")
+		}
+		if err := decodeStrict(payload, &struct{}{}); err != nil {
+			return nil, nil, errors.New("部署目标请求无效")
+		}
+		targets, err := controller.Targets(ctx, callCtx.GetTenantId())
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(map[string]any{"items": targets})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+	}
+}
+
+func kernelDeploymentPreview(controller deploymentpublication.Controller) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if !authenticatedDeploymentManager(callCtx) {
+			return nil, nil, errors.New("kernel.deployment.preview 只接受 deployment-manager 认证会话")
+		}
+		var request deploymentpublication.PreviewRequest
+		if err := decodeStrict(payload, &request); err != nil {
+			return nil, nil, errors.New("部署预览请求无效")
+		}
+		result, err := controller.Preview(ctx, callCtx.GetTenantId(), request.Composition, request.DeploymentRevision)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(result)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+	}
+}
+
+func kernelDeploymentPublish(controller deploymentpublication.Controller) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if !authenticatedDeploymentManager(callCtx) {
+			return nil, nil, errors.New("kernel.deployment.publish 只接受 deployment-manager 认证会话")
+		}
+		var request deploymentpublication.PublishRequest
+		if err := decodeStrict(payload, &request); err != nil {
+			return nil, nil, errors.New("部署发布请求无效")
+		}
+		result, err := controller.Publish(ctx, callCtx.GetTenantId(), request.Composition, request.DeploymentRevision, request.ExpectedDigest)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(result)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+	}
+}
+
+func decodeStrict(payload []byte, target any) error {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return errors.New("请求只能包含一个 JSON 文档")
+	}
+	return nil
 }
 
 func kernelNodeReadiness(observer nodebootstrap.ReadinessObserver) protocolbus.HostService {

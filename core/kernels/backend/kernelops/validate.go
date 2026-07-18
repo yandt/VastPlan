@@ -18,6 +18,7 @@ const (
 	ConfigKindDesiredV1           = "desired-v1"
 	ConfigKindPlatformV1          = "platform-profile-v1"
 	ConfigKindApplicationV1       = "application-composition-v1"
+	ConfigKindBackendCatalogV1    = "backend-platform-catalog-v1"
 	ConfigKindPortalPlatformV1    = "portal-platform-profile-v1"
 	ConfigKindPortalCatalogV1     = "portal-platform-catalog-v1"
 	ConfigKindPortalApplicationV1 = "portal-application-composition-v1"
@@ -46,7 +47,7 @@ func RunValidate(output io.Writer, args []string) error {
 		return err
 	}
 	if flags.NArg() != 0 || *kind == "" || *filename == "" {
-		return errors.New("用法: validate -kind <desired-v1|platform-profile-v1|application-composition-v1|portal-platform-profile-v1|portal-platform-catalog-v1|portal-application-composition-v1|deployment-v2|actual-state> -file <配置.json>")
+		return errors.New("用法: validate -kind <desired-v1|platform-profile-v1|application-composition-v1|backend-platform-catalog-v1|portal-platform-profile-v1|portal-platform-catalog-v1|portal-application-composition-v1|deployment-v2|actual-state> -file <配置.json>")
 	}
 
 	result := validationResult{Kind: *kind, Valid: true}
@@ -87,6 +88,12 @@ func RunValidate(output io.Writer, args []string) error {
 		result.Revision = composition.Revision
 		result.Digest = composition.Digest()
 		result.Units = len(composition.Units)
+	case ConfigKindBackendCatalogV1:
+		catalog, err := backendcompositionv1.ParseBackendPlatformCatalogFile(*filename)
+		if err != nil {
+			return err
+		}
+		result.SchemaVersion, result.Revision, result.Digest, result.Units = catalog.Version, catalog.Revision, catalog.Digest(), len(catalog.Bindings)
 	case ConfigKindPortalPlatformV1:
 		profile, err := frontendcompositionv1.ParsePlatformProfileFile(*filename)
 		if err != nil {

@@ -22,6 +22,7 @@ const plugins = [
   ["com.vastplan.platform.security.credentials", {}],
   ["com.vastplan.platform.data.relational.connection-manager", {}],
   ["com.vastplan.platform.artifacts.repository", {}],
+  ["com.vastplan.platform.infrastructure.deployment-manager", {}],
 ];
 
 for (const [id, options] of plugins) {

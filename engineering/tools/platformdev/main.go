@@ -39,6 +39,8 @@ import (
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
 
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 )
 
@@ -216,7 +218,9 @@ func (r *runtime) packageArtifacts(ctx context.Context) error {
 		{id: "com.vastplan.platform.security.credentials", backend: true, frontend: true},
 		{id: "com.vastplan.platform.data.relational.connection-manager", backend: true, frontend: true},
 		{id: "com.vastplan.platform.artifacts.repository", backend: true, frontend: true},
-		{id: "com.vastplan.platform.infrastructure.deployment-manager", backend: true},
+		{id: "com.vastplan.platform.infrastructure.deployment-manager", backend: true, frontend: true},
+		{id: "com.vastplan.demo-permission", backend: true},
+		{id: "com.vastplan.hello-world", backend: true},
 	}
 	for _, spec := range specs {
 		args := []string{"run", "./engineering/tools/pluginpackage", "-source", filepath.Join("extensions", "plugins", spec.id), "-repository", repository}
@@ -266,6 +270,22 @@ func (r *runtime) writeFixtures() error {
 	if err := os.WriteFile(filepath.Join(r.runDir, "platform-management-profile.json"), rendered, 0o600); err != nil {
 		return err
 	}
+	managedProfile, err := backendcompositionv1.ParsePlatformProfileFile(filepath.Join(r.options.root, "engineering", "deploy", "managed-services-profile.json"))
+	if err != nil {
+		return err
+	}
+	catalog := backendcompositionv1.BackendPlatformCatalog{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "local-backend-platform"},
+		Profiles: []backendcompositionv1.PlatformProfile{managedProfile},
+		Bindings: []backendcompositionv1.BackendPlatformBinding{{TenantID: "local", DeploymentName: "managed-services", PlatformProfile: compositioncommonv1.Ref{ID: managedProfile.ID, Revision: managedProfile.Revision, Digest: managedProfile.Digest()}}},
+	}
+	catalogRaw, err := json.MarshalIndent(catalog, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(r.runDir, "backend-platform-catalog.json"), catalogRaw, 0o600); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -287,16 +307,29 @@ func (r *runtime) start(ctx context.Context) error {
 		"-lock", filepath.Join(r.runDir, "state", "node-agent.lock"), "-third-party-plugin-policy", "deny",
 		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
 		"-plugin-placements", "com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
+		"-backend-platform-catalog", filepath.Join(r.runDir, "backend-platform-catalog.json"), "-allow-development-plugins",
 	}
 	if _, err := r.startChild("node-agent", env, kernel, nodeArgs...); err != nil {
 		return err
 	}
 	time.Sleep(750 * time.Millisecond)
+	managedNodeArgs := []string{
+		"reconcile", "-nats-url", natsURL, "-nats-allow-insecure",
+		"-deployment", "managed-services", "-tenant", "local", "-node-id", "local-managed-node",
+		"-labels", "environment=local-managed", "-repository", filepath.Join(r.runDir, "repository"),
+		"-runtime-root", filepath.Join(r.runDir, "installed", "managed-services"), "-actual-state", filepath.Join(r.runDir, "state", "managed-services-actual.json"),
+		"-lock", filepath.Join(r.runDir, "state", "managed-services.lock"), "-third-party-plugin-policy", "deny",
+		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
+	}
+	if _, err := r.startChild("managed-node-agent", env, kernel, managedNodeArgs...); err != nil {
+		return err
+	}
 	controllerArgs := []string{
 		"controlplane", "-nats-url", natsURL, "-nats-allow-insecure", "-bootstrap", "-replicas", "1",
 		"-platform-profile", filepath.Join(r.runDir, "platform-management-profile.json"),
 		"-application-composition", filepath.Join(r.options.root, "engineering", "deploy", "platform-management-application.json"),
 		"-deployment-revision", "1", "-repository", filepath.Join(r.runDir, "repository"), "-controller",
+		"-backend-platform-catalog", filepath.Join(r.runDir, "backend-platform-catalog.json"),
 	}
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
@@ -324,6 +357,12 @@ func (r *runtime) start(ctx context.Context) error {
 	}
 	if err := publishPortal("https://" + r.options.portalListen); err != nil {
 		return fmt.Errorf("发布初始 Portal 组合: %w", err)
+	}
+	if err := publishManagedService("https://" + r.options.portalListen); err != nil {
+		return fmt.Errorf("发布初始在线服务组合: %w", err)
+	}
+	if err := waitForUnits(ctx, filepath.Join(r.runDir, "state", "managed-services-actual.json"), 1, 60*time.Second); err != nil {
+		return fmt.Errorf("在线服务组合未收敛: %w", err)
 	}
 	if err := r.startProxy(); err != nil {
 		return err
@@ -630,6 +669,42 @@ func publishPortal(baseURL string) error {
 	return nil
 }
 
+func publishManagedService(baseURL string) error {
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: insecureLocalTLS()}, Timeout: 10 * time.Second}
+	composition := map[string]any{
+		"version": 1, "revision": 1, "id": "managed-services", "target": map[string]string{"kernel": "backend"},
+		"metadata": map[string]string{"name": "managed-services"},
+		"units": []any{map[string]any{
+			"serviceClass": "application.backend",
+			"spec": map[string]any{
+				"id": "hello-service", "kind": "service", "enabled": true, "service_role": "backend", "replicas": 1,
+				"placement": map[string]any{"nodeSelector": map[string]string{"environment": "local-managed"}},
+				"plugins":   []any{map[string]string{"id": "com.vastplan.hello-world", "version": "0.1.0", "channel": "stable"}},
+			},
+		}},
+	}
+	basePath := "/v1/portals/operations/platform/services/deployment/deployment/service-revisions"
+	status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, basePath, map[string]any{"composition": composition}, true)
+	if err != nil || status != http.StatusOK {
+		return fmt.Errorf("create service status=%d body=%s: %w", status, raw, err)
+	}
+	var revision struct {
+		ID uint64 `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &revision); err != nil || revision.ID == 0 {
+		return errors.New("Deployment Manager 未返回有效服务 revision")
+	}
+	steps := []struct{ token, operation string }{{authorToken, "submit"}, {approverToken, "approve"}, {publisherToken, "publish"}}
+	for _, step := range steps {
+		path := fmt.Sprintf("%s/%d/%s", basePath, revision.ID, step.operation)
+		status, raw, err = portalRequest(client, baseURL, step.token, http.MethodPost, path, map[string]any{}, true)
+		if err != nil || status != http.StatusOK {
+			return fmt.Errorf("service %s status=%d body=%s: %w", step.operation, status, raw, err)
+		}
+	}
+	return nil
+}
+
 func portalRequest(client *http.Client, baseURL, session, method, path string, payload any, csrf bool) (int, []byte, error) {
 	csrfToken := ""
 	if csrf {
@@ -693,9 +768,9 @@ func writeSessions(filename string) error {
 		roles     []string
 	}{
 		{devAdminToken, "local-admin", []string{"platform.admin", "portal.read", "portal.compose", "portal.approve", "portal.publish"}},
-		{authorToken, "local-author", []string{"portal.compose"}},
-		{approverToken, "local-approver", []string{"portal.approve"}},
-		{publisherToken, "local-publisher", []string{"portal.publish"}},
+		{authorToken, "local-author", []string{"portal.read", "portal.compose", "platform.deployment.read", "platform.deployment.compose"}},
+		{approverToken, "local-approver", []string{"portal.read", "portal.approve", "platform.deployment.read", "platform.deployment.approve"}},
+		{publisherToken, "local-publisher", []string{"portal.read", "portal.publish", "platform.deployment.read", "platform.deployment.publish"}},
 	}
 	doc := struct {
 		Sessions []record `json:"sessions"`

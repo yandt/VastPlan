@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -11,8 +12,13 @@ import (
 	"testing"
 	"time"
 
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
+	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 )
@@ -42,7 +48,7 @@ type fakeHost struct {
 	readinessStatus nodebootstrap.ReadinessStatus
 }
 
-func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 	h.targets = append(h.targets, target)
 	if h.err != nil {
 		return nil, nil, h.err
@@ -55,7 +61,86 @@ func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *con
 		raw, _ := json.Marshal(nodebootstrap.ReadinessObservation{Status: status})
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 	}
+	if target.Capability == deploymentpublication.KernelTargetsService {
+		raw, _ := json.Marshal(map[string]any{"items": []deploymentpublication.Target{{DeploymentName: "agent-services", PlatformProfile: compositioncommonv1.Ref{ID: "backend-default", Revision: 1, Digest: strings.Repeat("a", 64)}}}})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
+	if target.Capability == deploymentpublication.KernelPreviewService {
+		var request deploymentpublication.PreviewRequest
+		_ = json.Unmarshal(payload, &request)
+		deployment := deploymentv2.Deployment{Version: 2, Revision: request.DeploymentRevision, Metadata: request.Composition.Metadata, Units: []deploymentv2.ServiceUnit{}}
+		raw, _ := json.Marshal(deploymentpublication.Result{Deployment: deployment, Digest: fmt.Sprintf("preview-%d", request.DeploymentRevision)})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
+	if target.Capability == deploymentpublication.KernelPublishService {
+		var request deploymentpublication.PublishRequest
+		_ = json.Unmarshal(payload, &request)
+		deployment := deploymentv2.Deployment{Version: 2, Revision: request.DeploymentRevision, Metadata: request.Composition.Metadata, Units: []deploymentv2.ServiceUnit{}}
+		raw, _ := json.Marshal(deploymentpublication.Result{Deployment: deployment, Digest: request.ExpectedDigest, KVRevision: request.DeploymentRevision + 10})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"systemdActive":true}`), nil
+}
+
+func TestServiceCompositionWorkflowAndRollback(t *testing.T) {
+	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := &fakeHost{}
+	alice, bob, carol := userCall("tenant-a", "alice"), userCall("tenant-a", "bob"), userCall("tenant-a", "carol")
+	input := backendcompositionv1.ApplicationComposition{Metadata: deploymentv1.Metadata{Name: "agent-services"}, Units: []backendcompositionv1.ApplicationUnit{}}
+	targets, err := service.ListDeploymentTargets(context.Background(), host, alice)
+	if err != nil || len(targets) != 1 || targets[0].DeploymentName != "agent-services" {
+		t.Fatalf("部署目标查询失败: %+v %v", targets, err)
+	}
+	draft, err := service.CreateServiceDraft(context.Background(), host, alice, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if draft.ID != 1 || draft.Composition.Revision != 1 || draft.Composition.Metadata.Tenant != "tenant-a" || draft.PreviewDigest != "preview-1" {
+		t.Fatalf("服务草稿未由服务端规范化: %+v", draft)
+	}
+	pending, err := service.SubmitServiceDraft(context.Background(), host, alice, draft.ID)
+	if err != nil || pending.Status != platformadminapi.ServicePendingApproval || pending.SubmittedBy != "alice" {
+		t.Fatalf("服务草稿提交失败: %+v %v", pending, err)
+	}
+	if _, err := service.ApproveServiceRevision(alice, draft.ID); !errors.Is(err, errSeparation) {
+		t.Fatalf("提交人不得自批: %v", err)
+	}
+	approved, err := service.ApproveServiceRevision(bob, draft.ID)
+	if err != nil || approved.Status != platformadminapi.ServiceApproved {
+		t.Fatalf("服务修订审批失败: %+v %v", approved, err)
+	}
+	first, err := service.PublishServiceRevision(context.Background(), host, carol, draft.ID)
+	if err != nil || !first.Active || first.KVRevision != 11 {
+		t.Fatalf("服务修订发布失败: %+v %v", first, err)
+	}
+	secondDraft, err := service.CreateServiceDraft(context.Background(), host, alice, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.SubmitServiceDraft(context.Background(), host, alice, secondDraft.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ApproveServiceRevision(bob, secondDraft.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.PublishServiceRevision(context.Background(), host, carol, secondDraft.ID); err != nil {
+		t.Fatal(err)
+	}
+	rolledBack, err := service.RollbackServiceRevision(context.Background(), host, carol, first.ID)
+	if err != nil || rolledBack.ID != 3 || !rolledBack.Active || rolledBack.Composition.Revision != 3 {
+		t.Fatalf("回滚必须创建并发布新的单调修订: %+v %v", rolledBack, err)
+	}
+	revisions, err := service.ListServiceRevisions(alice)
+	if err != nil || len(revisions) != 3 || !revisions[0].Active || revisions[1].Active || revisions[2].Active {
+		t.Fatalf("服务组合激活状态错误: %+v %v", revisions, err)
+	}
+	audit, err := service.ListServiceRevisionAudit(alice, rolledBack.ID)
+	if err != nil || len(audit) < 3 {
+		t.Fatalf("回滚审计不完整: %+v %v", audit, err)
+	}
 }
 
 func (h *fakeHost) called(capability string) bool {

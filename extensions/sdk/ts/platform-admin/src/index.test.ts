@@ -33,4 +33,19 @@ describe("PlatformAdminClient", () => {
 		{ path: "/v1/portals/operations/platform/services/deployment/deployment/bootstrap-jobs/bootstrap-1/approve", method: "POST" },
     ]);
   });
+
+  it("keeps online service composition on portal-scoped fixed routes", async () => {
+    const calls: Array<{ path: string; method?: string }> = [];
+    const fetcher: PlatformFetch = async (path, init) => {
+      calls.push({ path, method: init?.method });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { id: 4, status: "Published" } };
+    };
+    const client = new PlatformAdminClient(fetcher, "operations", "deployment");
+    await client.publishServiceRevision(4);
+    expect(calls).toEqual([
+      { path: "/v1/csrf", method: "GET" },
+      { path: "/v1/portals/operations/platform/services/deployment/deployment/service-revisions/4/publish", method: "POST" },
+    ]);
+    expect(() => client.rollbackServiceRevision(0)).toThrowError(PlatformAdminError);
+  });
 });

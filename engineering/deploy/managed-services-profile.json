@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "revision": 1,
+  "id": "managed-services-default",
+  "target": { "kernel": "backend" },
+  "serviceClasses": ["application.backend"],
+  "attachments": [],
+  "services": []
+}

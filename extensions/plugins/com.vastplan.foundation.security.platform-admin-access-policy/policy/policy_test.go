@@ -28,6 +28,12 @@ func TestPlatformAdminRolesAndUnknownOperations(t *testing.T) {
 	if got, _ := decide(user("platform.deployment.approve"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "approveBootstrap"}); got != extpoint.DecisionAllow {
 		t.Fatalf("部署审批角色应允许: %s", got)
 	}
+	if got, _ := decide(user("platform.deployment.compose"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "publishServiceRevision"}); got != extpoint.DecisionDeny {
+		t.Fatalf("服务组合编辑角色不能隐含发布: %s", got)
+	}
+	if got, _ := decide(user("platform.deployment.publish"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "publishServiceRevision"}); got != extpoint.DecisionAllow {
+		t.Fatalf("服务组合发布角色应允许: %s", got)
+	}
 }
 
 func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
@@ -47,6 +53,9 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	}
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.node.readiness", Operation: "observe"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 的节点就绪观察回调应允许: %s", got)
+	}
+	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.deployment.publish", Operation: "execute"}); got != extpoint.DecisionAllow {
+		t.Fatalf("deployment-manager 的可信发布回调应允许: %s", got)
 	}
 }
 
