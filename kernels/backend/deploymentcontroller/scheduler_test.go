@@ -463,6 +463,11 @@ func assertPartitionCoverage(t *testing.T, assignments map[string]deploymentv1.D
 func testDeployment(replicas int) deploymentv2.Deployment {
 	return deploymentv2.Deployment{
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "prod", Tenant: "acme"},
+		Resolution: deploymentv2.Resolution{
+			PlatformProfile:        deploymentv2.CompositionRef{ID: "test-platform", Revision: 1, Digest: strings.Repeat("a", 64)},
+			ApplicationComposition: deploymentv2.CompositionRef{ID: "test-application", Revision: 1, Digest: strings.Repeat("b", 64)},
+			PluginOrigins:          map[string]string{"com.example.api": deploymentv2.OriginApplication},
+		},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: replicas,
 			Placement: deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},

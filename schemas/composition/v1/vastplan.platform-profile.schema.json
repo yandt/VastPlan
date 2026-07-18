@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/composition/v1/vastplan.platform-profile.schema.json",
+  "title": "VastPlan Backend Platform Profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "revision", "id", "target", "serviceClasses", "attachments", "services"],
+  "properties": {
+    "version": { "const": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kernel"],
+      "properties": { "kernel": { "const": "backend" } }
+    },
+    "serviceClasses": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" }
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["serviceClass", "plugins"],
+        "properties": {
+          "serviceClass": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+          "plugins": {
+            "type": "array",
+            "minItems": 1,
+            "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/deployment/v2/vastplan.deployment.schema.json#/$defs/pluginRef" }
+          }
+        }
+      }
+    },
+    "services": {
+      "type": "array",
+      "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/deployment/v2/vastplan.deployment.schema.json#/$defs/serviceUnit" }
+    }
+  }
+}

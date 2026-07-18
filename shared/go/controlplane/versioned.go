@@ -10,10 +10,11 @@ import (
 )
 
 type versionedCodec[T any] struct {
-	parse    func([]byte) (T, error)
-	revision func(T) uint64
-	digest   func(T) string
-	noun     string
+	parse     func([]byte) (T, error)
+	revision  func(T) uint64
+	digest    func(T) string
+	noun      string
+	monotonic bool
 }
 
 // applyVersioned 集中实现控制面配置的发布不变量：同业务 revision 不可改写，
@@ -48,6 +49,9 @@ func applyVersioned[T any](ctx context.Context, kv jetstream.KeyValue, key strin
 			return 0, zero, fmt.Errorf("业务 revision %d 已存在且内容不同", codec.revision(value))
 		}
 		return current.Revision(), value, nil
+	}
+	if codec.monotonic && codec.revision(value) < codec.revision(existing) {
+		return 0, zero, fmt.Errorf("%s revision 必须单调递增: current=%d requested=%d", codec.noun, codec.revision(existing), codec.revision(value))
 	}
 	revision, err := kv.Update(ctx, key, normalized, current.Revision())
 	if err != nil {

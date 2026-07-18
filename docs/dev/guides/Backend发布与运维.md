@@ -16,7 +16,7 @@ go vet ./...
 
 还必须取得冻结发布候选提交的 24 小时 `Backend Kernel Soak` 成功报告。短时 smoke、工作流仍在运行或其他源码提交的报告都不能替代。报告不仅要使 job 成功，还必须通过 `tools/soakreport` 对 commit、时长、真实调用/重启和资源收敛的复验。
 
-`./tools/verify-release.sh` 会执行两次独立构建并逐字节比较，用正式二进制预检仓库的 DesiredState v1 和 Deployment v2 样例，再验证 CycloneDX SBOM 可确定性重建。
+`./tools/verify-release.sh` 会执行两次独立构建并逐字节比较，用正式二进制预检仓库的 DesiredState v1、Platform Profile、Application Composition 和 Resolver 生成的 Deployment v2 样例，再验证 CycloneDX SBOM 可确定性重建。
 
 soak 成功后，把被测 SHA 登记为推广证据。此后到标签提交只允许修改 `VERSION`、`SOAKED_COMMIT`、`CHANGELOG.md` 和封板验收状态；任何源码、工作流、Schema 或测试变化都必须重新运行 24 小时 soak：
 
@@ -62,7 +62,7 @@ chmod 0755 backend-kernel-linux-amd64
 
 `gh attestation verify` 默认要求 SLSA provenance；CycloneDX SBOM 必须显式指定 `https://cyclonedx.org/bom` predicate。气隙部署必须在制品入区前完成在线证明验证，将验证记录、二进制、SBOM 和 `SHA256SUMS` 一起带入；入区后重新校验 SHA-256。
 
-## 3. 配置和状态迁移预检
+## 3. 配置和状态预检
 
 预检直接使用待上线二进制，确保检查器和运行时不会漂移：
 
@@ -71,13 +71,16 @@ chmod 0755 backend-kernel-linux-amd64
   -kind desired-v1 -file /etc/vastplan/desired-state.json
 
 ./backend-kernel-linux-amd64 validate \
-  -kind deployment-v2 -file /etc/vastplan/deployment.json
+  -kind platform-profile-v1 -file /etc/vastplan/platform-profile.json
+
+./backend-kernel-linux-amd64 validate \
+  -kind application-composition-v1 -file /etc/vastplan/application-composition.json
 
 ./backend-kernel-linux-amd64 validate \
   -kind actual-state -file /var/lib/vastplan/actual-state.json
 ```
 
-- 本地 Node Agent 使用 DesiredState v1；集群 Controller 输入使用 Deployment v2。两者不会在 Backend 1.0 发布时自动互相转换。
+- 本地 Node Agent 可使用 DesiredState v1 进行开发；集群服务配置必须同时提交 Platform Profile 与 Application Composition。Deployment v2 只由 Resolver 生成并供 Controller 消费，不接受人工提交。
 - actual-state v1 在预检中只于内存转换为 v2，不修改源文件。正式进程加载后，下一次成功保存只写 v2。
 - 未知 actual-state 版本、未知 v1 status、Schema 错误或同 revision 内容冲突必须先处理，不得跳过预检启动。
 - 所有待运行插件的 `engines.backend` 必须显式包含目标 Backend 1.0；`^0.1` 不会被 1.0 宿主默认为兼容。
@@ -152,7 +155,7 @@ canary 观察窗通过后再逐节点执行，不同时替换全部 Controller/N
 
 ## 5. 配置回滚与二进制回滚
 
-配置回滚必须发布备份快照本身，保留其原 revision；不要复制内容后沿用当前 revision。集群模式可使用控制面发布工具：
+配置回滚必须把已审核的旧内容作为一组新的 Platform Profile 与 Application Composition revision 发布，并分配新的单调递增 Deployment revision；不能回退 KV 中已经发布的 revision。集群模式可使用控制面发布工具：
 
 ```bash
 go run ./kernels/backend controlplane \
@@ -162,7 +165,9 @@ go run ./kernels/backend controlplane \
   -nats-key /etc/vastplan/pki/controller.key \
   -nats-seed /secure/controller.seed \
   -repository /var/lib/vastplan/repository \
-  -desired /var/lib/vastplan/backups/deployment.before-1.0.0.json
+  -platform-profile /var/lib/vastplan/backups/platform-profile.rollback.json \
+  -application-composition /var/lib/vastplan/backups/application-composition.rollback.json \
+  -deployment-revision 42
 ```
 
 本地文件模式用备份文件原子替换 DesiredState，Node Agent 会接受较小 revision 并按内容指纹决定是否重启。

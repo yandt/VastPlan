@@ -44,6 +44,10 @@ func TestValidateDeploymentContractsBuildsRemoteDAGAndChecksVersion(t *testing.T
 		{ID: "database", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "platform.database", InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "com.example.database", Version: "1.2.0", Channel: "stable"}}},
 		{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "business.api", InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "com.example.consumer", Version: "1.0.0", Channel: "stable"}}},
 	}}
+	deployment.Resolution.PluginOrigins = map[string]string{
+		"com.example.database": deploymentv2.OriginApplication,
+		"com.example.consumer": deploymentv2.OriginApplication,
+	}
 	graph := map[string][]string{"database": nil, "api": nil}
 	if err := validateDeploymentContracts(deployment, graph, reader); err != nil {
 		t.Fatal(err)
@@ -56,5 +60,25 @@ func TestValidateDeploymentContractsBuildsRemoteDAGAndChecksVersion(t *testing.T
 	reader["com.example.consumer@1.0.0"] = pluginv1.Artifact{PluginID: "com.example.consumer", Version: "1.0.0", Channel: "stable", Manifest: []byte(bad)}
 	if err := validateDeploymentContracts(deployment, map[string][]string{"database": nil, "api": nil}, reader); err == nil || !strings.Contains(err.Error(), "版本范围") {
 		t.Fatalf("版本冲突必须在发布 assignment 前报告: %v", err)
+	}
+}
+
+func TestValidateDeploymentContractsRejectsForgedApplicationOrigin(t *testing.T) {
+	manifest := []byte(`{
+		"id":"com.vastplan.foundation.security.policy","name":"policy","description":"policy",
+		"version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{"tools":[{"id":"platform.policy","service_role":"backend","title":"policy","subcommands":[]}]}}
+	}`)
+	reader := contractArtifactReader{"com.vastplan.foundation.security.policy@1.0.0": {
+		PluginID: "com.vastplan.foundation.security.policy", Version: "1.0.0", Channel: "stable", Manifest: manifest,
+	}}
+	deployment := deploymentv2.Deployment{
+		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "prod"},
+		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{"com.vastplan.foundation.security.policy": deploymentv2.OriginApplication}},
+		Units:      []deploymentv2.ServiceUnit{{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "com.vastplan.foundation.security.policy", Version: "1.0.0", Channel: "stable"}}}},
+	}
+	if err := validateDeploymentContracts(deployment, map[string][]string{"api": nil}, reader); err == nil || !strings.Contains(err.Error(), "应用来源") {
+		t.Fatalf("Controller 必须拒绝伪造的平台插件应用来源: %v", err)
 	}
 }

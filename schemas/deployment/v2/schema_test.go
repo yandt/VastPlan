@@ -1,9 +1,40 @@
 package deploymentv2
 
-import "testing"
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+)
+
+func resolvedDeployment(t *testing.T, raw string) []byte {
+	t.Helper()
+	var document map[string]any
+	if err := json.Unmarshal([]byte(raw), &document); err != nil {
+		t.Fatal(err)
+	}
+	origins := map[string]string{}
+	for _, unitValue := range document["units"].([]any) {
+		unit := unitValue.(map[string]any)
+		for _, pluginValue := range unit["plugins"].([]any) {
+			plugin := pluginValue.(map[string]any)
+			origins[plugin["id"].(string)] = OriginApplication
+		}
+	}
+	document["resolution"] = map[string]any{
+		"platform_profile":        map[string]any{"id": "default-platform", "revision": 1, "digest": strings.Repeat("a", 64)},
+		"application_composition": map[string]any{"id": "test-application", "revision": 1, "digest": strings.Repeat("b", 64)},
+		"development_mode":        false,
+		"plugin_origins":          origins,
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
 
 func TestParseClusterReplicas(t *testing.T) {
-	deployment, err := Parse([]byte(`{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"api","kind":"service","plugins":[{"id":"com.example.api","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":3,"placement":{"nodeSelector":{"region":"cn"}}}]}`))
+	deployment, err := Parse(resolvedDeployment(t, `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"api","kind":"service","plugins":[{"id":"com.example.api","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":3,"placement":{"nodeSelector":{"region":"cn"}}}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -13,7 +44,7 @@ func TestParseClusterReplicas(t *testing.T) {
 }
 
 func TestParseAppProfileReferencesWithoutServiceUnits(t *testing.T) {
-	deployment, err := Parse([]byte(`{"version":2,"revision":1,"metadata":{"name":"runner-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":3,"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`))
+	deployment, err := Parse(resolvedDeployment(t, `{"version":2,"revision":1,"metadata":{"name":"runner-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":3,"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +68,7 @@ func TestParseRejectsInvalidAppProfileReferences(t *testing.T) {
 
 func TestParseResourcesAffinityAndAutoscaling(t *testing.T) {
 	raw := []byte(`{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"api","kind":"service","plugins":[{"id":"com.example.api","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":2,"autoscaling":{"min_replicas":2,"max_replicas":6,"metric":"queue.depth","target_value_per_replica":10},"resources":{"requests":{"cpu_millis":500,"memory_bytes":1073741824,"gpu":1}},"placement":{"nodeSelector":{"region":"cn"},"affinity":{"preferred":[{"match_labels":{"disk":"ssd"},"weight":80}]},"antiAffinity":{"required":[{"match_labels":{"maintenance":"true"}}]}}}]}`)
-	deployment, err := Parse(raw)
+	deployment, err := Parse(resolvedDeployment(t, string(raw)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,18 +96,18 @@ func TestParseRejectsInvalidClusterDeployment(t *testing.T) {
 
 func TestParseValidatesUnitDependencyDAG(t *testing.T) {
 	valid := `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"database","kind":"service","plugins":[{"id":"com.example.db","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1},{"id":"api","kind":"service","plugins":[{"id":"com.example.api","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1,"depends_on":["database"]}]}`
-	if _, err := Parse([]byte(valid)); err != nil {
+	if _, err := Parse(resolvedDeployment(t, valid)); err != nil {
 		t.Fatalf("有效依赖 DAG 不应拒绝: %v", err)
 	}
 	cycle := `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"a","kind":"service","plugins":[{"id":"com.example.a","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1,"depends_on":["b"]},{"id":"b","kind":"service","plugins":[{"id":"com.example.b","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1,"depends_on":["a"]}]}`
-	if _, err := Parse([]byte(cycle)); err == nil {
+	if _, err := Parse(resolvedDeployment(t, cycle)); err == nil {
 		t.Fatal("循环 unit 依赖必须拒绝")
 	}
 }
 
 func TestParseValidatesLeaderAndPartitionOwnership(t *testing.T) {
 	partitioned := `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"db","kind":"service","plugins":[{"id":"com.example.db","version":"1.0.0"}],"enabled":true,"service_role":"backend","logical_service":"platform.database","instance_policy":"partitioned","state_model":"partition-owned","visibility":"cluster","routing":"shard","replicas":2,"partition_keys":["a","b","c"]}]}`
-	deployment, err := Parse([]byte(partitioned))
+	deployment, err := Parse(resolvedDeployment(t, partitioned))
 	if err != nil || len(deployment.Units[0].PartitionKeys) != 3 {
 		t.Fatalf("合法分片部署应通过: deployment=%+v err=%v", deployment, err)
 	}
@@ -88,5 +119,23 @@ func TestParseValidatesLeaderAndPartitionOwnership(t *testing.T) {
 		if _, err := Parse([]byte(raw)); err == nil {
 			t.Fatal("无 fencing/分片所有权边界的部署必须拒绝")
 		}
+	}
+}
+
+func TestParseRequiresCompleteResolutionLock(t *testing.T) {
+	raw := `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[]}`
+	if _, err := Parse([]byte(raw)); err == nil {
+		t.Fatal("Resolver 输出缺少 resolution lock 必须拒绝")
+	}
+	withOrigin := resolvedDeployment(t, `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"api","kind":"service","plugins":[{"id":"com.example.api","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1}]}`)
+	var document map[string]any
+	if err := json.Unmarshal(withOrigin, &document); err != nil {
+		t.Fatal(err)
+	}
+	resolution := document["resolution"].(map[string]any)
+	resolution["plugin_origins"] = map[string]string{}
+	missing, _ := json.Marshal(document)
+	if _, err := Parse(missing); err == nil {
+		t.Fatal("插件缺少来源锁定必须拒绝")
 	}
 }

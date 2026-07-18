@@ -50,3 +50,34 @@ func TestValidatePublisherOwnershipBindsFirstPartyBothWays(t *testing.T) {
 		t.Fatalf("合法首方身份应通过: %v", err)
 	}
 }
+
+func TestClassifyManagementUsesVerifiedIdentity(t *testing.T) {
+	tests := []struct {
+		id        string
+		publisher string
+		want      ManagementClass
+	}{
+		{"com.vastplan.foundation.security.bootstrap-policy", "vastplan", ManagementPlatform},
+		{"com.vastplan.platform.data.relational.connection-manager", "vastplan", ManagementPlatform},
+		{"com.vastplan.product.agent.designer", "vastplan", ManagementApplication},
+		{"com.vastplan.integration.database.postgresql", "vastplan", ManagementApplication},
+		{"com.vastplan.example.demo.hello-world", "vastplan", ManagementDevelopment},
+		{"com.vastplan.hello-world", "vastplan", ManagementDevelopment},
+		{"com.example.tool", "example", ManagementApplication},
+	}
+	for _, test := range tests {
+		got, err := ClassifyManagement(test.id, test.publisher)
+		if err != nil || got != test.want {
+			t.Fatalf("ClassifyManagement(%q, %q) = %q, %v; want %q", test.id, test.publisher, got, err, test.want)
+		}
+	}
+}
+
+func TestClassifyManagementRejectsPublisherNamespaceSpoofing(t *testing.T) {
+	if _, err := ClassifyManagement("com.vastplan.platform.security.policy", "attacker"); err == nil {
+		t.Fatal("首方命名空间冒用必须拒绝")
+	}
+	if _, err := ClassifyManagement("com.attacker.tool", "vastplan"); err == nil {
+		t.Fatal("首方发布者使用外部命名空间必须拒绝")
+	}
+}

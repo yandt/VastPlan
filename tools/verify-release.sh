@@ -18,6 +18,8 @@ version="$(tr -d '[:space:]' < kernels/backend/VERSION)"
 grep -Fq '"kernel":"backend"' "$TMP/version.json"
 grep -Fq "\"version\":\"${version}\"" "$TMP/version.json"
 "$backend" validate -kind desired-v1 -file deploy/local.desired-state.json >/dev/null
+"$backend" validate -kind platform-profile-v1 -file deploy/platform-profile.json >/dev/null
+"$backend" validate -kind application-composition-v1 -file deploy/application-composition.json >/dev/null
 "$backend" validate -kind deployment-v2 -file deploy/cluster.deployment.json >/dev/null
 "$backend" controlplane -help >/dev/null 2>&1
 "$backend" artifact-server -help >/dev/null 2>&1

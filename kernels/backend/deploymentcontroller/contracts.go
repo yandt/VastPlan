@@ -10,6 +10,7 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/pluginid"
 	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
 
@@ -40,6 +41,13 @@ func validateDeploymentContracts(deployment deploymentv2.Deployment, graph map[s
 	for _, unit := range deployment.Units {
 		contract := unitContract{unit: unit}
 		for _, ref := range unit.Plugins {
+			origin, ok := deployment.Resolution.PluginOrigins[ref.ID]
+			if !ok {
+				return fmt.Errorf("unit %s 插件 %s 缺少解析来源", unit.ID, ref.ID)
+			}
+			if origin != deploymentv2.OriginPlatformProfile && origin != deploymentv2.OriginApplication {
+				return fmt.Errorf("unit %s 插件 %s 的解析来源无效: %q", unit.ID, ref.ID, origin)
+			}
 			artifactRef := pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: normalizedChannel(ref)}
 			artifact, _, err := artifacts.Read(artifactRef)
 			if err != nil {
@@ -49,8 +57,18 @@ func validateDeploymentContracts(deployment deploymentv2.Deployment, graph map[s
 			if err != nil {
 				return fmt.Errorf("unit %s 制品 %s 清单无效: %w", unit.ID, ref.ID, err)
 			}
-			if artifact.PluginID != ref.ID || artifact.Version != ref.Version || manifest.ID != ref.ID || manifest.Version != ref.Version {
+			if artifact.PluginID != ref.ID || artifact.Version != ref.Version || normalizeChannel(artifact.Channel) != artifactRef.Channel || manifest.ID != ref.ID || manifest.Version != ref.Version {
 				return fmt.Errorf("unit %s 制品引用与不可变清单身份不一致: %s@%s", unit.ID, ref.ID, ref.Version)
+			}
+			class, err := pluginid.ClassifyManagement(manifest.ID, manifest.Publisher)
+			if err != nil {
+				return fmt.Errorf("unit %s 插件 %s 身份分类失败: %w", unit.ID, ref.ID, err)
+			}
+			if class == pluginid.ManagementDevelopment && !deployment.Resolution.DevelopmentMode {
+				return fmt.Errorf("unit %s 包含未允许的开发插件 %s", unit.ID, ref.ID)
+			}
+			if origin == deploymentv2.OriginApplication && class == pluginid.ManagementPlatform {
+				return fmt.Errorf("unit %s 的应用来源不能包含平台管理插件 %s", unit.ID, ref.ID)
 			}
 			contributions, err := pluginv1.BackendRuntimeContributions(manifest)
 			if err != nil {
@@ -186,10 +204,14 @@ func providersInUnit(providers []capabilityProvider, unitID string) []capability
 }
 
 func normalizedChannel(ref deploymentv1.PluginRef) string {
-	if ref.Channel == "" {
+	return normalizeChannel(ref.Channel)
+}
+
+func normalizeChannel(channel string) string {
+	if channel == "" {
 		return "stable"
 	}
-	return ref.Channel
+	return channel
 }
 
 func appendUnique(values []string, value string) []string {

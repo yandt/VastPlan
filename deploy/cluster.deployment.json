@@ -5,6 +5,23 @@
     "name": "cluster-demo",
     "tenant": "acme"
   },
+  "resolution": {
+    "platform_profile": {
+      "id": "local-backend",
+      "revision": 1,
+      "digest": "1aafe7510bf136d0a6c26f4064463f98e270bd60eba419495ab54bb13543e36e"
+    },
+    "application_composition": {
+      "id": "cluster-demo",
+      "revision": 1,
+      "digest": "57410eb501fba467f672ab408b49a9ed2152b8461c2ea44a0ca335cd097d602b"
+    },
+    "development_mode": true,
+    "plugin_origins": {
+      "com.vastplan.demo-permission": "platform-profile",
+      "com.vastplan.hello-world": "application"
+    }
+  },
   "units": [
     {
       "id": "backend-main",

@@ -8,14 +8,17 @@ import (
 	"io"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/nodeagent"
+	compositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
 )
 
 const (
-	ConfigKindDesiredV1    = "desired-v1"
-	ConfigKindDeploymentV2 = "deployment-v2"
-	ConfigKindActualState  = "actual-state"
+	ConfigKindDesiredV1     = "desired-v1"
+	ConfigKindPlatformV1    = "platform-profile-v1"
+	ConfigKindApplicationV1 = "application-composition-v1"
+	ConfigKindDeploymentV2  = "deployment-v2"
+	ConfigKindActualState   = "actual-state"
 )
 
 type validationResult struct {
@@ -33,13 +36,13 @@ type validationResult struct {
 func RunValidate(output io.Writer, args []string) error {
 	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	kind := flags.String("kind", "", "desired-v1、deployment-v2 或 actual-state")
+	kind := flags.String("kind", "", "desired-v1、platform-profile-v1、application-composition-v1、deployment-v2 或 actual-state")
 	filename := flags.String("file", "", "待校验 JSON 文件")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 || *kind == "" || *filename == "" {
-		return errors.New("用法: validate -kind <desired-v1|deployment-v2|actual-state> -file <配置.json>")
+		return errors.New("用法: validate -kind <desired-v1|platform-profile-v1|application-composition-v1|deployment-v2|actual-state> -file <配置.json>")
 	}
 
 	result := validationResult{Kind: *kind, Valid: true}
@@ -62,6 +65,24 @@ func RunValidate(output io.Writer, args []string) error {
 		result.Revision = deployment.Revision
 		result.Digest = deployment.Digest()
 		result.Units = len(deployment.Units)
+	case ConfigKindPlatformV1:
+		profile, err := compositionv1.ParsePlatformProfileFile(*filename)
+		if err != nil {
+			return err
+		}
+		result.SchemaVersion = profile.Version
+		result.Revision = profile.Revision
+		result.Digest = profile.Digest()
+		result.Units = len(profile.Services)
+	case ConfigKindApplicationV1:
+		composition, err := compositionv1.ParseApplicationCompositionFile(*filename)
+		if err != nil {
+			return err
+		}
+		result.SchemaVersion = composition.Version
+		result.Revision = composition.Revision
+		result.Digest = composition.Digest()
+		result.Units = len(composition.Units)
 	case ConfigKindActualState:
 		if err := checkRegularFile(*filename, maxActualStateBytes); err != nil {
 			return fmt.Errorf("实际态文件: %w", err)

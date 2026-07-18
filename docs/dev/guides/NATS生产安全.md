@@ -43,10 +43,15 @@ go run ./kernels/backend controlplane \
   -nats-key /etc/vastplan/pki/bootstrap.key \
   -nats-seed /secure/vastplan-nats/bootstrap.seed \
   -bootstrap -replicas 3 \
-  -desired deploy/cluster.deployment.json
+  -platform-profile /etc/vastplan/platform-profile.json \
+  -application-composition /etc/vastplan/application-composition.json \
+  -deployment-revision 1 \
+  -repository /var/lib/vastplan/repository
 ```
 
 bootstrap seed 只在初始化/迁移作业中挂载，常驻 controller 和 node 不得持有。
+服务配置入口不接受人工编写的 Deployment v2。上述两份输入会先经 Composition Resolver
+校验插件分级与来源，生成锁定输入摘要的 Deployment v2，再由 Controller 消费。
 
 ## 5. 运行 Controller 与 Node Agent
 

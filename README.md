@@ -27,7 +27,10 @@ VastPlan 已经完成一套**可运行、可扩展、可部署、可验证的 Ba
 
 ```mermaid
 flowchart LR
-  D["Deployment v2"] --> C["Deployment Controller"]
+  PP["Platform Profile"] --> CR["Composition Resolver"]
+  AC["Application Composition"] --> CR
+  CR --> D["锁定的 Deployment v2"]
+  D --> C["Deployment Controller"]
   R["不可变制品仓库"] --> C
   C --> A["每节点 Assignment v1"]
   A --> N1["Node Agent A"]
@@ -44,11 +47,12 @@ flowchart LR
 完整链路是：
 
 1. 插件以不可变制品和 manifest 声明身份、能力、依赖及运行策略；
-2. Controller 校验全局依赖图、版本、作用域和放置约束；
-3. Controller 为每个节点发布确定性的 Assignment；
-4. Node Agent 安装制品、启动候选进程、检查健康与依赖，并原子切换；
-5. Router 根据 capability、逻辑服务、路由域和分片键完成本地或跨节点调用；
-6. 实际态、组合状态、租约和 fencing token 共同约束故障恢复与所有权转移。
+2. 平台管理员发布 Platform Profile，应用配置人员发布 Application Composition；
+3. Resolver 校验插件固有分类、来源和组合边界，生成完整且锁定输入摘要的 Deployment v2；
+4. Controller 校验全局依赖图、版本、作用域和放置约束，为每个节点发布确定性的 Assignment；
+5. Node Agent 安装制品、启动候选进程、检查健康与依赖，并原子切换；
+6. Router 根据 capability、逻辑服务、路由域和分片键完成本地或跨节点调用；
+7. 实际态、组合状态、租约和 fencing token 共同约束故障恢复与所有权转移。
 
 架构设计见[系统架构](docs/dev/architecture/系统架构.md)、[插件契约与协议](docs/dev/architecture/插件契约与协议.md)和[插件服务集群化设计](docs/dev/architecture/插件服务集群化设计.md)。
 
@@ -57,7 +61,7 @@ flowchart LR
 | 能力域 | 当前实现 |
 |---|---|
 | 插件契约与运行 | Draft 2020-12 Schema、PluginHost 双向协议、独立进程、心跳探活、回调宿主、热装摘除、状态迁移与失败回滚 |
-| 全局依赖编排 | Controller 从不可变制品读取完整 manifest，校验包依赖、runtime capability、SemVer 范围、作用域、策略和循环依赖 |
+| 分级组合与全局依赖 | Platform Profile 与 Application Composition 分权输入，Resolver 锁定来源；Controller 再从不可变制品读取完整 manifest，校验分类、包依赖、runtime capability、SemVer 范围、作用域、策略和循环依赖 |
 | 本地自治启动 | Node Agent 执行本地 DAG；支持 `strong`、`soft`、`lazy`、`data` 依赖语义，依赖丢失时停止数据面并重新对账 |
 | 多节点调度 | 标签、资源容量、亲和/反亲和、指标自动伸缩、rendezvous hashing、持久 generation 和节点漂移恢复 |
 | 集群运行策略 | `per-kernel`、`active-active`、`leader`、`partitioned`，覆盖本地直调、队列、单活动 owner 和分片 owner |
@@ -129,10 +133,12 @@ go run ./tools/pluginpackage \
 ```bash
 nats-server -js
 
-# 终端 A：发布 Deployment v2，并持续运行 Controller
+# 终端 A：解析平台配置与应用组合，并持续运行 Controller
 go run ./kernels/backend controlplane \
   -nats-url nats://127.0.0.1:4222 -nats-allow-insecure -bootstrap \
-  -desired deploy/cluster.deployment.json -controller \
+  -platform-profile deploy/platform-profile.json \
+  -application-composition deploy/application-composition.json \
+  -deployment-revision 1 -allow-development-plugins -controller \
   -repository .vastplan/repository
 
 # 终端 B：node-a

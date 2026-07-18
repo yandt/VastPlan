@@ -4,19 +4,12 @@
   "title": "VastPlan Cluster Deployment v2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "revision", "metadata", "units"],
+  "required": ["version", "revision", "metadata", "resolution", "units"],
   "properties": {
     "version": { "const": 2 },
     "revision": { "type": "integer", "minimum": 1 },
-    "metadata": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["name"],
-      "properties": {
-        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
-        "tenant": { "type": "string", "minLength": 1, "maxLength": 160 }
-      }
-    },
+    "metadata": { "$ref": "#/$defs/deploymentMetadata" },
+    "resolution": { "$ref": "#/$defs/resolution" },
     "units": {
       "type": "array",
       "items": { "$ref": "#/$defs/serviceUnit" }
@@ -28,6 +21,40 @@
     }
   },
   "$defs": {
+    "deploymentMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "tenant": { "type": "string", "minLength": 1, "maxLength": 160 }
+      }
+    },
+    "compositionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "digest"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform_profile", "application_composition", "development_mode", "plugin_origins"],
+      "properties": {
+        "platform_profile": { "$ref": "#/$defs/compositionRef" },
+        "application_composition": { "$ref": "#/$defs/compositionRef" },
+        "development_mode": { "type": "boolean" },
+        "plugin_origins": {
+          "type": "object",
+          "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+          "additionalProperties": { "enum": ["platform-profile", "application"] }
+        }
+      }
+    },
     "appProfileRef": {
       "type": "object",
       "additionalProperties": false,

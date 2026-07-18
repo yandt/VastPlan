@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "revision": 1,
+  "id": "cluster-demo",
+  "kernel": "backend",
+  "metadata": {
+    "name": "cluster-demo",
+    "tenant": "acme"
+  },
+  "units": [
+    {
+      "serviceClass": "application.backend",
+      "spec": {
+        "id": "backend-main",
+        "kind": "service",
+        "enabled": true,
+        "service_role": "backend",
+        "replicas": 2,
+        "placement": {
+          "nodeSelector": {
+            "region": "cn"
+          }
+        },
+        "plugins": [
+          {
+            "id": "com.vastplan.hello-world",
+            "version": "0.1.0",
+            "channel": "stable"
+          }
+        ]
+      }
+    }
+  ]
+}

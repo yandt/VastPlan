@@ -13,9 +13,10 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	"cdsoft.com.cn/VastPlan/kernels/backend/compositionresolver"
 	"cdsoft.com.cn/VastPlan/kernels/backend/deploymentcontroller"
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
-	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
+	compositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/shared/go/controlplane"
 )
@@ -30,7 +31,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	natsKey := flags.String("nats-key", "", "NATS mTLS 客户端私钥 PEM")
 	natsSeed := flags.String("nats-seed", "", "bootstrap 或 controller 角色 NKey seed（0600）")
 	natsAllowInsecure := flags.Bool("nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
-	desiredPath := flags.String("desired", "", "要发布的 DesiredState v1 或 Deployment v2 JSON")
+	platformProfilePath := flags.String("platform-profile", "", "平台管理员发布的 Platform Profile v1 JSON")
+	applicationPath := flags.String("application-composition", "", "应用配置人员发布的 Application Composition v1 JSON")
+	deploymentRevision := flags.Uint64("deployment-revision", 0, "Resolver 输出的独立单调 Deployment revision")
+	allowDevelopmentPlugins := flags.Bool("allow-development-plugins", false, "仅本地开发：允许 example 或历史未分类首方插件")
 	key := flags.String("key", "", "KV key；默认从 metadata.tenant/name 生成")
 	controllerMode := flags.Bool("controller", false, "持续 watch v2 部署与节点租约并生成每节点 assignment")
 	controllerID := flags.String("controller-id", "", "controller 选主身份；默认 hostname-pid")
@@ -44,16 +48,42 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		hostname, _ := os.Hostname()
 		*controllerID = fmt.Sprintf("%s-%d", hostname, os.Getpid())
 	}
-	if *desiredPath == "" && !*controllerMode {
-		return errors.New("发布模式必须提供 -desired")
+	if (*platformProfilePath == "") != (*applicationPath == "") {
+		return errors.New("发布服务配置必须同时提供 -platform-profile 与 -application-composition")
 	}
-	if *desiredPath == "" && *key == "" {
+	publish := *platformProfilePath != ""
+	if !publish && !*controllerMode {
+		return errors.New("发布模式必须提供 -platform-profile 与 -application-composition")
+	}
+	if !publish && *key == "" {
 		return errors.New("仅运行 controller 时必须提供 v2 部署 -key")
 	}
+	if publish && *deploymentRevision == 0 {
+		return errors.New("发布服务配置必须提供大于 0 的 -deployment-revision")
+	}
 
-	raw, version, err := readDeployment(*desiredPath)
+	artifacts, err := pluginservice.NewRepository(*repositoryRoot)
 	if err != nil {
 		return err
+	}
+	var raw []byte
+	if publish {
+		profile, err := compositionv1.ParsePlatformProfileFile(*platformProfilePath)
+		if err != nil {
+			return err
+		}
+		application, err := compositionv1.ParseApplicationCompositionFile(*applicationPath)
+		if err != nil {
+			return err
+		}
+		resolved, err := compositionresolver.Resolve(profile, application, *deploymentRevision, artifacts, compositionresolver.Options{AllowDevelopmentPlugins: *allowDevelopmentPlugins})
+		if err != nil {
+			return fmt.Errorf("解析平台与应用组合: %w", err)
+		}
+		raw, err = json.Marshal(resolved)
+		if err != nil {
+			return fmt.Errorf("编码解析后的 Deployment: %w", err)
+		}
 	}
 	nc, err := sharedcontrolplane.ConnectWithConfig(sharedcontrolplane.ConnectionConfig{
 		URL: *natsURL, ClientName: "vastplan-controlplane",
@@ -81,16 +111,12 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if len(raw) > 0 {
-		if err := publishDeployment(openCtx, stdout, buckets, key, version, raw, *controllerMode); err != nil {
+		if err := publishDeployment(openCtx, stdout, buckets, key, raw); err != nil {
 			return err
 		}
 	}
 	if !*controllerMode {
 		return nil
-	}
-	artifacts, err := pluginservice.NewRepository(*repositoryRoot)
-	if err != nil {
-		return err
 	}
 	controller := deploymentcontroller.Controller{
 		Deployments: buckets.Deployments, DeploymentKey: *key,
@@ -107,60 +133,20 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-func readDeployment(path string) ([]byte, int, error) {
-	if path == "" {
-		return nil, 2, nil
-	}
-	raw, err := os.ReadFile(path)
+func publishDeployment(ctx context.Context, stdout io.Writer, buckets sharedcontrolplane.Buckets, key *string, raw []byte) error {
+	deployment, err := deploymentv2.Parse(raw)
 	if err != nil {
-		return nil, 0, fmt.Errorf("读取部署规格: %w", err)
+		return fmt.Errorf("Resolver 生成的 deployment v2 无效: %w", err)
 	}
-	var header struct {
-		Version int `json:"version"`
+	if *key == "" {
+		*key = sharedcontrolplane.DeploymentKey(deployment.Metadata.Tenant, deployment.Metadata.Name)
 	}
-	if err := json.Unmarshal(raw, &header); err != nil {
-		return nil, 0, fmt.Errorf("读取部署规格版本: %w", err)
+	kvRevision, applied, err := sharedcontrolplane.ApplyDeployment(ctx, buckets.Deployments, *key, raw)
+	if err != nil {
+		return fmt.Errorf("发布集群部署: %w", err)
 	}
-	return raw, header.Version, nil
-}
-
-func publishDeployment(ctx context.Context, stdout io.Writer, buckets sharedcontrolplane.Buckets, key *string, version int, raw []byte, controllerMode bool) error {
-	switch version {
-	case 1:
-		state, err := deploymentv1.Parse(raw)
-		if err != nil {
-			return fmt.Errorf("desired state v1 无效: %w", err)
-		}
-		if controllerMode {
-			return errors.New("controller 只接受全局 deployment v2")
-		}
-		if *key == "" {
-			*key = sharedcontrolplane.DesiredKey(state.Metadata.Tenant, state.Metadata.Name)
-		}
-		kvRevision, applied, err := sharedcontrolplane.ApplyDesiredState(ctx, buckets.Desired, *key, raw)
-		if err != nil {
-			return fmt.Errorf("发布期望态: %w", err)
-		}
-		if _, err := fmt.Fprintf(stdout, "已发布 DesiredState %s revision=%d kv-revision=%d key=%s\n", applied.Metadata.Name, applied.Revision, kvRevision, *key); err != nil {
-			return err
-		}
-	case 2:
-		deployment, err := deploymentv2.Parse(raw)
-		if err != nil {
-			return fmt.Errorf("deployment v2 无效: %w", err)
-		}
-		if *key == "" {
-			*key = sharedcontrolplane.DeploymentKey(deployment.Metadata.Tenant, deployment.Metadata.Name)
-		}
-		kvRevision, applied, err := sharedcontrolplane.ApplyDeployment(ctx, buckets.Deployments, *key, raw)
-		if err != nil {
-			return fmt.Errorf("发布集群部署: %w", err)
-		}
-		if _, err := fmt.Fprintf(stdout, "已发布 Deployment %s revision=%d kv-revision=%d key=%s\n", applied.Metadata.Name, applied.Revision, kvRevision, *key); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("不支持 deployment version=%d", version)
+	if _, err := fmt.Fprintf(stdout, "已发布 Deployment %s revision=%d kv-revision=%d key=%s\n", applied.Metadata.Name, applied.Revision, kvRevision, *key); err != nil {
+		return err
 	}
 	return nil
 }

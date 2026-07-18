@@ -24,6 +24,16 @@ const (
 	LayerExample     Layer = "example"
 )
 
+// ManagementClass 表示插件由哪一类配置入口管理。它只决定配置权限，
+// 不替代 Manifest 依赖图、readiness 或运行时启动顺序。
+type ManagementClass string
+
+const (
+	ManagementPlatform    ManagementClass = "platform"
+	ManagementApplication ManagementClass = "application"
+	ManagementDevelopment ManagementClass = "development"
+)
+
 var (
 	segmentPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 	layers         = map[Layer]struct{}{
@@ -45,6 +55,32 @@ func ValidatePublisherOwnership(id, publisher string) error {
 		return errors.New("publisher=vastplan 必须使用 com.vastplan 插件命名空间")
 	}
 	return nil
+}
+
+// ClassifyManagement 在发布者与命名空间所有权校验通过后，按可信身份推导固有管理分类。
+// 分类不能由 Manifest 自报，避免应用插件把自己伪装成平台基线。历史未分层首方 ID 和
+// example 命名空间只允许用于显式开发模式。
+func ClassifyManagement(id, publisher string) (ManagementClass, error) {
+	if err := ValidatePublisherOwnership(id, publisher); err != nil {
+		return "", err
+	}
+	if !IsFirstPartyID(id) {
+		return ManagementApplication, nil
+	}
+	namespace, err := ParseFirstParty(id)
+	if err != nil {
+		return ManagementDevelopment, nil
+	}
+	switch namespace.Layer {
+	case LayerFoundation, LayerPlatform:
+		return ManagementPlatform, nil
+	case LayerProduct, LayerIntegration:
+		return ManagementApplication, nil
+	case LayerExample:
+		return ManagementDevelopment, nil
+	default:
+		return "", fmt.Errorf("未知首方插件管理层级 %q", namespace.Layer)
+	}
 }
 
 // Namespace 把 com.vastplan.<layer>.<category...>.<component> 拆成机器可判定字段。

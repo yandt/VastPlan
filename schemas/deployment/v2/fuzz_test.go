@@ -6,7 +6,7 @@ import (
 )
 
 func FuzzParseDeploymentNeverPanics(f *testing.F) {
-	f.Add([]byte(`{"version":2,"revision":1,"metadata":{"name":"demo","tenant":"acme"},"units":[]}`))
+	f.Add([]byte(`{"version":2,"revision":1,"metadata":{"name":"demo","tenant":"acme"},"resolution":{"platform_profile":{"id":"default-platform","revision":1,"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},"application_composition":{"id":"demo","revision":1,"digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},"development_mode":false,"plugin_origins":{}},"units":[]}`))
 	f.Add([]byte(`null`))
 	f.Add([]byte{0xff, 0x01})
 	f.Fuzz(func(t *testing.T, raw []byte) {
