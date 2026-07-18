@@ -1,0 +1,19 @@
+html,
+body,
+#vastplan-portal {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #f7f8fa;
+  color: #1d2129;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+noscript {
+  display: block;
+  max-width: 48rem;
+  margin: 10vh auto;
+  padding: 1.5rem;
+}

@@ -2,6 +2,7 @@ import {
   Alert,
   Button,
   Card,
+  ConfigProvider,
   Form,
   Input,
   Menu as ArcoMenu,
@@ -11,9 +12,11 @@ import {
   Spin,
   Typography,
 } from "@arco-design/web-react";
-import { createElement, useState } from "react";
+import arcoCSS from "@arco-design/web-react/dist/css/arco.css";
+import { useRef, useState } from "react";
 import type { DesignSystemAdapter, FormField, FormRendererProps, MenuItem, PortalUI } from "@vastplan/portal-ui";
 import { PortalUIProvider } from "@vastplan/portal-ui";
+import { scopeDocumentCSS } from "./scope-css";
 
 function Page({ title, actions, children }: { title?: string; actions?: React.ReactNode; children: React.ReactNode }) {
   return <main style={{ padding: 24 }}><header style={{ display: "flex", justifyContent: "space-between", gap: 16 }}><Typography.Title heading={4}>{title}</Typography.Title>{actions}</header>{children}</main>;
@@ -66,12 +69,29 @@ const ui: PortalUI = {
   confirm: ({ title, content }) => new Promise((resolve) => Modal.confirm({ title, content, onOk: () => resolve(true), onCancel: () => resolve(false) })),
 };
 
+// Ordinary Arco selectors are already isolated by the Portal shadow tree.
+// Translate document-root selectors so tokens and normalization apply to that
+// shadow host instead of leaking into the surrounding page.
+export const scopedArcoCSS = scopeDocumentCSS(arcoCSS);
+
+function ArcoProvider({ children }: { children: React.ReactNode }) {
+  const popupRoot = useRef<HTMLDivElement>(null);
+  return <>
+    <style data-vastplan-design-system="arco">{scopedArcoCSS}</style>
+    <div ref={popupRoot} data-vastplan-design-system="arco">
+      <ConfigProvider getPopupContainer={() => popupRoot.current ?? document.body}>
+        <PortalUIProvider ui={ui}>{children}</PortalUIProvider>
+      </ConfigProvider>
+    </div>
+  </>;
+}
+
 export const arcoDesignSystem: DesignSystemAdapter = {
   id: "ui.design-system",
   framework: "arco",
   uiContract: "1.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"],
-  Provider: ({ children }) => createElement(PortalUIProvider, { ui }, children),
+  Provider: ArcoProvider,
 };
 
 export default arcoDesignSystem;

@@ -30,6 +30,7 @@ type Handler struct {
 	service     portalapi.Service
 	interaction InteractionService
 	catalog     *TrustedCatalog
+	assets      http.Handler
 }
 
 func New(identity IdentityProvider, service portalapi.Service) *Handler {
@@ -44,10 +45,16 @@ func NewWithInteraction(identity IdentityProvider, service portalapi.Service, in
 // Existing control-plane-only embeddings may keep catalog nil; production
 // Portal Edge always injects the trusted catalog.
 func NewWithRuntime(identity IdentityProvider, service portalapi.Service, interaction InteractionService, catalog *TrustedCatalog) *Handler {
+	return NewPortal(identity, service, interaction, catalog, nil)
+}
+
+// NewPortal assembles both the authenticated BFF and the deployable shell.
+// API paths never fall back to static content; client-side routes do.
+func NewPortal(identity IdentityProvider, service portalapi.Service, interaction InteractionService, catalog *TrustedCatalog, assets http.Handler) *Handler {
 	if identity == nil || service == nil {
 		panic("Edge BFF 必须注入身份提供方和 Portal 服务")
 	}
-	return &Handler{identity: identity, service: service, interaction: interaction, catalog: catalog}
+	return &Handler{identity: identity, service: service, interaction: interaction, catalog: catalog, assets: assets}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +69,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	portalPath := strings.HasPrefix(r.URL.Path, "/v1/portal-drafts")
 	interactionPath := strings.HasPrefix(r.URL.Path, "/v1/interactions")
 	if !runtimePath && !portalPath && !interactionPath {
+		if h.assets != nil && !strings.HasPrefix(r.URL.Path, "/v1/") && r.URL.Path != "/v1" {
+			h.assets.ServeHTTP(w, r)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}

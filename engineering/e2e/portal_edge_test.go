@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,6 +67,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	})
 	stateFile := filepath.Join(dir, "composer-state.json")
 	interactionStateFile := filepath.Join(dir, "interaction-state.json")
+	portalAssets := writePortalAssets(t, dir)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -91,6 +93,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 			"-portal-platform-profile", filepath.Join(repoRoot(t), "engineering", "deploy", "portal-platform-profile.json"),
 			"-interaction-broker-version", "0.1.0",
 			"-interaction-broker-state-file", interactionStateFile,
+			"-portal-assets", portalAssets,
 		}, "1.0.0", func(format string, args ...any) { t.Logf("[portal-edge] "+format, args...) })
 	}()
 	t.Cleanup(func() {
@@ -108,6 +111,18 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}} // #nosec G402 -- ephemeral E2E certificate.
 	baseURL := "https://" + address
 	waitForPortalEdge(t, client, baseURL)
+	shellResponse, err := client.Get(baseURL + "/settings/portals")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shellBody, err := io.ReadAll(shellResponse.Body)
+	_ = shellResponse.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shellResponse.StatusCode != http.StatusOK || bytes.Contains(shellBody, []byte("__VASTPLAN_CSP_NONCE__")) || !strings.Contains(shellResponse.Header.Get("Content-Security-Policy"), "script-src 'self' blob: 'nonce-") {
+		t.Fatalf("Portal Shell 未由 Edge 安全提供: status=%d headers=%v body=%s", shellResponse.StatusCode, shellResponse.Header, shellBody)
+	}
 
 	if status, _ := portalHTTPRequest(t, client, baseURL, "", "", http.MethodPost, "/v1/portal-drafts", portalSpec()); status != http.StatusUnauthorized {
 		t.Fatalf("anonymous browser request status=%d, want %d", status, http.StatusUnauthorized)
@@ -271,6 +286,22 @@ func publishPortalFrontendPlugin(t *testing.T, repository *pluginservice.Reposit
 	if _, err := repository.Publish("stable", pkg); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func writePortalAssets(t *testing.T, parent string) string {
+	t.Helper()
+	root := filepath.Join(parent, "portal-assets")
+	if err := os.MkdirAll(filepath.Join(root, "assets"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	index := `<script type="importmap" nonce="__VASTPLAN_CSP_NONCE__">{"imports":{}}</script><script type="module" nonce="__VASTPLAN_CSP_NONCE__" src="/assets/portal.js"></script>`
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte(index), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "assets", "portal.js"), []byte("export {};"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return root
 }
 
 func writePortalSessions(t *testing.T, filename string, sessions map[string]portalSession) {

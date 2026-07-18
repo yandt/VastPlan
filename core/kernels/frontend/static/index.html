@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>VastPlan Portal</title>
+  <link rel="stylesheet" href="/assets/portal.css">
+  <script type="importmap" nonce="__VASTPLAN_CSP_NONCE__">
+  {
+    "imports": {
+      "react": "/assets/vendor/react.js",
+      "react/jsx-runtime": "/assets/vendor/react-jsx-runtime.js",
+      "react-dom": "/assets/vendor/react-dom.js",
+      "react-dom/client": "/assets/vendor/react-dom.js",
+      "@vastplan/portal-ui": "/assets/vendor/portal-ui.js",
+      "@vastplan/ui-contract": "/assets/vendor/ui-contract.js"
+    }
+  }
+  </script>
+  <script type="module" nonce="__VASTPLAN_CSP_NONCE__" src="/assets/portal-kernel.js"></script>
+</head>
+<body>
+  <div id="vastplan-portal" aria-live="polite"></div>
+  <noscript>VastPlan Portal 需要启用 JavaScript。</noscript>
+</body>
+</html>

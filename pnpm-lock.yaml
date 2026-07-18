@@ -17,6 +17,9 @@ importers:
       '@vastplan/portal-ui':
         specifier: workspace:*
         version: link:../../../extensions/sdk/ts/portal-ui
+      '@vastplan/ui-contract':
+        specifier: workspace:*
+        version: link:../../../extensions/sdk/ts/ui-contract
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -61,6 +64,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7
 
   extensions/plugins/com.vastplan.platform.configuration.portal-composer/frontend:
     dependencies:

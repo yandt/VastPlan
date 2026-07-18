@@ -62,11 +62,12 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	stateFile := flags.String("composer-state-file", "", "Composer governed-state file")
 	platformProfileFile := flags.String("portal-platform-profile", "", "Frontend Platform Profile v1 JSON")
 	brokerStateFile := flags.String("interaction-broker-state-file", "", "Interaction Broker governed-state file")
+	portalAssetsDir := flags.String("portal-assets", "", "Portal Shell 静态产物目录")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *cert == "" || *key == "" || *sessions == "" || *pluginVersion == "" || *stateFile == "" || *platformProfileFile == "" || *brokerVersion == "" || *brokerStateFile == "" {
-		return errors.New("portal-edge 必须配置 TLS、session、Frontend Platform Profile、Composer 与 Interaction Broker 制品版本及状态文件")
+	if *cert == "" || *key == "" || *sessions == "" || *pluginVersion == "" || *stateFile == "" || *platformProfileFile == "" || *brokerVersion == "" || *brokerStateFile == "" || *portalAssetsDir == "" {
+		return errors.New("portal-edge 必须配置 TLS、session、Frontend Platform Profile、Portal 静态产物、Composer 与 Interaction Broker 制品版本及状态文件")
 	}
 	if *allowUnsigned && *trustFile != "" {
 		return errors.New("allow-unsigned-local 与 trust-store 不能同时使用")
@@ -107,6 +108,10 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	identity, err := edge.NewFileIdentityProvider(*sessions)
 	if err != nil {
 		return err
+	}
+	portalAssets, err := edge.NewPortalAssets(*portalAssetsDir)
+	if err != nil {
+		return fmt.Errorf("加载 Portal 静态产物: %w", err)
 	}
 	catalog, err := edge.NewTrustedCatalog([]edge.ArtifactSource{repository}, verifierAdapter{verifier})
 	if err != nil {
@@ -210,7 +215,7 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Addr: *listen, Handler: edge.NewWithRuntime(identity, service, interactionService, catalog), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Addr: *listen, Handler: edge.NewPortal(identity, service, interactionService, catalog, portalAssets), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() { <-ctx.Done(); _ = server.Shutdown(context.Background()) }()
 	err = server.ListenAndServeTLS(*cert, *key)
 	if errors.Is(err, http.ErrServerClosed) {
