@@ -41,9 +41,9 @@
 ## 验证
 
 ```bash
-go test ./plugins/com.vastplan.platform.configuration.global-settings/...
-go run ./tools/pluginpackage \
-  -source plugins/com.vastplan.platform.configuration.global-settings \
+go test ./extensions/plugins/com.vastplan.platform.configuration.global-settings/...
+go run ./engineering/tools/pluginpackage \
+  -source extensions/plugins/com.vastplan.platform.configuration.global-settings \
   -backend-bin <global-settings-binary> \
   -out /tmp/global-settings.tar.gz
 ```

@@ -19,6 +19,7 @@ tmp/
 # 构建产物
 bin/
 node_modules/
+.pnpm-store/
 .gstack/
 __pycache__/
 *.py[cod]

@@ -7,28 +7,28 @@
 发布负责人先确认目标提交位于 `main`，工作区干净，并执行：
 
 ```bash
-./tools/test.sh --e2e
+./engineering/tools/test.sh --e2e
 go test -race ./...
 go vet ./...
-./tools/benchmark.sh
-./tools/verify-release.sh
+./engineering/tools/benchmark.sh
+./engineering/tools/verify-release.sh
 ```
 
-还必须取得冻结发布候选提交的 24 小时 `Backend Kernel Soak` 成功报告。短时 smoke、工作流仍在运行或其他源码提交的报告都不能替代。报告不仅要使 job 成功，还必须通过 `tools/soakreport` 对 commit、时长、真实调用/重启和资源收敛的复验。
+还必须取得冻结发布候选提交的 24 小时 `Backend Kernel Soak` 成功报告。短时 smoke、工作流仍在运行或其他源码提交的报告都不能替代。报告不仅要使 job 成功，还必须通过 `engineering/tools/soakreport` 对 commit、时长、真实调用/重启和资源收敛的复验。
 
-`./tools/verify-release.sh` 会执行两次独立构建并逐字节比较，用正式二进制预检仓库的 DesiredState v1、Platform Profile、Application Composition 和 Resolver 生成的 Deployment v2 样例，再验证 CycloneDX SBOM 可确定性重建。
+`./engineering/tools/verify-release.sh` 会执行两次独立构建并逐字节比较，用正式二进制预检仓库的 DesiredState v1、Platform Profile、Application Composition 和 Resolver 生成的 Deployment v2 样例，再验证 CycloneDX SBOM 可确定性重建。
 
 soak 成功后，把被测 SHA 登记为推广证据。此后到标签提交只允许修改 `VERSION`、`SOAKED_COMMIT`、`CHANGELOG.md` 和封板验收状态；任何源码、工作流、Schema 或测试变化都必须重新运行 24 小时 soak：
 
 ```bash
 soaked_commit="<24h-soak-成功运行的完整提交SHA>"
-printf '%s\n' "$soaked_commit" > kernels/backend/SOAKED_COMMIT
+printf '%s\n' "$soaked_commit" > core/kernels/backend/SOAKED_COMMIT
 ```
 
-只有《封板指南》的所有行均完成后，才能在同一推广提交中把 `kernels/backend/VERSION` 更新为目标版本并补充 `CHANGELOG.md`。提交并推送后创建精确标签：
+只有《封板指南》的所有行均完成后，才能在同一推广提交中把 `core/kernels/backend/VERSION` 更新为目标版本并补充 `CHANGELOG.md`。提交并推送后创建精确标签：
 
 ```bash
-version="$(tr -d '[:space:]' < kernels/backend/VERSION)"
+version="$(tr -d '[:space:]' < core/kernels/backend/VERSION)"
 git tag -a "backend-v${version}" -m "Backend Kernel ${version}"
 git push origin "backend-v${version}"
 ```
@@ -112,7 +112,7 @@ dynamic-go 只支持 Linux/FreeBSD/macOS
 不能卸载，所以升级必须滚动重启 Backend，不做同进程热替换。共同构建命令为：
 
 ```bash
-OUT_DIR=bin/dynamic-go ./tools/build-dynamic-go.sh
+OUT_DIR=bin/dynamic-go ./engineering/tools/build-dynamic-go.sh
 ```
 
 其他平台或 `CGO_ENABLED=0` 的 Backend 保留进程能力并拒绝 dynamic-go。具体安全与
@@ -158,7 +158,7 @@ canary 观察窗通过后再逐节点执行，不同时替换全部 Controller/N
 配置回滚必须把已审核的旧内容作为一组新的 Platform Profile 与 Application Composition revision 发布，并分配新的单调递增 Deployment revision；不能回退 KV 中已经发布的 revision。集群模式可使用控制面发布工具：
 
 ```bash
-go run ./kernels/backend controlplane \
+go run ./core/kernels/backend controlplane \
   -nats-url tls://nats.example.com:4222 \
   -nats-ca /etc/vastplan/pki/ca.crt \
   -nats-cert /etc/vastplan/pki/controller.crt \

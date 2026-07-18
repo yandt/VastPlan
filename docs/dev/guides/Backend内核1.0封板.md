@@ -25,28 +25,28 @@
 | 发布运维 | 可复现构建、版本升级、回滚、配置迁移、诊断 runbook | 已完成：逐字节复现门禁、内置 version/validate/support-bundle、tag/version 守卫及可执行升级回滚手册 |
 | 代码质量 | 分层依赖、单一类型真源、重复度、生产函数复杂度、Shell 脚本 | 已完成：Backend 横向依赖/生产入口/DTO 架构守护，dupl/gocyclo/ShellCheck CI 与安全工具精确版本 |
 
-只有全部门禁都有当前仓库或运行记录证据，才允许把 `kernels/backend/VERSION` 更新为 `1.0.0`。
+只有全部门禁都有当前仓库或运行记录证据，才允许把 `core/kernels/backend/VERSION` 更新为 `1.0.0`。
 
 ## 3. 日常验证
 
 ```bash
-./tools/test.sh
-./tools/test.sh --e2e
+./engineering/tools/test.sh
+./engineering/tools/test.sh --e2e
 go test -race ./...
-PYTHONPATH=sdk/python python3 -m unittest discover -s sdk/python/tests -v
+PYTHONPATH=extensions/sdk/python python3 -m unittest discover -s extensions/sdk/python/tests -v
 go test -tags=e2e ./e2e -run TestPythonPlugin_CrossLanguageInvokeAndFeatureNegotiation
 go vet ./...
-./tools/benchmark.sh
-./tools/benchmark.sh --compare <base-ref>
-go test -run='^$' -fuzz=FuzzParseManifest -fuzztime=30s ./schemas/plugin/v1
-./tools/verify-release.sh
+./engineering/tools/benchmark.sh
+./engineering/tools/benchmark.sh --compare <base-ref>
+go test -run='^$' -fuzz=FuzzParseManifest -fuzztime=30s ./contracts/schemas/plugin/v1
+./engineering/tools/verify-release.sh
 ```
 
 发布候选的 24 小时稳定性记录由 GitHub Actions `Backend Kernel Soak` 手工工作流产生，输入必须保持 `24h`。报告检查真实插件调用和周期重启，并验证 goroutine、文件句柄、session pending 不持续增长；短时 smoke 只能验证入口，不能替代发布证据。
 
 2026-07-16 决定暂缓正式 soak：当前只有单一 `legacy-v1/echo` 合成链路，尚不足以代表后续插件生态的混合负载。已取消提交 `0c128a7692da48845c70b2d6472b013a50bac37b` 对应的 run `29480318827`；该运行及其任何部分结果不得作为发布证据。恢复条件是至少具备可代表实际业务路径的多类插件与负载模型，届时必须以新的冻结提交重新运行完整 24 小时，不得续跑或复用本次记录。
 
-Release 只接受 `kernels/backend/SOAKED_COMMIT` 指向提交的合格报告，并通过 `tools/soakreport` 复验。被测提交之后若出现任何非版本推广白名单改动，必须对新的冻结提交重新运行 24 小时 soak。
+Release 只接受 `core/kernels/backend/SOAKED_COMMIT` 指向提交的合格报告，并通过 `engineering/tools/soakreport` 复验。被测提交之后若出现任何非版本推广白名单改动，必须对新的冻结提交重新运行 24 小时 soak。
 
 封板新增的兼容、fuzz、benchmark、故障和 soak 入口落地后，继续登记在本节；不得把只存在个人命令历史里的验证当作发布证据。
 

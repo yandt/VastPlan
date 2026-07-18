@@ -10,7 +10,7 @@
 
 ## 决策
 
-1. 新增独立的 `schemas/app/v1` Runner Profile 契约，声明 tenant、revision、目标 OS/架构、`self-update` 分发、领取对象和精确插件引用。
+1. 新增独立的 `contracts/schemas/app/v1` Runner Profile 契约，声明 tenant、revision、目标 OS/架构、`self-update` 分发、领取对象和精确插件引用。
 2. `deployment/v2` 通过顶层 `app_profiles` 引用 Profile 的 `id + revision + sha256 digest`，不把 Profile 放进 `units`。
 3. 相同 Profile ID 在一份 deployment 中只能出现一次；digest 将期望态绑定到不可变 Profile 内容，避免同 revision 被替换。
 4. 服务调度器继续只遍历 `units`。Profile 发布、构建、签名和领取由独立 App Profile 控制面处理。

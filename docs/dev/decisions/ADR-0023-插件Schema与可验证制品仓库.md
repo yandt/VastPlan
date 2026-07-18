@@ -10,7 +10,7 @@
 
 ## 决策
 
-1. 新增顶层 `schemas/plugin/v1/`，其中的 JSON Schema 是插件清单、运行态 descriptor 与制品元数据的**唯一契约源**。该目录内的 Go 包只负责将同一份 JSON Schema 嵌入二进制并执行校验；不得另写一套会漂移的规则。
+1. 新增顶层 `contracts/schemas/plugin/v1/`，其中的 JSON Schema 是插件清单、运行态 descriptor 与制品元数据的**唯一契约源**。该目录内的 Go 包只负责将同一份 JSON Schema 嵌入二进制并执行校验；不得另写一套会漂移的规则。
 2. 发布时先校验 gzip tar 插件包根目录的 `vastplan.plugin.json`，再写入本地仓库。元数据固定为 `{pluginId, version, channel, sha256, size, object, manifest}`，并由 artifact Schema 校验。
 3. `(pluginId, version, channel)` 是不可变键：完全相同 SHA 的重传幂等；不同 SHA 一律拒绝。读取制品时再次校验索引 Schema、对象大小、SHA-256、包内 manifest 及其与索引的绑定，任一不符即 fail-closed。
 4. 协议总线在接收 `RegisterContributions` 时也校验 descriptor Schema。发布清单与运行进程是两条不同输入边界，二者均不得绕过验证。

@@ -12,10 +12,10 @@
 
 ## 决策
 
-1. 插件 `StateIdentity` 与处理器 `MigrationRequest` 以 `schemas/plugin/v1` 为单一真源；Go SDK 使用类型别名。协议总线复用该身份类型，并将带阶段的宿主对象命名为 `MigrationCommand`，旧 `MigrationRequest` 仅保留兼容别名。
+1. 插件 `StateIdentity` 与处理器 `MigrationRequest` 以 `contracts/schemas/plugin/v1` 为单一真源；Go SDK 使用类型别名。协议总线复用该身份类型，并将带阶段的宿主对象命名为 `MigrationCommand`，旧 `MigrationRequest` 仅保留兼容别名。
 2. Node Agent 的 `PluginStateIdentity` 作为实际态 v2 的外部 JSON 形态继续保留，但所有跨边界转换必须经显式函数并有往返测试。
-3. 部署 v1/v2 的 `ResourceList`、`ResourceRequirements` 上移到 `schemas/common/v1`，版本包只提供兼容别名；各版本 JSON Schema 仍独立冻结。
-4. soak 报告结构与离线验收规则归入 `internal/soakreport`，E2E 生产端和工具消费同一类型。当前只整理代码，不恢复或执行 soak。
+3. 部署 v1/v2 的 `ResourceList`、`ResourceRequirements` 上移到 `contracts/schemas/common/v1`，版本包只提供兼容别名；各版本 JSON Schema 仍独立冻结。
+4. soak 报告结构与离线验收规则归入 `engineering/internal/soakreport`，E2E 生产端和工具消费同一类型。当前只整理代码，不恢复或执行 soak。
 5. DesiredState 与 Deployment 的公开发布函数保持不变，同 revision 不可改写、不同 revision 通过 KV revision CAS 更新的算法收敛到 `controlplane.applyVersioned[T]`。
 
 ## 备选方案

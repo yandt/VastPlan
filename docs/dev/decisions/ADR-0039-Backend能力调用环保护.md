@@ -12,7 +12,7 @@
 
 1. 在公共 `CallContext` 追加 `call_path` 字段，元素使用 `extension_point/capability#operation` 的稳定目标标识。字段只新增、不改已有编号。
 2. `Host.Invoke` 是唯一维护边界：每次公开调用先克隆上下文，再检查目标是否已经出现在路径中，随后追加目标。重复目标返回应用层错误 `call.cycle_detected`。
-3. `shared/go/protocollimit.Limits` 增加 `MaxCallDepth`，默认 16。到达上限时返回 `call.depth_exceeded`，防止全部目标不同的过长调用链。
+3. `core/shared/go/protocollimit.Limits` 增加 `MaxCallDepth`，默认 16。到达上限时返回 `call.depth_exceeded`，防止全部目标不同的过长调用链。
 4. 第一方 SDK 从处理器 context 继承宿主下发的路径，`Host.Call` 不接受处理器自行缩短路径。跨服务 addressing 原样传递同一 `CallContext`。
 5. deadline 继续作为连接故障、非协作实现和其他异常的最终收敛边界，但不再承担正常调用环检测。
 

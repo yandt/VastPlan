@@ -8,13 +8,13 @@
 - 驱动：`python`，最低隔离 `trusted-process`
 - 必需协议能力：`channel.cancel.v1`、`event.publish.v1`
 
-源码入口为 `plugins/com.vastplan.python-hello/backend/main.py`。本地开发需先安装 `sdk/python/requirements.txt`，或执行 `python3 -m pip install -e sdk/python`。
+源码入口为 `extensions/plugins/com.vastplan.python-hello/backend/main.py`。本地开发需先安装 `extensions/sdk/python/requirements.txt`，或执行 `python3 -m pip install -e extensions/sdk/python`。
 
 发布时使用通用打包工具且不传 `-backend-bin`，保留 Python 源入口，并从仓库根注入许可证与 NOTICE：
 
 ```bash
-go run ./tools/pluginpackage \
-  -source plugins/com.vastplan.python-hello \
+go run ./engineering/tools/pluginpackage \
+  -source extensions/plugins/com.vastplan.python-hello \
   -license-file LICENSE \
   -notice-file NOTICE \
   -out dist/com.vastplan.python-hello.tar.gz

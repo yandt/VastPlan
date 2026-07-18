@@ -1,0 +1,183 @@
+syntax = "proto3";
+
+// 插件-宿主协议（Plugin-Host Protocol）——内核内：宿主 ↔ 本内核插件
+// 规格见 docs/dev/architecture/插件契约与协议.md 第二章
+//
+// 方向：**宿主是 gRPC 服务端，插件是客户端**。宿主拉起插件时注入连接端点，
+// 插件回连并主动 Hello（第二章 §2.2）。这样插件→宿主的回调是天然的，
+// 宿主→插件的调用则经 Channel 双向流下发。
+package vastplan.pluginhost.v1;
+
+import "contract/v1/contract.proto";
+
+option go_package = "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1;pluginhostv1";
+
+// ── 握手（§2.2）─────────────────────────────────────────
+
+// 插件→宿主：自报身份、版本集与 engines 兼容声明。
+message Hello {
+  repeated int32 proto_versions = 1; // 插件支持的协议版本集
+  string magic = 2;                  // magic cookie，防误把普通进程当插件
+  string plugin_id = 3;
+  string plugin_version = 4;
+  // 清单 engines：{内核规范ID: SemVer 范围}，如 {"backend": "^0.1"}。
+  // 宿主用它校验自身版本是否满足（ADR-0017 §4 强制点 2）；
+  // 未声明本内核 → fail-closed 拒绝装载。
+  map<string, string> engines = 5;
+  // 宿主拉起插件时注入的一次性令牌，用于把本次握手对应回那次 Launch。
+  string launch_token = 6;
+  // 可选协议能力。旧客户端不发送；宿主只返回双方交集。
+  repeated string features = 7;
+}
+
+// 宿主→插件：协商结果 + 会话票据。
+message HelloAck {
+  int32 negotiated_proto = 1;
+  string session_id = 2; // 宿主签发的会话票据：审计与回调鉴权
+  repeated string host_capabilities = 3;
+  repeated string negotiated_features = 4;
+}
+
+// ── 贡献注册（§2.5）─────────────────────────────────────
+
+message Contribution {
+  string extension_point = 1; // 目标 Registry 名（= CallTarget.extension_point）
+  string id = 2;              // 贡献稳定逻辑名（= CallTarget.capability），四处同名
+  int32 priority = 3;
+  // 该扩展点要求的贡献契约（JSON，见第四章）。
+  // 命名带 _json 后缀以避开 protobuf 生成的 Descriptor() 方法冲突。
+  bytes descriptor_json = 4;
+}
+
+// 插件声明它填充哪些扩展点（Channel 上的首条消息）。
+message Declaration {
+  repeated Contribution contributions = 1;
+}
+
+// 宿主逐条接受/拒绝（非法者 fail-closed）。
+message Registered {
+  repeated string accepted = 1;
+  map<string, string> rejected = 2; // id -> 原因
+}
+
+message ContributionRef {
+  string extension_point = 1;
+  string id = 2;
+}
+
+message RegisterContributions {
+  string request_id = 1;
+  repeated Contribution contributions = 2;
+}
+
+message UnregisterContributions {
+  string request_id = 1;
+  repeated ContributionRef contributions = 2;
+}
+
+message ContributionUpdateAck {
+  string request_id = 1;
+  repeated string accepted = 2;
+  map<string, string> rejected = 3;
+}
+
+// ── 调用（§2.4）─────────────────────────────────────────
+
+message InvokeRequest {
+  string request_id = 1; // 双向流上关联请求与响应
+  vastplan.contract.v1.CallTarget target = 2;
+  vastplan.contract.v1.CallContext context = 3;
+  bytes payload = 4;
+}
+
+message InvokeResponse {
+  string request_id = 1;
+  vastplan.contract.v1.CallResult result = 2;
+  bytes payload = 3;
+}
+
+// ── 事件（§2.6）─────────────────────────────────────────
+
+message EventEnvelope {
+  vastplan.contract.v1.CallEvent event = 1;
+}
+
+// ── 生命周期（§2.6）─────────────────────────────────────
+
+message Lifecycle {
+  enum Op {
+    OP_UNSPECIFIED = 0;
+    OP_ACTIVATE = 1;
+    OP_DEACTIVATE = 2;
+    OP_DRAIN = 3;
+    OP_SHUTDOWN = 4;
+    // 有状态升级采用 copy-on-write 三阶段事务。PREPARE/COMMIT 后、候选取得
+    // 路由所有权前仍必须支持 ROLLBACK；旧实例始终读取旧状态视图。
+    OP_MIGRATION_PREPARE = 5;
+    OP_MIGRATION_COMMIT = 6;
+    OP_MIGRATION_ROLLBACK = 7;
+  }
+  string request_id = 1;
+  Op op = 2;
+  string transaction_id = 3;
+  string from_state_format = 4;
+  int32 from_state_version = 5;
+  string to_state_format = 6;
+  int32 to_state_version = 7;
+}
+
+message LifecycleAck {
+  string request_id = 1;
+  bool ready = 2;
+  optional string message = 3;
+}
+
+// ── 心跳（§2.6）─────────────────────────────────────────
+
+message Ping { string request_id = 1; }
+message Pong { string request_id = 1; }
+
+// Cancel 取消同一 Channel 上尚未完成的 Invoke/HostCall。重复或迟到取消幂等忽略。
+message Cancel {
+  string request_id = 1;
+  optional string reason = 2;
+}
+
+// ── 双向流（§2.3 四类消息多路复用于单连接）───────────────
+
+message FromPlugin {
+  oneof msg {
+    Declaration declare = 1;
+    InvokeResponse invoke_result = 2; // 回应宿主的 Invoke
+    InvokeRequest host_call = 3;      // 回调宿主内核服务 / 经寻址层调别的能力
+    EventEnvelope event = 4;          // 发布事件
+    LifecycleAck lifecycle_ack = 5;
+    Pong pong = 6;
+    RegisterContributions register = 7;
+    UnregisterContributions unregister = 8;
+    Cancel cancel = 9;
+  }
+}
+
+message FromHost {
+  oneof msg {
+    Registered registered = 1;
+    InvokeRequest invoke = 2;          // 触发扩展点
+    InvokeResponse host_call_result = 3; // 回应插件的 HostCall
+    EventEnvelope event = 4;           // 下发事件
+    Lifecycle lifecycle = 5;
+    Ping ping = 6;
+    ContributionUpdateAck contribution_update_ack = 7;
+    Cancel cancel = 8;
+  }
+}
+
+// ── 服务（由**宿主**实现）───────────────────────────────
+
+service PluginHost {
+  // 握手：校验 magic、协商版本、校验 engines、签发会话票据。
+  rpc Handshake(Hello) returns (HelloAck);
+  // 运行态双向流：调用/事件/生命周期/心跳多路复用。
+  // 插件须在 metadata 中携带 session_id（键见 core/shared/go/protocol）。
+  rpc Channel(stream FromPlugin) returns (stream FromHost);
+}

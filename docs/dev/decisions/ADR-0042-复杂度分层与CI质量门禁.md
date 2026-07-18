@@ -13,7 +13,7 @@
 1. Node Agent reconcile 拆成加载与冲突校验、目标筛选、逐 unit 候选装配、失败记录、旧 unit 淘汰、收敛判定等阶段函数；每个副作用前后的实际态 checkpoint 顺序保持不变。
 2. Backend reconcile 命令拆成参数预检、制品源构造、NATS 控制面接入、节点租约守护、运行与关闭。根 main 仍是组合根，helper 不创建第二运行入口。
 3. golangci 启用 `gocyclo`（生产函数阈值 30）与 `dupl`（token 阈值 100）。测试表格排除 gocyclo，但不排除生产代码；生成文件排除两者。
-4. 架构守护增加 Backend 同级包白名单、稳定 DTO 单一结构体真源和 `tools/` 生产入口禁令。
+4. 架构守护增加 Backend 同级包白名单、稳定 DTO 单一结构体真源和 `engineering/tools/` 生产入口禁令。
 5. CI 使用 ShellCheck `v0.11.0` 检查全部受版本控制的 Shell 脚本，并校验官方 Linux x86_64 制品 SHA-256。
 6. `govulncheck` 钉为 `v1.1.4`；`go-licenses` 升级并钉为 `/v2@v2.0.1`。工具升级必须显式改版本并走评审，不使用 `@latest`。
 

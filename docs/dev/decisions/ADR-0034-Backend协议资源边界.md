@@ -14,7 +14,7 @@
 
 ### 1. 单一限额契约
 
-`shared/go/protocollimit.Limits` 是 Host、第一方 SDK 和 addressing 的单一真源。零值不能关闭保护，而是收敛到以下默认值：
+`core/shared/go/protocollimit.Limits` 是 Host、第一方 SDK 和 addressing 的单一真源。零值不能关闭保护，而是收敛到以下默认值：
 
 | 资源 | 默认值 | 边界语义 |
 |---|---:|---|

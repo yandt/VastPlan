@@ -9,7 +9,7 @@
 ## 2. 生成 NKey 与服务端 ACL
 
 ```bash
-go run ./tools/natssecurity \
+go run ./engineering/tools/natssecurity \
   -out /secure/vastplan-nats \
   -listen 0.0.0.0:4222 \
   -store-dir /var/lib/vastplan/nats \
@@ -36,7 +36,7 @@ nats-server -c /secure/vastplan-nats/nats-server.conf
 ## 4. 初始化 Bucket
 
 ```bash
-go run ./kernels/backend controlplane \
+go run ./core/kernels/backend controlplane \
   -nats-url tls://nats.example.com:4222 \
   -nats-ca /etc/vastplan/pki/ca.crt \
   -nats-cert /etc/vastplan/pki/bootstrap.crt \
@@ -58,7 +58,7 @@ bootstrap seed 只在初始化/迁移作业中挂载，常驻 controller 和 nod
 Controller 使用独立 `controller-N.seed`：
 
 ```bash
-go run ./kernels/backend controlplane -controller \
+go run ./core/kernels/backend controlplane -controller \
   -nats-url tls://nats.example.com:4222 \
   -nats-ca /etc/vastplan/pki/ca.crt \
   -nats-cert /etc/vastplan/pki/controller-1.crt \

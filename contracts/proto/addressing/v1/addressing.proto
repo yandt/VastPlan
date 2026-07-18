@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+// 后端服务间寻址 Wire v1。业务契约复用 contract.v1，本文件只定义远端传输信封。
+package vastplan.addressing.v1;
+
+option go_package = "cdsoft.com.cn/VastPlan/core/shared/go/addressing/v1;addressingv1";
+
+import "contract/v1/contract.proto";
+
+message InvokeRequest {
+  string request_id = 1;
+  vastplan.contract.v1.CallTarget target = 2;
+  vastplan.contract.v1.CallContext context = 3;
+  bytes payload = 4;
+}
+
+message InvokeResponse {
+  string request_id = 1;
+  vastplan.contract.v1.CallResult result = 2;
+  bytes payload = 3;
+  optional TransportError transport_error = 4;
+}
+
+message TransportError {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+message EventEnvelope {
+  vastplan.contract.v1.CallContext context = 1;
+  vastplan.contract.v1.CallEvent event = 2;
+}
+
+// CapabilityStream 承载跨服务的大输入、大输出和交互式调用。
+// HTTP/2 流控提供背压；任一端取消 RPC 会立刻传播到对端 context。
+service CapabilityStream {
+  rpc Open(stream StreamFrame) returns (stream StreamFrame);
+}
+
+message StreamOpen {
+  vastplan.contract.v1.CallTarget target = 1;
+  vastplan.contract.v1.CallContext context = 2;
+  bytes initial_payload = 3;
+}
+
+message StreamPayload {
+  bytes data = 1;
+}
+
+message StreamEnd {}
+
+message StreamCancel {
+  string reason = 1;
+}
+
+message StreamResult {
+  vastplan.contract.v1.CallResult result = 1;
+  bytes payload = 2;
+  optional TransportError transport_error = 3;
+}
+
+message StreamFrame {
+  string request_id = 1;
+  uint64 sequence = 2;
+  oneof body {
+    StreamOpen open = 3;
+    StreamPayload payload = 4;
+    StreamEnd end = 5;
+    StreamCancel cancel = 6;
+    StreamResult result = 7;
+  }
+}

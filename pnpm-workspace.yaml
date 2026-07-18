@@ -1,4 +1,4 @@
 packages:
-  - "kernels/frontend"
-  - "sdk/ts/*"
-  - "plugins/*/frontend"
+  - "core/kernels/frontend"
+  - "extensions/sdk/ts/*"
+  - "extensions/plugins/*/frontend"

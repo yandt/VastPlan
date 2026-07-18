@@ -8,11 +8,11 @@ importers:
 
   .: {}
 
-  kernels/frontend:
+  core/kernels/frontend:
     dependencies:
       '@vastplan/portal-ui':
         specifier: workspace:*
-        version: link:../../sdk/ts/portal-ui
+        version: link:../../../extensions/sdk/ts/portal-ui
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -33,7 +33,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  plugins/com.vastplan.foundation.frontend.design-system.arco/frontend:
+  extensions/plugins/com.vastplan.foundation.frontend.design-system.arco/frontend:
     dependencies:
       '@arco-design/web-react':
         specifier: ^2.66.0
@@ -58,7 +58,7 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  plugins/com.vastplan.platform.configuration.portal-composer/frontend:
+  extensions/plugins/com.vastplan.platform.configuration.portal-composer/frontend:
     dependencies:
       '@vastplan/portal-ui':
         specifier: workspace:*
@@ -83,7 +83,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  sdk/ts/portal-ui:
+  extensions/sdk/ts/portal-ui:
     dependencies:
       '@vastplan/ui-contract':
         specifier: workspace:*
@@ -105,7 +105,7 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  sdk/ts/ui-contract:
+  extensions/sdk/ts/ui-contract:
     devDependencies:
       typescript:
         specifier: ^5.8.3

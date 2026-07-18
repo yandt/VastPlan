@@ -54,11 +54,11 @@ jobs:
         with:
           go-version-file: go.mod
       - name: 安装 Python SDK 依赖
-        run: python3 -m pip install -r sdk/python/requirements.txt
-      - name: 单元测试与架构守护（arch/ 无 build tag，随此步执行）
+        run: python3 -m pip install -r extensions/sdk/python/requirements.txt
+      - name: 单元测试与架构守护（engineering/arch/ 无 build tag，随此步执行）
         run: |
           go test -race ./...
-          PYTHONPATH=sdk/python python3 -m unittest discover -s sdk/python/tests -v
+          PYTHONPATH=extensions/sdk/python python3 -m unittest discover -s extensions/sdk/python/tests -v
 
   e2e:
     name: E2E（跨进程真实链路）
@@ -69,9 +69,9 @@ jobs:
         with:
           go-version-file: go.mod
       - name: 安装 Python SDK 依赖
-        run: python3 -m pip install -r sdk/python/requirements.txt
+        run: python3 -m pip install -r extensions/sdk/python/requirements.txt
       - name: E2E
-        run: go test -tags=e2e ./e2e/...
+        run: go test -tags=e2e ./engineering/e2e/...
 
   reliability:
     name: Fuzz smoke + 性能回归
@@ -85,15 +85,15 @@ jobs:
           go-version-file: go.mod
       - name: Schema fuzz smoke
         run: |
-          go test -run='^$' -fuzz=FuzzParseManifest -fuzztime=10s ./schemas/plugin/v1
-          go test -run='^$' -fuzz=FuzzValidateDescriptor -fuzztime=10s ./schemas/plugin/v1
-          go test -run='^$' -fuzz=FuzzParseDeployment -fuzztime=10s ./schemas/deployment/v2
+          go test -run='^$' -fuzz=FuzzParseManifest -fuzztime=10s ./contracts/schemas/plugin/v1
+          go test -run='^$' -fuzz=FuzzValidateDescriptor -fuzztime=10s ./contracts/schemas/plugin/v1
+          go test -run='^$' -fuzz=FuzzParseDeployment -fuzztime=10s ./contracts/schemas/deployment/v2
       - name: Backend benchmark
         if: github.event_name == 'push'
-        run: ./tools/benchmark.sh
+        run: ./engineering/tools/benchmark.sh
       - name: Backend benchmark base/head 回归
         if: github.event_name == 'pull_request'
-        run: ./tools/benchmark.sh --compare '${{ github.event.pull_request.base.sha }}'
+        run: ./engineering/tools/benchmark.sh --compare '${{ github.event.pull_request.base.sha }}'
 
   reproducible:
     name: 可复现构建与发布自检
@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with: {go-version-file: go.mod}
-      - run: ./tools/verify-release.sh
+      - run: ./engineering/tools/verify-release.sh
 
   codegen:
     name: codegen 与 proto 同步
@@ -126,9 +126,9 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
       - name: 重跑 codegen 后不得有差异
         run: |
-          ./tools/gen-proto.sh
-          if ! git diff --exit-code -- shared/go sdk/python/contract sdk/python/pluginhost/v1/pluginhost_pb2.py; then
-            echo "::error::proto 改了但 codegen 生成物未同步提交。请本地跑 ./tools/gen-proto.sh 并提交产物（ADR-0016 §6）"
+          ./engineering/tools/gen-proto.sh
+          if ! git diff --exit-code -- core/shared/go extensions/sdk/python/contract extensions/sdk/python/pluginhost/v1/pluginhost_pb2.py; then
+            echo "::error::proto 改了但 codegen 生成物未同步提交。请本地跑 ./engineering/tools/gen-proto.sh 并提交产物（ADR-0016 §6）"
             exit 1
           fi
 

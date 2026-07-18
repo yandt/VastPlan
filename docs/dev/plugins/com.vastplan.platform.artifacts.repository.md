@@ -39,4 +39,4 @@
 
 ## 验证
 
-`kernels/backend/pluginservice/remote_test.go` 通过该共享 HTTP 传输层覆盖 TLS、读写 token、签名发布与再次读取；仓库插件本身只负责配置、进程生命周期和对外贡献。ADR-0049 是该边界的权威决策记录。
+`core/kernels/backend/pluginservice/remote_test.go` 通过该共享 HTTP 传输层覆盖 TLS、读写 token、签名发布与再次读取；仓库插件本身只负责配置、进程生命周期和对外贡献。ADR-0049 是该边界的权威决策记录。
