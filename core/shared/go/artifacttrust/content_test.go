@@ -30,6 +30,24 @@ func TestInspectPackageRejectsTooManyFilesBeforeInstallation(t *testing.T) {
 	}
 }
 
+func TestReadPackageFileReturnsOnlyBoundedRegularEntry(t *testing.T) {
+	module := []byte("export default { register() {} };")
+	raw := testArchive(t, []tar.Header{{Name: "frontend/index.js", Mode: 0o644, Size: int64(len(module))}}, module)
+	got, err := ReadPackageFile(raw, "frontend/index.js", 1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, module) {
+		t.Fatalf("模块内容不一致: %q", got)
+	}
+	if _, err := ReadPackageFile(raw, "../frontend/index.js", 1024); err == nil {
+		t.Fatal("逃逸路径必须拒绝")
+	}
+	if _, err := ReadPackageFile(raw, "frontend/index.js", 4); err == nil {
+		t.Fatal("超限模块必须拒绝")
+	}
+}
+
 func testArchive(t *testing.T, headers []tar.Header, body []byte) []byte {
 	t.Helper()
 	var buffer bytes.Buffer

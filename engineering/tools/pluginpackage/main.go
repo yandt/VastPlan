@@ -1,7 +1,8 @@
-// pluginpackage 把一个插件目录和已构建 backend 二进制打成可发布制品。
+// pluginpackage 把插件目录与已构建的 Backend/Frontend 入口装配成可发布制品。
 //
 //	用法：go run ./engineering/tools/pluginpackage -source extensions/plugins/com.example.demo \
-//	  -backend-bin dist/demo -license-file LICENSE -notice-file NOTICE \
+//	  -backend-bin dist/demo -frontend-bundle frontend/dist/index.js \
+//	  -license-file LICENSE -notice-file NOTICE \
 //	  -out /tmp/demo.tar.gz -repository .vastplan/repository
 package main
 
@@ -19,13 +20,14 @@ import (
 	"strings"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 )
 
 func main() {
 	source := flag.String("source", "", "插件目录（须含 vastplan.plugin.json）")
 	backendBin := flag.String("backend-bin", "", "写入清单 entry.backend 的已构建可执行文件")
+	frontendBundle := flag.String("frontend-bundle", "", "写入清单 entry.frontend 的已构建 ESM bundle")
 	dynamicGoBin := flag.String("dynamic-go-bin", "", "写入 execution.backend.dynamicGo.entry 的首方 Go .so")
 	dynamicGoFingerprint := flag.String("dynamic-go-fingerprint", "", "写入签名清单并在 plugin.Open 前校验的 64 位构建指纹")
 	licenseFile := flag.String("license-file", "LICENSE", "清单声明 license 时注入制品的许可证文本；默认仓库根 LICENSE")
@@ -43,11 +45,11 @@ func main() {
 		*remoteToken = os.Getenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN")
 	}
 	if *source == "" || (*out == "" && *repositoryRoot == "" && *remoteRepository == "") {
-		fmt.Fprintln(os.Stderr, "用法: go run ./engineering/tools/pluginpackage -source <插件目录> [-backend-bin <二进制>] [-out <制品.tar.gz>] [-repository <仓库>] [-remote-repository <HTTPS URL> -trust <trust.json> -sign-key <key.pem> -key-id <id>]")
+		fmt.Fprintln(os.Stderr, "用法: go run ./engineering/tools/pluginpackage -source <插件目录> [-backend-bin <二进制>] [-frontend-bundle <ESM 文件>] [-out <制品.tar.gz>] [-repository <仓库>] [-remote-repository <HTTPS URL> -trust <trust.json> -sign-key <key.pem> -key-id <id>]")
 		os.Exit(2)
 	}
 
-	packageSource, cleanup := stagePackage(*source, *backendBin, *dynamicGoBin, *dynamicGoFingerprint,
+	packageSource, cleanup := stagePackage(*source, *backendBin, *frontendBundle, *dynamicGoBin, *dynamicGoFingerprint,
 		*licenseFile, *noticeFile)
 	defer cleanup()
 	packageBytes, manifest, err := pluginservice.PackageDirectory(packageSource)
@@ -115,9 +117,9 @@ func main() {
 	}
 }
 
-// stagePackage 只在需要注入已构建二进制或许可证文本时创建临时目录。
+// stagePackage 只在需要注入已构建入口或许可证文本时创建临时目录。
 // 许可证目的路径来自已校验清单，不能由命令行改写（ADR-0046）。
-func stagePackage(source, backendBin, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
+func stagePackage(source, backendBin, frontendBundle, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
 	manifestRaw, err := os.ReadFile(filepath.Join(source, "vastplan.plugin.json"))
 	if err != nil {
 		fatalf("读取插件清单失败: %v", err)
@@ -140,7 +142,7 @@ func stagePackage(source, backendBin, dynamicGoBin, dynamicGoFingerprint, licens
 			fatalf("读取插件归属告示失败: %v", err)
 		}
 	}
-	if backendBin == "" && dynamicGoBin == "" && licensePresent && noticePresent {
+	if backendBin == "" && frontendBundle == "" && dynamicGoBin == "" && licensePresent && noticePresent {
 		return source, func() {}
 	}
 	var dynamicGoEntry string
@@ -179,6 +181,21 @@ func stagePackage(source, backendBin, dynamicGoBin, dynamicGoFingerprint, licens
 			fatalf("backend 二进制不是可执行普通文件: %s", backendBin)
 		}
 	}
+	var frontendEntry string
+	if frontendBundle != "" {
+		var ok bool
+		frontendEntry, ok = manifest.Entry["frontend"]
+		if !ok || (!strings.HasSuffix(frontendEntry, ".js") && !strings.HasSuffix(frontendEntry, ".mjs")) {
+			fatalf("清单未声明已构建的 JavaScript entry.frontend")
+		}
+		info, statErr := os.Stat(frontendBundle)
+		if statErr != nil {
+			fatalf("读取 frontend bundle 失败: %v", statErr)
+		}
+		if !info.Mode().IsRegular() || info.Size() == 0 {
+			fatalf("frontend bundle 不是非空普通文件: %s", frontendBundle)
+		}
+	}
 	staging, err := os.MkdirTemp("", "vastplan-package-*")
 	if err != nil {
 		fatalf("创建打包临时目录失败: %v", err)
@@ -197,6 +214,17 @@ func stagePackage(source, backendBin, dynamicGoBin, dynamicGoFingerprint, licens
 		if err := copyFile(backendBin, target, 0o755); err != nil {
 			cleanup()
 			fatalf("写入 backend 入口失败: %v", err)
+		}
+	}
+	if frontendBundle != "" {
+		target := filepath.Join(staging, filepath.FromSlash(frontendEntry))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			cleanup()
+			fatalf("创建 frontend 入口目录失败: %v", err)
+		}
+		if err := copyFile(frontendBundle, target, 0o644); err != nil {
+			cleanup()
+			fatalf("写入 frontend bundle 失败: %v", err)
 		}
 	}
 	if dynamicGoBin != "" {

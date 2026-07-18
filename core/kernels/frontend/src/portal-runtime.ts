@@ -1,4 +1,5 @@
 import type { DesignSystemAdapter, UICapability } from "@vastplan/portal-ui";
+import type { ComponentType } from "react";
 
 export interface PluginRef {
   id: string;
@@ -50,13 +51,14 @@ export interface FrontendPluginLoader {
 
 export interface FrontendPluginContext {
   readonly portal: Readonly<PortalSpec>;
-  addRoute(route: PluginRoute): void;
+  addRoute(route: Omit<PluginRoute, "pluginID">): void;
   addMenu(item: PluginMenuItem): void;
 }
 
 export interface PluginRoute {
   path: string;
   pluginID: string;
+  component: ComponentType;
 }
 
 export interface PluginMenuItem {
@@ -113,23 +115,7 @@ export class PortalRuntime {
     const menus: PluginMenuItem[] = [];
     const seenRoutes = new Set<string>();
     const seenMenus = new Set<string>();
-    const context: FrontendPluginContext = {
-      portal: Object.freeze({ ...portal, plugins: [...portal.plugins] }),
-      addRoute: (route) => {
-        if (!route.path.startsWith("/") || seenRoutes.has(route.path)) {
-          throw new PortalAssemblyError("ROUTE_REJECTED", `插件路由非法或重复: ${route.path}`);
-        }
-        seenRoutes.add(route.path);
-        routes.push({ ...route });
-      },
-      addMenu: (item) => {
-        if (seenMenus.has(item.id) || !seenRoutes.has(item.route)) {
-          throw new PortalAssemblyError("MENU_REJECTED", `菜单必须唯一且指向已注册路由: ${item.id}`);
-        }
-        seenMenus.add(item.id);
-        menus.push({ ...item });
-      },
-    };
+    const portalSnapshot = Object.freeze({ ...portal, plugins: [...portal.plugins] });
 
     for (const ref of portal.plugins) {
       if (samePlugin(ref, portal.designSystem)) {
@@ -140,29 +126,48 @@ export class PortalRuntime {
       if (plugin.designSystem !== undefined) {
         throw new PortalAssemblyError("SECOND_DESIGN_SYSTEM", "同一 Portal 不允许第二个设计系统");
       }
+      const ownRoutes = new Set<string>();
+      const context: FrontendPluginContext = {
+        portal: portalSnapshot,
+        addRoute: (route) => {
+          if (!route.path.startsWith("/") || seenRoutes.has(route.path) || typeof route.component !== "function") {
+            throw new PortalAssemblyError("ROUTE_REJECTED", `插件路由非法、重复或缺少组件: ${route.path}`);
+          }
+          seenRoutes.add(route.path);
+          ownRoutes.add(route.path);
+          routes.push({ ...route, pluginID: ref.id });
+        },
+        addMenu: (item) => {
+          if (seenMenus.has(item.id) || !ownRoutes.has(item.route)) {
+            throw new PortalAssemblyError("MENU_REJECTED", `菜单必须唯一且指向本插件已注册路由: ${item.id}`);
+          }
+          seenMenus.add(item.id);
+          menus.push({ ...item });
+        },
+      };
       await plugin.register?.(context);
     }
-    return Object.freeze({ portal: context.portal, designSystem, routes, menus });
+    return Object.freeze({ portal: portalSnapshot, designSystem, routes, menus });
   }
 
   private validatePortalShape(portal: PortalSpec): void {
     if (!Number.isSafeInteger(portal.revision) || portal.revision <= 0 || !portal.id || !portal.tenantId || !portal.route.startsWith("/")) {
       throw new PortalAssemblyError("PORTAL_INVALID", "Portal 必须包含 revision、ID、租户和绝对根路由");
     }
-	const refs = [portal.resolution.platformProfile, portal.resolution.applicationComposition];
-	if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
-	  throw new PortalAssemblyError("RESOLUTION_INVALID", "Portal 输入解析锁无效");
-	}
+    const refs = [portal.resolution.platformProfile, portal.resolution.applicationComposition];
+    if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
+      throw new PortalAssemblyError("RESOLUTION_INVALID", "Portal 输入解析锁无效");
+    }
     const count = portal.plugins.filter((ref) => samePlugin(ref, portal.designSystem)).length;
     if (count !== 1) {
       throw new PortalAssemblyError("DESIGN_SYSTEM_SELECTION", "Portal 插件列表必须精确包含一个已选设计系统");
     }
-	const pluginIDs = new Set(portal.plugins.map((ref) => ref.id));
-	if (portal.resolution.pluginOrigins[portal.designSystem.id] !== "platform-profile" ||
-	    Object.keys(portal.resolution.pluginOrigins).length !== pluginIDs.size ||
-	    [...pluginIDs].some((id) => portal.resolution.pluginOrigins[id] === undefined)) {
-	  throw new PortalAssemblyError("ORIGIN_LOCK_INVALID", "Portal 插件来源锁缺失或设计系统并非平台基线");
-	}
+    const pluginIDs = new Set(portal.plugins.map((ref) => ref.id));
+    if (portal.resolution.pluginOrigins[portal.designSystem.id] !== "platform-profile" ||
+        Object.keys(portal.resolution.pluginOrigins).length !== pluginIDs.size ||
+        [...pluginIDs].some((id) => portal.resolution.pluginOrigins[id] === undefined)) {
+      throw new PortalAssemblyError("ORIGIN_LOCK_INVALID", "Portal 插件来源锁缺失或设计系统并非平台基线");
+    }
   }
 
   private assertTrustedFirstParty(module: FrontendPluginModule, pluginID: string): void {

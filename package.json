@@ -3,7 +3,11 @@
   "private": true,
   "packageManager": "pnpm@10.11.0",
   "scripts": {
+    "build:frontend:plugins": "esbuild extensions/plugins/com.vastplan.foundation.frontend.design-system.arco/frontend/src/index.tsx --bundle --format=esm --platform=browser --target=es2022 --outfile=extensions/plugins/com.vastplan.foundation.frontend.design-system.arco/frontend/dist/index.js --external:react --external:react-dom --external:react/jsx-runtime --external:@vastplan/portal-ui --external:@vastplan/ui-contract && esbuild extensions/plugins/com.vastplan.platform.configuration.portal-composer/frontend/src/index.tsx --bundle --format=esm --platform=browser --target=es2022 --outfile=extensions/plugins/com.vastplan.platform.configuration.portal-composer/frontend/dist/index.js --external:react --external:react-dom --external:react/jsx-runtime --external:@vastplan/portal-ui --external:@vastplan/ui-contract",
     "typecheck": "pnpm -r --if-present typecheck",
     "test:frontend": "pnpm -r --if-present test"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.1"
   }
 }

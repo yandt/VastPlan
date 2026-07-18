@@ -10,7 +10,7 @@
   "engines": { "frontend": "^1.0" },
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "activation": ["onPortalStartup"],
-  "entry": { "frontend": "frontend/src/index.tsx" },
+  "entry": { "frontend": "frontend/dist/index.js" },
   "contributes": {
     "frontend": {
       "designSystems": [{

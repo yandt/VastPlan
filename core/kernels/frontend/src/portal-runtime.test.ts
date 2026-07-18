@@ -25,7 +25,7 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
       return {
         ...base,
         async register(context) {
-          context.addRoute({ path: "/settings/portals", pluginID: ref.id });
+          context.addRoute({ path: "/settings/portals", component: () => null });
           context.addMenu({ id: "portal-composer", title: "门户组合", route: "/settings/portals" });
         },
         ...(overrides[ref.id] as object),
@@ -47,7 +47,8 @@ describe("PortalRuntime", () => {
   it("only assembles one signed first-party design system and framework-neutral plugins", async () => {
     const prepared = await new PortalRuntime(loader()).prepare(portal);
     expect(prepared.designSystem.framework).toBe("arco");
-    expect(prepared.routes).toEqual([{ path: "/settings/portals", pluginID: composerRef.id }]);
+    expect(prepared.routes).toHaveLength(1);
+    expect(prepared.routes[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
   });
 
   it("fails closed for an untrusted design system", async () => {

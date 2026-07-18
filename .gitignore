@@ -18,6 +18,7 @@ tmp/
 
 # 构建产物
 bin/
+dist/
 node_modules/
 .pnpm-store/
 .gstack/

@@ -67,6 +67,24 @@ type Resolution struct {
 	PluginOrigins          map[string]string       `json:"pluginOrigins"`
 }
 
+// FrontendModule is an Edge-issued, content-bound browser module descriptor.
+// PackageSHA256 proves which verified plugin artifact supplied the module;
+// SHA256 binds the exact JavaScript bytes fetched by the browser.
+type FrontendModule struct {
+	PluginRef
+	Entry         string `json:"entry"`
+	URL           string `json:"url"`
+	SHA256        string `json:"sha256"`
+	PackageSHA256 string `json:"packageSha256"`
+}
+
+// RuntimeSpec is the only browser bootstrap input. The browser never receives
+// raw manifests or repository credentials and does not resolve compositions.
+type RuntimeSpec struct {
+	Portal  PortalSpec       `json:"portal"`
+	Modules []FrontendModule `json:"modules"`
+}
+
 type Status string
 
 const (

@@ -76,8 +76,8 @@ export function PortalComposerView() {
 }
 
 export default {
-  register(context: { addRoute(route: { path: string; pluginID: string }): void; addMenu(item: { id: string; title: string; route: string }): void }) {
-    context.addRoute({ path: "/settings/portals", pluginID: "com.vastplan.platform.configuration.portal-composer" });
+  register(context: { addRoute(route: { path: string; component: typeof PortalComposerView }): void; addMenu(item: { id: string; title: string; route: string }): void }) {
+    context.addRoute({ path: "/settings/portals", component: PortalComposerView });
     context.addMenu({ id: "platform.portal-composer", title: "系统配置", route: "/settings/portals" });
   },
 };

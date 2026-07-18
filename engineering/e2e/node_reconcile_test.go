@@ -16,12 +16,12 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
@@ -661,6 +661,16 @@ func publishBuiltPlugin(t *testing.T, repository *pluginservice.Repository, pack
 	}
 	if err := os.WriteFile(entry, binBytes, 0o755); err != nil {
 		t.Fatal(err)
+	}
+	if frontendEntry := manifest.Entry["frontend"]; frontendEntry != "" {
+		frontendPath := filepath.Join(dir, filepath.FromSlash(frontendEntry))
+		if err := os.MkdirAll(filepath.Dir(frontendPath), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		module := []byte(`export default { register(context) { context.addRoute({ path: "/settings/portals", component: () => null }); context.addMenu({ id: "portal-composer", title: "Portal", route: "/settings/portals" }); } };`)
+		if err := os.WriteFile(frontendPath, module, 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
 	packageBytes, _, err := pluginservice.PackageDirectory(dir)
 	if err != nil {

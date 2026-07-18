@@ -2,14 +2,16 @@ package edge
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
@@ -34,8 +36,15 @@ func (contentVerifier) Verify(_ context.Context, ref pluginv1.ArtifactRef, envel
 
 func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testing.T) {
 	dir := t.TempDir()
+	module := []byte(`export default { id: "ui.design-system" };`)
 	manifest := `{"id":"com.vastplan.foundation.frontend.design-system.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"designSystems":[{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}]}}}`
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "frontend"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "frontend", "main.js"), module, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	pkg, _, err := pluginservice.PackageDirectory(dir)
@@ -55,6 +64,18 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile}}}
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err != nil {
 		t.Fatalf("有效且已验证的设计系统应通过: %v", err)
+	}
+	runtime, err := catalog.ResolveRuntime(context.Background(), "tenant-a", spec)
+	if err != nil {
+		t.Fatalf("有效 Portal 应解析浏览器运行描述: %v", err)
+	}
+	wantDigest := sha256.Sum256(module)
+	if len(runtime.Modules) != 1 || runtime.Modules[0].SHA256 != hex.EncodeToString(wantDigest[:]) || runtime.Modules[0].PackageSHA256 != artifact.SHA256 {
+		t.Fatalf("模块摘要未绑定已验证制品: %+v", runtime.Modules)
+	}
+	asset, err := catalog.ReadFrontendModule(context.Background(), "tenant-a", spec, ref.ID)
+	if err != nil || string(asset.Content) != string(module) {
+		t.Fatalf("读取已锁定模块失败: asset=%+v err=%v", asset.Descriptor, err)
 	}
 	spec.Resolution.PluginOrigins[ref.ID] = compositioncommonv1.OriginApplication
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {

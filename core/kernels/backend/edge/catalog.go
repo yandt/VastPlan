@@ -2,6 +2,7 @@ package edge
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,13 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
+
+const maxFrontendModuleBytes = int64(32 << 20)
+
+type FrontendModuleAsset struct {
+	Descriptor portalapi.FrontendModule
+	Content    []byte
+}
 
 // TrustedCatalog reuses the kernel artifact-verification boundary. An artifact
 // source cannot make itself trusted: every candidate passes ArtifactVerifier
@@ -130,6 +138,64 @@ func (c *TrustedCatalog) ValidatePortal(ctx context.Context, tenantID string, sp
 	return errors.New("设计系统未提供匹配且完整的 ui.design-system 贡献")
 }
 
+// ResolveRuntime converts a governed PortalSpec into the only bootstrap
+// document accepted by the browser. Every module digest is calculated from a
+// freshly verified package, never from a manifest claim.
+func (c *TrustedCatalog) ResolveRuntime(ctx context.Context, tenantID string, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
+	if err := c.ValidatePortal(ctx, tenantID, spec); err != nil {
+		return portalapi.RuntimeSpec{}, err
+	}
+	runtime := portalapi.RuntimeSpec{Portal: spec, Modules: make([]portalapi.FrontendModule, 0, len(spec.Plugins))}
+	for _, ref := range spec.Plugins {
+		asset, err := c.frontendModule(ctx, spec.Revision, ref)
+		if err != nil {
+			return portalapi.RuntimeSpec{}, err
+		}
+		runtime.Modules = append(runtime.Modules, asset.Descriptor)
+	}
+	return runtime, nil
+}
+
+// ReadFrontendModule serves only a module locked into the supplied active
+// revision. A caller cannot turn the asset endpoint into an arbitrary artifact
+// reader by choosing its own plugin version or entry path.
+func (c *TrustedCatalog) ReadFrontendModule(ctx context.Context, tenantID string, spec portalapi.PortalSpec, pluginID string) (FrontendModuleAsset, error) {
+	if err := c.ValidatePortal(ctx, tenantID, spec); err != nil {
+		return FrontendModuleAsset{}, err
+	}
+	for _, ref := range spec.Plugins {
+		if ref.ID == pluginID {
+			return c.frontendModule(ctx, spec.Revision, ref)
+		}
+	}
+	return FrontendModuleAsset{}, fmt.Errorf("Portal revision 未锁定前端插件 %s", pluginID)
+}
+
+func (c *TrustedCatalog) frontendModule(ctx context.Context, revision uint64, ref portalapi.PluginRef) (FrontendModuleAsset, error) {
+	artifact, packageBytes, manifest, err := c.verifiedManifest(ctx, ref)
+	if err != nil {
+		return FrontendModuleAsset{}, err
+	}
+	entry := manifest.Entry["frontend"]
+	if entry == "" || (!strings.HasSuffix(entry, ".js") && !strings.HasSuffix(entry, ".mjs")) {
+		return FrontendModuleAsset{}, fmt.Errorf("插件 %s 缺少已构建的 JavaScript frontend 入口", ref.ID)
+	}
+	content, err := artifacttrust.ReadPackageFile(packageBytes, entry, maxFrontendModuleBytes)
+	if err != nil {
+		return FrontendModuleAsset{}, fmt.Errorf("读取插件 %s frontend 入口: %w", ref.ID, err)
+	}
+	digest := sha256.Sum256(content)
+	return FrontendModuleAsset{
+		Descriptor: portalapi.FrontendModule{
+			PluginRef: ref,
+			Entry:     entry,
+			URL:       fmt.Sprintf("/v1/portal-modules/%d/%s.js", revision, ref.ID),
+			SHA256:    hex.EncodeToString(digest[:]), PackageSHA256: artifact.SHA256,
+		},
+		Content: content,
+	}, nil
+}
+
 func validCompositionRef(ref compositioncommonv1.Ref) bool {
 	if ref.ID == "" || ref.Revision == 0 || len(ref.Digest) != 64 {
 		return false
@@ -139,6 +205,11 @@ func validCompositionRef(ref compositioncommonv1.Ref) bool {
 }
 
 func (c *TrustedCatalog) manifest(ctx context.Context, ref portalapi.PluginRef) (pluginv1.Manifest, error) {
+	_, _, manifest, err := c.verifiedManifest(ctx, ref)
+	return manifest, err
+}
+
+func (c *TrustedCatalog) verifiedManifest(ctx context.Context, ref portalapi.PluginRef) (pluginv1.Artifact, []byte, pluginv1.Manifest, error) {
 	artifactRef := pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: channel(ref.Channel)}
 	var last error
 	for _, source := range c.sources {
@@ -154,11 +225,11 @@ func (c *TrustedCatalog) manifest(ctx context.Context, ref portalapi.PluginRef) 
 		}
 		manifest, err := pluginv1.ParseManifest(artifact.Manifest)
 		if err != nil {
-			return pluginv1.Manifest{}, fmt.Errorf("已验证制品清单无效: %w", err)
+			return pluginv1.Artifact{}, nil, pluginv1.Manifest{}, fmt.Errorf("已验证制品清单无效: %w", err)
 		}
-		return manifest, nil
+		return artifact, envelope.PackageBytes, manifest, nil
 	}
-	return pluginv1.Manifest{}, fmt.Errorf("无法取得并验证 %s@%s: %w", ref.ID, ref.Version, last)
+	return pluginv1.Artifact{}, nil, pluginv1.Manifest{}, fmt.Errorf("无法取得并验证 %s@%s: %w", ref.ID, ref.Version, last)
 }
 
 func channel(value string) string {

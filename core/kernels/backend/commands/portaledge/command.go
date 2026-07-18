@@ -210,7 +210,7 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return err
 	}
-	server := &http.Server{Addr: *listen, Handler: edge.NewWithInteraction(identity, service, interactionService), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Addr: *listen, Handler: edge.NewWithRuntime(identity, service, interactionService, catalog), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() { <-ctx.Done(); _ = server.Shutdown(context.Background()) }()
 	err = server.ListenAndServeTLS(*cert, *key)
 	if errors.Is(err, http.ErrServerClosed) {

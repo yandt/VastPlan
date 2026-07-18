@@ -24,11 +24,11 @@ import (
 	"testing"
 	"time"
 
-	portaledgecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/portaledge"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	portaledgecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/portaledge"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
@@ -158,6 +158,21 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if published.Status != portalapi.StatusPublished || !published.Active {
 		t.Fatalf("unexpected published revision: %+v", published)
 	}
+	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-runtime?path=/operations", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("read governed Portal runtime status=%d body=%s", status, raw)
+	}
+	var runtime portalapi.RuntimeSpec
+	if err := json.Unmarshal(raw, &runtime); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.Portal.Revision != published.ID || len(runtime.Modules) != 2 || runtime.Modules[0].ID != "com.vastplan.foundation.frontend.design-system.arco" || runtime.Modules[1].ID != "com.vastplan.platform.configuration.portal-composer" {
+		t.Fatalf("unexpected governed runtime: %+v", runtime)
+	}
+	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, runtime.Modules[0].URL, map[string]any{})
+	if status != http.StatusOK || !bytes.Contains(raw, []byte("ui.design-system")) {
+		t.Fatalf("read verified frontend module status=%d body=%s", status, raw)
+	}
 	// Publish a newer revision first, which makes the first one a genuine
 	// historical rollback candidate rather than allowing a no-op self rollback.
 	csrf = portalCSRF(t, client, baseURL, "author-token")
@@ -224,6 +239,17 @@ func publishPortalFrontendPlugin(t *testing.T, repository *pluginservice.Reposit
 	}
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifestRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entry := manifest.Entry["frontend"]
+	if entry == "" {
+		t.Fatal("frontend fixture manifest has no frontend entry")
+	}
+	entryPath := filepath.Join(dir, filepath.FromSlash(entry))
+	if err := os.MkdirAll(filepath.Dir(entryPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(entryPath, []byte(`export default { id: "ui.design-system", framework: "fixture", uiContract: "1.0.0", capabilities: ["layout","menu","overlay","form","data","feedback","theme"], Provider: ({children}) => children };`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, filename := range []string{manifest.LicenseFile, manifest.NoticeFile} {

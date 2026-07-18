@@ -2,14 +2,19 @@ package edge
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
@@ -23,6 +28,8 @@ type service struct {
 	seen      portalapi.Principal
 	created   frontendcompositionv1.ApplicationComposition
 	createErr error
+	revisions []portalapi.Revision
+	listErr   error
 }
 
 func (s *service) CreateDraft(_ context.Context, p portalapi.Principal, v frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
@@ -52,8 +59,73 @@ func TestBFFMapsKernelPermissionDenialToForbidden(t *testing.T) {
 		t.Fatalf("内核权限拒绝必须映射为 403: %d", w.Code)
 	}
 }
-func (*service) List(context.Context, portalapi.Principal) ([]portalapi.Revision, error) {
-	return nil, nil
+func (s *service) List(context.Context, portalapi.Principal) ([]portalapi.Revision, error) {
+	return append([]portalapi.Revision(nil), s.revisions...), s.listErr
+}
+
+func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
+	module := []byte(`export default { register() {} };`)
+	dir := t.TempDir()
+	manifest := `{"id":"com.vastplan.foundation.frontend.design-system.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"designSystems":[{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}]}}}`
+	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "frontend"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "frontend", "main.js"), module, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkg, _, err := pluginservice.PackageDirectory(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := pluginservice.Describe("stable", pkg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := catalogSource{artifact.PluginID + "@" + artifact.Version: {Artifact: artifact, PackageBytes: pkg}}
+	catalog, err := NewTrustedCatalog([]ArtifactSource{source}, contentVerifier{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version}
+	spec := portalapi.PortalSpec{
+		Revision: 7, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref},
+		Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile}},
+	}
+	s := &service{revisions: []portalapi.Revision{{ID: 7, TenantID: "tenant-a", PortalID: "admin", Status: portalapi.StatusPublished, Active: true, Spec: spec}}}
+	h := NewWithRuntime(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "reader", TenantID: "tenant-a", Roles: []string{"portal.read"}}, nil
+	}), s, nil, catalog)
+
+	runtimeRequest := httptest.NewRequest(http.MethodGet, "/v1/portal-runtime?path=/settings", nil)
+	runtimeW := httptest.NewRecorder()
+	h.ServeHTTP(runtimeW, runtimeRequest)
+	if runtimeW.Code != http.StatusOK {
+		t.Fatalf("读取运行描述 status=%d body=%s", runtimeW.Code, runtimeW.Body.String())
+	}
+	var runtime portalapi.RuntimeSpec
+	if err := json.Unmarshal(runtimeW.Body.Bytes(), &runtime); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.Portal.Revision != 7 || len(runtime.Modules) != 1 {
+		t.Fatalf("运行描述未锁定 active revision: %+v", runtime)
+	}
+
+	moduleRequest := httptest.NewRequest(http.MethodGet, runtime.Modules[0].URL, nil)
+	moduleW := httptest.NewRecorder()
+	h.ServeHTTP(moduleW, moduleRequest)
+	if moduleW.Code != http.StatusOK || moduleW.Body.String() != string(module) || moduleW.Header().Get("X-VastPlan-Module-SHA256") != runtime.Modules[0].SHA256 {
+		t.Fatalf("模块响应未绑定运行描述: status=%d headers=%v body=%s", moduleW.Code, moduleW.Header(), moduleW.Body.String())
+	}
+
+	missing := httptest.NewRequest(http.MethodGet, "/v1/portal-modules/8/"+ref.ID+".js", nil)
+	missingW := httptest.NewRecorder()
+	h.ServeHTTP(missingW, missing)
+	if missingW.Code != http.StatusNotFound {
+		t.Fatalf("非 active revision 不得读取模块: %d", missingW.Code)
+	}
 }
 func (*service) Submit(context.Context, portalapi.Principal, uint64) (portalapi.Revision, error) {
 	return portalapi.Revision{}, nil

@@ -73,6 +73,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: TypeScript 类型检查
         run: pnpm typecheck
+      - name: 构建 Frontend 插件 ESM 制品
+        run: pnpm build:frontend:plugins
       - name: Frontend 运行时测试
         run: pnpm test:frontend
 

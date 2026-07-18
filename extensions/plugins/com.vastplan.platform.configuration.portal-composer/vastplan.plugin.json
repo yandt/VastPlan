@@ -21,7 +21,7 @@
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "state": { "backend": { "format": "com.vastplan.platform.portal-composer", "formatVersion": 1 } },
   "activation": ["onStartup", "onPortalStartup"],
-  "entry": { "backend": "backend/portal-composer", "frontend": "frontend/src/index.tsx" },
+  "entry": { "backend": "backend/portal-composer", "frontend": "frontend/dist/index.js" },
   "dependencies": { "com.vastplan.foundation.frontend.design-system.arco": "^1.0.0" },
   "contributes": {
     "backend": {

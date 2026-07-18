@@ -146,6 +146,56 @@ func InspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 	return manifest, json.RawMessage(manifestRaw), nil
 }
 
+// ReadPackageFile returns one regular file from an already validated package.
+// It repeats path and size checks because callers may expose the result across
+// a different trust boundary, such as serving a Frontend module to a browser.
+func ReadPackageFile(packageBytes []byte, filename string, maxBytes int64) ([]byte, error) {
+	requested, err := archiveName(filename)
+	if err != nil {
+		return nil, err
+	}
+	if maxBytes <= 0 || maxBytes > DefaultMaxPackageFileBytes {
+		return nil, fmt.Errorf("读取上限必须在 1..%d 字节内", DefaultMaxPackageFileBytes)
+	}
+	gz, err := gzip.NewReader(bytes.NewReader(packageBytes))
+	if err != nil {
+		return nil, fmt.Errorf("插件包不是 gzip tar: %w", err)
+	}
+	defer func() { _ = gz.Close() }()
+
+	tr := tar.NewReader(gz)
+	for {
+		header, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("插件包缺少文件 %s", requested)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("读取 tar 条目: %w", err)
+		}
+		name, err := archiveName(header.Name)
+		if err != nil {
+			return nil, err
+		}
+		if name != requested {
+			continue
+		}
+		if header.Typeflag != tar.TypeReg && header.Typeflag != 0 {
+			return nil, fmt.Errorf("插件包文件不是普通文件: %s", name)
+		}
+		if header.Size <= 0 || header.Size > maxBytes {
+			return nil, fmt.Errorf("插件包文件 %s 大小必须在 1..%d 字节内", name, maxBytes)
+		}
+		content, err := io.ReadAll(io.LimitReader(tr, maxBytes+1))
+		if err != nil {
+			return nil, fmt.Errorf("读取插件包文件 %s: %w", name, err)
+		}
+		if int64(len(content)) != header.Size || int64(len(content)) > maxBytes {
+			return nil, fmt.Errorf("插件包文件 %s 大小不一致", name)
+		}
+		return content, nil
+	}
+}
+
 func validatePackagedLegalFile(entrySizes map[string]int64, declaredName, kind string) error {
 	name, err := archiveName(declaredName)
 	if err != nil {

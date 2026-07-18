@@ -53,7 +53,7 @@ func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
 		t.Fatal(err)
 	}
 	fingerprint := strings.Repeat("a", 64)
-	staged, cleanup := stagePackage(source, backend, dynamic, fingerprint, "", "")
+	staged, cleanup := stagePackage(source, backend, "", dynamic, fingerprint, "", "")
 	defer cleanup()
 	raw, err := os.ReadFile(filepath.Join(staged, "vastplan.plugin.json"))
 	if err != nil {
@@ -65,5 +65,31 @@ func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
 	}
 	if got.Execution.Backend.DynamicGo.Fingerprint != fingerprint || !got.Execution.Backend.DynamicGo.Required {
 		t.Fatalf("签名清单没有冻结 dynamic-go 构建指纹: %+v", got.Execution.Backend.DynamicGo)
+	}
+}
+
+func TestStagePackageInjectsFrontendBundleAtManifestEntry(t *testing.T) {
+	source := t.TempDir()
+	manifest := []byte(`{
+  "id":"com.vastplan.product.test.frontend","name":"frontend","description":"frontend","version":"1.0.0","publisher":"vastplan",
+  "engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/dist/index.js"},
+  "contributes":{"frontend":{"views":[{"id":"test.frontend","title":"Test"}]}}
+}`)
+	if err := os.WriteFile(filepath.Join(source, "vastplan.plugin.json"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bundle := filepath.Join(t.TempDir(), "index.js")
+	content := []byte("export default { register() {} };\n")
+	if err := os.WriteFile(bundle, content, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	staged, cleanup := stagePackage(source, "", bundle, "", "", "", "")
+	defer cleanup()
+	got, err := os.ReadFile(filepath.Join(staged, "frontend", "dist", "index.js"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("frontend bundle 注入内容不一致: %q", got)
 	}
 }
