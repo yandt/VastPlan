@@ -4,25 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 
-	compositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/v1"
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/backend/v1"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
-	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/shared/go/pluginid"
+	"cdsoft.com.cn/VastPlan/shared/go/compositioncore"
 )
 
-type ArtifactReader interface {
-	Read(pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error)
-}
-
-type Options struct {
-	AllowDevelopmentPlugins bool
-}
+type ArtifactReader = compositioncore.ArtifactReader
+type Options = compositioncore.Options
 
 // Resolve verifies every exact artifact before it uses publisher and namespace
 // classification. Platform-origin plugins may include administrator-promoted
 // application plugins; application input can never select platform plugins.
-func Resolve(profile compositionv1.PlatformProfile, application compositionv1.ApplicationComposition, deploymentRevision uint64, artifacts ArtifactReader, options Options) (deploymentv2.Deployment, error) {
+func Resolve(profile backendcompositionv1.PlatformProfile, application backendcompositionv1.ApplicationComposition, deploymentRevision uint64, artifacts ArtifactReader, options Options) (deploymentv2.Deployment, error) {
 	if deploymentRevision == 0 {
 		return deploymentv2.Deployment{}, fmt.Errorf("deployment revision 必须大于 0")
 	}
@@ -30,11 +25,11 @@ func Resolve(profile compositionv1.PlatformProfile, application compositionv1.Ap
 		return deploymentv2.Deployment{}, fmt.Errorf("Composition Resolver 必须配置不可变制品读取器")
 	}
 	var err error
-	profile, err = compositionv1.ValidatePlatformProfile(profile)
+	profile, err = backendcompositionv1.ValidatePlatformProfile(profile)
 	if err != nil {
 		return deploymentv2.Deployment{}, err
 	}
-	application, err = compositionv1.ValidateApplicationComposition(application)
+	application, err = backendcompositionv1.ValidateApplicationComposition(application)
 	if err != nil {
 		return deploymentv2.Deployment{}, err
 	}
@@ -49,11 +44,11 @@ func Resolve(profile compositionv1.PlatformProfile, application compositionv1.Ap
 		}
 	}
 
-	platformRefs := map[string]deploymentv1.PluginRef{}
+	platformRefs := map[string]compositioncore.Selection{}
 	attachmentPluginIDs := map[string]struct{}{}
 	for _, attachment := range profile.Attachments {
 		for _, ref := range attachment.Plugins {
-			if err := verifyRef(ref, deploymentv2.OriginPlatformProfile, platformRefs, artifacts, options); err != nil {
+			if err := compositioncore.VerifyRef(selection(ref), compositioncommonv1.OriginPlatformProfile, platformRefs, artifacts, options); err != nil {
 				return deploymentv2.Deployment{}, fmt.Errorf("Platform Profile attachment %s: %w", attachment.ServiceClass, err)
 			}
 			attachmentPluginIDs[ref.ID] = struct{}{}
@@ -68,20 +63,20 @@ func Resolve(profile compositionv1.PlatformProfile, application compositionv1.Ap
 			if previousUnit := servicePluginUnits[ref.ID]; previousUnit != "" && previousUnit != unit.ID {
 				return deploymentv2.Deployment{}, fmt.Errorf("平台插件 %q 不能同时属于 service unit %q 和 %q", ref.ID, previousUnit, unit.ID)
 			}
-			if err := verifyRef(ref, deploymentv2.OriginPlatformProfile, platformRefs, artifacts, options); err != nil {
+			if err := compositioncore.VerifyRef(selection(ref), compositioncommonv1.OriginPlatformProfile, platformRefs, artifacts, options); err != nil {
 				return deploymentv2.Deployment{}, fmt.Errorf("Platform Profile service %s: %w", unit.ID, err)
 			}
 			servicePluginUnits[ref.ID] = unit.ID
 		}
 	}
 
-	applicationRefs := map[string]deploymentv1.PluginRef{}
+	applicationRefs := map[string]compositioncore.Selection{}
 	for _, unit := range application.Units {
 		for _, ref := range unit.Spec.Plugins {
 			if _, platformOwned := platformRefs[ref.ID]; platformOwned {
 				return deploymentv2.Deployment{}, fmt.Errorf("应用 unit %q 不能覆盖平台插件 %q", unit.Spec.ID, ref.ID)
 			}
-			if err := verifyRef(ref, deploymentv2.OriginApplication, applicationRefs, artifacts, options); err != nil {
+			if err := compositioncore.VerifyRef(selection(ref), compositioncommonv1.OriginApplication, applicationRefs, artifacts, options); err != nil {
 				return deploymentv2.Deployment{}, fmt.Errorf("Application Composition unit %s: %w", unit.Spec.ID, err)
 			}
 		}
@@ -113,10 +108,10 @@ func Resolve(profile compositionv1.PlatformProfile, application compositionv1.Ap
 
 	origins := make(map[string]string, len(platformRefs)+len(applicationRefs))
 	for id := range platformRefs {
-		origins[id] = deploymentv2.OriginPlatformProfile
+		origins[id] = compositioncommonv1.OriginPlatformProfile
 	}
 	for id := range applicationRefs {
-		origins[id] = deploymentv2.OriginApplication
+		origins[id] = compositioncommonv1.OriginApplication
 	}
 	resolved := deploymentv2.Deployment{
 		Version: 2, Revision: deploymentRevision, Metadata: application.Metadata,
@@ -139,42 +134,6 @@ func Resolve(profile compositionv1.PlatformProfile, application compositionv1.Ap
 	return resolved, nil
 }
 
-func verifyRef(ref deploymentv1.PluginRef, origin string, seen map[string]deploymentv1.PluginRef, artifacts ArtifactReader, options Options) error {
-	ref.Channel = normalizedChannel(ref.Channel)
-	if previous, ok := seen[ref.ID]; ok {
-		if previous.Version != ref.Version || normalizedChannel(previous.Channel) != ref.Channel {
-			return fmt.Errorf("插件 %q 存在多版本或多 channel 冲突", ref.ID)
-		}
-		return nil
-	}
-	artifact, _, err := artifacts.Read(pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: ref.Channel})
-	if err != nil {
-		return fmt.Errorf("读取制品 %s@%s/%s: %w", ref.ID, ref.Version, ref.Channel, err)
-	}
-	manifest, err := pluginv1.ParseManifest(artifact.Manifest)
-	if err != nil {
-		return fmt.Errorf("制品 %s 清单无效: %w", ref.ID, err)
-	}
-	if artifact.PluginID != ref.ID || artifact.Version != ref.Version || normalizedChannel(artifact.Channel) != ref.Channel || manifest.ID != ref.ID || manifest.Version != ref.Version {
-		return fmt.Errorf("制品引用与不可变清单身份不一致: %s@%s/%s", ref.ID, ref.Version, ref.Channel)
-	}
-	class, err := pluginid.ClassifyManagement(manifest.ID, manifest.Publisher)
-	if err != nil {
-		return fmt.Errorf("插件 %s 身份分类失败: %w", ref.ID, err)
-	}
-	if class == pluginid.ManagementDevelopment && !options.AllowDevelopmentPlugins {
-		return fmt.Errorf("开发插件 %q 未被生产策略允许", ref.ID)
-	}
-	if origin == deploymentv2.OriginApplication && class == pluginid.ManagementPlatform {
-		return fmt.Errorf("应用配置不能选择平台管理插件 %q", ref.ID)
-	}
-	seen[ref.ID] = ref
-	return nil
-}
-
-func normalizedChannel(channel string) string {
-	if channel == "" {
-		return "stable"
-	}
-	return channel
+func selection(ref deploymentv1.PluginRef) compositioncore.Selection {
+	return compositioncore.Selection{ID: ref.ID, Version: ref.Version, Channel: ref.Channel}
 }

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json",
+  "title": "VastPlan Composition Common Contract v1",
+  "$defs": {
+    "version": { "const": 1 },
+    "revision": { "type": "integer", "minimum": 1 },
+    "compositionId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "kernel": { "enum": ["backend", "frontend", "runner", "mobile"] },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kernel"],
+      "properties": {
+        "kernel": { "$ref": "#/$defs/kernel" }
+      }
+    },
+    "origin": { "enum": ["platform-profile", "application"] },
+    "compositionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "digest"],
+      "properties": {
+        "id": { "$ref": "#/$defs/compositionId" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  }
+}

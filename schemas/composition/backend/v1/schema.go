@@ -1,13 +1,11 @@
-// Package compositionv1 defines the two authorized inputs used to assemble a
-// backend service deployment. Platform Profile and Application Composition are
-// deliberately separate resources with separate publishers and revisions.
-package compositionv1
+// Package backendcompositionv1 defines Backend's two authorized composition
+// inputs. It reuses the cross-kernel document, target and digest contract while
+// keeping service scheduling DTOs strictly Backend-specific.
+package backendcompositionv1
 
 import (
 	"bytes"
-	"crypto/sha256"
 	_ "embed"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -15,13 +13,14 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
 )
 
 const (
-	PlatformProfileSchemaURL        = "https://schemas.cdsoft.com.cn/vastplan/composition/v1/vastplan.platform-profile.schema.json"
-	ApplicationCompositionSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/composition/v1/vastplan.application-composition.schema.json"
+	PlatformProfileSchemaURL        = "https://schemas.cdsoft.com.cn/vastplan/composition/backend/v1/vastplan.platform-profile.schema.json"
+	ApplicationCompositionSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/composition/backend/v1/vastplan.application-composition.schema.json"
 )
 
 //go:embed vastplan.platform-profile.schema.json
@@ -37,15 +36,9 @@ var (
 	compileErr            error
 )
 
-type Target struct {
-	Kernel string `json:"kernel"`
-}
-
 type PlatformProfile struct {
-	Version        int                        `json:"version"`
-	Revision       uint64                     `json:"revision"`
-	ID             string                     `json:"id"`
-	Target         Target                     `json:"target"`
+	compositioncommonv1.Document
+	Target         compositioncommonv1.Target `json:"target"`
 	ServiceClasses []string                   `json:"serviceClasses"`
 	Attachments    []Attachment               `json:"attachments"`
 	Services       []deploymentv2.ServiceUnit `json:"services"`
@@ -57,12 +50,10 @@ type Attachment struct {
 }
 
 type ApplicationComposition struct {
-	Version  int                   `json:"version"`
-	Revision uint64                `json:"revision"`
-	ID       string                `json:"id"`
-	Kernel   string                `json:"kernel"`
-	Metadata deploymentv1.Metadata `json:"metadata"`
-	Units    []ApplicationUnit     `json:"units"`
+	compositioncommonv1.Document
+	Target   compositioncommonv1.Target `json:"target"`
+	Metadata deploymentv1.Metadata      `json:"metadata"`
+	Units    []ApplicationUnit          `json:"units"`
 }
 
 type ApplicationUnit struct {
@@ -83,22 +74,22 @@ func schemas() (*jsonschema.Schema, *jsonschema.Schema, error) {
 		}{{PlatformProfileSchemaURL, platformProfileSchemaJSON}, {ApplicationCompositionSchemaURL, applicationCompositionSchemaJSON}} {
 			document, err := jsonschema.UnmarshalJSON(bytes.NewReader(resource.raw))
 			if err != nil {
-				compileErr = fmt.Errorf("解析组合 Schema %s: %w", resource.url, err)
+				compileErr = fmt.Errorf("解析 Backend 组合 Schema %s: %w", resource.url, err)
 				return
 			}
 			if err := compiler.AddResource(resource.url, document); err != nil {
-				compileErr = fmt.Errorf("登记组合 Schema %s: %w", resource.url, err)
+				compileErr = fmt.Errorf("登记 Backend 组合 Schema %s: %w", resource.url, err)
 				return
 			}
 		}
 		platformProfileSchema, compileErr = compiler.Compile(PlatformProfileSchemaURL)
 		if compileErr != nil {
-			compileErr = fmt.Errorf("编译 Platform Profile Schema: %w", compileErr)
+			compileErr = fmt.Errorf("编译 Backend Platform Profile Schema: %w", compileErr)
 			return
 		}
 		applicationSchema, compileErr = compiler.Compile(ApplicationCompositionSchemaURL)
 		if compileErr != nil {
-			compileErr = fmt.Errorf("编译 Application Composition Schema: %w", compileErr)
+			compileErr = fmt.Errorf("编译 Backend Application Composition Schema: %w", compileErr)
 		}
 	})
 	return platformProfileSchema, applicationSchema, compileErr
@@ -109,12 +100,15 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	if err != nil {
 		return PlatformProfile{}, err
 	}
-	if err := validateJSON(platformSchema, raw, "Platform Profile"); err != nil {
+	if err := validateJSON(platformSchema, raw, "Backend Platform Profile"); err != nil {
 		return PlatformProfile{}, err
 	}
 	var profile PlatformProfile
 	if err := json.Unmarshal(raw, &profile); err != nil {
-		return PlatformProfile{}, fmt.Errorf("解析 Platform Profile 字段: %w", err)
+		return PlatformProfile{}, fmt.Errorf("解析 Backend Platform Profile 字段: %w", err)
+	}
+	if err := compositioncommonv1.ValidateTarget(profile.Target, compositioncommonv1.KernelBackend); err != nil {
+		return PlatformProfile{}, err
 	}
 	classes := make(map[string]struct{}, len(profile.ServiceClasses))
 	for _, serviceClass := range profile.ServiceClasses {
@@ -123,7 +117,7 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	for i := range profile.Attachments {
 		attachment := &profile.Attachments[i]
 		if _, ok := classes[attachment.ServiceClass]; !ok {
-			return PlatformProfile{}, fmt.Errorf("Platform Profile attachment 使用未声明 serviceClass %q", attachment.ServiceClass)
+			return PlatformProfile{}, fmt.Errorf("Backend Platform Profile attachment 使用未声明 serviceClass %q", attachment.ServiceClass)
 		}
 		seen := map[string]struct{}{}
 		for j := range attachment.Plugins {
@@ -132,14 +126,14 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 				plugin.Channel = "stable"
 			}
 			if _, duplicate := seen[plugin.ID]; duplicate {
-				return PlatformProfile{}, fmt.Errorf("Platform Profile serviceClass %q 的插件 id 重复: %q", attachment.ServiceClass, plugin.ID)
+				return PlatformProfile{}, fmt.Errorf("Backend Platform Profile serviceClass %q 的插件 id 重复: %q", attachment.ServiceClass, plugin.ID)
 			}
 			seen[plugin.ID] = struct{}{}
 		}
 	}
 	profile.Services, err = deploymentv2.NormalizeServiceUnits(profile.Services)
 	if err != nil {
-		return PlatformProfile{}, fmt.Errorf("Platform Profile services 无效: %w", err)
+		return PlatformProfile{}, fmt.Errorf("Backend Platform Profile services 无效: %w", err)
 	}
 	return profile, nil
 }
@@ -149,12 +143,15 @@ func ParseApplicationComposition(raw []byte) (ApplicationComposition, error) {
 	if err != nil {
 		return ApplicationComposition{}, err
 	}
-	if err := validateJSON(applicationSchema, raw, "Application Composition"); err != nil {
+	if err := validateJSON(applicationSchema, raw, "Backend Application Composition"); err != nil {
 		return ApplicationComposition{}, err
 	}
 	var composition ApplicationComposition
 	if err := json.Unmarshal(raw, &composition); err != nil {
-		return ApplicationComposition{}, fmt.Errorf("解析 Application Composition 字段: %w", err)
+		return ApplicationComposition{}, fmt.Errorf("解析 Backend Application Composition 字段: %w", err)
+	}
+	if err := compositioncommonv1.ValidateTarget(composition.Target, compositioncommonv1.KernelBackend); err != nil {
+		return ApplicationComposition{}, err
 	}
 	units := make([]deploymentv2.ServiceUnit, len(composition.Units))
 	for i := range composition.Units {
@@ -162,7 +159,7 @@ func ParseApplicationComposition(raw []byte) (ApplicationComposition, error) {
 	}
 	units, err = deploymentv2.NormalizeServiceUnits(units)
 	if err != nil {
-		return ApplicationComposition{}, fmt.Errorf("Application Composition units 无效: %w", err)
+		return ApplicationComposition{}, fmt.Errorf("Backend Application Composition units 无效: %w", err)
 	}
 	for i := range composition.Units {
 		composition.Units[i].Spec = units[i]
@@ -173,7 +170,7 @@ func ParseApplicationComposition(raw []byte) (ApplicationComposition, error) {
 func ValidatePlatformProfile(profile PlatformProfile) (PlatformProfile, error) {
 	raw, err := json.Marshal(profile)
 	if err != nil {
-		return PlatformProfile{}, fmt.Errorf("编码 Platform Profile: %w", err)
+		return PlatformProfile{}, fmt.Errorf("编码 Backend Platform Profile: %w", err)
 	}
 	return ParsePlatformProfile(raw)
 }
@@ -181,7 +178,7 @@ func ValidatePlatformProfile(profile PlatformProfile) (PlatformProfile, error) {
 func ValidateApplicationComposition(composition ApplicationComposition) (ApplicationComposition, error) {
 	raw, err := json.Marshal(composition)
 	if err != nil {
-		return ApplicationComposition{}, fmt.Errorf("编码 Application Composition: %w", err)
+		return ApplicationComposition{}, fmt.Errorf("编码 Backend Application Composition: %w", err)
 	}
 	return ParseApplicationComposition(raw)
 }
@@ -200,7 +197,7 @@ func validateJSON(schema *jsonschema.Schema, raw []byte, noun string) error {
 func ParsePlatformProfileFile(filename string) (PlatformProfile, error) {
 	raw, err := os.ReadFile(filename)
 	if err != nil {
-		return PlatformProfile{}, fmt.Errorf("读取 Platform Profile 文件: %w", err)
+		return PlatformProfile{}, fmt.Errorf("读取 Backend Platform Profile 文件: %w", err)
 	}
 	return ParsePlatformProfile(raw)
 }
@@ -208,16 +205,11 @@ func ParsePlatformProfileFile(filename string) (PlatformProfile, error) {
 func ParseApplicationCompositionFile(filename string) (ApplicationComposition, error) {
 	raw, err := os.ReadFile(filename)
 	if err != nil {
-		return ApplicationComposition{}, fmt.Errorf("读取 Application Composition 文件: %w", err)
+		return ApplicationComposition{}, fmt.Errorf("读取 Backend Application Composition 文件: %w", err)
 	}
 	return ParseApplicationComposition(raw)
 }
 
-func digest(value any) string {
-	raw, _ := json.Marshal(value)
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:])
-}
+func (p PlatformProfile) Digest() string { return compositioncommonv1.Digest(p) }
 
-func (p PlatformProfile) Digest() string        { return digest(p) }
-func (c ApplicationComposition) Digest() string { return digest(c) }
+func (c ApplicationComposition) Digest() string { return compositioncommonv1.Digest(c) }

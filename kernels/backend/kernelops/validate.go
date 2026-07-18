@@ -8,7 +8,7 @@ import (
 	"io"
 
 	"cdsoft.com.cn/VastPlan/kernels/backend/nodeagent"
-	compositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/v1"
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/backend/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
 )
@@ -66,7 +66,7 @@ func RunValidate(output io.Writer, args []string) error {
 		result.Digest = deployment.Digest()
 		result.Units = len(deployment.Units)
 	case ConfigKindPlatformV1:
-		profile, err := compositionv1.ParsePlatformProfileFile(*filename)
+		profile, err := backendcompositionv1.ParsePlatformProfileFile(*filename)
 		if err != nil {
 			return err
 		}
@@ -75,7 +75,7 @@ func RunValidate(output io.Writer, args []string) error {
 		result.Digest = profile.Digest()
 		result.Units = len(profile.Services)
 	case ConfigKindApplicationV1:
-		composition, err := compositionv1.ParseApplicationCompositionFile(*filename)
+		composition, err := backendcompositionv1.ParseApplicationCompositionFile(*filename)
 		if err != nil {
 			return err
 		}

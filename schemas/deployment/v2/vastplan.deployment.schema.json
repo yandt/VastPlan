@@ -31,14 +31,7 @@
       }
     },
     "compositionRef": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["id", "revision", "digest"],
-      "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
-        "revision": { "type": "integer", "minimum": 1 },
-        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
-      }
+      "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionRef"
     },
     "resolution": {
       "type": "object",
@@ -51,7 +44,7 @@
         "plugin_origins": {
           "type": "object",
           "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
-          "additionalProperties": { "enum": ["platform-profile", "application"] }
+          "additionalProperties": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/origin" }
         }
       }
     },

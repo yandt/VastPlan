@@ -14,7 +14,7 @@
     "application_composition": {
       "id": "cluster-demo",
       "revision": 1,
-      "digest": "57410eb501fba467f672ab408b49a9ed2152b8461c2ea44a0ca335cd097d602b"
+      "digest": "d280a808938ba21f71423d28618e7d6d5a8174a8a70de5edfa53498f7003bb88"
     },
     "development_mode": true,
     "plugin_origins": {

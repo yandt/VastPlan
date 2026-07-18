@@ -18,6 +18,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	commonv1 "cdsoft.com.cn/VastPlan/schemas/common/v1"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/servicemodel"
 )
@@ -43,8 +44,8 @@ type Deployment struct {
 }
 
 const (
-	OriginPlatformProfile = "platform-profile"
-	OriginApplication     = "application"
+	OriginPlatformProfile = compositioncommonv1.OriginPlatformProfile
+	OriginApplication     = compositioncommonv1.OriginApplication
 )
 
 // Resolution 锁定生成 Deployment 的两份配置输入及每个插件的管理来源。
@@ -56,11 +57,8 @@ type Resolution struct {
 	PluginOrigins          map[string]string `json:"plugin_origins"`
 }
 
-type CompositionRef struct {
-	ID       string `json:"id"`
-	Revision uint64 `json:"revision"`
-	Digest   string `json:"digest"`
-}
+// CompositionRef is the cross-kernel resolution reference contract.
+type CompositionRef = compositioncommonv1.Ref
 
 // AppProfileRef pins an independently built App Profile artifact. It is part
 // of deployment intent, but is not a ServiceUnit and is never scheduled by the
@@ -142,6 +140,9 @@ func schema() (*jsonschema.Schema, error) {
 // 直接引用同一份 ServiceUnit 定义，避免复制调度 DTO。
 func AddResources(compiler *jsonschema.Compiler) error {
 	if err := commonv1.AddResources(compiler); err != nil {
+		return err
+	}
+	if err := compositioncommonv1.AddResources(compiler); err != nil {
 		return err
 	}
 	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(deploymentSchemaJSON))

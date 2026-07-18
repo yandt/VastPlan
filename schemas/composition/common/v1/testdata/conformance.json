@@ -1,0 +1,6 @@
+{
+  "valid_kernels": ["backend", "frontend", "runner", "mobile"],
+  "invalid_kernels": ["", "portal", "workspace", "Backend"],
+  "valid_origins": ["platform-profile", "application"],
+  "invalid_origins": ["", "platform", "manifest", "user"]
+}

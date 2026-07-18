@@ -16,7 +16,7 @@ import (
 	"cdsoft.com.cn/VastPlan/kernels/backend/compositionresolver"
 	"cdsoft.com.cn/VastPlan/kernels/backend/deploymentcontroller"
 	"cdsoft.com.cn/VastPlan/kernels/backend/pluginservice"
-	compositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/v1"
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/backend/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/shared/go/controlplane"
 )
@@ -68,11 +68,11 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	var raw []byte
 	if publish {
-		profile, err := compositionv1.ParsePlatformProfileFile(*platformProfilePath)
+		profile, err := backendcompositionv1.ParsePlatformProfileFile(*platformProfilePath)
 		if err != nil {
 			return err
 		}
-		application, err := compositionv1.ParseApplicationCompositionFile(*applicationPath)
+		application, err := backendcompositionv1.ParseApplicationCompositionFile(*applicationPath)
 		if err != nil {
 			return err
 		}

@@ -9,7 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	compositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/v1"
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/schemas/composition/backend/v1"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/schemas/plugin/v1"
@@ -41,18 +42,18 @@ func artifact(id, publisher string) pluginv1.Artifact {
 	return pluginv1.Artifact{PluginID: id, Version: "1.0.0", Channel: "stable", Manifest: manifest(id, publisher)}
 }
 
-func baseInputs() (compositionv1.PlatformProfile, compositionv1.ApplicationComposition, artifactReader) {
+func baseInputs() (backendcompositionv1.PlatformProfile, backendcompositionv1.ApplicationComposition, artifactReader) {
 	platformID := "com.vastplan.foundation.security.access-policy"
 	applicationID := "com.example.agent"
-	profile := compositionv1.PlatformProfile{
-		Version: 1, Revision: 2, ID: "backend-default", Target: compositionv1.Target{Kernel: "backend"},
+	profile := backendcompositionv1.PlatformProfile{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 2, ID: "backend-default"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend},
 		ServiceClasses: []string{"application.backend"},
-		Attachments:    []compositionv1.Attachment{{ServiceClass: "application.backend", Plugins: []deploymentv1.PluginRef{ref(platformID)}}},
+		Attachments:    []backendcompositionv1.Attachment{{ServiceClass: "application.backend", Plugins: []deploymentv1.PluginRef{ref(platformID)}}},
 		Services:       []deploymentv2.ServiceUnit{},
 	}
-	application := compositionv1.ApplicationComposition{
-		Version: 1, Revision: 4, ID: "agent-studio", Kernel: "backend", Metadata: deploymentv1.Metadata{Name: "agent-studio", Tenant: "acme"},
-		Units: []compositionv1.ApplicationUnit{{ServiceClass: "application.backend", Spec: deploymentv2.ServiceUnit{ID: "api", Kind: "service", Plugins: []deploymentv1.PluginRef{ref(applicationID)}, Enabled: true, ServiceRole: "backend", Replicas: 1}}},
+	application := backendcompositionv1.ApplicationComposition{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 4, ID: "agent-studio"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, Metadata: deploymentv1.Metadata{Name: "agent-studio", Tenant: "acme"},
+		Units: []backendcompositionv1.ApplicationUnit{{ServiceClass: "application.backend", Spec: deploymentv2.ServiceUnit{ID: "api", Kind: "service", Plugins: []deploymentv1.PluginRef{ref(applicationID)}, Enabled: true, ServiceRole: "backend", Replicas: 1}}},
 	}
 	reader := artifactReader{
 		platformID + "@1.0.0/stable":    artifact(platformID, "vastplan"),
@@ -125,11 +126,11 @@ func TestResolveRejectsPlatformPluginWithConflictingTopology(t *testing.T) {
 
 func TestDeploySampleIsResolverOutput(t *testing.T) {
 	root := filepath.Join("..", "..", "..")
-	profile, err := compositionv1.ParsePlatformProfileFile(filepath.Join(root, "deploy", "platform-profile.json"))
+	profile, err := backendcompositionv1.ParsePlatformProfileFile(filepath.Join(root, "deploy", "platform-profile.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	application, err := compositionv1.ParseApplicationCompositionFile(filepath.Join(root, "deploy", "application-composition.json"))
+	application, err := backendcompositionv1.ParseApplicationCompositionFile(filepath.Join(root, "deploy", "application-composition.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

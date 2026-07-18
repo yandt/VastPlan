@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.cdsoft.com.cn/vastplan/composition/v1/vastplan.platform-profile.schema.json",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/composition/backend/v1/vastplan.platform-profile.schema.json",
   "title": "VastPlan Backend Platform Profile v1",
   "type": "object",
   "additionalProperties": false,
   "required": ["version", "revision", "id", "target", "serviceClasses", "attachments", "services"],
   "properties": {
-    "version": { "const": 1 },
-    "revision": { "type": "integer", "minimum": 1 },
-    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+    "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
+    "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
+    "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
     "target": {
       "type": "object",
       "additionalProperties": false,

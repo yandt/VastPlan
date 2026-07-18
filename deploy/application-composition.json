@@ -2,7 +2,9 @@
   "version": 1,
   "revision": 1,
   "id": "cluster-demo",
-  "kernel": "backend",
+  "target": {
+    "kernel": "backend"
+  },
   "metadata": {
     "name": "cluster-demo",
     "tenant": "acme"
