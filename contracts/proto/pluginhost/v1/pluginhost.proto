@@ -88,6 +88,9 @@ message InvokeRequest {
   vastplan.contract.v1.CallTarget target = 2;
   vastplan.contract.v1.CallContext context = 3;
   bytes payload = 4;
+  // 宿主签发、仅限当前插件会话与当前调用生命周期使用的 opaque 委托引用。
+  // 它是协议控制信息，不属于可透传的 CallContext baggage。
+  optional string delegation_token = 5;
 }
 
 message InvokeResponse {

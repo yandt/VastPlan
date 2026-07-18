@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
@@ -36,6 +37,12 @@ type Host interface {
 // Handler 处理一次扩展点调用：收 CallContext + payload，回 CallResult + payload。
 // host 参数使处理器可回调宿主（不需要它时忽略即可）。
 type Handler func(ctx context.Context, host Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error)
+
+// ContextViews returns defensive, semantic views over the host-projected
+// context. It does not expose fields removed by audience projection.
+func ContextViews(callCtx *contractv1.CallContext) callcontext.Views {
+	return callcontext.ReadOnlyViews(callCtx)
+}
 
 // invocationCallPathKey 只在一次处理器调用的 context 内携带宿主已验证的调用路径。
 // Plugin.Call 会用它覆盖处理器可能传入的旧副本，保证链路继续向下游传播。
@@ -359,6 +366,9 @@ func (p *Plugin) dispatchInvoke(req *pluginhostv1.InvokeRequest) *pluginhostv1.I
 	if req.Context != nil {
 		ctx = context.WithValue(ctx, invocationCallPathKey{}, append([]string(nil), req.Context.CallPath...))
 	}
+	if token := req.GetDelegationToken(); token != "" {
+		ctx = context.WithValue(ctx, invocationDelegationKey{}, token)
+	}
 
 	res, payload, err := h(ctx, p, req.Context, req.Payload)
 	if err != nil {
@@ -531,6 +541,7 @@ func (p *Plugin) Call(ctx context.Context, target *contractv1.CallTarget,
 		Msg: &pluginhostv1.FromPlugin_HostCall{
 			HostCall: &pluginhostv1.InvokeRequest{
 				RequestId: reqID, Target: target, Context: callCtx, Payload: payload,
+				DelegationToken: delegationTokenFromContext(ctx),
 			},
 		},
 	}); err != nil {
@@ -555,6 +566,19 @@ func (p *Plugin) Call(ctx context.Context, target *contractv1.CallTarget,
 		}
 		return nil, nil, ctx.Err()
 	}
+}
+
+type invocationDelegationKey struct{}
+
+func delegationTokenFromContext(ctx context.Context) *string {
+	if ctx == nil {
+		return nil
+	}
+	token, _ := ctx.Value(invocationDelegationKey{}).(string)
+	if token == "" {
+		return nil
+	}
+	return &token
 }
 
 func (p *Plugin) hasFeature(feature string) bool { return p.features[feature] }

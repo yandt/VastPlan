@@ -81,6 +81,7 @@ func embeddedRouteKey(extensionPoint, id, operation string) string {
 }
 
 func (h *Host) LaunchEmbeddedWithPolicy(ctx context.Context, definition EmbeddedPlugin, policy LaunchPolicy) (*PluginProcess, error) {
+	policy = cloneLaunchPolicy(policy)
 	if definition.ID == "" || definition.Version == "" || policy.PluginID == "" || policy.Version == "" {
 		return nil, errors.New("内嵌插件及启动策略必须包含身份和版本")
 	}
@@ -206,12 +207,15 @@ func (i *embeddedInstance) invoke(ctx context.Context, host *Host, target *contr
 		return errorResponse(errorcode.CapabilityNotFound,
 			fmt.Sprintf("未实现 %s/%s 的操作 %q", target.ExtensionPoint, target.Capability, operation), false), nil
 	}
-	base := &contractv1.CallContext{}
-	if callCtx != nil {
-		base = proto.Clone(callCtx).(*contractv1.CallContext)
+	base, err := projectContextForPlugin(callCtx, target, i.policy)
+	if err != nil {
+		return errorResponse(errorcode.PermissionDenied, err.Error(), false), nil
 	}
 	callback := &embeddedHostCall{host: host, instance: i, invokeCtx: ctx, base: base, live: true}
-	result, out, err := handler(ctx, callback, callCtx, payload)
+	// dynamic-go 与独立进程得到同样的调用快照语义。处理器可修改自己的副本，
+	// 但不能污染宿主可信基线、后置钩子或同一调用中的回调鉴权。
+	handlerContext := proto.Clone(base).(*contractv1.CallContext)
+	result, out, err := handler(ctx, callback, handlerContext, payload)
 	callback.mu.Lock()
 	callback.live = false
 	callback.mu.Unlock()

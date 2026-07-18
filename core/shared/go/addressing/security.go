@@ -17,6 +17,7 @@ import (
 	"github.com/nats-io/nkeys"
 	"google.golang.org/protobuf/proto"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 )
 
@@ -25,8 +26,6 @@ const (
 	transportTimestampHeader = "VastPlan-Timestamp"
 	transportNonceHeader     = "VastPlan-Nonce"
 	transportSignatureHeader = "VastPlan-Signature"
-	transportIdentityMeta    = "vastplan.transport.identity"
-	transportRoleMeta        = "vastplan.transport.role"
 	defaultTransportSkew     = 5 * time.Minute
 )
 
@@ -345,17 +344,17 @@ func transportHeaderKeys() []string {
 	return keys
 }
 
-func authenticatedTransportContext(identity TransportIdentity, untrusted *contractv1.CallContext) (*contractv1.CallContext, error) {
+func authenticatedTransportTrustedContext(identity TransportIdentity, untrusted *contractv1.CallContext) (callcontext.Trusted, error) {
 	callCtx := &contractv1.CallContext{}
 	if untrusted != nil {
 		callCtx = proto.Clone(untrusted).(*contractv1.CallContext)
 	}
 	if identity.TenantID != "" {
 		if callCtx.TenantId != "" && callCtx.TenantId != identity.TenantID {
-			return nil, errors.New("调用租户与传输身份租户不一致")
+			return callcontext.Trusted{}, errors.New("调用租户与传输身份租户不一致")
 		}
 		if principalTenant := callCtx.GetPrincipal().GetTenantId(); principalTenant != "" && principalTenant != identity.TenantID {
-			return nil, errors.New("Principal 租户与传输身份租户不一致")
+			return callcontext.Trusted{}, errors.New("Principal 租户与传输身份租户不一致")
 		}
 		callCtx.TenantId = identity.TenantID
 	}
@@ -365,10 +364,16 @@ func authenticatedTransportContext(identity TransportIdentity, untrusted *contra
 	} else if callCtx.Caller == nil {
 		callCtx.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: identity.Name}
 	}
-	if callCtx.Metadata == nil {
-		callCtx.Metadata = map[string]string{}
+	return callcontext.ValidateIngress(callCtx, callcontext.Provenance{
+		Source: "addressing.transport", AuthenticatedBy: "nkey-envelope",
+		TransportIdentity: identity.Name, TransportRole: identity.Role,
+	})
+}
+
+func authenticatedTransportContext(identity TransportIdentity, untrusted *contractv1.CallContext) (*contractv1.CallContext, error) {
+	trusted, err := authenticatedTransportTrustedContext(identity, untrusted)
+	if err != nil {
+		return nil, err
 	}
-	callCtx.Metadata[transportIdentityMeta] = identity.Name
-	callCtx.Metadata[transportRoleMeta] = identity.Role
-	return callCtx, nil
+	return trusted.Wire(), nil
 }

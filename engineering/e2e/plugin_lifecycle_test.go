@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
@@ -358,7 +359,13 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	p, err := host.LaunchWithPolicy(ctx, bin, protocolbus.LaunchPolicy{KernelServices: []string{"kernel.info"}})
+	p, err := host.LaunchWithPolicy(ctx, bin, protocolbus.LaunchPolicy{
+		KernelServices: []string{"kernel.info"},
+		ContextAccess: pluginv1.ContextAccess{
+			Required: []string{"scope.tenant", "caller", "subject.profile", "trace"},
+			Optional: []string{"scene", "request.deadline", "propagation.callPath"},
+		},
+	})
 	if err != nil {
 		t.Fatalf("装载插件失败: %v", err)
 	}
@@ -375,7 +382,7 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 		t.Fatal("贡献 vastplan.hello 应已注册进 tool.package")
 	}
 
-	// 调用成功，且 CallContext 全程透传到插件
+	// 调用成功，且清单申请并获授权的 CallContext 投影传到插件
 	resp, err := host.Invoke(ctx, toolTarget("vastplan.hello", "greet"), testCallContext(), []byte(`{"name":"E2E"}`))
 	if err != nil {
 		t.Fatalf("调用 greet 传输层失败: %v", err)

@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"maps"
 	"sort"
+	"strings"
 	"sync"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
@@ -49,23 +50,44 @@ var (
 // Manifest 是清单中制品服务需要读取的稳定字段。Contributes 保留原始 JSON，
 // 因为每个扩展点的详细 descriptor 由 Schema 而非一套会漂移的 Go struct 描述。
 type Manifest struct {
-	ID           string                     `json:"id"`
-	Name         string                     `json:"name"`
-	Description  string                     `json:"description"`
-	Version      string                     `json:"version"`
-	Publisher    string                     `json:"publisher"`
-	License      string                     `json:"license,omitempty"`
-	LicenseFile  string                     `json:"licenseFile,omitempty"`
-	NoticeFile   string                     `json:"noticeFile,omitempty"`
-	Engines      map[string]string          `json:"engines"`
-	Capabilities *Capabilities              `json:"capabilities,omitempty"`
-	Runtime      *RuntimePolicy             `json:"runtime,omitempty"`
-	Execution    *ExecutionPolicy           `json:"execution,omitempty"`
-	State        *State                     `json:"state,omitempty"`
-	Activation   []string                   `json:"activation"`
-	Dependencies map[string]string          `json:"dependencies,omitempty"`
-	Entry        map[string]string          `json:"entry"`
-	Contributes  map[string]json.RawMessage `json:"contributes"`
+	ID            string                     `json:"id"`
+	Name          string                     `json:"name"`
+	Description   string                     `json:"description"`
+	Version       string                     `json:"version"`
+	Publisher     string                     `json:"publisher"`
+	License       string                     `json:"license,omitempty"`
+	LicenseFile   string                     `json:"licenseFile,omitempty"`
+	NoticeFile    string                     `json:"noticeFile,omitempty"`
+	Engines       map[string]string          `json:"engines"`
+	Capabilities  *Capabilities              `json:"capabilities,omitempty"`
+	ContextAccess *ContextAccess             `json:"contextAccess,omitempty"`
+	Runtime       *RuntimePolicy             `json:"runtime,omitempty"`
+	Execution     *ExecutionPolicy           `json:"execution,omitempty"`
+	State         *State                     `json:"state,omitempty"`
+	Activation    []string                   `json:"activation"`
+	Dependencies  map[string]string          `json:"dependencies,omitempty"`
+	Entry         map[string]string          `json:"entry"`
+	Contributes   map[string]json.RawMessage `json:"contributes"`
+}
+
+// ContextAccess declares the semantic CallContext views requested by a signed
+// plugin manifest. It is only a request; host, publisher and boundary ceilings
+// can remove optional fields or reject unavailable required fields.
+type ContextAccess struct {
+	Required []string `json:"required,omitempty"`
+	Optional []string `json:"optional,omitempty"`
+	Baggage  []string `json:"baggage,omitempty"`
+}
+
+func ContextAccessContract(manifest Manifest) ContextAccess {
+	if manifest.ContextAccess == nil {
+		return ContextAccess{}
+	}
+	return ContextAccess{
+		Required: append([]string(nil), manifest.ContextAccess.Required...),
+		Optional: append([]string(nil), manifest.ContextAccess.Optional...),
+		Baggage:  append([]string(nil), manifest.ContextAccess.Baggage...),
+	}
 }
 
 // ExecutionPolicy 描述各运行面的启动方式。它只声明驱动与最低要求；发布者信任级别
@@ -424,7 +446,36 @@ func ParseManifest(raw []byte) (Manifest, error) {
 			return Manifest{}, err
 		}
 	}
+	if err := validateContextAccess(manifest.ContextAccess); err != nil {
+		return Manifest{}, err
+	}
 	return manifest, nil
+}
+
+func validateContextAccess(access *ContextAccess) error {
+	if access == nil {
+		return nil
+	}
+	seen := map[string]string{}
+	for group, fields := range map[string][]string{"required": access.Required, "optional": access.Optional} {
+		for _, field := range fields {
+			if previous, exists := seen[field]; exists {
+				return fmt.Errorf("contextAccess 字段 %q 同时出现在 %s 和 %s", field, previous, group)
+			}
+			seen[field] = group
+		}
+	}
+	if len(access.Baggage) != 0 {
+		if _, requested := seen["baggage"]; !requested {
+			return fmt.Errorf("contextAccess.baggage 声明前缀时必须申请 baggage 字段")
+		}
+		for _, prefix := range access.Baggage {
+			if strings.HasPrefix(prefix, "vastplan.internal.") || strings.HasPrefix(prefix, "vastplan.transport.") {
+				return fmt.Errorf("contextAccess.baggage 不得申请宿主保留前缀 %q", prefix)
+			}
+		}
+	}
+	return nil
 }
 
 // ValidateDescriptor 校验插件通过协议总线注册的一条运行态 descriptor。

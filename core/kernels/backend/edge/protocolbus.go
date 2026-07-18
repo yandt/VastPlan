@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
@@ -55,16 +56,22 @@ func invokeCapability(ctx context.Context, host *protocolbus.Host, p portalapi.P
 		callerKind = contractv1.CallerKind_CALLER_KIND_SYSTEM
 	}
 	op := operation
-	response, err := host.Invoke(ctx, &contractv1.CallTarget{
-		ExtensionPoint: extpoint.ToolPackage,
-		Capability:     capability,
-		Operation:      &op,
-	}, &contractv1.CallContext{
+	wire := &contractv1.CallContext{
 		Caller:    &contractv1.Caller{Kind: callerKind, Id: p.ID},
 		Principal: &contractv1.Principal{UserId: p.ID, TenantId: p.TenantID, SystemRoles: append([]string(nil), p.Roles...)},
 		TenantId:  p.TenantID,
 		Scene:     "portal.bff",
-	}, payload)
+	}
+	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{Source: "portal.edge", AuthenticatedBy: "edge.identity"})
+	if err != nil {
+		return nil, fmt.Errorf("构造可信 Portal 调用上下文: %w", err)
+	}
+	ctx = callcontext.WithTrusted(ctx, trusted)
+	response, err := host.Invoke(ctx, &contractv1.CallTarget{
+		ExtensionPoint: extpoint.ToolPackage,
+		Capability:     capability,
+		Operation:      &op,
+	}, trusted.Wire(), payload)
 	if err != nil {
 		return nil, fmt.Errorf("调用 capability %s: %w", capability, err)
 	}

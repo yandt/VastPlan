@@ -131,12 +131,7 @@ func (s *session) issueDelegation(callCtx *contractv1.CallContext) (string, *con
 	if callCtx != nil {
 		trusted = proto.Clone(callCtx).(*contractv1.CallContext)
 	}
-	delete(trusted.Metadata, delegationMetadataKey)
 	forwarded := proto.Clone(trusted).(*contractv1.CallContext)
-	if forwarded.Metadata == nil {
-		forwarded.Metadata = map[string]string{}
-	}
-	forwarded.Metadata[delegationMetadataKey] = token
 
 	s.delegationMu.Lock()
 	s.delegations[token] = trusted

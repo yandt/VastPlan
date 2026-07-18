@@ -12,12 +12,12 @@ import (
 	"os"
 	"time"
 
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/edge"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
@@ -182,16 +182,16 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return fmt.Errorf("安装 Interaction Broker 制品: %w", err)
 	}
-	if _, err := host.LaunchWithPolicy(ctx, installedPolicy.EntryPath, protocolbus.LaunchPolicy{PluginID: installedPolicy.ID, Version: installedPolicy.Version, Contributions: installedPolicy.Contract.Contributions, KernelServices: installedPolicy.Contract.KernelServices}); err != nil {
+	if _, err := host.LaunchWithPolicy(ctx, installedPolicy.EntryPath, launchPolicy(installedPolicy)); err != nil {
 		return fmt.Errorf("启动门户访问策略: %w", err)
 	}
-	if _, err := host.LaunchWithPolicy(ctx, installedInteractionPolicy.EntryPath, protocolbus.LaunchPolicy{PluginID: installedInteractionPolicy.ID, Version: installedInteractionPolicy.Version, Contributions: installedInteractionPolicy.Contract.Contributions, KernelServices: installedInteractionPolicy.Contract.KernelServices}); err != nil {
+	if _, err := host.LaunchWithPolicy(ctx, installedInteractionPolicy.EntryPath, launchPolicy(installedInteractionPolicy)); err != nil {
 		return fmt.Errorf("启动交互访问策略: %w", err)
 	}
-	if _, err := host.LaunchWithPolicy(ctx, installed.EntryPath, protocolbus.LaunchPolicy{PluginID: installed.ID, Version: installed.Version, Contributions: installed.Contract.Contributions, KernelServices: installed.Contract.KernelServices}); err != nil {
+	if _, err := host.LaunchWithPolicy(ctx, installed.EntryPath, launchPolicy(installed)); err != nil {
 		return fmt.Errorf("启动 Composer: %w", err)
 	}
-	if _, err := host.LaunchWithPolicy(ctx, installedBroker.EntryPath, protocolbus.LaunchPolicy{PluginID: installedBroker.ID, Version: installedBroker.Version, Contributions: installedBroker.Contract.Contributions, KernelServices: installedBroker.Contract.KernelServices}); err != nil {
+	if _, err := host.LaunchWithPolicy(ctx, installedBroker.EntryPath, launchPolicy(installedBroker)); err != nil {
 		return fmt.Errorf("启动 Interaction Broker: %w", err)
 	}
 	client, err := edge.NewProtocolBusCapabilityClient(host)
@@ -217,4 +217,12 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 		return nil
 	}
 	return err
+}
+
+func launchPolicy(installed nodeagent.InstalledPlugin) protocolbus.LaunchPolicy {
+	return protocolbus.LaunchPolicy{
+		PluginID: installed.ID, Publisher: installed.Publisher, Version: installed.Version,
+		Contributions: installed.Contract.Contributions, KernelServices: installed.Contract.KernelServices,
+		ContextAccess: installed.Contract.ContextAccess,
+	}
 }

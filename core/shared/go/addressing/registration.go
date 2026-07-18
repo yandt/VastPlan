@@ -14,6 +14,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	addressingv1 "cdsoft.com.cn/VastPlan/core/shared/go/addressing/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
@@ -301,6 +302,7 @@ func (r *Router) serveInvoke(registrationID string, record Announcement, handler
 		return
 	}
 	var identity TransportIdentity
+	var transportTrusted *callcontext.Trusted
 	if r.Transport != nil {
 		var err error
 		identity, err = r.Transport.verifyMessage(msg)
@@ -331,14 +333,18 @@ func (r *Router) serveInvoke(registrationID string, record Announcement, handler
 			r.respondTransportError(msg, errorcode.PermissionDenied, err.Error(), false, req.RequestId)
 			return
 		}
-		authenticated, err := authenticatedTransportContext(identity, req.Context)
+		authenticated, err := authenticatedTransportTrustedContext(identity, req.Context)
 		if err != nil {
 			r.respondTransportError(msg, errorcode.PermissionDenied, err.Error(), false, req.RequestId)
 			return
 		}
-		req.Context = authenticated
+		req.Context = authenticated.Wire()
+		transportTrusted = &authenticated
 	}
 	handlerCtx, boundedCallCtx, cancel := r.boundedCallContext(r.ctx, req.Context)
+	if transportTrusted != nil {
+		handlerCtx = callcontext.WithTrusted(handlerCtx, *transportTrusted)
+	}
 	if !r.enterHandlerCall() {
 		cancel()
 		r.respondTransportError(msg, errorcode.ConcurrencyLimited, "addressing handler 并发达到上限", true, req.RequestId)

@@ -267,7 +267,7 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, publisher, entry 
 		ID: artifact.PluginID, Publisher: publisher, Version: artifact.Version, Channel: artifact.Channel,
 		SHA256: artifact.SHA256, Root: root, EntryPath: entryPath, DynamicGoPath: dynamicGoPath,
 		Execution: execution,
-		Contract:  PluginRuntimeContract{Contributions: contributions},
+		Contract:  PluginRuntimeContract{Contributions: contributions, ContextAccess: pluginv1.ContextAccessContract(manifest)},
 	}
 	if manifest.Runtime != nil {
 		installed.Contract.Requires = append([]pluginv1.RuntimeRequirement(nil), manifest.Runtime.Requires...)

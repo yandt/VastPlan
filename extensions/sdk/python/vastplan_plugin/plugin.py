@@ -51,9 +51,12 @@ class Contribution:
 
 
 class InvocationContext:
-    def __init__(self, deadline_unix_ms: Optional[int] = None):
+    def __init__(self, deadline_unix_ms: Optional[int] = None, delegation_token: str = ""):
         self._cancelled = threading.Event()
         self.deadline_unix_ms = deadline_unix_ms
+        # Opaque host-issued reference. It is exposed for custom HostCall
+        # adapters but never stored in CallContext metadata.
+        self.delegation_token = delegation_token
 
     @property
     def cancelled(self) -> bool:
@@ -85,6 +88,7 @@ class Plugin:
         self._stream_started = False
         self._event_handler: Optional[Callable[[contract_pb2.CallEvent], None]] = None
         self._lifecycle_queue: queue.Queue[Optional[pluginhost_pb2.Lifecycle]] = queue.Queue(maxsize=512)
+        self._invocation_local = threading.local()
 
     def contribute(self, contribution: Contribution) -> None:
         if self._stream_started:
@@ -144,9 +148,13 @@ class Plugin:
         request_id = self._new_id("hc")
         response_queue = self._start_pending(request_id)
         try:
-            self._send(pluginhost_pb2.FromPlugin(host_call=pluginhost_pb2.InvokeRequest(
+            request = pluginhost_pb2.InvokeRequest(
                 request_id=request_id, target=target, context=call_context, payload=payload,
-            )))
+            )
+            delegation_token = getattr(self._invocation_local, "delegation_token", "")
+            if delegation_token:
+                request.delegation_token = delegation_token
+            self._send(pluginhost_pb2.FromPlugin(host_call=request))
             try:
                 response = response_queue.get(timeout=timeout).host_call_result
             except queue.Empty as error:
@@ -219,7 +227,7 @@ class Plugin:
                 self._reply_error(message.invoke, ERROR_CONCURRENCY_LIMITED, "插件处理器并发达到上限")
                 return
             deadline = message.invoke.context.deadline_unix_ms if message.invoke.context.HasField("deadline_unix_ms") else None
-            invocation = InvocationContext(deadline)
+            invocation = InvocationContext(deadline, message.invoke.delegation_token)
             with self._calls_lock:
                 self._calls[message.invoke.request_id] = invocation
             threading.Thread(target=self._invoke, args=(message.invoke, invocation), daemon=True).start()
@@ -268,6 +276,7 @@ class Plugin:
             self._finish_invoke(request.request_id, response)
             return
         try:
+            self._invocation_local.delegation_token = invocation.delegation_token
             result, payload = handler(invocation, self, request.context, request.payload)
             if len(payload) > MAX_PAYLOAD_BYTES:
                 response = self._error_response(request.request_id, ERROR_PAYLOAD_TOO_LARGE, "响应 payload 超过协议上限")
@@ -275,6 +284,8 @@ class Plugin:
                 response = pluginhost_pb2.InvokeResponse(request_id=request.request_id, result=result, payload=payload)
         except Exception as error:  # Handler errors are application-level results.
             response = self._error_response(request.request_id, ERROR_PLUGIN_HANDLER, str(error))
+        finally:
+            self._invocation_local.delegation_token = ""
         self._finish_invoke(request.request_id, response)
 
     def _finish_invoke(self, request_id: str, response: pluginhost_pb2.InvokeResponse) -> None:

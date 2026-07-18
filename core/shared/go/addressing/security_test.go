@@ -6,6 +6,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
+
+	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 )
 
 func newTestTransportSecurity(t *testing.T) (*TransportSecurity, TransportIdentity) {
@@ -84,5 +86,21 @@ func TestCapabilityVisibilityAuthorization(t *testing.T) {
 	identity.AllowedCapabilities = []string{"other"}
 	if err := authorizeCapability(identity, global); err == nil {
 		t.Fatal("visibility 授权不能绕过 capability allowlist")
+	}
+}
+
+func TestAuthenticatedTransportContextKeepsIdentityInHostProvenance(t *testing.T) {
+	trusted, err := authenticatedTransportTrustedContext(TransportIdentity{
+		Name: "service-a", Role: "backend", TenantID: "acme", AllowDelegation: true,
+	}, &contractv1.CallContext{TenantId: "acme", Metadata: map[string]string{"com.example.flag": "on"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provenance := trusted.Provenance()
+	if provenance.TransportIdentity != "service-a" || provenance.TransportRole != "backend" {
+		t.Fatalf("传输 provenance 丢失: %+v", provenance)
+	}
+	if _, exists := trusted.Wire().Metadata["vastplan.transport.identity"]; exists {
+		t.Fatal("transport identity 不得回写 Wire metadata")
 	}
 }

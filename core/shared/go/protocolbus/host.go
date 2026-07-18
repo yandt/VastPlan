@@ -43,10 +43,6 @@ func randomHex(n int) string {
 // 使插件回调宿主与调用别的插件共用同一套 capability 寻址（§2.4）。
 const KernelPluginID = "__kernel__"
 
-// delegationMetadataKey 是宿主与 SDK 之间的保留元数据键。其值只是一次调用期间
-// 有效的随机引用，不包含身份明文，也不能脱离当前插件会话使用。
-const delegationMetadataKey = "vastplan.internal.delegation"
-
 // 时限：均可经 Host 字段覆盖，便于测试注入短值（勿硬编码，见 host_internal_test）。
 const (
 	defaultLaunchTimeout    = 15 * time.Second
@@ -60,10 +56,19 @@ type HostService func(ctx context.Context, callCtx *contractv1.CallContext, payl
 
 // LaunchPolicy 把已验证制品身份和签名清单授权绑定到一次插件启动。
 type LaunchPolicy struct {
-	PluginID             string
-	Version              string
-	Contributions        []pluginv1.RuntimeContribution
-	KernelServices       []string
+	PluginID       string
+	Publisher      string
+	Version        string
+	Contributions  []pluginv1.RuntimeContribution
+	KernelServices []string
+	ContextAccess  pluginv1.ContextAccess
+	// ContextCeiling is the host-user/publisher policy result. Empty means the
+	// host default; plugins cannot set or widen it through their manifest.
+	ContextCeiling []string
+	// UnrestrictedContext is only set by Host.Launch for an explicit local
+	// development launch without a signed manifest. Production callers leave
+	// it false and supply ContextAccess.
+	UnrestrictedContext  bool
 	EnvironmentAllowlist []string
 	RequiredFeatures     []string
 }

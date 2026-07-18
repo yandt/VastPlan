@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
@@ -77,6 +78,22 @@ func TestParseReconcileOptionsSupportsPublisherOverridesAndLegacyMigration(t *te
 	}
 }
 
+func TestParseReconcileOptionsSupportsPublisherContextAccessPrecedence(t *testing.T) {
+	configured, err := parseReconcileOptions([]string{
+		"-desired", "desired.json",
+		"-default-plugin-context-access", "scope.tenant,caller",
+		"-publisher-plugin-context-access", "partner=scope.tenant,caller,trace;vastplan=*",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configured.contextPolicy.Ceiling("unknown").Has(callcontext.FieldTrace) ||
+		!configured.contextPolicy.Ceiling("partner").Has(callcontext.FieldTrace) ||
+		!configured.contextPolicy.Ceiling("vastplan").Has(callcontext.FieldGrantCredentials) {
+		t.Fatalf("发布者上下文策略优先级错误: %+v", configured.contextPolicy)
+	}
+}
+
 func TestBuildArtifactResolutionSeparatesLocalDevelopmentAndSignedBootstrap(t *testing.T) {
 	local, err := parseReconcileOptions([]string{"-desired", "desired.json", "-repository", t.TempDir()})
 	if err != nil {
@@ -109,6 +126,8 @@ func TestParseReconcileOptionsRejectsConflictingOrInvalidPluginPolicies(t *testi
 		{"-desired", "desired.json", "-plugin-placement-default", "in-process"},
 		{"-desired", "desired.json", "-plugin-placements", "one=prefer-dynamic-go,one=process-only"},
 		{"-desired", "desired.json", "-plugin-placements", "one=prefer-embedded"},
+		{"-desired", "desired.json", "-default-plugin-context-access", "unknown"},
+		{"-desired", "desired.json", "-publisher-plugin-context-access", "partner=unknown"},
 	}
 	for _, args := range tests {
 		if _, err := parseReconcileOptions(args); err == nil {

@@ -13,6 +13,7 @@
     "credentials": [],
     "resources": []
   },
+  "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "leader",
     "stateModel": "leader-owned",

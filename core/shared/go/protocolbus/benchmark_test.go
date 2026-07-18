@@ -9,7 +9,7 @@ import (
 )
 
 func BenchmarkBackend_ProtocolDeadlineAndContextClone(b *testing.B) {
-	callCtx := &contractv1.CallContext{TenantId: "acme", Metadata: map[string]string{"scene": "benchmark"}}
+	callCtx := &contractv1.CallContext{TenantId: "acme", Metadata: map[string]string{"com.vastplan.benchmark.scene": "benchmark"}}
 	limits := protocollimit.Default()
 	b.ReportAllocs()
 	b.ResetTimer()

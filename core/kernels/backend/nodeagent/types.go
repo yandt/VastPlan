@@ -60,6 +60,7 @@ type PluginRuntimeContract struct {
 	Contributions  []pluginv1.RuntimeContribution `json:"contributions"`
 	Requires       []pluginv1.RuntimeRequirement  `json:"requires,omitempty"`
 	KernelServices []string                       `json:"kernel_services,omitempty"`
+	ContextAccess  pluginv1.ContextAccess         `json:"context_access,omitempty"`
 }
 
 // PluginStateIdentity 只标识插件私有状态格式，不暴露其存储结构。

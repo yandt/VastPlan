@@ -341,3 +341,27 @@ func TestParseManifest_BackendStateMigrationContract(t *testing.T) {
 		}
 	}
 }
+
+func TestParseManifest_ContextAccessContract(t *testing.T) {
+	base := `{"id":"com.example.context","name":"context","description":"context plugin","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},%s,"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`
+	valid := fmt.Sprintf(base, `"contextAccess":{"required":["scope.tenant"],"optional":["trace","baggage"],"baggage":["com.example.*"]}`)
+	manifest, err := ParseManifest([]byte(valid))
+	if err != nil {
+		t.Fatalf("合法上下文申请应通过: %v", err)
+	}
+	contract := ContextAccessContract(manifest)
+	if len(contract.Required) != 1 || len(contract.Baggage) != 1 {
+		t.Fatalf("上下文申请未冻结: %+v", contract)
+	}
+
+	invalid := []string{
+		`"contextAccess":{"required":["trace"],"optional":["trace"]}`,
+		`"contextAccess":{"optional":["baggage"],"baggage":["vastplan.internal.*"]}`,
+		`"contextAccess":{"baggage":["com.example.*"]}`,
+	}
+	for _, fragment := range invalid {
+		if _, err := ParseManifest([]byte(fmt.Sprintf(base, fragment))); err == nil {
+			t.Errorf("非法上下文申请必须拒绝: %s", fragment)
+		}
+	}
+}

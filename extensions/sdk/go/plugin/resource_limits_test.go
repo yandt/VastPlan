@@ -73,6 +73,30 @@ func TestPluginDispatchAppliesDefaultDeadline(t *testing.T) {
 	}
 }
 
+func TestPluginDispatchCarriesDelegationOutsideCallContext(t *testing.T) {
+	p := New("test.plugin", "1.0.0", nil)
+	token := "opaque-delegation"
+	p.Contribute(Contribution{
+		ExtensionPoint: "test.point", ID: "test",
+		Handlers: map[string]Handler{"": func(ctx context.Context, _ Host, callCtx *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+			if got := delegationTokenFromContext(ctx); got == nil || *got != token {
+				t.Fatalf("处理器未继承专用委托字段: %v", got)
+			}
+			if len(callCtx.GetMetadata()) != 0 {
+				t.Fatalf("委托不得进入 CallContext metadata: %v", callCtx.GetMetadata())
+			}
+			return OK(0), nil, nil
+		}},
+	})
+	response := p.dispatchInvoke(&pluginhostv1.InvokeRequest{
+		Target:  &contractv1.CallTarget{ExtensionPoint: "test.point", Capability: "test"},
+		Context: &contractv1.CallContext{}, DelegationToken: &token,
+	})
+	if response.Result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("处理器应成功: %+v", response)
+	}
+}
+
 func TestPluginCancellationCannotRaceAheadOfHandlerStart(t *testing.T) {
 	p := New("test.plugin", "1.0.0", nil)
 	p.active = true

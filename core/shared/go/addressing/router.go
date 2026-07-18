@@ -22,6 +22,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	addressingv1 "cdsoft.com.cn/VastPlan/core/shared/go/addressing/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
@@ -421,15 +422,17 @@ func (r *Router) Subscribe(eventType string, handler EventHandler) (*Subscriptio
 			r.Logf("丢弃超过资源边界的事件 subject=%s", msg.Subject)
 			return
 		}
+		eventCtx := r.ctx
 		if r.Transport != nil {
-			authenticated, err := authenticatedTransportContext(identity, envelope.Context)
+			authenticated, err := authenticatedTransportTrustedContext(identity, envelope.Context)
 			if err != nil {
 				r.Logf("丢弃租户身份不一致的事件 subject=%s: %v", msg.Subject, err)
 				return
 			}
-			envelope.Context = authenticated
+			envelope.Context = authenticated.Wire()
+			eventCtx = callcontext.WithTrusted(eventCtx, authenticated)
 		}
-		if err := handler(r.ctx, envelope.Context, envelope.Event); err != nil {
+		if err := handler(eventCtx, envelope.Context, envelope.Event); err != nil {
 			r.Logf("事件 handler 失败 type=%s: %v", envelope.Event.GetType(), err)
 		}
 	})

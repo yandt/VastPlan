@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	addressingv1 "cdsoft.com.cn/VastPlan/core/shared/go/addressing/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
@@ -145,16 +146,18 @@ func (r *Router) SubscribePersistent(ctx context.Context, options PersistentSubs
 			_ = msg.Term()
 			return
 		}
+		eventCtx := r.ctx
 		if r.Transport != nil {
-			authenticated, authErr := authenticatedTransportContext(identity, envelope.Context)
+			authenticated, authErr := authenticatedTransportTrustedContext(identity, envelope.Context)
 			if authErr != nil {
 				r.Logf("持久事件身份上下文校验失败 subject=%s: %v", msg.Subject(), authErr)
 				_ = msg.Term()
 				return
 			}
-			envelope.Context = authenticated
+			envelope.Context = authenticated.Wire()
+			eventCtx = callcontext.WithTrusted(eventCtx, authenticated)
 		}
-		if err := handler(r.ctx, envelope.Context, envelope.Event); err != nil {
+		if err := handler(eventCtx, envelope.Context, envelope.Event); err != nil {
 			r.Logf("持久事件 handler 失败 type=%s: %v", envelope.Event.Type, err)
 			_ = msg.NakWithDelay(options.RetryDelay)
 			return

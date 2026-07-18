@@ -20,6 +20,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	addressingv1 "cdsoft.com.cn/VastPlan/core/shared/go/addressing/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
@@ -487,6 +488,7 @@ func (service *capabilityStreamService) Open(raw grpc.BidiStreamingServer[addres
 	handler := selected.handler
 	service.router.streamCursor[open.Target.Capability] = cursor + 1
 	service.router.mu.Unlock()
+	var transportTrusted *callcontext.Trusted
 	if service.router.Transport != nil {
 		incoming, ok := metadata.FromIncomingContext(raw.Context())
 		if !ok {
@@ -508,13 +510,17 @@ func (service *capabilityStreamService) Open(raw grpc.BidiStreamingServer[addres
 		if authorizeErr := authorizeCapability(identity, selected.record); authorizeErr != nil {
 			return status.Error(codes.PermissionDenied, authorizeErr.Error())
 		}
-		authenticated, authErr := authenticatedTransportContext(identity, open.Context)
+		authenticated, authErr := authenticatedTransportTrustedContext(identity, open.Context)
 		if authErr != nil {
 			return status.Error(codes.PermissionDenied, authErr.Error())
 		}
-		open.Context = authenticated
+		open.Context = authenticated.Wire()
+		transportTrusted = &authenticated
 	}
 	handlerCtx, boundedCallCtx, cancel := service.router.boundedCallContext(raw.Context(), open.Context)
+	if transportTrusted != nil {
+		handlerCtx = callcontext.WithTrusted(handlerCtx, *transportTrusted)
+	}
 	defer cancel()
 	stream := &ServerStream{raw: raw, requestID: first.RequestId, recvSeq: 1, maxFrame: limits.MaxStreamFrameBytes}
 	result, payload, handlerErr := handler(handlerCtx, open.Target, boundedCallCtx, open.InitialPayload, stream)

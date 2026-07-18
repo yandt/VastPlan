@@ -8,6 +8,7 @@
   "noticeFile": "NOTICE",
   "description": "Python SDK 参考插件：验证异构运行驱动、协议协商与工具调用闭环",
   "engines": { "backend": "^0.1 || ^1.0" },
+  "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "propagation.callPath"] },
   "execution": {
     "backend": {
       "driver": "python",

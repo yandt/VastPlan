@@ -241,6 +241,7 @@ func runReconcile(args []string) (runErr error) {
 	defer func() { runErr = errors.Join(runErr, plane.Close()) }()
 	runtime := nodeagent.NewProtocolRuntime(version, logf)
 	runtime.ExecutionPolicy = options.executionPolicy
+	runtime.ContextPolicy = options.contextPolicy
 	runtime.PlacementPolicy = options.placementPolicy
 	runtime.DynamicGoLoader = nodeagent.NewDynamicGoLoader(dynamicGoHostFingerprint)
 	runtime.Identity = options.nodeID

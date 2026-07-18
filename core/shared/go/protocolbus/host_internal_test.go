@@ -236,9 +236,9 @@ func TestAuthenticatedPluginContextOverridesForgedCallerWithoutMutatingInput(t *
 	original := &contractv1.CallContext{
 		Principal: &contractv1.Principal{UserId: "attacker", TenantId: "tenant-b", IsAdmin: true},
 		Caller:    &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "forged"},
-		TenantId:  "tenant-b", Metadata: map[string]string{delegationMetadataKey: token},
+		TenantId:  "tenant-b",
 	}
-	got, ok := authenticatedPluginContext(sess, original, "plugin.real")
+	got, ok := authenticatedPluginContext(sess, token, "plugin.real")
 	if !ok {
 		t.Fatal("有效委托应被接受")
 	}
@@ -251,11 +251,11 @@ func TestAuthenticatedPluginContextOverridesForgedCallerWithoutMutatingInput(t *
 	if original.GetCaller().GetId() != "forged" {
 		t.Fatal("不得修改插件传入的原始 CallContext")
 	}
-	if _, ok := authenticatedPluginContext(sess, &contractv1.CallContext{}, "plugin.real"); ok {
+	if _, ok := authenticatedPluginContext(sess, "", "plugin.real"); ok {
 		t.Fatal("没有委托的 HostCall 必须拒绝")
 	}
 	sess.releaseDelegation(token)
-	if _, ok := authenticatedPluginContext(sess, original, "plugin.real"); ok {
+	if _, ok := authenticatedPluginContext(sess, token, "plugin.real"); ok {
 		t.Fatal("调用结束后的委托必须失效")
 	}
 }

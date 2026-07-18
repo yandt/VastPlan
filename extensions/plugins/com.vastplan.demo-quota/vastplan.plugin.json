@@ -11,6 +11,7 @@
   "engines": { "backend": "^0.1 || ^1.0" },
 
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": { "required": ["scope.tenant", "caller", "scene"], "optional": ["trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
 
   "activation": ["onStartup"],
 

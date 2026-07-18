@@ -9,6 +9,7 @@
   "noticeFile": "NOTICE",
   "engines": { "backend": "^1.0", "frontend": "^1.0" },
   "capabilities": { "kernelServices": ["kernel.config.get", "kernel.portal.catalog.validate"], "credentials": [], "resources": [] },
+  "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles", "authorization.admin"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "leader",
     "stateModel": "leader-owned",

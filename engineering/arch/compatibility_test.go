@@ -139,6 +139,7 @@ func assertPluginHostV1(t *testing.T) {
 		"InvokeRequest": {
 			"request_id": {1, protoreflect.StringKind}, "target": {2, protoreflect.MessageKind},
 			"context": {3, protoreflect.MessageKind}, "payload": {4, protoreflect.BytesKind},
+			"delegation_token": {5, protoreflect.StringKind},
 		},
 		"InvokeResponse": {
 			"request_id": {1, protoreflect.StringKind}, "result": {2, protoreflect.MessageKind},

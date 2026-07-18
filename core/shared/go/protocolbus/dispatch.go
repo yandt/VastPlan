@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
@@ -35,14 +36,12 @@ func (h *Host) CheckPermission(ctx context.Context, callCtx *contractv1.CallCont
 
 	checkers := h.Registry.List(extpoint.PermissionChecker) // 已按 priority 降序
 
+	views := callcontext.ReadOnlyViews(callCtx)
 	callerKind := ""
-	if callCtx != nil && callCtx.Caller != nil {
-		callerKind = callCtx.Caller.Kind.String()
+	if kind := views.Caller.Kind(); kind != contractv1.CallerKind_CALLER_KIND_UNSPECIFIED {
+		callerKind = kind.String()
 	}
-	scene := ""
-	if callCtx != nil {
-		scene = callCtx.Scene
-	}
+	scene := views.Caller.Scene()
 
 	req, _ := json.Marshal(extpoint.PermissionRequest{
 		ExtensionPoint: target.ExtensionPoint,

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
@@ -53,7 +54,13 @@ func invoke[T any](ctx context.Context, invoker Invoker, source interactionapi.S
 		return zero, err
 	}
 	op := operation
-	result, raw, err := invoker.Invoke(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.ToolPackage, Capability: interactionapi.Capability, Operation: &op}, &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_RUNNER, Id: source.ID}, TenantId: source.TenantID, Scene: "runner.interaction"}, payload)
+	wire := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_RUNNER, Id: source.ID}, TenantId: source.TenantID, Scene: "runner.interaction"}
+	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{Source: "runner.interaction", AuthenticatedBy: "runner-kernel"})
+	if err != nil {
+		return zero, fmt.Errorf("构造可信 Runner 调用上下文: %w", err)
+	}
+	ctx = callcontext.WithTrusted(ctx, trusted)
+	result, raw, err := invoker.Invoke(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.ToolPackage, Capability: interactionapi.Capability, Operation: &op}, trusted.Wire(), payload)
 	if err != nil {
 		return zero, fmt.Errorf("调用 Interaction Broker: %w", err)
 	}

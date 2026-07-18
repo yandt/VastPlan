@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
@@ -54,6 +54,7 @@ type ProtocolRuntime struct {
 	Dependencies    kernelspi.Dependencies
 	Drivers         *RuntimeDriverRegistry
 	ExecutionPolicy ExecutionPolicy
+	ContextPolicy   ContextPolicy
 	DynamicGoLoader DynamicGoModuleLoader
 	PlacementPolicy PlacementPolicy
 }
@@ -82,6 +83,7 @@ func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *Protoc
 		Logf:              logf,
 		DependencyTimeout: 5 * time.Second,
 		Drivers:           DefaultRuntimeDrivers(),
+		ContextPolicy:     DefaultContextPolicy(),
 		units:             map[string]*runningUnit{},
 		events:            make(chan RuntimeEvent, 64),
 	}
@@ -130,9 +132,11 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	processes := make([]*protocolbus.PluginProcess, 0, len(unit.Plugins))
 	for _, plugin := range unit.Plugins {
 		process, err := r.startPlugin(ctx, candidate, plugin, protocolbus.LaunchPolicy{
-			PluginID: plugin.ID, Version: plugin.Version,
+			PluginID: plugin.ID, Publisher: plugin.Publisher, Version: plugin.Version,
 			Contributions:        plugin.Contract.Contributions,
 			KernelServices:       plugin.Contract.KernelServices,
+			ContextAccess:        plugin.Contract.ContextAccess,
+			ContextCeiling:       r.ContextPolicy.Ceiling(plugin.Publisher).Strings(),
 			EnvironmentAllowlist: append([]string(nil), unit.EnvironmentAllowlist...),
 			RequiredFeatures:     append([]string(nil), plugin.Execution.Features...),
 		})

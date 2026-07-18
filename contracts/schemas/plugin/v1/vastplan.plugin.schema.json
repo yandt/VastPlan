@@ -39,6 +39,7 @@
         "resources": { "$ref": "#/$defs/stringList" }
       }
     },
+    "contextAccess": { "$ref": "#/$defs/contextAccess" },
     "runtime": { "$ref": "#/$defs/runtimePolicy" },
     "execution": { "$ref": "#/$defs/executionPolicy" },
     "activation": { "$ref": "#/$defs/stringList" },
@@ -85,6 +86,26 @@
   ],
   "$defs": {
     "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "contextField": {
+      "enum": [
+        "scope.tenant", "scope.project", "caller", "scene", "subject.id", "subject.profile",
+        "authorization.roles", "authorization.admin", "trace", "request.deadline",
+        "request.idempotency", "grant.credentials", "baggage", "propagation.callPath"
+      ]
+    },
+    "contextAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": { "type": "array", "items": { "$ref": "#/$defs/contextField" }, "uniqueItems": true },
+        "optional": { "type": "array", "items": { "$ref": "#/$defs/contextField" }, "uniqueItems": true },
+        "baggage": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9.-]*(?:\\*)?$", "maxLength": 160 },
+          "uniqueItems": true
+        }
+      }
+    },
     "executionPolicy": {
       "type": "object",
       "additionalProperties": false,

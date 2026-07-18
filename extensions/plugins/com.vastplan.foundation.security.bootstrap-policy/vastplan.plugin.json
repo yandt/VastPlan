@@ -10,6 +10,7 @@
   "engines": { "backend": "^1.0" },
 
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": { "required": ["caller", "authorization.admin"], "optional": ["scope.tenant", "scene", "subject.id", "authorization.roles", "trace", "request.deadline", "propagation.callPath"] },
 
   "runtime": {
     "instancePolicy": "per-kernel",

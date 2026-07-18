@@ -647,13 +647,16 @@ func (x *ContributionUpdateAck) GetRejected() map[string]string {
 }
 
 type InvokeRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 双向流上关联请求与响应
-	Target        *v1.CallTarget         `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
-	Context       *v1.CallContext        `protobuf:"bytes,3,opt,name=context,proto3" json:"context,omitempty"`
-	Payload       []byte                 `protobuf:"bytes,4,opt,name=payload,proto3" json:"payload,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"` // 双向流上关联请求与响应
+	Target    *v1.CallTarget         `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	Context   *v1.CallContext        `protobuf:"bytes,3,opt,name=context,proto3" json:"context,omitempty"`
+	Payload   []byte                 `protobuf:"bytes,4,opt,name=payload,proto3" json:"payload,omitempty"`
+	// 宿主签发、仅限当前插件会话与当前调用生命周期使用的 opaque 委托引用。
+	// 它是协议控制信息，不属于可透传的 CallContext baggage。
+	DelegationToken *string `protobuf:"bytes,5,opt,name=delegation_token,json=delegationToken,proto3,oneof" json:"delegation_token,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *InvokeRequest) Reset() {
@@ -712,6 +715,13 @@ func (x *InvokeRequest) GetPayload() []byte {
 		return x.Payload
 	}
 	return nil
+}
+
+func (x *InvokeRequest) GetDelegationToken() string {
+	if x != nil && x.DelegationToken != nil {
+		return *x.DelegationToken
+	}
+	return ""
 }
 
 type InvokeResponse struct {
@@ -1537,13 +1547,15 @@ const file_pluginhost_v1_pluginhost_proto_rawDesc = "" +
 	"\brejected\x18\x03 \x03(\v2;.vastplan.pluginhost.v1.ContributionUpdateAck.RejectedEntryR\brejected\x1a;\n" +
 	"\rRejectedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xbf\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x84\x02\n" +
 	"\rInvokeRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x128\n" +
 	"\x06target\x18\x02 \x01(\v2 .vastplan.contract.v1.CallTargetR\x06target\x12;\n" +
 	"\acontext\x18\x03 \x01(\v2!.vastplan.contract.v1.CallContextR\acontext\x12\x18\n" +
-	"\apayload\x18\x04 \x01(\fR\apayload\"\x83\x01\n" +
+	"\apayload\x18\x04 \x01(\fR\apayload\x12.\n" +
+	"\x10delegation_token\x18\x05 \x01(\tH\x00R\x0fdelegationToken\x88\x01\x01B\x13\n" +
+	"\x11_delegation_token\"\x83\x01\n" +
 	"\x0eInvokeResponse\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x128\n" +
@@ -1706,6 +1718,7 @@ func file_pluginhost_v1_pluginhost_proto_init() {
 	if File_pluginhost_v1_pluginhost_proto != nil {
 		return
 	}
+	file_pluginhost_v1_pluginhost_proto_msgTypes[9].OneofWrappers = []any{}
 	file_pluginhost_v1_pluginhost_proto_msgTypes[13].OneofWrappers = []any{}
 	file_pluginhost_v1_pluginhost_proto_msgTypes[16].OneofWrappers = []any{}
 	file_pluginhost_v1_pluginhost_proto_msgTypes[17].OneofWrappers = []any{

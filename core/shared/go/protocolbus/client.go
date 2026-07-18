@@ -13,6 +13,7 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -44,7 +45,7 @@ func (w processLogWriter) Write(raw []byte) (int, error) {
 // 宿主注入连接端点 + magic cookie + 一次性 launch token；插件回连本宿主。
 // 握手失败（magic/版本/engines）的原因经 launch token 回传，故此处能给出确切错误。
 func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, error) {
-	return h.LaunchWithPolicy(ctx, binPath, LaunchPolicy{})
+	return h.LaunchWithPolicy(ctx, binPath, LaunchPolicy{UnrestrictedContext: true})
 }
 
 // LaunchWithPolicy 启动插件，并把已验签清单中的身份、贡献和内核服务依赖绑定到
@@ -146,6 +147,10 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 func cloneLaunchPolicy(policy LaunchPolicy) LaunchPolicy {
 	policy.Contributions = append([]pluginv1.RuntimeContribution(nil), policy.Contributions...)
 	policy.KernelServices = append([]string(nil), policy.KernelServices...)
+	policy.ContextAccess.Required = append([]string(nil), policy.ContextAccess.Required...)
+	policy.ContextAccess.Optional = append([]string(nil), policy.ContextAccess.Optional...)
+	policy.ContextAccess.Baggage = append([]string(nil), policy.ContextAccess.Baggage...)
+	policy.ContextCeiling = append([]string(nil), policy.ContextCeiling...)
 	policy.EnvironmentAllowlist = append([]string(nil), policy.EnvironmentAllowlist...)
 	policy.RequiredFeatures = append([]string(nil), policy.RequiredFeatures...)
 	return policy
@@ -189,6 +194,16 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 		return errorResponse(errorcode.PayloadTooLarge,
 			fmt.Sprintf("payload 为 %d bytes，超过上限 %d bytes", len(payload), limits.MaxPayloadBytes), false), nil
 	}
+	provenance := callcontext.Provenance{Source: "protocolbus.public", AuthenticatedBy: "trusted-host-api"}
+	if inherited, ok := callcontext.FromContext(ctx); ok {
+		provenance = inherited.Provenance()
+	}
+	trusted, err := callcontext.ValidateIngress(callCtx, provenance)
+	if err != nil {
+		return errorResponse(errorcode.WireInvalidRequest, err.Error(), false), nil
+	}
+	callCtx = trusted.Wire()
+	ctx = callcontext.WithTrusted(ctx, trusted)
 	ctx, callCtx, cancel := boundedCallContext(ctx, callCtx, limits)
 	defer cancel()
 	if code, message := appendCallTarget(callCtx, target, limits.MaxCallDepth); code != "" {
@@ -319,7 +334,11 @@ func (h *Host) invokeOn(ctx context.Context, sess *session, target *contractv1.C
 	callCtx *contractv1.CallContext, payload []byte) (*pluginhostv1.InvokeResponse, error) {
 
 	reqID := sess.nextRequestID()
-	delegationToken, forwardedCallCtx := sess.issueDelegation(callCtx)
+	forwardedCallCtx, err := projectContextForPlugin(callCtx, target, sess.policy)
+	if err != nil {
+		return nil, err
+	}
+	delegationToken, forwardedCallCtx := sess.issueDelegation(forwardedCallCtx)
 	defer sess.releaseDelegation(delegationToken)
 	ch, err := sess.await(reqID, h.limits().MaxPendingRequests)
 	if err != nil {
@@ -331,6 +350,7 @@ func (h *Host) invokeOn(ctx context.Context, sess *session, target *contractv1.C
 		Msg: &pluginhostv1.FromHost_Invoke{
 			Invoke: &pluginhostv1.InvokeRequest{
 				RequestId: reqID, Target: target, Context: forwardedCallCtx, Payload: payload,
+				DelegationToken: &delegationToken,
 			},
 		},
 	}); err != nil {
@@ -393,7 +413,7 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 	defer sess.endHostCall(req.RequestId)
 
 	h.Logf("插件 %s 回调宿主：%s/%s", sess.pluginID, req.Target.ExtensionPoint, req.Target.Capability)
-	callCtx, ok := authenticatedPluginContext(sess, req.Context, sess.pluginID)
+	callCtx, ok := authenticatedPluginContext(sess, req.GetDelegationToken(), sess.pluginID)
 	if !ok {
 		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.PermissionDenied,
 			"HostCall 缺少有效的宿主身份委托", false))
@@ -425,11 +445,7 @@ func kernelServiceAllowed(policy LaunchPolicy, capability string) bool {
 	return false
 }
 
-func authenticatedPluginContext(sess *session, callCtx *contractv1.CallContext, pluginID string) (*contractv1.CallContext, bool) {
-	token := ""
-	if callCtx != nil {
-		token = callCtx.GetMetadata()[delegationMetadataKey]
-	}
+func authenticatedPluginContext(sess *session, token, pluginID string) (*contractv1.CallContext, bool) {
 	bounded, ok := sess.delegatedContext(token)
 	if !ok {
 		return nil, false
