@@ -19,7 +19,10 @@ import (
 const (
 	PluginID      = "com.vastplan.platform.configuration.portal-composer"
 	PluginVersion = "1.0.0"
-	Capability    = "platform.portal-composer"
+	Capability    = portalapi.ComposerCapability
+	// StateFileConfigKey is read only through the authenticated host callback;
+	// plugin process environment must not decide where governed state is stored.
+	StateFileConfigKey = "platform.portal-composer.stateFile"
 )
 
 var (
@@ -53,17 +56,29 @@ type Service struct {
 }
 
 func New(stateFile string, catalog Catalog) (*Service, error) {
-	if strings.TrimSpace(stateFile) == "" {
-		return nil, errors.New("Portal Composer stateFile 不能为空")
-	}
-	if catalog == nil {
-		return nil, errors.New("Portal Composer 必须注入受信任制品目录")
-	}
-	s := &Service{stateFile: stateFile, catalog: catalog, now: time.Now}
-	if err := s.load(); err != nil {
-		return nil, err
+	s := &Service{catalog: catalog, now: time.Now}
+	if strings.TrimSpace(stateFile) != "" {
+		if err := s.configure(stateFile); err != nil {
+			return nil, err
+		}
 	}
 	return s, nil
+}
+
+// configure is intentionally one-way: a running plugin cannot be pointed at
+// another state file by a later call or by a tenant-controlled request.
+func (s *Service) configure(stateFile string) error {
+	if strings.TrimSpace(stateFile) == "" {
+		return errors.New("Portal Composer stateFile 不能为空")
+	}
+	if s.stateFile != "" && s.stateFile != stateFile {
+		return errors.New("Portal Composer stateFile 不允许在运行中切换")
+	}
+	if s.stateFile != "" {
+		return nil
+	}
+	s.stateFile = stateFile
+	return s.load()
 }
 
 func (s *Service) load() error {
@@ -81,6 +96,9 @@ func (s *Service) load() error {
 }
 
 func (s *Service) save() error {
+	if s.stateFile == "" {
+		return errors.New("Portal Composer 尚未配置状态文件")
+	}
 	raw, err := json.Marshal(s.state)
 	if err != nil {
 		return err
@@ -115,7 +133,7 @@ func (s *Service) CreateDraft(ctx context.Context, principal portalapi.Principal
 	if err := validateSpec(spec); err != nil {
 		return portalapi.Revision{}, err
 	}
-	if err := s.catalog.ValidatePortal(ctx, principal.TenantID, spec); err != nil {
+	if err := s.validateCatalog(ctx, principal.TenantID, spec); err != nil {
 		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	s.mu.Lock()
@@ -161,7 +179,7 @@ func (s *Service) Submit(ctx context.Context, principal portalapi.Principal, id 
 	if r.Status != portalapi.StatusDraft {
 		return portalapi.Revision{}, ErrInvalidState
 	}
-	if err := s.catalog.ValidatePortal(ctx, principal.TenantID, r.Spec); err != nil {
+	if err := s.validateCatalog(ctx, principal.TenantID, r.Spec); err != nil {
 		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	r.Status = portalapi.StatusPendingApproval
@@ -220,7 +238,7 @@ func (s *Service) Publish(ctx context.Context, principal portalapi.Principal, id
 	} else if strings.TrimSpace(request.BreakGlassReason) == "" {
 		return portalapi.Revision{}, errors.New("system break-glass 发布必须说明原因")
 	}
-	if err := s.catalog.ValidatePortal(ctx, principal.TenantID, r.Spec); err != nil {
+	if err := s.validateCatalog(ctx, principal.TenantID, r.Spec); err != nil {
 		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	if s.routeConflictLocked(*r) {

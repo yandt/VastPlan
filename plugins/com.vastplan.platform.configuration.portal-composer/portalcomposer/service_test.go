@@ -2,10 +2,14 @@ package portalcomposer
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
 
+	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
+	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
 
@@ -100,5 +104,64 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 	}
 	if _, err = s.Publish(context.Background(), publisher, d.ID, portalapi.PublishRequest{}); !errors.Is(err, ErrRouteConflict) {
 		t.Fatalf("同租户跨 Portal 路由冲突必须拒绝: %v", err)
+	}
+}
+
+type configuredHost struct {
+	stateFile string
+	calls     []string
+}
+
+var _ sdk.Host = (*configuredHost)(nil)
+
+func (h *configuredHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+	if target.GetExtensionPoint() != extpoint.KernelService {
+		return nil, nil, errors.New("unexpected extension point")
+	}
+	h.calls = append(h.calls, target.GetCapability())
+	switch target.GetCapability() {
+	case "kernel.config.get":
+		var request map[string]string
+		if err := json.Unmarshal(payload, &request); err != nil || request["key"] != StateFileConfigKey {
+			return nil, nil, errors.New("unexpected state configuration request")
+		}
+		raw, _ := json.Marshal(h.stateFile)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	case portalapi.KernelCatalogValidationCapability:
+		var request struct {
+			TenantID string               `json:"tenantId"`
+			Spec     portalapi.PortalSpec `json:"spec"`
+		}
+		if err := json.Unmarshal(payload, &request); err != nil || request.TenantID != "tenant-a" || request.Spec.ID != "admin" {
+			return nil, nil, errors.New("unexpected catalog request")
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"valid":true}`), nil
+	default:
+		return nil, nil, errors.New("unexpected host capability")
+	}
+}
+
+func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) {
+	service, err := New("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := &configuredHost{stateFile: filepath.Join(t.TempDir(), "portals.json")}
+	callCtx := &contractv1.CallContext{
+		TenantId:  "tenant-a",
+		Principal: &contractv1.Principal{UserId: "author", SystemRoles: []string{"portal.compose"}},
+	}
+	payload, _ := json.Marshal(spec("/"))
+	handler := Contribution(service).Handlers["createDraft"]
+	result, raw, err := handler(context.Background(), host, callCtx, payload)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("通过可信宿主创建草稿失败: result=%+v err=%v", result, err)
+	}
+	if len(host.calls) != 2 || host.calls[0] != "kernel.config.get" || host.calls[1] != portalapi.KernelCatalogValidationCapability {
+		t.Fatalf("宿主调用路径错误: %v", host.calls)
+	}
+	var revision portalapi.Revision
+	if err := json.Unmarshal(raw, &revision); err != nil || revision.ID != 1 {
+		t.Fatalf("创建草稿响应错误: %s %v", raw, err)
 	}
 }

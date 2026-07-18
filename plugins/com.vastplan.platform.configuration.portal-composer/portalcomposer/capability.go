@@ -5,12 +5,93 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
+
+type catalogContextKey struct{}
+
+func withCatalog(ctx context.Context, catalog Catalog) context.Context {
+	return context.WithValue(ctx, catalogContextKey{}, catalog)
+}
+
+func (s *Service) validateCatalog(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+	catalog, _ := ctx.Value(catalogContextKey{}).(Catalog)
+	if catalog == nil {
+		catalog = s.catalog
+	}
+	if catalog == nil {
+		return fmt.Errorf("Portal Composer 未获得受信任制品目录")
+	}
+	return catalog.ValidatePortal(ctx, tenantID, spec)
+}
+
+// hostCatalog makes the artifact decision in the trusted kernel boundary. The
+// plugin can ask whether a spec is valid, but never receives repository
+// credentials, verification keys, or an unverified artifact envelope.
+type hostCatalog struct {
+	host    sdk.Host
+	callCtx *contractv1.CallContext
+}
+
+func (c hostCatalog) ValidatePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+	if c.host == nil || c.callCtx == nil || strings.TrimSpace(tenantID) == "" {
+		return fmt.Errorf("Portal 制品目录调用上下文不完整")
+	}
+	payload, err := json.Marshal(struct {
+		TenantID string               `json:"tenantId"`
+		Spec     portalapi.PortalSpec `json:"spec"`
+	}{TenantID: tenantID, Spec: spec})
+	if err != nil {
+		return err
+	}
+	op := "validate"
+	result, _, err := c.host.Call(ctx, &contractv1.CallTarget{
+		ExtensionPoint: extpoint.KernelService,
+		Capability:     portalapi.KernelCatalogValidationCapability,
+		Operation:      &op,
+	}, c.callCtx, payload)
+	if err != nil {
+		return fmt.Errorf("调用可信 Portal 制品目录: %w", err)
+	}
+	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return fmt.Errorf("可信 Portal 制品目录拒绝校验")
+	}
+	return nil
+}
+
+func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext) error {
+	s.mu.Lock()
+	configured := s.stateFile != ""
+	s.mu.Unlock()
+	if configured {
+		return nil
+	}
+	op := "get"
+	payload, _ := json.Marshal(map[string]string{"key": StateFileConfigKey})
+	result, raw, err := host.Call(ctx, &contractv1.CallTarget{
+		ExtensionPoint: extpoint.KernelService,
+		Capability:     "kernel.config.get",
+		Operation:      &op,
+	}, callCtx, payload)
+	if err != nil {
+		return fmt.Errorf("读取 Portal Composer 部署配置: %w", err)
+	}
+	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return fmt.Errorf("未提供 Portal Composer 部署配置")
+	}
+	var stateFile string
+	if err := json.Unmarshal(raw, &stateFile); err != nil || strings.TrimSpace(stateFile) == "" {
+		return fmt.Errorf("%s 必须是非空 JSON 字符串", StateFileConfigKey)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.configure(stateFile)
+}
 
 // Handle is the wire boundary used by the plugin capability adapter. Principal
 // is supplied by the trusted host call context, never decoded from browser JSON.
@@ -97,12 +178,15 @@ func Contribution(service *Service) sdk.Contribution {
 	handlers := map[string]sdk.Handler{}
 	for _, operation := range []string{"createDraft", "list", "submit", "approve", "publish", "rollback", "audit"} {
 		op := operation
-		handlers[op] = func(ctx context.Context, _ sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		handlers[op] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+			if err := service.ensureConfigured(ctx, host, callCtx); err != nil {
+				return nil, nil, err
+			}
 			principal, err := projectPrincipal(callCtx)
 			if err != nil {
 				return nil, nil, err
 			}
-			raw, err := service.Handle(ctx, principal, op, payload)
+			raw, err := service.Handle(withCatalog(ctx, hostCatalog{host: host, callCtx: callCtx}), principal, op, payload)
 			if err != nil {
 				return nil, nil, err
 			}

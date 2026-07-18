@@ -16,6 +16,16 @@ var (
 	ErrCatalogRejected = errors.New("Portal 制品目录校验失败")
 )
 
+// ComposerCapability is the stable tool capability shared by Edge and the
+// Portal Composer plugin. Keeping this logical name in the neutral contract
+// package prevents the Backend kernel from importing a concrete plugin.
+const ComposerCapability = "platform.portal-composer"
+
+// KernelCatalogValidationCapability is the narrowly scoped host capability
+// through which the Composer verifies a Portal spec against the trusted
+// artifact catalog. It is intentionally not a browser-facing API.
+const KernelCatalogValidationCapability = "kernel.portal.catalog.validate"
+
 type Principal struct {
 	ID       string   `json:"id"`
 	TenantID string   `json:"tenantId"`

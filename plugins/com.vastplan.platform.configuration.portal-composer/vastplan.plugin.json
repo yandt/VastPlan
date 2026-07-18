@@ -7,12 +7,38 @@
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "engines": { "frontend": "^1.0" },
-  "capabilities": { "kernelServices": ["kernel.config.get"], "credentials": [], "resources": [] },
-  "activation": ["onPortalStartup"],
-  "entry": { "frontend": "frontend/src/index.tsx" },
+  "engines": { "backend": "^1.0", "frontend": "^1.0" },
+  "capabilities": { "kernelServices": ["kernel.config.get", "kernel.portal.catalog.validate"], "credentials": [], "resources": [] },
+  "runtime": {
+    "instancePolicy": "leader",
+    "stateModel": "leader-owned",
+    "visibility": "cluster",
+    "routing": "leader",
+    "routingDomain": "platform",
+    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.portal-composer", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "state": { "backend": { "format": "com.vastplan.platform.portal-composer", "formatVersion": 1 } },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/portal-composer", "frontend": "frontend/src/index.tsx" },
   "dependencies": { "com.vastplan.foundation.frontend.design-system.arco": "^1.0.0" },
   "contributes": {
+    "backend": {
+      "tools": [{
+        "id": "platform.portal-composer",
+        "service_role": "backend",
+        "title": "门户组合治理",
+        "subcommands": [
+          { "name": "createDraft", "description": "创建 Portal 草稿" },
+          { "name": "list", "description": "列出 Portal revisions" },
+          { "name": "submit", "description": "提交草稿审批" },
+          { "name": "approve", "description": "审批草稿" },
+          { "name": "publish", "description": "发布 Portal revision" },
+          { "name": "rollback", "description": "回滚到历史 revision" },
+          { "name": "audit", "description": "读取 revision 审计" }
+        ]
+      }]
+    },
     "frontend": {
       "views": [{ "id": "platform.portal-composer", "title": "门户与插件组合" }],
       "menus": [{ "id": "platform.portal-composer.menu", "title": "系统配置" }]
