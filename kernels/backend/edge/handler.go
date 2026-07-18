@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
 
@@ -177,6 +178,11 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 func respond(w http.ResponseWriter, v any, err error) {
 	if err == nil {
 		writeJSON(w, http.StatusOK, v)
+		return
+	}
+	var capabilityErr *CapabilityError
+	if errors.As(err, &capabilityErr) && capabilityErr.Code == errorcode.PermissionDenied {
+		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 	switch {

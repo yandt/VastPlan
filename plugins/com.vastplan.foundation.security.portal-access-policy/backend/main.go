@@ -15,7 +15,7 @@ import (
 func main() {
 	p := sdk.New(policy.PluginID, policy.PluginVersion, map[string]string{"backend": "^1.0"})
 	d, _ := json.Marshal(extpoint.CheckerDescriptor{Title: "门户角色访问策略", Applies: &extpoint.Applies{}})
-	p.Contribute(sdk.Contribution{ExtensionPoint: extpoint.PermissionChecker, ID: policy.Capability, Descriptor: d, Handlers: map[string]sdk.Handler{"check": func(ctx context.Context, _ sdk.Host, c *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+	p.Contribute(sdk.Contribution{ExtensionPoint: extpoint.PermissionChecker, ID: policy.Capability, Priority: 1000, Descriptor: d, Handlers: map[string]sdk.Handler{"check": func(ctx context.Context, _ sdk.Host, c *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
 		return policy.Check(ctx, c, raw)
 	}}})
 	if err := p.Serve(); err != nil {

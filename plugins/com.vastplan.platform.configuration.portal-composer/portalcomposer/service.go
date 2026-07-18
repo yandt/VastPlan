@@ -276,10 +276,13 @@ func (s *Service) Rollback(ctx context.Context, principal portalapi.Principal, i
 		return portalapi.Revision{}, err
 	}
 	source := s.state.Revisions[i]
-	if source.Status != portalapi.StatusPublished {
+	// A rollback selects an inactive, previously published revision. Allowing
+	// the active revision would create a duplicate of the currently live state
+	// rather than perform a rollback.
+	if source.Status != portalapi.StatusPublished || source.Active {
 		return portalapi.Revision{}, ErrInvalidState
 	}
-	if err := s.catalog.ValidatePortal(ctx, principal.TenantID, source.Spec); err != nil {
+	if err := s.validateCatalog(ctx, principal.TenantID, source.Spec); err != nil {
 		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	s.state.NextRevision++
@@ -298,7 +301,7 @@ func (s *Service) Rollback(ctx context.Context, principal portalapi.Principal, i
 	if err := s.save(); err != nil {
 		return portalapi.Revision{}, err
 	}
-	return r, nil
+	return cloneRevision(s.state.Revisions[len(s.state.Revisions)-1]), nil
 }
 
 func (s *Service) Audit(_ context.Context, principal portalapi.Principal, id uint64) ([]portalapi.AuditEvent, error) {

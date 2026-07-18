@@ -52,9 +52,9 @@ func (c *ProtocolBusCapabilityClient) Call(ctx context.Context, p portalapi.Prin
 	}
 	if response.Result.Status != contractv1.CallResult_STATUS_OK {
 		if response.Result.Error != nil {
-			return nil, fmt.Errorf("Portal Composer capability 拒绝: %s", response.Result.Error.Message)
+			return nil, &CapabilityError{Code: response.Result.Error.Code, Message: response.Result.Error.Message}
 		}
-		return nil, errors.New("Portal Composer capability 未成功")
+		return nil, &CapabilityError{Message: "Portal Composer capability 未成功"}
 	}
 	return append([]byte(nil), response.Payload...), nil
 }

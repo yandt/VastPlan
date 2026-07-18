@@ -107,6 +107,43 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 	}
 }
 
+func TestRollbackUsesInactivePublishedRevisionAndReturnsActiveCopy(t *testing.T) {
+	s, err := New(filepath.Join(t.TempDir(), "portals.json"), acceptingCatalog{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	author := principal("author", "portal.compose")
+	approver := principal("approver", "portal.approve")
+	publisher := principal("publisher", "portal.publish")
+	publish := func() portalapi.Revision {
+		t.Helper()
+		draft, err := s.CreateDraft(context.Background(), author, spec("/"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Submit(context.Background(), author, draft.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.Approve(context.Background(), approver, draft.ID); err != nil {
+			t.Fatal(err)
+		}
+		published, err := s.Publish(context.Background(), publisher, draft.ID, portalapi.PublishRequest{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return published
+	}
+	first := publish()
+	_ = publish()
+	rolledBack, err := s.Rollback(context.Background(), publisher, first.ID, portalapi.PublishRequest{})
+	if err != nil || !rolledBack.Active || rolledBack.Status != portalapi.StatusPublished {
+		t.Fatalf("历史 revision 回滚失败: revision=%+v err=%v", rolledBack, err)
+	}
+	if _, err := s.Rollback(context.Background(), publisher, rolledBack.ID, portalapi.PublishRequest{}); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("当前 active revision 不能作为回滚源: %v", err)
+	}
+}
+
 type configuredHost struct {
 	stateFile string
 	calls     []string

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
 
@@ -16,14 +17,37 @@ type identity func(*http.Request) (portalapi.Principal, error)
 func (f identity) Authenticate(r *http.Request) (portalapi.Principal, error) { return f(r) }
 
 type service struct {
-	seen    portalapi.Principal
-	created portalapi.PortalSpec
+	seen      portalapi.Principal
+	created   portalapi.PortalSpec
+	createErr error
 }
 
 func (s *service) CreateDraft(_ context.Context, p portalapi.Principal, v portalapi.PortalSpec) (portalapi.Revision, error) {
 	s.seen = p
 	s.created = v
+	if s.createErr != nil {
+		return portalapi.Revision{}, s.createErr
+	}
 	return portalapi.Revision{ID: 1, TenantID: p.TenantID, PortalID: v.ID, Status: portalapi.StatusDraft}, nil
+}
+
+func TestBFFMapsKernelPermissionDenialToForbidden(t *testing.T) {
+	s := &service{createErr: &CapabilityError{Code: errorcode.PermissionDenied, Message: "缺少门户角色"}}
+	h := New(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "reader", TenantID: "tenant-a", Roles: []string{"portal.read"}}, nil
+	}), s)
+	csrf := httptest.NewRequest(http.MethodGet, "/v1/csrf", nil)
+	csrfW := httptest.NewRecorder()
+	h.ServeHTTP(csrfW, csrf)
+	cookie := csrfW.Result().Cookies()[0]
+	r := httptest.NewRequest(http.MethodPost, "/v1/portal-drafts", strings.NewReader(`{}`))
+	r.AddCookie(cookie)
+	r.Header.Set("X-VastPlan-CSRF", cookie.Value)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("内核权限拒绝必须映射为 403: %d", w.Code)
+	}
 }
 func (*service) List(context.Context, portalapi.Principal) ([]portalapi.Revision, error) {
 	return nil, nil

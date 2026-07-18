@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
 	sdk "cdsoft.com.cn/VastPlan/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/shared/go/portalapi"
 )
@@ -188,6 +190,9 @@ func Contribution(service *Service) sdk.Contribution {
 			}
 			raw, err := service.Handle(withCatalog(ctx, hostCatalog{host: host, callCtx: callCtx}), principal, op, payload)
 			if err != nil {
+				if errors.Is(err, ErrForbidden) || errors.Is(err, ErrSelfApproval) {
+					return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: errorcode.PermissionDenied, Message: err.Error()}}, nil, nil
+				}
 				return nil, nil, err
 			}
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil

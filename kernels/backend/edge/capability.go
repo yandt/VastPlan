@@ -15,6 +15,24 @@ type CapabilityClient interface {
 	Call(context.Context, portalapi.Principal, string, []byte) ([]byte, error)
 }
 
+// CapabilityError preserves a stable kernel application-error code across the
+// Edge adapter. The HTTP handler can safely map only known codes; its message
+// is diagnostic text, never an authorization decision.
+type CapabilityError struct {
+	Code    string
+	Message string
+}
+
+func (e *CapabilityError) Error() string {
+	if e == nil {
+		return "Portal capability 调用失败"
+	}
+	if e.Message == "" {
+		return fmt.Sprintf("Portal capability 调用失败: %s", e.Code)
+	}
+	return fmt.Sprintf("Portal capability 调用失败 [%s]: %s", e.Code, e.Message)
+}
+
 type CapabilityService struct{ client CapabilityClient }
 
 func NewCapabilityService(client CapabilityClient) (*CapabilityService, error) {
