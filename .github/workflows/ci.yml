@@ -60,6 +60,22 @@ jobs:
           go test -race ./...
           PYTHONPATH=extensions/sdk/python python3 -m unittest discover -s extensions/sdk/python/tests -v
 
+  frontend:
+    name: Frontend 类型与运行时测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - name: 启用仓库钉定的 pnpm
+        run: |
+          corepack enable
+          corepack install
+      - name: 安装前端依赖
+        run: pnpm install --frozen-lockfile
+      - name: TypeScript 类型检查
+        run: pnpm typecheck
+      - name: Frontend 运行时测试
+        run: pnpm test:frontend
+
   e2e:
     name: E2E（跨进程真实链路）
     runs-on: ubuntu-latest
