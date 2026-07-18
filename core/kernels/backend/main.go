@@ -31,9 +31,11 @@ import (
 	controlplanecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/controlplane"
 	nodebootstrapcommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/nodebootstrap"
 	portaledgecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/portaledge"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/credentialbroker"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/kernelops"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapbroker"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 )
 
@@ -252,6 +254,18 @@ func runReconcile(args []string) (runErr error) {
 	runtime.DynamicGoLoader = nodeagent.NewDynamicGoLoader(dynamicGoHostFingerprint)
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers
+	if options.credentialRoot != "" {
+		credentials, err := credentialbroker.NewDirectory(options.credentialRoot)
+		if err != nil {
+			return err
+		}
+		bootstrapBroker, err := nodebootstrapbroker.NewSSH(credentials, 30*time.Second)
+		if err != nil {
+			return err
+		}
+		runtime.Dependencies.Credentials = credentials
+		runtime.Dependencies.NodeBootstrap = bootstrapBroker
+	}
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
 	if plane.router != nil {
 		if err := runtime.AttachRouter(plane.router); err != nil {

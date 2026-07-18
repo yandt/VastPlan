@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -21,6 +22,7 @@ type reconcileOptions struct {
 	desiredPath, repositoryRoot, repositoryURL, repositoryTrust, repositoryToken, repositoryCA string
 	bootstrapRepository                                                                        string
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                       string
+	credentialRoot                                                                             string
 	firstPartyPublishers                                                                       string
 	thirdPartyPluginPolicy, publisherPluginPolicies                                            string
 	defaultPluginContextAccess, publisherPluginContextAccess                                   string
@@ -52,6 +54,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.lockPath, "lock", "", "单实例锁文件；默认 <actual-state>.lock")
 	flags.StringVar(&options.nodeID, "node-id", "local", "当前节点 ID")
 	flags.StringVar(&options.labelsRaw, "labels", "", "节点标签，逗号分隔 key=value")
+	flags.StringVar(&options.credentialRoot, "credential-root", "", "可信凭证挂载根目录：<root>/<tenant>/<credential-name>；留空不启用节点引导 Broker")
 	flags.StringVar(&options.thirdPartyPluginPolicy, "third-party-plugin-policy", string(nodeagent.PublisherPolicyRequireIsolation), "未单独配置发布者时的策略: require-isolation, allow-trusted, deny")
 	flags.StringVar(&options.publisherPluginPolicies, "publisher-plugin-policies", "", "发布者级策略，逗号分隔 publisher=policy；优先于全局策略")
 	flags.StringVar(&options.defaultPluginContextAccess, "default-plugin-context-access", "", "未知发布者的 CallContext 字段上限，逗号分隔；空值使用安全默认")
@@ -124,6 +127,9 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	}
 	if options.lockPath == "" {
 		options.lockPath = options.actualPath + ".lock"
+	}
+	if options.credentialRoot != "" && (!filepath.IsAbs(options.credentialRoot) || filepath.Clean(options.credentialRoot) != options.credentialRoot) {
+		return reconcileOptions{}, errors.New("-credential-root 必须是规范绝对路径")
 	}
 	if options.natsURL != "" && options.assignmentKey != "" {
 		assignmentNodeID, err := controlplane.AssignmentKeyNodeID(options.assignmentKey)

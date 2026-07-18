@@ -35,6 +35,29 @@ export interface DatabaseConnection {
 export interface DatabaseProbe { ready: boolean; message?: string; }
 export interface ArtifactRepositoryStatus { ready: boolean; listen?: string; }
 
+export interface NodeBootstrapPlan {
+  target: { address: string; port?: number; user: string };
+  release: { version: string; url: string; sha256: string };
+  node: {
+    id: string; tenant: string; deployment: string; labels?: string;
+    natsUrl: string; natsCa: string; natsCert: string; natsKey: string; natsSeed: string;
+    transportSeed: string; transportTrust: string;
+    repositoryUrl: string; repositoryCa?: string; repositoryTrust: string;
+    capacityCpuMillis?: number; capacityMemoryBytes?: number; capacityGpu?: number;
+  };
+  sshIdentityCredential: string;
+  sshKnownHostsCredential: string;
+  secretFiles: Array<{ credential: string; destination: string; mode?: number }>;
+}
+
+export interface ManagedNode { id: string; plan: NodeBootstrapPlan; version: number; createdAt: string; updatedAt: string; }
+export type BootstrapJobState = "Pending" | "Approved" | "Connecting" | "Installing" | "SystemdActive" | "Ready" | "Failed" | "Expired";
+export interface BootstrapJob {
+  id: string; nodeId: string; nodeVersion: number; state: BootstrapJobState;
+  requestedBy: string; approvedBy?: string; errorCode?: string;
+  createdAt: string; updatedAt: string; expiresAt: string;
+}
+
 export class PlatformAdminClient {
   public constructor(private readonly fetcher: PlatformFetch, private readonly basePath = "/v1/platform", private readonly csrfPath = "/v1/csrf") {}
 
@@ -59,6 +82,18 @@ export class PlatformAdminClient {
   public deleteDatabaseConnection(name: string): Promise<void> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "DELETE").then(() => undefined); }
   public probeDatabaseConnection(name: string): Promise<DatabaseProbe> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}/probe`, "POST", {}); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
+
+  public listManagedNodes(): Promise<ManagedNode[]> { return this.get(`${this.basePath}/deployment/nodes`); }
+  public putManagedNode(id: string, plan: NodeBootstrapPlan, ifVersion?: number): Promise<ManagedNode> {
+    return this.mutate(`${this.basePath}/deployment/nodes/${segment(id)}`, "PUT", { plan, ...(ifVersion === undefined ? {} : { ifVersion }) });
+  }
+  public listBootstrapJobs(): Promise<BootstrapJob[]> { return this.get(`${this.basePath}/deployment/bootstrap-jobs`); }
+  public createBootstrapJob(nodeId: string): Promise<BootstrapJob> {
+    return this.mutate(`${this.basePath}/deployment/nodes/${segment(nodeId)}/bootstrap`, "POST", {});
+  }
+  public approveBootstrapJob(jobId: string): Promise<BootstrapJob> {
+    return this.mutate(`${this.basePath}/deployment/bootstrap-jobs/${segment(jobId)}/approve`, "POST", {});
+  }
 
   private get<T>(path: string): Promise<T> { return this.call<T>(path, { method: "GET" }); }
 

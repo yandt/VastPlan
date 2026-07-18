@@ -24,6 +24,11 @@ type SSHExecutor struct {
 	Timeout        time.Duration
 }
 
+// MaterialSSHExecutor is used only by the trusted CredentialBroker adapter.
+// Private-key material stays in memory; known_hosts is parsed from a short-lived
+// 0600 file because x/crypto/ssh exposes only a file-backed parser.
+type MaterialSSHExecutor struct{ Timeout time.Duration }
+
 func (e SSHExecutor) Execute(ctx context.Context, target Target, script []byte) error {
 	if err := target.Validate(); err != nil {
 		return err
@@ -52,7 +57,46 @@ func (e SSHExecutor) Execute(ctx context.Context, target Target, script []byte) 
 	if err != nil {
 		return fmt.Errorf("加载 known_hosts: %w", err)
 	}
-	timeout := e.Timeout
+	return executeSSH(ctx, target, script, signer, hostKeyCallback, e.Timeout)
+}
+
+func (e MaterialSSHExecutor) Execute(ctx context.Context, target Target, script, identity, knownHosts []byte) error {
+	if err := target.Validate(); err != nil {
+		return err
+	}
+	if len(script) == 0 || len(identity) == 0 || len(knownHosts) == 0 || len(identity) > maxBootstrapSecretBytes || len(knownHosts) > maxBootstrapSecretBytes {
+		return errors.New("SSH material 或引导脚本无效")
+	}
+	signer, err := ssh.ParsePrivateKey(identity)
+	if err != nil {
+		return fmt.Errorf("解析 SSH identity: %w", err)
+	}
+	temporary, err := os.CreateTemp("", ".vastplan-known-hosts-*")
+	if err != nil {
+		return fmt.Errorf("创建 known_hosts 解析文件: %w", err)
+	}
+	name := temporary.Name()
+	defer os.Remove(name)
+	if err := temporary.Chmod(0o600); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(knownHosts); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	hostKeyCallback, err := knownhosts.New(name)
+	if err != nil {
+		return fmt.Errorf("解析 known_hosts: %w", err)
+	}
+	return executeSSH(ctx, target, script, signer, hostKeyCallback, e.Timeout)
+}
+
+func executeSSH(ctx context.Context, target Target, script []byte, signer ssh.Signer, hostKeyCallback ssh.HostKeyCallback, configuredTimeout time.Duration) error {
+	timeout := configuredTimeout
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}

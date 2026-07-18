@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
@@ -146,6 +147,54 @@ func (s *CapabilityPlatformAdminService) ProbeDatabaseConnection(ctx context.Con
 func (s *CapabilityPlatformAdminService) ArtifactRepositoryStatus(ctx context.Context, p portalapi.Principal) (platformadminapi.ArtifactRepositoryStatus, error) {
 	var response platformadminapi.ArtifactRepositoryStatus
 	err := s.call(ctx, p, platformadminapi.ArtifactsCapability, "status", struct{}{}, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) ListManagedNodes(ctx context.Context, p portalapi.Principal) ([]platformadminapi.ManagedNode, error) {
+	var response struct {
+		Items []platformadminapi.ManagedNode `json:"items"`
+	}
+	err := s.call(ctx, p, platformadminapi.DeploymentCapability, "listNodes", struct{}{}, &response)
+	return response.Items, err
+}
+
+func (s *CapabilityPlatformAdminService) PutManagedNode(ctx context.Context, p portalapi.Principal, id string, request platformadminapi.PutManagedNodeRequest) (platformadminapi.ManagedNode, error) {
+	if err := validResourceName(id, 128); err != nil || request.Plan.Node.ID != id || request.Plan.Node.Tenant != p.TenantID || request.Plan.Validate() != nil {
+		return platformadminapi.ManagedNode{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.ManagedNode
+	payload := struct {
+		ID        string             `json:"id"`
+		Plan      nodebootstrap.Plan `json:"plan"`
+		IfVersion *int64             `json:"ifVersion,omitempty"`
+	}{ID: id, Plan: request.Plan, IfVersion: request.IfVersion}
+	err := s.call(ctx, p, platformadminapi.DeploymentCapability, "putNode", payload, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) ListBootstrapJobs(ctx context.Context, p portalapi.Principal) ([]platformadminapi.BootstrapJob, error) {
+	var response struct {
+		Items []platformadminapi.BootstrapJob `json:"items"`
+	}
+	err := s.call(ctx, p, platformadminapi.DeploymentCapability, "listBootstrapJobs", struct{}{}, &response)
+	return response.Items, err
+}
+
+func (s *CapabilityPlatformAdminService) CreateBootstrapJob(ctx context.Context, p portalapi.Principal, nodeID string) (platformadminapi.BootstrapJob, error) {
+	if err := validResourceName(nodeID, 128); err != nil {
+		return platformadminapi.BootstrapJob{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.BootstrapJob
+	err := s.call(ctx, p, platformadminapi.DeploymentCapability, "createBootstrap", map[string]string{"nodeId": nodeID}, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) ApproveBootstrapJob(ctx context.Context, p portalapi.Principal, jobID string) (platformadminapi.BootstrapJob, error) {
+	if err := validResourceName(jobID, 128); err != nil {
+		return platformadminapi.BootstrapJob{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.BootstrapJob
+	err := s.call(ctx, p, platformadminapi.DeploymentCapability, "approveBootstrap", map[string]string{"jobId": jobID}, &response)
 	return response, err
 }
 

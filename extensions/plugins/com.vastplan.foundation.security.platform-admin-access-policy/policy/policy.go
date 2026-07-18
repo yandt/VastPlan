@@ -12,7 +12,7 @@ import (
 
 const (
 	PluginID      = "com.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.1.0"
+	PluginVersion = "0.2.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -67,7 +67,7 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, platformadminapi.DatabaseCapability, platformadminapi.ArtifactsCapability:
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, platformadminapi.DatabaseCapability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability:
 		return true
 	default:
 		return false
@@ -80,6 +80,7 @@ func operationRole(capability, operation string) string {
 		platformadminapi.CredentialsCapability: {"describe": "platform.credentials.read", "list": "platform.credentials.read", "put": "platform.credentials.write", "rotate": "platform.credentials.rotate", "revoke": "platform.credentials.revoke"},
 		platformadminapi.DatabaseCapability:    {"describe": "platform.database.read", "list": "platform.database.read", "define": "platform.database.write", "remove": "platform.database.write", "probe": "platform.database.probe"},
 		platformadminapi.ArtifactsCapability:   {"status": "platform.artifacts.read"},
+		platformadminapi.DeploymentCapability:  {"listNodes": "platform.deployment.read", "putNode": "platform.deployment.write", "listBootstrapJobs": "platform.deployment.read", "createBootstrap": "platform.deployment.bootstrap", "approveBootstrap": "platform.deployment.approve"},
 	}
 	return roles[capability][operation]
 }
@@ -93,6 +94,8 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 		return request.Capability == "kernel.config.get"
 	case "com.vastplan.platform.data.relational.connection-manager":
 		return request.Capability == "kernel.database.probe"
+	case "com.vastplan.platform.infrastructure.deployment-manager":
+		return request.Capability == "kernel.node.bootstrap"
 	default:
 		return false
 	}

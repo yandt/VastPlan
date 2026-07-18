@@ -5,12 +5,21 @@ import (
 	"encoding/json"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 )
+
+type bootstrapBroker struct{ called bool }
+
+func (b *bootstrapBroker) Bootstrap(_ context.Context, scope nodebootstrap.Scope, plan nodebootstrap.Plan) (nodebootstrap.Result, error) {
+	b.called = scope.TenantID == plan.Node.Tenant
+	return nodebootstrap.Result{SystemdActive: true, NodeID: plan.Node.ID}, nil
+}
 
 func TestNew_DefinesClosedBackendCatalogAndInternalService(t *testing.T) {
 	host, err := New("1.0.0", t.Logf)
@@ -57,4 +66,29 @@ func TestKernelConfigGetRequiresAuthenticatedPluginAndReturnsFrozenValue(t *test
 	if _, _, err := service(context.Background(), &contractv1.CallContext{}, []byte(`{"key":"retries"}`)); err == nil {
 		t.Fatal("非插件调用必须 fail-closed")
 	}
+}
+
+func TestKernelNodeBootstrapAcceptsOnlyDeploymentManager(t *testing.T) {
+	broker := &bootstrapBroker{}
+	service := kernelNodeBootstrap(broker)
+	plan := hostBootstrapPlan()
+	payload, _ := json.Marshal(plan)
+	trusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: nodebootstrap.DeploymentManagerPluginID}}
+	result, _, err := service(context.Background(), trusted, payload)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !broker.called {
+		t.Fatalf("deployment-manager 可信调用失败: result=%+v err=%v", result, err)
+	}
+	untrusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "third.party"}}
+	if _, _, err := service(context.Background(), untrusted, payload); err == nil {
+		t.Fatal("其他插件不得调用节点引导内核服务")
+	}
+}
+
+func hostBootstrapPlan() nodebootstrap.Plan {
+	node := nodebootstrap.NodeAgent{ID: "node-a", Tenant: "tenant-a", Deployment: "prod", NATSURL: "tls://nats.internal:4222", NATSCA: nodebootstrap.SecretsRoot + "/nats-ca.pem", NATSCert: nodebootstrap.SecretsRoot + "/node.crt", NATSKey: nodebootstrap.SecretsRoot + "/node.key", NATSSeed: nodebootstrap.SecretsRoot + "/node.seed", TransportSeed: nodebootstrap.SecretsRoot + "/transport.seed", TransportTrust: nodebootstrap.SecretsRoot + "/transport-trust.json", RepositoryURL: "https://artifacts.internal", RepositoryTrust: nodebootstrap.SecretsRoot + "/artifact-trust.json"}
+	plan := nodebootstrap.Plan{Target: nodebootstrap.Target{Address: "node-a.internal", User: "bootstrap"}, Release: nodebootstrap.Release{Version: "1.0.0", URL: "https://releases.internal/backend", SHA256: strings.Repeat("a", 64)}, Node: node, SSHIdentityCredential: "ssh.identity", SSHKnownHostsCredential: "ssh.known-hosts"}
+	for i, destination := range []string{node.NATSCA, node.NATSCert, node.NATSKey, node.NATSSeed, node.TransportSeed, node.TransportTrust, node.RepositoryTrust, nodebootstrap.ArtifactTokenFile} {
+		plan.SecretFiles = append(plan.SecretFiles, nodebootstrap.CredentialSecretFile{Credential: "material-" + string(rune('a'+i)), Destination: destination, Mode: 0o440})
+	}
+	return plan
 }

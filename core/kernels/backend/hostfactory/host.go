@@ -5,13 +5,17 @@
 package hostfactory
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 )
@@ -55,7 +59,46 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			return nil, err
 		}
 	}
+	if dependencies.NodeBootstrap != nil {
+		if err := host.RegisterHostService(extpoint.KernelService, nodebootstrap.KernelService, kernelNodeBootstrap(dependencies.NodeBootstrap)); err != nil {
+			return nil, err
+		}
+	}
 	return host, nil
+}
+
+func kernelNodeBootstrap(broker nodebootstrap.Broker) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != nodebootstrap.DeploymentManagerPluginID {
+			return nil, nil, fmt.Errorf("kernel.node.bootstrap 只接受 deployment-manager 认证会话")
+		}
+		decoder := json.NewDecoder(bytes.NewReader(payload))
+		decoder.DisallowUnknownFields()
+		var plan nodebootstrap.Plan
+		if err := decoder.Decode(&plan); err != nil {
+			return nil, nil, fmt.Errorf("节点引导计划无效: %w", err)
+		}
+		var trailing any
+		if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+			return nil, nil, errors.New("节点引导计划只能包含一个 JSON 文档")
+		}
+		if err := plan.Validate(); err != nil || plan.Node.Tenant != callCtx.GetTenantId() {
+			return nil, nil, errors.New("节点引导计划与认证租户不匹配")
+		}
+		scope := nodebootstrap.Scope{TenantID: callCtx.GetTenantId(), ProjectID: callCtx.GetProjectId(), PluginID: callCtx.GetCaller().GetId()}
+		if err := scope.Validate(); err != nil {
+			return nil, nil, err
+		}
+		result, err := broker.Bootstrap(ctx, scope, plan)
+		if err != nil {
+			return nil, nil, errors.New("可信节点引导执行失败")
+		}
+		raw, err := json.Marshal(result)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
 }
 
 type configGetRequest struct {

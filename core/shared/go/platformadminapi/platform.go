@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
@@ -16,6 +17,7 @@ const (
 	CredentialsCapability = "platform.credentials"
 	DatabaseCapability    = "platform.database"
 	ArtifactsCapability   = "platform.artifacts.repository"
+	DeploymentCapability  = "platform.deployment"
 )
 
 var (
@@ -69,6 +71,45 @@ type ArtifactRepositoryStatus struct {
 	Listen string `json:"listen,omitempty"`
 }
 
+type ManagedNode struct {
+	ID        string             `json:"id"`
+	Plan      nodebootstrap.Plan `json:"plan"`
+	Version   int64              `json:"version"`
+	CreatedAt string             `json:"createdAt"`
+	UpdatedAt string             `json:"updatedAt"`
+}
+
+type PutManagedNodeRequest struct {
+	Plan      nodebootstrap.Plan `json:"plan"`
+	IfVersion *int64             `json:"ifVersion,omitempty"`
+}
+
+type BootstrapJobState string
+
+const (
+	BootstrapPending       BootstrapJobState = "Pending"
+	BootstrapApproved      BootstrapJobState = "Approved"
+	BootstrapConnecting    BootstrapJobState = "Connecting"
+	BootstrapInstalling    BootstrapJobState = "Installing"
+	BootstrapSystemdActive BootstrapJobState = "SystemdActive"
+	BootstrapReady         BootstrapJobState = "Ready"
+	BootstrapFailed        BootstrapJobState = "Failed"
+	BootstrapExpired       BootstrapJobState = "Expired"
+)
+
+type BootstrapJob struct {
+	ID          string            `json:"id"`
+	NodeID      string            `json:"nodeId"`
+	NodeVersion int64             `json:"nodeVersion"`
+	State       BootstrapJobState `json:"state"`
+	RequestedBy string            `json:"requestedBy"`
+	ApprovedBy  string            `json:"approvedBy,omitempty"`
+	ErrorCode   string            `json:"errorCode,omitempty"`
+	CreatedAt   string            `json:"createdAt"`
+	UpdatedAt   string            `json:"updatedAt"`
+	ExpiresAt   string            `json:"expiresAt"`
+}
+
 // Service is the narrow BFF port consumed by HTTP handlers. Implementations
 // may reach local or cluster capabilities, but callers cannot select a target.
 type Service interface {
@@ -84,4 +125,9 @@ type Service interface {
 	DeleteDatabaseConnection(context.Context, portalapi.Principal, string) error
 	ProbeDatabaseConnection(context.Context, portalapi.Principal, string) (DatabaseProbe, error)
 	ArtifactRepositoryStatus(context.Context, portalapi.Principal) (ArtifactRepositoryStatus, error)
+	ListManagedNodes(context.Context, portalapi.Principal) ([]ManagedNode, error)
+	PutManagedNode(context.Context, portalapi.Principal, string, PutManagedNodeRequest) (ManagedNode, error)
+	ListBootstrapJobs(context.Context, portalapi.Principal) ([]BootstrapJob, error)
+	CreateBootstrapJob(context.Context, portalapi.Principal, string) (BootstrapJob, error)
+	ApproveBootstrapJob(context.Context, portalapi.Principal, string) (BootstrapJob, error)
 }

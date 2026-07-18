@@ -18,6 +18,10 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/platform/"), "/")
+	if len(parts) >= 2 && parts[0] == "deployment" {
+		h.deploymentRoute(w, r, p, parts[1:])
+		return
+	}
 	if len(parts) == 1 {
 		switch parts[0] {
 		case "settings":
@@ -62,6 +66,95 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal, parts []string) {
+	if len(parts) == 1 && parts[0] == "nodes" {
+		if !requirePlatformRole(w, p, "platform.deployment.read") {
+			return
+		}
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		value, err := h.platform.ListManagedNodes(r.Context(), p)
+		respondPlatform(w, value, err)
+		return
+	}
+	if len(parts) == 1 && parts[0] == "bootstrap-jobs" {
+		if !requirePlatformRole(w, p, "platform.deployment.read") {
+			return
+		}
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		value, err := h.platform.ListBootstrapJobs(r.Context(), p)
+		respondPlatform(w, value, err)
+		return
+	}
+	if len(parts) == 2 && parts[0] == "nodes" {
+		if !requirePlatformRole(w, p, "platform.deployment.write") {
+			return
+		}
+		if r.Method != http.MethodPut {
+			methodNotAllowed(w)
+			return
+		}
+		id, ok := deploymentResourceName(w, parts[1])
+		if !ok {
+			return
+		}
+		var request platformadminapi.PutManagedNodeRequest
+		if !decode(w, r, &request) {
+			return
+		}
+		value, err := h.platform.PutManagedNode(r.Context(), p, id, request)
+		respondPlatform(w, value, err)
+		return
+	}
+	if len(parts) == 3 && parts[0] == "nodes" && parts[2] == "bootstrap" {
+		if !requirePlatformRole(w, p, "platform.deployment.bootstrap") {
+			return
+		}
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		id, ok := deploymentResourceName(w, parts[1])
+		if !ok {
+			return
+		}
+		value, err := h.platform.CreateBootstrapJob(r.Context(), p, id)
+		respondPlatform(w, value, err)
+		return
+	}
+	if len(parts) == 3 && parts[0] == "bootstrap-jobs" && parts[2] == "approve" {
+		if !requirePlatformRole(w, p, "platform.deployment.approve") {
+			return
+		}
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		id, ok := deploymentResourceName(w, parts[1])
+		if !ok {
+			return
+		}
+		value, err := h.platform.ApproveBootstrapJob(r.Context(), p, id)
+		respondPlatform(w, value, err)
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func deploymentResourceName(w http.ResponseWriter, raw string) (string, bool) {
+	value, err := url.PathUnescape(raw)
+	if err != nil || validResourceName(value, 128) != nil {
+		writeError(w, http.StatusBadRequest, "invalid_resource_name")
+		return "", false
+	}
+	return value, true
 }
 
 func (h *Handler) listSettings(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
@@ -235,12 +328,18 @@ func respondPlatform(w http.ResponseWriter, value any, err error) {
 		switch capabilityErr.Code {
 		case errorcode.PermissionDenied:
 			writeError(w, http.StatusForbidden, "forbidden")
-		case "platform.settings.not_found", "platform.credentials.not_found", "platform.database.not_found":
+		case "platform.settings.not_found", "platform.credentials.not_found", "platform.database.not_found", "platform.deployment.not_found":
 			writeError(w, http.StatusNotFound, "not_found")
-		case "platform.settings.version_conflict":
+		case "platform.settings.version_conflict", "platform.deployment.version_conflict":
 			writeError(w, http.StatusConflict, "version_conflict")
-		case "platform.settings.invalid", "platform.credentials.invalid", "platform.database.invalid":
+		case "platform.deployment.separation_required":
+			writeError(w, http.StatusConflict, "separation_required")
+		case "platform.deployment.job_conflict":
+			writeError(w, http.StatusConflict, "job_conflict")
+		case "platform.settings.invalid", "platform.credentials.invalid", "platform.database.invalid", "platform.deployment.invalid":
 			writeError(w, http.StatusBadRequest, "invalid_request")
+		case "platform.deployment.bootstrap_failed":
+			writeError(w, http.StatusBadGateway, "bootstrap_failed")
 		default:
 			writeError(w, http.StatusBadGateway, "platform_service_unavailable")
 		}

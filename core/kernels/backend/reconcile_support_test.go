@@ -52,6 +52,16 @@ func TestParseReconcileOptionsSupportsPlacementPrecedence(t *testing.T) {
 	}
 }
 
+func TestParseReconcileOptionsValidatesCredentialRoot(t *testing.T) {
+	configured, err := parseReconcileOptions([]string{"-desired", "desired.json", "-credential-root", "/etc/vastplan/credentials"})
+	if err != nil || configured.credentialRoot != "/etc/vastplan/credentials" {
+		t.Fatalf("规范 credential root 应被接受: %+v %v", configured, err)
+	}
+	if _, err := parseReconcileOptions([]string{"-desired", "desired.json", "-credential-root", "relative/credentials"}); err == nil {
+		t.Fatal("相对 credential root 必须被拒绝")
+	}
+}
+
 func TestParseReconcileOptionsSupportsPublisherOverridesAndLegacyMigration(t *testing.T) {
 	configured, err := parseReconcileOptions([]string{
 		"-desired", "desired.json",

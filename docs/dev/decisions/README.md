@@ -100,3 +100,4 @@
 - [ADR-0067 Portal 控制面闭环、安全恢复与第二适配器验收](ADR-0067-Portal控制面闭环安全恢复与第二适配器验收.md)
 - [ADR-0068 分布式平台管理中心与强类型 BFF](ADR-0068-分布式平台管理中心与强类型BFF.md)
 - [ADR-0069 Linux SSH 首次引导与 Node Agent 接管](ADR-0069-SSH首次引导与Node-Agent接管.md)
+- [ADR-0070 Deployment Manager 与可信引导执行边界](ADR-0070-Deployment-Manager与可信引导执行边界.md)

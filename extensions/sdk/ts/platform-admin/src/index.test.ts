@@ -19,4 +19,18 @@ describe("PlatformAdminClient", () => {
     const client = new PlatformAdminClient(async () => ({ ok: true, status: 200, json: async () => ({}) }));
     expect(() => client.deleteSetting("bad/name")).toThrowError(PlatformAdminError);
   });
+
+  it("uses fixed deployment routes and obtains CSRF before bootstrap approval", async () => {
+    const calls: Array<{ path: string; method?: string }> = [];
+    const fetcher: PlatformFetch = async (path, init) => {
+      calls.push({ path, method: init?.method });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { id: "bootstrap-1", state: "SystemdActive" } };
+    };
+    const client = new PlatformAdminClient(fetcher);
+    await client.approveBootstrapJob("bootstrap-1");
+    expect(calls).toEqual([
+      { path: "/v1/csrf", method: "GET" },
+      { path: "/v1/platform/deployment/bootstrap-jobs/bootstrap-1/approve", method: "POST" },
+    ]);
+  });
 });

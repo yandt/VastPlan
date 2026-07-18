@@ -58,6 +58,21 @@ func (*platformService) ProbeDatabaseConnection(context.Context, portalapi.Princ
 func (*platformService) ArtifactRepositoryStatus(context.Context, portalapi.Principal) (platformadminapi.ArtifactRepositoryStatus, error) {
 	return platformadminapi.ArtifactRepositoryStatus{Ready: true}, nil
 }
+func (*platformService) ListManagedNodes(context.Context, portalapi.Principal) ([]platformadminapi.ManagedNode, error) {
+	return []platformadminapi.ManagedNode{}, nil
+}
+func (*platformService) PutManagedNode(_ context.Context, _ portalapi.Principal, id string, request platformadminapi.PutManagedNodeRequest) (platformadminapi.ManagedNode, error) {
+	return platformadminapi.ManagedNode{ID: id, Plan: request.Plan, Version: 1}, nil
+}
+func (*platformService) ListBootstrapJobs(context.Context, portalapi.Principal) ([]platformadminapi.BootstrapJob, error) {
+	return []platformadminapi.BootstrapJob{}, nil
+}
+func (*platformService) CreateBootstrapJob(_ context.Context, _ portalapi.Principal, nodeID string) (platformadminapi.BootstrapJob, error) {
+	return platformadminapi.BootstrapJob{ID: "job-1", NodeID: nodeID, State: platformadminapi.BootstrapPending}, nil
+}
+func (*platformService) ApproveBootstrapJob(_ context.Context, _ portalapi.Principal, jobID string) (platformadminapi.BootstrapJob, error) {
+	return platformadminapi.BootstrapJob{ID: jobID, State: platformadminapi.BootstrapSystemdActive}, nil
+}
 
 func TestPlatformAdminBFFUsesVerifiedPrincipalAndRoles(t *testing.T) {
 	admin := &platformService{}
@@ -123,6 +138,30 @@ func TestPlatformAdminDoesNotExposeGenericCapabilityProxy(t *testing.T) {
 	h.ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("通用能力路径必须不存在: %d", response.Code)
+	}
+}
+
+func TestDeploymentRoutesAreRoleSeparatedAndAllowlisted(t *testing.T) {
+	admin := &platformService{}
+	h := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "operator", TenantID: "tenant-a", Roles: []string{"platform.deployment.read"}}, nil
+	}), &service{}, nil, admin, nil, nil)
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/platform/deployment/nodes", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("部署读取角色应可列出节点: %d", response.Code)
+	}
+
+	h = NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "requester", TenantID: "tenant-a", Roles: []string{"platform.deployment.bootstrap"}}, nil
+	}), &service{}, nil, admin, nil, nil)
+	response = httptest.NewRecorder()
+	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/v1/platform/deployment/bootstrap-jobs", nil))
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("引导申请角色不能隐含读取权限: %d", response.Code)
+	}
+	if !platformCapabilityAllowed(platformadminapi.DeploymentCapability, "approveBootstrap") || platformCapabilityAllowed(platformadminapi.DeploymentCapability, "shell") {
+		t.Fatal("部署 capability 白名单必须固定操作且拒绝 shell")
 	}
 }
 

@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+
+	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 )
 
 var ErrNotFound = errors.New("kernel SPI 资源不存在")
@@ -74,11 +76,12 @@ type TransactionManager interface {
 
 // Dependencies 是一个 backend Host 的可替换依赖集合。nil 表示该能力不可用并 fail-closed。
 type Dependencies struct {
-	Config       ConfigProvider
-	Credentials  CredentialBroker
-	Persistence  Persistence
-	Transactions TransactionManager
-	Database     DatabaseBroker
+	Config        ConfigProvider
+	Credentials   CredentialBroker
+	Persistence   Persistence
+	Transactions  TransactionManager
+	Database      DatabaseBroker
+	NodeBootstrap nodebootstrap.Broker
 }
 
 type MapConfig struct{ values map[string]json.RawMessage }
