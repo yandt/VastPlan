@@ -47,6 +47,9 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	pluginID := flags.String("composer-plugin", "com.vastplan.platform.configuration.portal-composer", "Composer plugin ID")
 	pluginVersion := flags.String("composer-version", "", "Composer artifact version")
 	channel := flags.String("composer-channel", "stable", "Composer artifact channel")
+	policyID := flags.String("policy-plugin", "com.vastplan.foundation.security.portal-access-policy", "Portal authorization policy plugin ID")
+	policyVersion := flags.String("policy-version", "0.1.0", "Portal authorization policy artifact version")
+	policyChannel := flags.String("policy-channel", "stable", "Portal authorization policy artifact channel")
 	stateFile := flags.String("composer-state-file", "", "Composer governed-state file")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -113,6 +116,22 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 		return err
 	}
 	defer host.Stop()
+	policyRef := pluginv1.ArtifactRef{PluginID: *policyID, Version: *policyVersion, Channel: *policyChannel}
+	policyEnvelope, err := repository.Fetch(ctx, policyRef)
+	if err != nil {
+		return fmt.Errorf("读取门户访问策略制品: %w", err)
+	}
+	verifiedPolicy, err := verifier.Verify(policyRef, policyEnvelope)
+	if err != nil {
+		return fmt.Errorf("验证门户访问策略制品: %w", err)
+	}
+	installedPolicy, err := (nodeagent.LocalInstaller{Root: *installRoot}).Install(verifiedPolicy)
+	if err != nil {
+		return fmt.Errorf("安装门户访问策略制品: %w", err)
+	}
+	if _, err := host.LaunchWithPolicy(ctx, installedPolicy.EntryPath, protocolbus.LaunchPolicy{PluginID: installedPolicy.ID, Version: installedPolicy.Version, Contributions: installedPolicy.Contract.Contributions, KernelServices: installedPolicy.Contract.KernelServices}); err != nil {
+		return fmt.Errorf("启动门户访问策略: %w", err)
+	}
 	if _, err := host.LaunchWithPolicy(ctx, installed.EntryPath, protocolbus.LaunchPolicy{PluginID: installed.ID, Version: installed.Version, Contributions: installed.Contract.Contributions, KernelServices: installed.Contract.KernelServices}); err != nil {
 		return fmt.Errorf("启动 Composer: %w", err)
 	}
