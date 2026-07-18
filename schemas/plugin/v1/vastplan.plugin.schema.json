@@ -428,7 +428,27 @@
       "properties": {
         "scripts": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "workflows": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "interactions": { "type": "array", "items": { "$ref": "#/$defs/runnerInteractionContribution" } },
         "runtimeRequirements": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "runnerInteractionContribution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "interactionContract", "kinds", "allowedSurfaces"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "interactionContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "kinds": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["confirm", "form", "approval", "notification", "progress"] }
+        },
+        "allowedSurfaces": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["frontend", "mobile", "runner.local"] }
+        },
+        "experience": { "type": "string", "minLength": 1, "maxLength": 160 }
       }
     },
     "mobileContributes": {
@@ -436,7 +456,23 @@
       "properties": {
         "views": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "approvals": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
-        "triggers": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } }
+        "triggers": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
+        "uiAdapters": { "type": "array", "items": { "$ref": "#/$defs/mobileUIAdapterContribution" } }
+      }
+    },
+    "mobileUIAdapterContribution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "uiContract", "framework", "capabilities"],
+      "properties": {
+        "id": { "const": "mobile.ui-adapter" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "framework": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
+        "capabilities": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": { "enum": ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "approval", "navigation"] }
+        }
       }
     }
   }

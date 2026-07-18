@@ -100,6 +100,25 @@ func TestParseManifest_DesignSystemContributionIsClosedAndComplete(t *testing.T)
 	}
 }
 
+func TestParseManifest_CrossPlatformInteractionContributions(t *testing.T) {
+	base := `{
+  "id":"com.vastplan.foundation.mobile.native-shell","name":"native shell","description":"cross-platform interaction fixture","version":"1.0.0","publisher":"vastplan",
+  "engines":{"runner":"^1.0","mobile":"^1.0"},"activation":["onStartup"],"entry":{"runner":"runner/main","mobile":"mobile/main"},
+  "contributes":{
+    "runner":{"interactions":[{"id":"foundation.runner.interaction","interactionContract":"^1.0.0","kinds":["approval","form"],"allowedSurfaces":["frontend","mobile"]}]},
+    "mobile":{"uiAdapters":[%s]}
+  }
+}`
+	valid := `{"id":"mobile.ui-adapter","uiContract":"^1.0.0","framework":"swiftui","capabilities":["form","approval","feedback"]}`
+	if _, err := ParseManifest([]byte(fmt.Sprintf(base, valid))); err != nil {
+		t.Fatalf("跨端交互贡献应通过校验: %v", err)
+	}
+	invalid := `{"id":"mobile.other","uiContract":"^1.0.0","framework":"swiftui","capabilities":["form"]}`
+	if _, err := ParseManifest([]byte(fmt.Sprintf(base, invalid))); err == nil {
+		t.Fatal("移动 UI 适配器必须使用保留的 mobile.ui-adapter ID")
+	}
+}
+
 func TestValidateDescriptor_RejectsInvalidHookPhase(t *testing.T) {
 	err := ValidateDescriptor("hook", []byte(`{"point":"invoke","phase":"later"}`))
 	if err == nil {
