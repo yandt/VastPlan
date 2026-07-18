@@ -1,0 +1,29 @@
+# VastPlan primary knowledge-graph collection policy.
+#
+# The primary graph is for product architecture and runtime call chains. Tests,
+# fixtures and agent instruction files are deliberately kept out. Generated Go
+# protobuf files remain discoverable here because the post-processor compresses
+# them to contract declarations; ignoring them at scan time would also remove
+# CallContext and the other protocol boundary types.
+
+/AGENTS.md
+/CLAUDE.md
+
+*_test.go
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+**/testdata/
+**/fixtures/
+/engineering/arch/
+/engineering/e2e/
+
+# Python protobuf output does not expose useful message declarations to the
+# current extractor, so it can be excluded completely.
+*_pb2.py
+*_pb2_grpc.py
+
+# Graphify currently force-loads query memory. The primary-graph post-processor
+# enforces this exclusion even when the scanner bypasses this rule.
+/graphify-out/memory/

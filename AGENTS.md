@@ -21,7 +21,8 @@
 
 ## Graphify 图谱维护
 
-- 采用按需增量更新：实质性代码、文档或 ADR 改动完成并通过验证后，在提交前运行 Graphify `--update`。
+- 权威维护规则见 `docs/dev/guides/Graphify图谱维护.md`。
+- 采用按需增量更新：实质性代码、文档或 ADR 改动完成并通过验证后，在提交前运行 `engineering/tools/update-graphify-primary.sh`。
 - 零散小改动可合并后统一更新，避免无意义的频繁重建。
 - 架构、调用链和项目内容问题优先查询现有 `graphify-out/graph.json`。
 - 仅在大规模目录迁移、全局重构或图谱诊断异常时执行全量重建。
