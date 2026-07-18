@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/nats-io/nkeys"
 )
 
 const (
 	KernelService             = "kernel.node.bootstrap"
+	KernelReadinessService    = "kernel.node.readiness"
 	DeploymentManagerPluginID = "com.vastplan.platform.infrastructure.deployment-manager"
 )
 
@@ -133,6 +136,41 @@ type Result struct {
 	NodeID        string `json:"nodeId"`
 	Endpoint      string `json:"endpoint"`
 	Service       string `json:"service"`
+}
+
+type ReadinessExpectation struct {
+	TenantID           string `json:"tenantId"`
+	NodeID             string `json:"nodeId"`
+	Deployment         string `json:"deployment"`
+	TransportPublicKey string `json:"transportPublicKey"`
+}
+
+func (e ReadinessExpectation) Validate() error {
+	if !identifierPattern.MatchString(e.TenantID) || !identifierPattern.MatchString(e.NodeID) || !identifierPattern.MatchString(e.Deployment) {
+		return errors.New("节点就绪期望必须包含规范 tenant、node 与 deployment")
+	}
+	if !nkeys.IsValidPublicUserKey(e.TransportPublicKey) {
+		return errors.New("节点就绪期望必须包含有效传输公钥")
+	}
+	return nil
+}
+
+type ReadinessStatus string
+
+const (
+	ReadinessWaiting  ReadinessStatus = "Waiting"
+	ReadinessReady    ReadinessStatus = "Ready"
+	ReadinessRejected ReadinessStatus = "Rejected"
+)
+
+type ReadinessObservation struct {
+	Status     ReadinessStatus `json:"status"`
+	ObservedAt string          `json:"observedAt"`
+	Reason     string          `json:"reason,omitempty"`
+}
+
+type ReadinessObserver interface {
+	Observe(context.Context, ReadinessExpectation) (ReadinessObservation, error)
 }
 
 // Broker is implemented by the trusted kernel deployment adapter. Plugins can

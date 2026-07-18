@@ -1,14 +1,14 @@
 {
   "id": "com.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 节点部署管理服务",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "保存非敏感节点计划和首次引导审批状态；凭证解析与 SSH 执行仅由可信内核完成",
   "engines": { "backend": "^1.0" },
-  "capabilities": { "kernelServices": ["kernel.node.bootstrap"], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.node.bootstrap", "kernel.node.readiness"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "leader",

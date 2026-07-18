@@ -13,18 +13,38 @@ import (
 
 // NodeRecord 是调度器可见的节点租约内容。KV bucket TTL 是存活真相，UpdatedAt 仅供审计。
 type NodeRecord struct {
-	SchemaVersion int               `json:"schema_version"`
-	NodeID        string            `json:"node_id"`
-	Labels        map[string]string `json:"labels,omitempty"`
-	Capacity      ResourceCapacity  `json:"capacity,omitempty"`
-	UpdatedAt     time.Time         `json:"updated_at"`
+	SchemaVersion      int               `json:"schema_version"`
+	NodeID             string            `json:"node_id"`
+	TenantID           string            `json:"tenant_id"`
+	Deployment         string            `json:"deployment"`
+	Labels             map[string]string `json:"labels,omitempty"`
+	Capacity           ResourceCapacity  `json:"capacity,omitempty"`
+	UpdatedAt          time.Time         `json:"updated_at"`
+	TransportPublicKey string            `json:"transport_public_key,omitempty"`
+	TransportTimestamp string            `json:"transport_timestamp,omitempty"`
+	TransportNonce     string            `json:"transport_nonce,omitempty"`
+	TransportSignature string            `json:"transport_signature,omitempty"`
+}
+
+func (r NodeRecord) ValidateBasic() error {
+	if r.SchemaVersion != 3 || r.NodeID == "" || r.TenantID == "" || r.Deployment == "" || r.UpdatedAt.IsZero() {
+		return errors.New("节点租约必须是 v3 且包含 node、tenant、deployment 与更新时间")
+	}
+	if r.Capacity.CPUMillis < 0 || r.Capacity.MemoryBytes < 0 || r.Capacity.GPU < 0 {
+		return errors.New("节点资源容量不能为负数")
+	}
+	return nil
 }
 
 type NodeLeaseOptions struct {
-	HeartbeatEvery time.Duration
-	FailureTimeout time.Duration
-	Logf           func(string, ...any)
-	Capacity       ResourceCapacity
+	HeartbeatEvery  time.Duration
+	FailureTimeout  time.Duration
+	Logf            func(string, ...any)
+	Capacity        ResourceCapacity
+	TenantID        string
+	Deployment      string
+	Attest          func(NodeRecord) (NodeRecord, error)
+	AllowUnattested bool
 }
 
 type ResourceCapacity struct {
@@ -38,6 +58,7 @@ type NodeLease struct {
 	kv     jetstream.KeyValue
 	record NodeRecord
 	key    string
+	attest func(NodeRecord) (NodeRecord, error)
 	cancel context.CancelFunc
 	done   chan struct{}
 	lost   chan error
@@ -59,12 +80,17 @@ func StartNodeLease(parent context.Context, kv jetstream.KeyValue, nodeID string
 	}
 	ctx, cancel := context.WithCancel(parent)
 	lease := &NodeLease{
-		kv: kv, key: NodeKey(nodeID), cancel: cancel, done: make(chan struct{}), lost: make(chan error, 1),
-		record: NodeRecord{SchemaVersion: 2, NodeID: nodeID, Labels: cloneLabels(labels), Capacity: options.Capacity},
+		kv: kv, key: NodeKey(options.TenantID, options.Deployment, nodeID), attest: options.Attest, cancel: cancel, done: make(chan struct{}), lost: make(chan error, 1),
+		record: NodeRecord{SchemaVersion: 3, NodeID: nodeID, TenantID: options.TenantID, Deployment: options.Deployment, Labels: cloneLabels(labels), Capacity: options.Capacity},
 	}
-	if options.Capacity.CPUMillis < 0 || options.Capacity.MemoryBytes < 0 || options.Capacity.GPU < 0 {
+	lease.record.UpdatedAt = time.Now().UTC()
+	if err := lease.record.ValidateBasic(); err != nil {
 		cancel()
-		return nil, errors.New("节点资源容量不能为负数")
+		return nil, err
+	}
+	if options.Attest == nil && !options.AllowUnattested {
+		cancel()
+		return nil, errors.New("生产节点租约必须配置传输身份签名器")
 	}
 	if err := lease.heartbeat(ctx); err != nil {
 		cancel()
@@ -125,6 +151,19 @@ func (l *NodeLease) run(ctx context.Context, options NodeLeaseOptions) {
 func (l *NodeLease) heartbeat(ctx context.Context) error {
 	record := l.record
 	record.UpdatedAt = time.Now().UTC()
+	if l.record.TransportPublicKey != "" {
+		record.TransportPublicKey = ""
+		record.TransportTimestamp = ""
+		record.TransportNonce = ""
+		record.TransportSignature = ""
+	}
+	if l.attest != nil {
+		var err error
+		record, err = l.attest(record)
+		if err != nil {
+			return fmt.Errorf("签名节点租约: %w", err)
+		}
+	}
 	raw, err := json.Marshal(record)
 	if err != nil {
 		return err

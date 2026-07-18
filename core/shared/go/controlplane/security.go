@@ -120,6 +120,7 @@ const (
 	RoleBootstrap  SecurityRole = "bootstrap"
 	RoleController SecurityRole = "controller"
 	RoleNode       SecurityRole = "node"
+	RoleManager    SecurityRole = "manager-node"
 	RoleRuntime    SecurityRole = "runtime"
 )
 
@@ -132,17 +133,17 @@ type SubjectACL struct {
 
 // RoleACL 是代码中的权限单一真相源，配置生成和测试都引用同一份策略。
 func RoleACL(role SecurityRole) (SubjectACL, error) {
-	return roleACL(role, "")
+	return roleACL(role, "", "", "")
 }
 
 // RoleACLForIdentity 在生成服务端配置时把节点身份绑定到自己的状态 key。
 // Node 角色若没有 NodeID 不允许生成生产 ACL；无节点范围的 RoleACL 仅供策略检查，
 // 不得直接用于 NATS 用户配置。
 func RoleACLForIdentity(identity NKeyIdentity) (SubjectACL, error) {
-	return roleACL(identity.Role, identity.NodeID)
+	return roleACL(identity.Role, identity.TenantID, identity.Deployment, identity.NodeID)
 }
 
-func roleACL(role SecurityRole, nodeID string) (SubjectACL, error) {
+func roleACL(role SecurityRole, tenant, deployment, nodeID string) (SubjectACL, error) {
 	switch role {
 	case RoleBootstrap:
 		return SubjectACL{PublishAllow: []string{">"}, SubscribeAllow: []string{">"}}, nil
@@ -157,14 +158,14 @@ func roleACL(role SecurityRole, nodeID string) (SubjectACL, error) {
 				"$KV." + AssignmentsBucket + ".>", "$KV." + CompositionsBucket + ".>", "$KV." + ControllersBucket + ".>", "$KV." + AutoscalingBucket + ".>",
 			},
 		}, nil
-	case RoleNode:
-		if nodeID == "" {
-			return SubjectACL{}, errors.New("node NATS ACL 必须绑定 node id")
+	case RoleNode, RoleManager:
+		if nodeID == "" || tenant == "" || deployment == "" {
+			return SubjectACL{}, errors.New("node NATS ACL 必须绑定 tenant、deployment 与 node id")
 		}
-		return SubjectACL{
+		acl := SubjectACL{
 			PublishAllow: append(openAllAPI(), append(
 				kvAPIForRead(DesiredBucket, AssignmentsBucket, CapabilitiesBucket),
-				"$KV."+ActualBucket+"."+ActualKey(nodeID), "$KV."+NodesBucket+"."+NodeKey(nodeID),
+				"$KV."+ActualBucket+"."+ActualKey(nodeID), "$KV."+NodesBucket+"."+NodeKey(tenant, deployment, nodeID),
 				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
 				"vp.event.persist.v1.>",
 				"$JS.API.CONSUMER.CREATE."+EventsStream, "$JS.API.CONSUMER.CREATE."+EventsStream+".>",
@@ -178,7 +179,11 @@ func roleACL(role SecurityRole, nodeID string) (SubjectACL, error) {
 				"_INBOX.>", "$KV." + DesiredBucket + ".>", "$KV." + AssignmentsBucket + ".>",
 				"$KV." + CapabilitiesBucket + ".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
 			},
-		}, nil
+		}
+		if role == RoleManager {
+			acl.PublishAllow = append(acl.PublishAllow, kvAPIForRead(NodesBucket)...)
+		}
+		return acl, nil
 	case RoleRuntime:
 		return SubjectACL{
 			PublishAllow: append(append(kvAPIForRead(CapabilitiesBucket), "$JS.API.STREAM.INFO."+EventsStream, "$JS.API.STREAM.INFO.KV_"+AutoscalingBucket),
@@ -228,10 +233,12 @@ func kvAPIForRead(buckets ...string) []string {
 }
 
 type NKeyIdentity struct {
-	Name      string
-	Role      SecurityRole
-	PublicKey string
-	NodeID    string
+	Name       string
+	Role       SecurityRole
+	PublicKey  string
+	TenantID   string
+	Deployment string
+	NodeID     string
 }
 
 type ServerSecurityConfig struct {
@@ -277,6 +284,7 @@ func RenderNATSServerConfig(config ServerSecurityConfig) (string, error) {
 		return config.Identities[i].PublicKey < config.Identities[j].PublicKey
 	})
 	seenPublicKeys := map[string]struct{}{}
+	seenNodeIDs := map[string]struct{}{}
 	var users strings.Builder
 	for index, identity := range config.Identities {
 		if _, exists := seenPublicKeys[identity.PublicKey]; exists {
@@ -285,6 +293,12 @@ func RenderNATSServerConfig(config ServerSecurityConfig) (string, error) {
 		seenPublicKeys[identity.PublicKey] = struct{}{}
 		if !nkeys.IsValidPublicUserKey(identity.PublicKey) {
 			return "", fmt.Errorf("NATS %s 用户公钥无效", identity.Role)
+		}
+		if identity.Role == RoleNode || identity.Role == RoleManager {
+			if _, exists := seenNodeIDs[identity.NodeID]; exists {
+				return "", fmt.Errorf("node id 必须在控制面全局唯一: %s", identity.NodeID)
+			}
+			seenNodeIDs[identity.NodeID] = struct{}{}
 		}
 		acl, err := RoleACLForIdentity(identity)
 		if err != nil {

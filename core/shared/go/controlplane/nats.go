@@ -75,7 +75,7 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 		return Buckets{}, fmt.Errorf("创建实际态 bucket: %w", err)
 	}
 	nodes, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
-		Bucket: NodesBucket, Description: "VastPlan node leases v1",
+		Bucket: NodesBucket, Description: "VastPlan signed node leases v3",
 		History: 1, TTL: 30 * time.Second, LimitMarkerTTL: time.Minute,
 		MaxValueSize: 64 << 10, Replicas: replicas, Storage: storage,
 	})
@@ -239,7 +239,9 @@ func AssignmentKeyNodeID(key string) (string, error) {
 }
 
 func ActualKey(nodeID string) string { return "nodes." + keyToken(nodeID) }
-func NodeKey(nodeID string) string   { return "nodes." + keyToken(nodeID) }
+func NodeKey(tenant, deployment, nodeID string) string {
+	return DeploymentKey(tenant, deployment) + ".nodes." + keyToken(nodeID)
+}
 
 func CapabilityKey(capability, instanceID string) string {
 	return "capabilities." + keyToken(capability) + "." + keyToken(instanceID)

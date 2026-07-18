@@ -19,6 +19,7 @@ import (
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
 const (
@@ -180,6 +181,76 @@ func (s *TransportSecurity) SelfIdentity() TransportIdentity {
 		return TransportIdentity{}
 	}
 	return s.self
+}
+
+// AttestNodeLease binds a Node Lease to the transport identity that will later
+// sign cross-node capability traffic. The lease stays non-secret but cannot be
+// replaced with a self-reported public key by a KV reader or another node.
+func (s *TransportSecurity) AttestNodeLease(record controlplane.NodeRecord) (controlplane.NodeRecord, error) {
+	if s == nil || s.pair == nil {
+		return controlplane.NodeRecord{}, errors.New("节点租约签名器未配置")
+	}
+	if err := record.ValidateBasic(); err != nil {
+		return controlplane.NodeRecord{}, err
+	}
+	if !nodeTransportRole(s.self.Role) || s.self.NodeID != record.NodeID || s.self.TenantID != record.TenantID {
+		return controlplane.NodeRecord{}, errors.New("节点租约身份与传输信任身份不匹配")
+	}
+	record.TransportPublicKey = ""
+	record.TransportTimestamp = ""
+	record.TransportNonce = ""
+	record.TransportSignature = ""
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return controlplane.NodeRecord{}, err
+	}
+	values, err := s.sign(nodeLeaseSubject(record.TenantID, record.Deployment, record.NodeID), payload)
+	if err != nil {
+		return controlplane.NodeRecord{}, err
+	}
+	record.TransportPublicKey = values[transportPublicKeyHeader]
+	record.TransportTimestamp = values[transportTimestampHeader]
+	record.TransportNonce = values[transportNonceHeader]
+	record.TransportSignature = values[transportSignatureHeader]
+	return record, nil
+}
+
+// VerifyNodeLease verifies the detached transport signature without consuming
+// replay state: the same current KV revision may be observed by many readers.
+func (s *TransportSecurity) VerifyNodeLease(record controlplane.NodeRecord) (TransportIdentity, error) {
+	if err := record.ValidateBasic(); err != nil {
+		return TransportIdentity{}, err
+	}
+	values := map[string]string{
+		transportPublicKeyHeader: record.TransportPublicKey,
+		transportTimestampHeader: record.TransportTimestamp,
+		transportNonceHeader:     record.TransportNonce,
+		transportSignatureHeader: record.TransportSignature,
+	}
+	record.TransportPublicKey = ""
+	record.TransportTimestamp = ""
+	record.TransportNonce = ""
+	record.TransportSignature = ""
+	payload, err := json.Marshal(record)
+	if err != nil {
+		return TransportIdentity{}, err
+	}
+	identity, err := s.verifyNoReplay(nodeLeaseSubject(record.TenantID, record.Deployment, record.NodeID), payload, values)
+	if err != nil {
+		return TransportIdentity{}, err
+	}
+	if !nodeTransportRole(identity.Role) || identity.NodeID != record.NodeID || identity.TenantID != record.TenantID || identity.PublicKey != values[transportPublicKeyHeader] {
+		return TransportIdentity{}, errors.New("节点租约声明与可信传输身份不匹配")
+	}
+	return identity, nil
+}
+
+func nodeLeaseSubject(tenant, deployment, nodeID string) string {
+	return "vastplan.node-lease.v3:" + controlplane.NodeKey(tenant, deployment, nodeID)
+}
+
+func nodeTransportRole(role string) bool {
+	return role == string(controlplane.RoleNode) || role == string(controlplane.RoleManager)
 }
 
 func (s *TransportSecurity) sign(subject string, payload []byte) (map[string]string, error) {

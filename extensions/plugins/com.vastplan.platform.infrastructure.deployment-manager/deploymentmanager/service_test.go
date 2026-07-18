@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
@@ -14,16 +15,34 @@ import (
 )
 
 type fakeHost struct {
-	target *contractv1.CallTarget
-	err    error
+	targets         []*contractv1.CallTarget
+	err             error
+	readinessStatus nodebootstrap.ReadinessStatus
 }
 
 func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
-	h.target = target
+	h.targets = append(h.targets, target)
 	if h.err != nil {
 		return nil, nil, h.err
 	}
+	if target.Capability == nodebootstrap.KernelReadinessService {
+		status := h.readinessStatus
+		if status == "" {
+			status = nodebootstrap.ReadinessWaiting
+		}
+		raw, _ := json.Marshal(nodebootstrap.ReadinessObservation{Status: status})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"systemdActive":true}`), nil
+}
+
+func (h *fakeHost) called(capability string) bool {
+	for _, target := range h.targets {
+		if target.Capability == capability {
+			return true
+		}
+	}
+	return false
 }
 
 func TestApprovalRequiresSeparationAndUsesKernelService(t *testing.T) {
@@ -55,8 +74,75 @@ func TestApprovalRequiresSeparationAndUsesKernelService(t *testing.T) {
 	if err := json.Unmarshal(raw, &completed); err != nil || completed.State != platformadminapi.BootstrapSystemdActive || completed.ApprovedBy != "bob" {
 		t.Fatalf("引导完成状态无效: %s err=%v", raw, err)
 	}
-	if host.target == nil || host.target.ExtensionPoint != "kernel.service" || host.target.Capability != nodebootstrap.KernelService {
-		t.Fatalf("插件没有调用固定内核服务: %+v", host.target)
+	if !host.called(nodebootstrap.KernelService) || !host.called(nodebootstrap.KernelReadinessService) {
+		t.Fatalf("插件没有调用固定引导与就绪内核服务: %+v", host.targets)
+	}
+}
+
+func TestSignedLeaseObservationPromotesSystemdActiveToReady(t *testing.T) {
+	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.newID = func() (string, error) { return "bootstrap-ready", nil }
+	alice := userCall("tenant-a", "alice")
+	if _, err := service.PutNode(alice, "node-a", platformadminapi.PutManagedNodeRequest{Plan: validPlan()}); err != nil {
+		t.Fatal(err)
+	}
+	job, err := service.CreateJob(alice, "node-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(map[string]string{"jobId": job.ID})
+	result, raw, err := service.Handler(context.Background(), &fakeHost{readinessStatus: nodebootstrap.ReadinessReady}, userCall("tenant-a", "bob"), payload, "approveBootstrap")
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("审批并观察就绪失败: %+v %v", result, err)
+	}
+	var ready platformadminapi.BootstrapJob
+	if err := json.Unmarshal(raw, &ready); err != nil || ready.State != platformadminapi.BootstrapReady {
+		t.Fatalf("签名 lease 应推进 Ready: %s %v", raw, err)
+	}
+}
+
+func TestRejectedOrTimedOutLeaseFailsBootstrapJob(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		status    nodebootstrap.ReadinessStatus
+		advance   time.Duration
+		errorCode string
+	}{{name: "identity rejected", status: nodebootstrap.ReadinessRejected, errorCode: "platform.deployment.readiness_rejected"}, {name: "lease timeout", status: nodebootstrap.ReadinessWaiting, advance: jobTTL + time.Second, errorCode: "platform.deployment.readiness_timeout"}} {
+		t.Run(test.name, func(t *testing.T) {
+			service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			now := time.Date(2026, 7, 18, 12, 0, 0, 0, time.UTC)
+			service.now = func() time.Time { return now }
+			service.newID = func() (string, error) { return "bootstrap-terminal", nil }
+			alice := userCall("tenant-a", "alice")
+			if _, err := service.PutNode(alice, "node-a", platformadminapi.PutManagedNodeRequest{Plan: validPlan()}); err != nil {
+				t.Fatal(err)
+			}
+			job, err := service.CreateJob(alice, "node-a")
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload, _ := json.Marshal(map[string]string{"jobId": job.ID})
+			if result, _, err := service.Handler(context.Background(), &fakeHost{readinessStatus: test.status}, userCall("tenant-a", "bob"), payload, "approveBootstrap"); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+				t.Fatalf("审批失败: %+v %v", result, err)
+			}
+			now = now.Add(test.advance)
+			result, raw, err := service.Handler(context.Background(), &fakeHost{readinessStatus: test.status}, alice, []byte(`{}`), "listBootstrapJobs")
+			if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+				t.Fatalf("查询作业失败: %+v %v", result, err)
+			}
+			var response struct {
+				Items []platformadminapi.BootstrapJob `json:"items"`
+			}
+			if err := json.Unmarshal(raw, &response); err != nil || len(response.Items) != 1 || response.Items[0].State != platformadminapi.BootstrapFailed || response.Items[0].ErrorCode != test.errorCode {
+				t.Fatalf("就绪失败状态不正确: %s %v", raw, err)
+			}
+		})
 	}
 }
 
@@ -147,7 +233,8 @@ func validPlan() nodebootstrap.Plan {
 		ID: "node-a", Tenant: "tenant-a", Deployment: "production", Labels: "region=cn",
 		NATSURL: "tls://nats.internal:4222", NATSCA: nodebootstrap.SecretsRoot + "/nats-ca.pem", NATSCert: nodebootstrap.SecretsRoot + "/node.crt", NATSKey: nodebootstrap.SecretsRoot + "/node.key", NATSSeed: nodebootstrap.SecretsRoot + "/node.seed",
 		TransportSeed: nodebootstrap.SecretsRoot + "/transport.seed", TransportTrust: nodebootstrap.SecretsRoot + "/transport-trust.json",
-		RepositoryURL: "https://artifacts.internal", RepositoryTrust: nodebootstrap.SecretsRoot + "/artifact-trust.json",
+		TransportPublicKey: testTransportPublicKey,
+		RepositoryURL:      "https://artifacts.internal", RepositoryTrust: nodebootstrap.SecretsRoot + "/artifact-trust.json",
 	}
 	destinations := []string{node.NATSCA, node.NATSCert, node.NATSKey, node.NATSSeed, node.TransportSeed, node.TransportTrust, node.RepositoryTrust, nodebootstrap.ArtifactTokenFile}
 	files := make([]nodebootstrap.CredentialSecretFile, 0, len(destinations))
@@ -160,3 +247,5 @@ func validPlan() nodebootstrap.Plan {
 		Node:    node, SSHIdentityCredential: "node-a.ssh-identity", SSHKnownHostsCredential: "node-a.known-hosts", SecretFiles: files,
 	}
 }
+
+const testTransportPublicKey = "UBN2AENL65VCM6XLPUDC4FGKH4EMJN2DKU2TVBDF34PRQTEG32FHOZ5G"

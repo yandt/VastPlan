@@ -64,7 +64,42 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			return nil, err
 		}
 	}
+	if dependencies.NodeReadiness != nil {
+		if err := host.RegisterHostService(extpoint.KernelService, nodebootstrap.KernelReadinessService, kernelNodeReadiness(dependencies.NodeReadiness)); err != nil {
+			return nil, err
+		}
+	}
 	return host, nil
+}
+
+func kernelNodeReadiness(observer nodebootstrap.ReadinessObserver) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != nodebootstrap.DeploymentManagerPluginID {
+			return nil, nil, errors.New("kernel.node.readiness 只接受 deployment-manager 认证会话")
+		}
+		decoder := json.NewDecoder(bytes.NewReader(payload))
+		decoder.DisallowUnknownFields()
+		var expectation nodebootstrap.ReadinessExpectation
+		if err := decoder.Decode(&expectation); err != nil {
+			return nil, nil, errors.New("节点就绪期望无效")
+		}
+		var trailing any
+		if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+			return nil, nil, errors.New("节点就绪期望只能包含一个 JSON 文档")
+		}
+		if err := expectation.Validate(); err != nil || expectation.TenantID != callCtx.GetTenantId() {
+			return nil, nil, errors.New("节点就绪期望与认证租户不匹配")
+		}
+		observation, err := observer.Observe(ctx, expectation)
+		if err != nil {
+			return nil, nil, errors.New("可信节点就绪观察失败")
+		}
+		raw, err := json.Marshal(observation)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
 }
 
 func kernelNodeBootstrap(broker nodebootstrap.Broker) protocolbus.HostService {

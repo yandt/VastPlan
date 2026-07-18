@@ -21,10 +21,13 @@ func main() {
 	tlsKey := flag.String("tls-key", "", "NATS Server TLS 私钥路径")
 	tlsCA := flag.String("tls-ca", "", "签发服务端与客户端证书的 CA 路径")
 	nodeCount := flag.Int("node-count", 1, "生成独立 node 身份数量")
+	managerNodeCount := flag.Int("manager-node-count", 1, "生成可读取 Node Lease 的 manager-node 身份数量")
+	tenant := flag.String("tenant", "", "node/manager-node 绑定的租户")
+	deployment := flag.String("deployment", "", "node/manager-node 绑定的 Deployment")
 	controllerCount := flag.Int("controller-count", 1, "生成独立 controller 身份数量")
 	runtimeCount := flag.Int("runtime-count", 1, "生成独立 runtime 身份数量")
 	flag.Parse()
-	if *outDir == "" || *tlsCert == "" || *tlsKey == "" || *tlsCA == "" {
+	if *outDir == "" || *tlsCert == "" || *tlsKey == "" || *tlsCA == "" || *tenant == "" || *deployment == "" {
 		flag.Usage()
 		os.Exit(2)
 	}
@@ -32,14 +35,18 @@ func main() {
 		fatalf("创建输出目录失败: %v", err)
 	}
 	systemPublic, systemSeed := generateIdentity()
-	if *nodeCount < 1 || *controllerCount < 1 || *runtimeCount < 1 {
-		fatalf("node/controller/runtime 数量必须至少为 1")
+	if *nodeCount < 1 || *managerNodeCount < 0 || *controllerCount < 1 || *runtimeCount < 1 {
+		fatalf("node/controller/runtime 数量必须至少为 1，manager-node 不能为负数")
 	}
-	identities := make([]controlplane.NKeyIdentity, 0, 1+*nodeCount+*controllerCount+*runtimeCount)
+	identities := make([]controlplane.NKeyIdentity, 0, 1+*nodeCount+*managerNodeCount+*controllerCount+*runtimeCount)
 	seeds := map[string][]byte{"system.seed": systemSeed}
 	addIdentity := func(role controlplane.SecurityRole, name, nodeID string) {
 		publicKey, seed := generateIdentity()
-		identities = append(identities, controlplane.NKeyIdentity{Name: name, Role: role, PublicKey: publicKey, NodeID: nodeID})
+		identity := controlplane.NKeyIdentity{Name: name, Role: role, PublicKey: publicKey, NodeID: nodeID}
+		if role == controlplane.RoleNode || role == controlplane.RoleManager {
+			identity.TenantID, identity.Deployment = *tenant, *deployment
+		}
+		identities = append(identities, identity)
 		seeds[name+".seed"] = seed
 	}
 	addIdentity(controlplane.RoleBootstrap, "bootstrap", "")
@@ -49,6 +56,10 @@ func main() {
 	for index := 1; index <= *nodeCount; index++ {
 		name := fmt.Sprintf("node-%d", index)
 		addIdentity(controlplane.RoleNode, name, name)
+	}
+	for index := 1; index <= *managerNodeCount; index++ {
+		name := fmt.Sprintf("manager-node-%d", index)
+		addIdentity(controlplane.RoleManager, name, name)
 	}
 	for index := 1; index <= *runtimeCount; index++ {
 		addIdentity(controlplane.RoleRuntime, fmt.Sprintf("runtime-%d", index), "")

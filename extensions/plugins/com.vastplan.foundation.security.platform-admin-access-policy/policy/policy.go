@@ -12,7 +12,7 @@ import (
 
 const (
 	PluginID      = "com.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.2.0"
+	PluginVersion = "0.3.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -95,7 +95,7 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	case "com.vastplan.platform.data.relational.connection-manager":
 		return request.Capability == "kernel.database.probe"
 	case "com.vastplan.platform.infrastructure.deployment-manager":
-		return request.Capability == "kernel.node.bootstrap"
+		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness"
 	default:
 		return false
 	}

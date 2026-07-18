@@ -91,7 +91,7 @@ func validRequest() Request {
 		ID: "node-a", Tenant: "acme", Deployment: "prod", Labels: "region=cn,tier=platform",
 		NATSURL: "tls://nats.internal:4222",
 		NATSCA:  SecretsRoot + "/nats-ca.pem", NATSCert: SecretsRoot + "/node.crt", NATSKey: SecretsRoot + "/node.key", NATSSeed: SecretsRoot + "/node.seed",
-		TransportSeed: SecretsRoot + "/transport.seed", TransportTrust: SecretsRoot + "/transport-trust.json",
+		TransportSeed: SecretsRoot + "/transport.seed", TransportTrust: SecretsRoot + "/transport-trust.json", TransportPublicKey: "UBN2AENL65VCM6XLPUDC4FGKH4EMJN2DKU2TVBDF34PRQTEG32FHOZ5G",
 		RepositoryURL: "https://artifacts.internal", RepositoryCA: SecretsRoot + "/artifact-ca.pem", RepositoryTrust: SecretsRoot + "/artifact-trust.json",
 		CapacityCPU: 2000, CapacityMemory: 4 << 30,
 	}

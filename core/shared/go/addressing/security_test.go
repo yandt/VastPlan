@@ -3,11 +3,13 @@ package addressing
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nkeys"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
 func newTestTransportSecurity(t *testing.T) (*TransportSecurity, TransportIdentity) {
@@ -25,7 +27,7 @@ func newTestTransportSecurity(t *testing.T) (*TransportSecurity, TransportIdenti
 		t.Fatal(err)
 	}
 	identity := TransportIdentity{
-		Name: "node-a", Role: "node", PublicKey: publicKey, NodeID: "node-a",
+		Name: "node-a", Role: "node", PublicKey: publicKey, TenantID: "tenant-a", NodeID: "node-a",
 		ServiceRoles: []string{"*"}, LogicalServices: []string{"*"}, AllowedCapabilities: []string{"*"}, AllowGlobal: true,
 	}
 	security, err := newTransportSecurity(seed, TransportTrustDocument{
@@ -58,6 +60,24 @@ func TestTransportSecuritySignsAndDetectsReplay(t *testing.T) {
 	}
 	if _, err := security.verifyNoReplay(message.Subject, message.Data, transportHeaderValues(message.Header)); err != nil {
 		t.Fatalf("JetStream redelivery should bypass nonce replay check: %v", err)
+	}
+}
+
+func TestTransportSecurityAttestsNodeLeaseIdentity(t *testing.T) {
+	security, identity := newTestTransportSecurity(t)
+	defer security.Close()
+	record := controlplane.NodeRecord{SchemaVersion: 3, NodeID: "node-a", TenantID: "tenant-a", Deployment: "prod", UpdatedAt: time.Now().UTC()}
+	signed, err := security.AttestNodeLease(record)
+	if err != nil || signed.TransportPublicKey != identity.PublicKey || signed.TransportSignature == "" {
+		t.Fatalf("节点 lease 签名失败: %+v %v", signed, err)
+	}
+	verified, err := security.VerifyNodeLease(signed)
+	if err != nil || verified.NodeID != "node-a" || verified.TenantID != "tenant-a" {
+		t.Fatalf("节点 lease 验签失败: %+v %v", verified, err)
+	}
+	signed.Deployment = "other"
+	if _, err := security.VerifyNodeLease(signed); err == nil {
+		t.Fatal("篡改 deployment 后必须验签失败")
 	}
 }
 

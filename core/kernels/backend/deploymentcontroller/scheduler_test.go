@@ -26,7 +26,7 @@ func TestSchedulerReplicasPlacementScaleAndNodeLoss(t *testing.T) {
 	for nodeID, labels := range map[string]map[string]string{
 		"node-a": {"region": "cn"}, "node-b": {"region": "cn"}, "node-c": {"region": "us"},
 	} {
-		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, labels, controlplane.NodeLeaseOptions{})
+		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, labels, testNodeLeaseOptions())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,10 @@ func TestSchedulerReplicasPlacementScaleAndNodeLoss(t *testing.T) {
 func TestSchedulerDoesNotTurnAppProfilesIntoServiceAssignments(t *testing.T) {
 	_, buckets := startSchedulerNATS(t)
 	ctx := context.Background()
-	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
+	options := testNodeLeaseOptions()
+	options.TenantID = "tenant-a"
+	options.Deployment = "runner-fleet"
+	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,12 +120,35 @@ func TestSchedulerDoesNotTurnAppProfilesIntoServiceAssignments(t *testing.T) {
 	}
 }
 
+func TestSchedulerUsesOnlyMatchingTenantAndDeploymentLeases(t *testing.T) {
+	_, buckets := startSchedulerNATS(t)
+	ctx := context.Background()
+	matching, err := controlplane.StartNodeLease(ctx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, testNodeLeaseOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherOptions := testNodeLeaseOptions()
+	otherOptions.TenantID = "other"
+	other, err := controlplane.StartNodeLease(ctx, buckets.Nodes, "node-b", map[string]string{"region": "cn"}, otherOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = matching.Close(context.Background()); _ = other.Close(context.Background()) })
+	plan, err := (Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments}).Reconcile(ctx, testDeployment(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := plan.Assignments["node-b"]; exists {
+		t.Fatal("其他租户的活跃节点不得进入当前 deployment 调度候选")
+	}
+}
+
 func TestControllerWatchesDeploymentUpdates(t *testing.T) {
 	_, buckets := startSchedulerNATS(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for nodeID := range map[string]struct{}{"node-a": {}, "node-b": {}} {
-		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
+		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, map[string]string{"region": "cn"}, testNodeLeaseOptions())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -165,7 +191,7 @@ func TestControllerWatchesDeploymentUpdates(t *testing.T) {
 func TestControllerLeaderFailoverKeepsSingleActiveWriter(t *testing.T) {
 	_, buckets := startSchedulerNATS(t)
 	rootCtx := context.Background()
-	lease, err := controlplane.StartNodeLease(rootCtx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
+	lease, err := controlplane.StartNodeLease(rootCtx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, testNodeLeaseOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +271,9 @@ func TestSchedulerResourceAccountingAndAffinity(t *testing.T) {
 		{"node-c", map[string]string{"region": "cn", "disk": "ssd", "maintenance": "true"}, controlplane.ResourceCapacity{CPUMillis: 4000, MemoryBytes: 4000}},
 	}
 	for _, node := range nodes {
-		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, node.id, node.labels, controlplane.NodeLeaseOptions{Capacity: node.capacity})
+		options := testNodeLeaseOptions()
+		options.Capacity = node.capacity
+		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, node.id, node.labels, options)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -316,7 +344,7 @@ func TestSchedulerAutoscalingMetricBoundsAndMissingMetric(t *testing.T) {
 	leases := []*controlplane.NodeLease{}
 	for i := 0; i < 5; i++ {
 		id := fmt.Sprintf("node-%d", i)
-		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, id, map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
+		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, id, map[string]string{"region": "cn"}, testNodeLeaseOptions())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -376,7 +404,7 @@ func TestSchedulerPartitionsAreUniqueAndRebalanceAfterNodeLoss(t *testing.T) {
 	ctx := context.Background()
 	leases := map[string]*controlplane.NodeLease{}
 	for _, nodeID := range []string{"node-a", "node-b"} {
-		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
+		lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, nodeID, map[string]string{"region": "cn"}, testNodeLeaseOptions())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -474,6 +502,10 @@ func testDeployment(replicas int) deploymentv2.Deployment {
 			Plugins:   []deploymentv1.PluginRef{{ID: "com.example.api", Version: "1.0.0", Channel: "stable"}},
 		}},
 	}
+}
+
+func testNodeLeaseOptions() controlplane.NodeLeaseOptions {
+	return controlplane.NodeLeaseOptions{TenantID: "acme", Deployment: "prod", AllowUnattested: true}
 }
 
 func startSchedulerNATS(t *testing.T) (*natsserver.Server, controlplane.Buckets) {

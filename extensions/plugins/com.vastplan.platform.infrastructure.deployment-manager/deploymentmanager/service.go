@@ -27,7 +27,7 @@ import (
 
 const (
 	PluginID      = "com.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.1.0"
+	PluginVersion = "0.2.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 16 << 20
@@ -360,6 +360,98 @@ func (s *Service) ListJobs(call *contractv1.CallContext) ([]platformadminapi.Boo
 	return items, nil
 }
 
+func (s *Service) refreshReadiness(ctx context.Context, host sdk.Host, call *contractv1.CallContext) error {
+	tenant, err := callTenant(call)
+	if err != nil || host == nil {
+		return errInvalid
+	}
+	type candidate struct {
+		job  platformadminapi.BootstrapJob
+		node platformadminapi.ManagedNode
+	}
+	s.mu.Lock()
+	state := s.tenantLocked(tenant)
+	changed := s.expireLocked(state)
+	candidates := make([]candidate, 0)
+	for _, job := range state.Jobs {
+		if job.State != platformadminapi.BootstrapSystemdActive {
+			continue
+		}
+		node, ok := state.Nodes[job.NodeID]
+		if ok && node.Version == job.NodeVersion {
+			candidates = append(candidates, candidate{job: job, node: cloneNode(node)})
+		}
+	}
+	if changed {
+		if err := s.saveLocked(); err != nil {
+			s.mu.Unlock()
+			return err
+		}
+	}
+	s.mu.Unlock()
+
+	for _, item := range candidates {
+		expectation := nodebootstrap.ReadinessExpectation{
+			TenantID: tenant, NodeID: item.node.ID, Deployment: item.node.Plan.Node.Deployment,
+			TransportPublicKey: item.node.Plan.Node.TransportPublicKey,
+		}
+		raw, marshalErr := json.Marshal(expectation)
+		if marshalErr != nil {
+			continue
+		}
+		operation := "observe"
+		result, response, callErr := host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: nodebootstrap.KernelReadinessService, Operation: &operation}, call, raw)
+		if callErr != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+			continue
+		}
+		var observation nodebootstrap.ReadinessObservation
+		if err := json.Unmarshal(response, &observation); err != nil {
+			continue
+		}
+		if observation.Status != nodebootstrap.ReadinessReady && observation.Status != nodebootstrap.ReadinessRejected {
+			continue
+		}
+		s.mu.Lock()
+		state = s.tenantLocked(tenant)
+		current, ok := state.Jobs[item.job.ID]
+		if !ok || current.State != platformadminapi.BootstrapSystemdActive || current.NodeVersion != item.job.NodeVersion {
+			s.mu.Unlock()
+			continue
+		}
+		old := current
+		current.UpdatedAt = s.now().Format(time.RFC3339Nano)
+		if observation.Status == nodebootstrap.ReadinessReady {
+			current.State = platformadminapi.BootstrapReady
+			current.ErrorCode = ""
+		} else {
+			current.State = platformadminapi.BootstrapFailed
+			current.ErrorCode = "platform.deployment.readiness_rejected"
+		}
+		state.Jobs[current.ID] = current
+		if err := s.saveLocked(); err != nil {
+			state.Jobs[current.ID] = old
+			s.mu.Unlock()
+			return err
+		}
+		s.mu.Unlock()
+	}
+	return nil
+}
+
+func (s *Service) job(call *contractv1.CallContext, id string) (platformadminapi.BootstrapJob, error) {
+	tenant, err := callTenant(call)
+	if err != nil {
+		return platformadminapi.BootstrapJob{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	job, ok := s.tenantLocked(tenant).Jobs[id]
+	if !ok {
+		return platformadminapi.BootstrapJob{}, errNotFound
+	}
+	return job, nil
+}
+
 func (s *Service) CreateJob(call *contractv1.CallContext, nodeID string) (platformadminapi.BootstrapJob, error) {
 	tenant, err := callTenant(call)
 	if err != nil {
@@ -490,12 +582,17 @@ func (s *Service) expireLocked(state *tenantState) bool {
 	now := s.now()
 	changed := false
 	for id, job := range state.Jobs {
-		if job.State != platformadminapi.BootstrapPending && job.State != platformadminapi.BootstrapApproved {
+		if job.State != platformadminapi.BootstrapPending && job.State != platformadminapi.BootstrapApproved && job.State != platformadminapi.BootstrapSystemdActive {
 			continue
 		}
 		expires, err := time.Parse(time.RFC3339Nano, job.ExpiresAt)
 		if err == nil && !now.Before(expires) {
-			job.State = platformadminapi.BootstrapExpired
+			if job.State == platformadminapi.BootstrapSystemdActive {
+				job.State = platformadminapi.BootstrapFailed
+				job.ErrorCode = "platform.deployment.readiness_timeout"
+			} else {
+				job.State = platformadminapi.BootstrapExpired
+			}
 			job.UpdatedAt = now.Format(time.RFC3339Nano)
 			state.Jobs[id] = job
 			changed = true
@@ -539,6 +636,7 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 	case "putNode":
 		out, err = s.PutNode(call, request.ID, platformadminapi.PutManagedNodeRequest{Plan: request.Plan, IfVersion: request.IfVersion})
 	case "listBootstrapJobs":
+		_ = s.refreshReadiness(ctx, host, call)
 		var items []platformadminapi.BootstrapJob
 		items, err = s.ListJobs(call)
 		out = map[string]any{"items": items}
@@ -557,6 +655,10 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 				result, _, callErr := host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: nodebootstrap.KernelService, Operation: &operationName}, call, raw)
 				success := callErr == nil && result != nil && result.Status == contractv1.CallResult_STATUS_OK
 				job, err = s.finishApproval(call, job.ID, success)
+				if success && err == nil {
+					_ = s.refreshReadiness(ctx, host, call)
+					job, err = s.job(call, job.ID)
+				}
 				if !success && err == nil {
 					err = errBootstrapFailed
 				}

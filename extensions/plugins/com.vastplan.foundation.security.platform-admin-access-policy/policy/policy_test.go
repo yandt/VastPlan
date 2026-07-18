@@ -45,6 +45,9 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.node.bootstrap", Operation: "bootstrap"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 的受限内核回调应允许: %s", got)
 	}
+	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.node.readiness", Operation: "observe"}); got != extpoint.DecisionAllow {
+		t.Fatalf("deployment-manager 的节点就绪观察回调应允许: %s", got)
+	}
 }
 
 func user(roles ...string) *contractv1.CallContext {

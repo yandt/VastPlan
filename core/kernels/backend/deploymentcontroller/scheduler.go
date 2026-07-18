@@ -68,7 +68,7 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 	for _, unit := range deployment.Units {
 		unitsByID[unit.ID] = unit
 	}
-	nodes, err := s.liveNodes(ctx)
+	nodes, err := s.liveNodes(ctx, deployment.Metadata.Tenant, deployment.Metadata.Name)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -344,7 +344,7 @@ type existingAssignment struct {
 	State  deploymentv1.DesiredState
 }
 
-func (s Scheduler) liveNodes(ctx context.Context) (map[string]controlplane.NodeRecord, error) {
+func (s Scheduler) liveNodes(ctx context.Context, tenant, deployment string) (map[string]controlplane.NodeRecord, error) {
 	keys, err := s.Nodes.Keys(ctx)
 	if errors.Is(err, jetstream.ErrNoKeysFound) {
 		return map[string]controlplane.NodeRecord{}, nil
@@ -359,8 +359,14 @@ func (s Scheduler) liveNodes(ctx context.Context) (map[string]controlplane.NodeR
 			continue
 		}
 		var record controlplane.NodeRecord
-		if err := json.Unmarshal(entry.Value(), &record); err != nil || (record.SchemaVersion != 1 && record.SchemaVersion != 2) || record.NodeID == "" {
+		if err := json.Unmarshal(entry.Value(), &record); err != nil || record.ValidateBasic() != nil {
 			return nil, fmt.Errorf("节点租约 %s 无效", key)
+		}
+		if key != controlplane.NodeKey(record.TenantID, record.Deployment, record.NodeID) {
+			return nil, fmt.Errorf("节点租约 %s 与声明作用域不匹配", key)
+		}
+		if record.TenantID != tenant || record.Deployment != deployment {
+			continue
 		}
 		nodes[record.NodeID] = record
 	}

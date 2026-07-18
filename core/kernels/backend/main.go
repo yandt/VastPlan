@@ -36,6 +36,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/kernelops"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapbroker"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapobserver"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 )
 
@@ -254,6 +255,13 @@ func runReconcile(args []string) (runErr error) {
 	runtime.DynamicGoLoader = nodeagent.NewDynamicGoLoader(dynamicGoHostFingerprint)
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers
+	if plane.transport != nil && plane.buckets.Nodes != nil {
+		readiness, err := nodebootstrapobserver.New(plane.buckets.Nodes, plane.transport)
+		if err != nil {
+			return err
+		}
+		runtime.Dependencies.NodeReadiness = readiness
+	}
 	if options.credentialRoot != "" {
 		credentials, err := credentialbroker.NewDirectory(options.credentialRoot)
 		if err != nil {
@@ -283,7 +291,7 @@ func runReconcile(args []string) (runErr error) {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	leaseGuard, err := startNodeLeaseGuard(ctx, stop, options, labels, plane.buckets, logf)
+	leaseGuard, err := startNodeLeaseGuard(ctx, stop, options, labels, plane.buckets, plane.transport, logf)
 	if err != nil {
 		return err
 	}

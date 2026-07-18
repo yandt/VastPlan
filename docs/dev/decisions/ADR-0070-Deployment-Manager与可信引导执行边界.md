@@ -29,5 +29,5 @@
 ## 影响
 
 - 节点定义、审批与执行形成双层授权和可恢复状态记录。
-- 当前代码已具备插件、BFF、角色、Broker SPI、目录 CredentialBroker 和 Linux SSH Broker；集中式 Vault/KMS material provider 与 Node Lease 到 `Ready` 的异步观察器仍待实现。
+- 当前代码已具备插件、BFF、角色、Broker SPI、目录 CredentialBroker、Linux SSH Broker，以及由 [ADR-0071](ADR-0071-签名Node-Lease与可信就绪判定.md) 定义的 Node Lease 到 `Ready` 可信观察；集中式 Vault/KMS material provider 仍待实现。
 - 服务 Draft、Resolver 发布、管理页面和多 Provider 仍是后续纵切，不属于本 ADR 已完成范围。

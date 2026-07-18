@@ -293,7 +293,7 @@ type nodeLeaseGuard struct {
 	failure chan error
 }
 
-func startNodeLeaseGuard(ctx context.Context, stop context.CancelFunc, options reconcileOptions, labels map[string]string, buckets controlplane.Buckets, logf func(string, ...any)) (*nodeLeaseGuard, error) {
+func startNodeLeaseGuard(ctx context.Context, stop context.CancelFunc, options reconcileOptions, labels map[string]string, buckets controlplane.Buckets, transport *addressing.TransportSecurity, logf func(string, ...any)) (*nodeLeaseGuard, error) {
 	if options.natsURL == "" {
 		return nil, nil
 	}
@@ -302,11 +302,23 @@ func startNodeLeaseGuard(ctx context.Context, stop context.CancelFunc, options r
 			return nil, fmt.Errorf("作废旧 assignment: %w", err)
 		}
 	}
-	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, options.nodeID, labels, controlplane.NodeLeaseOptions{
-		Logf: logf, Capacity: controlplane.ResourceCapacity{
+	tenant, deployment := options.deploymentTenant, options.deploymentName
+	if tenant == "" {
+		tenant = "_global"
+	}
+	if deployment == "" {
+		deployment = "legacy"
+	}
+	leaseOptions := controlplane.NodeLeaseOptions{
+		Logf: logf, TenantID: tenant, Deployment: deployment, AllowUnattested: options.natsAllowInsecure,
+		Capacity: controlplane.ResourceCapacity{
 			CPUMillis: options.capacityCPU, MemoryBytes: options.capacityMemory, GPU: options.capacityGPU,
 		},
-	})
+	}
+	if transport != nil {
+		leaseOptions.Attest = transport.AttestNodeLease
+	}
+	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, options.nodeID, labels, leaseOptions)
 	if err != nil {
 		return nil, err
 	}

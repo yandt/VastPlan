@@ -41,7 +41,7 @@ export interface NodeBootstrapPlan {
   node: {
     id: string; tenant: string; deployment: string; labels?: string;
     natsUrl: string; natsCa: string; natsCert: string; natsKey: string; natsSeed: string;
-    transportSeed: string; transportTrust: string;
+    transportSeed: string; transportTrust: string; transportPublicKey: string;
     repositoryUrl: string; repositoryCa?: string; repositoryTrust: string;
     capacityCpuMillis?: number; capacityMemoryBytes?: number; capacityGpu?: number;
   };

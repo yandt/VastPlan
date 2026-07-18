@@ -35,16 +35,20 @@ func TestConnectWithConfig_FailsClosedOnPartialSecurity(t *testing.T) {
 
 func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	files := generateTestCertificates(t)
-	roles := []SecurityRole{RoleBootstrap, RoleController, RoleNode, RoleRuntime}
+	roles := []SecurityRole{RoleBootstrap, RoleController, RoleNode, RoleManager, RoleRuntime}
 	identities := make([]NKeyIdentity, 0, len(roles))
 	seedFiles := map[SecurityRole]string{}
 	for _, role := range roles {
 		publicKey, seed := generateNKey(t)
-		nodeID := ""
-		if role == RoleNode {
+		nodeID, tenant, deployment := "", "", ""
+		if role == RoleNode || role == RoleManager {
 			nodeID = "node-1"
+			if role == RoleManager {
+				nodeID = "manager-1"
+			}
+			tenant, deployment = "acme", "prod"
 		}
-		identities = append(identities, NKeyIdentity{Role: role, PublicKey: publicKey, NodeID: nodeID})
+		identities = append(identities, NKeyIdentity{Role: role, PublicKey: publicKey, TenantID: tenant, Deployment: deployment, NodeID: nodeID})
 		seedFiles[role] = writeTestFile(t, string(role)+".seed", append(seed, '\n'), 0o600)
 	}
 	systemPublic, _ := generateNKey(t)
@@ -88,6 +92,7 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	bootstrap := connect(RoleBootstrap)
 	controller := connect(RoleController)
 	node := connect(RoleNode)
+	manager := connect(RoleManager)
 	runtime := connect(RoleRuntime)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -113,6 +118,18 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	}
 	if _, err := nodeBuckets.Actual.Put(ctx, ActualKey("node-1"), []byte("healthy")); err != nil {
 		t.Fatalf("node 应能写 actual KV: %v", err)
+	}
+	leaseKey := NodeKey("acme", "prod", "node-1")
+	if _, err := nodeBuckets.Nodes.Put(ctx, leaseKey, []byte("signed-lease")); err != nil {
+		t.Fatalf("node 应能写自身作用域 lease: %v", err)
+	}
+	managerJS, _ := jetstream.New(manager)
+	managerBuckets, err := OpenBuckets(ctx, managerJS)
+	if err != nil {
+		t.Fatalf("manager-node 应能打开 buckets: %v", err)
+	}
+	if entry, err := managerBuckets.Nodes.Get(ctx, leaseKey); err != nil || string(entry.Value()) != "signed-lease" {
+		t.Fatalf("manager-node 应能读取节点 lease: entry=%v err=%v", entry, err)
 	}
 	runtimeJS, _ := jetstream.New(runtime)
 	runtimeMetrics, err := runtimeJS.KeyValue(ctx, AutoscalingBucket)
@@ -189,7 +206,7 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 }
 
 func TestRoleACL_NodeCannotMutateGlobalIntent(t *testing.T) {
-	acl, err := RoleACLForIdentity(NKeyIdentity{Role: RoleNode, NodeID: "node-1"})
+	acl, err := RoleACLForIdentity(NKeyIdentity{Role: RoleNode, TenantID: "acme", Deployment: "prod", NodeID: "node-1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,6 +220,35 @@ func TestRoleACL_NodeCannotMutateGlobalIntent(t *testing.T) {
 		if strings.Contains(subject, "$JS.API.CONSUMER.DELETE") {
 			t.Fatalf("node ACL 不得删除任意 consumer: %s", subject)
 		}
+	}
+}
+
+func TestRoleACL_ManagerNodeCanReadLeasesWithoutGlobalWrites(t *testing.T) {
+	manager, err := RoleACLForIdentity(NKeyIdentity{Role: RoleManager, TenantID: "acme", Deployment: "prod", NodeID: "manager-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(manager.PublishAllow, "\n")
+	if !strings.Contains(joined, "$JS.API.DIRECT.GET.KV_"+NodesBucket) {
+		t.Fatal("manager-node 必须能读取节点 lease 以执行可信就绪观察")
+	}
+	for _, subject := range manager.PublishAllow {
+		if strings.HasPrefix(subject, "$KV."+DeploymentsBucket+".") || strings.HasPrefix(subject, "$KV."+AssignmentsBucket+".") {
+			t.Fatalf("manager-node 不得获得全局期望态写权限: %s", subject)
+		}
+	}
+}
+
+func TestNATSSecurityRejectsDuplicateGlobalNodeID(t *testing.T) {
+	first, _ := generateNKey(t)
+	second, _ := generateNKey(t)
+	system, _ := generateNKey(t)
+	_, err := RenderNATSServerConfig(ServerSecurityConfig{
+		StoreDir: "/tmp/nats", TLSCertFile: "/tmp/server.crt", TLSKeyFile: "/tmp/server.key", TLSCAFile: "/tmp/ca.crt", SystemPublicKey: system,
+		Identities: []NKeyIdentity{{Role: RoleNode, TenantID: "acme", Deployment: "prod", NodeID: "node-a", PublicKey: first}, {Role: RoleManager, TenantID: "acme", Deployment: "prod", NodeID: "node-a", PublicKey: second}},
+	})
+	if err == nil || !strings.Contains(err.Error(), "全局唯一") {
+		t.Fatalf("重复 node id 必须在生成 NATS 配置时拒绝: %v", err)
 	}
 }
 

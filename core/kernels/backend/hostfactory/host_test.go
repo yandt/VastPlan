@@ -16,6 +16,13 @@ import (
 
 type bootstrapBroker struct{ called bool }
 
+type readinessObserver struct{ called bool }
+
+func (o *readinessObserver) Observe(_ context.Context, expectation nodebootstrap.ReadinessExpectation) (nodebootstrap.ReadinessObservation, error) {
+	o.called = expectation.TenantID == "tenant-a" && expectation.NodeID == "node-a"
+	return nodebootstrap.ReadinessObservation{Status: nodebootstrap.ReadinessReady}, nil
+}
+
 func (b *bootstrapBroker) Bootstrap(_ context.Context, scope nodebootstrap.Scope, plan nodebootstrap.Plan) (nodebootstrap.Result, error) {
 	b.called = scope.TenantID == plan.Node.Tenant
 	return nodebootstrap.Result{SystemdActive: true, NodeID: plan.Node.ID}, nil
@@ -84,8 +91,26 @@ func TestKernelNodeBootstrapAcceptsOnlyDeploymentManager(t *testing.T) {
 	}
 }
 
+func TestKernelNodeReadinessAcceptsOnlyDeploymentManagerAndTenant(t *testing.T) {
+	observer := &readinessObserver{}
+	service := kernelNodeReadiness(observer)
+	expectation := nodebootstrap.ReadinessExpectation{TenantID: "tenant-a", NodeID: "node-a", Deployment: "prod", TransportPublicKey: "UBN2AENL65VCM6XLPUDC4FGKH4EMJN2DKU2TVBDF34PRQTEG32FHOZ5G"}
+	payload, _ := json.Marshal(expectation)
+	trusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: nodebootstrap.DeploymentManagerPluginID}}
+	result, _, err := service(context.Background(), trusted, payload)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !observer.called {
+		t.Fatalf("deployment-manager 就绪观察失败: result=%+v err=%v", result, err)
+	}
+	wrongTenant := expectation
+	wrongTenant.TenantID = "tenant-b"
+	payload, _ = json.Marshal(wrongTenant)
+	if _, _, err := service(context.Background(), trusted, payload); err == nil {
+		t.Fatal("跨租户就绪观察必须 fail-closed")
+	}
+}
+
 func hostBootstrapPlan() nodebootstrap.Plan {
-	node := nodebootstrap.NodeAgent{ID: "node-a", Tenant: "tenant-a", Deployment: "prod", NATSURL: "tls://nats.internal:4222", NATSCA: nodebootstrap.SecretsRoot + "/nats-ca.pem", NATSCert: nodebootstrap.SecretsRoot + "/node.crt", NATSKey: nodebootstrap.SecretsRoot + "/node.key", NATSSeed: nodebootstrap.SecretsRoot + "/node.seed", TransportSeed: nodebootstrap.SecretsRoot + "/transport.seed", TransportTrust: nodebootstrap.SecretsRoot + "/transport-trust.json", RepositoryURL: "https://artifacts.internal", RepositoryTrust: nodebootstrap.SecretsRoot + "/artifact-trust.json"}
+	node := nodebootstrap.NodeAgent{ID: "node-a", Tenant: "tenant-a", Deployment: "prod", NATSURL: "tls://nats.internal:4222", NATSCA: nodebootstrap.SecretsRoot + "/nats-ca.pem", NATSCert: nodebootstrap.SecretsRoot + "/node.crt", NATSKey: nodebootstrap.SecretsRoot + "/node.key", NATSSeed: nodebootstrap.SecretsRoot + "/node.seed", TransportSeed: nodebootstrap.SecretsRoot + "/transport.seed", TransportTrust: nodebootstrap.SecretsRoot + "/transport-trust.json", TransportPublicKey: "UBN2AENL65VCM6XLPUDC4FGKH4EMJN2DKU2TVBDF34PRQTEG32FHOZ5G", RepositoryURL: "https://artifacts.internal", RepositoryTrust: nodebootstrap.SecretsRoot + "/artifact-trust.json"}
 	plan := nodebootstrap.Plan{Target: nodebootstrap.Target{Address: "node-a.internal", User: "bootstrap"}, Release: nodebootstrap.Release{Version: "1.0.0", URL: "https://releases.internal/backend", SHA256: strings.Repeat("a", 64)}, Node: node, SSHIdentityCredential: "ssh.identity", SSHKnownHostsCredential: "ssh.known-hosts"}
 	for i, destination := range []string{node.NATSCA, node.NATSCert, node.NATSKey, node.NATSSeed, node.TransportSeed, node.TransportTrust, node.RepositoryTrust, nodebootstrap.ArtifactTokenFile} {
 		plan.SecretFiles = append(plan.SecretFiles, nodebootstrap.CredentialSecretFile{Credential: "material-" + string(rune('a'+i)), Destination: destination, Mode: 0o440})

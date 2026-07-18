@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/nats-io/nkeys"
 )
 
 const (
@@ -58,23 +60,24 @@ type Release struct {
 }
 
 type NodeAgent struct {
-	ID              string `json:"id"`
-	Tenant          string `json:"tenant"`
-	Deployment      string `json:"deployment"`
-	Labels          string `json:"labels,omitempty"`
-	NATSURL         string `json:"natsUrl"`
-	NATSCA          string `json:"natsCa"`
-	NATSCert        string `json:"natsCert"`
-	NATSKey         string `json:"natsKey"`
-	NATSSeed        string `json:"natsSeed"`
-	TransportSeed   string `json:"transportSeed"`
-	TransportTrust  string `json:"transportTrust"`
-	RepositoryURL   string `json:"repositoryUrl"`
-	RepositoryCA    string `json:"repositoryCa,omitempty"`
-	RepositoryTrust string `json:"repositoryTrust"`
-	CapacityCPU     int64  `json:"capacityCpuMillis,omitempty"`
-	CapacityMemory  int64  `json:"capacityMemoryBytes,omitempty"`
-	CapacityGPU     int64  `json:"capacityGpu,omitempty"`
+	ID                 string `json:"id"`
+	Tenant             string `json:"tenant"`
+	Deployment         string `json:"deployment"`
+	Labels             string `json:"labels,omitempty"`
+	NATSURL            string `json:"natsUrl"`
+	NATSCA             string `json:"natsCa"`
+	NATSCert           string `json:"natsCert"`
+	NATSKey            string `json:"natsKey"`
+	NATSSeed           string `json:"natsSeed"`
+	TransportSeed      string `json:"transportSeed"`
+	TransportTrust     string `json:"transportTrust"`
+	TransportPublicKey string `json:"transportPublicKey"`
+	RepositoryURL      string `json:"repositoryUrl"`
+	RepositoryCA       string `json:"repositoryCa,omitempty"`
+	RepositoryTrust    string `json:"repositoryTrust"`
+	CapacityCPU        int64  `json:"capacityCpuMillis,omitempty"`
+	CapacityMemory     int64  `json:"capacityMemoryBytes,omitempty"`
+	CapacityGPU        int64  `json:"capacityGpu,omitempty"`
 }
 
 // SecretFile describes a local source and a fixed remote destination under
@@ -187,6 +190,9 @@ func (n NodeAgent) Validate() error {
 		if err := secureRemotePath(n.RepositoryCA); err != nil {
 			return fmt.Errorf("repositoryCa: %w", err)
 		}
+	}
+	if !nkeys.IsValidPublicUserKey(n.TransportPublicKey) {
+		return errors.New("节点必须声明预期 addressing 传输身份公钥")
 	}
 	if n.CapacityCPU < 0 || n.CapacityMemory < 0 || n.CapacityGPU < 0 {
 		return errors.New("节点容量不能为负数")

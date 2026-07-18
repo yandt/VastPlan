@@ -82,6 +82,7 @@ type Dependencies struct {
 	Transactions  TransactionManager
 	Database      DatabaseBroker
 	NodeBootstrap nodebootstrap.Broker
+	NodeReadiness nodebootstrap.ReadinessObserver
 }
 
 type MapConfig struct{ values map[string]json.RawMessage }

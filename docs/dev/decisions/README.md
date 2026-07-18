@@ -101,3 +101,4 @@
 - [ADR-0068 分布式平台管理中心与强类型 BFF](ADR-0068-分布式平台管理中心与强类型BFF.md)
 - [ADR-0069 Linux SSH 首次引导与 Node Agent 接管](ADR-0069-SSH首次引导与Node-Agent接管.md)
 - [ADR-0070 Deployment Manager 与可信引导执行边界](ADR-0070-Deployment-Manager与可信引导执行边界.md)
+- [ADR-0071 签名 Node Lease 与可信就绪判定](ADR-0071-签名Node-Lease与可信就绪判定.md)
