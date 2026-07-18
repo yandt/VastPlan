@@ -7,6 +7,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 const (
 	UIContractVersion          = "1.0.0"
 	InteractionContractVersion = "1.0.0"
+	JSONSchemaDialect          = "http://json-schema.org/draft-07/schema#"
 	UISchemaURL                = "https://schemas.cdsoft.com.cn/vastplan/ui/v1/vastplan.ui.schema.json"
 	InteractionSchemaURL       = "https://schemas.cdsoft.com.cn/vastplan/ui/v1/vastplan.interaction.schema.json"
 )
@@ -40,59 +42,13 @@ const (
 	CapabilityNavigation UICapability = "navigation"
 )
 
-type FormFieldType string
-
-const (
-	FieldText        FormFieldType = "text"
-	FieldTextarea    FormFieldType = "textarea"
-	FieldNumber      FormFieldType = "number"
-	FieldBoolean     FormFieldType = "boolean"
-	FieldSelect      FormFieldType = "select"
-	FieldMultiSelect FormFieldType = "multiSelect"
-	FieldDate        FormFieldType = "date"
-	FieldObject      FormFieldType = "object"
-	FieldArray       FormFieldType = "array"
-	FieldSecretRef   FormFieldType = "secretRef"
-)
-
-type FormCondition struct {
-	Key       string `json:"key"`
-	Equals    any    `json:"equals,omitempty"`
-	NotEquals any    `json:"notEquals,omitempty"`
-}
-
-type FormValidation struct {
-	Required bool     `json:"required,omitempty"`
-	Min      *float64 `json:"min,omitempty"`
-	Max      *float64 `json:"max,omitempty"`
-	Pattern  string   `json:"pattern,omitempty"`
-	Message  string   `json:"message,omitempty"`
-}
-
-type FormOption struct {
-	Label    string `json:"label"`
-	Value    any    `json:"value"`
-	Disabled bool   `json:"disabled,omitempty"`
-}
-
-type FormField struct {
-	Key          string          `json:"key"`
-	Type         FormFieldType   `json:"type"`
-	Title        string          `json:"title"`
-	Help         string          `json:"help,omitempty"`
-	DefaultValue any             `json:"defaultValue,omitempty"`
-	Options      []FormOption    `json:"options,omitempty"`
-	Validation   *FormValidation `json:"validation,omitempty"`
-	VisibleWhen  *FormCondition  `json:"visibleWhen,omitempty"`
-	ReadOnly     bool            `json:"readOnly,omitempty"`
-	Disabled     bool            `json:"disabled,omitempty"`
-	Fields       []FormField     `json:"fields,omitempty"`
-}
+type JSONSchema map[string]any
+type FormUISchema map[string]any
 
 type FormSchema struct {
-	ID     string      `json:"id"`
-	Title  string      `json:"title,omitempty"`
-	Fields []FormField `json:"fields"`
+	ID       string       `json:"id"`
+	Schema   JSONSchema   `json:"schema"`
+	UISchema FormUISchema `json:"uiSchema,omitempty"`
 }
 
 type InteractionKind string
@@ -203,12 +159,121 @@ func ValidateFormSchema(value FormSchema) error {
 	if err := schemas(); err != nil {
 		return err
 	}
-	return validate(uiSchema, value, "FormSchema")
+	if err := validateFormDocumentLimits(value); err != nil {
+		return err
+	}
+	if err := validate(uiSchema, value, "FormSchema"); err != nil {
+		return err
+	}
+	return validateDataSchema(value.Schema)
+}
+
+func ValidateFormData(form FormSchema, value map[string]any) error {
+	if err := ValidateFormSchema(form); err != nil {
+		return err
+	}
+	schema, err := compileDataSchema(form.Schema)
+	if err != nil {
+		return err
+	}
+	return validate(schema, value, "FormData")
 }
 
 func ValidateInteractionRequest(value InteractionRequest) error {
 	if err := schemas(); err != nil {
 		return err
 	}
-	return validate(interactionSchema, value, "InteractionRequest")
+	if err := validate(interactionSchema, value, "InteractionRequest"); err != nil {
+		return err
+	}
+	if value.Form != nil {
+		return ValidateFormSchema(*value.Form)
+	}
+	return nil
+}
+
+const (
+	maxFormDocumentBytes = 256 * 1024
+	maxFormSchemaDepth   = 32
+	maxFormSchemaNodes   = 4096
+)
+
+func validateDataSchema(schema JSONSchema) error {
+	_, err := compileDataSchema(schema)
+	return err
+}
+
+func validateFormDocumentLimits(value FormSchema) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("序列化表单文档: %w", err)
+	}
+	if len(raw) > maxFormDocumentBytes {
+		return fmt.Errorf("表单文档超过 %d 字节上限", maxFormDocumentBytes)
+	}
+	nodes := 0
+	document := map[string]any{"schema": map[string]any(value.Schema)}
+	if value.UISchema != nil {
+		document["uiSchema"] = map[string]any(value.UISchema)
+	}
+	return inspectSchemaValue(document, 0, &nodes)
+}
+
+func compileDataSchema(schema JSONSchema) (*jsonschema.Schema, error) {
+	raw, err := json.Marshal(schema)
+	if err != nil {
+		return nil, fmt.Errorf("序列化数据 Schema: %w", err)
+	}
+	if schema["$schema"] != JSONSchemaDialect {
+		return nil, fmt.Errorf("数据 Schema 必须显式使用 %s", JSONSchemaDialect)
+	}
+	if schema["type"] != "object" {
+		return nil, fmt.Errorf("数据 Schema 根类型必须是 object")
+	}
+
+	document, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		return nil, fmt.Errorf("解析数据 Schema: %w", err)
+	}
+	compiler := jsonschema.NewCompiler()
+	const resource = "urn:vastplan:form-schema:validation"
+	if err := compiler.AddResource(resource, document); err != nil {
+		return nil, fmt.Errorf("登记数据 Schema: %w", err)
+	}
+	compiled, err := compiler.Compile(resource)
+	if err != nil {
+		return nil, fmt.Errorf("编译数据 Schema: %w", err)
+	}
+	return compiled, nil
+}
+
+func inspectSchemaValue(value any, depth int, nodes *int) error {
+	if depth > maxFormSchemaDepth {
+		return fmt.Errorf("表单 Schema 嵌套超过 %d 层上限", maxFormSchemaDepth)
+	}
+	(*nodes)++
+	if *nodes > maxFormSchemaNodes {
+		return fmt.Errorf("表单 Schema 节点超过 %d 个上限", maxFormSchemaNodes)
+	}
+	switch current := value.(type) {
+	case map[string]any:
+		for key, child := range current {
+			if key == "$ref" {
+				ref, ok := child.(string)
+				if !ok || !strings.HasPrefix(ref, "#") {
+					return fmt.Errorf("数据 Schema 只允许本地 $ref")
+				}
+			}
+			if err := inspectSchemaValue(child, depth+1, nodes); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, child := range current {
+			if err := inspectSchemaValue(child, depth+1, nodes); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

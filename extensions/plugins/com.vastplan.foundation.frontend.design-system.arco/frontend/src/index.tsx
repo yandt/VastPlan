@@ -4,25 +4,20 @@ import {
   Button,
   Card,
   ConfigProvider,
-  DatePicker,
   Descriptions as ArcoDescriptions,
   Divider as ArcoDivider,
   Drawer as ArcoDrawer,
-  Form,
   Grid as ArcoGrid,
   Input,
-  InputNumber,
   Layout,
   Menu as ArcoMenu,
   Modal,
   Notification,
   Pagination as ArcoPagination,
   Result,
-  Select,
   Skeleton as ArcoSkeleton,
   Space,
   Spin,
-  Switch,
   Table as ArcoTable,
   Tabs as ArcoTabs,
   Tag,
@@ -42,7 +37,7 @@ import {
   IconSettings,
 } from "@arco-design/web-react/icon";
 import arcoCSS from "@arco-design/web-react/dist/css/arco.css";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 import type { ReactNode } from "react";
 import type {
   ButtonProps,
@@ -50,9 +45,6 @@ import type {
   DesignSystemAdapter,
   DialogProps,
   DrawerProps,
-  FormField,
-  FormRendererProps,
-  FormValidationIssue,
   GridItemProps,
   GridProps,
   MenuItem,
@@ -64,18 +56,12 @@ import type {
   StatusTone,
   TableProps,
 } from "@vastplan/portal-ui";
-import {
-  applyFormDefaults,
-  getFormValue,
-  isFormFieldVisible,
-  PortalUIProvider,
-  validateForm,
-} from "@vastplan/portal-ui";
+import { PortalUIProvider } from "@vastplan/portal-ui";
+import { ArcoJSONSchemaForm } from "./json-schema-form";
 import { scopeDocumentCSS } from "./scope-css";
 
 const gapPixels = { xs: 4, sm: 8, md: 16, lg: 24 } as const;
 const dialogWidths = { sm: 480, md: 720, lg: 960 } as const;
-const emptyFormContext: Readonly<Record<string, unknown>> = {};
 const iconSizes = { sm: 14, md: 16, lg: 20 } as const;
 
 function PortalShell({ header, navigation, inspector, statusBar, children }: PortalShellProps) {
@@ -166,181 +152,6 @@ function Drawer({ open, title, children, footer, width = "md", placement = "righ
   >{children}</ArcoDrawer>;
 }
 
-type Path = Array<string | number>;
-
-function pathString(path: Path): string {
-  return path.reduce<string>((result, part) => typeof part === "number" ? `${result}[${part}]` : result === "" ? part : `${result}.${part}`, "");
-}
-
-function replaceAtPath(root: Record<string, unknown>, path: Path, nextValue: unknown): Record<string, unknown> {
-  const [head, ...tail] = path;
-  if (head === undefined) return root;
-  const source = root[head] as unknown;
-  if (tail.length === 0) return { ...root, [head]: nextValue };
-  if (Array.isArray(source)) {
-    const next = [...source];
-    const index = tail[0];
-    if (typeof index !== "number") return root;
-    if (tail.length === 1) next[index] = nextValue;
-    else next[index] = replaceAtPath((next[index] as Record<string, unknown> | undefined) ?? {}, tail.slice(1), nextValue);
-    return { ...root, [head]: next };
-  }
-  return { ...root, [head]: replaceAtPath((source as Record<string, unknown> | undefined) ?? {}, tail, nextValue) };
-}
-
-function defaultArrayEntry(field: FormField): unknown {
-  if (field.fields === undefined) return "";
-  return applyFormDefaults({ id: `${field.key}.item`, fields: field.fields }, {});
-}
-
-function issueText(issue: FormValidationIssue): string {
-  if (issue.message !== undefined) return issue.message;
-  switch (issue.code) {
-    case "required": return "此项为必填项";
-    case "min": return `不能小于 ${issue.limit ?? "最小值"}`;
-    case "max": return `不能大于 ${issue.limit ?? "最大值"}`;
-    case "pattern": return "格式不符合要求";
-    case "invalidPattern": return "表单校验规则无效";
-  }
-}
-
-function optionToken(field: FormField, value: unknown): string | undefined {
-  const index = field.options?.findIndex((option) => Object.is(option.value, value)) ?? -1;
-  return index < 0 ? undefined : `option:${index}`;
-}
-
-function optionValue(field: FormField, token: string): unknown {
-  const index = Number(token.slice("option:".length));
-  return field.options?.[index]?.value;
-}
-
-function selectOptions(field: FormField) {
-  return (field.options ?? []).map((option, index) => ({ label: option.label, value: `option:${index}`, disabled: option.disabled }));
-}
-
-function FormRenderer({ schema, value, onChange, readOnly, submitting, errors: externalErrors, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
-  const context = suppliedContext ?? emptyFormContext;
-  const effectiveValue = useMemo(() => applyFormDefaults(schema, value), [schema, value]);
-  const validation = useMemo(() => validateForm(schema, effectiveValue), [schema, effectiveValue]);
-  useEffect(() => {
-    if (effectiveValue !== value) onChange(effectiveValue);
-  }, [effectiveValue, onChange, value]);
-  const [asyncValidation, setAsyncValidation] = useState<{
-    source?: Readonly<Record<string, unknown>>;
-    validating: boolean;
-    errors: Readonly<Record<string, string>>;
-  }>({ validating: false, errors: {} });
-  const currentAsyncValidation = asyncValidation.source === effectiveValue
-    ? asyncValidation
-    : { source: effectiveValue, validating: validate !== undefined && validation.valid, errors: {} };
-
-  useEffect(() => {
-    if (validate === undefined || !validation.valid) {
-      setAsyncValidation({ source: effectiveValue, validating: false, errors: {} });
-      return;
-    }
-    const controller = new AbortController();
-    setAsyncValidation({ source: effectiveValue, validating: true, errors: {} });
-    const timeout = window.setTimeout(() => {
-      validate({ schema, value: effectiveValue, context, signal: controller.signal })
-        .then((errors) => { if (!controller.signal.aborted) setAsyncValidation({ source: effectiveValue, validating: false, errors }); })
-        .catch(() => { if (!controller.signal.aborted) setAsyncValidation({ source: effectiveValue, validating: false, errors: { $form: "异步校验暂时不可用" } }); });
-    }, Math.max(0, validationDelayMs));
-    return () => { controller.abort(); window.clearTimeout(timeout); };
-  }, [context, effectiveValue, schema, validate, validation.valid, validationDelayMs]);
-
-  const errors = useMemo(() => {
-    const result: Record<string, string> = {};
-    for (const issue of validation.issues) result[issue.path] ??= issueText(issue);
-    return { ...result, ...currentAsyncValidation.errors, ...externalErrors };
-  }, [currentAsyncValidation.errors, externalErrors, validation.issues]);
-  const validationState = useMemo(() => ({
-    valid: validation.valid && !currentAsyncValidation.validating && Object.keys(currentAsyncValidation.errors).length === 0 && Object.keys(externalErrors ?? {}).length === 0,
-    issues: validation.issues,
-    errors,
-    validating: currentAsyncValidation.validating,
-  }), [currentAsyncValidation, errors, externalErrors, validation]);
-  useEffect(() => onValidationChange?.(validationState), [onValidationChange, validationState]);
-
-  const update = (path: Path, next: unknown) => onChange(replaceAtPath(effectiveValue, path, next));
-  const renderFields = (fields: FormField[], parent: Path = []): ReactNode => fields.filter((field) => isFormFieldVisible(field, effectiveValue)).map((field) => {
-    const path = [...parent, field.key];
-    const name = pathString(path);
-    const current = getFormValue(effectiveValue, name);
-    const disabled = Boolean(readOnly || field.readOnly || field.disabled || submitting);
-    const item = (control: ReactNode) => <Form.Item
-      key={name}
-      label={field.title}
-      extra={field.help}
-      validateStatus={errors[name] === undefined ? undefined : "error"}
-      help={errors[name]}
-    >{control}</Form.Item>;
-
-    switch (field.type) {
-      case "textarea":
-        return item(<Input.TextArea value={typeof current === "string" ? current : ""} disabled={disabled} onChange={(next) => update(path, next)} />);
-      case "number":
-        return item(<InputNumber value={typeof current === "number" ? current : undefined} disabled={disabled} onChange={(next) => update(path, next)} />);
-      case "boolean":
-        return item(<Switch checked={current === true} disabled={disabled} onChange={(next) => update(path, next)} />);
-      case "select":
-        return item(<Select value={optionToken(field, current)} disabled={disabled} onChange={(next) => update(path, optionValue(field, next))} options={selectOptions(field)} />);
-      case "multiSelect":
-        return item(<Select
-          mode="multiple"
-          value={Array.isArray(current) ? current.flatMap((entry) => optionToken(field, entry) ?? []) : []}
-          disabled={disabled}
-          onChange={(next: string[]) => update(path, next.map((token) => optionValue(field, token)))}
-          options={selectOptions(field)}
-        />);
-      case "date":
-        return item(<DatePicker value={typeof current === "string" ? current : undefined} disabled={disabled} onChange={(next) => update(path, next)} />);
-      case "secretRef":
-        return item(field.options?.length
-          ? <Select value={optionToken(field, current)} disabled={disabled} placeholder="选择凭证引用" onChange={(next) => update(path, optionValue(field, next))} options={selectOptions(field)} />
-          : <Input value={typeof current === "string" ? current : ""} autoComplete="off" placeholder="输入凭证引用 ID（不要填写明文）" disabled={disabled} onChange={(next) => update(path, next)} />);
-      case "object":
-        return <Card key={name} title={field.title} size="small" style={{ marginBottom: 16 }}>
-          {field.help === undefined ? null : <Typography.Paragraph>{field.help}</Typography.Paragraph>}
-          {renderFields(field.fields ?? [], path)}
-        </Card>;
-      case "array": {
-        const entries = Array.isArray(current) ? current : [];
-        return <Card
-          key={name}
-          title={field.title}
-          size="small"
-          style={{ marginBottom: 16 }}
-          extra={<Button size="small" disabled={disabled} onClick={() => update(path, [...entries, defaultArrayEntry(field)])}>添加</Button>}
-        >
-          {field.help === undefined ? null : <Typography.Paragraph>{field.help}</Typography.Paragraph>}
-          {errors[name] === undefined ? null : <Alert type="error" content={errors[name]} style={{ marginBottom: 12 }} />}
-          {entries.length === 0 ? <Result status="404" title="暂无条目" /> : entries.map((entry, index) => <Card
-            key={`${name}.${index}`}
-            size="small"
-            style={{ marginBottom: 12 }}
-            title={`第 ${index + 1} 项`}
-            extra={<Button size="mini" status="danger" disabled={disabled} onClick={() => update(path, entries.filter((_, candidate) => candidate !== index))}>删除</Button>}
-          >{field.fields === undefined
-              ? <Input value={typeof entry === "string" ? entry : ""} disabled={disabled} onChange={(next) => update([...path, index], next)} />
-              : renderFields(field.fields, [...path, index])}
-          </Card>)}
-        </Card>;
-      }
-      case "text":
-      default:
-        return item(<Input value={typeof current === "string" ? current : ""} disabled={disabled} onChange={(next) => update(path, next)} />);
-    }
-  });
-
-  return <Form layout="vertical">
-    {currentAsyncValidation.validating ? <Alert type="info" title="正在校验" style={{ marginBottom: 16 }} /> : null}
-    {Object.keys(errors).length === 0 ? null : <Alert type="error" title="表单校验未通过" content={`请检查 ${Object.keys(errors).length} 个字段`} style={{ marginBottom: 16 }} />}
-    {schema.title === undefined ? null : <Typography.Title heading={6}>{schema.title}</Typography.Title>}
-    {renderFields(schema.fields)}
-  </Form>;
-}
-
 function buttonProps({ kind }: Pick<ButtonProps, "kind">): { type?: "primary" | "secondary" | "text"; status?: "danger" } {
   if (kind === "primary") return { type: "primary" };
   if (kind === "danger") return { status: "danger" };
@@ -410,7 +221,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
   CommandPalette,
   Dialog,
   Drawer,
-  FormRenderer,
+  FormRenderer: ArcoJSONSchemaForm,
   FilterBar: ({ children, actions }) => <Card size="small"><Space wrap size={12}>{children}</Space>{actions === undefined ? null : <div style={{ float: "right" }}>{actions}</div>}</Card>,
   Table,
   Pagination: ({ page, pageSize, total, disabled, onChange }) => <ArcoPagination current={page} pageSize={pageSize} total={total} disabled={disabled} showTotal sizeCanChange onChange={onChange} />,

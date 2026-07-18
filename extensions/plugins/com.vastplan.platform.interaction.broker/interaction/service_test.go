@@ -94,6 +94,51 @@ func TestService_RejectsCrossTenantAndSecretPlaintext(t *testing.T) {
 	}
 }
 
+func TestValidateResponse_ValidatesNestedSchemaAndCredentialPaths(t *testing.T) {
+	form := &uiv1.FormSchema{ID: "nested", Schema: uiv1.JSONSchema{
+		"$schema":  uiv1.JSONSchemaDialect,
+		"type":     "object",
+		"required": []any{"name", "connection"},
+		"properties": map[string]any{
+			"name":       map[string]any{"type": "string", "minLength": 3},
+			"connection": map[string]any{"$ref": "#/definitions/connection"},
+		},
+		"definitions": map[string]any{
+			"connection": map[string]any{
+				"type": "object", "required": []any{"credential"},
+				"properties": map[string]any{
+					"credential": map[string]any{"type": "string", "format": "vastplan-credential-ref", "writeOnly": true},
+				},
+			},
+		},
+	}}
+	request := uiv1.InteractionRequest{Form: form}
+
+	if err := validateResponse(request, uiv1.InteractionResponse{Decision: uiv1.DecisionAnswered, Values: map[string]any{
+		"name": "portal", "connection": map[string]any{"credential": "plaintext"},
+	}}); err == nil {
+		t.Fatal("嵌套秘密字段明文必须被拒绝")
+	}
+	if err := validateResponse(request, uiv1.InteractionResponse{Decision: uiv1.DecisionAnswered,
+		Values:        map[string]any{"name": "x", "connection": map[string]any{}},
+		CredentialRef: map[string]string{"connection.credential": "credential://tenant-a/key-1"},
+	}); err == nil {
+		t.Fatal("绕过浏览器提交的非法普通字段必须被后端 Schema 拒绝")
+	}
+	if err := validateResponse(request, uiv1.InteractionResponse{Decision: uiv1.DecisionAnswered,
+		Values:        map[string]any{"name": "portal", "connection": map[string]any{}},
+		CredentialRef: map[string]string{"connection.credential": "plaintext"},
+	}); err == nil {
+		t.Fatal("非法凭证引用必须被拒绝")
+	}
+	if err := validateResponse(request, uiv1.InteractionResponse{Decision: uiv1.DecisionAnswered,
+		Values:        map[string]any{"name": "portal", "connection": map[string]any{}},
+		CredentialRef: map[string]string{"connection.credential": "credential://tenant-a/key-1"},
+	}); err != nil {
+		t.Fatalf("有效嵌套凭证引用被拒绝: %v", err)
+	}
+}
+
 func TestService_ExpiresFailClosed(t *testing.T) {
 	now := time.Date(2026, 7, 18, 9, 0, 0, 0, time.UTC)
 	service, err := New(t.TempDir() + "/interactions.json")
@@ -185,9 +230,15 @@ func testRequest(now time.Time) uiv1.InteractionRequest {
 		},
 		AllowedSurfaces: []uiv1.InteractionSurface{uiv1.SurfaceFrontend, uiv1.SurfaceMobile},
 		ExpiresAt:       now.Add(time.Hour),
-		Form: &uiv1.FormSchema{ID: "approval", Fields: []uiv1.FormField{
-			{Key: "reason", Type: uiv1.FieldText, Title: "Reason"},
-			{Key: "password", Type: uiv1.FieldSecretRef, Title: "Credential"},
+		Form: &uiv1.FormSchema{ID: "approval", Schema: uiv1.JSONSchema{
+			"$schema": uiv1.JSONSchemaDialect,
+			"type":    "object",
+			"properties": map[string]any{
+				"reason": map[string]any{"type": "string", "title": "Reason"},
+				"password": map[string]any{
+					"type": "string", "title": "Credential", "format": "vastplan-credential-ref", "writeOnly": true,
+				},
+			},
 		}},
 	}
 }

@@ -3,7 +3,8 @@ import { buildApplicationComposition, portalCompositionSchema } from "./index";
 
 describe("Portal application composition", () => {
   it("never exposes or submits platform-managed fields", () => {
-    expect(portalCompositionSchema.fields.some((field) => field.key === "designSystem")).toBe(false);
+    const properties = portalCompositionSchema.schema.properties as Record<string, unknown>;
+    expect(properties.designSystem).toBeUndefined();
 
     const composition = buildApplicationComposition({
       name: "operations",

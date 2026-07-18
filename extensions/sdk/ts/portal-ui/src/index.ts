@@ -2,8 +2,8 @@ import { createContext, createElement, useContext } from "react";
 import type { ComponentType, ReactNode } from "react";
 import type { FormSchema, FormValidationResult, UICapability } from "@vastplan/ui-contract";
 
-export type { FormCondition, FormField, FormFieldType, FormOption, FormSchema, FormValidation, FormValidationCode, FormValidationIssue, FormValidationResult, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, UICapability } from "@vastplan/ui-contract";
-export { applyFormDefaults, getFormValue, isFormFieldVisible, validateForm } from "@vastplan/ui-contract";
+export type { FormSchema, FormUISchema, FormValidationIssue, FormValidationResult, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, UICapability } from "@vastplan/ui-contract";
+export { jsonSchemaDialect } from "@vastplan/ui-contract";
 export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contract";
 export { PortalInteractionClient, PortalInteractionError } from "./interaction-client.js";
 export type { PortalFetch, PortalFetchResponse, PortalInteractionClientOptions } from "./interaction-client.js";

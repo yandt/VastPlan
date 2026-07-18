@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormSchema } from "@vastplan/portal-ui";
-import { usePortalUI } from "@vastplan/portal-ui";
+import { jsonSchemaDialect, usePortalUI } from "@vastplan/portal-ui";
 
 interface PluginRef {
   id: string;
@@ -20,26 +20,47 @@ export interface ApplicationComposition {
 
 export const portalCompositionSchema: FormSchema = {
   id: "portal-composition.v1",
-  title: "门户组合草稿",
-  fields: [
-    { key: "name", type: "text", title: "名称", validation: { required: true } },
-    { key: "route", type: "text", title: "访问路径", help: "必须以 / 开始", validation: { required: true, pattern: "^/" } },
-    {
-      key: "plugins",
-      type: "array",
-      title: "应用功能插件",
-      help: "这里只能选择应用插件；设计系统和平台插件由 Platform Profile 管理",
-      validation: { min: 1 },
-      fields: [
-        { key: "id", type: "text", title: "插件 ID", validation: { required: true, pattern: "^[a-z0-9]+(?:[.-][a-z0-9]+)+$" } },
-        { key: "version", type: "text", title: "精确版本", validation: { required: true, pattern: "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$" } },
-        { key: "channel", type: "select", title: "发布通道", defaultValue: "stable", options: [
-          { label: "稳定版", value: "stable" },
-          { label: "预发布", value: "preview" },
-        ] },
-      ],
-    }
-  ]
+  schema: {
+    $schema: jsonSchemaDialect,
+    title: "门户组合草稿",
+    type: "object",
+    additionalProperties: false,
+    required: ["name", "route", "plugins"],
+    properties: {
+      name: { type: "string", title: "名称", minLength: 1 },
+      route: { type: "string", title: "访问路径", pattern: "^/" },
+      plugins: {
+        type: "array",
+        title: "应用功能插件",
+        minItems: 1,
+        items: {
+          type: "object",
+          additionalProperties: false,
+          required: ["id", "version"],
+          properties: {
+            id: { type: "string", title: "插件 ID", pattern: "^[a-z0-9]+(?:[.-][a-z0-9]+)+$" },
+            version: { type: "string", title: "精确版本", pattern: "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$" },
+            channel: {
+              type: "string",
+              title: "发布通道",
+              default: "stable",
+              oneOf: [
+                { const: "stable", title: "稳定版" },
+                { const: "preview", title: "预发布" },
+              ],
+            },
+          },
+        },
+      },
+    },
+  },
+  uiSchema: {
+    route: { "ui:help": "必须以 / 开始" },
+    plugins: {
+      "ui:help": "这里只能选择应用插件；设计系统和平台插件由 Platform Profile 管理",
+      items: { channel: { "ui:widget": "select" } },
+    },
+  },
 };
 
 export function buildApplicationComposition(value: Record<string, unknown>): ApplicationComposition {

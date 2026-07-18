@@ -1,65 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.cdsoft.com.cn/vastplan/ui/v1/vastplan.ui.schema.json",
-  "title": "VastPlan UI Contract v1 Form Schema",
+  "title": "VastPlan UI Contract v1 JSON Schema Form",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "fields"],
+  "required": ["id", "schema"],
   "properties": {
     "id": { "type": "string", "minLength": 1, "maxLength": 160 },
-    "title": { "type": "string", "minLength": 1, "maxLength": 240 },
-    "fields": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/formField" } }
-  },
-  "$defs": {
-    "formField": {
+    "schema": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["key", "type", "title"],
+      "required": ["$schema", "type", "properties"],
       "properties": {
-        "key": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$" },
-        "type": { "enum": ["text", "textarea", "number", "boolean", "select", "multiSelect", "date", "object", "array", "secretRef"] },
-        "title": { "type": "string", "minLength": 1, "maxLength": 240 },
-        "help": { "type": "string", "maxLength": 2000 },
-        "defaultValue": {},
-        "options": { "type": "array", "items": { "$ref": "#/$defs/formOption" } },
-        "validation": { "$ref": "#/$defs/formValidation" },
-        "visibleWhen": { "$ref": "#/$defs/formCondition" },
-        "readOnly": { "type": "boolean" },
-        "disabled": { "type": "boolean" },
-        "fields": { "type": "array", "items": { "$ref": "#/$defs/formField" } }
-      }
-    },
-    "formOption": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["label", "value"],
-      "properties": {
-        "label": { "type": "string", "minLength": 1, "maxLength": 240 },
-        "value": { "type": ["string", "number", "boolean"] },
-        "disabled": { "type": "boolean" }
-      }
-    },
-    "formValidation": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "required": { "type": "boolean" },
-        "min": { "type": "number" },
-        "max": { "type": "number" },
-        "pattern": { "type": "string", "maxLength": 1024 },
-        "message": { "type": "string", "maxLength": 1000 }
-      }
-    },
-    "formCondition": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["key"],
-      "properties": {
-        "key": { "type": "string", "minLength": 1, "maxLength": 160 },
-        "equals": {},
-        "notEquals": {}
+        "$schema": { "const": "http://json-schema.org/draft-07/schema#" },
+        "type": { "const": "object" },
+        "properties": { "type": "object" }
       },
-      "allOf": [{ "not": { "required": ["equals", "notEquals"] } }]
+      "additionalProperties": true
+    },
+    "uiSchema": {
+      "type": "object",
+      "additionalProperties": true
     }
   }
 }

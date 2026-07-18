@@ -95,3 +95,4 @@
 - [ADR-0062 Frontend 可信 ESM 制品与运行描述](ADR-0062-Frontend可信ESM制品与运行描述.md)
 - [ADR-0063 Portal 静态宿主与样式隔离](ADR-0063-Portal静态宿主与样式隔离.md)
 - [ADR-0064 Portal 语义组件契约与动态表单运行时](ADR-0064-Portal语义组件契约与动态表单运行时.md)
+- [ADR-0065 通用 JSON Schema 表单与 Arco 主题适配](ADR-0065-通用JSON-Schema表单与Arco主题适配.md)

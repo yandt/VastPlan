@@ -1,38 +1,29 @@
 /** Serializable UI semantics shared by Web and Mobile renderers. */
 export const uiContractVersion = "1.0.0" as const;
 export const interactionContractVersion = "1.0.0" as const;
+export const jsonSchemaDialect = "http://json-schema.org/draft-07/schema#" as const;
 
 export type UICapability = "layout" | "menu" | "overlay" | "form" | "data" | "feedback" | "theme" | "approval" | "navigation";
-export type FormFieldType = "text" | "textarea" | "number" | "boolean" | "select" | "multiSelect" | "date" | "object" | "array" | "secretRef";
 
-export interface FormCondition { key: string; equals?: unknown; notEquals?: unknown; }
-export interface FormValidation { required?: boolean; min?: number; max?: number; pattern?: string; message?: string; }
-export interface FormOption { label: string; value: string | number | boolean; disabled?: boolean; }
-export interface FormField {
-  key: string;
-  type: FormFieldType;
-  title: string;
-  help?: string;
-  defaultValue?: unknown;
-  options?: FormOption[];
-  validation?: FormValidation;
-  visibleWhen?: FormCondition;
-  readOnly?: boolean;
-  disabled?: boolean;
-  fields?: FormField[];
+export type JSONPrimitive = string | number | boolean | null;
+export type JSONValue = JSONPrimitive | readonly JSONValue[] | { readonly [key: string]: JSONValue };
+/** Package-neutral JSON Schema document. V1 accepts Draft 7 only. */
+export type JSONSchema = Readonly<Record<string, JSONValue>>;
+/** Serializable RJSF-compatible presentation hints; never contains components or functions. */
+export type FormUISchema = Readonly<Record<string, JSONValue>>;
+export interface FormSchema {
+  id: string;
+  schema: JSONSchema;
+  uiSchema?: FormUISchema;
 }
-export interface FormSchema { id: string; title?: string; fields: FormField[]; }
 
-export type FormValidationCode = "required" | "min" | "max" | "pattern" | "invalidPattern";
 export interface FormValidationIssue {
   path: string;
-  code: FormValidationCode;
+  code: string;
   message?: string;
-  limit?: number;
+  schemaPath?: string;
 }
 export interface FormValidationResult { valid: boolean; issues: FormValidationIssue[]; }
-
-export { applyFormDefaults, getFormValue, isFormFieldVisible, validateForm } from "./form-runtime.js";
 
 export type InteractionKind = "confirm" | "form" | "approval" | "notification" | "progress";
 export type InteractionSurface = "frontend" | "mobile" | "runner.local";
