@@ -82,6 +82,9 @@ importers:
 
   sdk/ts/portal-ui:
     dependencies:
+      '@vastplan/ui-contract':
+        specifier: workspace:*
+        version: link:../ui-contract
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -95,6 +98,12 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  sdk/ts/ui-contract:
+    devDependencies:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3

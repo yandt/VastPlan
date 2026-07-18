@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "dependencies": {
+    "@vastplan/ui-contract": "workspace:*"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   },

@@ -1,70 +1,9 @@
 import { createContext, createElement, useContext } from "react";
 import type { ComponentType, ReactNode } from "react";
+import type { FormSchema, UICapability } from "@vastplan/ui-contract";
 
-/** The single UI contract version accepted by the first Portal release. */
-export const portalUIContractVersion = "1.0.0" as const;
-
-export type UICapability =
-  | "layout"
-  | "menu"
-  | "overlay"
-  | "form"
-  | "data"
-  | "feedback"
-  | "theme";
-
-export type FormFieldType =
-  | "text"
-  | "textarea"
-  | "number"
-  | "boolean"
-  | "select"
-  | "multiSelect"
-  | "date"
-  | "object"
-  | "array"
-  | "secretRef";
-
-export interface FormCondition {
-  key: string;
-  equals?: unknown;
-  notEquals?: unknown;
-}
-
-export interface FormValidation {
-  required?: boolean;
-  min?: number;
-  max?: number;
-  pattern?: string;
-  message?: string;
-}
-
-export interface FormOption {
-  label: string;
-  value: string | number | boolean;
-  disabled?: boolean;
-}
-
-/** A framework-neutral form definition. `secretRef` is always a reference, never a secret value. */
-export interface FormField {
-  key: string;
-  type: FormFieldType;
-  title: string;
-  help?: string;
-  defaultValue?: unknown;
-  options?: FormOption[];
-  validation?: FormValidation;
-  visibleWhen?: FormCondition;
-  readOnly?: boolean;
-  disabled?: boolean;
-  fields?: FormField[];
-}
-
-export interface FormSchema {
-  id: string;
-  title?: string;
-  fields: FormField[];
-}
+export type { FormCondition, FormField, FormFieldType, FormOption, FormSchema, FormValidation, UICapability } from "@vastplan/ui-contract";
+export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contract";
 
 export interface FormRendererProps {
   schema: FormSchema;

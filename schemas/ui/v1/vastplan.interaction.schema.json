@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/ui/v1/vastplan.interaction.schema.json",
+  "title": "VastPlan Interaction Contract v1 Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "contractVersion", "kind", "source", "tenantId", "eligibleSubjects", "allowedSurfaces", "expiresAt"],
+  "properties": {
+    "id": { "type": "string", "minLength": 16, "maxLength": 160, "pattern": "^[A-Za-z0-9_.-]+$" },
+    "contractVersion": { "const": "1.0.0" },
+    "kind": { "enum": ["confirm", "form", "approval", "notification", "progress"] },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capability"],
+      "properties": {
+        "workflowRunId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "capability": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "operation": { "type": "string", "maxLength": 160 }
+      }
+    },
+    "tenantId": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "eligibleSubjects": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
+    "allowedSurfaces": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["frontend", "mobile", "runner.local"] } },
+    "fallback": { "enum": ["expire", "runner.local-if-allowed"] },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "title": { "type": "string", "maxLength": 240 },
+    "message": { "type": "string", "maxLength": 4000 },
+    "form": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/ui/v1/vastplan.ui.schema.json" }
+  },
+  "allOf": [
+    { "if": { "properties": { "kind": { "const": "form" } } }, "then": { "required": ["form"] } },
+    { "if": { "properties": { "kind": { "const": "approval" } } }, "then": { "required": ["title"] } }
+  ]
+}
