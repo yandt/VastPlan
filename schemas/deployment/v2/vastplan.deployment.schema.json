@@ -20,9 +20,24 @@
     "units": {
       "type": "array",
       "items": { "$ref": "#/$defs/serviceUnit" }
+    },
+    "app_profiles": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/appProfileRef" }
     }
   },
   "$defs": {
+    "appProfileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "revision", "digest"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,127}$" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
     "pluginRef": {
       "type": "object",
       "additionalProperties": false,

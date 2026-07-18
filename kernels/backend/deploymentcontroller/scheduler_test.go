@@ -93,6 +93,30 @@ func TestSchedulerReplicasPlacementScaleAndNodeLoss(t *testing.T) {
 	}
 }
 
+func TestSchedulerDoesNotTurnAppProfilesIntoServiceAssignments(t *testing.T) {
+	_, buckets := startSchedulerNATS(t)
+	ctx := context.Background()
+	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, controlplane.NodeLeaseOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lease.Close(context.Background()) })
+
+	deployment := deploymentv2.Deployment{
+		Version: 2, Revision: 1,
+		Metadata:    deploymentv1.Metadata{Name: "runner-fleet", Tenant: "tenant-a"},
+		Units:       []deploymentv2.ServiceUnit{},
+		AppProfiles: []deploymentv2.AppProfileRef{{ID: "collector", Revision: 3, Digest: strings.Repeat("a", 64)}},
+	}
+	plan, err := (Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments}).Reconcile(ctx, deployment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Assignments["node-a"].Units) != 0 {
+		t.Fatalf("App Profile 不得进入 ServiceUnit assignment: %+v", plan.Assignments["node-a"])
+	}
+}
+
 func TestControllerWatchesDeploymentUpdates(t *testing.T) {
 	_, buckets := startSchedulerNATS(t)
 	ctx, cancel := context.WithCancel(context.Background())

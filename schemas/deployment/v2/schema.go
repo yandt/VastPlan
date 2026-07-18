@@ -33,10 +33,20 @@ var (
 )
 
 type Deployment struct {
-	Version  int                   `json:"version"`
-	Revision uint64                `json:"revision"`
-	Metadata deploymentv1.Metadata `json:"metadata"`
-	Units    []ServiceUnit         `json:"units"`
+	Version     int                   `json:"version"`
+	Revision    uint64                `json:"revision"`
+	Metadata    deploymentv1.Metadata `json:"metadata"`
+	Units       []ServiceUnit         `json:"units"`
+	AppProfiles []AppProfileRef       `json:"app_profiles,omitempty"`
+}
+
+// AppProfileRef pins an independently built App Profile artifact. It is part
+// of deployment intent, but is not a ServiceUnit and is never scheduled by the
+// backend service scheduler.
+type AppProfileRef struct {
+	ID       string `json:"id"`
+	Revision uint64 `json:"revision"`
+	Digest   string `json:"digest"`
 }
 
 type ServiceUnit struct {
@@ -187,6 +197,13 @@ func Parse(raw []byte) (Deployment, error) {
 			}
 			pluginIDs[plugin.ID] = struct{}{}
 		}
+	}
+	profileIDs := map[string]struct{}{}
+	for _, profile := range deployment.AppProfiles {
+		if _, exists := profileIDs[profile.ID]; exists {
+			return Deployment{}, fmt.Errorf("集群部署 App Profile id 重复: %q", profile.ID)
+		}
+		profileIDs[profile.ID] = struct{}{}
 	}
 	graph := make(map[string][]string, len(deployment.Units))
 	for _, unit := range deployment.Units {

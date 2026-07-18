@@ -9,7 +9,7 @@ type catalog struct{}
 
 func (catalog) SupportsRunner(context.Context, PluginRef) (bool, error) { return true, nil }
 func TestValidateAndEligibility(t *testing.T) {
-	p := Profile{ID: "collector", Revision: 1, TenantID: "tenant-a", Runtime: "runner", Distribution: "self-update", Targets: []string{"darwin/arm64"}, AssignedTo: []string{"runner-a"}, Plugins: []PluginRef{{ID: "com.vastplan.collector", Version: "1.0.0"}}}
+	p := Profile{Version: 1, ID: "collector", Revision: 1, TenantID: "tenant-a", Runtime: "runner", Distribution: "self-update", Targets: []string{"darwin/arm64"}, AssignedTo: []string{"runner-a"}, Plugins: []PluginRef{{ID: "com.vastplan.collector", Version: "1.0.0"}}}
 	if err := Validate(context.Background(), p, catalog{}); err != nil {
 		t.Fatal(err)
 	}
@@ -19,7 +19,7 @@ func TestValidateAndEligibility(t *testing.T) {
 }
 
 func TestClaimLaunchBindsVerifiedIdentityToTenantAndAssignment(t *testing.T) {
-	p := Profile{ID: "collector", Revision: 1, TenantID: "tenant-a", AssignedTo: []string{"runner-a"}, Plugins: []PluginRef{{ID: "x", Version: "1"}}}
+	p := Profile{Version: 1, ID: "collector", Revision: 1, TenantID: "tenant-a", AssignedTo: []string{"runner-a"}, Plugins: []PluginRef{{ID: "x", Version: "1"}}}
 	claim, err := ClaimLaunch(context.Background(), RunnerIdentity{ID: "runner-a", TenantID: "tenant-a"}, p)
 	if err != nil || claim.RunnerID != "runner-a" || claim.TenantID != "tenant-a" {
 		t.Fatalf("领取应绑定身份: %+v %v", claim, err)

@@ -12,6 +12,29 @@ func TestParseClusterReplicas(t *testing.T) {
 	}
 }
 
+func TestParseAppProfileReferencesWithoutServiceUnits(t *testing.T) {
+	deployment, err := Parse([]byte(`{"version":2,"revision":1,"metadata":{"name":"runner-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":3,"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(deployment.Units) != 0 || len(deployment.AppProfiles) != 1 || deployment.AppProfiles[0].Revision != 3 {
+		t.Fatalf("App Profile 引用未独立解析: %+v", deployment)
+	}
+}
+
+func TestParseRejectsInvalidAppProfileReferences(t *testing.T) {
+	for name, raw := range map[string]string{
+		"invalid digest": `{"version":2,"revision":1,"metadata":{"name":"runner-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":1,"digest":"not-a-digest"}]}`,
+		"duplicate id":   `{"version":2,"revision":1,"metadata":{"name":"runner-fleet"},"units":[],"app_profiles":[{"id":"collector","revision":1,"digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},{"id":"collector","revision":2,"digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Parse([]byte(raw)); err == nil {
+				t.Fatal("非法 App Profile 引用必须 fail-closed")
+			}
+		})
+	}
+}
+
 func TestParseResourcesAffinityAndAutoscaling(t *testing.T) {
 	raw := []byte(`{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"api","kind":"service","plugins":[{"id":"com.example.api","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":2,"autoscaling":{"min_replicas":2,"max_replicas":6,"metric":"queue.depth","target_value_per_replica":10},"resources":{"requests":{"cpu_millis":500,"memory_bytes":1073741824,"gpu":1}},"placement":{"nodeSelector":{"region":"cn"},"affinity":{"preferred":[{"match_labels":{"disk":"ssd"},"weight":80}]},"antiAffinity":{"required":[{"match_labels":{"maintenance":"true"}}]}}}]}`)
 	deployment, err := Parse(raw)

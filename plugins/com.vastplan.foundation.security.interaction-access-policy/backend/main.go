@@ -1,3 +1,4 @@
+// Package main serves the interaction entry access policy as a process plugin.
 package main
 
 import (
