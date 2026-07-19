@@ -13,7 +13,12 @@ ASSETS="$OUT_DIR/assets"
 VENDOR="$ASSETS/vendor"
 mkdir -p "$VENDOR"
 
-common=(--bundle --format=esm --platform=browser --target=es2022 --legal-comments=none --minify '--define:process.env.NODE_ENV="production"')
+case "${PORTAL_DEV_HMR:-0}" in
+  1|true) DEV_HMR=true ;;
+  0|false) DEV_HMR=false ;;
+  *) echo "PORTAL_DEV_HMR 只接受 0/1/false/true" >&2; exit 2 ;;
+esac
+common=(--bundle --format=esm --platform=browser --target=es2022 --legal-comments=none --minify '--define:process.env.NODE_ENV="production"' "--define:__VASTPLAN_DEV_HMR__=$DEV_HMR")
 shared=(--external:react --external:react/jsx-runtime --external:react-dom --external:react-dom/client --external:@vastplan/portal-ui --external:@vastplan/ui-contract)
 
 pnpm exec esbuild core/kernels/frontend/src/browser.tsx "${common[@]}" "${shared[@]}" --outfile="$ASSETS/portal-kernel.js"

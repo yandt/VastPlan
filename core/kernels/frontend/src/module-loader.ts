@@ -15,6 +15,7 @@ export interface PortalRuntimeSpec {
 
 export type ModuleFetcher = (input: string, init?: RequestInit) => Promise<Response>;
 export type ModuleImporter = (source: Uint8Array, sourceURL: string) => Promise<unknown>;
+export type ModuleDescriptorPolicy = "production" | "development";
 
 /**
  * Loads only modules listed in the Edge-issued RuntimeSpec. The JavaScript is
@@ -29,9 +30,10 @@ export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
     descriptors: readonly FrontendModuleDescriptor[],
     private readonly fetcher: ModuleFetcher = globalThis.fetch.bind(globalThis),
     private readonly importer: ModuleImporter = importModuleBytes,
+    private readonly policy: ModuleDescriptorPolicy = "production",
   ) {
     for (const descriptor of descriptors) {
-      validateDescriptor(descriptor);
+      validateDescriptor(descriptor, policy);
       const key = moduleKey(descriptor);
       if (this.modules.has(key)) {
         throw new ModuleLoadError("MODULE_DESCRIPTOR_DUPLICATE", `前端模块描述重复: ${key}`);
@@ -54,7 +56,7 @@ export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
   }
 
   private async loadVerified(descriptor: FrontendModuleDescriptor): Promise<FrontendPluginModule> {
-    const response = await this.fetcher(descriptor.url, { credentials: "include", cache: "force-cache" });
+    const response = await this.fetcher(descriptor.url, { credentials: "include", cache: isDevelopmentURL(descriptor.url) ? "no-store" : "force-cache" });
     if (!response.ok) {
       throw new ModuleLoadError("MODULE_FETCH_FAILED", `前端模块获取失败: ${descriptor.id} (${response.status})`);
     }
@@ -80,13 +82,22 @@ export class ModuleLoadError extends Error {
 }
 
 export function parsePortalRuntimeSpec(value: unknown): PortalRuntimeSpec {
+  return parseRuntimeSpec(value, "production");
+}
+
+/** Separate parser for local platformdev overlays; production URLs remain valid. */
+export function parseDevelopmentRuntimeSpec(value: unknown): PortalRuntimeSpec {
+  return parseRuntimeSpec(value, "development");
+}
+
+function parseRuntimeSpec(value: unknown, policy: ModuleDescriptorPolicy): PortalRuntimeSpec {
   if (!isRecord(value) || !isRecord(value.portal) || !Array.isArray(value.modules)) {
     throw new ModuleLoadError("RUNTIME_SPEC_INVALID", "Portal RuntimeSpec 结构无效");
   }
   const modules = value.modules.map((item) => {
     if (!isRecord(item)) throw new ModuleLoadError("RUNTIME_SPEC_INVALID", "Portal 模块描述无效");
     const descriptor = item as unknown as FrontendModuleDescriptor;
-    validateDescriptor(descriptor);
+    validateDescriptor(descriptor, policy);
     return { ...descriptor };
   });
   return { portal: value.portal as unknown as PortalSpec, modules };
@@ -152,10 +163,11 @@ function ownedBuffer(source: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
-function validateDescriptor(descriptor: FrontendModuleDescriptor): void {
+function validateDescriptor(descriptor: FrontendModuleDescriptor, policy: ModuleDescriptorPolicy): void {
   const active = /^\/v1\/portal-modules\/[1-9]\d*\/([a-f0-9]{64})\.js$/.exec(descriptor.url);
   const recovery = /^\/v1\/portal-recovery-modules\/[1-9]\d*\/[1-9]\d*\/([a-f0-9]{64})\.js$/.exec(descriptor.url);
-  const governedDigest = active?.[1] ?? recovery?.[1];
+  const development = policy === "development" ? /^\/__vastplan_dev\/modules\/([a-f0-9]{64})\.js$/.exec(descriptor.url) : null;
+  const governedDigest = active?.[1] ?? recovery?.[1] ?? development?.[1];
   if (!descriptor.id || !descriptor.version || governedDigest === undefined ||
       !/^[a-f0-9]{64}$/.test(descriptor.sha256) || !/^[a-f0-9]{64}$/.test(descriptor.packageSha256) ||
       (!descriptor.entry.endsWith(".js") && !descriptor.entry.endsWith(".mjs"))) {
@@ -163,6 +175,8 @@ function validateDescriptor(descriptor: FrontendModuleDescriptor): void {
   }
   if (governedDigest !== descriptor.sha256) throw new ModuleLoadError("MODULE_DESCRIPTOR_INVALID", `前端模块 URL 未按内容摘要寻址: ${descriptor.id}`);
 }
+
+function isDevelopmentURL(url: string): boolean { return url.startsWith("/__vastplan_dev/modules/"); }
 
 function moduleKey(ref: PluginRef): string {
   return `${ref.id}@${ref.version}/${ref.channel ?? "stable"}`;

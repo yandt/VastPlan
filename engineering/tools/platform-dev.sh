@@ -53,8 +53,8 @@ usage() {
 VastPlan 本地平台管理中心
 
 用法:
-  $0 up [--debug] [--fresh] [--timeout 秒]
-  $0 restart [--debug] [--fresh] [--timeout 秒]
+  $0 up [--debug] [--fresh] [--no-hot] [--timeout 秒]
+  $0 restart [--debug] [--fresh] [--no-hot] [--timeout 秒]
   $0 down
   $0 status
   $0 logs [--follow] [--lines 行数]
@@ -74,6 +74,7 @@ VastPlan 本地平台管理中心
 up/restart 参数:
   --debug, -d       前台运行并实时显示日志，Ctrl+C 停止
   --fresh           启动前删除旧运行数据和构建缓存
+  --no-hot          关闭默认启用的前端插件事务式热替换
   --timeout 秒      启动等待时间，默认 ${VASTPLAN_DEV_TIMEOUT:-300} 秒
 
 环境变量:
@@ -399,6 +400,7 @@ runtime_arguments() {
     -portal-listen "127.0.0.1:$PORTAL_PORT"
     -artifact-listen "127.0.0.1:$ARTIFACT_PORT"
     -vault-listen "127.0.0.1:$VAULT_PORT"
+	-hot="$HOT_MODE"
   )
 }
 
@@ -595,12 +597,14 @@ FRESH_MODE=false
 START_TIMEOUT="${VASTPLAN_DEV_TIMEOUT:-300}"
 LOG_FOLLOW=false
 LOG_LINES=100
+HOT_MODE=true
 
 parse_start_options() {
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --debug|-d) DEBUG_MODE=true ;;
       --fresh) FRESH_MODE=true ;;
+      --no-hot) HOT_MODE=false ;;
       --timeout)
         if [ "$#" -lt 2 ]; then
           fail "--timeout 缺少秒数"

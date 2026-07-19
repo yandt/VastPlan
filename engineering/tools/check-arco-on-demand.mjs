@@ -11,7 +11,7 @@ const source = join(frontend, "src");
 const componentsFile = join(source, "arco-components.ts");
 const stylesFile = join(source, "arco-styles.ts");
 const scopeFile = join(source, "scope-css.ts");
-const bundleFile = join(frontend, "dist/index.js");
+const bundleFile = process.env.ARCO_BUNDLE_FILE === undefined ? join(frontend, "dist/index.js") : resolve(process.env.ARCO_BUNDLE_FILE);
 const require = createRequire(import.meta.url);
 const arcoRoot = dirname(require.resolve("@arco-design/web-react/package.json", { paths: [frontend] }));
 

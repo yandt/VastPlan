@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { usePortalUI } from "@vastplan/portal-ui";
 import { VerifiedFrontendPluginLoader, parsePortalRuntimeSpec, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
+import { startPortalDevelopmentUpdates } from "./portal-development";
+import { PortalGenerationManager } from "./portal-generation";
 import { PortalRuntime, type PreparedPortal } from "./portal-runtime";
+
+declare const __VASTPLAN_DEV_HMR__: boolean;
 
 export interface PortalBootstrapOptions {
   element: Element;
@@ -19,17 +23,54 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   const endpoint = options.runtimeEndpoint ?? "/v1/portal-runtime";
   const recoveryEndpoint = options.recoveryEndpoint ?? "/v1/portal-recovery";
   const root = createRoot(options.element);
+  let prepared: PreparedPortal | undefined;
+  let recoveryMode = false;
+  let developmentError: string | undefined;
+  let stopDevelopmentUpdates: (() => void) | undefined;
+  const renderApplication = () => {
+    if (prepared !== undefined) root.render(<PortalApplication prepared={prepared} initialPath={pathname} recoveryMode={recoveryMode} developmentError={developmentError} />);
+  };
+  const manager = new PortalGenerationManager({
+    fetcher,
+    descriptorPolicy: __VASTPLAN_DEV_HMR__ ? "development" : "production",
+    onDiagnostic: (diagnostic) => {
+      if (!__VASTPLAN_DEV_HMR__) return;
+      developmentError = `热替换 ${diagnostic.phase} 阶段异常：${errorMessage(diagnostic.error)}`;
+      renderApplication();
+    },
+  });
+  manager.subscribe((generation) => {
+    prepared = generation.prepared;
+    developmentError = undefined;
+    renderApplication();
+  });
   root.render(<PortalStarting />);
   try {
-    const prepared = await preparePortal(fetcher, endpoint, pathname);
-    root.render(<PortalApplication prepared={prepared} initialPath={pathname} />);
+    const spec = await fetchRuntimeSpec(fetcher, endpoint, pathname);
+    await manager.start(spec);
+    if (__VASTPLAN_DEV_HMR__) {
+      stopDevelopmentUpdates = startPortalDevelopmentUpdates({
+        manager,
+        fetcher,
+        pathname: () => globalThis.location?.pathname ?? pathname,
+        onError: (error) => {
+          developmentError = errorMessage(error);
+          renderApplication();
+        },
+      });
+    }
   } catch (error) {
     const recover = async () => {
-      const prepared = await preparePortal(fetcher, recoveryEndpoint, pathname);
-      root.render(<PortalApplication prepared={prepared} initialPath={pathname} recoveryMode />);
+      recoveryMode = true;
+      const spec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname);
+      await manager.start(spec);
     };
     root.render(<PortalRecovery error={error} onRecover={recover} />);
   }
+  globalThis.addEventListener?.("pagehide", () => {
+    stopDevelopmentUpdates?.();
+    void manager.shutdown();
+  }, { once: true });
   return root;
 }
 
@@ -51,7 +92,7 @@ export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string,
   return parsePortalRuntimeSpec(await response.json());
 }
 
-export function PortalApplication({ prepared, initialPath, recoveryMode = false }: { prepared: PreparedPortal; initialPath: string; recoveryMode?: boolean }) {
+export function PortalApplication({ prepared, initialPath, recoveryMode = false, developmentError }: { prepared: PreparedPortal; initialPath: string; recoveryMode?: boolean; developmentError?: string }) {
   const landingPath = useMemo(() => resolvePortalPath(prepared, initialPath), [prepared, initialPath]);
   const [pathname, setPathname] = useState(landingPath);
   useEffect(() => {
@@ -64,7 +105,17 @@ export function PortalApplication({ prepared, initialPath, recoveryMode = false 
   }, [initialPath, landingPath]);
   const page = useMemo(() => selectPage(prepared, pathname), [prepared, pathname]);
   const Provider = prepared.designSystem.Provider;
-  return <Provider><PortalContent prepared={prepared} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} /></Provider>;
+  return <Provider>
+    <PortalContent prepared={prepared} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} />
+    {developmentError === undefined ? null : <PortalDevelopmentNotice message={developmentError} />}
+  </Provider>;
+}
+
+function PortalDevelopmentNotice({ message }: { message: string }) {
+  return <aside role="status" data-vastplan-development-error style={{ position: "fixed", right: 16, bottom: 16, zIndex: 2147483647, maxWidth: 520, padding: "12px 16px", borderRadius: 8, background: "#3b1219", color: "#fff", boxShadow: "0 8px 28px rgba(0,0,0,.28)", fontFamily: "system-ui" }}>
+    <strong>插件热替换未提交</strong>
+    <div style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{message}</div>
+  </aside>;
 }
 
 function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode }: {
@@ -163,3 +214,5 @@ export class PortalBootstrapError extends Error {
     this.name = "PortalBootstrapError";
   }
 }
+
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ModuleLoadError, VerifiedFrontendPluginLoader, parsePortalRuntimeSpec, type FrontendModuleDescriptor } from "./module-loader";
+import { ModuleLoadError, VerifiedFrontendPluginLoader, parseDevelopmentRuntimeSpec, parsePortalRuntimeSpec, type FrontendModuleDescriptor } from "./module-loader";
 
 const ref = { id: "com.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 const source = new TextEncoder().encode("export default { register() {} }");
@@ -67,5 +67,17 @@ describe("VerifiedFrontendPluginLoader", () => {
     const locked = await descriptor({ url: `/v1/portal-recovery-modules/8/7/${base.sha256}.js` });
     expect(parsePortalRuntimeSpec({ portal: { revision: 7 }, modules: [locked] }).modules[0].url).toBe(locked.url);
     expect(() => parsePortalRuntimeSpec({ portal: {}, modules: [{ ...locked, url: "/assets/history/module.js" }] })).toThrowError(ModuleLoadError);
+  });
+
+  it("isolates development module URLs behind the development parser and no-store loading", async () => {
+    const base = await descriptor();
+    const development = { ...base, url: `/__vastplan_dev/modules/${base.sha256}.js` };
+    expect(() => parsePortalRuntimeSpec({ portal: {}, modules: [development] })).toThrowError(ModuleLoadError);
+    expect(parseDevelopmentRuntimeSpec({ portal: {}, modules: [development] }).modules[0]).toEqual(development);
+
+    const fetcher = vi.fn(async () => new Response(source));
+    const loader = new VerifiedFrontendPluginLoader([development], fetcher, async () => ({ default: { register() {} } }), "development");
+    await loader.load(ref);
+    expect(fetcher).toHaveBeenCalledWith(development.url, { credentials: "include", cache: "no-store" });
   });
 });

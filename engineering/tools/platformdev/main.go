@@ -54,6 +54,7 @@ const (
 type options struct {
 	root, stateRoot                                               string
 	listen, portalListen, artifactListen, vaultListen, natsListen string
+	hot                                                           bool
 }
 
 type child struct {
@@ -73,6 +74,7 @@ type runtime struct {
 	children []*child
 	mu       sync.RWMutex
 	ready    bool
+	hmr      *frontendHMR
 }
 
 type packageSpec struct {
@@ -91,6 +93,7 @@ func main() {
 	flag.StringVar(&opts.artifactListen, "artifact-listen", "127.0.0.1:18443", "internal artifact repository address")
 	flag.StringVar(&opts.vaultListen, "vault-listen", "127.0.0.1:18200", "development Vault Transit stub address")
 	flag.StringVar(&opts.natsListen, "nats-listen", "127.0.0.1:0", "development NATS address; port 0 chooses a free port")
+	flag.BoolVar(&opts.hot, "hot", true, "enable transactional frontend plugin hot replacement")
 	flag.Parse()
 	if err := run(opts); err != nil {
 		log.Fatalf("本地平台管理中心退出: %v", err)
@@ -174,7 +177,11 @@ func (r *runtime) prepare(ctx context.Context) error {
 		return err
 	}
 	log.Printf("[2/5] 构建按需加载的 Portal 与前端插件")
-	if err := r.command(ctx, map[string]string{"PORTAL_OUT_DIR": filepath.Join(r.runDir, "portal-assets")}, "./engineering/tools/build-frontend.sh"); err != nil {
+	portalBuildEnv := map[string]string{"PORTAL_OUT_DIR": filepath.Join(r.runDir, "portal-assets")}
+	if r.options.hot {
+		portalBuildEnv["PORTAL_DEV_HMR"] = "1"
+	}
+	if err := r.command(ctx, portalBuildEnv, "./engineering/tools/build-frontend.sh"); err != nil {
 		return fmt.Errorf("构建 Portal 失败（若依赖尚未安装，请先运行 pnpm install）: %w", err)
 	}
 	log.Printf("[3/5] 共同构建 bootstrap-policy dynamic-go 制品")
@@ -364,6 +371,11 @@ func (r *runtime) start(ctx context.Context) error {
 	if err := waitForUnits(ctx, filepath.Join(r.runDir, "state", "managed-services-actual.json"), 1, 60*time.Second); err != nil {
 		return fmt.Errorf("在线服务组合未收敛: %w", err)
 	}
+	if r.options.hot {
+		if err := r.startFrontendHMR(ctx); err != nil {
+			return err
+		}
+	}
 	if err := r.startProxy(); err != nil {
 		return err
 	}
@@ -496,6 +508,11 @@ func (r *runtime) startProxy() error {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/__vastplan_dev/status", r.status)
+	if r.hmr != nil {
+		mux.HandleFunc("/__vastplan_dev/events", r.hmr.events)
+		mux.HandleFunc("/__vastplan_dev/runtime", r.hmr.runtime)
+		mux.HandleFunc("/__vastplan_dev/modules/", r.hmr.module)
+	}
 	mux.Handle("/", proxy)
 	r.proxy = &http.Server{Addr: r.options.listen, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	listener, err := net.Listen("tcp", r.options.listen)
@@ -511,10 +528,16 @@ func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 	ready := r.ready
 	r.mu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
+	status := map[string]any{
 		"ready": ready, "portal": "http://" + r.options.listen + "/operations", "runDir": r.runDir,
 		"mode": "local-development", "productionEquivalent": false,
-	})
+		"hot": r.options.hot,
+	}
+	if r.hmr != nil {
+		generation, lastError := r.hmr.status()
+		status["hotGeneration"], status["hotError"] = generation, lastError
+	}
+	_ = json.NewEncoder(w).Encode(status)
 }
 
 func (r *runtime) shutdown() error {

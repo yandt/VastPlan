@@ -1,5 +1,5 @@
 import type { FrontendPluginLifecycleContext, JSONValue } from "@vastplan/portal-ui";
-import { VerifiedFrontendPluginLoader, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
+import { VerifiedFrontendPluginLoader, type ModuleDescriptorPolicy, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
 import { PortalRuntime, type PreparedFrontendPlugin, type PreparedPortal } from "./portal-runtime";
 
 const defaultStateLimit = 64 * 1024;
@@ -27,6 +27,7 @@ export interface PortalGenerationManagerOptions {
   disposeTimeoutMs?: number;
   stateLimitBytes?: number;
   stateDepth?: number;
+  descriptorPolicy?: ModuleDescriptorPolicy;
   onDiagnostic?(diagnostic: PortalGenerationDiagnostic): void;
   prepare?(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<PreparedPortal>;
 }
@@ -104,7 +105,7 @@ export class PortalGenerationManager {
 
   private prepare(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<PreparedPortal> {
     if (this.options.prepare !== undefined) return this.options.prepare(spec, context);
-    const loader = new VerifiedFrontendPluginLoader(spec.modules, this.fetcher);
+    const loader = new VerifiedFrontendPluginLoader(spec.modules, this.fetcher, undefined, this.options.descriptorPolicy ?? "production");
     return new PortalRuntime(loader).prepare(spec.portal, context);
   }
 
