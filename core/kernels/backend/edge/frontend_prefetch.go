@@ -8,7 +8,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
-// RunFrontendPrefetcher continuously projects active Portal revisions from the
+// RunFrontendPrefetcher continuously projects current Portal Activations from the
 // governed Composer state into this Portal Edge node's local delivery cache.
 // The tenant list comes from the platform-owned catalog, never from a browser.
 func RunFrontendPrefetcher(ctx context.Context, service portalapi.Service, catalog *TrustedCatalog, tenantIDs []string, interval time.Duration, logf func(string, ...any)) {
@@ -25,17 +25,17 @@ func RunFrontendPrefetcher(ctx context.Context, service portalapi.Service, catal
 	sync := func() {
 		for _, tenantID := range tenants {
 			principal := portalapi.Principal{ID: "portal-edge-prefetch", TenantID: tenantID, System: true}
-			revisions, err := service.List(ctx, principal)
+			activations, err := service.ListActivations(ctx, principal)
 			if err != nil {
-				logf("Portal Edge 预取无法读取 tenant=%s 的活动 revision: %v", tenantID, err)
+				logf("Portal Edge 预取无法读取 tenant=%s 的当前 Activation: %v", tenantID, err)
 				continue
 			}
-			for _, revision := range revisions {
-				if !isActiveRevision(revision, tenantID) {
+			for _, activation := range activations {
+				if !isCurrentActivation(activation, tenantID) {
 					continue
 				}
-				if err := catalog.PrefetchPortal(ctx, tenantID, revision.Spec); err != nil {
-					logf("Portal Edge 预取失败 tenant=%s portal=%s revision=%d: %v", tenantID, revision.PortalID, revision.ID, err)
+				if err := catalog.PrefetchPortal(ctx, tenantID, activation.Spec); err != nil {
+					logf("Portal Edge 预取失败 tenant=%s portal=%s activation=%d: %v", tenantID, activation.PortalID, activation.ID, err)
 				}
 			}
 		}

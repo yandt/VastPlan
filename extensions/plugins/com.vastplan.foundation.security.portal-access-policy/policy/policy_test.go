@@ -41,6 +41,31 @@ func TestPortalRolesAndSystemBreakGlass(t *testing.T) {
 	}
 }
 
+func TestGovernanceOperationsAreExplicitlyRoleBound(t *testing.T) {
+	cases := []struct {
+		operation string
+		role      string
+	}{
+		{"governance", "portal.read"}, {"listActivations", "portal.read"},
+		{"createProfileDraft", "portal.compose"}, {"updateProfileDraft", "portal.compose"},
+		{"createBindingDraft", "portal.compose"}, {"updateBindingDraft", "portal.compose"},
+		{"transitionProfile", "portal.approve"}, {"transitionBinding", "portal.publish"},
+		{"activate", "portal.publish"}, {"rollbackActivation", "portal.publish"},
+	}
+	for _, test := range cases {
+		ctx := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "user"}, Principal: &contractv1.Principal{SystemRoles: []string{test.role}}}
+		if got := decisionFor(t, ctx, portalapi.ComposerCapability, test.operation); got.Decision != extpoint.DecisionAllow {
+			t.Fatalf("operation %s with role %s should be allowed: %+v", test.operation, test.role, got)
+		}
+	}
+	reader := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "reader"}, Principal: &contractv1.Principal{SystemRoles: []string{"portal.read"}}}
+	for _, operation := range []string{"createProfileDraft", "transitionBinding", "activate", "rollbackActivation"} {
+		if got := decisionFor(t, reader, portalapi.ComposerCapability, operation); got.Decision != extpoint.DecisionDeny {
+			t.Fatalf("reader must not execute %s: %+v", operation, got)
+		}
+	}
+}
+
 func TestOnlyComposerCanUseRestrictedKernelServices(t *testing.T) {
 	composer := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: PluginIDForComposer()}}
 	if got := decisionFor(t, composer, portalapi.KernelCatalogValidationCapability, "validate"); got.Decision != extpoint.DecisionAllow {

@@ -163,7 +163,6 @@ type Revision struct {
 	TenantID    string                                       `json:"tenantId"`
 	PortalID    string                                       `json:"portalId"`
 	Status      Status                                       `json:"status"`
-	Active      bool                                         `json:"active"`
 	Composition frontendcompositionv1.ApplicationComposition `json:"composition"`
 	Spec        PortalSpec                                   `json:"resolved"`
 	SubmittedBy string                                       `json:"submittedBy,omitempty"`
@@ -171,6 +170,89 @@ type Revision struct {
 	PublishedBy string                                       `json:"publishedBy,omitempty"`
 	CreatedAt   string                                       `json:"createdAt"`
 	UpdatedAt   string                                       `json:"updatedAt"`
+}
+
+type PlatformProfileRevision struct {
+	ID          uint64                                `json:"id"`
+	TenantID    string                                `json:"tenantId"`
+	Status      Status                                `json:"status"`
+	Profile     frontendcompositionv1.PlatformProfile `json:"profile"`
+	SubmittedBy string                                `json:"submittedBy,omitempty"`
+	ApprovedBy  string                                `json:"approvedBy,omitempty"`
+	PublishedBy string                                `json:"publishedBy,omitempty"`
+	CreatedAt   string                                `json:"createdAt"`
+	UpdatedAt   string                                `json:"updatedAt"`
+}
+
+type BindingRevision struct {
+	ID                uint64                              `json:"id"`
+	TenantID          string                              `json:"tenantId"`
+	PortalID          string                              `json:"portalId"`
+	ProfileRevisionID uint64                              `json:"profileRevisionId"`
+	Status            Status                              `json:"status"`
+	Binding           frontendcompositionv1.PortalBinding `json:"binding"`
+	SubmittedBy       string                              `json:"submittedBy,omitempty"`
+	ApprovedBy        string                              `json:"approvedBy,omitempty"`
+	PublishedBy       string                              `json:"publishedBy,omitempty"`
+	CreatedAt         string                              `json:"createdAt"`
+	UpdatedAt         string                              `json:"updatedAt"`
+}
+
+type ActivationStatus string
+
+const (
+	ActivationPreparing  ActivationStatus = "Preparing"
+	ActivationActivating ActivationStatus = "Activating"
+	ActivationCurrent    ActivationStatus = "Current"
+	ActivationSuperseded ActivationStatus = "Superseded"
+	ActivationFailed     ActivationStatus = "Failed"
+)
+
+type ActivationPhase struct {
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	Message   string `json:"message,omitempty"`
+	StartedAt string `json:"startedAt"`
+	EndedAt   string `json:"endedAt,omitempty"`
+}
+
+// PortalActivation is the immutable live-state fact. Published Application,
+// Profile and Binding revisions are only eligible inputs; none is live by itself.
+type PortalActivation struct {
+	ID                    uint64            `json:"id"`
+	TenantID              string            `json:"tenantId"`
+	PortalID              string            `json:"portalId"`
+	Status                ActivationStatus  `json:"status"`
+	ApplicationRevisionID uint64            `json:"applicationRevisionId"`
+	ProfileRevisionID     uint64            `json:"profileRevisionId"`
+	BindingRevisionID     uint64            `json:"bindingRevisionId"`
+	PreviousActivationID  uint64            `json:"previousActivationId,omitempty"`
+	Spec                  PortalSpec        `json:"resolved"`
+	Phases                []ActivationPhase `json:"phases"`
+	ActorID               string            `json:"actorId"`
+	Reason                string            `json:"reason,omitempty"`
+	CreatedAt             string            `json:"createdAt"`
+}
+
+type ActivationRequest struct {
+	PortalID              string `json:"portalId"`
+	ApplicationRevisionID uint64 `json:"applicationRevisionId"`
+	ProfileRevisionID     uint64 `json:"profileRevisionId"`
+	BindingRevisionID     uint64 `json:"bindingRevisionId"`
+	ExpectedCurrentID     uint64 `json:"expectedCurrentId"`
+	Reason                string `json:"reason,omitempty"`
+}
+
+type BindingDraftRequest struct {
+	ProfileRevisionID uint64                              `json:"profileRevisionId"`
+	Binding           frontendcompositionv1.PortalBinding `json:"binding"`
+}
+
+type GovernanceSnapshot struct {
+	Profiles     []PlatformProfileRevision `json:"profiles"`
+	Applications []Revision                `json:"applications"`
+	Bindings     []BindingRevision         `json:"bindings"`
+	Activations  []PortalActivation        `json:"activations"`
 }
 
 type AuditEvent struct {
@@ -198,6 +280,15 @@ type Service interface {
 	Submit(context.Context, Principal, uint64) (Revision, error)
 	Approve(context.Context, Principal, uint64) (Revision, error)
 	Publish(context.Context, Principal, uint64, PublishRequest) (Revision, error)
-	Rollback(context.Context, Principal, uint64, PublishRequest) (Revision, error)
 	Audit(context.Context, Principal, uint64) ([]AuditEvent, error)
+	Governance(context.Context, Principal) (GovernanceSnapshot, error)
+	CreateProfileDraft(context.Context, Principal, frontendcompositionv1.PlatformProfile) (PlatformProfileRevision, error)
+	UpdateProfileDraft(context.Context, Principal, uint64, frontendcompositionv1.PlatformProfile) (PlatformProfileRevision, error)
+	TransitionProfile(context.Context, Principal, uint64, string) (PlatformProfileRevision, error)
+	CreateBindingDraft(context.Context, Principal, BindingDraftRequest) (BindingRevision, error)
+	UpdateBindingDraft(context.Context, Principal, uint64, BindingDraftRequest) (BindingRevision, error)
+	TransitionBinding(context.Context, Principal, uint64, string) (BindingRevision, error)
+	Activate(context.Context, Principal, ActivationRequest) (PortalActivation, error)
+	RollbackActivation(context.Context, Principal, uint64, uint64, string) (PortalActivation, error)
+	ListActivations(context.Context, Principal) ([]PortalActivation, error)
 }

@@ -45,6 +45,19 @@ export interface PortalApplicationComposition {
   config: Record<string, JSONValue>;
 }
 
+export interface PortalPlatformProfile {
+  version: 1;
+  revision: number;
+  id: string;
+  target: { kernel: "frontend" };
+  designSystem: PortalPluginRef & { uiContract: string };
+  composition: PortalPluginRef & { uiContract: string; config?: Record<string, JSONValue> };
+  layout: PortalPluginRef & { uiContract: string; config?: Record<string, JSONValue> };
+  localization?: { defaultLocale: string; supportedLocales: string[] };
+  plugins: PortalPluginRef[];
+  security: { firstPartyOnly: true; requireIntegrity: true };
+}
+
 export type PortalRevisionStatus = "Draft" | "PendingApproval" | "Approved" | "Published";
 
 export interface PortalRevision {
@@ -52,9 +65,16 @@ export interface PortalRevision {
   tenantId: string;
   portalId: string;
   status: PortalRevisionStatus;
-  active: boolean;
   composition: PortalApplicationComposition;
-  resolved: {
+  resolved: PortalResolvedSpec;
+  submittedBy?: string;
+  approvedBy?: string;
+  publishedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PortalResolvedSpec {
     revision: number;
     id: string;
     tenantId: string;
@@ -75,12 +95,66 @@ export interface PortalRevision {
       managementBindingDigest: string;
       pluginOrigins: Record<string, "platform-profile" | "application">;
     };
-  };
+}
+
+export interface PortalProfileRevision {
+  id: number;
+  tenantId: string;
+  status: PortalRevisionStatus;
+  profile: PortalPlatformProfile;
   submittedBy?: string;
   approvedBy?: string;
   publishedBy?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PortalBindingRevision {
+  id: number;
+  tenantId: string;
+  portalId: string;
+  profileRevisionId: number;
+  status: PortalRevisionStatus;
+  binding: PortalManagementBinding;
+  submittedBy?: string;
+  approvedBy?: string;
+  publishedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type PortalActivationStatus = "Preparing" | "Activating" | "Current" | "Superseded" | "Failed";
+export interface PortalActivationPhase { name: string; status: "Succeeded" | "Failed"; message?: string; startedAt: string; endedAt?: string; }
+export interface PortalActivation {
+  id: number;
+  tenantId: string;
+  portalId: string;
+  status: PortalActivationStatus;
+  applicationRevisionId: number;
+  profileRevisionId: number;
+  bindingRevisionId: number;
+  previousActivationId?: number;
+  resolved: PortalResolvedSpec;
+  phases: PortalActivationPhase[];
+  actorId: string;
+  reason?: string;
+  createdAt: string;
+}
+
+export interface PortalGovernanceSnapshot {
+  profiles: PortalProfileRevision[];
+  applications: PortalRevision[];
+  bindings: PortalBindingRevision[];
+  activations: PortalActivation[];
+}
+
+export interface PortalActivationRequest {
+  portalId: string;
+  applicationRevisionId: number;
+  profileRevisionId: number;
+  bindingRevisionId: number;
+  expectedCurrentId: number;
+  reason?: string;
 }
 
 export interface PortalAuditEvent {
@@ -105,10 +179,12 @@ export interface PortalControlClientOptions {
 export class PortalControlClient {
   private readonly basePath: string;
   private readonly csrfPath: string;
+  private readonly governancePath: string;
 
   public constructor(private readonly options: PortalControlClientOptions) {
     this.basePath = options.basePath ?? "/v1/portal-drafts";
     this.csrfPath = options.csrfPath ?? "/v1/csrf";
+    this.governancePath = "/v1/portal-governance";
   }
 
   public list(): Promise<PortalRevision[]> {
@@ -135,17 +211,45 @@ export class PortalControlClient {
     return this.mutate<PortalRevision>(`${this.revisionPath(id)}/publish`, "POST", { breakGlassReason });
   }
 
-  public rollback(id: number, breakGlassReason = ""): Promise<PortalRevision> {
-    return this.mutate<PortalRevision>(`${this.revisionPath(id)}/rollback`, "POST", { breakGlassReason });
-  }
-
   public audit(id: number): Promise<PortalAuditEvent[]> {
     return this.call<PortalAuditEvent[]>(`${this.revisionPath(id)}/audit`, { method: "GET" });
   }
 
+  public governance(): Promise<PortalGovernanceSnapshot> {
+    return this.call<PortalGovernanceSnapshot>(this.governancePath, { method: "GET" });
+  }
+  public createProfile(profile: PortalPlatformProfile): Promise<PortalProfileRevision> {
+    return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles`, "POST", profile);
+  }
+  public updateProfile(id: number, profile: PortalPlatformProfile): Promise<PortalProfileRevision> {
+    return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles/${this.validID(id)}`, "PUT", profile);
+  }
+  public transitionProfile(id: number, action: "submit" | "approve" | "publish"): Promise<PortalProfileRevision> {
+    return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles/${this.validID(id)}/${action}`, "POST", {});
+  }
+  public createBinding(profileRevisionId: number, binding: PortalManagementBinding): Promise<PortalBindingRevision> {
+    return this.mutate<PortalBindingRevision>(`${this.governancePath}/bindings`, "POST", { profileRevisionId: this.validID(profileRevisionId), binding });
+  }
+  public updateBinding(id: number, profileRevisionId: number, binding: PortalManagementBinding): Promise<PortalBindingRevision> {
+    return this.mutate<PortalBindingRevision>(`${this.governancePath}/bindings/${this.validID(id)}`, "PUT", { profileRevisionId: this.validID(profileRevisionId), binding });
+  }
+  public transitionBinding(id: number, action: "submit" | "approve" | "publish"): Promise<PortalBindingRevision> {
+    return this.mutate<PortalBindingRevision>(`${this.governancePath}/bindings/${this.validID(id)}/${action}`, "POST", {});
+  }
+  public activate(request: PortalActivationRequest): Promise<PortalActivation> {
+    return this.mutate<PortalActivation>(`${this.governancePath}/activations`, "POST", request);
+  }
+  public rollbackActivation(sourceId: number, expectedCurrentId: number, reason: string): Promise<PortalActivation> {
+    return this.mutate<PortalActivation>(`${this.governancePath}/activations/${this.validID(sourceId)}/rollback`, "POST", { expectedCurrentId, reason });
+  }
+
   private revisionPath(id: number): string {
+	return `${this.basePath}/${this.validID(id)}`;
+  }
+
+  private validID(id: number): number {
     if (!Number.isSafeInteger(id) || id <= 0) throw new PortalControlError(400, "invalid_revision");
-    return `${this.basePath}/${id}`;
+    return id;
   }
 
   private async mutate<T>(path: string, method: "POST" | "PUT", body: unknown): Promise<T> {

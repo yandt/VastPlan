@@ -59,12 +59,14 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 		{"./extensions/plugins/com.vastplan.platform.security.credentials/backend", "extensions/plugins/com.vastplan.platform.security.credentials/vastplan.plugin.json"},
 		{"./extensions/plugins/com.vastplan.platform.data.relational.connection-manager/backend", "extensions/plugins/com.vastplan.platform.data.relational.connection-manager/vastplan.plugin.json"},
 		{"./extensions/plugins/com.vastplan.platform.artifacts.repository/backend", "extensions/plugins/com.vastplan.platform.artifacts.repository/vastplan.plugin.json"},
+		{"./extensions/plugins/com.vastplan.platform.infrastructure.deployment-manager/backend", "extensions/plugins/com.vastplan.platform.infrastructure.deployment-manager/vastplan.plugin.json"},
 	} {
 		publishBuiltPlugin(t, repository, plugin.packageDir, plugin.manifest)
 	}
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.design-system.arco/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.composition.standard/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.layout.standard/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.layout.top-navigation/vastplan.plugin.json")
 
 	dir := t.TempDir()
 	certFile, keyFile := writePortalTLSCertificate(t, dir)
@@ -197,8 +199,33 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &published); err != nil {
 		t.Fatal(err)
 	}
-	if published.Status != portalapi.StatusPublished || !published.Active {
+	if published.Status != portalapi.StatusPublished {
 		t.Fatalf("unexpected published revision: %+v", published)
+	}
+	// Publishing only makes an Application eligible for activation. It must not
+	// alter the live Portal until a CAS-protected Activation is created.
+	if status, _ = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-runtime?path=/operations", map[string]any{}); status != http.StatusNotFound {
+		t.Fatalf("published Application must not become live before Activation: status=%d", status)
+	}
+	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-governance", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("read governance snapshot status=%d body=%s", status, raw)
+	}
+	var governance portalapi.GovernanceSnapshot
+	if err := json.Unmarshal(raw, &governance); err != nil {
+		t.Fatal(err)
+	}
+	profile, binding := seededPortalInputs(t, governance, "operations")
+	firstActivation := activatePortal(t, client, baseURL, "publisher-token", portalapi.ActivationRequest{
+		PortalID:              "operations",
+		ApplicationRevisionID: published.ID,
+		ProfileRevisionID:     profile.ID,
+		BindingRevisionID:     binding.ID,
+		ExpectedCurrentID:     0,
+		Reason:                "E2E initial activation",
+	})
+	if firstActivation.Status != portalapi.ActivationCurrent || firstActivation.Spec.Revision != firstActivation.ID {
+		t.Fatalf("unexpected initial activation: %+v", firstActivation)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-runtime?path=/operations", map[string]any{})
 	if status != http.StatusOK {
@@ -208,36 +235,46 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != published.ID || len(runtime.Modules) != 8 || runtime.Modules[0].ID != "com.vastplan.foundation.frontend.design-system.arco" || runtime.Modules[1].ID != "com.vastplan.foundation.frontend.composition.standard" || runtime.Modules[2].ID != "com.vastplan.foundation.frontend.layout.standard" || runtime.Modules[3].ID != "com.vastplan.platform.configuration.portal-composer" || runtime.Modules[7].ID != "com.vastplan.platform.artifacts.repository" {
+	if runtime.Portal.Revision != firstActivation.ID || len(runtime.Modules) != 9 || runtime.Modules[0].ID != "com.vastplan.foundation.frontend.design-system.arco" || runtime.Modules[1].ID != "com.vastplan.foundation.frontend.composition.standard" || runtime.Modules[2].ID != "com.vastplan.foundation.frontend.layout.standard" || runtime.Modules[3].ID != "com.vastplan.platform.configuration.portal-composer" || runtime.Modules[8].ID != "com.vastplan.platform.infrastructure.deployment-manager" {
 		t.Fatalf("unexpected governed runtime: %+v", runtime)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, runtime.Modules[0].URL, map[string]any{})
 	if status != http.StatusOK || !bytes.Contains(raw, []byte("ui.design-system")) {
 		t.Fatalf("read verified frontend module status=%d body=%s", status, raw)
 	}
-	// Publish a newer revision first, which makes the first one a genuine
-	// historical rollback candidate rather than allowing a no-op self rollback.
-	csrf = portalCSRF(t, client, baseURL, "author-token")
-	status, raw = portalHTTPRequest(t, client, baseURL, "author-token", csrf, http.MethodPost, "/v1/portal-drafts", portalSpec())
-	if status != http.StatusOK {
-		t.Fatalf("create newer portal draft status=%d body=%s", status, raw)
+	// Create and publish a new Profile + Binding, then switch only through a
+	// second immutable Activation. This proves layout selection is data-driven.
+	topProfile := profile.Profile
+	topProfile.ID = "portal-top-navigation"
+	topProfile.Revision++
+	topProfile.Layout.ID = "com.vastplan.foundation.frontend.layout.top-navigation"
+	topProfile.Layout.Config = map[string]any{"navigation": "top", "pageBodyWidth": "fluid"}
+	for index := range topProfile.Plugins {
+		if topProfile.Plugins[index].ID == "com.vastplan.foundation.frontend.layout.standard" {
+			topProfile.Plugins[index].ID = "com.vastplan.foundation.frontend.layout.top-navigation"
+		}
 	}
-	var newer portalapi.Revision
-	if err := json.Unmarshal(raw, &newer); err != nil {
+	topProfileRevision := createAndPublishProfile(t, client, baseURL, topProfile)
+	topBinding := binding.Binding
+	topBinding.PlatformProfile = compositioncommonv1.Ref{}
+	topBindingRevision := createAndPublishBinding(t, client, baseURL, topProfileRevision.ID, topBinding)
+	topActivation := activatePortal(t, client, baseURL, "publisher-token", portalapi.ActivationRequest{
+		PortalID:              "operations",
+		ApplicationRevisionID: published.ID,
+		ProfileRevisionID:     topProfileRevision.ID,
+		BindingRevisionID:     topBindingRevision.ID,
+		ExpectedCurrentID:     firstActivation.ID,
+		Reason:                "E2E switch to top navigation",
+	})
+	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-runtime?path=/operations", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("read switched Portal runtime status=%d body=%s", status, raw)
+	}
+	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	for _, step := range []struct {
-		token     string
-		operation string
-	}{
-		{token: "author-token", operation: "submit"},
-		{token: "approver-token", operation: "approve"},
-		{token: "publisher-token", operation: "publish"},
-	} {
-		csrf = portalCSRF(t, client, baseURL, step.token)
-		if status, raw = portalHTTPRequest(t, client, baseURL, step.token, csrf, http.MethodPost, portalRevisionPath(newer.ID, step.operation), map[string]any{}); status != http.StatusOK {
-			t.Fatalf("%s newer portal draft status=%d body=%s", step.operation, status, raw)
-		}
+	if runtime.Portal.Revision != topActivation.ID || len(runtime.Modules) < 3 || runtime.Modules[2].ID != "com.vastplan.foundation.frontend.layout.top-navigation" {
+		t.Fatalf("Portal did not switch to top navigation through Activation: %+v", runtime)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-recovery?path=/operations", map[string]any{})
 	if status != http.StatusOK {
@@ -247,7 +284,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &recovery); err != nil {
 		t.Fatal(err)
 	}
-	if recovery.Portal.Revision != draft.ID || len(recovery.Modules) == 0 || !strings.HasPrefix(recovery.Modules[0].URL, fmt.Sprintf("/v1/portal-recovery-modules/%d/%d/", newer.ID, draft.ID)) {
+	if recovery.Portal.Revision != firstActivation.ID || len(recovery.Modules) == 0 || !strings.HasPrefix(recovery.Modules[0].URL, fmt.Sprintf("/v1/portal-recovery-modules/%d/%d/", topActivation.ID, firstActivation.ID)) {
 		t.Fatalf("unexpected governed recovery runtime: %+v", recovery)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, recovery.Modules[0].URL, map[string]any{})
@@ -255,27 +292,113 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 		t.Fatalf("read verified recovery module status=%d body=%s", status, raw)
 	}
 	csrf = portalCSRF(t, client, baseURL, "publisher-token")
-	status, raw = portalHTTPRequest(t, client, baseURL, "publisher-token", csrf, http.MethodPost, portalRevisionPath(draft.ID, "rollback"), map[string]any{})
+	status, raw = portalHTTPRequest(t, client, baseURL, "publisher-token", csrf, http.MethodPost, fmt.Sprintf("/v1/portal-governance/activations/%d/rollback", firstActivation.ID), map[string]any{"expectedCurrentId": topActivation.ID, "reason": "E2E rollback to standard layout"})
 	if status != http.StatusOK {
-		t.Fatalf("rollback historical revision status=%d body=%s", status, raw)
+		t.Fatalf("rollback historical Activation status=%d body=%s", status, raw)
 	}
-	var rolledBack portalapi.Revision
+	var rolledBack portalapi.PortalActivation
 	if err := json.Unmarshal(raw, &rolledBack); err != nil {
 		t.Fatal(err)
 	}
-	if rolledBack.ID == newer.ID || rolledBack.Status != portalapi.StatusPublished || !rolledBack.Active {
-		t.Fatalf("unexpected rollback revision: %+v", rolledBack)
+	if rolledBack.ID == topActivation.ID || rolledBack.Status != portalapi.ActivationCurrent || rolledBack.PreviousActivationID != topActivation.ID || rolledBack.ApplicationRevisionID != firstActivation.ApplicationRevisionID || rolledBack.ProfileRevisionID != firstActivation.ProfileRevisionID || rolledBack.BindingRevisionID != firstActivation.BindingRevisionID {
+		t.Fatalf("unexpected rollback Activation: %+v", rolledBack)
 	}
-	status, raw = portalHTTPRequest(t, client, baseURL, "publisher-token", "", http.MethodGet, portalRevisionPath(rolledBack.ID, "audit"), map[string]any{})
+	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-runtime?path=/operations", map[string]any{})
 	if status != http.StatusOK {
-		t.Fatalf("read rollback audit status=%d body=%s", status, raw)
+		t.Fatalf("read rolled-back runtime status=%d body=%s", status, raw)
 	}
-	var audit []portalapi.AuditEvent
-	if err := json.Unmarshal(raw, &audit); err != nil {
+	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if len(audit) != 1 || audit[0].Action != "revision.rolled_back" {
-		t.Fatalf("rollback audit missing: %+v", audit)
+	if runtime.Portal.Revision != rolledBack.ID || len(runtime.Modules) < 3 || runtime.Modules[2].ID != "com.vastplan.foundation.frontend.layout.standard" {
+		t.Fatalf("rollback did not restore exact standard-layout inputs: %+v", runtime)
+	}
+}
+
+func seededPortalInputs(t *testing.T, snapshot portalapi.GovernanceSnapshot, portalID string) (portalapi.PlatformProfileRevision, portalapi.BindingRevision) {
+	t.Helper()
+	for _, binding := range snapshot.Bindings {
+		if binding.PortalID != portalID || binding.Status != portalapi.StatusPublished {
+			continue
+		}
+		for _, profile := range snapshot.Profiles {
+			if profile.ID == binding.ProfileRevisionID && profile.Status == portalapi.StatusPublished {
+				return profile, binding
+			}
+		}
+	}
+	t.Fatalf("published Profile/Binding inputs not found for Portal %q: %+v", portalID, snapshot)
+	return portalapi.PlatformProfileRevision{}, portalapi.BindingRevision{}
+}
+
+func activatePortal(t *testing.T, client *http.Client, baseURL, token string, request portalapi.ActivationRequest) portalapi.PortalActivation {
+	t.Helper()
+	csrf := portalCSRF(t, client, baseURL, token)
+	status, raw := portalHTTPRequest(t, client, baseURL, token, csrf, http.MethodPost, "/v1/portal-governance/activations", request)
+	if status != http.StatusOK {
+		t.Fatalf("activate Portal status=%d body=%s", status, raw)
+	}
+	var activation portalapi.PortalActivation
+	if err := json.Unmarshal(raw, &activation); err != nil {
+		t.Fatal(err)
+	}
+	return activation
+}
+
+func createAndPublishProfile(t *testing.T, client *http.Client, baseURL string, profile frontendcompositionv1.PlatformProfile) portalapi.PlatformProfileRevision {
+	t.Helper()
+	csrf := portalCSRF(t, client, baseURL, "author-token")
+	status, raw := portalHTTPRequest(t, client, baseURL, "author-token", csrf, http.MethodPost, "/v1/portal-governance/profiles", profile)
+	if status != http.StatusOK {
+		t.Fatalf("create Profile revision status=%d body=%s", status, raw)
+	}
+	var revision portalapi.PlatformProfileRevision
+	if err := json.Unmarshal(raw, &revision); err != nil {
+		t.Fatal(err)
+	}
+	governanceTransitions(t, client, baseURL, "profiles", revision.ID)
+	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-governance", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("read published Profile status=%d body=%s", status, raw)
+	}
+	var snapshot portalapi.GovernanceSnapshot
+	if err := json.Unmarshal(raw, &snapshot); err != nil {
+		t.Fatal(err)
+	}
+	for _, candidate := range snapshot.Profiles {
+		if candidate.ID == revision.ID {
+			return candidate
+		}
+	}
+	t.Fatalf("published Profile revision %d missing", revision.ID)
+	return portalapi.PlatformProfileRevision{}
+}
+
+func createAndPublishBinding(t *testing.T, client *http.Client, baseURL string, profileRevisionID uint64, binding frontendcompositionv1.PortalBinding) portalapi.BindingRevision {
+	t.Helper()
+	csrf := portalCSRF(t, client, baseURL, "author-token")
+	request := portalapi.BindingDraftRequest{ProfileRevisionID: profileRevisionID, Binding: binding}
+	status, raw := portalHTTPRequest(t, client, baseURL, "author-token", csrf, http.MethodPost, "/v1/portal-governance/bindings", request)
+	if status != http.StatusOK {
+		t.Fatalf("create Binding revision status=%d body=%s", status, raw)
+	}
+	var revision portalapi.BindingRevision
+	if err := json.Unmarshal(raw, &revision); err != nil {
+		t.Fatal(err)
+	}
+	governanceTransitions(t, client, baseURL, "bindings", revision.ID)
+	revision.Status = portalapi.StatusPublished
+	return revision
+}
+
+func governanceTransitions(t *testing.T, client *http.Client, baseURL, resource string, id uint64) {
+	t.Helper()
+	for _, step := range []struct{ token, operation string }{{"author-token", "submit"}, {"approver-token", "approve"}, {"publisher-token", "publish"}} {
+		csrf := portalCSRF(t, client, baseURL, step.token)
+		path := fmt.Sprintf("/v1/portal-governance/%s/%d/%s", resource, id, step.operation)
+		if status, raw := portalHTTPRequest(t, client, baseURL, step.token, csrf, http.MethodPost, path, map[string]any{}); status != http.StatusOK {
+			t.Fatalf("%s %s status=%d body=%s", resource, step.operation, status, raw)
+		}
 	}
 }
 

@@ -172,7 +172,115 @@ func (s *Service) Handle(ctx context.Context, principal portalapi.Principal, ope
 			return nil, err
 		}
 		result = value
-	case "submit", "approve", "publish", "rollback", "audit":
+	case "governance":
+		value, err := s.Governance(ctx, principal)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "createProfileDraft":
+		var profile frontendcompositionv1.PlatformProfile
+		if err := decode(payload, &profile); err != nil {
+			return nil, err
+		}
+		value, err := s.CreateProfileDraft(ctx, principal, profile)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "updateProfileDraft":
+		var request struct {
+			RevisionID uint64                                `json:"revisionId"`
+			Profile    frontendcompositionv1.PlatformProfile `json:"profile"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.UpdateProfileDraft(ctx, principal, request.RevisionID, request.Profile)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "transitionProfile":
+		var request struct {
+			RevisionID uint64 `json:"revisionId"`
+			Action     string `json:"action"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.TransitionProfile(ctx, principal, request.RevisionID, request.Action)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "createBindingDraft":
+		var request portalapi.BindingDraftRequest
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.CreateBindingDraft(ctx, principal, request)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "updateBindingDraft":
+		var request struct {
+			RevisionID uint64                        `json:"revisionId"`
+			Draft      portalapi.BindingDraftRequest `json:"draft"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.UpdateBindingDraft(ctx, principal, request.RevisionID, request.Draft)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "transitionBinding":
+		var request struct {
+			RevisionID uint64 `json:"revisionId"`
+			Action     string `json:"action"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.TransitionBinding(ctx, principal, request.RevisionID, request.Action)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "activate":
+		var request portalapi.ActivationRequest
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.Activate(ctx, principal, request)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "rollbackActivation":
+		var request struct {
+			SourceID          uint64 `json:"sourceId"`
+			ExpectedCurrentID uint64 `json:"expectedCurrentId"`
+			Reason            string `json:"reason"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.RollbackActivation(ctx, principal, request.SourceID, request.ExpectedCurrentID, request.Reason)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "listActivations":
+		value, err := s.ListActivations(ctx, principal)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "submit", "approve", "publish", "audit":
 		var request struct {
 			RevisionID uint64 `json:"revisionId"`
 			portalapi.PublishRequest
@@ -198,12 +306,6 @@ func (s *Service) Handle(ctx context.Context, principal portalapi.Principal, ope
 			result = value
 		case "publish":
 			value, err := s.Publish(ctx, principal, request.RevisionID, request.PublishRequest)
-			if err != nil {
-				return nil, err
-			}
-			result = value
-		case "rollback":
-			value, err := s.Rollback(ctx, principal, request.RevisionID, request.PublishRequest)
 			if err != nil {
 				return nil, err
 			}
@@ -234,7 +336,7 @@ func decode(raw []byte, target any) error {
 // minimum fields required by the portal API.
 func Contribution(service *Service) sdk.Contribution {
 	handlers := map[string]sdk.Handler{}
-	for _, operation := range []string{"createDraft", "updateDraft", "list", "submit", "approve", "publish", "rollback", "audit"} {
+	for _, operation := range []string{"createDraft", "updateDraft", "list", "submit", "approve", "publish", "audit", "governance", "createProfileDraft", "updateProfileDraft", "transitionProfile", "createBindingDraft", "updateBindingDraft", "transitionBinding", "activate", "rollbackActivation", "listActivations"} {
 		op := operation
 		handlers[op] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 			if err := service.ensureConfigured(ctx, host, callCtx); err != nil {
@@ -258,7 +360,7 @@ func Contribution(service *Service) sdk.Contribution {
 }
 
 func Descriptor() []byte {
-	return []byte(`{"title":"门户组合治理","subcommands":[{"name":"createDraft","description":"创建 Portal 草稿"},{"name":"updateDraft","description":"更新 Portal 草稿"},{"name":"list","description":"列出 Portal revisions"},{"name":"submit","description":"提交草稿审批"},{"name":"approve","description":"审批草稿"},{"name":"publish","description":"发布 Portal revision"},{"name":"rollback","description":"回滚到历史 revision"},{"name":"audit","description":"读取 revision 审计"}]}`)
+	return []byte(`{"title":"门户组合治理","subcommands":[{"name":"governance","description":"读取完整 Portal 治理工作区"},{"name":"createDraft","description":"创建 Application 草稿"},{"name":"updateDraft","description":"更新 Application 草稿"},{"name":"list","description":"列出 Application revisions"},{"name":"submit","description":"提交 Application 审批"},{"name":"approve","description":"审批 Application"},{"name":"publish","description":"发布 Application 输入"},{"name":"createProfileDraft","description":"创建 Profile 草稿"},{"name":"updateProfileDraft","description":"更新 Profile 草稿"},{"name":"transitionProfile","description":"推进 Profile 生命周期"},{"name":"createBindingDraft","description":"创建 Binding 草稿"},{"name":"updateBindingDraft","description":"更新 Binding 草稿"},{"name":"transitionBinding","description":"推进 Binding 生命周期"},{"name":"activate","description":"CAS 激活 Published 输入"},{"name":"rollbackActivation","description":"由历史 Activation 创建新激活"},{"name":"listActivations","description":"列出不可变 Activation"},{"name":"audit","description":"读取 revision 审计"}]}`)
 }
 func projectPrincipal(callCtx *contractv1.CallContext) (portalapi.Principal, error) {
 	if callCtx == nil || callCtx.Principal == nil || callCtx.Principal.UserId == "" || callCtx.TenantId == "" {

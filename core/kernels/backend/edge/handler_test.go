@@ -26,11 +26,12 @@ type identity func(*http.Request) (portalapi.Principal, error)
 func (f identity) Authenticate(r *http.Request) (portalapi.Principal, error) { return f(r) }
 
 type service struct {
-	seen      portalapi.Principal
-	created   frontendcompositionv1.ApplicationComposition
-	createErr error
-	revisions []portalapi.Revision
-	listErr   error
+	seen        portalapi.Principal
+	created     frontendcompositionv1.ApplicationComposition
+	createErr   error
+	revisions   []portalapi.Revision
+	activations []portalapi.PortalActivation
+	listErr     error
 }
 
 func (s *service) CreateDraft(_ context.Context, p portalapi.Principal, v frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
@@ -67,6 +68,9 @@ func TestBFFMapsKernelPermissionDenialToForbidden(t *testing.T) {
 }
 func (s *service) List(context.Context, portalapi.Principal) ([]portalapi.Revision, error) {
 	return append([]portalapi.Revision(nil), s.revisions...), s.listErr
+}
+func (s *service) ListActivations(context.Context, portalapi.Principal) ([]portalapi.PortalActivation, error) {
+	return append([]portalapi.PortalActivation(nil), s.activations...), s.listErr
 }
 
 func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
@@ -115,9 +119,9 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	if err := catalog.MaterializePortal(context.Background(), "tenant-a", fallbackSpec); err != nil {
 		t.Fatal(err)
 	}
-	s := &service{revisions: []portalapi.Revision{
-		{ID: 7, TenantID: "tenant-a", PortalID: "admin", Status: portalapi.StatusPublished, Active: true, Spec: spec},
-		{ID: 6, TenantID: "tenant-a", PortalID: "admin", Status: portalapi.StatusPublished, Active: false, Spec: fallbackSpec},
+	s := &service{activations: []portalapi.PortalActivation{
+		{ID: 7, TenantID: "tenant-a", PortalID: "admin", Status: portalapi.ActivationCurrent, Spec: spec},
+		{ID: 6, TenantID: "tenant-a", PortalID: "admin", Status: portalapi.ActivationSuperseded, Spec: fallbackSpec},
 	}}
 	h := NewWithRuntime(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "reader", TenantID: "tenant-a", Roles: []string{"portal.read"}}, nil
@@ -134,7 +138,7 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	if runtime.Portal.Revision != 7 || len(runtime.Modules) != 3 {
-		t.Fatalf("运行描述未锁定 active revision: %+v", runtime)
+		t.Fatalf("运行描述未锁定当前 Activation: %+v", runtime)
 	}
 	links := runtimeW.Result().Header.Values("Link")
 	if len(links) != len(runtime.Modules) || !strings.Contains(links[0], "rel=preload; as=fetch; crossorigin=use-credentials") {
@@ -159,7 +163,7 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	missingW := httptest.NewRecorder()
 	h.ServeHTTP(missingW, missing)
 	if missingW.Code != http.StatusNotFound {
-		t.Fatalf("非 active revision 不得读取模块: %d", missingW.Code)
+		t.Fatalf("非当前 Activation 不得读取模块: %d", missingW.Code)
 	}
 
 	recoveryRequest := httptest.NewRequest(http.MethodGet, "/v1/portal-recovery?path=/settings", nil)
@@ -197,11 +201,35 @@ func (*service) Approve(context.Context, portalapi.Principal, uint64) (portalapi
 func (*service) Publish(context.Context, portalapi.Principal, uint64, portalapi.PublishRequest) (portalapi.Revision, error) {
 	return portalapi.Revision{}, nil
 }
-func (*service) Rollback(context.Context, portalapi.Principal, uint64, portalapi.PublishRequest) (portalapi.Revision, error) {
-	return portalapi.Revision{}, nil
-}
 func (*service) Audit(context.Context, portalapi.Principal, uint64) ([]portalapi.AuditEvent, error) {
 	return nil, nil
+}
+func (*service) Governance(context.Context, portalapi.Principal) (portalapi.GovernanceSnapshot, error) {
+	return portalapi.GovernanceSnapshot{}, nil
+}
+func (*service) CreateProfileDraft(context.Context, portalapi.Principal, frontendcompositionv1.PlatformProfile) (portalapi.PlatformProfileRevision, error) {
+	return portalapi.PlatformProfileRevision{}, nil
+}
+func (*service) UpdateProfileDraft(context.Context, portalapi.Principal, uint64, frontendcompositionv1.PlatformProfile) (portalapi.PlatformProfileRevision, error) {
+	return portalapi.PlatformProfileRevision{}, nil
+}
+func (*service) TransitionProfile(context.Context, portalapi.Principal, uint64, string) (portalapi.PlatformProfileRevision, error) {
+	return portalapi.PlatformProfileRevision{}, nil
+}
+func (*service) CreateBindingDraft(context.Context, portalapi.Principal, portalapi.BindingDraftRequest) (portalapi.BindingRevision, error) {
+	return portalapi.BindingRevision{}, nil
+}
+func (*service) UpdateBindingDraft(context.Context, portalapi.Principal, uint64, portalapi.BindingDraftRequest) (portalapi.BindingRevision, error) {
+	return portalapi.BindingRevision{}, nil
+}
+func (*service) TransitionBinding(context.Context, portalapi.Principal, uint64, string) (portalapi.BindingRevision, error) {
+	return portalapi.BindingRevision{}, nil
+}
+func (*service) Activate(context.Context, portalapi.Principal, portalapi.ActivationRequest) (portalapi.PortalActivation, error) {
+	return portalapi.PortalActivation{}, nil
+}
+func (*service) RollbackActivation(context.Context, portalapi.Principal, uint64, uint64, string) (portalapi.PortalActivation, error) {
+	return portalapi.PortalActivation{}, nil
 }
 
 type interactionService struct {

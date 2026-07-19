@@ -30,26 +30,26 @@ func (h *Handler) resolvePlatformRequest(w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusBadRequest, "invalid_management_target")
 		return portalapi.ManagementTarget{}, nil, false
 	}
-	revisions, err := h.service.List(r.Context(), p)
+	activations, err := h.service.ListActivations(r.Context(), p)
 	if err != nil {
 		respond(w, nil, err)
 		return portalapi.ManagementTarget{}, nil, false
 	}
-	revision, ok := activePortalByID(revisions, p.TenantID, portalID, requestHost(r))
+	activation, ok := activePortalByID(activations, p.TenantID, portalID, requestHost(r))
 	if !ok {
 		writeError(w, http.StatusNotFound, "portal_not_found")
 		return portalapi.ManagementTarget{}, nil, false
 	}
-	if !audienceAllows(revision.Spec.Audience, p) {
+	if !audienceAllows(activation.Spec.Audience, p) {
 		writeError(w, http.StatusForbidden, "portal_audience_forbidden")
 		return portalapi.ManagementTarget{}, nil, false
 	}
-	binding := revision.Spec.Management
-	if frontendcompositionv1.ValidatePortalBinding(binding) != nil || binding.PlatformProfile != revision.Spec.Resolution.PlatformProfile || compositioncommonv1.Digest(binding) != revision.Spec.Resolution.ManagementBindingDigest {
+	binding := activation.Spec.Management
+	if frontendcompositionv1.ValidatePortalBinding(binding) != nil || binding.PlatformProfile != activation.Spec.Resolution.PlatformProfile || compositioncommonv1.Digest(binding) != activation.Spec.Resolution.ManagementBindingDigest {
 		writeError(w, http.StatusConflict, "portal_management_binding_rejected")
 		return portalapi.ManagementTarget{}, nil, false
 	}
-	target, ok := revision.Spec.ManagementTarget(serviceID)
+	target, ok := activation.Spec.ManagementTarget(serviceID)
 	if !ok {
 		writeError(w, http.StatusNotFound, "managed_service_not_found")
 		return portalapi.ManagementTarget{}, nil, false

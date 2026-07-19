@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
@@ -15,6 +19,25 @@ import (
 )
 
 type acceptingCatalog struct{}
+
+func TestDescriptorMatchesSignedManifest(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var signed, runtime any
+	if len(contributions) != 1 || json.Unmarshal(contributions[0].Descriptor, &signed) != nil || json.Unmarshal(Descriptor(), &runtime) != nil || !reflect.DeepEqual(signed, runtime) {
+		t.Fatalf("运行时 descriptor 与签名 Manifest 不一致\nsigned=%s\nruntime=%s", contributions[0].Descriptor, Descriptor())
+	}
+}
 
 func (acceptingCatalog) ValidatePortal(context.Context, string, portalapi.PortalSpec) error {
 	return nil
@@ -62,8 +85,12 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 		t.Fatal(err)
 	}
 	published, err := s.Publish(context.Background(), publisher, draft.ID, portalapi.PublishRequest{})
-	if err != nil || published.Status != portalapi.StatusPublished || !published.Active {
+	if err != nil || published.Status != portalapi.StatusPublished {
 		t.Fatalf("发布失败: %+v %v", published, err)
+	}
+	activation, err := s.Activate(context.Background(), publisher, activationRequest(s, published, 0))
+	if err != nil || activation.Status != portalapi.ActivationCurrent {
+		t.Fatalf("激活失败: %+v %v", activation, err)
 	}
 	audit, err := s.Audit(context.Background(), publisher, draft.ID)
 	if err != nil || len(audit) != 4 {
@@ -73,7 +100,7 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 		t.Fatal(err)
 	} else if err := reopened.BindPlatformCatalog(testPlatformCatalog()); err != nil {
 		t.Fatal(err)
-	} else if got, err := reopened.List(context.Background(), publisher); err != nil || len(got) != 1 || got[0].Status != portalapi.StatusPublished {
+	} else if got, err := reopened.ListActivations(context.Background(), publisher); err != nil || len(got) != 1 || got[0].Status != portalapi.ActivationCurrent {
 		t.Fatalf("持久化状态错误: %+v %v", got, err)
 	}
 }
@@ -106,7 +133,7 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 	author := principal("author", "portal.compose")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
-	publish := func(id string) {
+	publish := func(id string, expected uint64) portalapi.PortalActivation {
 		d, e := s.CreateDraft(context.Background(), author, spec("/"))
 		if e != nil {
 			t.Fatal(e)
@@ -118,11 +145,25 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 		if _, e = s.Approve(context.Background(), approver, d.ID); e != nil {
 			t.Fatal(e)
 		}
-		if _, e = s.Publish(context.Background(), publisher, d.ID, portalapi.PublishRequest{}); e != nil {
+		published, e := s.Publish(context.Background(), publisher, d.ID, portalapi.PublishRequest{})
+		if e != nil {
 			t.Fatal(e)
 		}
+		request := activationRequest(s, published, expected)
+		request.PortalID = id
+		request.ApplicationRevisionID = published.ID
+		for _, binding := range s.state.Bindings {
+			if binding.PortalID == id {
+				request.BindingRevisionID, request.ProfileRevisionID = binding.ID, binding.ProfileRevisionID
+			}
+		}
+		activation, e := s.Activate(context.Background(), publisher, request)
+		if e != nil {
+			t.Fatal(e)
+		}
+		return activation
 	}
-	publish("one")
+	first := publish("admin", 0)
 	d, err := s.CreateDraft(context.Background(), author, spec("/"))
 	if err != nil {
 		t.Fatal(err)
@@ -137,17 +178,32 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 	if _, err = s.Approve(context.Background(), approver, d.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.Publish(context.Background(), publisher, d.ID, portalapi.PublishRequest{}); !errors.Is(err, ErrRouteConflict) {
-		t.Fatalf("同租户跨 Portal 路由冲突必须拒绝: %v", err)
+	published, err := s.Publish(context.Background(), publisher, d.ID, portalapi.PublishRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := activationRequest(s, published, 0)
+	request.PortalID = "two"
+	request.ExpectedCurrentID = 0
+	request.ApplicationRevisionID = published.ID
+	// The fixture catalog has one binding; clone it as a published binding for the second Portal.
+	binding := s.state.Bindings[0]
+	s.state.NextGovernance++
+	binding.ID, binding.PortalID, binding.Binding.PortalID = s.state.NextGovernance, "two", "two"
+	s.state.Bindings = append(s.state.Bindings, binding)
+	request.BindingRevisionID, request.ProfileRevisionID = binding.ID, binding.ProfileRevisionID
+	failed, err := s.Activate(context.Background(), publisher, request)
+	if err != nil || failed.Status != portalapi.ActivationFailed || first.Status != portalapi.ActivationCurrent {
+		t.Fatalf("同租户跨 Portal 路由冲突必须产生持久失败 Activation: %+v %v", failed, err)
 	}
 }
 
-func TestRollbackUsesInactivePublishedRevisionAndReturnsActiveCopy(t *testing.T) {
+func TestRollbackCreatesNewImmutableActivation(t *testing.T) {
 	s := newTestService(t)
 	author := principal("author", "portal.compose")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
-	publish := func() portalapi.Revision {
+	publish := func(expected uint64) portalapi.PortalActivation {
 		t.Helper()
 		draft, err := s.CreateDraft(context.Background(), author, spec("/"))
 		if err != nil {
@@ -163,17 +219,108 @@ func TestRollbackUsesInactivePublishedRevisionAndReturnsActiveCopy(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		return published
+		activation, err := s.Activate(context.Background(), publisher, activationRequest(s, published, expected))
+		if err != nil || activation.Status != portalapi.ActivationCurrent {
+			t.Fatalf("激活失败: %+v %v", activation, err)
+		}
+		return activation
 	}
-	first := publish()
-	_ = publish()
-	rolledBack, err := s.Rollback(context.Background(), publisher, first.ID, portalapi.PublishRequest{})
-	if err != nil || !rolledBack.Active || rolledBack.Status != portalapi.StatusPublished {
-		t.Fatalf("历史 revision 回滚失败: revision=%+v err=%v", rolledBack, err)
+	first := publish(0)
+	second := publish(first.ID)
+	rolledBack, err := s.RollbackActivation(context.Background(), publisher, first.ID, second.ID, "恢复已验证基线")
+	if err != nil || rolledBack.Status != portalapi.ActivationCurrent || rolledBack.PreviousActivationID != second.ID {
+		t.Fatalf("历史 Activation 回滚失败: activation=%+v err=%v", rolledBack, err)
 	}
-	if _, err := s.Rollback(context.Background(), publisher, rolledBack.ID, portalapi.PublishRequest{}); !errors.Is(err, ErrInvalidState) {
-		t.Fatalf("当前 active revision 不能作为回滚源: %v", err)
+	if _, err := s.RollbackActivation(context.Background(), publisher, rolledBack.ID, rolledBack.ID, "不能回滚当前"); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("当前 Activation 不能作为回滚源: %v", err)
 	}
+}
+
+func TestProfileAndBindingPublishingDoesNotGoLiveBeforeActivationCAS(t *testing.T) {
+	s := newTestService(t)
+	author := principal("author", "portal.compose")
+	approver := principal("approver", "portal.approve")
+	publisher := principal("publisher", "portal.publish")
+
+	baseProfile := s.state.Profiles[0].Profile
+	profile := baseProfile
+	profile.ID, profile.Revision = "portal-top", 1
+	oldLayoutID := profile.Layout.ID
+	profile.Layout.PluginRef = frontendcompositionv1.PluginRef{ID: "com.vastplan.foundation.frontend.layout.top-navigation", Version: "1.0.0", Channel: "stable"}
+	profile.Plugins = append([]frontendcompositionv1.PluginRef(nil), profile.Plugins...)
+	for i := range profile.Plugins {
+		if profile.Plugins[i].ID == oldLayoutID {
+			profile.Plugins[i] = profile.Layout.PluginRef
+		}
+	}
+	profileDraft, err := s.CreateProfileDraft(context.Background(), author, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.TransitionProfile(context.Background(), author, profileDraft.ID, "submit"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.TransitionProfile(context.Background(), approver, profileDraft.ID, "approve"); err != nil {
+		t.Fatal(err)
+	}
+	publishedProfile, err := s.TransitionProfile(context.Background(), publisher, profileDraft.ID, "publish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	binding := s.state.Bindings[0].Binding
+	binding.PlatformProfile = compositioncommonv1.Ref{}
+	bindingDraft, err := s.CreateBindingDraft(context.Background(), author, portalapi.BindingDraftRequest{ProfileRevisionID: publishedProfile.ID, Binding: binding})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.TransitionBinding(context.Background(), author, bindingDraft.ID, "submit"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.TransitionBinding(context.Background(), approver, bindingDraft.ID, "approve"); err != nil {
+		t.Fatal(err)
+	}
+	publishedBinding, err := s.TransitionBinding(context.Background(), publisher, bindingDraft.ID, "publish")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	applicationDraft, err := s.CreateDraft(context.Background(), author, spec("/"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Submit(context.Background(), author, applicationDraft.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Approve(context.Background(), approver, applicationDraft.ID); err != nil {
+		t.Fatal(err)
+	}
+	publishedApplication, err := s.Publish(context.Background(), publisher, applicationDraft.ID, portalapi.PublishRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.ListActivations(context.Background(), publisher); err != nil || len(got) != 0 {
+		t.Fatalf("Published 输入不得自动上线: %+v %v", got, err)
+	}
+
+	request := portalapi.ActivationRequest{PortalID: publishedApplication.PortalID, ApplicationRevisionID: publishedApplication.ID, ProfileRevisionID: publishedProfile.ID, BindingRevisionID: publishedBinding.ID, ExpectedCurrentID: 0, Reason: "切换到顶部导航"}
+	current, err := s.Activate(context.Background(), publisher, request)
+	if err != nil || current.Status != portalapi.ActivationCurrent || current.Spec.Layout.ID != profile.Layout.ID {
+		t.Fatalf("Activation 未使用精确发布输入: %+v %v", current, err)
+	}
+	if _, err := s.Activate(context.Background(), publisher, request); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("过期 expectedCurrentId 必须被 CAS 拒绝: %v", err)
+	}
+}
+
+func activationRequest(s *Service, application portalapi.Revision, expected uint64) portalapi.ActivationRequest {
+	profile := s.state.Profiles[0]
+	for _, binding := range s.state.Bindings {
+		if binding.TenantID == application.TenantID && binding.PortalID == application.PortalID && binding.ProfileRevisionID == profile.ID {
+			return portalapi.ActivationRequest{PortalID: application.PortalID, ApplicationRevisionID: application.ID, ProfileRevisionID: profile.ID, BindingRevisionID: binding.ID, ExpectedCurrentID: expected}
+		}
+	}
+	return portalapi.ActivationRequest{}
 }
 
 type configuredHost struct {

@@ -114,7 +114,7 @@ func platformPortalService() *service {
 		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision"}}}},
 	}}
 	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a", Route: "/operations", Management: binding, Resolution: portalapi.Resolution{PlatformProfile: profile, ManagementBindingDigest: compositioncommonv1.Digest(binding)}}
-	return &service{revisions: []portalapi.Revision{{ID: 1, TenantID: "tenant-a", PortalID: "operations", Status: portalapi.StatusPublished, Active: true, Spec: spec}}}
+	return &service{activations: []portalapi.PortalActivation{{ID: 1, TenantID: "tenant-a", PortalID: "operations", Status: portalapi.ActivationCurrent, Spec: spec}}}
 }
 
 func platformPath(serviceID, path string) string {
@@ -200,7 +200,7 @@ func TestPortalManagementBindingRejectsCrossServiceAndAudienceWidening(t *testin
 		t.Fatalf("设置服务绑定不得跨界访问凭证 capability: %d", response.Code)
 	}
 
-	portalService.revisions[0].Spec.Audience = []string{"portal.operations"}
+	portalService.activations[0].Spec.Audience = []string{"portal.operations"}
 	h = NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "operator", TenantID: "tenant-a", Roles: []string{"platform.settings.read"}}, nil
 	}), portalService, nil, admin, nil, nil)

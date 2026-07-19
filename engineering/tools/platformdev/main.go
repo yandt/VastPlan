@@ -42,6 +42,7 @@ import (
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
 const (
@@ -694,6 +695,58 @@ func publishPortal(baseURL string) error {
 		if err != nil || status != http.StatusOK {
 			return fmt.Errorf("%s status=%d body=%s: %w", step.operation, status, raw, err)
 		}
+	}
+	// Published Application/Profile/Binding revisions are eligible inputs only.
+	// Select the catalog-seeded Profile + Binding and make the initial live fact
+	// explicit through the same CAS-protected Activation API used in production.
+	status, raw, err = portalRequest(client, baseURL, devAdminToken, http.MethodGet, "/v1/portal-governance", nil, false)
+	if err != nil || status != http.StatusOK {
+		return fmt.Errorf("governance status=%d body=%s: %w", status, raw, err)
+	}
+	var governance portalapi.GovernanceSnapshot
+	if err := json.Unmarshal(raw, &governance); err != nil {
+		return fmt.Errorf("decode governance: %w", err)
+	}
+	var binding portalapi.BindingRevision
+	for _, candidate := range governance.Bindings {
+		if candidate.PortalID == "operations" && candidate.Status == portalapi.StatusPublished && candidate.ID > binding.ID {
+			binding = candidate
+		}
+	}
+	if binding.ID == 0 {
+		return errors.New("未找到 operations 的已发布 Portal Binding")
+	}
+	var profile portalapi.PlatformProfileRevision
+	for _, candidate := range governance.Profiles {
+		if candidate.ID == binding.ProfileRevisionID && candidate.Status == portalapi.StatusPublished {
+			profile = candidate
+			break
+		}
+	}
+	if profile.ID == 0 {
+		return fmt.Errorf("Binding #%d 引用的 Profile #%d 不可用", binding.ID, binding.ProfileRevisionID)
+	}
+	var expectedCurrentID uint64
+	for _, candidate := range governance.Activations {
+		if candidate.PortalID == "operations" && candidate.Status == portalapi.ActivationCurrent {
+			expectedCurrentID = candidate.ID
+			break
+		}
+	}
+	activationRequest := portalapi.ActivationRequest{
+		PortalID: "operations", ApplicationRevisionID: revision.ID, ProfileRevisionID: profile.ID,
+		BindingRevisionID: binding.ID, ExpectedCurrentID: expectedCurrentID, Reason: "platformdev startup activation",
+	}
+	status, raw, err = portalRequest(client, baseURL, publisherToken, http.MethodPost, "/v1/portal-governance/activations", activationRequest, true)
+	if err != nil || status != http.StatusOK {
+		return fmt.Errorf("activate status=%d body=%s: %w", status, raw, err)
+	}
+	var activation portalapi.PortalActivation
+	if err := json.Unmarshal(raw, &activation); err != nil {
+		return fmt.Errorf("decode activation: %w", err)
+	}
+	if activation.Status != portalapi.ActivationCurrent {
+		return fmt.Errorf("initial Portal activation failed: %+v", activation)
 	}
 	status, raw, err = portalRequest(client, baseURL, devAdminToken, http.MethodGet, "/v1/portal-runtime?path=/operations", nil, false)
 	if err != nil || status != http.StatusOK {

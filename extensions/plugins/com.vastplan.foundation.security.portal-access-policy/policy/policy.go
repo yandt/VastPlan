@@ -43,13 +43,29 @@ func decide(c *contractv1.CallContext, request extpoint.PermissionRequest) (extp
 	if c.Caller.Kind != contractv1.CallerKind_CALLER_KIND_USER {
 		return extpoint.DecisionDeny, "仅已认证用户可调用门户组合"
 	}
-	needed := map[string]string{"createDraft": "portal.compose", "updateDraft": "portal.compose", "submit": "portal.compose", "approve": "portal.approve", "publish": "portal.publish", "rollback": "portal.publish", "list": "portal.read", "audit": "portal.read"}[request.Operation]
-	if needed == "" {
+	needed := map[string][]string{
+		"createDraft": {"portal.compose"}, "updateDraft": {"portal.compose"}, "submit": {"portal.compose"},
+		"approve": {"portal.approve"}, "publish": {"portal.publish"},
+		"createProfileDraft": {"portal.compose"}, "updateProfileDraft": {"portal.compose"},
+		"createBindingDraft": {"portal.compose"}, "updateBindingDraft": {"portal.compose"},
+		// Transition payloads are decoded and finally authorized by Composer;
+		// this outer policy admits only the three lifecycle roles.
+		"transitionProfile": {"portal.compose", "portal.approve", "portal.publish"},
+		"transitionBinding": {"portal.compose", "portal.approve", "portal.publish"},
+		"activate":          {"portal.publish"}, "rollbackActivation": {"portal.publish"},
+		"list":            {"portal.read", "portal.compose", "portal.approve", "portal.publish"},
+		"audit":           {"portal.read", "portal.compose", "portal.approve", "portal.publish"},
+		"governance":      {"portal.read", "portal.compose", "portal.approve", "portal.publish"},
+		"listActivations": {"portal.read", "portal.compose", "portal.approve", "portal.publish"},
+	}[request.Operation]
+	if len(needed) == 0 {
 		return extpoint.DecisionDeny, "未知门户操作"
 	}
-	for _, role := range c.GetPrincipal().GetSystemRoles() {
-		if role == needed || (needed == "portal.read" && (role == "portal.compose" || role == "portal.approve" || role == "portal.publish")) {
-			return extpoint.DecisionAllow, "角色授权"
+	for _, actual := range c.GetPrincipal().GetSystemRoles() {
+		for _, allowed := range needed {
+			if actual == allowed {
+				return extpoint.DecisionAllow, "角色授权"
+			}
 		}
 	}
 	return extpoint.DecisionDeny, "缺少门户角色"

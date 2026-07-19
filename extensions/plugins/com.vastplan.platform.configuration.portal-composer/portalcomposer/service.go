@@ -44,10 +44,15 @@ type Catalog interface {
 }
 
 type state struct {
-	NextRevision uint64                 `json:"nextRevision"`
-	NextAudit    uint64                 `json:"nextAudit"`
-	Revisions    []portalapi.Revision   `json:"revisions"`
-	Audit        []portalapi.AuditEvent `json:"audit"`
+	NextRevision   uint64                              `json:"nextRevision"`
+	NextGovernance uint64                              `json:"nextGovernanceRevision"`
+	NextActivation uint64                              `json:"nextActivation"`
+	NextAudit      uint64                              `json:"nextAudit"`
+	Revisions      []portalapi.Revision                `json:"applications"`
+	Profiles       []portalapi.PlatformProfileRevision `json:"profiles"`
+	Bindings       []portalapi.BindingRevision         `json:"bindings"`
+	Activations    []portalapi.PortalActivation        `json:"activations"`
+	Audit          []portalapi.AuditEvent              `json:"audit"`
 }
 
 type Service struct {
@@ -74,6 +79,12 @@ func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatfo
 		return nil
 	}
 	s.platformCatalog, s.catalogConfigured = catalog, true
+	if err := s.seedPublishedCatalogLocked(catalog); err != nil {
+		return err
+	}
+	if s.stateFile != "" {
+		return s.save()
+	}
 	return nil
 }
 
@@ -314,75 +325,24 @@ func (s *Service) Publish(ctx context.Context, principal portalapi.Principal, id
 	if err != nil {
 		return portalapi.Revision{}, err
 	}
-	if s.routeConflictLocked(*r) {
-		return portalapi.Revision{}, ErrRouteConflict
-	}
-	if err := s.materializeCatalog(ctx, principal.TenantID, resolved); err != nil {
+	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
 		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	r.Status = portalapi.StatusPublished
 	r.Spec = cloneSpec(resolved)
-	s.activateLocked(r)
 	r.PublishedBy = principal.ID
 	r.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 	priority := "normal"
-	action := "revision.published"
+	action := "application.published"
 	if breakGlass {
 		priority = "high"
-		action = "revision.break_glass_published"
+		action = "application.break_glass_published"
 	}
 	s.auditLocked(*r, action, principal, request.BreakGlassReason, priority)
 	if err := s.save(); err != nil {
 		return portalapi.Revision{}, err
 	}
 	return cloneRevision(*r), nil
-}
-
-func (s *Service) Rollback(ctx context.Context, principal portalapi.Principal, id uint64, request portalapi.PublishRequest) (portalapi.Revision, error) {
-	if !principal.System {
-		if err := require(principal, "portal.publish"); err != nil {
-			return portalapi.Revision{}, err
-		}
-	} else if strings.TrimSpace(request.BreakGlassReason) == "" {
-		return portalapi.Revision{}, errors.New("system break-glass 回滚必须说明原因")
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	i, err := s.revisionIndex(principal.TenantID, id)
-	if err != nil {
-		return portalapi.Revision{}, err
-	}
-	source := s.state.Revisions[i]
-	// A rollback selects an inactive, previously published revision. Allowing
-	// the active revision would create a duplicate of the currently live state
-	// rather than perform a rollback.
-	if source.Status != portalapi.StatusPublished || source.Active {
-		return portalapi.Revision{}, ErrInvalidState
-	}
-	resolved, err := s.resolveCurrent(source.Composition, principal.TenantID, s.state.NextRevision+1)
-	if err != nil {
-		return portalapi.Revision{}, err
-	}
-	s.state.NextRevision++
-	now := s.now().UTC().Format(time.RFC3339Nano)
-	r := portalapi.Revision{ID: s.state.NextRevision, TenantID: principal.TenantID, PortalID: source.PortalID, Status: portalapi.StatusPublished, Composition: cloneComposition(source.Composition), Spec: cloneSpec(resolved), PublishedBy: principal.ID, CreatedAt: now, UpdatedAt: now}
-	if s.routeConflictLocked(r) {
-		return portalapi.Revision{}, ErrRouteConflict
-	}
-	if err := s.materializeCatalog(ctx, principal.TenantID, resolved); err != nil {
-		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
-	}
-	s.state.Revisions = append(s.state.Revisions, r)
-	s.activateLocked(&s.state.Revisions[len(s.state.Revisions)-1])
-	priority := "normal"
-	if principal.System {
-		priority = "high"
-	}
-	s.auditLocked(r, "revision.rolled_back", principal, request.BreakGlassReason, priority)
-	if err := s.save(); err != nil {
-		return portalapi.Revision{}, err
-	}
-	return cloneRevision(s.state.Revisions[len(s.state.Revisions)-1]), nil
 }
 
 func (s *Service) Audit(_ context.Context, principal portalapi.Principal, id uint64) ([]portalapi.AuditEvent, error) {
@@ -396,7 +356,7 @@ func (s *Service) Audit(_ context.Context, principal portalapi.Principal, id uin
 	}
 	out := make([]portalapi.AuditEvent, 0)
 	for _, e := range s.state.Audit {
-		if e.TenantID == principal.TenantID && e.RevisionID == id {
+		if e.TenantID == principal.TenantID && e.RevisionID == id && (strings.HasPrefix(e.Action, "draft.") || strings.HasPrefix(e.Action, "application.")) {
 			out = append(out, e)
 		}
 	}
@@ -414,34 +374,6 @@ func (s *Service) revisionIndex(tenant string, id uint64) (int, error) {
 func (s *Service) auditLocked(r portalapi.Revision, action string, p portalapi.Principal, reason, priority string) {
 	s.state.NextAudit++
 	s.state.Audit = append(s.state.Audit, portalapi.AuditEvent{ID: s.state.NextAudit, TenantID: r.TenantID, PortalID: r.PortalID, RevisionID: r.ID, Action: action, ActorID: p.ID, Reason: reason, Priority: priority, At: s.now().UTC().Format(time.RFC3339Nano)})
-}
-func (s *Service) activateLocked(candidate *portalapi.Revision) {
-	for i := range s.state.Revisions {
-		r := &s.state.Revisions[i]
-		if r.TenantID == candidate.TenantID && r.PortalID == candidate.PortalID && r.ID != candidate.ID {
-			r.Active = false
-		}
-	}
-	candidate.Active = true
-}
-
-func (s *Service) routeConflictLocked(candidate portalapi.Revision) bool {
-	for _, r := range s.state.Revisions {
-		if r.TenantID != candidate.TenantID || r.ID == candidate.ID || !r.Active || r.Status != portalapi.StatusPublished || r.PortalID == candidate.PortalID {
-			continue
-		}
-		if r.Spec.Route == candidate.Spec.Route {
-			return true
-		}
-		for _, d := range r.Spec.Domains {
-			for _, c := range candidate.Spec.Domains {
-				if d == c {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
 func require(p portalapi.Principal, role string) error {
 	if p.ID == "" || p.TenantID == "" {

@@ -56,4 +56,14 @@ describe("PortalControlClient", () => {
     const client = new PortalControlClient({ fetch: async () => response({ error: "forbidden" }, 403) });
     await expect(client.list()).rejects.toEqual(new PortalControlError(403, "forbidden"));
   });
+
+  it("uses the dedicated immutable Activation endpoint with an expected-current CAS", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(response({ token: "csrf-token" })).mockResolvedValueOnce(response({ id: 9, status: "Current" }));
+    const client = new PortalControlClient({ fetch });
+    const request = { portalId: "admin", applicationRevisionId: 7, profileRevisionId: 3, bindingRevisionId: 4, expectedCurrentId: 8, reason: "切换布局" };
+    await client.activate(request);
+    expect(fetch).toHaveBeenNthCalledWith(2, "/v1/portal-governance/activations", {
+      method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": "csrf-token" }, body: JSON.stringify(request),
+    });
+  });
 });

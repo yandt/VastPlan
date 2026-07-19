@@ -129,7 +129,7 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 		t.Fatal("应用输入选择 foundation 设计系统必须拒绝")
 	}
 	spec.Resolution.PluginOrigins[ref.ID] = compositioncommonv1.OriginPlatformProfile
-	spec.DesignSystem.UIContract = "^2.0.0"
+	spec.DesignSystem.UIContract = "^3.0.0"
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {
 		t.Fatal("不兼容 UI 契约必须拒绝")
 	}

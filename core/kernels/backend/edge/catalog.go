@@ -325,7 +325,7 @@ func (c *TrustedCatalog) ResolveRuntime(ctx context.Context, tenantID string, sp
 }
 
 // ResolveRecoveryRuntime binds every historical module URL to both the current
-// active revision and the server-selected fallback revision. The browser cannot
+// Activation and the server-selected fallback Activation. The browser cannot
 // turn recovery mode into an arbitrary historical artifact reader.
 func (c *TrustedCatalog) ResolveRecoveryRuntime(ctx context.Context, tenantID string, activeRevision uint64, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
 	if activeRevision == 0 || spec.Revision == 0 || activeRevision == spec.Revision {

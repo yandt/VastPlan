@@ -75,7 +75,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	runtimePath := r.URL.Path == "/v1/portal-runtime" || r.URL.Path == "/v1/portal-recovery" || strings.HasPrefix(r.URL.Path, "/v1/portal-modules/") || strings.HasPrefix(r.URL.Path, "/v1/portal-recovery-modules/")
-	portalPath := strings.HasPrefix(r.URL.Path, "/v1/portal-drafts")
+	portalPath := strings.HasPrefix(r.URL.Path, "/v1/portal-drafts") || strings.HasPrefix(r.URL.Path, "/v1/portal-governance")
 	interactionPath := strings.HasPrefix(r.URL.Path, "/v1/interactions")
 	platformPath := strings.HasPrefix(r.URL.Path, "/v1/portals/")
 	if !runtimePath && !portalPath && !interactionPath && !platformPath {
@@ -122,22 +122,22 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 		methodNotAllowed(w)
 		return
 	}
-	revisions, err := h.service.List(r.Context(), p)
+	activations, err := h.service.ListActivations(r.Context(), p)
 	if err != nil {
 		respond(w, nil, err)
 		return
 	}
 	if r.URL.Path == "/v1/portal-runtime" {
-		revision, ok := selectActivePortal(revisions, p.TenantID, r.URL.Query().Get("path"), requestHost(r))
+		activation, ok := selectActivePortal(activations, p.TenantID, r.URL.Query().Get("path"), requestHost(r))
 		if !ok {
 			writeError(w, http.StatusNotFound, "portal_not_found")
 			return
 		}
-		if !audienceAllows(revision.Spec.Audience, p) {
+		if !audienceAllows(activation.Spec.Audience, p) {
 			writeError(w, http.StatusForbidden, "portal_audience_forbidden")
 			return
 		}
-		runtime, err := h.catalog.ResolveRuntime(r.Context(), p.TenantID, revision.Spec)
+		runtime, err := h.catalog.ResolveRuntime(r.Context(), p.TenantID, activation.Spec)
 		if err != nil {
 			writeError(w, http.StatusConflict, "portal_runtime_rejected")
 			return
@@ -147,7 +147,7 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 		return
 	}
 	if r.URL.Path == "/v1/portal-recovery" {
-		active, fallback, ok := selectRecoveryPortal(revisions, p.TenantID, r.URL.Query().Get("path"), requestHost(r))
+		active, fallback, ok := selectRecoveryPortal(activations, p.TenantID, r.URL.Query().Get("path"), requestHost(r))
 		if !ok {
 			writeError(w, http.StatusNotFound, "portal_recovery_not_found")
 			return
@@ -173,7 +173,7 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 			http.NotFound(w, r)
 			return
 		}
-		active, ok := activeRevision(revisions, p.TenantID, activeID)
+		active, ok := activeActivation(activations, p.TenantID, activeID)
 		if !ok {
 			writeError(w, http.StatusNotFound, "portal_revision_not_found")
 			return
@@ -182,7 +182,7 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 			writeError(w, http.StatusForbidden, "portal_audience_forbidden")
 			return
 		}
-		fallback, ok := recoveryRevision(revisions, active, fallbackID)
+		fallback, ok := recoveryActivation(activations, active, fallbackID)
 		if !ok {
 			writeError(w, http.StatusNotFound, "portal_recovery_not_found")
 			return
@@ -195,20 +195,20 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 		http.NotFound(w, r)
 		return
 	}
-	revision, ok := activeRevision(revisions, p.TenantID, revisionID)
+	activation, ok := activeActivation(activations, p.TenantID, revisionID)
 	if !ok {
 		writeError(w, http.StatusNotFound, "portal_revision_not_found")
 		return
 	}
-	if !audienceAllows(revision.Spec.Audience, p) {
+	if !audienceAllows(activation.Spec.Audience, p) {
 		writeError(w, http.StatusForbidden, "portal_audience_forbidden")
 		return
 	}
-	h.serveFrontendModule(w, r, p, revision, pluginID)
+	h.serveFrontendModule(w, r, p, activation, pluginID)
 }
 
-func (h *Handler) serveFrontendModule(w http.ResponseWriter, r *http.Request, p portalapi.Principal, revision portalapi.Revision, digest string) {
-	asset, err := h.catalog.ReadFrontendModule(r.Context(), p.TenantID, revision.Spec, digest)
+func (h *Handler) serveFrontendModule(w http.ResponseWriter, r *http.Request, p portalapi.Principal, activation portalapi.PortalActivation, digest string) {
+	asset, err := h.catalog.ReadFrontendModule(r.Context(), p.TenantID, activation.Spec, digest)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "portal_module_not_found")
 		return
@@ -250,20 +250,19 @@ func acceptsEncoding(header, encoding string) bool {
 	return false
 }
 
-func selectRecoveryPortal(revisions []portalapi.Revision, tenantID, requestedPath, host string) (portalapi.Revision, portalapi.Revision, bool) {
-	active, ok := selectActivePortal(revisions, tenantID, requestedPath, host)
+func selectRecoveryPortal(activations []portalapi.PortalActivation, tenantID, requestedPath, host string) (portalapi.PortalActivation, portalapi.PortalActivation, bool) {
+	active, ok := selectActivePortal(activations, tenantID, requestedPath, host)
 	if !ok {
-		return portalapi.Revision{}, portalapi.Revision{}, false
+		return portalapi.PortalActivation{}, portalapi.PortalActivation{}, false
 	}
-	fallback, ok := latestRecoveryRevision(revisions, active)
+	fallback, ok := latestRecoveryActivation(activations, active)
 	return active, fallback, ok
 }
 
-func latestRecoveryRevision(revisions []portalapi.Revision, active portalapi.Revision) (portalapi.Revision, bool) {
-	var fallback portalapi.Revision
-	for _, candidate := range revisions {
-		if candidate.TenantID != active.TenantID || candidate.PortalID != active.PortalID || candidate.Active || candidate.Status != portalapi.StatusPublished ||
-			candidate.ID == 0 || candidate.Spec.Revision != candidate.ID {
+func latestRecoveryActivation(activations []portalapi.PortalActivation, active portalapi.PortalActivation) (portalapi.PortalActivation, bool) {
+	var fallback portalapi.PortalActivation
+	for _, candidate := range activations {
+		if candidate.TenantID != active.TenantID || candidate.PortalID != active.PortalID || candidate.Status != portalapi.ActivationSuperseded || candidate.ID == 0 || candidate.Spec.Revision != candidate.ID {
 			continue
 		}
 		if fallback.ID == 0 || candidate.ID > fallback.ID {
@@ -273,44 +272,44 @@ func latestRecoveryRevision(revisions []portalapi.Revision, active portalapi.Rev
 	return fallback, fallback.ID != 0
 }
 
-func recoveryRevision(revisions []portalapi.Revision, active portalapi.Revision, fallbackID uint64) (portalapi.Revision, bool) {
-	fallback, ok := latestRecoveryRevision(revisions, active)
+func recoveryActivation(activations []portalapi.PortalActivation, active portalapi.PortalActivation, fallbackID uint64) (portalapi.PortalActivation, bool) {
+	fallback, ok := latestRecoveryActivation(activations, active)
 	if !ok || fallback.ID != fallbackID || fallback.PortalID != active.PortalID {
-		return portalapi.Revision{}, false
+		return portalapi.PortalActivation{}, false
 	}
 	return fallback, true
 }
 
-func selectActivePortal(revisions []portalapi.Revision, tenantID, requestedPath, host string) (portalapi.Revision, bool) {
+func selectActivePortal(activations []portalapi.PortalActivation, tenantID, requestedPath, host string) (portalapi.PortalActivation, bool) {
 	if requestedPath == "" {
 		requestedPath = "/"
 	}
 	if !strings.HasPrefix(requestedPath, "/") {
-		return portalapi.Revision{}, false
+		return portalapi.PortalActivation{}, false
 	}
-	var selected portalapi.Revision
-	for _, revision := range revisions {
-		if !isActiveRevision(revision, tenantID) || !routeMatches(revision.Spec.Route, requestedPath) || !domainMatches(revision.Spec.Domains, host) {
+	var selected portalapi.PortalActivation
+	for _, activation := range activations {
+		if !isCurrentActivation(activation, tenantID) || !routeMatches(activation.Spec.Route, requestedPath) || !domainMatches(activation.Spec.Domains, host) {
 			continue
 		}
-		if selected.ID == 0 || len(revision.Spec.Route) > len(selected.Spec.Route) {
-			selected = revision
+		if selected.ID == 0 || len(activation.Spec.Route) > len(selected.Spec.Route) {
+			selected = activation
 		}
 	}
 	return selected, selected.ID != 0
 }
 
-func activeRevision(revisions []portalapi.Revision, tenantID string, id uint64) (portalapi.Revision, bool) {
-	for _, revision := range revisions {
-		if revision.ID == id && isActiveRevision(revision, tenantID) {
-			return revision, true
+func activeActivation(activations []portalapi.PortalActivation, tenantID string, id uint64) (portalapi.PortalActivation, bool) {
+	for _, activation := range activations {
+		if activation.ID == id && isCurrentActivation(activation, tenantID) {
+			return activation, true
 		}
 	}
-	return portalapi.Revision{}, false
+	return portalapi.PortalActivation{}, false
 }
 
-func isActiveRevision(revision portalapi.Revision, tenantID string) bool {
-	return revision.ID != 0 && revision.TenantID == tenantID && revision.Active && revision.Status == portalapi.StatusPublished && revision.Spec.Revision == revision.ID
+func isCurrentActivation(activation portalapi.PortalActivation, tenantID string) bool {
+	return activation.ID != 0 && activation.TenantID == tenantID && activation.Status == portalapi.ActivationCurrent && activation.Spec.Revision == activation.ID
 }
 
 func routeMatches(root, requested string) bool {
@@ -345,13 +344,13 @@ func audienceAllows(audience []string, principal portalapi.Principal) bool {
 	return false
 }
 
-func activePortalByID(revisions []portalapi.Revision, tenantID, portalID, host string) (portalapi.Revision, bool) {
-	for _, revision := range revisions {
-		if isActiveRevision(revision, tenantID) && revision.PortalID == portalID && revision.Spec.ID == portalID && domainMatches(revision.Spec.Domains, host) {
-			return revision, true
+func activePortalByID(activations []portalapi.PortalActivation, tenantID, portalID, host string) (portalapi.PortalActivation, bool) {
+	for _, activation := range activations {
+		if isCurrentActivation(activation, tenantID) && activation.PortalID == portalID && activation.Spec.ID == portalID && domainMatches(activation.Spec.Domains, host) {
+			return activation, true
 		}
 	}
-	return portalapi.Revision{}, false
+	return portalapi.PortalActivation{}, false
 }
 
 func requestHost(r *http.Request) string {
@@ -470,6 +469,10 @@ func (h *Handler) csrf(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) route(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
+	if strings.HasPrefix(r.URL.Path, "/v1/portal-governance") {
+		h.governanceRoute(w, r, p)
+		return
+	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/portal-drafts"), "/")
 	if r.URL.Path == "/v1/portal-drafts" {
 		switch r.Method {
@@ -520,11 +523,6 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request, p portalapi.Prin
 			h.publish(w, r, p, id)
 			return
 		}
-	case "rollback":
-		if r.Method == http.MethodPost {
-			h.rollback(w, r, p, id)
-			return
-		}
 	case "audit":
 		if r.Method == http.MethodGet {
 			h.audit(w, r, p, id)
@@ -532,6 +530,113 @@ func (h *Handler) route(w http.ResponseWriter, r *http.Request, p portalapi.Prin
 		}
 	}
 	methodNotAllowed(w)
+}
+
+func (h *Handler) governanceRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
+	path := strings.Trim(strings.TrimPrefix(r.URL.Path, "/v1/portal-governance"), "/")
+	if path == "" {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		value, err := h.service.Governance(r.Context(), p)
+		respond(w, value, err)
+		return
+	}
+	parts := strings.Split(path, "/")
+	if parts[0] == "profiles" {
+		if len(parts) == 1 && r.Method == http.MethodPost {
+			var profile frontendcompositionv1.PlatformProfile
+			if decode(w, r, &profile) {
+				value, err := h.service.CreateProfileDraft(r.Context(), p, profile)
+				respond(w, value, err)
+			}
+			return
+		}
+		id, ok := governanceRevisionID(w, parts)
+		if !ok {
+			return
+		}
+		if len(parts) == 2 && r.Method == http.MethodPut {
+			var profile frontendcompositionv1.PlatformProfile
+			if decode(w, r, &profile) {
+				value, err := h.service.UpdateProfileDraft(r.Context(), p, id, profile)
+				respond(w, value, err)
+			}
+			return
+		}
+		if len(parts) == 3 && r.Method == http.MethodPost && (parts[2] == "submit" || parts[2] == "approve" || parts[2] == "publish") {
+			value, err := h.service.TransitionProfile(r.Context(), p, id, parts[2])
+			respond(w, value, err)
+			return
+		}
+	}
+	if parts[0] == "bindings" {
+		if len(parts) == 1 && r.Method == http.MethodPost {
+			var request portalapi.BindingDraftRequest
+			if decode(w, r, &request) {
+				value, err := h.service.CreateBindingDraft(r.Context(), p, request)
+				respond(w, value, err)
+			}
+			return
+		}
+		id, ok := governanceRevisionID(w, parts)
+		if !ok {
+			return
+		}
+		if len(parts) == 2 && r.Method == http.MethodPut {
+			var request portalapi.BindingDraftRequest
+			if decode(w, r, &request) {
+				value, err := h.service.UpdateBindingDraft(r.Context(), p, id, request)
+				respond(w, value, err)
+			}
+			return
+		}
+		if len(parts) == 3 && r.Method == http.MethodPost && (parts[2] == "submit" || parts[2] == "approve" || parts[2] == "publish") {
+			value, err := h.service.TransitionBinding(r.Context(), p, id, parts[2])
+			respond(w, value, err)
+			return
+		}
+	}
+	if parts[0] == "activations" {
+		if len(parts) == 1 && r.Method == http.MethodPost {
+			var request portalapi.ActivationRequest
+			if decode(w, r, &request) {
+				value, err := h.service.Activate(r.Context(), p, request)
+				respond(w, value, err)
+			}
+			return
+		}
+		id, ok := governanceRevisionID(w, parts)
+		if !ok {
+			return
+		}
+		if len(parts) == 3 && parts[2] == "rollback" && r.Method == http.MethodPost {
+			var request struct {
+				ExpectedCurrentID uint64 `json:"expectedCurrentId"`
+				Reason            string `json:"reason"`
+			}
+			if decode(w, r, &request) {
+				value, err := h.service.RollbackActivation(r.Context(), p, id, request.ExpectedCurrentID, request.Reason)
+				respond(w, value, err)
+			}
+			return
+		}
+	}
+	http.NotFound(w, r)
+}
+
+func governanceRevisionID(w http.ResponseWriter, parts []string) (uint64, bool) {
+	if len(parts) < 2 {
+		writeError(w, http.StatusNotFound, "not_found")
+		return 0, false
+	}
+	var id uint64
+	if _, err := fmtSscan(parts[1], &id); err != nil || id == 0 {
+		writeError(w, http.StatusBadRequest, "invalid_revision")
+		return 0, false
+	}
+	return id, true
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {
@@ -568,14 +673,6 @@ func (h *Handler) publish(w http.ResponseWriter, r *http.Request, p portalapi.Pr
 		return
 	}
 	v, err := h.service.Publish(r.Context(), p, id, request)
-	respond(w, v, err)
-}
-func (h *Handler) rollback(w http.ResponseWriter, r *http.Request, p portalapi.Principal, id uint64) {
-	var request portalapi.PublishRequest
-	if !decode(w, r, &request) {
-		return
-	}
-	v, err := h.service.Rollback(r.Context(), p, id, request)
 	respond(w, v, err)
 }
 func (h *Handler) audit(w http.ResponseWriter, r *http.Request, p portalapi.Principal, id uint64) {
