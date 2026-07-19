@@ -1,5 +1,5 @@
 import { pageSlotIDs, shellSlotIDs } from "@vastplan/portal-ui";
-import type { DesignSystemAdapter, FrontendPluginContext, PortalManagementService, PortalRegisteredPage, PortalRegisteredShellContribution, ShellCompositionAdapter, ShellLayoutAdapter, UICapability } from "@vastplan/portal-ui";
+import type { DesignSystemAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, PortalManagementService, PortalRegisteredPage, PortalRegisteredShellContribution, ShellCompositionAdapter, ShellLayoutAdapter, UICapability } from "@vastplan/portal-ui";
 
 export interface PluginRef {
   id: string;
@@ -59,6 +59,7 @@ export interface FrontendPluginModule {
   composition?: ShellCompositionAdapter;
   layout?: ShellLayoutAdapter;
   register?(context: FrontendPluginContext): void | Promise<void>;
+  hot?: FrontendPluginHotLifecycle;
 }
 
 export interface FrontendPluginLoader {
@@ -72,6 +73,18 @@ export interface PreparedPortal {
   layout: ShellLayoutAdapter;
   pages: readonly PortalRegisteredPage[];
   shellContributions: readonly PortalRegisteredShellContribution[];
+  modules: readonly PreparedFrontendPlugin[];
+}
+
+export interface PreparedFrontendPlugin {
+  ref: Readonly<PluginRef>;
+  module: FrontendPluginModule;
+}
+
+export interface PortalPrepareOptions {
+  generation?: string;
+  signal?: AbortSignal;
+  reason?: "bootstrap" | "replace";
 }
 
 const requiredCapabilities: readonly UICapability[] = [
@@ -94,7 +107,7 @@ const standardShellSlots = new Set<string>(shellSlotIDs);
 export class PortalRuntime {
   public constructor(private readonly loader: FrontendPluginLoader) {}
 
-  public async prepare(portal: PortalSpec): Promise<PreparedPortal> {
+  public async prepare(portal: PortalSpec, options: PortalPrepareOptions = {}): Promise<PreparedPortal> {
     this.validatePortalShape(portal);
     // Start every governed fetch immediately. Trust and registration checks are
     // still applied in deterministic profile order after all bytes arrive.
@@ -138,6 +151,9 @@ export class PortalRuntime {
     const seenShellContributionIDs = new Set<string>();
     const shellContributions: PortalRegisteredShellContribution[] = [];
     const portalSnapshot = snapshotPortal(portal);
+    const generation = options.generation ?? `portal-${portal.revision}`;
+    const signal = options.signal ?? new AbortController().signal;
+    const reason = options.reason ?? "bootstrap";
 
     for (const ref of portal.plugins) {
       if ([portal.designSystem, portal.composition, portal.layout].some((foundation) => samePlugin(ref, foundation))) {
@@ -150,6 +166,7 @@ export class PortalRuntime {
       }
       const context: FrontendPluginContext = {
         portal: portalSnapshot,
+        lifecycle: Object.freeze({ pluginID: ref.id, generation, signal, reason }),
         addShellContribution: (contribution) => {
           const key = `${ref.id}/${contribution.id}`;
           if (portal.resolution.pluginOrigins[ref.id] !== "platform-profile") {
@@ -189,7 +206,8 @@ export class PortalRuntime {
       };
       await plugin.register?.(context);
     }
-    return Object.freeze({ portal: portalSnapshot, designSystem, composition, layout, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions) });
+    const preparedModules = portal.plugins.map((ref) => Object.freeze({ ref: Object.freeze({ ...ref }), module: requiredModule(modules, ref) }));
+    return Object.freeze({ portal: portalSnapshot, designSystem, composition, layout, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules) });
   }
 
   private validatePortalShape(portal: PortalSpec): void {

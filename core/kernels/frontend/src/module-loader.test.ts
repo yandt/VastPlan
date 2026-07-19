@@ -32,6 +32,17 @@ describe("VerifiedFrontendPluginLoader", () => {
     expect(importer).toHaveBeenCalledOnce();
   });
 
+  it("binds an optional hot lifecycle but rejects malformed hooks", async () => {
+    const locked = await descriptor();
+    const capture = vi.fn(function (this: { marker: string }) { return { marker: this.marker }; });
+    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({ default: { register() {}, hot: { marker: "bound", capture } } }));
+    const loaded = await loader.load(ref);
+    expect(await loaded.hot?.capture?.({ pluginID: ref.id, generation: "g1", signal: new AbortController().signal, reason: "replace" })).toEqual({ marker: "bound" });
+
+    const malformed = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({ default: { register() {}, hot: { dispose: true } } }));
+    await expect(malformed.load(ref)).rejects.toMatchObject({ code: "MODULE_HOT_INVALID" } satisfies Partial<ModuleLoadError>);
+  });
+
   it("fails closed before import when bytes do not match the runtime lock", async () => {
     const locked = await descriptor({ sha256: "b".repeat(64), url: `/v1/portal-modules/7/${"b".repeat(64)}.js` });
     const importer = vi.fn();

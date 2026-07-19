@@ -65,6 +65,21 @@ describe("PortalRuntime", () => {
     expect(prepared.pages[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
   });
 
+  it("gives plugin registration a host-owned generation lifecycle signal", async () => {
+    const controller = new AbortController();
+    let received: FrontendPluginContext["lifecycle"] | undefined;
+    await new PortalRuntime(loader({
+      [composerRef.id]: {
+        register(context: FrontendPluginContext) {
+          received = context.lifecycle;
+          context.addPage({ id: "home", path: "/home", title: "首页", slots: [{ id: "body", slot: "page.body.main", component: () => null }] });
+        },
+      },
+    })).prepare(portal, { generation: "candidate-7", signal: controller.signal, reason: "replace" });
+    expect(received).toMatchObject({ pluginID: composerRef.id, generation: "candidate-7", reason: "replace", signal: controller.signal });
+    expect(Object.isFrozen(received)).toBe(true);
+  });
+
   it("mounts functional page paths below the selected Portal route", async () => {
     const prepared = await new PortalRuntime(loader()).prepare({ ...portal, route: "/operations" });
     expect(prepared.pages[0]).toMatchObject({ path: "/operations/settings/portals", pluginID: composerRef.id });

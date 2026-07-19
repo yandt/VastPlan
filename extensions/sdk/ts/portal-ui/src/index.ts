@@ -1,6 +1,6 @@
 import { createContext, createElement, useContext } from "react";
 import type { ComponentType, ReactNode } from "react";
-import type { FormSchema, FormValidationResult, UICapability } from "@vastplan/ui-contract";
+import type { FormSchema, FormValidationResult, JSONValue, UICapability } from "@vastplan/ui-contract";
 
 export type { FormSchema, FormUISchema, FormValidationIssue, FormValidationResult, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, UICapability } from "@vastplan/ui-contract";
 export { jsonSchemaDialect } from "@vastplan/ui-contract";
@@ -253,9 +253,25 @@ export interface PortalPluginRuntime {
 
 export interface FrontendPluginContext {
 	readonly portal: Readonly<PortalPluginRuntime>;
+	/** Host-owned scope. Long-lived work must stop when this signal is aborted. */
+	readonly lifecycle: Readonly<FrontendPluginLifecycleContext>;
 	addPage(page: PortalPageDefinition): void;
 	/** Platform-profile plugins only; application plugins cannot mutate global Shell regions. */
 	addShellContribution(contribution: PortalShellContribution): void;
+}
+
+export interface FrontendPluginLifecycleContext {
+  readonly pluginID: string;
+  readonly generation: string;
+  readonly signal: AbortSignal;
+  readonly reason: "bootstrap" | "replace" | "shutdown";
+}
+
+/** Optional first-party lifecycle used by transactional Portal Generation swaps. */
+export interface FrontendPluginHotLifecycle {
+  capture?(context: Readonly<FrontendPluginLifecycleContext>): JSONValue | undefined | Promise<JSONValue | undefined>;
+  restore?(state: JSONValue | undefined, context: Readonly<FrontendPluginLifecycleContext>): void | Promise<void>;
+  dispose?(context: Readonly<FrontendPluginLifecycleContext>): void | Promise<void>;
 }
 
 export function managementServicesFor(portal: Readonly<PortalPluginRuntime>, capability: string): readonly PortalManagementService[] {
