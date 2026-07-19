@@ -109,3 +109,6 @@
 - [ADR-0076 Portal Edge 分布式快照交付](ADR-0076-Portal-Edge分布式快照交付.md)
 - [ADR-0077 Backend 在线组合与可信发布边界](ADR-0077-Backend在线组合与可信发布边界.md)
 - [ADR-0078 Frontend 事务式热替换与插件生命周期](ADR-0078-Frontend事务式热替换与插件生命周期.md)
+- [ADR-0079 Frontend 框架无关多语种契约](ADR-0079-Frontend框架无关多语种契约.md)
+- [ADR-0080 Portal 三级导航与可切换布局](ADR-0080-Portal三级导航与可切换布局.md)
+- [ADR-0081 Portal 治理与不可变 Activation](ADR-0081-Portal治理与不可变Activation.md)
