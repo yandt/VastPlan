@@ -1,0 +1,41 @@
+{
+  "id": "cn.vastplan.foundation.backend.runtime.node-worker-hello",
+  "name": "Node Worker Hello",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "Node Worker Runtime 与统一执行驱动参考插件",
+  "engines": { "backend": "^0.1 || ^1.0" },
+  "contextAccess": { "required": ["scope.tenant"], "optional": ["trace", "request.deadline"] },
+  "execution": {
+    "backend": {
+      "driver": "node-worker",
+      "minimumIsolation": "trusted-runtime",
+      "requirements": { "node": ">=20" },
+      "features": ["channel.cancel.v1"],
+      "node": { "workerSafe": true, "moduleFormat": "esm" }
+    }
+  },
+  "activation": ["onAgentTool:vastplan.node-worker-hello"],
+  "entry": { "backend": "backend/main.mjs" },
+  "contributes": {
+    "backend": {
+      "tools": [{
+        "id": "vastplan.node-worker-hello",
+        "service_role": "backend",
+        "title": "Node Worker Hello",
+        "subcommands": [{
+          "name": "echo",
+          "description": "由 Node Worker 回显输入",
+          "paramsSchema": {
+            "type": "object",
+            "properties": { "text": { "type": "string" } },
+            "required": ["text"]
+          }
+        }]
+      }]
+    }
+  }
+}

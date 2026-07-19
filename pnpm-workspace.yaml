@@ -1,4 +1,7 @@
 packages:
   - "core/kernels/frontend"
+  - "core/runtimehosts/node-worker"
+  - "extensions/sdk/node/*"
   - "extensions/sdk/ts/*"
+  - "extensions/plugins/*/backend"
   - "extensions/plugins/*/frontend"

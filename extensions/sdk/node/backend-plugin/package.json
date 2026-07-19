@@ -1,0 +1,17 @@
+{
+  "name": "@vastplan/backend-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.mjs",
+  "scripts": {
+    "test": "node --test ./test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "1.13.4",
+    "@grpc/proto-loader": "0.8.0"
+  }
+}

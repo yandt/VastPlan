@@ -1,0 +1,9 @@
+{
+  "name": "@vastplan/plugin-node-worker-hello",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vastplan/backend-plugin": "workspace:*"
+  }
+}
