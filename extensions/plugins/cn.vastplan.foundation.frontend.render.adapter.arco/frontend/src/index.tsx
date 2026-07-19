@@ -36,7 +36,7 @@ import {
   IconSettings,
 } from "./arco-components";
 import { useEffect, useId, useMemo, useRef } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { CSSProperties, ComponentType, ReactNode } from "react";
 import type {
   ButtonProps,
   CommandItem,
@@ -249,6 +249,32 @@ const arcoThemes = Object.freeze([
 
 function arcoTheme(id: string | undefined) { return arcoThemes.find((theme) => theme.id === id) ?? arcoThemes[0]; }
 
+function arcoThemeStyle(theme: (typeof arcoThemes)[number]): CSSProperties {
+  if (theme.id === "light") return { colorScheme: "light" };
+  const highContrast = theme.id === "high-contrast";
+  return {
+    colorScheme: "dark",
+    "--color-bg-1": highContrast ? "#000" : "#17171a",
+    "--color-bg-2": highContrast ? "#000" : "#232324",
+    "--color-bg-3": highContrast ? "#111" : "#2a2a2c",
+    "--color-bg-4": highContrast ? "#171717" : "#303033",
+    "--color-bg-5": highContrast ? "#222" : "#37373b",
+    "--color-text-1": "#fff",
+    "--color-text-2": highContrast ? "#fff" : "#e5e6eb",
+    "--color-text-3": highContrast ? "#fff" : "#b7bac2",
+    "--color-text-4": highContrast ? "#ddd" : "#8f949f",
+    "--color-border-1": highContrast ? "#fff" : "#45454a",
+    "--color-border-2": highContrast ? "#fff" : "#54545a",
+    "--color-border-3": highContrast ? "#fff" : "#68686e",
+    "--color-border-4": highContrast ? "#fff" : "#7b7b82",
+    "--color-fill-1": highContrast ? "#111" : "#28282b",
+    "--color-fill-2": highContrast ? "#222" : "#333337",
+    "--color-fill-3": highContrast ? "#333" : "#3d3d42",
+    "--color-fill-4": highContrast ? "#444" : "#4a4a50",
+    "--color-primary-light-1": highContrast ? "#003c8f" : "#193b6b",
+  } as CSSProperties;
+}
+
 function columnsForDescriptions(columns: ResponsiveColumns | undefined): number | Record<string, number> | undefined {
   return columns;
 }
@@ -353,7 +379,7 @@ function ArcoProvider({ children, locale, direction, theme }: { children: ReactN
 
   return <>
     <style data-vastplan-design-system="arco">{scopedArcoCSS}</style>
-    <div ref={popupRoot} data-vastplan-design-system="arco" data-vastplan-theme={activeTheme.id} lang={locale} dir={direction} style={{ colorScheme: activeTheme.mode === "dark" ? "dark" : "light" }}>
+    <div ref={popupRoot} data-vastplan-design-system="arco" data-vastplan-theme={activeTheme.id} lang={locale} dir={direction} style={arcoThemeStyle(activeTheme)}>
       <ConfigProvider getPopupContainer={requirePopupRoot} locale={locale.toLowerCase().startsWith("zh") ? zhCN : enUS}>
         <PortalUIProvider ui={ui}>{children}</PortalUIProvider>
         {notificationHolder}
