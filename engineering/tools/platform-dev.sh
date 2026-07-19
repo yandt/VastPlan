@@ -184,7 +184,7 @@ running_pid() {
     if [ -n "$pid" ]; then
       ensure_state_dirs
       printf '%s\n' "$pid" > "$PID_FILE"
-      warn "已从进程表恢复缺失的 PID 文件（pid=$pid）" >&2
+      warn "已从进程表恢复缺失的 PID 文件（pid=${pid}）" >&2
     fi
   fi
   if [ -z "$pid" ]; then

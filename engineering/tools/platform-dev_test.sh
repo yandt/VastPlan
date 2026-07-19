@@ -26,6 +26,9 @@ assert_contains() {
 }
 
 bash -n "$SCRIPT"
+case "$(<"$SCRIPT")" in
+  *'pid=$pid）'*) fail "set -u 下变量后紧邻多字节字符必须使用花括号" ;;
+esac
 
 help_output="$(NO_COLOR=1 "$SCRIPT" help)"
 assert_contains "$help_output" "up [--debug] [--fresh]"
