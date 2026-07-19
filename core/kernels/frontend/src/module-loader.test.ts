@@ -28,7 +28,7 @@ describe("VerifiedFrontendPluginLoader", () => {
     const loaded = await loader.load(ref);
     expect(loaded.provenance).toEqual({ signed: true, firstParty: true, integrity: `sha256:${locked.sha256}` });
     expect(loaded.register).toBeTypeOf("function");
-    expect(fetcher).toHaveBeenCalledWith(locked.url, { credentials: "same-origin", cache: "force-cache" });
+    expect(fetcher).toHaveBeenCalledWith(locked.url, { credentials: "include", cache: "force-cache" });
     expect(importer).toHaveBeenCalledOnce();
   });
 

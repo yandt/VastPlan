@@ -3,12 +3,14 @@ import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { transform } from "esbuild";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const frontend = join(root, "extensions/plugins/com.vastplan.foundation.frontend.design-system.arco/frontend");
 const source = join(frontend, "src");
 const componentsFile = join(source, "arco-components.ts");
 const stylesFile = join(source, "arco-styles.ts");
+const scopeFile = join(source, "scope-css.ts");
 const bundleFile = join(frontend, "dist/index.js");
 const require = createRequire(import.meta.url);
 const arcoRoot = dirname(require.resolve("@arco-design/web-react/package.json", { paths: [frontend] }));
@@ -64,6 +66,18 @@ for (const selector of [".arco-btn", ".arco-form-item", ".arco-picker", ".arco-t
     console.error(`Arco 插件制品缺少必要样式: ${selector}`);
     process.exit(1);
   }
+}
+const scopeModuleSource = await transform(readFileSync(scopeFile, "utf8"), { loader: "ts", format: "esm", minify: true });
+const scopeModule = await import(`data:text/javascript;base64,${Buffer.from(scopeModuleSource.code).toString("base64")}`);
+const arcoBaseCSS = await transform(readFileSync(join(arcoRoot, "es/style/index.css"), "utf8"), { loader: "css", minify: true });
+const scopedProductionCSS = scopeModule.scopeDocumentCSS(arcoBaseCSS.code);
+if (!scopedProductionCSS.includes(":host{--red-1:") || scopedProductionCSS.includes("body{--red-1:")) {
+  console.error("Arco 插件制品未将压缩后的文档根主题变量绑定到 Shadow DOM host");
+  process.exit(1);
+}
+if (!scopedProductionCSS.includes(":host([arco-theme=")) {
+  console.error("Arco 插件制品未将暗色主题选择器绑定到 Shadow DOM host");
+  process.exit(1);
 }
 if (!Number.isSafeInteger(maxBundleBytes) || maxBundleBytes <= 0) {
   console.error("ARCO_BUNDLE_MAX_BYTES 必须是正整数");

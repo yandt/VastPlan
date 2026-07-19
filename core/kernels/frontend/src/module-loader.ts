@@ -54,7 +54,7 @@ export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
   }
 
   private async loadVerified(descriptor: FrontendModuleDescriptor): Promise<FrontendPluginModule> {
-    const response = await this.fetcher(descriptor.url, { credentials: "same-origin", cache: "force-cache" });
+    const response = await this.fetcher(descriptor.url, { credentials: "include", cache: "force-cache" });
     if (!response.ok) {
       throw new ModuleLoadError("MODULE_FETCH_FAILED", `前端模块获取失败: ${descriptor.id} (${response.status})`);
     }

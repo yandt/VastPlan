@@ -26,3 +26,7 @@
 - 发布耗时增加，但发布失败不会激活缺少交付对象的 revision。
 - revision、PortalSpec 摘要、包摘要和入口摘要形成可审计的四层绑定。
 - 磁盘对象可跨进程重启复用；未引用对象的回收策略后续由运维任务实现。
+
+## 实施澄清（2026-07-19）
+
+模块端点需要会话，因此 Runtime 响应的 `Link preload` 固定为 `as=fetch; crossorigin=use-credentials`，Loader 对同源受治理 URL 固定使用 `credentials=include`。两端必须保持同一 Fetch 凭证模式，浏览器才会复用预加载响应而不是再次请求模块。

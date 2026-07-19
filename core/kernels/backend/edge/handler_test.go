@@ -136,6 +136,10 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	if runtime.Portal.Revision != 7 || len(runtime.Modules) != 3 {
 		t.Fatalf("运行描述未锁定 active revision: %+v", runtime)
 	}
+	links := runtimeW.Result().Header.Values("Link")
+	if len(links) != len(runtime.Modules) || !strings.Contains(links[0], "rel=preload; as=fetch; crossorigin=use-credentials") {
+		t.Fatalf("模块预加载必须与认证 fetch 使用相同凭证模式: %v", links)
+	}
 
 	moduleRequest := httptest.NewRequest(http.MethodGet, runtime.Modules[0].URL, nil)
 	moduleW := httptest.NewRecorder()

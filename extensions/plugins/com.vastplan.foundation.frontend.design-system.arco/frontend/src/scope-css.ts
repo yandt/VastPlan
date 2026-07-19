@@ -1,7 +1,8 @@
-/** Re-targets only document-root selectors; Shadow DOM scopes all others. */
+/** Re-targets Arco's document selectors to the Portal Shadow DOM host. */
 export function scopeDocumentCSS(css: string): string {
   return css
-    .replace(/(^|\n)html,\nbody \{/g, "$1:host {")
-    .replace(/(^|\n)body \{/g, "$1:host {")
-    .replace(/(^|\n)\* \{/g, "$1:host, :host * {");
+    .replace(/(^|[{},])(\s*)html\s*,\s*body(?=\s*\{)/g, "$1$2:host")
+    .replace(/(^|[{},])(\s*)body(\[[^\]{}]+\])(?=\s*(?:[.{:#>+~]|\{))/g, "$1$2:host($3)")
+    .replace(/(^|[{},])(\s*)body(?=\s*(?:[.{:#>+~]|\{))/g, "$1$2:host")
+    .replace(/(^|[{}])(\s*)\*(?=\s*\{)/g, "$1$2:host, :host *");
 }

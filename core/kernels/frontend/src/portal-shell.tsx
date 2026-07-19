@@ -52,12 +52,16 @@ export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string,
 }
 
 export function PortalApplication({ prepared, initialPath, recoveryMode = false }: { prepared: PreparedPortal; initialPath: string; recoveryMode?: boolean }) {
-  const [pathname, setPathname] = useState(initialPath);
+  const landingPath = useMemo(() => resolvePortalPath(prepared, initialPath), [prepared, initialPath]);
+  const [pathname, setPathname] = useState(landingPath);
   useEffect(() => {
     const onPopState = () => setPathname(globalThis.location?.pathname ?? "/");
     globalThis.addEventListener?.("popstate", onPopState);
     return () => globalThis.removeEventListener?.("popstate", onPopState);
   }, []);
+  useEffect(() => {
+    if (landingPath !== initialPath) globalThis.history?.replaceState({}, "", landingPath);
+  }, [initialPath, landingPath]);
   const page = useMemo(() => selectPage(prepared, pathname), [prepared, pathname]);
   const Provider = prepared.designSystem.Provider;
   return <Provider><PortalContent prepared={prepared} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} /></Provider>;
@@ -138,6 +142,19 @@ function selectPage(prepared: PreparedPortal, pathname: string) {
   return [...prepared.pages]
     .filter((page) => pathname === page.path || pathname.startsWith(`${page.path.replace(/\/$/, "")}/`))
     .sort((left, right) => right.path.length - left.path.length)[0];
+}
+
+/** Resolves only the Portal root to a deterministic landing page; unknown nested paths remain not-found. */
+export function resolvePortalPath(prepared: PreparedPortal, pathname: string): string {
+  if (selectPage(prepared, pathname) !== undefined) return pathname;
+  const root = prepared.portal.route === "/" ? "/" : prepared.portal.route.replace(/\/$/, "");
+  if (pathname !== root && (root === "/" || pathname !== `${root}/`)) return pathname;
+  const zoneRank = { primary: 0, settings: 1, secondary: 2 } as const;
+  const navigable = prepared.pages
+    .map((page, index) => ({ page, index }))
+    .filter(({ page }) => page.navigation !== undefined)
+    .sort((left, right) => zoneRank[left.page.navigation!.zone] - zoneRank[right.page.navigation!.zone] || left.index - right.index);
+  return navigable[0]?.page.path ?? prepared.pages[0]?.path ?? pathname;
 }
 
 export class PortalBootstrapError extends Error {
