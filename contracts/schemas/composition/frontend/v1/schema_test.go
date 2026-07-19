@@ -19,7 +19,7 @@ func TestFrontendInputsSeparatePlatformAndApplication(t *testing.T) {
 }
 
 func TestFrontendInputsRejectBoundaryViolations(t *testing.T) {
-	if _, err := ParsePlatformProfile([]byte(`{"version":1,"revision":1,"id":"x","target":{"kernel":"frontend"},"renderAdapter":{"id":"cn.vastplan.foundation.frontend.render.adapter.arco","version":"1.0.0","uiContract":"^2"},"plugins":[,{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}]}`)); err == nil {
+	if _, err := ParsePlatformProfile([]byte(`{"version":1,"revision":1,"id":"x","target":{"kernel":"frontend"},"renderAdapter":{"id":"cn.vastplan.foundation.frontend.render.adapter","version":"1.0.0","uiContract":"^2"},"plugins":[,{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}]}`)); err == nil {
 		t.Fatal("平台 plugins 缺设计系统必须拒绝")
 	}
 	if _, err := ParseApplicationComposition([]byte(`{"version":1,"revision":1,"id":"x","target":{"kernel":"frontend"},"route":"/","renderAdapter":{},"plugins":[,{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}]}`)); err == nil {
@@ -27,14 +27,14 @@ func TestFrontendInputsRejectBoundaryViolations(t *testing.T) {
 	}
 }
 
-func TestPlatformProfileUsesThemeTemplateSelection(t *testing.T) {
-	base := `{"version":1,"revision":1,"id":"theme-template","target":{"kernel":"frontend"},"renderAdapter":{"id":"cn.vastplan.foundation.frontend.render.adapter.arco","version":"1.0.0","uiContract":"^4.0.0","config":%s},"shell":{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0","uiContract":"^4.0.0","config":{"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}},"workbench":{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0","uiContract":"^4.0.0"},"plugins":[{"id":"cn.vastplan.foundation.frontend.render.adapter.arco","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`
-	profile, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, `{"themeTemplate":"dark"}`)))
-	if err != nil || profile.RenderAdapter.Config["themeTemplate"] != "dark" {
-		t.Fatalf("主题模板选择应能解析: %+v %v", profile.RenderAdapter.Config, err)
+func TestPlatformProfileUsesRendererAndThemeTemplateSelection(t *testing.T) {
+	base := `{"version":1,"revision":1,"id":"theme-template","target":{"kernel":"frontend"},"renderAdapter":{"id":"cn.vastplan.foundation.frontend.render.adapter","version":"1.0.0","uiContract":"^4.0.0","config":%s},"shell":{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0","uiContract":"^4.0.0","config":{"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}},"workbench":{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0","uiContract":"^4.0.0"},"plugins":[{"id":"cn.vastplan.foundation.frontend.render.adapter","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`
+	profile, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, `{"defaultRenderer":"arco","allowedRenderers":["arco","mui"],"userSelectable":true,"rendererOptions":{"arco":{"themeTemplate":"dark"}}}`)))
+	if err != nil || profile.RenderAdapter.Config.RendererOptions["arco"].ThemeTemplate != "dark" {
+		t.Fatalf("Renderer 与主题模板选择应能解析: %+v %v", profile.RenderAdapter.Config, err)
 	}
-	if _, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, `{"theme":"dark"}`))); err == nil {
-		t.Fatal("旧 theme 字段必须拒绝，避免与通用 themeTemplate 契约并存")
+	if _, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, `{"defaultRenderer":"arco","allowedRenderers":["arco"],"userSelectable":false,"themeTemplate":"dark"}`))); err == nil {
+		t.Fatal("顶层 themeTemplate 必须拒绝，主题必须属于指定 Renderer")
 	}
 }
 
@@ -139,5 +139,5 @@ func validShellProfileJSON(id string, revision int, shellConfig string, localiza
 	if len(localization) > 0 {
 		locale = `,"localization":` + localization[0]
 	}
-	return fmt.Sprintf(`{"version":1,"revision":%d,"id":"%s","target":{"kernel":"frontend"},"renderAdapter":{"id":"cn.vastplan.foundation.frontend.render.adapter.arco","version":"1.0.0","uiContract":"^4.0.0"},"shell":{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0","uiContract":"^4.0.0","config":%s},"workbench":{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0","uiContract":"^4.0.0"}%s,"plugins":[{"id":"cn.vastplan.foundation.frontend.render.adapter.arco","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`, revision, id, shellConfig, locale)
+	return fmt.Sprintf(`{"version":1,"revision":%d,"id":"%s","target":{"kernel":"frontend"},"renderAdapter":{"id":"cn.vastplan.foundation.frontend.render.adapter","version":"1.0.0","uiContract":"^4.0.0","config":{"defaultRenderer":"arco","allowedRenderers":["arco","mui"],"userSelectable":true,"rendererOptions":{"arco":{"themeTemplate":"light"}}}},"shell":{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0","uiContract":"^4.0.0","config":%s},"workbench":{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0","uiContract":"^4.0.0"}%s,"plugins":[{"id":"cn.vastplan.foundation.frontend.render.adapter","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`, revision, id, shellConfig, locale)
 }

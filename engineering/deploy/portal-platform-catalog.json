@@ -9,10 +9,19 @@
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "renderAdapter": {
-        "id": "cn.vastplan.foundation.frontend.render.adapter.arco",
+        "id": "cn.vastplan.foundation.frontend.render.adapter",
         "version": "1.0.0",
         "channel": "stable",
-        "uiContract": "^4.0.0"
+        "uiContract": "^4.0.0",
+        "config": {
+          "defaultRenderer": "arco",
+          "allowedRenderers": ["arco", "mui"],
+          "userSelectable": true,
+          "rendererOptions": {
+            "arco": { "themeTemplate": "light" },
+            "mui": { "themeTemplate": "light" }
+          }
+        }
       },
       "shell": {
         "id": "cn.vastplan.foundation.frontend.structure.shell",
@@ -36,7 +45,7 @@
         "uiContract": "^4.0.0"
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.frontend.render.adapter.arco", "version": "1.0.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "1.0.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "1.0.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "1.0.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.0.0", "channel": "stable" },
@@ -56,7 +65,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 1,
-        "digest": "45c3b1b68cd86ab4ed9adebcd3633fca034ab6adc1cbab99e784eef92eb7415e"
+        "digest": "e22957a50db9acf5b0ae719e736793025e70fb105448cb1025c80838060f03a0"
       },
       "services": [
         {

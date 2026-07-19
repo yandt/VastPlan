@@ -47,7 +47,7 @@ import { enUS, zhCN } from "@mui/material/locale";
 import type {
   ButtonProps,
   CommandItem,
-  UIRenderAdapter,
+  UIRenderer,
   DialogProps,
   DrawerProps,
   FormRendererProps,
@@ -69,7 +69,7 @@ const widths = { sm: "sm", md: "md", lg: "lg" } as const;
 const tones: Record<StatusTone, "default" | "info" | "success" | "warning" | "error"> = {
   neutral: "default", info: "info", success: "success", warning: "warning", error: "error",
 };
-const namespace = "cn.vastplan.foundation.frontend.render.adapter.mui";
+const namespace = "cn.vastplan.foundation.frontend.render.adapter";
 
 function PortalShell({ header, navigation, inspector, statusBar, children }: PortalShellProps) {
   return <Box sx={{ minHeight: "100%", display: "grid", gridTemplateRows: "auto 1fr auto" }}>
@@ -302,10 +302,10 @@ function MuiProvider({ children, locale, direction, themeTemplate }: { children:
   </ScopedCssBaseline></ThemeProvider></CacheProvider>}</div>;
 }
 
-export const muiRenderAdapter: UIRenderAdapter = {
-  id: "ui.render.adapter",
+export const muiRenderer: UIRenderer = {
+  id: "mui",
+  label: { namespace: "cn.vastplan.foundation.frontend.render.adapter", key: "renderer.mui", fallback: "Material UI" },
   framework: "mui",
-  uiContract: "4.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   themeTemplates: muiThemeTemplates,
   defaultThemeTemplate: "light",
@@ -319,4 +319,6 @@ export const muiRenderAdapter: UIRenderAdapter = {
   },
 };
 
-export default muiRenderAdapter;
+/** @deprecated Internal renderer source. Use the unified render-adapter plugin. */
+export const muiRenderAdapter = muiRenderer;
+export default muiRenderer;

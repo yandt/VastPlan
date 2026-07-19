@@ -1,19 +1,21 @@
 import { describe, expect, it } from "vitest";
+import type { ReactNode } from "react";
 import { type FrontendPluginContext, type UIRenderAdapter, type UIShellAdapter, type UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type PluginRef, type PortalSpec } from "./portal-runtime";
 
-const adapterRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.arco", version: "1.0.0" };
+const adapterRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter", version: "1.0.0" };
 const shellRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.shell", version: "1.0.0" };
 const workbenchRef: PluginRef = { id: "cn.vastplan.foundation.frontend.workflow.workbench", version: "1.0.0" };
 const featureRef: PluginRef = { id: "cn.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 
-const adapter: UIRenderAdapter = { id: "ui.render.adapter", framework: "arco", uiContract: "4.0.0", capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"], themeTemplates: [{ id: "light", label: "Light", scheme: "light" }], defaultThemeTemplate: "light", Provider: ({ children }) => children };
+const renderer = (id: string) => ({ id, label: id, framework: id, capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"] as const, themeTemplates: [{ id: "light", label: "Light", scheme: "light" as const }], defaultThemeTemplate: "light", Provider: ({ children }: { children: ReactNode }) => children, localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { label: "测试" }, "en-US": { label: "Test" } } } });
+const adapter: UIRenderAdapter = { id: "ui.render.adapter", uiContract: "4.0.0", defaultRenderer: "arco", renderers: [renderer("arco"), renderer("mui")] };
 const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: "4.0.0", templates: [{ id: "standard", label: "Standard" }, { id: "top-navigation", label: "Top" }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }), Shell: () => null };
 const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "4.0.0", CollectionPage: () => null };
 
 const portal: PortalSpec = {
   revision: 1, id: "admin", tenantId: "acme", route: "/",
-  renderAdapter: { ...adapterRef, uiContract: "^4.0.0" },
+  renderAdapter: { ...adapterRef, uiContract: "^4.0.0", config: { defaultRenderer: "arco", allowedRenderers: ["arco", "mui"], userSelectable: true } },
   shell: { ...shellRef, uiContract: "^4.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true } },
   workbench: { ...workbenchRef, uiContract: "^4.0.0" }, plugins: [adapterRef, shellRef, workbenchRef, featureRef],
   management: { tenantId: "acme", portalId: "admin", platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, services: [{ id: "settings", logicalService: "platform.settings", routingDomain: "platform", capabilities: [{ capability: "platform.settings", read: ["list"] }] }] },
@@ -35,6 +37,13 @@ describe("PortalRuntime shell", () => {
     const prepared = await new PortalRuntime(loader()).prepare(portal);
     expect(prepared.shell.id).toBe("ui.structure.shell");
     expect(prepared.pages).toMatchObject([{ id: "home", path: "/home" }]);
+  });
+
+  it("selects only an allowed user Renderer and keeps the Adapter singleton", async () => {
+    const prepared = await new PortalRuntime(loader()).prepare(portal, { rendererID: "mui" });
+    expect(prepared.renderAdapter.id).toBe("mui");
+    await expect(new PortalRuntime(loader()).prepare({ ...portal, renderAdapter: { ...portal.renderAdapter, config: { ...portal.renderAdapter.config, allowedRenderers: ["arco"], defaultRenderer: "mui" } } }))
+      .rejects.toMatchObject({ code: "DESIGN_SYSTEM_RENDERER_CATALOG_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 
   it("rejects undeclared shell templates before feature registration", async () => {

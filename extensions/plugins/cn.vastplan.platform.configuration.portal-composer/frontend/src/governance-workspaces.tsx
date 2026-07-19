@@ -34,8 +34,8 @@ export const governanceMessages = {
     "governance.notice.saved": "治理资源已保存", "governance.notice.transitioned": "治理状态已更新", "governance.notice.activated": "Portal 已激活", "governance.notice.rolledBack": "Portal 已回滚", "governance.notice.failed": "治理操作失败",
     "governance.error.load": "治理数据加载失败", "governance.error.activationFailed": "Activation 校验失败：{message}",
     "notice.inputPublished": "Application 已发布为可选输入", "confirm.inputPublish": "发布仅使该 Application 可被 Activation 引用，不会直接改变线上 Portal。", "action.publishInput": "发布为可选输入", "diff.active": "无其他已发布输入", "diff.activeRevision": "已发布输入 #{id}",
-    "governance.form.profileId": "Profile ID", "governance.form.layout": "布局插件", "governance.form.bodyWidth": "页面正文宽度", "governance.form.navigationGroups": "导航分组", "governance.form.portalId": "Portal ID", "governance.form.publishedProfile": "已发布 Profile", "governance.form.services": "管理服务绑定", "governance.form.publishedApplication": "已发布 Application", "governance.form.publishedBinding": "已发布 Binding", "governance.form.expectedActivation": "期望当前 Activation", "governance.form.reason": "变更说明",
-    "governance.option.standardLayout": "标准侧栏布局", "governance.option.topLayout": "顶部导航布局", "governance.option.fluid": "自适应", "governance.option.contained": "最大 1280px",
+    "governance.form.profileId": "Profile ID", "governance.form.renderer": "默认 UI 框架", "governance.form.allowedRenderers": "允许的 UI 框架", "governance.form.userRenderer": "允许用户切换 UI 框架", "governance.form.layout": "布局插件", "governance.form.bodyWidth": "页面正文宽度", "governance.form.navigationGroups": "导航分组", "governance.form.portalId": "Portal ID", "governance.form.publishedProfile": "已发布 Profile", "governance.form.services": "管理服务绑定", "governance.form.publishedApplication": "已发布 Application", "governance.form.publishedBinding": "已发布 Binding", "governance.form.expectedActivation": "期望当前 Activation", "governance.form.reason": "变更说明",
+    "governance.option.arco": "Arco Design", "governance.option.mui": "Material UI", "governance.option.standardLayout": "标准侧栏布局", "governance.option.topLayout": "顶部导航布局", "governance.option.fluid": "自适应", "governance.option.contained": "最大 1280px",
     "page.title.v2": "Portal 管理中心", "page.description.v2": "治理 Platform Profiles、Portals 与不可变 Activation", "page.navigation.v2": "Portal 管理",
   },
   "en-US": {
@@ -50,8 +50,8 @@ export const governanceMessages = {
     "governance.notice.saved": "Governance resource saved", "governance.notice.transitioned": "Governance status updated", "governance.notice.activated": "Portal activated", "governance.notice.rolledBack": "Portal rolled back", "governance.notice.failed": "Governance operation failed",
     "governance.error.load": "Failed to load governance data", "governance.error.activationFailed": "Activation validation failed: {message}",
     "notice.inputPublished": "Application published as an eligible input", "confirm.inputPublish": "Publishing only makes this Application eligible for Activation and does not change the live Portal.", "action.publishInput": "Publish as eligible input", "diff.active": "No other published input", "diff.activeRevision": "Published input #{id}",
-    "governance.form.profileId": "Profile ID", "governance.form.layout": "Layout plugin", "governance.form.bodyWidth": "Page body width", "governance.form.navigationGroups": "Navigation groups", "governance.form.portalId": "Portal ID", "governance.form.publishedProfile": "Published Profile", "governance.form.services": "Managed service bindings", "governance.form.publishedApplication": "Published Application", "governance.form.publishedBinding": "Published Binding", "governance.form.expectedActivation": "Expected current Activation", "governance.form.reason": "Change reason",
-    "governance.option.standardLayout": "Standard sidebar layout", "governance.option.topLayout": "Top navigation layout", "governance.option.fluid": "Fluid", "governance.option.contained": "Maximum 1280px",
+    "governance.form.profileId": "Profile ID", "governance.form.renderer": "Default UI framework", "governance.form.allowedRenderers": "Allowed UI frameworks", "governance.form.userRenderer": "Allow users to switch UI framework", "governance.form.layout": "Layout plugin", "governance.form.bodyWidth": "Page body width", "governance.form.navigationGroups": "Navigation groups", "governance.form.portalId": "Portal ID", "governance.form.publishedProfile": "Published Profile", "governance.form.services": "Managed service bindings", "governance.form.publishedApplication": "Published Application", "governance.form.publishedBinding": "Published Binding", "governance.form.expectedActivation": "Expected current Activation", "governance.form.reason": "Change reason",
+    "governance.option.arco": "Arco Design", "governance.option.mui": "Material UI", "governance.option.standardLayout": "Standard sidebar layout", "governance.option.topLayout": "Top navigation layout", "governance.option.fluid": "Fluid", "governance.option.contained": "Maximum 1280px",
     "page.title.v2": "Portal Management", "page.description.v2": "Govern Platform Profiles, Portals, and immutable Activations", "page.navigation.v2": "Portal Management",
   },
 } as const;
@@ -84,7 +84,7 @@ export function GovernanceWorkspaces({ client, applications }: { client: PortalC
   </ui.Stack>;
 }
 
-type ProfileValue = { name: string; defaultTemplate: "standard" | "top-navigation"; pageBodyWidth: "fluid" | "contained"; navigationGroups: unknown[] };
+type ProfileValue = { name: string; defaultRenderer: "arco" | "mui"; allowedRenderers: Array<"arco" | "mui">; userSelectableRenderer: boolean; defaultTemplate: "standard" | "top-navigation"; pageBodyWidth: "fluid" | "contained"; navigationGroups: unknown[] };
 
 function ProfileWorkspace({ client, snapshot, refresh, loading }: WorkspaceProps) {
   const ui = usePortalUI();
@@ -251,13 +251,21 @@ function ActivationWorkspace({ client, snapshot, refresh, loading }: WorkspacePr
 
 interface WorkspaceProps { client: PortalControlClient; snapshot: PortalGovernanceSnapshot; refresh(): Promise<void>; loading: boolean; }
 
-const profileSchema: FormSchema = { id: "portal-profile-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["name", "defaultTemplate", "pageBodyWidth", "navigationGroups"], properties: {
+const profileSchema: FormSchema = { id: "portal-profile-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["name", "defaultRenderer", "allowedRenderers", "userSelectableRenderer", "defaultTemplate", "pageBodyWidth", "navigationGroups"], properties: {
   name: { type: "string", title: "Profile ID", minLength: 1 },
+  defaultRenderer: { type: "string", title: "默认 UI 框架", oneOf: [{ const: "arco", title: "Arco Design" }, { const: "mui", title: "Material UI" }] },
+  allowedRenderers: { type: "array", title: "允许的 UI 框架", minItems: 1, uniqueItems: true, items: { type: "string", oneOf: [{ const: "arco", title: "Arco Design" }, { const: "mui", title: "Material UI" }] } },
+  userSelectableRenderer: { type: "boolean", title: "允许用户切换 UI 框架" },
   defaultTemplate: { type: "string", title: "默认布局", oneOf: [{ const: "standard", title: "标准侧栏布局" }, { const: "top-navigation", title: "顶部导航布局" }] },
   pageBodyWidth: { type: "string", title: "页面正文宽度", oneOf: [{ const: "fluid", title: "自适应" }, { const: "contained", title: "最大 1280px" }] },
   navigationGroups: { type: "array", title: "导航分组", items: { type: "object", additionalProperties: false, required: ["id", "label", "zone", "icon"], properties: { id: { type: "string" }, parentID: { type: "string" }, label: { type: "string" }, zone: { enum: ["primary", "secondary", "settings"] }, icon: { enum: ["menu", "settings", "info"] }, order: { type: "integer" } } } },
-} }, uiSchema: { defaultTemplate: { "ui:widget": "select" }, pageBodyWidth: { "ui:widget": "select" } }, localization: {
+} }, uiSchema: { defaultRenderer: { "ui:widget": "select" }, defaultTemplate: { "ui:widget": "select" }, pageBodyWidth: { "ui:widget": "select" } }, localization: {
   "/properties/name/title": message(namespace, "governance.form.profileId", "Profile ID"),
+  "/properties/defaultRenderer/title": message(namespace, "governance.form.renderer", "默认 UI 框架"),
+  "/properties/defaultRenderer/oneOf/0/title": message(namespace, "governance.option.arco", "Arco Design"),
+  "/properties/defaultRenderer/oneOf/1/title": message(namespace, "governance.option.mui", "Material UI"),
+  "/properties/allowedRenderers/title": message(namespace, "governance.form.allowedRenderers", "允许的 UI 框架"),
+  "/properties/userSelectableRenderer/title": message(namespace, "governance.form.userRenderer", "允许用户切换 UI 框架"),
   "/properties/defaultTemplate/title": message(namespace, "governance.form.layout", "默认布局"),
   "/properties/defaultTemplate/oneOf/0/title": message(namespace, "governance.option.standardLayout", "标准侧栏布局"),
   "/properties/defaultTemplate/oneOf/1/title": message(namespace, "governance.option.topLayout", "顶部导航布局"),
@@ -267,11 +275,14 @@ const profileSchema: FormSchema = { id: "portal-profile-editor.v1", schema: { $s
   "/properties/navigationGroups/title": message(namespace, "governance.form.navigationGroups", "导航分组"),
 } };
 
-function profileValue(profile: PortalPlatformProfile): ProfileValue { return { name: profile.id, defaultTemplate: profile.shell.config.defaultTemplate === "top-navigation" ? "top-navigation" : "standard", pageBodyWidth: profile.shell.config.templateOptions?.[profile.shell.config.defaultTemplate]?.pageBodyWidth === "contained" ? "contained" : "fluid", navigationGroups: Array.isArray(profile.shell.config.navigationGroups) ? profile.shell.config.navigationGroups : [] }; }
+function profileValue(profile: PortalPlatformProfile): ProfileValue { return { name: profile.id, defaultRenderer: profile.renderAdapter.config.defaultRenderer === "mui" ? "mui" : "arco", allowedRenderers: profile.renderAdapter.config.allowedRenderers.filter((value): value is "arco" | "mui" => value === "arco" || value === "mui"), userSelectableRenderer: profile.renderAdapter.config.userSelectable, defaultTemplate: profile.shell.config.defaultTemplate === "top-navigation" ? "top-navigation" : "standard", pageBodyWidth: profile.shell.config.templateOptions?.[profile.shell.config.defaultTemplate]?.pageBodyWidth === "contained" ? "contained" : "fluid", navigationGroups: Array.isArray(profile.shell.config.navigationGroups) ? profile.shell.config.navigationGroups : [] }; }
 function buildProfile(base: PortalPlatformProfile, value: Record<string, unknown>, newRevision: boolean): PortalPlatformProfile {
+  const defaultRenderer = value.defaultRenderer === "mui" ? "mui" : "arco";
+  const allowedRenderers = Array.isArray(value.allowedRenderers) ? value.allowedRenderers.filter((item): item is "arco" | "mui" => item === "arco" || item === "mui") : [defaultRenderer];
+  if (!allowedRenderers.includes(defaultRenderer)) allowedRenderers.unshift(defaultRenderer);
   const defaultTemplate = value.defaultTemplate === "top-navigation" ? "top-navigation" : "standard";
   const templateOptions = { ...(base.shell.config.templateOptions ?? {}), [defaultTemplate]: { ...(base.shell.config.templateOptions?.[defaultTemplate] ?? {}), pageBodyWidth: value.pageBodyWidth as JSONValue } };
-  return { ...base, id: String(value.name), revision: newRevision ? base.revision + 1 : base.revision, shell: { ...base.shell, config: { ...base.shell.config, defaultTemplate, navigationGroups: value.navigationGroups as JSONValue, templateOptions } } };
+  return { ...base, id: String(value.name), revision: newRevision ? base.revision + 1 : base.revision, renderAdapter: { ...base.renderAdapter, config: { ...base.renderAdapter.config, defaultRenderer, allowedRenderers, userSelectable: value.userSelectableRenderer === true } }, shell: { ...base.shell, config: { ...base.shell.config, defaultTemplate, navigationGroups: value.navigationGroups as JSONValue, templateOptions } } };
 }
 
 function bindingSchema(profiles: PortalProfileRevision[]): FormSchema { const published = profiles.filter((item) => item.status === "Published"); return { id: "portal-binding-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["portalId", "profileRevisionId", "services"], properties: {

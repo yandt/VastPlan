@@ -49,8 +49,8 @@ type PluginRef struct {
 
 type RenderAdapter struct {
 	PluginRef
-	UIContract string         `json:"uiContract"`
-	Config     map[string]any `json:"config,omitempty"`
+	UIContract string                                     `json:"uiContract"`
+	Config     frontendcompositionv1.RenderAdapterConfig `json:"config"`
 }
 
 type Shell struct {

@@ -63,7 +63,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	} {
 		publishBuiltPlugin(t, repository, plugin.packageDir, plugin.manifest)
 	}
-	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.workflow.workbench/vastplan.plugin.json")
 
@@ -234,7 +234,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != firstActivation.ID || len(runtime.Modules) != 9 || runtime.Modules[0].ID != "cn.vastplan.foundation.frontend.render.adapter.arco" || runtime.Modules[1].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Modules[2].ID != "cn.vastplan.foundation.frontend.workflow.workbench" || runtime.Modules[3].ID != "cn.vastplan.platform.configuration.portal-composer" || runtime.Modules[8].ID != "cn.vastplan.platform.infrastructure.deployment-manager" {
+	if runtime.Portal.Revision != firstActivation.ID || len(runtime.Modules) != 9 || runtime.Modules[0].ID != "cn.vastplan.foundation.frontend.render.adapter" || runtime.Modules[1].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Modules[2].ID != "cn.vastplan.foundation.frontend.workflow.workbench" || runtime.Modules[3].ID != "cn.vastplan.platform.configuration.portal-composer" || runtime.Modules[8].ID != "cn.vastplan.platform.infrastructure.deployment-manager" {
 		t.Fatalf("unexpected governed runtime: %+v", runtime)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, runtime.Modules[0].URL, map[string]any{})

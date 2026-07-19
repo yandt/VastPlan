@@ -1,0 +1,18 @@
+{
+  "id": "cn.vastplan.foundation.frontend.render.adapter",
+  "name": "VastPlan Unified Render Adapter",
+  "description": "统一管理 Portal 的 Arco、MUI 与未来 UI Renderer",
+  "version": "1.0.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "frontend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "activation": ["onPortalStartup"],
+  "entry": { "frontend": "frontend/dist/index.js" },
+  "contributes": { "frontend": { "renderAdapters": [{
+    "id": "ui.render.adapter", "title": "Unified Render Adapter", "uiContract": "^4.0.0", "framework": "multi",
+    "capabilities": ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"]
+  }] } }
+}

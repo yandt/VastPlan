@@ -50,7 +50,7 @@ export interface PortalPlatformProfile {
   revision: number;
   id: string;
   target: { kernel: "frontend" };
-  renderAdapter: PortalPluginRef & { uiContract: string };
+  renderAdapter: PortalPluginRef & { uiContract: string; config: { defaultRenderer: string; allowedRenderers: string[]; userSelectable: boolean; rendererOptions?: Record<string, { themeTemplate?: string }> } };
   shell: PortalPluginRef & { uiContract: string; config: { navigationGroups?: JSONValue; defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
   workbench: PortalPluginRef & { uiContract: string };
   localization?: { defaultLocale: string; supportedLocales: string[] };
@@ -82,7 +82,7 @@ export interface PortalResolvedSpec {
     domains?: string[];
     audience?: string[];
     branding?: Record<string, JSONValue>;
-    renderAdapter: PortalPluginRef & { uiContract: string };
+    renderAdapter: PortalPluginRef & { uiContract: string; config: { defaultRenderer: string; allowedRenderers: string[]; userSelectable: boolean; rendererOptions?: Record<string, { themeTemplate?: string }> } };
     shell: PortalPluginRef & { uiContract: string; config: { defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
     workbench: PortalPluginRef & { uiContract: string };
     plugins: PortalPluginRef[];

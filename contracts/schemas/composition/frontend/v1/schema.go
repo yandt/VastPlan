@@ -47,9 +47,21 @@ type PluginRef struct {
 type RenderAdapter struct {
 	PluginRef
 	UIContract string `json:"uiContract"`
-	// Config is adapter-private, non-sensitive Profile configuration. It may
-	// select a declared semantic themeTemplate but cannot carry arbitrary CSS.
-	Config map[string]any `json:"config,omitempty"`
+	Config RenderAdapterConfig `json:"config"`
+}
+
+// RenderAdapterConfig governs a framework renderer catalog exposed by one
+// trusted adapter plugin. It carries identifiers only, never CSS or framework
+// objects.
+type RenderAdapterConfig struct {
+	DefaultRenderer  string                          `json:"defaultRenderer"`
+	AllowedRenderers []string                        `json:"allowedRenderers"`
+	UserSelectable   bool                            `json:"userSelectable"`
+	RendererOptions  map[string]RendererThemeOptions `json:"rendererOptions,omitempty"`
+}
+
+type RendererThemeOptions struct {
+	ThemeTemplate string `json:"themeTemplate,omitempty"`
 }
 
 // Shell owns the platform-owned semantic page/slot topology and the governed
@@ -219,6 +231,9 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	value.RenderAdapter.Channel = channel(value.RenderAdapter.Channel)
 	value.Shell.Channel = channel(value.Shell.Channel)
 	value.Workbench.Channel = channel(value.Workbench.Channel)
+	if err := ValidateRenderAdapterConfig(value.RenderAdapter.Config); err != nil {
+		return PlatformProfile{}, err
+	}
 	if err := ValidateShellConfig(value.Shell.Config); err != nil {
 		return PlatformProfile{}, err
 	}
@@ -245,6 +260,31 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含设计系统、Shell 与 Workbench 插件")
 	}
 	return value, nil
+}
+
+func ValidateRenderAdapterConfig(config RenderAdapterConfig) error {
+	if !templateName.MatchString(config.DefaultRenderer) || len(config.AllowedRenderers) == 0 {
+		return fmt.Errorf("渲染器默认值或允许目录无效")
+	}
+	allowed := map[string]struct{}{}
+	for _, renderer := range config.AllowedRenderers {
+		if !templateName.MatchString(renderer) {
+			return fmt.Errorf("渲染器名称无效: %s", renderer)
+		}
+		if _, exists := allowed[renderer]; exists {
+			return fmt.Errorf("渲染器目录重复: %s", renderer)
+		}
+		allowed[renderer] = struct{}{}
+	}
+	if _, ok := allowed[config.DefaultRenderer]; !ok {
+		return fmt.Errorf("默认渲染器必须属于允许目录")
+	}
+	for renderer, options := range config.RendererOptions {
+		if _, ok := allowed[renderer]; !ok || (options.ThemeTemplate != "" && !templateName.MatchString(options.ThemeTemplate)) {
+			return fmt.Errorf("渲染器选项无效: %s", renderer)
+		}
+	}
+	return nil
 }
 
 func ValidateNavigationConfig(config NavigationConfig) error {

@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { message, pageSlotIDs, shellSlotIDs } from "@vastplan/ui-primitives";
-import type { UIRenderAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, UIShellAdapter, UICapability, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
+import type { UIRenderAdapter, UIRenderer, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, UIShellAdapter, UICapability, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 
 export interface PluginRef {
   id: string;
@@ -8,7 +8,15 @@ export interface PluginRef {
   channel?: string;
 }
 
-export interface RenderAdapterSelection extends PluginRef { uiContract: string; config?: { themeTemplate?: string }; }
+export interface RenderAdapterSelection extends PluginRef {
+  uiContract: string;
+  config: {
+    defaultRenderer: string;
+    allowedRenderers: readonly string[];
+    userSelectable: boolean;
+    rendererOptions?: Readonly<Record<string, { themeTemplate?: string }>>;
+  };
+}
 
 export interface ShellSelection extends PluginRef {
   uiContract: string;
@@ -78,7 +86,8 @@ export interface FrontendPluginLoader {
 
 export interface PreparedPortal {
   portal: Readonly<PortalSpec>;
-  renderAdapter: UIRenderAdapter;
+  renderAdapter: UIRenderer;
+  renderAdapterCatalog: UIRenderAdapter;
   shell: UIShellAdapter;
   workbench: UIWorkbenchAdapter;
   pages: readonly PortalRegisteredPage[];
@@ -96,6 +105,7 @@ export interface PortalPrepareOptions {
   generation?: string;
   signal?: AbortSignal;
   reason?: "bootstrap" | "replace";
+  rendererID?: string;
 }
 
 const requiredCapabilities: readonly UICapability[] = [
@@ -136,17 +146,21 @@ export class PortalRuntime {
     if (!contractSatisfies(renderAdapter.uiContract, portal.renderAdapter.uiContract)) {
       throw new PortalAssemblyError("UI_CONTRACT_INCOMPATIBLE", "设计系统与 Portal 的 UI 契约不兼容");
     }
-    const capabilities = new Set(renderAdapter.capabilities);
-    if (!requiredCapabilities.every((capability) => capabilities.has(capability))) {
-      throw new PortalAssemblyError("DESIGN_SYSTEM_INCOMPLETE", "设计系统未实现 Portal 所需的全部 UI 能力");
+    if (!validRendererCatalog(renderAdapter) || !validRenderAdapterConfig(portal.renderAdapter.config, renderAdapter)) {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_CATALOG_INVALID", "渲染适配器目录或 Platform Profile 配置无效");
     }
-    const configuredThemeTemplate = portal.renderAdapter.config?.themeTemplate;
-    if (!validThemeTemplateCatalog(renderAdapter)) {
-      throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_TEMPLATE_CATALOG_INVALID", "渲染适配器的主题模板目录无效");
+    const selectedRendererID = options.rendererID !== undefined && portal.renderAdapter.config.userSelectable && portal.renderAdapter.config.allowedRenderers.includes(options.rendererID)
+      ? options.rendererID : portal.renderAdapter.config.defaultRenderer;
+    const selectedRenderer = renderAdapter.renderers.find((renderer) => renderer.id === selectedRendererID);
+    if (selectedRenderer === undefined) throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_INVALID", `渲染适配器不支持 Renderer: ${selectedRendererID}`);
+    const capabilities = new Set(selectedRenderer.capabilities);
+    if (!requiredCapabilities.every((capability) => capabilities.has(capability)) || !validThemeTemplateCatalog(selectedRenderer)) {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_INCOMPLETE", "选定 Renderer 未实现 Portal 所需的全部 UI 能力或主题目录无效");
     }
-    const declaredThemeTemplates = new Set(renderAdapter.themeTemplates.map((template) => template.id));
-    if (!declaredThemeTemplates.has(renderAdapter.defaultThemeTemplate) || (configuredThemeTemplate !== undefined && !declaredThemeTemplates.has(configuredThemeTemplate))) {
-      throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_TEMPLATE_INVALID", `渲染适配器不支持主题模板: ${configuredThemeTemplate ?? renderAdapter.defaultThemeTemplate}`);
+    const configuredThemeTemplate = portal.renderAdapter.config.rendererOptions?.[selectedRendererID]?.themeTemplate;
+    const declaredThemeTemplates = new Set(selectedRenderer.themeTemplates.map((template) => template.id));
+    if (!declaredThemeTemplates.has(selectedRenderer.defaultThemeTemplate) || (configuredThemeTemplate !== undefined && !declaredThemeTemplates.has(configuredThemeTemplate))) {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_TEMPLATE_INVALID", `Renderer 不支持主题模板: ${configuredThemeTemplate ?? selectedRenderer.defaultThemeTemplate}`);
     }
 
     const shellModule = requiredModule(modules, portal.shell);
@@ -185,6 +199,10 @@ export class PortalRuntime {
       }
       messageCatalogs[ref.id] = localization;
     }
+    if (selectedRenderer.localization === undefined) throw new PortalAssemblyError("LOCALIZATION_REQUIRED", `Renderer 必须声明语言资源: ${selectedRenderer.id}`);
+    const rendererLocalization = validateLocalization(selectedRenderer.id, selectedRenderer.localization);
+    const adapterLocalization = messageCatalogs[portal.renderAdapter.id];
+    messageCatalogs[portal.renderAdapter.id] = adapterLocalization === undefined ? rendererLocalization : mergeLocalization(adapterLocalization, rendererLocalization);
 
     for (const ref of portal.plugins) {
       if ([portal.renderAdapter, portal.shell, portal.workbench].some((foundation) => samePlugin(ref, foundation))) {
@@ -246,7 +264,7 @@ export class PortalRuntime {
       await plugin.register?.(context);
     }
     const preparedModules = portal.plugins.map((ref) => Object.freeze({ ref: Object.freeze({ ...ref }), module: requiredModule(modules, ref) }));
-    return Object.freeze({ portal: portalSnapshot, renderAdapter, shell, workbench, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
+    return Object.freeze({ portal: portalSnapshot, renderAdapter: selectedRenderer, renderAdapterCatalog: renderAdapter, shell, workbench, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
   }
 
   private validatePortalShape(portal: PortalSpec): void {
@@ -255,8 +273,8 @@ export class PortalRuntime {
     }
     if ((portal.branding !== undefined && !isJSONRecord(portal.branding)) ||
         (portal.localization !== undefined && !validLocalizationPolicy(portal.localization)) ||
-        !isJSONRecord(portal.shell.config)) {
-      throw new PortalAssemblyError("PORTAL_INVALID", "Portal 品牌与 Shell 配置必须是 JSON 对象");
+        !isJSONRecord(portal.shell.config) || !isJSONRecord(portal.renderAdapter.config)) {
+      throw new PortalAssemblyError("PORTAL_INVALID", "Portal 品牌、Renderer 与 Shell 配置必须是 JSON 对象");
     }
     const refs = [portal.resolution.platformCatalog, portal.resolution.platformProfile, portal.resolution.applicationComposition];
     if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
@@ -306,13 +324,44 @@ export class PortalRuntime {
   }
 }
 
-function validThemeTemplateCatalog(adapter: UIRenderAdapter): boolean {
+function validThemeTemplateCatalog(adapter: UIRenderer): boolean {
   if (adapter.themeTemplates.length === 0) return false;
   const identifiers = new Set<string>();
   for (const template of adapter.themeTemplates) {
     if (!/^[a-z][a-z0-9-]{0,63}$/.test(template.id) || identifiers.has(template.id)) return false;
     if (template.scheme !== "light" && template.scheme !== "dark" && template.scheme !== "high-contrast") return false;
     identifiers.add(template.id);
+  }
+  return true;
+}
+
+function validRendererCatalog(adapter: UIRenderAdapter): boolean {
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(adapter.defaultRenderer) || adapter.renderers.length === 0) return false;
+  const identifiers = new Set<string>();
+  for (const renderer of adapter.renderers) {
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(renderer.id) || identifiers.has(renderer.id) || !renderer.framework || !validLocalizedText(renderer.label)) return false;
+    identifiers.add(renderer.id);
+  }
+  return identifiers.has(adapter.defaultRenderer);
+}
+
+function mergeLocalization(base: PluginLocalization, extra: PluginLocalization): PluginLocalization {
+  const messages: Record<string, Record<string, string>> = Object.fromEntries(Object.entries(base.messages).map(([locale, catalog]) => [locale, { ...catalog }]));
+  for (const [locale, catalog] of Object.entries(extra.messages)) messages[locale] = { ...(messages[locale] ?? {}), ...catalog };
+  return { defaultLocale: base.defaultLocale, messages };
+}
+
+function validRenderAdapterConfig(config: RenderAdapterSelection["config"], adapter: UIRenderAdapter): boolean {
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(config.defaultRenderer) || !Array.isArray(config.allowedRenderers) || config.allowedRenderers.length === 0 || typeof config.userSelectable !== "boolean") return false;
+  const declared = new Set(adapter.renderers.map((renderer) => renderer.id));
+  const allowed = new Set<string>();
+  for (const renderer of config.allowedRenderers) {
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(renderer) || !declared.has(renderer) || allowed.has(renderer)) return false;
+    allowed.add(renderer);
+  }
+  if (!allowed.has(config.defaultRenderer)) return false;
+  for (const [renderer, options] of Object.entries(config.rendererOptions ?? {})) {
+    if (!allowed.has(renderer) || !isJSONRecord(options) || (options.themeTemplate !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(options.themeTemplate))) return false;
   }
   return true;
 }
@@ -423,7 +472,7 @@ function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
     ...portal,
     branding: portal.branding === undefined ? undefined : freezeJSONRecord(portal.branding),
     localization: portal.localization === undefined ? undefined : Object.freeze({ defaultLocale: portal.localization.defaultLocale, supportedLocales: Object.freeze([...portal.localization.supportedLocales]) }),
-    renderAdapter: Object.freeze({ ...portal.renderAdapter, config: portal.renderAdapter.config === undefined ? undefined : freezeJSONRecord(portal.renderAdapter.config) }),
+    renderAdapter: Object.freeze({ ...portal.renderAdapter, config: Object.freeze({ ...portal.renderAdapter.config, allowedRenderers: Object.freeze([...portal.renderAdapter.config.allowedRenderers]), rendererOptions: portal.renderAdapter.config.rendererOptions === undefined ? undefined : Object.freeze(Object.fromEntries(Object.entries(portal.renderAdapter.config.rendererOptions).map(([renderer, options]) => [renderer, Object.freeze({ ...options })]))) }) }),
     shell: Object.freeze({ ...portal.shell, config: Object.freeze({ ...portal.shell.config, navigationGroups: portal.shell.config.navigationGroups === undefined ? undefined : Object.freeze(portal.shell.config.navigationGroups.map((group) => freezeJSONRecord(group))), allowedTemplates: Object.freeze([...portal.shell.config.allowedTemplates]), templateOptions: portal.shell.config.templateOptions === undefined ? undefined : Object.freeze(Object.fromEntries(Object.entries(portal.shell.config.templateOptions).map(([template, options]) => [template, freezeJSONRecord(options)]))) }) as ShellSelection["config"] }),
     workbench: Object.freeze({ ...portal.workbench, config: portal.workbench.config === undefined ? undefined : freezeJSONRecord(portal.workbench.config) }),
     plugins: Object.freeze(portal.plugins.map((ref) => Object.freeze({ ...ref }))),

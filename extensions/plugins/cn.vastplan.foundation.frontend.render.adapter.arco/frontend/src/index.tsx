@@ -40,7 +40,7 @@ import type { ComponentType, ReactNode } from "react";
 import type {
   ButtonProps,
   CommandItem,
-  UIRenderAdapter,
+  UIRenderer,
   DialogProps,
   DrawerProps,
   GridItemProps,
@@ -66,7 +66,7 @@ import { scopeDocumentCSS } from "./scope-css";
 const gapPixels = { xs: 4, sm: 8, md: 16, lg: 24 } as const;
 const dialogWidths = { sm: 480, md: 720, lg: 960 } as const;
 const iconSizes = { sm: 14, md: 16, lg: 20 } as const;
-const namespace = "cn.vastplan.foundation.frontend.render.adapter.arco";
+const namespace = "cn.vastplan.foundation.frontend.render.adapter";
 
 function PortalShell({ header, navigation, inspector, statusBar, children }: PortalShellProps) {
   return <Layout style={{ minHeight: "100%" }}>
@@ -377,10 +377,10 @@ function ArcoProvider({ children, locale, direction, themeTemplate }: { children
   </>;
 }
 
-export const arcoRenderAdapter: UIRenderAdapter = {
-  id: "ui.render.adapter",
+export const arcoRenderer: UIRenderer = {
+  id: "arco",
+  label: { namespace: "cn.vastplan.foundation.frontend.render.adapter", key: "renderer.arco", fallback: "Arco Design" },
   framework: "arco",
-  uiContract: "4.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   themeTemplates: arcoThemeTemplates,
   defaultThemeTemplate: "light",
@@ -394,4 +394,6 @@ export const arcoRenderAdapter: UIRenderAdapter = {
   },
 };
 
-export default arcoRenderAdapter;
+/** @deprecated Internal renderer source. Use the unified render-adapter plugin. */
+export const arcoRenderAdapter = arcoRenderer;
+export default arcoRenderer;

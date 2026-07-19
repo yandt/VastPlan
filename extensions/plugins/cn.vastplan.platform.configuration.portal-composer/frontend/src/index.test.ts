@@ -10,7 +10,7 @@ describe("Portal application composition", () => {
     const composition = buildApplicationComposition({
       name: "operations",
       route: "/operations",
-      renderAdapter: "cn.vastplan.foundation.frontend.render.adapter.arco",
+      renderAdapter: "cn.vastplan.foundation.frontend.render.adapter",
       plugins: [{ id: "com.example.application.dashboard", version: "1.2.3" }],
     });
 

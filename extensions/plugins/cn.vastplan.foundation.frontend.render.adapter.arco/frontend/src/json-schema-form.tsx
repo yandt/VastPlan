@@ -54,7 +54,7 @@ type FormContext = Readonly<Record<string, unknown>>;
 type Schema = RJSFSchema;
 
 const emptyContext: FormContext = {};
-const namespace = "cn.vastplan.foundation.frontend.render.adapter.arco";
+const namespace = "cn.vastplan.foundation.frontend.render.adapter";
 
 export const arcoJSONSchemaValidator = cspJSONSchemaValidator;
 

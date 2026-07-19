@@ -16,6 +16,7 @@ function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?
   return {
     portal: { revision } as PreparedPortal["portal"],
     renderAdapter: {} as PreparedPortal["renderAdapter"],
+    renderAdapterCatalog: {} as PreparedPortal["renderAdapterCatalog"],
     shell: {} as PreparedPortal["shell"],
     workbench: {} as PreparedPortal["workbench"],
     pages: [],

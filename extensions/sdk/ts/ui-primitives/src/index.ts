@@ -236,16 +236,31 @@ export interface ThemeTemplate {
   scheme: ThemeTemplateScheme;
 }
 
-export interface UIRenderAdapter {
-  id: "ui.render.adapter";
+/** A concrete UI framework implementation owned by the selected render adapter. */
+export interface UIRenderer {
+  id: string;
+  label: LocalizedText;
   framework: string;
-  uiContract: string;
   capabilities: readonly UICapability[];
-  /** The complete selectable template catalog for this framework adapter. */
   themeTemplates: readonly ThemeTemplate[];
-  /** ID of a template declared in `themeTemplates`. */
   defaultThemeTemplate: string;
   Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection; themeTemplate?: string }>;
+  localization?: PluginLocalization;
+}
+
+/** A discoverable, framework-neutral renderer choice. */
+export interface UIRendererTemplate {
+  id: string;
+  label: LocalizedText;
+  framework: string;
+}
+
+export interface UIRenderAdapter {
+  id: "ui.render.adapter";
+  uiContract: string;
+  /** Renderer catalog is owned by the Adapter; functional plugins never name a framework. */
+  renderers: readonly UIRenderer[];
+  defaultRenderer: string;
   localization?: PluginLocalization;
 }
 
@@ -438,6 +453,10 @@ export interface UIShellProps {
   template: ShellTemplateSelection;
   availableTemplates: readonly ShellTemplate[];
   onTemplateChange?(templateID: string): void;
+  /** Renderer choice is optional UI chrome; Shells may surface it in account/settings slots. */
+  renderers?: readonly UIRendererTemplate[];
+  renderer?: { id: string; options: Readonly<Record<string, unknown>> };
+  onRendererChange?(rendererID: string): void;
   branding: ShellBranding;
   pathname: string;
   recoveryNotice?: ReactNode;

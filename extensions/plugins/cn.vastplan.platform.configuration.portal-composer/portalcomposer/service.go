@@ -402,9 +402,20 @@ func cloneSpec(in portalapi.PortalSpec) portalapi.PortalSpec {
 	out.Plugins = append([]portalapi.PluginRef(nil), in.Plugins...)
 	out.Branding = cloneMap(in.Branding)
 	out.Config = cloneMap(in.Config)
+	out.RenderAdapter.Config = cloneRenderAdapterConfig(in.RenderAdapter.Config)
 	out.Shell.Config = cloneShellConfig(in.Shell.Config)
 	out.Management.Services = cloneManagedServices(in.Management.Services)
 	out.Resolution.PluginOrigins = cloneStringMap(in.Resolution.PluginOrigins)
+	return out
+}
+
+func cloneRenderAdapterConfig(in frontendcompositionv1.RenderAdapterConfig) frontendcompositionv1.RenderAdapterConfig {
+	out := frontendcompositionv1.RenderAdapterConfig{DefaultRenderer: in.DefaultRenderer, AllowedRenderers: append([]string(nil), in.AllowedRenderers...)}
+	if len(in.RendererOptions) != 0 {
+		out.RendererOptions = make(map[string]frontendcompositionv1.RendererThemeOptions, len(in.RendererOptions))
+		for id, options := range in.RendererOptions { out.RendererOptions[id] = options }
+	}
+	out.UserSelectable = in.UserSelectable
 	return out
 }
 func cloneShellConfig(in frontendcompositionv1.ShellConfig) frontendcompositionv1.ShellConfig {
