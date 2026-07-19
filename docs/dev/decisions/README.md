@@ -112,3 +112,4 @@
 - [ADR-0079 Frontend 框架无关多语种契约](ADR-0079-Frontend框架无关多语种契约.md)
 - [ADR-0080 Portal 三级导航与可切换布局](ADR-0080-Portal三级导航与可切换布局.md)
 - [ADR-0081 Portal 治理与不可变 Activation](ADR-0081-Portal治理与不可变Activation.md)
+- [ADR-0082 前端工作台组合框架](ADR-0082-前端工作台组合框架.md)
