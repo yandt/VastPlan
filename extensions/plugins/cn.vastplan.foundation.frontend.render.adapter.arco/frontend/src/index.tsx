@@ -36,7 +36,7 @@ import {
   IconSettings,
 } from "./arco-components";
 import { useEffect, useId, useMemo, useRef } from "react";
-import type { CSSProperties, ComponentType, ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type {
   ButtonProps,
   CommandItem,
@@ -66,6 +66,7 @@ import { scopeDocumentCSS } from "./scope-css";
 const gapPixels = { xs: 4, sm: 8, md: 16, lg: 24 } as const;
 const dialogWidths = { sm: 480, md: 720, lg: 960 } as const;
 const iconSizes = { sm: 14, md: 16, lg: 20 } as const;
+const namespace = "cn.vastplan.foundation.frontend.render.adapter.arco";
 
 function PortalShell({ header, navigation, inspector, statusBar, children }: PortalShellProps) {
   return <Layout style={{ minHeight: "100%" }}>
@@ -241,39 +242,12 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
   />;
 }
 
-const arcoThemes = Object.freeze([
-  { id: "light", mode: "light" as const },
-  { id: "dark", mode: "dark" as const },
-  { id: "high-contrast", mode: "dark" as const },
+const arcoThemeTemplates = Object.freeze([
+  { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
+  { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
 ]);
 
-function arcoTheme(id: string | undefined) { return arcoThemes.find((theme) => theme.id === id) ?? arcoThemes[0]; }
-
-function arcoThemeStyle(theme: (typeof arcoThemes)[number]): CSSProperties {
-  if (theme.id === "light") return { colorScheme: "light" };
-  const highContrast = theme.id === "high-contrast";
-  return {
-    colorScheme: "dark",
-    "--color-bg-1": highContrast ? "#000" : "#17171a",
-    "--color-bg-2": highContrast ? "#000" : "#232324",
-    "--color-bg-3": highContrast ? "#111" : "#2a2a2c",
-    "--color-bg-4": highContrast ? "#171717" : "#303033",
-    "--color-bg-5": highContrast ? "#222" : "#37373b",
-    "--color-text-1": "#fff",
-    "--color-text-2": highContrast ? "#fff" : "#e5e6eb",
-    "--color-text-3": highContrast ? "#fff" : "#b7bac2",
-    "--color-text-4": highContrast ? "#ddd" : "#8f949f",
-    "--color-border-1": highContrast ? "#fff" : "#45454a",
-    "--color-border-2": highContrast ? "#fff" : "#54545a",
-    "--color-border-3": highContrast ? "#fff" : "#68686e",
-    "--color-border-4": highContrast ? "#fff" : "#7b7b82",
-    "--color-fill-1": highContrast ? "#111" : "#28282b",
-    "--color-fill-2": highContrast ? "#222" : "#333337",
-    "--color-fill-3": highContrast ? "#333" : "#3d3d42",
-    "--color-fill-4": highContrast ? "#444" : "#4a4a50",
-    "--color-primary-light-1": highContrast ? "#003c8f" : "#193b6b",
-  } as CSSProperties;
-}
+function arcoThemeTemplate(id: string | undefined) { return arcoThemeTemplates.find((template) => template.id === id) ?? arcoThemeTemplates[0]; }
 
 function columnsForDescriptions(columns: ResponsiveColumns | undefined): number | Record<string, number> | undefined {
   return columns;
@@ -358,9 +332,20 @@ export const arcoPortalUIComponents: ArcoComponents = {
 // shadow host instead of leaking into the surrounding page.
 export const scopedArcoCSS = scopeDocumentCSS(arcoCSS);
 
-function ArcoProvider({ children, locale, direction, theme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; theme?: string }) {
-  const activeTheme = arcoTheme(theme);
+function ArcoProvider({ children, locale, direction, themeTemplate }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string }) {
+  const activeTemplate = arcoThemeTemplate(themeTemplate);
   const popupRoot = useRef<HTMLDivElement>(null);
+  // Arco's complete dark mode is the framework-provided [arco-theme=dark]
+  // stylesheet, not a hand-maintained subset of CSS variables. The scoped
+  // stylesheet maps body[arco-theme=dark] to :host(...), so set it on the
+  // Portal Shadow DOM host rather than the document body.
+  useEffect(() => {
+    const root = popupRoot.current?.getRootNode();
+    if (typeof ShadowRoot === "undefined" || !(root instanceof ShadowRoot)) return;
+    if (activeTemplate.scheme === "dark") root.host.setAttribute("arco-theme", "dark");
+    else root.host.removeAttribute("arco-theme");
+    return () => root.host.removeAttribute("arco-theme");
+  }, [activeTemplate.scheme]);
   const requirePopupRoot = () => {
     if (popupRoot.current === null) throw new Error("Arco overlay root 尚未挂载");
     return popupRoot.current;
@@ -374,12 +359,12 @@ function ArcoProvider({ children, locale, direction, theme }: { children: ReactN
       if (modals.confirm === undefined) { resolve(false); return; }
       modals.confirm({ title, content, onOk: () => resolve(true), onCancel: () => resolve(false) });
     }),
-    theme: { ...arcoPortalUIComponents.theme, mode: activeTheme.mode },
-  }), [activeTheme.mode, modals, notifications]);
+    theme: { ...arcoPortalUIComponents.theme, mode: activeTemplate.scheme === "dark" ? "dark" : "light" },
+  }), [activeTemplate.scheme, modals, notifications]);
 
   return <>
     <style data-vastplan-design-system="arco">{scopedArcoCSS}</style>
-    <div ref={popupRoot} data-vastplan-design-system="arco" data-vastplan-theme={activeTheme.id} lang={locale} dir={direction} style={arcoThemeStyle(activeTheme)}>
+    <div ref={popupRoot} data-vastplan-design-system="arco" data-vastplan-theme-template={activeTemplate.id} lang={locale} dir={direction}>
       <ConfigProvider getPopupContainer={requirePopupRoot} locale={locale.toLowerCase().startsWith("zh") ? zhCN : enUS}>
         <PortalUIProvider ui={ui}>{children}</PortalUIProvider>
         {notificationHolder}
@@ -394,18 +379,16 @@ export const arcoRenderAdapter: UIRenderAdapter = {
   framework: "arco",
   uiContract: "3.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
-  themes: arcoThemes,
-  defaultTheme: "light",
+  themeTemplates: arcoThemeTemplates,
+  defaultThemeTemplate: "light",
   Provider: ArcoProvider,
   localization: {
     defaultLocale: "zh-CN",
     messages: {
-      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "command.empty": "没有匹配命令", "action.retry": "重试", "form.validationFailed": "表单校验未通过", "form.issueCount": "请检查 {count} 个问题", "form.addProperty":"添加属性", "form.add":"添加", "form.empty":"暂无条目", "form.item":"第 {index} 项", "form.propertyName":"属性名称", "form.removeProperty":"删除属性", "form.fileUnsupported":"表单不接受内嵌文件数据；请使用受控制品上传能力。", "form.credentialPlaceholder":"输入 credential:// 凭证引用（禁止填写明文）", "action.moveUp":"上移", "action.moveDown":"下移", "action.copy":"复制", "action.delete":"删除", "form.asyncUnavailable":"异步校验暂时不可用", "form.unsupported":"表单 Schema 不受支持", "form.validating":"正在校验" },
-      "en-US": { "command.title": "Commands", "command.search": "Search commands", "command.empty": "No matching commands", "action.retry": "Retry", "form.validationFailed": "Form validation failed", "form.issueCount": "Please check {count} issues", "form.addProperty":"Add property", "form.add":"Add", "form.empty":"No items", "form.item":"Item {index}", "form.propertyName":"Property name", "form.removeProperty":"Remove property", "form.fileUnsupported":"Embedded file data is not accepted; use the governed artifact upload capability.", "form.credentialPlaceholder":"Enter a credential:// reference (plaintext is forbidden)", "action.moveUp":"Move up", "action.moveDown":"Move down", "action.copy":"Copy", "action.delete":"Delete", "form.asyncUnavailable":"Asynchronous validation is temporarily unavailable", "form.unsupported":"Unsupported form schema", "form.validating":"Validating" },
+      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "command.empty": "没有匹配命令", "action.retry": "重试", "theme.light":"浅色", "theme.dark":"深色", "form.validationFailed": "表单校验未通过", "form.issueCount": "请检查 {count} 个问题", "form.addProperty":"添加属性", "form.add":"添加", "form.empty":"暂无条目", "form.item":"第 {index} 项", "form.propertyName":"属性名称", "form.removeProperty":"删除属性", "form.fileUnsupported":"表单不接受内嵌文件数据；请使用受控制品上传能力。", "form.credentialPlaceholder":"输入 credential:// 凭证引用（禁止填写明文）", "action.moveUp":"上移", "action.moveDown":"下移", "action.copy":"复制", "action.delete":"删除", "form.asyncUnavailable":"异步校验暂时不可用", "form.unsupported":"表单 Schema 不受支持", "form.validating":"正在校验" },
+      "en-US": { "command.title": "Commands", "command.search": "Search commands", "command.empty": "No matching commands", "action.retry": "Retry", "theme.light":"Light", "theme.dark":"Dark", "form.validationFailed": "Form validation failed", "form.issueCount": "Please check {count} issues", "form.addProperty":"Add property", "form.add":"Add", "form.empty":"No items", "form.item":"Item {index}", "form.propertyName":"Property name", "form.removeProperty":"Remove property", "form.fileUnsupported":"Embedded file data is not accepted; use the governed artifact upload capability.", "form.credentialPlaceholder":"Enter a credential:// reference (plaintext is forbidden)", "action.moveUp":"Move up", "action.moveDown":"Move down", "action.copy":"Copy", "action.delete":"Delete", "form.asyncUnavailable":"Asynchronous validation is temporarily unavailable", "form.unsupported":"Unsupported form schema", "form.validating":"Validating" },
     },
   },
 };
-
-const namespace = "cn.vastplan.foundation.frontend.render.adapter.arco";
 
 export default arcoRenderAdapter;

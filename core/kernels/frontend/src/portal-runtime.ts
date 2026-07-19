@@ -8,7 +8,7 @@ export interface PluginRef {
   channel?: string;
 }
 
-export interface RenderAdapterSelection extends PluginRef { uiContract: string; config?: { theme?: string }; }
+export interface RenderAdapterSelection extends PluginRef { uiContract: string; config?: { themeTemplate?: string }; }
 
 export interface StructureCompositionSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
 export interface StructureLayoutSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
@@ -135,10 +135,13 @@ export class PortalRuntime {
     if (!requiredCapabilities.every((capability) => capabilities.has(capability))) {
       throw new PortalAssemblyError("DESIGN_SYSTEM_INCOMPLETE", "设计系统未实现 Portal 所需的全部 UI 能力");
     }
-    const configuredTheme = portal.renderAdapter.config?.theme;
-    const declaredThemes = new Set(renderAdapter.themes.map((theme) => theme.id));
-    if (!declaredThemes.has(renderAdapter.defaultTheme) || (configuredTheme !== undefined && !declaredThemes.has(configuredTheme))) {
-      throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_INVALID", `设计系统不支持主题: ${configuredTheme ?? renderAdapter.defaultTheme}`);
+    const configuredThemeTemplate = portal.renderAdapter.config?.themeTemplate;
+    if (!validThemeTemplateCatalog(renderAdapter)) {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_TEMPLATE_CATALOG_INVALID", "渲染适配器的主题模板目录无效");
+    }
+    const declaredThemeTemplates = new Set(renderAdapter.themeTemplates.map((template) => template.id));
+    if (!declaredThemeTemplates.has(renderAdapter.defaultThemeTemplate) || (configuredThemeTemplate !== undefined && !declaredThemeTemplates.has(configuredThemeTemplate))) {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_TEMPLATE_INVALID", `渲染适配器不支持主题模板: ${configuredThemeTemplate ?? renderAdapter.defaultThemeTemplate}`);
     }
 
     const compositionModule = requiredModule(modules, portal.structureComposition);
@@ -302,6 +305,17 @@ export class PortalRuntime {
   }
 }
 
+function validThemeTemplateCatalog(adapter: UIRenderAdapter): boolean {
+  if (adapter.themeTemplates.length === 0) return false;
+  const identifiers = new Set<string>();
+  for (const template of adapter.themeTemplates) {
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(template.id) || identifiers.has(template.id)) return false;
+    if (template.scheme !== "light" && template.scheme !== "dark" && template.scheme !== "high-contrast") return false;
+    identifiers.add(template.id);
+  }
+  return true;
+}
+
 function requiredModule(modules: ReadonlyMap<string, FrontendPluginModule>, ref: PluginRef): FrontendPluginModule {
   const module = modules.get(moduleKey(ref));
   if (module === undefined) throw new PortalAssemblyError("MODULE_NOT_LOADED", `已锁定模块未加载: ${ref.id}`);
@@ -381,9 +395,10 @@ function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
     ...portal,
     branding: portal.branding === undefined ? undefined : freezeJSONRecord(portal.branding),
     localization: portal.localization === undefined ? undefined : Object.freeze({ defaultLocale: portal.localization.defaultLocale, supportedLocales: Object.freeze([...portal.localization.supportedLocales]) }),
-    renderAdapter: Object.freeze({ ...portal.renderAdapter }),
+    renderAdapter: Object.freeze({ ...portal.renderAdapter, config: portal.renderAdapter.config === undefined ? undefined : freezeJSONRecord(portal.renderAdapter.config) }),
     structureComposition: Object.freeze({ ...portal.structureComposition, config: portal.structureComposition.config === undefined ? undefined : freezeJSONRecord(portal.structureComposition.config) }),
     structureLayout: Object.freeze({ ...portal.structureLayout, config: portal.structureLayout.config === undefined ? undefined : freezeJSONRecord(portal.structureLayout.config) }),
+    workbench: Object.freeze({ ...portal.workbench, config: portal.workbench.config === undefined ? undefined : freezeJSONRecord(portal.workbench.config) }),
     plugins: Object.freeze(portal.plugins.map((ref) => Object.freeze({ ...ref }))),
     management: Object.freeze({ ...portal.management, services: Object.freeze(services) }),
     resolution: Object.freeze({ ...portal.resolution, pluginOrigins: Object.freeze({ ...portal.resolution.pluginOrigins }) }),

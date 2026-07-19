@@ -201,9 +201,19 @@ export interface PortalUI {
   confirm(message: { title: string; content?: string }): Promise<boolean>;
 }
 
-export interface DesignSystemTheme {
+/**
+ * A named, framework-neutral presentation template exposed by a render adapter.
+ *
+ * The descriptor deliberately contains semantic intent only.  Its implementation
+ * belongs to the selected adapter: for example Arco maps `dark` to its native
+ * CSS theme attribute, while MUI maps it to `createTheme({ palette.mode })`.
+ */
+export type ThemeTemplateScheme = "light" | "dark" | "high-contrast";
+
+export interface ThemeTemplate {
   id: string;
-  mode: "light" | "dark" | "system";
+  label: LocalizedText;
+  scheme: ThemeTemplateScheme;
 }
 
 export interface UIRenderAdapter {
@@ -211,9 +221,11 @@ export interface UIRenderAdapter {
   framework: string;
   uiContract: string;
   capabilities: readonly UICapability[];
-  themes: readonly DesignSystemTheme[];
-  defaultTheme: string;
-  Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection; theme?: string }>;
+  /** The complete selectable template catalog for this framework adapter. */
+  themeTemplates: readonly ThemeTemplate[];
+  /** ID of a template declared in `themeTemplates`. */
+  defaultThemeTemplate: string;
+  Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection; themeTemplate?: string }>;
   localization?: PluginLocalization;
 }
 

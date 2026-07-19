@@ -1,6 +1,7 @@
 package frontendcompositionv1
 
 import (
+	"fmt"
 	"testing"
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
@@ -23,6 +24,17 @@ func TestFrontendInputsRejectBoundaryViolations(t *testing.T) {
 	}
 	if _, err := ParseApplicationComposition([]byte(`{"version":1,"revision":1,"id":"x","target":{"kernel":"frontend"},"route":"/","renderAdapter":{},"plugins":[,{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}]}`)); err == nil {
 		t.Fatal("应用输入不得携带 renderAdapter")
+	}
+}
+
+func TestPlatformProfileUsesThemeTemplateSelection(t *testing.T) {
+	base := `{"version":1,"revision":1,"id":"theme-template","target":{"kernel":"frontend"},"renderAdapter":{"id":"cn.vastplan.foundation.frontend.render.adapter.arco","version":"1.0.0","uiContract":"^3.0.0","config":%s},"structureComposition":{"id":"cn.vastplan.foundation.frontend.structure.composition.standard","version":"1.0.0","uiContract":"^3.0.0"},"structureLayout":{"id":"cn.vastplan.foundation.frontend.structure.layout.standard","version":"1.0.0","uiContract":"^3.0.0"},"workbench":{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0","uiContract":"^3.0.0"},"plugins":[{"id":"cn.vastplan.foundation.frontend.render.adapter.arco","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.structure.composition.standard","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.structure.layout.standard","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`
+	profile, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, `{"themeTemplate":"dark"}`)))
+	if err != nil || profile.RenderAdapter.Config["themeTemplate"] != "dark" {
+		t.Fatalf("主题模板选择应能解析: %+v %v", profile.RenderAdapter.Config, err)
+	}
+	if _, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, `{"theme":"dark"}`))); err == nil {
+		t.Fatal("旧 theme 字段必须拒绝，避免与通用 themeTemplate 契约并存")
 	}
 }
 

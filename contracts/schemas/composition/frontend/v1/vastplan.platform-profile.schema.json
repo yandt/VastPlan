@@ -83,7 +83,7 @@
     "renderAdapterConfig": {
       "type": "object", "additionalProperties": false,
       "properties": {
-        "theme": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" }
+        "themeTemplate": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" }
       }
     },
     "workbenchConfig": {

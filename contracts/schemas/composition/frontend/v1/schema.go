@@ -48,7 +48,7 @@ type RenderAdapter struct {
 	PluginRef
 	UIContract string `json:"uiContract"`
 	// Config is adapter-private, non-sensitive Profile configuration. It may
-	// select a declared semantic theme but cannot carry arbitrary CSS.
+	// select a declared semantic themeTemplate but cannot carry arbitrary CSS.
 	Config map[string]any `json:"config,omitempty"`
 }
 

@@ -69,6 +69,7 @@ const widths = { sm: "sm", md: "md", lg: "lg" } as const;
 const tones: Record<StatusTone, "default" | "info" | "success" | "warning" | "error"> = {
   neutral: "default", info: "info", success: "success", warning: "warning", error: "error",
 };
+const namespace = "cn.vastplan.foundation.frontend.render.adapter.mui";
 
 function PortalShell({ header, navigation, inspector, statusBar, children }: PortalShellProps) {
   return <Box sx={{ minHeight: "100%", display: "grid", gridTemplateRows: "auto 1fr auto" }}>
@@ -228,12 +229,11 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
 }
 
 const symbols: Record<SemanticIconName, string> = { add: "+", remove: "−", edit: "✎", search: "⌕", settings: "⚙", success: "✓", warning: "!", error: "×", info: "i", close: "×", menu: "☰" };
-const muiThemes = Object.freeze([
-  { id: "light", mode: "light" as const },
-  { id: "dark", mode: "dark" as const },
-  { id: "high-contrast", mode: "dark" as const },
+const muiThemeTemplates = Object.freeze([
+  { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
+  { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
 ]);
-function muiTheme(id: string | undefined) { return muiThemes.find((theme) => theme.id === id) ?? muiThemes[0]; }
+function muiThemeTemplate(id: string | undefined) { return muiThemeTemplates.find((template) => template.id === id) ?? muiThemeTemplates[0]; }
 type MuiComponents = Omit<PortalUI, "notify" | "confirm">;
 
 export const muiPortalUIComponents: MuiComponents = {
@@ -262,8 +262,8 @@ export const muiPortalUIComponents: MuiComponents = {
   Busy: ({ label }) => <MuiStack direction="row" gap={1} alignItems="center"><CircularProgress size={20} /><span>{label}</span></MuiStack>,
 };
 
-function MuiProvider({ children, locale, direction, theme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; theme?: string }) {
-  const activeTheme = muiTheme(theme);
+function MuiProvider({ children, locale, direction, themeTemplate }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string }) {
+  const activeTemplate = muiThemeTemplate(themeTemplate);
   const i18n = usePortalI18n();
   const boundary = useRef<HTMLDivElement>(null);
   const [shadowRuntime, setShadowRuntime] = useState<{ cache: ReturnType<typeof createCache>; theme: ReturnType<typeof createTheme> }>();
@@ -273,8 +273,8 @@ function MuiProvider({ children, locale, direction, theme }: { children: ReactNo
     ...muiPortalUIComponents,
     notify: ({ title, content, kind = "info" }) => setNotice({ title, content, kind }),
     confirm: ({ title, content }) => new Promise((resolve) => setConfirmation({ title, content, resolve })),
-    theme: { ...muiPortalUIComponents.theme, mode: activeTheme.mode },
-  }), [activeTheme.mode]);
+    theme: { ...muiPortalUIComponents.theme, mode: activeTemplate.scheme === "dark" ? "dark" : "light" },
+  }), [activeTemplate.scheme]);
   const finishConfirmation = (accepted: boolean) => {
     confirmation?.resolve(accepted);
     setConfirmation(undefined);
@@ -286,14 +286,14 @@ function MuiProvider({ children, locale, direction, theme }: { children: ReactNo
     const overlayContainer = boundary.current;
     setShadowRuntime({
       cache: createCache({ key: "vastplan-mui", container: styleContainer, prepend: true }),
-      theme: createTheme({ direction, palette: { mode: activeTheme.mode === "dark" ? "dark" : "light", contrastThreshold: activeTheme.id === "high-contrast" ? 7 : 3 }, components: {
+      theme: createTheme({ direction, palette: { mode: activeTemplate.scheme === "dark" ? "dark" : "light" }, components: {
         MuiModal: { defaultProps: { container: overlayContainer } },
         MuiPopover: { defaultProps: { container: overlayContainer } },
         MuiPopper: { defaultProps: { container: overlayContainer } },
       } }, locale.toLowerCase().startsWith("zh") ? zhCN : enUS),
     });
-  }, [activeTheme.id, activeTheme.mode, direction, locale]);
-  return <div ref={boundary} data-vastplan-design-system="mui" data-vastplan-theme={activeTheme.id} lang={locale} dir={direction}>{shadowRuntime === undefined ? null : <CacheProvider value={shadowRuntime.cache}><ThemeProvider theme={shadowRuntime.theme}><ScopedCssBaseline><PortalUIProvider ui={ui}>{children}</PortalUIProvider>
+  }, [activeTemplate.id, activeTemplate.scheme, direction, locale]);
+  return <div ref={boundary} data-vastplan-design-system="mui" data-vastplan-theme-template={activeTemplate.id} lang={locale} dir={direction}>{shadowRuntime === undefined ? null : <CacheProvider value={shadowRuntime.cache}><ThemeProvider theme={shadowRuntime.theme}><ScopedCssBaseline><PortalUIProvider ui={ui}>{children}</PortalUIProvider>
     <Snackbar open={notice !== undefined} autoHideDuration={5000} onClose={() => setNotice(undefined)}><Alert severity={notice?.kind ?? "info"} onClose={() => setNotice(undefined)}><strong>{notice?.title}</strong>{notice?.content === undefined ? null : ` — ${notice.content}`}</Alert></Snackbar>
     <MuiDialog open={confirmation !== undefined} onClose={() => finishConfirmation(false)}><DialogTitle>{confirmation?.title}</DialogTitle><DialogContent>{confirmation?.content}</DialogContent><DialogActions><MuiButton onClick={() => finishConfirmation(false)}>{i18n.text(message(namespace, "action.cancel", "取消"))}</MuiButton><MuiButton variant="contained" onClick={() => finishConfirmation(true)}>{i18n.text(message(namespace, "action.confirm", "确认"))}</MuiButton></DialogActions></MuiDialog>
   </ScopedCssBaseline></ThemeProvider></CacheProvider>}</div>;
@@ -304,18 +304,16 @@ export const muiRenderAdapter: UIRenderAdapter = {
   framework: "mui",
   uiContract: "3.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
-  themes: muiThemes,
-  defaultTheme: "light",
+  themeTemplates: muiThemeTemplates,
+  defaultThemeTemplate: "light",
   Provider: MuiProvider,
   localization: {
     defaultLocale: "zh-CN",
     messages: {
-      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "action.retry": "重试", "action.cancel": "取消", "action.confirm": "确认", "form.invalid": "值不符合 Schema" },
-      "en-US": { "command.title": "Commands", "command.search": "Search commands", "action.retry": "Retry", "action.cancel": "Cancel", "action.confirm": "Confirm", "form.invalid": "Value does not match the schema" },
+      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "action.retry": "重试", "action.cancel": "取消", "action.confirm": "确认", "theme.light":"浅色", "theme.dark":"深色", "form.invalid": "值不符合 Schema" },
+      "en-US": { "command.title": "Commands", "command.search": "Search commands", "action.retry": "Retry", "action.cancel": "Cancel", "action.confirm": "Confirm", "theme.light":"Light", "theme.dark":"Dark", "form.invalid": "Value does not match the schema" },
     },
   },
 };
-
-const namespace = "cn.vastplan.foundation.frontend.render.adapter.mui";
 
 export default muiRenderAdapter;

@@ -19,8 +19,8 @@ function renderAdapter(framework: string): UIRenderAdapter {
   framework,
   uiContract: "3.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"],
-  themes: [{ id: "light", mode: "light" }],
-  defaultTheme: "light",
+  themeTemplates: [{ id: "light", label: "浅色", scheme: "light" }],
+  defaultThemeTemplate: "light",
   Provider: () => null,
   };
 }
@@ -71,9 +71,15 @@ describe("PortalRuntime", () => {
     expect(prepared.pages[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
   });
 
-  it("rejects a Profile theme not declared by the selected design system", async () => {
-    await expect(new PortalRuntime(loader()).prepare({ ...portal, renderAdapter: { ...portal.renderAdapter, config: { theme: "untrusted-css" } } }))
-      .rejects.toMatchObject({ code: "DESIGN_SYSTEM_THEME_INVALID" } satisfies Partial<PortalAssemblyError>);
+  it("rejects a Profile theme template not declared by the selected render adapter", async () => {
+    await expect(new PortalRuntime(loader()).prepare({ ...portal, renderAdapter: { ...portal.renderAdapter, config: { themeTemplate: "untrusted-css" } } }))
+      .rejects.toMatchObject({ code: "DESIGN_SYSTEM_THEME_TEMPLATE_INVALID" } satisfies Partial<PortalAssemblyError>);
+  });
+
+  it("rejects a malformed theme template catalog before plugin registration", async () => {
+    await expect(new PortalRuntime(loader({
+      [arcoRef.id]: { renderAdapter: { ...adapter, themeTemplates: [{ id: "dark", label: "深色", scheme: "dark" }, { id: "dark", label: "重复", scheme: "dark" }] } },
+    })).prepare(portal)).rejects.toMatchObject({ code: "DESIGN_SYSTEM_THEME_TEMPLATE_CATALOG_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 
   it("registers a governed collection page through the selected Workbench", async () => {
