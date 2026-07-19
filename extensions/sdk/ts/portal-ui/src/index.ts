@@ -160,6 +160,8 @@ export interface SemanticThemeTokens {
   overlay: { navigationMinWidth: number; navigationMaxWidth: number; };
   elevation: { overlay: string; };
   motion: { fast: number; normal: number; };
+  focus: { width: number; };
+  touch: { minimum: number; };
 }
 
 export interface PortalUI {

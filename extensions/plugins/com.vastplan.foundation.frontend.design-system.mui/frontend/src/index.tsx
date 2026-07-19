@@ -240,7 +240,7 @@ export const muiPortalUIComponents: MuiComponents = {
     color: { canvas: "#fafafa", surface: "#fff", overlaySurface: "#fff", text: "#1d2129", mutedText: "#6b7785", border: "#d9d9d9", primary: "#1976d2", danger: "#d32f2f", warning: "#ed6c02", success: "#2e7d32", hover: "rgba(25,118,210,.06)", selected: "rgba(25,118,210,.12)", focusRing: "#1976d2" },
     radius: { sm: 4, md: 8, lg: 12 }, spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
     shell: { barHeight: 64, railWidth: 64, navigationWidth: 240, navigationCompactWidth: 220 },
-    overlay: { navigationMinWidth: 480, navigationMaxWidth: 840 }, elevation: { overlay: "0 8px 24px rgba(0,0,0,.12)" }, motion: { fast: 120, normal: 180 },
+    overlay: { navigationMinWidth: 480, navigationMaxWidth: 840 }, elevation: { overlay: "0 8px 24px rgba(0,0,0,.12)" }, motion: { fast: 120, normal: 180 }, focus: { width: 2 }, touch: { minimum: 44 },
   } },
   EmptyState: ({ title, description }) => <Box sx={{ p: 4, textAlign: "center" }}><Typography variant="h6">{title}</Typography><Typography color="text.secondary">{description}</Typography></Box>,
   ErrorState: function ErrorState({ title, retry }) { const i18n = usePortalI18n(); return <Alert severity="error" action={retry === undefined ? undefined : <MuiButton onClick={retry}>{i18n.text(message(namespace, "action.retry", "重试"))}</MuiButton>}>{title}</Alert>; },

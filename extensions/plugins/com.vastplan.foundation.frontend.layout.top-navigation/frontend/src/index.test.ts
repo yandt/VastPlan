@@ -17,7 +17,7 @@ describe("top navigation shell layout", () => {
 
   it("uses one bounded mega popover and a fixed page header", () => {
     expect(topNavigationShellCSS).toContain("--vp-top-mega-min");
-    expect(topNavigationShellCSS).toContain("grid-template-columns:repeat(3,minmax(220px,1fr))");
+    expect(topNavigationShellCSS).toContain("grid-template-columns:repeat(auto-fit,minmax(220px,1fr))");
     expect(topNavigationShellCSS).toContain(".vp-top-page-scroller{flex:1;min-height:0;overflow:auto");
     expect(topNavigationShellCSS).toContain("@media (max-width:767px)");
   });

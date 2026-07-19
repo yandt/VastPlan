@@ -21,6 +21,14 @@ describe("Arco portal UI adapter", () => {
     ]));
   });
 
+  it("maps the shared shell, overlay, focus and touch baselines", () => {
+    expect(arcoPortalUIComponents.theme.tokens).toMatchObject({
+      shell: { barHeight: 64, railWidth: 64, navigationWidth: 240, navigationCompactWidth: 220 },
+      overlay: { navigationMinWidth: 480, navigationMaxWidth: 840 },
+      focus: { width: 2 }, touch: { minimum: 44 }, motion: { fast: 120, normal: 180 },
+    });
+  });
+
   it("preserves framework-neutral GridItem children through Arco Grid", () => {
     const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.Grid, {
       columns: 2,

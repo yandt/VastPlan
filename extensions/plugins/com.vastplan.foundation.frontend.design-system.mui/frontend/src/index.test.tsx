@@ -20,6 +20,14 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain("保存");
   });
 
+  it("maps the same shell, overlay, focus and touch baselines as other adapters", () => {
+    expect(muiPortalUIComponents.theme.tokens).toMatchObject({
+      shell: { barHeight: 64, railWidth: 64, navigationWidth: 240, navigationCompactWidth: 220 },
+      overlay: { navigationMinWidth: 480, navigationMaxWidth: 840 },
+      focus: { width: 2 }, touch: { minimum: 44 }, motion: { fast: 120, normal: 180 },
+    });
+  });
+
   it("keeps navigation destinations as real links", () => {
     const Menu = muiPortalUIComponents.Menu;
     const markup = renderToStaticMarkup(<Menu items={[{ id: "settings", label: "设置", href: "/settings" }]} />);

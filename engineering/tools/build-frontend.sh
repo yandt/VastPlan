@@ -12,6 +12,7 @@ rm -rf -- "${OUT_DIR:?}"
 ASSETS="$OUT_DIR/assets"
 VENDOR="$ASSETS/vendor"
 mkdir -p "$VENDOR"
+node engineering/tools/build-portal-fonts.mjs "$ASSETS"
 
 case "${PORTAL_DEV_HMR:-0}" in
   1|true) DEV_HMR=true ;;

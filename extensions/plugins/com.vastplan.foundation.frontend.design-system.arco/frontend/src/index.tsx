@@ -303,6 +303,8 @@ export const arcoPortalUIComponents: ArcoComponents = {
       overlay: { navigationMinWidth: 480, navigationMaxWidth: 840 },
       elevation: { overlay: "0 8px 24px rgba(0,0,0,.12)" },
       motion: { fast: 120, normal: 180 },
+      focus: { width: 2 },
+      touch: { minimum: 44 },
     },
   },
   EmptyState: ({ title, description }) => <Empty description={<><strong>{title}</strong>{description === undefined ? null : <div>{description}</div>}</>} />,

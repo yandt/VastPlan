@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@fontsource/noto-sans':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/noto-sans-sc':
+        specifier: ^5.3.0
+        version: 5.3.0
       esbuild:
         specifier: 0.28.1
         version: 0.28.1
@@ -605,6 +611,12 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
+
+  '@fontsource/noto-sans-sc@5.3.0':
+    resolution: {integrity: sha512-HeqIlGm0+ohOKxZLuHj1qW6r6avHH0OWdKERAcSDI0RQ+MXrteuLKA+M+5eOA8rYy0MFvOR5AT0fQo2rUkye0Q==, tarball: https://registry.npmmirror.com/@fontsource/noto-sans-sc/-/noto-sans-sc-5.3.0.tgz}
+
+  '@fontsource/noto-sans@5.3.0':
+    resolution: {integrity: sha512-fBCog2PY7DiVVTEEqtI/Qdinx/knobHYfoGpjFXdfBX5RoJaBp1Prw2G75p0OIsdlMZg3cLo0c+YbIUYOxnQJw==, tarball: https://registry.npmmirror.com/@fontsource/noto-sans/-/noto-sans-5.3.0.tgz}
 
   '@hyperjump/json-schema-formats@1.0.2':
     resolution: {integrity: sha512-LwV7YMBst77SCvZJS/Fq5od/2dWvefU+a7RF9/MOo9mVXEcA7PJ0Ax6zgoL2x69f6PmEfFXTp3l1vGdtyziW6w==, tarball: https://registry.npmmirror.com/@hyperjump/json-schema-formats/-/json-schema-formats-1.0.2.tgz}
@@ -1711,6 +1723,10 @@ snapshots:
 
   '@esbuild/win32-x64@0.28.1':
     optional: true
+
+  '@fontsource/noto-sans-sc@5.3.0': {}
+
+  '@fontsource/noto-sans@5.3.0': {}
 
   '@hyperjump/json-schema-formats@1.0.2':
     dependencies:
