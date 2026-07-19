@@ -186,7 +186,7 @@ function buttonVariant(kind: ButtonProps["kind"]): { variant: "contained" | "out
   return { variant: "outlined" };
 }
 
-function FormRenderer({ schema, value, onChange, readOnly, submitting, onValidationChange }: FormRendererProps) {
+function FormRenderer({ schema, value, onChange, presentation, readOnly, submitting, onValidationChange }: FormRendererProps) {
   const i18n = usePortalI18n();
   const localizedSchema = useMemo(() => localizeJSONSchema(schema.schema, schema.localization, i18n.text), [i18n.text, schema.localization, schema.schema]);
   const localizedUISchema = useMemo(() => schema.uiSchema === undefined ? undefined : localizeJSONSchema(schema.uiSchema, schema.uiLocalization, i18n.text), [i18n.text, schema.uiLocalization, schema.uiSchema]);
@@ -200,7 +200,7 @@ function FormRenderer({ schema, value, onChange, readOnly, submitting, onValidat
       validating: false,
     });
   }, [i18n, onValidationChange, validation]);
-  return <RJSFForm
+  return <Box sx={presentation?.layout === "horizontal" ? { "& .form-group": { display: "grid", gridTemplateColumns: "104px minmax(0, 1fr)", alignItems: "center", columnGap: 1.5 }, "& .form-group > label": { margin: 0 }, "& .form-group > .field-description": { gridColumn: "2" } } : undefined}><RJSFForm
     schema={localizedSchema}
     uiSchema={localizedUISchema}
     formData={value}
@@ -209,10 +209,10 @@ function FormRenderer({ schema, value, onChange, readOnly, submitting, onValidat
     disabled={submitting}
     onChange={(event) => onChange((event.formData ?? {}) as Record<string, unknown>)}
     templates={{ ButtonTemplates: { SubmitButton: () => null } }}
-  ><></></RJSFForm>;
+  ><></></RJSFForm></Box>;
 }
 
-function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard" }: TableProps) {
+function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", appearance = "default" }: TableProps) {
   const keyOf = (row: Readonly<Record<string, unknown>>) => typeof rowKey === "string" ? String(row[rowKey]) : rowKey(row);
   const selected = new Set(selectedRowKeys);
   const toggle = (key: string) => {
@@ -220,12 +220,13 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
     const next = new Set(selected); next.has(key) ? next.delete(key) : next.add(key); onSelectionChange?.([...next]);
   };
   const toggleAll = () => onSelectionChange?.(selected.size === rows.length ? [] : rows.map(keyOf));
-  return <Paper variant="outlined"><MuiTable size={density === "compact" ? "small" : "medium"}><TableHead><TableRow>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={rows.length > 0 && selected.size === rows.length} indeterminate={selected.size > 0 && selected.size < rows.length} onChange={toggleAll} inputProps={{ "aria-label": "select rows" }} /></TableCell>}{columns.map((column) => <TableCell key={column.key} sx={{ width: column.width }}>{column.title}</TableCell>)}</TableRow></TableHead><TableBody>
+  const content = <MuiTable size={density === "compact" ? "small" : "medium"}><TableHead sx={appearance === "collection" ? { bgcolor: "action.hover" } : undefined}><TableRow>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={rows.length > 0 && selected.size === rows.length} indeterminate={selected.size > 0 && selected.size < rows.length} onChange={toggleAll} inputProps={{ "aria-label": "select rows" }} /></TableCell>}{columns.map((column) => <TableCell key={column.key} sx={{ width: column.width, fontWeight: appearance === "collection" ? 600 : undefined }}>{column.title}</TableCell>)}</TableRow></TableHead><TableBody>
     {loading ? <TableRow><TableCell colSpan={columns.length}><CircularProgress size={20} /></TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={columns.length}>{empty}</TableCell></TableRow> : rows.map((row, index) => {
       const key = keyOf(row);
       return <TableRow key={key} selected={selected.has(key)}>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={selected.has(key)} onChange={() => toggle(key)} inputProps={{ "aria-label": `select ${key}` }} /></TableCell>}{columns.map((column) => <TableCell key={column.key}>{column.render?.(row[column.key], row, index) ?? String(row[column.key] ?? "")}</TableCell>)}</TableRow>;
     })}
-  </TableBody></MuiTable></Paper>;
+  </TableBody></MuiTable>;
+  return appearance === "collection" ? content : <Paper variant="outlined">{content}</Paper>;
 }
 
 const symbols: Record<SemanticIconName, string> = { add: "+", remove: "−", edit: "✎", search: "⌕", settings: "⚙", success: "✓", warning: "!", error: "×", info: "i", close: "×", menu: "☰" };
@@ -244,9 +245,11 @@ export const muiPortalUIComponents: MuiComponents = {
   Breadcrumb: ({ items }) => <Breadcrumbs>{items.map((item) => <MuiButton key={item.id} href={item.href} onClick={item.onSelect} variant="text">{item.label}</MuiButton>)}</Breadcrumbs>,
   Tabs: ({ items, activeID, onChange }) => <><MuiTabs value={activeID ?? false} onChange={(_, id: string) => onChange?.(id)}>{items.map((item) => <Tab key={item.id} value={item.id} label={item.label} disabled={item.disabled} />)}</MuiTabs>{items.find((item) => item.id === activeID)?.content}</>,
   CommandPalette, Popover, Dialog, Drawer, FormRenderer,
-  FilterBar: ({ children, actions }) => <Paper variant="outlined" sx={{ p: 2 }}><MuiStack direction="row" gap={2} alignItems="center" flexWrap="wrap">{children}<Box sx={{ ml: "auto" }}>{actions}</Box></MuiStack></Paper>,
+  FilterBar: ({ children, actions, appearance = "default" }) => appearance === "collection"
+    ? <Box sx={{ display: "flex", gap: 3, alignItems: "stretch", flexWrap: "wrap", pb: 3, borderBottom: 1, borderColor: "divider" }}><Box sx={{ flex: "1 1 720px", minWidth: 0 }}>{children}</Box>{actions === undefined ? null : <Box sx={{ display: "flex", alignItems: "stretch", pl: 3, borderLeft: 1, borderColor: "divider" }}>{actions}</Box>}</Box>
+    : <Paper variant="outlined" sx={{ p: 2 }}><MuiStack direction="row" gap={2} alignItems="center" flexWrap="wrap">{children}<Box sx={{ ml: "auto" }}>{actions}</Box></MuiStack></Paper>,
   Table,
-  Pagination: ({ page, total, pageSize, disabled, onChange }) => <MuiPagination page={page} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} />,
+  Pagination: ({ page, total, pageSize, disabled, align = "start", onChange }) => <Box sx={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><MuiPagination page={page} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} /></Box>,
   Descriptions: ({ title, items, columns = 2 }) => <Box><Typography variant="h6">{title}</Typography><Grid columns={columns}>{items.map((item) => <Box key={item.id}><Typography variant="caption" color="text.secondary">{item.label}</Typography><Typography>{item.value}</Typography></Box>)}</Grid></Box>,
   Status: ({ tone = "neutral", children }) => <Chip color={tones[tone]} label={children} size="small" />,
   Icon: ({ name, label, size = "md" }) => <Box component="span" aria-label={label} aria-hidden={label === undefined} sx={{ fontSize: size === "sm" ? 14 : size === "md" ? 16 : 20 }}>{symbols[name]}</Box>,

@@ -1,20 +1,41 @@
+import { useEffect, useState } from "react";
 import type { FilterSpec } from "@vastplan/ui-contract";
 import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import { collectionFilterSchema } from "./filter-schema.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
-export function CollectionFilters({ filters, value, refreshing, onChange, onClear, onRefresh }: {
+const automaticFilterKinds = new Set<FilterSpec["kind"]>(["select", "boolean", "numberRange", "dateRange"]);
+
+/** Three desktop fields occupy one query row; short filter bars apply without a separate query button. */
+export function shouldAutoApplyCollectionFilters(filters: readonly FilterSpec[]): boolean { return filters.length <= 3; }
+
+export function CollectionFilters({ filters, value, querying, onApply }: {
   filters: readonly FilterSpec[];
   value: Record<string, unknown>;
-  refreshing: boolean;
-  onChange(value: Record<string, unknown>): void;
-  onClear(): void;
-  onRefresh(): void;
+  querying: boolean;
+  onApply(value: Record<string, unknown>): void;
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  return <ui.FilterBar actions={<ui.Stack direction="row" gap="sm"><ui.Button kind="text" onClick={onClear}>{i18n.text(message(namespace, "action.clearFilters", "清除筛选"))}</ui.Button><ui.Button kind="secondary" onClick={onRefresh} loading={refreshing}>{i18n.text(message(namespace, "action.refresh", "刷新"))}</ui.Button></ui.Stack>}>
-    <ui.FormRenderer schema={collectionFilterSchema(filters)} value={value} onChange={onChange} />
+  const autoApply = shouldAutoApplyCollectionFilters(filters);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const clear = () => { setDraft({}); onApply({}); };
+  const update = (filter: FilterSpec, patch: Record<string, unknown>) => {
+    const next = { ...draft, ...patch };
+    setDraft(next);
+    if (autoApply && automaticFilterKinds.has(filter.kind)) onApply(next);
+  };
+  const actions = <ui.Stack direction="column" gap="sm" justify="between">
+    {autoApply ? null : <ui.Button kind="primary" onClick={() => onApply(draft)} loading={querying}>{i18n.text(message(namespace, "action.query", "查询"))}</ui.Button>}
+    <ui.Button kind="secondary" onClick={clear}>{i18n.text(message(namespace, "action.clearFilters", "重置"))}</ui.Button>
+  </ui.Stack>;
+  return <ui.FilterBar appearance="collection" actions={actions}>
+    <ui.Grid columns={{ xs: 1, md: 2, xl: 3 }} gap="sm">{filters.map((filter) => <ui.GridItem key={filter.id}>
+      <div onKeyDown={(event) => { if (autoApply && filter.kind === "text" && event.key === "Enter") { event.preventDefault(); onApply(draft); } }}>
+        <ui.FormRenderer schema={collectionFilterSchema([filter])} value={{ [filter.id]: draft[filter.id] }} presentation={{ layout: "horizontal" }} onChange={(patch) => update(filter, patch)} />
+      </div>
+    </ui.GridItem>)}</ui.Grid>
   </ui.FilterBar>;
 }

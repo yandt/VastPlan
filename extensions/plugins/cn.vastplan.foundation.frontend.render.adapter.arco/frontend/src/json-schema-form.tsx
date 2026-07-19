@@ -450,7 +450,7 @@ function schemaContractError(schema: FormRendererProps["schema"], english: boole
   return undefined;
 }
 
-export function ArcoJSONSchemaForm({ schema, value, onChange, readOnly, submitting, errors: externalErrors, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
+export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, readOnly, submitting, errors: externalErrors, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
   const i18n = usePortalI18n();
   const contractError = schemaContractError(schema,!i18n.locale.toLowerCase().startsWith("zh"));
   const validationSchema = schema.schema as Schema;
@@ -504,7 +504,7 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, readOnly, submitti
   if (contractError !== undefined) return <Alert type="error" title={i18n.text(message(namespace,"form.unsupported","表单 Schema 不受支持"))} content={contractError} />;
   return <>
     {currentAsync.validating ? <Alert type="info" title={i18n.text(message(namespace,"form.validating","正在校验"))} style={{ marginBottom: 16 }} /> : null}
-    <Form layout="vertical">
+    <Form layout={presentation?.layout ?? "vertical"}>
       <RJSFForm<FormData, Schema, FormContext>
         tagName="div"
         schema={dataSchema}

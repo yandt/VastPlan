@@ -13,3 +13,5 @@
 - `density`、`filter-schema`、`preferences`：无框架私有依赖的策略与持久化辅助模块。
 
 这里的 `CollectionTable` 是筛选、列偏好、操作与分页工作流中的“表格组合区”，不是 Arco/MUI 的基础表格。基础表格仍通过 `ui.Table` 由渲染适配器提供。未来的表单、详情和 Overlay 工作台模式应新增到 `patterns/form/`、`patterns/record/`、`patterns/overlay/`，不得重新堆回入口文件或让功能插件直接组合基础 UI 组件。
+
+Collection 默认采用管理工作区呈现：三列筛选、左主右次操作、低对比表头、行分隔和右对齐分页。筛选字段不超过三项时不显示“查询”按钮：文本 Enter 后提交，选择类字段直接提交；达到两行时再使用“查询 + 重置”草稿模式。

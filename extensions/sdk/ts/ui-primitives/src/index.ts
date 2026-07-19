@@ -19,6 +19,8 @@ export interface FormRendererProps {
   schema: FormSchema;
   value: Record<string, unknown>;
   onChange(value: Record<string, unknown>): void;
+  /** A framework-neutral field-label arrangement for composed Workbench forms. */
+  presentation?: { layout?: "vertical" | "horizontal" };
   readOnly?: boolean;
   submitting?: boolean;
   errors?: Readonly<Record<string, string>>;
@@ -148,6 +150,24 @@ export interface TableProps {
   loading?: boolean;
   empty?: ReactNode;
   density?: "compact" | "standard" | "comfortable";
+  /** A governed visual treatment owned by the render adapter, never by a functional plugin. */
+  appearance?: "default" | "collection";
+}
+
+export interface FilterBarProps {
+  children: ReactNode;
+  actions?: ReactNode;
+  /** Collection uses the borderless, dense management-query treatment. */
+  appearance?: "default" | "collection";
+}
+
+export interface PaginationProps {
+  page: number;
+  pageSize: number;
+  total: number;
+  disabled?: boolean;
+  align?: "start" | "center" | "end";
+  onChange(page: number, pageSize: number): void;
 }
 
 export interface DescriptionItem { id: string; label: ReactNode; value: ReactNode; }
@@ -186,9 +206,9 @@ export interface PortalUI {
   Dialog: ComponentType<DialogProps>;
   Drawer: ComponentType<DrawerProps>;
   FormRenderer: ComponentType<FormRendererProps>;
-  FilterBar: ComponentType<{ children: ReactNode; actions?: ReactNode }>;
+  FilterBar: ComponentType<FilterBarProps>;
   Table: ComponentType<TableProps>;
-  Pagination: ComponentType<{ page: number; pageSize: number; total: number; disabled?: boolean; onChange(page: number, pageSize: number): void }>;
+  Pagination: ComponentType<PaginationProps>;
   Descriptions: ComponentType<{ title?: ReactNode; items: DescriptionItem[]; columns?: ResponsiveColumns }>;
   Status: ComponentType<{ tone?: StatusTone; children: ReactNode }>;
   Icon: ComponentType<{ name: SemanticIconName; label?: string; size?: "sm" | "md" | "lg" }>;

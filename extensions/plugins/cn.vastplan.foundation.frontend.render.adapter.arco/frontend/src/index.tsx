@@ -219,7 +219,7 @@ function buttonProps({ kind }: Pick<ButtonProps, "kind">): { type?: "primary" | 
   return { type: "secondary" };
 }
 
-function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard" }: TableProps) {
+function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", appearance = "default" }: TableProps) {
   return <ArcoTable
     columns={columns.map((column) => ({
       title: column.title,
@@ -239,6 +239,7 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
     noDataElement={empty}
     size={density === "compact" ? "small" : undefined}
     scroll={{ x: "max-content" }}
+    border={appearance === "collection" ? false : undefined}
   />;
 }
 
@@ -297,9 +298,11 @@ export const arcoPortalUIComponents: ArcoComponents = {
   Dialog,
   Drawer,
   FormRenderer: ArcoJSONSchemaForm,
-  FilterBar: ({ children, actions }) => <Card size="small"><Space wrap size={12}>{children}</Space>{actions === undefined ? null : <div style={{ float: "right" }}>{actions}</div>}</Card>,
+  FilterBar: ({ children, actions, appearance = "default" }) => appearance === "collection"
+    ? <div style={{ display: "flex", gap: 24, alignItems: "stretch", flexWrap: "wrap", paddingBottom: 24, borderBottom: "1px solid var(--color-border-2)" }}><div style={{ flex: "1 1 720px", minWidth: 0 }}>{children}</div>{actions === undefined ? null : <div style={{ display: "flex", alignItems: "stretch", paddingLeft: 24, borderLeft: "1px solid var(--color-border-2)" }}>{actions}</div>}</div>
+    : <Card size="small"><Space wrap size={12}>{children}</Space>{actions === undefined ? null : <div style={{ float: "right" }}>{actions}</div>}</Card>,
   Table,
-  Pagination: ({ page, pageSize, total, disabled, onChange }) => <ArcoPagination current={page} pageSize={pageSize} total={total} disabled={disabled} showTotal sizeCanChange onChange={onChange} />,
+  Pagination: ({ page, pageSize, total, disabled, align = "start", onChange }) => <div style={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><ArcoPagination current={page} pageSize={pageSize} total={total} disabled={disabled} showTotal sizeCanChange onChange={onChange} /></div>,
   Descriptions: ({ title, items, columns }) => <ArcoDescriptions title={title} data={items.map((item) => ({ key: item.id, label: item.label, value: item.value }))} column={columnsForDescriptions(columns)} border />,
   Status: ({ tone = "neutral", children }) => <Tag color={statusColors[tone]}>{children}</Tag>,
   Icon: SemanticIcon,

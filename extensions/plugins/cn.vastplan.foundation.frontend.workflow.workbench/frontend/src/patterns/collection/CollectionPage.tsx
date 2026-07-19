@@ -68,16 +68,17 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
     }
   }, [i18n, page, refresh, ui]);
   const actions = collection.actions ?? [];
-  const toolbarActions = actions.filter((action) => action.placement === "page.primary" || action.placement === "page.secondary" || action.placement === "collection.toolbar");
+  const primaryActions = actions.filter((action) => action.placement === "page.primary" || action.placement === "collection.toolbar");
+  const secondaryActions = actions.filter((action) => action.placement === "page.secondary");
   const bulkActions = actions.filter((action) => action.placement === "collection.bulk");
   const hasFilters = collection.filters !== undefined && collection.filters.length > 0;
 
   return <ui.Stack gap={density === "compact" ? "sm" : density === "comfortable" ? "lg" : "md"}>
-    {hasFilters ? <CollectionFilters filters={collection.filters!} value={filters} refreshing={refreshing} onChange={(value) => { setFilters(value); setPageNumber(1); }} onClear={() => { setFilters({}); setPageNumber(1); }} onRefresh={refresh} /> : null}
-    <CollectionToolbar hasFilters={hasFilters} refreshing={refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} onColumns={() => setPreferencesOpen(true)} onRunAction={(action) => void runAction(action, selected)} />
+    {hasFilters ? <CollectionFilters filters={collection.filters!} value={filters} querying={loading || refreshing} onApply={(value) => { setFilters(value); setPageNumber(1); }} /> : null}
+    <CollectionToolbar hasFilters={hasFilters} refreshing={refreshing} selectedCount={selected.length} primaryActions={primaryActions} secondaryActions={secondaryActions} bulkActions={bulkActions} onRefresh={refresh} onColumns={() => setPreferencesOpen(true)} onRunAction={(action) => void runAction(action, selected)} />
     {failure === undefined ? null : <ui.ErrorState title={failure} retry={refresh} />}
     <CollectionTable collection={collection} columns={columns} rows={rows} selectedKeys={selectedKeys} loading={loading} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} />
-    <ui.Pagination page={pageNumber} pageSize={pageSize} total={total} disabled={loading} onChange={(nextPage, nextSize) => { setPageNumber(nextPage); setPageSize(nextSize); }} />
+    <ui.Pagination align="end" page={pageNumber} pageSize={pageSize} total={total} disabled={loading} onChange={(nextPage, nextSize) => { setPageNumber(nextPage); setPageSize(nextSize); }} />
     <CollectionPreferencesDialog open={preferencesOpen} collection={collection} columns={columns} onChange={setColumns} onClose={() => setPreferencesOpen(false)} />
   </ui.Stack>;
 }

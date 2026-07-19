@@ -70,6 +70,8 @@ CollectionLoader(query, signal) -> CollectionResult
 - Filter 的值、排序、页码/cursor 都属于 URL 可恢复状态；敏感筛选值不得进入 URL。查询切换时取消上一请求，保留已成功数据并展示刷新状态。
 - V1 保存列移动与显隐到浏览器本地偏好，命名空间为 `tenant / portal / collectionId`；浏览器用户隔离由其登录配置文件承担。宽度、密度与 page size 的跨会话偏好属于后续增强。偏好无法新增未声明列，服务端也绝不依据它扩大数据字段或权限。
 - Workbench 统一渲染 loading、refreshing、empty、error、stale、selection 和 retry，不允许同一集合同时由插件再渲染另一套分页或工具栏。
+- Collection 的默认管理工作区采用三列筛选栅格、主操作在左/次操作在右、浅色表头与行分隔、页脚右对齐分页。该视觉语义通过 `FilterBar`、`Table`、`Pagination` 的 `collection` 呈现能力交由渲染适配器实现，Workbench 不注入框架 CSS。
+- 筛选字段在桌面三列栅格中不足两行（不超过 3 项）时采用直接查询：文本在 Enter 后提交，枚举/布尔/范围选择完成即提交，不显示“查询”按钮；达到两行时保留草稿并显示“查询 + 重置”，避免复杂筛选编辑过程反复请求。窄屏仍按栅格折行，但不改变已确定的查询安全语义。
 
 ### 3.2 操作区
 
