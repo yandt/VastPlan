@@ -65,6 +65,22 @@ describe("PortalRuntime", () => {
     expect(prepared.pages[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
   });
 
+  it("mounts functional page paths below the selected Portal route", async () => {
+    const prepared = await new PortalRuntime(loader()).prepare({ ...portal, route: "/operations" });
+    expect(prepared.pages[0]).toMatchObject({ path: "/operations/settings/portals", pluginID: composerRef.id });
+  });
+
+  it("rejects functional page paths that can escape or ambiguously encode the Portal route", async () => {
+    const runtime = new PortalRuntime(loader({
+      [composerRef.id]: {
+        register(context: FrontendPluginContext) {
+          context.addPage({ id: "escape", path: "/../settings", title: "Escape", slots: [{ id: "body", slot: "page.body.main", component: () => null }] });
+        },
+      },
+    }));
+    await expect(runtime.prepare({ ...portal, route: "/operations" })).rejects.toMatchObject({ code: "PAGE_REJECTED" } satisfies Partial<PortalAssemblyError>);
+  });
+
   it("assembles the same functional plugin against a second UI framework", async () => {
     const muiPortal = {
       ...portal,

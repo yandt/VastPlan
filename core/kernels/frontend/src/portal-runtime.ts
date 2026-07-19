@@ -151,7 +151,8 @@ export class PortalRuntime {
       const context: FrontendPluginContext = {
         portal: portalSnapshot,
         addPage: (page) => {
-          if (!page.id || !page.path.startsWith("/") || !page.title || seenPageIDs.has(page.id) || seenPaths.has(page.path) || !Array.isArray(page.slots)) {
+          const mountedPath = mountPortalPagePath(portal.route, page.path);
+          if (!page.id || mountedPath === undefined || !page.title || seenPageIDs.has(page.id) || seenPaths.has(mountedPath) || !Array.isArray(page.slots)) {
             throw new PortalAssemblyError("PAGE_REJECTED", `页面 ID/路径非法或重复: ${page.id || page.path}`);
           }
           if (!page.slots.some((slot) => slot.slot === "page.body.main")) {
@@ -168,9 +169,9 @@ export class PortalRuntime {
             seenSlotIDs.add(slotKey);
           }
           seenPageIDs.add(page.id);
-          seenPaths.add(page.path);
+          seenPaths.add(mountedPath);
           if (page.navigation !== undefined) seenNavigationIDs.add(page.navigation.id);
-          pages.push({ ...page, slots: [...page.slots], pluginID: ref.id });
+          pages.push({ ...page, path: mountedPath, slots: [...page.slots], pluginID: ref.id });
         },
       };
       await plugin.register?.(context);
@@ -240,6 +241,15 @@ function moduleKey(ref: PluginRef): string { return `${ref.id}@${ref.version}/${
 
 function managementName(value: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value) && value !== "*";
+}
+
+function mountPortalPagePath(portalRoute: string, pagePath: string): string | undefined {
+  if (!pagePath.startsWith("/") || pagePath.includes("//") || pagePath.includes("\\") || pagePath.includes("%") || pagePath.includes("?") || pagePath.includes("#") ||
+      pagePath.split("/").some((segment) => segment === "." || segment === "..")) {
+    return undefined;
+  }
+  const route = portalRoute === "/" ? "" : portalRoute.replace(/\/$/, "");
+  return pagePath === "/" ? (route || "/") : `${route}${pagePath}`;
 }
 
 function sameCompositionRef(left: CompositionRef, right: CompositionRef): boolean {

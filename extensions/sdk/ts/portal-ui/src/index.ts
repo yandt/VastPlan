@@ -196,6 +196,7 @@ export interface PortalSlotContribution {
 
 export interface PortalPageDefinition {
   id: string;
+  /** Portal-relative path. The trusted host mounts it below PortalSpec.route. */
   path: string;
   title: string;
   description?: string;
