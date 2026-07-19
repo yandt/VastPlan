@@ -15,7 +15,7 @@ const common = {
   legalComments: "none",
   minify: true,
   define: { "process.env.NODE_ENV": '"production"' },
-  external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/ui-primitives", "@vastplan/ui-contract"],
+  external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
 };
 
 const plugins = [
@@ -24,6 +24,7 @@ const plugins = [
   ["cn.vastplan.foundation.frontend.structure.composition.standard", {}],
   ["cn.vastplan.foundation.frontend.structure.layout.standard", {}],
   ["cn.vastplan.foundation.frontend.structure.layout.top-navigation", {}],
+  ["cn.vastplan.foundation.frontend.workflow.workbench", {}],
   ["cn.vastplan.platform.configuration.portal-composer", {}],
   ["cn.vastplan.platform.configuration.global-settings", {}],
   ["cn.vastplan.platform.security.credentials", {}],

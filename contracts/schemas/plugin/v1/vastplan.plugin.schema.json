@@ -416,7 +416,8 @@
         "settings": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "renderAdapters": { "type": "array", "items": { "$ref": "#/$defs/renderAdapterContribution" } },
         "structureCompositions": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } },
-        "structureLayouts": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } }
+        "structureLayouts": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } },
+        "workbenches": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } }
       }
     },
     "renderAdapterContribution": {

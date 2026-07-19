@@ -64,6 +64,11 @@ type StructureLayout struct {
 	Config     map[string]any `json:"config,omitempty"`
 }
 
+type Workbench struct {
+	PluginRef
+	UIContract string `json:"uiContract"`
+}
+
 type PortalSpec struct {
 	Revision             uint64                                   `json:"revision"`
 	ID                   string                                   `json:"id"`
@@ -76,6 +81,7 @@ type PortalSpec struct {
 	RenderAdapter        RenderAdapter                            `json:"renderAdapter"`
 	StructureComposition StructureComposition                     `json:"structureComposition"`
 	StructureLayout      StructureLayout                          `json:"structureLayout"`
+	Workbench            Workbench                                `json:"workbench"`
 	Plugins              []PluginRef                              `json:"plugins"`
 	Config               map[string]any                           `json:"config,omitempty"`
 	Management           frontendcompositionv1.PortalBinding      `json:"management"`

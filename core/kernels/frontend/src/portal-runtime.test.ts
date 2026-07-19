@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { managementServicesFor, type UIRenderAdapter, type FrontendPluginContext, type StructureCompositionAdapter, type StructureLayoutAdapter } from "@vastplan/ui-primitives";
+import { managementServicesFor, type UIRenderAdapter, type FrontendPluginContext, type StructureCompositionAdapter, type StructureLayoutAdapter, type UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type PluginRef } from "./portal-runtime";
 
 const arcoRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.arco", version: "1.0.0" };
@@ -7,9 +7,11 @@ const muiRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.
 const composerRef: PluginRef = { id: "cn.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 const compositionRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.composition.standard", version: "1.0.0" };
 const layoutRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.layout.standard", version: "1.0.0" };
+const workbenchRef: PluginRef = { id: "cn.vastplan.foundation.frontend.workflow.workbench", version: "1.0.0" };
 
 const structureComposition: StructureCompositionAdapter = { id: "ui.structure.composition", uiContract: "3.0.0", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
 const structureLayout: StructureLayoutAdapter = { id: "ui.structure.layout", uiContract: "3.0.0", Shell: () => null };
+const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "3.0.0", CollectionPage: () => null };
 
 function renderAdapter(framework: string): UIRenderAdapter {
   return {
@@ -35,6 +37,7 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
       }
       if (ref.id === compositionRef.id) return { ...base, structureComposition, ...(overrides[ref.id] as object) };
       if (ref.id === layoutRef.id) return { ...base, structureLayout, ...(overrides[ref.id] as object) };
+      if (ref.id === workbenchRef.id) return { ...base, workbench, ...(overrides[ref.id] as object) };
       return {
         ...base,
         async register(context) {
@@ -47,14 +50,14 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
 }
 
 const portal = {
-	revision: 1, id: "admin", tenantId: "acme", route: "/", renderAdapter: { ...arcoRef, uiContract: "^3.0.0" }, structureComposition: { ...compositionRef, uiContract: "^3.0.0" }, structureLayout: { ...layoutRef, uiContract: "^3.0.0" }, plugins: [arcoRef, compositionRef, layoutRef, composerRef],
+	revision: 1, id: "admin", tenantId: "acme", route: "/", renderAdapter: { ...arcoRef, uiContract: "^3.0.0" }, structureComposition: { ...compositionRef, uiContract: "^3.0.0" }, structureLayout: { ...layoutRef, uiContract: "^3.0.0" }, workbench: { ...workbenchRef, uiContract: "^3.0.0" }, plugins: [arcoRef, compositionRef, layoutRef, workbenchRef, composerRef],
 	management: { tenantId: "acme", portalId: "admin", platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, services: [{ id: "settings", logicalService: "platform.settings", routingDomain: "platform", capabilities: [{ capability: "platform.settings", read: ["list"] }] }] },
 	resolution: {
 		platformCatalog: { id: "portal-platform", revision: 1, digest: "c".repeat(64) },
 		platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) },
 		applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) },
 		managementBindingDigest: "d".repeat(64),
-    pluginOrigins: { [arcoRef.id]: "platform-profile" as const, [compositionRef.id]: "platform-profile" as const, [layoutRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
+    pluginOrigins: { [arcoRef.id]: "platform-profile" as const, [compositionRef.id]: "platform-profile" as const, [layoutRef.id]: "platform-profile" as const, [workbenchRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
   },
 };
 
@@ -64,6 +67,22 @@ describe("PortalRuntime", () => {
     expect(prepared.renderAdapter.framework).toBe("arco");
     expect(prepared.pages).toHaveLength(1);
     expect(prepared.pages[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
+  });
+
+  it("registers a governed collection page through the selected Workbench", async () => {
+    const prepared = await new PortalRuntime(loader({
+      [composerRef.id]: {
+        register(context: FrontendPluginContext) {
+          context.addCollectionPage({
+            id: "revisions", path: "/revisions", title: "Revisions", navigation: { id: "revisions", label: "Revisions", zone: "settings" },
+            collection: { id: "revisions", title: "Revisions", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [{ key: "id", label: "ID" }] },
+            async load() { return { items: [], total: 0 }; },
+          });
+        },
+      },
+    })).prepare(portal);
+    expect(prepared.workbench.id).toBe("ui.workflow.workbench");
+    expect(prepared.pages).toMatchObject([{ id: "revisions", slots: [{ id: "workbench.collection", slot: "page.body.main" }] }]);
   });
 
   it("gives plugin registration a host-owned generation lifecycle signal", async () => {
@@ -126,10 +145,10 @@ describe("PortalRuntime", () => {
     const muiPortal = {
       ...portal,
       renderAdapter: { ...muiRef, uiContract: "^3.0.0" },
-      plugins: [muiRef, compositionRef, layoutRef, composerRef],
+      plugins: [muiRef, compositionRef, layoutRef, workbenchRef, composerRef],
       resolution: {
         ...portal.resolution,
-        pluginOrigins: { [muiRef.id]: "platform-profile" as const, [compositionRef.id]: "platform-profile" as const, [layoutRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
+        pluginOrigins: { [muiRef.id]: "platform-profile" as const, [compositionRef.id]: "platform-profile" as const, [layoutRef.id]: "platform-profile" as const, [workbenchRef.id]: "platform-profile" as const, [composerRef.id]: "platform-profile" as const },
       },
     };
     const prepared = await new PortalRuntime(loader()).prepare(muiPortal);

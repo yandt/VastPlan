@@ -14,7 +14,7 @@ func TestResolveInjectsPlatformRenderAdapterAndLocksInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resolved.Revision != 7 || len(resolved.Plugins) != 4 || resolved.RenderAdapter.ID != profile.RenderAdapter.ID || resolved.StructureComposition.ID != profile.StructureComposition.ID || resolved.StructureLayout.ID != profile.StructureLayout.ID {
+	if resolved.Revision != 7 || len(resolved.Plugins) != 5 || resolved.RenderAdapter.ID != profile.RenderAdapter.ID || resolved.StructureComposition.ID != profile.StructureComposition.ID || resolved.StructureLayout.ID != profile.StructureLayout.ID || resolved.Workbench.ID != profile.Workbench.ID {
 		t.Fatalf("解析结果错误: %+v", resolved)
 	}
 	if resolved.Resolution.PluginOrigins[profile.RenderAdapter.ID] != compositioncommonv1.OriginPlatformProfile || resolved.Resolution.PluginOrigins[app.Plugins[0].ID] != compositioncommonv1.OriginApplication {
@@ -57,7 +57,8 @@ func testProfile() frontendcompositionv1.PlatformProfile {
 	design := frontendcompositionv1.PluginRef{ID: "cn.vastplan.foundation.frontend.render.adapter.arco", Version: "1.0.0", Channel: "stable"}
 	composition := frontendcompositionv1.PluginRef{ID: "cn.vastplan.foundation.frontend.structure.composition.standard", Version: "1.0.0", Channel: "stable"}
 	layout := frontendcompositionv1.PluginRef{ID: "cn.vastplan.foundation.frontend.structure.layout.standard", Version: "1.0.0", Channel: "stable"}
-	return frontendcompositionv1.PlatformProfile{Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "portal-default"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend}, RenderAdapter: frontendcompositionv1.RenderAdapter{PluginRef: design, UIContract: "^3.0.0"}, StructureComposition: frontendcompositionv1.StructureComposition{PluginRef: composition, UIContract: "^3.0.0", Config: frontendcompositionv1.NavigationConfig{NavigationGroups: []frontendcompositionv1.NavigationGroupDescriptor{{ID: "operations", Label: "运行管理", Zone: "primary", Icon: "menu"}}}}, StructureLayout: frontendcompositionv1.StructureLayout{PluginRef: layout, UIContract: "^3.0.0"}, Plugins: []frontendcompositionv1.PluginRef{design, composition, layout}, Security: frontendcompositionv1.SecurityPolicy{FirstPartyOnly: true, RequireIntegrity: true}}
+	workbench := frontendcompositionv1.PluginRef{ID: "cn.vastplan.foundation.frontend.workflow.workbench", Version: "1.0.0", Channel: "stable"}
+	return frontendcompositionv1.PlatformProfile{Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "portal-default"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend}, RenderAdapter: frontendcompositionv1.RenderAdapter{PluginRef: design, UIContract: "^3.0.0"}, StructureComposition: frontendcompositionv1.StructureComposition{PluginRef: composition, UIContract: "^3.0.0", Config: frontendcompositionv1.NavigationConfig{NavigationGroups: []frontendcompositionv1.NavigationGroupDescriptor{{ID: "operations", Label: "运行管理", Zone: "primary", Icon: "menu"}}}}, StructureLayout: frontendcompositionv1.StructureLayout{PluginRef: layout, UIContract: "^3.0.0"}, Workbench: frontendcompositionv1.Workbench{PluginRef: workbench, UIContract: "^3.0.0"}, Plugins: []frontendcompositionv1.PluginRef{design, composition, layout, workbench}, Security: frontendcompositionv1.SecurityPolicy{FirstPartyOnly: true, RequireIntegrity: true}}
 }
 
 func testComposition(route string) frontendcompositionv1.ApplicationComposition {

@@ -2,6 +2,7 @@ import { createContext, createElement, useContext } from "react";
 import type { ComponentType, KeyboardEvent, ReactNode } from "react";
 import type { FormSchema, FormValidationResult, JSONValue, UICapability } from "@vastplan/ui-contract";
 import type { LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy } from "@vastplan/ui-contract";
+import type { CollectionPageDefinition } from "@vastplan/workbench-sdk";
 
 export type { FormSchema, FormUISchema, FormValidationIssue, FormValidationResult, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
 export { jsonSchemaDialect } from "@vastplan/ui-contract";
@@ -141,6 +142,9 @@ export interface TableProps {
   columns: TableColumn[];
   rows: ReadonlyArray<Readonly<Record<string, unknown>>>;
   rowKey?: string | ((row: Readonly<Record<string, unknown>>) => string);
+  selection?: "none" | "single" | "multiple";
+  selectedRowKeys?: readonly string[];
+  onSelectionChange?(keys: readonly string[]): void;
   loading?: boolean;
   empty?: ReactNode;
 }
@@ -309,8 +313,18 @@ export interface FrontendPluginContext {
 		message(key: string, fallback: string, values?: MessageValues): MessageDescriptor;
 	}>;
 	addPage(page: PortalPageDefinition): void;
+	/** Registers a governed collection page. Functional plugins should prefer this over addPage. */
+	addCollectionPage<Row extends Record<string, unknown>>(page: CollectionPageDefinition<Row>): void;
 	/** Platform-profile plugins only; application plugins cannot mutate global Shell regions. */
 	addShellContribution(contribution: PortalShellContribution): void;
+}
+
+/** Foundation Workbench runtime; it owns collection query, selection and action state. */
+export interface UIWorkbenchAdapter {
+  id: "ui.workflow.workbench";
+  uiContract: string;
+  CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string }>;
+  localization?: PluginLocalization;
 }
 
 export interface FrontendPluginLifecycleContext {

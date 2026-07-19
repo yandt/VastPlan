@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：目标设计，待实施｜最后更新：2026-07-19
+> 状态：Collection V1 已实施；Card 与表单工作流待实施｜最后更新：2026-07-19
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；三层命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -27,15 +27,15 @@ flowchart TB
 
 ## 2. 运行与装配
 
-`ui.workflow.workbench` 是 Platform Profile 中的第四个 Frontend 基础单例，与设计系统、Shell 组合和布局分别来自不同的可信首方制品。Resolver 必须验证：
+`ui.workflow.workbench` 是 Platform Profile 中的第四个 Frontend 基础单例，与设计系统、Shell 组合和布局分别来自不同的可信首方制品。当前 Resolver 已验证前四项；第五项是完成首方页面迁移后启用的门禁：
 
 1. 恰好一个 Workbench，且其 `uiContract` 主版本与设计系统、功能插件相容；
 2. Workbench 只依赖 `@vastplan/ui-primitives` 和 `@vastplan/ui-contract` 的共享单例，不能带入第二套 UI 框架；
 3. Application Composition 不能选择、替换或绕过 Workbench；
 4. Workbench 故障和设计系统故障一样，进入 Portal Kernel 恢复路径，而不是让功能插件退回自行组合。
-5. 功能插件制品只能声明 `@vastplan/workbench-sdk` 为 UI SDK；构建门禁与 Catalog 检查其 import 图，出现 `@vastplan/ui-primitives`、Arco/MUI 或未授权共享 UI 包即拒绝装配。
+5. 待启用：功能插件制品只能声明 `@vastplan/workbench-sdk` 为 UI SDK；构建门禁与 Catalog 将检查其 import 图，出现 `@vastplan/ui-primitives`、Arco/MUI 或未授权共享 UI 包即拒绝装配。现有首方页面迁移完成前不得提前打开该门禁。
 
-当前实现仍是 UI Contract 3.0 的三个基础单例；以上是 ADR-0082 批次实现完成后才生效的目标状态。
+当前已是四个基础单例：设计系统、结构组合、结构布局和 Workbench。V1 已实现 `CollectionWorkbench` 的 table/page 查询模式：筛选、分页、列显示与顺序偏好、单/多选、行/批量动作、loading/empty/error/retry；平台管理中心的 Portal revision 浏览页是首个 fixture。Card cursor、表单工作流、导入图门禁和全量首方页面迁移仍待完成。
 
 ### 2.1 严格入口与受控 Pattern 演进
 
@@ -68,7 +68,7 @@ CollectionLoader(query, signal) -> CollectionResult
 
 - Table 使用 `page` 或 `cursor` 二选一。需要总数、跳页和审计浏览的管理表使用 `page`；Card feed 和高数据量连续浏览使用 `cursor`。
 - Filter 的值、排序、页码/cursor 都属于 URL 可恢复状态；敏感筛选值不得进入 URL。查询切换时取消上一请求，保留已成功数据并展示刷新状态。
-- 列移动、显隐、宽度、密度与 page size 保存为用户本地偏好，键为 `tenant / portal / user / collectionId`。偏好无法新增未声明列，服务端也绝不依据它扩大数据字段或权限。
+- V1 保存列移动与显隐到浏览器本地偏好，命名空间为 `tenant / portal / collectionId`；浏览器用户隔离由其登录配置文件承担。宽度、密度与 page size 的跨会话偏好属于后续增强。偏好无法新增未声明列，服务端也绝不依据它扩大数据字段或权限。
 - Workbench 统一渲染 loading、refreshing、empty、error、stale、selection 和 retry，不允许同一集合同时由插件再渲染另一套分页或工具栏。
 
 ### 3.2 操作区
@@ -123,10 +123,10 @@ Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为
 
 ## 5. 实施顺序与验收
 
-1. 新增 `ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与 `@vastplan/ui-contract` 3.x 基础类型；加入 import 图与裸页面注册门禁，迁移两个设计系统的能力声明。
-2. 先实现 `CollectionWorkbench`：表格、工具栏、筛选、分页、列偏好、行/批量操作；以平台管理中心的 revision 列表作为首个 fixture。
+1. 已完成：`ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与 `@vastplan/ui-contract` 3.x Collection 类型，以及 Arco/MUI 行选择语义。
+2. 已完成：`CollectionWorkbench` 的表格、工具栏、筛选、分页、列偏好、行/批量操作；平台管理中心 Portal revision 浏览页为首个 fixture。
 3. 实现 Card cursor 模式与共享查询状态；禁止额外的独立卡片查询协议。
 4. 实现 `FormPresentation`、`FormWorkflow`、Dialog/Drawer 表单；以连接定义或凭证元数据编辑器作为 fixture，明确不处理凭证明文。
 5. 把现有首方功能插件一次性迁移到 3.x，删除它们重复的筛选、提交和 Overlay 样板，并拒绝遗留的基础组件 import 或裸页面注册；通过 Arco/MUI fixture、键盘、窄屏、i18n、权限拒绝、Abort、脏数据和并发提交测试。
 
-实现前不得宣称当前 UI Contract 3.0 已具备上述 Workbench 能力；当前的 Table、FilterBar、Pagination 和 FormRenderer 仍是基础组件。
+除 Collection V1 外，当前的 Card、表单工作流和全量页面门禁尚未实施；它们不能被误称为现有 Workbench 能力。

@@ -1,4 +1,4 @@
-import type { UIRenderAdapter, FrontendPluginHotLifecycle, PluginLocalization, StructureCompositionAdapter, StructureLayoutAdapter } from "@vastplan/ui-primitives";
+import type { UIRenderAdapter, FrontendPluginHotLifecycle, PluginLocalization, StructureCompositionAdapter, StructureLayoutAdapter, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import type { FrontendPluginLoader, FrontendPluginModule, PluginRef, PortalSpec } from "./portal-runtime";
 
 export interface FrontendModuleDescriptor extends PluginRef {
@@ -119,6 +119,9 @@ function normalizeModule(namespace: unknown, descriptor: FrontendModuleDescripto
   }
   if (exported.id === "ui.structure.layout" && typeof exported.Shell === "function") {
     return { provenance, structureLayout: exported as unknown as StructureLayoutAdapter, hot, localization };
+  }
+  if (exported.id === "ui.workflow.workbench" && typeof exported.CollectionPage === "function") {
+    return { provenance, workbench: exported as unknown as UIWorkbenchAdapter, hot, localization };
   }
   if (typeof exported.register === "function") {
     return { provenance, register: exported.register.bind(exported) as FrontendPluginModule["register"], hot, localization };

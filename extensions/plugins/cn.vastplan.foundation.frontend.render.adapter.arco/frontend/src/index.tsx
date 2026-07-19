@@ -218,7 +218,7 @@ function buttonProps({ kind }: Pick<ButtonProps, "kind">): { type?: "primary" | 
   return { type: "secondary" };
 }
 
-function Table({ columns, rows, rowKey = "id", loading, empty }: TableProps) {
+function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty }: TableProps) {
   return <ArcoTable
     columns={columns.map((column) => ({
       title: column.title,
@@ -228,6 +228,11 @@ function Table({ columns, rows, rowKey = "id", loading, empty }: TableProps) {
     }))}
     data={rows as Array<Record<string, unknown>>}
     rowKey={typeof rowKey === "string" ? rowKey : (row: Record<string, unknown>) => rowKey(row)}
+    rowSelection={selection === "none" ? undefined : {
+      type: selection === "multiple" ? "checkbox" : "radio",
+      selectedRowKeys: [...selectedRowKeys],
+      onChange: (keys: (string | number)[]) => onSelectionChange?.(keys.map(String)),
+    }}
     loading={loading}
     pagination={false}
     noDataElement={empty}

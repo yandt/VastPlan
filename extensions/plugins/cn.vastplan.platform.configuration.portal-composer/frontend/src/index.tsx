@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormSchema, FrontendPluginContext, JSONValue, PortalApplicationComposition, PortalAuditEvent, PortalFetch, PortalRevision, StatusTone } from "@vastplan/ui-primitives";
 import { jsonSchemaDialect, message, PortalControlClient, PortalControlError, usePortalI18n, usePortalMessages, usePortalUI } from "@vastplan/ui-primitives";
 import { governanceMessages, GovernanceWorkspaces } from "./governance-workspaces";
+import { defineCollectionPage, type WorkbenchPluginContext } from "@vastplan/workbench-sdk";
 
 const namespace = "cn.vastplan.platform.configuration.portal-composer";
 
@@ -137,6 +138,42 @@ const errorMessages: Record<string, string> = {
   session_required: "登录会话已失效。",
   network_unavailable: "无法连接 Portal Edge。",
 };
+
+/** First Workbench fixture: the revision browser is intentionally data-only. */
+export const portalRevisionsWorkbenchPage = defineCollectionPage<Record<string, unknown>>({
+  id: "platform.portal-composer.revisions",
+  path: "/settings/portal-revisions",
+  title: message(namespace, "page.revisions.title", "Portal Revisions"),
+  description: message(namespace, "page.revisions.description", "浏览并筛选门户组合 revision"),
+  navigation: { id: "platform.portal-composer.revisions", label: message(namespace, "page.revisions.navigation", "Portal Revisions"), zone: "settings", order: 11 },
+  collection: {
+    id: "portal-composer.revisions",
+    title: message(namespace, "panel.revisions", "Revisions"),
+    view: "table",
+    query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
+    filters: [
+      { id: "portal", label: message(namespace, "filter.portal", "Portal"), kind: "text" },
+      { id: "status", label: message(namespace, "filter.status", "状态"), kind: "select", options: ["Draft", "PendingApproval", "Approved", "Published"].map((value) => ({ value, label: message(namespace, `status.${value}`, value) })) },
+    ],
+    columns: [
+      { key: "id", label: message(namespace, "column.revision", "Revision"), defaultVisible: true, minWidth: 100 },
+      { key: "portalId", label: message(namespace, "filter.portal", "Portal"), defaultVisible: true, minWidth: 180 },
+      { key: "status", label: message(namespace, "column.status", "状态"), defaultVisible: true, minWidth: 140 },
+      { key: "updatedAt", label: message(namespace, "column.updated", "更新时间"), defaultVisible: true, minWidth: 180 },
+    ],
+    selection: "single",
+    preferences: { allowedColumns: ["id", "portalId", "status", "updatedAt"], density: true },
+  },
+  async load(query, signal) {
+    const revisions = await createDefaultClient().list();
+    if (signal.aborted) throw new DOMException("aborted", "AbortError");
+    const portal = typeof query.filters.portal === "string" ? query.filters.portal.trim().toLowerCase() : "";
+    const status = typeof query.filters.status === "string" ? query.filters.status : "";
+    const filtered = revisions.filter((revision) => (portal === "" || revision.portalId.toLowerCase().includes(portal)) && (status === "" || revision.status === status));
+    const start = (query.page - 1) * query.pageSize;
+    return { items: filtered.slice(start, start + query.pageSize) as unknown as readonly Record<string, unknown>[], total: filtered.length };
+  },
+});
 
 export function PortalComposerView({ client: suppliedClient }: { client?: PortalControlClient } = {}) {
   const client = useMemo(() => suppliedClient ?? createDefaultClient(), [suppliedClient]);
@@ -323,8 +360,9 @@ function PortalGovernanceBadge() {
 }
 
 const portalComposerPlugin = {
-  register(context: FrontendPluginContext) {
+  register(context: FrontendPluginContext & WorkbenchPluginContext) {
     context.addPage({ id: "platform.portal-composer", path: "/settings/portals", title: context.i18n.message("page.title.v2","Portal 管理中心"), description: context.i18n.message("page.description.v2","治理 Platform Profiles、Portals 与不可变 Activation"), navigation: { id: "platform.portal-composer", label: context.i18n.message("page.navigation.v2","Portal 管理"), zone: "settings", order: 10 }, slots: [{ id: "governance", slot: "page.header.end", component: PortalGovernanceBadge, order: 10 }, { id: "body", slot: "page.body.main", component: PortalComposerView }] });
+    context.addCollectionPage(portalRevisionsWorkbenchPage);
   },
   localization:{defaultLocale:"zh-CN",messages:{
     "zh-CN":{"form.name":"名称","form.route":"访问路径","form.domains":"绑定域名","form.audience":"目标受众","form.branding":"品牌配置","form.plugins":"应用功能插件","form.pluginId":"插件 ID","form.version":"精确版本","form.channel":"发布通道","form.stable":"稳定版","form.preview":"预发布","form.config":"非敏感插件配置","help.route":"必须以 / 开始；同一租户内不能与其他已发布 Portal 冲突","help.domains":"留空表示不限制域名","help.audience":"只声明可见受众，不替代服务端授权","help.branding":"只能保存非敏感 JSON 品牌配置","help.plugins":"这里只能选择应用插件；设计系统和平台插件由 Platform Profile 管理","help.config":"禁止写入密码、令牌或凭证明文","notice.failed":"{title}失败","notice.created":"草稿已创建","notice.saved":"草稿已保存","action.refresh":"刷新","action.new":"新建草稿","panel.revisions":"Revisions","empty.revisions":"尚无 Portal revision","column.status":"状态","status.activeSuffix":" · 活动","column.updated":"更新时间","panel.new":"新建草稿","field.submitted":"提交人","field.approved":"审批人","field.published":"发布人","action.create":"创建草稿","action.save":"保存草稿","notice.submitted":"已提交审批","confirm.submit":"提交后不能继续编辑，需要由另一位审批人处理。","action.submit":"提交审批","notice.approved":"已批准","confirm.approve":"确认该 revision 的插件、路由和配置可以发布？","action.approve":"批准","notice.published":"已发布","confirm.publish":"发布会把该 revision 设为当前活动版本。","action.publish":"发布","notice.rolledBack":"已回滚","confirm.rollback":"系统将基于当前平台基线重新解析该历史版本并创建新的活动 revision。","action.rollback":"回滚到此版本","action.diff":"查看差异","action.audit":"审计记录","dialog.diff":"Revision #{id} 差异","diff.active":"当前活动版本","diff.activeRevision":"活动版本 #{id}","diff.selected":"所选版本","diff.selectedRevision":"所选版本 #{id}","diff.empty":"无","dialog.audit":"Revision #{id} 审计","empty.audit":"尚无审计记录","column.time":"时间","column.action":"动作","column.actor":"操作者","column.priority":"级别","column.reason":"原因","error.forbidden":"当前账号没有执行此操作的权限，或提交人与审批人相同。","error.transition_rejected":"当前 revision 状态不允许此操作，或制品/路由校验失败。","error.csrf_rejected":"安全令牌已失效，请重试。","error.session_required":"登录会话已失效。","error.network_unavailable":"无法连接 Portal Edge。","error.rejected":"请求被拒绝（{code}）","error.unknown":"未知错误","badge.governance":"平台治理","page.title":"门户与插件组合","page.description":"治理 Portal 草稿、审批、发布与回滚","page.navigation":"门户组合"},

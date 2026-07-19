@@ -132,8 +132,15 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 	if !pluginid.IsFirstPartyID(spec.StructureComposition.ID) || !pluginid.IsFirstPartyID(spec.StructureLayout.ID) {
 		return nil, errors.New("Portal Shell 组合与布局必须是第一方插件")
 	}
-	if spec.RenderAdapter.ID == spec.StructureComposition.ID || spec.RenderAdapter.ID == spec.StructureLayout.ID || spec.StructureComposition.ID == spec.StructureLayout.ID {
-		return nil, errors.New("Portal 设计系统、Shell 组合与布局必须来自独立插件")
+	if !pluginid.IsFirstPartyID(spec.Workbench.ID) {
+		return nil, errors.New("Portal Workbench 必须是第一方插件")
+	}
+	foundationIDs := map[string]struct{}{}
+	for _, id := range []string{spec.RenderAdapter.ID, spec.StructureComposition.ID, spec.StructureLayout.ID, spec.Workbench.ID} {
+		if _, exists := foundationIDs[id]; exists {
+			return nil, errors.New("Portal 设计系统、Shell 组合、布局与 Workbench 必须来自独立插件")
+		}
+		foundationIDs[id] = struct{}{}
 	}
 	seen := map[string]struct{}{}
 	selected := map[string]pluginv1.Manifest{}
@@ -175,10 +182,12 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		isSelectedRenderAdapter := samePortalRef(ref, spec.RenderAdapter.PluginRef)
 		isSelectedComposition := samePortalRef(ref, spec.StructureComposition.PluginRef)
 		isSelectedLayout := samePortalRef(ref, spec.StructureLayout.PluginRef)
+		isSelectedWorkbench := samePortalRef(ref, spec.Workbench.PluginRef)
 		var frontendContributions struct {
 			RenderAdapters        []json.RawMessage `json:"renderAdapters"`
 			StructureCompositions []json.RawMessage `json:"structureCompositions"`
 			StructureLayouts      []json.RawMessage `json:"structureLayouts"`
+			Workbenches           []json.RawMessage `json:"workbenches"`
 		}
 		if err := json.Unmarshal(manifest.Contributes["frontend"], &frontendContributions); err != nil {
 			return nil, fmt.Errorf("解析插件 %s 前端贡献: %w", ref.ID, err)
@@ -192,6 +201,9 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		if len(frontendContributions.StructureLayouts) > 0 && !isSelectedLayout {
 			return nil, fmt.Errorf("Portal 不允许第二个 Shell 布局插件 %s", ref.ID)
 		}
+		if len(frontendContributions.Workbenches) > 0 && !isSelectedWorkbench {
+			return nil, fmt.Errorf("Portal 不允许第二个 Workbench 插件 %s", ref.ID)
+		}
 		if isSelectedRenderAdapter {
 			selected["design"] = manifest
 		}
@@ -201,15 +213,18 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		if isSelectedLayout {
 			selected["structureLayout"] = manifest
 		}
+		if isSelectedWorkbench {
+			selected["workbench"] = manifest
+		}
 	}
 	if len(seen) != len(spec.Resolution.PluginOrigins) {
 		return nil, errors.New("Portal 解析来源包含未部署插件")
 	}
-	if spec.Resolution.PluginOrigins[spec.RenderAdapter.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.StructureComposition.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.StructureLayout.ID] != compositioncommonv1.OriginPlatformProfile {
-		return nil, errors.New("Portal 设计系统、Shell 组合与布局必须来自 Platform Profile")
+	if spec.Resolution.PluginOrigins[spec.RenderAdapter.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.StructureComposition.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.StructureLayout.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.Workbench.ID] != compositioncommonv1.OriginPlatformProfile {
+		return nil, errors.New("Portal 设计系统、Shell 组合、布局与 Workbench 必须来自 Platform Profile")
 	}
-	if selected["design"].ID == "" || selected["structureComposition"].ID == "" || selected["structureLayout"].ID == "" {
-		return nil, errors.New("所选设计系统、Shell 组合或布局不在 Portal plugins 中")
+	if selected["design"].ID == "" || selected["structureComposition"].ID == "" || selected["structureLayout"].ID == "" || selected["workbench"].ID == "" {
+		return nil, errors.New("所选设计系统、Shell 组合、布局或 Workbench 不在 Portal plugins 中")
 	}
 	var contribution struct {
 		RenderAdapters []struct {
@@ -229,6 +244,9 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 			}
 			if !hasShellFoundationContribution(selected["structureLayout"], "structureLayouts", "ui.structure.layout", spec.StructureLayout.UIContract) {
 				return nil, errors.New("Shell 布局插件未提供匹配的 ui.structure.layout 贡献")
+			}
+			if !hasShellFoundationContribution(selected["workbench"], "workbenches", "ui.workflow.workbench", spec.Workbench.UIContract) {
+				return nil, errors.New("Workbench 插件未提供匹配的 ui.workflow.workbench 贡献")
 			}
 			return verified, nil
 		}

@@ -26,6 +26,9 @@ importers:
       '@vastplan/ui-primitives':
         specifier: workspace:*
         version: link:../../../extensions/sdk/ts/ui-primitives
+      '@vastplan/workbench-sdk':
+        specifier: workspace:*
+        version: link:../../../extensions/sdk/ts/workbench-sdk
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -183,6 +186,31 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
+  extensions/plugins/cn.vastplan.foundation.frontend.workflow.workbench/frontend:
+    dependencies:
+      '@vastplan/ui-contract':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/ui-contract
+      '@vastplan/ui-primitives':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/ui-primitives
+      '@vastplan/workbench-sdk':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/workbench-sdk
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.23
+        version: 18.3.31
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7
+
   extensions/plugins/cn.vastplan.platform.artifacts.repository/frontend:
     dependencies:
       '@vastplan/platform-admin':
@@ -226,6 +254,9 @@ importers:
       '@vastplan/ui-primitives':
         specifier: workspace:*
         version: link:../../../sdk/ts/ui-primitives
+      '@vastplan/workbench-sdk':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/workbench-sdk
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -329,6 +360,9 @@ importers:
       '@vastplan/ui-contract':
         specifier: workspace:*
         version: link:../ui-contract
+      '@vastplan/workbench-sdk':
+        specifier: workspace:*
+        version: link:../workbench-sdk
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -345,6 +379,19 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+
+  extensions/sdk/ts/workbench-sdk:
+    dependencies:
+      '@vastplan/ui-contract':
+        specifier: workspace:*
+        version: link:../ui-contract
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7
 
 packages:
 

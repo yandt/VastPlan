@@ -7,7 +7,8 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@vastplan/ui-contract": "workspace:*"
+    "@vastplan/ui-contract": "workspace:*",
+    "@vastplan/workbench-sdk": "workspace:*"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

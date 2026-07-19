@@ -12,6 +12,7 @@ import {
   Card,
   CardContent,
   CardHeader,
+  Checkbox,
   CircularProgress,
   Dialog as MuiDialog,
   DialogActions,
@@ -210,11 +211,18 @@ function FormRenderer({ schema, value, onChange, readOnly, submitting, onValidat
   ><></></RJSFForm>;
 }
 
-function Table({ columns, rows, rowKey = "id", loading, empty }: TableProps) {
-  return <Paper variant="outlined"><MuiTable><TableHead><TableRow>{columns.map((column) => <TableCell key={column.key} sx={{ width: column.width }}>{column.title}</TableCell>)}</TableRow></TableHead><TableBody>
+function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty }: TableProps) {
+  const keyOf = (row: Readonly<Record<string, unknown>>) => typeof rowKey === "string" ? String(row[rowKey]) : rowKey(row);
+  const selected = new Set(selectedRowKeys);
+  const toggle = (key: string) => {
+    if (selection === "single") { onSelectionChange?.(selected.has(key) ? [] : [key]); return; }
+    const next = new Set(selected); next.has(key) ? next.delete(key) : next.add(key); onSelectionChange?.([...next]);
+  };
+  const toggleAll = () => onSelectionChange?.(selected.size === rows.length ? [] : rows.map(keyOf));
+  return <Paper variant="outlined"><MuiTable><TableHead><TableRow>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={rows.length > 0 && selected.size === rows.length} indeterminate={selected.size > 0 && selected.size < rows.length} onChange={toggleAll} inputProps={{ "aria-label": "select rows" }} /></TableCell>}{columns.map((column) => <TableCell key={column.key} sx={{ width: column.width }}>{column.title}</TableCell>)}</TableRow></TableHead><TableBody>
     {loading ? <TableRow><TableCell colSpan={columns.length}><CircularProgress size={20} /></TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={columns.length}>{empty}</TableCell></TableRow> : rows.map((row, index) => {
-      const key = typeof rowKey === "string" ? String(row[rowKey]) : rowKey(row);
-      return <TableRow key={key}>{columns.map((column) => <TableCell key={column.key}>{column.render?.(row[column.key], row, index) ?? String(row[column.key] ?? "")}</TableCell>)}</TableRow>;
+      const key = keyOf(row);
+      return <TableRow key={key} selected={selected.has(key)}>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={selected.has(key)} onChange={() => toggle(key)} inputProps={{ "aria-label": `select ${key}` }} /></TableCell>}{columns.map((column) => <TableCell key={column.key}>{column.render?.(row[column.key], row, index) ?? String(row[column.key] ?? "")}</TableCell>)}</TableRow>;
     })}
   </TableBody></MuiTable></Paper>;
 }

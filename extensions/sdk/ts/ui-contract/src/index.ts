@@ -30,6 +30,52 @@ export interface FormValidationIssue {
 }
 export interface FormValidationResult { valid: boolean; issues: FormValidationIssue[]; }
 
+/**
+ * Serializable collection presentation. Runtime loaders and action handlers live
+ * in @vastplan/workbench-sdk so this contract remains portable to Mobile/Runner.
+ */
+export type CollectionView = "table" | "cards";
+export type CollectionQueryMode = "page" | "cursor";
+export type CollectionFilterKind = "text" | "select" | "boolean" | "numberRange" | "dateRange";
+export type CollectionSelectionMode = "none" | "single" | "multiple";
+export type CollectionActionPlacement = "page.primary" | "page.secondary" | "collection.toolbar" | "collection.bulk" | "record.row" | "card.footer";
+
+export interface FilterOption { value: string; label: import("./i18n.js").LocalizedText; }
+export interface FilterSpec {
+  id: string;
+  label: import("./i18n.js").LocalizedText;
+  kind: CollectionFilterKind;
+  options?: readonly FilterOption[];
+  sensitive?: boolean;
+}
+export interface ColumnSpec {
+  key: string;
+  label: import("./i18n.js").LocalizedText;
+  sortable?: boolean;
+  defaultVisible?: boolean;
+  minWidth?: number;
+  maxWidth?: number;
+}
+export interface ActionSpec {
+  id: string;
+  label: import("./i18n.js").LocalizedText;
+  placement: CollectionActionPlacement;
+  tone?: "primary" | "secondary" | "danger";
+  requiresSelection?: boolean;
+  confirm?: import("./i18n.js").LocalizedText;
+}
+export interface CollectionSpec {
+  id: string;
+  title: import("./i18n.js").LocalizedText;
+  view: CollectionView;
+  query: { mode: CollectionQueryMode; defaultPageSize: number; pageSizeOptions: readonly number[] };
+  filters?: readonly FilterSpec[];
+  columns: readonly ColumnSpec[];
+  selection?: CollectionSelectionMode;
+  actions?: readonly ActionSpec[];
+  preferences?: { allowedColumns?: readonly string[]; density?: boolean };
+}
+
 export type InteractionKind = "confirm" | "form" | "approval" | "notification" | "progress";
 export type InteractionSurface = "frontend" | "mobile" | "runner.local";
 export interface InteractionSource { workflowRunId?: string; capability: string; operation?: string; }

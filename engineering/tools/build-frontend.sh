@@ -20,7 +20,7 @@ case "${PORTAL_DEV_HMR:-0}" in
   *) echo "PORTAL_DEV_HMR 只接受 0/1/false/true" >&2; exit 2 ;;
 esac
 common=(--bundle --format=esm --platform=browser --target=es2022 --legal-comments=none --minify '--define:process.env.NODE_ENV="production"' "--define:__VASTPLAN_DEV_HMR__=$DEV_HMR")
-shared=(--external:react --external:react/jsx-runtime --external:react-dom --external:react-dom/client --external:@vastplan/ui-primitives --external:@vastplan/ui-contract)
+shared=(--external:react --external:react/jsx-runtime --external:react-dom --external:react-dom/client --external:@vastplan/ui-primitives --external:@vastplan/ui-contract --external:@vastplan/workbench-sdk)
 
 pnpm exec esbuild core/kernels/frontend/src/browser.tsx "${common[@]}" "${shared[@]}" --outfile="$ASSETS/portal-kernel.js"
 pnpm exec esbuild core/kernels/frontend/src/vendor/react-stack.ts "${common[@]}" --outfile="$VENDOR/react-stack.js"
@@ -43,6 +43,7 @@ node --no-warnings --input-type=module -e '
 ' "$VENDOR/"
 pnpm exec esbuild core/kernels/frontend/src/vendor/ui-contract.ts "${common[@]}" --outfile="$VENDOR/ui-contract.js"
 pnpm exec esbuild core/kernels/frontend/src/vendor/ui-primitives.ts "${common[@]}" --external:react --external:@vastplan/ui-contract --outfile="$VENDOR/ui-primitives.js"
+pnpm exec esbuild core/kernels/frontend/src/vendor/workbench-sdk.ts "${common[@]}" --external:@vastplan/ui-contract --outfile="$VENDOR/workbench-sdk.js"
 
 pnpm run build:frontend:plugins
 cp core/kernels/frontend/static/index.html "$OUT_DIR/index.html"

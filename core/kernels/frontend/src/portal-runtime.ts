@@ -1,5 +1,6 @@
+import { createElement } from "react";
 import { message, pageSlotIDs, shellSlotIDs } from "@vastplan/ui-primitives";
-import type { UIRenderAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, StructureCompositionAdapter, StructureLayoutAdapter, UICapability } from "@vastplan/ui-primitives";
+import type { UIRenderAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, StructureCompositionAdapter, StructureLayoutAdapter, UICapability, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 
 export interface PluginRef {
   id: string;
@@ -13,6 +14,7 @@ export interface RenderAdapterSelection extends PluginRef {
 
 export interface StructureCompositionSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
 export interface StructureLayoutSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
+export interface WorkbenchSelection extends PluginRef { uiContract: string; }
 
 export interface PortalSpec {
   revision: number;
@@ -24,6 +26,7 @@ export interface PortalSpec {
   renderAdapter: RenderAdapterSelection;
   structureComposition: StructureCompositionSelection;
   structureLayout: StructureLayoutSelection;
+  workbench: WorkbenchSelection;
   plugins: readonly PluginRef[];
   management: {
     tenantId: string;
@@ -59,6 +62,7 @@ export interface FrontendPluginModule {
   renderAdapter?: UIRenderAdapter;
   structureComposition?: StructureCompositionAdapter;
   structureLayout?: StructureLayoutAdapter;
+  workbench?: UIWorkbenchAdapter;
   register?(context: FrontendPluginContext): void | Promise<void>;
   hot?: FrontendPluginHotLifecycle;
   localization?: PluginLocalization;
@@ -73,6 +77,7 @@ export interface PreparedPortal {
   renderAdapter: UIRenderAdapter;
   structureComposition: StructureCompositionAdapter;
   structureLayout: StructureLayoutAdapter;
+  workbench: UIWorkbenchAdapter;
   pages: readonly PortalRegisteredPage[];
   shellContributions: readonly PortalRegisteredShellContribution[];
   modules: readonly PreparedFrontendPlugin[];
@@ -145,6 +150,12 @@ export class PortalRuntime {
     if (layout?.id !== "ui.structure.layout" || typeof layout.Shell !== "function" || !contractSatisfies(layout.uiContract, portal.structureLayout.uiContract)) {
       throw new PortalAssemblyError("SHELL_LAYOUT_INVALID", "Shell 布局插件缺失或 UI 契约不兼容");
     }
+    const workbenchModule = requiredModule(modules, portal.workbench);
+    this.assertTrustedFirstParty(workbenchModule, portal.workbench.id);
+    const workbench = workbenchModule.workbench;
+    if (workbench?.id !== "ui.workflow.workbench" || typeof workbench.CollectionPage !== "function" || !contractSatisfies(workbench.uiContract, portal.workbench.uiContract)) {
+      throw new PortalAssemblyError("WORKBENCH_INVALID", "UI Workbench 插件缺失或 UI 契约不兼容");
+    }
 
     const pages: PortalRegisteredPage[] = [];
     const seenPageIDs = new Set<string>();
@@ -168,13 +179,13 @@ export class PortalRuntime {
     }
 
     for (const ref of portal.plugins) {
-      if ([portal.renderAdapter, portal.structureComposition, portal.structureLayout].some((foundation) => samePlugin(ref, foundation))) {
+      if ([portal.renderAdapter, portal.structureComposition, portal.structureLayout, portal.workbench].some((foundation) => samePlugin(ref, foundation))) {
         continue;
       }
       const plugin = requiredModule(modules, ref);
       this.assertTrustedFirstParty(plugin, ref.id);
-      if (plugin.renderAdapter !== undefined || plugin.structureComposition !== undefined || plugin.structureLayout !== undefined) {
-        throw new PortalAssemblyError("SECOND_SHELL_FOUNDATION", "功能插件不能注册第二个设计系统、Shell 组合或布局");
+      if (plugin.renderAdapter !== undefined || plugin.structureComposition !== undefined || plugin.structureLayout !== undefined || plugin.workbench !== undefined) {
+        throw new PortalAssemblyError("SECOND_SHELL_FOUNDATION", "功能插件不能注册第二个设计系统、Shell 组合、布局或 Workbench");
       }
       const context: FrontendPluginContext = {
         portal: portalSnapshot,
@@ -216,11 +227,18 @@ export class PortalRuntime {
           if (page.navigation !== undefined) seenNavigationIDs.add(page.navigation.id);
           pages.push({ ...page, path: mountedPath, slots: [...page.slots], pluginID: ref.id });
         },
+        addCollectionPage: (page) => {
+          if (!page.id || !page.collection.id || page.collection.view !== "table" || page.collection.query.mode !== "page" || page.collection.columns.length === 0 || typeof page.load !== "function") {
+            throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${page.id}`);
+          }
+          const Page = () => createElement(workbench.CollectionPage, { page, preferenceScope: `${portal.tenantId}/${portal.id}` });
+          context.addPage({ id: page.id, path: page.path, title: page.title, description: page.description, navigation: page.navigation, slots: [{ id: "workbench.collection", slot: "page.body.main", component: Page }] });
+        },
       };
       await plugin.register?.(context);
     }
     const preparedModules = portal.plugins.map((ref) => Object.freeze({ ref: Object.freeze({ ...ref }), module: requiredModule(modules, ref) }));
-    return Object.freeze({ portal: portalSnapshot, renderAdapter, structureComposition: composition, structureLayout: layout, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
+    return Object.freeze({ portal: portalSnapshot, renderAdapter, structureComposition: composition, structureLayout: layout, workbench, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
   }
 
   private validatePortalShape(portal: PortalSpec): void {
@@ -237,9 +255,9 @@ export class PortalRuntime {
     if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
       throw new PortalAssemblyError("RESOLUTION_INVALID", "Portal 输入解析锁无效");
     }
-    const foundations = [portal.renderAdapter, portal.structureComposition, portal.structureLayout];
+    const foundations = [portal.renderAdapter, portal.structureComposition, portal.structureLayout, portal.workbench];
     if (new Set(foundations.map((item) => item.id)).size !== foundations.length || foundations.some((selected) => portal.plugins.filter((ref) => samePlugin(ref, selected)).length !== 1)) {
-      throw new PortalAssemblyError("SHELL_FOUNDATION_SELECTION", "Portal 必须精确包含相互独立的设计系统、Shell 组合与布局插件");
+      throw new PortalAssemblyError("SHELL_FOUNDATION_SELECTION", "Portal 必须精确包含相互独立的设计系统、Shell 组合、布局与 Workbench 插件");
     }
     const pluginIDs = new Set(portal.plugins.map((ref) => ref.id));
     if (foundations.some((selected) => portal.resolution.pluginOrigins[selected.id] !== "platform-profile") ||
