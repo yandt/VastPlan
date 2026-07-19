@@ -19,6 +19,27 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
+func TestConvergenceSummaryDetectsOnlyMeaningfulChanges(t *testing.T) {
+	base := convergenceSummary{generation: 1, nodes: 1, compositionStatus: "Ready", units: 5, hasComposition: true}
+	same := base
+	if shouldLogConvergence(&base, same) {
+		t.Fatal("相同收敛摘要不得重复记录")
+	}
+	changed := base
+	changed.units = 1
+	if !shouldLogConvergence(&base, changed) {
+		t.Fatal("组合 unit 变化必须被识别为状态变化")
+	}
+	changed = base
+	changed.generation = 2
+	if !shouldLogConvergence(&base, changed) {
+		t.Fatal("调度 generation 变化必须被识别为状态变化")
+	}
+	if !shouldLogConvergence(nil, base) {
+		t.Fatal("首次收敛必须记录")
+	}
+}
+
 func TestSchedulerReplicasPlacementScaleAndNodeLoss(t *testing.T) {
 	_, buckets := startSchedulerNATS(t)
 	ctx := context.Background()

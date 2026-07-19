@@ -548,6 +548,21 @@ type Controller struct {
 	Logf          func(string, ...any)
 }
 
+// convergenceSummary 是一次成功对账中值得写入 INFO 的稳定业务摘要。
+// 节点续租和实际态 checkpoint 都会产生 KV 事件；相同摘要不应被误解为
+// 一次新的调度状态变化。
+type convergenceSummary struct {
+	generation        uint64
+	nodes             int
+	compositionStatus string
+	units             int
+	hasComposition    bool
+}
+
+func shouldLogConvergence(last *convergenceSummary, current convergenceSummary) bool {
+	return last == nil || *last != current
+}
+
 func (c Controller) Run(ctx context.Context) error {
 	if c.Deployments == nil || c.DeploymentKey == "" || c.Leaders == nil || c.Identity == "" {
 		return errors.New("controller deployment/leader KV、deployment key 与 identity 未配置")
@@ -630,6 +645,7 @@ func (c Controller) runAsLeader(ctx context.Context) error {
 	if actualWatcher != nil {
 		actualUpdates = actualWatcher.Updates()
 	}
+	var lastSummary *convergenceSummary
 	reconcile := func(reason string) {
 		entry, err := c.Deployments.Get(ctx, c.DeploymentKey)
 		if err != nil {
@@ -641,13 +657,22 @@ func (c Controller) runAsLeader(ctx context.Context) error {
 			var plan Plan
 			plan, err = c.Scheduler.Reconcile(ctx, deployment)
 			if err == nil {
-				c.Logf("调度已收敛 reason=%s generation=%d nodes=%d", reason, plan.Generation, len(plan.Assignments))
+				summary := convergenceSummary{generation: plan.Generation, nodes: len(plan.Assignments)}
 				if c.Scheduler.Actual != nil {
 					if report, observeErr := c.Scheduler.ObserveComposition(ctx, deployment); observeErr == nil {
-						c.Logf("组合状态 reason=%s status=%s units=%d", reason, report.Status, len(report.Units))
+						summary.compositionStatus = string(report.Status)
+						summary.units = len(report.Units)
+						summary.hasComposition = true
 					} else {
 						c.Logf("组合状态观测失败 reason=%s: %v", reason, observeErr)
 					}
+				}
+				if shouldLogConvergence(lastSummary, summary) {
+					c.Logf("调度已收敛 reason=%s generation=%d nodes=%d", reason, plan.Generation, len(plan.Assignments))
+					if summary.hasComposition {
+						c.Logf("组合状态 reason=%s status=%s units=%d", reason, summary.compositionStatus, summary.units)
+					}
+					lastSummary = &summary
 				}
 			}
 		}

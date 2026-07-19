@@ -154,7 +154,13 @@ func (o *Observer) BeginCall(ctx context.Context, callCtx *contractv1.CallContex
 		if err != nil {
 			endAttrs = append(endAttrs, "error", err.Error())
 		}
-		o.Logger.Log(ctx, slog.LevelInfo, "kernel call finished", endAttrs...)
+		// 成功调用在高频健康检查、门户预取等路径中十分常见；保留完整
+		// trace/metrics，但避免把每一次正常完成都写入生产 INFO 日志。
+		level := slog.LevelDebug
+		if err != nil || status != "STATUS_OK" {
+			level = slog.LevelWarn
+		}
+		o.Logger.Log(ctx, level, "kernel call finished", endAttrs...)
 	}
 }
 
