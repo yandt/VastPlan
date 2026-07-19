@@ -111,7 +111,12 @@ function normalizeModule(namespace: unknown, descriptor: FrontendModuleDescripto
   const provenance = { signed: true, firstParty: true, integrity: `sha256:${descriptor.sha256}` };
   const hot = normalizeHotLifecycle(exported.hot, descriptor.id);
   const localization = normalizeLocalizationExport(exported.localization, descriptor.id);
-  if (exported.id === "ui.render.adapter" && typeof exported.Provider === "function") {
+  if (
+    exported.id === "ui.render.adapter"
+    && typeof exported.uiContract === "string"
+    && typeof exported.defaultRenderer === "string"
+    && Array.isArray(exported.renderers)
+  ) {
     return { provenance, renderAdapter: exported as unknown as UIRenderAdapter, hot, localization };
   }
   if (exported.id === "ui.structure.shell" && typeof exported.compose === "function" && typeof exported.Shell === "function") {

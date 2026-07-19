@@ -43,6 +43,25 @@ describe("VerifiedFrontendPluginLoader", () => {
     await expect(malformed.load(ref)).rejects.toMatchObject({ code: "MODULE_HOT_INVALID" } satisfies Partial<ModuleLoadError>);
   });
 
+  it("recognizes a unified render-adapter catalog without a top-level Provider", async () => {
+    const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.render.adapter" });
+    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({
+      default: {
+        id: "ui.render.adapter",
+        uiContract: "4.0.0",
+        defaultRenderer: "arco",
+        renderers: [{ id: "arco", Provider() {} }],
+      },
+    }));
+
+    const loaded = await loader.load({ id: locked.id, version: locked.version });
+    expect(loaded.renderAdapter).toMatchObject({
+      id: "ui.render.adapter",
+      defaultRenderer: "arco",
+      renderers: [{ id: "arco" }],
+    });
+  });
+
   it("fails closed before import when bytes do not match the runtime lock", async () => {
     const locked = await descriptor({ sha256: "b".repeat(64), url: `/v1/portal-modules/7/${"b".repeat(64)}.js` });
     const importer = vi.fn();
