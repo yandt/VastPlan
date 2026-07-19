@@ -136,6 +136,8 @@ func (h *frontendHMR) sourceSignatures() (frontendSourceSignatures, error) {
 		"extensions/sdk/ts/ui-primitives/package.json",
 		"extensions/sdk/ts/ui-contract/src",
 		"extensions/sdk/ts/ui-contract/package.json",
+		"extensions/sdk/ts/workbench-sdk/src",
+		"extensions/sdk/ts/workbench-sdk/package.json",
 		"engineering/tools/build-frontend.sh",
 		"engineering/tools/build-frontend-plugins.mjs",
 		"package.json",

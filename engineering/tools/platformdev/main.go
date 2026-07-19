@@ -222,6 +222,7 @@ func (r *runtime) packageArtifacts(ctx context.Context) error {
 		{id: "cn.vastplan.foundation.frontend.structure.composition.standard", frontend: true},
 		{id: "cn.vastplan.foundation.frontend.structure.layout.standard", frontend: true},
 		{id: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", frontend: true},
+		{id: "cn.vastplan.foundation.frontend.workflow.workbench", frontend: true},
 		{id: "cn.vastplan.platform.configuration.portal-composer", backend: true, frontend: true},
 		{id: "cn.vastplan.platform.configuration.global-settings", backend: true, frontend: true},
 		{id: "cn.vastplan.platform.security.credentials", backend: true, frontend: true},

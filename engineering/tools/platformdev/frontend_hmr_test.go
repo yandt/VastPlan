@@ -114,10 +114,12 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 		"core/kernels/frontend/src/browser.tsx":                        "host-v1",
 		"core/kernels/frontend/static/index.html":                      "host-v1",
 		"core/kernels/frontend/package.json":                           "{}",
-		"extensions/sdk/ts/ui-primitives/src/index.ts":                     "ui-primitives-v1",
-		"extensions/sdk/ts/ui-primitives/package.json":                     "{}",
+		"extensions/sdk/ts/ui-primitives/src/index.ts":                 "ui-primitives-v1",
+		"extensions/sdk/ts/ui-primitives/package.json":                 "{}",
 		"extensions/sdk/ts/ui-contract/src/index.ts":                   "contract-v1",
 		"extensions/sdk/ts/ui-contract/package.json":                   "{}",
+		"extensions/sdk/ts/workbench-sdk/src/index.ts":                 "workbench-v1",
+		"extensions/sdk/ts/workbench-sdk/package.json":                 "{}",
 		"engineering/tools/build-frontend.sh":                          "build-v1",
 		"engineering/tools/build-frontend-plugins.mjs":                 "build-v1",
 		"package.json":        "{}",
@@ -157,6 +159,14 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	}
 	if hostChange.host == pluginChange.host || hostChange.plugins != pluginChange.plugins {
 		t.Fatalf("host change signatures = %#v, plugin = %#v", hostChange, pluginChange)
+	}
+	write("extensions/sdk/ts/workbench-sdk/src/index.ts", "workbench-v2")
+	workbenchChange, err := hmr.sourceSignatures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workbenchChange.host == hostChange.host || workbenchChange.plugins != hostChange.plugins {
+		t.Fatalf("workbench change signatures = %#v, host = %#v", workbenchChange, hostChange)
 	}
 }
 
