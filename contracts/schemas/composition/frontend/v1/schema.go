@@ -47,6 +47,9 @@ type PluginRef struct {
 type RenderAdapter struct {
 	PluginRef
 	UIContract string `json:"uiContract"`
+	// Config is adapter-private, non-sensitive Profile configuration. It may
+	// select a declared semantic theme but cannot carry arbitrary CSS.
+	Config map[string]any `json:"config,omitempty"`
 }
 
 // StructureComposition fixes the platform-owned semantic page and slot topology.
@@ -85,6 +88,9 @@ type StructureLayout struct {
 type Workbench struct {
 	PluginRef
 	UIContract string `json:"uiContract"`
+	// Config selects governed presentation profiles; functional plugins cannot
+	// replace it through Application Composition.
+	Config map[string]any `json:"config,omitempty"`
 }
 
 type SecurityPolicy struct {

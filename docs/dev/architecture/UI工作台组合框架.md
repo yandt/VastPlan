@@ -27,7 +27,7 @@ flowchart TB
 
 ## 2. 运行与装配
 
-`ui.workflow.workbench` 是 Platform Profile 中的第四个 Frontend 基础单例，与设计系统、Shell 组合和布局分别来自不同的可信首方制品。当前 Resolver 已验证前四项；第五项是完成首方页面迁移后启用的门禁：
+`ui.workflow.workbench` 是 Platform Profile 中的第四个 Frontend 基础单例，与设计系统、Shell 组合和布局分别来自不同的可信首方制品。它拥有 Pattern 展示档位而不拥有主题：首期 Collection 由 `workbench.config.collection.defaultDensity` / `allowedDensities` 治理 `compact`、`standard`、`comfortable`；颜色、字体、间距 token 与深浅主题仍只能由 `ui.render.adapter` 提供，详见 ADR-0084。当前 Resolver 已验证前四项；第五项是完成首方页面迁移后启用的门禁：
 
 1. 恰好一个 Workbench，且其 `uiContract` 主版本与设计系统、功能插件相容；
 2. Workbench 只依赖 `@vastplan/ui-primitives` 和 `@vastplan/ui-contract` 的共享单例，不能带入第二套 UI 框架；

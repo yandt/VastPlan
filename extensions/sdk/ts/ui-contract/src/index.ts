@@ -38,6 +38,7 @@ export type CollectionView = "table" | "cards";
 export type CollectionQueryMode = "page" | "cursor";
 export type CollectionFilterKind = "text" | "select" | "boolean" | "numberRange" | "dateRange";
 export type CollectionSelectionMode = "none" | "single" | "multiple";
+export type CollectionDensity = "compact" | "standard" | "comfortable";
 export type CollectionActionPlacement = "page.primary" | "page.secondary" | "collection.toolbar" | "collection.bulk" | "record.row" | "card.footer";
 
 export interface FilterOption { value: string; label: import("./i18n.js").LocalizedText; }
@@ -73,6 +74,8 @@ export interface CollectionSpec {
   columns: readonly ColumnSpec[];
   selection?: CollectionSelectionMode;
   actions?: readonly ActionSpec[];
+  /** A governed presentation preference, never arbitrary CSS or framework props. */
+  presentation?: { density?: CollectionDensity };
   preferences?: { allowedColumns?: readonly string[]; density?: boolean };
 }
 

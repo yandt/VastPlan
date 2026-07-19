@@ -147,6 +147,7 @@ export interface TableProps {
   onSelectionChange?(keys: readonly string[]): void;
   loading?: boolean;
   empty?: ReactNode;
+  density?: "compact" | "standard" | "comfortable";
 }
 
 export interface DescriptionItem { id: string; label: ReactNode; value: ReactNode; }
@@ -200,12 +201,19 @@ export interface PortalUI {
   confirm(message: { title: string; content?: string }): Promise<boolean>;
 }
 
+export interface DesignSystemTheme {
+  id: string;
+  mode: "light" | "dark" | "system";
+}
+
 export interface UIRenderAdapter {
   id: "ui.render.adapter";
   framework: string;
   uiContract: string;
   capabilities: readonly UICapability[];
-  Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection }>;
+  themes: readonly DesignSystemTheme[];
+  defaultTheme: string;
+  Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection; theme?: string }>;
   localization?: PluginLocalization;
 }
 
@@ -323,7 +331,7 @@ export interface FrontendPluginContext {
 export interface UIWorkbenchAdapter {
   id: "ui.workflow.workbench";
   uiContract: string;
-  CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string }>;
+  CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } } }>;
   localization?: PluginLocalization;
 }
 

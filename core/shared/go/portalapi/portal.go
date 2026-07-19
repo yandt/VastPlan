@@ -49,7 +49,8 @@ type PluginRef struct {
 
 type RenderAdapter struct {
 	PluginRef
-	UIContract string `json:"uiContract"`
+	UIContract string         `json:"uiContract"`
+	Config     map[string]any `json:"config,omitempty"`
 }
 
 type StructureComposition struct {
@@ -66,7 +67,8 @@ type StructureLayout struct {
 
 type Workbench struct {
 	PluginRef
-	UIContract string `json:"uiContract"`
+	UIContract string         `json:"uiContract"`
+	Config     map[string]any `json:"config,omitempty"`
 }
 
 type PortalSpec struct {

@@ -211,7 +211,7 @@ function FormRenderer({ schema, value, onChange, readOnly, submitting, onValidat
   ><></></RJSFForm>;
 }
 
-function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty }: TableProps) {
+function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard" }: TableProps) {
   const keyOf = (row: Readonly<Record<string, unknown>>) => typeof rowKey === "string" ? String(row[rowKey]) : rowKey(row);
   const selected = new Set(selectedRowKeys);
   const toggle = (key: string) => {
@@ -219,7 +219,7 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
     const next = new Set(selected); next.has(key) ? next.delete(key) : next.add(key); onSelectionChange?.([...next]);
   };
   const toggleAll = () => onSelectionChange?.(selected.size === rows.length ? [] : rows.map(keyOf));
-  return <Paper variant="outlined"><MuiTable><TableHead><TableRow>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={rows.length > 0 && selected.size === rows.length} indeterminate={selected.size > 0 && selected.size < rows.length} onChange={toggleAll} inputProps={{ "aria-label": "select rows" }} /></TableCell>}{columns.map((column) => <TableCell key={column.key} sx={{ width: column.width }}>{column.title}</TableCell>)}</TableRow></TableHead><TableBody>
+  return <Paper variant="outlined"><MuiTable size={density === "compact" ? "small" : "medium"}><TableHead><TableRow>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={rows.length > 0 && selected.size === rows.length} indeterminate={selected.size > 0 && selected.size < rows.length} onChange={toggleAll} inputProps={{ "aria-label": "select rows" }} /></TableCell>}{columns.map((column) => <TableCell key={column.key} sx={{ width: column.width }}>{column.title}</TableCell>)}</TableRow></TableHead><TableBody>
     {loading ? <TableRow><TableCell colSpan={columns.length}><CircularProgress size={20} /></TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={columns.length}>{empty}</TableCell></TableRow> : rows.map((row, index) => {
       const key = keyOf(row);
       return <TableRow key={key} selected={selected.has(key)}>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={selected.has(key)} onChange={() => toggle(key)} inputProps={{ "aria-label": `select ${key}` }} /></TableCell>}{columns.map((column) => <TableCell key={column.key}>{column.render?.(row[column.key], row, index) ?? String(row[column.key] ?? "")}</TableCell>)}</TableRow>;
@@ -228,6 +228,12 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
 }
 
 const symbols: Record<SemanticIconName, string> = { add: "+", remove: "−", edit: "✎", search: "⌕", settings: "⚙", success: "✓", warning: "!", error: "×", info: "i", close: "×", menu: "☰" };
+const muiThemes = Object.freeze([
+  { id: "light", mode: "light" as const },
+  { id: "dark", mode: "dark" as const },
+  { id: "high-contrast", mode: "dark" as const },
+]);
+function muiTheme(id: string | undefined) { return muiThemes.find((theme) => theme.id === id) ?? muiThemes[0]; }
 type MuiComponents = Omit<PortalUI, "notify" | "confirm">;
 
 export const muiPortalUIComponents: MuiComponents = {
@@ -256,7 +262,8 @@ export const muiPortalUIComponents: MuiComponents = {
   Busy: ({ label }) => <MuiStack direction="row" gap={1} alignItems="center"><CircularProgress size={20} /><span>{label}</span></MuiStack>,
 };
 
-function MuiProvider({ children, locale, direction }: { children: ReactNode; locale: string; direction: "ltr" | "rtl" }) {
+function MuiProvider({ children, locale, direction, theme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; theme?: string }) {
+  const activeTheme = muiTheme(theme);
   const i18n = usePortalI18n();
   const boundary = useRef<HTMLDivElement>(null);
   const [shadowRuntime, setShadowRuntime] = useState<{ cache: ReturnType<typeof createCache>; theme: ReturnType<typeof createTheme> }>();
@@ -266,7 +273,8 @@ function MuiProvider({ children, locale, direction }: { children: ReactNode; loc
     ...muiPortalUIComponents,
     notify: ({ title, content, kind = "info" }) => setNotice({ title, content, kind }),
     confirm: ({ title, content }) => new Promise((resolve) => setConfirmation({ title, content, resolve })),
-  }), []);
+    theme: { ...muiPortalUIComponents.theme, mode: activeTheme.mode },
+  }), [activeTheme.mode]);
   const finishConfirmation = (accepted: boolean) => {
     confirmation?.resolve(accepted);
     setConfirmation(undefined);
@@ -278,14 +286,14 @@ function MuiProvider({ children, locale, direction }: { children: ReactNode; loc
     const overlayContainer = boundary.current;
     setShadowRuntime({
       cache: createCache({ key: "vastplan-mui", container: styleContainer, prepend: true }),
-      theme: createTheme({ direction, components: {
+      theme: createTheme({ direction, palette: { mode: activeTheme.mode === "dark" ? "dark" : "light", contrastThreshold: activeTheme.id === "high-contrast" ? 7 : 3 }, components: {
         MuiModal: { defaultProps: { container: overlayContainer } },
         MuiPopover: { defaultProps: { container: overlayContainer } },
         MuiPopper: { defaultProps: { container: overlayContainer } },
       } }, locale.toLowerCase().startsWith("zh") ? zhCN : enUS),
     });
-  }, [direction, locale]);
-  return <div ref={boundary} data-vastplan-design-system="mui" lang={locale} dir={direction}>{shadowRuntime === undefined ? null : <CacheProvider value={shadowRuntime.cache}><ThemeProvider theme={shadowRuntime.theme}><ScopedCssBaseline><PortalUIProvider ui={ui}>{children}</PortalUIProvider>
+  }, [activeTheme.id, activeTheme.mode, direction, locale]);
+  return <div ref={boundary} data-vastplan-design-system="mui" data-vastplan-theme={activeTheme.id} lang={locale} dir={direction}>{shadowRuntime === undefined ? null : <CacheProvider value={shadowRuntime.cache}><ThemeProvider theme={shadowRuntime.theme}><ScopedCssBaseline><PortalUIProvider ui={ui}>{children}</PortalUIProvider>
     <Snackbar open={notice !== undefined} autoHideDuration={5000} onClose={() => setNotice(undefined)}><Alert severity={notice?.kind ?? "info"} onClose={() => setNotice(undefined)}><strong>{notice?.title}</strong>{notice?.content === undefined ? null : ` — ${notice.content}`}</Alert></Snackbar>
     <MuiDialog open={confirmation !== undefined} onClose={() => finishConfirmation(false)}><DialogTitle>{confirmation?.title}</DialogTitle><DialogContent>{confirmation?.content}</DialogContent><DialogActions><MuiButton onClick={() => finishConfirmation(false)}>{i18n.text(message(namespace, "action.cancel", "取消"))}</MuiButton><MuiButton variant="contained" onClick={() => finishConfirmation(true)}>{i18n.text(message(namespace, "action.confirm", "确认"))}</MuiButton></DialogActions></MuiDialog>
   </ScopedCssBaseline></ThemeProvider></CacheProvider>}</div>;
@@ -296,6 +304,8 @@ export const muiRenderAdapter: UIRenderAdapter = {
   framework: "mui",
   uiContract: "3.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
+  themes: muiThemes,
+  defaultTheme: "light",
   Provider: MuiProvider,
   localization: {
     defaultLocale: "zh-CN",

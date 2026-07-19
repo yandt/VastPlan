@@ -19,6 +19,8 @@ function renderAdapter(framework: string): UIRenderAdapter {
   framework,
   uiContract: "3.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"],
+  themes: [{ id: "light", mode: "light" }],
+  defaultTheme: "light",
   Provider: () => null,
   };
 }
@@ -67,6 +69,11 @@ describe("PortalRuntime", () => {
     expect(prepared.renderAdapter.framework).toBe("arco");
     expect(prepared.pages).toHaveLength(1);
     expect(prepared.pages[0]).toMatchObject({ path: "/settings/portals", pluginID: composerRef.id });
+  });
+
+  it("rejects a Profile theme not declared by the selected design system", async () => {
+    await expect(new PortalRuntime(loader()).prepare({ ...portal, renderAdapter: { ...portal.renderAdapter, config: { theme: "untrusted-css" } } }))
+      .rejects.toMatchObject({ code: "DESIGN_SYSTEM_THEME_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 
   it("registers a governed collection page through the selected Workbench", async () => {

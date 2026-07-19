@@ -116,7 +116,7 @@ export function PortalApplication({ prepared, initialPath, recoveryMode = false,
 function LocalizedPortalApplication({ prepared, pathname, onNavigate, page, recoveryMode, developmentError }: { prepared: PreparedPortal; pathname: string; onNavigate(path: string): void; page: PreparedPortal["pages"][number] | undefined; recoveryMode: boolean; developmentError?: string }) {
   const Provider = prepared.renderAdapter.Provider;
   const i18n = usePortalI18n();
-  return <Provider locale={i18n.locale} direction={i18n.direction}>
+  return <Provider locale={i18n.locale} direction={i18n.direction} theme={prepared.portal.renderAdapter.config?.theme}>
     <PortalContent prepared={prepared} pathname={pathname} onNavigate={onNavigate} page={page} recoveryMode={recoveryMode} />
     {developmentError === undefined ? null : <PortalDevelopmentNotice message={developmentError} />}
   </Provider>;

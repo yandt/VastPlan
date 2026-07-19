@@ -218,7 +218,7 @@ function buttonProps({ kind }: Pick<ButtonProps, "kind">): { type?: "primary" | 
   return { type: "secondary" };
 }
 
-function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty }: TableProps) {
+function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard" }: TableProps) {
   return <ArcoTable
     columns={columns.map((column) => ({
       title: column.title,
@@ -236,9 +236,18 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
     loading={loading}
     pagination={false}
     noDataElement={empty}
+    size={density === "compact" ? "small" : undefined}
     scroll={{ x: "max-content" }}
   />;
 }
+
+const arcoThemes = Object.freeze([
+  { id: "light", mode: "light" as const },
+  { id: "dark", mode: "dark" as const },
+  { id: "high-contrast", mode: "dark" as const },
+]);
+
+function arcoTheme(id: string | undefined) { return arcoThemes.find((theme) => theme.id === id) ?? arcoThemes[0]; }
 
 function columnsForDescriptions(columns: ResponsiveColumns | undefined): number | Record<string, number> | undefined {
   return columns;
@@ -323,7 +332,8 @@ export const arcoPortalUIComponents: ArcoComponents = {
 // shadow host instead of leaking into the surrounding page.
 export const scopedArcoCSS = scopeDocumentCSS(arcoCSS);
 
-function ArcoProvider({ children, locale, direction }: { children: ReactNode; locale: string; direction: "ltr" | "rtl" }) {
+function ArcoProvider({ children, locale, direction, theme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; theme?: string }) {
+  const activeTheme = arcoTheme(theme);
   const popupRoot = useRef<HTMLDivElement>(null);
   const requirePopupRoot = () => {
     if (popupRoot.current === null) throw new Error("Arco overlay root 尚未挂载");
@@ -338,11 +348,12 @@ function ArcoProvider({ children, locale, direction }: { children: ReactNode; lo
       if (modals.confirm === undefined) { resolve(false); return; }
       modals.confirm({ title, content, onOk: () => resolve(true), onCancel: () => resolve(false) });
     }),
-  }), [modals, notifications]);
+    theme: { ...arcoPortalUIComponents.theme, mode: activeTheme.mode },
+  }), [activeTheme.mode, modals, notifications]);
 
   return <>
     <style data-vastplan-design-system="arco">{scopedArcoCSS}</style>
-    <div ref={popupRoot} data-vastplan-design-system="arco" lang={locale} dir={direction}>
+    <div ref={popupRoot} data-vastplan-design-system="arco" data-vastplan-theme={activeTheme.id} lang={locale} dir={direction} style={{ colorScheme: activeTheme.mode === "dark" ? "dark" : "light" }}>
       <ConfigProvider getPopupContainer={requirePopupRoot} locale={locale.toLowerCase().startsWith("zh") ? zhCN : enUS}>
         <PortalUIProvider ui={ui}>{children}</PortalUIProvider>
         {notificationHolder}
@@ -357,6 +368,8 @@ export const arcoRenderAdapter: UIRenderAdapter = {
   framework: "arco",
   uiContract: "3.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
+  themes: arcoThemes,
+  defaultTheme: "light",
   Provider: ArcoProvider,
   localization: {
     defaultLocale: "zh-CN",

@@ -8,13 +8,11 @@ export interface PluginRef {
   channel?: string;
 }
 
-export interface RenderAdapterSelection extends PluginRef {
-  uiContract: string;
-}
+export interface RenderAdapterSelection extends PluginRef { uiContract: string; config?: { theme?: string }; }
 
 export interface StructureCompositionSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
 export interface StructureLayoutSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
-export interface WorkbenchSelection extends PluginRef { uiContract: string; }
+export interface WorkbenchSelection extends PluginRef { uiContract: string; config?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } }; }
 
 export interface PortalSpec {
   revision: number;
@@ -137,6 +135,11 @@ export class PortalRuntime {
     if (!requiredCapabilities.every((capability) => capabilities.has(capability))) {
       throw new PortalAssemblyError("DESIGN_SYSTEM_INCOMPLETE", "设计系统未实现 Portal 所需的全部 UI 能力");
     }
+    const configuredTheme = portal.renderAdapter.config?.theme;
+    const declaredThemes = new Set(renderAdapter.themes.map((theme) => theme.id));
+    if (!declaredThemes.has(renderAdapter.defaultTheme) || (configuredTheme !== undefined && !declaredThemes.has(configuredTheme))) {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_INVALID", `设计系统不支持主题: ${configuredTheme ?? renderAdapter.defaultTheme}`);
+    }
 
     const compositionModule = requiredModule(modules, portal.structureComposition);
     this.assertTrustedFirstParty(compositionModule, portal.structureComposition.id);
@@ -231,7 +234,7 @@ export class PortalRuntime {
           if (!page.id || !page.collection.id || page.collection.view !== "table" || page.collection.query.mode !== "page" || page.collection.columns.length === 0 || typeof page.load !== "function") {
             throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${page.id}`);
           }
-          const Page = () => createElement(workbench.CollectionPage, { page, preferenceScope: `${portal.tenantId}/${portal.id}` });
+          const Page = () => createElement(workbench.CollectionPage, { page, preferenceScope: `${portal.tenantId}/${portal.id}`, presentation: portal.workbench.config });
           context.addPage({ id: page.id, path: page.path, title: page.title, description: page.description, navigation: page.navigation, slots: [{ id: "workbench.collection", slot: "page.body.main", component: Page }] });
         },
       };

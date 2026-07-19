@@ -1,4 +1,4 @@
-import type { ActionSpec, CollectionSpec, LocalizedText } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionDensity, CollectionSpec, LocalizedText } from "@vastplan/ui-contract";
 
 export type { ActionSpec, CollectionSpec, ColumnSpec, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView } from "@vastplan/ui-contract";
 
@@ -18,6 +18,11 @@ export interface CollectionActionContext<Row extends Record<string, unknown> = R
   action: ActionSpec;
   selected: readonly Row[];
   refresh(): void;
+}
+
+/** Platform Profile policy for the collection presentation family. */
+export interface WorkbenchPresentationConfig {
+  collection?: { defaultDensity?: CollectionDensity; allowedDensities?: readonly CollectionDensity[] };
 }
 
 export interface CollectionPageDefinition<Row extends Record<string, unknown> = Record<string, unknown>> {

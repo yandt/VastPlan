@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ActionSpec, CollectionSpec, FilterSpec } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionDensity, CollectionSpec, FilterSpec } from "@vastplan/ui-contract";
 import { jsonSchemaDialect, message, usePortalI18n, usePortalUI, type FormSchema, type UIWorkbenchAdapter } from "@vastplan/ui-primitives";
-import type { CollectionActionContext, CollectionPageDefinition, CollectionQuery } from "@vastplan/workbench-sdk";
+import type { CollectionActionContext, CollectionPageDefinition, CollectionQuery, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 type Row = Record<string, unknown>;
 
-function CollectionPage({ page, preferenceScope }: { page: CollectionPageDefinition; preferenceScope: string }) {
+function CollectionPage({ page, preferenceScope, presentation }: { page: CollectionPageDefinition; preferenceScope: string; presentation?: WorkbenchPresentationConfig }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const collection = page.collection;
+  const density = collectionDensity(collection, presentation);
   const [filters, setFilters] = useState<Record<string, unknown>>({});
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState(collection.query.defaultPageSize);
@@ -71,7 +72,7 @@ function CollectionPage({ page, preferenceScope }: { page: CollectionPageDefinit
   const toolbarActions = (collection.actions ?? []).filter((action) => action.placement === "page.primary" || action.placement === "page.secondary" || action.placement === "collection.toolbar");
   const bulkActions = (collection.actions ?? []).filter((action) => action.placement === "collection.bulk");
 
-  return <ui.Stack gap="md">
+  return <ui.Stack gap={density === "compact" ? "sm" : density === "comfortable" ? "lg" : "md"}>
     {collection.filters === undefined || collection.filters.length === 0 ? null : <ui.FilterBar actions={<ui.Stack direction="row" gap="sm"><ui.Button kind="text" onClick={() => { setFilters({}); setPageNumber(1); }}>{i18n.text(message(namespace, "action.clearFilters", "清除筛选"))}</ui.Button><ui.Button kind="secondary" onClick={refresh} loading={refreshing}>{i18n.text(message(namespace, "action.refresh", "刷新"))}</ui.Button></ui.Stack>}><ui.FormRenderer schema={filterSchema(collection.filters)} value={filters} onChange={(value) => { setFilters(value); setPageNumber(1); }} /></ui.FilterBar>}
     <ui.Stack direction="row" gap="sm" wrap justify="end">
       {collection.filters === undefined || collection.filters.length === 0 ? <ui.Button kind="secondary" onClick={refresh} loading={refreshing}>{i18n.text(message(namespace, "action.refresh", "刷新"))}</ui.Button> : null}
@@ -80,10 +81,16 @@ function CollectionPage({ page, preferenceScope }: { page: CollectionPageDefinit
     </ui.Stack>
     {bulkActions.length === 0 ? null : <ui.Stack direction="row" gap="sm" wrap><span>{i18n.text(message(namespace, "selection.count", "已选择 {count} 项", { count: selected.length }))}</span>{bulkActions.map((action) => <ui.Button key={action.id} kind={action.tone ?? "secondary"} disabled={selected.length === 0} onClick={() => void runAction(action, selected)}>{i18n.text(action.label)}</ui.Button>)}</ui.Stack>}
     {failure === undefined ? null : <ui.ErrorState title={failure} retry={refresh} />}
-    <ui.Table columns={tableColumns} rows={rows} rowKey={keyOf} selection={collection.selection ?? "none"} selectedRowKeys={selectedKeys} onSelectionChange={setSelectedKeys} loading={loading} empty={<ui.EmptyState title={i18n.text(message(namespace, "empty.title", "暂无数据"))} />} />
+    <ui.Table columns={tableColumns} rows={rows} rowKey={keyOf} selection={collection.selection ?? "none"} selectedRowKeys={selectedKeys} onSelectionChange={setSelectedKeys} loading={loading} density={density} empty={<ui.EmptyState title={i18n.text(message(namespace, "empty.title", "暂无数据"))} />} />
     <ui.Pagination page={pageNumber} pageSize={pageSize} total={total} disabled={loading} onChange={(nextPage, nextSize) => { setPageNumber(nextPage); setPageSize(nextSize); }} />
     <ui.Dialog open={preferencesOpen} title={i18n.text(message(namespace, "columns.title", "列设置"))} onClose={() => setPreferencesOpen(false)} footer={<ui.Button kind="primary" onClick={() => setPreferencesOpen(false)}>{i18n.text(message(namespace, "action.done", "完成"))}</ui.Button>}><ui.Stack gap="sm">{columns.map((column, index) => <ui.Stack key={column.key} direction="row" gap="sm" align="center"><ui.Button kind="text" onClick={() => setColumns(move(columns, index, -1))} disabled={index === 0}>↑</ui.Button><ui.Button kind="text" onClick={() => setColumns(move(columns, index, 1))} disabled={index === columns.length - 1}>↓</ui.Button><ui.Button kind={column.visible ? "secondary" : "text"} onClick={() => setColumns(columns.map((item) => item.key === column.key ? { ...item, visible: !item.visible } : item))}>{column.visible ? i18n.text(message(namespace, "action.hide", "隐藏")) : i18n.text(message(namespace, "action.show", "显示"))}</ui.Button><span>{i18n.text(collection.columns.find((item) => item.key === column.key)?.label ?? message(namespace, "column.unknown", "未知列"))}</span></ui.Stack>)}</ui.Stack></ui.Dialog>
   </ui.Stack>;
+}
+
+function collectionDensity(collection: CollectionSpec, presentation: WorkbenchPresentationConfig | undefined): CollectionDensity {
+  const configured = collection.presentation?.density ?? presentation?.collection?.defaultDensity ?? "standard";
+  const allowed = presentation?.collection?.allowedDensities;
+  return allowed === undefined || allowed.includes(configured) ? configured : presentation?.collection?.defaultDensity ?? "standard";
 }
 
 function initialColumns(collection: CollectionSpec) { return collection.columns.map((column) => ({ key: column.key, visible: column.defaultVisible !== false })); }
