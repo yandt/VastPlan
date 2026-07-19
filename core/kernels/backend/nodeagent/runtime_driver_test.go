@@ -71,6 +71,28 @@ func TestManagedRuntimeDriversRequireExplicitCompatibilityDeclaration(t *testing
 	}
 }
 
+func TestDefaultManagedRuntimeDriversUseTrustedHostOverrides(t *testing.T) {
+	t.Setenv("VASTPLAN_NODE_WORKER_HOST", "/kernel/runtimehosts/node/host.mjs")
+	t.Setenv("VASTPLAN_PYTHON_SUBINTERPRETER_HOST", "/kernel/runtimehosts/python/host.py")
+	registry := DefaultExecutionDrivers()
+	node, ok := registry.Resolve("node-worker")
+	if !ok {
+		t.Fatal("缺少 node-worker 驱动")
+	}
+	nodeDriver := node.(NodeWorkerExecutionDriver)
+	if nodeDriver.Command != "node" || len(nodeDriver.HostArgs) != 1 || nodeDriver.HostArgs[0] != "/kernel/runtimehosts/node/host.mjs" {
+		t.Fatalf("Node Runtime Host 覆盖未生效: %+v", nodeDriver)
+	}
+	python, ok := registry.Resolve("python-subinterpreter")
+	if !ok {
+		t.Fatal("缺少 python-subinterpreter 驱动")
+	}
+	pythonDriver := python.(PythonSubinterpreterExecutionDriver)
+	if pythonDriver.Command != "python3" || len(pythonDriver.HostArgs) != 1 || pythonDriver.HostArgs[0] != "/kernel/runtimehosts/python/host.py" {
+		t.Fatalf("Python Runtime Host 覆盖未生效: %+v", pythonDriver)
+	}
+}
+
 func TestExecutionPolicyPublisherOverridePrecedenceAndManifestFloor(t *testing.T) {
 	policy, err := ParseExecutionPolicy(
 		"require-isolation",

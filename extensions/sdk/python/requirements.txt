@@ -1,2 +1,4 @@
-grpcio==1.70.0
-protobuf==4.25.8
+grpcio==1.70.0; python_version < "3.14"
+protobuf==4.25.8; python_version < "3.14"
+grpcio>=1.82,<2; python_version >= "3.14"
+protobuf>=6.33,<7; python_version >= "3.14"

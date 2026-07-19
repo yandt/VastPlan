@@ -1,0 +1,40 @@
+{
+  "id": "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello",
+  "name": "Python Subinterpreter Hello",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "CPython 子解释器 Runtime Host 与纯 Python 桥接参考插件",
+  "engines": { "backend": "^0.1 || ^1.0" },
+  "contextAccess": { "required": ["scope.tenant"], "optional": ["trace", "request.deadline"] },
+  "execution": {
+    "backend": {
+      "driver": "python-subinterpreter",
+      "minimumIsolation": "trusted-runtime",
+      "requirements": { "python": ">=3.14" },
+      "python": { "subinterpreterSafe": true }
+    }
+  },
+  "activation": ["onAgentTool:vastplan.python-subinterpreter-hello"],
+  "entry": { "backend": "backend/main.py" },
+  "contributes": {
+    "backend": {
+      "tools": [{
+        "id": "vastplan.python-subinterpreter-hello",
+        "service_role": "backend",
+        "title": "Python Subinterpreter Hello",
+        "subcommands": [{
+          "name": "echo",
+          "description": "由 CPython 子解释器回显输入",
+          "paramsSchema": {
+            "type": "object",
+            "properties": { "text": { "type": "string" } },
+            "required": ["text"]
+          }
+        }]
+      }]
+    }
+  }
+}

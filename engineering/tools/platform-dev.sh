@@ -498,6 +498,8 @@ start_runtime() {
   # 开发工作区中的 Runtime Host 由 pnpm 以稳定命令名链接到此目录。
   # 只扩展当前编排器及其子进程的 PATH，不写入用户全局环境。
   export PATH="$ROOT/node_modules/.bin:$PATH"
+  export VASTPLAN_NODE_WORKER_HOST="$ROOT/core/runtimehosts/node-worker/host.mjs"
+  export VASTPLAN_PYTHON_SUBINTERPRETER_HOST="$ROOT/core/runtimehosts/python-subinterpreter/host.py"
   : > "$LOG_FILE"
 
   if [ "$debug" = true ]; then

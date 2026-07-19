@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"runtime"
 	"sort"
 	"strings"
@@ -57,11 +58,21 @@ func NewExecutionDriverRegistry(drivers ...PluginExecutionDriver) (*ExecutionDri
 }
 
 func DefaultExecutionDrivers() *ExecutionDriverRegistry {
+	nodeHost := strings.TrimSpace(os.Getenv("VASTPLAN_NODE_WORKER_HOST"))
+	pythonHost := strings.TrimSpace(os.Getenv("VASTPLAN_PYTHON_SUBINTERPRETER_HOST"))
+	nodeDriver := NodeWorkerExecutionDriver{Command: "vastplan-node-worker-host"}
+	if nodeHost != "" {
+		nodeDriver = NodeWorkerExecutionDriver{Command: "node", HostArgs: []string{nodeHost}}
+	}
+	pythonDriver := PythonSubinterpreterExecutionDriver{Command: "vastplan-python-subinterpreter-host"}
+	if pythonHost != "" {
+		pythonDriver = PythonSubinterpreterExecutionDriver{Command: "python3", HostArgs: []string{pythonHost}}
+	}
 	registry, _ := NewExecutionDriverRegistry(
 		NativeExecutionDriver{},
 		PythonProcessExecutionDriver{Interpreter: "python3"},
-		NodeWorkerExecutionDriver{Command: "vastplan-node-worker-host"},
-		PythonSubinterpreterExecutionDriver{Command: "vastplan-python-subinterpreter-host"},
+		nodeDriver,
+		pythonDriver,
 	)
 	return registry
 }
@@ -128,7 +139,10 @@ func (d PythonProcessExecutionDriver) Start(ctx context.Context, host *protocolb
 
 // NodeWorkerExecutionDriver 由内核发布物中的受信任 Runtime Host 创建 Worker。
 // Runtime Host 仍通过同一插件协议回连，不能绕过 LaunchPolicy。
-type NodeWorkerExecutionDriver struct{ Command string }
+type NodeWorkerExecutionDriver struct {
+	Command  string
+	HostArgs []string
+}
 
 func (NodeWorkerExecutionDriver) Name() string              { return "node-worker" }
 func (NodeWorkerExecutionDriver) Isolation() IsolationLevel { return IsolationTrustedRuntime }
@@ -141,13 +155,17 @@ func (d NodeWorkerExecutionDriver) Start(ctx context.Context, host *protocolbus.
 	if command == "" {
 		return nil, errors.New("node-worker 执行驱动未配置 Runtime Host")
 	}
-	args := append([]string{"--entry", plugin.EntryPath}, plugin.Execution.Args...)
+	args := append(append([]string(nil), d.HostArgs...), "--entry", plugin.EntryPath, "--")
+	args = append(args, plugin.Execution.Args...)
 	return host.LaunchSpecWithPolicy(ctx, processLaunchSpec(plugin, command, args, "node-worker"), policy)
 }
 
 // PythonSubinterpreterExecutionDriver 只接收对完整依赖图作出多解释器安全承诺
 // 的插件。CPython 版本和扩展模块支持度由 Runtime Host 在握手前继续校验。
-type PythonSubinterpreterExecutionDriver struct{ Command string }
+type PythonSubinterpreterExecutionDriver struct {
+	Command  string
+	HostArgs []string
+}
 
 func (PythonSubinterpreterExecutionDriver) Name() string { return "python-subinterpreter" }
 func (PythonSubinterpreterExecutionDriver) Isolation() IsolationLevel {
@@ -162,7 +180,8 @@ func (d PythonSubinterpreterExecutionDriver) Start(ctx context.Context, host *pr
 	if command == "" {
 		return nil, errors.New("python-subinterpreter 执行驱动未配置 Runtime Host")
 	}
-	args := append([]string{"--entry", plugin.EntryPath}, plugin.Execution.Args...)
+	args := append(append([]string(nil), d.HostArgs...), "--entry", plugin.EntryPath, "--")
+	args = append(args, plugin.Execution.Args...)
 	return host.LaunchSpecWithPolicy(ctx, processLaunchSpec(plugin, command, args, "python-subinterpreter"), policy)
 }
 

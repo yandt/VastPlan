@@ -8,10 +8,12 @@ version = "0.1.0"
 description = "VastPlan first-party Python plugin SDK"
 requires-python = ">=3.8"
 dependencies = [
-  "grpcio==1.70.0",
-  "protobuf==4.25.8",
+  "grpcio==1.70.0; python_version < '3.14'",
+  "protobuf==4.25.8; python_version < '3.14'",
+  "grpcio>=1.82,<2; python_version >= '3.14'",
+  "protobuf>=6.33,<7; python_version >= '3.14'",
 ]
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["vastplan_plugin*", "contract*", "pluginhost*"]
+include = ["vastplan_plugin*", "vastplan_subinterpreter*", "contract*", "pluginhost*"]

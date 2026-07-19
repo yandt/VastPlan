@@ -70,10 +70,12 @@ class InvocationContext:
 
 
 class Plugin:
-    def __init__(self, plugin_id: str, version: str, engines: Mapping[str, str]):
+    def __init__(self, plugin_id: str, version: str, engines: Mapping[str, str],
+                 features: Iterable[str] = FEATURES):
         self.id = plugin_id
         self.version = version
         self.engines = dict(engines)
+        self._supported_features = tuple(features)
         self._contributions: list[Contribution] = []
         self._routes: dict[tuple[str, str, str], Handler] = {}
         self._contribution_lock = threading.Lock()
@@ -111,7 +113,7 @@ class Plugin:
         stub = pluginhost_pb2_grpc.PluginHostStub(channel)
         ack = stub.Handshake(pluginhost_pb2.Hello(
             proto_versions=(1,), magic=MAGIC, plugin_id=self.id, plugin_version=self.version,
-            engines=self.engines, launch_token=os.getenv(TOKEN_ENV, ""), features=FEATURES,
+            engines=self.engines, launch_token=os.getenv(TOKEN_ENV, ""), features=self._supported_features,
         ))
         if ack.negotiated_proto != 1:
             raise RuntimeError(f"宿主协商了不支持的协议版本 {ack.negotiated_proto}")
