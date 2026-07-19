@@ -186,6 +186,34 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
+  extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/frontend:
+    dependencies:
+      '@vastplan/ui-primitives':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/ui-primitives
+      '@vastplan/ui-structure-composition-standard':
+        specifier: workspace:*
+        version: link:../../cn.vastplan.foundation.frontend.structure.composition.standard/frontend
+      '@vastplan/ui-structure-layout-standard':
+        specifier: workspace:*
+        version: link:../../cn.vastplan.foundation.frontend.structure.layout.standard/frontend
+      '@vastplan/ui-structure-layout-top-navigation':
+        specifier: workspace:*
+        version: link:../../cn.vastplan.foundation.frontend.structure.layout.top-navigation/frontend
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.23
+        version: 18.3.31
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7
+
   extensions/plugins/cn.vastplan.foundation.frontend.workflow.workbench/frontend:
     dependencies:
       '@vastplan/ui-contract':

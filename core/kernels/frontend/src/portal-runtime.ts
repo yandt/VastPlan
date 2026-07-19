@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { message, pageSlotIDs, shellSlotIDs } from "@vastplan/ui-primitives";
-import type { UIRenderAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, StructureCompositionAdapter, StructureLayoutAdapter, UICapability, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
+import type { UIRenderAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, UIShellAdapter, UICapability, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 
 export interface PluginRef {
   id: string;
@@ -10,8 +10,16 @@ export interface PluginRef {
 
 export interface RenderAdapterSelection extends PluginRef { uiContract: string; config?: { themeTemplate?: string }; }
 
-export interface StructureCompositionSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
-export interface StructureLayoutSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
+export interface ShellSelection extends PluginRef {
+  uiContract: string;
+  config: {
+    navigationGroups?: readonly Record<string, unknown>[];
+    defaultTemplate: string;
+    allowedTemplates: readonly string[];
+    userSelectable: boolean;
+    templateOptions?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  };
+}
 export interface WorkbenchSelection extends PluginRef { uiContract: string; config?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } }; }
 
 export interface PortalSpec {
@@ -22,8 +30,7 @@ export interface PortalSpec {
   branding?: Record<string, unknown>;
   localization?: PortalLocalizationPolicy;
   renderAdapter: RenderAdapterSelection;
-  structureComposition: StructureCompositionSelection;
-  structureLayout: StructureLayoutSelection;
+  shell: ShellSelection;
   workbench: WorkbenchSelection;
   plugins: readonly PluginRef[];
   management: {
@@ -58,8 +65,7 @@ export interface RemoteProvenance {
 export interface FrontendPluginModule {
   provenance: RemoteProvenance;
   renderAdapter?: UIRenderAdapter;
-  structureComposition?: StructureCompositionAdapter;
-  structureLayout?: StructureLayoutAdapter;
+  shell?: UIShellAdapter;
   workbench?: UIWorkbenchAdapter;
   register?(context: FrontendPluginContext): void | Promise<void>;
   hot?: FrontendPluginHotLifecycle;
@@ -73,8 +79,7 @@ export interface FrontendPluginLoader {
 export interface PreparedPortal {
   portal: Readonly<PortalSpec>;
   renderAdapter: UIRenderAdapter;
-  structureComposition: StructureCompositionAdapter;
-  structureLayout: StructureLayoutAdapter;
+  shell: UIShellAdapter;
   workbench: UIWorkbenchAdapter;
   pages: readonly PortalRegisteredPage[];
   shellContributions: readonly PortalRegisteredShellContribution[];
@@ -144,17 +149,14 @@ export class PortalRuntime {
       throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_TEMPLATE_INVALID", `渲染适配器不支持主题模板: ${configuredThemeTemplate ?? renderAdapter.defaultThemeTemplate}`);
     }
 
-    const compositionModule = requiredModule(modules, portal.structureComposition);
-    this.assertTrustedFirstParty(compositionModule, portal.structureComposition.id);
-    const composition = compositionModule.structureComposition;
-    if (composition?.id !== "ui.structure.composition" || !contractSatisfies(composition.uiContract, portal.structureComposition.uiContract)) {
-      throw new PortalAssemblyError("SHELL_COMPOSITION_INVALID", "Shell 组合插件缺失或 UI 契约不兼容");
+    const shellModule = requiredModule(modules, portal.shell);
+    this.assertTrustedFirstParty(shellModule, portal.shell.id);
+    const shell = shellModule.shell;
+    if (shell?.id !== "ui.structure.shell" || typeof shell.Shell !== "function" || typeof shell.compose !== "function" || !contractSatisfies(shell.uiContract, portal.shell.uiContract)) {
+      throw new PortalAssemblyError("SHELL_INVALID", "Shell 插件缺失或 UI 契约不兼容");
     }
-    const layoutModule = requiredModule(modules, portal.structureLayout);
-    this.assertTrustedFirstParty(layoutModule, portal.structureLayout.id);
-    const layout = layoutModule.structureLayout;
-    if (layout?.id !== "ui.structure.layout" || typeof layout.Shell !== "function" || !contractSatisfies(layout.uiContract, portal.structureLayout.uiContract)) {
-      throw new PortalAssemblyError("SHELL_LAYOUT_INVALID", "Shell 布局插件缺失或 UI 契约不兼容");
+    if (!validShellTemplateCatalog(shell) || !validShellConfig(portal.shell.config, shell)) {
+      throw new PortalAssemblyError("SHELL_TEMPLATE_INVALID", "Shell 模板目录或 Platform Profile 配置无效");
     }
     const workbenchModule = requiredModule(modules, portal.workbench);
     this.assertTrustedFirstParty(workbenchModule, portal.workbench.id);
@@ -185,13 +187,13 @@ export class PortalRuntime {
     }
 
     for (const ref of portal.plugins) {
-      if ([portal.renderAdapter, portal.structureComposition, portal.structureLayout, portal.workbench].some((foundation) => samePlugin(ref, foundation))) {
+      if ([portal.renderAdapter, portal.shell, portal.workbench].some((foundation) => samePlugin(ref, foundation))) {
         continue;
       }
       const plugin = requiredModule(modules, ref);
       this.assertTrustedFirstParty(plugin, ref.id);
-      if (plugin.renderAdapter !== undefined || plugin.structureComposition !== undefined || plugin.structureLayout !== undefined || plugin.workbench !== undefined) {
-        throw new PortalAssemblyError("SECOND_SHELL_FOUNDATION", "功能插件不能注册第二个设计系统、Shell 组合、布局或 Workbench");
+      if (plugin.renderAdapter !== undefined || plugin.shell !== undefined || plugin.workbench !== undefined) {
+        throw new PortalAssemblyError("SECOND_SHELL_FOUNDATION", "功能插件不能注册第二个设计系统、Shell 或 Workbench");
       }
       const context: FrontendPluginContext = {
         portal: portalSnapshot,
@@ -244,7 +246,7 @@ export class PortalRuntime {
       await plugin.register?.(context);
     }
     const preparedModules = portal.plugins.map((ref) => Object.freeze({ ref: Object.freeze({ ...ref }), module: requiredModule(modules, ref) }));
-    return Object.freeze({ portal: portalSnapshot, renderAdapter, structureComposition: composition, structureLayout: layout, workbench, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
+    return Object.freeze({ portal: portalSnapshot, renderAdapter, shell, workbench, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
   }
 
   private validatePortalShape(portal: PortalSpec): void {
@@ -253,17 +255,16 @@ export class PortalRuntime {
     }
     if ((portal.branding !== undefined && !isJSONRecord(portal.branding)) ||
         (portal.localization !== undefined && !validLocalizationPolicy(portal.localization)) ||
-        (portal.structureComposition.config !== undefined && !isJSONRecord(portal.structureComposition.config)) ||
-        (portal.structureLayout.config !== undefined && !isJSONRecord(portal.structureLayout.config))) {
+        !isJSONRecord(portal.shell.config)) {
       throw new PortalAssemblyError("PORTAL_INVALID", "Portal 品牌与 Shell 配置必须是 JSON 对象");
     }
     const refs = [portal.resolution.platformCatalog, portal.resolution.platformProfile, portal.resolution.applicationComposition];
     if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
       throw new PortalAssemblyError("RESOLUTION_INVALID", "Portal 输入解析锁无效");
     }
-    const foundations = [portal.renderAdapter, portal.structureComposition, portal.structureLayout, portal.workbench];
+    const foundations = [portal.renderAdapter, portal.shell, portal.workbench];
     if (new Set(foundations.map((item) => item.id)).size !== foundations.length || foundations.some((selected) => portal.plugins.filter((ref) => samePlugin(ref, selected)).length !== 1)) {
-      throw new PortalAssemblyError("SHELL_FOUNDATION_SELECTION", "Portal 必须精确包含相互独立的设计系统、Shell 组合、布局与 Workbench 插件");
+      throw new PortalAssemblyError("SHELL_FOUNDATION_SELECTION", "Portal 必须精确包含相互独立的设计系统、Shell 与 Workbench 插件");
     }
     const pluginIDs = new Set(portal.plugins.map((ref) => ref.id));
     if (foundations.some((selected) => portal.resolution.pluginOrigins[selected.id] !== "platform-profile") ||
@@ -312,6 +313,33 @@ function validThemeTemplateCatalog(adapter: UIRenderAdapter): boolean {
     if (!/^[a-z][a-z0-9-]{0,63}$/.test(template.id) || identifiers.has(template.id)) return false;
     if (template.scheme !== "light" && template.scheme !== "dark" && template.scheme !== "high-contrast") return false;
     identifiers.add(template.id);
+  }
+  return true;
+}
+
+function validShellTemplateCatalog(shell: UIShellAdapter): boolean {
+  if (shell.templates.length === 0 || !/^[a-z][a-z0-9-]{0,63}$/.test(shell.defaultTemplate)) return false;
+  const identifiers = new Set<string>();
+  for (const template of shell.templates) {
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(template.id) || identifiers.has(template.id) || !validLocalizedText(template.label)) return false;
+    identifiers.add(template.id);
+  }
+  return identifiers.has(shell.defaultTemplate);
+}
+
+function validShellConfig(config: ShellSelection["config"], shell: UIShellAdapter): boolean {
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(config.defaultTemplate) || !Array.isArray(config.allowedTemplates) || config.allowedTemplates.length === 0 || typeof config.userSelectable !== "boolean") return false;
+  const declared = new Set(shell.templates.map((template) => template.id));
+  const allowed = new Set<string>();
+  for (const template of config.allowedTemplates) {
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(template) || !declared.has(template) || allowed.has(template)) return false;
+    allowed.add(template);
+  }
+  if (!allowed.has(config.defaultTemplate)) return false;
+  if (config.templateOptions !== undefined) {
+    for (const [template, options] of Object.entries(config.templateOptions)) {
+      if (!allowed.has(template) || !isJSONRecord(options)) return false;
+    }
   }
   return true;
 }
@@ -396,8 +424,7 @@ function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
     branding: portal.branding === undefined ? undefined : freezeJSONRecord(portal.branding),
     localization: portal.localization === undefined ? undefined : Object.freeze({ defaultLocale: portal.localization.defaultLocale, supportedLocales: Object.freeze([...portal.localization.supportedLocales]) }),
     renderAdapter: Object.freeze({ ...portal.renderAdapter, config: portal.renderAdapter.config === undefined ? undefined : freezeJSONRecord(portal.renderAdapter.config) }),
-    structureComposition: Object.freeze({ ...portal.structureComposition, config: portal.structureComposition.config === undefined ? undefined : freezeJSONRecord(portal.structureComposition.config) }),
-    structureLayout: Object.freeze({ ...portal.structureLayout, config: portal.structureLayout.config === undefined ? undefined : freezeJSONRecord(portal.structureLayout.config) }),
+    shell: Object.freeze({ ...portal.shell, config: Object.freeze({ ...portal.shell.config, navigationGroups: portal.shell.config.navigationGroups === undefined ? undefined : Object.freeze(portal.shell.config.navigationGroups.map((group) => freezeJSONRecord(group))), allowedTemplates: Object.freeze([...portal.shell.config.allowedTemplates]), templateOptions: portal.shell.config.templateOptions === undefined ? undefined : Object.freeze(Object.fromEntries(Object.entries(portal.shell.config.templateOptions).map(([template, options]) => [template, freezeJSONRecord(options)]))) }) as ShellSelection["config"] }),
     workbench: Object.freeze({ ...portal.workbench, config: portal.workbench.config === undefined ? undefined : freezeJSONRecord(portal.workbench.config) }),
     plugins: Object.freeze(portal.plugins.map((ref) => Object.freeze({ ...ref }))),
     management: Object.freeze({ ...portal.management, services: Object.freeze(services) }),

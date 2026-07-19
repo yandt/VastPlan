@@ -305,7 +305,7 @@ function MuiProvider({ children, locale, direction, themeTemplate }: { children:
 export const muiRenderAdapter: UIRenderAdapter = {
   id: "ui.render.adapter",
   framework: "mui",
-  uiContract: "3.0.0",
+  uiContract: "4.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   themeTemplates: muiThemeTemplates,
   defaultThemeTemplate: "light",

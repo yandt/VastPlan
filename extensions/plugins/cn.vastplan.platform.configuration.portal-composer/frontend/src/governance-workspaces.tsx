@@ -84,7 +84,7 @@ export function GovernanceWorkspaces({ client, applications }: { client: PortalC
   </ui.Stack>;
 }
 
-type ProfileValue = { name: string; layoutID: string; pageBodyWidth: "fluid" | "contained"; navigationGroups: unknown[] };
+type ProfileValue = { name: string; defaultTemplate: "standard" | "top-navigation"; pageBodyWidth: "fluid" | "contained"; navigationGroups: unknown[] };
 
 function ProfileWorkspace({ client, snapshot, refresh, loading }: WorkspaceProps) {
   const ui = usePortalUI();
@@ -251,27 +251,27 @@ function ActivationWorkspace({ client, snapshot, refresh, loading }: WorkspacePr
 
 interface WorkspaceProps { client: PortalControlClient; snapshot: PortalGovernanceSnapshot; refresh(): Promise<void>; loading: boolean; }
 
-const profileSchema: FormSchema = { id: "portal-profile-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["name", "layoutID", "pageBodyWidth", "navigationGroups"], properties: {
+const profileSchema: FormSchema = { id: "portal-profile-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["name", "defaultTemplate", "pageBodyWidth", "navigationGroups"], properties: {
   name: { type: "string", title: "Profile ID", minLength: 1 },
-  layoutID: { type: "string", title: "布局插件", oneOf: [{ const: "cn.vastplan.foundation.frontend.structure.layout.standard", title: "标准侧栏布局" }, { const: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", title: "顶部导航布局" }] },
+  defaultTemplate: { type: "string", title: "默认布局", oneOf: [{ const: "standard", title: "标准侧栏布局" }, { const: "top-navigation", title: "顶部导航布局" }] },
   pageBodyWidth: { type: "string", title: "页面正文宽度", oneOf: [{ const: "fluid", title: "自适应" }, { const: "contained", title: "最大 1280px" }] },
   navigationGroups: { type: "array", title: "导航分组", items: { type: "object", additionalProperties: false, required: ["id", "label", "zone", "icon"], properties: { id: { type: "string" }, parentID: { type: "string" }, label: { type: "string" }, zone: { enum: ["primary", "secondary", "settings"] }, icon: { enum: ["menu", "settings", "info"] }, order: { type: "integer" } } } },
-} }, uiSchema: { layoutID: { "ui:widget": "select" }, pageBodyWidth: { "ui:widget": "select" } }, localization: {
+} }, uiSchema: { defaultTemplate: { "ui:widget": "select" }, pageBodyWidth: { "ui:widget": "select" } }, localization: {
   "/properties/name/title": message(namespace, "governance.form.profileId", "Profile ID"),
-  "/properties/layoutID/title": message(namespace, "governance.form.layout", "布局插件"),
-  "/properties/layoutID/oneOf/0/title": message(namespace, "governance.option.standardLayout", "标准侧栏布局"),
-  "/properties/layoutID/oneOf/1/title": message(namespace, "governance.option.topLayout", "顶部导航布局"),
+  "/properties/defaultTemplate/title": message(namespace, "governance.form.layout", "默认布局"),
+  "/properties/defaultTemplate/oneOf/0/title": message(namespace, "governance.option.standardLayout", "标准侧栏布局"),
+  "/properties/defaultTemplate/oneOf/1/title": message(namespace, "governance.option.topLayout", "顶部导航布局"),
   "/properties/pageBodyWidth/title": message(namespace, "governance.form.bodyWidth", "页面正文宽度"),
   "/properties/pageBodyWidth/oneOf/0/title": message(namespace, "governance.option.fluid", "自适应"),
   "/properties/pageBodyWidth/oneOf/1/title": message(namespace, "governance.option.contained", "最大 1280px"),
   "/properties/navigationGroups/title": message(namespace, "governance.form.navigationGroups", "导航分组"),
 } };
 
-function profileValue(profile: PortalPlatformProfile): ProfileValue { return { name: profile.id, layoutID: profile.structureLayout.id, pageBodyWidth: profile.structureLayout.config?.pageBodyWidth === "contained" ? "contained" : "fluid", navigationGroups: Array.isArray(profile.structureComposition.config?.navigationGroups) ? profile.structureComposition.config.navigationGroups : [] }; }
+function profileValue(profile: PortalPlatformProfile): ProfileValue { return { name: profile.id, defaultTemplate: profile.shell.config.defaultTemplate === "top-navigation" ? "top-navigation" : "standard", pageBodyWidth: profile.shell.config.templateOptions?.[profile.shell.config.defaultTemplate]?.pageBodyWidth === "contained" ? "contained" : "fluid", navigationGroups: Array.isArray(profile.shell.config.navigationGroups) ? profile.shell.config.navigationGroups : [] }; }
 function buildProfile(base: PortalPlatformProfile, value: Record<string, unknown>, newRevision: boolean): PortalPlatformProfile {
-  const oldLayoutID = base.structureLayout.id; const layoutID = String(value.layoutID); const structureLayout = { ...base.structureLayout, id: layoutID, config: { ...(base.structureLayout.config ?? {}), pageBodyWidth: value.pageBodyWidth as JSONValue } };
-  const plugins = base.plugins.filter((ref) => ref.id !== oldLayoutID && ref.id !== layoutID).concat([{ id: layoutID, version: base.structureLayout.version, channel: base.structureLayout.channel }]);
-  return { ...base, id: String(value.name), revision: newRevision ? base.revision + 1 : base.revision, structureComposition: { ...base.structureComposition, config: { ...(base.structureComposition.config ?? {}), navigationGroups: value.navigationGroups as JSONValue } }, structureLayout, plugins };
+  const defaultTemplate = value.defaultTemplate === "top-navigation" ? "top-navigation" : "standard";
+  const templateOptions = { ...(base.shell.config.templateOptions ?? {}), [defaultTemplate]: { ...(base.shell.config.templateOptions?.[defaultTemplate] ?? {}), pageBodyWidth: value.pageBodyWidth as JSONValue } };
+  return { ...base, id: String(value.name), revision: newRevision ? base.revision + 1 : base.revision, shell: { ...base.shell, config: { ...base.shell.config, defaultTemplate, navigationGroups: value.navigationGroups as JSONValue, templateOptions } } };
 }
 
 function bindingSchema(profiles: PortalProfileRevision[]): FormSchema { const published = profiles.filter((item) => item.status === "Published"); return { id: "portal-binding-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["portalId", "profileRevisionId", "services"], properties: {

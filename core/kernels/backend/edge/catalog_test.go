@@ -48,7 +48,7 @@ func (contentVerifier) Verify(_ context.Context, ref pluginv1.ArtifactRef, envel
 func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *testing.T) {
 	dir := t.TempDir()
 	module := []byte(`export default { id: "ui.render.adapter" };`)
-	manifest := `{"id":"cn.vastplan.foundation.frontend.render.adapter.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"renderAdapters":[{"id":"ui.render.adapter","uiContract":"^3.0.0","framework":"test","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}]}}}`
+	manifest := `{"id":"cn.vastplan.foundation.frontend.render.adapter.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"renderAdapters":[{"id":"ui.render.adapter","uiContract":"^4.0.0","framework":"test","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}]}}}`
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -67,11 +67,9 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 		t.Fatal(err)
 	}
 	source := catalogSource{artifact.PluginID + "@" + artifact.Version: {Artifact: artifact, PackageBytes: pkg}}
-	compositionArtifact, compositionPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.composition.test","name":"structureComposition","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"structureCompositions":[{"id":"ui.structure.composition","uiContract":"^3.0.0"}]}}}`, []byte(`export default { id: "ui.structure.composition" };`))
-	layoutArtifact, layoutPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.layout.test","name":"structureLayout","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"structureLayouts":[{"id":"ui.structure.layout","uiContract":"^3.0.0"}]}}}`, []byte(`export default { id: "ui.structure.layout" };`))
-	workbenchArtifact, workbenchPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.workflow.workbench.test","name":"workbench","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"workbenches":[{"id":"ui.workflow.workbench","uiContract":"^3.0.0"}]}}}`, []byte(`export default { id: "ui.workflow.workbench" };`))
-	source[compositionArtifact.PluginID+"@"+compositionArtifact.Version] = artifacttrust.Envelope{Artifact: compositionArtifact, PackageBytes: compositionPackage}
-	source[layoutArtifact.PluginID+"@"+layoutArtifact.Version] = artifacttrust.Envelope{Artifact: layoutArtifact, PackageBytes: layoutPackage}
+	shellArtifact, shellPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.shell.test","name":"shell","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shells":[{"id":"ui.structure.shell","uiContract":"^4.0.0"}]}}}`, []byte(`export default { id: "ui.structure.shell" };`))
+	workbenchArtifact, workbenchPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.workflow.workbench.test","name":"workbench","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"workbenches":[{"id":"ui.workflow.workbench","uiContract":"^4.0.0"}]}}}`, []byte(`export default { id: "ui.workflow.workbench" };`))
+	source[shellArtifact.PluginID+"@"+shellArtifact.Version] = artifacttrust.Envelope{Artifact: shellArtifact, PackageBytes: shellPackage}
 	source[workbenchArtifact.PluginID+"@"+workbenchArtifact.Version] = artifacttrust.Envelope{Artifact: workbenchArtifact, PackageBytes: workbenchPackage}
 	counted := &countingCatalogSource{catalogSource: source}
 	deliveryRoot := t.TempDir()
@@ -81,10 +79,9 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 		t.Fatal(err)
 	}
 	ref := portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version}
-	compositionRef := portalapi.PluginRef{ID: compositionArtifact.PluginID, Version: compositionArtifact.Version}
-	layoutRef := portalapi.PluginRef{ID: layoutArtifact.PluginID, Version: layoutArtifact.Version}
+	shellRef := portalapi.PluginRef{ID: shellArtifact.PluginID, Version: shellArtifact.Version}
 	workbenchRef := portalapi.PluginRef{ID: workbenchArtifact.PluginID, Version: workbenchArtifact.Version}
-	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", RenderAdapter: portalapi.RenderAdapter{PluginRef: ref, UIContract: "^3.0.0"}, StructureComposition: portalapi.StructureComposition{PluginRef: compositionRef, UIContract: "^3.0.0"}, StructureLayout: portalapi.StructureLayout{PluginRef: layoutRef, UIContract: "^3.0.0"}, Workbench: portalapi.Workbench{PluginRef: workbenchRef, UIContract: "^3.0.0"}, Plugins: []portalapi.PluginRef{ref, compositionRef, layoutRef, workbenchRef}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, compositionRef.ID: compositioncommonv1.OriginPlatformProfile, layoutRef.ID: compositioncommonv1.OriginPlatformProfile, workbenchRef.ID: compositioncommonv1.OriginPlatformProfile}}}
+	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", RenderAdapter: portalapi.RenderAdapter{PluginRef: ref, UIContract: "^4.0.0"}, Shell: portalapi.Shell{PluginRef: shellRef, UIContract: "^4.0.0", Config: frontendcompositionv1.ShellConfig{DefaultTemplate: "standard", AllowedTemplates: []string{"standard"}}}, Workbench: portalapi.Workbench{PluginRef: workbenchRef, UIContract: "^4.0.0"}, Plugins: []portalapi.PluginRef{ref, shellRef, workbenchRef}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, shellRef.ID: compositioncommonv1.OriginPlatformProfile, workbenchRef.ID: compositioncommonv1.OriginPlatformProfile}}}
 	lockTestManagement(&spec)
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err != nil {
 		t.Fatalf("有效且已验证的设计系统应通过: %v", err)
@@ -102,11 +99,11 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 		t.Fatalf("有效 Portal 应解析浏览器运行描述: %v", err)
 	}
 	wantDigest := sha256.Sum256(module)
-	if len(runtime.Modules) != 4 || runtime.Modules[0].SHA256 != hex.EncodeToString(wantDigest[:]) || runtime.Modules[0].PackageSHA256 != artifact.SHA256 {
+	if len(runtime.Modules) != 3 || runtime.Modules[0].SHA256 != hex.EncodeToString(wantDigest[:]) || runtime.Modules[0].PackageSHA256 != artifact.SHA256 {
 		t.Fatalf("模块摘要未绑定已验证制品: %+v", runtime.Modules)
 	}
 	recovery, err := catalog.ResolveRecoveryRuntime(context.Background(), "tenant-a", 2, spec)
-	if err != nil || len(recovery.Modules) != 4 || recovery.Modules[0].URL != "/v1/portal-recovery-modules/2/1/"+runtime.Modules[0].SHA256+".js" {
+	if err != nil || len(recovery.Modules) != 3 || recovery.Modules[0].URL != "/v1/portal-recovery-modules/2/1/"+runtime.Modules[0].SHA256+".js" {
 		t.Fatalf("恢复模块 URL 未同时绑定 active/fallback revision: %+v %v", recovery.Modules, err)
 	}
 	asset, err := catalog.ReadFrontendModule(context.Background(), "tenant-a", spec, runtime.Modules[0].SHA256)
@@ -132,7 +129,7 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 		t.Fatal("应用输入选择 foundation 设计系统必须拒绝")
 	}
 	spec.Resolution.PluginOrigins[ref.ID] = compositioncommonv1.OriginPlatformProfile
-	spec.RenderAdapter.UIContract = "^4.0.0"
+	spec.RenderAdapter.UIContract = "^9.0.0"
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {
 		t.Fatal("不兼容 UI 契约必须拒绝")
 	}

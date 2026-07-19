@@ -51,8 +51,8 @@ export interface PortalPlatformProfile {
   id: string;
   target: { kernel: "frontend" };
   renderAdapter: PortalPluginRef & { uiContract: string };
-  structureComposition: PortalPluginRef & { uiContract: string; config?: Record<string, JSONValue> };
-  structureLayout: PortalPluginRef & { uiContract: string; config?: Record<string, JSONValue> };
+  shell: PortalPluginRef & { uiContract: string; config: { navigationGroups?: JSONValue; defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
+  workbench: PortalPluginRef & { uiContract: string };
   localization?: { defaultLocale: string; supportedLocales: string[] };
   plugins: PortalPluginRef[];
   security: { firstPartyOnly: true; requireIntegrity: true };
@@ -83,8 +83,8 @@ export interface PortalResolvedSpec {
     audience?: string[];
     branding?: Record<string, JSONValue>;
     renderAdapter: PortalPluginRef & { uiContract: string };
-    structureComposition: PortalPluginRef & { uiContract: string };
-    structureLayout: PortalPluginRef & { uiContract: string; config?: Record<string, JSONValue> };
+    shell: PortalPluginRef & { uiContract: string; config: { defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
+    workbench: PortalPluginRef & { uiContract: string };
     plugins: PortalPluginRef[];
     config?: Record<string, JSONValue>;
     management: PortalManagementBinding;

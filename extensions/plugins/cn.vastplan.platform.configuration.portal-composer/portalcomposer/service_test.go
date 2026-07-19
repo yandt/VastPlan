@@ -245,14 +245,7 @@ func TestProfileAndBindingPublishingDoesNotGoLiveBeforeActivationCAS(t *testing.
 	baseProfile := s.state.Profiles[0].Profile
 	profile := baseProfile
 	profile.ID, profile.Revision = "portal-top", 1
-	oldLayoutID := profile.StructureLayout.ID
-	profile.StructureLayout.PluginRef = frontendcompositionv1.PluginRef{ID: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", Version: "1.0.0", Channel: "stable"}
-	profile.Plugins = append([]frontendcompositionv1.PluginRef(nil), profile.Plugins...)
-	for i := range profile.Plugins {
-		if profile.Plugins[i].ID == oldLayoutID {
-			profile.Plugins[i] = profile.StructureLayout.PluginRef
-		}
-	}
+	profile.Shell.Config.DefaultTemplate = "top-navigation"
 	profileDraft, err := s.CreateProfileDraft(context.Background(), author, profile)
 	if err != nil {
 		t.Fatal(err)
@@ -305,7 +298,7 @@ func TestProfileAndBindingPublishingDoesNotGoLiveBeforeActivationCAS(t *testing.
 
 	request := portalapi.ActivationRequest{PortalID: publishedApplication.PortalID, ApplicationRevisionID: publishedApplication.ID, ProfileRevisionID: publishedProfile.ID, BindingRevisionID: publishedBinding.ID, ExpectedCurrentID: 0, Reason: "切换到顶部导航"}
 	current, err := s.Activate(context.Background(), publisher, request)
-	if err != nil || current.Status != portalapi.ActivationCurrent || current.Spec.StructureLayout.ID != profile.StructureLayout.ID {
+	if err != nil || current.Status != portalapi.ActivationCurrent || current.Spec.Shell.ID != profile.Shell.ID || current.Spec.Shell.Config.DefaultTemplate != "top-navigation" {
 		t.Fatalf("Activation 未使用精确发布输入: %+v %v", current, err)
 	}
 	if _, err := s.Activate(context.Background(), publisher, request); !errors.Is(err, ErrInvalidState) {

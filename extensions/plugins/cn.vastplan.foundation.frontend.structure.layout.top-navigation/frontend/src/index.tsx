@@ -8,14 +8,13 @@ import {
   type PageSlotID,
   type PortalNavigationGroup,
   type PortalPageNavigation,
-  type StructureLayoutAdapter,
-  type StructureLayoutProps,
+  type UIShellProps,
   type ShellSlotID,
 } from "@vastplan/ui-primitives";
 
 const shellHeaderSlots = ["shell.header.start", "shell.header.center", "shell.header.end"] as const;
 
-function TopNavigationShell({ composition, branding, config, pathname, recoveryNotice, onNavigate }: StructureLayoutProps) {
+export function TopNavigationShell({ composition, branding, template, pathname, recoveryNotice, onNavigate }: UIShellProps) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -28,7 +27,7 @@ function TopNavigationShell({ composition, branding, config, pathname, recoveryN
   const capacity = Math.max(1, Math.floor(centerWidth / 120));
   const { visible, overflow } = prioritizeRoots(mainRoots, capacity, activeRootID);
   const page = composition.activePage;
-  const pageWidth = config.pageBodyWidth === "contained" ? 1280 : undefined;
+  const pageWidth = template.options.pageBodyWidth === "contained" ? 1280 : undefined;
   const shellTheme = {
     "--vp-top-canvas": ui.theme.tokens.color.canvas,
     "--vp-top-surface": ui.theme.tokens.color.surface,
@@ -108,7 +107,7 @@ function TopNavigationShell({ composition, branding, config, pathname, recoveryN
   </div>;
 }
 
-function RootPopover({ group, composition, open, active, onOpenChange, onNavigate }: { group: PortalNavigationGroup; composition: StructureLayoutProps["composition"]; open: boolean; active: boolean; onOpenChange(open: boolean): void; onNavigate(id: string): void }) {
+function RootPopover({ group, composition, open, active, onOpenChange, onNavigate }: { group: PortalNavigationGroup; composition: UIShellProps["composition"]; open: boolean; active: boolean; onOpenChange(open: boolean): void; onNavigate(id: string): void }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   return <ui.Popover open={open} placement="bottom-start" ariaLabel={i18n.text(group.label)} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={group.zone} data-active={active || undefined} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name={group.icon} /><span>{i18n.text(group.label)}</span></button>}>
@@ -116,7 +115,7 @@ function RootPopover({ group, composition, open, active, onOpenChange, onNavigat
   </ui.Popover>;
 }
 
-function OverflowPopover({ groups: overflow, composition, open, active, onOpenChange, onNavigate }: { groups: readonly PortalNavigationGroup[]; composition: StructureLayoutProps["composition"]; open: boolean; active: boolean; onOpenChange(open: boolean): void; onNavigate(id: string): void }) {
+function OverflowPopover({ groups: overflow, composition, open, active, onOpenChange, onNavigate }: { groups: readonly PortalNavigationGroup[]; composition: UIShellProps["composition"]; open: boolean; active: boolean; onOpenChange(open: boolean): void; onNavigate(id: string): void }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   return <ui.Popover open={open} placement="bottom-end" ariaLabel={i18n.text(message(namespace, "navigation.more", "更多导航"))} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-active={active || undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name="menu" /><span>{i18n.text(message(namespace, "navigation.more", "更多"))}</span></button>}>
@@ -124,7 +123,7 @@ function OverflowPopover({ groups: overflow, composition, open, active, onOpenCh
   </ui.Popover>;
 }
 
-function MegaGroup({ group, composition, onNavigate }: { group: PortalNavigationGroup; composition: StructureLayoutProps["composition"]; onNavigate(id: string): void }) {
+function MegaGroup({ group, composition, onNavigate }: { group: PortalNavigationGroup; composition: UIShellProps["composition"]; onNavigate(id: string): void }) {
   const i18n = usePortalI18n();
   const activePageID = composition.activeNavigationPath?.pageID;
   return <div className="vp-top-mega">
@@ -172,11 +171,11 @@ export function prioritizeRoots(groups: readonly PortalNavigationGroup[], capaci
   return { visible, overflow: groups.filter((group) => !visibleIDs.has(group.id)) };
 }
 
-function groups(composition: StructureLayoutProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] { return zones.flatMap((zone) => composition.navigation[zone]); }
-function pagePath(composition: StructureLayoutProps["composition"], navigationID: string): string | undefined { return composition.pages.find((candidate) => candidate.navigation?.id === navigationID)?.path; }
+function groups(composition: UIShellProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] { return zones.flatMap((zone) => composition.navigation[zone]); }
+function pagePath(composition: UIShellProps["composition"], navigationID: string): string | undefined { return composition.pages.find((candidate) => candidate.navigation?.id === navigationID)?.path; }
 function Brand({ name, shortName, logoURL }: { name: string; shortName?: string; logoURL?: string }) { const label = shortName ?? name; return <div className="vp-top-brand" title={name}>{logoURL === undefined ? <span className="vp-top-brand-mark">{label.slice(0, 1).toUpperCase()}</span> : <img src={logoURL} alt="" className="vp-top-brand-logo" />}<strong>{label}</strong></div>; }
-function shellSlot(values: StructureLayoutProps["composition"]["shellSlots"], id: ShellSlotID): ReactNode { return values[id]?.map((item) => createElement(item.component, { key: `${item.pluginID}/${item.id}` })); }
-function pageSlot(values: StructureLayoutProps["composition"]["pageSlots"], id: PageSlotID): ReactNode { return values[id]?.map((item) => createElement(item.component, { key: item.id })); }
+function shellSlot(values: UIShellProps["composition"]["shellSlots"], id: ShellSlotID): ReactNode { return values[id]?.map((item) => createElement(item.component, { key: `${item.pluginID}/${item.id}` })); }
+function pageSlot(values: UIShellProps["composition"]["pageSlots"], id: PageSlotID): ReactNode { return values[id]?.map((item) => createElement(item.component, { key: item.id })); }
 
 export const topNavigationShellCSS = `
 .vp-top-shell{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:var(--vp-top-canvas);color:var(--vp-top-text)}
@@ -191,8 +190,8 @@ export const topNavigationShellCSS = `
 `;
 
 const namespace = "cn.vastplan.foundation.frontend.structure.layout.top-navigation";
-const adapter: StructureLayoutAdapter = {
-  id: "ui.structure.layout", uiContract: "3.0.0", Shell: TopNavigationShell,
+const adapter = {
+  id: "internal.top-navigation-template-source", uiContract: "4.0.0", Shell: TopNavigationShell,
   localization: { defaultLocale: "zh-CN", messages: {
     "zh-CN": { "page.notFound": "页面不存在", "page.pathMissing": "Portal 没有注册路径 {path}", "navigation.main": "主导航", "navigation.open": "打开主菜单", "navigation.mobile": "移动主菜单", "navigation.more": "更多" },
     "en-US": { "page.notFound": "Page not found", "page.pathMissing": "Portal has no registered route for {path}", "navigation.main": "Main navigation", "navigation.open": "Open main menu", "navigation.mobile": "Mobile main menu", "navigation.more": "More" },

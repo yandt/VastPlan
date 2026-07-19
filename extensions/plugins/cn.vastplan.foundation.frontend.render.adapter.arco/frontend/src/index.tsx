@@ -380,7 +380,7 @@ function ArcoProvider({ children, locale, direction, themeTemplate }: { children
 export const arcoRenderAdapter: UIRenderAdapter = {
   id: "ui.render.adapter",
   framework: "arco",
-  uiContract: "3.0.0",
+  uiContract: "4.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   themeTemplates: arcoThemeTemplates,
   defaultThemeTemplate: "light",

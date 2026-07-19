@@ -12,36 +12,32 @@
         "id": "cn.vastplan.foundation.frontend.render.adapter.arco",
         "version": "1.0.0",
         "channel": "stable",
-        "uiContract": "^3.0.0"
+        "uiContract": "^4.0.0"
       },
-      "structureComposition": {
-        "id": "cn.vastplan.foundation.frontend.structure.composition.standard",
+      "shell": {
+        "id": "cn.vastplan.foundation.frontend.structure.shell",
         "version": "1.0.0",
         "channel": "stable",
-        "uiContract": "^3.0.0"
-      },
-      "structureLayout": {
-        "id": "cn.vastplan.foundation.frontend.structure.layout.standard",
-        "version": "1.0.0",
-        "channel": "stable",
-        "uiContract": "^3.0.0",
+        "uiContract": "^4.0.0",
         "config": {
-          "navigation": "rail",
-          "logoPlacement": "navigation",
-          "settingsPlacement": "navigation-bottom",
-          "pageBodyWidth": "fluid"
+          "defaultTemplate": "standard",
+          "allowedTemplates": ["standard", "top-navigation"],
+          "userSelectable": true,
+          "templateOptions": {
+            "standard": { "pageBodyWidth": "fluid" },
+            "top-navigation": { "pageBodyWidth": "fluid" }
+          }
         }
       },
       "workbench": {
         "id": "cn.vastplan.foundation.frontend.workflow.workbench",
         "version": "1.0.0",
         "channel": "stable",
-        "uiContract": "^3.0.0"
+        "uiContract": "^4.0.0"
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.frontend.render.adapter.arco", "version": "1.0.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.structure.composition.standard", "version": "1.0.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "1.0.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "1.0.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "1.0.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.0.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.2.0", "channel": "stable" },
@@ -60,7 +56,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 1,
-        "digest": "b1658a8afc1b9e3bb25f1e4ab1b6bdeccf777c98d49ed97d53af395ce9a7741f"
+        "digest": "45c3b1b68cd86ab4ed9adebcd3633fca034ab6adc1cbab99e784eef92eb7415e"
       },
       "services": [
         {

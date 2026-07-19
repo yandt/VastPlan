@@ -401,14 +401,14 @@ export interface PortalRegisteredShellContribution extends PortalShellContributi
   pluginID: string;
 }
 
-export interface StructureCompositionInput {
+export interface ShellCompositionInput {
   pages: readonly PortalRegisteredPage[];
   shellContributions: readonly PortalRegisteredShellContribution[];
   activePageID?: string;
   config?: Readonly<Record<string, unknown>>;
 }
 
-export interface StructureCompositionModel {
+export interface ShellCompositionModel {
   pages: readonly PortalRegisteredPage[];
   activePage?: PortalRegisteredPage;
   activeNavigationPath?: ActiveNavigationPath;
@@ -417,34 +417,41 @@ export interface StructureCompositionModel {
   pageSlots: Readonly<Partial<Record<PageSlotID, readonly PortalPageSlotContribution[]>>>;
 }
 
-/** Owns the stable shell/page topology, slot validation and deterministic order. */
-export interface StructureCompositionAdapter {
-  id: "ui.structure.composition";
-  uiContract: string;
-  compose(input: StructureCompositionInput): StructureCompositionModel;
-  localization?: PluginLocalization;
-}
-
 export interface ShellBranding {
   name: string;
   logoURL?: string;
   shortName?: string;
 }
 
-export interface StructureLayoutProps {
-  composition: StructureCompositionModel;
+export interface ShellTemplate {
+  id: string;
+  label: LocalizedText;
+}
+
+export interface ShellTemplateSelection {
+  id: string;
+  options: Readonly<Record<string, unknown>>;
+}
+
+export interface UIShellProps {
+  composition: ShellCompositionModel;
+  template: ShellTemplateSelection;
+  availableTemplates: readonly ShellTemplate[];
+  onTemplateChange?(templateID: string): void;
   branding: ShellBranding;
-  config: Readonly<Record<string, unknown>>;
   pathname: string;
   recoveryNotice?: ReactNode;
   onNavigate(pageID: string): void;
 }
 
-/** Applies visual arrangement only; slot names and content come from composition. */
-export interface StructureLayoutAdapter {
-  id: "ui.structure.layout";
+/** Owns stable shell semantics and a governed catalog of visual templates. */
+export interface UIShellAdapter {
+  id: "ui.structure.shell";
   uiContract: string;
-  Shell: ComponentType<StructureLayoutProps>;
+  templates: readonly ShellTemplate[];
+  defaultTemplate: string;
+  compose(input: ShellCompositionInput): ShellCompositionModel;
+  Shell: ComponentType<UIShellProps>;
   localization?: PluginLocalization;
 }
 

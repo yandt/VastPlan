@@ -3,7 +3,7 @@ import { CollectionPage } from "./patterns/collection/CollectionPage.js";
 
 export const workbench: UIWorkbenchAdapter = {
   id: "ui.workflow.workbench",
-  uiContract: "3.0.0",
+  uiContract: "4.0.0",
   CollectionPage,
   localization: {
     defaultLocale: "zh-CN",

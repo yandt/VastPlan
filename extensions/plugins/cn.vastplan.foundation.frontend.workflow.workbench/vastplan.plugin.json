@@ -10,5 +10,5 @@
   "engines": { "frontend": "^1.0" },
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
-  "contributes": { "frontend": { "workbenches": [{ "id": "ui.workflow.workbench", "uiContract": "^3.0.0" }] } }
+  "contributes": { "frontend": { "workbenches": [{ "id": "ui.workflow.workbench", "uiContract": "^4.0.0" }] } }
 }

@@ -16,7 +16,7 @@
       "renderAdapters": [{
         "id": "ui.render.adapter",
         "title": "Arco Design System",
-        "uiContract": "^3.0.0",
+        "uiContract": "^4.0.0",
         "framework": "arco",
         "capabilities": ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"]
       }]

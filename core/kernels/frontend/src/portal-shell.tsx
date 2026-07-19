@@ -139,13 +139,20 @@ function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode }: {
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const composition = prepared.structureComposition.compose({
+  const composition = prepared.shell.compose({
     pages: prepared.pages,
     shellContributions: prepared.shellContributions,
     activePageID: page?.id,
-    config: prepared.portal.structureComposition.config,
+    config: prepared.portal.shell.config,
   });
-  const Layout = prepared.structureLayout.Shell;
+  const templateStorageKey = `vastplan.shell-template.${prepared.portal.tenantId}.${prepared.portal.id}.${prepared.portal.shell.id}`;
+  const [templateID, setTemplateID] = useState(() => resolveShellTemplate(prepared, templateStorageKey));
+  useEffect(() => setTemplateID(resolveShellTemplate(prepared, templateStorageKey)), [prepared, templateStorageKey]);
+  const changeTemplate = (next: string) => {
+    if (!prepared.portal.shell.config.userSelectable || !prepared.portal.shell.config.allowedTemplates.includes(next)) return;
+    setTemplateID(next);
+    try { globalThis.localStorage?.setItem(templateStorageKey, next); } catch { /* browser privacy mode may deny persistence */ }
+  };
   const navigate = (pageID: string) => {
     const target = prepared.pages.find((candidate) => candidate.id === pageID);
     if (target === undefined) return;
@@ -153,18 +160,30 @@ function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode }: {
     onNavigate(target.path);
   };
   const branding = prepared.portal.branding ?? {};
-  return <Layout
+  const Shell = prepared.shell.Shell;
+  return <Shell
     composition={composition}
+    template={{ id: templateID, options: prepared.portal.shell.config.templateOptions?.[templateID] ?? {} }}
+    availableTemplates={prepared.portal.shell.config.userSelectable ? prepared.shell.templates.filter((template) => prepared.portal.shell.config.allowedTemplates.includes(template.id)) : []}
+    onTemplateChange={prepared.portal.shell.config.userSelectable ? changeTemplate : undefined}
     branding={{
       name: typeof branding.name === "string" && branding.name !== "" ? branding.name : typeof branding.title === "string" && branding.title !== "" ? branding.title : prepared.portal.id,
       shortName: typeof branding.shortName === "string" ? branding.shortName : undefined,
       logoURL: typeof branding.logoURL === "string" ? branding.logoURL : undefined,
     }}
-    config={prepared.portal.structureLayout.config ?? {}}
     pathname={pathname}
     onNavigate={navigate}
     recoveryNotice={recoveryMode ? <ui.Status tone="warning">{i18n.text(message(kernelNamespace, "recovery.active", "正在运行上一条仍可信的已发布 revision #{revision}。", { revision: prepared.portal.revision }))}</ui.Status> : undefined}
   />;
+}
+
+function resolveShellTemplate(prepared: PreparedPortal, storageKey: string): string {
+  const allowed = new Set(prepared.portal.shell.config.allowedTemplates);
+  try {
+    const saved = globalThis.localStorage?.getItem(storageKey);
+    if (saved !== null && saved !== undefined && allowed.has(saved)) return saved;
+  } catch { /* browser privacy mode may deny persistence */ }
+  return prepared.portal.shell.config.defaultTemplate;
 }
 
 export function PortalStarting() {

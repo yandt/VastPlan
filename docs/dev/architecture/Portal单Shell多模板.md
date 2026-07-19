@@ -1,8 +1,8 @@
 # Portal 单 Shell 多模板设计
 
-> 状态：已采纳，待实施｜最后更新：2026-07-19
+> 状态：已采纳，核心路径已实施｜最后更新：2026-07-19
 >
-> 本文是 Portal 从“组合插件 + 布局插件”迁移到“单 Shell 插件 + 多模板”的实施设计单一真相源。架构取舍见 [ADR-0086](../decisions/ADR-0086-单Shell插件与可切换布局模板.md)。在迁移完成前，现网实现仍以《[前端门户内核](前端门户内核.md)》所述的 v2 三基础插件模型为准。
+> 本文是 Portal 从“组合插件 + 布局插件”迁移到“单 Shell 插件 + 多模板”的实施设计单一真相源。架构取舍见 [ADR-0086](../decisions/ADR-0086-单Shell插件与可切换布局模板.md)。Profile、Catalog、Portal Runtime 和首方交付已切换到 v3；旧目录当前仅作为 Shell 的内部编译源码，不再贡献或装配旧扩展点。
 
 ## 1. 目标与非目标
 
@@ -115,7 +115,7 @@ extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/
     └── shared/                   # Slot renderer、可访问性与区域可见性
 ```
 
-每种模板各自包含样式与模板专属测试；导航归并、Slot 渲染和区域内容判断只能在共享代码中存在一份。`vastplan.plugin.json` 只声明 `shells: [{ id: "ui.structure.shell", ... }]`。完成后删除以下旧目录及其构建制品、测试夹具、Catalog 条目和文档引用：
+每种模板各自包含样式与模板专属测试；导航归并、Slot 渲染和区域内容判断只能在共享代码中存在一份。`vastplan.plugin.json` 只声明 `shells: [{ id: "ui.structure.shell", ... }]`。当前迁移将以下旧目录降为不具备基础贡献的内部编译源码；下一轮目录收敛时再物理迁入 `structure.shell` 并删除目录：
 
 - `cn.vastplan.foundation.frontend.structure.composition.standard`
 - `cn.vastplan.foundation.frontend.structure.layout.standard`
@@ -125,12 +125,12 @@ extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/
 
 | 阶段 | 变更 | 完成条件 |
 |---|---|---|
-| 0. 决策与夹具 | ADR、本文、目标 Profile fixture | 无代码双模型并存承诺 |
-| 1. 公共契约 | `UIShellAdapter`、Shell 模板/Profile 类型、Manifest Schema | TypeScript 与 Go Schema 可表示且拒绝无效模板 |
-| 2. 解析与运行时 | Catalog、Composer、Portal API、Portal Runtime、开发态 loader 只解析 `shell` | 来源、单例、契约、模板目录和偏好均 fail-closed |
-| 3. 首方 Shell | 合并组合、标准侧栏、顶部导航为一个模块 | 两模板共享一套导航/Slot 逻辑 |
-| 4. 管理体验 | 配置中心展示模板目录与允许范围；门户提供用户切换入口 | 管理员范围与用户偏好边界可验证 |
-| 5. 删除与发布 | 删除旧三个插件与旧字段；构建/发布夹具全量替换 | 仓库不存在旧运行时字段或旧贡献类型 |
+| 0. 决策与夹具 | ADR、本文、目标 Profile fixture | 已完成 |
+| 1. 公共契约 | `UIShellAdapter`、Shell 模板/Profile 类型、Manifest Schema | 已完成，服务端与浏览器均拒绝无效模板 |
+| 2. 解析与运行时 | Catalog、Composer、Portal API、Portal Runtime、开发态 loader 只解析 `shell` | 已完成，来源、单例、契约与模板目录 fail-closed |
+| 3. 首方 Shell | 合并组合、标准侧栏、顶部导航为一个模块 | 已完成交付；旧源码暂作为无贡献内部模块复用 |
+| 4. 管理体验 | 配置中心展示模板目录与允许范围；门户提供用户切换入口 | 管理中心已改为编辑默认模板；用户切换入口待补入账户/偏好插件 |
+| 5. 删除与发布 | 删除旧三个插件与旧字段；构建/发布夹具全量替换 | 旧字段与贡献类型已删除；待物理目录收敛 |
 
 每阶段应独立提交；第 2 至 5 阶段必须在同一兼容性切换窗口内完成，不发布保留旧字段的双运行时。
 

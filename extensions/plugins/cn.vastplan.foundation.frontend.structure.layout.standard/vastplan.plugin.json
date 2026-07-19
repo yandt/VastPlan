@@ -11,5 +11,5 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
-  "contributes": { "frontend": { "structureLayouts": [{ "id": "ui.structure.layout", "title": "Standard Enterprise Layout", "uiContract": "^3.0.0" }] } }
+  "contributes": { "frontend": { "views": [{ "id": "legacy-standard-template-source", "title": "Internal Standard Template Source" }] } }
 }

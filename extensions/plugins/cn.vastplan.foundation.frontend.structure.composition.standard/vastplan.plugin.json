@@ -11,5 +11,5 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
-  "contributes": { "frontend": { "structureCompositions": [{ "id": "ui.structure.composition", "title": "Standard Shell Composition", "uiContract": "^3.0.0" }] } }
+  "contributes": { "frontend": { "views": [{ "id": "legacy-shell-composition-source", "title": "Internal Shell Composition Source" }] } }
 }

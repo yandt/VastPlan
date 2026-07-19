@@ -7,8 +7,7 @@ import {
   type NavigationZone,
   type PageSlotID,
   type PortalNavigationGroup,
-  type StructureLayoutAdapter,
-  type StructureLayoutProps,
+  type UIShellProps,
   type ShellSlotID,
 } from "@vastplan/ui-primitives";
 import { hasRegionContent } from "./region-visibility";
@@ -16,7 +15,7 @@ import { hasRegionContent } from "./region-visibility";
 const shellHeaderSlots = ["shell.header.start", "shell.header.center", "shell.header.end"] as const;
 const shellNavigationSlots = ["shell.navigation.start", "shell.navigation.center", "shell.navigation.end"] as const;
 
-function StandardShell({ composition, branding, config, pathname, recoveryNotice, onNavigate }: StructureLayoutProps) {
+export function StandardShell({ composition, branding, template, pathname, recoveryNotice, onNavigate }: UIShellProps) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -38,7 +37,7 @@ function StandardShell({ composition, branding, config, pathname, recoveryNotice
     "--vp-shell-touch-minimum": `${ui.theme.tokens.touch.minimum}px`,
     "--vp-shell-motion-fast": `${ui.theme.tokens.motion.fast}ms`,
   } as CSSProperties;
-  const pageWidth = config.pageBodyWidth === "contained" ? 1280 : undefined;
+  const pageWidth = template.options.pageBodyWidth === "contained" ? 1280 : undefined;
   const allGroups = useMemo(() => groups(composition, ["primary", "secondary", "settings"]), [composition]);
   const activeGroup = allGroups.find((group) => group.id === composition.activeNavigationPath?.rootGroupID);
   const groupKey = allGroups.map((group) => group.id).join("\u0000");
@@ -119,7 +118,7 @@ function StandardShell({ composition, branding, config, pathname, recoveryNotice
 
 function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, selectedGroup, onSelectGroup, onNavigate }: {
   branding: ReactNode;
-  composition: StructureLayoutProps["composition"];
+  composition: UIShellProps["composition"];
   mainGroups: readonly PortalNavigationGroup[];
   settingsGroups: readonly PortalNavigationGroup[];
   selectedGroup: PortalNavigationGroup | undefined;
@@ -176,7 +175,7 @@ function IconForGroup({ group }: { group: PortalNavigationGroup }) {
   return <ui.Icon name={group.icon} />;
 }
 
-function SecondLevelMenu({ group, composition, onNavigate }: { group: PortalNavigationGroup; composition: StructureLayoutProps["composition"]; onNavigate(id: string): void }) {
+function SecondLevelMenu({ group, composition, onNavigate }: { group: PortalNavigationGroup; composition: UIShellProps["composition"]; onNavigate(id: string): void }) {
   const i18n = usePortalI18n();
   const activePageID = composition.activeNavigationPath?.pageID;
   const activeChildID = composition.activeNavigationPath?.rootGroupID === group.id ? composition.activeNavigationPath.childGroupID : undefined;
@@ -251,11 +250,11 @@ function moveRailFocus(event: KeyboardEvent<HTMLElement>) {
   buttons[next]?.focus();
 }
 
-export function groups(composition: StructureLayoutProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] {
+export function groups(composition: UIShellProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] {
   return zones.flatMap((zone) => composition.navigation[zone]);
 }
 
-function pagePath(composition: StructureLayoutProps["composition"], navigationID: string): string | undefined {
+function pagePath(composition: UIShellProps["composition"], navigationID: string): string | undefined {
   return composition.pages.find((candidate) => candidate.navigation?.id === navigationID)?.path;
 }
 
@@ -264,11 +263,11 @@ function Brand({ name, shortName, logoURL, compact = false }: { name: string; sh
   return <div className={`vp-brand${compact ? " vp-brand-compact" : ""}`} title={name}>{logoURL === undefined ? <span className="vp-brand-mark">{label.slice(0, 1).toUpperCase()}</span> : <img src={logoURL} alt="" className="vp-brand-logo" />}{compact ? null : <strong>{label}</strong>}</div>;
 }
 
-function shellSlot(values: StructureLayoutProps["composition"]["shellSlots"], id: ShellSlotID): ReactNode {
+function shellSlot(values: UIShellProps["composition"]["shellSlots"], id: ShellSlotID): ReactNode {
   return values[id]?.map((item) => createElement(item.component, { key: `${item.pluginID}/${item.id}` }));
 }
 
-function pageSlot(values: StructureLayoutProps["composition"]["pageSlots"], id: PageSlotID): ReactNode {
+function pageSlot(values: UIShellProps["composition"]["pageSlots"], id: PageSlotID): ReactNode {
   return values[id]?.map((item) => createElement(item.component, { key: item.id }));
 }
 
@@ -286,8 +285,8 @@ export const standardShellCSS = `
 `;
 
 const namespace = "cn.vastplan.foundation.frontend.structure.layout.standard";
-const adapter: StructureLayoutAdapter = {
-  id: "ui.structure.layout", uiContract: "3.0.0", Shell: StandardShell,
+const adapter = {
+  id: "internal.standard-template-source", uiContract: "4.0.0", Shell: StandardShell,
   localization: {
     defaultLocale: "zh-CN",
     messages: {

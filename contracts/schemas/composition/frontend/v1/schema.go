@@ -52,13 +52,13 @@ type RenderAdapter struct {
 	Config map[string]any `json:"config,omitempty"`
 }
 
-// StructureComposition fixes the platform-owned semantic page and slot topology.
-// It is deliberately separate from StructureLayout so changing CSS/layout cannot
-// silently rename or remove extension slots consumed by functional plugins.
-type StructureComposition struct {
+// Shell owns the platform-owned semantic page/slot topology and the governed
+// catalog of visual templates. Templates may rearrange the stable topology but
+// cannot rename or remove slots consumed by functional plugins.
+type Shell struct {
 	PluginRef
-	UIContract string           `json:"uiContract"`
-	Config     NavigationConfig `json:"config,omitempty"`
+	UIContract string      `json:"uiContract"`
+	Config     ShellConfig `json:"config"`
 }
 
 type NavigationConfig struct {
@@ -74,13 +74,12 @@ type NavigationGroupDescriptor struct {
 	Order    int    `json:"order,omitempty"`
 }
 
-// StructureLayout selects the visual arrangement for an already normalized shell
-// composition. Config is layout-private, non-sensitive JSON owned by the
-// Platform Profile rather than an Application Composition.
-type StructureLayout struct {
-	PluginRef
-	UIContract string         `json:"uiContract"`
-	Config     map[string]any `json:"config,omitempty"`
+type ShellConfig struct {
+	NavigationConfig
+	DefaultTemplate  string                    `json:"defaultTemplate"`
+	AllowedTemplates []string                  `json:"allowedTemplates"`
+	UserSelectable   bool                      `json:"userSelectable"`
+	TemplateOptions  map[string]map[string]any `json:"templateOptions,omitempty"`
 }
 
 // Workbench fixes the governed page workflow runtime. Functional plugins may
@@ -105,14 +104,13 @@ type LocalizationPolicy struct {
 
 type PlatformProfile struct {
 	compositioncommonv1.Document
-	Target               compositioncommonv1.Target `json:"target"`
-	RenderAdapter        RenderAdapter              `json:"renderAdapter"`
-	StructureComposition StructureComposition       `json:"structureComposition"`
-	StructureLayout      StructureLayout            `json:"structureLayout"`
-	Workbench            Workbench                  `json:"workbench"`
-	Localization         *LocalizationPolicy        `json:"localization,omitempty"`
-	Plugins              []PluginRef                `json:"plugins"`
-	Security             SecurityPolicy             `json:"security,omitempty"`
+	Target        compositioncommonv1.Target `json:"target"`
+	RenderAdapter RenderAdapter              `json:"renderAdapter"`
+	Shell         Shell                      `json:"shell"`
+	Workbench     Workbench                  `json:"workbench"`
+	Localization  *LocalizationPolicy        `json:"localization,omitempty"`
+	Plugins       []PluginRef                `json:"plugins"`
+	Security      SecurityPolicy             `json:"security,omitempty"`
 }
 
 type ApplicationComposition struct {
@@ -219,20 +217,19 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 		return PlatformProfile{}, err
 	}
 	value.RenderAdapter.Channel = channel(value.RenderAdapter.Channel)
-	value.StructureComposition.Channel = channel(value.StructureComposition.Channel)
-	value.StructureLayout.Channel = channel(value.StructureLayout.Channel)
+	value.Shell.Channel = channel(value.Shell.Channel)
 	value.Workbench.Channel = channel(value.Workbench.Channel)
-	if err := ValidateNavigationConfig(value.StructureComposition.Config); err != nil {
+	if err := ValidateShellConfig(value.Shell.Config); err != nil {
 		return PlatformProfile{}, err
 	}
 	if value.Localization != nil && !containsFold(value.Localization.SupportedLocales, value.Localization.DefaultLocale) {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile 默认语言必须包含在 supportedLocales 中")
 	}
-	selectedFoundations := []PluginRef{value.RenderAdapter.PluginRef, value.StructureComposition.PluginRef, value.StructureLayout.PluginRef, value.Workbench.PluginRef}
+	selectedFoundations := []PluginRef{value.RenderAdapter.PluginRef, value.Shell.PluginRef, value.Workbench.PluginRef}
 	foundationIDs := map[string]struct{}{}
 	for _, selected := range selectedFoundations {
 		if _, exists := foundationIDs[selected.ID]; exists {
-			return PlatformProfile{}, fmt.Errorf("设计系统、Shell 组合、布局与 Workbench 必须由独立插件提供")
+			return PlatformProfile{}, fmt.Errorf("设计系统、Shell 与 Workbench 必须由独立插件提供")
 		}
 		foundationIDs[selected.ID] = struct{}{}
 	}
@@ -244,8 +241,8 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 			}
 		}
 	}
-	if !found[value.RenderAdapter.ID] || !found[value.StructureComposition.ID] || !found[value.StructureLayout.ID] || !found[value.Workbench.ID] {
-		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含设计系统、Shell 组合、布局与 Workbench 插件")
+	if !found[value.RenderAdapter.ID] || !found[value.Shell.ID] || !found[value.Workbench.ID] {
+		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含设计系统、Shell 与 Workbench 插件")
 	}
 	return value, nil
 }
@@ -286,6 +283,40 @@ func ValidateNavigationConfig(config NavigationConfig) error {
 		}
 		if parent.Zone != group.Zone {
 			return fmt.Errorf("导航子组不能跨语义区: %s/%s", group.ID, group.ParentID)
+		}
+	}
+	return nil
+}
+
+func ValidateShellConfig(config ShellConfig) error {
+	if err := ValidateNavigationConfig(config.NavigationConfig); err != nil {
+		return err
+	}
+	if !templateName.MatchString(config.DefaultTemplate) {
+		return fmt.Errorf("Shell 默认模板无效: %s", config.DefaultTemplate)
+	}
+	if len(config.AllowedTemplates) == 0 {
+		return fmt.Errorf("Shell 至少需要一个允许模板")
+	}
+	allowed := map[string]struct{}{}
+	for _, template := range config.AllowedTemplates {
+		if !templateName.MatchString(template) {
+			return fmt.Errorf("Shell 模板无效: %s", template)
+		}
+		if _, exists := allowed[template]; exists {
+			return fmt.Errorf("Shell 模板重复: %s", template)
+		}
+		allowed[template] = struct{}{}
+	}
+	if _, exists := allowed[config.DefaultTemplate]; !exists {
+		return fmt.Errorf("Shell 默认模板必须包含在 allowedTemplates: %s", config.DefaultTemplate)
+	}
+	for template, options := range config.TemplateOptions {
+		if _, exists := allowed[template]; !exists {
+			return fmt.Errorf("Shell templateOptions 不能包含未允许模板: %s", template)
+		}
+		if options == nil {
+			return fmt.Errorf("Shell 模板选项必须是对象: %s", template)
 		}
 	}
 	return nil
@@ -446,6 +477,7 @@ func ValidatePortalBinding(binding PortalBinding) error {
 }
 
 var managementName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$`)
+var templateName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 
 func validateManagedServices(services []ManagedService) error {
 	seenIDs, seenTargets := map[string]struct{}{}, map[string]struct{}{}

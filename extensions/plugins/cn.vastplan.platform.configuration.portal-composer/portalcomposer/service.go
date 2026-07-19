@@ -402,9 +402,19 @@ func cloneSpec(in portalapi.PortalSpec) portalapi.PortalSpec {
 	out.Plugins = append([]portalapi.PluginRef(nil), in.Plugins...)
 	out.Branding = cloneMap(in.Branding)
 	out.Config = cloneMap(in.Config)
-	out.StructureLayout.Config = cloneMap(in.StructureLayout.Config)
+	out.Shell.Config = cloneShellConfig(in.Shell.Config)
 	out.Management.Services = cloneManagedServices(in.Management.Services)
 	out.Resolution.PluginOrigins = cloneStringMap(in.Resolution.PluginOrigins)
+	return out
+}
+func cloneShellConfig(in frontendcompositionv1.ShellConfig) frontendcompositionv1.ShellConfig {
+	out := in
+	out.NavigationGroups = append([]frontendcompositionv1.NavigationGroupDescriptor(nil), in.NavigationGroups...)
+	out.AllowedTemplates = append([]string(nil), in.AllowedTemplates...)
+	out.TemplateOptions = make(map[string]map[string]any, len(in.TemplateOptions))
+	for template, options := range in.TemplateOptions {
+		out.TemplateOptions[template] = cloneMap(options)
+	}
 	return out
 }
 func cloneManagedServices(in []frontendcompositionv1.ManagedService) []frontendcompositionv1.ManagedService {

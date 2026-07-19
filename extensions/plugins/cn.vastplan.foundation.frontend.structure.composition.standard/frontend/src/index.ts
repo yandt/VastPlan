@@ -9,9 +9,8 @@ import type {
   PortalPageSlotContribution,
   PortalRegisteredShellContribution,
   SemanticIconName,
-  StructureCompositionAdapter,
-  StructureCompositionInput,
-  StructureCompositionModel,
+  ShellCompositionInput,
+  ShellCompositionModel,
   ShellSlotID,
 } from "@vastplan/ui-primitives";
 
@@ -30,7 +29,7 @@ function ordered<T extends { id: string; order?: number }>(values: readonly T[])
   return [...values].sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.id.localeCompare(right.id));
 }
 
-function compose(input: StructureCompositionInput): StructureCompositionModel {
+function compose(input: ShellCompositionInput): ShellCompositionModel {
   const pages = Object.freeze([...input.pages]);
   const activePage = pages.find((page) => page.id === input.activePageID);
   const descriptors = navigationGroups(input.config);
@@ -148,8 +147,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-const adapter: StructureCompositionAdapter = {
-  id: "ui.structure.composition", uiContract: "3.0.0", compose,
+const adapter = {
+  id: "internal.shell-composition-source", uiContract: "4.0.0", compose,
   localization: {
     defaultLocale: "zh-CN",
     messages: {
@@ -158,4 +157,5 @@ const adapter: StructureCompositionAdapter = {
     },
   },
 };
+export { compose };
 export default adapter;

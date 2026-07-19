@@ -1,4 +1,4 @@
-import type { UIRenderAdapter, FrontendPluginHotLifecycle, PluginLocalization, StructureCompositionAdapter, StructureLayoutAdapter, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
+import type { UIRenderAdapter, FrontendPluginHotLifecycle, PluginLocalization, UIShellAdapter, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import type { FrontendPluginLoader, FrontendPluginModule, PluginRef, PortalSpec } from "./portal-runtime";
 
 export interface FrontendModuleDescriptor extends PluginRef {
@@ -114,11 +114,8 @@ function normalizeModule(namespace: unknown, descriptor: FrontendModuleDescripto
   if (exported.id === "ui.render.adapter" && typeof exported.Provider === "function") {
     return { provenance, renderAdapter: exported as unknown as UIRenderAdapter, hot, localization };
   }
-  if (exported.id === "ui.structure.composition" && typeof exported.compose === "function") {
-    return { provenance, structureComposition: exported as unknown as StructureCompositionAdapter, hot, localization };
-  }
-  if (exported.id === "ui.structure.layout" && typeof exported.Shell === "function") {
-    return { provenance, structureLayout: exported as unknown as StructureLayoutAdapter, hot, localization };
+  if (exported.id === "ui.structure.shell" && typeof exported.compose === "function" && typeof exported.Shell === "function") {
+    return { provenance, shell: exported as unknown as UIShellAdapter, hot, localization };
   }
   if (exported.id === "ui.workflow.workbench" && typeof exported.CollectionPage === "function") {
     return { provenance, workbench: exported as unknown as UIWorkbenchAdapter, hot, localization };
@@ -126,7 +123,7 @@ function normalizeModule(namespace: unknown, descriptor: FrontendModuleDescripto
   if (typeof exported.register === "function") {
     return { provenance, register: exported.register.bind(exported) as FrontendPluginModule["register"], hot, localization };
   }
-  throw new ModuleLoadError("MODULE_EXPORT_INVALID", `前端模块未导出设计系统、Shell 组合、布局或 register: ${descriptor.id}`);
+  throw new ModuleLoadError("MODULE_EXPORT_INVALID", `前端模块未导出设计系统、Shell、Workbench 或 register: ${descriptor.id}`);
 }
 
 function normalizeLocalizationExport(value: unknown, pluginID: string): PluginLocalization | undefined {

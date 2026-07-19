@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { PortalSlotContribution, StructureCompositionModel } from "@vastplan/ui-primitives";
+import type { PortalSlotContribution, ShellCompositionModel } from "@vastplan/ui-primitives";
 import adapter, { groups, standardShellCSS } from "./index";
 import { hasRegionContent } from "./region-visibility";
 
-function composition(overrides: Partial<StructureCompositionModel> = {}): StructureCompositionModel {
+function composition(overrides: Partial<ShellCompositionModel> = {}): ShellCompositionModel {
   return {
     pages: [],
     navigation: { primary: [], settings: [], secondary: [] },
@@ -17,8 +17,8 @@ const contribution: PortalSlotContribution<"shell.header.start"> & { pluginID: s
 
 describe("standard shell layout", () => {
   it("exports only the visual layout adapter contract", () => {
-    expect(adapter.id).toBe("ui.structure.layout");
-    expect(adapter.uiContract).toBe("3.0.0");
+    expect(adapter.id).toBe("internal.standard-template-source");
+    expect(adapter.uiContract).toBe("4.0.0");
     expect(adapter.Shell).toBeTypeOf("function");
     expect(adapter).not.toHaveProperty("compose");
   });
