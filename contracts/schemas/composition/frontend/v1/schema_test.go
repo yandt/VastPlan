@@ -26,6 +26,16 @@ func TestFrontendInputsRejectBoundaryViolations(t *testing.T) {
 	}
 }
 
+func TestFrontendLocalizationPolicyRequiresGovernedDefault(t *testing.T) {
+	profile, err := ParsePlatformProfile([]byte(`{"version":1,"revision":1,"id":"localized","target":{"kernel":"frontend"},"designSystem":{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0","uiContract":"^1.0.0"},"composition":{"id":"com.vastplan.foundation.frontend.composition.standard","version":"1.0.0","uiContract":"^1.0.0"},"layout":{"id":"com.vastplan.foundation.frontend.layout.standard","version":"1.0.0","uiContract":"^1.0.0"},"localization":{"defaultLocale":"en-US","supportedLocales":["zh-CN","en-US"]},"plugins":[{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0"},{"id":"com.vastplan.foundation.frontend.composition.standard","version":"1.0.0"},{"id":"com.vastplan.foundation.frontend.layout.standard","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`))
+	if err != nil || profile.Localization == nil || profile.Localization.DefaultLocale != "en-US" {
+		t.Fatalf("本地化策略解析失败: %+v %v", profile.Localization, err)
+	}
+	if _, err := ParsePlatformProfile([]byte(`{"version":1,"revision":1,"id":"localized","target":{"kernel":"frontend"},"designSystem":{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0","uiContract":"^1.0.0"},"composition":{"id":"com.vastplan.foundation.frontend.composition.standard","version":"1.0.0","uiContract":"^1.0.0"},"layout":{"id":"com.vastplan.foundation.frontend.layout.standard","version":"1.0.0","uiContract":"^1.0.0"},"localization":{"defaultLocale":"fr-FR","supportedLocales":["zh-CN","en-US"]},"plugins":[{"id":"com.vastplan.foundation.frontend.design-system.arco","version":"1.0.0"},{"id":"com.vastplan.foundation.frontend.composition.standard","version":"1.0.0"},{"id":"com.vastplan.foundation.frontend.layout.standard","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`)); err == nil {
+		t.Fatal("默认语言不在 supportedLocales 中必须拒绝")
+	}
+}
+
 func TestPortalPlatformCatalogResolvesProfileAndExactServiceGrants(t *testing.T) {
 	profile := validProfile(t)
 	catalog, err := ValidatePortalPlatformCatalog(PortalPlatformCatalog{

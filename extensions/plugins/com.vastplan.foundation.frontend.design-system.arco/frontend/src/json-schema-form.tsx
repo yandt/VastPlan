@@ -46,7 +46,7 @@ import type {
 } from "@rjsf/utils";
 import { useEffect, useMemo, useState } from "react";
 import type { FormRendererProps, FormValidationIssue } from "@vastplan/portal-ui";
-import { jsonSchemaDialect } from "@vastplan/portal-ui";
+import { jsonSchemaDialect, localizeJSONSchema, message, usePortalI18n } from "@vastplan/portal-ui";
 import { cspJSONSchemaValidator } from "./csp-json-schema-validator";
 
 type FormData = Record<string, unknown>;
@@ -54,6 +54,7 @@ type FormContext = Readonly<Record<string, unknown>>;
 type Schema = RJSFSchema;
 
 const emptyContext: FormContext = {};
+const namespace = "com.vastplan.foundation.frontend.design-system.arco";
 
 export const arcoJSONSchemaValidator = cspJSONSchemaValidator;
 
@@ -201,15 +202,17 @@ function RatingWidget(props: WidgetProps) {
 }
 
 function UnsupportedFileWidget() {
-  return <Alert type="warning" content="表单不接受内嵌文件数据；请使用受控制品上传能力。" />;
+  const i18n = usePortalI18n();
+  return <Alert type="warning" content={i18n.text(message(namespace,"form.fileUnsupported","表单不接受内嵌文件数据；请使用受控制品上传能力。"))} />;
 }
 
 function SecretRefWidget(props: WidgetProps) {
+  const i18n = usePortalI18n();
   if ((props.options.enumOptions?.length ?? 0) > 0) return <SelectWidget {...props} />;
   return <Input
     id={props.id}
     value={typeof props.value === "string" ? props.value : ""}
-    placeholder={props.placeholder ?? "输入 credential:// 凭证引用（禁止填写明文）"}
+    placeholder={props.placeholder ?? i18n.text(message(namespace,"form.credentialPlaceholder","输入 credential:// 凭证引用（禁止填写明文）"))}
     disabled={controlDisabled(props)}
     autoComplete="off"
     onChange={(next) => props.onChange(next || undefined)}
@@ -262,9 +265,10 @@ function FieldTemplate({ label, children, rawDescription, rawHelp, rawErrors, hi
 }
 
 function ObjectFieldTemplate({ title, description, properties, schema, uiSchema, formData, onAddProperty, fieldPathId, readonly, disabled }: ObjectFieldTemplateProps) {
+  const i18n = usePortalI18n();
   const content = <>{properties.filter((property) => !property.hidden).map((property) => property.content)}</>;
   const add = canExpand(schema, uiSchema, formData) && !readonly && !disabled
-    ? <Button size="small" icon={<IconPlus />} onClick={onAddProperty}>添加属性</Button>
+    ? <Button size="small" icon={<IconPlus />} onClick={onAddProperty}>{i18n.text(message(namespace,"form.addProperty","添加属性"))}</Button>
     : undefined;
   if (fieldPathId.path.length === 0) return <>
     {title === "" ? null : <Typography.Title heading={6}>{title}</Typography.Title>}
@@ -279,31 +283,34 @@ function ObjectFieldTemplate({ title, description, properties, schema, uiSchema,
 }
 
 function ArrayFieldTemplate({ title, items, canAdd, onAddClick, readonly, disabled, rawErrors }: ArrayFieldTemplateProps) {
+  const i18n = usePortalI18n();
   return <Card
     title={title}
     size="small"
     style={{ marginBottom: 16 }}
-    extra={canAdd && !readonly && !disabled ? <Button size="small" icon={<IconPlus />} onClick={onAddClick}>添加</Button> : undefined}
+    extra={canAdd && !readonly && !disabled ? <Button size="small" icon={<IconPlus />} onClick={onAddClick}>{i18n.text(message(namespace,"form.add","添加"))}</Button> : undefined}
   >
     {(rawErrors?.length ?? 0) > 0 ? <Alert type="error" content={rawErrors?.[0]} style={{ marginBottom: 12 }} /> : null}
-    {items.length === 0 ? <Typography.Text type="secondary">暂无条目</Typography.Text> : items}
+    {items.length === 0 ? <Typography.Text type="secondary">{i18n.text(message(namespace,"form.empty","暂无条目"))}</Typography.Text> : items}
   </Card>;
 }
 
 function ArrayFieldItemButtonsTemplate({ hasMoveUp, hasMoveDown, hasCopy, hasRemove, disabled, readonly, onMoveUpItem, onMoveDownItem, onCopyItem, onRemoveItem }: ArrayFieldItemButtonsTemplateProps) {
+  const i18n = usePortalI18n();
   const locked = Boolean(disabled || readonly);
   return <Space size={4}>
-    {hasMoveUp ? <Button size="mini" icon={<IconUp />} disabled={locked} aria-label="上移" onClick={onMoveUpItem} /> : null}
-    {hasMoveDown ? <Button size="mini" icon={<IconDown />} disabled={locked} aria-label="下移" onClick={onMoveDownItem} /> : null}
-    {hasCopy ? <Button size="mini" icon={<IconCopy />} disabled={locked} aria-label="复制" onClick={onCopyItem} /> : null}
-    {hasRemove ? <Button size="mini" status="danger" icon={<IconDelete />} disabled={locked} aria-label="删除" onClick={onRemoveItem} /> : null}
+    {hasMoveUp ? <Button size="mini" icon={<IconUp />} disabled={locked} aria-label={i18n.text(message(namespace,"action.moveUp","上移"))} onClick={onMoveUpItem} /> : null}
+    {hasMoveDown ? <Button size="mini" icon={<IconDown />} disabled={locked} aria-label={i18n.text(message(namespace,"action.moveDown","下移"))} onClick={onMoveDownItem} /> : null}
+    {hasCopy ? <Button size="mini" icon={<IconCopy />} disabled={locked} aria-label={i18n.text(message(namespace,"action.copy","复制"))} onClick={onCopyItem} /> : null}
+    {hasRemove ? <Button size="mini" status="danger" icon={<IconDelete />} disabled={locked} aria-label={i18n.text(message(namespace,"action.delete","删除"))} onClick={onRemoveItem} /> : null}
   </Space>;
 }
 
 function ArrayFieldItemTemplate({ children, buttonsProps, index, hasToolbar }: ArrayFieldItemTemplateProps) {
+  const i18n = usePortalI18n();
   return <Card
     key={buttonsProps.fieldPathId.$id}
-    title={`第 ${index + 1} 项`}
+    title={i18n.text(message(namespace,"form.item","第 {index} 项",{index:index + 1}))}
     size="small"
     style={{ marginBottom: 12 }}
     extra={hasToolbar ? <ArrayFieldItemButtonsTemplate {...buttonsProps} /> : undefined}
@@ -315,11 +322,12 @@ function MultiSchemaFieldTemplate({ selector, optionSchemaField }: MultiSchemaFi
 }
 
 function WrapIfAdditionalTemplate({ children, id, label, onKeyRename, onKeyRenameBlur, onRemoveProperty, disabled, readonly }: WrapIfAdditionalTemplateProps) {
+  const i18n = usePortalI18n();
   if (!schemaIsAdditional(label)) return children;
   return <Space direction="vertical" size={8} style={{ width: "100%" }}>
     <Space style={{ width: "100%" }}>
-      <Input defaultValue={label} disabled={disabled || readonly} aria-label="属性名称" onChange={onKeyRename} onBlur={onKeyRenameBlur} />
-      <Button status="danger" icon={<IconDelete />} disabled={disabled || readonly} aria-label="删除属性" onClick={onRemoveProperty} />
+      <Input defaultValue={label} disabled={disabled || readonly} aria-label={i18n.text(message(namespace,"form.propertyName","属性名称"))} onChange={onKeyRename} onBlur={onKeyRenameBlur} />
+      <Button status="danger" icon={<IconDelete />} disabled={disabled || readonly} aria-label={i18n.text(message(namespace,"form.removeProperty","删除属性"))} onClick={onRemoveProperty} />
     </Space>
     <div id={id}>{children}</div>
   </Space>;
@@ -330,7 +338,8 @@ function schemaIsAdditional(label: string): boolean {
 }
 
 function ErrorListTemplate({ errors }: ErrorListProps) {
-  return errors.length === 0 ? null : <Alert type="error" title="表单校验未通过" content={`请检查 ${errors.length} 个问题`} style={{ marginBottom: 16 }} />;
+  const i18n = usePortalI18n();
+  return errors.length === 0 ? null : <Alert type="error" title={i18n.text(message(namespace, "form.validationFailed", "表单校验未通过"))} content={i18n.text(message(namespace, "form.issueCount", "请检查 {count} 个问题", { count: errors.length }))} style={{ marginBottom: 16 }} />;
 }
 
 function IconButton({ icon, type, onClick, disabled, title, className, style, id, name, tabIndex, "aria-label": ariaLabel }: IconButtonProps) {
@@ -378,37 +387,42 @@ function pathFromError(error: RJSFValidationError): string {
   return path.replace(/\['([^']+)'\]/g, "$1");
 }
 
-function translatedMessage(error: RJSFValidationError): string {
+function translatedMessage(error: RJSFValidationError, locale = "zh-CN"): string {
+  const english = !locale.toLowerCase().startsWith("zh");
   switch (error.name) {
-    case "required": return "此项为必填项";
-    case "minLength": return `至少需要 ${String(error.params?.limit ?? "指定")} 个字符`;
-    case "maxLength": return `最多允许 ${String(error.params?.limit ?? "指定")} 个字符`;
-    case "minimum": return `不能小于 ${String(error.params?.limit ?? "最小值")}`;
-    case "maximum": return `不能大于 ${String(error.params?.limit ?? "最大值")}`;
-    case "minItems": return `至少需要 ${String(error.params?.limit ?? "指定")} 项`;
-    case "maxItems": return `最多允许 ${String(error.params?.limit ?? "指定")} 项`;
-    case "pattern": return "格式不符合要求";
-    case "format": return "格式不正确";
-    case "additionalProperties": return "包含未允许的属性";
-    default: return error.message ?? "值不符合 Schema";
+    case "required": return english ? "This field is required" : "此项为必填项";
+    case "minLength": return english ? `Must contain at least ${String(error.params?.limit ?? "the required number of")} characters` : `至少需要 ${String(error.params?.limit ?? "指定")} 个字符`;
+    case "maxLength": return english ? `Must contain no more than ${String(error.params?.limit ?? "the allowed number of")} characters` : `最多允许 ${String(error.params?.limit ?? "指定")} 个字符`;
+    case "minimum": return english ? `Must not be less than ${String(error.params?.limit ?? "the minimum")}` : `不能小于 ${String(error.params?.limit ?? "最小值")}`;
+    case "maximum": return english ? `Must not be greater than ${String(error.params?.limit ?? "the maximum")}` : `不能大于 ${String(error.params?.limit ?? "最大值")}`;
+    case "minItems": return english ? `Must contain at least ${String(error.params?.limit ?? "the required number of")} items` : `至少需要 ${String(error.params?.limit ?? "指定")} 项`;
+    case "maxItems": return english ? `Must contain no more than ${String(error.params?.limit ?? "the allowed number of")} items` : `最多允许 ${String(error.params?.limit ?? "指定")} 项`;
+    case "pattern": return english ? "The value does not match the required format" : "格式不符合要求";
+    case "format": return english ? "The value has an invalid format" : "格式不正确";
+    case "additionalProperties": return english ? "Contains a property that is not allowed" : "包含未允许的属性";
+    default: return error.message ?? (english ? "Value does not match the schema" : "值不符合 Schema");
   }
 }
 
 export function transformArcoFormErrors(errors: RJSFValidationError[]): RJSFValidationError[] {
-  return errors.map((error) => ({ ...error, message: translatedMessage(error), stack: `${pathFromError(error)} ${translatedMessage(error)}`.trim() }));
+  return transformLocalizedFormErrors(errors, "zh-CN");
 }
 
-function errorsByPath(errors: RJSFValidationError[]): Record<string, string> {
+function transformLocalizedFormErrors(errors: RJSFValidationError[], locale: string): RJSFValidationError[] {
+  return errors.map((error) => ({ ...error, message: translatedMessage(error, locale), stack: `${pathFromError(error)} ${translatedMessage(error, locale)}`.trim() }));
+}
+
+function errorsByPath(errors: RJSFValidationError[], locale: string): Record<string, string> {
   const result: Record<string, string> = {};
-  for (const error of errors) result[pathFromError(error) || "$form"] ??= translatedMessage(error);
+  for (const error of errors) result[pathFromError(error) || "$form"] ??= translatedMessage(error, locale);
   return result;
 }
 
-function issuesFromErrors(errors: RJSFValidationError[]): FormValidationIssue[] {
+function issuesFromErrors(errors: RJSFValidationError[], locale: string): FormValidationIssue[] {
   return errors.map((error) => ({
     path: pathFromError(error),
     code: error.name ?? "schema",
-    message: translatedMessage(error),
+    message: translatedMessage(error, locale),
     ...(error.schemaPath === undefined ? {} : { schemaPath: error.schemaPath }),
   }));
 }
@@ -429,28 +443,30 @@ function errorSchemaFromPaths(errors: Readonly<Record<string, string>>): ErrorSc
   return root as ErrorSchema<FormData>;
 }
 
-function schemaContractError(schema: FormRendererProps["schema"]): string | undefined {
-  if (schema.schema.$schema !== jsonSchemaDialect) return `仅支持 JSON Schema Draft 7：${jsonSchemaDialect}`;
-  if (schema.schema.type !== "object") return "表单根 Schema 的 type 必须是 object";
-  if (typeof schema.schema.properties !== "object" || schema.schema.properties === null || Array.isArray(schema.schema.properties)) return "表单根 Schema 必须声明 properties";
+function schemaContractError(schema: FormRendererProps["schema"], english: boolean): string | undefined {
+  if (schema.schema.$schema !== jsonSchemaDialect) return english ? `Only JSON Schema Draft 7 is supported: ${jsonSchemaDialect}` : `仅支持 JSON Schema Draft 7：${jsonSchemaDialect}`;
+  if (schema.schema.type !== "object") return english ? "The form root schema type must be object" : "表单根 Schema 的 type 必须是 object";
+  if (typeof schema.schema.properties !== "object" || schema.schema.properties === null || Array.isArray(schema.schema.properties)) return english ? "The form root schema must declare properties" : "表单根 Schema 必须声明 properties";
   return undefined;
 }
 
 export function ArcoJSONSchemaForm({ schema, value, onChange, readOnly, submitting, errors: externalErrors, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
-  const contractError = schemaContractError(schema);
-  const dataSchema = schema.schema as Schema;
-  const uiSchema = schema.uiSchema as UiSchema<FormData, Schema, FormContext> | undefined;
+  const i18n = usePortalI18n();
+  const contractError = schemaContractError(schema,!i18n.locale.toLowerCase().startsWith("zh"));
+  const validationSchema = schema.schema as Schema;
+  const dataSchema = useMemo(() => localizeJSONSchema(schema.schema, schema.localization, i18n.text) as Schema, [i18n.text, schema.localization, schema.schema]);
+  const uiSchema = useMemo(() => schema.uiSchema === undefined ? undefined : localizeJSONSchema(schema.uiSchema, schema.uiLocalization, i18n.text) as UiSchema<FormData, Schema, FormContext>, [i18n.text, schema.uiLocalization, schema.uiSchema]);
   const context = suppliedContext ?? emptyContext;
   const syncValidation = useMemo(() => {
     if (contractError !== undefined) return { errors: [{ name: "schema", property: "", schemaPath: "", stack: contractError, message: contractError }] as RJSFValidationError[] };
     try {
-      return arcoJSONSchemaValidator.validateFormData(value, dataSchema, undefined, transformArcoFormErrors, uiSchema);
+      return arcoJSONSchemaValidator.validateFormData(value, validationSchema, undefined, (errors) => transformLocalizedFormErrors(errors, i18n.locale), uiSchema);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Schema 编译失败";
       return { errors: [{ name: "schema", property: "", schemaPath: "", stack: message, message }] as RJSFValidationError[] };
     }
-  }, [contractError, dataSchema, uiSchema, value]);
-  const syncErrors = useMemo(() => errorsByPath(syncValidation.errors), [syncValidation.errors]);
+  }, [contractError, i18n.locale, uiSchema, validationSchema, value]);
+  const syncErrors = useMemo(() => errorsByPath(syncValidation.errors, i18n.locale), [i18n.locale, syncValidation.errors]);
   const [asyncValidation, setAsyncValidation] = useState<{
     source?: Readonly<FormData>;
     validating: boolean;
@@ -470,7 +486,7 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, readOnly, submitti
     const timeout = window.setTimeout(() => {
       validate({ schema, value, context, signal: controller.signal })
         .then((errors) => { if (!controller.signal.aborted) setAsyncValidation({ source: value, validating: false, errors }); })
-        .catch(() => { if (!controller.signal.aborted) setAsyncValidation({ source: value, validating: false, errors: { $form: "异步校验暂时不可用" } }); });
+        .catch(() => { if (!controller.signal.aborted) setAsyncValidation({ source: value, validating: false, errors: { $form: i18n.text(message(namespace,"form.asyncUnavailable","异步校验暂时不可用")) } }); });
     }, Math.max(0, validationDelayMs));
     return () => { controller.abort(); window.clearTimeout(timeout); };
   }, [context, schema, syncValidation.errors.length, validate, validationDelayMs, value]);
@@ -479,15 +495,15 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, readOnly, submitti
   const errors = useMemo(() => ({ ...syncErrors, ...allExternalErrors }), [allExternalErrors, syncErrors]);
   const validationState = useMemo(() => ({
     valid: syncValidation.errors.length === 0 && !currentAsync.validating && Object.keys(allExternalErrors).length === 0,
-    issues: issuesFromErrors(syncValidation.errors),
+    issues: issuesFromErrors(syncValidation.errors, i18n.locale),
     errors,
     validating: currentAsync.validating,
-  }), [allExternalErrors, currentAsync.validating, errors, syncValidation.errors]);
+  }), [allExternalErrors, currentAsync.validating, errors, i18n.locale, syncValidation.errors]);
   useEffect(() => onValidationChange?.(validationState), [onValidationChange, validationState]);
 
-  if (contractError !== undefined) return <Alert type="error" title="表单 Schema 不受支持" content={contractError} />;
+  if (contractError !== undefined) return <Alert type="error" title={i18n.text(message(namespace,"form.unsupported","表单 Schema 不受支持"))} content={contractError} />;
   return <>
-    {currentAsync.validating ? <Alert type="info" title="正在校验" style={{ marginBottom: 16 }} /> : null}
+    {currentAsync.validating ? <Alert type="info" title={i18n.text(message(namespace,"form.validating","正在校验"))} style={{ marginBottom: 16 }} /> : null}
     <Form layout="vertical">
       <RJSFForm<FormData, Schema, FormContext>
         tagName="div"
@@ -505,7 +521,7 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, readOnly, submitti
         extraErrors={errorSchemaFromPaths(allExternalErrors)}
         extraErrorsBlockSubmit
         noHtml5Validate
-        transformErrors={transformArcoFormErrors}
+        transformErrors={(items) => transformLocalizedFormErrors(items, i18n.locale)}
         onChange={(event) => onChange(event.formData ?? {})}
       ><></></RJSFForm>
     </Form>

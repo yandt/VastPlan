@@ -28,6 +28,7 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
     async load(ref) {
       const base = {
         provenance: { signed: true, firstParty: true, integrity: "sha256:test" },
+        localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { "test.label": "测试" }, "en-US": { "test.label": "Test" } } },
       };
       if (ref.id === arcoRef.id || ref.id === muiRef.id) {
         return { ...base, designSystem: designSystem(ref.id === arcoRef.id ? "arco" : "mui"), ...(overrides[ref.id] as object) };
@@ -78,6 +79,31 @@ describe("PortalRuntime", () => {
     })).prepare(portal, { generation: "candidate-7", signal: controller.signal, reason: "replace" });
     expect(received).toMatchObject({ pluginID: composerRef.id, generation: "candidate-7", reason: "replace", signal: controller.signal });
     expect(Object.isFrozen(received)).toBe(true);
+  });
+
+  it("binds language resources and registration messages to the real plugin id", async () => {
+    const prepared = await new PortalRuntime(loader({
+      [composerRef.id]: {
+        localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { "page.title": "门户" }, "en-US": { "page.title": "Portal" } } },
+        register(context: FrontendPluginContext) {
+          const title = context.i18n.message("page.title", "门户");
+          context.addPage({ id: "localized", path: "/localized", title, slots: [{ id: "body", slot: "page.body.main", component: () => null }] });
+        },
+      },
+    })).prepare({ ...portal, localization: { defaultLocale: "zh-CN", supportedLocales: ["zh-CN", "en-US"] } });
+    expect(prepared.pages[0].title).toMatchObject({ namespace: composerRef.id, key: "page.title" });
+    expect(prepared.messageCatalogs[composerRef.id].messages["en-US"]["page.title"]).toBe("Portal");
+  });
+
+  it("rejects oversized or malformed plugin language resources", async () => {
+    await expect(new PortalRuntime(loader({ [composerRef.id]: { localization: { defaultLocale: "zh-CN", messages: { bad_locale: { title: "x" } } } } })).prepare(portal))
+      .rejects.toMatchObject({ code: "LOCALIZATION_INVALID" } satisfies Partial<PortalAssemblyError>);
+    await expect(new PortalRuntime(loader({ [composerRef.id]: { localization: undefined } })).prepare(portal))
+      .rejects.toMatchObject({ code: "LOCALIZATION_REQUIRED" } satisfies Partial<PortalAssemblyError>);
+    await expect(new PortalRuntime(loader({ [composerRef.id]: { localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { title: "仅中文" } } } } })).prepare(portal))
+      .rejects.toMatchObject({ code: "LOCALIZATION_FIRST_PARTY_INCOMPLETE" } satisfies Partial<PortalAssemblyError>);
+    await expect(new PortalRuntime(loader({ [composerRef.id]: { localization: { defaultLocale: "en-US", messages: { "en-US": { title: "one" }, "en-us": { title: "two" } } } } })).prepare(portal))
+      .rejects.toMatchObject({ code: "LOCALIZATION_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 
   it("mounts functional page paths below the selected Portal route", async () => {

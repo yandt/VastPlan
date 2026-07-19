@@ -42,6 +42,7 @@ func resolve(catalog frontendcompositionv1.PortalPlatformCatalog, application fr
 		Revision: revision, ID: application.ID, TenantID: tenantID, Route: application.Route,
 		Domains: append([]string(nil), application.Domains...), Audience: append([]string(nil), application.Audience...),
 		Branding: cloneMap(application.Branding), Config: cloneMap(application.Config), Plugins: plugins,
+		Localization: localization(profile.Localization),
 		Management:   binding,
 		DesignSystem: portalapi.DesignSystem{PluginRef: portalRef(profile.DesignSystem.PluginRef), UIContract: profile.DesignSystem.UIContract},
 		Composition:  portalapi.ShellComposition{PluginRef: portalRef(profile.Composition.PluginRef), UIContract: profile.Composition.UIContract, Config: profile.Composition.Config},
@@ -54,6 +55,13 @@ func resolve(catalog frontendcompositionv1.PortalPlatformCatalog, application fr
 			PluginOrigins:           origins,
 		},
 	}, nil
+}
+
+func localization(policy *frontendcompositionv1.LocalizationPolicy) frontendcompositionv1.LocalizationPolicy {
+	if policy == nil {
+		return frontendcompositionv1.LocalizationPolicy{DefaultLocale: "zh-CN", SupportedLocales: []string{"zh-CN", "en-US"}}
+	}
+	return frontendcompositionv1.LocalizationPolicy{DefaultLocale: policy.DefaultLocale, SupportedLocales: append([]string(nil), policy.SupportedLocales...)}
 }
 
 func portalRef(ref frontendcompositionv1.PluginRef) portalapi.PluginRef {

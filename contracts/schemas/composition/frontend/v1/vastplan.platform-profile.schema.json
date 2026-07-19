@@ -13,6 +13,7 @@
     "designSystem": { "$ref": "#/$defs/designSystem" },
     "composition": { "$ref": "#/$defs/foundationSelection" },
     "layout": { "$ref": "#/$defs/layoutSelection" },
+    "localization": { "$ref": "#/$defs/localizationPolicy" },
     "plugins": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/pluginRef" } },
     "security": {
       "type": "object", "additionalProperties": false,
@@ -56,6 +57,13 @@
         "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" },
         "uiContract": { "type": "string", "minLength": 1, "maxLength": 128 },
         "config": { "type": "object" }
+      }
+    },
+    "localizationPolicy": {
+      "type": "object", "additionalProperties": false, "required": ["defaultLocale", "supportedLocales"],
+      "properties": {
+        "defaultLocale": { "type": "string", "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$", "maxLength": 64 },
+        "supportedLocales": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$", "maxLength": 64 } }
       }
     }
   }

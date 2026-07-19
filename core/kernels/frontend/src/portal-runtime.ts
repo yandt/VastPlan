@@ -1,5 +1,5 @@
-import { pageSlotIDs, shellSlotIDs } from "@vastplan/portal-ui";
-import type { DesignSystemAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, PortalManagementService, PortalRegisteredPage, PortalRegisteredShellContribution, ShellCompositionAdapter, ShellLayoutAdapter, UICapability } from "@vastplan/portal-ui";
+import { message, pageSlotIDs, shellSlotIDs } from "@vastplan/portal-ui";
+import type { DesignSystemAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, ShellCompositionAdapter, ShellLayoutAdapter, UICapability } from "@vastplan/portal-ui";
 
 export interface PluginRef {
   id: string;
@@ -20,6 +20,7 @@ export interface PortalSpec {
   tenantId: string;
   route: string;
   branding?: Record<string, unknown>;
+  localization?: PortalLocalizationPolicy;
   designSystem: DesignSystemSelection;
   composition: ShellCompositionSelection;
   layout: ShellLayoutSelection;
@@ -60,6 +61,7 @@ export interface FrontendPluginModule {
   layout?: ShellLayoutAdapter;
   register?(context: FrontendPluginContext): void | Promise<void>;
   hot?: FrontendPluginHotLifecycle;
+  localization?: PluginLocalization;
 }
 
 export interface FrontendPluginLoader {
@@ -74,6 +76,7 @@ export interface PreparedPortal {
   pages: readonly PortalRegisteredPage[];
   shellContributions: readonly PortalRegisteredShellContribution[];
   modules: readonly PreparedFrontendPlugin[];
+  messageCatalogs: PortalMessageCatalogs;
 }
 
 export interface PreparedFrontendPlugin {
@@ -154,6 +157,15 @@ export class PortalRuntime {
     const generation = options.generation ?? `portal-${portal.revision}`;
     const signal = options.signal ?? new AbortController().signal;
     const reason = options.reason ?? "bootstrap";
+    const messageCatalogs: Record<string, PluginLocalization> = {};
+    for (const { ref, module } of loaded) {
+      if (module.localization === undefined) throw new PortalAssemblyError("LOCALIZATION_REQUIRED", `UI 插件必须声明语言资源: ${ref.id}`);
+      const localization = validateLocalization(ref.id, module.localization);
+      if (module.provenance.firstParty && (!Object.hasOwn(localization.messages, "zh-CN") || !Object.hasOwn(localization.messages, "en-US"))) {
+        throw new PortalAssemblyError("LOCALIZATION_FIRST_PARTY_INCOMPLETE", `第一方 UI 插件必须包含 zh-CN 与 en-US: ${ref.id}`);
+      }
+      messageCatalogs[ref.id] = localization;
+    }
 
     for (const ref of portal.plugins) {
       if ([portal.designSystem, portal.composition, portal.layout].some((foundation) => samePlugin(ref, foundation))) {
@@ -167,6 +179,7 @@ export class PortalRuntime {
       const context: FrontendPluginContext = {
         portal: portalSnapshot,
         lifecycle: Object.freeze({ pluginID: ref.id, generation, signal, reason }),
+        i18n: Object.freeze({ message: (key, fallback, values) => message(ref.id, key, fallback, values) }),
         addShellContribution: (contribution) => {
           const key = `${ref.id}/${contribution.id}`;
           if (portal.resolution.pluginOrigins[ref.id] !== "platform-profile") {
@@ -180,13 +193,13 @@ export class PortalRuntime {
         },
         addPage: (page) => {
           const mountedPath = mountPortalPagePath(portal.route, page.path);
-          if (!page.id || mountedPath === undefined || !page.title || seenPageIDs.has(page.id) || seenPaths.has(mountedPath) || !Array.isArray(page.slots)) {
+          if (!page.id || mountedPath === undefined || !validLocalizedText(page.title) || (page.description !== undefined && !validLocalizedText(page.description)) || seenPageIDs.has(page.id) || seenPaths.has(mountedPath) || !Array.isArray(page.slots)) {
             throw new PortalAssemblyError("PAGE_REJECTED", `页面 ID/路径非法或重复: ${page.id || page.path}`);
           }
           if (!page.slots.some((slot) => slot.slot === "page.body.main")) {
             throw new PortalAssemblyError("PAGE_MAIN_MISSING", `页面必须填充 page.body.main: ${page.id}`);
           }
-          if (page.navigation !== undefined && (!managementName(page.navigation.id) || page.navigation.label.trim() === "" || page.navigation.label.length > 120 ||
+          if (page.navigation !== undefined && (!managementName(page.navigation.id) || !validLocalizedText(page.navigation.label) ||
               seenNavigationIDs.has(page.navigation.id) || !["primary", "settings", "secondary"].includes(page.navigation.zone) ||
               (page.navigation.groupID !== undefined && !managementName(page.navigation.groupID)))) {
             throw new PortalAssemblyError("NAVIGATION_REJECTED", `导航 ID 重复或语义区无效: ${page.navigation.id}`);
@@ -207,7 +220,7 @@ export class PortalRuntime {
       await plugin.register?.(context);
     }
     const preparedModules = portal.plugins.map((ref) => Object.freeze({ ref: Object.freeze({ ...ref }), module: requiredModule(modules, ref) }));
-    return Object.freeze({ portal: portalSnapshot, designSystem, composition, layout, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules) });
+    return Object.freeze({ portal: portalSnapshot, designSystem, composition, layout, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
   }
 
   private validatePortalShape(portal: PortalSpec): void {
@@ -215,6 +228,7 @@ export class PortalRuntime {
       throw new PortalAssemblyError("PORTAL_INVALID", "Portal 必须包含 revision、ID、租户和绝对根路由");
     }
     if ((portal.branding !== undefined && !isJSONRecord(portal.branding)) ||
+        (portal.localization !== undefined && !validLocalizationPolicy(portal.localization)) ||
         (portal.composition.config !== undefined && !isJSONRecord(portal.composition.config)) ||
         (portal.layout.config !== undefined && !isJSONRecord(portal.layout.config))) {
       throw new PortalAssemblyError("PORTAL_INVALID", "Portal 品牌与 Shell 配置必须是 JSON 对象");
@@ -283,6 +297,43 @@ function isJSONRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function validLocalizedText(value: LocalizedText): boolean {
+  if (typeof value === "string") return value.trim() !== "" && value.length <= 240;
+  return isJSONRecord(value) && managementName(value.namespace) && managementName(value.key) && typeof value.fallback === "string" && value.fallback.trim() !== "" && value.fallback.length <= 240;
+}
+
+function validLocalizationPolicy(value: PortalLocalizationPolicy): boolean {
+  if (typeof value.defaultLocale !== "string" || !Array.isArray(value.supportedLocales) || value.supportedLocales.length === 0 || value.supportedLocales.length > 32) return false;
+  try {
+    const supported = Intl.getCanonicalLocales(value.supportedLocales);
+    return supported.length === value.supportedLocales.length && supported.includes(Intl.getCanonicalLocales(value.defaultLocale)[0]);
+  } catch { return false; }
+}
+
+function validateLocalization(pluginID: string, value: PluginLocalization): PluginLocalization {
+  const locales = Object.keys(value.messages);
+  if (locales.length === 0 || locales.length > 32 || typeof value.defaultLocale !== "string") throw new PortalAssemblyError("LOCALIZATION_INVALID", `插件语言资源无效: ${pluginID}`);
+  let canonical: string[];
+  let canonicalDefault: string;
+  try { canonical = Intl.getCanonicalLocales(locales); canonicalDefault = Intl.getCanonicalLocales(value.defaultLocale)[0]; } catch { throw new PortalAssemblyError("LOCALIZATION_INVALID", `插件包含非法 locale: ${pluginID}`); }
+  if (canonical.length !== locales.length) throw new PortalAssemblyError("LOCALIZATION_INVALID", `插件包含重复 locale: ${pluginID}`);
+  if (!canonical.includes(canonicalDefault)) throw new PortalAssemblyError("LOCALIZATION_DEFAULT_MISSING", `插件默认语言资源缺失: ${pluginID}`);
+  const messages: Record<string, Readonly<Record<string, string>>> = {};
+  let total = 0;
+  for (let index = 0; index < locales.length; index += 1) {
+    const entries = value.messages[locales[index]];
+    const copy: Record<string, string> = {};
+    for (const [key, text] of Object.entries(entries)) {
+      if (!managementName(key) || typeof text !== "string" || text.length > 8_192) throw new PortalAssemblyError("LOCALIZATION_MESSAGE_INVALID", `插件语言消息无效: ${pluginID}/${key}`);
+      total += text.length;
+      if (total > 1_048_576) throw new PortalAssemblyError("LOCALIZATION_TOO_LARGE", `插件语言资源超过上限: ${pluginID}`);
+      copy[key] = text;
+    }
+    messages[canonical[index]] = Object.freeze(copy);
+  }
+  return Object.freeze({ defaultLocale: canonicalDefault, messages: Object.freeze(messages) });
+}
+
 function mountPortalPagePath(portalRoute: string, pagePath: string): string | undefined {
   if (!pagePath.startsWith("/") || pagePath.includes("//") || pagePath.includes("\\") || pagePath.includes("%") || pagePath.includes("?") || pagePath.includes("#") ||
       pagePath.split("/").some((segment) => segment === "." || segment === "..")) {
@@ -308,6 +359,7 @@ function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
   return Object.freeze({
     ...portal,
     branding: portal.branding === undefined ? undefined : freezeJSONRecord(portal.branding),
+    localization: portal.localization === undefined ? undefined : Object.freeze({ defaultLocale: portal.localization.defaultLocale, supportedLocales: Object.freeze([...portal.localization.supportedLocales]) }),
     designSystem: Object.freeze({ ...portal.designSystem }),
     composition: Object.freeze({ ...portal.composition, config: portal.composition.config === undefined ? undefined : freezeJSONRecord(portal.composition.config) }),
     layout: Object.freeze({ ...portal.layout, config: portal.layout.config === undefined ? undefined : freezeJSONRecord(portal.layout.config) }),

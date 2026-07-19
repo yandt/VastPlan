@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -71,12 +72,18 @@ type SecurityPolicy struct {
 	RequireIntegrity bool `json:"requireIntegrity"`
 }
 
+type LocalizationPolicy struct {
+	DefaultLocale    string   `json:"defaultLocale"`
+	SupportedLocales []string `json:"supportedLocales"`
+}
+
 type PlatformProfile struct {
 	compositioncommonv1.Document
 	Target       compositioncommonv1.Target `json:"target"`
 	DesignSystem DesignSystem               `json:"designSystem"`
 	Composition  ShellComposition           `json:"composition"`
 	Layout       ShellLayout                `json:"layout"`
+	Localization *LocalizationPolicy        `json:"localization,omitempty"`
 	Plugins      []PluginRef                `json:"plugins"`
 	Security     SecurityPolicy             `json:"security,omitempty"`
 }
@@ -187,6 +194,9 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	value.DesignSystem.Channel = channel(value.DesignSystem.Channel)
 	value.Composition.Channel = channel(value.Composition.Channel)
 	value.Layout.Channel = channel(value.Layout.Channel)
+	if value.Localization != nil && !containsFold(value.Localization.SupportedLocales, value.Localization.DefaultLocale) {
+		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile 默认语言必须包含在 supportedLocales 中")
+	}
 	if value.DesignSystem.ID == value.Composition.ID || value.DesignSystem.ID == value.Layout.ID || value.Composition.ID == value.Layout.ID {
 		return PlatformProfile{}, fmt.Errorf("设计系统、Shell 组合与布局必须由三个独立插件提供")
 	}
@@ -202,6 +212,15 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含设计系统、Shell 组合与布局插件")
 	}
 	return value, nil
+}
+
+func containsFold(values []string, target string) bool {
+	for _, value := range values {
+		if strings.EqualFold(value, target) {
+			return true
+		}
+	}
+	return false
 }
 
 func ParseApplicationComposition(raw []byte) (ApplicationComposition, error) {

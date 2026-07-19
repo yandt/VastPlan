@@ -1,10 +1,14 @@
 import { createContext, createElement, useContext } from "react";
 import type { ComponentType, ReactNode } from "react";
 import type { FormSchema, FormValidationResult, JSONValue, UICapability } from "@vastplan/ui-contract";
+import type { LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy } from "@vastplan/ui-contract";
 
-export type { FormSchema, FormUISchema, FormValidationIssue, FormValidationResult, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, UICapability } from "@vastplan/ui-contract";
+export type { FormSchema, FormUISchema, FormValidationIssue, FormValidationResult, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
 export { jsonSchemaDialect } from "@vastplan/ui-contract";
 export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contract";
+export { message } from "@vastplan/ui-contract";
+export { PortalI18nProvider, localizeJSONSchema, translate, usePortalI18n, usePortalMessages } from "./i18n.js";
+export type { PortalI18n, PortalI18nProviderProps, PortalMessageCatalogs } from "./i18n.js";
 export { PortalInteractionClient, PortalInteractionError } from "./interaction-client.js";
 export type { PortalFetch, PortalFetchResponse, PortalInteractionClientOptions } from "./interaction-client.js";
 export { PortalControlClient, PortalControlError } from "./portal-control-client.js";
@@ -30,7 +34,7 @@ export interface FormRendererValidationState extends FormValidationResult {
 
 export interface MenuItem {
   id: string;
-  label: string;
+  label: ReactNode;
   icon?: ReactNode;
   href?: string;
   disabled?: boolean;
@@ -168,7 +172,8 @@ export interface DesignSystemAdapter {
   framework: string;
   uiContract: string;
   capabilities: readonly UICapability[];
-  Provider: ComponentType<{ children: ReactNode }>;
+  Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection }>;
+  localization?: PluginLocalization;
 }
 
 export type NavigationZone = "primary" | "settings" | "secondary";
@@ -190,7 +195,7 @@ export type PortalSlotID = ShellSlotID | PageSlotID;
 
 export interface PortalNavigationGroupDescriptor {
   id: string;
-  label: string;
+  label: LocalizedText;
   zone: NavigationZone;
   icon: SemanticIconName;
   order?: number;
@@ -198,7 +203,7 @@ export interface PortalNavigationGroupDescriptor {
 
 export interface PortalPageNavigation {
   id: string;
-  label: string;
+  label: LocalizedText;
   zone: NavigationZone;
   /** References a group governed by the selected Shell composition. */
   groupID?: string;
@@ -223,8 +228,8 @@ export interface PortalPageDefinition {
   id: string;
   /** Portal-relative path. The trusted host mounts it below PortalSpec.route. */
   path: string;
-  title: string;
-  description?: string;
+  title: LocalizedText;
+  description?: LocalizedText;
   navigation?: PortalPageNavigation;
   slots: readonly PortalPageSlotContribution[];
 }
@@ -255,6 +260,9 @@ export interface FrontendPluginContext {
 	readonly portal: Readonly<PortalPluginRuntime>;
 	/** Host-owned scope. Long-lived work must stop when this signal is aborted. */
 	readonly lifecycle: Readonly<FrontendPluginLifecycleContext>;
+	readonly i18n: Readonly<{
+		message(key: string, fallback: string, values?: MessageValues): MessageDescriptor;
+	}>;
 	addPage(page: PortalPageDefinition): void;
 	/** Platform-profile plugins only; application plugins cannot mutate global Shell regions. */
 	addShellContribution(contribution: PortalShellContribution): void;
@@ -314,6 +322,7 @@ export interface ShellCompositionAdapter {
   id: "ui.shell-composition";
   uiContract: string;
   compose(input: ShellCompositionInput): ShellCompositionModel;
+  localization?: PluginLocalization;
 }
 
 export interface ShellBranding {
@@ -336,6 +345,7 @@ export interface ShellLayoutAdapter {
   id: "ui.shell-layout";
   uiContract: string;
   Shell: ComponentType<ShellLayoutProps>;
+  localization?: PluginLocalization;
 }
 
 const portalUIContext = createContext<PortalUI | null>(null);

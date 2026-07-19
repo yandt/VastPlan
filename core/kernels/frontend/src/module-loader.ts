@@ -1,4 +1,4 @@
-import type { DesignSystemAdapter, FrontendPluginHotLifecycle, ShellCompositionAdapter, ShellLayoutAdapter } from "@vastplan/portal-ui";
+import type { DesignSystemAdapter, FrontendPluginHotLifecycle, PluginLocalization, ShellCompositionAdapter, ShellLayoutAdapter } from "@vastplan/portal-ui";
 import type { FrontendPluginLoader, FrontendPluginModule, PluginRef, PortalSpec } from "./portal-runtime";
 
 export interface FrontendModuleDescriptor extends PluginRef {
@@ -110,19 +110,28 @@ function normalizeModule(namespace: unknown, descriptor: FrontendModuleDescripto
   const exported = isRecord(namespace.default) ? namespace.default : namespace;
   const provenance = { signed: true, firstParty: true, integrity: `sha256:${descriptor.sha256}` };
   const hot = normalizeHotLifecycle(exported.hot, descriptor.id);
+  const localization = normalizeLocalizationExport(exported.localization, descriptor.id);
   if (exported.id === "ui.design-system" && typeof exported.Provider === "function") {
-    return { provenance, designSystem: exported as unknown as DesignSystemAdapter, hot };
+    return { provenance, designSystem: exported as unknown as DesignSystemAdapter, hot, localization };
   }
   if (exported.id === "ui.shell-composition" && typeof exported.compose === "function") {
-    return { provenance, composition: exported as unknown as ShellCompositionAdapter, hot };
+    return { provenance, composition: exported as unknown as ShellCompositionAdapter, hot, localization };
   }
   if (exported.id === "ui.shell-layout" && typeof exported.Shell === "function") {
-    return { provenance, layout: exported as unknown as ShellLayoutAdapter, hot };
+    return { provenance, layout: exported as unknown as ShellLayoutAdapter, hot, localization };
   }
   if (typeof exported.register === "function") {
-    return { provenance, register: exported.register.bind(exported) as FrontendPluginModule["register"], hot };
+    return { provenance, register: exported.register.bind(exported) as FrontendPluginModule["register"], hot, localization };
   }
   throw new ModuleLoadError("MODULE_EXPORT_INVALID", `前端模块未导出设计系统、Shell 组合、布局或 register: ${descriptor.id}`);
+}
+
+function normalizeLocalizationExport(value: unknown, pluginID: string): PluginLocalization | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || typeof value.defaultLocale !== "string" || !isRecord(value.messages)) {
+    throw new ModuleLoadError("MODULE_LOCALIZATION_INVALID", `前端模块语言资源结构无效: ${pluginID}`);
+  }
+  return value as unknown as PluginLocalization;
 }
 
 function normalizeHotLifecycle(value: unknown, pluginID: string): FrontendPluginHotLifecycle | undefined {

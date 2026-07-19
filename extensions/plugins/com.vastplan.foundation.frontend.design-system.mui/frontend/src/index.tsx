@@ -41,6 +41,7 @@ import {
   Chip,
   createTheme,
 } from "@mui/material";
+import { enUS, zhCN } from "@mui/material/locale";
 import type {
   ButtonProps,
   CommandItem,
@@ -58,7 +59,7 @@ import type {
   StatusTone,
   TableProps,
 } from "@vastplan/portal-ui";
-import { PortalUIProvider } from "@vastplan/portal-ui";
+import { PortalUIProvider, localizeJSONSchema, message, usePortalI18n } from "@vastplan/portal-ui";
 
 const gaps = { xs: 0.5, sm: 1, md: 2, lg: 3 } as const;
 const widths = { sm: "sm", md: "md", lg: "lg" } as const;
@@ -119,10 +120,11 @@ function MenuBranch({ items, activeID, onSelect, depth = 0 }: { items: MenuItem[
 }
 
 function CommandPalette({ open, commands, query, onQueryChange, onClose }: { open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }) {
+  const i18n = usePortalI18n();
   const term = query.trim().toLocaleLowerCase();
   const visible = term === "" ? commands : commands.filter((command) => [command.title, command.description, ...(command.keywords ?? [])].some((value) => value?.toLocaleLowerCase().includes(term)));
-  return <MuiDialog open={open} onClose={onClose} fullWidth maxWidth="sm"><DialogTitle>命令</DialogTitle><DialogContent>
-    <TextField autoFocus fullWidth value={query} label="搜索命令" onChange={(event) => onQueryChange(event.target.value)} sx={{ my: 1 }} />
+  return <MuiDialog open={open} onClose={onClose} fullWidth maxWidth="sm"><DialogTitle>{i18n.text(message(namespace, "command.title", "命令"))}</DialogTitle><DialogContent>
+    <TextField autoFocus fullWidth value={query} label={i18n.text(message(namespace, "command.search", "搜索命令"))} onChange={(event) => onQueryChange(event.target.value)} sx={{ my: 1 }} />
     <List>{visible.map((command) => <ListItemButton key={command.id} disabled={command.disabled} onClick={() => { command.run(); onClose(); }}><ListItemText primary={command.title} secondary={command.description} /></ListItemButton>)}</List>
   </DialogContent></MuiDialog>;
 }
@@ -147,19 +149,22 @@ function buttonVariant(kind: ButtonProps["kind"]): { variant: "contained" | "out
 }
 
 function FormRenderer({ schema, value, onChange, readOnly, submitting, onValidationChange }: FormRendererProps) {
+  const i18n = usePortalI18n();
+  const localizedSchema = useMemo(() => localizeJSONSchema(schema.schema, schema.localization, i18n.text), [i18n.text, schema.localization, schema.schema]);
+  const localizedUISchema = useMemo(() => schema.uiSchema === undefined ? undefined : localizeJSONSchema(schema.uiSchema, schema.uiLocalization, i18n.text), [i18n.text, schema.uiLocalization, schema.uiSchema]);
   const validation = useMemo(() => validator.validateFormData(value, schema.schema), [schema, value]);
   useLayoutEffect(() => {
-    const errors = Object.fromEntries(validation.errors.map((error, index) => [error.property || `form.${index}`, error.message ?? "值不符合 Schema"]));
+    const errors = Object.fromEntries(validation.errors.map((error, index) => [error.property || `form.${index}`, error.message ?? i18n.text(message(namespace, "form.invalid", "值不符合 Schema"))]));
     onValidationChange?.({
       valid: validation.errors.length === 0,
       issues: validation.errors.map((error) => ({ path: error.property ?? "", code: error.name ?? "schema_invalid", message: error.message, schemaPath: error.schemaPath })),
       errors,
       validating: false,
     });
-  }, [onValidationChange, validation]);
+  }, [i18n, onValidationChange, validation]);
   return <RJSFForm
-    schema={schema.schema}
-    uiSchema={schema.uiSchema}
+    schema={localizedSchema}
+    uiSchema={localizedUISchema}
     formData={value}
     validator={validator}
     readonly={readOnly}
@@ -197,12 +202,13 @@ export const muiPortalUIComponents: MuiComponents = {
   Icon: ({ name, label, size = "md" }) => <Box component="span" aria-label={label} aria-hidden={label === undefined} sx={{ fontSize: size === "sm" ? 14 : size === "md" ? 16 : 20 }}>{symbols[name]}</Box>,
   theme: { mode: "system", tokens: { color: { canvas: "#fafafa", surface: "#fff", text: "#1d2129", mutedText: "#6b7785", border: "#d9d9d9", primary: "#1976d2", danger: "#d32f2f" }, radius: { sm: 4, md: 8, lg: 12 }, spacing: { xs: 4, sm: 8, md: 16, lg: 24 } } },
   EmptyState: ({ title, description }) => <Box sx={{ p: 4, textAlign: "center" }}><Typography variant="h6">{title}</Typography><Typography color="text.secondary">{description}</Typography></Box>,
-  ErrorState: ({ title, retry }) => <Alert severity="error" action={retry === undefined ? undefined : <MuiButton onClick={retry}>重试</MuiButton>}>{title}</Alert>,
+  ErrorState: function ErrorState({ title, retry }) { const i18n = usePortalI18n(); return <Alert severity="error" action={retry === undefined ? undefined : <MuiButton onClick={retry}>{i18n.text(message(namespace, "action.retry", "重试"))}</MuiButton>}>{title}</Alert>; },
   Skeleton: ({ rows = 3 }) => <MuiStack gap={1}>{Array.from({ length: rows }, (_, index) => <MuiSkeleton key={index} />)}</MuiStack>,
   Busy: ({ label }) => <MuiStack direction="row" gap={1} alignItems="center"><CircularProgress size={20} /><span>{label}</span></MuiStack>,
 };
 
-function MuiProvider({ children }: { children: ReactNode }) {
+function MuiProvider({ children, locale, direction }: { children: ReactNode; locale: string; direction: "ltr" | "rtl" }) {
+  const i18n = usePortalI18n();
   const boundary = useRef<HTMLDivElement>(null);
   const [shadowRuntime, setShadowRuntime] = useState<{ cache: ReturnType<typeof createCache>; theme: ReturnType<typeof createTheme> }>();
   const [notice, setNotice] = useState<{ title: string; content?: string; kind: "info" | "success" | "warning" | "error" }>();
@@ -223,16 +229,16 @@ function MuiProvider({ children }: { children: ReactNode }) {
     const overlayContainer = boundary.current;
     setShadowRuntime({
       cache: createCache({ key: "vastplan-mui", container: styleContainer, prepend: true }),
-      theme: createTheme({ components: {
+      theme: createTheme({ direction, components: {
         MuiModal: { defaultProps: { container: overlayContainer } },
         MuiPopover: { defaultProps: { container: overlayContainer } },
         MuiPopper: { defaultProps: { container: overlayContainer } },
-      } }),
+      } }, locale.toLowerCase().startsWith("zh") ? zhCN : enUS),
     });
-  }, []);
-  return <div ref={boundary} data-vastplan-design-system="mui">{shadowRuntime === undefined ? null : <CacheProvider value={shadowRuntime.cache}><ThemeProvider theme={shadowRuntime.theme}><ScopedCssBaseline><PortalUIProvider ui={ui}>{children}</PortalUIProvider>
+  }, [direction, locale]);
+  return <div ref={boundary} data-vastplan-design-system="mui" lang={locale} dir={direction}>{shadowRuntime === undefined ? null : <CacheProvider value={shadowRuntime.cache}><ThemeProvider theme={shadowRuntime.theme}><ScopedCssBaseline><PortalUIProvider ui={ui}>{children}</PortalUIProvider>
     <Snackbar open={notice !== undefined} autoHideDuration={5000} onClose={() => setNotice(undefined)}><Alert severity={notice?.kind ?? "info"} onClose={() => setNotice(undefined)}><strong>{notice?.title}</strong>{notice?.content === undefined ? null : ` — ${notice.content}`}</Alert></Snackbar>
-    <MuiDialog open={confirmation !== undefined} onClose={() => finishConfirmation(false)}><DialogTitle>{confirmation?.title}</DialogTitle><DialogContent>{confirmation?.content}</DialogContent><DialogActions><MuiButton onClick={() => finishConfirmation(false)}>取消</MuiButton><MuiButton variant="contained" onClick={() => finishConfirmation(true)}>确认</MuiButton></DialogActions></MuiDialog>
+    <MuiDialog open={confirmation !== undefined} onClose={() => finishConfirmation(false)}><DialogTitle>{confirmation?.title}</DialogTitle><DialogContent>{confirmation?.content}</DialogContent><DialogActions><MuiButton onClick={() => finishConfirmation(false)}>{i18n.text(message(namespace, "action.cancel", "取消"))}</MuiButton><MuiButton variant="contained" onClick={() => finishConfirmation(true)}>{i18n.text(message(namespace, "action.confirm", "确认"))}</MuiButton></DialogActions></MuiDialog>
   </ScopedCssBaseline></ThemeProvider></CacheProvider>}</div>;
 }
 
@@ -242,6 +248,15 @@ export const muiDesignSystem: DesignSystemAdapter = {
   uiContract: "1.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   Provider: MuiProvider,
+  localization: {
+    defaultLocale: "zh-CN",
+    messages: {
+      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "action.retry": "重试", "action.cancel": "取消", "action.confirm": "确认", "form.invalid": "值不符合 Schema" },
+      "en-US": { "command.title": "Commands", "command.search": "Search commands", "action.retry": "Retry", "action.cancel": "Cancel", "action.confirm": "Confirm", "form.invalid": "Value does not match the schema" },
+    },
+  },
 };
+
+const namespace = "com.vastplan.foundation.frontend.design-system.mui";
 
 export default muiDesignSystem;

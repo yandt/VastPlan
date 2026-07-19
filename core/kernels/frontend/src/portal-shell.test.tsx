@@ -11,7 +11,7 @@ describe("Portal recovery shell", () => {
       onRecover: async () => undefined,
     }));
     expect(html).toContain("VASTPLAN SAFE MODE");
-    expect(html).toContain("启动上一安全版本");
+    expect(html).toMatch(/启动上一安全版本|Start previous safe version/);
     expect(html).toContain("RUNTIME_FETCH_FAILED");
   });
 

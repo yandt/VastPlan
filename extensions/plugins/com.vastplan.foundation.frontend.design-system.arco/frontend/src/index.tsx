@@ -54,6 +54,9 @@ import type {
   TableProps,
 } from "@vastplan/portal-ui";
 import { PortalUIProvider } from "@vastplan/portal-ui";
+import { message, usePortalI18n } from "@vastplan/portal-ui";
+import enUS from "@arco-design/web-react/es/locale/en-US";
+import zhCN from "@arco-design/web-react/es/locale/zh-CN";
 import { arcoCSS } from "./arco-styles";
 import { ArcoJSONSchemaForm } from "./json-schema-form";
 import { scopeDocumentCSS } from "./scope-css";
@@ -136,12 +139,13 @@ function Menu({ items, activeID, onSelect }: { items: MenuItem[]; activeID?: str
 }
 
 function CommandPalette({ open, commands, query, onQueryChange, onClose }: { open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }) {
+  const i18n = usePortalI18n();
   const term = query.trim().toLocaleLowerCase();
   const visible = term === "" ? commands : commands.filter((command) => [command.title, command.description, ...(command.keywords ?? [])].some((part) => part?.toLocaleLowerCase().includes(term)));
-  return <Modal visible={open} title="命令" footer={null} onCancel={onClose} unmountOnExit>
+  return <Modal visible={open} title={i18n.text(message(namespace, "command.title", "命令"))} footer={null} onCancel={onClose} unmountOnExit>
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
-      <Input autoFocus value={query} placeholder="搜索命令" onChange={onQueryChange} />
-      {visible.length === 0 ? <Empty description="没有匹配命令" /> : visible.map((command) => <Button
+      <Input autoFocus value={query} placeholder={i18n.text(message(namespace, "command.search", "搜索命令"))} onChange={onQueryChange} />
+      {visible.length === 0 ? <Empty description={i18n.text(message(namespace, "command.empty", "没有匹配命令"))} /> : visible.map((command) => <Button
         key={command.id}
         long
         disabled={command.disabled}
@@ -258,7 +262,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
     },
   },
   EmptyState: ({ title, description }) => <Empty description={<><strong>{title}</strong>{description === undefined ? null : <div>{description}</div>}</>} />,
-  ErrorState: ({ title, retry }) => <Alert type="error" title={title} action={retry ? <Button onClick={retry}>重试</Button> : undefined} />,
+  ErrorState: function ErrorState({ title, retry }) { const i18n = usePortalI18n(); return <Alert type="error" title={title} action={retry ? <Button onClick={retry}>{i18n.text(message(namespace, "action.retry", "重试"))}</Button> : undefined} />; },
   Skeleton: ({ rows = 3 }) => <ArcoSkeleton animation text={{ rows }} />,
   Busy: ({ label }) => <Spin tip={label} />,
 };
@@ -268,7 +272,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
 // shadow host instead of leaking into the surrounding page.
 export const scopedArcoCSS = scopeDocumentCSS(arcoCSS);
 
-function ArcoProvider({ children }: { children: ReactNode }) {
+function ArcoProvider({ children, locale, direction }: { children: ReactNode; locale: string; direction: "ltr" | "rtl" }) {
   const popupRoot = useRef<HTMLDivElement>(null);
   const requirePopupRoot = () => {
     if (popupRoot.current === null) throw new Error("Arco overlay root 尚未挂载");
@@ -287,8 +291,8 @@ function ArcoProvider({ children }: { children: ReactNode }) {
 
   return <>
     <style data-vastplan-design-system="arco">{scopedArcoCSS}</style>
-    <div ref={popupRoot} data-vastplan-design-system="arco">
-      <ConfigProvider getPopupContainer={requirePopupRoot}>
+    <div ref={popupRoot} data-vastplan-design-system="arco" lang={locale} dir={direction}>
+      <ConfigProvider getPopupContainer={requirePopupRoot} locale={locale.toLowerCase().startsWith("zh") ? zhCN : enUS}>
         <PortalUIProvider ui={ui}>{children}</PortalUIProvider>
         {notificationHolder}
         {modalHolder}
@@ -303,6 +307,15 @@ export const arcoDesignSystem: DesignSystemAdapter = {
   uiContract: "1.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   Provider: ArcoProvider,
+  localization: {
+    defaultLocale: "zh-CN",
+    messages: {
+      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "command.empty": "没有匹配命令", "action.retry": "重试", "form.validationFailed": "表单校验未通过", "form.issueCount": "请检查 {count} 个问题", "form.addProperty":"添加属性", "form.add":"添加", "form.empty":"暂无条目", "form.item":"第 {index} 项", "form.propertyName":"属性名称", "form.removeProperty":"删除属性", "form.fileUnsupported":"表单不接受内嵌文件数据；请使用受控制品上传能力。", "form.credentialPlaceholder":"输入 credential:// 凭证引用（禁止填写明文）", "action.moveUp":"上移", "action.moveDown":"下移", "action.copy":"复制", "action.delete":"删除", "form.asyncUnavailable":"异步校验暂时不可用", "form.unsupported":"表单 Schema 不受支持", "form.validating":"正在校验" },
+      "en-US": { "command.title": "Commands", "command.search": "Search commands", "command.empty": "No matching commands", "action.retry": "Retry", "form.validationFailed": "Form validation failed", "form.issueCount": "Please check {count} issues", "form.addProperty":"Add property", "form.add":"Add", "form.empty":"No items", "form.item":"Item {index}", "form.propertyName":"Property name", "form.removeProperty":"Remove property", "form.fileUnsupported":"Embedded file data is not accepted; use the governed artifact upload capability.", "form.credentialPlaceholder":"Enter a credential:// reference (plaintext is forbidden)", "action.moveUp":"Move up", "action.moveDown":"Move down", "action.copy":"Copy", "action.delete":"Delete", "form.asyncUnavailable":"Asynchronous validation is temporarily unavailable", "form.unsupported":"Unsupported form schema", "form.validating":"Validating" },
+    },
+  },
 };
+
+const namespace = "com.vastplan.foundation.frontend.design-system.arco";
 
 export default arcoDesignSystem;

@@ -2,6 +2,7 @@
 export const uiContractVersion = "1.0.0" as const;
 export const interactionContractVersion = "1.0.0" as const;
 export const jsonSchemaDialect = "http://json-schema.org/draft-07/schema#" as const;
+export * from "./i18n.js";
 
 export type UICapability = "layout" | "menu" | "overlay" | "form" | "data" | "feedback" | "theme" | "approval" | "navigation";
 
@@ -15,6 +16,10 @@ export interface FormSchema {
   id: string;
   schema: JSONSchema;
   uiSchema?: FormUISchema;
+  /** JSON Pointer -> localized text. Keeps the validation schema standards-compliant. */
+  localization?: Readonly<Record<string, import("./i18n.js").LocalizedText>>;
+  /** JSON Pointer -> localized presentation hint, applied only to uiSchema. */
+  uiLocalization?: Readonly<Record<string, import("./i18n.js").LocalizedText>>;
 }
 
 export interface FormValidationIssue {

@@ -1,4 +1,4 @@
-import { pageSlotIDs, semanticIconNames, shellSlotIDs } from "@vastplan/portal-ui";
+import { message, pageSlotIDs, semanticIconNames, shellSlotIDs } from "@vastplan/portal-ui";
 import type {
   NavigationZone,
   PageSlotID,
@@ -18,10 +18,11 @@ const shellSlots = new Set<ShellSlotID>(shellSlotIDs);
 const pageSlots = new Set<PageSlotID>(pageSlotIDs);
 const navigationZones = new Set<NavigationZone>(["primary", "secondary", "settings"]);
 const semanticIcons = new Set<SemanticIconName>(semanticIconNames);
+const namespace = "com.vastplan.foundation.frontend.composition.standard";
 const defaultGroups: readonly PortalNavigationGroupDescriptor[] = [
-  { id: "primary", label: "主要功能", zone: "primary", icon: "menu", order: 10 },
-  { id: "secondary", label: "辅助功能", zone: "secondary", icon: "info", order: 20 },
-  { id: "settings", label: "系统设置", zone: "settings", icon: "settings", order: 100 },
+  { id: "primary", label: message(namespace, "navigation.primary", "主要功能"), zone: "primary", icon: "menu", order: 10 },
+  { id: "secondary", label: message(namespace, "navigation.secondary", "辅助功能"), zone: "secondary", icon: "info", order: 20 },
+  { id: "settings", label: message(namespace, "navigation.settings", "系统设置"), zone: "settings", icon: "settings", order: 100 },
 ];
 
 function ordered<T extends { id: string; order?: number }>(values: readonly T[]): readonly T[] {
@@ -115,5 +116,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-const adapter: ShellCompositionAdapter = { id: "ui.shell-composition", uiContract: "1.0.0", compose };
+const adapter: ShellCompositionAdapter = {
+  id: "ui.shell-composition", uiContract: "1.0.0", compose,
+  localization: {
+    defaultLocale: "zh-CN",
+    messages: {
+      "zh-CN": { "navigation.primary": "主要功能", "navigation.secondary": "辅助功能", "navigation.settings": "系统设置" },
+      "en-US": { "navigation.primary": "Primary", "navigation.secondary": "Secondary", "navigation.settings": "System settings" },
+    },
+  },
+};
 export default adapter;

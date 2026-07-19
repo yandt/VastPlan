@@ -1,5 +1,7 @@
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import {
+  message,
+  usePortalI18n,
   usePortalUI,
   type MenuItem,
   type NavigationZone,
@@ -16,6 +18,7 @@ const shellNavigationSlots = ["shell.navigation.start", "shell.navigation.center
 
 function StandardShell({ composition, branding, config, pathname, recoveryNotice, onNavigate }: ShellLayoutProps) {
   const ui = usePortalUI();
+  const i18n = usePortalI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
   const shellTheme = {
     "--vp-shell-canvas": ui.theme.tokens.color.canvas,
@@ -55,13 +58,13 @@ function StandardShell({ composition, branding, config, pathname, recoveryNotice
 
   const page = composition.activePage;
   const pageHeader = page === undefined ? null : <header className="vp-page-header">
-    <div className="vp-page-header-side">{pageSlot(composition.pageSlots, "page.header.start")}<div className="vp-page-title-copy"><h1 className="vp-page-title" tabIndex={-1}>{page.title}</h1>{page.description === undefined ? null : <p className="vp-page-description">{page.description}</p>}</div></div>
+    <div className="vp-page-header-side">{pageSlot(composition.pageSlots, "page.header.start")}<div className="vp-page-title-copy"><h1 className="vp-page-title" tabIndex={-1}>{i18n.text(page.title)}</h1>{page.description === undefined ? null : <p className="vp-page-description">{i18n.text(page.description)}</p>}</div></div>
     <div className="vp-page-header-center">{pageSlot(composition.pageSlots, "page.header.center")}</div>
     <div className="vp-page-header-side vp-page-header-end">{pageSlot(composition.pageSlots, "page.header.end")}</div>
   </header>;
   const pageBody = <div className="vp-page-scroller"><main className="vp-page" style={{ maxWidth: pageWidth }}>
     {recoveryNotice}
-    {page === undefined ? <ui.EmptyState title="页面不存在" description={`Portal 没有注册路径 ${pathname}`} /> : <>
+    {page === undefined ? <ui.EmptyState title={i18n.text(message(namespace, "page.notFound", "页面不存在"))} description={i18n.text(message(namespace, "page.pathMissing", "Portal 没有注册路径 {path}", { path: pathname }))} /> : <>
       {pageSlot(composition.pageSlots, "page.body.before")}
       <div className="vp-page-body-row"><section className="vp-page-body-main">{pageSlot(composition.pageSlots, "page.body.main")}</section>{hasRegionContent(composition, { pageSlots: ["page.aside"] }) ? <aside className="vp-page-aside">{pageSlot(composition.pageSlots, "page.aside")}</aside> : null}</div>
       {pageSlot(composition.pageSlots, "page.body.after")}
@@ -70,9 +73,9 @@ function StandardShell({ composition, branding, config, pathname, recoveryNotice
 
   const mobileItems: MenuItem[] = allGroups.map((group) => ({
     id: `group:${group.id}`,
-    label: group.label,
-    icon: <ui.Icon name={group.icon} label={group.label} />,
-    children: group.pages.map((item) => ({ id: item.id, label: item.label, href: pagePath(composition, item.id) })),
+    label: i18n.text(group.label),
+    icon: <ui.Icon name={group.icon} label={i18n.text(group.label)} />,
+    children: group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
   }));
 
   return <div className="vp-shell-root" style={shellTheme}>
@@ -89,14 +92,14 @@ function StandardShell({ composition, branding, config, pathname, recoveryNotice
         onNavigate={navigate}
       /> : null}
       <div className="vp-shell-content">
-        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label="打开主菜单" onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /></div> : null}
+        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /></div> : null}
         {pageHeader}
         {pageBody}
       </div>
     </div>
     {hasRegionContent(composition, { shellSlots: ["shell.footer"] }) ? <footer className="vp-shell-footer">{shellSlot(composition.shellSlots, "shell.footer")}</footer> : null}
     <ui.Drawer open={mobileOpen} title={branding.name} placement="left" width="sm" onClose={() => setMobileOpen(false)}>
-      <nav aria-label="移动主菜单"><ui.Menu items={mobileItems} activeID={page?.navigation?.id} onSelect={navigate} /></nav>
+      <nav aria-label={i18n.text(message(namespace, "navigation.mobile", "移动主菜单"))}><ui.Menu items={mobileItems} activeID={page?.navigation?.id} onSelect={navigate} /></nav>
     </ui.Drawer>
   </div>;
 }
@@ -110,6 +113,7 @@ function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, 
   onSelectGroup(id: string): void;
   onNavigate(id: string): void;
 }) {
+  const i18n = usePortalI18n();
   const panelRef = useRef<HTMLElement>(null);
   const selectedButtonRef = useRef<HTMLButtonElement>(null);
   const panelID = selectedGroup === undefined ? undefined : `vp-navigation-panel-${selectedGroup.id}`;
@@ -124,14 +128,14 @@ function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, 
     onOpen={focusPanel}
   />;
   return <div className="vp-desktop-navigation">
-    <aside className="vp-navigation-rail" aria-label="主菜单分组">
+    <aside className="vp-navigation-rail" aria-label={i18n.text(message(namespace, "navigation.groups", "主菜单分组"))}>
       <div className="vp-navigation-start">{branding}{shellSlot(composition.shellSlots, "shell.navigation.start")}</div>
       <div className="vp-navigation-center">{shellSlot(composition.shellSlots, "shell.navigation.center")}{mainGroups.map(groupButton)}</div>
       <div className="vp-navigation-end">{settingsGroups.map(groupButton)}{shellSlot(composition.shellSlots, "shell.navigation.end")}</div>
     </aside>
-    {selectedGroup === undefined ? null : <aside id={panelID} ref={panelRef} className="vp-navigation-panel" aria-label={`${selectedGroup.label}二级导航`} onKeyDown={(event) => returnToRail(event, selectedButtonRef)}>
-      <header className="vp-navigation-panel-header"><span className="vp-navigation-panel-icon"><IconForGroup group={selectedGroup} /></span><strong>{selectedGroup.label}</strong></header>
-      <nav className="vp-navigation-panel-body" aria-label={selectedGroup.label}>
+    {selectedGroup === undefined ? null : <aside id={panelID} ref={panelRef} className="vp-navigation-panel" aria-label={i18n.text(message(namespace, "navigation.secondaryLabel", "{group}二级导航", { group: i18n.text(selectedGroup.label) }))} onKeyDown={(event) => returnToRail(event, selectedButtonRef)}>
+      <header className="vp-navigation-panel-header"><span className="vp-navigation-panel-icon"><IconForGroup group={selectedGroup} /></span><strong>{i18n.text(selectedGroup.label)}</strong></header>
+      <nav className="vp-navigation-panel-body" aria-label={i18n.text(selectedGroup.label)}>
         <SecondLevelMenu group={selectedGroup} composition={composition} onNavigate={onNavigate} />
       </nav>
     </aside>}
@@ -147,7 +151,9 @@ function RailButton({ group, selected, controls, buttonRef, onSelect, onOpen }: 
   onOpen(): void;
 }) {
   const ui = usePortalUI();
-  return <button ref={buttonRef} type="button" className="vp-rail-button" data-selected={selected || undefined} aria-label={group.label} title={group.label} aria-pressed={selected} aria-controls={controls} onClick={onSelect} onKeyDown={(event) => {
+  const i18n = usePortalI18n();
+  const label = i18n.text(group.label);
+  return <button ref={buttonRef} type="button" className="vp-rail-button" data-selected={selected || undefined} aria-label={label} title={label} aria-pressed={selected} aria-controls={controls} onClick={onSelect} onKeyDown={(event) => {
     if (event.key === "ArrowRight" && selected) { event.preventDefault(); onOpen(); }
   }}><ui.Icon name={group.icon} size="lg" /></button>;
 }
@@ -159,7 +165,8 @@ function IconForGroup({ group }: { group: PortalNavigationGroup }) {
 
 function SecondLevelMenu({ group, composition, onNavigate }: { group: PortalNavigationGroup; composition: ShellLayoutProps["composition"]; onNavigate(id: string): void }) {
   const ui = usePortalUI();
-  const items = group.pages.map((item) => ({ id: item.id, label: item.label, href: pagePath(composition, item.id) }));
+  const i18n = usePortalI18n();
+  const items = group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) }));
   return <ui.Menu items={items} activeID={composition.activePage?.navigation?.id} onSelect={onNavigate} />;
 }
 
@@ -202,5 +209,15 @@ export const standardShellCSS = `
 @media (prefers-reduced-motion:reduce){.vp-shell-root *{scroll-behavior:auto!important;transition:none!important}}
 `;
 
-const adapter: ShellLayoutAdapter = { id: "ui.shell-layout", uiContract: "1.0.0", Shell: StandardShell };
+const namespace = "com.vastplan.foundation.frontend.layout.standard";
+const adapter: ShellLayoutAdapter = {
+  id: "ui.shell-layout", uiContract: "1.0.0", Shell: StandardShell,
+  localization: {
+    defaultLocale: "zh-CN",
+    messages: {
+      "zh-CN": { "page.notFound": "页面不存在", "page.pathMissing": "Portal 没有注册路径 {path}", "navigation.open": "打开主菜单", "navigation.mobile": "移动主菜单", "navigation.groups": "主菜单分组", "navigation.secondaryLabel": "{group}二级导航" },
+      "en-US": { "page.notFound": "Page not found", "page.pathMissing": "Portal has no registered route for {path}", "navigation.open": "Open main menu", "navigation.mobile": "Mobile main menu", "navigation.groups": "Main menu groups", "navigation.secondaryLabel": "{group} secondary navigation" },
+    },
+  },
+};
 export default adapter;

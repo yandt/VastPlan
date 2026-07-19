@@ -65,20 +65,21 @@ type ShellLayout struct {
 }
 
 type PortalSpec struct {
-	Revision     uint64                              `json:"revision"`
-	ID           string                              `json:"id"`
-	TenantID     string                              `json:"tenantId"`
-	Route        string                              `json:"route"`
-	Domains      []string                            `json:"domains,omitempty"`
-	Audience     []string                            `json:"audience,omitempty"`
-	Branding     map[string]any                      `json:"branding,omitempty"`
-	DesignSystem DesignSystem                        `json:"designSystem"`
-	Composition  ShellComposition                    `json:"composition"`
-	Layout       ShellLayout                         `json:"layout"`
-	Plugins      []PluginRef                         `json:"plugins"`
-	Config       map[string]any                      `json:"config,omitempty"`
-	Management   frontendcompositionv1.PortalBinding `json:"management"`
-	Resolution   Resolution                          `json:"resolution"`
+	Revision     uint64                                   `json:"revision"`
+	ID           string                                   `json:"id"`
+	TenantID     string                                   `json:"tenantId"`
+	Route        string                                   `json:"route"`
+	Domains      []string                                 `json:"domains,omitempty"`
+	Audience     []string                                 `json:"audience,omitempty"`
+	Branding     map[string]any                           `json:"branding,omitempty"`
+	Localization frontendcompositionv1.LocalizationPolicy `json:"localization"`
+	DesignSystem DesignSystem                             `json:"designSystem"`
+	Composition  ShellComposition                         `json:"composition"`
+	Layout       ShellLayout                              `json:"layout"`
+	Plugins      []PluginRef                              `json:"plugins"`
+	Config       map[string]any                           `json:"config,omitempty"`
+	Management   frontendcompositionv1.PortalBinding      `json:"management"`
+	Resolution   Resolution                               `json:"resolution"`
 }
 
 type ManagementTarget struct {

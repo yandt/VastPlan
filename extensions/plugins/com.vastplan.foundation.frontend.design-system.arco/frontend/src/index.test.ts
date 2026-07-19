@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { arcoDesignSystem, arcoPortalUIComponents, cascadeResponsiveColumns } from "./index";
 import { arcoJSONSchemaValidator, transformArcoFormErrors } from "./json-schema-form";
+import { PortalI18nProvider } from "@vastplan/portal-ui";
 
 describe("Arco portal UI adapter", () => {
   it("implements the complete stable component surface", () => {
@@ -76,7 +77,7 @@ describe("Arco portal UI adapter", () => {
   });
 
   it("renders a standard JSON Schema through the Arco theme without a framework submit button", () => {
-    const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.FormRenderer, {
+    const form = createElement(arcoPortalUIComponents.FormRenderer, {
       schema: {
         id: "portal",
         schema: {
@@ -91,7 +92,8 @@ describe("Arco portal UI adapter", () => {
       },
       value: {},
       onChange: () => undefined,
-    }));
+    });
+    const html = renderToStaticMarkup(createElement(PortalI18nProvider, { policy: { defaultLocale: "zh-CN", supportedLocales: ["zh-CN", "en-US"] }, catalogs: { "com.vastplan.foundation.frontend.design-system.arco": arcoDesignSystem.localization! }, candidates: ["zh-CN"], children: form }));
 
     expect(html).toContain("门户设置");
     expect(html).toContain("名称");

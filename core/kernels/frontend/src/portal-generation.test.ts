@@ -20,6 +20,7 @@ function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?
     layout: {} as PreparedPortal["layout"],
     pages: [],
     shellContributions: [],
+    messageCatalogs: {},
     modules: [
       { ref: { id: "com.vastplan.feature", version: "1.0.0" }, module: module(hot) },
       ...(secondHot === undefined ? [] : [{ ref: { id: "com.vastplan.second", version: "1.0.0" }, module: module(secondHot) }]),
