@@ -288,7 +288,7 @@ func (h *Host) lifecycle(ctx context.Context, sess *session, op pluginhostv1.Lif
 
 // Migrate 向指定候选进程发送状态迁移事务阶段。调用方只可在候选尚未取得路由
 // 所有权时调用；任一阶段拒绝都会返回错误，由 Runtime 负责逆序 rollback。
-func (h *Host) Migrate(ctx context.Context, process *PluginProcess, request MigrationCommand) error {
+func (h *Host) Migrate(ctx context.Context, process *PluginInstance, request MigrationCommand) error {
 	if process != nil && process.embedded != nil {
 		op, err := migrationLifecycleOp(request.Operation)
 		if err != nil {

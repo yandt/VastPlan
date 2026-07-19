@@ -244,6 +244,38 @@ func TestParseManifest_BackendExecutionIsLanguageNeutralAndBackwardCompatible(t 
 		t.Fatalf("dynamic-go 执行契约解析错误: %+v", got.DynamicGo)
 	}
 
+	nodeWorker, err := ParseManifest([]byte(`{
+  "id":"com.example.node-worker","name":"node","description":"node","version":"1.0.0","publisher":"example",
+  "engines":{"backend":"^1.0"},
+  "execution":{"backend":{"driver":"node-worker","minimumIsolation":"trusted-runtime",
+    "requirements":{"node":">=22"},"node":{"workerSafe":true,"moduleFormat":"esm"}}},
+  "activation":["onStartup"],"entry":{"backend":"backend/main.mjs"},
+  "contributes":{"backend":{"tools":[{"id":"example.node","service_role":"backend"}]}}
+}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nodeContract := BackendExecutionContract(nodeWorker)
+	if nodeContract.Node == nil || !nodeContract.Node.WorkerSafe || nodeContract.Node.ModuleFormat != "esm" || nodeContract.MinimumIsolation != "trusted-runtime" {
+		t.Fatalf("Node Worker 执行契约解析错误: %+v", nodeContract)
+	}
+
+	pythonSubinterpreter, err := ParseManifest([]byte(`{
+  "id":"com.example.python-subinterpreter","name":"python","description":"python","version":"1.0.0","publisher":"example",
+  "engines":{"backend":"^1.0"},
+  "execution":{"backend":{"driver":"python-subinterpreter","minimumIsolation":"trusted-runtime",
+    "requirements":{"python":">=3.14"},"python":{"subinterpreterSafe":true}}},
+  "activation":["onStartup"],"entry":{"backend":"backend/main.py"},
+  "contributes":{"backend":{"tools":[{"id":"example.python-subinterpreter","service_role":"backend"}]}}
+}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pythonContract := BackendExecutionContract(pythonSubinterpreter)
+	if pythonContract.Python == nil || !pythonContract.Python.SubinterpreterSafe || pythonContract.MinimumIsolation != "trusted-runtime" {
+		t.Fatalf("Python 子解释器执行契约解析错误: %+v", pythonContract)
+	}
+
 	invalid := []byte(`{
   "id":"com.example.invalid","name":"invalid","description":"invalid","version":"1.0.0","publisher":"example",
   "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"bad driver"}},

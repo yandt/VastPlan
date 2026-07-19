@@ -117,3 +117,5 @@
 - [ADR-0084 主题与工作台展示档位](ADR-0084-主题与工作台展示档位.md)
 - [ADR-0085 渲染适配器主题模板契约](ADR-0085-渲染适配器主题模板契约.md)
 - [ADR-0086 单 Shell 插件与可切换布局模板](ADR-0086-单Shell插件与可切换布局模板.md)
+- [ADR-0087 统一 Render Adapter 与可切换 Renderer](ADR-0087-统一Render-Adapter与可切换Renderer.md)
+- [ADR-0088 Backend 统一执行驱动与托管语言运行时](ADR-0088-Backend统一执行驱动与托管语言运行时.md)

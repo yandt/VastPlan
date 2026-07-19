@@ -44,18 +44,18 @@ func (w processLogWriter) Write(raw []byte) (int, error) {
 //
 // 宿主注入连接端点 + magic cookie + 一次性 launch token；插件回连本宿主。
 // 握手失败（magic/版本/engines）的原因经 launch token 回传，故此处能给出确切错误。
-func (h *Host) Launch(ctx context.Context, binPath string) (*PluginProcess, error) {
+func (h *Host) Launch(ctx context.Context, binPath string) (*PluginInstance, error) {
 	return h.LaunchWithPolicy(ctx, binPath, LaunchPolicy{UnrestrictedContext: true})
 }
 
 // LaunchWithPolicy 启动插件，并把已验签清单中的身份、贡献和内核服务依赖绑定到
 // 一次性 launch token。空 Policy 只用于本地演示/兼容夹具，但仍强制 token 认证。
-func (h *Host) LaunchWithPolicy(ctx context.Context, binPath string, policy LaunchPolicy) (*PluginProcess, error) {
+func (h *Host) LaunchWithPolicy(ctx context.Context, binPath string, policy LaunchPolicy) (*PluginInstance, error) {
 	return h.LaunchSpecWithPolicy(ctx, LaunchSpec{Command: binPath}, policy)
 }
 
 // LaunchSpecWithPolicy 通过运行驱动生成的无 shell 规格启动插件。
-func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy LaunchPolicy) (*PluginProcess, error) {
+func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy LaunchPolicy) (*PluginInstance, error) {
 	if h.addr == "" {
 		return nil, errors.New("宿主尚未 Start，插件无处回连")
 	}
@@ -115,12 +115,13 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 			kill()
 			return nil, fmt.Errorf("插件完成接入后立即失联: %w", res.sess.err())
 		}
-		return &PluginProcess{
-			PluginID:  res.sess.pluginID,
-			Version:   res.sess.pluginVersion,
-			SessionID: res.sess.id,
-			PID:       cmd.Process.Pid,
-			session:   res.sess,
+		return &PluginInstance{
+			PluginID:    res.sess.pluginID,
+			Version:     res.sess.pluginVersion,
+			SessionID:   res.sess.id,
+			PID:         cmd.Process.Pid,
+			runtimeKind: spec.RuntimeKind,
+			session:     res.sess,
 		}, nil
 
 	case err := <-exited:
@@ -506,7 +507,7 @@ func (h *Host) callHostService(ctx context.Context, target *contractv1.CallTarge
 }
 
 // Close 优雅关闭插件：SHUTDOWN 指令 → 摘除贡献 → 回收进程。
-func (h *Host) Close(p *PluginProcess) error {
+func (h *Host) Close(p *PluginInstance) error {
 	if p == nil {
 		return nil
 	}

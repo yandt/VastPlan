@@ -105,7 +105,22 @@ type BackendExecution struct {
 	Platforms        []string            `json:"platforms,omitempty"`
 	MinimumIsolation string              `json:"minimumIsolation,omitempty"`
 	Features         []string            `json:"features,omitempty"`
+	Node             *NodeExecution      `json:"node,omitempty"`
+	Python           *PythonExecution    `json:"python,omitempty"`
 	DynamicGo        *DynamicGoExecution `json:"dynamicGo,omitempty"`
+}
+
+// NodeExecution 是 Node Worker 执行单元的显式兼容声明。WorkerSafe 必须为
+// true，入口必须使用 ESM；缺少声明不能被驱动推断为兼容。
+type NodeExecution struct {
+	WorkerSafe   bool   `json:"workerSafe"`
+	ModuleFormat string `json:"moduleFormat"`
+}
+
+// PythonExecution 是插件作者对其完整依赖图的多解释器安全承诺。宿主仍会探测
+// CPython 版本和 Runtime Host 能力，清单声明不能绕过运行时校验。
+type PythonExecution struct {
+	SubinterpreterSafe bool `json:"subinterpreterSafe"`
 }
 
 // DynamicGoExecution 声明制品内可选的首方 Go 动态内嵌入口。它只描述已签名内容，
@@ -127,6 +142,14 @@ func BackendExecutionContract(manifest Manifest) BackendExecution {
 	execution.Args = append([]string(nil), execution.Args...)
 	execution.Platforms = append([]string(nil), execution.Platforms...)
 	execution.Features = append([]string(nil), execution.Features...)
+	if execution.Node != nil {
+		node := *execution.Node
+		execution.Node = &node
+	}
+	if execution.Python != nil {
+		python := *execution.Python
+		execution.Python = &python
+	}
 	if execution.DynamicGo != nil {
 		dynamic := *execution.DynamicGo
 		execution.DynamicGo = &dynamic

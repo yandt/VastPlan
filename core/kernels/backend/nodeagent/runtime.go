@@ -24,7 +24,7 @@ import (
 type runningUnit struct {
 	fingerprint      string
 	host             *protocolbus.Host
-	processes        []*protocolbus.PluginProcess
+	instances        []*protocolbus.PluginInstance
 	registrations    []*addressing.Registration
 	startedAt        time.Time
 	restarts         uint64
@@ -52,7 +52,7 @@ type ProtocolRuntime struct {
 	nextID          uint64
 	router          *addressing.Router
 	Dependencies    kernelspi.Dependencies
-	Drivers         *RuntimeDriverRegistry
+	Drivers         *ExecutionDriverRegistry
 	ExecutionPolicy ExecutionPolicy
 	ContextPolicy   ContextPolicy
 	DynamicGoLoader DynamicGoModuleLoader
@@ -82,7 +82,7 @@ func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *Protoc
 		KernelVersion:     kernelVersion,
 		Logf:              logf,
 		DependencyTimeout: 5 * time.Second,
-		Drivers:           DefaultRuntimeDrivers(),
+		Drivers:           DefaultExecutionDrivers(),
 		ContextPolicy:     DefaultContextPolicy(),
 		units:             map[string]*runningUnit{},
 		events:            make(chan RuntimeEvent, 64),
@@ -129,9 +129,9 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 			candidate.Stop()
 		}
 	}()
-	processes := make([]*protocolbus.PluginProcess, 0, len(unit.Plugins))
+	instances := make([]*protocolbus.PluginInstance, 0, len(unit.Plugins))
 	for _, plugin := range unit.Plugins {
-		process, err := r.startPlugin(ctx, candidate, plugin, protocolbus.LaunchPolicy{
+		instance, err := r.startPlugin(ctx, candidate, plugin, protocolbus.LaunchPolicy{
 			PluginID: plugin.ID, Publisher: plugin.Publisher, Version: plugin.Version,
 			Contributions:        plugin.Contract.Contributions,
 			KernelServices:       plugin.Contract.KernelServices,
@@ -143,18 +143,18 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 		if err != nil {
 			return fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)
 		}
-		if process.PluginID != plugin.ID || process.Version != plugin.Version {
+		if instance.PluginID != plugin.ID || instance.Version != plugin.Version {
 			return fmt.Errorf("候选进程身份与验签清单不一致: 期望 %s@%s，实际 %s@%s",
-				plugin.ID, plugin.Version, process.PluginID, process.Version)
+				plugin.ID, plugin.Version, instance.PluginID, instance.Version)
 		}
-		processes = append(processes, process)
+		instances = append(instances, instance)
 	}
-	for _, process := range processes {
-		if !process.Alive() {
-			return fmt.Errorf("候选插件 %s@%s 在发布能力前已退出: %v", process.PluginID, process.Version, process.Err())
+	for _, instance := range instances {
+		if !instance.Alive() {
+			return fmt.Errorf("候选插件 %s@%s 在发布能力前已退出: %v", instance.PluginID, instance.Version, instance.Err())
 		}
 	}
-	prepared, err := prepareMigrations(ctx, candidate, unit.Migrations, processes)
+	prepared, err := prepareMigrations(ctx, candidate, unit.Migrations, instances)
 	if err != nil {
 		return err
 	}
@@ -166,7 +166,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 		}
 	}()
 	for _, migration := range prepared {
-		if err := candidate.Migrate(ctx, migration.process, migrationRequest(migration.plan, protocolbus.MigrationCommit)); err != nil {
+		if err := candidate.Migrate(ctx, migration.instance, migrationRequest(migration.plan, protocolbus.MigrationCommit)); err != nil {
 			return &StateMigrationError{PluginID: migration.plan.PluginID, Phase: "commit", Err: err}
 		}
 	}
@@ -214,7 +214,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	r.mu.RLock()
 	router := r.router
 	r.mu.RUnlock()
-	registrations, err := registerCandidate(ctx, router, candidate, unit, processes)
+	registrations, err := registerCandidate(ctx, router, candidate, unit, instances)
 	if err != nil {
 		return err
 	}
@@ -249,7 +249,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	current := &runningUnit{
 		fingerprint:   unit.Fingerprint,
 		host:          candidate,
-		processes:     processes,
+		instances:     instances,
 		registrations: registrations,
 		startedAt:     time.Now().UTC(),
 		restarts:      restarts,
@@ -261,8 +261,8 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	r.units[unit.ID] = current
 	r.mu.Unlock()
 	ok = true
-	for _, process := range processes {
-		go r.monitor(unit.ID, current.generation, process)
+	for _, instance := range instances {
+		go r.monitor(unit.ID, current.generation, instance)
 	}
 	for _, leadership := range leaderships {
 		go r.monitorLeadership(unit.ID, current.generation, leadership)
@@ -353,7 +353,7 @@ func (r *ProtocolRuntime) restoreOwnership(ctx context.Context, unitID string, o
 	r.mu.RLock()
 	router := r.router
 	r.mu.RUnlock()
-	registrations, err := registerCandidate(ctx, router, old.host, restoredSpec, old.processes)
+	registrations, err := registerCandidate(ctx, router, old.host, restoredSpec, old.instances)
 	if err == nil {
 		err = addressing.ActivateRegistrations(ctx, registrations)
 	}
@@ -416,27 +416,27 @@ func cloneStringMap(input map[string]string) map[string]string {
 }
 
 type preparedMigration struct {
-	plan    StateMigrationPlan
-	process *protocolbus.PluginProcess
+	plan     StateMigrationPlan
+	instance *protocolbus.PluginInstance
 }
 
-func prepareMigrations(ctx context.Context, host *protocolbus.Host, plans []StateMigrationPlan, processes []*protocolbus.PluginProcess) ([]preparedMigration, error) {
-	byPlugin := make(map[string]*protocolbus.PluginProcess, len(processes))
-	for _, process := range processes {
-		byPlugin[process.PluginID] = process
+func prepareMigrations(ctx context.Context, host *protocolbus.Host, plans []StateMigrationPlan, instances []*protocolbus.PluginInstance) ([]preparedMigration, error) {
+	byPlugin := make(map[string]*protocolbus.PluginInstance, len(instances))
+	for _, instance := range instances {
+		byPlugin[instance.PluginID] = instance
 	}
 	prepared := make([]preparedMigration, 0, len(plans))
 	for _, plan := range plans {
-		process := byPlugin[plan.PluginID]
-		if process == nil {
+		instance := byPlugin[plan.PluginID]
+		if instance == nil {
 			err := &StateMigrationError{PluginID: plan.PluginID, Phase: "prepare", Err: errors.New("迁移计划引用未启动的候选插件")}
 			return nil, errors.Join(err, rollbackMigrations(host, prepared, nil))
 		}
-		migration := preparedMigration{plan: plan, process: process}
+		migration := preparedMigration{plan: plan, instance: instance}
 		// 即使 PREPARE 返回错误，也可能已经产生了部分候选状态；先登记再调用，
 		// 失败路径才能把本插件一并纳入逆序 ROLLBACK。
 		prepared = append(prepared, migration)
-		if err := host.Migrate(ctx, process, migrationRequest(plan, protocolbus.MigrationPrepare)); err != nil {
+		if err := host.Migrate(ctx, instance, migrationRequest(plan, protocolbus.MigrationPrepare)); err != nil {
 			prepareErr := &StateMigrationError{PluginID: plan.PluginID, Phase: "prepare", Err: err}
 			return nil, errors.Join(prepareErr, rollbackMigrations(host, prepared, nil))
 		}
@@ -457,7 +457,7 @@ func rollbackMigrations(host *protocolbus.Host, prepared []preparedMigration, lo
 	for index := len(prepared) - 1; index >= 0; index-- {
 		migration := prepared[index]
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		err := host.Migrate(ctx, migration.process, migrationRequest(migration.plan, protocolbus.MigrationRollback))
+		err := host.Migrate(ctx, migration.instance, migrationRequest(migration.plan, protocolbus.MigrationRollback))
 		cancel()
 		if err != nil && logf != nil {
 			logf("回滚插件 %s 状态迁移失败 transaction=%s: %v",
@@ -513,17 +513,17 @@ func (r *ProtocolRuntime) Status(unitID string) (RuntimeStatus, bool) {
 		return RuntimeStatus{}, false
 	}
 	status := RuntimeStatus{
-		Healthy:          len(unit.processes) > 0,
+		Healthy:          len(unit.instances) > 0,
 		Readiness:        "ready",
 		DependencyIssues: append([]string(nil), unit.dependencyIssues...),
 		StartedAt:        unit.startedAt,
 		RestartCount:     unit.restarts,
 	}
-	for _, process := range unit.processes {
-		if process.PID > 0 {
-			status.PIDs = append(status.PIDs, process.PID)
+	for _, instance := range unit.instances {
+		if instance.PID > 0 {
+			status.PIDs = append(status.PIDs, instance.PID)
 		}
-		if !process.Alive() {
+		if !instance.Alive() {
 			status.Healthy = false
 		}
 	}
@@ -535,8 +535,8 @@ func (r *ProtocolRuntime) Status(unitID string) (RuntimeStatus, bool) {
 
 func (r *ProtocolRuntime) Events() <-chan RuntimeEvent { return r.events }
 
-func (r *ProtocolRuntime) monitor(unitID string, generation uint64, process *protocolbus.PluginProcess) {
-	<-process.Done()
+func (r *ProtocolRuntime) monitor(unitID string, generation uint64, instance *protocolbus.PluginInstance) {
+	<-instance.Done()
 	r.mu.Lock()
 	unit, ok := r.units[unitID]
 	if !ok || unit.generation != generation || unit.notified {
@@ -548,7 +548,7 @@ func (r *ProtocolRuntime) monitor(unitID string, generation uint64, process *pro
 		UnitID:      unitID,
 		Fingerprint: unit.fingerprint,
 		Type:        "instance_exited",
-		Message:     fmt.Sprint(process.Err()),
+		Message:     fmt.Sprint(instance.Err()),
 		OccurredAt:  time.Now().UTC(),
 	}
 	r.mu.Unlock()
@@ -676,13 +676,13 @@ func (r *ProtocolRuntime) Close() error {
 	return nil
 }
 
-func registerCandidate(ctx context.Context, router *addressing.Router, host *protocolbus.Host, unit RuntimeUnit, processes []*protocolbus.PluginProcess) ([]*addressing.Registration, error) {
+func registerCandidate(ctx context.Context, router *addressing.Router, host *protocolbus.Host, unit RuntimeUnit, instances []*protocolbus.PluginInstance) ([]*addressing.Registration, error) {
 	if router == nil {
 		return nil, nil
 	}
-	versions := make(map[string]string, len(processes))
-	for _, process := range processes {
-		versions[process.PluginID] = process.Version
+	versions := make(map[string]string, len(instances))
+	for _, instance := range instances {
+		versions[instance.PluginID] = instance.Version
 	}
 	policies := make(map[string]pluginv1.RuntimeContribution)
 	for _, plugin := range unit.Plugins {

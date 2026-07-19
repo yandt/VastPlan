@@ -80,6 +80,9 @@ type LaunchSpec struct {
 	Args     []string
 	Dir      string
 	ExtraEnv []string
+	// RuntimeKind 是受信任驱动写入的诊断标识，例如 process、node-worker、
+	// python-subinterpreter。它不参与授权，也不能由插件环境覆盖。
+	RuntimeKind string
 }
 
 type launchAttempt struct {
@@ -110,15 +113,21 @@ type MigrationCommand struct {
 // MigrationRequest 保留为源代码兼容别名；新代码使用语义更准确的 MigrationCommand。
 type MigrationRequest = MigrationCommand
 
-// PluginProcess 宿主侧持有的一个已接入插件。
-type PluginProcess struct {
-	PluginID  string
-	Version   string
-	SessionID string
-	PID       int
-	session   *session
-	embedded  *embeddedInstance
+// PluginInstance 是宿主侧持有的一个已接入执行单元。它可以来自独立进程、
+// Runtime Host 管理的 Worker/子解释器，或受控内嵌驱动；上层生命周期不区分语言。
+type PluginInstance struct {
+	PluginID    string
+	Version     string
+	SessionID   string
+	PID         int
+	runtimeKind string
+	session     *session
+	embedded    *embeddedInstance
 }
+
+// PluginProcess 是 v1 代码的源兼容别名。新代码使用 PluginInstance；协议和
+// 运行态不会因为 Go 类型重命名发生 wire 变化。
+type PluginProcess = PluginInstance
 
 var closedProcessDone = func() <-chan struct{} {
 	done := make(chan struct{})
@@ -128,7 +137,7 @@ var closedProcessDone = func() <-chan struct{} {
 
 // Done 在插件会话因崩溃、心跳超时或主动关闭而终结时关闭。
 // Node Agent 依赖这个真实死亡信号，不能只凭启动记录判断进程仍健康。
-func (p *PluginProcess) Done() <-chan struct{} {
+func (p *PluginInstance) Done() <-chan struct{} {
 	if p != nil && p.embedded != nil {
 		return p.embedded.done
 	}
@@ -139,7 +148,7 @@ func (p *PluginProcess) Done() <-chan struct{} {
 }
 
 // Err 返回会话终结原因；进程仍运行时为 nil。
-func (p *PluginProcess) Err() error {
+func (p *PluginInstance) Err() error {
 	if p != nil && p.embedded != nil {
 		return p.embedded.terminalError()
 	}
@@ -155,15 +164,21 @@ func (p *PluginProcess) Err() error {
 }
 
 // RuntimeKind 返回实例的运行形态，供状态与故障事件区分进程和内嵌实例。
-func (p *PluginProcess) RuntimeKind() string {
+func (p *PluginInstance) RuntimeKind() string {
 	if p != nil && p.embedded != nil {
+		if p.runtimeKind != "" {
+			return p.runtimeKind
+		}
 		return "embedded"
+	}
+	if p != nil && p.runtimeKind != "" {
+		return p.runtimeKind
 	}
 	return "process"
 }
 
 // Alive 同时检查会话是否仍连通，而非仅检查 PID 曾经存在。
-func (p *PluginProcess) Alive() bool {
+func (p *PluginInstance) Alive() bool {
 	select {
 	case <-p.Done():
 		return false

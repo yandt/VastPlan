@@ -133,10 +133,29 @@
           "maxItems": 32
         },
         "minimumIsolation": {
-          "enum": ["trusted-process", "process-sandbox", "container", "wasm"]
+          "enum": ["trusted-process", "trusted-runtime", "process-sandbox", "container", "wasm"]
         },
         "features": { "$ref": "#/$defs/stringList" },
+        "node": { "$ref": "#/$defs/nodeExecution" },
+        "python": { "$ref": "#/$defs/pythonExecution" },
         "dynamicGo": { "$ref": "#/$defs/dynamicGoExecution" }
+      }
+    },
+    "nodeExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["workerSafe", "moduleFormat"],
+      "properties": {
+        "workerSafe": { "type": "boolean" },
+        "moduleFormat": { "const": "esm" }
+      }
+    },
+    "pythonExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subinterpreterSafe"],
+      "properties": {
+        "subinterpreterSafe": { "type": "boolean" }
       }
     },
     "dynamicGoExecution": {

@@ -1,6 +1,7 @@
 package nodeagent
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -12,8 +13,9 @@ type sandboxTestDriver struct{}
 
 func (sandboxTestDriver) Name() string              { return "sandbox.test" }
 func (sandboxTestDriver) Isolation() IsolationLevel { return IsolationProcessSandbox }
-func (sandboxTestDriver) LaunchSpec(plugin InstalledPlugin) (protocolbus.LaunchSpec, error) {
-	return protocolbus.LaunchSpec{Command: "sandbox", Args: []string{plugin.EntryPath}}, nil
+func (sandboxTestDriver) Start(context.Context, *protocolbus.Host, InstalledPlugin,
+	protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error) {
+	return nil, nil
 }
 
 func TestRuntimeDriversResolveLanguageAndEnforcePublisherIsolation(t *testing.T) {
@@ -27,27 +29,45 @@ func TestRuntimeDriversResolveLanguageAndEnforcePublisherIsolation(t *testing.T)
 		t.Fatal(err)
 	}
 	runtime.ExecutionPolicy = policy
-	spec, err := runtime.launchSpec(plugin)
+	driver, normalized, err := runtime.resolveExecutionDriver(plugin)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.Command != "python3" || len(spec.Args) != 2 || spec.Args[0] != plugin.EntryPath || spec.Dir != plugin.Root {
-		t.Fatalf("python 驱动启动规格错误: %+v", spec)
+	if driver.Name() != "python" || normalized.Execution.Driver != "python" {
+		t.Fatalf("python 执行驱动解析错误: driver=%s plugin=%+v", driver.Name(), normalized)
 	}
 
 	plugin.Publisher = "third-party"
-	if _, err := runtime.launchSpec(plugin); err == nil || !strings.Contains(err.Error(), "要求隔离") {
+	if _, _, err := runtime.resolveExecutionDriver(plugin); err == nil || !strings.Contains(err.Error(), "要求隔离") {
 		t.Fatalf("未知发布者不能降级为 trusted-process: %v", err)
 	}
 
-	registry, err := NewRuntimeDriverRegistry(sandboxTestDriver{})
+	registry, err := NewExecutionDriverRegistry(sandboxTestDriver{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	runtime.Drivers = registry
 	plugin.Execution.Driver = "sandbox.test"
-	if _, err := runtime.launchSpec(plugin); err != nil {
+	if _, _, err := runtime.resolveExecutionDriver(plugin); err != nil {
 		t.Fatalf("隔离驱动应允许第三方发布者: %v", err)
+	}
+}
+
+func TestManagedRuntimeDriversRequireExplicitCompatibilityDeclaration(t *testing.T) {
+	nodeDriver := NodeWorkerExecutionDriver{Command: "node-host"}
+	plugin := InstalledPlugin{ID: "com.example.node", EntryPath: "/plugin/main.mjs",
+		Execution: pluginv1.BackendExecution{Driver: "node-worker"}}
+	if _, err := nodeDriver.Start(context.Background(), nil, plugin, protocolbus.LaunchPolicy{}); err == nil ||
+		!strings.Contains(err.Error(), "workerSafe") {
+		t.Fatalf("Node Worker 缺少兼容声明必须 fail-closed: %v", err)
+	}
+
+	pythonDriver := PythonSubinterpreterExecutionDriver{Command: "python-host"}
+	plugin.ID = "com.example.python"
+	plugin.Execution = pluginv1.BackendExecution{Driver: "python-subinterpreter"}
+	if _, err := pythonDriver.Start(context.Background(), nil, plugin, protocolbus.LaunchPolicy{}); err == nil ||
+		!strings.Contains(err.Error(), "subinterpreterSafe") {
+		t.Fatalf("Python 子解释器缺少兼容声明必须 fail-closed: %v", err)
 	}
 }
 
@@ -111,12 +131,12 @@ func TestRuntimeDriversRejectUnknownDriverAndUnsupportedPlatform(t *testing.T) {
 	plugin := InstalledPlugin{ID: "p", Publisher: "vastplan", EntryPath: "/p", Execution: pluginv1.BackendExecution{
 		Driver: "missing", MinimumIsolation: "trusted-process",
 	}}
-	if _, err := runtime.launchSpec(plugin); err == nil || !strings.Contains(err.Error(), "未注册运行驱动") {
+	if _, _, err := runtime.resolveExecutionDriver(plugin); err == nil || !strings.Contains(err.Error(), "未注册执行驱动") {
 		t.Fatalf("未知驱动必须 fail-closed: %v", err)
 	}
 	plugin.Execution.Driver = "native"
 	plugin.Execution.Platforms = []string{"unsupported/none"}
-	if _, err := runtime.launchSpec(plugin); err == nil || !strings.Contains(err.Error(), "不支持当前平台") {
+	if _, _, err := runtime.resolveExecutionDriver(plugin); err == nil || !strings.Contains(err.Error(), "不支持当前平台") {
 		t.Fatalf("平台不匹配必须 fail-closed: %v", err)
 	}
 }

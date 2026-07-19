@@ -80,7 +80,13 @@ func embeddedRouteKey(extensionPoint, id, operation string) string {
 	return extensionPoint + "\x00" + id + "\x00" + operation
 }
 
-func (h *Host) LaunchEmbeddedWithPolicy(ctx context.Context, definition EmbeddedPlugin, policy LaunchPolicy) (*PluginProcess, error) {
+func (h *Host) LaunchEmbeddedWithPolicy(ctx context.Context, definition EmbeddedPlugin, policy LaunchPolicy) (*PluginInstance, error) {
+	return h.LaunchEmbeddedKindWithPolicy(ctx, definition, policy, "embedded")
+}
+
+// LaunchEmbeddedKindWithPolicy 允许受信任执行驱动记录具体内嵌承载类型；kind
+// 只用于诊断，身份与权限仍完全来自 LaunchPolicy。
+func (h *Host) LaunchEmbeddedKindWithPolicy(ctx context.Context, definition EmbeddedPlugin, policy LaunchPolicy, kind string) (*PluginInstance, error) {
 	policy = cloneLaunchPolicy(policy)
 	if definition.ID == "" || definition.Version == "" || policy.PluginID == "" || policy.Version == "" {
 		return nil, errors.New("内嵌插件及启动策略必须包含身份和版本")
@@ -153,7 +159,8 @@ func (h *Host) LaunchEmbeddedWithPolicy(ctx context.Context, definition Embedded
 	instance.mu.Unlock()
 	registered = true
 	h.Logf("内嵌插件已激活 %s@%s", definition.ID, definition.Version)
-	return &PluginProcess{PluginID: definition.ID, Version: definition.Version, SessionID: instance.id, embedded: instance}, nil
+	return &PluginInstance{PluginID: definition.ID, Version: definition.Version, SessionID: instance.id,
+		runtimeKind: kind, embedded: instance}, nil
 }
 
 func validateAndRegisterEmbedded(h *Host, instance *embeddedInstance, contribution *pluginhostv1.Contribution) error {

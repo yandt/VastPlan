@@ -68,7 +68,7 @@ func TestRequireDynamicGoLoadsOnlyFirstPartySignedEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !loader.called || process.RuntimeKind() != "embedded" {
+	if !loader.called || process.RuntimeKind() != "dynamic-go" {
 		t.Fatalf("dynamic-go 未以内嵌实例启动: called=%v process=%+v", loader.called, process)
 	}
 

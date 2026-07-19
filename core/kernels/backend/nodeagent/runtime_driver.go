@@ -1,6 +1,7 @@
 package nodeagent
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"runtime"
@@ -17,6 +18,7 @@ type IsolationLevel string
 
 const (
 	IsolationTrustedProcess IsolationLevel = "trusted-process"
+	IsolationTrustedRuntime IsolationLevel = "trusted-runtime"
 	IsolationProcessSandbox IsolationLevel = "process-sandbox"
 	IsolationContainer      IsolationLevel = "container"
 	IsolationWASM           IsolationLevel = "wasm"
@@ -24,26 +26,28 @@ const (
 
 var isolationRank = map[IsolationLevel]int{
 	IsolationTrustedProcess: 0,
+	IsolationTrustedRuntime: 0,
 	IsolationProcessSandbox: 1,
 	IsolationContainer:      2,
 	IsolationWASM:           2,
 }
 
-// PluginRuntimeDriver 把已验签、已安装的语言制品转换为无 shell LaunchSpec。
-// OCI/WASM/系统沙箱实现未来注册到同一接口，协议宿主不感知具体运行时。
-type PluginRuntimeDriver interface {
+// PluginExecutionDriver 启动一个已验签、已安装的插件，并返回统一实例句柄。
+// 进程、Runtime Host、WASM 和内嵌实现都必须在这里完成最后一跳，主生命周期
+// 不再根据语言生成条件分支。
+type PluginExecutionDriver interface {
 	Name() string
 	Isolation() IsolationLevel
-	LaunchSpec(InstalledPlugin) (protocolbus.LaunchSpec, error)
+	Start(context.Context, *protocolbus.Host, InstalledPlugin, protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error)
 }
 
-type RuntimeDriverRegistry struct {
+type ExecutionDriverRegistry struct {
 	mu      sync.RWMutex
-	drivers map[string]PluginRuntimeDriver
+	drivers map[string]PluginExecutionDriver
 }
 
-func NewRuntimeDriverRegistry(drivers ...PluginRuntimeDriver) (*RuntimeDriverRegistry, error) {
-	registry := &RuntimeDriverRegistry{drivers: map[string]PluginRuntimeDriver{}}
+func NewExecutionDriverRegistry(drivers ...PluginExecutionDriver) (*ExecutionDriverRegistry, error) {
+	registry := &ExecutionDriverRegistry{drivers: map[string]PluginExecutionDriver{}}
 	for _, driver := range drivers {
 		if err := registry.Register(driver); err != nil {
 			return nil, err
@@ -52,12 +56,17 @@ func NewRuntimeDriverRegistry(drivers ...PluginRuntimeDriver) (*RuntimeDriverReg
 	return registry, nil
 }
 
-func DefaultRuntimeDrivers() *RuntimeDriverRegistry {
-	registry, _ := NewRuntimeDriverRegistry(NativeRuntimeDriver{}, PythonRuntimeDriver{Interpreter: "python3"})
+func DefaultExecutionDrivers() *ExecutionDriverRegistry {
+	registry, _ := NewExecutionDriverRegistry(
+		NativeExecutionDriver{},
+		PythonProcessExecutionDriver{Interpreter: "python3"},
+		NodeWorkerExecutionDriver{Command: "vastplan-node-worker-host"},
+		PythonSubinterpreterExecutionDriver{Command: "vastplan-python-subinterpreter-host"},
+	)
 	return registry
 }
 
-func (r *RuntimeDriverRegistry) Register(driver PluginRuntimeDriver) error {
+func (r *ExecutionDriverRegistry) Register(driver PluginExecutionDriver) error {
 	if r == nil || driver == nil || strings.TrimSpace(driver.Name()) == "" {
 		return errors.New("运行驱动及名称不能为空")
 	}
@@ -73,7 +82,7 @@ func (r *RuntimeDriverRegistry) Register(driver PluginRuntimeDriver) error {
 	return nil
 }
 
-func (r *RuntimeDriverRegistry) Resolve(name string) (PluginRuntimeDriver, bool) {
+func (r *ExecutionDriverRegistry) Resolve(name string) (PluginExecutionDriver, bool) {
 	if r == nil {
 		return nil, false
 	}
@@ -83,7 +92,7 @@ func (r *RuntimeDriverRegistry) Resolve(name string) (PluginRuntimeDriver, bool)
 	return driver, ok
 }
 
-func (r *RuntimeDriverRegistry) Names() []string {
+func (r *ExecutionDriverRegistry) Names() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	names := make([]string, 0, len(r.drivers))
@@ -94,31 +103,74 @@ func (r *RuntimeDriverRegistry) Names() []string {
 	return names
 }
 
-type NativeRuntimeDriver struct{}
+type NativeExecutionDriver struct{}
 
-func (NativeRuntimeDriver) Name() string              { return "native" }
-func (NativeRuntimeDriver) Isolation() IsolationLevel { return IsolationTrustedProcess }
-func (NativeRuntimeDriver) LaunchSpec(plugin InstalledPlugin) (protocolbus.LaunchSpec, error) {
-	return launchSpec(plugin, plugin.EntryPath, plugin.Execution.Args), nil
+func (NativeExecutionDriver) Name() string              { return "native" }
+func (NativeExecutionDriver) Isolation() IsolationLevel { return IsolationTrustedProcess }
+func (NativeExecutionDriver) Start(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
+	policy protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error) {
+	return host.LaunchSpecWithPolicy(ctx, processLaunchSpec(plugin, plugin.EntryPath, plugin.Execution.Args, "process"), policy)
 }
 
-type PythonRuntimeDriver struct{ Interpreter string }
+type PythonProcessExecutionDriver struct{ Interpreter string }
 
-func (PythonRuntimeDriver) Name() string              { return "python" }
-func (PythonRuntimeDriver) Isolation() IsolationLevel { return IsolationTrustedProcess }
-func (d PythonRuntimeDriver) LaunchSpec(plugin InstalledPlugin) (protocolbus.LaunchSpec, error) {
+func (PythonProcessExecutionDriver) Name() string              { return "python" }
+func (PythonProcessExecutionDriver) Isolation() IsolationLevel { return IsolationTrustedProcess }
+func (d PythonProcessExecutionDriver) Start(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
+	policy protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error) {
 	interpreter := strings.TrimSpace(d.Interpreter)
 	if interpreter == "" {
-		return protocolbus.LaunchSpec{}, errors.New("python 运行驱动未配置解释器")
+		return nil, errors.New("python 执行驱动未配置解释器")
 	}
 	args := append([]string{plugin.EntryPath}, plugin.Execution.Args...)
-	return launchSpec(plugin, interpreter, args), nil
+	return host.LaunchSpecWithPolicy(ctx, processLaunchSpec(plugin, interpreter, args, "process"), policy)
 }
 
-func launchSpec(plugin InstalledPlugin, command string, args []string) protocolbus.LaunchSpec {
+// NodeWorkerExecutionDriver 由内核发布物中的受信任 Runtime Host 创建 Worker。
+// Runtime Host 仍通过同一插件协议回连，不能绕过 LaunchPolicy。
+type NodeWorkerExecutionDriver struct{ Command string }
+
+func (NodeWorkerExecutionDriver) Name() string              { return "node-worker" }
+func (NodeWorkerExecutionDriver) Isolation() IsolationLevel { return IsolationTrustedRuntime }
+func (d NodeWorkerExecutionDriver) Start(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
+	policy protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error) {
+	if plugin.Execution.Node == nil || !plugin.Execution.Node.WorkerSafe || plugin.Execution.Node.ModuleFormat != "esm" {
+		return nil, fmt.Errorf("插件 %s 未声明 node.workerSafe=true 且 moduleFormat=esm", plugin.ID)
+	}
+	command := strings.TrimSpace(d.Command)
+	if command == "" {
+		return nil, errors.New("node-worker 执行驱动未配置 Runtime Host")
+	}
+	args := append([]string{"--entry", plugin.EntryPath}, plugin.Execution.Args...)
+	return host.LaunchSpecWithPolicy(ctx, processLaunchSpec(plugin, command, args, "node-worker"), policy)
+}
+
+// PythonSubinterpreterExecutionDriver 只接收对完整依赖图作出多解释器安全承诺
+// 的插件。CPython 版本和扩展模块支持度由 Runtime Host 在握手前继续校验。
+type PythonSubinterpreterExecutionDriver struct{ Command string }
+
+func (PythonSubinterpreterExecutionDriver) Name() string { return "python-subinterpreter" }
+func (PythonSubinterpreterExecutionDriver) Isolation() IsolationLevel {
+	return IsolationTrustedRuntime
+}
+func (d PythonSubinterpreterExecutionDriver) Start(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
+	policy protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error) {
+	if plugin.Execution.Python == nil || !plugin.Execution.Python.SubinterpreterSafe {
+		return nil, fmt.Errorf("插件 %s 未声明 python.subinterpreterSafe=true", plugin.ID)
+	}
+	command := strings.TrimSpace(d.Command)
+	if command == "" {
+		return nil, errors.New("python-subinterpreter 执行驱动未配置 Runtime Host")
+	}
+	args := append([]string{"--entry", plugin.EntryPath}, plugin.Execution.Args...)
+	return host.LaunchSpecWithPolicy(ctx, processLaunchSpec(plugin, command, args, "python-subinterpreter"), policy)
+}
+
+func processLaunchSpec(plugin InstalledPlugin, command string, args []string, kind string) protocolbus.LaunchSpec {
 	return protocolbus.LaunchSpec{
 		Command: command, Args: append([]string(nil), args...), Dir: plugin.Root,
-		ExtraEnv: []string{"VASTPLAN_PLUGIN_ROOT=" + plugin.Root, "VASTPLAN_PLUGIN_DRIVER=" + plugin.Execution.Driver},
+		ExtraEnv:    []string{"VASTPLAN_PLUGIN_ROOT=" + plugin.Root, "VASTPLAN_PLUGIN_DRIVER=" + plugin.Execution.Driver},
+		RuntimeKind: kind,
 	}
 }
 
@@ -218,7 +270,7 @@ func (p ExecutionPolicy) RequiredIsolation(plugin InstalledPlugin) (IsolationLev
 	return required, nil
 }
 
-func (r *ProtocolRuntime) launchSpec(plugin InstalledPlugin) (protocolbus.LaunchSpec, error) {
+func normalizeExecutionContract(plugin InstalledPlugin) InstalledPlugin {
 	// 兼容升级前实际态和直接构造 InstalledPlugin 的嵌入方；正式安装路径已经
 	// 冻结同样的默认值，这里是运行边界上的最后一道归一化。
 	if strings.TrimSpace(plugin.Execution.Driver) == "" {
@@ -227,6 +279,10 @@ func (r *ProtocolRuntime) launchSpec(plugin InstalledPlugin) (protocolbus.Launch
 	if strings.TrimSpace(plugin.Execution.MinimumIsolation) == "" {
 		plugin.Execution.MinimumIsolation = string(IsolationTrustedProcess)
 	}
+	return plugin
+}
+
+func validateExecutionPlatform(plugin InstalledPlugin) error {
 	if len(plugin.Execution.Platforms) != 0 {
 		current := runtime.GOOS + "/" + runtime.GOARCH
 		matched := false
@@ -234,23 +290,40 @@ func (r *ProtocolRuntime) launchSpec(plugin InstalledPlugin) (protocolbus.Launch
 			matched = matched || platform == current
 		}
 		if !matched {
-			return protocolbus.LaunchSpec{}, fmt.Errorf("插件 %s 不支持当前平台 %s", plugin.ID, current)
+			return fmt.Errorf("插件 %s 不支持当前平台 %s", plugin.ID, current)
 		}
+	}
+	return nil
+}
+
+func (r *ProtocolRuntime) resolveExecutionDriver(plugin InstalledPlugin) (PluginExecutionDriver, InstalledPlugin, error) {
+	plugin = normalizeExecutionContract(plugin)
+	if err := validateExecutionPlatform(plugin); err != nil {
+		return nil, InstalledPlugin{}, err
 	}
 	drivers := r.Drivers
 	if drivers == nil {
-		drivers = DefaultRuntimeDrivers()
+		drivers = DefaultExecutionDrivers()
 	}
 	driver, ok := drivers.Resolve(plugin.Execution.Driver)
 	if !ok {
-		return protocolbus.LaunchSpec{}, fmt.Errorf("插件 %s 请求未注册运行驱动 %q（可用: %s）", plugin.ID, plugin.Execution.Driver, strings.Join(drivers.Names(), ","))
+		return nil, InstalledPlugin{}, fmt.Errorf("插件 %s 请求未注册执行驱动 %q（可用: %s）", plugin.ID, plugin.Execution.Driver, strings.Join(drivers.Names(), ","))
 	}
 	required, err := r.ExecutionPolicy.RequiredIsolation(plugin)
 	if err != nil {
-		return protocolbus.LaunchSpec{}, err
+		return nil, InstalledPlugin{}, err
 	}
 	if isolationRank[driver.Isolation()] < isolationRank[required] {
-		return protocolbus.LaunchSpec{}, fmt.Errorf("插件 %s 发布者 %s 要求隔离 %s，驱动 %s 仅提供 %s", plugin.ID, plugin.Publisher, required, driver.Name(), driver.Isolation())
+		return nil, InstalledPlugin{}, fmt.Errorf("插件 %s 发布者 %s 要求隔离 %s，驱动 %s 仅提供 %s", plugin.ID, plugin.Publisher, required, driver.Name(), driver.Isolation())
 	}
-	return driver.LaunchSpec(plugin)
+	return driver, plugin, nil
+}
+
+func (r *ProtocolRuntime) startConfiguredPlugin(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
+	policy protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error) {
+	driver, normalized, err := r.resolveExecutionDriver(plugin)
+	if err != nil {
+		return nil, err
+	}
+	return driver.Start(ctx, host, normalized, policy)
 }

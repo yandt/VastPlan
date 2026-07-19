@@ -86,8 +86,36 @@ func (p PlacementPolicy) modeFor(plugin InstalledPlugin) PlacementMode {
 	return p.Default
 }
 
+// DynamicGoExecutionDriver 把历史 dynamic-go 承载纳入统一执行驱动入口。
+// 选择与可回退策略仍由宿主 PlacementPolicy 决定，驱动本身不拥有提权能力。
+type DynamicGoExecutionDriver struct{ Loader DynamicGoModuleLoader }
+
+func (DynamicGoExecutionDriver) Name() string              { return "dynamic-go" }
+func (DynamicGoExecutionDriver) Isolation() IsolationLevel { return IsolationTrustedRuntime }
+func (d DynamicGoExecutionDriver) Start(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
+	policy protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error) {
+	if err := validateInProcessFirstParty(plugin); err != nil {
+		return nil, err
+	}
+	if plugin.DynamicGoPath == "" {
+		return nil, fmt.Errorf("插件 %s@%s 没有已验签的 dynamic-go 入口", plugin.ID, plugin.Version)
+	}
+	if plugin.Execution.DynamicGo == nil || plugin.Execution.DynamicGo.ABI != protocolbus.DynamicGoABIV1 {
+		return nil, errors.New("dynamic-go 安装契约缺失或 ABI 无效")
+	}
+	if d.Loader == nil {
+		return nil, errors.New("Backend 未配置 dynamic-go loader")
+	}
+	definition, err := d.Loader.Load(plugin.DynamicGoPath, plugin.ID, plugin.Version,
+		plugin.Execution.DynamicGo.Fingerprint)
+	if err != nil {
+		return nil, err
+	}
+	return host.LaunchEmbeddedKindWithPolicy(ctx, definition, policy, d.Name())
+}
+
 func (r *ProtocolRuntime) startPlugin(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
-	policy protocolbus.LaunchPolicy) (*protocolbus.PluginProcess, error) {
+	policy protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error) {
 	mode := r.PlacementPolicy.modeFor(plugin)
 	if err := validatePlacementMode(mode); err != nil {
 		return nil, err
@@ -97,64 +125,40 @@ func (r *ProtocolRuntime) startPlugin(ctx context.Context, host *protocolbus.Hos
 			plugin.ID, plugin.Version, mode)
 	}
 	if mode == PlacementProcessOnly {
-		return r.startProcessPlugin(ctx, host, plugin, policy)
+		return r.startConfiguredPlugin(ctx, host, plugin, policy)
 	}
 	required := mode == PlacementRequireDynamicGo
-	fallbackProcess := func(reason error) (*protocolbus.PluginProcess, error) {
+	fallbackConfigured := func(reason error) (*protocolbus.PluginInstance, error) {
 		if required {
 			return nil, reason
 		}
 		if r.Logf != nil {
-			r.Logf("插件 %s@%s 无法以内嵌形态启动，回退独立进程: %v", plugin.ID, plugin.Version, reason)
+			r.Logf("插件 %s@%s 无法以 dynamic-go 启动，回退签名清单驱动 %s: %v",
+				plugin.ID, plugin.Version, plugin.Execution.Driver, reason)
 		}
-		return r.startProcessPlugin(ctx, host, plugin, policy)
+		return r.startConfiguredPlugin(ctx, host, plugin, policy)
 	}
 	if err := validateInProcessFirstParty(plugin); err != nil {
 		if required {
 			return nil, err
 		}
-		return r.startProcessPlugin(ctx, host, plugin, policy)
+		return r.startConfiguredPlugin(ctx, host, plugin, policy)
 	}
-	candidate := plugin
-	if strings.TrimSpace(candidate.Execution.MinimumIsolation) == "" {
-		candidate.Execution.MinimumIsolation = string(IsolationTrustedProcess)
-	}
+	candidate := normalizeExecutionContract(plugin)
 	minimum, isolationErr := r.ExecutionPolicy.RequiredIsolation(candidate)
-	if isolationErr != nil || isolationRank[minimum] > isolationRank[IsolationTrustedProcess] {
+	driver := DynamicGoExecutionDriver{Loader: r.DynamicGoLoader}
+	if isolationErr != nil || isolationRank[driver.Isolation()] < isolationRank[minimum] {
 		if required {
 			if isolationErr != nil {
 				return nil, isolationErr
 			}
 			return nil, fmt.Errorf("插件 %s 要求隔离 %s，不能放入内核进程", plugin.ID, minimum)
 		}
-		return r.startProcessPlugin(ctx, host, plugin, policy)
+		return r.startConfiguredPlugin(ctx, host, plugin, policy)
 	}
-
-	if plugin.DynamicGoPath != "" {
-		if plugin.Execution.DynamicGo == nil || plugin.Execution.DynamicGo.ABI != protocolbus.DynamicGoABIV1 {
-			return fallbackProcess(errors.New("dynamic-go 安装契约缺失或 ABI 无效"))
-		}
-		if r.DynamicGoLoader == nil {
-			return fallbackProcess(errors.New("Backend 未配置 dynamic-go loader"))
-		}
-		definition, err := r.DynamicGoLoader.Load(plugin.DynamicGoPath, plugin.ID, plugin.Version,
-			plugin.Execution.DynamicGo.Fingerprint)
-		if err != nil {
-			return fallbackProcess(err)
-		}
-		return host.LaunchEmbeddedWithPolicy(ctx, definition, policy)
-	}
-	if required {
-		return nil, fmt.Errorf("插件 %s@%s 没有已验签的 dynamic-go 入口", plugin.ID, plugin.Version)
-	}
-	return r.startProcessPlugin(ctx, host, plugin, policy)
-}
-
-func (r *ProtocolRuntime) startProcessPlugin(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
-	policy protocolbus.LaunchPolicy) (*protocolbus.PluginProcess, error) {
-	spec, err := r.launchSpec(plugin)
+	instance, err := driver.Start(ctx, host, candidate, policy)
 	if err != nil {
-		return nil, err
+		return fallbackConfigured(err)
 	}
-	return host.LaunchSpecWithPolicy(ctx, spec, policy)
+	return instance, nil
 }
