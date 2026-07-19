@@ -104,3 +104,82 @@ func TestFrontendHMRRejectsNonLoopbackAndEscapingManifest(t *testing.T) {
 		t.Fatalf("escaping manifest error = %v", err)
 	}
 }
+
+func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"extensions/plugins/com.vastplan.feature/frontend/src/index.ts": "plugin-v1",
+		"extensions/sdk/ts/platform-admin/src/index.ts":                 "admin-v1",
+		"extensions/sdk/ts/platform-admin/package.json":                 "{}",
+		"core/kernels/frontend/src/browser.tsx":                         "host-v1",
+		"core/kernels/frontend/static/index.html":                       "host-v1",
+		"core/kernels/frontend/package.json":                            "{}",
+		"extensions/sdk/ts/portal-ui/src/index.ts":                      "portal-ui-v1",
+		"extensions/sdk/ts/portal-ui/package.json":                      "{}",
+		"extensions/sdk/ts/ui-contract/src/index.ts":                    "contract-v1",
+		"extensions/sdk/ts/ui-contract/package.json":                    "{}",
+		"engineering/tools/build-frontend.sh":                           "build-v1",
+		"engineering/tools/build-frontend-plugins.mjs":                  "build-v1",
+		"package.json":        "{}",
+		"pnpm-lock.yaml":      "lockfileVersion: 1",
+		"pnpm-workspace.yaml": "packages: []",
+		"tsconfig.base.json":  "{}",
+	}
+	write := func(relative, content string) {
+		path := filepath.Join(root, filepath.FromSlash(relative))
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for relative, content := range files {
+		write(relative, content)
+	}
+	hmr := &frontendHMR{root: root}
+	initial, err := hmr.sourceSignatures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	write("extensions/plugins/com.vastplan.feature/frontend/src/index.ts", "plugin-v2")
+	pluginChange, err := hmr.sourceSignatures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pluginChange.plugins == initial.plugins || pluginChange.host != initial.host {
+		t.Fatalf("plugin change signatures = %#v, initial = %#v", pluginChange, initial)
+	}
+	write("extensions/sdk/ts/portal-ui/src/index.ts", "portal-ui-v2")
+	hostChange, err := hmr.sourceSignatures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hostChange.host == pluginChange.host || hostChange.plugins != pluginChange.plugins {
+		t.Fatalf("host change signatures = %#v, plugin = %#v", hostChange, pluginChange)
+	}
+}
+
+func TestFrontendHMRCommitsHostAssetsAndModulesAsReload(t *testing.T) {
+	updates := make(chan frontendHMREvent, 1)
+	hmr := &frontendHMR{
+		current:     map[string]frontendHMRModule{},
+		objects:     map[string][]byte{},
+		subscribers: map[chan frontendHMREvent]struct{}{updates: {}},
+		assets:      http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("old-vendor")) }),
+	}
+	module := frontendHMRModule{ID: "com.vastplan.feature", SHA256: strings.Repeat("a", 64), Bytes: []byte("new-plugin")}
+	assets := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("new-vendor-with-message")) })
+	hmr.commitCandidate(frontendHMRCandidate{current: map[string]frontendHMRModule{module.ID: module}, digests: []string{module.SHA256}}, "reload", assets)
+
+	event := <-updates
+	if event.Name != "reload" {
+		t.Fatalf("event = %#v", event)
+	}
+	request := httptest.NewRequest(http.MethodGet, "/assets/vendor/portal-ui.js", nil)
+	response := httptest.NewRecorder()
+	hmr.portalAssets(response, request)
+	if response.Body.String() != "new-vendor-with-message" || string(hmr.objects[module.SHA256]) != "new-plugin" {
+		t.Fatalf("host/module commit was not atomic: body=%q module=%q", response.Body.String(), hmr.objects[module.SHA256])
+	}
+}

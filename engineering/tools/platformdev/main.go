@@ -512,8 +512,17 @@ func (r *runtime) startProxy() error {
 		mux.HandleFunc("/__vastplan_dev/events", r.hmr.events)
 		mux.HandleFunc("/__vastplan_dev/runtime", r.hmr.runtime)
 		mux.HandleFunc("/__vastplan_dev/modules/", r.hmr.module)
+		mux.HandleFunc("/assets/", r.hmr.portalAssets)
+		mux.HandleFunc("/", func(w http.ResponseWriter, request *http.Request) {
+			if request.URL.Path == "/v1" || strings.HasPrefix(request.URL.Path, "/v1/") {
+				proxy.ServeHTTP(w, request)
+				return
+			}
+			r.hmr.portalAssets(w, request)
+		})
+	} else {
+		mux.Handle("/", proxy)
 	}
-	mux.Handle("/", proxy)
 	r.proxy = &http.Server{Addr: r.options.listen, Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	listener, err := net.Listen("tcp", r.options.listen)
 	if err != nil {

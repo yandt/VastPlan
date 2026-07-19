@@ -14,6 +14,7 @@ export interface PortalDevelopmentOptions {
   eventSourceFactory?(url: string): DevelopmentEventSource;
   eventsEndpoint?: string;
   runtimeEndpoint?: string;
+  reload?(): void;
   onError?(error: unknown): void;
 }
 
@@ -61,6 +62,18 @@ export function startPortalDevelopmentUpdates(options: PortalDevelopmentOptions)
     try {
       const payload = JSON.parse(event.data) as { message?: unknown };
       options.onError?.(new PortalDevelopmentError("BUILD_FAILED", typeof payload.message === "string" ? payload.message : "前端插件构建失败"));
+    } catch (error) {
+      options.onError?.(error);
+    }
+  });
+  source.addEventListener("reload", (event) => {
+    if (closed) return;
+    try {
+      const payload = JSON.parse(event.data) as { generation?: unknown };
+      if (!Number.isSafeInteger(payload.generation) || Number(payload.generation) <= 0) throw new PortalDevelopmentError("RELOAD_INVALID", "开发态 Portal reload 事件无效");
+      closed = true;
+      source.close();
+      (options.reload ?? (() => globalThis.location?.reload()))();
     } catch (error) {
       options.onError?.(error);
     }

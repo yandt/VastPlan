@@ -72,4 +72,24 @@ describe("portal development updates", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(replace).toHaveBeenCalledOnce();
   });
+
+  it("reloads the whole host instead of importing plugins against stale shared vendors", () => {
+    const source = new FakeEventSource();
+    const replace = vi.fn(async () => ({} as never));
+    const reload = vi.fn();
+    const errors: unknown[] = [];
+    startPortalDevelopmentUpdates({
+      manager: { replace } as unknown as PortalGenerationManager,
+      pathname: () => "/operations",
+      eventSource: source,
+      reload,
+      onError: (error) => errors.push(error),
+    });
+    source.emit("reload", { generation: 3 });
+    source.emit("generation", { generation: 4 });
+    expect(reload).toHaveBeenCalledOnce();
+    expect(source.closed).toBe(true);
+    expect(replace).not.toHaveBeenCalled();
+    expect(errors).toEqual([]);
+  });
 });
