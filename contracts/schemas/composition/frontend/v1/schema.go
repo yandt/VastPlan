@@ -53,7 +53,8 @@ type DesignSystem struct {
 // silently rename or remove extension slots consumed by functional plugins.
 type ShellComposition struct {
 	PluginRef
-	UIContract string `json:"uiContract"`
+	UIContract string         `json:"uiContract"`
+	Config     map[string]any `json:"config,omitempty"`
 }
 
 // ShellLayout selects the visual arrangement for an already normalized shell

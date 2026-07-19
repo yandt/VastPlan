@@ -44,7 +44,7 @@ func resolve(catalog frontendcompositionv1.PortalPlatformCatalog, application fr
 		Branding: cloneMap(application.Branding), Config: cloneMap(application.Config), Plugins: plugins,
 		Management:   binding,
 		DesignSystem: portalapi.DesignSystem{PluginRef: portalRef(profile.DesignSystem.PluginRef), UIContract: profile.DesignSystem.UIContract},
-		Composition:  portalapi.ShellComposition{PluginRef: portalRef(profile.Composition.PluginRef), UIContract: profile.Composition.UIContract},
+		Composition:  portalapi.ShellComposition{PluginRef: portalRef(profile.Composition.PluginRef), UIContract: profile.Composition.UIContract, Config: profile.Composition.Config},
 		Layout:       portalapi.ShellLayout{PluginRef: portalRef(profile.Layout.PluginRef), UIContract: profile.Layout.UIContract, Config: cloneMap(profile.Layout.Config)},
 		Resolution: portalapi.Resolution{
 			PlatformCatalog:         compositioncommonv1.Ref{ID: catalog.ID, Revision: catalog.Revision, Digest: catalog.Digest()},

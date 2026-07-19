@@ -54,7 +54,8 @@ type DesignSystem struct {
 
 type ShellComposition struct {
 	PluginRef
-	UIContract string `json:"uiContract"`
+	UIContract string         `json:"uiContract"`
+	Config     map[string]any `json:"config,omitempty"`
 }
 
 type ShellLayout struct {

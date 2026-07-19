@@ -26,7 +26,7 @@
         "channel": "stable",
         "uiContract": "^1.0.0",
         "config": {
-          "navigation": "sidebar",
+          "navigation": "rail",
           "logoPlacement": "navigation",
           "settingsPlacement": "navigation-bottom",
           "pageBodyWidth": "fluid"
@@ -53,7 +53,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 1,
-        "digest": "3556bc84e4f2e3b2c601336e7c48f515b77f8b080733a4e8a715fc1145096ec0"
+        "digest": "d2ebb5a13359cdc6e7560c347528f7736086db3f01c053723badf775cb5bca0e"
       },
       "services": [
         {

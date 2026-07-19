@@ -44,7 +44,8 @@
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
         "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" },
-        "uiContract": { "type": "string", "minLength": 1, "maxLength": 128 }
+        "uiContract": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "config": { "type": "object" }
       }
     },
     "layoutSelection": {

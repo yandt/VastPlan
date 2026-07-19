@@ -26,6 +26,9 @@ func TestResolveInjectsPlatformDesignSystemAndLocksInputs(t *testing.T) {
 	if resolved.Management.TenantID != "tenant-a" || resolved.Management.Services[0].LogicalService != "platform.settings" {
 		t.Fatalf("管理绑定未锁定: %+v", resolved.Management)
 	}
+	if resolved.Composition.Config["navigationGroups"] == nil {
+		t.Fatal("Shell 组合配置未透传到浏览器运行描述")
+	}
 }
 
 func TestResolveRejectsApplicationOverride(t *testing.T) {
@@ -54,7 +57,7 @@ func testProfile() frontendcompositionv1.PlatformProfile {
 	design := frontendcompositionv1.PluginRef{ID: "com.vastplan.foundation.frontend.design-system.arco", Version: "1.0.0", Channel: "stable"}
 	composition := frontendcompositionv1.PluginRef{ID: "com.vastplan.foundation.frontend.composition.standard", Version: "1.0.0", Channel: "stable"}
 	layout := frontendcompositionv1.PluginRef{ID: "com.vastplan.foundation.frontend.layout.standard", Version: "1.0.0", Channel: "stable"}
-	return frontendcompositionv1.PlatformProfile{Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "portal-default"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend}, DesignSystem: frontendcompositionv1.DesignSystem{PluginRef: design, UIContract: "^1.0.0"}, Composition: frontendcompositionv1.ShellComposition{PluginRef: composition, UIContract: "^1.0.0"}, Layout: frontendcompositionv1.ShellLayout{PluginRef: layout, UIContract: "^1.0.0"}, Plugins: []frontendcompositionv1.PluginRef{design, composition, layout}, Security: frontendcompositionv1.SecurityPolicy{FirstPartyOnly: true, RequireIntegrity: true}}
+	return frontendcompositionv1.PlatformProfile{Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "portal-default"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelFrontend}, DesignSystem: frontendcompositionv1.DesignSystem{PluginRef: design, UIContract: "^1.0.0"}, Composition: frontendcompositionv1.ShellComposition{PluginRef: composition, UIContract: "^1.0.0", Config: map[string]any{"navigationGroups": []any{map[string]any{"id": "operations", "label": "运行管理", "zone": "primary", "icon": "menu"}}}}, Layout: frontendcompositionv1.ShellLayout{PluginRef: layout, UIContract: "^1.0.0"}, Plugins: []frontendcompositionv1.PluginRef{design, composition, layout}, Security: frontendcompositionv1.SecurityPolicy{FirstPartyOnly: true, RequireIntegrity: true}}
 }
 
 func testComposition(route string) frontendcompositionv1.ApplicationComposition {

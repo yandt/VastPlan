@@ -124,7 +124,8 @@ export interface TableProps {
 
 export interface DescriptionItem { id: string; label: ReactNode; value: ReactNode; }
 export type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
-export type SemanticIconName = "add" | "remove" | "edit" | "search" | "settings" | "success" | "warning" | "error" | "info" | "close" | "menu";
+export const semanticIconNames = Object.freeze(["add", "remove", "edit", "search", "settings", "success", "warning", "error", "info", "close", "menu"] as const);
+export type SemanticIconName = (typeof semanticIconNames)[number];
 export interface SemanticThemeTokens {
   color: { canvas: string; surface: string; text: string; mutedText: string; border: string; primary: string; danger: string; };
   radius: { sm: number; md: number; lg: number; };
@@ -172,27 +173,51 @@ export interface DesignSystemAdapter {
 
 export type NavigationZone = "primary" | "settings" | "secondary";
 
-export type ShellSlotID =
-  | "shell.header.start" | "shell.header.center" | "shell.header.end"
-  | "shell.navigation.before" | "shell.navigation.after"
-  | "page.header.start" | "page.header.center" | "page.header.end"
-  | "page.body.before" | "page.body.main" | "page.body.after"
-  | "page.aside" | "shell.footer";
+export const shellSlotIDs = Object.freeze([
+  "shell.header.start", "shell.header.center", "shell.header.end",
+  "shell.navigation.start", "shell.navigation.center", "shell.navigation.end",
+  "shell.footer",
+] as const);
+export type ShellSlotID = (typeof shellSlotIDs)[number];
+
+export const pageSlotIDs = Object.freeze([
+  "page.header.start", "page.header.center", "page.header.end",
+  "page.body.before", "page.body.main", "page.body.after", "page.aside",
+] as const);
+export type PageSlotID = (typeof pageSlotIDs)[number];
+
+export type PortalSlotID = ShellSlotID | PageSlotID;
+
+export interface PortalNavigationGroupDescriptor {
+  id: string;
+  label: string;
+  zone: NavigationZone;
+  icon: SemanticIconName;
+  order?: number;
+}
 
 export interface PortalPageNavigation {
   id: string;
   label: string;
   zone: NavigationZone;
-  group?: string;
+  /** References a group governed by the selected Shell composition. */
+  groupID?: string;
   order?: number;
 }
 
-export interface PortalSlotContribution {
+export interface PortalNavigationGroup extends PortalNavigationGroupDescriptor {
+  pages: readonly PortalPageNavigation[];
+}
+
+export interface PortalSlotContribution<Slot extends PortalSlotID = PortalSlotID> {
   id: string;
-  slot: ShellSlotID;
+  slot: Slot;
   component: ComponentType;
   order?: number;
 }
+
+export type PortalShellContribution = PortalSlotContribution<ShellSlotID>;
+export type PortalPageSlotContribution = PortalSlotContribution<PageSlotID>;
 
 export interface PortalPageDefinition {
   id: string;
@@ -201,7 +226,7 @@ export interface PortalPageDefinition {
   title: string;
   description?: string;
   navigation?: PortalPageNavigation;
-  slots: readonly PortalSlotContribution[];
+  slots: readonly PortalPageSlotContribution[];
 }
 
 export interface PortalManagementCapability {
@@ -229,6 +254,8 @@ export interface PortalPluginRuntime {
 export interface FrontendPluginContext {
 	readonly portal: Readonly<PortalPluginRuntime>;
 	addPage(page: PortalPageDefinition): void;
+	/** Platform-profile plugins only; application plugins cannot mutate global Shell regions. */
+	addShellContribution(contribution: PortalShellContribution): void;
 }
 
 export function managementServicesFor(portal: Readonly<PortalPluginRuntime>, capability: string): readonly PortalManagementService[] {
@@ -247,16 +274,23 @@ export interface PortalRegisteredPage extends PortalPageDefinition {
   pluginID: string;
 }
 
+export interface PortalRegisteredShellContribution extends PortalShellContribution {
+  pluginID: string;
+}
+
 export interface ShellCompositionInput {
   pages: readonly PortalRegisteredPage[];
+  shellContributions: readonly PortalRegisteredShellContribution[];
   activePageID?: string;
+  config?: Readonly<Record<string, unknown>>;
 }
 
 export interface ShellCompositionModel {
   pages: readonly PortalRegisteredPage[];
   activePage?: PortalRegisteredPage;
-  navigation: Readonly<Record<NavigationZone, readonly PortalPageNavigation[]>>;
-  slots: Readonly<Partial<Record<ShellSlotID, readonly PortalSlotContribution[]>>>;
+  navigation: Readonly<Record<NavigationZone, readonly PortalNavigationGroup[]>>;
+  shellSlots: Readonly<Partial<Record<ShellSlotID, readonly PortalRegisteredShellContribution[]>>>;
+  pageSlots: Readonly<Partial<Record<PageSlotID, readonly PortalPageSlotContribution[]>>>;
 }
 
 /** Owns the stable shell/page topology, slot validation and deterministic order. */

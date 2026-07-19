@@ -71,7 +71,12 @@ function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode }: {
   recoveryMode: boolean;
 }) {
   const ui = usePortalUI();
-  const composition = prepared.composition.compose({ pages: prepared.pages, activePageID: page?.id });
+  const composition = prepared.composition.compose({
+    pages: prepared.pages,
+    shellContributions: prepared.shellContributions,
+    activePageID: page?.id,
+    config: prepared.portal.composition.config,
+  });
   const Layout = prepared.layout.Shell;
   const navigate = (pageID: string) => {
     const target = prepared.pages.find((candidate) => candidate.id === pageID);

@@ -8,7 +8,7 @@ const composerRef: PluginRef = { id: "com.vastplan.platform.configuration.portal
 const compositionRef: PluginRef = { id: "com.vastplan.foundation.frontend.composition.standard", version: "1.0.0" };
 const layoutRef: PluginRef = { id: "com.vastplan.foundation.frontend.layout.standard", version: "1.0.0" };
 
-const composition: ShellCompositionAdapter = { id: "ui.shell-composition", uiContract: "1.0.0", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, slots: {} }) };
+const composition: ShellCompositionAdapter = { id: "ui.shell-composition", uiContract: "1.0.0", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
 const layout: ShellLayoutAdapter = { id: "ui.shell-layout", uiContract: "1.0.0", Shell: () => null };
 
 function designSystem(framework: string): DesignSystemAdapter {
@@ -106,9 +106,35 @@ describe("PortalRuntime", () => {
     await expect(runtime.prepare(portal)).rejects.toMatchObject({ code: "SECOND_SHELL_FOUNDATION" } satisfies Partial<PortalAssemblyError>);
   });
 
+  it("accepts global Shell contributions only from platform-profile plugins", async () => {
+    const Brand = () => null;
+    const prepared = await new PortalRuntime(loader({
+      [composerRef.id]: {
+        register(context: FrontendPluginContext) {
+          context.addShellContribution({ id: "brand", slot: "shell.navigation.start", component: Brand });
+          context.addPage({ id: "home", path: "/home", title: "首页", slots: [{ id: "body", slot: "page.body.main", component: () => null }] });
+        },
+      },
+    })).prepare(portal);
+    expect(prepared.shellContributions).toMatchObject([{ id: "brand", pluginID: composerRef.id, slot: "shell.navigation.start" }]);
+
+    const applicationPortal = {
+      ...portal,
+      resolution: { ...portal.resolution, pluginOrigins: { ...portal.resolution.pluginOrigins, [composerRef.id]: "application" as const } },
+    };
+    await expect(new PortalRuntime(loader({
+      [composerRef.id]: { register(context: FrontendPluginContext) { context.addShellContribution({ id: "brand", slot: "shell.navigation.start", component: Brand }); } },
+    })).prepare(applicationPortal)).rejects.toMatchObject({ code: "SHELL_CONTRIBUTION_ORIGIN" } satisfies Partial<PortalAssemblyError>);
+  });
+
   it("rejects a design system selected by the application input", async () => {
     const invalid = { ...portal, resolution: { ...portal.resolution, pluginOrigins: { ...portal.resolution.pluginOrigins, [arcoRef.id]: "application" as const } } };
     await expect(new PortalRuntime(loader()).prepare(invalid)).rejects.toMatchObject({ code: "ORIGIN_LOCK_INVALID" } satisfies Partial<PortalAssemblyError>);
+  });
+
+  it("rejects non-object Shell configuration before plugin registration", async () => {
+    const invalid = { ...portal, composition: { ...portal.composition, config: [] as unknown as Record<string, unknown> } };
+    await expect(new PortalRuntime(loader()).prepare(invalid)).rejects.toMatchObject({ code: "PORTAL_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 
   it("exposes every explicitly bound service to functional plugins without exposing routing input", async () => {

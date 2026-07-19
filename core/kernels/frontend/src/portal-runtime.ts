@@ -1,4 +1,5 @@
-import type { DesignSystemAdapter, FrontendPluginContext, PortalManagementService, PortalRegisteredPage, ShellCompositionAdapter, ShellLayoutAdapter, UICapability } from "@vastplan/portal-ui";
+import { pageSlotIDs, shellSlotIDs } from "@vastplan/portal-ui";
+import type { DesignSystemAdapter, FrontendPluginContext, PortalManagementService, PortalRegisteredPage, PortalRegisteredShellContribution, ShellCompositionAdapter, ShellLayoutAdapter, UICapability } from "@vastplan/portal-ui";
 
 export interface PluginRef {
   id: string;
@@ -10,7 +11,7 @@ export interface DesignSystemSelection extends PluginRef {
   uiContract: string;
 }
 
-export interface ShellCompositionSelection extends PluginRef { uiContract: string; }
+export interface ShellCompositionSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
 export interface ShellLayoutSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
 
 export interface PortalSpec {
@@ -70,6 +71,7 @@ export interface PreparedPortal {
   composition: ShellCompositionAdapter;
   layout: ShellLayoutAdapter;
   pages: readonly PortalRegisteredPage[];
+  shellContributions: readonly PortalRegisteredShellContribution[];
 }
 
 const requiredCapabilities: readonly UICapability[] = [
@@ -81,12 +83,8 @@ const requiredCapabilities: readonly UICapability[] = [
   "feedback",
   "theme",
 ];
-const standardSlots = new Set([
-  "shell.header.start", "shell.header.center", "shell.header.end",
-  "shell.navigation.before", "shell.navigation.after",
-  "page.header.start", "page.header.center", "page.header.end",
-  "page.body.before", "page.body.main", "page.body.after", "page.aside", "shell.footer",
-]);
+const standardSlots = new Set<string>(pageSlotIDs);
+const standardShellSlots = new Set<string>(shellSlotIDs);
 
 /**
  * Security boundary for browser plugin assembly. It never accepts a remote merely
@@ -137,6 +135,8 @@ export class PortalRuntime {
     const seenPaths = new Set<string>();
     const seenNavigationIDs = new Set<string>();
     const seenSlotIDs = new Set<string>();
+    const seenShellContributionIDs = new Set<string>();
+    const shellContributions: PortalRegisteredShellContribution[] = [];
     const portalSnapshot = snapshotPortal(portal);
 
     for (const ref of portal.plugins) {
@@ -150,6 +150,17 @@ export class PortalRuntime {
       }
       const context: FrontendPluginContext = {
         portal: portalSnapshot,
+        addShellContribution: (contribution) => {
+          const key = `${ref.id}/${contribution.id}`;
+          if (portal.resolution.pluginOrigins[ref.id] !== "platform-profile") {
+            throw new PortalAssemblyError("SHELL_CONTRIBUTION_ORIGIN", `应用插件不能贡献全局 Shell 区域: ${ref.id}`);
+          }
+          if (!managementName(contribution.id) || !standardShellSlots.has(contribution.slot) || typeof contribution.component !== "function" || seenShellContributionIDs.has(key)) {
+            throw new PortalAssemblyError("SHELL_CONTRIBUTION_REJECTED", `Shell 贡献非法或重复: ${key}`);
+          }
+          seenShellContributionIDs.add(key);
+          shellContributions.push({ ...contribution, pluginID: ref.id });
+        },
         addPage: (page) => {
           const mountedPath = mountPortalPagePath(portal.route, page.path);
           if (!page.id || mountedPath === undefined || !page.title || seenPageIDs.has(page.id) || seenPaths.has(mountedPath) || !Array.isArray(page.slots)) {
@@ -158,7 +169,9 @@ export class PortalRuntime {
           if (!page.slots.some((slot) => slot.slot === "page.body.main")) {
             throw new PortalAssemblyError("PAGE_MAIN_MISSING", `页面必须填充 page.body.main: ${page.id}`);
           }
-          if (page.navigation !== undefined && (seenNavigationIDs.has(page.navigation.id) || !["primary", "settings", "secondary"].includes(page.navigation.zone))) {
+          if (page.navigation !== undefined && (!managementName(page.navigation.id) || page.navigation.label.trim() === "" || page.navigation.label.length > 120 ||
+              seenNavigationIDs.has(page.navigation.id) || !["primary", "settings", "secondary"].includes(page.navigation.zone) ||
+              (page.navigation.groupID !== undefined && !managementName(page.navigation.groupID)))) {
             throw new PortalAssemblyError("NAVIGATION_REJECTED", `导航 ID 重复或语义区无效: ${page.navigation.id}`);
           }
           for (const slot of page.slots) {
@@ -176,12 +189,17 @@ export class PortalRuntime {
       };
       await plugin.register?.(context);
     }
-    return Object.freeze({ portal: portalSnapshot, designSystem, composition, layout, pages });
+    return Object.freeze({ portal: portalSnapshot, designSystem, composition, layout, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions) });
   }
 
   private validatePortalShape(portal: PortalSpec): void {
     if (!Number.isSafeInteger(portal.revision) || portal.revision <= 0 || !portal.id || !portal.tenantId || !portal.route.startsWith("/")) {
       throw new PortalAssemblyError("PORTAL_INVALID", "Portal 必须包含 revision、ID、租户和绝对根路由");
+    }
+    if ((portal.branding !== undefined && !isJSONRecord(portal.branding)) ||
+        (portal.composition.config !== undefined && !isJSONRecord(portal.composition.config)) ||
+        (portal.layout.config !== undefined && !isJSONRecord(portal.layout.config))) {
+      throw new PortalAssemblyError("PORTAL_INVALID", "Portal 品牌与 Shell 配置必须是 JSON 对象");
     }
     const refs = [portal.resolution.platformCatalog, portal.resolution.platformProfile, portal.resolution.applicationComposition];
     if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
@@ -243,6 +261,10 @@ function managementName(value: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value) && value !== "*";
 }
 
+function isJSONRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function mountPortalPagePath(portalRoute: string, pagePath: string): string | undefined {
   if (!pagePath.startsWith("/") || pagePath.includes("//") || pagePath.includes("\\") || pagePath.includes("%") || pagePath.includes("?") || pagePath.includes("#") ||
       pagePath.split("/").some((segment) => segment === "." || segment === "..")) {
@@ -267,10 +289,26 @@ function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
   }));
   return Object.freeze({
     ...portal,
+    branding: portal.branding === undefined ? undefined : freezeJSONRecord(portal.branding),
+    designSystem: Object.freeze({ ...portal.designSystem }),
+    composition: Object.freeze({ ...portal.composition, config: portal.composition.config === undefined ? undefined : freezeJSONRecord(portal.composition.config) }),
+    layout: Object.freeze({ ...portal.layout, config: portal.layout.config === undefined ? undefined : freezeJSONRecord(portal.layout.config) }),
     plugins: Object.freeze(portal.plugins.map((ref) => Object.freeze({ ...ref }))),
     management: Object.freeze({ ...portal.management, services: Object.freeze(services) }),
     resolution: Object.freeze({ ...portal.resolution, pluginOrigins: Object.freeze({ ...portal.resolution.pluginOrigins }) }),
   });
+}
+
+function freezeJSONRecord(value: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const copy: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value)) copy[key] = freezeJSONValue(item);
+  return Object.freeze(copy);
+}
+
+function freezeJSONValue(value: unknown): unknown {
+  if (Array.isArray(value)) return Object.freeze(value.map(freezeJSONValue));
+  if (typeof value === "object" && value !== null) return freezeJSONRecord(value as Record<string, unknown>);
+  return value;
 }
 
 export class PortalAssemblyError extends Error {

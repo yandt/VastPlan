@@ -33,6 +33,13 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("right");
   });
 
+  it("keeps navigation destinations as real links", () => {
+    const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.Menu, {
+      items: [{ id: "settings", label: "设置", href: "/settings" }],
+    }));
+    expect(html).toContain('href="/settings"');
+  });
+
   it("validates standard JSON Schema constraints and credential references through AJV", () => {
     const schema: RJSFSchema = {
       $schema: "http://json-schema.org/draft-07/schema#",

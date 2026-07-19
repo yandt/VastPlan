@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
 import RJSFForm from "@rjsf/core";
@@ -108,7 +108,10 @@ function GridItem({ span = 1, children }: GridItemProps) {
 
 function MenuBranch({ items, activeID, onSelect, depth = 0 }: { items: MenuItem[]; activeID?: string; onSelect?(id: string): void; depth?: number }) {
   return <>{items.map((item) => <Box key={item.id}>
-    <ListItemButton selected={activeID === item.id} disabled={item.disabled} onClick={() => item.children?.length ? undefined : onSelect?.(item.id)} sx={{ pl: 2 + depth * 2 }}>
+    <ListItemButton component={item.href === undefined ? "div" : "a"} href={item.href} selected={activeID === item.id} disabled={item.disabled} onClick={(event: MouseEvent<HTMLElement>) => {
+      if (item.href !== undefined) event.preventDefault();
+      if (!item.children?.length) onSelect?.(item.id);
+    }} sx={{ pl: 2 + depth * 2 }}>
       {item.icon}<ListItemText primary={item.label} />
     </ListItemButton>
     {item.children?.length ? <MenuBranch items={item.children} activeID={activeID} onSelect={onSelect} depth={depth + 1} /> : null}

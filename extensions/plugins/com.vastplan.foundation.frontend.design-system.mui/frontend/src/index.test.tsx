@@ -19,4 +19,10 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain("Portal");
     expect(markup).toContain("保存");
   });
+
+  it("keeps navigation destinations as real links", () => {
+    const Menu = muiPortalUIComponents.Menu;
+    const markup = renderToStaticMarkup(<Menu items={[{ id: "settings", label: "设置", href: "/settings" }]} />);
+    expect(markup).toContain('href="/settings"');
+  });
 });

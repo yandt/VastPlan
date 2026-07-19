@@ -107,14 +107,18 @@ function Grid({ columns = 1, gap = "md", children }: GridProps) {
 // so expose the native item through the framework-neutral contract.
 const GridItem = ArcoGrid.GridItem as unknown as ComponentType<GridItemProps>;
 
-function renderMenuItems(items: MenuItem[], parentDisabled = false): ReactNode[] {
+function renderMenuItems(items: MenuItem[], onSelect?: (id: string) => void, parentDisabled = false): ReactNode[] {
   return items.map((item) => item.children?.length
-    ? <ArcoMenu.SubMenu key={item.id} title={item.label}>{renderMenuItems(item.children, parentDisabled || item.disabled === true)}</ArcoMenu.SubMenu>
-    : <ArcoMenu.Item key={item.id} disabled={parentDisabled || item.disabled}>{item.icon}{item.label}</ArcoMenu.Item>);
+    ? <ArcoMenu.SubMenu key={item.id} title={item.label}>{renderMenuItems(item.children, onSelect, parentDisabled || item.disabled === true)}</ArcoMenu.SubMenu>
+    : <ArcoMenu.Item key={item.id} disabled={parentDisabled || item.disabled}>{item.icon}{item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!parentDisabled && item.disabled !== true) onSelect?.(item.id);
+    }}>{item.label}</a>}</ArcoMenu.Item>);
 }
 
 function Menu({ items, activeID, onSelect }: { items: MenuItem[]; activeID?: string; onSelect?(id: string): void }) {
-  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)}>{renderMenuItems(items)}</ArcoMenu>;
+  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)}>{renderMenuItems(items, onSelect)}</ArcoMenu>;
 }
 
 function CommandPalette({ open, commands, query, onQueryChange, onClose }: { open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }) {
