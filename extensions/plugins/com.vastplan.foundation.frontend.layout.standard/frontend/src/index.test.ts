@@ -41,6 +41,13 @@ describe("standard shell layout", () => {
     expect(standardShellCSS).toContain("@media (max-width:767px){.vp-desktop-navigation{display:none}");
   });
 
+  it("aligns the desktop brand, second-level title and page header to one shell bar height", () => {
+    expect(standardShellCSS).toContain("--vp-shell-bar-height:64px");
+    expect(standardShellCSS).toContain(".vp-navigation-start{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height)");
+    expect(standardShellCSS).toContain(".vp-navigation-panel-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height)");
+    expect(standardShellCSS).toContain(".vp-page-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height)");
+  });
+
   it("keeps semantic zone order while returning normalized groups", () => {
     const model = composition({ navigation: {
       primary: [{ id: "operations", label: "运行", zone: "primary", icon: "menu", pages: [] }],
