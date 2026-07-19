@@ -26,7 +26,5 @@ node_modules/
 __pycache__/
 *.py[cod]
 
-# 本地 Agent/graphify 运行状态。仓库只保留可移植、可查询的图数据；解释器路径、
-# 缓存、诊断和可再生成展示产物不得进入版本库，避免泄露本机绝对路径。
+# 本地 Agent 运行状态
 .codex/
-graphify-out/

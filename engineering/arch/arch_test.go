@@ -322,7 +322,7 @@ func TestArch_TopLevelDirectoriesAreClosed(t *testing.T) {
 		"core": true, "extensions": true, "contracts": true, "engineering": true, "docs": true,
 		".git": true, ".github": true, ".githooks": true, ".claude": true, ".codex": true,
 		".gstack": true, ".obsidian": true, ".pnpm-store": true, ".vastplan": true,
-		"bin": true, "graphify-out": true, "node_modules": true,
+		"bin": true, "node_modules": true,
 	}
 	entries, err := os.ReadDir(repoRoot(t))
 	if err != nil {
