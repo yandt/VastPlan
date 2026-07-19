@@ -30,7 +30,7 @@ function StandardShell({ composition, branding, config, pathname, recoveryNotice
   } as CSSProperties;
   const pageWidth = config.pageBodyWidth === "contained" ? 1280 : undefined;
   const allGroups = useMemo(() => groups(composition, ["primary", "secondary", "settings"]), [composition]);
-  const activeGroup = allGroups.find((group) => group.pages.some((item) => item.id === composition.activePage?.navigation?.id));
+  const activeGroup = allGroups.find((group) => group.id === composition.activeNavigationPath?.rootGroupID);
   const groupKey = allGroups.map((group) => group.id).join("\u0000");
   const [selectedGroupID, setSelectedGroupID] = useState(activeGroup?.id ?? allGroups[0]?.id);
   useEffect(() => {
@@ -75,7 +75,10 @@ function StandardShell({ composition, branding, config, pathname, recoveryNotice
     id: `group:${group.id}`,
     label: i18n.text(group.label),
     icon: <ui.Icon name={group.icon} label={i18n.text(group.label)} />,
-    children: group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
+    children: [
+      ...group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
+      ...group.children.map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })) })),
+    ],
   }));
 
   return <div className="vp-shell-root" style={shellTheme}>
@@ -166,7 +169,10 @@ function IconForGroup({ group }: { group: PortalNavigationGroup }) {
 function SecondLevelMenu({ group, composition, onNavigate }: { group: PortalNavigationGroup; composition: ShellLayoutProps["composition"]; onNavigate(id: string): void }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const items = group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) }));
+  const items: MenuItem[] = [
+    ...group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
+    ...group.children.map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })) })),
+  ];
   return <ui.Menu items={items} activeID={composition.activePage?.navigation?.id} onSelect={onNavigate} />;
 }
 
@@ -211,7 +217,7 @@ export const standardShellCSS = `
 
 const namespace = "com.vastplan.foundation.frontend.layout.standard";
 const adapter: ShellLayoutAdapter = {
-  id: "ui.shell-layout", uiContract: "1.0.0", Shell: StandardShell,
+  id: "ui.shell-layout", uiContract: "2.0.0", Shell: StandardShell,
   localization: {
     defaultLocale: "zh-CN",
     messages: {

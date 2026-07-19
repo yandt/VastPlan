@@ -54,8 +54,21 @@ type DesignSystem struct {
 // silently rename or remove extension slots consumed by functional plugins.
 type ShellComposition struct {
 	PluginRef
-	UIContract string         `json:"uiContract"`
-	Config     map[string]any `json:"config,omitempty"`
+	UIContract string           `json:"uiContract"`
+	Config     NavigationConfig `json:"config,omitempty"`
+}
+
+type NavigationConfig struct {
+	NavigationGroups []NavigationGroupDescriptor `json:"navigationGroups,omitempty"`
+}
+
+type NavigationGroupDescriptor struct {
+	ID       string `json:"id"`
+	ParentID string `json:"parentID,omitempty"`
+	Label    string `json:"label"`
+	Zone     string `json:"zone"`
+	Icon     string `json:"icon"`
+	Order    int    `json:"order,omitempty"`
 }
 
 // ShellLayout selects the visual arrangement for an already normalized shell
@@ -194,6 +207,9 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	value.DesignSystem.Channel = channel(value.DesignSystem.Channel)
 	value.Composition.Channel = channel(value.Composition.Channel)
 	value.Layout.Channel = channel(value.Layout.Channel)
+	if err := ValidateNavigationConfig(value.Composition.Config); err != nil {
+		return PlatformProfile{}, err
+	}
 	if value.Localization != nil && !containsFold(value.Localization.SupportedLocales, value.Localization.DefaultLocale) {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile 默认语言必须包含在 supportedLocales 中")
 	}
@@ -212,6 +228,47 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含设计系统、Shell 组合与布局插件")
 	}
 	return value, nil
+}
+
+func ValidateNavigationConfig(config NavigationConfig) error {
+	groups := map[string]NavigationGroupDescriptor{
+		"primary":   {ID: "primary", Zone: "primary"},
+		"secondary": {ID: "secondary", Zone: "secondary"},
+		"settings":  {ID: "settings", Zone: "settings"},
+	}
+	configured := map[string]struct{}{}
+	for _, group := range config.NavigationGroups {
+		if !managementName.MatchString(group.ID) || strings.TrimSpace(group.Label) == "" {
+			return fmt.Errorf("导航分组 id 或 label 无效: %s", group.ID)
+		}
+		if _, duplicate := configured[group.ID]; duplicate {
+			return fmt.Errorf("导航分组 id 重复: %s", group.ID)
+		}
+		configured[group.ID] = struct{}{}
+		if previous, builtin := groups[group.ID]; builtin && (group.ParentID != "" || group.Zone != previous.Zone) {
+			return fmt.Errorf("内建导航分组不能跨语义区或改为子组: %s", group.ID)
+		}
+		groups[group.ID] = group
+	}
+	for _, group := range config.NavigationGroups {
+		if group.ParentID == "" {
+			continue
+		}
+		if group.ParentID == group.ID {
+			return fmt.Errorf("导航分组不能引用自身: %s", group.ID)
+		}
+		parent, ok := groups[group.ParentID]
+		if !ok {
+			return fmt.Errorf("导航子组引用了未知根组: %s/%s", group.ID, group.ParentID)
+		}
+		if parent.ParentID != "" {
+			return fmt.Errorf("导航深度超过 root group → child group → page: %s", group.ID)
+		}
+		if parent.Zone != group.Zone {
+			return fmt.Errorf("导航子组不能跨语义区: %s/%s", group.ID, group.ParentID)
+		}
+	}
+	return nil
 }
 
 func containsFold(values []string, target string) bool {

@@ -16,7 +16,7 @@
       "designSystems": [{
         "id": "ui.design-system",
         "title": "Arco Design System",
-        "uiContract": "^1.0.0",
+        "uiContract": "^2.0.0",
         "framework": "arco",
         "capabilities": ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"]
       }]

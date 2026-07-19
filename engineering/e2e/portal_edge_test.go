@@ -326,7 +326,7 @@ func publishPortalFrontendPlugin(t *testing.T, repository *pluginservice.Reposit
 	if err := os.MkdirAll(filepath.Dir(entryPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(entryPath, []byte(`export default { id: "ui.design-system", framework: "fixture", uiContract: "1.0.0", capabilities: ["layout","menu","overlay","form","data","feedback","theme"], Provider: ({children}) => children };`), 0o644); err != nil {
+	if err := os.WriteFile(entryPath, []byte(`export default { id: "ui.design-system", framework: "fixture", uiContract: "2.0.0", capabilities: ["layout","menu","overlay","form","data","feedback","theme"], Provider: ({children}) => children };`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, filename := range []string{manifest.LicenseFile, manifest.NoticeFile} {

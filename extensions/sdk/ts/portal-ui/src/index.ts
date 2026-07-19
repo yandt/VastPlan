@@ -1,5 +1,5 @@
 import { createContext, createElement, useContext } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, KeyboardEvent, ReactNode } from "react";
 import type { FormSchema, FormValidationResult, JSONValue, UICapability } from "@vastplan/ui-contract";
 import type { LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy } from "@vastplan/ui-contract";
 
@@ -102,6 +102,25 @@ export interface DialogProps {
 
 export interface DrawerProps extends DialogProps { placement?: "top" | "right" | "bottom" | "left"; }
 
+export type PopoverPlacement = "bottom-start" | "bottom" | "bottom-end" | "top-start" | "top" | "top-end";
+export type PopoverCloseReason = "trigger" | "escape" | "outside" | "selection";
+export interface PopoverTriggerProps {
+  ref(node: HTMLElement | null): void;
+  "aria-expanded": boolean;
+  "aria-controls": string;
+  onClick(): void;
+  onKeyDown(event: KeyboardEvent<HTMLElement>): void;
+}
+export interface PopoverProps {
+  open: boolean;
+  trigger(props: PopoverTriggerProps): ReactNode;
+  children: ReactNode;
+  placement?: PopoverPlacement;
+  initialFocus?: "current" | "first" | "none";
+  ariaLabel?: string;
+  onOpenChange(open: boolean, reason: PopoverCloseReason): void;
+}
+
 export interface CommandItem {
   id: string;
   title: string;
@@ -131,9 +150,16 @@ export type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
 export const semanticIconNames = Object.freeze(["add", "remove", "edit", "search", "settings", "success", "warning", "error", "info", "close", "menu"] as const);
 export type SemanticIconName = (typeof semanticIconNames)[number];
 export interface SemanticThemeTokens {
-  color: { canvas: string; surface: string; text: string; mutedText: string; border: string; primary: string; danger: string; };
+  color: {
+    canvas: string; surface: string; overlaySurface: string; text: string; mutedText: string; border: string;
+    primary: string; danger: string; warning: string; success: string; hover: string; selected: string; focusRing: string;
+  };
   radius: { sm: number; md: number; lg: number; };
   spacing: Record<SpaceSize, number>;
+  shell: { barHeight: number; railWidth: number; navigationWidth: number; navigationCompactWidth: number; };
+  overlay: { navigationMinWidth: number; navigationMaxWidth: number; };
+  elevation: { overlay: string; };
+  motion: { fast: number; normal: number; };
 }
 
 export interface PortalUI {
@@ -149,6 +175,7 @@ export interface PortalUI {
   Breadcrumb: ComponentType<{ items: BreadcrumbItem[] }>;
   Tabs: ComponentType<{ items: TabItem[]; activeID?: string; onChange?(id: string): void }>;
   CommandPalette: ComponentType<{ open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }>;
+  Popover: ComponentType<PopoverProps>;
   Dialog: ComponentType<DialogProps>;
   Drawer: ComponentType<DrawerProps>;
   FormRenderer: ComponentType<FormRendererProps>;
@@ -198,6 +225,8 @@ export interface PortalNavigationGroupDescriptor {
   label: LocalizedText;
   zone: NavigationZone;
   icon: SemanticIconName;
+  /** Child groups reference a root group in the same zone. Omitted for roots. */
+  parentID?: string;
   order?: number;
 }
 
@@ -210,8 +239,22 @@ export interface PortalPageNavigation {
   order?: number;
 }
 
-export interface PortalNavigationGroup extends PortalNavigationGroupDescriptor {
+export interface PortalNavigationChildGroup extends PortalNavigationGroupDescriptor {
+  parentID: string;
   pages: readonly PortalPageNavigation[];
+}
+
+export interface PortalNavigationGroup extends PortalNavigationGroupDescriptor {
+  parentID?: undefined;
+  pages: readonly PortalPageNavigation[];
+  children: readonly PortalNavigationChildGroup[];
+}
+
+export interface ActiveNavigationPath {
+  zone: NavigationZone;
+  rootGroupID: string;
+  childGroupID?: string;
+  pageID: string;
 }
 
 export interface PortalSlotContribution<Slot extends PortalSlotID = PortalSlotID> {
@@ -312,6 +355,7 @@ export interface ShellCompositionInput {
 export interface ShellCompositionModel {
   pages: readonly PortalRegisteredPage[];
   activePage?: PortalRegisteredPage;
+  activeNavigationPath?: ActiveNavigationPath;
   navigation: Readonly<Record<NavigationZone, readonly PortalNavigationGroup[]>>;
   shellSlots: Readonly<Partial<Record<ShellSlotID, readonly PortalRegisteredShellContribution[]>>>;
   pageSlots: Readonly<Partial<Record<PageSlotID, readonly PortalPageSlotContribution[]>>>;

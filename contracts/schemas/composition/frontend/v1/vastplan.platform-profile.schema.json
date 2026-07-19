@@ -36,7 +36,7 @@
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
         "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" },
-        "uiContract": { "type": "string", "minLength": 1, "maxLength": 128 }
+        "uiContract": { "type": "string", "pattern": "^(?:\\^)?2\\.", "maxLength": 128 }
       }
     },
     "foundationSelection": {
@@ -45,8 +45,8 @@
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
         "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" },
-        "uiContract": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "config": { "type": "object" }
+        "uiContract": { "type": "string", "pattern": "^(?:\\^)?2\\.", "maxLength": 128 },
+        "config": { "$ref": "#/$defs/navigationConfig" }
       }
     },
     "layoutSelection": {
@@ -55,8 +55,29 @@
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
         "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" },
-        "uiContract": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "uiContract": { "type": "string", "pattern": "^(?:\\^)?2\\.", "maxLength": 128 },
         "config": { "type": "object" }
+      }
+    },
+    "navigationConfig": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "navigationGroups": {
+          "type": "array", "maxItems": 256,
+          "items": { "$ref": "#/$defs/navigationGroup" }
+        }
+      }
+    },
+    "navigationGroup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "label", "zone", "icon"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
+        "parentID": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
+        "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "zone": { "enum": ["primary", "secondary", "settings"] },
+        "icon": { "enum": ["add", "remove", "edit", "search", "settings", "success", "warning", "error", "info", "close", "menu"] },
+        "order": { "type": "integer", "minimum": -1000000, "maximum": 1000000 }
       }
     },
     "localizationPolicy": {

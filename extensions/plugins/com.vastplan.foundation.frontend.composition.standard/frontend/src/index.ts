@@ -3,6 +3,7 @@ import type {
   NavigationZone,
   PageSlotID,
   PortalNavigationGroup,
+  PortalNavigationChildGroup,
   PortalNavigationGroupDescriptor,
   PortalPageNavigation,
   PortalPageSlotContribution,
@@ -51,9 +52,18 @@ function compose(input: ShellCompositionInput): ShellCompositionModel {
 
   const navigation: Record<NavigationZone, PortalNavigationGroup[]> = { primary: [], settings: [], secondary: [] };
   for (const descriptor of descriptors.values()) {
-    const groupPages = ordered(pagesByGroup.get(descriptor.id) ?? []);
-    if (groupPages.length === 0) continue;
-    navigation[descriptor.zone].push(Object.freeze({ ...descriptor, pages: Object.freeze(groupPages) }));
+    if (descriptor.parentID !== undefined) continue;
+    const rootPages = ordered(pagesByGroup.get(descriptor.id) ?? []);
+    const children: PortalNavigationChildGroup[] = [];
+    for (const child of descriptors.values()) {
+      if (child.parentID !== descriptor.id) continue;
+      const childPages = ordered(pagesByGroup.get(child.id) ?? []);
+      if (childPages.length === 0) continue;
+      children.push(Object.freeze({ ...child, parentID: descriptor.id, pages: Object.freeze(childPages) }));
+    }
+    const orderedChildren = ordered(children);
+    if (rootPages.length === 0 && orderedChildren.length === 0) continue;
+    navigation[descriptor.zone].push(Object.freeze({ ...descriptor, parentID: undefined, pages: Object.freeze(rootPages), children: Object.freeze(orderedChildren) }));
   }
   for (const zone of navigationZones) navigation[zone] = [...ordered(navigation[zone])];
 
@@ -73,9 +83,11 @@ function compose(input: ShellCompositionInput): ShellCompositionModel {
   const pageNormalized: Partial<Record<PageSlotID, readonly PortalPageSlotContribution[]>> = {};
   for (const [slot, contributions] of Object.entries(pageGrouped)) pageNormalized[slot as PageSlotID] = Object.freeze(ordered(contributions));
 
+  const activeNavigationPath = activePage?.navigation === undefined ? undefined : navigationPath(activePage.navigation, descriptors);
   return Object.freeze({
     pages,
     activePage,
+    activeNavigationPath,
     navigation: Object.freeze({
       primary: Object.freeze(navigation.primary),
       settings: Object.freeze(navigation.settings),
@@ -97,15 +109,35 @@ function navigationGroups(config: Readonly<Record<string, unknown>> | undefined)
         typeof value.label !== "string" || value.label.trim() === "" || value.label.length > 80 ||
         typeof value.zone !== "string" || !navigationZones.has(value.zone as NavigationZone) ||
         typeof value.icon !== "string" || !semanticIcons.has(value.icon as SemanticIconName) ||
+        (value.parentID !== undefined && (typeof value.parentID !== "string" || !validID(value.parentID) || value.parentID === value.id)) ||
         (value.order !== undefined && (!Number.isSafeInteger(value.order) || Math.abs(value.order as number) > 1_000_000))) {
       throw new Error("composition.config.navigationGroups 包含无效或重复分组");
     }
     const previous = groups.get(value.id);
-    if (previous !== undefined && previous.zone !== value.zone) throw new Error(`内建导航分组不能跨语义区覆盖: ${value.id}`);
+    if (previous !== undefined && (previous.zone !== value.zone || value.parentID !== undefined)) throw new Error(`内建导航分组不能跨语义区或改为子组: ${value.id}`);
     configuredIDs.add(value.id);
-    groups.set(value.id, Object.freeze({ id: value.id, label: value.label.trim(), zone: value.zone as NavigationZone, icon: value.icon as SemanticIconName, order: value.order as number | undefined }));
+    groups.set(value.id, Object.freeze({ id: value.id, label: value.label.trim(), zone: value.zone as NavigationZone, icon: value.icon as SemanticIconName, parentID: value.parentID as string | undefined, order: value.order as number | undefined }));
+  }
+  for (const descriptor of groups.values()) {
+    if (descriptor.parentID === undefined) continue;
+    const parent = groups.get(descriptor.parentID);
+    if (parent === undefined) throw new Error(`导航子组引用了未知根组: ${descriptor.id}/${descriptor.parentID}`);
+    if (parent.parentID !== undefined) throw new Error(`导航深度超过 root group → child group → page: ${descriptor.id}`);
+    if (parent.zone !== descriptor.zone) throw new Error(`导航子组不能跨语义区: ${descriptor.id}/${descriptor.parentID}`);
   }
   return groups;
+}
+
+function navigationPath(page: PortalPageNavigation, descriptors: ReadonlyMap<string, PortalNavigationGroupDescriptor>) {
+  const groupID = page.groupID ?? page.zone;
+  const group = descriptors.get(groupID);
+  if (group === undefined) throw new Error(`导航引用了未治理的分组: ${groupID}`);
+  return Object.freeze({
+    zone: page.zone,
+    rootGroupID: group.parentID ?? group.id,
+    ...(group.parentID === undefined ? {} : { childGroupID: group.id }),
+    pageID: page.id,
+  });
 }
 
 function validID(value: string): boolean {
@@ -117,7 +149,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const adapter: ShellCompositionAdapter = {
-  id: "ui.shell-composition", uiContract: "1.0.0", compose,
+  id: "ui.shell-composition", uiContract: "2.0.0", compose,
   localization: {
     defaultLocale: "zh-CN",
     messages: {

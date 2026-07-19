@@ -8,14 +8,14 @@ const composerRef: PluginRef = { id: "com.vastplan.platform.configuration.portal
 const compositionRef: PluginRef = { id: "com.vastplan.foundation.frontend.composition.standard", version: "1.0.0" };
 const layoutRef: PluginRef = { id: "com.vastplan.foundation.frontend.layout.standard", version: "1.0.0" };
 
-const composition: ShellCompositionAdapter = { id: "ui.shell-composition", uiContract: "1.0.0", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
-const layout: ShellLayoutAdapter = { id: "ui.shell-layout", uiContract: "1.0.0", Shell: () => null };
+const composition: ShellCompositionAdapter = { id: "ui.shell-composition", uiContract: "2.0.0", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
+const layout: ShellLayoutAdapter = { id: "ui.shell-layout", uiContract: "2.0.0", Shell: () => null };
 
 function designSystem(framework: string): DesignSystemAdapter {
   return {
   id: "ui.design-system",
   framework,
-  uiContract: "1.0.0",
+  uiContract: "2.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"],
   Provider: () => null,
   };
@@ -47,7 +47,7 @@ function loader(overrides: Record<string, unknown> = {}): FrontendPluginLoader {
 }
 
 const portal = {
-	revision: 1, id: "admin", tenantId: "acme", route: "/", designSystem: { ...arcoRef, uiContract: "^1.0.0" }, composition: { ...compositionRef, uiContract: "^1.0.0" }, layout: { ...layoutRef, uiContract: "^1.0.0" }, plugins: [arcoRef, compositionRef, layoutRef, composerRef],
+	revision: 1, id: "admin", tenantId: "acme", route: "/", designSystem: { ...arcoRef, uiContract: "^2.0.0" }, composition: { ...compositionRef, uiContract: "^2.0.0" }, layout: { ...layoutRef, uiContract: "^2.0.0" }, plugins: [arcoRef, compositionRef, layoutRef, composerRef],
 	management: { tenantId: "acme", portalId: "admin", platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, services: [{ id: "settings", logicalService: "platform.settings", routingDomain: "platform", capabilities: [{ capability: "platform.settings", read: ["list"] }] }] },
 	resolution: {
 		platformCatalog: { id: "portal-platform", revision: 1, digest: "c".repeat(64) },
@@ -125,7 +125,7 @@ describe("PortalRuntime", () => {
   it("assembles the same functional plugin against a second UI framework", async () => {
     const muiPortal = {
       ...portal,
-      designSystem: { ...muiRef, uiContract: "^1.0.0" },
+      designSystem: { ...muiRef, uiContract: "^2.0.0" },
       plugins: [muiRef, compositionRef, layoutRef, composerRef],
       resolution: {
         ...portal.resolution,

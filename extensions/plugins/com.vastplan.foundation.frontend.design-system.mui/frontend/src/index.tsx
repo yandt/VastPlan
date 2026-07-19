@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
@@ -24,6 +24,7 @@ import {
   ListItemText,
   Pagination as MuiPagination,
   Paper,
+  Popover as MuiPopover,
   ScopedCssBaseline,
   Skeleton as MuiSkeleton,
   Snackbar,
@@ -52,6 +53,7 @@ import type {
   GridItemProps,
   GridProps,
   MenuItem,
+  PopoverProps,
   PortalShellProps,
   PortalUI,
   SemanticIconName,
@@ -133,6 +135,40 @@ function Dialog({ open, title, children, footer, width = "md", onClose }: Dialog
   return <MuiDialog open={open} onClose={onClose} fullWidth maxWidth={widths[width]}><DialogTitle>{title}</DialogTitle><DialogContent>{children}</DialogContent>{footer === undefined ? null : <DialogActions>{footer}</DialogActions>}</MuiDialog>;
 }
 
+function Popover({ open, trigger, children, placement = "bottom-start", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {
+  const contentID = useId();
+  const triggerRef = useRef<HTMLElement | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open || initialFocus === "none") return;
+    const selector = initialFocus === "current" ? "[aria-current='page']" : "button,a[href],[tabindex]:not([tabindex='-1'])";
+    const target = contentRef.current?.querySelector<HTMLElement>(selector) ?? contentRef.current?.querySelector<HTMLElement>("button,a[href],[tabindex]:not([tabindex='-1'])");
+    target?.focus();
+  }, [initialFocus, open]);
+  const horizontal = placement.endsWith("-start") ? "left" : placement.endsWith("-end") ? "right" : "center";
+  const vertical = placement.startsWith("top") ? "top" : "bottom";
+  const close = (reason: "escape" | "outside") => {
+    onOpenChange(false, reason);
+    triggerRef.current?.focus();
+  };
+  return <>{trigger({
+    ref: (node) => { triggerRef.current = node; },
+    "aria-expanded": open,
+    "aria-controls": contentID,
+    onClick: () => onOpenChange(!open, "trigger"),
+    onKeyDown: (event) => {
+      if (event.key === "ArrowDown") { event.preventDefault(); onOpenChange(true, "trigger"); }
+      if (event.key === "Escape" && open) { event.preventDefault(); close("escape"); }
+    },
+  })}<MuiPopover
+    open={open}
+    anchorEl={triggerRef.current}
+    onClose={(_, reason) => close(reason === "escapeKeyDown" ? "escape" : "outside")}
+    anchorOrigin={{ vertical, horizontal }}
+    transformOrigin={{ vertical: vertical === "top" ? "bottom" : "top", horizontal }}
+  ><Box id={contentID} ref={contentRef} role="region" aria-label={ariaLabel}>{children}</Box></MuiPopover></>;
+}
+
 function Drawer({ open, title, children, footer, width = "md", placement = "right", onClose }: DrawerProps) {
   const size = width === "sm" ? 480 : width === "md" ? 720 : 960;
   const horizontal = placement === "left" || placement === "right";
@@ -193,14 +229,19 @@ export const muiPortalUIComponents: MuiComponents = {
   Menu: ({ items, activeID, onSelect }) => <List><MenuBranch items={items} activeID={activeID} onSelect={onSelect} /></List>,
   Breadcrumb: ({ items }) => <Breadcrumbs>{items.map((item) => <MuiButton key={item.id} href={item.href} onClick={item.onSelect} variant="text">{item.label}</MuiButton>)}</Breadcrumbs>,
   Tabs: ({ items, activeID, onChange }) => <><MuiTabs value={activeID ?? false} onChange={(_, id: string) => onChange?.(id)}>{items.map((item) => <Tab key={item.id} value={item.id} label={item.label} disabled={item.disabled} />)}</MuiTabs>{items.find((item) => item.id === activeID)?.content}</>,
-  CommandPalette, Dialog, Drawer, FormRenderer,
+  CommandPalette, Popover, Dialog, Drawer, FormRenderer,
   FilterBar: ({ children, actions }) => <Paper variant="outlined" sx={{ p: 2 }}><MuiStack direction="row" gap={2} alignItems="center" flexWrap="wrap">{children}<Box sx={{ ml: "auto" }}>{actions}</Box></MuiStack></Paper>,
   Table,
   Pagination: ({ page, total, pageSize, disabled, onChange }) => <MuiPagination page={page} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} />,
   Descriptions: ({ title, items, columns = 2 }) => <Box><Typography variant="h6">{title}</Typography><Grid columns={columns}>{items.map((item) => <Box key={item.id}><Typography variant="caption" color="text.secondary">{item.label}</Typography><Typography>{item.value}</Typography></Box>)}</Grid></Box>,
   Status: ({ tone = "neutral", children }) => <Chip color={tones[tone]} label={children} size="small" />,
   Icon: ({ name, label, size = "md" }) => <Box component="span" aria-label={label} aria-hidden={label === undefined} sx={{ fontSize: size === "sm" ? 14 : size === "md" ? 16 : 20 }}>{symbols[name]}</Box>,
-  theme: { mode: "system", tokens: { color: { canvas: "#fafafa", surface: "#fff", text: "#1d2129", mutedText: "#6b7785", border: "#d9d9d9", primary: "#1976d2", danger: "#d32f2f" }, radius: { sm: 4, md: 8, lg: 12 }, spacing: { xs: 4, sm: 8, md: 16, lg: 24 } } },
+  theme: { mode: "system", tokens: {
+    color: { canvas: "#fafafa", surface: "#fff", overlaySurface: "#fff", text: "#1d2129", mutedText: "#6b7785", border: "#d9d9d9", primary: "#1976d2", danger: "#d32f2f", warning: "#ed6c02", success: "#2e7d32", hover: "rgba(25,118,210,.06)", selected: "rgba(25,118,210,.12)", focusRing: "#1976d2" },
+    radius: { sm: 4, md: 8, lg: 12 }, spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
+    shell: { barHeight: 64, railWidth: 64, navigationWidth: 240, navigationCompactWidth: 220 },
+    overlay: { navigationMinWidth: 480, navigationMaxWidth: 840 }, elevation: { overlay: "0 8px 24px rgba(0,0,0,.12)" }, motion: { fast: 120, normal: 180 },
+  } },
   EmptyState: ({ title, description }) => <Box sx={{ p: 4, textAlign: "center" }}><Typography variant="h6">{title}</Typography><Typography color="text.secondary">{description}</Typography></Box>,
   ErrorState: function ErrorState({ title, retry }) { const i18n = usePortalI18n(); return <Alert severity="error" action={retry === undefined ? undefined : <MuiButton onClick={retry}>{i18n.text(message(namespace, "action.retry", "重试"))}</MuiButton>}>{title}</Alert>; },
   Skeleton: ({ rows = 3 }) => <MuiStack gap={1}>{Array.from({ length: rows }, (_, index) => <MuiSkeleton key={index} />)}</MuiStack>,
@@ -245,7 +286,7 @@ function MuiProvider({ children, locale, direction }: { children: ReactNode; loc
 export const muiDesignSystem: DesignSystemAdapter = {
   id: "ui.design-system",
   framework: "mui",
-  uiContract: "1.0.0",
+  uiContract: "2.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   Provider: MuiProvider,
   localization: {

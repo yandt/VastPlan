@@ -31,6 +31,7 @@ export { default as Table } from "@arco-design/web-react/es/Table";
 export { default as Tabs } from "@arco-design/web-react/es/Tabs";
 export { default as Tag } from "@arco-design/web-react/es/Tag";
 export { default as TimePicker } from "@arco-design/web-react/es/TimePicker";
+export { default as Trigger } from "@arco-design/web-react/es/Trigger";
 export { default as Typography } from "@arco-design/web-react/es/Typography";
 
 export { default as IconCheckCircle } from "@arco-design/web-react/icon/react-icon/IconCheckCircle";

@@ -16,7 +16,7 @@
       "designSystems": [{
         "id": "ui.design-system",
         "title": "Material UI Design System",
-        "uiContract": "^1.0.0",
+        "uiContract": "^2.0.0",
         "framework": "mui",
         "capabilities": ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"]
       }]

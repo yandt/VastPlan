@@ -18,7 +18,7 @@ const contribution: PortalSlotContribution<"shell.header.start"> & { pluginID: s
 describe("standard shell layout", () => {
   it("exports only the visual layout adapter contract", () => {
     expect(adapter.id).toBe("ui.shell-layout");
-    expect(adapter.uiContract).toBe("1.0.0");
+    expect(adapter.uiContract).toBe("2.0.0");
     expect(adapter.Shell).toBeTypeOf("function");
     expect(adapter).not.toHaveProperty("compose");
   });
@@ -30,7 +30,7 @@ describe("standard shell layout", () => {
 
   it("keeps a region when any supported content source is present", () => {
     expect(hasRegionContent(composition({ shellSlots: { "shell.header.start": [contribution] } }), { shellSlots: ["shell.header.start", "shell.header.center", "shell.header.end"] })).toBe(true);
-    expect(hasRegionContent(composition({ navigation: { primary: [{ id: "primary", label: "主要功能", zone: "primary", icon: "menu", pages: [{ id: "home", label: "首页", zone: "primary" }] }], settings: [], secondary: [] } }), { navigationGroups: true })).toBe(true);
+    expect(hasRegionContent(composition({ navigation: { primary: [{ id: "primary", label: "主要功能", zone: "primary", icon: "menu", pages: [{ id: "home", label: "首页", zone: "primary" }], children: [] }], settings: [], secondary: [] } }), { navigationGroups: true })).toBe(true);
     expect(hasRegionContent(composition(), { intrinsic: true })).toBe(true);
   });
 
@@ -50,9 +50,9 @@ describe("standard shell layout", () => {
 
   it("keeps semantic zone order while returning normalized groups", () => {
     const model = composition({ navigation: {
-      primary: [{ id: "operations", label: "运行", zone: "primary", icon: "menu", pages: [] }],
-      secondary: [{ id: "reports", label: "报表", zone: "secondary", icon: "info", pages: [] }],
-      settings: [{ id: "settings", label: "设置", zone: "settings", icon: "settings", pages: [] }],
+      primary: [{ id: "operations", label: "运行", zone: "primary", icon: "menu", pages: [], children: [] }],
+      secondary: [{ id: "reports", label: "报表", zone: "secondary", icon: "info", pages: [], children: [] }],
+      settings: [{ id: "settings", label: "设置", zone: "settings", icon: "settings", pages: [], children: [] }],
     } });
     expect(groups(model, ["primary", "secondary", "settings"]).map((group) => group.id)).toEqual(["operations", "reports", "settings"]);
   });

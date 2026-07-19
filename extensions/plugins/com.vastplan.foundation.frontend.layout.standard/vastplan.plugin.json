@@ -11,5 +11,5 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
-  "contributes": { "frontend": { "shellLayouts": [{ "id": "ui.shell-layout", "title": "Standard Enterprise Layout", "uiContract": "^1.0.0" }] } }
+  "contributes": { "frontend": { "shellLayouts": [{ "id": "ui.shell-layout", "title": "Standard Enterprise Layout", "uiContract": "^2.0.0" }] } }
 }

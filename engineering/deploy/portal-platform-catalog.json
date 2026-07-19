@@ -12,19 +12,19 @@
         "id": "com.vastplan.foundation.frontend.design-system.arco",
         "version": "1.0.0",
         "channel": "stable",
-        "uiContract": "^1.0.0"
+        "uiContract": "^2.0.0"
       },
       "composition": {
         "id": "com.vastplan.foundation.frontend.composition.standard",
         "version": "1.0.0",
         "channel": "stable",
-        "uiContract": "^1.0.0"
+        "uiContract": "^2.0.0"
       },
       "layout": {
         "id": "com.vastplan.foundation.frontend.layout.standard",
         "version": "1.0.0",
         "channel": "stable",
-        "uiContract": "^1.0.0",
+        "uiContract": "^2.0.0",
         "config": {
           "navigation": "rail",
           "logoPlacement": "navigation",

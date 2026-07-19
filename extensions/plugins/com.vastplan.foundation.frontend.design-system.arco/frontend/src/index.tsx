@@ -21,6 +21,7 @@ import {
   Table as ArcoTable,
   Tabs as ArcoTabs,
   Tag,
+  Trigger,
   Typography,
   IconCheckCircle,
   IconClose,
@@ -34,7 +35,7 @@ import {
   IconSearch,
   IconSettings,
 } from "./arco-components";
-import { useMemo, useRef } from "react";
+import { useEffect, useId, useMemo, useRef } from "react";
 import type { ComponentType, ReactNode } from "react";
 import type {
   ButtonProps,
@@ -45,6 +46,7 @@ import type {
   GridItemProps,
   GridProps,
   MenuItem,
+  PopoverProps,
   PortalShellProps,
   PortalUI,
   ResponsiveColumns,
@@ -159,6 +161,42 @@ function Dialog({ open, title, children, footer, width = "md", onClose }: Dialog
   return <Modal visible={open} title={title} footer={footer ?? null} style={{ width: dialogWidths[width] }} onCancel={onClose} unmountOnExit>{children}</Modal>;
 }
 
+function Popover({ open, trigger, children, placement = "bottom-start", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {
+  const contentID = useId();
+  const contentRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!open || initialFocus === "none") return;
+    const selector = initialFocus === "current" ? "[aria-current='page']" : "button,a[href],[tabindex]:not([tabindex='-1'])";
+    const target = contentRef.current?.querySelector<HTMLElement>(selector) ?? contentRef.current?.querySelector<HTMLElement>("button,a[href],[tabindex]:not([tabindex='-1'])");
+    target?.focus();
+  }, [initialFocus, open]);
+  const position = ({ "bottom-start": "bl", bottom: "bottom", "bottom-end": "br", "top-start": "tl", top: "top", "top-end": "tr" } as const)[placement];
+  return <Trigger
+    popupVisible={open}
+    trigger="click"
+    position={position}
+    unmountOnExit
+    onVisibleChange={(visible) => onOpenChange(visible, visible ? "trigger" : "outside")}
+    popup={() => <div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      onOpenChange(false, "escape");
+      triggerRef.current?.focus();
+    }}>{children}</div>}
+  >{trigger({
+    ref: (node) => { triggerRef.current = node; },
+    "aria-expanded": open,
+    "aria-controls": contentID,
+    onClick: () => undefined,
+    onKeyDown: (event) => {
+      if (event.key !== "ArrowDown") return;
+      event.preventDefault();
+      onOpenChange(true, "trigger");
+    },
+  })}</Trigger>;
+}
+
 function Drawer({ open, title, children, footer, width = "md", placement = "right", onClose }: DrawerProps) {
   const size = dialogWidths[width];
   return <ArcoDrawer
@@ -241,6 +279,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
   Breadcrumb: ({ items }) => <ArcoBreadcrumb>{items.map((item) => <ArcoBreadcrumb.Item key={item.id} href={item.href} onClick={item.onSelect}>{item.label}</ArcoBreadcrumb.Item>)}</ArcoBreadcrumb>,
   Tabs: ({ items, activeID, onChange }) => <ArcoTabs activeTab={activeID} onChange={onChange}>{items.map((item) => <ArcoTabs.TabPane key={item.id} title={item.label} disabled={item.disabled}>{item.content}</ArcoTabs.TabPane>)}</ArcoTabs>,
   CommandPalette,
+  Popover,
   Dialog,
   Drawer,
   FormRenderer: ArcoJSONSchemaForm,
@@ -254,11 +293,16 @@ export const arcoPortalUIComponents: ArcoComponents = {
     mode: "system",
     tokens: {
       color: {
-        canvas: "var(--color-bg-1)", surface: "var(--color-bg-2)", text: "var(--color-text-1)",
+        canvas: "var(--color-bg-1)", surface: "var(--color-bg-2)", overlaySurface: "var(--color-bg-2)", text: "var(--color-text-1)",
         mutedText: "var(--color-text-3)", border: "var(--color-border-2)", primary: "rgb(var(--primary-6))", danger: "rgb(var(--danger-6))",
+        warning: "rgb(var(--orange-6))", success: "rgb(var(--green-6))", hover: "var(--color-fill-2)", selected: "var(--color-primary-light-1)", focusRing: "rgb(var(--primary-6))",
       },
       radius: { sm: 2, md: 4, lg: 8 },
       spacing: gapPixels,
+      shell: { barHeight: 64, railWidth: 64, navigationWidth: 240, navigationCompactWidth: 220 },
+      overlay: { navigationMinWidth: 480, navigationMaxWidth: 840 },
+      elevation: { overlay: "0 8px 24px rgba(0,0,0,.12)" },
+      motion: { fast: 120, normal: 180 },
     },
   },
   EmptyState: ({ title, description }) => <Empty description={<><strong>{title}</strong>{description === undefined ? null : <div>{description}</div>}</>} />,
@@ -304,7 +348,7 @@ function ArcoProvider({ children, locale, direction }: { children: ReactNode; lo
 export const arcoDesignSystem: DesignSystemAdapter = {
   id: "ui.design-system",
   framework: "arco",
-  uiContract: "1.0.0",
+  uiContract: "2.0.0",
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   Provider: ArcoProvider,
   localization: {

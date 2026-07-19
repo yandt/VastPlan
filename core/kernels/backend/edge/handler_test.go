@@ -72,7 +72,7 @@ func (s *service) List(context.Context, portalapi.Principal) ([]portalapi.Revisi
 func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	module := []byte(`export default { register() {} };`)
 	dir := t.TempDir()
-	manifest := `{"id":"com.vastplan.foundation.frontend.design-system.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"designSystems":[{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}]}}}`
+	manifest := `{"id":"com.vastplan.foundation.frontend.design-system.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"designSystems":[{"id":"ui.design-system","uiContract":"^2.0.0","framework":"test","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}]}}}`
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +91,8 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := catalogSource{artifact.PluginID + "@" + artifact.Version: {Artifact: artifact, PackageBytes: pkg}}
-	compositionArtifact, compositionPackage := packageFrontendFixture(t, `{"id":"com.vastplan.foundation.frontend.composition.test","name":"composition","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellCompositions":[{"id":"ui.shell-composition","uiContract":"^1.0.0"}]}}}`, []byte(`export default { id: "ui.shell-composition" };`))
-	layoutArtifact, layoutPackage := packageFrontendFixture(t, `{"id":"com.vastplan.foundation.frontend.layout.test","name":"layout","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellLayouts":[{"id":"ui.shell-layout","uiContract":"^1.0.0"}]}}}`, []byte(`export default { id: "ui.shell-layout" };`))
+	compositionArtifact, compositionPackage := packageFrontendFixture(t, `{"id":"com.vastplan.foundation.frontend.composition.test","name":"composition","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellCompositions":[{"id":"ui.shell-composition","uiContract":"^2.0.0"}]}}}`, []byte(`export default { id: "ui.shell-composition" };`))
+	layoutArtifact, layoutPackage := packageFrontendFixture(t, `{"id":"com.vastplan.foundation.frontend.layout.test","name":"layout","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellLayouts":[{"id":"ui.shell-layout","uiContract":"^2.0.0"}]}}}`, []byte(`export default { id: "ui.shell-layout" };`))
 	source[compositionArtifact.PluginID+"@"+compositionArtifact.Version] = artifacttrust.Envelope{Artifact: compositionArtifact, PackageBytes: compositionPackage}
 	source[layoutArtifact.PluginID+"@"+layoutArtifact.Version] = artifacttrust.Envelope{Artifact: layoutArtifact, PackageBytes: layoutPackage}
 	catalog, err := NewTrustedCatalog([]ArtifactSource{source}, contentVerifier{})
@@ -103,7 +103,7 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	compositionRef := portalapi.PluginRef{ID: compositionArtifact.PluginID, Version: compositionArtifact.Version}
 	layoutRef := portalapi.PluginRef{ID: layoutArtifact.PluginID, Version: layoutArtifact.Version}
 	spec := portalapi.PortalSpec{
-		Revision: 7, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^1.0.0"}, Composition: portalapi.ShellComposition{PluginRef: compositionRef, UIContract: "^1.0.0"}, Layout: portalapi.ShellLayout{PluginRef: layoutRef, UIContract: "^1.0.0"}, Plugins: []portalapi.PluginRef{ref, compositionRef, layoutRef},
+		Revision: 7, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^2.0.0"}, Composition: portalapi.ShellComposition{PluginRef: compositionRef, UIContract: "^2.0.0"}, Layout: portalapi.ShellLayout{PluginRef: layoutRef, UIContract: "^2.0.0"}, Plugins: []portalapi.PluginRef{ref, compositionRef, layoutRef},
 		Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, compositionRef.ID: compositioncommonv1.OriginPlatformProfile, layoutRef.ID: compositioncommonv1.OriginPlatformProfile}},
 	}
 	lockTestManagement(&spec)

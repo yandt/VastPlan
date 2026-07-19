@@ -11,7 +11,7 @@ describe("Arco portal UI adapter", () => {
     expect(Object.keys(arcoPortalUIComponents).sort()).toEqual([
       "Breadcrumb", "Busy", "Button", "CommandPalette", "Descriptions", "Dialog", "Divider", "Drawer",
       "EmptyState", "ErrorState", "FilterBar", "FormRenderer", "Grid", "GridItem", "Icon", "Menu", "Page", "Pagination",
-      "Panel", "PortalShell", "Skeleton", "Stack", "Status", "Table", "Tabs", "theme",
+      "Panel", "Popover", "PortalShell", "Skeleton", "Stack", "Status", "Table", "Tabs", "theme",
     ].sort());
   });
 
