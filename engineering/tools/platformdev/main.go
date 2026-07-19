@@ -41,6 +41,7 @@ import (
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
@@ -79,9 +80,8 @@ type runtime struct {
 }
 
 type packageSpec struct {
-	id       string
-	backend  bool
-	frontend bool
+	id, frontendEntry string
+	backend, frontend bool
 }
 
 func main() {
@@ -213,24 +213,9 @@ func (r *runtime) command(ctx context.Context, extra map[string]string, name str
 
 func (r *runtime) packageArtifacts(ctx context.Context) error {
 	repository := filepath.Join(r.runDir, "repository")
-	specs := []packageSpec{
-		{id: "cn.vastplan.foundation.security.portal-access-policy", backend: true},
-		{id: "cn.vastplan.foundation.security.interaction-access-policy", backend: true},
-		{id: "cn.vastplan.foundation.security.platform-admin-access-policy", backend: true},
-		{id: "cn.vastplan.platform.interaction.broker", backend: true},
-		{id: "cn.vastplan.foundation.frontend.render.adapter.arco", frontend: true},
-		{id: "cn.vastplan.foundation.frontend.structure.composition.standard", frontend: true},
-		{id: "cn.vastplan.foundation.frontend.structure.layout.standard", frontend: true},
-		{id: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", frontend: true},
-		{id: "cn.vastplan.foundation.frontend.workflow.workbench", frontend: true},
-		{id: "cn.vastplan.platform.configuration.portal-composer", backend: true, frontend: true},
-		{id: "cn.vastplan.platform.configuration.global-settings", backend: true, frontend: true},
-		{id: "cn.vastplan.platform.security.credentials", backend: true, frontend: true},
-		{id: "cn.vastplan.platform.data.relational.connection-manager", backend: true, frontend: true},
-		{id: "cn.vastplan.platform.artifacts.repository", backend: true, frontend: true},
-		{id: "cn.vastplan.platform.infrastructure.deployment-manager", backend: true, frontend: true},
-		{id: "cn.vastplan.demo-permission", backend: true},
-		{id: "cn.vastplan.hello-world", backend: true},
+	specs, err := discoverPackageSpecs(r.options.root)
+	if err != nil {
+		return err
 	}
 	for _, spec := range specs {
 		args := []string{"run", "./engineering/tools/pluginpackage", "-source", filepath.Join("extensions", "plugins", spec.id), "-repository", repository}
@@ -238,7 +223,7 @@ func (r *runtime) packageArtifacts(ctx context.Context) error {
 			args = append(args, "-backend-bin", filepath.Join(r.runDir, "bin", spec.id))
 		}
 		if spec.frontend {
-			args = append(args, "-frontend-bundle", filepath.Join(r.options.root, "extensions", "plugins", spec.id, "frontend", "dist", "index.js"))
+			args = append(args, "-frontend-bundle", filepath.Join(r.options.root, "extensions", "plugins", spec.id, filepath.FromSlash(spec.frontendEntry)))
 		}
 		if err := r.command(ctx, map[string]string{"GOCACHE": filepath.Join(r.runDir, "go-cache")}, "go", args...); err != nil {
 			return fmt.Errorf("打包 %s: %w", spec.id, err)
@@ -256,6 +241,50 @@ func (r *runtime) packageArtifacts(ctx context.Context) error {
 		return fmt.Errorf("发布 bootstrap-policy dynamic-go 制品: %w", err)
 	}
 	return nil
+}
+
+// discoverPackageSpecs makes plugin manifests the sole development-time source
+// for frontend and native-Go package inputs. A new UI plugin therefore needs
+// no platformdev allow-list entry before its source can be hot-reloaded.
+func discoverPackageSpecs(root string) ([]packageSpec, error) {
+	pluginsRoot := filepath.Join(root, "extensions", "plugins")
+	directories, err := os.ReadDir(pluginsRoot)
+	if err != nil {
+		return nil, fmt.Errorf("读取插件目录: %w", err)
+	}
+	specs := make([]packageSpec, 0, len(directories))
+	for _, directory := range directories {
+		if !directory.IsDir() {
+			continue
+		}
+		pluginRoot := filepath.Join(pluginsRoot, directory.Name())
+		raw, err := os.ReadFile(filepath.Join(pluginRoot, "vastplan.plugin.json"))
+		if err != nil {
+			return nil, fmt.Errorf("读取插件 %s 清单: %w", directory.Name(), err)
+		}
+		manifest, err := pluginv1.ParseManifest(raw)
+		if err != nil {
+			return nil, fmt.Errorf("解析插件 %s 清单: %w", directory.Name(), err)
+		}
+		if manifest.ID != directory.Name() {
+			return nil, fmt.Errorf("插件目录 %s 与清单 id %s 不一致", directory.Name(), manifest.ID)
+		}
+		frontendEntry := strings.TrimSpace(manifest.Entry["frontend"])
+		if frontendEntry != "" && (!strings.HasPrefix(frontendEntry, "frontend/dist/") || strings.Contains(frontendEntry, "..")) {
+			return nil, fmt.Errorf("插件 %s entry.frontend 必须位于 frontend/dist/", manifest.ID)
+		}
+		_, backendErr := os.Stat(filepath.Join(pluginRoot, "backend", "main.go"))
+		dynamicGo := manifest.Execution != nil && manifest.Execution.Backend != nil && manifest.Execution.Backend.DynamicGo != nil
+		backend := backendErr == nil && !dynamicGo
+		if backendErr != nil && !errors.Is(backendErr, os.ErrNotExist) {
+			return nil, fmt.Errorf("读取插件 %s backend 入口: %w", manifest.ID, backendErr)
+		}
+		if !backend && frontendEntry == "" {
+			continue
+		}
+		specs = append(specs, packageSpec{id: manifest.ID, backend: backend, frontend: frontendEntry != "", frontendEntry: frontendEntry})
+	}
+	return specs, nil
 }
 
 func (r *runtime) writeFixtures() error {

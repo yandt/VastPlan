@@ -1,7 +1,7 @@
 import { build } from "esbuild";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 const outputRoot = option("--out-dir");
@@ -18,31 +18,20 @@ const common = {
   external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
 };
 
-const plugins = [
-  ["cn.vastplan.foundation.frontend.render.adapter.arco", { loader: { ".css": "text" } }],
-  ["cn.vastplan.foundation.frontend.render.adapter.mui", {}],
-  ["cn.vastplan.foundation.frontend.structure.composition.standard", {}],
-  ["cn.vastplan.foundation.frontend.structure.layout.standard", {}],
-  ["cn.vastplan.foundation.frontend.structure.layout.top-navigation", {}],
-  ["cn.vastplan.foundation.frontend.workflow.workbench", {}],
-  ["cn.vastplan.platform.configuration.portal-composer", {}],
-  ["cn.vastplan.platform.configuration.global-settings", {}],
-  ["cn.vastplan.platform.security.credentials", {}],
-  ["cn.vastplan.platform.data.relational.connection-manager", {}],
-  ["cn.vastplan.platform.artifacts.repository", {}],
-  ["cn.vastplan.platform.infrastructure.deployment-manager", {}],
-];
+const plugins = await discoverFrontendPlugins();
 
 const modules = [];
-for (const [id, options] of plugins) {
+for (const { id, entry, source } of plugins) {
   const outfile = outputRoot === undefined
-    ? `extensions/plugins/${id}/frontend/dist/index.js`
+    ? resolve("extensions/plugins", id, entry)
     : resolve(outputRoot, `${id}.js`);
   await mkdir(dirname(outfile), { recursive: true });
   await build({
     ...common,
-    ...options,
-    entryPoints: [`extensions/plugins/${id}/frontend/src/index.${id === "cn.vastplan.foundation.frontend.structure.composition.standard" ? "ts" : "tsx"}`],
+    // UI adapters may export their framework styles as module text. Applying
+    // this loader uniformly keeps discovery independent from plugin identity.
+    loader: { ".css": "text" },
+    entryPoints: [source],
     outfile,
   });
   if (id === "cn.vastplan.foundation.frontend.render.adapter.arco") {
@@ -51,8 +40,40 @@ for (const [id, options] of plugins) {
   }
   if (outputRoot !== undefined) {
     const bytes = await readFile(outfile);
-    modules.push({ id, entry: "frontend/dist/index.js", file: outfile, sha256: createHash("sha256").update(bytes).digest("hex") });
+    modules.push({ id, entry, file: outfile, sha256: createHash("sha256").update(bytes).digest("hex") });
   }
+}
+
+async function discoverFrontendPlugins() {
+  const root = resolve("extensions/plugins");
+  const entries = await readdir(root, { withFileTypes: true });
+  const plugins = [];
+  for (const directory of entries.filter((entry) => entry.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
+    const pluginRoot = resolve(root, directory.name);
+    const manifestPath = resolve(pluginRoot, "vastplan.plugin.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    const id = typeof manifest.id === "string" ? manifest.id.trim() : "";
+    const entry = typeof manifest.entry?.frontend === "string" ? manifest.entry.frontend.trim() : "";
+    if (entry === "") continue;
+    if (id === "" || id !== directory.name) throw new Error(`${manifestPath} 的 id 必须等于插件目录名`);
+    if (!/^frontend\/dist\/[A-Za-z0-9._/-]+\.(?:m?js)$/.test(entry) || entry.includes("..")) {
+      throw new Error(`${manifestPath} 的 entry.frontend 必须是 frontend/dist/ 下的 JavaScript 文件`);
+    }
+    plugins.push({ id, entry, source: await findFrontendSource(pluginRoot, id) });
+  }
+  return plugins;
+}
+
+async function findFrontendSource(pluginRoot, id) {
+  for (const suffix of ["tsx", "ts", "jsx", "js"]) {
+    const source = resolve(pluginRoot, `frontend/src/index.${suffix}`);
+    try {
+      if ((await stat(source)).isFile()) return source;
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+    }
+  }
+  throw new Error(`前端插件 ${id} 声明了 entry.frontend，但缺少 frontend/src/index.(tsx|ts|jsx|js)`);
 }
 
 if (manifestPath !== undefined) {
