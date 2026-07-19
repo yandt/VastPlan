@@ -158,6 +158,25 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
+  extensions/plugins/com.vastplan.foundation.frontend.layout.top-navigation/frontend:
+    dependencies:
+      '@vastplan/portal-ui':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/portal-ui
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.23
+        version: 18.3.31
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7
+
   extensions/plugins/com.vastplan.platform.artifacts.repository/frontend:
     dependencies:
       '@vastplan/platform-admin':

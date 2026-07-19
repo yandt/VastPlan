@@ -1,0 +1,15 @@
+{
+  "id": "com.vastplan.foundation.frontend.layout.top-navigation",
+  "name": "VastPlan Top Navigation Portal Layout",
+  "description": "为标准 Shell 组合模型提供顶部主菜单与分组式 Mega Popover 布局",
+  "version": "1.0.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "frontend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "activation": ["onPortalStartup"],
+  "entry": { "frontend": "frontend/dist/index.js" },
+  "contributes": { "frontend": { "shellLayouts": [{ "id": "ui.shell-layout", "title": "Top Navigation Enterprise Layout", "uiContract": "^2.0.0" }] } }
+}

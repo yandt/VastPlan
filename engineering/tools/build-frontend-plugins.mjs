@@ -23,6 +23,7 @@ const plugins = [
   ["com.vastplan.foundation.frontend.design-system.mui", {}],
   ["com.vastplan.foundation.frontend.composition.standard", {}],
   ["com.vastplan.foundation.frontend.layout.standard", {}],
+  ["com.vastplan.foundation.frontend.layout.top-navigation", {}],
   ["com.vastplan.platform.configuration.portal-composer", {}],
   ["com.vastplan.platform.configuration.global-settings", {}],
   ["com.vastplan.platform.security.credentials", {}],

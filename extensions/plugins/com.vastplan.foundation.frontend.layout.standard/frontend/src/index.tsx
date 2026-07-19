@@ -27,6 +27,13 @@ function StandardShell({ composition, branding, config, pathname, recoveryNotice
     "--vp-shell-muted": ui.theme.tokens.color.mutedText,
     "--vp-shell-border": ui.theme.tokens.color.border,
     "--vp-shell-primary": ui.theme.tokens.color.primary,
+    "--vp-shell-hover": ui.theme.tokens.color.hover,
+    "--vp-shell-selected": ui.theme.tokens.color.selected,
+    "--vp-shell-focus": ui.theme.tokens.color.focusRing,
+    "--vp-shell-bar-height": `${ui.theme.tokens.shell.barHeight}px`,
+    "--vp-shell-rail-width": `${ui.theme.tokens.shell.railWidth}px`,
+    "--vp-shell-navigation-width": `${ui.theme.tokens.shell.navigationWidth}px`,
+    "--vp-shell-navigation-compact-width": `${ui.theme.tokens.shell.navigationCompactWidth}px`,
   } as CSSProperties;
   const pageWidth = config.pageBodyWidth === "contained" ? 1280 : undefined;
   const allGroups = useMemo(() => groups(composition, ["primary", "secondary", "settings"]), [composition]);
@@ -131,7 +138,7 @@ function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, 
     onOpen={focusPanel}
   />;
   return <div className="vp-desktop-navigation">
-    <aside className="vp-navigation-rail" aria-label={i18n.text(message(namespace, "navigation.groups", "主菜单分组"))}>
+    <aside className="vp-navigation-rail" aria-label={i18n.text(message(namespace, "navigation.groups", "主菜单分组"))} onKeyDown={moveRailFocus}>
       <div className="vp-navigation-start">{branding}{shellSlot(composition.shellSlots, "shell.navigation.start")}</div>
       <div className="vp-navigation-center">{shellSlot(composition.shellSlots, "shell.navigation.center")}{mainGroups.map(groupButton)}</div>
       <div className="vp-navigation-end">{settingsGroups.map(groupButton)}{shellSlot(composition.shellSlots, "shell.navigation.end")}</div>
@@ -167,19 +174,78 @@ function IconForGroup({ group }: { group: PortalNavigationGroup }) {
 }
 
 function SecondLevelMenu({ group, composition, onNavigate }: { group: PortalNavigationGroup; composition: ShellLayoutProps["composition"]; onNavigate(id: string): void }) {
-  const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const items: MenuItem[] = [
-    ...group.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })),
-    ...group.children.map((child) => ({ id: `group:${child.id}`, label: i18n.text(child.label), children: child.pages.map((item) => ({ id: item.id, label: i18n.text(item.label), href: pagePath(composition, item.id) })) })),
-  ];
-  return <ui.Menu items={items} activeID={composition.activePage?.navigation?.id} onSelect={onNavigate} />;
+  const activePageID = composition.activeNavigationPath?.pageID;
+  const activeChildID = composition.activeNavigationPath?.rootGroupID === group.id ? composition.activeNavigationPath.childGroupID : undefined;
+  const storageKey = `${namespace}.open-child-groups`;
+  const [openGroups, setOpenGroups] = useState<ReadonlySet<string>>(() => readOpenGroups(storageKey, activeChildID));
+  useEffect(() => {
+    if (activeChildID === undefined) return;
+    setOpenGroups((current) => current.has(activeChildID) ? current : new Set([...current, activeChildID]));
+  }, [activeChildID]);
+  const setOpen = (id: string, open: boolean) => setOpenGroups((current) => {
+    const next = new Set(current);
+    if (open) next.add(id); else next.delete(id);
+    writeOpenGroups(storageKey, next);
+    return next;
+  });
+  return <div className="vp-navigation-tree">
+    {group.pages.length === 0 ? null : <ul className="vp-navigation-page-list vp-navigation-root-pages">
+      {group.pages.map((item) => <NavigationLink key={item.id} id={item.id} label={i18n.text(item.label)} href={pagePath(composition, item.id)} active={item.id === activePageID} onNavigate={onNavigate} />)}
+    </ul>}
+    {group.children.map((child) => {
+      const open = openGroups.has(child.id);
+      const panelID = `vp-navigation-child-${child.id}`;
+      return <section key={child.id} className="vp-navigation-child" data-active={child.id === activeChildID || undefined}>
+        <button type="button" className="vp-navigation-child-trigger" aria-expanded={open} aria-controls={panelID} onClick={() => setOpen(child.id, !open)}>
+          <span>{i18n.text(child.label)}</span><span className="vp-navigation-chevron" aria-hidden="true">›</span>
+        </button>
+        {open ? <ul id={panelID} className="vp-navigation-page-list">
+          {child.pages.map((item) => <NavigationLink key={item.id} id={item.id} label={i18n.text(item.label)} href={pagePath(composition, item.id)} active={item.id === activePageID} onNavigate={onNavigate} />)}
+        </ul> : null}
+      </section>;
+    })}
+  </div>;
+}
+
+function NavigationLink({ id, label, href, active, onNavigate }: { id: string; label: string; href?: string; active: boolean; onNavigate(id: string): void }) {
+  return <li><a className="vp-navigation-link" href={href} aria-current={active ? "page" : undefined} onClick={(event) => {
+    event.preventDefault();
+    onNavigate(id);
+  }}>{label}</a></li>;
+}
+
+function readOpenGroups(key: string, activeID?: string): ReadonlySet<string> {
+  const fallback = new Set(activeID === undefined ? [] : [activeID]);
+  if (typeof window === "undefined") return fallback;
+  try {
+    const stored = JSON.parse(window.sessionStorage.getItem(key) ?? "[]") as unknown;
+    if (!Array.isArray(stored)) return fallback;
+    return new Set([...stored.filter((value): value is string => typeof value === "string"), ...fallback]);
+  } catch {
+    return fallback;
+  }
+}
+
+function writeOpenGroups(key: string, values: ReadonlySet<string>) {
+  if (typeof window === "undefined") return;
+  try { window.sessionStorage.setItem(key, JSON.stringify([...values])); } catch { /* session storage is optional */ }
 }
 
 function returnToRail(event: KeyboardEvent<HTMLElement>, button: React.RefObject<HTMLButtonElement>) {
   if (event.key !== "ArrowLeft") return;
   event.preventDefault();
   button.current?.focus();
+}
+
+function moveRailFocus(event: KeyboardEvent<HTMLElement>) {
+  if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+  const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(".vp-rail-button")];
+  const current = buttons.indexOf(event.target as HTMLButtonElement);
+  if (current < 0 || buttons.length === 0) return;
+  event.preventDefault();
+  const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (current + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length;
+  buttons[next]?.focus();
 }
 
 export function groups(composition: ShellLayoutProps["composition"], zones: readonly NavigationZone[]): readonly PortalNavigationGroup[] {
@@ -204,14 +270,15 @@ function pageSlot(values: ShellLayoutProps["composition"]["pageSlots"], id: Page
 }
 
 export const standardShellCSS = `
-.vp-shell-root{--vp-shell-bar-height:64px;height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:var(--vp-shell-canvas);color:var(--vp-shell-text)}
-.vp-shell-header{height:56px;flex:0 0 56px;display:grid;grid-template-columns:minmax(180px,auto) 1fr minmax(180px,auto);align-items:center;gap:16px;padding:0 24px;background:var(--vp-shell-surface);border-bottom:1px solid var(--vp-shell-border);z-index:20}.vp-shell-header-side{display:flex;align-items:center;gap:12px}.vp-shell-header-center{display:flex;justify-content:center;min-width:0}.vp-shell-header-end{justify-content:flex-end}
-.vp-shell-frame{display:flex;flex:1;min-height:0;min-width:0}.vp-desktop-navigation{display:flex;flex:0 0 auto;min-height:0}.vp-navigation-rail{width:64px;flex:0 0 64px;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:var(--vp-shell-surface);border-right:1px solid var(--vp-shell-border)}.vp-navigation-start,.vp-navigation-center,.vp-navigation-end{display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px}.vp-navigation-center{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}.vp-navigation-start{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);justify-content:center;overflow:hidden;border-bottom:1px solid var(--vp-shell-border)}.vp-navigation-end{border-top:1px solid var(--vp-shell-border);max-height:40vh;overflow-y:auto}
-.vp-rail-button{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border:0;border-radius:10px;background:transparent;color:var(--vp-shell-muted);cursor:pointer}.vp-rail-button:hover{background:color-mix(in srgb,var(--vp-shell-primary) 8%,transparent);color:var(--vp-shell-primary)}.vp-rail-button[data-selected]{background:color-mix(in srgb,var(--vp-shell-primary) 12%,transparent);color:var(--vp-shell-primary)}.vp-rail-button:focus-visible,.vp-mobile-menu-button:focus-visible{outline:2px solid var(--vp-shell-primary);outline-offset:2px}
-.vp-navigation-panel{width:240px;flex:0 0 240px;min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--vp-shell-surface);border-right:1px solid var(--vp-shell-border)}.vp-navigation-panel-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--vp-shell-border)}.vp-navigation-panel-icon{color:var(--vp-shell-primary)}.vp-navigation-panel-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px;scrollbar-width:thin}
+.vp-shell-root{height:100vh;height:100dvh;display:flex;flex-direction:column;overflow:hidden;background:var(--vp-shell-canvas);color:var(--vp-shell-text)}
+.vp-shell-header{height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height);display:grid;grid-template-columns:minmax(180px,auto) 1fr minmax(180px,auto);align-items:center;gap:16px;padding:0 24px;background:var(--vp-shell-surface);border-bottom:1px solid var(--vp-shell-border);z-index:20}.vp-shell-header-side{display:flex;align-items:center;gap:12px}.vp-shell-header-center{display:flex;justify-content:center;min-width:0}.vp-shell-header-end{justify-content:flex-end}
+.vp-shell-frame{display:flex;flex:1;min-height:0;min-width:0}.vp-desktop-navigation{display:flex;flex:0 0 auto;min-height:0}.vp-navigation-rail{width:var(--vp-shell-rail-width);flex:0 0 var(--vp-shell-rail-width);min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:var(--vp-shell-surface);border-right:1px solid var(--vp-shell-border)}.vp-navigation-start,.vp-navigation-center,.vp-navigation-end{display:flex;flex-direction:column;align-items:center;gap:8px;padding:8px}.vp-navigation-center{overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin}.vp-navigation-start{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);justify-content:center;overflow:hidden;border-bottom:1px solid var(--vp-shell-border)}.vp-navigation-end{border-top:1px solid var(--vp-shell-border);max-height:40vh;overflow-y:auto}
+.vp-rail-button{width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;border:0;border-radius:10px;background:transparent;color:var(--vp-shell-muted);cursor:pointer}.vp-rail-button:hover{background:var(--vp-shell-hover);color:var(--vp-shell-primary)}.vp-rail-button[data-selected]{background:var(--vp-shell-selected);color:var(--vp-shell-primary)}.vp-rail-button:focus-visible,.vp-mobile-menu-button:focus-visible,.vp-navigation-child-trigger:focus-visible,.vp-navigation-link:focus-visible{outline:2px solid var(--vp-shell-focus);outline-offset:2px}
+.vp-navigation-panel{width:var(--vp-shell-navigation-width);flex:0 0 var(--vp-shell-navigation-width);min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--vp-shell-surface);border-right:1px solid var(--vp-shell-border)}.vp-navigation-panel-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--vp-shell-border)}.vp-navigation-panel-icon{color:var(--vp-shell-primary)}.vp-navigation-panel-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px;scrollbar-width:thin}
+.vp-navigation-tree{display:grid;gap:4px}.vp-navigation-page-list{list-style:none;margin:0;padding:4px 0 8px}.vp-navigation-root-pages{border-bottom:1px solid var(--vp-shell-border);margin-bottom:4px}.vp-navigation-link{display:block;min-height:36px;box-sizing:border-box;padding:8px 12px;border-radius:8px;color:var(--vp-shell-text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-navigation-link:hover{background:var(--vp-shell-hover);color:var(--vp-shell-primary)}.vp-navigation-link[aria-current=page]{background:var(--vp-shell-selected);color:var(--vp-shell-primary);font-weight:600}.vp-navigation-child{border-radius:8px}.vp-navigation-child[data-active]{background:color-mix(in srgb,var(--vp-shell-selected) 35%,transparent)}.vp-navigation-child-trigger{width:100%;min-height:40px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--vp-shell-text);font:inherit;font-weight:600;text-align:left;cursor:pointer}.vp-navigation-child-trigger:hover{background:var(--vp-shell-hover)}.vp-navigation-chevron{color:var(--vp-shell-muted);transition:transform 120ms ease}.vp-navigation-child-trigger[aria-expanded=true] .vp-navigation-chevron{transform:rotate(90deg)}.vp-navigation-child .vp-navigation-page-list{padding-left:8px}
 .vp-shell-content{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}.vp-mobile-header{display:none}.vp-page-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height);display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;padding:8px 24px;background:var(--vp-shell-surface);border-bottom:1px solid var(--vp-shell-border);z-index:10}.vp-page-header-side{display:flex;align-items:center;gap:12px;min-width:0}.vp-page-header-center{display:flex;justify-content:center;gap:12px;min-width:0}.vp-page-header-end{justify-content:flex-end}.vp-page-title-copy{min-width:0}.vp-page-title{font-size:22px;line-height:1.2;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-page-description{font-size:14px;line-height:1.3;color:var(--vp-shell-muted);margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:color-mix(in srgb,var(--vp-shell-surface) 97%,var(--vp-shell-text))}.vp-page{box-sizing:border-box;width:100%;margin:0 auto;padding:24px}.vp-page-body-row{display:flex;align-items:flex-start;gap:20px}.vp-page-body-main{flex:1;min-width:0}.vp-page-aside{width:320px;flex:0 0 320px;max-height:calc(100dvh - 120px);overflow:auto}.vp-shell-footer{flex:0 0 auto}.vp-brand{display:flex;align-items:center;gap:10px;min-height:40px;min-width:0}.vp-brand-compact{justify-content:center}.vp-brand-mark{width:32px;height:32px;flex:0 0 32px;border-radius:9px;display:grid;place-items:center;color:var(--vp-shell-surface);background:var(--vp-shell-primary)}.vp-brand-logo{width:32px;height:32px;object-fit:contain}.vp-mobile-menu-button{width:44px;height:44px;border:0;border-radius:8px;background:transparent;color:var(--vp-shell-text);display:grid;place-items:center}
-@media (max-width:1199px){.vp-navigation-panel{width:220px;flex-basis:220px}.vp-page{padding:20px}.vp-page-header{padding-left:20px;padding-right:20px}}
-@media (max-width:767px){.vp-desktop-navigation{display:none}.vp-mobile-header{box-sizing:border-box;height:56px;flex:0 0 56px;display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--vp-shell-surface);border-bottom:1px solid var(--vp-shell-border)}.vp-page-header{height:auto;min-height:64px;flex:0 0 auto;grid-template-columns:minmax(0,1fr) auto;padding:8px 16px}.vp-page-header-center{grid-column:1/-1;justify-content:flex-start;overflow-x:auto}.vp-page-header-end{grid-column:2}.vp-page-title{font-size:20px}.vp-page-description{max-width:65vw}.vp-page{padding:16px}.vp-page-body-row{display:block}.vp-page-aside{width:auto;max-height:none;margin-top:16px;overflow:visible}}
+@media (max-width:1199px){.vp-navigation-panel{width:var(--vp-shell-navigation-compact-width);flex-basis:var(--vp-shell-navigation-compact-width)}.vp-page{padding:20px}.vp-page-header{padding-left:20px;padding-right:20px}}
+@media (max-width:767px){.vp-desktop-navigation{display:none}.vp-mobile-header{box-sizing:border-box;height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height);display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--vp-shell-surface);border-bottom:1px solid var(--vp-shell-border)}.vp-page-header{height:auto;min-height:var(--vp-shell-bar-height);flex:0 0 auto;grid-template-columns:minmax(0,1fr) auto;padding:8px 16px}.vp-page-header-center{grid-column:1/-1;justify-content:flex-start;overflow-x:auto}.vp-page-header-end{grid-column:2}.vp-page-title{font-size:20px}.vp-page-description{max-width:65vw}.vp-page{padding:16px}.vp-page-body-row{display:block}.vp-page-aside{width:auto;max-height:none;margin-top:16px;overflow:visible}}
 @media (prefers-reduced-motion:reduce){.vp-shell-root *{scroll-behavior:auto!important;transition:none!important}}
 `;
 
@@ -221,8 +288,8 @@ const adapter: ShellLayoutAdapter = {
   localization: {
     defaultLocale: "zh-CN",
     messages: {
-      "zh-CN": { "page.notFound": "页面不存在", "page.pathMissing": "Portal 没有注册路径 {path}", "navigation.open": "打开主菜单", "navigation.mobile": "移动主菜单", "navigation.groups": "主菜单分组", "navigation.secondaryLabel": "{group}二级导航" },
-      "en-US": { "page.notFound": "Page not found", "page.pathMissing": "Portal has no registered route for {path}", "navigation.open": "Open main menu", "navigation.mobile": "Mobile main menu", "navigation.groups": "Main menu groups", "navigation.secondaryLabel": "{group} secondary navigation" },
+      "zh-CN": { "page.notFound": "页面不存在", "page.pathMissing": "Portal 没有注册路径 {path}", "navigation.open": "打开主菜单", "navigation.mobile": "移动主菜单", "navigation.groups": "主菜单分组", "navigation.secondaryLabel": "{group}导航" },
+      "en-US": { "page.notFound": "Page not found", "page.pathMissing": "Portal has no registered route for {path}", "navigation.open": "Open main menu", "navigation.mobile": "Mobile main menu", "navigation.groups": "Main menu groups", "navigation.secondaryLabel": "{group} navigation" },
     },
   },
 };

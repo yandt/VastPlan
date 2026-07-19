@@ -220,6 +220,7 @@ func (r *runtime) packageArtifacts(ctx context.Context) error {
 		{id: "com.vastplan.foundation.frontend.design-system.arco", frontend: true},
 		{id: "com.vastplan.foundation.frontend.composition.standard", frontend: true},
 		{id: "com.vastplan.foundation.frontend.layout.standard", frontend: true},
+		{id: "com.vastplan.foundation.frontend.layout.top-navigation", frontend: true},
 		{id: "com.vastplan.platform.configuration.portal-composer", backend: true, frontend: true},
 		{id: "com.vastplan.platform.configuration.global-settings", backend: true, frontend: true},
 		{id: "com.vastplan.platform.security.credentials", backend: true, frontend: true},

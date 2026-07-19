@@ -35,17 +35,22 @@ describe("standard shell layout", () => {
   });
 
   it("uses a 64px icon rail and a persistent 240px second-level panel on desktop", () => {
-    expect(standardShellCSS).toContain(".vp-navigation-rail{width:64px;flex:0 0 64px");
-    expect(standardShellCSS).toContain(".vp-navigation-panel{width:240px;flex:0 0 240px");
+    expect(standardShellCSS).toContain(".vp-navigation-rail{width:var(--vp-shell-rail-width);flex:0 0 var(--vp-shell-rail-width)");
+    expect(standardShellCSS).toContain(".vp-navigation-panel{width:var(--vp-shell-navigation-width);flex:0 0 var(--vp-shell-navigation-width)");
     expect(standardShellCSS).toContain(".vp-page-scroller{flex:1;min-height:0;overflow:auto");
     expect(standardShellCSS).toContain("@media (max-width:767px){.vp-desktop-navigation{display:none}");
   });
 
   it("aligns the desktop brand, second-level title and page header to one shell bar height", () => {
-    expect(standardShellCSS).toContain("--vp-shell-bar-height:64px");
+    expect(standardShellCSS).toContain(".vp-shell-header{height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height)");
     expect(standardShellCSS).toContain(".vp-navigation-start{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height)");
     expect(standardShellCSS).toContain(".vp-navigation-panel-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height)");
     expect(standardShellCSS).toContain(".vp-page-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height)");
+  });
+
+  it("owns a multi-open child navigation tree with real page links", () => {
+    expect(standardShellCSS).toContain(".vp-navigation-child-trigger");
+    expect(standardShellCSS).toContain(".vp-navigation-link[aria-current=page]");
   });
 
   it("keeps semantic zone order while returning normalized groups", () => {
