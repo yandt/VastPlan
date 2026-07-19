@@ -12,8 +12,11 @@ func TestKeysAreStableAndDoNotLeakHierarchy(t *testing.T) {
 	if got, want := DesiredKey("", "local"), "tenants.X2dsb2JhbA.states.bG9jYWw"; got != want {
 		t.Fatalf("global DesiredKey=%q want=%q", got, want)
 	}
-	if ActualKey("node.1") == NodeKey("acme", "prod", "node.1") {
-		t.Fatal("node lease 必须额外绑定 tenant/deployment 作用域")
+	if got, want := ActualKey("acme", "prod", "node.1"), "tenants.YWNtZQ.states.cHJvZA.actual.bm9kZS4x"; got != want {
+		t.Fatalf("ActualKey=%q want=%q", got, want)
+	}
+	if ActualKey("acme", "prod", "node.1") == ActualKey("acme", "other", "node.1") {
+		t.Fatal("实际态必须绑定 tenant/deployment 作用域")
 	}
 	if got, want := AssignmentKey("acme", "prod", "node.1"), "tenants.YWNtZQ.states.cHJvZA.nodes.bm9kZS4x"; got != want {
 		t.Fatalf("AssignmentKey=%q want=%q", got, want)

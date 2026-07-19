@@ -101,7 +101,7 @@ func (s Scheduler) ObserveComposition(ctx context.Context, deployment deployment
 		if nodeErr != nil {
 			return CompositionReport{}, nodeErr
 		}
-		entry, getErr := s.Actual.Get(ctx, controlplane.ActualKey(nodeID))
+		entry, getErr := s.Actual.Get(ctx, controlplane.ActualKey(deployment.Metadata.Tenant, deployment.Metadata.Name, nodeID))
 		if getErr != nil {
 			continue
 		}

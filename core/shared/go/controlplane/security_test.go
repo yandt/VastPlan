@@ -116,7 +116,7 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	if entry, err := nodeBuckets.Assignments.Get(ctx, "tenant.unit"); err != nil || string(entry.Value()) != "assignment" {
 		t.Fatalf("node 应能读取 assignment KV: entry=%v err=%v", entry, err)
 	}
-	if _, err := nodeBuckets.Actual.Put(ctx, ActualKey("node-1"), []byte("healthy")); err != nil {
+	if _, err := nodeBuckets.Actual.Put(ctx, ActualKey("acme", "prod", "node-1"), []byte("healthy")); err != nil {
 		t.Fatalf("node 应能写 actual KV: %v", err)
 	}
 	leaseKey := NodeKey("acme", "prod", "node-1")
@@ -187,7 +187,7 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	actual := "$KV." + ActualBucket + "." + ActualKey("node-1")
+	actual := "$KV." + ActualBucket + "." + ActualKey("acme", "prod", "node-1")
 	actualMessages := make(chan []byte, 1)
 	_, _ = bootstrap.Subscribe(actual, func(message *nats.Msg) { actualMessages <- message.Data })
 	_ = bootstrap.Flush()

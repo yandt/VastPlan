@@ -66,14 +66,40 @@ func TestNATSKVSourceWatchReconnectAndActualStateReport(t *testing.T) {
 	applyDesired(t, ctx, buckets.Desired, desiredKey, desired)
 	waitSourceRevision(t, events, 2)
 
-	actualStore := NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey("node-1")}
+	actualStore := NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey("acme", "prod", "node-1")}
 	actual := emptyActualState()
 	actual.NodeID, actual.ObservedRevision, actual.AppliedRevision = "node-1", 2, 2
 	if err := actualStore.Save(actual); err != nil {
 		t.Fatal(err)
 	}
+	firstActualEntry, err := buckets.Actual.Get(ctx, actualStore.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actual.UpdatedAt = time.Now().UTC()
+	if err := actualStore.Save(actual); err != nil {
+		t.Fatal(err)
+	}
+	unchangedActualEntry, err := buckets.Actual.Get(ctx, actualStore.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unchangedActualEntry.Revision() != firstActualEntry.Revision() {
+		t.Fatalf("仅检查点时间变化不得写入 Actual KV: first=%d unchanged=%d", firstActualEntry.Revision(), unchangedActualEntry.Revision())
+	}
+	actual.Units["worker"] = UnitState{Phase: PhaseActive, Readiness: "ready"}
+	if err := actualStore.Save(actual); err != nil {
+		t.Fatal(err)
+	}
+	changedActualEntry, err := buckets.Actual.Get(ctx, actualStore.Key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changedActualEntry.Revision() <= unchangedActualEntry.Revision() {
+		t.Fatalf("实际运行事实变化必须写入 Actual KV: before=%d after=%d", unchangedActualEntry.Revision(), changedActualEntry.Revision())
+	}
 	loadedActual, err := actualStore.Load()
-	if err != nil || loadedActual.NodeID != "node-1" || loadedActual.AppliedRevision != 2 {
+	if err != nil || loadedActual.NodeID != "node-1" || loadedActual.AppliedRevision != 2 || loadedActual.Units["worker"].Phase != PhaseActive {
 		t.Fatalf("NATS actual=%+v err=%v", loadedActual, err)
 	}
 

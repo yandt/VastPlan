@@ -207,6 +207,19 @@ func AssignmentPrefix(tenant, name string) string {
 	return DeploymentKey(tenant, name) + ".nodes."
 }
 
+// AssignmentPrefixForDeploymentKey 服务于 Controller 已持有的稳定 deployment key，
+// 避免在 Watch 热路径反向解析 tenant/name。
+func AssignmentPrefixForDeploymentKey(deploymentKey string) string { return deploymentKey + ".nodes." }
+
+// ActualPrefix 与 assignment 共享 tenant/deployment 作用域，但使用独立层级，
+// 防止同一物理节点为多个部署运行 Agent 时相互覆盖实际态。
+func ActualPrefix(tenant, name string) string {
+	return DeploymentKey(tenant, name) + ".actual."
+}
+
+// ActualPrefixForDeploymentKey 见 AssignmentPrefixForDeploymentKey。
+func ActualPrefixForDeploymentKey(deploymentKey string) string { return deploymentKey + ".actual." }
+
 func AssignmentKey(tenant, name, nodeID string) string {
 	return AssignmentPrefix(tenant, name) + keyToken(nodeID)
 }
@@ -238,7 +251,9 @@ func AssignmentKeyNodeID(key string) (string, error) {
 	return string(raw), nil
 }
 
-func ActualKey(nodeID string) string { return "nodes." + keyToken(nodeID) }
+func ActualKey(tenant, deployment, nodeID string) string {
+	return ActualPrefix(tenant, deployment) + keyToken(nodeID)
+}
 func NodeKey(tenant, deployment, nodeID string) string {
 	return DeploymentKey(tenant, deployment) + ".nodes." + keyToken(nodeID)
 }

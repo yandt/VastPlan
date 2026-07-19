@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
@@ -22,7 +22,7 @@ func TestObserveCompositionReportsDependencyLoss(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := buckets.Actual.Put(context.Background(), controlplane.ActualKey("node-a"), raw); err != nil {
+	if _, err := buckets.Actual.Put(context.Background(), controlplane.ActualKey("acme", "prod", "node-a"), raw); err != nil {
 		t.Fatal(err)
 	}
 	desired := deploymentv1.DesiredState{Version: 1, Revision: 7, Metadata: deploymentv1.Metadata{Name: "prod", Tenant: "acme"}, Units: []deploymentv1.Unit{
@@ -60,7 +60,7 @@ func TestObserveCompositionReportsContractedPartitionOwnersAsDegraded(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := buckets.Actual.Put(ctx, controlplane.ActualKey("node-a"), raw); err != nil {
+	if _, err := buckets.Actual.Put(ctx, controlplane.ActualKey("acme", "prod", "node-a"), raw); err != nil {
 		t.Fatal(err)
 	}
 	assignment := deploymentv1.DesiredState{

@@ -51,6 +51,12 @@ Reconciler 在下载、激活、排空、停用等有副作用的长操作前后
 
 迁移只发生在读取边界，后续写回只产生 v2；未知 v1 status 或未知版本拒绝加载。该迁移是 Node Agent 自身诊断状态的格式迁移，不等同于插件业务状态迁移。
 
+### 5. 运行事实变化才复制到控制面
+
+本地实际态文件仍在每个检查点更新 `updated_at`，保证节点恢复诊断完整；同步到 NATS 的副本则忽略该纯时间字段。若 version、revision、unit 生命周期、readiness、候选、错误或进程事实均未变化，不产生新的 KV revision。节点存活继续由 Node Lease 续租表达，不把 ActualState 当心跳。
+
+Actual KV key 固定为 `tenant/deployment/actual/node` 作用域，与节点租约和 assignment 一致。同一物理节点为多个部署运行 Node Agent 时，实际态互不覆盖；Controller 只消费自身 deployment 前缀的 Node/Actual Watch 事件。
+
 ## 备选方案
 
 - **保留 `status` 并新增更多字符串**：改动较小，但无法阻止拼写漂移，也没有明确转换图。拒绝。
@@ -61,6 +67,6 @@ Reconciler 在下载、激活、排空、停用等有副作用的长操作前后
 ## 影响
 
 - 正面：生命周期成为可验证状态机，升级候选与当前实例事实不再混淆，控制面可以诊断中间阶段。
-- 代价：一次 reconcile 会产生更多状态写入；观察方必须识别 actual state v2。
+- 代价：长操作仍会产生更多本地检查点；观察方必须识别 actual state v2。无运行事实变化的周期对账不再放大为控制面写入或全局重算。
 - 兼容：v1 本地/NATS 实际态可自动读取；实际态是节点内部控制面协议，不改变插件 v1 wire 协议。
 - 后续：有状态插件的业务状态版本、迁移事务和回滚契约仍按 ADR-0031 单独落地，不能以本 ADR 的 actual state 迁移冒充完成。

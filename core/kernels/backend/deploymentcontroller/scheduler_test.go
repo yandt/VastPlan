@@ -40,6 +40,26 @@ func TestConvergenceSummaryDetectsOnlyMeaningfulChanges(t *testing.T) {
 	}
 }
 
+func TestWatchKeyMatchesOnlyDeploymentScope(t *testing.T) {
+	platform := controlplane.DeploymentKey("local", "platform-management")
+	managed := controlplane.DeploymentKey("local", "managed-services")
+	if !watchKeyMatches(controlplane.NodeKey("local", "platform-management", "node-a"), controlplane.AssignmentPrefixForDeploymentKey(platform)) {
+		t.Fatal("本部署节点租约必须触发调度")
+	}
+	if watchKeyMatches(controlplane.NodeKey("local", "managed-services", "node-a"), controlplane.AssignmentPrefixForDeploymentKey(platform)) {
+		t.Fatal("其他部署节点租约不得触发调度")
+	}
+	if !watchKeyMatches(controlplane.ActualKey("local", "platform-management", "node-a"), controlplane.ActualPrefixForDeploymentKey(platform)) {
+		t.Fatal("本部署实际态必须触发组合状态刷新")
+	}
+	if watchKeyMatches(controlplane.ActualKey("local", "managed-services", "node-a"), controlplane.ActualPrefixForDeploymentKey(platform)) {
+		t.Fatal("其他部署实际态不得触发组合状态刷新")
+	}
+	if !watchKeyMatches(controlplane.ActualKey("local", "managed-services", "node-a"), controlplane.ActualPrefixForDeploymentKey(managed)) {
+		t.Fatal("实际态必须能由所属部署控制器识别")
+	}
+}
+
 func TestSchedulerReplicasPlacementScaleAndNodeLoss(t *testing.T) {
 	_, buckets := startSchedulerNATS(t)
 	ctx := context.Background()

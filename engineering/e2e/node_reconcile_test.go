@@ -399,7 +399,7 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", t.Logf)
 	localStore := nodeagent.FileStateStore{Path: filepath.Join(t.TempDir(), "actual.json")}
-	remoteStore := nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey("nats-node")}
+	remoteStore := nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey("_global", "nats-e2e", "nats-node")}
 	reconciler := &nodeagent.Reconciler{
 		NodeID: "nats-node", Sources: []nodeagent.ArtifactSource{repository}, Verifier: nodeagent.NewLocalDevelopmentArtifactVerifier(),
 		Installer: nodeagent.LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")}, Runtime: runtime,
@@ -541,7 +541,7 @@ func startClusterNode(t *testing.T, server *natsserver.Server, buckets controlpl
 		Sources: []nodeagent.ArtifactSource{repository}, Verifier: nodeagent.NewLocalDevelopmentArtifactVerifier(),
 		Installer: nodeagent.LocalInstaller{Root: runtimeRoot}, Runtime: runtime,
 		StateStore: nodeagent.ReplicatedStateStore{Primary: store, Replicas: []nodeagent.StateStore{
-			nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey(nodeID)},
+			nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey("acme", "mesh", nodeID)},
 		}},
 	}
 	ctx, cancel := context.WithCancel(context.Background())

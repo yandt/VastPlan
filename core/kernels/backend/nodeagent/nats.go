@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -169,6 +170,18 @@ func (s NATSStateStore) Save(state ActualState) error {
 	if err := validateActualState(state); err != nil {
 		return err
 	}
+	entry, err := s.KV.Get(context.Background(), s.Key)
+	if err == nil {
+		persisted, decodeErr := decodeActualState(entry.Value())
+		if decodeErr != nil {
+			return fmt.Errorf("解析既有 NATS 实际态 key %s: %w", s.Key, decodeErr)
+		}
+		if sameActualState(persisted, state) {
+			return nil
+		}
+	} else if !errors.Is(err, jetstream.ErrKeyNotFound) {
+		return fmt.Errorf("读取既有 NATS 实际态 key %s: %w", s.Key, err)
+	}
 	raw, err := json.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("序列化 NATS 实际态: %w", err)
@@ -177,6 +190,14 @@ func (s NATSStateStore) Save(state ActualState) error {
 		return fmt.Errorf("上报 NATS 实际态 key %s: %w", s.Key, err)
 	}
 	return nil
+}
+
+// sameActualState 忽略纯本地检查点时间。租约负责节点存活，控制面只需在
+// 运行事实变化时收到 Actual KV 更新，避免定时幂等 reconcile 形成写放大。
+func sameActualState(left, right ActualState) bool {
+	left.UpdatedAt = time.Time{}
+	right.UpdatedAt = time.Time{}
+	return reflect.DeepEqual(left, right)
 }
 
 // ReplicatedStateStore 以本地文件为恢复真源，并同步一份远端实际态供控制面观察。

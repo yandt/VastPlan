@@ -294,10 +294,11 @@ func newNodeControlPlane(options reconcileOptions, logf func(string, ...any)) (*
 	} else {
 		plane.source = nodeagent.NATSDesiredStateSource{KV: plane.buckets.Desired, Key: options.desiredKey, Conn: nc}
 	}
+	tenant, deployment := controlPlaneScope(options.deploymentTenant, options.deploymentName)
 	plane.stateStore = nodeagent.ReplicatedStateStore{
 		Primary: nodeagent.FileStateStore{Path: options.actualPath},
 		Replicas: []nodeagent.StateStore{
-			nodeagent.NATSStateStore{KV: plane.buckets.Actual, Key: controlplane.ActualKey(options.nodeID)},
+			nodeagent.NATSStateStore{KV: plane.buckets.Actual, Key: controlplane.ActualKey(tenant, deployment, options.nodeID)},
 		},
 	}
 	if plane.transport != nil {
@@ -340,13 +341,7 @@ func startNodeLeaseGuard(ctx context.Context, stop context.CancelFunc, options r
 			return nil, fmt.Errorf("作废旧 assignment: %w", err)
 		}
 	}
-	tenant, deployment := options.deploymentTenant, options.deploymentName
-	if tenant == "" {
-		tenant = "_global"
-	}
-	if deployment == "" {
-		deployment = "legacy"
-	}
+	tenant, deployment := controlPlaneScope(options.deploymentTenant, options.deploymentName)
 	leaseOptions := controlplane.NodeLeaseOptions{
 		Logf: logf, TenantID: tenant, Deployment: deployment, AllowUnattested: options.natsAllowInsecure,
 		Capacity: controlplane.ResourceCapacity{
@@ -371,6 +366,16 @@ func startNodeLeaseGuard(ctx context.Context, stop context.CancelFunc, options r
 		}
 	}()
 	return guard, nil
+}
+
+func controlPlaneScope(tenant, deployment string) (string, string) {
+	if tenant == "" {
+		tenant = "_global"
+	}
+	if deployment == "" {
+		deployment = "legacy"
+	}
+	return tenant, deployment
 }
 
 func (g *nodeLeaseGuard) close(ctx context.Context) error {

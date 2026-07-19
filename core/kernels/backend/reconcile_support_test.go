@@ -34,6 +34,17 @@ func TestParseReconcileOptionsNormalizesLocalAndDeploymentModes(t *testing.T) {
 	if cluster.assignmentKey != controlplane.AssignmentKey("acme", "api", "node-a") {
 		t.Fatalf("deployment 应生成当前节点 assignment key: %+v", cluster)
 	}
+
+	legacy, err := parseReconcileOptions([]string{"-nats-url", "nats://127.0.0.1:4222", "-desired-key", controlplane.DesiredKey("acme", "legacy-config")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if legacy.assignmentKey != "" || legacy.deploymentName != "" {
+		t.Fatalf("仅指定 desired-key 的 NATS Agent 必须保留 desired source 语义: %+v", legacy)
+	}
+	if tenant, deployment := controlPlaneScope(legacy.deploymentTenant, legacy.deploymentName); tenant != "_global" || deployment != "legacy" {
+		t.Fatalf("未声明部署的控制面实际态作用域错误: tenant=%s deployment=%s", tenant, deployment)
+	}
 }
 
 func TestParseReconcileOptionsSupportsPlacementPrecedence(t *testing.T) {

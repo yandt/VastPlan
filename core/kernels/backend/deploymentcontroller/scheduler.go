@@ -563,6 +563,14 @@ func shouldLogConvergence(last *convergenceSummary, current convergenceSummary) 
 	return last == nil || *last != current
 }
 
+func watchEntryMatches(entry jetstream.KeyValueEntry, prefix string) bool {
+	return entry != nil && watchKeyMatches(entry.Key(), prefix)
+}
+
+func watchKeyMatches(key, prefix string) bool {
+	return key != "" && strings.HasPrefix(key, prefix)
+}
+
 func (c Controller) Run(ctx context.Context) error {
 	if c.Deployments == nil || c.DeploymentKey == "" || c.Leaders == nil || c.Identity == "" {
 		return errors.New("controller deployment/leader KV、deployment key 与 identity 未配置")
@@ -694,14 +702,20 @@ func (c Controller) runAsLeader(ctx context.Context) error {
 				return errors.New("集群部署 watcher 已关闭")
 			}
 			reconcile("deployment_watch")
-		case _, ok := <-nodeWatcher.Updates():
+		case entry, ok := <-nodeWatcher.Updates():
 			if !ok {
 				return errors.New("节点 watcher 已关闭")
 			}
+			if !watchEntryMatches(entry, controlplane.AssignmentPrefixForDeploymentKey(c.DeploymentKey)) {
+				continue
+			}
 			reconcile("node_watch")
-		case _, ok := <-actualUpdates:
+		case entry, ok := <-actualUpdates:
 			if !ok {
 				return errors.New("节点实际态 watcher 已关闭")
+			}
+			if !watchEntryMatches(entry, controlplane.ActualPrefixForDeploymentKey(c.DeploymentKey)) {
+				continue
 			}
 			reconcile("actual_watch")
 		}
