@@ -99,7 +99,21 @@ function Stack({ direction = "column", gap = "md", align = "stretch", justify = 
 }
 
 function Grid({ columns = 1, gap = "md", children }: GridProps) {
-  return <ArcoGrid cols={columns} rowGap={gapPixels[gap]} colGap={gapPixels[gap]}>{children}</ArcoGrid>;
+  return <ArcoGrid cols={cascadeResponsiveColumns(columns)} rowGap={gapPixels[gap]} colGap={gapPixels[gap]}>{children}</ArcoGrid>;
+}
+
+const responsiveBreakpoints = ["xs", "sm", "md", "lg", "xl"] as const;
+
+/** Arco does not cascade a lower breakpoint value when the current breakpoint key is absent. */
+export function cascadeResponsiveColumns(columns: ResponsiveColumns): ResponsiveColumns {
+  if (typeof columns === "number") return columns;
+  const cascaded: Exclude<ResponsiveColumns, number> = {};
+  let inherited: number | undefined;
+  for (const breakpoint of responsiveBreakpoints) {
+    inherited = columns[breakpoint] ?? inherited;
+    if (inherited !== undefined) cascaded[breakpoint] = inherited;
+  }
+  return cascaded;
 }
 
 // Arco Grid only retains direct children carrying its private GridItem marker.
@@ -175,6 +189,7 @@ function Table({ columns, rows, rowKey = "id", loading, empty }: TableProps) {
     loading={loading}
     pagination={false}
     noDataElement={empty}
+    scroll={{ x: "max-content" }}
   />;
 }
 

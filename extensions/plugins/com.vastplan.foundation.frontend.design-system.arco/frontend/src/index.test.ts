@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RJSFSchema } from "@rjsf/utils";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { arcoDesignSystem, arcoPortalUIComponents } from "./index";
+import { arcoDesignSystem, arcoPortalUIComponents, cascadeResponsiveColumns } from "./index";
 import { arcoJSONSchemaValidator, transformArcoFormErrors } from "./json-schema-form";
 
 describe("Arco portal UI adapter", () => {
@@ -31,6 +31,22 @@ describe("Arco portal UI adapter", () => {
 
     expect(html).toContain("left");
     expect(html).toContain("right");
+  });
+
+  it("cascades framework-neutral responsive columns across Arco breakpoints", () => {
+    expect(cascadeResponsiveColumns({ xs: 1, lg: 2 })).toEqual({ xs: 1, sm: 1, md: 1, lg: 2, xl: 2 });
+    expect(cascadeResponsiveColumns({ sm: 2, xl: 4 })).toEqual({ sm: 2, md: 2, lg: 2, xl: 4 });
+    expect(cascadeResponsiveColumns(3)).toBe(3);
+  });
+
+  it("keeps wide semantic tables horizontally scrollable on narrow pages", () => {
+    const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.Table, {
+      columns: [{ key: "name", title: "Name" }, { key: "updatedAt", title: "Updated" }],
+      rows: [{ id: "one", name: "Portal", updatedAt: "2026-07-19" }],
+    }));
+    expect(html).toContain("arco-table-layout-fixed");
+    expect(html).toContain("arco-table-content-scroll");
+    expect(html).toContain("width:max-content");
   });
 
   it("keeps navigation destinations as real links", () => {
