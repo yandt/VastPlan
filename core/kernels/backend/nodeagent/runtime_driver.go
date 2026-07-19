@@ -68,12 +68,14 @@ func DefaultExecutionDrivers() *ExecutionDriverRegistry {
 	if pythonHost != "" {
 		pythonDriver = PythonSubinterpreterExecutionDriver{Command: "python3", HostArgs: []string{pythonHost}}
 	}
-	registry, _ := NewExecutionDriverRegistry(
+	drivers := []PluginExecutionDriver{
 		NativeExecutionDriver{},
 		PythonProcessExecutionDriver{Interpreter: "python3"},
 		nodeDriver,
 		pythonDriver,
-	)
+	}
+	drivers = append(drivers, configuredIsolationDrivers()...)
+	registry, _ := NewExecutionDriverRegistry(drivers...)
 	return registry
 }
 

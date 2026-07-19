@@ -28,6 +28,7 @@ Go 标准库 `plugin` 不能卸载，且要求宿主和 `.so` 共同构建，因
 8. Runtime Host 属于内核发布物和信任计算基，不是普通插件。它只接受宿主签发的一次性启动票据，不接受插件自行扩权；stdout/stderr、资源限制、健康和退出事实回到统一实例生命周期。驱动接口不约束 Runtime Host 采用每插件进程还是共享进程，后续可在不改变插件契约的前提下池化。
 9. 热替换以“执行单元替换”实现，不依靠语言模块缓存技巧。新 Worker/解释器/进程先完全就绪，再切换路由并释放旧执行单元；有状态插件继续使用 `lifecycle.v1` 的 prepare/commit/rollback。
 10. Python Runtime Host 的协议面固定在主解释器，业务入口才装入子解释器。跨解释器仅传输可复制的声明、裁剪后上下文、payload 与结果，避免要求 `grpcio`/Protobuf 原生扩展支持多解释器。桥接实现只能宣告已实现的协议 feature；第一版仅支持静态贡献与 Invoke，需要 HostCall、事件、动态贡献或迁移的插件必须明确使用独立 `python` 驱动。
+11. 第三方隔离驱动采用“内核内固定等级 + 部署方可信 Runtime Host”注册：`VASTPLAN_PROCESS_SANDBOX_HOST`、`VASTPLAN_CONTAINER_HOST`、`VASTPLAN_WASM_COMPONENT_HOST` 只接受运维配置，不来自插件清单。未配置时对应驱动不注册；配置后内核以无 shell argv 传递已验签插件 ID、安装根、入口和参数，并继续持有一次性启动票据与协议授权。外部 Host 必须是内核发布物或部署方审计制品，不能把普通解释器/进程启动器冒充隔离 Host。
 
 ## 备选方案
 
