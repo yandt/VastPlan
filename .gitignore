@@ -28,3 +28,4 @@ __pycache__/
 
 # 本地 Agent 运行状态
 .codex/
+graphify-out/
