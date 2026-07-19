@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { PortalI18nProvider, message, usePortalI18n, usePortalUI, type PluginLocalization, type PortalLocalizationPolicy } from "@vastplan/portal-ui";
+import { PortalI18nProvider, message, usePortalI18n, usePortalUI, type PluginLocalization, type PortalLocalizationPolicy } from "@vastplan/ui-primitives";
 import { VerifiedFrontendPluginLoader, parsePortalRuntimeSpec, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
 import { startPortalDevelopmentUpdates } from "./portal-development";
 import { PortalGenerationManager } from "./portal-generation";
@@ -114,7 +114,7 @@ export function PortalApplication({ prepared, initialPath, recoveryMode = false,
 }
 
 function LocalizedPortalApplication({ prepared, pathname, onNavigate, page, recoveryMode, developmentError }: { prepared: PreparedPortal; pathname: string; onNavigate(path: string): void; page: PreparedPortal["pages"][number] | undefined; recoveryMode: boolean; developmentError?: string }) {
-  const Provider = prepared.designSystem.Provider;
+  const Provider = prepared.renderAdapter.Provider;
   const i18n = usePortalI18n();
   return <Provider locale={i18n.locale} direction={i18n.direction}>
     <PortalContent prepared={prepared} pathname={pathname} onNavigate={onNavigate} page={page} recoveryMode={recoveryMode} />
@@ -139,13 +139,13 @@ function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode }: {
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const composition = prepared.composition.compose({
+  const composition = prepared.structureComposition.compose({
     pages: prepared.pages,
     shellContributions: prepared.shellContributions,
     activePageID: page?.id,
-    config: prepared.portal.composition.config,
+    config: prepared.portal.structureComposition.config,
   });
-  const Layout = prepared.layout.Shell;
+  const Layout = prepared.structureLayout.Shell;
   const navigate = (pageID: string) => {
     const target = prepared.pages.find((candidate) => candidate.id === pageID);
     if (target === undefined) return;
@@ -160,7 +160,7 @@ function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode }: {
       shortName: typeof branding.shortName === "string" ? branding.shortName : undefined,
       logoURL: typeof branding.logoURL === "string" ? branding.logoURL : undefined,
     }}
-    config={prepared.portal.layout.config ?? {}}
+    config={prepared.portal.structureLayout.config ?? {}}
     pathname={pathname}
     onNavigate={navigate}
     recoveryNotice={recoveryMode ? <ui.Status tone="warning">{i18n.text(message(kernelNamespace, "recovery.active", "正在运行上一条仍可信的已发布 revision #{revision}。", { revision: prepared.portal.revision }))}</ui.Status> : undefined}
@@ -230,7 +230,7 @@ export class PortalBootstrapError extends Error {
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error); }
 
-const kernelNamespace = "com.vastplan.kernel.frontend";
+const kernelNamespace = "cn.vastplan.kernel.frontend";
 const kernelLocalization: PluginLocalization = {
   defaultLocale: "zh-CN",
   messages: {

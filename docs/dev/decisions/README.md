@@ -113,3 +113,4 @@
 - [ADR-0080 Portal 三级导航与可切换布局](ADR-0080-Portal三级导航与可切换布局.md)
 - [ADR-0081 Portal 治理与不可变 Activation](ADR-0081-Portal治理与不可变Activation.md)
 - [ADR-0082 前端工作台组合框架](ADR-0082-前端工作台组合框架.md)
+- [ADR-0083 前端 UI 分层术语与插件命名空间](ADR-0083-前端UI分层术语与插件命名空间.md)

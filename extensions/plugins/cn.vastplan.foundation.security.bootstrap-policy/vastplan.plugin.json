@@ -1,0 +1,57 @@
+{
+  "id": "cn.vastplan.foundation.security.bootstrap-policy",
+  "name": "VastPlan 自举权限基线",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "在全局设置服务启动前提供本地、无状态、默认拒绝的最小权限基线",
+  "engines": { "backend": "^0.1" },
+
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": { "required": ["caller", "authorization.admin"], "optional": ["scope.tenant", "scene", "subject.id", "authorization.roles", "trace", "request.deadline", "propagation.callPath"] },
+
+  "runtime": {
+    "instancePolicy": "per-kernel",
+    "stateModel": "local-ephemeral",
+    "visibility": "local",
+    "routing": "direct"
+  },
+
+  "execution": {
+    "backend": {
+      "driver": "native",
+      "minimumIsolation": "trusted-process",
+      "dynamicGo": {
+        "entry": "backend/bootstrap-policy.so",
+        "abi": "vastplan.dynamic-go.v1",
+        "required": true
+      }
+    }
+  },
+
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/bootstrap-policy" },
+
+  "contributes": {
+    "backend": {
+      "permissionCheckers": [
+        {
+          "id": "foundation.security.bootstrap-policy.write-guard",
+          "service_role": "backend",
+          "title": "系统设置写保护",
+          "priority": 1000000,
+          "applies": { "target": "platform.settings" }
+        },
+        {
+          "id": "foundation.security.bootstrap-policy.baseline",
+          "service_role": "backend",
+          "title": "系统设置自举权限基线",
+          "priority": -1000000,
+          "applies": { "target": "platform.settings" }
+        }
+      ]
+    }
+  }
+}

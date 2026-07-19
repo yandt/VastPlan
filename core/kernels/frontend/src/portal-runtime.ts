@@ -1,5 +1,5 @@
-import { message, pageSlotIDs, shellSlotIDs } from "@vastplan/portal-ui";
-import type { DesignSystemAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, ShellCompositionAdapter, ShellLayoutAdapter, UICapability } from "@vastplan/portal-ui";
+import { message, pageSlotIDs, shellSlotIDs } from "@vastplan/ui-primitives";
+import type { UIRenderAdapter, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, StructureCompositionAdapter, StructureLayoutAdapter, UICapability } from "@vastplan/ui-primitives";
 
 export interface PluginRef {
   id: string;
@@ -7,12 +7,12 @@ export interface PluginRef {
   channel?: string;
 }
 
-export interface DesignSystemSelection extends PluginRef {
+export interface RenderAdapterSelection extends PluginRef {
   uiContract: string;
 }
 
-export interface ShellCompositionSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
-export interface ShellLayoutSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
+export interface StructureCompositionSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
+export interface StructureLayoutSelection extends PluginRef { uiContract: string; config?: Record<string, unknown>; }
 
 export interface PortalSpec {
   revision: number;
@@ -21,9 +21,9 @@ export interface PortalSpec {
   route: string;
   branding?: Record<string, unknown>;
   localization?: PortalLocalizationPolicy;
-  designSystem: DesignSystemSelection;
-  composition: ShellCompositionSelection;
-  layout: ShellLayoutSelection;
+  renderAdapter: RenderAdapterSelection;
+  structureComposition: StructureCompositionSelection;
+  structureLayout: StructureLayoutSelection;
   plugins: readonly PluginRef[];
   management: {
     tenantId: string;
@@ -56,9 +56,9 @@ export interface RemoteProvenance {
 
 export interface FrontendPluginModule {
   provenance: RemoteProvenance;
-  designSystem?: DesignSystemAdapter;
-  composition?: ShellCompositionAdapter;
-  layout?: ShellLayoutAdapter;
+  renderAdapter?: UIRenderAdapter;
+  structureComposition?: StructureCompositionAdapter;
+  structureLayout?: StructureLayoutAdapter;
   register?(context: FrontendPluginContext): void | Promise<void>;
   hot?: FrontendPluginHotLifecycle;
   localization?: PluginLocalization;
@@ -70,9 +70,9 @@ export interface FrontendPluginLoader {
 
 export interface PreparedPortal {
   portal: Readonly<PortalSpec>;
-  designSystem: DesignSystemAdapter;
-  composition: ShellCompositionAdapter;
-  layout: ShellLayoutAdapter;
+  renderAdapter: UIRenderAdapter;
+  structureComposition: StructureCompositionAdapter;
+  structureLayout: StructureLayoutAdapter;
   pages: readonly PortalRegisteredPage[];
   shellContributions: readonly PortalRegisteredShellContribution[];
   modules: readonly PreparedFrontendPlugin[];
@@ -116,33 +116,33 @@ export class PortalRuntime {
     // still applied in deterministic profile order after all bytes arrive.
     const loaded = await Promise.all(portal.plugins.map(async (ref) => ({ ref, module: await this.loader.load(ref) })));
     const modules = new Map(loaded.map((item) => [moduleKey(item.ref), item.module]));
-    const designSystemModule = requiredModule(modules, portal.designSystem);
-    this.assertTrustedFirstParty(designSystemModule, portal.designSystem.id);
-    const designSystem = designSystemModule.designSystem;
-    if (designSystem === undefined) {
-      throw new PortalAssemblyError("DESIGN_SYSTEM_MISSING", "指定插件没有 ui.design-system 贡献");
+    const renderAdapterModule = requiredModule(modules, portal.renderAdapter);
+    this.assertTrustedFirstParty(renderAdapterModule, portal.renderAdapter.id);
+    const renderAdapter = renderAdapterModule.renderAdapter;
+    if (renderAdapter === undefined) {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_MISSING", "指定插件没有 ui.render.adapter 贡献");
     }
-    if (designSystem.id !== "ui.design-system") {
-      throw new PortalAssemblyError("DESIGN_SYSTEM_INVALID", "设计系统贡献 ID 必须为 ui.design-system");
+    if (renderAdapter.id !== "ui.render.adapter") {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_INVALID", "设计系统贡献 ID 必须为 ui.render.adapter");
     }
-    if (!contractSatisfies(designSystem.uiContract, portal.designSystem.uiContract)) {
+    if (!contractSatisfies(renderAdapter.uiContract, portal.renderAdapter.uiContract)) {
       throw new PortalAssemblyError("UI_CONTRACT_INCOMPATIBLE", "设计系统与 Portal 的 UI 契约不兼容");
     }
-    const capabilities = new Set(designSystem.capabilities);
+    const capabilities = new Set(renderAdapter.capabilities);
     if (!requiredCapabilities.every((capability) => capabilities.has(capability))) {
       throw new PortalAssemblyError("DESIGN_SYSTEM_INCOMPLETE", "设计系统未实现 Portal 所需的全部 UI 能力");
     }
 
-    const compositionModule = requiredModule(modules, portal.composition);
-    this.assertTrustedFirstParty(compositionModule, portal.composition.id);
-    const composition = compositionModule.composition;
-    if (composition?.id !== "ui.shell-composition" || !contractSatisfies(composition.uiContract, portal.composition.uiContract)) {
+    const compositionModule = requiredModule(modules, portal.structureComposition);
+    this.assertTrustedFirstParty(compositionModule, portal.structureComposition.id);
+    const composition = compositionModule.structureComposition;
+    if (composition?.id !== "ui.structure.composition" || !contractSatisfies(composition.uiContract, portal.structureComposition.uiContract)) {
       throw new PortalAssemblyError("SHELL_COMPOSITION_INVALID", "Shell 组合插件缺失或 UI 契约不兼容");
     }
-    const layoutModule = requiredModule(modules, portal.layout);
-    this.assertTrustedFirstParty(layoutModule, portal.layout.id);
-    const layout = layoutModule.layout;
-    if (layout?.id !== "ui.shell-layout" || typeof layout.Shell !== "function" || !contractSatisfies(layout.uiContract, portal.layout.uiContract)) {
+    const layoutModule = requiredModule(modules, portal.structureLayout);
+    this.assertTrustedFirstParty(layoutModule, portal.structureLayout.id);
+    const layout = layoutModule.structureLayout;
+    if (layout?.id !== "ui.structure.layout" || typeof layout.Shell !== "function" || !contractSatisfies(layout.uiContract, portal.structureLayout.uiContract)) {
       throw new PortalAssemblyError("SHELL_LAYOUT_INVALID", "Shell 布局插件缺失或 UI 契约不兼容");
     }
 
@@ -168,12 +168,12 @@ export class PortalRuntime {
     }
 
     for (const ref of portal.plugins) {
-      if ([portal.designSystem, portal.composition, portal.layout].some((foundation) => samePlugin(ref, foundation))) {
+      if ([portal.renderAdapter, portal.structureComposition, portal.structureLayout].some((foundation) => samePlugin(ref, foundation))) {
         continue;
       }
       const plugin = requiredModule(modules, ref);
       this.assertTrustedFirstParty(plugin, ref.id);
-      if (plugin.designSystem !== undefined || plugin.composition !== undefined || plugin.layout !== undefined) {
+      if (plugin.renderAdapter !== undefined || plugin.structureComposition !== undefined || plugin.structureLayout !== undefined) {
         throw new PortalAssemblyError("SECOND_SHELL_FOUNDATION", "功能插件不能注册第二个设计系统、Shell 组合或布局");
       }
       const context: FrontendPluginContext = {
@@ -220,7 +220,7 @@ export class PortalRuntime {
       await plugin.register?.(context);
     }
     const preparedModules = portal.plugins.map((ref) => Object.freeze({ ref: Object.freeze({ ...ref }), module: requiredModule(modules, ref) }));
-    return Object.freeze({ portal: portalSnapshot, designSystem, composition, layout, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
+    return Object.freeze({ portal: portalSnapshot, renderAdapter, structureComposition: composition, structureLayout: layout, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
   }
 
   private validatePortalShape(portal: PortalSpec): void {
@@ -229,15 +229,15 @@ export class PortalRuntime {
     }
     if ((portal.branding !== undefined && !isJSONRecord(portal.branding)) ||
         (portal.localization !== undefined && !validLocalizationPolicy(portal.localization)) ||
-        (portal.composition.config !== undefined && !isJSONRecord(portal.composition.config)) ||
-        (portal.layout.config !== undefined && !isJSONRecord(portal.layout.config))) {
+        (portal.structureComposition.config !== undefined && !isJSONRecord(portal.structureComposition.config)) ||
+        (portal.structureLayout.config !== undefined && !isJSONRecord(portal.structureLayout.config))) {
       throw new PortalAssemblyError("PORTAL_INVALID", "Portal 品牌与 Shell 配置必须是 JSON 对象");
     }
     const refs = [portal.resolution.platformCatalog, portal.resolution.platformProfile, portal.resolution.applicationComposition];
     if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
       throw new PortalAssemblyError("RESOLUTION_INVALID", "Portal 输入解析锁无效");
     }
-    const foundations = [portal.designSystem, portal.composition, portal.layout];
+    const foundations = [portal.renderAdapter, portal.structureComposition, portal.structureLayout];
     if (new Set(foundations.map((item) => item.id)).size !== foundations.length || foundations.some((selected) => portal.plugins.filter((ref) => samePlugin(ref, selected)).length !== 1)) {
       throw new PortalAssemblyError("SHELL_FOUNDATION_SELECTION", "Portal 必须精确包含相互独立的设计系统、Shell 组合与布局插件");
     }
@@ -360,9 +360,9 @@ function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
     ...portal,
     branding: portal.branding === undefined ? undefined : freezeJSONRecord(portal.branding),
     localization: portal.localization === undefined ? undefined : Object.freeze({ defaultLocale: portal.localization.defaultLocale, supportedLocales: Object.freeze([...portal.localization.supportedLocales]) }),
-    designSystem: Object.freeze({ ...portal.designSystem }),
-    composition: Object.freeze({ ...portal.composition, config: portal.composition.config === undefined ? undefined : freezeJSONRecord(portal.composition.config) }),
-    layout: Object.freeze({ ...portal.layout, config: portal.layout.config === undefined ? undefined : freezeJSONRecord(portal.layout.config) }),
+    renderAdapter: Object.freeze({ ...portal.renderAdapter }),
+    structureComposition: Object.freeze({ ...portal.structureComposition, config: portal.structureComposition.config === undefined ? undefined : freezeJSONRecord(portal.structureComposition.config) }),
+    structureLayout: Object.freeze({ ...portal.structureLayout, config: portal.structureLayout.config === undefined ? undefined : freezeJSONRecord(portal.structureLayout.config) }),
     plugins: Object.freeze(portal.plugins.map((ref) => Object.freeze({ ...ref }))),
     management: Object.freeze({ ...portal.management, services: Object.freeze(services) }),
     resolution: Object.freeze({ ...portal.resolution, pluginOrigins: Object.freeze({ ...portal.resolution.pluginOrigins }) }),

@@ -65,18 +65,18 @@ func TestValidateDeploymentContractsBuildsRemoteDAGAndChecksVersion(t *testing.T
 
 func TestValidateDeploymentContractsRejectsForgedApplicationOrigin(t *testing.T) {
 	manifest := []byte(`{
-		"id":"com.vastplan.foundation.security.policy","name":"policy","description":"policy",
+		"id":"cn.vastplan.foundation.security.policy","name":"policy","description":"policy",
 		"version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
 		"contributes":{"backend":{"tools":[{"id":"platform.policy","service_role":"backend","title":"policy","subcommands":[]}]}}
 	}`)
-	reader := contractArtifactReader{"com.vastplan.foundation.security.policy@1.0.0": {
-		PluginID: "com.vastplan.foundation.security.policy", Version: "1.0.0", Channel: "stable", Manifest: manifest,
+	reader := contractArtifactReader{"cn.vastplan.foundation.security.policy@1.0.0": {
+		PluginID: "cn.vastplan.foundation.security.policy", Version: "1.0.0", Channel: "stable", Manifest: manifest,
 	}}
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "prod"},
-		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{"com.vastplan.foundation.security.policy": deploymentv2.OriginApplication}},
-		Units:      []deploymentv2.ServiceUnit{{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "com.vastplan.foundation.security.policy", Version: "1.0.0", Channel: "stable"}}}},
+		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{"cn.vastplan.foundation.security.policy": deploymentv2.OriginApplication}},
+		Units:      []deploymentv2.ServiceUnit{{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "cn.vastplan.foundation.security.policy", Version: "1.0.0", Channel: "stable"}}}},
 	}
 	if err := validateDeploymentContracts(deployment, map[string][]string{"api": nil}, reader); err == nil || !strings.Contains(err.Error(), "应用来源") {
 		t.Fatalf("Controller 必须拒绝伪造的平台插件应用来源: %v", err)
@@ -85,31 +85,31 @@ func TestValidateDeploymentContractsRejectsForgedApplicationOrigin(t *testing.T)
 
 func TestValidateDeploymentContractsAllowsLocalPermissionAuxiliary(t *testing.T) {
 	serviceManifest := []byte(`{
-		"id":"com.vastplan.platform.configuration.settings","name":"settings","description":"settings","version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
+		"id":"cn.vastplan.platform.configuration.settings","name":"settings","description":"settings","version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
 		"runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","routingDomain":"platform"},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
 		"contributes":{"backend":{"tools":[{"id":"platform.settings","service_role":"backend","title":"settings","subcommands":[]}]}}
 	}`)
 	policyManifest := []byte(`{
-		"id":"com.vastplan.foundation.security.platform-admin-access-policy","name":"policy","description":"policy","version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
+		"id":"cn.vastplan.foundation.security.platform-admin-access-policy","name":"policy","description":"policy","version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
 		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct"},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
 		"contributes":{"backend":{"permissionCheckers":[{"id":"platform.admin","service_role":"backend","title":"policy","priority":1000,"applies":{}}]}}
 	}`)
 	reader := contractArtifactReader{
-		"com.vastplan.platform.configuration.settings@1.0.0":                  {PluginID: "com.vastplan.platform.configuration.settings", Version: "1.0.0", Channel: "stable", Manifest: serviceManifest},
-		"com.vastplan.foundation.security.platform-admin-access-policy@1.0.0": {PluginID: "com.vastplan.foundation.security.platform-admin-access-policy", Version: "1.0.0", Channel: "stable", Manifest: policyManifest},
+		"cn.vastplan.platform.configuration.settings@1.0.0":                  {PluginID: "cn.vastplan.platform.configuration.settings", Version: "1.0.0", Channel: "stable", Manifest: serviceManifest},
+		"cn.vastplan.foundation.security.platform-admin-access-policy@1.0.0": {PluginID: "cn.vastplan.foundation.security.platform-admin-access-policy", Version: "1.0.0", Channel: "stable", Manifest: policyManifest},
 	}
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "platform"},
 		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{
-			"com.vastplan.platform.configuration.settings":                  deploymentv2.OriginPlatformProfile,
-			"com.vastplan.foundation.security.platform-admin-access-policy": deploymentv2.OriginPlatformProfile,
+			"cn.vastplan.platform.configuration.settings":                  deploymentv2.OriginPlatformProfile,
+			"cn.vastplan.foundation.security.platform-admin-access-policy": deploymentv2.OriginPlatformProfile,
 		}},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "settings", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "platform.settings",
 			InstancePolicy: "leader", StateModel: "leader-owned", Visibility: "cluster", Routing: "leader", RoutingDomain: "platform", Replicas: 1,
-			Plugins: []deploymentv1.PluginRef{{ID: "com.vastplan.platform.configuration.settings", Version: "1.0.0", Channel: "stable"}, {ID: "com.vastplan.foundation.security.platform-admin-access-policy", Version: "1.0.0", Channel: "stable"}},
+			Plugins: []deploymentv1.PluginRef{{ID: "cn.vastplan.platform.configuration.settings", Version: "1.0.0", Channel: "stable"}, {ID: "cn.vastplan.foundation.security.platform-admin-access-policy", Version: "1.0.0", Channel: "stable"}},
 		}},
 	}
 	if err := validateDeploymentContracts(deployment, map[string][]string{"settings": nil}, reader); err != nil {

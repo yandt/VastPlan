@@ -9,17 +9,17 @@
     "platform_profile": {
       "id": "local-backend",
       "revision": 1,
-      "digest": "1aafe7510bf136d0a6c26f4064463f98e270bd60eba419495ab54bb13543e36e"
+      "digest": "030e998fc45858996beaf469c0c35e38a14c07389e537f78eeb169e11a5c4adc"
     },
     "application_composition": {
       "id": "cluster-demo",
       "revision": 1,
-      "digest": "d280a808938ba21f71423d28618e7d6d5a8174a8a70de5edfa53498f7003bb88"
+      "digest": "1e58dd32e66344b0fe6557d9374872dbb7337336422fe2f889f87b93eb0944ec"
     },
     "development_mode": true,
     "plugin_origins": {
-      "com.vastplan.demo-permission": "platform-profile",
-      "com.vastplan.hello-world": "application"
+      "cn.vastplan.demo-permission": "platform-profile",
+      "cn.vastplan.hello-world": "application"
     }
   },
   "units": [
@@ -36,12 +36,12 @@
       },
       "plugins": [
         {
-          "id": "com.vastplan.demo-permission",
+          "id": "cn.vastplan.demo-permission",
           "version": "0.1.0",
           "channel": "stable"
         },
         {
-          "id": "com.vastplan.hello-world",
+          "id": "cn.vastplan.hello-world",
           "version": "0.1.0",
           "channel": "stable"
         }

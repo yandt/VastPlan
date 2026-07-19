@@ -126,13 +126,13 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 	if spec.Management.TenantID != tenantID || spec.Management.PortalID != spec.ID || spec.Management.PlatformProfile != spec.Resolution.PlatformProfile || compositioncommonv1.Digest(spec.Management) != spec.Resolution.ManagementBindingDigest {
 		return nil, errors.New("Portal 管理绑定与解析锁不一致")
 	}
-	if !pluginid.IsFirstPartyID(spec.DesignSystem.ID) {
+	if !pluginid.IsFirstPartyID(spec.RenderAdapter.ID) {
 		return nil, errors.New("Portal 设计系统必须是第一方插件")
 	}
-	if !pluginid.IsFirstPartyID(spec.Composition.ID) || !pluginid.IsFirstPartyID(spec.Layout.ID) {
+	if !pluginid.IsFirstPartyID(spec.StructureComposition.ID) || !pluginid.IsFirstPartyID(spec.StructureLayout.ID) {
 		return nil, errors.New("Portal Shell 组合与布局必须是第一方插件")
 	}
-	if spec.DesignSystem.ID == spec.Composition.ID || spec.DesignSystem.ID == spec.Layout.ID || spec.Composition.ID == spec.Layout.ID {
+	if spec.RenderAdapter.ID == spec.StructureComposition.ID || spec.RenderAdapter.ID == spec.StructureLayout.ID || spec.StructureComposition.ID == spec.StructureLayout.ID {
 		return nil, errors.New("Portal 设计系统、Shell 组合与布局必须来自独立插件")
 	}
 	seen := map[string]struct{}{}
@@ -172,68 +172,68 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		if class == pluginid.ManagementDevelopment {
 			return nil, fmt.Errorf("Portal v1 不允许开发插件 %s", ref.ID)
 		}
-		isSelectedDesignSystem := samePortalRef(ref, spec.DesignSystem.PluginRef)
-		isSelectedComposition := samePortalRef(ref, spec.Composition.PluginRef)
-		isSelectedLayout := samePortalRef(ref, spec.Layout.PluginRef)
+		isSelectedRenderAdapter := samePortalRef(ref, spec.RenderAdapter.PluginRef)
+		isSelectedComposition := samePortalRef(ref, spec.StructureComposition.PluginRef)
+		isSelectedLayout := samePortalRef(ref, spec.StructureLayout.PluginRef)
 		var frontendContributions struct {
-			DesignSystems     []json.RawMessage `json:"designSystems"`
-			ShellCompositions []json.RawMessage `json:"shellCompositions"`
-			ShellLayouts      []json.RawMessage `json:"shellLayouts"`
+			RenderAdapters        []json.RawMessage `json:"renderAdapters"`
+			StructureCompositions []json.RawMessage `json:"structureCompositions"`
+			StructureLayouts      []json.RawMessage `json:"structureLayouts"`
 		}
 		if err := json.Unmarshal(manifest.Contributes["frontend"], &frontendContributions); err != nil {
 			return nil, fmt.Errorf("解析插件 %s 前端贡献: %w", ref.ID, err)
 		}
-		if len(frontendContributions.DesignSystems) > 0 && !isSelectedDesignSystem {
+		if len(frontendContributions.RenderAdapters) > 0 && !isSelectedRenderAdapter {
 			return nil, fmt.Errorf("Portal 不允许第二个设计系统插件 %s", ref.ID)
 		}
-		if len(frontendContributions.ShellCompositions) > 0 && !isSelectedComposition {
+		if len(frontendContributions.StructureCompositions) > 0 && !isSelectedComposition {
 			return nil, fmt.Errorf("Portal 不允许第二个 Shell 组合插件 %s", ref.ID)
 		}
-		if len(frontendContributions.ShellLayouts) > 0 && !isSelectedLayout {
+		if len(frontendContributions.StructureLayouts) > 0 && !isSelectedLayout {
 			return nil, fmt.Errorf("Portal 不允许第二个 Shell 布局插件 %s", ref.ID)
 		}
-		if isSelectedDesignSystem {
+		if isSelectedRenderAdapter {
 			selected["design"] = manifest
 		}
 		if isSelectedComposition {
-			selected["composition"] = manifest
+			selected["structureComposition"] = manifest
 		}
 		if isSelectedLayout {
-			selected["layout"] = manifest
+			selected["structureLayout"] = manifest
 		}
 	}
 	if len(seen) != len(spec.Resolution.PluginOrigins) {
 		return nil, errors.New("Portal 解析来源包含未部署插件")
 	}
-	if spec.Resolution.PluginOrigins[spec.DesignSystem.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.Composition.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.Layout.ID] != compositioncommonv1.OriginPlatformProfile {
+	if spec.Resolution.PluginOrigins[spec.RenderAdapter.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.StructureComposition.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.StructureLayout.ID] != compositioncommonv1.OriginPlatformProfile {
 		return nil, errors.New("Portal 设计系统、Shell 组合与布局必须来自 Platform Profile")
 	}
-	if selected["design"].ID == "" || selected["composition"].ID == "" || selected["layout"].ID == "" {
+	if selected["design"].ID == "" || selected["structureComposition"].ID == "" || selected["structureLayout"].ID == "" {
 		return nil, errors.New("所选设计系统、Shell 组合或布局不在 Portal plugins 中")
 	}
 	var contribution struct {
-		DesignSystems []struct {
+		RenderAdapters []struct {
 			ID           string   `json:"id"`
 			UIContract   string   `json:"uiContract"`
 			Framework    string   `json:"framework"`
 			Capabilities []string `json:"capabilities"`
-		} `json:"designSystems"`
+		} `json:"renderAdapters"`
 	}
 	if err := json.Unmarshal(selected["design"].Contributes["frontend"], &contribution); err != nil {
 		return nil, fmt.Errorf("解析设计系统贡献: %w", err)
 	}
-	for _, ds := range contribution.DesignSystems {
-		if ds.ID == "ui.design-system" && ds.UIContract == spec.DesignSystem.UIContract && ds.Framework != "" && completeCapabilities(ds.Capabilities) {
-			if !hasShellFoundationContribution(selected["composition"], "shellCompositions", "ui.shell-composition", spec.Composition.UIContract) {
-				return nil, errors.New("Shell 组合插件未提供匹配的 ui.shell-composition 贡献")
+	for _, ds := range contribution.RenderAdapters {
+		if ds.ID == "ui.render.adapter" && ds.UIContract == spec.RenderAdapter.UIContract && ds.Framework != "" && completeCapabilities(ds.Capabilities) {
+			if !hasShellFoundationContribution(selected["structureComposition"], "structureCompositions", "ui.structure.composition", spec.StructureComposition.UIContract) {
+				return nil, errors.New("Shell 组合插件未提供匹配的 ui.structure.composition 贡献")
 			}
-			if !hasShellFoundationContribution(selected["layout"], "shellLayouts", "ui.shell-layout", spec.Layout.UIContract) {
-				return nil, errors.New("Shell 布局插件未提供匹配的 ui.shell-layout 贡献")
+			if !hasShellFoundationContribution(selected["structureLayout"], "structureLayouts", "ui.structure.layout", spec.StructureLayout.UIContract) {
+				return nil, errors.New("Shell 布局插件未提供匹配的 ui.structure.layout 贡献")
 			}
 			return verified, nil
 		}
 	}
-	return nil, errors.New("设计系统未提供匹配且完整的 ui.design-system 贡献")
+	return nil, errors.New("设计系统未提供匹配且完整的 ui.render.adapter 贡献")
 }
 
 func hasShellFoundationContribution(manifest pluginv1.Manifest, field, id, contract string) bool {

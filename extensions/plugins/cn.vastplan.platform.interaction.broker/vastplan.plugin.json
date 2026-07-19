@@ -1,0 +1,43 @@
+{
+  "id": "cn.vastplan.platform.interaction.broker",
+  "name": "VastPlan Interaction Broker",
+  "description": "持久化、授权并协调跨 Portal、Mobile 与 Runner 的人机交互",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1" },
+  "capabilities": { "kernelServices": ["kernel.config.get"], "credentials": [], "resources": [] },
+  "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "subject.id", "authorization.roles", "authorization.admin", "trace", "request.deadline", "propagation.callPath"] },
+  "runtime": {
+    "instancePolicy": "leader",
+    "stateModel": "leader-owned",
+    "visibility": "cluster",
+    "routing": "leader",
+    "routingDomain": "platform",
+    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.interaction-broker", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "state": { "backend": { "format": "cn.vastplan.platform.interaction-broker", "formatVersion": 1 } },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/interaction-broker" },
+  "contributes": {
+    "backend": {
+      "tools": [{
+        "id": "platform.interaction-broker",
+        "service_role": "backend",
+        "title": "跨端交互协调",
+        "subcommands": [
+          { "name": "open", "description": "创建交互任务" },
+          { "name": "list", "description": "列出当前用户可处理的交互" },
+          { "name": "get", "description": "读取交互任务状态" },
+          { "name": "watch", "description": "以更新游标等待交互状态变化" },
+          { "name": "present", "description": "标记交互已呈现" },
+          { "name": "respond", "description": "提交一次性终态响应" },
+          { "name": "cancel", "description": "取消来源侧交互任务" }
+        ]
+      }]
+    }
+  }
+}

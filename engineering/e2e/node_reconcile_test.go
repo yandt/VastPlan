@@ -45,8 +45,8 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/com.vastplan.demo-permission/backend", "extensions/plugins/com.vastplan.demo-permission/vastplan.plugin.json")
-	publishBuiltPlugin(t, repository, "./extensions/plugins/com.vastplan.hello-world/backend", "extensions/plugins/com.vastplan.hello-world/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
 	server := startE2ENATS(t)
 	admin, err := nats.Connect(server.ClientURL())
 	if err != nil {
@@ -89,8 +89,8 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 			ID: "backend-api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 2,
 			Placement: deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "com.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
-				{ID: "com.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},
 			},
 		}},
 	}
@@ -199,8 +199,8 @@ func TestNodeAgent_RuntimePublishesRealPluginToNATSMesh(t *testing.T) {
 	if err := runtime.Apply(context.Background(), nodeagent.RuntimeUnit{
 		ID: "backend-worker", Fingerprint: "mesh-e2e", ServiceRole: "backend",
 		Plugins: []nodeagent.InstalledPlugin{
-			{ID: "com.vastplan.demo-permission", Version: "0.1.0", EntryPath: buildPlugin(t, "./extensions/plugins/com.vastplan.demo-permission/backend")},
-			{ID: "com.vastplan.hello-world", Version: "0.1.0", EntryPath: buildPlugin(t, "./extensions/plugins/com.vastplan.hello-world/backend")},
+			{ID: "cn.vastplan.demo-permission", Version: "0.1.0", EntryPath: buildPlugin(t, "./extensions/plugins/cn.vastplan.demo-permission/backend")},
+			{ID: "cn.vastplan.hello-world", Version: "0.1.0", EntryPath: buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")},
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -228,8 +228,8 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/com.vastplan.demo-permission/backend", "extensions/plugins/com.vastplan.demo-permission/vastplan.plugin.json")
-	publishBuiltPlugin(t, repository, "./extensions/plugins/com.vastplan.hello-world/backend", "extensions/plugins/com.vastplan.hello-world/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
 	publishBrokenPlugin(t, repository)
 
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", func(format string, args ...any) { t.Logf("[runtime] "+format, args...) })
@@ -244,8 +244,8 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "com.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
-				{ID: "com.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},
 			},
 		}},
 	}
@@ -274,7 +274,7 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 		Version: 1, Revision: 2, Metadata: deploymentv1.Metadata{Name: "e2e"},
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
-			Plugins: []deploymentv1.PluginRef{{ID: "com.vastplan.broken", Version: "2.0.0", Channel: "stable"}},
+			Plugins: []deploymentv1.PluginRef{{ID: "cn.vastplan.broken", Version: "2.0.0", Channel: "stable"}},
 		}},
 	}
 	failed, err := reconciler.Reconcile(ctx, broken)
@@ -304,15 +304,15 @@ func TestNodeAgent_ProcessCrashTriggersImmediateRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/com.vastplan.demo-permission/backend", "extensions/plugins/com.vastplan.demo-permission/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
 	publishCrasherPlugin(t, repository)
 	desired := deploymentv1.DesiredState{
 		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "crash-recovery"},
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "com.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
-				{ID: "com.vastplan.fixture.crasher", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.fixture.crasher", Version: "0.1.0", Channel: "stable"},
 			},
 		}},
 	}
@@ -382,15 +382,15 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/com.vastplan.demo-permission/backend", "extensions/plugins/com.vastplan.demo-permission/vastplan.plugin.json")
-	publishBuiltPlugin(t, repository, "./extensions/plugins/com.vastplan.hello-world/backend", "extensions/plugins/com.vastplan.hello-world/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
 	desired := deploymentv1.DesiredState{
 		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "nats-e2e"},
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "com.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
-				{ID: "com.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},
 			},
 		}},
 	}
@@ -685,7 +685,7 @@ func publishBrokenPlugin(t *testing.T, repository *pluginservice.Repository) {
 	t.Helper()
 	dir := t.TempDir()
 	manifest := []byte(`{
-  "id":"com.vastplan.broken","name":"broken","description":"broken candidate",
+  "id":"cn.vastplan.broken","name":"broken","description":"broken candidate",
   "version":"2.0.0","publisher":"vastplan","engines":{"backend":"^0.1"},
   "activation":["onStartup"],"entry":{"backend":"backend/broken"},
   "contributes":{"backend":{"tools":[{"id":"broken.tool","service_role":"backend"}]}}
@@ -713,7 +713,7 @@ func publishCrasherPlugin(t *testing.T, repository *pluginservice.Repository) {
 	bin := buildPlugin(t, "./engineering/e2e/fixtures/plugins/crasher")
 	dir := t.TempDir()
 	manifest := []byte(`{
-  "id":"com.vastplan.fixture.crasher","name":"crasher","description":"crash recovery fixture",
+  "id":"cn.vastplan.fixture.crasher","name":"crasher","description":"crash recovery fixture",
   "version":"0.1.0","publisher":"vastplan","engines":{"backend":"^0.1"},
   "activation":["onStartup"],"entry":{"backend":"backend/crasher"},
   "contributes":{"backend":{"tools":[{"id":"fixture.crasher","service_role":"backend","title":"故意崩溃的夹具"}]}}

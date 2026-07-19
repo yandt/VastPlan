@@ -31,7 +31,7 @@ func TestPythonPlugin_CrossLanguageInvokeAndFeatureNegotiation(t *testing.T) {
 
 	host := newHost(t, "1.0.0")
 	allowAllPermissions(t, host)
-	manifestRaw, err := os.ReadFile(filepath.Join(root, "extensions/plugins/com.vastplan.python-hello/vastplan.plugin.json"))
+	manifestRaw, err := os.ReadFile(filepath.Join(root, "extensions/plugins/cn.vastplan.python-hello/vastplan.plugin.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,13 +47,13 @@ func TestPythonPlugin_CrossLanguageInvokeAndFeatureNegotiation(t *testing.T) {
 	defer cancel()
 	process, err := host.LaunchSpecWithPolicy(ctx, protocolbus.LaunchSpec{
 		Command: python,
-		Args:    []string{filepath.Join(root, "extensions/plugins/com.vastplan.python-hello/backend/main.py")},
+		Args:    []string{filepath.Join(root, "extensions/plugins/cn.vastplan.python-hello/backend/main.py")},
 		Dir:     root,
 		ExtraEnv: []string{
 			"PYTHONPATH=" + filepath.Join(root, "extensions/sdk/python"),
 		},
 	}, protocolbus.LaunchPolicy{
-		PluginID: "com.vastplan.python-hello", Version: "0.1.0", Contributions: contributions,
+		PluginID: "cn.vastplan.python-hello", Version: "0.1.0", Contributions: contributions,
 		RequiredFeatures: []string{protocol.FeatureCancellation, protocol.FeatureEventPublish},
 	})
 	if err != nil {

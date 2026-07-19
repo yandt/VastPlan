@@ -13,8 +13,8 @@
 ## 决策
 
 1. 新建 React + TypeScript + Module Federation 的 **Frontend Portal Kernel**。内核只保留浏览器安全启动壳、已签名制品选择与校验、前端插件生命周期、路由/Slot 隔离、身份上下文、故障恢复页和稳定 UI 契约；不保留任何具体 UI 框架或业务页面。
-2. UI 框架作为第一方 `foundation` 层前端插件管理。首个实现为 `com.vastplan.foundation.frontend.design-system.arco`，其后可按相同契约增加 `...design-system.mui` 等插件。设计系统插件提供主题、布局、菜单、弹窗、动态表单、数据展示、反馈和图标适配。
-3. 每个 Portal 组合必须精确选择一个 `ui.design-system` 贡献；同一 Portal 不允许并存多个设计系统。不同 Portal 可选择不同实现。普通前端插件只依赖 `@vastplan/portal-ui`，不得直接导入 Arco/MUI、修改全局 CSS、接管顶级路由或取得原始身份令牌。
+2. UI 框架作为第一方 `foundation` 层前端插件管理。首个实现为 `cn.vastplan.foundation.frontend.render.adapter.arco`，其后可按相同契约增加 `...design-system.mui` 等插件。设计系统插件提供主题、布局、菜单、弹窗、动态表单、数据展示、反馈和图标适配。
+3. 每个 Portal 组合必须精确选择一个 `ui.render.adapter` 贡献；同一 Portal 不允许并存多个设计系统。不同 Portal 可选择不同实现。普通前端插件只依赖 `@vastplan/ui-primitives`，不得直接导入 Arco/MUI、修改全局 CSS、接管顶级路由或取得原始身份令牌。
 4. 门户内核始终提供不依赖设计系统插件的最小加载、错误、恢复与“切回最后可用设计系统”页面。设计系统插件由签名种子/制品仓库取得；首期只加载已签名第一方插件。升级按候选校验、原子资产切换、浏览器刷新或回退完成，不尝试卸载已执行的 React 远程模块。
 5. 在线门户组合和系统配置使用版本化的 `Draft → PendingApproval → Approved → Published` 流程。提交人不得审批自己的变更；紧急 `system` 身份可 break-glass 发布，但必须给出原因并产生不可变审计事件。发布生成可回滚 revision，失败或未就绪的候选不得替换当前发布版本。
 6. Portal 与 Backend 的交互只能经稳定 Edge/BFF。BFF 验证会话、执行 CSRF 防护、向后端投影最小 Principal/角色，并调用已授权 capability；浏览器和前端远程插件不直接接触 NATS、内部服务地址或服务凭据。

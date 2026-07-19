@@ -14,7 +14,7 @@ import (
 
 func main() {
 	// engines 为空：未声明对 backend 内核的兼容范围
-	p := sdk.New("com.vastplan.fixture.no-engines", "0.1.0", map[string]string{})
+	p := sdk.New("cn.vastplan.fixture.no-engines", "0.1.0", map[string]string{})
 
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: "tool.package",

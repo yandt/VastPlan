@@ -47,7 +47,7 @@ func TestParseManifest_RejectsUnknownField(t *testing.T) {
 func TestParseManifest_BindsFirstPartyNamespaceToPublisher(t *testing.T) {
 	base := `{"id":%q,"name":"demo","description":"demo","version":"1.0.0","publisher":%q,"engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`
 	for name, values := range map[string][2]string{
-		"第三方抢占首方命名空间": {"com.vastplan.platform.security.fake", "example"},
+		"第三方抢占首方命名空间": {"cn.vastplan.platform.security.fake", "example"},
 		"首方使用外部命名空间":  {"com.example.platform.security.fake", "vastplan"},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -80,21 +80,21 @@ func TestParseManifest_LicenseFieldsArePaired(t *testing.T) {
 	}
 }
 
-func TestParseManifest_DesignSystemContributionIsClosedAndComplete(t *testing.T) {
+func TestParseManifest_RenderAdapterContributionIsClosedAndComplete(t *testing.T) {
 	base := `{
-  "id":"com.vastplan.foundation.frontend.design-system.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan",
+  "id":"cn.vastplan.foundation.frontend.render.adapter.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan",
   "engines":{"frontend":"^1.0"},"activation":["onStartup"],"entry":{"frontend":"frontend/remoteEntry.js"},
-  "contributes":{"frontend":{"designSystems":[%s]}}
+  "contributes":{"frontend":{"renderAdapters":[%s]}}
 }`
-	valid := `{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme","navigation"]}`
+	valid := `{"id":"ui.render.adapter","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme","navigation"]}`
 	if _, err := ParseManifest([]byte(fmt.Sprintf(base, valid))); err != nil {
 		t.Fatalf("完整的设计系统贡献应通过校验: %v", err)
 	}
-	missing := `{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback"]}`
+	missing := `{"id":"ui.render.adapter","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback"]}`
 	if _, err := ParseManifest([]byte(fmt.Sprintf(base, missing))); err == nil {
 		t.Fatal("缺少基础 UI 能力的设计系统贡献必须被拒绝")
 	}
-	unknown := `{"id":"ui.design-system","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme"],"rawFrameworkToken":true}`
+	unknown := `{"id":"ui.render.adapter","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme"],"rawFrameworkToken":true}`
 	if _, err := ParseManifest([]byte(fmt.Sprintf(base, unknown))); err == nil {
 		t.Fatal("设计系统 descriptor 的未知字段必须被拒绝")
 	}
@@ -102,7 +102,7 @@ func TestParseManifest_DesignSystemContributionIsClosedAndComplete(t *testing.T)
 
 func TestParseManifest_CrossPlatformInteractionContributions(t *testing.T) {
 	base := `{
-  "id":"com.vastplan.foundation.mobile.native-shell","name":"native shell","description":"cross-platform interaction fixture","version":"1.0.0","publisher":"vastplan",
+  "id":"cn.vastplan.foundation.mobile.native-shell","name":"native shell","description":"cross-platform interaction fixture","version":"1.0.0","publisher":"vastplan",
   "engines":{"runner":"^1.0","mobile":"^1.0"},"activation":["onStartup"],"entry":{"runner":"runner/main","mobile":"mobile/main"},
   "contributes":{
     "runner":{"interactions":[{"id":"foundation.runner.interaction","interactionContract":"^1.0.0","kinds":["approval","form"],"allowedSurfaces":["frontend","mobile"]}]},

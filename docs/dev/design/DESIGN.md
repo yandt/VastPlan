@@ -14,7 +14,7 @@
 
 ## 2. 基础 Token
 
-UI Contract 2.0 暴露语义 token，适配器映射到具体框架。布局插件不得读取 Arco/MUI 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
+UI Contract 3.0 暴露语义 token，适配器映射到具体框架。布局插件不得读取 Arco/MUI 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
 
 | Token | 基线 | 用途 |
 |---|---:|---|

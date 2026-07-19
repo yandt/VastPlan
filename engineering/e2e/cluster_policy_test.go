@@ -12,9 +12,9 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"google.golang.org/protobuf/proto"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	addressing "cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
@@ -109,8 +109,8 @@ func TestProtocolRuntimeLeaderRollingUpgradeKeepsMonotonicFencing(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/com.vastplan.hello-world/backend", "extensions/plugins/com.vastplan.hello-world/vastplan.plugin.json")
-	artifact, packageBytes, err := repository.Read(pluginv1.ArtifactRef{PluginID: "com.vastplan.hello-world", Version: "0.1.0", Channel: "stable"})
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
+	artifact, packageBytes, err := repository.Read(pluginv1.ArtifactRef{PluginID: "cn.vastplan.hello-world", Version: "0.1.0", Channel: "stable"})
 	if err != nil {
 		t.Fatal(err)
 	}

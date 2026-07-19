@@ -47,39 +47,39 @@ type PluginRef struct {
 	Channel string `json:"channel,omitempty"`
 }
 
-type DesignSystem struct {
+type RenderAdapter struct {
 	PluginRef
 	UIContract string `json:"uiContract"`
 }
 
-type ShellComposition struct {
+type StructureComposition struct {
 	PluginRef
 	UIContract string                                 `json:"uiContract"`
 	Config     frontendcompositionv1.NavigationConfig `json:"config,omitempty"`
 }
 
-type ShellLayout struct {
+type StructureLayout struct {
 	PluginRef
 	UIContract string         `json:"uiContract"`
 	Config     map[string]any `json:"config,omitempty"`
 }
 
 type PortalSpec struct {
-	Revision     uint64                                   `json:"revision"`
-	ID           string                                   `json:"id"`
-	TenantID     string                                   `json:"tenantId"`
-	Route        string                                   `json:"route"`
-	Domains      []string                                 `json:"domains,omitempty"`
-	Audience     []string                                 `json:"audience,omitempty"`
-	Branding     map[string]any                           `json:"branding,omitempty"`
-	Localization frontendcompositionv1.LocalizationPolicy `json:"localization"`
-	DesignSystem DesignSystem                             `json:"designSystem"`
-	Composition  ShellComposition                         `json:"composition"`
-	Layout       ShellLayout                              `json:"layout"`
-	Plugins      []PluginRef                              `json:"plugins"`
-	Config       map[string]any                           `json:"config,omitempty"`
-	Management   frontendcompositionv1.PortalBinding      `json:"management"`
-	Resolution   Resolution                               `json:"resolution"`
+	Revision             uint64                                   `json:"revision"`
+	ID                   string                                   `json:"id"`
+	TenantID             string                                   `json:"tenantId"`
+	Route                string                                   `json:"route"`
+	Domains              []string                                 `json:"domains,omitempty"`
+	Audience             []string                                 `json:"audience,omitempty"`
+	Branding             map[string]any                           `json:"branding,omitempty"`
+	Localization         frontendcompositionv1.LocalizationPolicy `json:"localization"`
+	RenderAdapter        RenderAdapter                            `json:"renderAdapter"`
+	StructureComposition StructureComposition                     `json:"structureComposition"`
+	StructureLayout      StructureLayout                          `json:"structureLayout"`
+	Plugins              []PluginRef                              `json:"plugins"`
+	Config               map[string]any                           `json:"config,omitempty"`
+	Management           frontendcompositionv1.PortalBinding      `json:"management"`
+	Resolution           Resolution                               `json:"resolution"`
 }
 
 type ManagementTarget struct {

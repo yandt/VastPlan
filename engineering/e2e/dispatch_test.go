@@ -31,7 +31,7 @@ func launchAll(t *testing.T, host *protocolbus.Host, pkgDirs ...string) {
 // 这条最要紧：它防止"忘装权限插件"变成静默的全开放。
 func TestSelect_NoCheckerRegisteredDeniesEverything(t *testing.T) {
 	host := newHost(t, "0.1.0")
-	launchAll(t, host, "./extensions/plugins/com.vastplan.hello-world/backend") // 故意不装权限插件
+	launchAll(t, host, "./extensions/plugins/cn.vastplan.hello-world/backend") // 故意不装权限插件
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -52,8 +52,8 @@ func TestSelect_NoCheckerRegisteredDeniesEverything(t *testing.T) {
 func TestSelect_BaselineAllowsTrustedCaller(t *testing.T) {
 	host := newHost(t, "0.1.0")
 	launchAll(t, host,
-		"./extensions/plugins/com.vastplan.demo-permission/backend",
-		"./extensions/plugins/com.vastplan.hello-world/backend")
+		"./extensions/plugins/cn.vastplan.demo-permission/backend",
+		"./extensions/plugins/cn.vastplan.hello-world/backend")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -71,7 +71,7 @@ func TestSelect_BaselineAllowsTrustedCaller(t *testing.T) {
 // 这是 select「按 priority 高→低，第一个非 abstain 即定论」的实质。
 func TestSelect_HigherPriorityDenyWinsOverLowerPriorityAllow(t *testing.T) {
 	host := newHost(t, "0.1.0")
-	launchAll(t, host, "./extensions/plugins/com.vastplan.demo-permission/backend")
+	launchAll(t, host, "./extensions/plugins/cn.vastplan.demo-permission/backend")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -95,7 +95,7 @@ func TestSelect_HigherPriorityDenyWinsOverLowerPriorityAllow(t *testing.T) {
 // 高优先级弃权时应继续问下一个——abstain 不是结论。
 func TestSelect_AbstainFallsThroughToNextChecker(t *testing.T) {
 	host := newHost(t, "0.1.0")
-	launchAll(t, host, "./extensions/plugins/com.vastplan.demo-permission/backend")
+	launchAll(t, host, "./extensions/plugins/cn.vastplan.demo-permission/backend")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -116,7 +116,7 @@ func TestSelect_AbstainFallsThroughToNextChecker(t *testing.T) {
 // 全部校验器弃权 → fail-closed 拒绝。
 func TestSelect_AllAbstainIsFailClosed(t *testing.T) {
 	host := newHost(t, "0.1.0")
-	launchAll(t, host, "./extensions/plugins/com.vastplan.demo-permission/backend")
+	launchAll(t, host, "./extensions/plugins/cn.vastplan.demo-permission/backend")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -139,8 +139,8 @@ func TestSelect_AllAbstainIsFailClosed(t *testing.T) {
 func TestFanout_EventDeliveredToSubscribedSink(t *testing.T) {
 	host := newHost(t, "0.1.0")
 	launchAll(t, host,
-		"./extensions/plugins/com.vastplan.demo-permission/backend",
-		"./extensions/plugins/com.vastplan.demo-audit/backend")
+		"./extensions/plugins/cn.vastplan.demo-permission/backend",
+		"./extensions/plugins/cn.vastplan.demo-audit/backend")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -180,8 +180,8 @@ func TestFanout_EventDeliveredToSubscribedSink(t *testing.T) {
 func TestFanout_UnsubscribedEventTypeNotDelivered(t *testing.T) {
 	host := newHost(t, "0.1.0")
 	launchAll(t, host,
-		"./extensions/plugins/com.vastplan.demo-permission/backend",
-		"./extensions/plugins/com.vastplan.demo-audit/backend")
+		"./extensions/plugins/cn.vastplan.demo-permission/backend",
+		"./extensions/plugins/cn.vastplan.demo-audit/backend")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -220,9 +220,9 @@ func TestFanout_SubscribeGlobMatching(t *testing.T) {
 func TestHook_BeforeAbortsAndAfterMeters(t *testing.T) {
 	host := newHost(t, "0.1.0")
 	launchAll(t, host,
-		"./extensions/plugins/com.vastplan.demo-permission/backend",
-		"./extensions/plugins/com.vastplan.demo-quota/backend",
-		"./extensions/plugins/com.vastplan.hello-world/backend")
+		"./extensions/plugins/cn.vastplan.demo-permission/backend",
+		"./extensions/plugins/cn.vastplan.demo-quota/backend",
+		"./extensions/plugins/cn.vastplan.hello-world/backend")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

@@ -12,12 +12,12 @@ import (
 	"syscall"
 	"time"
 
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 func main() {
-	p := sdk.New("com.vastplan.fixture.crasher", "0.1.0", map[string]string{"backend": "^0.1"})
+	p := sdk.New("cn.vastplan.fixture.crasher", "0.1.0", map[string]string{"backend": "^0.1"})
 
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: "tool.package",

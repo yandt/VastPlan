@@ -43,7 +43,7 @@ func artifact(id, publisher string) pluginv1.Artifact {
 }
 
 func baseInputs() (backendcompositionv1.PlatformProfile, backendcompositionv1.ApplicationComposition, artifactReader) {
-	platformID := "com.vastplan.foundation.security.access-policy"
+	platformID := "cn.vastplan.foundation.security.access-policy"
 	applicationID := "com.example.agent"
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 2, ID: "backend-default"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend},
@@ -88,7 +88,7 @@ func TestResolveRejectsApplicationPlatformOverrideAndDevelopmentByDefault(t *tes
 	}
 
 	profile, application, reader = baseInputs()
-	developmentID := "com.vastplan.example.demo.hello"
+	developmentID := "cn.vastplan.example.demo.hello"
 	application.Units[0].Spec.Plugins = []deploymentv1.PluginRef{ref(developmentID)}
 	reader[developmentID+"@1.0.0/stable"] = artifact(developmentID, "vastplan")
 	if _, err := Resolve(profile, application, 1, reader, Options{}); err == nil || !strings.Contains(err.Error(), "开发插件") {
@@ -107,7 +107,7 @@ func TestResolveRejectsServiceClassAndUnitCollisions(t *testing.T) {
 	}
 
 	profile, application, reader = baseInputs()
-	platformServiceID := "com.vastplan.platform.settings.service"
+	platformServiceID := "cn.vastplan.platform.settings.service"
 	profile.Services = []deploymentv2.ServiceUnit{{ID: "api", Kind: "service", Plugins: []deploymentv1.PluginRef{ref(platformServiceID)}, Enabled: true, ServiceRole: "backend", Replicas: 1}}
 	reader[platformServiceID+"@1.0.0/stable"] = artifact(platformServiceID, "vastplan")
 	if _, err := Resolve(profile, application, 1, reader, Options{}); err == nil || !strings.Contains(err.Error(), "与应用 unit 冲突") {
@@ -126,9 +126,9 @@ func TestResolveRejectsPlatformPluginWithConflictingTopology(t *testing.T) {
 
 func TestResolveAllowsExactLocalPermissionPluginInMultiplePlatformServices(t *testing.T) {
 	profile, application, reader := baseInputs()
-	policyID := "com.vastplan.foundation.security.platform-admin-access-policy"
+	policyID := "cn.vastplan.foundation.security.platform-admin-access-policy"
 	policyManifest := []byte(`{
-		"id":"com.vastplan.foundation.security.platform-admin-access-policy","name":"policy","description":"policy",
+		"id":"cn.vastplan.foundation.security.platform-admin-access-policy","name":"policy","description":"policy",
 		"version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
 		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct"},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
@@ -159,7 +159,7 @@ func TestDeploySampleIsResolverOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	reader := artifactReader{}
-	for _, id := range []string{"com.vastplan.demo-permission", "com.vastplan.hello-world"} {
+	for _, id := range []string{"cn.vastplan.demo-permission", "cn.vastplan.hello-world"} {
 		raw, readErr := os.ReadFile(filepath.Join(root, "extensions", "plugins", id, "vastplan.plugin.json"))
 		if readErr != nil {
 			t.Fatal(readErr)

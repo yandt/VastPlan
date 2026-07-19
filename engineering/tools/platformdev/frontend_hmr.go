@@ -132,8 +132,8 @@ func (h *frontendHMR) sourceSignatures() (frontendSourceSignatures, error) {
 		"core/kernels/frontend/src",
 		"core/kernels/frontend/static",
 		"core/kernels/frontend/package.json",
-		"extensions/sdk/ts/portal-ui/src",
-		"extensions/sdk/ts/portal-ui/package.json",
+		"extensions/sdk/ts/ui-primitives/src",
+		"extensions/sdk/ts/ui-primitives/package.json",
 		"extensions/sdk/ts/ui-contract/src",
 		"extensions/sdk/ts/ui-contract/package.json",
 		"engineering/tools/build-frontend.sh",
@@ -295,7 +295,7 @@ func (h *frontendHMR) loadCandidate(manifestPath string) (frontendHMRCandidate, 
 	digests := make([]string, 0, len(manifest.Modules))
 	for _, item := range manifest.Modules {
 		relative, err := filepath.Rel(directory, item.File)
-		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || !strings.HasPrefix(item.ID, "com.vastplan.") || item.Entry != "frontend/dist/index.js" {
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || !strings.HasPrefix(item.ID, "cn.vastplan.") || item.Entry != "frontend/dist/index.js" {
 			return frontendHMRCandidate{}, fmt.Errorf("前端候选模块路径或身份无效: %s", item.ID)
 		}
 		content, err := os.ReadFile(item.File)

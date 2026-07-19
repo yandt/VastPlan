@@ -13,6 +13,6 @@ describe("framework-neutral locale contract", () => {
   it("keeps direction and message references independent from a UI framework", () => {
     expect(localeDirection("ar-EG")).toBe("rtl");
     expect(localeDirection("zh-CN")).toBe("ltr");
-    expect(message("com.vastplan.test", "welcome", "欢迎 {name}", { name: "Ada" })).toEqual({ namespace: "com.vastplan.test", key: "welcome", fallback: "欢迎 {name}", values: { name: "Ada" } });
+    expect(message("cn.vastplan.test", "welcome", "欢迎 {name}", { name: "Ada" })).toEqual({ namespace: "cn.vastplan.test", key: "welcome", fallback: "欢迎 {name}", values: { name: "Ada" } });
   });
 });

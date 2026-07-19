@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	FirstPartyPrefix    = "com.vastplan."
+	FirstPartyPrefix    = "cn.vastplan."
 	FirstPartyPublisher = "vastplan"
 )
 
@@ -49,10 +49,10 @@ func IsFirstPartyID(id string) bool { return strings.HasPrefix(id, FirstPartyPre
 // 命名空间所有权；制品签名和完整性仍由制品信任链负责。
 func ValidatePublisherOwnership(id, publisher string) error {
 	if IsFirstPartyID(id) && publisher != FirstPartyPublisher {
-		return errors.New("com.vastplan 插件命名空间只允许 publisher=vastplan")
+		return errors.New("cn.vastplan 插件命名空间只允许 publisher=vastplan")
 	}
 	if publisher == FirstPartyPublisher && !IsFirstPartyID(id) {
-		return errors.New("publisher=vastplan 必须使用 com.vastplan 插件命名空间")
+		return errors.New("publisher=vastplan 必须使用 cn.vastplan 插件命名空间")
 	}
 	return nil
 }
@@ -83,7 +83,7 @@ func ClassifyManagement(id, publisher string) (ManagementClass, error) {
 	}
 }
 
-// Namespace 把 com.vastplan.<layer>.<category...>.<component> 拆成机器可判定字段。
+// Namespace 把 cn.vastplan.<layer>.<category...>.<component> 拆成机器可判定字段。
 // Categories 至少包含一级，既可表达 security 等大功能域，也可继续细分为
 // data.relational 等子域；最后一段始终是具体组件名。
 type Namespace struct {
@@ -96,11 +96,11 @@ type Namespace struct {
 // Schema 读取，但不会被本函数误判成已分类的生产插件。
 func ParseFirstParty(id string) (Namespace, error) {
 	if !IsFirstPartyID(id) {
-		return Namespace{}, errors.New("不是 com.vastplan 首方插件命名空间")
+		return Namespace{}, errors.New("不是 cn.vastplan 首方插件命名空间")
 	}
 	parts := strings.Split(id, ".")
-	if len(parts) < 5 || parts[0] != "com" || parts[1] != "vastplan" {
-		return Namespace{}, errors.New("首方插件 ID 必须使用 com.vastplan.<layer>.<category...>.<component>")
+	if len(parts) < 5 || parts[0] != "cn" || parts[1] != "vastplan" {
+		return Namespace{}, errors.New("首方插件 ID 必须使用 cn.vastplan.<layer>.<category...>.<component>")
 	}
 	layer := Layer(parts[2])
 	if _, ok := layers[layer]; !ok {
@@ -130,7 +130,7 @@ func (n Namespace) Domain() string {
 func (n Namespace) CategoryPath() string { return strings.Join(n.Categories, ".") }
 
 // IsPlatformBootstrapReader 表示该首方插件是否属于允许读取系统设置的基础层。
-// 这里只做功能分类；com.vastplan 命名空间所有权由 Manifest 发布者绑定强制。
+// 这里只做功能分类；cn.vastplan 命名空间所有权由 Manifest 发布者绑定强制。
 func (n Namespace) IsPlatformBootstrapReader() bool {
 	return n.Layer == LayerFoundation || n.Layer == LayerPlatform
 }

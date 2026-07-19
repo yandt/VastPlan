@@ -12,7 +12,7 @@
 
 ## 决策
 
-1. Portal Shell 构建为独立静态目录，不编译进 Backend Go 二进制。`build-frontend.sh` 生成 `index.html`、Portal Kernel 和 `react/react-dom/@vastplan/portal-ui/@vastplan/ui-contract` 单例 vendor ESM；插件 ESM 仍进入各自签名插件包。
+1. Portal Shell 构建为独立静态目录，不编译进 Backend Go 二进制。`build-frontend.sh` 生成 `index.html`、Portal Kernel 和 `react/react-dom/@vastplan/ui-primitives/@vastplan/ui-contract` 单例 vendor ESM；插件 ESM 仍进入各自签名插件包。
 2. 首期由 Portal Edge 通过必填 `-portal-assets` 提供静态目录。目录在启动时一次性读取到有界内存，只接受普通文件，拒绝符号链接、目录列表、超量文件和超量字节；运行期间磁盘替换不会改变已启动进程提供的内容。
 3. `/v1` 与所有未知 `/v1/*` 永不回落到 SPA。`/assets/*` 只读取启动时登记的精确文件；其他 GET/HEAD 路径返回 `index.html` 以支持客户端路由。
 4. `index.html` 必须包含构建时 nonce 占位符。Edge 每次响应生成随机 nonce 并施加 CSP：脚本只允许同源、该 nonce 与 Loader 所需的 `blob:`；禁止 object、frame ancestor、worker 和非同源连接。Arco/React 当前使用 style 属性和运行时 style 元素，因此 `style-src` 暂时保留 `'unsafe-inline'`，但不得把该例外扩到 `script-src`。静态文件带 `nosniff`、同源资源策略与内容 ETag。

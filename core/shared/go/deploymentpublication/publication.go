@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	DeploymentManagerPluginID = "com.vastplan.platform.infrastructure.deployment-manager"
+	DeploymentManagerPluginID = "cn.vastplan.platform.infrastructure.deployment-manager"
 	KernelTargetsService      = "kernel.deployment.targets"
 	KernelPreviewService      = "kernel.deployment.preview"
 	KernelPublishService      = "kernel.deployment.publish"

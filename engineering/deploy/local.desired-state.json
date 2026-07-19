@@ -10,12 +10,12 @@
       "kind": "service",
       "plugins": [
         {
-          "id": "com.vastplan.demo-permission",
+          "id": "cn.vastplan.demo-permission",
           "version": "0.1.0",
           "channel": "stable"
         },
         {
-          "id": "com.vastplan.hello-world",
+          "id": "cn.vastplan.hello-world",
           "version": "0.1.0",
           "channel": "stable"
         }

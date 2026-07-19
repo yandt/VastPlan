@@ -97,13 +97,13 @@ Backend 默认用独立进程运行所有插件。内嵌是独立的部署策略
 ```text
 -plugin-placement-default=process-only
 -publisher-plugin-placements=vastplan=prefer-dynamic-go
--plugin-placements=com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go
+-plugin-placements=cn.vastplan.foundation.security.bootstrap-policy=require-dynamic-go
 ```
 
 规则优先级为“插件 > 发布者 > 全局”，可选值为 `process-only`、
 `prefer-dynamic-go`、`require-dynamic-go`。
 生产建议保持全局 `process-only`，逐插件启用；发布者级规则适合已经完成统一评审的封闭
-发布物。只有 `publisher=vastplan + com.vastplan.*` 首方硬身份、精确 ID/版本、验签贡献
+发布物。只有 `publisher=vastplan + cn.vastplan.*` 首方硬身份、精确 ID/版本、验签贡献
 清单和 `trusted-process` 隔离下限同时满足时才会内嵌。
 
 `prefer-dynamic-go` 在 dynamic-go 不可用时回退独立进程；`require-dynamic-go` 不允许回退。

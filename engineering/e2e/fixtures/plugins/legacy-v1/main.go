@@ -39,7 +39,7 @@ func serve() error {
 	ack, err := client.Handshake(ctx, &pluginhostv1.Hello{
 		ProtoVersions: []int32{1},
 		Magic:         protocol.MagicCookie,
-		PluginId:      "com.vastplan.fixture.legacy-v1",
+		PluginId:      "cn.vastplan.fixture.legacy-v1",
 		PluginVersion: "0.1.0",
 		Engines:       map[string]string{"backend": ">=0.1.0 <2.0.0"},
 		LaunchToken:   os.Getenv(protocol.LaunchTokenEnvKey),

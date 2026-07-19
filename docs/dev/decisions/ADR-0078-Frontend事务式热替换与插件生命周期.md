@@ -58,12 +58,12 @@ Frontend Kernel 增加事务式 Portal Generation（Portal 运行代）和可选
 
 ## 补充决策：共享宿主依赖采用第二级热替换
 
-插件模块把 `react`、`@vastplan/portal-ui` 和 `@vastplan/ui-contract` 视为宿主单例。只重建插件而继续运行旧 vendor，会使新模块请求旧宿主不存在的命名导出，并在 ESM 链接阶段失败；此时事务式 Portal Generation 尚未创建，无法靠候选回滚处理。
+插件模块把 `react`、`@vastplan/ui-primitives` 和 `@vastplan/ui-contract` 视为宿主单例。只重建插件而继续运行旧 vendor，会使新模块请求旧宿主不存在的命名导出，并在 ESM 链接阶段失败；此时事务式 Portal Generation 尚未创建，无法靠候选回滚处理。
 
 开发编排器因此维护两类独立源码签名并采用两级更新：
 
 1. 仅插件及会被插件内联的 SDK 变化时，继续执行无页面 reload 的事务式 Generation 替换。
-2. Portal Kernel、静态宿主、`portal-ui`、`ui-contract`、vendor 构建入口或依赖锁变化时，同时构建完整宿主候选与插件候选；两者全部验证成功后，在同一提交点切换内存静态资源和开发模块集合，并发布 `reload` 事件。
+2. Portal Kernel、静态宿主、`ui-primitives`、`ui-contract`、vendor 构建入口或依赖锁变化时，同时构建完整宿主候选与插件候选；两者全部验证成功后，在同一提交点切换内存静态资源和开发模块集合，并发布 `reload` 事件。
 3. 开发网关在热加载模式下直接服务当前内存宿主快照，不能继续依赖 Portal Edge 启动时读取的旧静态资源。API 仍转发给 Portal Edge，生产交付链路不变。
 4. 旧页面收到宿主级 `reload` 后不得先消费新插件 Generation；它应关闭开发事件源并整页刷新，使 import map、Portal Kernel、共享 vendor 与插件模块来自同一候选。
 

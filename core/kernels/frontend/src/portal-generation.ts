@@ -1,4 +1,4 @@
-import type { FrontendPluginLifecycleContext, JSONValue } from "@vastplan/portal-ui";
+import type { FrontendPluginLifecycleContext, JSONValue } from "@vastplan/ui-primitives";
 import { VerifiedFrontendPluginLoader, type ModuleDescriptorPolicy, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
 import { PortalRuntime, type PreparedFrontendPlugin, type PreparedPortal } from "./portal-runtime";
 

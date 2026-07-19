@@ -20,12 +20,12 @@ importers:
 
   core/kernels/frontend:
     dependencies:
-      '@vastplan/portal-ui':
-        specifier: workspace:*
-        version: link:../../../extensions/sdk/ts/portal-ui
       '@vastplan/ui-contract':
         specifier: workspace:*
         version: link:../../../extensions/sdk/ts/ui-contract
+      '@vastplan/ui-primitives':
+        specifier: workspace:*
+        version: link:../../../extensions/sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -46,26 +46,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  extensions/plugins/com.vastplan.foundation.frontend.composition.standard/frontend:
-    dependencies:
-      '@vastplan/portal-ui':
-        specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
-    devDependencies:
-      '@types/react':
-        specifier: ^18.3.23
-        version: 18.3.31
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.7
-
-  extensions/plugins/com.vastplan.foundation.frontend.design-system.arco/frontend:
+  extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/frontend:
     dependencies:
       '@arco-design/web-react':
         specifier: ^2.66.0
@@ -76,9 +57,9 @@ importers:
       '@rjsf/utils':
         specifier: ^6.7.0
         version: 6.7.0(react@18.3.1)
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       json-schema-library:
         specifier: 11.6.1
         version: 11.6.1
@@ -102,7 +83,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  extensions/plugins/com.vastplan.foundation.frontend.design-system.mui/frontend:
+  extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.mui/frontend:
     dependencies:
       '@emotion/cache':
         specifier: ^11.14.0
@@ -122,9 +103,9 @@ importers:
       '@rjsf/validator-ajv8':
         specifier: ^6.7.0
         version: 6.7.0(@rjsf/utils@6.7.0(react@18.3.1))
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -145,11 +126,11 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  extensions/plugins/com.vastplan.foundation.frontend.layout.standard/frontend:
+  extensions/plugins/cn.vastplan.foundation.frontend.structure.composition.standard/frontend:
     dependencies:
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -164,11 +145,11 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  extensions/plugins/com.vastplan.foundation.frontend.layout.top-navigation/frontend:
+  extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.standard/frontend:
     dependencies:
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -183,14 +164,33 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  extensions/plugins/com.vastplan.platform.artifacts.repository/frontend:
+  extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.top-navigation/frontend:
+    dependencies:
+      '@vastplan/ui-primitives':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/ui-primitives
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+    devDependencies:
+      '@types/react':
+        specifier: ^18.3.23
+        version: 18.3.31
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7
+
+  extensions/plugins/cn.vastplan.platform.artifacts.repository/frontend:
     dependencies:
       '@vastplan/platform-admin':
         specifier: workspace:*
         version: link:../../../sdk/ts/platform-admin
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -202,14 +202,14 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  extensions/plugins/com.vastplan.platform.configuration.global-settings/frontend:
+  extensions/plugins/cn.vastplan.platform.configuration.global-settings/frontend:
     dependencies:
       '@vastplan/platform-admin':
         specifier: workspace:*
         version: link:../../../sdk/ts/platform-admin
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -221,11 +221,11 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  extensions/plugins/com.vastplan.platform.configuration.portal-composer/frontend:
+  extensions/plugins/cn.vastplan.platform.configuration.portal-composer/frontend:
     dependencies:
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -246,14 +246,14 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  extensions/plugins/com.vastplan.platform.data.relational.connection-manager/frontend:
+  extensions/plugins/cn.vastplan.platform.data.relational.connection-manager/frontend:
     dependencies:
       '@vastplan/platform-admin':
         specifier: workspace:*
         version: link:../../../sdk/ts/platform-admin
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -265,14 +265,14 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  extensions/plugins/com.vastplan.platform.infrastructure.deployment-manager/frontend:
+  extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/frontend:
     dependencies:
       '@vastplan/platform-admin':
         specifier: workspace:*
         version: link:../../../sdk/ts/platform-admin
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -287,14 +287,14 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  extensions/plugins/com.vastplan.platform.security.credentials/frontend:
+  extensions/plugins/cn.vastplan.platform.security.credentials/frontend:
     dependencies:
       '@vastplan/platform-admin':
         specifier: workspace:*
         version: link:../../../sdk/ts/platform-admin
-      '@vastplan/portal-ui':
+      '@vastplan/ui-primitives':
         specifier: workspace:*
-        version: link:../../../sdk/ts/portal-ui
+        version: link:../../../sdk/ts/ui-primitives
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -315,7 +315,16 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7
 
-  extensions/sdk/ts/portal-ui:
+  extensions/sdk/ts/ui-contract:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7
+
+  extensions/sdk/ts/ui-primitives:
     dependencies:
       '@vastplan/ui-contract':
         specifier: workspace:*
@@ -336,15 +345,6 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
-
-  extensions/sdk/ts/ui-contract:
-    devDependencies:
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.7
 
 packages:
 

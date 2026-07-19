@@ -13,15 +13,15 @@ import (
 
 func TestPlacementPolicyPrecedenceAndRejectsStaticModes(t *testing.T) {
 	policy, err := ParsePlacementPolicy("process-only", "vastplan=prefer-dynamic-go",
-		"com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go")
+		"cn.vastplan.foundation.security.bootstrap-policy=require-dynamic-go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	plugin := InstalledPlugin{ID: "com.vastplan.foundation.security.bootstrap-policy", Publisher: "vastplan"}
+	plugin := InstalledPlugin{ID: "cn.vastplan.foundation.security.bootstrap-policy", Publisher: "vastplan"}
 	if got := policy.modeFor(plugin); got != PlacementRequireDynamicGo {
 		t.Fatalf("插件级规则应优先，实际 %s", got)
 	}
-	plugin.ID = "com.vastplan.platform.settings"
+	plugin.ID = "cn.vastplan.platform.settings"
 	if got := policy.modeFor(plugin); got != PlacementPreferDynamicGo {
 		t.Fatalf("发布者级规则应次优先，实际 %s", got)
 	}
@@ -45,7 +45,7 @@ func (l *fakeDynamicGoLoader) Load(_, _, _, _ string) (protocolbus.EmbeddedPlugi
 
 func dynamicPlugin() InstalledPlugin {
 	return InstalledPlugin{
-		ID: "com.vastplan.foundation.test.dynamic", Publisher: "vastplan", Version: "1.0.0",
+		ID: "cn.vastplan.foundation.test.dynamic", Publisher: "vastplan", Version: "1.0.0",
 		DynamicGoPath: "/signed/content/plugin.so",
 		Execution: pluginv1.BackendExecution{MinimumIsolation: string(IsolationTrustedProcess),
 			DynamicGo: &pluginv1.DynamicGoExecution{Entry: "backend/plugin.so", ABI: protocolbus.DynamicGoABIV1,

@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	p := plugin.New("com.vastplan.fixture.migrator", "2.0.0", map[string]string{"backend": "^0.1 || ^1.0"})
+	p := plugin.New("cn.vastplan.fixture.migrator", "2.0.0", map[string]string{"backend": "^0.1 || ^1.0"})
 	p.OnMigration(func(_ context.Context, phase plugin.MigrationPhase, request plugin.MigrationRequest) error {
 		path := os.Getenv("VASTPLAN_MIGRATION_LOG")
 		if path == "" {

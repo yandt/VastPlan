@@ -57,7 +57,7 @@ func TestCopyTreeSkipsNodeModules(t *testing.T) {
 func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
 	source := t.TempDir()
 	manifest := []byte(`{
-  "id":"com.vastplan.foundation.test.dynamic","name":"dynamic","description":"dynamic","version":"1.0.0","publisher":"vastplan",
+  "id":"cn.vastplan.foundation.test.dynamic","name":"dynamic","description":"dynamic","version":"1.0.0","publisher":"vastplan",
   "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"native","minimumIsolation":"trusted-process",
     "dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1","required":true}}},
   "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
@@ -92,7 +92,7 @@ func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
 func TestStagePackageInjectsFrontendBundleAtManifestEntry(t *testing.T) {
 	source := t.TempDir()
 	manifest := []byte(`{
-  "id":"com.vastplan.product.test.frontend","name":"frontend","description":"frontend","version":"1.0.0","publisher":"vastplan",
+  "id":"cn.vastplan.product.test.frontend","name":"frontend","description":"frontend","version":"1.0.0","publisher":"vastplan",
   "engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/dist/index.js"},
   "contributes":{"frontend":{"views":[{"id":"test.frontend","title":"Test"}]}}
 }`)

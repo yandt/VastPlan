@@ -170,7 +170,7 @@ func TestArch_PluginsMustNotImportEachOther(t *testing.T) {
 		if !strings.HasPrefix(f.relPath, "extensions/plugins/") {
 			continue
 		}
-		// 本插件自身的目录，如 extensions/plugins/com.vastplan.hello-world
+		// 本插件自身的目录，如 extensions/plugins/cn.vastplan.hello-world
 		rel := strings.TrimPrefix(f.relPath, "extensions/plugins/")
 		parts := strings.SplitN(rel, "/", 2)
 		if len(parts) < 2 {

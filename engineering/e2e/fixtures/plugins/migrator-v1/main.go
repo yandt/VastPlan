@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	p := plugin.New("com.vastplan.fixture.migrator", "1.0.0", map[string]string{"backend": "^0.1 || ^1.0"})
+	p := plugin.New("cn.vastplan.fixture.migrator", "1.0.0", map[string]string{"backend": "^0.1 || ^1.0"})
 	if err := p.Serve(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

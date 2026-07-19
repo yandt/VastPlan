@@ -52,13 +52,13 @@ func TestParseReconcileOptionsSupportsPlacementPrecedence(t *testing.T) {
 		"-desired", "desired.json",
 		"-plugin-placement-default", "process-only",
 		"-publisher-plugin-placements", "vastplan=prefer-dynamic-go",
-		"-plugin-placements", "com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
+		"-plugin-placements", "cn.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if configured.placementPolicy.PublisherPolicies["vastplan"] != nodeagent.PlacementPreferDynamicGo ||
-		configured.placementPolicy.PluginPolicies["com.vastplan.foundation.security.bootstrap-policy"] != nodeagent.PlacementRequireDynamicGo {
+		configured.placementPolicy.PluginPolicies["cn.vastplan.foundation.security.bootstrap-policy"] != nodeagent.PlacementRequireDynamicGo {
 		t.Fatalf("放置策略未正确解析: %+v", configured.placementPolicy)
 	}
 }

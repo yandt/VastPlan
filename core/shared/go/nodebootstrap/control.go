@@ -13,7 +13,7 @@ import (
 const (
 	KernelService             = "kernel.node.bootstrap"
 	KernelReadinessService    = "kernel.node.readiness"
-	DeploymentManagerPluginID = "com.vastplan.platform.infrastructure.deployment-manager"
+	DeploymentManagerPluginID = "cn.vastplan.platform.infrastructure.deployment-manager"
 )
 
 var credentialNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$`)

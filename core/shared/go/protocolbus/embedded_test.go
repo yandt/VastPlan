@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	embeddedTestPlugin   = "com.vastplan.test.embedded"
+	embeddedTestPlugin   = "cn.vastplan.test.embedded"
 	embeddedTestTool     = "test.embedded.tool"
 	embeddedTestPolicyID = "test.embedded.allow"
 )

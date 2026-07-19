@@ -125,12 +125,12 @@ func toolTarget(capability, op string) *contractv1.CallTarget {
 
 func TestFirstPartyReferencePluginsSupportCurrentBackend(t *testing.T) {
 	plugins := []string{
-		"./extensions/plugins/com.vastplan.foundation.security.bootstrap-policy/backend",
-		"./extensions/plugins/com.vastplan.foundation.security.portal-access-policy/backend",
-		"./extensions/plugins/com.vastplan.demo-audit/backend",
-		"./extensions/plugins/com.vastplan.demo-permission/backend",
-		"./extensions/plugins/com.vastplan.demo-quota/backend",
-		"./extensions/plugins/com.vastplan.hello-world/backend",
+		"./extensions/plugins/cn.vastplan.foundation.security.bootstrap-policy/backend",
+		"./extensions/plugins/cn.vastplan.foundation.security.portal-access-policy/backend",
+		"./extensions/plugins/cn.vastplan.demo-audit/backend",
+		"./extensions/plugins/cn.vastplan.demo-permission/backend",
+		"./extensions/plugins/cn.vastplan.demo-quota/backend",
+		"./extensions/plugins/cn.vastplan.hello-world/backend",
 	}
 	for _, pluginPath := range plugins {
 		t.Run(filepath.Base(filepath.Dir(filepath.Dir(pluginPath))), func(t *testing.T) {
@@ -150,7 +150,7 @@ func TestFirstPartyReferencePluginsSupportCurrentBackend(t *testing.T) {
 }
 
 func TestBootstrapPolicy_RealProcessEnforcesSettingsBaseline(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/com.vastplan.foundation.security.bootstrap-policy/backend")
+	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.foundation.security.bootstrap-policy/backend")
 	host := newHost(t, "0.1.0")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -167,7 +167,7 @@ func TestBootstrapPolicy_RealProcessEnforcesSettingsBaseline(t *testing.T) {
 		Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "kernel",
 	}}
 	reader := &contractv1.CallContext{Caller: &contractv1.Caller{
-		Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "com.vastplan.platform.data.database",
+		Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.data.database",
 	}}
 	foreign := &contractv1.CallContext{Caller: &contractv1.Caller{
 		Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "com.example.integration.reader",
@@ -252,7 +252,7 @@ func TestPluginMigrationLifecycle_ThreePhaseAndMissingHandlerFailClosed(t *testi
 	if err := host.Close(process); err != nil {
 		t.Fatal(err)
 	}
-	plain, err := host.Launch(ctx, buildPlugin(t, "./extensions/plugins/com.vastplan.hello-world/backend"))
+	plain, err := host.Launch(ctx, buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,13 +275,13 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 		ID: "backend-main", Fingerprint: "v1", ServiceRole: "backend",
 		EnvironmentAllowlist: []string{"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"},
 		Plugins: []nodeagent.InstalledPlugin{{
-			ID: "com.vastplan.fixture.migrator", Version: "1.0.0", EntryPath: v1Bin,
+			ID: "cn.vastplan.fixture.migrator", Version: "1.0.0", EntryPath: v1Bin,
 		}},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	plan12 := nodeagent.StateMigrationPlan{
-		PluginID: "com.vastplan.fixture.migrator", TransactionID: "runtime-v1-v2",
+		PluginID: "cn.vastplan.fixture.migrator", TransactionID: "runtime-v1-v2",
 		From: nodeagent.PluginStateIdentity{Format: "com.example.state", FormatVersion: 1},
 		To:   nodeagent.PluginStateIdentity{Format: "com.example.state", FormatVersion: 2},
 	}
@@ -289,7 +289,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 		ID: "backend-main", Fingerprint: "v2", ServiceRole: "backend",
 		EnvironmentAllowlist: []string{"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"},
 		Plugins: []nodeagent.InstalledPlugin{{
-			ID: "com.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
+			ID: "cn.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
 		}},
 		Migrations: []nodeagent.StateMigrationPlan{plan12},
 	}); err != nil {
@@ -301,7 +301,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 
 	t.Setenv("VASTPLAN_MIGRATION_FAIL", "commit")
 	plan23 := nodeagent.StateMigrationPlan{
-		PluginID: "com.vastplan.fixture.migrator", TransactionID: "runtime-v2-v3",
+		PluginID: "cn.vastplan.fixture.migrator", TransactionID: "runtime-v2-v3",
 		From: nodeagent.PluginStateIdentity{Format: "com.example.state", FormatVersion: 2},
 		To:   nodeagent.PluginStateIdentity{Format: "com.example.state", FormatVersion: 3},
 	}
@@ -309,7 +309,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 		ID: "backend-main", Fingerprint: "v3", ServiceRole: "backend",
 		EnvironmentAllowlist: []string{"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"},
 		Plugins: []nodeagent.InstalledPlugin{{
-			ID: "com.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
+			ID: "cn.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
 		}},
 		Migrations: []nodeagent.StateMigrationPlan{plan23},
 	})
@@ -325,7 +325,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 		ID: "backend-main", Fingerprint: "v3-prepare-fails", ServiceRole: "backend",
 		EnvironmentAllowlist: []string{"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"},
 		Plugins: []nodeagent.InstalledPlugin{{
-			ID: "com.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
+			ID: "cn.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
 		}},
 		Migrations: []nodeagent.StateMigrationPlan{plan23},
 	})
@@ -352,7 +352,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 
 // 完整生命周期：拉起 → 回连 → 握手 → engines 校验 → 贡献注册 → 激活 → 调用 → 摘除。
 func TestPluginLifecycle_HappyPath(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/com.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
 	host := newHost(t, "0.1.0")  // 满足插件的 engines ^0.1
 	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 
@@ -370,8 +370,8 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 		t.Fatalf("装载插件失败: %v", err)
 	}
 
-	if p.PluginID != "com.vastplan.hello-world" {
-		t.Fatalf("插件 id = %q，期望 com.vastplan.hello-world", p.PluginID)
+	if p.PluginID != "cn.vastplan.hello-world" {
+		t.Fatalf("插件 id = %q，期望 cn.vastplan.hello-world", p.PluginID)
 	}
 	if p.SessionID == "" {
 		t.Fatal("宿主应签发会话票据")
@@ -410,7 +410,7 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 // 插件回调宿主（§2.4）：经 capability 寻址内核能力，且 CallContext 在反方向同样透传。
 // 这是 Channel 双向流的核心价值——插件能用内核服务，而不只是被动被调。
 func TestPluginHostCall_PluginCallsBackIntoKernel(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/com.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
 	host := newHost(t, "0.1.0")
 	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -445,14 +445,14 @@ func TestPluginHostCall_PluginCallsBackIntoKernel(t *testing.T) {
 	// 已认证 session 重建，不能让插件冒用原始 Agent 身份。
 	if got.HostReported["tenant"] != "acme" || got.HostReported["traceId"] != "trace-e2e" ||
 		got.HostReported["callerKind"] != "CALLER_KIND_PLUGIN" ||
-		got.HostReported["callerId"] != "com.vastplan.hello-world" {
+		got.HostReported["callerId"] != "cn.vastplan.hello-world" {
 		t.Fatalf("HostCall 信任边界裁剪错误，实际: %v", got.HostReported)
 	}
 }
 
 // 应用层错误须经 CallResult 返回，且与传输层错误严格区分（工程规范 §4.2）。
 func TestPluginInvoke_ApplicationErrorsAreNotTransportErrors(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/com.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
 	host := newHost(t, "0.1.0")
 	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -496,7 +496,7 @@ func TestPluginInvoke_ApplicationErrorsAreNotTransportErrors(t *testing.T) {
 
 // 未注册能力的解析必须失败（fail-closed）。
 func TestPluginInvoke_UnregisteredCapabilityRejected(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/com.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
 	host := newHost(t, "0.1.0")
 	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -518,7 +518,7 @@ func TestPluginInvoke_UnregisteredCapabilityRejected(t *testing.T) {
 // engines fail-closed：内核版本不满足插件声明范围时必须拒绝装载
 // （ADR-0017 §4 强制点 2）。这是版本机制的核心保障，必须由真实链路验证。
 func TestPluginLaunch_IncompatibleKernelVersionRejected(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/com.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
 	host := newHost(t, "0.2.0") // 插件要求 ^0.1，0.2.0 不满足
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

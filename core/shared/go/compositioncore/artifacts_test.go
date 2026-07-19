@@ -30,7 +30,7 @@ func testArtifact(id, publisher string) pluginv1.Artifact {
 }
 
 func TestVerifyRefEnforcesSharedOriginPolicy(t *testing.T) {
-	platformID := "com.vastplan.foundation.security.policy"
+	platformID := "cn.vastplan.foundation.security.policy"
 	reader := artifactReader{platformID + "@1.0.0/stable": testArtifact(platformID, "vastplan")}
 	ref := Selection{ID: platformID, Version: "1.0.0"}
 	if err := VerifyRef(ref, compositioncommonv1.OriginApplication, map[string]Selection{}, reader, Options{}); err == nil {

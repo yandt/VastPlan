@@ -25,8 +25,8 @@ func TestFrontendDeliveryPrefetchKeepsRuntimeDescriptorForSharedContent(t *testi
 	sha := hex.EncodeToString(digest[:])
 	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a"}
 	assets := []FrontendModuleAsset{
-		{Descriptor: portalapi.FrontendModule{PluginRef: portalapi.PluginRef{ID: "com.vastplan.one", Version: "1.0.0"}, SHA256: sha, PackageSHA256: strings.Repeat("a", 64)}, Content: content},
-		{Descriptor: portalapi.FrontendModule{PluginRef: portalapi.PluginRef{ID: "com.vastplan.two", Version: "1.0.0"}, SHA256: sha, PackageSHA256: strings.Repeat("b", 64)}, Content: content},
+		{Descriptor: portalapi.FrontendModule{PluginRef: portalapi.PluginRef{ID: "cn.vastplan.one", Version: "1.0.0"}, SHA256: sha, PackageSHA256: strings.Repeat("a", 64)}, Content: content},
+		{Descriptor: portalapi.FrontendModule{PluginRef: portalapi.PluginRef{ID: "cn.vastplan.two", Version: "1.0.0"}, SHA256: sha, PackageSHA256: strings.Repeat("b", 64)}, Content: content},
 	}
 	if err := origin.put("tenant-a", spec, assets); err != nil {
 		t.Fatal(err)

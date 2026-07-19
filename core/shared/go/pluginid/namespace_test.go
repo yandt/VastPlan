@@ -3,7 +3,7 @@ package pluginid
 import "testing"
 
 func TestParseFirstPartyClassifiesLayerDomainAndComponent(t *testing.T) {
-	namespace, err := ParseFirstParty("com.vastplan.foundation.security.bootstrap-policy")
+	namespace, err := ParseFirstParty("cn.vastplan.foundation.security.bootstrap-policy")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -16,7 +16,7 @@ func TestParseFirstPartyClassifiesLayerDomainAndComponent(t *testing.T) {
 }
 
 func TestParseFirstPartyPreservesMultiLevelFunctionalCategory(t *testing.T) {
-	namespace, err := ParseFirstParty("com.vastplan.platform.data.relational.connection-manager")
+	namespace, err := ParseFirstParty("cn.vastplan.platform.data.relational.connection-manager")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,8 +27,8 @@ func TestParseFirstPartyPreservesMultiLevelFunctionalCategory(t *testing.T) {
 
 func TestParseFirstPartyRejectsFlatUnknownAndForeignNamespaces(t *testing.T) {
 	for _, id := range []string{
-		"com.vastplan.bootstrap-policy",
-		"com.vastplan.unknown.security.policy",
+		"cn.vastplan.bootstrap-policy",
+		"cn.vastplan.unknown.security.policy",
 		"com.example.foundation.security.policy",
 	} {
 		if _, err := ParseFirstParty(id); err == nil {
@@ -39,14 +39,14 @@ func TestParseFirstPartyRejectsFlatUnknownAndForeignNamespaces(t *testing.T) {
 
 func TestValidatePublisherOwnershipBindsFirstPartyBothWays(t *testing.T) {
 	for _, pair := range [][2]string{
-		{"com.vastplan.platform.data.database", "example"},
+		{"cn.vastplan.platform.data.database", "example"},
 		{"com.example.platform.data.database", "vastplan"},
 	} {
 		if err := ValidatePublisherOwnership(pair[0], pair[1]); err == nil {
 			t.Fatalf("应拒绝命名空间与发布者不匹配: %q / %q", pair[0], pair[1])
 		}
 	}
-	if err := ValidatePublisherOwnership("com.vastplan.platform.data.database", "vastplan"); err != nil {
+	if err := ValidatePublisherOwnership("cn.vastplan.platform.data.database", "vastplan"); err != nil {
 		t.Fatalf("合法首方身份应通过: %v", err)
 	}
 }
@@ -57,12 +57,12 @@ func TestClassifyManagementUsesVerifiedIdentity(t *testing.T) {
 		publisher string
 		want      ManagementClass
 	}{
-		{"com.vastplan.foundation.security.bootstrap-policy", "vastplan", ManagementPlatform},
-		{"com.vastplan.platform.data.relational.connection-manager", "vastplan", ManagementPlatform},
-		{"com.vastplan.product.agent.designer", "vastplan", ManagementApplication},
-		{"com.vastplan.integration.database.postgresql", "vastplan", ManagementApplication},
-		{"com.vastplan.example.demo.hello-world", "vastplan", ManagementDevelopment},
-		{"com.vastplan.hello-world", "vastplan", ManagementDevelopment},
+		{"cn.vastplan.foundation.security.bootstrap-policy", "vastplan", ManagementPlatform},
+		{"cn.vastplan.platform.data.relational.connection-manager", "vastplan", ManagementPlatform},
+		{"cn.vastplan.product.agent.designer", "vastplan", ManagementApplication},
+		{"cn.vastplan.integration.database.postgresql", "vastplan", ManagementApplication},
+		{"cn.vastplan.example.demo.hello-world", "vastplan", ManagementDevelopment},
+		{"cn.vastplan.hello-world", "vastplan", ManagementDevelopment},
 		{"com.example.tool", "example", ManagementApplication},
 	}
 	for _, test := range tests {
@@ -74,7 +74,7 @@ func TestClassifyManagementUsesVerifiedIdentity(t *testing.T) {
 }
 
 func TestClassifyManagementRejectsPublisherNamespaceSpoofing(t *testing.T) {
-	if _, err := ClassifyManagement("com.vastplan.platform.security.policy", "attacker"); err == nil {
+	if _, err := ClassifyManagement("cn.vastplan.platform.security.policy", "attacker"); err == nil {
 		t.Fatal("首方命名空间冒用必须拒绝")
 	}
 	if _, err := ClassifyManagement("com.attacker.tool", "vastplan"); err == nil {

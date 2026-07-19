@@ -1,0 +1,15 @@
+{
+  "id": "cn.vastplan.foundation.frontend.structure.layout.standard",
+  "name": "VastPlan Standard Portal Layout",
+  "description": "为标准 Shell 组合模型提供企业管理门户视觉布局",
+  "version": "1.0.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "frontend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "activation": ["onPortalStartup"],
+  "entry": { "frontend": "frontend/dist/index.js" },
+  "contributes": { "frontend": { "structureLayouts": [{ "id": "ui.structure.layout", "title": "Standard Enterprise Layout", "uiContract": "^3.0.0" }] } }
+}

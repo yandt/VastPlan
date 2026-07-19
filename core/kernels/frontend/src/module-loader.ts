@@ -1,4 +1,4 @@
-import type { DesignSystemAdapter, FrontendPluginHotLifecycle, PluginLocalization, ShellCompositionAdapter, ShellLayoutAdapter } from "@vastplan/portal-ui";
+import type { UIRenderAdapter, FrontendPluginHotLifecycle, PluginLocalization, StructureCompositionAdapter, StructureLayoutAdapter } from "@vastplan/ui-primitives";
 import type { FrontendPluginLoader, FrontendPluginModule, PluginRef, PortalSpec } from "./portal-runtime";
 
 export interface FrontendModuleDescriptor extends PluginRef {
@@ -111,14 +111,14 @@ function normalizeModule(namespace: unknown, descriptor: FrontendModuleDescripto
   const provenance = { signed: true, firstParty: true, integrity: `sha256:${descriptor.sha256}` };
   const hot = normalizeHotLifecycle(exported.hot, descriptor.id);
   const localization = normalizeLocalizationExport(exported.localization, descriptor.id);
-  if (exported.id === "ui.design-system" && typeof exported.Provider === "function") {
-    return { provenance, designSystem: exported as unknown as DesignSystemAdapter, hot, localization };
+  if (exported.id === "ui.render.adapter" && typeof exported.Provider === "function") {
+    return { provenance, renderAdapter: exported as unknown as UIRenderAdapter, hot, localization };
   }
-  if (exported.id === "ui.shell-composition" && typeof exported.compose === "function") {
-    return { provenance, composition: exported as unknown as ShellCompositionAdapter, hot, localization };
+  if (exported.id === "ui.structure.composition" && typeof exported.compose === "function") {
+    return { provenance, structureComposition: exported as unknown as StructureCompositionAdapter, hot, localization };
   }
-  if (exported.id === "ui.shell-layout" && typeof exported.Shell === "function") {
-    return { provenance, layout: exported as unknown as ShellLayoutAdapter, hot, localization };
+  if (exported.id === "ui.structure.layout" && typeof exported.Shell === "function") {
+    return { provenance, structureLayout: exported as unknown as StructureLayoutAdapter, hot, localization };
   }
   if (typeof exported.register === "function") {
     return { provenance, register: exported.register.bind(exported) as FrontendPluginModule["register"], hot, localization };

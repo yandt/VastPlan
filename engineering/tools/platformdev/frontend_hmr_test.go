@@ -14,7 +14,7 @@ import (
 
 func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 	directory := t.TempDir()
-	modulePath := filepath.Join(directory, "com.vastplan.feature.js")
+	modulePath := filepath.Join(directory, "cn.vastplan.feature.js")
 	content := []byte(`export default { register() {} }`)
 	if err := os.WriteFile(modulePath, content, 0o600); err != nil {
 		t.Fatal(err)
@@ -22,7 +22,7 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 	digest := sha256.Sum256(content)
 	sha := hex.EncodeToString(digest[:])
 	manifestPath := filepath.Join(directory, "manifest.json")
-	manifest := map[string]any{"version": 1, "modules": []map[string]string{{"id": "com.vastplan.feature", "entry": "frontend/dist/index.js", "file": modulePath, "sha256": sha}}}
+	manifest := map[string]any{"version": 1, "modules": []map[string]string{{"id": "cn.vastplan.feature", "entry": "frontend/dist/index.js", "file": modulePath, "sha256": sha}}}
 	raw, _ := json.Marshal(manifest)
 	if err := os.WriteFile(manifestPath, raw, 0o600); err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"portal":  map[string]any{"revision": 7},
-			"modules": []map[string]any{{"id": "com.vastplan.feature", "version": "1.0.0", "entry": "frontend/dist/index.js", "url": "/v1/portal-modules/7/" + strings.Repeat("b", 64) + ".js", "sha256": strings.Repeat("b", 64), "packageSha256": strings.Repeat("c", 64)}},
+			"modules": []map[string]any{{"id": "cn.vastplan.feature", "version": "1.0.0", "entry": "frontend/dist/index.js", "url": "/v1/portal-modules/7/" + strings.Repeat("b", 64) + ".js", "sha256": strings.Repeat("b", 64), "packageSha256": strings.Repeat("c", 64)}},
 		})
 	}))
 	defer upstream.Close()
@@ -94,7 +94,7 @@ func TestFrontendHMRRejectsNonLoopbackAndEscapingManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(content)
-	manifest := map[string]any{"version": 1, "modules": []map[string]string{{"id": "com.vastplan.escape", "entry": "frontend/dist/index.js", "file": outside, "sha256": hex.EncodeToString(digest[:])}}}
+	manifest := map[string]any{"version": 1, "modules": []map[string]string{{"id": "cn.vastplan.escape", "entry": "frontend/dist/index.js", "file": outside, "sha256": hex.EncodeToString(digest[:])}}}
 	raw, _ := json.Marshal(manifest)
 	manifestPath := filepath.Join(directory, "manifest.json")
 	if err := os.WriteFile(manifestPath, raw, 0o600); err != nil {
@@ -108,18 +108,18 @@ func TestFrontendHMRRejectsNonLoopbackAndEscapingManifest(t *testing.T) {
 func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
-		"extensions/plugins/com.vastplan.feature/frontend/src/index.ts": "plugin-v1",
-		"extensions/sdk/ts/platform-admin/src/index.ts":                 "admin-v1",
-		"extensions/sdk/ts/platform-admin/package.json":                 "{}",
-		"core/kernels/frontend/src/browser.tsx":                         "host-v1",
-		"core/kernels/frontend/static/index.html":                       "host-v1",
-		"core/kernels/frontend/package.json":                            "{}",
-		"extensions/sdk/ts/portal-ui/src/index.ts":                      "portal-ui-v1",
-		"extensions/sdk/ts/portal-ui/package.json":                      "{}",
-		"extensions/sdk/ts/ui-contract/src/index.ts":                    "contract-v1",
-		"extensions/sdk/ts/ui-contract/package.json":                    "{}",
-		"engineering/tools/build-frontend.sh":                           "build-v1",
-		"engineering/tools/build-frontend-plugins.mjs":                  "build-v1",
+		"extensions/plugins/cn.vastplan.feature/frontend/src/index.ts": "plugin-v1",
+		"extensions/sdk/ts/platform-admin/src/index.ts":                "admin-v1",
+		"extensions/sdk/ts/platform-admin/package.json":                "{}",
+		"core/kernels/frontend/src/browser.tsx":                        "host-v1",
+		"core/kernels/frontend/static/index.html":                      "host-v1",
+		"core/kernels/frontend/package.json":                           "{}",
+		"extensions/sdk/ts/ui-primitives/src/index.ts":                     "ui-primitives-v1",
+		"extensions/sdk/ts/ui-primitives/package.json":                     "{}",
+		"extensions/sdk/ts/ui-contract/src/index.ts":                   "contract-v1",
+		"extensions/sdk/ts/ui-contract/package.json":                   "{}",
+		"engineering/tools/build-frontend.sh":                          "build-v1",
+		"engineering/tools/build-frontend-plugins.mjs":                 "build-v1",
 		"package.json":        "{}",
 		"pnpm-lock.yaml":      "lockfileVersion: 1",
 		"pnpm-workspace.yaml": "packages: []",
@@ -142,7 +142,7 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	write("extensions/plugins/com.vastplan.feature/frontend/src/index.ts", "plugin-v2")
+	write("extensions/plugins/cn.vastplan.feature/frontend/src/index.ts", "plugin-v2")
 	pluginChange, err := hmr.sourceSignatures()
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	if pluginChange.plugins == initial.plugins || pluginChange.host != initial.host {
 		t.Fatalf("plugin change signatures = %#v, initial = %#v", pluginChange, initial)
 	}
-	write("extensions/sdk/ts/portal-ui/src/index.ts", "portal-ui-v2")
+	write("extensions/sdk/ts/ui-primitives/src/index.ts", "ui-primitives-v2")
 	hostChange, err := hmr.sourceSignatures()
 	if err != nil {
 		t.Fatal(err)
@@ -168,7 +168,7 @@ func TestFrontendHMRCommitsHostAssetsAndModulesAsReload(t *testing.T) {
 		subscribers: map[chan frontendHMREvent]struct{}{updates: {}},
 		assets:      http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("old-vendor")) }),
 	}
-	module := frontendHMRModule{ID: "com.vastplan.feature", SHA256: strings.Repeat("a", 64), Bytes: []byte("new-plugin")}
+	module := frontendHMRModule{ID: "cn.vastplan.feature", SHA256: strings.Repeat("a", 64), Bytes: []byte("new-plugin")}
 	assets := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("new-vendor-with-message")) })
 	hmr.commitCandidate(frontendHMRCandidate{current: map[string]frontendHMRModule{module.ID: module}, digests: []string{module.SHA256}}, "reload", assets)
 
@@ -176,7 +176,7 @@ func TestFrontendHMRCommitsHostAssetsAndModulesAsReload(t *testing.T) {
 	if event.Name != "reload" {
 		t.Fatalf("event = %#v", event)
 	}
-	request := httptest.NewRequest(http.MethodGet, "/assets/vendor/portal-ui.js", nil)
+	request := httptest.NewRequest(http.MethodGet, "/assets/vendor/ui-primitives.js", nil)
 	response := httptest.NewRecorder()
 	hmr.portalAssets(response, request)
 	if response.Body.String() != "new-vendor-with-message" || string(hmr.objects[module.SHA256]) != "new-plugin" {

@@ -9,7 +9,7 @@ type catalog struct{}
 
 func (catalog) SupportsRunner(context.Context, PluginRef) (bool, error) { return true, nil }
 func TestValidateAndEligibility(t *testing.T) {
-	p := Profile{Version: 1, ID: "collector", Revision: 1, TenantID: "tenant-a", Runtime: "runner", Distribution: "self-update", Targets: []string{"darwin/arm64"}, AssignedTo: []string{"runner-a"}, Plugins: []PluginRef{{ID: "com.vastplan.collector", Version: "1.0.0"}}}
+	p := Profile{Version: 1, ID: "collector", Revision: 1, TenantID: "tenant-a", Runtime: "runner", Distribution: "self-update", Targets: []string{"darwin/arm64"}, AssignedTo: []string{"runner-a"}, Plugins: []PluginRef{{ID: "cn.vastplan.collector", Version: "1.0.0"}}}
 	if err := Validate(context.Background(), p, catalog{}); err != nil {
 		t.Fatal(err)
 	}

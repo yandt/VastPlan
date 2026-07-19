@@ -44,15 +44,15 @@ type PluginRef struct {
 	Channel string `json:"channel,omitempty"`
 }
 
-type DesignSystem struct {
+type RenderAdapter struct {
 	PluginRef
 	UIContract string `json:"uiContract"`
 }
 
-// ShellComposition fixes the platform-owned semantic page and slot topology.
-// It is deliberately separate from ShellLayout so changing CSS/layout cannot
+// StructureComposition fixes the platform-owned semantic page and slot topology.
+// It is deliberately separate from StructureLayout so changing CSS/layout cannot
 // silently rename or remove extension slots consumed by functional plugins.
-type ShellComposition struct {
+type StructureComposition struct {
 	PluginRef
 	UIContract string           `json:"uiContract"`
 	Config     NavigationConfig `json:"config,omitempty"`
@@ -71,10 +71,10 @@ type NavigationGroupDescriptor struct {
 	Order    int    `json:"order,omitempty"`
 }
 
-// ShellLayout selects the visual arrangement for an already normalized shell
+// StructureLayout selects the visual arrangement for an already normalized shell
 // composition. Config is layout-private, non-sensitive JSON owned by the
 // Platform Profile rather than an Application Composition.
-type ShellLayout struct {
+type StructureLayout struct {
 	PluginRef
 	UIContract string         `json:"uiContract"`
 	Config     map[string]any `json:"config,omitempty"`
@@ -92,13 +92,13 @@ type LocalizationPolicy struct {
 
 type PlatformProfile struct {
 	compositioncommonv1.Document
-	Target       compositioncommonv1.Target `json:"target"`
-	DesignSystem DesignSystem               `json:"designSystem"`
-	Composition  ShellComposition           `json:"composition"`
-	Layout       ShellLayout                `json:"layout"`
-	Localization *LocalizationPolicy        `json:"localization,omitempty"`
-	Plugins      []PluginRef                `json:"plugins"`
-	Security     SecurityPolicy             `json:"security,omitempty"`
+	Target               compositioncommonv1.Target `json:"target"`
+	RenderAdapter        RenderAdapter              `json:"renderAdapter"`
+	StructureComposition StructureComposition       `json:"structureComposition"`
+	StructureLayout      StructureLayout            `json:"structureLayout"`
+	Localization         *LocalizationPolicy        `json:"localization,omitempty"`
+	Plugins              []PluginRef                `json:"plugins"`
+	Security             SecurityPolicy             `json:"security,omitempty"`
 }
 
 type ApplicationComposition struct {
@@ -204,27 +204,27 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	if err != nil {
 		return PlatformProfile{}, err
 	}
-	value.DesignSystem.Channel = channel(value.DesignSystem.Channel)
-	value.Composition.Channel = channel(value.Composition.Channel)
-	value.Layout.Channel = channel(value.Layout.Channel)
-	if err := ValidateNavigationConfig(value.Composition.Config); err != nil {
+	value.RenderAdapter.Channel = channel(value.RenderAdapter.Channel)
+	value.StructureComposition.Channel = channel(value.StructureComposition.Channel)
+	value.StructureLayout.Channel = channel(value.StructureLayout.Channel)
+	if err := ValidateNavigationConfig(value.StructureComposition.Config); err != nil {
 		return PlatformProfile{}, err
 	}
 	if value.Localization != nil && !containsFold(value.Localization.SupportedLocales, value.Localization.DefaultLocale) {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile 默认语言必须包含在 supportedLocales 中")
 	}
-	if value.DesignSystem.ID == value.Composition.ID || value.DesignSystem.ID == value.Layout.ID || value.Composition.ID == value.Layout.ID {
+	if value.RenderAdapter.ID == value.StructureComposition.ID || value.RenderAdapter.ID == value.StructureLayout.ID || value.StructureComposition.ID == value.StructureLayout.ID {
 		return PlatformProfile{}, fmt.Errorf("设计系统、Shell 组合与布局必须由三个独立插件提供")
 	}
 	found := map[string]bool{}
 	for _, ref := range value.Plugins {
-		for _, selected := range []PluginRef{value.DesignSystem.PluginRef, value.Composition.PluginRef, value.Layout.PluginRef} {
+		for _, selected := range []PluginRef{value.RenderAdapter.PluginRef, value.StructureComposition.PluginRef, value.StructureLayout.PluginRef} {
 			if same(ref, selected) {
 				found[selected.ID] = true
 			}
 		}
 	}
-	if !found[value.DesignSystem.ID] || !found[value.Composition.ID] || !found[value.Layout.ID] {
+	if !found[value.RenderAdapter.ID] || !found[value.StructureComposition.ID] || !found[value.StructureLayout.ID] {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含设计系统、Shell 组合与布局插件")
 	}
 	return value, nil

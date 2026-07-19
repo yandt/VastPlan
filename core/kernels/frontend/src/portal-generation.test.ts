@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import type { FrontendPluginHotLifecycle } from "@vastplan/portal-ui";
+import type { FrontendPluginHotLifecycle } from "@vastplan/ui-primitives";
 import { PortalGenerationManager, type PortalGenerationDiagnostic } from "./portal-generation";
 import type { PortalRuntimeSpec } from "./module-loader";
 import type { FrontendPluginModule, PreparedPortal } from "./portal-runtime";
@@ -15,15 +15,15 @@ function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?
   });
   return {
     portal: { revision } as PreparedPortal["portal"],
-    designSystem: {} as PreparedPortal["designSystem"],
-    composition: {} as PreparedPortal["composition"],
-    layout: {} as PreparedPortal["layout"],
+    renderAdapter: {} as PreparedPortal["renderAdapter"],
+    structureComposition: {} as PreparedPortal["structureComposition"],
+    structureLayout: {} as PreparedPortal["structureLayout"],
     pages: [],
     shellContributions: [],
     messageCatalogs: {},
     modules: [
-      { ref: { id: "com.vastplan.feature", version: "1.0.0" }, module: module(hot) },
-      ...(secondHot === undefined ? [] : [{ ref: { id: "com.vastplan.second", version: "1.0.0" }, module: module(secondHot) }]),
+      { ref: { id: "cn.vastplan.feature", version: "1.0.0" }, module: module(hot) },
+      ...(secondHot === undefined ? [] : [{ ref: { id: "cn.vastplan.second", version: "1.0.0" }, module: module(secondHot) }]),
     ],
   };
 }
@@ -122,7 +122,7 @@ describe("PortalGenerationManager", () => {
 
     expect(manager.active).toBe(second);
     expect(diagnostics.map((item) => item.phase)).toEqual(["listener", "listener", "dispose"]);
-    expect(diagnostics[2]).toMatchObject({ pluginID: "com.vastplan.feature", generation: "generation-1" });
+    expect(diagnostics[2]).toMatchObject({ pluginID: "cn.vastplan.feature", generation: "generation-1" });
   });
 
   it("aborts and disposes the active generation on shutdown in reverse plugin order", async () => {

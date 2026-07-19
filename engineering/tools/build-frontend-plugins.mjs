@@ -15,21 +15,21 @@ const common = {
   legalComments: "none",
   minify: true,
   define: { "process.env.NODE_ENV": '"production"' },
-  external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/portal-ui", "@vastplan/ui-contract"],
+  external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/ui-primitives", "@vastplan/ui-contract"],
 };
 
 const plugins = [
-  ["com.vastplan.foundation.frontend.design-system.arco", { loader: { ".css": "text" } }],
-  ["com.vastplan.foundation.frontend.design-system.mui", {}],
-  ["com.vastplan.foundation.frontend.composition.standard", {}],
-  ["com.vastplan.foundation.frontend.layout.standard", {}],
-  ["com.vastplan.foundation.frontend.layout.top-navigation", {}],
-  ["com.vastplan.platform.configuration.portal-composer", {}],
-  ["com.vastplan.platform.configuration.global-settings", {}],
-  ["com.vastplan.platform.security.credentials", {}],
-  ["com.vastplan.platform.data.relational.connection-manager", {}],
-  ["com.vastplan.platform.artifacts.repository", {}],
-  ["com.vastplan.platform.infrastructure.deployment-manager", {}],
+  ["cn.vastplan.foundation.frontend.render.adapter.arco", { loader: { ".css": "text" } }],
+  ["cn.vastplan.foundation.frontend.render.adapter.mui", {}],
+  ["cn.vastplan.foundation.frontend.structure.composition.standard", {}],
+  ["cn.vastplan.foundation.frontend.structure.layout.standard", {}],
+  ["cn.vastplan.foundation.frontend.structure.layout.top-navigation", {}],
+  ["cn.vastplan.platform.configuration.portal-composer", {}],
+  ["cn.vastplan.platform.configuration.global-settings", {}],
+  ["cn.vastplan.platform.security.credentials", {}],
+  ["cn.vastplan.platform.data.relational.connection-manager", {}],
+  ["cn.vastplan.platform.artifacts.repository", {}],
+  ["cn.vastplan.platform.infrastructure.deployment-manager", {}],
 ];
 
 const modules = [];
@@ -41,10 +41,10 @@ for (const [id, options] of plugins) {
   await build({
     ...common,
     ...options,
-    entryPoints: [`extensions/plugins/${id}/frontend/src/index.${id === "com.vastplan.foundation.frontend.composition.standard" ? "ts" : "tsx"}`],
+    entryPoints: [`extensions/plugins/${id}/frontend/src/index.${id === "cn.vastplan.foundation.frontend.structure.composition.standard" ? "ts" : "tsx"}`],
     outfile,
   });
-  if (id === "com.vastplan.foundation.frontend.design-system.arco") {
+  if (id === "cn.vastplan.foundation.frontend.render.adapter.arco") {
     const result = spawnSync(process.execPath, ["engineering/tools/check-arco-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ARCO_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }

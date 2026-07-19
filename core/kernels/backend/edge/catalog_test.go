@@ -45,10 +45,10 @@ func (contentVerifier) Verify(_ context.Context, ref pluginv1.ArtifactRef, envel
 	return envelope.Artifact, nil
 }
 
-func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testing.T) {
+func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *testing.T) {
 	dir := t.TempDir()
-	module := []byte(`export default { id: "ui.design-system" };`)
-	manifest := `{"id":"com.vastplan.foundation.frontend.design-system.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"designSystems":[{"id":"ui.design-system","uiContract":"^2.0.0","framework":"test","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}]}}}`
+	module := []byte(`export default { id: "ui.render.adapter" };`)
+	manifest := `{"id":"cn.vastplan.foundation.frontend.render.adapter.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"renderAdapters":[{"id":"ui.render.adapter","uiContract":"^3.0.0","framework":"test","capabilities":["layout","menu","overlay","form","data","feedback","theme"]}]}}}`
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -67,8 +67,8 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 		t.Fatal(err)
 	}
 	source := catalogSource{artifact.PluginID + "@" + artifact.Version: {Artifact: artifact, PackageBytes: pkg}}
-	compositionArtifact, compositionPackage := packageFrontendFixture(t, `{"id":"com.vastplan.foundation.frontend.composition.test","name":"composition","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellCompositions":[{"id":"ui.shell-composition","uiContract":"^2.0.0"}]}}}`, []byte(`export default { id: "ui.shell-composition" };`))
-	layoutArtifact, layoutPackage := packageFrontendFixture(t, `{"id":"com.vastplan.foundation.frontend.layout.test","name":"layout","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellLayouts":[{"id":"ui.shell-layout","uiContract":"^2.0.0"}]}}}`, []byte(`export default { id: "ui.shell-layout" };`))
+	compositionArtifact, compositionPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.composition.test","name":"structureComposition","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"structureCompositions":[{"id":"ui.structure.composition","uiContract":"^3.0.0"}]}}}`, []byte(`export default { id: "ui.structure.composition" };`))
+	layoutArtifact, layoutPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.layout.test","name":"structureLayout","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"structureLayouts":[{"id":"ui.structure.layout","uiContract":"^3.0.0"}]}}}`, []byte(`export default { id: "ui.structure.layout" };`))
 	source[compositionArtifact.PluginID+"@"+compositionArtifact.Version] = artifacttrust.Envelope{Artifact: compositionArtifact, PackageBytes: compositionPackage}
 	source[layoutArtifact.PluginID+"@"+layoutArtifact.Version] = artifacttrust.Envelope{Artifact: layoutArtifact, PackageBytes: layoutPackage}
 	counted := &countingCatalogSource{catalogSource: source}
@@ -81,7 +81,7 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 	ref := portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version}
 	compositionRef := portalapi.PluginRef{ID: compositionArtifact.PluginID, Version: compositionArtifact.Version}
 	layoutRef := portalapi.PluginRef{ID: layoutArtifact.PluginID, Version: layoutArtifact.Version}
-	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", DesignSystem: portalapi.DesignSystem{PluginRef: ref, UIContract: "^2.0.0"}, Composition: portalapi.ShellComposition{PluginRef: compositionRef, UIContract: "^2.0.0"}, Layout: portalapi.ShellLayout{PluginRef: layoutRef, UIContract: "^2.0.0"}, Plugins: []portalapi.PluginRef{ref, compositionRef, layoutRef}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, compositionRef.ID: compositioncommonv1.OriginPlatformProfile, layoutRef.ID: compositioncommonv1.OriginPlatformProfile}}}
+	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", RenderAdapter: portalapi.RenderAdapter{PluginRef: ref, UIContract: "^3.0.0"}, StructureComposition: portalapi.StructureComposition{PluginRef: compositionRef, UIContract: "^3.0.0"}, StructureLayout: portalapi.StructureLayout{PluginRef: layoutRef, UIContract: "^3.0.0"}, Plugins: []portalapi.PluginRef{ref, compositionRef, layoutRef}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, compositionRef.ID: compositioncommonv1.OriginPlatformProfile, layoutRef.ID: compositioncommonv1.OriginPlatformProfile}}}
 	lockTestManagement(&spec)
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err != nil {
 		t.Fatalf("有效且已验证的设计系统应通过: %v", err)
@@ -129,7 +129,7 @@ func TestTrustedCatalogRequiresVerifiedFrontendDesignSystemContribution(t *testi
 		t.Fatal("应用输入选择 foundation 设计系统必须拒绝")
 	}
 	spec.Resolution.PluginOrigins[ref.ID] = compositioncommonv1.OriginPlatformProfile
-	spec.DesignSystem.UIContract = "^3.0.0"
+	spec.RenderAdapter.UIContract = "^4.0.0"
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {
 		t.Fatal("不兼容 UI 契约必须拒绝")
 	}

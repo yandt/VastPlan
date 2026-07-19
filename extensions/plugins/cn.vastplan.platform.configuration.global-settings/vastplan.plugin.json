@@ -1,0 +1,63 @@
+{
+  "id": "cn.vastplan.platform.configuration.global-settings",
+  "name": "VastPlan 全局设置服务",
+  "version": "0.2.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "提供租户隔离、版本化且可审计的全局平台设置；单活写入由 leader fencing 保证",
+  "engines": { "backend": "^0.1", "frontend": "^1.0" },
+  "capabilities": {
+    "kernelServices": ["kernel.config.get"],
+    "credentials": [],
+    "resources": []
+  },
+  "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "runtime": {
+    "instancePolicy": "leader",
+    "stateModel": "leader-owned",
+    "visibility": "cluster",
+    "routing": "leader",
+    "routingDomain": "platform",
+    "provides": [
+      {
+        "extensionPoint": "tool.package",
+        "capability": "platform.settings",
+        "visibility": "cluster",
+        "routing": "leader",
+        "routingDomain": "platform"
+      }
+    ]
+  },
+  "execution": {
+    "backend": { "driver": "native", "minimumIsolation": "trusted-process" }
+  },
+  "state": {
+    "backend": { "format": "cn.vastplan.platform.settings", "formatVersion": 1 }
+  },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/global-settings", "frontend": "frontend/dist/index.js" },
+  "contributes": {
+    "backend": {
+      "tools": [
+        {
+          "id": "platform.settings",
+          "service_role": "backend",
+          "title": "全局设置",
+          "subcommands": [
+            { "name": "get", "description": "读取一个设置", "paramsSchema": { "type": "object", "properties": { "key": { "type": "string" } }, "required": ["key"] } },
+            { "name": "list", "description": "按前缀列出设置", "paramsSchema": { "type": "object", "properties": { "prefix": { "type": "string" } } } },
+            { "name": "put", "description": "以可选版本前置条件写入设置", "paramsSchema": { "type": "object", "properties": { "key": { "type": "string" }, "value": {}, "ifVersion": { "type": "integer", "minimum": 0 } }, "required": ["key", "value"] } },
+            { "name": "delete", "description": "以可选版本前置条件删除设置", "paramsSchema": { "type": "object", "properties": { "key": { "type": "string" }, "ifVersion": { "type": "integer", "minimum": 0 } }, "required": ["key"] } },
+            { "name": "changesSince", "description": "读取指定版本后的变更", "paramsSchema": { "type": "object", "properties": { "version": { "type": "integer", "minimum": 0 } }, "required": ["version"] } }
+          ]
+        }
+      ]
+    },
+    "frontend": {
+      "views": [{ "id": "platform.global-settings", "title": "全局设置" }],
+      "menus": [{ "id": "platform.global-settings.menu", "title": "全局设置" }]
+    }
+  }
+}

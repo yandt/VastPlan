@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 )
 
 func TestLocalInstaller_ContentAddressedAndIdempotent(t *testing.T) {
@@ -93,7 +93,7 @@ func TestLocalInstallerFreezesDynamicGoEntryFromSignedManifest(t *testing.T) {
 			fingerprint = `,"fingerprint":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`
 		}
 		manifest := []byte(fmt.Sprintf(`{
-  "id":"com.vastplan.foundation.test.dynamic","name":"dynamic","description":"dynamic","version":"1.0.0","publisher":"vastplan",
+  "id":"cn.vastplan.foundation.test.dynamic","name":"dynamic","description":"dynamic","version":"1.0.0","publisher":"vastplan",
   "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"native","minimumIsolation":"trusted-process",
     "dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1","required":true%s}}},
   "activation":["onStartup"],"entry":{"backend":"backend/plugin"},

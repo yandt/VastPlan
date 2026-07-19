@@ -19,8 +19,8 @@
 ## 决定
 
 1. `FormSchema` 成为一个薄信封：`id + schema + uiSchema?`。`schema` 是唯一数据约束真相，V1 固定为 JSON Schema Draft 7，根类型必须为 `object`；`uiSchema` 只能包含可序列化的呈现提示，不得包含组件、函数、网络地址、身份或秘密值。
-2. Web 表单引擎采用 [RJSF](https://rjsf-team.github.io/react-jsonschema-form/) 6.x，校验采用 AJV 8。RJSF/AJV 仅存在于设计系统插件内部；`@vastplan/ui-contract` 与 `@vastplan/portal-ui` 不导出 RJSF 类型，功能插件仍只依赖 VastPlan 契约。
-3. `com.vastplan.foundation.frontend.design-system.arco` 提供 Arco widgets、字段/对象/数组模板、数组操作、错误展示和中文错误转换。其他 Web 设计系统可以复用相同数据 Schema，但必须提供自己的主题适配；一个 Portal 只运行一个设计系统，所以不会同时装载多份主题引擎。
+2. Web 表单引擎采用 [RJSF](https://rjsf-team.github.io/react-jsonschema-form/) 6.x，校验采用 AJV 8。RJSF/AJV 仅存在于设计系统插件内部；`@vastplan/ui-contract` 与 `@vastplan/ui-primitives` 不导出 RJSF 类型，功能插件仍只依赖 VastPlan 契约。
+3. `cn.vastplan.foundation.frontend.render.adapter.arco` 提供 Arco widgets、字段/对象/数组模板、数组操作、错误展示和中文错误转换。其他 Web 设计系统可以复用相同数据 Schema，但必须提供自己的主题适配；一个 Portal 只运行一个设计系统，所以不会同时装载多份主题引擎。
 4. `required`、`minLength`、`minimum`、`pattern`、`enum/oneOf`、`items`、`if/then/else`、`readOnly`、`default` 等规则只写入标准 JSON Schema。`uiSchema` 可控制 widget、顺序、帮助和布局，但不得降低 Schema 约束或充当授权依据。
 5. 凭证字段使用 `type: string + format: vastplan-credential-ref + writeOnly: true`；Web 可用 `ui:widget: secretRef` 呈现。Broker 只信任数据 Schema 中两项安全标记，只接受 `credential://` 引用，不因 UI widget 名称而放行明文。
 6. 表单信封进入 Broker 前同时执行 VastPlan 外层契约校验和内嵌 JSON Schema 编译。只允许本地 `#...` 引用，禁止远程 `$ref`；文档限制为 256 KiB、32 层和 4096 个节点，避免 SSRF 与资源耗尽。浏览器 AJV 不配置异步 Schema loader。

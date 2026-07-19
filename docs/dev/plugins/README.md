@@ -16,11 +16,11 @@
 
 ## 当前插件文档
 
-- [com.vastplan.python-hello](com.vastplan.python-hello.md) —— Python SDK 与异构运行参考插件
-- [com.vastplan.foundation.security.bootstrap-policy](com.vastplan.foundation.security.bootstrap-policy.md) —— 系统设置之前启动的首方权限基线
-- [com.vastplan.foundation.security.platform-admin-access-policy](com.vastplan.foundation.security.platform-admin-access-policy.md) —— 平台管理角色访问策略
-- [com.vastplan.platform.configuration.global-settings](com.vastplan.platform.configuration.global-settings.md) —— 租户级版本化全局设置
-- [com.vastplan.platform.security.credentials](com.vastplan.platform.security.credentials.md) —— Vault Transit 凭证元数据与轮换
-- [com.vastplan.platform.data.relational.connection-manager](com.vastplan.platform.data.relational.connection-manager.md) —— 数据库连接定义与可信探测
-- [com.vastplan.platform.artifacts.repository](com.vastplan.platform.artifacts.repository.md) —— HTTPS 制品仓库与状态能力
-- [com.vastplan.platform.infrastructure.deployment-manager](com.vastplan.platform.infrastructure.deployment-manager.md) —— 节点计划、首次引导审批与可信执行桥
+- [cn.vastplan.python-hello](cn.vastplan.python-hello.md) —— Python SDK 与异构运行参考插件
+- [cn.vastplan.foundation.security.bootstrap-policy](cn.vastplan.foundation.security.bootstrap-policy.md) —— 系统设置之前启动的首方权限基线
+- [cn.vastplan.foundation.security.platform-admin-access-policy](cn.vastplan.foundation.security.platform-admin-access-policy.md) —— 平台管理角色访问策略
+- [cn.vastplan.platform.configuration.global-settings](cn.vastplan.platform.configuration.global-settings.md) —— 租户级版本化全局设置
+- [cn.vastplan.platform.security.credentials](cn.vastplan.platform.security.credentials.md) —— Vault Transit 凭证元数据与轮换
+- [cn.vastplan.platform.data.relational.connection-manager](cn.vastplan.platform.data.relational.connection-manager.md) —— 数据库连接定义与可信探测
+- [cn.vastplan.platform.artifacts.repository](cn.vastplan.platform.artifacts.repository.md) —— HTTPS 制品仓库与状态能力
+- [cn.vastplan.platform.infrastructure.deployment-manager](cn.vastplan.platform.infrastructure.deployment-manager.md) —— 节点计划、首次引导审批与可信执行桥

@@ -71,7 +71,7 @@ func TestRepositoryArtifactRefAcceptsFirstPartyNamespace(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, ref := range []Ref{
-		{PluginID: "com.vastplan.platform.data.database", Version: "1.0.0", Channel: "stable"},
+		{PluginID: "cn.vastplan.platform.data.database", Version: "1.0.0", Channel: "stable"},
 		{PluginID: "com.example.integration.reader", Version: "1.0.0", Channel: "stable"},
 	} {
 		if _, err := repo.artifactDir(ref); err != nil {

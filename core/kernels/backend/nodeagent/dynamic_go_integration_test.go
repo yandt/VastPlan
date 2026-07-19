@@ -17,7 +17,7 @@ func TestDynamicGoLoaderLoadsRealFirstPartyModule(t *testing.T) {
 	args := []string{"build", "-buildmode=plugin",
 		"-ldflags", "-X main.dynamicGoBuildFingerprint=" + fingerprint,
 		"-o", output,
-		"../../../../extensions/plugins/com.vastplan.foundation.security.bootstrap-policy/dynamic"}
+		"../../../../extensions/plugins/cn.vastplan.foundation.security.bootstrap-policy/dynamic"}
 	if raceBuild() {
 		t.Skip("Go 官方 plugin 机制不可靠支持 race detector，真实 .so 测试在非 race 门禁执行")
 	}
@@ -28,11 +28,11 @@ func TestDynamicGoLoaderLoadsRealFirstPartyModule(t *testing.T) {
 	}
 	loader := NewDynamicGoLoader(fingerprint)
 	definition, err := loader.Load(output,
-		"com.vastplan.foundation.security.bootstrap-policy", "0.1.0", fingerprint)
+		"cn.vastplan.foundation.security.bootstrap-policy", "0.1.0", fingerprint)
 	if err != nil {
 		t.Fatalf("加载真实 dynamic-go 模块: %v", err)
 	}
-	if definition.ID != "com.vastplan.foundation.security.bootstrap-policy" || len(definition.Contributions) != 2 {
+	if definition.ID != "cn.vastplan.foundation.security.bootstrap-policy" || len(definition.Contributions) != 2 {
 		t.Fatalf("dynamic-go 模块定义不完整: %+v", definition)
 	}
 	secondPath := filepath.Join(t.TempDir(), "bootstrap-policy-v2.so")

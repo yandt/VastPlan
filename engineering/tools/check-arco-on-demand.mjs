@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { transform } from "esbuild";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const frontend = join(root, "extensions/plugins/com.vastplan.foundation.frontend.design-system.arco/frontend");
+const frontend = join(root, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/frontend");
 const source = join(frontend, "src");
 const componentsFile = join(source, "arco-components.ts");
 const stylesFile = join(source, "arco-styles.ts");

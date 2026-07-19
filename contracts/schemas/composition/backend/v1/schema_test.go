@@ -11,7 +11,7 @@ func TestParsePlatformProfileAndApplicationComposition(t *testing.T) {
 	profile, err := ParsePlatformProfile([]byte(`{
 		"version":1,"revision":2,"id":"backend-default","target":{"kernel":"backend"},
 		"serviceClasses":["application.backend"],
-		"attachments":[{"serviceClass":"application.backend","plugins":[{"id":"com.vastplan.foundation.security.portal-access-policy","version":"1.0.0"}]}],
+		"attachments":[{"serviceClass":"application.backend","plugins":[{"id":"cn.vastplan.foundation.security.portal-access-policy","version":"1.0.0"}]}],
 		"services":[]
 	}`))
 	if err != nil {

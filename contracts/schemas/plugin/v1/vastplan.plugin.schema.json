@@ -414,12 +414,12 @@
         "commands": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "menus": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "settings": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
-        "designSystems": { "type": "array", "items": { "$ref": "#/$defs/designSystemContribution" } },
-        "shellCompositions": { "type": "array", "items": { "$ref": "#/$defs/shellFoundationContribution" } },
-        "shellLayouts": { "type": "array", "items": { "$ref": "#/$defs/shellFoundationContribution" } }
+        "renderAdapters": { "type": "array", "items": { "$ref": "#/$defs/renderAdapterContribution" } },
+        "structureCompositions": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } },
+        "structureLayouts": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } }
       }
     },
-    "designSystemContribution": {
+    "renderAdapterContribution": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "uiContract", "framework", "capabilities"],
@@ -446,7 +446,7 @@
         }
       }
     },
-    "shellFoundationContribution": {
+    "structureFoundationContribution": {
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "uiContract"],

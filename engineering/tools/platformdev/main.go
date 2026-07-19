@@ -214,22 +214,22 @@ func (r *runtime) command(ctx context.Context, extra map[string]string, name str
 func (r *runtime) packageArtifacts(ctx context.Context) error {
 	repository := filepath.Join(r.runDir, "repository")
 	specs := []packageSpec{
-		{id: "com.vastplan.foundation.security.portal-access-policy", backend: true},
-		{id: "com.vastplan.foundation.security.interaction-access-policy", backend: true},
-		{id: "com.vastplan.foundation.security.platform-admin-access-policy", backend: true},
-		{id: "com.vastplan.platform.interaction.broker", backend: true},
-		{id: "com.vastplan.foundation.frontend.design-system.arco", frontend: true},
-		{id: "com.vastplan.foundation.frontend.composition.standard", frontend: true},
-		{id: "com.vastplan.foundation.frontend.layout.standard", frontend: true},
-		{id: "com.vastplan.foundation.frontend.layout.top-navigation", frontend: true},
-		{id: "com.vastplan.platform.configuration.portal-composer", backend: true, frontend: true},
-		{id: "com.vastplan.platform.configuration.global-settings", backend: true, frontend: true},
-		{id: "com.vastplan.platform.security.credentials", backend: true, frontend: true},
-		{id: "com.vastplan.platform.data.relational.connection-manager", backend: true, frontend: true},
-		{id: "com.vastplan.platform.artifacts.repository", backend: true, frontend: true},
-		{id: "com.vastplan.platform.infrastructure.deployment-manager", backend: true, frontend: true},
-		{id: "com.vastplan.demo-permission", backend: true},
-		{id: "com.vastplan.hello-world", backend: true},
+		{id: "cn.vastplan.foundation.security.portal-access-policy", backend: true},
+		{id: "cn.vastplan.foundation.security.interaction-access-policy", backend: true},
+		{id: "cn.vastplan.foundation.security.platform-admin-access-policy", backend: true},
+		{id: "cn.vastplan.platform.interaction.broker", backend: true},
+		{id: "cn.vastplan.foundation.frontend.render.adapter.arco", frontend: true},
+		{id: "cn.vastplan.foundation.frontend.structure.composition.standard", frontend: true},
+		{id: "cn.vastplan.foundation.frontend.structure.layout.standard", frontend: true},
+		{id: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", frontend: true},
+		{id: "cn.vastplan.platform.configuration.portal-composer", backend: true, frontend: true},
+		{id: "cn.vastplan.platform.configuration.global-settings", backend: true, frontend: true},
+		{id: "cn.vastplan.platform.security.credentials", backend: true, frontend: true},
+		{id: "cn.vastplan.platform.data.relational.connection-manager", backend: true, frontend: true},
+		{id: "cn.vastplan.platform.artifacts.repository", backend: true, frontend: true},
+		{id: "cn.vastplan.platform.infrastructure.deployment-manager", backend: true, frontend: true},
+		{id: "cn.vastplan.demo-permission", backend: true},
+		{id: "cn.vastplan.hello-world", backend: true},
 	}
 	for _, spec := range specs {
 		args := []string{"run", "./engineering/tools/pluginpackage", "-source", filepath.Join("extensions", "plugins", spec.id), "-repository", repository}
@@ -243,7 +243,7 @@ func (r *runtime) packageArtifacts(ctx context.Context) error {
 			return fmt.Errorf("打包 %s: %w", spec.id, err)
 		}
 	}
-	dynamicPackage, err := os.ReadFile(filepath.Join(r.runDir, "dynamic", "com.vastplan.foundation.security.bootstrap-policy.tar.gz"))
+	dynamicPackage, err := os.ReadFile(filepath.Join(r.runDir, "dynamic", "cn.vastplan.foundation.security.bootstrap-policy.tar.gz"))
 	if err != nil {
 		return err
 	}
@@ -315,7 +315,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"-runtime-root", filepath.Join(r.runDir, "installed", "backend"), "-actual-state", filepath.Join(r.runDir, "state", "actual-state.json"),
 		"-lock", filepath.Join(r.runDir, "state", "node-agent.lock"), "-third-party-plugin-policy", "deny",
 		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
-		"-plugin-placements", "com.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
+		"-plugin-placements", "cn.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
 		"-backend-platform-catalog", filepath.Join(r.runDir, "backend-platform-catalog.json"), "-allow-development-plugins",
 	}
 	if _, err := r.startChild("node-agent", env, kernel, nodeArgs...); err != nil {
@@ -765,7 +765,7 @@ func publishManagedService(baseURL string) error {
 			"spec": map[string]any{
 				"id": "hello-service", "kind": "service", "enabled": true, "service_role": "backend", "replicas": 1,
 				"placement": map[string]any{"nodeSelector": map[string]string{"environment": "local-managed"}},
-				"plugins":   []any{map[string]string{"id": "com.vastplan.hello-world", "version": "0.1.0", "channel": "stable"}},
+				"plugins":   []any{map[string]string{"id": "cn.vastplan.hello-world", "version": "0.1.0", "channel": "stable"}},
 			},
 		}},
 	}

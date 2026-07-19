@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ModuleLoadError, VerifiedFrontendPluginLoader, parseDevelopmentRuntimeSpec, parsePortalRuntimeSpec, type FrontendModuleDescriptor } from "./module-loader";
 
-const ref = { id: "com.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
+const ref = { id: "cn.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 const source = new TextEncoder().encode("export default { register() {} }");
 
 async function descriptor(overrides: Partial<FrontendModuleDescriptor> = {}): Promise<FrontendModuleDescriptor> {
@@ -53,7 +53,7 @@ describe("VerifiedFrontendPluginLoader", () => {
 
   it("rejects modules absent from the Edge-issued lock", async () => {
     const loader = new VerifiedFrontendPluginLoader([await descriptor()], async () => new Response(source), async () => ({}));
-    await expect(loader.load({ id: "com.vastplan.product.other", version: "1.0.0" })).rejects.toMatchObject({ code: "MODULE_NOT_LOCKED" } satisfies Partial<ModuleLoadError>);
+    await expect(loader.load({ id: "cn.vastplan.product.other", version: "1.0.0" })).rejects.toMatchObject({ code: "MODULE_NOT_LOCKED" } satisfies Partial<ModuleLoadError>);
   });
 
   it("validates the bootstrap document before constructing a loader", async () => {

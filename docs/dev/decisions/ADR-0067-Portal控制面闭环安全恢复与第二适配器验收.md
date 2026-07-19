@@ -12,13 +12,13 @@ Portal 已具备双输入解析、可信 ESM 装载、Arco 设计系统和受治
 
 ## 决策
 
-1. `@vastplan/portal-ui` 提供类型化 `PortalControlClient`，覆盖 list、create、update、submit、approve、publish、rollback 和 audit。每次非安全读取操作重新取得短期 CSRF token；错误向 UI 暴露稳定错误码，不暴露内部调用细节。
+1. `@vastplan/ui-primitives` 提供类型化 `PortalControlClient`，覆盖 list、create、update、submit、approve、publish、rollback 和 audit。每次非安全读取操作重新取得短期 CSRF token；错误向 UI 暴露稳定错误码，不暴露内部调用细节。
 2. Composer 的草稿允许在 `draft` 状态更新完整 Application Composition；提交后不可编辑。更新仍执行 Schema、插件分类、Catalog 和当前 Platform Profile 解析校验，并产生 `draft.updated` 审计事件。
 3. Portal Composer 页面提供 revision 列表、草稿创建/编辑、差异预览、提交、审批、发布、回滚和审计查看。职责分离和最终权限仍由服务端策略裁决，按钮可见性不是授权边界。
 4. 普通活动模块继续只通过 `/v1/portal-modules/{activeRevision}/{plugin}.js` 读取。启动失败时，内核原生恢复页可请求 `/v1/portal-recovery`；服务端只选择同租户、同 Portal ID、非当前且最近的已发布 revision。
 5. 恢复模块 URL 同时绑定当前活动 revision 与服务端选择的回退 revision：`/v1/portal-recovery-modules/{active}/{fallback}/{plugin}.js`。读取时再次验证当前活动版本未变化、fallback 仍是最新合法候选并重新验签制品。浏览器不能传入版本、channel 或任意包路径。
 6. 恢复版本只用于临时安全模式，页面明确标识正在运行旧 revision。它不改变服务端活动状态；管理员必须通过正式回滚或发布修复版本完成收敛。
-7. 增加 `com.vastplan.foundation.frontend.design-system.mui`，以 Material UI 实现同一 `@vastplan/portal-ui` 1.x 组件面。Portal Composer 删除对 Arco 的插件依赖，继续只依赖公共 UI SDK。Arco 与 MUI 分别构建为独立单文件 ESM，同一 Portal 仍只能选择一个设计系统。
+7. 增加 `cn.vastplan.foundation.frontend.render.adapter.mui`，以 Material UI 实现同一 `@vastplan/ui-primitives` 1.x 组件面。Portal Composer 删除对 Arco 的插件依赖，继续只依赖公共 UI SDK。Arco 与 MUI 分别构建为独立单文件 ESM，同一 Portal 仍只能选择一个设计系统。
 
 ## 被否决方案
 

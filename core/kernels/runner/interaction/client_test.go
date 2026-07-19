@@ -28,7 +28,7 @@ func (*brokerStub) Cancel(context.Context, interactionapi.Subject, string) (inte
 
 func TestClientUsesBoundRunnerSourceAndBrokerOnly(t *testing.T) {
 	broker := &brokerStub{}
-	source := interactionapi.Subject{ID: "com.vastplan.runner.workflow", TenantID: "tenant-a"}
+	source := interactionapi.Subject{ID: "cn.vastplan.runner.workflow", TenantID: "tenant-a"}
 	client, err := New(broker, source)
 	if err != nil {
 		t.Fatal(err)

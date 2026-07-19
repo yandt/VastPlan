@@ -43,30 +43,30 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	publishBuiltPlugin(t, repository,
-		"./extensions/plugins/com.vastplan.foundation.security.portal-access-policy/backend",
-		"extensions/plugins/com.vastplan.foundation.security.portal-access-policy/vastplan.plugin.json")
+		"./extensions/plugins/cn.vastplan.foundation.security.portal-access-policy/backend",
+		"extensions/plugins/cn.vastplan.foundation.security.portal-access-policy/vastplan.plugin.json")
 	publishBuiltPlugin(t, repository,
-		"./extensions/plugins/com.vastplan.platform.configuration.portal-composer/backend",
-		"extensions/plugins/com.vastplan.platform.configuration.portal-composer/vastplan.plugin.json")
+		"./extensions/plugins/cn.vastplan.platform.configuration.portal-composer/backend",
+		"extensions/plugins/cn.vastplan.platform.configuration.portal-composer/vastplan.plugin.json")
 	publishBuiltPlugin(t, repository,
-		"./extensions/plugins/com.vastplan.foundation.security.interaction-access-policy/backend",
-		"extensions/plugins/com.vastplan.foundation.security.interaction-access-policy/vastplan.plugin.json")
+		"./extensions/plugins/cn.vastplan.foundation.security.interaction-access-policy/backend",
+		"extensions/plugins/cn.vastplan.foundation.security.interaction-access-policy/vastplan.plugin.json")
 	publishBuiltPlugin(t, repository,
-		"./extensions/plugins/com.vastplan.platform.interaction.broker/backend",
-		"extensions/plugins/com.vastplan.platform.interaction.broker/vastplan.plugin.json")
+		"./extensions/plugins/cn.vastplan.platform.interaction.broker/backend",
+		"extensions/plugins/cn.vastplan.platform.interaction.broker/vastplan.plugin.json")
 	for _, plugin := range []struct{ packageDir, manifest string }{
-		{"./extensions/plugins/com.vastplan.platform.configuration.global-settings/backend", "extensions/plugins/com.vastplan.platform.configuration.global-settings/vastplan.plugin.json"},
-		{"./extensions/plugins/com.vastplan.platform.security.credentials/backend", "extensions/plugins/com.vastplan.platform.security.credentials/vastplan.plugin.json"},
-		{"./extensions/plugins/com.vastplan.platform.data.relational.connection-manager/backend", "extensions/plugins/com.vastplan.platform.data.relational.connection-manager/vastplan.plugin.json"},
-		{"./extensions/plugins/com.vastplan.platform.artifacts.repository/backend", "extensions/plugins/com.vastplan.platform.artifacts.repository/vastplan.plugin.json"},
-		{"./extensions/plugins/com.vastplan.platform.infrastructure.deployment-manager/backend", "extensions/plugins/com.vastplan.platform.infrastructure.deployment-manager/vastplan.plugin.json"},
+		{"./extensions/plugins/cn.vastplan.platform.configuration.global-settings/backend", "extensions/plugins/cn.vastplan.platform.configuration.global-settings/vastplan.plugin.json"},
+		{"./extensions/plugins/cn.vastplan.platform.security.credentials/backend", "extensions/plugins/cn.vastplan.platform.security.credentials/vastplan.plugin.json"},
+		{"./extensions/plugins/cn.vastplan.platform.data.relational.connection-manager/backend", "extensions/plugins/cn.vastplan.platform.data.relational.connection-manager/vastplan.plugin.json"},
+		{"./extensions/plugins/cn.vastplan.platform.artifacts.repository/backend", "extensions/plugins/cn.vastplan.platform.artifacts.repository/vastplan.plugin.json"},
+		{"./extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/backend", "extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/vastplan.plugin.json"},
 	} {
 		publishBuiltPlugin(t, repository, plugin.packageDir, plugin.manifest)
 	}
-	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.design-system.arco/vastplan.plugin.json")
-	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.composition.standard/vastplan.plugin.json")
-	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.layout.standard/vastplan.plugin.json")
-	publishPortalFrontendPlugin(t, repository, "extensions/plugins/com.vastplan.foundation.frontend.layout.top-navigation/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.structure.composition.standard/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.standard/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.top-navigation/vastplan.plugin.json")
 
 	dir := t.TempDir()
 	certFile, keyFile := writePortalTLSCertificate(t, dir)
@@ -175,8 +175,8 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &updated); err != nil {
 		t.Fatal(err)
 	}
-	if updated.Composition.Branding["title"] != "Operations Portal" {
-		t.Fatalf("updated composition was not persisted: %+v", updated.Composition)
+	if updated.StructureComposition.Branding["title"] != "Operations Portal" {
+		t.Fatalf("updated composition was not persisted: %+v", updated.StructureComposition)
 	}
 
 	csrf = portalCSRF(t, client, baseURL, "author-token")
@@ -235,11 +235,11 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != firstActivation.ID || len(runtime.Modules) != 9 || runtime.Modules[0].ID != "com.vastplan.foundation.frontend.design-system.arco" || runtime.Modules[1].ID != "com.vastplan.foundation.frontend.composition.standard" || runtime.Modules[2].ID != "com.vastplan.foundation.frontend.layout.standard" || runtime.Modules[3].ID != "com.vastplan.platform.configuration.portal-composer" || runtime.Modules[8].ID != "com.vastplan.platform.infrastructure.deployment-manager" {
+	if runtime.Portal.Revision != firstActivation.ID || len(runtime.Modules) != 9 || runtime.Modules[0].ID != "cn.vastplan.foundation.frontend.render.adapter.arco" || runtime.Modules[1].ID != "cn.vastplan.foundation.frontend.structure.composition.standard" || runtime.Modules[2].ID != "cn.vastplan.foundation.frontend.structure.layout.standard" || runtime.Modules[3].ID != "cn.vastplan.platform.configuration.portal-composer" || runtime.Modules[8].ID != "cn.vastplan.platform.infrastructure.deployment-manager" {
 		t.Fatalf("unexpected governed runtime: %+v", runtime)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, runtime.Modules[0].URL, map[string]any{})
-	if status != http.StatusOK || !bytes.Contains(raw, []byte("ui.design-system")) {
+	if status != http.StatusOK || !bytes.Contains(raw, []byte("ui.render.adapter")) {
 		t.Fatalf("read verified frontend module status=%d body=%s", status, raw)
 	}
 	// Create and publish a new Profile + Binding, then switch only through a
@@ -247,11 +247,11 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	topProfile := profile.Profile
 	topProfile.ID = "portal-top-navigation"
 	topProfile.Revision++
-	topProfile.Layout.ID = "com.vastplan.foundation.frontend.layout.top-navigation"
-	topProfile.Layout.Config = map[string]any{"navigation": "top", "pageBodyWidth": "fluid"}
+	topProfile.StructureLayout.ID = "cn.vastplan.foundation.frontend.structure.layout.top-navigation"
+	topProfile.StructureLayout.Config = map[string]any{"navigation": "top", "pageBodyWidth": "fluid"}
 	for index := range topProfile.Plugins {
-		if topProfile.Plugins[index].ID == "com.vastplan.foundation.frontend.layout.standard" {
-			topProfile.Plugins[index].ID = "com.vastplan.foundation.frontend.layout.top-navigation"
+		if topProfile.Plugins[index].ID == "cn.vastplan.foundation.frontend.structure.layout.standard" {
+			topProfile.Plugins[index].ID = "cn.vastplan.foundation.frontend.structure.layout.top-navigation"
 		}
 	}
 	topProfileRevision := createAndPublishProfile(t, client, baseURL, topProfile)
@@ -273,7 +273,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != topActivation.ID || len(runtime.Modules) < 3 || runtime.Modules[2].ID != "com.vastplan.foundation.frontend.layout.top-navigation" {
+	if runtime.Portal.Revision != topActivation.ID || len(runtime.Modules) < 3 || runtime.Modules[2].ID != "cn.vastplan.foundation.frontend.structure.layout.top-navigation" {
 		t.Fatalf("Portal did not switch to top navigation through Activation: %+v", runtime)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-recovery?path=/operations", map[string]any{})
@@ -288,7 +288,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 		t.Fatalf("unexpected governed recovery runtime: %+v", recovery)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, recovery.Modules[0].URL, map[string]any{})
-	if status != http.StatusOK || !bytes.Contains(raw, []byte("ui.design-system")) {
+	if status != http.StatusOK || !bytes.Contains(raw, []byte("ui.render.adapter")) {
 		t.Fatalf("read verified recovery module status=%d body=%s", status, raw)
 	}
 	csrf = portalCSRF(t, client, baseURL, "publisher-token")
@@ -310,7 +310,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != rolledBack.ID || len(runtime.Modules) < 3 || runtime.Modules[2].ID != "com.vastplan.foundation.frontend.layout.standard" {
+	if runtime.Portal.Revision != rolledBack.ID || len(runtime.Modules) < 3 || runtime.Modules[2].ID != "cn.vastplan.foundation.frontend.structure.layout.standard" {
 		t.Fatalf("rollback did not restore exact standard-layout inputs: %+v", runtime)
 	}
 }
@@ -449,7 +449,7 @@ func publishPortalFrontendPlugin(t *testing.T, repository *pluginservice.Reposit
 	if err := os.MkdirAll(filepath.Dir(entryPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(entryPath, []byte(`export default { id: "ui.design-system", framework: "fixture", uiContract: "2.0.0", capabilities: ["layout","menu","overlay","form","data","feedback","theme"], Provider: ({children}) => children };`), 0o644); err != nil {
+	if err := os.WriteFile(entryPath, []byte(`export default { id: "ui.render.adapter", framework: "fixture", uiContract: "3.0.0", capabilities: ["layout","menu","overlay","form","data","feedback","theme"], Provider: ({children}) => children };`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, filename := range []string{manifest.LicenseFile, manifest.NoticeFile} {

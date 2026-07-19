@@ -10,7 +10,7 @@
 
 ## 决策
 
-1. 新增平台基础插件 `com.vastplan.platform.infrastructure.deployment-manager`。它只保存租户隔离的非敏感 `nodebootstrap.Plan`、Credential 名称、节点 CAS 版本和 Bootstrap Job，不保存或返回 material。
+1. 新增平台基础插件 `cn.vastplan.platform.infrastructure.deployment-manager`。它只保存租户隔离的非敏感 `nodebootstrap.Plan`、Credential 名称、节点 CAS 版本和 Bootstrap Job，不保存或返回 material。
 2. Bootstrap Job 使用 `Pending/Approved/Connecting/Installing/SystemdActive/Ready/Failed/Expired` 封闭状态集。首期同步执行到 `SystemdActive`；`Ready` 必须等待控制面观察到匹配 Node Lease，不能由 SSH 成功直接推导。
 3. `createBootstrap` 与 `approveBootstrap` 使用独立角色，并在插件领域层再次强制请求人与审批人不同。Edge 和权限插件的角色检查只是纵深防御，不能替代该职责分离规则。
 4. 插件只能调用唯一的 `kernel.node.bootstrap`。宿主只接受已认证的精确 Deployment Manager 插件 ID，重新校验 tenant 与完整计划，再交给注入的 `nodebootstrap.Broker`。

@@ -15,10 +15,10 @@ Portal 已把设计系统、Shell 组合与 Shell 布局拆成三个独立基础
 2. Shell 组合输出有界导航树：`zone → root group → child group? → page`。`zone` 不计入可见深度；页面必须为叶子。根组可直接包含页面或子组，子组只能包含页面。
 3. 分组 ID 在一份 Profile 内全局唯一。Go Schema、可信 Catalog、Composer 与浏览器组合器都校验父引用、跨 zone、循环、最大深度、重复 ID 和活动页面路径。
 4. 组合层输出唯一 `activeNavigationPath = {zone, rootGroupID, childGroupID?, pageID}`。布局插件不得各自反推祖先。
-5. 新增第一方 `com.vastplan.foundation.frontend.layout.top-navigation`。顶栏只显示根组；点击或键盘打开一个分组式 Mega Popover，承载根直属页面、子组和三级页面，不使用嵌套 Popover 或级联菜单。
+5. 新增第一方 `cn.vastplan.foundation.frontend.structure.layout.top-navigation`。顶栏只显示根组；点击或键盘打开一个分组式 Mega Popover，承载根直属页面、子组和三级页面，不使用嵌套 Popover 或级联菜单。
 6. 顶栏将 `primary` 与 `secondary` 放在中部并以视觉分隔区分，`settings` 固定在右侧。空间不足时尾部根组进入“更多”，活动根组优先保留。
 7. `layout.standard` 保留 64px 图标轨与 240px 常驻面板；根直属页面优先显示，子组使用可多开的折叠章节。活动子组自动展开，展开状态只保存在浏览器会话。
-8. UI Contract 2.0 增加框架无关的受控 `Popover` 和 Shell/Overlay 语义 token。Arco/MUI 负责定位、碰撞、ESC、外部点击、焦点恢复、Shadow DOM Portal 与 z-index；布局只拥有菜单结构。
+8. UI Contract 3.0 增加框架无关的受控 `Popover` 和 Shell/Overlay 语义 token。Arco/MUI 负责定位、碰撞、ESC、外部点击、焦点恢复、Shadow DOM Portal 与 z-index；布局只拥有菜单结构。
 9. 响应式按 Shell 容器宽度：`≥1200px` 完整桌面，`768–1199px` 收窄并使用“更多”，`<768px` 统一使用全高 Drawer。
 10. 顶部导航采用 disclosure 语义；页面使用普通链接与 `aria-current`。标准图标轨实现 Up/Down/Home/End、ArrowRight 进入面板、ArrowLeft 返回。触控目标不小于 44×44px。
 

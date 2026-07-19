@@ -11,11 +11,11 @@ import (
 
 // 这些 ID 是多级分类规则采纳前的示例插件，只为兼容测试保留；新首方插件不得加入此表。
 var legacyExamplePluginIDs = map[string]struct{}{
-	"com.vastplan.demo-audit":      {},
-	"com.vastplan.demo-permission": {},
-	"com.vastplan.demo-quota":      {},
-	"com.vastplan.hello-world":     {},
-	"com.vastplan.python-hello":    {},
+	"cn.vastplan.demo-audit":      {},
+	"cn.vastplan.demo-permission": {},
+	"cn.vastplan.demo-quota":      {},
+	"cn.vastplan.hello-world":     {},
+	"cn.vastplan.python-hello":    {},
 }
 
 func TestFirstPartyProductionPluginsUseClassifiableNamespaces(t *testing.T) {
