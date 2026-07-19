@@ -11,6 +11,10 @@ cd "$ROOT"
 echo "── 单元测试 ──"
 go test ./...
 
+echo
+echo "── 工程脚本测试 ──"
+./engineering/tools/platform-dev_test.sh
+
 if command -v pnpm >/dev/null 2>&1; then
   echo
   echo "── 前端类型与运行时测试 ──"

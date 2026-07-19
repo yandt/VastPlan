@@ -110,13 +110,17 @@ flowchart LR
 ./engineering/tools/platform-dev.sh up
 ```
 
-就绪后打开 <http://127.0.0.1:18080/operations>。查看状态、日志和停止服务：
+就绪后打开 <http://127.0.0.1:18080/operations>。启动前可先检查依赖和端口；查看状态、日志和停止服务：
 
 ```bash
+./engineering/tools/platform-dev.sh doctor
 ./engineering/tools/platform-dev.sh status
 ./engineering/tools/platform-dev.sh logs
+./engineering/tools/platform-dev.sh logs --follow
 ./engineering/tools/platform-dev.sh down
 ```
+
+需要在终端实时观察完整启动日志时使用 `up --debug`；需要清空本地运行状态重新装配时使用 `restart --fresh`。
 
 该入口包含开发身份注入、嵌入式 NATS 和 Vault 兼容桩，不等同于生产部署。完整边界见[本地平台管理中心指南](docs/dev/guides/本地平台管理中心.md)。
 
