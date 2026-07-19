@@ -18,7 +18,10 @@ import (
 const portalNoncePlaceholder = "__VASTPLAN_CSP_NONCE__"
 
 const (
-	maxPortalAssetFiles = 128
+	// Unicode-range self-hosted fonts intentionally produce many small immutable
+	// files. Keep a bounded ceiling above the complete first-party Portal build
+	// without weakening the independent total-byte limit.
+	maxPortalAssetFiles = 512
 	maxPortalAssetBytes = 64 << 20
 )
 
