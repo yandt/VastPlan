@@ -7,8 +7,6 @@
   "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
   "dependencies": {
     "@vastplan/ui-primitives": "workspace:*",
-    "@vastplan/ui-render-adapter-arco": "workspace:*",
-    "@vastplan/ui-render-adapter-mui": "workspace:*",
     "react": "^18.3.1"
   },
   "devDependencies": { "@types/react": "^18.3.23", "typescript": "^5.8.3", "vitest": "^3.2.4" }

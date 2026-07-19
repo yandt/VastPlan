@@ -1,4 +1,4 @@
-import type { UIRenderAdapter, FrontendPluginHotLifecycle, PluginLocalization, UIShellAdapter, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
+import type { UIRenderAdapter, UIRenderer, FrontendPluginHotLifecycle, PluginLocalization, UIShellAdapter, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import type { FrontendPluginLoader, FrontendPluginModule, PluginRef, PortalSpec } from "./portal-runtime";
 
 export interface FrontendModuleDescriptor extends PluginRef {
@@ -6,6 +6,7 @@ export interface FrontendModuleDescriptor extends PluginRef {
   url: string;
   sha256: string;
   packageSha256: string;
+  deferred?: boolean;
 }
 
 export interface PortalRuntimeSpec {
@@ -119,6 +120,18 @@ function normalizeModule(namespace: unknown, descriptor: FrontendModuleDescripto
   ) {
     return { provenance, renderAdapter: exported as unknown as UIRenderAdapter, hot, localization };
   }
+  const renderer = isRecord(namespace.renderer) ? namespace.renderer : undefined;
+  if (
+    renderer !== undefined
+    && typeof renderer.id === "string"
+    && typeof renderer.framework === "string"
+    && typeof renderer.Provider === "function"
+    && Array.isArray(renderer.capabilities)
+    && Array.isArray(renderer.themeTemplates)
+    && typeof renderer.defaultThemeTemplate === "string"
+  ) {
+    return { provenance, renderer: renderer as unknown as UIRenderer, hot, localization };
+  }
   if (exported.id === "ui.structure.shell" && typeof exported.compose === "function" && typeof exported.Shell === "function") {
     return { provenance, shell: exported as unknown as UIShellAdapter, hot, localization };
   }
@@ -184,7 +197,8 @@ function validateDescriptor(descriptor: FrontendModuleDescriptor, policy: Module
   const governedDigest = active?.[1] ?? recovery?.[1] ?? development?.[1];
   if (!descriptor.id || !descriptor.version || governedDigest === undefined ||
       !/^[a-f0-9]{64}$/.test(descriptor.sha256) || !/^[a-f0-9]{64}$/.test(descriptor.packageSha256) ||
-      (!descriptor.entry.endsWith(".js") && !descriptor.entry.endsWith(".mjs"))) {
+      (!descriptor.entry.endsWith(".js") && !descriptor.entry.endsWith(".mjs")) ||
+      (descriptor.deferred !== undefined && typeof descriptor.deferred !== "boolean")) {
     throw new ModuleLoadError("MODULE_DESCRIPTOR_INVALID", `前端模块描述无效: ${descriptor.id || "unknown"}`);
   }
   if (governedDigest !== descriptor.sha256) throw new ModuleLoadError("MODULE_DESCRIPTOR_INVALID", `前端模块 URL 未按内容摘要寻址: ${descriptor.id}`);

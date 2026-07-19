@@ -253,13 +253,26 @@ export interface UIRendererTemplate {
   id: string;
   label: LocalizedText;
   framework: string;
+  /** Verified first-party module, fetched only after this Renderer is selected. */
+  module: {
+    id: string;
+    version: string;
+    channel?: string;
+  };
+}
+
+/** Safe Renderer metadata exposed to Shell chrome; it never leaks module routing. */
+export interface UIRendererChoice {
+  id: string;
+  label: LocalizedText;
+  framework: string;
 }
 
 export interface UIRenderAdapter {
   id: "ui.render.adapter";
   uiContract: string;
   /** Renderer catalog is owned by the Adapter; functional plugins never name a framework. */
-  renderers: readonly UIRenderer[];
+  renderers: readonly UIRendererTemplate[];
   defaultRenderer: string;
   localization?: PluginLocalization;
 }
@@ -454,7 +467,7 @@ export interface UIShellProps {
   availableTemplates: readonly ShellTemplate[];
   onTemplateChange?(templateID: string): void;
   /** Renderer choice is optional UI chrome; Shells may surface it in account/settings slots. */
-  renderers?: readonly UIRendererTemplate[];
+  renderers?: readonly UIRendererChoice[];
   renderer?: { id: string; options: Readonly<Record<string, unknown>> };
   onRendererChange?(rendererID: string): void;
   branding: ShellBranding;

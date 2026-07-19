@@ -45,12 +45,14 @@ type frontendSourceSignatures struct{ plugins, host string }
 type frontendHMRModule struct {
 	ID, Entry, SHA256 string
 	Bytes             []byte
+	Deferred          bool
 }
 
 type frontendHMRManifest struct {
 	Version int `json:"version"`
 	Modules []struct {
 		ID, Entry, File, SHA256 string
+		Deferred                bool
 	} `json:"modules"`
 }
 
@@ -313,7 +315,7 @@ func (h *frontendHMR) loadCandidate(manifestPath string) (frontendHMRCandidate, 
 			return frontendHMRCandidate{}, fmt.Errorf("前端候选模块身份重复: %s", item.ID)
 		}
 		copied := append([]byte(nil), content...)
-		current[item.ID] = frontendHMRModule{ID: item.ID, Entry: item.Entry, SHA256: actual, Bytes: copied}
+		current[item.ID] = frontendHMRModule{ID: item.ID, Entry: item.Entry, SHA256: actual, Bytes: copied, Deferred: item.Deferred}
 		digests = append(digests, actual)
 	}
 	return frontendHMRCandidate{current: current, digests: digests}, nil
@@ -503,6 +505,7 @@ func (h *frontendHMR) runtime(w http.ResponseWriter, request *http.Request) {
 			descriptor["entry"] = module.Entry
 			descriptor["url"] = "/__vastplan_dev/modules/" + module.SHA256 + ".js"
 			descriptor["sha256"] = module.SHA256
+			descriptor["deferred"] = module.Deferred
 		}
 	}
 	h.mu.RUnlock()

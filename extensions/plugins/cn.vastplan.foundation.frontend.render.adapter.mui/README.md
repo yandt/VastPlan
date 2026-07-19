@@ -1,6 +1,6 @@
 # MUI Design System Plugin
 
-`cn.vastplan.foundation.frontend.render.adapter.mui` 是统一 Render Adapter 的内部 MUI Renderer 源码包。它以 Material UI 实现与 Arco 相同的 `@vastplan/ui-primitives` 语义契约，但不再单独贡献 `ui.render.adapter`。
+`cn.vastplan.foundation.frontend.render.adapter.mui` 是统一 Render Adapter 的内部 MUI Renderer 模块。它以 Material UI 实现与 Arco 相同的 `@vastplan/ui-primitives` 语义契约；Portal 只会在 Adapter 目录选中 `mui` 时下载它，不单独贡献 `ui.render.adapter`。
 
 统一 Adapter 负责目录、Profile 治理和切换安全；MUI Renderer 提供布局、导航、弹层、JSON Schema 表单、数据展示、反馈和主题实现。Portal Generation 不会混用 MUI 与 Arco。
 

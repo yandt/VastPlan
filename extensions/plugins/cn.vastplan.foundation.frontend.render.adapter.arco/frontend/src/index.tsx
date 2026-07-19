@@ -394,6 +394,9 @@ export const arcoRenderer: UIRenderer = {
   },
 };
 
+/** Explicit module role consumed only through the unified Adapter catalog. */
+export const renderer = arcoRenderer;
+
 /** @deprecated Internal renderer source. Use the unified render-adapter plugin. */
 export const arcoRenderAdapter = arcoRenderer;
 export default arcoRenderer;

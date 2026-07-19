@@ -319,6 +319,9 @@ export const muiRenderer: UIRenderer = {
   },
 };
 
+/** Explicit module role consumed only through the unified Adapter catalog. */
+export const renderer = muiRenderer;
+
 /** @deprecated Internal renderer source. Use the unified render-adapter plugin. */
 export const muiRenderAdapter = muiRenderer;
 export default muiRenderer;

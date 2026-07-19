@@ -134,12 +134,6 @@ importers:
       '@vastplan/ui-primitives':
         specifier: workspace:*
         version: link:../../../sdk/ts/ui-primitives
-      '@vastplan/ui-render-adapter-arco':
-        specifier: workspace:*
-        version: link:../../cn.vastplan.foundation.frontend.render.adapter.arco/frontend
-      '@vastplan/ui-render-adapter-mui':
-        specifier: workspace:*
-        version: link:../../cn.vastplan.foundation.frontend.render.adapter.mui/frontend
       react:
         specifier: ^18.3.1
         version: 18.3.1

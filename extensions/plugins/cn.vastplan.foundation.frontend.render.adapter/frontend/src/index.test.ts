@@ -5,6 +5,10 @@ describe("unified render adapter", () => {
   it("owns the complete first-party Renderer catalog", () => {
     expect(adapter).toMatchObject({ id: "ui.render.adapter", uiContract: "4.0.0", defaultRenderer: "arco" });
     expect(adapter.renderers.map((renderer) => renderer.id)).toEqual(["arco", "mui"]);
+    expect(adapter.renderers.map((renderer) => renderer.module.id)).toEqual([
+      "cn.vastplan.foundation.frontend.render.adapter.arco",
+      "cn.vastplan.foundation.frontend.render.adapter.mui",
+    ]);
   });
 
   it("keeps Renderer labels in the Adapter namespace", () => {

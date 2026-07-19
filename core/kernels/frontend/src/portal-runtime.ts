@@ -73,6 +73,7 @@ export interface RemoteProvenance {
 export interface FrontendPluginModule {
   provenance: RemoteProvenance;
   renderAdapter?: UIRenderAdapter;
+  renderer?: UIRenderer;
   shell?: UIShellAdapter;
   workbench?: UIWorkbenchAdapter;
   register?(context: FrontendPluginContext): void | Promise<void>;
@@ -130,11 +131,10 @@ export class PortalRuntime {
 
   public async prepare(portal: PortalSpec, options: PortalPrepareOptions = {}): Promise<PreparedPortal> {
     this.validatePortalShape(portal);
-    // Start every governed fetch immediately. Trust and registration checks are
-    // still applied in deterministic profile order after all bytes arrive.
-    const loaded = await Promise.all(portal.plugins.map(async (ref) => ({ ref, module: await this.loader.load(ref) })));
-    const modules = new Map(loaded.map((item) => [moduleKey(item.ref), item.module]));
-    const renderAdapterModule = requiredModule(modules, portal.renderAdapter);
+    // The Adapter catalog is deliberately small. It is loaded first so only the
+    // selected framework module is fetched; unselected framework bundles remain
+    // locked in RuntimeSpec but never enter the browser cache or React tree.
+    const renderAdapterModule = await this.loader.load(portal.renderAdapter);
     this.assertTrustedFirstParty(renderAdapterModule, portal.renderAdapter.id);
     const renderAdapter = renderAdapterModule.renderAdapter;
     if (renderAdapter === undefined) {
@@ -151,8 +151,20 @@ export class PortalRuntime {
     }
     const selectedRendererID = options.rendererID !== undefined && portal.renderAdapter.config.userSelectable && portal.renderAdapter.config.allowedRenderers.includes(options.rendererID)
       ? options.rendererID : portal.renderAdapter.config.defaultRenderer;
-    const selectedRenderer = renderAdapter.renderers.find((renderer) => renderer.id === selectedRendererID);
-    if (selectedRenderer === undefined) throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_INVALID", `渲染适配器不支持 Renderer: ${selectedRendererID}`);
+    const selectedRendererTemplate = renderAdapter.renderers.find((renderer) => renderer.id === selectedRendererID);
+    if (selectedRendererTemplate === undefined) throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_INVALID", `渲染适配器不支持 Renderer: ${selectedRendererID}`);
+    if (!portal.plugins.some((ref) => samePlugin(ref, selectedRendererTemplate.module))) {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_MODULE_MISSING", `Renderer 模块未包含在 Portal 解析锁中: ${selectedRendererID}`);
+    }
+    if (portal.resolution.pluginOrigins[selectedRendererTemplate.module.id] !== "platform-profile") {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_ORIGIN", `Renderer 模块必须来自 Platform Profile: ${selectedRendererID}`);
+    }
+    const rendererModule = await this.loader.load(selectedRendererTemplate.module);
+    this.assertTrustedFirstParty(rendererModule, selectedRendererTemplate.module.id);
+    const selectedRenderer = rendererModule.renderer;
+    if (selectedRenderer === undefined || selectedRenderer.id !== selectedRendererTemplate.id || selectedRenderer.framework !== selectedRendererTemplate.framework) {
+      throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_INVALID", `Renderer 模块与 Adapter 目录不匹配: ${selectedRendererID}`);
+    }
     const capabilities = new Set(selectedRenderer.capabilities);
     if (!requiredCapabilities.every((capability) => capabilities.has(capability)) || !validThemeTemplateCatalog(selectedRenderer)) {
       throw new PortalAssemblyError("DESIGN_SYSTEM_INCOMPLETE", "选定 Renderer 未实现 Portal 所需的全部 UI 能力或主题目录无效");
@@ -162,6 +174,16 @@ export class PortalRuntime {
     if (!declaredThemeTemplates.has(selectedRenderer.defaultThemeTemplate) || (configuredThemeTemplate !== undefined && !declaredThemeTemplates.has(configuredThemeTemplate))) {
       throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_TEMPLATE_INVALID", `Renderer 不支持主题模板: ${configuredThemeTemplate ?? selectedRenderer.defaultThemeTemplate}`);
     }
+
+    const rendererModuleKeys = new Set(renderAdapter.renderers.map((renderer) => moduleKey(renderer.module)));
+    const otherRefs = portal.plugins.filter((ref) => !samePlugin(ref, portal.renderAdapter) && !rendererModuleKeys.has(moduleKey(ref)));
+    const otherLoaded = await Promise.all(otherRefs.map(async (ref) => ({ ref, module: await this.loader.load(ref) })));
+    const loaded = [
+      { ref: portal.renderAdapter as PluginRef, module: renderAdapterModule },
+      { ref: selectedRendererTemplate.module as PluginRef, module: rendererModule },
+      ...otherLoaded,
+    ];
+    const modules = new Map(loaded.map((item) => [moduleKey(item.ref), item.module]));
 
     const shellModule = requiredModule(modules, portal.shell);
     this.assertTrustedFirstParty(shellModule, portal.shell.id);
@@ -208,6 +230,7 @@ export class PortalRuntime {
       if ([portal.renderAdapter, portal.shell, portal.workbench].some((foundation) => samePlugin(ref, foundation))) {
         continue;
       }
+      if (rendererModuleKeys.has(moduleKey(ref))) continue;
       const plugin = requiredModule(modules, ref);
       this.assertTrustedFirstParty(plugin, ref.id);
       if (plugin.renderAdapter !== undefined || plugin.shell !== undefined || plugin.workbench !== undefined) {
@@ -263,7 +286,7 @@ export class PortalRuntime {
       };
       await plugin.register?.(context);
     }
-    const preparedModules = portal.plugins.map((ref) => Object.freeze({ ref: Object.freeze({ ...ref }), module: requiredModule(modules, ref) }));
+    const preparedModules = loaded.map(({ ref, module }) => Object.freeze({ ref: Object.freeze({ ...ref }), module }));
     return Object.freeze({ portal: portalSnapshot, renderAdapter: selectedRenderer, renderAdapterCatalog: renderAdapter, shell, workbench, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
   }
 
@@ -338,11 +361,20 @@ function validThemeTemplateCatalog(adapter: UIRenderer): boolean {
 function validRendererCatalog(adapter: UIRenderAdapter): boolean {
   if (!/^[a-z][a-z0-9-]{0,63}$/.test(adapter.defaultRenderer) || adapter.renderers.length === 0) return false;
   const identifiers = new Set<string>();
+  const modules = new Set<string>();
   for (const renderer of adapter.renderers) {
-    if (!/^[a-z][a-z0-9-]{0,63}$/.test(renderer.id) || identifiers.has(renderer.id) || !renderer.framework || !validLocalizedText(renderer.label)) return false;
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(renderer.id) || identifiers.has(renderer.id) || !renderer.framework || !validLocalizedText(renderer.label) ||
+        !validPluginRef(renderer.module) || modules.has(moduleKey(renderer.module))) return false;
     identifiers.add(renderer.id);
+    modules.add(moduleKey(renderer.module));
   }
   return identifiers.has(adapter.defaultRenderer);
+}
+
+function validPluginRef(ref: PluginRef): boolean {
+  return /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/.test(ref.id) &&
+    /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(ref.version) &&
+    (ref.channel === undefined || /^[a-z][a-z0-9-]{0,63}$/.test(ref.channel));
 }
 
 function mergeLocalization(base: PluginLocalization, extra: PluginLocalization): PluginLocalization {

@@ -28,12 +28,13 @@ Profile 使用下列受限目录治理 Renderer：
 
 ## 交付与性能边界
 
-首阶段把 Renderer 源码纳入一个已验签 Adapter 制品，先完成治理、切换和回退边界。浏览器交付协议目前只验证每插件一个入口模块；因此不能用未验签 URL 或 Blob 相对路径实现伪按需加载。
+Renderer 保持为 Adapter 管辖的首方内部模块：每个框架拥有独立、已验签的前端制品入口，Adapter 主模块只携带目录和模块引用。RuntimeSpec 锁定这些模块的摘要与包来源，但 Portal 只在确定用户/Profile 的 Renderer 后，通过既有摘要校验 Loader 获取该模块。未选 Renderer 不下载、不执行，也不进入 React 树。
 
-后续若需物理按需加载，必须先扩展制品清单、RuntimeSpec、Edge 内容寻址快照和浏览器 Loader，使每个 Renderer 子制品都具备独立摘要、包来源绑定、预取策略和恢复路径。该工作在交付协议完成前不得以性能优化名义绕过验签。
+这不是普通 `import()` 分包：Portal 会将已校验字节从 Blob URL 执行，普通相对路径分包既不能稳定解析，也会绕过内容摘要验证。Renderer 模块必须继续作为 RuntimeSpec 中的受控模块存在；禁止使用任意 URL、未锁定动态 import 或将框架选择权交给功能插件。
 
 ## 结果
 
 - Profile 与配置中心改为编辑 Renderer 默认值，不再替换 Adapter 插件。
 - 主题模板保持 Renderer 私有，避免 Arco/MUI 的原生主题对象泄漏到 Portal 或功能插件。
 - 未来新增 UI 框架仅增加 Renderer，实现不改变业务插件、Shell 或 Workbench。
+- 首屏只传输当前 Renderer 的框架代码；用户切换 Renderer 后刷新新一代 Portal，再加载对应模块。

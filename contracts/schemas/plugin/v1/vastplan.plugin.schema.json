@@ -415,6 +415,7 @@
         "menus": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "settings": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "renderAdapters": { "type": "array", "items": { "$ref": "#/$defs/renderAdapterContribution" } },
+        "rendererModules": { "type": "array", "items": { "$ref": "#/$defs/rendererModuleContribution" } },
         "shells": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } },
         "workbenches": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } }
       }
@@ -444,6 +445,17 @@
             { "contains": { "const": "theme" } }
           ]
         }
+      }
+    },
+    "rendererModuleContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "adapter", "uiContract", "framework"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "adapter": { "const": "ui.render.adapter" },
+        "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "framework": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 }
       }
     },
     "structureFoundationContribution": {

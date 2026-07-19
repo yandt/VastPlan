@@ -21,7 +21,7 @@ const common = {
 const plugins = await discoverFrontendPlugins();
 
 const modules = [];
-for (const { id, entry, source } of plugins) {
+for (const { id, entry, source, deferred } of plugins) {
   const outfile = outputRoot === undefined
     ? resolve("extensions/plugins", id, entry)
     : resolve(outputRoot, `${id}.js`);
@@ -40,7 +40,7 @@ for (const { id, entry, source } of plugins) {
   }
   if (outputRoot !== undefined) {
     const bytes = await readFile(outfile);
-    modules.push({ id, entry, file: outfile, sha256: createHash("sha256").update(bytes).digest("hex") });
+    modules.push({ id, entry, file: outfile, sha256: createHash("sha256").update(bytes).digest("hex"), deferred });
   }
 }
 
@@ -59,7 +59,9 @@ async function discoverFrontendPlugins() {
     if (!/^frontend\/dist\/[A-Za-z0-9._/-]+\.(?:m?js)$/.test(entry) || entry.includes("..")) {
       throw new Error(`${manifestPath} 的 entry.frontend 必须是 frontend/dist/ 下的 JavaScript 文件`);
     }
-    plugins.push({ id, entry, source: await findFrontendSource(pluginRoot, id) });
+    const rendererModules = manifest.contributes?.frontend?.rendererModules;
+    const deferred = Array.isArray(rendererModules) && rendererModules.length === 1;
+    plugins.push({ id, entry, deferred, source: await findFrontendSource(pluginRoot, id) });
   }
   return plugins;
 }

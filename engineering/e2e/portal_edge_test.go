@@ -64,6 +64,8 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 		publishBuiltPlugin(t, repository, plugin.packageDir, plugin.manifest)
 	}
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.mui/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.workflow.workbench/vastplan.plugin.json")
 
@@ -234,7 +236,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != firstActivation.ID || len(runtime.Modules) != 9 || runtime.Modules[0].ID != "cn.vastplan.foundation.frontend.render.adapter" || runtime.Modules[1].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Modules[2].ID != "cn.vastplan.foundation.frontend.workflow.workbench" || runtime.Modules[3].ID != "cn.vastplan.platform.configuration.portal-composer" || runtime.Modules[8].ID != "cn.vastplan.platform.infrastructure.deployment-manager" {
+	if runtime.Portal.Revision != firstActivation.ID || len(runtime.Modules) != 11 || runtime.Modules[0].ID != "cn.vastplan.foundation.frontend.render.adapter" || runtime.Modules[1].ID != "cn.vastplan.foundation.frontend.render.adapter.arco" || !runtime.Modules[1].Deferred || runtime.Modules[2].ID != "cn.vastplan.foundation.frontend.render.adapter.mui" || !runtime.Modules[2].Deferred || runtime.Modules[3].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Modules[4].ID != "cn.vastplan.foundation.frontend.workflow.workbench" || runtime.Modules[5].ID != "cn.vastplan.platform.configuration.portal-composer" || runtime.Modules[10].ID != "cn.vastplan.platform.infrastructure.deployment-manager" {
 		t.Fatalf("unexpected governed runtime: %+v", runtime)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, runtime.Modules[0].URL, map[string]any{})
@@ -266,7 +268,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != topActivation.ID || len(runtime.Modules) < 2 || runtime.Modules[1].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Portal.Shell.Config.DefaultTemplate != "top-navigation" {
+	if runtime.Portal.Revision != topActivation.ID || len(runtime.Modules) < 4 || runtime.Modules[3].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Portal.Shell.Config.DefaultTemplate != "top-navigation" {
 		t.Fatalf("Portal did not switch to top navigation through Activation: %+v", runtime)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, "/v1/portal-recovery?path=/operations", map[string]any{})
@@ -303,7 +305,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != rolledBack.ID || len(runtime.Modules) < 2 || runtime.Modules[1].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Portal.Shell.Config.DefaultTemplate != "standard" {
+	if runtime.Portal.Revision != rolledBack.ID || len(runtime.Modules) < 4 || runtime.Modules[3].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Portal.Shell.Config.DefaultTemplate != "standard" {
 		t.Fatalf("rollback did not restore exact standard-layout inputs: %+v", runtime)
 	}
 }

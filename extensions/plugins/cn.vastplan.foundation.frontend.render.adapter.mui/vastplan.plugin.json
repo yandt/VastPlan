@@ -11,5 +11,5 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
-  "contributes": { "frontend": { "views": [{ "id": "internal.mui-renderer-source", "title": "Internal MUI renderer source" }] } }
+  "contributes": { "frontend": { "rendererModules": [{ "id": "mui", "adapter": "ui.render.adapter", "uiContract": "^4.0.0", "framework": "mui" }] } }
 }

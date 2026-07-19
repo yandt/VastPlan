@@ -62,6 +62,23 @@ describe("VerifiedFrontendPluginLoader", () => {
     });
   });
 
+  it("recognizes a Renderer only from its explicit named module export", async () => {
+    const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.render.adapter.arco" });
+    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({
+      renderer: {
+        id: "arco",
+        framework: "arco",
+        Provider() {},
+        capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"],
+        themeTemplates: [{ id: "light" }],
+        defaultThemeTemplate: "light",
+      },
+    }));
+
+    const loaded = await loader.load({ id: locked.id, version: locked.version });
+    expect(loaded.renderer).toMatchObject({ id: "arco", framework: "arco" });
+  });
+
   it("fails closed before import when bytes do not match the runtime lock", async () => {
     const locked = await descriptor({ sha256: "b".repeat(64), url: `/v1/portal-modules/7/${"b".repeat(64)}.js` });
     const importer = vi.fn();

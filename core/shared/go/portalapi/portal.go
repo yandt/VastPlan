@@ -49,7 +49,7 @@ type PluginRef struct {
 
 type RenderAdapter struct {
 	PluginRef
-	UIContract string                                     `json:"uiContract"`
+	UIContract string                                    `json:"uiContract"`
 	Config     frontendcompositionv1.RenderAdapterConfig `json:"config"`
 }
 
@@ -141,6 +141,9 @@ type FrontendModule struct {
 	URL           string `json:"url"`
 	SHA256        string `json:"sha256"`
 	PackageSHA256 string `json:"packageSha256"`
+	// Deferred modules are locked and authorized like every other module, but
+	// must not be preloaded. Renderer selection fetches exactly one on demand.
+	Deferred bool `json:"deferred,omitempty"`
 }
 
 // RuntimeSpec is the only browser bootstrap input. The browser never receives

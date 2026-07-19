@@ -238,9 +238,13 @@ func (h *Handler) serveFrontendModule(w http.ResponseWriter, r *http.Request, p 
 
 func addModulePreloads(w http.ResponseWriter, runtime portalapi.RuntimeSpec) {
 	for _, module := range runtime.Modules {
+		if module.Deferred {
+			continue
+		}
 		w.Header().Add("Link", fmt.Sprintf("<%s>; rel=preload; as=fetch; crossorigin=use-credentials", module.URL))
 	}
 }
+
 func acceptsEncoding(header, encoding string) bool {
 	for _, value := range strings.Split(header, ",") {
 		if strings.TrimSpace(strings.SplitN(value, ";", 2)[0]) == encoding {

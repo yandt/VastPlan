@@ -373,9 +373,24 @@ func frontendModule(revision uint64, plugin verifiedPortalPlugin) (FrontendModul
 			Entry:     entry,
 			URL:       fmt.Sprintf("/v1/portal-modules/%d/%s.js", revision, ref.ID),
 			SHA256:    hex.EncodeToString(digest[:]), PackageSHA256: artifact.SHA256,
+			Deferred: isDeferredRendererModule(manifest),
 		},
 		Content: content,
 	}, nil
+}
+
+func isDeferredRendererModule(manifest pluginv1.Manifest) bool {
+	var frontend struct {
+		RendererModules []struct {
+			ID         string `json:"id"`
+			Adapter    string `json:"adapter"`
+			UIContract string `json:"uiContract"`
+			Framework  string `json:"framework"`
+		} `json:"rendererModules"`
+	}
+	return json.Unmarshal(manifest.Contributes["frontend"], &frontend) == nil && len(frontend.RendererModules) == 1 &&
+		frontend.RendererModules[0].ID != "" && frontend.RendererModules[0].Adapter == "ui.render.adapter" &&
+		frontend.RendererModules[0].UIContract != "" && frontend.RendererModules[0].Framework != ""
 }
 
 func validCompositionRef(ref compositioncommonv1.Ref) bool {

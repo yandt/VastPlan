@@ -1,15 +1,18 @@
 import type { UIRenderAdapter } from "@vastplan/ui-primitives";
-import { arcoRenderer } from "@vastplan/ui-render-adapter-arco";
-import { muiRenderer } from "@vastplan/ui-render-adapter-mui";
 
 /**
  * The only Portal render-adapter foundation. Frameworks are trusted internal
- * renderers, selected from this catalog instead of becoming competing roots.
+ * renderer modules, selected from this catalog instead of becoming competing
+ * roots. Framework code is intentionally not imported here: the Portal host
+ * fetches exactly one verified Renderer after profile selection.
  */
 const adapter: UIRenderAdapter = {
   id: "ui.render.adapter",
   uiContract: "4.0.0",
-  renderers: [arcoRenderer, muiRenderer],
+  renderers: [
+    { id: "arco", label: { namespace: "cn.vastplan.foundation.frontend.render.adapter", key: "renderer.arco", fallback: "Arco Design" }, framework: "arco", module: { id: "cn.vastplan.foundation.frontend.render.adapter.arco", version: "1.0.0", channel: "stable" } },
+    { id: "mui", label: { namespace: "cn.vastplan.foundation.frontend.render.adapter", key: "renderer.mui", fallback: "Material UI" }, framework: "mui", module: { id: "cn.vastplan.foundation.frontend.render.adapter.mui", version: "1.0.0", channel: "stable" } },
+  ],
   defaultRenderer: "arco",
   localization: {
     defaultLocale: "zh-CN",

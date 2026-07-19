@@ -1,6 +1,6 @@
 # Arco Design System Plugin
 
-`cn.vastplan.foundation.frontend.render.adapter.arco` 是统一 Render Adapter 的内部 Arco Renderer 源码包。它实现 `@vastplan/ui-primitives` 的语义组件、动态表单与主题映射，但不再单独贡献 `ui.render.adapter` 或作为 Portal 基础插件被选择。
+`cn.vastplan.foundation.frontend.render.adapter.arco` 是统一 Render Adapter 的内部 Arco Renderer 模块。它实现 `@vastplan/ui-primitives` 的语义组件、动态表单与主题映射；Portal 只会在 Adapter 目录选中 `arco` 时下载它，不单独贡献 `ui.render.adapter` 或作为 Portal 基础插件被选择。
 
 Portal 只选择 `cn.vastplan.foundation.frontend.render.adapter`。该 Adapter 在其受治理 Renderer 目录中使用本源码；同一 Portal Generation 仍只运行一个 Renderer。
 

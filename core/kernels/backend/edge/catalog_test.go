@@ -135,6 +135,24 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 	}
 }
 
+func TestFrontendRendererModuleIsDeferredFromTrustedManifest(t *testing.T) {
+	manifestRaw := `{"id":"cn.vastplan.foundation.frontend.render.adapter.arco.test","name":"renderer","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"rendererModules":[{"id":"arco","adapter":"ui.render.adapter","uiContract":"^4.0.0","framework":"arco"}]}}}`
+	artifact, packageBytes := packageFrontendFixture(t, manifestRaw, []byte(`export const renderer = {};`))
+	manifest, err := pluginv1.ParseManifest([]byte(manifestRaw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset, err := frontendModule(1, verifiedPortalPlugin{
+		ref:          portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel},
+		artifact:     artifact,
+		packageBytes: packageBytes,
+		manifest:     manifest,
+	})
+	if err != nil || !asset.Descriptor.Deferred {
+		t.Fatalf("Renderer 模块必须作为延迟前端对象交付: asset=%+v err=%v", asset.Descriptor, err)
+	}
+}
+
 func lockTestManagement(spec *portalapi.PortalSpec) {
 	profile := spec.Resolution.PlatformProfile
 	spec.Resolution.PlatformCatalog = compositioncommonv1.Ref{ID: "catalog", Revision: 1, Digest: strings.Repeat("c", 64)}
