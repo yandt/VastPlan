@@ -25,6 +25,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/observability"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/processguard"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 )
@@ -212,6 +213,9 @@ type Host struct {
 	Registry *registry.Registry
 	Logf     func(format string, args ...any)
 	Observer *observability.Observer
+	// ProcessGuardian controls independently launched plugin process groups.
+	// Nil selects the operating-system default.
+	ProcessGuardian processguard.Guardian
 
 	// 时限（零值时用默认）。
 	LaunchTimeout    time.Duration
@@ -366,18 +370,29 @@ func (h *Host) Stop() {
 	}
 	h.mu.RUnlock()
 
-	for _, s := range sessions {
-		// 停服时逐个回收；单个插件关闭失败不影响其余（teardown 会强制杀进程）
-		if err := h.Close(&PluginProcess{PluginID: s.pluginID, SessionID: s.id}); err != nil {
-			h.Logf("回收插件 %s 时出错: %v", s.pluginID, err)
-		}
+	// 并行回收所有执行单元，使总停机上界取决于最慢的一个插件，
+	// 而不是把每个故障插件的宽限期累加到 systemd TimeoutStopSec。
+	var closeGroup sync.WaitGroup
+	for _, sess := range sessions {
+		closeGroup.Add(1)
+		go func(sess *session) {
+			defer closeGroup.Done()
+			if err := h.Close(&PluginProcess{PluginID: sess.pluginID, SessionID: sess.id}); err != nil {
+				h.Logf("回收插件 %s 时出错: %v", sess.pluginID, err)
+			}
+		}(sess)
 	}
 	for _, instance := range embedded {
-		if err := h.Close(&PluginProcess{PluginID: instance.pluginID, Version: instance.version,
-			SessionID: instance.id, embedded: instance}); err != nil {
-			h.Logf("回收内嵌插件 %s 时出错: %v", instance.pluginID, err)
-		}
+		closeGroup.Add(1)
+		go func(instance *embeddedInstance) {
+			defer closeGroup.Done()
+			if err := h.Close(&PluginProcess{PluginID: instance.pluginID, Version: instance.version,
+				SessionID: instance.id, embedded: instance}); err != nil {
+				h.Logf("回收内嵌插件 %s 时出错: %v", instance.pluginID, err)
+			}
+		}(instance)
 	}
+	closeGroup.Wait()
 	if h.srv != nil {
 		h.srv.Stop()
 	}

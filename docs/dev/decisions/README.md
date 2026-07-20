@@ -124,3 +124,5 @@
 - [ADR-0091 制品存储 Provider 供给边界](ADR-0091-制品存储Provider供给边界.md)
 - [ADR-0092 业务插件拥有托管凭证生命周期](ADR-0092-业务插件拥有托管凭证生命周期.md)
 - [ADR-0093 可信宿主加密 Material Lease](ADR-0093-可信宿主加密Material-Lease.md)
+- [ADR-0094 操作系统 Guardian 与独立进程故障收敛](ADR-0094-操作系统Guardian与独立进程故障收敛.md)
+- [ADR-0095 Database Runtime、多 Provider 连接池与集群事务](ADR-0095-Database-Runtime多Provider连接池与集群事务.md)

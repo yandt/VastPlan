@@ -85,6 +85,12 @@ chmod 0600 node-a.bootstrap.json /secure/ssh/node-bootstrap.key /secure/node-a/*
 
 在 Node Lease 出现前，不得把 SSH 成功等同于集群接管完成。
 
+### systemd 就绪、看门狗与升级
+
+新生成的 unit 使用 `Type=notify`：Node Agent 只有在接入控制面并启动 Node Lease Guard 后才发送 `READY=1`。`WatchdogSec=60s` 只在 Agent/Reconciler 控制循环真实推进，或处于与 reconcile deadline 相同的 15 分钟有界工作租约时收到存活通知；普通卡死会快速触发失败重启，长任务不会被 60 秒阈值误杀，超过租约仍未返回则停止喂狗。`KillMode=control-group` 会在服务退出时回收 Kernel、Runtime Host、独立插件及其子孙进程。完整分层见 [ADR-0094](../decisions/ADR-0094-操作系统Guardian与独立进程故障收敛.md)。
+
+已经安装的旧 unit 不会因 Kernel 二进制升级自动获得这些 systemd 属性。升级到本决策后的首个版本时，必须通过受控引导/升级流程原子重装 unit、执行 `systemctl daemon-reload` 并重启服务；随后检查 `systemctl show vastplan-node-agent.service` 中 `Type=notify`、`WatchdogUSec=1min` 和 `KillMode=control-group` 已生效。
+
 ## 4. 失败与重试
 
 - host key 不匹配：按主机身份事件处理，禁止使用跳过校验参数；

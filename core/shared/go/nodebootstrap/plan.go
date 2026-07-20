@@ -62,15 +62,19 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
 User=` + ServiceUser + `
 Group=` + ServiceUser + `
 EnvironmentFile=` + ArtifactTokenFile + `
 ExecStart=` + strings.Join(args, " ") + `
-Restart=always
+Restart=on-failure
 RestartSec=5s
+WatchdogSec=60s
 TimeoutStopSec=90s
 KillSignal=SIGTERM
+KillMode=control-group
+SendSIGKILL=yes
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

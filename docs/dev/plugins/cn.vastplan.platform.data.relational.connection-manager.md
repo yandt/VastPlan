@@ -8,9 +8,9 @@
 
 本插件管理租户隔离的数据库连接定义：驱动、端点、数据库名和不透明托管凭证引用。`define` 可接收一次性的只写 `credentialValue`，立即交给凭证插件加密托管；明文不进入连接状态文件、响应或日志。连接定义和凭证候选以可恢复 pending 状态收敛，状态文件使用 `0600` 原子替换。
 
-`probe` 将非敏感定义和 `CredentialRef` 交给 `kernel.database.probe`。可信部署适配器实现 `kernelspi.DatabaseBroker`，并在内部通过 `CredentialBroker` 使用 Vault/KMS 凭证。插件无法取得、序列化或返回凭证明文。
+`probe` 当前将非敏感定义和 `CredentialRef` 交给 `kernel.database.probe`。可信部署适配器实现 `kernelspi.DatabaseBroker`，并在内部通过 `CredentialBroker` 使用 Vault/KMS 凭证。插件无法取得、序列化或返回凭证明文。
 
-这使连接产品、数据库驱动和凭证使用策略可以由部署适配器独立演进，内核只保留稳定的 `DatabaseBroker` SPI 与经过认证的宿主回调边界。
+目标架构由 dedicated 的 `cn.vastplan.foundation.data.relational.runtime` 基础插件负责真实 Provider、连接池、查询和集群事务；本插件继续只做管理面。迁移完成后稳定 wire capability 取代当前 Kernel Broker，Kernel 不编入 PostgreSQL、MySQL 或其他数据库驱动。完整边界和实施顺序见 [ADR-0095](../decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。
 
 ## 运行配置
 
@@ -26,6 +26,10 @@
 | `probe` | 让可信宿主以凭证引用执行连通性检查 |
 
 没有返回或解密凭证的 API。生产部署未注入 `DatabaseBroker` 时，`probe` 会 fail-closed。
+
+## 当前与目标状态
+
+当前已经完成连接定义、托管凭证 candidate Saga 和可信宿主 `probe` 边界，尚未实现真实数据库连接池。下一阶段不会把池放入 Kernel，而是实现独立 Database Runtime；首批同时支持 `postgresql` 与 `mysql`，后续 Provider 复用同一契约。每个 Runtime 副本拥有本地有界池，事务通过不透明句柄固定路由到创建它的实例。
 
 ## Portal 管理页
 

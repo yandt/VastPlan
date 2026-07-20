@@ -17,6 +17,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"cdsoft.com.cn/VastPlan/core/shared/go/processguard"
 )
 
 // RuntimeHostingMode decides whether compatible logical plugin units share a
@@ -162,13 +164,14 @@ type runtimeHostProcess struct {
 	logf   func(string, ...any)
 	onExit func(*runtimeHostProcess)
 
-	writeMu sync.Mutex
-	mu      sync.Mutex
-	pending map[string]chan runtimeControlResponse
-	units   map[string]chan error
-	done    chan struct{}
-	err     error
-	closed  atomic.Bool
+	writeMu  sync.Mutex
+	mu       sync.Mutex
+	pending  map[string]chan runtimeControlResponse
+	units    map[string]chan error
+	done     chan struct{}
+	err      error
+	closed   atomic.Bool
+	guardian processguard.Guardian
 }
 
 type runtimeHostLogWriter struct {
@@ -187,12 +190,18 @@ func (w runtimeHostLogWriter) Write(raw []byte) (int, error) {
 	return len(raw), nil
 }
 
-func startRuntimeHostProcess(key RuntimeHostKey, spec runtimeHostProcessSpec,
+func startRuntimeHostProcess(key RuntimeHostKey, spec runtimeHostProcessSpec, guardian processguard.Guardian,
 	logf func(string, ...any), onExit func(*runtimeHostProcess)) (*runtimeHostProcess, error) {
 	if strings.TrimSpace(spec.Command) == "" {
 		return nil, errors.New("Runtime Host command 不能为空")
 	}
 	cmd := exec.Command(spec.Command, spec.Args...)
+	if guardian == nil {
+		guardian = processguard.Default()
+	}
+	if err := guardian.Prepare(cmd); err != nil {
+		return nil, fmt.Errorf("准备 Runtime Host 进程守护: %w", err)
+	}
 	// Runtime Hosts are trusted infrastructure, but they still must not inherit
 	// arbitrary kernel secrets. Per-plugin allowlisted values are delivered only
 	// in the start control message. Windows needs its system root for process
@@ -218,6 +227,7 @@ func startRuntimeHostProcess(key RuntimeHostKey, spec runtimeHostProcessSpec,
 	process := &runtimeHostProcess{
 		key: key, spec: spec, cmd: cmd, stdin: stdin, logf: logf, onExit: onExit,
 		pending: map[string]chan runtimeControlResponse{}, units: map[string]chan error{}, done: make(chan struct{}),
+		guardian: guardian,
 	}
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()
@@ -368,10 +378,17 @@ func (p *runtimeHostProcess) shutdown() {
 	_ = p.stdin.Close()
 	select {
 	case <-p.done:
+		// Host 组长已退出时仍清扫同组子孙进程。
+		_ = p.guardian.Kill(p.cmd)
 	case <-time.After(5 * time.Second):
-		if p.cmd.Process != nil {
-			_ = p.cmd.Process.Kill()
+		_ = p.guardian.Terminate(p.cmd)
+		select {
+		case <-p.done:
+			_ = p.guardian.Kill(p.cmd)
+			return
+		case <-time.After(5 * time.Second):
 		}
+		_ = p.guardian.Kill(p.cmd)
 		<-p.done
 	}
 }
@@ -399,12 +416,20 @@ type RuntimePoolManager struct {
 	retiring map[*runtimeHostProcess]struct{}
 	sequence atomic.Uint64
 	logf     func(string, ...any)
+	guardian processguard.Guardian
 	closed   bool
 }
 
 func NewRuntimePoolManager(logf func(string, ...any)) *RuntimePoolManager {
+	return NewRuntimePoolManagerWithGuardian(logf, processguard.Default())
+}
+
+func NewRuntimePoolManagerWithGuardian(logf func(string, ...any), guardian processguard.Guardian) *RuntimePoolManager {
+	if guardian == nil {
+		guardian = processguard.Default()
+	}
 	return &RuntimePoolManager{
-		hosts: map[string]*pooledRuntimeHost{}, retiring: map[*runtimeHostProcess]struct{}{}, logf: logf,
+		hosts: map[string]*pooledRuntimeHost{}, retiring: map[*runtimeHostProcess]struct{}{}, logf: logf, guardian: guardian,
 	}
 }
 
@@ -448,7 +473,7 @@ func (m *RuntimePoolManager) Acquire(key RuntimeHostKey, spec runtimeHostProcess
 	}
 	m.mu.Unlock()
 
-	process, err := startRuntimeHostProcess(key, spec, m.logf, m.evict)
+	process, err := startRuntimeHostProcess(key, spec, m.guardian, m.logf, m.evict)
 	if err != nil {
 		return nil, err
 	}
@@ -617,9 +642,16 @@ func (m *RuntimePoolManager) Close() error {
 	m.hosts = map[string]*pooledRuntimeHost{}
 	m.retiring = map[*runtimeHostProcess]struct{}{}
 	m.mu.Unlock()
+	// 多个语言 Host 并行收敛，避免它们的优雅停机宽限期串行累加。
+	var shutdownGroup sync.WaitGroup
 	for _, host := range hosts {
-		host.shutdown()
+		shutdownGroup.Add(1)
+		go func(host *runtimeHostProcess) {
+			defer shutdownGroup.Done()
+			host.shutdown()
+		}(host)
 	}
+	shutdownGroup.Wait()
 	return nil
 }
 

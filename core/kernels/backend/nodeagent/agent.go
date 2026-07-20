@@ -9,6 +9,8 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 )
 
+const defaultReconcileTimeout = 15 * time.Minute
+
 // FileSource 是本地开发期望态来源；集群模式替换为 NATS KV watch，Reconciler 不感知来源。
 type FileSource struct {
 	Path string
@@ -30,8 +32,18 @@ type Agent struct {
 	Interval   time.Duration
 	RetryMin   time.Duration
 	RetryMax   time.Duration
-	Jitter     func(time.Duration) time.Duration
-	Logf       func(string, ...any)
+	// ReconcileTimeout bounds one complete desired-to-actual convergence pass.
+	// Zero selects 15 minutes, covering large artifact work without allowing a
+	// permanently stuck driver to feed the service watchdog forever.
+	ReconcileTimeout time.Duration
+	Jitter           func(time.Duration) time.Duration
+	Logf             func(string, ...any)
+	// Pulse proves that the Agent control loop is still advancing. Production
+	// wires it to systemd watchdog liveness; nil keeps tests and embeds simple.
+	Pulse func()
+	// BeginWork grants the service watchdog the same bounded window used by the
+	// reconcile context. Nil disables this optional host integration.
+	BeginWork func(time.Duration) func()
 }
 
 func (a *Agent) Run(ctx context.Context) error {
@@ -45,6 +57,11 @@ func (a *Agent) Run(ctx context.Context) error {
 	if a.Logf == nil {
 		a.Logf = func(string, ...any) {}
 	}
+	pulse := a.Pulse
+	if pulse == nil {
+		pulse = func() {}
+	}
+	pulse()
 	var sourceEvents <-chan SourceEvent
 	if watcher, ok := a.Source.(WatchableDesiredStateSource); ok {
 		events, err := watcher.Watch(ctx)
@@ -61,6 +78,10 @@ func (a *Agent) Run(ctx context.Context) error {
 	if retryMax < retryMin {
 		retryMax = 30 * time.Second
 	}
+	reconcileTimeout := a.ReconcileTimeout
+	if reconcileTimeout <= 0 {
+		reconcileTimeout = defaultReconcileTimeout
+	}
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -68,7 +89,16 @@ func (a *Agent) Run(ctx context.Context) error {
 	var retryTimer *time.Timer
 	attempt := 0
 	run := func(reason string) {
-		err := a.reconcileOnce(ctx)
+		pulse()
+		finishWork := func() {}
+		if a.BeginWork != nil {
+			finishWork = a.BeginWork(reconcileTimeout)
+		}
+		reconcileCtx, cancelReconcile := context.WithTimeout(ctx, reconcileTimeout)
+		err := a.reconcileOnce(reconcileCtx)
+		cancelReconcile()
+		finishWork()
+		pulse()
 		if err == nil {
 			attempt = 0
 			if retryTimer != nil && !retryTimer.Stop() {
@@ -104,15 +134,18 @@ func (a *Agent) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
+			pulse()
 			if retry == nil {
 				run("poll")
 			}
 		case event := <-a.Reconciler.Runtime.Events():
+			pulse()
 			a.Logf("运行时变化 unit=%s type=%s: %s", event.UnitID, event.Type, event.Message)
 			if retry == nil {
 				run("runtime_event")
 			}
 		case event, ok := <-sourceEvents:
+			pulse()
 			if !ok {
 				sourceEvents = nil
 				a.Logf("期望态 watch 已关闭，将保留轮询")
@@ -125,6 +158,7 @@ func (a *Agent) Run(ctx context.Context) error {
 				run("source_watch")
 			}
 		case <-retry:
+			pulse()
 			retry = nil
 			run("retry")
 		}

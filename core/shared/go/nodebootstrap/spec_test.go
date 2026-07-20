@@ -79,7 +79,11 @@ func TestRenderInstallScriptIsFixedAndSystemdHardened(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"NoNewPrivileges=true", "ProtectSystem=strict", "ReadWritePaths=/var/lib/vastplan", `"-third-party-plugin-policy" "require-isolation"`, `"-deployment" "prod"`} {
+	for _, expected := range []string{
+		"Type=notify", "NotifyAccess=main", "WatchdogSec=60s", "Restart=on-failure",
+		"KillMode=control-group", "SendSIGKILL=yes", "NoNewPrivileges=true", "ProtectSystem=strict",
+		"ReadWritePaths=/var/lib/vastplan", `"-third-party-plugin-policy" "require-isolation"`, `"-deployment" "prod"`,
+	} {
 		if !strings.Contains(unit, expected) {
 			t.Fatalf("systemd unit 缺少 %q:\n%s", expected, unit)
 		}

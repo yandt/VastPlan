@@ -23,11 +23,21 @@ type Reconciler struct {
 	Runtime    Runtime
 	StateStore StateStore
 	Now        func() time.Time
+	// Pulse marks progress through potentially long multi-unit reconciliation.
+	// It is deliberately host-only and never enters DesiredState.
+	Pulse func()
+}
+
+func (r *Reconciler) pulse() {
+	if r != nil && r.Pulse != nil {
+		r.Pulse()
+	}
 }
 
 // Reconcile 每次执行都是幂等的。当前实例与候选实例分别持久化；候选插件全部安装且
 // 启动成功后 Runtime 才替换旧实例，任一阶段失败都保留旧实例并留下候选失败实际态。
 func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.DesiredState) (Result, error) {
+	r.pulse()
 	actual, err := r.beginReconcile(desired)
 	if err != nil {
 		return Result{}, err
@@ -114,6 +124,7 @@ func (r *Reconciler) reconcileTargets(ctx context.Context, revision uint64, targ
 		return false, fmt.Errorf("节点 %s 本地 unit 依赖图无效: %w", r.NodeID, err)
 	}
 	for _, id := range ordered {
+		r.pulse()
 		unitChanged, err := r.reconcileTarget(ctx, revision, targets[id], actual)
 		changed = changed || unitChanged
 		if err != nil {
@@ -124,6 +135,7 @@ func (r *Reconciler) reconcileTargets(ctx context.Context, revision uint64, targ
 }
 
 func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit deploymentv1.Unit, actual *ActualState) (bool, error) {
+	r.pulse()
 	id, fingerprint := unit.ID, unit.Fingerprint()
 	policy, err := unitPolicy(unit)
 	if err != nil {
@@ -158,6 +170,7 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 	}
 
 	installed, stage, err := r.prepare(ctx, unit)
+	r.pulse()
 	if err != nil {
 		return false, r.recordCandidateFailure(actual, id, stage, err)
 	}
@@ -230,6 +243,7 @@ func (r *Reconciler) recordCandidateFailure(actual *ActualState, id, stage strin
 func (r *Reconciler) removeObsoleteUnits(ctx context.Context, targets map[string]deploymentv1.Unit, actual *ActualState) (bool, error) {
 	changed := false
 	for _, id := range unionUnitIDs(actual.Units, r.Runtime.UnitIDs()) {
+		r.pulse()
 		if _, keep := targets[id]; keep {
 			continue
 		}
@@ -396,6 +410,7 @@ func (r *Reconciler) Shutdown(ctx context.Context) error {
 	}
 	actual.Errors = nil
 	for _, id := range r.Runtime.UnitIDs() {
+		r.pulse()
 		state, ok := actual.Units[id]
 		if !ok {
 			state = UnitState{Phase: PhaseActive, PhaseChangedAt: r.now()}
@@ -450,12 +465,15 @@ func (r *Reconciler) Shutdown(ctx context.Context) error {
 func (r *Reconciler) prepare(ctx context.Context, unit deploymentv1.Unit) ([]InstalledPlugin, string, error) {
 	plugins := make([]InstalledPlugin, 0, len(unit.Plugins))
 	for _, ref := range unit.Plugins {
+		r.pulse()
 		artifactRef := pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: ref.Channel}
 		verified, err := r.resolveArtifact(ctx, artifactRef)
+		r.pulse()
 		if err != nil {
 			return nil, "download", fmt.Errorf("读取 %s@%s/%s: %w", ref.ID, ref.Version, ref.Channel, err)
 		}
 		installed, err := r.Installer.Install(verified)
+		r.pulse()
 		if err != nil {
 			return nil, "install", fmt.Errorf("安装 %s@%s/%s: %w", ref.ID, ref.Version, ref.Channel, err)
 		}

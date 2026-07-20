@@ -19,6 +19,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/processguard"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
 	"google.golang.org/protobuf/proto"
@@ -116,6 +117,13 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 	}
 	cmd.Stdout = processLogWriter{logf: h.Logf, prefix: "plugin=" + logID + " stream=stdout"}
 	cmd.Stderr = processLogWriter{logf: h.Logf, prefix: "plugin=" + logID + " stream=stderr"}
+	guardian := h.ProcessGuardian
+	if guardian == nil {
+		guardian = processguard.Default()
+	}
+	if err := guardian.Prepare(cmd); err != nil {
+		return nil, fmt.Errorf("准备插件进程守护: %w", err)
+	}
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("拉起插件进程: %w", err)
 	}
@@ -123,12 +131,15 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 
 	// 进程提前退出（如 magic 不符自杀）时立刻脱身，不必等满超时
 	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
+	processDone := make(chan struct{})
+	go func() {
+		err := cmd.Wait()
+		close(processDone)
+		exited <- err
+	}()
 
 	kill := func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Kill()
-		}
+		_ = guardian.Kill(cmd)
 	}
 
 	select {
@@ -137,7 +148,7 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 			kill()
 			return nil, res.err
 		}
-		if !res.sess.bindProcess(cmd) {
+		if !res.sess.bindProcess(cmd, processDone, guardian) {
 			kill()
 			return nil, fmt.Errorf("插件完成接入后立即失联: %w", res.sess.err())
 		}

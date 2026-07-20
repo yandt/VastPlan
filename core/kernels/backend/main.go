@@ -42,6 +42,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapobserver"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/servicewatchdog"
 )
 
 // KernelName 本内核的规范 ID（ADR-0015）。
@@ -230,6 +231,10 @@ func runReconcile(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
+	serviceNotifier, err := servicewatchdog.FromEnvironment()
+	if err != nil {
+		return fmt.Errorf("初始化 systemd 通知: %w", err)
+	}
 	processLock, err := nodeagent.AcquireProcessLock(options.lockPath)
 	if err != nil {
 		return err
@@ -315,17 +320,29 @@ func runReconcile(args []string) (runErr error) {
 		Installer: nodeagent.LocalInstaller{Root: options.runtimeRoot}, Runtime: runtime,
 		StateStore: plane.stateStore,
 	}
+	liveness := &servicewatchdog.Liveness{}
+	reconciler.Pulse = liveness.Pulse
 	agent := &nodeagent.Agent{
 		Source: plane.source, Reconciler: reconciler,
-		Interval: options.interval, Logf: logf,
+		Interval: options.interval, Logf: logf, Pulse: liveness.Pulse, BeginWork: liveness.Begin,
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	liveness.Pulse()
+	serviceNotifier.Start(ctx, liveness, logf)
 	leaseGuard, err := startNodeLeaseGuard(ctx, stop, options, labels, plane.buckets, plane.transport, logf)
 	if err != nil {
 		return err
 	}
 	defer leaseGuard.closeEventually()
+	if err := serviceNotifier.Ready("Node Agent 已加入控制面并启动对账"); err != nil {
+		return fmt.Errorf("通知 systemd 就绪: %w", err)
+	}
+	defer func() {
+		if err := serviceNotifier.Stopping("Node Agent 正在排空 Runtime Host 与插件"); err != nil {
+			logf("systemd 停止通知失败: %v", err)
+		}
+	}()
 	logNodeStartup(options, logf)
 	err = agent.Run(ctx)
 	if errors.Is(err, context.Canceled) {

@@ -11,6 +11,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/processguard"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -26,6 +27,8 @@ type session struct {
 	launchToken   string // 关联到发起它的那次 Launch
 	cmdMu         sync.Mutex
 	cmd           *exec.Cmd
+	processDone   <-chan struct{}
+	guardian      processguard.Guardian
 	managedStop   func()
 	managedOnce   sync.Once
 
@@ -273,7 +276,7 @@ func (s *session) err() error {
 
 // bindProcess 在握手完成后把进程句柄交给会话；若会话已经死亡则拒绝绑定，
 // 避免“刚激活就崩溃”被 Launch 误报为成功。
-func (s *session) bindProcess(cmd *exec.Cmd) bool {
+func (s *session) bindProcess(cmd *exec.Cmd, done <-chan struct{}, guardian processguard.Guardian) bool {
 	s.cmdMu.Lock()
 	defer s.cmdMu.Unlock()
 	select {
@@ -281,17 +284,36 @@ func (s *session) bindProcess(cmd *exec.Cmd) bool {
 		return false
 	default:
 		s.cmd = cmd
+		s.processDone = done
+		s.guardian = guardian
 		return true
 	}
 }
 
 func (s *session) killProcess() {
 	s.cmdMu.Lock()
-	defer s.cmdMu.Unlock()
-	if s.cmd != nil && s.cmd.Process != nil {
-		// cmd.Wait 由 Launch 创建的唯一 goroutine 负责，避免重复 Wait 的竞态。
-		_ = s.cmd.Process.Kill()
+	command, done, guardian := s.cmd, s.processDone, s.guardian
+	s.cmd, s.processDone, s.guardian = nil, nil, nil
+	s.cmdMu.Unlock()
+	if command == nil || command.Process == nil {
+		return
 	}
+	if guardian == nil {
+		guardian = processguard.Default()
+	}
+	_ = guardian.Terminate(command)
+	if done != nil {
+		select {
+		case <-done:
+			// 组长退出不代表它派生的子孙进程已退出；对原
+			// 进程组做最终清扫，已消失的进程组由 Guardian 幂等忽略。
+			_ = guardian.Kill(command)
+			return
+		case <-time.After(5 * time.Second):
+		}
+	}
+	// cmd.Wait 由 Launch 创建的唯一 goroutine负责；这里只向进程组发送最终信号。
+	_ = guardian.Kill(command)
 }
 
 // errBox 让 atomic.Value 能存 nil 之外的 error（类型必须一致）。
