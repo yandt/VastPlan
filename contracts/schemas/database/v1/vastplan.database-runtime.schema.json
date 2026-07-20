@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/database/v1/vastplan.database-runtime.schema.json",
+  "title": "VastPlan Database Runtime v1",
+  "oneOf": [
+    { "$ref": "#/$defs/providerListRequest" },
+    { "$ref": "#/$defs/probeRequest" },
+    { "$ref": "#/$defs/activateRequest" },
+    { "$ref": "#/$defs/retireRequest" },
+    { "$ref": "#/$defs/queryRequest" },
+    { "$ref": "#/$defs/executeRequest" },
+    { "$ref": "#/$defs/beginRequest" },
+    { "$ref": "#/$defs/endTransactionRequest" }
+  ],
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "maxLength": 160
+    },
+    "providerId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$",
+      "maxLength": 80
+    },
+    "providerCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "query": { "type": "boolean" },
+        "execute": { "type": "boolean" },
+        "transactions": { "type": "boolean" },
+        "readOnlyTransactions": { "type": "boolean" },
+        "savepoints": { "type": "boolean" },
+        "streaming": { "type": "boolean" },
+        "namedParameters": { "type": "boolean" }
+      },
+      "required": ["query", "execute", "transactions"]
+    },
+    "providerDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/providerId" },
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "configurationSchema": { "type": "object" },
+        "capabilities": { "$ref": "#/$defs/providerCapabilities" }
+      },
+      "required": ["id", "version", "displayName", "configurationSchema", "capabilities"]
+    },
+    "connectionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resourceId": { "$ref": "#/$defs/identifier" },
+        "revision": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["resourceId", "revision"]
+    },
+    "poolPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minIdle": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "maxIdle": { "type": "integer", "minimum": 0, "maximum": 10000 },
+        "maxOpen": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "maxLifetimeMs": { "type": "integer", "minimum": 1000, "maximum": 86400000 },
+        "maxIdleTimeMs": { "type": "integer", "minimum": 1000, "maximum": 86400000 },
+        "acquireTimeoutMs": { "type": "integer", "minimum": 100, "maximum": 300000 },
+        "idlePoolTtlMs": { "type": "integer", "minimum": 1000, "maximum": 86400000 }
+      },
+      "required": ["maxIdle", "maxOpen", "maxLifetimeMs", "maxIdleTimeMs", "acquireTimeoutMs", "idlePoolTtlMs"]
+    },
+    "connectionSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "$ref": "#/$defs/connectionRef" },
+        "providerId": { "$ref": "#/$defs/providerId" },
+        "endpoint": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "database": { "type": "string", "maxLength": 256 },
+        "options": { "type": "object", "maxProperties": 128 },
+        "credentials": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/managedCredentialRef" },
+        "pool": { "$ref": "#/$defs/poolPolicy" }
+      },
+      "required": ["ref", "providerId", "endpoint", "options", "credentials", "pool"]
+    },
+    "value": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["null", "string", "int64", "decimal", "bool", "bytes", "timestamp", "json"] },
+        "value": {}
+      },
+      "required": ["type"]
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sql": { "type": "string", "minLength": 1, "maxLength": 65536 },
+        "parameters": { "type": "array", "maxItems": 1000, "items": { "$ref": "#/$defs/value" } }
+      },
+      "required": ["sql", "parameters"]
+    },
+    "transactionOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "isolation": { "type": "string", "enum": ["default", "read-uncommitted", "read-committed", "repeatable-read", "serializable"] },
+        "readOnly": { "type": "boolean" },
+        "timeoutMs": { "type": "integer", "minimum": 100, "maximum": 3600000 }
+      },
+      "required": ["isolation", "readOnly", "timeoutMs"]
+    },
+    "transactionHandle": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+$",
+      "minLength": 32,
+      "maxLength": 2048
+    },
+    "providerListRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 0
+    },
+    "providerListResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "providers": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/providerDescriptor" } } },
+      "required": ["providers"]
+    },
+    "probeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "connection": { "$ref": "#/$defs/connectionSpec" } },
+      "required": ["connection"]
+    },
+    "probeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ready": { "type": "boolean" },
+        "providerId": { "$ref": "#/$defs/providerId" },
+        "latencyMs": { "type": "integer", "minimum": 0 },
+        "message": { "type": "string", "maxLength": 1024 }
+      },
+      "required": ["ready", "providerId", "latencyMs"]
+    },
+    "activateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "connection": { "$ref": "#/$defs/connectionSpec" } },
+      "required": ["connection"]
+    },
+    "activateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "connection": { "$ref": "#/$defs/connectionRef" },
+        "generation": { "type": "integer", "minimum": 1 },
+        "ready": { "type": "boolean" }
+      },
+      "required": ["connection", "generation", "ready"]
+    },
+    "retireRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "connection": { "$ref": "#/$defs/connectionRef" } },
+      "required": ["connection"]
+    },
+    "queryRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "connection": { "$ref": "#/$defs/connectionRef" },
+        "statement": { "$ref": "#/$defs/statement" },
+        "transactionHandle": { "$ref": "#/$defs/transactionHandle" },
+        "maxRows": { "type": "integer", "minimum": 1, "maximum": 10000 }
+      },
+      "required": ["connection", "statement", "maxRows"]
+    },
+    "executeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "connection": { "$ref": "#/$defs/connectionRef" },
+        "statement": { "$ref": "#/$defs/statement" },
+        "transactionHandle": { "$ref": "#/$defs/transactionHandle" }
+      },
+      "required": ["connection", "statement"]
+    },
+    "column": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "databaseType": { "type": "string", "maxLength": 128 },
+        "nullable": { "type": "boolean" }
+      },
+      "required": ["name", "databaseType", "nullable"]
+    },
+    "queryResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "columns": { "type": "array", "maxItems": 1024, "items": { "$ref": "#/$defs/column" } },
+        "rows": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": { "type": "array", "maxItems": 1024, "items": { "$ref": "#/$defs/value" } }
+        },
+        "truncated": { "type": "boolean" }
+      },
+      "required": ["columns", "rows", "truncated"]
+    },
+    "executeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "rowsAffected": { "type": "integer", "minimum": 0 } },
+      "required": ["rowsAffected"]
+    },
+    "beginRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "connection": { "$ref": "#/$defs/connectionRef" },
+        "options": { "$ref": "#/$defs/transactionOptions" }
+      },
+      "required": ["connection", "options"]
+    },
+    "beginResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transactionHandle": { "$ref": "#/$defs/transactionHandle" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["transactionHandle", "expiresAt"]
+    },
+    "endTransactionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "transactionHandle": { "$ref": "#/$defs/transactionHandle" } },
+      "required": ["transactionHandle"]
+    }
+  }
+}

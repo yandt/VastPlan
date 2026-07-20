@@ -19,6 +19,7 @@
 - [cn.vastplan.python-hello](cn.vastplan.python-hello.md) —— Python SDK 与异构运行参考插件
 - [cn.vastplan.foundation.security.bootstrap-policy](cn.vastplan.foundation.security.bootstrap-policy.md) —— 系统设置之前启动的首方权限基线
 - [cn.vastplan.foundation.security.platform-admin-access-policy](cn.vastplan.foundation.security.platform-admin-access-policy.md) —— 平台管理角色访问策略
+- [cn.vastplan.foundation.data.relational.runtime](cn.vastplan.foundation.data.relational.runtime.md) —— Database Runtime wire 契约、Provider SPI 与可信数据面边界
 - [cn.vastplan.platform.configuration.global-settings](cn.vastplan.platform.configuration.global-settings.md) —— 租户级版本化全局设置
 - [cn.vastplan.platform.security.credentials](cn.vastplan.platform.security.credentials.md) —— Vault Transit 凭证元数据与轮换
 - [cn.vastplan.platform.data.relational.connection-manager](cn.vastplan.platform.data.relational.connection-manager.md) —— 数据库连接定义与可信探测

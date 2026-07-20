@@ -1,0 +1,53 @@
+{
+  "id": "cn.vastplan.foundation.data.relational.runtime",
+  "name": "VastPlan Database Runtime",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "关系数据库 Provider、连接池与事务的数据面基础插件；当前阶段仅开放 Provider 契约发现",
+  "engines": { "backend": "^0.1" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": {
+    "required": ["caller"],
+    "optional": ["scope.tenant", "scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"]
+  },
+  "runtime": {
+    "instancePolicy": "active-active",
+    "stateModel": "external-shared",
+    "visibility": "cluster",
+    "routing": "queue",
+    "routingDomain": "platform",
+    "provides": [
+      {
+        "extensionPoint": "tool.package",
+        "capability": "foundation.data.relational.runtime",
+        "visibility": "cluster",
+        "routing": "queue",
+        "routingDomain": "platform"
+      }
+    ]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/database-runtime" },
+  "contributes": {
+    "backend": {
+      "tools": [
+        {
+          "id": "foundation.data.relational.runtime",
+          "service_role": "backend",
+          "title": "Database Runtime",
+          "subcommands": [
+            {
+              "name": "providers",
+              "description": "列出当前制品内已注册的关系数据库 Provider",
+              "paramsSchema": { "type": "object", "additionalProperties": false, "maxProperties": 0 }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

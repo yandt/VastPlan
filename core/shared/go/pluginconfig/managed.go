@@ -6,18 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 // ManagedCredentialRef is the non-sensitive runtime projection of a credential
 // entered through a plugin's own configuration form.
-type ManagedCredentialRef struct {
-	Handle  string `json:"handle"`
-	Scope   string `json:"scope"`
-	Owner   string `json:"owner"`
-	Purpose string `json:"purpose"`
-	Version int64  `json:"version"`
-	Name    string `json:"name,omitempty"`
-}
+type ManagedCredentialRef = commonv1.ManagedCredentialRef
 
 type CredentialSpec struct {
 	ID       string

@@ -28,6 +28,19 @@
         { "pattern": "^[^/].*$" },
         { "not": { "pattern": "(^|/)\\.\\.(/|$)" } }
       ]
+    },
+    "managedCredentialRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "handle": { "type": "string", "pattern": "^credential://managed/[A-Za-z0-9._~-]+$", "maxLength": 256 },
+        "scope": { "type": "string", "enum": ["tenant", "service"] },
+        "owner": { "$ref": "#/$defs/pluginId" },
+        "purpose": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+        "version": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 160 }
+      },
+      "required": ["handle", "scope", "owner", "purpose", "version"]
     }
   }
 }

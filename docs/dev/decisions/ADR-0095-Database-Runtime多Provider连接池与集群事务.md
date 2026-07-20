@@ -102,3 +102,9 @@ Provider panic/崩溃由 ADR-0094 的 Guardian 和协议心跳收敛。第三方
 - 已有连接管理插件、托管凭证 Saga、Kernel Material Lease 适配器和多服务 capability 路由；Database Runtime、真实 Provider 和连接池尚未实现。
 - 新方案保持 Kernel 不感知 PostgreSQL/MySQL 驱动，新增数据库类型不要求修改或重启 Kernel 二进制，只需发布兼容的 Database Runtime/Provider 制品。
 - dedicated 可信进程比内嵌驱动多一次本机协议调用，但换来凭证隔离、独立升级、故障恢复和集群扩缩容；数据库网络时延通常远高于这层本机调用成本。
+
+## 实施进展（2026-07-20）
+
+实施顺序第 1 项已完成：新增 `contracts/schemas/database/v1` 机器可执行 JSON wire 契约、显式无损值类型、稳定 `database.runtime.*` 错误码、事务句柄格式和严格语义校验；`ManagedCredentialRef` 提升到 common/v1 单一类型，`pluginconfig` 保留兼容别名。
+
+基础插件 `cn.vastplan.foundation.data.relational.runtime` 已建立第一方 Provider/Pool/Transaction SPI、冻结式 Registry、MaterialSource 边界和 fake PostgreSQL/MySQL 契约测试。0.1.0 只在 descriptor 中开放无敏感性的 `providers` 操作；其余操作虽已固化 wire 契约，但在实施顺序第 2 项可信运行实例 identity 完成前继续 fail-closed。
