@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = databasev1.RuntimePluginID
-	PluginVersion = "0.3.0"
+	PluginVersion = "0.4.0"
 )
 
 // CredentialMaterial exists only during MaterialSource.WithMaterial. Provider
@@ -30,12 +30,13 @@ type MaterialSource interface {
 }
 
 type PoolStats struct {
-	Open    int64 `json:"open"`
-	Idle    int64 `json:"idle"`
-	InUse   int64 `json:"inUse"`
-	Waiting int64 `json:"waiting"`
-	MaxOpen int64 `json:"maxOpen"`
-	Healthy bool  `json:"healthy"`
+	Open           int64 `json:"open"`
+	Idle           int64 `json:"idle"`
+	InUse          int64 `json:"inUse"`
+	WaitCount      int64 `json:"waitCount"`
+	WaitDurationMS int64 `json:"waitDurationMs"`
+	MaxOpen        int64 `json:"maxOpen"`
+	Healthy        bool  `json:"healthy"`
 }
 
 // Provider creates one local pool for one validated connection generation.
@@ -118,6 +119,16 @@ type registeredProvider struct {
 }
 
 func NewRegistry() *Registry { return &Registry{providers: map[string]registeredProvider{}} }
+
+func NewDefaultRegistry(policy ProviderSecurityPolicy) (*Registry, error) {
+	registry := NewRegistry()
+	for _, provider := range []Provider{NewPostgreSQLProvider(policy), NewMySQLProvider(policy)} {
+		if err := registry.Register(provider); err != nil {
+			return nil, err
+		}
+	}
+	return registry, nil
+}
 
 func (r *Registry) Register(provider Provider) error {
 	if r == nil || nilInterface(provider) {

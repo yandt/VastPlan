@@ -1,6 +1,6 @@
 // Command databaseruntime starts the dedicated Database Runtime foundation
-// plugin. Phase 1 exposes contract/provider discovery only and cannot decrypt
-// credentials or open physical database connections.
+// plugin. The public surface still exposes Provider discovery only; query and
+// transaction operations remain closed until the execution service is wired.
 package main
 
 import (
@@ -11,7 +11,11 @@ import (
 )
 
 func main() {
-	service, err := runtime.NewService(runtime.NewRegistry())
+	registry, err := runtime.NewDefaultRegistry(runtime.ProviderSecurityPolicy{})
+	if err != nil {
+		log.Fatalf("注册 Database Provider: %v", err)
+	}
+	service, err := runtime.NewService(registry)
 	if err != nil {
 		log.Fatalf("初始化 Database Runtime: %v", err)
 	}

@@ -1,12 +1,12 @@
 {
   "id": "cn.vastplan.foundation.data.relational.runtime",
   "name": "VastPlan Database Runtime",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "关系数据库 Provider、连接池与事务的数据面基础插件；当前仅对外开放 Provider 契约发现",
+  "description": "内置 PostgreSQL/MySQL Provider、连接池与事务的数据面基础插件；当前仅对外开放 Provider 契约发现",
   "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": ["kernel.credential.material-lease"], "credentials": [], "resources": [] },
   "contextAccess": {

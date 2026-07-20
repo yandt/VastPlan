@@ -11,9 +11,9 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-// Service intentionally exposes only Provider discovery in phase 1. Pool and
-// credential operations remain fail-closed until trusted runtime identity is
-// implemented; advertising unfinished operations would create a false API.
+// Service intentionally exposes only Provider discovery. Pool and credential
+// primitives are implemented, but execution operations remain fail-closed until
+// the authenticated call scope and transaction routing service are wired.
 type Service struct{ registry *Registry }
 
 func NewService(registry *Registry) (*Service, error) {

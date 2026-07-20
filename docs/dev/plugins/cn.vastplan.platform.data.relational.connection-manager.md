@@ -29,7 +29,7 @@
 
 ## 当前与目标状态
 
-当前已经完成连接定义、托管凭证 candidate Saga 和可信宿主 `probe` 边界。独立 Database Runtime 已完成 v1 wire 契约、Provider SPI、安全发现、可信实例 audience、Kernel 不见明文的 Material Lease 中继，以及统一 Pool Manager 的预算、generation 轮换、排空和指标；尚未接入真实 Provider 与外部执行服务。池不会放入 Kernel；首批同时支持 `postgresql` 与 `mysql`，后续 Provider 复用同一契约。每个 Runtime 副本拥有本地有界池，事务通过不透明句柄固定路由到创建它的实例。
+当前已经完成连接定义、托管凭证 candidate Saga 和可信宿主 `probe` 边界。独立 Database Runtime 已完成 v1 wire 契约、Provider SPI、安全发现、可信实例 audience、Kernel 不见明文的 Material Lease 中继、统一 Pool Manager，以及 `postgresql`/`mysql` 真实 Provider；尚未把 connection-manager 发布闭环切换到 Runtime 外部执行服务。池不会放入 Kernel，后续数据库类型复用同一 Provider 契约。每个 Runtime 副本拥有本地有界池，事务通过不透明句柄固定路由到创建它的实例。
 
 ## Portal 管理页
 

@@ -120,3 +120,9 @@ Provider panic/崩溃由 ADR-0094 的 Guardian 和协议心跳收敛。第三方
 实施顺序第 3 项已完成，Database Runtime 制品升级为 0.3.0。统一 Pool Manager 在打开候选池和获取 material 前执行节点、租户、连接与重叠 generation 预算检查；连接定义 revision 或凭证版本变化时先打开并 probe 候选池，再原子切换新请求，旧池只接收在途 lease 并在有界窗口内 drain。
 
 调用入口同时受每池等待队列、每调用方并发和 `acquireTimeout` 限制。关闭失败的 generation 保持 `draining` 并继续占用预算，后续关闭流程可重试；关闭历史采用全局有界保留，避免大量已删除连接造成内存增长。快照只暴露摘要化 scope/connection、Provider、revision、generation、预算、等待、在途和健康统计，不输出 endpoint、CredentialRef 或 material。fake Provider 已覆盖幂等激活、并发轮换、预算前置拒绝、队列过载、强制排空、关闭失败重试和历史上限，并通过竞态检测。下一步进入实施顺序第 4 项：同批接入 PostgreSQL 与 MySQL Provider 及真实数据库集成测试。
+
+## 实施进展（2026-07-20，真实 Provider A2）
+
+实施顺序第 4 项已完成，Database Runtime 制品升级为 0.4.0。制品同批注册 pgx 5.10.0 PostgreSQL Provider 与 go-sql-driver/mysql 1.10.0 MySQL Provider，两者复用 `database/sql` 池适配、wire 值转换、结果截断、事务隔离/超时和稳定错误分类。Provider 只接受各自签名 JSON Schema 中的非敏感字段，不接受 DSN；默认 `verify-full` 和系统信任根，关闭 TLS 必须由宿主部署策略显式放行。PostgreSQL 禁止 `PGSERVICE/PGSERVICEFILE` 注入并使用受控配置模板，MySQL 禁用明文回退、旧认证、任意本地文件与多语句。
+
+每条物理连接通过 `MaterialSource` 单独取得 material，长期 `database/sql.DB` 不保存密码 DSN，认证后清空 Runtime 自己持有的候选配置。pgx、go-sql-driver/mysql 和 Go immutable string 均无法承诺驱动私有连接副本中的认证字符串可原地擦除，因此该风险不再被文档隐藏，而由 dedicated 可信进程、短时 lease、最小内存暴露、关闭物理连接和 generation drain 控制。单元契约覆盖两个 Provider 的注册、TLS fail-closed、严格配置、minIdle 预热、无损值类型、结果上限、事务和错误分类；真实数据库门禁通过显式测试环境变量启用，本次已在 PostgreSQL 17.10 与 MySQL 8.0.42 临时实例上完成 probe 和参数化查询验收。下一步进入实施顺序第 5 项。
