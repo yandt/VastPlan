@@ -220,10 +220,26 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 	defer r.leaveOutboundCall()
 	r.mu.Lock()
 	locals := r.local[target.Capability]
+	eligibleLocals := make([]localHandler, 0, len(locals))
+	for _, candidate := range locals {
+		if candidate.record.Health != "healthy" ||
+			(candidate.record.Readiness != "" && candidate.record.Readiness != "ready" && candidate.record.Readiness != "degraded") ||
+			(target.GetLogicalService() != "" && candidate.record.LogicalService != target.GetLogicalService()) ||
+			(target.GetRoutingDomain() != "" && candidate.record.RoutingDomain != target.GetRoutingDomain()) ||
+			(target.GetPartitionKey() != "" && candidate.record.PartitionKey != target.GetPartitionKey()) ||
+			(target.GetInstanceId() != "" && candidate.record.InstanceID != target.GetInstanceId()) {
+			continue
+		}
+		eligibleLocals = append(eligibleLocals, candidate)
+	}
 	var local localHandler
-	if len(locals) > 0 {
+	if target.GetInstanceId() != "" {
+		if len(eligibleLocals) > 0 {
+			local = eligibleLocals[0]
+		}
+	} else if len(eligibleLocals) > 0 {
 		cursor := r.localCursor[target.Capability]
-		local = locals[cursor%uint64(len(locals))]
+		local = eligibleLocals[cursor%uint64(len(eligibleLocals))]
 		r.localCursor[target.Capability] = cursor + 1
 	}
 	r.mu.Unlock()
@@ -240,11 +256,15 @@ func (r *Router) Invoke(ctx context.Context, target *contractv1.CallTarget, call
 		}
 		return result, out, err
 	}
-	instances := r.instancesFor(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey())
+	instances := r.instancesFor(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey(), target.GetInstanceId())
 	if len(instances) == 0 {
 		return nil, nil, fmt.Errorf("%w: %s", ErrCapabilityNotFound, target.Capability)
 	}
 	subject := instances[0].Subject
+	if target.GetInstanceId() != "" {
+		selected := instances[0]
+		subject = controlplane.RPCInstanceSubject(selected.Capability, selected.LogicalService, selected.RoutingDomain, selected.PartitionKey, selected.InstanceID)
+	}
 	for _, instance := range instances[1:] {
 		if instance.Subject != subject && target.GetLogicalService() == "" && target.GetRoutingDomain() == "" && target.GetPartitionKey() == "" {
 			return nil, nil, fmt.Errorf("capability %s 存在多个路由域，调用方必须指定 logical_service/routing_domain", target.Capability)
@@ -480,10 +500,10 @@ func (r *Router) LocalInstances(capability string) []Announcement {
 
 // InstancesFor 只返回指定逻辑服务和路由域中的健康实例。空过滤条件保持 v1 兼容行为。
 func (r *Router) InstancesFor(capability, logicalService, routingDomain string) []Announcement {
-	return r.instancesFor(capability, logicalService, routingDomain, "")
+	return r.instancesFor(capability, logicalService, routingDomain, "", "")
 }
 
-func (r *Router) instancesFor(capability, logicalService, routingDomain, partitionKey string) []Announcement {
+func (r *Router) instancesFor(capability, logicalService, routingDomain, partitionKey, instanceID string) []Announcement {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	entries := r.instances[capability]
@@ -492,6 +512,7 @@ func (r *Router) instancesFor(capability, logicalService, routingDomain, partiti
 		if entry.Health == "healthy" && (logicalService == "" || entry.LogicalService == logicalService) &&
 			(routingDomain == "" || entry.RoutingDomain == routingDomain) &&
 			(partitionKey == "" || entry.PartitionKey == partitionKey) &&
+			(instanceID == "" || entry.InstanceID == instanceID) &&
 			(entry.Readiness == "" || entry.Readiness == "ready" || entry.Readiness == "degraded") {
 			if r.Transport != nil && authorizeCapability(r.Transport.SelfIdentity(), entry) != nil {
 				continue

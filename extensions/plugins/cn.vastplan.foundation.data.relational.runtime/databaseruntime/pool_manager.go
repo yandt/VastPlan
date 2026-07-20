@@ -434,6 +434,15 @@ func (l *PoolLease) Generation() uint64 {
 	return l.entry.generation
 }
 
+func (l *PoolLease) Closed() <-chan struct{} {
+	if l == nil || l.entry == nil {
+		closed := make(chan struct{})
+		close(closed)
+		return closed
+	}
+	return l.entry.closed
+}
+
 func (l *PoolLease) Probe(ctx context.Context) error {
 	if l == nil || l.entry == nil || ctx == nil {
 		return NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pool lease probe 参数无效"))
@@ -453,6 +462,13 @@ func (l *PoolLease) Execute(ctx context.Context, statement databasev1.Statement)
 		return databasev1.ExecuteResult{}, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pool lease execute 参数无效"))
 	}
 	return l.entry.pool.Execute(ctx, statement)
+}
+
+func (l *PoolLease) Begin(ctx context.Context, options databasev1.TransactionOptions) (Transaction, error) {
+	if l == nil || l.entry == nil || ctx == nil {
+		return nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pool lease begin 参数无效"))
+	}
+	return l.entry.pool.Begin(ctx, options)
 }
 
 func (l *PoolLease) Release() {

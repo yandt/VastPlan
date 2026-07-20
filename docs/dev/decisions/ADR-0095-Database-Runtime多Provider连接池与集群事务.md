@@ -99,7 +99,7 @@ Provider panic/崩溃由 ADR-0094 的 Guardian 和协议心跳收敛。第三方
 
 ## 当前实现状态与影响
 
-- 已有连接管理插件、托管凭证 Saga、Kernel Material Lease 适配器、真实 Provider、连接池、持久化 publication outbox 和 active-active 无状态执行服务；事务实例亲和与故障注入门禁尚未完成。
+- 已有连接管理插件、托管凭证 Saga、Kernel Material Lease 适配器、真实 Provider、连接池、持久化 publication outbox、active-active 无状态执行和实例亲和事务；真实数据库扩展故障注入矩阵与事务指标出口尚未完成。
 - 新方案保持 Kernel 不感知 PostgreSQL/MySQL 驱动，新增数据库类型不要求修改或重启 Kernel 二进制，只需发布兼容的 Database Runtime/Provider 制品。
 - dedicated 可信进程比内嵌驱动多一次本机协议调用，但换来凭证隔离、独立升级、故障恢复和集群扩缩容；数据库网络时延通常远高于这层本机调用成本。
 
@@ -134,3 +134,11 @@ Provider panic/崩溃由 ADR-0094 的 Guardian 和协议心跳收敛。第三方
 active-active 不采用不可验证的“重复 queue 调用即广播”。管理面主动发布命中一个副本；其他副本在首次接到该 revision 的 `query/execute` 时，通过只允许精确 Runtime caller 的内部 `platform.database/resolveRuntime` 读取该单条现行定义，随后幂等建池。Runtime 的成功定义确认使用 1 秒有界 lease，同一连接的并发过期验证在副本内合并；删除或 revision 失效会排空该 tenant 在本副本内所有 project 池，管理面不可达且 lease 过期时 fail-closed。这样每个活跃连接每副本最多增加约 1 次/秒轻量管理面校验，同时把未命中主动 retire 的 stale-serving 窗口限制为 1 秒。已删除定义、旧 revision、用户直调和缺少 `database.connection/<resourceId>` 宿主投影 grant 的执行请求均 fail-closed。平台本地组合新增两个 Database Runtime 副本，使用 `external-shared + cluster + queue`。
 
 `probe` 已从临时 `kernel.database.probe` 迁移到 Database Runtime Material Lease 数据面；Backend Kernel 不再承担数据库 Broker 路径。`providers/probe/activate/retire/query/execute` 已进入签名 descriptor，事务操作继续关闭。下一步进入实施顺序第 6 项。
+
+## 实施进展（2026-07-20，实例亲和事务 A4）
+
+实施顺序第 6 项的事务主链已完成，Database Runtime 升级为 0.6.0。通用 `CallTarget` 新增可选 `instance_id`，addressing registration 同时订阅共享 queue subject 与实例独立直达 subject；Router 只对同 logical service/routing domain/partition 范围内存在健康租约的精确实例发流量，未知、draining 或已撤销实例 fail-closed。Node Agent 使用宿主签发的非秘密 Runtime audience 作为非分片能力实例路由身份，分片注册追加 partition 后缀避免目录键冲突。该能力是短期状态亲和的通用路由原语，不改变 active-active 默认均衡，也不替代 partition fencing。
+
+`begin` 取得当前 pool generation lease 和驱动事务，返回 `vptx1` 句柄。完整声明由每次进程启动随机生成的 AES-256-GCM 密钥加密认证，绑定 tenant、project、caller、ConnectionRef、owner Runtime audience、随机 transaction ID 和 expiry；外部只看到非秘密 owner 路由前缀，不包含 SQL、参数、endpoint、CredentialRef 或 material。后续请求仍可进入任意 queue 副本，非 owner 在校验原调用主体及连接 grant 后通过未公开、仅允许精确 Runtime caller 的 `transactionRelay` 直达 owner；owner 再验证加密句柄与原 scope/caller。查询、执行和提交必须重新持有当前连接 grant，回滚只要求原 caller/scope，以便授权撤销后仍能安全清理。owner 租约消失、进程重启密钥变化或本地事务丢失统一返回可重试 `database.runtime.transaction_lost`，过期自动回滚并稳定返回不可重试 `database.runtime.transaction_expired`。
+
+事务占用 generation lease，连接/凭证 revision 轮换后可在既定 drain 窗口内完成；强制 drain 关闭旧 generation 时会唤醒事务注册表、回滚并释放调用方/池槽位。每个 Runtime 默认最多 4096 个活动事务，service 级 `maxTransactions` 施加硬上限。契约、caller/scope/连接绑定、句柄篡改、跨副本 relay、owner 离线、超时回滚、轮换有界 drain 和精确实例寻址均有自动化测试。剩余工作是扩大真实 PostgreSQL/MySQL 的网络中断、数据库重启、预算耗尽与提交冲突故障注入矩阵，并补齐事务指标出口。

@@ -51,6 +51,7 @@ type Registration struct {
 	key       string
 	id        string
 	sub       *nats.Subscription
+	directSub *nats.Subscription
 	stream    bool
 	localOnly bool
 	cancel    context.CancelFunc
@@ -154,11 +155,12 @@ func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOption
 		id: registrationID, handler: handler, cancel: cancel,
 	}
 	sub, err := r.NC.QueueSubscribe(record.Subject, controlplane.RPCQueueForPartition(options.Capability, options.LogicalService, options.RoutingDomain, options.PartitionKey), func(msg *nats.Msg) {
-		if !registration.active.Load() {
+		current, accepting := registration.acceptingRecord()
+		if !accepting {
 			r.respondTransportError(msg, errorcode.RemoteInvokeFailed, "候选 capability 尚未激活", true, "")
 			return
 		}
-		r.serveInvoke(registrationID, record, handler, msg)
+		r.serveInvoke(registrationID, current, handler, msg)
 	})
 	if err != nil {
 		cancel()
@@ -171,15 +173,37 @@ func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOption
 		_ = sub.Unsubscribe()
 		return nil, fmt.Errorf("配置 capability 有界 pending 队列: %w", err)
 	}
+	directSub, err := r.NC.Subscribe(controlplane.RPCInstanceSubject(options.Capability, options.LogicalService, options.RoutingDomain, options.PartitionKey, options.InstanceID), func(msg *nats.Msg) {
+		current, accepting := registration.acceptingRecord()
+		if !accepting {
+			r.respondTransportError(msg, errorcode.RemoteInvokeFailed, "候选 capability 尚未激活", true, "")
+			return
+		}
+		r.serveInvoke(registrationID, current, handler, msg)
+	})
+	if err != nil {
+		cancel()
+		_ = sub.Unsubscribe()
+		return nil, fmt.Errorf("订阅 capability 实例 %s: %w", options.InstanceID, err)
+	}
+	registration.directSub = directSub
+	if err := directSub.SetPendingLimits(limits.MaxPendingRequests, limits.MaxPendingRequests*limits.MaxMessageBytes()); err != nil {
+		cancel()
+		_ = directSub.Unsubscribe()
+		_ = sub.Unsubscribe()
+		return nil, fmt.Errorf("配置 capability 实例有界 pending 队列: %w", err)
+	}
 	flushCtx, flushCancel := deadlineContext(ctx, 5*time.Second)
 	defer flushCancel()
 	if err := r.NC.FlushWithContext(flushCtx); err != nil {
 		cancel()
+		_ = directSub.Unsubscribe()
 		_ = sub.Unsubscribe()
 		return nil, fmt.Errorf("确认 capability 订阅: %w", err)
 	}
 	if err := r.putAnnouncement(ctx, r.Directory, registration.key, record); err != nil {
 		cancel()
+		_ = directSub.Unsubscribe()
 		_ = sub.Unsubscribe()
 		return nil, err
 	}
@@ -187,6 +211,7 @@ func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOption
 	if r.closed {
 		r.mu.Unlock()
 		cancel()
+		_ = directSub.Unsubscribe()
 		_ = sub.Unsubscribe()
 		_ = r.Directory.Delete(ctx, registration.key)
 		return nil, errors.New("addressing router 已关闭")
@@ -195,6 +220,16 @@ func (r *Router) PrepareRegistration(ctx context.Context, options RegisterOption
 	r.mu.Unlock()
 	go registration.heartbeat(registrationCtx)
 	return registration, nil
+}
+
+func (registration *Registration) acceptingRecord() (Announcement, bool) {
+	if registration == nil || !registration.active.Load() {
+		return Announcement{}, false
+	}
+	registration.recordMu.Lock()
+	defer registration.recordMu.Unlock()
+	record := registration.record
+	return record, record.Health == "healthy" && (record.Readiness == "" || record.Readiness == "ready" || record.Readiness == "degraded")
 }
 
 // ActivateRegistrations 先把整组租约改为 healthy，全部成功后才在一个临界区加入
@@ -316,7 +351,8 @@ func (r *Router) serveInvoke(registrationID string, record Announcement, handler
 		r.respondTransportError(msg, errorcode.WireInvalidRequest, err.Error(), false, "")
 		return
 	}
-	if req.Target == nil || req.Target.Capability != record.Capability {
+	if req.Target == nil || req.Target.Capability != record.Capability ||
+		(req.Target.GetInstanceId() != "" && req.Target.GetInstanceId() != record.InstanceID) {
 		r.respondTransportError(msg, errorcode.WireTargetMismatch, "请求 capability 与 subject 不一致", false, req.RequestId)
 		return
 	}
@@ -466,13 +502,28 @@ func (registration *Registration) SetReadiness(ctx context.Context, readiness, r
 	record.UpdatedAt = time.Now().UTC()
 	if registration.localOnly {
 		registration.record = record
+		registration.updateLocalRecord(record)
 		return nil
 	}
 	if err := registration.router.putAnnouncement(ctx, registration.router.Directory, registration.key, record); err != nil {
 		return err
 	}
 	registration.record = record
+	registration.updateLocalRecord(record)
 	return nil
+}
+
+func (registration *Registration) updateLocalRecord(record Announcement) {
+	registration.router.mu.Lock()
+	defer registration.router.mu.Unlock()
+	entries := registration.router.local[record.Capability]
+	for index := range entries {
+		if entries[index].registrationID == registration.id {
+			entries[index].record = record
+			registration.router.local[record.Capability] = entries
+			return
+		}
+	}
 }
 
 func (registration *Registration) Close(ctx context.Context) error {
@@ -527,6 +578,9 @@ func (registration *Registration) Close(ctx context.Context) error {
 		}
 		if registration.sub != nil {
 			registration.closeErr = errors.Join(registration.closeErr, registration.sub.Drain())
+		}
+		if registration.directSub != nil {
+			registration.closeErr = errors.Join(registration.closeErr, registration.directSub.Drain())
 		}
 	})
 	return registration.closeErr

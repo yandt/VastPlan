@@ -156,12 +156,13 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 			return nil, fmt.Errorf("插件完成接入后立即失联: %w", res.sess.err())
 		}
 		return &PluginInstance{
-			PluginID:    res.sess.pluginID,
-			Version:     res.sess.pluginVersion,
-			SessionID:   res.sess.id,
-			PID:         cmd.Process.Pid,
-			runtimeKind: spec.RuntimeKind,
-			session:     res.sess,
+			PluginID:        res.sess.pluginID,
+			Version:         res.sess.pluginVersion,
+			SessionID:       res.sess.id,
+			PID:             cmd.Process.Pid,
+			RuntimeAudience: launchRuntimeAudience(res.sess.policy),
+			runtimeKind:     spec.RuntimeKind,
+			session:         res.sess,
 		}, nil
 
 	case err := <-exited:
@@ -249,7 +250,8 @@ func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSp
 		return &PluginInstance{
 			PluginID: res.sess.pluginID, Version: res.sess.pluginVersion,
 			SessionID: res.sess.id, PID: spec.PID,
-			runtimeKind: spec.RuntimeKind, session: res.sess,
+			RuntimeAudience: launchRuntimeAudience(res.sess.policy),
+			runtimeKind:     spec.RuntimeKind, session: res.sess,
 		}, nil
 	case <-time.After(h.launchTimeout()):
 		return nil, fmt.Errorf("等待托管插件接入超时（%v）", h.launchTimeout())
@@ -261,6 +263,14 @@ func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSp
 		}
 		return nil, err
 	}
+}
+
+func launchRuntimeAudience(policy LaunchPolicy) string {
+	audience, err := runtimeAudience(policy)
+	if err != nil {
+		return ""
+	}
+	return audience
 }
 
 func cloneLaunchPolicy(policy LaunchPolicy) LaunchPolicy {
@@ -460,6 +470,9 @@ func callTargetKey(target *contractv1.CallTarget) string {
 	key := target.ExtensionPoint + "/" + target.Capability
 	if operation := target.GetOperation(); operation != "" {
 		key += "#" + operation
+	}
+	if instanceID := target.GetInstanceId(); instanceID != "" {
+		key += "@" + instanceID
 	}
 	return key
 }

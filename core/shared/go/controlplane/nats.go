@@ -282,6 +282,9 @@ func RPCSubjectForPartition(capability, logicalService, routingDomain, partition
 func RPCQueueForPartition(capability, logicalService, routingDomain, partitionKey string) string {
 	return RPCSubjectForPartition(capability, logicalService, routingDomain, partitionKey)
 }
+func RPCInstanceSubject(capability, logicalService, routingDomain, partitionKey, instanceID string) string {
+	return RPCSubjectForPartition(capability, logicalService, routingDomain, partitionKey) + ".instance." + keyToken(instanceID)
+}
 func EventSubject(eventType string) string { return "vp.event.v1." + keyToken(eventType) }
 func PersistentEventSubject(eventType string) string {
 	return "vp.event.persist.v1." + keyToken(eventType)

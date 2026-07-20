@@ -33,3 +33,14 @@ func TestRPCSubjectForAllowsOneOptionalRoutingDimension(t *testing.T) {
 		}
 	}
 }
+
+func TestRPCInstanceSubjectIsScopedAndOpaque(t *testing.T) {
+	first := RPCInstanceSubject("foundation.database", "database-runtime", "platform", "", "runtime:v1:secret-looking")
+	second := RPCInstanceSubject("foundation.database", "database-runtime", "platform", "", "runtime:v1:other")
+	if first == second || !strings.Contains(first, ".instance.") {
+		t.Fatalf("实例 subject 必须唯一且位于共享路由下: %q %q", first, second)
+	}
+	if strings.Contains(first, "runtime:v1") || strings.Contains(first, "secret-looking") {
+		t.Fatalf("实例 ID 必须编码后进入 NATS subject: %q", first)
+	}
+}

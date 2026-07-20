@@ -745,8 +745,10 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 		return nil, nil
 	}
 	versions := make(map[string]string, len(instances))
+	audiences := make(map[string]string, len(instances))
 	for _, instance := range instances {
 		versions[instance.PluginID] = instance.Version
+		audiences[instance.PluginID] = instance.RuntimeAudience
 	}
 	policies := make(map[string]pluginv1.RuntimeContribution)
 	for _, plugin := range unit.Plugins {
@@ -768,6 +770,10 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 				continue
 			}
 			declared := policies[contribution.PluginID+"\x00"+point.Name+"\x00"+contribution.ID]
+			instanceID := audiences[contribution.PluginID]
+			if instanceID == "" {
+				return nil, fmt.Errorf("插件 %s 缺少可信 Runtime audience", contribution.PluginID)
+			}
 			policy, err := contributionPolicy(declared)
 			if err != nil {
 				return nil, err
@@ -778,7 +784,7 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 					LogicalService: logicalService, RoutingDomain: policy.RoutingDomain,
 					InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
 					Visibility: policy.Visibility, Routing: policy.Routing, UnitID: unit.ID,
-					Version: versions[contribution.PluginID],
+					Version: versions[contribution.PluginID], InstanceID: instanceID,
 				}, addressing.HostHandler(func(invokeCtx context.Context, target *contractv1.CallTarget, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 					response, err := host.Invoke(invokeCtx, target, callCtx, payload)
 					if err != nil {
@@ -798,6 +804,10 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 				partitionKeys = unit.PartitionKeys
 			}
 			for _, partitionKey := range partitionKeys {
+				routingInstanceID := instanceID
+				if partitionKey != "" {
+					routingInstanceID += ":partition:" + partitionKey
+				}
 				generation := unit.Generation
 				fencingToken := unit.FencingToken
 				if unit.PartitionGenerations != nil {
@@ -813,7 +823,7 @@ func registerCandidate(ctx context.Context, router *addressing.Router, host *pro
 					Visibility: policy.Visibility, Routing: policy.Routing,
 					RoutingDomain: policy.RoutingDomain,
 					Generation:    generation, FencingToken: fencingToken,
-					UnitID: unit.ID, Version: versions[contribution.PluginID],
+					UnitID: unit.ID, Version: versions[contribution.PluginID], InstanceID: routingInstanceID,
 				}, addressing.HostHandler(func(invokeCtx context.Context, target *contractv1.CallTarget, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 					response, err := host.Invoke(invokeCtx, target, callCtx, payload)
 					if err != nil {

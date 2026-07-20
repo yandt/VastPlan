@@ -95,9 +95,18 @@ func TestDatabaseRuntimeManagementAndExecutionBoundary(t *testing.T) {
 	if got, _ := decide(runtime, extpoint.PermissionRequest{Capability: platformadminapi.DatabaseCapability, Operation: "resolveRuntime"}); got != extpoint.DecisionAllow {
 		t.Fatalf("Runtime 应可惰性解析连接定义: %s", got)
 	}
+	if got, _ := decide(runtime, extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: "transactionRelay"}); got != extpoint.DecisionAllow {
+		t.Fatalf("Runtime 实例之间应可精确转发事务: %s", got)
+	}
 	thirdParty := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "org.example.orders"}}
 	if got, _ := decide(thirdParty, extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: databasev1.OperationQuery}); got != extpoint.DecisionAllow {
 		t.Fatalf("数据面调用应继续交由 Runtime 校验连接授权: %s", got)
+	}
+	if got, _ := decide(thirdParty, extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: databasev1.OperationBegin}); got != extpoint.DecisionAllow {
+		t.Fatalf("事务开始应继续交由 Runtime 校验连接授权: %s", got)
+	}
+	if got, _ := decide(thirdParty, extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: "transactionRelay"}); got != extpoint.DecisionDeny {
+		t.Fatalf("第三方插件不得伪造 Runtime 事务转发: %s", got)
 	}
 	if got, _ := decide(user("platform.admin"), extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: databasev1.OperationQuery}); got != extpoint.DecisionDeny {
 		t.Fatalf("用户不得直接执行底层 SQL: %s", got)

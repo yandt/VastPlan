@@ -21,6 +21,14 @@ func launchRuntimeIdentity(policy LaunchPolicy) (runtimeidentity.Identity, error
 }
 
 func runtimeAudienceEnvironment(policy LaunchPolicy) (string, error) {
+	audience, err := runtimeAudience(policy)
+	if err != nil {
+		return "", err
+	}
+	return protocol.RuntimeAudienceEnvKey + "=" + audience, nil
+}
+
+func runtimeAudience(policy LaunchPolicy) (string, error) {
 	identity, err := launchRuntimeIdentity(policy)
 	if err != nil {
 		return "", err
@@ -29,7 +37,7 @@ func runtimeAudienceEnvironment(policy LaunchPolicy) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return protocol.RuntimeAudienceEnvKey + "=" + audience, nil
+	return audience, nil
 }
 
 func withLaunchRuntimeIdentity(ctx context.Context, policy LaunchPolicy) (context.Context, error) {

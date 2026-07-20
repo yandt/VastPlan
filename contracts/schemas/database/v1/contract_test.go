@@ -50,6 +50,26 @@ func TestDatabaseRuntimeSchemaParsesStrictOperationRequests(t *testing.T) {
 	}
 }
 
+func TestTransactionRequestsAcceptOpaqueInstanceAffineHandle(t *testing.T) {
+	begin, err := json.Marshal(databasev1.BeginRequest{Connection: validConnection().Ref,
+		Options: databasev1.TransactionOptions{Isolation: "serializable", ReadOnly: true, TimeoutMS: 1000}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := databasev1.ParseRequest(databasev1.OperationBegin, begin); err != nil {
+		t.Fatalf("有效 begin 请求被拒绝: %v", err)
+	}
+	handle := "vptx1.cnVudGltZS12MQ.ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_abcd"
+	end, _ := json.Marshal(databasev1.EndTransactionRequest{TransactionHandle: handle})
+	if _, err := databasev1.ParseRequest(databasev1.OperationCommit, end); err != nil {
+		t.Fatalf("带路由分段的不透明事务句柄被拒绝: %v", err)
+	}
+	invalid, _ := json.Marshal(databasev1.EndTransactionRequest{TransactionHandle: "vptx1/runtime/forged"})
+	if _, err := databasev1.ParseRequest(databasev1.OperationRollback, invalid); err == nil {
+		t.Fatal("含非法字符的事务句柄必须被 Schema 拒绝")
+	}
+}
+
 func TestConnectionSpecRejectsDSNAndSecretOptions(t *testing.T) {
 	spec := validConnection()
 	spec.Endpoint = "postgres://user:password@db.internal/orders"

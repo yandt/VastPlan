@@ -13,7 +13,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.7.0"
+	PluginVersion = "0.8.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -90,7 +90,8 @@ func databaseRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionReques
 			(request.Operation == databasev1.OperationActivate || request.Operation == databasev1.OperationRetire || request.Operation == databasev1.OperationProbe || request.Operation == databasev1.OperationProviders)
 	}
 	if c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN && c.GetCaller().GetId() == databasev1.RuntimePluginID {
-		return request.Capability == platformadminapi.DatabaseCapability && request.Operation == "resolveRuntime"
+		return (request.Capability == platformadminapi.DatabaseCapability && request.Operation == "resolveRuntime") ||
+			(request.Capability == databasev1.Capability && request.Operation == "transactionRelay")
 	}
 	if request.Capability != databasev1.Capability {
 		return false
@@ -98,7 +99,8 @@ func databaseRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionReques
 	if request.Operation == databasev1.OperationProviders && c.GetCaller().GetId() != "" {
 		return true
 	}
-	if request.Operation != databasev1.OperationQuery && request.Operation != databasev1.OperationExecute {
+	if request.Operation != databasev1.OperationQuery && request.Operation != databasev1.OperationExecute &&
+		request.Operation != databasev1.OperationBegin && request.Operation != databasev1.OperationCommit && request.Operation != databasev1.OperationRollback {
 		return false
 	}
 	switch c.GetCaller().GetKind() {

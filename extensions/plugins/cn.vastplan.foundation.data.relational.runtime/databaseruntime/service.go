@@ -23,12 +23,14 @@ const (
 
 type MaterialSourceFactory func(sdk.Host, string, commonv1.ManagedCredentialRef) (MaterialSource, error)
 
-// Service owns the public Database Runtime data plane. Transaction operations
-// remain closed until A4 adds signed instance-affine handles.
+// Service owns the public Database Runtime data plane, including short-lived
+// instance-affine transactions.
 type Service struct {
 	registry     *Registry
 	manager      *PoolManager
 	material     MaterialSourceFactory
+	transactions *TransactionManager
+	instanceID   string
 	validationMu sync.Mutex
 	validations  map[string]*definitionValidation
 }
@@ -40,21 +42,38 @@ type definitionValidation struct {
 
 const definitionLeaseTTL = time.Second
 
-func NewService(registry *Registry) (*Service, error) {
+type ServiceOptions struct {
+	InstanceID      string
+	MaxTransactions int
+}
+
+func NewService(registry *Registry, options ServiceOptions) (*Service, error) {
 	manager, err := NewPoolManager(registry, DefaultManagerPolicy())
 	if err != nil {
 		return nil, err
 	}
 	return NewServiceWithManager(registry, manager, func(host sdk.Host, tenant string, ref commonv1.ManagedCredentialRef) (MaterialSource, error) {
 		return NewRuntimeMaterialSourceFromEnvironment(host, tenant, ref)
-	})
+	}, options)
 }
 
-func NewServiceWithManager(registry *Registry, manager *PoolManager, material MaterialSourceFactory) (*Service, error) {
+func NewServiceWithManager(registry *Registry, manager *PoolManager, material MaterialSourceFactory, options ServiceOptions) (*Service, error) {
 	if registry == nil || manager == nil || material == nil {
 		return nil, fmt.Errorf("Database Runtime service 依赖不能为空")
 	}
-	return &Service{registry: registry, manager: manager, material: material, validations: map[string]*definitionValidation{}}, nil
+	transactions, err := NewTransactionManager(options.InstanceID, options.MaxTransactions)
+	if err != nil {
+		return nil, err
+	}
+	return &Service{registry: registry, manager: manager, material: material, transactions: transactions,
+		instanceID: options.InstanceID, validations: map[string]*definitionValidation{}}, nil
+}
+
+func (s *Service) Close() error {
+	if s == nil || s.transactions == nil {
+		return nil
+	}
+	return s.transactions.Close()
 }
 
 func (s *Service) Providers(payload []byte) (databasev1.ProviderListResult, error) {
@@ -104,6 +123,21 @@ func requireExecutor(call *contractv1.CallContext, ref databasev1.ConnectionRef)
 		return errors.New("调用方没有该数据库连接的宿主投影授权")
 	default:
 		return errors.New("用户不能直接调用底层数据库执行能力")
+	}
+}
+
+func requireTransactionCaller(call *contractv1.CallContext) error {
+	if call == nil || call.GetCaller().GetId() == "" {
+		return errors.New("事务调用缺少可信 caller")
+	}
+	if call.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_SYSTEM {
+		return nil
+	}
+	switch call.GetCaller().GetKind() {
+	case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_AGENT, contractv1.CallerKind_CALLER_KIND_RUNNER:
+		return nil
+	default:
+		return errors.New("用户不能直接调用底层数据库事务能力")
 	}
 }
 
@@ -273,6 +307,9 @@ func runtimeResult(value any, err error) (*contractv1.CallResult, []byte, error)
 
 func (s *Service) handler(operation string) sdk.Handler {
 	return func(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if operation == "transactionRelay" {
+			return s.relayTransaction(ctx, call, payload)
+		}
 		parsed, err := databasev1.ParseRequest(operation, payload)
 		if err != nil {
 			return runtimeResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, err))
@@ -301,7 +338,11 @@ func (s *Service) handler(operation string) sdk.Handler {
 				return runtimeResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, callErr))
 			}
 			if request.TransactionHandle != "" {
-				return runtimeResult(nil, NewRuntimeError(databasev1.ErrorUnsupported, false, errors.New("事务句柄将在 A4 开放")))
+				if result, raw, proxyErr := s.proxyTransaction(ctx, host, call, operation, request.TransactionHandle, request); result != nil || proxyErr != nil {
+					return result, raw, proxyErr
+				}
+				value, callErr := s.transactions.Query(ctx, call, request)
+				return runtimeResult(value, callErr)
 			}
 			lease, callErr := s.acquire(ctx, host, call, request.Connection)
 			if callErr != nil {
@@ -315,7 +356,11 @@ func (s *Service) handler(operation string) sdk.Handler {
 				return runtimeResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, callErr))
 			}
 			if request.TransactionHandle != "" {
-				return runtimeResult(nil, NewRuntimeError(databasev1.ErrorUnsupported, false, errors.New("事务句柄将在 A4 开放")))
+				if result, raw, proxyErr := s.proxyTransaction(ctx, host, call, operation, request.TransactionHandle, request); result != nil || proxyErr != nil {
+					return result, raw, proxyErr
+				}
+				value, callErr := s.transactions.Execute(ctx, call, request)
+				return runtimeResult(value, callErr)
 			}
 			lease, callErr := s.acquire(ctx, host, call, request.Connection)
 			if callErr != nil {
@@ -324,6 +369,34 @@ func (s *Service) handler(operation string) sdk.Handler {
 			defer lease.Release()
 			value, callErr := lease.Execute(ctx, request.Statement)
 			return runtimeResult(value, callErr)
+		case *databasev1.BeginRequest:
+			if callErr := requireExecutor(call, request.Connection); callErr != nil {
+				return runtimeResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, callErr))
+			}
+			lease, callErr := s.acquire(ctx, host, call, request.Connection)
+			if callErr != nil {
+				return runtimeResult(nil, callErr)
+			}
+			value, callErr := s.transactions.Begin(ctx, call, request.Connection, request.Options, lease)
+			if callErr != nil {
+				lease.Release()
+			}
+			return runtimeResult(value, callErr)
+		case *databasev1.EndTransactionRequest:
+			if result, raw, proxyErr := s.proxyTransaction(ctx, host, call, operation, request.TransactionHandle, request); result != nil || proxyErr != nil {
+				return result, raw, proxyErr
+			}
+			if operation == databasev1.OperationCommit {
+				ref, callErr := s.transactions.Connection(request.TransactionHandle, call)
+				if callErr != nil {
+					return runtimeResult(nil, callErr)
+				}
+				if callErr := requireExecutor(call, ref); callErr != nil {
+					return runtimeResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, callErr))
+				}
+			}
+			callErr := s.transactions.End(ctx, call, request.TransactionHandle, operation == databasev1.OperationCommit)
+			return runtimeResult(struct{}{}, callErr)
 		default:
 			return runtimeResult(nil, NewRuntimeError(databasev1.ErrorUnsupported, false, errors.New("Database Runtime 操作尚未开放")))
 		}
@@ -340,10 +413,14 @@ func (s *Service) Contribution() sdk.Contribution {
 			databasev1.OperationRetire:    s.handler(databasev1.OperationRetire),
 			databasev1.OperationQuery:     s.handler(databasev1.OperationQuery),
 			databasev1.OperationExecute:   s.handler(databasev1.OperationExecute),
+			databasev1.OperationBegin:     s.handler(databasev1.OperationBegin),
+			databasev1.OperationCommit:    s.handler(databasev1.OperationCommit),
+			databasev1.OperationRollback:  s.handler(databasev1.OperationRollback),
+			"transactionRelay":            s.handler("transactionRelay"),
 		},
 	}
 }
 
 func descriptor() []byte {
-	return []byte(`{"title":"Database Runtime","subcommands":[{"name":"providers","description":"列出当前制品内已注册的关系数据库 Provider","paramsSchema":{"type":"object","additionalProperties":false,"maxProperties":0}},{"name":"probe","description":"由连接管理面执行一次性连通性检查"},{"name":"activate","description":"发布或轮换连接 revision"},{"name":"retire","description":"排空并删除连接 revision"},{"name":"query","description":"通过活动连接池执行参数化查询"},{"name":"execute","description":"通过活动连接池执行参数化写操作"}]}`)
+	return []byte(`{"title":"Database Runtime","subcommands":[{"name":"providers","description":"列出当前制品内已注册的关系数据库 Provider","paramsSchema":{"type":"object","additionalProperties":false,"maxProperties":0}},{"name":"probe","description":"由连接管理面执行一次性连通性检查"},{"name":"activate","description":"发布或轮换连接 revision"},{"name":"retire","description":"排空并删除连接 revision"},{"name":"query","description":"通过活动连接池或实例亲和事务执行参数化查询"},{"name":"execute","description":"通过活动连接池或实例亲和事务执行参数化写操作"},{"name":"begin","description":"在当前 Runtime 实例开始短期事务"},{"name":"commit","description":"提交实例亲和事务"},{"name":"rollback","description":"回滚实例亲和事务"}]}`)
 }

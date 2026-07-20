@@ -55,6 +55,59 @@ func TestRouterLocalAndRemoteInvoke(t *testing.T) {
 	}
 }
 
+func TestRouterRoutesToExactHealthyInstance(t *testing.T) {
+	server, buckets := startAddressingNATS(t)
+	caller := newTestRouter(t, server, buckets.Capabilities, "caller-exact")
+	workerA := newTestRouter(t, server, buckets.Capabilities, "worker-exact-a")
+	workerB := newTestRouter(t, server, buckets.Capabilities, "worker-exact-b")
+	register := func(worker *Router, instanceID, value string) *Registration {
+		registration, err := worker.Register(context.Background(), RegisterOptions{
+			Capability: "demo.exact", ExtensionPoint: "tool.package", UnitID: value,
+			LogicalService: "demo.exact", RoutingDomain: "test", InstanceID: instanceID,
+			InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue",
+		}, func(context.Context, *contractv1.CallTarget, *contractv1.CallContext, []byte) (*contractv1.CallResult, []byte, error) {
+			return okResult(), []byte(value), nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return registration
+	}
+	a := register(workerA, "runtime-a", "a")
+	b := register(workerB, "runtime-b", "b")
+	t.Cleanup(func() {
+		_ = a.Close(context.Background())
+		_ = b.Close(context.Background())
+	})
+	waitInstances(t, caller, "demo.exact", 2)
+	operation, service, domain, instance := "relay", "demo.exact", "test", "runtime-b"
+	result, payload, err := caller.Invoke(context.Background(), &contractv1.CallTarget{
+		ExtensionPoint: "tool.package", Capability: "demo.exact", Operation: &operation,
+		LogicalService: &service, RoutingDomain: &domain, InstanceId: &instance,
+	}, nil, nil)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || string(payload) != "b" {
+		t.Fatalf("精确实例路由错误: result=%v payload=%q err=%v", result, payload, err)
+	}
+	if err := b.SetReadiness(context.Background(), "draining", "transaction owner draining"); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = workerB.Invoke(context.Background(), &contractv1.CallTarget{
+		ExtensionPoint: "tool.package", Capability: "demo.exact", Operation: &operation,
+		LogicalService: &service, RoutingDomain: &domain, InstanceId: &instance,
+	}, nil, nil)
+	if err == nil {
+		t.Fatal("draining 精确实例不得继续通过本地或直达路径接收新调用")
+	}
+	missing := "runtime-missing"
+	_, _, err = caller.Invoke(context.Background(), &contractv1.CallTarget{
+		ExtensionPoint: "tool.package", Capability: "demo.exact", LogicalService: &service,
+		RoutingDomain: &domain, InstanceId: &missing,
+	}, nil, nil)
+	if !errors.Is(err, ErrCapabilityNotFound) {
+		t.Fatalf("未知实例必须 fail closed: %v", err)
+	}
+}
+
 func TestRouterRejectsLocalCapabilityRegistration(t *testing.T) {
 	server, buckets := startAddressingNATS(t)
 	worker := newTestRouter(t, server, buckets.Capabilities, "worker-local")

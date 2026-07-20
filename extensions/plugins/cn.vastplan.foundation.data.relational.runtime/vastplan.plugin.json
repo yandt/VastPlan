@@ -1,12 +1,12 @@
 {
   "id": "cn.vastplan.foundation.data.relational.runtime",
   "name": "VastPlan Database Runtime",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "内置 PostgreSQL/MySQL Provider、连接池、按 revision 发布和无状态查询/执行的数据面基础插件",
+  "description": "内置 PostgreSQL/MySQL Provider、连接池、按 revision 发布及实例亲和事务的数据面基础插件",
   "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": ["kernel.credential.material-lease"], "credentials": [], "resources": [] },
   "contextAccess": {
@@ -36,7 +36,10 @@
     "schema": {
       "type": "object",
       "additionalProperties": false,
-      "properties": { "allowInsecureTLS": { "type": "boolean", "default": false } }
+      "properties": {
+        "allowInsecureTLS": { "type": "boolean", "default": false },
+        "maxTransactions": { "type": "integer", "minimum": 1, "maximum": 1000000, "default": 4096 }
+      }
     }
   },
   "activation": ["onStartup"],
@@ -57,8 +60,11 @@
             { "name": "probe", "description": "由连接管理面执行一次性连通性检查" },
             { "name": "activate", "description": "发布或轮换连接 revision" },
             { "name": "retire", "description": "排空并删除连接 revision" },
-            { "name": "query", "description": "通过活动连接池执行参数化查询" },
-            { "name": "execute", "description": "通过活动连接池执行参数化写操作" }
+            { "name": "query", "description": "通过活动连接池或实例亲和事务执行参数化查询" },
+            { "name": "execute", "description": "通过活动连接池或实例亲和事务执行参数化写操作" },
+            { "name": "begin", "description": "在当前 Runtime 实例开始短期事务" },
+            { "name": "commit", "description": "提交实例亲和事务" },
+            { "name": "rollback", "description": "回滚实例亲和事务" }
           ]
         }
       ]

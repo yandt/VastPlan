@@ -161,7 +161,7 @@ func (h *Host) LaunchEmbeddedKindWithPolicy(ctx context.Context, definition Embe
 	registered = true
 	h.Logf("内嵌插件已激活 %s@%s", definition.ID, definition.Version)
 	return &PluginInstance{PluginID: definition.ID, Version: definition.Version, SessionID: instance.id,
-		runtimeKind: kind, embedded: instance}, nil
+		RuntimeAudience: launchRuntimeAudience(instance.policy), runtimeKind: kind, embedded: instance}, nil
 }
 
 func validateAndRegisterEmbedded(h *Host, instance *embeddedInstance, contribution *pluginhostv1.Contribution) error {

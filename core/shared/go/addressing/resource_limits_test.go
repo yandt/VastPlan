@@ -24,7 +24,7 @@ func TestRouterLocalInvokeEnforcesPayloadAndPropagatesDeadline(t *testing.T) {
 		t.Fatalf("输入 payload 超限必须返回稳定错误码: %v", err)
 	}
 
-	router.local[target.Capability] = []localHandler{{handler: func(ctx context.Context, _ *contractv1.CallTarget, callCtx *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+	router.local[target.Capability] = []localHandler{{record: Announcement{Health: "healthy", Readiness: "ready"}, handler: func(ctx context.Context, _ *contractv1.CallTarget, callCtx *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
 		deadline, ok := ctx.Deadline()
 		if !ok || time.Until(deadline) > time.Second || callCtx == nil || callCtx.DeadlineUnixMs == nil {
 			t.Fatalf("本地 fast path 也必须应用并传播默认 deadline: deadline=%v context=%+v", deadline, callCtx)

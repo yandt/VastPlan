@@ -116,7 +116,7 @@
     },
     "transactionHandle": {
       "type": "string",
-      "pattern": "^[A-Za-z0-9_-]+$",
+      "pattern": "^[A-Za-z0-9_.-]+$",
       "minLength": 32,
       "maxLength": 2048
     },

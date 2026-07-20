@@ -226,7 +226,7 @@ func (r *Router) InvokeStream(ctx context.Context, target *contractv1.CallTarget
 		}
 	}()
 	ctx, callCtx, deadlineCancel := r.boundedCallContext(ctx, callCtx)
-	instances := r.instancesFor(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey())
+	instances := r.instancesFor(target.Capability, target.GetLogicalService(), target.GetRoutingDomain(), target.GetPartitionKey(), target.GetInstanceId())
 	streamInstances := instances[:0]
 	for _, instance := range instances {
 		if instance.StreamEndpoint != "" {

@@ -135,13 +135,16 @@ type MigrationRequest = MigrationCommand
 // PluginInstance 是宿主侧持有的一个已接入执行单元。它可以来自独立进程、
 // Runtime Host 管理的 Worker/子解释器，或受控内嵌驱动；上层生命周期不区分语言。
 type PluginInstance struct {
-	PluginID    string
-	Version     string
-	SessionID   string
-	PID         int
-	runtimeKind string
-	session     *session
-	embedded    *embeddedInstance
+	PluginID  string
+	Version   string
+	SessionID string
+	PID       int
+	// RuntimeAudience is the non-secret, restart-unique digest of the trusted
+	// launch identity. Node Agent reuses it as the capability routing instance.
+	RuntimeAudience string
+	runtimeKind     string
+	session         *session
+	embedded        *embeddedInstance
 }
 
 // PluginProcess 是 v1 代码的源兼容别名。新代码使用 PluginInstance；协议和

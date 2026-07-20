@@ -8,11 +8,11 @@
 
 ## 当前阶段
 
-0.5.0 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider，以及 connection-manager 发布闭环和 active-active 无状态执行服务。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。
+0.6.0 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider、connection-manager 发布闭环、active-active 无状态执行和实例亲和事务。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。
 
 当前制品开放 `providers/probe/activate/retire/query/execute`。只有 connection-manager 能发布、探测和退役连接；`query/execute` 拒绝用户直调，普通插件、Agent 或 Runner 还必须取得宿主投影的 `database.connection/<resourceId>` grant。管理面主动发布会命中一个 queue 副本，其他 active-active 副本首次收到该 revision 请求时，通过只允许 Runtime 调用的 `resolveRuntime` 内部操作惰性取得定义并幂等建池，因此扩容和重启不依赖伪广播。每个副本最多缓存 1 秒管理面确认；过期后同一连接的并发请求合并验证，删除会在该有界 lease 内排空本副本所有 project 池，避免未命中主动 retire 的副本无限继续服务。
 
-`begin/commit/rollback` 仍 fail-closed，等待下一阶段的签名事务句柄与实例亲和路由。
+`begin/commit/rollback` 返回由单次 Runtime 启动密钥加密认证的短期句柄，绑定 tenant/project/caller/ConnectionRef/owner/expiry。后续请求可落到任意副本，由受限的 Runtime-to-Runtime relay 使用 `CallTarget.instance_id` 精确转给 owner。owner 崩溃、重启或丢失本地事务时稳定返回 `database.runtime.transaction_lost`；过期自动回滚并返回 `database.runtime.transaction_expired`。连接轮换时旧事务只保留到 generation drain 上界。
 
 Provider options 强制使用结构化 JSON，不接受 DSN。两者都要求 `user`，默认 `tlsMode=verify-full`；`tlsMode=disable` 只有宿主显式设置 `ProviderSecurityPolicy.AllowInsecureTLS` 时才允许。PostgreSQL 使用原生 `$1` 参数占位符，MySQL 使用 `?`，Runtime 不对 SQL 文本做不安全的自动改写。
 
@@ -27,6 +27,7 @@ Provider options 强制使用结构化 JSON，不接受 DSN。两者都要求 `u
 - 长期池只保存 `MaterialSource`。每条物理连接建立时临时取得 material，不生成长期密码 DSN；认证后会清空 Runtime 自己持有的候选配置。pgx、go-sql-driver/mysql 和 Go immutable string 均无法保证驱动私有连接副本中的认证字符串可原地清零，因此必须继续运行在 dedicated 可信进程，并通过关闭物理连接和 generation drain 完成凭证轮换。
 - 第三方 Provider 不实现本 Go SPI，而是经未来的隔离进程和版本化 RPC 接入。
 - `allowInsecureTLS` 是 service 级重启配置，默认 `false`；只有受控测试环境可设置为 `true`，连接定义自身不能绕过该部署策略。
+- `maxTransactions` 是每个 Runtime 实例的活动事务硬上限，默认 4096；达到上限时拒绝新事务，不影响无状态查询。
 
 ## 真实数据库集成测试
 
