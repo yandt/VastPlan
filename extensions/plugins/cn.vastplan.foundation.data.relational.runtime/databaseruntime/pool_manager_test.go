@@ -188,6 +188,28 @@ func TestPoolManagerSwitchesGenerationAndDrainsInflight(t *testing.T) {
 	waitFor(t, time.Second, provider.pool(1).isClosed)
 }
 
+func TestPoolManagerRetireAllCoversEveryProjectPool(t *testing.T) {
+	manager, _, material := newManagerForTest(t, DefaultManagerPolicy())
+	spec := managerSpec(1, 2)
+	first := managerScope("plugin-a")
+	second := managerScope("plugin-b")
+	second.ProjectID = "project-b"
+	if _, err := manager.Activate(context.Background(), first, spec, material); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Activate(context.Background(), second, spec, material); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.RetireAll(context.Background(), "tenant-a", spec.Ref); err != nil {
+		t.Fatal(err)
+	}
+	for _, scope := range []RequestScope{first, second} {
+		if _, err := manager.Acquire(context.Background(), scope, spec.Ref); err == nil {
+			t.Fatalf("tenant 级退役后 project %s 不得继续获取连接", scope.ProjectID)
+		}
+	}
+}
+
 func TestPoolManagerRejectsBudgetBeforeOpeningProvider(t *testing.T) {
 	manager, provider, material := newManagerForTest(t, ManagerPolicy{
 		NodeMaxOpen: 20, TenantMaxOpen: 12, ConnectionMaxOpen: 6, MaxGenerations: 2,

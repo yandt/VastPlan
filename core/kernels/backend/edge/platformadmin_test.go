@@ -49,7 +49,7 @@ func (*platformService) ListDatabaseConnections(context.Context, portalapi.Princ
 	return []platformadminapi.DatabaseConnection{}, nil
 }
 func (*platformService) PutDatabaseConnection(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, name string, value platformadminapi.PutDatabaseConnectionRequest) (platformadminapi.DatabaseConnection, error) {
-	return platformadminapi.DatabaseConnection{Name: name, Driver: value.Driver, Endpoint: value.Endpoint, Database: value.Database}, nil
+	return platformadminapi.DatabaseConnection{Name: name, ProviderID: value.ProviderID, Endpoint: value.Endpoint, Database: value.Database}, nil
 }
 func (*platformService) DeleteDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) error {
 	return nil

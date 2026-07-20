@@ -52,20 +52,6 @@ type RuntimeMaterialLeaseBroker interface {
 	IssueRuntimeLease(context.Context, string, runtimeidentity.Identity, credentiallease.Request) (credentiallease.Envelope, error)
 }
 
-// DatabaseConnection 是数据库插件交给可信部署适配器的非敏感连接定义。密码不属于
-// 此契约，适配器只能通过 CredentialBroker 在受控回调中使用 CredentialRef。
-type DatabaseConnection struct {
-	Driver      string        `json:"driver"`
-	Endpoint    string        `json:"endpoint"`
-	Database    string        `json:"database,omitempty"`
-	Credentials CredentialRef `json:"credentials"`
-}
-
-// DatabaseBroker 在可信宿主内执行数据库连通性检查；它不得将凭证明文返回给插件。
-type DatabaseBroker interface {
-	Probe(context.Context, Scope, DatabaseConnection) error
-}
-
 type Persistence interface {
 	Get(context.Context, Scope, string) ([]byte, error)
 	Put(context.Context, Scope, string, []byte) error
@@ -89,7 +75,6 @@ type Dependencies struct {
 	RuntimeMaterialLeases RuntimeMaterialLeaseBroker
 	Persistence           Persistence
 	Transactions          TransactionManager
-	Database              DatabaseBroker
 	NodeBootstrap         nodebootstrap.Broker
 	NodeReadiness         nodebootstrap.ReadinessObserver
 	DeploymentPublication deploymentpublication.Controller

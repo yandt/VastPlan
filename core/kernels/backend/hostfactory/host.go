@@ -57,11 +57,6 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			return nil, err
 		}
 	}
-	if dependencies.Database != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, "kernel.database.probe", kernelDatabaseProbe(dependencies.Database)); err != nil {
-			return nil, err
-		}
-	}
 	if dependencies.RuntimeMaterialLeases != nil {
 		if err := host.RegisterHostService(extpoint.KernelService, credentiallease.RuntimeKernelService, kernelRuntimeMaterialLease(dependencies.RuntimeMaterialLeases)); err != nil {
 			return nil, err
@@ -269,26 +264,6 @@ func kernelConfigGet(provider kernelspi.ConfigProvider) protocolbus.HostService 
 			return nil, nil, kernelspi.ErrNotFound
 		}
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, value, nil
-	}
-}
-
-func kernelDatabaseProbe(broker kernelspi.DatabaseBroker) protocolbus.HostService {
-	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
-		if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() == "" {
-			return nil, nil, fmt.Errorf("kernel.database.probe 只接受已认证插件会话")
-		}
-		var connection kernelspi.DatabaseConnection
-		if err := json.Unmarshal(payload, &connection); err != nil || connection.Driver == "" || connection.Endpoint == "" || connection.Credentials.Handle == "" && connection.Credentials.Name == "" {
-			return nil, nil, fmt.Errorf("数据库连通性请求无效")
-		}
-		scope := kernelspi.Scope{TenantID: callCtx.GetTenantId(), ProjectID: callCtx.GetProjectId(), PluginID: callCtx.GetCaller().GetId(), Namespace: "database"}
-		if err := scope.Validate(); err != nil {
-			return nil, nil, err
-		}
-		if err := broker.Probe(ctx, scope, connection); err != nil {
-			return nil, nil, err
-		}
-		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"ready":true}`), nil
 	}
 }
 

@@ -13,7 +13,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.6.0"
+	PluginVersion = "0.7.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -36,6 +36,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if allowedKernelCallback(c, request) {
 		return extpoint.DecisionAllow, "平台基础插件受限宿主回调"
+	}
+	if databaseRuntimeAllowed(c, request) {
+		return extpoint.DecisionAllow, "数据库管理面与受控数据面调用"
 	}
 	if managedCredentialLifecycleAllowed(c, request) {
 		return extpoint.DecisionAllow, "业务插件只能管理自己拥有的托管凭证"
@@ -74,7 +77,32 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", platformadminapi.DatabaseCapability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability:
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability:
+		return true
+	default:
+		return false
+	}
+}
+
+func databaseRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN && c.GetCaller().GetId() == databasev1.ConnectionManagerPluginID {
+		return request.Capability == databasev1.Capability &&
+			(request.Operation == databasev1.OperationActivate || request.Operation == databasev1.OperationRetire || request.Operation == databasev1.OperationProbe || request.Operation == databasev1.OperationProviders)
+	}
+	if c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN && c.GetCaller().GetId() == databasev1.RuntimePluginID {
+		return request.Capability == platformadminapi.DatabaseCapability && request.Operation == "resolveRuntime"
+	}
+	if request.Capability != databasev1.Capability {
+		return false
+	}
+	if request.Operation == databasev1.OperationProviders && c.GetCaller().GetId() != "" {
+		return true
+	}
+	if request.Operation != databasev1.OperationQuery && request.Operation != databasev1.OperationExecute {
+		return false
+	}
+	switch c.GetCaller().GetKind() {
+	case v1.CallerKind_CALLER_KIND_PLUGIN, v1.CallerKind_CALLER_KIND_AGENT, v1.CallerKind_CALLER_KIND_RUNNER, v1.CallerKind_CALLER_KIND_SYSTEM:
 		return true
 	default:
 		return false
@@ -115,8 +143,6 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	switch c.Caller.Id {
 	case "cn.vastplan.platform.configuration.global-settings", "cn.vastplan.platform.security.credentials":
 		return request.Capability == "kernel.config.get"
-	case "cn.vastplan.platform.data.relational.connection-manager":
-		return request.Capability == "kernel.database.probe"
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":

@@ -1,17 +1,17 @@
 {
   "id": "cn.vastplan.foundation.data.relational.runtime",
   "name": "VastPlan Database Runtime",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "内置 PostgreSQL/MySQL Provider、连接池与事务的数据面基础插件；当前仅对外开放 Provider 契约发现",
+  "description": "内置 PostgreSQL/MySQL Provider、连接池、按 revision 发布和无状态查询/执行的数据面基础插件",
   "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": ["kernel.credential.material-lease"], "credentials": [], "resources": [] },
   "contextAccess": {
     "required": ["caller"],
-    "optional": ["scope.tenant", "scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"]
+    "optional": ["scope.tenant", "scope.project", "scene", "trace", "request.deadline", "request.idempotency", "grant.credentials", "propagation.callPath"]
   },
   "runtime": {
     "instancePolicy": "active-active",
@@ -30,6 +30,15 @@
     ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "restart",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "allowInsecureTLS": { "type": "boolean", "default": false } }
+    }
+  },
   "activation": ["onStartup"],
   "entry": { "backend": "backend/database-runtime" },
   "contributes": {
@@ -44,7 +53,12 @@
               "name": "providers",
               "description": "列出当前制品内已注册的关系数据库 Provider",
               "paramsSchema": { "type": "object", "additionalProperties": false, "maxProperties": 0 }
-            }
+            },
+            { "name": "probe", "description": "由连接管理面执行一次性连通性检查" },
+            { "name": "activate", "description": "发布或轮换连接 revision" },
+            { "name": "retire", "description": "排空并删除连接 revision" },
+            { "name": "query", "description": "通过活动连接池执行参数化查询" },
+            { "name": "execute", "description": "通过活动连接池执行参数化写操作" }
           ]
         }
       ]

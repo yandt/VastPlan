@@ -3,6 +3,7 @@ package policy
 import (
 	"testing"
 
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
@@ -79,6 +80,27 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	}
 	if got, _ := decide(businessPlugin, runtimeLease); got != extpoint.DecisionDeny {
 		t.Fatalf("其他插件不得被平台策略授权 Runtime lease: %s", got)
+	}
+}
+
+func TestDatabaseRuntimeManagementAndExecutionBoundary(t *testing.T) {
+	manager := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: databasev1.ConnectionManagerPluginID}}
+	if got, _ := decide(manager, extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: databasev1.OperationActivate}); got != extpoint.DecisionAllow {
+		t.Fatalf("connection-manager 应可发布 Runtime 定义: %s", got)
+	}
+	if got, _ := decide(manager, extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: databasev1.OperationQuery}); got != extpoint.DecisionDeny {
+		t.Fatalf("connection-manager 不应继承查询能力: %s", got)
+	}
+	runtime := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: databasev1.RuntimePluginID}}
+	if got, _ := decide(runtime, extpoint.PermissionRequest{Capability: platformadminapi.DatabaseCapability, Operation: "resolveRuntime"}); got != extpoint.DecisionAllow {
+		t.Fatalf("Runtime 应可惰性解析连接定义: %s", got)
+	}
+	thirdParty := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "org.example.orders"}}
+	if got, _ := decide(thirdParty, extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: databasev1.OperationQuery}); got != extpoint.DecisionAllow {
+		t.Fatalf("数据面调用应继续交由 Runtime 校验连接授权: %s", got)
+	}
+	if got, _ := decide(user("platform.admin"), extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: databasev1.OperationQuery}); got != extpoint.DecisionDeny {
+		t.Fatalf("用户不得直接执行底层 SQL: %s", got)
 	}
 }
 

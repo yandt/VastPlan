@@ -21,9 +21,9 @@ type leaseHost struct {
 	calls            int
 }
 
-func (h *leaseHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+func (h *leaseHost) Call(_ context.Context, target *contractv1.CallTarget, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 	h.calls++
-	if target.GetCapability() != credentiallease.RuntimeKernelService || target.GetOperation() != "issue" {
+	if target.GetCapability() != credentiallease.RuntimeKernelService || target.GetOperation() != "issue" || call.GetTenantId() != "tenant-a" {
 		return nil, nil, context.Canceled
 	}
 	var request credentiallease.Request

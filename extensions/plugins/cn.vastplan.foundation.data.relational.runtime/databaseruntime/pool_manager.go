@@ -383,6 +383,42 @@ func (m *PoolManager) Retire(ctx context.Context, scope RequestScope, ref databa
 	return nil
 }
 
+// RetireAll removes the same tenant-scoped connection revision from every
+// project-local pool in this Runtime replica. Management deletion cannot know
+// which projects have lazily hydrated a pool, so exact-project retirement
+// would leave stale pools usable until process restart.
+func (m *PoolManager) RetireAll(ctx context.Context, tenantID string, ref databasev1.ConnectionRef) error {
+	if m == nil || ctx == nil || invalidScopePart(tenantID, true) || databasev1.ValidateConnectionRef(ref) != nil {
+		return NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("retire all 参数无效"))
+	}
+	if err := ctx.Err(); err != nil {
+		return NewRuntimeError(databasev1.ErrorDeadlineExceeded, true, err)
+	}
+	m.activationMu.Lock()
+	defer m.activationMu.Unlock()
+	m.mu.Lock()
+	entries := make([]*poolGeneration, 0)
+	for logical, group := range m.groups {
+		if logical.tenant != tenantID || logical.resource != ref.ResourceID || group.active == nil || group.active.spec.Ref != ref {
+			continue
+		}
+		entry := group.active
+		group.active = nil
+		entry.markDraining()
+		entries = append(entries, entry)
+	}
+	if len(entries) == 0 {
+		m.mu.Unlock()
+		return nil
+	}
+	m.counters.retirements.Add(uint64(len(entries)))
+	m.mu.Unlock()
+	for _, entry := range entries {
+		m.scheduleDrain(entry)
+	}
+	return nil
+}
+
 type PoolLease struct {
 	entry   *poolGeneration
 	manager *PoolManager
@@ -397,6 +433,28 @@ func (l *PoolLease) Generation() uint64 {
 	}
 	return l.entry.generation
 }
+
+func (l *PoolLease) Probe(ctx context.Context) error {
+	if l == nil || l.entry == nil || ctx == nil {
+		return NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pool lease probe 参数无效"))
+	}
+	return l.entry.pool.Probe(ctx)
+}
+
+func (l *PoolLease) Query(ctx context.Context, statement databasev1.Statement, maxRows int) (databasev1.QueryResult, error) {
+	if l == nil || l.entry == nil || ctx == nil {
+		return databasev1.QueryResult{}, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pool lease query 参数无效"))
+	}
+	return l.entry.pool.Query(ctx, statement, maxRows)
+}
+
+func (l *PoolLease) Execute(ctx context.Context, statement databasev1.Statement) (databasev1.ExecuteResult, error) {
+	if l == nil || l.entry == nil || ctx == nil {
+		return databasev1.ExecuteResult{}, NewRuntimeError(databasev1.ErrorInvalidRequest, false, errors.New("pool lease execute 参数无效"))
+	}
+	return l.entry.pool.Execute(ctx, statement)
+}
+
 func (l *PoolLease) Release() {
 	if l == nil {
 		return

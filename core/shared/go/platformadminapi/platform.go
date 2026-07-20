@@ -10,6 +10,7 @@ import (
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
@@ -58,9 +59,14 @@ type PutCredentialRequest struct {
 
 type DatabaseConnection struct {
 	Name       string                   `json:"name"`
-	Driver     string                   `json:"driver"`
+	ResourceID string                   `json:"resourceId"`
+	Revision   uint64                   `json:"revision"`
+	ProviderID string                   `json:"providerId"`
 	Endpoint   string                   `json:"endpoint"`
 	Database   string                   `json:"database,omitempty"`
+	Options    json.RawMessage          `json:"options"`
+	Pool       databasev1.PoolPolicy    `json:"pool"`
+	Runtime    string                   `json:"runtime"`
 	Credential DatabaseCredentialStatus `json:"credential"`
 }
 
@@ -73,10 +79,12 @@ type DatabaseCredentialStatus struct {
 // write-only input to the database plugin. The value is omitted on ordinary
 // edits to retain the currently managed credential and is never returned.
 type PutDatabaseConnectionRequest struct {
-	Driver          string `json:"driver"`
-	Endpoint        string `json:"endpoint"`
-	Database        string `json:"database,omitempty"`
-	CredentialValue string `json:"credentialValue,omitempty"`
+	ProviderID      string                 `json:"providerId"`
+	Endpoint        string                 `json:"endpoint"`
+	Database        string                 `json:"database,omitempty"`
+	Options         json.RawMessage        `json:"options"`
+	Pool            *databasev1.PoolPolicy `json:"pool,omitempty"`
+	CredentialValue string                 `json:"credentialValue,omitempty"`
 }
 
 type DatabaseProbe struct {

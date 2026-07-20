@@ -65,7 +65,7 @@ func (s *RuntimeMaterialSource) WithMaterial(ctx context.Context, use func(Crede
 	operation := "issue"
 	result, response, err := s.host.Call(ctx, &contractv1.CallTarget{
 		ExtensionPoint: extpoint.KernelService, Capability: credentiallease.RuntimeKernelService, Operation: &operation,
-	}, &contractv1.CallContext{}, payload)
+	}, &contractv1.CallContext{TenantId: s.tenant}, payload)
 	if err != nil {
 		return fmt.Errorf("申请 Database Runtime material lease: %w", err)
 	}

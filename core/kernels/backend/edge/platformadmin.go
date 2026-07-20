@@ -122,7 +122,7 @@ func (s *CapabilityPlatformAdminService) ListDatabaseConnections(ctx context.Con
 }
 
 func (s *CapabilityPlatformAdminService) PutDatabaseConnection(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, name string, request platformadminapi.PutDatabaseConnectionRequest) (platformadminapi.DatabaseConnection, error) {
-	if err := validResourceName(name, 160); err != nil || strings.TrimSpace(request.Driver) == "" || strings.TrimSpace(request.Endpoint) == "" {
+	if err := validResourceName(name, 160); err != nil || strings.TrimSpace(request.ProviderID) == "" || strings.TrimSpace(request.Endpoint) == "" || len(request.Options) == 0 || !json.Valid(request.Options) {
 		return platformadminapi.DatabaseConnection{}, platformadminapi.ErrInvalid
 	}
 	payload := struct {

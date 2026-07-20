@@ -1,6 +1,6 @@
 // Command databaseruntime starts the dedicated Database Runtime foundation
-// plugin. The public surface still exposes Provider discovery only; query and
-// transaction operations remain closed until the execution service is wired.
+// plugin. A3 exposes management activation and stateless execution; signed
+// instance-affine transactions remain closed for the next phase.
 package main
 
 import (
@@ -11,7 +11,13 @@ import (
 )
 
 func main() {
-	registry, err := runtime.NewDefaultRegistry(runtime.ProviderSecurityPolicy{})
+	var startup struct {
+		AllowInsecureTLS bool `json:"allowInsecureTLS"`
+	}
+	if err := sdk.DecodeStartupConfiguration(&startup); err != nil {
+		log.Fatalf("解析 Database Runtime 启动配置: %v", err)
+	}
+	registry, err := runtime.NewDefaultRegistry(runtime.ProviderSecurityPolicy{AllowInsecureTLS: startup.AllowInsecureTLS})
 	if err != nil {
 		log.Fatalf("注册 Database Provider: %v", err)
 	}

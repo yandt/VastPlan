@@ -99,7 +99,7 @@ Provider panic/崩溃由 ADR-0094 的 Guardian 和协议心跳收敛。第三方
 
 ## 当前实现状态与影响
 
-- 已有连接管理插件、托管凭证 Saga、Kernel Material Lease 适配器和多服务 capability 路由；Database Runtime、真实 Provider 和连接池尚未实现。
+- 已有连接管理插件、托管凭证 Saga、Kernel Material Lease 适配器、真实 Provider、连接池、持久化 publication outbox 和 active-active 无状态执行服务；事务实例亲和与故障注入门禁尚未完成。
 - 新方案保持 Kernel 不感知 PostgreSQL/MySQL 驱动，新增数据库类型不要求修改或重启 Kernel 二进制，只需发布兼容的 Database Runtime/Provider 制品。
 - dedicated 可信进程比内嵌驱动多一次本机协议调用，但换来凭证隔离、独立升级、故障恢复和集群扩缩容；数据库网络时延通常远高于这层本机调用成本。
 
@@ -126,3 +126,11 @@ Provider panic/崩溃由 ADR-0094 的 Guardian 和协议心跳收敛。第三方
 实施顺序第 4 项已完成，Database Runtime 制品升级为 0.4.0。制品同批注册 pgx 5.10.0 PostgreSQL Provider 与 go-sql-driver/mysql 1.10.0 MySQL Provider，两者复用 `database/sql` 池适配、wire 值转换、结果截断、事务隔离/超时和稳定错误分类。Provider 只接受各自签名 JSON Schema 中的非敏感字段，不接受 DSN；默认 `verify-full` 和系统信任根，关闭 TLS 必须由宿主部署策略显式放行。PostgreSQL 禁止 `PGSERVICE/PGSERVICEFILE` 注入并使用受控配置模板，MySQL 禁用明文回退、旧认证、任意本地文件与多语句。
 
 每条物理连接通过 `MaterialSource` 单独取得 material，长期 `database/sql.DB` 不保存密码 DSN，认证后清空 Runtime 自己持有的候选配置。pgx、go-sql-driver/mysql 和 Go immutable string 均无法承诺驱动私有连接副本中的认证字符串可原地擦除，因此该风险不再被文档隐藏，而由 dedicated 可信进程、短时 lease、最小内存暴露、关闭物理连接和 generation drain 控制。单元契约覆盖两个 Provider 的注册、TLS fail-closed、严格配置、minIdle 预热、无损值类型、结果上限、事务和错误分类；真实数据库门禁通过显式测试环境变量启用，本次已在 PostgreSQL 17.10 与 MySQL 8.0.42 临时实例上完成 probe 和参数化查询验收。下一步进入实施顺序第 5 项。
+
+## 实施进展（2026-07-20，发布与 active-active A3）
+
+实施顺序第 5 项已完成，Database Runtime 升级为 0.5.0，connection-manager 升级为 0.4.0。连接定义状态格式 v3 新增稳定的 96-bit 摘要 `resourceId`、单调 revision、删除后保留的非秘密 revision tombstone、Provider options、PoolPolicy 和持久化 publication outbox。凭证 candidate 激活后才形成期望定义；Runtime `activate/retire` 成功后才完成 publication，并按顺序推进旧 CredentialRef 退役。管理面列表明确报告 `ready/pending`，其中 ready 只表示至少一个 queue 副本已接受该 revision，不冒充全副本预热。
+
+active-active 不采用不可验证的“重复 queue 调用即广播”。管理面主动发布命中一个副本；其他副本在首次接到该 revision 的 `query/execute` 时，通过只允许精确 Runtime caller 的内部 `platform.database/resolveRuntime` 读取该单条现行定义，随后幂等建池。Runtime 的成功定义确认使用 1 秒有界 lease，同一连接的并发过期验证在副本内合并；删除或 revision 失效会排空该 tenant 在本副本内所有 project 池，管理面不可达且 lease 过期时 fail-closed。这样每个活跃连接每副本最多增加约 1 次/秒轻量管理面校验，同时把未命中主动 retire 的 stale-serving 窗口限制为 1 秒。已删除定义、旧 revision、用户直调和缺少 `database.connection/<resourceId>` 宿主投影 grant 的执行请求均 fail-closed。平台本地组合新增两个 Database Runtime 副本，使用 `external-shared + cluster + queue`。
+
+`probe` 已从临时 `kernel.database.probe` 迁移到 Database Runtime Material Lease 数据面；Backend Kernel 不再承担数据库 Broker 路径。`providers/probe/activate/retire/query/execute` 已进入签名 descriptor，事务操作继续关闭。下一步进入实施顺序第 6 项。

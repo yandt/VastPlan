@@ -26,16 +26,28 @@ export interface CredentialMetadata {
 
 export interface DatabaseConnection {
   name: string;
-  driver: string;
+  resourceId: string;
+  revision: number;
+  providerId: string;
   endpoint: string;
   database?: string;
+  options: Record<string, unknown>;
+  pool: DatabasePoolPolicy;
+  runtime: "ready" | "pending";
   credential: { managed: boolean; version: number };
 }
 
+export interface DatabasePoolPolicy {
+  minIdle?: number; maxIdle: number; maxOpen: number; maxLifetimeMs: number;
+  maxIdleTimeMs: number; acquireTimeoutMs: number; idlePoolTtlMs: number;
+}
+
 export interface PutDatabaseConnectionRequest {
-  driver: string;
+  providerId: string;
   endpoint: string;
   database?: string;
+  options: Record<string, unknown>;
+  pool?: DatabasePoolPolicy;
   credentialValue?: string;
 }
 
