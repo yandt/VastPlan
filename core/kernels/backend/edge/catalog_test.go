@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,9 +29,50 @@ type countingCatalogSource struct {
 	calls int
 }
 
+type failingCatalogSource struct {
+	err   error
+	calls int
+}
+
+func (s *failingCatalogSource) Fetch(context.Context, pluginv1.ArtifactRef) (artifacttrust.Envelope, error) {
+	s.calls++
+	return artifacttrust.Envelope{}, s.err
+}
+
 func (s *countingCatalogSource) Fetch(ctx context.Context, ref pluginv1.ArtifactRef) (artifacttrust.Envelope, error) {
 	s.calls++
 	return s.catalogSource.Fetch(ctx, ref)
+}
+
+func TestTrustedCatalogFallsBackOnlyWhenExactSeedRefIsAbsent(t *testing.T) {
+	manifestRaw := `{"id":"cn.vastplan.product.frontend.fallback","name":"fallback","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"views":[]}}}`
+	artifact, packageBytes := packageFrontendFixture(t, manifestRaw, []byte(`export default { register() {} };`))
+	ref := portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+	remote := &countingCatalogSource{catalogSource: catalogSource{artifact.PluginID + "@" + artifact.Version: {Artifact: artifact, PackageBytes: packageBytes}}}
+	missing := &failingCatalogSource{err: artifacttrust.ErrNotFound}
+	catalog, err := NewTrustedCatalog([]ArtifactSource{missing, remote}, contentVerifier{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := catalog.verifiedManifest(context.Background(), ref); err != nil {
+		t.Fatalf("本地精确 ref 不存在时应读取远端源: %v", err)
+	}
+	if missing.calls != 1 || remote.calls != 1 {
+		t.Fatalf("制品源调用顺序错误: seed=%d remote=%d", missing.calls, remote.calls)
+	}
+
+	broken := &failingCatalogSource{err: errors.New("seed permission denied")}
+	remote.calls = 0
+	catalog, err = NewTrustedCatalog([]ArtifactSource{broken, remote}, contentVerifier{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := catalog.verifiedManifest(context.Background(), ref); err == nil || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("本地读取异常必须 fail-closed: %v", err)
+	}
+	if remote.calls != 0 {
+		t.Fatal("非 not-found 错误不得切换制品源")
+	}
 }
 
 type contentVerifier struct{}

@@ -45,6 +45,10 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	key := flags.String("tls-key", "", "HTTPS private key PEM")
 	sessions := flags.String("session-file", "", "0600 session digest JSON")
 	repositoryRoot := flags.String("repository", ".vastplan/repository", "local immutable artifact repository")
+	repositoryURL := flags.String("repository-url", "", "HTTPS managed artifact repository used when an exact Seed ref is absent")
+	repositoryTrust := flags.String("repository-trust", "", "managed repository publisher trust document")
+	repositoryToken := flags.String("repository-token", "", "managed repository read token; defaults to VASTPLAN_ARTIFACT_READ_TOKEN")
+	repositoryCA := flags.String("repository-ca", "", "managed repository custom CA PEM")
 	installRoot := flags.String("install-root", ".vastplan/portal-edge/plugins", "content-addressed plugin install root")
 	deliveryOrigin := flags.String("frontend-delivery-origin", "", "shared trusted Portal frontend delivery origin")
 	deliveryCache := flags.String("frontend-delivery-cache", ".vastplan/portal-edge/frontend-cache", "this Portal Edge node's private frontend cache")
@@ -89,9 +93,23 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err := platformOptions.validate(); err != nil {
 		return err
 	}
+	if *repositoryToken == "" {
+		*repositoryToken = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
+	}
+	remoteSource, remoteTrust, err := buildPortalRemoteArtifactSource(*repositoryURL, *repositoryTrust, *repositoryToken, *repositoryCA)
+	if err != nil {
+		return err
+	}
 	var verifier nodeagent.ArtifactVerifier
 	if *allowUnsigned {
-		verifier = nodeagent.NewLocalDevelopmentArtifactVerifier()
+		if remoteSource == nil {
+			verifier = nodeagent.NewLocalDevelopmentArtifactVerifier()
+		} else {
+			verifier, err = nodeagent.NewLocalDevelopmentArtifactVerifierWithTrust(remoteTrust)
+			if err != nil {
+				return err
+			}
+		}
 	} else {
 		if *trustFile == "" {
 			return errors.New("生产 portal-edge 必须配置 trust-store")
@@ -130,7 +148,11 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return fmt.Errorf("加载 Portal 静态产物: %w", err)
 	}
-	catalog, err := edge.NewTrustedCatalog([]edge.ArtifactSource{repository}, verifierAdapter{verifier}, edge.WithFrontendDeliveryDistribution(*deliveryOrigin, *deliveryCache))
+	artifactSources := []edge.ArtifactSource{repository}
+	if remoteSource != nil {
+		artifactSources = append(artifactSources, remoteSource)
+	}
+	catalog, err := edge.NewTrustedCatalog(artifactSources, verifierAdapter{verifier}, edge.WithFrontendDeliveryDistribution(*deliveryOrigin, *deliveryCache))
 	if err != nil {
 		return err
 	}

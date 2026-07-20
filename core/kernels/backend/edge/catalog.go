@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
@@ -407,13 +408,15 @@ func (c *TrustedCatalog) verifiedManifest(ctx context.Context, ref portalapi.Plu
 	for _, source := range c.sources {
 		envelope, err := source.Fetch(ctx, artifactRef)
 		if err != nil {
-			last = err
-			continue
+			if errors.Is(err, artifacttrust.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
+				last = err
+				continue
+			}
+			return pluginv1.Artifact{}, nil, pluginv1.Manifest{}, fmt.Errorf("读取 %s@%s 制品源失败: %w", ref.ID, ref.Version, err)
 		}
 		artifact, err := c.verifier.Verify(ctx, artifactRef, envelope)
 		if err != nil {
-			last = err
-			continue
+			return pluginv1.Artifact{}, nil, pluginv1.Manifest{}, fmt.Errorf("验证 %s@%s 制品失败: %w", ref.ID, ref.Version, err)
 		}
 		manifest, err := pluginv1.ParseManifest(artifact.Manifest)
 		if err != nil {

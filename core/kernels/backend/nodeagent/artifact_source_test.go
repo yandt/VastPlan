@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 )
 
@@ -60,6 +60,37 @@ func TestArtifactVerifierRequiresProofAndProducesInstallerToken(t *testing.T) {
 	}
 	if _, err := (LocalInstaller{Root: t.TempDir()}).Install(VerifiedArtifact{}); err == nil {
 		t.Fatal("安装器必须拒绝未由内核验证器构造的零值")
+	}
+}
+
+func TestDevelopmentMixedVerifierAcceptsUnsignedSeedAndVerifiesSignedTestingArtifact(t *testing.T) {
+	packageBytes, artifact := testPackage(t, 0o755)
+	ref := pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+	publicKey, privateKey, _ := ed25519.GenerateKey(nil)
+	trust, err := pluginservice.NewTrustStore(pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+		Publisher: "example", KeyID: "testing", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifier, err := NewLocalDevelopmentArtifactVerifierWithTrust(trust)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := verifier.Verify(ref, artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes}); err != nil {
+		t.Fatalf("显式开发模式应允许无签名 Seed: %v", err)
+	}
+	attestation, err := pluginservice.SignArtifact(artifact, "example", "testing", privateKey, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof, _ := json.Marshal(attestation)
+	if _, err := verifier.Verify(ref, artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof}); err != nil {
+		t.Fatalf("已签名 testing 制品应使用信任根验证: %v", err)
+	}
+	proof[len(proof)/2] ^= 1
+	if _, err := verifier.Verify(ref, artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof}); err == nil {
+		t.Fatal("开发混合模式不得忽略损坏的签名证明")
 	}
 }
 

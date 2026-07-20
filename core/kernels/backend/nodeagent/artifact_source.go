@@ -44,6 +44,18 @@ func NewLocalDevelopmentArtifactVerifier() ArtifactVerifier {
 	return ArtifactVerifier{allowUnsigned: true, configured: true, validate: artifacttrust.ValidateContent}
 }
 
+// NewLocalDevelopmentArtifactVerifierWithTrust is used only by an explicitly
+// development-mode host that consumes both unsigned local Seed artifacts and
+// signed testing artifacts. Signed envelopes are still verified; this does not
+// weaken the production constructor, which continues to require every artifact
+// to carry a trusted proof.
+func NewLocalDevelopmentArtifactVerifierWithTrust(proofVerifier ArtifactProofVerifier) (ArtifactVerifier, error) {
+	if proofVerifier == nil {
+		return ArtifactVerifier{}, errors.New("开发混合制品验证器必须配置发布者信任")
+	}
+	return ArtifactVerifier{proofVerifier: proofVerifier, allowUnsigned: true, configured: true, validate: artifacttrust.ValidateContent}, nil
+}
+
 // VerifiedArtifact 只能由 ArtifactVerifier 构造。安装器接收该类型而非来源直接返回的
 // Artifact+bytes，避免可插拔制品源绕过内核验证链。
 type VerifiedArtifact struct {

@@ -529,6 +529,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"-interaction-broker-version", "0.1.0", "-interaction-broker-state-file", filepath.Join(r.runDir, "state", "interaction-broker.json"),
 		"-portal-assets", filepath.Join(r.runDir, "portal-assets"), "-nats-url", natsURL, "-nats-allow-insecure",
 	}
+	portalArgs = append(portalArgs, r.controllerArtifactSourceArgs()...)
 	if _, err := r.startChild("portal-edge", env, kernel, portalArgs...); err != nil {
 		return err
 	}
