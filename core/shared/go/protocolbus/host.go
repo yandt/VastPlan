@@ -75,6 +75,9 @@ type LaunchPolicy struct {
 	// the wire or accepted from a plugin manifest; managed execution drivers use
 	// it to keep pools within one kernel service instance.
 	RuntimeScope string
+	// RuntimeGeneration separates providers that cannot unload code (notably
+	// dynamic-go) while a candidate and current service generation overlap.
+	RuntimeGeneration string
 }
 
 // LaunchSpec 是运行驱动交给协议宿主的语言无关启动结果。Command/Args 直接传给

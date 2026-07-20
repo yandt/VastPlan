@@ -66,6 +66,10 @@ type MigrationRequest = pluginv1.MigrationRequest
 // 产生额外副作用；返回错误会使候选启动失败并保留当前版本。
 type MigrationHandler func(context.Context, MigrationPhase, MigrationRequest) error
 
+// LifecycleHandler is the low-level hook used by trusted Runtime Providers to
+// adapt an existing module ABI. Ordinary plugins should prefer OnMigration.
+type LifecycleHandler func(context.Context, *pluginhostv1.Lifecycle) error
+
 // Contribution 插件对某扩展点的一条贡献。
 type Contribution struct {
 	ExtensionPoint string // 如 tool.package
@@ -100,6 +104,7 @@ type Plugin struct {
 	inflight    sync.WaitGroup
 	sessionID   string
 	migration   MigrationHandler
+	lifecycle   LifecycleHandler
 
 	pendingMu      sync.Mutex
 	pending        map[string]chan *pluginhostv1.FromHost
@@ -109,7 +114,11 @@ type Plugin struct {
 	features       map[string]bool
 	seq            atomic.Uint64
 	// shuttingDown 让宿主在收到异步 SHUTDOWN Ack 后关流时被识别为正常退出。
-	shuttingDown atomic.Bool
+	shuttingDown  atomic.Bool
+	serveMu       sync.Mutex
+	serveCancel   context.CancelFunc
+	serveConn     *grpc.ClientConn
+	stopRequested atomic.Bool
 }
 
 // OnMigration 登记插件私有状态迁移处理器。只有清单 state.backend 声明了
@@ -117,6 +126,10 @@ type Plugin struct {
 func (p *Plugin) OnMigration(handler MigrationHandler) {
 	p.migration = handler
 }
+
+// OnLifecycle registers a trusted adapter hook for all lifecycle operations.
+// Returning an error rejects the operation before the SDK changes local state.
+func (p *Plugin) OnLifecycle(handler LifecycleHandler) { p.lifecycle = handler }
 
 func New(id, version string, engines map[string]string) *Plugin {
 	if engines == nil {
@@ -145,11 +158,26 @@ func routeKey(ep, id, op string) string { return ep + "|" + id + "|" + op }
 
 // Serve 回连宿主、完成握手与贡献声明，然后进入运行态直到宿主断开或下发 SHUTDOWN。
 func (p *Plugin) Serve() error {
+	return p.ServeWithEnvironment(nil)
+}
+
+// ServeWithEnvironment avoids process-global environment mutation when a
+// shared Runtime Host serves several plugin sessions. A nil map preserves the
+// independent-process behavior of Serve.
+func (p *Plugin) ServeWithEnvironment(environment map[string]string) error {
+	lookup := os.Getenv
+	if environment != nil {
+		frozen := make(map[string]string, len(environment))
+		for key, value := range environment {
+			frozen[key] = value
+		}
+		lookup = func(key string) string { return frozen[key] }
+	}
 	// magic 校验：宿主经 env 注入，防止被当普通程序误启
-	if os.Getenv(protocol.MagicEnvKey) != protocol.MagicCookie {
+	if lookup(protocol.MagicEnvKey) != protocol.MagicCookie {
 		return errors.New("magic cookie 不匹配：本程序是 VastPlan 插件，须由宿主拉起")
 	}
-	hostAddr := os.Getenv(protocol.HostAddrEnvKey)
+	hostAddr := lookup(protocol.HostAddrEnvKey)
 	if hostAddr == "" {
 		return fmt.Errorf("未注入宿主地址（%s）", protocol.HostAddrEnvKey)
 	}
@@ -171,6 +199,20 @@ func (p *Plugin) Serve() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	p.serveMu.Lock()
+	p.serveCancel, p.serveConn = cancel, conn
+	stopRequested := p.stopRequested.Load()
+	p.serveMu.Unlock()
+	if stopRequested {
+		cancel()
+		_ = conn.Close()
+		return errors.New("插件会话已请求停止")
+	}
+	defer func() {
+		p.serveMu.Lock()
+		p.serveCancel, p.serveConn = nil, nil
+		p.serveMu.Unlock()
+	}()
 
 	// 1) 握手：自报身份 + 版本集 + engines；宿主校验后签发会话票据
 	ack, err := client.Handshake(ctx, &pluginhostv1.Hello{
@@ -179,7 +221,7 @@ func (p *Plugin) Serve() error {
 		PluginId:      p.ID,
 		PluginVersion: p.Version,
 		Engines:       p.Engines,
-		LaunchToken:   os.Getenv(protocol.LaunchTokenEnvKey),
+		LaunchToken:   lookup(protocol.LaunchTokenEnvKey),
 		Features:      protocol.SupportedFeatures,
 	})
 	if err != nil {
@@ -210,6 +252,21 @@ func (p *Plugin) Serve() error {
 
 	// 4) 运行态读循环
 	return p.readLoop()
+}
+
+// Shutdown stops one logical plugin session without terminating a shared
+// Runtime Host process. It is idempotent and also aborts a pending handshake.
+func (p *Plugin) Shutdown() {
+	p.stopRequested.Store(true)
+	p.serveMu.Lock()
+	cancel, conn := p.serveCancel, p.serveConn
+	p.serveMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if conn != nil {
+		_ = conn.Close()
+	}
 }
 
 func (p *Plugin) declaration() *pluginhostv1.Declaration {
@@ -425,6 +482,20 @@ func (p *Plugin) endInvoke(requestID ...string) {
 // handleLifecycle 在独立的串行 worker 中处理生命周期指令。
 func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) {
 	ack := &pluginhostv1.LifecycleAck{RequestId: lc.RequestId, Ready: true}
+	if p.lifecycle != nil {
+		lifecycleCtx, cancel := context.WithTimeout(context.Background(), p.Limits.Normalize().DefaultDeadline)
+		err := p.lifecycle(lifecycleCtx, lc)
+		cancel()
+		if err != nil {
+			ack.Ready = false
+			message := err.Error()
+			ack.Message = &message
+			_ = p.send(&pluginhostv1.FromPlugin{
+				Msg: &pluginhostv1.FromPlugin_LifecycleAck{LifecycleAck: ack},
+			})
+			return
+		}
+	}
 
 	switch lc.Op {
 	case pluginhostv1.Lifecycle_OP_ACTIVATE:
@@ -449,6 +520,9 @@ func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) {
 	case pluginhostv1.Lifecycle_OP_MIGRATION_PREPARE,
 		pluginhostv1.Lifecycle_OP_MIGRATION_COMMIT,
 		pluginhostv1.Lifecycle_OP_MIGRATION_ROLLBACK:
+		if p.lifecycle != nil {
+			break // trusted adapter already handled the full wire lifecycle
+		}
 		phase, err := migrationPhase(lc.Op)
 		if err != nil {
 			ack.Ready = false

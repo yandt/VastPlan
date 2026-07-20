@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -183,6 +184,80 @@ plugin.serve()
 		t.Fatalf("关闭一个子解释器后同池插件应继续可用: response=%+v err=%v", response, err)
 	}
 	if err := host.Close(second); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRuntimePool_DynamicGoLoadsOutsideBackendProcess(t *testing.T) {
+	if runtime.GOOS != "linux" && runtime.GOOS != "darwin" && runtime.GOOS != "freebsd" {
+		t.Skip("当前平台不支持 Go plugin")
+	}
+	const fingerprint = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	root := repoRoot(t)
+	buildRoot := t.TempDir()
+	hostBinary := filepath.Join(buildRoot, "vastplan-go-dynamic-host")
+	moduleBinary := filepath.Join(buildRoot, "bootstrap-policy.so")
+	build := func(arguments ...string) {
+		command := exec.Command("go", arguments...)
+		command.Dir = root
+		command.Env = append(os.Environ(), "CGO_ENABLED=1", "GOCACHE="+filepath.Join(buildRoot, "go-cache"))
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("构建 dynamic-go E2E 制品: %v\n%s", err, output)
+		}
+	}
+	build("build", "-trimpath", "-buildvcs=false",
+		"-ldflags", "-X main.dynamicGoHostFingerprint="+fingerprint,
+		"-o", hostBinary, "./core/runtimehosts/go-dynamic")
+	build("build", "-trimpath", "-buildvcs=false", "-buildmode=plugin",
+		"-ldflags", "-X main.dynamicGoBuildFingerprint="+fingerprint,
+		"-o", moduleBinary,
+		"./extensions/plugins/cn.vastplan.foundation.security.bootstrap-policy/dynamic")
+
+	manifestRaw, err := os.ReadFile(filepath.Join(root,
+		"extensions/plugins/cn.vastplan.foundation.security.bootstrap-policy/vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := pluginv1.ParseManifest(manifestRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	host := newHost(t, "0.1.0")
+	pools := nodeagent.NewRuntimePoolManager(t.Logf)
+	t.Cleanup(func() { _ = pools.Close() })
+	driver := nodeagent.DynamicGoExecutionDriver{Command: hostBinary}
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	instance, err := driver.StartManaged(ctx, host, nodeagent.InstalledPlugin{
+		ID: manifest.ID, Publisher: manifest.Publisher, Version: manifest.Version,
+		Engines: manifest.Engines, Root: buildRoot, DynamicGoPath: moduleBinary,
+		SHA256: strings.Repeat("b", 64),
+		Execution: pluginv1.BackendExecution{
+			MinimumIsolation: "trusted-runtime",
+			DynamicGo: &pluginv1.DynamicGoExecution{
+				Entry: "bootstrap-policy.so", ABI: protocolbus.DynamicGoABIV1, Fingerprint: fingerprint,
+			},
+		},
+	}, protocolbus.LaunchPolicy{
+		PluginID: manifest.ID, Publisher: manifest.Publisher, Version: manifest.Version,
+		Contributions: contributions, RuntimeScope: "backend-main", RuntimeGeneration: "generation-1",
+	}, pools, nodeagent.RuntimeHostingPolicy{Default: nodeagent.RuntimeHostingShared})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if instance.RuntimeKind() != "dynamic-go" || instance.PID <= 0 || instance.PID == os.Getpid() {
+		t.Fatalf("dynamic-go 必须在独立 Go Runtime Host 中运行: kind=%s pid=%d backend=%d",
+			instance.RuntimeKind(), instance.PID, os.Getpid())
+	}
+	if snapshot := pools.Snapshot(); len(snapshot) != 1 || snapshot[0].PID != instance.PID || snapshot[0].Units != 1 {
+		t.Fatalf("Go Runtime Pool 状态异常: %+v", snapshot)
+	}
+	if err := host.Close(instance); err != nil {
 		t.Fatal(err)
 	}
 }

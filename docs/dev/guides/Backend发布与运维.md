@@ -91,7 +91,7 @@ chmod 0755 backend-kernel-linux-amd64
 
 ### 3.1 插件运行形态
 
-Backend 默认用独立进程运行所有插件。内嵌是独立的部署策略轴，不能用发布者信任
+Backend 默认用独立进程运行所有插件。dynamic-go 是独立的部署策略轴，不能用发布者信任
 策略代替：
 
 ```text
@@ -104,22 +104,22 @@ Backend 默认用独立进程运行所有插件。内嵌是独立的部署策略
 `prefer-dynamic-go`、`require-dynamic-go`。
 生产建议保持全局 `process-only`，逐插件启用；发布者级规则适合已经完成统一评审的封闭
 发布物。只有 `publisher=vastplan + cn.vastplan.*` 首方硬身份、精确 ID/版本、验签贡献
-清单和 `trusted-process` 隔离下限同时满足时才会内嵌。
+清单和 `trusted-process` 隔离下限同时满足时才会进入受管 Go Runtime Host。
 
 `prefer-dynamic-go` 在 dynamic-go 不可用时回退独立进程；`require-dynamic-go` 不允许回退。
 代码定义与清单不一致属于发布漂移，直接拒绝。`execution.backend.dynamicGo.required=true`
 的签名制品必须匹配部署方的 `require-dynamic-go`，否则拒绝启动；该字段不授予内嵌权限。
 dynamic-go 只支持 Linux/FreeBSD/macOS
-原生 `CGO_ENABLED=1` 共同构建，Backend、`.so` 与签名 Manifest 的构建指纹必须一致；
-加载器会在 `plugin.Open` 前先校验签名指纹，再验证模块导出信息。标准库 plugin
-不能卸载，所以升级必须滚动重启 Backend，不做同进程热替换。共同构建命令为：
+原生 `CGO_ENABLED=1` 共同构建，Go Runtime Host、`.so` 与签名 Manifest 的构建指纹必须一致；
+Host 加载器会在 `plugin.Open` 前先校验签名指纹，再验证模块导出信息。标准库 plugin
+不能卸载，所以升级创建新的 Host generation，切换并排空旧 generation，不重启 Backend。共同构建命令为：
 
 ```bash
 OUT_DIR=bin/dynamic-go ./engineering/tools/build-dynamic-go.sh
 ```
 
-其他平台或 `CGO_ENABLED=0` 的 Backend 保留进程能力并拒绝 dynamic-go。具体安全与
-故障边界见 [ADR-0051](../decisions/ADR-0051-Backend混合插件运行与受控内嵌边界.md)。
+其他平台或 `CGO_ENABLED=0` 时保留进程能力并拒绝 dynamic-go。具体安全、Pool 与
+故障边界见 [ADR-0089](../decisions/ADR-0089-Runtime-Provider与共享Host池.md)。
 
 ## 4. 升级
 

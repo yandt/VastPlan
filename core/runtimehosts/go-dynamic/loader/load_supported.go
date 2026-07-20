@@ -1,6 +1,6 @@
 //go:build (linux || darwin || freebsd) && cgo
 
-package nodeagent
+package loader
 
 import (
 	"debug/buildinfo"
@@ -13,11 +13,11 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 
-func loadDynamicGo(filename, pluginID, version, hostFingerprint string) (definition protocolbus.EmbeddedPlugin, err error) {
+func load(filename, pluginID, version, hostFingerprint string) (definition protocolbus.EmbeddedPlugin, err error) {
 	if strings.TrimSpace(filename) == "" {
 		return definition, errors.New("dynamic-go 入口路径不能为空")
 	}
-	if err := validateDynamicGoBuildInfo(filename); err != nil {
+	if err := validateBuildInfo(filename); err != nil {
 		return definition, err
 	}
 	loaded, err := plugin.Open(filename)
@@ -51,25 +51,23 @@ func loadDynamicGo(filename, pluginID, version, hostFingerprint string) (definit
 	return module.Plugin, nil
 }
 
-func validateDynamicGoBuildInfo(filename string) error {
+func validateBuildInfo(filename string) error {
 	module, err := buildinfo.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("读取 dynamic-go 构建信息: %w", err)
 	}
 	host, ok := debug.ReadBuildInfo()
 	if !ok {
-		return errors.New("读取 Backend 构建信息失败")
+		return errors.New("读取 Go Runtime Host 构建信息失败")
 	}
 	if module.GoVersion != host.GoVersion {
 		return fmt.Errorf("dynamic-go Go 工具链不一致: host=%s module=%s", host.GoVersion, module.GoVersion)
 	}
-	if err := compareDynamicGoSettings(host.Settings, module.Settings); err != nil {
+	if err := compareBuildSettings(host.Settings, module.Settings); err != nil {
 		return err
 	}
-	hostDeps := buildDependencyMap(host)
-	for path, moduleValue := range buildDependencyMap(module) {
-		// 主仓模块在测试/本地 plugin 构建中可能分别表现为 Main=(devel) 与
-		// dependency=pseudo-version；其精确源码由共同注入的 build fingerprint 绑定。
+	hostDeps := dependencyMap(host)
+	for path, moduleValue := range dependencyMap(module) {
 		if path == host.Main.Path || path == module.Main.Path {
 			continue
 		}
@@ -80,7 +78,7 @@ func validateDynamicGoBuildInfo(filename string) error {
 	return nil
 }
 
-func compareDynamicGoSettings(host, module []debug.BuildSetting) error {
+func compareBuildSettings(host, module []debug.BuildSetting) error {
 	wanted := map[string]bool{
 		"GOOS": true, "GOARCH": true, "CGO_ENABLED": true,
 		"GOAMD64": true, "GOARM": true, "GOARM64": true,
@@ -104,7 +102,7 @@ func compareDynamicGoSettings(host, module []debug.BuildSetting) error {
 	return nil
 }
 
-func buildDependencyMap(info *debug.BuildInfo) map[string]string {
+func dependencyMap(info *debug.BuildInfo) map[string]string {
 	out := map[string]string{}
 	if info.Main.Path != "" {
 		out[info.Main.Path] = info.Main.Version + "@" + info.Main.Sum

@@ -68,3 +68,10 @@ dynamic-go 还必须满足：
 正面影响：高频基础插件可获得最低调用开销；其他首方 Go 插件无需重编内核即可受控动态内嵌；微内核不依赖任何具体插件；部署方保留最终进程内准入决策。
 
 负面影响：内嵌故障域大于进程插件；dynamic-go 要求原生 CGO 构建、严格共同构建且不能卸载或进程内热升级。性能收益必须由基准和真实负载验证，不能仅凭“同进程更快”扩大内嵌范围。
+
+## 后续修订（2026-07-20）
+
+[ADR-0089](ADR-0089-Runtime-Provider与共享Host池.md) 收窄了本 ADR 的物理承载边界：
+dynamic-go 的准入、签名、ABI 与部署方放置策略继续有效，但 `.so` 已迁入独立的、
+generation-scoped Go Runtime Host。Backend 不再调用 `plugin.Open`；升级替换 Runtime Host
+generation，而不是滚动重启 Backend。本文前述“Backend 进程内”内容仅保留为历史决策背景。

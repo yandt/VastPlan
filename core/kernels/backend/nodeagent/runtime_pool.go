@@ -114,11 +114,15 @@ type RuntimeHostKey struct {
 	Isolation     IsolationLevel
 	TrustDomain   string
 	Compatibility string
+	Generation    string
 	Dedicated     string
 }
 
 func (k RuntimeHostKey) String() string {
 	parts := []string{k.Scope, k.Provider, string(k.Isolation), k.TrustDomain, k.Compatibility}
+	if k.Generation != "" {
+		parts = append(parts, "generation="+k.Generation)
+	}
 	if k.Dedicated != "" {
 		parts = append(parts, "dedicated="+k.Dedicated)
 	}
@@ -138,6 +142,7 @@ type runtimeControlRequest struct {
 	Entry       string            `json:"entry,omitempty"`
 	Args        []string          `json:"args,omitempty"`
 	Environment map[string]string `json:"environment,omitempty"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
 type runtimeControlResponse struct {
@@ -228,14 +233,16 @@ func startRuntimeHostProcess(key RuntimeHostKey, spec runtimeHostProcessSpec,
 }
 
 func (p *runtimeHostProcess) readResponses(reader io.Reader) {
-	decoder := json.NewDecoder(bufio.NewReader(reader))
-	for {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 64<<10), 1<<20)
+	for scanner.Scan() {
 		var response runtimeControlResponse
-		if err := decoder.Decode(&response); err != nil {
-			if !errors.Is(err, io.EOF) && p.logf != nil {
-				p.logf("Runtime Host 控制输出无效 provider=%s pid=%d: %v", p.spec.Kind, p.pid, err)
+		if err := json.Unmarshal(scanner.Bytes(), &response); err != nil {
+			if p.logf != nil {
+				p.logf("runtime-host=%s pid=%d stream=stdout %s", p.spec.Kind, p.pid,
+					strings.TrimSpace(scanner.Text()))
 			}
-			return
+			continue
 		}
 		if response.RequestID == "" {
 			if response.Event == "unit-exited" {
@@ -267,6 +274,9 @@ func (p *runtimeHostProcess) readResponses(reader io.Reader) {
 			waiting <- response
 			close(waiting)
 		}
+	}
+	if err := scanner.Err(); err != nil && p.logf != nil {
+		p.logf("Runtime Host 控制输出读取失败 provider=%s pid=%d: %v", p.spec.Kind, p.pid, err)
 	}
 }
 
@@ -504,12 +514,18 @@ func (m *RuntimePoolManager) evict(process *runtimeHostProcess) {
 }
 
 func (l *RuntimeHostLease) Start(ctx context.Context, entry string, args, environment []string) error {
+	return l.StartWithMetadata(ctx, entry, args, environment, nil)
+}
+
+func (l *RuntimeHostLease) StartWithMetadata(ctx context.Context, entry string, args, environment []string,
+	metadata map[string]string) error {
 	l.host.mu.Lock()
 	l.host.units[l.unitID] = l.failure
 	l.host.mu.Unlock()
 	err := l.host.control(ctx, runtimeControlRequest{
 		RequestID: l.unitID + "-start", Operation: "start", UnitID: l.unitID,
 		Entry: entry, Args: append([]string(nil), args...), Environment: environmentMap(environment),
+		Metadata: cloneRuntimeMetadata(metadata),
 	})
 	if err != nil {
 		l.host.mu.Lock()
@@ -517,6 +533,17 @@ func (l *RuntimeHostLease) Start(ctx context.Context, entry string, args, enviro
 		l.host.mu.Unlock()
 	}
 	return err
+}
+
+func cloneRuntimeMetadata(values map[string]string) map[string]string {
+	if values == nil {
+		return nil
+	}
+	result := make(map[string]string, len(values))
+	for key, value := range values {
+		result[key] = value
+	}
+	return result
 }
 
 func (l *RuntimeHostLease) PID() int           { return l.host.pid }
@@ -623,6 +650,10 @@ func runtimeCompatibility(plugin InstalledPlugin) string {
 	}
 	if plugin.Execution.Python != nil {
 		parts = append(parts, fmt.Sprintf("python.subinterpreter-safe=%t", plugin.Execution.Python.SubinterpreterSafe))
+	}
+	if plugin.Execution.DynamicGo != nil {
+		parts = append(parts, "dynamic-go.abi="+plugin.Execution.DynamicGo.ABI,
+			"dynamic-go.fingerprint="+plugin.Execution.DynamicGo.Fingerprint)
 	}
 	digest := sha256.Sum256([]byte(strings.Join(parts, "\n")))
 	return hex.EncodeToString(digest[:])

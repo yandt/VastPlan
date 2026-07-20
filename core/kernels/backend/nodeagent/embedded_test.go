@@ -32,20 +32,27 @@ func TestPlacementPolicyPrecedenceAndRejectsStaticModes(t *testing.T) {
 	}
 }
 
-type fakeDynamicGoLoader struct {
+type fakeDynamicGoDriver struct {
 	called bool
 	value  protocolbus.EmbeddedPlugin
 	err    error
 }
 
-func (l *fakeDynamicGoLoader) Load(_, _, _, _ string) (protocolbus.EmbeddedPlugin, error) {
-	l.called = true
-	return l.value, l.err
+func (*fakeDynamicGoDriver) Name() string              { return "dynamic-go" }
+func (*fakeDynamicGoDriver) Isolation() IsolationLevel { return IsolationTrustedRuntime }
+func (d *fakeDynamicGoDriver) Start(ctx context.Context, host *protocolbus.Host, _ InstalledPlugin,
+	policy protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error) {
+	d.called = true
+	if d.err != nil {
+		return nil, d.err
+	}
+	return host.LaunchEmbeddedKindWithPolicy(ctx, d.value, policy, d.Name())
 }
 
 func dynamicPlugin() InstalledPlugin {
 	return InstalledPlugin{
 		ID: "cn.vastplan.foundation.test.dynamic", Publisher: "vastplan", Version: "1.0.0",
+		Engines:       map[string]string{"backend": "^1.0"},
 		DynamicGoPath: "/signed/content/plugin.so",
 		Execution: pluginv1.BackendExecution{MinimumIsolation: string(IsolationTrustedProcess),
 			DynamicGo: &pluginv1.DynamicGoExecution{Entry: "backend/plugin.so", ABI: protocolbus.DynamicGoABIV1,
@@ -56,9 +63,9 @@ func dynamicPlugin() InstalledPlugin {
 
 func TestRequireDynamicGoLoadsOnlyFirstPartySignedEntry(t *testing.T) {
 	plugin := dynamicPlugin()
-	loader := &fakeDynamicGoLoader{value: protocolbus.EmbeddedPlugin{ID: plugin.ID, Version: plugin.Version}}
+	driver := &fakeDynamicGoDriver{value: protocolbus.EmbeddedPlugin{ID: plugin.ID, Version: plugin.Version}}
 	runtime := NewProtocolRuntime("1.0.0", nil)
-	runtime.DynamicGoLoader = loader
+	runtime.dynamicGoDriver = driver
 	runtime.PlacementPolicy = PlacementPolicy{Default: PlacementRequireDynamicGo}
 	runtime.ExecutionPolicy = ExecutionPolicy{DefaultPolicy: PublisherPolicyAllowTrusted}
 	host := protocolbus.NewHost("backend", "1.0.0", registry.New(), nil)
@@ -68,17 +75,17 @@ func TestRequireDynamicGoLoadsOnlyFirstPartySignedEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !loader.called || process.RuntimeKind() != "dynamic-go" {
-		t.Fatalf("dynamic-go 未以内嵌实例启动: called=%v process=%+v", loader.called, process)
+	if !driver.called || process.RuntimeKind() != "dynamic-go" {
+		t.Fatalf("dynamic-go 驱动未被选择: called=%v process=%+v", driver.called, process)
 	}
 
 	plugin.ID, plugin.Publisher = "com.example.thirdparty", "example"
-	loader.called = false
+	driver.called = false
 	_, err = runtime.startPlugin(context.Background(), host, plugin, protocolbus.LaunchPolicy{
 		PluginID: plugin.ID, Version: plugin.Version, Contributions: []pluginv1.RuntimeContribution{},
 	})
-	if err == nil || !strings.Contains(err.Error(), "publisher=vastplan") || loader.called {
-		t.Fatalf("第三方插件不得进入 dynamic-go: called=%v err=%v", loader.called, err)
+	if err == nil || !strings.Contains(err.Error(), "publisher=vastplan") || driver.called {
+		t.Fatalf("第三方插件不得进入 dynamic-go: called=%v err=%v", driver.called, err)
 	}
 }
 
@@ -109,7 +116,7 @@ func TestRequireDynamicGoRejectsHigherIsolationAndMissingModule(t *testing.T) {
 	_, err := runtime.startPlugin(context.Background(), host, plugin, protocolbus.LaunchPolicy{
 		PluginID: plugin.ID, Version: plugin.Version, Contributions: []pluginv1.RuntimeContribution{},
 	})
-	if err == nil || !strings.Contains(err.Error(), "不能放入内核进程") {
+	if err == nil || !strings.Contains(err.Error(), "不能使用 dynamic-go trusted Runtime") {
 		t.Fatalf("高隔离下限必须拒绝 dynamic-go: %v", err)
 	}
 	plugin.Execution.MinimumIsolation = string(IsolationTrustedProcess)
@@ -126,16 +133,16 @@ func TestPreferDynamicGoFallsBackToProcessWhenModuleIsUnavailable(t *testing.T) 
 	dynamicErr := errors.New("dynamic-go 当前平台不可用")
 	plugin := dynamicPlugin()
 	plugin.Execution.Driver = "native"
-	loader := &fakeDynamicGoLoader{err: dynamicErr}
+	driver := &fakeDynamicGoDriver{err: dynamicErr}
 	runtime := NewProtocolRuntime("1.0.0", nil)
-	runtime.DynamicGoLoader = loader
+	runtime.dynamicGoDriver = driver
 	runtime.PlacementPolicy = PlacementPolicy{Default: PlacementPreferDynamicGo}
 	runtime.ExecutionPolicy = ExecutionPolicy{DefaultPolicy: PublisherPolicyAllowTrusted}
 	host := protocolbus.NewHost("backend", "1.0.0", registry.New(), nil)
 	_, err := runtime.startPlugin(context.Background(), host, plugin, protocolbus.LaunchPolicy{
 		PluginID: plugin.ID, Version: plugin.Version, Contributions: []pluginv1.RuntimeContribution{},
 	})
-	if !loader.called || err == nil || errors.Is(err, dynamicErr) {
-		t.Fatalf("prefer-dynamic-go 应尝试模块后回退进程: called=%v err=%v", loader.called, err)
+	if !driver.called || err == nil || errors.Is(err, dynamicErr) {
+		t.Fatalf("prefer-dynamic-go 应尝试模块后回退进程: called=%v err=%v", driver.called, err)
 	}
 }

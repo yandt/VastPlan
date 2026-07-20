@@ -432,6 +432,7 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_ARTIFACT_TLS_KEY":                filepath.Join(r.runDir, "secrets", "tls-key.pem"),
 		"VASTPLAN_ARTIFACT_READ_TOKEN":             "vastplan-local-artifact-reader",
 		"VASTPLAN_ARTIFACT_PUBLISH_TOKEN":          "vastplan-local-artifact-publisher",
+		"VASTPLAN_DYNAMIC_GO_HOST":                 filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
 	}
 }
 

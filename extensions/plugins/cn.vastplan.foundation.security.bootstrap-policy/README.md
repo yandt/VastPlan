@@ -8,6 +8,8 @@
 > [ADR-0050](../../../docs/dev/decisions/ADR-0050-首方插件多级命名空间与自举权限基线.md)，
 > 混合运行边界见
 > [ADR-0051](../../../docs/dev/decisions/ADR-0051-Backend混合插件运行与受控内嵌边界.md)，
+> Runtime Host 最终边界见
+> [ADR-0089](../../../docs/dev/decisions/ADR-0089-Runtime-Provider与共享Host池.md)，
 > 完整插件说明见
 > [插件文档](../../../docs/dev/plugins/cn.vastplan.foundation.security.bootstrap-policy.md)。
 
@@ -41,8 +43,8 @@ cn.vastplan.<layer>.<category...>.<component>
 | 路由 | `direct` | 内核本地直接调用 |
 | 运行时依赖 | 无 | 避免 settings 权限检查形成自举循环 |
 
-策略代码支持独立进程与 dynamic-go 两种承载；Backend 发布物不编译或登记本插件。
-共同构建的签名制品携带 dynamic-go `.so`。内嵌权限来自部署方而不是 Manifest；但本插件
+策略代码支持独立进程与 dynamic-go 两种承载；Backend 发布物不编译、加载或登记本插件。
+共同构建的签名制品携带 dynamic-go `.so`。Go Runtime Host 权限来自部署方而不是 Manifest；但本插件
 的 Manifest 声明 `dynamicGo.required=true`，只能与 `require-dynamic-go` 一起启动。首方硬
 身份、精确版本、验签贡献清单、隔离下限、放置策略必须同时匹配；dynamic-go 还要匹配 ABI
 与构建指纹。两种方式使用同一 `policy`，不维护多份权限逻辑。
@@ -139,7 +141,7 @@ go run ./engineering/tools/pluginpackage \
 - 未知操作继续按写操作处理，保持 fail-closed。
 - 修改插件版本、贡献 descriptor 或优先级时，必须同步更新 `dynamic` 适配，并通过 dynamic-go 定义与 Manifest 精确一致测试。
 
-## 选择内嵌运行
+## 选择 dynamic-go Runtime Host
 
 本插件的签名 Manifest 禁止回退独立进程；Backend `reconcile` 必须配置精确插件规则：
 
@@ -149,4 +151,4 @@ go run ./engineering/tools/pluginpackage \
 
 该模式只接受共同构建、指纹一致的签名 `.so`，仅支持 Linux/FreeBSD/macOS 且
 `CGO_ENABLED=1`。若未配置该规则、无法加载 `.so` 或指纹不一致，插件拒绝启动。Go plugin
-不能卸载；升级 dynamic-go 插件必须滚动重启 Backend。
+不能在同一 Go 进程卸载；升级会创建新的 Runtime Host generation，切换后排空旧 Host，Backend 无需重启。

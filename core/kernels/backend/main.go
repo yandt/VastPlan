@@ -50,9 +50,6 @@ const KernelName = hostfactory.KernelName
 // 单一真源是 core/kernels/backend/VERSION（ADR-0017 §1）；devel 仅用于未经构建脚本的本地跑。
 var version = "0.0.0-devel"
 
-// dynamicGoHostFingerprint 由正式构建同时注入 Backend 与首方 .so；空值安全禁用动态加载。
-var dynamicGoHostFingerprint string
-
 func init() {
 	// JSONHandler 是 Backend 进程的统一结构化出口；slog.SetDefault 同时接管
 	// 标准 log 包，保证仍使用 log.Fatal 的启动失败也输出结构化记录。
@@ -256,7 +253,6 @@ func runReconcile(args []string) (runErr error) {
 	runtime.ContextPolicy = options.contextPolicy
 	runtime.PlacementPolicy = options.placementPolicy
 	runtime.HostingPolicy = options.hostingPolicy
-	runtime.DynamicGoLoader = nodeagent.NewDynamicGoLoader(dynamicGoHostFingerprint)
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers
 	if plane.transport != nil && plane.buckets.Nodes != nil {

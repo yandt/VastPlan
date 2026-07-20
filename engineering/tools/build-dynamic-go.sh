@@ -18,8 +18,12 @@ version="$(tr -d '[:space:]' < core/kernels/backend/VERSION)"
 plugin_id="cn.vastplan.foundation.security.bootstrap-policy"
 
 go build -trimpath -buildvcs=false \
-  -ldflags "-s -w -buildid= -X main.version=${version} -X main.dynamicGoHostFingerprint=${fingerprint}" \
+  -ldflags "-s -w -buildid= -X main.version=${version}" \
   -o "$OUT_DIR/backend-kernel" ./core/kernels/backend
+
+go build -trimpath -buildvcs=false \
+  -ldflags "-s -w -buildid= -X main.dynamicGoHostFingerprint=${fingerprint}" \
+  -o "$OUT_DIR/vastplan-go-dynamic-host" ./core/runtimehosts/go-dynamic
 
 go build -trimpath -buildvcs=false \
   -ldflags "-s -w -buildid=" \

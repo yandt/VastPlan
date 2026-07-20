@@ -45,6 +45,7 @@ type InstalledPlugin struct {
 	ID            string                    `json:"id"`
 	Publisher     string                    `json:"publisher"`
 	Version       string                    `json:"version"`
+	Engines       map[string]string         `json:"engines,omitempty"`
 	Channel       string                    `json:"channel"`
 	SHA256        string                    `json:"sha256"`
 	Root          string                    `json:"root"`

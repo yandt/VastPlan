@@ -57,7 +57,7 @@ type ProtocolRuntime struct {
 	ExecutionPolicy ExecutionPolicy
 	HostingPolicy   RuntimeHostingPolicy
 	ContextPolicy   ContextPolicy
-	DynamicGoLoader DynamicGoModuleLoader
+	dynamicGoDriver PluginExecutionDriver
 	PlacementPolicy PlacementPolicy
 }
 
@@ -144,6 +144,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 			EnvironmentAllowlist: append([]string(nil), unit.EnvironmentAllowlist...),
 			RequiredFeatures:     append([]string(nil), plugin.Execution.Features...),
 			RuntimeScope:         unit.ID,
+			RuntimeGeneration:    unit.Fingerprint,
 		})
 		if err != nil {
 			return fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)
@@ -391,6 +392,9 @@ func cloneRuntimeUnit(unit RuntimeUnit) RuntimeUnit {
 	unit.PartitionKeys = append([]string(nil), unit.PartitionKeys...)
 	unit.EnvironmentAllowlist = append([]string(nil), unit.EnvironmentAllowlist...)
 	unit.Plugins = append([]InstalledPlugin(nil), unit.Plugins...)
+	for index := range unit.Plugins {
+		unit.Plugins[index].Engines = cloneStringMap(unit.Plugins[index].Engines)
+	}
 	unit.Migrations = append([]StateMigrationPlan(nil), unit.Migrations...)
 	unit.PartitionGenerations = cloneUint64Map(unit.PartitionGenerations)
 	unit.PartitionFencingTokens = cloneStringMap(unit.PartitionFencingTokens)
