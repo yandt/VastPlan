@@ -126,3 +126,4 @@
 - [ADR-0093 可信宿主加密 Material Lease](ADR-0093-可信宿主加密Material-Lease.md)
 - [ADR-0094 操作系统 Guardian 与独立进程故障收敛](ADR-0094-操作系统Guardian与独立进程故障收敛.md)
 - [ADR-0095 Database Runtime、多 Provider 连接池与集群事务](ADR-0095-Database-Runtime多Provider连接池与集群事务.md)
+- [ADR-0096 配置入口 Codec 与 YAML 嵌套](ADR-0096-配置入口Codec与YAML嵌套.md)

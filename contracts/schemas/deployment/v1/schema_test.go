@@ -1,6 +1,10 @@
 package deploymentv1
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestParse_NormalizesStableChannelAndMatchesNode(t *testing.T) {
 	state, err := Parse([]byte(`{
@@ -57,6 +61,46 @@ func TestParse_ValidatesPluginScopedConfigurationEnvelope(t *testing.T) {
 	invalid := `{"version":1,"revision":1,"metadata":{"name":"local"},"units":[{"id":"x","kind":"service","enabled":true,"service_role":"backend","replicas":1,"config":{"plugins":{"com.example.other":{"token":"secret"}}},"plugins":[{"id":"com.example.a","version":"1.0.0"}]}]}`
 	if _, err := Parse([]byte(invalid)); err == nil {
 		t.Fatal("未安装插件的配置必须被拒绝")
+	}
+}
+
+func TestParseFileAcceptsNestedYAMLStartupConfiguration(t *testing.T) {
+	root := t.TempDir()
+	write := func(name, contents string) {
+		t.Helper()
+		path := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("desired.yaml", `
+version: 1
+revision: 5
+metadata:
+  $include: metadata.yaml
+units:
+  - $include: units/backend.yaml
+`)
+	write("metadata.yaml", "name: yaml-startup\n")
+	write("units/backend.yaml", `
+- id: backend-main
+  kind: service
+  enabled: true
+  service_role: backend
+  replicas: 1
+  plugins:
+    - id: com.example.demo
+      version: 1.2.3
+`)
+	state, err := ParseFile(filepath.Join(root, "desired.yaml"))
+	if err != nil {
+		t.Fatalf("嵌套 YAML 启动配置应通过现有 Schema: %v", err)
+	}
+	if state.Metadata.Name != "yaml-startup" || len(state.Units) != 1 || state.Units[0].Plugins[0].Channel != "stable" {
+		t.Fatalf("YAML 启动配置未走既有规范化: %+v", state)
 	}
 }
 

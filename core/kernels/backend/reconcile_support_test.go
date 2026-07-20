@@ -50,6 +50,16 @@ func TestParseReconcileOptionsNormalizesLocalAndDeploymentModes(t *testing.T) {
 	}
 }
 
+func TestParseReconcileOptionsSupportsYAMLStartupFileAlias(t *testing.T) {
+	configured, err := parseReconcileOptions([]string{"-startup-file", "desired.yaml"})
+	if err != nil || configured.desiredPath != "desired.yaml" {
+		t.Fatalf("启动配置别名未解析: %+v %v", configured, err)
+	}
+	if _, err := parseReconcileOptions([]string{"-desired", "desired.json", "-startup-file", "desired.yaml"}); err == nil {
+		t.Fatal("两个配置入口同时设置必须拒绝")
+	}
+}
+
 func TestParseReconcileOptionsSupportsPlacementPrecedence(t *testing.T) {
 	configured, err := parseReconcileOptions([]string{
 		"-desired", "desired.json",

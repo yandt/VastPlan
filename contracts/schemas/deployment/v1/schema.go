@@ -11,11 +11,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
 	"sync"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -172,7 +172,7 @@ func Parse(raw []byte) (DesiredState, error) {
 
 // ParseFile 从本地 config-as-code 文件读取当前快照。
 func ParseFile(filename string) (DesiredState, error) {
-	raw, err := os.ReadFile(filename)
+	raw, err := configfile.Load(filename)
 	if err != nil {
 		return DesiredState{}, fmt.Errorf("读取期望态文件: %w", err)
 	}

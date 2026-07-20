@@ -12,7 +12,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -20,6 +19,7 @@ import (
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
 )
@@ -278,7 +278,7 @@ func NormalizeServiceUnits(units []ServiceUnit) ([]ServiceUnit, error) {
 }
 
 func ParseFile(filename string) (Deployment, error) {
-	raw, err := os.ReadFile(filename)
+	raw, err := configfile.Load(filename)
 	if err != nil {
 		return Deployment{}, fmt.Errorf("读取集群部署文件: %w", err)
 	}

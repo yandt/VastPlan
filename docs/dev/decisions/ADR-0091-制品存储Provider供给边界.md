@@ -19,7 +19,7 @@
 4. 部署适配器把供给结果投影为仓库进程可访问的本地数据面；对象读写不走插件协议总线；
 5. Provider 切换仍遵循 ADR-0090 的 probe、迁移、校验、candidate 激活和旧路线观察窗口。
 
-首个实现为 `cn.vastplan.platform.artifacts.storage.file`。它仅在预配置私有根目录下幂等创建 `0700` volume，拒绝相对路径、目录逃逸、符号链接和 group/other 可访问目录。开发环境由它在仓库启动前供给 `repository.primary`。
+首个实现为 `cn.vastplan.platform.artifacts.storage.file`。它仅在预配置私有根目录下幂等创建 `0700` volume，拒绝相对路径、目录逃逸、符号链接和 group/other 可访问目录。开发环境由它在仓库启动前供给 `repository.primary`。在插件可下载前的 Seed 仓库阶段，`seed-artifact-server` 以同样的 owner-only 目录约束直接托管本地根目录；它不依赖尚未可用的插件。
 
 ## 备选方案
 

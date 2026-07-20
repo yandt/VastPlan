@@ -42,12 +42,12 @@ func RunValidate(output io.Writer, args []string) error {
 	flags := flag.NewFlagSet("validate", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	kind := flags.String("kind", "", "desired-v1、Backend/Portal 双输入、deployment-v2 或 actual-state")
-	filename := flags.String("file", "", "待校验 JSON 文件")
+	filename := flags.String("file", "", "待校验配置文件（JSON/YAML）")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 || *kind == "" || *filename == "" {
-		return errors.New("用法: validate -kind <desired-v1|platform-profile-v1|application-composition-v1|backend-platform-catalog-v1|portal-platform-profile-v1|portal-platform-catalog-v1|portal-application-composition-v1|deployment-v2|actual-state> -file <配置.json>")
+		return errors.New("用法: validate -kind <desired-v1|platform-profile-v1|application-composition-v1|backend-platform-catalog-v1|portal-platform-profile-v1|portal-platform-catalog-v1|portal-application-composition-v1|deployment-v2|actual-state> -file <配置.json|yaml>")
 	}
 
 	result := validationResult{Kind: *kind, Valid: true}

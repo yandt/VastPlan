@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "id": "seed-repository",
+  "listen": "127.0.0.1:8443",
+  "repositoryRoot": "/var/lib/vastplan/seed-artifacts",
+  "trustFile": "/etc/vastplan/seed/trust.json",
+  "tlsCertFile": "/etc/vastplan/seed/tls.crt",
+  "tlsKeyFile": "/etc/vastplan/seed/tls.key",
+  "readTokenFile": "/etc/vastplan/seed/read.token",
+  "publishTokenFile": "/etc/vastplan/seed/publish.token"
+}

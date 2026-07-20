@@ -21,33 +21,34 @@ import (
 )
 
 type reconcileOptions struct {
-	desiredPath, repositoryRoot, repositoryURL, repositoryTrust, repositoryToken, repositoryCA string
-	bootstrapRepository                                                                        string
-	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                       string
-	credentialRoot                                                                             string
-	backendPlatformCatalog                                                                     string
-	firstPartyPublishers                                                                       string
-	thirdPartyPluginPolicy, publisherPluginPolicies                                            string
-	defaultPluginContextAccess, publisherPluginContextAccess                                   string
-	pluginPlacementDefault, publisherPluginPlacements, pluginPlacements                        string
-	runtimeHostingDefault, publisherRuntimeHosting, pluginRuntimeHosting                       string
-	capacityCPU, capacityMemory, capacityGPU                                                   int64
-	interval                                                                                   time.Duration
-	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                string
-	natsAllowInsecure, natsBootstrap, allowDevelopmentPlugins                                  bool
-	requireThirdPartyIsolation                                                                 bool
-	executionPolicy                                                                            nodeagent.ExecutionPolicy
-	contextPolicy                                                                              nodeagent.ContextPolicy
-	placementPolicy                                                                            nodeagent.PlacementPolicy
-	hostingPolicy                                                                              nodeagent.RuntimeHostingPolicy
-	desiredKey, assignmentKey, deploymentName, deploymentTenant                                string
-	natsReplicas                                                                               int
+	desiredPath, startupFile, repositoryRoot, repositoryURL, repositoryTrust, repositoryToken, repositoryCA string
+	bootstrapRepository                                                                                     string
+	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                                    string
+	credentialRoot                                                                                          string
+	backendPlatformCatalog                                                                                  string
+	firstPartyPublishers                                                                                    string
+	thirdPartyPluginPolicy, publisherPluginPolicies                                                         string
+	defaultPluginContextAccess, publisherPluginContextAccess                                                string
+	pluginPlacementDefault, publisherPluginPlacements, pluginPlacements                                     string
+	runtimeHostingDefault, publisherRuntimeHosting, pluginRuntimeHosting                                    string
+	capacityCPU, capacityMemory, capacityGPU                                                                int64
+	interval                                                                                                time.Duration
+	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                             string
+	natsAllowInsecure, natsBootstrap, allowDevelopmentPlugins                                               bool
+	requireThirdPartyIsolation                                                                              bool
+	executionPolicy                                                                                         nodeagent.ExecutionPolicy
+	contextPolicy                                                                                           nodeagent.ContextPolicy
+	placementPolicy                                                                                         nodeagent.PlacementPolicy
+	hostingPolicy                                                                                           nodeagent.RuntimeHostingPolicy
+	desiredKey, assignmentKey, deploymentName, deploymentTenant                                             string
+	natsReplicas                                                                                            int
 }
 
 func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	var options reconcileOptions
 	flags := flag.NewFlagSet("reconcile", flag.ContinueOnError)
-	flags.StringVar(&options.desiredPath, "desired", "", "本地 DesiredState v1 JSON 文件")
+	flags.StringVar(&options.desiredPath, "desired", "", "本地 DesiredState v1 配置文件（JSON/YAML）")
+	flags.StringVar(&options.startupFile, "startup-file", "", "本地启动配置文件（JSON/YAML），等价于 -desired")
 	flags.StringVar(&options.repositoryRoot, "repository", ".vastplan/repository", "本地插件制品仓库")
 	flags.StringVar(&options.repositoryURL, "repository-url", "", "HTTPS 远端签名制品仓库；设置后替代本地仓库")
 	flags.StringVar(&options.repositoryTrust, "repository-trust", "", "远端制品发布者信任文档")
@@ -97,6 +98,12 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	}
 	visited := map[string]bool{}
 	flags.Visit(func(item *flag.Flag) { visited[item.Name] = true })
+	if options.startupFile != "" {
+		if options.desiredPath != "" {
+			return reconcileOptions{}, errors.New("-startup-file 与 -desired 不能同时设置")
+		}
+		options.desiredPath = options.startupFile
+	}
 	if visited["require-third-party-isolation"] {
 		if visited["third-party-plugin-policy"] {
 			return reconcileOptions{}, errors.New("-require-third-party-isolation 与 -third-party-plugin-policy 不能同时设置")

@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -17,6 +16,7 @@ import (
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
 )
 
 const (
@@ -46,8 +46,8 @@ type PluginRef struct {
 
 type RenderAdapter struct {
 	PluginRef
-	UIContract string `json:"uiContract"`
-	Config RenderAdapterConfig `json:"config"`
+	UIContract string              `json:"uiContract"`
+	Config     RenderAdapterConfig `json:"config"`
 }
 
 // RenderAdapterConfig governs a framework renderer catalog exposed by one
@@ -430,21 +430,21 @@ func ValidatePortalPlatformCatalog(v PortalPlatformCatalog) (PortalPlatformCatal
 	return ParsePortalPlatformCatalog(raw)
 }
 func ParsePlatformProfileFile(path string) (PlatformProfile, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := configfile.Load(path)
 	if err != nil {
 		return PlatformProfile{}, err
 	}
 	return ParsePlatformProfile(raw)
 }
 func ParseApplicationCompositionFile(path string) (ApplicationComposition, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := configfile.Load(path)
 	if err != nil {
 		return ApplicationComposition{}, err
 	}
 	return ParseApplicationComposition(raw)
 }
 func ParsePortalPlatformCatalogFile(path string) (PortalPlatformCatalog, error) {
-	raw, err := os.ReadFile(path)
+	raw, err := configfile.Load(path)
 	if err != nil {
 		return PortalPlatformCatalog{}, err
 	}

@@ -8,7 +8,6 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -16,6 +15,7 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
 )
 
 const (
@@ -263,7 +263,7 @@ func ValidateBackendPlatformCatalog(catalog BackendPlatformCatalog) (BackendPlat
 }
 
 func ParseBackendPlatformCatalogFile(filename string) (BackendPlatformCatalog, error) {
-	raw, err := os.ReadFile(filename)
+	raw, err := configfile.Load(filename)
 	if err != nil {
 		return BackendPlatformCatalog{}, fmt.Errorf("读取 Backend Platform Catalog 文件: %w", err)
 	}
@@ -311,7 +311,7 @@ func validateJSON(schema *jsonschema.Schema, raw []byte, noun string) error {
 }
 
 func ParsePlatformProfileFile(filename string) (PlatformProfile, error) {
-	raw, err := os.ReadFile(filename)
+	raw, err := configfile.Load(filename)
 	if err != nil {
 		return PlatformProfile{}, fmt.Errorf("读取 Backend Platform Profile 文件: %w", err)
 	}
@@ -319,7 +319,7 @@ func ParsePlatformProfileFile(filename string) (PlatformProfile, error) {
 }
 
 func ParseApplicationCompositionFile(filename string) (ApplicationComposition, error) {
-	raw, err := os.ReadFile(filename)
+	raw, err := configfile.Load(filename)
 	if err != nil {
 		return ApplicationComposition{}, fmt.Errorf("读取 Backend Application Composition 文件: %w", err)
 	}
