@@ -507,6 +507,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"-deployment-revision", "1", "-repository", filepath.Join(r.runDir, "repository"), "-controller",
 		"-backend-platform-catalog", filepath.Join(r.runDir, "backend-platform-catalog.json"),
 	}
+	controllerArgs = append(controllerArgs, r.controllerArtifactSourceArgs()...)
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
 	}
@@ -603,6 +604,14 @@ func (r *runtime) testingRepositoryTrust() string {
 func (r *runtime) managedArtifactSourceArgs() []string {
 	return []string{
 		"-bootstrap-repository", filepath.Join(r.runDir, "repository"),
+		"-repository-url", "https://" + r.options.artifactListen,
+		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
+		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
+	}
+}
+
+func (r *runtime) controllerArtifactSourceArgs() []string {
+	return []string{
 		"-repository-url", "https://" + r.options.artifactListen,
 		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
 		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),

@@ -33,10 +33,12 @@ const maximumPackageBytes = int64(256 << 20)
 var developmentPrerelease = regexp.MustCompile(`^dev\.[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)+$`)
 
 type options struct {
-	PackageFile string
-	StateRoot   string
-	StatusURL   string
-	Timeout     time.Duration
+	PackageFile    string
+	StateRoot      string
+	StatusURL      string
+	BackendTarget  string
+	BackendBinding string
+	Timeout        time.Duration
 }
 
 type developmentStatus struct {
@@ -44,6 +46,7 @@ type developmentStatus struct {
 	Mode                 string `json:"mode"`
 	ProductionEquivalent bool   `json:"productionEquivalent"`
 	RunDir               string `json:"runDir"`
+	Portal               string `json:"portal"`
 	Repositories         struct {
 		Testing struct {
 			URL        string `json:"url"`
@@ -57,6 +60,8 @@ func main() {
 	flag.StringVar(&opts.PackageFile, "package", "", "已构建且清单使用 dev.* 预发布版本的插件 .tar.gz")
 	flag.StringVar(&opts.StateRoot, "state-root", ".vastplan/dev-platform", "本地平台开发状态根")
 	flag.StringVar(&opts.StatusURL, "status-url", "http://127.0.0.1:18080/__vastplan_dev/status", "本地平台状态端点（仅允许回环地址）")
+	flag.StringVar(&opts.BackendTarget, "backend-target", "", "可选：发布到 Backend 测试目标，格式 deployment/unit")
+	flag.StringVar(&opts.BackendBinding, "backend-binding", "", "可选：复用已有 TestTargetBinding；与 -backend-target 同用时作为绑定 ID")
 	flag.DurationVar(&opts.Timeout, "timeout", 2*time.Minute, "上传超时")
 	flag.Parse()
 	if err := publish(context.Background(), opts); err != nil {
@@ -131,54 +136,60 @@ func publish(ctx context.Context, opts options) error {
 	if err != nil {
 		return err
 	}
-	if revision, found, err := lookupRepositoryRevision(ctx, repositoryClient, repositoryURL, readToken, artifact); err != nil {
+	revision, found, err := lookupRepositoryRevision(ctx, repositoryClient, repositoryURL, readToken, artifact)
+	if err != nil {
 		return fmt.Errorf("查询既有 Catalog: %w", err)
-	} else if found {
-		printReceipt(artifact, repositoryURL, revision, true)
-		return nil
 	}
-
-	reader := &pluginservice.RemoteRepository{BaseURL: repositoryURL.String(), Token: readToken, Trust: trust, Client: repositoryClient}
-	existing, fetchErr := reader.Fetch(ctx, pluginservice.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
-	var attestation pluginservice.Attestation
-	if fetchErr == nil {
-		if existing.Artifact.SHA256 != artifact.SHA256 || existing.Artifact.Size != artifact.Size {
-			return errors.New("测试仓库已经存在相同 ref 但摘要不同的不可变制品")
-		}
-		if err := json.Unmarshal(existing.Proof, &attestation); err != nil {
-			return fmt.Errorf("解析仓库既有证明: %w", err)
-		}
-	} else if !errors.Is(fetchErr, artifacttrust.ErrNotFound) {
-		return fmt.Errorf("检查仓库既有制品: %w", fetchErr)
-	} else {
-		privateKeyFile := filepath.Join(stateRoot, "repositories", "testing", "secrets", "artifact-signing.pem")
-		if err := requireRegularFile(privateKeyFile, true); err != nil {
-			return err
-		}
-		privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(privateKeyFile)
-		if err != nil {
-			return err
-		}
-		attestation, err = pluginservice.SignArtifact(artifact, manifest.Publisher, "local-testing", privateKey, time.Now().UTC())
-		if err != nil {
-			return err
-		}
-	}
-	remote := &pluginservice.RemoteRepository{
-		BaseURL: repositoryURL.String(), Token: publishToken, Trust: trust, Client: repositoryClient,
-	}
-	published, err := remote.PublishRemote(ctx, attestation, packageBytes)
-	if err != nil {
-		return err
-	}
-	revision, found, err := lookupRepositoryRevision(ctx, repositoryClient, repositoryURL, readToken, published)
-	if err != nil {
-		return fmt.Errorf("确认 Catalog 与发布流水账: %w", err)
-	}
+	wasExisting := found
 	if !found {
-		return errors.New("Catalog 未返回刚发布的精确制品")
+		reader := &pluginservice.RemoteRepository{BaseURL: repositoryURL.String(), Token: readToken, Trust: trust, Client: repositoryClient}
+		existing, fetchErr := reader.Fetch(ctx, pluginservice.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
+		var attestation pluginservice.Attestation
+		if fetchErr == nil {
+			if existing.Artifact.SHA256 != artifact.SHA256 || existing.Artifact.Size != artifact.Size {
+				return errors.New("测试仓库已经存在相同 ref 但摘要不同的不可变制品")
+			}
+			if err := json.Unmarshal(existing.Proof, &attestation); err != nil {
+				return fmt.Errorf("解析仓库既有证明: %w", err)
+			}
+		} else if !errors.Is(fetchErr, artifacttrust.ErrNotFound) {
+			return fmt.Errorf("检查仓库既有制品: %w", fetchErr)
+		} else {
+			privateKeyFile := filepath.Join(stateRoot, "repositories", "testing", "secrets", "artifact-signing.pem")
+			if err := requireRegularFile(privateKeyFile, true); err != nil {
+				return err
+			}
+			privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(privateKeyFile)
+			if err != nil {
+				return err
+			}
+			attestation, err = pluginservice.SignArtifact(artifact, manifest.Publisher, "local-testing", privateKey, time.Now().UTC())
+			if err != nil {
+				return err
+			}
+		}
+		remote := &pluginservice.RemoteRepository{
+			BaseURL: repositoryURL.String(), Token: publishToken, Trust: trust, Client: repositoryClient,
+		}
+		published, err := remote.PublishRemote(ctx, attestation, packageBytes)
+		if err != nil {
+			return err
+		}
+		artifact = published
+		revision, found, err = lookupRepositoryRevision(ctx, repositoryClient, repositoryURL, readToken, published)
+		if err != nil {
+			return fmt.Errorf("确认 Catalog 与发布流水账: %w", err)
+		}
+		if !found {
+			return errors.New("Catalog 未返回刚发布的精确制品")
+		}
 	}
-	printReceipt(published, repositoryURL, revision, false)
+	printReceipt(artifact, repositoryURL, revision, wasExisting)
+	if opts.BackendTarget != "" || opts.BackendBinding != "" {
+		if err := submitBackendTestRelease(ctx, status, opts, artifact, revision); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

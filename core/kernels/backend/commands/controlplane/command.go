@@ -42,6 +42,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	controllerMode := flags.Bool("controller", false, "持续 watch v2 部署与节点租约并生成每节点 assignment")
 	controllerID := flags.String("controller-id", "", "controller 选主身份；默认 hostname-pid")
 	repositoryRoot := flags.String("repository", ".vastplan/repository", "controller 读取完整 manifest 的本地不可变制品仓库")
+	repositoryURL := flags.String("repository-url", "", "controller 使用的 HTTPS 托管制品仓库；本地 Seed 缺失时后备")
+	repositoryTrust := flags.String("repository-trust", "", "controller 远端制品发布者信任文档")
+	repositoryToken := flags.String("repository-token", "", "controller 远端仓库读令牌；默认读取 VASTPLAN_ARTIFACT_READ_TOKEN")
+	repositoryCA := flags.String("repository-ca", "", "controller 远端制品仓库自定义 CA PEM")
 	bootstrap := flags.Bool("bootstrap", false, "创建/校准控制面 bucket")
 	replicas := flags.Int("replicas", 1, "bootstrap 时的 JetStream 副本数；生产建议至少 3")
 	if err := flags.Parse(args); err != nil {
@@ -66,6 +70,13 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 
 	artifacts, err := pluginservice.NewRepository(*repositoryRoot)
+	if err != nil {
+		return err
+	}
+	if *repositoryToken == "" {
+		*repositoryToken = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
+	}
+	controllerArtifacts, err := buildControllerArtifactReader(artifacts, *repositoryURL, *repositoryTrust, *repositoryToken, *repositoryCA)
 	if err != nil {
 		return err
 	}
@@ -135,7 +146,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		Deployments: buckets.Deployments,
 		Scheduler: deploymentcontroller.Scheduler{
 			Nodes: buckets.Nodes, Assignments: buckets.Assignments, Metrics: buckets.Autoscaling,
-			Actual: buckets.Actual, Compositions: buckets.Compositions, Artifacts: artifacts,
+			Actual: buckets.Actual, Compositions: buckets.Compositions, Artifacts: controllerArtifacts,
 		},
 		Leaders: buckets.Controllers, Identity: *controllerID,
 		Logf: func(format string, values ...any) { _, _ = fmt.Fprintf(stderr, format+"\n", values...) },

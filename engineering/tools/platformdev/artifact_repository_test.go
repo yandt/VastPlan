@@ -83,6 +83,10 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 	if got := r.managedArtifactSourceArgs(); !reflect.DeepEqual(got, wantArgs) {
 		t.Fatalf("Node Agent 制品源错误:\n got=%#v\nwant=%#v", got, wantArgs)
 	}
+	wantControllerArgs := wantArgs[2:]
+	if got := r.controllerArtifactSourceArgs(); !reflect.DeepEqual(got, wantControllerArgs) {
+		t.Fatalf("Controller 必须使用同一托管测试仓库后备源:\n got=%#v\nwant=%#v", got, wantControllerArgs)
+	}
 	environment := r.serviceEnv()
 	wantVolumeRoot := filepath.Join(stateRoot, "repositories", "testing", "volumes")
 	if environment["VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT"] != wantVolumeRoot {
