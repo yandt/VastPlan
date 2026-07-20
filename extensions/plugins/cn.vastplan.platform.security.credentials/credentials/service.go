@@ -1,4 +1,4 @@
-// Package credentials 保存凭证密文和元数据；它不提供任何读取明文的操作。
+// Package credentials 保存凭证密文和元数据；它不提供任何返回明文的协议操作。
 package credentials
 
 import (
@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,24 +20,27 @@ import (
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
-	PluginID          = "cn.vastplan.platform.security.credentials"
-	PluginVersion     = "0.3.0"
-	Capability        = "platform.credentials"
-	stateFileKey      = "platform.credentials.stateFile"
-	vaultAddressKey   = "platform.credentials.vault.address"
-	vaultKeyKey       = "platform.credentials.vault.transitKey"
-	vaultTokenFileKey = "platform.credentials.vault.tokenFile"
+	PluginID                = "cn.vastplan.platform.security.credentials"
+	PluginVersion           = "0.4.0"
+	Capability              = "platform.credentials"
+	MaterialLeaseCapability = "platform.credentials.material-lease"
+	stateFileKey            = "platform.credentials.stateFile"
+	vaultAddressKey         = "platform.credentials.vault.address"
+	vaultKeyKey             = "platform.credentials.vault.transitKey"
+	vaultTokenFileKey       = "platform.credentials.vault.tokenFile"
 )
 
 type Transit interface {
 	Encrypt(context.Context, []byte) (string, error)
 	Rewrap(context.Context, string) (string, error)
+	Decrypt(context.Context, string) ([]byte, error)
 }
 
 // VaultTransit 使用 Vault Transit HTTP API。Token 只从权限受控的本地文件读取，
@@ -46,13 +50,18 @@ type VaultTransit struct {
 	Client                  *http.Client
 }
 
-func (v VaultTransit) call(ctx context.Context, operation string, body any) (string, error) {
+type vaultTransitData struct {
+	Ciphertext string `json:"ciphertext"`
+	Plaintext  string `json:"plaintext"`
+}
+
+func (v VaultTransit) call(ctx context.Context, operation string, body any) (vaultTransitData, error) {
 	if strings.TrimSpace(v.Address) == "" || strings.TrimSpace(v.Key) == "" || strings.TrimSpace(v.TokenFile) == "" {
-		return "", errors.New("Vault Transit 配置不完整")
+		return vaultTransitData{}, errors.New("Vault Transit 配置不完整")
 	}
 	token, err := os.ReadFile(v.TokenFile)
 	if err != nil {
-		return "", fmt.Errorf("读取 Vault token 文件: %w", err)
+		return vaultTransitData{}, fmt.Errorf("读取 Vault token 文件: %w", err)
 	}
 	defer func() {
 		for i := range token {
@@ -61,11 +70,16 @@ func (v VaultTransit) call(ctx context.Context, operation string, body any) (str
 	}()
 	raw, err := json.Marshal(body)
 	if err != nil {
-		return "", err
+		return vaultTransitData{}, err
 	}
+	defer func() {
+		for index := range raw {
+			raw[index] = 0
+		}
+	}()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(v.Address, "/")+"/v1/transit/"+operation+"/"+v.Key, bytes.NewReader(raw))
 	if err != nil {
-		return "", err
+		return vaultTransitData{}, err
 	}
 	request.Header.Set("X-Vault-Token", strings.TrimSpace(string(token)))
 	request.Header.Set("Content-Type", "application/json")
@@ -75,28 +89,48 @@ func (v VaultTransit) call(ctx context.Context, operation string, body any) (str
 	}
 	response, err := client.Do(request)
 	if err != nil {
-		return "", fmt.Errorf("调用 Vault Transit: %w", err)
+		return vaultTransitData{}, fmt.Errorf("调用 Vault Transit: %w", err)
 	}
 	defer response.Body.Close()
 	var decoded struct {
-		Data struct {
-			Ciphertext string `json:"ciphertext"`
-		} `json:"data"`
-		Errors []string `json:"errors"`
+		Data   vaultTransitData `json:"data"`
+		Errors []string         `json:"errors"`
 	}
-	if err := json.NewDecoder(response.Body).Decode(&decoded); err != nil {
-		return "", err
+	if err := json.NewDecoder(io.LimitReader(response.Body, 8<<20)).Decode(&decoded); err != nil {
+		return vaultTransitData{}, err
 	}
-	if response.StatusCode/100 != 2 || decoded.Data.Ciphertext == "" {
-		return "", fmt.Errorf("Vault Transit %s 失败: %s", operation, strings.Join(decoded.Errors, "; "))
+	if response.StatusCode/100 != 2 {
+		return vaultTransitData{}, fmt.Errorf("Vault Transit %s 失败: %s", operation, strings.Join(decoded.Errors, "; "))
 	}
-	return decoded.Data.Ciphertext, nil
+	return decoded.Data, nil
 }
 func (v VaultTransit) Encrypt(ctx context.Context, value []byte) (string, error) {
-	return v.call(ctx, "encrypt", map[string]string{"plaintext": base64.StdEncoding.EncodeToString(value)})
+	data, err := v.call(ctx, "encrypt", map[string]string{"plaintext": base64.StdEncoding.EncodeToString(value)})
+	if err != nil || data.Ciphertext == "" {
+		return "", errors.Join(err, errors.New("Vault Transit encrypt 未返回 ciphertext"))
+	}
+	return data.Ciphertext, nil
 }
 func (v VaultTransit) Rewrap(ctx context.Context, ciphertext string) (string, error) {
-	return v.call(ctx, "rewrap", map[string]string{"ciphertext": ciphertext})
+	data, err := v.call(ctx, "rewrap", map[string]string{"ciphertext": ciphertext})
+	if err != nil || data.Ciphertext == "" {
+		return "", errors.Join(err, errors.New("Vault Transit rewrap 未返回 ciphertext"))
+	}
+	return data.Ciphertext, nil
+}
+func (v VaultTransit) Decrypt(ctx context.Context, ciphertext string) ([]byte, error) {
+	data, err := v.call(ctx, "decrypt", map[string]string{"ciphertext": ciphertext})
+	if err != nil || data.Plaintext == "" {
+		return nil, errors.Join(err, errors.New("Vault Transit decrypt 未返回 plaintext"))
+	}
+	value, err := base64.StdEncoding.DecodeString(data.Plaintext)
+	if err != nil || len(value) == 0 || len(value) > 4<<20 {
+		for index := range value {
+			value[index] = 0
+		}
+		return nil, errors.New("Vault Transit plaintext 编码或长度无效")
+	}
+	return value, nil
 }
 
 type Record struct {
@@ -147,17 +181,18 @@ type ManagedRecord struct {
 	Ciphertext string                            `json:"ciphertext,omitempty"`
 }
 type Service struct {
-	mu      sync.Mutex
-	file    string
-	transit Transit
-	data    persisted
+	mu         sync.Mutex
+	file       string
+	transit    Transit
+	data       persisted
+	leaseSlots chan struct{}
 }
 
 func New(file string, transit Transit) (*Service, error) {
 	if transit == nil {
 		return nil, errors.New("凭证 Transit 适配器不能为空")
 	}
-	s := &Service{file: file, transit: transit, data: persisted{Tenants: map[string]map[string]Record{}, Managed: map[string]map[string]ManagedRecord{}}}
+	s := &Service{file: file, transit: transit, data: persisted{Tenants: map[string]map[string]Record{}, Managed: map[string]map[string]ManagedRecord{}}, leaseSlots: make(chan struct{}, 32)}
 	if file != "" {
 		if err := s.load(); err != nil {
 			return nil, err
@@ -407,6 +442,95 @@ func (s *Service) RetireManaged(call *contractv1.CallContext, handle string) (pl
 	}
 	return pluginconfig.ManagedCredentialRef{}, os.ErrNotExist
 }
+
+// IssueMaterialLease decrypts only for an authenticated kernel identity and
+// immediately reseals the material to the requester's one-use X25519 key.
+// Plaintext is never returned in a protocol payload.
+func (s *Service) IssueMaterialLease(ctx context.Context, call *contractv1.CallContext, request credentiallease.Request) (credentiallease.Envelope, error) {
+	if err := credentiallease.ValidateRequest(request); err != nil {
+		return credentiallease.Envelope{}, err
+	}
+	t, err := tenant(call)
+	if err != nil {
+		return credentiallease.Envelope{}, err
+	}
+	audience := strings.TrimSpace(call.GetCaller().GetId())
+	if call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM || audience == "" {
+		return credentiallease.Envelope{}, errors.New("material lease 只接受已认证可信宿主")
+	}
+	select {
+	case s.leaseSlots <- struct{}{}:
+		defer func() { <-s.leaseSlots }()
+	case <-ctx.Done():
+		return credentiallease.Envelope{}, ctx.Err()
+	}
+	s.mu.Lock()
+	var matched ManagedRecord
+	for _, record := range s.managedRecords(t) {
+		if record.Ref.Handle == request.Ref.Handle {
+			matched = record
+			break
+		}
+	}
+	if matched.StageID == "" || matched.State != managedActive || matched.Ref != request.Ref || matched.Ciphertext == "" {
+		s.mu.Unlock()
+		return credentiallease.Envelope{}, errors.New("托管凭证不存在、未激活或引用不匹配")
+	}
+	ciphertext := matched.Ciphertext
+	s.mu.Unlock()
+	material, err := s.transit.Decrypt(ctx, ciphertext)
+	if err != nil {
+		return credentiallease.Envelope{}, err
+	}
+	defer func() {
+		for index := range material {
+			material[index] = 0
+		}
+	}()
+	// A revoke/retire racing the KMS request wins. Do not issue a lease from a
+	// stale record merely because decryption started while it was Active.
+	s.mu.Lock()
+	current, ok := s.managedRecords(t)[matched.StageID]
+	stillActive := ok && current.State == managedActive && current.Ref == matched.Ref && current.Ciphertext == ciphertext
+	s.mu.Unlock()
+	if !stillActive {
+		return credentiallease.Envelope{}, errors.New("托管凭证在 lease 签发期间已变化")
+	}
+	return credentiallease.Seal(request, credentiallease.Claims{TenantID: t, Audience: audience, Ref: matched.Ref}, material, time.Now().UTC(), credentiallease.DefaultTTL)
+}
+
+func decodeMaterialLeaseRequest(payload []byte) (credentiallease.Request, error) {
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	var request credentiallease.Request
+	if err := decoder.Decode(&request); err != nil {
+		return credentiallease.Request{}, err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return credentiallease.Request{}, errors.New("material lease 请求只能包含一个 JSON 文档")
+	}
+	return request, nil
+}
+
+func (s *Service) MaterialLeaseHandler(ctx context.Context, _ sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
+	if operation != "issue" {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "platform.credentials.material_lease.invalid", Message: "不支持的 material lease 操作"}}, nil, nil
+	}
+	request, err := decodeMaterialLeaseRequest(payload)
+	if err != nil {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "platform.credentials.material_lease.invalid", Message: err.Error()}}, nil, nil
+	}
+	envelope, err := s.IssueMaterialLease(ctx, call, request)
+	if err != nil {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "platform.credentials.material_lease.denied", Message: err.Error()}}, nil, nil
+	}
+	raw, err := json.Marshal(envelope)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+}
 func (s *Service) Put(ctx context.Context, call *contractv1.CallContext, name, value string) (Record, error) {
 	if err := validName(name); err != nil {
 		return Record{}, err
@@ -607,6 +731,13 @@ func Descriptor() []byte {
 		{"name":"retireManaged","description":"由创建者退役不再使用的托管凭证","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"handle":{"type":"string"}},"required":["handle"]}}
 	]}`)
 }
+
+func MaterialLeaseDescriptor() []byte {
+	return []byte(`{"title":"可信宿主凭证 Material Lease","subcommands":[
+		{"name":"issue","description":"向可信宿主一次性公钥签发短期加密 material lease","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"ref":{"type":"object","additionalProperties":false,"properties":{"handle":{"type":"string"},"scope":{"const":"tenant"},"owner":{"type":"string"},"purpose":{"type":"string"},"version":{"type":"integer","minimum":1}},"required":["handle","scope","owner","purpose","version"]},"recipientPublicKey":{"type":"string"}},"required":["ref","recipientPublicKey"]}}
+	]}`)
+}
+
 func Contribution(s *Service) sdk.Contribution {
 	h := func(op string) sdk.Handler {
 		return func(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -614,4 +745,10 @@ func Contribution(s *Service) sdk.Contribution {
 		}
 	}
 	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"put": h("put"), "describe": h("describe"), "list": h("list"), "rotate": h("rotate"), "revoke": h("revoke"), "stageManaged": h("stageManaged"), "activateManaged": h("activateManaged"), "abortManaged": h("abortManaged"), "retireManaged": h("retireManaged")}}
+}
+
+func MaterialLeaseContribution(s *Service) sdk.Contribution {
+	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: MaterialLeaseCapability, Descriptor: MaterialLeaseDescriptor(), Handlers: map[string]sdk.Handler{"issue": func(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		return s.MaterialLeaseHandler(ctx, host, call, payload, "issue")
+	}}}
 }

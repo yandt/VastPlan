@@ -124,3 +124,27 @@ func TestAuthenticatedTransportContextKeepsIdentityInHostProvenance(t *testing.T
 		t.Fatal("transport identity 不得回写 Wire metadata")
 	}
 }
+
+func TestAuthenticatedTransportContextNeverDelegatesSystemIdentity(t *testing.T) {
+	identity := TransportIdentity{Name: "portal-edge-a", Role: "edge", TenantID: "acme", AllowDelegation: true}
+	trusted, err := authenticatedTransportTrustedContext(identity, &contractv1.CallContext{
+		TenantId:  "acme",
+		Caller:    &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "forged-kernel"},
+		Principal: &contractv1.Principal{TenantId: "acme", UserId: "forged"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire := trusted.Wire()
+	if wire.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_SYSTEM || wire.GetCaller().GetId() != identity.Name || wire.GetPrincipal() != nil {
+		t.Fatalf("SYSTEM caller 必须按传输身份重建: %+v", wire)
+	}
+
+	trusted, err = authenticatedTransportTrustedContext(identity, &contractv1.CallContext{
+		TenantId: "acme", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "user-a"},
+		Principal: &contractv1.Principal{TenantId: "acme", UserId: "user-a"},
+	})
+	if err != nil || trusted.Wire().GetCaller().GetId() != "user-a" || trusted.Wire().GetPrincipal().GetUserId() != "user-a" {
+		t.Fatalf("合法用户委托应保留: wire=%+v err=%v", trusted.Wire(), err)
+	}
+}

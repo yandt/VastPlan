@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.security.credentials",
   "name": "VastPlan 凭证管理服务",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -13,7 +13,10 @@
   "runtime": {
     "instancePolicy": "leader", "stateModel": "leader-owned", "visibility": "cluster", "routing": "leader", "routingDomain": "platform",
     "requires": [{ "capability": "platform.settings", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.settings", "routingDomain": "platform" }],
-    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.credentials", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
+    "provides": [
+      { "extensionPoint": "tool.package", "capability": "platform.credentials", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" },
+      { "extensionPoint": "tool.package", "capability": "platform.credentials.material-lease", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }
+    ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "state": { "backend": { "format": "cn.vastplan.platform.credentials", "formatVersion": 2 } },
@@ -29,6 +32,8 @@
     { "name": "activateManaged", "description": "由创建者激活托管凭证候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "stageId": { "type": "string" } }, "required": ["stageId"] } },
     { "name": "abortManaged", "description": "由创建者终止托管凭证候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "stageId": { "type": "string" } }, "required": ["stageId"] } },
     { "name": "retireManaged", "description": "由创建者退役不再使用的托管凭证", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "handle": { "type": "string" } }, "required": ["handle"] } }
+  ] }, { "id": "platform.credentials.material-lease", "service_role": "backend", "title": "可信宿主凭证 Material Lease", "subcommands": [
+    { "name": "issue", "description": "向可信宿主一次性公钥签发短期加密 material lease", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "ref": { "type": "object", "additionalProperties": false, "properties": { "handle": { "type": "string" }, "scope": { "const": "tenant" }, "owner": { "type": "string" }, "purpose": { "type": "string" }, "version": { "type": "integer", "minimum": 1 } }, "required": ["handle", "scope", "owner", "purpose", "version"] }, "recipientPublicKey": { "type": "string" } }, "required": ["ref", "recipientPublicKey"] } }
   ] }] }, "frontend": {
     "views": [{ "id": "platform.credentials", "title": "凭证引用" }],
     "menus": [{ "id": "platform.credentials.menu", "title": "凭证引用" }]

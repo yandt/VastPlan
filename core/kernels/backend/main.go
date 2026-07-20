@@ -41,6 +41,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapbroker"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapobserver"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 )
 
 // KernelName 本内核的规范 ID（ADR-0015）。
@@ -262,6 +263,7 @@ func runReconcile(args []string) (runErr error) {
 		}
 		runtime.Dependencies.NodeReadiness = readiness
 	}
+	var namedCredentials kernelspi.CredentialBroker
 	if options.credentialRoot != "" {
 		credentials, err := credentialbroker.NewDirectory(options.credentialRoot)
 		if err != nil {
@@ -271,8 +273,25 @@ func runReconcile(args []string) (runErr error) {
 		if err != nil {
 			return err
 		}
-		runtime.Dependencies.Credentials = credentials
+		namedCredentials = credentials
 		runtime.Dependencies.NodeBootstrap = bootstrapBroker
+	}
+	var managedCredentials kernelspi.CredentialBroker
+	if plane.router != nil {
+		audience := options.nodeID
+		if plane.transport != nil && plane.transport.SelfIdentity().Name != "" {
+			audience = plane.transport.SelfIdentity().Name
+		}
+		managedCredentials, err = credentialbroker.NewManagedLease(audience, plane.router.Invoke)
+		if err != nil {
+			return err
+		}
+	}
+	if managedCredentials != nil || namedCredentials != nil {
+		runtime.Dependencies.Credentials, err = credentialbroker.NewComposite(managedCredentials, namedCredentials)
+		if err != nil {
+			return err
+		}
 	}
 	if options.backendPlatformCatalog != "" {
 		catalog, err := backendcompositionv1.ParseBackendPlatformCatalogFile(options.backendPlatformCatalog)

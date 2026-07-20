@@ -89,7 +89,7 @@ bin/backend-kernel reconcile \
 
 承载 Deployment Manager 的节点改用独立的 `manager-node-N.seed`，其余参数相同。该角色只增加 Nodes bucket 读取能力，用于可信内核观察器判定已引导节点是否 Ready；不增加 Deployment、Desired 或 Assignment 写权。引导计划中的 `transportPublicKey` 必须是目标节点 transport seed 对应的公钥。
 
-未显式配置 `-transport-seed` 与 `-transport-trust` 时，控制面 Node Agent 会拒绝启动；仅本地开发可以显式使用 `-nats-allow-insecure` 绕过 NATS 与 addressing 的生产门禁。传输信封会绑定 subject、payload、时间戳和 nonce，接收端据此校验签名并重建可信调用身份；JetStream 重投只跳过 nonce 重放检查，不跳过签名和身份校验。
+未显式配置 `-transport-seed` 与 `-transport-trust` 时，控制面 Node Agent 会拒绝启动；仅本地开发可以显式使用 `-nats-allow-insecure` 绕过 NATS 与 addressing 的生产门禁。传输信封会绑定 subject、payload、时间戳和 nonce，接收端据此校验签名并重建可信调用身份；即使身份允许委托用户/插件，线上的 `SYSTEM` caller 也始终按签名 transport identity 重建，不能自报。JetStream 重投只跳过 nonce 重放检查，不跳过签名和身份校验。
 
 `transport-trust.json` 中每个身份还必须显式声明调用边界：
 
@@ -103,14 +103,14 @@ bin/backend-kernel reconcile \
     "nodeId": "node-1",
     "tenantId": "acme",
     "serviceRoles": ["backend"],
-    "logicalServices": ["platform.database"],
-    "allowedCapabilities": ["platform.settings", "platform.credentials"],
+    "logicalServices": ["platform.database", "platform.credentials"],
+    "allowedCapabilities": ["platform.settings", "platform.credentials", "platform.credentials.material-lease"],
     "allowGlobal": false
   }]
 }
 ```
 
-`tenantId` 必须与该节点启动参数和首次引导计划一致。`allowedCapabilities` 是第一道 capability allowlist；`service` 还要求 service role 匹配，`cluster` 还要求 logical service 匹配，`global` 必须单独设置 `allowGlobal=true`。`*` 只允许在受控迁移期使用，不应作为生产默认值。一元 NATS 调用和 gRPC 双向流使用同一授权规则。
+`tenantId` 必须与该节点启动参数和首次引导计划一致。`allowedCapabilities` 是第一道 capability allowlist；`service` 还要求 service role 匹配，`cluster` 还要求 logical service 匹配，`global` 必须单独设置 `allowGlobal=true`。需要使用托管凭证的可信宿主必须同时声明 `platform.credentials.material-lease` 和目标 `platform.credentials` logical service；不执行敏感操作的节点不要授予。`*` 只允许在受控迁移期使用，不应作为生产默认值。一元 NATS 调用和 gRPC 双向流使用同一授权规则。
 
 Node Agent 每次续租都会对完整 v3 Lease 做 detached signature。Lease key 同时编码 tenant、Deployment 与 node ID；Controller 只调度作用域完全匹配的 v3 Lease，Deployment Manager 只通过 `kernel.node.readiness` 获取封闭观察结果。普通插件不得直接读取 Nodes KV 或 transport trust。
 

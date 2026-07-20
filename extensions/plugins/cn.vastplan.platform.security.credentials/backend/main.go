@@ -17,6 +17,7 @@ func main() {
 	}
 	p := sdk.New(credentials.PluginID, credentials.PluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(credentials.Contribution(service))
+	p.Contribute(credentials.MaterialLeaseContribution(service))
 	if err := p.Serve(); err != nil {
 		log.Fatalf("凭证插件退出: %v", err)
 	}

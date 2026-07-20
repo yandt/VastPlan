@@ -429,10 +429,11 @@ func authenticatedTransportTrustedContext(identity TransportIdentity, untrusted 
 		}
 		callCtx.TenantId = identity.TenantID
 	}
-	if !identity.AllowDelegation {
+	// Delegation may preserve an authenticated end-user/plugin/agent identity,
+	// but SYSTEM is transport authority and must never be self-asserted on the
+	// wire. Rebuild it from the NKey trust document even for delegating edges.
+	if !identity.AllowDelegation || callCtx.Caller == nil || callCtx.Caller.Kind == contractv1.CallerKind_CALLER_KIND_SYSTEM || callCtx.Caller.Kind == contractv1.CallerKind_CALLER_KIND_UNSPECIFIED {
 		callCtx.Principal = nil
-		callCtx.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: identity.Name}
-	} else if callCtx.Caller == nil {
 		callCtx.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: identity.Name}
 	}
 	return callcontext.ValidateIngress(callCtx, callcontext.Provenance{

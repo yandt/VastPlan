@@ -54,6 +54,14 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: platformadminapi.CredentialsCapability, Operation: "revoke"}); got != extpoint.DecisionDeny {
 		t.Fatalf("托管生命周期授权不能扩张为管理员撤销权限: %s", got)
 	}
+	lease := extpoint.PermissionRequest{Capability: "platform.credentials.material-lease", Operation: "issue"}
+	if got, _ := decide(businessPlugin, lease); got != extpoint.DecisionDeny {
+		t.Fatalf("普通插件不得申请 material lease: %s", got)
+	}
+	kernel := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "node-a"}}
+	if got, _ := decide(kernel, lease); got != extpoint.DecisionAllow {
+		t.Fatalf("可信宿主应可申请 material lease: %s", got)
+	}
 	deploymentPlugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.infrastructure.deployment-manager"}}
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.node.bootstrap", Operation: "bootstrap"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 的受限内核回调应允许: %s", got)

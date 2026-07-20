@@ -12,7 +12,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.4.0"
+	PluginVersion = "0.5.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -38,6 +38,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if managedCredentialLifecycleAllowed(c, request) {
 		return extpoint.DecisionAllow, "业务插件只能管理自己拥有的托管凭证"
+	}
+	if materialLeaseAllowed(c, request) {
+		return extpoint.DecisionAllow, "可信宿主可申请绑定身份的一次性加密 material lease"
 	}
 	role := operationRole(request.Capability, request.Operation)
 	if role == "" {
@@ -70,11 +73,15 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, platformadminapi.DatabaseCapability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability:
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", platformadminapi.DatabaseCapability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability:
 		return true
 	default:
 		return false
 	}
+}
+
+func materialLeaseAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	return c.Caller.Kind == v1.CallerKind_CALLER_KIND_SYSTEM && c.Caller.Id != "" && request.Capability == "platform.credentials.material-lease" && request.Operation == "issue"
 }
 
 func managedCredentialLifecycleAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {

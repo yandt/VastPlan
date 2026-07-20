@@ -1,13 +1,15 @@
 # 凭证管理基础插件
 
 插件 ID：`cn.vastplan.platform.security.credentials`
-能力：`tool.package/platform.credentials`
+能力：`tool.package/platform.credentials`、`tool.package/platform.credentials.material-lease`
 运行模型：`leader + leader-owned + cluster + leader`
-当前制品版本：`0.3.0`
+当前制品版本：`0.4.0`
 
 ## 安全模型
 
 本插件采用 Vault Transit/KMS 信封加密：调用 `put` 时的明文只被编码后发送到 Vault Transit 的 `encrypt` API；插件状态文件仅保存 Vault 返回的密文、版本、时间与撤销状态。`describe`、`list`、`rotate`、`revoke` 的协议响应均不包含密文，更不包含明文。
+
+可信宿主需要执行数据库连接等操作时，使用独立的 `platform.credentials.material-lease/issue`。该操作只接受认证后的 `SYSTEM` caller，以一次性 X25519 公钥签发默认 15 秒的 AES-GCM 加密信封，并把 tenant、宿主 audience、完整托管引用和时间窗绑定进 AAD。它不提供返回明文的 API，用户和普通插件均不能申请。完整取舍见 [ADR-0093](../decisions/ADR-0093-可信宿主加密Material-Lease.md)。
 
 `rotate` 使用 Transit `rewrap`，因此只轮换包裹密钥版本，不需要先解密再重新加密原始凭证。`revoke` 使引用失效；是否同时吊销外部数据库用户、API token 等目标系统身份，属于后续受控凭证操作与业务工作流，不由本插件猜测。
 
@@ -39,8 +41,9 @@
 | `activateManaged(stageId)` | 仅允许创建该候选的插件激活，重复调用幂等 |
 | `abortManaged(stageId)` | 终止未激活候选并删除其密文 |
 | `retireManaged(handle)` | 由所有者插件退役不再使用的 Active 句柄 |
+| `material-lease/issue(ref, recipientPublicKey)` | 仅可信宿主：将 Active 托管凭证重加密给本次一次性公钥 |
 
-托管操作的 owner 从宿主认证后的插件 caller 注入，payload 不能指定或冒充。该 API **没有**面向普通插件的 `get` 或 `decrypt` 操作。数据库插件不能索取明文；后续可信宿主 material lease 适配器将按 tenant、owner、purpose 和 version 校验后，在受限回调内使用 `CredentialRef`。
+托管操作的 owner 从宿主认证后的插件 caller 注入，payload 不能指定或冒充。该 API **没有**面向普通插件的 `get` 或 `decrypt` 操作。数据库插件不能索取明文；可信宿主适配器按 tenant、owner、purpose 和 version 校验后，仅在受限同步回调内使用 `CredentialRef`。
 
 ## Portal 管理页
 

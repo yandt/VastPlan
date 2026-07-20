@@ -123,3 +123,4 @@
 - [ADR-0090 插件配置与托管凭证闭环](ADR-0090-插件配置与托管凭证闭环.md)
 - [ADR-0091 制品存储 Provider 供给边界](ADR-0091-制品存储Provider供给边界.md)
 - [ADR-0092 业务插件拥有托管凭证生命周期](ADR-0092-业务插件拥有托管凭证生命周期.md)
+- [ADR-0093 可信宿主加密 Material Lease](ADR-0093-可信宿主加密Material-Lease.md)
