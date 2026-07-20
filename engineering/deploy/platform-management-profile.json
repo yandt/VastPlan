@@ -20,7 +20,11 @@
       "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
-        "platform.settings.stateFile": "__VASTPLAN_DEV_ROOT__/state/settings.json"
+        "plugins": {
+          "cn.vastplan.platform.configuration.global-settings": {
+            "platform.settings.stateFile": "__VASTPLAN_DEV_ROOT__/state/settings.json"
+          }
+        }
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.bootstrap-policy", "version": "0.1.0", "channel": "stable" },
@@ -42,15 +46,17 @@
       "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
-        "environment_allowlist": [
-          "VASTPLAN_ARTIFACT_LISTEN_ADDR",
-          "VASTPLAN_ARTIFACT_REPOSITORY",
-          "VASTPLAN_ARTIFACT_TRUST",
-          "VASTPLAN_ARTIFACT_TLS_CERT",
-          "VASTPLAN_ARTIFACT_TLS_KEY",
-          "VASTPLAN_ARTIFACT_READ_TOKEN",
-          "VASTPLAN_ARTIFACT_PUBLISH_TOKEN"
-        ]
+        "environment_allowlist": {
+          "cn.vastplan.platform.artifacts.repository": [
+            "VASTPLAN_ARTIFACT_LISTEN_ADDR",
+            "VASTPLAN_ARTIFACT_REPOSITORY",
+            "VASTPLAN_ARTIFACT_TRUST",
+            "VASTPLAN_ARTIFACT_TLS_CERT",
+            "VASTPLAN_ARTIFACT_TLS_KEY",
+            "VASTPLAN_ARTIFACT_READ_TOKEN",
+            "VASTPLAN_ARTIFACT_PUBLISH_TOKEN"
+          ]
+        }
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },
@@ -71,12 +77,14 @@
       "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
-        "environment_allowlist": [
-          "VASTPLAN_CREDENTIALS_STATE_FILE",
-          "VASTPLAN_VAULT_ADDR",
-          "VASTPLAN_VAULT_TRANSIT_KEY",
-          "VASTPLAN_VAULT_TOKEN_FILE"
-        ]
+        "environment_allowlist": {
+          "cn.vastplan.platform.security.credentials": [
+            "VASTPLAN_CREDENTIALS_STATE_FILE",
+            "VASTPLAN_VAULT_ADDR",
+            "VASTPLAN_VAULT_TRANSIT_KEY",
+            "VASTPLAN_VAULT_TOKEN_FILE"
+          ]
+        }
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },
@@ -97,7 +105,9 @@
       "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
-        "environment_allowlist": ["VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"]
+        "environment_allowlist": {
+          "cn.vastplan.platform.data.relational.connection-manager": ["VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"]
+        }
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },
@@ -118,7 +128,9 @@
       "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
-        "environment_allowlist": ["VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE"]
+        "environment_allowlist": {
+          "cn.vastplan.platform.infrastructure.deployment-manager": ["VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE"]
+        }
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },

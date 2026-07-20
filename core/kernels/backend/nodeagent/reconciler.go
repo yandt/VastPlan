@@ -181,14 +181,18 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 	if err := r.checkpoint(actual); err != nil {
 		return false, err
 	}
+	envelope, err := configEnvelope(unit.Config, unit.Plugins)
+	if err != nil {
+		return false, r.recordCandidateFailure(actual, id, "configuration", err)
+	}
 	runtimeUnit := RuntimeUnit{
 		ID: id, Fingerprint: fingerprint, ServiceRole: unit.ServiceRole,
 		LogicalService: unit.LogicalService, InstancePolicy: policy.InstancePolicy,
 		StateModel: policy.StateModel, Visibility: policy.Visibility, Routing: policy.Routing,
-		RoutingDomain:        policy.RoutingDomain,
-		PartitionKeys:        partitionKeys(unit.Config),
-		EnvironmentAllowlist: environmentAllowlist(unit.Config),
-		Config:               RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
+		RoutingDomain:         policy.RoutingDomain,
+		PartitionKeys:         envelope.PartitionKeys,
+		EnvironmentAllowlists: envelope.EnvironmentAllowlist,
+		Config:                RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
 		RestartBase: current.RestartCount,
 	}
 	if err := r.Runtime.Apply(ctx, runtimeUnit); err != nil {

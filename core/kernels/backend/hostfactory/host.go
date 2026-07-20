@@ -231,7 +231,7 @@ func kernelConfigGet(provider kernelspi.ConfigProvider) protocolbus.HostService 
 		if err := json.Unmarshal(payload, &request); err != nil || request.Key == "" {
 			return nil, nil, fmt.Errorf("配置请求 key 不能为空")
 		}
-		value, ok, err := provider.Lookup(ctx, request.Key)
+		value, ok, err := provider.Lookup(ctx, callCtx.GetCaller().GetId(), request.Key)
 		if err != nil {
 			return nil, nil, err
 		}

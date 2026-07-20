@@ -49,6 +49,17 @@ func TestParse_RejectsDuplicateUnitAndPluginIDs(t *testing.T) {
 	}
 }
 
+func TestParse_ValidatesPluginScopedConfigurationEnvelope(t *testing.T) {
+	valid := `{"version":1,"revision":1,"metadata":{"name":"local"},"units":[{"id":"x","kind":"service","enabled":true,"service_role":"backend","replicas":1,"config":{"plugins":{"com.example.a":{"retries":3}},"environment_allowlist":{"com.example.a":["EXAMPLE_TOKEN"]}},"plugins":[{"id":"com.example.a","version":"1.0.0"}]}]}`
+	if _, err := Parse([]byte(valid)); err != nil {
+		t.Fatalf("插件隔离配置信封应通过: %v", err)
+	}
+	invalid := `{"version":1,"revision":1,"metadata":{"name":"local"},"units":[{"id":"x","kind":"service","enabled":true,"service_role":"backend","replicas":1,"config":{"plugins":{"com.example.other":{"token":"secret"}}},"plugins":[{"id":"com.example.a","version":"1.0.0"}]}]}`
+	if _, err := Parse([]byte(invalid)); err == nil {
+		t.Fatal("未安装插件的配置必须被拒绝")
+	}
+}
+
 func TestUnitFingerprint_IgnoresPluginOrder(t *testing.T) {
 	a := Unit{ID: "x", Kind: "service", Enabled: true, Replicas: 1, Plugins: []PluginRef{{ID: "com.example.a", Version: "1.0.0", Channel: "stable"}, {ID: "com.example.b", Version: "2.0.0", Channel: "stable"}}}
 	b := a

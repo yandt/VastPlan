@@ -273,7 +273,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 	defer cancel()
 	if err := runtime.Apply(ctx, nodeagent.RuntimeUnit{
 		ID: "backend-main", Fingerprint: "v1", ServiceRole: "backend",
-		EnvironmentAllowlist: []string{"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"},
+		EnvironmentAllowlists: map[string][]string{"cn.vastplan.fixture.migrator": {"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"}},
 		Plugins: []nodeagent.InstalledPlugin{{
 			ID: "cn.vastplan.fixture.migrator", Version: "1.0.0", EntryPath: v1Bin,
 		}},
@@ -287,7 +287,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 	}
 	if err := runtime.Apply(ctx, nodeagent.RuntimeUnit{
 		ID: "backend-main", Fingerprint: "v2", ServiceRole: "backend",
-		EnvironmentAllowlist: []string{"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"},
+		EnvironmentAllowlists: map[string][]string{"cn.vastplan.fixture.migrator": {"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"}},
 		Plugins: []nodeagent.InstalledPlugin{{
 			ID: "cn.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
 		}},
@@ -307,7 +307,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 	}
 	err := runtime.Apply(ctx, nodeagent.RuntimeUnit{
 		ID: "backend-main", Fingerprint: "v3", ServiceRole: "backend",
-		EnvironmentAllowlist: []string{"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"},
+		EnvironmentAllowlists: map[string][]string{"cn.vastplan.fixture.migrator": {"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"}},
 		Plugins: []nodeagent.InstalledPlugin{{
 			ID: "cn.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
 		}},
@@ -323,7 +323,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 	plan23.TransactionID = "runtime-v2-v3-prepare-fails"
 	err = runtime.Apply(ctx, nodeagent.RuntimeUnit{
 		ID: "backend-main", Fingerprint: "v3-prepare-fails", ServiceRole: "backend",
-		EnvironmentAllowlist: []string{"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"},
+		EnvironmentAllowlists: map[string][]string{"cn.vastplan.fixture.migrator": {"VASTPLAN_MIGRATION_LOG", "VASTPLAN_MIGRATION_FAIL"}},
 		Plugins: []nodeagent.InstalledPlugin{{
 			ID: "cn.vastplan.fixture.migrator", Version: "2.0.0", EntryPath: v2Bin,
 		}},

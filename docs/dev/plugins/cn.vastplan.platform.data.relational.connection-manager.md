@@ -29,4 +29,4 @@
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/databases` 页面，管理非敏感连接定义并触发可信宿主 probe。CredentialRef 只填写凭证名称；页面和 BFF 均没有密码字段。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。
+同一签名制品提供 `/settings/databases` 页面，管理非敏感连接定义并触发可信宿主 probe。当前页面仍手工填写 CredentialRef 名称；这是待迁移的过渡实现，不再是目标交互。目标页面直接采集只写密码/令牌，由配置协调器托管并把不透明 CredentialRef 绑定到连接，详见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。

@@ -6,9 +6,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 )
 
 var ErrNotFound = errors.New("kernel SPI 资源不存在")
@@ -29,13 +31,10 @@ func (s Scope) Validate() error {
 }
 
 type ConfigProvider interface {
-	Lookup(context.Context, string) (json.RawMessage, bool, error)
+	Lookup(context.Context, string, string) (json.RawMessage, bool, error)
 }
 
-type CredentialRef struct {
-	Name  string `json:"name"`
-	Scope string `json:"scope"`
-}
+type CredentialRef = pluginconfig.ManagedCredentialRef
 
 // CredentialMaterial 只允许可信宿主适配器在回调期间使用；不得序列化或返回插件。
 type CredentialMaterial interface{ Bytes() []byte }
@@ -87,10 +86,39 @@ type Dependencies struct {
 	DeploymentPublication deploymentpublication.Controller
 }
 
-type MapConfig struct{ values map[string]json.RawMessage }
+type MapConfig struct {
+	values   map[string]map[string]json.RawMessage
+	fallback map[string]json.RawMessage
+}
 
 func NewMapConfig(values map[string]any) (*MapConfig, error) {
-	out := &MapConfig{values: map[string]json.RawMessage{}}
+	frozen, err := freezeConfig(values)
+	if err != nil {
+		return nil, err
+	}
+	return &MapConfig{values: map[string]map[string]json.RawMessage{}, fallback: frozen}, nil
+}
+
+// NewPluginMapConfig freezes one configuration map per plugin. Unlike
+// NewMapConfig it has no fallback namespace and therefore fails closed for an
+// unknown caller. Backend Runtime must always use this constructor.
+func NewPluginMapConfig(values map[string]map[string]any) (*MapConfig, error) {
+	out := &MapConfig{values: map[string]map[string]json.RawMessage{}}
+	for pluginID, pluginValues := range values {
+		if pluginID == "" {
+			return nil, errors.New("配置 plugin id 不能为空")
+		}
+		frozen, err := freezeConfig(pluginValues)
+		if err != nil {
+			return nil, fmt.Errorf("冻结插件 %q 配置: %w", pluginID, err)
+		}
+		out.values[pluginID] = frozen
+	}
+	return out, nil
+}
+
+func freezeConfig(values map[string]any) (map[string]json.RawMessage, error) {
+	out := map[string]json.RawMessage{}
 	for key, value := range values {
 		if key == "" {
 			return nil, errors.New("配置 key 不能为空")
@@ -99,15 +127,19 @@ func NewMapConfig(values map[string]any) (*MapConfig, error) {
 		if err != nil {
 			return nil, err
 		}
-		out.values[key] = raw
+		out[key] = raw
 	}
 	return out, nil
 }
 
-func (m *MapConfig) Lookup(_ context.Context, key string) (json.RawMessage, bool, error) {
+func (m *MapConfig) Lookup(_ context.Context, pluginID, key string) (json.RawMessage, bool, error) {
 	if m == nil {
 		return nil, false, nil
 	}
-	raw, ok := m.values[key]
+	values, ok := m.values[pluginID]
+	if !ok {
+		values = m.fallback
+	}
+	raw, ok := values[key]
 	return append(json.RawMessage(nil), raw...), ok, nil
 }

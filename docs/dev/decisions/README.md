@@ -119,3 +119,5 @@
 - [ADR-0086 单 Shell 插件与可切换布局模板](ADR-0086-单Shell插件与可切换布局模板.md)
 - [ADR-0087 统一 Render Adapter 与可切换 Renderer](ADR-0087-统一Render-Adapter与可切换Renderer.md)
 - [ADR-0088 Backend 统一执行驱动与托管语言运行时](ADR-0088-Backend统一执行驱动与托管语言运行时.md)
+- [ADR-0089 Runtime Provider 与共享 Host 池](ADR-0089-Runtime-Provider与共享Host池.md)
+- [ADR-0090 插件配置与托管凭证闭环](ADR-0090-插件配置与托管凭证闭环.md)

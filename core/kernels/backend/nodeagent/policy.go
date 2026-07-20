@@ -6,15 +6,20 @@ import (
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
 )
 
 func partitionKeys(config map[string]any) []string {
-	return normalizedStringList(config, "partition_keys")
+	return normalizedStringList(config, pluginconfig.PartitionKeysKey)
 }
 
-func environmentAllowlist(config map[string]any) []string {
-	return normalizedStringList(config, "environment_allowlist")
+func configEnvelope(config map[string]any, plugins []deploymentv1.PluginRef) (pluginconfig.Envelope, error) {
+	ids := make([]string, 0, len(plugins))
+	for _, plugin := range plugins {
+		ids = append(ids, plugin.ID)
+	}
+	return pluginconfig.Parse(config, ids)
 }
 
 func normalizedStringList(config map[string]any, key string) []string {

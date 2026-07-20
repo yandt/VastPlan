@@ -9,6 +9,7 @@ import (
 	"bytes"
 	_ "embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"sort"
@@ -63,11 +64,31 @@ type Manifest struct {
 	ContextAccess *ContextAccess             `json:"contextAccess,omitempty"`
 	Runtime       *RuntimePolicy             `json:"runtime,omitempty"`
 	Execution     *ExecutionPolicy           `json:"execution,omitempty"`
+	Configuration *ConfigurationContract     `json:"configuration,omitempty"`
 	State         *State                     `json:"state,omitempty"`
 	Activation    []string                   `json:"activation"`
 	Dependencies  map[string]string          `json:"dependencies,omitempty"`
 	Entry         map[string]string          `json:"entry"`
 	Contributes   map[string]json.RawMessage `json:"contributes"`
+}
+
+// ConfigurationContract declares the plugin-owned configuration surface. The
+// JSON Schema covers non-sensitive values. ManagedCredentials are write-only
+// form inputs whose values are handed directly to the platform credential
+// custodian and never inserted into the schema value document.
+type ConfigurationContract struct {
+	Scope              string                   `json:"scope"`
+	ApplyMode          string                   `json:"applyMode"`
+	Schema             json.RawMessage          `json:"schema"`
+	ManagedCredentials []ManagedCredentialField `json:"managedCredentials,omitempty"`
+}
+
+type ManagedCredentialField struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+	Purpose     string `json:"purpose"`
+	Required    bool   `json:"required,omitempty"`
 }
 
 // ContextAccess declares the semantic CallContext views requested by a signed
@@ -486,7 +507,66 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	if err := validateContextAccess(manifest.ContextAccess); err != nil {
 		return Manifest{}, err
 	}
+	if err := validateConfiguration(manifest.Configuration); err != nil {
+		return Manifest{}, err
+	}
 	return manifest, nil
+}
+
+func validateConfiguration(contract *ConfigurationContract) error {
+	if contract == nil {
+		return nil
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(contract.Schema, &schema); err != nil || schema == nil {
+		return errors.New("configuration.schema 必须是 JSON Schema 对象")
+	}
+	if schema["type"] != "object" {
+		return errors.New("configuration.schema 根类型必须是 object")
+	}
+	if additional, exists := schema["additionalProperties"]; !exists || additional != false {
+		return errors.New("configuration.schema 必须显式 additionalProperties=false")
+	}
+	if err := rejectRemoteSchemaRefs(schema); err != nil {
+		return err
+	}
+	seenIDs := map[string]struct{}{}
+	seenPurposes := map[string]struct{}{}
+	for _, field := range contract.ManagedCredentials {
+		if _, duplicate := seenIDs[field.ID]; duplicate {
+			return fmt.Errorf("configuration.managedCredentials id 重复: %q", field.ID)
+		}
+		if _, duplicate := seenPurposes[field.Purpose]; duplicate {
+			return fmt.Errorf("configuration.managedCredentials purpose 重复: %q", field.Purpose)
+		}
+		seenIDs[field.ID] = struct{}{}
+		seenPurposes[field.Purpose] = struct{}{}
+	}
+	return nil
+}
+
+func rejectRemoteSchemaRefs(value any) error {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, child := range typed {
+			if key == "$ref" {
+				ref, _ := child.(string)
+				if !strings.HasPrefix(ref, "#/") {
+					return fmt.Errorf("configuration.schema 禁止远端或非本地 $ref: %q", ref)
+				}
+			}
+			if err := rejectRemoteSchemaRefs(child); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for _, child := range typed {
+			if err := rejectRemoteSchemaRefs(child); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func validateContextAccess(access *ContextAccess) error {

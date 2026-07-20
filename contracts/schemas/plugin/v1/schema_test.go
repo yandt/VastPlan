@@ -397,3 +397,28 @@ func TestParseManifest_ContextAccessContract(t *testing.T) {
 		}
 	}
 }
+
+func TestParseManifest_ConfigurationAndManagedCredentials(t *testing.T) {
+	valid := []byte(`{
+		"id":"com.example.configured","name":"configured","description":"configured plugin",
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"properties":{"listen":{"type":"string"}}},
+			"managedCredentials":[{"id":"api-token","title":"API token","purpose":"remote.api-token","required":true}]},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
+	}`)
+	manifest, err := ParseManifest(valid)
+	if err != nil || manifest.Configuration == nil || len(manifest.Configuration.ManagedCredentials) != 1 {
+		t.Fatalf("合法插件配置契约应通过: manifest=%+v err=%v", manifest.Configuration, err)
+	}
+	invalid := []string{
+		`{"type":"string","additionalProperties":false}`,
+		`{"type":"object","additionalProperties":true}`,
+		`{"type":"object","additionalProperties":false,"properties":{"x":{"$ref":"https://untrusted.example/schema.json"}}}`,
+	}
+	for _, schema := range invalid {
+		raw := fmt.Sprintf(`{"id":"com.example.configured","name":"configured","description":"configured plugin","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"configuration":{"scope":"service","applyMode":"restart","schema":%s},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`, schema)
+		if _, err := ParseManifest([]byte(raw)); err == nil {
+			t.Fatalf("不安全 configuration.schema 必须被拒绝: %s", schema)
+		}
+	}
+}

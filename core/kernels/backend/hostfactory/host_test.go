@@ -3,6 +3,7 @@ package hostfactory
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"sort"
 	"strings"
@@ -72,7 +73,10 @@ func TestNew_DefinesClosedBackendCatalogAndInternalService(t *testing.T) {
 }
 
 func TestKernelConfigGetRequiresAuthenticatedPluginAndReturnsFrozenValue(t *testing.T) {
-	provider, err := kernelspi.NewMapConfig(map[string]any{"retries": 3})
+	provider, err := kernelspi.NewPluginMapConfig(map[string]map[string]any{
+		"plugin.a": {"retries": 3},
+		"plugin.b": {"region": "cn-east"},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +92,10 @@ func TestKernelConfigGetRequiresAuthenticatedPluginAndReturnsFrozenValue(t *test
 	}
 	if _, _, err := service(context.Background(), &contractv1.CallContext{}, []byte(`{"key":"retries"}`)); err == nil {
 		t.Fatal("非插件调用必须 fail-closed")
+	}
+	otherCtx := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "plugin.b"}}
+	if _, _, err := service(context.Background(), otherCtx, []byte(`{"key":"retries"}`)); !errors.Is(err, kernelspi.ErrNotFound) {
+		t.Fatalf("同一宿主内的其他插件不得读取 plugin.a 配置: %v", err)
 	}
 }
 

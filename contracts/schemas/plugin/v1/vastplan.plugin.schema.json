@@ -42,6 +42,7 @@
     "contextAccess": { "$ref": "#/$defs/contextAccess" },
     "runtime": { "$ref": "#/$defs/runtimePolicy" },
     "execution": { "$ref": "#/$defs/executionPolicy" },
+    "configuration": { "$ref": "#/$defs/configurationContract" },
     "activation": { "$ref": "#/$defs/stringList" },
     "dependencies": {
       "type": "object",
@@ -86,6 +87,32 @@
   ],
   "$defs": {
     "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "configurationContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "applyMode", "schema"],
+      "properties": {
+        "scope": { "enum": ["service", "tenant", "user"] },
+        "applyMode": { "enum": ["restart", "hot"] },
+        "schema": { "type": "object" },
+        "managedCredentials": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "title", "purpose"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
+              "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+              "description": { "type": "string", "maxLength": 1000 },
+              "purpose": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 160 },
+              "required": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
     "contextField": {
       "enum": [
         "scope.tenant", "scope.project", "caller", "scene", "subject.id", "subject.profile",

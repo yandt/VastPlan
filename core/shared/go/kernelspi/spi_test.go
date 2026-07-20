@@ -15,12 +15,28 @@ func TestMapConfigIsImmutableAndScopeFailsClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	input["retries"] = 9
-	raw, ok, err := provider.Lookup(context.Background(), "retries")
+	raw, ok, err := provider.Lookup(context.Background(), "plugin.a", "retries")
 	if err != nil || !ok || string(raw) != "3" {
 		t.Fatalf("配置必须在构造时冻结: %s %v %v", raw, ok, err)
 	}
 	if err := (kernelspi.Scope{TenantID: "t", PluginID: "p"}).Validate(); err == nil {
 		t.Fatal("缺 namespace 的 scope 必须拒绝")
+	}
+}
+
+func TestPluginMapConfigFailsClosedAcrossPlugins(t *testing.T) {
+	provider, err := kernelspi.NewPluginMapConfig(map[string]map[string]any{
+		"plugin.a": {"tokenRef": "credential://a"},
+		"plugin.b": {"region": "cn-east"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := provider.Lookup(context.Background(), "plugin.a", "region"); err != nil || ok {
+		t.Fatalf("plugin.a 不得读取 plugin.b 配置: ok=%v err=%v", ok, err)
+	}
+	if raw, ok, err := provider.Lookup(context.Background(), "plugin.b", "region"); err != nil || !ok || string(raw) != `"cn-east"` {
+		t.Fatalf("plugin.b 应读取自己的配置: raw=%s ok=%v err=%v", raw, ok, err)
 	}
 }
 

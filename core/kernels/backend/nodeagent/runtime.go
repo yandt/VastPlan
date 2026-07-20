@@ -115,7 +115,15 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	}
 	ok := false
 	var leaderships []*controlplane.Leadership
-	configProvider, err := kernelspi.NewMapConfig(unit.Config)
+	pluginRefs := make([]deploymentv1.PluginRef, 0, len(unit.Plugins))
+	for _, installed := range unit.Plugins {
+		pluginRefs = append(pluginRefs, deploymentv1.PluginRef{ID: installed.ID})
+	}
+	envelope, err := configEnvelope(unit.Config, pluginRefs)
+	if err != nil {
+		return fmt.Errorf("解析 unit 配置信封: %w", err)
+	}
+	configProvider, err := kernelspi.NewPluginMapConfig(envelope.Plugins)
 	if err != nil {
 		return fmt.Errorf("冻结 unit 配置: %w", err)
 	}
@@ -141,7 +149,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 			KernelServices:       plugin.Contract.KernelServices,
 			ContextAccess:        plugin.Contract.ContextAccess,
 			ContextCeiling:       r.ContextPolicy.Ceiling(plugin.Publisher).Strings(),
-			EnvironmentAllowlist: append([]string(nil), unit.EnvironmentAllowlist...),
+			EnvironmentAllowlist: append([]string(nil), unit.EnvironmentAllowlists[plugin.ID]...),
 			RequiredFeatures:     append([]string(nil), plugin.Execution.Features...),
 			RuntimeScope:         unit.ID,
 			RuntimeGeneration:    unit.Fingerprint,
@@ -390,7 +398,7 @@ func (r *ProtocolRuntime) restoreOwnership(ctx context.Context, unitID string, o
 
 func cloneRuntimeUnit(unit RuntimeUnit) RuntimeUnit {
 	unit.PartitionKeys = append([]string(nil), unit.PartitionKeys...)
-	unit.EnvironmentAllowlist = append([]string(nil), unit.EnvironmentAllowlist...)
+	unit.EnvironmentAllowlists = cloneStringSlices(unit.EnvironmentAllowlists)
 	unit.Plugins = append([]InstalledPlugin(nil), unit.Plugins...)
 	for index := range unit.Plugins {
 		unit.Plugins[index].Engines = cloneStringMap(unit.Plugins[index].Engines)
@@ -409,6 +417,17 @@ func cloneUint64Map(input map[string]uint64) map[string]uint64 {
 	out := make(map[string]uint64, len(input))
 	for key, value := range input {
 		out[key] = value
+	}
+	return out
+}
+
+func cloneStringSlices(input map[string][]string) map[string][]string {
+	if input == nil {
+		return nil
+	}
+	out := make(map[string][]string, len(input))
+	for key, values := range input {
+		out[key] = append([]string(nil), values...)
 	}
 	return out
 }

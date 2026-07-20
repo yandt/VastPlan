@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -143,6 +144,7 @@ func Parse(raw []byte) (DesiredState, error) {
 		unit.Visibility, unit.Routing = policy.Visibility, policy.Routing
 		unit.RoutingDomain = policy.RoutingDomain
 		pluginIDs := map[string]struct{}{}
+		installedPluginIDs := make([]string, 0, len(unit.Plugins))
 		for j := range unit.Plugins {
 			plugin := &unit.Plugins[j]
 			if plugin.Channel == "" {
@@ -152,6 +154,10 @@ func Parse(raw []byte) (DesiredState, error) {
 				return DesiredState{}, fmt.Errorf("unit %q 的插件 id 重复: %q", unit.ID, plugin.ID)
 			}
 			pluginIDs[plugin.ID] = struct{}{}
+			installedPluginIDs = append(installedPluginIDs, plugin.ID)
+		}
+		if _, err := pluginconfig.Parse(unit.Config, installedPluginIDs); err != nil {
+			return DesiredState{}, fmt.Errorf("unit %q 配置信封无效: %w", unit.ID, err)
 		}
 	}
 	graph := make(map[string][]string, len(state.Units))

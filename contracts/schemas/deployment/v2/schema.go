@@ -20,6 +20,7 @@ import (
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
 )
 
@@ -250,6 +251,7 @@ func NormalizeServiceUnits(units []ServiceUnit) ([]ServiceUnit, error) {
 			}
 		}
 		pluginIDs := map[string]struct{}{}
+		installedPluginIDs := make([]string, 0, len(unit.Plugins))
 		for j := range unit.Plugins {
 			plugin := &unit.Plugins[j]
 			if plugin.Channel == "" {
@@ -259,6 +261,10 @@ func NormalizeServiceUnits(units []ServiceUnit) ([]ServiceUnit, error) {
 				return nil, fmt.Errorf("unit %q 的插件 id 重复: %q", unit.ID, plugin.ID)
 			}
 			pluginIDs[plugin.ID] = struct{}{}
+			installedPluginIDs = append(installedPluginIDs, plugin.ID)
+		}
+		if _, err := pluginconfig.Parse(unit.Config, installedPluginIDs); err != nil {
+			return nil, fmt.Errorf("unit %q 配置信封无效: %w", unit.ID, err)
 		}
 	}
 	graph := make(map[string][]string, len(normalized))
