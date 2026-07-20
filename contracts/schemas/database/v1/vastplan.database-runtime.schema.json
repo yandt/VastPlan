@@ -4,6 +4,7 @@
   "title": "VastPlan Database Runtime v1",
   "oneOf": [
     { "$ref": "#/$defs/providerListRequest" },
+    { "$ref": "#/$defs/metricsRequest" },
     { "$ref": "#/$defs/probeRequest" },
     { "$ref": "#/$defs/activateRequest" },
     { "$ref": "#/$defs/retireRequest" },
@@ -130,6 +131,91 @@
       "additionalProperties": false,
       "properties": { "providers": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/providerDescriptor" } } },
       "required": ["providers"]
+    },
+    "metricsRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "maxProperties": 0
+    },
+    "runtimeHealth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": { "type": "string", "enum": ["idle", "ready", "degraded", "unavailable"] },
+        "activeGenerations": { "type": "integer", "minimum": 0 },
+        "healthyGenerations": { "type": "integer", "minimum": 0 },
+        "unhealthyGenerations": { "type": "integer", "minimum": 0 },
+        "drainingGenerations": { "type": "integer", "minimum": 0 },
+        "closeFailedGenerations": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["status", "activeGenerations", "healthyGenerations", "unhealthyGenerations", "drainingGenerations", "closeFailedGenerations"]
+    },
+    "poolMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "openConnections": { "type": "integer", "minimum": 0 },
+        "idleConnections": { "type": "integer", "minimum": 0 },
+        "inUseConnections": { "type": "integer", "minimum": 0 },
+        "maxOpenConnections": { "type": "integer", "minimum": 0 },
+        "waiting": { "type": "integer", "minimum": 0 },
+        "inFlight": { "type": "integer", "minimum": 0 },
+        "waitCount": { "type": "integer", "minimum": 0 },
+        "waitDurationMs": { "type": "integer", "minimum": 0 },
+        "nodeReserved": { "type": "integer", "minimum": 0 },
+        "budgetRejected": { "type": "integer", "minimum": 0 },
+        "acquireSucceeded": { "type": "integer", "minimum": 0 },
+        "acquireTimeouts": { "type": "integer", "minimum": 0 },
+        "queueRejected": { "type": "integer", "minimum": 0 },
+        "forcedDrains": { "type": "integer", "minimum": 0 },
+        "closeFailures": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["openConnections", "idleConnections", "inUseConnections", "maxOpenConnections", "waiting", "inFlight", "waitCount", "waitDurationMs", "nodeReserved", "budgetRejected", "acquireSucceeded", "acquireTimeouts", "queueRejected", "forcedDrains", "closeFailures"]
+    },
+    "transactionMetrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "active": { "type": "integer", "minimum": 0 },
+        "capacity": { "type": "integer", "minimum": 1 },
+        "begins": { "type": "integer", "minimum": 0 },
+        "commits": { "type": "integer", "minimum": 0 },
+        "rollbacks": { "type": "integer", "minimum": 0 },
+        "expired": { "type": "integer", "minimum": 0 },
+        "lost": { "type": "integer", "minimum": 0 },
+        "rejected": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["active", "capacity", "begins", "commits", "rollbacks", "expired", "lost", "rejected"]
+    },
+    "metricSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9_]{2,159}$" },
+        "kind": { "type": "string", "enum": ["counter", "gauge"] },
+        "unit": { "type": "string", "enum": ["connections", "operations", "transactions", "milliseconds", "generations", "bytes"] },
+        "value": { "type": "integer", "minimum": 0 },
+        "labels": {
+          "type": "object",
+          "maxProperties": 4,
+          "properties": { "provider": { "$ref": "#/$defs/providerId" } },
+          "additionalProperties": false
+        }
+      },
+      "required": ["name", "kind", "unit", "value"]
+    },
+    "runtimeMetricsResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "health": { "$ref": "#/$defs/runtimeHealth" },
+        "pools": { "$ref": "#/$defs/poolMetrics" },
+        "transactions": { "$ref": "#/$defs/transactionMetrics" },
+        "samples": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/metricSample" } }
+      },
+      "required": ["schemaVersion", "observedAt", "health", "pools", "transactions", "samples"]
     },
     "probeRequest": {
       "type": "object",

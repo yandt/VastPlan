@@ -8,9 +8,9 @@
 
 ## 当前阶段
 
-0.6.0 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider、connection-manager 发布闭环、active-active 无状态执行和实例亲和事务。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。
+0.7.0 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继、统一 Pool Manager、PostgreSQL/MySQL Provider、connection-manager 发布闭环、active-active 无状态执行、实例亲和事务以及标准指标出口。两个 Provider 共用 `database/sql` 执行适配层、无损 wire 值转换、稳定错误分类、结果行数上限和池指标；Pool Manager 继续负责节点/租户/连接三级预算、调用方并发和等待队列上限、revision/generation 原子切换、旧池有界排空与关闭失败保守占额。
 
-当前制品开放 `providers/probe/activate/retire/query/execute`。只有 connection-manager 能发布、探测和退役连接；`query/execute` 拒绝用户直调，普通插件、Agent 或 Runner 还必须取得宿主投影的 `database.connection/<resourceId>` grant。管理面主动发布会命中一个 queue 副本，其他 active-active 副本首次收到该 revision 请求时，通过只允许 Runtime 调用的 `resolveRuntime` 内部操作惰性取得定义并幂等建池，因此扩容和重启不依赖伪广播。每个副本最多缓存 1 秒管理面确认；过期后同一连接的并发请求合并验证，删除会在该有界 lease 内排空本副本所有 project 池，避免未命中主动 retire 的副本无限继续服务。
+当前制品开放 `providers/metrics/probe/activate/retire/query/execute`。只有 connection-manager 能发布、探测和退役连接；`metrics` 仅允许 connection-manager 或 SYSTEM 监控采集器读取；`query/execute` 拒绝用户直调，普通插件、Agent 或 Runner 还必须取得宿主投影的 `database.connection/<resourceId>` grant。管理面主动发布会命中一个 queue 副本，其他 active-active 副本首次收到该 revision 请求时，通过只允许 Runtime 调用的 `resolveRuntime` 内部操作惰性取得定义并幂等建池，因此扩容和重启不依赖伪广播。每个副本最多缓存 1 秒管理面确认；过期后同一连接的并发请求合并验证，删除会在该有界 lease 内排空本副本所有 project 池，避免未命中主动 retire 的副本无限继续服务。
 
 `begin/commit/rollback` 返回由单次 Runtime 启动密钥加密认证的短期句柄，绑定 tenant/project/caller/ConnectionRef/owner/expiry。后续请求可落到任意副本，由受限的 Runtime-to-Runtime relay 使用 `CallTarget.instance_id` 精确转给 owner。owner 崩溃、重启或丢失本地事务时稳定返回 `database.runtime.transaction_lost`；过期自动回滚并返回 `database.runtime.transaction_expired`。连接轮换时旧事务只保留到 generation drain 上界。
 
@@ -28,6 +28,14 @@ Provider options 强制使用结构化 JSON，不接受 DSN。两者都要求 `u
 - 第三方 Provider 不实现本 Go SPI，而是经未来的隔离进程和版本化 RPC 接入。
 - `allowInsecureTLS` 是 service 级重启配置，默认 `false`；只有受控测试环境可设置为 `true`，连接定义自身不能绕过该部署策略。
 - `maxTransactions` 是每个 Runtime 实例的活动事务硬上限，默认 4096；达到上限时拒绝新事务，不影响无状态查询。
+
+## 指标与告警
+
+`metrics` 返回版本化的绝对 counter/gauge 快照和 `idle/ready/degraded/unavailable` 健康摘要。样本名称遵循 Prometheus/OpenTelemetry 的 `_total` counter 与无后缀 gauge 约定，覆盖连接池 open/idle/in-use/max、等待、预算拒绝、超时、队列拒绝、forced drain、关闭失败及事务 active/capacity/begin/commit/rollback/expired/lost/rejected。
+
+样本只允许 `provider` 这一低基数标签；不输出 tenant、project、connection、endpoint、SQL、CredentialRef、material、事务句柄或 Runtime audience。管理诊断若需要连接级短摘要，必须使用受权限保护的本地 `PoolManager.Snapshot`，不能将摘要复制进监控标签。counter 在 Runtime 重启后会归零，采集器必须按 counter reset 语义处理。
+
+建议外部告警适配器至少实施：`unavailable` health 立即告警；`pool_acquire_timeouts_total`、`pool_budget_rejected_total` 或 `pool_close_failures_total` 在窗口内增长告警；`transactions_active / transactions_capacity >= 0.8` 预警；`transactions_lost_total` 增长告警。Runtime 只提供事实与健康摘要，不在插件进程内发送告警或持久化告警状态。
 
 ## 真实数据库集成测试
 

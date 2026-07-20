@@ -228,10 +228,10 @@ func TestServiceExposesVersionedDataPlane(t *testing.T) {
 		t.Fatal("Provider discovery 必须严格拒绝额外字段")
 	}
 	contribution := service.Contribution()
-	if contribution.ID != databasev1.Capability || !json.Valid(contribution.Descriptor) || len(contribution.Handlers) != 10 {
+	if contribution.ID != databasev1.Capability || !json.Valid(contribution.Descriptor) || len(contribution.Handlers) != 11 {
 		t.Fatalf("Database Runtime contribution 无效: %+v", contribution)
 	}
-	for _, operation := range []string{databasev1.OperationProviders, databasev1.OperationProbe, databasev1.OperationActivate, databasev1.OperationRetire, databasev1.OperationQuery, databasev1.OperationExecute, databasev1.OperationBegin, databasev1.OperationCommit, databasev1.OperationRollback, "transactionRelay"} {
+	for _, operation := range []string{databasev1.OperationProviders, databasev1.OperationMetrics, databasev1.OperationProbe, databasev1.OperationActivate, databasev1.OperationRetire, databasev1.OperationQuery, databasev1.OperationExecute, databasev1.OperationBegin, databasev1.OperationCommit, databasev1.OperationRollback, "transactionRelay"} {
 		if contribution.Handlers[operation] == nil {
 			t.Fatalf("Database Runtime 缺少 %s handler", operation)
 		}

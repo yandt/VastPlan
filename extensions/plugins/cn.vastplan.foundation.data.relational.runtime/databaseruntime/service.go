@@ -105,6 +105,23 @@ func requireManager(call *contractv1.CallContext) error {
 	return nil
 }
 
+// Metrics are infrastructure diagnostics. They are intentionally available to
+// the connection manager and trusted system collectors only, never to tenant
+// callers or ordinary business plugins.
+func requireMetricsReader(call *contractv1.CallContext) error {
+	if call == nil || call.GetCaller() == nil {
+		return errors.New("读取数据库指标缺少可信 caller")
+	}
+	if call.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_SYSTEM {
+		return nil
+	}
+	if call.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_PLUGIN &&
+		call.GetCaller().GetId() == databasev1.ConnectionManagerPluginID {
+		return nil
+	}
+	return errors.New("只有连接管理插件或系统采集器可以读取数据库指标")
+}
+
 func requireExecutor(call *contractv1.CallContext, ref databasev1.ConnectionRef) error {
 	if call == nil || call.GetCaller().GetId() == "" {
 		return errors.New("数据库执行调用缺少可信 caller")
@@ -317,6 +334,12 @@ func (s *Service) handler(operation string) sdk.Handler {
 		switch request := parsed.(type) {
 		case *databasev1.ProviderListRequest:
 			return runtimeResult(databasev1.ProviderListResult{Providers: s.registry.Descriptors()}, nil)
+		case *databasev1.MetricsRequest:
+			if callErr := requireMetricsReader(call); callErr != nil {
+				return runtimeResult(nil, NewRuntimeError(databasev1.ErrorInvalidRequest, false, callErr))
+			}
+			value, callErr := s.Metrics()
+			return runtimeResult(value, callErr)
 		case *databasev1.ProbeRequest:
 			value, callErr := s.probe(ctx, host, call, request)
 			return runtimeResult(value, callErr)
@@ -408,6 +431,7 @@ func (s *Service) Contribution() sdk.Contribution {
 		ExtensionPoint: extpoint.ToolPackage, ID: databasev1.Capability, Descriptor: descriptor(),
 		Handlers: map[string]sdk.Handler{
 			databasev1.OperationProviders: s.handler(databasev1.OperationProviders),
+			databasev1.OperationMetrics:   s.handler(databasev1.OperationMetrics),
 			databasev1.OperationProbe:     s.handler(databasev1.OperationProbe),
 			databasev1.OperationActivate:  s.handler(databasev1.OperationActivate),
 			databasev1.OperationRetire:    s.handler(databasev1.OperationRetire),
@@ -422,5 +446,5 @@ func (s *Service) Contribution() sdk.Contribution {
 }
 
 func descriptor() []byte {
-	return []byte(`{"title":"Database Runtime","subcommands":[{"name":"providers","description":"列出当前制品内已注册的关系数据库 Provider","paramsSchema":{"type":"object","additionalProperties":false,"maxProperties":0}},{"name":"probe","description":"由连接管理面执行一次性连通性检查"},{"name":"activate","description":"发布或轮换连接 revision"},{"name":"retire","description":"排空并删除连接 revision"},{"name":"query","description":"通过活动连接池或实例亲和事务执行参数化查询"},{"name":"execute","description":"通过活动连接池或实例亲和事务执行参数化写操作"},{"name":"begin","description":"在当前 Runtime 实例开始短期事务"},{"name":"commit","description":"提交实例亲和事务"},{"name":"rollback","description":"回滚实例亲和事务"}]}`)
+	return []byte(`{"title":"Database Runtime","subcommands":[{"name":"providers","description":"列出当前制品内已注册的关系数据库 Provider","paramsSchema":{"type":"object","additionalProperties":false,"maxProperties":0}},{"name":"metrics","description":"输出脱敏、低基数的连接池与事务标准指标","paramsSchema":{"type":"object","additionalProperties":false,"maxProperties":0}},{"name":"probe","description":"由连接管理面执行一次性连通性检查"},{"name":"activate","description":"发布或轮换连接 revision"},{"name":"retire","description":"排空并删除连接 revision"},{"name":"query","description":"通过活动连接池或实例亲和事务执行参数化查询"},{"name":"execute","description":"通过活动连接池或实例亲和事务执行参数化写操作"},{"name":"begin","description":"在当前 Runtime 实例开始短期事务"},{"name":"commit","description":"提交实例亲和事务"},{"name":"rollback","description":"回滚实例亲和事务"}]}`)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
@@ -67,6 +68,28 @@ func TestTransactionRequestsAcceptOpaqueInstanceAffineHandle(t *testing.T) {
 	invalid, _ := json.Marshal(databasev1.EndTransactionRequest{TransactionHandle: "vptx1/runtime/forged"})
 	if _, err := databasev1.ParseRequest(databasev1.OperationRollback, invalid); err == nil {
 		t.Fatal("含非法字符的事务句柄必须被 Schema 拒绝")
+	}
+}
+
+func TestRuntimeMetricsContractIsStrictAndLowCardinality(t *testing.T) {
+	if _, err := databasev1.ParseRequest(databasev1.OperationMetrics, []byte(`{}`)); err != nil {
+		t.Fatalf("有效 metrics 请求被拒绝: %v", err)
+	}
+	if _, err := databasev1.ParseRequest(databasev1.OperationMetrics, []byte(`{"connection":"orders.primary"}`)); err == nil {
+		t.Fatal("metrics 请求不得支持 connection 等高基数筛选字段")
+	}
+	result := databasev1.RuntimeMetricsResult{
+		SchemaVersion: 1, ObservedAt: time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC),
+		Health: databasev1.RuntimeHealth{Status: "ready"},
+		Pools:  databasev1.PoolMetrics{}, Transactions: databasev1.TransactionMetrics{Capacity: 1},
+		Samples: []databasev1.MetricSample{{Name: "vastplan_database_runtime_transactions_active", Kind: "gauge", Unit: "transactions", Value: 0}},
+	}
+	if err := databasev1.ValidateRuntimeMetricsResult(result); err != nil {
+		t.Fatalf("有效 Runtime metrics 被拒绝: %v", err)
+	}
+	result.Samples[0].Labels = map[string]string{"connection_hash": "abcdef"}
+	if err := databasev1.ValidateRuntimeMetricsResult(result); err == nil {
+		t.Fatal("连接标识不得作为 Runtime metrics 标签")
 	}
 }
 

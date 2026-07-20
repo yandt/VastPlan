@@ -32,6 +32,7 @@ var (
 
 var requestDefinition = map[string]string{
 	OperationProviders: "providerListRequest",
+	OperationMetrics:   "metricsRequest",
 	OperationProbe:     "probeRequest",
 	OperationActivate:  "activateRequest",
 	OperationRetire:    "retireRequest",
@@ -66,7 +67,7 @@ func compileSchemas() {
 	}
 	definitions := []string{
 		"providerDescriptor", "connectionRef", "connectionSpec", "statement", "queryResult",
-		"providerListRequest", "probeRequest", "activateRequest", "retireRequest",
+		"providerListRequest", "metricsRequest", "runtimeMetricsResult", "probeRequest", "activateRequest", "retireRequest",
 		"queryRequest", "executeRequest", "beginRequest", "endTransactionRequest",
 	}
 	definitionSchemas = make(map[string]*jsonschema.Schema, len(definitions))
@@ -126,6 +127,8 @@ func ParseRequest(operation string, raw []byte) (any, error) {
 	switch operation {
 	case OperationProviders:
 		target = &ProviderListRequest{}
+	case OperationMetrics:
+		target = &MetricsRequest{}
 	case OperationProbe:
 		target = &ProbeRequest{}
 	case OperationActivate:
@@ -361,6 +364,14 @@ func ValidateQueryResult(result QueryResult) error {
 		}
 	}
 	return nil
+}
+
+func ValidateRuntimeMetricsResult(result RuntimeMetricsResult) error {
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	return validateDefinition("runtimeMetricsResult", raw)
 }
 
 func KnownErrorCode(code string) bool {

@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.data.relational.runtime",
   "name": "VastPlan Database Runtime",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -55,6 +55,11 @@
             {
               "name": "providers",
               "description": "列出当前制品内已注册的关系数据库 Provider",
+              "paramsSchema": { "type": "object", "additionalProperties": false, "maxProperties": 0 }
+            },
+            {
+              "name": "metrics",
+              "description": "输出脱敏、低基数的连接池与事务标准指标",
               "paramsSchema": { "type": "object", "additionalProperties": false, "maxProperties": 0 }
             },
             { "name": "probe", "description": "由连接管理面执行一次性连通性检查" },

@@ -4,7 +4,7 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.6.0`
+当前制品版本：`0.7.0`
 
 ## 职责边界
 
@@ -16,9 +16,10 @@ Database Runtime 是关系数据库数据面，负责 Provider、节点本地连
 
 机器可执行真源位于 `contracts/schemas/database/v1`，预留以下操作：
 
-| 操作 | 语义 | 0.6.0 状态 |
+| 操作 | 语义 | 0.7.0 状态 |
 |---|---|---|
 | `providers` | 返回当前签名制品内冻结的 Provider descriptor | 已开放 |
+| `metrics` | 输出脱敏、低基数的池/事务 counter、gauge 与健康摘要 | 仅 connection-manager 或 SYSTEM 采集器 |
 | `probe` | 使用候选连接定义做连通性检查 | 仅 connection-manager 可调用 |
 | `activate` / `retire` | 创建新池 generation、排空旧 generation | 已开放给 connection-manager |
 | `query` / `execute` | 以 ConnectionRef 执行参数化语句 | 已开放给非用户执行主体，并强制连接 grant |
@@ -56,6 +57,12 @@ connection-manager 以持久化 outbox 发布完整的非敏感 `ConnectionSpec`
 
 当前首方 PostgreSQL/MySQL Provider 使用 Go，是因为本阶段与 Go Pool Manager、`database/sql` 及现有驱动集成的成本最低；这不是语言限制。未来 Provider 按效率、生态和场景选型，Python、Node.js、Rust、Java 等实现经专用可信 Provider Host 和版本化 RPC 接入，物理池仍留在其语言进程。
 
+## 指标与告警
+
+`metrics` 是平台级监控的版本化数据面，不是面向用户的查询接口。它返回绝对值 counter/gauge，名称遵循 Prometheus/OpenTelemetry 约定：`*_total` 为 counter，其余为 gauge。涵盖连接池 open/idle/in-use/max、等待、预算/队列拒绝、forced drain、关闭失败，以及事务 active/capacity/begin/commit/rollback/expired/lost/rejected。
+
+只能使用 `provider` 等低基数标签；禁止 tenant、project、连接标识（包括 hash）、endpoint、SQL、CredentialRef、事务句柄和 Runtime audience。采集器处理 Runtime 重启时必须识别 counter reset。运行状态为 `idle/ready/degraded/unavailable`；建议至少对 unavailable、资源拒绝或超时的增量、事务使用率达到 80%、事务丢失和关闭失败增量建立告警。告警发送与长期存储属于未来监控插件，不在 Database Runtime 内实现。
+
 ## 当前限制与下一阶段
 
-事务亲和、超时/崩溃丢失语义和凭证轮换 drain 已完成。后续重点是扩展真实数据库故障注入矩阵、事务/池指标出口，以及第三方 Provider Host；完整路线见 [ADR-0095](../decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。
+事务亲和、超时/崩溃丢失语义、凭证轮换 drain、真实 PostgreSQL/MySQL 故障矩阵和标准指标出口均已完成。后续重点是第三方 Provider Host，以及由独立监控插件实现的 Prometheus/OTel 采集适配、告警发送与长期存储；完整路线见 [ADR-0095](../decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。

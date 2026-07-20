@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
@@ -49,6 +50,29 @@ type TransactionManager struct {
 	mu         sync.Mutex
 	active     map[string]*activeTransaction
 	closed     bool
+	counters   transactionCounters
+}
+
+type transactionCounters struct {
+	begins    atomic.Uint64
+	commits   atomic.Uint64
+	rollbacks atomic.Uint64
+	expired   atomic.Uint64
+	lost      atomic.Uint64
+	rejected  atomic.Uint64
+}
+
+// TransactionSnapshot contains counters and capacity only. It deliberately
+// excludes handles, callers, connection refs and owner routes.
+type TransactionSnapshot struct {
+	Active    uint64
+	Capacity  uint64
+	Begins    uint64
+	Commits   uint64
+	Rollbacks uint64
+	Expired   uint64
+	Lost      uint64
+	Rejected  uint64
 }
 
 func NewTransactionManager(instanceID string, maxActive int) (*TransactionManager, error) {
@@ -160,6 +184,7 @@ func (m *TransactionManager) Begin(ctx context.Context, call *contractv1.CallCon
 	m.mu.Lock()
 	if m.closed || len(m.active) >= m.maxActive {
 		m.mu.Unlock()
+		m.counters.rejected.Add(1)
 		return databasev1.BeginResult{}, NewRuntimeError(databasev1.ErrorPoolExhausted, true, errors.New("Runtime 活动事务达到上限"))
 	}
 	m.mu.Unlock()
@@ -182,9 +207,11 @@ func (m *TransactionManager) Begin(ctx context.Context, call *contractv1.CallCon
 	if m.closed || len(m.active) >= m.maxActive {
 		m.mu.Unlock()
 		_ = transaction.Rollback(context.Background())
+		m.counters.rejected.Add(1)
 		return databasev1.BeginResult{}, NewRuntimeError(databasev1.ErrorPoolExhausted, true, errors.New("Runtime 活动事务达到上限"))
 	}
 	m.active[claims.ID] = entry
+	m.counters.begins.Add(1)
 	entry.timer = time.AfterFunc(time.Until(expires), func() { m.expire(claims.ID) })
 	m.mu.Unlock()
 	go func() {
@@ -285,26 +312,38 @@ func (m *TransactionManager) End(ctx context.Context, call *contractv1.CallConte
 	defer entry.mu.Unlock()
 	defer entry.lease.Release()
 	if commit {
-		return entry.transaction.Commit(ctx)
+		err := entry.transaction.Commit(ctx)
+		if err == nil {
+			m.counters.commits.Add(1)
+		}
+		return err
 	}
-	return entry.transaction.Rollback(ctx)
+	err = entry.transaction.Rollback(ctx)
+	if err == nil {
+		m.counters.rollbacks.Add(1)
+	}
+	return err
 }
 
 func (m *TransactionManager) expire(id string) {
-	m.removeAndRollback(id)
+	if m.removeAndRollback(id) {
+		m.counters.expired.Add(1)
+	}
 }
 
 func (m *TransactionManager) lose(id string) {
-	m.removeAndRollback(id)
+	if m.removeAndRollback(id) {
+		m.counters.lost.Add(1)
+	}
 }
 
-func (m *TransactionManager) removeAndRollback(id string) {
+func (m *TransactionManager) removeAndRollback(id string) bool {
 	m.mu.Lock()
 	entry := m.active[id]
 	delete(m.active, id)
 	m.mu.Unlock()
 	if entry == nil {
-		return
+		return false
 	}
 	if entry.timer != nil {
 		entry.timer.Stop()
@@ -314,6 +353,21 @@ func (m *TransactionManager) removeAndRollback(id string) {
 	_ = entry.transaction.Rollback(context.Background())
 	entry.lease.Release()
 	entry.mu.Unlock()
+	return true
+}
+
+func (m *TransactionManager) Snapshot() TransactionSnapshot {
+	if m == nil {
+		return TransactionSnapshot{}
+	}
+	m.mu.Lock()
+	active, capacity := len(m.active), m.maxActive
+	m.mu.Unlock()
+	return TransactionSnapshot{
+		Active: uint64(active), Capacity: uint64(capacity),
+		Begins: m.counters.begins.Load(), Commits: m.counters.commits.Load(), Rollbacks: m.counters.rollbacks.Load(),
+		Expired: m.counters.expired.Load(), Lost: m.counters.lost.Load(), Rejected: m.counters.rejected.Load(),
+	}
 }
 
 func (m *TransactionManager) Close() error {

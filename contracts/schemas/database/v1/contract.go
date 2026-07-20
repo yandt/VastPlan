@@ -17,6 +17,7 @@ const (
 	CredentialPurpose         = "database.connection"
 
 	OperationProviders = "providers"
+	OperationMetrics   = "metrics"
 	OperationProbe     = "probe"
 	OperationActivate  = "activate"
 	OperationRetire    = "retire"
@@ -101,6 +102,67 @@ type TransactionOptions struct {
 type ProviderListRequest struct{}
 type ProviderListResult struct {
 	Providers []ProviderDescriptor `json:"providers"`
+}
+
+// MetricsRequest intentionally has no filter: connection-scoped filters would
+// create a high-cardinality observability API and can reveal tenant topology.
+type MetricsRequest struct{}
+
+type RuntimeHealth struct {
+	Status                 string `json:"status"`
+	ActiveGenerations      uint64 `json:"activeGenerations"`
+	HealthyGenerations     uint64 `json:"healthyGenerations"`
+	UnhealthyGenerations   uint64 `json:"unhealthyGenerations"`
+	DrainingGenerations    uint64 `json:"drainingGenerations"`
+	CloseFailedGenerations uint64 `json:"closeFailedGenerations"`
+}
+
+type PoolMetrics struct {
+	OpenConnections    uint64 `json:"openConnections"`
+	IdleConnections    uint64 `json:"idleConnections"`
+	InUseConnections   uint64 `json:"inUseConnections"`
+	MaxOpenConnections uint64 `json:"maxOpenConnections"`
+	Waiting            uint64 `json:"waiting"`
+	InFlight           uint64 `json:"inFlight"`
+	WaitCount          uint64 `json:"waitCount"`
+	WaitDurationMS     uint64 `json:"waitDurationMs"`
+	NodeReserved       uint64 `json:"nodeReserved"`
+	BudgetRejected     uint64 `json:"budgetRejected"`
+	AcquireSucceeded   uint64 `json:"acquireSucceeded"`
+	AcquireTimeouts    uint64 `json:"acquireTimeouts"`
+	QueueRejected      uint64 `json:"queueRejected"`
+	ForcedDrains       uint64 `json:"forcedDrains"`
+	CloseFailures      uint64 `json:"closeFailures"`
+}
+
+type TransactionMetrics struct {
+	Active    uint64 `json:"active"`
+	Capacity  uint64 `json:"capacity"`
+	Begins    uint64 `json:"begins"`
+	Commits   uint64 `json:"commits"`
+	Rollbacks uint64 `json:"rollbacks"`
+	Expired   uint64 `json:"expired"`
+	Lost      uint64 `json:"lost"`
+	Rejected  uint64 `json:"rejected"`
+}
+
+// MetricSample follows Prometheus/OpenTelemetry counter/gauge conventions.
+// Labels are deliberately limited to the low-cardinality provider value.
+type MetricSample struct {
+	Name   string            `json:"name"`
+	Kind   string            `json:"kind"`
+	Unit   string            `json:"unit"`
+	Value  uint64            `json:"value"`
+	Labels map[string]string `json:"labels,omitempty"`
+}
+
+type RuntimeMetricsResult struct {
+	SchemaVersion int                `json:"schemaVersion"`
+	ObservedAt    time.Time          `json:"observedAt"`
+	Health        RuntimeHealth      `json:"health"`
+	Pools         PoolMetrics        `json:"pools"`
+	Transactions  TransactionMetrics `json:"transactions"`
+	Samples       []MetricSample     `json:"samples"`
 }
 
 type ProbeRequest struct {

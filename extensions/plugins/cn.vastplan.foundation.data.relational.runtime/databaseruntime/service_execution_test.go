@@ -246,6 +246,9 @@ func TestServiceExpiresAndRollsBackTransaction(t *testing.T) {
 	if code := result.GetError().GetCode(); code != databasev1.ErrorTransactionExpired {
 		t.Fatalf("超时事务必须稳定报告 transaction_expired 并已回滚: %+v", result)
 	}
+	if metrics, err := service.Metrics(); err != nil || metrics.Transactions.Expired != 1 || metrics.Transactions.Active != 0 {
+		t.Fatalf("过期事务指标未收敛: metrics=%+v err=%v", metrics.Transactions, err)
+	}
 }
 
 func TestCredentialRotationDrainsOldTransactionWithinBound(t *testing.T) {
@@ -289,6 +292,9 @@ func TestCredentialRotationDrainsOldTransactionWithinBound(t *testing.T) {
 	result, _ = invokeRuntime(t, service, host, databasev1.OperationQuery, executorCall(spec.Ref, true), query)
 	if result.GetError().GetCode() != databasev1.ErrorTransactionLost {
 		t.Fatalf("drain 超时后旧事务必须回滚并报告 transaction_lost: %+v", result)
+	}
+	if metrics, err := service.Metrics(); err != nil || metrics.Transactions.Lost != 1 || metrics.Transactions.Active != 0 {
+		t.Fatalf("drain 丢失事务指标未收敛: metrics=%+v err=%v", metrics.Transactions, err)
 	}
 }
 
