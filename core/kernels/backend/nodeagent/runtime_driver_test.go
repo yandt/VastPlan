@@ -148,6 +148,62 @@ func TestParseExecutionPolicyRejectsInvalidOrAmbiguousRules(t *testing.T) {
 	}
 }
 
+func TestRuntimeHostingPolicyDefaultsToSharedAndUsesNarrowOverride(t *testing.T) {
+	policy, err := ParseRuntimeHostingPolicy(
+		"shared", "vastplan=dedicated,partner=shared", "cn.vastplan.fast=shared",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plugin := InstalledPlugin{ID: "cn.vastplan.fast", Publisher: "vastplan"}
+	if got := policy.modeFor(plugin); got != RuntimeHostingShared {
+		t.Fatalf("插件规则必须优先于发布者规则: %s", got)
+	}
+	plugin.ID = "cn.vastplan.other"
+	if got := policy.modeFor(plugin); got != RuntimeHostingDedicated {
+		t.Fatalf("发布者规则未生效: %s", got)
+	}
+	plugin.Publisher = "unknown"
+	if got := policy.modeFor(plugin); got != RuntimeHostingShared {
+		t.Fatalf("默认应共享 Runtime Host: %s", got)
+	}
+}
+
+func TestRuntimeHostingPolicyRejectsInvalidAndDuplicateRules(t *testing.T) {
+	for _, test := range []struct{ defaults, publishers, plugins string }{
+		{defaults: "invalid"},
+		{defaults: "shared", publishers: "vastplan=invalid"},
+		{defaults: "shared", publishers: "vastplan=shared,vastplan=dedicated"},
+		{defaults: "shared", plugins: "missing-separator"},
+	} {
+		if _, err := ParseRuntimeHostingPolicy(test.defaults, test.publishers, test.plugins); err == nil {
+			t.Fatalf("无效 Runtime Host 策略必须拒绝: %+v", test)
+		}
+	}
+}
+
+func TestRuntimePoolCompatibilitySeparatesPublisherAndRequirements(t *testing.T) {
+	driver := NodeWorkerExecutionDriver{Command: "node"}
+	plugin := InstalledPlugin{ID: "cn.vastplan.a", Publisher: "vastplan", Execution: pluginv1.BackendExecution{
+		Driver: "node-worker", Requirements: map[string]string{"node": ">=20"},
+		Node: &pluginv1.NodeExecution{WorkerSafe: true, ModuleFormat: "esm"},
+	}}
+	base := runtimePoolKey("service-a", plugin, driver, RuntimeHostingShared)
+	otherPublisher := plugin
+	otherPublisher.Publisher = "partner"
+	if base.String() == runtimePoolKey("service-a", otherPublisher, driver, RuntimeHostingShared).String() {
+		t.Fatal("不同发布者信任域不得共享 Runtime Host")
+	}
+	otherRuntime := plugin
+	otherRuntime.Execution.Requirements = map[string]string{"node": ">=22"}
+	if base.String() == runtimePoolKey("service-a", otherRuntime, driver, RuntimeHostingShared).String() {
+		t.Fatal("不同运行时约束不得共享 Runtime Host")
+	}
+	if runtimePoolKey("service-b", plugin, driver, RuntimeHostingShared).String() == base.String() {
+		t.Fatal("不同内核服务不得共享 Runtime Host")
+	}
+}
+
 func TestRuntimeDriversRejectUnknownDriverAndUnsupportedPlatform(t *testing.T) {
 	runtime := NewProtocolRuntime("1.0.0", nil)
 	plugin := InstalledPlugin{ID: "p", Publisher: "vastplan", EntryPath: "/p", Execution: pluginv1.BackendExecution{

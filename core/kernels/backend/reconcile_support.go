@@ -30,6 +30,7 @@ type reconcileOptions struct {
 	thirdPartyPluginPolicy, publisherPluginPolicies                                            string
 	defaultPluginContextAccess, publisherPluginContextAccess                                   string
 	pluginPlacementDefault, publisherPluginPlacements, pluginPlacements                        string
+	runtimeHostingDefault, publisherRuntimeHosting, pluginRuntimeHosting                       string
 	capacityCPU, capacityMemory, capacityGPU                                                   int64
 	interval                                                                                   time.Duration
 	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                string
@@ -38,6 +39,7 @@ type reconcileOptions struct {
 	executionPolicy                                                                            nodeagent.ExecutionPolicy
 	contextPolicy                                                                              nodeagent.ContextPolicy
 	placementPolicy                                                                            nodeagent.PlacementPolicy
+	hostingPolicy                                                                              nodeagent.RuntimeHostingPolicy
 	desiredKey, assignmentKey, deploymentName, deploymentTenant                                string
 	natsReplicas                                                                               int
 }
@@ -67,6 +69,9 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.pluginPlacementDefault, "plugin-placement-default", string(nodeagent.PlacementProcessOnly), "插件默认放置: process-only, prefer-dynamic-go, require-dynamic-go")
 	flags.StringVar(&options.publisherPluginPlacements, "publisher-plugin-placements", "", "发布者级放置策略，逗号分隔 publisher=mode")
 	flags.StringVar(&options.pluginPlacements, "plugin-placements", "", "插件级放置策略，逗号分隔 pluginID=mode；优先级最高")
+	flags.StringVar(&options.runtimeHostingDefault, "runtime-hosting-default", string(nodeagent.RuntimeHostingShared), "托管语言插件默认 Host 模式: shared, dedicated")
+	flags.StringVar(&options.publisherRuntimeHosting, "publisher-runtime-hosting", "", "发布者级 Runtime Host 模式，逗号分隔 publisher=mode")
+	flags.StringVar(&options.pluginRuntimeHosting, "plugin-runtime-hosting", "", "插件级 Runtime Host 模式，逗号分隔 pluginID=mode；优先级最高")
 	flags.BoolVar(&options.requireThirdPartyIsolation, "require-third-party-isolation", true, "已弃用兼容参数；请使用 -third-party-plugin-policy")
 	flags.Int64Var(&options.capacityCPU, "capacity-cpu-millis", 0, "节点可分配 CPU，单位 millicores")
 	flags.Int64Var(&options.capacityMemory, "capacity-memory-bytes", 0, "节点可分配内存，单位 bytes")
@@ -117,6 +122,12 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	}
 	options.placementPolicy, err = nodeagent.ParsePlacementPolicy(
 		options.pluginPlacementDefault, options.publisherPluginPlacements, options.pluginPlacements,
+	)
+	if err != nil {
+		return reconcileOptions{}, err
+	}
+	options.hostingPolicy, err = nodeagent.ParseRuntimeHostingPolicy(
+		options.runtimeHostingDefault, options.publisherRuntimeHosting, options.pluginRuntimeHosting,
 	)
 	if err != nil {
 		return reconcileOptions{}, err
@@ -409,6 +420,8 @@ func finishCanceledAgent(guard *nodeLeaseGuard, reconciler *nodeagent.Reconciler
 func logNodeStartup(options reconcileOptions, logf func(string, ...any)) {
 	logf("插件运行策略 global=%s publisher-overrides=%s trusted-compat=%s",
 		options.thirdPartyPluginPolicy, options.publisherPluginPolicies, options.firstPartyPublishers)
+	logf("Runtime Host 策略 default=%s publisher-overrides=%s plugin-overrides=%s",
+		options.runtimeHostingDefault, options.publisherRuntimeHosting, options.pluginRuntimeHosting)
 	if options.natsURL == "" {
 		logf("节点 %s 启动，期望态=%s", options.nodeID, options.desiredPath)
 		return

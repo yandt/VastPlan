@@ -28,6 +28,20 @@ type processLogWriter struct {
 	prefix string
 }
 
+// ManagedLaunchSpec starts one logical execution unit inside a Runtime Host
+// process that is owned outside protocolbus. Start receives the exact trusted
+// environment for this plugin session. Stop must be idempotent and release only
+// this unit (and its pool lease), never an unrelated unit in the same process.
+type ManagedLaunchSpec struct {
+	PID         int
+	RuntimeKind string
+	Start       func(environment []string) error
+	Stop        func()
+	// Done reports that the managed unit or its physical host exited before the
+	// protocol handshake completed. Nil disables the early failure path.
+	Done <-chan error
+}
+
 func (w processLogWriter) Write(raw []byte) (int, error) {
 	const maxLine = 64 << 10
 	line := strings.TrimSpace(string(raw))
@@ -142,6 +156,75 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 	case <-ctx.Done():
 		kill()
 		return nil, ctx.Err()
+	}
+}
+
+// LaunchManagedWithPolicy attaches a logical plugin unit started by a shared
+// Runtime Host to the normal one-time-ticket handshake. The resulting session
+// follows exactly the same authorization, contribution and lifecycle pipeline
+// as an independent process, while its PID denotes the shared physical host.
+func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSpec,
+	policy LaunchPolicy) (*PluginInstance, error) {
+	if h.addr == "" {
+		return nil, errors.New("宿主尚未 Start，插件无处回连")
+	}
+	if spec.Start == nil || spec.Stop == nil {
+		return nil, errors.New("托管执行单元必须提供 Start 和 Stop")
+	}
+	token := newToken()
+	resultCh := make(chan launchResult, 1)
+	h.mu.Lock()
+	h.launches[token] = &launchAttempt{result: resultCh, policy: cloneLaunchPolicy(policy)}
+	h.mu.Unlock()
+	defer func() {
+		h.mu.Lock()
+		delete(h.launches, token)
+		h.mu.Unlock()
+	}()
+
+	environmentAllowlist := append([]string(nil), h.PluginEnvironmentAllowlist...)
+	environmentAllowlist = append(environmentAllowlist, policy.EnvironmentAllowlist...)
+	environment := pluginEnvironment(environmentAllowlist)
+	environment = append(environment,
+		protocol.MagicEnvKey+"="+protocol.MagicCookie,
+		protocol.HostAddrEnvKey+"="+h.addr,
+		protocol.LaunchTokenEnvKey+"="+token,
+	)
+	if err := spec.Start(environment); err != nil {
+		spec.Stop()
+		return nil, fmt.Errorf("启动托管插件执行单元: %w", err)
+	}
+	stop := spec.Stop
+	failed := true
+	defer func() {
+		if failed {
+			stop()
+		}
+	}()
+
+	select {
+	case res := <-resultCh:
+		if res.err != nil {
+			return nil, res.err
+		}
+		if !res.sess.bindManagedUnit(stop) {
+			return nil, fmt.Errorf("托管插件完成接入后立即失联: %w", res.sess.err())
+		}
+		failed = false
+		return &PluginInstance{
+			PluginID: res.sess.pluginID, Version: res.sess.pluginVersion,
+			SessionID: res.sess.id, PID: spec.PID,
+			runtimeKind: spec.RuntimeKind, session: res.sess,
+		}, nil
+	case <-time.After(h.launchTimeout()):
+		return nil, fmt.Errorf("等待托管插件接入超时（%v）", h.launchTimeout())
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-spec.Done:
+		if err == nil {
+			err = errors.New("托管插件执行单元已退出")
+		}
+		return nil, err
 	}
 }
 

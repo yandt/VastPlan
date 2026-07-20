@@ -7,6 +7,11 @@ test('parseArguments separates the trusted entry from plugin arguments', () => {
   const parsed = parseArguments(['--entry', './plugin.mjs', '--', '--tenant', 'acme']);
   assert.match(parsed.entry, /plugin\.mjs$/);
   assert.deepEqual(parsed.pluginArgs, ['--tenant', 'acme']);
+	assert.equal(parsed.pool, false);
+});
+
+test('parseArguments accepts pool control mode without a plugin entry', () => {
+  assert.deepEqual(parseArguments(['--pool']), { entry: '', pluginArgs: [], pool: true });
 });
 
 test('parseArguments rejects a missing entry', () => {

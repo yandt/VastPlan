@@ -71,6 +71,10 @@ type LaunchPolicy struct {
 	UnrestrictedContext  bool
 	EnvironmentAllowlist []string
 	RequiredFeatures     []string
+	// RuntimeScope is trusted host-only placement metadata. It is not sent over
+	// the wire or accepted from a plugin manifest; managed execution drivers use
+	// it to keep pools within one kernel service instance.
+	RuntimeScope string
 }
 
 // LaunchSpec 是运行驱动交给协议宿主的语言无关启动结果。Command/Args 直接传给

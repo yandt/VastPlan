@@ -255,6 +255,7 @@ func runReconcile(args []string) (runErr error) {
 	runtime.ExecutionPolicy = options.executionPolicy
 	runtime.ContextPolicy = options.contextPolicy
 	runtime.PlacementPolicy = options.placementPolicy
+	runtime.HostingPolicy = options.hostingPolicy
 	runtime.DynamicGoLoader = nodeagent.NewDynamicGoLoader(dynamicGoHostFingerprint)
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers

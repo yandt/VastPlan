@@ -42,6 +42,14 @@ type PluginExecutionDriver interface {
 	Start(context.Context, *protocolbus.Host, InstalledPlugin, protocolbus.LaunchPolicy) (*protocolbus.PluginInstance, error)
 }
 
+// managedRuntimeExecutionDriver is implemented by providers capable of
+// hosting multiple logical execution units in one physical process.
+type managedRuntimeExecutionDriver interface {
+	PluginExecutionDriver
+	StartManaged(context.Context, *protocolbus.Host, InstalledPlugin, protocolbus.LaunchPolicy,
+		*RuntimePoolManager, RuntimeHostingPolicy) (*protocolbus.PluginInstance, error)
+}
+
 type ExecutionDriverRegistry struct {
 	mu      sync.RWMutex
 	drivers map[string]PluginExecutionDriver
@@ -162,6 +170,16 @@ func (d NodeWorkerExecutionDriver) Start(ctx context.Context, host *protocolbus.
 	return host.LaunchSpecWithPolicy(ctx, processLaunchSpec(plugin, command, args, "node-worker"), policy)
 }
 
+func (d NodeWorkerExecutionDriver) StartManaged(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
+	policy protocolbus.LaunchPolicy, pools *RuntimePoolManager,
+	hosting RuntimeHostingPolicy) (*protocolbus.PluginInstance, error) {
+	if plugin.Execution.Node == nil || !plugin.Execution.Node.WorkerSafe || plugin.Execution.Node.ModuleFormat != "esm" {
+		return nil, fmt.Errorf("插件 %s 未声明 node.workerSafe=true 且 moduleFormat=esm", plugin.ID)
+	}
+	return startManagedRuntime(ctx, host, plugin, policy, d, pools, hosting,
+		runtimeHostProcessSpec{Command: d.Command, Args: append(append([]string(nil), d.HostArgs...), "--pool"), Kind: d.Name()})
+}
+
 // PythonSubinterpreterExecutionDriver 只接收对完整依赖图作出多解释器安全承诺
 // 的插件。CPython 版本和扩展模块支持度由 Runtime Host 在握手前继续校验。
 type PythonSubinterpreterExecutionDriver struct {
@@ -185,6 +203,52 @@ func (d PythonSubinterpreterExecutionDriver) Start(ctx context.Context, host *pr
 	args := append(append([]string(nil), d.HostArgs...), "--entry", plugin.EntryPath, "--")
 	args = append(args, plugin.Execution.Args...)
 	return host.LaunchSpecWithPolicy(ctx, processLaunchSpec(plugin, command, args, "python-subinterpreter"), policy)
+}
+
+func (d PythonSubinterpreterExecutionDriver) StartManaged(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
+	policy protocolbus.LaunchPolicy, pools *RuntimePoolManager,
+	hosting RuntimeHostingPolicy) (*protocolbus.PluginInstance, error) {
+	if plugin.Execution.Python == nil || !plugin.Execution.Python.SubinterpreterSafe {
+		return nil, fmt.Errorf("插件 %s 未声明 python.subinterpreterSafe=true", plugin.ID)
+	}
+	return startManagedRuntime(ctx, host, plugin, policy, d, pools, hosting,
+		runtimeHostProcessSpec{Command: d.Command, Args: append(append([]string(nil), d.HostArgs...), "--pool"), Kind: d.Name()})
+}
+
+func startManagedRuntime(ctx context.Context, host *protocolbus.Host, plugin InstalledPlugin,
+	policy protocolbus.LaunchPolicy, driver PluginExecutionDriver, pools *RuntimePoolManager,
+	hosting RuntimeHostingPolicy, processSpec runtimeHostProcessSpec) (*protocolbus.PluginInstance, error) {
+	if pools == nil {
+		return nil, errors.New("托管运行驱动未配置 Runtime Pool Manager")
+	}
+	if strings.TrimSpace(processSpec.Command) == "" {
+		return nil, fmt.Errorf("%s 执行驱动未配置 Runtime Host", driver.Name())
+	}
+	mode := hosting.modeFor(plugin)
+	if err := validateRuntimeHostingMode(mode); err != nil {
+		return nil, err
+	}
+	scope := strings.TrimSpace(policy.RuntimeScope)
+	if scope == "" {
+		scope = "default"
+	}
+	lease, err := pools.Acquire(runtimePoolKey(scope, plugin, driver, mode), processSpec)
+	if err != nil {
+		return nil, err
+	}
+	extraEnvironment := []string{
+		"VASTPLAN_PLUGIN_ROOT=" + plugin.Root,
+		"VASTPLAN_PLUGIN_DRIVER=" + plugin.Execution.Driver,
+	}
+	return host.LaunchManagedWithPolicy(ctx, protocolbus.ManagedLaunchSpec{
+		PID: lease.PID(), RuntimeKind: driver.Name(),
+		Start: func(environment []string) error {
+			environment = append(append([]string(nil), environment...), extraEnvironment...)
+			return lease.Start(ctx, plugin.EntryPath, plugin.Execution.Args, environment)
+		},
+		Stop: lease.Release,
+		Done: lease.Done(),
+	}, policy)
 }
 
 func processLaunchSpec(plugin InstalledPlugin, command string, args []string, kind string) protocolbus.LaunchSpec {
@@ -345,6 +409,9 @@ func (r *ProtocolRuntime) startConfiguredPlugin(ctx context.Context, host *proto
 	driver, normalized, err := r.resolveExecutionDriver(plugin)
 	if err != nil {
 		return nil, err
+	}
+	if managed, ok := driver.(managedRuntimeExecutionDriver); ok && r.RuntimePools != nil {
+		return managed.StartManaged(ctx, host, normalized, policy, r.RuntimePools, r.HostingPolicy)
 	}
 	return driver.Start(ctx, host, normalized, policy)
 }

@@ -2,6 +2,7 @@
 
 import { accessSync, constants } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 
@@ -9,12 +10,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 export function parseArguments(argv) {
   let entry = '';
+  let pool = false;
   const pluginArgs = [];
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--entry') {
       entry = argv[index + 1] ?? '';
       index += 1;
+    } else if (argument === '--pool') {
+      pool = true;
     } else if (argument === '--') {
       pluginArgs.push(...argv.slice(index + 1));
       break;
@@ -22,10 +26,10 @@ export function parseArguments(argv) {
       pluginArgs.push(argument);
     }
   }
-  if (!entry) {
+  if (!entry && !pool) {
     throw new Error('缺少必需参数 --entry');
   }
-  return { entry: resolve(entry), pluginArgs };
+  return { entry: entry ? resolve(entry) : '', pluginArgs, pool };
 }
 
 export function resourceLimits(environment = process.env) {
@@ -52,7 +56,7 @@ export function contractsDirectory(environment = process.env) {
   return candidate;
 }
 
-export function startWorker({ entry, pluginArgs }, environment = process.env) {
+export function startWorker({ entry, pluginArgs }, environment = process.env, redirectOutput = false) {
   accessSync(entry, constants.R_OK);
   const workerEnvironment = {
     ...environment,
@@ -63,18 +67,103 @@ export function startWorker({ entry, pluginArgs }, environment = process.env) {
     env: workerEnvironment,
     resourceLimits: resourceLimits(environment),
     name: `vastplan:${entry}`,
+    stdout: redirectOutput,
+    stderr: redirectOutput,
   });
 }
 
+function controlReply(message) {
+  process.stdout.write(`${JSON.stringify(message)}\n`);
+}
+
+function stopWorker(worker) {
+  worker.postMessage({ type: 'shutdown' });
+  // protocolbus has already completed the graceful lifecycle handshake before
+  // issuing a pool stop. Keep only a short guard for a wedged Worker.
+  const timer = setTimeout(() => void worker.terminate(), 500);
+  timer.unref();
+  worker.once('exit', () => clearTimeout(timer));
+}
+
+export async function runPool(input = process.stdin) {
+  const units = new Map();
+  const stoppingUnits = new Set();
+  const reader = createInterface({ input, crlfDelay: Infinity });
+  let stopping = false;
+
+  const shutdown = () => {
+    if (stopping) return;
+    stopping = true;
+    for (const [unitId, worker] of units) {
+      stoppingUnits.add(unitId);
+      stopWorker(worker);
+    }
+    reader.close();
+  };
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+
+  for await (const line of reader) {
+    if (!line.trim()) continue;
+    let request;
+    try {
+      request = JSON.parse(line);
+      if (!request.requestId || !request.operation) throw new Error('控制请求缺少 requestId/operation');
+      if (request.operation === 'start') {
+        if (!request.unitId || !request.entry) throw new Error('start 缺少 unitId/entry');
+        if (units.has(request.unitId)) throw new Error(`执行单元重复: ${request.unitId}`);
+        const worker = startWorker({
+          entry: resolve(request.entry),
+          pluginArgs: Array.isArray(request.args) ? request.args.map(String) : [],
+        }, request.environment ?? {}, true);
+        units.set(request.unitId, worker);
+        worker.stdout?.pipe(process.stderr, { end: false });
+        worker.stderr?.pipe(process.stderr, { end: false });
+        worker.on('message', (message) => {
+          if (message?.type === 'fatal') {
+            process.stderr.write(`Node Worker 插件启动失败 unit=${request.unitId}: ${message.error}\n`);
+          }
+        });
+        worker.once('exit', (code) => {
+          units.delete(request.unitId);
+          const expected = stoppingUnits.delete(request.unitId);
+          controlReply({ event: 'unit-exited', unitId: request.unitId, status: 'ok',
+            ...(code === 0 || expected ? {} : { error: `Worker exit code ${code}` }) });
+        });
+        controlReply({ requestId: request.requestId, unitId: request.unitId, status: 'ok' });
+      } else if (request.operation === 'stop') {
+        const worker = units.get(request.unitId);
+        if (worker) {
+          stoppingUnits.add(request.unitId);
+          stopWorker(worker);
+        }
+        controlReply({ requestId: request.requestId, unitId: request.unitId, status: 'ok' });
+      } else if (request.operation === 'shutdown') {
+        controlReply({ requestId: request.requestId, status: 'ok' });
+        shutdown();
+      } else {
+        throw new Error(`未知控制操作: ${request.operation}`);
+      }
+    } catch (error) {
+      controlReply({ requestId: request?.requestId ?? '', status: 'error', error: error.message });
+    }
+  }
+
+  if (units.size > 0) {
+    await Promise.all([...units.values()].map((worker) => new Promise((resolveExit) => worker.once('exit', resolveExit))));
+  }
+  return 0;
+}
+
 export async function run(argv = process.argv.slice(2), environment = process.env) {
-  const worker = startWorker(parseArguments(argv), environment);
+  const parsed = parseArguments(argv);
+  if (parsed.pool) return runPool();
+  const worker = startWorker(parsed, environment);
   let stopping = false;
   const stop = () => {
     if (stopping) return;
     stopping = true;
-    worker.postMessage({ type: 'shutdown' });
-    const timer = setTimeout(() => worker.terminate(), 5_000);
-    timer.unref();
+    stopWorker(worker);
   };
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);

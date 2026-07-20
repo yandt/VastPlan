@@ -599,6 +599,9 @@ func (h *Host) teardown(sess *session, cause error) {
 
 		h.failLaunch(sess.launchToken, cause) // 若仍在 Launch 等待中，让它立刻脱身
 		sess.killProcess()
+		// Shared Runtime Hosts own many logical units. Closing one plugin must
+		// release only its unit/lease and must never kill the shared process.
+		sess.stopManagedUnit()
 	})
 	// done 只表示流已死亡；teardownDone 才证明贡献、会话表和进程已经全部收敛。
 	// Close/Stop 的调用者据此获得同步完成语义，不再与读循环的 defer teardown 竞态。

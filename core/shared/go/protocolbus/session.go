@@ -26,6 +26,8 @@ type session struct {
 	launchToken   string // 关联到发起它的那次 Launch
 	cmdMu         sync.Mutex
 	cmd           *exec.Cmd
+	managedStop   func()
+	managedOnce   sync.Once
 
 	streamMu      sync.Mutex
 	stream        pluginhostv1.PluginHost_ChannelServer
@@ -57,6 +59,33 @@ type session struct {
 	teardownDone chan struct{}
 	// deadErr 会话死亡原因（崩溃/心跳超时/主动关闭）。
 	deadErr atomic.Value
+}
+
+// bindManagedUnit associates the logical plugin session with a unit owned by a
+// shared Runtime Host. Unlike bindProcess, tearing this session down must stop
+// only that unit; the physical process may still serve other plugins.
+func (s *session) bindManagedUnit(stop func()) bool {
+	s.cmdMu.Lock()
+	defer s.cmdMu.Unlock()
+	select {
+	case <-s.done:
+		return false
+	default:
+	}
+	s.managedStop = stop
+	return true
+}
+
+func (s *session) stopManagedUnit() {
+	s.managedOnce.Do(func() {
+		s.cmdMu.Lock()
+		stop := s.managedStop
+		s.managedStop = nil
+		s.cmdMu.Unlock()
+		if stop != nil {
+			stop()
+		}
+	})
 }
 
 func newSession(id, pluginID, pluginVersion string) *session {

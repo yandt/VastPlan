@@ -24,6 +24,9 @@ func TestParseReconcileOptionsNormalizesLocalAndDeploymentModes(t *testing.T) {
 	if local.placementPolicy.Default != nodeagent.PlacementProcessOnly {
 		t.Fatalf("默认必须保持进程隔离: %+v", local.placementPolicy)
 	}
+	if local.hostingPolicy.Default != nodeagent.RuntimeHostingShared {
+		t.Fatalf("托管语言默认应共享兼容 Runtime Host: %+v", local.hostingPolicy)
+	}
 
 	cluster, err := parseReconcileOptions([]string{
 		"-nats-url", "nats://127.0.0.1:4222", "-deployment", "api", "-tenant", "acme", "-node-id", "node-a",
@@ -60,6 +63,22 @@ func TestParseReconcileOptionsSupportsPlacementPrecedence(t *testing.T) {
 	if configured.placementPolicy.PublisherPolicies["vastplan"] != nodeagent.PlacementPreferDynamicGo ||
 		configured.placementPolicy.PluginPolicies["cn.vastplan.foundation.security.bootstrap-policy"] != nodeagent.PlacementRequireDynamicGo {
 		t.Fatalf("放置策略未正确解析: %+v", configured.placementPolicy)
+	}
+}
+
+func TestParseReconcileOptionsSupportsRuntimeHostingPrecedence(t *testing.T) {
+	configured, err := parseReconcileOptions([]string{
+		"-desired", "desired.json",
+		"-runtime-hosting-default", "shared",
+		"-publisher-runtime-hosting", "partner=dedicated",
+		"-plugin-runtime-hosting", "cn.vastplan.heavy=shared",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configured.hostingPolicy.PublisherModes["partner"] != nodeagent.RuntimeHostingDedicated ||
+		configured.hostingPolicy.PluginModes["cn.vastplan.heavy"] != nodeagent.RuntimeHostingShared {
+		t.Fatalf("Runtime Host 策略未正确解析: %+v", configured.hostingPolicy)
 	}
 }
 
@@ -149,6 +168,9 @@ func TestParseReconcileOptionsRejectsConflictingOrInvalidPluginPolicies(t *testi
 		{"-desired", "desired.json", "-plugin-placements", "one=prefer-embedded"},
 		{"-desired", "desired.json", "-default-plugin-context-access", "unknown"},
 		{"-desired", "desired.json", "-publisher-plugin-context-access", "partner=unknown"},
+		{"-desired", "desired.json", "-runtime-hosting-default", "elastic"},
+		{"-desired", "desired.json", "-publisher-runtime-hosting", "partner=shared,partner=dedicated"},
+		{"-desired", "desired.json", "-plugin-runtime-hosting", "missing-separator"},
 	}
 	for _, args := range tests {
 		if _, err := parseReconcileOptions(args); err == nil {

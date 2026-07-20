@@ -29,6 +29,11 @@ class RuntimeHostTest(unittest.TestCase):
         arguments = HOST.parse_arguments(("--entry", "plugin.py", "--", "--tenant", "acme"))
         self.assertEqual(arguments.plugin_args, ("--tenant", "acme"))
 
+    def test_pool_mode_does_not_require_a_plugin_entry(self):
+        arguments = HOST.parse_arguments(("--pool",))
+        self.assertTrue(arguments.pool)
+        self.assertIsNone(arguments.entry)
+
 
 if __name__ == "__main__":
     unittest.main()

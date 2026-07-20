@@ -15,18 +15,31 @@ from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence
 
 
+# Source-tree development fallback. Production Runtime Host artifacts install
+# the SDK into their own environment; this path is added only when the monorepo
+# layout is actually present.
+SOURCE_SDK = Path(__file__).resolve().parents[3] / "extensions" / "sdk" / "python"
+if SOURCE_SDK.is_dir() and str(SOURCE_SDK) not in sys.path:
+    sys.path.insert(0, str(SOURCE_SDK))
+
+
 MINIMUM_VERSION = (3, 14)
 BOOTSTRAP = r"""
 import runpy
 import sys
 import traceback
 from pathlib import Path
-from vastplan_subinterpreter.plugin import _configure
 
 try:
+    for __vastplan_path_entry in reversed(__vastplan_sys_path):
+        if __vastplan_path_entry not in sys.path:
+            sys.path.insert(0, __vastplan_path_entry)
+    from vastplan_subinterpreter.plugin import _configure
     _configure(__vastplan_requests, __vastplan_responses)
     sys.argv = [__vastplan_entry, *__vastplan_args]
     sys.path.insert(0, str(Path(__vastplan_entry).resolve().parent))
+    # Pool mode reserves process stdout for the JSON control channel.
+    sys.stdout = sys.stderr
     runpy.run_path(__vastplan_entry, run_name="__main__")
 except BaseException:
     __vastplan_responses.put({"type": "fatal", "error": traceback.format_exc()})
@@ -57,12 +70,13 @@ def runtime_capability() -> Mapping[str, Any]:
 def parse_arguments(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--probe", action="store_true", help="输出运行时能力 JSON 后退出")
+    parser.add_argument("--pool", action="store_true", help="通过 stdin/stdout JSON 行协议托管多个插件")
     parser.add_argument("--entry", help="已验签插件入口")
     namespace, plugin_args = parser.parse_known_args(argv)
     if plugin_args and plugin_args[0] == "--":
         plugin_args = plugin_args[1:]
     namespace.plugin_args = tuple(plugin_args)
-    if not namespace.probe and not namespace.entry:
+    if not namespace.probe and not namespace.pool and not namespace.entry:
         parser.error("缺少必需参数 --entry")
     return namespace
 
@@ -153,7 +167,8 @@ def _declaration(responses, timeout: float = 15.0) -> Mapping[str, Any]:
     return message
 
 
-def run(entry: str, plugin_args: Sequence[str]) -> int:
+def run(entry: str, plugin_args: Sequence[str], environment: Optional[Mapping[str, str]] = None,
+        stop_requested: Optional[threading.Event] = None) -> int:
     capability = runtime_capability()
     if not capability["supported"]:
         raise RuntimeError(capability["reason"])
@@ -172,6 +187,7 @@ def run(entry: str, plugin_args: Sequence[str]) -> int:
         __vastplan_args=tuple(plugin_args),
         __vastplan_requests=requests,
         __vastplan_responses=responses,
+        __vastplan_sys_path=tuple(sys.path),
     )
     worker = interpreter.call_in_thread(exec, BOOTSTRAP)
     bridge = None
@@ -198,7 +214,12 @@ def run(entry: str, plugin_args: Sequence[str]) -> int:
                 handlers=handlers,
             ))
         bridge.start()
-        plugin.serve()
+        if stop_requested is not None:
+            threading.Thread(
+                target=lambda: (stop_requested.wait(), plugin.shutdown()),
+                name="vastplan-python-unit-stop", daemon=True,
+            ).start()
+        plugin.serve(environment=environment)
         return 0
     finally:
         if bridge is not None:
@@ -211,11 +232,144 @@ def run(entry: str, plugin_args: Sequence[str]) -> int:
         interpreter.close()
 
 
+class RuntimeUnit:
+    def __init__(self, unit_id: str, entry: str, plugin_args: Sequence[str],
+                 environment: Mapping[str, str], on_exit):
+        self.unit_id = unit_id
+        self.entry = entry
+        self.plugin_args = tuple(plugin_args)
+        self.environment = dict(environment)
+        self.on_exit = on_exit
+        self.stop_requested = threading.Event()
+        self.thread = threading.Thread(target=self._run, name=f"vastplan-python-unit-{unit_id}", daemon=True)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def stop(self) -> None:
+        # The protocol host sends lifecycle shutdown before this control call.
+        # This flag also prevents a slow-starting unit from entering serve.
+        self.stop_requested.set()
+
+    def _run(self) -> None:
+        error = ""
+        try:
+            if self.stop_requested.is_set():
+                return
+            run(self.entry, self.plugin_args, self.environment, self.stop_requested)
+        except BaseException as exc:  # the control plane must observe unit death
+            error = f"{type(exc).__name__}: {exc}"
+            print(f"Python 执行单元失败 unit={self.unit_id}: {error}", file=sys.stderr)
+        finally:
+            self.on_exit(self, error)
+
+
+def _write_control(message: Mapping[str, Any], lock: threading.Lock) -> None:
+    with lock:
+        print(json.dumps(dict(message), ensure_ascii=False), flush=True)
+
+
+def run_pool() -> int:
+    capability = runtime_capability()
+    if not capability["supported"]:
+        raise RuntimeError(capability["reason"])
+    units: dict[str, RuntimeUnit] = {}
+    units_lock = threading.Lock()
+    output_lock = threading.Lock()
+    stopping = threading.Event()
+
+    def unit_exited(unit: RuntimeUnit, error: str) -> None:
+        with units_lock:
+            units.pop(unit.unit_id, None)
+        message: dict[str, Any] = {
+            "event": "unit-exited", "unitId": unit.unit_id, "status": "ok",
+        }
+        if error:
+            message["error"] = error
+        _write_control(message, output_lock)
+
+    def request_shutdown(*_args) -> None:
+        stopping.set()
+        with units_lock:
+            current = tuple(units.values())
+        for unit in current:
+            unit.stop()
+
+    signal.signal(signal.SIGINT, request_shutdown)
+    signal.signal(signal.SIGTERM, request_shutdown)
+
+    for raw_line in sys.stdin:
+        if stopping.is_set():
+            break
+        if not raw_line.strip():
+            continue
+        request: Mapping[str, Any] = {}
+        try:
+            request = json.loads(raw_line)
+            request_id = str(request.get("requestId", ""))
+            operation = str(request.get("operation", ""))
+            if not request_id or not operation:
+                raise ValueError("控制请求缺少 requestId/operation")
+            if operation == "start":
+                unit_id = str(request.get("unitId", ""))
+                entry = str(request.get("entry", ""))
+                if not unit_id or not entry:
+                    raise ValueError("start 缺少 unitId/entry")
+                with units_lock:
+                    if unit_id in units:
+                        raise ValueError(f"执行单元重复: {unit_id}")
+                    unit = RuntimeUnit(
+                        unit_id, entry, tuple(str(item) for item in request.get("args", ())),
+                        {str(key): str(value) for key, value in request.get("environment", {}).items()},
+                        unit_exited,
+                    )
+                    units[unit_id] = unit
+                unit.start()
+                _write_control({"requestId": request_id, "unitId": unit_id, "status": "ok"}, output_lock)
+            elif operation == "stop":
+                unit_id = str(request.get("unitId", ""))
+                with units_lock:
+                    unit = units.get(unit_id)
+                if unit is not None:
+                    unit.stop()
+                _write_control({"requestId": request_id, "unitId": unit_id, "status": "ok"}, output_lock)
+            elif operation == "shutdown":
+                _write_control({"requestId": request_id, "status": "ok"}, output_lock)
+                request_shutdown()
+                break
+            else:
+                raise ValueError(f"未知控制操作: {operation}")
+        except Exception as error:
+            _write_control({
+                "requestId": str(request.get("requestId", "")),
+                "status": "error", "error": str(error),
+            }, output_lock)
+
+    request_shutdown()
+    deadline = time.monotonic() + 5.0
+    while time.monotonic() < deadline:
+        with units_lock:
+            current = tuple(units.values())
+        if not current:
+            return 0
+        for unit in current:
+            unit.thread.join(timeout=0.05)
+    # A wedged extension/subinterpreter must not keep a retired Runtime Host
+    # generation alive indefinitely.
+    os._exit(143)
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     arguments = parse_arguments(tuple(sys.argv[1:] if argv is None else argv))
     if arguments.probe:
         print(json.dumps(runtime_capability(), ensure_ascii=False))
         return 0
+    if arguments.pool:
+        try:
+            return run_pool()
+        except Exception as error:
+            print(f"Python Subinterpreter Runtime Pool 启动失败: {error}", file=sys.stderr)
+            return 78
     try:
         return run(arguments.entry, arguments.plugin_args)
     except Exception as error:

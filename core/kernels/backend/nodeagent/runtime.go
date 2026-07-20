@@ -53,7 +53,9 @@ type ProtocolRuntime struct {
 	router          *addressing.Router
 	Dependencies    kernelspi.Dependencies
 	Drivers         *ExecutionDriverRegistry
+	RuntimePools    *RuntimePoolManager
 	ExecutionPolicy ExecutionPolicy
+	HostingPolicy   RuntimeHostingPolicy
 	ContextPolicy   ContextPolicy
 	DynamicGoLoader DynamicGoModuleLoader
 	PlacementPolicy PlacementPolicy
@@ -83,6 +85,8 @@ func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *Protoc
 		Logf:              logf,
 		DependencyTimeout: 5 * time.Second,
 		Drivers:           DefaultExecutionDrivers(),
+		RuntimePools:      NewRuntimePoolManager(logf),
+		HostingPolicy:     RuntimeHostingPolicy{Default: RuntimeHostingShared},
 		ContextPolicy:     DefaultContextPolicy(),
 		units:             map[string]*runningUnit{},
 		events:            make(chan RuntimeEvent, 64),
@@ -139,6 +143,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 			ContextCeiling:       r.ContextPolicy.Ceiling(plugin.Publisher).Strings(),
 			EnvironmentAllowlist: append([]string(nil), unit.EnvironmentAllowlist...),
 			RequiredFeatures:     append([]string(nil), plugin.Execution.Features...),
+			RuntimeScope:         unit.ID,
 		})
 		if err != nil {
 			return fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)
@@ -519,14 +524,19 @@ func (r *ProtocolRuntime) Status(unitID string) (RuntimeStatus, bool) {
 		StartedAt:        unit.startedAt,
 		RestartCount:     unit.restarts,
 	}
+	seenPIDs := map[int]struct{}{}
 	for _, instance := range unit.instances {
 		if instance.PID > 0 {
-			status.PIDs = append(status.PIDs, instance.PID)
+			if _, duplicate := seenPIDs[instance.PID]; !duplicate {
+				seenPIDs[instance.PID] = struct{}{}
+				status.PIDs = append(status.PIDs, instance.PID)
+			}
 		}
 		if !instance.Alive() {
 			status.Healthy = false
 		}
 	}
+	sort.Ints(status.PIDs)
 	if len(status.DependencyIssues) > 0 {
 		status.Readiness = "degraded"
 	}
@@ -672,6 +682,9 @@ func (r *ProtocolRuntime) Close() error {
 		for _, leadership := range unit.leaderships {
 			_ = leadership.Close(context.Background())
 		}
+	}
+	if r.RuntimePools != nil {
+		return r.RuntimePools.Close()
 	}
 	return nil
 }

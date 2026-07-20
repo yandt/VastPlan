@@ -91,6 +91,7 @@ class Plugin:
         self._event_handler: Optional[Callable[[contract_pb2.CallEvent], None]] = None
         self._lifecycle_queue: queue.Queue[Optional[pluginhost_pb2.Lifecycle]] = queue.Queue(maxsize=512)
         self._invocation_local = threading.local()
+        self._shutdown = threading.Event()
 
     def contribute(self, contribution: Contribution) -> None:
         if self._stream_started:
@@ -100,10 +101,15 @@ class Plugin:
     def on_event(self, handler: Callable[[contract_pb2.CallEvent], None]) -> None:
         self._event_handler = handler
 
-    def serve(self) -> None:
-        if os.getenv(MAGIC_ENV) != MAGIC:
+    def serve(self, environment: Optional[Mapping[str, str]] = None) -> None:
+        # Shared Runtime Hosts cannot mutate os.environ per plugin without
+        # cross-thread credential and launch-ticket races. Independent process
+        # plugins keep the old environment behavior; trusted hosts pass an
+        # immutable per-unit mapping explicitly.
+        launch_environment = os.environ if environment is None else environment
+        if launch_environment.get(MAGIC_ENV) != MAGIC:
             raise RuntimeError("magic cookie 不匹配：插件必须由 VastPlan 宿主拉起")
-        address = os.getenv(HOST_ENV)
+        address = launch_environment.get(HOST_ENV)
         if not address:
             raise RuntimeError(f"未注入宿主地址 {HOST_ENV}")
         channel = grpc.insecure_channel(
@@ -113,7 +119,7 @@ class Plugin:
         stub = pluginhost_pb2_grpc.PluginHostStub(channel)
         ack = stub.Handshake(pluginhost_pb2.Hello(
             proto_versions=(1,), magic=MAGIC, plugin_id=self.id, plugin_version=self.version,
-            engines=self.engines, launch_token=os.getenv(TOKEN_ENV, ""), features=self._supported_features,
+            engines=self.engines, launch_token=launch_environment.get(TOKEN_ENV, ""), features=self._supported_features,
         ))
         if ack.negotiated_proto != 1:
             raise RuntimeError(f"宿主协商了不支持的协议版本 {ack.negotiated_proto}")
@@ -140,6 +146,19 @@ class Plugin:
             except queue.Full:
                 pass
             channel.close()
+
+    def shutdown(self) -> None:
+        """End this plugin's logical channel without terminating its Runtime Host."""
+        if self._shutdown.is_set():
+            return
+        self._shutdown.set()
+        self._active = False
+        try:
+            self._outgoing.put_nowait(None)
+        except queue.Full:
+            # A saturated broken session is recovered by the host-side timeout
+            # and process generation guard.
+            pass
 
     def call(self, target: contract_pb2.CallTarget, call_context: contract_pb2.CallContext, payload: bytes,
              timeout: float = 30.0) -> tuple[contract_pb2.CallResult, bytes]:
