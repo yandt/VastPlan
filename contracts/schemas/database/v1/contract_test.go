@@ -68,6 +68,20 @@ func TestConnectionSpecRejectsDSNAndSecretOptions(t *testing.T) {
 	}
 }
 
+func TestConnectionRefValidationUsesWireSchema(t *testing.T) {
+	if err := databasev1.ValidateConnectionRef(databasev1.ConnectionRef{ResourceID: "orders.primary", Revision: 1}); err != nil {
+		t.Fatal(err)
+	}
+	for _, invalid := range []databasev1.ConnectionRef{
+		{ResourceID: "Orders Primary", Revision: 1},
+		{ResourceID: "orders.primary", Revision: 0},
+	} {
+		if err := databasev1.ValidateConnectionRef(invalid); err == nil {
+			t.Fatalf("非法 ConnectionRef 必须拒绝: %+v", invalid)
+		}
+	}
+}
+
 func TestTypedValuesRemainLosslessAcrossLanguages(t *testing.T) {
 	valid := []databasev1.Value{
 		{Type: "null"},

@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = databasev1.RuntimePluginID
-	PluginVersion = "0.2.0"
+	PluginVersion = "0.3.0"
 )
 
 // CredentialMaterial exists only during MaterialSource.WithMaterial. Provider
@@ -30,12 +30,12 @@ type MaterialSource interface {
 }
 
 type PoolStats struct {
-	Open    int64
-	Idle    int64
-	InUse   int64
-	Waiting int64
-	MaxOpen int64
-	Healthy bool
+	Open    int64 `json:"open"`
+	Idle    int64 `json:"idle"`
+	InUse   int64 `json:"inUse"`
+	Waiting int64 `json:"waiting"`
+	MaxOpen int64 `json:"maxOpen"`
+	Healthy bool  `json:"healthy"`
 }
 
 // Provider creates one local pool for one validated connection generation.
@@ -52,6 +52,7 @@ type Pool interface {
 	Query(context.Context, databasev1.Statement, int) (databasev1.QueryResult, error)
 	Execute(context.Context, databasev1.Statement) (databasev1.ExecuteResult, error)
 	Begin(context.Context, databasev1.TransactionOptions) (Transaction, error)
+	// Stats must be concurrency-safe, non-blocking and free of secret labels.
 	Stats() PoolStats
 	Close() error
 }

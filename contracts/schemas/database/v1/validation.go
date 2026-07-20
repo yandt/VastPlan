@@ -65,7 +65,7 @@ func compileSchemas() {
 		return
 	}
 	definitions := []string{
-		"providerDescriptor", "connectionSpec", "statement", "queryResult",
+		"providerDescriptor", "connectionRef", "connectionSpec", "statement", "queryResult",
 		"providerListRequest", "probeRequest", "activateRequest", "retireRequest",
 		"queryRequest", "executeRequest", "beginRequest", "endTransactionRequest",
 	}
@@ -241,6 +241,14 @@ func ValidateConnectionSpec(spec ConnectionSpec) error {
 		return fmt.Errorf("Provider options 不得包含疑似秘密字段 %q；请使用 CredentialRef", key)
 	}
 	return nil
+}
+
+func ValidateConnectionRef(ref ConnectionRef) error {
+	raw, err := json.Marshal(ref)
+	if err != nil {
+		return err
+	}
+	return validateDefinition("connectionRef", raw)
 }
 
 func secretOptionKey(value any) string {

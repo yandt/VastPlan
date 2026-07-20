@@ -114,3 +114,9 @@ Provider panic/崩溃由 ADR-0094 的 Guardian 和协议心跳收敛。第三方
 实施顺序第 2 项已完成，Database Runtime 制品升级为 0.2.0。Backend Host 将验签后的插件 ID、发布者、版本、制品 SHA-256、节点、service unit 和随机启动实例保存在 host-only identity 中，以摘要形成 Material Lease audience；身份不接受插件 payload，也不签发可重放 bearer token。
 
 新增 `kernel.credential.material-lease` 窄中继与 Runtime 内部 `MaterialSource`：Runtime 持有一次性 X25519 私钥，Kernel 只转发 CredentialRef、公钥和密文，不接触明文。策略精确限制为首方 Database Runtime 与 connection-manager 的 `database.connection` 引用，并覆盖伪造 caller、第三方发布者、跨 owner、跨 tenant、错 audience、过期 lease 和回调后清零测试。`providers` 仍是唯一公开操作；下一步进入连接池管理器、资源预算、generation 轮换和指标。
+
+## 实施进展（2026-07-20，Pool Manager A1）
+
+实施顺序第 3 项已完成，Database Runtime 制品升级为 0.3.0。统一 Pool Manager 在打开候选池和获取 material 前执行节点、租户、连接与重叠 generation 预算检查；连接定义 revision 或凭证版本变化时先打开并 probe 候选池，再原子切换新请求，旧池只接收在途 lease 并在有界窗口内 drain。
+
+调用入口同时受每池等待队列、每调用方并发和 `acquireTimeout` 限制。关闭失败的 generation 保持 `draining` 并继续占用预算，后续关闭流程可重试；关闭历史采用全局有界保留，避免大量已删除连接造成内存增长。快照只暴露摘要化 scope/connection、Provider、revision、generation、预算、等待、在途和健康统计，不输出 endpoint、CredentialRef 或 material。fake Provider 已覆盖幂等激活、并发轮换、预算前置拒绝、队列过载、强制排空、关闭失败重试和历史上限，并通过竞态检测。下一步进入实施顺序第 4 项：同批接入 PostgreSQL 与 MySQL Provider 及真实数据库集成测试。
