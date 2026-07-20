@@ -21,6 +21,7 @@ STATE_MARKER="$STATE_ROOT/.vastplan-platform-dev-state"
 GATEWAY_PORT="${VASTPLAN_DEV_GATEWAY_PORT:-18080}"
 PORTAL_PORT="${VASTPLAN_DEV_PORTAL_PORT:-18444}"
 ARTIFACT_PORT="${VASTPLAN_DEV_ARTIFACT_PORT:-18443}"
+SEED_ARTIFACT_PORT="${VASTPLAN_DEV_SEED_ARTIFACT_PORT:-18442}"
 VAULT_PORT="${VASTPLAN_DEV_VAULT_PORT:-18200}"
 STATUS_URL="http://127.0.0.1:$GATEWAY_PORT/__vastplan_dev/status"
 PORTAL_URL="http://127.0.0.1:$GATEWAY_PORT/operations"
@@ -83,6 +84,7 @@ up/restart 参数:
   VASTPLAN_DEV_GATEWAY_PORT    开发网关端口（默认 18080）
   VASTPLAN_DEV_PORTAL_PORT     Portal Edge 内部端口（默认 18444）
   VASTPLAN_DEV_ARTIFACT_PORT   制品服务内部端口（默认 18443）
+  VASTPLAN_DEV_SEED_ARTIFACT_PORT Seed 制品仓库端口（默认 18442）
   VASTPLAN_DEV_VAULT_PORT      Vault 桩内部端口（默认 18200）
 EOF
 }
@@ -113,13 +115,18 @@ validate_configuration() {
   validate_port "开发网关端口" "$GATEWAY_PORT"
   validate_port "Portal Edge 端口" "$PORTAL_PORT"
   validate_port "制品服务端口" "$ARTIFACT_PORT"
+  validate_port "Seed 制品仓库端口" "$SEED_ARTIFACT_PORT"
   validate_port "Vault 桩端口" "$VAULT_PORT"
   if [ "$GATEWAY_PORT" = "$PORTAL_PORT" ] ||
      [ "$GATEWAY_PORT" = "$ARTIFACT_PORT" ] ||
+     [ "$GATEWAY_PORT" = "$SEED_ARTIFACT_PORT" ] ||
      [ "$GATEWAY_PORT" = "$VAULT_PORT" ] ||
      [ "$PORTAL_PORT" = "$ARTIFACT_PORT" ] ||
+     [ "$PORTAL_PORT" = "$SEED_ARTIFACT_PORT" ] ||
      [ "$PORTAL_PORT" = "$VAULT_PORT" ] ||
-     [ "$ARTIFACT_PORT" = "$VAULT_PORT" ]; then
+     [ "$ARTIFACT_PORT" = "$SEED_ARTIFACT_PORT" ] ||
+     [ "$ARTIFACT_PORT" = "$VAULT_PORT" ] ||
+     [ "$SEED_ARTIFACT_PORT" = "$VAULT_PORT" ]; then
     fail "开发服务端口必须互不相同"
     return 1
   fi
@@ -348,6 +355,7 @@ check_ports_free() {
 开发网关 $GATEWAY_PORT
 Portal-Edge $PORTAL_PORT
 制品服务 $ARTIFACT_PORT
+Seed制品仓库 $SEED_ARTIFACT_PORT
 Vault-Transit桩 $VAULT_PORT
 EOF
   if [ "$failed" -ne 0 ]; then
@@ -399,6 +407,7 @@ runtime_arguments() {
     -listen "127.0.0.1:$GATEWAY_PORT"
     -portal-listen "127.0.0.1:$PORTAL_PORT"
     -artifact-listen "127.0.0.1:$ARTIFACT_PORT"
+    -seed-artifact-listen "127.0.0.1:$SEED_ARTIFACT_PORT"
     -vault-listen "127.0.0.1:$VAULT_PORT"
 	-hot="$HOT_MODE"
   )

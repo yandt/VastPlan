@@ -267,7 +267,7 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("计算 Backend 构建摘要: %w", err)
 	}
-	log.Printf("[1/5] 准备 Backend 内核与插件 digest=%s", backendDigest[:12])
+	log.Printf("[2/6] 准备 Backend 内核与插件 digest=%s", backendDigest[:12])
 	backend, err := ensureCachedBuild(cacheRoot, "backend", backendDigest, func(candidate string) error {
 		return r.command(ctx, map[string]string{
 			"CGO_ENABLED": "1", "OUT_DIR": filepath.Join(candidate, "bin"), "GOCACHE": goCache,
@@ -289,7 +289,7 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 		return err
 	}
 	frontendDigest := digestStrings(frontendIdentity, frontendSources.host, frontendSources.plugins, fmt.Sprintf("hot=%t", r.options.hot), "frontend-build-v1")
-	log.Printf("[2/5] 准备按需加载的 Portal 与前端插件 digest=%s", frontendDigest[:12])
+	log.Printf("[3/6] 准备按需加载的 Portal 与前端插件 digest=%s", frontendDigest[:12])
 	frontend, err := ensureCachedBuild(cacheRoot, "frontend", frontendDigest, func(candidate string) error {
 		portalBuildEnv := map[string]string{"PORTAL_OUT_DIR": filepath.Join(candidate, "portal-assets")}
 		if r.options.hot {
@@ -318,7 +318,7 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 		return err
 	}
 	dynamicDigest := digestStrings(goIdentity, dynamicFingerprint, "dynamic-go-build-v1")
-	log.Printf("[3/5] 准备 bootstrap-policy dynamic-go 制品 digest=%s", dynamicDigest[:12])
+	log.Printf("[4/6] 准备 bootstrap-policy dynamic-go 制品 digest=%s", dynamicDigest[:12])
 	dynamic, err := ensureCachedBuild(cacheRoot, "dynamic-go", dynamicDigest, func(candidate string) error {
 		return r.command(ctx, map[string]string{
 			"OUT_DIR": filepath.Join(candidate, "dynamic"), "GOCACHE": goCache,
@@ -343,7 +343,7 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("计算插件制品摘要: %w", err)
 	}
-	log.Printf("[4/5] 准备本地不可变插件仓库 digest=%s", packageSourceDigest[:12])
+	log.Printf("[5/6] 准备本地不可变插件仓库 digest=%s", packageSourceDigest[:12])
 	packages, err := ensureCachedBuild(cacheRoot, "packages", packageSourceDigest, func(candidate string) error {
 		return r.packageArtifacts(ctx, filepath.Join(candidate, "repository"),
 			filepath.Join(r.runDir, "bin"), filepath.Join(r.runDir, "frontend-modules"), filepath.Join(r.runDir, "dynamic"))

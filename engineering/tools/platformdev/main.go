@@ -54,9 +54,9 @@ const (
 )
 
 type options struct {
-	root, stateRoot                                               string
-	listen, portalListen, artifactListen, vaultListen, natsListen string
-	hot                                                           bool
+	root, stateRoot                                                                   string
+	listen, portalListen, artifactListen, seedArtifactListen, vaultListen, natsListen string
+	hot                                                                               bool
 }
 
 type child struct {
@@ -92,6 +92,7 @@ func main() {
 	flag.StringVar(&opts.listen, "listen", "127.0.0.1:18080", "developer gateway address")
 	flag.StringVar(&opts.portalListen, "portal-listen", "127.0.0.1:18444", "internal Portal Edge address")
 	flag.StringVar(&opts.artifactListen, "artifact-listen", "127.0.0.1:18443", "internal artifact repository address")
+	flag.StringVar(&opts.seedArtifactListen, "seed-artifact-listen", "127.0.0.1:18442", "seed artifact repository address")
 	flag.StringVar(&opts.vaultListen, "vault-listen", "127.0.0.1:18200", "development Vault Transit stub address")
 	flag.StringVar(&opts.natsListen, "nats-listen", "127.0.0.1:0", "development NATS address; port 0 chooses a free port")
 	flag.BoolVar(&opts.hot, "hot", true, "enable transactional frontend plugin hot replacement")
@@ -168,11 +169,17 @@ func (r *runtime) prepare(ctx context.Context) error {
 			return err
 		}
 	}
+	log.Printf("[1/6] 生成仅限本地开发的 TLS、session、Seed 仓库配置与签名身份")
+	if err := r.writeFixtures(); err != nil {
+		return err
+	}
 	if err := r.prepareCachedBuilds(ctx); err != nil {
 		return err
 	}
-	log.Printf("[5/5] 生成仅限本地开发的 TLS、session 与服务配置")
-	return r.writeFixtures()
+	if err := r.signPackageRepository(); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *runtime) command(ctx context.Context, extra map[string]string, name string, args ...string) error {
@@ -215,6 +222,90 @@ func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, fron
 		return fmt.Errorf("发布 bootstrap-policy dynamic-go 制品: %w", err)
 	}
 	return nil
+}
+
+// signPackageRepository upgrades the locally built development repository to a
+// signed Seed repository after it has been materialized from the reproducible
+// build cache. The signing key is generated per run and is never cached.
+func (r *runtime) signPackageRepository() error {
+	repository, err := pluginservice.NewRepository(filepath.Join(r.runDir, "repository"))
+	if err != nil {
+		return err
+	}
+	trust, err := pluginservice.LoadTrustStore(filepath.Join(r.runDir, "secrets", "artifact-trust.json"))
+	if err != nil {
+		return err
+	}
+	privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(filepath.Join(r.runDir, "secrets", "artifact-signing.pem"))
+	if err != nil {
+		return err
+	}
+	refs, err := packageRepositoryRefs(filepath.Join(r.runDir, "repository"))
+	if err != nil {
+		return err
+	}
+	signed := &pluginservice.SignedRepository{Local: repository, Trust: trust}
+	for _, ref := range refs {
+		artifact, packageBytes, err := repository.Read(ref)
+		if err != nil {
+			return err
+		}
+		manifest, err := pluginv1.ParseManifest(artifact.Manifest)
+		if err != nil {
+			return fmt.Errorf("解析 %s 的制品清单: %w", ref.PluginID, err)
+		}
+		attestation, err := pluginservice.SignArtifact(artifact, manifest.Publisher, "local-development", privateKey, time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		if _, err := signed.Publish(attestation, packageBytes); err != nil {
+			return err
+		}
+	}
+	log.Printf("[6/6] 已签署 %d 个本地 Seed 制品", len(refs))
+	return nil
+}
+
+func packageRepositoryRefs(root string) ([]pluginservice.Ref, error) {
+	refs := make([]pluginservice.Ref, 0)
+	err := filepath.WalkDir(filepath.Join(root, "artifacts"), func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || entry.Name() != "artifact.json" {
+			return nil
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := pluginv1.ValidateArtifactMetadata(raw); err != nil {
+			return err
+		}
+		var artifact pluginservice.Artifact
+		if err := json.Unmarshal(raw, &artifact); err != nil {
+			return err
+		}
+		refs = append(refs, pluginservice.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		left, right := refs[i], refs[j]
+		if left.PluginID != right.PluginID {
+			return left.PluginID < right.PluginID
+		}
+		if left.Version != right.Version {
+			return left.Version < right.Version
+		}
+		return left.Channel < right.Channel
+	})
+	if len(refs) == 0 {
+		return nil, errors.New("Seed 制品仓库为空")
+	}
+	return refs, nil
 }
 
 // discoverPackageSpecs makes plugin manifests the sole development-time source
@@ -266,7 +357,13 @@ func (r *runtime) writeFixtures() error {
 	if err := writeTLS(certFile, keyFile); err != nil {
 		return err
 	}
-	if err := writeTrust(filepath.Join(r.runDir, "secrets", "artifact-trust.json")); err != nil {
+	if err := writeTrust(filepath.Join(r.runDir, "secrets", "artifact-trust.json"), filepath.Join(r.runDir, "secrets", "artifact-signing.pem")); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "artifact-read.token"), []byte("vastplan-local-artifact-reader\n"), 0o600); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "artifact-publish.token"), []byte("vastplan-local-artifact-publisher\n"), 0o600); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "vault-token"), []byte("vastplan-local-vault-token\n"), 0o600); err != nil {
@@ -279,7 +376,10 @@ func (r *runtime) writeFixtures() error {
 	if err != nil {
 		return err
 	}
-	rendered := renderPlatformProfile(template, r.runDir, r.options.artifactListen)
+	rendered, err := renderPlatformProfile(template, r.runDir, r.options.artifactListen)
+	if err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(r.runDir, "platform-management-profile.json"), rendered, 0o600); err != nil {
 		return err
 	}
@@ -299,15 +399,53 @@ func (r *runtime) writeFixtures() error {
 	if err := os.WriteFile(filepath.Join(r.runDir, "backend-platform-catalog.json"), catalogRaw, 0o600); err != nil {
 		return err
 	}
-	return nil
+	return r.writeSeedRepositoryProfile()
 }
 
-func renderPlatformProfile(template []byte, runDir, artifactListen string) []byte {
+func (r *runtime) writeSeedRepositoryProfile() error {
+	profile := fmt.Sprintf("version: 1\nid: seed-repository\nlisten: %s\nrepositoryRoot: %s\ntrustFile: %s\ntlsCertFile: %s\ntlsKeyFile: %s\nreadTokenFile: %s\npublishTokenFile: %s\n",
+		yamlString(r.options.seedArtifactListen), yamlString(filepath.Join(r.runDir, "repository")),
+		yamlString(filepath.Join(r.runDir, "secrets", "artifact-trust.json")), yamlString(filepath.Join(r.runDir, "secrets", "tls-cert.pem")),
+		yamlString(filepath.Join(r.runDir, "secrets", "tls-key.pem")), yamlString(filepath.Join(r.runDir, "secrets", "artifact-read.token")),
+		yamlString(filepath.Join(r.runDir, "secrets", "artifact-publish.token")))
+	return os.WriteFile(filepath.Join(r.runDir, "seed-repository.yaml"), []byte(profile), 0o600)
+}
+
+func yamlString(value string) string {
+	raw, _ := json.Marshal(value)
+	return string(raw)
+}
+
+func renderPlatformProfile(template []byte, runDir, artifactListen string) ([]byte, error) {
 	rendered := bytes.ReplaceAll(template, []byte("__VASTPLAN_DEV_ROOT__"), []byte(filepath.ToSlash(runDir)))
-	return bytes.ReplaceAll(rendered, []byte("__VASTPLAN_ARTIFACT_LISTEN__"), []byte(artifactListen))
+	rendered = bytes.ReplaceAll(rendered, []byte("__VASTPLAN_ARTIFACT_LISTEN__"), []byte(artifactListen))
+	profile, err := backendcompositionv1.ParsePlatformProfile(rendered)
+	if err != nil {
+		return nil, fmt.Errorf("解析开发 Platform Profile 模板: %w", err)
+	}
+	for index := range profile.Services {
+		if profile.Services[index].ID == "platform-database-runtime" {
+			// 开发编排器只有一个 local-platform 节点。生产模板保持两个
+			// active-active 副本，开发投影显式缩为一个，避免伪造第二节点。
+			profile.Services[index].Replicas = 1
+			raw, err := json.MarshalIndent(profile, "", "  ")
+			if err != nil {
+				return nil, err
+			}
+			return append(raw, '\n'), nil
+		}
+	}
+	return nil, errors.New("开发 Platform Profile 缺少 platform-database-runtime")
 }
 
 func (r *runtime) start(ctx context.Context) error {
+	kernel := filepath.Join(r.runDir, "dynamic", "backend-kernel")
+	if _, err := r.startChild("seed-artifact-server", nil, kernel, "seed-artifact-server", "-profile", filepath.Join(r.runDir, "seed-repository.yaml")); err != nil {
+		return err
+	}
+	if err := waitHTTP(ctx, "https://"+r.options.seedArtifactListen, 30*time.Second, true); err != nil {
+		return fmt.Errorf("Seed 制品仓库未就绪: %w", err)
+	}
 	if err := r.startNATS(); err != nil {
 		return err
 	}
@@ -315,8 +453,12 @@ func (r *runtime) start(ctx context.Context) error {
 		return err
 	}
 	env := r.serviceEnv()
-	kernel := filepath.Join(r.runDir, "dynamic", "backend-kernel")
 	natsURL := "nats://" + r.options.natsListen
+	seedRepositoryArgs := []string{
+		"-repository-url", "https://" + r.options.seedArtifactListen,
+		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
+		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
+	}
 	nodeArgs := []string{
 		"reconcile", "-nats-url", natsURL, "-nats-allow-insecure", "-nats-bootstrap", "-nats-replicas", "1",
 		"-deployment", "platform-management", "-tenant", "local", "-node-id", "local-platform-node",
@@ -327,6 +469,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"-plugin-placements", "cn.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
 		"-backend-platform-catalog", filepath.Join(r.runDir, "backend-platform-catalog.json"), "-allow-development-plugins",
 	}
+	nodeArgs = append(nodeArgs, seedRepositoryArgs...)
 	if _, err := r.startChild("node-agent", env, kernel, nodeArgs...); err != nil {
 		return err
 	}
@@ -339,6 +482,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"-lock", filepath.Join(r.runDir, "state", "managed-services.lock"), "-third-party-plugin-policy", "deny",
 		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
 	}
+	managedNodeArgs = append(managedNodeArgs, seedRepositoryArgs...)
 	if _, err := r.startChild("managed-node-agent", env, kernel, managedNodeArgs...); err != nil {
 		return err
 	}
@@ -352,7 +496,7 @@ func (r *runtime) start(ctx context.Context) error {
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
 	}
-	if err := waitForUnits(ctx, filepath.Join(r.runDir, "state", "actual-state.json"), 5, 90*time.Second); err != nil {
+	if err := waitForUnits(ctx, filepath.Join(r.runDir, "state", "actual-state.json"), 6, 90*time.Second); err != nil {
 		return fmt.Errorf("平台 Backend 未收敛: %w", err)
 	}
 	portalArgs := []string{
@@ -885,8 +1029,8 @@ func writeSessions(filename string) error {
 	return os.WriteFile(filename, append(raw, '\n'), 0o600)
 }
 
-func writeTrust(filename string) error {
-	publicKey, _, err := ed25519.GenerateKey(rand.Reader)
+func writeTrust(filename, privateFilename string) error {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return err
 	}
@@ -897,7 +1041,14 @@ func writeTrust(filename string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filename, append(raw, '\n'), 0o600)
+	if err := os.WriteFile(filename, append(raw, '\n'), 0o600); err != nil {
+		return err
+	}
+	encoded, err := pluginservice.MarshalEd25519PrivateKeyPEM(privateKey)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(privateFilename, encoded, 0o600)
 }
 
 func writeTLS(certFile, keyFile string) error {

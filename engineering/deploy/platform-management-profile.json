@@ -146,7 +146,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.8.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.6.0", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.7.0", "channel": "stable" }
       ]
     },
     {
