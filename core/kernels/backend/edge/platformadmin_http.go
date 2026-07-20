@@ -112,6 +112,77 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 }
 
 func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget, parts []string) {
+	if len(parts) == 1 && parts[0] == "test-target-bindings" {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "listTestTargetBindings", false) || !requirePlatformRole(w, p, "platform.deployment.read") {
+			return
+		}
+		value, err := h.platform.ListTestTargetBindings(r.Context(), p, target)
+		respondPlatform(w, value, err)
+		return
+	}
+	if len(parts) == 2 && parts[0] == "test-target-bindings" {
+		if r.Method != http.MethodPut {
+			methodNotAllowed(w)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "putTestTargetBinding", true) || !requirePlatformRole(w, p, "platform.admin") {
+			return
+		}
+		id, ok := deploymentResourceName(w, parts[1])
+		if !ok {
+			return
+		}
+		var request platformadminapi.PutTestTargetBindingRequest
+		if !decode(w, r, &request) {
+			return
+		}
+		value, err := h.platform.PutTestTargetBinding(r.Context(), p, target, id, request)
+		respondPlatform(w, value, err)
+		return
+	}
+	if len(parts) == 1 && parts[0] == "test-releases" {
+		switch r.Method {
+		case http.MethodGet:
+			if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "listTestReleases", false) || !requirePlatformRole(w, p, "platform.deployment.read") {
+				return
+			}
+			value, err := h.platform.ListTestReleases(r.Context(), p, target)
+			respondPlatform(w, value, err)
+		case http.MethodPost:
+			if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "createTestRelease", true) || !requirePlatformRole(w, p, "platform.deployment.publish") {
+				return
+			}
+			var request platformadminapi.CreateTestReleaseRequest
+			if !decode(w, r, &request) {
+				return
+			}
+			value, err := h.platform.CreateTestRelease(r.Context(), p, target, request)
+			respondPlatform(w, value, err)
+		default:
+			methodNotAllowed(w)
+		}
+		return
+	}
+	if len(parts) == 3 && parts[0] == "test-releases" && parts[2] == "rollback" {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "rollbackTestRelease", true) || !requirePlatformRole(w, p, "platform.deployment.publish") {
+			return
+		}
+		id, ok := deploymentRevisionID(w, parts[1])
+		if !ok {
+			return
+		}
+		value, err := h.platform.RollbackTestRelease(r.Context(), p, target, id)
+		respondPlatform(w, value, err)
+		return
+	}
 	if len(parts) == 1 && parts[0] == "targets" {
 		if !requireManagementOperation(w, target, platformadminapi.DeploymentCapability, "listDeploymentTargets", false) || !requirePlatformRole(w, p, "platform.deployment.read") {
 			return

@@ -55,7 +55,7 @@
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.4.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.4.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.4.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.3.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.4.0", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
     }
@@ -67,7 +67,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 1,
-        "digest": "42cdf7a43e5c2d8fe96e6a0d969a3c547d5d6343939737996072023fdc28f7d1"
+        "digest": "5ac933fcb436528038982972e8a2f9c26b261bba148b2655745c6a09e6002472"
       },
       "services": [
         {
@@ -112,7 +112,7 @@
           "logicalService": "platform.deployment",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.deployment", "read": ["listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit"], "write": ["putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision"] }
+            { "capability": "platform.deployment", "read": ["listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"], "write": ["putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"] }
           ]
         }
       ]

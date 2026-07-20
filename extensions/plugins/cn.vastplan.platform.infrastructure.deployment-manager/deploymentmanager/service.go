@@ -28,7 +28,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.3.0"
+	PluginVersion = "0.4.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 16 << 20
@@ -46,12 +46,15 @@ var (
 )
 
 type tenantState struct {
-	Nodes        map[string]platformadminapi.ManagedNode  `json:"nodes"`
-	Jobs         map[string]platformadminapi.BootstrapJob `json:"jobs"`
-	NextRevision uint64                                   `json:"nextRevision"`
-	NextAudit    uint64                                   `json:"nextAudit"`
-	Revisions    []platformadminapi.ServiceRevision       `json:"revisions"`
-	ServiceAudit []platformadminapi.ServiceAuditEvent     `json:"serviceAudit"`
+	Nodes           map[string]platformadminapi.ManagedNode       `json:"nodes"`
+	Jobs            map[string]platformadminapi.BootstrapJob      `json:"jobs"`
+	NextRevision    uint64                                        `json:"nextRevision"`
+	NextAudit       uint64                                        `json:"nextAudit"`
+	Revisions       []platformadminapi.ServiceRevision            `json:"revisions"`
+	ServiceAudit    []platformadminapi.ServiceAuditEvent          `json:"serviceAudit"`
+	TestBindings    map[string]platformadminapi.TestTargetBinding `json:"testBindings"`
+	NextTestRelease uint64                                        `json:"nextTestRelease"`
+	TestReleases    []platformadminapi.TestRelease                `json:"testReleases"`
 }
 
 type persisted struct {
@@ -59,11 +62,13 @@ type persisted struct {
 }
 
 type Service struct {
-	mu    sync.Mutex
-	file  string
-	now   func() time.Time
-	newID func() (string, error)
-	data  persisted
+	mu                  sync.Mutex
+	file                string
+	now                 func() time.Time
+	newID               func() (string, error)
+	data                persisted
+	releaseTimeout      time.Duration
+	releasePollInterval time.Duration
 }
 
 func New(file string) (*Service, error) {
@@ -76,7 +81,11 @@ func New(file string) (*Service, error) {
 	if err := secureStateDirectory(filepath.Dir(file)); err != nil {
 		return nil, err
 	}
-	s := &Service{file: file, now: func() time.Time { return time.Now().UTC() }, newID: randomID, data: persisted{Tenants: map[string]*tenantState{}}}
+	s := &Service{
+		file: file, now: func() time.Time { return time.Now().UTC() }, newID: randomID,
+		data:           persisted{Tenants: map[string]*tenantState{}},
+		releaseTimeout: 2 * time.Minute, releasePollInterval: 500 * time.Millisecond,
+	}
 	if err := s.load(); err != nil {
 		return nil, err
 	}
@@ -124,6 +133,9 @@ func (s *Service) validateLoaded() error {
 		if state.Jobs == nil {
 			state.Jobs = map[string]platformadminapi.BootstrapJob{}
 		}
+		if state.TestBindings == nil {
+			state.TestBindings = map[string]platformadminapi.TestTargetBinding{}
+		}
 		for _, revision := range state.Revisions {
 			if revision.ID == 0 || revision.Deployment == "" || revision.Composition.Metadata.Tenant != tenant || revision.Composition.Metadata.Name != revision.Deployment || revision.PreviewDigest == "" || !validServiceRevisionState(revision.Status) {
 				return fmt.Errorf("deployment-manager 状态包含无效服务组合 revision %d", revision.ID)
@@ -152,6 +164,16 @@ func (s *Service) validateLoaded() error {
 			}
 			if _, ok := state.Nodes[job.NodeID]; !ok {
 				return fmt.Errorf("引导作业 %q 引用了不存在的节点", id)
+			}
+		}
+		for id, binding := range state.TestBindings {
+			if id == "" || binding.ID != id || binding.Version < 1 || validateTestBindingShape(binding) != nil {
+				return fmt.Errorf("deployment-manager 状态包含无效测试目标绑定 %q", id)
+			}
+		}
+		for _, release := range state.TestReleases {
+			if release.ID == 0 || release.BindingID == "" || release.RequestedBy == "" || !validTestReleaseStatus(release.Status) {
+				return fmt.Errorf("deployment-manager 状态包含无效测试发布 %d", release.ID)
 			}
 		}
 	}
@@ -233,6 +255,18 @@ func (s *Service) recoverInterruptedLocked() bool {
 			state.Jobs[id] = job
 			changed = true
 		}
+		for i := range state.TestReleases {
+			release := &state.TestReleases[i]
+			if testReleaseTerminal(release.Status) {
+				continue
+			}
+			release.Status = platformadminapi.TestReleaseFailed
+			release.ErrorCode = "platform.test_release.interrupted"
+			release.ErrorMessage = "发布控制器重启中断了测试发布；如候选已经激活，必须显式执行恢复回滚"
+			release.RollbackRequired = release.CandidateServiceRevisionID != 0
+			release.UpdatedAt = now
+			changed = true
+		}
 	}
 	return changed
 }
@@ -251,7 +285,7 @@ func validJobState(state platformadminapi.BootstrapJobState) bool {
 func (s *Service) tenantLocked(tenant string) *tenantState {
 	state := s.data.Tenants[tenant]
 	if state == nil {
-		state = &tenantState{Nodes: map[string]platformadminapi.ManagedNode{}, Jobs: map[string]platformadminapi.BootstrapJob{}}
+		state = &tenantState{Nodes: map[string]platformadminapi.ManagedNode{}, Jobs: map[string]platformadminapi.BootstrapJob{}, TestBindings: map[string]platformadminapi.TestTargetBinding{}}
 		s.data.Tenants[tenant] = state
 	}
 	if state.Nodes == nil {
@@ -259,6 +293,9 @@ func (s *Service) tenantLocked(tenant string) *tenantState {
 	}
 	if state.Jobs == nil {
 		state.Jobs = map[string]platformadminapi.BootstrapJob{}
+	}
+	if state.TestBindings == nil {
+		state.TestBindings = map[string]platformadminapi.TestTargetBinding{}
 	}
 	return state
 }
@@ -633,13 +670,16 @@ func terminal(state platformadminapi.BootstrapJobState) bool {
 
 func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
 	var request struct {
-		ID          string                                      `json:"id"`
-		NodeID      string                                      `json:"nodeId"`
-		JobID       string                                      `json:"jobId"`
-		Plan        nodebootstrap.Plan                          `json:"plan"`
-		IfVersion   *int64                                      `json:"ifVersion,omitempty"`
-		RevisionID  uint64                                      `json:"revisionId"`
-		Composition backendcompositionv1.ApplicationComposition `json:"composition"`
+		ID          string                                       `json:"id"`
+		NodeID      string                                       `json:"nodeId"`
+		JobID       string                                       `json:"jobId"`
+		Plan        nodebootstrap.Plan                           `json:"plan"`
+		IfVersion   *int64                                       `json:"ifVersion,omitempty"`
+		RevisionID  uint64                                       `json:"revisionId"`
+		ReleaseID   uint64                                       `json:"releaseId"`
+		Composition backendcompositionv1.ApplicationComposition  `json:"composition"`
+		Binding     platformadminapi.PutTestTargetBindingRequest `json:"binding"`
+		Release     platformadminapi.CreateTestReleaseRequest    `json:"release"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
@@ -712,6 +752,20 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		var items []platformadminapi.ServiceAuditEvent
 		items, err = s.ListServiceRevisionAudit(call, request.RevisionID)
 		out = map[string]any{"items": items}
+	case "listTestTargetBindings":
+		var items []platformadminapi.TestTargetBinding
+		items, err = s.ListTestTargetBindings(call)
+		out = map[string]any{"items": items}
+	case "putTestTargetBinding":
+		out, err = s.PutTestTargetBinding(call, request.ID, request.Binding)
+	case "listTestReleases":
+		var items []platformadminapi.TestRelease
+		items, err = s.ListTestReleases(call)
+		out = map[string]any{"items": items}
+	case "createTestRelease":
+		out, err = s.CreateTestRelease(ctx, host, call, request.Release)
+	case "rollbackTestRelease":
+		out, err = s.RollbackTestRelease(ctx, host, call, request.ReleaseID)
 	default:
 		err = errInvalid
 	}
@@ -749,6 +803,12 @@ func errorCode(err error) string {
 		return "platform.deployment.service_state_conflict"
 	case errors.Is(err, errServicePublish):
 		return "platform.deployment.service_publish_failed"
+	case errors.Is(err, errTestBindingConflict):
+		return "platform.test_release.binding_version_conflict"
+	case errors.Is(err, errTestReleaseConflict):
+		return "platform.test_release.in_progress"
+	case errors.Is(err, errTestArtifact):
+		return "platform.test_release.artifact_rejected"
 	default:
 		return "platform.deployment.invalid"
 	}
@@ -767,7 +827,7 @@ func randomID() (string, error) {
 }
 
 func Descriptor() []byte {
-	return []byte(`{"title":"节点部署管理","subcommands":[
+	return []byte(`{"title":"部署与测试发布管理","subcommands":[
 		{"name":"listNodes","description":"列出当前租户的节点计划","paramsSchema":{"type":"object","properties":{}}},
 		{"name":"putNode","description":"以 CAS 保存不含明文凭证的节点计划","paramsSchema":{"type":"object","properties":{"id":{"type":"string"},"plan":{"type":"object"},"ifVersion":{"type":"integer","minimum":0}},"required":["id","plan"]}},
 		{"name":"listBootstrapJobs","description":"列出首次引导审批作业","paramsSchema":{"type":"object","properties":{}}},
@@ -782,6 +842,11 @@ func Descriptor() []byte {
 		,{"name":"publishServiceRevision","description":"通过可信内核发布服务组合","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
 		,{"name":"rollbackServiceRevision","description":"以新修订回滚到历史服务组合","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
 		,{"name":"listServiceRevisionAudit","description":"列出服务组合审计记录","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
+		,{"name":"listTestTargetBindings","description":"列出 Backend 测试目标预授权绑定","paramsSchema":{"type":"object","properties":{}}}
+		,{"name":"putTestTargetBinding","description":"以 CAS 保存 Backend 应用插件测试目标绑定","paramsSchema":{"type":"object","properties":{"id":{"type":"string"},"binding":{"type":"object"}},"required":["id","binding"]}}
+		,{"name":"listTestReleases","description":"列出测试发布与自动回滚状态","paramsSchema":{"type":"object","properties":{}}}
+		,{"name":"createTestRelease","description":"验证精确 testing 制品并执行候选发布","paramsSchema":{"type":"object","properties":{"release":{"type":"object"}},"required":["release"]}}
+		,{"name":"rollbackTestRelease","description":"恢复回滚被中断的测试发布","paramsSchema":{"type":"object","properties":{"releaseId":{"type":"integer","minimum":1}},"required":["releaseId"]}}
 	]}`)
 }
 
@@ -791,7 +856,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "listServiceRevisionAudit"}
+	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

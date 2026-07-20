@@ -91,8 +91,8 @@ func platformCapabilityAllowed(capability, operation string) bool {
 		platformadminapi.SettingsCapability:    {"list": {}, "put": {}, "delete": {}},
 		platformadminapi.CredentialsCapability: {"list": {}, "put": {}, "rotate": {}, "revoke": {}},
 		platformadminapi.DatabaseCapability:    {"list": {}, "define": {}, "remove": {}, "probe": {}},
-		platformadminapi.ArtifactsCapability:   {"status": {}},
-		platformadminapi.DeploymentCapability:  {"listNodes": {}, "putNode": {}, "listBootstrapJobs": {}, "createBootstrap": {}, "approveBootstrap": {}, "listDeploymentTargets": {}, "listServiceRevisions": {}, "createServiceDraft": {}, "updateServiceDraft": {}, "submitServiceDraft": {}, "approveServiceRevision": {}, "publishServiceRevision": {}, "rollbackServiceRevision": {}, "listServiceRevisionAudit": {}},
+		platformadminapi.ArtifactsCapability:   {"status": {}, "listCatalog": {}, "listPublishJournal": {}},
+		platformadminapi.DeploymentCapability:  {"listNodes": {}, "putNode": {}, "listBootstrapJobs": {}, "createBootstrap": {}, "approveBootstrap": {}, "listDeploymentTargets": {}, "listServiceRevisions": {}, "createServiceDraft": {}, "updateServiceDraft": {}, "submitServiceDraft": {}, "approveServiceRevision": {}, "publishServiceRevision": {}, "rollbackServiceRevision": {}, "listServiceRevisionAudit": {}, "listTestTargetBindings": {}, "putTestTargetBinding": {}, "listTestReleases": {}, "createTestRelease": {}, "rollbackTestRelease": {}},
 	}
 	_, ok := operations[capability][operation]
 	return ok

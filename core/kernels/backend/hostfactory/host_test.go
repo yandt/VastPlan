@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
@@ -26,6 +27,8 @@ type bootstrapBroker struct{ called bool }
 type readinessObserver struct{ called bool }
 
 type deploymentController struct{ tenant string }
+
+type deploymentReadinessObserver struct{ called bool }
 
 type runtimeLeaseBroker struct {
 	tenant   string
@@ -46,6 +49,14 @@ func (*deploymentController) Preview(_ context.Context, _ string, _ backendcompo
 }
 func (*deploymentController) Publish(_ context.Context, _ string, _ backendcompositionv1.ApplicationComposition, revision uint64, digest string) (deploymentpublication.Result, error) {
 	return deploymentpublication.Result{Deployment: deploymentv2.Deployment{Revision: revision}, Digest: digest}, nil
+}
+
+func (o *deploymentReadinessObserver) Observe(_ context.Context, tenant, deployment string, revision uint64) (deploymentpublication.ReadinessObservation, error) {
+	o.called = tenant == "tenant-a" && deployment == "services" && revision == 9
+	return deploymentpublication.ReadinessObservation{
+		SchemaVersion: 1, Tenant: tenant, Deployment: deployment, Revision: revision,
+		Status: deploymentpublication.ReadinessReady, UpdatedAt: time.Now().UTC(),
+	}, nil
 }
 
 func (o *readinessObserver) Observe(_ context.Context, expectation nodebootstrap.ReadinessExpectation) (nodebootstrap.ReadinessObservation, error) {
@@ -197,6 +208,21 @@ func TestKernelDeploymentPublicationAcceptsOnlyDeploymentManager(t *testing.T) {
 	}
 	if _, _, err := service(context.Background(), trusted, []byte(`{"routingDomain":"attacker"}`)); err == nil {
 		t.Fatal("内核部署服务必须拒绝未知路由字段")
+	}
+}
+
+func TestKernelDeploymentReadinessAcceptsOnlyDeploymentManager(t *testing.T) {
+	observer := &deploymentReadinessObserver{}
+	service := kernelDeploymentReadiness(observer)
+	request, _ := json.Marshal(deploymentpublication.ReadinessRequest{DeploymentName: "services", DeploymentRevision: 9})
+	trusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: deploymentpublication.DeploymentManagerPluginID}}
+	result, raw, err := service(context.Background(), trusted, request)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !observer.called || !strings.Contains(string(raw), `"status":"Ready"`) {
+		t.Fatalf("deployment-manager readiness 查询失败: result=%+v raw=%s err=%v", result, raw, err)
+	}
+	untrusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "third.party"}}
+	if _, _, err := service(context.Background(), untrusted, request); err == nil {
+		t.Fatal("其他插件不得读取部署 readiness")
 	}
 }
 

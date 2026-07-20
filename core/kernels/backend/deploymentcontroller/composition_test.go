@@ -14,9 +14,9 @@ import (
 
 func TestObserveCompositionReportsDependencyLoss(t *testing.T) {
 	_, buckets := startSchedulerNATS(t)
-	actual := nodeagent.ActualState{Version: 2, NodeID: "node-a", Units: map[string]nodeagent.UnitState{
-		"database": {Phase: nodeagent.PhaseActive, Readiness: "ready"},
-		"api":      {Phase: nodeagent.PhaseActive, Readiness: "degraded", DependencyIssues: []string{"platform.database lease expired"}},
+	actual := nodeagent.ActualState{Version: 2, NodeID: "node-a", AppliedRevision: 7, Units: map[string]nodeagent.UnitState{
+		"database": {AppliedRevision: 7, Phase: nodeagent.PhaseActive, Readiness: "ready"},
+		"api":      {AppliedRevision: 7, Phase: nodeagent.PhaseActive, Readiness: "degraded", DependencyIssues: []string{"platform.database lease expired"}},
 	}, UpdatedAt: time.Now().UTC()}
 	raw, err := json.Marshal(actual)
 	if err != nil {
@@ -53,8 +53,8 @@ func TestObserveCompositionReportsDependencyLoss(t *testing.T) {
 func TestObserveCompositionReportsContractedPartitionOwnersAsDegraded(t *testing.T) {
 	_, buckets := startSchedulerNATS(t)
 	ctx := context.Background()
-	actual := nodeagent.ActualState{Version: 2, NodeID: "node-a", Units: map[string]nodeagent.UnitState{
-		"database": {Phase: nodeagent.PhaseActive, Readiness: "ready"},
+	actual := nodeagent.ActualState{Version: 2, NodeID: "node-a", AppliedRevision: 8, Units: map[string]nodeagent.UnitState{
+		"database": {AppliedRevision: 8, Phase: nodeagent.PhaseActive, Readiness: "ready"},
 	}, UpdatedAt: time.Now().UTC()}
 	raw, err := json.Marshal(actual)
 	if err != nil {
@@ -83,5 +83,38 @@ func TestObserveCompositionReportsContractedPartitionOwnersAsDegraded(t *testing
 	}
 	if report.Status != CompositionDegraded || len(report.Units) != 1 || report.Units[0].DesiredReplicas != 2 || report.Units[0].ReadyReplicas != 1 {
 		t.Fatalf("owner 收缩必须按部署目标报告 Degraded: %+v", report)
+	}
+}
+
+func TestObserveCompositionDoesNotHideFailedCandidateBehindOldReadyInstance(t *testing.T) {
+	_, buckets := startSchedulerNATS(t)
+	ctx := context.Background()
+	actual := nodeagent.ActualState{Version: 2, NodeID: "node-a", AppliedRevision: 7, Units: map[string]nodeagent.UnitState{
+		"api": {
+			AppliedRevision: 7, Phase: nodeagent.PhaseActive, Readiness: "ready",
+			Candidate: &nodeagent.CandidateState{Phase: nodeagent.PhaseFailed, LastError: "candidate handshake rejected"},
+		},
+	}, UpdatedAt: time.Now().UTC()}
+	raw, _ := json.Marshal(actual)
+	if _, err := buckets.Actual.Put(ctx, controlplane.ActualKey("acme", "prod", "node-a"), raw); err != nil {
+		t.Fatal(err)
+	}
+	assignment := deploymentv1.DesiredState{
+		Version: 1, Revision: 8, Metadata: deploymentv1.Metadata{Name: "prod", Tenant: "acme"},
+		Units: []deploymentv1.Unit{{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "cn.example.api", Version: "2.0.0"}}}},
+	}
+	assignmentRaw, _ := json.Marshal(assignment)
+	if _, _, err := controlplane.ApplyDesiredState(ctx, buckets.Assignments, controlplane.AssignmentKey("acme", "prod", "node-a"), assignmentRaw); err != nil {
+		t.Fatal(err)
+	}
+	report, err := (Scheduler{Actual: buckets.Actual, Assignments: buckets.Assignments}).ObserveComposition(ctx, deploymentv2.Deployment{
+		Version: 2, Revision: 2, Metadata: deploymentv1.Metadata{Name: "prod", Tenant: "acme"},
+		Units: []deploymentv2.ServiceUnit{{ID: "api", Enabled: true, Replicas: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Status != CompositionFailed || len(report.Units) != 1 || len(report.Units[0].Errors) != 1 {
+		t.Fatalf("新候选失败不得由旧健康实例掩盖: %+v", report)
 	}
 }

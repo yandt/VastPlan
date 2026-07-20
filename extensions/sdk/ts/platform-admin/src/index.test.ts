@@ -48,4 +48,23 @@ describe("PlatformAdminClient", () => {
     ]);
     expect(() => client.rollbackServiceRevision(0)).toThrowError(PlatformAdminError);
   });
+
+  it("publishes an exact test artifact through the deployment BFF", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const fetcher: PlatformFetch = async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { id: 1, status: "Ready" } };
+    };
+    const client = new PlatformAdminClient(fetcher, "operations", "deployment");
+    await client.createTestRelease({
+      bindingId: "demo-api",
+      artifact: { pluginId: "cn.example.demo", version: "1.1.0-dev.1", channel: "testing" },
+      sha256: "a".repeat(64), repositoryRevision: 17,
+    });
+    expect(calls[1]).toEqual({
+      path: "/v1/portals/operations/platform/services/deployment/deployment/test-releases",
+      method: "POST",
+      body: expect.stringContaining('"repositoryRevision":17'),
+    });
+  });
 });

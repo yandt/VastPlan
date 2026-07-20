@@ -269,6 +269,52 @@ func (s *CapabilityPlatformAdminService) serviceRevisionAction(ctx context.Conte
 	return response, err
 }
 
+func (s *CapabilityPlatformAdminService) ListTestTargetBindings(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) ([]platformadminapi.TestTargetBinding, error) {
+	var response struct {
+		Items []platformadminapi.TestTargetBinding `json:"items"`
+	}
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "listTestTargetBindings", false, struct{}{}, &response)
+	return response.Items, err
+}
+
+func (s *CapabilityPlatformAdminService) PutTestTargetBinding(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id string, request platformadminapi.PutTestTargetBindingRequest) (platformadminapi.TestTargetBinding, error) {
+	if err := validResourceName(id, 128); err != nil {
+		return platformadminapi.TestTargetBinding{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.TestTargetBinding
+	payload := struct {
+		ID      string                                       `json:"id"`
+		Binding platformadminapi.PutTestTargetBindingRequest `json:"binding"`
+	}{ID: id, Binding: request}
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "putTestTargetBinding", true, payload, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) ListTestReleases(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) ([]platformadminapi.TestRelease, error) {
+	var response struct {
+		Items []platformadminapi.TestRelease `json:"items"`
+	}
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "listTestReleases", false, struct{}{}, &response)
+	return response.Items, err
+}
+
+func (s *CapabilityPlatformAdminService) CreateTestRelease(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, request platformadminapi.CreateTestReleaseRequest) (platformadminapi.TestRelease, error) {
+	var response platformadminapi.TestRelease
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "createTestRelease", true, struct {
+		Release platformadminapi.CreateTestReleaseRequest `json:"release"`
+	}{Release: request}, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) RollbackTestRelease(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id uint64) (platformadminapi.TestRelease, error) {
+	if id == 0 {
+		return platformadminapi.TestRelease{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.TestRelease
+	err := s.call(ctx, p, target, platformadminapi.DeploymentCapability, "rollbackTestRelease", true, map[string]uint64{"releaseId": id}, &response)
+	return response, err
+}
+
 func validResourceName(value string, max int) error {
 	if strings.TrimSpace(value) == "" || len(value) > max || strings.ContainsAny(value, "/\\\x00") {
 		return platformadminapi.ErrInvalid

@@ -73,6 +73,15 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.deployment.publish", Operation: "execute"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 的可信发布回调应允许: %s", got)
 	}
+	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.deployment.readiness", Operation: "execute"}); got != extpoint.DecisionAllow {
+		t.Fatalf("deployment-manager 的部署就绪观察回调应允许: %s", got)
+	}
+	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "listCatalog"}); got != extpoint.DecisionAllow {
+		t.Fatalf("deployment-manager 应只能读取制品目录元数据: %s", got)
+	}
+	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "publish"}); got != extpoint.DecisionDeny {
+		t.Fatalf("deployment-manager 不得取得仓库发布权限: %s", got)
+	}
 	databaseRuntime := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.foundation.data.relational.runtime"}}
 	runtimeLease := extpoint.PermissionRequest{Capability: "kernel.credential.material-lease", Operation: "issue"}
 	if got, _ := decide(databaseRuntime, runtimeLease); got != extpoint.DecisionAllow {

@@ -102,6 +102,21 @@ func (*platformService) RollbackServiceRevision(_ context.Context, _ portalapi.P
 func (*platformService) ListServiceRevisionAudit(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id uint64) ([]platformadminapi.ServiceAuditEvent, error) {
 	return []platformadminapi.ServiceAuditEvent{{ID: 1, RevisionID: id}}, nil
 }
+func (*platformService) ListTestTargetBindings(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]platformadminapi.TestTargetBinding, error) {
+	return []platformadminapi.TestTargetBinding{{ID: "demo", Kind: platformadminapi.TestTargetBackend}}, nil
+}
+func (*platformService) PutTestTargetBinding(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id string, request platformadminapi.PutTestTargetBindingRequest) (platformadminapi.TestTargetBinding, error) {
+	return platformadminapi.TestTargetBinding{ID: id, Kind: request.Kind, Deployment: request.Deployment, UnitID: request.UnitID, PluginID: request.PluginID}, nil
+}
+func (*platformService) ListTestReleases(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]platformadminapi.TestRelease, error) {
+	return []platformadminapi.TestRelease{{ID: 1, Status: platformadminapi.TestReleaseReady}}, nil
+}
+func (*platformService) CreateTestRelease(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, request platformadminapi.CreateTestReleaseRequest) (platformadminapi.TestRelease, error) {
+	return platformadminapi.TestRelease{ID: 1, BindingID: request.BindingID, Artifact: request.Artifact, Status: platformadminapi.TestReleaseQueued}, nil
+}
+func (*platformService) RollbackTestRelease(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, id uint64) (platformadminapi.TestRelease, error) {
+	return platformadminapi.TestRelease{ID: id, Status: platformadminapi.TestReleaseRolledBack}, nil
+}
 
 func platformPortalService() *service {
 	profile := compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}
@@ -110,7 +125,7 @@ func platformPortalService() *service {
 		{ID: "credentials", LogicalService: "platform.credentials", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.CredentialsCapability, Read: []string{"list"}, Write: []string{"put", "rotate", "revoke"}}}},
 		{ID: "database", LogicalService: "platform.database", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DatabaseCapability, Read: []string{"list"}, Write: []string{"define", "remove", "probe"}}}},
 		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status"}}}},
-		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision"}}}},
+		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"}}}},
 	}}
 	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a", Route: "/operations", Management: binding, Resolution: portalapi.Resolution{PlatformProfile: profile, ManagementBindingDigest: compositioncommonv1.Digest(binding)}}
 	return &service{activations: []portalapi.PortalActivation{{ID: 1, TenantID: "tenant-a", PortalID: "operations", Status: portalapi.ActivationCurrent, Spec: spec}}}
@@ -220,6 +235,11 @@ func TestDeploymentRoutesAreRoleSeparatedAndAllowlisted(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("部署读取角色应可列出节点: %d", response.Code)
 	}
+	response = httptest.NewRecorder()
+	h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, platformPath("deployment", "deployment/test-target-bindings"), nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("部署读取角色应可列出测试目标绑定: %d", response.Code)
+	}
 
 	h = NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
 		return portalapi.Principal{ID: "requester", TenantID: "tenant-a", Roles: []string{"platform.deployment.bootstrap"}}, nil
@@ -229,7 +249,7 @@ func TestDeploymentRoutesAreRoleSeparatedAndAllowlisted(t *testing.T) {
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("引导申请角色不能隐含读取权限: %d", response.Code)
 	}
-	if !platformCapabilityAllowed(platformadminapi.DeploymentCapability, "approveBootstrap") || platformCapabilityAllowed(platformadminapi.DeploymentCapability, "shell") {
+	if !platformCapabilityAllowed(platformadminapi.DeploymentCapability, "approveBootstrap") || !platformCapabilityAllowed(platformadminapi.DeploymentCapability, "rollbackTestRelease") || platformCapabilityAllowed(platformadminapi.DeploymentCapability, "shell") {
 		t.Fatal("部署 capability 白名单必须固定操作且拒绝 shell")
 	}
 }

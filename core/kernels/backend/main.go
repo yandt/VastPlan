@@ -318,6 +318,7 @@ func runReconcile(args []string) (runErr error) {
 			return err
 		}
 		runtime.Dependencies.DeploymentPublication = publisher
+		runtime.Dependencies.DeploymentReadiness = natsDeploymentReadiness{KV: plane.buckets.Compositions}
 	}
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
 	if plane.router != nil {

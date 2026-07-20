@@ -78,6 +78,7 @@ type Dependencies struct {
 	NodeBootstrap         nodebootstrap.Broker
 	NodeReadiness         nodebootstrap.ReadinessObserver
 	DeploymentPublication deploymentpublication.Controller
+	DeploymentReadiness   deploymentpublication.ReadinessObserver
 }
 
 type MapConfig struct {

@@ -13,50 +13,40 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 )
 
-type CompositionStatus string
+type CompositionStatus = deploymentpublication.ReadinessStatus
+type CompositionUnit = deploymentpublication.ReadinessUnit
+type CompositionReport = deploymentpublication.ReadinessObservation
 
 const (
-	CompositionPending        CompositionStatus = "Pending"
-	CompositionBlocked        CompositionStatus = "Blocked"
-	CompositionReady          CompositionStatus = "Ready"
-	CompositionDegraded       CompositionStatus = "Degraded"
-	CompositionDependencyLost CompositionStatus = "DependencyLost"
-	CompositionFailed         CompositionStatus = "Failed"
-	CompositionStopped        CompositionStatus = "Stopped"
+	CompositionPending        = deploymentpublication.ReadinessPending
+	CompositionBlocked        = deploymentpublication.ReadinessBlocked
+	CompositionReady          = deploymentpublication.ReadinessReady
+	CompositionDegraded       = deploymentpublication.ReadinessDegraded
+	CompositionDependencyLost = deploymentpublication.ReadinessDependencyLost
+	CompositionFailed         = deploymentpublication.ReadinessFailed
+	CompositionStopped        = deploymentpublication.ReadinessStopped
 )
 
-type CompositionUnit struct {
-	ID               string            `json:"id"`
-	Status           CompositionStatus `json:"status"`
-	DesiredReplicas  int               `json:"desired_replicas"`
-	Replicas         int               `json:"replicas"`
-	ReadyReplicas    int               `json:"ready_replicas"`
-	DependencyIssues []string          `json:"dependency_issues,omitempty"`
-	Errors           []string          `json:"errors,omitempty"`
-}
-
-type CompositionReport struct {
-	SchemaVersion int               `json:"schema_version"`
-	Tenant        string            `json:"tenant,omitempty"`
-	Deployment    string            `json:"deployment"`
-	Revision      uint64            `json:"revision"`
-	Generation    uint64            `json:"generation"`
-	Units         []CompositionUnit `json:"units"`
-	Status        CompositionStatus `json:"status"`
-	UpdatedAt     time.Time         `json:"updated_at"`
-}
-
 type actualSnapshot struct {
-	Units map[string]actualUnit `json:"units"`
+	AppliedRevision uint64                `json:"applied_revision"`
+	Units           map[string]actualUnit `json:"units"`
 }
 
 type actualUnit struct {
-	Phase            string   `json:"phase"`
-	Readiness        string   `json:"readiness"`
-	DependencyIssues []string `json:"dependency_issues,omitempty"`
-	LastError        string   `json:"last_error,omitempty"`
+	AppliedRevision  uint64           `json:"applied_revision"`
+	Phase            string           `json:"phase"`
+	Readiness        string           `json:"readiness"`
+	DependencyIssues []string         `json:"dependency_issues,omitempty"`
+	LastError        string           `json:"last_error,omitempty"`
+	Candidate        *actualCandidate `json:"candidate,omitempty"`
+}
+
+type actualCandidate struct {
+	Phase     string `json:"phase"`
+	LastError string `json:"last_error,omitempty"`
 }
 
 // ObserveComposition 汇总各 Node Agent 上报的实际态，不把“存在一个进程”误报为 Ready。
@@ -109,8 +99,21 @@ func (s Scheduler) ObserveComposition(ctx context.Context, deployment deployment
 		if json.Unmarshal(entry.Value(), &actual) != nil {
 			continue
 		}
-		for id, state := range actual.Units {
-			byUnit[id] = append(byUnit[id], state)
+		for _, desired := range assignment.Units {
+			state, exists := actual.Units[desired.ID]
+			if !exists {
+				continue
+			}
+			if state.Candidate != nil && state.Candidate.Phase == "failed" {
+				failed := state
+				failed.Phase, failed.LastError = "failed", state.Candidate.LastError
+				byUnit[desired.ID] = append(byUnit[desired.ID], failed)
+				continue
+			}
+			if actual.AppliedRevision != assignment.Revision || state.AppliedRevision != assignment.Revision {
+				continue
+			}
+			byUnit[desired.ID] = append(byUnit[desired.ID], state)
 		}
 	}
 	report := CompositionReport{

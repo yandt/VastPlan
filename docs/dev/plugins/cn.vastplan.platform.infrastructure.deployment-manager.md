@@ -2,7 +2,9 @@
 
 插件 ID：`cn.vastplan.platform.infrastructure.deployment-manager`
 
-该 platform 基础插件以 `leader + leader-owned + cluster + platform routing domain` 运行，持有租户隔离的节点计划、Bootstrap Job、服务组合 revision 和审计记录。它依赖 settings、credentials、artifact repository 与窄内核服务，但只保存 Credential 名称和 Application Composition，永远不能读取 SSH/NATS/制品令牌 material、Platform Catalog、信任根或 KV 句柄。
+当前制品版本：`0.4.0`
+
+该 platform 基础插件以 `leader + leader-owned + cluster + platform routing domain` 运行，持有租户隔离的节点计划、Bootstrap Job、服务组合 revision、Test Target Binding、Test Release 和审计记录。它依赖 settings、credentials、artifact repository 与窄内核服务，但只保存 Credential 名称、Application Composition 和精确制品身份，永远不能读取 SSH/NATS/制品令牌 material、Platform Catalog、信任根或 KV 句柄。
 
 当前 capability 为 `platform.deployment`：
 
@@ -14,5 +16,8 @@
 - `create/update/submitServiceDraft`：由 `platform.deployment.compose` 编辑并提交仅含应用插件的组合；
 - `approveServiceRevision`：由不同的 `platform.deployment.approve` 用户批准；
 - `publish/rollbackServiceRevision`：由 `platform.deployment.publish` 通过可信内核发布或创建新 revision 回滚。
+- `list/putTestTargetBinding`：读取或由 `platform.admin` 以 CAS 预授权 Backend 应用插件测试槽位；
+- `list/createTestRelease`：读取记录，或由 `platform.deployment.publish` 提交精确 testing 制品并等待候选结果；
+- `rollbackTestRelease`：恢复回滚被控制器重启中断且已标记 `rollbackRequired` 的发布。
 
-活动作业期间节点定义被冻结。进程重启时，未确认的 `Connecting/Installing` 会落为 `Failed` 且不自动重放，避免高权限 SSH 被重复执行。服务发布采用不同语义：`Publishing` 可用同 revision/同摘要幂等重试。`kernel.deployment.targets/preview/publish` 只接受精确插件身份，并由内核固定 Profile、验签制品和 CAS 写入。状态文件配置、运行说明见插件目录 [README](../../../extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/README.md)，完整边界见《[服务部署控制台](../architecture/服务部署控制台.md)》、[ADR-0070](../decisions/ADR-0070-Deployment-Manager与可信引导执行边界.md)、[ADR-0071](../decisions/ADR-0071-签名Node-Lease与可信就绪判定.md) 与 [ADR-0077](../decisions/ADR-0077-Backend在线组合与可信发布边界.md)。
+活动作业期间节点定义被冻结。进程重启时，未确认的 `Connecting/Installing` 会落为 `Failed` 且不自动重放，避免高权限 SSH 被重复执行。服务发布采用不同语义：`Publishing` 可用同 revision/同摘要幂等重试；中断的 Test Release 则 fail-closed 并要求显式恢复回滚。`kernel.deployment.targets/preview/publish/readiness` 只接受精确插件身份，并由内核固定 Profile、验签制品、CAS 写入和判断真实收敛。状态文件配置、运行说明见插件目录 [README](../../../extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/README.md)，完整边界见《[服务部署控制台](../architecture/服务部署控制台.md)》、《[制品仓库与测试发布](../architecture/制品仓库与测试发布.md)》、[ADR-0070](../decisions/ADR-0070-Deployment-Manager与可信引导执行边界.md)、[ADR-0071](../decisions/ADR-0071-签名Node-Lease与可信就绪判定.md)、[ADR-0077](../decisions/ADR-0077-Backend在线组合与可信发布边界.md) 与 [ADR-0097](../decisions/ADR-0097-测试制品仓库与前端分级热升级.md)。

@@ -83,6 +83,11 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			return nil, err
 		}
 	}
+	if dependencies.DeploymentReadiness != nil {
+		if err := host.RegisterHostService(extpoint.KernelService, deploymentpublication.KernelReadinessService, kernelDeploymentReadiness(dependencies.DeploymentReadiness)); err != nil {
+			return nil, err
+		}
+	}
 	return host, nil
 }
 
@@ -162,6 +167,24 @@ func kernelDeploymentPublish(controller deploymentpublication.Controller) protoc
 			return nil, nil, err
 		}
 		raw, err := json.Marshal(result)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+	}
+}
+
+func kernelDeploymentReadiness(observer deploymentpublication.ReadinessObserver) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if !authenticatedDeploymentManager(callCtx) {
+			return nil, nil, errors.New("kernel.deployment.readiness 只接受 deployment-manager 认证会话")
+		}
+		var request deploymentpublication.ReadinessRequest
+		if err := decodeStrict(payload, &request); err != nil || request.DeploymentName == "" || request.DeploymentRevision == 0 {
+			return nil, nil, errors.New("部署 readiness 请求无效")
+		}
+		observation, err := observer.Observe(ctx, callCtx.GetTenantId(), request.DeploymentName, request.DeploymentRevision)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(observation)
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
 	}
 }

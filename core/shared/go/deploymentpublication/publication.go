@@ -6,6 +6,9 @@ package deploymentpublication
 
 import (
 	"context"
+	"errors"
+	"strings"
+	"time"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
@@ -17,6 +20,7 @@ const (
 	KernelTargetsService      = "kernel.deployment.targets"
 	KernelPreviewService      = "kernel.deployment.preview"
 	KernelPublishService      = "kernel.deployment.publish"
+	KernelReadinessService    = "kernel.deployment.readiness"
 )
 
 type Target struct {
@@ -39,6 +43,61 @@ type Result struct {
 	Deployment deploymentv2.Deployment `json:"deployment"`
 	Digest     string                  `json:"digest"`
 	KVRevision uint64                  `json:"kvRevision,omitempty"`
+}
+
+type ReadinessStatus string
+
+const (
+	ReadinessPending        ReadinessStatus = "Pending"
+	ReadinessBlocked        ReadinessStatus = "Blocked"
+	ReadinessReady          ReadinessStatus = "Ready"
+	ReadinessDegraded       ReadinessStatus = "Degraded"
+	ReadinessDependencyLost ReadinessStatus = "DependencyLost"
+	ReadinessFailed         ReadinessStatus = "Failed"
+	ReadinessStopped        ReadinessStatus = "Stopped"
+)
+
+type ReadinessUnit struct {
+	ID               string          `json:"id"`
+	Status           ReadinessStatus `json:"status"`
+	DesiredReplicas  int             `json:"desired_replicas"`
+	Replicas         int             `json:"replicas"`
+	ReadyReplicas    int             `json:"ready_replicas"`
+	DependencyIssues []string        `json:"dependency_issues,omitempty"`
+	Errors           []string        `json:"errors,omitempty"`
+}
+
+type ReadinessObservation struct {
+	SchemaVersion int             `json:"schema_version"`
+	Tenant        string          `json:"tenant,omitempty"`
+	Deployment    string          `json:"deployment"`
+	Revision      uint64          `json:"revision"`
+	Generation    uint64          `json:"generation"`
+	Units         []ReadinessUnit `json:"units"`
+	Status        ReadinessStatus `json:"status"`
+	Reason        string          `json:"reason,omitempty"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+func (o ReadinessObservation) Validate() error {
+	if o.SchemaVersion != 1 || strings.TrimSpace(o.Tenant) == "" || strings.TrimSpace(o.Deployment) == "" || o.Revision == 0 || o.UpdatedAt.IsZero() {
+		return errors.New("部署 readiness observation 身份无效")
+	}
+	switch o.Status {
+	case ReadinessPending, ReadinessBlocked, ReadinessReady, ReadinessDegraded, ReadinessDependencyLost, ReadinessFailed, ReadinessStopped:
+	default:
+		return errors.New("部署 readiness observation 状态无效")
+	}
+	return nil
+}
+
+type ReadinessRequest struct {
+	DeploymentName     string `json:"deploymentName"`
+	DeploymentRevision uint64 `json:"deploymentRevision"`
+}
+
+type ReadinessObserver interface {
+	Observe(context.Context, string, string, uint64) (ReadinessObservation, error)
 }
 
 type Controller interface {

@@ -99,6 +99,23 @@ export interface ServiceRevision {
   submittedBy?: string; approvedBy?: string; publishedBy?: string; createdAt: string; updatedAt: string;
 }
 export interface ServiceAuditEvent { id: number; revisionId: number; deployment: string; action: string; actorId: string; at: string; }
+export interface ArtifactRef { pluginId: string; version: string; channel: string; }
+export interface TestTargetBinding {
+  id: string; kind: "backend"; deployment: string; unitId: string; pluginId: string;
+  allowedPublishers: string[]; enabled: boolean; version: number; createdAt: string; updatedAt: string;
+}
+export interface PutTestTargetBindingRequest {
+  kind: "backend"; deployment: string; unitId: string; pluginId: string;
+  allowedPublishers: string[]; enabled: boolean; ifVersion?: number;
+}
+export type TestReleaseStatus = "Queued" | "Resolving" | "Preparing" | "Validating" | "Activating" | "Ready" | "RollingBack" | "RolledBack" | "Failed" | "Superseded";
+export interface TestRelease {
+  id: number; bindingId: string; artifact: ArtifactRef; sha256: string; repositoryRevision: number;
+  status: TestReleaseStatus; previousServiceRevisionId?: number; candidateServiceRevisionId?: number;
+  rollbackServiceRevisionId?: number; rollbackRequired?: boolean; errorCode?: string; errorMessage?: string;
+  requestedBy: string; createdAt: string; updatedAt: string;
+}
+export interface CreateTestReleaseRequest { bindingId: string; artifact: ArtifactRef; sha256: string; repositoryRevision: number; }
 
 export class PlatformAdminClient {
 	private readonly basePath: string;
@@ -153,6 +170,17 @@ export class PlatformAdminClient {
   public publishServiceRevision(id: number): Promise<ServiceRevision> { return this.serviceRevisionAction(id, "publish"); }
   public rollbackServiceRevision(id: number): Promise<ServiceRevision> { return this.serviceRevisionAction(id, "rollback"); }
   public listServiceRevisionAudit(id: number): Promise<ServiceAuditEvent[]> { return this.get(`${this.basePath}/deployment/service-revisions/${revision(id)}/audit`); }
+  public listTestTargetBindings(): Promise<TestTargetBinding[]> { return this.get(`${this.basePath}/deployment/test-target-bindings`); }
+  public putTestTargetBinding(id: string, request: PutTestTargetBindingRequest): Promise<TestTargetBinding> {
+    return this.mutate(`${this.basePath}/deployment/test-target-bindings/${segment(id)}`, "PUT", request);
+  }
+  public listTestReleases(): Promise<TestRelease[]> { return this.get(`${this.basePath}/deployment/test-releases`); }
+  public createTestRelease(request: CreateTestReleaseRequest): Promise<TestRelease> {
+    return this.mutate(`${this.basePath}/deployment/test-releases`, "POST", request);
+  }
+  public rollbackTestRelease(id: number): Promise<TestRelease> {
+    return this.mutate(`${this.basePath}/deployment/test-releases/${revision(id)}/rollback`, "POST", {});
+  }
 
   private serviceRevisionAction(id: number, action: string): Promise<ServiceRevision> {
     return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}/${action}`, "POST", {});

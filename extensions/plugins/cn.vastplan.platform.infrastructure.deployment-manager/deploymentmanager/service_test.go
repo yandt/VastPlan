@@ -43,9 +43,11 @@ func TestDescriptorMatchesSignedManifest(t *testing.T) {
 }
 
 type fakeHost struct {
-	targets         []*contractv1.CallTarget
-	err             error
-	readinessStatus nodebootstrap.ReadinessStatus
+	targets             []*contractv1.CallTarget
+	err                 error
+	readinessStatus     nodebootstrap.ReadinessStatus
+	catalogEntry        *artifactCatalogEntry
+	deploymentReadiness map[uint64]deploymentpublication.ReadinessObservation
 }
 
 func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -79,7 +81,172 @@ func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *con
 		raw, _ := json.Marshal(deploymentpublication.Result{Deployment: deployment, Digest: request.ExpectedDigest, KVRevision: request.DeploymentRevision + 10})
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 	}
+	if target.Capability == deploymentpublication.KernelReadinessService {
+		var request deploymentpublication.ReadinessRequest
+		_ = json.Unmarshal(payload, &request)
+		observation, ok := h.deploymentReadiness[request.DeploymentRevision]
+		if !ok {
+			observation = deploymentpublication.ReadinessObservation{
+				SchemaVersion: 1, Tenant: "tenant-a", Deployment: request.DeploymentName,
+				Revision: request.DeploymentRevision, Status: deploymentpublication.ReadinessReady,
+				UpdatedAt: time.Now().UTC(),
+			}
+		}
+		raw, _ := json.Marshal(observation)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
+	if target.Capability == platformadminapi.ArtifactsCapability && target.GetOperation() == "listCatalog" {
+		page := artifactCatalogPage{}
+		if h.catalogEntry != nil {
+			page.Revision, page.Total, page.Items = h.catalogEntry.RepositoryRevision, 1, []artifactCatalogEntry{*h.catalogEntry}
+		}
+		raw, _ := json.Marshal(page)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"systemdActive":true}`), nil
+}
+
+func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		candidate  deploymentpublication.ReadinessStatus
+		wantStatus platformadminapi.TestReleaseStatus
+		wantActive uint64
+		wantTotal  int
+	}{
+		{name: "candidate ready", candidate: deploymentpublication.ReadinessReady, wantStatus: platformadminapi.TestReleaseReady, wantActive: 2, wantTotal: 2},
+		{name: "candidate failed rolls back", candidate: deploymentpublication.ReadinessFailed, wantStatus: platformadminapi.TestReleaseRolledBack, wantActive: 3, wantTotal: 3},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			service.releaseTimeout, service.releasePollInterval = time.Second, time.Millisecond
+			alice, bob, carol := userCall("tenant-a", "alice"), userCall("tenant-a", "bob"), userCall("tenant-a", "carol")
+			composition := backendcompositionv1.ApplicationComposition{
+				Metadata: deploymentv1.Metadata{Name: "agent-services"},
+				Units: []backendcompositionv1.ApplicationUnit{{ServiceClass: "application", Spec: deploymentv2.ServiceUnit{
+					ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
+					Plugins: []deploymentv1.PluginRef{{ID: "cn.example.application.demo", Version: "1.0.0", Channel: "stable"}},
+				}}},
+			}
+			host := &fakeHost{}
+			draft, err := service.CreateServiceDraft(context.Background(), host, alice, composition)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = service.SubmitServiceDraft(context.Background(), host, alice, draft.ID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = service.ApproveServiceRevision(bob, draft.ID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = service.PublishServiceRevision(context.Background(), host, carol, draft.ID); err != nil {
+				t.Fatal(err)
+			}
+			binding, err := service.PutTestTargetBinding(carol, "demo-api", platformadminapi.PutTestTargetBindingRequest{
+				Kind: platformadminapi.TestTargetBackend, Deployment: "agent-services", UnitID: "api",
+				PluginID: "cn.example.application.demo", AllowedPublishers: []string{"vastplan"}, Enabled: true,
+			})
+			if err != nil || binding.Version != 1 {
+				t.Fatalf("创建测试目标绑定失败: binding=%+v err=%v", binding, err)
+			}
+			artifact := pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.1", Channel: "testing"}
+			digest := strings.Repeat("a", 64)
+			host.catalogEntry = &artifactCatalogEntry{
+				Ref: artifact, SHA256: digest, Publisher: "vastplan", RepositoryRevision: 17, Targets: []string{"backend"},
+			}
+			host.deploymentReadiness = map[uint64]deploymentpublication.ReadinessObservation{
+				2: {SchemaVersion: 1, Tenant: "tenant-a", Deployment: "agent-services", Revision: 2, Status: test.candidate, UpdatedAt: time.Now().UTC()},
+				3: {SchemaVersion: 1, Tenant: "tenant-a", Deployment: "agent-services", Revision: 3, Status: deploymentpublication.ReadinessReady, UpdatedAt: time.Now().UTC()},
+			}
+			release, err := service.CreateTestRelease(context.Background(), host, carol, platformadminapi.CreateTestReleaseRequest{
+				BindingID: binding.ID, Artifact: artifact, SHA256: digest, RepositoryRevision: 17,
+			})
+			if err != nil || release.Status != test.wantStatus || release.RollbackRequired {
+				t.Fatalf("测试发布终态错误: release=%+v err=%v", release, err)
+			}
+			revisions, err := service.ListServiceRevisions(carol)
+			if err != nil || len(revisions) != test.wantTotal || revisions[0].ID != test.wantActive || !revisions[0].Active {
+				t.Fatalf("服务修订激活结果错误: %+v err=%v", revisions, err)
+			}
+			if test.candidate == deploymentpublication.ReadinessReady {
+				plugin := revisions[0].Composition.Units[0].Spec.Plugins[0]
+				if plugin.Version != artifact.Version || plugin.Channel != artifact.Channel {
+					t.Fatalf("候选组合未锁定测试制品: %+v", plugin)
+				}
+			} else if release.RollbackServiceRevisionID != 3 || release.ErrorCode != "platform.test_release.candidate_not_ready" {
+				t.Fatalf("自动回滚审计字段不完整: %+v", release)
+			}
+		})
+	}
+}
+
+func TestTestTargetBindingRejectsPlatformPlugin(t *testing.T) {
+	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := userCall("tenant-a", "alice")
+	service.data.Tenants["tenant-a"] = &tenantState{
+		Nodes: map[string]platformadminapi.ManagedNode{}, Jobs: map[string]platformadminapi.BootstrapJob{},
+		TestBindings: map[string]platformadminapi.TestTargetBinding{},
+		Revisions: []platformadminapi.ServiceRevision{{
+			ID: 1, Deployment: "platform", Status: platformadminapi.ServicePublished, Active: true,
+			Composition: backendcompositionv1.ApplicationComposition{Units: []backendcompositionv1.ApplicationUnit{{Spec: deploymentv2.ServiceUnit{
+				ID: "core", Plugins: []deploymentv1.PluginRef{{ID: "cn.vastplan.platform.settings", Version: "1.0.0"}},
+			}}}},
+		}},
+	}
+	_, err = service.PutTestTargetBinding(call, "reserved", platformadminapi.PutTestTargetBindingRequest{
+		Kind: platformadminapi.TestTargetBackend, Deployment: "platform", UnitID: "core",
+		PluginID: "cn.vastplan.platform.settings", AllowedPublishers: []string{"vastplan"}, Enabled: true,
+	})
+	if !errors.Is(err, errInvalid) {
+		t.Fatalf("foundation/platform 插件不得进入应用测试绑定: %v", err)
+	}
+}
+
+func TestInterruptedTestReleaseCanBeRecoveredWithMonotonicRollback(t *testing.T) {
+	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := userCall("tenant-a", "operator")
+	composition := backendcompositionv1.ApplicationComposition{
+		Metadata: deploymentv1.Metadata{Name: "agent-services", Tenant: "tenant-a"},
+		Units: []backendcompositionv1.ApplicationUnit{{ServiceClass: "application", Spec: deploymentv2.ServiceUnit{
+			ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
+			Plugins: []deploymentv1.PluginRef{{ID: "cn.example.demo", Version: "1.0.0", Channel: "stable"}},
+		}}},
+	}
+	service.data.Tenants["tenant-a"] = &tenantState{
+		Nodes: map[string]platformadminapi.ManagedNode{}, Jobs: map[string]platformadminapi.BootstrapJob{},
+		TestBindings: map[string]platformadminapi.TestTargetBinding{
+			"demo": {ID: "demo", Kind: platformadminapi.TestTargetBackend, Deployment: "agent-services", UnitID: "api", PluginID: "cn.example.demo", AllowedPublishers: []string{"vastplan"}, Enabled: true, Version: 1},
+		},
+		NextRevision: 2, NextTestRelease: 1,
+		Revisions: []platformadminapi.ServiceRevision{
+			{ID: 1, Deployment: "agent-services", Status: platformadminapi.ServicePublished, Active: false, Composition: composition, PreviewDigest: "preview-1"},
+			{ID: 2, Deployment: "agent-services", Status: platformadminapi.ServicePublished, Active: true, Composition: composition, PreviewDigest: "preview-2"},
+		},
+		TestReleases: []platformadminapi.TestRelease{{
+			ID: 1, BindingID: "demo", Status: platformadminapi.TestReleaseFailed, RollbackRequired: true,
+			PreviousServiceRevisionID: 1, CandidateServiceRevisionID: 2, RequestedBy: "operator",
+		}},
+	}
+	host := &fakeHost{deploymentReadiness: map[uint64]deploymentpublication.ReadinessObservation{
+		3: {SchemaVersion: 1, Tenant: "tenant-a", Deployment: "agent-services", Revision: 3, Status: deploymentpublication.ReadinessReady, UpdatedAt: time.Now().UTC()},
+	}}
+	recovered, err := service.RollbackTestRelease(context.Background(), host, call, 1)
+	if err != nil || recovered.Status != platformadminapi.TestReleaseRolledBack || recovered.RollbackRequired || recovered.RollbackServiceRevisionID != 3 {
+		t.Fatalf("中断发布恢复失败: release=%+v err=%v", recovered, err)
+	}
+	revisions, _ := service.ListServiceRevisions(call)
+	if len(revisions) != 3 || revisions[0].ID != 3 || !revisions[0].Active {
+		t.Fatalf("恢复必须生成新的单调 revision: %+v", revisions)
+	}
 }
 
 func TestServiceCompositionWorkflowAndRollback(t *testing.T) {

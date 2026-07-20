@@ -1,14 +1,14 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
-  "name": "VastPlan 节点部署管理服务",
-  "version": "0.3.0",
+  "name": "VastPlan 部署与测试发布管理服务",
+  "version": "0.4.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "保存非敏感节点计划和首次引导审批状态；凭证解析与 SSH 执行仅由可信内核完成",
+  "description": "管理非敏感节点引导、应用服务修订和 Backend 测试发布；凭证、制品信任、KV 与就绪事实仍由可信内核持有",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
-  "capabilities": { "kernelServices": ["kernel.node.bootstrap", "kernel.node.readiness", "kernel.deployment.targets", "kernel.deployment.preview", "kernel.deployment.publish"], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.node.bootstrap", "kernel.node.readiness", "kernel.deployment.targets", "kernel.deployment.preview", "kernel.deployment.publish", "kernel.deployment.readiness"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "leader",
@@ -24,7 +24,7 @@
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.deployment", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
-  "state": { "backend": { "format": "cn.vastplan.platform.deployment-manager", "formatVersion": 2 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.deployment-manager", "formatVersion": 3 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/deployment-manager", "frontend": "frontend/dist/index.js" },
   "contributes": {
@@ -32,7 +32,7 @@
       "tools": [{
         "id": "platform.deployment",
         "service_role": "backend",
-        "title": "节点部署管理",
+        "title": "部署与测试发布管理",
         "subcommands": [
           { "name": "listNodes", "description": "列出当前租户的节点计划", "paramsSchema": { "type": "object", "properties": {} } },
           { "name": "putNode", "description": "以 CAS 保存不含明文凭证的节点计划", "paramsSchema": { "type": "object", "properties": { "id": { "type": "string" }, "plan": { "type": "object" }, "ifVersion": { "type": "integer", "minimum": 0 } }, "required": ["id", "plan"] } },
@@ -47,7 +47,12 @@
           { "name": "approveServiceRevision", "description": "批准服务组合修订", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
           { "name": "publishServiceRevision", "description": "通过可信内核发布服务组合", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
           { "name": "rollbackServiceRevision", "description": "以新修订回滚到历史服务组合", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
-          { "name": "listServiceRevisionAudit", "description": "列出服务组合审计记录", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } }
+          { "name": "listServiceRevisionAudit", "description": "列出服务组合审计记录", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
+          { "name": "listTestTargetBindings", "description": "列出 Backend 测试目标预授权绑定", "paramsSchema": { "type": "object", "properties": {} } },
+          { "name": "putTestTargetBinding", "description": "以 CAS 保存 Backend 应用插件测试目标绑定", "paramsSchema": { "type": "object", "properties": { "id": { "type": "string" }, "binding": { "type": "object" } }, "required": ["id", "binding"] } },
+          { "name": "listTestReleases", "description": "列出测试发布与自动回滚状态", "paramsSchema": { "type": "object", "properties": {} } },
+          { "name": "createTestRelease", "description": "验证精确 testing 制品并执行候选发布", "paramsSchema": { "type": "object", "properties": { "release": { "type": "object" } }, "required": ["release"] } },
+          { "name": "rollbackTestRelease", "description": "恢复回滚被中断的测试发布", "paramsSchema": { "type": "object", "properties": { "releaseId": { "type": "integer", "minimum": 1 } }, "required": ["releaseId"] } }
         ]
       }]
     },
