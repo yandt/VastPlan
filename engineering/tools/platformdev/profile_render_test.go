@@ -61,6 +61,9 @@ func TestWriteSeedRepositoryProfileUsesPrivateRunPaths(t *testing.T) {
 	if profile["listen"] != "127.0.0.1:18442" || profile["repositoryRoot"] != filepath.Join(runDir, "repository") {
 		t.Fatalf("Seed Profile 路径或监听地址错误: %s", raw)
 	}
+	if profile["trustFile"] != filepath.Join(runDir, "secrets", "seed-artifact-trust.json") {
+		t.Fatalf("Seed Profile 只能加载 Seed-only 信任文档: %s", raw)
+	}
 	info, err := os.Stat(filepath.Join(runDir, "seed-repository.yaml"))
 	if err != nil || info.Mode().Perm()&0o077 != 0 {
 		t.Fatalf("Seed Profile 必须仅属主可访问: info=%v err=%v", info, err)

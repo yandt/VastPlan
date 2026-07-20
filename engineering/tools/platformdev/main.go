@@ -169,6 +169,11 @@ func (r *runtime) prepare(ctx context.Context) error {
 			return err
 		}
 	}
+	for _, dir := range []string{r.testingRepositoryRoot(), r.testingRepositoryVolumes(), r.testingRepositorySecrets()} {
+		if err := ensurePrivateDirectory(dir); err != nil {
+			return fmt.Errorf("准备持久化测试仓库目录: %w", err)
+		}
+	}
 	log.Printf("[1/6] 生成仅限本地开发的 TLS、session、Seed 仓库配置与签名身份")
 	if err := r.writeFixtures(); err != nil {
 		return err
@@ -232,7 +237,7 @@ func (r *runtime) signPackageRepository() error {
 	if err != nil {
 		return err
 	}
-	trust, err := pluginservice.LoadTrustStore(filepath.Join(r.runDir, "secrets", "artifact-trust.json"))
+	trust, err := pluginservice.LoadTrustStore(filepath.Join(r.runDir, "secrets", "seed-artifact-trust.json"))
 	if err != nil {
 		return err
 	}
@@ -357,7 +362,21 @@ func (r *runtime) writeFixtures() error {
 	if err := writeTLS(certFile, keyFile); err != nil {
 		return err
 	}
-	if err := writeTrust(filepath.Join(r.runDir, "secrets", "artifact-trust.json"), filepath.Join(r.runDir, "secrets", "artifact-signing.pem")); err != nil {
+	seedTrust, err := ensureSigningIdentity(filepath.Join(r.runDir, "secrets", "artifact-signing.pem"), "vastplan", "local-development")
+	if err != nil {
+		return fmt.Errorf("创建本次 Seed 签名身份: %w", err)
+	}
+	testingTrust, err := ensureSigningIdentity(r.testingRepositorySigningKey(), "vastplan", "local-testing")
+	if err != nil {
+		return fmt.Errorf("准备持久化测试签名身份: %w", err)
+	}
+	if err := writeTrustDocument(filepath.Join(r.runDir, "secrets", "artifact-trust.json"), seedTrust, testingTrust); err != nil {
+		return err
+	}
+	if err := writeTrustDocument(filepath.Join(r.runDir, "secrets", "seed-artifact-trust.json"), seedTrust); err != nil {
+		return err
+	}
+	if err := writeTrustDocument(r.testingRepositoryTrust(), testingTrust); err != nil {
 		return err
 	}
 	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "artifact-read.token"), []byte("vastplan-local-artifact-reader\n"), 0o600); err != nil {
@@ -405,7 +424,7 @@ func (r *runtime) writeFixtures() error {
 func (r *runtime) writeSeedRepositoryProfile() error {
 	profile := fmt.Sprintf("version: 1\nid: seed-repository\nlisten: %s\nrepositoryRoot: %s\ntrustFile: %s\ntlsCertFile: %s\ntlsKeyFile: %s\nreadTokenFile: %s\npublishTokenFile: %s\n",
 		yamlString(r.options.seedArtifactListen), yamlString(filepath.Join(r.runDir, "repository")),
-		yamlString(filepath.Join(r.runDir, "secrets", "artifact-trust.json")), yamlString(filepath.Join(r.runDir, "secrets", "tls-cert.pem")),
+		yamlString(filepath.Join(r.runDir, "secrets", "seed-artifact-trust.json")), yamlString(filepath.Join(r.runDir, "secrets", "tls-cert.pem")),
 		yamlString(filepath.Join(r.runDir, "secrets", "tls-key.pem")), yamlString(filepath.Join(r.runDir, "secrets", "artifact-read.token")),
 		yamlString(filepath.Join(r.runDir, "secrets", "artifact-publish.token")))
 	return os.WriteFile(filepath.Join(r.runDir, "seed-repository.yaml"), []byte(profile), 0o600)
@@ -454,22 +473,17 @@ func (r *runtime) start(ctx context.Context) error {
 	}
 	env := r.serviceEnv()
 	natsURL := "nats://" + r.options.natsListen
-	seedRepositoryArgs := []string{
-		"-repository-url", "https://" + r.options.seedArtifactListen,
-		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
-		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
-	}
 	nodeArgs := []string{
 		"reconcile", "-nats-url", natsURL, "-nats-allow-insecure", "-nats-bootstrap", "-nats-replicas", "1",
 		"-deployment", "platform-management", "-tenant", "local", "-node-id", "local-platform-node",
-		"-labels", "environment=local-platform", "-repository", filepath.Join(r.runDir, "repository"),
+		"-labels", "environment=local-platform",
 		"-runtime-root", filepath.Join(r.runDir, "installed", "backend"), "-actual-state", filepath.Join(r.runDir, "state", "actual-state.json"),
 		"-lock", filepath.Join(r.runDir, "state", "node-agent.lock"), "-third-party-plugin-policy", "deny",
 		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
 		"-plugin-placements", "cn.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
 		"-backend-platform-catalog", filepath.Join(r.runDir, "backend-platform-catalog.json"), "-allow-development-plugins",
 	}
-	nodeArgs = append(nodeArgs, seedRepositoryArgs...)
+	nodeArgs = append(nodeArgs, r.managedArtifactSourceArgs()...)
 	if _, err := r.startChild("node-agent", env, kernel, nodeArgs...); err != nil {
 		return err
 	}
@@ -477,12 +491,12 @@ func (r *runtime) start(ctx context.Context) error {
 	managedNodeArgs := []string{
 		"reconcile", "-nats-url", natsURL, "-nats-allow-insecure",
 		"-deployment", "managed-services", "-tenant", "local", "-node-id", "local-managed-node",
-		"-labels", "environment=local-managed", "-repository", filepath.Join(r.runDir, "repository"),
+		"-labels", "environment=local-managed",
 		"-runtime-root", filepath.Join(r.runDir, "installed", "managed-services"), "-actual-state", filepath.Join(r.runDir, "state", "managed-services-actual.json"),
 		"-lock", filepath.Join(r.runDir, "state", "managed-services.lock"), "-third-party-plugin-policy", "deny",
 		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
 	}
-	managedNodeArgs = append(managedNodeArgs, seedRepositoryArgs...)
+	managedNodeArgs = append(managedNodeArgs, r.managedArtifactSourceArgs()...)
 	if _, err := r.startChild("managed-node-agent", env, kernel, managedNodeArgs...); err != nil {
 		return err
 	}
@@ -498,6 +512,9 @@ func (r *runtime) start(ctx context.Context) error {
 	}
 	if err := waitForUnits(ctx, filepath.Join(r.runDir, "state", "actual-state.json"), 6, 90*time.Second); err != nil {
 		return fmt.Errorf("平台 Backend 未收敛: %w", err)
+	}
+	if err := waitHTTP(ctx, "https://"+r.options.artifactListen, 30*time.Second, true); err != nil {
+		return fmt.Errorf("托管测试制品仓库未就绪: %w", err)
 	}
 	portalArgs := []string{
 		"portal-edge", "-listen", r.options.portalListen,
@@ -548,14 +565,47 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_VAULT_TOKEN_FILE":                filepath.Join(r.runDir, "secrets", "vault-token"),
 		"VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE": filepath.Join(r.runDir, "state", "database-connections.json"),
 		"VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE":   filepath.Join(r.runDir, "state", "deployment-manager.json"),
-		"VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT":     filepath.Join(r.runDir, "artifact-volumes"),
-		"VASTPLAN_ARTIFACT_REPOSITORY":             filepath.Join(r.runDir, "artifact-volumes", "repository.primary"),
-		"VASTPLAN_ARTIFACT_TRUST":                  filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
+		"VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT":     r.testingRepositoryVolumes(),
+		"VASTPLAN_ARTIFACT_REPOSITORY":             r.testingRepositoryData(),
+		"VASTPLAN_ARTIFACT_TRUST":                  r.testingRepositoryTrust(),
 		"VASTPLAN_ARTIFACT_TLS_CERT":               filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
 		"VASTPLAN_ARTIFACT_TLS_KEY":                filepath.Join(r.runDir, "secrets", "tls-key.pem"),
 		"VASTPLAN_ARTIFACT_READ_TOKEN":             "vastplan-local-artifact-reader",
 		"VASTPLAN_ARTIFACT_PUBLISH_TOKEN":          "vastplan-local-artifact-publisher",
 		"VASTPLAN_DYNAMIC_GO_HOST":                 filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
+	}
+}
+
+func (r *runtime) testingRepositoryRoot() string {
+	return filepath.Join(r.options.stateRoot, "repositories", "testing")
+}
+
+func (r *runtime) testingRepositoryVolumes() string {
+	return filepath.Join(r.testingRepositoryRoot(), "volumes")
+}
+
+func (r *runtime) testingRepositoryData() string {
+	return filepath.Join(r.testingRepositoryVolumes(), "repository.primary")
+}
+
+func (r *runtime) testingRepositorySecrets() string {
+	return filepath.Join(r.testingRepositoryRoot(), "secrets")
+}
+
+func (r *runtime) testingRepositorySigningKey() string {
+	return filepath.Join(r.testingRepositorySecrets(), "artifact-signing.pem")
+}
+
+func (r *runtime) testingRepositoryTrust() string {
+	return filepath.Join(r.testingRepositoryRoot(), "artifact-trust.json")
+}
+
+func (r *runtime) managedArtifactSourceArgs() []string {
+	return []string{
+		"-bootstrap-repository", filepath.Join(r.runDir, "repository"),
+		"-repository-url", "https://" + r.options.artifactListen,
+		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
+		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
 	}
 }
 
@@ -697,6 +747,10 @@ func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 		"ready": ready, "portal": "http://" + r.options.listen + "/operations", "runDir": r.runDir,
 		"mode": "local-development", "productionEquivalent": false,
 		"hot": r.options.hot,
+		"repositories": map[string]any{
+			"seed":    map[string]any{"url": "https://" + r.options.seedArtifactListen, "persistent": false},
+			"testing": map[string]any{"url": "https://" + r.options.artifactListen, "persistent": true},
+		},
 	}
 	if r.hmr != nil {
 		generation, lastError := r.hmr.status()
@@ -1029,26 +1083,86 @@ func writeSessions(filename string) error {
 	return os.WriteFile(filename, append(raw, '\n'), 0o600)
 }
 
-func writeTrust(filename, privateFilename string) error {
-	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+func ensurePrivateDirectory(path string) error {
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return err
+	}
+	info, err := os.Lstat(path)
 	if err != nil {
 		return err
 	}
-	document := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
-		Publisher: "vastplan", KeyID: "local-development", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
-	})
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("%s 必须是普通目录且不能是符号链接", path)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return fmt.Errorf("%s 权限过宽 %o，要求 0700 或更严格", path, info.Mode().Perm())
+	}
+	return nil
+}
+
+func ensureSigningIdentity(privateFilename, publisher, keyID string) (pluginservice.TrustKey, error) {
+	if strings.TrimSpace(publisher) == "" || strings.TrimSpace(keyID) == "" {
+		return pluginservice.TrustKey{}, errors.New("签名身份 publisher 和 keyId 不能为空")
+	}
+	if err := ensurePrivateDirectory(filepath.Dir(privateFilename)); err != nil {
+		return pluginservice.TrustKey{}, err
+	}
+	info, err := os.Lstat(privateFilename)
+	if errors.Is(err, os.ErrNotExist) {
+		_, privateKey, generateErr := ed25519.GenerateKey(rand.Reader)
+		if generateErr != nil {
+			return pluginservice.TrustKey{}, generateErr
+		}
+		encoded, marshalErr := pluginservice.MarshalEd25519PrivateKeyPEM(privateKey)
+		if marshalErr != nil {
+			return pluginservice.TrustKey{}, marshalErr
+		}
+		file, createErr := os.OpenFile(privateFilename, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+		if createErr == nil {
+			written, writeErr := file.Write(encoded)
+			if writeErr == nil && written != len(encoded) {
+				writeErr = io.ErrShortWrite
+			}
+			syncErr := file.Sync()
+			closeErr := file.Close()
+			if writeErr != nil || syncErr != nil || closeErr != nil {
+				_ = os.Remove(privateFilename)
+				return pluginservice.TrustKey{}, errors.Join(writeErr, syncErr, closeErr)
+			}
+		} else if !errors.Is(createErr, os.ErrExist) {
+			return pluginservice.TrustKey{}, createErr
+		}
+		info, err = os.Lstat(privateFilename)
+	}
+	if err != nil {
+		return pluginservice.TrustKey{}, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return pluginservice.TrustKey{}, fmt.Errorf("签名私钥 %s 必须是普通文件且不能是符号链接", privateFilename)
+	}
+	if info.Mode().Perm()&0o077 != 0 {
+		return pluginservice.TrustKey{}, fmt.Errorf("签名私钥 %s 权限过宽 %o，要求 0600 或更严格", privateFilename, info.Mode().Perm())
+	}
+	privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(privateFilename)
+	if err != nil {
+		return pluginservice.TrustKey{}, err
+	}
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return pluginservice.TrustKey{}, errors.New("签名私钥无法导出 Ed25519 公钥")
+	}
+	return pluginservice.TrustKey{
+		Publisher: publisher, KeyID: keyID, PublicKey: base64.StdEncoding.EncodeToString(publicKey),
+	}, nil
+}
+
+func writeTrustDocument(filename string, keys ...pluginservice.TrustKey) error {
+	document := pluginservice.TrustDocumentForPublicKeys(keys...)
 	raw, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filename, append(raw, '\n'), 0o600); err != nil {
-		return err
-	}
-	encoded, err := pluginservice.MarshalEd25519PrivateKeyPEM(privateKey)
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(privateFilename, encoded, 0o600)
+	return os.WriteFile(filename, append(raw, '\n'), 0o600)
 }
 
 func writeTLS(certFile, keyFile string) error {

@@ -15,6 +15,8 @@
 
 当前以 `leader / leader-owned / cluster` 运行。集群成员可通过 `platform.artifacts.repository` 查询状态，数据复制与多活对象存储尚未在本版本提供，不能把多个实例指向不同本地目录后宣称高可用。
 
+本地平台开发组合已经把它与临时 Seed 仓库分离：Seed 只负责本次启动的基础制品，本插件使用 `.vastplan/dev-platform/repositories/testing/volumes/repository.primary` 作为跨普通重启保留的测试数据面。Node Agent 将 Seed 作为优先 bootstrap source，将本插件的 HTTPS 端点作为普通远端 source；Node Agent 通过本次运行的组合信任快照复验两者，而本插件自身只加载 testing-only 信任文档，不接受临时 Seed 身份发布的制品。
+
 ## 运行配置
 
 签名清单声明的非敏感插件配置通过调用方隔离的启动快照注入：
@@ -36,6 +38,8 @@
 
 令牌、私钥和信任文档不通过插件 API 返回，也不得写入日志、状态输出或普通设置。生产部署应以 Secret 文件或受控密钥注入提供这些值，并仅将需要的变量列入该第一方插件的环境白名单。
 
+本地开发的稳定 `local-testing` 私钥由编排器保存在仓库目录之外的私有 `secrets/` 中，**不注入本插件**。插件只获得 testing-only 信任文档、TLS 材料和分离的读写 token。该自动生成行为不适用于生产环境。
+
 ## HTTP 协议
 
 该服务强制 TLS：
@@ -48,7 +52,7 @@
 
 ## 验证
 
-`core/kernels/backend/pluginservice/remote_test.go` 通过该共享 HTTP 传输层覆盖 TLS、读写 token、签名发布与再次读取；仓库插件本身只负责配置、进程生命周期和对外贡献。ADR-0049 是该边界的权威决策记录。
+`core/kernels/backend/pluginservice/remote_test.go` 通过该共享 HTTP 传输层覆盖 TLS、读写 token、签名发布与再次读取；`engineering/tools/platformdev/artifact_repository_test.go` 覆盖持久测试身份复用、组合信任、Seed/远端源顺序、私钥不注入和目录权限。仓库插件本身只负责配置、进程生命周期和对外贡献。ADR-0049 与 ADR-0097 是该边界的权威决策记录。
 
 ## Portal 管理页
 
