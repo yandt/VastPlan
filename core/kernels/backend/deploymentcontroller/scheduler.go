@@ -654,11 +654,23 @@ func (c Controller) runAsLeader(ctx context.Context) error {
 		actualUpdates = actualWatcher.Updates()
 	}
 	var lastSummary *convergenceSummary
+	deploymentMissing := false
 	reconcile := func(reason string) {
 		entry, err := c.Deployments.Get(ctx, c.DeploymentKey)
+		if errors.Is(err, jetstream.ErrKeyNotFound) {
+			if !deploymentMissing {
+				c.Logf("集群部署尚未发布，等待 KV 创建 key=%s", c.DeploymentKey)
+				deploymentMissing = true
+			}
+			return
+		}
 		if err != nil {
 			c.Logf("读取集群部署失败 reason=%s: %v", reason, err)
 			return
+		}
+		if deploymentMissing {
+			c.Logf("集群部署已发布 key=%s", c.DeploymentKey)
+			deploymentMissing = false
 		}
 		deployment, err := deploymentv2.Parse(entry.Value())
 		if err == nil {

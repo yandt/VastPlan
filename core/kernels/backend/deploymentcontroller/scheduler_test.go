@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -221,6 +223,81 @@ func TestControllerWatchesDeploymentUpdates(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitAssignedReplicas(t, buckets.Assignments, deployment, 2)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("controller 未响应 context 取消")
+	}
+}
+
+func TestControllerTreatsMissingDeploymentAsWaitingState(t *testing.T) {
+	_, buckets := startSchedulerNATS(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	deployment := testDeployment(1)
+	key := controlplane.DeploymentKey(deployment.Metadata.Tenant, deployment.Metadata.Name)
+	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, testNodeLeaseOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lease.Close(context.Background()) })
+	var logMu sync.Mutex
+	var logs []string
+	controller := Controller{
+		Deployments: buckets.Deployments, DeploymentKey: key, Interval: 20 * time.Millisecond,
+		Scheduler: Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments},
+		Leaders:   buckets.Controllers, Identity: "controller-waiting",
+		Election: controlplane.LeaderElectionOptions{
+			LeaseDuration: time.Second, RenewEvery: 100 * time.Millisecond, RetryEvery: 20 * time.Millisecond,
+		},
+		Logf: func(format string, values ...any) {
+			logMu.Lock()
+			logs = append(logs, fmt.Sprintf(format, values...))
+			logMu.Unlock()
+		},
+	}
+	done := make(chan error, 1)
+	go func() { done <- controller.Run(ctx) }()
+
+	waitFor := func(match string) {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for time.Now().Before(deadline) {
+			logMu.Lock()
+			found := slices.ContainsFunc(logs, func(line string) bool { return strings.Contains(line, match) })
+			logMu.Unlock()
+			if found {
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		t.Fatalf("等待日志超时: %s", match)
+	}
+	waitFor("集群部署尚未发布")
+	time.Sleep(100 * time.Millisecond) // 覆盖多次 poll，等待态只允许记录一次。
+	logMu.Lock()
+	captured := append([]string(nil), logs...)
+	logMu.Unlock()
+	waiting, failures := 0, 0
+	for _, line := range captured {
+		if strings.Contains(line, "集群部署尚未发布") {
+			waiting++
+		}
+		if strings.Contains(line, "读取集群部署失败") {
+			failures++
+		}
+	}
+	if waiting != 1 || failures != 0 {
+		t.Fatalf("未发布 Deployment 应安静等待一次: waiting=%d failures=%d logs=%v", waiting, failures, captured)
+	}
+
+	raw, _ := json.Marshal(deployment)
+	if _, _, err := controlplane.ApplyDeployment(ctx, buckets.Deployments, key, raw); err != nil {
+		t.Fatal(err)
+	}
+	waitFor("集群部署已发布")
+	waitAssignedReplicas(t, buckets.Assignments, deployment, 1)
 	cancel()
 	select {
 	case <-done:
