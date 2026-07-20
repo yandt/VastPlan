@@ -163,37 +163,12 @@ func ownPIDFile(stateRoot string) (func(), error) {
 }
 
 func (r *runtime) prepare(ctx context.Context) error {
-	for _, dir := range []string{"bin", "dynamic", "repository", "installed", "state", "secrets", "artifact-store", "nats", "go-cache"} {
+	for _, dir := range []string{"installed", "state", "secrets", "artifact-store", "nats"} {
 		if err := os.MkdirAll(filepath.Join(r.runDir, dir), 0o700); err != nil {
 			return err
 		}
 	}
-	log.Printf("[1/5] 构建 Backend 内核与插件")
-	buildEnv := map[string]string{
-		"CGO_ENABLED": "1",
-		"OUT_DIR":     filepath.Join(r.runDir, "bin"),
-		"GOCACHE":     filepath.Join(r.runDir, "go-cache"),
-	}
-	if err := r.command(ctx, buildEnv, "./engineering/tools/build.sh"); err != nil {
-		return err
-	}
-	log.Printf("[2/5] 构建按需加载的 Portal 与前端插件")
-	portalBuildEnv := map[string]string{"PORTAL_OUT_DIR": filepath.Join(r.runDir, "portal-assets")}
-	if r.options.hot {
-		portalBuildEnv["PORTAL_DEV_HMR"] = "1"
-	}
-	if err := r.command(ctx, portalBuildEnv, "./engineering/tools/build-frontend.sh"); err != nil {
-		return fmt.Errorf("构建 Portal 失败（若依赖尚未安装，请先运行 pnpm install）: %w", err)
-	}
-	log.Printf("[3/5] 共同构建 bootstrap-policy dynamic-go 制品")
-	if err := r.command(ctx, map[string]string{
-		"OUT_DIR": filepath.Join(r.runDir, "dynamic"),
-		"GOCACHE": filepath.Join(r.runDir, "go-cache"),
-	}, "./engineering/tools/build-dynamic-go.sh"); err != nil {
-		return err
-	}
-	log.Printf("[4/5] 装配本地不可变插件仓库")
-	if err := r.packageArtifacts(ctx); err != nil {
+	if err := r.prepareCachedBuilds(ctx); err != nil {
 		return err
 	}
 	log.Printf("[5/5] 生成仅限本地开发的 TLS、session 与服务配置")
@@ -211,8 +186,7 @@ func (r *runtime) command(ctx context.Context, extra map[string]string, name str
 	return nil
 }
 
-func (r *runtime) packageArtifacts(ctx context.Context) error {
-	repository := filepath.Join(r.runDir, "repository")
+func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, frontendModulesDir, dynamicDir string) error {
 	specs, err := discoverPackageSpecs(r.options.root)
 	if err != nil {
 		return err
@@ -220,16 +194,16 @@ func (r *runtime) packageArtifacts(ctx context.Context) error {
 	for _, spec := range specs {
 		args := []string{"run", "./engineering/tools/pluginpackage", "-source", filepath.Join("extensions", "plugins", spec.id), "-repository", repository}
 		if spec.backend {
-			args = append(args, "-backend-bin", filepath.Join(r.runDir, "bin", spec.id))
+			args = append(args, "-backend-bin", filepath.Join(binDir, spec.id))
 		}
 		if spec.frontend {
-			args = append(args, "-frontend-bundle", filepath.Join(r.options.root, "extensions", "plugins", spec.id, filepath.FromSlash(spec.frontendEntry)))
+			args = append(args, "-frontend-bundle", filepath.Join(frontendModulesDir, spec.id+".js"))
 		}
-		if err := r.command(ctx, map[string]string{"GOCACHE": filepath.Join(r.runDir, "go-cache")}, "go", args...); err != nil {
+		if err := r.command(ctx, map[string]string{"GOCACHE": filepath.Join(r.options.stateRoot, "go-cache")}, "go", args...); err != nil {
 			return fmt.Errorf("打包 %s: %w", spec.id, err)
 		}
 	}
-	dynamicPackage, err := os.ReadFile(filepath.Join(r.runDir, "dynamic", "cn.vastplan.foundation.security.bootstrap-policy.tar.gz"))
+	dynamicPackage, err := os.ReadFile(filepath.Join(dynamicDir, "cn.vastplan.foundation.security.bootstrap-policy.tar.gz"))
 	if err != nil {
 		return err
 	}

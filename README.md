@@ -120,7 +120,7 @@ flowchart LR
 ./engineering/tools/platform-dev.sh down
 ```
 
-需要在终端实时观察完整启动日志时使用 `up --debug`；需要清空本地运行状态重新装配时使用 `restart --fresh`。
+首次启动会完整构建；后续启动按源码、插件清单和工具链的内容摘要复用未变化的 Backend、Portal、dynamic-go 与本地插件制品。需要在终端实时观察完整启动日志时使用 `up --debug`；需要清空本地运行状态和构建缓存后冷启动时使用 `restart --fresh`。
 
 该入口包含开发身份注入、嵌入式 NATS 和 Vault 兼容桩，不等同于生产部署。完整边界见[本地平台管理中心指南](docs/dev/guides/本地平台管理中心.md)。
 
