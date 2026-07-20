@@ -13,6 +13,8 @@ import (
 // MagicCookie 防止误把普通进程当插件（插件契约与协议 §2.2）。
 const MagicCookie = "VASTPLAN_PLUGIN_V1"
 
+const MaxPluginConfigBytes = 64 << 10
+
 // 宿主拉起插件时经环境变量注入的三件套（§2.2「注入连接端点 + magic cookie」）。
 const (
 	// MagicEnvKey magic cookie。
@@ -21,6 +23,9 @@ const (
 	HostAddrEnvKey = "VASTPLAN_HOST_ADDR"
 	// LaunchTokenEnvKey 一次性令牌，用于把握手对应回那次 Launch。
 	LaunchTokenEnvKey = "VASTPLAN_LAUNCH_TOKEN"
+	// PluginConfigEnvKey carries the caller-isolated, non-sensitive startup
+	// snapshot. Managed credential values are never included in this document.
+	PluginConfigEnvKey = "VASTPLAN_PLUGIN_CONFIG_JSON"
 )
 
 // SessionMetadataKey 插件在 Channel 流的 gRPC metadata 中携带会话票据的键。

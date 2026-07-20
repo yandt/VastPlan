@@ -1,0 +1,51 @@
+{
+  "id": "cn.vastplan.platform.artifacts.storage.file",
+  "name": "VastPlan 本地文件制品存储 Provider",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "在配置与迁移路径上供给仅属主可访问的本地制品卷；对象读写不经过插件 RPC",
+  "engines": { "backend": "^0.1" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": { "optional": ["scope.tenant", "caller", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "runtime": {
+    "instancePolicy": "leader",
+    "stateModel": "leader-owned",
+    "visibility": "cluster",
+    "routing": "leader",
+    "routingDomain": "platform",
+    "provides": [
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.storage.file", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }
+    ]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "restart",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "volumeId": { "type": "string", "minLength": 1, "maxLength": 80 } },
+      "required": ["volumeId"]
+    }
+  },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/artifact-storage-file" },
+  "contributes": {
+    "backend": {
+      "tools": [
+        {
+          "id": "platform.artifacts.storage.file",
+          "service_role": "backend",
+          "title": "本地文件制品存储 Provider",
+          "subcommands": [
+            { "name": "probe", "description": "检查本地文件存储根目录", "paramsSchema": { "type": "object", "properties": { "volumeId": { "type": "string" } }, "required": ["volumeId"] } },
+            { "name": "provision", "description": "幂等供给一个私有制品卷", "paramsSchema": { "type": "object", "properties": { "volumeId": { "type": "string" } }, "required": ["volumeId"] } }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -142,6 +142,35 @@ func TestPluginEnvironmentUsesExplicitAllowlist(t *testing.T) {
 	_ = os.Getenv("PATH") // 证明测试不依赖当前 PATH 内容。
 }
 
+func TestStartupConfigurationMustBeBoundedJSONObject(t *testing.T) {
+	if err := validateStartupConfiguration([]byte(`{"region":"cn-east"}`)); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range [][]byte{[]byte(`[]`), []byte(`{"broken"`), make([]byte, protocol.MaxPluginConfigBytes+1)} {
+		if err := validateStartupConfiguration(raw); err == nil {
+			t.Fatalf("非法插件启动配置必须拒绝: bytes=%d", len(raw))
+		}
+	}
+	input := []byte(`{"region":"cn-east"}`)
+	policy := cloneLaunchPolicy(LaunchPolicy{Configuration: input})
+	policy.Configuration[2] = 'X'
+	if string(input) != `{"region":"cn-east"}` {
+		t.Fatal("启动配置必须防御性复制")
+	}
+}
+
+func TestReservedPluginEnvironmentCannotBeInheritedOrOverridden(t *testing.T) {
+	t.Setenv(protocol.PluginConfigEnvKey, `{"spoofed":true}`)
+	for _, item := range pluginEnvironment([]string{protocol.PluginConfigEnvKey}) {
+		if key, _, ok := splitEnv(item); ok && key == protocol.PluginConfigEnvKey {
+			t.Fatal("宿主保留启动配置不得通过普通 allowlist 继承")
+		}
+	}
+	if err := validateExtraEnvironment([]string{protocol.PluginConfigEnvKey + `={"spoofed":true}`}); err == nil {
+		t.Fatal("运行驱动不得覆盖宿主保留启动配置")
+	}
+}
+
 func splitEnv(item string) (string, string, bool) {
 	for index := range item {
 		if item[index] == '=' {

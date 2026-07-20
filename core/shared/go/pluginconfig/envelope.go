@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+
+	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
 )
 
 const (
@@ -62,7 +64,12 @@ func Parse(config map[string]any, installedPluginIDs []string) (Envelope, error)
 			if err != nil {
 				return Envelope{}, fmt.Errorf("插件 %q 配置: %w", pluginID, err)
 			}
-			envelope.Plugins[pluginID] = cloneObject(pluginValues)
+			frozen := cloneObject(pluginValues)
+			raw, err := json.Marshal(frozen)
+			if err != nil || len(raw) > protocol.MaxPluginConfigBytes {
+				return Envelope{}, fmt.Errorf("插件 %q 配置超过 64KiB 上限", pluginID)
+			}
+			envelope.Plugins[pluginID] = frozen
 		}
 	}
 	if raw, ok := config[EnvironmentAllowlistKey]; ok {

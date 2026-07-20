@@ -46,9 +46,20 @@
       "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
+        "plugins": {
+          "cn.vastplan.platform.artifacts.storage.file": {
+            "volumeId": "repository.primary"
+          },
+          "cn.vastplan.platform.artifacts.repository": {
+            "listen": "__VASTPLAN_ARTIFACT_LISTEN__",
+            "storageProvider": "platform.artifacts.storage.file"
+          }
+        },
         "environment_allowlist": {
+          "cn.vastplan.platform.artifacts.storage.file": [
+            "VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT"
+          ],
           "cn.vastplan.platform.artifacts.repository": [
-            "VASTPLAN_ARTIFACT_LISTEN_ADDR",
             "VASTPLAN_ARTIFACT_REPOSITORY",
             "VASTPLAN_ARTIFACT_TRUST",
             "VASTPLAN_ARTIFACT_TLS_CERT",
@@ -60,7 +71,8 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.2.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.1.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.3.0", "channel": "stable" }
       ]
     },
     {

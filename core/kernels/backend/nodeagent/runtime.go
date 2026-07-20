@@ -2,6 +2,7 @@ package nodeagent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -143,6 +144,14 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	}()
 	instances := make([]*protocolbus.PluginInstance, 0, len(unit.Plugins))
 	for _, plugin := range unit.Plugins {
+		pluginValues := envelope.Plugins[plugin.ID]
+		if pluginValues == nil {
+			pluginValues = map[string]any{}
+		}
+		startupConfig, err := json.Marshal(pluginValues)
+		if err != nil {
+			return fmt.Errorf("序列化插件 %s 启动配置: %w", plugin.ID, err)
+		}
 		instance, err := r.startPlugin(ctx, candidate, plugin, protocolbus.LaunchPolicy{
 			PluginID: plugin.ID, Publisher: plugin.Publisher, Version: plugin.Version,
 			Contributions:        plugin.Contract.Contributions,
@@ -150,6 +159,7 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 			ContextAccess:        plugin.Contract.ContextAccess,
 			ContextCeiling:       r.ContextPolicy.Ceiling(plugin.Publisher).Strings(),
 			EnvironmentAllowlist: append([]string(nil), unit.EnvironmentAllowlists[plugin.ID]...),
+			Configuration:        startupConfig,
 			RequiredFeatures:     append([]string(nil), plugin.Execution.Features...),
 			RuntimeScope:         unit.ID,
 			RuntimeGeneration:    unit.Fingerprint,

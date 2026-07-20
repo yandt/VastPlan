@@ -279,7 +279,7 @@ func (r *runtime) writeFixtures() error {
 	if err != nil {
 		return err
 	}
-	rendered := bytes.ReplaceAll(template, []byte("__VASTPLAN_DEV_ROOT__"), []byte(filepath.ToSlash(r.runDir)))
+	rendered := renderPlatformProfile(template, r.runDir, r.options.artifactListen)
 	if err := os.WriteFile(filepath.Join(r.runDir, "platform-management-profile.json"), rendered, 0o600); err != nil {
 		return err
 	}
@@ -300,6 +300,11 @@ func (r *runtime) writeFixtures() error {
 		return err
 	}
 	return nil
+}
+
+func renderPlatformProfile(template []byte, runDir, artifactListen string) []byte {
+	rendered := bytes.ReplaceAll(template, []byte("__VASTPLAN_DEV_ROOT__"), []byte(filepath.ToSlash(runDir)))
+	return bytes.ReplaceAll(rendered, []byte("__VASTPLAN_ARTIFACT_LISTEN__"), []byte(artifactListen))
 }
 
 func (r *runtime) start(ctx context.Context) error {
@@ -399,8 +404,8 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_VAULT_TOKEN_FILE":                filepath.Join(r.runDir, "secrets", "vault-token"),
 		"VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE": filepath.Join(r.runDir, "state", "database-connections.json"),
 		"VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE":   filepath.Join(r.runDir, "state", "deployment-manager.json"),
-		"VASTPLAN_ARTIFACT_LISTEN_ADDR":            r.options.artifactListen,
-		"VASTPLAN_ARTIFACT_REPOSITORY":             filepath.Join(r.runDir, "artifact-store"),
+		"VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT":     filepath.Join(r.runDir, "artifact-volumes"),
+		"VASTPLAN_ARTIFACT_REPOSITORY":             filepath.Join(r.runDir, "artifact-volumes", "repository.primary"),
 		"VASTPLAN_ARTIFACT_TRUST":                  filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
 		"VASTPLAN_ARTIFACT_TLS_CERT":               filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
 		"VASTPLAN_ARTIFACT_TLS_KEY":                filepath.Join(r.runDir, "secrets", "tls-key.pem"),

@@ -3,7 +3,7 @@ package main
 import "testing"
 
 func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
-	t.Setenv("VASTPLAN_ARTIFACT_LISTEN_ADDR", "")
+	t.Setenv("VASTPLAN_PLUGIN_CONFIG_JSON", `{}`)
 	t.Setenv("VASTPLAN_ARTIFACT_REPOSITORY", "")
 	t.Setenv("VASTPLAN_ARTIFACT_TRUST", "")
 	t.Setenv("VASTPLAN_ARTIFACT_TLS_CERT", "")
@@ -33,5 +33,12 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	}
 	if config.addr != "127.0.0.1:8443" {
 		t.Fatalf("default listen address = %q", config.addr)
+	}
+	if config.storageProvider != "platform.artifacts.storage.file" {
+		t.Fatalf("default storage provider = %q", config.storageProvider)
+	}
+	t.Setenv("VASTPLAN_PLUGIN_CONFIG_JSON", `{"storageProvider":"../../escape"}`)
+	if _, err := loadConfig(); err == nil {
+		t.Fatal("invalid storage provider id must fail closed")
 	}
 }

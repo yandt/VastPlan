@@ -2,6 +2,7 @@ package protocolbus
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -76,6 +77,12 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 	if strings.TrimSpace(spec.Command) == "" {
 		return nil, errors.New("插件启动命令不能为空")
 	}
+	if err := validateStartupConfiguration(policy.Configuration); err != nil {
+		return nil, err
+	}
+	if err := validateExtraEnvironment(spec.ExtraEnv); err != nil {
+		return nil, err
+	}
 
 	token := newToken()
 	resultCh := make(chan launchResult, 1)
@@ -98,6 +105,9 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 		protocol.HostAddrEnvKey+"="+h.addr,
 		protocol.LaunchTokenEnvKey+"="+token,
 	)
+	if len(policy.Configuration) != 0 {
+		cmd.Env = append(cmd.Env, protocol.PluginConfigEnvKey+"="+string(policy.Configuration))
+	}
 	logID := policy.PluginID
 	if logID == "" {
 		logID = filepath.Base(spec.Command)
@@ -171,6 +181,9 @@ func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSp
 	if spec.Start == nil || spec.Stop == nil {
 		return nil, errors.New("托管执行单元必须提供 Start 和 Stop")
 	}
+	if err := validateStartupConfiguration(policy.Configuration); err != nil {
+		return nil, err
+	}
 	token := newToken()
 	resultCh := make(chan launchResult, 1)
 	h.mu.Lock()
@@ -190,6 +203,9 @@ func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSp
 		protocol.HostAddrEnvKey+"="+h.addr,
 		protocol.LaunchTokenEnvKey+"="+token,
 	)
+	if len(policy.Configuration) != 0 {
+		environment = append(environment, protocol.PluginConfigEnvKey+"="+string(policy.Configuration))
+	}
 	if err := spec.Start(environment); err != nil {
 		spec.Stop()
 		return nil, fmt.Errorf("启动托管插件执行单元: %w", err)
@@ -236,8 +252,45 @@ func cloneLaunchPolicy(policy LaunchPolicy) LaunchPolicy {
 	policy.ContextAccess.Baggage = append([]string(nil), policy.ContextAccess.Baggage...)
 	policy.ContextCeiling = append([]string(nil), policy.ContextCeiling...)
 	policy.EnvironmentAllowlist = append([]string(nil), policy.EnvironmentAllowlist...)
+	policy.Configuration = append([]byte(nil), policy.Configuration...)
 	policy.RequiredFeatures = append([]string(nil), policy.RequiredFeatures...)
 	return policy
+}
+
+func validateStartupConfiguration(raw []byte) error {
+	if len(raw) == 0 {
+		return nil
+	}
+	if len(raw) > protocol.MaxPluginConfigBytes || !json.Valid(raw) {
+		return errors.New("插件启动配置必须是最大 64KiB 的合法 JSON")
+	}
+	var object map[string]any
+	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
+		return errors.New("插件启动配置根必须是 JSON object")
+	}
+	return nil
+}
+
+func validateExtraEnvironment(environment []string) error {
+	for _, item := range environment {
+		key, _, ok := splitEnvironment(item)
+		if !ok || key == "" {
+			return errors.New("运行驱动 ExtraEnv 必须使用 KEY=VALUE")
+		}
+		if reservedPluginEnvironmentKey(key) {
+			return fmt.Errorf("运行驱动不得覆盖宿主保留环境变量 %s", key)
+		}
+	}
+	return nil
+}
+
+func reservedPluginEnvironmentKey(key string) bool {
+	switch key {
+	case protocol.MagicEnvKey, protocol.HostAddrEnvKey, protocol.LaunchTokenEnvKey, protocol.PluginConfigEnvKey:
+		return true
+	default:
+		return false
+	}
 }
 
 func pluginEnvironment(allowlist []string) []string {
@@ -250,7 +303,7 @@ func pluginEnvironment(allowlist []string) []string {
 	out := make([]string, 0, len(allowed))
 	last := ""
 	for _, key := range allowed {
-		if key == "" || key == last {
+		if key == "" || key == last || reservedPluginEnvironmentKey(key) {
 			continue
 		}
 		last = key
@@ -259,6 +312,14 @@ func pluginEnvironment(allowlist []string) []string {
 		}
 	}
 	return out
+}
+
+func splitEnvironment(item string) (string, string, bool) {
+	index := strings.IndexByte(item, '=')
+	if index <= 0 {
+		return "", "", false
+	}
+	return item[:index], item[index+1:], true
 }
 
 // Invoke 扩展点被触发时的**公开入口**，是完整的调用管道：

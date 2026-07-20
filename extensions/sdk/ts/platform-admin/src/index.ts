@@ -33,7 +33,7 @@ export interface DatabaseConnection {
 }
 
 export interface DatabaseProbe { ready: boolean; message?: string; }
-export interface ArtifactRepositoryStatus { ready: boolean; listen?: string; }
+export interface ArtifactRepositoryStatus { ready: boolean; listen?: string; storageProvider?: string; }
 
 export interface NodeBootstrapPlan {
   target: { address: string; port?: number; user: string };

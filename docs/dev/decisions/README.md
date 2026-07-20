@@ -121,3 +121,4 @@
 - [ADR-0088 Backend 统一执行驱动与托管语言运行时](ADR-0088-Backend统一执行驱动与托管语言运行时.md)
 - [ADR-0089 Runtime Provider 与共享 Host 池](ADR-0089-Runtime-Provider与共享Host池.md)
 - [ADR-0090 插件配置与托管凭证闭环](ADR-0090-插件配置与托管凭证闭环.md)
+- [ADR-0091 制品存储 Provider 供给边界](ADR-0091-制品存储Provider供给边界.md)

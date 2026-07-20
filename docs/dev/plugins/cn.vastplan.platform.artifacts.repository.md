@@ -1,13 +1,15 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.2.0`
+当前制品版本：`0.3.0`
+
+仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
 能力：`tool.package/platform.artifacts.repository`
 
 ## 边界
 
-该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、读写令牌分离和运行状态查询。它可以在不改动内核的情况下继续增加对象存储、OCI、索引、复制、审批和市场 API。
+该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、读写令牌分离和运行状态查询。对象存储与 OCI 通过供给 Provider 增加；索引、复制、审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
@@ -15,11 +17,17 @@
 
 ## 运行配置
 
-第一方进程只能从部署方显式允许的受控环境取得以下配置：
+签名清单声明的非敏感插件配置通过调用方隔离的启动快照注入：
+
+| 字段 | 含义 |
+|---|---|
+| `listen` | HTTPS 监听地址；默认 `127.0.0.1:8443` |
+| `storageProvider` | 已供给当前数据面的 Provider 能力 ID |
+
+部署适配器仍需向该第一方进程提供以下受控挂载/秘密；它们不属于普通插件设置：
 
 | 变量 | 含义 |
 |---|---|
-| `VASTPLAN_ARTIFACT_LISTEN_ADDR` | HTTPS 监听地址；默认 `127.0.0.1:8443` |
 | `VASTPLAN_ARTIFACT_REPOSITORY` | 不可变本地制品存储根目录 |
 | `VASTPLAN_ARTIFACT_TRUST` | 发布者 Ed25519 信任文档 |
 | `VASTPLAN_ARTIFACT_TLS_CERT` / `VASTPLAN_ARTIFACT_TLS_KEY` | TLS 证书与私钥 PEM |
@@ -44,4 +52,4 @@
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/artifacts` 只读状态页。v1 仅显示就绪和监听状态，不返回令牌、信任根、存储路径，也不复用仓库上传 API。目录、审批与供应链证明浏览将在独立管理契约封板后扩展。
+同一签名制品提供 `/settings/artifacts` 只读状态页。v1 显示真实就绪状态、监听地址和 Provider ID，不返回令牌、信任根、存储路径，也不复用仓库上传 API。目录、审批与供应链证明浏览将在独立管理契约封板后扩展。

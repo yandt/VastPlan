@@ -70,8 +70,9 @@ type DatabaseProbe struct {
 }
 
 type ArtifactRepositoryStatus struct {
-	Ready  bool   `json:"ready"`
-	Listen string `json:"listen,omitempty"`
+	Ready           bool   `json:"ready"`
+	Listen          string `json:"listen,omitempty"`
+	StorageProvider string `json:"storageProvider,omitempty"`
 }
 
 type ManagedNode struct {

@@ -6,9 +6,12 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,6 +29,33 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
 )
+
+// DecodeStartupConfiguration decodes the caller-isolated, non-sensitive
+// configuration snapshot injected into an independent plugin process by the
+// trusted runtime. Managed Runtime Hosts decode their per-unit environment map;
+// dynamic plugins use kernel.config.get. Unknown fields fail closed.
+func DecodeStartupConfiguration(output any) error {
+	return decodeStartupConfiguration(os.Getenv(protocol.PluginConfigEnvKey), output)
+}
+
+func decodeStartupConfiguration(raw string, output any) error {
+	if output == nil {
+		return errors.New("启动配置输出不能为空")
+	}
+	if raw == "" {
+		raw = "{}"
+	}
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(output); err != nil {
+		return fmt.Errorf("解析插件启动配置: %w", err)
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		return errors.New("插件启动配置必须只包含一个 JSON 值")
+	}
+	return nil
+}
 
 // Host 是插件回调宿主的入口：取内核服务、或经 capability 寻址调别的能力（§2.4）。
 // 插件**不得**直接 import 别的插件，只能经它按能力名寻址（工程规范 §七）。

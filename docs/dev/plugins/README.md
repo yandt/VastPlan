@@ -23,4 +23,5 @@
 - [cn.vastplan.platform.security.credentials](cn.vastplan.platform.security.credentials.md) —— Vault Transit 凭证元数据与轮换
 - [cn.vastplan.platform.data.relational.connection-manager](cn.vastplan.platform.data.relational.connection-manager.md) —— 数据库连接定义与可信探测
 - [cn.vastplan.platform.artifacts.repository](cn.vastplan.platform.artifacts.repository.md) —— HTTPS 制品仓库与状态能力
+- [cn.vastplan.platform.artifacts.storage.file](cn.vastplan.platform.artifacts.storage.file.md) —— 本地文件制品 volume 供给 Provider
 - [cn.vastplan.platform.infrastructure.deployment-manager](cn.vastplan.platform.infrastructure.deployment-manager.md) —— 节点计划、首次引导审批与可信执行桥
