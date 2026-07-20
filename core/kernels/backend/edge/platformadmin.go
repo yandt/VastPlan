@@ -121,13 +121,16 @@ func (s *CapabilityPlatformAdminService) ListDatabaseConnections(ctx context.Con
 	return response, err
 }
 
-func (s *CapabilityPlatformAdminService) PutDatabaseConnection(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, name string, request platformadminapi.DatabaseConnection) (platformadminapi.DatabaseConnection, error) {
-	if err := validResourceName(name, 160); err != nil || request.Name != "" && request.Name != name || strings.TrimSpace(request.Driver) == "" || strings.TrimSpace(request.Endpoint) == "" || strings.TrimSpace(request.Credential) == "" {
+func (s *CapabilityPlatformAdminService) PutDatabaseConnection(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, name string, request platformadminapi.PutDatabaseConnectionRequest) (platformadminapi.DatabaseConnection, error) {
+	if err := validResourceName(name, 160); err != nil || strings.TrimSpace(request.Driver) == "" || strings.TrimSpace(request.Endpoint) == "" {
 		return platformadminapi.DatabaseConnection{}, platformadminapi.ErrInvalid
 	}
-	request.Name = name
+	payload := struct {
+		Name string `json:"name"`
+		platformadminapi.PutDatabaseConnectionRequest
+	}{Name: name, PutDatabaseConnectionRequest: request}
 	var response platformadminapi.DatabaseConnection
-	err := s.call(ctx, p, target, platformadminapi.DatabaseCapability, "define", true, request, &response)
+	err := s.call(ctx, p, target, platformadminapi.DatabaseCapability, "define", true, payload, &response)
 	return response, err
 }
 

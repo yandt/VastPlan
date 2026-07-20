@@ -57,11 +57,26 @@ type PutCredentialRequest struct {
 }
 
 type DatabaseConnection struct {
-	Name       string `json:"name"`
-	Driver     string `json:"driver"`
-	Endpoint   string `json:"endpoint"`
-	Database   string `json:"database,omitempty"`
-	Credential string `json:"credential"`
+	Name       string                   `json:"name"`
+	Driver     string                   `json:"driver"`
+	Endpoint   string                   `json:"endpoint"`
+	Database   string                   `json:"database,omitempty"`
+	Credential DatabaseCredentialStatus `json:"credential"`
+}
+
+type DatabaseCredentialStatus struct {
+	Managed bool  `json:"managed"`
+	Version int64 `json:"version"`
+}
+
+// PutDatabaseConnectionRequest accepts credential material only as a
+// write-only input to the database plugin. The value is omitted on ordinary
+// edits to retain the currently managed credential and is never returned.
+type PutDatabaseConnectionRequest struct {
+	Driver          string `json:"driver"`
+	Endpoint        string `json:"endpoint"`
+	Database        string `json:"database,omitempty"`
+	CredentialValue string `json:"credentialValue,omitempty"`
 }
 
 type DatabaseProbe struct {
@@ -171,7 +186,7 @@ type Service interface {
 	RotateCredential(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (CredentialMetadata, error)
 	RevokeCredential(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (CredentialMetadata, error)
 	ListDatabaseConnections(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]DatabaseConnection, error)
-	PutDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, DatabaseConnection) (DatabaseConnection, error)
+	PutDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, PutDatabaseConnectionRequest) (DatabaseConnection, error)
 	DeleteDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) error
 	ProbeDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (DatabaseProbe, error)
 	ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryStatus, error)

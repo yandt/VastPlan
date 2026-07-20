@@ -134,6 +134,9 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	if err != nil {
 		return fmt.Errorf("创建候选宿主: %w", err)
 	}
+	if r.router != nil {
+		candidate.SetCapabilityForwarder(r.router.Invoke)
+	}
 	if err := candidate.Start(); err != nil {
 		return err
 	}

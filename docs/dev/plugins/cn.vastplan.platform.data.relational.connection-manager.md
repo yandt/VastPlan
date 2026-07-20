@@ -2,11 +2,11 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.2.0`
+当前制品版本：`0.3.0`
 
 ## 边界
 
-本插件管理租户隔离的数据库连接定义：驱动、端点、数据库名和凭证引用。它不接受密码、连接串中的凭证片段或任意 SQL；连接定义以 `0600` 的原子状态文件持久化。
+本插件管理租户隔离的数据库连接定义：驱动、端点、数据库名和不透明托管凭证引用。`define` 可接收一次性的只写 `credentialValue`，立即交给凭证插件加密托管；明文不进入连接状态文件、响应或日志。连接定义和凭证候选以可恢复 pending 状态收敛，状态文件使用 `0600` 原子替换。
 
 `probe` 将非敏感定义和 `CredentialRef` 交给 `kernel.database.probe`。可信部署适配器实现 `kernelspi.DatabaseBroker`，并在内部通过 `CredentialBroker` 使用 Vault/KMS 凭证。插件无法取得、序列化或返回凭证明文。
 
@@ -20,7 +20,7 @@
 
 | 操作 | 含义 |
 |---|---|
-| `define` | 保存 `name/driver/endpoint/database/credential`，不含密码 |
+| `define` | 保存连接；新建时接收只写 `credentialValue`，编辑留空则保留原托管凭证 |
 | `describe`、`list` | 返回连接定义 |
 | `remove` | 删除连接定义 |
 | `probe` | 让可信宿主以凭证引用执行连通性检查 |
@@ -29,4 +29,4 @@
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/databases` 页面，管理非敏感连接定义并触发可信宿主 probe。当前页面仍手工填写 CredentialRef 名称；这是待迁移的过渡实现，不再是目标交互。目标页面直接采集只写密码/令牌，由配置协调器托管并把不透明 CredentialRef 绑定到连接，详见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。
+同一签名制品提供 `/settings/databases` 页面。用户直接在连接表单中输入密码或令牌，不再先创建、再复制 CredentialRef 名称。页面读取只显示“已托管”，编辑时不会回填秘密；填写新值会创建并激活新凭证，删除连接会退役其托管句柄。详见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。

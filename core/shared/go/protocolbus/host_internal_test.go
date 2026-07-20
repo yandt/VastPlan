@@ -17,6 +17,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
+	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
@@ -399,6 +400,24 @@ func TestHost_LaunchWithoutStartFails(t *testing.T) {
 	h := NewHost("backend", "0.1.0", nil, nil)
 	if _, err := h.Launch(t.Context(), "/nonexistent"); err == nil {
 		t.Fatal("未 Start 就 Launch 应报错")
+	}
+}
+
+func TestHostForwardsMissingCapabilityWithoutDuplicatingCallPath(t *testing.T) {
+	host := NewHost("backend", "0.1.0", registry.New(), nil)
+	operation := "stageManaged"
+	target := &contractv1.CallTarget{ExtensionPoint: extpoint.ToolPackage, Capability: "platform.credentials", Operation: &operation}
+	key := callTargetKey(target)
+	host.SetCapabilityForwarder(func(_ context.Context, gotTarget *contractv1.CallTarget, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if gotTarget.GetCapability() != target.GetCapability() || len(call.GetCallPath()) != 1 || call.GetCallPath()[0] != "tool.package/platform.database#define" {
+			t.Fatalf("跨服务转发必须保留祖先并移除当前目标: target=%+v path=%v", gotTarget, call.GetCallPath())
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, append([]byte(nil), payload...), nil
+	})
+	ctx := context.WithValue(context.Background(), currentDispatchTargetKey{}, key)
+	response, err := host.invoke(ctx, target, &contractv1.CallContext{CallPath: []string{"tool.package/platform.database#define", key}}, []byte(`{"secret":"opaque"}`))
+	if err != nil || response.GetResult().GetStatus() != contractv1.CallResult_STATUS_OK || string(response.GetPayload()) != `{"secret":"opaque"}` {
+		t.Fatalf("跨服务能力转发失败: response=%+v err=%v", response, err)
 	}
 }
 

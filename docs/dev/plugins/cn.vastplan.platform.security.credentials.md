@@ -3,7 +3,7 @@
 插件 ID：`cn.vastplan.platform.security.credentials`
 能力：`tool.package/platform.credentials`
 运行模型：`leader + leader-owned + cluster + leader`
-当前制品版本：`0.2.0`
+当前制品版本：`0.3.0`
 
 ## 安全模型
 
@@ -35,8 +35,12 @@
 | `list(prefix)` | 返回当前租户的元数据列表 |
 | `rotate(name)` | 调用 Transit rewrap 轮换包裹密钥 |
 | `revoke(name)` | 撤销凭证引用 |
+| `stageManaged(purpose, resource, value)` | 仅限已认证业务插件，创建 Preparing 候选并返回随机句柄 |
+| `activateManaged(stageId)` | 仅允许创建该候选的插件激活，重复调用幂等 |
+| `abortManaged(stageId)` | 终止未激活候选并删除其密文 |
+| `retireManaged(handle)` | 由所有者插件退役不再使用的 Active 句柄 |
 
-该 API **没有** `get` 或 `decrypt` 操作。数据库服务不能向它索取明文；后续数据库适配将通过可信宿主的受限操作使用 `CredentialRef`。
+托管操作的 owner 从宿主认证后的插件 caller 注入，payload 不能指定或冒充。该 API **没有**面向普通插件的 `get` 或 `decrypt` 操作。数据库插件不能索取明文；后续可信宿主 material lease 适配器将按 tenant、owner、purpose 和 version 校验后，在受限回调内使用 `CredentialRef`。
 
 ## Portal 管理页
 

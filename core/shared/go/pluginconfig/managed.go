@@ -41,8 +41,8 @@ type Snapshot struct {
 }
 
 type StagedCredential struct {
-	ID  string
-	Ref ManagedCredentialRef
+	ID  string               `json:"stageId"`
+	Ref ManagedCredentialRef `json:"ref"`
 }
 
 // CredentialCustodian owns all plaintext handling. Stage must copy the bytes it

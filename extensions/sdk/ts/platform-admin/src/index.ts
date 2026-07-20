@@ -29,7 +29,14 @@ export interface DatabaseConnection {
   driver: string;
   endpoint: string;
   database?: string;
-  credential: string;
+  credential: { managed: boolean; version: number };
+}
+
+export interface PutDatabaseConnectionRequest {
+  driver: string;
+  endpoint: string;
+  database?: string;
+  credentialValue?: string;
 }
 
 export interface DatabaseProbe { ready: boolean; message?: string; }
@@ -102,7 +109,7 @@ export class PlatformAdminClient {
   public revokeCredential(name: string): Promise<CredentialMetadata> { return this.mutate(`${this.basePath}/credentials/${segment(name)}/revoke`, "POST", {}); }
 
   public listDatabaseConnections(): Promise<DatabaseConnection[]> { return this.get(`${this.basePath}/database-connections`); }
-  public putDatabaseConnection(name: string, value: Omit<DatabaseConnection, "name">): Promise<DatabaseConnection> {
+  public putDatabaseConnection(name: string, value: PutDatabaseConnectionRequest): Promise<DatabaseConnection> {
     return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "PUT", value);
   }
   public deleteDatabaseConnection(name: string): Promise<void> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "DELETE").then(() => undefined); }

@@ -28,7 +28,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.bootstrap-policy", "version": "0.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.4.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.2.0", "channel": "stable" }
       ]
     },
@@ -70,7 +70,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.4.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.3.0", "channel": "stable" }
       ]
@@ -99,8 +99,8 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.credentials", "version": "0.2.0", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.4.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.credentials", "version": "0.3.0", "channel": "stable" }
       ]
     },
     {
@@ -122,8 +122,8 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.2.0", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.4.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.3.0", "channel": "stable" }
       ]
     },
     {
@@ -145,7 +145,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.3.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.4.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.3.0", "channel": "stable" }
       ]
     }

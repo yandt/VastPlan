@@ -4,7 +4,9 @@ package credentials
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,12 +20,13 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
 	PluginID          = "cn.vastplan.platform.security.credentials"
-	PluginVersion     = "0.2.0"
+	PluginVersion     = "0.3.0"
 	Capability        = "platform.credentials"
 	stateFileKey      = "platform.credentials.stateFile"
 	vaultAddressKey   = "platform.credentials.vault.address"
@@ -121,7 +124,27 @@ func metadata(record Record) Metadata {
 }
 
 type persisted struct {
-	Tenants map[string]map[string]Record `json:"tenants"`
+	Tenants map[string]map[string]Record        `json:"tenants"`
+	Managed map[string]map[string]ManagedRecord `json:"managed"`
+}
+
+const (
+	managedPreparing = "Preparing"
+	managedActive    = "Active"
+	managedAborted   = "Aborted"
+	managedRetired   = "Retired"
+)
+
+// ManagedRecord is the custodian-owned representation. Ciphertext is persisted
+// only here; callers receive Ref and StageID, never ciphertext or plaintext.
+type ManagedRecord struct {
+	StageID    string                            `json:"stageId"`
+	Ref        pluginconfig.ManagedCredentialRef `json:"ref"`
+	Resource   string                            `json:"resource"`
+	State      string                            `json:"state"`
+	CreatedAt  time.Time                         `json:"createdAt"`
+	UpdatedAt  time.Time                         `json:"updatedAt"`
+	Ciphertext string                            `json:"ciphertext,omitempty"`
 }
 type Service struct {
 	mu      sync.Mutex
@@ -131,7 +154,10 @@ type Service struct {
 }
 
 func New(file string, transit Transit) (*Service, error) {
-	s := &Service{file: file, transit: transit, data: persisted{Tenants: map[string]map[string]Record{}}}
+	if transit == nil {
+		return nil, errors.New("凭证 Transit 适配器不能为空")
+	}
+	s := &Service{file: file, transit: transit, data: persisted{Tenants: map[string]map[string]Record{}, Managed: map[string]map[string]ManagedRecord{}}}
 	if file != "" {
 		if err := s.load(); err != nil {
 			return nil, err
@@ -152,6 +178,35 @@ func (s *Service) load() error {
 	}
 	if s.data.Tenants == nil {
 		s.data.Tenants = map[string]map[string]Record{}
+	}
+	if s.data.Managed == nil {
+		s.data.Managed = map[string]map[string]ManagedRecord{}
+	}
+	return validateManagedState(s.data.Managed)
+}
+
+func validateManagedState(tenants map[string]map[string]ManagedRecord) error {
+	for tenantID, records := range tenants {
+		if strings.TrimSpace(tenantID) == "" {
+			return errors.New("托管凭证状态包含空 tenant")
+		}
+		for stageID, record := range records {
+			if stageID != record.StageID || !strings.HasPrefix(stageID, "stage-") || !strings.HasPrefix(record.Ref.Handle, "credential://managed/") || record.Ref.Scope != "tenant" || record.Ref.Owner == "" || record.Ref.Purpose == "" || record.Resource == "" || record.Ref.Version < 1 {
+				return fmt.Errorf("托管凭证状态 %q 元数据无效", stageID)
+			}
+			switch record.State {
+			case managedPreparing, managedActive:
+				if record.Ciphertext == "" {
+					return fmt.Errorf("托管凭证状态 %q 缺少密文", stageID)
+				}
+			case managedAborted, managedRetired:
+				if record.Ciphertext != "" {
+					return fmt.Errorf("已终止托管凭证 %q 不得保留密文", stageID)
+				}
+			default:
+				return fmt.Errorf("托管凭证状态 %q 的 state 无效", stageID)
+			}
+		}
 	}
 	return nil
 }
@@ -202,6 +257,155 @@ func (s *Service) records(tenant string) map[string]Record {
 		s.data.Tenants[tenant] = map[string]Record{}
 	}
 	return s.data.Tenants[tenant]
+}
+
+func (s *Service) managedRecords(tenant string) map[string]ManagedRecord {
+	if s.data.Managed[tenant] == nil {
+		s.data.Managed[tenant] = map[string]ManagedRecord{}
+	}
+	return s.data.Managed[tenant]
+}
+
+func managedOwner(call *contractv1.CallContext) (string, error) {
+	if call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || strings.TrimSpace(call.GetCaller().GetId()) == "" {
+		return "", errors.New("托管凭证只接受已认证业务插件")
+	}
+	return call.GetCaller().GetId(), nil
+}
+
+func opaqueID(prefix string) (string, error) {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return prefix + hex.EncodeToString(raw), nil
+}
+
+// StageManaged creates a non-runnable credential candidate owned by the
+// authenticated calling plugin. owner is never accepted from the payload.
+func (s *Service) StageManaged(ctx context.Context, call *contractv1.CallContext, purpose, resource string, value []byte) (pluginconfig.StagedCredential, error) {
+	t, err := tenant(call)
+	if err != nil {
+		return pluginconfig.StagedCredential{}, err
+	}
+	owner, err := managedOwner(call)
+	if err != nil {
+		return pluginconfig.StagedCredential{}, err
+	}
+	if strings.TrimSpace(purpose) == "" || strings.TrimSpace(resource) == "" || len(purpose) > 160 || len(resource) > 320 || len(value) == 0 || len(value) > 4<<20 {
+		return pluginconfig.StagedCredential{}, errors.New("托管凭证 purpose、resource 和 value 均不能为空")
+	}
+	ciphertext, err := s.transit.Encrypt(ctx, value)
+	if err != nil {
+		return pluginconfig.StagedCredential{}, err
+	}
+	stageID, err := opaqueID("stage-")
+	if err != nil {
+		return pluginconfig.StagedCredential{}, err
+	}
+	handle, err := opaqueID("credential://managed/")
+	if err != nil {
+		return pluginconfig.StagedCredential{}, err
+	}
+	now := time.Now().UTC()
+	ref := pluginconfig.ManagedCredentialRef{Handle: handle, Scope: "tenant", Owner: owner, Purpose: purpose, Version: 1}
+	record := ManagedRecord{StageID: stageID, Ref: ref, Resource: resource, State: managedPreparing, CreatedAt: now, UpdatedAt: now, Ciphertext: ciphertext}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.managedRecords(t)[stageID] = record
+	if err := s.save(); err != nil {
+		delete(s.managedRecords(t), stageID)
+		return pluginconfig.StagedCredential{}, err
+	}
+	return pluginconfig.StagedCredential{ID: stageID, Ref: ref}, nil
+}
+
+func (s *Service) managedTransition(call *contractv1.CallContext, stageID, target string) (pluginconfig.ManagedCredentialRef, error) {
+	t, err := tenant(call)
+	if err != nil {
+		return pluginconfig.ManagedCredentialRef{}, err
+	}
+	owner, err := managedOwner(call)
+	if err != nil {
+		return pluginconfig.ManagedCredentialRef{}, err
+	}
+	if !strings.HasPrefix(stageID, "stage-") {
+		return pluginconfig.ManagedCredentialRef{}, errors.New("托管凭证 stageId 无效")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	record, ok := s.managedRecords(t)[stageID]
+	if !ok {
+		return pluginconfig.ManagedCredentialRef{}, os.ErrNotExist
+	}
+	if record.Ref.Owner != owner {
+		return pluginconfig.ManagedCredentialRef{}, errors.New("托管凭证不属于当前插件")
+	}
+	switch target {
+	case managedActive:
+		if record.State != managedPreparing && record.State != managedActive {
+			return pluginconfig.ManagedCredentialRef{}, errors.New("只有 Preparing 凭证可以激活")
+		}
+	case managedAborted:
+		if record.State == managedActive || record.State == managedRetired {
+			return pluginconfig.ManagedCredentialRef{}, errors.New("已激活凭证不能终止候选")
+		}
+		record.Ciphertext = ""
+	default:
+		return pluginconfig.ManagedCredentialRef{}, errors.New("未知托管凭证状态")
+	}
+	record.State = target
+	record.UpdatedAt = time.Now().UTC()
+	s.managedRecords(t)[stageID] = record
+	if err := s.save(); err != nil {
+		return pluginconfig.ManagedCredentialRef{}, err
+	}
+	return record.Ref, nil
+}
+
+func (s *Service) ActivateManaged(call *contractv1.CallContext, stageID string) (pluginconfig.ManagedCredentialRef, error) {
+	return s.managedTransition(call, stageID, managedActive)
+}
+
+func (s *Service) AbortManaged(call *contractv1.CallContext, stageID string) (pluginconfig.ManagedCredentialRef, error) {
+	return s.managedTransition(call, stageID, managedAborted)
+}
+
+func (s *Service) RetireManaged(call *contractv1.CallContext, handle string) (pluginconfig.ManagedCredentialRef, error) {
+	t, err := tenant(call)
+	if err != nil {
+		return pluginconfig.ManagedCredentialRef{}, err
+	}
+	owner, err := managedOwner(call)
+	if err != nil {
+		return pluginconfig.ManagedCredentialRef{}, err
+	}
+	if !strings.HasPrefix(handle, "credential://managed/") || len(handle) > 256 {
+		return pluginconfig.ManagedCredentialRef{}, errors.New("托管凭证 handle 无效")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for id, record := range s.managedRecords(t) {
+		if record.Ref.Handle != handle {
+			continue
+		}
+		if record.Ref.Owner != owner {
+			return pluginconfig.ManagedCredentialRef{}, errors.New("托管凭证不可由当前插件退役")
+		}
+		if record.State == managedRetired {
+			return record.Ref, nil
+		}
+		if record.State != managedActive {
+			return pluginconfig.ManagedCredentialRef{}, errors.New("只有 Active 托管凭证可以退役")
+		}
+		record.State, record.Ciphertext, record.UpdatedAt = managedRetired, "", time.Now().UTC()
+		s.managedRecords(t)[id] = record
+		if err := s.save(); err != nil {
+			return pluginconfig.ManagedCredentialRef{}, err
+		}
+		return record.Ref, nil
+	}
+	return pluginconfig.ManagedCredentialRef{}, os.ErrNotExist
 }
 func (s *Service) Put(ctx context.Context, call *contractv1.CallContext, name, value string) (Record, error) {
 	if err := validName(name); err != nil {
@@ -323,9 +527,13 @@ func transitVersion(cipher string) string {
 
 func (s *Service) Handler(ctx context.Context, _ sdk.Host, call *contractv1.CallContext, payload []byte, op string) (*contractv1.CallResult, []byte, error) {
 	var in struct {
-		Name   string `json:"name"`
-		Value  string `json:"value"`
-		Prefix string `json:"prefix"`
+		Name     string `json:"name"`
+		Value    string `json:"value"`
+		Prefix   string `json:"prefix"`
+		StageID  string `json:"stageId"`
+		Handle   string `json:"handle"`
+		Purpose  string `json:"purpose"`
+		Resource string `json:"resource"`
 	}
 	if err := json.Unmarshal(payload, &in); err != nil {
 		return nil, nil, err
@@ -356,6 +564,20 @@ func (s *Service) Handler(ctx context.Context, _ sdk.Host, call *contractv1.Call
 		var record Record
 		record, err = s.Revoke(call, in.Name)
 		out = metadata(record)
+	case "stageManaged":
+		secret := []byte(in.Value)
+		defer func() {
+			for index := range secret {
+				secret[index] = 0
+			}
+		}()
+		out, err = s.StageManaged(ctx, call, in.Purpose, in.Resource, secret)
+	case "activateManaged":
+		out, err = s.ActivateManaged(call, in.StageID)
+	case "abortManaged":
+		out, err = s.AbortManaged(call, in.StageID)
+	case "retireManaged":
+		out, err = s.RetireManaged(call, in.Handle)
 	default:
 		err = fmt.Errorf("不支持的凭证操作 %q", op)
 	}
@@ -378,7 +600,11 @@ func Descriptor() []byte {
 		{"name":"describe","description":"读取凭证元数据，不返回明文或密文","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
 		{"name":"list","description":"列出当前租户的凭证元数据","paramsSchema":{"type":"object","properties":{"prefix":{"type":"string"}}}},
 		{"name":"rotate","description":"通过 Vault Transit rewrap 轮换凭证包裹密钥","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
-		{"name":"revoke","description":"撤销凭证引用","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}
+		{"name":"revoke","description":"撤销凭证引用","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
+		{"name":"stageManaged","description":"由业务插件创建不可读取的凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"purpose":{"type":"string"},"resource":{"type":"string"},"value":{"type":"string"}},"required":["purpose","resource","value"]}},
+		{"name":"activateManaged","description":"由创建者激活托管凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"}},"required":["stageId"]}},
+		{"name":"abortManaged","description":"由创建者终止托管凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"}},"required":["stageId"]}},
+		{"name":"retireManaged","description":"由创建者退役不再使用的托管凭证","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"handle":{"type":"string"}},"required":["handle"]}}
 	]}`)
 }
 func Contribution(s *Service) sdk.Contribution {
@@ -387,5 +613,5 @@ func Contribution(s *Service) sdk.Contribution {
 			return s.Handler(ctx, host, call, payload, op)
 		}
 	}
-	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"put": h("put"), "describe": h("describe"), "list": h("list"), "rotate": h("rotate"), "revoke": h("revoke")}}
+	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"put": h("put"), "describe": h("describe"), "list": h("list"), "rotate": h("rotate"), "revoke": h("revoke"), "stageManaged": h("stageManaged"), "activateManaged": h("activateManaged"), "abortManaged": h("abortManaged"), "retireManaged": h("retireManaged")}}
 }

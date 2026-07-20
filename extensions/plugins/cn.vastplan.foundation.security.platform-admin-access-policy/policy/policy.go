@@ -12,7 +12,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.3.0"
+	PluginVersion = "0.4.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -35,6 +35,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if allowedKernelCallback(c, request) {
 		return extpoint.DecisionAllow, "平台基础插件受限宿主回调"
+	}
+	if managedCredentialLifecycleAllowed(c, request) {
+		return extpoint.DecisionAllow, "业务插件只能管理自己拥有的托管凭证"
 	}
 	role := operationRole(request.Capability, request.Operation)
 	if role == "" {
@@ -68,6 +71,18 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 func governedCapability(capability string) bool {
 	switch capability {
 	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, platformadminapi.DatabaseCapability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability:
+		return true
+	default:
+		return false
+	}
+}
+
+func managedCredentialLifecycleAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.Caller.Kind != v1.CallerKind_CALLER_KIND_PLUGIN || c.Caller.Id == "" || request.Capability != platformadminapi.CredentialsCapability {
+		return false
+	}
+	switch request.Operation {
+	case "stageManaged", "activateManaged", "abortManaged", "retireManaged":
 		return true
 	default:
 		return false

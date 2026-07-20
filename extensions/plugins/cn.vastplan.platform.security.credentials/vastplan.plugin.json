@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.security.credentials",
   "name": "VastPlan 凭证管理服务",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -16,7 +16,7 @@
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.credentials", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
-  "state": { "backend": { "format": "cn.vastplan.platform.credentials", "formatVersion": 1 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.credentials", "formatVersion": 2 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/credentials", "frontend": "frontend/dist/index.js" },
   "contributes": { "backend": { "tools": [{ "id": "platform.credentials", "service_role": "backend", "title": "凭证管理", "subcommands": [
@@ -24,7 +24,11 @@
     { "name": "describe", "description": "读取凭证元数据，不返回明文或密文", "paramsSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] } },
     { "name": "list", "description": "列出当前租户的凭证元数据", "paramsSchema": { "type": "object", "properties": { "prefix": { "type": "string" } } } },
     { "name": "rotate", "description": "通过 Vault Transit rewrap 轮换凭证包裹密钥", "paramsSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] } },
-    { "name": "revoke", "description": "撤销凭证引用", "paramsSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] } }
+    { "name": "revoke", "description": "撤销凭证引用", "paramsSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] } },
+    { "name": "stageManaged", "description": "由业务插件创建不可读取的凭证候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "purpose": { "type": "string" }, "resource": { "type": "string" }, "value": { "type": "string" } }, "required": ["purpose", "resource", "value"] } },
+    { "name": "activateManaged", "description": "由创建者激活托管凭证候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "stageId": { "type": "string" } }, "required": ["stageId"] } },
+    { "name": "abortManaged", "description": "由创建者终止托管凭证候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "stageId": { "type": "string" } }, "required": ["stageId"] } },
+    { "name": "retireManaged", "description": "由创建者退役不再使用的托管凭证", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "handle": { "type": "string" } }, "required": ["handle"] } }
   ] }] }, "frontend": {
     "views": [{ "id": "platform.credentials", "title": "凭证引用" }],
     "menus": [{ "id": "platform.credentials.menu", "title": "凭证引用" }]

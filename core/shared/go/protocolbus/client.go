@@ -24,6 +24,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type currentDispatchTargetKey struct{}
+
 type processLogWriter struct {
 	logf   func(string, ...any)
 	prefix string
@@ -402,6 +404,7 @@ func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,
 	}
 
 	// 3) 分发
+	ctx = context.WithValue(ctx, currentDispatchTargetKey{}, callTargetKey(target))
 	resp, err := h.invoke(ctx, target, callCtx, payload)
 	if err != nil {
 		if errors.Is(err, errPendingQueueFull) {
@@ -453,7 +456,28 @@ func (h *Host) invoke(ctx context.Context, target *contractv1.CallTarget,
 
 	c, ok := h.Registry.Lookup(target.ExtensionPoint, target.Capability)
 	if !ok {
-		return nil, fmt.Errorf("能力未注册：%s/%s", target.ExtensionPoint, target.Capability)
+		h.mu.RLock()
+		forwarder := h.forwarder
+		h.mu.RUnlock()
+		if forwarder == nil {
+			return nil, fmt.Errorf("能力未注册：%s/%s", target.ExtensionPoint, target.Capability)
+		}
+		// Invoke already appended this target for local hook/authorization. The
+		// destination Host runs its own public Invoke pipeline and must append it
+		// exactly once there, otherwise the same call is mistaken for a cycle.
+		forwarded := proto.Clone(callCtx).(*contractv1.CallContext)
+		key, appendedByPublicInvoke := ctx.Value(currentDispatchTargetKey{}).(string)
+		if last := len(forwarded.CallPath) - 1; appendedByPublicInvoke && last >= 0 && key == callTargetKey(target) && forwarded.CallPath[last] == key {
+			forwarded.CallPath = forwarded.CallPath[:last]
+		}
+		result, payload, err := forwarder(ctx, target, forwarded, payload)
+		if err != nil {
+			return nil, err
+		}
+		if result == nil {
+			return nil, errors.New("跨服务能力返回空 CallResult")
+		}
+		return &pluginhostv1.InvokeResponse{Result: result, Payload: payload}, nil
 	}
 
 	// 内核自身提供的能力：直接本地调用，不经流

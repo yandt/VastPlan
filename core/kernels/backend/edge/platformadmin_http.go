@@ -468,7 +468,7 @@ func (h *Handler) databaseConnectionItem(w http.ResponseWriter, r *http.Request,
 			if !requireManagementOperation(w, target, platformadminapi.DatabaseCapability, "define", true) {
 				return
 			}
-			var request platformadminapi.DatabaseConnection
+			var request platformadminapi.PutDatabaseConnectionRequest
 			if !decode(w, r, &request) {
 				return
 			}

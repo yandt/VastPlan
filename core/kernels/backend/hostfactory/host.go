@@ -248,7 +248,7 @@ func kernelDatabaseProbe(broker kernelspi.DatabaseBroker) protocolbus.HostServic
 			return nil, nil, fmt.Errorf("kernel.database.probe 只接受已认证插件会话")
 		}
 		var connection kernelspi.DatabaseConnection
-		if err := json.Unmarshal(payload, &connection); err != nil || connection.Driver == "" || connection.Endpoint == "" || connection.Credentials.Name == "" {
+		if err := json.Unmarshal(payload, &connection); err != nil || connection.Driver == "" || connection.Endpoint == "" || connection.Credentials.Handle == "" && connection.Credentials.Name == "" {
 			return nil, nil, fmt.Errorf("数据库连通性请求无效")
 		}
 		scope := kernelspi.Scope{TenantID: callCtx.GetTenantId(), ProjectID: callCtx.GetProjectId(), PluginID: callCtx.GetCaller().GetId(), Namespace: "database"}

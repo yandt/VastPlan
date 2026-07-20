@@ -54,6 +54,11 @@ const (
 // HostService 内核自身提供的能力实现（插件经 HostCall 回调它）。
 type HostService func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error)
 
+// CapabilityForwarder resolves a capability outside the current service unit.
+// Backend Runtime binds it to the cluster addressing router; protocolbus keeps
+// the interface transport-neutral and still runs local authorization first.
+type CapabilityForwarder func(context.Context, *contractv1.CallTarget, *contractv1.CallContext, []byte) (*contractv1.CallResult, []byte, error)
+
 // LaunchPolicy 把已验证制品身份和签名清单授权绑定到一次插件启动。
 type LaunchPolicy struct {
 	PluginID       string
@@ -232,6 +237,7 @@ type Host struct {
 	embeddedByPlugin map[string]*embeddedInstance // pluginID → embedded instance
 	launches         map[string]*launchAttempt
 	services         map[string]HostService // 内核自身能力：capability → 实现
+	forwarder        CapabilityForwarder
 
 	stopped atomic.Bool
 
@@ -243,6 +249,14 @@ type Host struct {
 
 	callbackMu    sync.Mutex
 	callbackSlots chan struct{}
+}
+
+// SetCapabilityForwarder installs the service-to-service fallback. It is
+// normally called before Start; replacing it while calls are in flight is safe.
+func (h *Host) SetCapabilityForwarder(forwarder CapabilityForwarder) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.forwarder = forwarder
 }
 
 type launchResult struct {
