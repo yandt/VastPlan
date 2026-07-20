@@ -54,7 +54,7 @@
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.2.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.4.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.4.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.3.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.4.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.3.0", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
@@ -67,7 +67,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 1,
-        "digest": "2b066c8b17b6a9ada2ef1c1c3e2f2228289374bd283ab18f19eb9bff2103957c"
+        "digest": "42cdf7a43e5c2d8fe96e6a0d969a3c547d5d6343939737996072023fdc28f7d1"
       },
       "services": [
         {
@@ -103,7 +103,7 @@
           "logicalService": "platform.artifacts.repository",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.artifacts.repository", "read": ["status"] }
+            { "capability": "platform.artifacts.repository", "read": ["status", "listCatalog", "listPublishJournal"] }
           ]
         },
         {

@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.3.0`
+当前制品版本：`0.4.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、读写令牌分离和运行状态查询。对象存储与 OCI 通过供给 Provider 增加；索引、复制、审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、读写令牌分离、可重建 Catalog、单调 Publish Journal 和运行状态查询。对象存储与 OCI 通过供给 Provider 增加；依赖解析、复制、审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
@@ -47,8 +47,14 @@
 - `POST /v1/artifacts`：使用发布 token 上传 multipart `attestation` 与 `package`；
 - `GET /v1/artifacts/{pluginId}/{version}/{channel}/package`：使用读取 token 下载包；
 - `GET /v1/artifacts/{pluginId}/{version}/{channel}/attestation`：使用读取 token 下载已验证证明。
+- `GET /v1/catalog/artifacts`：使用读取 token 分页查询目录；支持 `pluginId`、`pluginPrefix`、`namespace`、`publisher`、`version`、`channel`、`target`、`page` 和 `pageSize`；
+- `GET /v1/catalog/journal`：使用读取 token 按 `afterRevision` 与 `limit` 增量读取发布事件。
 
 包体默认上限为 256 MiB，证明上限为 2 MiB。未授权、明文请求、超限或不可信制品均 fail-closed。当前服务是独立 TLS 入口；平台 Edge API Route、设置/凭证句柄与签名种子 Bundle 尚未接入，所以 `artifact-server` 子命令仍保留为兼容启动路径，不能据此删除自举能力。
+
+Catalog 数据保存在仓库 volume 的 `catalog/` 下。发布流水账按单调 revision 使用原子事件文件，索引快照可从每个签名制品及流水账重建；启动时发现制品已成功落盘但事件缺失，会补写 `recovered` 事件。恢复路径只读取并验证 artifact metadata 与 attestation，不扫描全部大对象；实际读取仍由内核复验对象摘要。相同精确 ref、摘要和证明重传幂等，不增加 revision；受控测试 CLI 会先查 Catalog，避免重试产生不同证明。
+
+平台工具能力同时提供 `status`、`listCatalog` 和 `listPublishJournal`。浏览器应经 Portal Edge 和能力授权调用工具，不得直接持有仓库读令牌。
 
 ## 验证
 
@@ -56,4 +62,4 @@
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/artifacts` 只读状态页。v1 显示真实就绪状态、监听地址和 Provider ID，不返回令牌、信任根、存储路径，也不复用仓库上传 API。目录、审批与供应链证明浏览将在独立管理契约封板后扩展。
+同一签名制品提供 `/settings/artifacts` 只读状态页。当前页面仍只显示真实就绪状态、监听地址和 Provider ID，不返回令牌、信任根、存储路径，也不复用仓库上传 API。Catalog/Journal 后端查询已就绪，目录、审批与供应链证明的 Workbench UI 将在独立管理契约封板后接入。

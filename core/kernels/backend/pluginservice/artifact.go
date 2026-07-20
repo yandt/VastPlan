@@ -19,6 +19,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 
@@ -225,16 +226,13 @@ func (r *Repository) publishArtifact(artifact Artifact, packageBytes []byte) (Ar
 // Read 读取一个制品并在交付前复算 SHA-256、重新检查 tar 内清单和索引绑定。
 // 因而磁盘损坏、对象被替换或索引被手工改错都不会被下游节点当作可安装制品。
 func (r *Repository) Read(ref Ref) (Artifact, []byte, error) {
-	dir, err := r.artifactDir(ref)
+	artifact, err := r.ReadMetadata(ref)
 	if err != nil {
 		return Artifact{}, nil, err
 	}
-	artifact, err := readArtifact(filepath.Join(dir, "artifact.json"))
+	dir, err := r.artifactDir(ref)
 	if err != nil {
-		return Artifact{}, nil, fmt.Errorf("读取制品索引: %w", err)
-	}
-	if artifact.PluginID != ref.PluginID || artifact.Version != ref.Version || artifact.Channel != ref.Channel {
-		return Artifact{}, nil, errors.New("制品索引与请求引用不一致")
+		return Artifact{}, nil, err
 	}
 	packagePath := filepath.Join(dir, artifact.Object)
 	packageBytes, err := os.ReadFile(packagePath)
@@ -245,6 +243,75 @@ func (r *Repository) Read(ref Ref) (Artifact, []byte, error) {
 		return Artifact{}, nil, err
 	}
 	return artifact, packageBytes, nil
+}
+
+// ReadMetadata 读取并校验精确引用的 artifact.json，但不读取大对象正文。它只适合
+// Catalog 重建等元数据路径；制品交付仍必须调用 Read 复算正文摘要并检查包内清单。
+func (r *Repository) ReadMetadata(ref Ref) (Artifact, error) {
+	dir, err := r.artifactDir(ref)
+	if err != nil {
+		return Artifact{}, err
+	}
+	artifact, err := readArtifact(filepath.Join(dir, "artifact.json"))
+	if err != nil {
+		return Artifact{}, fmt.Errorf("读取制品索引: %w", err)
+	}
+	if artifact.PluginID != ref.PluginID || artifact.Version != ref.Version || artifact.Channel != ref.Channel {
+		return Artifact{}, errors.New("制品索引与请求引用不一致")
+	}
+	return artifact, nil
+}
+
+// ListRefs 列出仓库中已经写入完整 artifact.json 的精确引用。它只暴露稳定
+// ArtifactRef，不暴露对象路径或目录布局；调用方仍必须逐项 Read/验签，不能把
+// “出现在目录中”当作可信。发现符号链接、路径错位或损坏索引时整体 fail-closed。
+func (r *Repository) ListRefs() ([]Ref, error) {
+	if r == nil {
+		return nil, errors.New("制品仓库未配置")
+	}
+	root := filepath.Join(r.root, "artifacts")
+	refs := make([]Ref, 0)
+	err := filepath.WalkDir(root, func(filename string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("制品仓库不允许符号链接: %s", filename)
+		}
+		if entry.IsDir() || entry.Name() != "artifact.json" {
+			return nil
+		}
+		artifact, err := readArtifact(filename)
+		if err != nil {
+			return fmt.Errorf("读取制品索引 %s: %w", filename, err)
+		}
+		ref := Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+		expected, err := r.artifactDir(ref)
+		if err != nil {
+			return err
+		}
+		if filepath.Clean(filepath.Dir(filename)) != filepath.Clean(expected) {
+			return fmt.Errorf("制品索引路径与引用不一致: %s", filename)
+		}
+		refs = append(refs, ref)
+		return nil
+	})
+	if errors.Is(err, os.ErrNotExist) {
+		return refs, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].PluginID != refs[j].PluginID {
+			return refs[i].PluginID < refs[j].PluginID
+		}
+		if refs[i].Version != refs[j].Version {
+			return refs[i].Version < refs[j].Version
+		}
+		return refs[i].Channel < refs[j].Channel
+	})
+	return refs, nil
 }
 
 // Fetch 实现内核 ArtifactSource。返回值仍被视为未信任 Envelope；本地仓库的

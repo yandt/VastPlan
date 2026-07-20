@@ -92,6 +92,10 @@ func TestSignedRepository_RequiresAttestationAndKeepsItImmutable(t *testing.T) {
 		t.Fatalf("发布可信制品失败: %v", err)
 	}
 	ref := Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+	metadata, proof, err := repository.ReadMetadataWithAttestation(ref)
+	if err != nil || metadata.SHA256 != artifact.SHA256 || len(proof) == 0 {
+		t.Fatalf("Catalog 元数据路径必须验证发布者证明: metadata=%#v proof=%d err=%v", metadata, len(proof), err)
+	}
 	if _, _, err := repository.Read(ref); err != nil {
 		t.Fatalf("读取可信制品失败: %v", err)
 	}

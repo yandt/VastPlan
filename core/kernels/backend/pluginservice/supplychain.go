@@ -319,6 +319,50 @@ func (r *SignedRepository) Read(ref Ref) (Artifact, []byte, error) {
 	return artifact, packageBytes, err
 }
 
+// ListRefs 只枚举本地不可变索引中的精确引用。返回值尚未代表可信制品；Catalog
+// 等调用方必须继续使用 ReadWithAttestation 逐项完成签名与内容复验。
+func (r *SignedRepository) ListRefs() ([]Ref, error) {
+	if r == nil || r.Local == nil || r.Trust == nil {
+		return nil, errors.New("签名制品仓库未完整配置")
+	}
+	return r.Local.ListRefs()
+}
+
+// ReadMetadataWithAttestation 校验元数据与发布者证明，不读取包体。它供 Catalog
+// 启动重建使用，避免仓库启动时间按全部对象字节数增长；任何实际交付仍必须走
+// ReadWithAttestation，对包体重新计算摘要并检查清单绑定。
+func (r *SignedRepository) ReadMetadataWithAttestation(ref Ref) (Artifact, []byte, error) {
+	if r == nil || r.Local == nil || r.Trust == nil {
+		return Artifact{}, nil, errors.New("签名制品仓库未完整配置")
+	}
+	artifact, err := r.Local.ReadMetadata(ref)
+	if err != nil {
+		return Artifact{}, nil, err
+	}
+	dir, err := r.Local.artifactDir(ref)
+	if err != nil {
+		return Artifact{}, nil, err
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "attestation.json"))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Artifact{}, nil, errors.New("签名制品缺少发布者证明")
+		}
+		return Artifact{}, nil, fmt.Errorf("读取签名证明: %w", err)
+	}
+	var attestation Attestation
+	if err := decodeJSONStrict(raw, &attestation); err != nil {
+		return Artifact{}, nil, fmt.Errorf("解析签名证明: %w", err)
+	}
+	if !sameArtifact(artifact, attestation.Artifact) {
+		return Artifact{}, nil, errors.New("签名证明与制品元数据不一致")
+	}
+	if err := r.Trust.Verify(attestation); err != nil {
+		return Artifact{}, nil, err
+	}
+	return artifact, append([]byte(nil), raw...), nil
+}
+
 // ReadWithAttestation 返回通过内核信任根验证的制品、原始包和签名证明。
 // 对外 HTTP 层只能转发这份已验证的结果，不能自行读取仓库目录或绕过验签。
 func (r *SignedRepository) ReadWithAttestation(ref Ref) (Artifact, []byte, []byte, error) {

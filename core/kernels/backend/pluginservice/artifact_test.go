@@ -2,10 +2,21 @@ package pluginservice
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestArtifactRefUsesStableLowerCamelJSON(t *testing.T) {
+	raw, err := json.Marshal(Ref{PluginID: "com.example.plugin", Version: "1.0.0", Channel: "testing"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != `{"pluginId":"com.example.plugin","version":"1.0.0","channel":"testing"}` {
+		t.Fatalf("ArtifactRef JSON 字段名不是稳定 lowerCamel: %s", raw)
+	}
+}
 
 func TestRepository_PublishReadAndVerify(t *testing.T) {
 	pluginDir := writeTestPlugin(t)
@@ -41,6 +52,36 @@ func TestRepository_PublishReadAndVerify(t *testing.T) {
 	}
 }
 
+func TestRepositoryListRefsExposesOnlyExactValidatedReferences(t *testing.T) {
+	packageBytes, manifest, err := PackageDirectory(writeTestPlugin(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := NewRepository(filepath.Join(t.TempDir(), "repository"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if refs, err := repo.ListRefs(); err != nil || len(refs) != 0 {
+		t.Fatalf("空仓库应返回空引用: refs=%#v err=%v", refs, err)
+	}
+	for _, channel := range []string{"testing", "stable"} {
+		if _, err := repo.Publish(channel, packageBytes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	refs, err := repo.ListRefs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Ref{
+		{PluginID: manifest.ID, Version: manifest.Version, Channel: "stable"},
+		{PluginID: manifest.ID, Version: manifest.Version, Channel: "testing"},
+	}
+	if len(refs) != len(want) || refs[0] != want[0] || refs[1] != want[1] {
+		t.Fatalf("引用必须稳定排序且不泄露路径: got=%#v want=%#v", refs, want)
+	}
+}
+
 func TestRepository_ReadFailsClosedOnCorruption(t *testing.T) {
 	pluginDir := writeTestPlugin(t)
 	packageBytes, manifest, err := PackageDirectory(pluginDir)
@@ -59,6 +100,9 @@ func TestRepository_ReadFailsClosedOnCorruption(t *testing.T) {
 	object := filepath.Join(root, "artifacts", manifest.ID, manifest.Version, "stable", artifact.Object)
 	if err := os.WriteFile(object, []byte("tampered"), 0o644); err != nil {
 		t.Fatalf("篡改测试对象失败: %v", err)
+	}
+	if metadata, err := repo.ReadMetadata(Ref{PluginID: manifest.ID, Version: manifest.Version, Channel: "stable"}); err != nil || metadata.SHA256 != artifact.SHA256 {
+		t.Fatalf("元数据路径不应为 Catalog 重读大对象: metadata=%#v err=%v", metadata, err)
 	}
 	if _, _, err := repo.Read(Ref{PluginID: manifest.ID, Version: manifest.Version, Channel: "stable"}); err == nil {
 		t.Fatal("对象 SHA 不匹配必须 fail-closed")

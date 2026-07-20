@@ -60,6 +60,7 @@ VastPlan 本地平台管理中心
   $0 status
   $0 logs [--follow] [--lines 行数]
   $0 doctor
+  $0 publish-test <插件制品.tar.gz>
   $0 clean
   $0 help
 
@@ -70,6 +71,7 @@ VastPlan 本地平台管理中心
   status     显示编排器与开发网关状态
   logs       显示最近日志；加 --follow/-f 持续跟踪
   doctor     检查依赖、运行状态和固定端口
+  publish-test 以 testing channel 签名并上传唯一 dev.* 预发布制品
   clean      平台停止后删除 .vastplan/dev-platform 运行数据
 
 up/restart 参数:
@@ -452,6 +454,17 @@ wait_until_ready() {
   return 1
 }
 
+publish_test_artifact() {
+  local package_file="$1"
+  case "$package_file" in
+    /*) ;;
+    *) package_file="$PWD/$package_file" ;;
+  esac
+  ensure_state_dirs
+  (cd "$ROOT" && env GOCACHE="$GO_CACHE" go run ./engineering/tools/testpublish \
+    -package "$package_file" -state-root "$STATE_ROOT" -status-url "$STATUS_URL")
+}
+
 clean_state() {
   local owned
   owned="$(owned_runtime_pids | unique_pids || true)"
@@ -689,6 +702,10 @@ case "$COMMAND" in
     [ "$#" -eq 0 ] || { fail "doctor 不接受参数"; exit 2; }
     validate_configuration
     doctor
+    ;;
+  publish-test)
+    [ "$#" -eq 1 ] || { fail "publish-test 需要一个插件 .tar.gz 文件"; exit 2; }
+    publish_test_artifact "$1"
     ;;
   clean)
     [ "$#" -eq 0 ] || { fail "clean 不接受参数"; exit 2; }
