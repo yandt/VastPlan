@@ -72,6 +72,14 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.deployment.publish", Operation: "execute"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 的可信发布回调应允许: %s", got)
 	}
+	databaseRuntime := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.foundation.data.relational.runtime"}}
+	runtimeLease := extpoint.PermissionRequest{Capability: "kernel.credential.material-lease", Operation: "issue"}
+	if got, _ := decide(databaseRuntime, runtimeLease); got != extpoint.DecisionAllow {
+		t.Fatalf("Database Runtime 的本地加密 lease 中继应允许: %s", got)
+	}
+	if got, _ := decide(businessPlugin, runtimeLease); got != extpoint.DecisionDeny {
+		t.Fatalf("其他插件不得被平台策略授权 Runtime lease: %s", got)
+	}
 }
 
 func user(roles ...string) *contractv1.CallContext {

@@ -108,6 +108,9 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 		protocol.HostAddrEnvKey+"="+h.addr,
 		protocol.LaunchTokenEnvKey+"="+token,
 	)
+	if runtimeAudience, err := runtimeAudienceEnvironment(policy); err == nil {
+		cmd.Env = append(cmd.Env, runtimeAudience)
+	}
 	if len(policy.Configuration) != 0 {
 		cmd.Env = append(cmd.Env, protocol.PluginConfigEnvKey+"="+string(policy.Configuration))
 	}
@@ -216,6 +219,9 @@ func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSp
 		protocol.HostAddrEnvKey+"="+h.addr,
 		protocol.LaunchTokenEnvKey+"="+token,
 	)
+	if runtimeAudience, err := runtimeAudienceEnvironment(policy); err == nil {
+		environment = append(environment, runtimeAudience)
+	}
 	if len(policy.Configuration) != 0 {
 		environment = append(environment, protocol.PluginConfigEnvKey+"="+string(policy.Configuration))
 	}
@@ -299,7 +305,7 @@ func validateExtraEnvironment(environment []string) error {
 
 func reservedPluginEnvironmentKey(key string) bool {
 	switch key {
-	case protocol.MagicEnvKey, protocol.HostAddrEnvKey, protocol.LaunchTokenEnvKey, protocol.PluginConfigEnvKey:
+	case protocol.MagicEnvKey, protocol.HostAddrEnvKey, protocol.LaunchTokenEnvKey, protocol.PluginConfigEnvKey, protocol.RuntimeAudienceEnvKey:
 		return true
 	default:
 		return false
@@ -603,6 +609,17 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.PermissionDenied,
 			"插件未在签名清单中声明该内核服务", false))
 		return
+	}
+	// Host-only runtime identity is attached only for a locally registered
+	// kernel service. It is never copied into CallContext or forwarded to a
+	// remote capability when the local service is absent.
+	h.mu.RLock()
+	_, localKernelService := h.services[req.Target.Capability]
+	h.mu.RUnlock()
+	if req.Target.ExtensionPoint == extpoint.KernelService && localKernelService {
+		if trustedCtx, identityErr := withLaunchRuntimeIdentity(ctx, sess.policy); identityErr == nil {
+			ctx = trustedCtx
+		}
 	}
 	resp, err := h.Invoke(ctx, req.Target, callCtx, req.Payload)
 	if err != nil {

@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
 )
 
 var ErrNotFound = errors.New("kernel SPI 资源不存在")
@@ -42,6 +44,12 @@ type CredentialMaterial interface{ Bytes() []byte }
 // CredentialBroker 通过回调缩短明文生命周期。插件只能请求具体宿主操作，不能取得 material。
 type CredentialBroker interface {
 	WithCredential(context.Context, Scope, CredentialRef, func(CredentialMaterial) error) error
+}
+
+// RuntimeMaterialLeaseBroker relays an already encrypted lease to one
+// host-authenticated runtime instance. It never opens or returns plaintext.
+type RuntimeMaterialLeaseBroker interface {
+	IssueRuntimeLease(context.Context, string, runtimeidentity.Identity, credentiallease.Request) (credentiallease.Envelope, error)
 }
 
 // DatabaseConnection 是数据库插件交给可信部署适配器的非敏感连接定义。密码不属于
@@ -78,6 +86,7 @@ type TransactionManager interface {
 type Dependencies struct {
 	Config                ConfigProvider
 	Credentials           CredentialBroker
+	RuntimeMaterialLeases RuntimeMaterialLeaseBroker
 	Persistence           Persistence
 	Transactions          TransactionManager
 	Database              DatabaseBroker

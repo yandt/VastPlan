@@ -11,6 +11,7 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
+	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 )
@@ -258,12 +259,21 @@ func (c *embeddedHostCall) Call(_ context.Context, target *contractv1.CallTarget
 	if target == nil {
 		return nil, nil, errors.New("内嵌宿主回调目标不能为空")
 	}
-	if target.ExtensionPoint == "kernel.service" && !kernelServiceAllowed(c.instance.policy, target.Capability) {
+	if target.ExtensionPoint == extpoint.KernelService && !kernelServiceAllowed(c.instance.policy, target.Capability) {
 		return nil, nil, errors.New("插件未在签名清单中声明该内核服务")
 	}
 	authenticated := proto.Clone(c.base).(*contractv1.CallContext)
 	authenticated.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: c.instance.pluginID}
-	response, err := c.host.Invoke(c.invokeCtx, target, authenticated, payload)
+	invokeCtx := c.invokeCtx
+	c.host.mu.RLock()
+	_, localKernelService := c.host.services[target.Capability]
+	c.host.mu.RUnlock()
+	if target.ExtensionPoint == extpoint.KernelService && localKernelService {
+		if trustedCtx, identityErr := withLaunchRuntimeIdentity(invokeCtx, c.instance.policy); identityErr == nil {
+			invokeCtx = trustedCtx
+		}
+	}
+	response, err := c.host.Invoke(invokeCtx, target, authenticated, payload)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	PluginID      = "cn.vastplan.foundation.data.relational.runtime"
-	PluginVersion = "0.1.0"
+	PluginID      = databasev1.RuntimePluginID
+	PluginVersion = "0.2.0"
 )
 
 // CredentialMaterial exists only during MaterialSource.WithMaterial. Provider

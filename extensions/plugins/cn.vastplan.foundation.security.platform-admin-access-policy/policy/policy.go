@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
+	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	v1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
@@ -12,7 +13,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.5.0"
+	PluginVersion = "0.6.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -73,7 +74,7 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", platformadminapi.DatabaseCapability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability:
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", platformadminapi.DatabaseCapability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability:
 		return true
 	default:
 		return false
@@ -116,6 +117,8 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 		return request.Capability == "kernel.config.get"
 	case "cn.vastplan.platform.data.relational.connection-manager":
 		return request.Capability == "kernel.database.probe"
+	case databasev1.RuntimePluginID:
+		return request.Capability == "kernel.credential.material-lease"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":
 		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness" || request.Capability == "kernel.deployment.targets" || request.Capability == "kernel.deployment.preview" || request.Capability == "kernel.deployment.publish"
 	default:

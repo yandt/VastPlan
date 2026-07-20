@@ -13,12 +13,14 @@ import (
 	"io"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
+	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
 )
 
 // KernelName 是 backend 内核规范 ID。
@@ -60,6 +62,11 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			return nil, err
 		}
 	}
+	if dependencies.RuntimeMaterialLeases != nil {
+		if err := host.RegisterHostService(extpoint.KernelService, credentiallease.RuntimeKernelService, kernelRuntimeMaterialLease(dependencies.RuntimeMaterialLeases)); err != nil {
+			return nil, err
+		}
+	}
 	if dependencies.NodeBootstrap != nil {
 		if err := host.RegisterHostService(extpoint.KernelService, nodebootstrap.KernelService, kernelNodeBootstrap(dependencies.NodeBootstrap)); err != nil {
 			return nil, err
@@ -82,6 +89,29 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 		}
 	}
 	return host, nil
+}
+
+func kernelRuntimeMaterialLease(broker kernelspi.RuntimeMaterialLeaseBroker) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		identity, ok := runtimeidentity.FromContext(ctx)
+		if !ok || callCtx.GetTenantId() == "" || callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN ||
+			callCtx.GetCaller().GetId() != identity.PluginID {
+			return nil, nil, errors.New("kernel.credential.material-lease 缺少可信 Runtime 启动身份")
+		}
+		var request credentiallease.Request
+		if err := decodeStrict(payload, &request); err != nil {
+			return nil, nil, errors.New("runtime material lease 请求无效")
+		}
+		envelope, err := broker.IssueRuntimeLease(ctx, callCtx.GetTenantId(), identity, request)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(envelope)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
 }
 
 func authenticatedDeploymentManager(callCtx *contractv1.CallContext) bool {

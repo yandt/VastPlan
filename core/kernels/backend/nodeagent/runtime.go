@@ -2,6 +2,8 @@ package nodeagent
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -155,8 +157,13 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 		if err != nil {
 			return fmt.Errorf("序列化插件 %s 启动配置: %w", plugin.ID, err)
 		}
+		runtimeInstanceID, err := newRuntimeInstanceID()
+		if err != nil {
+			return fmt.Errorf("生成插件 %s 运行实例身份: %w", plugin.ID, err)
+		}
 		instance, err := r.startPlugin(ctx, candidate, plugin, protocolbus.LaunchPolicy{
 			PluginID: plugin.ID, Publisher: plugin.Publisher, Version: plugin.Version,
+			ArtifactSHA256: plugin.SHA256, NodeID: r.Identity, RuntimeInstanceID: runtimeInstanceID,
 			Contributions:        plugin.Contract.Contributions,
 			KernelServices:       plugin.Contract.KernelServices,
 			ContextAccess:        plugin.Contract.ContextAccess,
@@ -306,6 +313,14 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 		}
 	}
 	return nil
+}
+
+func newRuntimeInstanceID() (string, error) {
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return "runtime-" + hex.EncodeToString(raw), nil
 }
 
 func deploymentUnitForRuntime(unit RuntimeUnit) deploymentv1.Unit {

@@ -11,6 +11,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
+	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
 )
 
 const (
@@ -83,9 +84,12 @@ func TestEmbeddedPluginUsesPublicSecurityPipeline(t *testing.T) {
 func TestEmbeddedHostCallReissuesAuthenticatedPluginIdentity(t *testing.T) {
 	host := newEmbeddedTestHost(t)
 	var caller *contractv1.Caller
+	var runtimeIdentityOK bool
 	if err := host.RegisterHostService(extpoint.KernelService, "kernel.test.identity",
-		func(_ context.Context, callCtx *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+		func(ctx context.Context, callCtx *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
 			caller = callCtx.GetCaller()
+			identity, ok := runtimeidentity.FromContext(ctx)
+			runtimeIdentityOK = ok && identity.PluginID == embeddedTestPlugin && identity.Publisher == "vastplan" && identity.InstanceID == "runtime-test"
 			return embeddedOK(), nil, nil
 		}); err != nil {
 		t.Fatal(err)
@@ -99,6 +103,11 @@ func TestEmbeddedHostCallReissuesAuthenticatedPluginIdentity(t *testing.T) {
 	})
 	policy := embeddedTestPolicy()
 	policy.KernelServices = []string{"kernel.test.identity"}
+	policy.Publisher = "vastplan"
+	policy.ArtifactSHA256 = strings.Repeat("a", 64)
+	policy.NodeID = "node-a"
+	policy.RuntimeScope = "test-unit"
+	policy.RuntimeInstanceID = "runtime-test"
 	if _, err := host.LaunchEmbeddedWithPolicy(context.Background(), definition, policy); err != nil {
 		t.Fatal(err)
 	}
@@ -111,6 +120,9 @@ func TestEmbeddedHostCallReissuesAuthenticatedPluginIdentity(t *testing.T) {
 	}
 	if caller == nil || caller.Kind != contractv1.CallerKind_CALLER_KIND_PLUGIN || caller.Id != embeddedTestPlugin {
 		t.Fatalf("伪造身份未被覆盖: %+v", caller)
+	}
+	if !runtimeIdentityOK {
+		t.Fatal("本地 Kernel service 未收到 Host 会话绑定的 runtime identity")
 	}
 }
 

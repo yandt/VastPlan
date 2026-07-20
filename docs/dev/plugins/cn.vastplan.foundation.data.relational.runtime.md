@@ -4,7 +4,7 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.1.0`
+当前制品版本：`0.2.0`
 
 ## 职责边界
 
@@ -16,7 +16,7 @@ Database Runtime 是关系数据库数据面，负责 Provider、节点本地连
 
 机器可执行真源位于 `contracts/schemas/database/v1`，预留以下操作：
 
-| 操作 | 语义 | 0.1.0 状态 |
+| 操作 | 语义 | 0.2.0 状态 |
 |---|---|---|
 | `providers` | 返回当前签名制品内冻结的 Provider descriptor | 已开放 |
 | `probe` | 使用候选连接定义做连通性检查 | 契约已固化，未开放 |
@@ -34,8 +34,14 @@ Database Runtime 是关系数据库数据面，负责 Provider、节点本地连
 
 Provider 不接收口令字段，只保留 `MaterialSource`。每次创建物理连接时通过短期回调使用 material，不能保留回调字节。该 SPI 只用于同一第一方签名制品内部；未来第三方 Provider 经独立进程和版本化 RPC 接入。
 
+## 可信 material 路径
+
+Backend Host 从已验签 `LaunchPolicy` 生成 host-only Runtime identity，绑定插件 ID、发布者、版本、制品 SHA-256、节点、service unit 和每次启动随机实例。完整 identity 不进入 wire；插件只接收其非秘密 audience 摘要。Database Runtime 每次使用凭证生成一次性 X25519 接收密钥，经声明的 `kernel.credential.material-lease` 请求加密信封。
+
+Kernel 只允许当前认证会话调用，并只为首方 Database Runtime、中继 connection-manager 所拥有的 `database.connection` 引用；它不创建接收私钥，也不解封 material。跨服务凭证插件继续只接受 transport-trusted `SYSTEM` 调用并把同一 audience 写入 AAD。Runtime 校验 tenant、audience、完整 CredentialRef、TTL 和 GCM 后在同步回调中使用并清零明文。错误 audience、跨 tenant、跨 owner、过期 lease 和伪造 caller 均 fail-closed。
+
 ## 当前限制与下一阶段
 
-0.1.0 的启动进程注册空 Provider Registry，只安全开放 `providers`，因此返回空列表且不能打开数据库连接。真实数据操作继续 fail-closed。
+0.2.0 的启动进程仍注册空 Provider Registry，只安全开放 `providers`，因此返回空列表且不能打开数据库连接。真实数据操作继续 fail-closed。
 
-下一阶段必须先实现可信运行实例 identity、Material Lease audience 与精确访问策略；之后实现池管理器、资源预算和 generation 轮换，再同批接入 `postgresql` 与 `mysql` 两个真实 Provider。完整路线见 [ADR-0095](../decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。
+下一阶段实现池管理器、资源预算、generation 轮换与指标，再同批接入 `postgresql` 与 `mysql` 两个真实 Provider。完整路线见 [ADR-0095](../decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。

@@ -22,12 +22,13 @@ import (
 )
 
 const (
-	Version          = 1
-	DefaultTTL       = 15 * time.Second
-	MaxTTL           = 30 * time.Second
-	MaxMaterialBytes = 4 << 20
-	keyBytes         = 32
-	saltBytes        = 32
+	Version              = 1
+	RuntimeKernelService = "kernel.credential.material-lease"
+	DefaultTTL           = 15 * time.Second
+	MaxTTL               = 30 * time.Second
+	MaxMaterialBytes     = 4 << 20
+	keyBytes             = 32
+	saltBytes            = 32
 )
 
 var rawBase64 = base64.RawURLEncoding
@@ -108,6 +109,10 @@ func ValidateRequest(request Request) error {
 	zero(raw)
 	return err
 }
+
+// ValidateCredentialRef applies the exact managed-reference rules used by the
+// lease protocol without allocating an ephemeral key pair.
+func ValidateCredentialRef(ref pluginconfig.ManagedCredentialRef) error { return validateRef(ref) }
 
 func Seal(request Request, claims Claims, material []byte, now time.Time, ttl time.Duration) (Envelope, error) {
 	if err := validateRef(request.Ref); err != nil || request.Ref != claims.Ref {

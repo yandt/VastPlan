@@ -291,6 +291,10 @@ func runReconcile(args []string) (runErr error) {
 		if err != nil {
 			return err
 		}
+		runtime.Dependencies.RuntimeMaterialLeases, err = credentialbroker.NewRuntimeLease(plane.router.Invoke)
+		if err != nil {
+			return err
+		}
 	}
 	if managedCredentials != nil || namedCredentials != nil {
 		runtime.Dependencies.Credentials, err = credentialbroker.NewComposite(managedCredentials, namedCredentials)

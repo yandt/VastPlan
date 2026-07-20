@@ -62,12 +62,15 @@ type CapabilityForwarder func(context.Context, *contractv1.CallTarget, *contract
 
 // LaunchPolicy 把已验证制品身份和签名清单授权绑定到一次插件启动。
 type LaunchPolicy struct {
-	PluginID       string
-	Publisher      string
-	Version        string
-	Contributions  []pluginv1.RuntimeContribution
-	KernelServices []string
-	ContextAccess  pluginv1.ContextAccess
+	PluginID          string
+	Publisher         string
+	Version           string
+	ArtifactSHA256    string
+	NodeID            string
+	RuntimeInstanceID string
+	Contributions     []pluginv1.RuntimeContribution
+	KernelServices    []string
+	ContextAccess     pluginv1.ContextAccess
 	// ContextCeiling is the host-user/publisher policy result. Empty means the
 	// host default; plugins cannot set or widen it through their manifest.
 	ContextCeiling []string

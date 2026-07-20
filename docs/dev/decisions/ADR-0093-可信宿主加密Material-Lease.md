@@ -36,3 +36,9 @@
 - 每次 material 使用增加一次 capability 调用、一次 Vault decrypt 和一次短期非对称协商；这是最小秘密暴露边界的明确成本。
 - Go 无法保证编译器不会复制内存，也没有 `crypto/ecdh.PrivateKey` 的显式销毁 API；实现采用短生命周期、单次消费、引用释放和可变明文缓冲区清零，但不宣称形式化的内存擦除保证。
 - 当前已完成通用加密 lease、凭证插件签发、宿主 `CredentialBroker` 解封和 Node Agent 注入。数据库等领域 Broker 仍需分别接入，插件本身不得直接调用 material lease。
+
+## 实施进展（2026-07-20，Database Runtime）
+
+Database Runtime 的领域中继已经实现。Host 从验签清单和当前协议会话构造 host-only identity，绑定插件 ID、发布者、版本、制品 SHA-256、节点、service unit 与单次启动实例；完整 identity 不跨 wire，进程只取得其非秘密 audience 摘要。因此本领域不发放可被复制、转移或重放的“宿主签名 bearer token”。
+
+Database Runtime 自己生成一次性 X25519 接收密钥，经声明的 `kernel.credential.material-lease` 回调请求信封。Kernel 根据权威会话身份将请求转换为 transport-trusted `SYSTEM` 调用，但没有接收私钥且不执行 Open。精确策略只允许首方 `cn.vastplan.foundation.data.relational.runtime` 读取 connection-manager 拥有、purpose 为 `database.connection` 的 tenant CredentialRef。Runtime 最终校验 tenant、audience、完整引用、时间窗与 GCM，并在同步 Provider 回调结束后清零明文。

@@ -108,3 +108,9 @@ Provider panic/崩溃由 ADR-0094 的 Guardian 和协议心跳收敛。第三方
 实施顺序第 1 项已完成：新增 `contracts/schemas/database/v1` 机器可执行 JSON wire 契约、显式无损值类型、稳定 `database.runtime.*` 错误码、事务句柄格式和严格语义校验；`ManagedCredentialRef` 提升到 common/v1 单一类型，`pluginconfig` 保留兼容别名。
 
 基础插件 `cn.vastplan.foundation.data.relational.runtime` 已建立第一方 Provider/Pool/Transaction SPI、冻结式 Registry、MaterialSource 边界和 fake PostgreSQL/MySQL 契约测试。0.1.0 只在 descriptor 中开放无敏感性的 `providers` 操作；其余操作虽已固化 wire 契约，但在实施顺序第 2 项可信运行实例 identity 完成前继续 fail-closed。
+
+## 实施进展（2026-07-20，可信 Runtime material）
+
+实施顺序第 2 项已完成，Database Runtime 制品升级为 0.2.0。Backend Host 将验签后的插件 ID、发布者、版本、制品 SHA-256、节点、service unit 和随机启动实例保存在 host-only identity 中，以摘要形成 Material Lease audience；身份不接受插件 payload，也不签发可重放 bearer token。
+
+新增 `kernel.credential.material-lease` 窄中继与 Runtime 内部 `MaterialSource`：Runtime 持有一次性 X25519 私钥，Kernel 只转发 CredentialRef、公钥和密文，不接触明文。策略精确限制为首方 Database Runtime 与 connection-manager 的 `database.connection` 引用，并覆盖伪造 caller、第三方发布者、跨 owner、跨 tenant、错 audience、过期 lease 和回调后清零测试。`providers` 仍是唯一公开操作；下一步进入连接池管理器、资源预算、generation 轮换和指标。

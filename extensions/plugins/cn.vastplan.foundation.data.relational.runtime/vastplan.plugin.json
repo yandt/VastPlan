@@ -1,14 +1,14 @@
 {
   "id": "cn.vastplan.foundation.data.relational.runtime",
   "name": "VastPlan Database Runtime",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "关系数据库 Provider、连接池与事务的数据面基础插件；当前阶段仅开放 Provider 契约发现",
   "engines": { "backend": "^0.1" },
-  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.credential.material-lease"], "credentials": [], "resources": [] },
   "contextAccess": {
     "required": ["caller"],
     "optional": ["scope.tenant", "scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"]

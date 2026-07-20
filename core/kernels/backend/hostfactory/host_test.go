@@ -9,13 +9,16 @@ import (
 	"strings"
 	"testing"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
 )
 
 type bootstrapBroker struct{ called bool }
@@ -23,6 +26,16 @@ type bootstrapBroker struct{ called bool }
 type readinessObserver struct{ called bool }
 
 type deploymentController struct{ tenant string }
+
+type runtimeLeaseBroker struct {
+	tenant   string
+	identity runtimeidentity.Identity
+}
+
+func (b *runtimeLeaseBroker) IssueRuntimeLease(_ context.Context, tenant string, identity runtimeidentity.Identity, request credentiallease.Request) (credentiallease.Envelope, error) {
+	b.tenant, b.identity = tenant, identity
+	return credentiallease.Envelope{Version: 1, TenantID: tenant, Audience: "runtime:v1:test", Ref: request.Ref}, nil
+}
 
 func (c *deploymentController) Targets(_ context.Context, tenant string) ([]deploymentpublication.Target, error) {
 	c.tenant = tenant
@@ -43,6 +56,43 @@ func (o *readinessObserver) Observe(_ context.Context, expectation nodebootstrap
 func (b *bootstrapBroker) Bootstrap(_ context.Context, scope nodebootstrap.Scope, plan nodebootstrap.Plan) (nodebootstrap.Result, error) {
 	b.called = scope.TenantID == plan.Node.Tenant
 	return nodebootstrap.Result{SystemdActive: true, NodeID: plan.Node.ID}, nil
+}
+
+func TestRuntimeMaterialLeaseRequiresHostOnlyLaunchIdentity(t *testing.T) {
+	broker := &runtimeLeaseBroker{}
+	handler := kernelRuntimeMaterialLease(broker)
+	ref := commonv1.ManagedCredentialRef{
+		Handle: "credential://managed/database", Scope: "tenant",
+		Owner: "cn.vastplan.platform.data.relational.connection-manager", Purpose: "database.connection", Version: 1,
+	}
+	request, recipient, err := credentiallease.NewRequest(ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer recipient.Discard()
+	payload, _ := json.Marshal(request)
+	call := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{
+		Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.foundation.data.relational.runtime",
+	}}
+	if _, _, err := handler(context.Background(), call, payload); err == nil {
+		t.Fatal("只有 wire plugin caller、没有 host-only 启动身份时必须拒绝")
+	}
+	identity := runtimeidentity.Identity{
+		PluginID: call.Caller.Id, Publisher: "vastplan", Version: "0.2.0", ArtifactSHA256: strings.Repeat("a", 64),
+		NodeID: "node-a", RuntimeScope: "database", InstanceID: "runtime-a",
+	}
+	ctx, err := runtimeidentity.WithIdentity(context.Background(), identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, _, err := handler(ctx, call, payload)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || broker.tenant != "tenant-a" || broker.identity != identity {
+		t.Fatalf("可信 runtime lease 未转发: result=%+v broker=%+v err=%v", result, broker, err)
+	}
+	call.Caller.Id = "cn.vastplan.foundation.data.relational.other"
+	if _, _, err := handler(ctx, call, payload); err == nil {
+		t.Fatal("wire caller 与 host identity 不一致必须拒绝")
+	}
 }
 
 func TestNew_DefinesClosedBackendCatalogAndInternalService(t *testing.T) {

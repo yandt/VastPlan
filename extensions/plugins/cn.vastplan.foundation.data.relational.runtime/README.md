@@ -8,7 +8,7 @@
 
 ## 当前阶段
 
-0.1.0 只完成 Database Runtime v1 wire 契约、Provider SPI、错误分类、注册表和 `providers` 发现操作。`probe/activate/query/execute/begin/commit/rollback` 已进入机器可执行契约，但在可信运行实例 identity 和 Material Lease audience 完成前不会写入插件 descriptor，也不会接收请求。
+0.2.0 已完成 Database Runtime v1 wire 契约、Provider SPI、可信运行实例 identity、加密 Material Lease 中继和 `providers` 发现操作。`probe/activate/query/execute/begin/commit/rollback` 已进入机器可执行契约，但在池管理器与真实 Provider 完成前不会写入插件 descriptor，也不会接收请求。
 
 因此当前制品可以安全启动和报告空 Provider 列表，但不能打开物理数据库连接；这属于明确的 fail-closed，不是可用数据库服务。后续必须同批接入 PostgreSQL 与 MySQL Provider，不能把 `psql` 当作 Provider ID。
 
@@ -16,7 +16,8 @@
 
 - 部署时使用 native 独立进程；不与无关插件共享地址空间。
 - Provider 配置不得包含 DSN、密码、token、private key 等秘密，只能引用托管 CredentialRef。
-- Provider 只保留 `MaterialSource`，需要创建物理连接时才在短期回调内取得 material；不得缓存回调中的字节切片。
+- Host 会话把首方发布者、制品摘要、节点、unit 和单次启动实例绑定为不可伪造的 Runtime audience；插件不能从 payload 自报身份。
+- Provider 只保留 `MaterialSource`，需要创建物理连接时才生成一次性 X25519 密钥并取得加密 lease；Kernel 不持有私钥、看不到明文，Provider 不得缓存回调中的字节切片。
 - 第三方 Provider 不实现本 Go SPI，而是经未来的隔离进程和版本化 RPC 接入。
 
 设计依据见 [ADR-0095](../../../docs/dev/decisions/ADR-0095-Database-Runtime多Provider连接池与集群事务.md)。

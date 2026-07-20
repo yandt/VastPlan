@@ -26,6 +26,10 @@ const (
 	// PluginConfigEnvKey carries the caller-isolated, non-sensitive startup
 	// snapshot. Managed credential values are never included in this document.
 	PluginConfigEnvKey = "VASTPLAN_PLUGIN_CONFIG_JSON"
+	// RuntimeAudienceEnvKey is a non-secret digest of the host-verified launch
+	// identity. A plugin may compare it with a returned encrypted lease, but it
+	// cannot choose or override the value.
+	RuntimeAudienceEnvKey = "VASTPLAN_RUNTIME_AUDIENCE"
 )
 
 // SessionMetadataKey 插件在 Channel 流的 gRPC metadata 中携带会话票据的键。
