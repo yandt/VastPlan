@@ -41,6 +41,12 @@ func TestPlatformAdminRolesAndUnknownOperations(t *testing.T) {
 	if got, _ := decide(user("platform.artifacts.read"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "cutoverMigration"}); got != extpoint.DecisionDeny {
 		t.Fatalf("制品读取角色不得隐含迁移: %s", got)
 	}
+	if got, _ := decide(user("platform.artifacts.lifecycle"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "setLifecycle"}); got != extpoint.DecisionAllow {
+		t.Fatalf("制品生命周期角色应允许状态变更: %s", got)
+	}
+	if got, _ := decide(user("platform.artifacts.migrate"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "setLifecycle"}); got != extpoint.DecisionDeny {
+		t.Fatalf("制品迁移角色不得隐含生命周期权限: %s", got)
+	}
 }
 
 func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {

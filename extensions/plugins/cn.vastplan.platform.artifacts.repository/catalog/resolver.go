@@ -62,9 +62,15 @@ func (s *Store) Resolve(request pluginv1.ArtifactResolveRequest) (pluginv1.Artif
 	}
 	s.mu.RLock()
 	revision := s.revision
+	snapshot := request.SnapshotRevision
+	if snapshot == 0 {
+		snapshot = revision
+	}
 	entries := make([]Entry, 0, len(s.entries))
-	for _, entry := range s.entries {
-		entries = append(entries, cloneEntry(entry))
+	for key, entry := range s.entries {
+		copy := cloneEntry(entry)
+		applyLifecycle(&copy, lifecycleAt(s.lifecycle[key], snapshot))
+		entries = append(entries, copy)
 	}
 	s.mu.RUnlock()
 	return resolveEntries(revision, entries, request)
@@ -189,6 +195,9 @@ func validateResolveRequest(current uint64, request pluginv1.ArtifactResolveRequ
 }
 
 func entryAllowed(entry Entry, request pluginv1.ArtifactResolveRequest, kernelVersion *semver.Version, channelRank map[string]int, publishers map[string]struct{}, prefixes []string) bool {
+	if entry.LifecycleStatus == LifecycleYanked || entry.LifecycleStatus == LifecycleRevoked {
+		return false
+	}
 	if _, ok := channelRank[entry.Ref.Channel]; !ok {
 		return false
 	}
@@ -432,7 +441,8 @@ func buildLock(revision uint64, request pluginv1.ArtifactResolveRequest, selecte
 		packages = append(packages, pluginv1.ArtifactLockPackage{
 			Ref: entry.Ref, SHA256: entry.SHA256, Size: entry.Size, Publisher: entry.Publisher,
 			KeyID: entry.KeyID, RepositoryRevision: entry.RepositoryRevision,
-			Dependencies: cloneStringMap(entry.Dependencies),
+			Dependencies:    cloneStringMap(entry.Dependencies),
+			LifecycleStatus: deprecatedStatus(entry), LifecycleReason: deprecatedReason(entry), Replacement: deprecatedReplacement(entry),
 		})
 	}
 	sort.Slice(packages, func(i, j int) bool { return packages[i].Ref.PluginID < packages[j].Ref.PluginID })
@@ -454,6 +464,27 @@ func buildLock(revision uint64, request pluginv1.ArtifactResolveRequest, selecte
 		return pluginv1.ArtifactLock{}, err
 	}
 	return lock, nil
+}
+
+func deprecatedStatus(entry Entry) string {
+	if entry.LifecycleStatus == LifecycleDeprecated {
+		return LifecycleDeprecated
+	}
+	return ""
+}
+
+func deprecatedReason(entry Entry) string {
+	if entry.LifecycleStatus == LifecycleDeprecated {
+		return entry.LifecycleReason
+	}
+	return ""
+}
+
+func deprecatedReplacement(entry Entry) *pluginv1.ArtifactRequirement {
+	if entry.LifecycleStatus == LifecycleDeprecated {
+		return cloneRequirement(entry.Replacement)
+	}
+	return nil
 }
 
 func ValidateLock(lock pluginv1.ArtifactLock) error {

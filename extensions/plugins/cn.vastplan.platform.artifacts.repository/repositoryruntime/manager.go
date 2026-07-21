@@ -153,11 +153,36 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 	return artifact, nil
 }
 
+func (m *Manager) SetLifecycle(request catalog.LifecycleRequest, occurredAt time.Time) (catalog.Entry, uint64, error) {
+	m.publishMu.Lock()
+	defer m.publishMu.Unlock()
+	m.mu.RLock()
+	active, mirror := m.active, m.mirror
+	m.mu.RUnlock()
+	if active == nil {
+		return catalog.Entry{}, 0, errors.New("活动制品仓库不可用")
+	}
+	if mirror != nil {
+		if _, _, err := mirror.catalog.SetLifecycle(request, occurredAt); err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷生命周期镜像失败: %w", err))
+			return catalog.Entry{}, 0, errors.New("制品迁移观察卷不可用，生命周期变更已冻结")
+		}
+	}
+	entry, revision, err := active.catalog.SetLifecycle(request, occurredAt)
+	if err != nil && mirror != nil {
+		m.recordMigrationError(fmt.Errorf("候选卷生命周期变更失败: %w", err))
+	}
+	return entry, revision, err
+}
+
 func (m *Manager) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, []byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.active == nil {
 		return pluginv1.Artifact{}, nil, nil, errors.New("活动制品仓库不可用")
+	}
+	if err := m.active.catalog.RequireDelivery(ref); err != nil {
+		return pluginv1.Artifact{}, nil, nil, err
 	}
 	return m.active.adapter.Read(ref)
 }

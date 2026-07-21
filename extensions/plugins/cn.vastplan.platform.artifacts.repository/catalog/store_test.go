@@ -121,6 +121,50 @@ func TestCatalogHTTPRequiresReadTokenTLSAndBoundedQuery(t *testing.T) {
 	}
 }
 
+func TestLifecycleIsCASAuditedSnapshotAwareAndRestartSafe(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repository")
+	repository, privateKey := testSignedRepository(t, root)
+	artifact, _ := publishTestArtifact(t, repository, privateKey, "1.0.0-dev.20260721.1.abcdef0")
+	store, err := Open(root, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+	replacement := &pluginv1.ArtifactRequirement{PluginID: "com.example.catalog", Constraint: ">=2.0.0"}
+	entry, revision, err := store.SetLifecycle(LifecycleRequest{Ref: ref, Status: LifecycleDeprecated, Reason: "use the maintained major", Replacement: replacement, ExpectedRevision: 1}, time.Now().UTC())
+	if err != nil || revision != 2 || entry.LifecycleStatus != LifecycleDeprecated {
+		t.Fatalf("deprecate failed: entry=%+v revision=%d err=%v", entry, revision, err)
+	}
+	request := pluginv1.ArtifactResolveRequest{Roots: []pluginv1.ArtifactRequirement{{PluginID: ref.PluginID, Constraint: "=" + ref.Version}}, Target: "backend", KernelVersion: "0.1.0", AllowedChannels: []string{"testing"}, AllowedPublishers: []string{"example"}, AllowedPluginPrefixes: []string{"com.example"}}
+	lock, err := store.Resolve(request)
+	if err != nil || lock.Packages[0].LifecycleStatus != LifecycleDeprecated || lock.Packages[0].Replacement == nil {
+		t.Fatalf("deprecated artifact must remain resolvable with warning metadata: lock=%+v err=%v", lock, err)
+	}
+	request.SnapshotRevision = 1
+	oldLock, err := store.Resolve(request)
+	if err != nil || oldLock.Packages[0].LifecycleStatus != "" {
+		t.Fatalf("older snapshot must keep its historical lifecycle view: lock=%+v err=%v", oldLock, err)
+	}
+	if _, actual, err := store.SetLifecycle(LifecycleRequest{Ref: ref, Status: LifecycleYanked, Reason: "bad release", ExpectedRevision: 1}, time.Now().UTC()); err == nil || actual != 2 {
+		t.Fatalf("stale CAS must fail with current revision: actual=%d err=%v", actual, err)
+	}
+	if _, revision, err = store.SetLifecycle(LifecycleRequest{Ref: ref, Status: LifecycleYanked, Reason: "bad release", ExpectedRevision: 2}, time.Now().UTC()); err != nil || revision != 3 {
+		t.Fatalf("yank failed: revision=%d err=%v", revision, err)
+	}
+	request.SnapshotRevision = 0
+	if _, err := store.Resolve(request); err == nil {
+		t.Fatal("yanked artifact must be excluded from new resolution")
+	}
+	reopened, err := Open(root, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := reopened.Query(Query{PluginID: ref.PluginID, Page: 1, PageSize: 10})
+	if page.Revision != 3 || len(page.Items) != 1 || page.Items[0].LifecycleStatus != LifecycleYanked {
+		t.Fatalf("restart lost lifecycle state: %+v", page)
+	}
+}
+
 func testSignedRepository(t *testing.T, root string) (*pluginservice.SignedRepository, ed25519.PrivateKey) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)

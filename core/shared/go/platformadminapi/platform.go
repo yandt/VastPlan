@@ -108,6 +108,25 @@ type ArtifactCatalogStatus struct {
 	InventorySHA256 string `json:"inventorySHA256,omitempty"`
 }
 
+type ArtifactLifecycleRequest struct {
+	Ref              pluginv1.ArtifactRef          `json:"ref"`
+	Status           string                        `json:"status"`
+	Reason           string                        `json:"reason"`
+	Replacement      *pluginv1.ArtifactRequirement `json:"replacement,omitempty"`
+	ExpectedRevision uint64                        `json:"expectedRevision"`
+}
+
+type ArtifactLifecycleResult struct {
+	Revision uint64 `json:"revision"`
+	Entry    struct {
+		Ref               pluginv1.ArtifactRef          `json:"ref"`
+		LifecycleStatus   string                        `json:"lifecycleStatus"`
+		LifecycleRevision uint64                        `json:"lifecycleRevision"`
+		LifecycleReason   string                        `json:"lifecycleReason,omitempty"`
+		Replacement       *pluginv1.ArtifactRequirement `json:"replacement,omitempty"`
+	} `json:"entry"`
+}
+
 type ArtifactRepositoryMigration struct {
 	MigrationID      string `json:"migrationId,omitempty"`
 	Phase            string `json:"phase,omitempty"`
@@ -306,6 +325,7 @@ type Service interface {
 	DeleteDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) error
 	ProbeDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (DatabaseProbe, error)
 	ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryStatus, error)
+	SetArtifactLifecycle(context.Context, portalapi.Principal, portalapi.ManagementTarget, ArtifactLifecycleRequest) (ArtifactLifecycleResult, error)
 	ArtifactMigrationStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryMigration, error)
 	PrepareArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, PrepareArtifactMigrationRequest) (ArtifactRepositoryMigration, error)
 	SyncArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (ArtifactRepositoryMigration, error)

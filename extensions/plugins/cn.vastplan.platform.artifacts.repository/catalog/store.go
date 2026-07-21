@@ -34,17 +34,21 @@ type VerifiedRepository interface {
 }
 
 type Event struct {
-	SchemaVersion string               `json:"schemaVersion"`
-	Revision      uint64               `json:"revision"`
-	Type          string               `json:"type"`
-	Ref           pluginv1.ArtifactRef `json:"ref"`
-	SHA256        string               `json:"sha256"`
-	Size          int64                `json:"size"`
-	Publisher     string               `json:"publisher"`
-	KeyID         string               `json:"keyId"`
-	SignedAt      time.Time            `json:"signedAt"`
-	OccurredAt    time.Time            `json:"occurredAt"`
-	Recovered     bool                 `json:"recovered,omitempty"`
+	SchemaVersion  string                        `json:"schemaVersion"`
+	Revision       uint64                        `json:"revision"`
+	Type           string                        `json:"type"`
+	Ref            pluginv1.ArtifactRef          `json:"ref"`
+	SHA256         string                        `json:"sha256"`
+	Size           int64                         `json:"size"`
+	Publisher      string                        `json:"publisher"`
+	KeyID          string                        `json:"keyId"`
+	SignedAt       time.Time                     `json:"signedAt"`
+	OccurredAt     time.Time                     `json:"occurredAt"`
+	Recovered      bool                          `json:"recovered,omitempty"`
+	PreviousStatus string                        `json:"previousStatus,omitempty"`
+	Status         string                        `json:"status,omitempty"`
+	Reason         string                        `json:"reason,omitempty"`
+	Replacement    *pluginv1.ArtifactRequirement `json:"replacement,omitempty"`
 }
 
 type Entry struct {
@@ -67,6 +71,10 @@ type Entry struct {
 	RuntimeRequires      []pluginv1.RuntimeRequirement      `json:"runtimeRequires,omitempty"`
 	RuntimeProvides      []pluginv1.RuntimeCapabilityPolicy `json:"runtimeProvides,omitempty"`
 	ProvidedCapabilities []string                           `json:"providedCapabilities,omitempty"`
+	LifecycleStatus      string                             `json:"lifecycleStatus"`
+	LifecycleRevision    uint64                             `json:"lifecycleRevision,omitempty"`
+	LifecycleReason      string                             `json:"lifecycleReason,omitempty"`
+	Replacement          *pluginv1.ArtifactRequirement      `json:"replacement,omitempty"`
 }
 
 type Query struct {
@@ -107,6 +115,7 @@ type Store struct {
 	revision   uint64
 	entries    map[string]Entry
 	events     []Event
+	lifecycle  map[string][]LifecycleTransition
 }
 
 func Open(repositoryRoot string, repository VerifiedRepository) (*Store, error) {
@@ -115,7 +124,7 @@ func Open(repositoryRoot string, repository VerifiedRepository) (*Store, error) 
 	}
 	store := &Store{
 		root: filepath.Join(filepath.Clean(repositoryRoot), "catalog"), repository: repository,
-		entries: map[string]Entry{},
+		entries: map[string]Entry{}, lifecycle: map[string][]LifecycleTransition{},
 	}
 	for _, directory := range []string{store.root, store.journalDir()} {
 		if err := ensurePrivateDirectory(directory); err != nil {
@@ -157,6 +166,7 @@ func (s *Store) RecordPublished(artifact pluginservice.Artifact, attestationRaw 
 	}
 	entry.RepositoryRevision = event.Revision
 	entry.PublishedAt = event.OccurredAt
+	entry.LifecycleStatus = LifecycleActive
 	s.entries[key] = entry
 	if err := s.writeSnapshotLocked(); err != nil {
 		return 0, err
@@ -224,7 +234,7 @@ func inventoryDigest(entries map[string]Entry) string {
 	hash := sha256.New()
 	for _, key := range keys {
 		entry := entries[key]
-		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%d\n", key, entry.SHA256, entry.RepositoryRevision)
+		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%d\x00%s\x00%d\n", key, entry.SHA256, entry.RepositoryRevision, entry.LifecycleStatus, entry.LifecycleRevision)
 	}
 	return hex.EncodeToString(hash.Sum(nil))
 }
@@ -252,6 +262,7 @@ func (s *Store) rebuild() error {
 			}
 			entry.RepositoryRevision = prior.RepositoryRevision
 			entry.PublishedAt = prior.PublishedAt
+			applyLifecycle(&entry, lifecycleAt(s.lifecycle[key], s.revision))
 			s.entries[key] = entry
 			continue
 		}
@@ -261,6 +272,7 @@ func (s *Store) rebuild() error {
 		}
 		entry.RepositoryRevision = event.Revision
 		entry.PublishedAt = event.OccurredAt
+		entry.LifecycleStatus = LifecycleActive
 		s.entries[key] = entry
 	}
 	for key := range s.entries {
@@ -299,14 +311,26 @@ func (s *Store) loadJournal() error {
 			return fmt.Errorf("校验发布流水账 %s: %w", item.Name(), err)
 		}
 		key := refKey(event.Ref)
-		if _, duplicate := s.entries[key]; duplicate {
-			return fmt.Errorf("发布流水账重复引用: %s", key)
-		}
 		s.revision = revision
 		s.events = append(s.events, event)
-		s.entries[key] = Entry{
-			Ref: event.Ref, SHA256: event.SHA256, Size: event.Size, Publisher: event.Publisher, KeyID: event.KeyID,
-			SignedAt: event.SignedAt, PublishedAt: event.OccurredAt, RepositoryRevision: event.Revision,
+		switch event.Type {
+		case "artifact.published":
+			if _, duplicate := s.entries[key]; duplicate {
+				return fmt.Errorf("发布流水账重复引用: %s", key)
+			}
+			s.entries[key] = Entry{
+				Ref: event.Ref, SHA256: event.SHA256, Size: event.Size, Publisher: event.Publisher, KeyID: event.KeyID,
+				SignedAt: event.SignedAt, PublishedAt: event.OccurredAt, RepositoryRevision: event.Revision, LifecycleStatus: LifecycleActive,
+			}
+		case "artifact.lifecycle":
+			entry, exists := s.entries[key]
+			if !exists || entry.SHA256 != event.SHA256 || currentLifecycleStatus(s.lifecycle[key]) != event.PreviousStatus {
+				return fmt.Errorf("生命周期流水账前置状态不一致: %s", key)
+			}
+			transition := LifecycleTransition{Revision: event.Revision, Status: event.Status, Reason: event.Reason, Replacement: cloneRequirement(event.Replacement), OccurredAt: event.OccurredAt}
+			s.lifecycle[key] = append(s.lifecycle[key], transition)
+			applyLifecycle(&entry, transition)
+			s.entries[key] = entry
 		}
 	}
 	return nil
@@ -315,7 +339,9 @@ func (s *Store) loadJournal() error {
 func (s *Store) appendEventLocked(event *Event) error {
 	event.SchemaVersion = schemaVersion
 	event.Revision = s.revision + 1
-	event.Type = "artifact.published"
+	if event.Type == "" {
+		event.Type = "artifact.published"
+	}
 	raw, err := json.MarshalIndent(event, "", "  ")
 	if err != nil {
 		return err
@@ -428,21 +454,28 @@ func runtimeProvides(manifest pluginv1.Manifest) []pluginv1.RuntimeCapabilityPol
 
 func eventFrom(entry Entry, occurredAt time.Time, recovered bool) Event {
 	return Event{
-		Ref: entry.Ref, SHA256: entry.SHA256, Size: entry.Size, Publisher: entry.Publisher, KeyID: entry.KeyID,
+		Type: "artifact.published",
+		Ref:  entry.Ref, SHA256: entry.SHA256, Size: entry.Size, Publisher: entry.Publisher, KeyID: entry.KeyID,
 		SignedAt: entry.SignedAt, OccurredAt: occurredAt.UTC(), Recovered: recovered,
 	}
 }
 
 func validateEvent(event Event, revision uint64) error {
-	if event.SchemaVersion != schemaVersion || event.Revision != revision || event.Type != "artifact.published" {
+	if event.SchemaVersion != schemaVersion || event.Revision != revision || (event.Type != "artifact.published" && event.Type != "artifact.lifecycle") {
 		return errors.New("不支持的流水账事件")
 	}
-	if event.Ref.PluginID == "" || event.Ref.Version == "" || event.Ref.Channel == "" || event.Publisher == "" || event.KeyID == "" {
+	if event.Ref.PluginID == "" || event.Ref.Version == "" || event.Ref.Channel == "" {
 		return errors.New("流水账事件缺少身份字段")
 	}
 	digest, err := hex.DecodeString(event.SHA256)
-	if err != nil || len(digest) != 32 || event.Size <= 0 || event.SignedAt.IsZero() || event.OccurredAt.IsZero() {
+	if err != nil || len(digest) != 32 || event.OccurredAt.IsZero() {
 		return errors.New("流水账事件的摘要、大小或时间无效")
+	}
+	if event.Type == "artifact.published" && (event.Size <= 0 || event.Publisher == "" || event.KeyID == "" || event.SignedAt.IsZero()) {
+		return errors.New("发布流水账事件缺少签名身份")
+	}
+	if event.Type == "artifact.lifecycle" && (!validLifecycleStatus(event.PreviousStatus) || !validLifecycleStatus(event.Status) || event.PreviousStatus == event.Status || strings.TrimSpace(event.Reason) == "") {
+		return errors.New("生命周期流水账事件无效")
 	}
 	return nil
 }

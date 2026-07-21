@@ -63,6 +63,9 @@ func (*platformService) ArtifactRepositoryStatus(context.Context, portalapi.Prin
 func (*platformService) ArtifactMigrationStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryMigration, error) {
 	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "synced"}, nil
 }
+func (*platformService) SetArtifactLifecycle(context.Context, portalapi.Principal, portalapi.ManagementTarget, platformadminapi.ArtifactLifecycleRequest) (platformadminapi.ArtifactLifecycleResult, error) {
+	return platformadminapi.ArtifactLifecycleResult{Revision: 2}, nil
+}
 func (*platformService) PrepareArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, platformadminapi.PrepareArtifactMigrationRequest) (platformadminapi.ArtifactRepositoryMigration, error) {
 	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "prepared"}, nil
 }
@@ -145,7 +148,7 @@ func platformPortalService() *service {
 		{ID: "settings", LogicalService: "platform.settings", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.SettingsCapability, Read: []string{"list"}, Write: []string{"put", "delete"}}}},
 		{ID: "credentials", LogicalService: "platform.credentials", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.CredentialsCapability, Read: []string{"list"}, Write: []string{"put", "rotate", "revoke"}}}},
 		{ID: "database", LogicalService: "platform.database", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DatabaseCapability, Read: []string{"list"}, Write: []string{"define", "remove", "probe"}}}},
-		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status", "migrationStatus"}, Write: []string{"prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"}}}},
+		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status", "migrationStatus"}, Write: []string{"setLifecycle", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"}}}},
 		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"}}}},
 	}}
 	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a", Route: "/operations", Management: binding, Resolution: portalapi.Resolution{PlatformProfile: profile, ManagementBindingDigest: compositioncommonv1.Digest(binding)}}
@@ -277,7 +280,7 @@ func TestDeploymentRoutesAreRoleSeparatedAndAllowlisted(t *testing.T) {
 
 func TestArtifactMigrationRoutesAreExplicitRoleSeparatedAndCSRFProtected(t *testing.T) {
 	h := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
-		return portalapi.Principal{ID: "repository-admin", TenantID: "tenant-a", Roles: []string{"platform.artifacts.migrate", "platform.artifacts.read"}}, nil
+		return portalapi.Principal{ID: "repository-admin", TenantID: "tenant-a", Roles: []string{"platform.artifacts.migrate", "platform.artifacts.lifecycle", "platform.artifacts.read"}}, nil
 	}), platformPortalService(), nil, &platformService{}, nil, nil)
 	status := httptest.NewRecorder()
 	h.ServeHTTP(status, httptest.NewRequest(http.MethodGet, platformPath("artifacts", "artifacts/migration"), nil))
@@ -301,7 +304,15 @@ func TestArtifactMigrationRoutesAreExplicitRoleSeparatedAndCSRFProtected(t *test
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "prepared") {
 		t.Fatalf("migration prepare failed: status=%d body=%s", response.Code, response.Body.String())
 	}
-	if !platformCapabilityAllowed(platformadminapi.ArtifactsCapability, "releaseMigration") || platformCapabilityAllowed(platformadminapi.ArtifactsCapability, "deleteVolume") {
+	lifecycle := httptest.NewRequest(http.MethodPost, platformPath("artifacts", "artifacts/lifecycle"), strings.NewReader(`{"ref":{"pluginId":"cn.example.demo","version":"1.0.0","channel":"stable"},"status":"deprecated","reason":"use v2","expectedRevision":1}`))
+	lifecycle.AddCookie(cookie)
+	lifecycle.Header.Set("X-VastPlan-CSRF", cookie.Value)
+	lifecycleResponse := httptest.NewRecorder()
+	h.ServeHTTP(lifecycleResponse, lifecycle)
+	if lifecycleResponse.Code != http.StatusOK || !strings.Contains(lifecycleResponse.Body.String(), `"revision":2`) {
+		t.Fatalf("lifecycle update failed: status=%d body=%s", lifecycleResponse.Code, lifecycleResponse.Body.String())
+	}
+	if !platformCapabilityAllowed(platformadminapi.ArtifactsCapability, "setLifecycle") || !platformCapabilityAllowed(platformadminapi.ArtifactsCapability, "releaseMigration") || platformCapabilityAllowed(platformadminapi.ArtifactsCapability, "deleteVolume") {
 		t.Fatal("artifact migration allowlist must be explicit")
 	}
 }

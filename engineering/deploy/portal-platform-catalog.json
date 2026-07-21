@@ -56,7 +56,7 @@
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.2.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.4.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.4.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.6.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.7.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.4.0", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
@@ -69,7 +69,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 1,
-        "digest": "194372a1254f6560dec9dd2b733c4ac6dd747766880838a2749320adc67513ed"
+        "digest": "a90ecd025c62f9c72fa3c276624ce7b791617a9c2fde3befcd4edd9ef0975c91"
       },
       "services": [
         {
@@ -105,7 +105,7 @@
           "logicalService": "platform.artifacts.repository",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.artifacts.repository", "read": ["status", "listCatalog", "listPublishJournal", "resolve", "migrationStatus"], "write": ["prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"] }
+            { "capability": "platform.artifacts.repository", "read": ["status", "listCatalog", "listPublishJournal", "resolve", "migrationStatus"], "write": ["setLifecycle", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"] }
           ]
         },
         {

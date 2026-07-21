@@ -82,5 +82,11 @@ describe("PlatformAdminClient", () => {
     ]);
     expect(() => client.cutoverArtifactMigration("repository.move-001", 0)).toThrowError(PlatformAdminError);
     expect(() => client.releaseArtifactMigration("bad/id")).toThrowError(PlatformAdminError);
+    await client.setArtifactLifecycle({ ref: { pluginId: "cn.example.demo", version: "1.0.0", channel: "stable" }, status: "deprecated", reason: "use v2", expectedRevision: 17 });
+    expect(calls[3]).toEqual({
+      path: "/v1/portals/operations/platform/services/artifacts/artifacts/lifecycle",
+      method: "POST",
+      body: expect.stringContaining('"expectedRevision":17'),
+    });
   });
 });

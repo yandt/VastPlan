@@ -64,6 +64,16 @@ export interface ArtifactRepositoryStatus {
   migration?: ArtifactRepositoryMigration;
 }
 export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
+export interface ArtifactRef { pluginId: string; version: string; channel: string; }
+export interface ArtifactRequirement { pluginId: string; constraint: string; }
+export interface ArtifactLifecycleRequest {
+  ref: ArtifactRef; status: "active" | "deprecated" | "yanked" | "revoked"; reason: string;
+  replacement?: ArtifactRequirement; expectedRevision: number;
+}
+export interface ArtifactLifecycleResult {
+  revision: number;
+  entry: { ref: ArtifactRef; lifecycleStatus: string; lifecycleRevision: number; lifecycleReason?: string; replacement?: ArtifactRequirement };
+}
 
 export interface NodeBootstrapPlan {
   target: { address: string; port?: number; user: string };
@@ -155,6 +165,7 @@ export class PlatformAdminClient {
   public deleteDatabaseConnection(name: string): Promise<void> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "DELETE").then(() => undefined); }
   public probeDatabaseConnection(name: string): Promise<DatabaseProbe> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}/probe`, "POST", {}); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
+  public setArtifactLifecycle(request: ArtifactLifecycleRequest): Promise<ArtifactLifecycleResult> { return this.mutate(`${this.basePath}/artifacts/lifecycle`, "POST", request); }
   public artifactMigrationStatus(): Promise<ArtifactRepositoryMigration> { return this.get(`${this.basePath}/artifacts/migration`); }
   public prepareArtifactMigration(request: PrepareArtifactMigrationRequest): Promise<ArtifactRepositoryMigration> { return this.mutate(`${this.basePath}/artifacts/migrations`, "POST", request); }
   public syncArtifactMigration(id: string): Promise<ArtifactRepositoryMigration> { return this.artifactMigrationAction(id, "sync"); }

@@ -51,13 +51,16 @@ type ArtifactResolveRequest struct {
 
 // ArtifactLockPackage binds one package identity to its verified repository facts.
 type ArtifactLockPackage struct {
-	Ref                ArtifactRef       `json:"ref"`
-	SHA256             string            `json:"sha256"`
-	Size               int64             `json:"size"`
-	Publisher          string            `json:"publisher"`
-	KeyID              string            `json:"keyId"`
-	RepositoryRevision uint64            `json:"repositoryRevision"`
-	Dependencies       map[string]string `json:"dependencies,omitempty"`
+	Ref                ArtifactRef          `json:"ref"`
+	SHA256             string               `json:"sha256"`
+	Size               int64                `json:"size"`
+	Publisher          string               `json:"publisher"`
+	KeyID              string               `json:"keyId"`
+	RepositoryRevision uint64               `json:"repositoryRevision"`
+	Dependencies       map[string]string    `json:"dependencies,omitempty"`
+	LifecycleStatus    string               `json:"lifecycleStatus,omitempty"`
+	LifecycleReason    string               `json:"lifecycleReason,omitempty"`
+	Replacement        *ArtifactRequirement `json:"replacement,omitempty"`
 }
 
 // ArtifactLock is the immutable, cross-kernel result of one repository solve.

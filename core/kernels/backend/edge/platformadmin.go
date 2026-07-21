@@ -162,6 +162,20 @@ func (s *CapabilityPlatformAdminService) ArtifactMigrationStatus(ctx context.Con
 	return response, err
 }
 
+func (s *CapabilityPlatformAdminService) SetArtifactLifecycle(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, request platformadminapi.ArtifactLifecycleRequest) (platformadminapi.ArtifactLifecycleResult, error) {
+	if request.ExpectedRevision == 0 || validResourceName(request.Ref.PluginID, 160) != nil || request.Ref.Version == "" || len(request.Ref.Version) > 128 || validResourceName(request.Ref.Channel, 64) != nil || request.Reason == "" || len([]rune(request.Reason)) > 500 {
+		return platformadminapi.ArtifactLifecycleResult{}, platformadminapi.ErrInvalid
+	}
+	switch request.Status {
+	case "active", "deprecated", "yanked", "revoked":
+	default:
+		return platformadminapi.ArtifactLifecycleResult{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.ArtifactLifecycleResult
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "setLifecycle", true, request, &response)
+	return response, err
+}
+
 func (s *CapabilityPlatformAdminService) PrepareArtifactMigration(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, request platformadminapi.PrepareArtifactMigrationRequest) (platformadminapi.ArtifactRepositoryMigration, error) {
 	if validResourceName(request.MigrationID, 96) != nil || validResourceName(request.TargetProvider, 160) != nil || validResourceName(request.TargetVolumeID, 80) != nil {
 		return platformadminapi.ArtifactRepositoryMigration{}, platformadminapi.ErrInvalid

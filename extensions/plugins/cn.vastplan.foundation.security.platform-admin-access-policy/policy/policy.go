@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.11.0"
+	PluginVersion = "0.12.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -149,7 +149,7 @@ func operationRole(capability, operation string) string {
 		platformadminapi.SettingsCapability:    {"get": "platform.settings.read", "list": "platform.settings.read", "changesSince": "platform.settings.read", "put": "platform.admin", "delete": "platform.admin"},
 		platformadminapi.CredentialsCapability: {"describe": "platform.credentials.read", "list": "platform.credentials.read", "put": "platform.credentials.write", "rotate": "platform.credentials.rotate", "revoke": "platform.credentials.revoke"},
 		platformadminapi.DatabaseCapability:    {"describe": "platform.database.read", "list": "platform.database.read", "define": "platform.database.write", "remove": "platform.database.write", "probe": "platform.database.probe"},
-		platformadminapi.ArtifactsCapability:   {"status": "platform.artifacts.read", "listCatalog": "platform.artifacts.read", "listPublishJournal": "platform.artifacts.read", "resolve": "platform.artifacts.read", "migrationStatus": "platform.artifacts.read", "prepareMigration": "platform.artifacts.migrate", "syncMigration": "platform.artifacts.migrate", "cutoverMigration": "platform.artifacts.migrate", "rollbackMigration": "platform.artifacts.migrate", "finalizeMigration": "platform.artifacts.migrate", "releaseMigration": "platform.artifacts.migrate"},
+		platformadminapi.ArtifactsCapability:   {"status": "platform.artifacts.read", "listCatalog": "platform.artifacts.read", "listPublishJournal": "platform.artifacts.read", "resolve": "platform.artifacts.read", "setLifecycle": "platform.artifacts.lifecycle", "migrationStatus": "platform.artifacts.read", "prepareMigration": "platform.artifacts.migrate", "syncMigration": "platform.artifacts.migrate", "cutoverMigration": "platform.artifacts.migrate", "rollbackMigration": "platform.artifacts.migrate", "finalizeMigration": "platform.artifacts.migrate", "releaseMigration": "platform.artifacts.migrate"},
 		platformadminapi.DeploymentCapability:  {"listNodes": "platform.deployment.read", "putNode": "platform.deployment.write", "listBootstrapJobs": "platform.deployment.read", "createBootstrap": "platform.deployment.bootstrap", "approveBootstrap": "platform.deployment.approve", "listDeploymentTargets": "platform.deployment.read", "listServiceRevisions": "platform.deployment.read", "listServiceRevisionAudit": "platform.deployment.read", "createServiceDraft": "platform.deployment.compose", "updateServiceDraft": "platform.deployment.compose", "submitServiceDraft": "platform.deployment.compose", "approveServiceRevision": "platform.deployment.approve", "publishServiceRevision": "platform.deployment.publish", "rollbackServiceRevision": "platform.deployment.publish", "listTestTargetBindings": "platform.deployment.read", "putTestTargetBinding": "platform.admin", "listTestReleases": "platform.deployment.read", "createTestRelease": "platform.deployment.publish", "rollbackTestRelease": "platform.deployment.publish"},
 	}
 	return roles[capability][operation]

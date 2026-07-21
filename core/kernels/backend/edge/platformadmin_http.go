@@ -102,6 +102,22 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 		respondPlatform(w, value, err)
 		return
 	}
+	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "lifecycle" {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "setLifecycle", true) || !requirePlatformRole(w, p, "platform.artifacts.lifecycle") {
+			return
+		}
+		var request platformadminapi.ArtifactLifecycleRequest
+		if !decode(w, r, &request) {
+			return
+		}
+		value, err := h.platform.SetArtifactLifecycle(r.Context(), p, target, request)
+		respondPlatform(w, value, err)
+		return
+	}
 	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "migrations" {
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w)

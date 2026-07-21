@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.6.0`
+当前制品版本：`0.7.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、离线 Bundle 和可回滚 File Volume 迁移。对象存储与 OCI 通过供给 Provider 增加；yank/deprecate/revoke、审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、离线 Bundle 和可回滚 File Volume 迁移。对象存储与 OCI 通过供给 Provider 增加；引用保护、GC、审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
@@ -78,7 +78,7 @@ Resolver 请求示例：
 
 Catalog 数据保存在仓库 volume 的 `catalog/` 下。发布流水账按单调 revision 使用原子事件文件，索引快照可从每个签名制品及流水账重建；启动时发现制品已成功落盘但事件缺失，会补写 `recovered` 事件。恢复路径只读取并验证 artifact metadata 与 attestation，不扫描全部大对象；实际读取仍由内核复验对象摘要。相同精确 ref、摘要和证明重传幂等，不增加 revision；受控测试 CLI 会先查 Catalog，避免重试产生不同证明。
 
-平台工具能力同时提供 `status`、`listCatalog`、`listPublishJournal`、小载荷 `resolve`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。迁移采用可重试阶段命令；长时同步可按同一 ID 续做，只有 cutover 的最终追平会短暂冻结发布，读取仍可用。观察期双写，失败可回滚；物理 path/handle 不返回 Portal。Bundle 大字节只走 HTTPS，不穿过协议总线。
+平台工具能力同时提供 `status`、`listCatalog`、`listPublishJournal`、小载荷 `resolve`、`setLifecycle`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。生命周期变更使用 Catalog revision CAS 和独立权限，`deprecated` 会进入锁提示，`yanked/revoked` 拒绝新的解析与交付。迁移采用可重试阶段命令；长时同步可按同一 ID 续做，只有 cutover 的最终追平会短暂冻结发布，读取仍可用。观察期的发布与生命周期事件都先镜像后提交活动卷，失败可回滚；物理 path/handle 不返回 Portal。Bundle 大字节只走 HTTPS，不穿过协议总线。
 
 ## 验证
 

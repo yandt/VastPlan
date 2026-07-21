@@ -41,6 +41,9 @@
     "package": {
       "type": "object", "additionalProperties": false,
       "required": ["ref", "sha256", "size", "publisher", "keyId", "repositoryRevision"],
+      "allOf": [
+        { "if": { "required": ["lifecycleStatus"] }, "then": { "required": ["lifecycleReason"] } }
+      ],
       "properties": {
         "ref": { "$ref": "#/$defs/ref" },
         "sha256": { "$ref": "#/$defs/sha256" },
@@ -48,6 +51,9 @@
         "publisher": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$" },
         "keyId": { "type": "string", "minLength": 1, "maxLength": 160 },
         "repositoryRevision": { "type": "integer", "minimum": 1 },
+        "lifecycleStatus": { "enum": ["deprecated"] },
+        "lifecycleReason": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "replacement": { "$ref": "#/$defs/requirement" },
         "dependencies": {
           "type": "object",
           "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
