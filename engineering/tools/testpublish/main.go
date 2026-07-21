@@ -26,6 +26,7 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
 const maximumPackageBytes = int64(256 << 20)
@@ -33,12 +34,15 @@ const maximumPackageBytes = int64(256 << 20)
 var developmentPrerelease = regexp.MustCompile(`^dev\.[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)+$`)
 
 type options struct {
-	PackageFile    string
-	StateRoot      string
-	StatusURL      string
-	BackendTarget  string
-	BackendBinding string
-	Timeout        time.Duration
+	PackageFile     string
+	StateRoot       string
+	StatusURL       string
+	BackendTarget   string
+	BackendBinding  string
+	FrontendTarget  string
+	FrontendBinding string
+	FrontendScope   string
+	Timeout         time.Duration
 }
 
 type developmentStatus struct {
@@ -62,6 +66,9 @@ func main() {
 	flag.StringVar(&opts.StatusURL, "status-url", "http://127.0.0.1:18080/__vastplan_dev/status", "本地平台状态端点（仅允许回环地址）")
 	flag.StringVar(&opts.BackendTarget, "backend-target", "", "可选：发布到 Backend 测试目标，格式 deployment/unit")
 	flag.StringVar(&opts.BackendBinding, "backend-binding", "", "可选：复用已有 TestTargetBinding；与 -backend-target 同用时作为绑定 ID")
+	flag.StringVar(&opts.FrontendTarget, "frontend-target", "", "可选：发布到 Frontend Application 测试目标，值为 portal ID")
+	flag.StringVar(&opts.FrontendBinding, "frontend-binding", "", "可选：复用已有 Frontend TestTargetBinding；与 -frontend-target 同用时作为绑定 ID")
+	flag.StringVar(&opts.FrontendScope, "frontend-scope", string(portalapi.TestTargetApplicationPlugin), "Frontend 目标范围：application-plugin 或 platform-profile-plugin")
 	flag.DurationVar(&opts.Timeout, "timeout", 2*time.Minute, "上传超时")
 	flag.Parse()
 	if err := publish(context.Background(), opts); err != nil {
@@ -187,6 +194,11 @@ func publish(ctx context.Context, opts options) error {
 	printReceipt(artifact, repositoryURL, revision, wasExisting)
 	if opts.BackendTarget != "" || opts.BackendBinding != "" {
 		if err := submitBackendTestRelease(ctx, status, opts, artifact, revision); err != nil {
+			return err
+		}
+	}
+	if opts.FrontendTarget != "" || opts.FrontendBinding != "" {
+		if err := submitFrontendTestRelease(ctx, status, opts, artifact, revision); err != nil {
 			return err
 		}
 	}

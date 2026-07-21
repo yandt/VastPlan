@@ -13,7 +13,7 @@ export type { PortalI18n, PortalI18nProviderProps, PortalMessageCatalogs } from 
 export { PortalInteractionClient, PortalInteractionError } from "./interaction-client.js";
 export type { PortalFetch, PortalFetchResponse, PortalInteractionClientOptions } from "./interaction-client.js";
 export { PortalControlClient, PortalControlError } from "./portal-control-client.js";
-export type { PortalActivation, PortalActivationPhase, PortalActivationRequest, PortalActivationStatus, PortalApplicationComposition, PortalAuditEvent, PortalBindingRevision, PortalCompositionRef, PortalControlClientOptions, PortalGovernanceSnapshot, PortalManagementBinding, PortalManagementGrant, PortalPlatformProfile, PortalPluginRef, PortalProfileRevision, PortalResolvedSpec, PortalRevision, PortalRevisionStatus } from "./portal-control-client.js";
+export type { PortalActivation, PortalActivationPhase, PortalActivationRequest, PortalActivationStatus, PortalApplicationComposition, PortalAuditEvent, PortalBindingRevision, PortalCompositionRef, PortalControlClientOptions, PortalGovernanceSnapshot, PortalManagementBinding, PortalManagementGrant, PortalPlatformProfile, PortalPluginRef, PortalProfileRevision, PortalPutTestTargetBindingRequest, PortalResolvedSpec, PortalRevision, PortalRevisionStatus, PortalTestRelease, PortalTestReleaseRequest, PortalTestReleaseStatus, PortalTestTargetBinding, PortalTestTargetScope } from "./portal-control-client.js";
 
 export interface FormRendererProps {
   schema: FormSchema;

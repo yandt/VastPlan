@@ -158,6 +158,37 @@ type PortalCatalog interface {
 	MaterializePortal(context.Context, string, portalapi.PortalSpec) error
 }
 
+type PortalTestArtifactCatalog interface {
+	ValidateTestArtifact(context.Context, string, portalapi.CreateTestReleaseRequest, []string) error
+}
+
+type catalogTestArtifactRequest struct {
+	TenantID          string                             `json:"tenantId"`
+	Request           portalapi.CreateTestReleaseRequest `json:"request"`
+	AllowedPublishers []string                           `json:"allowedPublishers"`
+}
+
+func CatalogTestArtifactValidationService(catalog PortalTestArtifactCatalog) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if catalog == nil {
+			return nil, nil, errors.New("可信 Portal 制品目录未配置")
+		}
+		if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() == "" {
+			return nil, nil, errors.New("Portal 测试制品验证只接受已认证插件会话")
+		}
+		var request catalogTestArtifactRequest
+		decoder := json.NewDecoder(bytes.NewReader(payload))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&request); err != nil || request.TenantID == "" || request.TenantID != callCtx.GetTenantId() {
+			return nil, nil, errors.New("Portal 测试制品验证请求 tenant 无效")
+		}
+		if err := catalog.ValidateTestArtifact(ctx, request.TenantID, request.Request, request.AllowedPublishers); err != nil {
+			return nil, nil, err
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"valid":true}`), nil
+	}
+}
+
 // CatalogMaterializationService performs the same authenticated tenant
 // projection but commits immutable browser delivery objects before publish.
 func CatalogMaterializationService(catalog PortalCatalog) protocolbus.HostService {

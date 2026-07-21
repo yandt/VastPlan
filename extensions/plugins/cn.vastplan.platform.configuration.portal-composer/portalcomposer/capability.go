@@ -44,6 +44,21 @@ func (s *Service) materializeCatalog(ctx context.Context, tenantID string, spec 
 	return catalog.MaterializePortal(ctx, tenantID, spec)
 }
 
+func (s *Service) validateTestArtifact(ctx context.Context, tenantID string, request portalapi.CreateTestReleaseRequest, publishers []string) error {
+	catalog, _ := ctx.Value(catalogContextKey{}).(Catalog)
+	if catalog == nil {
+		catalog = s.artifactCatalog
+	}
+	if catalog == nil {
+		return fmt.Errorf("Portal Composer 未获得受信任制品目录")
+	}
+	testCatalog, ok := catalog.(TestArtifactCatalog)
+	if !ok {
+		return fmt.Errorf("Portal Composer 未获得受信任测试制品目录")
+	}
+	return testCatalog.ValidateTestArtifact(ctx, tenantID, request, publishers)
+}
+
 // hostCatalog makes the artifact decision in the trusted kernel boundary. The
 // plugin can ask whether a spec is valid, but never receives repository
 // credentials, verification keys, or an unverified artifact envelope.
@@ -58,6 +73,31 @@ func (c hostCatalog) ValidatePortal(ctx context.Context, tenantID string, spec p
 
 func (c hostCatalog) MaterializePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
 	return c.call(ctx, tenantID, spec, portalapi.KernelCatalogMaterializationCapability, "materialize")
+}
+
+func (c hostCatalog) ValidateTestArtifact(ctx context.Context, tenantID string, request portalapi.CreateTestReleaseRequest, allowedPublishers []string) error {
+	if c.host == nil || c.callCtx == nil || strings.TrimSpace(tenantID) == "" {
+		return fmt.Errorf("Portal 测试制品调用上下文不完整")
+	}
+	payload, err := json.Marshal(struct {
+		TenantID          string                             `json:"tenantId"`
+		Request           portalapi.CreateTestReleaseRequest `json:"request"`
+		AllowedPublishers []string                           `json:"allowedPublishers"`
+	}{TenantID: tenantID, Request: request, AllowedPublishers: allowedPublishers})
+	if err != nil {
+		return err
+	}
+	op := "validate"
+	result, _, err := c.host.Call(ctx, &contractv1.CallTarget{
+		ExtensionPoint: extpoint.KernelService, Capability: portalapi.KernelTestArtifactValidationCapability, Operation: &op,
+	}, c.callCtx, payload)
+	if err != nil {
+		return fmt.Errorf("调用可信 Portal 测试制品验证: %w", err)
+	}
+	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return fmt.Errorf("可信 Portal 测试制品验证拒绝")
+	}
+	return nil
 }
 
 func (c hostCatalog) call(ctx context.Context, tenantID string, spec portalapi.PortalSpec, capability, operation string) error {
@@ -280,6 +320,53 @@ func (s *Service) Handle(ctx context.Context, principal portalapi.Principal, ope
 			return nil, err
 		}
 		result = value
+	case "listTestTargetBindings":
+		value, err := s.ListTestTargetBindings(ctx, principal)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "putTestTargetBinding":
+		var request struct {
+			ID      string                                `json:"id"`
+			Binding portalapi.PutTestTargetBindingRequest `json:"binding"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.PutTestTargetBinding(ctx, principal, request.ID, request.Binding)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "listTestReleases":
+		value, err := s.ListTestReleases(ctx, principal)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "createTestRelease":
+		var request portalapi.CreateTestReleaseRequest
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.CreateTestRelease(ctx, principal, request)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "rollbackTestRelease":
+		var request struct {
+			ID uint64 `json:"id"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.RollbackTestRelease(ctx, principal, request.ID)
+		if err != nil {
+			return nil, err
+		}
+		result = value
 	case "submit", "approve", "publish", "audit":
 		var request struct {
 			RevisionID uint64 `json:"revisionId"`
@@ -336,7 +423,7 @@ func decode(raw []byte, target any) error {
 // minimum fields required by the portal API.
 func Contribution(service *Service) sdk.Contribution {
 	handlers := map[string]sdk.Handler{}
-	for _, operation := range []string{"createDraft", "updateDraft", "list", "submit", "approve", "publish", "audit", "governance", "createProfileDraft", "updateProfileDraft", "transitionProfile", "createBindingDraft", "updateBindingDraft", "transitionBinding", "activate", "rollbackActivation", "listActivations"} {
+	for _, operation := range []string{"createDraft", "updateDraft", "list", "submit", "approve", "publish", "audit", "governance", "createProfileDraft", "updateProfileDraft", "transitionProfile", "createBindingDraft", "updateBindingDraft", "transitionBinding", "activate", "rollbackActivation", "listActivations", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"} {
 		op := operation
 		handlers[op] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 			if err := service.ensureConfigured(ctx, host, callCtx); err != nil {
@@ -360,7 +447,7 @@ func Contribution(service *Service) sdk.Contribution {
 }
 
 func Descriptor() []byte {
-	return []byte(`{"title":"门户组合治理","subcommands":[{"name":"governance","description":"读取完整 Portal 治理工作区"},{"name":"createDraft","description":"创建 Application 草稿"},{"name":"updateDraft","description":"更新 Application 草稿"},{"name":"list","description":"列出 Application revisions"},{"name":"submit","description":"提交 Application 审批"},{"name":"approve","description":"审批 Application"},{"name":"publish","description":"发布 Application 输入"},{"name":"createProfileDraft","description":"创建 Profile 草稿"},{"name":"updateProfileDraft","description":"更新 Profile 草稿"},{"name":"transitionProfile","description":"推进 Profile 生命周期"},{"name":"createBindingDraft","description":"创建 Binding 草稿"},{"name":"updateBindingDraft","description":"更新 Binding 草稿"},{"name":"transitionBinding","description":"推进 Binding 生命周期"},{"name":"activate","description":"CAS 激活 Published 输入"},{"name":"rollbackActivation","description":"由历史 Activation 创建新激活"},{"name":"listActivations","description":"列出不可变 Activation"},{"name":"audit","description":"读取 revision 审计"}]}`)
+	return []byte(`{"title":"门户组合治理","subcommands":[{"name":"governance","description":"读取完整 Portal 治理工作区"},{"name":"createDraft","description":"创建 Application 草稿"},{"name":"updateDraft","description":"更新 Application 草稿"},{"name":"list","description":"列出 Application revisions"},{"name":"submit","description":"提交 Application 审批"},{"name":"approve","description":"审批 Application"},{"name":"publish","description":"发布 Application 输入"},{"name":"createProfileDraft","description":"创建 Profile 草稿"},{"name":"updateProfileDraft","description":"更新 Profile 草稿"},{"name":"transitionProfile","description":"推进 Profile 生命周期"},{"name":"createBindingDraft","description":"创建 Binding 草稿"},{"name":"updateBindingDraft","description":"更新 Binding 草稿"},{"name":"transitionBinding","description":"推进 Binding 生命周期"},{"name":"activate","description":"CAS 激活 Published 输入"},{"name":"rollbackActivation","description":"由历史 Activation 创建新激活"},{"name":"listActivations","description":"列出不可变 Activation"},{"name":"listTestTargetBindings","description":"列出 Frontend 测试目标绑定"},{"name":"putTestTargetBinding","description":"CAS 保存 Frontend 应用插件测试目标"},{"name":"listTestReleases","description":"列出 Frontend Test Release"},{"name":"createTestRelease","description":"提交精确 Frontend 测试制品"},{"name":"rollbackTestRelease","description":"恢复中断的 Frontend Test Release"},{"name":"audit","description":"读取 revision 审计"}]}`)
 }
 func projectPrincipal(callCtx *contractv1.CallContext) (portalapi.Principal, error) {
 	if callCtx == nil || callCtx.Principal == nil || callCtx.Principal.UserId == "" || callCtx.TenantId == "" {

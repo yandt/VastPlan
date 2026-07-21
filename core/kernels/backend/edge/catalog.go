@@ -37,10 +37,11 @@ type verifiedPortalPlugin struct {
 // source cannot make itself trusted: every candidate passes ArtifactVerifier
 // before its manifest is considered for a Portal composition.
 type TrustedCatalog struct {
-	sources  []ArtifactSource
-	verifier ArtifactVerifier
-	delivery *frontendDeliveryStore
-	origin   *frontendDeliveryStore
+	sources   []ArtifactSource
+	verifier  ArtifactVerifier
+	delivery  *frontendDeliveryStore
+	origin    *frontendDeliveryStore
+	testIndex TestArtifactIndex
 }
 
 // ArtifactSource and ArtifactVerifier are stable Edge ports. The Backend
@@ -54,6 +55,16 @@ type ArtifactVerifier interface {
 }
 
 type TrustedCatalogOption func(*TrustedCatalog) error
+
+func WithTestArtifactIndex(index TestArtifactIndex) TrustedCatalogOption {
+	return func(c *TrustedCatalog) error {
+		if index == nil {
+			return errors.New("Portal 测试制品索引不能为空")
+		}
+		c.testIndex = index
+		return nil
+	}
+}
 
 func WithFrontendDeliveryRoot(root string) TrustedCatalogOption {
 	return func(c *TrustedCatalog) error {

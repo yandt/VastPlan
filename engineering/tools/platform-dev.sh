@@ -60,7 +60,7 @@ VastPlan 本地平台管理中心
   $0 status
   $0 logs [--follow] [--lines 行数]
   $0 doctor
-  $0 publish-test <插件制品.tar.gz> [--backend-target deployment/unit] [--backend-binding id]
+  $0 publish-test <插件制品.tar.gz> [--backend-target deployment/unit] [--frontend-target portal-id] [--frontend-scope application-plugin|platform-profile-plugin]
   $0 clean
   $0 help
 

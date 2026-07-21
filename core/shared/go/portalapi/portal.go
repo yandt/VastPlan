@@ -8,6 +8,7 @@ import (
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
 var (
@@ -33,6 +34,11 @@ const KernelCatalogValidationCapability = "kernel.portal.catalog.validate"
 // that verifies and extracts immutable browser delivery objects before a
 // revision can become active.
 const KernelCatalogMaterializationCapability = "kernel.portal.catalog.materialize"
+
+// KernelTestArtifactValidationCapability validates one exact testing receipt
+// inside the trusted Portal Edge boundary without exposing repository tokens,
+// publisher keys, or artifact bytes to the Composer plugin.
+const KernelTestArtifactValidationCapability = "kernel.portal.test-artifact.validate"
 
 type Principal struct {
 	ID       string   `json:"id"`
@@ -273,6 +279,91 @@ type AuditEvent struct {
 
 type PublishRequest struct {
 	BreakGlassReason string `json:"breakGlassReason,omitempty"`
+}
+
+type TestTargetScope string
+
+const (
+	TestTargetApplicationPlugin     TestTargetScope = "application-plugin"
+	TestTargetPlatformProfilePlugin TestTargetScope = "platform-profile-plugin"
+)
+
+// TestTargetBinding authorizes replacement of one plugin slot already owned
+// by the current Portal Application. It never authorizes Platform Profile edits.
+type TestTargetBinding struct {
+	ID                string          `json:"id"`
+	TenantID          string          `json:"tenantId"`
+	Scope             TestTargetScope `json:"scope"`
+	PortalID          string          `json:"portalId"`
+	PluginID          string          `json:"pluginId"`
+	AllowedPublishers []string        `json:"allowedPublishers"`
+	Enabled           bool            `json:"enabled"`
+	Version           int64           `json:"version"`
+	CreatedAt         string          `json:"createdAt"`
+	UpdatedAt         string          `json:"updatedAt"`
+}
+
+type PutTestTargetBindingRequest struct {
+	Scope             TestTargetScope `json:"scope"`
+	PortalID          string          `json:"portalId"`
+	PluginID          string          `json:"pluginId"`
+	AllowedPublishers []string        `json:"allowedPublishers"`
+	Enabled           bool            `json:"enabled"`
+	IfVersion         *int64          `json:"ifVersion,omitempty"`
+}
+
+type TestReleaseStatus string
+
+const (
+	TestReleaseQueued      TestReleaseStatus = "Queued"
+	TestReleaseResolving   TestReleaseStatus = "Resolving"
+	TestReleasePreparing   TestReleaseStatus = "Preparing"
+	TestReleaseValidating  TestReleaseStatus = "Validating"
+	TestReleaseActivating  TestReleaseStatus = "Activating"
+	TestReleaseReady       TestReleaseStatus = "Ready"
+	TestReleaseRollingBack TestReleaseStatus = "RollingBack"
+	TestReleaseRolledBack  TestReleaseStatus = "RolledBack"
+	TestReleaseFailed      TestReleaseStatus = "Failed"
+	TestReleaseSuperseded  TestReleaseStatus = "Superseded"
+)
+
+type TestRelease struct {
+	ID                             uint64               `json:"id"`
+	TenantID                       string               `json:"tenantId"`
+	BindingID                      string               `json:"bindingId"`
+	Artifact                       pluginv1.ArtifactRef `json:"artifact"`
+	SHA256                         string               `json:"sha256"`
+	RepositoryRevision             uint64               `json:"repositoryRevision"`
+	Status                         TestReleaseStatus    `json:"status"`
+	PreviousActivationID           uint64               `json:"previousActivationId,omitempty"`
+	CandidateApplicationRevisionID uint64               `json:"candidateApplicationRevisionId,omitempty"`
+	CandidateProfileRevisionID     uint64               `json:"candidateProfileRevisionId,omitempty"`
+	CandidateBindingRevisionID     uint64               `json:"candidateBindingRevisionId,omitempty"`
+	CandidateActivationID          uint64               `json:"candidateActivationId,omitempty"`
+	RollbackActivationID           uint64               `json:"rollbackActivationId,omitempty"`
+	RollbackRequired               bool                 `json:"rollbackRequired,omitempty"`
+	ErrorCode                      string               `json:"errorCode,omitempty"`
+	ErrorMessage                   string               `json:"errorMessage,omitempty"`
+	RequestedBy                    string               `json:"requestedBy"`
+	CreatedAt                      string               `json:"createdAt"`
+	UpdatedAt                      string               `json:"updatedAt"`
+}
+
+type CreateTestReleaseRequest struct {
+	BindingID          string               `json:"bindingId"`
+	Artifact           pluginv1.ArtifactRef `json:"artifact"`
+	SHA256             string               `json:"sha256"`
+	RepositoryRevision uint64               `json:"repositoryRevision"`
+}
+
+// TestReleaseService is intentionally separate from Service so consumers that
+// only need Portal runtime/governance do not gain test publication authority.
+type TestReleaseService interface {
+	ListTestTargetBindings(context.Context, Principal) ([]TestTargetBinding, error)
+	PutTestTargetBinding(context.Context, Principal, string, PutTestTargetBindingRequest) (TestTargetBinding, error)
+	ListTestReleases(context.Context, Principal) ([]TestRelease, error)
+	CreateTestRelease(context.Context, Principal, CreateTestReleaseRequest) (TestRelease, error)
+	RollbackTestRelease(context.Context, Principal, uint64) (TestRelease, error)
 }
 
 // Service is implemented by the configuration/composition plugin and consumed

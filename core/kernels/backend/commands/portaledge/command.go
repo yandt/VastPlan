@@ -152,7 +152,11 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if remoteSource != nil {
 		artifactSources = append(artifactSources, remoteSource)
 	}
-	catalog, err := edge.NewTrustedCatalog(artifactSources, verifierAdapter{verifier}, edge.WithFrontendDeliveryDistribution(*deliveryOrigin, *deliveryCache))
+	catalogOptions := []edge.TrustedCatalogOption{edge.WithFrontendDeliveryDistribution(*deliveryOrigin, *deliveryCache)}
+	if remoteSource != nil {
+		catalogOptions = append(catalogOptions, edge.WithTestArtifactIndex(edge.RemoteTestArtifactIndex{BaseURL: remoteSource.BaseURL, Token: remoteSource.Token, Client: remoteSource.Client}))
+	}
+	catalog, err := edge.NewTrustedCatalog(artifactSources, verifierAdapter{verifier}, catalogOptions...)
 	if err != nil {
 		return err
 	}
@@ -184,6 +188,9 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 		return err
 	}
 	if err := host.RegisterHostService(extpoint.KernelService, portalapi.KernelCatalogMaterializationCapability, edge.CatalogMaterializationService(catalog)); err != nil {
+		return err
+	}
+	if err := host.RegisterHostService(extpoint.KernelService, portalapi.KernelTestArtifactValidationCapability, edge.CatalogTestArtifactValidationService(catalog)); err != nil {
 		return err
 	}
 	if err := host.Start(); err != nil {

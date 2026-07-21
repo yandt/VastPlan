@@ -238,6 +238,30 @@ type interactionService struct {
 	response  uiv1.InteractionResponse
 }
 
+type testReleasePortalService struct {
+	service
+	principal portalapi.Principal
+	bindingID string
+	binding   portalapi.PutTestTargetBindingRequest
+}
+
+func (s *testReleasePortalService) ListTestTargetBindings(context.Context, portalapi.Principal) ([]portalapi.TestTargetBinding, error) {
+	return nil, nil
+}
+func (s *testReleasePortalService) PutTestTargetBinding(_ context.Context, p portalapi.Principal, id string, request portalapi.PutTestTargetBindingRequest) (portalapi.TestTargetBinding, error) {
+	s.principal, s.bindingID, s.binding = p, id, request
+	return portalapi.TestTargetBinding{ID: id, TenantID: p.TenantID, Scope: request.Scope, PortalID: request.PortalID, PluginID: request.PluginID, Enabled: request.Enabled}, nil
+}
+func (s *testReleasePortalService) ListTestReleases(context.Context, portalapi.Principal) ([]portalapi.TestRelease, error) {
+	return nil, nil
+}
+func (s *testReleasePortalService) CreateTestRelease(context.Context, portalapi.Principal, portalapi.CreateTestReleaseRequest) (portalapi.TestRelease, error) {
+	return portalapi.TestRelease{}, nil
+}
+func (s *testReleasePortalService) RollbackTestRelease(context.Context, portalapi.Principal, uint64) (portalapi.TestRelease, error) {
+	return portalapi.TestRelease{}, nil
+}
+
 func (s *interactionService) List(_ context.Context, p portalapi.Principal) ([]interactionapi.Record, error) {
 	s.principal = p
 	return []interactionapi.Record{{Request: uiv1.InteractionRequest{ID: "interaction-0001"}, State: interactionapi.StateCreated}}, nil
@@ -307,6 +331,34 @@ func TestBFFUsesVerifiedPrincipalAndStrictCSRF(t *testing.T) {
 	}
 	if !cookie.Secure || cookie.SameSite != http.SameSiteStrictMode {
 		t.Fatalf("CSRF cookie 安全属性错误: %+v", cookie)
+	}
+}
+
+func TestBFFFrontendTestTargetUsesVerifiedPrincipalAndStrictResourceID(t *testing.T) {
+	service := &testReleasePortalService{}
+	h := New(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "portal-admin", TenantID: "tenant-a", Roles: []string{"portal.compose"}}, nil
+	}), service)
+	csrfRequest := httptest.NewRequest(http.MethodGet, "/v1/csrf", nil)
+	csrfW := httptest.NewRecorder()
+	h.ServeHTTP(csrfW, csrfRequest)
+	cookie := csrfW.Result().Cookies()[0]
+	body := `{"scope":"application-plugin","portalId":"admin","pluginId":"cn.vastplan.product.frontend.admin","allowedPublishers":["vastplan"],"enabled":true,"ifVersion":0}`
+	request := httptest.NewRequest(http.MethodPut, "/v1/portal-governance/test-target-bindings/1-admin", strings.NewReader(body))
+	request.AddCookie(cookie)
+	request.Header.Set("X-VastPlan-CSRF", cookie.Value)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, request)
+	if w.Code != http.StatusOK || service.principal.ID != "portal-admin" || service.principal.TenantID != "tenant-a" || service.bindingID != "1-admin" || service.binding.PluginID != "cn.vastplan.product.frontend.admin" {
+		t.Fatalf("Frontend 测试目标 BFF 边界错误: status=%d principal=%+v id=%q binding=%+v", w.Code, service.principal, service.bindingID, service.binding)
+	}
+	bad := httptest.NewRequest(http.MethodPut, "/v1/portal-governance/test-target-bindings/../admin", strings.NewReader(body))
+	bad.AddCookie(cookie)
+	bad.Header.Set("X-VastPlan-CSRF", cookie.Value)
+	badW := httptest.NewRecorder()
+	h.ServeHTTP(badW, bad)
+	if badW.Code != http.StatusNotFound {
+		t.Fatalf("路径型资源 ID 必须拒绝: %d", badW.Code)
 	}
 }
 

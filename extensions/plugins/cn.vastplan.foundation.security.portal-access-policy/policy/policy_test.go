@@ -74,6 +74,9 @@ func TestOnlyComposerCanUseRestrictedKernelServices(t *testing.T) {
 	if got := decisionFor(t, composer, portalapi.KernelCatalogMaterializationCapability, "materialize"); got.Decision != extpoint.DecisionAllow {
 		t.Fatalf("Composer materialize 回调应放行: %+v", got)
 	}
+	if got := decisionFor(t, composer, portalapi.KernelTestArtifactValidationCapability, "validate"); got.Decision != extpoint.DecisionAllow {
+		t.Fatalf("Composer 测试制品验证回调应放行: %+v", got)
+	}
 	other := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "evil"}}
 	if got := decisionFor(t, other, portalapi.KernelCatalogValidationCapability, "validate"); got.Decision != extpoint.DecisionAbstain {
 		t.Fatalf("非 Composer 必须不获授权: %+v", got)

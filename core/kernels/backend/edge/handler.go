@@ -548,6 +548,56 @@ func (h *Handler) governanceRoute(w http.ResponseWriter, r *http.Request, p port
 		return
 	}
 	parts := strings.Split(path, "/")
+	testService, supportsTestRelease := h.service.(portalapi.TestReleaseService)
+	if parts[0] == "test-target-bindings" {
+		if !supportsTestRelease {
+			http.NotFound(w, r)
+			return
+		}
+		if len(parts) == 1 && r.Method == http.MethodGet {
+			value, err := testService.ListTestTargetBindings(r.Context(), p)
+			respond(w, value, err)
+			return
+		}
+		if len(parts) == 2 && r.Method == http.MethodPut && testResourceSegment(parts[1]) {
+			var request portalapi.PutTestTargetBindingRequest
+			if decode(w, r, &request) {
+				value, err := testService.PutTestTargetBinding(r.Context(), p, parts[1], request)
+				respond(w, value, err)
+			}
+			return
+		}
+	}
+	if parts[0] == "test-releases" {
+		if !supportsTestRelease {
+			http.NotFound(w, r)
+			return
+		}
+		if len(parts) == 1 {
+			switch r.Method {
+			case http.MethodGet:
+				value, err := testService.ListTestReleases(r.Context(), p)
+				respond(w, value, err)
+			case http.MethodPost:
+				var request portalapi.CreateTestReleaseRequest
+				if decode(w, r, &request) {
+					value, err := testService.CreateTestRelease(r.Context(), p, request)
+					respond(w, value, err)
+				}
+			default:
+				methodNotAllowed(w)
+			}
+			return
+		}
+		if len(parts) == 3 && parts[2] == "rollback" && r.Method == http.MethodPost {
+			id, ok := governanceRevisionID(w, parts)
+			if ok {
+				value, err := testService.RollbackTestRelease(r.Context(), p, id)
+				respond(w, value, err)
+			}
+			return
+		}
+	}
 	if parts[0] == "profiles" {
 		if len(parts) == 1 && r.Method == http.MethodPost {
 			var profile frontendcompositionv1.PlatformProfile
@@ -628,6 +678,22 @@ func (h *Handler) governanceRoute(w http.ResponseWriter, r *http.Request, p port
 		}
 	}
 	http.NotFound(w, r)
+}
+
+func testResourceSegment(value string) bool {
+	if value == "" || len(value) > 128 || !asciiLowerOrDigit(rune(value[0])) {
+		return false
+	}
+	for _, char := range value {
+		if (char < 'a' || char > 'z') && (char < '0' || char > '9') && char != '.' && char != '_' && char != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func asciiLowerOrDigit(char rune) bool {
+	return char >= 'a' && char <= 'z' || char >= '0' && char <= '9'
 }
 
 func governanceRevisionID(w http.ResponseWriter, parts []string) (uint64, bool) {

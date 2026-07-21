@@ -114,6 +114,26 @@ func (s *CapabilityService) RollbackActivation(ctx context.Context, p portalapi.
 func (s *CapabilityService) ListActivations(ctx context.Context, p portalapi.Principal) ([]portalapi.PortalActivation, error) {
 	return call[[]portalapi.PortalActivation](ctx, s.client, p, "listActivations", struct{}{})
 }
+func (s *CapabilityService) ListTestTargetBindings(ctx context.Context, p portalapi.Principal) ([]portalapi.TestTargetBinding, error) {
+	return call[[]portalapi.TestTargetBinding](ctx, s.client, p, "listTestTargetBindings", struct{}{})
+}
+func (s *CapabilityService) PutTestTargetBinding(ctx context.Context, p portalapi.Principal, id string, request portalapi.PutTestTargetBindingRequest) (portalapi.TestTargetBinding, error) {
+	return call[portalapi.TestTargetBinding](ctx, s.client, p, "putTestTargetBinding", struct {
+		ID      string                                `json:"id"`
+		Binding portalapi.PutTestTargetBindingRequest `json:"binding"`
+	}{id, request})
+}
+func (s *CapabilityService) ListTestReleases(ctx context.Context, p portalapi.Principal) ([]portalapi.TestRelease, error) {
+	return call[[]portalapi.TestRelease](ctx, s.client, p, "listTestReleases", struct{}{})
+}
+func (s *CapabilityService) CreateTestRelease(ctx context.Context, p portalapi.Principal, request portalapi.CreateTestReleaseRequest) (portalapi.TestRelease, error) {
+	return call[portalapi.TestRelease](ctx, s.client, p, "createTestRelease", request)
+}
+func (s *CapabilityService) RollbackTestRelease(ctx context.Context, p portalapi.Principal, id uint64) (portalapi.TestRelease, error) {
+	return call[portalapi.TestRelease](ctx, s.client, p, "rollbackTestRelease", struct {
+		ID uint64 `json:"id"`
+	}{id})
+}
 
 type revisionRequest struct {
 	RevisionID uint64 `json:"revisionId"`

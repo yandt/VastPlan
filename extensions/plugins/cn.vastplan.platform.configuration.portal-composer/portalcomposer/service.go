@@ -43,16 +43,23 @@ type Catalog interface {
 	MaterializePortal(context.Context, string, portalapi.PortalSpec) error
 }
 
+type TestArtifactCatalog interface {
+	ValidateTestArtifact(context.Context, string, portalapi.CreateTestReleaseRequest, []string) error
+}
+
 type state struct {
-	NextRevision   uint64                              `json:"nextRevision"`
-	NextGovernance uint64                              `json:"nextGovernanceRevision"`
-	NextActivation uint64                              `json:"nextActivation"`
-	NextAudit      uint64                              `json:"nextAudit"`
-	Revisions      []portalapi.Revision                `json:"applications"`
-	Profiles       []portalapi.PlatformProfileRevision `json:"profiles"`
-	Bindings       []portalapi.BindingRevision         `json:"bindings"`
-	Activations    []portalapi.PortalActivation        `json:"activations"`
-	Audit          []portalapi.AuditEvent              `json:"audit"`
+	NextRevision    uint64                                 `json:"nextRevision"`
+	NextGovernance  uint64                                 `json:"nextGovernanceRevision"`
+	NextActivation  uint64                                 `json:"nextActivation"`
+	NextAudit       uint64                                 `json:"nextAudit"`
+	Revisions       []portalapi.Revision                   `json:"applications"`
+	Profiles        []portalapi.PlatformProfileRevision    `json:"profiles"`
+	Bindings        []portalapi.BindingRevision            `json:"bindings"`
+	Activations     []portalapi.PortalActivation           `json:"activations"`
+	TestBindings    map[string]portalapi.TestTargetBinding `json:"testTargetBindings"`
+	NextTestRelease uint64                                 `json:"nextTestRelease"`
+	TestReleases    []portalapi.TestRelease                `json:"testReleases"`
+	Audit           []portalapi.AuditEvent                 `json:"audit"`
 }
 
 type Service struct {
@@ -90,6 +97,7 @@ func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatfo
 
 func New(stateFile string, catalog Catalog) (*Service, error) {
 	s := &Service{artifactCatalog: catalog, now: time.Now}
+	s.state.TestBindings = map[string]portalapi.TestTargetBinding{}
 	if strings.TrimSpace(stateFile) != "" {
 		if err := s.configure(stateFile); err != nil {
 			return nil, err
@@ -124,6 +132,12 @@ func (s *Service) load() error {
 	}
 	if err := json.Unmarshal(raw, &s.state); err != nil {
 		return fmt.Errorf("解析 Portal Composer 状态: %w", err)
+	}
+	if s.state.TestBindings == nil {
+		s.state.TestBindings = map[string]portalapi.TestTargetBinding{}
+	}
+	if s.recoverInterruptedTestReleases() {
+		return s.save()
 	}
 	return nil
 }
@@ -413,7 +427,9 @@ func cloneRenderAdapterConfig(in frontendcompositionv1.RenderAdapterConfig) fron
 	out := frontendcompositionv1.RenderAdapterConfig{DefaultRenderer: in.DefaultRenderer, AllowedRenderers: append([]string(nil), in.AllowedRenderers...)}
 	if len(in.RendererOptions) != 0 {
 		out.RendererOptions = make(map[string]frontendcompositionv1.RendererThemeOptions, len(in.RendererOptions))
-		for id, options := range in.RendererOptions { out.RendererOptions[id] = options }
+		for id, options := range in.RendererOptions {
+			out.RendererOptions[id] = options
+		}
 	}
 	out.UserSelectable = in.UserSelectable
 	return out

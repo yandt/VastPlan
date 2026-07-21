@@ -17,6 +17,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 	artifactcatalog "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 )
 
@@ -213,6 +214,60 @@ func TestSubmitBackendTestReleaseCreatesBindingAndPublishesExactReceipt(t *testi
 	}
 	if releaseRequest.RepositoryRevision != 17 || releaseRequest.SHA256 != artifact.SHA256 || releaseRequest.Artifact.PluginID != artifact.PluginID || releaseRequest.BindingID == "" {
 		t.Fatalf("Test Release 未使用精确仓库回执: %+v", releaseRequest)
+	}
+}
+
+func TestSubmitFrontendTestReleaseCreatesApplicationBindingAndPublishesExactReceipt(t *testing.T) {
+	var bindingRequest portalapi.PutTestTargetBindingRequest
+	var releaseRequest portalapi.CreateTestReleaseRequest
+	portal := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		session, _ := request.Cookie("vastplan_session")
+		switch {
+		case request.URL.Path == "/v1/csrf":
+			_ = json.NewEncoder(w).Encode(map[string]string{"token": "csrf-safe"})
+		case request.Method == http.MethodGet && request.URL.Path == "/v1/portal-governance/test-target-bindings":
+			if session == nil || session.Value != developmentAdminSession {
+				http.Error(w, "wrong admin session", http.StatusForbidden)
+				return
+			}
+			_ = json.NewEncoder(w).Encode([]portalapi.TestTargetBinding{})
+		case request.Method == http.MethodPut && strings.HasPrefix(request.URL.Path, "/v1/portal-governance/test-target-bindings/"):
+			if session == nil || session.Value != developmentAdminSession || request.Header.Get("X-VastPlan-CSRF") != "csrf-safe" {
+				http.Error(w, "wrong binding authorization", http.StatusForbidden)
+				return
+			}
+			if err := json.NewDecoder(request.Body).Decode(&bindingRequest); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			id := request.URL.Path[strings.LastIndex(request.URL.Path, "/")+1:]
+			_ = json.NewEncoder(w).Encode(portalapi.TestTargetBinding{ID: id, TenantID: "local", Scope: bindingRequest.Scope, PortalID: bindingRequest.PortalID, PluginID: bindingRequest.PluginID, AllowedPublishers: bindingRequest.AllowedPublishers, Enabled: true, Version: 1})
+		case request.Method == http.MethodPost && request.URL.Path == "/v1/portal-governance/test-releases":
+			if session == nil || session.Value != developmentPublisherSession || request.Header.Get("X-VastPlan-CSRF") != "csrf-safe" {
+				http.Error(w, "wrong release authorization", http.StatusForbidden)
+				return
+			}
+			if err := json.NewDecoder(request.Body).Decode(&releaseRequest); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(portalapi.TestRelease{ID: 4, BindingID: releaseRequest.BindingID, Artifact: releaseRequest.Artifact, SHA256: releaseRequest.SHA256, RepositoryRevision: releaseRequest.RepositoryRevision, Status: portalapi.TestReleaseReady, CandidateApplicationRevisionID: 9, CandidateActivationID: 12})
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer portal.Close()
+	artifact := pluginservice.Artifact{PluginID: "cn.vastplan.product.frontend.admin", Version: "1.1.0-dev.20260721.1.abcdef0", Channel: "testing", SHA256: strings.Repeat("c", 64)}
+	status := developmentStatus{Portal: portal.URL + "/operations"}
+	opts := options{FrontendTarget: "operations", Timeout: 5 * time.Second}
+	if err := submitFrontendTestRelease(context.Background(), status, opts, artifact, 31); err != nil {
+		t.Fatalf("Frontend 测试发布入口失败: %v", err)
+	}
+	if bindingRequest.Scope != portalapi.TestTargetApplicationPlugin || bindingRequest.PortalID != "operations" || bindingRequest.PluginID != artifact.PluginID {
+		t.Fatalf("Frontend 自动目标绑定错误: %+v", bindingRequest)
+	}
+	if releaseRequest.RepositoryRevision != 31 || releaseRequest.SHA256 != artifact.SHA256 || releaseRequest.Artifact.PluginID != artifact.PluginID || releaseRequest.BindingID == "" {
+		t.Fatalf("Frontend Test Release 未使用精确仓库回执: %+v", releaseRequest)
 	}
 }
 

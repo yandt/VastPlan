@@ -8,6 +8,8 @@ Profile、Application 和 Binding 均执行 `Draft → PendingApproval → Appro
 
 该插件只负责呈现与提交意图；校验、双人审批、发布、Activation、回滚与审计均通过 Edge/BFF 的受保护 API 完成。浏览器不得直接获得服务凭据、内部服务地址或原始身份令牌。生产插件仅经已认证的 `kernel.config.get` 取得状态位置，并通过窄化的 Catalog 能力请求内核验证和物化制品。
 
+Frontend Test Release 也在本插件中复用同一组 revision/Activation 分配器。`application-plugin` 只替换当前 Application 已有槽位；`platform-profile-plugin` 创建 tenant 专用测试 Profile 与 Binding，不原地修改共享基线。制品摘要、repository revision、发布者与 frontend target 由 Portal Edge 的可信宿主回调验证，Composer 进程不持有仓库凭证。
+
 ```bash
 pnpm --filter @vastplan/portal-composer typecheck
 ```

@@ -8,7 +8,7 @@
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
-  "capabilities": { "kernelServices": ["kernel.config.get", "kernel.portal.catalog.validate", "kernel.portal.catalog.materialize"], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.config.get", "kernel.portal.catalog.validate", "kernel.portal.catalog.materialize", "kernel.portal.test-artifact.validate"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles", "authorization.admin"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "leader",
@@ -19,7 +19,7 @@
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.portal-composer", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
-  "state": { "backend": { "format": "cn.vastplan.platform.portal-composer", "formatVersion": 2 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.portal-composer", "formatVersion": 3 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/portal-composer", "frontend": "frontend/dist/index.js" },
   "contributes": {
@@ -45,6 +45,11 @@
           { "name": "activate", "description": "CAS 激活 Published 输入" },
           { "name": "rollbackActivation", "description": "由历史 Activation 创建新激活" },
           { "name": "listActivations", "description": "列出不可变 Activation" },
+          { "name": "listTestTargetBindings", "description": "列出 Frontend 测试目标绑定" },
+          { "name": "putTestTargetBinding", "description": "CAS 保存 Frontend 应用插件测试目标" },
+          { "name": "listTestReleases", "description": "列出 Frontend Test Release" },
+          { "name": "createTestRelease", "description": "提交精确 Frontend 测试制品" },
+          { "name": "rollbackTestRelease", "description": "恢复中断的 Frontend Test Release" },
           { "name": "audit", "description": "读取 revision 审计" }
         ]
       }]

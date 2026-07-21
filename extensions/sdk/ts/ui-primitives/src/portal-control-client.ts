@@ -157,6 +157,52 @@ export interface PortalActivationRequest {
   reason?: string;
 }
 
+export type PortalTestTargetScope = "application-plugin" | "platform-profile-plugin";
+export interface PortalTestTargetBinding {
+  id: string;
+  tenantId: string;
+  scope: PortalTestTargetScope;
+  portalId: string;
+  pluginId: string;
+  allowedPublishers: string[];
+  enabled: boolean;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface PortalPutTestTargetBindingRequest {
+  scope: PortalTestTargetScope;
+  portalId: string;
+  pluginId: string;
+  allowedPublishers: string[];
+  enabled: boolean;
+  ifVersion?: number;
+}
+export type PortalTestReleaseStatus = "Queued" | "Resolving" | "Preparing" | "Validating" | "Activating" | "Ready" | "RollingBack" | "RolledBack" | "Failed" | "Superseded";
+export interface PortalTestReleaseRequest {
+  bindingId: string;
+  artifact: { pluginId: string; version: string; channel: "testing" };
+  sha256: string;
+  repositoryRevision: number;
+}
+export interface PortalTestRelease extends PortalTestReleaseRequest {
+  id: number;
+  tenantId: string;
+  status: PortalTestReleaseStatus;
+  previousActivationId?: number;
+  candidateApplicationRevisionId?: number;
+  candidateProfileRevisionId?: number;
+  candidateBindingRevisionId?: number;
+  candidateActivationId?: number;
+  rollbackActivationId?: number;
+  rollbackRequired?: boolean;
+  errorCode?: string;
+  errorMessage?: string;
+  requestedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface PortalAuditEvent {
   id: number;
   tenantId: string;
@@ -242,6 +288,21 @@ export class PortalControlClient {
   public rollbackActivation(sourceId: number, expectedCurrentId: number, reason: string): Promise<PortalActivation> {
     return this.mutate<PortalActivation>(`${this.governancePath}/activations/${this.validID(sourceId)}/rollback`, "POST", { expectedCurrentId, reason });
   }
+  public listTestTargetBindings(): Promise<PortalTestTargetBinding[]> {
+    return this.call<PortalTestTargetBinding[]>(`${this.governancePath}/test-target-bindings`, { method: "GET" });
+  }
+  public putTestTargetBinding(id: string, request: PortalPutTestTargetBindingRequest): Promise<PortalTestTargetBinding> {
+    return this.mutate<PortalTestTargetBinding>(`${this.governancePath}/test-target-bindings/${this.validResourceID(id)}`, "PUT", request);
+  }
+  public listTestReleases(): Promise<PortalTestRelease[]> {
+    return this.call<PortalTestRelease[]>(`${this.governancePath}/test-releases`, { method: "GET" });
+  }
+  public createTestRelease(request: PortalTestReleaseRequest): Promise<PortalTestRelease> {
+    return this.mutate<PortalTestRelease>(`${this.governancePath}/test-releases`, "POST", request);
+  }
+  public rollbackTestRelease(id: number): Promise<PortalTestRelease> {
+    return this.mutate<PortalTestRelease>(`${this.governancePath}/test-releases/${this.validID(id)}/rollback`, "POST", {});
+  }
 
   private revisionPath(id: number): string {
 	return `${this.basePath}/${this.validID(id)}`;
@@ -249,6 +310,11 @@ export class PortalControlClient {
 
   private validID(id: number): number {
     if (!Number.isSafeInteger(id) || id <= 0) throw new PortalControlError(400, "invalid_revision");
+    return id;
+  }
+
+  private validResourceID(id: string): string {
+    if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(id)) throw new PortalControlError(400, "invalid_resource_id");
     return id;
   }
 
