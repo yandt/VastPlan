@@ -65,6 +65,24 @@ export class PortalGenerationManager {
     return this.enqueue(() => this.replaceNow(spec, "replace"));
   }
 
+  /** Loads and assembles a Host Epoch candidate without changing the live tree. */
+  public preflight(spec: PortalRuntimeSpec): Promise<void> {
+    return this.enqueue(async () => {
+      const controller = new AbortController();
+      const id = `preflight-${++this.sequence}`;
+      let candidate: OwnedPortalGeneration | undefined;
+      try {
+        const prepared = await this.prepare(spec, { generation: id, signal: controller.signal, reason: "replace" });
+        candidate = { id, prepared, signal: controller.signal, controller };
+      } catch (error) {
+        controller.abort(error);
+        throw error;
+      } finally {
+        if (candidate !== undefined) await this.dispose(candidate, "replace");
+      }
+    });
+  }
+
   public shutdown(): Promise<void> {
     return this.enqueue(async () => {
       const active = this.activeGeneration;

@@ -3,3 +3,4 @@ export * from "./module-loader";
 export * from "./portal-shell";
 export * from "./portal-generation";
 export * from "./portal-development";
+export * from "./portal-updates";

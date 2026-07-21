@@ -280,7 +280,8 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	for _, binding := range platformCatalog.Bindings {
 		tenantIDs = append(tenantIDs, binding.TenantID)
 	}
-	go edge.RunFrontendPrefetcher(ctx, service, catalog, tenantIDs, *prefetchInterval, logf)
+	updates := edge.NewPortalUpdateHub()
+	go edge.RunFrontendPrefetcher(ctx, service, catalog, updates, tenantIDs, *prefetchInterval, logf)
 	interactionClient, err := edge.NewProtocolBusInteractionClient(host)
 	if err != nil {
 		return err
@@ -300,7 +301,7 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 			return err
 		}
 	}
-	server := &http.Server{Addr: *listen, Handler: edge.NewPlatformPortal(identity, service, interactionService, platformService, catalog, portalAssets), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Addr: *listen, Handler: edge.NewPlatformPortalWithUpdates(identity, service, interactionService, platformService, catalog, portalAssets, updates), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() { <-ctx.Done(); _ = server.Shutdown(context.Background()) }()
 	err = server.ListenAndServeTLS(*cert, *key)
 	if errors.Is(err, http.ErrServerClosed) {

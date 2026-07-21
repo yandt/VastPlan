@@ -114,6 +114,10 @@ type LocalizationPolicy struct {
 	SupportedLocales []string `json:"supportedLocales"`
 }
 
+type UpdatePolicy struct {
+	Mode string `json:"mode"`
+}
+
 type PlatformProfile struct {
 	compositioncommonv1.Document
 	Target        compositioncommonv1.Target `json:"target"`
@@ -121,6 +125,7 @@ type PlatformProfile struct {
 	Shell         Shell                      `json:"shell"`
 	Workbench     Workbench                  `json:"workbench"`
 	Localization  *LocalizationPolicy        `json:"localization,omitempty"`
+	Updates       *UpdatePolicy              `json:"updates,omitempty"`
 	Plugins       []PluginRef                `json:"plugins"`
 	Security      SecurityPolicy             `json:"security,omitempty"`
 }
@@ -239,6 +244,9 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	}
 	if value.Localization != nil && !containsFold(value.Localization.SupportedLocales, value.Localization.DefaultLocale) {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile 默认语言必须包含在 supportedLocales 中")
+	}
+	if value.Updates != nil && value.Updates.Mode != "refresh" && value.Updates.Mode != "notify" && value.Updates.Mode != "automatic" {
+		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile updates.mode 无效: %s", value.Updates.Mode)
 	}
 	selectedFoundations := []PluginRef{value.RenderAdapter.PluginRef, value.Shell.PluginRef, value.Workbench.PluginRef}
 	foundationIDs := map[string]struct{}{}

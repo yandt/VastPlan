@@ -106,7 +106,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 			"-frontend-delivery-origin", filepath.Join(dir, "frontend-delivery-origin"),
 			"-frontend-delivery-cache", filepath.Join(dir, "frontend-delivery-cache"),
 			"-allow-unsigned-local",
-			"-composer-version", "1.1.0",
+			"-composer-version", "1.2.0",
 			"-composer-state-file", stateFile,
 			"-portal-platform-catalog", portalCatalog,
 			"-interaction-broker-version", "0.1.0",

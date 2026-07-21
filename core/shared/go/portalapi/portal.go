@@ -86,6 +86,7 @@ type PortalSpec struct {
 	Audience      []string                                 `json:"audience,omitempty"`
 	Branding      map[string]any                           `json:"branding,omitempty"`
 	Localization  frontendcompositionv1.LocalizationPolicy `json:"localization"`
+	Updates       frontendcompositionv1.UpdatePolicy       `json:"updates"`
 	RenderAdapter RenderAdapter                            `json:"renderAdapter"`
 	Shell         Shell                                    `json:"shell"`
 	Workbench     Workbench                                `json:"workbench"`

@@ -34,6 +34,7 @@ type Handler struct {
 	platform    platformadminapi.Service
 	catalog     *TrustedCatalog
 	assets      http.Handler
+	updates     *PortalUpdateHub
 }
 
 func New(identity IdentityProvider, service portalapi.Service) *Handler {
@@ -60,10 +61,14 @@ func NewPortal(identity IdentityProvider, service portalapi.Service, interaction
 // NewPlatformPortal adds the allowlisted platform administration surface. A
 // nil service keeps every portal-scoped platform namespace unavailable.
 func NewPlatformPortal(identity IdentityProvider, service portalapi.Service, interaction InteractionService, platform platformadminapi.Service, catalog *TrustedCatalog, assets http.Handler) *Handler {
+	return NewPlatformPortalWithUpdates(identity, service, interaction, platform, catalog, assets, nil)
+}
+
+func NewPlatformPortalWithUpdates(identity IdentityProvider, service portalapi.Service, interaction InteractionService, platform platformadminapi.Service, catalog *TrustedCatalog, assets http.Handler, updates *PortalUpdateHub) *Handler {
 	if identity == nil || service == nil {
 		panic("Edge BFF 必须注入身份提供方和 Portal 服务")
 	}
-	return &Handler{identity: identity, service: service, interaction: interaction, platform: platform, catalog: catalog, assets: assets}
+	return &Handler{identity: identity, service: service, interaction: interaction, platform: platform, catalog: catalog, assets: assets, updates: updates}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +79,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.csrf(w, r)
 		return
 	}
-	runtimePath := r.URL.Path == "/v1/portal-runtime" || r.URL.Path == "/v1/portal-recovery" || strings.HasPrefix(r.URL.Path, "/v1/portal-modules/") || strings.HasPrefix(r.URL.Path, "/v1/portal-recovery-modules/")
+	runtimePath := r.URL.Path == "/v1/portal-runtime" || r.URL.Path == "/v1/portal-recovery" || r.URL.Path == "/v1/portal-updates" || strings.HasPrefix(r.URL.Path, "/v1/portal-modules/") || strings.HasPrefix(r.URL.Path, "/v1/portal-recovery-modules/")
 	portalPath := strings.HasPrefix(r.URL.Path, "/v1/portal-drafts") || strings.HasPrefix(r.URL.Path, "/v1/portal-governance")
 	interactionPath := strings.HasPrefix(r.URL.Path, "/v1/interactions")
 	platformPath := strings.HasPrefix(r.URL.Path, "/v1/portals/")
@@ -125,6 +130,10 @@ func (h *Handler) runtimeRoute(w http.ResponseWriter, r *http.Request, p portala
 	activations, err := h.service.ListActivations(r.Context(), p)
 	if err != nil {
 		respond(w, nil, err)
+		return
+	}
+	if r.URL.Path == "/v1/portal-updates" {
+		h.portalUpdates(w, r, p, activations)
 		return
 	}
 	if r.URL.Path == "/v1/portal-runtime" {

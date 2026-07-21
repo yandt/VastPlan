@@ -43,6 +43,7 @@ func resolve(catalog frontendcompositionv1.PortalPlatformCatalog, application fr
 		Domains: append([]string(nil), application.Domains...), Audience: append([]string(nil), application.Audience...),
 		Branding: cloneMap(application.Branding), Config: cloneMap(application.Config), Plugins: plugins,
 		Localization:  localization(profile.Localization),
+		Updates:       updates(profile.Updates),
 		Management:    binding,
 		RenderAdapter: portalapi.RenderAdapter{PluginRef: portalRef(profile.RenderAdapter.PluginRef), UIContract: profile.RenderAdapter.UIContract, Config: cloneRenderAdapterConfig(profile.RenderAdapter.Config)},
 		Shell:         portalapi.Shell{PluginRef: portalRef(profile.Shell.PluginRef), UIContract: profile.Shell.UIContract, Config: profile.Shell.Config},
@@ -55,6 +56,13 @@ func resolve(catalog frontendcompositionv1.PortalPlatformCatalog, application fr
 			PluginOrigins:           origins,
 		},
 	}, nil
+}
+
+func updates(policy *frontendcompositionv1.UpdatePolicy) frontendcompositionv1.UpdatePolicy {
+	if policy == nil || policy.Mode == "" {
+		return frontendcompositionv1.UpdatePolicy{Mode: "refresh"}
+	}
+	return *policy
 }
 
 func localization(policy *frontendcompositionv1.LocalizationPolicy) frontendcompositionv1.LocalizationPolicy {

@@ -31,6 +31,16 @@ function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?
 }
 
 describe("PortalGenerationManager", () => {
+  it("preflights and disposes a Host Epoch candidate without replacing the active generation", async () => {
+    const dispose = vi.fn();
+    const manager = new PortalGenerationManager({ prepare: async (runtime) => prepared(runtime.portal.revision, runtime.portal.revision === 2 ? { dispose } : undefined) });
+    const active = await manager.start(spec(1));
+    await manager.preflight(spec(2));
+    expect(manager.active).toBe(active);
+    expect(active.signal.aborted).toBe(false);
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
   it("captures state, restores the candidate, commits once, then disposes the old generation", async () => {
     const order: string[] = [];
     const oldHot: FrontendPluginHotLifecycle = {

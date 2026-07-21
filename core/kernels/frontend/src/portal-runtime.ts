@@ -37,6 +37,7 @@ export interface PortalSpec {
   route: string;
   branding?: Record<string, unknown>;
   localization?: PortalLocalizationPolicy;
+  updates?: { mode: "refresh" | "notify" | "automatic" };
   renderAdapter: RenderAdapterSelection;
   shell: ShellSelection;
   workbench: WorkbenchSelection;

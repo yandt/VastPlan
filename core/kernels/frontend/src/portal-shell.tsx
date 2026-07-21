@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { PortalI18nProvider, message, usePortalI18n, usePortalUI, type PluginLocalization, type PortalLocalizationPolicy } from "@vastplan/ui-primitives";
 import { VerifiedFrontendPluginLoader, parsePortalRuntimeSpec, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
 import { startPortalDevelopmentUpdates } from "./portal-development";
+import { startPortalActivationUpdates, type PortalActivationUpdate } from "./portal-updates";
 import { PortalGenerationManager } from "./portal-generation";
 import { PortalRuntime, type PreparedPortal } from "./portal-runtime";
 
@@ -28,11 +29,13 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   let prepared: PreparedPortal | undefined;
   let recoveryMode = false;
   let developmentError: string | undefined;
+  let updateNotice: PortalActivationUpdate | undefined;
   let currentSpec: PortalRuntimeSpec | undefined;
   let replaceShellTemplate: (templateID: string) => Promise<void> = async () => undefined;
   let stopDevelopmentUpdates: (() => void) | undefined;
+  let stopActivationUpdates: (() => void) | undefined;
   const renderApplication = () => {
-    if (prepared !== undefined) root.render(<PortalApplication prepared={prepared} initialPath={pathname} recoveryMode={recoveryMode} developmentError={developmentError} onShellTemplateChange={replaceShellTemplate} />);
+    if (prepared !== undefined) root.render(<PortalApplication prepared={prepared} initialPath={pathname} recoveryMode={recoveryMode} developmentError={developmentError} updateNotice={updateNotice} onApplyUpdate={() => globalThis.location?.reload()} onShellTemplateChange={replaceShellTemplate} />);
   };
   const manager = new PortalGenerationManager({
     fetcher,
@@ -72,6 +75,21 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   try {
     currentSpec = await fetchRuntimeSpec(fetcher, endpoint, pathname);
     await manager.start(currentSpec);
+    commitHostEpoch(currentSpec.portal);
+    const updatePolicy = currentSpec.portal.updates?.mode ?? "refresh";
+    if (updatePolicy !== "refresh") {
+      stopActivationUpdates = startPortalActivationUpdates({
+        manager,
+        policy: updatePolicy,
+        pathname: () => globalThis.location?.pathname ?? pathname,
+        currentRevision: () => currentSpec?.portal.revision ?? 0,
+        fetchRuntime: (path) => fetchRuntimeSpec(fetcher, endpoint, path),
+        onRuntime: (spec) => { currentSpec = spec; updateNotice = undefined; },
+        onNotify: (update) => { updateNotice = update; renderApplication(); },
+        onHostEpoch: (revision) => { if (currentSpec !== undefined) markHostEpochPending(currentSpec.portal, revision); },
+        onError: (error) => { developmentError = errorMessage(error); renderApplication(); },
+      });
+    }
     if (__VASTPLAN_DEV_HMR__) {
       stopDevelopmentUpdates = startPortalDevelopmentUpdates({
         manager,
@@ -85,15 +103,27 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
       });
     }
   } catch (error) {
-    const recover = async () => {
-      recoveryMode = true;
-      currentSpec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname);
-      await manager.start(currentSpec);
-    };
-    root.render(<PortalRecovery error={error} onRecover={recover} />);
+    if (currentSpec !== undefined && failPendingHostEpoch(currentSpec.portal)) {
+      try {
+        recoveryMode = true;
+        currentSpec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname);
+        await manager.start(currentSpec);
+        renderApplication();
+      } catch (recoveryError) {
+        root.render(<PortalRecovery error={recoveryError} />);
+      }
+    } else {
+      const recover = async () => {
+        recoveryMode = true;
+        currentSpec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname);
+        await manager.start(currentSpec);
+      };
+      root.render(<PortalRecovery error={error} onRecover={recover} />);
+    }
   }
   globalThis.addEventListener?.("pagehide", () => {
     stopDevelopmentUpdates?.();
+    stopActivationUpdates?.();
     void manager.shutdown();
   }, { once: true });
   return root;
@@ -117,7 +147,7 @@ export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string,
   return parsePortalRuntimeSpec(await response.json());
 }
 
-export function PortalApplication({ prepared, initialPath, recoveryMode = false, developmentError, onShellTemplateChange }: { prepared: PreparedPortal; initialPath: string; recoveryMode?: boolean; developmentError?: string; onShellTemplateChange?(templateID: string): Promise<void> }) {
+export function PortalApplication({ prepared, initialPath, recoveryMode = false, developmentError, updateNotice, onApplyUpdate, onShellTemplateChange }: { prepared: PreparedPortal; initialPath: string; recoveryMode?: boolean; developmentError?: string; updateNotice?: PortalActivationUpdate; onApplyUpdate?(): void; onShellTemplateChange?(templateID: string): Promise<void> }) {
   const landingPath = useMemo(() => resolvePortalPath(prepared, initialPath), [prepared, initialPath]);
   const [pathname, setPathname] = useState(landingPath);
   useEffect(() => {
@@ -132,18 +162,28 @@ export function PortalApplication({ prepared, initialPath, recoveryMode = false,
   const policy = prepared.portal.localization ?? defaultPortalLocalization;
   const catalogs = useMemo(() => ({ ...prepared.messageCatalogs, [kernelNamespace]: kernelLocalization }), [prepared.messageCatalogs]);
   return <PortalI18nProvider policy={policy} catalogs={catalogs} candidates={globalThis.navigator?.languages ?? []} storageKey={`vastplan.locale.${prepared.portal.tenantId}.${prepared.portal.id}`}>
-    <LocalizedPortalApplication prepared={prepared} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} developmentError={developmentError} onRendererChange={(rendererID) => changeRendererPreference(prepared, rendererID)} onShellTemplateChange={onShellTemplateChange} />
+    <LocalizedPortalApplication prepared={prepared} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} developmentError={developmentError} updateNotice={updateNotice} onApplyUpdate={onApplyUpdate} onRendererChange={(rendererID) => changeRendererPreference(prepared, rendererID)} onShellTemplateChange={onShellTemplateChange} />
   </PortalI18nProvider>;
 }
 
-function LocalizedPortalApplication({ prepared, pathname, onNavigate, page, recoveryMode, developmentError, onRendererChange, onShellTemplateChange }: { prepared: PreparedPortal; pathname: string; onNavigate(path: string): void; page: PreparedPortal["pages"][number] | undefined; recoveryMode: boolean; developmentError?: string; onRendererChange(rendererID: string): void; onShellTemplateChange?(templateID: string): Promise<void> }) {
+function LocalizedPortalApplication({ prepared, pathname, onNavigate, page, recoveryMode, developmentError, updateNotice, onApplyUpdate, onRendererChange, onShellTemplateChange }: { prepared: PreparedPortal; pathname: string; onNavigate(path: string): void; page: PreparedPortal["pages"][number] | undefined; recoveryMode: boolean; developmentError?: string; updateNotice?: PortalActivationUpdate; onApplyUpdate?(): void; onRendererChange(rendererID: string): void; onShellTemplateChange?(templateID: string): Promise<void> }) {
   const Provider = prepared.renderAdapter.Provider;
   const i18n = usePortalI18n();
   const themeTemplate = prepared.portal.renderAdapter.config.rendererOptions?.[prepared.renderAdapter.id]?.themeTemplate;
   return <Provider locale={i18n.locale} direction={i18n.direction} themeTemplate={themeTemplate}>
     <PortalContent prepared={prepared} pathname={pathname} onNavigate={onNavigate} page={page} recoveryMode={recoveryMode} onRendererChange={onRendererChange} onShellTemplateChange={onShellTemplateChange} />
     {developmentError === undefined ? null : <PortalDevelopmentNotice message={developmentError} />}
+    {updateNotice === undefined ? null : <PortalUpdateNotice update={updateNotice} onApply={onApplyUpdate} />}
   </Provider>;
+}
+
+function PortalUpdateNotice({ update, onApply }: { update: PortalActivationUpdate; onApply?(): void }) {
+  const i18n = usePortalI18n();
+  return <aside role="status" data-vastplan-update-available style={{ position: "fixed", right: 16, bottom: 16, zIndex: 2147483646, maxWidth: 420, padding: "12px 16px", borderRadius: 8, background: "#17233d", color: "#fff", boxShadow: "0 8px 28px rgba(0,0,0,.24)", fontFamily: "system-ui" }}>
+    <strong>{i18n.text(messageDescriptor("update.available", "Portal 新版本已就绪"))}</strong>
+    <div style={{ marginTop: 4 }}>{i18n.text(message(kernelNamespace, "update.revision", "Activation #{revision}", { revision: update.activationId }))}</div>
+    <button type="button" onClick={onApply} style={{ marginTop: 8 }}>{i18n.text(messageDescriptor("update.apply", "刷新并应用"))}</button>
+  </aside>;
 }
 
 function PortalDevelopmentNotice({ message }: { message: string }) {
@@ -220,6 +260,42 @@ function changeRendererPreference(prepared: PreparedPortal, rendererID: string):
   if (!config.userSelectable || !config.allowedRenderers.includes(rendererID) || rendererID === prepared.renderAdapter.id) return;
   try { globalThis.localStorage?.setItem(rendererStorageKey(prepared.portal), rendererID); } catch { /* privacy mode may deny persistence */ }
   globalThis.location?.reload();
+}
+
+interface HostEpochState { active?: number; lastKnownGood?: number; pending?: number; failed?: number; }
+
+function hostEpochStorageKey(portal: PortalRuntimeSpec["portal"]): string {
+  return `vastplan.host-epoch.${portal.tenantId}.${portal.id}`;
+}
+
+function readHostEpoch(portal: PortalRuntimeSpec["portal"]): HostEpochState {
+  try {
+    const raw = globalThis.localStorage?.getItem(hostEpochStorageKey(portal));
+    if (raw === null || raw === undefined) return {};
+    const value = JSON.parse(raw) as HostEpochState;
+    return typeof value === "object" && value !== null ? value : {};
+  } catch { return {}; }
+}
+
+function writeHostEpoch(portal: PortalRuntimeSpec["portal"], value: HostEpochState): void {
+  try { globalThis.localStorage?.setItem(hostEpochStorageKey(portal), JSON.stringify(value)); } catch { /* privacy mode may deny persistence */ }
+}
+
+function markHostEpochPending(portal: PortalRuntimeSpec["portal"], revision: number): void {
+  const state = readHostEpoch(portal);
+  writeHostEpoch(portal, { active: state.active ?? portal.revision, lastKnownGood: state.active ?? portal.revision, pending: revision, failed: state.failed });
+}
+
+function commitHostEpoch(portal: PortalRuntimeSpec["portal"]): void {
+  const state = readHostEpoch(portal);
+  writeHostEpoch(portal, { active: portal.revision, lastKnownGood: portal.revision, failed: state.failed === portal.revision ? undefined : state.failed });
+}
+
+function failPendingHostEpoch(portal: PortalRuntimeSpec["portal"]): boolean {
+  const state = readHostEpoch(portal);
+  if (state.pending !== portal.revision) return false;
+  writeHostEpoch(portal, { active: state.lastKnownGood, lastKnownGood: state.lastKnownGood, failed: portal.revision });
+  return true;
 }
 
 function shellTemplateStorageKey(portal: PreparedPortal["portal"]): string {
@@ -302,8 +378,8 @@ const kernelNamespace = "cn.vastplan.kernel.frontend";
 const kernelLocalization: PluginLocalization = {
   defaultLocale: "zh-CN",
   messages: {
-    "zh-CN": { "recovery.active": "正在运行上一条仍可信的已发布 revision #{revision}。", "development.notCommitted": "插件热替换未提交" },
-    "en-US": { "recovery.active": "Running the previous trusted published revision #{revision}.", "development.notCommitted": "Plugin hot update was not committed" },
+    "zh-CN": { "recovery.active": "正在运行上一条仍可信的已发布 revision #{revision}。", "development.notCommitted": "插件热替换未提交", "update.available": "Portal 新版本已就绪", "update.revision": "Activation #{revision}", "update.apply": "刷新并应用" },
+    "en-US": { "recovery.active": "Running the previous trusted published revision #{revision}.", "development.notCommitted": "Plugin hot update was not committed", "update.available": "A new Portal version is ready", "update.revision": "Activation #{revision}", "update.apply": "Refresh and apply" },
   },
 };
 

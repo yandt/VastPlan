@@ -38,6 +38,16 @@ func TestPlatformProfileUsesRendererAndThemeTemplateSelection(t *testing.T) {
 	}
 }
 
+func TestPlatformProfileUpdatePolicy(t *testing.T) {
+	base := `{"version":1,"revision":1,"id":"updates","target":{"kernel":"frontend"},"renderAdapter":{"id":"cn.vastplan.foundation.frontend.render.adapter","version":"1.0.0","uiContract":"^4.0.0","config":{"defaultRenderer":"arco","allowedRenderers":["arco"],"userSelectable":false}},"shell":{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0","uiContract":"^4.0.0","config":{"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}},"workbench":{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0","uiContract":"^4.0.0"},"updates":{"mode":%q},"plugins":[{"id":"cn.vastplan.foundation.frontend.render.adapter","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`
+	if profile, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, "automatic"))); err != nil || profile.Updates == nil || profile.Updates.Mode != "automatic" {
+		t.Fatalf("合法更新策略未保留: %+v err=%v", profile.Updates, err)
+	}
+	if _, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, "poll"))); err == nil {
+		t.Fatal("未知更新策略必须拒绝")
+	}
+}
+
 func TestPlatformProfileValidatesBoundedNavigationTree(t *testing.T) {
 	valid := validShellProfileJSON("tree", 1, `{"navigationGroups":[{"id":"operations","label":"运行管理","zone":"primary","icon":"menu"},{"id":"deployments","parentID":"operations","label":"部署","zone":"primary","icon":"menu"}],"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}`)
 	if _, err := ParsePlatformProfile([]byte(valid)); err != nil {
