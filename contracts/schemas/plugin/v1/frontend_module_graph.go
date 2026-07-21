@@ -33,8 +33,9 @@ type FrontendModuleNode struct {
 }
 
 type FrontendModuleDependency struct {
-	Path string `json:"path"`
-	Kind string `json:"kind"`
+	Specifier string `json:"specifier"`
+	Path      string `json:"path"`
+	Kind      string `json:"kind"`
 }
 
 func (g FrontendModuleGraph) ComputedDigest() string {
@@ -46,10 +47,13 @@ func (g FrontendModuleGraph) ComputedDigest() string {
 	for index := range canonical.Nodes {
 		canonical.Nodes[index].Dependencies = append([]FrontendModuleDependency{}, canonical.Nodes[index].Dependencies...)
 		sort.Slice(canonical.Nodes[index].Dependencies, func(left, right int) bool {
-			if canonical.Nodes[index].Dependencies[left].Path == canonical.Nodes[index].Dependencies[right].Path {
-				return canonical.Nodes[index].Dependencies[left].Kind < canonical.Nodes[index].Dependencies[right].Kind
+			if canonical.Nodes[index].Dependencies[left].Specifier == canonical.Nodes[index].Dependencies[right].Specifier {
+				if canonical.Nodes[index].Dependencies[left].Path == canonical.Nodes[index].Dependencies[right].Path {
+					return canonical.Nodes[index].Dependencies[left].Kind < canonical.Nodes[index].Dependencies[right].Kind
+				}
+				return canonical.Nodes[index].Dependencies[left].Path < canonical.Nodes[index].Dependencies[right].Path
 			}
-			return canonical.Nodes[index].Dependencies[left].Path < canonical.Nodes[index].Dependencies[right].Path
+			return canonical.Nodes[index].Dependencies[left].Specifier < canonical.Nodes[index].Dependencies[right].Specifier
 		})
 	}
 	sort.Slice(canonical.Nodes, func(left, right int) bool { return canonical.Nodes[left].Path < canonical.Nodes[right].Path })
@@ -108,9 +112,9 @@ func validateFrontendModuleGraph(graph FrontendModuleGraph, maxTotalSize int64) 
 	for _, node := range graph.Nodes {
 		dependencies := make(map[string]struct{}, len(node.Dependencies))
 		for _, dependency := range node.Dependencies {
-			key := dependency.Path + "\x00" + dependency.Kind
+			key := dependency.Specifier
 			if _, exists := dependencies[key]; exists {
-				return fmt.Errorf("节点依赖重复: %s -> %s", node.Path, dependency.Path)
+				return fmt.Errorf("节点 import specifier 重复: %s -> %s", node.Path, dependency.Specifier)
 			}
 			dependencies[key] = struct{}{}
 			if dependency.Path == node.Path {

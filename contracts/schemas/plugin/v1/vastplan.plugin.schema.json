@@ -137,8 +137,9 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["path", "kind"],
+            "required": ["specifier", "path", "kind"],
             "properties": {
+              "specifier": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[A-Za-z0-9._/-]+$" },
               "path": { "$ref": "#/$defs/frontendModulePath" },
               "kind": { "enum": ["static", "dynamic", "asset"] }
             }

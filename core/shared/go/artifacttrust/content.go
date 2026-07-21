@@ -94,6 +94,7 @@ func InspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 	tr := tar.NewReader(gz)
 	var manifestRaw []byte
 	entrySizes := map[string]int64{}
+	entryFacts := map[string]packageFileFact{}
 	files := 0
 	var expandedBytes int64
 	for {
@@ -127,6 +128,15 @@ func InspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 		expandedBytes += header.Size
 		entrySizes[name] = header.Size
 		if name != manifestName {
+			digest := sha256.New()
+			written, copyErr := io.CopyN(digest, tr, header.Size)
+			if copyErr != nil {
+				return pluginv1.Manifest{}, nil, fmt.Errorf("读取插件包文件 %s: %w", name, copyErr)
+			}
+			if written != header.Size {
+				return pluginv1.Manifest{}, nil, fmt.Errorf("插件包文件 %s 大小不一致", name)
+			}
+			entryFacts[name] = packageFileFact{size: header.Size, sha256: hex.EncodeToString(digest.Sum(nil))}
 			continue
 		}
 		if manifestRaw != nil {
@@ -139,6 +149,8 @@ func InspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 		if len(manifestRaw) > maxManifestBytes {
 			return pluginv1.Manifest{}, nil, fmt.Errorf("插件清单超过 %d 字节上限", maxManifestBytes)
 		}
+		manifestDigest := sha256.Sum256(manifestRaw)
+		entryFacts[name] = packageFileFact{size: int64(len(manifestRaw)), sha256: hex.EncodeToString(manifestDigest[:])}
 	}
 	if manifestRaw == nil {
 		return pluginv1.Manifest{}, nil, errors.New("插件包缺少根清单 vastplan.plugin.json")
@@ -156,6 +168,9 @@ func InspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 				return pluginv1.Manifest{}, nil, err
 			}
 		}
+	}
+	if err := validatePackagedFrontendGraphs(manifest, entryFacts); err != nil {
+		return pluginv1.Manifest{}, nil, err
 	}
 	return manifest, json.RawMessage(manifestRaw), nil
 }

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,7 +77,7 @@ func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
 		t.Fatal(err)
 	}
 	fingerprint := strings.Repeat("a", 64)
-	staged, cleanup := stagePackage(source, backend, "", dynamic, fingerprint, "", "")
+	staged, cleanup := stagePackage(source, backend, "", "", "", dynamic, fingerprint, "", "")
 	defer cleanup()
 	raw, err := os.ReadFile(filepath.Join(staged, "vastplan.plugin.json"))
 	if err != nil {
@@ -104,7 +107,7 @@ func TestStagePackageInjectsFrontendBundleAtManifestEntry(t *testing.T) {
 	if err := os.WriteFile(bundle, content, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	staged, cleanup := stagePackage(source, "", bundle, "", "", "", "")
+	staged, cleanup := stagePackage(source, "", bundle, "", "", "", "", "", "")
 	defer cleanup()
 	got, err := os.ReadFile(filepath.Join(staged, "frontend", "dist", "index.js"))
 	if err != nil {
@@ -112,5 +115,60 @@ func TestStagePackageInjectsFrontendBundleAtManifestEntry(t *testing.T) {
 	}
 	if string(got) != string(content) {
 		t.Fatalf("frontend bundle 注入内容不一致: %q", got)
+	}
+}
+
+func TestStagePackageInjectsVerifiedFrontendModuleGraph(t *testing.T) {
+	source := t.TempDir()
+	manifest := []byte(`{
+  "id":"cn.vastplan.product.test.graph","name":"graph","description":"graph","version":"1.0.0","publisher":"vastplan",
+  "engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/dist/index.js"},
+  "contributes":{"frontend":{"views":[{"id":"test.graph","title":"Test"}]}}
+}`)
+	if err := os.WriteFile(filepath.Join(source, "vastplan.plugin.json"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	buildRoot := t.TempDir()
+	entryPath, chunkPath := "frontend/dist/index.js", "frontend/dist/chunks/lazy.js"
+	entry, chunk := []byte("import('./chunks/lazy.js');\n"), []byte("export const lazy = true;\n")
+	for name, content := range map[string][]byte{entryPath: entry, chunkPath: chunk} {
+		filename := filepath.Join(buildRoot, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filename, content, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entryDigest, chunkDigest := sha256.Sum256(entry), sha256.Sum256(chunk)
+	graph := pluginv1.FrontendModuleGraph{SchemaVersion: "v1", Target: "browser", Entry: entryPath, Externals: []string{}, Nodes: []pluginv1.FrontendModuleNode{
+		{Path: entryPath, SHA256: hex.EncodeToString(entryDigest[:]), Size: int64(len(entry)), MediaType: "text/javascript", Purpose: "entry", Dependencies: []pluginv1.FrontendModuleDependency{{Specifier: "chunks/lazy.js", Path: chunkPath, Kind: "dynamic"}}},
+		{Path: chunkPath, SHA256: hex.EncodeToString(chunkDigest[:]), Size: int64(len(chunk)), MediaType: "text/javascript", Purpose: "chunk", Dependencies: []pluginv1.FrontendModuleDependency{}},
+	}}
+	graph.Digest = graph.ComputedDigest()
+	graphRaw, err := json.Marshal(graph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	graphFile := filepath.Join(t.TempDir(), "graph.json")
+	if err := os.WriteFile(graphFile, graphRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staged, cleanup := stagePackage(source, "", "", graphFile, buildRoot, "", "", "", "")
+	defer cleanup()
+	raw, err := os.ReadFile(filepath.Join(staged, "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.FrontendModuleGraphs == nil || parsed.FrontendModuleGraphs.Browser.Digest != graph.Digest {
+		t.Fatalf("签名清单未绑定 browser Module Graph: %+v", parsed.FrontendModuleGraphs)
+	}
+	got, err := os.ReadFile(filepath.Join(staged, filepath.FromSlash(chunkPath)))
+	if err != nil || string(got) != string(chunk) {
+		t.Fatalf("Module Graph chunk 未进入制品: %q %v", got, err)
 	}
 }

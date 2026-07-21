@@ -4,9 +4,14 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
 func TestInspectPackageRejectsNormalizedDuplicatePaths(t *testing.T) {
@@ -48,6 +53,31 @@ func TestReadPackageFileReturnsOnlyBoundedRegularEntry(t *testing.T) {
 	}
 }
 
+func TestInspectPackageBindsFrontendGraphToActualBytes(t *testing.T) {
+	module := []byte("export const ready = true;\n")
+	digest := sha256.Sum256(module)
+	graph := pluginv1.FrontendModuleGraph{SchemaVersion: "v1", Target: "browser", Entry: "frontend/dist/index.js", Externals: []string{}, Nodes: []pluginv1.FrontendModuleNode{{
+		Path: "frontend/dist/index.js", SHA256: hex.EncodeToString(digest[:]), Size: int64(len(module)), MediaType: "text/javascript", Purpose: "entry", Dependencies: []pluginv1.FrontendModuleDependency{},
+	}}}
+	graph.Digest = graph.ComputedDigest()
+	manifest, err := json.Marshal(pluginv1.Manifest{
+		ID: "cn.vastplan.product.test.graph", Name: "graph", Description: "graph", Version: "1.0.0", Publisher: "vastplan",
+		Engines: map[string]string{"frontend": "^1.0"}, Activation: []string{"onPortalStartup"}, Entry: map[string]string{"frontend": graph.Entry},
+		FrontendModuleGraphs: &pluginv1.FrontendModuleGraphs{Browser: &graph}, Contributes: map[string]json.RawMessage{"frontend": json.RawMessage(`{"views":[]}`)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := testArchiveFiles(t, map[string][]byte{manifestName: manifest, graph.Entry: module})
+	if _, _, err := InspectPackage(valid); err != nil {
+		t.Fatalf("真实字节与签名图匹配时应通过: %v", err)
+	}
+	tampered := testArchiveFiles(t, map[string][]byte{manifestName: manifest, graph.Entry: []byte("export const ready = false;\n")})
+	if _, _, err := InspectPackage(tampered); err == nil || !strings.Contains(err.Error(), "失配") {
+		t.Fatalf("Module Graph 节点被替换必须拒绝: %v", err)
+	}
+}
+
 func testArchive(t *testing.T, headers []tar.Header, body []byte) []byte {
 	t.Helper()
 	var buffer bytes.Buffer
@@ -61,6 +91,28 @@ func testArchive(t *testing.T, headers []tar.Header, body []byte) []byte {
 			if _, err := tw.Write(body[:header.Size]); err != nil {
 				t.Fatal(err)
 			}
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buffer.Bytes()
+}
+
+func testArchiveFiles(t *testing.T, files map[string][]byte) []byte {
+	t.Helper()
+	var buffer bytes.Buffer
+	gz := gzip.NewWriter(&buffer)
+	tw := tar.NewWriter(gz)
+	for name, body := range files {
+		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(body))}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(body); err != nil {
+			t.Fatal(err)
 		}
 	}
 	if err := tw.Close(); err != nil {

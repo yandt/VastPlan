@@ -20,7 +20,7 @@ export async function createFrontendModuleGraph({ target, pluginRoot, entry, met
       }
       const dependencyAbsolute = resolve(dirname(absolutePath), dependency.path);
       if (!outputByAbsolutePath.has(dependencyAbsolute)) throw new Error(`Module Graph 依赖不在构建闭包中: ${path} -> ${dependency.path}`);
-      dependencies.push({ path: packagePath(pluginRoot, dependencyAbsolute), kind: dependencyKind(dependency.kind) });
+      dependencies.push({ specifier: dependency.path, path: packagePath(pluginRoot, dependencyAbsolute), kind: dependencyKind(dependency.kind) });
     }
     const content = await readFile(absolutePath);
     if (content.byteLength !== metadata.bytes) throw new Error(`Module Graph 输出大小漂移: ${path}`);
@@ -85,5 +85,6 @@ function purpose(path) {
 }
 
 function compareDependency(left, right) {
+  if (left.specifier !== right.specifier) return left.specifier.localeCompare(right.specifier);
   return left.path === right.path ? left.kind.localeCompare(right.kind) : left.path.localeCompare(right.path);
 }
