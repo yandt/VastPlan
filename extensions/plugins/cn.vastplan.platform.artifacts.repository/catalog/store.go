@@ -33,6 +33,13 @@ type VerifiedRepository interface {
 	ReadMetadataWithAttestation(pluginservice.Ref) (pluginservice.Artifact, []byte, error)
 }
 
+// MissingArtifactRegistry allows Catalog history to retain an exact artifact
+// after its bytes have entered the crash-recoverable GC retirement state.
+// Unknown physical loss must still fail repository startup.
+type MissingArtifactRegistry interface {
+	AllowsMissing(pluginv1.ArtifactRef, string) bool
+}
+
 type Event struct {
 	SchemaVersion  string                        `json:"schemaVersion"`
 	Revision       uint64                        `json:"revision"`
@@ -116,15 +123,22 @@ type Store struct {
 	entries    map[string]Entry
 	events     []Event
 	lifecycle  map[string][]LifecycleTransition
+	retired    MissingArtifactRegistry
 }
 
-func Open(repositoryRoot string, repository VerifiedRepository) (*Store, error) {
+func Open(repositoryRoot string, repository VerifiedRepository, retired ...MissingArtifactRegistry) (*Store, error) {
 	if strings.TrimSpace(repositoryRoot) == "" || repository == nil {
 		return nil, errors.New("Catalog 必须配置仓库根目录和已验证制品源")
 	}
 	store := &Store{
 		root: filepath.Join(filepath.Clean(repositoryRoot), "catalog"), repository: repository,
 		entries: map[string]Entry{}, lifecycle: map[string][]LifecycleTransition{},
+	}
+	if len(retired) > 1 {
+		return nil, errors.New("Catalog 只能配置一个制品 retirement 注册表")
+	}
+	if len(retired) == 1 {
+		store.retired = retired[0]
 	}
 	for _, directory := range []string{store.root, store.journalDir()} {
 		if err := ensurePrivateDirectory(directory); err != nil {
@@ -225,6 +239,38 @@ func (s *Store) Stats() Stats {
 	return Stats{Revision: s.revision, Artifacts: len(s.entries), InventorySHA256: inventoryDigest(s.entries)}
 }
 
+func (s *Store) Lookup(ref pluginv1.ArtifactRef) (Entry, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry, ok := s.entries[refKey(ref)]
+	return entry, ok
+}
+
+// GarbageCandidates returns only administratively retired artifacts. Active
+// and deprecated entries remain resolvable and can never become implicit GC.
+func (s *Store) GarbageCandidates() (uint64, []Entry) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	items := make([]Entry, 0)
+	for _, entry := range s.entries {
+		if entry.LifecycleStatus == LifecycleYanked || entry.LifecycleStatus == LifecycleRevoked {
+			items = append(items, entry)
+		}
+	}
+	sortEntries(items)
+	return s.revision, items
+}
+
+func (s *Store) GarbageCandidate(ref pluginv1.ArtifactRef, sha256 string) (Entry, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry, ok := s.entries[refKey(ref)]
+	if !ok || entry.SHA256 != sha256 || (entry.LifecycleStatus != LifecycleYanked && entry.LifecycleStatus != LifecycleRevoked) {
+		return Entry{}, false
+	}
+	return entry, true
+}
+
 func inventoryDigest(entries map[string]Entry) string {
 	keys := make([]string, 0, len(entries))
 	for key := range entries {
@@ -277,7 +323,10 @@ func (s *Store) rebuild() error {
 	}
 	for key := range s.entries {
 		if _, ok := seen[key]; !ok {
-			return fmt.Errorf("发布流水账引用的制品缺失: %s", key)
+			entry := s.entries[key]
+			if s.retired == nil || !s.retired.AllowsMissing(entry.Ref, entry.SHA256) || (entry.LifecycleStatus != LifecycleYanked && entry.LifecycleStatus != LifecycleRevoked) {
+				return fmt.Errorf("发布流水账引用的制品缺失: %s", key)
+			}
 		}
 	}
 	return s.writeSnapshotLocked()

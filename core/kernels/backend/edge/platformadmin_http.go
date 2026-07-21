@@ -114,6 +114,60 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 		respondPlatform(w, value, err)
 		return
 	}
+	if len(parts) == 3 && parts[0] == "artifacts" && parts[1] == "gc" {
+		switch parts[2] {
+		case "plan":
+			if r.Method != http.MethodGet {
+				methodNotAllowed(w)
+				return
+			}
+			if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "gcPlan", false) || !requirePlatformRole(w, p, "platform.artifacts.read") {
+				return
+			}
+			value, err := h.platform.PlanArtifactGarbageCollection(r.Context(), p, target)
+			respondPlatform(w, value, err)
+			return
+		case "status":
+			if r.Method != http.MethodGet {
+				methodNotAllowed(w)
+				return
+			}
+			if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "gcStatus", false) || !requirePlatformRole(w, p, "platform.artifacts.read") {
+				return
+			}
+			value, err := h.platform.ArtifactGarbageCollectionStatus(r.Context(), p, target)
+			respondPlatform(w, value, err)
+			return
+		case "quarantine":
+			if r.Method != http.MethodPost {
+				methodNotAllowed(w)
+				return
+			}
+			if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "gcQuarantine", true) || !requirePlatformRole(w, p, "platform.artifacts.gc") {
+				return
+			}
+			var request platformadminapi.QuarantineArtifactsRequest
+			if !decode(w, r, &request) {
+				return
+			}
+			value, err := h.platform.QuarantineArtifacts(r.Context(), p, target, request)
+			respondPlatform(w, value, err)
+			return
+		case "sweep":
+			if r.Method != http.MethodPost {
+				methodNotAllowed(w)
+				return
+			}
+			if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "gcSweep", true) || !requirePlatformRole(w, p, "platform.artifacts.gc") || !decodeEmptyObject(w, r) {
+				return
+			}
+			value, err := h.platform.SweepArtifacts(r.Context(), p, target)
+			respondPlatform(w, value, err)
+			return
+		}
+		http.NotFound(w, r)
+		return
+	}
 	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "lifecycle" {
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w)

@@ -83,6 +83,18 @@ export interface ArtifactReferenceSnapshot {
   tenantId: string; publisherId: string; value: ArtifactReferenceSnapshotValue; reportedAt: string; expiresAt?: string;
 }
 export interface ArtifactReferencePage { revision: number; items: ArtifactReferenceSnapshot[]; }
+export interface ArtifactGCBlocker { code: string; message: string; }
+export interface ArtifactGCCandidate { ref: ArtifactRef; sha256: string; size: number; lifecycle: "yanked" | "revoked"; }
+export interface ArtifactGCPlan {
+  schemaVersion: "v1"; planId?: string; ready: boolean; createdAt: string;
+  catalogRevision: number; referenceRevision: number; candidates: ArtifactGCCandidate[];
+  bytes: number; blockers?: ArtifactGCBlocker[];
+}
+export interface ArtifactGCRecord extends ArtifactGCCandidate {
+  retirementId: string; status: "quarantining" | "quarantined" | "sweeping" | "swept";
+  quarantinedAt: string; sweepAfter: string; sweptAt?: string;
+}
+export interface ArtifactGCStatus { revision: number; items: ArtifactGCRecord[]; }
 
 export interface NodeBootstrapPlan {
   target: { address: string; port?: number; user: string };
@@ -176,6 +188,13 @@ export class PlatformAdminClient {
   public probeDatabaseConnection(name: string): Promise<DatabaseProbe> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}/probe`, "POST", {}); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
   public listArtifactReferences(): Promise<ArtifactReferencePage> { return this.get(`${this.basePath}/artifacts/references`); }
+  public planArtifactGarbageCollection(): Promise<ArtifactGCPlan> { return this.get(`${this.basePath}/artifacts/gc/plan`); }
+  public artifactGarbageCollectionStatus(): Promise<ArtifactGCStatus> { return this.get(`${this.basePath}/artifacts/gc/status`); }
+  public quarantineArtifacts(planId: string, graceHours: number): Promise<ArtifactGCStatus> {
+    if (!/^[a-f0-9]{64}$/.test(planId) || !Number.isSafeInteger(graceHours) || graceHours < 24 || graceHours > 24 * 365) throw new PlatformAdminError(400, "invalid_gc_request");
+    return this.mutate(`${this.basePath}/artifacts/gc/quarantine`, "POST", { planId, graceHours });
+  }
+  public sweepArtifacts(): Promise<ArtifactGCStatus> { return this.mutate(`${this.basePath}/artifacts/gc/sweep`, "POST", {}); }
   public setArtifactLifecycle(request: ArtifactLifecycleRequest): Promise<ArtifactLifecycleResult> { return this.mutate(`${this.basePath}/artifacts/lifecycle`, "POST", request); }
   public artifactMigrationStatus(): Promise<ArtifactRepositoryMigration> { return this.get(`${this.basePath}/artifacts/migration`); }
   public prepareArtifactMigration(request: PrepareArtifactMigrationRequest): Promise<ArtifactRepositoryMigration> { return this.mutate(`${this.basePath}/artifacts/migrations`, "POST", request); }

@@ -155,6 +155,58 @@ func (s *Store) Protected() map[pluginv1.ArtifactRef]map[string]struct{} {
 	return protected
 }
 
+func (s *Store) IsProtected(ref pluginv1.ArtifactRef, sha256 string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, snapshot := range s.data.Snapshots {
+		for _, reference := range snapshot.Value.References {
+			if reference.Ref == ref && reference.SHA256 == sha256 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *Store) HasOwnerKind(ownerKind string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, snapshot := range s.data.Snapshots {
+		if snapshot.Value.OwnerKind == ownerKind {
+			return true
+		}
+	}
+	return false
+}
+
+// GCHealth requires at least one Seed and LKG source and treats every expired
+// leased owner as uncertainty. Expired snapshots continue protecting bytes.
+func (s *Store) GCHealth(now time.Time) Health {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	health := Health{Ready: true, Revision: s.data.Revision}
+	kinds := map[string]bool{artifactreference.OwnerSeed: false, artifactreference.OwnerLastKnownGood: false}
+	for _, snapshot := range s.data.Snapshots {
+		if _, required := kinds[snapshot.Value.OwnerKind]; required {
+			kinds[snapshot.Value.OwnerKind] = true
+		}
+		if snapshot.ExpiresAt != nil && !now.UTC().Before(*snapshot.ExpiresAt) {
+			health.Ready = false
+			health.Expired = append(health.Expired, RequiredOwner{TenantID: snapshot.TenantID, OwnerKind: snapshot.Value.OwnerKind, OwnerID: snapshot.Value.OwnerID})
+		}
+	}
+	for _, kind := range []string{artifactreference.OwnerSeed, artifactreference.OwnerLastKnownGood} {
+		if !kinds[kind] {
+			health.Ready = false
+			health.Missing = append(health.Missing, RequiredOwner{TenantID: "system", OwnerKind: kind, OwnerID: "*"})
+		}
+	}
+	return health
+}
+
 func (s *Store) Health(required []RequiredOwner, now time.Time) Health {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -225,9 +277,12 @@ func cloneSnapshot(value Snapshot) Snapshot {
 }
 
 func cloneValue(value pluginv1.ArtifactReferenceSnapshot) pluginv1.ArtifactReferenceSnapshot {
-	copy := value
-	copy.References = append([]pluginv1.ArtifactReference(nil), value.References...)
-	return copy
+	result := value
+	if value.References != nil {
+		result.References = make([]pluginv1.ArtifactReference, len(value.References))
+		copy(result.References, value.References)
+	}
+	return result
 }
 
 func (s *Store) save(value state) error {

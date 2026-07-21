@@ -63,6 +63,18 @@ func (*platformService) ArtifactRepositoryStatus(context.Context, portalapi.Prin
 func (*platformService) ListArtifactReferences(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactReferencePage, error) {
 	return platformadminapi.ArtifactReferencePage{Revision: 1, Items: []platformadminapi.ArtifactReferenceSnapshot{}}, nil
 }
+func (*platformService) PlanArtifactGarbageCollection(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactGCPlan, error) {
+	return platformadminapi.ArtifactGCPlan{SchemaVersion: "v1", PlanID: strings.Repeat("a", 64), Ready: true, Candidates: []platformadminapi.ArtifactGCCandidate{}}, nil
+}
+func (*platformService) ArtifactGarbageCollectionStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactGCStatus, error) {
+	return platformadminapi.ArtifactGCStatus{Items: []platformadminapi.ArtifactGCRecord{}}, nil
+}
+func (*platformService) QuarantineArtifacts(context.Context, portalapi.Principal, portalapi.ManagementTarget, platformadminapi.QuarantineArtifactsRequest) (platformadminapi.ArtifactGCStatus, error) {
+	return platformadminapi.ArtifactGCStatus{Revision: 1, Items: []platformadminapi.ArtifactGCRecord{}}, nil
+}
+func (*platformService) SweepArtifacts(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactGCStatus, error) {
+	return platformadminapi.ArtifactGCStatus{Revision: 2, Items: []platformadminapi.ArtifactGCRecord{}}, nil
+}
 func (*platformService) ArtifactMigrationStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryMigration, error) {
 	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "synced"}, nil
 }
@@ -151,7 +163,7 @@ func platformPortalService() *service {
 		{ID: "settings", LogicalService: "platform.settings", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.SettingsCapability, Read: []string{"list"}, Write: []string{"put", "delete"}}}},
 		{ID: "credentials", LogicalService: "platform.credentials", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.CredentialsCapability, Read: []string{"list"}, Write: []string{"put", "rotate", "revoke"}}}},
 		{ID: "database", LogicalService: "platform.database", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DatabaseCapability, Read: []string{"list"}, Write: []string{"define", "remove", "probe"}}}},
-		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status", "listReferences", "migrationStatus"}, Write: []string{"setLifecycle", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"}}}},
+		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status", "listReferences", "gcPlan", "gcStatus", "migrationStatus"}, Write: []string{"setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"}}}},
 		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"}}}},
 	}}
 	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a", Route: "/operations", Management: binding, Resolution: portalapi.Resolution{PlatformProfile: profile, ManagementBindingDigest: compositioncommonv1.Digest(binding)}}
@@ -181,6 +193,33 @@ func TestPlatformAdminBFFUsesVerifiedPrincipalAndRoles(t *testing.T) {
 	h.ServeHTTP(response, request)
 	if response.Code != http.StatusForbidden {
 		t.Fatalf("缺少平台角色必须在 Edge 拒绝: %d", response.Code)
+	}
+}
+
+func TestArtifactGarbageCollectionUsesReadAndDedicatedMutationRoles(t *testing.T) {
+	admin := &platformService{}
+	readHandler := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "reader", TenantID: "tenant-a", Roles: []string{"platform.artifacts.read"}}, nil
+	}), platformPortalService(), nil, admin, nil, nil)
+	response := httptest.NewRecorder()
+	readHandler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, platformPath("artifacts", "artifacts/gc/plan"), nil))
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"ready":true`) {
+		t.Fatalf("GC plan 读路径失败: status=%d body=%s", response.Code, response.Body.String())
+	}
+
+	gcHandler := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "gc-operator", TenantID: "tenant-a", Roles: []string{"platform.artifacts.gc"}}, nil
+	}), platformPortalService(), nil, admin, nil, nil)
+	csrfResponse := httptest.NewRecorder()
+	gcHandler.ServeHTTP(csrfResponse, httptest.NewRequest(http.MethodGet, "/v1/csrf", nil))
+	cookie := csrfResponse.Result().Cookies()[0]
+	request := httptest.NewRequest(http.MethodPost, platformPath("artifacts", "artifacts/gc/quarantine"), strings.NewReader(`{"planId":"`+strings.Repeat("a", 64)+`","graceHours":72}`))
+	request.AddCookie(cookie)
+	request.Header.Set("X-VastPlan-CSRF", cookie.Value)
+	response = httptest.NewRecorder()
+	gcHandler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("专用 GC 角色应可隔离: status=%d body=%s", response.Code, response.Body.String())
 	}
 }
 

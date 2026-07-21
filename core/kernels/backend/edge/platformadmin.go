@@ -162,6 +162,33 @@ func (s *CapabilityPlatformAdminService) ListArtifactReferences(ctx context.Cont
 	return response, err
 }
 
+func (s *CapabilityPlatformAdminService) PlanArtifactGarbageCollection(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) (platformadminapi.ArtifactGCPlan, error) {
+	var response platformadminapi.ArtifactGCPlan
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "gcPlan", false, struct{}{}, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) ArtifactGarbageCollectionStatus(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) (platformadminapi.ArtifactGCStatus, error) {
+	var response platformadminapi.ArtifactGCStatus
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "gcStatus", false, struct{}{}, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) QuarantineArtifacts(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, request platformadminapi.QuarantineArtifactsRequest) (platformadminapi.ArtifactGCStatus, error) {
+	if len(request.PlanID) != 64 || request.GraceHours < 24 || request.GraceHours > 24*365 {
+		return platformadminapi.ArtifactGCStatus{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.ArtifactGCStatus
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "gcQuarantine", true, request, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) SweepArtifacts(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) (platformadminapi.ArtifactGCStatus, error) {
+	var response platformadminapi.ArtifactGCStatus
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "gcSweep", true, struct{}{}, &response)
+	return response, err
+}
+
 func (s *CapabilityPlatformAdminService) ArtifactMigrationStatus(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryMigration, error) {
 	var response platformadminapi.ArtifactRepositoryMigration
 	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "migrationStatus", false, struct{}{}, &response)

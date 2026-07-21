@@ -140,6 +140,52 @@ type ArtifactReferencePage struct {
 	Items    []ArtifactReferenceSnapshot `json:"items"`
 }
 
+type ArtifactGCBlocker struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
+type ArtifactGCCandidate struct {
+	Ref       pluginv1.ArtifactRef `json:"ref"`
+	SHA256    string               `json:"sha256"`
+	Size      int64                `json:"size"`
+	Lifecycle string               `json:"lifecycle"`
+}
+
+type ArtifactGCPlan struct {
+	SchemaVersion     string                `json:"schemaVersion"`
+	PlanID            string                `json:"planId,omitempty"`
+	Ready             bool                  `json:"ready"`
+	CreatedAt         string                `json:"createdAt"`
+	CatalogRevision   uint64                `json:"catalogRevision"`
+	ReferenceRevision uint64                `json:"referenceRevision"`
+	Candidates        []ArtifactGCCandidate `json:"candidates"`
+	Bytes             int64                 `json:"bytes"`
+	Blockers          []ArtifactGCBlocker   `json:"blockers,omitempty"`
+}
+
+type ArtifactGCRecord struct {
+	RetirementID  string               `json:"retirementId"`
+	Ref           pluginv1.ArtifactRef `json:"ref"`
+	SHA256        string               `json:"sha256"`
+	Size          int64                `json:"size"`
+	Lifecycle     string               `json:"lifecycle"`
+	Status        string               `json:"status"`
+	QuarantinedAt string               `json:"quarantinedAt"`
+	SweepAfter    string               `json:"sweepAfter"`
+	SweptAt       string               `json:"sweptAt,omitempty"`
+}
+
+type ArtifactGCStatus struct {
+	Revision uint64             `json:"revision"`
+	Items    []ArtifactGCRecord `json:"items"`
+}
+
+type QuarantineArtifactsRequest struct {
+	PlanID     string `json:"planId"`
+	GraceHours int64  `json:"graceHours"`
+}
+
 type ArtifactRepositoryMigration struct {
 	MigrationID      string `json:"migrationId,omitempty"`
 	Phase            string `json:"phase,omitempty"`
@@ -340,6 +386,10 @@ type Service interface {
 	ProbeDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (DatabaseProbe, error)
 	ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryStatus, error)
 	ListArtifactReferences(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactReferencePage, error)
+	PlanArtifactGarbageCollection(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactGCPlan, error)
+	ArtifactGarbageCollectionStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactGCStatus, error)
+	QuarantineArtifacts(context.Context, portalapi.Principal, portalapi.ManagementTarget, QuarantineArtifactsRequest) (ArtifactGCStatus, error)
+	SweepArtifacts(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactGCStatus, error)
 	SetArtifactLifecycle(context.Context, portalapi.Principal, portalapi.ManagementTarget, ArtifactLifecycleRequest) (ArtifactLifecycleResult, error)
 	ArtifactMigrationStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryMigration, error)
 	PrepareArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, PrepareArtifactMigrationRequest) (ArtifactRepositoryMigration, error)

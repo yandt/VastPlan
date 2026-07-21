@@ -99,4 +99,21 @@ describe("PlatformAdminClient", () => {
     await client.listArtifactReferences();
     expect(calls).toEqual(["/v1/portals/operations/platform/services/artifacts/artifacts/references"]);
   });
+
+  it("keeps artifact GC on fixed read and CSRF-protected mutation routes", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const fetcher: PlatformFetch = async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { revision: 1, items: [] } };
+    };
+    const client = new PlatformAdminClient(fetcher, "operations", "artifacts");
+    await client.planArtifactGarbageCollection();
+    await client.quarantineArtifacts("a".repeat(64), 72);
+    expect(calls).toEqual([
+      { path: "/v1/portals/operations/platform/services/artifacts/artifacts/gc/plan", method: "GET", body: undefined },
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/artifacts/artifacts/gc/quarantine", method: "POST", body: JSON.stringify({ planId: "a".repeat(64), graceHours: 72 }) },
+    ]);
+    expect(() => client.quarantineArtifacts("bad", 72)).toThrowError(PlatformAdminError);
+  });
 });

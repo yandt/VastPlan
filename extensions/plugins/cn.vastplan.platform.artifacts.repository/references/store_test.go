@@ -71,6 +71,29 @@ func TestStoreRejectsPublisherTakeoverAndReportsMissingOwners(t *testing.T) {
 	}
 }
 
+func TestStorePreservesEmptySnapshotDigestAcrossRestart(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repository")
+	store, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := artifactreference.Seal(pluginv1.ArtifactReferenceSnapshot{OwnerKind: artifactreference.OwnerSeed, OwnerID: "seed/primary", Generation: 1, References: []pluginv1.ArtifactReference{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.Put("system", "bootstrap-inventory/primary", value, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(root)
+	if err != nil {
+		t.Fatalf("空引用快照必须保留 [] 与摘要语义: %v", err)
+	}
+	_, snapshots := reopened.List()
+	if len(snapshots) != 1 || snapshots[0].Value.References == nil {
+		t.Fatalf("空引用快照不应退化为 null: %+v", snapshots)
+	}
+}
+
 func sealed(t *testing.T, generation uint64, ttl uint32, withReference bool) pluginv1.ArtifactReferenceSnapshot {
 	t.Helper()
 	value := pluginv1.ArtifactReferenceSnapshot{OwnerKind: artifactreference.OwnerAssignmentActive, OwnerID: "platform/node-a", Generation: generation, TTLSeconds: ttl, References: []pluginv1.ArtifactReference{}}

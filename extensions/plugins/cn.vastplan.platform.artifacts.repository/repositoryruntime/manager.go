@@ -20,6 +20,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/garbagecollection"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/references"
 )
 
@@ -75,6 +76,7 @@ type repositorySet struct {
 	adapter pluginservice.HTTPRepositoryAdapter
 	catalog *catalog.Store
 	refs    *references.Store
+	gc      *garbagecollection.Store
 }
 
 type Manager struct {
@@ -140,6 +142,14 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 	if active == nil {
 		return pluginv1.Artifact{}, errors.New("活动制品仓库不可用")
 	}
+	var attestation pluginservice.Attestation
+	if err := json.Unmarshal(attestationRaw, &attestation); err != nil {
+		return pluginv1.Artifact{}, errors.New("解析待发布制品证明失败")
+	}
+	ref := pluginv1.ArtifactRef{PluginID: attestation.Artifact.PluginID, Version: attestation.Artifact.Version, Channel: attestation.Artifact.Channel}
+	if prior, ok := active.catalog.Lookup(ref); ok && active.gc.IsRetired(prior.Ref, prior.SHA256) {
+		return pluginv1.Artifact{}, errors.New("已进入 GC retirement 的不可变 ref 禁止重新发布")
+	}
 	if mirror != nil {
 		if _, err := mirror.publish(attestationRaw, packageBytes); err != nil {
 			m.recordMigrationError(fmt.Errorf("观察卷镜像发布失败: %w", err))
@@ -165,6 +175,9 @@ func (m *Manager) SetLifecycle(request catalog.LifecycleRequest, occurredAt time
 	if active == nil {
 		return catalog.Entry{}, 0, errors.New("活动制品仓库不可用")
 	}
+	if entry, ok := active.catalog.Lookup(request.Ref); ok && active.gc.IsRetired(entry.Ref, entry.SHA256) && request.Status != catalog.LifecycleYanked && request.Status != catalog.LifecycleRevoked {
+		return catalog.Entry{}, 0, errors.New("已进入 GC retirement 的制品不能恢复为可解析状态")
+	}
 	if mirror != nil {
 		if _, _, err := mirror.catalog.SetLifecycle(request, occurredAt); err != nil {
 			m.recordMigrationError(fmt.Errorf("观察卷生命周期镜像失败: %w", err))
@@ -186,6 +199,11 @@ func (m *Manager) PutReferences(tenantID, publisherID string, value pluginv1.Art
 	m.mu.RUnlock()
 	if active == nil {
 		return references.Snapshot{}, 0, errors.New("活动制品仓库不可用")
+	}
+	for _, reference := range value.References {
+		if active.gc.IsRetired(reference.Ref, reference.SHA256) {
+			return references.Snapshot{}, 0, errors.New("引用快照包含已隔离或清扫的制品")
+		}
 	}
 	bootstrapReference := value.OwnerKind == artifactreference.OwnerSeed || value.OwnerKind == artifactreference.OwnerLastKnownGood
 	if !bootstrapReference {
@@ -475,7 +493,14 @@ func (m *Manager) openSet(root string) (*repositorySet, error) {
 		return nil, err
 	}
 	signed := &pluginservice.SignedRepository{Local: local, Trust: m.trust}
-	store, err := catalog.Open(root, signed)
+	gcStore, err := garbagecollection.Open(root)
+	if err != nil {
+		return nil, err
+	}
+	if err := gcStore.Recover(local, time.Now().UTC()); err != nil {
+		return nil, err
+	}
+	store, err := catalog.Open(root, signed, gcStore)
 	if err != nil {
 		return nil, err
 	}
@@ -483,7 +508,7 @@ func (m *Manager) openSet(root string) (*repositorySet, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &repositorySet{root: filepath.Clean(root), signed: signed, adapter: pluginservice.HTTPRepositoryAdapter{Repository: signed}, catalog: store, refs: referenceStore}, nil
+	return &repositorySet{root: filepath.Clean(root), signed: signed, adapter: pluginservice.HTTPRepositoryAdapter{Repository: signed}, catalog: store, refs: referenceStore, gc: gcStore}, nil
 }
 
 func (s *repositorySet) publish(attestationRaw, packageBytes []byte) (pluginservice.Artifact, error) {
