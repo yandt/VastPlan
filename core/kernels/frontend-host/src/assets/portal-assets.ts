@@ -3,6 +3,7 @@ import { lstat, opendir, readFile, realpath, stat } from "node:fs/promises";
 import { extname, relative, resolve, sep } from "node:path";
 
 export const portalNoncePlaceholder = "__VASTPLAN_CSP_NONCE__";
+const portalRootMarker = '<div id="vastplan-portal" aria-live="polite"></div>';
 const maxAssetFiles = 512;
 const maxAssetBytes = 64 * 1024 * 1024;
 
@@ -27,6 +28,7 @@ export class PortalAssets {
     if (!indexStats.isFile() || indexStats.isSymbolicLink()) throw new Error("Portal index.html 必须是普通文件");
     const index = await readFile(indexPath);
     if (!index.includes(portalNoncePlaceholder)) throw new Error("Portal index.html 缺少 CSP nonce 占位符");
+		if (!index.includes(portalRootMarker)) throw new Error("Portal index.html 缺少 SSR 宿主标记");
 
     const assets = new Map<string, PortalAsset>();
     let totalBytes = index.byteLength;
@@ -45,9 +47,14 @@ export class PortalAssets {
     return new PortalAssets(Buffer.from(index), assets);
   }
 
-  public renderIndex(): { body: Buffer; nonce: string } {
+  public renderIndex(ssrHTML?: string): { body: Buffer; nonce: string } {
     const nonce = randomBytes(24).toString("base64url");
-    return { body: Buffer.from(this.index.toString("utf8").replaceAll(portalNoncePlaceholder, nonce)), nonce };
+		let html = this.index.toString("utf8").replaceAll(portalNoncePlaceholder, nonce);
+		if (ssrHTML !== undefined) {
+			if (!html.includes(portalRootMarker)) throw new Error("Portal index.html 缺少 SSR 宿主标记");
+			html = html.replace(portalRootMarker, `<div id="vastplan-portal" aria-live="polite"><template shadowrootmode="open"><div id="vastplan-portal-root">${ssrHTML}</div></template></div>`);
+		}
+		return { body: Buffer.from(html), nonce };
   }
 
   public get(name: string): PortalAsset | undefined {

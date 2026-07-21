@@ -15,6 +15,8 @@ describe("PortalAssets", () => {
     expect(first.nonce).not.toBe(second.nonce);
     expect(first.body.toString()).toContain(first.nonce);
     expect(first.body.toString()).not.toContain(portalNoncePlaceholder);
+		const rendered = assets.renderIndex('<main aria-busy="true">VastPlan</main>').body.toString();
+		expect(rendered).toContain('<template shadowrootmode="open"><div id="vastplan-portal-root"><main aria-busy="true">VastPlan</main>');
   });
 
   it("rejects symbolic links at every static trust boundary", async () => {

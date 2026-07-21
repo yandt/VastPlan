@@ -29,11 +29,11 @@ func cloneFrontendRuntime(runtime portalapi.RuntimeSpec) portalapi.RuntimeSpec {
 
 func cloneFrontendModuleGraph(graph portalapi.FrontendModuleGraph) portalapi.FrontendModuleGraph {
 	cloned := graph
-	cloned.Externals = append([]string(nil), graph.Externals...)
+	cloned.Externals = append([]string{}, graph.Externals...)
 	cloned.Nodes = make([]portalapi.FrontendModuleNode, len(graph.Nodes))
 	for index, node := range graph.Nodes {
 		clonedNode := node
-		clonedNode.Dependencies = append([]portalapi.FrontendModuleDependency(nil), node.Dependencies...)
+		clonedNode.Dependencies = append([]portalapi.FrontendModuleDependency{}, node.Dependencies...)
 		cloned.Nodes[index] = clonedNode
 	}
 	return cloned

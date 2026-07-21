@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
 import { createFrontendModuleGraph } from "./frontend-module-graph.mjs";
+import { buildFrontendServerGraph } from "./frontend-server-build.mjs";
 
 const outputRoot = option("--out-dir");
 const manifestPath = option("--manifest");
@@ -19,9 +20,6 @@ const common = {
   external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
 };
 const allowedExternals = new Set(common.external);
-// Server Module Graph 只允许 React SSR 实现所需的 Node.js 内置模块。
-// 该集合也是可信 Worker 的导入边界，不能扩展为任意 npm 依赖。
-const serverAllowedExternals = new Set(["stream", "util", "node:stream", "node:util"]);
 
 const plugins = await discoverFrontendPlugins();
 
@@ -54,18 +52,7 @@ for (const { id, entry, source, serverEntry, serverSource, deferred, pluginRoot 
   let serverGraph;
   let serverGraphFile;
   if (serverEntry !== undefined && serverSource !== undefined) {
-    const serverOutfile = resolve(buildRoot, serverEntry);
-    const serverOutdir = dirname(serverOutfile);
-    await mkdir(serverOutdir, { recursive: true });
-    const serverEntryName = basename(serverEntry, extname(serverEntry));
-    const serverResult = await build({
-      bundle: true, format: "esm", platform: "node", target: "node22", legalComments: "none", minify: true,
-      entryPoints: { [serverEntryName]: serverSource }, outdir: serverOutdir, entryNames: serverEntryName,
-      chunkNames: "server-chunks/[name]-[hash]", splitting: true, metafile: true, outExtension: { ".js": extname(serverEntry) },
-    });
-    serverGraph = await createFrontendModuleGraph({ target: "server", pluginRoot: buildRoot, entry: serverEntry, metafile: serverResult.metafile, allowedExternals: serverAllowedExternals });
-    serverGraphFile = resolve(serverOutdir, "vastplan.server-graph.json");
-    await writeFile(serverGraphFile, `${JSON.stringify(serverGraph, null, 2)}\n`);
+		({ graph: serverGraph, graphFile: serverGraphFile } = await buildFrontendServerGraph({ buildRoot, serverEntry, serverSource }));
   }
   if (id === "cn.vastplan.foundation.frontend.render.adapter.arco") {
     const result = spawnSync(process.execPath, ["engineering/tools/check-arco-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ARCO_BUNDLE_FILE: outfile } });

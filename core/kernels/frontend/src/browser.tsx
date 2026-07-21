@@ -8,8 +8,11 @@ if (host === null) {
 // The Portal owns one shadow tree. Framework CSS and ordinary plugin selectors
 // cannot escape into a surrounding product page; plugins never receive host.
 const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
-const mount = document.createElement("div");
-mount.id = "vastplan-portal-root";
-shadow.replaceChildren(mount);
+let mount = shadow.getElementById("vastplan-portal-root");
+if (mount === null) {
+  mount = document.createElement("div");
+  mount.id = "vastplan-portal-root";
+  shadow.replaceChildren(mount);
+}
 
 void bootstrapPortal({ element: mount });

@@ -1093,7 +1093,7 @@ func publishPortal(baseURL string) error {
 	if err != nil || status != http.StatusOK {
 		return fmt.Errorf("runtime status=%d body=%s: %w", status, raw, err)
 	}
-	return nil
+	return verifyPortalSSR(client, baseURL, devAdminToken)
 }
 
 func publishManagedService(baseURL string) error {

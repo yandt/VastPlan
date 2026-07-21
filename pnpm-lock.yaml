@@ -57,6 +57,9 @@ importers:
       '@vastplan/addressing-node':
         specifier: workspace:*
         version: link:../../../extensions/sdk/node/addressing
+      '@vastplan/frontend-engine-contract':
+        specifier: workspace:*
+        version: link:../../../extensions/sdk/ts/frontend-engine-contract
     devDependencies:
       '@types/node':
         specifier: ^22.15.29

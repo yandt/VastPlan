@@ -6,6 +6,7 @@ import type { InteractionPort } from "../capabilities/interaction-client";
 import type { PlatformCapabilityPort } from "../capabilities/platform-management-client";
 import type { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
 import type { PortalDeliveryStore } from "../runtime/portal-delivery-store";
+import type { PortalSSRPort } from "../runtime/portal-ssr-coordinator";
 import { createAPIHandler } from "./api-handler";
 import { setBaseSecurityHeaders, setIndexSecurityHeaders } from "./security-headers";
 
@@ -17,6 +18,7 @@ export interface PortalHandlerOptions {
   interaction?: InteractionPort;
   platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort };
   delivery?: PortalDeliveryStore;
+	ssr?: PortalSSRPort;
 }
 
 export function createPortalHandler(options: PortalHandlerOptions): (request: IncomingMessage, response: ServerResponse) => void {
@@ -41,12 +43,26 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     if (method !== "GET" && method !== "HEAD") return sendEmpty(response, 405, { Allow: "GET, HEAD" });
     if (path === "/healthz" || path === "/readyz") return sendText(response, method, 200, "ok\n");
     if (path.startsWith("/assets/")) return serveAsset(options.assets, path.slice("/assets/".length), method, request, response);
-    const index = options.assets.renderIndex();
-    setIndexSecurityHeaders(response, index.nonce);
-    response.statusCode = 200;
-    if (method === "GET") response.end(index.body);
-    else response.end();
+		void serveIndex(options.assets, options.ssr, request, response, method, path);
   };
+}
+
+async function serveIndex(assets: PortalAssets, ssr: PortalSSRPort | undefined, request: IncomingMessage, response: ServerResponse, method: string, path: string): Promise<void> {
+	let html: string | undefined;
+	if (method === "GET" && ssr !== undefined) {
+		try {
+			html = (await ssr.render(request, path))?.html;
+			response.setHeader("X-VastPlan-SSR", html === undefined ? "bypass" : "rendered");
+		} catch (error) {
+			response.setHeader("X-VastPlan-SSR", "fallback");
+			process.stderr.write(`${JSON.stringify({ level: "error", message: "portal ssr fallback", error: error instanceof Error ? error.message : String(error) })}\n`);
+		}
+	}
+	const index = assets.renderIndex(html);
+	setIndexSecurityHeaders(response, index.nonce);
+	response.statusCode = 200;
+	if (method === "GET") response.end(index.body);
+	else response.end();
 }
 
 function requestPath(value: string | undefined): string | undefined {

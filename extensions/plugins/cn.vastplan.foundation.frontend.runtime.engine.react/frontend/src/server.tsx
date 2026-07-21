@@ -5,13 +5,12 @@ import type { FrontendServerRenderInput, FrontendServerRuntime } from "@vastplan
 const serverRuntime: FrontendServerRuntime = Object.freeze({
   id: "ui.runtime.engine.server",
   render(input: FrontendServerRenderInput) {
-    const title = typeof input.branding.title === "string" ? input.branding.title : "VastPlan";
-    const html = renderToStaticMarkup(createElement("div", {
-      "data-vastplan-ssr-generation": String(input.generation),
-      "data-vastplan-portal": input.portalId,
-      "data-vastplan-path": input.path,
-      lang: input.locale,
-    }, createElement("strong", null, title), createElement("p", null, input.locale === "zh-CN" ? "正在装配平台模块…" : "Preparing platform modules…")));
+    const chinese = input.locale.toLowerCase().startsWith("zh");
+    const html = renderToStaticMarkup(createElement("main", {
+      "aria-busy": "true",
+      style: { fontFamily: "system-ui", minHeight: "100vh", display: "grid", placeItems: "center", background: "#f7f8fa", color: "#4e5969" },
+    }, createElement("div", null, createElement("strong", null, "VastPlan"), createElement("p", null,
+      chinese ? "正在验证并装配平台模块…" : "Verifying and assembling platform modules…"))));
     return { html };
   },
 });

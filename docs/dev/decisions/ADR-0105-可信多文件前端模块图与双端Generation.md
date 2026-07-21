@@ -37,4 +37,5 @@
 - Node Portal Kernel 冷预取会在提交本地 snapshot 前同时复核 browser/server 两面的全部对象；公开 Runtime 与私有 Server Runtime 使用分离读取端口，服务端代码不会进入 `/v1/portal-runtime` 或 `/v1/portal-modules`。
 - 已完成 Browser Loader 对完整 DAG 的并行下载、摘要复算、响应绑定、受控 externals、依赖闭包、循环与 64 层深度拒绝、64 MiB 总量限制、相对 Chunk Blob URL 重写及入口导入。
 - 每个 Portal Generation 独占并释放其 Blob URL；候选装配失败、预检结束、替换旧代和关闭时均执行清理。
-- React Runtime Engine 已声明并构建首个签名 `frontendServer` 入口，构建器和打包器会生成并冻结双图。尚未完成 Server Worker 的 prepare/render/drain 与 Browser Generation 原子提交；该部分与 Node Portal Kernel 的 Addressing/BFF 接管继续按 ADR-0103 实施。
+- React Runtime Engine 已声明并构建首个签名 `frontendServer` 入口。专用 Server 构建器通过 `createRequire` 仅桥接签名图允许的 Node 内置模块，构建后测试必须真实 import 并执行 React SSR，不能只检查静态图。
+- Server Worker 已实现 prepare、健康 render、原子提交、在途请求 drain、dispose、超时终止与内存/栈上限。SSR 结果限制为 1 MiB 并拒绝脚本或逃逸声明式 Shadow DOM 的 `</template>`；浏览器只 hydration 同一启动视图。当前双端提交的 Server 一面已完成，Browser 功能 Generation 继续沿用既有事务管理器；Host Epoch 仍协调跨端不兼容升级。

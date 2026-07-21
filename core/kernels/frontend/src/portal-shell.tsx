@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { PortalI18nProvider, message, usePortalI18n, usePortalUI, type PluginLocalization, type PortalLocalizationPolicy } from "@vastplan/ui-primitives";
 import { VerifiedFrontendPluginLoader, parsePortalRuntimeSpec, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
 import { startPortalDevelopmentUpdates } from "./portal-development";
@@ -25,7 +25,8 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   const pathname = options.pathname ?? globalThis.location?.pathname ?? "/";
   const endpoint = options.runtimeEndpoint ?? "/v1/portal-runtime";
   const recoveryEndpoint = options.recoveryEndpoint ?? "/v1/portal-recovery";
-  const root = createRoot(options.element);
+	const hydrated = options.element.hasChildNodes();
+	const root = hydrated ? hydrateRoot(options.element, <PortalStarting />) : createRoot(options.element);
   let prepared: PreparedPortal | undefined;
   let recoveryMode = false;
   let developmentError: string | undefined;
@@ -71,7 +72,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
       renderApplication();
     }
   };
-  root.render(<PortalStarting />);
+	if (!hydrated) root.render(<PortalStarting />);
   try {
     currentSpec = await fetchRuntimeSpec(fetcher, endpoint, pathname);
     await manager.start(currentSpec);

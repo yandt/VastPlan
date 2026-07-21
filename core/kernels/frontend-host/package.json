@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node22 --legal-comments=none --outfile=dist/portal-host.cjs",
+    "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
@@ -15,6 +15,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
-    "@vastplan/addressing-node": "workspace:*"
+    "@vastplan/addressing-node": "workspace:*",
+    "@vastplan/frontend-engine-contract": "workspace:*"
   }
 }

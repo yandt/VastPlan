@@ -3,6 +3,7 @@ package edge
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -102,6 +103,13 @@ func TestFrontendDeliverySealsServerGraphFromBrowserAndPrefetchesIt(t *testing.T
 	}
 	if err := origin.putSealed("tenant-a", spec, portalapi.RuntimeSpec{Portal: spec, ModuleGraphs: []portalapi.FrontendModuleGraph{browserGraph}}, serverRuntimeSpec{ModuleGraphs: []portalapi.FrontendModuleGraph{serverGraph}}, assets); err != nil {
 		t.Fatal(err)
+	}
+	snapshotRaw, err := os.ReadFile(origin.snapshotPath(deliveryKey("tenant-a", spec.ID, spec.Revision)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(snapshotRaw), `"externals":null`) || strings.Contains(string(snapshotRaw), `"dependencies":null`) {
+		t.Fatalf("Module Graph 的合法空集合不得在不可变快照中退化为 null: %s", snapshotRaw)
 	}
 	if _, err := origin.module("tenant-a", spec, serverSHA); err == nil || !strings.Contains(err.Error(), "未授权") {
 		t.Fatalf("浏览器对象接口不得读取 server graph: %v", err)

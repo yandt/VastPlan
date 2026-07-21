@@ -404,13 +404,14 @@ build_orchestrator() {
 
 portal_host_needs_build() {
   local output="$ROOT/core/kernels/frontend-host/dist/portal-host.cjs"
-  if [ ! -f "$output" ]; then
+  local worker="$ROOT/core/kernels/frontend-host/dist/server-generation-worker.cjs"
+  if [ ! -f "$output" ] || [ ! -f "$worker" ]; then
     return 0
   fi
-  if [ "$ROOT/core/kernels/frontend-host/package.json" -nt "$output" ] || [ "$ROOT/pnpm-lock.yaml" -nt "$output" ]; then
+  if [ "$ROOT/core/kernels/frontend-host/package.json" -nt "$output" ] || [ "$ROOT/core/kernels/frontend-host/build.mjs" -nt "$output" ] || [ "$ROOT/pnpm-lock.yaml" -nt "$output" ]; then
     return 0
   fi
-  find "$ROOT/core/kernels/frontend-host/src" "$ROOT/extensions/sdk/node/addressing/src" -type f \( -name '*.ts' -o -name '*.json' \) -newer "$output" -print -quit | grep -q .
+  find "$ROOT/core/kernels/frontend-host/src" "$ROOT/extensions/sdk/node/addressing/src" "$ROOT/extensions/sdk/ts/frontend-engine-contract/src" -type f \( -name '*.ts' -o -name '*.json' \) -newer "$output" -print -quit | grep -q .
 }
 
 build_portal_host() {

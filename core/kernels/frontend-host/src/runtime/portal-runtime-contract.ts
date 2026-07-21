@@ -178,17 +178,30 @@ function validateServerRuntime(runtime: ServerRuntimeSpec): void {
 
 function validateGraph(graph: FrontendModuleGraph): void {
 	if (!nonempty(graph.id) || !nonempty(graph.version) || !nonempty(graph.entry) || !digest(graph.digest) || !digest(graph.packageSha256)
-		|| !Array.isArray(graph.externals) || graph.externals.some((external) => !nonempty(external)) || !Array.isArray(graph.nodes) || graph.nodes.length === 0 || graph.nodes.length > 1024) {
+		|| !Array.isArray(graph.externals) || graph.externals.length > 32 || new Set(graph.externals).size !== graph.externals.length || graph.externals.some((external) => !nonempty(external))
+		|| !Array.isArray(graph.nodes) || graph.nodes.length === 0 || graph.nodes.length > 1024) {
 		throw new PortalRuntimeContractError("Portal Module Graph 无效");
 	}
 	const paths = new Set<string>();
+	const digests = new Set<string>();
 	for (const node of graph.nodes) {
-		if (!safeModulePath(node.path) || !Number.isSafeInteger(node.size) || node.size < 0 || !digest(node.sha256) || paths.has(node.path)) {
+		if (!safeModulePath(node.path) || !Number.isSafeInteger(node.size) || node.size < 1 || node.size > 16 << 20 || !digest(node.sha256) || paths.has(node.path) || digests.has(node.sha256)
+			|| !Array.isArray(node.dependencies) || node.dependencies.length > 128 || !nonempty(node.purpose)) {
 			throw new PortalRuntimeContractError("Portal Module Graph 节点无效");
 		}
 		paths.add(node.path);
+		digests.add(node.sha256);
 	}
-	if (!paths.has(graph.entry)) throw new PortalRuntimeContractError("Portal Module Graph 缺少入口节点");
+	if (graph.nodes.find((node) => node.path === graph.entry)?.purpose !== "entry") throw new PortalRuntimeContractError("Portal Module Graph 缺少入口节点");
+	for (const node of graph.nodes) {
+		const specifiers = new Set<string>();
+		for (const dependency of node.dependencies ?? []) {
+			if (!safeSpecifier(dependency.specifier) || !paths.has(dependency.path) || dependency.path === node.path || !["static", "dynamic", "asset"].includes(dependency.kind) || specifiers.has(dependency.specifier)) {
+				throw new PortalRuntimeContractError("Portal Module Graph 依赖闭包无效");
+			}
+			specifiers.add(dependency.specifier);
+		}
+	}
 }
 
 function validateServerDescriptor(value: Readonly<Record<string, unknown>>, mediaType: unknown): void {
@@ -221,6 +234,7 @@ function digest(value: unknown): value is string { return typeof value === "stri
 function safeModulePath(value: unknown): value is string {
 	return nonempty(value) && !value.startsWith("/") && !value.includes("\\") && !value.split("/").some((part) => part === "" || part === "." || part === "..");
 }
+function safeSpecifier(value: unknown): value is string { return nonempty(value) && value.length <= 512 && /^[A-Za-z0-9._/-]+$/.test(value); }
 
 function stableJSON(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJSON).join(",")}]`;

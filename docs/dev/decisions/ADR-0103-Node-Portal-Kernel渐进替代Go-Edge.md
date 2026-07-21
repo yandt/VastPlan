@@ -48,4 +48,5 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - RuntimeSpec、Recovery、SSE 更新与内容对象端点已迁移。Node 兼容读取 Go 物化的不可变快照，并用 Go/Node golden 锁定 `PortalSpec` 摘要；当前 Activation、快照、对象字节和 URL revision/digest/media type 必须全部一致。冷填充先验证并写入全部对象、最后原子暴露 snapshot；Recovery 只能读取服务端选择的最新 Superseded revision。更新监视器按 tenant/portal 共享且无订阅时停止，只有新快照已就绪才广播。
 - Portal Composer 与 Interaction Broker 已进入受调度的 Backend 基础服务单元；Node Portal Kernel 不再本地复制插件状态。Catalog validate/materialize、测试制品复核和引用发布作为四个窄 `kernel.service` 注入可信 Go 宿主，Composer 只获得校验结论与精确引用，仓库凭据、验签密钥和包字节不进入插件。开发编排已切换为 Node Portal Kernel，并使用持久 JetStream、三份独立签名传输身份与 8 单元平台 Profile 验证真实 Addressing 链路。
 - 插件 tar.gz 已改为确定性归档：固定顺序、mtime、uid/gid、模式和 gzip 元数据；同一内容可复现为同一 SHA，避免回滚历史把未变化版本误判成同 ref 多摘要。
-- 后续仍需完成服务端 Generation/SSR Worker、真实企业 OIDC + NATS mTLS 权限对照 E2E；这些完成后删除 Go Edge 入口。
+- 服务端 Generation/SSR Worker 已完成：签名 Server Graph 只进入密封快照，Node 将候选物化到私有目录并在受资源限制的 Worker 中执行 `prepare/render/dispose`。候选先健康渲染再原子替换，旧代等待在途请求 drain 后销毁；页面通过声明式 Shadow DOM 输出首屏并由 React `hydrateRoot` 接管。开发平台启动会真实请求页面并要求 `X-VastPlan-SSR: rendered`，CSR fallback 不能冒充就绪。
+- 后续仍需完成真实企业 OIDC + NATS mTLS 权限对照 E2E；完成后删除 Go Edge 入口。

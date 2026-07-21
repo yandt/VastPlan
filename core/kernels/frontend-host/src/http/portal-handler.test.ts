@@ -6,6 +6,7 @@ import { PortalAssets } from "../assets/portal-assets";
 import { FileIdentityProvider } from "../identity/file-identity-provider";
 import type { IdentityProvider } from "../identity/identity-provider";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
+import type { PortalSSRPort } from "../runtime/portal-ssr-coordinator";
 import { createPortalFixture } from "../testing/portal-fixture";
 import { writeSessionFixture } from "../testing/session-fixture";
 import { createPortalHandler } from "./portal-handler";
@@ -82,11 +83,20 @@ describe("createPortalHandler", () => {
     expect(unknown.status).toBe(404);
     expect(calls).toEqual(["tenant-a/list", "tenant-a/governance"]);
   });
+
+	it("embeds authenticated SSR output in a declarative shadow root", async () => {
+		const ssr: PortalSSRPort = { async render() { return { html: '<main aria-busy="true">VastPlan</main>' }; } };
+		const origin = await startFixtureServer(undefined, undefined, ssr);
+		const response = await fetch(`${origin}/operations`);
+		expect(response.headers.get("x-vastplan-ssr")).toBe("rendered");
+		const body = await response.text();
+		expect(body).toContain('<template shadowrootmode="open"><div id="vastplan-portal-root"><main aria-busy="true">VastPlan</main>');
+	});
 });
 
-async function startFixtureServer(identity?: IdentityProvider, composer?: PortalComposerPort): Promise<string> {
+async function startFixtureServer(identity?: IdentityProvider, composer?: PortalComposerPort, ssr?: PortalSSRPort): Promise<string> {
   const assets = await PortalAssets.load(await createPortalFixture());
-  const server = createServer(createPortalHandler({ assets, identity, secureCookies: false, ...(composer === undefined ? {} : { composer }) }));
+  const server = createServer(createPortalHandler({ assets, identity, secureCookies: false, ...(composer === undefined ? {} : { composer }), ...(ssr === undefined ? {} : { ssr }) }));
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
