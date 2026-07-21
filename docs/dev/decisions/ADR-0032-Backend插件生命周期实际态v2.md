@@ -57,6 +57,8 @@ Reconciler 在下载、激活、排空、停用等有副作用的长操作前后
 
 Actual KV key 固定为 `tenant/deployment/actual/node` 作用域，与节点租约和 assignment 一致。同一物理节点为多个部署运行 Node Agent 时，实际态互不覆盖；Controller 只消费自身 deployment 前缀的 Node/Actual Watch 事件。
 
+开发与运维启动门禁不得仅按持久 ActualState 中的 `active/ready` 数量判定成功。门禁必须同时确认该快照由本次 Node Agent 启动后重新写入，并且每个目标 unit 的 `candidate` 为空；否则上次运行的 Ready 或“旧实例仍服务、候选仍启动”的中间态会产生假就绪。
+
 ## 备选方案
 
 - **保留 `status` 并新增更多字符串**：改动较小，但无法阻止拼写漂移，也没有明确转换图。拒绝。

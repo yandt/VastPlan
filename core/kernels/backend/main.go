@@ -350,7 +350,7 @@ func runReconcile(args []string) (runErr error) {
 		if err != nil {
 			return err
 		}
-		if bootstrapInventory != nil {
+		if bootstrapInventory != nil && options.publishBootstrapReferences {
 			reconciler.BootstrapReferences, err = nodeagent.NewBootstrapArtifactReferencePublisher(plane.router, bootstrapInventory.RepositoryID)
 			if err != nil {
 				return err

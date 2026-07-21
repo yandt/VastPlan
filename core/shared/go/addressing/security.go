@@ -31,19 +31,21 @@ const (
 )
 
 // TransportIdentity 是跨节点传输层认可的工作负载身份。AllowDelegation 仅授予
-// 已验证边缘/节点代用户传递 Principal/Caller 的能力；未授予时接收端会清空
-// 自报 Principal，并把 Caller 重建为该工作负载。
+// 已验证边缘/节点代用户传递 Principal/Caller 的能力；AllowedSystemCallers 则
+// 逐项绑定可信宿主子身份。两者都未授予时接收端清空 Principal，并把 Caller
+// 重建为签名传输工作负载。
 type TransportIdentity struct {
-	Name                string   `json:"name"`
-	Role                string   `json:"role"`
-	PublicKey           string   `json:"publicKey"`
-	TenantID            string   `json:"tenantId,omitempty"`
-	NodeID              string   `json:"nodeId,omitempty"`
-	ServiceRoles        []string `json:"serviceRoles,omitempty"`
-	LogicalServices     []string `json:"logicalServices,omitempty"`
-	AllowedCapabilities []string `json:"allowedCapabilities"`
-	AllowGlobal         bool     `json:"allowGlobal,omitempty"`
-	AllowDelegation     bool     `json:"allowDelegation,omitempty"`
+	Name                 string   `json:"name"`
+	Role                 string   `json:"role"`
+	PublicKey            string   `json:"publicKey"`
+	TenantID             string   `json:"tenantId,omitempty"`
+	NodeID               string   `json:"nodeId,omitempty"`
+	ServiceRoles         []string `json:"serviceRoles,omitempty"`
+	LogicalServices      []string `json:"logicalServices,omitempty"`
+	AllowedCapabilities  []string `json:"allowedCapabilities"`
+	AllowedSystemCallers []string `json:"allowedSystemCallers,omitempty"`
+	AllowGlobal          bool     `json:"allowGlobal,omitempty"`
+	AllowDelegation      bool     `json:"allowDelegation,omitempty"`
 }
 
 type TransportTrustDocument struct {
@@ -115,6 +117,10 @@ func newTransportSecurity(seed []byte, document TransportTrustDocument) (*Transp
 		if len(identity.AllowedCapabilities) == 0 {
 			pair.Wipe()
 			return nil, fmt.Errorf("传输信任身份 %s 必须声明 allowedCapabilities", identity.Name)
+		}
+		if err := validateAllowedSystemCallers(identity); err != nil {
+			pair.Wipe()
+			return nil, err
 		}
 		if _, exists := security.trusted[identity.PublicKey]; exists {
 			pair.Wipe()
@@ -431,10 +437,13 @@ func authenticatedTransportTrustedContext(identity TransportIdentity, untrusted 
 		}
 		callCtx.TenantId = identity.TenantID
 	}
-	// Delegation may preserve an authenticated end-user/plugin/agent identity,
-	// but SYSTEM is transport authority and must never be self-asserted on the
-	// wire. Rebuild it from the NKey trust document even for delegating edges.
-	if !identity.AllowDelegation || callCtx.Caller == nil || callCtx.Caller.Kind == contractv1.CallerKind_CALLER_KIND_SYSTEM || callCtx.Caller.Kind == contractv1.CallerKind_CALLER_KIND_UNSPECIFIED {
+	allowedSystemCaller := callCtx.Caller != nil && callCtx.Caller.Kind == contractv1.CallerKind_CALLER_KIND_SYSTEM && containsExactIdentityValue(identity.AllowedSystemCallers, callCtx.Caller.Id)
+	if allowedSystemCaller {
+		// A host-only SYSTEM subidentity is preserved only when the signed trust
+		// document binds it exactly to this transport identity. Principal remains
+		// unavailable so the workload cannot masquerade as a user delegation.
+		callCtx.Principal = nil
+	} else if !identity.AllowDelegation || callCtx.Caller == nil || callCtx.Caller.Kind == contractv1.CallerKind_CALLER_KIND_SYSTEM || callCtx.Caller.Kind == contractv1.CallerKind_CALLER_KIND_UNSPECIFIED {
 		callCtx.Principal = nil
 		callCtx.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: identity.Name}
 	}

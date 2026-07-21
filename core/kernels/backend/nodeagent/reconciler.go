@@ -60,9 +60,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 	}
 
 	converged := r.isConverged(targets, actual)
-	if converged {
-		actual.AppliedRevision = desired.Revision
-	}
 	if err := r.checkpoint(&actual); err != nil {
 		return Result{}, err
 	}
@@ -92,6 +89,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 				_ = r.checkpoint(&actual)
 				return Result{Changed: changed, Converged: false, State: actual}, fmt.Errorf("安装目录垃圾回收失败: %w", err)
 			}
+		}
+		// AppliedRevision is the transaction commit marker consumed by the
+		// controller and startup gates. Runtime health alone is insufficient:
+		// reference protection, Bootstrap LKG and installer GC must all succeed
+		// before this revision can be reported as applied.
+		actual.AppliedRevision = desired.Revision
+		if err := r.checkpoint(&actual); err != nil {
+			return Result{Changed: changed, Converged: false, State: actual}, err
 		}
 	}
 	result := Result{Changed: changed, Converged: converged, State: actual}
@@ -570,11 +575,11 @@ func (r *Reconciler) validate() error {
 	if r.RequireArtifactReferences && r.References == nil {
 		return errors.New("托管制品源要求配置 Assignment 引用发布器")
 	}
-	if r.BootstrapInventory != nil && r.BootstrapReferences == nil {
-		return errors.New("Bootstrap Inventory 要求配置 Seed/LKG 引用发布器")
-	}
 	if r.BootstrapUpgrade != nil && r.BootstrapInventory == nil {
 		return errors.New("Bootstrap 自动升级要求配置初始 Inventory")
+	}
+	if r.BootstrapUpgrade != nil && r.BootstrapReferences == nil {
+		return errors.New("Bootstrap 自动升级要求配置 Seed/LKG 引用发布器")
 	}
 	return nil
 }

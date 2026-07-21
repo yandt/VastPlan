@@ -12,12 +12,14 @@ import (
 )
 
 type recordingAssignmentReferences struct {
-	values []pluginv1.ArtifactReferenceSnapshot
-	err    error
+	values  []pluginv1.ArtifactReferenceSnapshot
+	tenants []string
+	err     error
 }
 
-func (p *recordingAssignmentReferences) Publish(_ context.Context, _ string, value pluginv1.ArtifactReferenceSnapshot) error {
+func (p *recordingAssignmentReferences) Publish(_ context.Context, tenantID string, value pluginv1.ArtifactReferenceSnapshot) error {
 	p.values = append(p.values, value)
+	p.tenants = append(p.tenants, tenantID)
 	return p.err
 }
 
@@ -118,12 +120,34 @@ func TestBootstrapInventoryPublishesSeedAndLKGAfterRuntimeConverges(t *testing.T
 	want := desired(3, "1.0.0", true)
 	want.Metadata.Tenant = "tenant-a"
 	failed, err := reconciler.Reconcile(context.Background(), want)
-	if err == nil || failed.Converged || failed.State.BootstrapGeneration != 0 || len(bootstrapPublisher.values) != 1 || bootstrapPublisher.values[0].OwnerKind != "seed" {
+	if err == nil || failed.Converged || failed.State.AppliedRevision != 0 || failed.State.BootstrapGeneration != 0 || len(bootstrapPublisher.values) != 1 || bootstrapPublisher.values[0].OwnerKind != "seed" {
 		t.Fatalf("仓库未就绪时 Seed/LKG 发布必须保持未收敛: result=%+v snapshots=%+v err=%v", failed, bootstrapPublisher.values, err)
 	}
 	bootstrapPublisher.err = nil
 	retried, err := reconciler.Reconcile(context.Background(), want)
 	if err != nil || !retried.Converged || retried.State.BootstrapGeneration != 9 || len(bootstrapPublisher.values) != 3 || bootstrapPublisher.values[1].OwnerKind != "seed" || bootstrapPublisher.values[2].OwnerKind != "last-known-good" {
 		t.Fatalf("仓库恢复后 Seed/LKG 未以同 inventory 收敛: result=%+v snapshots=%+v err=%v", retried, bootstrapPublisher.values, err)
+	}
+	for _, tenantID := range bootstrapPublisher.tenants {
+		if tenantID != want.Metadata.Tenant {
+			t.Fatalf("Seed/LKG 必须使用节点期望态的可信租户，实际=%q 期望=%q", tenantID, want.Metadata.Tenant)
+		}
+	}
+}
+
+func TestBootstrapInventoryCanBeConsumedWithoutReferencePublisher(t *testing.T) {
+	runtime := newFakeRuntime()
+	reconciler := newTestReconciler(runtime, NewMemoryStateStore())
+	item := bootstrapinventory.Item{Ref: pluginv1.ArtifactRef{PluginID: "cn.vastplan.platform.artifacts.repository", Version: "1.0.0", Channel: "stable"}, SHA256: strings.Repeat("b", 64)}
+	inventory, err := bootstrapinventory.Normalize(bootstrapinventory.Inventory{Version: 1, Generation: 1, RepositoryID: "primary", Seed: []bootstrapinventory.Item{item}, LastKnownGood: []bootstrapinventory.Item{item}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconciler.BootstrapInventory = &inventory
+	want := desired(1, "1.0.0", true)
+	want.Metadata.Tenant = "tenant-a"
+	result, err := reconciler.Reconcile(context.Background(), want)
+	if err != nil || !result.Converged || result.State.BootstrapGeneration != 0 {
+		t.Fatalf("消费节点不应隐式取得 Seed/LKG 发布职责: result=%+v err=%v", result, err)
 	}
 }

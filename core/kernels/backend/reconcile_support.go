@@ -39,6 +39,7 @@ type reconcileOptions struct {
 	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                             string
 	natsAllowInsecure, natsBootstrap, allowDevelopmentPlugins                                               bool
 	bootstrapUpgrade                                                                                        bool
+	publishBootstrapReferences                                                                              bool
 	requireThirdPartyIsolation                                                                              bool
 	executionPolicy                                                                                         nodeagent.ExecutionPolicy
 	contextPolicy                                                                                           nodeagent.ContextPolicy
@@ -61,6 +62,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.bootstrapRepository, "bootstrap-repository", "", "预置签名种子仓库；精确命中时优先于远端源")
 	flags.StringVar(&options.bootstrapInventory, "bootstrap-inventory", "", "root-owned Bootstrap Inventory（Seed/LKG 精确引用与单调 generation）")
 	flags.BoolVar(&options.bootstrapUpgrade, "bootstrap-upgrade", false, "由可信宿主事务式镜像仓库关键插件并在健康后推进 LKG")
+	flags.BoolVar(&options.publishBootstrapReferences, "publish-bootstrap-references", false, "由本节点以信任文档授权的 SYSTEM 子身份发布 Seed/LKG 引用")
 	flags.StringVar(&options.runtimeRoot, "runtime-root", ".vastplan/runtime/plugins", "内容寻址安装目录")
 	flags.StringVar(&options.actualPath, "actual-state", ".vastplan/runtime/actual-state.json", "实际态报告文件")
 	flags.StringVar(&options.lockPath, "lock", "", "单实例锁文件；默认 <actual-state>.lock")
@@ -173,14 +175,14 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	if options.bootstrapInventory != "" && options.bootstrapRepository == "" {
 		return reconcileOptions{}, errors.New("-bootstrap-inventory 必须与 -bootstrap-repository 同时配置")
 	}
-	if options.bootstrapInventory != "" && options.natsURL == "" {
-		return reconcileOptions{}, errors.New("-bootstrap-inventory 必须接入控制面以发布 Seed/LKG 引用")
-	}
 	if options.repositoryURL != "" && options.bootstrapRepository != "" && options.bootstrapInventory == "" {
 		return reconcileOptions{}, errors.New("托管仓库与 Seed 后备源并用时必须提供 -bootstrap-inventory")
 	}
-	if options.bootstrapUpgrade && (options.bootstrapInventory == "" || options.bootstrapRepository == "" || options.repositoryURL == "") {
-		return reconcileOptions{}, errors.New("-bootstrap-upgrade 必须同时配置 Bootstrap Inventory、Seed 仓库与远端候选仓库")
+	if options.publishBootstrapReferences && (options.bootstrapInventory == "" || options.natsURL == "") {
+		return reconcileOptions{}, errors.New("-publish-bootstrap-references 必须同时配置 Bootstrap Inventory 与 NATS 控制面")
+	}
+	if options.bootstrapUpgrade && (options.bootstrapInventory == "" || options.bootstrapRepository == "" || options.repositoryURL == "" || !options.publishBootstrapReferences) {
+		return reconcileOptions{}, errors.New("-bootstrap-upgrade 必须同时配置 Bootstrap Inventory、Seed 仓库、远端候选仓库与引用发布职责")
 	}
 	if options.natsURL != "" && options.assignmentKey != "" {
 		assignmentNodeID, err := controlplane.AssignmentKeyNodeID(options.assignmentKey)

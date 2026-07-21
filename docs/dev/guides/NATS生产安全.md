@@ -89,7 +89,7 @@ bin/backend-kernel reconcile \
 
 承载 Deployment Manager 的节点改用独立的 `manager-node-N.seed`，其余参数相同。该角色只增加 Nodes bucket 读取能力，用于可信内核观察器判定已引导节点是否 Ready；不增加 Deployment、Desired 或 Assignment 写权。引导计划中的 `transportPublicKey` 必须是目标节点 transport seed 对应的公钥。
 
-未显式配置 `-transport-seed` 与 `-transport-trust` 时，控制面 Node Agent 会拒绝启动；仅本地开发可以显式使用 `-nats-allow-insecure` 绕过 NATS 与 addressing 的生产门禁。传输信封会绑定 subject、payload、时间戳和 nonce，接收端据此校验签名并重建可信调用身份；即使身份允许委托用户/插件，线上的 `SYSTEM` caller 也始终按签名 transport identity 重建，不能自报。JetStream 重投只跳过 nonce 重放检查，不跳过签名和身份校验。
+未显式配置 `-transport-seed` 与 `-transport-trust` 时，控制面 Node Agent 会拒绝启动；仅本地开发可以显式使用 `-nats-allow-insecure` 绕过 NATS 与 addressing 的生产门禁。传输信封会绑定 subject、payload、时间戳和 nonce，接收端据此校验签名并重建可信调用身份。默认情况下，线上的 `SYSTEM` caller 始终重建为签名 transport identity，不能自报；只有可信宿主创建、且在该 transport identity 的 `allowedSystemCallers` 中逐项精确列出的 SYSTEM 子身份可以保留，通配符、用户 Principal 和插件自报均无效。JetStream 重投只跳过 nonce 重放检查，不跳过签名和身份校验。
 
 `transport-trust.json` 中每个身份还必须显式声明调用边界：
 

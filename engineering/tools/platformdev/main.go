@@ -572,6 +572,8 @@ func (r *runtime) start(ctx context.Context) error {
 		"-transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
 	}
 	nodeArgs = append(nodeArgs, r.managedArtifactSourceArgs()...)
+	nodeArgs = append(nodeArgs, "-bootstrap-upgrade", "-publish-bootstrap-references")
+	platformNodeStartedAt := time.Now().UTC()
 	if _, err := r.startChild("node-agent", env, kernel, nodeArgs...); err != nil {
 		return err
 	}
@@ -591,7 +593,7 @@ func (r *runtime) start(ctx context.Context) error {
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
 	}
-	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), 8, 90*time.Second); err != nil {
+	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), 8, platformNodeStartedAt, 90*time.Second); err != nil {
 		return fmt.Errorf("平台 Backend 未收敛: %w", err)
 	}
 	if err := waitHTTP(ctx, "https://"+r.options.artifactListen, 30*time.Second, true); err != nil {
@@ -638,10 +640,11 @@ func (r *runtime) start(ctx context.Context) error {
 		"-transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
 	}
 	managedNodeArgs = append(managedNodeArgs, r.managedArtifactSourceArgs()...)
+	managedNodeStartedAt := time.Now().UTC()
 	if _, err := r.startChild("managed-node-agent", env, kernel, managedNodeArgs...); err != nil {
 		return err
 	}
-	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "managed-services-actual.json"), 1, 60*time.Second); err != nil {
+	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "managed-services-actual.json"), 1, managedNodeStartedAt, 60*time.Second); err != nil {
 		return fmt.Errorf("在线服务组合未收敛: %w", err)
 	}
 	if r.options.hot {
@@ -727,7 +730,6 @@ func (r *runtime) managedArtifactSourceArgs() []string {
 	return []string{
 		"-bootstrap-repository", filepath.Join(r.runDir, "repository"),
 		"-bootstrap-inventory", filepath.Join(r.runDir, "seed-inventory.json"),
-		"-bootstrap-upgrade",
 		"-repository-url", "https://" + r.options.artifactListen,
 		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
 		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
@@ -942,48 +944,6 @@ func firstChildExit(children []*child) <-chan error {
 		}()
 	}
 	return result
-}
-
-func waitForUnits(ctx context.Context, filename string, count int, timeout time.Duration) error {
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	var last string
-	for {
-		raw, err := os.ReadFile(filename)
-		if err == nil {
-			var state struct {
-				Units map[string]struct {
-					Phase     string `json:"phase"`
-					Readiness string `json:"readiness"`
-					LastError string `json:"last_error"`
-				} `json:"units"`
-			}
-			if json.Unmarshal(raw, &state) == nil {
-				active := 0
-				messages := make([]string, 0, len(state.Units))
-				for id, unit := range state.Units {
-					messages = append(messages, id+"="+unit.Phase+"/"+unit.Readiness+" "+unit.LastError)
-					if unit.Phase == "active" && (unit.Readiness == "ready" || unit.Readiness == "") {
-						active++
-					}
-				}
-				sort.Strings(messages)
-				last = strings.Join(messages, "; ")
-				if len(state.Units) == count && active == count {
-					return nil
-				}
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-deadline.C:
-			return fmt.Errorf("等待 %d 个 active unit 超时: %s", count, last)
-		case <-ticker.C:
-		}
-	}
 }
 
 func waitHTTP(ctx context.Context, endpoint string, timeout time.Duration, insecure bool) error {

@@ -212,3 +212,37 @@ func TestAuthenticatedTransportContextNeverDelegatesSystemIdentity(t *testing.T)
 		t.Fatalf("合法用户委托应保留: wire=%+v err=%v", trusted.Wire(), err)
 	}
 }
+
+func TestAuthenticatedTransportContextOnlyPreservesAllowlistedSystemIdentity(t *testing.T) {
+	identity := TransportIdentity{
+		Name: "node-agent/node-a", Role: "node", TenantID: "acme",
+		AllowedSystemCallers: []string{"bootstrap-inventory/primary"},
+	}
+	trusted, err := authenticatedTransportTrustedContext(identity, &contractv1.CallContext{
+		TenantId: "acme",
+		Caller:   &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "bootstrap-inventory/primary"},
+	})
+	if err != nil || trusted.Wire().GetCaller().GetId() != "bootstrap-inventory/primary" || trusted.Wire().GetPrincipal() != nil {
+		t.Fatalf("显式信任的宿主 SYSTEM 子身份应保留: wire=%+v err=%v", trusted.Wire(), err)
+	}
+	trusted, err = authenticatedTransportTrustedContext(identity, &contractv1.CallContext{
+		TenantId: "acme",
+		Caller:   &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "bootstrap-inventory/other"},
+	})
+	if err != nil || trusted.Wire().GetCaller().GetId() != identity.Name {
+		t.Fatalf("未列入信任文档的 SYSTEM 身份必须重建为 transport identity: wire=%+v err=%v", trusted.Wire(), err)
+	}
+}
+
+func TestTransportTrustRejectsWildcardSystemCaller(t *testing.T) {
+	pair, identity := testTransportIdentity(t, "node-a")
+	defer pair.Wipe()
+	seed, err := pair.Seed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity.AllowedSystemCallers = []string{"*"}
+	if _, err := newTransportSecurity(seed, TransportTrustDocument{Version: 1, Identities: []TransportIdentity{identity}}); err == nil {
+		t.Fatal("SYSTEM 子身份必须逐项精确授权，不能使用通配符")
+	}
+}

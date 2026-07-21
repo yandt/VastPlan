@@ -23,6 +23,7 @@ func writeDevelopmentTransportIdentities(secretsDir string) error {
 	if err != nil {
 		return err
 	}
+	node.AllowedSystemCallers = []string{"bootstrap-inventory/local-seed"}
 	portal, portalSeed, err := developmentTransportIdentity("portal-host", "edge", "portal-host")
 	if err != nil {
 		return err

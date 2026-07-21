@@ -80,7 +80,7 @@ func (r *Reconciler) publishBootstrapReferences(ctx context.Context, actual *Act
 		return nil
 	}
 	if r.BootstrapReferences == nil {
-		return errors.New("Bootstrap Inventory 缺少集群引用发布器")
+		return nil
 	}
 	inventory := *r.BootstrapInventory
 	if actual.BootstrapGeneration > inventory.Generation {
@@ -98,10 +98,14 @@ func (r *Reconciler) publishBootstrapReferences(ctx context.Context, actual *Act
 	if err != nil {
 		return err
 	}
-	if err := r.BootstrapReferences.Publish(ctx, "system", seed); err != nil {
+	tenantID := actual.ReferenceTenant
+	if tenantID == "" {
+		return errors.New("Bootstrap 引用缺少期望态租户")
+	}
+	if err := r.BootstrapReferences.Publish(ctx, tenantID, seed); err != nil {
 		return err
 	}
-	if err := r.BootstrapReferences.Publish(ctx, "system", lkg); err != nil {
+	if err := r.BootstrapReferences.Publish(ctx, tenantID, lkg); err != nil {
 		return err
 	}
 	actual.BootstrapGeneration = inventory.Generation
