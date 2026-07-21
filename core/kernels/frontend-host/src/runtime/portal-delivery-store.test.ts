@@ -36,4 +36,20 @@ describe("PortalDeliveryStore", () => {
     await expect(store.runtime("tenant-a", revision.spec)).rejects.toThrow(/摘要失配/);
     await expect(readFile(snapshotPath(fixture.cache, "tenant-a", "operations", 7))).rejects.toMatchObject({ code: "ENOENT" });
   });
+
+	it("prefetches sealed server objects without exposing them through the browser object API", async () => {
+		const fixture = await createPortalDeliveryFixture();
+		const revision = await writePortalDeliveryRevision(fixture, { revision: 8, id: "operations", tenantId: "tenant-a", route: "/operations" }, undefined,
+			"export default { render() { return { html: '' }; } };\n");
+		const store = await PortalDeliveryStore.open(fixture.cache, fixture.origin);
+		const serverDigest = revision.serverDigest!;
+
+		await expect(store.runtime("tenant-a", revision.spec)).resolves.not.toHaveProperty("server");
+		await expect(store.object("tenant-a", revision.spec, serverDigest)).rejects.toThrow(/未授权/);
+		const server = await store.serverRuntime("tenant-a", revision.spec);
+		expect(server.moduleGraphs?.[0]?.nodes[0]?.url).toBe(`server-object:${serverDigest}`);
+		const object = await store.serverObject("tenant-a", revision.spec, serverDigest);
+		expect(object.content).toEqual(Buffer.from(revision.serverContent!));
+		await expect(readFile(objectPath(fixture.cache, serverDigest))).resolves.toEqual(Buffer.from(revision.serverContent!));
+	});
 });

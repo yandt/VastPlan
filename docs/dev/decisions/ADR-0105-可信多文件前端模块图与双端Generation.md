@@ -30,10 +30,11 @@
 - 内容寻址对象数量增加，需要复用 ADR-0100 的引用与 GC 语义。
 - 单插件小改动仍生成新插件版本，但客户端只需下载新的可达文件。
 
-## 实施进展（2026-07-21）
+## 实施进展（2026-07-22）
 
 - 已完成 browser/server Module Graph Schema、Go/Node 规范化 digest、esbuild 图生成、打包时 Manifest 注入及 Artifact Trust 对包内实际字节的二次绑定。
-- 已完成 Go Catalog 对 Browser Graph 的物化、逐节点内容寻址交付、RuntimeSpec 投影、恢复版本 URL 和媒体类型响应；Server Graph 仍只保留在可信服务端边界。
+- 已完成 Go Catalog 对 Browser/Server Graph 的逐节点物化、摘要复核与不可变对象写入。Browser Graph 投影到公开 RuntimeSpec；Server Graph 只进入同一 revision 的密封交付区，使用 `server-object:` 私有定位符，浏览器对象 API 无法读取。
+- Node Portal Kernel 冷预取会在提交本地 snapshot 前同时复核 browser/server 两面的全部对象；公开 Runtime 与私有 Server Runtime 使用分离读取端口，服务端代码不会进入 `/v1/portal-runtime` 或 `/v1/portal-modules`。
 - 已完成 Browser Loader 对完整 DAG 的并行下载、摘要复算、响应绑定、受控 externals、依赖闭包、循环与 64 层深度拒绝、64 MiB 总量限制、相对 Chunk Blob URL 重写及入口导入。
 - 每个 Portal Generation 独占并释放其 Blob URL；候选装配失败、预检结束、替换旧代和关闭时均执行清理。
-- 尚未完成双端 Generation 的 Server Worker/SSR 一面；该部分与 Node Portal Kernel 的 Addressing/BFF 接管继续按 ADR-0103 实施。
+- React Runtime Engine 已声明并构建首个签名 `frontendServer` 入口，构建器和打包器会生成并冻结双图。尚未完成 Server Worker 的 prepare/render/drain 与 Browser Generation 原子提交；该部分与 Node Portal Kernel 的 Addressing/BFF 接管继续按 ADR-0103 实施。

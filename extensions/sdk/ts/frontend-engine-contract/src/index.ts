@@ -19,6 +19,36 @@ export interface FrontendRuntimeEngine {
   readonly capabilities: readonly FrontendEngineCapability[];
 }
 
+export interface FrontendServerRenderInput {
+  readonly generation: number;
+  readonly tenantId: string;
+  readonly portalId: string;
+  readonly path: string;
+  readonly locale: string;
+  readonly branding: Readonly<Record<string, unknown>>;
+}
+
+export interface FrontendServerRenderResult {
+  readonly html: string;
+  readonly head?: readonly string[];
+}
+
+export interface FrontendServerRuntime {
+  readonly id: "ui.runtime.engine.server";
+  prepare?(signal: AbortSignal): Promise<void> | void;
+  render(input: FrontendServerRenderInput, signal: AbortSignal): Promise<FrontendServerRenderResult> | FrontendServerRenderResult;
+  dispose?(): Promise<void> | void;
+}
+
+export function validateFrontendServerRuntime(value: unknown): FrontendServerRuntime {
+  if (typeof value !== "object" || value === null) throw new Error("Server Runtime 导出必须是对象");
+  const runtime = value as Partial<FrontendServerRuntime>;
+  if (runtime.id !== "ui.runtime.engine.server" || typeof runtime.render !== "function" || (runtime.prepare !== undefined && typeof runtime.prepare !== "function") || (runtime.dispose !== undefined && typeof runtime.dispose !== "function")) {
+    throw new Error("Server Runtime 与 engine contract 不兼容");
+  }
+  return runtime as FrontendServerRuntime;
+}
+
 export function validateFrontendRuntimeEngine(value: unknown): FrontendRuntimeEngine {
   if (typeof value !== "object" || value === null) throw new Error("Runtime Engine 导出必须是对象");
   const engine = value as Partial<FrontendRuntimeEngine>;

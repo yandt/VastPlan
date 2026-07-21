@@ -4,7 +4,7 @@ export const runtimeEngine: FrontendRuntimeEngine = Object.freeze({
   id: "ui.runtime.engine",
   family: "react",
   engineContract: "1.0.0",
-  capabilities: Object.freeze(["csr", "generation", "lazy-module", "i18n"] as const),
+  capabilities: Object.freeze(["csr", "ssr", "hydration", "generation", "lazy-module", "i18n"] as const),
 });
 
 export const localization = Object.freeze({

@@ -75,3 +75,50 @@ func TestFrontendDeliveryRuntimeDoesNotExposeMutableSnapshotSlices(t *testing.T)
 		t.Fatalf("调用方修改污染了不可变交付快照: %+v", second.ModuleGraphs[0])
 	}
 }
+
+func TestFrontendDeliverySealsServerGraphFromBrowserAndPrefetchesIt(t *testing.T) {
+	root := t.TempDir()
+	origin, err := newFrontendDeliveryStore(filepath.Join(root, "origin"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache, err := newFrontendDeliveryStore(filepath.Join(root, "cache"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := portalapi.PortalSpec{Revision: 11, ID: "operations", TenantID: "tenant-a"}
+	browserContent, serverContent := []byte("export default {};"), []byte("export default { render() {} };")
+	browserDigest, serverDigest := sha256.Sum256(browserContent), sha256.Sum256(serverContent)
+	browserSHA, serverSHA := hex.EncodeToString(browserDigest[:]), hex.EncodeToString(serverDigest[:])
+	plugin := portalapi.PluginRef{ID: "cn.vastplan.foundation.frontend.runtime.engine.react", Version: "1.1.0"}
+	packageSHA := strings.Repeat("d", 64)
+	browserGraph := portalapi.FrontendModuleGraph{PluginRef: plugin, Target: "browser", Entry: "frontend/dist/index.js", Digest: strings.Repeat("a", 64), PackageSHA256: packageSHA,
+		Nodes: []portalapi.FrontendModuleNode{{Path: "frontend/dist/index.js", SHA256: browserSHA, Size: int64(len(browserContent)), MediaType: "text/javascript", Purpose: "entry"}}}
+	serverGraph := portalapi.FrontendModuleGraph{PluginRef: plugin, Target: "server", Entry: "frontend/dist/server.js", Digest: strings.Repeat("b", 64), PackageSHA256: packageSHA, Externals: []string{"stream"},
+		Nodes: []portalapi.FrontendModuleNode{{Path: "frontend/dist/server.js", SHA256: serverSHA, Size: int64(len(serverContent)), MediaType: "text/javascript", Purpose: "entry"}}}
+	assets := []FrontendModuleAsset{
+		{Descriptor: graphNodeDescriptor(browserGraph, browserGraph.Nodes[0]), Content: browserContent},
+		{Descriptor: graphNodeDescriptor(serverGraph, serverGraph.Nodes[0]), Content: serverContent},
+	}
+	if err := origin.putSealed("tenant-a", spec, portalapi.RuntimeSpec{Portal: spec, ModuleGraphs: []portalapi.FrontendModuleGraph{browserGraph}}, serverRuntimeSpec{ModuleGraphs: []portalapi.FrontendModuleGraph{serverGraph}}, assets); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := origin.module("tenant-a", spec, serverSHA); err == nil || !strings.Contains(err.Error(), "未授权") {
+		t.Fatalf("浏览器对象接口不得读取 server graph: %v", err)
+	}
+	sealed, err := origin.serverRuntime("tenant-a", spec)
+	if err != nil || len(sealed.ModuleGraphs) != 1 || sealed.ModuleGraphs[0].Nodes[0].URL != serverObjectURL(serverSHA) {
+		t.Fatalf("可信宿主未读取到密封 server graph: runtime=%+v err=%v", sealed, err)
+	}
+	if err := cache.prefetchFrom(origin, "tenant-a", spec); err != nil {
+		t.Fatalf("本地缓存未完整预取 server graph: %v", err)
+	}
+	cached, err := cache.sealedSnapshot("tenant-a", spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	object, err := cache.sealedObject(cached, serverSHA)
+	if err != nil || string(object.Content) != string(serverContent) {
+		t.Fatalf("预取后的 server graph 对象不可用: %v", err)
+	}
+}

@@ -418,11 +418,11 @@ func (c *TrustedCatalog) MaterializePortal(ctx context.Context, tenantID string,
 	if err != nil {
 		return nil, err
 	}
-	runtime, assets, references, err := materializeFrontendRuntime(spec, verified)
+	runtime, server, assets, references, err := materializeFrontendRuntime(spec, verified)
 	if err != nil {
 		return nil, err
 	}
-	if err := c.origin.put(tenantID, spec, runtime, assets); err != nil {
+	if err := c.origin.putSealed(tenantID, spec, runtime, server, assets); err != nil {
 		return nil, err
 	}
 	if c.origin == c.delivery {
@@ -439,10 +439,11 @@ func (c *TrustedCatalog) MaterializePortal(ctx context.Context, tenantID string,
 // cache. It never reads plugin packages or executes frontend code.
 func (c *TrustedCatalog) PrefetchPortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
 	_ = ctx
-	if runtime, err := c.delivery.runtime(tenantID, spec); err == nil {
+	if snapshot, err := c.delivery.sealedSnapshot(tenantID, spec); err == nil {
 		ready := true
-		for _, module := range runtimeFrontendObjects(runtime) {
-			if _, err := c.delivery.module(tenantID, spec, module.SHA256); err != nil {
+		objects := append(runtimeFrontendObjects(snapshot.Runtime), serverRuntimeObjects(snapshot.Server)...)
+		for _, module := range objects {
+			if _, err := c.delivery.sealedObject(snapshot, module.SHA256); err != nil {
 				ready = false
 				break
 			}

@@ -15,11 +15,36 @@ import (
 )
 
 type verifiedFrontendGraph struct {
-	Graph pluginv1.FrontendModuleGraph
-	root  string
+	Browser pluginv1.FrontendModuleGraph
+	Server  *pluginv1.FrontendModuleGraph
+	root    string
 }
 
 func loadVerifiedFrontendGraph(filename, root string, manifest pluginv1.Manifest) *verifiedFrontendGraph {
+	return loadVerifiedFrontendGraphs(filename, "", root, manifest)
+}
+
+func loadVerifiedFrontendGraphs(browserFile, serverFile, root string, manifest pluginv1.Manifest) *verifiedFrontendGraph {
+	browser := readVerifiedGraph(browserFile, root)
+	var server *pluginv1.FrontendModuleGraph
+	if serverFile != "" {
+		value := readVerifiedGraph(serverFile, root)
+		server = &value
+	}
+	contract := &verifiedFrontendGraph{Browser: browser, Server: server, root: root}
+	candidate := manifest
+	candidate.FrontendModuleGraphs = &pluginv1.FrontendModuleGraphs{Browser: &browser, Server: server}
+	encoded, err := json.Marshal(candidate)
+	if err != nil {
+		fatalf("编码 frontend Module Graph 候选清单失败: %v", err)
+	}
+	if _, err := pluginv1.ParseManifest(encoded); err != nil {
+		fatalf("frontend Module Graph 不符合签名清单契约: %v", err)
+	}
+	return contract
+}
+
+func readVerifiedGraph(filename, root string) pluginv1.FrontendModuleGraph {
 	raw, err := os.ReadFile(filename)
 	if err != nil {
 		fatalf("读取 frontend Module Graph 失败: %v", err)
@@ -33,7 +58,6 @@ func loadVerifiedFrontendGraph(filename, root string, manifest pluginv1.Manifest
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
 		fatalf("frontend Module Graph 只能包含一个 JSON 文档")
 	}
-	contract := &verifiedFrontendGraph{Graph: graph, root: root}
 	for _, node := range graph.Nodes {
 		filename, pathErr := containedGraphPath(root, node.Path)
 		if pathErr != nil {
@@ -52,23 +76,23 @@ func loadVerifiedFrontendGraph(filename, root string, manifest pluginv1.Manifest
 			fatalf("frontend Module Graph 节点摘要失配: %s", node.Path)
 		}
 	}
-	candidate := manifest
-	candidate.FrontendModuleGraphs = &pluginv1.FrontendModuleGraphs{Browser: &graph}
-	encoded, err := json.Marshal(candidate)
-	if err != nil {
-		fatalf("编码 frontend Module Graph 候选清单失败: %v", err)
-	}
-	if _, err := pluginv1.ParseManifest(encoded); err != nil {
-		fatalf("frontend Module Graph 不符合签名清单契约: %v", err)
-	}
-	return contract
+	return graph
 }
 
 func (g *verifiedFrontendGraph) CopyTo(staging string) error {
 	if g == nil {
 		return nil
 	}
-	for _, node := range g.Graph.Nodes {
+	nodes := append([]pluginv1.FrontendModuleNode(nil), g.Browser.Nodes...)
+	if g.Server != nil {
+		nodes = append(nodes, g.Server.Nodes...)
+	}
+	copied := map[string]struct{}{}
+	for _, node := range nodes {
+		if _, exists := copied[node.Path]; exists {
+			continue
+		}
+		copied[node.Path] = struct{}{}
 		source, err := containedGraphPath(g.root, node.Path)
 		if err != nil {
 			return err

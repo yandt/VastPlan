@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 3,
+  "revision": 4,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],

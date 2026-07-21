@@ -19,11 +19,14 @@ const common = {
   external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
 };
 const allowedExternals = new Set(common.external);
+// Server Module Graph 只允许 React SSR 实现所需的 Node.js 内置模块。
+// 该集合也是可信 Worker 的导入边界，不能扩展为任意 npm 依赖。
+const serverAllowedExternals = new Set(["stream", "util", "node:stream", "node:util"]);
 
 const plugins = await discoverFrontendPlugins();
 
 const modules = [];
-for (const { id, entry, source, deferred, pluginRoot } of plugins) {
+for (const { id, entry, source, serverEntry, serverSource, deferred, pluginRoot } of plugins) {
   await enforceFunctionalPluginBoundary(id, dirname(dirname(source)));
   const buildRoot = outputRoot === undefined ? pluginRoot : resolve(outputRoot, id);
   const outfile = resolve(buildRoot, entry);
@@ -48,13 +51,30 @@ for (const { id, entry, source, deferred, pluginRoot } of plugins) {
   const graph = await createFrontendModuleGraph({ target: "browser", pluginRoot: buildRoot, entry, metafile: result.metafile, allowedExternals });
   const graphFile = resolve(outdir, "vastplan.browser-graph.json");
   await writeFile(graphFile, `${JSON.stringify(graph, null, 2)}\n`);
+  let serverGraph;
+  let serverGraphFile;
+  if (serverEntry !== undefined && serverSource !== undefined) {
+    const serverOutfile = resolve(buildRoot, serverEntry);
+    const serverOutdir = dirname(serverOutfile);
+    await mkdir(serverOutdir, { recursive: true });
+    const serverEntryName = basename(serverEntry, extname(serverEntry));
+    const serverResult = await build({
+      bundle: true, format: "esm", platform: "node", target: "node22", legalComments: "none", minify: true,
+      entryPoints: { [serverEntryName]: serverSource }, outdir: serverOutdir, entryNames: serverEntryName,
+      chunkNames: "server-chunks/[name]-[hash]", splitting: true, metafile: true, outExtension: { ".js": extname(serverEntry) },
+    });
+    serverGraph = await createFrontendModuleGraph({ target: "server", pluginRoot: buildRoot, entry: serverEntry, metafile: serverResult.metafile, allowedExternals: serverAllowedExternals });
+    serverGraphFile = resolve(serverOutdir, "vastplan.server-graph.json");
+    await writeFile(serverGraphFile, `${JSON.stringify(serverGraph, null, 2)}\n`);
+  }
   if (id === "cn.vastplan.foundation.frontend.render.adapter.arco") {
     const result = spawnSync(process.execPath, ["engineering/tools/check-arco-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ARCO_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
   if (outputRoot !== undefined) {
     const bytes = await readFile(outfile);
-    modules.push({ id, entry, file: outfile, sha256: createHash("sha256").update(bytes).digest("hex"), graphFile, graph, deferred });
+    modules.push({ id, entry, file: outfile, sha256: createHash("sha256").update(bytes).digest("hex"), graphFile, graph, deferred,
+      ...(serverGraph === undefined ? {} : { serverEntry, serverGraphFile, serverGraph }) });
   }
 }
 
@@ -116,9 +136,23 @@ async function discoverFrontendPlugins() {
     }
     const rendererModules = manifest.contributes?.frontend?.rendererModules;
     const deferred = Array.isArray(rendererModules) && rendererModules.length === 1;
-    plugins.push({ id, entry, deferred, pluginRoot, source: await findFrontendSource(pluginRoot, id) });
+    const serverEntry = typeof manifest.entry?.frontendServer === "string" ? manifest.entry.frontendServer.trim() : undefined;
+    if (serverEntry !== undefined && (!/^frontend\/dist\/[A-Za-z0-9._/-]+\.(?:m?js)$/.test(serverEntry) || serverEntry.includes(".."))) {
+      throw new Error(`${manifestPath} 的 entry.frontendServer 必须是 frontend/dist/ 下的 JavaScript 文件`);
+    }
+    plugins.push({ id, entry, serverEntry, deferred, pluginRoot, source: await findFrontendSource(pluginRoot, id),
+      ...(serverEntry === undefined ? {} : { serverSource: await findFrontendServerSource(pluginRoot, id) }) });
   }
   return plugins;
+}
+
+async function findFrontendServerSource(pluginRoot, id) {
+  for (const suffix of ["tsx", "ts", "jsx", "js"]) {
+    const source = resolve(pluginRoot, `frontend/src/server.${suffix}`);
+    try { if ((await stat(source)).isFile()) return source; }
+    catch (error) { if (error?.code !== "ENOENT") throw error; }
+  }
+  throw new Error(`前端插件 ${id} 声明了 entry.frontendServer，但缺少 frontend/src/server.(tsx|ts|jsx|js)`);
 }
 
 async function findFrontendSource(pluginRoot, id) {

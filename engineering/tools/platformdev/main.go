@@ -81,8 +81,8 @@ type runtime struct {
 }
 
 type packageSpec struct {
-	id, frontendEntry string
-	backend, frontend bool
+	id, frontendEntry, frontendServerEntry string
+	backend, frontend                      bool
 }
 
 func main() {
@@ -210,7 +210,11 @@ func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, fron
 			args = append(args, "-backend-bin", filepath.Join(binDir, spec.id))
 		}
 		if spec.frontend {
-			args = append(args, "-frontend-bundle", filepath.Join(frontendModulesDir, spec.id+".js"))
+			graphRoot := filepath.Join(frontendModulesDir, spec.id)
+			args = append(args, "-frontend-graph", filepath.Join(graphRoot, "frontend", "dist", "vastplan.browser-graph.json"), "-frontend-graph-root", graphRoot)
+			if spec.frontendServerEntry != "" {
+				args = append(args, "-frontend-server-graph", filepath.Join(graphRoot, "frontend", "dist", "vastplan.server-graph.json"))
+			}
 		}
 		if err := r.command(ctx, map[string]string{"GOCACHE": filepath.Join(r.options.stateRoot, "go-cache")}, "go", args...); err != nil {
 			return fmt.Errorf("打包 %s: %w", spec.id, err)
@@ -377,8 +381,12 @@ func discoverPackageSpecs(root string) ([]packageSpec, error) {
 			return nil, fmt.Errorf("插件目录 %s 与清单 id %s 不一致", directory.Name(), manifest.ID)
 		}
 		frontendEntry := strings.TrimSpace(manifest.Entry["frontend"])
+		frontendServerEntry := strings.TrimSpace(manifest.Entry["frontendServer"])
 		if frontendEntry != "" && (!strings.HasPrefix(frontendEntry, "frontend/dist/") || strings.Contains(frontendEntry, "..")) {
 			return nil, fmt.Errorf("插件 %s entry.frontend 必须位于 frontend/dist/", manifest.ID)
+		}
+		if frontendServerEntry != "" && (!strings.HasPrefix(frontendServerEntry, "frontend/dist/") || strings.Contains(frontendServerEntry, "..")) {
+			return nil, fmt.Errorf("插件 %s entry.frontendServer 必须位于 frontend/dist/", manifest.ID)
 		}
 		_, backendErr := os.Stat(filepath.Join(pluginRoot, "backend", "main.go"))
 		dynamicGo := manifest.Execution != nil && manifest.Execution.Backend != nil && manifest.Execution.Backend.DynamicGo != nil
@@ -389,7 +397,7 @@ func discoverPackageSpecs(root string) ([]packageSpec, error) {
 		if !backend && frontendEntry == "" {
 			continue
 		}
-		specs = append(specs, packageSpec{id: manifest.ID, backend: backend, frontend: frontendEntry != "", frontendEntry: frontendEntry})
+		specs = append(specs, packageSpec{id: manifest.ID, backend: backend, frontend: frontendEntry != "", frontendEntry: frontendEntry, frontendServerEntry: frontendServerEntry})
 	}
 	return specs, nil
 }

@@ -4,7 +4,7 @@ import { access, link, mkdir, readFile, stat, unlink, writeFile } from "node:fs/
 import { dirname } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { objectPath, snapshotPath } from "./portal-delivery-paths";
-import { parseDeliverySnapshot, runtimeObjects, type FrontendObjectDescriptor, type PortalRuntimeSpec, type PortalSpec } from "./portal-runtime-contract";
+import { parseSealedDeliverySnapshot, runtimeObjects, serverRuntimeObjects, type FrontendObjectDescriptor, type PortalRuntimeSpec, type PortalSpec, type SealedDeliverySnapshot, type ServerRuntimeSpec } from "./portal-runtime-contract";
 
 const maximumSnapshotBytes = 8 << 20;
 const maximumObjectBytes = 64 << 20;
@@ -25,13 +25,22 @@ export class PortalDeliveryStore {
   }
 
   public async runtime(tenantId: string, spec: PortalSpec): Promise<PortalRuntimeSpec> {
-    try { return await this.readRuntime(this.cacheRoot, tenantId, spec); }
+	try { return (await this.readSnapshot(this.cacheRoot, tenantId, spec)).runtime; }
     catch (cacheError) {
       if (this.originRoot === undefined || this.originRoot === this.cacheRoot) throw cacheError;
       await this.prefetch(tenantId, spec);
-      return this.readRuntime(this.cacheRoot, tenantId, spec);
-    }
+		return (await this.readSnapshot(this.cacheRoot, tenantId, spec)).runtime;
+	}
   }
+
+	public async serverRuntime(tenantId: string, spec: PortalSpec): Promise<ServerRuntimeSpec> {
+		try { return (await this.readSnapshot(this.cacheRoot, tenantId, spec)).server; }
+		catch (cacheError) {
+			if (this.originRoot === undefined || this.originRoot === this.cacheRoot) throw cacheError;
+			await this.prefetch(tenantId, spec);
+			return (await this.readSnapshot(this.cacheRoot, tenantId, spec)).server;
+		}
+	}
 
   public async object(tenantId: string, spec: PortalSpec, digest: string): Promise<PortalDeliveryObject> {
     let runtime = await this.runtime(tenantId, spec);
@@ -41,20 +50,35 @@ export class PortalDeliveryStore {
     catch (cacheError) {
       if (this.originRoot === undefined || this.originRoot === this.cacheRoot) throw cacheError;
       await this.prefetch(tenantId, spec);
-      runtime = await this.readRuntime(this.cacheRoot, tenantId, spec);
+			runtime = (await this.readSnapshot(this.cacheRoot, tenantId, spec)).runtime;
       descriptor = runtimeObjects(runtime).find((candidate) => candidate.sha256 === digest);
       if (descriptor === undefined) throw new Error("Portal 快照未授权该内容对象");
       return this.readObject(this.cacheRoot, descriptor);
     }
   }
 
+	public async serverObject(tenantId: string, spec: PortalSpec, digest: string): Promise<PortalDeliveryObject> {
+		let server = await this.serverRuntime(tenantId, spec);
+		let descriptor = serverRuntimeObjects(server).find((candidate) => candidate.sha256 === digest);
+		if (descriptor === undefined) throw new Error("Portal Server 快照未授权该内容对象");
+		try { return await this.readObject(this.cacheRoot, descriptor); }
+		catch (cacheError) {
+			if (this.originRoot === undefined || this.originRoot === this.cacheRoot) throw cacheError;
+			await this.prefetch(tenantId, spec);
+			server = await this.serverRuntime(tenantId, spec);
+			descriptor = serverRuntimeObjects(server).find((candidate) => candidate.sha256 === digest);
+			if (descriptor === undefined) throw new Error("Portal Server 快照未授权该内容对象");
+			return this.readObject(this.cacheRoot, descriptor);
+		}
+	}
+
   private async prefetch(tenantId: string, spec: PortalSpec): Promise<void> {
     const origin = this.originRoot;
     if (origin === undefined) throw new Error("Portal 中央交付 origin 未配置");
     const rawSnapshot = await boundedRead(snapshotPath(origin, tenantId, spec.id, spec.revision), maximumSnapshotBytes);
-    const runtime = parseDeliverySnapshot(rawSnapshot, spec);
-    const objects = new Map<string, PortalDeliveryObject>();
-    for (const descriptor of runtimeObjects(runtime)) {
+		const snapshot = parseSealedDeliverySnapshot(rawSnapshot, spec);
+		const objects = new Map<string, PortalDeliveryObject>();
+		for (const descriptor of [...runtimeObjects(snapshot.runtime), ...serverRuntimeObjects(snapshot.server)]) {
       if (!objects.has(descriptor.sha256)) objects.set(descriptor.sha256, await this.readObject(origin, descriptor));
     }
     for (const object of objects.values()) {
@@ -64,10 +88,10 @@ export class PortalDeliveryStore {
     await writeAtomicImmutable(snapshotPath(this.cacheRoot, tenantId, spec.id, spec.revision), rawSnapshot);
   }
 
-  private async readRuntime(root: string, tenantId: string, spec: PortalSpec): Promise<PortalRuntimeSpec> {
-    const raw = await boundedRead(snapshotPath(root, tenantId, spec.id, spec.revision), maximumSnapshotBytes);
-    return parseDeliverySnapshot(raw, spec);
-  }
+	private async readSnapshot(root: string, tenantId: string, spec: PortalSpec): Promise<SealedDeliverySnapshot> {
+		const raw = await boundedRead(snapshotPath(root, tenantId, spec.id, spec.revision), maximumSnapshotBytes);
+		return parseSealedDeliverySnapshot(raw, spec);
+	}
 
   private async readObject(root: string, descriptor: FrontendObjectDescriptor): Promise<PortalDeliveryObject> {
     const content = await boundedRead(objectPath(root, descriptor.sha256), maximumObjectBytes);

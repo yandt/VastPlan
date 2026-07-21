@@ -17,6 +17,10 @@ import (
 // stagePackage creates a temporary package only when build outputs or legal
 // files must be injected. Destination paths always come from the validated manifest.
 func stagePackage(source, backendBin, frontendBundle, frontendGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
+	return stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, "", frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource)
+}
+
+func stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
 	manifestRaw, err := os.ReadFile(filepath.Join(source, "vastplan.plugin.json"))
 	if err != nil {
 		fatalf("读取插件清单失败: %v", err)
@@ -27,8 +31,8 @@ func stagePackage(source, backendBin, frontendBundle, frontendGraph, frontendGra
 	}
 	licensePresent := declaredFilePresent(source, manifest.LicenseFile, manifest.License != "", "许可证")
 	noticePresent := declaredFilePresent(source, manifest.NoticeFile, manifest.NoticeFile != "", "归属告示")
-	validateFrontendInputs(frontendBundle, frontendGraph, frontendGraphRoot)
-	if backendBin == "" && frontendBundle == "" && frontendGraph == "" && dynamicGoBin == "" && licensePresent && noticePresent {
+	validateFrontendInputs(frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot)
+	if backendBin == "" && frontendBundle == "" && frontendGraph == "" && frontendServerGraph == "" && dynamicGoBin == "" && licensePresent && noticePresent {
 		return source, func() {}
 	}
 
@@ -39,8 +43,8 @@ func stagePackage(source, backendBin, frontendBundle, frontendGraph, frontendGra
 	frontendEntry := validateLegacyFrontendInput(manifest, frontendBundle)
 	var frontendGraphContract *verifiedFrontendGraph
 	if frontendGraph != "" {
-		frontendGraphContract = loadVerifiedFrontendGraph(frontendGraph, frontendGraphRoot, manifest)
-		manifest.FrontendModuleGraphs = &pluginv1.FrontendModuleGraphs{Browser: &frontendGraphContract.Graph}
+		frontendGraphContract = loadVerifiedFrontendGraphs(frontendGraph, frontendServerGraph, frontendGraphRoot, manifest)
+		manifest.FrontendModuleGraphs = &pluginv1.FrontendModuleGraphs{Browser: &frontendGraphContract.Browser, Server: frontendGraphContract.Server}
 		manifestChanged = true
 	}
 
@@ -70,9 +74,12 @@ func stagePackage(source, backendBin, frontendBundle, frontendGraph, frontendGra
 	return staging, cleanup
 }
 
-func validateFrontendInputs(bundle, graph, root string) {
+func validateFrontendInputs(bundle, graph, serverGraph, root string) {
 	if bundle != "" && graph != "" {
 		fatalf("-frontend-bundle 与 -frontend-graph 不能同时使用")
+	}
+	if serverGraph != "" && graph == "" {
+		fatalf("-frontend-server-graph 必须与 -frontend-graph 同时配置")
 	}
 	if (graph == "") != (root == "") {
 		fatalf("-frontend-graph 与 -frontend-graph-root 必须同时配置")

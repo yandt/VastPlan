@@ -27,6 +27,14 @@ export interface FrontendModuleNode extends Readonly<Record<string, unknown>> {
   readonly sha256: string;
   readonly size: number;
   readonly mediaType: string;
+	readonly purpose?: string;
+	readonly dependencies?: readonly FrontendModuleDependency[];
+}
+
+export interface FrontendModuleDependency extends Readonly<Record<string, unknown>> {
+	readonly specifier: string;
+	readonly path: string;
+	readonly kind: string;
 }
 
 export interface FrontendModuleGraph extends Readonly<Record<string, unknown>> {
@@ -34,9 +42,21 @@ export interface FrontendModuleGraph extends Readonly<Record<string, unknown>> {
   readonly version: string;
   readonly channel?: string;
   readonly entry: string;
+	readonly target: "browser" | "server";
+	readonly digest: string;
   readonly packageSha256: string;
+	readonly externals: readonly string[];
   readonly deferred?: boolean;
   readonly nodes: readonly FrontendModuleNode[];
+}
+
+export interface ServerRuntimeSpec extends Readonly<Record<string, unknown>> {
+	readonly moduleGraphs?: readonly FrontendModuleGraph[];
+}
+
+export interface SealedDeliverySnapshot {
+	readonly runtime: PortalRuntimeSpec;
+	readonly server: ServerRuntimeSpec;
 }
 
 export interface PortalRuntimeSpec extends Readonly<Record<string, unknown>> {
@@ -64,6 +84,10 @@ export class PortalRuntimeContractError extends Error {
 }
 
 export function parseDeliverySnapshot(raw: Uint8Array, expected: PortalSpec): PortalRuntimeSpec {
+	return parseSealedDeliverySnapshot(raw, expected).runtime;
+}
+
+export function parseSealedDeliverySnapshot(raw: Uint8Array, expected: PortalSpec): SealedDeliverySnapshot {
   let value: unknown;
   try { value = JSON.parse(new TextDecoder().decode(raw)) as unknown; }
   catch { throw new PortalRuntimeContractError("Portal 交付快照 JSON 无效"); }
@@ -77,7 +101,9 @@ export function parseDeliverySnapshot(raw: Uint8Array, expected: PortalSpec): Po
     throw new PortalRuntimeContractError("Portal RuntimeSpec 与活动 Portal 不一致");
   }
   validateRuntime(runtime);
-  return structuredClone(runtime);
+	const server = snapshot.server === undefined ? {} : objectValue(snapshot.server, "Portal Server RuntimeSpec 无效") as ServerRuntimeSpec;
+	validateServerRuntime(server);
+	return Object.freeze({ runtime: structuredClone(runtime), server: structuredClone(server) });
 }
 
 export function portalSpecDigest(spec: PortalSpec): string {
@@ -98,6 +124,14 @@ export function runtimeObjects(runtime: PortalRuntimeSpec): readonly FrontendObj
   return Object.freeze([...modules, ...graphNodes]);
 }
 
+export function serverRuntimeObjects(runtime: ServerRuntimeSpec): readonly FrontendObjectDescriptor[] {
+	return Object.freeze((runtime.moduleGraphs ?? []).flatMap((graph) => graph.nodes.map((node) => ({
+		id: graph.id, version: graph.version, ...(graph.channel === undefined ? {} : { channel: graph.channel }),
+		url: node.url, sha256: node.sha256, packageSha256: graph.packageSha256,
+		mediaType: node.mediaType, deferred: false,
+	}))));
+}
+
 export function recoveryRuntime(runtime: PortalRuntimeSpec, activeRevision: number, fallbackRevision: number): PortalRuntimeSpec {
   const cloned = structuredClone(runtime) as PortalRuntimeSpec;
   const prefix = `/v1/portal-recovery-modules/${activeRevision}/${fallbackRevision}/`;
@@ -113,6 +147,8 @@ function validateRuntime(runtime: PortalRuntimeSpec): void {
   if (!Array.isArray(runtime.modules ?? []) || !Array.isArray(runtime.moduleGraphs ?? [])) throw new PortalRuntimeContractError("Portal RuntimeSpec 模块列表无效");
   for (const module of runtime.modules ?? []) validateDescriptor(module, module.mediaType ?? "text/javascript", runtime.portal.revision);
   for (const graph of runtime.moduleGraphs ?? []) {
+		if (graph.target !== "browser") throw new PortalRuntimeContractError("浏览器 RuntimeSpec 只能包含 browser Module Graph");
+		validateGraph(graph);
     if (!nonempty(graph.id) || !nonempty(graph.version) || !nonempty(graph.entry) || !digest(graph.packageSha256) || !Array.isArray(graph.nodes)) {
       throw new PortalRuntimeContractError("Portal Module Graph 无效");
     }
@@ -121,6 +157,45 @@ function validateRuntime(runtime: PortalRuntimeSpec): void {
       validateDescriptor({ ...node, id: graph.id, version: graph.version, packageSha256: graph.packageSha256, entry: node.path }, node.mediaType, runtime.portal.revision);
     }
   }
+}
+
+const serverExternalAllowlist = new Set(["stream", "util", "node:stream", "node:util"]);
+
+function validateServerRuntime(runtime: ServerRuntimeSpec): void {
+	if (!Array.isArray(runtime.moduleGraphs ?? [])) throw new PortalRuntimeContractError("Portal Server Module Graph 列表无效");
+	let totalBytes = 0;
+	for (const graph of runtime.moduleGraphs ?? []) {
+		if (graph.target !== "server") throw new PortalRuntimeContractError("Server RuntimeSpec 只能包含 server Module Graph");
+		validateGraph(graph);
+		if (graph.externals.some((external) => !serverExternalAllowlist.has(external))) throw new PortalRuntimeContractError("Server Module Graph 包含未允许的外部依赖");
+		for (const node of graph.nodes) {
+			totalBytes += node.size;
+			validateServerDescriptor({ ...node, id: graph.id, version: graph.version, packageSha256: graph.packageSha256, entry: node.path }, node.mediaType);
+		}
+	}
+	if (totalBytes > 128 << 20) throw new PortalRuntimeContractError("Server Module Graph 总大小超过安全上限");
+}
+
+function validateGraph(graph: FrontendModuleGraph): void {
+	if (!nonempty(graph.id) || !nonempty(graph.version) || !nonempty(graph.entry) || !digest(graph.digest) || !digest(graph.packageSha256)
+		|| !Array.isArray(graph.externals) || graph.externals.some((external) => !nonempty(external)) || !Array.isArray(graph.nodes) || graph.nodes.length === 0 || graph.nodes.length > 1024) {
+		throw new PortalRuntimeContractError("Portal Module Graph 无效");
+	}
+	const paths = new Set<string>();
+	for (const node of graph.nodes) {
+		if (!safeModulePath(node.path) || !Number.isSafeInteger(node.size) || node.size < 0 || !digest(node.sha256) || paths.has(node.path)) {
+			throw new PortalRuntimeContractError("Portal Module Graph 节点无效");
+		}
+		paths.add(node.path);
+	}
+	if (!paths.has(graph.entry)) throw new PortalRuntimeContractError("Portal Module Graph 缺少入口节点");
+}
+
+function validateServerDescriptor(value: Readonly<Record<string, unknown>>, mediaType: unknown): void {
+	if (!nonempty(value.id) || !nonempty(value.version) || !safeModulePath(value.entry) || !digest(value.sha256) || !digest(value.packageSha256)
+		|| mediaType !== "text/javascript" || value.url !== `server-object:${value.sha256}`) {
+		throw new PortalRuntimeContractError("Portal Server 内容对象描述符无效");
+	}
 }
 
 function validateDescriptor(value: Readonly<Record<string, unknown>>, mediaType: unknown, portalRevision: number): void {
@@ -143,6 +218,9 @@ function objectValue(value: unknown, message: string): Readonly<Record<string, u
 
 function nonempty(value: unknown): value is string { return typeof value === "string" && value.length > 0; }
 function digest(value: unknown): value is string { return typeof value === "string" && /^[0-9a-f]{64}$/.test(value); }
+function safeModulePath(value: unknown): value is string {
+	return nonempty(value) && !value.startsWith("/") && !value.includes("\\") && !value.split("/").some((part) => part === "" || part === "." || part === "..");
+}
 
 function stableJSON(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJSON).join(",")}]`;

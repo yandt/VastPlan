@@ -10,36 +10,45 @@ import (
 // materializeFrontendRuntime converts already verified packages into one
 // immutable browser RuntimeSpec. Package verification remains in Catalog;
 // graph projection and object encoding remain in their dedicated adapters.
-func materializeFrontendRuntime(spec portalapi.PortalSpec, verified []verifiedPortalPlugin) (portalapi.RuntimeSpec, []FrontendModuleAsset, []pluginv1.ArtifactReference, error) {
+func materializeFrontendRuntime(spec portalapi.PortalSpec, verified []verifiedPortalPlugin) (portalapi.RuntimeSpec, serverRuntimeSpec, []FrontendModuleAsset, []pluginv1.ArtifactReference, error) {
 	runtime := portalapi.RuntimeSpec{Portal: spec}
+	server := serverRuntimeSpec{}
 	assets := make([]FrontendModuleAsset, 0, len(spec.Plugins))
 	references := make([]pluginv1.ArtifactReference, 0, len(spec.Plugins))
 	for _, plugin := range verified {
 		if plugin.manifest.FrontendModuleGraphs == nil {
 			asset, err := frontendModule(spec.Revision, plugin)
 			if err != nil {
-				return portalapi.RuntimeSpec{}, nil, nil, err
+				return portalapi.RuntimeSpec{}, serverRuntimeSpec{}, nil, nil, err
 			}
 			assets = append(assets, asset)
 			runtime.Modules = append(runtime.Modules, asset.Descriptor)
 		} else {
 			graph, graphAssets, err := materializeFrontendModuleGraph(plugin)
 			if err != nil {
-				return portalapi.RuntimeSpec{}, nil, nil, err
+				return portalapi.RuntimeSpec{}, serverRuntimeSpec{}, nil, nil, err
 			}
 			runtime.ModuleGraphs = append(runtime.ModuleGraphs, graph)
 			assets = append(assets, graphAssets...)
+			if plugin.manifest.FrontendModuleGraphs.Server != nil {
+				serverGraph, serverAssets, serverErr := materializeServerModuleGraph(plugin)
+				if serverErr != nil {
+					return portalapi.RuntimeSpec{}, serverRuntimeSpec{}, nil, nil, serverErr
+				}
+				server.ModuleGraphs = append(server.ModuleGraphs, serverGraph)
+				assets = append(assets, serverAssets...)
+			}
 		}
 		references = append(references, artifactReference(plugin))
 	}
 	for index := range assets {
 		compressed, err := gzipBytes(assets[index].Content)
 		if err != nil {
-			return portalapi.RuntimeSpec{}, nil, nil, fmt.Errorf("压缩插件 %s frontend 对象: %w", assets[index].Descriptor.ID, err)
+			return portalapi.RuntimeSpec{}, serverRuntimeSpec{}, nil, nil, fmt.Errorf("压缩插件 %s frontend 对象: %w", assets[index].Descriptor.ID, err)
 		}
 		assets[index].GzipContent = compressed
 	}
-	return runtime, assets, references, nil
+	return runtime, server, assets, references, nil
 }
 
 func artifactReference(plugin verifiedPortalPlugin) pluginv1.ArtifactReference {

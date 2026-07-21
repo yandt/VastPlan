@@ -22,15 +22,19 @@ func cloneFrontendRuntime(runtime portalapi.RuntimeSpec) portalapi.RuntimeSpec {
 	cloned.Modules = append([]portalapi.FrontendModule(nil), runtime.Modules...)
 	cloned.ModuleGraphs = make([]portalapi.FrontendModuleGraph, len(runtime.ModuleGraphs))
 	for graphIndex, graph := range runtime.ModuleGraphs {
-		clonedGraph := graph
-		clonedGraph.Externals = append([]string(nil), graph.Externals...)
-		clonedGraph.Nodes = make([]portalapi.FrontendModuleNode, len(graph.Nodes))
-		for nodeIndex, node := range graph.Nodes {
-			clonedNode := node
-			clonedNode.Dependencies = append([]portalapi.FrontendModuleDependency(nil), node.Dependencies...)
-			clonedGraph.Nodes[nodeIndex] = clonedNode
-		}
-		cloned.ModuleGraphs[graphIndex] = clonedGraph
+		cloned.ModuleGraphs[graphIndex] = cloneFrontendModuleGraph(graph)
+	}
+	return cloned
+}
+
+func cloneFrontendModuleGraph(graph portalapi.FrontendModuleGraph) portalapi.FrontendModuleGraph {
+	cloned := graph
+	cloned.Externals = append([]string(nil), graph.Externals...)
+	cloned.Nodes = make([]portalapi.FrontendModuleNode, len(graph.Nodes))
+	for index, node := range graph.Nodes {
+		clonedNode := node
+		clonedNode.Dependencies = append([]portalapi.FrontendModuleDependency(nil), node.Dependencies...)
+		cloned.Nodes[index] = clonedNode
 	}
 	return cloned
 }
@@ -52,7 +56,6 @@ func findRuntimeFrontendObject(runtime portalapi.RuntimeSpec, digest string) por
 }
 
 func applyFrontendObjectURLs(runtime *portalapi.RuntimeSpec, urls map[string]string) error {
-	referenced := make(map[string]struct{}, len(urls))
 	for index := range runtime.Modules {
 		digest := runtime.Modules[index].SHA256
 		url := urls[digest]
@@ -60,7 +63,6 @@ func applyFrontendObjectURLs(runtime *portalapi.RuntimeSpec, urls map[string]str
 			return fmt.Errorf("Portal RuntimeSpec 缺少内容对象: %s", digest)
 		}
 		runtime.Modules[index].URL = url
-		referenced[digest] = struct{}{}
 	}
 	for graphIndex := range runtime.ModuleGraphs {
 		for nodeIndex := range runtime.ModuleGraphs[graphIndex].Nodes {
@@ -70,11 +72,7 @@ func applyFrontendObjectURLs(runtime *portalapi.RuntimeSpec, urls map[string]str
 				return fmt.Errorf("Portal Module Graph 缺少内容对象: %s/%s", runtime.ModuleGraphs[graphIndex].ID, node.Path)
 			}
 			node.URL = url
-			referenced[node.SHA256] = struct{}{}
 		}
-	}
-	if len(referenced) != len(urls) {
-		return fmt.Errorf("Portal 交付包含 %d 个未被 RuntimeSpec 引用的对象", len(urls)-len(referenced))
 	}
 	return nil
 }

@@ -122,16 +122,16 @@ func TestStagePackageInjectsVerifiedFrontendModuleGraph(t *testing.T) {
 	source := t.TempDir()
 	manifest := []byte(`{
   "id":"cn.vastplan.product.test.graph","name":"graph","description":"graph","version":"1.0.0","publisher":"vastplan",
-  "engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/dist/index.js"},
+  "engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/dist/index.js","frontendServer":"frontend/dist/server.js"},
   "contributes":{"frontend":{"views":[{"id":"test.graph","title":"Test"}]}}
 }`)
 	if err := os.WriteFile(filepath.Join(source, "vastplan.plugin.json"), manifest, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	buildRoot := t.TempDir()
-	entryPath, chunkPath := "frontend/dist/index.js", "frontend/dist/chunks/lazy.js"
-	entry, chunk := []byte("import('./chunks/lazy.js');\n"), []byte("export const lazy = true;\n")
-	for name, content := range map[string][]byte{entryPath: entry, chunkPath: chunk} {
+	entryPath, chunkPath, serverPath := "frontend/dist/index.js", "frontend/dist/chunks/lazy.js", "frontend/dist/server.js"
+	entry, chunk, server := []byte("import('./chunks/lazy.js');\n"), []byte("export const lazy = true;\n"), []byte("export default { render() { return { html: '' }; } };\n")
+	for name, content := range map[string][]byte{entryPath: entry, chunkPath: chunk, serverPath: server} {
 		filename := filepath.Join(buildRoot, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
 			t.Fatal(err)
@@ -146,6 +146,11 @@ func TestStagePackageInjectsVerifiedFrontendModuleGraph(t *testing.T) {
 		{Path: chunkPath, SHA256: hex.EncodeToString(chunkDigest[:]), Size: int64(len(chunk)), MediaType: "text/javascript", Purpose: "chunk", Dependencies: []pluginv1.FrontendModuleDependency{}},
 	}}
 	graph.Digest = graph.ComputedDigest()
+	serverDigest := sha256.Sum256(server)
+	serverGraph := pluginv1.FrontendModuleGraph{SchemaVersion: "v1", Target: "server", Entry: serverPath, Externals: []string{"stream"}, Nodes: []pluginv1.FrontendModuleNode{
+		{Path: serverPath, SHA256: hex.EncodeToString(serverDigest[:]), Size: int64(len(server)), MediaType: "text/javascript", Purpose: "entry", Dependencies: []pluginv1.FrontendModuleDependency{}},
+	}}
+	serverGraph.Digest = serverGraph.ComputedDigest()
 	graphRaw, err := json.Marshal(graph)
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +159,15 @@ func TestStagePackageInjectsVerifiedFrontendModuleGraph(t *testing.T) {
 	if err := os.WriteFile(graphFile, graphRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	staged, cleanup := stagePackage(source, "", "", graphFile, buildRoot, "", "", "", "")
+	serverGraphRaw, err := json.Marshal(serverGraph)
+	if err != nil {
+		t.Fatal(err)
+	}
+	serverGraphFile := filepath.Join(t.TempDir(), "server-graph.json")
+	if err := os.WriteFile(serverGraphFile, serverGraphRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	staged, cleanup := stagePackageWithGraphs(source, "", "", graphFile, serverGraphFile, buildRoot, "", "", "", "")
 	defer cleanup()
 	raw, err := os.ReadFile(filepath.Join(staged, "vastplan.plugin.json"))
 	if err != nil {
@@ -164,11 +177,15 @@ func TestStagePackageInjectsVerifiedFrontendModuleGraph(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if parsed.FrontendModuleGraphs == nil || parsed.FrontendModuleGraphs.Browser.Digest != graph.Digest {
-		t.Fatalf("签名清单未绑定 browser Module Graph: %+v", parsed.FrontendModuleGraphs)
+	if parsed.FrontendModuleGraphs == nil || parsed.FrontendModuleGraphs.Browser.Digest != graph.Digest || parsed.FrontendModuleGraphs.Server == nil || parsed.FrontendModuleGraphs.Server.Digest != serverGraph.Digest {
+		t.Fatalf("签名清单未同时绑定 browser/server Module Graph: %+v", parsed.FrontendModuleGraphs)
 	}
 	got, err := os.ReadFile(filepath.Join(staged, filepath.FromSlash(chunkPath)))
 	if err != nil || string(got) != string(chunk) {
 		t.Fatalf("Module Graph chunk 未进入制品: %q %v", got, err)
+	}
+	got, err = os.ReadFile(filepath.Join(staged, filepath.FromSlash(serverPath)))
+	if err != nil || string(got) != string(server) {
+		t.Fatalf("Server Module Graph entry 未进入制品: %q %v", got, err)
 	}
 }

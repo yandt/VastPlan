@@ -19,6 +19,7 @@ func main() {
 	backendBin := flag.String("backend-bin", "", "写入清单 entry.backend 的已构建可执行文件")
 	frontendBundle := flag.String("frontend-bundle", "", "写入清单 entry.frontend 的旧单文件 ESM bundle")
 	frontendGraph := flag.String("frontend-graph", "", "写入签名清单的 browser Module Graph JSON")
+	frontendServerGraph := flag.String("frontend-server-graph", "", "写入签名清单的 server Module Graph JSON")
 	frontendGraphRoot := flag.String("frontend-graph-root", "", "Module Graph 节点路径相对的已构建目录根")
 	dynamicGoBin := flag.String("dynamic-go-bin", "", "写入 execution.backend.dynamicGo.entry 的首方 Go .so")
 	dynamicGoFingerprint := flag.String("dynamic-go-fingerprint", "", "写入签名清单并在 plugin.Open 前校验的 64 位构建指纹")
@@ -41,7 +42,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	packageSource, cleanup := stagePackage(*source, *backendBin, *frontendBundle, *frontendGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile)
+	packageSource, cleanup := stagePackageWithGraphs(*source, *backendBin, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile)
 	defer cleanup()
 	packageBytes, manifest, err := pluginservice.PackageDirectory(packageSource)
 	if err != nil {

@@ -294,7 +294,7 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	frontendDigest := digestStrings(frontendIdentity, frontendSources.host, frontendSources.plugins, fmt.Sprintf("hot=%t", r.options.hot), "frontend-build-v1")
+	frontendDigest := digestStrings(frontendIdentity, frontendSources.host, frontendSources.plugins, fmt.Sprintf("hot=%t", r.options.hot), "frontend-build-v2")
 	log.Printf("[3/6] 准备按需加载的 Portal 与前端插件 digest=%s", frontendDigest[:12])
 	frontend, err := ensureCachedBuild(cacheRoot, "frontend", frontendDigest, func(candidate string) error {
 		portalBuildEnv := map[string]string{"PORTAL_OUT_DIR": filepath.Join(candidate, "portal-assets")}
@@ -345,7 +345,7 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 
 	packageSourceDigest, err := digestBuildInputs(r.options.root, []string{
 		"LICENSE", "NOTICE", "extensions/plugins", "engineering/tools/pluginpackage",
-	}, []string{backendDigest, frontendDigest, dynamicDigest, "package-build-v1"}, packageBuildInput)
+	}, []string{backendDigest, frontendDigest, dynamicDigest, "package-build-v2"}, packageBuildInput)
 	if err != nil {
 		return fmt.Errorf("计算插件制品摘要: %w", err)
 	}
@@ -444,13 +444,10 @@ func (r *runtime) captureFrontendModules(target string) error {
 		if !spec.frontend {
 			continue
 		}
-		source := filepath.Join(r.options.root, "extensions", "plugins", spec.id, filepath.FromSlash(spec.frontendEntry))
-		info, err := os.Stat(source)
-		if err != nil {
-			return fmt.Errorf("读取前端插件构建产物 %s: %w", spec.id, err)
-		}
-		if err := copyBuildFile(source, filepath.Join(target, spec.id+".js"), info.Mode().Perm()); err != nil {
-			return fmt.Errorf("缓存前端插件构建产物 %s: %w", spec.id, err)
+		source := filepath.Join(r.options.root, "extensions", "plugins", spec.id, "frontend", "dist")
+		destination := filepath.Join(target, spec.id, "frontend", "dist")
+		if err := materializeCachedDirectory(source, destination); err != nil {
+			return fmt.Errorf("缓存前端插件 Module Graph %s: %w", spec.id, err)
 		}
 	}
 	return nil
@@ -467,7 +464,10 @@ func (r *runtime) validateFrontendBuild(candidate string) error {
 	var files []string
 	for _, spec := range specs {
 		if spec.frontend {
-			files = append(files, spec.id+".js")
+			files = append(files, filepath.Join(spec.id, "frontend", "dist", "vastplan.browser-graph.json"), filepath.Join(spec.id, filepath.FromSlash(spec.frontendEntry)))
+			if spec.frontendServerEntry != "" {
+				files = append(files, filepath.Join(spec.id, "frontend", "dist", "vastplan.server-graph.json"), filepath.Join(spec.id, filepath.FromSlash(spec.frontendServerEntry)))
+			}
 		}
 	}
 	return requireCachedFiles(filepath.Join(candidate, "frontend-modules"), files...)

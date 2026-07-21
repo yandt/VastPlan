@@ -2,19 +2,19 @@
   "id": "cn.vastplan.foundation.frontend.runtime.engine.react",
   "name": "VastPlan React Runtime Engine",
   "description": "为 Portal 提供受治理的 React 浏览器运行时与 Generation 生命周期",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "engines": { "frontend": "^1.0" },
   "activation": ["onPortalStartup"],
-  "entry": { "frontend": "frontend/dist/index.js" },
+  "entry": { "frontend": "frontend/dist/index.js", "frontendServer": "frontend/dist/server.js" },
   "contributes": { "frontend": { "runtimeEngines": [{
     "id": "ui.runtime.engine",
     "family": "react",
     "engineContract": "^1.0.0",
     "browserEntry": "frontend/dist/index.js",
-    "capabilities": ["csr", "generation", "lazy-module", "i18n"]
+    "capabilities": ["csr", "ssr", "hydration", "generation", "lazy-module", "i18n"]
   }] } }
 }

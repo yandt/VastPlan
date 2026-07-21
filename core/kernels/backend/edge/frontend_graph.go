@@ -15,10 +15,22 @@ func materializeFrontendModuleGraph(plugin verifiedPortalPlugin) (portalapi.Fron
 	if source == nil {
 		return portalapi.FrontendModuleGraph{}, nil, fmt.Errorf("插件 %s 缺少 browser Module Graph", plugin.ref.ID)
 	}
+	return materializeVerifiedModuleGraph(plugin, source, isDeferredFrontendModule(plugin.manifest))
+}
+
+func materializeServerModuleGraph(plugin verifiedPortalPlugin) (portalapi.FrontendModuleGraph, []FrontendModuleAsset, error) {
+	source := plugin.manifest.FrontendModuleGraphs.Server
+	if source == nil {
+		return portalapi.FrontendModuleGraph{}, nil, fmt.Errorf("插件 %s 缺少 server Module Graph", plugin.ref.ID)
+	}
+	return materializeVerifiedModuleGraph(plugin, source, false)
+}
+
+func materializeVerifiedModuleGraph(plugin verifiedPortalPlugin, source *pluginv1.FrontendModuleGraph, deferred bool) (portalapi.FrontendModuleGraph, []FrontendModuleAsset, error) {
 	graph := portalapi.FrontendModuleGraph{
 		PluginRef: plugin.ref, Target: source.Target, Entry: source.Entry, Digest: source.Digest,
 		PackageSHA256: plugin.artifact.SHA256, Externals: append([]string(nil), source.Externals...),
-		Nodes: make([]portalapi.FrontendModuleNode, 0, len(source.Nodes)), Deferred: isDeferredFrontendModule(plugin.manifest),
+		Nodes: make([]portalapi.FrontendModuleNode, 0, len(source.Nodes)), Deferred: deferred,
 	}
 	assets := make([]FrontendModuleAsset, 0, len(source.Nodes))
 	for _, sourceNode := range source.Nodes {

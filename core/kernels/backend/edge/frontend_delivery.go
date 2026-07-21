@@ -18,6 +18,7 @@ import (
 type deliverySnapshot struct {
 	SpecSHA256 string                `json:"specSha256"`
 	Runtime    portalapi.RuntimeSpec `json:"runtime"`
+	Server     serverRuntimeSpec     `json:"server,omitempty"`
 }
 
 // frontendDeliveryStore owns immutable, content-addressed browser objects and
@@ -43,26 +44,55 @@ func newFrontendDeliveryStore(root string) (*frontendDeliveryStore, error) {
 }
 
 func (s *frontendDeliveryStore) put(tenantID string, spec portalapi.PortalSpec, runtime portalapi.RuntimeSpec, assets []FrontendModuleAsset) error {
+	return s.putSealed(tenantID, spec, runtime, serverRuntimeSpec{}, assets)
+}
+
+func (s *frontendDeliveryStore) putSealed(tenantID string, spec portalapi.PortalSpec, runtime portalapi.RuntimeSpec, server serverRuntimeSpec, assets []FrontendModuleAsset) error {
 	digest, err := portalSpecDigest(spec)
 	if err != nil {
 		return err
 	}
 	runtime.Portal = spec
-	urls := make(map[string]string, len(assets))
+	assetsByDigest := make(map[string]FrontendModuleAsset, len(assets))
 	for i := range assets {
 		asset := assets[i]
 		actual := sha256.Sum256(asset.Content)
 		if hex.EncodeToString(actual[:]) != asset.Descriptor.SHA256 {
 			return errors.New("Portal 交付对象与声明摘要不一致")
 		}
-		asset.Descriptor.URL = frontendObjectURL(spec.Revision, asset.Descriptor.SHA256, asset.Descriptor.MediaType)
 		assets[i] = asset
-		urls[asset.Descriptor.SHA256] = asset.Descriptor.URL
+		assetsByDigest[asset.Descriptor.SHA256] = asset
 	}
-	if err := applyFrontendObjectURLs(&runtime, urls); err != nil {
+	browserURLs := make(map[string]string)
+	for _, descriptor := range runtimeFrontendObjects(runtime) {
+		browserURLs[descriptor.SHA256] = frontendObjectURL(spec.Revision, descriptor.SHA256, descriptor.MediaType)
+	}
+	serverURLs := make(map[string]string)
+	for _, descriptor := range serverRuntimeObjects(server) {
+		serverURLs[descriptor.SHA256] = serverObjectURL(descriptor.SHA256)
+	}
+	if err := applyFrontendObjectURLs(&runtime, browserURLs); err != nil {
 		return err
 	}
-	snapshot := deliverySnapshot{SpecSHA256: digest, Runtime: cloneFrontendRuntime(runtime)}
+	if err := applyServerObjectURLs(&server, serverURLs); err != nil {
+		return err
+	}
+	referenced := make(map[string]struct{}, len(browserURLs)+len(serverURLs))
+	for digest := range browserURLs {
+		referenced[digest] = struct{}{}
+	}
+	for digest := range serverURLs {
+		referenced[digest] = struct{}{}
+	}
+	if len(referenced) != len(assetsByDigest) {
+		return fmt.Errorf("Portal 交付对象与 browser/server Runtime 引用集合不一致")
+	}
+	for digest := range referenced {
+		if _, ok := assetsByDigest[digest]; !ok {
+			return fmt.Errorf("Portal 交付缺少内容对象: %s", digest)
+		}
+	}
+	snapshot := deliverySnapshot{SpecSHA256: digest, Runtime: cloneFrontendRuntime(runtime), Server: cloneServerRuntime(server)}
 	key := deliveryKey(tenantID, spec.ID, spec.Revision)
 
 	s.mu.Lock()
@@ -89,29 +119,50 @@ func (s *frontendDeliveryStore) put(tenantID string, spec portalapi.PortalSpec, 
 }
 
 func (s *frontendDeliveryStore) runtime(tenantID string, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
-	snapshot, err := s.snapshot(deliveryKey(tenantID, spec.ID, spec.Revision))
+	snapshot, err := s.sealedSnapshot(tenantID, spec)
 	if err != nil {
 		return portalapi.RuntimeSpec{}, err
 	}
+	return cloneFrontendRuntime(snapshot.Runtime), nil
+}
+
+func (s *frontendDeliveryStore) serverRuntime(tenantID string, spec portalapi.PortalSpec) (serverRuntimeSpec, error) {
+	snapshot, err := s.sealedSnapshot(tenantID, spec)
+	if err != nil {
+		return serverRuntimeSpec{}, err
+	}
+	return cloneServerRuntime(snapshot.Server), nil
+}
+
+func (s *frontendDeliveryStore) sealedSnapshot(tenantID string, spec portalapi.PortalSpec) (deliverySnapshot, error) {
+	snapshot, err := s.snapshot(deliveryKey(tenantID, spec.ID, spec.Revision))
+	if err != nil {
+		return deliverySnapshot{}, err
+	}
 	digest, err := portalSpecDigest(spec)
 	if err != nil || digest != snapshot.SpecSHA256 {
-		return portalapi.RuntimeSpec{}, errors.New("Portal 交付快照与活动解析锁不一致")
+		return deliverySnapshot{}, errors.New("Portal 交付快照与活动解析锁不一致")
 	}
-	return cloneFrontendRuntime(snapshot.Runtime), nil
+	return deliverySnapshot{SpecSHA256: snapshot.SpecSHA256, Runtime: cloneFrontendRuntime(snapshot.Runtime), Server: cloneServerRuntime(snapshot.Server)}, nil
 }
 
 func (s *frontendDeliveryStore) prefetchFrom(origin *frontendDeliveryStore, tenantID string, spec portalapi.PortalSpec) error {
 	if origin == nil {
 		return errors.New("Portal 中央交付 origin 未配置")
 	}
-	runtime, err := origin.runtime(tenantID, spec)
+	snapshot, err := origin.sealedSnapshot(tenantID, spec)
 	if err != nil {
 		return fmt.Errorf("读取 Portal 中央快照: %w", err)
 	}
-	descriptors := runtimeFrontendObjects(runtime)
+	descriptors := append(runtimeFrontendObjects(snapshot.Runtime), serverRuntimeObjects(snapshot.Server)...)
 	assets := make([]FrontendModuleAsset, 0, len(descriptors))
+	seen := make(map[string]struct{}, len(descriptors))
 	for _, descriptor := range descriptors {
-		asset, err := origin.module(tenantID, spec, descriptor.SHA256)
+		if _, ok := seen[descriptor.SHA256]; ok {
+			continue
+		}
+		seen[descriptor.SHA256] = struct{}{}
+		asset, err := origin.sealedObject(snapshot, descriptor.SHA256)
 		if err != nil {
 			return fmt.Errorf("预取 Portal 内容对象 %s: %w", descriptor.SHA256, err)
 		}
@@ -127,7 +178,7 @@ func (s *frontendDeliveryStore) prefetchFrom(origin *frontendDeliveryStore, tena
 	}
 	// put writes every object first and the revision snapshot last. The local
 	// revision therefore becomes visible only after the full module set exists.
-	return s.put(tenantID, spec, runtime, assets)
+	return s.putSealed(tenantID, spec, snapshot.Runtime, snapshot.Server, assets)
 }
 
 func (s *frontendDeliveryStore) module(tenantID string, spec portalapi.PortalSpec, digest string) (FrontendModuleAsset, error) {
@@ -140,6 +191,27 @@ func (s *frontendDeliveryStore) module(tenantID string, spec portalapi.PortalSpe
 		return FrontendModuleAsset{}, errors.New("Portal 快照未授权该内容对象")
 	}
 
+	return s.readObject(descriptor)
+}
+
+func (s *frontendDeliveryStore) sealedObject(snapshot deliverySnapshot, digest string) (FrontendModuleAsset, error) {
+	descriptor := findRuntimeFrontendObject(snapshot.Runtime, digest)
+	if descriptor.ID == "" {
+		for _, candidate := range serverRuntimeObjects(snapshot.Server) {
+			if candidate.SHA256 == digest {
+				descriptor = candidate
+				break
+			}
+		}
+	}
+	if descriptor.ID == "" {
+		return FrontendModuleAsset{}, errors.New("Portal 密封快照未授权该内容对象")
+	}
+	return s.readObject(descriptor)
+}
+
+func (s *frontendDeliveryStore) readObject(descriptor portalapi.FrontendModule) (FrontendModuleAsset, error) {
+	digest := descriptor.SHA256
 	s.mu.RLock()
 	asset, ok := s.objects[digest]
 	s.mu.RUnlock()

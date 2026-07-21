@@ -1,17 +1,17 @@
 {
   "version": 1,
-  "revision": 1,
+  "revision": 2,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 1,
+      "revision": 2,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
       "runtimeEngine": {
         "id": "cn.vastplan.foundation.frontend.runtime.engine.react",
-        "version": "1.0.0",
+        "version": "1.1.0",
         "channel": "stable",
         "engineContract": "^1.0.0",
         "family": "react"
@@ -56,7 +56,7 @@
         "uiContract": "^4.0.0"
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.frontend.runtime.engine.react", "version": "1.0.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.runtime.engine.react", "version": "1.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "1.3.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.render.adapter.arco", "version": "1.3.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.render.adapter.mui", "version": "1.3.0", "channel": "stable" },
@@ -80,8 +80,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 1,
-        "digest": "e11a205993b866ec71914bf4de2b988facdfd34fc21d20437825237c7f776f05"
+        "revision": 2,
+        "digest": "d74df7acf63454da3b4df92e7d5d342dd0268801a96d0731f86594299192b5c5"
       },
       "services": [
         {
