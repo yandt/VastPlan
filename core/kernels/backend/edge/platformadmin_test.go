@@ -60,6 +60,27 @@ func (*platformService) ProbeDatabaseConnection(context.Context, portalapi.Princ
 func (*platformService) ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryStatus, error) {
 	return platformadminapi.ArtifactRepositoryStatus{Ready: true}, nil
 }
+func (*platformService) ArtifactMigrationStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "synced"}, nil
+}
+func (*platformService) PrepareArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, platformadminapi.PrepareArtifactMigrationRequest) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "prepared"}, nil
+}
+func (*platformService) SyncArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "synced"}, nil
+}
+func (*platformService) CutoverArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, platformadminapi.CutoverArtifactMigrationRequest) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "observing"}, nil
+}
+func (*platformService) RollbackArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "rolled-back"}, nil
+}
+func (*platformService) FinalizeArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "finalized"}, nil
+}
+func (*platformService) ReleaseArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "released"}, nil
+}
 func (*platformService) ListManagedNodes(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]platformadminapi.ManagedNode, error) {
 	return []platformadminapi.ManagedNode{}, nil
 }
@@ -124,7 +145,7 @@ func platformPortalService() *service {
 		{ID: "settings", LogicalService: "platform.settings", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.SettingsCapability, Read: []string{"list"}, Write: []string{"put", "delete"}}}},
 		{ID: "credentials", LogicalService: "platform.credentials", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.CredentialsCapability, Read: []string{"list"}, Write: []string{"put", "rotate", "revoke"}}}},
 		{ID: "database", LogicalService: "platform.database", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DatabaseCapability, Read: []string{"list"}, Write: []string{"define", "remove", "probe"}}}},
-		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status"}}}},
+		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status", "migrationStatus"}, Write: []string{"prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"}}}},
 		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"}}}},
 	}}
 	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a", Route: "/operations", Management: binding, Resolution: portalapi.Resolution{PlatformProfile: profile, ManagementBindingDigest: compositioncommonv1.Digest(binding)}}
@@ -251,6 +272,37 @@ func TestDeploymentRoutesAreRoleSeparatedAndAllowlisted(t *testing.T) {
 	}
 	if !platformCapabilityAllowed(platformadminapi.DeploymentCapability, "approveBootstrap") || !platformCapabilityAllowed(platformadminapi.DeploymentCapability, "rollbackTestRelease") || platformCapabilityAllowed(platformadminapi.DeploymentCapability, "shell") {
 		t.Fatal("部署 capability 白名单必须固定操作且拒绝 shell")
+	}
+}
+
+func TestArtifactMigrationRoutesAreExplicitRoleSeparatedAndCSRFProtected(t *testing.T) {
+	h := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "repository-admin", TenantID: "tenant-a", Roles: []string{"platform.artifacts.migrate", "platform.artifacts.read"}}, nil
+	}), platformPortalService(), nil, &platformService{}, nil, nil)
+	status := httptest.NewRecorder()
+	h.ServeHTTP(status, httptest.NewRequest(http.MethodGet, platformPath("artifacts", "artifacts/migration"), nil))
+	if status.Code != http.StatusOK || !strings.Contains(status.Body.String(), "repository.move-001") {
+		t.Fatalf("migration status failed: status=%d body=%s", status.Code, status.Body.String())
+	}
+
+	withoutCSRF := httptest.NewRecorder()
+	h.ServeHTTP(withoutCSRF, httptest.NewRequest(http.MethodPost, platformPath("artifacts", "artifacts/migrations"), strings.NewReader(`{"migrationId":"repository.move-001","targetProvider":"platform.artifacts.storage.file","targetVolumeId":"repository.next"}`)))
+	if withoutCSRF.Code != http.StatusForbidden {
+		t.Fatalf("migration write without CSRF must fail: %d", withoutCSRF.Code)
+	}
+	csrfResponse := httptest.NewRecorder()
+	h.ServeHTTP(csrfResponse, httptest.NewRequest(http.MethodGet, "/v1/csrf", nil))
+	cookie := csrfResponse.Result().Cookies()[0]
+	request := httptest.NewRequest(http.MethodPost, platformPath("artifacts", "artifacts/migrations"), strings.NewReader(`{"migrationId":"repository.move-001","targetProvider":"platform.artifacts.storage.file","targetVolumeId":"repository.next"}`))
+	request.AddCookie(cookie)
+	request.Header.Set("X-VastPlan-CSRF", cookie.Value)
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "prepared") {
+		t.Fatalf("migration prepare failed: status=%d body=%s", response.Code, response.Body.String())
+	}
+	if !platformCapabilityAllowed(platformadminapi.ArtifactsCapability, "releaseMigration") || platformCapabilityAllowed(platformadminapi.ArtifactsCapability, "deleteVolume") {
+		t.Fatal("artifact migration allowlist must be explicit")
 	}
 }
 

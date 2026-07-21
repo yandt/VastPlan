@@ -17,7 +17,7 @@ import (
 const maxResolveRequestBytes = int64(256 << 10)
 
 type HTTPHandler struct {
-	Store             *Store
+	Store             Service
 	ReadToken         string
 	BundleToken       string
 	ImportToken       string
@@ -27,6 +27,15 @@ type HTTPHandler struct {
 	BundleDirectory   string
 	RequireTLS        bool
 	Logf              func(string, ...any)
+}
+
+// Service is the catalog read surface. A repository migration coordinator can
+// atomically redirect it to a verified candidate without exposing storage paths
+// to the HTTP layer.
+type Service interface {
+	Query(Query) Page
+	Journal(uint64, int) JournalPage
+	Resolve(pluginv1.ArtifactResolveRequest) (pluginv1.ArtifactLock, error)
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {

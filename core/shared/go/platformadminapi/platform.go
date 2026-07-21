@@ -94,9 +94,46 @@ type DatabaseProbe struct {
 }
 
 type ArtifactRepositoryStatus struct {
-	Ready           bool   `json:"ready"`
-	Listen          string `json:"listen,omitempty"`
-	StorageProvider string `json:"storageProvider,omitempty"`
+	Ready           bool                        `json:"ready"`
+	Listen          string                      `json:"listen,omitempty"`
+	StorageProvider string                      `json:"storageProvider,omitempty"`
+	StorageVolumeID string                      `json:"storageVolumeId,omitempty"`
+	Catalog         ArtifactCatalogStatus       `json:"catalog"`
+	Migration       ArtifactRepositoryMigration `json:"migration"`
+}
+
+type ArtifactCatalogStatus struct {
+	Revision        uint64 `json:"revision"`
+	Artifacts       int    `json:"artifacts"`
+	InventorySHA256 string `json:"inventorySHA256,omitempty"`
+}
+
+type ArtifactRepositoryMigration struct {
+	MigrationID      string `json:"migrationId,omitempty"`
+	Phase            string `json:"phase,omitempty"`
+	SourceProvider   string `json:"sourceProvider,omitempty"`
+	SourceVolumeID   string `json:"sourceVolumeId,omitempty"`
+	TargetProvider   string `json:"targetProvider,omitempty"`
+	TargetVolumeID   string `json:"targetVolumeId,omitempty"`
+	Files            int64  `json:"files,omitempty"`
+	Bytes            int64  `json:"bytes,omitempty"`
+	Digest           string `json:"digest,omitempty"`
+	ObservationUntil string `json:"observationUntil,omitempty"`
+	LastError        string `json:"lastError,omitempty"`
+	ConfiguredActive bool   `json:"configuredActive"`
+	CanRollback      bool   `json:"canRollback"`
+	CanFinalize      bool   `json:"canFinalize"`
+	CanRelease       bool   `json:"canRelease"`
+}
+
+type PrepareArtifactMigrationRequest struct {
+	MigrationID    string `json:"migrationId"`
+	TargetProvider string `json:"targetProvider"`
+	TargetVolumeID string `json:"targetVolumeId"`
+}
+
+type CutoverArtifactMigrationRequest struct {
+	ObservationSeconds int64 `json:"observationSeconds"`
 }
 
 type ManagedNode struct {
@@ -269,6 +306,13 @@ type Service interface {
 	DeleteDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) error
 	ProbeDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (DatabaseProbe, error)
 	ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryStatus, error)
+	ArtifactMigrationStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryMigration, error)
+	PrepareArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, PrepareArtifactMigrationRequest) (ArtifactRepositoryMigration, error)
+	SyncArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (ArtifactRepositoryMigration, error)
+	CutoverArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, CutoverArtifactMigrationRequest) (ArtifactRepositoryMigration, error)
+	RollbackArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (ArtifactRepositoryMigration, error)
+	FinalizeArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (ArtifactRepositoryMigration, error)
+	ReleaseArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (ArtifactRepositoryMigration, error)
 	ListManagedNodes(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]ManagedNode, error)
 	PutManagedNode(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, PutManagedNodeRequest) (ManagedNode, error)
 	ListBootstrapJobs(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]BootstrapJob, error)

@@ -128,3 +128,5 @@
 - [ADR-0095 Database Runtime、多 Provider 连接池与集群事务](ADR-0095-Database-Runtime多Provider连接池与集群事务.md)
 - [ADR-0096 配置入口 Codec 与 YAML 嵌套](ADR-0096-配置入口Codec与YAML嵌套.md)
 - [ADR-0097 测试制品仓库与前端分级热升级](ADR-0097-测试制品仓库与前端分级热升级.md)
+- [ADR-0098 制品依赖解析、精确锁与离线 Bundle](ADR-0098-制品依赖解析锁与离线Bundle.md)
+- [ADR-0099 File Volume 在线迁移与可回滚切换](ADR-0099-File-Volume在线迁移与可回滚切换.md)

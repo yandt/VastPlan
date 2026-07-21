@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.storage.file",
   "name": "VastPlan 本地文件制品存储 Provider",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -31,6 +31,7 @@
       "required": ["volumeId"]
     }
   },
+  "state": { "backend": { "format": "cn.vastplan.platform.artifacts.storage.file", "formatVersion": 1 } },
   "activation": ["onStartup"],
   "entry": { "backend": "backend/artifact-storage-file" },
   "contributes": {
@@ -42,7 +43,10 @@
           "title": "本地文件制品存储 Provider",
           "subcommands": [
             { "name": "probe", "description": "检查本地文件存储根目录", "paramsSchema": { "type": "object", "properties": { "volumeId": { "type": "string" } }, "required": ["volumeId"] } },
-            { "name": "provision", "description": "幂等供给一个私有制品卷", "paramsSchema": { "type": "object", "properties": { "volumeId": { "type": "string" } }, "required": ["volumeId"] } }
+            { "name": "provision", "description": "幂等供给一个私有制品卷", "paramsSchema": { "type": "object", "properties": { "volumeId": { "type": "string" } }, "required": ["volumeId"] } },
+            { "name": "describe", "description": "读取受控 volume 身份" },
+            { "name": "migrate", "description": "可重试地准备、同步或校验 volume" },
+            { "name": "release", "description": "将旧 volume 原子移入私有隔离区" }
           ]
         }
       ]

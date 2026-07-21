@@ -156,6 +156,57 @@ func (s *CapabilityPlatformAdminService) ArtifactRepositoryStatus(ctx context.Co
 	return response, err
 }
 
+func (s *CapabilityPlatformAdminService) ArtifactMigrationStatus(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryMigration, error) {
+	var response platformadminapi.ArtifactRepositoryMigration
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "migrationStatus", false, struct{}{}, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) PrepareArtifactMigration(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, request platformadminapi.PrepareArtifactMigrationRequest) (platformadminapi.ArtifactRepositoryMigration, error) {
+	if validResourceName(request.MigrationID, 96) != nil || validResourceName(request.TargetProvider, 160) != nil || validResourceName(request.TargetVolumeID, 80) != nil {
+		return platformadminapi.ArtifactRepositoryMigration{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.ArtifactRepositoryMigration
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "prepareMigration", true, request, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) artifactMigrationAction(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, migrationID, operation string, extra map[string]any) (platformadminapi.ArtifactRepositoryMigration, error) {
+	if validResourceName(migrationID, 96) != nil {
+		return platformadminapi.ArtifactRepositoryMigration{}, platformadminapi.ErrInvalid
+	}
+	payload := map[string]any{"migrationId": migrationID}
+	for key, value := range extra {
+		payload[key] = value
+	}
+	var response platformadminapi.ArtifactRepositoryMigration
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, operation, true, payload, &response)
+	return response, err
+}
+
+func (s *CapabilityPlatformAdminService) SyncArtifactMigration(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id string) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return s.artifactMigrationAction(ctx, p, target, id, "syncMigration", nil)
+}
+
+func (s *CapabilityPlatformAdminService) CutoverArtifactMigration(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id string, request platformadminapi.CutoverArtifactMigrationRequest) (platformadminapi.ArtifactRepositoryMigration, error) {
+	if request.ObservationSeconds < 60 || request.ObservationSeconds > 7*24*60*60 {
+		return platformadminapi.ArtifactRepositoryMigration{}, platformadminapi.ErrInvalid
+	}
+	return s.artifactMigrationAction(ctx, p, target, id, "cutoverMigration", map[string]any{"observationSeconds": request.ObservationSeconds})
+}
+
+func (s *CapabilityPlatformAdminService) RollbackArtifactMigration(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id string) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return s.artifactMigrationAction(ctx, p, target, id, "rollbackMigration", nil)
+}
+
+func (s *CapabilityPlatformAdminService) FinalizeArtifactMigration(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id string) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return s.artifactMigrationAction(ctx, p, target, id, "finalizeMigration", nil)
+}
+
+func (s *CapabilityPlatformAdminService) ReleaseArtifactMigration(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, id string) (platformadminapi.ArtifactRepositoryMigration, error) {
+	return s.artifactMigrationAction(ctx, p, target, id, "releaseMigration", nil)
+}
+
 func (s *CapabilityPlatformAdminService) ListManagedNodes(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) ([]platformadminapi.ManagedNode, error) {
 	var response struct {
 		Items []platformadminapi.ManagedNode `json:"items"`

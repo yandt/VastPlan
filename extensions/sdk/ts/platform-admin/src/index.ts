@@ -52,7 +52,18 @@ export interface PutDatabaseConnectionRequest {
 }
 
 export interface DatabaseProbe { ready: boolean; message?: string; }
-export interface ArtifactRepositoryStatus { ready: boolean; listen?: string; storageProvider?: string; }
+export interface ArtifactRepositoryMigration {
+  migrationId?: string; phase?: string; sourceProvider?: string; sourceVolumeId?: string;
+  targetProvider?: string; targetVolumeId?: string; files?: number; bytes?: number; digest?: string;
+  observationUntil?: string; lastError?: string; configuredActive: boolean;
+  canRollback: boolean; canFinalize: boolean; canRelease: boolean;
+}
+export interface ArtifactRepositoryStatus {
+  ready: boolean; listen?: string; storageProvider?: string; storageVolumeId?: string;
+  catalog?: { revision: number; artifacts: number; inventorySHA256?: string };
+  migration?: ArtifactRepositoryMigration;
+}
+export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
 
 export interface NodeBootstrapPlan {
   target: { address: string; port?: number; user: string };
@@ -144,6 +155,16 @@ export class PlatformAdminClient {
   public deleteDatabaseConnection(name: string): Promise<void> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "DELETE").then(() => undefined); }
   public probeDatabaseConnection(name: string): Promise<DatabaseProbe> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}/probe`, "POST", {}); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
+  public artifactMigrationStatus(): Promise<ArtifactRepositoryMigration> { return this.get(`${this.basePath}/artifacts/migration`); }
+  public prepareArtifactMigration(request: PrepareArtifactMigrationRequest): Promise<ArtifactRepositoryMigration> { return this.mutate(`${this.basePath}/artifacts/migrations`, "POST", request); }
+  public syncArtifactMigration(id: string): Promise<ArtifactRepositoryMigration> { return this.artifactMigrationAction(id, "sync"); }
+  public cutoverArtifactMigration(id: string, observationSeconds: number): Promise<ArtifactRepositoryMigration> {
+    if (!Number.isSafeInteger(observationSeconds) || observationSeconds < 60 || observationSeconds > 7 * 24 * 60 * 60) throw new PlatformAdminError(400, "invalid_observation_seconds");
+    return this.artifactMigrationAction(id, "cutover", { observationSeconds });
+  }
+  public rollbackArtifactMigration(id: string): Promise<ArtifactRepositoryMigration> { return this.artifactMigrationAction(id, "rollback"); }
+  public finalizeArtifactMigration(id: string): Promise<ArtifactRepositoryMigration> { return this.artifactMigrationAction(id, "finalize"); }
+  public releaseArtifactMigration(id: string): Promise<ArtifactRepositoryMigration> { return this.artifactMigrationAction(id, "release"); }
 
   public listManagedNodes(): Promise<ManagedNode[]> { return this.get(`${this.basePath}/deployment/nodes`); }
   public putManagedNode(id: string, plan: NodeBootstrapPlan, ifVersion?: number): Promise<ManagedNode> {
@@ -184,6 +205,10 @@ export class PlatformAdminClient {
 
   private serviceRevisionAction(id: number, action: string): Promise<ServiceRevision> {
     return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}/${action}`, "POST", {});
+  }
+
+  private artifactMigrationAction(id: string, action: string, body: Record<string, unknown> = {}): Promise<ArtifactRepositoryMigration> {
+    return this.mutate(`${this.basePath}/artifacts/migrations/${segment(id)}/${action}`, "POST", body);
   }
 
   private get<T>(path: string): Promise<T> { return this.call<T>(path, { method: "GET" }); }

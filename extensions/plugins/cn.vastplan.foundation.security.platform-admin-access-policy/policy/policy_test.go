@@ -35,6 +35,12 @@ func TestPlatformAdminRolesAndUnknownOperations(t *testing.T) {
 	if got, _ := decide(user("platform.deployment.publish"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "publishServiceRevision"}); got != extpoint.DecisionAllow {
 		t.Fatalf("服务组合发布角色应允许: %s", got)
 	}
+	if got, _ := decide(user("platform.artifacts.migrate"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "cutoverMigration"}); got != extpoint.DecisionAllow {
+		t.Fatalf("制品迁移角色应允许切换: %s", got)
+	}
+	if got, _ := decide(user("platform.artifacts.read"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "cutoverMigration"}); got != extpoint.DecisionDeny {
+		t.Fatalf("制品读取角色不得隐含迁移: %s", got)
+	}
 }
 
 func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
@@ -81,6 +87,13 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	}
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "resolve"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 应可生成精确制品锁: %s", got)
+	}
+	repositoryPlugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.artifacts.repository"}}
+	if got, _ := decide(repositoryPlugin, extpoint.PermissionRequest{Capability: "platform.artifacts.storage.file", Operation: "migrate"}); got != extpoint.DecisionAllow {
+		t.Fatalf("repository must be allowed to invoke storage migration, got %s", got)
+	}
+	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: "platform.artifacts.storage.file", Operation: "migrate"}); got != extpoint.DecisionDeny {
+		t.Fatalf("business plugins must not invoke storage migration, got %s", got)
 	}
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "publish"}); got != extpoint.DecisionDeny {
 		t.Fatalf("deployment-manager 不得取得仓库发布权限: %s", got)

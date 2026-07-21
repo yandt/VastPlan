@@ -24,39 +24,23 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/repositoryruntime"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.5.0"
+const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.6.0"
+
+var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"}]}`)
 
 type serverConfig struct {
-	addr, repository, storageProvider, trust, cert, key, readToken, publishToken, bundleToken string
-}
-
-type catalogRepository struct {
-	upstream artifactapi.Repository
-	catalog  *catalog.Store
-}
-
-func (r catalogRepository) Publish(attestationRaw, packageBytes []byte) (pluginservice.Artifact, error) {
-	artifact, err := r.upstream.Publish(attestationRaw, packageBytes)
-	if err != nil {
-		return pluginservice.Artifact{}, err
-	}
-	if _, err := r.catalog.RecordPublished(artifact, attestationRaw, time.Now().UTC()); err != nil {
-		return pluginservice.Artifact{}, fmt.Errorf("记录发布流水账: %w", err)
-	}
-	return artifact, nil
-}
-
-func (r catalogRepository) Read(ref pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, error) {
-	return r.upstream.Read(ref)
+	addr, repository, storageProvider, volumeID, migrationState, trust, cert, key, readToken, publishToken, bundleToken string
 }
 
 func loadConfig() (serverConfig, error) {
 	var startup struct {
 		Listen          string `json:"listen"`
 		StorageProvider string `json:"storageProvider"`
+		VolumeID        string `json:"volumeId"`
 	}
 	if err := sdk.DecodeStartupConfiguration(&startup); err != nil {
 		return serverConfig{}, err
@@ -65,6 +49,8 @@ func loadConfig() (serverConfig, error) {
 		addr:            startup.Listen,
 		repository:      os.Getenv("VASTPLAN_ARTIFACT_REPOSITORY"),
 		storageProvider: startup.StorageProvider,
+		volumeID:        startup.VolumeID,
+		migrationState:  os.Getenv("VASTPLAN_ARTIFACT_MIGRATION_STATE"),
 		trust:           os.Getenv("VASTPLAN_ARTIFACT_TRUST"),
 		cert:            os.Getenv("VASTPLAN_ARTIFACT_TLS_CERT"),
 		key:             os.Getenv("VASTPLAN_ARTIFACT_TLS_KEY"),
@@ -78,10 +64,16 @@ func loadConfig() (serverConfig, error) {
 	if config.storageProvider == "" {
 		config.storageProvider = "platform.artifacts.storage.file"
 	}
+	if config.volumeID == "" {
+		config.volumeID = "repository.primary"
+	}
 	if err := artifactstorage.ValidateProviderID(config.storageProvider); err != nil {
 		return config, err
 	}
-	if config.repository == "" || config.trust == "" || config.cert == "" || config.key == "" || config.readToken == "" || config.publishToken == "" || config.bundleToken == "" || config.readToken == config.publishToken || config.readToken == config.bundleToken || config.publishToken == config.bundleToken {
+	if err := artifactstorage.ValidateVolumeID(config.volumeID); err != nil {
+		return config, err
+	}
+	if config.repository == "" || config.migrationState == "" || config.trust == "" || config.cert == "" || config.key == "" || config.readToken == "" || config.publishToken == "" || config.bundleToken == "" || config.readToken == config.publishToken || config.readToken == config.bundleToken || config.publishToken == config.bundleToken {
 		return config, errors.New("制品仓库必须配置存储、信任文档、TLS 证书和互不相同的读取/发布/Bundle 令牌")
 	}
 	return config, nil
@@ -96,22 +88,19 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	local, err := pluginservice.NewRepository(config.repository)
-	if err != nil {
-		log.Fatal(err)
-	}
-	signed := &pluginservice.SignedRepository{Local: local, Trust: trust}
 	trustRaw, err := os.ReadFile(config.trust)
 	if err != nil {
 		log.Fatalf("读取制品信任快照失败: %v", err)
 	}
-	catalogStore, err := catalog.Open(config.repository, signed)
+	manager, err := repositoryruntime.Open(artifactstorage.Volume{
+		Handle: "artifact-storage://configured", ProviderID: config.storageProvider, VolumeID: config.volumeID,
+		AccessMode: "filesystem", MountPath: config.repository, Generation: 1, Ready: true,
+	}, trust, config.migrationState)
 	if err != nil {
-		log.Fatalf("打开制品 Catalog 与发布流水账失败: %v", err)
+		log.Fatalf("打开可迁移制品仓库失败: %v", err)
 	}
-	adapter := pluginservice.HTTPRepositoryAdapter{Repository: signed}
 	handler := &artifactapi.Server{
-		Repository:   catalogRepository{upstream: adapter, catalog: catalogStore},
+		Repository:   manager,
 		ReadToken:    config.readToken,
 		PublishToken: config.publishToken,
 		RequireTLS:   true,
@@ -120,8 +109,8 @@ func main() {
 		},
 	}
 	catalogHandler := &catalog.HTTPHandler{
-		Store: catalogStore, ReadToken: config.readToken, BundleToken: config.bundleToken, ImportToken: config.publishToken,
-		BundleSource: signed, BundleDestination: catalogRepository{upstream: adapter, catalog: catalogStore}, TrustSnapshot: trustRaw, BundleDirectory: filepath.Join(config.repository, "catalog", "bundles"), RequireTLS: true,
+		Store: manager, ReadToken: config.readToken, BundleToken: config.bundleToken, ImportToken: config.publishToken,
+		BundleSource: manager, BundleDestination: manager, TrustSnapshot: trustRaw, BundleDirectory: filepath.Join(filepath.Dir(config.migrationState), "bundles"), RequireTLS: true,
 		Logf: func(format string, args ...any) { log.Printf("[artifact-audit] "+format, args...) },
 	}
 	mux := http.NewServeMux()
@@ -153,10 +142,10 @@ func main() {
 	p := sdk.New(pluginID, pluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage, ID: "platform.artifacts.repository",
-		Descriptor: []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"在精确 Catalog revision 上解析依赖并生成不可变锁"}]}`),
+		Descriptor: runtimeRepositoryDescriptor,
 		Handlers: map[string]sdk.Handler{
 			"status": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
-				status, marshalErr := json.Marshal(map[string]any{"listen": config.addr, "ready": ready.Load(), "storageProvider": config.storageProvider, "catalog": catalogStore.Stats()})
+				status, marshalErr := json.Marshal(map[string]any{"listen": config.addr, "ready": ready.Load(), "storageProvider": config.storageProvider, "storageVolumeId": manager.ActiveVolume().VolumeID, "catalog": manager.Stats(), "migration": manager.Migration()})
 				if marshalErr != nil {
 					return nil, nil, marshalErr
 				}
@@ -177,7 +166,7 @@ func main() {
 				if err := decodeParams(raw, &request); err != nil {
 					return nil, nil, err
 				}
-				response := catalogStore.Query(catalog.Query{
+				response := manager.Query(catalog.Query{
 					PluginID: request.PluginID, PluginPrefix: request.PluginPrefix, Namespace: request.Namespace,
 					Publisher: request.Publisher, Version: request.Version, Channel: request.Channel,
 					Target: request.Target, Page: request.Page, PageSize: request.PageSize,
@@ -193,7 +182,7 @@ func main() {
 				if err := decodeParams(raw, &request); err != nil {
 					return nil, nil, err
 				}
-				payload, err := json.Marshal(catalogStore.Journal(request.AfterRevision, request.Limit))
+				payload, err := json.Marshal(manager.Journal(request.AfterRevision, request.Limit))
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 			},
 			"resolve": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
@@ -201,13 +190,20 @@ func main() {
 				if err := decodeParams(raw, &request); err != nil {
 					return nil, nil, err
 				}
-				lock, err := catalogStore.Resolve(request)
+				lock, err := manager.Resolve(request)
 				if err != nil {
 					return nil, nil, err
 				}
 				payload, err := json.Marshal(lock)
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 			},
+			"migrationStatus":   migrationHandler(manager, "migrationStatus"),
+			"prepareMigration":  migrationHandler(manager, "prepareMigration"),
+			"syncMigration":     migrationHandler(manager, "syncMigration"),
+			"cutoverMigration":  migrationHandler(manager, "cutoverMigration"),
+			"rollbackMigration": migrationHandler(manager, "rollbackMigration"),
+			"finalizeMigration": migrationHandler(manager, "finalizeMigration"),
+			"releaseMigration":  migrationHandler(manager, "releaseMigration"),
 		},
 	})
 	if err := p.Serve(); err != nil {

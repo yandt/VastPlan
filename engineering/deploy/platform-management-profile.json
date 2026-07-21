@@ -28,7 +28,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.bootstrap-policy", "version": "0.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.10.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.11.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.2.0", "channel": "stable" }
       ]
     },
@@ -52,7 +52,8 @@
           },
           "cn.vastplan.platform.artifacts.repository": {
             "listen": "__VASTPLAN_ARTIFACT_LISTEN__",
-            "storageProvider": "platform.artifacts.storage.file"
+            "storageProvider": "platform.artifacts.storage.file",
+            "volumeId": "repository.primary"
           }
         },
         "environment_allowlist": {
@@ -66,14 +67,15 @@
             "VASTPLAN_ARTIFACT_TLS_KEY",
             "VASTPLAN_ARTIFACT_READ_TOKEN",
             "VASTPLAN_ARTIFACT_PUBLISH_TOKEN",
-            "VASTPLAN_ARTIFACT_BUNDLE_TOKEN"
+            "VASTPLAN_ARTIFACT_BUNDLE_TOKEN",
+            "VASTPLAN_ARTIFACT_MIGRATION_STATE"
           ]
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.10.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.5.0", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.11.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.2.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.6.0", "channel": "stable" }
       ]
     },
     {
@@ -100,7 +102,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.10.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.11.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.4.0", "channel": "stable" }
       ]
     },
@@ -123,7 +125,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.10.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.11.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.4.0", "channel": "stable" }
       ]
     },
@@ -146,7 +148,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.10.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.11.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.7.0", "channel": "stable" }
       ]
     },
@@ -169,7 +171,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.10.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.11.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.4.0", "channel": "stable" }
       ]
     }

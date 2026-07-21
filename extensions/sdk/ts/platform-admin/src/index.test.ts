@@ -67,4 +67,20 @@ describe("PlatformAdminClient", () => {
       body: expect.stringContaining('"repositoryRevision":17'),
     });
   });
+
+  it("uses fixed CSRF-protected artifact migration actions", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const fetcher: PlatformFetch = async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { migrationId: "repository.move-001", phase: "observing" } };
+    };
+    const client = new PlatformAdminClient(fetcher, "operations", "artifacts");
+    await client.cutoverArtifactMigration("repository.move-001", 300);
+    expect(calls).toEqual([
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/artifacts/artifacts/migrations/repository.move-001/cutover", method: "POST", body: '{"observationSeconds":300}' },
+    ]);
+    expect(() => client.cutoverArtifactMigration("repository.move-001", 0)).toThrowError(PlatformAdminError);
+    expect(() => client.releaseArtifactMigration("bad/id")).toThrowError(PlatformAdminError);
+  });
 });

@@ -90,6 +90,77 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 		respondPlatform(w, value, err)
 		return
 	}
+	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "migration" {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "migrationStatus", false) || !requirePlatformRole(w, p, "platform.artifacts.read") {
+			return
+		}
+		value, err := h.platform.ArtifactMigrationStatus(r.Context(), p, target)
+		respondPlatform(w, value, err)
+		return
+	}
+	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "migrations" {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "prepareMigration", true) || !requirePlatformRole(w, p, "platform.artifacts.migrate") {
+			return
+		}
+		var request platformadminapi.PrepareArtifactMigrationRequest
+		if !decode(w, r, &request) {
+			return
+		}
+		value, err := h.platform.PrepareArtifactMigration(r.Context(), p, target, request)
+		respondPlatform(w, value, err)
+		return
+	}
+	if len(parts) == 4 && parts[0] == "artifacts" && parts[1] == "migrations" {
+		if r.Method != http.MethodPost {
+			methodNotAllowed(w)
+			return
+		}
+		migrationID, err := url.PathUnescape(parts[2])
+		if err != nil || validResourceName(migrationID, 96) != nil {
+			writeError(w, http.StatusBadRequest, "invalid_migration_id")
+			return
+		}
+		operation := map[string]string{"sync": "syncMigration", "cutover": "cutoverMigration", "rollback": "rollbackMigration", "finalize": "finalizeMigration", "release": "releaseMigration"}[parts[3]]
+		if operation == "" {
+			http.NotFound(w, r)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, operation, true) || !requirePlatformRole(w, p, "platform.artifacts.migrate") {
+			return
+		}
+		var value platformadminapi.ArtifactRepositoryMigration
+		if parts[3] == "cutover" {
+			var request platformadminapi.CutoverArtifactMigrationRequest
+			if !decode(w, r, &request) {
+				return
+			}
+			value, err = h.platform.CutoverArtifactMigration(r.Context(), p, target, migrationID, request)
+		} else {
+			if !decodeEmptyObject(w, r) {
+				return
+			}
+			switch parts[3] {
+			case "sync":
+				value, err = h.platform.SyncArtifactMigration(r.Context(), p, target, migrationID)
+			case "rollback":
+				value, err = h.platform.RollbackArtifactMigration(r.Context(), p, target, migrationID)
+			case "finalize":
+				value, err = h.platform.FinalizeArtifactMigration(r.Context(), p, target, migrationID)
+			case "release":
+				value, err = h.platform.ReleaseArtifactMigration(r.Context(), p, target, migrationID)
+			}
+		}
+		respondPlatform(w, value, err)
+		return
+	}
 	if len(parts) < 2 || len(parts) > 3 {
 		http.NotFound(w, r)
 		return
@@ -109,6 +180,11 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func decodeEmptyObject(w http.ResponseWriter, r *http.Request) bool {
+	var request struct{}
+	return decode(w, r, &request)
 }
 
 func (h *Handler) deploymentRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal, target portalapi.ManagementTarget, parts []string) {

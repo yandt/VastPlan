@@ -6,6 +6,7 @@ package catalog
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -88,8 +89,9 @@ type JournalPage struct {
 }
 
 type Stats struct {
-	Revision  uint64 `json:"revision"`
-	Artifacts int    `json:"artifacts"`
+	Revision        uint64 `json:"revision"`
+	Artifacts       int    `json:"artifacts"`
+	InventorySHA256 string `json:"inventorySHA256"`
 }
 
 type snapshot struct {
@@ -210,7 +212,21 @@ func (s *Store) Journal(afterRevision uint64, limit int) JournalPage {
 func (s *Store) Stats() Stats {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return Stats{Revision: s.revision, Artifacts: len(s.entries)}
+	return Stats{Revision: s.revision, Artifacts: len(s.entries), InventorySHA256: inventoryDigest(s.entries)}
+}
+
+func inventoryDigest(entries map[string]Entry) string {
+	keys := make([]string, 0, len(entries))
+	for key := range entries {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	hash := sha256.New()
+	for _, key := range keys {
+		entry := entries[key]
+		_, _ = fmt.Fprintf(hash, "%s\x00%s\x00%d\n", key, entry.SHA256, entry.RepositoryRevision)
+	}
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func (s *Store) rebuild() error {

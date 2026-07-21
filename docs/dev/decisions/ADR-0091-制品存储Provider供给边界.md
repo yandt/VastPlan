@@ -33,4 +33,4 @@
 - 仓库热路径保持本地数据面性能，Provider 仍可插件化演进。
 - 部署适配器需要理解 volume handle，并负责 mount/sidecar 生命周期。
 - Portal 普通用户只能看到 Provider ID 和健康状态，不能读取 mount path、endpoint 或凭证。
-- 当前已实现通用 DTO、本地文件 Provider、私有目录强制和开发环境启动组合；在线迁移控制器与 S3/OCI Provider 后续实现。
+- 当前已实现通用 DTO、本地文件 Provider、私有目录强制、File A/B 在线迁移控制器和开发环境启动组合；切换与回滚细节见 [ADR-0099](ADR-0099-File-Volume在线迁移与可回滚切换.md)，S3/OCI Provider 仍待实现。

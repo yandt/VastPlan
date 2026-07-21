@@ -1,6 +1,38 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+)
+
+func TestRuntimeDescriptorMatchesSignedManifest(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := pluginv1.BackendRuntimeContributions(manifest)
+	if err != nil || len(expected) != 1 {
+		t.Fatalf("manifest contributions invalid: %+v err=%v", expected, err)
+	}
+	var left, right any
+	if json.Unmarshal(expected[0].Descriptor, &left) != nil || json.Unmarshal(runtimeRepositoryDescriptor, &right) != nil {
+		t.Fatal("descriptors must be JSON")
+	}
+	leftRaw, _ := json.Marshal(left)
+	rightRaw, _ := json.Marshal(right)
+	if !bytes.Equal(leftRaw, rightRaw) {
+		t.Fatalf("runtime descriptor differs from signed manifest:\nwant=%s\ngot=%s", leftRaw, rightRaw)
+	}
+}
 
 func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	t.Setenv("VASTPLAN_PLUGIN_CONFIG_JSON", `{}`)
@@ -11,6 +43,7 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	t.Setenv("VASTPLAN_ARTIFACT_READ_TOKEN", "")
 	t.Setenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN", "")
 	t.Setenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN", "")
+	t.Setenv("VASTPLAN_ARTIFACT_MIGRATION_STATE", "")
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("incomplete artifact repository configuration must fail closed")
 	}
@@ -22,6 +55,7 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	t.Setenv("VASTPLAN_ARTIFACT_READ_TOKEN", "shared")
 	t.Setenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN", "shared")
 	t.Setenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN", "bundle")
+	t.Setenv("VASTPLAN_ARTIFACT_MIGRATION_STATE", "/var/lib/vastplan/control/repository-migration.json")
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("read and publish tokens must be separated")
 
@@ -39,6 +73,9 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	}
 	if config.storageProvider != "platform.artifacts.storage.file" {
 		t.Fatalf("default storage provider = %q", config.storageProvider)
+	}
+	if config.volumeID != "repository.primary" {
+		t.Fatalf("default storage volume = %q", config.volumeID)
 	}
 	t.Setenv("VASTPLAN_PLUGIN_CONFIG_JSON", `{"storageProvider":"../../escape"}`)
 	if _, err := loadConfig(); err == nil {
