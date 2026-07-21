@@ -18,7 +18,7 @@ export interface PortalHandlerOptions {
   interaction?: InteractionPort;
   platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort };
   delivery?: PortalDeliveryStore;
-	ssr?: PortalSSRPort;
+  ssr?: PortalSSRPort;
 }
 
 export function createPortalHandler(options: PortalHandlerOptions): (request: IncomingMessage, response: ServerResponse) => void {
@@ -31,7 +31,7 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     ...(options.delivery === undefined ? {} : { delivery: options.delivery }),
   });
   return (request, response) => {
-    setBaseSecurityHeaders(response);
+    setBaseSecurityHeaders(response, options.secureCookies ?? true);
     const method = request.method ?? "GET";
     const path = requestPath(request.url);
     if (path === undefined) return sendEmpty(response, 400);
@@ -40,11 +40,36 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
       void api(request, response, path);
       return;
     }
+    if (path === "/auth" || path.startsWith("/auth/")) {
+      if (options.identity?.handle === undefined) return sendEmpty(response, 404);
+      void options.identity.handle(request, response, path, options.secureCookies ?? true).then((handled) => {
+        if (!handled && !response.headersSent) sendEmpty(response, 404);
+      }).catch((error: unknown) => {
+        process.stderr.write(`${JSON.stringify({ level: "error", message: "identity route failed", error: error instanceof Error ? error.message : String(error) })}\n`);
+        if (!response.headersSent) sendEmpty(response, 502);
+        else response.destroy();
+      });
+      return;
+    }
     if (method !== "GET" && method !== "HEAD") return sendEmpty(response, 405, { Allow: "GET, HEAD" });
     if (path === "/healthz" || path === "/readyz") return sendText(response, method, 200, "ok\n");
     if (path.startsWith("/assets/")) return serveAsset(options.assets, path.slice("/assets/".length), method, request, response);
-		void serveIndex(options.assets, options.ssr, request, response, method, path);
+    void servePage(options, request, response, method, path);
   };
+}
+
+async function servePage(options: PortalHandlerOptions, request: IncomingMessage, response: ServerResponse, method: string, path: string): Promise<void> {
+  if (options.identity?.loginRedirect !== undefined) {
+    try { await options.identity.authenticate(request); }
+    catch {
+      response.statusCode = 302;
+      response.setHeader("Location", options.identity.loginRedirect(request.url ?? path));
+      response.setHeader("Cache-Control", "no-store");
+      response.end();
+      return;
+    }
+  }
+  await serveIndex(options.assets, options.ssr, request, response, method, path);
 }
 
 async function serveIndex(assets: PortalAssets, ssr: PortalSSRPort | undefined, request: IncomingMessage, response: ServerResponse, method: string, path: string): Promise<void> {

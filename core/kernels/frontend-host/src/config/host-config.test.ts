@@ -7,6 +7,27 @@ describe("parseHostArguments", () => {
     const config = parseHostArguments(["--portal-assets", "bin/portal", "--session-file", "sessions.json", "--allow-insecure-http"], "/srv/vastplan");
     expect(config.portalAssets).toBe("/srv/vastplan/bin/portal");
     expect(config.listenPort).toBe(8443);
+    expect(config.identity).toEqual({ kind: "file", sessionFile: "/srv/vastplan/sessions.json" });
+  });
+
+  it("requires a complete HTTPS OIDC code-flow configuration", () => {
+    const base = ["--portal-assets", "bin/portal", "--tls-cert", "portal.crt", "--tls-key", "portal.key", "--identity-provider", "oidc"];
+    expect(() => parseHostArguments([...base, "--oidc-issuer", "https://id.example.com"])).toThrow(/oidc-client-id/i);
+    const config = parseHostArguments([
+      ...base, "--oidc-issuer", "https://id.example.com", "--oidc-client-id", "portal",
+      "--oidc-client-secret-file", "client.secret", "--oidc-client-auth-method", "client_secret_basic",
+      "--oidc-redirect-uri", "https://portal.example.com/auth/callback", "--oidc-session-key-file", "session.key",
+      "--oidc-tenant-claim", "tenant", "--oidc-roles-claim", "groups", "--oidc-session-max-age", "600",
+    ], "/srv/vastplan");
+    expect(config.identity).toMatchObject({ kind: "oidc", issuer: "https://id.example.com/", clientId: "portal", redirectURI: "https://portal.example.com/auth/callback", sessionMaxAgeSeconds: 600 });
+    expect(() => parseHostArguments([
+      "--portal-assets", "bin/portal", "--allow-insecure-http", "--identity-provider", "oidc", "--oidc-issuer", "http://id.example.com",
+      "--oidc-client-id", "portal", "--oidc-redirect-uri", "http://portal.example.com/auth/callback", "--oidc-session-key-file", "session.key",
+    ])).toThrow(/HTTPS/);
+    expect(() => parseHostArguments([
+      ...base, "--oidc-issuer", "https://id.example.com", "--oidc-client-id", "portal",
+      "--oidc-redirect-uri", "https://portal.example.com/auth/callback", "--oidc-session-key-file", "session.key", "--oidc-scopes", "profile email",
+    ])).toThrow(/openid/);
   });
 
   it("rejects unknown and duplicate parameters", () => {

@@ -49,4 +49,6 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - Portal Composer 与 Interaction Broker 已进入受调度的 Backend 基础服务单元；Node Portal Kernel 不再本地复制插件状态。Catalog validate/materialize、测试制品复核和引用发布作为四个窄 `kernel.service` 注入可信 Go 宿主，Composer 只获得校验结论与精确引用，仓库凭据、验签密钥和包字节不进入插件。开发编排已切换为 Node Portal Kernel，并使用持久 JetStream、三份独立签名传输身份与 8 单元平台 Profile 验证真实 Addressing 链路。
 - 插件 tar.gz 已改为确定性归档：固定顺序、mtime、uid/gid、模式和 gzip 元数据；同一内容可复现为同一 SHA，避免回滚历史把未变化版本误判成同 ref 多摘要。
 - 服务端 Generation/SSR Worker 已完成：签名 Server Graph 只进入密封快照，Node 将候选物化到私有目录并在受资源限制的 Worker 中执行 `prepare/render/dispose`。候选先健康渲染再原子替换，旧代等待在途请求 drain 后销毁；页面通过声明式 Shadow DOM 输出首屏并由 React `hydrateRoot` 接管。开发平台启动会真实请求页面并要求 `X-VastPlan-SSR: rendered`，CSR fallback 不能冒充就绪。
-- 后续仍需完成真实企业 OIDC + NATS mTLS 权限对照 E2E；完成后删除 Go Edge 入口。
+- 企业身份入口已完成 OIDC Authorization Code + PKCE：Provider discovery/JWKS、state、nonce、S256、issuer/audience/ID Token 验证由标准客户端完成；tenant/roles 使用受控 claim 映射。浏览器只持有 AES-256-GCM 密封的 HttpOnly/Secure/SameSite BFF Session 与 CSRF，不保存 Access/Refresh Token。文件会话只保留为受控开发/部署适配器。
+- Node↔Go Addressing E2E 已升级为真实 TLS 1.3 双向证书验证，并继续覆盖 NKey 请求/响应签名、签名 Capability Directory 和 Protobuf v1。OIDC 黑盒测试同时证明已验证 Principal、tenant 与 roles 被固定投影到 Composer 端口，浏览器 payload 不能提供这些字段。
+- 剩余迁移封板项只有 Go/Node 黑盒行为等价审计、生产入口最终切换以及删除 `backend portal-edge`。目标企业环境的真实 IdP/TLS 浏览器验收属于部署放行门禁，不再是代码内核缺口。

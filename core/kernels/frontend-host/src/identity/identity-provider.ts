@@ -1,4 +1,4 @@
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 export interface Principal {
   id: string;
@@ -9,6 +9,8 @@ export interface Principal {
 
 export interface IdentityProvider {
   authenticate(request: IncomingMessage): Promise<Principal>;
+	handle?(request: IncomingMessage, response: ServerResponse, path: string, secureCookies: boolean): Promise<boolean>;
+	loginRedirect?(path: string): string;
 }
 
 export class SessionRejectedError extends Error {

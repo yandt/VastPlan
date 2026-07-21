@@ -1,6 +1,6 @@
 import { pathToFileURL } from "node:url";
 
-const [runtimePath, contractsDirectory, seedFile, trustFile, serverURL, capability] = process.argv.slice(2);
+const [runtimePath, contractsDirectory, seedFile, trustFile, serverURL, capability, caFile, certFile, keyFile] = process.argv.slice(2);
 if ([runtimePath, contractsDirectory, seedFile, trustFile, serverURL, capability].some((value) => !value)) {
   throw new Error("Node Addressing E2E 参数不完整");
 }
@@ -12,7 +12,7 @@ const runtime = await openNodeAddressing({
   contractsDirectory,
   seedFile,
   trustFile,
-  allowInsecure: true,
+  ...(caFile && certFile && keyFile ? { tls: { caFile, certFile, keyFile } } : { allowInsecure: true }),
 });
 
 try {

@@ -1,4 +1,4 @@
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
 export function onlyCookie(request: IncomingMessage, name: string): string | undefined {
   const header = request.headers.cookie;
@@ -15,4 +15,10 @@ export function onlyCookie(request: IncomingMessage, name: string): string | und
     }
   }
   return found;
+}
+
+export function appendSetCookie(response: ServerResponse, value: string): void {
+  const existing = response.getHeader("Set-Cookie");
+  if (existing === undefined) response.setHeader("Set-Cookie", value);
+  else response.setHeader("Set-Cookie", [...(Array.isArray(existing) ? existing.map(String) : [String(existing)]), value]);
 }

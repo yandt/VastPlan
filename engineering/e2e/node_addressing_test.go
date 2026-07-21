@@ -4,7 +4,15 @@ package e2e
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
@@ -28,8 +37,8 @@ func TestNodeAddressingInvokesSecureGoCapability(t *testing.T) {
 	}
 	buildNodeAddressing(t, repositoryRoot)
 
-	server := startE2ENATS(t)
-	admin, err := nats.Connect(server.ClientURL())
+	server, clientTLS, caFile, certFile, keyFile := startE2ENATSMTLS(t)
+	admin, err := nats.Connect(server.ClientURL(), nats.Secure(clientTLS.Clone()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +72,7 @@ func TestNodeAddressingInvokesSecureGoCapability(t *testing.T) {
 	}
 	defer workerSecurity.Close()
 
-	workerConnection, err := nats.Connect(server.ClientURL())
+	workerConnection, err := nats.Connect(server.ClientURL(), nats.Secure(clientTLS.Clone()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +103,7 @@ func TestNodeAddressingInvokesSecureGoCapability(t *testing.T) {
 	contracts := filepath.Join(repositoryRoot, "contracts", "proto")
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	command := exec.CommandContext(ctx, "node", fixture, runtime, contracts, nodeSeedFile, trustFile, server.ClientURL(), capability)
+	command := exec.CommandContext(ctx, "node", fixture, runtime, contracts, nodeSeedFile, trustFile, server.ClientURL(), capability, caFile, certFile, keyFile)
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("Node -> Go Addressing E2E 失败: %v\n%s", err, output)
@@ -109,6 +118,83 @@ func TestNodeAddressingInvokesSecureGoCapability(t *testing.T) {
 	if response.Status != int32(contractv1.CallResult_STATUS_OK) || response.Payload != "from-go" {
 		t.Fatalf("Node E2E 响应错误: %+v", response)
 	}
+}
+
+func startE2ENATSMTLS(t *testing.T) (*natsserver.Server, *tls.Config, string, string, string) {
+	t.Helper()
+	directory := t.TempDir()
+	caCert, caKey, caPEM := createE2ECA(t)
+	serverCertPEM, serverKeyPEM := createE2ECertificate(t, caCert, caKey, "nats-server", true)
+	clientCertPEM, clientKeyPEM := createE2ECertificate(t, caCert, caKey, "node-portal", false)
+	serverCertificate, err := tls.X509KeyPair(serverCertPEM, serverKeyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientCertificate, err := tls.X509KeyPair(clientCertPEM, clientKeyPEM)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(caPEM) {
+		t.Fatal("解析 NATS E2E CA 失败")
+	}
+	server, err := natsserver.NewServer(&natsserver.Options{
+		JetStream: true, StoreDir: filepath.Join(directory, "jetstream"), Host: "127.0.0.1", Port: -1, NoLog: true, NoSigs: true,
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{serverCertificate}, ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: pool},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go server.Start()
+	if !server.ReadyForConnections(10 * time.Second) {
+		t.Fatal("mTLS NATS 未就绪")
+	}
+	t.Cleanup(func() { server.Shutdown(); server.WaitForShutdown() })
+	caFile := writeBytesFile(t, directory, "ca.pem", caPEM, 0o600)
+	certFile := writeBytesFile(t, directory, "client.pem", clientCertPEM, 0o600)
+	keyFile := writeBytesFile(t, directory, "client-key.pem", clientKeyPEM, 0o600)
+	return server, &tls.Config{MinVersion: tls.VersionTLS13, RootCAs: pool, Certificates: []tls.Certificate{clientCertificate}, ServerName: "localhost"}, caFile, certFile, keyFile
+}
+
+func createE2ECA(t *testing.T) (*x509.Certificate, *rsa.PrivateKey, []byte) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "VastPlan E2E CA"}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certificate, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return certificate, key, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+}
+
+func createE2ECertificate(t *testing.T, ca *x509.Certificate, caKey *rsa.PrivateKey, commonName string, server bool) ([]byte, []byte) {
+	t.Helper()
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	usage := x509.ExtKeyUsageClientAuth
+	if server {
+		usage = x509.ExtKeyUsageServerAuth
+	}
+	template := &x509.Certificate{SerialNumber: big.NewInt(time.Now().UnixNano()), Subject: pkix.Name{CommonName: commonName}, NotBefore: time.Now().Add(-time.Minute), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment, ExtKeyUsage: []x509.ExtKeyUsage{usage}}
+	if server {
+		template.DNSNames = []string{"localhost"}
+		template.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, ca, &key.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyDER := x509.MarshalPKCS1PrivateKey(key)
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: keyDER})
 }
 
 func buildNodeAddressing(t *testing.T, repositoryRoot string) {
