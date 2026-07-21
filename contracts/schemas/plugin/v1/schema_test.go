@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -115,6 +116,78 @@ func TestParseManifest_RuntimeEngineContributionRequiresLifecycleBaseline(t *tes
 	if _, err := ParseManifest([]byte(fmt.Sprintf(base, missingGeneration))); err == nil {
 		t.Fatal("Runtime Engine 缺少 generation 基线必须拒绝")
 	}
+}
+
+func TestParseManifest_FrontendModuleGraphIsClosedAndDigestBound(t *testing.T) {
+	graph := FrontendModuleGraph{
+		SchemaVersion: "v1",
+		Target:        "browser",
+		Entry:         "frontend/main.js",
+		Nodes: []FrontendModuleNode{
+			{Path: "frontend/main.js", SHA256: strings.Repeat("a", 64), Size: 120, MediaType: "text/javascript", Purpose: "entry", Dependencies: []FrontendModuleDependency{{Path: "frontend/chunk.js", Kind: "dynamic"}}},
+			{Path: "frontend/chunk.js", SHA256: strings.Repeat("b", 64), Size: 80, MediaType: "text/javascript", Purpose: "chunk", Dependencies: []FrontendModuleDependency{}},
+		},
+	}
+	graph.Digest = graph.ComputedDigest()
+	if _, err := ParseManifest(frontendGraphManifest(t, graph)); err != nil {
+		t.Fatalf("闭合且摘要匹配的 Module Graph 应通过: %v", err)
+	}
+
+	t.Run("依赖未闭合", func(t *testing.T) {
+		invalid := graph
+		invalid.Nodes = append([]FrontendModuleNode(nil), graph.Nodes...)
+		invalid.Nodes[0].Dependencies = []FrontendModuleDependency{{Path: "frontend/missing.js", Kind: "static"}}
+		invalid.Digest = invalid.ComputedDigest()
+		if _, err := ParseManifest(frontendGraphManifest(t, invalid)); err == nil || !strings.Contains(err.Error(), "未闭合") {
+			t.Fatalf("未锁定依赖必须拒绝: %v", err)
+		}
+	})
+
+	t.Run("摘要重复映射", func(t *testing.T) {
+		invalid := graph
+		invalid.Nodes = append([]FrontendModuleNode(nil), graph.Nodes...)
+		invalid.Nodes[1].SHA256 = invalid.Nodes[0].SHA256
+		invalid.Digest = invalid.ComputedDigest()
+		if _, err := ParseManifest(frontendGraphManifest(t, invalid)); err == nil || !strings.Contains(err.Error(), "摘要重复") {
+			t.Fatalf("一个摘要映射多个路径必须拒绝: %v", err)
+		}
+	})
+
+	t.Run("规范化摘要不匹配", func(t *testing.T) {
+		invalid := graph
+		invalid.Digest = strings.Repeat("f", 64)
+		if _, err := ParseManifest(frontendGraphManifest(t, invalid)); err == nil || !strings.Contains(err.Error(), "digest") {
+			t.Fatalf("被修改的图必须拒绝: %v", err)
+		}
+	})
+}
+
+func TestFrontendModuleGraphDigestIgnoresDeclarationOrder(t *testing.T) {
+	left := FrontendModuleGraph{SchemaVersion: "v1", Target: "browser", Entry: "frontend/main.js", Nodes: []FrontendModuleNode{
+		{Path: "frontend/main.js", SHA256: strings.Repeat("a", 64), Size: 1, MediaType: "text/javascript", Purpose: "entry", Dependencies: []FrontendModuleDependency{{Path: "frontend/b.js", Kind: "static"}, {Path: "frontend/a.js", Kind: "dynamic"}}},
+		{Path: "frontend/a.js", SHA256: strings.Repeat("b", 64), Size: 1, MediaType: "text/javascript", Purpose: "chunk", Dependencies: []FrontendModuleDependency{}},
+		{Path: "frontend/b.js", SHA256: strings.Repeat("c", 64), Size: 1, MediaType: "text/javascript", Purpose: "chunk", Dependencies: []FrontendModuleDependency{}},
+	}}
+	right := left
+	right.Nodes = []FrontendModuleNode{left.Nodes[2], left.Nodes[0], left.Nodes[1]}
+	right.Nodes[1].Dependencies = []FrontendModuleDependency{left.Nodes[0].Dependencies[1], left.Nodes[0].Dependencies[0]}
+	if left.ComputedDigest() != right.ComputedDigest() {
+		t.Fatal("节点和依赖声明顺序不应改变规范化 digest")
+	}
+}
+
+func frontendGraphManifest(t *testing.T, graph FrontendModuleGraph) []byte {
+	t.Helper()
+	graphs, err := json.Marshal(FrontendModuleGraphs{Browser: &graph})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return []byte(fmt.Sprintf(`{
+  "id":"cn.vastplan.foundation.frontend.graph.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan",
+  "engines":{"frontend":"^1.0"},"activation":["onStartup"],"entry":{"frontend":"frontend/main.js"},
+  "frontendModuleGraphs":%s,
+  "contributes":{"frontend":{"views":[]}}
+}`, graphs))
 }
 
 func TestParseManifest_CrossPlatformInteractionContributions(t *testing.T) {

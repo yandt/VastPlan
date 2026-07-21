@@ -63,25 +63,26 @@ var (
 // Manifest 是清单中制品服务需要读取的稳定字段。Contributes 保留原始 JSON，
 // 因为每个扩展点的详细 descriptor 由 Schema 而非一套会漂移的 Go struct 描述。
 type Manifest struct {
-	ID            string                     `json:"id"`
-	Name          string                     `json:"name"`
-	Description   string                     `json:"description"`
-	Version       string                     `json:"version"`
-	Publisher     string                     `json:"publisher"`
-	License       string                     `json:"license,omitempty"`
-	LicenseFile   string                     `json:"licenseFile,omitempty"`
-	NoticeFile    string                     `json:"noticeFile,omitempty"`
-	Engines       map[string]string          `json:"engines"`
-	Capabilities  *Capabilities              `json:"capabilities,omitempty"`
-	ContextAccess *ContextAccess             `json:"contextAccess,omitempty"`
-	Runtime       *RuntimePolicy             `json:"runtime,omitempty"`
-	Execution     *ExecutionPolicy           `json:"execution,omitempty"`
-	Configuration *ConfigurationContract     `json:"configuration,omitempty"`
-	State         *State                     `json:"state,omitempty"`
-	Activation    []string                   `json:"activation"`
-	Dependencies  map[string]string          `json:"dependencies,omitempty"`
-	Entry         map[string]string          `json:"entry"`
-	Contributes   map[string]json.RawMessage `json:"contributes"`
+	ID                   string                     `json:"id"`
+	Name                 string                     `json:"name"`
+	Description          string                     `json:"description"`
+	Version              string                     `json:"version"`
+	Publisher            string                     `json:"publisher"`
+	License              string                     `json:"license,omitempty"`
+	LicenseFile          string                     `json:"licenseFile,omitempty"`
+	NoticeFile           string                     `json:"noticeFile,omitempty"`
+	Engines              map[string]string          `json:"engines"`
+	Capabilities         *Capabilities              `json:"capabilities,omitempty"`
+	ContextAccess        *ContextAccess             `json:"contextAccess,omitempty"`
+	Runtime              *RuntimePolicy             `json:"runtime,omitempty"`
+	Execution            *ExecutionPolicy           `json:"execution,omitempty"`
+	Configuration        *ConfigurationContract     `json:"configuration,omitempty"`
+	State                *State                     `json:"state,omitempty"`
+	Activation           []string                   `json:"activation"`
+	Dependencies         map[string]string          `json:"dependencies,omitempty"`
+	Entry                map[string]string          `json:"entry"`
+	FrontendModuleGraphs *FrontendModuleGraphs      `json:"frontendModuleGraphs,omitempty"`
+	Contributes          map[string]json.RawMessage `json:"contributes"`
 }
 
 // ConfigurationContract declares the plugin-owned configuration surface. The
@@ -532,6 +533,9 @@ func ParseManifest(raw []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	if err := validateConfiguration(manifest.Configuration); err != nil {
+		return Manifest{}, err
+	}
+	if err := validateFrontendModuleGraphs(manifest); err != nil {
 		return Manifest{}, err
 	}
 	return manifest, nil
