@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.11.0`
+当前制品版本：`0.12.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -9,13 +9,15 @@
 
 ## 边界
 
-该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。对象存储与 OCI 通过供给 Provider 增加；审批、配额和市场 API 仍在仓库领域扩展。
+该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
 当前以 `leader / leader-owned / cluster` 运行。集群成员可通过 `platform.artifacts.repository` 查询状态，数据复制与多活对象存储尚未在本版本提供，不能把多个实例指向不同本地目录后宣称高可用。
 
 本地平台开发组合已经把它与临时 Seed 仓库分离：Seed 只负责本次启动的基础制品，本插件使用 `.vastplan/dev-platform/repositories/testing/volumes/repository.primary` 作为跨普通重启保留的测试数据面。Node Agent 将 Seed 作为优先 bootstrap source，将本插件的 HTTPS 端点作为普通远端 source；Node Agent 通过本次运行的组合信任快照复验两者，而本插件自身只加载 testing-only 信任文档，不接受临时 Seed 身份发布的制品。
+
+仓库关键栈在线升级由 Node Agent 内的可信宿主适配器负责，而不是本插件自升级。本插件无权读取或写入 Seed 与 Bootstrap Inventory。候选证明与内容先经过内核固定验证点，再镜像到 Seed；只有候选 Runtime 健康且活动 Assignment 引用发布成功后才推进 LKG。自动路径拒绝跨 channel 和 SemVer 降级，详细事务见 [ADR-0102](../decisions/ADR-0102-可信宿主仓库自升级事务.md)。
 
 ## 运行配置
 
@@ -26,6 +28,8 @@
 | `listen` | HTTPS 监听地址；默认 `127.0.0.1:8443` |
 | `storageProvider` | 已供给当前数据面的 Provider 能力 ID |
 | `volumeId` | 部署配置指向的活动 volume ID；迁移 finalize 后必须更新它并重启，才允许 release 旧卷 |
+| `quota.maxArtifacts` / `quota.maxBytes` | 可选全仓活动制品数量/对象字节上限；`0` 表示该维度不限额 |
+| `quota.rules[]` | 可选累积规则；每条以稳定 `id` 按 namespace、publisher、channel 中至少一个维度匹配，并设置数量和/或字节上限 |
 
 部署适配器仍需向该第一方进程提供以下受控挂载/秘密；它们不属于普通插件设置：
 
@@ -78,7 +82,9 @@ Resolver 请求示例：
 
 Catalog 数据保存在仓库 volume 的 `catalog/` 下。发布流水账按单调 revision 使用原子事件文件，索引快照可从每个签名制品及流水账重建；启动时发现制品已成功落盘但事件缺失，会补写 `recovered` 事件。恢复路径只读取并验证 artifact metadata 与 attestation，不扫描全部大对象；实际读取仍由内核复验对象摘要。相同精确 ref、摘要和证明重传幂等，不增加 revision；受控测试 CLI 会先查 Catalog，避免重试产生不同证明。
 
-平台工具能力同时提供 `status`、`listCatalog`、`listPublishJournal`、小载荷 `resolve`、`setLifecycle`、`putReferences/listReferences`、`gcPlan/gcStatus/gcQuarantine/gcSweep`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。引用发布只接受宿主验证的租户与精确首方控制器身份；完整快照使用 generation、可选 TTL 和规范摘要，过期会令 GC fail-closed，且继续保护字节。`bootstrap-inventory/<repositoryId>` 系统身份只能写匹配 ID 的 Seed/LKG 快照；这两类引用允许对象尚未复制进 Managed Catalog，但清单已由内核逐项从 Seed 重新验签，GC 只保护其中实际存在的托管对象。生命周期变更使用 Catalog revision CAS 和独立权限，`deprecated` 会进入锁提示，`yanked/revoked` 拒绝新的解析与交付。
+平台工具能力同时提供 `status/capacity`、`listCatalog`、`listPublishJournal`、小载荷 `resolve`、`setLifecycle`、`putReferences/listReferences`、`gcPlan/gcStatus/gcQuarantine/gcSweep`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。引用发布只接受宿主验证的租户与精确首方控制器身份；完整快照使用 generation、可选 TTL 和规范摘要，过期会令 GC fail-closed，且继续保护字节。`bootstrap-inventory/<repositoryId>` 系统身份只能写匹配 ID 的 Seed/LKG 快照；这两类引用允许对象尚未复制进 Managed Catalog，但清单已由内核逐项从 Seed 重新验签，GC 只保护其中实际存在的托管对象。生命周期变更使用 Catalog revision CAS 和独立权限，`deprecated` 会进入锁提示，`yanked/revoked` 拒绝新的解析与交付。
+
+发布准入在仓库 leader 的同一串行临界区内执行：全仓上限与所有匹配规则累积生效，任一超限即在物理写入前拒绝，且不会自动运行 GC。已隔离/清扫对象不再占活动配额，因此可以发布替代版本；隔离字节仍计入实际存储容量，直到 sweep 后才计入 reclaimed。`capacity` 只聚合已验证 Catalog 与持久 GC 元数据，分别返回活动、隔离、已清扫、已回收和按 namespace/publisher/channel 的活动 bucket；对象字节不包含 Catalog/证明等小型元数据开销。降低配置到当前用量以下不会阻止仓库启动，但会把对应 quota 标为 `exceeded` 并冻结后续新增发布，便于先治理再恢复。
 
 GC 只把已显式 `yanked/revoked`、无精确引用且不在既有 retirement 状态的制品列为候选，绝不隐式下架 `active/deprecated`。plan 不写状态；quarantine 重新计算 plan 身份并要求至少一个健康 Seed/LKG、所有租约源未过期、仓库迁移完全结束，随后逐项原子移出活动命名空间。隔离宽限期至少 24 小时；sweep 再次复核引用健康、生命周期和精确保护后才删除。中断的 quarantining/sweeping 在启动时幂等恢复，Catalog 只允许 GC 状态中精确记录的缺失制品继续保留历史。已进入 retirement 的 ref 禁止重发、重新激活或被新快照引用。迁移采用可重试阶段命令；观察期的发布、生命周期和引用快照都先镜像后提交活动卷，失败可回滚；GC 在迁移未完全结束时冻结。物理 path/handle 不返回 Portal，Bundle 大字节只走 HTTPS，不穿过协议总线。
 
@@ -88,4 +94,4 @@ GC 只把已显式 `yanked/revoked`、无精确引用且不在既有 retirement 
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/artifacts` 状态页，显示真实就绪状态、Catalog revision、Provider、活动 volume 和脱敏迁移阶段。Portal BFF 与 TypeScript SDK 已提供显式、CSRF 保护的分阶段迁移路由；完整迁移 Workbench、目录、审批与供应链证明 UI 在后续管理阶段接入。页面不返回令牌、信任根、mount path 或 Provider endpoint。
+同一签名制品当前提供 `/settings/artifacts` 脱敏状态页。Portal BFF 与 TypeScript SDK 已对 capacity、plan、status 提供固定只读路由，对 quarantine/sweep 提供 CSRF 保护和独立 `platform.artifacts.gc` 角色。把容量 bucket、配额用量、GC 阻断与 retirement 记录统一迁入 Workbench，并补齐目录、生命周期编辑、审批和供应链证明，仍属于下一步前端交付；页面和 API 均不返回令牌、信任根、mount path 或 Provider endpoint。

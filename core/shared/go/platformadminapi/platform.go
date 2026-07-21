@@ -186,6 +186,40 @@ type QuarantineArtifactsRequest struct {
 	GraceHours int64  `json:"graceHours"`
 }
 
+type ArtifactCapacityBucket struct {
+	Namespace string `json:"namespace"`
+	Publisher string `json:"publisher"`
+	Channel   string `json:"channel"`
+	Artifacts int    `json:"artifacts"`
+	Bytes     int64  `json:"bytes"`
+}
+
+type ArtifactQuotaUsage struct {
+	ID           string `json:"id"`
+	Namespace    string `json:"namespace,omitempty"`
+	Publisher    string `json:"publisher,omitempty"`
+	Channel      string `json:"channel,omitempty"`
+	Artifacts    int    `json:"artifacts"`
+	Bytes        int64  `json:"bytes"`
+	MaxArtifacts int    `json:"maxArtifacts,omitempty"`
+	MaxBytes     int64  `json:"maxBytes,omitempty"`
+	Exceeded     bool   `json:"exceeded"`
+}
+
+type ArtifactCapacity struct {
+	CatalogRevision      uint64                   `json:"catalogRevision"`
+	GCRevision           uint64                   `json:"gcRevision"`
+	ActiveArtifacts      int                      `json:"activeArtifacts"`
+	ActiveBytes          int64                    `json:"activeBytes"`
+	QuarantinedArtifacts int                      `json:"quarantinedArtifacts"`
+	QuarantinedBytes     int64                    `json:"quarantinedBytes"`
+	SweptArtifacts       int                      `json:"sweptArtifacts"`
+	ReclaimedBytes       int64                    `json:"reclaimedBytes"`
+	StoredBytes          int64                    `json:"storedBytes"`
+	Buckets              []ArtifactCapacityBucket `json:"buckets"`
+	Quotas               []ArtifactQuotaUsage     `json:"quotas"`
+}
+
 type ArtifactRepositoryMigration struct {
 	MigrationID      string `json:"migrationId,omitempty"`
 	Phase            string `json:"phase,omitempty"`
@@ -385,6 +419,7 @@ type Service interface {
 	DeleteDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) error
 	ProbeDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (DatabaseProbe, error)
 	ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryStatus, error)
+	ArtifactRepositoryCapacity(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactCapacity, error)
 	ListArtifactReferences(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactReferencePage, error)
 	PlanArtifactGarbageCollection(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactGCPlan, error)
 	ArtifactGarbageCollectionStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactGCStatus, error)

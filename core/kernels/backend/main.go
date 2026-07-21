@@ -266,6 +266,10 @@ func runReconcile(args []string) (runErr error) {
 		}
 		bootstrapInventory = &inventory
 	}
+	bootstrapUpgrade, err := buildBootstrapUpgrade(options, artifacts)
+	if err != nil {
+		return err
+	}
 	logf := componentLogf("node-agent")
 	plane, err := newNodeControlPlane(options, logf)
 	if err != nil {
@@ -342,6 +346,7 @@ func runReconcile(args []string) (runErr error) {
 		NodeID: options.nodeID, NodeLabels: labels, Sources: artifacts.sources, Verifier: artifacts.verifier,
 		Installer: nodeagent.LocalInstaller{Root: options.runtimeRoot}, Runtime: runtime,
 		StateStore: plane.stateStore, RequireArtifactReferences: options.repositoryURL != "", BootstrapInventory: bootstrapInventory,
+		BootstrapUpgrade: bootstrapUpgrade,
 	}
 	if plane.router != nil {
 		reconciler.References, err = nodeagent.NewAddressingArtifactReferencePublisher(plane.router, options.nodeID)

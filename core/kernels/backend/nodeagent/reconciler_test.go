@@ -3,6 +3,7 @@ package nodeagent
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ func (fakeArtifactSource) Fetch(_ context.Context, ref pluginv1.ArtifactRef) (ar
 		return artifacttrust.Envelope{}, artifacttrust.ErrNotFound
 	}
 	return artifacttrust.Envelope{
-		Artifact:     pluginv1.Artifact{PluginID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: ref.Version, Size: 1},
+		Artifact:     pluginv1.Artifact{PluginID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: strings.Repeat("a", 64), Size: 1},
 		PackageBytes: []byte{1},
 	}, nil
 }

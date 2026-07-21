@@ -61,12 +61,17 @@ func NewLocalDevelopmentArtifactVerifierWithTrust(proofVerifier ArtifactProofVer
 type VerifiedArtifact struct {
 	artifact     pluginv1.Artifact
 	packageBytes []byte
+	proof        []byte
 	verified     bool
 }
 
 func (v VerifiedArtifact) Artifact() pluginv1.Artifact { return v.artifact }
 
 func (v VerifiedArtifact) PackageBytes() []byte { return append([]byte(nil), v.packageBytes...) }
+
+// ProofBytes returns the already verified publisher proof for trusted host
+// adapters such as Bootstrap upgrade mirroring. Plugins never receive it.
+func (v VerifiedArtifact) ProofBytes() []byte { return append([]byte(nil), v.proof...) }
 
 func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrust.Envelope) (VerifiedArtifact, error) {
 	if !v.configured || v.validate == nil {
@@ -92,7 +97,8 @@ func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrus
 		}
 	}
 	return VerifiedArtifact{
-		artifact: artifact, packageBytes: append([]byte(nil), envelope.PackageBytes...), verified: true,
+		artifact: artifact, packageBytes: append([]byte(nil), envelope.PackageBytes...),
+		proof: append([]byte(nil), envelope.Proof...), verified: true,
 	}, nil
 }
 

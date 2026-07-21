@@ -648,6 +648,7 @@ func (r *runtime) managedArtifactSourceArgs() []string {
 	return []string{
 		"-bootstrap-repository", filepath.Join(r.runDir, "repository"),
 		"-bootstrap-inventory", filepath.Join(r.runDir, "seed-inventory.json"),
+		"-bootstrap-upgrade",
 		"-repository-url", "https://" + r.options.artifactListen,
 		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
 		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),

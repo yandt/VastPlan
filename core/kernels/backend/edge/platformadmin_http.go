@@ -90,6 +90,18 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 		respondPlatform(w, value, err)
 		return
 	}
+	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "capacity" {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "capacity", false) || !requirePlatformRole(w, p, "platform.artifacts.read") {
+			return
+		}
+		value, err := h.platform.ArtifactRepositoryCapacity(r.Context(), p, target)
+		respondPlatform(w, value, err)
+		return
+	}
 	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "migration" {
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w)

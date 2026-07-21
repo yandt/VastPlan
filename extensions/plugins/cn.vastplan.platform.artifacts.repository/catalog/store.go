@@ -246,6 +246,17 @@ func (s *Store) Lookup(ref pluginv1.ArtifactRef) (Entry, bool) {
 	return entry, ok
 }
 
+func (s *Store) Entries() (uint64, []Entry) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	items := make([]Entry, 0, len(s.entries))
+	for _, entry := range s.entries {
+		items = append(items, entry)
+	}
+	sortEntries(items)
+	return s.revision, items
+}
+
 // GarbageCandidates returns only administratively retired artifacts. Active
 // and deprecated entries remain resolvable and can never become implicit GC.
 func (s *Store) GarbageCandidates() (uint64, []Entry) {

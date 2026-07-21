@@ -37,6 +37,7 @@ type reconcileOptions struct {
 	interval                                                                                                time.Duration
 	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                             string
 	natsAllowInsecure, natsBootstrap, allowDevelopmentPlugins                                               bool
+	bootstrapUpgrade                                                                                        bool
 	requireThirdPartyIsolation                                                                              bool
 	executionPolicy                                                                                         nodeagent.ExecutionPolicy
 	contextPolicy                                                                                           nodeagent.ContextPolicy
@@ -58,6 +59,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.repositoryCA, "repository-ca", "", "远端制品仓库自定义 CA PEM")
 	flags.StringVar(&options.bootstrapRepository, "bootstrap-repository", "", "预置签名种子仓库；精确命中时优先于远端源")
 	flags.StringVar(&options.bootstrapInventory, "bootstrap-inventory", "", "root-owned Bootstrap Inventory（Seed/LKG 精确引用与单调 generation）")
+	flags.BoolVar(&options.bootstrapUpgrade, "bootstrap-upgrade", false, "由可信宿主事务式镜像仓库关键插件并在健康后推进 LKG")
 	flags.StringVar(&options.runtimeRoot, "runtime-root", ".vastplan/runtime/plugins", "内容寻址安装目录")
 	flags.StringVar(&options.actualPath, "actual-state", ".vastplan/runtime/actual-state.json", "实际态报告文件")
 	flags.StringVar(&options.lockPath, "lock", "", "单实例锁文件；默认 <actual-state>.lock")
@@ -166,8 +168,14 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	if options.bootstrapInventory != "" && options.bootstrapRepository == "" {
 		return reconcileOptions{}, errors.New("-bootstrap-inventory 必须与 -bootstrap-repository 同时配置")
 	}
+	if options.bootstrapInventory != "" && options.natsURL == "" {
+		return reconcileOptions{}, errors.New("-bootstrap-inventory 必须接入控制面以发布 Seed/LKG 引用")
+	}
 	if options.repositoryURL != "" && options.bootstrapRepository != "" && options.bootstrapInventory == "" {
 		return reconcileOptions{}, errors.New("托管仓库与 Seed 后备源并用时必须提供 -bootstrap-inventory")
+	}
+	if options.bootstrapUpgrade && (options.bootstrapInventory == "" || options.bootstrapRepository == "" || options.repositoryURL == "") {
+		return reconcileOptions{}, errors.New("-bootstrap-upgrade 必须同时配置 Bootstrap Inventory、Seed 仓库与远端候选仓库")
 	}
 	if options.natsURL != "" && options.assignmentKey != "" {
 		assignmentNodeID, err := controlplane.AssignmentKeyNodeID(options.assignmentKey)
@@ -463,6 +471,9 @@ func logNodeStartup(options reconcileOptions, logf func(string, ...any)) {
 		options.thirdPartyPluginPolicy, options.publisherPluginPolicies, options.firstPartyPublishers)
 	logf("Runtime Host 策略 default=%s publisher-overrides=%s plugin-overrides=%s",
 		options.runtimeHostingDefault, options.publisherRuntimeHosting, options.pluginRuntimeHosting)
+	if options.bootstrapUpgrade {
+		logf("Bootstrap 仓库自升级已启用 inventory=%s", options.bootstrapInventory)
+	}
 	if options.natsURL == "" {
 		logf("节点 %s 启动，期望态=%s", options.nodeID, options.desiredPath)
 		return

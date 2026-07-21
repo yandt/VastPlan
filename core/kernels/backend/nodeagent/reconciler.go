@@ -26,6 +26,7 @@ type Reconciler struct {
 	References                ArtifactReferencePublisher
 	BootstrapInventory        *bootstrapinventory.Inventory
 	BootstrapReferences       ArtifactReferencePublisher
+	BootstrapUpgrade          BootstrapUpgradeCoordinator
 	RequireArtifactReferences bool
 	Now                       func() time.Time
 	// Pulse marks progress through potentially long multi-unit reconciliation.
@@ -71,6 +72,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 			_ = r.checkpoint(&actual)
 			return Result{Changed: changed, Converged: false, State: actual}, fmt.Errorf("发布 Assignment 制品引用失败: %w", err)
 		}
+		if r.BootstrapUpgrade != nil {
+			inventory, err := r.BootstrapUpgrade.Commit(ctx)
+			if err != nil {
+				actual.Errors = append(actual.Errors, OperationError{Stage: "bootstrap_upgrade_commit", Message: err.Error()})
+				_ = r.checkpoint(&actual)
+				return Result{Changed: changed, Converged: false, State: actual}, fmt.Errorf("提交 Bootstrap LKG 失败: %w", err)
+			}
+			r.BootstrapInventory = &inventory
+		}
 		if err := r.publishBootstrapReferences(ctx, &actual); err != nil {
 			actual.Errors = append(actual.Errors, OperationError{Stage: "bootstrap_reference", Message: err.Error()})
 			_ = r.checkpoint(&actual)
@@ -102,6 +112,13 @@ func (r *Reconciler) beginReconcile(desired deploymentv1.DesiredState) (ActualSt
 	actual, err := r.StateStore.Load()
 	if err != nil {
 		return ActualState{}, err
+	}
+	if r.BootstrapUpgrade != nil {
+		inventory, err := r.BootstrapUpgrade.Begin(installedBootstrapItems(actual))
+		if err != nil {
+			return ActualState{}, fmt.Errorf("恢复 Bootstrap 升级事务: %w", err)
+		}
+		r.BootstrapInventory = &inventory
 	}
 	if actual.NodeID != "" && actual.NodeID != r.NodeID {
 		return ActualState{}, fmt.Errorf("实际态属于节点 %q，当前节点为 %q", actual.NodeID, r.NodeID)
@@ -489,6 +506,7 @@ func (r *Reconciler) Shutdown(ctx context.Context) error {
 
 func (r *Reconciler) prepare(ctx context.Context, unit deploymentv1.Unit) ([]InstalledPlugin, string, error) {
 	plugins := make([]InstalledPlugin, 0, len(unit.Plugins))
+	verifiedArtifacts := make([]VerifiedArtifact, 0, len(unit.Plugins))
 	for _, ref := range unit.Plugins {
 		r.pulse()
 		artifactRef := pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: ref.Channel}
@@ -503,6 +521,14 @@ func (r *Reconciler) prepare(ctx context.Context, unit deploymentv1.Unit) ([]Ins
 			return nil, "install", fmt.Errorf("安装 %s@%s/%s: %w", ref.ID, ref.Version, ref.Channel, err)
 		}
 		plugins = append(plugins, installed)
+		verifiedArtifacts = append(verifiedArtifacts, verified)
+	}
+	if r.BootstrapUpgrade != nil {
+		inventory, err := r.BootstrapUpgrade.Prepare(ctx, verifiedArtifacts)
+		if err != nil {
+			return nil, "bootstrap_upgrade_prepare", err
+		}
+		r.BootstrapInventory = &inventory
 	}
 	return plugins, "", nil
 }
@@ -547,7 +573,23 @@ func (r *Reconciler) validate() error {
 	if r.BootstrapInventory != nil && r.BootstrapReferences == nil {
 		return errors.New("Bootstrap Inventory 要求配置 Seed/LKG 引用发布器")
 	}
+	if r.BootstrapUpgrade != nil && r.BootstrapInventory == nil {
+		return errors.New("Bootstrap 自动升级要求配置初始 Inventory")
+	}
 	return nil
+}
+
+func installedBootstrapItems(actual ActualState) []bootstrapinventory.Item {
+	items := make([]bootstrapinventory.Item, 0)
+	for _, unit := range actual.Units {
+		for _, plugin := range unit.Plugins {
+			items = append(items, bootstrapinventory.Item{
+				Ref:    pluginv1.ArtifactRef{PluginID: plugin.ID, Version: plugin.Version, Channel: plugin.Channel},
+				SHA256: plugin.SHA256,
+			})
+		}
+	}
+	return items
 }
 
 func (r *Reconciler) now() time.Time {

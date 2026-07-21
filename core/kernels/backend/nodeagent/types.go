@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 )
 
 // Installer 把不可变制品安装到本机内容寻址目录。
@@ -202,6 +203,15 @@ type Result struct {
 // Node Agent system identity across the cluster hop.
 type ArtifactReferencePublisher interface {
 	Publish(context.Context, string, pluginv1.ArtifactReferenceSnapshot) error
+}
+
+// BootstrapUpgradeCoordinator is a trusted-host capability. It mirrors only
+// verified critical candidates into offline Seed during prepare, then advances
+// LKG after runtime health and Assignment reference publication succeed.
+type BootstrapUpgradeCoordinator interface {
+	Begin([]bootstrapinventory.Item) (bootstrapinventory.Inventory, error)
+	Prepare(context.Context, []VerifiedArtifact) (bootstrapinventory.Inventory, error)
+	Commit(context.Context) (bootstrapinventory.Inventory, error)
 }
 
 // RawConfig 深拷贝 JSON 配置，避免运行时持有期望态调用方仍可修改的 map。

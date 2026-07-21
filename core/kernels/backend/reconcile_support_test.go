@@ -168,6 +168,20 @@ func TestBuildArtifactResolutionSeparatesLocalDevelopmentAndSignedBootstrap(t *t
 	}
 }
 
+func TestParseReconcileOptionsRequiresCompleteBootstrapUpgradeBoundary(t *testing.T) {
+	tests := [][]string{
+		{"-desired", "desired.json", "-bootstrap-upgrade"},
+		{"-nats-url", "nats://127.0.0.1:4222", "-bootstrap-upgrade", "-bootstrap-repository", t.TempDir(), "-bootstrap-inventory", "/tmp/inventory.json"},
+		{"-desired", "desired.json", "-bootstrap-upgrade", "-bootstrap-repository", t.TempDir(), "-bootstrap-inventory", "/tmp/inventory.json", "-repository-url", "https://repository.example"},
+		{"-desired", "desired.json", "-bootstrap-repository", t.TempDir(), "-bootstrap-inventory", "/tmp/inventory.json"},
+	}
+	for _, args := range tests {
+		if _, err := parseReconcileOptions(args); err == nil {
+			t.Fatalf("不完整的 Bootstrap 升级边界必须被拒绝: %v", args)
+		}
+	}
+}
+
 func TestParseReconcileOptionsRejectsConflictingOrInvalidPluginPolicies(t *testing.T) {
 	tests := [][]string{
 		{"-desired", "desired.json", "-third-party-plugin-policy", "deny", "-require-third-party-isolation=false"},

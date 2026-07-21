@@ -84,6 +84,7 @@ type Manager struct {
 	statePath          string
 	configuredProvider string
 	configuredVolumeID string
+	quota              QuotaPolicy
 
 	publishMu    sync.Mutex
 	mu           sync.RWMutex
@@ -94,9 +95,23 @@ type Manager struct {
 	state        *MigrationState
 }
 
-func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, statePath string) (*Manager, error) {
+type Options struct {
+	Quota QuotaPolicy
+}
+
+func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, statePath string, options ...Options) (*Manager, error) {
 	if trust == nil || statePath == "" {
 		return nil, errors.New("仓库迁移运行时必须配置信任根和状态文件")
+	}
+	if len(options) > 1 {
+		return nil, errors.New("仓库运行时只能配置一组 Options")
+	}
+	var runtimeOptions Options
+	if len(options) == 1 {
+		runtimeOptions = options[0]
+	}
+	if err := runtimeOptions.Quota.Validate(); err != nil {
+		return nil, err
 	}
 	if err := validateVolume(initial); err != nil {
 		return nil, fmt.Errorf("校验初始制品 volume: %w", err)
@@ -104,7 +119,7 @@ func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, state
 	if err := ensureStateDirectory(filepath.Dir(filepath.Clean(statePath))); err != nil {
 		return nil, err
 	}
-	manager := &Manager{trust: trust, statePath: filepath.Clean(statePath), configuredProvider: initial.ProviderID, configuredVolumeID: initial.VolumeID}
+	manager := &Manager{trust: trust, statePath: filepath.Clean(statePath), configuredProvider: initial.ProviderID, configuredVolumeID: initial.VolumeID, quota: runtimeOptions.Quota}
 	state, err := manager.loadState()
 	if err != nil {
 		return nil, err
@@ -149,6 +164,9 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 	ref := pluginv1.ArtifactRef{PluginID: attestation.Artifact.PluginID, Version: attestation.Artifact.Version, Channel: attestation.Artifact.Channel}
 	if prior, ok := active.catalog.Lookup(ref); ok && active.gc.IsRetired(prior.Ref, prior.SHA256) {
 		return pluginv1.Artifact{}, errors.New("已进入 GC retirement 的不可变 ref 禁止重新发布")
+	}
+	if err := m.admitPublish(attestation.Artifact); err != nil {
+		return pluginv1.Artifact{}, err
 	}
 	if mirror != nil {
 		if _, err := mirror.publish(attestationRaw, packageBytes); err != nil {

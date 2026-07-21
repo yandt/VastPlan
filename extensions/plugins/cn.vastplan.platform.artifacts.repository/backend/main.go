@@ -29,19 +29,21 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.11.0"
+const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.12.0"
 
-var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"gcPlan","description":"生成无副作用 GC 计划"},{"name":"gcStatus","description":"读取隔离与清扫状态"},{"name":"gcQuarantine","description":"按精确计划隔离制品"},{"name":"gcSweep","description":"复核并清扫过期隔离制品"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"}]}`)
+var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"capacity","description":"读取已验证容量与配额用量"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"gcPlan","description":"生成无副作用 GC 计划"},{"name":"gcStatus","description":"读取隔离与清扫状态"},{"name":"gcQuarantine","description":"按精确计划隔离制品"},{"name":"gcSweep","description":"复核并清扫过期隔离制品"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"}]}`)
 
 type serverConfig struct {
 	addr, repository, storageProvider, volumeID, migrationState, trust, cert, key, readToken, publishToken, bundleToken string
+	quota                                                                                                               repositoryruntime.QuotaPolicy
 }
 
 func loadConfig() (serverConfig, error) {
 	var startup struct {
-		Listen          string `json:"listen"`
-		StorageProvider string `json:"storageProvider"`
-		VolumeID        string `json:"volumeId"`
+		Listen          string                        `json:"listen"`
+		StorageProvider string                        `json:"storageProvider"`
+		VolumeID        string                        `json:"volumeId"`
+		Quota           repositoryruntime.QuotaPolicy `json:"quota"`
 	}
 	if err := sdk.DecodeStartupConfiguration(&startup); err != nil {
 		return serverConfig{}, err
@@ -58,6 +60,7 @@ func loadConfig() (serverConfig, error) {
 		readToken:       os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN"),
 		publishToken:    os.Getenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN"),
 		bundleToken:     os.Getenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN"),
+		quota:           startup.Quota,
 	}
 	if config.addr == "" {
 		config.addr = "127.0.0.1:8443"
@@ -96,7 +99,7 @@ func main() {
 	manager, err := repositoryruntime.Open(artifactstorage.Volume{
 		Handle: "artifact-storage://configured", ProviderID: config.storageProvider, VolumeID: config.volumeID,
 		AccessMode: "filesystem", MountPath: config.repository, Generation: 1, Ready: true,
-	}, trust, config.migrationState)
+	}, trust, config.migrationState, repositoryruntime.Options{Quota: config.quota})
 	if err != nil {
 		log.Fatalf("打开可迁移制品仓库失败: %v", err)
 	}
@@ -151,6 +154,10 @@ func main() {
 					return nil, nil, marshalErr
 				}
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, status, nil
+			},
+			"capacity": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+				payload, err := json.Marshal(manager.Capacity())
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 			},
 			"listCatalog": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
 				var request struct {

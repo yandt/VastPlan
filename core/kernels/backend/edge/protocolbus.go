@@ -95,7 +95,7 @@ func platformCapabilityAllowed(capability, operation string) bool {
 		platformadminapi.SettingsCapability:    {"list": {}, "put": {}, "delete": {}},
 		platformadminapi.CredentialsCapability: {"list": {}, "put": {}, "rotate": {}, "revoke": {}},
 		platformadminapi.DatabaseCapability:    {"list": {}, "define": {}, "remove": {}, "probe": {}},
-		platformadminapi.ArtifactsCapability:   {"status": {}, "listCatalog": {}, "listPublishJournal": {}, "resolve": {}, "listReferences": {}, "setLifecycle": {}, "gcPlan": {}, "gcStatus": {}, "gcQuarantine": {}, "gcSweep": {}, "migrationStatus": {}, "prepareMigration": {}, "syncMigration": {}, "cutoverMigration": {}, "rollbackMigration": {}, "finalizeMigration": {}, "releaseMigration": {}},
+		platformadminapi.ArtifactsCapability:   {"status": {}, "capacity": {}, "listCatalog": {}, "listPublishJournal": {}, "resolve": {}, "listReferences": {}, "setLifecycle": {}, "gcPlan": {}, "gcStatus": {}, "gcQuarantine": {}, "gcSweep": {}, "migrationStatus": {}, "prepareMigration": {}, "syncMigration": {}, "cutoverMigration": {}, "rollbackMigration": {}, "finalizeMigration": {}, "releaseMigration": {}},
 		platformadminapi.DeploymentCapability:  {"listNodes": {}, "putNode": {}, "listBootstrapJobs": {}, "createBootstrap": {}, "approveBootstrap": {}, "listDeploymentTargets": {}, "listServiceRevisions": {}, "createServiceDraft": {}, "updateServiceDraft": {}, "submitServiceDraft": {}, "approveServiceRevision": {}, "publishServiceRevision": {}, "rollbackServiceRevision": {}, "listServiceRevisionAudit": {}, "listTestTargetBindings": {}, "putTestTargetBinding": {}, "listTestReleases": {}, "createTestRelease": {}, "rollbackTestRelease": {}},
 	}
 	_, ok := operations[capability][operation]

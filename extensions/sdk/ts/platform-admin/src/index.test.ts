@@ -100,6 +100,16 @@ describe("PlatformAdminClient", () => {
     expect(calls).toEqual(["/v1/portals/operations/platform/services/artifacts/artifacts/references"]);
   });
 
+  it("reads verified artifact capacity through a fixed BFF route", async () => {
+    const calls: string[] = [];
+    const client = new PlatformAdminClient(async (path) => {
+      calls.push(path);
+      return { ok: true, status: 200, json: async () => ({ activeArtifacts: 2, activeBytes: 100, buckets: [], quotas: [] }) };
+    }, "operations", "artifacts");
+    await client.artifactRepositoryCapacity();
+    expect(calls).toEqual(["/v1/portals/operations/platform/services/artifacts/artifacts/capacity"]);
+  });
+
   it("keeps artifact GC on fixed read and CSRF-protected mutation routes", async () => {
     const calls: Array<{ path: string; method?: string; body?: string }> = [];
     const fetcher: PlatformFetch = async (path, init) => {

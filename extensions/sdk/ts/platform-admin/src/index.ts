@@ -95,6 +95,16 @@ export interface ArtifactGCRecord extends ArtifactGCCandidate {
   quarantinedAt: string; sweepAfter: string; sweptAt?: string;
 }
 export interface ArtifactGCStatus { revision: number; items: ArtifactGCRecord[]; }
+export interface ArtifactCapacityBucket { namespace: string; publisher: string; channel: string; artifacts: number; bytes: number; }
+export interface ArtifactQuotaUsage {
+  id: string; namespace?: string; publisher?: string; channel?: string; artifacts: number; bytes: number;
+  maxArtifacts?: number; maxBytes?: number; exceeded: boolean;
+}
+export interface ArtifactCapacity {
+  catalogRevision: number; gcRevision: number; activeArtifacts: number; activeBytes: number;
+  quarantinedArtifacts: number; quarantinedBytes: number; sweptArtifacts: number;
+  reclaimedBytes: number; storedBytes: number; buckets: ArtifactCapacityBucket[]; quotas: ArtifactQuotaUsage[];
+}
 
 export interface NodeBootstrapPlan {
   target: { address: string; port?: number; user: string };
@@ -187,6 +197,7 @@ export class PlatformAdminClient {
   public deleteDatabaseConnection(name: string): Promise<void> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "DELETE").then(() => undefined); }
   public probeDatabaseConnection(name: string): Promise<DatabaseProbe> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}/probe`, "POST", {}); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
+  public artifactRepositoryCapacity(): Promise<ArtifactCapacity> { return this.get(`${this.basePath}/artifacts/capacity`); }
   public listArtifactReferences(): Promise<ArtifactReferencePage> { return this.get(`${this.basePath}/artifacts/references`); }
   public planArtifactGarbageCollection(): Promise<ArtifactGCPlan> { return this.get(`${this.basePath}/artifacts/gc/plan`); }
   public artifactGarbageCollectionStatus(): Promise<ArtifactGCStatus> { return this.get(`${this.basePath}/artifacts/gc/status`); }
