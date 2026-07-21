@@ -1,11 +1,14 @@
 import type { ServerResponse } from "node:http";
-import type { PortalComposerPort } from "../capabilities/portal-composer-client";
-import { CapabilityApplicationError } from "../capabilities/portal-composer-client";
+import { CapabilityApplicationError } from "../capabilities/capability-invoker";
 import type { Principal } from "../identity/identity-provider";
 import { sendAPIError, sendJSON } from "./json-response";
 
-export async function sendComposerResponse(
-  composer: PortalComposerPort,
+export interface JSONCapabilityPort {
+  call(principal: Principal, operation: string, payload: Uint8Array, signal?: AbortSignal): Promise<Uint8Array>;
+}
+
+export async function sendCapabilityResponse(
+  capability: JSONCapabilityPort,
   principal: Principal,
   operation: string,
   payload: Uint8Array,
@@ -14,7 +17,7 @@ export async function sendComposerResponse(
   head = false,
 ): Promise<void> {
   try {
-    const raw = await composer.call(principal, operation, payload, signal);
+    const raw = await capability.call(principal, operation, payload, signal);
     let value: unknown;
     try { value = JSON.parse(new TextDecoder().decode(raw)) as unknown; }
     catch { return sendAPIError(response, 502, "invalid_capability_response", head); }

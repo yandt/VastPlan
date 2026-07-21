@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import type { Principal } from "../identity/identity-provider";
 import { sendAPIError } from "./json-response";
-import { sendComposerResponse } from "./composer-response";
+import { sendCapabilityResponse } from "./capability-response";
 import { requireJSONObject, withRequestJSON } from "./request-json";
 import { encodeCapabilityPayload, parseRevisionID } from "./revision-route-contract";
 
@@ -29,28 +29,28 @@ export class PortalDraftRoutes {
 
   private async collection(method: string, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<true> {
     if (method === "GET" || method === "HEAD") {
-      await sendComposerResponse(this.composer, principal, "list", encodeCapabilityPayload({}), response, signal, method === "HEAD");
+      await sendCapabilityResponse(this.composer, principal, "list", encodeCapabilityPayload({}), response, signal, method === "HEAD");
     } else if (method === "POST") {
-      await withRequestJSON(request, response, async (body) => sendComposerResponse(this.composer, principal, "createDraft", encodeCapabilityPayload(body), response, signal));
+      await withRequestJSON(request, response, async (body) => sendCapabilityResponse(this.composer, principal, "createDraft", encodeCapabilityPayload(body), response, signal));
     } else sendAPIError(response, 405, "method_not_allowed");
     return true;
   }
 
   private async revision(method: string, action: string | undefined, revisionID: number, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<true> {
     if (action === undefined && method === "PUT") {
-      await withRequestJSON(request, response, async (composition) => sendComposerResponse(this.composer, principal, "updateDraft", encodeCapabilityPayload({ revisionId: revisionID, composition }), response, signal));
+      await withRequestJSON(request, response, async (composition) => sendCapabilityResponse(this.composer, principal, "updateDraft", encodeCapabilityPayload({ revisionId: revisionID, composition }), response, signal));
       return true;
     }
     if (action === "audit" && (method === "GET" || method === "HEAD")) {
-      await sendComposerResponse(this.composer, principal, "audit", encodeCapabilityPayload({ revisionId: revisionID }), response, signal, method === "HEAD");
+      await sendCapabilityResponse(this.composer, principal, "audit", encodeCapabilityPayload({ revisionId: revisionID }), response, signal, method === "HEAD");
       return true;
     }
     if ((action === "submit" || action === "approve") && method === "POST") {
-      await withRequestJSON(request, response, async () => sendComposerResponse(this.composer, principal, action, encodeCapabilityPayload({ revisionId: revisionID }), response, signal));
+      await withRequestJSON(request, response, async () => sendCapabilityResponse(this.composer, principal, action, encodeCapabilityPayload({ revisionId: revisionID }), response, signal));
       return true;
     }
     if (action === "publish" && method === "POST") {
-      await withRequestJSON(request, response, async (body) => sendComposerResponse(this.composer, principal, "publish", encodeCapabilityPayload({ ...requireJSONObject(body), revisionId: revisionID }), response, signal));
+      await withRequestJSON(request, response, async (body) => sendCapabilityResponse(this.composer, principal, "publish", encodeCapabilityPayload({ ...requireJSONObject(body), revisionId: revisionID }), response, signal));
       return true;
     }
     sendAPIError(response, 405, "method_not_allowed", method === "HEAD");

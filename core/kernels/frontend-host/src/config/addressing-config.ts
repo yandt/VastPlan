@@ -3,11 +3,12 @@ import type { NodeAddressingConfig } from "@vastplan/addressing-node";
 
 export interface PortalAddressingConfig extends NodeAddressingConfig {
   composerLogicalService?: string;
+  interactionLogicalService?: string;
 }
 
 export const addressingValueArguments = Object.freeze([
   "--nats-servers", "--addressing-contracts", "--transport-seed", "--transport-trust",
-  "--nats-tls-ca", "--nats-tls-cert", "--nats-tls-key", "--composer-logical-service",
+  "--nats-tls-ca", "--nats-tls-cert", "--nats-tls-key", "--composer-logical-service", "--interaction-logical-service",
 ]);
 
 export function parseAddressingConfig(values: ReadonlyMap<string, string>, allowInsecure: boolean, cwd: string): PortalAddressingConfig | undefined {
@@ -28,12 +29,14 @@ export function parseAddressingConfig(values: ReadonlyMap<string, string>, allow
   }
   if (!allowInsecure && caFile === undefined) throw new Error("生产 Node Addressing 必须配置 NATS mTLS；本地开发需显式 --allow-insecure-nats");
   const composerLogicalService = values.get("--composer-logical-service");
+  const interactionLogicalService = values.get("--interaction-logical-service");
   return Object.freeze({
     servers: Object.freeze(servers), clientName: "vastplan-portal-host",
     contractsDirectory: absolutePath(contractsDirectory, cwd), seedFile: absolutePath(seedFile, cwd), trustFile: absolutePath(trustFile, cwd),
     ...(caFile === undefined ? {} : { tls: Object.freeze({ caFile: absolutePath(caFile, cwd), certFile: absolutePath(certFile!, cwd), keyFile: absolutePath(keyFile!, cwd) }) }),
     ...(allowInsecure ? { allowInsecure: true } : {}),
     ...(composerLogicalService === undefined ? {} : { composerLogicalService }),
+    ...(interactionLogicalService === undefined ? {} : { interactionLogicalService }),
   });
 }
 

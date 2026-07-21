@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import type { Principal } from "../identity/identity-provider";
-import { sendComposerResponse } from "./composer-response";
+import { sendCapabilityResponse } from "./capability-response";
 import { sendAPIError } from "./json-response";
 import { withRequestJSON } from "./request-json";
 import { encodeCapabilityPayload } from "./revision-route-contract";
@@ -27,6 +27,6 @@ export class PortalTestTargetRoutes {
   }
 
   private async call(operation: string, payload: unknown, principal: Principal, response: ServerResponse, signal: AbortSignal, head = false): Promise<void> {
-    await sendComposerResponse(this.composer, principal, operation, encodeCapabilityPayload(payload), response, signal, head);
+    await sendCapabilityResponse(this.composer, principal, operation, encodeCapabilityPayload(payload), response, signal, head);
   }
 }

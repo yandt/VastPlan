@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import type { Principal } from "../identity/identity-provider";
-import { sendComposerResponse } from "./composer-response";
+import { sendCapabilityResponse } from "./capability-response";
 import { sendAPIError } from "./json-response";
 import { PortalActivationRoutes } from "./portal-activation-routes";
 import { PortalBindingRoutes } from "./portal-binding-routes";
@@ -31,7 +31,7 @@ export class PortalGovernanceRoutes {
     if (path !== basePath && !path.startsWith(`${basePath}/`)) return false;
     if (path === basePath) {
       if (method !== "GET" && method !== "HEAD") sendAPIError(response, 405, "method_not_allowed");
-      else await sendComposerResponse(this.composer, principal, "governance", encodeCapabilityPayload({}), response, signal, method === "HEAD");
+      else await sendCapabilityResponse(this.composer, principal, "governance", encodeCapabilityPayload({}), response, signal, method === "HEAD");
       return true;
     }
     if (await this.profiles.handle(path, method, principal, request, response, signal)) return true;
