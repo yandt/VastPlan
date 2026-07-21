@@ -172,7 +172,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.13.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.4.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.5.0", "channel": "stable" }
       ]
     }
   ]

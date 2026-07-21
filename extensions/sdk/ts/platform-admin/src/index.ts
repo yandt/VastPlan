@@ -126,6 +126,7 @@ export type ServiceRevisionStatus = "Draft" | "PendingApproval" | "Approved" | "
 export interface ServiceRevision {
   id: number; deployment: string; status: ServiceRevisionStatus; active: boolean;
   composition: BackendApplicationComposition; preview: Record<string, unknown>; previewDigest: string; kvRevision?: number;
+  referencePending?: boolean;
   submittedBy?: string; approvedBy?: string; publishedBy?: string; createdAt: string; updatedAt: string;
 }
 export interface ServiceAuditEvent { id: number; revisionId: number; deployment: string; action: string; actorId: string; at: string; }

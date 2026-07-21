@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -24,7 +24,7 @@
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.deployment", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
-  "state": { "backend": { "format": "cn.vastplan.platform.deployment-manager", "formatVersion": 3 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.deployment-manager", "formatVersion": 4 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/deployment-manager", "frontend": "frontend/dist/index.js" },
   "contributes": {

@@ -28,7 +28,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.4.0"
+	PluginVersion = "0.5.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 16 << 20
@@ -266,6 +266,17 @@ func (s *Service) recoverInterruptedLocked() bool {
 			release.RollbackRequired = release.CandidateServiceRevisionID != 0
 			release.UpdatedAt = now
 			changed = true
+		}
+		// Reconcile exact repository references after every controller restart.
+		// The transition snapshot already protects both old and new artifacts, so
+		// marking the active revision pending can only retain extra bytes.
+		for i := range state.Revisions {
+			revision := &state.Revisions[i]
+			if revision.Status == platformadminapi.ServicePublished && revision.Active && !revision.ReferencePending {
+				revision.ReferencePending = true
+				revision.UpdatedAt = now
+				changed = true
+			}
 		}
 	}
 	return changed
@@ -733,6 +744,7 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		items, err = s.ListDeploymentTargets(ctx, host, call)
 		out = map[string]any{"items": items}
 	case "listServiceRevisions":
+		_ = s.ReconcileServiceReferences(ctx, host, call)
 		var items []platformadminapi.ServiceRevision
 		items, err = s.ListServiceRevisions(call)
 		out = map[string]any{"items": items}
@@ -749,6 +761,7 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 	case "rollbackServiceRevision":
 		out, err = s.RollbackServiceRevision(ctx, host, call, request.RevisionID)
 	case "listServiceRevisionAudit":
+		_ = s.ReconcileServiceReferences(ctx, host, call)
 		var items []platformadminapi.ServiceAuditEvent
 		items, err = s.ListServiceRevisionAudit(call, request.RevisionID)
 		out = map[string]any{"items": items}

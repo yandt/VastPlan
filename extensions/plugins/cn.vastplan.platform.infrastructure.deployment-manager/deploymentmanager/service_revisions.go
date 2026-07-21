@@ -43,6 +43,58 @@ func (s *Service) ListServiceRevisions(call *contractv1.CallContext) ([]platform
 	return items, nil
 }
 
+// ReconcileServiceReferences drains the durable reference-protection outbox.
+// It is safe to call on every management read: only revisions explicitly left
+// pending by publish or restart perform repository I/O.
+func (s *Service) ReconcileServiceReferences(ctx context.Context, host sdk.Host, call *contractv1.CallContext) error {
+	tenant, err := callTenant(call)
+	if err != nil {
+		return err
+	}
+	type pendingReference struct {
+		revision platformadminapi.ServiceRevision
+		rollback *backendcompositionv1.ApplicationComposition
+	}
+	s.mu.Lock()
+	state := s.tenantLocked(tenant)
+	pending := make([]pendingReference, 0)
+	for _, revision := range state.Revisions {
+		if revision.Status != platformadminapi.ServicePublished || !revision.Active || !revision.ReferencePending {
+			continue
+		}
+		var rollback *backendcompositionv1.ApplicationComposition
+		var rollbackID uint64
+		for _, candidate := range state.Revisions {
+			if candidate.Deployment == revision.Deployment && candidate.Status == platformadminapi.ServicePublished && candidate.ID < revision.ID && candidate.ID > rollbackID {
+				copy := cloneJSON(candidate.Composition)
+				rollback, rollbackID = &copy, candidate.ID
+			}
+		}
+		pending = append(pending, pendingReference{revision: cloneServiceRevision(revision), rollback: rollback})
+	}
+	s.mu.Unlock()
+
+	for _, item := range pending {
+		if err := publishDeploymentReferences(ctx, host, call, item.revision.Deployment, item.revision.ID, item.revision.Composition, item.rollback); err != nil {
+			return err
+		}
+		s.mu.Lock()
+		state = s.tenantLocked(tenant)
+		index, lookupErr := serviceRevisionIndex(state, item.revision.ID)
+		if lookupErr == nil && state.Revisions[index].Active && state.Revisions[index].ReferencePending {
+			state.Revisions[index].ReferencePending = false
+			state.Revisions[index].UpdatedAt = s.now().Format(time.RFC3339Nano)
+			s.auditServiceLocked(state, state.Revisions[index], "service.references.synced", "repository")
+			if saveErr := s.saveLocked(); saveErr != nil {
+				s.mu.Unlock()
+				return saveErr
+			}
+		}
+		s.mu.Unlock()
+	}
+	return nil
+}
+
 func (s *Service) CreateServiceDraft(ctx context.Context, host sdk.Host, call *contractv1.CallContext, input backendcompositionv1.ApplicationComposition) (platformadminapi.ServiceRevision, error) {
 	tenant, err := callTenant(call)
 	if err != nil {
@@ -174,6 +226,20 @@ func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, cal
 			return platformadminapi.ServiceRevision{}, err
 		}
 	}
+	var previousComposition *backendcompositionv1.ApplicationComposition
+	for i := range state.Revisions {
+		if state.Revisions[i].Deployment == revision.Deployment && state.Revisions[i].Active {
+			copy := cloneJSON(state.Revisions[i].Composition)
+			previousComposition = &copy
+			break
+		}
+	}
+	if err := protectDeploymentTransition(ctx, host, call, revision.Deployment, revision.ID*2-1, previousComposition, revision.Composition); err != nil {
+		revision.Status, revision.UpdatedAt = platformadminapi.ServiceApproved, s.now().Format(time.RFC3339Nano)
+		state.Revisions[index] = revision
+		_ = s.saveLocked()
+		return platformadminapi.ServiceRevision{}, errServicePublish
+	}
 	result, err := publishService(ctx, host, call, revision.Composition, revision.ID, revision.PreviewDigest)
 	if err != nil {
 		publishing := revision
@@ -188,6 +254,7 @@ func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, cal
 	oldRevisions := cloneServiceRevisions(state.Revisions)
 	oldAuditLength, oldNextAudit := len(state.ServiceAudit), state.NextAudit
 	revision.Status, revision.Active, revision.PublishedBy = platformadminapi.ServicePublished, true, publisher
+	revision.ReferencePending = true
 	revision.Preview, revision.PreviewDigest, revision.KVRevision = result.Deployment, result.Digest, result.KVRevision
 	revision.UpdatedAt = s.now().Format(time.RFC3339Nano)
 	for i := range state.Revisions {
@@ -202,6 +269,20 @@ func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, cal
 		state.ServiceAudit = state.ServiceAudit[:oldAuditLength]
 		state.NextAudit = oldNextAudit
 		return platformadminapi.ServiceRevision{}, err
+	}
+	if referenceErr := publishDeploymentReferences(ctx, host, call, revision.Deployment, revision.ID, revision.Composition, previousComposition); referenceErr != nil {
+		s.auditServiceLocked(state, revision, "service.references.pending", "repository")
+		_ = s.saveLocked()
+	} else {
+		revision.ReferencePending = false
+		state.Revisions[index] = revision
+		s.auditServiceLocked(state, revision, "service.references.synced", "repository")
+		if err := s.saveLocked(); err != nil {
+			// The durable state written before repository I/O still says pending.
+			// Keep memory aligned with it so a later read retries idempotently.
+			revision.ReferencePending = true
+			state.Revisions[index] = revision
+		}
 	}
 	return cloneServiceRevision(revision), nil
 }

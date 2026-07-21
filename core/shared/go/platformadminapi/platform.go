@@ -223,19 +223,20 @@ const (
 )
 
 type ServiceRevision struct {
-	ID            uint64                                      `json:"id"`
-	Deployment    string                                      `json:"deployment"`
-	Status        ServiceRevisionStatus                       `json:"status"`
-	Active        bool                                        `json:"active"`
-	Composition   backendcompositionv1.ApplicationComposition `json:"composition"`
-	Preview       deploymentv2.Deployment                     `json:"preview"`
-	PreviewDigest string                                      `json:"previewDigest"`
-	KVRevision    uint64                                      `json:"kvRevision,omitempty"`
-	SubmittedBy   string                                      `json:"submittedBy,omitempty"`
-	ApprovedBy    string                                      `json:"approvedBy,omitempty"`
-	PublishedBy   string                                      `json:"publishedBy,omitempty"`
-	CreatedAt     string                                      `json:"createdAt"`
-	UpdatedAt     string                                      `json:"updatedAt"`
+	ID               uint64                                      `json:"id"`
+	Deployment       string                                      `json:"deployment"`
+	Status           ServiceRevisionStatus                       `json:"status"`
+	Active           bool                                        `json:"active"`
+	Composition      backendcompositionv1.ApplicationComposition `json:"composition"`
+	Preview          deploymentv2.Deployment                     `json:"preview"`
+	PreviewDigest    string                                      `json:"previewDigest"`
+	KVRevision       uint64                                      `json:"kvRevision,omitempty"`
+	ReferencePending bool                                        `json:"referencePending,omitempty"`
+	SubmittedBy      string                                      `json:"submittedBy,omitempty"`
+	ApprovedBy       string                                      `json:"approvedBy,omitempty"`
+	PublishedBy      string                                      `json:"publishedBy,omitempty"`
+	CreatedAt        string                                      `json:"createdAt"`
+	UpdatedAt        string                                      `json:"updatedAt"`
 }
 
 type ServiceAuditEvent struct {

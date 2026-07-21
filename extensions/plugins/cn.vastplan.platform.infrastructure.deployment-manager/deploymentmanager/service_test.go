@@ -48,6 +48,10 @@ type fakeHost struct {
 	readinessStatus     nodebootstrap.ReadinessStatus
 	catalogEntry        *artifactCatalogEntry
 	deploymentReadiness map[uint64]deploymentpublication.ReadinessObservation
+	referenceSnapshots  []pluginv1.ArtifactReferenceSnapshot
+	referenceErr        error
+	referenceCalls      int
+	failReferenceAt     int
 }
 
 func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -97,11 +101,33 @@ func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *con
 	}
 	if target.Capability == platformadminapi.ArtifactsCapability && target.GetOperation() == "listCatalog" {
 		page := artifactCatalogPage{}
-		if h.catalogEntry != nil {
+		var query struct {
+			PluginID string `json:"pluginId"`
+			Version  string `json:"version"`
+			Channel  string `json:"channel"`
+		}
+		_ = json.Unmarshal(payload, &query)
+		if h.catalogEntry != nil && h.catalogEntry.Ref == (pluginv1.ArtifactRef{PluginID: query.PluginID, Version: query.Version, Channel: query.Channel}) {
 			page.Revision, page.Total, page.Items = h.catalogEntry.RepositoryRevision, 1, []artifactCatalogEntry{*h.catalogEntry}
+		} else {
+			entry := artifactCatalogEntry{Ref: pluginv1.ArtifactRef{PluginID: query.PluginID, Version: query.Version, Channel: query.Channel}, SHA256: strings.Repeat("c", 64), Publisher: "vastplan", RepositoryRevision: 1, Targets: []string{"backend"}}
+			page.Revision, page.Total, page.Items = 1, 1, []artifactCatalogEntry{entry}
 		}
 		raw, _ := json.Marshal(page)
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
+	if target.Capability == platformadminapi.ArtifactsCapability && target.GetOperation() == "putReferences" {
+		h.referenceCalls++
+		if h.failReferenceAt == h.referenceCalls {
+			return nil, nil, errors.New("repository temporarily unavailable")
+		}
+		if h.referenceErr != nil {
+			return nil, nil, h.referenceErr
+		}
+		var snapshot pluginv1.ArtifactReferenceSnapshot
+		_ = json.Unmarshal(payload, &snapshot)
+		h.referenceSnapshots = append(h.referenceSnapshots, snapshot)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"revision":1}`), nil
 	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"systemdActive":true}`), nil
 }
@@ -145,6 +171,9 @@ func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
 			if _, err = service.PublishServiceRevision(context.Background(), host, carol, draft.ID); err != nil {
 				t.Fatal(err)
 			}
+			if len(host.referenceSnapshots) < 3 || host.referenceSnapshots[0].Generation != 1 || host.referenceSnapshots[1].OwnerKind != "rollback-history" || host.referenceSnapshots[2].OwnerKind != "deployment-active" || host.referenceSnapshots[2].Generation != 2 {
+				t.Fatalf("deployment reference protection must bracket activation and contract only after rollback protection: %+v", host.referenceSnapshots)
+			}
 			binding, err := service.PutTestTargetBinding(carol, "demo-api", platformadminapi.PutTestTargetBindingRequest{
 				Kind: platformadminapi.TestTargetBackend, Deployment: "agent-services", UnitID: "api",
 				PluginID: "cn.example.application.demo", AllowedPublishers: []string{"vastplan"}, Enabled: true,
@@ -167,6 +196,15 @@ func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
 			if err != nil || release.Status != test.wantStatus || release.RollbackRequired {
 				t.Fatalf("测试发布终态错误: release=%+v err=%v", release, err)
 			}
+			var protected pluginv1.ArtifactReferenceSnapshot
+			for _, snapshot := range host.referenceSnapshots {
+				if snapshot.OwnerKind == "artifact-lock" {
+					protected = snapshot
+				}
+			}
+			if protected.OwnerKind != "artifact-lock" || len(protected.References) != 1 || protected.References[0].SHA256 != digest {
+				t.Fatalf("测试制品必须在激活前取得精确引用保护: %+v", host.referenceSnapshots)
+			}
 			revisions, err := service.ListServiceRevisions(carol)
 			if err != nil || len(revisions) != test.wantTotal || revisions[0].ID != test.wantActive || !revisions[0].Active {
 				t.Fatalf("服务修订激活结果错误: %+v err=%v", revisions, err)
@@ -180,6 +218,14 @@ func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
 				t.Fatalf("自动回滚审计字段不完整: %+v", release)
 			}
 		})
+	}
+}
+
+func TestTestReleaseReferenceProtectionFailsClosed(t *testing.T) {
+	host := &fakeHost{referenceErr: errors.New("repository unavailable")}
+	release := platformadminapi.TestRelease{ID: 7, Artifact: pluginv1.ArtifactRef{PluginID: "cn.example.demo", Version: "1.0.0-dev.1", Channel: "testing"}, SHA256: strings.Repeat("a", 64)}
+	if err := publishTestReleaseReference(context.Background(), host, userCall("tenant-a", "publisher"), release); err == nil {
+		t.Fatal("candidate activation must not proceed without reference protection")
 	}
 }
 
@@ -307,6 +353,46 @@ func TestServiceCompositionWorkflowAndRollback(t *testing.T) {
 	audit, err := service.ListServiceRevisionAudit(alice, rolledBack.ID)
 	if err != nil || len(audit) < 3 {
 		t.Fatalf("回滚审计不完整: %+v %v", audit, err)
+	}
+}
+
+func TestServiceReferenceOutboxRetriesAfterRepositoryRecovery(t *testing.T) {
+	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := &fakeHost{failReferenceAt: 2}
+	alice, bob, carol := userCall("tenant-a", "alice"), userCall("tenant-a", "bob"), userCall("tenant-a", "carol")
+	input := backendcompositionv1.ApplicationComposition{
+		Metadata: deploymentv1.Metadata{Name: "agent-services"},
+		Units: []backendcompositionv1.ApplicationUnit{{ServiceClass: "application", Spec: deploymentv2.ServiceUnit{
+			ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
+			Plugins: []deploymentv1.PluginRef{{ID: "cn.example.application.demo", Version: "1.0.0", Channel: "stable"}},
+		}}},
+	}
+	draft, err := service.CreateServiceDraft(context.Background(), host, alice, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.SubmitServiceDraft(context.Background(), host, alice, draft.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.ApproveServiceRevision(bob, draft.ID); err != nil {
+		t.Fatal(err)
+	}
+	published, err := service.PublishServiceRevision(context.Background(), host, carol, draft.ID)
+	if err != nil || !published.Active || !published.ReferencePending {
+		t.Fatalf("仓库瞬时失败不得回滚已完成的内核切换，且必须留下 outbox: %+v err=%v", published, err)
+	}
+	if err = service.ReconcileServiceReferences(context.Background(), host, carol); err != nil {
+		t.Fatalf("仓库恢复后必须能幂等收敛引用: %v", err)
+	}
+	revisions, err := service.ListServiceRevisions(carol)
+	if err != nil || len(revisions) != 1 || revisions[0].ReferencePending {
+		t.Fatalf("引用 outbox 未被清空: %+v err=%v", revisions, err)
+	}
+	if len(host.referenceSnapshots) != 3 || host.referenceSnapshots[2].OwnerKind != "deployment-active" || host.referenceSnapshots[2].Generation != 2 {
+		t.Fatalf("重试后应先恢复回滚保护再收敛活动引用: %+v", host.referenceSnapshots)
 	}
 }
 

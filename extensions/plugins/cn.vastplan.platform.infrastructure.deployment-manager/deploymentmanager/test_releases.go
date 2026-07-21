@@ -14,6 +14,7 @@ import (
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -168,11 +169,42 @@ func (s *Service) CreateTestRelease(ctx context.Context, host sdk.Host, call *co
 		return platformadminapi.TestRelease{}, err
 	}
 	s.mu.Unlock()
+	if err := publishTestReleaseReference(ctx, host, call, release); err != nil {
+		_ = s.transitionTestRelease(tenant, release.ID, platformadminapi.TestReleaseFailed, func(current *platformadminapi.TestRelease) {
+			current.ErrorCode = "platform.deployment.reference_protection_failed"
+			current.ErrorMessage = "制品引用保护尚未提交，候选未激活"
+		})
+		return s.testRelease(call, release.ID)
+	}
 
 	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.releaseTimeout)
 	defer cancel()
 	s.executeTestRelease(releaseCtx, host, call, tenant, binding, release.ID)
 	return s.testRelease(call, release.ID)
+}
+
+func publishTestReleaseReference(ctx context.Context, host sdk.Host, call *contractv1.CallContext, release platformadminapi.TestRelease) error {
+	if host == nil || call == nil {
+		return errors.New("引用保护缺少可信宿主")
+	}
+	snapshot, err := artifactreference.Seal(pluginv1.ArtifactReferenceSnapshot{
+		OwnerKind: artifactreference.OwnerArtifactLock, OwnerID: fmt.Sprintf("deployment/test-release-%d", release.ID), Generation: 1,
+		References: []pluginv1.ArtifactReference{{Ref: release.Artifact, SHA256: release.SHA256, Purpose: "test-release"}},
+	})
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	operation := "putReferences"
+	logicalService, routingDomain := platformadminapi.ArtifactsCapability, "platform"
+	result, _, err := host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.ToolPackage, Capability: platformadminapi.ArtifactsCapability, Operation: &operation, LogicalService: &logicalService, RoutingDomain: &routingDomain}, call, raw)
+	if err != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return fmt.Errorf("提交测试制品引用保护失败: %w", coalesceError(err, errTestArtifact))
+	}
+	return nil
 }
 
 // RollbackTestRelease recovers a fail-closed interrupted release. It never
