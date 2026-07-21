@@ -64,7 +64,8 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
     if (action.confirm !== undefined && !await ui.confirm({ title, content: i18n.text(action.confirm) })) return;
     try {
       const context: CollectionActionContext = { action, selected: actionRows, refresh };
-      await page.runAction?.(context, new AbortController().signal);
+      const result = await page.runAction?.(context, new AbortController().signal);
+      if (result?.notify !== undefined) ui.notify({ title: i18n.text(result.notify.title), content: result.notify.content === undefined ? undefined : i18n.text(result.notify.content), kind: result.notify.kind });
       refresh();
     } catch (error) {
       ui.notify({ title, content: error instanceof Error ? error.message : String(error), kind: "error" });

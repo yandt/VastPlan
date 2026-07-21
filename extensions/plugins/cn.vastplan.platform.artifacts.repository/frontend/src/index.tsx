@@ -1,7 +1,6 @@
 import type { ArtifactCatalogQuery, ArtifactCapacity, ArtifactGCPlan, PlatformAdminClient } from "@vastplan/platform-admin";
 import { createBrowserPlatformAdminClient } from "@vastplan/platform-admin";
-import { defineCollectionPage, type CollectionPageDefinition, type CollectionQuery } from "@vastplan/workbench-sdk";
-import { managementServicesFor, message, type FrontendPluginContext } from "@vastplan/ui-primitives";
+import { defineCollectionPage, managementServicesFor, message, type CollectionPageDefinition, type CollectionQuery, type WorkbenchFrontendPluginContext } from "@vastplan/workbench-sdk";
 
 const namespace = "cn.vastplan.platform.artifacts.repository";
 type Row = Record<string, unknown>;
@@ -250,7 +249,7 @@ export function createArtifactRepositoryPages(client: PlatformAdminClient, servi
 }
 
 export default {
-  register(context: FrontendPluginContext) {
+  register(context: WorkbenchFrontendPluginContext) {
     const services = managementServicesFor(context.portal, "platform.artifacts.repository");
     if (services.length === 0) throw new Error("Portal 未绑定 platform.artifacts.repository 服务");
     for (const service of services) {

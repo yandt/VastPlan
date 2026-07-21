@@ -13,6 +13,6 @@
 - `CollectionFilters`、`CollectionToolbar`、`CollectionTable`、`CollectionCards`、`CollectionPreferencesDialog`：可独立演进的组合区域；
 - `density`、`filter-schema`、`preferences`：无框架私有依赖的策略与持久化辅助模块。
 
-这里的 `CollectionTable` / `CollectionCards` 是集合工作流的受控呈现区，不是 Arco/MUI 的基础组件。基础表格和卡片分别通过 `ui.Table` / `ui.DataCard` 由渲染适配器提供。`patterns/form/` 负责 Page/Dialog/Drawer 表单、条件投影、脏状态、校验与提交；校验和提交的字段错误使用 `LocalizedText`，统一在 Workbench 解析当前语言。Render Adapter 只负责把同一 Presentation 映射为各框架的 sections/tabs/steps 和分栏。未来详情模式应进入 `patterns/record/`，不得重新堆回入口文件或让功能插件直接组合基础 UI 组件。
+这里的 `CollectionTable` / `CollectionCards` 是集合工作流的受控呈现区，不是 Arco/MUI 的基础组件。基础表格和卡片分别通过 `ui.Table` / `ui.DataCard` 由渲染适配器提供。`patterns/form/` 负责 Page/Dialog/Drawer 表单、条件投影、脏状态、校验与提交；校验和提交的字段错误使用 `LocalizedText`，统一在 Workbench 解析当前语言。`secret-material.ts` 统一识别和丢弃一次性秘密，禁止材料进入 baseline 或在提交/关闭后滞留。Render Adapter 只负责把同一 Presentation 映射为各框架的 sections/tabs/steps、分栏和 password 控件。未来详情模式应进入 `patterns/record/`，不得重新堆回入口文件或让功能插件直接组合基础 UI 组件。
 
 Collection 默认采用管理工作区呈现：三列筛选、左主右次操作、低对比表头、行分隔和右对齐分页。筛选字段不超过三项时不显示“查询”按钮：文本 Enter 后提交，选择类字段直接提交；达到两行时再使用“查询 + 重置”草稿模式。

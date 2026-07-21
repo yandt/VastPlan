@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { message, usePortalI18n, usePortalUI, type FormRendererProps, type FormRendererValidationState } from "@vastplan/ui-primitives";
 import type { WorkbenchFormDefinition } from "@vastplan/workbench-sdk";
 import { projectFormPresentation } from "./presentation.js";
+import { containsSecretMaterial, discardSecretMaterial, secretMaterialPointers } from "./secret-material.js";
 import type { CollectionRow } from "../collection/model.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
@@ -28,8 +29,12 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
   const loadRef = useRef<AbortController>();
   const submitRef = useRef<AbortController>();
   const context = definition?.context ?? emptyContext;
+  const secretPointers = useMemo(() => secretMaterialPointers(definition?.presentation), [definition?.presentation]);
   useEffect(() => {
-    if (!open || definition === undefined) return;
+    if (!open || definition === undefined) {
+      setValue({}); setBaseline("{}"); setFieldErrors({}); setFailure(undefined);
+      return;
+    }
     loadRef.current?.abort();
     const controller = new AbortController();
     loadRef.current = controller;
@@ -38,12 +43,13 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
     const source = definition.load?.(selected, controller.signal) ?? Promise.resolve(definition.initialValue ?? {});
     void source.then((loaded) => {
       if (controller.signal.aborted) return;
-      const next = clone(loaded);
+      if (containsSecretMaterial(loaded, secretPointers)) setFailure(i18n.text(message(namespace, "form.secretLoadRejected", "一次性秘密字段禁止从存储中回填；已安全丢弃该值。")));
+      const next = discardSecretMaterial(loaded, secretPointers);
       setValue(next); setBaseline(JSON.stringify(next));
     }).catch((error: unknown) => { if (!controller.signal.aborted) setFailure(errorText(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [definition, open, selected]);
+  }, [definition, i18n.text, open, secretPointers, selected]);
   useEffect(() => () => submitRef.current?.abort(), []);
   const schema = useMemo(() => definition === undefined ? undefined : projectFormPresentation(definition.schema, definition.presentation, value, context, i18n.text), [context, definition, i18n.text, value]);
   const asyncValidator = useMemo<FormRendererProps["validate"]>(() => definition?.validate === undefined ? undefined : async ({ value: next, context: nextContext, signal }) => {
@@ -51,16 +57,20 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
     return Object.fromEntries(Object.entries(errors).map(([pointer, error]) => [pointer, i18n.text(error)]));
   }, [definition, i18n.text]);
   if (definition === undefined) return null;
-  const dirty = JSON.stringify(value) !== baseline;
+  const dirty = JSON.stringify(discardSecretMaterial(value, secretPointers)) !== baseline || containsSecretMaterial(value, secretPointers);
   const sections = definition.presentation?.sections ?? [];
   const sectionIndex = Math.max(0, sections.findIndex((section) => section.id === activeSection));
   const steps = definition.presentation?.navigation === "steps" && sections.length > 0;
   const requestClose = async () => {
     if (submitting) return;
     if (dirty && !await ui.confirm({ title: i18n.text(message(namespace, "form.discardTitle", "放弃未保存的修改？")), content: i18n.text(message(namespace, "form.discardContent", "关闭后，本次输入不会保留。")) })) return;
+    setFieldErrors({}); setFailure(undefined);
     if (definition.workflow.surface === "page") {
-      setValue(JSON.parse(baseline) as Record<string, unknown>); setFieldErrors({}); setFailure(undefined);
-    } else onClose?.();
+      setValue(JSON.parse(baseline) as Record<string, unknown>);
+    } else {
+      const sanitized = discardSecretMaterial(value, secretPointers);
+      setValue(sanitized); setBaseline(JSON.stringify(sanitized)); onClose?.();
+    }
   };
   const submit = async () => {
     if (submitting || !validation.valid || validation.validating) return;
@@ -78,11 +88,12 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
       }
       if (definition.workflow.success?.notify !== undefined) ui.notify({ title: i18n.text(definition.workflow.success.notify), kind: "success" });
       if (definition.workflow.success?.refreshCollection === true) onRefresh();
-      setBaseline(JSON.stringify(value));
+      setBaseline(JSON.stringify(discardSecretMaterial(value, secretPointers)));
       if (definition.workflow.surface !== "page" && definition.workflow.success?.close !== false) onClose?.();
     } catch (error) {
       if (!controller.signal.aborted) setFailure(errorText(error));
     } finally {
+      setValue((current) => discardSecretMaterial(current, secretPointers));
       if (!controller.signal.aborted) setSubmitting(false);
     }
   };
@@ -116,5 +127,4 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
     : <ui.Dialog open={open} title={title} width={definition.workflow.size} footer={footer} onClose={() => void requestClose()}>{content}</ui.Dialog>;
 }
 
-function clone(value: Readonly<Record<string, unknown>>): Record<string, unknown> { return JSON.parse(JSON.stringify(value)) as Record<string, unknown>; }
 function errorText(value: unknown): string { return value instanceof Error ? value.message : String(value); }

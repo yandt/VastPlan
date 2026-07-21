@@ -145,11 +145,29 @@ function cloneValue(value: unknown): unknown {
 function setJSONPointer(root: Record<string, unknown>, pointer: string, value: string): void {
   if (!pointer.startsWith("/") || pointer === "/") return;
   const parts = pointer.slice(1).split("/").map((part) => part.replace(/~1/g, "/").replace(/~0/g, "~"));
-  let current: Record<string, unknown> = root;
+  let current: unknown = root;
   for (const part of parts.slice(0, -1)) {
-    const next = current[part];
-    if (typeof next !== "object" || next === null || Array.isArray(next)) return;
-    current = next as Record<string, unknown>;
+    if (Array.isArray(current)) {
+      const index = arrayIndex(part, current.length);
+      if (index === undefined) return;
+      current = current[index];
+      continue;
+    }
+    if (typeof current !== "object" || current === null || !Object.hasOwn(current, part)) return;
+    current = (current as Record<string, unknown>)[part];
   }
-  if (parts.length > 0 && Object.hasOwn(current, parts[parts.length - 1])) current[parts[parts.length - 1]] = value;
+  const last = parts[parts.length - 1];
+  if (last === undefined) return;
+  if (Array.isArray(current)) {
+    const index = arrayIndex(last, current.length);
+    if (index !== undefined) current[index] = value;
+    return;
+  }
+  if (typeof current === "object" && current !== null && Object.hasOwn(current, last)) (current as Record<string, unknown>)[last] = value;
+}
+
+function arrayIndex(value: string, length: number): number | undefined {
+  if (!/^(0|[1-9][0-9]*)$/.test(value)) return undefined;
+  const index = Number(value);
+  return Number.isSafeInteger(index) && index < length ? index : undefined;
 }

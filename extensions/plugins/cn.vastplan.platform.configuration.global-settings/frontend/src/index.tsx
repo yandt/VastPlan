@@ -1,6 +1,5 @@
 import { createBrowserPlatformAdminClient, type PlatformAdminClient, type Setting } from "@vastplan/platform-admin";
-import { jsonSchemaDialect, managementServicesFor, message, type FormSchema, type FrontendPluginContext } from "@vastplan/ui-primitives";
-import { defineCollectionPage, type CollectionPageDefinition, type CollectionQuery, type WorkbenchFormDefinition, type WorkbenchFormFieldErrors, type WorkbenchFormSubmitResult } from "@vastplan/workbench-sdk";
+import { defineCollectionPage, jsonSchemaDialect, managementServicesFor, message, type CollectionPageDefinition, type CollectionQuery, type FormSchema, type WorkbenchFormDefinition, type WorkbenchFormFieldErrors, type WorkbenchFormSubmitResult, type WorkbenchFrontendPluginContext } from "@vastplan/workbench-sdk";
 
 const namespace = "cn.vastplan.platform.configuration.global-settings";
 
@@ -70,8 +69,8 @@ export function createGlobalSettingsPage(client: PlatformAdminClient, serviceID:
       filters: [{ id: "key", label: message(namespace, "filter.key", "设置键前缀"), kind: "text" }],
       columns: [
         { key: "key", label: message(namespace, "column.key", "键"), defaultVisible: true, minWidth: 240 },
-        { key: "version", label: message(namespace, "column.version", "版本"), defaultVisible: true, minWidth: 90 },
-        { key: "updatedAt", label: message(namespace, "column.updatedAt", "更新时间"), defaultVisible: true, minWidth: 180 },
+        { key: "version", label: message(namespace, "column.version", "版本"), format: "number", defaultVisible: true, minWidth: 90 },
+        { key: "updatedAt", label: message(namespace, "column.updatedAt", "更新时间"), format: "datetime", defaultVisible: true, minWidth: 180 },
       ],
       actions: [
         { id: "create", label: message(namespace, "action.create", "新增设置"), placement: "page.primary", tone: "primary", form: "create" },
@@ -95,7 +94,7 @@ export function createGlobalSettingsPage(client: PlatformAdminClient, serviceID:
 }
 
 export default {
-  register(context: FrontendPluginContext) {
+  register(context: WorkbenchFrontendPluginContext) {
     const services = managementServicesFor(context.portal, "platform.settings");
     if (services.length === 0) throw new Error("Portal 未绑定 platform.settings 服务");
     for (const service of services) {

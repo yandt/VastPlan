@@ -129,4 +129,28 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("Name");
     expect(html).toContain("Region");
   });
+
+  it("renders one-time secret material as a non-autofilled password input", () => {
+    const form = createElement(arcoPortalUIComponents.FormRenderer, {
+      schema: { id: "secret", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { value: { type: "string", format: "vastplan-secret-material", writeOnly: true } } }, uiSchema: { value: { "ui:widget": "password" } } },
+      value: {}, onChange: () => undefined,
+    });
+    const html = renderToStaticMarkup(createElement(PortalI18nProvider, { policy: { defaultLocale: "en-US", supportedLocales: ["en-US"] }, catalogs: {}, candidates: ["en-US"], children: form }));
+    expect(html).toContain('type="password"');
+    expect(html).toContain('autoComplete="new-password"');
+  });
+
+  it("localizes enum titles addressed through JSON Pointer array indexes", () => {
+    const form = createElement(arcoPortalUIComponents.FormRenderer, {
+      schema: {
+        id: "enum", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { mode: { type: "string", title: "模式", oneOf: [{ const: "safe", title: "安全" }] } } },
+        localization: { "/properties/mode/title": "Mode", "/properties/mode/oneOf/0/title": "Safe" },
+      },
+      value: { mode: "safe" }, onChange: () => undefined,
+    });
+    const html = renderToStaticMarkup(createElement(PortalI18nProvider, { policy: { defaultLocale: "en-US", supportedLocales: ["en-US"] }, catalogs: {}, candidates: ["en-US"], children: form }));
+    expect(html).toContain("Mode");
+    expect(html).toContain("Safe");
+    expect(html).not.toContain("安全");
+  });
 });

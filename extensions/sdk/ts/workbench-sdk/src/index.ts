@@ -1,6 +1,8 @@
 import type { ActionSpec, CollectionDensity, CollectionSpec, FormPresentation, FormSchema, FormWorkflow, LocalizedText } from "@vastplan/ui-contract";
 
 export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, ColumnSpec, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow } from "@vastplan/ui-contract";
+export { jsonSchemaDialect, message } from "@vastplan/ui-contract";
+export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
 
 export interface CollectionQuery {
   mode: "page" | "cursor";
@@ -21,6 +23,10 @@ export interface CollectionActionContext<Row extends Record<string, unknown> = R
   action: ActionSpec;
   selected: readonly Row[];
   refresh(): void;
+}
+
+export interface CollectionActionResult {
+  notify?: { title: LocalizedText; content?: LocalizedText; kind?: "success" | "info" | "warning" | "error" };
 }
 
 export interface CollectionSummaryMetric {
@@ -74,7 +80,7 @@ export interface CollectionPageDefinition<Row extends Record<string, unknown> = 
   load(query: CollectionQuery, signal: AbortSignal): Promise<CollectionResult<Row>>;
   loadSummary?(signal: AbortSignal): Promise<CollectionSummary>;
   forms?: readonly WorkbenchFormDefinition<Row>[];
-  runAction?(context: CollectionActionContext<Row>, signal: AbortSignal): Promise<void>;
+  runAction?(context: CollectionActionContext<Row>, signal: AbortSignal): Promise<CollectionActionResult | void>;
 }
 
 export interface FormPageDefinition {
@@ -90,6 +96,19 @@ export interface FormPageDefinition {
 export interface WorkbenchPluginContext {
   addCollectionPage<Row extends Record<string, unknown>>(page: CollectionPageDefinition<Row>): void;
   addFormPage(page: FormPageDefinition): void;
+}
+
+export interface WorkbenchManagementCapability { capability: string; read?: readonly string[]; write?: readonly string[]; }
+export interface WorkbenchManagementService { id: string; label?: string; logicalService: string; routingDomain: string; capabilities: readonly WorkbenchManagementCapability[]; }
+export interface WorkbenchPortalRuntime { revision: number; id: string; tenantId: string; route: string; management: { services: readonly WorkbenchManagementService[] }; }
+export interface WorkbenchFrontendPluginContext extends WorkbenchPluginContext {
+  readonly portal: Readonly<WorkbenchPortalRuntime>;
+  readonly lifecycle: Readonly<{ pluginID: string; generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" | "shutdown" }>;
+  readonly i18n: Readonly<{ message(key: string, fallback: string, values?: import("@vastplan/ui-contract").MessageValues): import("@vastplan/ui-contract").MessageDescriptor }>;
+}
+
+export function managementServicesFor(portal: Readonly<WorkbenchPortalRuntime>, capability: string): readonly WorkbenchManagementService[] {
+  return portal.management.services.filter((service) => service.capabilities.some((grant) => grant.capability === capability));
 }
 
 /** Makes page definitions discoverable and prevents a future arbitrary component escape hatch. */
@@ -128,7 +147,23 @@ function validateFormDefinition(form: WorkbenchFormDefinition): void {
       const node = schemaNode(form.schema.schema, field.pointer);
       if (node?.format !== "vastplan-credential-ref" || node.writeOnly !== true) throw new Error(`表单 ${form.id} 的 credentialRef 字段必须声明 format=vastplan-credential-ref 且 writeOnly=true`);
     }
+    if (field.widget === "secretMaterial") {
+      const node = schemaNode(form.schema.schema, field.pointer);
+      if (node?.type !== "string" || node.format !== "vastplan-secret-material" || node.writeOnly !== true) throw new Error(`表单 ${form.id} 的 secretMaterial 字段必须声明 type=string、format=vastplan-secret-material 且 writeOnly=true`);
+      if (pointerValue(form.initialValue, field.pointer).found) throw new Error(`表单 ${form.id} 的 secretMaterial 字段禁止出现在 initialValue`);
+    }
   }
+}
+
+function pointerValue(root: Readonly<Record<string, unknown>> | undefined, pointer: string): { found: boolean; value?: unknown } {
+  if (root === undefined) return { found: false };
+  let value: unknown = root;
+  for (const raw of pointer.slice(1).split("/")) {
+    const key = raw.replace(/~1/g, "/").replace(/~0/g, "~");
+    if (typeof value !== "object" || value === null || Array.isArray(value) || !Object.prototype.hasOwnProperty.call(value, key)) return { found: false };
+    value = (value as Record<string, unknown>)[key];
+  }
+  return { found: true, value };
 }
 
 function schemaNode(schema: Readonly<Record<string, unknown>>, pointer: string): Readonly<Record<string, unknown>> | undefined {

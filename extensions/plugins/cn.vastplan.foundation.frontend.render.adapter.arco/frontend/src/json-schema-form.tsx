@@ -96,6 +96,21 @@ function TextareaWidget({ id, value, placeholder, required, disabled, readonly, 
   />;
 }
 
+function PasswordWidget({ id, value, placeholder, required, disabled, readonly, autofocus, options, onChange, onBlur, onFocus }: WidgetProps) {
+  return <Input.Password
+    id={id}
+    value={typeof value === "string" ? value : ""}
+    placeholder={placeholder}
+    required={required}
+    disabled={controlDisabled({ disabled, readonly })}
+    autoFocus={autofocus}
+    autoComplete="new-password"
+    onChange={(next) => onChange(next === "" ? options.emptyValue : next)}
+    onBlur={() => onBlur(id, value)}
+    onFocus={() => onFocus(id, value)}
+  />;
+}
+
 function CheckboxWidget({ id, value, disabled, readonly, autofocus, onChange, onBlur, onFocus }: WidgetProps) {
   return <Switch
     id={id}
@@ -229,7 +244,7 @@ function HiddenWidget({ id, value }: WidgetProps) {
 
 export const arcoFormWidgets: RegistryWidgetsType<FormData, Schema, FormContext> = {
   TextWidget: BaseInputTemplate,
-  PasswordWidget: BaseInputTemplate,
+  PasswordWidget,
   EmailWidget: BaseInputTemplate,
   URLWidget: BaseInputTemplate,
   TextareaWidget,

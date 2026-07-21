@@ -23,7 +23,7 @@ export interface FormSchema {
 }
 
 export type FormLayout = "compact" | "horizontal" | "vertical";
-export type FormWidget = "text" | "textarea" | "number" | "select" | "boolean" | "date" | "datetime" | "credentialRef" | "hidden";
+export type FormWidget = "text" | "textarea" | "number" | "select" | "boolean" | "date" | "datetime" | "credentialRef" | "secretMaterial" | "hidden";
 export type FormCondition =
   | { pointer: string; equals: JSONPrimitive }
   | { pointer: string; in: readonly JSONPrimitive[] }
@@ -94,6 +94,9 @@ export interface FilterSpec {
 export interface ColumnSpec {
   key: string;
   label: import("./i18n.js").LocalizedText;
+  format?: "text" | "number" | "date" | "datetime" | "boolean" | "status";
+  valueLabels?: Readonly<Record<string, import("./i18n.js").LocalizedText>>;
+  statusTones?: Readonly<Record<string, "neutral" | "info" | "success" | "warning" | "error">>;
   sortable?: boolean;
   defaultVisible?: boolean;
   minWidth?: number;

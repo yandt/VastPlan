@@ -28,7 +28,7 @@ import (
 
 const (
 	PluginID                = "cn.vastplan.platform.security.credentials"
-	PluginVersion           = "0.4.0"
+	PluginVersion           = "0.5.0"
 	Capability              = "platform.credentials"
 	MaterialLeaseCapability = "platform.credentials.material-lease"
 	stateFileKey            = "platform.credentials.stateFile"

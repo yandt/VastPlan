@@ -54,7 +54,7 @@ function uiNode(root: Record<string, unknown>, pointer: string): Record<string, 
 }
 
 function widget(value: FormWidget): string {
-  return ({ text: "text", textarea: "textarea", number: "updown", select: "select", boolean: "checkbox", date: "date", datetime: "alt-datetime", credentialRef: "secretRef", hidden: "hidden" } as const)[value];
+  return ({ text: "text", textarea: "textarea", number: "updown", select: "select", boolean: "checkbox", date: "date", datetime: "alt-datetime", credentialRef: "secretRef", secretMaterial: "password", hidden: "hidden" } as const)[value];
 }
 
 function record(value: unknown): Record<string, unknown> {

@@ -3,7 +3,7 @@
 插件 ID：`cn.vastplan.platform.security.credentials`
 能力：`tool.package/platform.credentials`、`tool.package/platform.credentials.material-lease`
 运行模型：`leader + leader-owned + cluster + leader`
-当前制品版本：`0.4.0`
+当前制品版本：`0.5.0`
 
 ## 安全模型
 
@@ -47,6 +47,6 @@
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/credentials` 页面。列表只渲染 `Metadata`；保存字段使用 password widget，明文只进入 TLS + CSRF 写请求，请求完成后立即从编辑状态清空。轮换与撤销使用独立角色，详见《[平台管理中心](../architecture/平台管理中心.md)》。
+同一签名制品提供 `/settings/credentials` 页面。0.5 已迁移到 Collection/Form Workbench：列表只渲染 `Metadata`；保存字段必须使用受治理的 `secretMaterial`，并由 Schema 同时声明 `format: vastplan-secret-material + writeOnly`。明文只进入 TLS + CSRF 写请求，不进入初始值、loader、偏好或脏状态 baseline；无论提交成功还是失败均立即从 Workbench 状态删除。轮换与撤销是受治理的行操作，详见《[平台管理中心](../architecture/平台管理中心.md)》。
 
 该独立页面将收敛为安全管理员的审计、轮换和应急撤销视图。普通业务配置不再要求用户先来此创建名称：数据库、制品仓库等插件在自己的配置页声明并采集 `managedCredentials`，由配置协调器交给本插件托管。完整状态机见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。Vault 工作负载 token 是自举根凭证，仍由部署层安全挂载，不能由本插件托管自身。

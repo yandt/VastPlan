@@ -47,4 +47,21 @@ describe("defineCollectionPage", () => {
       async load() { return { items: [], total: 0 }; },
     })).toThrow("writeOnly");
   });
+
+  it("accepts one-time secret material only for an uninitialized write-only field", () => {
+    const definition = {
+      id: "credentials", path: "/credentials", title: "Credentials",
+      collection: { id: "credentials", title: "Credentials", view: "table" as const, query: { mode: "page" as const, defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "new", label: "New", placement: "page.primary" as const, form: "new" }] },
+      forms: [{
+        id: "new",
+        schema: { id: "new", schema: { type: "object", properties: { value: { type: "string", format: "vastplan-secret-material", writeOnly: true } } } },
+        presentation: { fields: [{ pointer: "/value", widget: "secretMaterial" as const }] },
+        workflow: { surface: "dialog" as const, title: "New" },
+        async submit() {},
+      }],
+      async load() { return { items: [], total: 0 }; },
+    };
+    expect(() => defineCollectionPage(definition)).not.toThrow();
+    expect(() => defineCollectionPage({ ...definition, forms: [{ ...definition.forms[0]!, initialValue: { value: "must-not-be-retained" } }] })).toThrow("initialValue");
+  });
 });

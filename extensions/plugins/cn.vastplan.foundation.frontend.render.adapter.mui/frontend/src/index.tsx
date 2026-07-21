@@ -3,7 +3,7 @@ import type { MouseEvent, ReactNode } from "react";
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
 import RJSFForm from "@rjsf/core";
-import validator from "@rjsf/validator-ajv8";
+import { customizeValidator } from "@rjsf/validator-ajv8";
 import {
   Alert,
   Box,
@@ -76,6 +76,10 @@ const tones: Record<StatusTone, "default" | "info" | "success" | "warning" | "er
   neutral: "default", info: "info", success: "success", warning: "warning", error: "error",
 };
 const namespace = "cn.vastplan.foundation.frontend.render.adapter";
+const validator = customizeValidator({ customFormats: {
+  "vastplan-credential-ref": /^credential:\/\/[A-Za-z0-9][A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]*$/,
+  "vastplan-secret-material": /^.*$/s,
+} });
 
 function PortalShell({ header, navigation, inspector, statusBar, children }: PortalShellProps) {
   return <Box sx={{ minHeight: "100%", display: "grid", gridTemplateRows: "auto 1fr auto" }}>

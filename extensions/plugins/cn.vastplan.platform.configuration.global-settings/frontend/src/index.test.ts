@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PlatformAdminClient, Setting } from "@vastplan/platform-admin";
-import { message } from "@vastplan/ui-primitives";
+import { message } from "@vastplan/workbench-sdk";
 import { createGlobalSettingsPage } from "./index.js";
 
 describe("global settings Workbench page", () => {

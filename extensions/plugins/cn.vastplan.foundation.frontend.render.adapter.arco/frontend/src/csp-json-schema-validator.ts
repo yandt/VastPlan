@@ -36,6 +36,8 @@ const vastplanDraft07 = extendDraft(draft07, {
         value: data,
       });
     },
+    // The format marks lifecycle semantics; string/minLength enforce value shape.
+    "vastplan-secret-material": () => undefined,
   },
   errors: {
     "vastplan-credential-ref-error": "Value at `{{pointer}}` must be a credential:// reference",

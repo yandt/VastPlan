@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.4.0`
+当前制品版本：`0.5.0`
 
 ## 边界
 
@@ -33,4 +33,4 @@
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/databases` 页面。页面现在配置 PostgreSQL/MySQL Provider、用户名、TLS、连接超时和池预算，并显示 Runtime 发布状态。用户直接输入密码或令牌，不再复制 CredentialRef；编辑时不会回填秘密。详见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。
+同一签名制品提供 `/settings/databases` 页面。0.5 已迁移到 Collection/Form Workbench，统一配置 PostgreSQL/MySQL Provider、用户名、TLS、连接超时、池预算和 Runtime 状态。用户通过受治理的 `secretMaterial` 直接输入一次性密码或令牌，不再复制 CredentialRef；新建必须输入，编辑永不回填且留空保留现有托管凭证，提交结束后 Workbench 删除浏览器状态中的材料引用。详见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。权限与集群调用见《[平台管理中心](../architecture/平台管理中心.md)》。

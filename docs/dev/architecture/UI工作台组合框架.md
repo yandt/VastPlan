@@ -110,7 +110,9 @@ FormWorkflow
 
 `FormDialog` / `FormDrawer` 由 Workbench 统一处理标题、焦点、ESC、关闭确认、校验、提交中禁用、一次性提交、字段级错误、成功刷新、失败保留和本地化。插件只给出 Schema、Presentation、Workflow 与 `submit(values, signal)` 处理器；处理器是运行时代码，绝不写入 Portal 发布配置。
 
-当前实现中，Collection Action 只能通过已登记的 `form` ID 打开表单，不能携带组件或任意回调；独立表单页通过 `defineFormPage()` 注册。Workbench 在打开时加载值、在切换/关闭时取消请求，并拒绝重复提交。异步校验和提交返回的字段错误保持为 `LocalizedText`，只由 Workbench 按当前 Portal locale 翻译，功能插件与 UI Adapter 均不能提前固化语言。`credentialRef` 呈现只有当对应 JSON Schema 同时声明 `format: vastplan-credential-ref` 与 `writeOnly: true` 才能注册，防止把普通文本字段伪装成安全凭证入口。全局设置 fixture 只接受非敏感 JSON，并保留服务端版本前置条件；现有凭证和数据库连接页尚含一次性秘密输入，因此不会在秘密输入边界明确前迁入该工作流。
+当前实现中，Collection Action 只能通过已登记的 `form` ID 打开表单，不能携带组件或任意回调；独立表单页通过 `defineFormPage()` 注册。Workbench 在打开时加载值、在切换/关闭时取消请求，并拒绝重复提交。异步校验和提交返回的字段错误保持为 `LocalizedText`，只由 Workbench 按当前 Portal locale 翻译，功能插件与 UI Adapter 均不能提前固化语言。
+
+秘密输入分成两个互不混淆的语义：`credentialRef` 只接受同时声明 `format: vastplan-credential-ref + writeOnly` 的引用；`secretMaterial` 只接受 `type: string + format: vastplan-secret-material + writeOnly` 的一次性材料。后者禁止出现在 `initialValue`，若 loader 违规回填则 Workbench fail-closed 并丢弃该值；输入不会进入偏好或 dirty baseline，无论提交成功、字段拒绝还是网络异常，提交结束后都会立即从 Workbench 状态删除，取消/关闭同样删除。清理时按字段路径复制非敏感兄弟节点，跳过秘密节点，不会先把整个表单（连同明文）JSON 序列化。JavaScript 字符串无法原地覆写内存，因此这里保证的是最短引用生命周期，而不是虚假的“物理清零”。凭证 0.5 与数据库连接 0.5 已成为该边界的真实 fixture：数据库编辑从不回填秘密，留空保留托管凭证。
 
 ### 3.4 卡片列表
 
@@ -133,7 +135,7 @@ Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为
 1. 已完成：`ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与当前 `@vastplan/ui-contract` 4.x Collection 类型，以及 Arco/MUI 行选择语义。
 2. 已完成：`CollectionWorkbench` 的表格、数据概览、工具栏、筛选、分页、列偏好、行/批量操作；Portal revision 与制品仓库管理为已迁移 fixture。
 3. 已完成：Card cursor 模式、共享查询状态、稳定键去重、重复 cursor 防护、手动/视口增量加载，以及 Arco/MUI `DataCard` 语义组件。
-4. 已完成：`FormPresentation`、`FormWorkflow`、Page/Dialog/Drawer 表单，以及 Arco/MUI 的分区、标签、步骤、分栏和条件字段语义；以全局非敏感设置编辑器作为首个真实 fixture，明确不处理凭证明文。
-5. 把现有首方功能插件一次性迁移到当前 4.x 契约，删除它们重复的筛选、提交和 Overlay 样板，并拒绝遗留的基础组件 import 或裸页面注册；通过 Arco/MUI fixture、键盘、窄屏、i18n、权限拒绝、Abort、脏数据和并发提交测试。
+4. 已完成：`FormPresentation`、`FormWorkflow`、Page/Dialog/Drawer 表单，以及 Arco/MUI 的分区、标签、步骤、分栏和条件字段语义；全局设置是非敏感 fixture，凭证和数据库连接验证 `secretMaterial` 一次性秘密边界。
+5. 进行中：把其余首方功能插件一次性迁移到当前 4.x 契约，删除重复的筛选、提交和 Overlay 样板，并拒绝遗留的基础组件 import 或裸页面注册；通过 Arco/MUI fixture、键盘、窄屏、i18n、权限拒绝、Abort、脏数据和并发提交测试。
 
-当前尚未完成的是其余首方页面迁移和全量导入门禁；在它们完成前，系统仍不能宣称所有功能页都已强制使用 Workbench。
+当前尚未完成的是 Portal 治理、部署管理两个复杂首方页面及全量导入门禁；在它们完成前，系统仍不能宣称所有功能页都已强制使用 Workbench。
