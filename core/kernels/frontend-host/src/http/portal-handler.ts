@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { PortalAssets } from "../assets/portal-assets";
 import type { IdentityProvider } from "../identity/identity-provider";
+import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import { createAPIHandler } from "./api-handler";
 import { setBaseSecurityHeaders, setIndexSecurityHeaders } from "./security-headers";
 
@@ -8,10 +9,11 @@ export interface PortalHandlerOptions {
   assets: PortalAssets;
   identity?: IdentityProvider;
   secureCookies?: boolean;
+  composer?: PortalComposerPort;
 }
 
 export function createPortalHandler(options: PortalHandlerOptions): (request: IncomingMessage, response: ServerResponse) => void {
-  const api = options.identity === undefined ? undefined : createAPIHandler({ identity: options.identity, secureCookies: options.secureCookies ?? true });
+  const api = options.identity === undefined ? undefined : createAPIHandler({ identity: options.identity, secureCookies: options.secureCookies ?? true, ...(options.composer === undefined ? {} : { composer: options.composer }) });
   return (request, response) => {
     setBaseSecurityHeaders(response);
     const method = request.method ?? "GET";

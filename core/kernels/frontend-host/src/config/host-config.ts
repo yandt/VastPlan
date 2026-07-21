@@ -1,4 +1,5 @@
 import { isAbsolute, resolve } from "node:path";
+import { addressingValueArguments, parseAddressingConfig, type PortalAddressingConfig } from "./addressing-config";
 
 export interface PortalHostConfig {
   listenHost: string;
@@ -7,15 +8,21 @@ export interface PortalHostConfig {
   sessionFile: string;
   tls?: { certFile: string; keyFile: string };
   allowInsecureHTTP: boolean;
+  addressing?: PortalAddressingConfig;
 }
 
 export function parseHostArguments(args: readonly string[], cwd = process.cwd()): PortalHostConfig {
   const values = new Map<string, string>();
   let allowInsecureHTTP = false;
+  let allowInsecureNATS = false;
   for (let index = 0; index < args.length; index += 1) {
     const name = args[index];
     if (name === "--allow-insecure-http") {
       allowInsecureHTTP = true;
+      continue;
+    }
+    if (name === "--allow-insecure-nats") {
+      allowInsecureNATS = true;
       continue;
     }
     if (!name.startsWith("--") || index + 1 >= args.length || args[index + 1].startsWith("--")) {
@@ -25,7 +32,7 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
     values.set(name, args[index + 1]);
     index += 1;
   }
-  const allowed = new Set(["--listen", "--portal-assets", "--session-file", "--tls-cert", "--tls-key"]);
+  const allowed = new Set(["--listen", "--portal-assets", "--session-file", "--tls-cert", "--tls-key", ...addressingValueArguments]);
   for (const name of values.keys()) if (!allowed.has(name)) throw new Error(`未知启动参数: ${name}`);
 
   const [listenHost, portText, extra] = (values.get("--listen") ?? "127.0.0.1:8443").split(":");
@@ -43,6 +50,7 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
   if (!allowInsecureHTTP && (certFile === undefined || keyFile === undefined)) {
     throw new Error("生产 Portal Host 必须配置 TLS；本地开发需显式 --allow-insecure-http");
   }
+  const addressing = parseAddressingConfig(values, allowInsecureNATS, cwd);
   return Object.freeze({
     listenHost,
     listenPort,
@@ -50,6 +58,7 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
     sessionFile: absolutePath(sessionFile, cwd),
     tls: certFile === undefined ? undefined : Object.freeze({ certFile: absolutePath(certFile, cwd), keyFile: absolutePath(keyFile!, cwd) }),
     allowInsecureHTTP,
+    ...(addressing === undefined ? {} : { addressing }),
   });
 }
 

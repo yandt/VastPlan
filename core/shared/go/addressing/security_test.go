@@ -109,6 +109,70 @@ func TestCapabilityVisibilityAuthorization(t *testing.T) {
 	}
 }
 
+func TestSecureRouterAcceptsAnnouncementSignedByDifferentTrustedNode(t *testing.T) {
+	callerPair, caller := testTransportIdentity(t, "caller-node")
+	workerPair, worker := testTransportIdentity(t, "worker-node")
+	defer callerPair.Wipe()
+	defer workerPair.Wipe()
+	callerSeed, err := callerPair.Seed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	workerSeed, err := workerPair.Seed()
+	if err != nil {
+		t.Fatal(err)
+	}
+	document := TransportTrustDocument{Version: 1, Identities: []TransportIdentity{caller, worker}}
+	callerSecurity, err := newTransportSecurity(callerSeed, document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer callerSecurity.Close()
+	workerSecurity, err := newTransportSecurity(workerSeed, document)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer workerSecurity.Close()
+	record := Announcement{
+		SchemaVersion: 1, Capability: "demo.remote", ExtensionPoint: "tool.package", ServiceRole: "backend",
+		InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "service", Routing: "queue",
+		InstanceID: "remote-a", NodeID: worker.NodeID, UnitID: "unit-a", Subject: controlplane.RPCSubject("demo.remote"),
+		Health: "healthy", Readiness: "ready", UpdatedAt: time.Now().UTC(), LeaseExpiresAt: time.Now().UTC().Add(time.Minute),
+	}
+	key := controlplane.CapabilityKey(record.Capability, record.InstanceID)
+	signed, err := workerSecurity.signAnnouncement(key, record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	router := &Router{NodeID: caller.NodeID, Transport: callerSecurity}
+	if err := router.validateAnnouncement(key, signed); err != nil {
+		t.Fatalf("可信远端节点公告应通过校验: %v", err)
+	}
+	if err := router.validateAnnouncement(key, signed); err != nil {
+		t.Fatalf("持久目录的相同 revision 可被 watcher 和刷新器重复验证: %v", err)
+	}
+	signed.NodeID = "forged-node"
+	if err := router.validateAnnouncement(key, signed); err == nil {
+		t.Fatal("公告 node_id 被篡改后必须拒绝")
+	}
+}
+
+func testTransportIdentity(t *testing.T, nodeID string) (nkeys.KeyPair, TransportIdentity) {
+	t.Helper()
+	pair, err := nkeys.CreateUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, err := pair.PublicKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return pair, TransportIdentity{
+		Name: nodeID, Role: "node", PublicKey: publicKey, NodeID: nodeID,
+		ServiceRoles: []string{"*"}, LogicalServices: []string{"*"}, AllowedCapabilities: []string{"*"}, AllowGlobal: true,
+	}
+}
+
 func TestAuthenticatedTransportContextKeepsIdentityInHostProvenance(t *testing.T) {
 	trusted, err := authenticatedTransportTrustedContext(TransportIdentity{
 		Name: "service-a", Role: "backend", TenantID: "acme", AllowDelegation: true,

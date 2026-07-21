@@ -324,7 +324,9 @@ func (s *TransportSecurity) verifyAnnouncement(key string, record Announcement) 
 	if err != nil {
 		return TransportIdentity{}, err
 	}
-	return s.verify(key, payload, values)
+	// Capability Directory 是可被 watcher、周期刷新和新加入节点重复读取的持久态。
+	// 它必须验证时间窗与签名，但不能把同一 KV revision 当作数据面重放。
+	return s.verifyNoReplay(key, payload, values)
 }
 
 func announcementPayload(record Announcement) ([]byte, error) {

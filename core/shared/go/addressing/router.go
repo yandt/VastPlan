@@ -602,8 +602,8 @@ func (r *Router) validateAnnouncement(key string, record Announcement) error {
 	if err != nil {
 		return fmt.Errorf("能力目录传输签名无效: %w", err)
 	}
-	if identity.NodeID != r.NodeID {
-		return fmt.Errorf("能力目录签名身份 node_id %q 与 router node_id %q 不一致", identity.NodeID, r.NodeID)
+	if identity.NodeID != record.NodeID {
+		return fmt.Errorf("能力目录签名身份 node_id %q 与公告 node_id %q 不一致", identity.NodeID, record.NodeID)
 	}
 	return nil
 }

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { PortalAssets } from "../assets/portal-assets";
 import { FileIdentityProvider } from "../identity/file-identity-provider";
 import type { IdentityProvider } from "../identity/identity-provider";
+import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import { createPortalFixture } from "../testing/portal-fixture";
 import { writeSessionFixture } from "../testing/session-fixture";
 import { createPortalHandler } from "./portal-handler";
@@ -58,11 +59,34 @@ describe("createPortalHandler", () => {
     expect(body.token).toMatch(/^[a-f0-9]{64}$/);
     expect(authorized.headers.get("set-cookie")).toContain(`vastplan_csrf=${body.token}`);
   });
+
+  it("routes only allowlisted Portal reads through the authenticated capability port", async () => {
+    const root = await createPortalFixture();
+    const sessionFile = join(root, "sessions.json");
+    await writeSessionFixture(sessionFile, "browser-token", new Date(Date.now() + 60_000));
+    const identity = await FileIdentityProvider.open(sessionFile);
+    const calls: string[] = [];
+    const composer: PortalComposerPort = { async call(principal, operation) {
+      calls.push(`${principal.tenantId}/${operation}`);
+      return new TextEncoder().encode(operation === "list" ? "[]" : '{"profiles":[]}');
+    } };
+    const origin = await startFixtureServer(identity, composer);
+    const headers = { Cookie: "vastplan_session=browser-token" };
+    const drafts = await fetch(`${origin}/v1/portal-drafts`, { headers });
+    expect(drafts.status).toBe(200);
+    expect(await drafts.json()).toEqual([]);
+    const governance = await fetch(`${origin}/v1/portal-governance`, { headers });
+    expect(governance.status).toBe(200);
+    expect(await governance.json()).toEqual({ profiles: [] });
+    const unknown = await fetch(`${origin}/v1/arbitrary`, { headers });
+    expect(unknown.status).toBe(404);
+    expect(calls).toEqual(["tenant-a/list", "tenant-a/governance"]);
+  });
 });
 
-async function startFixtureServer(identity?: IdentityProvider): Promise<string> {
+async function startFixtureServer(identity?: IdentityProvider, composer?: PortalComposerPort): Promise<string> {
   const assets = await PortalAssets.load(await createPortalFixture());
-  const server = createServer(createPortalHandler({ assets, identity, secureCookies: false }));
+  const server = createServer(createPortalHandler({ assets, identity, secureCookies: false, ...(composer === undefined ? {} : { composer }) }));
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;

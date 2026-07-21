@@ -1,0 +1,9 @@
+{
+  "notice": "TEST ONLY - public verification fixture; no private seed is stored",
+  "publicKey": "UC5MH6LN6W5T3UQ7NIX5X4LTSIOFLSKL5FTDPE6TJH44HFA3WR5C5M6S",
+  "subject": "vp.rpc.v1.test",
+  "timestamp": "1784563200000",
+  "nonce": "00112233445566778899aabb",
+  "payloadBase64URL": "AAECAwQFBgcICQ",
+  "signature": "1o6AyN49VNAjly-1-Qpxl6a1s4BeKtIXGl8oegEacYxFMjGtHza6hGYBAhPdyFetFJ1KHdyzn_lQIQc_50WdDQ"
+}
