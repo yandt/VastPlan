@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { type FrontendPluginContext, type UIRenderAdapter, type UIShellAdapter, type UIShellLibrary, type UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type PluginRef, type PortalSpec } from "./portal-runtime";
@@ -102,6 +102,13 @@ describe("PortalRuntime shell", () => {
   it("rejects a second shell contribution", async () => {
     await expect(new PortalRuntime(loader({ [featureRef.id]: { shell } })).prepare(portal))
       .rejects.toMatchObject({ code: "SECOND_SHELL_FOUNDATION" } satisfies Partial<PortalAssemblyError>);
+  });
+
+  it("releases loader resources when assembly fails", async () => {
+    const dispose = vi.fn();
+    const tracked = { ...loader({ [featureRef.id]: { shell } }), dispose };
+    await expect(new PortalRuntime(tracked).prepare(portal)).rejects.toMatchObject({ code: "SECOND_SHELL_FOUNDATION" });
+    expect(dispose).toHaveBeenCalledOnce();
   });
 
   it("keeps global shell contributions restricted to Profile plugins", async () => {

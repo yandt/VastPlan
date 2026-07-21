@@ -46,6 +46,15 @@ export class PortalRuntime {
   public constructor(private readonly loader: FrontendPluginLoader) {}
 
   public async prepare(portal: PortalSpec, options: PortalPrepareOptions = {}): Promise<PreparedPortal> {
+    try {
+      return await this.assemble(portal, options);
+    } catch (error) {
+      this.releaseLoader();
+      throw error;
+    }
+  }
+
+  private async assemble(portal: PortalSpec, options: PortalPrepareOptions): Promise<PreparedPortal> {
     validatePortalShape(portal);
     const foundations = await loadPortalFoundations(this.loader, portal, options);
     const modules = new Map(foundations.loaded.map((item) => [moduleKey(item.ref), item.module]));
@@ -96,7 +105,12 @@ export class PortalRuntime {
       shellContributions: Object.freeze(registration.shellContributions),
       modules: Object.freeze(preparedModules),
       messageCatalogs: Object.freeze(messageCatalogs),
+      release: () => this.releaseLoader(),
     });
+  }
+
+  private releaseLoader(): void {
+    this.loader.dispose?.();
   }
 }
 

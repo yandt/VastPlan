@@ -161,6 +161,16 @@ func TestParseManifest_FrontendModuleGraphIsClosedAndDigestBound(t *testing.T) {
 			t.Fatalf("被修改的图必须拒绝: %v", err)
 		}
 	})
+
+	t.Run("循环依赖", func(t *testing.T) {
+		invalid := graph
+		invalid.Nodes = append([]FrontendModuleNode(nil), graph.Nodes...)
+		invalid.Nodes[1].Dependencies = []FrontendModuleDependency{{Specifier: "../main.js", Path: "frontend/main.js", Kind: "static"}}
+		invalid.Digest = invalid.ComputedDigest()
+		if _, err := ParseManifest(frontendGraphManifest(t, invalid)); err == nil || !strings.Contains(err.Error(), "循环依赖") {
+			t.Fatalf("循环 Module Graph 必须拒绝: %v", err)
+		}
+	})
 }
 
 func TestFrontendModuleGraphDigestIgnoresDeclarationOrder(t *testing.T) {
@@ -175,6 +185,23 @@ func TestFrontendModuleGraphDigestIgnoresDeclarationOrder(t *testing.T) {
 	right.Nodes[1].Dependencies = []FrontendModuleDependency{left.Nodes[0].Dependencies[1], left.Nodes[0].Dependencies[0]}
 	if left.ComputedDigest() != right.ComputedDigest() {
 		t.Fatal("节点和依赖声明顺序不应改变规范化 digest")
+	}
+}
+
+func TestValidateFrontendModuleGraphRejectsExcessiveDepth(t *testing.T) {
+	nodes := make([]FrontendModuleNode, 65)
+	for index := range nodes {
+		path := fmt.Sprintf("frontend/node-%02d.js", index)
+		nodes[index] = FrontendModuleNode{Path: path, SHA256: fmt.Sprintf("%064x", index+1), Size: 1, MediaType: "text/javascript", Purpose: "chunk", Dependencies: []FrontendModuleDependency{}}
+		if index < len(nodes)-1 {
+			nodes[index].Dependencies = []FrontendModuleDependency{{Specifier: fmt.Sprintf("node-%02d.js", index+1), Path: fmt.Sprintf("frontend/node-%02d.js", index+1), Kind: "static"}}
+		}
+	}
+	nodes[0].Purpose = "entry"
+	graph := FrontendModuleGraph{SchemaVersion: "v1", Target: "browser", Entry: nodes[0].Path, Nodes: nodes, Externals: []string{}}
+	graph.Digest = graph.ComputedDigest()
+	if err := validateFrontendModuleGraph(graph, 64<<20); err == nil || !strings.Contains(err.Error(), "深度") {
+		t.Fatalf("超过深度上限的 Module Graph 必须拒绝: %v", err)
 	}
 }
 

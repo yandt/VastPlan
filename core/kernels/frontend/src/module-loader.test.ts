@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ModuleLoadError, VerifiedFrontendPluginLoader, parseDevelopmentRuntimeSpec, parsePortalRuntimeSpec, type FrontendModuleDescriptor } from "./module-loader";
+import { computeModuleGraphDigest, type FrontendModuleGraphDescriptor } from "./module-graph-loader";
 
 const ref = { id: "cn.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 const source = new TextEncoder().encode("export default { register() {} }");
@@ -121,6 +122,18 @@ describe("VerifiedFrontendPluginLoader", () => {
     const locked = await descriptor();
     expect(parsePortalRuntimeSpec({ portal: { revision: 7 }, modules: [locked] }).modules).toHaveLength(1);
     expect(() => parsePortalRuntimeSpec({ portal: {}, modules: [{ ...locked, url: "https://attacker.invalid/module.js" }] })).toThrowError(ModuleLoadError);
+  });
+
+  it("accepts a graph-only RuntimeSpec and preserves its locked node closure", async () => {
+    const locked = await descriptor();
+    const unsigned: FrontendModuleGraphDescriptor = {
+      ...ref, target: "browser", entry: locked.entry, digest: "0".repeat(64), packageSha256: locked.packageSha256, externals: [],
+      nodes: [{ path: locked.entry, url: locked.url, sha256: locked.sha256, size: source.byteLength, mediaType: "text/javascript", purpose: "entry", dependencies: [] }],
+    };
+    const graph = { ...unsigned, digest: await computeModuleGraphDigest(unsigned) };
+    const parsed = parsePortalRuntimeSpec({ portal: { revision: 7 }, moduleGraphs: [graph] });
+    expect(parsed.modules).toEqual([]);
+    expect(parsed.moduleGraphs[0]).toEqual(graph);
   });
 
   it("accepts only governed active or recovery module URLs", async () => {

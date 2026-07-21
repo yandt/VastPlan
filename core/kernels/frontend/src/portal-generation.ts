@@ -123,7 +123,7 @@ export class PortalGenerationManager {
 
   private prepare(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<PreparedPortal> {
     if (this.options.prepare !== undefined) return this.options.prepare(spec, context);
-    const loader = new VerifiedFrontendPluginLoader(spec.modules, this.fetcher, undefined, this.options.descriptorPolicy ?? "production");
+    const loader = new VerifiedFrontendPluginLoader(spec, this.fetcher, undefined, this.options.descriptorPolicy ?? "production");
     return new PortalRuntime(loader).prepare(spec.portal, context);
   }
 
@@ -154,6 +154,11 @@ export class PortalGenerationManager {
       } catch (error) {
         this.report({ phase: "dispose", generation: generation.id, pluginID: plugin.ref.id, error });
       }
+    }
+    try {
+      generation.prepared.release?.();
+    } catch (error) {
+      this.report({ phase: "dispose", generation: generation.id, error });
     }
   }
 

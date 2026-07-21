@@ -125,8 +125,55 @@ func validateFrontendModuleGraph(graph FrontendModuleGraph, maxTotalSize int64) 
 			}
 		}
 	}
+	if err := validateFrontendModuleGraphAcyclic(paths); err != nil {
+		return err
+	}
 	if graph.Digest != graph.ComputedDigest() {
 		return errors.New("Module Graph digest 与规范化内容不一致")
+	}
+	return nil
+}
+
+func validateFrontendModuleGraphAcyclic(nodes map[string]FrontendModuleNode) error {
+	const (
+		unvisited uint8 = iota
+		visiting
+		visited
+	)
+	states := make(map[string]uint8, len(nodes))
+	depths := make(map[string]int, len(nodes))
+	var visit func(string) (int, error)
+	visit = func(path string) (int, error) {
+		switch states[path] {
+		case visiting:
+			return 0, fmt.Errorf("Module Graph 存在循环依赖: %s", path)
+		case visited:
+			return depths[path], nil
+		}
+		states[path] = visiting
+		depth := 1
+		for _, dependency := range nodes[path].Dependencies {
+			dependencyDepth, err := visit(dependency.Path)
+			if err != nil {
+				return 0, err
+			}
+			if dependencyDepth+1 > depth {
+				depth = dependencyDepth + 1
+			}
+		}
+		if depth > 64 {
+			return 0, fmt.Errorf("Module Graph 依赖深度超过 64: %s", path)
+		}
+		states[path] = visited
+		depths[path] = depth
+		return depth, nil
+	}
+	for path := range nodes {
+		if states[path] == unvisited {
+			if _, err := visit(path); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

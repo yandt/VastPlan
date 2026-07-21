@@ -110,6 +110,7 @@ export interface FrontendPluginModule {
 
 export interface FrontendPluginLoader {
   load(ref: PluginRef): Promise<FrontendPluginModule>;
+  dispose?(): void;
 }
 
 export interface PreparedFrontendPlugin {
@@ -129,6 +130,8 @@ export interface PreparedPortal {
   shellContributions: readonly PortalRegisteredShellContribution[];
   modules: readonly PreparedFrontendPlugin[];
   messageCatalogs: PortalMessageCatalogs;
+  /** Releases generation-owned Blob URLs and other loader resources. */
+  release?(): void;
 }
 
 export interface PortalPrepareOptions {

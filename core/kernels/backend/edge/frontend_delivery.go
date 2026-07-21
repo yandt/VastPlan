@@ -42,19 +42,27 @@ func newFrontendDeliveryStore(root string) (*frontendDeliveryStore, error) {
 	return &frontendDeliveryStore{root: root, snapshots: map[string]deliverySnapshot{}, objects: map[string]FrontendModuleAsset{}}, nil
 }
 
-func (s *frontendDeliveryStore) put(tenantID string, spec portalapi.PortalSpec, assets []FrontendModuleAsset) error {
+func (s *frontendDeliveryStore) put(tenantID string, spec portalapi.PortalSpec, runtime portalapi.RuntimeSpec, assets []FrontendModuleAsset) error {
 	digest, err := portalSpecDigest(spec)
 	if err != nil {
 		return err
 	}
-	runtime := portalapi.RuntimeSpec{Portal: spec, Modules: make([]portalapi.FrontendModule, 0, len(assets))}
+	runtime.Portal = spec
+	urls := make(map[string]string, len(assets))
 	for i := range assets {
 		asset := assets[i]
-		asset.Descriptor.URL = fmt.Sprintf("/v1/portal-modules/%d/%s.js", spec.Revision, asset.Descriptor.SHA256)
+		actual := sha256.Sum256(asset.Content)
+		if hex.EncodeToString(actual[:]) != asset.Descriptor.SHA256 {
+			return errors.New("Portal 交付对象与声明摘要不一致")
+		}
+		asset.Descriptor.URL = frontendObjectURL(spec.Revision, asset.Descriptor.SHA256, asset.Descriptor.MediaType)
 		assets[i] = asset
-		runtime.Modules = append(runtime.Modules, asset.Descriptor)
+		urls[asset.Descriptor.SHA256] = asset.Descriptor.URL
 	}
-	snapshot := deliverySnapshot{SpecSHA256: digest, Runtime: runtime}
+	if err := applyFrontendObjectURLs(&runtime, urls); err != nil {
+		return err
+	}
+	snapshot := deliverySnapshot{SpecSHA256: digest, Runtime: cloneFrontendRuntime(runtime)}
 	key := deliveryKey(tenantID, spec.ID, spec.Revision)
 
 	s.mu.Lock()
@@ -89,7 +97,7 @@ func (s *frontendDeliveryStore) runtime(tenantID string, spec portalapi.PortalSp
 	if err != nil || digest != snapshot.SpecSHA256 {
 		return portalapi.RuntimeSpec{}, errors.New("Portal 交付快照与活动解析锁不一致")
 	}
-	return snapshot.Runtime, nil
+	return cloneFrontendRuntime(snapshot.Runtime), nil
 }
 
 func (s *frontendDeliveryStore) prefetchFrom(origin *frontendDeliveryStore, tenantID string, spec portalapi.PortalSpec) error {
@@ -100,8 +108,9 @@ func (s *frontendDeliveryStore) prefetchFrom(origin *frontendDeliveryStore, tena
 	if err != nil {
 		return fmt.Errorf("读取 Portal 中央快照: %w", err)
 	}
-	assets := make([]FrontendModuleAsset, 0, len(runtime.Modules))
-	for _, descriptor := range runtime.Modules {
+	descriptors := runtimeFrontendObjects(runtime)
+	assets := make([]FrontendModuleAsset, 0, len(descriptors))
+	for _, descriptor := range descriptors {
 		asset, err := origin.module(tenantID, spec, descriptor.SHA256)
 		if err != nil {
 			return fmt.Errorf("预取 Portal 内容对象 %s: %w", descriptor.SHA256, err)
@@ -118,7 +127,7 @@ func (s *frontendDeliveryStore) prefetchFrom(origin *frontendDeliveryStore, tena
 	}
 	// put writes every object first and the revision snapshot last. The local
 	// revision therefore becomes visible only after the full module set exists.
-	return s.put(tenantID, spec, assets)
+	return s.put(tenantID, spec, runtime, assets)
 }
 
 func (s *frontendDeliveryStore) module(tenantID string, spec portalapi.PortalSpec, digest string) (FrontendModuleAsset, error) {
@@ -126,13 +135,7 @@ func (s *frontendDeliveryStore) module(tenantID string, spec portalapi.PortalSpe
 	if err != nil {
 		return FrontendModuleAsset{}, err
 	}
-	var descriptor portalapi.FrontendModule
-	for _, candidate := range runtime.Modules {
-		if candidate.SHA256 == digest {
-			descriptor = candidate
-			break
-		}
-	}
+	descriptor := findRuntimeFrontendObject(runtime, digest)
 	if descriptor.ID == "" {
 		return FrontendModuleAsset{}, errors.New("Portal 快照未授权该内容对象")
 	}
@@ -150,7 +153,7 @@ func (s *frontendDeliveryStore) module(tenantID string, spec portalapi.PortalSpe
 	if s.root == "" {
 		return FrontendModuleAsset{}, os.ErrNotExist
 	}
-	raw, err := os.ReadFile(s.objectPath(digest, ".js"))
+	raw, err := os.ReadFile(s.objectPath(digest, ".blob"))
 	if err != nil {
 		return FrontendModuleAsset{}, err
 	}
@@ -158,7 +161,7 @@ func (s *frontendDeliveryStore) module(tenantID string, spec portalapi.PortalSpe
 	if hex.EncodeToString(actual[:]) != digest {
 		return FrontendModuleAsset{}, errors.New("Portal 内容寻址对象摘要失配")
 	}
-	gz, _ := os.ReadFile(s.objectPath(digest, ".js.gz"))
+	gz, _ := os.ReadFile(s.objectPath(digest, ".blob.gz"))
 	asset = FrontendModuleAsset{Descriptor: descriptor, Content: raw, GzipContent: gz}
 	s.mu.Lock()
 	s.objects[digest] = cloneFrontendAsset(asset)
@@ -193,11 +196,11 @@ func (s *frontendDeliveryStore) writeObject(asset FrontendModuleAsset) error {
 	if len(asset.Descriptor.SHA256) != 64 {
 		return errors.New("Portal 对象摘要无效")
 	}
-	if err := writeAtomic(s.objectPath(asset.Descriptor.SHA256, ".js"), asset.Content, 0o600); err != nil {
+	if err := writeAtomic(s.objectPath(asset.Descriptor.SHA256, ".blob"), asset.Content, 0o600); err != nil {
 		return err
 	}
 	if len(asset.GzipContent) > 0 {
-		return writeAtomic(s.objectPath(asset.Descriptor.SHA256, ".js.gz"), asset.GzipContent, 0o600)
+		return writeAtomic(s.objectPath(asset.Descriptor.SHA256, ".blob.gz"), asset.GzipContent, 0o600)
 	}
 	return nil
 }

@@ -29,3 +29,11 @@
 - 构建器、仓库、Catalog、RuntimeSpec、浏览器 Loader 和 Node Worker 必须共同消费同一 Graph 契约。
 - 内容寻址对象数量增加，需要复用 ADR-0100 的引用与 GC 语义。
 - 单插件小改动仍生成新插件版本，但客户端只需下载新的可达文件。
+
+## 实施进展（2026-07-21）
+
+- 已完成 browser/server Module Graph Schema、Go/Node 规范化 digest、esbuild 图生成、打包时 Manifest 注入及 Artifact Trust 对包内实际字节的二次绑定。
+- 已完成 Go Catalog 对 Browser Graph 的物化、逐节点内容寻址交付、RuntimeSpec 投影、恢复版本 URL 和媒体类型响应；Server Graph 仍只保留在可信服务端边界。
+- 已完成 Browser Loader 对完整 DAG 的并行下载、摘要复算、响应绑定、受控 externals、依赖闭包、循环与 64 层深度拒绝、64 MiB 总量限制、相对 Chunk Blob URL 重写及入口导入。
+- 每个 Portal Generation 独占并释放其 Blob URL；候选装配失败、预检结束、替换旧代和关闭时均执行清理。
+- 尚未完成双端 Generation 的 Server Worker/SSR 一面；该部分与 Node Portal Kernel 的 Addressing/BFF 接管继续按 ADR-0103 实施。

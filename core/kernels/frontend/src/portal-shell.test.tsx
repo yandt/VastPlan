@@ -19,7 +19,8 @@ describe("Portal recovery shell", () => {
     const calls: string[] = [];
     const fetcher = async (input: string) => {
       calls.push(input);
-      return new Response(JSON.stringify({ portal: {}, modules: [] }), { status: 200 });
+      const digest = "a".repeat(64);
+      return new Response(JSON.stringify({ portal: {}, modules: [{ id: "cn.vastplan.test", version: "1.0.0", entry: "frontend/dist/index.js", url: `/v1/portal-recovery-modules/8/7/${digest}.js`, sha256: digest, packageSha256: "b".repeat(64) }] }), { status: 200 });
     };
     await fetchRuntimeSpec(fetcher, "/v1/portal-recovery", "/settings/portals");
     expect(calls).toEqual(["/v1/portal-recovery?path=%2Fsettings%2Fportals"]);

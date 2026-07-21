@@ -41,7 +41,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
     fetcher,
     descriptorPolicy: __VASTPLAN_DEV_HMR__ ? "development" : "production",
     prepare: async (spec, context) => {
-      const loader = new VerifiedFrontendPluginLoader(spec.modules, fetcher, undefined, __VASTPLAN_DEV_HMR__ ? "development" : "production");
+      const loader = new VerifiedFrontendPluginLoader(spec, fetcher, undefined, __VASTPLAN_DEV_HMR__ ? "development" : "production");
       return new PortalRuntime(loader).prepare(spec.portal, { ...context, rendererID: resolveRendererPreference(spec.portal), shellTemplateID: resolveShellTemplatePreference(spec.portal) });
     },
     onDiagnostic: (diagnostic) => {
@@ -131,7 +131,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
 
 export async function preparePortal(fetcher: ModuleFetcher, endpoint: string, pathname: string): Promise<PreparedPortal> {
   const spec = await fetchRuntimeSpec(fetcher, endpoint, pathname);
-  const loader = new VerifiedFrontendPluginLoader(spec.modules, fetcher);
+  const loader = new VerifiedFrontendPluginLoader(spec, fetcher);
   return new PortalRuntime(loader).prepare(spec.portal);
 }
 

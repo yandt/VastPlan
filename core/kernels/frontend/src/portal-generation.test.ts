@@ -5,10 +5,10 @@ import type { PortalRuntimeSpec } from "./module-loader";
 import type { FrontendPluginModule, PreparedPortal } from "./portal-runtime";
 
 function spec(revision: number): PortalRuntimeSpec {
-  return { portal: { revision } as PortalRuntimeSpec["portal"], modules: [] };
+  return { portal: { revision } as PortalRuntimeSpec["portal"], modules: [], moduleGraphs: [] };
 }
 
-function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?: FrontendPluginHotLifecycle): PreparedPortal {
+function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?: FrontendPluginHotLifecycle, release?: () => void): PreparedPortal {
   const module = (lifecycle: FrontendPluginHotLifecycle | undefined): FrontendPluginModule => ({
     provenance: { signed: true, firstParty: true, integrity: `sha256:${revision}` },
     hot: lifecycle,
@@ -28,6 +28,7 @@ function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?
       { ref: { id: "cn.vastplan.feature", version: "1.0.0" }, module: module(hot) },
       ...(secondHot === undefined ? [] : [{ ref: { id: "cn.vastplan.second", version: "1.0.0" }, module: module(secondHot) }]),
     ],
+    release,
   };
 }
 
@@ -148,5 +149,19 @@ describe("PortalGenerationManager", () => {
     expect(active.signal.aborted).toBe(true);
     expect(order).toEqual(["second", "first"]);
     expect(manager.active).toBeUndefined();
+  });
+
+  it("releases generation-owned module URLs after replacement and shutdown", async () => {
+    const firstRelease = vi.fn();
+    const secondRelease = vi.fn();
+    const manager = new PortalGenerationManager({
+      prepare: async (runtime) => prepared(runtime.portal.revision, undefined, undefined, runtime.portal.revision === 1 ? firstRelease : secondRelease),
+    });
+    await manager.start(spec(1));
+    await manager.replace(spec(2));
+    expect(firstRelease).toHaveBeenCalledOnce();
+    expect(secondRelease).not.toHaveBeenCalled();
+    await manager.shutdown();
+    expect(secondRelease).toHaveBeenCalledOnce();
   });
 });

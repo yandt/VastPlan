@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"strings"
 
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
@@ -222,7 +223,14 @@ func (h *Handler) serveFrontendModule(w http.ResponseWriter, r *http.Request, p 
 		writeError(w, http.StatusNotFound, "portal_module_not_found")
 		return
 	}
-	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	contentType := asset.Descriptor.MediaType
+	if contentType == "" {
+		contentType = "text/javascript"
+	}
+	if strings.HasPrefix(contentType, "text/") || contentType == "application/json" {
+		contentType += "; charset=utf-8"
+	}
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
 	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
 	w.Header().Set("X-VastPlan-Module-SHA256", asset.Descriptor.SHA256)
@@ -251,6 +259,17 @@ func addModulePreloads(w http.ResponseWriter, runtime portalapi.RuntimeSpec) {
 			continue
 		}
 		w.Header().Add("Link", fmt.Sprintf("<%s>; rel=preload; as=fetch; crossorigin=use-credentials", module.URL))
+	}
+	for _, graph := range runtime.ModuleGraphs {
+		if graph.Deferred {
+			continue
+		}
+		for _, node := range graph.Nodes {
+			if node.Path == graph.Entry {
+				w.Header().Add("Link", fmt.Sprintf("<%s>; rel=preload; as=fetch; crossorigin=use-credentials", node.URL))
+				break
+			}
+		}
 	}
 }
 
@@ -376,18 +395,15 @@ func requestHost(r *http.Request) string {
 
 func parseModulePath(value string) (uint64, string, bool) {
 	parts := strings.Split(strings.TrimPrefix(value, "/v1/portal-modules/"), "/")
-	if len(parts) != 2 || parts[0] == "" || !strings.HasSuffix(parts[1], ".js") {
+	if len(parts) != 2 || parts[0] == "" {
 		return 0, "", false
 	}
 	var revision uint64
 	if _, err := fmtSscan(parts[0], &revision); err != nil || revision == 0 {
 		return 0, "", false
 	}
-	digest := strings.TrimSuffix(parts[1], ".js")
-	if len(digest) != 64 {
-		return 0, "", false
-	}
-	if _, err := hex.DecodeString(digest); err != nil {
+	digest, ok := parseFrontendObjectName(parts[1])
+	if !ok {
 		return 0, "", false
 	}
 	return revision, digest, true
@@ -395,7 +411,7 @@ func parseModulePath(value string) (uint64, string, bool) {
 
 func parseRecoveryModulePath(value string) (uint64, uint64, string, bool) {
 	parts := strings.Split(strings.TrimPrefix(value, "/v1/portal-recovery-modules/"), "/")
-	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || !strings.HasSuffix(parts[2], ".js") {
+	if len(parts) != 3 || parts[0] == "" || parts[1] == "" {
 		return 0, 0, "", false
 	}
 	var active, fallback uint64
@@ -405,14 +421,24 @@ func parseRecoveryModulePath(value string) (uint64, uint64, string, bool) {
 	if _, err := fmtSscan(parts[1], &fallback); err != nil || fallback == 0 || fallback == active {
 		return 0, 0, "", false
 	}
-	digest := strings.TrimSuffix(parts[2], ".js")
-	if len(digest) != 64 {
-		return 0, 0, "", false
-	}
-	if _, err := hex.DecodeString(digest); err != nil {
+	digest, ok := parseFrontendObjectName(parts[2])
+	if !ok {
 		return 0, 0, "", false
 	}
 	return active, fallback, digest, true
+}
+
+func parseFrontendObjectName(value string) (string, bool) {
+	extension := path.Ext(value)
+	if extension != ".js" && extension != ".css" && extension != ".json" && extension != ".wasm" && extension != ".bin" {
+		return "", false
+	}
+	digest := strings.TrimSuffix(value, extension)
+	if len(digest) != 64 {
+		return "", false
+	}
+	_, err := hex.DecodeString(digest)
+	return digest, err == nil
 }
 
 func (h *Handler) interactionRoute(w http.ResponseWriter, r *http.Request, p portalapi.Principal) {

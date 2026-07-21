@@ -418,28 +418,11 @@ func (c *TrustedCatalog) MaterializePortal(ctx context.Context, tenantID string,
 	if err != nil {
 		return nil, err
 	}
-	assets := make([]FrontendModuleAsset, 0, len(spec.Plugins))
-	references := make([]pluginv1.ArtifactReference, 0, len(spec.Plugins))
-	for _, plugin := range verified {
-		asset, err := frontendModule(spec.Revision, plugin)
-		if err != nil {
-			return nil, err
-		}
-		asset.GzipContent, err = gzipBytes(asset.Content)
-		if err != nil {
-			return nil, fmt.Errorf("压缩插件 %s frontend 入口: %w", plugin.ref.ID, err)
-		}
-		assets = append(assets, asset)
-		channel := plugin.ref.Channel
-		if channel == "" {
-			channel = "stable"
-		}
-		references = append(references, pluginv1.ArtifactReference{
-			Ref:    pluginv1.ArtifactRef{PluginID: plugin.ref.ID, Version: plugin.ref.Version, Channel: channel},
-			SHA256: asset.Descriptor.PackageSHA256, Purpose: "candidate",
-		})
+	runtime, assets, references, err := materializeFrontendRuntime(spec, verified)
+	if err != nil {
+		return nil, err
 	}
-	if err := c.origin.put(tenantID, spec, assets); err != nil {
+	if err := c.origin.put(tenantID, spec, runtime, assets); err != nil {
 		return nil, err
 	}
 	if c.origin == c.delivery {
@@ -458,7 +441,7 @@ func (c *TrustedCatalog) PrefetchPortal(ctx context.Context, tenantID string, sp
 	_ = ctx
 	if runtime, err := c.delivery.runtime(tenantID, spec); err == nil {
 		ready := true
-		for _, module := range runtime.Modules {
+		for _, module := range runtimeFrontendObjects(runtime) {
 			if _, err := c.delivery.module(tenantID, spec, module.SHA256); err != nil {
 				ready = false
 				break
@@ -502,7 +485,13 @@ func (c *TrustedCatalog) ResolveRecoveryRuntime(ctx context.Context, tenantID st
 		return portalapi.RuntimeSpec{}, err
 	}
 	for i := range runtime.Modules {
-		runtime.Modules[i].URL = fmt.Sprintf("/v1/portal-recovery-modules/%d/%d/%s.js", activeRevision, spec.Revision, runtime.Modules[i].SHA256)
+		runtime.Modules[i].URL = recoveryFrontendObjectURL(activeRevision, spec.Revision, runtime.Modules[i].URL)
+	}
+	for graphIndex := range runtime.ModuleGraphs {
+		for nodeIndex := range runtime.ModuleGraphs[graphIndex].Nodes {
+			node := &runtime.ModuleGraphs[graphIndex].Nodes[nodeIndex]
+			node.URL = recoveryFrontendObjectURL(activeRevision, spec.Revision, node.URL)
+		}
 	}
 	return runtime, nil
 }
@@ -532,7 +521,7 @@ func frontendModule(revision uint64, plugin verifiedPortalPlugin) (FrontendModul
 			Entry:     entry,
 			URL:       fmt.Sprintf("/v1/portal-modules/%d/%s.js", revision, ref.ID),
 			SHA256:    hex.EncodeToString(digest[:]), PackageSHA256: artifact.SHA256,
-			Deferred: isDeferredFrontendModule(manifest),
+			Deferred: isDeferredFrontendModule(manifest), MediaType: "text/javascript",
 		},
 		Content: content,
 	}, nil

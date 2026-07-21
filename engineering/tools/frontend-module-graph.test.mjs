@@ -35,6 +35,31 @@ test("rejects undeclared externals and output escape", async () => {
   await assert.rejects(createFrontendModuleGraph({ target: "browser", pluginRoot: root, entry: "main.js", metafile, allowedExternals: new Set() }), /未允许/);
 });
 
+test("rejects cyclic output graphs before packaging", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vastplan-graph-"));
+  const left = join(root, "left.js");
+  const right = join(root, "right.js");
+  await writeFile(left, "import './right.js';\n");
+  await writeFile(right, "import './left.js';\n");
+  const metafile = { outputs: {
+    [left]: { bytes: 21, imports: [{ path: "right.js", kind: "import-statement" }] },
+    [right]: { bytes: 20, imports: [{ path: "left.js", kind: "import-statement" }] },
+  } };
+  await assert.rejects(createFrontendModuleGraph({ target: "browser", pluginRoot: root, entry: "left.js", metafile, allowedExternals: new Set() }), /循环依赖/);
+});
+
+test("rejects output graphs deeper than the browser limit", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vastplan-graph-"));
+  const outputs = {};
+  for (let index = 0; index < 65; index += 1) {
+    const file = join(root, `node-${index}.js`);
+    const content = index === 64 ? "export {};\n" : `import './node-${index + 1}.js';\n`;
+    await writeFile(file, content);
+    outputs[file] = { bytes: Buffer.byteLength(content), imports: index === 64 ? [] : [{ path: `node-${index + 1}.js`, kind: "import-statement" }] };
+  }
+  await assert.rejects(createFrontendModuleGraph({ target: "browser", pluginRoot: root, entry: "node-0.js", metafile: { outputs }, allowedExternals: new Set() }), /深度/);
+});
+
 test("uses the same canonical digest as the Go manifest validator", () => {
   const graph = {
     schemaVersion: "v1", target: "browser", entry: "frontend/dist/main.js", externals: ["react"],

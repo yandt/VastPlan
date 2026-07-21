@@ -35,8 +35,29 @@ export async function createFrontendModuleGraph({ target, pluginRoot, entry, met
   }
   nodes.sort((left, right) => left.path.localeCompare(right.path));
   if (!nodes.some((node) => node.path === entry && node.purpose === "entry")) throw new Error(`Module Graph 入口未生成: ${entry}`);
+  assertAcyclic(nodes);
   const graph = { schemaVersion: "v1", target, entry, externals: [...externals].sort(), nodes };
   return { ...graph, digest: computeFrontendModuleGraphDigest(graph) };
+}
+
+function assertAcyclic(nodes) {
+  const byPath = new Map(nodes.map((node) => [node.path, node]));
+  const visiting = new Set();
+  const visited = new Set();
+  const depths = new Map();
+  const visit = (path) => {
+    if (visiting.has(path)) throw new Error(`Module Graph 存在循环依赖: ${path}`);
+    if (visited.has(path)) return depths.get(path);
+    visiting.add(path);
+    let depth = 1;
+    for (const dependency of byPath.get(path).dependencies) depth = Math.max(depth, visit(dependency.path) + 1);
+    if (depth > 64) throw new Error(`Module Graph 依赖深度超过 64: ${path}`);
+    visiting.delete(path);
+    visited.add(path);
+    depths.set(path, depth);
+    return depth;
+  };
+  for (const node of nodes) visit(node.path);
 }
 
 export function computeFrontendModuleGraphDigest(graph) {
