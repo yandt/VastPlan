@@ -6,6 +6,8 @@ import { sendAPIError } from "./json-response";
 import { PortalActivationRoutes } from "./portal-activation-routes";
 import { PortalBindingRoutes } from "./portal-binding-routes";
 import { PortalProfileRoutes } from "./portal-profile-routes";
+import { PortalTestReleaseRoutes } from "./portal-test-release-routes";
+import { PortalTestTargetRoutes } from "./portal-test-target-routes";
 import { encodeCapabilityPayload } from "./revision-route-contract";
 
 const basePath = "/v1/portal-governance";
@@ -14,11 +16,15 @@ export class PortalGovernanceRoutes {
   private readonly profiles: PortalProfileRoutes;
   private readonly bindings: PortalBindingRoutes;
   private readonly activations: PortalActivationRoutes;
+  private readonly testTargets: PortalTestTargetRoutes;
+  private readonly testReleases: PortalTestReleaseRoutes;
 
   public constructor(private readonly composer: PortalComposerPort) {
     this.profiles = new PortalProfileRoutes(composer);
     this.bindings = new PortalBindingRoutes(composer);
     this.activations = new PortalActivationRoutes(composer);
+    this.testTargets = new PortalTestTargetRoutes(composer);
+    this.testReleases = new PortalTestReleaseRoutes(composer);
   }
 
   public async handle(path: string, method: string, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
@@ -31,6 +37,8 @@ export class PortalGovernanceRoutes {
     if (await this.profiles.handle(path, method, principal, request, response, signal)) return true;
     if (await this.bindings.handle(path, method, principal, request, response, signal)) return true;
     if (await this.activations.handle(path, method, principal, request, response, signal)) return true;
+    if (await this.testTargets.handle(path, method, principal, request, response, signal)) return true;
+    if (await this.testReleases.handle(path, method, principal, request, response, signal)) return true;
     sendAPIError(response, 404, "not_found", method === "HEAD");
     return true;
   }
