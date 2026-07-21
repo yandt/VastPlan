@@ -41,4 +41,5 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - 跨进程 E2E 已覆盖 Node 读取 Go 签名目录、Node 请求签名、Protobuf v1 调用、Go 响应签名和 Node 响应实例身份绑定，不再只以两端各自单元测试作为互通证据。
 - Portal Host 已接入可选 Addressing 生命周期和严格启动配置。Application Draft、Platform Profile、Management Binding、Activation、Frontend Test Target 与 Test Release 的 HTTP 工作流已通过窄 Composer 端口迁移；各资源拥有独立路由模块。写操作先验证服务端会话和双提交 CSRF，再执行 1 MiB 有界 JSON 解码，revision/source/resource ID 只能由受信 URL 路径投影。未知能力和路由继续 fail-closed。
 - Interaction Web 端点已通过独立 `InteractionPort` 迁移，浏览器只能调用 list/get/present/respond；可信宿主固定投影 `frontend` surface 和已验证 Principal。Composer 与 Interaction 共享 Addressing/CallContext 基础适配，但各自持有独立 operation allowlist。
-- 后续仍需迁移平台管理、RuntimeSpec/内容对象端点，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。
+- 平台管理已建立独立 Management Resolver：只接受当前 Activation，校验 tenant、Portal、域名、Audience、Platform Profile 引用、Binding 结构及 `managementBindingDigest`，再把浏览器 `serviceId` 解析为服务端 `logicalService/routingDomain`。Go/Node 使用共享 golden 锁定 Binding 摘要算法；调用还必须同时通过内核固定 allowlist 和 Binding read/write grant。
+- 后续仍需接通 Settings/Credentials/Database/Artifacts/Deployment 各领域 HTTP 工作流、RuntimeSpec/内容对象端点，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。

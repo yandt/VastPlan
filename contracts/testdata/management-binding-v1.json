@@ -1,0 +1,27 @@
+{
+  "binding": {
+    "tenantId": "tenant-a",
+    "portalId": "operations",
+    "platformProfile": {
+      "id": "enterprise-standard",
+      "revision": 7,
+      "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    },
+    "services": [
+      {
+        "id": "settings",
+        "label": "Platform settings",
+        "logicalService": "platform.settings.primary",
+        "routingDomain": "platform",
+        "capabilities": [
+          {
+            "capability": "platform.settings",
+            "read": ["list"],
+            "write": ["put", "delete"]
+          }
+        ]
+      }
+    ]
+  },
+  "digest": "7614ff6fcc2e1e8485f97d0f22fc9ee11eb460dc2feae688484a326f599fa671"
+}
