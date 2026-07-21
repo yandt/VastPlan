@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.12.0`
+当前制品版本：`0.13.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -82,7 +82,7 @@ Resolver 请求示例：
 
 Catalog 数据保存在仓库 volume 的 `catalog/` 下。发布流水账按单调 revision 使用原子事件文件，索引快照可从每个签名制品及流水账重建；启动时发现制品已成功落盘但事件缺失，会补写 `recovered` 事件。恢复路径只读取并验证 artifact metadata 与 attestation，不扫描全部大对象；实际读取仍由内核复验对象摘要。相同精确 ref、摘要和证明重传幂等，不增加 revision；受控测试 CLI 会先查 Catalog，避免重试产生不同证明。
 
-平台工具能力同时提供 `status/capacity`、`listCatalog`、`listPublishJournal`、小载荷 `resolve`、`setLifecycle`、`putReferences/listReferences`、`gcPlan/gcStatus/gcQuarantine/gcSweep`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。引用发布只接受宿主验证的租户与精确首方控制器身份；完整快照使用 generation、可选 TTL 和规范摘要，过期会令 GC fail-closed，且继续保护字节。`bootstrap-inventory/<repositoryId>` 系统身份只能写匹配 ID 的 Seed/LKG 快照；这两类引用允许对象尚未复制进 Managed Catalog，但清单已由内核逐项从 Seed 重新验签，GC 只保护其中实际存在的托管对象。生命周期变更使用 Catalog revision CAS 和独立权限，`deprecated` 会进入锁提示，`yanked/revoked` 拒绝新的解析与交付。
+平台工具能力同时提供 `status/capacity`、`listCatalog`、`listPublishJournal`、小载荷 `resolve`、`setLifecycle`、`putReferences/listReferences`、`gcPlan/gcStatus/gcQuarantine/gcSweep`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。引用发布只接受宿主验证的租户与精确首方控制器身份；完整快照使用 generation、可选 TTL 和规范摘要，过期会令 GC fail-closed，且继续保护字节。完整快照可以包含由消费者从签名 Seed 等其他可信源取得、尚未复制进 Managed Catalog 的精确 ref+SHA；本仓已知 ref 仍必须摘要一致，已退休对象仍拒绝。未知对象只持久化为未来保护声明，GC 只保护本仓实际存在且精确 SHA 命中的对象。`bootstrap-inventory/<repositoryId>` 系统身份仍只能写匹配 ID 的 Seed/LKG 快照，且其清单由内核逐项从 Seed 重新验签。生命周期变更使用 Catalog revision CAS 和独立权限，`deprecated` 会进入锁提示，`yanked/revoked` 拒绝新的解析与交付。
 
 发布准入在仓库 leader 的同一串行临界区内执行：全仓上限与所有匹配规则累积生效，任一超限即在物理写入前拒绝，且不会自动运行 GC。已隔离/清扫对象不再占活动配额，因此可以发布替代版本；隔离字节仍计入实际存储容量，直到 sweep 后才计入 reclaimed。`capacity` 只聚合已验证 Catalog 与持久 GC 元数据，分别返回活动、隔离、已清扫、已回收和按 namespace/publisher/channel 的活动 bucket；对象字节不包含 Catalog/证明等小型元数据开销。降低配置到当前用量以下不会阻止仓库启动，但会把对应 quota 标为 `exceeded` 并冻结后续新增发布，便于先治理再恢复。
 
@@ -94,4 +94,6 @@ GC 只把已显式 `yanked/revoked`、无精确引用且不在既有 retirement 
 
 ## Portal 管理页
 
-同一签名制品当前提供 `/settings/artifacts` 脱敏状态页。Portal BFF 与 TypeScript SDK 已对 capacity、plan、status 提供固定只读路由，对 quarantine/sweep 提供 CSRF 保护和独立 `platform.artifacts.gc` 角色。把容量 bucket、配额用量、GC 阻断与 retirement 记录统一迁入 Workbench，并补齐目录、生命周期编辑、审批和供应链证明，仍属于下一步前端交付；页面和 API 均不返回令牌、信任根、mount path 或 Provider endpoint。
+同一签名制品从 `/settings/artifacts` 进入统一 Workbench，并在受治理的“系统设置 → 制品仓库”三级导航下提供目录、容量/配额、引用快照和 GC 四个 Collection 页面。目录经新的固定 BFF/TypeScript SDK 路由按 plugin prefix、namespace、publisher、channel、target、lifecycle 与分页查询，不把仓库读令牌交给浏览器；概览与集合查询独立，筛选/翻页不会重复拉取容量。GC 页面展示阻断项、候选与 retirement 记录，隔离前重新生成 plan，quarantine/sweep 继续受 CSRF 和独立 `platform.artifacts.gc` 角色保护。
+
+生命周期原因/替代约束编辑、迁移阶段操作、发布审批和供应链证明需要 Workbench Form/Overlay Pattern，不能退回裸 React 表单，因此仍属于下一阶段。现有页面和 API 均不返回令牌、信任根、mount path、Provider endpoint 或制品正文。

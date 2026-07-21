@@ -34,6 +34,20 @@ func TestRuntimeDescriptorMatchesSignedManifest(t *testing.T) {
 	}
 }
 
+func TestPluginVersionMatchesManifest(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pluginVersion != manifest.Version {
+		t.Fatalf("插件握手版本 %s 与清单版本 %s 不一致", pluginVersion, manifest.Version)
+	}
+}
+
 func TestReferenceOwnerAuthorityIsNarrow(t *testing.T) {
 	if !referenceOwnerAllowed("cn.vastplan.platform.infrastructure.deployment-manager", "deployment-active") || !referenceOwnerAllowed("cn.vastplan.platform.configuration.portal-composer", "portal-activation") {
 		t.Fatal("trusted controllers must publish only their owned reference classes")

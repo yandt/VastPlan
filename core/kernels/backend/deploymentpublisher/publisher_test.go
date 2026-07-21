@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
@@ -53,7 +54,7 @@ func TestPublisherUsesCatalogProfileAndDigestLock(t *testing.T) {
 		Bindings: []backendcompositionv1.BackendPlatformBinding{{TenantID: "acme", DeploymentName: "agent-services", PlatformProfile: compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()}}},
 	}
 	manifest := []byte(fmt.Sprintf(`{"id":%q,"name":"agent","description":"agent","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`, applicationID))
-	reader := artifactReader{applicationID + "@1.0.0/stable": {PluginID: applicationID, Version: "1.0.0", Channel: "stable", Manifest: manifest}}
+	reader := artifactReader{applicationID + "@1.0.0/stable": {PluginID: applicationID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: manifest}}
 	applier := &memoryApplier{}
 	publisher, err := New(catalog, reader, applier, compositionresolver.Options{}, compositionresolver.Resolve)
 	if err != nil {
@@ -65,6 +66,9 @@ func TestPublisherUsesCatalogProfileAndDigestLock(t *testing.T) {
 	}
 	if preview.Deployment.Units[0].Replicas != 2 || preview.Digest == "" {
 		t.Fatalf("预览不完整: %+v", preview)
+	}
+	if len(preview.ArtifactReferences) != 1 || preview.ArtifactReferences[0].Ref.PluginID != applicationID || preview.ArtifactReferences[0].SHA256 != strings.Repeat("a", 64) {
+		t.Fatalf("预览必须返回由可信多来源读取器解析的精确制品事实: %+v", preview.ArtifactReferences)
 	}
 	if _, err := publisher.Publish(context.Background(), "acme", application, 5, "stale"); err == nil {
 		t.Fatal("过期预览摘要必须拒绝")

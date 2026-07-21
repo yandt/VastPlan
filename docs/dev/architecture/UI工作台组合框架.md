@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：Collection V1 已实施；Card 与表单工作流待实施｜最后更新：2026-07-19
+> 状态：Collection V1 与数据概览已实施；Card 与表单工作流待实施｜最后更新：2026-07-21
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；三层命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -35,7 +35,7 @@ flowchart TB
 4. Workbench 故障和设计系统故障一样，进入 Portal Kernel 恢复路径，而不是让功能插件退回自行组合。
 5. 待启用：功能插件制品只能声明 `@vastplan/workbench-sdk` 为 UI SDK；构建门禁与 Catalog 将检查其 import 图，出现 `@vastplan/ui-primitives`、Arco/MUI 或未授权共享 UI 包即拒绝装配。现有首方页面迁移完成前不得提前打开该门禁。
 
-当前已是四个基础单例：设计系统、结构组合、结构布局和 Workbench。V1 已实现 `CollectionWorkbench` 的 table/page 查询模式：筛选、分页、列显示与顺序偏好、单/多选、行/批量动作、loading/empty/error/retry；平台管理中心的 Portal revision 浏览页是首个 fixture。Card cursor、表单工作流、导入图门禁和全量首方页面迁移仍待完成。
+当前已是四个基础单例：设计系统、结构组合、结构布局和 Workbench。V1 已实现 `CollectionWorkbench` 的 table/page 查询模式：筛选、分页、列显示与顺序偏好、单/多选、行/批量动作、loading/empty/error/retry；可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。Portal revision 浏览页是首个 fixture，制品仓库目录、容量/配额、引用与 GC 是首个完整领域迁移。Card cursor、表单工作流、导入图门禁和其余首方页面迁移仍待完成。
 
 ### 2.1 严格入口与受控 Pattern 演进
 
@@ -126,7 +126,7 @@ Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为
 ## 5. 实施顺序与验收
 
 1. 已完成：`ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与 `@vastplan/ui-contract` 3.x Collection 类型，以及 Arco/MUI 行选择语义。
-2. 已完成：`CollectionWorkbench` 的表格、工具栏、筛选、分页、列偏好、行/批量操作；平台管理中心 Portal revision 浏览页为首个 fixture。
+2. 已完成：`CollectionWorkbench` 的表格、数据概览、工具栏、筛选、分页、列偏好、行/批量操作；Portal revision 与制品仓库管理为已迁移 fixture。
 3. 实现 Card cursor 模式与共享查询状态；禁止额外的独立卡片查询协议。
 4. 实现 `FormPresentation`、`FormWorkflow`、Dialog/Drawer 表单；以连接定义或凭证元数据编辑器作为 fixture，明确不处理凭证明文。
 5. 把现有首方功能插件一次性迁移到 3.x，删除它们重复的筛选、提交和 Overlay 样板，并拒绝遗留的基础组件 import 或裸页面注册；通过 Arco/MUI fixture、键盘、窄屏、i18n、权限拒绝、Abort、脏数据和并发提交测试。

@@ -29,7 +29,12 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.12.0"
+const pluginID = "cn.vastplan.platform.artifacts.repository"
+
+// pluginVersion defaults to the checked-in manifest version for go test/go run.
+// Production and development builds inject the manifest value from build.sh,
+// keeping the packaged binary and signed manifest on the same version source.
+var pluginVersion = "0.13.0"
 
 var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"capacity","description":"读取已验证容量与配额用量"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"gcPlan","description":"生成无副作用 GC 计划"},{"name":"gcStatus","description":"读取隔离与清扫状态"},{"name":"gcQuarantine","description":"按精确计划隔离制品"},{"name":"gcSweep","description":"复核并清扫过期隔离制品"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"}]}`)
 
@@ -168,6 +173,7 @@ func main() {
 					Version      string `json:"version"`
 					Channel      string `json:"channel"`
 					Target       string `json:"target"`
+					Lifecycle    string `json:"lifecycle"`
 					Page         int    `json:"page"`
 					PageSize     int    `json:"pageSize"`
 				}
@@ -177,7 +183,7 @@ func main() {
 				response := manager.Query(catalog.Query{
 					PluginID: request.PluginID, PluginPrefix: request.PluginPrefix, Namespace: request.Namespace,
 					Publisher: request.Publisher, Version: request.Version, Channel: request.Channel,
-					Target: request.Target, Page: request.Page, PageSize: request.PageSize,
+					Target: request.Target, Lifecycle: request.Lifecycle, Page: request.Page, PageSize: request.PageSize,
 				})
 				payload, err := json.Marshal(response)
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err

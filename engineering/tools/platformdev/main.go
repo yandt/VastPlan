@@ -170,9 +170,9 @@ func (r *runtime) prepare(ctx context.Context) error {
 			return err
 		}
 	}
-	for _, dir := range []string{r.testingRepositoryRoot(), r.testingRepositoryVolumes(), r.testingRepositorySecrets()} {
+	for _, dir := range []string{r.persistentStateRoot(), r.testingRepositoryRoot(), r.testingRepositoryVolumes(), r.testingRepositorySecrets()} {
 		if err := ensurePrivateDirectory(dir); err != nil {
-			return fmt.Errorf("准备持久化测试仓库目录: %w", err)
+			return fmt.Errorf("准备持久化开发目录: %w", err)
 		}
 	}
 	log.Printf("[1/6] 生成仅限本地开发的 TLS、session、Seed 仓库配置与签名身份")
@@ -435,7 +435,7 @@ func (r *runtime) writeFixtures() error {
 	if err != nil {
 		return err
 	}
-	rendered, err := renderPlatformProfile(template, r.runDir, r.options.artifactListen)
+	rendered, err := renderPlatformProfile(template, r.runDir, r.persistentStateRoot(), r.options.artifactListen)
 	if err != nil {
 		return err
 	}
@@ -475,8 +475,9 @@ func yamlString(value string) string {
 	return string(raw)
 }
 
-func renderPlatformProfile(template []byte, runDir, artifactListen string) ([]byte, error) {
+func renderPlatformProfile(template []byte, runDir, stateDir, artifactListen string) ([]byte, error) {
 	rendered := bytes.ReplaceAll(template, []byte("__VASTPLAN_DEV_ROOT__"), []byte(filepath.ToSlash(runDir)))
+	rendered = bytes.ReplaceAll(rendered, []byte("__VASTPLAN_DEV_STATE__"), []byte(filepath.ToSlash(stateDir)))
 	rendered = bytes.ReplaceAll(rendered, []byte("__VASTPLAN_ARTIFACT_LISTEN__"), []byte(artifactListen))
 	profile, err := backendcompositionv1.ParsePlatformProfile(rendered)
 	if err != nil {
@@ -517,7 +518,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"reconcile", "-nats-url", natsURL, "-nats-allow-insecure", "-nats-bootstrap", "-nats-replicas", "1",
 		"-deployment", "platform-management", "-tenant", "local", "-node-id", "local-platform-node",
 		"-labels", "environment=local-platform",
-		"-runtime-root", filepath.Join(r.runDir, "installed", "backend"), "-actual-state", filepath.Join(r.runDir, "state", "actual-state.json"),
+		"-runtime-root", filepath.Join(r.runDir, "installed", "backend"), "-actual-state", filepath.Join(r.persistentStateRoot(), "actual-state.json"),
 		"-lock", filepath.Join(r.runDir, "state", "node-agent.lock"), "-third-party-plugin-policy", "deny",
 		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
 		"-plugin-placements", "cn.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
@@ -528,18 +529,6 @@ func (r *runtime) start(ctx context.Context) error {
 		return err
 	}
 	time.Sleep(750 * time.Millisecond)
-	managedNodeArgs := []string{
-		"reconcile", "-nats-url", natsURL, "-nats-allow-insecure",
-		"-deployment", "managed-services", "-tenant", "local", "-node-id", "local-managed-node",
-		"-labels", "environment=local-managed",
-		"-runtime-root", filepath.Join(r.runDir, "installed", "managed-services"), "-actual-state", filepath.Join(r.runDir, "state", "managed-services-actual.json"),
-		"-lock", filepath.Join(r.runDir, "state", "managed-services.lock"), "-third-party-plugin-policy", "deny",
-		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
-	}
-	managedNodeArgs = append(managedNodeArgs, r.managedArtifactSourceArgs()...)
-	if _, err := r.startChild("managed-node-agent", env, kernel, managedNodeArgs...); err != nil {
-		return err
-	}
 	controllerArgs := []string{
 		"controlplane", "-nats-url", natsURL, "-nats-allow-insecure", "-bootstrap", "-replicas", "1",
 		"-platform-profile", filepath.Join(r.runDir, "platform-management-profile.json"),
@@ -551,7 +540,7 @@ func (r *runtime) start(ctx context.Context) error {
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
 	}
-	if err := waitForUnits(ctx, filepath.Join(r.runDir, "state", "actual-state.json"), 6, 90*time.Second); err != nil {
+	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), 6, 90*time.Second); err != nil {
 		return fmt.Errorf("平台 Backend 未收敛: %w", err)
 	}
 	if err := waitHTTP(ctx, "https://"+r.options.artifactListen, 30*time.Second, true); err != nil {
@@ -562,11 +551,11 @@ func (r *runtime) start(ctx context.Context) error {
 		"-tls-cert", filepath.Join(r.runDir, "secrets", "tls-cert.pem"), "-tls-key", filepath.Join(r.runDir, "secrets", "tls-key.pem"),
 		"-session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json"),
 		"-repository", filepath.Join(r.runDir, "repository"), "-install-root", filepath.Join(r.runDir, "installed", "portal"), "-allow-unsigned-local",
-		"-frontend-delivery-origin", filepath.Join(r.runDir, "frontend-delivery-origin"),
+		"-frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
 		"-frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
-		"-composer-version", "1.1.0", "-composer-state-file", filepath.Join(r.runDir, "state", "portal-composer.json"),
+		"-composer-version", "1.1.0", "-composer-state-file", filepath.Join(r.persistentStateRoot(), "portal-composer.json"),
 		"-portal-platform-catalog", filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json"),
-		"-interaction-broker-version", "0.1.0", "-interaction-broker-state-file", filepath.Join(r.runDir, "state", "interaction-broker.json"),
+		"-interaction-broker-version", "0.1.0", "-interaction-broker-state-file", filepath.Join(r.persistentStateRoot(), "interaction-broker.json"),
 		"-portal-assets", filepath.Join(r.runDir, "portal-assets"), "-nats-url", natsURL, "-nats-allow-insecure",
 	}
 	portalArgs = append(portalArgs, r.controllerArtifactSourceArgs()...)
@@ -582,7 +571,22 @@ func (r *runtime) start(ctx context.Context) error {
 	if err := publishManagedService("https://" + r.options.portalListen); err != nil {
 		return fmt.Errorf("发布初始在线服务组合: %w", err)
 	}
-	if err := waitForUnits(ctx, filepath.Join(r.runDir, "state", "managed-services-actual.json"), 1, 60*time.Second); err != nil {
+	// Publish the managed deployment before joining its first node. Starting the
+	// agent earlier turns the expected initial absence into exponential retries
+	// and can add tens of seconds to every local startup.
+	managedNodeArgs := []string{
+		"reconcile", "-nats-url", natsURL, "-nats-allow-insecure",
+		"-deployment", "managed-services", "-tenant", "local", "-node-id", "local-managed-node",
+		"-labels", "environment=local-managed",
+		"-runtime-root", filepath.Join(r.runDir, "installed", "managed-services"), "-actual-state", filepath.Join(r.persistentStateRoot(), "managed-services-actual.json"),
+		"-lock", filepath.Join(r.runDir, "state", "managed-services.lock"), "-third-party-plugin-policy", "deny",
+		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
+	}
+	managedNodeArgs = append(managedNodeArgs, r.managedArtifactSourceArgs()...)
+	if _, err := r.startChild("managed-node-agent", env, kernel, managedNodeArgs...); err != nil {
+		return err
+	}
+	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "managed-services-actual.json"), 1, 60*time.Second); err != nil {
 		return fmt.Errorf("在线服务组合未收敛: %w", err)
 	}
 	if r.options.hot {
@@ -601,12 +605,12 @@ func (r *runtime) start(ctx context.Context) error {
 
 func (r *runtime) serviceEnv() map[string]string {
 	return map[string]string{
-		"VASTPLAN_CREDENTIALS_STATE_FILE":          filepath.Join(r.runDir, "state", "credentials.json"),
+		"VASTPLAN_CREDENTIALS_STATE_FILE":          filepath.Join(r.persistentStateRoot(), "credentials.json"),
 		"VASTPLAN_VAULT_ADDR":                      "http://" + r.options.vaultListen,
 		"VASTPLAN_VAULT_TRANSIT_KEY":               "vastplan-local",
 		"VASTPLAN_VAULT_TOKEN_FILE":                filepath.Join(r.runDir, "secrets", "vault-token"),
-		"VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE": filepath.Join(r.runDir, "state", "database-connections.json"),
-		"VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE":   filepath.Join(r.runDir, "state", "deployment-manager.json"),
+		"VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE": filepath.Join(r.persistentStateRoot(), "database-connections.json"),
+		"VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE":   filepath.Join(r.persistentStateRoot(), "deployment-manager.json"),
 		"VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT":     r.testingRepositoryVolumes(),
 		"VASTPLAN_ARTIFACT_REPOSITORY":             r.testingRepositoryData(),
 		"VASTPLAN_ARTIFACT_TRUST":                  r.testingRepositoryTrust(),
@@ -618,6 +622,15 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_ARTIFACT_MIGRATION_STATE":        filepath.Join(r.testingRepositoryRoot(), "control", "repository-migration.json"),
 		"VASTPLAN_DYNAMIC_GO_HOST":                 filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
 	}
+}
+
+// persistentStateRoot holds governed plugin state across ordinary platformdev
+// restarts. Permanent artifact-reference snapshots use monotonic generations,
+// so resetting their producer state while retaining the repository would make
+// a healthy restart look like a stale writer. `platform-dev.sh clean` and
+// `--fresh` still remove this entire development state root intentionally.
+func (r *runtime) persistentStateRoot() string {
+	return filepath.Join(r.options.stateRoot, "state")
 }
 
 func (r *runtime) testingRepositoryRoot() string {

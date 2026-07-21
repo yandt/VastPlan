@@ -90,6 +90,15 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 		t.Fatalf("Controller 必须使用同一托管测试仓库后备源:\n got=%#v\nwant=%#v", got, wantControllerArgs)
 	}
 	environment := r.serviceEnv()
+	wantStateRoot := filepath.Join(stateRoot, "state")
+	if environment["VASTPLAN_CREDENTIALS_STATE_FILE"] != filepath.Join(wantStateRoot, "credentials.json") ||
+		environment["VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"] != filepath.Join(wantStateRoot, "database-connections.json") ||
+		environment["VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE"] != filepath.Join(wantStateRoot, "deployment-manager.json") {
+		t.Fatalf("有永久引用或治理事实的插件状态必须跨普通重启保留: %#v", environment)
+	}
+	if r.persistentStateRoot() != wantStateRoot {
+		t.Fatalf("Node ActualState、Portal 交付快照与治理插件必须共享同一持久开发状态根: %s", r.persistentStateRoot())
+	}
 	wantVolumeRoot := filepath.Join(stateRoot, "repositories", "testing", "volumes")
 	if environment["VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT"] != wantVolumeRoot {
 		t.Fatalf("File Provider 必须使用持久化测试目录: %#v", environment)

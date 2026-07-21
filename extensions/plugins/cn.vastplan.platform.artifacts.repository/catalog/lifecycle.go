@@ -107,13 +107,19 @@ func (s *Store) RequireDelivery(ref pluginv1.ArtifactRef) error {
 	}
 }
 
-func (s *Store) ValidateReferences(values []pluginv1.ArtifactReference) error {
+// ValidateKnownReferences allows a trusted consumer's complete snapshot to
+// include artifacts resolved from another verified source such as Seed. When
+// this Catalog does know the immutable ref, its digest must still match.
+func (s *Store) ValidateKnownReferences(values []pluginv1.ArtifactReference) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for _, value := range values {
 		entry, ok := s.entries[refKey(value.Ref)]
-		if !ok || entry.SHA256 != value.SHA256 {
-			return fmt.Errorf("引用快照包含未知或摘要不匹配的制品: %s", refKey(value.Ref))
+		if !ok {
+			continue
+		}
+		if entry.SHA256 != value.SHA256 {
+			return fmt.Errorf("引用快照包含摘要不匹配的已知制品: %s", refKey(value.Ref))
 		}
 	}
 	return nil

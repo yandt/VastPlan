@@ -265,6 +265,9 @@ importers:
       '@vastplan/ui-primitives':
         specifier: workspace:*
         version: link:../../../sdk/ts/ui-primitives
+      '@vastplan/workbench-sdk':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/workbench-sdk
       react:
         specifier: ^18.3.1
         version: 18.3.1
@@ -275,6 +278,9 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@26.1.1)
 
   extensions/plugins/cn.vastplan.platform.configuration.global-settings/frontend:
     dependencies:

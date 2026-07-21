@@ -16,7 +16,7 @@ func TestRenderPlatformProfileProducesValidProviderComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := renderPlatformProfile(template, "/private/tmp/vastplan-dev", "127.0.0.1:9443")
+	raw, err := renderPlatformProfile(template, "/private/tmp/vastplan-dev", "/private/tmp/vastplan-state", "127.0.0.1:9443")
 	if err != nil {
 		t.Fatal(err)
 	}

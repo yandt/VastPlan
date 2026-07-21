@@ -95,13 +95,13 @@ function Panel({ title, children }: { title?: string; children: ReactNode }) {
 }
 
 function Stack({ direction = "column", gap = "md", align = "stretch", justify = "start", wrap = false, children }: StackProps) {
-  return <Space
-    direction={direction === "column" ? "vertical" : "horizontal"}
-    size={gapPixels[gap]}
-    align={align === "stretch" ? "start" : align}
-    wrap={wrap}
-    style={{ width: direction === "column" || align === "stretch" ? "100%" : undefined, justifyContent: justify === "between" ? "space-between" : justify }}
-  >{children}</Space>;
+  const alignItems = align === "start" || align === "end" ? `flex-${align}` : align;
+  const justifyContent = justify === "between" ? "space-between" : justify === "start" || justify === "end" ? `flex-${justify}` : justify;
+  // Arco Space wraps every child in an intrinsic-width .arco-space-item. That
+  // breaks the Stack contract's default stretch semantics and makes a page-wide
+  // Workbench shrink to its widest form field. A plain flex container keeps the
+  // adapter behavior aligned with MUI and lets children actually occupy 100%.
+  return <div style={{ display: "flex", width: "100%", minWidth: 0, flexDirection: direction, gap: gapPixels[gap], alignItems, justifyContent, flexWrap: wrap ? "wrap" : "nowrap" }}>{children}</div>;
 }
 
 function Grid({ columns = 1, gap = "md", children }: GridProps) {

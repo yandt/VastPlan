@@ -15,7 +15,7 @@ import (
 	semver "github.com/Masterminds/semver/v3"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 )
 
@@ -25,7 +25,7 @@ type InventoryStore interface {
 }
 
 type SeedRepository interface {
-	Publish(pluginservice.Attestation, []byte) (pluginv1.Artifact, error)
+	Publish(artifacttrust.Attestation, []byte) (pluginv1.Artifact, error)
 }
 
 type Candidate struct {
@@ -278,8 +278,8 @@ func itemKey(item bootstrapinventory.Item) string {
 	return item.Ref.PluginID + "@" + item.Ref.Version + "/" + item.Ref.Channel + "\x00" + item.SHA256
 }
 
-func decodeAttestation(raw []byte) (pluginservice.Attestation, error) {
-	var value pluginservice.Attestation
+func decodeAttestation(raw []byte) (artifacttrust.Attestation, error) {
+	var value artifacttrust.Attestation
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&value); err != nil {

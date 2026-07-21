@@ -14,6 +14,7 @@ import (
 	"io"
 	"path"
 	"strings"
+	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
@@ -40,6 +41,19 @@ type Envelope struct {
 	Artifact     pluginv1.Artifact
 	PackageBytes []byte
 	Proof        json.RawMessage
+}
+
+// Attestation is the stable publisher-proof wire value shared by trusted
+// artifact sources and bootstrap upgrade coordination. Signature verification
+// remains a host capability; this DTO alone carries no trust.
+type Attestation struct {
+	SchemaVersion string            `json:"schemaVersion"`
+	Artifact      pluginv1.Artifact `json:"artifact"`
+	Publisher     string            `json:"publisher"`
+	KeyID         string            `json:"keyId"`
+	Algorithm     string            `json:"algorithm"`
+	SignedAt      time.Time         `json:"signedAt"`
+	Signature     string            `json:"signature"`
 }
 
 // ValidateContent 验证元数据、摘要、大小、tar 根清单和法律文件绑定。

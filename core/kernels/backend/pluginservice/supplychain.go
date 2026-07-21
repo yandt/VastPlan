@@ -26,17 +26,8 @@ const attestationSchemaVersion = "v1"
 
 const maximumSigningClockSkew = 5 * time.Minute
 
-// Attestation 把发布者身份绑定到不可变制品元数据。签名覆盖除 Signature 外的全部字段，
-// 因而 ref、摘要、大小、对象名、清单和签署时间中任何一项被改写都会验证失败。
-type Attestation struct {
-	SchemaVersion string    `json:"schemaVersion"`
-	Artifact      Artifact  `json:"artifact"`
-	Publisher     string    `json:"publisher"`
-	KeyID         string    `json:"keyId"`
-	Algorithm     string    `json:"algorithm"`
-	SignedAt      time.Time `json:"signedAt"`
-	Signature     string    `json:"signature"`
-}
+// Attestation 保留为兼容别名；发布者证明 DTO 的单一真相源在 artifacttrust。
+type Attestation = artifacttrust.Attestation
 
 type signedPayload struct {
 	SchemaVersion string    `json:"schemaVersion"`

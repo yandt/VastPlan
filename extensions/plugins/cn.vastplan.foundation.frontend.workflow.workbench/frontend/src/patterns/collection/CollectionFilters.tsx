@@ -28,14 +28,14 @@ export function CollectionFilters({ filters, value, querying, onApply }: {
     if (autoApply && automaticFilterKinds.has(filter.kind)) onApply(next);
   };
   const actions = <ui.Stack direction="column" gap="sm" justify="between">
-    {autoApply ? null : <ui.Button kind="primary" onClick={() => onApply(draft)} loading={querying}>{i18n.text(message(namespace, "action.query", "查询"))}</ui.Button>}
+    <ui.Button kind="primary" onClick={() => onApply(draft)} loading={querying}>{i18n.text(message(namespace, "action.query", "查询"))}</ui.Button>
     <ui.Button kind="secondary" onClick={clear}>{i18n.text(message(namespace, "action.clearFilters", "重置"))}</ui.Button>
   </ui.Stack>;
-  return <ui.FilterBar appearance="collection" actions={actions}>
+  return <ui.FilterBar appearance="collection" actions={autoApply ? undefined : actions}>
     <ui.Grid columns={{ xs: 1, md: 2, xl: 3 }} gap="sm">{filters.map((filter) => <ui.GridItem key={filter.id}>
       <div onKeyDown={(event) => { if (autoApply && filter.kind === "text" && event.key === "Enter") { event.preventDefault(); onApply(draft); } }}>
         <ui.FormRenderer schema={collectionFilterSchema([filter])} value={{ [filter.id]: draft[filter.id] }} presentation={{ layout: "horizontal" }} onChange={(patch) => update(filter, patch)} />
       </div>
-    </ui.GridItem>)}</ui.Grid>
+    </ui.GridItem>)}{autoApply ? <ui.GridItem><div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", minHeight: 32 }}><ui.Button kind="secondary" onClick={clear}>{i18n.text(message(namespace, "action.clearFilters", "重置"))}</ui.Button></div></ui.GridItem> : null}</ui.Grid>
   </ui.FilterBar>;
 }

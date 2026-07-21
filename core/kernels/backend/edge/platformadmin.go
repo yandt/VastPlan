@@ -156,6 +156,26 @@ func (s *CapabilityPlatformAdminService) ArtifactRepositoryStatus(ctx context.Co
 	return response, err
 }
 
+func (s *CapabilityPlatformAdminService) ListArtifactCatalog(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget, query platformadminapi.ArtifactCatalogQuery) (platformadminapi.ArtifactCatalogPage, error) {
+	if query.Page < 1 || query.PageSize < 1 || query.PageSize > 100 {
+		return platformadminapi.ArtifactCatalogPage{}, platformadminapi.ErrInvalid
+	}
+	for _, value := range []string{query.PluginID, query.PluginPrefix, query.Namespace, query.Publisher, query.Version, query.Channel} {
+		if len(value) > 160 || strings.ContainsAny(value, "\x00\r\n") {
+			return platformadminapi.ArtifactCatalogPage{}, platformadminapi.ErrInvalid
+		}
+	}
+	if query.Target != "" && query.Target != "backend" && query.Target != "frontend" && query.Target != "runner" && query.Target != "mobile" {
+		return platformadminapi.ArtifactCatalogPage{}, platformadminapi.ErrInvalid
+	}
+	if query.Lifecycle != "" && query.Lifecycle != "active" && query.Lifecycle != "deprecated" && query.Lifecycle != "yanked" && query.Lifecycle != "revoked" {
+		return platformadminapi.ArtifactCatalogPage{}, platformadminapi.ErrInvalid
+	}
+	var response platformadminapi.ArtifactCatalogPage
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "listCatalog", false, query, &response)
+	return response, err
+}
+
 func (s *CapabilityPlatformAdminService) ArtifactRepositoryCapacity(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) (platformadminapi.ArtifactCapacity, error) {
 	var response platformadminapi.ArtifactCapacity
 	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "capacity", false, struct{}{}, &response)

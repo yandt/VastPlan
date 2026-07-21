@@ -11,6 +11,7 @@ import (
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
@@ -59,6 +60,9 @@ func (*platformService) ProbeDatabaseConnection(context.Context, portalapi.Princ
 }
 func (*platformService) ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryStatus, error) {
 	return platformadminapi.ArtifactRepositoryStatus{Ready: true}, nil
+}
+func (*platformService) ListArtifactCatalog(_ context.Context, _ portalapi.Principal, _ portalapi.ManagementTarget, query platformadminapi.ArtifactCatalogQuery) (platformadminapi.ArtifactCatalogPage, error) {
+	return platformadminapi.ArtifactCatalogPage{Revision: 4, Total: 1, Page: query.Page, PageSize: query.PageSize, Items: []platformadminapi.ArtifactCatalogEntry{{Ref: pluginv1.ArtifactRef{PluginID: "cn.vastplan.example.demo", Version: "1.0.0", Channel: "stable"}, LifecycleStatus: "active"}}}, nil
 }
 func (*platformService) ArtifactRepositoryCapacity(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactCapacity, error) {
 	return platformadminapi.ArtifactCapacity{ActiveArtifacts: 2, ActiveBytes: 100, Buckets: []platformadminapi.ArtifactCapacityBucket{}, Quotas: []platformadminapi.ArtifactQuotaUsage{}}, nil
@@ -166,7 +170,7 @@ func platformPortalService() *service {
 		{ID: "settings", LogicalService: "platform.settings", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.SettingsCapability, Read: []string{"list"}, Write: []string{"put", "delete"}}}},
 		{ID: "credentials", LogicalService: "platform.credentials", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.CredentialsCapability, Read: []string{"list"}, Write: []string{"put", "rotate", "revoke"}}}},
 		{ID: "database", LogicalService: "platform.database", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DatabaseCapability, Read: []string{"list"}, Write: []string{"define", "remove", "probe"}}}},
-		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status", "capacity", "listReferences", "gcPlan", "gcStatus", "migrationStatus"}, Write: []string{"setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"}}}},
+		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status", "capacity", "listCatalog", "listReferences", "gcPlan", "gcStatus", "migrationStatus"}, Write: []string{"setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"}}}},
 		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"}}}},
 	}}
 	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a", Route: "/operations", Management: binding, Resolution: portalapi.Resolution{PlatformProfile: profile, ManagementBindingDigest: compositioncommonv1.Digest(binding)}}
@@ -223,6 +227,26 @@ func TestArtifactGarbageCollectionUsesReadAndDedicatedMutationRoles(t *testing.T
 	gcHandler.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("专用 GC 角色应可隔离: status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestArtifactCatalogUsesWhitelistedPaginatedQuery(t *testing.T) {
+	admin := &platformService{}
+	h := NewPlatformPortal(identity(func(*http.Request) (portalapi.Principal, error) {
+		return portalapi.Principal{ID: "reader", TenantID: "tenant-a", Roles: []string{"platform.artifacts.read"}}, nil
+	}), platformPortalService(), nil, admin, nil, nil)
+	request := httptest.NewRequest(http.MethodGet, platformPath("artifacts", "artifacts/catalog")+"?pluginPrefix=cn.vastplan&target=backend&lifecycle=active&page=2&pageSize=10", nil)
+	response := httptest.NewRecorder()
+	h.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"page":2`) || !strings.Contains(response.Body.String(), `"pluginId":"cn.vastplan.example.demo"`) {
+		t.Fatalf("Catalog 查询失败: status=%d body=%s", response.Code, response.Body.String())
+	}
+	for _, rawQuery := range []string{"unknown=true", "target=server", "pageSize=101", "lifecycle=deleted", "page=1&page=2"} {
+		response = httptest.NewRecorder()
+		h.ServeHTTP(response, httptest.NewRequest(http.MethodGet, platformPath("artifacts", "artifacts/catalog")+"?"+rawQuery, nil))
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("非法 Catalog 查询必须拒绝: query=%s status=%d", rawQuery, response.Code)
+		}
 	}
 }
 

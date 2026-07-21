@@ -30,6 +30,9 @@ func TestStoreRecoversCatalogAndKeepsMonotonicJournal(t *testing.T) {
 	if page.Revision != 1 || page.Total != 1 || len(page.Items) != 1 || page.Items[0].SHA256 != first.SHA256 {
 		t.Fatalf("恢复后的 Catalog 不完整: %#v", page)
 	}
+	if filtered := store.Query(Query{Lifecycle: LifecycleYanked, Page: 1, PageSize: 10}); filtered.Total != 0 {
+		t.Fatalf("生命周期过滤必须使用当前状态: %#v", filtered)
+	}
 	journal := store.Journal(0, 10)
 	if len(journal.Items) != 1 || !journal.Items[0].Recovered || journal.Items[0].Revision != 1 {
 		t.Fatalf("首次发现的已有制品应形成恢复事件: %#v", journal)

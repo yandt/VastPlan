@@ -63,6 +63,19 @@ export interface ArtifactRepositoryStatus {
   catalog?: { revision: number; artifacts: number; inventorySHA256?: string };
   migration?: ArtifactRepositoryMigration;
 }
+export interface ArtifactCatalogQuery {
+  pluginId?: string; pluginPrefix?: string; namespace?: string; publisher?: string; version?: string;
+  channel?: string; target?: "backend" | "frontend" | "runner" | "mobile";
+  lifecycle?: "active" | "deprecated" | "yanked" | "revoked"; page?: number; pageSize?: number;
+}
+export interface ArtifactCatalogEntry {
+  ref: ArtifactRef; sha256: string; size: number; publisher: string; keyId: string;
+  signedAt: string; publishedAt: string; repositoryRevision: number; name: string; description: string;
+  namespace: string; license?: string; targets: string[]; platforms?: string[];
+  lifecycleStatus: "active" | "deprecated" | "yanked" | "revoked";
+  lifecycleRevision?: number; lifecycleReason?: string;
+}
+export interface ArtifactCatalogPage { revision: number; total: number; page: number; pageSize: number; items: ArtifactCatalogEntry[]; }
 export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
 export interface ArtifactRef { pluginId: string; version: string; channel: string; }
 export interface ArtifactRequirement { pluginId: string; constraint: string; }
@@ -148,6 +161,7 @@ export type ServiceRevisionStatus = "Draft" | "PendingApproval" | "Approved" | "
 export interface ServiceRevision {
   id: number; deployment: string; status: ServiceRevisionStatus; active: boolean;
   composition: BackendApplicationComposition; preview: Record<string, unknown>; previewDigest: string; kvRevision?: number;
+  artifactReferences: ArtifactReference[];
   referencePending?: boolean;
   submittedBy?: string; approvedBy?: string; publishedBy?: string; createdAt: string; updatedAt: string;
 }
@@ -197,6 +211,15 @@ export class PlatformAdminClient {
   public deleteDatabaseConnection(name: string): Promise<void> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "DELETE").then(() => undefined); }
   public probeDatabaseConnection(name: string): Promise<DatabaseProbe> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}/probe`, "POST", {}); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
+  public listArtifactCatalog(value: ArtifactCatalogQuery = {}): Promise<ArtifactCatalogPage> {
+    const page = value.page ?? 1, pageSize = value.pageSize ?? 20;
+    if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new PlatformAdminError(400, "invalid_catalog_query");
+    return this.get(`${this.basePath}/artifacts/catalog${query({
+      pluginId: value.pluginId, pluginPrefix: value.pluginPrefix, namespace: value.namespace, publisher: value.publisher,
+      version: value.version, channel: value.channel, target: value.target, lifecycle: value.lifecycle,
+      page: String(page), pageSize: String(pageSize),
+    })}`);
+  }
   public artifactRepositoryCapacity(): Promise<ArtifactCapacity> { return this.get(`${this.basePath}/artifacts/capacity`); }
   public listArtifactReferences(): Promise<ArtifactReferencePage> { return this.get(`${this.basePath}/artifacts/references`); }
   public planArtifactGarbageCollection(): Promise<ArtifactGCPlan> { return this.get(`${this.basePath}/artifacts/gc/plan`); }
@@ -313,9 +336,9 @@ function revision(value: number): string {
   return String(value);
 }
 
-function query(values: Record<string, string>): string {
+function query(values: Record<string, string | undefined>): string {
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(values)) if (value !== "") params.set(key, value);
+  for (const [key, value] of Object.entries(values)) if (value !== undefined && value !== "") params.set(key, value);
   const encoded = params.toString();
   return encoded === "" ? "" : `?${encoded}`;
 }

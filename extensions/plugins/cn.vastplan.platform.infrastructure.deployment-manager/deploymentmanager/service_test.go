@@ -52,6 +52,7 @@ type fakeHost struct {
 	referenceErr        error
 	referenceCalls      int
 	failReferenceAt     int
+	catalogCalls        int
 }
 
 func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -75,14 +76,14 @@ func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *con
 		var request deploymentpublication.PreviewRequest
 		_ = json.Unmarshal(payload, &request)
 		deployment := deploymentv2.Deployment{Version: 2, Revision: request.DeploymentRevision, Metadata: request.Composition.Metadata, Units: []deploymentv2.ServiceUnit{}}
-		raw, _ := json.Marshal(deploymentpublication.Result{Deployment: deployment, Digest: fmt.Sprintf("preview-%d", request.DeploymentRevision)})
+		raw, _ := json.Marshal(deploymentpublication.Result{Deployment: deployment, Digest: fmt.Sprintf("preview-%d", request.DeploymentRevision), ArtifactReferences: fakeArtifactReferences(request.Composition)})
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 	}
 	if target.Capability == deploymentpublication.KernelPublishService {
 		var request deploymentpublication.PublishRequest
 		_ = json.Unmarshal(payload, &request)
 		deployment := deploymentv2.Deployment{Version: 2, Revision: request.DeploymentRevision, Metadata: request.Composition.Metadata, Units: []deploymentv2.ServiceUnit{}}
-		raw, _ := json.Marshal(deploymentpublication.Result{Deployment: deployment, Digest: request.ExpectedDigest, KVRevision: request.DeploymentRevision + 10})
+		raw, _ := json.Marshal(deploymentpublication.Result{Deployment: deployment, Digest: request.ExpectedDigest, KVRevision: request.DeploymentRevision + 10, ArtifactReferences: fakeArtifactReferences(request.Composition)})
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 	}
 	if target.Capability == deploymentpublication.KernelReadinessService {
@@ -100,6 +101,7 @@ func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *con
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 	}
 	if target.Capability == platformadminapi.ArtifactsCapability && target.GetOperation() == "listCatalog" {
+		h.catalogCalls++
 		page := artifactCatalogPage{}
 		var query struct {
 			PluginID string `json:"pluginId"`
@@ -130,6 +132,20 @@ func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *con
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"revision":1}`), nil
 	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"systemdActive":true}`), nil
+}
+
+func fakeArtifactReferences(composition backendcompositionv1.ApplicationComposition) []pluginv1.ArtifactReference {
+	values := make([]pluginv1.ArtifactReference, 0)
+	for _, unit := range composition.Units {
+		for _, plugin := range unit.Spec.Plugins {
+			channel := plugin.Channel
+			if channel == "" {
+				channel = "stable"
+			}
+			values = append(values, pluginv1.ArtifactReference{Ref: pluginv1.ArtifactRef{PluginID: plugin.ID, Version: plugin.Version, Channel: channel}, SHA256: strings.Repeat("c", 64), Purpose: "resolved"})
+		}
+	}
+	return values
 }
 
 func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
@@ -173,6 +189,9 @@ func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
 			}
 			if len(host.referenceSnapshots) < 3 || host.referenceSnapshots[0].Generation != 1 || host.referenceSnapshots[1].OwnerKind != "rollback-history" || host.referenceSnapshots[2].OwnerKind != "deployment-active" || host.referenceSnapshots[2].Generation != 2 {
 				t.Fatalf("deployment reference protection must bracket activation and contract only after rollback protection: %+v", host.referenceSnapshots)
+			}
+			if host.catalogCalls != 0 || len(host.referenceSnapshots[2].References) != 1 {
+				t.Fatalf("部署引用必须复用可信内核预览返回的多来源制品事实，不得旁路查询单一仓库: catalogCalls=%d snapshot=%+v", host.catalogCalls, host.referenceSnapshots[2])
 			}
 			binding, err := service.PutTestTargetBinding(carol, "demo-api", platformadminapi.PutTestTargetBindingRequest{
 				Kind: platformadminapi.TestTargetBackend, Deployment: "agent-services", UnitID: "api",

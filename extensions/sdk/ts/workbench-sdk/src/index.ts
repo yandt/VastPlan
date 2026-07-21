@@ -20,6 +20,18 @@ export interface CollectionActionContext<Row extends Record<string, unknown> = R
   refresh(): void;
 }
 
+export interface CollectionSummaryMetric {
+  id: string;
+  label: LocalizedText;
+  value: string | number;
+  tone?: "neutral" | "info" | "success" | "warning" | "error";
+}
+
+export interface CollectionSummary {
+  title?: LocalizedText;
+  metrics: readonly CollectionSummaryMetric[];
+}
+
 /** Platform Profile policy for the collection presentation family. */
 export interface WorkbenchPresentationConfig {
   collection?: { defaultDensity?: CollectionDensity; allowedDensities?: readonly CollectionDensity[] };
@@ -33,6 +45,7 @@ export interface CollectionPageDefinition<Row extends Record<string, unknown> = 
   navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
   collection: CollectionSpec;
   load(query: CollectionQuery, signal: AbortSignal): Promise<CollectionResult<Row>>;
+  loadSummary?(signal: AbortSignal): Promise<CollectionSummary>;
   runAction?(context: CollectionActionContext<Row>, signal: AbortSignal): Promise<void>;
 }
 

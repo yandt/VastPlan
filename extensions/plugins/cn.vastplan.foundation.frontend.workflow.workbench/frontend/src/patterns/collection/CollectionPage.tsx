@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionSpec } from "@vastplan/ui-contract";
 import { usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
-import type { CollectionActionContext, CollectionPageDefinition, CollectionQuery, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
+import type { CollectionActionContext, CollectionPageDefinition, CollectionQuery, CollectionSummary, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
 import { CollectionFilters } from "./CollectionFilters.js";
 import { CollectionPreferencesDialog } from "./CollectionPreferencesDialog.js";
 import { CollectionTable } from "./CollectionTable.js";
@@ -23,10 +23,13 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [failure, setFailure] = useState<string>();
+  const [summary, setSummary] = useState<CollectionSummary>();
+  const [summaryFailure, setSummaryFailure] = useState<string>();
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [columns, setColumns] = useState(() => readCollectionColumns(preferenceScope, collection));
   const requestRef = useRef<AbortController>();
+  const summaryRequestRef = useRef<AbortController>();
   const keyOf = useCallback((row: CollectionRow) => String(row.id ?? row.key ?? ""), []);
   const selected = useMemo(() => rows.filter((row) => selectedKeys.includes(keyOf(row))), [keyOf, rows, selectedKeys]);
 
@@ -53,8 +56,24 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
     requestRef.current = controller;
     void request(controller.signal, background);
   }, [request]);
+  const requestSummary = useCallback(async (signal: AbortSignal) => {
+    if (page.loadSummary === undefined) { setSummary(undefined); setSummaryFailure(undefined); return; }
+    try {
+      const next = await page.loadSummary(signal);
+      if (!signal.aborted) { setSummary(next); setSummaryFailure(undefined); }
+    } catch (error) {
+      if (!signal.aborted) setSummaryFailure(error instanceof Error ? error.message : String(error));
+    }
+  }, [page]);
+  const startSummaryRequest = useCallback(() => {
+    summaryRequestRef.current?.abort();
+    const controller = new AbortController();
+    summaryRequestRef.current = controller;
+    void requestSummary(controller.signal);
+  }, [requestSummary]);
   useEffect(() => { startRequest(); return () => requestRef.current?.abort(); }, [startRequest]);
-  const refresh = useCallback(() => { startRequest(rows.length > 0); }, [rows.length, startRequest]);
+  useEffect(() => { startSummaryRequest(); return () => summaryRequestRef.current?.abort(); }, [startSummaryRequest]);
+  const refresh = useCallback(() => { startRequest(rows.length > 0); startSummaryRequest(); }, [rows.length, startRequest, startSummaryRequest]);
   const runAction = useCallback(async (action: ActionSpec, actionRows: readonly CollectionRow[]) => {
     if (action.requiresSelection && actionRows.length === 0) return;
     const title = i18n.text(action.label);
@@ -74,11 +93,12 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
   const hasFilters = collection.filters !== undefined && collection.filters.length > 0;
 
   return <ui.Stack gap={density === "compact" ? "sm" : density === "comfortable" ? "lg" : "md"}>
-    {hasFilters ? <CollectionFilters filters={collection.filters!} value={filters} querying={loading || refreshing} onApply={(value) => { setFilters(value); setPageNumber(1); }} /> : null}
-    <CollectionToolbar hasFilters={hasFilters} refreshing={refreshing} selectedCount={selected.length} primaryActions={primaryActions} secondaryActions={secondaryActions} bulkActions={bulkActions} onRefresh={refresh} onColumns={() => setPreferencesOpen(true)} onRunAction={(action) => void runAction(action, selected)} />
-    {failure === undefined ? null : <ui.ErrorState title={failure} retry={refresh} />}
-    <CollectionTable collection={collection} columns={columns} rows={rows} selectedKeys={selectedKeys} loading={loading} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} />
-    <ui.Pagination align="end" page={pageNumber} pageSize={pageSize} total={total} disabled={loading} onChange={(nextPage, nextSize) => { setPageNumber(nextPage); setPageSize(nextSize); }} />
+    {summary === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Panel title={summary.title === undefined ? undefined : i18n.text(summary.title)}><ui.Descriptions columns={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 3 }} items={summary.metrics.map((metric) => ({ id: metric.id, label: i18n.text(metric.label), value: metric.tone === undefined ? metric.value : <ui.Status tone={metric.tone}>{metric.value}</ui.Status> }))} /></ui.Panel></div>}
+    {hasFilters ? <div style={{ width: "100%", minWidth: 0 }}><CollectionFilters filters={collection.filters!} value={filters} querying={loading || refreshing} onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div> : null}
+    <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={refreshing} selectedCount={selected.length} primaryActions={primaryActions} secondaryActions={secondaryActions} bulkActions={bulkActions} onRefresh={refresh} onColumns={() => setPreferencesOpen(true)} onRunAction={(action) => void runAction(action, selected)} /></div>
+    {failure === undefined && summaryFailure === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.ErrorState title={failure ?? summaryFailure!} retry={refresh} /></div>}
+    <div style={{ width: "100%", minWidth: 0 }}><CollectionTable collection={collection} columns={columns} rows={rows} selectedKeys={selectedKeys} loading={loading} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} /></div>
+    <div style={{ width: "100%", minWidth: 0 }}><ui.Pagination align="end" page={pageNumber} pageSize={pageSize} total={total} disabled={loading} onChange={(nextPage, nextSize) => { setPageNumber(nextPage); setPageSize(nextSize); }} /></div>
     <CollectionPreferencesDialog open={preferencesOpen} collection={collection} columns={columns} onChange={setColumns} onClose={() => setPreferencesOpen(false)} />
   </ui.Stack>;
 }

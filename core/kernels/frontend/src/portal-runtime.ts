@@ -295,7 +295,8 @@ export class PortalRuntime {
           pages.push({ ...page, path: mountedPath, slots: [...page.slots], pluginID: ref.id });
         },
         addCollectionPage: (page) => {
-          if (!page.id || !page.collection.id || page.collection.view !== "table" || page.collection.query.mode !== "page" || page.collection.columns.length === 0 || typeof page.load !== "function") {
+          if (!page.id || !page.collection.id || page.collection.view !== "table" || page.collection.query.mode !== "page" || page.collection.columns.length === 0 || typeof page.load !== "function" ||
+              (page.loadSummary !== undefined && typeof page.loadSummary !== "function") || (page.runAction !== undefined && typeof page.runAction !== "function")) {
             throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${page.id}`);
           }
           const Page = () => createElement(workbench.CollectionPage, { page, preferenceScope: `${portal.tenantId}/${portal.id}`, presentation: portal.workbench.config });

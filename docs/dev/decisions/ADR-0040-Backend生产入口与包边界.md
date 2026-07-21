@@ -29,3 +29,7 @@
 - 正面：生产入口、版本、发布证明和运维命令收敛到一个二进制；`nodeagent` 不再依赖仓库实现包。
 - 代价：原 `go run ./engineering/tools/...` 命令需要迁移到 `go run ./core/kernels/backend <subcommand>`；命令组合包是显式允许的同级依赖汇聚点。
 - 后续：架构门禁应禁止 `engineering/tools/` 下出现生产入口，并限制 Backend 普通子包之间的横向依赖。
+
+## 补充记录
+
+- 2026-07-21：发布者 `Attestation` 证明 DTO 从 `pluginservice` 实现包下沉到 `core/shared/go/artifacttrust`，`pluginservice` 仅保留兼容别名。它不是新的制品身份真相源，而是跨可信制品源和 Bootstrap Upgrade 传递的签名证明 wire value；验签能力仍只属于可信宿主。这消除了 `bootstrapupgrade -> pluginservice` 的同级实现依赖。

@@ -20,6 +20,9 @@ func TestGarbageCollectionPlansQuarantinesRecoversAndSweeps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if status := manager.GarbageCollectionStatus(); status.Items == nil {
+		t.Fatal("空 GC 状态必须编码为 []，不能把 null 泄漏给多语言 SDK")
+	}
 	artifact, proof, body := migrationArtifact(t, privateKey, "3.0.0")
 	ref := pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 	if _, err := manager.Publish(proof, body); err != nil {

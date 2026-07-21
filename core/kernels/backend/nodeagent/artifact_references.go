@@ -115,6 +115,9 @@ func (r *Reconciler) publishAssignmentReferences(ctx context.Context, desiredRev
 	}
 	tenantID, ownerID := actual.ReferenceTenant, actual.ReferenceOwnerID
 	if tenantID == "" || ownerID == "" {
+		if release && tenantID == "" && ownerID == "" {
+			return nil
+		}
 		return errors.New("Assignment 引用缺少 tenant 或 owner")
 	}
 	now := r.now()

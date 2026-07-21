@@ -85,8 +85,8 @@ type Entry struct {
 }
 
 type Query struct {
-	PluginID, PluginPrefix, Namespace, Publisher, Version, Channel, Target string
-	Page, PageSize                                                         int
+	PluginID, PluginPrefix, Namespace, Publisher, Version, Channel, Target, Lifecycle string
+	Page, PageSize                                                                    int
 }
 
 type Page struct {
@@ -562,6 +562,9 @@ func matches(entry Entry, query Query) bool {
 		return false
 	}
 	if query.Channel != "" && entry.Ref.Channel != query.Channel {
+		return false
+	}
+	if query.Lifecycle != "" && entry.LifecycleStatus != query.Lifecycle {
 		return false
 	}
 	if query.Target != "" {

@@ -108,6 +108,47 @@ type ArtifactCatalogStatus struct {
 	InventorySHA256 string `json:"inventorySHA256,omitempty"`
 }
 
+type ArtifactCatalogQuery struct {
+	PluginID     string `json:"pluginId,omitempty"`
+	PluginPrefix string `json:"pluginPrefix,omitempty"`
+	Namespace    string `json:"namespace,omitempty"`
+	Publisher    string `json:"publisher,omitempty"`
+	Version      string `json:"version,omitempty"`
+	Channel      string `json:"channel,omitempty"`
+	Target       string `json:"target,omitempty"`
+	Lifecycle    string `json:"lifecycle,omitempty"`
+	Page         int    `json:"page"`
+	PageSize     int    `json:"pageSize"`
+}
+
+type ArtifactCatalogEntry struct {
+	Ref                pluginv1.ArtifactRef `json:"ref"`
+	SHA256             string               `json:"sha256"`
+	Size               int64                `json:"size"`
+	Publisher          string               `json:"publisher"`
+	KeyID              string               `json:"keyId"`
+	SignedAt           string               `json:"signedAt"`
+	PublishedAt        string               `json:"publishedAt"`
+	RepositoryRevision uint64               `json:"repositoryRevision"`
+	Name               string               `json:"name"`
+	Description        string               `json:"description"`
+	Namespace          string               `json:"namespace"`
+	License            string               `json:"license,omitempty"`
+	Targets            []string             `json:"targets"`
+	Platforms          []string             `json:"platforms,omitempty"`
+	LifecycleStatus    string               `json:"lifecycleStatus"`
+	LifecycleRevision  uint64               `json:"lifecycleRevision,omitempty"`
+	LifecycleReason    string               `json:"lifecycleReason,omitempty"`
+}
+
+type ArtifactCatalogPage struct {
+	Revision uint64                 `json:"revision"`
+	Total    int                    `json:"total"`
+	Page     int                    `json:"page"`
+	PageSize int                    `json:"pageSize"`
+	Items    []ArtifactCatalogEntry `json:"items"`
+}
+
 type ArtifactLifecycleRequest struct {
 	Ref              pluginv1.ArtifactRef          `json:"ref"`
 	Status           string                        `json:"status"`
@@ -303,20 +344,21 @@ const (
 )
 
 type ServiceRevision struct {
-	ID               uint64                                      `json:"id"`
-	Deployment       string                                      `json:"deployment"`
-	Status           ServiceRevisionStatus                       `json:"status"`
-	Active           bool                                        `json:"active"`
-	Composition      backendcompositionv1.ApplicationComposition `json:"composition"`
-	Preview          deploymentv2.Deployment                     `json:"preview"`
-	PreviewDigest    string                                      `json:"previewDigest"`
-	KVRevision       uint64                                      `json:"kvRevision,omitempty"`
-	ReferencePending bool                                        `json:"referencePending,omitempty"`
-	SubmittedBy      string                                      `json:"submittedBy,omitempty"`
-	ApprovedBy       string                                      `json:"approvedBy,omitempty"`
-	PublishedBy      string                                      `json:"publishedBy,omitempty"`
-	CreatedAt        string                                      `json:"createdAt"`
-	UpdatedAt        string                                      `json:"updatedAt"`
+	ID                 uint64                                      `json:"id"`
+	Deployment         string                                      `json:"deployment"`
+	Status             ServiceRevisionStatus                       `json:"status"`
+	Active             bool                                        `json:"active"`
+	Composition        backendcompositionv1.ApplicationComposition `json:"composition"`
+	Preview            deploymentv2.Deployment                     `json:"preview"`
+	PreviewDigest      string                                      `json:"previewDigest"`
+	ArtifactReferences []pluginv1.ArtifactReference                `json:"artifactReferences"`
+	KVRevision         uint64                                      `json:"kvRevision,omitempty"`
+	ReferencePending   bool                                        `json:"referencePending,omitempty"`
+	SubmittedBy        string                                      `json:"submittedBy,omitempty"`
+	ApprovedBy         string                                      `json:"approvedBy,omitempty"`
+	PublishedBy        string                                      `json:"publishedBy,omitempty"`
+	CreatedAt          string                                      `json:"createdAt"`
+	UpdatedAt          string                                      `json:"updatedAt"`
 }
 
 type ServiceAuditEvent struct {
@@ -419,6 +461,7 @@ type Service interface {
 	DeleteDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) error
 	ProbeDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (DatabaseProbe, error)
 	ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryStatus, error)
+	ListArtifactCatalog(context.Context, portalapi.Principal, portalapi.ManagementTarget, ArtifactCatalogQuery) (ArtifactCatalogPage, error)
 	ArtifactRepositoryCapacity(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactCapacity, error)
 	ListArtifactReferences(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactReferencePage, error)
 	PlanArtifactGarbageCollection(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactGCPlan, error)

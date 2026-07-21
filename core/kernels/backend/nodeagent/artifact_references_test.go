@@ -88,6 +88,18 @@ func TestManagedArtifactSourceRequiresReferencePublisher(t *testing.T) {
 	}
 }
 
+func TestShutdownBeforeFirstAssignmentDoesNotPublishInvalidReference(t *testing.T) {
+	publisher := &recordingAssignmentReferences{}
+	reconciler := newTestReconciler(newFakeRuntime(), NewMemoryStateStore())
+	reconciler.References = publisher
+	if err := reconciler.Shutdown(context.Background()); err != nil {
+		t.Fatalf("尚未接收期望态的节点关闭时不应伪造空 owner: %v", err)
+	}
+	if len(publisher.values) != 0 {
+		t.Fatalf("缺少可信 tenant/owner 时不得发布引用: %+v", publisher.values)
+	}
+}
+
 func TestBootstrapInventoryPublishesSeedAndLKGAfterRuntimeConverges(t *testing.T) {
 	runtime := newFakeRuntime()
 	store := NewMemoryStateStore()

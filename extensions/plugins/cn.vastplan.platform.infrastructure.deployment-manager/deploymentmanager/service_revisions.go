@@ -10,6 +10,7 @@ import (
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -52,8 +53,8 @@ func (s *Service) ReconcileServiceReferences(ctx context.Context, host sdk.Host,
 		return err
 	}
 	type pendingReference struct {
-		revision platformadminapi.ServiceRevision
-		rollback *backendcompositionv1.ApplicationComposition
+		revision           platformadminapi.ServiceRevision
+		rollbackReferences []pluginv1.ArtifactReference
 	}
 	s.mu.Lock()
 	state := s.tenantLocked(tenant)
@@ -62,20 +63,19 @@ func (s *Service) ReconcileServiceReferences(ctx context.Context, host sdk.Host,
 		if revision.Status != platformadminapi.ServicePublished || !revision.Active || !revision.ReferencePending {
 			continue
 		}
-		var rollback *backendcompositionv1.ApplicationComposition
+		var rollbackReferences []pluginv1.ArtifactReference
 		var rollbackID uint64
 		for _, candidate := range state.Revisions {
 			if candidate.Deployment == revision.Deployment && candidate.Status == platformadminapi.ServicePublished && candidate.ID < revision.ID && candidate.ID > rollbackID {
-				copy := cloneJSON(candidate.Composition)
-				rollback, rollbackID = &copy, candidate.ID
+				rollbackReferences, rollbackID = append([]pluginv1.ArtifactReference(nil), candidate.ArtifactReferences...), candidate.ID
 			}
 		}
-		pending = append(pending, pendingReference{revision: cloneServiceRevision(revision), rollback: rollback})
+		pending = append(pending, pendingReference{revision: cloneServiceRevision(revision), rollbackReferences: rollbackReferences})
 	}
 	s.mu.Unlock()
 
 	for _, item := range pending {
-		if err := publishDeploymentReferences(ctx, host, call, item.revision.Deployment, item.revision.ID, item.revision.Composition, item.rollback); err != nil {
+		if err := publishDeploymentReferences(ctx, host, call, item.revision.Deployment, item.revision.ID, item.revision.ArtifactReferences, item.rollbackReferences); err != nil {
 			return err
 		}
 		s.mu.Lock()
@@ -113,7 +113,7 @@ func (s *Service) CreateServiceDraft(ctx context.Context, host sdk.Host, call *c
 		return platformadminapi.ServiceRevision{}, err
 	}
 	now := s.now().Format(time.RFC3339Nano)
-	revision := platformadminapi.ServiceRevision{ID: id, Deployment: composition.Metadata.Name, Status: platformadminapi.ServiceDraft, Composition: composition, Preview: preview.Deployment, PreviewDigest: preview.Digest, CreatedAt: now, UpdatedAt: now}
+	revision := platformadminapi.ServiceRevision{ID: id, Deployment: composition.Metadata.Name, Status: platformadminapi.ServiceDraft, Composition: composition, Preview: preview.Deployment, PreviewDigest: preview.Digest, ArtifactReferences: preview.ArtifactReferences, CreatedAt: now, UpdatedAt: now}
 	state.NextRevision = id
 	state.Revisions = append(state.Revisions, revision)
 	s.auditServiceLocked(state, revision, "service.draft.created", actorOrUnknown(call))
@@ -150,7 +150,7 @@ func (s *Service) UpdateServiceDraft(ctx context.Context, host sdk.Host, call *c
 	}
 	old := state.Revisions[index]
 	revision := old
-	revision.Composition, revision.Preview, revision.PreviewDigest = composition, preview.Deployment, preview.Digest
+	revision.Composition, revision.Preview, revision.PreviewDigest, revision.ArtifactReferences = composition, preview.Deployment, preview.Digest, preview.ArtifactReferences
 	revision.UpdatedAt = s.now().Format(time.RFC3339Nano)
 	state.Revisions[index] = revision
 	s.auditServiceLocked(state, revision, "service.draft.updated", actorOrUnknown(call))
@@ -226,15 +226,14 @@ func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, cal
 			return platformadminapi.ServiceRevision{}, err
 		}
 	}
-	var previousComposition *backendcompositionv1.ApplicationComposition
+	var previousReferences []pluginv1.ArtifactReference
 	for i := range state.Revisions {
 		if state.Revisions[i].Deployment == revision.Deployment && state.Revisions[i].Active {
-			copy := cloneJSON(state.Revisions[i].Composition)
-			previousComposition = &copy
+			previousReferences = append([]pluginv1.ArtifactReference(nil), state.Revisions[i].ArtifactReferences...)
 			break
 		}
 	}
-	if err := protectDeploymentTransition(ctx, host, call, revision.Deployment, revision.ID*2-1, previousComposition, revision.Composition); err != nil {
+	if err := protectDeploymentTransition(ctx, host, call, revision.Deployment, revision.ID*2-1, previousReferences, revision.ArtifactReferences); err != nil {
 		revision.Status, revision.UpdatedAt = platformadminapi.ServiceApproved, s.now().Format(time.RFC3339Nano)
 		state.Revisions[index] = revision
 		_ = s.saveLocked()
@@ -255,7 +254,7 @@ func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, cal
 	oldAuditLength, oldNextAudit := len(state.ServiceAudit), state.NextAudit
 	revision.Status, revision.Active, revision.PublishedBy = platformadminapi.ServicePublished, true, publisher
 	revision.ReferencePending = true
-	revision.Preview, revision.PreviewDigest, revision.KVRevision = result.Deployment, result.Digest, result.KVRevision
+	revision.Preview, revision.PreviewDigest, revision.KVRevision, revision.ArtifactReferences = result.Deployment, result.Digest, result.KVRevision, result.ArtifactReferences
 	revision.UpdatedAt = s.now().Format(time.RFC3339Nano)
 	for i := range state.Revisions {
 		if i != index && state.Revisions[i].Deployment == revision.Deployment {
@@ -270,7 +269,7 @@ func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, cal
 		state.NextAudit = oldNextAudit
 		return platformadminapi.ServiceRevision{}, err
 	}
-	if referenceErr := publishDeploymentReferences(ctx, host, call, revision.Deployment, revision.ID, revision.Composition, previousComposition); referenceErr != nil {
+	if referenceErr := publishDeploymentReferences(ctx, host, call, revision.Deployment, revision.ID, revision.ArtifactReferences, previousReferences); referenceErr != nil {
 		s.auditServiceLocked(state, revision, "service.references.pending", "repository")
 		_ = s.saveLocked()
 	} else {

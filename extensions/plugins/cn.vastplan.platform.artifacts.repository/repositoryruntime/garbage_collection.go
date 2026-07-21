@@ -214,7 +214,7 @@ func (m *Manager) gcStatusLocked() GCStatus {
 		return GCStatus{Items: []garbagecollection.Record{}}
 	}
 	state := m.active.gc.List()
-	return GCStatus{Revision: state.Revision, Items: state.Items}
+	return GCStatus{Revision: state.Revision, Items: append([]garbagecollection.Record{}, state.Items...)}
 }
 
 func gcMigrationBlocked(state *MigrationState) bool {

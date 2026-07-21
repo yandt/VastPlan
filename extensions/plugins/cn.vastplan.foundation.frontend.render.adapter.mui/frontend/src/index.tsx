@@ -226,7 +226,7 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
       return <TableRow key={key} selected={selected.has(key)}>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={selected.has(key)} onChange={() => toggle(key)} inputProps={{ "aria-label": `select ${key}` }} /></TableCell>}{columns.map((column) => <TableCell key={column.key}>{column.render?.(row[column.key], row, index) ?? String(row[column.key] ?? "")}</TableCell>)}</TableRow>;
     })}
   </TableBody></MuiTable>;
-  return appearance === "collection" ? content : <Paper variant="outlined">{content}</Paper>;
+  return appearance === "collection" ? <Box sx={{ width: "100%", overflowX: "auto" }}>{content}</Box> : <Paper variant="outlined">{content}</Paper>;
 }
 
 const symbols: Record<SemanticIconName, string> = { add: "+", remove: "−", edit: "✎", search: "⌕", settings: "⚙", success: "✓", warning: "!", error: "×", info: "i", close: "×", menu: "☰" };

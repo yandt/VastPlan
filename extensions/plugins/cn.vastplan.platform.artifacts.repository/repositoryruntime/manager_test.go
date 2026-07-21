@@ -120,6 +120,39 @@ func TestManagerCutsOverMirrorsFinalizesAndReleases(t *testing.T) {
 	}
 }
 
+func TestManagerAcceptsVerifiedExternalReferencesButRejectsKnownDigestMismatch(t *testing.T) {
+	volume, _ := migrationVolumes(t, "repository.unused")
+	trust, privateKey := migrationTrust(t)
+	manager, err := Open(volume, trust, filepath.Join(t.TempDir(), "state", "migration.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, proof, body := migrationArtifact(t, privateKey, "6.0.0")
+	if _, err := manager.Publish(proof, body); err != nil {
+		t.Fatal(err)
+	}
+	unknown, err := artifactreference.Seal(pluginv1.ArtifactReferenceSnapshot{
+		OwnerKind: artifactreference.OwnerAssignmentActive, OwnerID: "assignment/platform/node-a", Generation: 1, TTLSeconds: 120,
+		References: []pluginv1.ArtifactReference{{Ref: pluginv1.ArtifactRef{PluginID: "cn.vastplan.seed.only", Version: "1.0.0", Channel: "stable"}, SHA256: strings.Repeat("d", 64), Purpose: "active"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := manager.PutReferences("tenant-a", "node-agent/node-a", unknown, time.Now().UTC()); err != nil {
+		t.Fatalf("可信消费者完整快照必须允许 Seed-only 精确引用: %v", err)
+	}
+	mismatch := unknown
+	mismatch.Generation++
+	mismatch.References = []pluginv1.ArtifactReference{{Ref: pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}, SHA256: strings.Repeat("e", 64), Purpose: "active"}}
+	mismatch, err = artifactreference.Seal(mismatch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := manager.PutReferences("tenant-a", "node-agent/node-a", mismatch, time.Now().UTC()); err == nil {
+		t.Fatal("本仓已知 ref 的摘要不匹配必须拒绝")
+	}
+}
+
 func TestManagerRecoversObservationAndRollsBack(t *testing.T) {
 	source, target := migrationVolumes(t, "repository.rollback")
 	trust, privateKey := migrationTrust(t)

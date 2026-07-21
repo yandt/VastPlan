@@ -23,6 +23,6 @@ for dir in extensions/plugins/*/; do
   id="$(basename "$dir")"
   [ -f "$dir/backend/main.go" ] || continue
   ver="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$dir/vastplan.plugin.json" | head -1)"
-  go build "${BUILD_FLAGS[@]}" -ldflags "$COMMON_LDFLAGS" -o "$OUT_DIR/${id}" "./${dir}backend"
+  go build "${BUILD_FLAGS[@]}" -ldflags "$COMMON_LDFLAGS -X main.pluginVersion=${ver}" -o "$OUT_DIR/${id}" "./${dir}backend"
   echo "已构建 $OUT_DIR/${id}  (${id}@${ver})"
 done

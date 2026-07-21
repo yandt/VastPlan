@@ -22,7 +22,7 @@
       "config": {
         "plugins": {
           "cn.vastplan.platform.configuration.global-settings": {
-            "platform.settings.stateFile": "__VASTPLAN_DEV_ROOT__/state/settings.json"
+            "platform.settings.stateFile": "__VASTPLAN_DEV_STATE__/settings.json"
           }
         }
       },
@@ -82,7 +82,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.17.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.12.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.13.0", "channel": "stable" }
       ]
     },
     {
@@ -179,7 +179,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.17.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.5.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.6.0", "channel": "stable" }
       ]
     }
   ]

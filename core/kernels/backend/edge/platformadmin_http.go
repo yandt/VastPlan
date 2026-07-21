@@ -90,6 +90,23 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 		respondPlatform(w, value, err)
 		return
 	}
+	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "catalog" {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "listCatalog", false) || !requirePlatformRole(w, p, "platform.artifacts.read") {
+			return
+		}
+		query, err := artifactCatalogQuery(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_catalog_query")
+			return
+		}
+		value, err := h.platform.ListArtifactCatalog(r.Context(), p, target, query)
+		respondPlatform(w, value, err)
+		return
+	}
 	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "capacity" {
 		if r.Method != http.MethodGet {
 			methodNotAllowed(w)
@@ -274,6 +291,58 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+func artifactCatalogQuery(r *http.Request) (platformadminapi.ArtifactCatalogQuery, error) {
+	values, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return platformadminapi.ArtifactCatalogQuery{}, platformadminapi.ErrInvalid
+	}
+	allowed := map[string]bool{
+		"pluginId": true, "pluginPrefix": true, "namespace": true, "publisher": true,
+		"version": true, "channel": true, "target": true, "lifecycle": true, "page": true, "pageSize": true,
+	}
+	for key, entries := range values {
+		if !allowed[key] || len(entries) != 1 {
+			return platformadminapi.ArtifactCatalogQuery{}, platformadminapi.ErrInvalid
+		}
+	}
+	page, err := positiveQueryInteger(values.Get("page"), 1, 1_000_000)
+	if err != nil {
+		return platformadminapi.ArtifactCatalogQuery{}, err
+	}
+	pageSize, err := positiveQueryInteger(values.Get("pageSize"), 20, 100)
+	if err != nil {
+		return platformadminapi.ArtifactCatalogQuery{}, err
+	}
+	query := platformadminapi.ArtifactCatalogQuery{
+		PluginID: values.Get("pluginId"), PluginPrefix: values.Get("pluginPrefix"), Namespace: values.Get("namespace"),
+		Publisher: values.Get("publisher"), Version: values.Get("version"), Channel: values.Get("channel"),
+		Target: values.Get("target"), Lifecycle: values.Get("lifecycle"), Page: page, PageSize: pageSize,
+	}
+	for _, value := range []string{query.PluginID, query.PluginPrefix, query.Namespace, query.Publisher, query.Version, query.Channel} {
+		if len(value) > 160 || strings.ContainsAny(value, "\x00\r\n") {
+			return platformadminapi.ArtifactCatalogQuery{}, platformadminapi.ErrInvalid
+		}
+	}
+	if query.Target != "" && query.Target != "backend" && query.Target != "frontend" && query.Target != "runner" && query.Target != "mobile" {
+		return platformadminapi.ArtifactCatalogQuery{}, platformadminapi.ErrInvalid
+	}
+	if query.Lifecycle != "" && query.Lifecycle != "active" && query.Lifecycle != "deprecated" && query.Lifecycle != "yanked" && query.Lifecycle != "revoked" {
+		return platformadminapi.ArtifactCatalogQuery{}, platformadminapi.ErrInvalid
+	}
+	return query, nil
+}
+
+func positiveQueryInteger(raw string, fallback, maximum int) (int, error) {
+	if raw == "" {
+		return fallback, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 1 || value > maximum {
+		return 0, platformadminapi.ErrInvalid
+	}
+	return value, nil
 }
 
 func decodeEmptyObject(w http.ResponseWriter, r *http.Request) bool {

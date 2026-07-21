@@ -126,4 +126,16 @@ describe("PlatformAdminClient", () => {
     ]);
     expect(() => client.quarantineArtifacts("bad", 72)).toThrowError(PlatformAdminError);
   });
+
+  it("uses a fixed catalog route with encoded filters and bounded pagination", async () => {
+		const calls: Array<{ path: string; method?: string }> = [];
+		const fetcher: PlatformFetch = async (path, init) => {
+			calls.push({ path, method: init?.method });
+			return { ok: true, status: 200, json: async () => ({ revision: 1, total: 0, page: 2, pageSize: 10, items: [] }) };
+		};
+		const client = new PlatformAdminClient(fetcher, "operations", "artifacts");
+		await client.listArtifactCatalog({ pluginPrefix: "cn.vastplan", target: "backend", lifecycle: "active", page: 2, pageSize: 10 });
+		expect(calls[0]).toEqual({ path: "/v1/portals/operations/platform/services/artifacts/artifacts/catalog?pluginPrefix=cn.vastplan&target=backend&lifecycle=active&page=2&pageSize=10", method: "GET" });
+		expect(() => client.listArtifactCatalog({ pageSize: 101 })).toThrowError(PlatformAdminError);
+	});
 });

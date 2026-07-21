@@ -35,7 +35,10 @@
           "templateOptions": {
             "standard": { "pageBodyWidth": "fluid" },
             "top-navigation": { "pageBodyWidth": "fluid" }
-          }
+          },
+          "navigationGroups": [
+            { "id": "platform.artifacts", "label": "制品仓库", "zone": "settings", "icon": "settings", "parentID": "settings", "order": 50 }
+          ]
         }
       },
       "workbench": {
@@ -56,8 +59,8 @@
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.2.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.4.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.4.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.12.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.5.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.13.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.6.0", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
     }
@@ -69,7 +72,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 1,
-        "digest": "024eb7393352d83aefb33b4c813147a371a267075b5fd010dd6bc9ee0b1435d5"
+        "digest": "12ce872b32499e569bf427fd9ba66c8e3e295c6b52f164185268452355b39277"
       },
       "services": [
         {

@@ -14,6 +14,7 @@ import (
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/compositioncore"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
@@ -43,6 +44,19 @@ type Publisher struct {
 	options   compositioncore.Options
 	applier   Applier
 	resolve   Resolver
+}
+
+type recordingArtifactReader struct {
+	delegate compositioncore.ArtifactReader
+	values   map[pluginv1.ArtifactRef]pluginv1.Artifact
+}
+
+func (r *recordingArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
+	artifact, raw, err := r.delegate.Read(ref)
+	if err == nil {
+		r.values[ref] = artifact
+	}
+	return artifact, raw, err
 }
 
 func New(catalog backendcompositionv1.BackendPlatformCatalog, artifacts compositioncore.ArtifactReader, applier Applier, options compositioncore.Options, resolve Resolver) (*Publisher, error) {
@@ -77,11 +91,44 @@ func (p *Publisher) Preview(_ context.Context, tenantID string, application back
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}
-	resolved, err := p.resolve(profile, application, deploymentRevision, p.artifacts, p.options)
+	recording := &recordingArtifactReader{delegate: p.artifacts, values: map[pluginv1.ArtifactRef]pluginv1.Artifact{}}
+	resolved, err := p.resolve(profile, application, deploymentRevision, recording, p.options)
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}
-	return deploymentpublication.Result{Deployment: resolved, Digest: resolved.Digest()}, nil
+	references, err := resolvedArtifactReferences(resolved, recording.values)
+	if err != nil {
+		return deploymentpublication.Result{}, err
+	}
+	return deploymentpublication.Result{Deployment: resolved, Digest: resolved.Digest(), ArtifactReferences: references}, nil
+}
+
+func resolvedArtifactReferences(deployment deploymentv2.Deployment, artifacts map[pluginv1.ArtifactRef]pluginv1.Artifact) ([]pluginv1.ArtifactReference, error) {
+	byRef := map[pluginv1.ArtifactRef]pluginv1.ArtifactReference{}
+	for _, unit := range deployment.Units {
+		for _, plugin := range unit.Plugins {
+			ref := pluginv1.ArtifactRef{PluginID: plugin.ID, Version: plugin.Version, Channel: compositioncore.NormalizeChannel(plugin.Channel)}
+			artifact, ok := artifacts[ref]
+			if !ok || artifact.PluginID != ref.PluginID || artifact.Version != ref.Version || compositioncore.NormalizeChannel(artifact.Channel) != ref.Channel || len(artifact.SHA256) != 64 {
+				return nil, fmt.Errorf("可信部署预览缺少精确制品事实: %s@%s/%s", ref.PluginID, ref.Version, ref.Channel)
+			}
+			byRef[ref] = pluginv1.ArtifactReference{Ref: ref, SHA256: artifact.SHA256, Purpose: "resolved"}
+		}
+	}
+	values := make([]pluginv1.ArtifactReference, 0, len(byRef))
+	for _, value := range byRef {
+		values = append(values, value)
+	}
+	sort.Slice(values, func(i, j int) bool {
+		if values[i].Ref.PluginID != values[j].Ref.PluginID {
+			return values[i].Ref.PluginID < values[j].Ref.PluginID
+		}
+		if values[i].Ref.Version != values[j].Ref.Version {
+			return values[i].Ref.Version < values[j].Ref.Version
+		}
+		return values[i].Ref.Channel < values[j].Ref.Channel
+	})
+	return values, nil
 }
 
 func (p *Publisher) Publish(ctx context.Context, tenantID string, application backendcompositionv1.ApplicationComposition, deploymentRevision uint64, expectedDigest string) (deploymentpublication.Result, error) {
