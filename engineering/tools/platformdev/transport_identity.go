@@ -19,7 +19,7 @@ const (
 )
 
 func writeDevelopmentTransportIdentities(secretsDir string) error {
-	node, nodeSeed, err := developmentTransportIdentity("local-platform-node", "node", "local-platform-node")
+	node, nodeSeed, err := developmentTransportIdentity("node-agent/local-platform-node", "node", "local-platform-node")
 	if err != nil {
 		return err
 	}
@@ -28,7 +28,7 @@ func writeDevelopmentTransportIdentities(secretsDir string) error {
 		return err
 	}
 	portal.AllowDelegation = true
-	managed, managedSeed, err := developmentTransportIdentity("local-managed-node", "node", "local-managed-node")
+	managed, managedSeed, err := developmentTransportIdentity("node-agent/local-managed-node", "node", "local-managed-node")
 	if err != nil {
 		return err
 	}

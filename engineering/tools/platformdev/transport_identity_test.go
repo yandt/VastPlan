@@ -31,4 +31,7 @@ func TestWriteDevelopmentTransportIdentitiesCreatesMutuallyTrustedWorkloads(t *t
 	if !document.Identities[2].AllowDelegation || document.Identities[0].NodeID != "local-platform-node" || document.Identities[1].NodeID != "local-managed-node" {
 		t.Fatalf("Portal 委托或节点身份未锁定: %+v", document.Identities)
 	}
+	if document.Identities[0].Name != "node-agent/local-platform-node" || document.Identities[1].Name != "node-agent/local-managed-node" {
+		t.Fatalf("Node transport identity 必须投影为策略可验证的 node-agent system caller: %+v", document.Identities)
+	}
 }
