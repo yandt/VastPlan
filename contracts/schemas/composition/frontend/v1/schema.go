@@ -44,6 +44,15 @@ type PluginRef struct {
 	Channel string `json:"channel,omitempty"`
 }
 
+// RuntimeEngine selects the single trusted browser/server framework runtime
+// for a Portal. It is independent from the visual RenderAdapter: React/Vue are
+// engine families while Arco/MUI are renderer implementations.
+type RuntimeEngine struct {
+	PluginRef
+	EngineContract string `json:"engineContract"`
+	Family         string `json:"family"`
+}
+
 type RenderAdapter struct {
 	PluginRef
 	UIContract string              `json:"uiContract"`
@@ -121,6 +130,7 @@ type UpdatePolicy struct {
 type PlatformProfile struct {
 	compositioncommonv1.Document
 	Target        compositioncommonv1.Target `json:"target"`
+	RuntimeEngine RuntimeEngine               `json:"runtimeEngine"`
 	RenderAdapter RenderAdapter              `json:"renderAdapter"`
 	Shell         Shell                      `json:"shell"`
 	Workbench     Workbench                  `json:"workbench"`
@@ -233,9 +243,13 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	if err != nil {
 		return PlatformProfile{}, err
 	}
+	value.RuntimeEngine.Channel = channel(value.RuntimeEngine.Channel)
 	value.RenderAdapter.Channel = channel(value.RenderAdapter.Channel)
 	value.Shell.Channel = channel(value.Shell.Channel)
 	value.Workbench.Channel = channel(value.Workbench.Channel)
+	if !templateName.MatchString(value.RuntimeEngine.Family) || strings.TrimSpace(value.RuntimeEngine.EngineContract) == "" {
+		return PlatformProfile{}, fmt.Errorf("Frontend Runtime Engine family 或 engineContract 无效")
+	}
 	if err := ValidateRenderAdapterConfig(value.RenderAdapter.Config); err != nil {
 		return PlatformProfile{}, err
 	}
@@ -248,11 +262,11 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	if value.Updates != nil && value.Updates.Mode != "refresh" && value.Updates.Mode != "notify" && value.Updates.Mode != "automatic" {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile updates.mode 无效: %s", value.Updates.Mode)
 	}
-	selectedFoundations := []PluginRef{value.RenderAdapter.PluginRef, value.Shell.PluginRef, value.Workbench.PluginRef}
+	selectedFoundations := []PluginRef{value.RuntimeEngine.PluginRef, value.RenderAdapter.PluginRef, value.Shell.PluginRef, value.Workbench.PluginRef}
 	foundationIDs := map[string]struct{}{}
 	for _, selected := range selectedFoundations {
 		if _, exists := foundationIDs[selected.ID]; exists {
-			return PlatformProfile{}, fmt.Errorf("设计系统、Shell 与 Workbench 必须由独立插件提供")
+			return PlatformProfile{}, fmt.Errorf("Runtime Engine、设计系统、Shell 与 Workbench 必须由独立插件提供")
 		}
 		foundationIDs[selected.ID] = struct{}{}
 	}
@@ -264,8 +278,8 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 			}
 		}
 	}
-	if !found[value.RenderAdapter.ID] || !found[value.Shell.ID] || !found[value.Workbench.ID] {
-		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含设计系统、Shell 与 Workbench 插件")
+	if !found[value.RuntimeEngine.ID] || !found[value.RenderAdapter.ID] || !found[value.Shell.ID] || !found[value.Workbench.ID] {
+		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含 Runtime Engine、设计系统、Shell 与 Workbench 插件")
 	}
 	return value, nil
 }

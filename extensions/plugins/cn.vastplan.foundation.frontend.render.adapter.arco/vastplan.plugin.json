@@ -11,5 +11,5 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
-  "contributes": { "frontend": { "rendererModules": [{ "id": "arco", "adapter": "ui.render.adapter", "uiContract": "^4.0.0", "framework": "arco" }] } }
+  "contributes": { "frontend": { "rendererModules": [{ "id": "arco", "adapter": "ui.render.adapter", "uiContract": "^4.0.0", "engineFamily": "react", "framework": "arco" }] } }
 }

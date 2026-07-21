@@ -59,6 +59,12 @@ type PluginRef struct {
 	Channel string `json:"channel,omitempty"`
 }
 
+type RuntimeEngine struct {
+	PluginRef
+	EngineContract string `json:"engineContract"`
+	Family         string `json:"family"`
+}
+
 type RenderAdapter struct {
 	PluginRef
 	UIContract string                                    `json:"uiContract"`
@@ -87,6 +93,7 @@ type PortalSpec struct {
 	Branding      map[string]any                           `json:"branding,omitempty"`
 	Localization  frontendcompositionv1.LocalizationPolicy `json:"localization"`
 	Updates       frontendcompositionv1.UpdatePolicy       `json:"updates"`
+	RuntimeEngine RuntimeEngine                            `json:"runtimeEngine"`
 	RenderAdapter RenderAdapter                            `json:"renderAdapter"`
 	Shell         Shell                                    `json:"shell"`
 	Workbench     Workbench                                `json:"workbench"`

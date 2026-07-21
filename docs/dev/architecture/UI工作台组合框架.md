@@ -2,7 +2,7 @@
 
 > 状态：Collection、表单与 Overlay 工作流、首方页面迁移和导入门禁均已实施｜最后更新：2026-07-21
 >
-> 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；三层命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
+> 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md) 与 [ADR-0104](../decisions/ADR-0104-Frontend-Runtime-Engine与React单实现.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
 ## 1. 定位与边界
 
@@ -14,6 +14,7 @@ flowchart TB
   W --> P["@vastplan/ui-primitives\n框架无关基础组件"]
   W --> C["@vastplan/ui-contract\n可序列化规则与纯运行时"]
   P --> D["ui.render.adapter\nArco / MUI / 未来适配器"]
+  D --> E["ui.runtime.engine\n当前 React"]
   C --> X["Mobile / Runner\n复用数据与交互语义"]
   L["ui.structure.layout\n位置、尺寸、样式"] -. 不参与业务行为 .-> W
 ```
@@ -21,16 +22,17 @@ flowchart TB
 | 层 | 负责 | 禁止负责 |
 |---|---|---|
 | `ui.structure.composition` / `ui.structure.layout` | Slot 拓扑、导航、页面区域和视觉位置 | 列表查询、表单提交、业务动作 |
+| `ui.runtime.engine` | 前端框架生命周期、挂载、Generation、可选 SSR 桥 | 业务页面、主题、领域动作 |
 | `ui.render.adapter` | 主题、DOM、组件渲染、焦点、键盘、虚拟化、响应式 | 业务筛选含义、服务端请求、权限裁决 |
 | `ui.workflow.workbench` | 通用工作流和状态机 | Arco/MUI 私有 API、全局布局、领域权限裁决 |
 | 功能插件 | 领域数据、Schema、动作处理器、文案、Workbench Page 定义 | 全局 CSS、框架私有组件、`ui-primitives` 基础组件、裸 React 页面、直接 HTTP URL、Shell 控制 |
 
 ## 2. 运行与装配
 
-`ui.workflow.workbench` 是 Platform Profile 中三个语义 Frontend 基础单例之一；另外两个是 `ui.render.adapter` 与已经内聚组合拓扑、Catalog 和布局 Library 的 `ui.structure.shell`。它拥有 Pattern 展示档位而不拥有主题：首期 Collection 由 `workbench.config.collection.defaultDensity` / `allowedDensities` 治理 `compact`、`standard`、`comfortable`；颜色、字体、间距 token 与深浅主题仍只能由 `ui.render.adapter` 提供，详见 ADR-0084。当前 Resolver 和构建系统共同执行以下约束：
+`ui.workflow.workbench` 是 Platform Profile 中四个语义 Frontend 基础单例之一；另外三个是 `ui.runtime.engine`、`ui.render.adapter` 与已经内聚组合拓扑、Catalog 和布局 Library 的 `ui.structure.shell`。它拥有 Pattern 展示档位而不拥有主题：首期 Collection 由 `workbench.config.collection.defaultDensity` / `allowedDensities` 治理 `compact`、`standard`、`comfortable`；颜色、字体、间距 token 与深浅主题仍只能由 `ui.render.adapter` 提供，详见 ADR-0084。当前 Resolver 和构建系统共同执行以下约束：
 
 1. 恰好一个 Workbench，且其 `uiContract` 主版本与设计系统、功能插件相容；
-2. Workbench 只依赖 `@vastplan/ui-primitives` 和 `@vastplan/ui-contract` 的共享单例，不能带入第二套 UI 框架；
+2. Workbench 只依赖 `@vastplan/ui-primitives` 和 `@vastplan/ui-contract` 的共享单例，且 `engineFamily` 必须与 Runtime Engine、Adapter、Shell 一致，不能带入第二套前端框架；
 3. Application Composition 不能选择、替换或绕过 Workbench；
 4. Workbench 故障和设计系统故障一样，进入 Portal Kernel 恢复路径，而不是让功能插件退回自行组合。
 5. 功能插件制品必须使用 `@vastplan/workbench-sdk`；构建门禁与 Go 架构适应度测试拒绝 React、Arco/MUI、裸 `context.addPage` 和 `@vastplan/ui-primitives` 视觉导入。当前唯一例外是尚在该包中的非视觉 `PortalControlClient` 与 `Portal*` 数据契约。

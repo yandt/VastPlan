@@ -62,6 +62,15 @@ describe("VerifiedFrontendPluginLoader", () => {
     });
   });
 
+  it("recognizes only a governed Runtime Engine export", async () => {
+    const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.runtime.engine.react" });
+    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({
+      runtimeEngine: { id: "ui.runtime.engine", family: "react", engineContract: "1.0.0", capabilities: ["csr", "generation"] },
+    }));
+    const loaded = await loader.load({ id: locked.id, version: locked.version });
+    expect(loaded.runtimeEngine).toMatchObject({ id: "ui.runtime.engine", family: "react" });
+  });
+
   it("recognizes a Renderer only from its explicit named module export", async () => {
     const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.render.adapter.arco" });
     const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({

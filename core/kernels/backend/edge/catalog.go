@@ -138,6 +138,9 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 	if spec.Management.TenantID != tenantID || spec.Management.PortalID != spec.ID || spec.Management.PlatformProfile != spec.Resolution.PlatformProfile || compositioncommonv1.Digest(spec.Management) != spec.Resolution.ManagementBindingDigest {
 		return nil, errors.New("Portal 管理绑定与解析锁不一致")
 	}
+	if !pluginid.IsFirstPartyID(spec.RuntimeEngine.ID) {
+		return nil, errors.New("Portal Runtime Engine 必须是第一方插件")
+	}
 	if !pluginid.IsFirstPartyID(spec.RenderAdapter.ID) {
 		return nil, errors.New("Portal 设计系统必须是第一方插件")
 	}
@@ -148,9 +151,9 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		return nil, errors.New("Portal Workbench 必须是第一方插件")
 	}
 	foundationIDs := map[string]struct{}{}
-	for _, id := range []string{spec.RenderAdapter.ID, spec.Shell.ID, spec.Workbench.ID} {
+	for _, id := range []string{spec.RuntimeEngine.ID, spec.RenderAdapter.ID, spec.Shell.ID, spec.Workbench.ID} {
 		if _, exists := foundationIDs[id]; exists {
-			return nil, errors.New("Portal 设计系统、Shell 与 Workbench 必须来自独立插件")
+			return nil, errors.New("Portal Runtime Engine、设计系统、Shell 与 Workbench 必须来自独立插件")
 		}
 		foundationIDs[id] = struct{}{}
 	}
@@ -193,16 +196,21 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		if class == pluginid.ManagementDevelopment {
 			return nil, fmt.Errorf("Portal v1 不允许开发插件 %s", ref.ID)
 		}
+		isSelectedRuntimeEngine := samePortalRef(ref, spec.RuntimeEngine.PluginRef)
 		isSelectedRenderAdapter := samePortalRef(ref, spec.RenderAdapter.PluginRef)
 		isSelectedShell := samePortalRef(ref, spec.Shell.PluginRef)
 		isSelectedWorkbench := samePortalRef(ref, spec.Workbench.PluginRef)
 		var frontendContributions struct {
+			RuntimeEngines []json.RawMessage `json:"runtimeEngines"`
 			RenderAdapters []json.RawMessage `json:"renderAdapters"`
 			Shells         []json.RawMessage `json:"shells"`
 			Workbenches    []json.RawMessage `json:"workbenches"`
 		}
 		if err := json.Unmarshal(manifest.Contributes["frontend"], &frontendContributions); err != nil {
 			return nil, fmt.Errorf("解析插件 %s 前端贡献: %w", ref.ID, err)
+		}
+		if len(frontendContributions.RuntimeEngines) > 0 && !isSelectedRuntimeEngine {
+			return nil, fmt.Errorf("Portal 不允许第二个 Runtime Engine 插件 %s", ref.ID)
 		}
 		if len(frontendContributions.RenderAdapters) > 0 && !isSelectedRenderAdapter {
 			return nil, fmt.Errorf("Portal 不允许第二个设计系统插件 %s", ref.ID)
@@ -212,6 +220,9 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		}
 		if len(frontendContributions.Workbenches) > 0 && !isSelectedWorkbench {
 			return nil, fmt.Errorf("Portal 不允许第二个 Workbench 插件 %s", ref.ID)
+		}
+		if isSelectedRuntimeEngine {
+			selected["engine"] = manifest
 		}
 		if isSelectedRenderAdapter {
 			selected["design"] = manifest
@@ -226,16 +237,20 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 	if len(seen) != len(spec.Resolution.PluginOrigins) {
 		return nil, errors.New("Portal 解析来源包含未部署插件")
 	}
-	if spec.Resolution.PluginOrigins[spec.RenderAdapter.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.Shell.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.Workbench.ID] != compositioncommonv1.OriginPlatformProfile {
-		return nil, errors.New("Portal 设计系统、Shell 与 Workbench 必须来自 Platform Profile")
+	if spec.Resolution.PluginOrigins[spec.RuntimeEngine.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.RenderAdapter.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.Shell.ID] != compositioncommonv1.OriginPlatformProfile || spec.Resolution.PluginOrigins[spec.Workbench.ID] != compositioncommonv1.OriginPlatformProfile {
+		return nil, errors.New("Portal Runtime Engine、设计系统、Shell 与 Workbench 必须来自 Platform Profile")
 	}
-	if selected["design"].ID == "" || selected["shell"].ID == "" || selected["workbench"].ID == "" {
-		return nil, errors.New("所选设计系统、Shell 或 Workbench 不在 Portal plugins 中")
+	if selected["engine"].ID == "" || selected["design"].ID == "" || selected["shell"].ID == "" || selected["workbench"].ID == "" {
+		return nil, errors.New("所选 Runtime Engine、设计系统、Shell 或 Workbench 不在 Portal plugins 中")
+	}
+	if !hasRuntimeEngineContribution(selected["engine"], spec.RuntimeEngine) {
+		return nil, errors.New("Runtime Engine 插件未提供匹配且完整的 ui.runtime.engine 贡献")
 	}
 	var contribution struct {
 		RenderAdapters []struct {
 			ID           string   `json:"id"`
 			UIContract   string   `json:"uiContract"`
+			EngineFamily string   `json:"engineFamily"`
 			Framework    string   `json:"framework"`
 			Capabilities []string `json:"capabilities"`
 		} `json:"renderAdapters"`
@@ -244,11 +259,11 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		return nil, fmt.Errorf("解析设计系统贡献: %w", err)
 	}
 	for _, ds := range contribution.RenderAdapters {
-		if ds.ID == "ui.render.adapter" && ds.UIContract == spec.RenderAdapter.UIContract && ds.Framework != "" && completeCapabilities(ds.Capabilities) {
-			if !hasShellFoundationContribution(selected["shell"], "shells", "ui.structure.shell", spec.Shell.UIContract) {
+		if ds.ID == "ui.render.adapter" && ds.UIContract == spec.RenderAdapter.UIContract && ds.EngineFamily == spec.RuntimeEngine.Family && ds.Framework != "" && completeCapabilities(ds.Capabilities) {
+			if !hasShellFoundationContribution(selected["shell"], "shells", "ui.structure.shell", spec.Shell.UIContract, spec.RuntimeEngine.Family) {
 				return nil, errors.New("Shell 插件未提供匹配的 ui.structure.shell 贡献")
 			}
-			if !hasShellFoundationContribution(selected["workbench"], "workbenches", "ui.workflow.workbench", spec.Workbench.UIContract) {
+			if !hasShellFoundationContribution(selected["workbench"], "workbenches", "ui.workflow.workbench", spec.Workbench.UIContract, spec.RuntimeEngine.Family) {
 				return nil, errors.New("Workbench 插件未提供匹配的 ui.workflow.workbench 贡献")
 			}
 			if err := validateShellLibraryCatalog(selected["shell"], manifestsByID, spec); err != nil {
@@ -258,6 +273,27 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		}
 	}
 	return nil, errors.New("设计系统未提供匹配且完整的 ui.render.adapter 贡献")
+}
+
+func hasRuntimeEngineContribution(manifest pluginv1.Manifest, selection portalapi.RuntimeEngine) bool {
+	var frontend struct {
+		RuntimeEngines []struct {
+			ID             string   `json:"id"`
+			Family         string   `json:"family"`
+			EngineContract string   `json:"engineContract"`
+			BrowserEntry   string   `json:"browserEntry"`
+			Capabilities   []string `json:"capabilities"`
+		} `json:"runtimeEngines"`
+	}
+	if json.Unmarshal(manifest.Contributes["frontend"], &frontend) != nil {
+		return false
+	}
+	for _, engine := range frontend.RuntimeEngines {
+		if engine.ID == "ui.runtime.engine" && engine.Family == selection.Family && engine.EngineContract == selection.EngineContract && engine.BrowserEntry == manifest.Entry["frontend"] && containsString(engine.Capabilities, "csr") && containsString(engine.Capabilities, "generation") {
+			return true
+		}
+	}
+	return false
 }
 
 func validateShellLibraryCatalog(shellManifest pluginv1.Manifest, manifests map[string]pluginv1.Manifest, spec portalapi.PortalSpec) error {
@@ -344,16 +380,26 @@ func manifestProvidesShellLibrary(manifest pluginv1.Manifest, id, contract strin
 	return library.ID == id && library.Shell == "ui.structure.shell" && library.UIContract == contract
 }
 
-func hasShellFoundationContribution(manifest pluginv1.Manifest, field, id, contract string) bool {
+func hasShellFoundationContribution(manifest pluginv1.Manifest, field, id, contract, engineFamily string) bool {
 	var frontend map[string][]struct {
-		ID         string `json:"id"`
-		UIContract string `json:"uiContract"`
+		ID           string `json:"id"`
+		UIContract   string `json:"uiContract"`
+		EngineFamily string `json:"engineFamily"`
 	}
 	if json.Unmarshal(manifest.Contributes["frontend"], &frontend) != nil {
 		return false
 	}
 	for _, contribution := range frontend[field] {
-		if contribution.ID == id && contribution.UIContract == contract {
+		if contribution.ID == id && contribution.UIContract == contract && contribution.EngineFamily == engineFamily {
+			return true
+		}
+	}
+	return false
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
 			return true
 		}
 	}

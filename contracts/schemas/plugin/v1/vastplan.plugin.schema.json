@@ -455,6 +455,7 @@
     "frontendContributes": {
       "type": "object", "minProperties": 1, "additionalProperties": false,
       "properties": {
+        "runtimeEngines": { "type": "array", "items": { "$ref": "#/$defs/runtimeEngineContribution" } },
         "views": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "editors": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
         "commands": { "type": "array", "items": { "$ref": "#/$defs/genericContribution" } },
@@ -467,15 +468,36 @@
         "workbenches": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } }
       }
     },
+    "runtimeEngineContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "family", "engineContract", "browserEntry", "capabilities"],
+      "properties": {
+        "id": { "const": "ui.runtime.engine" },
+        "family": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "engineContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "browserEntry": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
+        "serverEntry": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/entryPath" },
+        "capabilities": {
+          "type": "array", "minItems": 2, "uniqueItems": true,
+          "items": { "enum": ["csr", "ssr", "hydration", "generation", "lazy-module", "i18n"] },
+          "allOf": [
+            { "contains": { "const": "csr" } },
+            { "contains": { "const": "generation" } }
+          ]
+        }
+      }
+    },
     "renderAdapterContribution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "uiContract", "framework", "capabilities"],
+      "required": ["id", "uiContract", "engineFamily", "framework", "capabilities"],
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 160 },
         "title": { "type": "string", "minLength": 1, "maxLength": 160 },
         "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
         "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "engineFamily": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
         "framework": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
         "capabilities": {
           "type": "array",
@@ -497,23 +519,25 @@
     "rendererModuleContribution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "adapter", "uiContract", "framework"],
+      "required": ["id", "adapter", "uiContract", "engineFamily", "framework"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
         "adapter": { "const": "ui.render.adapter" },
         "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "engineFamily": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
         "framework": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 }
       }
     },
     "structureFoundationContribution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "uiContract"],
+      "required": ["id", "uiContract", "engineFamily"],
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 160 },
         "title": { "type": "string", "minLength": 1, "maxLength": 160 },
         "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
         "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "engineFamily": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
         "libraries": {
           "type": "array", "minItems": 1,
           "items": {

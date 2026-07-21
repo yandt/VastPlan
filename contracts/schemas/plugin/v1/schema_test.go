@@ -87,17 +87,33 @@ func TestParseManifest_RenderAdapterContributionIsClosedAndComplete(t *testing.T
   "engines":{"frontend":"^1.0"},"activation":["onStartup"],"entry":{"frontend":"frontend/remoteEntry.js"},
   "contributes":{"frontend":{"renderAdapters":[%s]}}
 }`
-	valid := `{"id":"ui.render.adapter","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme","navigation"]}`
+	valid := `{"id":"ui.render.adapter","uiContract":"^1.0.0","engineFamily":"react","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme","navigation"]}`
 	if _, err := ParseManifest([]byte(fmt.Sprintf(base, valid))); err != nil {
 		t.Fatalf("完整的设计系统贡献应通过校验: %v", err)
 	}
-	missing := `{"id":"ui.render.adapter","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback"]}`
+	missing := `{"id":"ui.render.adapter","uiContract":"^1.0.0","engineFamily":"react","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback"]}`
 	if _, err := ParseManifest([]byte(fmt.Sprintf(base, missing))); err == nil {
 		t.Fatal("缺少基础 UI 能力的设计系统贡献必须被拒绝")
 	}
-	unknown := `{"id":"ui.render.adapter","uiContract":"^1.0.0","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme"],"rawFrameworkToken":true}`
+	unknown := `{"id":"ui.render.adapter","uiContract":"^1.0.0","engineFamily":"react","framework":"test-ui","capabilities":["layout","menu","overlay","form","data","feedback","theme"],"rawFrameworkToken":true}`
 	if _, err := ParseManifest([]byte(fmt.Sprintf(base, unknown))); err == nil {
 		t.Fatal("设计系统 descriptor 的未知字段必须被拒绝")
+	}
+}
+
+func TestParseManifest_RuntimeEngineContributionRequiresLifecycleBaseline(t *testing.T) {
+	base := `{
+  "id":"cn.vastplan.foundation.frontend.runtime.engine.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan",
+  "engines":{"frontend":"^1.0"},"activation":["onStartup"],"entry":{"frontend":"frontend/main.js"},
+  "contributes":{"frontend":{"runtimeEngines":[%s]}}
+}`
+	valid := `{"id":"ui.runtime.engine","family":"react","engineContract":"^1.0.0","browserEntry":"frontend/main.js","capabilities":["csr","generation"]}`
+	if _, err := ParseManifest([]byte(fmt.Sprintf(base, valid))); err != nil {
+		t.Fatalf("完整 Runtime Engine 应通过校验: %v", err)
+	}
+	missingGeneration := `{"id":"ui.runtime.engine","family":"react","engineContract":"^1.0.0","browserEntry":"frontend/main.js","capabilities":["csr","i18n"]}`
+	if _, err := ParseManifest([]byte(fmt.Sprintf(base, missingGeneration))); err == nil {
+		t.Fatal("Runtime Engine 缺少 generation 基线必须拒绝")
 	}
 }
 

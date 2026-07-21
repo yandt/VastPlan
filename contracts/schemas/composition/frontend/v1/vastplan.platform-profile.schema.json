@@ -4,12 +4,13 @@
   "title": "VastPlan Frontend Platform Profile v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "revision", "id", "target", "renderAdapter", "shell", "workbench", "plugins", "security"],
+  "required": ["version", "revision", "id", "target", "runtimeEngine", "renderAdapter", "shell", "workbench", "plugins", "security"],
   "properties": {
     "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
     "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
     "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
     "target": { "type": "object", "additionalProperties": false, "required": ["kernel"], "properties": { "kernel": { "const": "frontend" } } },
+    "runtimeEngine": { "$ref": "#/$defs/runtimeEngine" },
     "renderAdapter": { "$ref": "#/$defs/renderAdapter" },
     "shell": { "$ref": "#/$defs/shellSelection" },
     "workbench": { "$ref": "#/$defs/workbenchSelection" },
@@ -32,6 +33,17 @@
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
         "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" }
+      }
+    },
+    "runtimeEngine": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "engineContract", "family"],
+      "properties": {
+        "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+        "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" },
+        "engineContract": { "type": "string", "pattern": "^(?:\\^)?1\\.", "maxLength": 128 },
+        "family": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" }
       }
     },
     "renderAdapter": {

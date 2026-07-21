@@ -12,7 +12,7 @@
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
   "contributes": { "frontend": { "renderAdapters": [{
-    "id": "ui.render.adapter", "title": "Unified Render Adapter", "uiContract": "^4.0.0", "framework": "multi",
+    "id": "ui.render.adapter", "title": "Unified Render Adapter", "uiContract": "^4.0.0", "engineFamily": "react", "framework": "multi",
     "capabilities": ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"]
   }] } }
 }

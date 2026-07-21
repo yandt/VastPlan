@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { type FrontendPluginContext, type UIRenderAdapter, type UIShellAdapter, type UIShellLibrary, type UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type PluginRef, type PortalSpec } from "./portal-runtime";
 
+const engineRef: PluginRef = { id: "cn.vastplan.foundation.frontend.runtime.engine.react", version: "1.0.0" };
 const adapterRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter", version: "1.0.0" };
 const arcoRendererRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.arco", version: "1.0.0" };
 const muiRendererRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.mui", version: "1.0.0" };
@@ -26,16 +27,18 @@ const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract:
 
 const portal: PortalSpec = {
   revision: 1, id: "admin", tenantId: "acme", route: "/",
+  runtimeEngine: { ...engineRef, family: "react", engineContract: "^1.0.0" },
   renderAdapter: { ...adapterRef, uiContract: "^4.0.0", config: { defaultRenderer: "arco", allowedRenderers: ["arco", "mui"], userSelectable: true } },
   shell: { ...shellRef, uiContract: "^4.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true } },
-  workbench: { ...workbenchRef, uiContract: "^4.0.0" }, plugins: [adapterRef, arcoRendererRef, muiRendererRef, shellRef, standardShellRef, topShellRef, workbenchRef, featureRef],
+  workbench: { ...workbenchRef, uiContract: "^4.0.0" }, plugins: [engineRef, adapterRef, arcoRendererRef, muiRendererRef, shellRef, standardShellRef, topShellRef, workbenchRef, featureRef],
   management: { tenantId: "acme", portalId: "admin", platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, services: [{ id: "settings", logicalService: "platform.settings", routingDomain: "platform", capabilities: [{ capability: "platform.settings", read: ["list"] }] }] },
-  resolution: { platformCatalog: { id: "catalog", revision: 1, digest: "c".repeat(64) }, platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) }, managementBindingDigest: "d".repeat(64), pluginOrigins: { [adapterRef.id]: "platform-profile", [arcoRendererRef.id]: "platform-profile", [muiRendererRef.id]: "platform-profile", [shellRef.id]: "platform-profile", [standardShellRef.id]: "platform-profile", [topShellRef.id]: "platform-profile", [workbenchRef.id]: "platform-profile", [featureRef.id]: "platform-profile" } },
+  resolution: { platformCatalog: { id: "catalog", revision: 1, digest: "c".repeat(64) }, platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) }, managementBindingDigest: "d".repeat(64), pluginOrigins: { [engineRef.id]: "platform-profile", [adapterRef.id]: "platform-profile", [arcoRendererRef.id]: "platform-profile", [muiRendererRef.id]: "platform-profile", [shellRef.id]: "platform-profile", [standardShellRef.id]: "platform-profile", [topShellRef.id]: "platform-profile", [workbenchRef.id]: "platform-profile", [featureRef.id]: "platform-profile" } },
 };
 
 function loader(overrides: Record<string, object> = {}): FrontendPluginLoader {
   const base = { provenance: { signed: true, firstParty: true, integrity: "sha256:test" }, localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { label: "测试" }, "en-US": { label: "Test" } } } };
   return { async load(ref) {
+    if (ref.id === engineRef.id) return { ...base, runtimeEngine: { id: "ui.runtime.engine" as const, family: "react", engineContract: "1.0.0", capabilities: ["csr", "generation"] as const }, ...overrides[ref.id] };
     if (ref.id === adapterRef.id) return { ...base, renderAdapter: adapter, ...overrides[ref.id] };
     if (ref.id === arcoRendererRef.id) return { ...base, renderer: renderer("arco"), ...overrides[ref.id] };
     if (ref.id === muiRendererRef.id) return { ...base, renderer: renderer("mui"), ...overrides[ref.id] };
@@ -50,6 +53,7 @@ function loader(overrides: Record<string, object> = {}): FrontendPluginLoader {
 describe("PortalRuntime shell", () => {
   it("assembles one signed shell and the functional page", async () => {
     const prepared = await new PortalRuntime(loader()).prepare(portal);
+    expect(prepared.runtimeEngine.family).toBe("react");
     expect(prepared.shell.id).toBe("ui.structure.shell");
     expect(prepared.shellLibrary.id).toBe("standard");
     expect(prepared.pages).toMatchObject([{ id: "home", path: "/home" }]);
