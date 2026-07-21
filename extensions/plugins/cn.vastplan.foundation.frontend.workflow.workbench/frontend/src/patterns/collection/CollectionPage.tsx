@@ -12,6 +12,8 @@ import type { CollectionRow } from "./model.js";
 import { readCollectionColumns, writeCollectionColumns } from "./preferences.js";
 import { useCollectionData } from "./useCollectionData.js";
 import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
+import { evaluateFormCondition } from "../form/presentation.js";
+import { CollectionOverlayWorkflow } from "../overlay/CollectionOverlayWorkflow.js";
 
 export function CollectionPage({ page, preferenceScope, presentation }: { page: CollectionPageDefinition; preferenceScope: string; presentation?: WorkbenchPresentationConfig }) {
   const ui = usePortalUI();
@@ -27,6 +29,7 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
   const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [columns, setColumns] = useState(() => readCollectionColumns(preferenceScope, collection));
   const [activeForm, setActiveForm] = useState<{ id: string; selected: readonly CollectionRow[] }>();
+  const [activeOverlay, setActiveOverlay] = useState<{ id: string; selected: readonly CollectionRow[] }>();
   const summaryRequestRef = useRef<AbortController>();
   const keyOf = useCallback((row: CollectionRow) => String(row.id ?? row.key ?? ""), []);
   const data = useCollectionData({ page, pageNumber, pageSize, filters, keyOf });
@@ -60,6 +63,12 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
       setActiveForm({ id: definition.id, selected: actionRows });
       return;
     }
+    if (action.overlay !== undefined) {
+      const definition = page.overlays?.find((overlay) => overlay.id === action.overlay);
+      if (definition === undefined) { ui.notify({ title: i18n.text(action.label), content: `未注册 Overlay ${action.overlay}`, kind: "error" }); return; }
+      setActiveOverlay({ id: definition.id, selected: actionRows });
+      return;
+    }
     const title = i18n.text(action.label);
     if (action.confirm !== undefined && !await ui.confirm({ title, content: i18n.text(action.confirm) })) return;
     try {
@@ -72,9 +81,10 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
     }
   }, [i18n, page, refresh, ui]);
   const actions = collection.actions ?? [];
-  const primaryActions = actions.filter((action) => action.placement === "page.primary" || action.placement === "collection.toolbar");
-  const secondaryActions = actions.filter((action) => action.placement === "page.secondary");
-  const bulkActions = actions.filter((action) => action.placement === "collection.bulk");
+  const visibleAction = (action: ActionSpec) => action.visibleWhen === undefined || (selected[0] !== undefined && evaluateFormCondition(action.visibleWhen, selected[0]));
+  const primaryActions = actions.filter((action) => (action.placement === "page.primary" || action.placement === "collection.toolbar") && visibleAction(action));
+  const secondaryActions = actions.filter((action) => action.placement === "page.secondary" && visibleAction(action));
+  const bulkActions = actions.filter((action) => action.placement === "collection.bulk" && visibleAction(action));
   const hasFilters = collection.filters !== undefined && collection.filters.length > 0;
 
   return <ui.Stack gap={density === "compact" ? "sm" : density === "comfortable" ? "lg" : "md"}>
@@ -89,5 +99,6 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
     {collection.view !== "table" || collection.query.mode !== "cursor" || data.nextCursor === undefined ? null : <ui.Stack direction="row" justify="center"><ui.Button kind="secondary" loading={data.loadingMore} disabled={data.loadingMore} onClick={data.loadMore}>{i18n.text({ namespace: "cn.vastplan.foundation.frontend.workflow.workbench", key: "cursor.more", fallback: "加载更多" })}</ui.Button></ui.Stack>}
     {collection.view !== "table" ? null : <CollectionPreferencesDialog open={preferencesOpen} collection={collection} columns={columns} onChange={setColumns} onClose={() => setPreferencesOpen(false)} />}
     <CollectionFormWorkflow definition={page.forms?.find((form) => form.id === activeForm?.id)} selected={activeForm?.selected ?? []} open={activeForm !== undefined} onClose={() => setActiveForm(undefined)} onRefresh={refresh} />
+    <CollectionOverlayWorkflow definition={page.overlays?.find((overlay) => overlay.id === activeOverlay?.id)} selected={activeOverlay?.selected ?? []} open={activeOverlay !== undefined} onClose={() => setActiveOverlay(undefined)} />
   </ui.Stack>;
 }

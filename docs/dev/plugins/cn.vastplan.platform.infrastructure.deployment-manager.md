@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.infrastructure.deployment-manager`
 
-当前制品版本：`0.6.0`
+当前制品版本：`0.7.0`
 
 该 platform 基础插件以 `leader + leader-owned + cluster + platform routing domain` 运行，持有租户隔离的节点计划、Bootstrap Job、服务组合 revision、Test Target Binding、Test Release 和审计记录。它依赖 settings、credentials、artifact repository 与窄内核服务，但只保存 Credential 名称、Application Composition 和精确制品身份，永远不能读取 SSH/NATS/制品令牌 material、Platform Catalog、信任根或 KV 句柄。
 
@@ -25,3 +25,5 @@
 0.5.0 起，服务发布在内核切换前先提交“旧活动 + 新候选”引用并集，切换成功后先固化回滚引用、再收敛活动引用；任一步失败只会多保护对象。精确引用同步由持久化 `referencePending` outbox 驱动，仓库恢复后在管理读取路径自动幂等重试，控制器重启也会重新校验活动 revision。Backend Test Release 在候选激活前还会发布独立的精确 artifact-lock owner。仓库不可用时候选 fail-closed，GC 不会获得一个缺引用但看似健康的窗口。
 
 0.6.0 起，部署预览由可信内核返回跨 Seed、托管仓库等来源解析后的精确制品引用；Deployment Manager 只消费并持久化该结果，不再旁路查询某一个仓库。这样引用保护与实际部署解析使用同一份事实，也避免 Seed 基础插件被误判为托管仓库缺失。
+
+0.7.0 起，服务组合页面完全使用 Workbench Collection、动态 Form 与 Overlay 契约；部署目标枚举只在抽屉打开时加载，编辑和生命周期动作按所选 revision 状态显示，最终预览与审计不再由功能插件直接拼装 UI。

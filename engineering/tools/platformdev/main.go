@@ -394,6 +394,22 @@ func discoverPackageSpecs(root string) ([]packageSpec, error) {
 	return specs, nil
 }
 
+func pluginManifestVersion(root, pluginID string) (string, error) {
+	path := filepath.Join(root, "extensions", "plugins", pluginID, "vastplan.plugin.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("读取插件 %s 清单: %w", pluginID, err)
+	}
+	manifest, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		return "", fmt.Errorf("解析插件 %s 清单: %w", pluginID, err)
+	}
+	if manifest.ID != pluginID {
+		return "", fmt.Errorf("插件清单 %s 的 id 是 %s", pluginID, manifest.ID)
+	}
+	return manifest.Version, nil
+}
+
 func (r *runtime) writeFixtures() error {
 	certFile, keyFile := filepath.Join(r.runDir, "secrets", "tls-cert.pem"), filepath.Join(r.runDir, "secrets", "tls-key.pem")
 	if err := writeTLS(certFile, keyFile); err != nil {
@@ -546,6 +562,14 @@ func (r *runtime) start(ctx context.Context) error {
 	if err := waitHTTP(ctx, "https://"+r.options.artifactListen, 30*time.Second, true); err != nil {
 		return fmt.Errorf("托管测试制品仓库未就绪: %w", err)
 	}
+	composerVersion, err := pluginManifestVersion(r.options.root, "cn.vastplan.platform.configuration.portal-composer")
+	if err != nil {
+		return err
+	}
+	interactionBrokerVersion, err := pluginManifestVersion(r.options.root, "cn.vastplan.platform.interaction.broker")
+	if err != nil {
+		return err
+	}
 	portalArgs := []string{
 		"portal-edge", "-listen", r.options.portalListen,
 		"-tls-cert", filepath.Join(r.runDir, "secrets", "tls-cert.pem"), "-tls-key", filepath.Join(r.runDir, "secrets", "tls-key.pem"),
@@ -553,9 +577,9 @@ func (r *runtime) start(ctx context.Context) error {
 		"-repository", filepath.Join(r.runDir, "repository"), "-install-root", filepath.Join(r.runDir, "installed", "portal"), "-allow-unsigned-local",
 		"-frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
 		"-frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
-		"-composer-version", "1.2.0", "-composer-state-file", filepath.Join(r.persistentStateRoot(), "portal-composer.json"),
+		"-composer-version", composerVersion, "-composer-state-file", filepath.Join(r.persistentStateRoot(), "portal-composer.json"),
 		"-portal-platform-catalog", filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json"),
-		"-interaction-broker-version", "0.1.0", "-interaction-broker-state-file", filepath.Join(r.persistentStateRoot(), "interaction-broker.json"),
+		"-interaction-broker-version", interactionBrokerVersion, "-interaction-broker-state-file", filepath.Join(r.persistentStateRoot(), "interaction-broker.json"),
 		"-portal-assets", filepath.Join(r.runDir, "portal-assets"), "-nats-url", natsURL, "-nats-allow-insecure",
 	}
 	portalArgs = append(portalArgs, r.controllerArtifactSourceArgs()...)

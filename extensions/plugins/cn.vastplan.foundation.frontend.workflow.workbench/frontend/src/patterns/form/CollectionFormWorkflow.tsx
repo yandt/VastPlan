@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { message, usePortalI18n, usePortalUI, type FormRendererProps, type FormRendererValidationState } from "@vastplan/ui-primitives";
-import type { WorkbenchFormDefinition } from "@vastplan/workbench-sdk";
+import type { WorkbenchFormDefinition, WorkbenchFormPreparation } from "@vastplan/workbench-sdk";
 import { projectFormPresentation } from "./presentation.js";
 import { containsSecretMaterial, discardSecretMaterial, secretMaterialPointers } from "./secret-material.js";
 import type { CollectionRow } from "../collection/model.js";
@@ -26,41 +26,47 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
   const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
   const [validation, setValidation] = useState<FormRendererValidationState>(emptyValidation);
   const [activeSection, setActiveSection] = useState<string>();
+  const [preparation, setPreparation] = useState<WorkbenchFormPreparation>();
   const loadRef = useRef<AbortController>();
   const submitRef = useRef<AbortController>();
-  const context = definition?.context ?? emptyContext;
-  const secretPointers = useMemo(() => secretMaterialPointers(definition?.presentation), [definition?.presentation]);
+  const presentation = preparation?.presentation ?? definition?.presentation;
+  const context = preparation?.context ?? definition?.context ?? emptyContext;
+  const secretPointers = useMemo(() => secretMaterialPointers(presentation), [presentation]);
   useEffect(() => {
     if (!open || definition === undefined) {
-      setValue({}); setBaseline("{}"); setFieldErrors({}); setFailure(undefined);
+      setValue({}); setBaseline("{}"); setFieldErrors({}); setFailure(undefined); setPreparation(undefined);
       return;
     }
     loadRef.current?.abort();
     const controller = new AbortController();
     loadRef.current = controller;
-    setLoading(true); setFailure(undefined); setFieldErrors({}); setValidation(emptyValidation);
-    setActiveSection(definition.presentation?.sections?.[0]?.id);
-    const source = definition.load?.(selected, controller.signal) ?? Promise.resolve(definition.initialValue ?? {});
-    void source.then((loaded) => {
+    setLoading(true); setFailure(undefined); setFieldErrors({}); setValidation(emptyValidation); setPreparation(undefined);
+    void (async () => {
+      const prepared = await definition.prepare?.(selected, controller.signal) ?? {};
       if (controller.signal.aborted) return;
-      if (containsSecretMaterial(loaded, secretPointers)) setFailure(i18n.text(message(namespace, "form.secretLoadRejected", "一次性秘密字段禁止从存储中回填；已安全丢弃该值。")));
-      const next = discardSecretMaterial(loaded, secretPointers);
+      const resolvedPresentation = prepared.presentation ?? definition.presentation;
+      const pointers = secretMaterialPointers(resolvedPresentation);
+      const loaded = definition.load === undefined ? prepared.initialValue ?? definition.initialValue ?? {} : await definition.load(selected, controller.signal);
+      if (controller.signal.aborted) return;
+      if (containsSecretMaterial(loaded, pointers)) setFailure(i18n.text(message(namespace, "form.secretLoadRejected", "一次性秘密字段禁止从存储中回填；已安全丢弃该值。")));
+      const next = discardSecretMaterial(loaded, pointers);
+      setPreparation(prepared); setActiveSection(resolvedPresentation?.sections?.[0]?.id);
       setValue(next); setBaseline(JSON.stringify(next));
-    }).catch((error: unknown) => { if (!controller.signal.aborted) setFailure(errorText(error)); })
+    })().catch((error: unknown) => { if (!controller.signal.aborted) setFailure(errorText(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [definition, i18n.text, open, secretPointers, selected]);
+  }, [definition, i18n.text, open, selected]);
   useEffect(() => () => submitRef.current?.abort(), []);
-  const schema = useMemo(() => definition === undefined ? undefined : projectFormPresentation(definition.schema, definition.presentation, value, context, i18n.text), [context, definition, i18n.text, value]);
+  const schema = useMemo(() => definition === undefined ? undefined : projectFormPresentation(preparation?.schema ?? definition.schema, presentation, value, context, i18n.text), [context, definition, i18n.text, preparation?.schema, presentation, value]);
   const asyncValidator = useMemo<FormRendererProps["validate"]>(() => definition?.validate === undefined ? undefined : async ({ value: next, context: nextContext, signal }) => {
     const errors = await definition.validate!({ value: next, context: nextContext, signal });
     return Object.fromEntries(Object.entries(errors).map(([pointer, error]) => [pointer, i18n.text(error)]));
   }, [definition, i18n.text]);
   if (definition === undefined) return null;
   const dirty = JSON.stringify(discardSecretMaterial(value, secretPointers)) !== baseline || containsSecretMaterial(value, secretPointers);
-  const sections = definition.presentation?.sections ?? [];
+  const sections = presentation?.sections ?? [];
   const sectionIndex = Math.max(0, sections.findIndex((section) => section.id === activeSection));
-  const steps = definition.presentation?.navigation === "steps" && sections.length > 0;
+  const steps = presentation?.navigation === "steps" && sections.length > 0;
   const requestClose = async () => {
     if (submitting) return;
     if (dirty && !await ui.confirm({ title: i18n.text(message(namespace, "form.discardTitle", "放弃未保存的修改？")), content: i18n.text(message(namespace, "form.discardContent", "关闭后，本次输入不会保留。")) })) return;
@@ -110,7 +116,7 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
       schema={schema}
       value={value}
       onChange={(next) => { setValue(next); setFieldErrors({}); setFailure(undefined); }}
-      presentation={definition.presentation}
+      presentation={presentation}
       presentationSection={activeSection}
       onPresentationSectionChange={setActiveSection}
       submitting={submitting}

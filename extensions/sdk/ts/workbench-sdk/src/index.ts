@@ -1,6 +1,6 @@
-import type { ActionSpec, CollectionDensity, CollectionSpec, FormPresentation, FormSchema, FormWorkflow, LocalizedText } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText } from "@vastplan/ui-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, ColumnSpec, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, ColumnSpec, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue } from "@vastplan/ui-contract";
 export { jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
 
@@ -53,6 +53,13 @@ export interface WorkbenchFormSubmitResult {
 /** Field errors stay semantic until Workbench resolves them for the active locale. */
 export type WorkbenchFormFieldErrors = Readonly<Record<string, LocalizedText>>;
 
+export interface WorkbenchFormPreparation {
+  schema?: FormSchema;
+  presentation?: FormPresentation;
+  context?: Readonly<Record<string, unknown>>;
+  initialValue?: Readonly<Record<string, unknown>>;
+}
+
 export interface WorkbenchFormDefinition<Row extends Record<string, unknown> = Record<string, unknown>> {
   id: string;
   schema: FormSchema;
@@ -60,9 +67,23 @@ export interface WorkbenchFormDefinition<Row extends Record<string, unknown> = R
   workflow: FormWorkflow;
   initialValue?: Readonly<Record<string, unknown>>;
   context?: Readonly<Record<string, unknown>>;
+  /** Resolves current enumerations/policy only when the form opens. */
+  prepare?(selected: readonly Row[], signal: AbortSignal): Promise<WorkbenchFormPreparation>;
   load?(selected: readonly Row[], signal: AbortSignal): Promise<Readonly<Record<string, unknown>>>;
   validate?(request: { value: Readonly<Record<string, unknown>>; context: Readonly<Record<string, unknown>>; signal: AbortSignal }): Promise<WorkbenchFormFieldErrors>;
   submit(context: WorkbenchFormSubmitContext<Row>, signal: AbortSignal): Promise<WorkbenchFormSubmitResult | void>;
+}
+
+export type WorkbenchOverlayContent =
+  | { kind: "json"; documents: readonly { title?: LocalizedText; value: JSONValue }[] }
+  | { kind: "table"; columns: readonly ColumnSpec[]; rows: readonly Readonly<Record<string, unknown>>[]; rowKey?: string };
+
+export interface WorkbenchOverlayDefinition<Row extends Record<string, unknown> = Record<string, unknown>> {
+  id: string;
+  surface: "dialog" | "drawer";
+  title: LocalizedText;
+  size?: "sm" | "md" | "lg";
+  load(selected: readonly Row[], signal: AbortSignal): Promise<WorkbenchOverlayContent>;
 }
 
 /** Platform Profile policy for the collection presentation family. */
@@ -80,6 +101,7 @@ export interface CollectionPageDefinition<Row extends Record<string, unknown> = 
   load(query: CollectionQuery, signal: AbortSignal): Promise<CollectionResult<Row>>;
   loadSummary?(signal: AbortSignal): Promise<CollectionSummary>;
   forms?: readonly WorkbenchFormDefinition<Row>[];
+  overlays?: readonly WorkbenchOverlayDefinition<Row>[];
   runAction?(context: CollectionActionContext<Row>, signal: AbortSignal): Promise<CollectionActionResult | void>;
 }
 
@@ -121,9 +143,13 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
   }
   const forms = new Map((definition.forms ?? []).map((form) => [form.id, form]));
   if (forms.size !== (definition.forms ?? []).length) throw new Error("Collection 表单 ID 必须唯一");
+  const overlays = new Map((definition.overlays ?? []).map((overlay) => [overlay.id, overlay]));
+  if (overlays.size !== (definition.overlays ?? []).length) throw new Error("Collection Overlay ID 必须唯一");
   for (const form of forms.values()) validateFormDefinition(form);
   for (const action of definition.collection.actions ?? []) {
     if (action.form !== undefined && !forms.has(action.form)) throw new Error(`Action ${action.id} 引用了未声明的表单 ${action.form}`);
+    if (action.overlay !== undefined && !overlays.has(action.overlay)) throw new Error(`Action ${action.id} 引用了未声明的 Overlay ${action.overlay}`);
+    if (action.form !== undefined && action.overlay !== undefined) throw new Error(`Action ${action.id} 不能同时打开表单和 Overlay`);
   }
   return Object.freeze({ ...definition, collection: Object.freeze({ ...definition.collection }) });
 }

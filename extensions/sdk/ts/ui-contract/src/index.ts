@@ -125,6 +125,9 @@ export interface ActionSpec {
   requiresSelection?: boolean;
   confirm?: import("./i18n.js").LocalizedText;
   form?: string;
+  overlay?: string;
+  /** Evaluated only against the selected record; authorization stays server-side. */
+  visibleWhen?: FormCondition;
 }
 export interface CollectionSpec {
   id: string;

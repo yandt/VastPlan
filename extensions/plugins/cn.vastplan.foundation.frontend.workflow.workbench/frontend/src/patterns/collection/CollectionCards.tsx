@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ActionSpec, CollectionCardFieldSpec, CollectionDensity, CollectionSpec } from "@vastplan/ui-contract";
 import { message, usePortalI18n, usePortalUI, type PortalI18n, type StatusTone } from "@vastplan/ui-primitives";
 import type { CollectionRow } from "./model.js";
+import { evaluateFormCondition } from "../form/presentation.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 const tones = new Set<StatusTone>(["neutral", "info", "success", "warning", "error"]);
@@ -49,7 +50,8 @@ export function CollectionCards({ collection, rows, selectedKeys, loading, loadi
       {rows.map((row) => {
         const key = keyOf(row);
         const statusTone = card.status?.toneKey === undefined ? "neutral" : tone(row[card.status.toneKey]);
-        const actions = footerActions.length === 0 ? undefined : <ui.Stack direction="row" gap="xs" wrap>{footerActions.map((action) => <ui.Button key={action.id} kind={action.tone ?? "text"} onClick={() => onRunAction(action, [row])}>{i18n.text(action.label)}</ui.Button>)}</ui.Stack>;
+        const visibleActions = footerActions.filter((action) => action.visibleWhen === undefined || evaluateFormCondition(action.visibleWhen, row));
+        const actions = visibleActions.length === 0 ? undefined : <ui.Stack direction="row" gap="xs" wrap>{visibleActions.map((action) => <ui.Button key={action.id} kind={action.tone ?? "text"} onClick={() => onRunAction(action, [row])}>{i18n.text(action.label)}</ui.Button>)}</ui.Stack>;
         return <ui.GridItem key={key} span={1}><ui.DataCard
           title={value(row[card.titleKey], { key: card.titleKey }, i18n)}
           subtitle={card.subtitleKey === undefined ? undefined : value(row[card.subtitleKey], { key: card.subtitleKey }, i18n)}

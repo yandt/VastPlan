@@ -1,6 +1,6 @@
 {
   "name": "@vastplan/plugin-ui-workflow-workbench",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },

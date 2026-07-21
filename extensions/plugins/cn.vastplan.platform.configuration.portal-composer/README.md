@@ -1,6 +1,6 @@
 # Portal Composer Plugin
 
-`cn.vastplan.platform.configuration.portal-composer` 是 Portal 在线组合与发布治理插件。管理中心分为 `Platform Profiles` 与 `Portals` 两个工作区；Portals 下分别管理 Applications、Bindings 和不可变 Activations。Application 草稿只编辑 Portal 路由、受众、品牌、非敏感配置和应用功能插件，不能替换 Profile 治理的设计系统、Shell 组合或布局。
+`cn.vastplan.platform.configuration.portal-composer` 是 Portal 在线组合与发布治理插件。管理中心通过 Workbench 提供 Platform Profile、Application、Binding 和不可变 Activation 四个受治理页面。Application 草稿只编辑 Portal 路由、受众、品牌、非敏感配置和应用功能插件，不能替换 Profile 治理的设计系统、Shell 组合或布局。
 
 Profile、Application 和 Binding 均执行 `Draft → PendingApproval → Approved → Published`，且 Published 只表示可被引用，不代表线上生效。Activation 精确引用三类 Published revision，服务端重新解析并锁定输入摘要、逐插件来源和管理绑定；随后依次执行输入校验、快照生成、Edge 就绪与 CAS 激活。可信内核 Catalog 复核精确制品、发布者分类、单一设计系统和 UI 契约，Composer 本身不接触仓库凭据或验签密钥。
 

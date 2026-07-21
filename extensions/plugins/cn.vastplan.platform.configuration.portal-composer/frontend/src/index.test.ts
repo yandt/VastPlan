@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { PortalControlClient, PortalControlError, type PortalApplicationComposition } from "@vastplan/ui-primitives";
-import { buildApplicationComposition, portalCompositionSchema } from "./index";
+import { buildApplicationComposition, createApplicationPage, portalCompositionSchema } from "./index";
+import { createActivationPage, createBindingPage, createProfilePage } from "./governance-workspaces";
 
 describe("Portal application composition", () => {
   it("never exposes or submits platform-managed fields", () => {
@@ -24,6 +25,18 @@ describe("Portal application composition", () => {
       config: {},
     });
     expect(composition).not.toHaveProperty("renderAdapter");
+  });
+
+  it("registers every governance domain through Workbench contracts", () => {
+    const client = new PortalControlClient({ fetch: async () => response([]) });
+    const pages = [createProfilePage(client), createApplicationPage(client), createBindingPage(client), createActivationPage(client)];
+
+    expect(pages.map((page) => page.path)).toEqual([
+      "/settings/portals/profiles", "/settings/portals", "/settings/portals/bindings", "/settings/portals/activations",
+    ]);
+    expect(pages.every((page) => page.collection.selection === "single")).toBe(true);
+    expect(pages.every((page) => (page.overlays?.length ?? 0) > 0)).toBe(true);
+    expect(pages.flatMap((page) => page.collection.actions ?? []).filter((action) => action.visibleWhen !== undefined).length).toBeGreaterThan(8);
   });
 });
 

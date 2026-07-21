@@ -46,6 +46,16 @@ func TestDiscoverPackageSpecsLeavesDynamicGoToDedicatedPackager(t *testing.T) {
 	}
 }
 
+func TestPluginManifestVersionUsesManifestAsSourceOfTruth(t *testing.T) {
+	version, err := pluginManifestVersion(repositoryRoot(t), "cn.vastplan.platform.configuration.portal-composer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != "1.3.0" {
+		t.Fatalf("version = %q, want 1.3.0", version)
+	}
+}
+
 func repositoryRoot(t *testing.T) string {
 	t.Helper()
 	root, err := filepath.Abs(filepath.Join("..", "..", ".."))

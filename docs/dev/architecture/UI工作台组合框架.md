@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：Collection、表单与 Overlay 工作流已实施；首方页面迁移和导入门禁待完成｜最后更新：2026-07-21
+> 状态：Collection、表单与 Overlay 工作流、首方页面迁移和导入门禁均已实施｜最后更新：2026-07-21
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；三层命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -27,19 +27,19 @@ flowchart TB
 
 ## 2. 运行与装配
 
-`ui.workflow.workbench` 是 Platform Profile 中的第四个 Frontend 基础单例，与设计系统、Shell 组合和布局分别来自不同的可信首方制品。它拥有 Pattern 展示档位而不拥有主题：首期 Collection 由 `workbench.config.collection.defaultDensity` / `allowedDensities` 治理 `compact`、`standard`、`comfortable`；颜色、字体、间距 token 与深浅主题仍只能由 `ui.render.adapter` 提供，详见 ADR-0084。当前 Resolver 已验证前四项；第五项是完成首方页面迁移后启用的门禁：
+`ui.workflow.workbench` 是 Platform Profile 中三个语义 Frontend 基础单例之一；另外两个是 `ui.render.adapter` 与已经内聚组合拓扑、Catalog 和布局 Library 的 `ui.structure.shell`。它拥有 Pattern 展示档位而不拥有主题：首期 Collection 由 `workbench.config.collection.defaultDensity` / `allowedDensities` 治理 `compact`、`standard`、`comfortable`；颜色、字体、间距 token 与深浅主题仍只能由 `ui.render.adapter` 提供，详见 ADR-0084。当前 Resolver 和构建系统共同执行以下约束：
 
 1. 恰好一个 Workbench，且其 `uiContract` 主版本与设计系统、功能插件相容；
 2. Workbench 只依赖 `@vastplan/ui-primitives` 和 `@vastplan/ui-contract` 的共享单例，不能带入第二套 UI 框架；
 3. Application Composition 不能选择、替换或绕过 Workbench；
 4. Workbench 故障和设计系统故障一样，进入 Portal Kernel 恢复路径，而不是让功能插件退回自行组合。
-5. 待启用：功能插件制品只能声明 `@vastplan/workbench-sdk` 为 UI SDK；构建门禁与 Catalog 将检查其 import 图，出现 `@vastplan/ui-primitives`、Arco/MUI 或未授权共享 UI 包即拒绝装配。现有首方页面迁移完成前不得提前打开该门禁。
+5. 功能插件制品必须使用 `@vastplan/workbench-sdk`；构建门禁与 Go 架构适应度测试拒绝 React、Arco/MUI、裸 `context.addPage` 和 `@vastplan/ui-primitives` 视觉导入。当前唯一例外是尚在该包中的非视觉 `PortalControlClient` 与 `Portal*` 数据契约。
 
-当前已是四个基础单例：设计系统、结构组合、结构布局和 Workbench。`CollectionWorkbench` 现已共享一套查询、筛选、选择、动作、取消和错误状态机，并提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。表单工作流已提供 page/Dialog/Drawer、分区/标签/步骤、1–4 列、有限条件 DSL、脏数据关闭保护、同步/异步/服务端字段错误、一次性提交和成功刷新。全局设置页是首个不处理凭证明文的真实 Form fixture；导入图门禁和其余首方页面迁移仍待完成。
+`CollectionWorkbench` 共享一套查询、筛选、选择、动作、取消和错误状态机，并提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。表单工作流已提供 page/Dialog/Drawer、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏数据关闭保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表。全局设置、凭证、数据库连接、制品仓库、Portal 治理与部署管理均已迁移为真实 fixture。
 
 ### 2.1 严格入口与受控 Pattern 演进
 
-每个页面必须通过 `workbench.definePage()` 提供 `WorkbenchPageDefinition`。定义可以引用 Collection、Record、Form、Action、Status 和后续已批准的 Pattern；它不接受任意 React `Component`、DOM 节点或基础组件实例。运行时函数仅限 Loader、ActionHandler、SubmitHandler 等数据/命令端口，不能直接构造视觉树。
+每个页面必须通过 `defineCollectionPage()` 或 `defineFormPage()` 提供 Workbench 定义。定义可以引用 Collection、Form、Overlay、Action、Status 和后续已批准的 Pattern；它不接受任意 React `Component`、DOM 节点或基础组件实例。运行时函数仅限 Loader、ActionHandler、SubmitHandler 等数据/命令端口，不能直接构造视觉树。
 
 这不是允许“自由 custom block”的例外。某个业务需要图编辑器、代码编辑器、GIS、时间轴或拓扑图时，先提出新的 Workbench Pattern：说明数据模型、选择/动作、焦点、错误、i18n、窄屏、性能和安全边界；由 foundation Workbench 同步实现 Arco/MUI 语义。V1 不加载独立 Pattern 插件，避免未经治理的业务模块重新取得底层 UI 能力；未来独立 Pattern 的可信来源与 SDK 必须另立 ADR。
 
@@ -136,6 +136,6 @@ Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为
 2. 已完成：`CollectionWorkbench` 的表格、数据概览、工具栏、筛选、分页、列偏好、行/批量操作；Portal revision 与制品仓库管理为已迁移 fixture。
 3. 已完成：Card cursor 模式、共享查询状态、稳定键去重、重复 cursor 防护、手动/视口增量加载，以及 Arco/MUI `DataCard` 语义组件。
 4. 已完成：`FormPresentation`、`FormWorkflow`、Page/Dialog/Drawer 表单，以及 Arco/MUI 的分区、标签、步骤、分栏和条件字段语义；全局设置是非敏感 fixture，凭证和数据库连接验证 `secretMaterial` 一次性秘密边界。
-5. 进行中：把其余首方功能插件一次性迁移到当前 4.x 契约，删除重复的筛选、提交和 Overlay 样板，并拒绝遗留的基础组件 import 或裸页面注册；通过 Arco/MUI fixture、键盘、窄屏、i18n、权限拒绝、Abort、脏数据和并发提交测试。
+5. 已完成：首方功能插件已迁移到当前 4.x 契约；Portal 治理按 Profile/Application/Binding/Activation 分页，部署管理复用动态 Form 和预览/审计 Overlay。生产构建与 `engineering/arch` 同时拒绝遗留基础组件 import、UI 框架 import 和裸页面注册。
 
-当前尚未完成的是 Portal 治理、部署管理两个复杂首方页面及全量导入门禁；在它们完成前，系统仍不能宣称所有功能页都已强制使用 Workbench。
+当前首方功能页已全部强制使用 Workbench。后续新增业务呈现若不适合 Collection/Form/Overlay，必须先扩展 Foundation Workbench Pattern，不能在功能插件中恢复任意组件逃生口。

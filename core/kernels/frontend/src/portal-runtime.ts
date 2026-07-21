@@ -298,7 +298,8 @@ export class PortalRuntime {
         addCollectionPage: (page) => {
           if (!page.id || !page.collection.id || !["table", "cards"].includes(page.collection.view) || !["page", "cursor"].includes(page.collection.query.mode) ||
               (page.collection.view === "table" && page.collection.columns.length === 0) || (page.collection.view === "cards" && page.collection.card === undefined) || typeof page.load !== "function" ||
-              (page.loadSummary !== undefined && typeof page.loadSummary !== "function") || (page.runAction !== undefined && typeof page.runAction !== "function")) {
+              (page.loadSummary !== undefined && typeof page.loadSummary !== "function") || (page.runAction !== undefined && typeof page.runAction !== "function") ||
+              (page.overlays ?? []).some((overlay) => !overlay.id || !["dialog", "drawer"].includes(overlay.surface) || typeof overlay.load !== "function")) {
             throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${page.id}`);
           }
           const Page = () => createElement(workbench.CollectionPage, { page, preferenceScope: `${portal.tenantId}/${portal.id}`, presentation: portal.workbench.config });

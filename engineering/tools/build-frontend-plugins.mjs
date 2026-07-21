@@ -22,6 +22,7 @@ const plugins = await discoverFrontendPlugins();
 
 const modules = [];
 for (const { id, entry, source, deferred } of plugins) {
+  await enforceFunctionalPluginBoundary(id, dirname(dirname(source)));
   const outfile = outputRoot === undefined
     ? resolve("extensions/plugins", id, entry)
     : resolve(outputRoot, `${id}.js`);
@@ -42,6 +43,47 @@ for (const { id, entry, source, deferred } of plugins) {
     const bytes = await readFile(outfile);
     modules.push({ id, entry, file: outfile, sha256: createHash("sha256").update(bytes).digest("hex"), deferred });
   }
+}
+
+/**
+ * Functional UI plugins declare Workbench pages; they do not own a component
+ * tree. Foundation frontend plugins remain the only layer allowed to import a
+ * rendering framework or the primitive UI surface.
+ */
+async function enforceFunctionalPluginBoundary(id, frontendRoot) {
+  if (id.startsWith("cn.vastplan.foundation.frontend.")) return;
+  const sourceRoot = resolve(frontendRoot, "src");
+  const files = await sourceFiles(sourceRoot);
+  let importsWorkbench = false;
+  for (const file of files) {
+    const content = await readFile(file, "utf8");
+    importsWorkbench ||= /from\s+["']@vastplan\/workbench-sdk["']/.test(content);
+    if (/from\s+["'](?:react|react-dom(?:\/[^"']*)?|@arco-design\/[^"']+|@mui\/[^"']+)["']/.test(content)) {
+      throw new Error(`${id}: 功能插件不得直接导入 React 或 UI 框架 (${file})`);
+    }
+    if (/\bcontext\.addPage\s*\(/.test(content)) {
+      throw new Error(`${id}: 功能插件必须通过 Workbench 注册页面，禁止 context.addPage (${file})`);
+    }
+    for (const match of content.matchAll(/import\s+(?:type\s+)?\{([\s\S]*?)\}\s+from\s+["']@vastplan\/ui-primitives["']/g)) {
+      const names = match[1].split(",").map((entry) => entry.trim().replace(/^type\s+/, "").split(/\s+as\s+/)[0]).filter(Boolean);
+      const forbidden = names.filter((name) => !name.startsWith("Portal"));
+      if (forbidden.length > 0) throw new Error(`${id}: 功能插件只能从 ui-primitives 使用非视觉 Portal 客户端契约，禁止 ${forbidden.join(", ")} (${file})`);
+    }
+    if (/from\s+["']@vastplan\/ui-primitives["']/.test(content) && !/import\s+(?:type\s+)?\{/.test(content)) {
+      throw new Error(`${id}: 功能插件不得整体导入 ui-primitives (${file})`);
+    }
+  }
+  if (!importsWorkbench) throw new Error(`${id}: 功能前端插件必须使用 @vastplan/workbench-sdk`);
+}
+
+async function sourceFiles(root) {
+  const result = [];
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const path = resolve(root, entry.name);
+    if (entry.isDirectory()) result.push(...await sourceFiles(path));
+    else if (/\.(?:[cm]?[jt]sx?)$/.test(entry.name) && !/\.test\.[cm]?[jt]sx?$/.test(entry.name) && !/\.d\.ts$/.test(entry.name)) result.push(path);
+  }
+  return result;
 }
 
 async function discoverFrontendPlugins() {

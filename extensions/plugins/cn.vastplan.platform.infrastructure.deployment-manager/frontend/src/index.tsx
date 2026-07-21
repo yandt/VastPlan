@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   createBrowserPlatformAdminClient,
   type BackendApplicationComposition,
@@ -8,9 +7,19 @@ import {
   type PlatformAdminClient,
   type ServiceAuditEvent,
   type ServiceRevision,
-  type ServiceRevisionStatus,
 } from "@vastplan/platform-admin";
-import { jsonSchemaDialect, managementServicesFor, message as localizedMessage, usePortalI18n, usePortalMessages, usePortalUI, type FormSchema, type FrontendPluginContext, type StatusTone } from "@vastplan/ui-primitives";
+import {
+  defineCollectionPage,
+  jsonSchemaDialect,
+  managementServicesFor,
+  message as localizedMessage,
+  type CollectionPageDefinition,
+  type CollectionQuery,
+  type FormSchema,
+  type JSONValue,
+  type WorkbenchFormDefinition,
+  type WorkbenchFrontendPluginContext,
+} from "@vastplan/workbench-sdk";
 
 const namespace = "cn.vastplan.platform.infrastructure.deployment-manager";
 
@@ -119,109 +128,65 @@ function editorValue(revision: ServiceRevision): EditorValue {
   })) };
 }
 
-const tones: Record<ServiceRevisionStatus, StatusTone> = { Draft: "neutral", PendingApproval: "warning", Approved: "info", Publishing: "warning", Published: "success" };
+type DeploymentRow = ServiceRevision & Record<string, unknown>;
 
-export function DeploymentManagerView({ client }: { client: PlatformAdminClient }) {
-  const ui = usePortalUI();
-  const i18n = usePortalI18n();
-  const t = usePortalMessages(namespace);
-  const [targets, setTargets] = useState<DeploymentTarget[]>([]);
-  const [revisions, setRevisions] = useState<ServiceRevision[]>([]);
-  const [selectedID, setSelectedID] = useState<number>();
-  const [value, setValue] = useState<EditorValue>({ units: [] });
-  const [creating, setCreating] = useState(true);
-  const [valid, setValid] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const [audit, setAudit] = useState<ServiceAuditEvent[]>([]);
-  const [auditOpen, setAuditOpen] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const selected = revisions.find((item) => item.id === selectedID);
-  const schema = useMemo(() => serviceCompositionSchema(targets), [targets]);
-
-  const select = useCallback((revision: ServiceRevision) => { setSelectedID(revision.id); setCreating(false); setValue(editorValue(revision)); }, []);
-  const load = useCallback(async (preferID?: number) => {
-    setLoading(true);
-    try {
-      const [nextTargets, nextRevisions] = await Promise.all([client.listDeploymentTargets(), client.listServiceRevisions()]);
-      setTargets(nextTargets); setRevisions(nextRevisions);
-      const preferred = nextRevisions.find((item) => item.id === (preferID ?? selectedID)) ?? nextRevisions[0];
-      if (!creating && preferred !== undefined) select(preferred);
-      if (creating && typeof value.deployment !== "string" && nextTargets[0] !== undefined) setValue((current) => ({ ...current, deployment: nextTargets[0]?.deploymentName }));
-      setError(undefined);
-    } catch (cause) { setError(errorMessage(cause,t("error.request","服务编排请求失败"))); } finally { setLoading(false); }
-  }, [client, creating, select, selectedID, value.deployment]);
-  useEffect(() => { void load(); }, [client]);
-
-  const mutate = async (title: string, action: () => Promise<ServiceRevision>, confirmation?: string) => {
-    if (confirmation !== undefined && !await ui.confirm({ title, content: confirmation })) return;
-    setBusy(true);
-    try { const changed = await action(); setCreating(false); setSelectedID(changed.id); await load(changed.id); ui.notify({ title, kind: "success" }); }
-    catch (cause) { const text = errorMessage(cause,t("error.request","服务编排请求失败")); setError(text); ui.notify({ title: t("notice.failed","{title}失败",{title}), content: text, kind: "error" }); }
-    finally { setBusy(false); }
-  };
-  const startNew = () => { setCreating(true); setSelectedID(undefined); setValue({ deployment: targets[0]?.deploymentName, units: [] }); };
-  const save = () => mutate(creating ? t("notice.created","草稿已创建") : t("notice.saved","草稿已保存"), () => {
-    const composition = buildBackendComposition(value, selected?.composition.revision ?? 1);
-    return creating || selected === undefined ? client.createServiceDraft(composition) : client.updateServiceDraft(selected.id, composition);
+export function createDeploymentPage(client: PlatformAdminClient, serviceID: string, path: string, title: ReturnType<typeof localizedMessage>): CollectionPageDefinition<DeploymentRow> {
+  const form = (id: "create" | "edit"): WorkbenchFormDefinition<DeploymentRow> => ({
+    id,
+    schema: serviceCompositionSchema([]),
+    presentation: { layout: "vertical", navigation: "sections", sections: [{ id: "composition", title: localizedMessage(namespace,"panel.composition","应用服务组合"), columns: 1, fields: ["/deployment", "/units"] }], fields: [{ pointer: "/deployment" }, { pointer: "/units" }] },
+    workflow: { surface: "drawer", size: "lg", title: localizedMessage(namespace, id === "create" ? "panel.new" : "panel.edit", id === "create" ? "新建服务草稿" : "编辑服务草稿"), submitLabel: localizedMessage(namespace, id === "create" ? "action.create" : "action.save", id === "create" ? "创建草稿" : "保存草稿"), success: { notify: localizedMessage(namespace, id === "create" ? "notice.created" : "notice.saved", id === "create" ? "草稿已创建" : "草稿已保存"), refreshCollection: true, close: true } },
+    async prepare(_selected, signal) {
+      const targets = await client.listDeploymentTargets();
+      if (signal.aborted) return {};
+      return { schema: serviceCompositionSchema(targets), ...(id === "create" ? { initialValue: { deployment: targets[0]?.deploymentName, units: [] } } : {}) };
+    },
+    ...(id === "edit" ? { async load(selected: readonly DeploymentRow[]) { return selected[0] === undefined ? { units: [] } : editorValue(selected[0]); } } : {}),
+    async submit({ value, selected }) {
+      const composition = buildBackendComposition(value, selected[0]?.composition.revision ?? 1);
+      if (id === "create") await client.createServiceDraft(composition);
+      else if (selected[0] !== undefined) await client.updateServiceDraft(selected[0].id, composition);
+    },
   });
-  const openAudit = async () => { if (selected === undefined) return; setAudit(await client.listServiceRevisionAudit(selected.id)); setAuditOpen(true); };
-
-  return <ui.Stack gap="md"><ui.Stack direction="row" gap="sm" justify="end">
-    <ui.Button kind="secondary" onClick={() => void load()} loading={loading}>{t("action.refresh","刷新")}</ui.Button><ui.Button kind="primary" onClick={startNew}>{t("action.new","新建服务草稿")}</ui.Button>
-  </ui.Stack>
-    {error === undefined ? null : <ui.ErrorState title={error} retry={() => void load()} />}
-    {targets.length === 0 && !loading ? <ui.EmptyState title={t("empty.targets","没有平台预授权的部署目标")} description={t("empty.targetsDescription","请先由平台运维发布 Backend Platform Catalog 绑定。")} /> : null}
-    <ui.Grid columns={{ xs: 1, lg: 2 }} gap="lg">
-      <ui.GridItem><ui.Panel title={t("panel.revisions","服务组合 Revisions")}><ui.Table loading={loading} rowKey="id" rows={revisions as unknown as Array<Record<string, unknown>>} empty={<ui.EmptyState title={t("empty.revisions","尚无服务组合")} />} columns={[
-        { key: "id", title: "Revision", render: (_cell, row) => <ui.Button kind="text" onClick={() => select(row as unknown as ServiceRevision)}>#{String(row.id)}</ui.Button> },
-        { key: "deployment", title: t("column.deployment","部署") },
-        { key: "status", title: t("column.status","状态"), render: (cell, row) => <ui.Status tone={tones[String(cell) as ServiceRevisionStatus]}>{String(cell)}{row.active === true ? t("status.activeSuffix"," · 活动") : ""}</ui.Status> },
-        { key: "updatedAt", title: t("column.updated","更新时间"), render: (cell) => formatTime(cell,i18n.formatDate) },
-      ]} /></ui.Panel></ui.GridItem>
-      <ui.GridItem><ui.Panel title={creating ? t("panel.new","新建服务草稿") : `Revision #${selected?.id ?? "-"}`}>
-        {selected === undefined ? null : <><ui.Descriptions columns={2} items={[
-          { id: "status", label: t("column.status","状态"), value: <ui.Status tone={tones[selected.status]}>{selected.status}{selected.active ? t("status.activeSuffix"," · 活动") : ""}</ui.Status> },
-          { id: "deployment", label: t("column.deployment","部署"), value: selected.deployment }, { id: "kv", label: t("field.kv","控制面 KV revision"), value: selected.kvRevision ?? "-" },
-          { id: "profile", label: t("field.profile","平台基线"), value: targets.find((target) => target.deploymentName === selected.deployment)?.platformProfile.id ?? "-" },
-          { id: "submitted", label: t("field.submitted","提交人"), value: selected.submittedBy ?? "-" }, { id: "approved", label: t("field.approved","审批人"), value: selected.approvedBy ?? "-" },
-        ]} /><ui.Divider /></>}
-        <ui.FormRenderer schema={schema} value={value} onChange={setValue} readOnly={!creating && selected?.status !== "Draft"} submitting={busy} onValidationChange={(result) => setValid(result.valid)} />
-        <ui.Stack direction="row" gap="sm" wrap>
-          {creating || selected?.status === "Draft" ? <ui.Button kind="primary" disabled={!valid || targets.length === 0} loading={busy} onClick={() => void save()}>{creating ? t("action.create","创建草稿") : t("action.save","保存草稿")}</ui.Button> : null}
-          {selected?.status === "Draft" ? <ui.Button onClick={() => void mutate(t("notice.submitted","已提交审批"), () => client.submitServiceDraft(selected.id), t("confirm.submit","提交后将重新执行可信解析，且不能继续编辑。"))}>{t("action.submit","提交审批")}</ui.Button> : null}
-          {selected?.status === "PendingApproval" ? <ui.Button kind="primary" onClick={() => void mutate(t("notice.approved","已批准"), () => client.approveServiceRevision(selected.id), t("confirm.approve","审批人与提交人必须不同。"))}>{t("action.approve","批准")}</ui.Button> : null}
-          {selected?.status === "Approved" || selected?.status === "Publishing" ? <ui.Button kind="primary" onClick={() => void mutate(t("notice.published","已发布"), () => client.publishServiceRevision(selected.id), t("confirm.publish","发布后 Controller 会把副本调度到符合条件的 Node Agent。"))}>{t("action.publish","发布")}</ui.Button> : null}
-          {selected?.status === "Published" && !selected.active ? <ui.Button kind="danger" onClick={() => void mutate(t("notice.rolledBack","已回滚"), () => client.rollbackServiceRevision(selected.id), t("confirm.rollback","回滚会用历史应用组合创建并发布一个新的单调 revision。"))}>{t("action.rollback","回滚到此版本")}</ui.Button> : null}
-          {selected === undefined ? null : <ui.Button kind="secondary" onClick={() => setPreviewOpen(true)}>{t("action.preview","最终部署预览")}</ui.Button>}
-          {selected === undefined ? null : <ui.Button kind="secondary" onClick={() => void openAudit()}>{t("action.audit","审计记录")}</ui.Button>}
-        </ui.Stack>
-      </ui.Panel></ui.GridItem>
-    </ui.Grid>
-    <ui.Dialog open={previewOpen} title={t("dialog.preview","内核解析后的 Deployment v2")} width="lg" onClose={() => setPreviewOpen(false)}><pre style={{ overflow: "auto", maxHeight: 560 }}>{JSON.stringify(selected?.preview ?? {}, null, 2)}</pre></ui.Dialog>
-    <ui.Drawer open={auditOpen} title={t("dialog.audit","服务组合审计")} width="lg" onClose={() => setAuditOpen(false)}><ui.Table rowKey="id" rows={audit as unknown as Array<Record<string, unknown>>} empty={<ui.EmptyState title={t("empty.audit","尚无审计记录")} />} columns={[
-      { key: "at", title: t("column.time","时间"), render: (cell) => formatTime(cell,i18n.formatDate) }, { key: "action", title: t("column.action","动作") }, { key: "actorId", title: t("column.actor","操作者") },
-    ]} /></ui.Drawer>
-  </ui.Stack>;
+  const statusLabels = { Draft: localizedMessage(namespace,"status.draft","草稿"), PendingApproval: localizedMessage(namespace,"status.pendingApproval","待审批"), Approved: localizedMessage(namespace,"status.approved","已批准"), Publishing: localizedMessage(namespace,"status.publishing","发布中"), Published: localizedMessage(namespace,"status.published","已发布") };
+  return defineCollectionPage<DeploymentRow>({
+    id: `platform.deployment.${serviceID}`, path, title, description: localizedMessage(namespace,"page.description","在线组合应用服务、实例与调度并发布到 Node Agent 集群"), navigation: { id: `platform.deployment.${serviceID}`, label: title, zone: "settings", order: 60 },
+    collection: { id: `platform.deployment.${serviceID}`, title, view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
+      filters: [{ id: "deployment", label: localizedMessage(namespace,"column.deployment","部署"), kind: "text" }, { id: "status", label: localizedMessage(namespace,"column.status","状态"), kind: "select", options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })) }],
+      columns: [{ key: "id", label: "Revision", format: "number", defaultVisible: true, minWidth: 90 }, { key: "deployment", label: localizedMessage(namespace,"column.deployment","部署"), defaultVisible: true, minWidth: 180 }, { key: "status", label: localizedMessage(namespace,"column.status","状态"), format: "status", valueLabels: statusLabels, statusTones: { Draft: "neutral", PendingApproval: "warning", Approved: "info", Publishing: "warning", Published: "success" }, defaultVisible: true, minWidth: 110 }, { key: "active", label: localizedMessage(namespace,"column.active","活动"), format: "boolean", defaultVisible: true, minWidth: 80 }, { key: "updatedAt", label: localizedMessage(namespace,"column.updated","更新时间"), format: "datetime", defaultVisible: true, minWidth: 180 }], selection: "single",
+      actions: [
+        { id: "create", label: localizedMessage(namespace,"action.new","新建服务草稿"), placement: "page.primary", tone: "primary", form: "create" },
+        { id: "edit", label: localizedMessage(namespace,"action.edit","编辑"), placement: "page.secondary", requiresSelection: true, form: "edit", visibleWhen: { pointer: "/status", equals: "Draft" } },
+        { id: "submit", label: localizedMessage(namespace,"action.submit","提交审批"), placement: "page.secondary", requiresSelection: true, confirm: localizedMessage(namespace,"confirm.submit","提交后将重新执行可信解析，且不能继续编辑。"), visibleWhen: { pointer: "/status", equals: "Draft" } },
+        { id: "approve", label: localizedMessage(namespace,"action.approve","批准"), placement: "page.secondary", requiresSelection: true, tone: "primary", confirm: localizedMessage(namespace,"confirm.approve","审批人与提交人必须不同。"), visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
+        { id: "publish", label: localizedMessage(namespace,"action.publish","发布"), placement: "page.secondary", requiresSelection: true, tone: "primary", confirm: localizedMessage(namespace,"confirm.publish","发布后 Controller 会把副本调度到符合条件的 Node Agent。"), visibleWhen: { pointer: "/status", in: ["Approved", "Publishing"] } },
+        { id: "rollback", label: localizedMessage(namespace,"action.rollback","回滚到此版本"), placement: "page.secondary", requiresSelection: true, tone: "danger", confirm: localizedMessage(namespace,"confirm.rollback","回滚会用历史应用组合创建并发布一个新的单调 revision。"), visibleWhen: { all: [{ pointer: "/status", equals: "Published" }, { pointer: "/active", equals: false }] } },
+        { id: "preview", label: localizedMessage(namespace,"action.preview","最终部署预览"), placement: "page.secondary", requiresSelection: true, overlay: "preview" },
+        { id: "audit", label: localizedMessage(namespace,"action.audit","审计记录"), placement: "page.secondary", requiresSelection: true, overlay: "audit" },
+      ] },
+    forms: [form("create"), form("edit")],
+    overlays: [
+      { id: "preview", surface: "dialog", size: "lg", title: localizedMessage(namespace,"dialog.preview","内核解析后的 Deployment v2"), async load(selected) { return { kind: "json", documents: [{ value: (selected[0]?.preview ?? {}) as JSONValue }] }; } },
+      { id: "audit", surface: "drawer", size: "lg", title: localizedMessage(namespace,"dialog.audit","服务组合审计"), async load(selected) { const rows = selected[0] === undefined ? [] : await client.listServiceRevisionAudit(selected[0].id); return { kind: "table", rowKey: "id", rows: rows as Array<ServiceAuditEvent & Record<string, unknown>>, columns: [{ key: "at", label: localizedMessage(namespace,"column.time","时间"), format: "datetime" }, { key: "action", label: localizedMessage(namespace,"column.action","动作") }, { key: "actorId", label: localizedMessage(namespace,"column.actor","操作者") }] }; } },
+    ],
+    async load(query: CollectionQuery, signal) { const deployment = typeof query.filters.deployment === "string" ? query.filters.deployment.trim().toLowerCase() : ""; const status = typeof query.filters.status === "string" ? query.filters.status : ""; const rows = (await client.listServiceRevisions()).filter((item) => (deployment === "" || item.deployment.toLowerCase().includes(deployment)) && (status === "" || item.status === status)) as DeploymentRow[]; if (signal.aborted) return { items: [], total: 0 }; const start = Math.max(0, (query.page - 1) * query.pageSize); return { items: rows.slice(start, start + query.pageSize), total: rows.length }; },
+    async runAction({ action, selected }) { const item = selected[0]; if (item === undefined) return; if (action.id === "submit") await client.submitServiceDraft(item.id); else if (action.id === "approve") await client.approveServiceRevision(item.id); else if (action.id === "publish") await client.publishServiceRevision(item.id); else if (action.id === "rollback") await client.rollbackServiceRevision(item.id); return { notify: { title: action.label, kind: "success" } }; },
+  });
 }
 
 function pluginRefs(value: unknown): BackendPluginRef[] { return Array.isArray(value) ? value.flatMap((item) => typeof item === "object" && item !== null && typeof (item as Record<string, unknown>).id === "string" && typeof (item as Record<string, unknown>).version === "string" ? [{ id: String((item as Record<string, unknown>).id), version: String((item as Record<string, unknown>).version), ...(text((item as Record<string, unknown>).channel) === undefined ? {} : { channel: text((item as Record<string, unknown>).channel) }) }] : []) : []; }
 function text(value: unknown): string | undefined { return typeof value === "string" && value !== "" ? value : undefined; }
 function strings(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item !== "") : []; }
 function record(value: unknown): Record<string, unknown> | undefined { return typeof value === "object" && value !== null && !Array.isArray(value) && Object.keys(value).length > 0 ? JSON.parse(JSON.stringify(value)) as Record<string, unknown> : undefined; }
-function formatTime(value: unknown, format: (value:string)=>string): string { if (typeof value !== "string") return "-"; const parsed = new Date(value); return Number.isNaN(parsed.valueOf()) ? value : format(value); }
-function errorMessage(cause: unknown, fallback: string): string { return cause instanceof Error ? cause.message : fallback; }
-
-export default {
-  register(context: FrontendPluginContext) {
+const deploymentManagerPlugin = {
+  register(context: WorkbenchFrontendPluginContext) {
     const services = managementServicesFor(context.portal, "platform.deployment");
     if (services.length === 0) throw new Error("Portal 未绑定 platform.deployment 服务");
     for (const service of services) {
       const client = createBrowserPlatformAdminClient(context.portal.id, service.id);
       const suffix = services.length === 1 ? "" : `/${service.id}`;
       const label = context.i18n.message(services.length === 1 ? "page.title" : "page.titleService", services.length === 1 ? "服务与节点部署" : "服务与节点部署 · {service}", { service: service.label ?? service.id });
-      context.addPage({ id: `platform.deployment.${service.id}`, path: `/settings/deployment${suffix}`, title: label, description: context.i18n.message("page.description","在线组合应用服务、实例与调度并发布到 Node Agent 集群"), navigation: { id: `platform.deployment.${service.id}`, label, zone: "settings", order: 60 }, slots: [{ id: "body", slot: "page.body.main", component: () => <DeploymentManagerView client={client} /> }] });
+      context.addCollectionPage(createDeploymentPage(client, service.id, `/settings/deployment${suffix}`, label));
     }
   },
   localization:{defaultLocale:"zh-CN",messages:{
@@ -229,3 +194,14 @@ export default {
     "en-US":{"form.deployment":"Deployment target","form.units":"Application services","form.serviceClass":"Service class","form.serviceId":"Service ID","form.logicalService":"Logical service","form.plugins":"Application plugins","form.pluginId":"Plugin ID","form.version":"Exact version","form.channel":"Channel","form.stable":"Stable","form.preview":"Preview","form.replicas":"Replicas","form.instancePolicy":"Instance policy","form.activeActive":"Active-active","form.leader":"Leader","form.partitioned":"Partitioned","form.stateModel":"State model","form.externalShared":"External shared state","form.leaderOwned":"Leader-owned state","form.partitionOwned":"Partition-owned state","form.localEphemeral":"Local ephemeral state","form.routing":"Routing","form.queue":"Queue","form.leaderRoute":"Leader","form.partitionRoute":"Partition","form.direct":"Direct","form.routingDomain":"Routing domain","form.partitionKeys":"Partition keys","form.dependsOn":"Service dependencies","form.nodeSelector":"Node selector","form.config":"Non-sensitive config","help.deployment":"The target and Platform Profile are pre-authorized by platform operations and cannot be changed here.","help.units":"Only application plugins are composed here; the kernel injects foundation plugins and validates provenance, dependency DAG, instance policy, and scheduling.","help.config":"Sensitive values must use credential references and cannot be written to configuration.","action.refresh":"Refresh","action.new":"New service draft","empty.targets":"No pre-authorized deployment targets","empty.targetsDescription":"Platform operations must publish a Backend Platform Catalog binding first.","panel.revisions":"Service composition revisions","empty.revisions":"No service compositions","column.deployment":"Deployment","column.status":"Status","status.activeSuffix":" · Active","column.updated":"Updated","panel.new":"New service draft","action.create":"Create draft","action.save":"Save draft","field.kv":"Control-plane KV revision","field.profile":"Platform baseline","field.submitted":"Submitted by","field.approved":"Approved by","notice.created":"Draft created","notice.saved":"Draft saved","notice.submitted":"Submitted for approval","confirm.submit":"Trusted resolution runs again after submission and the draft can no longer be edited.","action.submit":"Submit","notice.approved":"Approved","confirm.approve":"The approver must be different from the submitter.","action.approve":"Approve","notice.published":"Published","confirm.publish":"After publishing, the Controller schedules replicas onto eligible Node Agents.","action.publish":"Publish","notice.rolledBack":"Rolled back","confirm.rollback":"Rollback creates and publishes a new monotonic revision from the historical application composition.","action.rollback":"Rollback to this version","notice.failed":"{title} failed","error.request":"Service composition request failed","action.preview":"Final deployment preview","action.audit":"Audit log","dialog.preview":"Kernel-resolved Deployment v2","dialog.audit":"Service composition audit","empty.audit":"No audit records","column.time":"Time","column.action":"Action","column.actor":"Actor","page.title":"Services and node deployment","page.titleService":"Services and node deployment · {service}","page.description":"Compose application services, replicas, and scheduling, then publish to the Node Agent cluster"}
   }},
 };
+
+Object.assign(deploymentManagerPlugin.localization.messages["zh-CN"], {
+  "panel.composition": "应用服务组合", "panel.edit": "编辑服务草稿", "action.edit": "编辑", "column.active": "活动",
+  "status.draft": "草稿", "status.pendingApproval": "待审批", "status.approved": "已批准", "status.publishing": "发布中", "status.published": "已发布",
+});
+Object.assign(deploymentManagerPlugin.localization.messages["en-US"], {
+  "panel.composition": "Application service composition", "panel.edit": "Edit service draft", "action.edit": "Edit", "column.active": "Active",
+  "status.draft": "Draft", "status.pendingApproval": "Pending approval", "status.approved": "Approved", "status.publishing": "Publishing", "status.published": "Published",
+});
+
+export default deploymentManagerPlugin;

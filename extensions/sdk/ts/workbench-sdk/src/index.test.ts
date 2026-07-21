@@ -64,4 +64,12 @@ describe("defineCollectionPage", () => {
     expect(() => defineCollectionPage(definition)).not.toThrow();
     expect(() => defineCollectionPage({ ...definition, forms: [{ ...definition.forms[0]!, initialValue: { value: "must-not-be-retained" } }] })).toThrow("initialValue");
   });
+
+  it("rejects actions that escape the governed overlay registry", () => {
+    expect(() => defineCollectionPage({
+      id: "revisions", path: "/revisions", title: "Revisions",
+      collection: { id: "revisions", title: "Revisions", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [{ key: "id", label: "ID" }], actions: [{ id: "audit", label: "Audit", placement: "record.row", overlay: "audit" }] },
+      async load() { return { items: [], total: 0 }; },
+    })).toThrow("未声明的 Overlay");
+  });
 });

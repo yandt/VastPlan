@@ -1,13 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  jsonSchemaDialect,
-  message,
   PortalControlError,
-  usePortalI18n,
-  usePortalMessages,
-  usePortalUI,
-  type FormSchema,
-  type JSONValue,
   type PortalActivation,
   type PortalBindingRevision,
   type PortalControlClient,
@@ -15,330 +7,137 @@ import {
   type PortalManagementBinding,
   type PortalPlatformProfile,
   type PortalProfileRevision,
-  type PortalRevisionStatus,
-  type StatusTone,
 } from "@vastplan/ui-primitives";
+import {
+  defineCollectionPage,
+  jsonSchemaDialect,
+  message,
+  type CollectionPageDefinition,
+  type CollectionQuery,
+  type FormSchema,
+  type JSONValue,
+  type WorkbenchFormDefinition,
+} from "@vastplan/workbench-sdk";
 
 const namespace = "cn.vastplan.platform.configuration.portal-composer";
+type ProfileRow = PortalProfileRevision & Record<string, unknown>;
+type BindingRow = PortalBindingRevision & Record<string, unknown>;
+type ActivationRow = PortalActivation & Record<string, unknown>;
+
+const revisionStatusLabels = {
+  Draft: message(namespace, "status.draft", "草稿"),
+  PendingApproval: message(namespace, "status.pendingApproval", "待审批"),
+  Approved: message(namespace, "status.approved", "已批准"),
+  Published: message(namespace, "status.published", "已发布"),
+};
+const revisionStatusTones = { Draft: "neutral", PendingApproval: "warning", Approved: "info", Published: "success" } as const;
+const revisionActions = (prefix: string) => [
+  { id: `${prefix}.edit`, label: message(namespace, "action.edit", "编辑草稿"), placement: "page.secondary" as const, requiresSelection: true, form: "edit", visibleWhen: { pointer: "/status", equals: "Draft" } },
+  { id: `${prefix}.submit`, label: message(namespace, "governance.action.submit", "提交审批"), placement: "page.secondary" as const, requiresSelection: true, confirm: message(namespace, "confirm.submit", "提交后不能继续编辑，需要由另一位审批人处理。"), visibleWhen: { pointer: "/status", equals: "Draft" } },
+  { id: `${prefix}.approve`, label: message(namespace, "governance.action.approve", "批准"), placement: "page.secondary" as const, tone: "primary" as const, requiresSelection: true, visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
+  { id: `${prefix}.publish`, label: message(namespace, "governance.action.publishInput", "发布为可选输入"), placement: "page.secondary" as const, tone: "primary" as const, requiresSelection: true, confirm: message(namespace, "confirm.inputPublish", "发布只会使该版本可被 Activation 引用，不会直接改变线上 Portal。"), visibleWhen: { pointer: "/status", equals: "Approved" } },
+  { id: `${prefix}.preview`, label: message(namespace, "action.preview", "查看内容"), placement: "page.secondary" as const, requiresSelection: true, overlay: "preview" },
+];
 
 export const governanceMessages = {
   "zh-CN": {
-    "governance.workspace.profiles": "Platform Profiles", "governance.workspace.portals": "Portals",
-    "governance.tab.activations": "Activations", "governance.tab.applications": "Applications", "governance.tab.bindings": "Bindings",
-    "governance.action.newFromSelected": "基于所选 {resource} 新建版本", "governance.action.createDraft": "创建草稿", "governance.action.saveDraft": "保存草稿",
-    "governance.action.submit": "提交审批", "governance.action.approve": "批准", "governance.action.publishInput": "发布为可选输入", "governance.action.activate": "校验并激活", "governance.action.rollback": "回滚到此版本",
-    "governance.panel.profileRevisions": "Profile revisions", "governance.panel.bindingRevisions": "Binding revisions", "governance.panel.currentActivation": "当前线上 Activation", "governance.panel.newActivation": "创建 Activation", "governance.panel.activationHistory": "不可变 Activation 历史",
-    "governance.empty.profiles": "尚无 Platform Profile", "governance.empty.profileBase": "请选择一个 Profile 作为版本基线", "governance.empty.bindings": "尚无 Portal Binding", "governance.empty.bindingBase": "请选择一个 Binding 作为版本基线", "governance.empty.activation": "尚无 Activation", "governance.empty.current": "尚未激活 Portal",
-    "governance.column.revision": "Revision", "governance.column.profile": "Profile", "governance.column.portal": "Portal", "governance.column.status": "状态", "governance.column.activation": "Activation", "governance.column.time": "时间", "governance.column.action": "操作", "governance.column.inputs": "输入", "governance.column.references": "制品引用",
-    "governance.status.referencePending": "引用同步中", "governance.status.referenceSynced": "已保护",
-    "governance.notice.profilePublished": "Profile 已发布，尚未影响任何 Portal；必须创建 Activation 才会生效。", "governance.notice.bindingPublished": "Binding 已发布，只有被 Activation 引用后才影响线上 Portal。",
-    "governance.notice.saved": "治理资源已保存", "governance.notice.transitioned": "治理状态已更新", "governance.notice.activated": "Portal 已激活", "governance.notice.rolledBack": "Portal 已回滚", "governance.notice.failed": "治理操作失败",
-    "governance.error.load": "治理数据加载失败", "governance.error.activationFailed": "Activation 校验失败：{message}",
-    "notice.inputPublished": "Application 已发布为可选输入", "confirm.inputPublish": "发布仅使该 Application 可被 Activation 引用，不会直接改变线上 Portal。", "action.publishInput": "发布为可选输入", "diff.active": "无其他已发布输入", "diff.activeRevision": "已发布输入 #{id}",
-    "governance.form.profileId": "Profile ID", "governance.form.renderer": "默认 UI 框架", "governance.form.allowedRenderers": "允许的 UI 框架", "governance.form.userRenderer": "允许用户切换 UI 框架", "governance.form.layout": "布局插件", "governance.form.bodyWidth": "页面正文宽度", "governance.form.navigationGroups": "导航分组", "governance.form.portalId": "Portal ID", "governance.form.publishedProfile": "已发布 Profile", "governance.form.services": "管理服务绑定", "governance.form.publishedApplication": "已发布 Application", "governance.form.publishedBinding": "已发布 Binding", "governance.form.expectedActivation": "期望当前 Activation", "governance.form.reason": "变更说明",
-    "governance.option.arco": "Arco Design", "governance.option.mui": "Material UI", "governance.option.standardLayout": "标准侧栏布局", "governance.option.topLayout": "顶部导航布局", "governance.option.fluid": "自适应", "governance.option.contained": "最大 1280px",
-    "page.title.v2": "Portal 管理中心", "page.description.v2": "治理 Platform Profiles、Portals 与不可变 Activation", "page.navigation.v2": "Portal 管理",
+    "page.profiles.title": "Portal 平台基线", "page.profiles.description": "治理 UI 框架、Shell 模板和导航基线", "page.profiles.navigation": "Portal 平台基线",
+    "page.bindings.title": "Portal 服务绑定", "page.bindings.description": "将 Portal 绑定到已发布平台基线和管理服务", "page.bindings.navigation": "Portal 服务绑定",
+    "page.activations.title": "Portal 上线记录", "page.activations.description": "以不可变 Activation 组合并切换线上 Portal", "page.activations.navigation": "Portal 上线",
+    "governance.action.newFromSelected": "从所选版本新建", "governance.action.submit": "提交审批", "governance.action.approve": "批准", "governance.action.publishInput": "发布为可选输入", "governance.action.activate": "校验并激活", "governance.action.rollback": "回滚到此版本",
+    "governance.form.profileId": "Profile ID", "governance.form.renderer": "默认 UI 框架", "governance.form.allowedRenderers": "允许的 UI 框架", "governance.form.userRenderer": "允许用户切换 UI 框架", "governance.form.layout": "默认 Shell 模板", "governance.form.bodyWidth": "页面正文宽度", "governance.form.navigationGroups": "导航分组", "governance.form.portalId": "Portal ID", "governance.form.publishedProfile": "已发布 Profile", "governance.form.services": "管理服务绑定", "governance.form.publishedApplication": "已发布 Application", "governance.form.publishedBinding": "已发布 Binding", "governance.form.expectedActivation": "期望当前 Activation", "governance.form.reason": "变更说明",
+    "governance.option.standardLayout": "标准侧栏布局", "governance.option.topLayout": "顶部导航布局", "governance.option.fluid": "自适应", "governance.option.contained": "最大 1280px",
+    "column.profile": "Profile", "column.portal": "Portal", "column.status": "状态", "column.updated": "更新时间", "column.inputs": "组合输入", "column.references": "制品引用", "column.time": "时间",
+    "status.draft": "草稿", "status.pendingApproval": "待审批", "status.approved": "已批准", "status.published": "已发布", "status.preparing": "准备中", "status.activating": "激活中", "status.current": "当前", "status.superseded": "历史", "status.failed": "失败",
+    "status.referencesPending": "同步中", "status.referencesReady": "已保护", "action.edit": "编辑草稿", "action.preview": "查看内容", "action.activate": "创建 Activation", "action.rollback": "回滚", "action.createVersion": "新建版本", "action.createBinding": "新建 Binding",
+    "panel.profile": "Profile 版本", "panel.binding": "Binding 版本", "panel.activation": "Activation", "notice.saved": "治理资源已保存", "notice.transitioned": "治理状态已更新", "notice.activated": "Portal 已激活", "notice.rolledBack": "Portal 已回滚", "dialog.preview": "不可变内容预览",
   },
   "en-US": {
-    "governance.workspace.profiles": "Platform Profiles", "governance.workspace.portals": "Portals",
-    "governance.tab.activations": "Activations", "governance.tab.applications": "Applications", "governance.tab.bindings": "Bindings",
-    "governance.action.newFromSelected": "Create a version from selected {resource}", "governance.action.createDraft": "Create draft", "governance.action.saveDraft": "Save draft",
-    "governance.action.submit": "Submit", "governance.action.approve": "Approve", "governance.action.publishInput": "Publish as eligible input", "governance.action.activate": "Validate and activate", "governance.action.rollback": "Rollback to this version",
-    "governance.panel.profileRevisions": "Profile revisions", "governance.panel.bindingRevisions": "Binding revisions", "governance.panel.currentActivation": "Current Activations", "governance.panel.newActivation": "Create Activation", "governance.panel.activationHistory": "Immutable Activation history",
-    "governance.empty.profiles": "No Platform Profiles", "governance.empty.profileBase": "Select a Profile as the version baseline", "governance.empty.bindings": "No Portal Bindings", "governance.empty.bindingBase": "Select a Binding as the version baseline", "governance.empty.activation": "No Activations", "governance.empty.current": "No active Portal",
-    "governance.column.revision": "Revision", "governance.column.profile": "Profile", "governance.column.portal": "Portal", "governance.column.status": "Status", "governance.column.activation": "Activation", "governance.column.time": "Time", "governance.column.action": "Action", "governance.column.inputs": "Inputs", "governance.column.references": "Artifact references",
-    "governance.status.referencePending": "Syncing references", "governance.status.referenceSynced": "Protected",
-    "governance.notice.profilePublished": "The Profile is eligible but does not affect a Portal until an Activation references it.", "governance.notice.bindingPublished": "The Binding is eligible but affects the live Portal only through an Activation.",
-    "governance.notice.saved": "Governance resource saved", "governance.notice.transitioned": "Governance status updated", "governance.notice.activated": "Portal activated", "governance.notice.rolledBack": "Portal rolled back", "governance.notice.failed": "Governance operation failed",
-    "governance.error.load": "Failed to load governance data", "governance.error.activationFailed": "Activation validation failed: {message}",
-    "notice.inputPublished": "Application published as an eligible input", "confirm.inputPublish": "Publishing only makes this Application eligible for Activation and does not change the live Portal.", "action.publishInput": "Publish as eligible input", "diff.active": "No other published input", "diff.activeRevision": "Published input #{id}",
-    "governance.form.profileId": "Profile ID", "governance.form.renderer": "Default UI framework", "governance.form.allowedRenderers": "Allowed UI frameworks", "governance.form.userRenderer": "Allow users to switch UI framework", "governance.form.layout": "Layout plugin", "governance.form.bodyWidth": "Page body width", "governance.form.navigationGroups": "Navigation groups", "governance.form.portalId": "Portal ID", "governance.form.publishedProfile": "Published Profile", "governance.form.services": "Managed service bindings", "governance.form.publishedApplication": "Published Application", "governance.form.publishedBinding": "Published Binding", "governance.form.expectedActivation": "Expected current Activation", "governance.form.reason": "Change reason",
-    "governance.option.arco": "Arco Design", "governance.option.mui": "Material UI", "governance.option.standardLayout": "Standard sidebar layout", "governance.option.topLayout": "Top navigation layout", "governance.option.fluid": "Fluid", "governance.option.contained": "Maximum 1280px",
-    "page.title.v2": "Portal Management", "page.description.v2": "Govern Platform Profiles, Portals, and immutable Activations", "page.navigation.v2": "Portal Management",
+    "page.profiles.title": "Portal Platform Profiles", "page.profiles.description": "Govern UI frameworks, Shell templates, and navigation baselines", "page.profiles.navigation": "Portal Profiles",
+    "page.bindings.title": "Portal Service Bindings", "page.bindings.description": "Bind Portals to published platform profiles and management services", "page.bindings.navigation": "Portal Bindings",
+    "page.activations.title": "Portal Activations", "page.activations.description": "Compose and switch live Portals through immutable Activations", "page.activations.navigation": "Portal Activations",
+    "governance.action.newFromSelected": "Create from selected", "governance.action.submit": "Submit", "governance.action.approve": "Approve", "governance.action.publishInput": "Publish as eligible input", "governance.action.activate": "Validate and activate", "governance.action.rollback": "Rollback to this version",
+    "governance.form.profileId": "Profile ID", "governance.form.renderer": "Default UI framework", "governance.form.allowedRenderers": "Allowed UI frameworks", "governance.form.userRenderer": "Allow users to switch UI framework", "governance.form.layout": "Default Shell template", "governance.form.bodyWidth": "Page body width", "governance.form.navigationGroups": "Navigation groups", "governance.form.portalId": "Portal ID", "governance.form.publishedProfile": "Published Profile", "governance.form.services": "Management service bindings", "governance.form.publishedApplication": "Published Application", "governance.form.publishedBinding": "Published Binding", "governance.form.expectedActivation": "Expected current Activation", "governance.form.reason": "Change reason",
+    "governance.option.standardLayout": "Standard sidebar layout", "governance.option.topLayout": "Top navigation layout", "governance.option.fluid": "Fluid", "governance.option.contained": "Maximum 1280px",
+    "column.profile": "Profile", "column.portal": "Portal", "column.status": "Status", "column.updated": "Updated", "column.inputs": "Composition inputs", "column.references": "Artifact references", "column.time": "Time",
+    "status.draft": "Draft", "status.pendingApproval": "Pending approval", "status.approved": "Approved", "status.published": "Published", "status.preparing": "Preparing", "status.activating": "Activating", "status.current": "Current", "status.superseded": "Superseded", "status.failed": "Failed",
+    "status.referencesPending": "Syncing", "status.referencesReady": "Protected", "action.edit": "Edit draft", "action.preview": "View content", "action.activate": "Create Activation", "action.rollback": "Rollback", "action.createVersion": "New version", "action.createBinding": "New Binding",
+    "panel.profile": "Profile version", "panel.binding": "Binding version", "panel.activation": "Activation", "notice.saved": "Governance resource saved", "notice.transitioned": "Governance state updated", "notice.activated": "Portal activated", "notice.rolledBack": "Portal rolled back", "dialog.preview": "Immutable content preview",
   },
 } as const;
 
-type Translator = (key: string, fallback: string, values?: Record<string, string | number>) => string;
-
-const tones: Record<PortalRevisionStatus, StatusTone> = { Draft: "neutral", PendingApproval: "warning", Approved: "info", Published: "success" };
-const activationTones: Record<PortalActivation["status"], StatusTone> = { Preparing: "info", Activating: "warning", Current: "success", Superseded: "neutral", Failed: "error" };
-
-export function GovernanceWorkspaces({ client, applications }: { client: PortalControlClient; applications: ReactNode }) {
-  const ui = usePortalUI();
-  const t = usePortalMessages(namespace);
-  const [workspace, setWorkspace] = useState("portals");
-  const [snapshot, setSnapshot] = useState<PortalGovernanceSnapshot>({ profiles: [], applications: [], bindings: [], activations: [] });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string>();
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try { setSnapshot(await client.governance()); setError(undefined); }
-    catch (cause) { setError(controlError(cause, t, t("governance.error.load", "治理数据加载失败"))); }
-    finally { setLoading(false); }
-  }, [client]);
-  useEffect(() => { void refresh(); }, [refresh]);
-  return <ui.Stack gap="md">
-    {error === undefined ? null : <ui.ErrorState title={error} retry={() => void refresh()} />}
-    <ui.Tabs activeID={workspace} onChange={setWorkspace} items={[
-      { id: "profiles", label: t("governance.workspace.profiles", "Platform Profiles"), content: <ProfileWorkspace client={client} snapshot={snapshot} refresh={refresh} loading={loading} /> },
-      { id: "portals", label: t("governance.workspace.portals", "Portals"), content: <PortalWorkspace client={client} snapshot={snapshot} refresh={refresh} loading={loading} applications={applications} /> },
-    ]} />
-  </ui.Stack>;
+export function createProfilePage(client: PortalControlClient): CollectionPageDefinition<ProfileRow> {
+  const form = (id: "create" | "edit"): WorkbenchFormDefinition<ProfileRow> => ({
+    id, schema: profileSchema,
+    presentation: { layout: "vertical", navigation: "sections", sections: [{ id: "profile", title: message(namespace, "panel.profile", "Profile 版本"), columns: 2, fields: ["/name", "/defaultRenderer", "/allowedRenderers", "/userSelectableRenderer", "/defaultTemplate", "/pageBodyWidth", "/navigationGroups"] }], fields: [{ pointer: "/navigationGroups", span: 2 }] },
+    workflow: { surface: "drawer", size: "lg", title: message(namespace, id === "create" ? "action.createVersion" : "action.edit", id === "create" ? "新建版本" : "编辑草稿"), submitLabel: message(namespace, "action.save", "保存草稿"), success: { notify: message(namespace, "notice.saved", "治理资源已保存"), refreshCollection: true, close: true } },
+    async load(selected) { return selected[0] === undefined ? {} : profileValue(selected[0].profile); },
+    async submit({ value, selected }) { const base = selected[0]; if (base === undefined) return; const profile = buildProfile(base.profile, value, id === "create"); if (id === "create") await client.createProfile(profile); else await client.updateProfile(base.id, profile); },
+  });
+  return defineCollectionPage<ProfileRow>({
+    id: "platform.portal-composer.profiles", path: "/settings/portals/profiles", title: message(namespace, "page.profiles.title", "Portal 平台基线"), description: message(namespace, "page.profiles.description", "治理 UI 框架、Shell 模板和导航基线"), navigation: { id: "platform.portal-composer.profiles", label: message(namespace, "page.profiles.navigation", "Portal 平台基线"), zone: "settings", order: 10 },
+    collection: { id: "portal-profiles", title: message(namespace, "page.profiles.title", "Portal 平台基线"), view: "table", query: pageQuery(), filters: revisionFilters("profile"), columns: [{ key: "id", label: "Revision", format: "number", defaultVisible: true }, { key: "profileId", label: message(namespace, "column.profile", "Profile"), defaultVisible: true, minWidth: 180 }, statusColumn(), updatedColumn()], selection: "single", preferences: { allowedColumns: ["id", "profileId", "status", "updatedAt"], density: true }, actions: [{ id: "profile.create", label: message(namespace, "action.createVersion", "新建版本"), placement: "page.primary", tone: "primary", requiresSelection: true, form: "create" }, ...revisionActions("profile")] },
+    forms: [form("create"), form("edit")], overlays: [jsonPreview<ProfileRow>((row) => row.profile as unknown as JSONValue)],
+    async load(query, signal) { const snapshot = await client.governance(); const rows = snapshot.profiles.map((row) => ({ ...row, profileId: row.profile.id })) as ProfileRow[]; return selectPage(rows, query, signal, (row, text) => row.profile.id.toLowerCase().includes(text)); },
+    async runAction({ action, selected }) { const row = selected[0]; if (row === undefined) return; const transition = action.id.split(".")[1]; if (transition === "submit" || transition === "approve" || transition === "publish") await client.transitionProfile(row.id, transition); return { notify: { title: message(namespace, "notice.transitioned", "治理状态已更新"), kind: "success" } }; },
+  });
 }
 
-type ProfileValue = { name: string; defaultRenderer: "arco" | "mui"; allowedRenderers: Array<"arco" | "mui">; userSelectableRenderer: boolean; defaultTemplate: "standard" | "top-navigation"; pageBodyWidth: "fluid" | "contained"; navigationGroups: unknown[] };
+export function createBindingPage(client: PortalControlClient): CollectionPageDefinition<BindingRow> {
+  const form = (id: "create" | "edit"): WorkbenchFormDefinition<BindingRow> => ({
+    id, schema: bindingSchema([]), presentation: { layout: "vertical", sections: [{ id: "binding", title: message(namespace, "panel.binding", "Binding 版本"), columns: 1, fields: ["/portalId", "/profileRevisionId", "/services"] }] },
+    workflow: { surface: "drawer", size: "lg", title: message(namespace, id === "create" ? "action.createBinding" : "action.edit", id === "create" ? "新建 Binding" : "编辑草稿"), submitLabel: message(namespace, "action.save", "保存草稿"), success: { notify: message(namespace, "notice.saved", "治理资源已保存"), refreshCollection: true, close: true } },
+    async prepare() { const snapshot = await client.governance(); return { schema: bindingSchema(snapshot.profiles) }; },
+    async load(selected) { return selected[0] === undefined ? {} : bindingValue(selected[0]); },
+    async submit({ value, selected }) { const base = selected[0]; if (base === undefined) return; const profileRevisionId = Number(value.profileRevisionId); const binding = buildBinding(base.binding, value); if (id === "create") await client.createBinding(profileRevisionId, binding); else await client.updateBinding(base.id, profileRevisionId, binding); },
+  });
+  return defineCollectionPage<BindingRow>({
+    id: "platform.portal-composer.bindings", path: "/settings/portals/bindings", title: message(namespace, "page.bindings.title", "Portal 服务绑定"), description: message(namespace, "page.bindings.description", "将 Portal 绑定到已发布平台基线和管理服务"), navigation: { id: "platform.portal-composer.bindings", label: message(namespace, "page.bindings.navigation", "Portal 服务绑定"), zone: "settings", order: 12 },
+    collection: { id: "portal-bindings", title: message(namespace, "page.bindings.title", "Portal 服务绑定"), view: "table", query: pageQuery(), filters: revisionFilters("portalId"), columns: [{ key: "id", label: "Revision", format: "number", defaultVisible: true }, { key: "portalId", label: message(namespace, "column.portal", "Portal"), defaultVisible: true, minWidth: 180 }, { key: "profileRevisionId", label: message(namespace, "column.profile", "Profile"), format: "number", defaultVisible: true }, statusColumn(), updatedColumn()], selection: "single", preferences: { allowedColumns: ["id", "portalId", "profileRevisionId", "status", "updatedAt"], density: true }, actions: [{ id: "binding.create", label: message(namespace, "action.createBinding", "新建 Binding"), placement: "page.primary", tone: "primary", requiresSelection: true, form: "create" }, ...revisionActions("binding")] },
+    forms: [form("create"), form("edit")], overlays: [jsonPreview<BindingRow>((row) => row.binding as unknown as JSONValue)],
+    async load(query, signal) { const snapshot = await client.governance(); return selectPage(snapshot.bindings as BindingRow[], query, signal, (row, text) => row.portalId.toLowerCase().includes(text)); },
+    async runAction({ action, selected }) { const row = selected[0]; if (row === undefined) return; const transition = action.id.split(".")[1]; if (transition === "submit" || transition === "approve" || transition === "publish") await client.transitionBinding(row.id, transition); return { notify: { title: message(namespace, "notice.transitioned", "治理状态已更新"), kind: "success" } }; },
+  });
+}
 
-function ProfileWorkspace({ client, snapshot, refresh, loading }: WorkspaceProps) {
-  const ui = usePortalUI();
-  const t = usePortalMessages(namespace);
-  const [selectedID, setSelectedID] = useState<number>();
-  const [draftBase, setDraftBase] = useState<PortalProfileRevision>();
-  const [value, setValue] = useState<Record<string, unknown>>({});
-  const [valid, setValid] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const selected = snapshot.profiles.find((item) => item.id === selectedID) ?? snapshot.profiles[0];
-  useEffect(() => {
-    if (selected === undefined || draftBase?.id === selected.id) return;
-    setSelectedID(selected.id); setDraftBase(selected); setValue(profileValue(selected.profile));
-  }, [draftBase?.id, selected]);
-  const mutate = async (title: string, action: () => Promise<unknown>) => {
-    setBusy(true);
-    try { await action(); await refresh(); setError(undefined); ui.notify({ title, kind: "success" }); }
-    catch (cause) { const detail = controlError(cause, t); setError(detail); ui.notify({ title: t("governance.notice.failed", "治理操作失败"), content: detail, kind: "error" }); }
-    finally { setBusy(false); }
+export function createActivationPage(client: PortalControlClient): CollectionPageDefinition<ActivationRow> {
+  const form: WorkbenchFormDefinition<ActivationRow> = {
+    id: "activate", schema: activationSchema(emptySnapshot()), presentation: { layout: "vertical", sections: [{ id: "activation", title: message(namespace, "panel.activation", "Activation"), columns: 2, fields: ["/portalId", "/applicationRevisionId", "/profileRevisionId", "/bindingRevisionId", "/expectedCurrentId", "/reason"] }], fields: [{ pointer: "/reason", span: 2 }] },
+    workflow: { surface: "drawer", size: "lg", title: message(namespace, "action.activate", "创建 Activation"), submitLabel: message(namespace, "governance.action.activate", "校验并激活"), success: { notify: message(namespace, "notice.activated", "Portal 已激活"), refreshCollection: true, close: true } },
+    async prepare() { const snapshot = await client.governance(); return { schema: activationSchema(snapshot), initialValue: activationDefaults(snapshot) }; },
+    async submit({ value }) { const result = await client.activate({ portalId: String(value.portalId ?? ""), applicationRevisionId: Number(value.applicationRevisionId), profileRevisionId: Number(value.profileRevisionId), bindingRevisionId: Number(value.bindingRevisionId), expectedCurrentId: Number(value.expectedCurrentId ?? 0), reason: typeof value.reason === "string" ? value.reason : undefined }); if (result.status === "Failed") throw new Error(result.phases.find((phase) => phase.status === "Failed")?.message ?? "Activation failed"); },
   };
-  const startVersion = () => { if (selected === undefined) return; setDraftBase(selected); setSelectedID(undefined); setValue(profileValue(selected.profile)); };
-  const save = () => {
-    if (draftBase === undefined) return;
-    const profile = buildProfile(draftBase.profile, value, selectedID === undefined);
-    void mutate(t("governance.notice.saved", "治理资源已保存"), () => selectedID === undefined ? client.createProfile(profile) : client.updateProfile(selectedID, profile));
-  };
-  const transition = (action: "submit" | "approve" | "publish") => selected === undefined ? undefined : void mutate(t("governance.notice.transitioned", "治理状态已更新"), () => client.transitionProfile(selected.id, action));
-  return <ui.Grid columns={{ xs: 1, lg: 2 }} gap="lg">
-    <ui.GridItem><ui.Panel title={t("governance.panel.profileRevisions", "Profile revisions")}><ui.Stack gap="sm">
-      <ui.Button kind="primary" onClick={startVersion} disabled={selected === undefined}>{t("governance.action.newFromSelected", "基于所选 {resource} 新建版本", { resource: "Profile" })}</ui.Button>
-      <ui.Table loading={loading} rowKey="id" rows={snapshot.profiles as unknown as Array<Record<string, unknown>>} empty={<ui.EmptyState title={t("governance.empty.profiles", "尚无 Platform Profile")} />} columns={[
-        { key: "id", title: t("governance.column.revision", "Revision"), render: (_value, row) => <ui.Button kind="text" onClick={() => { const item = row as unknown as PortalProfileRevision; setSelectedID(item.id); setDraftBase(item); setValue(profileValue(item.profile)); }}>#{String(row.id)}</ui.Button> },
-        { key: "profile", title: t("governance.column.profile", "Profile"), render: (entry) => (entry as PortalPlatformProfile).id },
-        { key: "status", title: t("governance.column.status", "状态"), render: (entry) => <ui.Status tone={tones[entry as PortalRevisionStatus]}>{String(entry)}</ui.Status> },
-      ]} />
-    </ui.Stack></ui.Panel></ui.GridItem>
-    <ui.GridItem><ui.Panel title={selectedID === undefined ? "新 Profile revision" : `Profile revision #${selected?.id ?? "-"}`}>
-      {error === undefined ? null : <ui.ErrorState title={error} />}
-      {draftBase === undefined ? <ui.EmptyState title={t("governance.empty.profileBase", "请选择一个 Profile 作为版本基线")} /> : <ui.Stack gap="md">
-        <ui.FormRenderer schema={profileSchema} value={value} onChange={setValue} readOnly={selectedID !== undefined && selected?.status !== "Draft"} submitting={busy} onValidationChange={(result) => setValid(result.valid)} />
-        <ui.Stack direction="row" gap="sm" wrap>
-          {selectedID === undefined || selected?.status === "Draft" ? <ui.Button kind="primary" disabled={!valid} loading={busy} onClick={save}>{selectedID === undefined ? t("governance.action.createDraft", "创建草稿") : t("governance.action.saveDraft", "保存草稿")}</ui.Button> : null}
-          {selected?.status === "Draft" ? <ui.Button onClick={() => transition("submit")}>{t("governance.action.submit", "提交审批")}</ui.Button> : null}
-          {selected?.status === "PendingApproval" ? <ui.Button kind="primary" onClick={() => transition("approve")}>{t("governance.action.approve", "批准")}</ui.Button> : null}
-          {selected?.status === "Approved" ? <ui.Button kind="primary" onClick={() => transition("publish")}>{t("governance.action.publishInput", "发布为可选输入")}</ui.Button> : null}
-        </ui.Stack>
-        {selected?.status === "Published" ? <ui.Status tone="info">{t("governance.notice.profilePublished", "已发布，尚未影响任何 Portal；必须创建 Activation 才会生效。")}</ui.Status> : null}
-      </ui.Stack>}
-    </ui.Panel></ui.GridItem>
-  </ui.Grid>;
+  const activationLabels = { Preparing: message(namespace, "status.preparing", "准备中"), Activating: message(namespace, "status.activating", "激活中"), Current: message(namespace, "status.current", "当前"), Superseded: message(namespace, "status.superseded", "历史"), Failed: message(namespace, "status.failed", "失败") };
+  return defineCollectionPage<ActivationRow>({
+    id: "platform.portal-composer.activations", path: "/settings/portals/activations", title: message(namespace, "page.activations.title", "Portal 上线记录"), description: message(namespace, "page.activations.description", "以不可变 Activation 组合并切换线上 Portal"), navigation: { id: "platform.portal-composer.activations", label: message(namespace, "page.activations.navigation", "Portal 上线"), zone: "settings", order: 13 },
+    collection: { id: "portal-activations", title: message(namespace, "page.activations.title", "Portal 上线记录"), view: "table", query: pageQuery(), filters: [{ id: "portalId", label: message(namespace, "column.portal", "Portal"), kind: "text" }, { id: "status", label: message(namespace, "column.status", "状态"), kind: "select", options: Object.entries(activationLabels).map(([value, label]) => ({ value, label })) }], columns: [{ key: "id", label: "Activation", format: "number", defaultVisible: true }, { key: "portalId", label: message(namespace, "column.portal", "Portal"), defaultVisible: true }, { key: "status", label: message(namespace, "column.status", "状态"), format: "status", valueLabels: activationLabels, statusTones: { Preparing: "info", Activating: "warning", Current: "success", Superseded: "neutral", Failed: "error" }, defaultVisible: true }, { key: "applicationRevisionId", label: "Application", format: "number", defaultVisible: true }, { key: "profileRevisionId", label: "Profile", format: "number", defaultVisible: true }, { key: "bindingRevisionId", label: "Binding", format: "number", defaultVisible: true }, { key: "referencePending", label: message(namespace, "column.references", "制品引用"), format: "status", valueLabels: { true: message(namespace, "status.referencesPending", "同步中"), false: message(namespace, "status.referencesReady", "已保护") }, statusTones: { true: "warning", false: "success" }, defaultVisible: true }, { key: "createdAt", label: message(namespace, "column.time", "时间"), format: "datetime", defaultVisible: true }], selection: "single", preferences: { allowedColumns: ["id", "portalId", "status", "applicationRevisionId", "profileRevisionId", "bindingRevisionId", "referencePending", "createdAt"], density: true }, actions: [{ id: "activation.create", label: message(namespace, "action.activate", "创建 Activation"), placement: "page.primary", tone: "primary", form: "activate" }, { id: "activation.rollback", label: message(namespace, "action.rollback", "回滚"), placement: "page.secondary", tone: "danger", requiresSelection: true, confirm: message(namespace, "confirm.rollbackActivation", "将以所选历史输入创建新的 Activation。"), visibleWhen: { pointer: "/status", equals: "Superseded" } }, { id: "activation.preview", label: message(namespace, "action.preview", "查看内容"), placement: "page.secondary", requiresSelection: true, overlay: "preview" }] },
+    forms: [form], overlays: [jsonPreview<ActivationRow>((row) => row.resolved as unknown as JSONValue)],
+    async load(query, signal) { const snapshot = await client.governance(); return selectPage(snapshot.activations as ActivationRow[], query, signal, (row, text) => row.portalId.toLowerCase().includes(text)); },
+    async loadSummary() { const snapshot = await client.governance(); const current = snapshot.activations.filter((item) => item.status === "Current"); return { title: message(namespace, "summary.current", "当前线上 Portal"), metrics: [{ id: "current", label: message(namespace, "summary.currentCount", "当前 Activation"), value: current.length, tone: current.length === 0 ? "warning" : "success" }] }; },
+    async runAction({ action, selected }) { const row = selected[0]; if (row === undefined || action.id !== "activation.rollback") return; const snapshot = await client.governance(); const current = snapshot.activations.find((item) => item.portalId === row.portalId && item.status === "Current"); if (current === undefined) throw new Error("No current Activation"); const result = await client.rollbackActivation(row.id, current.id, "管理员从 Portal Workbench 发起回滚"); if (result.status === "Failed") throw new Error(result.phases.find((phase) => phase.status === "Failed")?.message ?? "Activation rollback failed"); return { notify: { title: message(namespace, "notice.rolledBack", "Portal 已回滚"), kind: "success" } }; },
+  });
 }
 
-function PortalWorkspace({ client, snapshot, refresh, loading, applications }: WorkspaceProps & { applications: ReactNode }) {
-  const ui = usePortalUI();
-  const t = usePortalMessages(namespace);
-  const [tab, setTab] = useState("activations");
-  return <ui.Tabs activeID={tab} onChange={setTab} items={[
-    { id: "activations", label: t("governance.tab.activations", "Activations"), content: <ActivationWorkspace client={client} snapshot={snapshot} refresh={refresh} loading={loading} /> },
-    { id: "applications", label: t("governance.tab.applications", "Applications"), content: applications },
-    { id: "bindings", label: t("governance.tab.bindings", "Bindings"), content: <BindingWorkspace client={client} snapshot={snapshot} refresh={refresh} loading={loading} /> },
-  ]} />;
-}
+export const profileSchema: FormSchema = { id: "portal-profile-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["name", "defaultRenderer", "allowedRenderers", "userSelectableRenderer", "defaultTemplate", "pageBodyWidth", "navigationGroups"], properties: {
+  name: { type: "string", title: "Profile ID", minLength: 1 }, defaultRenderer: { type: "string", title: "默认 UI 框架", oneOf: [{ const: "arco", title: "Arco Design" }, { const: "mui", title: "Material UI" }] }, allowedRenderers: { type: "array", title: "允许的 UI 框架", minItems: 1, uniqueItems: true, items: { type: "string", oneOf: [{ const: "arco", title: "Arco Design" }, { const: "mui", title: "Material UI" }] } }, userSelectableRenderer: { type: "boolean", title: "允许用户切换 UI 框架" }, defaultTemplate: { type: "string", title: "默认布局", oneOf: [{ const: "standard", title: "标准侧栏布局" }, { const: "top-navigation", title: "顶部导航布局" }] }, pageBodyWidth: { type: "string", title: "页面正文宽度", oneOf: [{ const: "fluid", title: "自适应" }, { const: "contained", title: "最大 1280px" }] }, navigationGroups: { type: "array", title: "导航分组", items: { type: "object", additionalProperties: true } },
+} }, uiSchema: { defaultRenderer: { "ui:widget": "select" }, defaultTemplate: { "ui:widget": "select" }, pageBodyWidth: { "ui:widget": "select" } }, localization: { "/properties/name/title": message(namespace, "governance.form.profileId", "Profile ID"), "/properties/defaultRenderer/title": message(namespace, "governance.form.renderer", "默认 UI 框架"), "/properties/allowedRenderers/title": message(namespace, "governance.form.allowedRenderers", "允许的 UI 框架"), "/properties/userSelectableRenderer/title": message(namespace, "governance.form.userRenderer", "允许用户切换 UI 框架"), "/properties/defaultTemplate/title": message(namespace, "governance.form.layout", "默认 Shell 模板"), "/properties/pageBodyWidth/title": message(namespace, "governance.form.bodyWidth", "页面正文宽度"), "/properties/navigationGroups/title": message(namespace, "governance.form.navigationGroups", "导航分组") } };
 
-function BindingWorkspace({ client, snapshot, refresh, loading }: WorkspaceProps) {
-  const ui = usePortalUI();
-  const t = usePortalMessages(namespace);
-  const [selectedID, setSelectedID] = useState<number>();
-  const [base, setBase] = useState<PortalBindingRevision>();
-  const [value, setValue] = useState<Record<string, unknown>>({});
-  const [valid, setValid] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const selected = snapshot.bindings.find((item) => item.id === selectedID) ?? snapshot.bindings[0];
-  const schema = useMemo(() => bindingSchema(snapshot.profiles), [snapshot.profiles]);
-  useEffect(() => { if (selected === undefined || base?.id === selected.id) return; setSelectedID(selected.id); setBase(selected); setValue(bindingValue(selected)); }, [base?.id, selected]);
-  const mutate = async (title: string, action: () => Promise<unknown>) => {
-    setBusy(true);
-    try { await action(); await refresh(); setError(undefined); ui.notify({ title, kind: "success" }); }
-    catch (cause) { const detail = controlError(cause, t); setError(detail); ui.notify({ title: t("governance.notice.failed", "治理操作失败"), content: detail, kind: "error" }); }
-    finally { setBusy(false); }
-  };
-  const save = () => {
-    if (base === undefined) return;
-    const profileRevisionId = Number(value.profileRevisionId);
-    const binding = buildBinding(base.binding, value);
-    void mutate(t("governance.notice.saved", "治理资源已保存"), () => selectedID === undefined ? client.createBinding(profileRevisionId, binding) : client.updateBinding(selectedID, profileRevisionId, binding));
-  };
-  const transition = (action: "submit" | "approve" | "publish") => selected === undefined ? undefined : void mutate(t("governance.notice.transitioned", "治理状态已更新"), () => client.transitionBinding(selected.id, action));
-  return <ui.Grid columns={{ xs: 1, lg: 2 }} gap="lg">
-    <ui.GridItem><ui.Panel title={t("governance.panel.bindingRevisions", "Binding revisions")}><ui.Stack gap="sm"><ui.Button kind="primary" disabled={selected === undefined} onClick={() => { if (selected === undefined) return; setBase(selected); setSelectedID(undefined); setValue(bindingValue(selected)); }}>{t("governance.action.newFromSelected", "基于所选 {resource} 新建版本", { resource: "Binding" })}</ui.Button><ui.Table loading={loading} rowKey="id" rows={snapshot.bindings as unknown as Array<Record<string, unknown>>} empty={<ui.EmptyState title={t("governance.empty.bindings", "尚无 Portal Binding")} />} columns={[
-      { key: "id", title: t("governance.column.revision", "Revision"), render: (_entry, row) => <ui.Button kind="text" onClick={() => { const item = row as unknown as PortalBindingRevision; setSelectedID(item.id); setBase(item); setValue(bindingValue(item)); }}>#{String(row.id)}</ui.Button> },
-      { key: "portalId", title: t("governance.column.portal", "Portal") }, { key: "status", title: t("governance.column.status", "状态"), render: (entry) => <ui.Status tone={tones[entry as PortalRevisionStatus]}>{String(entry)}</ui.Status> },
-    ]} /></ui.Stack></ui.Panel></ui.GridItem>
-    <ui.GridItem><ui.Panel title={selectedID === undefined ? "新 Binding revision" : `Binding revision #${selected?.id ?? "-"}`}>
-      {error === undefined ? null : <ui.ErrorState title={error} />}
-      {base === undefined ? <ui.EmptyState title={t("governance.empty.bindingBase", "请选择一个 Binding 作为版本基线")} /> : <ui.Stack gap="md"><ui.FormRenderer schema={schema} value={value} onChange={setValue} readOnly={selectedID !== undefined && selected?.status !== "Draft"} submitting={busy} onValidationChange={(result) => setValid(result.valid)} /><ui.Stack direction="row" gap="sm" wrap>
-        {selectedID === undefined || selected?.status === "Draft" ? <ui.Button kind="primary" disabled={!valid} onClick={save}>{t("governance.action.saveDraft", "保存草稿")}</ui.Button> : null}
-        {selected?.status === "Draft" ? <ui.Button onClick={() => transition("submit")}>{t("governance.action.submit", "提交审批")}</ui.Button> : null}{selected?.status === "PendingApproval" ? <ui.Button kind="primary" onClick={() => transition("approve")}>{t("governance.action.approve", "批准")}</ui.Button> : null}{selected?.status === "Approved" ? <ui.Button kind="primary" onClick={() => transition("publish")}>{t("governance.action.publishInput", "发布为可选输入")}</ui.Button> : null}
-      </ui.Stack>{selected?.status === "Published" ? <ui.Status tone="info">{t("governance.notice.bindingPublished", "已发布，只有被 Activation 引用后才影响线上 Portal。")}</ui.Status> : null}</ui.Stack>}
-    </ui.Panel></ui.GridItem>
-  </ui.Grid>;
-}
+export function profileValue(profile: PortalPlatformProfile): Record<string, unknown> { return { name: profile.id, defaultRenderer: profile.renderAdapter.config.defaultRenderer === "mui" ? "mui" : "arco", allowedRenderers: profile.renderAdapter.config.allowedRenderers.filter((value) => value === "arco" || value === "mui"), userSelectableRenderer: profile.renderAdapter.config.userSelectable, defaultTemplate: profile.shell.config.defaultTemplate === "top-navigation" ? "top-navigation" : "standard", pageBodyWidth: profile.shell.config.templateOptions?.[profile.shell.config.defaultTemplate]?.pageBodyWidth === "contained" ? "contained" : "fluid", navigationGroups: Array.isArray(profile.shell.config.navigationGroups) ? profile.shell.config.navigationGroups : [] }; }
+export function buildProfile(base: PortalPlatformProfile, value: Readonly<Record<string, unknown>>, newRevision: boolean): PortalPlatformProfile { const defaultRenderer = value.defaultRenderer === "mui" ? "mui" : "arco"; const allowedRenderers = Array.isArray(value.allowedRenderers) ? value.allowedRenderers.filter((item): item is string => item === "arco" || item === "mui") : [defaultRenderer]; if (!allowedRenderers.includes(defaultRenderer)) allowedRenderers.unshift(defaultRenderer); const defaultTemplate = value.defaultTemplate === "top-navigation" ? "top-navigation" : "standard"; const templateOptions = { ...(base.shell.config.templateOptions ?? {}), [defaultTemplate]: { ...(base.shell.config.templateOptions?.[defaultTemplate] ?? {}), pageBodyWidth: value.pageBodyWidth as JSONValue } }; return { ...base, id: String(value.name), revision: newRevision ? base.revision + 1 : base.revision, renderAdapter: { ...base.renderAdapter, config: { ...base.renderAdapter.config, defaultRenderer, allowedRenderers, userSelectable: value.userSelectableRenderer === true } }, shell: { ...base.shell, config: { ...base.shell.config, defaultTemplate, navigationGroups: value.navigationGroups as JSONValue, templateOptions } } }; }
 
-function ActivationWorkspace({ client, snapshot, refresh, loading }: WorkspaceProps) {
-  const ui = usePortalUI();
-  const i18n = usePortalI18n();
-  const t = usePortalMessages(namespace);
-  const [value, setValue] = useState<Record<string, unknown>>({});
-  const [valid, setValid] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string>();
-  const schema = useMemo(() => activationSchema(snapshot), [snapshot]);
-  const current = snapshot.activations.filter((item) => item.status === "Current");
-  useEffect(() => {
-    if (value.portalId !== undefined || snapshot.bindings.length === 0) return;
-    setValue(activationDefaults(snapshot));
-  }, [snapshot, value.portalId]);
-  const activate = async () => {
-    setBusy(true);
-    try {
-      const result = await client.activate({ portalId: String(value.portalId ?? ""), applicationRevisionId: Number(value.applicationRevisionId), profileRevisionId: Number(value.profileRevisionId), bindingRevisionId: Number(value.bindingRevisionId), expectedCurrentId: Number(value.expectedCurrentId ?? 0), reason: typeof value.reason === "string" ? value.reason : undefined });
-      await refresh();
-      if (result.status === "Failed") {
-        const message = result.phases.find((phase) => phase.status === "Failed")?.message ?? "unknown";
-        throw new Error(t("governance.error.activationFailed", "Activation 校验失败：{message}", { message }));
-      }
-      setError(undefined);
-      ui.notify({ title: t("governance.notice.activated", "Portal 已激活"), kind: "success" });
-    } catch (cause) {
-      const detail = controlError(cause, t);
-      setError(detail);
-      ui.notify({ title: t("governance.notice.failed", "治理操作失败"), content: detail, kind: "error" });
-    } finally { setBusy(false); }
-  };
-  const rollback = async (source: PortalActivation) => {
-    const live = current.find((item) => item.portalId === source.portalId);
-    if (live === undefined) return;
-    setBusy(true);
-    try {
-      const result = await client.rollbackActivation(source.id, live.id, "管理员从 Portal 工作区发起回滚");
-      await refresh();
-      if (result.status === "Failed") throw new Error(result.phases.find((phase) => phase.status === "Failed")?.message ?? "Activation rollback failed");
-      setError(undefined);
-      ui.notify({ title: t("governance.notice.rolledBack", "Portal 已回滚"), kind: "success" });
-    } catch (cause) {
-      const detail = controlError(cause, t);
-      setError(detail);
-      ui.notify({ title: t("governance.notice.failed", "治理操作失败"), content: detail, kind: "error" });
-    } finally { setBusy(false); }
-  };
-  return <ui.Stack gap="lg">
-    {error === undefined ? null : <ui.ErrorState title={error} retry={() => void refresh()} />}
-    <ui.Panel title={t("governance.panel.currentActivation", "当前线上 Activation")}><ui.Descriptions columns={{ xs: 1, lg: 3 }} items={current.length === 0 ? [{ id: "empty", label: t("governance.column.status", "状态"), value: t("governance.empty.current", "尚未激活 Portal") }] : current.flatMap((item) => [
-      { id: `${item.id}:portal`, label: t("governance.column.portal", "Portal"), value: item.portalId }, { id: `${item.id}:activation`, label: t("governance.column.activation", "Activation"), value: `#${item.id} · ${item.status}${item.referencePending === true ? ` · ${t("governance.status.referencePending", "引用同步中")}` : ""}` }, { id: `${item.id}:inputs`, label: t("governance.column.inputs", "输入"), value: `Profile #${item.profileRevisionId} / Application #${item.applicationRevisionId} / Binding #${item.bindingRevisionId}` },
-    ])} /></ui.Panel>
-    <ui.Grid columns={{ xs: 1, lg: 2 }} gap="lg"><ui.GridItem><ui.Panel title={t("governance.panel.newActivation", "创建 Activation")}><ui.Stack gap="md"><ui.FormRenderer schema={schema} value={value} onChange={(next) => setValue(normalizeActivationValue(snapshot, next))} submitting={busy} onValidationChange={(result) => setValid(result.valid)} /><ui.Button kind="primary" disabled={!valid} loading={busy} onClick={() => void activate()}>{t("governance.action.activate", "校验并激活")}</ui.Button></ui.Stack></ui.Panel></ui.GridItem>
-    <ui.GridItem><ui.Panel title={t("governance.panel.activationHistory", "不可变 Activation 历史")}><ui.Table loading={loading} rowKey="id" rows={snapshot.activations as unknown as Array<Record<string, unknown>>} empty={<ui.EmptyState title={t("governance.empty.activation", "尚无 Activation")} />} columns={[
-      { key: "id", title: t("governance.column.activation", "Activation"), render: (entry) => `#${String(entry)}` }, { key: "portalId", title: t("governance.column.portal", "Portal") }, { key: "status", title: t("governance.column.status", "状态"), render: (entry) => <ui.Status tone={activationTones[entry as PortalActivation["status"]]}>{String(entry)}</ui.Status> }, { key: "referencePending", title: t("governance.column.references", "制品引用"), render: (entry) => entry === true ? <ui.Status tone="warning">{t("governance.status.referencePending", "同步中")}</ui.Status> : <ui.Status tone="success">{t("governance.status.referenceSynced", "已保护")}</ui.Status> }, { key: "createdAt", title: t("governance.column.time", "时间"), render: (entry) => typeof entry === "string" ? i18n.formatDate(entry) : "-" },
-      { key: "rollback", title: t("governance.column.action", "操作"), render: (_entry, row) => row.status === "Superseded" ? <ui.Button kind="text" disabled={busy} onClick={() => void rollback(row as unknown as PortalActivation)}>{t("governance.action.rollback", "回滚到此版本")}</ui.Button> : null },
-    ]} /></ui.Panel></ui.GridItem></ui.Grid>
-  </ui.Stack>;
-}
+export function bindingSchema(profiles: PortalProfileRevision[]): FormSchema { const published = profiles.filter((item) => item.status === "Published"); return { id: "portal-binding-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["portalId", "profileRevisionId", "services"], properties: { portalId: { type: "string", title: "Portal ID", minLength: 1 }, profileRevisionId: { type: "integer", title: "Published Profile", oneOf: published.map((item) => ({ const: item.id, title: `${item.profile.id} #${item.id}` })) }, services: { type: "array", title: "管理服务绑定", items: { type: "object", additionalProperties: true } } } }, uiSchema: { profileRevisionId: { "ui:widget": "select" } }, localization: { "/properties/portalId/title": message(namespace, "governance.form.portalId", "Portal ID"), "/properties/profileRevisionId/title": message(namespace, "governance.form.publishedProfile", "已发布 Profile"), "/properties/services/title": message(namespace, "governance.form.services", "管理服务绑定") } }; }
+export function bindingValue(revision: PortalBindingRevision): Record<string, unknown> { return { portalId: revision.portalId, profileRevisionId: revision.profileRevisionId, services: revision.binding.services }; }
+export function buildBinding(base: PortalManagementBinding, value: Readonly<Record<string, unknown>>): PortalManagementBinding { return { ...base, portalId: String(value.portalId), services: Array.isArray(value.services) ? value.services as PortalManagementBinding["services"] : [] }; }
 
-interface WorkspaceProps { client: PortalControlClient; snapshot: PortalGovernanceSnapshot; refresh(): Promise<void>; loading: boolean; }
+export function activationSchema(snapshot: PortalGovernanceSnapshot): FormSchema { const apps = snapshot.applications.filter((item) => item.status === "Published"); const profiles = snapshot.profiles.filter((item) => item.status === "Published"); const bindings = snapshot.bindings.filter((item) => item.status === "Published"); return { id: "portal-activation.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["portalId", "applicationRevisionId", "profileRevisionId", "bindingRevisionId", "expectedCurrentId"], properties: { portalId: { type: "string", title: "Portal ID", oneOf: [...new Set(bindings.map((item) => item.portalId))].map((id) => ({ const: id, title: id })) }, applicationRevisionId: { type: "integer", title: "Published Application", oneOf: apps.map((item) => ({ const: item.id, title: `${item.portalId} #${item.id}` })) }, profileRevisionId: { type: "integer", title: "Published Profile", oneOf: profiles.map((item) => ({ const: item.id, title: `${item.profile.id} #${item.id}` })) }, bindingRevisionId: { type: "integer", title: "Published Binding", oneOf: bindings.map((item) => ({ const: item.id, title: `${item.portalId} #${item.id}` })) }, expectedCurrentId: { type: "integer", title: "Expected current Activation", minimum: 0, default: 0 }, reason: { type: "string", title: "Change reason" } } }, uiSchema: { portalId: { "ui:widget": "select" }, applicationRevisionId: { "ui:widget": "select" }, profileRevisionId: { "ui:widget": "select" }, bindingRevisionId: { "ui:widget": "select" } }, localization: { "/properties/portalId/title": message(namespace, "governance.form.portalId", "Portal ID"), "/properties/applicationRevisionId/title": message(namespace, "governance.form.publishedApplication", "已发布 Application"), "/properties/profileRevisionId/title": message(namespace, "governance.form.publishedProfile", "已发布 Profile"), "/properties/bindingRevisionId/title": message(namespace, "governance.form.publishedBinding", "已发布 Binding"), "/properties/expectedCurrentId/title": message(namespace, "governance.form.expectedActivation", "期望当前 Activation"), "/properties/reason/title": message(namespace, "governance.form.reason", "变更说明") } }; }
+export function activationDefaults(snapshot: PortalGovernanceSnapshot): Record<string, unknown> { const binding = snapshot.bindings.find((item) => item.status === "Published"); if (binding === undefined) return {}; const application = snapshot.applications.find((item) => item.status === "Published" && item.portalId === binding.portalId); const current = snapshot.activations.find((item) => item.status === "Current" && item.portalId === binding.portalId); return { portalId: binding.portalId, applicationRevisionId: application?.id, profileRevisionId: binding.profileRevisionId, bindingRevisionId: binding.id, expectedCurrentId: current?.id ?? 0, reason: "" }; }
 
-const profileSchema: FormSchema = { id: "portal-profile-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["name", "defaultRenderer", "allowedRenderers", "userSelectableRenderer", "defaultTemplate", "pageBodyWidth", "navigationGroups"], properties: {
-  name: { type: "string", title: "Profile ID", minLength: 1 },
-  defaultRenderer: { type: "string", title: "默认 UI 框架", oneOf: [{ const: "arco", title: "Arco Design" }, { const: "mui", title: "Material UI" }] },
-  allowedRenderers: { type: "array", title: "允许的 UI 框架", minItems: 1, uniqueItems: true, items: { type: "string", oneOf: [{ const: "arco", title: "Arco Design" }, { const: "mui", title: "Material UI" }] } },
-  userSelectableRenderer: { type: "boolean", title: "允许用户切换 UI 框架" },
-  defaultTemplate: { type: "string", title: "默认布局", oneOf: [{ const: "standard", title: "标准侧栏布局" }, { const: "top-navigation", title: "顶部导航布局" }] },
-  pageBodyWidth: { type: "string", title: "页面正文宽度", oneOf: [{ const: "fluid", title: "自适应" }, { const: "contained", title: "最大 1280px" }] },
-  navigationGroups: { type: "array", title: "导航分组", items: { type: "object", additionalProperties: false, required: ["id", "label", "zone", "icon"], properties: { id: { type: "string" }, parentID: { type: "string" }, label: { type: "string" }, zone: { enum: ["primary", "secondary", "settings"] }, icon: { enum: ["menu", "settings", "info"] }, order: { type: "integer" } } } },
-} }, uiSchema: { defaultRenderer: { "ui:widget": "select" }, defaultTemplate: { "ui:widget": "select" }, pageBodyWidth: { "ui:widget": "select" } }, localization: {
-  "/properties/name/title": message(namespace, "governance.form.profileId", "Profile ID"),
-  "/properties/defaultRenderer/title": message(namespace, "governance.form.renderer", "默认 UI 框架"),
-  "/properties/defaultRenderer/oneOf/0/title": message(namespace, "governance.option.arco", "Arco Design"),
-  "/properties/defaultRenderer/oneOf/1/title": message(namespace, "governance.option.mui", "Material UI"),
-  "/properties/allowedRenderers/title": message(namespace, "governance.form.allowedRenderers", "允许的 UI 框架"),
-  "/properties/userSelectableRenderer/title": message(namespace, "governance.form.userRenderer", "允许用户切换 UI 框架"),
-  "/properties/defaultTemplate/title": message(namespace, "governance.form.layout", "默认布局"),
-  "/properties/defaultTemplate/oneOf/0/title": message(namespace, "governance.option.standardLayout", "标准侧栏布局"),
-  "/properties/defaultTemplate/oneOf/1/title": message(namespace, "governance.option.topLayout", "顶部导航布局"),
-  "/properties/pageBodyWidth/title": message(namespace, "governance.form.bodyWidth", "页面正文宽度"),
-  "/properties/pageBodyWidth/oneOf/0/title": message(namespace, "governance.option.fluid", "自适应"),
-  "/properties/pageBodyWidth/oneOf/1/title": message(namespace, "governance.option.contained", "最大 1280px"),
-  "/properties/navigationGroups/title": message(namespace, "governance.form.navigationGroups", "导航分组"),
-} };
+function pageQuery() { return { mode: "page" as const, defaultPageSize: 20, pageSizeOptions: [10, 20, 50] }; }
+function revisionFilters(textID: string) { return [{ id: textID, label: message(namespace, textID === "profile" ? "column.profile" : "column.portal", textID === "profile" ? "Profile" : "Portal"), kind: "text" as const }, { id: "status", label: message(namespace, "column.status", "状态"), kind: "select" as const, options: Object.entries(revisionStatusLabels).map(([value, label]) => ({ value, label })) }]; }
+function statusColumn() { return { key: "status", label: message(namespace, "column.status", "状态"), format: "status" as const, valueLabels: revisionStatusLabels, statusTones: revisionStatusTones, defaultVisible: true, minWidth: 120 }; }
+function updatedColumn() { return { key: "updatedAt", label: message(namespace, "column.updated", "更新时间"), format: "datetime" as const, defaultVisible: true, minWidth: 180 }; }
+function jsonPreview<Row extends Record<string, unknown>>(value: (row: Row) => JSONValue) { return { id: "preview", surface: "drawer" as const, size: "lg" as const, title: message(namespace, "dialog.preview", "不可变内容预览"), async load(selected: readonly Row[]) { return { kind: "json" as const, documents: selected[0] === undefined ? [] : [{ value: value(selected[0]) }] }; } }; }
+function selectPage<Row extends { status: string }>(rows: Row[], query: CollectionQuery, signal: AbortSignal, matchesText: (row: Row, text: string) => boolean) { if (signal.aborted) return { items: [], total: 0 }; const text = Object.entries(query.filters).find(([key]) => key !== "status")?.[1]; const needle = typeof text === "string" ? text.trim().toLowerCase() : ""; const status = typeof query.filters.status === "string" ? query.filters.status : ""; const filtered = rows.filter((row) => (needle === "" || matchesText(row, needle)) && (status === "" || row.status === status)); const start = (query.page - 1) * query.pageSize; return { items: filtered.slice(start, start + query.pageSize), total: filtered.length }; }
+function emptySnapshot(): PortalGovernanceSnapshot { return { profiles: [], applications: [], bindings: [], activations: [] }; }
 
-function profileValue(profile: PortalPlatformProfile): ProfileValue { return { name: profile.id, defaultRenderer: profile.renderAdapter.config.defaultRenderer === "mui" ? "mui" : "arco", allowedRenderers: profile.renderAdapter.config.allowedRenderers.filter((value): value is "arco" | "mui" => value === "arco" || value === "mui"), userSelectableRenderer: profile.renderAdapter.config.userSelectable, defaultTemplate: profile.shell.config.defaultTemplate === "top-navigation" ? "top-navigation" : "standard", pageBodyWidth: profile.shell.config.templateOptions?.[profile.shell.config.defaultTemplate]?.pageBodyWidth === "contained" ? "contained" : "fluid", navigationGroups: Array.isArray(profile.shell.config.navigationGroups) ? profile.shell.config.navigationGroups : [] }; }
-function buildProfile(base: PortalPlatformProfile, value: Record<string, unknown>, newRevision: boolean): PortalPlatformProfile {
-  const defaultRenderer = value.defaultRenderer === "mui" ? "mui" : "arco";
-  const allowedRenderers = Array.isArray(value.allowedRenderers) ? value.allowedRenderers.filter((item): item is "arco" | "mui" => item === "arco" || item === "mui") : [defaultRenderer];
-  if (!allowedRenderers.includes(defaultRenderer)) allowedRenderers.unshift(defaultRenderer);
-  const defaultTemplate = value.defaultTemplate === "top-navigation" ? "top-navigation" : "standard";
-  const templateOptions = { ...(base.shell.config.templateOptions ?? {}), [defaultTemplate]: { ...(base.shell.config.templateOptions?.[defaultTemplate] ?? {}), pageBodyWidth: value.pageBodyWidth as JSONValue } };
-  return { ...base, id: String(value.name), revision: newRevision ? base.revision + 1 : base.revision, renderAdapter: { ...base.renderAdapter, config: { ...base.renderAdapter.config, defaultRenderer, allowedRenderers, userSelectable: value.userSelectableRenderer === true } }, shell: { ...base.shell, config: { ...base.shell.config, defaultTemplate, navigationGroups: value.navigationGroups as JSONValue, templateOptions } } };
-}
-
-function bindingSchema(profiles: PortalProfileRevision[]): FormSchema { const published = profiles.filter((item) => item.status === "Published"); return { id: "portal-binding-editor.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["portalId", "profileRevisionId", "services"], properties: {
-  portalId: { type: "string", title: "Portal ID", minLength: 1 }, profileRevisionId: { type: "integer", title: "Published Profile", oneOf: published.map((item) => ({ const: item.id, title: `${item.profile.id} #${item.id}` })) },
-  services: { type: "array", title: "管理服务绑定", items: { type: "object", additionalProperties: false, required: ["id", "logicalService", "routingDomain", "capabilities"], properties: { id: { type: "string" }, label: { type: "string" }, logicalService: { type: "string" }, routingDomain: { type: "string" }, capabilities: { type: "array", items: { type: "object", additionalProperties: false, required: ["capability"], properties: { capability: { type: "string" }, read: { type: "array", items: { type: "string" } }, write: { type: "array", items: { type: "string" } } } } } } } },
-} }, uiSchema: { profileRevisionId: { "ui:widget": "select" } }, localization: {
-  "/properties/portalId/title": message(namespace, "governance.form.portalId", "Portal ID"),
-  "/properties/profileRevisionId/title": message(namespace, "governance.form.publishedProfile", "已发布 Profile"),
-  "/properties/services/title": message(namespace, "governance.form.services", "管理服务绑定"),
-} }; }
-function bindingValue(revision: PortalBindingRevision) { return { portalId: revision.portalId, profileRevisionId: revision.profileRevisionId, services: revision.binding.services }; }
-function buildBinding(base: PortalManagementBinding, value: Record<string, unknown>): PortalManagementBinding { return { ...base, portalId: String(value.portalId), services: Array.isArray(value.services) ? value.services as PortalManagementBinding["services"] : [] }; }
-
-function activationSchema(snapshot: PortalGovernanceSnapshot): FormSchema {
-  const apps = snapshot.applications.filter((item) => item.status === "Published"); const profiles = snapshot.profiles.filter((item) => item.status === "Published"); const bindings = snapshot.bindings.filter((item) => item.status === "Published");
-  return { id: "portal-activation.v1", schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["portalId", "applicationRevisionId", "profileRevisionId", "bindingRevisionId", "expectedCurrentId"], properties: {
-    portalId: { type: "string", title: "Portal ID", oneOf: [...new Set(bindings.map((item) => item.portalId))].map((id) => ({ const: id, title: id })) },
-    applicationRevisionId: { type: "integer", title: "Published Application", oneOf: apps.map((item) => ({ const: item.id, title: `${item.portalId} #${item.id}` })) }, profileRevisionId: { type: "integer", title: "Published Profile", oneOf: profiles.map((item) => ({ const: item.id, title: `${item.profile.id} #${item.id}` })) }, bindingRevisionId: { type: "integer", title: "Published Binding", oneOf: bindings.map((item) => ({ const: item.id, title: `${item.portalId} #${item.id}` })) }, expectedCurrentId: { type: "integer", title: "期望当前 Activation", minimum: 0, default: 0 }, reason: { type: "string", title: "变更说明" },
-  } }, uiSchema: { portalId: { "ui:widget": "select" }, applicationRevisionId: { "ui:widget": "select" }, profileRevisionId: { "ui:widget": "select" }, bindingRevisionId: { "ui:widget": "select" } }, localization: {
-    "/properties/portalId/title": message(namespace, "governance.form.portalId", "Portal ID"),
-    "/properties/applicationRevisionId/title": message(namespace, "governance.form.publishedApplication", "已发布 Application"),
-    "/properties/profileRevisionId/title": message(namespace, "governance.form.publishedProfile", "已发布 Profile"),
-    "/properties/bindingRevisionId/title": message(namespace, "governance.form.publishedBinding", "已发布 Binding"),
-    "/properties/expectedCurrentId/title": message(namespace, "governance.form.expectedActivation", "期望当前 Activation"),
-    "/properties/reason/title": message(namespace, "governance.form.reason", "变更说明"),
-  } };
-}
-
-function activationDefaults(snapshot: PortalGovernanceSnapshot, requestedPortalID?: string): Record<string, unknown> {
-  const bindings = snapshot.bindings.filter((item) => item.status === "Published");
-  const binding = bindings.find((item) => item.portalId === requestedPortalID) ?? bindings[0];
-  if (binding === undefined) return {};
-  const application = snapshot.applications.find((item) => item.status === "Published" && item.portalId === binding.portalId);
-  const current = snapshot.activations.find((item) => item.status === "Current" && item.portalId === binding.portalId);
-  return {
-    portalId: binding.portalId,
-    applicationRevisionId: application?.id,
-    profileRevisionId: binding.profileRevisionId,
-    bindingRevisionId: binding.id,
-    expectedCurrentId: current?.id ?? 0,
-    reason: "",
-  };
-}
-
-function normalizeActivationValue(snapshot: PortalGovernanceSnapshot, next: Record<string, unknown>): Record<string, unknown> {
-  const portalID = typeof next.portalId === "string" ? next.portalId : undefined;
-  const binding = snapshot.bindings.find((item) => item.status === "Published" && item.id === Number(next.bindingRevisionId));
-  if (portalID === undefined || binding?.portalId === portalID) return next;
-  return { ...next, ...activationDefaults(snapshot, portalID), portalId: portalID };
-}
-
-function controlError(cause: unknown, t: Translator, fallback = "请求被拒绝"): string {
-  if (cause instanceof PortalControlError) {
-    return t(`error.${cause.code}`, fallback);
-  }
-  return cause instanceof Error ? cause.message : fallback;
-}
+export function portalControlError(cause: unknown): string { return cause instanceof PortalControlError ? cause.code : cause instanceof Error ? cause.message : "request_rejected"; }
