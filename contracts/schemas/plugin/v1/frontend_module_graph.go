@@ -19,6 +19,7 @@ type FrontendModuleGraph struct {
 	Target        string               `json:"target"`
 	Entry         string               `json:"entry"`
 	Digest        string               `json:"digest,omitempty"`
+	Externals     []string             `json:"externals"`
 	Nodes         []FrontendModuleNode `json:"nodes"`
 }
 
@@ -39,9 +40,11 @@ type FrontendModuleDependency struct {
 func (g FrontendModuleGraph) ComputedDigest() string {
 	canonical := g
 	canonical.Digest = ""
-	canonical.Nodes = append([]FrontendModuleNode(nil), g.Nodes...)
+	canonical.Externals = append([]string{}, g.Externals...)
+	sort.Strings(canonical.Externals)
+	canonical.Nodes = append([]FrontendModuleNode{}, g.Nodes...)
 	for index := range canonical.Nodes {
-		canonical.Nodes[index].Dependencies = append([]FrontendModuleDependency(nil), canonical.Nodes[index].Dependencies...)
+		canonical.Nodes[index].Dependencies = append([]FrontendModuleDependency{}, canonical.Nodes[index].Dependencies...)
 		sort.Slice(canonical.Nodes[index].Dependencies, func(left, right int) bool {
 			if canonical.Nodes[index].Dependencies[left].Path == canonical.Nodes[index].Dependencies[right].Path {
 				return canonical.Nodes[index].Dependencies[left].Kind < canonical.Nodes[index].Dependencies[right].Kind

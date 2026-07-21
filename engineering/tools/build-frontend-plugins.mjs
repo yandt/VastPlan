@@ -1,8 +1,9 @@
 import { build } from "esbuild";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { basename, dirname, extname, resolve } from "node:path";
+import { createFrontendModuleGraph } from "./frontend-module-graph.mjs";
 
 const outputRoot = option("--out-dir");
 const manifestPath = option("--manifest");
@@ -17,31 +18,43 @@ const common = {
   define: { "process.env.NODE_ENV": '"production"' },
   external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
 };
+const allowedExternals = new Set(common.external);
 
 const plugins = await discoverFrontendPlugins();
 
 const modules = [];
-for (const { id, entry, source, deferred } of plugins) {
+for (const { id, entry, source, deferred, pluginRoot } of plugins) {
   await enforceFunctionalPluginBoundary(id, dirname(dirname(source)));
-  const outfile = outputRoot === undefined
-    ? resolve("extensions/plugins", id, entry)
-    : resolve(outputRoot, `${id}.js`);
-  await mkdir(dirname(outfile), { recursive: true });
-  await build({
+  const buildRoot = outputRoot === undefined ? pluginRoot : resolve(outputRoot, id);
+  const outfile = resolve(buildRoot, entry);
+  const outdir = dirname(outfile);
+  await rm(outdir, { recursive: true, force: true });
+  await mkdir(outdir, { recursive: true });
+  const entryName = basename(entry, extname(entry));
+  const result = await build({
     ...common,
     // UI adapters may export their framework styles as module text. Applying
     // this loader uniformly keeps discovery independent from plugin identity.
     loader: { ".css": "text" },
-    entryPoints: [source],
-    outfile,
+    entryPoints: { [entryName]: source },
+    outdir,
+    entryNames: entryName,
+    chunkNames: "chunks/[name]-[hash]",
+    assetNames: "assets/[name]-[hash]",
+    splitting: true,
+    metafile: true,
+    outExtension: { ".js": extname(entry) },
   });
+  const graph = await createFrontendModuleGraph({ target: "browser", pluginRoot: buildRoot, entry, metafile: result.metafile, allowedExternals });
+  const graphFile = resolve(outdir, "vastplan.browser-graph.json");
+  await writeFile(graphFile, `${JSON.stringify(graph, null, 2)}\n`);
   if (id === "cn.vastplan.foundation.frontend.render.adapter.arco") {
     const result = spawnSync(process.execPath, ["engineering/tools/check-arco-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ARCO_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
   if (outputRoot !== undefined) {
     const bytes = await readFile(outfile);
-    modules.push({ id, entry, file: outfile, sha256: createHash("sha256").update(bytes).digest("hex"), deferred });
+    modules.push({ id, entry, file: outfile, sha256: createHash("sha256").update(bytes).digest("hex"), graphFile, graph, deferred });
   }
 }
 
@@ -103,7 +116,7 @@ async function discoverFrontendPlugins() {
     }
     const rendererModules = manifest.contributes?.frontend?.rendererModules;
     const deferred = Array.isArray(rendererModules) && rendererModules.length === 1;
-    plugins.push({ id, entry, deferred, source: await findFrontendSource(pluginRoot, id) });
+    plugins.push({ id, entry, deferred, pluginRoot, source: await findFrontendSource(pluginRoot, id) });
   }
   return plugins;
 }

@@ -123,6 +123,7 @@ func TestParseManifest_FrontendModuleGraphIsClosedAndDigestBound(t *testing.T) {
 		SchemaVersion: "v1",
 		Target:        "browser",
 		Entry:         "frontend/main.js",
+		Externals:     []string{"react", "@vastplan/ui-contract"},
 		Nodes: []FrontendModuleNode{
 			{Path: "frontend/main.js", SHA256: strings.Repeat("a", 64), Size: 120, MediaType: "text/javascript", Purpose: "entry", Dependencies: []FrontendModuleDependency{{Path: "frontend/chunk.js", Kind: "dynamic"}}},
 			{Path: "frontend/chunk.js", SHA256: strings.Repeat("b", 64), Size: 80, MediaType: "text/javascript", Purpose: "chunk", Dependencies: []FrontendModuleDependency{}},
@@ -163,16 +164,30 @@ func TestParseManifest_FrontendModuleGraphIsClosedAndDigestBound(t *testing.T) {
 }
 
 func TestFrontendModuleGraphDigestIgnoresDeclarationOrder(t *testing.T) {
-	left := FrontendModuleGraph{SchemaVersion: "v1", Target: "browser", Entry: "frontend/main.js", Nodes: []FrontendModuleNode{
+	left := FrontendModuleGraph{SchemaVersion: "v1", Target: "browser", Entry: "frontend/main.js", Externals: []string{"react", "@vastplan/ui-contract"}, Nodes: []FrontendModuleNode{
 		{Path: "frontend/main.js", SHA256: strings.Repeat("a", 64), Size: 1, MediaType: "text/javascript", Purpose: "entry", Dependencies: []FrontendModuleDependency{{Path: "frontend/b.js", Kind: "static"}, {Path: "frontend/a.js", Kind: "dynamic"}}},
 		{Path: "frontend/a.js", SHA256: strings.Repeat("b", 64), Size: 1, MediaType: "text/javascript", Purpose: "chunk", Dependencies: []FrontendModuleDependency{}},
 		{Path: "frontend/b.js", SHA256: strings.Repeat("c", 64), Size: 1, MediaType: "text/javascript", Purpose: "chunk", Dependencies: []FrontendModuleDependency{}},
 	}}
 	right := left
+	right.Externals = []string{"@vastplan/ui-contract", "react"}
 	right.Nodes = []FrontendModuleNode{left.Nodes[2], left.Nodes[0], left.Nodes[1]}
 	right.Nodes[1].Dependencies = []FrontendModuleDependency{left.Nodes[0].Dependencies[1], left.Nodes[0].Dependencies[0]}
 	if left.ComputedDigest() != right.ComputedDigest() {
 		t.Fatal("节点和依赖声明顺序不应改变规范化 digest")
+	}
+}
+
+func TestFrontendModuleGraphDigestMatchesNodeBuilder(t *testing.T) {
+	graph := FrontendModuleGraph{
+		SchemaVersion: "v1", Target: "browser", Entry: "frontend/dist/main.js", Externals: []string{"react"},
+		Nodes: []FrontendModuleNode{
+			{Path: "frontend/dist/main.js", SHA256: "923fe53966c6cd9343e11af776cd4b05be315ea4b200b02e4d5dfb0f929b73bf", Size: 5, MediaType: "text/javascript", Purpose: "entry", Dependencies: []FrontendModuleDependency{{Path: "frontend/dist/chunks/lazy.js", Kind: "dynamic"}}},
+			{Path: "frontend/dist/chunks/lazy.js", SHA256: "6c87f68371b28954707ebb92afee7ccffb74c6f71ec8fea8a98cf6104289585b", Size: 5, MediaType: "text/javascript", Purpose: "chunk", Dependencies: []FrontendModuleDependency{}},
+		},
+	}
+	if got, want := graph.ComputedDigest(), "a44835cf60eeb0f0a5b588180074460f74be37c55876e7a955f0b3362519fc7c"; got != want {
+		t.Fatalf("Go/Node Module Graph digest 漂移: got=%s want=%s", got, want)
 	}
 }
 
