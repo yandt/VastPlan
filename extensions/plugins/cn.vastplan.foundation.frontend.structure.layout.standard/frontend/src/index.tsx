@@ -285,8 +285,8 @@ export const standardShellCSS = `
 `;
 
 const namespace = "cn.vastplan.foundation.frontend.structure.layout.standard";
-const adapter = {
-  id: "internal.standard-template-source", uiContract: "4.0.0", Shell: StandardShell,
+export const shellLibrary = {
+  id: "standard", shell: "ui.structure.shell", uiContract: "4.0.0", Shell: StandardShell,
   localization: {
     defaultLocale: "zh-CN",
     messages: {
@@ -295,4 +295,5 @@ const adapter = {
     },
   },
 };
-export default adapter;
+export const localization = shellLibrary.localization;
+export default shellLibrary;

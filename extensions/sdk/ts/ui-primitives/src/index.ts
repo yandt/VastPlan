@@ -454,6 +454,7 @@ export interface ShellBranding {
 export interface ShellTemplate {
   id: string;
   label: LocalizedText;
+  module: { id: string; version: string; channel?: string };
 }
 
 export interface ShellTemplateSelection {
@@ -483,6 +484,14 @@ export interface UIShellAdapter {
   templates: readonly ShellTemplate[];
   defaultTemplate: string;
   compose(input: ShellCompositionInput): ShellCompositionModel;
+  localization?: PluginLocalization;
+}
+
+/** One visual implementation selected from the governed Shell catalog. */
+export interface UIShellLibrary {
+  id: string;
+  shell: "ui.structure.shell";
+  uiContract: string;
   Shell: ComponentType<UIShellProps>;
   localization?: PluginLocalization;
 }

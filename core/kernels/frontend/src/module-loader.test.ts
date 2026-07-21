@@ -79,6 +79,22 @@ describe("VerifiedFrontendPluginLoader", () => {
     expect(loaded.renderer).toMatchObject({ id: "arco", framework: "arco" });
   });
 
+  it("recognizes a Shell Library only from its governed export", async () => {
+    const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.structure.layout.standard" });
+    const Shell = () => null;
+    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({
+      shellLibrary: {
+        id: "standard",
+        shell: "ui.structure.shell",
+        uiContract: "4.0.0",
+        Shell,
+      },
+    }));
+
+    const loaded = await loader.load({ id: locked.id, version: locked.version });
+    expect(loaded.shellLibrary).toMatchObject({ id: "standard", shell: "ui.structure.shell", Shell });
+  });
+
   it("fails closed before import when bytes do not match the runtime lock", async () => {
     const locked = await descriptor({ sha256: "b".repeat(64), url: `/v1/portal-modules/7/${"b".repeat(64)}.js` });
     const importer = vi.fn();

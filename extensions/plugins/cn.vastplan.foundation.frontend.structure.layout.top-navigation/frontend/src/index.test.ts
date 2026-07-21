@@ -5,8 +5,8 @@ import type { PortalNavigationGroup } from "@vastplan/ui-primitives";
 const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "primary", icon: "menu", pages: [], children: [] });
 
 describe("top navigation shell layout", () => {
-  it("exports an independent UI Contract 2 layout", () => {
-    expect(adapter).toMatchObject({ id: "internal.top-navigation-template-source", uiContract: "4.0.0" });
+  it("exports an independent signed Shell Library", () => {
+    expect(adapter).toMatchObject({ id: "top-navigation", shell: "ui.structure.shell", uiContract: "4.0.0" });
   });
 
   it("keeps the active root visible when navigation overflows", () => {

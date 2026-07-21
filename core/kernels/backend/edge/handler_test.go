@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -95,9 +96,11 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := catalogSource{artifact.PluginID + "@" + artifact.Version: {Artifact: artifact, PackageBytes: pkg}}
-	shellArtifact, shellPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.shell.test","name":"shell","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shells":[{"id":"ui.structure.shell","uiContract":"^4.0.0"}]}}}`, []byte(`export default { id: "ui.structure.shell" };`))
+	layoutArtifact, layoutPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.layout.test-runtime","name":"layout","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellLibraries":[{"id":"standard","shell":"ui.structure.shell","uiContract":"^4.0.0"}]}}}`, []byte(`export const shellLibrary = { id: "standard" };`))
+	shellArtifact, shellPackage := packageFrontendFixture(t, fmt.Sprintf(`{"id":"cn.vastplan.foundation.frontend.structure.shell.test","name":"shell","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shells":[{"id":"ui.structure.shell","uiContract":"^4.0.0","libraries":[{"id":"standard","module":{"id":%q,"version":"1.0.0","channel":"stable"}}]}]}}}`, layoutArtifact.PluginID), []byte(`export default { id: "ui.structure.shell" };`))
 	workbenchArtifact, workbenchPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.workflow.workbench.test","name":"workbench","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"workbenches":[{"id":"ui.workflow.workbench","uiContract":"^4.0.0"}]}}}`, []byte(`export default { id: "ui.workflow.workbench" };`))
 	source[shellArtifact.PluginID+"@"+shellArtifact.Version] = artifacttrust.Envelope{Artifact: shellArtifact, PackageBytes: shellPackage}
+	source[layoutArtifact.PluginID+"@"+layoutArtifact.Version] = artifacttrust.Envelope{Artifact: layoutArtifact, PackageBytes: layoutPackage}
 	source[workbenchArtifact.PluginID+"@"+workbenchArtifact.Version] = artifacttrust.Envelope{Artifact: workbenchArtifact, PackageBytes: workbenchPackage}
 	catalog, err := NewTrustedCatalog([]ArtifactSource{source}, contentVerifier{})
 	if err != nil {
@@ -105,10 +108,11 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	}
 	ref := portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version}
 	shellRef := portalapi.PluginRef{ID: shellArtifact.PluginID, Version: shellArtifact.Version}
+	layoutRef := portalapi.PluginRef{ID: layoutArtifact.PluginID, Version: layoutArtifact.Version}
 	workbenchRef := portalapi.PluginRef{ID: workbenchArtifact.PluginID, Version: workbenchArtifact.Version}
 	spec := portalapi.PortalSpec{
-		Revision: 7, ID: "admin", TenantID: "tenant-a", Route: "/", RenderAdapter: portalapi.RenderAdapter{PluginRef: ref, UIContract: "^4.0.0"}, Shell: portalapi.Shell{PluginRef: shellRef, UIContract: "^4.0.0", Config: frontendcompositionv1.ShellConfig{DefaultTemplate: "standard", AllowedTemplates: []string{"standard"}}}, Workbench: portalapi.Workbench{PluginRef: workbenchRef, UIContract: "^4.0.0"}, Plugins: []portalapi.PluginRef{ref, shellRef, workbenchRef},
-		Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, shellRef.ID: compositioncommonv1.OriginPlatformProfile, workbenchRef.ID: compositioncommonv1.OriginPlatformProfile}},
+		Revision: 7, ID: "admin", TenantID: "tenant-a", Route: "/", RenderAdapter: portalapi.RenderAdapter{PluginRef: ref, UIContract: "^4.0.0"}, Shell: portalapi.Shell{PluginRef: shellRef, UIContract: "^4.0.0", Config: frontendcompositionv1.ShellConfig{DefaultTemplate: "standard", AllowedTemplates: []string{"standard"}}}, Workbench: portalapi.Workbench{PluginRef: workbenchRef, UIContract: "^4.0.0"}, Plugins: []portalapi.PluginRef{ref, shellRef, layoutRef, workbenchRef},
+		Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, shellRef.ID: compositioncommonv1.OriginPlatformProfile, layoutRef.ID: compositioncommonv1.OriginPlatformProfile, workbenchRef.ID: compositioncommonv1.OriginPlatformProfile}},
 	}
 	lockTestManagement(&spec)
 	fallbackSpec := spec
@@ -137,11 +141,11 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	if err := json.Unmarshal(runtimeW.Body.Bytes(), &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != 7 || len(runtime.Modules) != 3 {
+	if runtime.Portal.Revision != 7 || len(runtime.Modules) != 4 || !runtime.Modules[2].Deferred {
 		t.Fatalf("运行描述未锁定当前 Activation: %+v", runtime)
 	}
 	links := runtimeW.Result().Header.Values("Link")
-	if len(links) != len(runtime.Modules) || !strings.Contains(links[0], "rel=preload; as=fetch; crossorigin=use-credentials") {
+	if len(links) != len(runtime.Modules)-1 || !strings.Contains(links[0], "rel=preload; as=fetch; crossorigin=use-credentials") {
 		t.Fatalf("模块预加载必须与认证 fetch 使用相同凭证模式: %v", links)
 	}
 
@@ -176,7 +180,7 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	if err := json.Unmarshal(recoveryW.Body.Bytes(), &recovery); err != nil {
 		t.Fatal(err)
 	}
-	if recovery.Portal.Revision != 6 || len(recovery.Modules) != 3 || recovery.Modules[0].URL != "/v1/portal-recovery-modules/7/6/"+recovery.Modules[0].SHA256+".js" {
+	if recovery.Portal.Revision != 6 || len(recovery.Modules) != 4 || recovery.Modules[0].URL != "/v1/portal-recovery-modules/7/6/"+recovery.Modules[0].SHA256+".js" {
 		t.Fatalf("恢复描述未绑定 active/fallback revision: %+v", recovery)
 	}
 	recoveryModule := httptest.NewRequest(http.MethodGet, recovery.Modules[0].URL, nil)

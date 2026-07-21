@@ -463,6 +463,7 @@
         "renderAdapters": { "type": "array", "items": { "$ref": "#/$defs/renderAdapterContribution" } },
         "rendererModules": { "type": "array", "items": { "$ref": "#/$defs/rendererModuleContribution" } },
         "shells": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } },
+        "shellLibraries": { "type": "array", "items": { "$ref": "#/$defs/shellLibraryContribution" } },
         "workbenches": { "type": "array", "items": { "$ref": "#/$defs/structureFoundationContribution" } }
       }
     },
@@ -512,6 +513,32 @@
         "id": { "type": "string", "minLength": 1, "maxLength": 160 },
         "title": { "type": "string", "minLength": 1, "maxLength": 160 },
         "priority": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "libraries": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "module"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+              "module": {
+                "type": "object", "additionalProperties": false, "required": ["id", "version", "channel"],
+                "properties": {
+                  "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+                  "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+                  "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shellLibraryContribution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "shell", "uiContract"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "shell": { "const": "ui.structure.shell" },
         "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" }
       }
     },

@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { ReactNode } from "react";
-import { type FrontendPluginContext, type UIRenderAdapter, type UIShellAdapter, type UIWorkbenchAdapter } from "@vastplan/ui-primitives";
+import { type FrontendPluginContext, type UIRenderAdapter, type UIShellAdapter, type UIShellLibrary, type UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type PluginRef, type PortalSpec } from "./portal-runtime";
 
 const adapterRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter", version: "1.0.0" };
 const arcoRendererRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.arco", version: "1.0.0" };
 const muiRendererRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.mui", version: "1.0.0" };
 const shellRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.shell", version: "1.0.0" };
+const standardShellRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.layout.standard", version: "1.0.0" };
+const topShellRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", version: "1.0.0" };
 const workbenchRef: PluginRef = { id: "cn.vastplan.foundation.frontend.workflow.workbench", version: "1.0.0" };
 const featureRef: PluginRef = { id: "cn.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 
@@ -18,16 +20,17 @@ const adapter: UIRenderAdapter = {
     { id: "mui", label: "MUI", framework: "mui", module: muiRendererRef },
   ],
 };
-const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: "4.0.0", templates: [{ id: "standard", label: "Standard" }, { id: "top-navigation", label: "Top" }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }), Shell: () => null };
+const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: "4.0.0", templates: [{ id: "standard", label: "Standard", module: standardShellRef }, { id: "top-navigation", label: "Top", module: topShellRef }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
+const shellLibrary = (id: string): UIShellLibrary => ({ id, shell: "ui.structure.shell", uiContract: "4.0.0", Shell: () => null });
 const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "4.0.0", CollectionPage: () => null };
 
 const portal: PortalSpec = {
   revision: 1, id: "admin", tenantId: "acme", route: "/",
   renderAdapter: { ...adapterRef, uiContract: "^4.0.0", config: { defaultRenderer: "arco", allowedRenderers: ["arco", "mui"], userSelectable: true } },
   shell: { ...shellRef, uiContract: "^4.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true } },
-  workbench: { ...workbenchRef, uiContract: "^4.0.0" }, plugins: [adapterRef, arcoRendererRef, muiRendererRef, shellRef, workbenchRef, featureRef],
+  workbench: { ...workbenchRef, uiContract: "^4.0.0" }, plugins: [adapterRef, arcoRendererRef, muiRendererRef, shellRef, standardShellRef, topShellRef, workbenchRef, featureRef],
   management: { tenantId: "acme", portalId: "admin", platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, services: [{ id: "settings", logicalService: "platform.settings", routingDomain: "platform", capabilities: [{ capability: "platform.settings", read: ["list"] }] }] },
-  resolution: { platformCatalog: { id: "catalog", revision: 1, digest: "c".repeat(64) }, platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) }, managementBindingDigest: "d".repeat(64), pluginOrigins: { [adapterRef.id]: "platform-profile", [arcoRendererRef.id]: "platform-profile", [muiRendererRef.id]: "platform-profile", [shellRef.id]: "platform-profile", [workbenchRef.id]: "platform-profile", [featureRef.id]: "platform-profile" } },
+  resolution: { platformCatalog: { id: "catalog", revision: 1, digest: "c".repeat(64) }, platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) }, managementBindingDigest: "d".repeat(64), pluginOrigins: { [adapterRef.id]: "platform-profile", [arcoRendererRef.id]: "platform-profile", [muiRendererRef.id]: "platform-profile", [shellRef.id]: "platform-profile", [standardShellRef.id]: "platform-profile", [topShellRef.id]: "platform-profile", [workbenchRef.id]: "platform-profile", [featureRef.id]: "platform-profile" } },
 };
 
 function loader(overrides: Record<string, object> = {}): FrontendPluginLoader {
@@ -37,6 +40,8 @@ function loader(overrides: Record<string, object> = {}): FrontendPluginLoader {
     if (ref.id === arcoRendererRef.id) return { ...base, renderer: renderer("arco"), ...overrides[ref.id] };
     if (ref.id === muiRendererRef.id) return { ...base, renderer: renderer("mui"), ...overrides[ref.id] };
     if (ref.id === shellRef.id) return { ...base, shell, ...overrides[ref.id] };
+    if (ref.id === standardShellRef.id) return { ...base, shellLibrary: shellLibrary("standard"), ...overrides[ref.id] };
+    if (ref.id === topShellRef.id) return { ...base, shellLibrary: shellLibrary("top-navigation"), ...overrides[ref.id] };
     if (ref.id === workbenchRef.id) return { ...base, workbench, ...overrides[ref.id] };
     return { ...base, register(context: FrontendPluginContext) { context.addPage({ id: "home", path: "/home", title: "Home", navigation: { id: "home", label: "Home", zone: "primary" }, slots: [{ id: "body", slot: "page.body.main", component: () => null }] }); }, ...overrides[ref.id] };
   } };
@@ -46,6 +51,7 @@ describe("PortalRuntime shell", () => {
   it("assembles one signed shell and the functional page", async () => {
     const prepared = await new PortalRuntime(loader()).prepare(portal);
     expect(prepared.shell.id).toBe("ui.structure.shell");
+    expect(prepared.shellLibrary.id).toBe("standard");
     expect(prepared.pages).toMatchObject([{ id: "home", path: "/home" }]);
   });
 
@@ -65,8 +71,27 @@ describe("PortalRuntime shell", () => {
     expect(calls).not.toContain(muiRendererRef.id);
   });
 
+  it("loads only the selected Shell Library module", async () => {
+    const calls: string[] = [];
+    const base = loader();
+    const tracked: FrontendPluginLoader = { async load(ref) { calls.push(ref.id); return base.load(ref); } };
+    const prepared = await new PortalRuntime(tracked).prepare(portal, { shellTemplateID: "top-navigation" });
+    expect(prepared.shellLibrary.id).toBe("top-navigation");
+    expect(calls).toContain(topShellRef.id);
+    expect(calls).not.toContain(standardShellRef.id);
+  });
+
   it("rejects undeclared shell templates before feature registration", async () => {
     await expect(new PortalRuntime(loader()).prepare({ ...portal, shell: { ...portal.shell, config: { ...portal.shell.config, allowedTemplates: ["missing"] } } }))
+      .rejects.toMatchObject({ code: "SHELL_TEMPLATE_INVALID" } satisfies Partial<PortalAssemblyError>);
+  });
+
+  it("rejects duplicate or malformed Shell Library module refs", async () => {
+    const duplicateModuleCatalog = {
+      ...shell,
+      templates: [shell.templates[0], { ...shell.templates[1], module: standardShellRef }],
+    } satisfies UIShellAdapter;
+    await expect(new PortalRuntime(loader({ [shellRef.id]: { shell: duplicateModuleCatalog } })).prepare(portal))
       .rejects.toMatchObject({ code: "SHELL_TEMPLATE_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 

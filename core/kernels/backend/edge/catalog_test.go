@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -109,9 +110,13 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 		t.Fatal(err)
 	}
 	source := catalogSource{artifact.PluginID + "@" + artifact.Version: {Artifact: artifact, PackageBytes: pkg}}
-	shellArtifact, shellPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.shell.test","name":"shell","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shells":[{"id":"ui.structure.shell","uiContract":"^4.0.0"}]}}}`, []byte(`export default { id: "ui.structure.shell" };`))
+	standardArtifact, standardPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.layout.test-standard","name":"standard","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellLibraries":[{"id":"standard","shell":"ui.structure.shell","uiContract":"^4.0.0"}]}}}`, []byte(`export const shellLibrary = { id: "standard" };`))
+	topArtifact, topPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.structure.layout.test-top","name":"top","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellLibraries":[{"id":"top-navigation","shell":"ui.structure.shell","uiContract":"^4.0.0"}]}}}`, []byte(`export const shellLibrary = { id: "top-navigation" };`))
+	shellArtifact, shellPackage := packageFrontendFixture(t, fmt.Sprintf(`{"id":"cn.vastplan.foundation.frontend.structure.shell.test","name":"shell","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shells":[{"id":"ui.structure.shell","uiContract":"^4.0.0","libraries":[{"id":"standard","module":{"id":%q,"version":"1.0.0","channel":"stable"}},{"id":"top-navigation","module":{"id":%q,"version":"1.0.0","channel":"stable"}}]}]}}}`, standardArtifact.PluginID, topArtifact.PluginID), []byte(`export default { id: "ui.structure.shell" };`))
 	workbenchArtifact, workbenchPackage := packageFrontendFixture(t, `{"id":"cn.vastplan.foundation.frontend.workflow.workbench.test","name":"workbench","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"workbenches":[{"id":"ui.workflow.workbench","uiContract":"^4.0.0"}]}}}`, []byte(`export default { id: "ui.workflow.workbench" };`))
 	source[shellArtifact.PluginID+"@"+shellArtifact.Version] = artifacttrust.Envelope{Artifact: shellArtifact, PackageBytes: shellPackage}
+	source[standardArtifact.PluginID+"@"+standardArtifact.Version] = artifacttrust.Envelope{Artifact: standardArtifact, PackageBytes: standardPackage}
+	source[topArtifact.PluginID+"@"+topArtifact.Version] = artifacttrust.Envelope{Artifact: topArtifact, PackageBytes: topPackage}
 	source[workbenchArtifact.PluginID+"@"+workbenchArtifact.Version] = artifacttrust.Envelope{Artifact: workbenchArtifact, PackageBytes: workbenchPackage}
 	counted := &countingCatalogSource{catalogSource: source}
 	deliveryRoot := t.TempDir()
@@ -122,8 +127,10 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 	}
 	ref := portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version}
 	shellRef := portalapi.PluginRef{ID: shellArtifact.PluginID, Version: shellArtifact.Version}
+	standardRef := portalapi.PluginRef{ID: standardArtifact.PluginID, Version: standardArtifact.Version}
+	topRef := portalapi.PluginRef{ID: topArtifact.PluginID, Version: topArtifact.Version}
 	workbenchRef := portalapi.PluginRef{ID: workbenchArtifact.PluginID, Version: workbenchArtifact.Version}
-	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", RenderAdapter: portalapi.RenderAdapter{PluginRef: ref, UIContract: "^4.0.0"}, Shell: portalapi.Shell{PluginRef: shellRef, UIContract: "^4.0.0", Config: frontendcompositionv1.ShellConfig{DefaultTemplate: "standard", AllowedTemplates: []string{"standard"}}}, Workbench: portalapi.Workbench{PluginRef: workbenchRef, UIContract: "^4.0.0"}, Plugins: []portalapi.PluginRef{ref, shellRef, workbenchRef}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, shellRef.ID: compositioncommonv1.OriginPlatformProfile, workbenchRef.ID: compositioncommonv1.OriginPlatformProfile}}}
+	spec := portalapi.PortalSpec{Revision: 1, ID: "admin", TenantID: "tenant-a", Route: "/", RenderAdapter: portalapi.RenderAdapter{PluginRef: ref, UIContract: "^4.0.0"}, Shell: portalapi.Shell{PluginRef: shellRef, UIContract: "^4.0.0", Config: frontendcompositionv1.ShellConfig{DefaultTemplate: "standard", AllowedTemplates: []string{"standard"}}}, Workbench: portalapi.Workbench{PluginRef: workbenchRef, UIContract: "^4.0.0"}, Plugins: []portalapi.PluginRef{ref, shellRef, standardRef, topRef, workbenchRef}, Resolution: portalapi.Resolution{PlatformProfile: compositioncommonv1.Ref{ID: "default", Revision: 1, Digest: strings.Repeat("a", 64)}, ApplicationComposition: compositioncommonv1.Ref{ID: "admin", Revision: 1, Digest: strings.Repeat("b", 64)}, PluginOrigins: map[string]string{ref.ID: compositioncommonv1.OriginPlatformProfile, shellRef.ID: compositioncommonv1.OriginPlatformProfile, standardRef.ID: compositioncommonv1.OriginPlatformProfile, topRef.ID: compositioncommonv1.OriginPlatformProfile, workbenchRef.ID: compositioncommonv1.OriginPlatformProfile}}}
 	lockTestManagement(&spec)
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err != nil {
 		t.Fatalf("有效且已验证的设计系统应通过: %v", err)
@@ -141,11 +148,11 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 		t.Fatalf("有效 Portal 应解析浏览器运行描述: %v", err)
 	}
 	wantDigest := sha256.Sum256(module)
-	if len(runtime.Modules) != 3 || runtime.Modules[0].SHA256 != hex.EncodeToString(wantDigest[:]) || runtime.Modules[0].PackageSHA256 != artifact.SHA256 {
+	if len(runtime.Modules) != len(spec.Plugins) || runtime.Modules[0].SHA256 != hex.EncodeToString(wantDigest[:]) || runtime.Modules[0].PackageSHA256 != artifact.SHA256 {
 		t.Fatalf("模块摘要未绑定已验证制品: %+v", runtime.Modules)
 	}
 	recovery, err := catalog.ResolveRecoveryRuntime(context.Background(), "tenant-a", 2, spec)
-	if err != nil || len(recovery.Modules) != 3 || recovery.Modules[0].URL != "/v1/portal-recovery-modules/2/1/"+runtime.Modules[0].SHA256+".js" {
+	if err != nil || len(recovery.Modules) != len(spec.Plugins) || recovery.Modules[0].URL != "/v1/portal-recovery-modules/2/1/"+runtime.Modules[0].SHA256+".js" {
 		t.Fatalf("恢复模块 URL 未同时绑定 active/fallback revision: %+v %v", recovery.Modules, err)
 	}
 	asset, err := catalog.ReadFrontendModule(context.Background(), "tenant-a", spec, runtime.Modules[0].SHA256)
@@ -192,6 +199,19 @@ func TestFrontendRendererModuleIsDeferredFromTrustedManifest(t *testing.T) {
 	})
 	if err != nil || !asset.Descriptor.Deferred {
 		t.Fatalf("Renderer 模块必须作为延迟前端对象交付: asset=%+v err=%v", asset.Descriptor, err)
+	}
+}
+
+func TestFrontendShellLibraryModuleIsDeferredFromTrustedManifest(t *testing.T) {
+	manifestRaw := `{"id":"cn.vastplan.foundation.frontend.structure.layout.deferred-test","name":"layout","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"shellLibraries":[{"id":"deferred-test","shell":"ui.structure.shell","uiContract":"^4.0.0"}]}}}`
+	artifact, packageBytes := packageFrontendFixture(t, manifestRaw, []byte(`export const shellLibrary = {};`))
+	manifest, err := pluginv1.ParseManifest([]byte(manifestRaw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	asset, err := frontendModule(1, verifiedPortalPlugin{ref: portalapi.PluginRef{ID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}, artifact: artifact, packageBytes: packageBytes, manifest: manifest})
+	if err != nil || !asset.Descriptor.Deferred {
+		t.Fatalf("Shell Library 模块必须作为延迟前端对象交付: asset=%+v err=%v", asset.Descriptor, err)
 	}
 }
 

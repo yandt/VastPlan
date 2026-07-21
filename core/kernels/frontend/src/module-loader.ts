@@ -1,4 +1,4 @@
-import type { UIRenderAdapter, UIRenderer, FrontendPluginHotLifecycle, PluginLocalization, UIShellAdapter, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
+import type { UIRenderAdapter, UIRenderer, FrontendPluginHotLifecycle, PluginLocalization, UIShellAdapter, UIShellLibrary, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import type { FrontendPluginLoader, FrontendPluginModule, PluginRef, PortalSpec } from "./portal-runtime";
 
 export interface FrontendModuleDescriptor extends PluginRef {
@@ -132,8 +132,12 @@ function normalizeModule(namespace: unknown, descriptor: FrontendModuleDescripto
   ) {
     return { provenance, renderer: renderer as unknown as UIRenderer, hot, localization };
   }
-  if (exported.id === "ui.structure.shell" && typeof exported.compose === "function" && typeof exported.Shell === "function") {
+  if (exported.id === "ui.structure.shell" && typeof exported.compose === "function" && Array.isArray(exported.templates)) {
     return { provenance, shell: exported as unknown as UIShellAdapter, hot, localization };
+  }
+  const library = isRecord(namespace.shellLibrary) ? namespace.shellLibrary : exported;
+  if (typeof library.id === "string" && library.shell === "ui.structure.shell" && typeof library.uiContract === "string" && typeof library.Shell === "function") {
+    return { provenance, shellLibrary: library as unknown as UIShellLibrary, hot, localization };
   }
   if (exported.id === "ui.workflow.workbench" && typeof exported.CollectionPage === "function") {
     return { provenance, workbench: exported as unknown as UIWorkbenchAdapter, hot, localization };

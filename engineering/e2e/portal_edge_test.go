@@ -67,6 +67,8 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.mui/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.standard/vastplan.plugin.json")
+	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.top-navigation/vastplan.plugin.json")
 	publishPortalFrontendPlugin(t, repository, "extensions/plugins/cn.vastplan.foundation.frontend.workflow.workbench/vastplan.plugin.json")
 
 	dir := t.TempDir()
@@ -236,7 +238,7 @@ func TestPortalEdgeHTTPSGovernanceEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(raw, &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if runtime.Portal.Revision != firstActivation.ID || len(runtime.Modules) != 11 || runtime.Modules[0].ID != "cn.vastplan.foundation.frontend.render.adapter" || runtime.Modules[1].ID != "cn.vastplan.foundation.frontend.render.adapter.arco" || !runtime.Modules[1].Deferred || runtime.Modules[2].ID != "cn.vastplan.foundation.frontend.render.adapter.mui" || !runtime.Modules[2].Deferred || runtime.Modules[3].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Modules[4].ID != "cn.vastplan.foundation.frontend.workflow.workbench" || runtime.Modules[5].ID != "cn.vastplan.platform.configuration.portal-composer" || runtime.Modules[10].ID != "cn.vastplan.platform.infrastructure.deployment-manager" {
+	if runtime.Portal.Revision != firstActivation.ID || len(runtime.Modules) != 13 || runtime.Modules[0].ID != "cn.vastplan.foundation.frontend.render.adapter" || runtime.Modules[1].ID != "cn.vastplan.foundation.frontend.render.adapter.arco" || !runtime.Modules[1].Deferred || runtime.Modules[2].ID != "cn.vastplan.foundation.frontend.render.adapter.mui" || !runtime.Modules[2].Deferred || runtime.Modules[3].ID != "cn.vastplan.foundation.frontend.structure.shell" || runtime.Modules[4].ID != "cn.vastplan.foundation.frontend.structure.layout.standard" || !runtime.Modules[4].Deferred || runtime.Modules[5].ID != "cn.vastplan.foundation.frontend.structure.layout.top-navigation" || !runtime.Modules[5].Deferred || runtime.Modules[6].ID != "cn.vastplan.foundation.frontend.workflow.workbench" || runtime.Modules[7].ID != "cn.vastplan.platform.configuration.portal-composer" || runtime.Modules[12].ID != "cn.vastplan.platform.infrastructure.deployment-manager" {
 		t.Fatalf("unexpected governed runtime: %+v", runtime)
 	}
 	status, raw = portalHTTPRequest(t, client, baseURL, "reader-token", "", http.MethodGet, runtime.Modules[0].URL, map[string]any{})

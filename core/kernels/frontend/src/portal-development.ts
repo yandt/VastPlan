@@ -16,6 +16,7 @@ export interface PortalDevelopmentOptions {
   runtimeEndpoint?: string;
   reload?(): void;
   onError?(error: unknown): void;
+  onRuntime?(spec: PortalRuntimeSpec): void;
 }
 
 /** Coalesces local build events and never lets an older update overtake a newer one. */
@@ -37,6 +38,7 @@ export function startPortalDevelopmentUpdates(options: PortalDevelopmentOptions)
         const target = requested;
         const spec = await fetchDevelopmentRuntime(fetcher, runtimeEndpoint, options.pathname());
         await options.manager.replace(spec);
+        options.onRuntime?.(spec);
         applied = target;
       }
     } catch (error) {

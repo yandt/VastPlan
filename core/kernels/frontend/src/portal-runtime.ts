@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { message, pageSlotIDs, shellSlotIDs } from "@vastplan/ui-primitives";
-import type { UIRenderAdapter, UIRenderer, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, UIShellAdapter, UICapability, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
+import type { UIRenderAdapter, UIRenderer, FrontendPluginContext, FrontendPluginHotLifecycle, LocalizedText, PluginLocalization, PortalLocalizationPolicy, PortalManagementService, PortalMessageCatalogs, PortalRegisteredPage, PortalRegisteredShellContribution, UIShellAdapter, UIShellLibrary, UICapability, UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 
 export interface PluginRef {
   id: string;
@@ -75,6 +75,7 @@ export interface FrontendPluginModule {
   renderAdapter?: UIRenderAdapter;
   renderer?: UIRenderer;
   shell?: UIShellAdapter;
+  shellLibrary?: UIShellLibrary;
   workbench?: UIWorkbenchAdapter;
   register?(context: FrontendPluginContext): void | Promise<void>;
   hot?: FrontendPluginHotLifecycle;
@@ -90,6 +91,7 @@ export interface PreparedPortal {
   renderAdapter: UIRenderer;
   renderAdapterCatalog: UIRenderAdapter;
   shell: UIShellAdapter;
+  shellLibrary: UIShellLibrary;
   workbench: UIWorkbenchAdapter;
   pages: readonly PortalRegisteredPage[];
   shellContributions: readonly PortalRegisteredShellContribution[];
@@ -107,6 +109,7 @@ export interface PortalPrepareOptions {
   signal?: AbortSignal;
   reason?: "bootstrap" | "replace";
   rendererID?: string;
+  shellTemplateID?: string;
 }
 
 const requiredCapabilities: readonly UICapability[] = [
@@ -176,24 +179,38 @@ export class PortalRuntime {
     }
 
     const rendererModuleKeys = new Set(renderAdapter.renderers.map((renderer) => moduleKey(renderer.module)));
-    const otherRefs = portal.plugins.filter((ref) => !samePlugin(ref, portal.renderAdapter) && !rendererModuleKeys.has(moduleKey(ref)));
+    const shellModule = await this.loader.load(portal.shell);
+    this.assertTrustedFirstParty(shellModule, portal.shell.id);
+    const shell = shellModule.shell;
+    if (shell?.id !== "ui.structure.shell" || typeof shell.compose !== "function" || !contractSatisfies(shell.uiContract, portal.shell.uiContract)) {
+      throw new PortalAssemblyError("SHELL_INVALID", "Shell Catalog 缺失或 UI 契约不兼容");
+    }
+    if (!validShellTemplateCatalog(shell) || !validShellConfig(portal.shell.config, shell)) {
+      throw new PortalAssemblyError("SHELL_TEMPLATE_INVALID", "Shell Library 目录或 Platform Profile 配置无效");
+    }
+    const selectedTemplateID = options.shellTemplateID !== undefined && portal.shell.config.userSelectable && portal.shell.config.allowedTemplates.includes(options.shellTemplateID)
+      ? options.shellTemplateID : portal.shell.config.defaultTemplate;
+    const selectedShellTemplate = shell.templates.find((template) => template.id === selectedTemplateID);
+    if (selectedShellTemplate === undefined || !portal.plugins.some((ref) => samePlugin(ref, selectedShellTemplate.module)) || portal.resolution.pluginOrigins[selectedShellTemplate.module.id] !== "platform-profile") {
+      throw new PortalAssemblyError("SHELL_LIBRARY_MISSING", `Shell Library 未包含在 Platform Profile 解析锁中: ${selectedTemplateID}`);
+    }
+    const shellLibraryModule = await this.loader.load(selectedShellTemplate.module);
+    this.assertTrustedFirstParty(shellLibraryModule, selectedShellTemplate.module.id);
+    const shellLibrary = shellLibraryModule.shellLibrary;
+    if (shellLibrary === undefined || shellLibrary.id !== selectedTemplateID || shellLibrary.shell !== shell.id || typeof shellLibrary.Shell !== "function" || !contractSatisfies(shellLibrary.uiContract, portal.shell.uiContract)) {
+      throw new PortalAssemblyError("SHELL_LIBRARY_INVALID", `Shell Library 导出与 Catalog 不一致: ${selectedTemplateID}`);
+    }
+    const shellLibraryModuleKeys = new Set(shell.templates.map((template) => moduleKey(template.module)));
+    const otherRefs = portal.plugins.filter((ref) => !samePlugin(ref, portal.renderAdapter) && !samePlugin(ref, portal.shell) && !rendererModuleKeys.has(moduleKey(ref)) && !shellLibraryModuleKeys.has(moduleKey(ref)));
     const otherLoaded = await Promise.all(otherRefs.map(async (ref) => ({ ref, module: await this.loader.load(ref) })));
     const loaded = [
       { ref: portal.renderAdapter as PluginRef, module: renderAdapterModule },
       { ref: selectedRendererTemplate.module as PluginRef, module: rendererModule },
+      { ref: portal.shell as PluginRef, module: shellModule },
+      { ref: selectedShellTemplate.module as PluginRef, module: shellLibraryModule },
       ...otherLoaded,
     ];
     const modules = new Map(loaded.map((item) => [moduleKey(item.ref), item.module]));
-
-    const shellModule = requiredModule(modules, portal.shell);
-    this.assertTrustedFirstParty(shellModule, portal.shell.id);
-    const shell = shellModule.shell;
-    if (shell?.id !== "ui.structure.shell" || typeof shell.Shell !== "function" || typeof shell.compose !== "function" || !contractSatisfies(shell.uiContract, portal.shell.uiContract)) {
-      throw new PortalAssemblyError("SHELL_INVALID", "Shell 插件缺失或 UI 契约不兼容");
-    }
-    if (!validShellTemplateCatalog(shell) || !validShellConfig(portal.shell.config, shell)) {
-      throw new PortalAssemblyError("SHELL_TEMPLATE_INVALID", "Shell 模板目录或 Platform Profile 配置无效");
-    }
     const workbenchModule = requiredModule(modules, portal.workbench);
     this.assertTrustedFirstParty(workbenchModule, portal.workbench.id);
     const workbench = workbenchModule.workbench;
@@ -231,6 +248,7 @@ export class PortalRuntime {
         continue;
       }
       if (rendererModuleKeys.has(moduleKey(ref))) continue;
+      if (shellLibraryModuleKeys.has(moduleKey(ref))) continue;
       const plugin = requiredModule(modules, ref);
       this.assertTrustedFirstParty(plugin, ref.id);
       if (plugin.renderAdapter !== undefined || plugin.shell !== undefined || plugin.workbench !== undefined) {
@@ -287,7 +305,7 @@ export class PortalRuntime {
       await plugin.register?.(context);
     }
     const preparedModules = loaded.map(({ ref, module }) => Object.freeze({ ref: Object.freeze({ ...ref }), module }));
-    return Object.freeze({ portal: portalSnapshot, renderAdapter: selectedRenderer, renderAdapterCatalog: renderAdapter, shell, workbench, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
+    return Object.freeze({ portal: portalSnapshot, renderAdapter: selectedRenderer, renderAdapterCatalog: renderAdapter, shell, shellLibrary, workbench, pages: Object.freeze(pages), shellContributions: Object.freeze(shellContributions), modules: Object.freeze(preparedModules), messageCatalogs: Object.freeze(messageCatalogs) });
   }
 
   private validatePortalShape(portal: PortalSpec): void {
@@ -401,9 +419,12 @@ function validRenderAdapterConfig(config: RenderAdapterSelection["config"], adap
 function validShellTemplateCatalog(shell: UIShellAdapter): boolean {
   if (shell.templates.length === 0 || !/^[a-z][a-z0-9-]{0,63}$/.test(shell.defaultTemplate)) return false;
   const identifiers = new Set<string>();
+  const modules = new Set<string>();
   for (const template of shell.templates) {
-    if (!/^[a-z][a-z0-9-]{0,63}$/.test(template.id) || identifiers.has(template.id) || !validLocalizedText(template.label)) return false;
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(template.id) || identifiers.has(template.id) || !validLocalizedText(template.label) ||
+        !validPluginRef(template.module) || modules.has(moduleKey(template.module))) return false;
     identifiers.add(template.id);
+    modules.add(moduleKey(template.module));
   }
   return identifiers.has(shell.defaultTemplate);
 }

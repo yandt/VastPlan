@@ -28,16 +28,18 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   let prepared: PreparedPortal | undefined;
   let recoveryMode = false;
   let developmentError: string | undefined;
+  let currentSpec: PortalRuntimeSpec | undefined;
+  let replaceShellTemplate: (templateID: string) => Promise<void> = async () => undefined;
   let stopDevelopmentUpdates: (() => void) | undefined;
   const renderApplication = () => {
-    if (prepared !== undefined) root.render(<PortalApplication prepared={prepared} initialPath={pathname} recoveryMode={recoveryMode} developmentError={developmentError} />);
+    if (prepared !== undefined) root.render(<PortalApplication prepared={prepared} initialPath={pathname} recoveryMode={recoveryMode} developmentError={developmentError} onShellTemplateChange={replaceShellTemplate} />);
   };
   const manager = new PortalGenerationManager({
     fetcher,
     descriptorPolicy: __VASTPLAN_DEV_HMR__ ? "development" : "production",
     prepare: async (spec, context) => {
       const loader = new VerifiedFrontendPluginLoader(spec.modules, fetcher, undefined, __VASTPLAN_DEV_HMR__ ? "development" : "production");
-      return new PortalRuntime(loader).prepare(spec.portal, { ...context, rendererID: resolveRendererPreference(spec.portal) });
+      return new PortalRuntime(loader).prepare(spec.portal, { ...context, rendererID: resolveRendererPreference(spec.portal), shellTemplateID: resolveShellTemplatePreference(spec.portal) });
     },
     onDiagnostic: (diagnostic) => {
       if (!__VASTPLAN_DEV_HMR__) return;
@@ -50,15 +52,32 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
     developmentError = undefined;
     renderApplication();
   });
+  replaceShellTemplate = async (templateID) => {
+    if (prepared === undefined || currentSpec === undefined || templateID === prepared.shellLibrary.id || !prepared.portal.shell.config.userSelectable || !prepared.portal.shell.config.allowedTemplates.includes(templateID)) return;
+    const storageKey = shellTemplateStorageKey(prepared.portal);
+    const previous = resolveShellTemplatePreference(prepared.portal);
+    try {
+      globalThis.localStorage?.setItem(storageKey, templateID);
+      await manager.replace(currentSpec);
+    } catch (error) {
+      try {
+        if (previous === undefined) globalThis.localStorage?.removeItem(storageKey);
+        else globalThis.localStorage?.setItem(storageKey, previous);
+      } catch { /* browser privacy mode may deny persistence */ }
+      developmentError = errorMessage(error);
+      renderApplication();
+    }
+  };
   root.render(<PortalStarting />);
   try {
-    const spec = await fetchRuntimeSpec(fetcher, endpoint, pathname);
-    await manager.start(spec);
+    currentSpec = await fetchRuntimeSpec(fetcher, endpoint, pathname);
+    await manager.start(currentSpec);
     if (__VASTPLAN_DEV_HMR__) {
       stopDevelopmentUpdates = startPortalDevelopmentUpdates({
         manager,
         fetcher,
         pathname: () => globalThis.location?.pathname ?? pathname,
+        onRuntime: (spec) => { currentSpec = spec; },
         onError: (error) => {
           developmentError = errorMessage(error);
           renderApplication();
@@ -68,8 +87,8 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   } catch (error) {
     const recover = async () => {
       recoveryMode = true;
-      const spec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname);
-      await manager.start(spec);
+      currentSpec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname);
+      await manager.start(currentSpec);
     };
     root.render(<PortalRecovery error={error} onRecover={recover} />);
   }
@@ -98,7 +117,7 @@ export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string,
   return parsePortalRuntimeSpec(await response.json());
 }
 
-export function PortalApplication({ prepared, initialPath, recoveryMode = false, developmentError }: { prepared: PreparedPortal; initialPath: string; recoveryMode?: boolean; developmentError?: string }) {
+export function PortalApplication({ prepared, initialPath, recoveryMode = false, developmentError, onShellTemplateChange }: { prepared: PreparedPortal; initialPath: string; recoveryMode?: boolean; developmentError?: string; onShellTemplateChange?(templateID: string): Promise<void> }) {
   const landingPath = useMemo(() => resolvePortalPath(prepared, initialPath), [prepared, initialPath]);
   const [pathname, setPathname] = useState(landingPath);
   useEffect(() => {
@@ -113,16 +132,16 @@ export function PortalApplication({ prepared, initialPath, recoveryMode = false,
   const policy = prepared.portal.localization ?? defaultPortalLocalization;
   const catalogs = useMemo(() => ({ ...prepared.messageCatalogs, [kernelNamespace]: kernelLocalization }), [prepared.messageCatalogs]);
   return <PortalI18nProvider policy={policy} catalogs={catalogs} candidates={globalThis.navigator?.languages ?? []} storageKey={`vastplan.locale.${prepared.portal.tenantId}.${prepared.portal.id}`}>
-    <LocalizedPortalApplication prepared={prepared} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} developmentError={developmentError} onRendererChange={(rendererID) => changeRendererPreference(prepared, rendererID)} />
+    <LocalizedPortalApplication prepared={prepared} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} developmentError={developmentError} onRendererChange={(rendererID) => changeRendererPreference(prepared, rendererID)} onShellTemplateChange={onShellTemplateChange} />
   </PortalI18nProvider>;
 }
 
-function LocalizedPortalApplication({ prepared, pathname, onNavigate, page, recoveryMode, developmentError, onRendererChange }: { prepared: PreparedPortal; pathname: string; onNavigate(path: string): void; page: PreparedPortal["pages"][number] | undefined; recoveryMode: boolean; developmentError?: string; onRendererChange(rendererID: string): void }) {
+function LocalizedPortalApplication({ prepared, pathname, onNavigate, page, recoveryMode, developmentError, onRendererChange, onShellTemplateChange }: { prepared: PreparedPortal; pathname: string; onNavigate(path: string): void; page: PreparedPortal["pages"][number] | undefined; recoveryMode: boolean; developmentError?: string; onRendererChange(rendererID: string): void; onShellTemplateChange?(templateID: string): Promise<void> }) {
   const Provider = prepared.renderAdapter.Provider;
   const i18n = usePortalI18n();
   const themeTemplate = prepared.portal.renderAdapter.config.rendererOptions?.[prepared.renderAdapter.id]?.themeTemplate;
   return <Provider locale={i18n.locale} direction={i18n.direction} themeTemplate={themeTemplate}>
-    <PortalContent prepared={prepared} pathname={pathname} onNavigate={onNavigate} page={page} recoveryMode={recoveryMode} onRendererChange={onRendererChange} />
+    <PortalContent prepared={prepared} pathname={pathname} onNavigate={onNavigate} page={page} recoveryMode={recoveryMode} onRendererChange={onRendererChange} onShellTemplateChange={onShellTemplateChange} />
     {developmentError === undefined ? null : <PortalDevelopmentNotice message={developmentError} />}
   </Provider>;
 }
@@ -135,13 +154,14 @@ function PortalDevelopmentNotice({ message }: { message: string }) {
   </aside>;
 }
 
-function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode, onRendererChange }: {
+function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode, onRendererChange, onShellTemplateChange }: {
   prepared: PreparedPortal;
   pathname: string;
   onNavigate(path: string): void;
   page: PreparedPortal["pages"][number] | undefined;
   recoveryMode: boolean;
   onRendererChange(rendererID: string): void;
+  onShellTemplateChange?(templateID: string): Promise<void>;
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
@@ -151,13 +171,10 @@ function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode, onR
     activePageID: page?.id,
     config: prepared.portal.shell.config,
   });
-  const templateStorageKey = `vastplan.shell-template.${prepared.portal.tenantId}.${prepared.portal.id}.${prepared.portal.shell.id}`;
-  const [templateID, setTemplateID] = useState(() => resolveShellTemplate(prepared, templateStorageKey));
-  useEffect(() => setTemplateID(resolveShellTemplate(prepared, templateStorageKey)), [prepared, templateStorageKey]);
+  const templateID = prepared.shellLibrary.id;
   const changeTemplate = (next: string) => {
     if (!prepared.portal.shell.config.userSelectable || !prepared.portal.shell.config.allowedTemplates.includes(next)) return;
-    setTemplateID(next);
-    try { globalThis.localStorage?.setItem(templateStorageKey, next); } catch { /* browser privacy mode may deny persistence */ }
+    void onShellTemplateChange?.(next);
   };
   const navigate = (pageID: string) => {
     const target = prepared.pages.find((candidate) => candidate.id === pageID);
@@ -166,7 +183,7 @@ function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode, onR
     onNavigate(target.path);
   };
   const branding = prepared.portal.branding ?? {};
-  const Shell = prepared.shell.Shell;
+  const Shell = prepared.shellLibrary.Shell;
   return <Shell
     composition={composition}
     template={{ id: templateID, options: prepared.portal.shell.config.templateOptions?.[templateID] ?? {} }}
@@ -205,13 +222,17 @@ function changeRendererPreference(prepared: PreparedPortal, rendererID: string):
   globalThis.location?.reload();
 }
 
-function resolveShellTemplate(prepared: PreparedPortal, storageKey: string): string {
-  const allowed = new Set(prepared.portal.shell.config.allowedTemplates);
+function shellTemplateStorageKey(portal: PreparedPortal["portal"]): string {
+  return `vastplan.shell-template.${portal.tenantId}.${portal.id}.${portal.shell.id}`;
+}
+
+function resolveShellTemplatePreference(portal: PreparedPortal["portal"]): string | undefined {
+  const allowed = new Set(portal.shell.config.allowedTemplates);
   try {
-    const saved = globalThis.localStorage?.getItem(storageKey);
+    const saved = globalThis.localStorage?.getItem(shellTemplateStorageKey(portal));
     if (saved !== null && saved !== undefined && allowed.has(saved)) return saved;
   } catch { /* browser privacy mode may deny persistence */ }
-  return prepared.portal.shell.config.defaultTemplate;
+  return undefined;
 }
 
 export function PortalStarting() {

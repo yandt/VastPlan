@@ -17,7 +17,8 @@ const contribution: PortalSlotContribution<"shell.header.start"> & { pluginID: s
 
 describe("standard shell layout", () => {
   it("exports only the visual layout adapter contract", () => {
-    expect(adapter.id).toBe("internal.standard-template-source");
+    expect(adapter.id).toBe("standard");
+    expect(adapter.shell).toBe("ui.structure.shell");
     expect(adapter.uiContract).toBe("4.0.0");
     expect(adapter.Shell).toBeTypeOf("function");
     expect(adapter).not.toHaveProperty("compose");

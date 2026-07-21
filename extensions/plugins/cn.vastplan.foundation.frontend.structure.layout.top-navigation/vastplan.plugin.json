@@ -11,5 +11,5 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
-  "contributes": { "frontend": { "views": [{ "id": "legacy-top-navigation-template-source", "title": "Internal Top Navigation Template Source" }] } }
+  "contributes": { "frontend": { "shellLibraries": [{ "id": "top-navigation", "shell": "ui.structure.shell", "uiContract": "^4.0.0" }] } }
 }
