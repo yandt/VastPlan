@@ -1,5 +1,7 @@
 # ADR-0070 Deployment Manager 与可信引导执行边界
 
+> 实现更新（2026-07-22）：白名单节点/作业 HTTP Adapter 已迁移到 Node Portal Kernel；SSH、凭证解密与执行边界仍留在受信 Backend/Agent，不进入 BFF。
+
 - 状态：已采纳
 - 日期：2026-07-18
 - 关联：[ADR-0036](ADR-0036-Backend核心SPI边界.md)、[ADR-0068](ADR-0068-分布式平台管理中心与强类型BFF.md)、[ADR-0069](ADR-0069-SSH首次引导与Node-Agent接管.md)

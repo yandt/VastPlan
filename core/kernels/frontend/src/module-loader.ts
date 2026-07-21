@@ -14,7 +14,7 @@ export type ModuleFetcher = (input: string, init?: RequestInit) => Promise<Respo
 export type ModuleImporter = (source: Uint8Array, sourceURL: string) => Promise<unknown>;
 
 /**
- * Loads only modules listed in the Edge-issued RuntimeSpec. The JavaScript is
+ * Loads only modules listed in the trusted Portal-issued RuntimeSpec. The JavaScript is
  * fetched as bytes, checked against the server-governed digest, and imported
  * from an opaque blob URL; a plugin cannot self-assert provenance.
  */

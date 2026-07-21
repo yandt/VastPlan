@@ -60,7 +60,7 @@
 - `POST /v1/catalog/bundles`：使用独立 Bundle token 提交一份已校验锁，下载包含锁、信任快照、精确包与证明的确定性 `tar.gz`。
 - `POST /v1/catalog/bundles/import`：使用发布 token 流式上传 Bundle；服务先在仓库外的私有临时目录解包，再将每个对象送回相同的签名、摘要、包内清单和不可变发布强制点。部分导入只会留下已验证的幂等对象，不会激活任何锁或部署。
 
-包体默认上限为 256 MiB，证明上限为 2 MiB。未授权、明文请求、超限或不可信制品均 fail-closed。小载荷管理操作已经 Portal Edge BFF；制品包与 Bundle 大字节仍使用独立 TLS 入口。通用设置/凭证句柄与签名种子 Bundle 尚未接入，所以 `artifact-server` 子命令仍保留为兼容启动路径，不能据此删除自举能力。
+包体默认上限为 256 MiB，证明上限为 2 MiB。未授权、明文请求、超限或不可信制品均 fail-closed。小载荷管理操作已经 Node Portal Kernel BFF；制品包与 Bundle 大字节仍使用独立 TLS 入口。通用设置/凭证句柄与签名种子 Bundle 尚未接入，所以 `artifact-server` 子命令仍保留为兼容启动路径，不能据此删除自举能力。
 
 Resolver 请求示例：
 

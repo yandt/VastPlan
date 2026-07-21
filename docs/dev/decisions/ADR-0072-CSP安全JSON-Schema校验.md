@@ -1,5 +1,7 @@
 # ADR-0072 CSP 安全的浏览器 JSON Schema 校验
 
+> 实现更新（2026-07-22）：生产 CSP 现由 Node Portal Kernel 生成；禁止 `unsafe-eval` 的不变量不变，Go Portal HTTP 宿主已经删除。
+
 - 状态：已接受
 - 日期：2026-07-18
 - 关联：[ADR-0063 Portal 静态宿主与样式隔离](ADR-0063-Portal静态宿主与样式隔离.md)、[ADR-0065 通用 JSON Schema 表单与 Arco 主题适配](ADR-0065-通用JSON-Schema表单与Arco主题适配.md)、[ADR-0066 Arco 按需构建与单文件制品边界](ADR-0066-Arco按需构建与单文件制品边界.md)

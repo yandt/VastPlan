@@ -1,8 +1,7 @@
-package edge
+package portaltrust
 
 import (
 	"fmt"
-	"strings"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
@@ -90,9 +89,4 @@ func frontendObjectURL(revision uint64, digest, mediaType string) string {
 		extension = ".wasm"
 	}
 	return fmt.Sprintf("/v1/portal-modules/%d/%s%s", revision, digest, extension)
-}
-
-func recoveryFrontendObjectURL(active, fallback uint64, regularURL string) string {
-	name := regularURL[strings.LastIndex(regularURL, "/")+1:]
-	return fmt.Sprintf("/v1/portal-recovery-modules/%d/%d/%s", active, fallback, name)
 }

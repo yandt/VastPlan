@@ -1,4 +1,4 @@
-package edge
+package portaltrust
 
 import (
 	"context"
@@ -122,8 +122,7 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 	source[workbenchArtifact.PluginID+"@"+workbenchArtifact.Version] = artifacttrust.Envelope{Artifact: workbenchArtifact, PackageBytes: workbenchPackage}
 	counted := &countingCatalogSource{catalogSource: source}
 	deliveryRoot := t.TempDir()
-	originRoot := filepath.Join(deliveryRoot, "origin")
-	catalog, err := NewTrustedCatalog([]ArtifactSource{counted}, contentVerifier{}, WithFrontendDeliveryDistribution(originRoot, filepath.Join(deliveryRoot, "edge-a")))
+	catalog, err := NewTrustedCatalog([]ArtifactSource{counted}, contentVerifier{}, WithFrontendDeliveryRoot(deliveryRoot))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +149,7 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 		t.Fatalf("物化期间每个制品应只获取和验证一次: got=%d want=%d", got, len(spec.Plugins))
 	}
 	materializationFetches := counted.calls
-	runtime, err := catalog.ResolveRuntime(context.Background(), "tenant-a", spec)
+	runtime, err := catalog.delivery.runtime("tenant-a", spec)
 	if err != nil {
 		t.Fatalf("有效 Portal 应解析浏览器运行描述: %v", err)
 	}
@@ -158,27 +157,12 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 	if len(runtime.Modules) != len(spec.Plugins) || runtime.Modules[1].SHA256 != hex.EncodeToString(wantDigest[:]) || runtime.Modules[1].PackageSHA256 != artifact.SHA256 {
 		t.Fatalf("模块摘要未绑定已验证制品: %+v", runtime.Modules)
 	}
-	recovery, err := catalog.ResolveRecoveryRuntime(context.Background(), "tenant-a", 2, spec)
-	if err != nil || len(recovery.Modules) != len(spec.Plugins) || recovery.Modules[0].URL != "/v1/portal-recovery-modules/2/1/"+runtime.Modules[0].SHA256+".js" {
-		t.Fatalf("恢复模块 URL 未同时绑定 active/fallback revision: %+v %v", recovery.Modules, err)
-	}
-	asset, err := catalog.ReadFrontendModule(context.Background(), "tenant-a", spec, runtime.Modules[1].SHA256)
+	asset, err := catalog.delivery.module("tenant-a", spec, runtime.Modules[1].SHA256)
 	if err != nil || string(asset.Content) != string(module) {
 		t.Fatalf("读取已锁定模块失败: asset=%+v err=%v", asset.Descriptor, err)
 	}
 	if counted.calls != materializationFetches {
 		t.Fatalf("运行时热路径不得重新读取制品包: before=%d after=%d", materializationFetches, counted.calls)
-	}
-	edgeB, err := NewTrustedCatalog([]ArtifactSource{counted}, contentVerifier{}, WithFrontendDeliveryDistribution(originRoot, filepath.Join(deliveryRoot, "edge-b")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	beforeColdFill := counted.calls
-	if _, err := edgeB.ResolveRuntime(context.Background(), "tenant-a", spec); err != nil || counted.calls != beforeColdFill {
-		t.Fatalf("新 Portal Edge 应从中央交付快照冷填充且不读制品包: calls=%d err=%v", counted.calls-beforeColdFill, err)
-	}
-	if err := edgeB.PrefetchPortal(context.Background(), "tenant-a", spec); err != nil || counted.calls != beforeColdFill {
-		t.Fatalf("已就绪 Portal Edge 的后台预取应无副作用: calls=%d err=%v", counted.calls-beforeColdFill, err)
 	}
 	spec.Resolution.PluginOrigins[ref.ID] = compositioncommonv1.OriginApplication
 	if err := catalog.ValidatePortal(context.Background(), "tenant-a", spec); err == nil {

@@ -1,5 +1,6 @@
-// Package portalapi defines the stable control-plane contract between Edge/BFF and
-// the portal-composer plugin. It deliberately contains no HTTP or UI framework code.
+// Package portalapi defines the stable control-plane contract between a Portal
+// BFF and the portal-composer plugin. It deliberately contains no HTTP or UI
+// framework code.
 package portalapi
 
 import (
@@ -20,9 +21,9 @@ var (
 	ErrCatalogRejected = errors.New("Portal 制品目录校验失败")
 )
 
-// ComposerCapability is the stable tool capability shared by Edge and the
-// Portal Composer plugin. Keeping this logical name in the neutral contract
-// package prevents the Backend kernel from importing a concrete plugin.
+// ComposerCapability is the stable tool capability shared by Portal hosts and
+// the Portal Composer plugin. Keeping this logical name in the neutral contract
+// package prevents either kernel from importing a concrete plugin.
 const ComposerCapability = "platform.portal-composer"
 const ComposerPluginID = "cn.vastplan.platform.configuration.portal-composer"
 
@@ -36,13 +37,13 @@ const KernelCatalogValidationCapability = "kernel.portal.catalog.validate"
 // revision can become active.
 const KernelCatalogMaterializationCapability = "kernel.portal.catalog.materialize"
 
-// KernelArtifactReferencePublicationCapability is the narrow Portal Edge
+// KernelArtifactReferencePublicationCapability is the narrow trusted-host
 // bridge to the cluster artifact repository. It accepts only sealed snapshots
 // from the authenticated Composer plugin and never exposes a generic router.
 const KernelArtifactReferencePublicationCapability = "kernel.portal.artifact-references.publish"
 
 // KernelTestArtifactValidationCapability validates one exact testing receipt
-// inside the trusted Portal Edge boundary without exposing repository tokens,
+// inside the trusted Backend boundary without exposing repository tokens,
 // publisher keys, or artifact bytes to the Composer plugin.
 const KernelTestArtifactValidationCapability = "kernel.portal.test-artifact.validate"
 
@@ -152,7 +153,7 @@ type Resolution struct {
 	PluginOrigins           map[string]string       `json:"pluginOrigins"`
 }
 
-// FrontendModule is an Edge-issued, content-bound browser object descriptor.
+// FrontendModule is a trusted-host-issued, content-bound browser object descriptor.
 // PackageSHA256 proves which verified plugin artifact supplied the module;
 // SHA256 binds the exact bytes fetched by the browser.
 type FrontendModule struct {
@@ -385,7 +386,7 @@ type TestReleaseService interface {
 }
 
 // Service is implemented by the configuration/composition plugin and consumed
-// through an authenticated Edge adapter. Every method scopes itself to principal.TenantID.
+// through an authenticated Portal BFF adapter. Every method scopes itself to principal.TenantID.
 type Service interface {
 	CreateDraft(context.Context, Principal, frontendcompositionv1.ApplicationComposition) (Revision, error)
 	UpdateDraft(context.Context, Principal, uint64, frontendcompositionv1.ApplicationComposition) (Revision, error)

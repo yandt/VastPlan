@@ -1,6 +1,6 @@
 // Package platformadminapi defines the browser-facing platform administration
 // contract. It intentionally contains domain DTOs only: transport, plugin IDs,
-// NATS subjects and repository credentials stay behind the Portal Edge.
+// NATS subjects and repository credentials stay behind the trusted Portal host.
 package platformadminapi
 
 import (
@@ -446,8 +446,8 @@ type ServiceCompositionRequest struct {
 
 // Service is the narrow BFF port consumed by HTTP handlers. Implementations
 // may reach local or cluster capabilities. Target is resolved from the active
-// Portal management binding by Edge and cannot be supplied as routing fields by
-// a browser.
+// Portal management binding by the BFF and cannot be supplied as routing fields
+// by a browser.
 type Service interface {
 	ListSettings(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) ([]Setting, error)
 	PutSetting(context.Context, portalapi.Principal, portalapi.ManagementTarget, string, PutSettingRequest) (Setting, error)

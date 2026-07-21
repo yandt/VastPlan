@@ -27,7 +27,7 @@ describe("Portal Activation updates", () => {
     expect(onRuntime).toHaveBeenCalledWith(expect.objectContaining({ portal: expect.objectContaining({ revision: 2 }) }));
   });
 
-  it("requests an Edge catch-up from the exact active revision", () => {
+  it("requests a Portal-host catch-up from the exact active revision", () => {
     const source = new FakeEventSource();
     const factory = vi.fn(() => source);
     startPortalActivationUpdates({ manager: {} as PortalGenerationManager, currentRevision: () => 11, pathname: () => "/operations/settings", policy: "notify", eventSourceFactory: factory, fetchRuntime: async () => runtime(11) });

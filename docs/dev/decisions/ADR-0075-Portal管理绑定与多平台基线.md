@@ -1,5 +1,7 @@
 # ADR-0075：Portal 管理绑定与多平台基线
 
+> 实现更新（2026-07-22）：Catalog 信任与物化由 Backend `portaltrust` 持有，Portal HTTP/BFF 由 Node Portal Kernel 持有；两者通过窄 capability 和不可变快照解耦，不再共享 Go Edge 进程生命周期。
+
 - 状态：已接受
 - 日期：2026-07-19
 - 修订：ADR-0068 第 2、3 项中的全局 `/v1/platform/*` 路径与固定 `routingDomain=platform` 假设

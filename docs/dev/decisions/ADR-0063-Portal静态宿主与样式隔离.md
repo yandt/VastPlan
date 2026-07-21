@@ -1,5 +1,7 @@
 # ADR-0063 Portal 静态宿主与样式隔离
 
+> 实现更新（2026-07-22）：静态宿主约束已由 Node Portal Kernel 实现，参数使用 `--portal-assets`；Go Portal HTTP 静态宿主已经删除。开发网关只保留独立的内存快照适配器用于 HMR。
+
 - 状态：已采纳
 - 日期：2026-07-18
 - 关联：[ADR-0052 前端门户内核与多 UI 设计系统插件](ADR-0052-前端门户内核与多UI设计系统插件.md)、[ADR-0062 Frontend 可信 ESM 制品与运行描述](ADR-0062-Frontend可信ESM制品与运行描述.md)

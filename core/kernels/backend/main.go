@@ -31,7 +31,6 @@ import (
 	artifactservercommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/artifactserver"
 	controlplanecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/controlplane"
 	nodebootstrapcommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/nodebootstrap"
-	portaledgecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/portaledge"
 	seedrepositorycommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/seedrepository"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/credentialbroker"
@@ -105,11 +104,6 @@ func main() {
 			return seedrepositorycommand.Run(ctx, os.Args[2:], os.Stderr)
 		})
 		return
-	case "portal-edge":
-		runProductionCommand("portal-edge", func(ctx context.Context) error {
-			return portaledgecommand.Run(ctx, os.Args[2:], version, componentLogf("portal-edge"))
-		})
-		return
 	case "node-bootstrap":
 		runProductionCommand("node-bootstrap", func(ctx context.Context) error {
 			return nodebootstrapcommand.Run(ctx, os.Args[2:], os.Stdout, os.Stderr)
@@ -121,7 +115,7 @@ func main() {
 
 func printUsage() {
 	name := filepath.Base(os.Args[0])
-	fmt.Fprintf(os.Stderr, "用法:\n  %s version [--json]\n  %s validate -kind <desired-v1|platform-profile-v1|application-composition-v1|portal-platform-profile-v1|portal-platform-catalog-v1|portal-application-composition-v1|deployment-v2|actual-state> -file <配置.json|yaml>\n  %s support-bundle -actual-state <实际态.json> -output <支持包.tar.gz> [参数]\n  %s <插件可执行文件路径>...\n  %s reconcile -startup-file <启动配置.yaml> [参数]\n  %s reconcile -nats-url <URL> -deployment <name> -node-id <id> [参数]\n  %s controlplane [参数]\n  %s artifact-server [参数]\n  %s seed-artifact-server -profile <Profile.json>\n  %s portal-edge [参数]\n  %s node-bootstrap [参数]\n", name, name, name, name, name, name, name, name, name, name, name)
+	fmt.Fprintf(os.Stderr, "用法:\n  %s version [--json]\n  %s validate -kind <desired-v1|platform-profile-v1|application-composition-v1|portal-platform-profile-v1|portal-platform-catalog-v1|portal-application-composition-v1|deployment-v2|actual-state> -file <配置.json|yaml>\n  %s support-bundle -actual-state <实际态.json> -output <支持包.tar.gz> [参数]\n  %s <插件可执行文件路径>...\n  %s reconcile -startup-file <启动配置.yaml> [参数]\n  %s reconcile -nats-url <URL> -deployment <name> -node-id <id> [参数]\n  %s controlplane [参数]\n  %s artifact-server [参数]\n  %s seed-artifact-server -profile <Profile.json>\n  %s node-bootstrap [参数]\n", name, name, name, name, name, name, name, name, name, name)
 }
 
 func runProductionCommand(component string, run func(context.Context) error) {

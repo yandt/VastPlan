@@ -1,4 +1,4 @@
-package edge
+package portaltrust
 
 import (
 	"crypto/sha256"

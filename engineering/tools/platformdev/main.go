@@ -91,7 +91,7 @@ func main() {
 	flag.StringVar(&opts.root, "root", "", "VastPlan repository root")
 	flag.StringVar(&opts.stateRoot, "state-root", ".vastplan/dev-platform", "development runtime root")
 	flag.StringVar(&opts.listen, "listen", "127.0.0.1:18080", "developer gateway address")
-	flag.StringVar(&opts.portalListen, "portal-listen", "127.0.0.1:18444", "internal Portal Edge address")
+	flag.StringVar(&opts.portalListen, "portal-listen", "127.0.0.1:18444", "internal Node Portal Kernel address")
 	flag.StringVar(&opts.artifactListen, "artifact-listen", "127.0.0.1:18443", "internal artifact repository address")
 	flag.StringVar(&opts.seedArtifactListen, "seed-artifact-listen", "127.0.0.1:18442", "seed artifact repository address")
 	flag.StringVar(&opts.vaultListen, "vault-listen", "127.0.0.1:18200", "development Vault Transit stub address")

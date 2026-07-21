@@ -190,7 +190,7 @@ func TestAuthenticatedTransportContextKeepsIdentityInHostProvenance(t *testing.T
 }
 
 func TestAuthenticatedTransportContextNeverDelegatesSystemIdentity(t *testing.T) {
-	identity := TransportIdentity{Name: "portal-edge-a", Role: "edge", TenantID: "acme", AllowDelegation: true}
+	identity := TransportIdentity{Name: "portal-host-a", Role: "edge", TenantID: "acme", AllowDelegation: true}
 	trusted, err := authenticatedTransportTrustedContext(identity, &contractv1.CallContext{
 		TenantId:  "acme",
 		Caller:    &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "forged-kernel"},

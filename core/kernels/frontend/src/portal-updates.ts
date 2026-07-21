@@ -24,7 +24,7 @@ export interface PortalUpdateOptions {
   onError?(error: unknown): void;
 }
 
-/** Applies only Edge-issued Activation facts; reconnects never infer latest. */
+/** Applies only trusted Portal-issued Activation facts; reconnects never infer latest. */
 export function startPortalActivationUpdates(options: PortalUpdateOptions): () => void {
   const endpoint = options.endpoint ?? "/v1/portal-updates";
   const separator = endpoint.includes("?") ? "&" : "?";

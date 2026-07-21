@@ -1,6 +1,6 @@
 # ADR-0103 Node Portal Kernel 渐进替代 Go Portal Edge
 
-- 状态：已采纳，实施中
+- 状态：已采纳，已完成
 - 日期：2026-07-21
 - 关联：[ADR-0052](ADR-0052-前端门户内核与多UI设计系统插件.md)、[ADR-0062](ADR-0062-Frontend可信ESM制品与运行描述.md)、[ADR-0076](ADR-0076-Portal-Edge分布式快照交付.md)、[ADR-0078](ADR-0078-Frontend事务式热替换与插件生命周期.md)
 
@@ -51,4 +51,6 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - 服务端 Generation/SSR Worker 已完成：签名 Server Graph 只进入密封快照，Node 将候选物化到私有目录并在受资源限制的 Worker 中执行 `prepare/render/dispose`。候选先健康渲染再原子替换，旧代等待在途请求 drain 后销毁；页面通过声明式 Shadow DOM 输出首屏并由 React `hydrateRoot` 接管。开发平台启动会真实请求页面并要求 `X-VastPlan-SSR: rendered`，CSR fallback 不能冒充就绪。
 - 企业身份入口已完成 OIDC Authorization Code + PKCE：Provider discovery/JWKS、state、nonce、S256、issuer/audience/ID Token 验证由标准客户端完成；tenant/roles 使用受控 claim 映射。浏览器只持有 AES-256-GCM 密封的 HttpOnly/Secure/SameSite BFF Session 与 CSRF，不保存 Access/Refresh Token。文件会话只保留为受控开发/部署适配器。
 - Node↔Go Addressing E2E 已升级为真实 TLS 1.3 双向证书验证，并继续覆盖 NKey 请求/响应签名、签名 Capability Directory 和 Protobuf v1。OIDC 黑盒测试同时证明已验证 Principal、tenant 与 roles 被固定投影到 Composer 端口，浏览器 payload 不能提供这些字段。
-- 剩余迁移封板项只有 Go/Node 黑盒行为等价审计、生产入口最终切换以及删除 `backend portal-edge`。目标企业环境的真实 IdP/TLS 浏览器验收属于部署放行门禁，不再是代码内核缺口。
+- Node 真实进程 E2E 已贯通浏览器 OIDC 登录、HTTPS BFF、密封 Session、CSRF、NATS TLS 1.3 双向证书、NKey 请求/响应签名与 Go capability，并在 Go 端验证 `subject/tenant/roles/scene` 的统一 `CallContext` 投影。第二条真实进程 E2E 实际构建、安装并启动访问策略与 Portal Composer，覆盖匿名/只读拒绝、草稿、异人审批、发布、Activation、中央 origin、Node 冷填充、内容寻址模块、第二次激活和历史回滚；两者共同替代原 Go Portal Edge E2E。
+- `backend portal-edge` 命令、Go HTTP/BFF Handler、文件会话、静态宿主和旧入口测试已删除。仍属于 Backend 可信计算基的 Catalog 验签、Browser/Server 双图物化、testing 回执复核和引用发布已迁入职责单一的 `core/kernels/backend/portaltrust`，不再与浏览器入口混包。
+- 开发与生产入口统一为 Node Portal Kernel；目标企业环境的真实 IdP/受信 CA 浏览器验收属于部署放行门禁，不再是代码迁移缺口。

@@ -1,4 +1,4 @@
-package edge
+package portaltrust
 
 import (
 	"crypto/sha256"
@@ -25,13 +25,6 @@ func TestFrontendObjectURLUsesGovernedMediaExtension(t *testing.T) {
 		if !strings.HasSuffix(url, digest+extension) {
 			t.Fatalf("%s URL 扩展名错误: %s", mediaType, url)
 		}
-		_, parsed, ok := parseModulePath(url)
-		if !ok || parsed != digest {
-			t.Fatalf("内容寻址 URL 无法被 Handler 解析: %s", url)
-		}
-	}
-	if _, _, ok := parseModulePath("/v1/portal-modules/7/" + digest + ".html"); ok {
-		t.Fatal("未允许的前端对象扩展名必须拒绝")
 	}
 }
 

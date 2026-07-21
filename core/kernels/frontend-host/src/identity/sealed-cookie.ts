@@ -27,9 +27,9 @@ export class SealedCookieCodec {
     if (value.length > 8192) throw new Error("OIDC session cookie 超过上限");
     const [version, nonceText, ciphertextText, tagText, extra] = value.split(".");
     if (version !== "v1" || extra !== undefined) throw new Error("OIDC session cookie 格式无效");
-    const nonce = Buffer.from(nonceText ?? "", "base64url");
-    const ciphertext = Buffer.from(ciphertextText ?? "", "base64url");
-    const tag = Buffer.from(tagText ?? "", "base64url");
+    const nonce = decodeCanonicalBase64URL(nonceText);
+    const ciphertext = decodeCanonicalBase64URL(ciphertextText);
+    const tag = decodeCanonicalBase64URL(tagText);
     if (nonce.byteLength !== 12 || tag.byteLength !== 16 || ciphertext.byteLength === 0 || ciphertext.byteLength > 4096) throw new Error("OIDC session cookie 格式无效");
     const decipher = createDecipheriv("aes-256-gcm", this.key, nonce);
     decipher.setAAD(Buffer.from(this.audience));
@@ -42,4 +42,11 @@ export class SealedCookieCodec {
     if (!Number.isSafeInteger(record.exp) || (record.exp as number) <= Math.floor(this.now() / 1000)) throw new Error("OIDC session 已过期");
     return record;
   }
+}
+
+function decodeCanonicalBase64URL(value: string | undefined): Buffer {
+  if (value === undefined || value === "" || !/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("OIDC session cookie 格式无效");
+  const decoded = Buffer.from(value, "base64url");
+  if (decoded.toString("base64url") !== value) throw new Error("OIDC session cookie 编码不规范");
+  return decoded;
 }

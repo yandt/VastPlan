@@ -1,5 +1,7 @@
 # ADR-0076：Portal Edge 分布式快照交付
 
+> 实现更新（2026-07-22）：ADR-0103 已将 Portal HTTP 入口替换为 Node Portal Kernel。本文的“可信中央 origin + 每实例私有 cache + 内容寻址冷填充”不变量继续有效；文中的 Portal Edge 实例现指 Node Portal Kernel 实例，Go Backend 只保留 `portaltrust` 发布边界。
+
 - 状态：已接受
 - 日期：2026-07-19
 - 扩展：ADR-0073 的单 Edge 私有交付目录

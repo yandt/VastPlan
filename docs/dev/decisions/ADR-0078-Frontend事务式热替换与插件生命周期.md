@@ -1,5 +1,7 @@
 # ADR-0078：Frontend 事务式热替换与插件生命周期
 
+> 实现更新（2026-07-22）：生产宿主现为 Node Portal Kernel；开发网关直接服务验证后的内存宿主快照并把 API 转发给 Node Portal Kernel。本文中的事务式 Generation/Host Epoch 不变量保持不变。
+
 - 状态：已接受
 - 日期：2026-07-19
 - 关联：[ADR-0052 前端门户内核与多 UI 设计系统插件](ADR-0052-前端门户内核与多UI设计系统插件.md)、[ADR-0062 Frontend 可信 ESM 制品与运行描述](ADR-0062-Frontend可信ESM制品与运行描述.md)、[ADR-0073 Portal 内容寻址交付快照](ADR-0073-Portal内容寻址交付快照.md)

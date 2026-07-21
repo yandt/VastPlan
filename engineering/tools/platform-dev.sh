@@ -115,7 +115,7 @@ validate_port() {
 
 validate_configuration() {
   validate_port "开发网关端口" "$GATEWAY_PORT"
-  validate_port "Portal Edge 端口" "$PORTAL_PORT"
+  validate_port "Node Portal Kernel 端口" "$PORTAL_PORT"
   validate_port "制品服务端口" "$ARTIFACT_PORT"
   validate_port "Seed 制品仓库端口" "$SEED_ARTIFACT_PORT"
   validate_port "Vault 桩端口" "$VAULT_PORT"

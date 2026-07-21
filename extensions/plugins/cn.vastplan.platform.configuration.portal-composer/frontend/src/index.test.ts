@@ -65,7 +65,7 @@ describe("PortalControlClient", () => {
     });
   });
 
-  it("preserves stable Edge error codes", async () => {
+  it("preserves stable Portal BFF error codes", async () => {
     const client = new PortalControlClient({ fetch: async () => response({ error: "forbidden" }, 403) });
     await expect(client.list()).rejects.toEqual(new PortalControlError(403, "forbidden"));
   });

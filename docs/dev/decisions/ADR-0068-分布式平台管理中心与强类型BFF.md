@@ -1,5 +1,7 @@
 # ADR-0068 分布式平台管理中心与强类型 BFF
 
+> 实现更新（2026-07-22）：强类型 BFF 已迁移到 Node Portal Kernel，正式路径为 `/v1/portals/{portalId}/platform/services/{serviceId}/...`；旧 `/v1/platform/*` 与 Go Portal Edge 均已删除。远端能力仍由 Backend 权限插件最终授权。
+
 - 状态：已采纳
 - 日期：2026-07-18
 

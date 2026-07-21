@@ -1,5 +1,7 @@
 # ADR-0067 Portal 控制面闭环、安全恢复与第二适配器验收
 
+> 实现更新（2026-07-22）：原“真实 Portal Edge 进程 E2E”已由 `engineering/e2e/portal_kernel_test.go` 的 Node Portal Kernel 真实进程 E2E 替代，并增加 OIDC、NATS TLS 1.3 mTLS、NKey 与 Wire Principal 投影验证。
+
 - 状态：已接受
 - 日期：2026-07-18
 - 关联：[ADR-0052 前端门户内核与多 UI 设计系统插件](ADR-0052-前端门户内核与多UI设计系统插件.md)、[ADR-0059 Frontend 双输入采用服务端权威解析](ADR-0059-Frontend双输入服务端权威解析.md)、[ADR-0062 Frontend 可信 ESM 制品与运行描述](ADR-0062-Frontend可信ESM制品与运行描述.md)

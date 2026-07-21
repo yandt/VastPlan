@@ -1,4 +1,4 @@
-package edge
+package portaltrust
 
 import (
 	"context"
@@ -40,13 +40,12 @@ type TrustedCatalog struct {
 	sources   []ArtifactSource
 	verifier  ArtifactVerifier
 	delivery  *frontendDeliveryStore
-	origin    *frontendDeliveryStore
 	testIndex TestArtifactIndex
 }
 
-// ArtifactSource and ArtifactVerifier are stable Edge ports. The Backend
-// composition root adapts Node Agent's verifier here; Edge never imports a
-// sibling implementation package.
+// ArtifactSource and ArtifactVerifier are stable trusted-host ports. The
+// Backend composition root adapts repository and Node Agent implementations;
+// the Portal trust domain never imports sibling implementation packages.
 type ArtifactSource interface {
 	Fetch(context.Context, pluginv1.ArtifactRef) (artifacttrust.Envelope, error)
 }
@@ -69,30 +68,8 @@ func WithTestArtifactIndex(index TestArtifactIndex) TrustedCatalogOption {
 func WithFrontendDeliveryRoot(root string) TrustedCatalogOption {
 	return func(c *TrustedCatalog) error {
 		store, err := newFrontendDeliveryStore(root)
-		c.delivery, c.origin = store, store
+		c.delivery = store
 		return err
-	}
-}
-
-// WithFrontendDeliveryDistribution separates the shared, trusted publication
-// origin from this Portal Edge node's private local cache. Only Portal Edge
-// nodes receive the cache; ordinary Backend service nodes never pull browser
-// snapshots.
-func WithFrontendDeliveryDistribution(originRoot, cacheRoot string) TrustedCatalogOption {
-	return func(c *TrustedCatalog) error {
-		if strings.TrimSpace(originRoot) == "" || strings.TrimSpace(cacheRoot) == "" {
-			return errors.New("Portal 交付 origin 与 cache 路径不能为空")
-		}
-		origin, err := newFrontendDeliveryStore(originRoot)
-		if err != nil {
-			return err
-		}
-		cache, err := newFrontendDeliveryStore(cacheRoot)
-		if err != nil {
-			return err
-		}
-		c.origin, c.delivery = origin, cache
-		return nil
 	}
 }
 
@@ -107,7 +84,7 @@ func NewTrustedCatalog(sources []ArtifactSource, verifier ArtifactVerifier, opti
 	if err != nil {
 		return nil, err
 	}
-	catalog := &TrustedCatalog{sources: append([]ArtifactSource(nil), sources...), verifier: verifier, delivery: store, origin: store}
+	catalog := &TrustedCatalog{sources: append([]ArtifactSource(nil), sources...), verifier: verifier, delivery: store}
 	for _, option := range options {
 		if err := option(catalog); err != nil {
 			return nil, err
@@ -422,87 +399,10 @@ func (c *TrustedCatalog) MaterializePortal(ctx context.Context, tenantID string,
 	if err != nil {
 		return nil, err
 	}
-	if err := c.origin.putSealed(tenantID, spec, runtime, server, assets); err != nil {
-		return nil, err
-	}
-	if c.origin == c.delivery {
-		return references, nil
-	}
-	if err := c.delivery.prefetchFrom(c.origin, tenantID, spec); err != nil {
+	if err := c.delivery.putSealed(tenantID, spec, runtime, server, assets); err != nil {
 		return nil, err
 	}
 	return references, nil
-}
-
-// PrefetchPortal verifies a central immutable snapshot and every referenced
-// content object before atomically exposing the revision in the local Edge
-// cache. It never reads plugin packages or executes frontend code.
-func (c *TrustedCatalog) PrefetchPortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
-	_ = ctx
-	if snapshot, err := c.delivery.sealedSnapshot(tenantID, spec); err == nil {
-		ready := true
-		objects := append(runtimeFrontendObjects(snapshot.Runtime), serverRuntimeObjects(snapshot.Server)...)
-		for _, module := range objects {
-			if _, err := c.delivery.sealedObject(snapshot, module.SHA256); err != nil {
-				ready = false
-				break
-			}
-		}
-		if ready {
-			return nil
-		}
-	}
-	if c.origin == c.delivery {
-		_, err := c.delivery.runtime(tenantID, spec)
-		return err
-	}
-	return c.delivery.prefetchFrom(c.origin, tenantID, spec)
-}
-
-// ResolveRuntime reads an immutable publication snapshot from the local Edge
-// cache. A newly added Edge may cold-fill that cache from the trusted delivery
-// origin, but it never falls back to package download, signature verification,
-// or archive extraction on the browser request path.
-func (c *TrustedCatalog) ResolveRuntime(ctx context.Context, tenantID string, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
-	runtime, err := c.delivery.runtime(tenantID, spec)
-	if err == nil || c.origin == c.delivery {
-		return runtime, err
-	}
-	if err := c.PrefetchPortal(ctx, tenantID, spec); err != nil {
-		return portalapi.RuntimeSpec{}, fmt.Errorf("Portal Edge 本地快照不可用且冷预取失败: %w", err)
-	}
-	return c.delivery.runtime(tenantID, spec)
-}
-
-// ResolveRecoveryRuntime binds every historical module URL to both the current
-// Activation and the server-selected fallback Activation. The browser cannot
-// turn recovery mode into an arbitrary historical artifact reader.
-func (c *TrustedCatalog) ResolveRecoveryRuntime(ctx context.Context, tenantID string, activeRevision uint64, spec portalapi.PortalSpec) (portalapi.RuntimeSpec, error) {
-	if activeRevision == 0 || spec.Revision == 0 || activeRevision == spec.Revision {
-		return portalapi.RuntimeSpec{}, errors.New("Portal 恢复 revision 无效")
-	}
-	runtime, err := c.ResolveRuntime(ctx, tenantID, spec)
-	if err != nil {
-		return portalapi.RuntimeSpec{}, err
-	}
-	for i := range runtime.Modules {
-		runtime.Modules[i].URL = recoveryFrontendObjectURL(activeRevision, spec.Revision, runtime.Modules[i].URL)
-	}
-	for graphIndex := range runtime.ModuleGraphs {
-		for nodeIndex := range runtime.ModuleGraphs[graphIndex].Nodes {
-			node := &runtime.ModuleGraphs[graphIndex].Nodes[nodeIndex]
-			node.URL = recoveryFrontendObjectURL(activeRevision, spec.Revision, node.URL)
-		}
-	}
-	return runtime, nil
-}
-
-// ReadFrontendModule serves only a module locked into the supplied active
-// revision. A caller cannot turn the asset endpoint into an arbitrary artifact
-// reader by choosing its own plugin version or entry path.
-func (c *TrustedCatalog) ReadFrontendModule(ctx context.Context, tenantID string, spec portalapi.PortalSpec, digest string) (FrontendModuleAsset, error) {
-	_ = ctx
-	return c.delivery.module(tenantID, spec, digest)
 }
 
 func frontendModule(revision uint64, plugin verifiedPortalPlugin) (FrontendModuleAsset, error) {

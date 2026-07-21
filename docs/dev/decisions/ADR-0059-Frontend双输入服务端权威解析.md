@@ -1,5 +1,7 @@
 # ADR-0059 Frontend 双输入采用服务端权威解析
 
+> 实现更新（2026-07-22）：Portal 宿主已迁移为 Node Portal Kernel。候选 Platform Profile 通过不可变 Activation 与 Portal Generation/Host Epoch 切换，不再依赖 Go Portal Edge/Composer 同进程生命周期。
+
 - 状态：已采纳
 - 日期：2026-07-18
 - 关联：[ADR-0052 前端门户内核与多 UI 设计系统插件](ADR-0052-前端门户内核与多UI设计系统插件.md)、[ADR-0057 插件分级管理与双输入组合解析](ADR-0057-插件分级管理与双输入组合解析.md)、[ADR-0058 跨内核组合公共契约与内核适配器](ADR-0058-跨内核组合公共契约与适配器.md)

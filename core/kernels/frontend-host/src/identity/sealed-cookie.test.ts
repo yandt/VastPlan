@@ -14,7 +14,8 @@ describe("SealedCookieCodec", () => {
     const token = codec.seal({ kind: "session", exp: 1001, sub: "alice" });
     expect(token).not.toContain("alice");
     expect(codec.unseal(token)).toMatchObject({ sub: "alice" });
-    expect(() => codec.unseal(`${token.slice(0, -1)}x`)).toThrow(/无效/);
+    expect(() => codec.unseal(`${token.slice(0, -1)}x`)).toThrow(/无效|不规范/);
+    expect(() => codec.unseal(token.replace(/.$/, (last) => last === "A" ? "B" : "A"))).toThrow(/无效|不规范/);
     const expired = codec.seal({ kind: "session", exp: 999, sub: "alice" });
     expect(() => codec.unseal(expired)).toThrow(/过期/);
   });

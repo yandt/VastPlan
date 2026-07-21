@@ -113,7 +113,7 @@ describe("VerifiedFrontendPluginLoader", () => {
     expect(importer).not.toHaveBeenCalled();
   });
 
-  it("rejects modules absent from the Edge-issued lock", async () => {
+  it("rejects modules absent from the trusted Portal-issued lock", async () => {
     const loader = new VerifiedFrontendPluginLoader([await descriptor()], async () => new Response(source), async () => ({}));
     await expect(loader.load({ id: "cn.vastplan.product.other", version: "1.0.0" })).rejects.toMatchObject({ code: "MODULE_NOT_LOCKED" } satisfies Partial<ModuleLoadError>);
   });

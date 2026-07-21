@@ -12,7 +12,7 @@ export interface PortalFetch {
 
 export interface PortalInteractionClientOptions {
   fetch: PortalFetch;
-  /** Obtained from Edge /v1/csrf and held by the Portal shell. */
+  /** Obtained from Node Portal Kernel /v1/csrf and held by the Portal shell. */
   csrfToken(): string | undefined;
   basePath?: string;
 }

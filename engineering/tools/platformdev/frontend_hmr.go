@@ -20,8 +20,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/edge"
 )
 
 const retainedFrontendGenerations = 8
@@ -68,7 +66,7 @@ type frontendHMREvent struct {
 
 func (r *runtime) startFrontendHMR(ctx context.Context) error {
 	portalAssetsDir := filepath.Join(r.runDir, "portal-assets")
-	assets, err := edge.NewPortalAssets(portalAssetsDir)
+	assets, err := newDevelopmentPortalAssets(portalAssetsDir)
 	if err != nil {
 		return fmt.Errorf("加载开发态 Portal 静态产物: %w", err)
 	}
@@ -230,7 +228,7 @@ func (h *frontendHMR) buildHost(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	assets, err := edge.NewPortalAssets(portalCandidate)
+	assets, err := newDevelopmentPortalAssets(portalCandidate)
 	if err != nil {
 		return fmt.Errorf("验证 Portal 宿主候选: %w", err)
 	}
