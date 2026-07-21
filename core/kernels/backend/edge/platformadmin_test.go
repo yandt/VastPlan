@@ -60,6 +60,9 @@ func (*platformService) ProbeDatabaseConnection(context.Context, portalapi.Princ
 func (*platformService) ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryStatus, error) {
 	return platformadminapi.ArtifactRepositoryStatus{Ready: true}, nil
 }
+func (*platformService) ListArtifactReferences(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactReferencePage, error) {
+	return platformadminapi.ArtifactReferencePage{Revision: 1, Items: []platformadminapi.ArtifactReferenceSnapshot{}}, nil
+}
 func (*platformService) ArtifactMigrationStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryMigration, error) {
 	return platformadminapi.ArtifactRepositoryMigration{MigrationID: "repository.move-001", Phase: "synced"}, nil
 }
@@ -148,7 +151,7 @@ func platformPortalService() *service {
 		{ID: "settings", LogicalService: "platform.settings", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.SettingsCapability, Read: []string{"list"}, Write: []string{"put", "delete"}}}},
 		{ID: "credentials", LogicalService: "platform.credentials", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.CredentialsCapability, Read: []string{"list"}, Write: []string{"put", "rotate", "revoke"}}}},
 		{ID: "database", LogicalService: "platform.database", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DatabaseCapability, Read: []string{"list"}, Write: []string{"define", "remove", "probe"}}}},
-		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status", "migrationStatus"}, Write: []string{"setLifecycle", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"}}}},
+		{ID: "artifacts", LogicalService: "platform.artifacts.repository", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.ArtifactsCapability, Read: []string{"status", "listReferences", "migrationStatus"}, Write: []string{"setLifecycle", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"}}}},
 		{ID: "deployment", LogicalService: "platform.deployment", RoutingDomain: "platform", Capabilities: []frontendcompositionv1.CapabilityGrant{{Capability: platformadminapi.DeploymentCapability, Read: []string{"listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"}, Write: []string{"putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"}}}},
 	}}
 	spec := portalapi.PortalSpec{Revision: 1, ID: "operations", TenantID: "tenant-a", Route: "/operations", Management: binding, Resolution: portalapi.Resolution{PlatformProfile: profile, ManagementBindingDigest: compositioncommonv1.Digest(binding)}}

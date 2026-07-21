@@ -156,6 +156,12 @@ func (s *CapabilityPlatformAdminService) ArtifactRepositoryStatus(ctx context.Co
 	return response, err
 }
 
+func (s *CapabilityPlatformAdminService) ListArtifactReferences(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) (platformadminapi.ArtifactReferencePage, error) {
+	var response platformadminapi.ArtifactReferencePage
+	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "listReferences", false, struct{}{}, &response)
+	return response, err
+}
+
 func (s *CapabilityPlatformAdminService) ArtifactMigrationStatus(ctx context.Context, p portalapi.Principal, target portalapi.ManagementTarget) (platformadminapi.ArtifactRepositoryMigration, error) {
 	var response platformadminapi.ArtifactRepositoryMigration
 	err := s.call(ctx, p, target, platformadminapi.ArtifactsCapability, "migrationStatus", false, struct{}{}, &response)

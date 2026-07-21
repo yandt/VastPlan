@@ -74,6 +74,15 @@ export interface ArtifactLifecycleResult {
   revision: number;
   entry: { ref: ArtifactRef; lifecycleStatus: string; lifecycleRevision: number; lifecycleReason?: string; replacement?: ArtifactRequirement };
 }
+export interface ArtifactReference { ref: ArtifactRef; sha256: string; purpose: string; }
+export interface ArtifactReferenceSnapshotValue {
+  schemaVersion: "v1"; ownerKind: string; ownerId: string; generation: number; ttlSeconds?: number;
+  references: ArtifactReference[]; digest: string;
+}
+export interface ArtifactReferenceSnapshot {
+  tenantId: string; publisherId: string; value: ArtifactReferenceSnapshotValue; reportedAt: string; expiresAt?: string;
+}
+export interface ArtifactReferencePage { revision: number; items: ArtifactReferenceSnapshot[]; }
 
 export interface NodeBootstrapPlan {
   target: { address: string; port?: number; user: string };
@@ -165,6 +174,7 @@ export class PlatformAdminClient {
   public deleteDatabaseConnection(name: string): Promise<void> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "DELETE").then(() => undefined); }
   public probeDatabaseConnection(name: string): Promise<DatabaseProbe> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}/probe`, "POST", {}); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
+  public listArtifactReferences(): Promise<ArtifactReferencePage> { return this.get(`${this.basePath}/artifacts/references`); }
   public setArtifactLifecycle(request: ArtifactLifecycleRequest): Promise<ArtifactLifecycleResult> { return this.mutate(`${this.basePath}/artifacts/lifecycle`, "POST", request); }
   public artifactMigrationStatus(): Promise<ArtifactRepositoryMigration> { return this.get(`${this.basePath}/artifacts/migration`); }
   public prepareArtifactMigration(request: PrepareArtifactMigrationRequest): Promise<ArtifactRepositoryMigration> { return this.mutate(`${this.basePath}/artifacts/migrations`, "POST", request); }

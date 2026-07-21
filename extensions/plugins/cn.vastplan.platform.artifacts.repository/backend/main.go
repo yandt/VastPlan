@@ -28,9 +28,9 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.7.0"
+const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.8.0"
 
-var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"}]}`)
+var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"}]}`)
 
 type serverConfig struct {
 	addr, repository, storageProvider, volumeID, migrationState, trust, cert, key, readToken, publishToken, bundleToken string
@@ -209,6 +209,29 @@ func main() {
 				payload, err := json.Marshal(map[string]any{"revision": revision, "entry": entry})
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 			},
+			"putReferences": func(_ context.Context, _ sdk.Host, call *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+				if call == nil || call.GetTenantId() == "" || call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || call.GetCaller().GetId() == "" {
+					return nil, nil, errors.New("引用快照必须由可信插件身份发布")
+				}
+				var request pluginv1.ArtifactReferenceSnapshot
+				if err := decodeParams(raw, &request); err != nil {
+					return nil, nil, err
+				}
+				if !referenceOwnerAllowed(call.GetCaller().GetId(), request.OwnerKind) {
+					return nil, nil, errors.New("调用者无权声明该引用 owner kind")
+				}
+				snapshot, revision, err := manager.PutReferences(call.GetTenantId(), call.GetCaller().GetId(), request, time.Now().UTC())
+				if err != nil {
+					return nil, nil, err
+				}
+				payload, err := json.Marshal(map[string]any{"revision": revision, "snapshot": snapshot})
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
+			},
+			"listReferences": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+				revision, snapshots := manager.References()
+				payload, err := json.Marshal(map[string]any{"revision": revision, "items": snapshots})
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
+			},
 			"migrationStatus":   migrationHandler(manager, "migrationStatus"),
 			"prepareMigration":  migrationHandler(manager, "prepareMigration"),
 			"syncMigration":     migrationHandler(manager, "syncMigration"),
@@ -224,6 +247,17 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	_ = server.Shutdown(shutdownCtx)
+}
+
+func referenceOwnerAllowed(callerID, ownerKind string) bool {
+	switch callerID {
+	case "cn.vastplan.platform.infrastructure.deployment-manager":
+		return ownerKind == "deployment-active" || ownerKind == "artifact-lock" || ownerKind == "rollback-history"
+	case "cn.vastplan.platform.configuration.portal-composer":
+		return ownerKind == "portal-activation" || ownerKind == "artifact-lock" || ownerKind == "rollback-history"
+	default:
+		return false
+	}
 }
 
 func decodeParams(raw []byte, target any) error {

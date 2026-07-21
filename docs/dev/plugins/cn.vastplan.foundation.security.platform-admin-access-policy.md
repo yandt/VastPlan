@@ -1,7 +1,7 @@
 # 平台管理访问策略
 
 插件 ID：`cn.vastplan.foundation.security.platform-admin-access-policy`
-当前制品版本：`0.12.0`
+当前制品版本：`0.13.0`
 
 该 foundation 插件以 `per-kernel + local-ephemeral + local + direct` 运行，在设置、凭证、数据库、制品和部署能力所在 unit 内执行最终授权。它不读取 settings，不依赖远端服务，也不向浏览器暴露能力。业务插件只可调用 `stageManaged/activateManaged/abortManaged/retireManaged` 管理由凭证插件强制绑定给自己的句柄，不能继承 `put/rotate/revoke` 等管理员权限。
 

@@ -75,3 +75,23 @@ type ArtifactLock struct {
 	Packages           []ArtifactLockPackage `json:"packages"`
 	Digest             string                `json:"digest"`
 }
+
+// ArtifactReference binds one exact immutable artifact to a consumer-owned
+// protection snapshot. Purpose is descriptive; owner kind determines authority.
+type ArtifactReference struct {
+	Ref     ArtifactRef `json:"ref"`
+	SHA256  string      `json:"sha256"`
+	Purpose string      `json:"purpose"`
+}
+
+// ArtifactReferenceSnapshot is a complete replacement snapshot for one owner.
+// Tenant and caller identity are supplied by the trusted host, never this DTO.
+type ArtifactReferenceSnapshot struct {
+	SchemaVersion string              `json:"schemaVersion"`
+	OwnerKind     string              `json:"ownerKind"`
+	OwnerID       string              `json:"ownerId"`
+	Generation    uint64              `json:"generation"`
+	TTLSeconds    uint32              `json:"ttlSeconds,omitempty"`
+	References    []ArtifactReference `json:"references"`
+	Digest        string              `json:"digest"`
+}

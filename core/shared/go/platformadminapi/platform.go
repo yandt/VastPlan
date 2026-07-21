@@ -127,6 +127,19 @@ type ArtifactLifecycleResult struct {
 	} `json:"entry"`
 }
 
+type ArtifactReferenceSnapshot struct {
+	TenantID    string                             `json:"tenantId"`
+	PublisherID string                             `json:"publisherId"`
+	Value       pluginv1.ArtifactReferenceSnapshot `json:"value"`
+	ReportedAt  string                             `json:"reportedAt"`
+	ExpiresAt   string                             `json:"expiresAt,omitempty"`
+}
+
+type ArtifactReferencePage struct {
+	Revision uint64                      `json:"revision"`
+	Items    []ArtifactReferenceSnapshot `json:"items"`
+}
+
 type ArtifactRepositoryMigration struct {
 	MigrationID      string `json:"migrationId,omitempty"`
 	Phase            string `json:"phase,omitempty"`
@@ -325,6 +338,7 @@ type Service interface {
 	DeleteDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) error
 	ProbeDatabaseConnection(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (DatabaseProbe, error)
 	ArtifactRepositoryStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryStatus, error)
+	ListArtifactReferences(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactReferencePage, error)
 	SetArtifactLifecycle(context.Context, portalapi.Principal, portalapi.ManagementTarget, ArtifactLifecycleRequest) (ArtifactLifecycleResult, error)
 	ArtifactMigrationStatus(context.Context, portalapi.Principal, portalapi.ManagementTarget) (ArtifactRepositoryMigration, error)
 	PrepareArtifactMigration(context.Context, portalapi.Principal, portalapi.ManagementTarget, PrepareArtifactMigrationRequest) (ArtifactRepositoryMigration, error)

@@ -107,6 +107,18 @@ func (s *Store) RequireDelivery(ref pluginv1.ArtifactRef) error {
 	}
 }
 
+func (s *Store) ValidateReferences(values []pluginv1.ArtifactReference) error {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, value := range values {
+		entry, ok := s.entries[refKey(value.Ref)]
+		if !ok || entry.SHA256 != value.SHA256 {
+			return fmt.Errorf("引用快照包含未知或摘要不匹配的制品: %s", refKey(value.Ref))
+		}
+	}
+	return nil
+}
+
 func validLifecycleStatus(status string) bool {
 	switch status {
 	case LifecycleActive, LifecycleDeprecated, LifecycleYanked, LifecycleRevoked:

@@ -89,4 +89,14 @@ describe("PlatformAdminClient", () => {
       body: expect.stringContaining('"expectedRevision":17'),
     });
   });
+
+  it("reads artifact reference protection through a fixed BFF route", async () => {
+    const calls: string[] = [];
+    const client = new PlatformAdminClient(async (path) => {
+      calls.push(path);
+      return { ok: true, status: 200, json: async () => ({ revision: 1, items: [] }) };
+    }, "operations", "artifacts");
+    await client.listArtifactReferences();
+    expect(calls).toEqual(["/v1/portals/operations/platform/services/artifacts/artifacts/references"]);
+  });
 });

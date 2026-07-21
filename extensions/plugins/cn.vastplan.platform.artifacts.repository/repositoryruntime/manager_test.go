@@ -13,7 +13,9 @@ import (
 	"testing"
 	"time"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 )
 
@@ -28,6 +30,13 @@ func TestManagerCutsOverMirrorsFinalizesAndReleases(t *testing.T) {
 	first, proof, body := migrationArtifact(t, privateKey, "1.0.0")
 	if _, err := manager.Publish(proof, body); err != nil {
 		t.Fatal(err)
+	}
+	referenceSnapshot, err := artifactreference.Seal(pluginv1.ArtifactReferenceSnapshot{OwnerKind: artifactreference.OwnerArtifactLock, OwnerID: "deployment/lock-1", Generation: 1, References: []pluginv1.ArtifactReference{{Ref: pluginv1.ArtifactRef{PluginID: first.PluginID, Version: first.Version, Channel: first.Channel}, SHA256: first.SHA256, Purpose: "lock"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, revision, err := manager.PutReferences("tenant-a", "cn.vastplan.platform.infrastructure.deployment-manager", referenceSnapshot, time.Now().UTC()); err != nil || revision != 1 {
+		t.Fatalf("reference publish failed: revision=%d err=%v", revision, err)
 	}
 	request := artifactstorage.VolumeMigrationRequest{MigrationID: "repository.online-001", SourceVolumeID: source.VolumeID, TargetVolumeID: target.VolumeID, Phase: artifactstorage.MigrationPrepare}
 	prepared := migrationResult(request, source, target)
@@ -60,6 +69,15 @@ func TestManagerCutsOverMirrorsFinalizesAndReleases(t *testing.T) {
 	if _, err := manager.Publish(proof, body); err != nil {
 		t.Fatal(err)
 	}
+	referenceSnapshot.Generation = 2
+	referenceSnapshot.References = append(referenceSnapshot.References, pluginv1.ArtifactReference{Ref: pluginv1.ArtifactRef{PluginID: third.PluginID, Version: third.Version, Channel: third.Channel}, SHA256: third.SHA256, Purpose: "lock"})
+	referenceSnapshot, err = artifactreference.Seal(referenceSnapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := manager.PutReferences("tenant-a", "cn.vastplan.platform.infrastructure.deployment-manager", referenceSnapshot, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
 	view, err = manager.Finalize(request.MigrationID, time.Now().UTC())
 	if err != nil || view.Phase != PhaseFinalized || view.CanRelease {
 		t.Fatalf("finalize must wait for deployment config before release: view=%+v err=%v", view, err)
@@ -71,6 +89,9 @@ func TestManagerCutsOverMirrorsFinalizesAndReleases(t *testing.T) {
 	}
 	if _, _, _, err := restarted.Read(pluginservice.Ref{PluginID: third.PluginID, Version: third.Version, Channel: third.Channel}); err != nil {
 		t.Fatalf("finalized target did not survive restart: %v", err)
+	}
+	if revision, snapshots := restarted.References(); revision != 2 || len(snapshots) != 1 || snapshots[0].Value.Generation != 2 {
+		t.Fatalf("reference mirror did not survive restart: revision=%d snapshots=%+v", revision, snapshots)
 	}
 	releaseRequest, err := restarted.SourceReleaseRequest(request.MigrationID)
 	if err != nil {

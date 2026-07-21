@@ -19,6 +19,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/references"
 )
 
 const stateSchemaVersion = "v1"
@@ -72,6 +73,7 @@ type repositorySet struct {
 	signed  *pluginservice.SignedRepository
 	adapter pluginservice.HTTPRepositoryAdapter
 	catalog *catalog.Store
+	refs    *references.Store
 }
 
 type Manager struct {
@@ -173,6 +175,41 @@ func (m *Manager) SetLifecycle(request catalog.LifecycleRequest, occurredAt time
 		m.recordMigrationError(fmt.Errorf("候选卷生命周期变更失败: %w", err))
 	}
 	return entry, revision, err
+}
+
+func (m *Manager) PutReferences(tenantID, publisherID string, value pluginv1.ArtifactReferenceSnapshot, occurredAt time.Time) (references.Snapshot, uint64, error) {
+	m.publishMu.Lock()
+	defer m.publishMu.Unlock()
+	m.mu.RLock()
+	active, mirror := m.active, m.mirror
+	m.mu.RUnlock()
+	if active == nil {
+		return references.Snapshot{}, 0, errors.New("活动制品仓库不可用")
+	}
+	if err := active.catalog.ValidateReferences(value.References); err != nil {
+		return references.Snapshot{}, 0, err
+	}
+	if mirror != nil {
+		if err := mirror.catalog.ValidateReferences(value.References); err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷引用校验失败: %w", err))
+			return references.Snapshot{}, 0, errors.New("制品迁移观察卷不可用，引用更新已冻结")
+		}
+		if _, _, err := mirror.refs.Put(tenantID, publisherID, value, occurredAt); err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷引用镜像失败: %w", err))
+			return references.Snapshot{}, 0, errors.New("制品迁移观察卷不可用，引用更新已冻结")
+		}
+	}
+	snapshot, revision, err := active.refs.Put(tenantID, publisherID, value, occurredAt)
+	if err != nil && mirror != nil {
+		m.recordMigrationError(fmt.Errorf("候选卷引用更新失败: %w", err))
+	}
+	return snapshot, revision, err
+}
+
+func (m *Manager) References() (uint64, []references.Snapshot) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.active.refs.List()
 }
 
 func (m *Manager) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, []byte, error) {
@@ -436,7 +473,11 @@ func (m *Manager) openSet(root string) (*repositorySet, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &repositorySet{root: filepath.Clean(root), signed: signed, adapter: pluginservice.HTTPRepositoryAdapter{Repository: signed}, catalog: store}, nil
+	referenceStore, err := references.Open(root)
+	if err != nil {
+		return nil, err
+	}
+	return &repositorySet{root: filepath.Clean(root), signed: signed, adapter: pluginservice.HTTPRepositoryAdapter{Repository: signed}, catalog: store, refs: referenceStore}, nil
 }
 
 func (s *repositorySet) publish(attestationRaw, packageBytes []byte) (pluginservice.Artifact, error) {

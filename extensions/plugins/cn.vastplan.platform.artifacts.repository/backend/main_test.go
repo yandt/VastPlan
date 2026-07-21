@@ -34,6 +34,15 @@ func TestRuntimeDescriptorMatchesSignedManifest(t *testing.T) {
 	}
 }
 
+func TestReferenceOwnerAuthorityIsNarrow(t *testing.T) {
+	if !referenceOwnerAllowed("cn.vastplan.platform.infrastructure.deployment-manager", "deployment-active") || !referenceOwnerAllowed("cn.vastplan.platform.configuration.portal-composer", "portal-activation") {
+		t.Fatal("trusted controllers must publish only their owned reference classes")
+	}
+	if referenceOwnerAllowed("cn.example.business", "deployment-active") || referenceOwnerAllowed("cn.vastplan.platform.configuration.portal-composer", "assignment-active") {
+		t.Fatal("business or cross-domain owner claims must be denied")
+	}
+}
+
 func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	t.Setenv("VASTPLAN_PLUGIN_CONFIG_JSON", `{}`)
 	t.Setenv("VASTPLAN_ARTIFACT_REPOSITORY", "")

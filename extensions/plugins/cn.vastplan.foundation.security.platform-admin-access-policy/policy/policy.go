@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.12.0"
+	PluginVersion = "0.13.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -44,6 +44,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if artifactStorageAllowed(c, request) {
 		return extpoint.DecisionAllow, "制品仓库 leader 可执行受限存储迁移"
+	}
+	if artifactReferenceWriteAllowed(c, request) {
+		return extpoint.DecisionAllow, "制品消费者可发布自己拥有的完整引用快照"
 	}
 	if managedCredentialLifecycleAllowed(c, request) {
 		return extpoint.DecisionAllow, "业务插件只能管理自己拥有的托管凭证"
@@ -78,6 +81,18 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 		return extpoint.DecisionAllow, "平台角色授权"
 	}
 	return extpoint.DecisionDeny, "缺少平台管理角色"
+}
+
+func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || request.Capability != platformadminapi.ArtifactsCapability || request.Operation != "putReferences" {
+		return false
+	}
+	switch c.GetCaller().GetId() {
+	case "cn.vastplan.platform.infrastructure.deployment-manager", "cn.vastplan.platform.configuration.portal-composer":
+		return true
+	default:
+		return false
+	}
 }
 
 func governedCapability(capability string) bool {
@@ -149,7 +164,7 @@ func operationRole(capability, operation string) string {
 		platformadminapi.SettingsCapability:    {"get": "platform.settings.read", "list": "platform.settings.read", "changesSince": "platform.settings.read", "put": "platform.admin", "delete": "platform.admin"},
 		platformadminapi.CredentialsCapability: {"describe": "platform.credentials.read", "list": "platform.credentials.read", "put": "platform.credentials.write", "rotate": "platform.credentials.rotate", "revoke": "platform.credentials.revoke"},
 		platformadminapi.DatabaseCapability:    {"describe": "platform.database.read", "list": "platform.database.read", "define": "platform.database.write", "remove": "platform.database.write", "probe": "platform.database.probe"},
-		platformadminapi.ArtifactsCapability:   {"status": "platform.artifacts.read", "listCatalog": "platform.artifacts.read", "listPublishJournal": "platform.artifacts.read", "resolve": "platform.artifacts.read", "setLifecycle": "platform.artifacts.lifecycle", "migrationStatus": "platform.artifacts.read", "prepareMigration": "platform.artifacts.migrate", "syncMigration": "platform.artifacts.migrate", "cutoverMigration": "platform.artifacts.migrate", "rollbackMigration": "platform.artifacts.migrate", "finalizeMigration": "platform.artifacts.migrate", "releaseMigration": "platform.artifacts.migrate"},
+		platformadminapi.ArtifactsCapability:   {"status": "platform.artifacts.read", "listCatalog": "platform.artifacts.read", "listPublishJournal": "platform.artifacts.read", "resolve": "platform.artifacts.read", "listReferences": "platform.artifacts.read", "setLifecycle": "platform.artifacts.lifecycle", "migrationStatus": "platform.artifacts.read", "prepareMigration": "platform.artifacts.migrate", "syncMigration": "platform.artifacts.migrate", "cutoverMigration": "platform.artifacts.migrate", "rollbackMigration": "platform.artifacts.migrate", "finalizeMigration": "platform.artifacts.migrate", "releaseMigration": "platform.artifacts.migrate"},
 		platformadminapi.DeploymentCapability:  {"listNodes": "platform.deployment.read", "putNode": "platform.deployment.write", "listBootstrapJobs": "platform.deployment.read", "createBootstrap": "platform.deployment.bootstrap", "approveBootstrap": "platform.deployment.approve", "listDeploymentTargets": "platform.deployment.read", "listServiceRevisions": "platform.deployment.read", "listServiceRevisionAudit": "platform.deployment.read", "createServiceDraft": "platform.deployment.compose", "updateServiceDraft": "platform.deployment.compose", "submitServiceDraft": "platform.deployment.compose", "approveServiceRevision": "platform.deployment.approve", "publishServiceRevision": "platform.deployment.publish", "rollbackServiceRevision": "platform.deployment.publish", "listTestTargetBindings": "platform.deployment.read", "putTestTargetBinding": "platform.admin", "listTestReleases": "platform.deployment.read", "createTestRelease": "platform.deployment.publish", "rollbackTestRelease": "platform.deployment.publish"},
 	}
 	return roles[capability][operation]

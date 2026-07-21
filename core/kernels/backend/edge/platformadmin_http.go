@@ -102,6 +102,18 @@ func (h *Handler) platformRoute(w http.ResponseWriter, r *http.Request, p portal
 		respondPlatform(w, value, err)
 		return
 	}
+	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "references" {
+		if r.Method != http.MethodGet {
+			methodNotAllowed(w)
+			return
+		}
+		if !requireManagementOperation(w, target, platformadminapi.ArtifactsCapability, "listReferences", false) || !requirePlatformRole(w, p, "platform.artifacts.read") {
+			return
+		}
+		value, err := h.platform.ListArtifactReferences(r.Context(), p, target)
+		respondPlatform(w, value, err)
+		return
+	}
 	if len(parts) == 2 && parts[0] == "artifacts" && parts[1] == "lifecycle" {
 		if r.Method != http.MethodPost {
 			methodNotAllowed(w)
