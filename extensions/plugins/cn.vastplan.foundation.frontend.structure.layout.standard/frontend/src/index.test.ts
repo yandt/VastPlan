@@ -42,6 +42,10 @@ describe("standard shell layout", () => {
     expect(standardShellCSS).toContain("@media (max-width:767px){.vp-desktop-navigation{display:none}");
   });
 
+  it("uses the renderer surface token for the page body", () => {
+    expect(standardShellCSS).toContain(".vp-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-shell-surface)}");
+  });
+
   it("aligns the desktop brand, second-level title and page header to one shell bar height", () => {
     expect(standardShellCSS).toContain(".vp-shell-header{height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height)");
     expect(standardShellCSS).toContain(".vp-navigation-start{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height)");

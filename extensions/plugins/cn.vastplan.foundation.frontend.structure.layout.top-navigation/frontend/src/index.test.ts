@@ -21,4 +21,8 @@ describe("top navigation shell layout", () => {
     expect(topNavigationShellCSS).toContain(".vp-top-page-scroller{flex:1;min-height:0;overflow:auto");
     expect(topNavigationShellCSS).toContain("@media (max-width:767px)");
   });
+
+  it("uses the renderer surface token for the page body", () => {
+    expect(topNavigationShellCSS).toContain(".vp-top-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-top-surface)}");
+  });
 });
