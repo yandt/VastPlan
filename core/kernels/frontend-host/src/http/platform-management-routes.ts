@@ -4,6 +4,7 @@ import { ManagementResolutionError, type PlatformManagementResolver } from "../c
 import type { Principal } from "../identity/identity-provider";
 import { sendAPIError } from "./json-response";
 import { PlatformCredentialsRoutes } from "./platform-credentials-routes";
+import { PlatformArtifactRoutes } from "./platform-artifact-routes";
 import { PlatformDatabaseRoutes } from "./platform-database-routes";
 import { requestHostname, resourceName } from "./platform-route-contract";
 import { PlatformSettingsRoutes } from "./platform-settings-routes";
@@ -14,11 +15,13 @@ export class PlatformManagementRoutes {
   private readonly settings: PlatformSettingsRoutes;
   private readonly credentials: PlatformCredentialsRoutes;
   private readonly database: PlatformDatabaseRoutes;
+  private readonly artifacts: PlatformArtifactRoutes;
 
   public constructor(private readonly resolver: PlatformManagementResolver, client: PlatformCapabilityPort) {
     this.settings = new PlatformSettingsRoutes(client);
     this.credentials = new PlatformCredentialsRoutes(client);
     this.database = new PlatformDatabaseRoutes(client);
+    this.artifacts = new PlatformArtifactRoutes(client);
   }
 
   public async handle(path: string, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
@@ -39,6 +42,7 @@ export class PlatformManagementRoutes {
     if (await this.settings.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.credentials.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.database.handle(resourceParts, principal, target, request, response, signal)) return true;
+    if (await this.artifacts.handle(resourceParts, principal, target, request, response, signal)) return true;
     return reject(response, 404, "not_found", method);
   }
 }

@@ -43,4 +43,5 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - Interaction Web 端点已通过独立 `InteractionPort` 迁移，浏览器只能调用 list/get/present/respond；可信宿主固定投影 `frontend` surface 和已验证 Principal。Composer 与 Interaction 共享 Addressing/CallContext 基础适配，但各自持有独立 operation allowlist。
 - 平台管理已建立独立 Management Resolver：只接受当前 Activation，校验 tenant、Portal、域名、Audience、Platform Profile 引用、Binding 结构及 `managementBindingDigest`，再把浏览器 `serviceId` 解析为服务端 `logicalService/routingDomain`。Go/Node 使用共享 golden 锁定 Binding 摘要算法；调用还必须同时通过内核固定 allowlist 和 Binding read/write grant。
 - Settings、Credentials、Database 管理 HTTP 工作流已分别迁移。每次请求重新解析当前受管服务，先检查 Binding grant、再检查平台角色；路径 key/name 是目标身份唯一来源并覆盖请求体同名字段。错误响应只映射稳定 capability code，不向浏览器暴露远端诊断文本。
-- 后续仍需接通 Artifacts/Deployment 管理工作流、RuntimeSpec/内容对象端点，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。
+- Artifacts 管理已按查询/容量、生命周期、GC、仓库迁移四个模块迁移。Catalog 查询限制字段、重复参数、分页和枚举；GC/迁移动作区分严格空对象与有界参数；migration ID 只取可信 URL 路径。所有 operation 仍由固定表映射，不能由浏览器指定。
+- 后续仍需接通 Deployment 管理工作流、RuntimeSpec/内容对象端点，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。

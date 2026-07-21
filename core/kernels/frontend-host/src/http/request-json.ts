@@ -35,6 +35,12 @@ export function requireJSONObject(value: unknown): Readonly<Record<string, unkno
   return value as Readonly<Record<string, unknown>>;
 }
 
+export function requireEmptyJSONObject(value: unknown): Readonly<Record<string, never>> {
+  const object = requireJSONObject(value);
+  if (Object.keys(object).length !== 0) throw new RequestJSONError("请求 JSON 必须是空对象");
+  return object as Readonly<Record<string, never>>;
+}
+
 export async function withRequestJSON(request: IncomingMessage, response: ServerResponse, action: (value: unknown) => Promise<void>): Promise<void> {
   try { await action(await readRequestJSON(request)); }
   catch (error) {
