@@ -149,6 +149,8 @@ type ActualState struct {
 	ReferenceDesiredRevision uint64               `json:"reference_desired_revision,omitempty"`
 	ReferencePending         bool                 `json:"reference_pending,omitempty"`
 	ReferencePublishedAt     time.Time            `json:"reference_published_at,omitempty"`
+	BootstrapGeneration      uint64               `json:"bootstrap_generation,omitempty"`
+	BootstrapPublishedAt     time.Time            `json:"bootstrap_published_at,omitempty"`
 	Units                    map[string]UnitState `json:"units"`
 	Errors                   []OperationError     `json:"errors,omitempty"`
 	UpdatedAt                time.Time            `json:"updated_at"`

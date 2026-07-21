@@ -29,7 +29,7 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.9.0"
+const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.10.0"
 
 var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"}]}`)
 
@@ -257,7 +257,10 @@ func referenceOwnerAllowed(callerID, ownerKind string) bool {
 	case "cn.vastplan.platform.configuration.portal-composer":
 		return ownerKind == "portal-activation" || ownerKind == "artifact-lock" || ownerKind == "rollback-history"
 	default:
-		return strings.HasPrefix(callerID, "node-agent/") && ownerKind == "assignment-active"
+		if strings.HasPrefix(callerID, "node-agent/") {
+			return ownerKind == "assignment-active"
+		}
+		return strings.HasPrefix(callerID, "bootstrap-inventory/") && (ownerKind == "seed" || ownerKind == "last-known-good")
 	}
 }
 
@@ -268,6 +271,9 @@ func referenceOwnerIDAllowed(callerID, ownerKind, ownerID string) bool {
 	case "cn.vastplan.platform.configuration.portal-composer":
 		return strings.HasPrefix(ownerID, "portal/")
 	default:
+		if repositoryID := strings.TrimPrefix(callerID, "bootstrap-inventory/"); repositoryID != callerID {
+			return repositoryID != "" && ((ownerKind == "seed" && ownerID == "seed/"+repositoryID) || (ownerKind == "last-known-good" && ownerID == "lkg/"+repositoryID))
+		}
 		nodeID := strings.TrimPrefix(callerID, "node-agent/")
 		return ownerKind == "assignment-active" && nodeID != "" && strings.HasPrefix(ownerID, "assignment/") && strings.HasSuffix(ownerID, "/"+nodeID)
 	}

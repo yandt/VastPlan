@@ -104,6 +104,10 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(nodeAgent, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "putReferences"}); got != extpoint.DecisionAllow {
 		t.Fatalf("可信 Node Agent 应可发布 Assignment 引用快照: %s", got)
 	}
+	bootstrapInventory := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "bootstrap-inventory/primary"}}
+	if got, _ := decide(bootstrapInventory, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "putReferences"}); got != extpoint.DecisionAllow {
+		t.Fatalf("可信 Bootstrap Inventory 应可发布 Seed/LKG 引用快照: %s", got)
+	}
 	repositoryPlugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.artifacts.repository"}}
 	if got, _ := decide(repositoryPlugin, extpoint.PermissionRequest{Capability: "platform.artifacts.storage.file", Operation: "migrate"}); got != extpoint.DecisionAllow {
 		t.Fatalf("repository must be allowed to invoke storage migration, got %s", got)

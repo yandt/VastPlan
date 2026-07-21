@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestFileStateStoreMigratesV1ToV2(t *testing.T) {
+func TestFileStateStoreMigratesV1ToCurrent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "actual.json")
 	raw := []byte(`{
   "version": 1,
@@ -48,7 +48,17 @@ func TestFileStateStoreMigratesV1ToV2(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reloaded.Version != actualStateVersion || reloaded.Units["backend-main"].Phase != PhaseActive {
-		t.Fatalf("v2 回写后不可重读: %+v", reloaded)
+		t.Fatalf("当前版本回写后不可重读: %+v", reloaded)
+	}
+}
+
+func TestDecodeActualStateMigratesV3ToV4(t *testing.T) {
+	state, err := decodeActualState([]byte(`{"version":3,"node_id":"node-1","units":{},"updated_at":"2026-07-21T00:00:00Z"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Version != actualStateVersion || state.BootstrapGeneration != 0 || !state.BootstrapPublishedAt.IsZero() {
+		t.Fatalf("v3 实际态未安全迁移到 v4: %+v", state)
 	}
 }
 

@@ -20,26 +20,42 @@ import (
 const (
 	assignmentReferenceTTL       = 120
 	assignmentReferenceHeartbeat = 40 * time.Second
+	bootstrapReferenceHeartbeat  = 10 * time.Minute
 )
 
 type AddressingArtifactReferencePublisher struct {
-	router *addressing.Router
-	nodeID string
+	router          *addressing.Router
+	callerID        string
+	scene           string
+	authenticatedBy string
 }
 
 func NewAddressingArtifactReferencePublisher(router *addressing.Router, nodeID string) (*AddressingArtifactReferencePublisher, error) {
 	if router == nil || nodeID == "" {
 		return nil, errors.New("Assignment 引用发布器需要 addressing router 与 node ID")
 	}
-	return &AddressingArtifactReferencePublisher{router: router, nodeID: nodeID}, nil
+	return &AddressingArtifactReferencePublisher{
+		router: router, callerID: "node-agent/" + nodeID,
+		scene: "artifact.references.assignment", authenticatedBy: "kernel.node-agent",
+	}, nil
+}
+
+func NewBootstrapArtifactReferencePublisher(router *addressing.Router, repositoryID string) (*AddressingArtifactReferencePublisher, error) {
+	if router == nil || repositoryID == "" {
+		return nil, errors.New("Bootstrap 引用发布器需要 addressing router 与 repository ID")
+	}
+	return &AddressingArtifactReferencePublisher{
+		router: router, callerID: "bootstrap-inventory/" + repositoryID,
+		scene: "artifact.references.bootstrap", authenticatedBy: "kernel.bootstrap-inventory",
+	}, nil
 }
 
 func (p *AddressingArtifactReferencePublisher) Publish(ctx context.Context, tenantID string, value pluginv1.ArtifactReferenceSnapshot) error {
 	wire := &contractv1.CallContext{
-		Caller:    &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "node-agent/" + p.nodeID},
-		Principal: &contractv1.Principal{TenantId: tenantID}, TenantId: tenantID, Scene: "node.assignment.references",
+		Caller:    &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: p.callerID},
+		Principal: &contractv1.Principal{TenantId: tenantID}, TenantId: tenantID, Scene: p.scene,
 	}
-	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{Source: "node.agent", AuthenticatedBy: "kernel.assignment"})
+	trusted, err := callcontext.ValidateIngress(wire, callcontext.Provenance{Source: "backend.kernel", AuthenticatedBy: p.authenticatedBy})
 	if err != nil {
 		return err
 	}
@@ -51,12 +67,46 @@ func (p *AddressingArtifactReferencePublisher) Publish(ctx context.Context, tena
 	target := &contractv1.CallTarget{ExtensionPoint: extpoint.ToolPackage, Capability: platformadminapi.ArtifactsCapability, Operation: &operation, LogicalService: &logicalService, RoutingDomain: &routingDomain}
 	result, _, err := p.router.Invoke(callcontext.WithTrusted(ctx, trusted), target, trusted.Wire(), raw)
 	if err != nil {
-		return fmt.Errorf("路由 Assignment 引用快照: %w", err)
+		return fmt.Errorf("路由制品引用快照: %w", err)
 	}
 	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
-		return errors.New("远端制品仓库拒绝 Assignment 引用快照")
+		return errors.New("远端制品仓库拒绝制品引用快照")
 	}
 	return nil
+}
+
+func (r *Reconciler) publishBootstrapReferences(ctx context.Context, actual *ActualState) error {
+	if r.BootstrapInventory == nil {
+		return nil
+	}
+	if r.BootstrapReferences == nil {
+		return errors.New("Bootstrap Inventory 缺少集群引用发布器")
+	}
+	inventory := *r.BootstrapInventory
+	if actual.BootstrapGeneration > inventory.Generation {
+		return errors.New("Bootstrap Inventory generation 发生回退")
+	}
+	now := r.now()
+	if actual.BootstrapGeneration == inventory.Generation && !actual.BootstrapPublishedAt.IsZero() && now.Sub(actual.BootstrapPublishedAt) < bootstrapReferenceHeartbeat {
+		return nil
+	}
+	seed, err := artifactreference.Seal(inventory.SeedSnapshot())
+	if err != nil {
+		return err
+	}
+	lkg, err := artifactreference.Seal(inventory.LastKnownGoodSnapshot())
+	if err != nil {
+		return err
+	}
+	if err := r.BootstrapReferences.Publish(ctx, "system", seed); err != nil {
+		return err
+	}
+	if err := r.BootstrapReferences.Publish(ctx, "system", lkg); err != nil {
+		return err
+	}
+	actual.BootstrapGeneration = inventory.Generation
+	actual.BootstrapPublishedAt = now
+	return r.checkpoint(actual)
 }
 
 func (r *Reconciler) publishAssignmentReferences(ctx context.Context, desiredRevision uint64, actual *ActualState, release bool) error {

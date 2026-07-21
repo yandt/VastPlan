@@ -47,6 +47,12 @@ func TestReferenceOwnerAuthorityIsNarrow(t *testing.T) {
 	if referenceOwnerIDAllowed("node-agent/node-a", "assignment-active", "assignment/backend/node-b") || referenceOwnerIDAllowed("cn.vastplan.platform.configuration.portal-composer", "portal-activation", "deployment/backend") {
 		t.Fatal("cross-node or cross-domain owner IDs must be denied")
 	}
+	if !referenceOwnerAllowed("bootstrap-inventory/primary", "seed") || !referenceOwnerAllowed("bootstrap-inventory/primary", "last-known-good") || !referenceOwnerIDAllowed("bootstrap-inventory/primary", "seed", "seed/primary") || !referenceOwnerIDAllowed("bootstrap-inventory/primary", "last-known-good", "lkg/primary") {
+		t.Fatal("Bootstrap Inventory identity must own only matching Seed/LKG snapshots")
+	}
+	if referenceOwnerIDAllowed("bootstrap-inventory/primary", "seed", "seed/other") {
+		t.Fatal("Bootstrap Inventory must not claim another repository ID")
+	}
 }
 
 func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {

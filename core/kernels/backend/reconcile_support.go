@@ -17,12 +17,14 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
 type reconcileOptions struct {
 	desiredPath, startupFile, repositoryRoot, repositoryURL, repositoryTrust, repositoryToken, repositoryCA string
 	bootstrapRepository                                                                                     string
+	bootstrapInventory                                                                                      string
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                                    string
 	credentialRoot                                                                                          string
 	backendPlatformCatalog                                                                                  string
@@ -55,6 +57,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.repositoryToken, "repository-token", "", "远端制品读令牌；默认读取 VASTPLAN_ARTIFACT_READ_TOKEN")
 	flags.StringVar(&options.repositoryCA, "repository-ca", "", "远端制品仓库自定义 CA PEM")
 	flags.StringVar(&options.bootstrapRepository, "bootstrap-repository", "", "预置签名种子仓库；精确命中时优先于远端源")
+	flags.StringVar(&options.bootstrapInventory, "bootstrap-inventory", "", "root-owned Bootstrap Inventory（Seed/LKG 精确引用与单调 generation）")
 	flags.StringVar(&options.runtimeRoot, "runtime-root", ".vastplan/runtime/plugins", "内容寻址安装目录")
 	flags.StringVar(&options.actualPath, "actual-state", ".vastplan/runtime/actual-state.json", "实际态报告文件")
 	flags.StringVar(&options.lockPath, "lock", "", "单实例锁文件；默认 <actual-state>.lock")
@@ -157,6 +160,15 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	if options.credentialRoot != "" && (!filepath.IsAbs(options.credentialRoot) || filepath.Clean(options.credentialRoot) != options.credentialRoot) {
 		return reconcileOptions{}, errors.New("-credential-root 必须是规范绝对路径")
 	}
+	if options.bootstrapInventory != "" && (!filepath.IsAbs(options.bootstrapInventory) || filepath.Clean(options.bootstrapInventory) != options.bootstrapInventory) {
+		return reconcileOptions{}, errors.New("-bootstrap-inventory 必须是规范绝对路径")
+	}
+	if options.bootstrapInventory != "" && options.bootstrapRepository == "" {
+		return reconcileOptions{}, errors.New("-bootstrap-inventory 必须与 -bootstrap-repository 同时配置")
+	}
+	if options.repositoryURL != "" && options.bootstrapRepository != "" && options.bootstrapInventory == "" {
+		return reconcileOptions{}, errors.New("托管仓库与 Seed 后备源并用时必须提供 -bootstrap-inventory")
+	}
 	if options.natsURL != "" && options.assignmentKey != "" {
 		assignmentNodeID, err := controlplane.AssignmentKeyNodeID(options.assignmentKey)
 		if err != nil || assignmentNodeID != options.nodeID {
@@ -167,8 +179,29 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 }
 
 type artifactResolution struct {
-	sources  []nodeagent.ArtifactSource
-	verifier nodeagent.ArtifactVerifier
+	sources   []nodeagent.ArtifactSource
+	verifier  nodeagent.ArtifactVerifier
+	bootstrap *pluginservice.SignedRepository
+}
+
+func (r artifactResolution) VerifyBootstrapInventory(ctx context.Context, inventory bootstrapinventory.Inventory) error {
+	if r.bootstrap == nil {
+		return errors.New("Bootstrap Inventory 已配置但 Seed 仓库源不存在")
+	}
+	for _, item := range inventory.Seed {
+		envelope, err := r.bootstrap.Fetch(ctx, item.Ref)
+		if err != nil {
+			return fmt.Errorf("读取 Bootstrap Inventory 制品 %s@%s/%s: %w", item.Ref.PluginID, item.Ref.Version, item.Ref.Channel, err)
+		}
+		verified, err := r.verifier.Verify(item.Ref, envelope)
+		if err != nil {
+			return fmt.Errorf("验证 Bootstrap Inventory 制品 %s: %w", item.Ref.PluginID, err)
+		}
+		if verified.Artifact().SHA256 != item.SHA256 {
+			return fmt.Errorf("Bootstrap Inventory 制品 %s 的 SHA-256 不匹配", item.Ref.PluginID)
+		}
+	}
+	return nil
 }
 
 // Read implements the resolver's synchronous immutable ArtifactReader on top
@@ -228,7 +261,8 @@ func buildArtifactResolution(options reconcileOptions) (artifactResolution, erro
 		if err != nil {
 			return artifactResolution{}, err
 		}
-		resolution.sources = append(resolution.sources, &pluginservice.SignedRepository{Local: local, Trust: trust})
+		resolution.bootstrap = &pluginservice.SignedRepository{Local: local, Trust: trust}
+		resolution.sources = append(resolution.sources, resolution.bootstrap)
 	}
 	if options.repositoryURL != "" {
 		token := options.repositoryToken

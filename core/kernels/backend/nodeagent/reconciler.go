@@ -10,6 +10,7 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
 )
 
@@ -23,6 +24,8 @@ type Reconciler struct {
 	Runtime                   Runtime
 	StateStore                StateStore
 	References                ArtifactReferencePublisher
+	BootstrapInventory        *bootstrapinventory.Inventory
+	BootstrapReferences       ArtifactReferencePublisher
 	RequireArtifactReferences bool
 	Now                       func() time.Time
 	// Pulse marks progress through potentially long multi-unit reconciliation.
@@ -67,6 +70,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 			actual.Errors = append(actual.Errors, OperationError{Stage: "artifact_reference", Message: err.Error()})
 			_ = r.checkpoint(&actual)
 			return Result{Changed: changed, Converged: false, State: actual}, fmt.Errorf("发布 Assignment 制品引用失败: %w", err)
+		}
+		if err := r.publishBootstrapReferences(ctx, &actual); err != nil {
+			actual.Errors = append(actual.Errors, OperationError{Stage: "bootstrap_reference", Message: err.Error()})
+			_ = r.checkpoint(&actual)
+			return Result{Changed: changed, Converged: false, State: actual}, fmt.Errorf("发布 Seed/LKG 制品引用失败: %w", err)
 		}
 		if collector, ok := r.Installer.(GarbageCollector); ok {
 			if err := collector.GarbageCollect(referencedSHA256(actual)); err != nil {
@@ -535,6 +543,9 @@ func (r *Reconciler) validate() error {
 	}
 	if r.RequireArtifactReferences && r.References == nil {
 		return errors.New("托管制品源要求配置 Assignment 引用发布器")
+	}
+	if r.BootstrapInventory != nil && r.BootstrapReferences == nil {
+		return errors.New("Bootstrap Inventory 要求配置 Seed/LKG 引用发布器")
 	}
 	return nil
 }

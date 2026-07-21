@@ -76,6 +76,7 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 	}
 	wantArgs := []string{
 		"-bootstrap-repository", filepath.Join(runDir, "repository"),
+		"-bootstrap-inventory", filepath.Join(runDir, "seed-inventory.json"),
 		"-repository-url", "https://127.0.0.1:18443",
 		"-repository-trust", filepath.Join(runDir, "secrets", "artifact-trust.json"),
 		"-repository-ca", filepath.Join(runDir, "secrets", "tls-cert.pem"),
@@ -83,7 +84,7 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 	if got := r.managedArtifactSourceArgs(); !reflect.DeepEqual(got, wantArgs) {
 		t.Fatalf("Node Agent 制品源错误:\n got=%#v\nwant=%#v", got, wantArgs)
 	}
-	wantControllerArgs := wantArgs[2:]
+	wantControllerArgs := wantArgs[4:]
 	if got := r.controllerArtifactSourceArgs(); !reflect.DeepEqual(got, wantControllerArgs) {
 		t.Fatalf("Controller 必须使用同一托管测试仓库后备源:\n got=%#v\nwant=%#v", got, wantControllerArgs)
 	}

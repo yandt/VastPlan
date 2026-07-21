@@ -131,3 +131,4 @@
 - [ADR-0098 制品依赖解析、精确锁与离线 Bundle](ADR-0098-制品依赖解析锁与离线Bundle.md)
 - [ADR-0099 File Volume 在线迁移与可回滚切换](ADR-0099-File-Volume在线迁移与可回滚切换.md)
 - [ADR-0100 制品生命周期、引用保护与垃圾回收](ADR-0100-制品生命周期引用保护与垃圾回收.md)
+- [ADR-0101 离线 Bootstrap Inventory 与 LKG 推进](ADR-0101-离线Bootstrap-Inventory与LKG推进.md)

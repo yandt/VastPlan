@@ -17,6 +17,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/references"
@@ -186,13 +187,18 @@ func (m *Manager) PutReferences(tenantID, publisherID string, value pluginv1.Art
 	if active == nil {
 		return references.Snapshot{}, 0, errors.New("活动制品仓库不可用")
 	}
-	if err := active.catalog.ValidateReferences(value.References); err != nil {
-		return references.Snapshot{}, 0, err
+	bootstrapReference := value.OwnerKind == artifactreference.OwnerSeed || value.OwnerKind == artifactreference.OwnerLastKnownGood
+	if !bootstrapReference {
+		if err := active.catalog.ValidateReferences(value.References); err != nil {
+			return references.Snapshot{}, 0, err
+		}
 	}
 	if mirror != nil {
-		if err := mirror.catalog.ValidateReferences(value.References); err != nil {
-			m.recordMigrationError(fmt.Errorf("观察卷引用校验失败: %w", err))
-			return references.Snapshot{}, 0, errors.New("制品迁移观察卷不可用，引用更新已冻结")
+		if !bootstrapReference {
+			if err := mirror.catalog.ValidateReferences(value.References); err != nil {
+				m.recordMigrationError(fmt.Errorf("观察卷引用校验失败: %w", err))
+				return references.Snapshot{}, 0, errors.New("制品迁移观察卷不可用，引用更新已冻结")
+			}
 		}
 		if _, _, err := mirror.refs.Put(tenantID, publisherID, value, occurredAt); err != nil {
 			m.recordMigrationError(fmt.Errorf("观察卷引用镜像失败: %w", err))

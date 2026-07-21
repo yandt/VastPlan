@@ -38,6 +38,13 @@ func TestManagerCutsOverMirrorsFinalizesAndReleases(t *testing.T) {
 	if _, revision, err := manager.PutReferences("tenant-a", "cn.vastplan.platform.infrastructure.deployment-manager", referenceSnapshot, time.Now().UTC()); err != nil || revision != 1 {
 		t.Fatalf("reference publish failed: revision=%d err=%v", revision, err)
 	}
+	seedSnapshot, err := artifactreference.Seal(pluginv1.ArtifactReferenceSnapshot{OwnerKind: artifactreference.OwnerSeed, OwnerID: "seed/primary", Generation: 1, References: []pluginv1.ArtifactReference{{Ref: pluginv1.ArtifactRef{PluginID: "cn.vastplan.bootstrap.only", Version: "1.0.0", Channel: "stable"}, SHA256: strings.Repeat("f", 64), Purpose: "seed"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, revision, err := manager.PutReferences("system", "bootstrap-inventory/primary", seedSnapshot, time.Now().UTC()); err != nil || revision != 2 {
+		t.Fatalf("Seed-only ref may be absent from managed catalog: revision=%d err=%v", revision, err)
+	}
 	request := artifactstorage.VolumeMigrationRequest{MigrationID: "repository.online-001", SourceVolumeID: source.VolumeID, TargetVolumeID: target.VolumeID, Phase: artifactstorage.MigrationPrepare}
 	prepared := migrationResult(request, source, target)
 	if _, err := manager.Prepare(prepared); err != nil {
@@ -90,7 +97,7 @@ func TestManagerCutsOverMirrorsFinalizesAndReleases(t *testing.T) {
 	if _, _, _, err := restarted.Read(pluginservice.Ref{PluginID: third.PluginID, Version: third.Version, Channel: third.Channel}); err != nil {
 		t.Fatalf("finalized target did not survive restart: %v", err)
 	}
-	if revision, snapshots := restarted.References(); revision != 2 || len(snapshots) != 1 || snapshots[0].Value.Generation != 2 {
+	if revision, snapshots := restarted.References(); revision != 3 || len(snapshots) != 2 || snapshots[0].Value.OwnerKind != artifactreference.OwnerSeed || snapshots[1].Value.Generation != 2 {
 		t.Fatalf("reference mirror did not survive restart: revision=%d snapshots=%+v", revision, snapshots)
 	}
 	releaseRequest, err := restarted.SourceReleaseRequest(request.MigrationID)

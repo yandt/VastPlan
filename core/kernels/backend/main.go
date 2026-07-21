@@ -41,6 +41,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapbroker"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapobserver"
+	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicewatchdog"
@@ -254,6 +255,17 @@ func runReconcile(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
+	var bootstrapInventory *bootstrapinventory.Inventory
+	if options.bootstrapInventory != "" {
+		inventory, err := bootstrapinventory.ParseFile(options.bootstrapInventory)
+		if err != nil {
+			return fmt.Errorf("读取 Bootstrap Inventory: %w", err)
+		}
+		if err := artifacts.VerifyBootstrapInventory(context.Background(), inventory); err != nil {
+			return err
+		}
+		bootstrapInventory = &inventory
+	}
 	logf := componentLogf("node-agent")
 	plane, err := newNodeControlPlane(options, logf)
 	if err != nil {
@@ -329,12 +341,18 @@ func runReconcile(args []string) (runErr error) {
 	reconciler := &nodeagent.Reconciler{
 		NodeID: options.nodeID, NodeLabels: labels, Sources: artifacts.sources, Verifier: artifacts.verifier,
 		Installer: nodeagent.LocalInstaller{Root: options.runtimeRoot}, Runtime: runtime,
-		StateStore: plane.stateStore, RequireArtifactReferences: options.repositoryURL != "",
+		StateStore: plane.stateStore, RequireArtifactReferences: options.repositoryURL != "", BootstrapInventory: bootstrapInventory,
 	}
 	if plane.router != nil {
 		reconciler.References, err = nodeagent.NewAddressingArtifactReferencePublisher(plane.router, options.nodeID)
 		if err != nil {
 			return err
+		}
+		if bootstrapInventory != nil {
+			reconciler.BootstrapReferences, err = nodeagent.NewBootstrapArtifactReferencePublisher(plane.router, bootstrapInventory.RepositoryID)
+			if err != nil {
+				return err
+			}
 		}
 	}
 	liveness := &servicewatchdog.Liveness{}

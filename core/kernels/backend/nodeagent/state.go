@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const actualStateVersion = 3
+const actualStateVersion = 4
 
 // FileStateStore 将实际态原子写入单个 JSON 文件，既能断点恢复也便于本地审计。
 type FileStateStore struct {
@@ -164,7 +164,7 @@ func decodeActualState(raw []byte) (ActualState, error) {
 			}
 		}
 		return state, validateActualState(state)
-	case 2, actualStateVersion:
+	case 2, 3, actualStateVersion:
 		var state ActualState
 		if err := json.Unmarshal(raw, &state); err != nil {
 			return ActualState{}, err
@@ -201,6 +201,9 @@ func validateActualState(state ActualState) error {
 	}
 	if (state.ReferencePending || state.ReferenceDesiredRevision != 0 || !state.ReferencePublishedAt.IsZero()) && (state.ReferenceTenant == "" || state.ReferenceGeneration == 0) {
 		return errors.New("实际态 Assignment 引用 outbox 缺少 owner 或 generation")
+	}
+	if (state.BootstrapGeneration == 0) != state.BootstrapPublishedAt.IsZero() {
+		return errors.New("实际态 Bootstrap 引用 generation 与发布时间必须同时存在")
 	}
 	for id, unit := range state.Units {
 		if !unit.Phase.Valid() {

@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.14.0"
+	PluginVersion = "0.15.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -87,7 +87,7 @@ func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.Permissio
 	if request.Capability != platformadminapi.ArtifactsCapability || request.Operation != "putReferences" {
 		return false
 	}
-	if c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_SYSTEM && strings.HasPrefix(c.GetCaller().GetId(), "node-agent/") {
+	if c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_SYSTEM && (strings.HasPrefix(c.GetCaller().GetId(), "node-agent/") || strings.HasPrefix(c.GetCaller().GetId(), "bootstrap-inventory/")) {
 		return true
 	}
 	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN {

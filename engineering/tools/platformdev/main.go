@@ -43,6 +43,7 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
@@ -267,8 +268,44 @@ func (r *runtime) signPackageRepository() error {
 			return err
 		}
 	}
+	if err := r.writeBootstrapInventory(repository, refs); err != nil {
+		return err
+	}
 	log.Printf("[6/6] 已签署 %d 个本地 Seed 制品", len(refs))
 	return nil
+}
+
+func (r *runtime) writeBootstrapInventory(repository *pluginservice.Repository, refs []pluginservice.Ref) error {
+	items := make([]bootstrapinventory.Item, 0, len(refs))
+	lkgIDs := map[string]struct{}{
+		"cn.vastplan.foundation.security.platform-admin-access-policy": {},
+		"cn.vastplan.platform.artifacts.storage.file":                  {},
+		"cn.vastplan.platform.artifacts.repository":                    {},
+	}
+	lkg := make([]bootstrapinventory.Item, 0, len(lkgIDs))
+	for _, ref := range refs {
+		artifact, err := repository.ReadMetadata(ref)
+		if err != nil {
+			return err
+		}
+		item := bootstrapinventory.Item{Ref: ref, SHA256: artifact.SHA256}
+		items = append(items, item)
+		if _, ok := lkgIDs[ref.PluginID]; ok {
+			lkg = append(lkg, item)
+		}
+	}
+	inventory, err := bootstrapinventory.Normalize(bootstrapinventory.Inventory{
+		Version: bootstrapinventory.Version, Generation: uint64(time.Now().UTC().UnixNano()), RepositoryID: "local-seed",
+		Seed: items, LastKnownGood: lkg,
+	})
+	if err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(inventory, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(r.runDir, "seed-inventory.json"), append(raw, '\n'), 0o600)
 }
 
 func packageRepositoryRefs(root string) ([]pluginservice.Ref, error) {
@@ -610,6 +647,7 @@ func (r *runtime) testingRepositoryTrust() string {
 func (r *runtime) managedArtifactSourceArgs() []string {
 	return []string{
 		"-bootstrap-repository", filepath.Join(r.runDir, "repository"),
+		"-bootstrap-inventory", filepath.Join(r.runDir, "seed-inventory.json"),
 		"-repository-url", "https://" + r.options.artifactListen,
 		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
 		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 )
 
 type recordingAssignmentReferences struct {
@@ -84,5 +85,33 @@ func TestManagedArtifactSourceRequiresReferencePublisher(t *testing.T) {
 	reconciler.RequireArtifactReferences = true
 	if _, err := reconciler.Reconcile(context.Background(), desired(1, "1.0.0", true)); err == nil {
 		t.Fatal("托管制品源缺少 Assignment 引用发布器必须 fail-closed")
+	}
+}
+
+func TestBootstrapInventoryPublishesSeedAndLKGAfterRuntimeConverges(t *testing.T) {
+	runtime := newFakeRuntime()
+	store := NewMemoryStateStore()
+	assignmentPublisher := &recordingAssignmentReferences{}
+	bootstrapPublisher := &recordingAssignmentReferences{err: errors.New("repository starting")}
+	reconciler := newTestReconciler(runtime, store)
+	reconciler.Installer = referenceInstaller{}
+	reconciler.References = assignmentPublisher
+	reconciler.BootstrapReferences = bootstrapPublisher
+	item := bootstrapinventory.Item{Ref: pluginv1.ArtifactRef{PluginID: "cn.vastplan.platform.artifacts.repository", Version: "1.0.0", Channel: "stable"}, SHA256: strings.Repeat("b", 64)}
+	inventory, err := bootstrapinventory.Normalize(bootstrapinventory.Inventory{Version: 1, Generation: 9, RepositoryID: "primary", Seed: []bootstrapinventory.Item{item}, LastKnownGood: []bootstrapinventory.Item{item}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reconciler.BootstrapInventory = &inventory
+	want := desired(3, "1.0.0", true)
+	want.Metadata.Tenant = "tenant-a"
+	failed, err := reconciler.Reconcile(context.Background(), want)
+	if err == nil || failed.Converged || failed.State.BootstrapGeneration != 0 || len(bootstrapPublisher.values) != 1 || bootstrapPublisher.values[0].OwnerKind != "seed" {
+		t.Fatalf("仓库未就绪时 Seed/LKG 发布必须保持未收敛: result=%+v snapshots=%+v err=%v", failed, bootstrapPublisher.values, err)
+	}
+	bootstrapPublisher.err = nil
+	retried, err := reconciler.Reconcile(context.Background(), want)
+	if err != nil || !retried.Converged || retried.State.BootstrapGeneration != 9 || len(bootstrapPublisher.values) != 3 || bootstrapPublisher.values[1].OwnerKind != "seed" || bootstrapPublisher.values[2].OwnerKind != "last-known-good" {
+		t.Fatalf("仓库恢复后 Seed/LKG 未以同 inventory 收敛: result=%+v snapshots=%+v err=%v", retried, bootstrapPublisher.values, err)
 	}
 }

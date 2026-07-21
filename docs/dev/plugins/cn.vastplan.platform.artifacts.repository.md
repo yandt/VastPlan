@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.9.0`
+当前制品版本：`0.10.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -78,7 +78,7 @@ Resolver 请求示例：
 
 Catalog 数据保存在仓库 volume 的 `catalog/` 下。发布流水账按单调 revision 使用原子事件文件，索引快照可从每个签名制品及流水账重建；启动时发现制品已成功落盘但事件缺失，会补写 `recovered` 事件。恢复路径只读取并验证 artifact metadata 与 attestation，不扫描全部大对象；实际读取仍由内核复验对象摘要。相同精确 ref、摘要和证明重传幂等，不增加 revision；受控测试 CLI 会先查 Catalog，避免重试产生不同证明。
 
-平台工具能力同时提供 `status`、`listCatalog`、`listPublishJournal`、小载荷 `resolve`、`setLifecycle`、`putReferences/listReferences`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。引用发布只接受宿主验证的租户与精确首方控制器身份；完整快照使用 generation、可选 TTL 和规范摘要，过期只会令未来 GC fail-closed，不会解除保护。生命周期变更使用 Catalog revision CAS 和独立权限，`deprecated` 会进入锁提示，`yanked/revoked` 拒绝新的解析与交付。迁移采用可重试阶段命令；观察期的发布、生命周期和引用快照都先镜像后提交活动卷，失败可回滚；物理 path/handle 不返回 Portal。Bundle 大字节只走 HTTPS，不穿过协议总线。
+平台工具能力同时提供 `status`、`listCatalog`、`listPublishJournal`、小载荷 `resolve`、`setLifecycle`、`putReferences/listReferences`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。引用发布只接受宿主验证的租户与精确首方控制器身份；完整快照使用 generation、可选 TTL 和规范摘要，过期只会令未来 GC fail-closed，不会解除保护。`bootstrap-inventory/<repositoryId>` 系统身份只能写匹配 ID 的 Seed/LKG 快照；这两类引用允许对象尚未复制进 Managed Catalog，但清单已由内核逐项从 Seed 重新验签，GC 只保护其中实际存在的托管对象。生命周期变更使用 Catalog revision CAS 和独立权限，`deprecated` 会进入锁提示，`yanked/revoked` 拒绝新的解析与交付。迁移采用可重试阶段命令；观察期的发布、生命周期和引用快照都先镜像后提交活动卷，失败可回滚；物理 path/handle 不返回 Portal。Bundle 大字节只走 HTTPS，不穿过协议总线。
 
 ## 验证
 
