@@ -11,6 +11,7 @@ import (
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
@@ -54,6 +55,7 @@ func (s *Service) seedPublishedCatalogLocked(catalog frontendcompositionv1.Porta
 }
 
 func (s *Service) Governance(ctx context.Context, principal portalapi.Principal) (portalapi.GovernanceSnapshot, error) {
+	_ = s.reconcilePortalReferences(ctx, principal)
 	applications, err := s.List(ctx, principal)
 	if err != nil {
 		return portalapi.GovernanceSnapshot{}, err
@@ -214,6 +216,13 @@ func (s *Service) Activate(ctx context.Context, principal portalapi.Principal, r
 	s.state.NextActivation++
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	activation := portalapi.PortalActivation{ID: s.state.NextActivation, TenantID: principal.TenantID, PortalID: request.PortalID, Status: portalapi.ActivationPreparing, ApplicationRevisionID: request.ApplicationRevisionID, ProfileRevisionID: request.ProfileRevisionID, BindingRevisionID: request.BindingRevisionID, PreviousActivationID: currentID, ActorID: principal.ID, Reason: request.Reason, CreatedAt: now}
+	var previousReferences []pluginv1.ArtifactReference
+	for _, candidate := range s.state.Activations {
+		if candidate.TenantID == principal.TenantID && candidate.ID == currentID {
+			previousReferences = append([]pluginv1.ArtifactReference(nil), candidate.ArtifactReferences...)
+			break
+		}
+	}
 	application, profile, binding, err := s.activationInputsLocked(principal.TenantID, request)
 	s.mu.Unlock()
 	if err != nil {
@@ -230,32 +239,67 @@ func (s *Service) Activate(ctx context.Context, principal portalapi.Principal, r
 	}
 	activation.Spec = cloneSpec(spec)
 	activation.Phases = append(activation.Phases, phase("generate-snapshot"))
-	if err := s.materializeCatalog(ctx, principal.TenantID, spec); err != nil {
+	references, err := s.materializeCatalog(ctx, principal.TenantID, spec)
+	if err != nil {
 		return s.persistFailedActivation(activation, "edge-readiness", fmt.Errorf("%w: %v", ErrCatalogRejected, err))
 	}
+	activation.ArtifactReferences = withPortalPurpose(references, "active")
 	activation.Phases = append(activation.Phases, phase("edge-readiness"))
+	if err := s.protectPortalTransition(ctx, activation.ID, activation.PortalID, previousReferences, references); err != nil {
+		_ = s.restorePortalActiveReferences(ctx, activation.ID, activation.PortalID, previousReferences)
+		return s.persistFailedActivation(activation, "reference-protection", err)
+	}
+	activation.Phases = append(activation.Phases, phase("reference-protection"))
 
 	// Expensive resolution and materialization intentionally run without the
 	// governance mutex. Re-enter the critical section and revalidate the exact
 	// tuple plus current Activation before the single live-state commit.
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if current := s.currentActivationIDLocked(principal.TenantID, request.PortalID); current != request.ExpectedCurrentID {
-		return s.persistFailedActivationLocked(activation, "cas-activate", fmt.Errorf("%w: 当前 Activation 已从 %d 变为 %d", ErrInvalidState, request.ExpectedCurrentID, current))
+		value, err := s.persistFailedActivationLocked(activation, "cas-activate", fmt.Errorf("%w: 当前 Activation 已从 %d 变为 %d", ErrInvalidState, request.ExpectedCurrentID, current))
+		s.mu.Unlock()
+		_ = s.restorePortalActiveReferences(ctx, activation.ID, activation.PortalID, previousReferences)
+		return value, err
 	}
 	if _, _, _, err := s.activationInputsLocked(principal.TenantID, request); err != nil {
-		return s.persistFailedActivationLocked(activation, "cas-activate", err)
+		value, persistErr := s.persistFailedActivationLocked(activation, "cas-activate", err)
+		s.mu.Unlock()
+		_ = s.restorePortalActiveReferences(ctx, activation.ID, activation.PortalID, previousReferences)
+		return value, persistErr
 	}
 	if s.activationRouteConflictLocked(principal.TenantID, request.PortalID, spec) {
-		return s.persistFailedActivationLocked(activation, "cas-activate", ErrRouteConflict)
+		value, err := s.persistFailedActivationLocked(activation, "cas-activate", ErrRouteConflict)
+		s.mu.Unlock()
+		_ = s.restorePortalActiveReferences(ctx, activation.ID, activation.PortalID, previousReferences)
+		return value, err
 	}
 	activation.Phases = append(activation.Phases, phase("cas-activate"))
 	activation.Status = portalapi.ActivationCurrent
+	activation.ReferencePending = true
 	s.state.Activations = append(s.state.Activations, activation)
 	s.auditResourceLocked(principal.TenantID, request.PortalID, activation.ID, "activation.current", principal)
 	if err := s.save(); err != nil {
+		s.mu.Unlock()
 		return portalapi.PortalActivation{}, err
 	}
+	s.mu.Unlock()
+
+	if err := s.publishPortalReferences(ctx, activation, previousReferences); err != nil {
+		return cloneJSON(activation), nil
+	}
+	s.mu.Lock()
+	for i := range s.state.Activations {
+		if s.state.Activations[i].TenantID == activation.TenantID && s.state.Activations[i].ID == activation.ID {
+			s.state.Activations[i].ReferencePending = false
+			activation.ReferencePending = false
+			if err := s.save(); err != nil {
+				s.state.Activations[i].ReferencePending = true
+				activation.ReferencePending = true
+			}
+			break
+		}
+	}
+	s.mu.Unlock()
 	return cloneJSON(activation), nil
 }
 
@@ -296,10 +340,11 @@ func (s *Service) RollbackActivation(ctx context.Context, principal portalapi.Pr
 	return s.Activate(ctx, principal, portalapi.ActivationRequest{PortalID: source.PortalID, ApplicationRevisionID: source.ApplicationRevisionID, ProfileRevisionID: source.ProfileRevisionID, BindingRevisionID: source.BindingRevisionID, ExpectedCurrentID: expectedCurrentID, Reason: reason})
 }
 
-func (s *Service) ListActivations(_ context.Context, principal portalapi.Principal) ([]portalapi.PortalActivation, error) {
+func (s *Service) ListActivations(ctx context.Context, principal portalapi.Principal) ([]portalapi.PortalActivation, error) {
 	if principal.ID == "" || principal.TenantID == "" {
 		return nil, ErrForbidden
 	}
+	_ = s.reconcilePortalReferences(ctx, principal)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.projectActivationsLocked(principal.TenantID), nil

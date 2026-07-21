@@ -24,6 +24,7 @@ var (
 // Portal Composer plugin. Keeping this logical name in the neutral contract
 // package prevents the Backend kernel from importing a concrete plugin.
 const ComposerCapability = "platform.portal-composer"
+const ComposerPluginID = "cn.vastplan.platform.configuration.portal-composer"
 
 // KernelCatalogValidationCapability is the narrowly scoped host capability
 // through which the Composer verifies a Portal spec against the trusted
@@ -34,6 +35,11 @@ const KernelCatalogValidationCapability = "kernel.portal.catalog.validate"
 // that verifies and extracts immutable browser delivery objects before a
 // revision can become active.
 const KernelCatalogMaterializationCapability = "kernel.portal.catalog.materialize"
+
+// KernelArtifactReferencePublicationCapability is the narrow Portal Edge
+// bridge to the cluster artifact repository. It accepts only sealed snapshots
+// from the authenticated Composer plugin and never exposes a generic router.
+const KernelArtifactReferencePublicationCapability = "kernel.portal.artifact-references.publish"
 
 // KernelTestArtifactValidationCapability validates one exact testing receipt
 // inside the trusted Portal Edge boundary without exposing repository tokens,
@@ -229,19 +235,21 @@ type ActivationPhase struct {
 // PortalActivation is the immutable live-state fact. Published Application,
 // Profile and Binding revisions are only eligible inputs; none is live by itself.
 type PortalActivation struct {
-	ID                    uint64            `json:"id"`
-	TenantID              string            `json:"tenantId"`
-	PortalID              string            `json:"portalId"`
-	Status                ActivationStatus  `json:"status"`
-	ApplicationRevisionID uint64            `json:"applicationRevisionId"`
-	ProfileRevisionID     uint64            `json:"profileRevisionId"`
-	BindingRevisionID     uint64            `json:"bindingRevisionId"`
-	PreviousActivationID  uint64            `json:"previousActivationId,omitempty"`
-	Spec                  PortalSpec        `json:"resolved"`
-	Phases                []ActivationPhase `json:"phases"`
-	ActorID               string            `json:"actorId"`
-	Reason                string            `json:"reason,omitempty"`
-	CreatedAt             string            `json:"createdAt"`
+	ID                    uint64                       `json:"id"`
+	TenantID              string                       `json:"tenantId"`
+	PortalID              string                       `json:"portalId"`
+	Status                ActivationStatus             `json:"status"`
+	ApplicationRevisionID uint64                       `json:"applicationRevisionId"`
+	ProfileRevisionID     uint64                       `json:"profileRevisionId"`
+	BindingRevisionID     uint64                       `json:"bindingRevisionId"`
+	PreviousActivationID  uint64                       `json:"previousActivationId,omitempty"`
+	Spec                  PortalSpec                   `json:"resolved"`
+	ArtifactReferences    []pluginv1.ArtifactReference `json:"artifactReferences,omitempty"`
+	ReferencePending      bool                         `json:"referencePending,omitempty"`
+	Phases                []ActivationPhase            `json:"phases"`
+	ActorID               string                       `json:"actorId"`
+	Reason                string                       `json:"reason,omitempty"`
+	CreatedAt             string                       `json:"createdAt"`
 }
 
 type ActivationRequest struct {

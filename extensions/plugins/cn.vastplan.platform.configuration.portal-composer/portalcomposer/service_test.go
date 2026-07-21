@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
@@ -42,7 +43,39 @@ func TestDescriptorMatchesSignedManifest(t *testing.T) {
 func (acceptingCatalog) ValidatePortal(context.Context, string, portalapi.PortalSpec) error {
 	return nil
 }
-func (acceptingCatalog) MaterializePortal(context.Context, string, portalapi.PortalSpec) error {
+func (acceptingCatalog) MaterializePortal(context.Context, string, portalapi.PortalSpec) ([]pluginv1.ArtifactReference, error) {
+	return []pluginv1.ArtifactReference{}, nil
+}
+func (acceptingCatalog) PublishReferenceSnapshot(context.Context, pluginv1.ArtifactReferenceSnapshot) error {
+	return nil
+}
+
+type recordingReferenceCatalog struct {
+	snapshots []pluginv1.ArtifactReferenceSnapshot
+	calls     int
+	failAt    int
+}
+
+func (*recordingReferenceCatalog) ValidatePortal(context.Context, string, portalapi.PortalSpec) error {
+	return nil
+}
+func (*recordingReferenceCatalog) MaterializePortal(_ context.Context, _ string, spec portalapi.PortalSpec) ([]pluginv1.ArtifactReference, error) {
+	values := make([]pluginv1.ArtifactReference, 0, len(spec.Plugins))
+	for _, ref := range spec.Plugins {
+		channel := ref.Channel
+		if channel == "" {
+			channel = "stable"
+		}
+		values = append(values, pluginv1.ArtifactReference{Ref: pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: channel}, SHA256: strings.Repeat("a", 64), Purpose: "candidate"})
+	}
+	return values, nil
+}
+func (c *recordingReferenceCatalog) PublishReferenceSnapshot(_ context.Context, value pluginv1.ArtifactReferenceSnapshot) error {
+	c.calls++
+	if c.calls == c.failAt {
+		return errors.New("repository temporarily unavailable")
+	}
+	c.snapshots = append(c.snapshots, value)
 	return nil
 }
 
@@ -102,6 +135,44 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 		t.Fatal(err)
 	} else if got, err := reopened.ListActivations(context.Background(), publisher); err != nil || len(got) != 1 || got[0].Status != portalapi.ActivationCurrent {
 		t.Fatalf("持久化状态错误: %+v %v", got, err)
+	}
+}
+
+func TestActivationReferenceOutboxRetriesAfterRepositoryRecovery(t *testing.T) {
+	catalog := &recordingReferenceCatalog{failAt: 2}
+	s, err := New(filepath.Join(t.TempDir(), "portals.json"), catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BindPlatformCatalog(testPlatformCatalog()); err != nil {
+		t.Fatal(err)
+	}
+	author, approver, publisher := principal("author", "portal.compose"), principal("approver", "portal.approve"), principal("publisher", "portal.publish")
+	draft, err := s.CreateDraft(context.Background(), author, spec("/"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Submit(context.Background(), author, draft.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Approve(context.Background(), approver, draft.ID); err != nil {
+		t.Fatal(err)
+	}
+	published, err := s.Publish(context.Background(), publisher, draft.ID, portalapi.PublishRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	activation, err := s.Activate(context.Background(), publisher, activationRequest(s, published, 0))
+	if err != nil || !activation.ReferencePending || len(activation.ArtifactReferences) == 0 {
+		t.Fatalf("引用仓库瞬时失败不得撤销已完成 Activation，且必须留下精确 outbox: %+v err=%v", activation, err)
+	}
+	catalog.failAt = 0
+	activations, err := s.ListActivations(context.Background(), publisher)
+	if err != nil || len(activations) != 1 || activations[0].ReferencePending {
+		t.Fatalf("仓库恢复后引用 outbox 未收敛: %+v err=%v", activations, err)
+	}
+	if len(catalog.snapshots) != 3 || catalog.snapshots[0].OwnerKind != "portal-activation" || catalog.snapshots[0].Generation != 1 || catalog.snapshots[1].OwnerKind != "rollback-history" || catalog.snapshots[2].Generation != 2 {
+		t.Fatalf("Portal 引用保护顺序错误: %+v", catalog.snapshots)
 	}
 }
 

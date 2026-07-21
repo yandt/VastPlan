@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -33,15 +35,30 @@ func (s *Service) validateCatalog(ctx context.Context, tenantID string, spec por
 	return catalog.ValidatePortal(ctx, tenantID, spec)
 }
 
-func (s *Service) materializeCatalog(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+func (s *Service) materializeCatalog(ctx context.Context, tenantID string, spec portalapi.PortalSpec) ([]pluginv1.ArtifactReference, error) {
 	catalog, _ := ctx.Value(catalogContextKey{}).(Catalog)
 	if catalog == nil {
 		catalog = s.artifactCatalog
 	}
 	if catalog == nil {
-		return fmt.Errorf("Portal Composer 未获得受信任制品目录")
+		return nil, fmt.Errorf("Portal Composer 未获得受信任制品目录")
 	}
 	return catalog.MaterializePortal(ctx, tenantID, spec)
+}
+
+func (s *Service) publishReferenceSnapshot(ctx context.Context, value pluginv1.ArtifactReferenceSnapshot) error {
+	catalog, _ := ctx.Value(catalogContextKey{}).(Catalog)
+	if catalog == nil {
+		catalog = s.artifactCatalog
+	}
+	if catalog == nil {
+		return fmt.Errorf("Portal Composer 未获得受信任制品引用发布器")
+	}
+	sealed, err := artifactreference.Seal(value)
+	if err != nil {
+		return err
+	}
+	return catalog.PublishReferenceSnapshot(ctx, sealed)
 }
 
 func (s *Service) validateTestArtifact(ctx context.Context, tenantID string, request portalapi.CreateTestReleaseRequest, publishers []string) error {
@@ -71,8 +88,54 @@ func (c hostCatalog) ValidatePortal(ctx context.Context, tenantID string, spec p
 	return c.call(ctx, tenantID, spec, portalapi.KernelCatalogValidationCapability, "validate")
 }
 
-func (c hostCatalog) MaterializePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
-	return c.call(ctx, tenantID, spec, portalapi.KernelCatalogMaterializationCapability, "materialize")
+func (c hostCatalog) MaterializePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) ([]pluginv1.ArtifactReference, error) {
+	if c.host == nil || c.callCtx == nil || strings.TrimSpace(tenantID) == "" {
+		return nil, fmt.Errorf("Portal 制品目录调用上下文不完整")
+	}
+	payload, err := json.Marshal(struct {
+		TenantID string               `json:"tenantId"`
+		Spec     portalapi.PortalSpec `json:"spec"`
+	}{TenantID: tenantID, Spec: spec})
+	if err != nil {
+		return nil, err
+	}
+	op := "materialize"
+	result, raw, err := c.host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: portalapi.KernelCatalogMaterializationCapability, Operation: &op}, c.callCtx, payload)
+	if err != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return nil, fmt.Errorf("调用可信 Portal 制品目录 materialize: %w", coalesceCatalogError(err))
+	}
+	var response struct {
+		References []pluginv1.ArtifactReference `json:"references"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil || response.References == nil {
+		return nil, fmt.Errorf("可信 Portal 制品目录返回的引用无效")
+	}
+	return response.References, nil
+}
+
+func (c hostCatalog) PublishReferenceSnapshot(ctx context.Context, value pluginv1.ArtifactReferenceSnapshot) error {
+	if c.host == nil || c.callCtx == nil {
+		return fmt.Errorf("Portal 制品引用调用上下文不完整")
+	}
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	op := "publish"
+	result, _, err := c.host.Call(ctx, &contractv1.CallTarget{
+		ExtensionPoint: extpoint.KernelService, Capability: portalapi.KernelArtifactReferencePublicationCapability, Operation: &op,
+	}, c.callCtx, payload)
+	if err != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return fmt.Errorf("提交 Portal 制品引用保护失败: %w", coalesceCatalogError(err))
+	}
+	return nil
+}
+
+func coalesceCatalogError(err error) error {
+	if err != nil {
+		return err
+	}
+	return errors.New("可信宿主拒绝")
 }
 
 func (c hostCatalog) ValidateTestArtifact(ctx context.Context, tenantID string, request portalapi.CreateTestReleaseRequest, allowedPublishers []string) error {

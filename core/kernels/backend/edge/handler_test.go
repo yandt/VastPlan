@@ -117,10 +117,10 @@ func TestBFFServesOnlyVerifiedModulesFromActiveRevision(t *testing.T) {
 	lockTestManagement(&spec)
 	fallbackSpec := spec
 	fallbackSpec.Revision = 6
-	if err := catalog.MaterializePortal(context.Background(), "tenant-a", spec); err != nil {
+	if _, err := catalog.MaterializePortal(context.Background(), "tenant-a", spec); err != nil {
 		t.Fatal(err)
 	}
-	if err := catalog.MaterializePortal(context.Background(), "tenant-a", fallbackSpec); err != nil {
+	if _, err := catalog.MaterializePortal(context.Background(), "tenant-a", fallbackSpec); err != nil {
 		t.Fatal(err)
 	}
 	s := &service{activations: []portalapi.PortalActivation{

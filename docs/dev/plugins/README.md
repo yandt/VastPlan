@@ -26,3 +26,4 @@
 - [cn.vastplan.platform.artifacts.repository](cn.vastplan.platform.artifacts.repository.md) —— HTTPS 制品仓库与状态能力
 - [cn.vastplan.platform.artifacts.storage.file](cn.vastplan.platform.artifacts.storage.file.md) —— 本地文件制品 volume 供给 Provider
 - [cn.vastplan.platform.infrastructure.deployment-manager](cn.vastplan.platform.infrastructure.deployment-manager.md) —— 节点计划、首次引导审批与可信执行桥
+- [cn.vastplan.platform.configuration.portal-composer](cn.vastplan.platform.configuration.portal-composer.md) —— Portal 分域治理、不可变 Activation 与前端制品引用保护

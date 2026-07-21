@@ -14,12 +14,13 @@ import (
 	"time"
 
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
 const (
 	PluginID      = "cn.vastplan.platform.configuration.portal-composer"
-	PluginVersion = "1.0.0"
+	PluginVersion = "1.1.0"
 	Capability    = portalapi.ComposerCapability
 	// StateFileConfigKey is read only through the authenticated host callback;
 	// plugin process environment must not decide where governed state is stored.
@@ -40,7 +41,8 @@ var (
 // plugin may not publish merely because a browser passed a plugin ID.
 type Catalog interface {
 	ValidatePortal(context.Context, string, portalapi.PortalSpec) error
-	MaterializePortal(context.Context, string, portalapi.PortalSpec) error
+	MaterializePortal(context.Context, string, portalapi.PortalSpec) ([]pluginv1.ArtifactReference, error)
+	PublishReferenceSnapshot(context.Context, pluginv1.ArtifactReferenceSnapshot) error
 }
 
 type TestArtifactCatalog interface {
@@ -136,7 +138,11 @@ func (s *Service) load() error {
 	if s.state.TestBindings == nil {
 		s.state.TestBindings = map[string]portalapi.TestTargetBinding{}
 	}
-	if s.recoverInterruptedTestReleases() {
+	changed := s.recoverInterruptedTestReleases()
+	if s.markCurrentReferencesPendingLocked() {
+		changed = true
+	}
+	if changed {
 		return s.save()
 	}
 	return nil

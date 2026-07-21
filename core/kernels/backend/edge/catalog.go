@@ -367,30 +367,42 @@ func samePortalRef(left, right portalapi.PluginRef) bool {
 // MaterializePortal is the only transition from verified plugin packages to
 // browser delivery objects. It runs before publication and never on a browser
 // request path.
-func (c *TrustedCatalog) MaterializePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) error {
+func (c *TrustedCatalog) MaterializePortal(ctx context.Context, tenantID string, spec portalapi.PortalSpec) ([]pluginv1.ArtifactReference, error) {
 	verified, err := c.verifyPortal(ctx, tenantID, spec)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	assets := make([]FrontendModuleAsset, 0, len(spec.Plugins))
+	references := make([]pluginv1.ArtifactReference, 0, len(spec.Plugins))
 	for _, plugin := range verified {
 		asset, err := frontendModule(spec.Revision, plugin)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		asset.GzipContent, err = gzipBytes(asset.Content)
 		if err != nil {
-			return fmt.Errorf("压缩插件 %s frontend 入口: %w", plugin.ref.ID, err)
+			return nil, fmt.Errorf("压缩插件 %s frontend 入口: %w", plugin.ref.ID, err)
 		}
 		assets = append(assets, asset)
+		channel := plugin.ref.Channel
+		if channel == "" {
+			channel = "stable"
+		}
+		references = append(references, pluginv1.ArtifactReference{
+			Ref:    pluginv1.ArtifactRef{PluginID: plugin.ref.ID, Version: plugin.ref.Version, Channel: channel},
+			SHA256: asset.Descriptor.PackageSHA256, Purpose: "candidate",
+		})
 	}
 	if err := c.origin.put(tenantID, spec, assets); err != nil {
-		return err
+		return nil, err
 	}
 	if c.origin == c.delivery {
-		return nil
+		return references, nil
 	}
-	return c.delivery.prefetchFrom(c.origin, tenantID, spec)
+	if err := c.delivery.prefetchFrom(c.origin, tenantID, spec); err != nil {
+		return nil, err
+	}
+	return references, nil
 }
 
 // PrefetchPortal verifies a central immutable snapshot and every referenced

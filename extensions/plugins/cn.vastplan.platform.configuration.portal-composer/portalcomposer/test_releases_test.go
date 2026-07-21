@@ -12,15 +12,54 @@ import (
 )
 
 type acceptingTestCatalog struct {
-	reject error
-	calls  int
+	reject       error
+	referenceErr error
+	calls        int
+	snapshots    []pluginv1.ArtifactReferenceSnapshot
 }
 
 func (*acceptingTestCatalog) ValidatePortal(context.Context, string, portalapi.PortalSpec) error {
 	return nil
 }
-func (*acceptingTestCatalog) MaterializePortal(context.Context, string, portalapi.PortalSpec) error {
+func (*acceptingTestCatalog) MaterializePortal(context.Context, string, portalapi.PortalSpec) ([]pluginv1.ArtifactReference, error) {
+	return []pluginv1.ArtifactReference{}, nil
+}
+func (c *acceptingTestCatalog) PublishReferenceSnapshot(_ context.Context, value pluginv1.ArtifactReferenceSnapshot) error {
+	if c.referenceErr != nil {
+		return c.referenceErr
+	}
+	c.snapshots = append(c.snapshots, value)
 	return nil
+}
+
+func TestFrontendTestReleaseReferenceProtectionFailsClosed(t *testing.T) {
+	catalog := &acceptingTestCatalog{}
+	service, err := New(filepath.Join(t.TempDir(), "portals.json"), catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.BindPlatformCatalog(testPlatformCatalog()); err != nil {
+		t.Fatal(err)
+	}
+	author, approver, publisher := principal("author", "portal.compose"), principal("approver", "portal.approve"), principal("publisher", "portal.publish")
+	admin := principal("admin", "portal.compose")
+	publishTestPortalApplication(t, service, author, approver, publisher)
+	zero := int64(0)
+	binding, err := service.PutTestTargetBinding(context.Background(), admin, "admin-ui", portalapi.PutTestTargetBindingRequest{
+		Scope: portalapi.TestTargetApplicationPlugin, PortalID: "admin", PluginID: "cn.vastplan.product.frontend.admin",
+		AllowedPublishers: []string{"vastplan"}, Enabled: true, IfVersion: &zero,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog.referenceErr = errors.New("repository unavailable")
+	release, err := service.CreateTestRelease(context.Background(), publisher, portalapi.CreateTestReleaseRequest{
+		BindingID: binding.ID, Artifact: pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.9.abcdef0", Channel: "testing"},
+		SHA256: strings.Repeat("f", 64), RepositoryRevision: 17,
+	})
+	if err != nil || release.Status != portalapi.TestReleaseFailed || release.ErrorCode != "platform.portal_test_release.reference_protection_failed" || catalog.calls != 0 {
+		t.Fatalf("引用保护失败必须在可信目录验证和候选激活前 fail-closed: %+v err=%v calls=%d", release, err, catalog.calls)
+	}
 }
 func (c *acceptingTestCatalog) ValidateTestArtifact(_ context.Context, _ string, request portalapi.CreateTestReleaseRequest, publishers []string) error {
 	c.calls++
@@ -66,6 +105,15 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 	}
 	if catalog.calls != 1 {
 		t.Fatalf("精确 testing 回执应验证一次: %d", catalog.calls)
+	}
+	var artifactLock pluginv1.ArtifactReferenceSnapshot
+	for _, snapshot := range catalog.snapshots {
+		if snapshot.OwnerKind == "artifact-lock" {
+			artifactLock = snapshot
+		}
+	}
+	if len(artifactLock.References) != 1 || artifactLock.References[0].Ref != request.Artifact || artifactLock.References[0].SHA256 != request.SHA256 {
+		t.Fatalf("Frontend Test Release 必须在候选激活前保护精确 testing 制品: %+v", catalog.snapshots)
 	}
 	activations, err := service.ListActivations(context.Background(), publisher)
 	if err != nil || len(activations) != 2 || activations[0].ID != release.CandidateActivationID || activations[0].Status != portalapi.ActivationCurrent || activations[1].Status != portalapi.ActivationSuperseded {

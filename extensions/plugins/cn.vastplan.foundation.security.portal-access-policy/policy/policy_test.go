@@ -74,6 +74,9 @@ func TestOnlyComposerCanUseRestrictedKernelServices(t *testing.T) {
 	if got := decisionFor(t, composer, portalapi.KernelCatalogMaterializationCapability, "materialize"); got.Decision != extpoint.DecisionAllow {
 		t.Fatalf("Composer materialize 回调应放行: %+v", got)
 	}
+	if got := decisionFor(t, composer, portalapi.KernelArtifactReferencePublicationCapability, "publish"); got.Decision != extpoint.DecisionAllow {
+		t.Fatalf("Composer 引用发布回调应放行: %+v", got)
+	}
 	if got := decisionFor(t, composer, portalapi.KernelTestArtifactValidationCapability, "validate"); got.Decision != extpoint.DecisionAllow {
 		t.Fatalf("Composer 测试制品验证回调应放行: %+v", got)
 	}

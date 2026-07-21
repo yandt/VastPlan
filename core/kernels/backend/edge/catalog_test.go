@@ -136,8 +136,12 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 		t.Fatalf("有效且已验证的设计系统应通过: %v", err)
 	}
 	beforeMaterialization := counted.calls
-	if err := catalog.MaterializePortal(context.Background(), "tenant-a", spec); err != nil {
+	references, err := catalog.MaterializePortal(context.Background(), "tenant-a", spec)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if len(references) != len(spec.Plugins) || references[0].Ref.PluginID != artifact.PluginID || references[0].SHA256 != artifact.SHA256 || references[0].Ref.Channel != "stable" {
+		t.Fatalf("物化结果必须返回已验签包的精确引用: %+v", references)
 	}
 	if got := counted.calls - beforeMaterialization; got != len(spec.Plugins) {
 		t.Fatalf("物化期间每个制品应只获取和验证一次: got=%d want=%d", got, len(spec.Plugins))

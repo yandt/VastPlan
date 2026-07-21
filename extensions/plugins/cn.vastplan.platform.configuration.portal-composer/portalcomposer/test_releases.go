@@ -150,6 +150,10 @@ func (s *Service) CreateTestRelease(ctx context.Context, principal portalapi.Pri
 	}
 	s.mu.Unlock()
 
+	if err := s.publishPortalTestReleaseReference(ctx, release); err != nil {
+		s.failPortalTestRelease(principal.TenantID, release.ID, "platform.portal_test_release.reference_protection_failed", err, false)
+		return s.portalTestRelease(principal, release.ID)
+	}
 	s.executePortalTestRelease(ctx, principal, binding, request, release.ID)
 	return s.portalTestRelease(principal, release.ID)
 }

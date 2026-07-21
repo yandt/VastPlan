@@ -11,7 +11,7 @@ import (
 )
 
 const PluginID = "cn.vastplan.foundation.security.portal-access-policy"
-const PluginVersion = "0.1.0"
+const PluginVersion = "0.2.0"
 const Capability = "foundation.security.portal-access-policy"
 
 func Check(_ context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -31,7 +31,7 @@ func decide(c *contractv1.CallContext, request extpoint.PermissionRequest) (extp
 	if c == nil || c.Caller == nil {
 		return extpoint.DecisionDeny, "缺少经验证调用身份"
 	}
-	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && (request.Capability == "kernel.config.get" || request.Capability == portalapi.KernelCatalogValidationCapability || request.Capability == portalapi.KernelCatalogMaterializationCapability || request.Capability == portalapi.KernelTestArtifactValidationCapability) {
+	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && (request.Capability == "kernel.config.get" || request.Capability == portalapi.KernelCatalogValidationCapability || request.Capability == portalapi.KernelCatalogMaterializationCapability || request.Capability == portalapi.KernelArtifactReferencePublicationCapability || request.Capability == portalapi.KernelTestArtifactValidationCapability) {
 		return extpoint.DecisionAllow, "Composer 受限宿主回调"
 	}
 	if request.Capability != portalapi.ComposerCapability {

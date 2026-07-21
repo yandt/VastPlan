@@ -59,7 +59,7 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	pluginVersion := flags.String("composer-version", "", "Composer artifact version")
 	channel := flags.String("composer-channel", "stable", "Composer artifact channel")
 	policyID := flags.String("policy-plugin", "cn.vastplan.foundation.security.portal-access-policy", "Portal authorization policy plugin ID")
-	policyVersion := flags.String("policy-version", "0.1.0", "Portal authorization policy artifact version")
+	policyVersion := flags.String("policy-version", "0.2.0", "Portal authorization policy artifact version")
 	policyChannel := flags.String("policy-channel", "stable", "Portal authorization policy artifact channel")
 	interactionPolicyID := flags.String("interaction-policy-plugin", "cn.vastplan.foundation.security.interaction-access-policy", "Interaction authorization policy plugin ID")
 	interactionPolicyVersion := flags.String("interaction-policy-version", "0.1.0", "Interaction authorization policy artifact version")
@@ -180,6 +180,23 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	if err != nil {
 		return err
 	}
+	cluster, err := newPlatformRouter(ctx, platformOptions, logf)
+	if err != nil {
+		return err
+	}
+	if cluster != nil {
+		defer cluster.Close()
+	}
+	var referencePublisher edge.ArtifactReferencePublisher
+	if cluster != nil {
+		referencePublisher, err = edge.NewAddressingArtifactReferencePublisher(cluster.router)
+		if err != nil {
+			return err
+		}
+	} else if *allowUnsigned {
+		logf("警告：本地未配置托管仓库，Portal 制品引用仅做契约校验，不具备跨进程 GC 保护")
+		referencePublisher = edge.DevelopmentArtifactReferencePublisher{}
+	}
 	host, err := hostfactory.NewWithDependencies(version, logf, kernelspi.Dependencies{Config: config})
 	if err != nil {
 		return err
@@ -188,6 +205,9 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 		return err
 	}
 	if err := host.RegisterHostService(extpoint.KernelService, portalapi.KernelCatalogMaterializationCapability, edge.CatalogMaterializationService(catalog)); err != nil {
+		return err
+	}
+	if err := host.RegisterHostService(extpoint.KernelService, portalapi.KernelArtifactReferencePublicationCapability, edge.ArtifactReferencePublicationService(referencePublisher)); err != nil {
 		return err
 	}
 	if err := host.RegisterHostService(extpoint.KernelService, portalapi.KernelTestArtifactValidationCapability, edge.CatalogTestArtifactValidationService(catalog)); err != nil {
@@ -268,13 +288,6 @@ func Run(ctx context.Context, args []string, version string, logf func(string, .
 	interactionService, err := edge.NewCapabilityInteractionService(interactionClient)
 	if err != nil {
 		return err
-	}
-	cluster, err := newPlatformRouter(ctx, platformOptions, logf)
-	if err != nil {
-		return err
-	}
-	if cluster != nil {
-		defer cluster.Close()
 	}
 	var platformService *edge.CapabilityPlatformAdminService
 	if cluster != nil {

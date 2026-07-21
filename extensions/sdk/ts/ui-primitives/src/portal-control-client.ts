@@ -125,6 +125,11 @@ export interface PortalBindingRevision {
 
 export type PortalActivationStatus = "Preparing" | "Activating" | "Current" | "Superseded" | "Failed";
 export interface PortalActivationPhase { name: string; status: "Succeeded" | "Failed"; message?: string; startedAt: string; endedAt?: string; }
+export interface PortalArtifactReference {
+  ref: { pluginId: string; version: string; channel: string };
+  sha256: string;
+  purpose: string;
+}
 export interface PortalActivation {
   id: number;
   tenantId: string;
@@ -135,6 +140,8 @@ export interface PortalActivation {
   bindingRevisionId: number;
   previousActivationId?: number;
   resolved: PortalResolvedSpec;
+  artifactReferences?: PortalArtifactReference[];
+  referencePending?: boolean;
   phases: PortalActivationPhase[];
   actorId: string;
   reason?: string;
