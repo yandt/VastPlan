@@ -3,6 +3,8 @@ import { PortalAssets } from "../assets/portal-assets";
 import type { IdentityProvider } from "../identity/identity-provider";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import type { InteractionPort } from "../capabilities/interaction-client";
+import type { PlatformCapabilityPort } from "../capabilities/platform-management-client";
+import type { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
 import { createAPIHandler } from "./api-handler";
 import { setBaseSecurityHeaders, setIndexSecurityHeaders } from "./security-headers";
 
@@ -12,6 +14,7 @@ export interface PortalHandlerOptions {
   secureCookies?: boolean;
   composer?: PortalComposerPort;
   interaction?: InteractionPort;
+  platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort };
 }
 
 export function createPortalHandler(options: PortalHandlerOptions): (request: IncomingMessage, response: ServerResponse) => void {
@@ -20,6 +23,7 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     secureCookies: options.secureCookies ?? true,
     ...(options.composer === undefined ? {} : { composer: options.composer }),
     ...(options.interaction === undefined ? {} : { interaction: options.interaction }),
+    ...(options.platform === undefined ? {} : { platform: options.platform }),
   });
   return (request, response) => {
     setBaseSecurityHeaders(response);

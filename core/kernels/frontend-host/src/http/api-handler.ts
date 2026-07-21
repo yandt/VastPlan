@@ -2,21 +2,26 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { IdentityProvider } from "../identity/identity-provider";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import type { InteractionPort } from "../capabilities/interaction-client";
+import type { PlatformCapabilityPort } from "../capabilities/platform-management-client";
+import type { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
 import { issueCSRF, validCSRF } from "../security/csrf";
 import { sendAPIError, sendJSON } from "./json-response";
 import { PortalControlRoutes } from "./portal-control-routes";
 import { InteractionRoutes } from "./interaction-routes";
+import { PlatformManagementRoutes } from "./platform-management-routes";
 
 export interface APIHandlerOptions {
   identity: IdentityProvider;
   secureCookies: boolean;
   composer?: PortalComposerPort;
   interaction?: InteractionPort;
+  platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort };
 }
 
 export function createAPIHandler(options: APIHandlerOptions): (request: IncomingMessage, response: ServerResponse, path: string) => Promise<void> {
   const portalControl = options.composer === undefined ? undefined : new PortalControlRoutes(options.composer);
   const interactions = options.interaction === undefined ? undefined : new InteractionRoutes(options.interaction);
+  const platform = options.platform === undefined ? undefined : new PlatformManagementRoutes(options.platform.resolver, options.platform.client);
   return async (request, response, path) => {
     const method = request.method ?? "GET";
     let principal;
@@ -39,6 +44,9 @@ export function createAPIHandler(options: APIHandlerOptions): (request: Incoming
     }
     if (interactions !== undefined) {
       if (await interactions.handle(path, method, principal, request, response, controller.signal)) return;
+    }
+    if (platform !== undefined) {
+      if (await platform.handle(path, principal, request, response, controller.signal)) return;
     }
     return sendAPIError(response, 404, "not_found", method === "HEAD");
   };

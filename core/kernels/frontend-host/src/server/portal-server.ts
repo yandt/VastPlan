@@ -9,6 +9,8 @@ import { openNodeAddressing, type NodeAddressingRuntime } from "@vastplan/addres
 import { AddressingPortalComposerClient } from "../capabilities/portal-composer-client";
 import { AddressingCapabilityInvoker } from "../capabilities/capability-invoker";
 import { AddressingInteractionClient } from "../capabilities/interaction-client";
+import { AddressingPlatformManagementClient } from "../capabilities/platform-management-client";
+import { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
 
 const addressingRuntimes = new WeakMap<Server, NodeAddressingRuntime>();
 
@@ -20,10 +22,14 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
     const invoker = addressing === undefined ? undefined : new AddressingCapabilityInvoker(addressing.client);
     const composer = invoker === undefined ? undefined : new AddressingPortalComposerClient(invoker, config.addressing?.composerLogicalService);
     const interaction = invoker === undefined ? undefined : new AddressingInteractionClient(invoker, config.addressing?.interactionLogicalService);
+    const platform = invoker === undefined || composer === undefined ? undefined : {
+      resolver: new PlatformManagementResolver(composer), client: new AddressingPlatformManagementClient(invoker),
+    };
     const handler = createPortalHandler({
       assets, identity, secureCookies: config.tls !== undefined,
       ...(composer === undefined ? {} : { composer }),
       ...(interaction === undefined ? {} : { interaction }),
+      ...(platform === undefined ? {} : { platform }),
     });
     let server: Server;
     if (config.tls === undefined) server = createHTTPServer(handler);
