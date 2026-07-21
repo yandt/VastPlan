@@ -39,5 +39,5 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - 新增 `@vastplan/addressing-node`：直接复用 Addressing v1 的 NATS + Protobuf Wire、签名 Capability Directory 与 NKey 传输身份，不建立私有 REST 代理。目录记录执行形状、服务策略、租约、签名和调用方 allowlist 校验；响应公钥必须绑定本次所选的公告实例。
 - Node/Go 使用共享确定性 NKey golden 验证签名字节兼容；Go Router 同时修正远端公告签名身份应绑定公告 `node_id`、而不是绑定接收方 node 的错误。
 - 跨进程 E2E 已覆盖 Node 读取 Go 签名目录、Node 请求签名、Protobuf v1 调用、Go 响应签名和 Node 响应实例身份绑定，不再只以两端各自单元测试作为互通证据。
-- Portal Host 已接入可选 Addressing 生命周期和严格启动配置。Application Draft 的列表、创建、更新、提交、审批、发布和审计端点已通过窄 Composer 端口迁移；写操作先验证服务端会话和双提交 CSRF，再执行 1 MiB 有界 JSON 解码，revision 只能由受信 URL 路径投影。未知能力和路由继续 fail-closed。
-- 后续仍需迁移 Profile/Binding/Activation、Interaction/平台管理、RuntimeSpec/内容对象端点，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。
+- Portal Host 已接入可选 Addressing 生命周期和严格启动配置。Application Draft、Platform Profile、Management Binding 与 Activation 的 HTTP 工作流已通过窄 Composer 端口迁移；各资源拥有独立路由模块。写操作先验证服务端会话和双提交 CSRF，再执行 1 MiB 有界 JSON 解码，revision/source ID 只能由受信 URL 路径投影。未知能力和路由继续 fail-closed。
+- 后续仍需迁移 Frontend Test Release、Interaction/平台管理、RuntimeSpec/内容对象端点，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。

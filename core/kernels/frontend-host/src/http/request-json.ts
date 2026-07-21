@@ -1,4 +1,5 @@
-import type { IncomingMessage } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { sendAPIError } from "./json-response";
 
 const defaultMaximumBodyBytes = 1 << 20;
 
@@ -32,4 +33,12 @@ export async function readRequestJSON(request: IncomingMessage, maximumBytes = d
 export function requireJSONObject(value: unknown): Readonly<Record<string, unknown>> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new RequestJSONError("请求 JSON 必须是对象");
   return value as Readonly<Record<string, unknown>>;
+}
+
+export async function withRequestJSON(request: IncomingMessage, response: ServerResponse, action: (value: unknown) => Promise<void>): Promise<void> {
+  try { await action(await readRequestJSON(request)); }
+  catch (error) {
+    if (error instanceof RequestJSONError) sendAPIError(response, 400, "invalid_json");
+    else throw error;
+  }
 }
