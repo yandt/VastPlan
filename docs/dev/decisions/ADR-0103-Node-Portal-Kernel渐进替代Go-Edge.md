@@ -33,7 +33,7 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - 代价：必须用契约对照测试覆盖现有约 6,200 行 Go Edge 行为，迁移不能靠页面能打开作为完成证据。
 - 安全：Node 主进程进入前端可信计算基；生产依赖必须锁定、可复现、签名且禁止运行时 npm install。
 
-## 实施进展（2026-07-21）
+## 实施进展（2026-07-22）
 
 - Node Portal Kernel 基础宿主已完成 HTTPS、文件会话、CSRF、CSP、静态资产边界和未知 `/v1` fail-closed。
 - 新增 `@vastplan/addressing-node`：直接复用 Addressing v1 的 NATS + Protobuf Wire、签名 Capability Directory 与 NKey 传输身份，不建立私有 REST 代理。目录记录执行形状、服务策略、租约、签名和调用方 allowlist 校验；响应公钥必须绑定本次所选的公告实例。
@@ -44,4 +44,5 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - 平台管理已建立独立 Management Resolver：只接受当前 Activation，校验 tenant、Portal、域名、Audience、Platform Profile 引用、Binding 结构及 `managementBindingDigest`，再把浏览器 `serviceId` 解析为服务端 `logicalService/routingDomain`。Go/Node 使用共享 golden 锁定 Binding 摘要算法；调用还必须同时通过内核固定 allowlist 和 Binding read/write grant。
 - Settings、Credentials、Database 管理 HTTP 工作流已分别迁移。每次请求重新解析当前受管服务，先检查 Binding grant、再检查平台角色；路径 key/name 是目标身份唯一来源并覆盖请求体同名字段。错误响应只映射稳定 capability code，不向浏览器暴露远端诊断文本。
 - Artifacts 管理已按查询/容量、生命周期、GC、仓库迁移四个模块迁移。Catalog 查询限制字段、重复参数、分页和枚举；GC/迁移动作区分严格空对象与有界参数；migration ID 只取可信 URL 路径。所有 operation 仍由固定表映射，不能由浏览器指定。
-- 后续仍需接通 Deployment 管理工作流、RuntimeSpec/内容对象端点，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。
+- Deployment 管理已按节点与首次引导、服务 revision 发布、测试目标与测试发布三个工作流迁移，并抽出仅服务该领域的授权与调用支撑层。节点/revision/release 身份只取 URL 路径，动作请求严格拒绝额外字段，所有 operation 和角色均由内核固定映射。
+- 后续仍需接通 RuntimeSpec/Recovery/内容对象端点、服务端 Generation/SSR Worker，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。

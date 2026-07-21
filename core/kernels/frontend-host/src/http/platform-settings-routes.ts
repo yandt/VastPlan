@@ -3,7 +3,7 @@ import type { PlatformCapabilityPort } from "../capabilities/platform-management
 import type { PlatformManagementTarget } from "../capabilities/platform-management-resolver";
 import type { Principal } from "../identity/identity-provider";
 import { sendAPIError } from "./json-response";
-import { authorizePlatformOperation, sendPlatformResponse } from "./platform-response";
+import { authorizePlatformOperation, responseItems, sendPlatformResponse } from "./platform-response";
 import { optionalNonnegativeVersion, queryValue, requirePlatformRole, resourceName } from "./platform-route-contract";
 import { requireJSONObject, withRequestJSON } from "./request-json";
 
@@ -18,7 +18,7 @@ export class PlatformSettingsRoutes {
     if (parts.length === 1) {
       if (!authorizePlatformOperation(this.client, target, capability, "list", false, response) || !requirePlatformRole(principal, "platform.settings.read", response)) return true;
       if (method !== "GET" && method !== "HEAD") return methodNotAllowed(response, method);
-      await this.call(principal, target, "list", false, { prefix: queryValue(request.url, "prefix") }, response, signal, method === "HEAD", listItems);
+      await this.call(principal, target, "list", false, { prefix: queryValue(request.url, "prefix") }, response, signal, method === "HEAD", responseItems);
       return true;
     }
     if (parts.length !== 2) return notFound(response, method);
@@ -44,7 +44,6 @@ export class PlatformSettingsRoutes {
   }
 }
 
-function listItems(value: unknown): unknown { if (typeof value !== "object" || value === null || !Array.isArray((value as Record<string, unknown>).items)) throw new Error("settings list 响应无效"); return (value as { items: unknown[] }).items; }
 function methodNotAllowed(response: ServerResponse, method: string): true { sendAPIError(response, 405, "method_not_allowed", method === "HEAD"); return true; }
 function notFound(response: ServerResponse, method: string): true { sendAPIError(response, 404, "not_found", method === "HEAD"); return true; }
 function invalidName(response: ServerResponse, method: string): true { sendAPIError(response, 400, "invalid_resource_name", method === "HEAD"); return true; }
