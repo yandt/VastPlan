@@ -49,7 +49,7 @@ func TestRunValidateMigratesActualStateV1WithoutWriting(t *testing.T) {
 	if err := RunValidate(&output, []string{"-kind", ConfigKindActualState, "-file", path}); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), `"schema_version": 2`) || !strings.Contains(output.String(), `"revision": 6`) {
+	if !strings.Contains(output.String(), `"schema_version": 3`) || !strings.Contains(output.String(), `"revision": 6`) {
 		t.Fatalf("未报告迁移后的实际态: %s", output.String())
 	}
 	after, err := os.ReadFile(path)
@@ -76,7 +76,7 @@ func TestRunSupportBundleRedactsSensitiveData(t *testing.T) {
 	actualPath := filepath.Join(directory, "actual-state.json")
 	now := time.Now().UTC().Truncate(time.Second)
 	state := nodeagent.ActualState{
-		Version: 2, NodeID: "node-a", ObservedRevision: 8, AppliedRevision: 7,
+		Version: 3, NodeID: "node-a", ObservedRevision: 8, AppliedRevision: 7,
 		Units: map[string]nodeagent.UnitState{
 			"api": {
 				AppliedRevision: 7, Phase: nodeagent.PhaseActive, PhaseChangedAt: now,

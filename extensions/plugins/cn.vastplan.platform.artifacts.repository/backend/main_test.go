@@ -41,6 +41,12 @@ func TestReferenceOwnerAuthorityIsNarrow(t *testing.T) {
 	if referenceOwnerAllowed("cn.example.business", "deployment-active") || referenceOwnerAllowed("cn.vastplan.platform.configuration.portal-composer", "assignment-active") {
 		t.Fatal("business or cross-domain owner claims must be denied")
 	}
+	if !referenceOwnerAllowed("node-agent/node-a", "assignment-active") || !referenceOwnerIDAllowed("node-agent/node-a", "assignment-active", "assignment/backend/node-a") {
+		t.Fatal("authenticated Node Agent must own only its Assignment namespace")
+	}
+	if referenceOwnerIDAllowed("node-agent/node-a", "assignment-active", "assignment/backend/node-b") || referenceOwnerIDAllowed("cn.vastplan.platform.configuration.portal-composer", "portal-activation", "deployment/backend") {
+		t.Fatal("cross-node or cross-domain owner IDs must be denied")
+	}
 }
 
 func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {

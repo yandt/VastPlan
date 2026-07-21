@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const actualStateVersion = 2
+const actualStateVersion = 3
 
 // FileStateStore 将实际态原子写入单个 JSON 文件，既能断点恢复也便于本地审计。
 type FileStateStore struct {
@@ -131,7 +131,7 @@ type legacyUnitStateV1 struct {
 }
 
 // decodeActualState 是所有持久化后端共享的版本入口。v1 的自由字符串 status 会在
-// 读取时迁移为 v2 的封闭 Phase；写回始终只产生 v2，避免双写两套语义。
+// 读取时迁移为当前封闭 Phase；写回始终只产生当前版本，避免双写两套语义。
 func decodeActualState(raw []byte) (ActualState, error) {
 	var header struct {
 		Version int `json:"version"`
@@ -164,7 +164,7 @@ func decodeActualState(raw []byte) (ActualState, error) {
 			}
 		}
 		return state, validateActualState(state)
-	case actualStateVersion:
+	case 2, actualStateVersion:
 		var state ActualState
 		if err := json.Unmarshal(raw, &state); err != nil {
 			return ActualState{}, err
@@ -172,6 +172,7 @@ func decodeActualState(raw []byte) (ActualState, error) {
 		if state.Units == nil {
 			state.Units = map[string]UnitState{}
 		}
+		state.Version = actualStateVersion
 		return state, validateActualState(state)
 	default:
 		return ActualState{}, fmt.Errorf("不支持的实际态版本 %d", header.Version)
@@ -194,6 +195,12 @@ func legacyPhase(status string) (UnitPhase, error) {
 func validateActualState(state ActualState) error {
 	if state.Version != actualStateVersion {
 		return fmt.Errorf("实际态版本必须为 %d，实际为 %d", actualStateVersion, state.Version)
+	}
+	if (state.ReferenceTenant == "") != (state.ReferenceOwnerID == "") {
+		return errors.New("实际态 Assignment 引用 tenant 与 owner 必须同时存在")
+	}
+	if (state.ReferencePending || state.ReferenceDesiredRevision != 0 || !state.ReferencePublishedAt.IsZero()) && (state.ReferenceTenant == "" || state.ReferenceGeneration == 0) {
+		return errors.New("实际态 Assignment 引用 outbox 缺少 owner 或 generation")
 	}
 	for id, unit := range state.Units {
 		if !unit.Phase.Valid() {

@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.13.0"
+	PluginVersion = "0.14.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -84,7 +84,13 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 }
 
 func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
-	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || request.Capability != platformadminapi.ArtifactsCapability || request.Operation != "putReferences" {
+	if request.Capability != platformadminapi.ArtifactsCapability || request.Operation != "putReferences" {
+		return false
+	}
+	if c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_SYSTEM && strings.HasPrefix(c.GetCaller().GetId(), "node-agent/") {
+		return true
+	}
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN {
 		return false
 	}
 	switch c.GetCaller().GetId() {

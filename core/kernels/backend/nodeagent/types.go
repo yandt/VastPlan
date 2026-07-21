@@ -138,14 +138,20 @@ type RuntimeEvent struct {
 
 // ActualState 是最近一次 reconcile 后持久化的节点视图。
 type ActualState struct {
-	Version          int                  `json:"version"`
-	NodeID           string               `json:"node_id"`
-	ObservedRevision uint64               `json:"observed_revision"`
-	ObservedDigest   string               `json:"observed_digest"`
-	AppliedRevision  uint64               `json:"applied_revision"`
-	Units            map[string]UnitState `json:"units"`
-	Errors           []OperationError     `json:"errors,omitempty"`
-	UpdatedAt        time.Time            `json:"updated_at"`
+	Version                  int                  `json:"version"`
+	NodeID                   string               `json:"node_id"`
+	ObservedRevision         uint64               `json:"observed_revision"`
+	ObservedDigest           string               `json:"observed_digest"`
+	AppliedRevision          uint64               `json:"applied_revision"`
+	ReferenceTenant          string               `json:"reference_tenant,omitempty"`
+	ReferenceOwnerID         string               `json:"reference_owner_id,omitempty"`
+	ReferenceGeneration      uint64               `json:"reference_generation,omitempty"`
+	ReferenceDesiredRevision uint64               `json:"reference_desired_revision,omitempty"`
+	ReferencePending         bool                 `json:"reference_pending,omitempty"`
+	ReferencePublishedAt     time.Time            `json:"reference_published_at,omitempty"`
+	Units                    map[string]UnitState `json:"units"`
+	Errors                   []OperationError     `json:"errors,omitempty"`
+	UpdatedAt                time.Time            `json:"updated_at"`
 }
 
 // UnitState 同时记录当前稳定实例和可选的升级候选。候选失败不会覆盖当前实例，
@@ -187,6 +193,13 @@ type Result struct {
 	Changed   bool
 	Converged bool
 	State     ActualState
+}
+
+// ArtifactReferencePublisher writes one complete, sealed Assignment snapshot
+// to the managed repository. Implementations must preserve the authenticated
+// Node Agent system identity across the cluster hop.
+type ArtifactReferencePublisher interface {
+	Publish(context.Context, string, pluginv1.ArtifactReferenceSnapshot) error
 }
 
 // RawConfig 深拷贝 JSON 配置，避免运行时持有期望态调用方仍可修改的 map。

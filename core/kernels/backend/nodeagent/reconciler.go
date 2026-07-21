@@ -15,14 +15,16 @@ import (
 
 // Reconciler 把一份完整期望态收敛到当前节点。
 type Reconciler struct {
-	NodeID     string
-	NodeLabels map[string]string
-	Sources    []ArtifactSource
-	Verifier   ArtifactVerifier
-	Installer  Installer
-	Runtime    Runtime
-	StateStore StateStore
-	Now        func() time.Time
+	NodeID                    string
+	NodeLabels                map[string]string
+	Sources                   []ArtifactSource
+	Verifier                  ArtifactVerifier
+	Installer                 Installer
+	Runtime                   Runtime
+	StateStore                StateStore
+	References                ArtifactReferencePublisher
+	RequireArtifactReferences bool
+	Now                       func() time.Time
 	// Pulse marks progress through potentially long multi-unit reconciliation.
 	// It is deliberately host-only and never enters DesiredState.
 	Pulse func()
@@ -61,6 +63,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, desired deploymentv1.Desired
 		return Result{}, err
 	}
 	if converged {
+		if err := r.publishAssignmentReferences(ctx, desired.Revision, &actual, false); err != nil {
+			actual.Errors = append(actual.Errors, OperationError{Stage: "artifact_reference", Message: err.Error()})
+			_ = r.checkpoint(&actual)
+			return Result{Changed: changed, Converged: false, State: actual}, fmt.Errorf("发布 Assignment 制品引用失败: %w", err)
+		}
 		if collector, ok := r.Installer.(GarbageCollector); ok {
 			if err := collector.GarbageCollect(referencedSHA256(actual)); err != nil {
 				actual.Errors = append(actual.Errors, OperationError{Stage: "gc", Message: err.Error()})
@@ -99,6 +106,13 @@ func (r *Reconciler) beginReconcile(desired deploymentv1.DesiredState) (ActualSt
 	actual.NodeID = r.NodeID
 	actual.ObservedRevision = desired.Revision
 	actual.ObservedDigest = digest
+	if desired.Metadata.Tenant != "" && desired.Metadata.Name != "" {
+		ownerID := "assignment/" + desired.Metadata.Name + "/" + r.NodeID
+		if actual.ReferenceOwnerID != "" && (actual.ReferenceTenant != desired.Metadata.Tenant || actual.ReferenceOwnerID != ownerID) {
+			return ActualState{}, errors.New("实际态的 Assignment 引用 owner 与期望态不一致")
+		}
+		actual.ReferenceTenant, actual.ReferenceOwnerID = desired.Metadata.Tenant, ownerID
+	}
 	actual.Errors = nil
 	return actual, nil
 }
@@ -456,6 +470,9 @@ func (r *Reconciler) Shutdown(ctx context.Context) error {
 	if err := r.checkpoint(&actual); err != nil {
 		return err
 	}
+	if err := r.publishAssignmentReferences(ctx, 0, &actual, true); err != nil {
+		return fmt.Errorf("释放 Assignment 制品引用失败: %w", err)
+	}
 	if len(actual.Errors) > 0 {
 		return fmt.Errorf("节点 %s 关闭时有 %d 个操作失败", r.NodeID, len(actual.Errors))
 	}
@@ -515,6 +532,9 @@ func (r *Reconciler) validate() error {
 	}
 	if len(r.Sources) == 0 || !r.Verifier.configured || r.Installer == nil || r.Runtime == nil || r.StateStore == nil {
 		return errors.New("reconciler 依赖未完整配置")
+	}
+	if r.RequireArtifactReferences && r.References == nil {
+		return errors.New("托管制品源要求配置 Assignment 引用发布器")
 	}
 	return nil
 }

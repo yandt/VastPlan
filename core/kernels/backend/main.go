@@ -329,7 +329,13 @@ func runReconcile(args []string) (runErr error) {
 	reconciler := &nodeagent.Reconciler{
 		NodeID: options.nodeID, NodeLabels: labels, Sources: artifacts.sources, Verifier: artifacts.verifier,
 		Installer: nodeagent.LocalInstaller{Root: options.runtimeRoot}, Runtime: runtime,
-		StateStore: plane.stateStore,
+		StateStore: plane.stateStore, RequireArtifactReferences: options.repositoryURL != "",
+	}
+	if plane.router != nil {
+		reconciler.References, err = nodeagent.NewAddressingArtifactReferencePublisher(plane.router, options.nodeID)
+		if err != nil {
+			return err
+		}
 	}
 	liveness := &servicewatchdog.Liveness{}
 	reconciler.Pulse = liveness.Pulse
