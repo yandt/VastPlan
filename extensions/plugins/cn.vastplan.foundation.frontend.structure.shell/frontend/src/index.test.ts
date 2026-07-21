@@ -7,8 +7,8 @@ describe("Shell Catalog", () => {
     expect(shell.compose).toBeTypeOf("function");
     expect(shell).not.toHaveProperty("Shell");
     expect(shell.templates).toMatchObject([
-      { id: "standard", module: { id: "cn.vastplan.foundation.frontend.structure.layout.standard", version: "1.0.0", channel: "stable" } },
-      { id: "top-navigation", module: { id: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", version: "1.0.0", channel: "stable" } },
+      { id: "standard", module: { id: "cn.vastplan.foundation.frontend.structure.layout.standard", version: "1.1.0", channel: "stable" } },
+      { id: "top-navigation", module: { id: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", version: "1.1.0", channel: "stable" } },
     ]);
   });
 });

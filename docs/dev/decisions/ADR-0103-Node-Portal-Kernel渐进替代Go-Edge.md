@@ -46,4 +46,6 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - Artifacts 管理已按查询/容量、生命周期、GC、仓库迁移四个模块迁移。Catalog 查询限制字段、重复参数、分页和枚举；GC/迁移动作区分严格空对象与有界参数；migration ID 只取可信 URL 路径。所有 operation 仍由固定表映射，不能由浏览器指定。
 - Deployment 管理已按节点与首次引导、服务 revision 发布、测试目标与测试发布三个工作流迁移，并抽出仅服务该领域的授权与调用支撑层。节点/revision/release 身份只取 URL 路径，动作请求严格拒绝额外字段，所有 operation 和角色均由内核固定映射。
 - RuntimeSpec、Recovery、SSE 更新与内容对象端点已迁移。Node 兼容读取 Go 物化的不可变快照，并用 Go/Node golden 锁定 `PortalSpec` 摘要；当前 Activation、快照、对象字节和 URL revision/digest/media type 必须全部一致。冷填充先验证并写入全部对象、最后原子暴露 snapshot；Recovery 只能读取服务端选择的最新 Superseded revision。更新监视器按 tenant/portal 共享且无订阅时停止，只有新快照已就绪才广播。
-- 后续仍需迁移 Catalog validate/materialize 与预取所有权、服务端 Generation/SSR Worker，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。
+- Portal Composer 与 Interaction Broker 已进入受调度的 Backend 基础服务单元；Node Portal Kernel 不再本地复制插件状态。Catalog validate/materialize、测试制品复核和引用发布作为四个窄 `kernel.service` 注入可信 Go 宿主，Composer 只获得校验结论与精确引用，仓库凭据、验签密钥和包字节不进入插件。开发编排已切换为 Node Portal Kernel，并使用持久 JetStream、三份独立签名传输身份与 8 单元平台 Profile 验证真实 Addressing 链路。
+- 插件 tar.gz 已改为确定性归档：固定顺序、mtime、uid/gid、模式和 gzip 元数据；同一内容可复现为同一 SHA，避免回滚历史把未变化版本误判成同 ref 多摘要。
+- 后续仍需完成服务端 Generation/SSR Worker、真实企业 OIDC + NATS mTLS 权限对照 E2E；这些完成后删除 Go Edge 入口。

@@ -84,7 +84,7 @@ up/restart 参数:
   VASTPLAN_DEV_STATE_ROOT      覆盖本地运行目录
   VASTPLAN_DEV_TIMEOUT         覆盖默认启动超时
   VASTPLAN_DEV_GATEWAY_PORT    开发网关端口（默认 18080）
-  VASTPLAN_DEV_PORTAL_PORT     Portal Edge 内部端口（默认 18444）
+  VASTPLAN_DEV_PORTAL_PORT     Node Portal Kernel 内部端口（默认 18444）
   VASTPLAN_DEV_ARTIFACT_PORT   制品服务内部端口（默认 18443）
   VASTPLAN_DEV_SEED_ARTIFACT_PORT Seed 制品仓库端口（默认 18442）
   VASTPLAN_DEV_VAULT_PORT      Vault 桩内部端口（默认 18200）
@@ -355,7 +355,7 @@ check_ports_free() {
     fi
   done <<EOF
 开发网关 $GATEWAY_PORT
-Portal-Edge $PORTAL_PORT
+Portal-Kernel $PORTAL_PORT
 制品服务 $ARTIFACT_PORT
 Seed制品仓库 $SEED_ARTIFACT_PORT
 Vault-Transit桩 $VAULT_PORT
@@ -400,6 +400,30 @@ build_orchestrator() {
   chmod 700 "$temporary"
   mv "$temporary" "$BIN"
   success "开发编排器构建完成"
+}
+
+portal_host_needs_build() {
+  local output="$ROOT/core/kernels/frontend-host/dist/portal-host.cjs"
+  if [ ! -f "$output" ]; then
+    return 0
+  fi
+  if [ "$ROOT/core/kernels/frontend-host/package.json" -nt "$output" ] || [ "$ROOT/pnpm-lock.yaml" -nt "$output" ]; then
+    return 0
+  fi
+  find "$ROOT/core/kernels/frontend-host/src" "$ROOT/extensions/sdk/node/addressing/src" -type f \( -name '*.ts' -o -name '*.json' \) -newer "$output" -print -quit | grep -q .
+}
+
+build_portal_host() {
+  if ! portal_host_needs_build; then
+    success "复用未变化的 Node Portal Kernel"
+    return 0
+  fi
+  info "[准备] 构建 Node Portal Kernel..."
+  if ! (cd "$ROOT" && pnpm build:portal-host); then
+    fail "Node Portal Kernel 构建失败"
+    return 1
+  fi
+  success "Node Portal Kernel 构建完成"
 }
 
 runtime_arguments() {
@@ -517,6 +541,7 @@ start_runtime() {
   check_dependencies
   check_ports_free
   build_orchestrator
+  build_portal_host
   runtime_arguments
   # 开发工作区中的 Runtime Host 由 pnpm 以稳定命令名链接到此目录。
   # 只扩展当前编排器及其子进程的 PATH，不写入用户全局环境。

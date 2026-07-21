@@ -102,7 +102,7 @@ func (c hostCatalog) MaterializePortal(ctx context.Context, tenantID string, spe
 	op := "materialize"
 	result, raw, err := c.host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: portalapi.KernelCatalogMaterializationCapability, Operation: &op}, c.callCtx, payload)
 	if err != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
-		return nil, fmt.Errorf("调用可信 Portal 制品目录 materialize: %w", coalesceCatalogError(err))
+		return nil, fmt.Errorf("调用可信 Portal 制品目录 materialize: %w", catalogCallError(result, err))
 	}
 	var response struct {
 		References []pluginv1.ArtifactReference `json:"references"`
@@ -126,7 +126,7 @@ func (c hostCatalog) PublishReferenceSnapshot(ctx context.Context, value pluginv
 		ExtensionPoint: extpoint.KernelService, Capability: portalapi.KernelArtifactReferencePublicationCapability, Operation: &op,
 	}, c.callCtx, payload)
 	if err != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
-		return fmt.Errorf("提交 Portal 制品引用保护失败: %w", coalesceCatalogError(err))
+		return fmt.Errorf("提交 Portal 制品引用保护失败: %w", catalogCallError(result, err))
 	}
 	return nil
 }
@@ -136,6 +136,19 @@ func coalesceCatalogError(err error) error {
 		return err
 	}
 	return errors.New("可信宿主拒绝")
+}
+
+func catalogCallError(result *contractv1.CallResult, err error) error {
+	if err != nil {
+		return err
+	}
+	if result != nil && result.Error != nil && strings.TrimSpace(result.Error.Message) != "" {
+		if strings.TrimSpace(result.Error.Code) != "" {
+			return fmt.Errorf("%s: %s", result.Error.Code, result.Error.Message)
+		}
+		return errors.New(result.Error.Message)
+	}
+	return coalesceCatalogError(nil)
 }
 
 func (c hostCatalog) ValidateTestArtifact(ctx context.Context, tenantID string, request portalapi.CreateTestReleaseRequest, allowedPublishers []string) error {
@@ -184,7 +197,7 @@ func (c hostCatalog) call(ctx context.Context, tenantID string, spec portalapi.P
 		return fmt.Errorf("调用可信 Portal 制品目录 %s: %w", operation, err)
 	}
 	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
-		return fmt.Errorf("可信 Portal 制品目录拒绝校验")
+		return fmt.Errorf("可信 Portal 制品目录拒绝校验: %w", catalogCallError(result, nil))
 	}
 	return nil
 }

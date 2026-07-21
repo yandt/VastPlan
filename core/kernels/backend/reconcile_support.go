@@ -28,6 +28,7 @@ type reconcileOptions struct {
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                                    string
 	credentialRoot                                                                                          string
 	backendPlatformCatalog                                                                                  string
+	frontendDeliveryOrigin                                                                                  string
 	firstPartyPublishers                                                                                    string
 	thirdPartyPluginPolicy, publisherPluginPolicies                                                         string
 	defaultPluginContextAccess, publisherPluginContextAccess                                                string
@@ -67,6 +68,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.labelsRaw, "labels", "", "节点标签，逗号分隔 key=value")
 	flags.StringVar(&options.credentialRoot, "credential-root", "", "可信凭证挂载根目录：<root>/<tenant>/<credential-name>；留空不启用节点引导 Broker")
 	flags.StringVar(&options.backendPlatformCatalog, "backend-platform-catalog", "", "平台签发的 Backend Platform Catalog；配置后向 deployment-manager 开放在线编排")
+	flags.StringVar(&options.frontendDeliveryOrigin, "frontend-delivery-origin", "", "可信 Portal 前端快照中央物化目录；仅在承载 Portal Composer 的节点配置")
 	flags.StringVar(&options.thirdPartyPluginPolicy, "third-party-plugin-policy", string(nodeagent.PublisherPolicyRequireIsolation), "未单独配置发布者时的策略: require-isolation, allow-trusted, deny")
 	flags.StringVar(&options.publisherPluginPolicies, "publisher-plugin-policies", "", "发布者级策略，逗号分隔 publisher=policy；优先于全局策略")
 	flags.StringVar(&options.defaultPluginContextAccess, "default-plugin-context-access", "", "未知发布者的 CallContext 字段上限，逗号分隔；空值使用安全默认")
@@ -155,6 +157,9 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	}
 	if options.backendPlatformCatalog != "" && options.natsURL == "" {
 		return reconcileOptions{}, errors.New("在线部署发布必须同时配置 -backend-platform-catalog 与 -nats-url")
+	}
+	if options.frontendDeliveryOrigin != "" && (!filepath.IsAbs(options.frontendDeliveryOrigin) || filepath.Clean(options.frontendDeliveryOrigin) != options.frontendDeliveryOrigin) {
+		return reconcileOptions{}, errors.New("-frontend-delivery-origin 必须是规范绝对路径")
 	}
 	if options.lockPath == "" {
 		options.lockPath = options.actualPath + ".lock"

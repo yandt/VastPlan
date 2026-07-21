@@ -72,6 +72,12 @@ func ensureCachedBuild(cacheRoot, category, digest string, build func(string) er
 		return cachedBuild{}, err
 	}
 	if err := os.Rename(temporary, target); err != nil {
+		// Another platformdev process may have completed the exact same digest
+		// while this candidate was building. The immutable marker and validator
+		// decide whether that race is a safe cache hit.
+		if validCachedBuild(target, category, digest, validate) {
+			return cachedBuild{Path: target, Hit: true}, nil
+		}
 		return cachedBuild{}, fmt.Errorf("提交 %s 构建缓存: %w", category, err)
 	}
 	return cachedBuild{Path: target}, nil

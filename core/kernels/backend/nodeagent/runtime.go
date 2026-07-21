@@ -17,6 +17,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
@@ -55,6 +56,7 @@ type ProtocolRuntime struct {
 	nextID          uint64
 	router          *addressing.Router
 	Dependencies    kernelspi.Dependencies
+	HostServices    map[string]protocolbus.HostService
 	Drivers         *ExecutionDriverRegistry
 	RuntimePools    *RuntimePoolManager
 	ExecutionPolicy ExecutionPolicy
@@ -135,6 +137,9 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	candidate, err := hostfactory.NewWithDependencies(r.KernelVersion, r.Logf, dependencies)
 	if err != nil {
 		return fmt.Errorf("创建候选宿主: %w", err)
+	}
+	if err := registerRuntimeHostServices(candidate, r.HostServices); err != nil {
+		return fmt.Errorf("注册候选宿主服务: %w", err)
 	}
 	if r.router != nil {
 		candidate.SetCapabilityForwarder(r.router.Invoke)
@@ -310,6 +315,23 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 		old.host.Stop()
 		for _, leadership := range old.leaderships {
 			_ = leadership.Close(context.Background())
+		}
+	}
+	return nil
+}
+
+func registerRuntimeHostServices(host *protocolbus.Host, services map[string]protocolbus.HostService) error {
+	names := make([]string, 0, len(services))
+	for name := range services {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		if name == "" || services[name] == nil {
+			return errors.New("附加内核服务名称和实现不能为空")
+		}
+		if err := host.RegisterHostService(extpoint.KernelService, name, services[name]); err != nil {
+			return err
 		}
 	}
 	return nil

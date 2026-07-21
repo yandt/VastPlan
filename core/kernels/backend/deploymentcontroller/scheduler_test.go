@@ -136,6 +136,26 @@ func TestSchedulerReplicasPlacementScaleAndNodeLoss(t *testing.T) {
 	}
 }
 
+func TestSchedulerUsesDeploymentRevisionAsNewControlPlaneGenerationFloor(t *testing.T) {
+	_, buckets := startSchedulerNATS(t)
+	ctx := context.Background()
+	lease, err := controlplane.StartNodeLease(ctx, buckets.Nodes, "node-a", map[string]string{"region": "cn"}, testNodeLeaseOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = lease.Close(context.Background()) })
+
+	deployment := testDeployment(1)
+	deployment.Revision = 9
+	plan, err := (Scheduler{Nodes: buckets.Nodes, Assignments: buckets.Assignments}).Reconcile(ctx, deployment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Generation != deployment.Revision || plan.Assignments["node-a"].Revision != deployment.Revision {
+		t.Fatalf("重建控制面不得把 Assignment generation 回退到 Deployment revision 以下: %+v", plan)
+	}
+}
+
 func TestSchedulerDoesNotTurnAppProfilesIntoServiceAssignments(t *testing.T) {
 	_, buckets := startSchedulerNATS(t)
 	ctx := context.Background()

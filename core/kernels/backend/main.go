@@ -283,6 +283,9 @@ func runReconcile(args []string) (runErr error) {
 	runtime.HostingPolicy = options.hostingPolicy
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers
+	if err := configurePortalHostServices(options, artifacts, plane, runtime, logf); err != nil {
+		return err
+	}
 	if plane.transport != nil && plane.buckets.Nodes != nil {
 		readiness, err := nodebootstrapobserver.New(plane.buckets.Nodes, plane.transport)
 		if err != nil {

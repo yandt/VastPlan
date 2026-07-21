@@ -306,6 +306,14 @@ func (s Scheduler) scheduleGeneration(ctx context.Context, tenant, name string) 
 }
 
 func (s Scheduler) reserveGeneration(ctx context.Context, deployment deploymentv2.Deployment, floor uint64) (uint64, error) {
+	// Assignment generations and Deployment revisions are independent counters,
+	// but a newly rebuilt control plane must not publish a lower generation than
+	// the durable Deployment revision. This also preserves Node Agent's strict
+	// same-revision/different-content conflict protection after control-plane
+	// disaster recovery.
+	if deployment.Revision > 0 && deployment.Revision-1 > floor {
+		floor = deployment.Revision - 1
+	}
 	key := controlplane.ScheduleKey(deployment.Metadata.Tenant, deployment.Metadata.Name)
 	for range 8 {
 		entry, err := s.Assignments.Get(ctx, key)

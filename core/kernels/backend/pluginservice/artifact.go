@@ -5,9 +5,7 @@
 package pluginservice
 
 import (
-	"archive/tar"
 	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -75,8 +73,7 @@ func PackageDirectory(dir string) ([]byte, pluginv1.Manifest, error) {
 	}
 
 	var out bytes.Buffer
-	gz := gzip.NewWriter(&out)
-	tw := tar.NewWriter(gz)
+	gz, tw := newDeterministicArchive(&out)
 	err = filepath.WalkDir(dir, func(filename string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -105,11 +102,7 @@ func PackageDirectory(dir string) ([]byte, pluginv1.Manifest, error) {
 		if err != nil {
 			return err
 		}
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		header.Name = name
+		header := deterministicFileHeader(name, info)
 		if err := tw.WriteHeader(header); err != nil {
 			return err
 		}

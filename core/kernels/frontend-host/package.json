@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node22 --legal-comments=none --outfile=dist/portal-host.mjs",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=cjs --target=node22 --legal-comments=none --outfile=dist/portal-host.cjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

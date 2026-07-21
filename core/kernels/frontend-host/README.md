@@ -9,7 +9,7 @@
 构建后可用以下核心参数启动：
 
 ```text
-node dist/portal-host.mjs \
+node dist/portal-host.cjs \
   --listen 127.0.0.1:8443 \
   --portal-assets /srv/vastplan/portal \
   --session-file /srv/vastplan/private/sessions.json \

@@ -6,7 +6,32 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestPackageDirectoryIsReproducibleAcrossFilesystemMetadata(t *testing.T) {
+	directory := writeTestPlugin(t)
+	first, _, err := PackageDirectory(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	future := time.Now().Add(24 * time.Hour)
+	if err := filepath.WalkDir(directory, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil || entry.IsDir() {
+			return walkErr
+		}
+		return os.Chtimes(path, future, future)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := PackageDirectory(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first, second) {
+		t.Fatal("相同插件内容不得因 mtime、uid 或临时 staging 路径产生不同制品")
+	}
+}
 
 func TestArtifactRefUsesStableLowerCamelJSON(t *testing.T) {
 	raw, err := json.Marshal(Ref{PluginID: "com.example.plugin", Version: "1.0.0", Channel: "testing"})

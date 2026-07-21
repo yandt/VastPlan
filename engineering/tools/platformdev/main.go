@@ -447,11 +447,18 @@ func (r *runtime) writeFixtures() error {
 	if err := writeSessions(filepath.Join(r.runDir, "secrets", "portal-sessions.json")); err != nil {
 		return err
 	}
+	if err := writeDevelopmentTransportIdentities(filepath.Join(r.runDir, "secrets")); err != nil {
+		return err
+	}
 	template, err := os.ReadFile(filepath.Join(r.options.root, "engineering", "deploy", "platform-management-profile.json"))
 	if err != nil {
 		return err
 	}
-	rendered, err := renderPlatformProfile(template, r.runDir, r.persistentStateRoot(), r.options.artifactListen)
+	portalCatalog, err := os.ReadFile(filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json"))
+	if err != nil {
+		return err
+	}
+	rendered, err := renderPlatformProfile(template, portalCatalog, r.runDir, r.persistentStateRoot(), r.options.artifactListen)
 	if err != nil {
 		return err
 	}
@@ -491,10 +498,23 @@ func yamlString(value string) string {
 	return string(raw)
 }
 
-func renderPlatformProfile(template []byte, runDir, stateDir, artifactListen string) ([]byte, error) {
+func renderPlatformProfile(template, portalCatalog []byte, runDir, stateDir, artifactListen string) ([]byte, error) {
 	rendered := bytes.ReplaceAll(template, []byte("__VASTPLAN_DEV_ROOT__"), []byte(filepath.ToSlash(runDir)))
 	rendered = bytes.ReplaceAll(rendered, []byte("__VASTPLAN_DEV_STATE__"), []byte(filepath.ToSlash(stateDir)))
 	rendered = bytes.ReplaceAll(rendered, []byte("__VASTPLAN_ARTIFACT_LISTEN__"), []byte(artifactListen))
+	var canonicalCatalog any
+	if err := json.Unmarshal(portalCatalog, &canonicalCatalog); err != nil {
+		return nil, fmt.Errorf("解析 Portal Platform Catalog: %w", err)
+	}
+	canonicalRaw, err := json.Marshal(canonicalCatalog)
+	if err != nil {
+		return nil, err
+	}
+	quotedCatalog, err := json.Marshal(string(canonicalRaw))
+	if err != nil {
+		return nil, err
+	}
+	rendered = bytes.ReplaceAll(rendered, []byte(`"__VASTPLAN_PORTAL_PLATFORM_CATALOG__"`), quotedCatalog)
 	profile, err := backendcompositionv1.ParsePlatformProfile(rendered)
 	if err != nil {
 		return nil, fmt.Errorf("解析开发 Platform Profile 模板: %w", err)
@@ -539,55 +559,56 @@ func (r *runtime) start(ctx context.Context) error {
 		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
 		"-plugin-placements", "cn.vastplan.foundation.security.bootstrap-policy=require-dynamic-go",
 		"-backend-platform-catalog", filepath.Join(r.runDir, "backend-platform-catalog.json"), "-allow-development-plugins",
+		"-frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
+		"-transport-seed", filepath.Join(r.runDir, "secrets", platformNodeTransportSeed),
+		"-transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
 	}
 	nodeArgs = append(nodeArgs, r.managedArtifactSourceArgs()...)
 	if _, err := r.startChild("node-agent", env, kernel, nodeArgs...); err != nil {
 		return err
 	}
 	time.Sleep(750 * time.Millisecond)
+	platformRevision, err := r.platformManagementRevision()
+	if err != nil {
+		return err
+	}
 	controllerArgs := []string{
 		"controlplane", "-nats-url", natsURL, "-nats-allow-insecure", "-bootstrap", "-replicas", "1",
 		"-platform-profile", filepath.Join(r.runDir, "platform-management-profile.json"),
 		"-application-composition", filepath.Join(r.options.root, "engineering", "deploy", "platform-management-application.json"),
-		"-deployment-revision", "1", "-repository", filepath.Join(r.runDir, "repository"), "-controller",
+		"-deployment-revision", platformRevision, "-repository", filepath.Join(r.runDir, "repository"), "-controller",
 		"-backend-platform-catalog", filepath.Join(r.runDir, "backend-platform-catalog.json"),
 	}
 	controllerArgs = append(controllerArgs, r.controllerArtifactSourceArgs()...)
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
 	}
-	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), 6, 90*time.Second); err != nil {
+	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), 8, 90*time.Second); err != nil {
 		return fmt.Errorf("平台 Backend 未收敛: %w", err)
 	}
 	if err := waitHTTP(ctx, "https://"+r.options.artifactListen, 30*time.Second, true); err != nil {
 		return fmt.Errorf("托管测试制品仓库未就绪: %w", err)
 	}
-	composerVersion, err := pluginManifestVersion(r.options.root, "cn.vastplan.platform.configuration.portal-composer")
-	if err != nil {
-		return err
-	}
-	interactionBrokerVersion, err := pluginManifestVersion(r.options.root, "cn.vastplan.platform.interaction.broker")
-	if err != nil {
-		return err
-	}
 	portalArgs := []string{
-		"portal-edge", "-listen", r.options.portalListen,
-		"-tls-cert", filepath.Join(r.runDir, "secrets", "tls-cert.pem"), "-tls-key", filepath.Join(r.runDir, "secrets", "tls-key.pem"),
-		"-session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json"),
-		"-repository", filepath.Join(r.runDir, "repository"), "-install-root", filepath.Join(r.runDir, "installed", "portal"), "-allow-unsigned-local",
-		"-frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
-		"-frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
-		"-composer-version", composerVersion, "-composer-state-file", filepath.Join(r.persistentStateRoot(), "portal-composer.json"),
-		"-portal-platform-catalog", filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json"),
-		"-interaction-broker-version", interactionBrokerVersion, "-interaction-broker-state-file", filepath.Join(r.persistentStateRoot(), "interaction-broker.json"),
-		"-portal-assets", filepath.Join(r.runDir, "portal-assets"), "-nats-url", natsURL, "-nats-allow-insecure",
+		filepath.Join(r.options.root, "core", "kernels", "frontend-host", "dist", "portal-host.cjs"),
+		"--listen", r.options.portalListen,
+		"--tls-cert", filepath.Join(r.runDir, "secrets", "tls-cert.pem"), "--tls-key", filepath.Join(r.runDir, "secrets", "tls-key.pem"),
+		"--session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json"),
+		"--portal-assets", filepath.Join(r.runDir, "portal-assets"),
+		"--frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
+		"--frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
+		"--nats-servers", natsURL, "--allow-insecure-nats",
+		"--addressing-contracts", filepath.Join(r.options.root, "contracts", "proto"),
+		"--transport-seed", filepath.Join(r.runDir, "secrets", portalHostTransportSeed),
+		"--transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
+		"--composer-logical-service", "platform.portal-composer",
+		"--interaction-logical-service", "platform.interaction-broker",
 	}
-	portalArgs = append(portalArgs, r.controllerArtifactSourceArgs()...)
-	if _, err := r.startChild("portal-edge", env, kernel, portalArgs...); err != nil {
+	if _, err := r.startChild("portal-kernel", env, "node", portalArgs...); err != nil {
 		return err
 	}
 	if err := waitHTTP(ctx, "https://"+r.options.portalListen+"/v1/csrf", 45*time.Second, true); err != nil {
-		return fmt.Errorf("Portal Edge 未就绪: %w", err)
+		return fmt.Errorf("Node Portal Kernel 未就绪: %w", err)
 	}
 	if err := publishPortal("https://" + r.options.portalListen); err != nil {
 		return fmt.Errorf("发布初始 Portal 组合: %w", err)
@@ -605,6 +626,8 @@ func (r *runtime) start(ctx context.Context) error {
 		"-runtime-root", filepath.Join(r.runDir, "installed", "managed-services"), "-actual-state", filepath.Join(r.persistentStateRoot(), "managed-services-actual.json"),
 		"-lock", filepath.Join(r.runDir, "state", "managed-services.lock"), "-third-party-plugin-policy", "deny",
 		"-publisher-plugin-policies", "vastplan=allow-trusted", "-plugin-placement-default", "process-only",
+		"-transport-seed", filepath.Join(r.runDir, "secrets", managedNodeTransportSeed),
+		"-transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
 	}
 	managedNodeArgs = append(managedNodeArgs, r.managedArtifactSourceArgs()...)
 	if _, err := r.startChild("managed-node-agent", env, kernel, managedNodeArgs...); err != nil {
@@ -625,6 +648,17 @@ func (r *runtime) start(ctx context.Context) error {
 	r.ready = true
 	r.mu.Unlock()
 	return nil
+}
+
+func (r *runtime) platformManagementRevision() (string, error) {
+	profile, err := backendcompositionv1.ParsePlatformProfileFile(filepath.Join(r.runDir, "platform-management-profile.json"))
+	if err != nil {
+		return "", err
+	}
+	if profile.Revision == 0 {
+		return "", errors.New("开发 Platform Profile revision 必须大于 0")
+	}
+	return fmt.Sprint(profile.Revision), nil
 }
 
 func (r *runtime) serviceEnv() map[string]string {
@@ -730,7 +764,7 @@ func (r *runtime) startNATS() error {
 		port = -1
 	}
 	server, err := natsserver.NewServer(&natsserver.Options{
-		JetStream: true, StoreDir: filepath.Join(r.runDir, "nats"), Host: host, Port: port,
+		JetStream: true, StoreDir: filepath.Join(r.persistentStateRoot(), "nats"), Host: host, Port: port,
 		NoLog: true, NoSigs: true,
 	})
 	if err != nil {

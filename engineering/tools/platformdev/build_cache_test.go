@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 )
 
@@ -44,6 +45,37 @@ func TestEnsureCachedBuildBuildsOnceAndRejectsIncompleteEntry(t *testing.T) {
 	rebuilt, err := ensureCachedBuild(cacheRoot, "fixture", digest, build, validate)
 	if err != nil || rebuilt.Hit || builds != 2 {
 		t.Fatalf("不完整缓存必须原子重建: build=%+v builds=%d err=%v", rebuilt, builds, err)
+	}
+}
+
+func TestEnsureCachedBuildConvergesConcurrentIdenticalCandidates(t *testing.T) {
+	cacheRoot := t.TempDir()
+	digest := digestStrings("concurrent-v1")
+	ready := make(chan struct{})
+	release := make(chan struct{})
+	var once sync.Once
+	build := func(candidate string) error {
+		if err := os.WriteFile(filepath.Join(candidate, "artifact"), []byte("same"), 0o600); err != nil {
+			return err
+		}
+		once.Do(func() { close(ready) })
+		<-release
+		return nil
+	}
+	validate := func(candidate string) error { return requireCachedFiles(candidate, "artifact") }
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			_, err := ensureCachedBuild(cacheRoot, "fixture", digest, build, validate)
+			results <- err
+		}()
+	}
+	<-ready
+	close(release)
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatalf("相同 digest 的并发候选必须收敛为一个完整缓存: %v", err)
+		}
 	}
 }
 
