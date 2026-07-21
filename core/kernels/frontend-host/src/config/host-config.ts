@@ -9,6 +9,7 @@ export interface PortalHostConfig {
   tls?: { certFile: string; keyFile: string };
   allowInsecureHTTP: boolean;
   addressing?: PortalAddressingConfig;
+  delivery?: { cacheRoot: string; originRoot?: string };
 }
 
 export function parseHostArguments(args: readonly string[], cwd = process.cwd()): PortalHostConfig {
@@ -32,7 +33,10 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
     values.set(name, args[index + 1]);
     index += 1;
   }
-  const allowed = new Set(["--listen", "--portal-assets", "--session-file", "--tls-cert", "--tls-key", ...addressingValueArguments]);
+  const allowed = new Set([
+    "--listen", "--portal-assets", "--session-file", "--tls-cert", "--tls-key",
+    "--frontend-delivery-cache", "--frontend-delivery-origin", ...addressingValueArguments,
+  ]);
   for (const name of values.keys()) if (!allowed.has(name)) throw new Error(`未知启动参数: ${name}`);
 
   const [listenHost, portText, extra] = (values.get("--listen") ?? "127.0.0.1:8443").split(":");
@@ -51,6 +55,9 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
     throw new Error("生产 Portal Host 必须配置 TLS；本地开发需显式 --allow-insecure-http");
   }
   const addressing = parseAddressingConfig(values, allowInsecureNATS, cwd);
+  const cacheRoot = values.get("--frontend-delivery-cache");
+  const originRoot = values.get("--frontend-delivery-origin");
+  if (originRoot !== undefined && cacheRoot === undefined) throw new Error("配置 delivery origin 时必须同时配置本机 cache");
   return Object.freeze({
     listenHost,
     listenPort,
@@ -59,6 +66,12 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
     tls: certFile === undefined ? undefined : Object.freeze({ certFile: absolutePath(certFile, cwd), keyFile: absolutePath(keyFile!, cwd) }),
     allowInsecureHTTP,
     ...(addressing === undefined ? {} : { addressing }),
+    ...(cacheRoot === undefined ? {} : {
+      delivery: Object.freeze({
+        cacheRoot: absolutePath(cacheRoot, cwd),
+        ...(originRoot === undefined ? {} : { originRoot: absolutePath(originRoot, cwd) }),
+      }),
+    }),
   });
 }
 

@@ -5,6 +5,7 @@ import type { PortalComposerPort } from "../capabilities/portal-composer-client"
 import type { InteractionPort } from "../capabilities/interaction-client";
 import type { PlatformCapabilityPort } from "../capabilities/platform-management-client";
 import type { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
+import type { PortalDeliveryStore } from "../runtime/portal-delivery-store";
 import { createAPIHandler } from "./api-handler";
 import { setBaseSecurityHeaders, setIndexSecurityHeaders } from "./security-headers";
 
@@ -15,6 +16,7 @@ export interface PortalHandlerOptions {
   composer?: PortalComposerPort;
   interaction?: InteractionPort;
   platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort };
+  delivery?: PortalDeliveryStore;
 }
 
 export function createPortalHandler(options: PortalHandlerOptions): (request: IncomingMessage, response: ServerResponse) => void {
@@ -24,6 +26,7 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     ...(options.composer === undefined ? {} : { composer: options.composer }),
     ...(options.interaction === undefined ? {} : { interaction: options.interaction }),
     ...(options.platform === undefined ? {} : { platform: options.platform }),
+    ...(options.delivery === undefined ? {} : { delivery: options.delivery }),
   });
   return (request, response) => {
     setBaseSecurityHeaders(response);

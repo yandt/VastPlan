@@ -11,6 +11,7 @@ import { AddressingCapabilityInvoker } from "../capabilities/capability-invoker"
 import { AddressingInteractionClient } from "../capabilities/interaction-client";
 import { AddressingPlatformManagementClient } from "../capabilities/platform-management-client";
 import { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
+import { PortalDeliveryStore } from "../runtime/portal-delivery-store";
 
 const addressingRuntimes = new WeakMap<Server, NodeAddressingRuntime>();
 
@@ -25,11 +26,13 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
     const platform = invoker === undefined || composer === undefined ? undefined : {
       resolver: new PlatformManagementResolver(composer), client: new AddressingPlatformManagementClient(invoker),
     };
+    const delivery = config.delivery === undefined ? undefined : await PortalDeliveryStore.open(config.delivery.cacheRoot, config.delivery.originRoot);
     const handler = createPortalHandler({
       assets, identity, secureCookies: config.tls !== undefined,
       ...(composer === undefined ? {} : { composer }),
       ...(interaction === undefined ? {} : { interaction }),
       ...(platform === undefined ? {} : { platform }),
+      ...(delivery === undefined ? {} : { delivery }),
     });
     let server: Server;
     if (config.tls === undefined) server = createHTTPServer(handler);

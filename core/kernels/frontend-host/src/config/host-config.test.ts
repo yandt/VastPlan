@@ -28,4 +28,11 @@ describe("parseHostArguments", () => {
       seedFile: "/srv/vastplan/portal.seed", allowInsecure: true, composerLogicalService: "platform.portal-composer", interactionLogicalService: "platform.interaction-broker",
     });
   });
+
+  it("enables immutable frontend delivery only with an explicit local cache", () => {
+    const base = ["--portal-assets", "bin/portal", "--session-file", "sessions.json", "--allow-insecure-http"];
+    expect(() => parseHostArguments([...base, "--frontend-delivery-origin", "origin"], "/srv/vastplan")).toThrow(/cache/);
+    const config = parseHostArguments([...base, "--frontend-delivery-cache", "cache", "--frontend-delivery-origin", "origin"], "/srv/vastplan");
+    expect(config.delivery).toEqual({ cacheRoot: "/srv/vastplan/cache", originRoot: "/srv/vastplan/origin" });
+  });
 });

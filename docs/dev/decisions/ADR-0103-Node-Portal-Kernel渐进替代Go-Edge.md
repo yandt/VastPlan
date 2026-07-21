@@ -45,4 +45,5 @@ Node.js 对 HTTP/BFF 并无能力缺口，且与 ESM、React SSR、构建器、S
 - Settings、Credentials、Database 管理 HTTP 工作流已分别迁移。每次请求重新解析当前受管服务，先检查 Binding grant、再检查平台角色；路径 key/name 是目标身份唯一来源并覆盖请求体同名字段。错误响应只映射稳定 capability code，不向浏览器暴露远端诊断文本。
 - Artifacts 管理已按查询/容量、生命周期、GC、仓库迁移四个模块迁移。Catalog 查询限制字段、重复参数、分页和枚举；GC/迁移动作区分严格空对象与有界参数；migration ID 只取可信 URL 路径。所有 operation 仍由固定表映射，不能由浏览器指定。
 - Deployment 管理已按节点与首次引导、服务 revision 发布、测试目标与测试发布三个工作流迁移，并抽出仅服务该领域的授权与调用支撑层。节点/revision/release 身份只取 URL 路径，动作请求严格拒绝额外字段，所有 operation 和角色均由内核固定映射。
-- 后续仍需接通 RuntimeSpec/Recovery/内容对象端点、服务端 Generation/SSR Worker，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。
+- RuntimeSpec、Recovery、SSE 更新与内容对象端点已迁移。Node 兼容读取 Go 物化的不可变快照，并用 Go/Node golden 锁定 `PortalSpec` 摘要；当前 Activation、快照、对象字节和 URL revision/digest/media type 必须全部一致。冷填充先验证并写入全部对象、最后原子暴露 snapshot；Recovery 只能读取服务端选择的最新 Superseded revision。更新监视器按 tenant/portal 共享且无订阅时停止，只有新快照已就绪才广播。
+- 后续仍需迁移 Catalog validate/materialize 与预取所有权、服务端 Generation/SSR Worker，并完成真实 NATS+mTLS+权限对照 E2E 后切换流量。
