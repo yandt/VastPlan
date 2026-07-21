@@ -1,6 +1,6 @@
 # ADR-0104 Frontend Runtime Engine 与 React 单实现
 
-- 状态：已采纳，实施中
+- 状态：已采纳，已完成
 - 日期：2026-07-21
 - 关联：[ADR-0083](ADR-0083-前端UI分层术语与插件命名空间.md)、[ADR-0087](ADR-0087-统一Render-Adapter与可切换Renderer.md)、[ADR-0103](ADR-0103-Node-Portal-Kernel渐进替代Go-Edge.md)
 
@@ -29,3 +29,11 @@ React/Vue 是运行引擎，Arco/MUI 是组件与设计系统实现。现有 Fro
 - Frontend 基础角色从三个增为四个：Runtime Engine、Render Adapter、Shell、Workbench。
 - React 仍是唯一实际运行时，因此当前页面和插件体验不因本 ADR 自动改变。
 - Vue 的启动信号是明确客户/生态需求以及公共 SDK 已无 React 类型，而不是仅为技术对称。
+
+## 实施记录（2026-07-22）
+
+- 已建立框架无关的 `frontend-engine-contract`，覆盖 Engine 身份、能力、Browser Root、Server Runtime、Generation 与生命周期校验。
+- Platform Profile、Catalog、Resolver、RuntimeSpec 和模块图均显式携带 `engineFamily`/`engineContract`，并在装配时校验 Runtime Engine、Render Adapter、Shell 与 Workbench 的 Engine family 一致性。
+- `cn.vastplan.foundation.frontend.runtime.engine.react` 已作为唯一生产实现提供 CSR、SSR、hydration、Generation、按需模块和 i18n 能力；Arco/MUI 继续作为 React family 下的 Renderer，而不是独立 Engine。
+- 功能插件继续只依赖框架无关的 UI Contract 与 Workbench SDK；生产构建和架构守护拒绝功能插件直接引入 React、Vue、Arco、MUI、DOM 或裸页面注册。
+- 当前不提供 Vue 占位实现。增加新 Engine 时必须以独立基础插件实现同一契约并通过完整构建、SSR、热替换、安全与双端测试矩阵。

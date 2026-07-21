@@ -26,7 +26,7 @@ jobs:
           VASTPLAN_SOAK_REPORT: ${{ runner.temp }}/backend-soak.json
           VASTPLAN_SOAK_REQUIRE_FD: "true"
           VASTPLAN_SOAK_COMMIT: ${{ github.sha }}
-        run: go test -tags='e2e soak' -run='^TestBackendKernelSoak$' -timeout=25h -v ./e2e
+        run: go test -tags='e2e soak' -run='^TestBackendKernelSoak$' -timeout=25h -v ./engineering/e2e
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: backend-kernel-soak-report

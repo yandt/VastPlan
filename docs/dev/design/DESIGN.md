@@ -1,6 +1,6 @@
 # VastPlan Portal 设计系统
 
-> 状态：设计基线 v2｜最后更新：2026-07-19
+> 状态：设计基线 v2｜最后更新：2026-07-22
 >
 > 本文是 Portal 跨布局、跨 Arco/MUI 的视觉与交互单一真相源。组件职责和安全边界见《[前端门户内核](../architecture/前端门户内核.md)》，架构取舍见 [ADR-0080](../decisions/ADR-0080-Portal三级导航与可切换布局.md) 与 [ADR-0081](../decisions/ADR-0081-Portal治理与不可变Activation.md)。
 
@@ -14,7 +14,7 @@
 
 ## 2. 基础 Token
 
-UI Contract 3.0 暴露语义 token，适配器映射到具体框架。布局插件不得读取 Arco/MUI 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
+UI Contract 4.0 暴露语义 token，适配器映射到具体框架。布局插件不得读取 Arco/MUI 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
 
 | Token | 基线 | 用途 |
 |---|---:|---|

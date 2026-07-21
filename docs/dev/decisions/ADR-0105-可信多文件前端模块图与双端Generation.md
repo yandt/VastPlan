@@ -39,3 +39,8 @@
 - 每个 Portal Generation 独占并释放其 Blob URL；候选装配失败、预检结束、替换旧代和关闭时均执行清理。
 - React Runtime Engine 已声明并构建首个签名 `frontendServer` 入口。专用 Server 构建器通过 `createRequire` 仅桥接签名图允许的 Node 内置模块，构建后测试必须真实 import 并执行 React SSR，不能只检查静态图。
 - Server Worker 已实现 prepare、健康 render、原子提交、在途请求 drain、dispose、超时终止与内存/栈上限。SSR 结果限制为 1 MiB 并拒绝脚本或逃逸声明式 Shadow DOM 的 `</template>`；浏览器只 hydration 同一启动视图。当前双端提交的 Server 一面已完成，Browser 功能 Generation 继续沿用既有事务管理器；Host Epoch 仍协调跨端不兼容升级。
+
+### 剩余实施项
+
+- ADR 第 6 条要求 Browser 与 Server 候选由一个 Generation 事务协调。当前两端分别具有安全的候选准备、提交和失败保留机制，但尚无同一提交协调器：Server 在 Node Portal Kernel 内按首次 SSR 请求准备并提交，Browser 在页面内通过 `PortalGenerationManager` 准备并提交，Host Epoch 只处理不兼容边界。
+- 在建立跨进程的 prepare token、Browser ready/commit acknowledgement、超时与旧代统一 drain 之前，本 ADR 保持“实施中”。不得把“两端各自原子”描述成“双端原子”，也不得为了状态收敛而弱化原决策。
