@@ -5,16 +5,28 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
+
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
+const maxResolveRequestBytes = int64(256 << 10)
+
 type HTTPHandler struct {
-	Store      *Store
-	ReadToken  string
-	RequireTLS bool
-	Logf       func(string, ...any)
+	Store             *Store
+	ReadToken         string
+	BundleToken       string
+	ImportToken       string
+	BundleSource      OfflineBundleSource
+	BundleDestination OfflineBundleDestination
+	TrustSnapshot     []byte
+	BundleDirectory   string
+	RequireTLS        bool
+	Logf              func(string, ...any)
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
@@ -26,12 +38,13 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "TLS required", http.StatusUpgradeRequired)
 		return
 	}
-	if request.Method != http.MethodGet {
-		w.Header().Set("Allow", http.MethodGet)
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
+	token := h.ReadToken
+	if request.URL.Path == "/v1/catalog/bundles" {
+		token = h.BundleToken
+	} else if request.URL.Path == "/v1/catalog/bundles/import" {
+		token = h.ImportToken
 	}
-	if !catalogAuthorized(request, h.ReadToken) {
+	if !catalogAuthorized(request, token) {
 		h.log("catalog.read_denied remote=%s", request.RemoteAddr)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
@@ -40,19 +53,160 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	var err error
 	switch request.URL.Path {
 	case "/v1/catalog/artifacts":
+		if !requireMethod(w, request, http.MethodGet) {
+			return
+		}
 		response, err = h.catalog(request.URL.Query())
 	case "/v1/catalog/journal":
+		if !requireMethod(w, request, http.MethodGet) {
+			return
+		}
 		response, err = h.journal(request.URL.Query())
+	case "/v1/catalog/resolve":
+		if !requireMethod(w, request, http.MethodPost) {
+			return
+		}
+		response, err = h.resolve(w, request)
+	case "/v1/catalog/bundles":
+		if !requireMethod(w, request, http.MethodPost) {
+			return
+		}
+		h.bundle(w, request)
+		return
+	case "/v1/catalog/bundles/import":
+		if !requireMethod(w, request, http.MethodPost) {
+			return
+		}
+		h.importBundle(w, request)
+		return
 	default:
 		http.NotFound(w, request)
 		return
 	}
 	if err != nil {
+		var resolution *ResolutionError
+		if errors.As(err, &resolution) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(resolution)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (h *HTTPHandler) importBundle(w http.ResponseWriter, request *http.Request) {
+	if h.BundleDestination == nil || h.BundleDirectory == "" {
+		http.Error(w, "bundle import unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if len(request.URL.Query()) != 0 {
+		http.Error(w, "bundle import endpoint does not accept query parameters", http.StatusBadRequest)
+		return
+	}
+	if err := ensurePrivateDirectory(h.BundleDirectory); err != nil {
+		http.Error(w, "bundle import unavailable", http.StatusInternalServerError)
+		return
+	}
+	request.Body = http.MaxBytesReader(w, request.Body, maxOfflineBundleBytes+(32<<20))
+	file, err := os.CreateTemp(h.BundleDirectory, ".bundle-upload-*.tar.gz")
+	if err != nil {
+		http.Error(w, "bundle import unavailable", http.StatusInternalServerError)
+		return
+	}
+	path := file.Name()
+	defer os.Remove(path)
+	if err := file.Chmod(0o600); err != nil {
+		_ = file.Close()
+		http.Error(w, "bundle import unavailable", http.StatusInternalServerError)
+		return
+	}
+	_, copyErr := io.Copy(file, request.Body)
+	syncErr, closeErr := file.Sync(), file.Close()
+	if err := errors.Join(copyErr, syncErr, closeErr); err != nil {
+		http.Error(w, "bundle upload rejected", http.StatusRequestEntityTooLarge)
+		return
+	}
+	lock, err := ImportOfflineBundle(path, h.BundleDestination)
+	if err != nil {
+		h.log("bundle.import_rejected error=%v", err)
+		http.Error(w, "bundle import rejected", http.StatusUnprocessableEntity)
+		return
+	}
+	h.log("bundle.imported lock=%s packages=%d", lock.Digest, len(lock.Packages))
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(lock)
+}
+
+func (h *HTTPHandler) bundle(w http.ResponseWriter, request *http.Request) {
+	if h.BundleSource == nil || len(h.TrustSnapshot) == 0 || h.BundleDirectory == "" {
+		http.Error(w, "bundle unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if len(request.URL.Query()) != 0 {
+		http.Error(w, "bundle endpoint does not accept query parameters", http.StatusBadRequest)
+		return
+	}
+	request.Body = http.MaxBytesReader(w, request.Body, 2<<20)
+	raw, err := io.ReadAll(request.Body)
+	if err != nil {
+		http.Error(w, "bundle lock exceeds 2MiB or cannot be read", http.StatusBadRequest)
+		return
+	}
+	var lock pluginv1.ArtifactLock
+	if err := decodeStrict(raw, &lock); err != nil {
+		http.Error(w, "invalid artifact lock", http.StatusBadRequest)
+		return
+	}
+	bundle, err := CreateOfflineBundle(lock, h.TrustSnapshot, h.BundleSource, h.BundleDirectory)
+	if err != nil {
+		h.log("bundle.build_rejected lock=%s error=%v", lock.Digest, err)
+		http.Error(w, "bundle rejected", http.StatusUnprocessableEntity)
+		return
+	}
+	defer os.Remove(bundle.Path)
+	file, err := os.Open(bundle.Path)
+	if err != nil {
+		http.Error(w, "bundle unavailable", http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="vastplan-%s.tar.gz"`, lock.Digest[:16]))
+	w.Header().Set("Content-Length", strconv.FormatInt(bundle.Size, 10))
+	w.Header().Set("ETag", `"sha256-`+bundle.SHA256+`"`)
+	w.Header().Set("X-VastPlan-Bundle-SHA256", bundle.SHA256)
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, file)
+	h.log("bundle.built lock=%s sha256=%s size=%d", lock.Digest, bundle.SHA256, bundle.Size)
+}
+
+func (h *HTTPHandler) resolve(w http.ResponseWriter, request *http.Request) (pluginv1.ArtifactLock, error) {
+	if len(request.URL.Query()) != 0 {
+		return pluginv1.ArtifactLock{}, errors.New("resolve endpoint does not accept query parameters")
+	}
+	request.Body = http.MaxBytesReader(w, request.Body, maxResolveRequestBytes)
+	raw, err := io.ReadAll(request.Body)
+	if err != nil {
+		return pluginv1.ArtifactLock{}, errors.New("resolve request exceeds 256KiB or cannot be read")
+	}
+	var input pluginv1.ArtifactResolveRequest
+	if err := decodeStrict(raw, &input); err != nil {
+		return pluginv1.ArtifactLock{}, fmt.Errorf("invalid resolve request: %w", err)
+	}
+	return h.Store.Resolve(input)
+}
+
+func requireMethod(w http.ResponseWriter, request *http.Request, method string) bool {
+	if request.Method == method {
+		return true
+	}
+	w.Header().Set("Allow", method)
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	return false
 }
 
 func (h *HTTPHandler) catalog(values url.Values) (Page, error) {

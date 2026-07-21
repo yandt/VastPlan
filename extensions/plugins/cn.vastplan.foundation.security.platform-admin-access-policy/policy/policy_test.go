@@ -79,6 +79,9 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "listCatalog"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 应只能读取制品目录元数据: %s", got)
 	}
+	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "resolve"}); got != extpoint.DecisionAllow {
+		t.Fatalf("deployment-manager 应可生成精确制品锁: %s", got)
+	}
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "publish"}); got != extpoint.DecisionDeny {
 		t.Fatalf("deployment-manager 不得取得仓库发布权限: %s", got)
 	}

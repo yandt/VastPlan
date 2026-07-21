@@ -385,6 +385,9 @@ func (r *runtime) writeFixtures() error {
 	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "artifact-publish.token"), []byte("vastplan-local-artifact-publisher\n"), 0o600); err != nil {
 		return err
 	}
+	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "artifact-bundle.token"), []byte("vastplan-local-artifact-bundle\n"), 0o600); err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "vault-token"), []byte("vastplan-local-vault-token\n"), 0o600); err != nil {
 		return err
 	}
@@ -574,6 +577,7 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_ARTIFACT_TLS_KEY":                filepath.Join(r.runDir, "secrets", "tls-key.pem"),
 		"VASTPLAN_ARTIFACT_READ_TOKEN":             "vastplan-local-artifact-reader",
 		"VASTPLAN_ARTIFACT_PUBLISH_TOKEN":          "vastplan-local-artifact-publisher",
+		"VASTPLAN_ARTIFACT_BUNDLE_TOKEN":           "vastplan-local-artifact-bundle",
 		"VASTPLAN_DYNAMIC_GO_HOST":                 filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
 	}
 }

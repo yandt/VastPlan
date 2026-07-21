@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/plugin/v1/vastplan.artifact-resolve.schema.json",
+  "title": "VastPlan Artifact Resolve Request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["roots", "target", "kernelVersion", "allowedChannels", "allowedPublishers"],
+  "properties": {
+    "roots": {
+      "type": "array", "minItems": 1, "maxItems": 256,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["pluginId", "constraint"],
+        "properties": {
+          "pluginId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+          "constraint": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" }
+        }
+      }
+    },
+    "target": { "enum": ["backend", "frontend", "runner", "mobile"] },
+    "kernelVersion": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+    "platform": { "type": "string", "pattern": "^[a-z0-9]+/[a-z0-9_]+$", "maxLength": 40 },
+    "allowedChannels": {
+      "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+      "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel" }
+    },
+    "allowedPublishers": {
+      "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,79}$" }
+    },
+    "allowedPluginPrefixes": {
+      "type": "array", "maxItems": 256, "uniqueItems": true,
+      "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" }
+    },
+    "availableCapabilities": {
+      "type": "array", "maxItems": 512,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["capability"],
+        "properties": {
+          "capability": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+          "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" }
+        }
+      }
+    },
+    "snapshotRevision": { "type": "integer", "minimum": 0 }
+  }
+}

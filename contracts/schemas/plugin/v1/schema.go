@@ -29,6 +29,10 @@ const (
 	DescriptorSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/plugin/v1/vastplan.descriptor.schema.json"
 	// ArtifactSchemaURL 是制品仓库元数据 Schema 的稳定标识。
 	ArtifactSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/plugin/v1/vastplan.artifact.schema.json"
+	// ArtifactLockSchemaURL 是跨内核精确制品锁 Schema 的稳定标识。
+	ArtifactLockSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/plugin/v1/vastplan.artifact-lock.schema.json"
+	// ArtifactResolveSchemaURL 是仓库确定性求解输入 Schema 的稳定标识。
+	ArtifactResolveSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/plugin/v1/vastplan.artifact-resolve.schema.json"
 )
 
 //go:embed vastplan.plugin.schema.json
@@ -40,12 +44,20 @@ var descriptorSchemaJSON []byte
 //go:embed vastplan.artifact.schema.json
 var artifactSchemaJSON []byte
 
+//go:embed vastplan.artifact-lock.schema.json
+var artifactLockSchemaJSON []byte
+
+//go:embed vastplan.artifact-resolve.schema.json
+var artifactResolveSchemaJSON []byte
+
 var (
-	compileOnce   sync.Once
-	manifestSch   *jsonschema.Schema
-	descriptorSch *jsonschema.Schema
-	artifactSch   *jsonschema.Schema
-	compileErr    error
+	compileOnce        sync.Once
+	manifestSch        *jsonschema.Schema
+	descriptorSch      *jsonschema.Schema
+	artifactSch        *jsonschema.Schema
+	artifactLockSch    *jsonschema.Schema
+	artifactResolveSch *jsonschema.Schema
+	compileErr         error
 )
 
 // Manifest 是清单中制品服务需要读取的稳定字段。Contributes 保留原始 JSON，
@@ -447,9 +459,11 @@ func schemas() error {
 			return
 		}
 		for url, raw := range map[string][]byte{
-			ManifestSchemaURL:   manifestSchemaJSON,
-			DescriptorSchemaURL: descriptorSchemaJSON,
-			ArtifactSchemaURL:   artifactSchemaJSON,
+			ManifestSchemaURL:        manifestSchemaJSON,
+			DescriptorSchemaURL:      descriptorSchemaJSON,
+			ArtifactSchemaURL:        artifactSchemaJSON,
+			ArtifactLockSchemaURL:    artifactLockSchemaJSON,
+			ArtifactResolveSchemaURL: artifactResolveSchemaJSON,
 		} {
 			doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
 			if err != nil {
@@ -474,6 +488,16 @@ func schemas() error {
 		artifactSch, compileErr = compiler.Compile(ArtifactSchemaURL)
 		if compileErr != nil {
 			compileErr = fmt.Errorf("编译制品元数据 Schema: %w", compileErr)
+			return
+		}
+		artifactLockSch, compileErr = compiler.Compile(ArtifactLockSchemaURL)
+		if compileErr != nil {
+			compileErr = fmt.Errorf("编译制品锁 Schema: %w", compileErr)
+			return
+		}
+		artifactResolveSch, compileErr = compiler.Compile(ArtifactResolveSchemaURL)
+		if compileErr != nil {
+			compileErr = fmt.Errorf("编译制品解析输入 Schema: %w", compileErr)
 		}
 	})
 	return compileErr
@@ -625,6 +649,37 @@ func ValidateArtifactMetadata(raw []byte) error {
 	}
 	if err := artifactSch.Validate(instance); err != nil {
 		return fmt.Errorf("制品元数据不符合 Schema: %w", err)
+	}
+	return nil
+}
+
+// ValidateArtifactLock validates the immutable lock shared by Backend, Portal,
+// Runner, Mobile and offline Bundle importers.
+func ValidateArtifactLock(raw []byte) error {
+	if err := schemas(); err != nil {
+		return err
+	}
+	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		return fmt.Errorf("解析制品锁 JSON: %w", err)
+	}
+	if err := artifactLockSch.Validate(instance); err != nil {
+		return fmt.Errorf("制品锁不符合 Schema: %w", err)
+	}
+	return nil
+}
+
+// ValidateArtifactResolveRequest validates the cross-client resolver input.
+func ValidateArtifactResolveRequest(raw []byte) error {
+	if err := schemas(); err != nil {
+		return err
+	}
+	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		return fmt.Errorf("解析制品解析输入 JSON: %w", err)
+	}
+	if err := artifactResolveSch.Validate(instance); err != nil {
+		return fmt.Errorf("制品解析输入不符合 Schema: %w", err)
 	}
 	return nil
 }

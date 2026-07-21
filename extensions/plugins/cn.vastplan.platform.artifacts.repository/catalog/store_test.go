@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/tls"
 	"encoding/base64"
@@ -12,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 )
 
@@ -79,6 +81,20 @@ func TestCatalogHTTPRequiresReadTokenTLSAndBoundedQuery(t *testing.T) {
 	var page Page
 	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil || page.Total != 1 {
 		t.Fatalf("目录响应无效: page=%#v err=%v", page, err)
+	}
+
+	resolveBody := []byte(`{"roots":[{"pluginId":"com.example.catalog","constraint":"=1.0.0-dev.20260720.1.abcdef0"}],"target":"backend","kernelVersion":"0.1.0","allowedChannels":["testing"],"allowedPublishers":["example"],"allowedPluginPrefixes":["com.example"]}`)
+	resolveRequest := httptest.NewRequest(http.MethodPost, "https://repository.test/v1/catalog/resolve", bytes.NewReader(resolveBody))
+	resolveRequest.TLS = &tls.ConnectionState{HandshakeComplete: true}
+	resolveRequest.Header.Set("Authorization", "Bearer reader")
+	resolveResponse := httptest.NewRecorder()
+	handler.ServeHTTP(resolveResponse, resolveRequest)
+	if resolveResponse.Code != http.StatusOK {
+		t.Fatalf("依赖解析失败: status=%d body=%s", resolveResponse.Code, resolveResponse.Body.String())
+	}
+	var lock pluginv1.ArtifactLock
+	if err := json.Unmarshal(resolveResponse.Body.Bytes(), &lock); err != nil || len(lock.Packages) != 1 || lock.RepositoryRevision != 1 {
+		t.Fatalf("解析锁无效: lock=%#v err=%v", lock, err)
 	}
 
 	for name, target := range map[string]struct {

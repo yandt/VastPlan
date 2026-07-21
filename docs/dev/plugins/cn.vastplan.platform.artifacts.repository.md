@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.4.0`
+当前制品版本：`0.5.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、读写令牌分离、可重建 Catalog、单调 Publish Journal 和运行状态查询。对象存储与 OCI 通过供给 Provider 增加；依赖解析、复制、审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析和离线 Bundle 导出。对象存储与 OCI 通过供给 Provider 增加；yank/deprecate/revoke、审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
@@ -35,6 +35,7 @@
 | `VASTPLAN_ARTIFACT_TLS_CERT` / `VASTPLAN_ARTIFACT_TLS_KEY` | TLS 证书与私钥 PEM |
 | `VASTPLAN_ARTIFACT_READ_TOKEN` | 制品读取 Bearer token |
 | `VASTPLAN_ARTIFACT_PUBLISH_TOKEN` | 制品发布 Bearer token，必须与读取 token 不同 |
+| `VASTPLAN_ARTIFACT_BUNDLE_TOKEN` | 离线 Bundle 导出 Bearer token，必须与读取、发布 token 都不同 |
 
 令牌、私钥和信任文档不通过插件 API 返回，也不得写入日志、状态输出或普通设置。生产部署应以 Secret 文件或受控密钥注入提供这些值，并仅将需要的变量列入该第一方插件的环境白名单。
 
@@ -49,12 +50,33 @@
 - `GET /v1/artifacts/{pluginId}/{version}/{channel}/attestation`：使用读取 token 下载已验证证明。
 - `GET /v1/catalog/artifacts`：使用读取 token 分页查询目录；支持 `pluginId`、`pluginPrefix`、`namespace`、`publisher`、`version`、`channel`、`target`、`page` 和 `pageSize`；
 - `GET /v1/catalog/journal`：使用读取 token 按 `afterRevision` 与 `limit` 增量读取发布事件。
+- `POST /v1/catalog/resolve`：使用读取 token，根据根约束、目标内核/平台、channel、发布者和 Catalog revision 生成精确 `ArtifactLock v1`；
+- `POST /v1/catalog/bundles`：使用独立 Bundle token 提交一份已校验锁，下载包含锁、信任快照、精确包与证明的确定性 `tar.gz`。
+- `POST /v1/catalog/bundles/import`：使用发布 token 流式上传 Bundle；服务先在仓库外的私有临时目录解包，再将每个对象送回相同的签名、摘要、包内清单和不可变发布强制点。部分导入只会留下已验证的幂等对象，不会激活任何锁或部署。
 
 包体默认上限为 256 MiB，证明上限为 2 MiB。未授权、明文请求、超限或不可信制品均 fail-closed。当前服务是独立 TLS 入口；平台 Edge API Route、设置/凭证句柄与签名种子 Bundle 尚未接入，所以 `artifact-server` 子命令仍保留为兼容启动路径，不能据此删除自举能力。
 
+Resolver 请求示例：
+
+```json
+{
+  "roots": [{ "pluginId": "cn.vastplan.product.example", "constraint": "^1.4" }],
+  "target": "backend",
+  "kernelVersion": "0.1.0",
+  "platform": "linux/amd64",
+  "allowedChannels": ["stable"],
+  "allowedPublishers": ["vastplan"],
+  "allowedPluginPrefixes": ["cn.vastplan"],
+  "availableCapabilities": [{ "capability": "platform.settings", "version": "1.0.0" }],
+  "snapshotRevision": 42
+}
+```
+
+`snapshotRevision: 0` 或省略时，服务端在请求内原子锁定当前 revision，并把实际值写入返回锁。`allowedChannels` 的顺序是同版本 channel 的优先级；最终锁不保存 `latest` 或 URL。
+
 Catalog 数据保存在仓库 volume 的 `catalog/` 下。发布流水账按单调 revision 使用原子事件文件，索引快照可从每个签名制品及流水账重建；启动时发现制品已成功落盘但事件缺失，会补写 `recovered` 事件。恢复路径只读取并验证 artifact metadata 与 attestation，不扫描全部大对象；实际读取仍由内核复验对象摘要。相同精确 ref、摘要和证明重传幂等，不增加 revision；受控测试 CLI 会先查 Catalog，避免重试产生不同证明。
 
-平台工具能力同时提供 `status`、`listCatalog` 和 `listPublishJournal`。浏览器应经 Portal Edge 和能力授权调用工具，不得直接持有仓库读令牌。
+平台工具能力同时提供 `status`、`listCatalog`、`listPublishJournal` 和小载荷 `resolve`。Bundle 大字节只走 HTTPS，不穿过协议总线。浏览器应经 Portal Edge 和能力授权调用工具，不得直接持有仓库令牌。
 
 ## 验证
 

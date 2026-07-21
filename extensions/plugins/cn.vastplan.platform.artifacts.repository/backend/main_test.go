@@ -10,6 +10,7 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	t.Setenv("VASTPLAN_ARTIFACT_TLS_KEY", "")
 	t.Setenv("VASTPLAN_ARTIFACT_READ_TOKEN", "")
 	t.Setenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN", "")
+	t.Setenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN", "")
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("incomplete artifact repository configuration must fail closed")
 	}
@@ -20,6 +21,7 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	t.Setenv("VASTPLAN_ARTIFACT_TLS_KEY", "/etc/vastplan/tls.key")
 	t.Setenv("VASTPLAN_ARTIFACT_READ_TOKEN", "shared")
 	t.Setenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN", "shared")
+	t.Setenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN", "bundle")
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("read and publish tokens must be separated")
 
@@ -27,6 +29,7 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 
 	t.Setenv("VASTPLAN_ARTIFACT_READ_TOKEN", "reader")
 	t.Setenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN", "publisher")
+	t.Setenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN", "bundle")
 	config, err := loadConfig()
 	if err != nil {
 		t.Fatalf("complete distinct configuration rejected: %v", err)

@@ -21,3 +21,54 @@ type Artifact struct {
 	Object        string          `json:"object"`
 	Manifest      json.RawMessage `json:"manifest"`
 }
+
+// ArtifactRequirement is one root constraint supplied to the repository resolver.
+type ArtifactRequirement struct {
+	PluginID   string `json:"pluginId"`
+	Constraint string `json:"constraint"`
+}
+
+// AvailableCapability describes a capability supplied by the target environment
+// rather than by a package selected into this lock.
+type AvailableCapability struct {
+	Capability string `json:"capability"`
+	Version    string `json:"version,omitempty"`
+}
+
+// ArtifactResolveRequest contains every policy input that can affect solving.
+// SnapshotRevision zero asks the repository to atomically select its current revision.
+type ArtifactResolveRequest struct {
+	Roots                 []ArtifactRequirement `json:"roots"`
+	Target                string                `json:"target"`
+	KernelVersion         string                `json:"kernelVersion"`
+	Platform              string                `json:"platform,omitempty"`
+	AllowedChannels       []string              `json:"allowedChannels"`
+	AllowedPublishers     []string              `json:"allowedPublishers"`
+	AllowedPluginPrefixes []string              `json:"allowedPluginPrefixes,omitempty"`
+	AvailableCapabilities []AvailableCapability `json:"availableCapabilities,omitempty"`
+	SnapshotRevision      uint64                `json:"snapshotRevision,omitempty"`
+}
+
+// ArtifactLockPackage binds one package identity to its verified repository facts.
+type ArtifactLockPackage struct {
+	Ref                ArtifactRef       `json:"ref"`
+	SHA256             string            `json:"sha256"`
+	Size               int64             `json:"size"`
+	Publisher          string            `json:"publisher"`
+	KeyID              string            `json:"keyId"`
+	RepositoryRevision uint64            `json:"repositoryRevision"`
+	Dependencies       map[string]string `json:"dependencies,omitempty"`
+}
+
+// ArtifactLock is the immutable, cross-kernel result of one repository solve.
+// Digest is SHA-256 over the canonical JSON form with Digest omitted.
+type ArtifactLock struct {
+	SchemaVersion      string                `json:"schemaVersion"`
+	RepositoryRevision uint64                `json:"repositoryRevision"`
+	Target             string                `json:"target"`
+	KernelVersion      string                `json:"kernelVersion"`
+	Platform           string                `json:"platform,omitempty"`
+	Roots              []ArtifactRequirement `json:"roots"`
+	Packages           []ArtifactLockPackage `json:"packages"`
+	Digest             string                `json:"digest"`
+}

@@ -13,9 +13,11 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
@@ -25,10 +27,10 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.4.0"
+const pluginID, pluginVersion = "cn.vastplan.platform.artifacts.repository", "0.5.0"
 
 type serverConfig struct {
-	addr, repository, storageProvider, trust, cert, key, readToken, publishToken string
+	addr, repository, storageProvider, trust, cert, key, readToken, publishToken, bundleToken string
 }
 
 type catalogRepository struct {
@@ -68,6 +70,7 @@ func loadConfig() (serverConfig, error) {
 		key:             os.Getenv("VASTPLAN_ARTIFACT_TLS_KEY"),
 		readToken:       os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN"),
 		publishToken:    os.Getenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN"),
+		bundleToken:     os.Getenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN"),
 	}
 	if config.addr == "" {
 		config.addr = "127.0.0.1:8443"
@@ -78,8 +81,8 @@ func loadConfig() (serverConfig, error) {
 	if err := artifactstorage.ValidateProviderID(config.storageProvider); err != nil {
 		return config, err
 	}
-	if config.repository == "" || config.trust == "" || config.cert == "" || config.key == "" || config.readToken == "" || config.publishToken == "" || config.readToken == config.publishToken {
-		return config, errors.New("制品仓库必须配置存储、信任文档、TLS 证书和不同的读写令牌")
+	if config.repository == "" || config.trust == "" || config.cert == "" || config.key == "" || config.readToken == "" || config.publishToken == "" || config.bundleToken == "" || config.readToken == config.publishToken || config.readToken == config.bundleToken || config.publishToken == config.bundleToken {
+		return config, errors.New("制品仓库必须配置存储、信任文档、TLS 证书和互不相同的读取/发布/Bundle 令牌")
 	}
 	return config, nil
 }
@@ -98,6 +101,10 @@ func main() {
 		log.Fatal(err)
 	}
 	signed := &pluginservice.SignedRepository{Local: local, Trust: trust}
+	trustRaw, err := os.ReadFile(config.trust)
+	if err != nil {
+		log.Fatalf("读取制品信任快照失败: %v", err)
+	}
 	catalogStore, err := catalog.Open(config.repository, signed)
 	if err != nil {
 		log.Fatalf("打开制品 Catalog 与发布流水账失败: %v", err)
@@ -113,7 +120,8 @@ func main() {
 		},
 	}
 	catalogHandler := &catalog.HTTPHandler{
-		Store: catalogStore, ReadToken: config.readToken, RequireTLS: true,
+		Store: catalogStore, ReadToken: config.readToken, BundleToken: config.bundleToken, ImportToken: config.publishToken,
+		BundleSource: signed, BundleDestination: catalogRepository{upstream: adapter, catalog: catalogStore}, TrustSnapshot: trustRaw, BundleDirectory: filepath.Join(config.repository, "catalog", "bundles"), RequireTLS: true,
 		Logf: func(format string, args ...any) { log.Printf("[artifact-audit] "+format, args...) },
 	}
 	mux := http.NewServeMux()
@@ -145,7 +153,7 @@ func main() {
 	p := sdk.New(pluginID, pluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage, ID: "platform.artifacts.repository",
-		Descriptor: []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"}]}`),
+		Descriptor: []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"在精确 Catalog revision 上解析依赖并生成不可变锁"}]}`),
 		Handlers: map[string]sdk.Handler{
 			"status": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
 				status, marshalErr := json.Marshal(map[string]any{"listen": config.addr, "ready": ready.Load(), "storageProvider": config.storageProvider, "catalog": catalogStore.Stats()})
@@ -186,6 +194,18 @@ func main() {
 					return nil, nil, err
 				}
 				payload, err := json.Marshal(catalogStore.Journal(request.AfterRevision, request.Limit))
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
+			},
+			"resolve": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+				var request pluginv1.ArtifactResolveRequest
+				if err := decodeParams(raw, &request); err != nil {
+					return nil, nil, err
+				}
+				lock, err := catalogStore.Resolve(request)
+				if err != nil {
+					return nil, nil, err
+				}
+				payload, err := json.Marshal(lock)
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 			},
 		},

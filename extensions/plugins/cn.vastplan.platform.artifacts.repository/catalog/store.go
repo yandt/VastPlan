@@ -47,21 +47,25 @@ type Event struct {
 }
 
 type Entry struct {
-	Ref                pluginv1.ArtifactRef `json:"ref"`
-	SHA256             string               `json:"sha256"`
-	Size               int64                `json:"size"`
-	Publisher          string               `json:"publisher"`
-	KeyID              string               `json:"keyId"`
-	SignedAt           time.Time            `json:"signedAt"`
-	PublishedAt        time.Time            `json:"publishedAt"`
-	RepositoryRevision uint64               `json:"repositoryRevision"`
-	Name               string               `json:"name"`
-	Description        string               `json:"description"`
-	Namespace          string               `json:"namespace"`
-	License            string               `json:"license,omitempty"`
-	Engines            map[string]string    `json:"engines"`
-	Dependencies       map[string]string    `json:"dependencies,omitempty"`
-	Targets            []string             `json:"targets"`
+	Ref                  pluginv1.ArtifactRef               `json:"ref"`
+	SHA256               string                             `json:"sha256"`
+	Size                 int64                              `json:"size"`
+	Publisher            string                             `json:"publisher"`
+	KeyID                string                             `json:"keyId"`
+	SignedAt             time.Time                          `json:"signedAt"`
+	PublishedAt          time.Time                          `json:"publishedAt"`
+	RepositoryRevision   uint64                             `json:"repositoryRevision"`
+	Name                 string                             `json:"name"`
+	Description          string                             `json:"description"`
+	Namespace            string                             `json:"namespace"`
+	License              string                             `json:"license,omitempty"`
+	Engines              map[string]string                  `json:"engines"`
+	Dependencies         map[string]string                  `json:"dependencies,omitempty"`
+	Targets              []string                           `json:"targets"`
+	Platforms            []string                           `json:"platforms,omitempty"`
+	RuntimeRequires      []pluginv1.RuntimeRequirement      `json:"runtimeRequires,omitempty"`
+	RuntimeProvides      []pluginv1.RuntimeCapabilityPolicy `json:"runtimeProvides,omitempty"`
+	ProvidedCapabilities []string                           `json:"providedCapabilities,omitempty"`
 }
 
 type Query struct {
@@ -340,6 +344,10 @@ func entryFrom(artifact pluginservice.Artifact, attestationRaw []byte) (Entry, e
 	if err != nil {
 		return Entry{}, err
 	}
+	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
+	if err != nil {
+		return Entry{}, err
+	}
 	targetSet := map[string]struct{}{}
 	for target := range manifest.Engines {
 		targetSet[target] = struct{}{}
@@ -347,6 +355,20 @@ func entryFrom(artifact pluginservice.Artifact, attestationRaw []byte) (Entry, e
 	for target := range manifest.Entry {
 		targetSet[target] = struct{}{}
 	}
+	providedSet := map[string]struct{}{}
+	for _, contribution := range contributions {
+		providedSet[contribution.ID] = struct{}{}
+	}
+	if manifest.Runtime != nil {
+		for _, provided := range manifest.Runtime.Provides {
+			providedSet[provided.Capability] = struct{}{}
+		}
+	}
+	providedCapabilities := make([]string, 0, len(providedSet))
+	for capability := range providedSet {
+		providedCapabilities = append(providedCapabilities, capability)
+	}
+	sort.Strings(providedCapabilities)
 	targets := make([]string, 0, len(targetSet))
 	for target := range targetSet {
 		targets = append(targets, target)
@@ -362,7 +384,30 @@ func entryFrom(artifact pluginservice.Artifact, attestationRaw []byte) (Entry, e
 		SignedAt: attestation.SignedAt.UTC(), Name: manifest.Name, Description: manifest.Description,
 		Namespace: namespace, License: manifest.License, Engines: manifest.Engines,
 		Dependencies: manifest.Dependencies, Targets: targets,
+		Platforms: backendPlatforms(manifest), RuntimeRequires: runtimeRequires(manifest), RuntimeProvides: runtimeProvides(manifest),
+		ProvidedCapabilities: providedCapabilities,
 	}, nil
+}
+
+func backendPlatforms(manifest pluginv1.Manifest) []string {
+	if manifest.Execution == nil || manifest.Execution.Backend == nil {
+		return nil
+	}
+	return append([]string(nil), manifest.Execution.Backend.Platforms...)
+}
+
+func runtimeRequires(manifest pluginv1.Manifest) []pluginv1.RuntimeRequirement {
+	if manifest.Runtime == nil {
+		return nil
+	}
+	return append([]pluginv1.RuntimeRequirement(nil), manifest.Runtime.Requires...)
+}
+
+func runtimeProvides(manifest pluginv1.Manifest) []pluginv1.RuntimeCapabilityPolicy {
+	if manifest.Runtime == nil {
+		return nil
+	}
+	return append([]pluginv1.RuntimeCapabilityPolicy(nil), manifest.Runtime.Provides...)
 }
 
 func eventFrom(entry Entry, occurredAt time.Time, recovered bool) Event {
