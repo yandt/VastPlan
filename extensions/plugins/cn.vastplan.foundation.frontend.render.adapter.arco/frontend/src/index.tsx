@@ -3,6 +3,7 @@ import {
   Breadcrumb as ArcoBreadcrumb,
   Button,
   Card,
+  Checkbox,
   ConfigProvider,
   Descriptions as ArcoDescriptions,
   Divider as ArcoDivider,
@@ -40,6 +41,7 @@ import type { ComponentType, ReactNode } from "react";
 import type {
   ButtonProps,
   CommandItem,
+  DataCardProps,
   UIRenderer,
   DialogProps,
   DrawerProps,
@@ -243,6 +245,22 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
   />;
 }
 
+function DataCard({ title, subtitle, status, summary, children, actions, selectable = false, selected = false, selectionLabel, density = "standard", onSelectionChange }: DataCardProps) {
+  const header = <div style={{ minWidth: 0 }}><strong>{title}</strong>{subtitle === undefined ? null : <div style={{ marginTop: 4, color: "var(--color-text-3)" }}>{subtitle}</div>}</div>;
+  const extra = <Space size={8}>{status}{selectable ? <Checkbox aria-label={selectionLabel} checked={selected} onChange={onSelectionChange} /> : null}</Space>;
+  return <Card
+    size={density === "compact" ? "small" : undefined}
+    title={header}
+    extra={extra}
+    bordered
+    style={selected ? { borderColor: "rgb(var(--primary-6))", boxShadow: "0 0 0 1px rgb(var(--primary-6))" } : undefined}
+    actions={actions === undefined ? undefined : [actions]}
+  >
+    {summary === undefined ? null : <div style={{ marginBottom: density === "comfortable" ? 20 : 12 }}>{summary}</div>}
+    {children}
+  </Card>;
+}
+
 const arcoThemeTemplates = Object.freeze([
   { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
   { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
@@ -302,6 +320,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
     ? <div style={{ display: "flex", gap: 24, alignItems: "stretch", flexWrap: "wrap", paddingBottom: 24, borderBottom: "1px solid var(--color-border-2)" }}><div style={{ flex: "1 1 720px", minWidth: 0 }}>{children}</div>{actions === undefined ? null : <div style={{ display: "flex", alignItems: "stretch", paddingLeft: 24, borderLeft: "1px solid var(--color-border-2)" }}>{actions}</div>}</div>
     : <Card size="small"><Space wrap size={12}>{children}</Space>{actions === undefined ? null : <div style={{ float: "right" }}>{actions}</div>}</Card>,
   Table,
+  DataCard,
   Pagination: ({ page, pageSize, total, disabled, align = "start", onChange }) => <div style={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><ArcoPagination current={page} pageSize={pageSize} total={total} disabled={disabled} showTotal sizeCanChange onChange={onChange} /></div>,
   Descriptions: ({ title, items, columns }) => <ArcoDescriptions title={title} data={items.map((item) => ({ key: item.id, label: item.label, value: item.value }))} column={columnsForDescriptions(columns)} border />,
   Status: ({ tone = "neutral", children }) => <Tag color={statusColors[tone]}>{children}</Tag>,

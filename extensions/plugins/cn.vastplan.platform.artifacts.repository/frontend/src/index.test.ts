@@ -35,7 +35,7 @@ describe("artifact repository Workbench", () => {
       "platform.artifact-repository.artifacts.references.collection",
       "platform.artifact-repository.artifacts.gc.collection",
     ]);
-    const result = await pages[0]!.load({ page: 1, pageSize: 20, filters: { pluginPrefix: "cn.vastplan", target: "backend", lifecycle: "active" } }, new AbortController().signal);
+    const result = await pages[0]!.load({ mode: "page", page: 1, pageSize: 20, filters: { pluginPrefix: "cn.vastplan", target: "backend", lifecycle: "active" } }, new AbortController().signal);
     expect(result.total).toBe(1);
     expect(stub.listArtifactCatalog).toHaveBeenCalledWith(expect.objectContaining({ pluginPrefix: "cn.vastplan", target: "backend", lifecycle: "active", page: 1, pageSize: 20 }));
   });
@@ -55,7 +55,7 @@ describe("artifact repository Workbench", () => {
       planArtifactGarbageCollection: vi.fn(async () => ({ schemaVersion: "v1", ready: false, createdAt: "2026-07-21T00:00:00Z", catalogRevision: 0, referenceRevision: 0, candidates: null, bytes: 0, blockers: [] })),
     });
     const page = createArtifactRepositoryPages(stub.value, "artifacts")[3]!;
-    await expect(page.load({ page: 1, pageSize: 20, filters: {} }, new AbortController().signal)).resolves.toEqual({ items: [], total: 0 });
+    await expect(page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal)).resolves.toEqual({ items: [], total: 0 });
     await expect(page.loadSummary?.(new AbortController().signal)).resolves.toMatchObject({ metrics: expect.arrayContaining([expect.objectContaining({ id: "candidates", value: 0 })]) });
   });
 });

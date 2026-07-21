@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：Collection V1 与数据概览已实施；Card 与表单工作流待实施｜最后更新：2026-07-21
+> 状态：Collection Table/Page、Card/Cursor 与数据概览已实施；表单工作流待实施｜最后更新：2026-07-21
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；三层命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -35,7 +35,7 @@ flowchart TB
 4. Workbench 故障和设计系统故障一样，进入 Portal Kernel 恢复路径，而不是让功能插件退回自行组合。
 5. 待启用：功能插件制品只能声明 `@vastplan/workbench-sdk` 为 UI SDK；构建门禁与 Catalog 将检查其 import 图，出现 `@vastplan/ui-primitives`、Arco/MUI 或未授权共享 UI 包即拒绝装配。现有首方页面迁移完成前不得提前打开该门禁。
 
-当前已是四个基础单例：设计系统、结构组合、结构布局和 Workbench。V1 已实现 `CollectionWorkbench` 的 table/page 查询模式：筛选、分页、列显示与顺序偏好、单/多选、行/批量动作、loading/empty/error/retry；可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。Portal revision 浏览页是首个 fixture，制品仓库目录、容量/配额、引用与 GC 是首个完整领域迁移。Card cursor、表单工作流、导入图门禁和其余首方页面迁移仍待完成。
+当前已是四个基础单例：设计系统、结构组合、结构布局和 Workbench。`CollectionWorkbench` 现已共享一套查询、筛选、选择、动作、取消和错误状态机，并提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。Portal revision 浏览页是首个 fixture，制品仓库目录、容量/配额、引用与 GC 是首个完整领域迁移。表单工作流、导入图门禁和其余首方页面迁移仍待完成。
 
 ### 2.1 严格入口与受控 Pattern 演进
 
@@ -70,6 +70,7 @@ CollectionLoader(query, signal) -> CollectionResult
 - Filter 的值、排序、页码/cursor 都属于 URL 可恢复状态；敏感筛选值不得进入 URL。查询切换时取消上一请求，保留已成功数据并展示刷新状态。
 - V1 保存列移动与显隐到浏览器本地偏好，命名空间为 `tenant / portal / collectionId`；浏览器用户隔离由其登录配置文件承担。宽度、密度与 page size 的跨会话偏好属于后续增强。偏好无法新增未声明列，服务端也绝不依据它扩大数据字段或权限。
 - Workbench 统一渲染 loading、refreshing、empty、error、stale、selection 和 retry，不允许同一集合同时由插件再渲染另一套分页或工具栏。
+- Cursor 只来自上次成功结果的 `nextCursor`。加载更多会按稳定记录键去重并用新事实替换重复项；Loader 返回与请求相同的 cursor 时立即失败，避免无限请求。筛选或刷新会重新从首 cursor 装配，未提交请求由 `AbortSignal` 取消。
 - Collection 的默认管理工作区采用三列筛选栅格、主操作在左/次操作在右、浅色表头与行分隔、页脚右对齐分页。该视觉语义通过 `FilterBar`、`Table`、`Pagination` 的 `collection` 呈现能力交由渲染适配器实现，Workbench 不注入框架 CSS。
 - 筛选字段在桌面三列栅格中不足两行（不超过 3 项）时采用直接查询：文本在 Enter 后提交，枚举/布尔/范围选择完成即提交，不显示“查询”按钮；达到两行时保留草稿并显示“查询 + 重置”，避免复杂筛选编辑过程反复请求。窄屏仍按栅格折行，但不改变已确定的查询安全语义。
 
@@ -113,6 +114,8 @@ FormWorkflow
 
 Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为：标题/识别信息、状态区、受限摘要区、内容槽、footer 操作区。卡片同样必须使用 Collection 的筛选、cursor、空态、骨架屏、选择与动作规则；不得为卡片视图另造一套搜索和加载协议。
 
+`CollectionSpec.card` 只声明字段键、格式、响应式列数和 `manual | viewport` 增量加载策略，不接受 render function、HTML 或框架组件。`DataCard` 是 Render Adapter 的跨框架语义组件：Arco 与 MUI 分别使用自己的 Card、Checkbox、主题和焦点实现；Workbench 负责字段投影、选择与动作状态。视口观察能力不可用时自动保留显式“加载更多”入口。
+
 密集管理场景默认优先 Table；只有摘要、状态和少量操作比多列对比更重要时使用 Card。详情仍进入详情页、Drawer 或 master-detail，不让卡片承载完整编辑器。
 
 ## 4. 安全、可访问性与国际化
@@ -127,8 +130,8 @@ Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为
 
 1. 已完成：`ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与 `@vastplan/ui-contract` 3.x Collection 类型，以及 Arco/MUI 行选择语义。
 2. 已完成：`CollectionWorkbench` 的表格、数据概览、工具栏、筛选、分页、列偏好、行/批量操作；Portal revision 与制品仓库管理为已迁移 fixture。
-3. 实现 Card cursor 模式与共享查询状态；禁止额外的独立卡片查询协议。
+3. 已完成：Card cursor 模式、共享查询状态、稳定键去重、重复 cursor 防护、手动/视口增量加载，以及 Arco/MUI `DataCard` 语义组件。
 4. 实现 `FormPresentation`、`FormWorkflow`、Dialog/Drawer 表单；以连接定义或凭证元数据编辑器作为 fixture，明确不处理凭证明文。
 5. 把现有首方功能插件一次性迁移到 3.x，删除它们重复的筛选、提交和 Overlay 样板，并拒绝遗留的基础组件 import 或裸页面注册；通过 Arco/MUI fixture、键盘、窄屏、i18n、权限拒绝、Abort、脏数据和并发提交测试。
 
-除 Collection V1 外，当前的 Card、表单工作流和全量页面门禁尚未实施；它们不能被误称为现有 Workbench 能力。
+当前的表单工作流和全量页面门禁尚未实施；它们不能被误称为现有 Workbench 能力。

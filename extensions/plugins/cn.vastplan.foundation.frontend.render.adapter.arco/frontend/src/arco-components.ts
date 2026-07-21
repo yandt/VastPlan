@@ -5,6 +5,7 @@ export { default as Alert } from "@arco-design/web-react/es/Alert";
 export { default as Breadcrumb } from "@arco-design/web-react/es/Breadcrumb";
 export { default as Button } from "@arco-design/web-react/es/Button";
 export { default as Card } from "@arco-design/web-react/es/Card";
+export { default as Checkbox } from "@arco-design/web-react/es/Checkbox";
 export { default as ColorPicker } from "@arco-design/web-react/es/ColorPicker";
 export { default as ConfigProvider } from "@arco-design/web-react/es/ConfigProvider";
 export { default as DatePicker } from "@arco-design/web-react/es/DatePicker";

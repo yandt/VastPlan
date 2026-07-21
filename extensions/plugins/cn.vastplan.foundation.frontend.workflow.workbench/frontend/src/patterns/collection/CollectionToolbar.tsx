@@ -11,7 +11,7 @@ export function CollectionToolbar({ hasFilters, refreshing, selectedCount, prima
   secondaryActions: readonly ActionSpec[];
   bulkActions: readonly ActionSpec[];
   onRefresh(): void;
-  onColumns(): void;
+  onColumns?(): void;
   onRunAction(action: ActionSpec): void;
 }) {
   const ui = usePortalUI();
@@ -21,7 +21,7 @@ export function CollectionToolbar({ hasFilters, refreshing, selectedCount, prima
       <ui.Stack direction="row" gap="sm" wrap>{primaryActions.map((action) => <ui.Button key={action.id} kind={action.tone ?? "primary"} disabled={Boolean(action.requiresSelection && selectedCount === 0)} onClick={() => onRunAction(action)}>{i18n.text(action.label)}</ui.Button>)}</ui.Stack>
       <ui.Stack direction="row" gap="sm" wrap>
         {hasFilters ? null : <ui.Button kind="secondary" onClick={onRefresh} loading={refreshing}>{i18n.text(message(namespace, "action.refresh", "刷新"))}</ui.Button>}
-        <ui.Button kind="secondary" onClick={onColumns}>{i18n.text(message(namespace, "action.columns", "列设置"))}</ui.Button>
+        {onColumns === undefined ? null : <ui.Button kind="secondary" onClick={onColumns}>{i18n.text(message(namespace, "action.columns", "列设置"))}</ui.Button>}
         {secondaryActions.map((action) => <ui.Button key={action.id} kind={action.tone ?? "secondary"} disabled={Boolean(action.requiresSelection && selectedCount === 0)} onClick={() => onRunAction(action)}>{i18n.text(action.label)}</ui.Button>)}
       </ui.Stack>
     </ui.Stack>

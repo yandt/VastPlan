@@ -47,6 +47,7 @@ import { enUS, zhCN } from "@mui/material/locale";
 import type {
   ButtonProps,
   CommandItem,
+  DataCardProps,
   UIRenderer,
   DialogProps,
   DrawerProps,
@@ -229,6 +230,19 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
   return appearance === "collection" ? <Box sx={{ width: "100%", overflowX: "auto" }}>{content}</Box> : <Paper variant="outlined">{content}</Paper>;
 }
 
+function DataCard({ title, subtitle, status, summary, children, actions, selectable = false, selected = false, selectionLabel, density = "standard", onSelectionChange }: DataCardProps) {
+  return <Card variant="outlined" sx={{ height: "100%", borderColor: selected ? "primary.main" : undefined, boxShadow: selected ? 1 : undefined }}>
+    <CardHeader
+      title={title}
+      subheader={subtitle}
+      action={<MuiStack direction="row" alignItems="center" gap={1}>{status}{selectable ? <Checkbox inputProps={{ "aria-label": selectionLabel }} checked={selected} onChange={(_, checked) => onSelectionChange?.(checked)} /> : null}</MuiStack>}
+      sx={density === "compact" ? { py: 1.5 } : undefined}
+    />
+    <CardContent sx={density === "compact" ? { pt: 0 } : undefined}>{summary}{children}</CardContent>
+    {actions === undefined ? null : <Box sx={{ px: 2, pb: density === "comfortable" ? 2.5 : 2 }}>{actions}</Box>}
+  </Card>;
+}
+
 const symbols: Record<SemanticIconName, string> = { add: "+", remove: "−", edit: "✎", search: "⌕", settings: "⚙", success: "✓", warning: "!", error: "×", info: "i", close: "×", menu: "☰" };
 const muiThemeTemplates = Object.freeze([
   { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
@@ -249,6 +263,7 @@ export const muiPortalUIComponents: MuiComponents = {
     ? <Box sx={{ display: "flex", gap: 3, alignItems: "stretch", flexWrap: "wrap", pb: 3, borderBottom: 1, borderColor: "divider" }}><Box sx={{ flex: "1 1 720px", minWidth: 0 }}>{children}</Box>{actions === undefined ? null : <Box sx={{ display: "flex", alignItems: "stretch", pl: 3, borderLeft: 1, borderColor: "divider" }}>{actions}</Box>}</Box>
     : <Paper variant="outlined" sx={{ p: 2 }}><MuiStack direction="row" gap={2} alignItems="center" flexWrap="wrap">{children}<Box sx={{ ml: "auto" }}>{actions}</Box></MuiStack></Paper>,
   Table,
+  DataCard,
   Pagination: ({ page, total, pageSize, disabled, align = "start", onChange }) => <Box sx={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><MuiPagination page={page} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} /></Box>,
   Descriptions: ({ title, items, columns = 2 }) => <Box><Typography variant="h6">{title}</Typography><Grid columns={columns}>{items.map((item) => <Box key={item.id}><Typography variant="caption" color="text.secondary">{item.label}</Typography><Typography>{item.value}</Typography></Box>)}</Grid></Box>,
   Status: ({ tone = "neutral", children }) => <Chip color={tones[tone]} label={children} size="small" />,

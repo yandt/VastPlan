@@ -154,6 +154,20 @@ export interface TableProps {
   appearance?: "default" | "collection";
 }
 
+export interface DataCardProps {
+  title: ReactNode;
+  subtitle?: ReactNode;
+  status?: ReactNode;
+  summary?: ReactNode;
+  children?: ReactNode;
+  actions?: ReactNode;
+  selectable?: boolean;
+  selected?: boolean;
+  selectionLabel?: string;
+  density?: "compact" | "standard" | "comfortable";
+  onSelectionChange?(selected: boolean): void;
+}
+
 export interface FilterBarProps {
   children: ReactNode;
   actions?: ReactNode;
@@ -208,6 +222,7 @@ export interface PortalUI {
   FormRenderer: ComponentType<FormRendererProps>;
   FilterBar: ComponentType<FilterBarProps>;
   Table: ComponentType<TableProps>;
+  DataCard: ComponentType<DataCardProps>;
   Pagination: ComponentType<PaginationProps>;
   Descriptions: ComponentType<{ title?: ReactNode; items: DescriptionItem[]; columns?: ResponsiveColumns }>;
   Status: ComponentType<{ tone?: StatusTone; children: ReactNode }>;

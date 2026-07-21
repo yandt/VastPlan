@@ -1,17 +1,20 @@
 import type { ActionSpec, CollectionDensity, CollectionSpec, LocalizedText } from "@vastplan/ui-contract";
 
-export type { ActionSpec, CollectionSpec, ColumnSpec, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, ColumnSpec, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView } from "@vastplan/ui-contract";
 
 export interface CollectionQuery {
+  mode: "page" | "cursor";
   page: number;
   pageSize: number;
+  cursor?: string;
   filters: Readonly<Record<string, unknown>>;
   sort?: { key: string; direction: "asc" | "desc" };
 }
 
 export interface CollectionResult<Row extends Record<string, unknown> = Record<string, unknown>> {
   items: readonly Row[];
-  total: number;
+  total?: number;
+  nextCursor?: string;
 }
 
 export interface CollectionActionContext<Row extends Record<string, unknown> = Record<string, unknown>> {
@@ -56,5 +59,11 @@ export interface WorkbenchPluginContext {
 
 /** Makes page definitions discoverable and prevents a future arbitrary component escape hatch. */
 export function defineCollectionPage<Row extends Record<string, unknown>>(definition: CollectionPageDefinition<Row>): CollectionPageDefinition<Row> {
+  if (definition.collection.view === "cards" && definition.collection.query.mode !== "cursor") {
+    throw new Error("Card Collection 必须使用 cursor 查询");
+  }
+  if (definition.collection.view === "cards" && definition.collection.card === undefined) {
+    throw new Error("Card Collection 必须声明 card 呈现契约");
+  }
   return Object.freeze({ ...definition, collection: Object.freeze({ ...definition.collection }) });
 }

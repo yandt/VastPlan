@@ -1,6 +1,6 @@
 # UI Workbench
 
-`cn.vastplan.foundation.frontend.workflow.workbench` 是 Portal 的基础工作流插件。V1 只实现受治理的表格集合：筛选、分页、列可见性/顺序、选择与行/批量操作。
+`cn.vastplan.foundation.frontend.workflow.workbench` 是 Portal 的基础工作流插件。Collection 现支持受治理的 Table/Page 与 Card/Cursor：共享筛选、查询取消、刷新、选择、行/卡片/批量动作和错误状态；Table 额外管理列偏好与分页，Card 额外管理稳定键去重及手动/视口增量加载。
 
 功能插件只能通过 `@vastplan/workbench-sdk` 提交 `defineCollectionPage()` 定义；数据加载和动作处理仍由功能插件提供，视觉与状态机由本插件统一处理。
 
@@ -8,10 +8,11 @@
 
 `frontend/src/patterns/collection/` 是 Collection 工作台模式的内部实现目录：
 
-- `CollectionPage`：加载、刷新、选择和动作的状态编排；
-- `CollectionFilters`、`CollectionToolbar`、`CollectionTable`、`CollectionPreferencesDialog`：可独立演进的组合区域；
+- `CollectionPage`：筛选、选择、摘要和动作的顶层编排；
+- `useCollectionData`：Table/Page 与 Card/Cursor 共用的加载、刷新、取消、游标和错误状态；
+- `CollectionFilters`、`CollectionToolbar`、`CollectionTable`、`CollectionCards`、`CollectionPreferencesDialog`：可独立演进的组合区域；
 - `density`、`filter-schema`、`preferences`：无框架私有依赖的策略与持久化辅助模块。
 
-这里的 `CollectionTable` 是筛选、列偏好、操作与分页工作流中的“表格组合区”，不是 Arco/MUI 的基础表格。基础表格仍通过 `ui.Table` 由渲染适配器提供。未来的表单、详情和 Overlay 工作台模式应新增到 `patterns/form/`、`patterns/record/`、`patterns/overlay/`，不得重新堆回入口文件或让功能插件直接组合基础 UI 组件。
+这里的 `CollectionTable` / `CollectionCards` 是集合工作流的受控呈现区，不是 Arco/MUI 的基础组件。基础表格和卡片分别通过 `ui.Table` / `ui.DataCard` 由渲染适配器提供。未来的表单、详情和 Overlay 工作台模式应新增到 `patterns/form/`、`patterns/record/`、`patterns/overlay/`，不得重新堆回入口文件或让功能插件直接组合基础 UI 组件。
 
 Collection 默认采用管理工作区呈现：三列筛选、左主右次操作、低对比表头、行分隔和右对齐分页。筛选字段不超过三项时不显示“查询”按钮：文本 Enter 后提交，选择类字段直接提交；达到两行时再使用“查询 + 重置”草稿模式。

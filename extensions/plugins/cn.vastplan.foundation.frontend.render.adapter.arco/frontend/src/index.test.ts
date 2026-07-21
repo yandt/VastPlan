@@ -10,7 +10,7 @@ describe("Arco portal UI adapter", () => {
   it("implements the complete stable component surface", () => {
     expect(Object.keys(arcoPortalUIComponents).sort()).toEqual([
       "Breadcrumb", "Busy", "Button", "CommandPalette", "Descriptions", "Dialog", "Divider", "Drawer",
-      "EmptyState", "ErrorState", "FilterBar", "FormRenderer", "Grid", "GridItem", "Icon", "Menu", "Page", "Pagination",
+      "DataCard", "EmptyState", "ErrorState", "FilterBar", "FormRenderer", "Grid", "GridItem", "Icon", "Menu", "Page", "Pagination",
       "Panel", "Popover", "PortalShell", "Skeleton", "Stack", "Status", "Table", "Tabs", "theme",
     ].sort());
   });
@@ -56,6 +56,16 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("arco-table-layout-fixed");
     expect(html).toContain("arco-table-content-scroll");
     expect(html).toContain("width:max-content");
+  });
+
+  it("maps the semantic data card to native selectable Arco markup", () => {
+    const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.DataCard, {
+      title: "Node A", subtitle: "linux", status: "Ready", selectable: true, selected: true, selectionLabel: "Select Node A", children: "4 cores",
+    }));
+    expect(html).toContain("Node A");
+    expect(html).toContain("Select Node A");
+    expect(html).toContain("arco-card");
+    expect(html).toContain("arco-checkbox-checked");
   });
 
   it("keeps navigation destinations as real links", () => {

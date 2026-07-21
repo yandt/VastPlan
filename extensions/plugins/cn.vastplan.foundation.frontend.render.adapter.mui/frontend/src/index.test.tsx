@@ -6,7 +6,7 @@ import { muiRenderAdapter, muiPortalUIComponents } from "./index";
 describe("MUI portal UI adapter", () => {
   it("implements the full framework-neutral component surface", () => {
     const required: Array<keyof Omit<PortalUI, "notify" | "confirm" | "theme">> = [
-      "PortalShell", "Page", "Panel", "Stack", "Grid", "GridItem", "Divider", "Button", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
+      "PortalShell", "Page", "Panel", "Stack", "Grid", "GridItem", "Divider", "Button", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "DataCard", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
     ];
     expect(muiRenderAdapter).toMatchObject({ id: "mui", framework: "mui" });
     expect(required.every((name) => typeof muiPortalUIComponents[name] === "function")).toBe(true);
@@ -32,5 +32,14 @@ describe("MUI portal UI adapter", () => {
     const Menu = muiPortalUIComponents.Menu;
     const markup = renderToStaticMarkup(<Menu items={[{ id: "settings", label: "设置", href: "/settings" }]} />);
     expect(markup).toContain('href="/settings"');
+  });
+
+  it("maps the semantic data card to native selectable MUI markup", () => {
+    const DataCard = muiPortalUIComponents.DataCard;
+    const markup = renderToStaticMarkup(<DataCard title="Node A" subtitle="linux" status="Ready" selectable selected selectionLabel="Select Node A">4 cores</DataCard>);
+    expect(markup).toContain("Node A");
+    expect(markup).toContain("Select Node A");
+    expect(markup).toContain("MuiCard-root");
+    expect(markup).toContain("Mui-checked");
   });
 });

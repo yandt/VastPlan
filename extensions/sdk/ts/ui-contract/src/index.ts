@@ -57,6 +57,21 @@ export interface ColumnSpec {
   minWidth?: number;
   maxWidth?: number;
 }
+export type CollectionCardValueFormat = "text" | "number" | "date" | "datetime";
+export interface CollectionCardFieldSpec {
+  key: string;
+  label?: import("./i18n.js").LocalizedText;
+  format?: CollectionCardValueFormat;
+}
+export interface CollectionCardSpec {
+  titleKey: string;
+  subtitleKey?: string;
+  status?: { labelKey: string; toneKey?: string };
+  summary?: readonly CollectionCardFieldSpec[];
+  content?: readonly CollectionCardFieldSpec[];
+  columns?: { xs?: number; sm?: number; md?: number; lg?: number; xl?: number };
+  loadMore?: "manual" | "viewport";
+}
 export interface ActionSpec {
   id: string;
   label: import("./i18n.js").LocalizedText;
@@ -72,6 +87,7 @@ export interface CollectionSpec {
   query: { mode: CollectionQueryMode; defaultPageSize: number; pageSizeOptions: readonly number[] };
   filters?: readonly FilterSpec[];
   columns: readonly ColumnSpec[];
+  card?: CollectionCardSpec;
   selection?: CollectionSelectionMode;
   actions?: readonly ActionSpec[];
   /** A governed presentation preference, never arbitrary CSS or framework props. */
