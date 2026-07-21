@@ -4,6 +4,7 @@
   "packageManager": "pnpm@10.11.0",
   "scripts": {
     "build:frontend": "./engineering/tools/build-frontend.sh",
+    "build:portal-host": "pnpm --filter @vastplan/portal-host build",
     "build:frontend:plugins": "node engineering/tools/build-frontend-plugins.mjs",
     "typecheck": "pnpm -r --if-present typecheck",
     "test:frontend": "pnpm -r --if-present test"
