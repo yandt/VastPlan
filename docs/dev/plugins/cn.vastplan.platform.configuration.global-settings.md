@@ -3,7 +3,7 @@
 插件 ID：`cn.vastplan.platform.configuration.global-settings`
 状态：已实现（首个基础服务）
 能力：`tool.package/platform.settings`
-当前制品版本：`0.2.0`
+当前制品版本：`0.3.0`
 
 ## 边界
 
@@ -53,4 +53,4 @@ go run ./engineering/tools/pluginpackage \
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/global` 页面。页面经强类型平台 BFF 列表、写入和带版本删除设置；JSON 值保存前在浏览器和后端分别校验。页面不允许保存凭证，权限与远端寻址边界见《[平台管理中心](../architecture/平台管理中心.md)》。
+同一签名制品提供 `/settings/global` 页面。0.3 已迁移到 UI Workbench：集合筛选、分页、行操作、新增/编辑 Drawer、脏数据关闭确认、JSON 异步校验、字段错误和成功刷新均由基础工作流统一处理；功能插件只提供强类型 BFF loader/submit/delete。编辑继续携带 `ifVersion`，并发覆盖会由服务端拒绝。页面明确只接受非敏感 JSON，不提供密码、令牌或密钥输入；权限与远端寻址边界见《[平台管理中心](../architecture/平台管理中心.md)》。

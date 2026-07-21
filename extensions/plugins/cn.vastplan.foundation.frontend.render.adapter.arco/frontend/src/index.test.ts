@@ -117,4 +117,16 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("名称");
     expect(html).not.toContain("Submit");
   });
+
+  it("renders governed form sections without splitting the validation schema", () => {
+    const form = createElement(arcoPortalUIComponents.FormRenderer, {
+      schema: { id: "node", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { name: { type: "string", title: "Name" }, region: { type: "string", title: "Region" } } } },
+      value: {}, onChange: () => undefined,
+      presentation: { navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, fields: ["/name", "/region"] }], fields: [{ pointer: "/name", span: 2 }] },
+    });
+    const html = renderToStaticMarkup(createElement(PortalI18nProvider, { policy: { defaultLocale: "en-US", supportedLocales: ["en-US"] }, catalogs: {}, candidates: ["en-US"], children: form }));
+    expect(html).toContain("Identity");
+    expect(html).toContain("Name");
+    expect(html).toContain("Region");
+  });
 });

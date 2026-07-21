@@ -1,10 +1,10 @@
 import { createContext, createElement, useContext } from "react";
 import type { ComponentType, KeyboardEvent, ReactNode } from "react";
-import type { FormSchema, FormValidationResult, JSONValue, UICapability } from "@vastplan/ui-contract";
+import type { FormPresentation, FormSchema, FormValidationResult, JSONValue, UICapability } from "@vastplan/ui-contract";
 import type { LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy } from "@vastplan/ui-contract";
-import type { CollectionPageDefinition } from "@vastplan/workbench-sdk";
+import type { CollectionPageDefinition, FormPageDefinition } from "@vastplan/workbench-sdk";
 
-export type { FormSchema, FormUISchema, FormValidationIssue, FormValidationResult, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
+export type { FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormUISchema, FormValidationIssue, FormValidationResult, FormWidget, FormWorkflow, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
 export { jsonSchemaDialect } from "@vastplan/ui-contract";
 export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contract";
 export { message } from "@vastplan/ui-contract";
@@ -20,7 +20,9 @@ export interface FormRendererProps {
   value: Record<string, unknown>;
   onChange(value: Record<string, unknown>): void;
   /** A framework-neutral field-label arrangement for composed Workbench forms. */
-  presentation?: { layout?: "vertical" | "horizontal" };
+  presentation?: FormPresentation;
+  presentationSection?: string;
+  onPresentationSectionChange?(sectionID: string): void;
   readOnly?: boolean;
   submitting?: boolean;
   errors?: Readonly<Record<string, string>>;
@@ -398,6 +400,7 @@ export interface FrontendPluginContext {
 	addPage(page: PortalPageDefinition): void;
 	/** Registers a governed collection page. Functional plugins should prefer this over addPage. */
 	addCollectionPage<Row extends Record<string, unknown>>(page: CollectionPageDefinition<Row>): void;
+	addFormPage(page: FormPageDefinition): void;
 	/** Platform-profile plugins only; application plugins cannot mutate global Shell regions. */
 	addShellContribution(contribution: PortalShellContribution): void;
 }
@@ -407,6 +410,7 @@ export interface UIWorkbenchAdapter {
   id: "ui.workflow.workbench";
   uiContract: string;
   CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } } }>;
+  FormPage: ComponentType<{ page: FormPageDefinition }>;
   localization?: PluginLocalization;
 }
 

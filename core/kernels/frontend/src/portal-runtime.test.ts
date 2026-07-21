@@ -22,7 +22,7 @@ const adapter: UIRenderAdapter = {
 };
 const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: "4.0.0", templates: [{ id: "standard", label: "Standard", module: standardShellRef }, { id: "top-navigation", label: "Top", module: topShellRef }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
 const shellLibrary = (id: string): UIShellLibrary => ({ id, shell: "ui.structure.shell", uiContract: "4.0.0", Shell: () => null });
-const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "4.0.0", CollectionPage: () => null };
+const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "4.0.0", CollectionPage: () => null, FormPage: () => null };
 
 const portal: PortalSpec = {
   revision: 1, id: "admin", tenantId: "acme", route: "/",
@@ -104,5 +104,20 @@ describe("PortalRuntime shell", () => {
     const global = { ...portal, resolution: { ...portal.resolution, pluginOrigins: { ...portal.resolution.pluginOrigins, [featureRef.id]: "application" as const } } };
     await expect(new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) { context.addShellContribution({ id: "brand", slot: "shell.header.start", component: () => null }); } } })).prepare(global))
       .rejects.toMatchObject({ code: "SHELL_CONTRIBUTION_ORIGIN" } satisfies Partial<PortalAssemblyError>);
+  });
+
+  it("accepts governed Card/Cursor and standalone Form pages through the Workbench only", async () => {
+    const prepared = await new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
+      context.addCollectionPage({
+        id: "cards", path: "/cards", title: "Cards",
+        collection: { id: "cards", title: "Cards", view: "cards", query: { mode: "cursor", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], card: { titleKey: "name" } },
+        async load() { return { items: [] }; },
+      });
+      context.addFormPage({
+        id: "profile", path: "/profile", title: "Profile",
+        form: { id: "profile", schema: { id: "profile", schema: { type: "object", properties: { name: { type: "string" } } } }, workflow: { surface: "page", title: "Profile" }, async submit() {} },
+      });
+    } } })).prepare(portal);
+    expect(prepared.pages.map((page) => page.id)).toEqual(["cards", "profile"]);
   });
 });

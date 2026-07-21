@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { PortalUI } from "@vastplan/ui-primitives";
+import { PortalI18nProvider, type PortalUI } from "@vastplan/ui-primitives";
 import { muiRenderAdapter, muiPortalUIComponents } from "./index";
 
 describe("MUI portal UI adapter", () => {
@@ -41,5 +41,18 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain("Select Node A");
     expect(markup).toContain("MuiCard-root");
     expect(markup).toContain("Mui-checked");
+  });
+
+  it("renders the same governed form section semantics", () => {
+    const Form = muiPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
+      schema={{ id: "node", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { name: { type: "string", title: "Name" }, region: { type: "string", title: "Region" } } } }}
+      value={{}}
+      onChange={() => undefined}
+      presentation={{ navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, fields: ["/name", "/region"] }] }}
+    /></PortalI18nProvider>);
+    expect(markup).toContain("Identity");
+    expect(markup).toContain("Name");
+    expect(markup).toContain("Region");
   });
 });

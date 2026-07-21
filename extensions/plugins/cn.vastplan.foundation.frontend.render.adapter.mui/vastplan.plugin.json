@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.frontend.render.adapter.mui",
   "name": "VastPlan MUI Renderer Source",
   "description": "供统一 Render Adapter 编译使用的 MUI Renderer 内部源码",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

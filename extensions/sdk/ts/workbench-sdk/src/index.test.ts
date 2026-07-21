@@ -24,4 +24,27 @@ describe("defineCollectionPage", () => {
       async load() { return { items: [] }; },
     })).toThrow("card");
   });
+
+  it("rejects collection actions that escape the governed form registry", () => {
+    expect(() => defineCollectionPage({
+      id: "connections", path: "/connections", title: "Connections",
+      collection: { id: "connections", title: "Connections", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "edit", label: "Edit", placement: "record.row", form: "edit" }] },
+      async load() { return { items: [], total: 0 }; },
+    })).toThrow("未声明的表单");
+  });
+
+  it("requires credentialRef presentation to remain a reference-only schema field", () => {
+    expect(() => defineCollectionPage({
+      id: "connections", path: "/connections", title: "Connections",
+      collection: { id: "connections", title: "Connections", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "new", label: "New", placement: "page.primary", form: "new" }] },
+      forms: [{
+        id: "new",
+        schema: { id: "new", schema: { type: "object", properties: { credential: { type: "string" } } } },
+        presentation: { fields: [{ pointer: "/credential", widget: "credentialRef" }] },
+        workflow: { surface: "dialog", title: "New" },
+        async submit() {},
+      }],
+      async load() { return { items: [], total: 0 }; },
+    })).toThrow("writeOnly");
+  });
 });

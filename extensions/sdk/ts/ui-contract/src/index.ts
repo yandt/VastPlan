@@ -22,6 +22,48 @@ export interface FormSchema {
   uiLocalization?: Readonly<Record<string, import("./i18n.js").LocalizedText>>;
 }
 
+export type FormLayout = "compact" | "horizontal" | "vertical";
+export type FormWidget = "text" | "textarea" | "number" | "select" | "boolean" | "date" | "datetime" | "credentialRef" | "hidden";
+export type FormCondition =
+  | { pointer: string; equals: JSONPrimitive }
+  | { pointer: string; in: readonly JSONPrimitive[] }
+  | { pointer: string; exists: boolean }
+  | { all: readonly FormCondition[] }
+  | { any: readonly FormCondition[] }
+  | { not: FormCondition };
+export interface FormFieldPresentation {
+  pointer: string;
+  span?: number;
+  widget?: FormWidget;
+  help?: import("./i18n.js").LocalizedText;
+  visibleWhen?: FormCondition;
+  readOnlyWhen?: FormCondition;
+}
+export interface FormSectionPresentation {
+  id: string;
+  title?: import("./i18n.js").LocalizedText;
+  description?: import("./i18n.js").LocalizedText;
+  columns?: number;
+  fields: readonly string[];
+  collapsible?: boolean;
+}
+export interface FormPresentation {
+  layout?: FormLayout;
+  navigation?: "sections" | "tabs" | "steps";
+  sections?: readonly FormSectionPresentation[];
+  fields?: readonly FormFieldPresentation[];
+}
+export interface FormWorkflow {
+  surface: "page" | "dialog" | "drawer";
+  title: import("./i18n.js").LocalizedText;
+  description?: import("./i18n.js").LocalizedText;
+  size?: "sm" | "md" | "lg";
+  submitLabel?: import("./i18n.js").LocalizedText;
+  cancelLabel?: import("./i18n.js").LocalizedText;
+  confirmBeforeSubmit?: import("./i18n.js").LocalizedText;
+  success?: { notify?: import("./i18n.js").LocalizedText; refreshCollection?: boolean; close?: boolean };
+}
+
 export interface FormValidationIssue {
   path: string;
   code: string;
@@ -79,6 +121,7 @@ export interface ActionSpec {
   tone?: "primary" | "secondary" | "danger";
   requiresSelection?: boolean;
   confirm?: import("./i18n.js").LocalizedText;
+  form?: string;
 }
 export interface CollectionSpec {
   id: string;

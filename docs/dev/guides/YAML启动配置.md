@@ -44,7 +44,7 @@ units:
   replicas: 1
   plugins:
     - id: cn.vastplan.platform.configuration.global-settings
-      version: "0.2.0"
+      version: "0.3.0"
 ```
 
 对象内部也可以递归拆分，例如将某个插件的非敏感启动参数放入独立文件：

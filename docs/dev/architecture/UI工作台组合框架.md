@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：Collection Table/Page、Card/Cursor 与数据概览已实施；表单工作流待实施｜最后更新：2026-07-21
+> 状态：Collection、表单与 Overlay 工作流已实施；首方页面迁移和导入门禁待完成｜最后更新：2026-07-21
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；三层命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -35,7 +35,7 @@ flowchart TB
 4. Workbench 故障和设计系统故障一样，进入 Portal Kernel 恢复路径，而不是让功能插件退回自行组合。
 5. 待启用：功能插件制品只能声明 `@vastplan/workbench-sdk` 为 UI SDK；构建门禁与 Catalog 将检查其 import 图，出现 `@vastplan/ui-primitives`、Arco/MUI 或未授权共享 UI 包即拒绝装配。现有首方页面迁移完成前不得提前打开该门禁。
 
-当前已是四个基础单例：设计系统、结构组合、结构布局和 Workbench。`CollectionWorkbench` 现已共享一套查询、筛选、选择、动作、取消和错误状态机，并提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。Portal revision 浏览页是首个 fixture，制品仓库目录、容量/配额、引用与 GC 是首个完整领域迁移。表单工作流、导入图门禁和其余首方页面迁移仍待完成。
+当前已是四个基础单例：设计系统、结构组合、结构布局和 Workbench。`CollectionWorkbench` 现已共享一套查询、筛选、选择、动作、取消和错误状态机，并提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。表单工作流已提供 page/Dialog/Drawer、分区/标签/步骤、1–4 列、有限条件 DSL、脏数据关闭保护、同步/异步/服务端字段错误、一次性提交和成功刷新。全局设置页是首个不处理凭证明文的真实 Form fixture；导入图门禁和其余首方页面迁移仍待完成。
 
 ### 2.1 严格入口与受控 Pattern 演进
 
@@ -89,7 +89,7 @@ CollectionLoader(query, signal) -> CollectionResult
 
 ### 3.3 表单与 Overlay 工作流
 
-`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。3.x 新增：
+`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 4.x 提供：
 
 ```text
 FormPresentation
@@ -110,6 +110,8 @@ FormWorkflow
 
 `FormDialog` / `FormDrawer` 由 Workbench 统一处理标题、焦点、ESC、关闭确认、校验、提交中禁用、一次性提交、字段级错误、成功刷新、失败保留和本地化。插件只给出 Schema、Presentation、Workflow 与 `submit(values, signal)` 处理器；处理器是运行时代码，绝不写入 Portal 发布配置。
 
+当前实现中，Collection Action 只能通过已登记的 `form` ID 打开表单，不能携带组件或任意回调；独立表单页通过 `defineFormPage()` 注册。Workbench 在打开时加载值、在切换/关闭时取消请求，并拒绝重复提交。异步校验和提交返回的字段错误保持为 `LocalizedText`，只由 Workbench 按当前 Portal locale 翻译，功能插件与 UI Adapter 均不能提前固化语言。`credentialRef` 呈现只有当对应 JSON Schema 同时声明 `format: vastplan-credential-ref` 与 `writeOnly: true` 才能注册，防止把普通文本字段伪装成安全凭证入口。全局设置 fixture 只接受非敏感 JSON，并保留服务端版本前置条件；现有凭证和数据库连接页尚含一次性秘密输入，因此不会在秘密输入边界明确前迁入该工作流。
+
 ### 3.4 卡片列表
 
 Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为：标题/识别信息、状态区、受限摘要区、内容槽、footer 操作区。卡片同样必须使用 Collection 的筛选、cursor、空态、骨架屏、选择与动作规则；不得为卡片视图另造一套搜索和加载协议。
@@ -128,10 +130,10 @@ Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为
 
 ## 5. 实施顺序与验收
 
-1. 已完成：`ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与 `@vastplan/ui-contract` 3.x Collection 类型，以及 Arco/MUI 行选择语义。
+1. 已完成：`ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与当前 `@vastplan/ui-contract` 4.x Collection 类型，以及 Arco/MUI 行选择语义。
 2. 已完成：`CollectionWorkbench` 的表格、数据概览、工具栏、筛选、分页、列偏好、行/批量操作；Portal revision 与制品仓库管理为已迁移 fixture。
 3. 已完成：Card cursor 模式、共享查询状态、稳定键去重、重复 cursor 防护、手动/视口增量加载，以及 Arco/MUI `DataCard` 语义组件。
-4. 实现 `FormPresentation`、`FormWorkflow`、Dialog/Drawer 表单；以连接定义或凭证元数据编辑器作为 fixture，明确不处理凭证明文。
-5. 把现有首方功能插件一次性迁移到 3.x，删除它们重复的筛选、提交和 Overlay 样板，并拒绝遗留的基础组件 import 或裸页面注册；通过 Arco/MUI fixture、键盘、窄屏、i18n、权限拒绝、Abort、脏数据和并发提交测试。
+4. 已完成：`FormPresentation`、`FormWorkflow`、Page/Dialog/Drawer 表单，以及 Arco/MUI 的分区、标签、步骤、分栏和条件字段语义；以全局非敏感设置编辑器作为首个真实 fixture，明确不处理凭证明文。
+5. 把现有首方功能插件一次性迁移到当前 4.x 契约，删除它们重复的筛选、提交和 Overlay 样板，并拒绝遗留的基础组件 import 或裸页面注册；通过 Arco/MUI fixture、键盘、窄屏、i18n、权限拒绝、Abort、脏数据和并发提交测试。
 
-当前的表单工作流和全量页面门禁尚未实施；它们不能被误称为现有 Workbench 能力。
+当前尚未完成的是其余首方页面迁移和全量导入门禁；在它们完成前，系统仍不能宣称所有功能页都已强制使用 Workbench。

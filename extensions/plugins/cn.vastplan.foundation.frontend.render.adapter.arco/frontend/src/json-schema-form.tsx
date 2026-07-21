@@ -5,11 +5,13 @@ import {
   ColorPicker,
   DatePicker,
   Form,
+  Grid as ArcoGrid,
   Input,
   InputNumber,
   Rate,
   Select,
   Space,
+  Tabs,
   Switch,
   TimePicker,
   Typography,
@@ -45,7 +47,7 @@ import type {
   WrapIfAdditionalTemplateProps,
 } from "@rjsf/utils";
 import { useEffect, useMemo, useState } from "react";
-import type { FormRendererProps, FormValidationIssue } from "@vastplan/ui-primitives";
+import type { FormPresentation, FormRendererProps, FormSectionPresentation, FormValidationIssue } from "@vastplan/ui-primitives";
 import { jsonSchemaDialect, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { cspJSONSchemaValidator } from "./csp-json-schema-validator";
 
@@ -282,6 +284,39 @@ function ObjectFieldTemplate({ title, description, properties, schema, uiSchema,
   </Card>;
 }
 
+function PresentedObjectFieldTemplate({ presentation, activeSection, onSectionChange, ...props }: ObjectFieldTemplateProps & { presentation?: FormPresentation; activeSection?: string; onSectionChange?(sectionID: string): void }) {
+  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <ObjectFieldTemplate {...props} />;
+  const i18n = usePortalI18n();
+  const sections = presentation.sections;
+  const selected = sections.find((section) => section.id === activeSection) ?? sections[0]!;
+  const assigned = new Set(sections.flatMap((section) => section.fields.map(fieldName)));
+  const remainder = props.properties.filter((property) => !assigned.has(property.name));
+  const section = (value: FormSectionPresentation) => {
+    const fields = value.fields.map(fieldName);
+    const content = <ArcoGrid cols={value.columns ?? 1} rowGap={12} colGap={16}>{props.properties.filter((property) => fields.includes(property.name) && !property.hidden).map((property) => {
+      const span = presentation.fields?.find((field) => fieldName(field.pointer) === property.name)?.span ?? 1;
+      return <ArcoGrid.GridItem key={property.name} span={Math.min(Math.max(1, span), value.columns ?? 1)}>{property.content}</ArcoGrid.GridItem>;
+    })}</ArcoGrid>;
+    const body = <>{value.description === undefined ? null : <Typography.Paragraph type="secondary">{i18n.text(value.description)}</Typography.Paragraph>}{content}</>;
+    if (presentation.navigation !== "sections") return body;
+    return value.collapsible
+      ? <details><summary style={{ cursor: "pointer", fontWeight: 600, marginBottom: 12 }}>{value.title === undefined ? value.id : i18n.text(value.title)}</summary>{body}</details>
+      : <Card title={value.title === undefined ? undefined : i18n.text(value.title)} size="small">{body}</Card>;
+  };
+  const remaining = remainder.length === 0 ? null : <ArcoGrid cols={1} rowGap={12}>{remainder.map((property) => <ArcoGrid.GridItem key={property.name}>{property.content}</ArcoGrid.GridItem>)}</ArcoGrid>;
+  if (presentation.navigation === "tabs") return <>{props.title === "" ? null : <Typography.Title heading={6}>{props.title}</Typography.Title>}<Tabs activeTab={selected.id} onChange={onSectionChange}>{sections.map((item) => <Tabs.TabPane key={item.id} title={item.title === undefined ? item.id : i18n.text(item.title)}>{section(item)}</Tabs.TabPane>)}</Tabs>{remaining}</>;
+  if (presentation.navigation === "steps") {
+    const current = Math.max(0, sections.findIndex((item) => item.id === selected.id));
+    return <>{props.title === "" ? null : <Typography.Title heading={6}>{props.title}</Typography.Title>}<ol aria-label={props.title} style={{ display: "flex", gap: 8, margin: "0 0 20px", padding: 0, listStyle: "none" }}>{sections.map((item, index) => <li key={item.id} aria-current={index === current ? "step" : undefined}><Button type={index === current ? "primary" : "secondary"} onClick={() => onSectionChange?.(item.id)}>{index + 1}. {item.title === undefined ? item.id : i18n.text(item.title)}</Button></li>)}</ol>{section(selected)}{remaining}</>;
+  }
+  return <Space direction="vertical" size={16} style={{ width: "100%" }}>{sections.map((item) => <div key={item.id}>{section(item)}</div>)}{remaining}</Space>;
+}
+
+function fieldName(pointer: string): string {
+  const first = pointer.startsWith("/") ? pointer.slice(1).split("/")[0] ?? "" : pointer;
+  return first.replace(/~1/g, "/").replace(/~0/g, "~");
+}
+
 function ArrayFieldTemplate({ title, items, canAdd, onAddClick, readonly, disabled, rawErrors }: ArrayFieldTemplateProps) {
   const i18n = usePortalI18n();
   return <Card
@@ -450,7 +485,7 @@ function schemaContractError(schema: FormRendererProps["schema"], english: boole
   return undefined;
 }
 
-export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, readOnly, submitting, errors: externalErrors, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
+export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
   const i18n = usePortalI18n();
   const contractError = schemaContractError(schema,!i18n.locale.toLowerCase().startsWith("zh"));
   const validationSchema = schema.schema as Schema;
@@ -500,11 +535,12 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, read
     validating: currentAsync.validating,
   }), [allExternalErrors, currentAsync.validating, errors, i18n.locale, syncValidation.errors]);
   useEffect(() => onValidationChange?.(validationState), [onValidationChange, validationState]);
+  const templates = useMemo(() => ({ ...arcoFormTemplates, ObjectFieldTemplate: (props: ObjectFieldTemplateProps<FormData, Schema, FormContext>) => <PresentedObjectFieldTemplate {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} /> }), [onPresentationSectionChange, presentation, presentationSection]);
 
   if (contractError !== undefined) return <Alert type="error" title={i18n.text(message(namespace,"form.unsupported","表单 Schema 不受支持"))} content={contractError} />;
   return <>
     {currentAsync.validating ? <Alert type="info" title={i18n.text(message(namespace,"form.validating","正在校验"))} style={{ marginBottom: 16 }} /> : null}
-    <Form layout={presentation?.layout ?? "vertical"}>
+    <Form layout={presentation?.layout === "horizontal" ? "horizontal" : "vertical"} size={presentation?.layout === "compact" ? "small" : undefined}>
       <RJSFForm<FormData, Schema, FormContext>
         tagName="div"
         schema={dataSchema}
@@ -513,7 +549,7 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, read
         formContext={context}
         validator={arcoJSONSchemaValidator}
         widgets={arcoFormWidgets}
-        templates={arcoFormTemplates}
+        templates={templates}
         readonly={readOnly}
         disabled={submitting}
         liveValidate="onChange"

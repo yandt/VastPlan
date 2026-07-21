@@ -296,12 +296,20 @@ export class PortalRuntime {
           pages.push({ ...page, path: mountedPath, slots: [...page.slots], pluginID: ref.id });
         },
         addCollectionPage: (page) => {
-          if (!page.id || !page.collection.id || page.collection.view !== "table" || page.collection.query.mode !== "page" || page.collection.columns.length === 0 || typeof page.load !== "function" ||
+          if (!page.id || !page.collection.id || !["table", "cards"].includes(page.collection.view) || !["page", "cursor"].includes(page.collection.query.mode) ||
+              (page.collection.view === "table" && page.collection.columns.length === 0) || (page.collection.view === "cards" && page.collection.card === undefined) || typeof page.load !== "function" ||
               (page.loadSummary !== undefined && typeof page.loadSummary !== "function") || (page.runAction !== undefined && typeof page.runAction !== "function")) {
             throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${page.id}`);
           }
           const Page = () => createElement(workbench.CollectionPage, { page, preferenceScope: `${portal.tenantId}/${portal.id}`, presentation: portal.workbench.config });
           context.addPage({ id: page.id, path: page.path, title: page.title, description: page.description, navigation: page.navigation, slots: [{ id: "workbench.collection", slot: "page.body.main", component: Page }] });
+        },
+        addFormPage: (page) => {
+          if (!page.id || !page.form?.id || page.form.workflow.surface !== "page" || typeof page.form.submit !== "function") {
+            throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `表单页面定义无效: ${page.id}`);
+          }
+          const Page = () => createElement(workbench.FormPage, { page });
+          context.addPage({ id: page.id, path: page.path, title: page.title, description: page.description, navigation: page.navigation, slots: [{ id: "workbench.form", slot: "page.body.main", component: Page }] });
         },
       };
       await plugin.register?.(context);

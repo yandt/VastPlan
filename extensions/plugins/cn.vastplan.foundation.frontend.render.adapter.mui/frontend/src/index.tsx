@@ -27,6 +27,9 @@ import {
   Paper,
   Popover as MuiPopover,
   ScopedCssBaseline,
+  Step,
+  StepLabel,
+  Stepper,
   Skeleton as MuiSkeleton,
   Snackbar,
   Stack as MuiStack,
@@ -52,6 +55,8 @@ import type {
   DialogProps,
   DrawerProps,
   FormRendererProps,
+  FormPresentation,
+  FormSectionPresentation,
   GridItemProps,
   GridProps,
   MenuItem,
@@ -187,20 +192,77 @@ function buttonVariant(kind: ButtonProps["kind"]): { variant: "contained" | "out
   return { variant: "outlined" };
 }
 
-function FormRenderer({ schema, value, onChange, presentation, readOnly, submitting, onValidationChange }: FormRendererProps) {
+interface MuiObjectFieldTemplateProps {
+  fieldPathId: { path: readonly unknown[] };
+  title?: string;
+  description?: ReactNode;
+  properties: readonly { name: string; hidden: boolean; content: ReactNode }[];
+}
+
+function MuiObjectFieldTemplate({ presentation, activeSection, onSectionChange, ...props }: MuiObjectFieldTemplateProps & { presentation?: FormPresentation; activeSection?: string; onSectionChange?(sectionID: string): void }) {
   const i18n = usePortalI18n();
+  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <Box sx={{ mb: 2 }}><Typography variant="subtitle1">{props.title}</Typography>{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <Box key={property.name}>{property.content}</Box>)}</Box>;
+  const sections = presentation.sections;
+  const selected = sections.find((section) => section.id === activeSection) ?? sections[0]!;
+  const assigned = new Set(sections.flatMap((section) => section.fields.map(formFieldName)));
+  const remainder = props.properties.filter((property) => !assigned.has(property.name));
+  const section = (item: FormSectionPresentation) => {
+    const fields = item.fields.map(formFieldName);
+    const body = <><Box sx={{ display: "grid", gridTemplateColumns: `repeat(${item.columns ?? 1}, minmax(0, 1fr))`, gap: 2 }}>{props.properties.filter((property) => fields.includes(property.name) && !property.hidden).map((property) => {
+      const span = presentation.fields?.find((field) => formFieldName(field.pointer) === property.name)?.span ?? 1;
+      return <Box key={property.name} sx={{ gridColumn: `span ${Math.min(Math.max(1, span), item.columns ?? 1)}` }}>{property.content}</Box>;
+    })}</Box></>;
+    if (presentation.navigation !== "sections") return <>{item.description === undefined ? null : <Typography color="text.secondary" sx={{ mb: 2 }}>{i18n.text(item.description)}</Typography>}{body}</>;
+    const content = <>{item.description === undefined ? null : <Typography color="text.secondary" sx={{ mb: 2 }}>{i18n.text(item.description)}</Typography>}{body}</>;
+    return item.collapsible ? <Box component="details" sx={{ mb: 2 }}><Box component="summary" sx={{ cursor: "pointer", fontWeight: 600, mb: 1.5 }}>{item.title === undefined ? item.id : i18n.text(item.title)}</Box>{content}</Box> : <Card variant="outlined" sx={{ mb: 2 }}><CardHeader title={item.title === undefined ? undefined : i18n.text(item.title)} /><CardContent>{content}</CardContent></Card>;
+  };
+  const remaining = remainder.length === 0 ? null : <Box>{remainder.map((property) => <Box key={property.name}>{property.content}</Box>)}</Box>;
+  if (presentation.navigation === "tabs") return <><MuiTabs value={selected.id} onChange={(_, id: string) => onSectionChange?.(id)}>{sections.map((item) => <Tab key={item.id} value={item.id} label={item.title === undefined ? item.id : i18n.text(item.title)} />)}</MuiTabs><Box sx={{ pt: 2 }}>{section(selected)}</Box>{remaining}</>;
+  if (presentation.navigation === "steps") {
+    const current = Math.max(0, sections.findIndex((item) => item.id === selected.id));
+    return <><Stepper activeStep={current} sx={{ mb: 3 }}>{sections.map((item, index) => <Step key={item.id} onClick={() => onSectionChange?.(item.id)}><StepLabel>{item.title === undefined ? `${index + 1}` : i18n.text(item.title)}</StepLabel></Step>)}</Stepper>{section(selected)}{remaining}</>;
+  }
+  return <>{sections.map((item) => <Box key={item.id}>{section(item)}</Box>)}{remaining}</>;
+}
+
+function formFieldName(pointer: string): string {
+  const first = pointer.startsWith("/") ? pointer.slice(1).split("/")[0] ?? "" : pointer;
+  return first.replace(/~1/g, "/").replace(/~0/g, "~");
+}
+
+const emptyFormContext: Readonly<Record<string, unknown>> = Object.freeze({});
+
+function FormRenderer({ schema, value, onChange, presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
+  const i18n = usePortalI18n();
+  const formContext = suppliedContext ?? emptyFormContext;
   const localizedSchema = useMemo(() => localizeJSONSchema(schema.schema, schema.localization, i18n.text), [i18n.text, schema.localization, schema.schema]);
   const localizedUISchema = useMemo(() => schema.uiSchema === undefined ? undefined : localizeJSONSchema(schema.uiSchema, schema.uiLocalization, i18n.text), [i18n.text, schema.uiLocalization, schema.uiSchema]);
   const validation = useMemo(() => validator.validateFormData(value, schema.schema), [schema, value]);
-  useLayoutEffect(() => {
-    const errors = Object.fromEntries(validation.errors.map((error, index) => [error.property || `form.${index}`, error.message ?? i18n.text(message(namespace, "form.invalid", "值不符合 Schema"))]));
+  const syncErrors = useMemo(() => Object.fromEntries(validation.errors.map((error, index) => [muiErrorPath(error) || `form.${index}`, error.message ?? i18n.text(message(namespace, "form.invalid", "值不符合 Schema"))])), [i18n, validation.errors]);
+  const [asyncValidation, setAsyncValidation] = useState<{ source?: Readonly<Record<string, unknown>>; validating: boolean; errors: Readonly<Record<string, string>> }>({ validating: false, errors: {} });
+  const currentAsync = asyncValidation.source === value ? asyncValidation : { source: value, validating: validate !== undefined && validation.errors.length === 0, errors: {} };
+  useEffect(() => {
+    if (validate === undefined || validation.errors.length > 0) { setAsyncValidation({ source: value, validating: false, errors: {} }); return; }
+    const controller = new AbortController();
+    setAsyncValidation({ source: value, validating: true, errors: {} });
+    const timeout = window.setTimeout(() => {
+      validate({ schema, value, context: formContext, signal: controller.signal })
+        .then((errors) => { if (!controller.signal.aborted) setAsyncValidation({ source: value, validating: false, errors }); })
+        .catch(() => { if (!controller.signal.aborted) setAsyncValidation({ source: value, validating: false, errors: { $form: i18n.text(message(namespace, "form.asyncUnavailable", "异步校验暂时不可用")) } }); });
+    }, Math.max(0, validationDelayMs));
+    return () => { controller.abort(); window.clearTimeout(timeout); };
+  }, [formContext, i18n, schema, validate, validation.errors.length, validationDelayMs, value]);
+  const combinedExternalErrors = useMemo(() => ({ ...currentAsync.errors, ...externalErrors }), [currentAsync.errors, externalErrors]);
+  useEffect(() => {
+    const errors = { ...syncErrors, ...combinedExternalErrors };
     onValidationChange?.({
-      valid: validation.errors.length === 0,
-      issues: validation.errors.map((error) => ({ path: error.property ?? "", code: error.name ?? "schema_invalid", message: error.message, schemaPath: error.schemaPath })),
+      valid: validation.errors.length === 0 && !currentAsync.validating && Object.keys(combinedExternalErrors).length === 0,
+      issues: validation.errors.map((error) => ({ path: muiErrorPath(error), code: error.name ?? "schema_invalid", message: error.message, schemaPath: error.schemaPath })),
       errors,
-      validating: false,
+      validating: currentAsync.validating,
     });
-  }, [i18n, onValidationChange, validation]);
+  }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
+  const templates = useMemo(() => ({ ObjectFieldTemplate: (props: MuiObjectFieldTemplateProps) => <MuiObjectFieldTemplate {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
   return <Box sx={presentation?.layout === "horizontal" ? { "& .form-group": { display: "grid", gridTemplateColumns: "104px minmax(0, 1fr)", alignItems: "center", columnGap: 1.5 }, "& .form-group > label": { margin: 0 }, "& .form-group > .field-description": { gridColumn: "2" } } : undefined}><RJSFForm
     schema={localizedSchema}
     uiSchema={localizedUISchema}
@@ -208,9 +270,35 @@ function FormRenderer({ schema, value, onChange, presentation, readOnly, submitt
     validator={validator}
     readonly={readOnly}
     disabled={submitting}
+    liveValidate="onChange"
+    showErrorList="top"
+    extraErrors={muiErrorSchema(combinedExternalErrors) as never}
+    extraErrorsBlockSubmit
+    noHtml5Validate
     onChange={(event) => onChange((event.formData ?? {}) as Record<string, unknown>)}
-    templates={{ ButtonTemplates: { SubmitButton: () => null } }}
+    templates={templates}
   ><></></RJSFForm></Box>;
+}
+
+function muiErrorPath(error: { property?: string; name?: string; params?: { missingProperty?: unknown } }): string {
+  let path = error.property?.replace(/^\./, "") ?? "";
+  if (error.name === "required" && typeof error.params?.missingProperty === "string") path = path === "" ? error.params.missingProperty : `${path}.${error.params.missingProperty}`;
+  return path.replace(/\['([^']+)'\]/g, "$1");
+}
+
+function muiErrorSchema(errors: Readonly<Record<string, string>>): Record<string, unknown> {
+  const root: Record<string, unknown> = {};
+  for (const [path, value] of Object.entries(errors)) {
+    const parts = path === "$form" ? [] : path.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean);
+    let node = root;
+    for (const part of parts) {
+      const current = node[part];
+      if (typeof current !== "object" || current === null || Array.isArray(current)) node[part] = {};
+      node = node[part] as Record<string, unknown>;
+    }
+    node.__errors = [...(Array.isArray(node.__errors) ? node.__errors as string[] : []), value];
+  }
+  return root;
 }
 
 function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", appearance = "default" }: TableProps) {
