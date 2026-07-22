@@ -11,30 +11,29 @@
 - **Context**：当前阶段只记录 orphan 的 digest、时间和失败原因，并设置容量与对象数告警；达到硬上限时拒绝新物化但不影响活动 Portal。禁止在 Activation CAS 失败后立即删除对象。
 - **Depends on / blocked by**：不可变 `PortalActivation` 历史模型、Origin 对象索引、恢复版本保留策略、多 Edge 使用状态和运维容量基线。
 
-## 在线角色与权限配置基础插件
+## Mobile/Runner 授权载体与执行租约
 
-- **What**：新增平台基础插件，聚合已验证插件 Manifest 声明的权限目录，在线管理角色 revision、授权范围与发布审批。
-- **Why**：插件可声明权限、内核可执行权限，但缺少面向管理员的角色组合、人员/主体绑定、即时撤权和审计闭环。
-- **Pros**：安装插件后权限自动进入目录；角色无需手工维护中央权限代码；可以表达 platform、tenant、portal 和 resource 作用域。
-- **Cons**：需要职责分离、角色版本、授权审批、主体目录对接、缓存失效、紧急撤权和失效权限清理，不能退化成简单复选框页面。
-- **Context**：权限代码由所属插件在签名 Manifest 中声明，可信内核校验命名空间、scope、风险等级和冲突；角色插件只能授权 Catalog 中已知权限，不能创建权限，也不负责最终判定。
-- **Depends on / blocked by**：插件权限 Manifest Schema、可信权限 Catalog、企业身份主体接口、内核授权执行点和本次 Portal Governance 分域权限。
-- **Progress（2026-07-22）**：B1—B6 已完成：签名 Permission Catalog、Authorization IR/Provider Protocol、Policy 状态机与签发、每内核 Enforcer/Native Engine、在线 Role/Subject Binding Workbench、可信外部组投影和 Portal 权限体验裁剪均已落地；`platform.admin/is_admin` 通用旁路及 legacy 用户 operation-role 表已移除。B7 Mobile/Runner 载体与 Execution Lease 随对应内核推进。权威设计见《[在线角色与权限治理](docs/dev/architecture/在线角色与权限治理.md)》。
+- **What**：在 Mobile 和 Runner 内核推进时完成 B7：各端可信身份载体、Runner Execution Lease、离线授权上限、撤权与租约失效闭环。
+- **Why**：Portal 的签名 Permission Catalog、Policy、Enforcer、在线角色与主体绑定已经完成，但移动端和桌面执行器不能照搬浏览器 Cookie，也不能让离线任务无限继承人的在线权限。
+- **Pros**：四类内核共享同一授权语义；Runner 获得最小、短时、可审计的任务执行权限；设备丢失、主体撤权或策略换代后可以确定失效。
+- **Cons**：需要设备身份、租约签发、续期、离线窗口、任务绑定、重放防护和时钟偏差测试，与 Runner/Mobile 生命周期紧密相关，不能脱离对应内核单独完成。
+- **Context**：B1—B6 已完成；`platform.admin/is_admin` 通用旁路及 legacy operation-role 表已经移除。B7 不新增第二套角色系统，只为不同终端投影合适的可信载体。
+- **Depends on / blocked by**：Runner Profile 的构建、签名与实际装配，Mobile Profile/Gateway/Native Adapter，以及设备注册和吊销模型。权威设计见《[在线角色与权限治理](docs/dev/architecture/在线角色与权限治理.md)》与 [ADR-0106](docs/dev/decisions/ADR-0106-多端统一身份授权与Runner执行租约.md)。
 
-## 会话前登录与认证方法插件
+## Portal 用户偏好服务端真源
 
-- **What**：实现会话前 Access Generation、统一 AuthenticationFlow、Authentication Broker，以及首批密码和临时验证码 Method Provider。
-- **Why**：当前生产 OIDC 会直接跳转外部 Provider，普通 Portal Generation 又依赖已认证 Principal，无法安全承载本地多方式登录页面。
-- **Pros**：登录 UI 继续遵守 Runtime/Renderer/Shell/Workbench 层级；密码、OTP、OIDC、Passkey 可通过稳定协议扩展；Node 仍是唯一浏览器 Session 签发者。
-- **Cons**：需要集群 transaction、一次性 Assertion、账号枚举防护、密码 pepper、验证码 Delivery、pre-auth CSRF 和独立公网安全验收。
-- **Context**：Method Provider 不提供前端组件、不签发 Cookie、不返回角色；密码与验证码作为替代登录都只是单因素。权威设计见《[登录与认证协议](docs/dev/architecture/登录与认证协议.md)》。
-- **Progress（2026-07-23）**：L0 已完成 Method/Assertion/Access Profile 公共 DTO、JSON Schema、解析与测试；L1—L6 的 Access Generation、UI、Broker、Password/OTP 和 OIDC 协议化仍待实施。
+- **What**：把当前浏览器本地的 Shell Library、Renderer、主题和 Workbench 展示偏好提升为租户/Portal/用户隔离的服务端 `PortalPreference`，localStorage 只保留启动缓存。
+- **Why**：当前用户已经可以即时切换 Shell Library，且只下载所选模块，但偏好只保存在当前浏览器配置文件，无法跨设备同步，也不能在管理员撤销允许项后形成集中失效事实。
+- **Pros**：跨设备一致；管理员调整允许范围后可确定回退；偏好 revision 可参与候选切换和审计，而不需要修改 Platform Profile 或创建 Activation。
+- **Cons**：需要认证后的窄 BFF、用户级 CAS、隐私边界、离线缓存和失败回退；不能让偏好接口接受模块 URL、版本、摘要、CSS 或任意组件配置。
+- **Context**：Shell Catalog、deferred Library、允许范围校验和候选 Generation 已实施。服务端只保存稳定选择 ID；浏览器仍以活动 RuntimeSpec 的允许目录为权威，候选成功后才提交偏好。
+- **Depends on / blocked by**：稳定企业主体、Portal Session、偏好 Store 与多 Node 一致性。
 
-## 生产 Portal 实时 Activation 通知
+## 生产 Portal Activation 实时模式容量验收
 
-- **What**：在出现明确实时需求后，为已打开的 Portal 增加生产 Activation revision 通知，使新布局或插件组合无需用户刷新即可事务替换 Generation。
-- **Why**：当前策略只在刷新、新标签页或重新打开 Portal 时取得最新 Activation；长期打开的页面只会在正常 API 响应发现版本变化后提示刷新。
-- **Pros**：管理员激活后，在线用户可以及时加载新 RuntimeSpec；候选失败仍能保留旧 Generation。
-- **Cons**：需要常驻连接容量、代理支持、认证续期、断线重连、重复事件、多 Edge 分发和客户端集中刷新峰值控制。
-- **Context**：当前不实现 SSE 或轮询。若未来实施，Edge 应复用一条 Activation KV watch 并向浏览器多路分发最小 revision 事件；浏览器必须重新获取权威 RuntimeSpec，不能信任事件携带模块内容。
-- **Depends on / blocked by**：生产并发连接容量测试、Activation KV watch、多 Edge 传播、RuntimeSpec ETag 和 PortalGeneration 替换协议。
+- **What**：在生产启用 `updates.mode=notify|automatic` 前，对已实现的认证 SSE 更新链路完成容量、代理兼容、断线恢复和集中更新控制验收。
+- **Why**：Portal 已支持 `refresh|notify|automatic`，但生产默认仍是 `refresh`。实时模式会引入常驻连接、多 Node 分发和激活瞬间的候选装配峰值，不能仅凭功能测试默认开启。
+- **Pros**：管理员激活后，长期打开的页面可及时提示或事务切换 Generation；候选失败仍保留活动 Generation。
+- **Cons**：需要目标负载基线、代理超时配置、认证续期、退避重连、重复事件、多 Node 传播和刷新风暴控制。
+- **Context**：Node Portal Kernel 已提供认证、租户/Portal 隔离的 SSE，只分发最小 revision 事实；浏览器仍重新获取权威 RuntimeSpec，不信任事件携带模块内容。生产在验收完成前继续使用低负载的 `refresh` 默认值，禁止页面轮询仓库。
+- **Depends on / blocked by**：真实生产并发基线、多 Node 部署、RuntimeSpec/PortalGeneration 候选切换和目标代理环境。
