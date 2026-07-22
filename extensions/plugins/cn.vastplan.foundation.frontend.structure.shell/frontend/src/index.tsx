@@ -1,5 +1,5 @@
 import type { UIShellAdapter } from "@vastplan/ui-primitives";
-import { compose } from "@vastplan/ui-structure-composition-standard";
+import { compose } from "./composition";
 
 const adapter: UIShellAdapter = {
   id: "ui.structure.shell",
@@ -13,8 +13,14 @@ const adapter: UIShellAdapter = {
   localization: {
     defaultLocale: "zh-CN",
     messages: {
-      "zh-CN": { "template.standard": "标准侧栏", "template.topNavigation": "顶部导航" },
-      "en-US": { "template.standard": "Standard sidebar", "template.topNavigation": "Top navigation" },
+      "zh-CN": {
+        "template.standard": "标准侧栏", "template.topNavigation": "顶部导航",
+        "navigation.primary": "主要功能", "navigation.secondary": "辅助功能", "navigation.settings": "系统设置",
+      },
+      "en-US": {
+        "template.standard": "Standard sidebar", "template.topNavigation": "Top navigation",
+        "navigation.primary": "Primary", "navigation.secondary": "Secondary", "navigation.settings": "System settings",
+      },
     },
   },
 };

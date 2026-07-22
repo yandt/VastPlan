@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import adapter from "./index";
+import { compose } from "./composition";
 
-describe("standard shell composition", () => {
+describe("shell composition core", () => {
   it("owns stable slots and deterministic navigation/content order", () => {
     const Body = () => null;
     const Action = () => null;
-    const model = adapter.compose({
+    const model = compose({
       activePageID: "settings",
       shellContributions: [],
       pages: [{
@@ -26,7 +26,7 @@ describe("standard shell composition", () => {
   });
 
   it("builds one bounded child-group level and one authoritative active path", () => {
-    const model = adapter.compose({
+    const model = compose({
       activePageID: "workers",
       shellContributions: [],
       config: { navigationGroups: [
@@ -44,13 +44,13 @@ describe("standard shell composition", () => {
   });
 
   it("rejects unknown parents, cross-zone children, and a third group level", () => {
-    const compose = (navigationGroups: unknown[]) => () => adapter.compose({ pages: [], shellContributions: [], config: { navigationGroups } });
-    expect(compose([{ id: "child", parentID: "missing", label: "子组", zone: "primary", icon: "menu" }])).toThrow("未知根组");
-    expect(compose([
+    const attempt = (navigationGroups: unknown[]) => () => compose({ pages: [], shellContributions: [], config: { navigationGroups } });
+    expect(attempt([{ id: "child", parentID: "missing", label: "子组", zone: "primary", icon: "menu" }])).toThrow("未知根组");
+    expect(attempt([
       { id: "root", label: "根组", zone: "primary", icon: "menu" },
       { id: "child", parentID: "root", label: "子组", zone: "settings", icon: "settings" },
     ])).toThrow("不能跨语义区");
-    expect(compose([
+    expect(attempt([
       { id: "root", label: "根组", zone: "primary", icon: "menu" },
       { id: "child", parentID: "root", label: "子组", zone: "primary", icon: "menu" },
       { id: "too-deep", parentID: "child", label: "过深", zone: "primary", icon: "menu" },
@@ -63,17 +63,17 @@ describe("standard shell composition", () => {
       navigation: { id: "jobs", label: "任务", zone: "primary" as const, groupID: "operations" },
       slots: [{ id: "body", slot: "page.body.main" as const, component: () => null }],
     };
-    const model = adapter.compose({
+    const model = compose({
       pages: [page], shellContributions: [],
       config: { navigationGroups: [{ id: "operations", label: "运行管理", zone: "primary", icon: "menu", order: 5 }] },
     });
     expect(model.navigation.primary[0]).toMatchObject({ id: "operations", label: "运行管理", icon: "menu" });
-    expect(() => adapter.compose({ pages: [page], shellContributions: [] })).toThrow("未治理的分组");
+    expect(() => compose({ pages: [page], shellContributions: [] })).toThrow("未治理的分组");
   });
 
   it("keeps global shell contributions independent from the active page", () => {
     const Logo = () => null;
-    const model = adapter.compose({
+    const model = compose({
       pages: [],
       shellContributions: [{ id: "logo", pluginID: "cn.vastplan.foundation.brand", slot: "shell.navigation.start", component: Logo }],
     });

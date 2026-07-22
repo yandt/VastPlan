@@ -18,7 +18,7 @@ const shellSlots = new Set<ShellSlotID>(shellSlotIDs);
 const pageSlots = new Set<PageSlotID>(pageSlotIDs);
 const navigationZones = new Set<NavigationZone>(["primary", "secondary", "settings"]);
 const semanticIcons = new Set<SemanticIconName>(semanticIconNames);
-const namespace = "cn.vastplan.foundation.frontend.structure.composition.standard";
+const namespace = "cn.vastplan.foundation.frontend.structure.shell";
 const defaultGroups: readonly PortalNavigationGroupDescriptor[] = [
   { id: "primary", label: message(namespace, "navigation.primary", "主要功能"), zone: "primary", icon: "menu", order: 10 },
   { id: "secondary", label: message(namespace, "navigation.secondary", "辅助功能"), zone: "secondary", icon: "info", order: 20 },
@@ -29,7 +29,7 @@ function ordered<T extends { id: string; order?: number }>(values: readonly T[])
   return [...values].sort((left, right) => (left.order ?? 0) - (right.order ?? 0) || left.id.localeCompare(right.id));
 }
 
-function compose(input: ShellCompositionInput): ShellCompositionModel {
+export function compose(input: ShellCompositionInput): ShellCompositionModel {
   const pages = Object.freeze([...input.pages]);
   const activePage = pages.find((page) => page.id === input.activePageID);
   const descriptors = navigationGroups(input.config);
@@ -146,16 +146,3 @@ function validID(value: string): boolean {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
-
-const adapter = {
-  id: "internal.shell-composition-source", uiContract: "4.0.0", compose,
-  localization: {
-    defaultLocale: "zh-CN",
-    messages: {
-      "zh-CN": { "navigation.primary": "主要功能", "navigation.secondary": "辅助功能", "navigation.settings": "系统设置" },
-      "en-US": { "navigation.primary": "Primary", "navigation.secondary": "Secondary", "navigation.settings": "System settings" },
-    },
-  },
-};
-export { compose };
-export default adapter;

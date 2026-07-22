@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, resolve } from "node:path";
 import { createFrontendModuleGraph } from "./frontend-module-graph.mjs";
+import { isDeferredFrontendContribution } from "./frontend-plugin-contribution.mjs";
 import { buildFrontendServerGraph } from "./frontend-server-build.mjs";
 
 const outputRoot = option("--out-dir");
@@ -125,8 +126,7 @@ async function discoverFrontendPlugins() {
     if (!/^frontend\/dist\/[A-Za-z0-9._/-]+\.(?:m?js)$/.test(entry) || entry.includes("..")) {
       throw new Error(`${manifestPath} 的 entry.frontend 必须是 frontend/dist/ 下的 JavaScript 文件`);
     }
-    const rendererModules = manifest.contributes?.frontend?.rendererModules;
-    const deferred = Array.isArray(rendererModules) && rendererModules.length === 1;
+    const deferred = isDeferredFrontendContribution(manifest.contributes?.frontend);
     const serverEntry = typeof manifest.entry?.frontendServer === "string" ? manifest.entry.frontendServer.trim() : undefined;
     if (serverEntry !== undefined && (!/^frontend\/dist\/[A-Za-z0-9._/-]+\.(?:m?js)$/.test(serverEntry) || serverEntry.includes(".."))) {
       throw new Error(`${manifestPath} 的 entry.frontendServer 必须是 frontend/dist/ 下的 JavaScript 文件`);

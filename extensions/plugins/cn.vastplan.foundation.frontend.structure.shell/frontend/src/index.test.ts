@@ -10,5 +10,10 @@ describe("Shell Catalog", () => {
       { id: "standard", module: { id: "cn.vastplan.foundation.frontend.structure.layout.standard", version: "1.1.0", channel: "stable" } },
       { id: "top-navigation", module: { id: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", version: "1.1.0", channel: "stable" } },
     ]);
+    expect(shell.localization?.messages["en-US"]).toMatchObject({
+      "template.standard": "Standard sidebar",
+      "navigation.primary": "Primary",
+      "navigation.settings": "System settings",
+    });
   });
 });
