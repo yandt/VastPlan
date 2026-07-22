@@ -554,6 +554,10 @@ func TestParseManifest_ConfigurationAndManagedCredentials(t *testing.T) {
 			t.Fatalf("不安全 configuration.schema 必须被拒绝: %s", schema)
 		}
 	}
+	restartTenant := `{"id":"com.example.configured","name":"configured","description":"configured plugin","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"configuration":{"scope":"tenant","applyMode":"restart","schema":{"type":"object","additionalProperties":false}},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`
+	if _, err := ParseManifest([]byte(restartTenant)); err == nil {
+		t.Fatal("tenant restart 配置必须拒绝")
+	}
 }
 
 func TestArtifactLockSchemaRejectsMutableOrIncompleteLocks(t *testing.T) {

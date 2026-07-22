@@ -203,6 +203,16 @@ func DesiredKey(tenant, name string) string {
 
 func DeploymentKey(tenant, name string) string { return DesiredKey(tenant, name) }
 
+// DeploymentPrefix returns the encoded tenant prefix shared by Deployment
+// facts and their trusted sidecar snapshots. Callers must still validate the
+// tenant identity carried by each decoded value.
+func DeploymentPrefix(tenant string) string {
+	if tenant == "" {
+		tenant = "_global"
+	}
+	return "tenants." + keyToken(tenant) + ".states."
+}
+
 func AssignmentPrefix(tenant, name string) string {
 	return DeploymentKey(tenant, name) + ".nodes."
 }

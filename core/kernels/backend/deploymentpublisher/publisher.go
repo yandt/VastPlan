@@ -18,6 +18,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/compositioncore"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 )
 
 type Applier interface {
@@ -43,6 +44,7 @@ type Publisher struct {
 	artifacts compositioncore.ArtifactReader
 	options   compositioncore.Options
 	applier   Applier
+	catalogs  pluginconfiguration.Publisher
 	resolve   Resolver
 }
 
@@ -59,15 +61,15 @@ func (r *recordingArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artif
 	return artifact, raw, err
 }
 
-func New(catalog backendcompositionv1.BackendPlatformCatalog, artifacts compositioncore.ArtifactReader, applier Applier, options compositioncore.Options, resolve Resolver) (*Publisher, error) {
+func New(catalog backendcompositionv1.BackendPlatformCatalog, artifacts compositioncore.ArtifactReader, applier Applier, catalogs pluginconfiguration.Publisher, options compositioncore.Options, resolve Resolver) (*Publisher, error) {
 	validated, err := backendcompositionv1.ValidateBackendPlatformCatalog(catalog)
 	if err != nil {
 		return nil, err
 	}
-	if artifacts == nil || applier == nil || resolve == nil {
-		return nil, errors.New("在线部署发布器必须配置可信制品读取器、Composition Resolver 与 CAS applier")
+	if artifacts == nil || applier == nil || catalogs == nil || resolve == nil {
+		return nil, errors.New("在线部署发布器必须配置可信制品读取器、Composition Resolver、Deployment CAS 与配置目录发布器")
 	}
-	return &Publisher{catalog: validated, artifacts: artifacts, options: options, applier: applier, resolve: resolve}, nil
+	return &Publisher{catalog: validated, artifacts: artifacts, options: options, applier: applier, catalogs: catalogs, resolve: resolve}, nil
 }
 
 func (p *Publisher) Targets(_ context.Context, tenantID string) ([]deploymentpublication.Target, error) {
@@ -100,7 +102,11 @@ func (p *Publisher) Preview(_ context.Context, tenantID string, application back
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}
-	return deploymentpublication.Result{Deployment: resolved, Digest: resolved.Digest(), ArtifactReferences: references}, nil
+	configurationCatalog, err := pluginconfiguration.Build(resolved, recording.values)
+	if err != nil {
+		return deploymentpublication.Result{}, fmt.Errorf("生成可信插件配置目录: %w", err)
+	}
+	return deploymentpublication.Result{Deployment: resolved, Digest: resolved.Digest(), ArtifactReferences: references, ConfigurationCatalog: configurationCatalog}, nil
 }
 
 func resolvedArtifactReferences(deployment deploymentv2.Deployment, artifacts map[pluginv1.ArtifactRef]pluginv1.Artifact) ([]pluginv1.ArtifactReference, error) {
@@ -151,6 +157,9 @@ func (p *Publisher) Publish(ctx context.Context, tenantID string, application ba
 	preview.Deployment = applied
 	preview.Digest = applied.Digest()
 	preview.KVRevision = kvRevision
+	if err := p.catalogs.Publish(ctx, tenantID, preview.ConfigurationCatalog); err != nil {
+		return deploymentpublication.Result{}, fmt.Errorf("发布可信插件配置目录: %w", err)
+	}
 	return preview, nil
 }
 

@@ -11,11 +11,12 @@ import (
 	v1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 )
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.18.0"
+	PluginVersion = "0.20.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -62,6 +63,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if managedCredentialLifecycleAllowed(c, request) {
 		return extpoint.DecisionAllow, "业务插件只能管理自己拥有的托管凭证"
+	}
+	if pluginConfigurationCatalogReadAllowed(c, request) {
+		return extpoint.DecisionAllow, "插件配置协调器只能读取活动可信配置目录"
 	}
 	if materialLeaseAllowed(c, request) {
 		return extpoint.DecisionAllow, "可信宿主可申请绑定身份的一次性加密 material lease"
@@ -114,11 +118,17 @@ func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.Permissio
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability, "platform.api-exposure":
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, "platform.api-exposure":
 		return true
 	default:
 		return strings.HasPrefix(capability, artifactstorage.CapabilityPrefix)
 	}
+}
+
+func pluginConfigurationCatalogReadAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	return c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN &&
+		c.GetCaller().GetId() == pluginconfiguration.PluginSettingsID &&
+		request.Capability == pluginconfiguration.KernelCatalogsService && request.Operation == "list"
 }
 
 func artifactStorageAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
@@ -201,7 +211,7 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 		return false
 	}
 	switch c.Caller.Id {
-	case "cn.vastplan.platform.configuration.global-settings", "cn.vastplan.platform.security.credentials":
+	case "cn.vastplan.platform.configuration.global-settings", "cn.vastplan.platform.configuration.plugin-settings", "cn.vastplan.platform.security.credentials":
 		return request.Capability == "kernel.config.get"
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"

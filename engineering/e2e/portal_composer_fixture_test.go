@@ -223,6 +223,7 @@ func copyPortalFixtureNotice(t *testing.T, directory, name string) {
 func portalPlatformBackendPlugins() []struct{ packageDir, manifest string } {
 	return []struct{ packageDir, manifest string }{
 		{"./extensions/plugins/cn.vastplan.platform.configuration.global-settings/backend", "extensions/plugins/cn.vastplan.platform.configuration.global-settings/vastplan.plugin.json"},
+		{"./extensions/plugins/cn.vastplan.platform.configuration.plugin-settings/backend", "extensions/plugins/cn.vastplan.platform.configuration.plugin-settings/vastplan.plugin.json"},
 		{"./extensions/plugins/cn.vastplan.platform.security.credentials/backend", "extensions/plugins/cn.vastplan.platform.security.credentials/vastplan.plugin.json"},
 		{"./extensions/plugins/cn.vastplan.platform.data.relational.connection-manager/backend", "extensions/plugins/cn.vastplan.platform.data.relational.connection-manager/vastplan.plugin.json"},
 		{"./extensions/plugins/cn.vastplan.platform.artifacts.repository/backend", "extensions/plugins/cn.vastplan.platform.artifacts.repository/vastplan.plugin.json"},

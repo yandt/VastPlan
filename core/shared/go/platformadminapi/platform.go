@@ -14,15 +14,17 @@ import (
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
 const (
-	SettingsCapability    = "platform.settings"
-	CredentialsCapability = "platform.credentials"
-	DatabaseCapability    = "platform.database"
-	ArtifactsCapability   = "platform.artifacts.repository"
-	DeploymentCapability  = "platform.deployment"
+	SettingsCapability            = "platform.settings"
+	CredentialsCapability         = "platform.credentials"
+	DatabaseCapability            = "platform.database"
+	ArtifactsCapability           = "platform.artifacts.repository"
+	DeploymentCapability          = "platform.deployment"
+	PluginConfigurationCapability = "platform.plugin-configuration"
 )
 
 var (
@@ -344,21 +346,22 @@ const (
 )
 
 type ServiceRevision struct {
-	ID                 uint64                                      `json:"id"`
-	Deployment         string                                      `json:"deployment"`
-	Status             ServiceRevisionStatus                       `json:"status"`
-	Active             bool                                        `json:"active"`
-	Composition        backendcompositionv1.ApplicationComposition `json:"composition"`
-	Preview            deploymentv2.Deployment                     `json:"preview"`
-	PreviewDigest      string                                      `json:"previewDigest"`
-	ArtifactReferences []pluginv1.ArtifactReference                `json:"artifactReferences"`
-	KVRevision         uint64                                      `json:"kvRevision,omitempty"`
-	ReferencePending   bool                                        `json:"referencePending,omitempty"`
-	SubmittedBy        string                                      `json:"submittedBy,omitempty"`
-	ApprovedBy         string                                      `json:"approvedBy,omitempty"`
-	PublishedBy        string                                      `json:"publishedBy,omitempty"`
-	CreatedAt          string                                      `json:"createdAt"`
-	UpdatedAt          string                                      `json:"updatedAt"`
+	ID                   uint64                                      `json:"id"`
+	Deployment           string                                      `json:"deployment"`
+	Status               ServiceRevisionStatus                       `json:"status"`
+	Active               bool                                        `json:"active"`
+	Composition          backendcompositionv1.ApplicationComposition `json:"composition"`
+	Preview              deploymentv2.Deployment                     `json:"preview"`
+	PreviewDigest        string                                      `json:"previewDigest"`
+	ArtifactReferences   []pluginv1.ArtifactReference                `json:"artifactReferences"`
+	ConfigurationCatalog pluginconfiguration.Catalog                 `json:"configurationCatalog"`
+	KVRevision           uint64                                      `json:"kvRevision,omitempty"`
+	ReferencePending     bool                                        `json:"referencePending,omitempty"`
+	SubmittedBy          string                                      `json:"submittedBy,omitempty"`
+	ApprovedBy           string                                      `json:"approvedBy,omitempty"`
+	PublishedBy          string                                      `json:"publishedBy,omitempty"`
+	CreatedAt            string                                      `json:"createdAt"`
+	UpdatedAt            string                                      `json:"updatedAt"`
 }
 
 type ServiceAuditEvent struct {

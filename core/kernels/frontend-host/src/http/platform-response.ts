@@ -36,12 +36,13 @@ export function responseItems(value: unknown): unknown[] {
 
 function mapCapabilityError(response: ServerResponse, code: string, head = false): void {
   if (code === "permission.denied") return sendAPIError(response, 403, "forbidden", head);
-  if (["platform.settings.not_found", "platform.credentials.not_found", "platform.database.not_found", "platform.deployment.not_found"].includes(code)) return sendAPIError(response, 404, "not_found", head);
-  if (["platform.settings.version_conflict", "platform.deployment.version_conflict"].includes(code)) return sendAPIError(response, 409, "version_conflict", head);
+  if (["platform.settings.not_found", "platform.credentials.not_found", "platform.database.not_found", "platform.deployment.not_found", "platform.plugin_configuration.not_found"].includes(code)) return sendAPIError(response, 404, "not_found", head);
+  if (["platform.settings.version_conflict", "platform.deployment.version_conflict", "platform.plugin_configuration.conflict"].includes(code)) return sendAPIError(response, 409, "version_conflict", head);
   if (code === "platform.deployment.separation_required") return sendAPIError(response, 409, "separation_required", head);
   if (code === "platform.deployment.job_conflict") return sendAPIError(response, 409, "job_conflict", head);
   if (code === "platform.deployment.service_state_conflict") return sendAPIError(response, 409, "service_state_conflict", head);
-  if (["platform.settings.invalid", "platform.credentials.invalid", "platform.database.invalid", "platform.deployment.invalid"].includes(code)) return sendAPIError(response, 400, "invalid_request", head);
+  if (["platform.settings.invalid", "platform.credentials.invalid", "platform.database.invalid", "platform.deployment.invalid", "platform.plugin_configuration.invalid"].includes(code)) return sendAPIError(response, 400, "invalid_request", head);
+  if (code === "platform.plugin_configuration.unavailable") return sendAPIError(response, 503, "configuration_unavailable", head);
   if (code === "platform.deployment.bootstrap_failed") return sendAPIError(response, 502, "bootstrap_failed", head);
   if (code === "platform.deployment.service_publish_failed") return sendAPIError(response, 502, "service_publish_failed", head);
   sendAPIError(response, 502, "platform_service_unavailable", head);

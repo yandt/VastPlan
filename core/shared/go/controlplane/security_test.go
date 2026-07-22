@@ -97,7 +97,8 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	bootstrapJS, _ := jetstream.New(bootstrap)
-	if _, err := EnsureBuckets(ctx, bootstrapJS, 1, jetstream.MemoryStorage); err != nil {
+	bootstrapBuckets, err := EnsureBuckets(ctx, bootstrapJS, 1, jetstream.MemoryStorage)
+	if err != nil {
 		t.Fatalf("bootstrap 应能创建控制面 buckets: %v", err)
 	}
 	controllerJS, _ := jetstream.New(controller)
@@ -115,6 +116,12 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	}
 	if entry, err := nodeBuckets.Assignments.Get(ctx, "tenant.unit"); err != nil || string(entry.Value()) != "assignment" {
 		t.Fatalf("node 应能读取 assignment KV: entry=%v err=%v", entry, err)
+	}
+	if _, err := bootstrapBuckets.Deployments.Put(ctx, DeploymentKey("acme", "prod"), []byte("deployment")); err != nil {
+		t.Fatalf("bootstrap 应能发布 deployment KV: %v", err)
+	}
+	if entry, err := nodeBuckets.Deployments.Get(ctx, DeploymentKey("acme", "prod")); err != nil || string(entry.Value()) != "deployment" {
+		t.Fatalf("可信节点内核应能读取 deployment 与配置目录 sidecar: entry=%v err=%v", entry, err)
 	}
 	if _, err := nodeBuckets.Actual.Put(ctx, ActualKey("acme", "prod", "node-1"), []byte("healthy")); err != nil {
 		t.Fatalf("node 应能写 actual KV: %v", err)

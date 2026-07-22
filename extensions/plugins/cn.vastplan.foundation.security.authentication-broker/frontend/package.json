@@ -1,6 +1,6 @@
 {
   "name": "@vastplan/authentication-provider-management-ui",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "dependencies": { "@vastplan/platform-admin": "workspace:*", "@vastplan/workbench-sdk": "workspace:*" },

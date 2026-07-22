@@ -231,6 +231,12 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["scope", "applyMode", "schema"],
+      "allOf": [
+        {
+          "if": { "properties": { "applyMode": { "const": "restart" } }, "required": ["applyMode"] },
+          "then": { "properties": { "scope": { "const": "service" } } }
+        }
+      ],
       "properties": {
         "scope": { "enum": ["service", "tenant", "user"] },
         "applyMode": { "enum": ["restart", "hot"] },

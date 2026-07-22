@@ -12,6 +12,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
 )
 
@@ -79,6 +80,7 @@ type Dependencies struct {
 	NodeReadiness         nodebootstrap.ReadinessObserver
 	DeploymentPublication deploymentpublication.Controller
 	DeploymentReadiness   deploymentpublication.ReadinessObserver
+	ConfigurationCatalogs pluginconfiguration.Reader
 }
 
 type MapConfig struct {

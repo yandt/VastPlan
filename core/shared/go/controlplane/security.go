@@ -164,7 +164,7 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID string) (SubjectACL, 
 		}
 		acl := SubjectACL{
 			PublishAllow: append(openAllAPI(), append(
-				kvAPIForRead(DesiredBucket, AssignmentsBucket, CapabilitiesBucket),
+				kvAPIForRead(DesiredBucket, DeploymentsBucket, AssignmentsBucket, CapabilitiesBucket),
 				"$KV."+ActualBucket+"."+ActualKey(tenant, deployment, nodeID), "$KV."+NodesBucket+"."+NodeKey(tenant, deployment, nodeID),
 				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
 				"vp.event.persist.v1.>",
@@ -176,7 +176,7 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID string) (SubjectACL, 
 				"$KV." + DesiredBucket + ".>", "$KV." + DeploymentsBucket + ".>", "$KV." + AssignmentsBucket + ".>",
 			},
 			SubscribeAllow: []string{
-				"_INBOX.>", "$KV." + DesiredBucket + ".>", "$KV." + AssignmentsBucket + ".>",
+				"_INBOX.>", "$KV." + DesiredBucket + ".>", "$KV." + DeploymentsBucket + ".>", "$KV." + AssignmentsBucket + ".>",
 				"$KV." + CapabilitiesBucket + ".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
 			},
 		}

@@ -23,6 +23,7 @@
 - [cn.vastplan.foundation.security.authorization-engine.native](cn.vastplan.foundation.security.authorization-engine.native.md) —— 默认 Go authorization.engine.v1 与 Decision Proof Provider
 - [cn.vastplan.foundation.data.relational.runtime](cn.vastplan.foundation.data.relational.runtime.md) —— Database Runtime wire 契约、Provider SPI 与可信数据面边界
 - [cn.vastplan.platform.configuration.global-settings](cn.vastplan.platform.configuration.global-settings.md) —— 租户级版本化全局设置
+- [cn.vastplan.platform.configuration.plugin-settings](cn.vastplan.platform.configuration.plugin-settings.md) —— 可信插件配置目录、候选 CAS 与分路径生效协调
 - [cn.vastplan.platform.security.credentials](cn.vastplan.platform.security.credentials.md) —— Vault Transit 凭证元数据与轮换
 - [cn.vastplan.platform.data.relational.connection-manager](cn.vastplan.platform.data.relational.connection-manager.md) —— 数据库连接定义与可信探测
 - [cn.vastplan.platform.artifacts.repository](cn.vastplan.platform.artifacts.repository.md) —— HTTPS 制品仓库与状态能力

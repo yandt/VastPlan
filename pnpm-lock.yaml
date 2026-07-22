@@ -351,6 +351,22 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@26.1.1)
 
+  extensions/plugins/cn.vastplan.platform.configuration.plugin-settings/frontend:
+    dependencies:
+      '@vastplan/platform-admin':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/platform-admin
+      '@vastplan/workbench-sdk':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/workbench-sdk
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@26.1.1)
+
   extensions/plugins/cn.vastplan.platform.configuration.portal-composer/frontend:
     dependencies:
       '@vastplan/ui-primitives':

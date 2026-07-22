@@ -17,11 +17,28 @@ import (
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/configurationcatalog"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/compositioncore"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 )
+
+type catalogRecordingArtifactReader struct {
+	delegate compositioncore.ArtifactReader
+	values   map[pluginv1.ArtifactRef]pluginv1.Artifact
+}
+
+func (r *catalogRecordingArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
+	artifact, raw, err := r.delegate.Read(ref)
+	if err == nil {
+		r.values[ref] = artifact
+	}
+	return artifact, raw, err
+}
 
 // Run 初始化 NATS KV、发布部署规格，并可持续运行多节点 assignment 控制器。
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -91,6 +108,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 	}
 	var raw []byte
+	var configurationCatalog pluginconfiguration.Catalog
 	if publish {
 		profile, err := backendcompositionv1.ParsePlatformProfileFile(*platformProfilePath)
 		if err != nil {
@@ -100,9 +118,14 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		resolved, err := compositionresolver.Resolve(profile, application, *deploymentRevision, artifacts, compositionresolver.Options{AllowDevelopmentPlugins: *allowDevelopmentPlugins})
+		recording := &catalogRecordingArtifactReader{delegate: artifacts, values: map[pluginv1.ArtifactRef]pluginv1.Artifact{}}
+		resolved, err := compositionresolver.Resolve(profile, application, *deploymentRevision, recording, compositionresolver.Options{AllowDevelopmentPlugins: *allowDevelopmentPlugins})
 		if err != nil {
 			return fmt.Errorf("解析平台与应用组合: %w", err)
+		}
+		configurationCatalog, err = pluginconfiguration.Build(resolved, recording.values)
+		if err != nil {
+			return fmt.Errorf("生成可信插件配置目录: %w", err)
 		}
 		raw, err = json.Marshal(resolved)
 		if err != nil {
@@ -135,7 +158,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if len(raw) > 0 {
-		if err := publishDeployment(openCtx, stdout, buckets, key, raw); err != nil {
+		if err := publishDeployment(openCtx, stdout, buckets, key, raw, configurationCatalog); err != nil {
 			return err
 		}
 	}
@@ -202,7 +225,7 @@ func runControllerFleet(ctx context.Context, template deploymentcontroller.Contr
 	return first
 }
 
-func publishDeployment(ctx context.Context, stdout io.Writer, buckets sharedcontrolplane.Buckets, key *string, raw []byte) error {
+func publishDeployment(ctx context.Context, stdout io.Writer, buckets sharedcontrolplane.Buckets, key *string, raw []byte, catalog pluginconfiguration.Catalog) error {
 	deployment, err := deploymentv2.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("Resolver 生成的 deployment v2 无效: %w", err)
@@ -213,6 +236,9 @@ func publishDeployment(ctx context.Context, stdout io.Writer, buckets sharedcont
 	kvRevision, applied, err := sharedcontrolplane.ApplyDeployment(ctx, buckets.Deployments, *key, raw)
 	if err != nil {
 		return fmt.Errorf("发布集群部署: %w", err)
+	}
+	if err := (configurationcatalog.Store{KV: buckets.Deployments}).Publish(ctx, applied.Metadata.Tenant, catalog); err != nil {
+		return fmt.Errorf("发布集群部署配置目录: %w", err)
 	}
 	if _, err := fmt.Fprintf(stdout, "已发布 Deployment %s revision=%d kv-revision=%d key=%s\n", applied.Metadata.Name, applied.Revision, kvRevision, *key); err != nil {
 		return err

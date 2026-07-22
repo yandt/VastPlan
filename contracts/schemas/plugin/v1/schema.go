@@ -599,6 +599,9 @@ func validateConfiguration(contract *ConfigurationContract) error {
 	if contract == nil {
 		return nil
 	}
+	if contract.ApplyMode == "restart" && contract.Scope != "service" {
+		return errors.New("configuration restart 只允许 service scope")
+	}
 	var schema map[string]any
 	if err := json.Unmarshal(contract.Schema, &schema); err != nil || schema == nil {
 		return errors.New("configuration.schema 必须是 JSON Schema 对象")

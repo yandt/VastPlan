@@ -91,6 +91,7 @@ func TestBuildPermissionCatalogFromSystemManagementPlugins(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..", "extensions", "plugins")
 	plugins := []string{
 		"cn.vastplan.platform.artifacts.repository",
+		"cn.vastplan.platform.configuration.plugin-settings",
 		"cn.vastplan.platform.infrastructure.deployment-manager",
 	}
 	sources := make([]PermissionCatalogSource, 0, len(plugins))
@@ -110,7 +111,7 @@ func TestBuildPermissionCatalogFromSystemManagementPlugins(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if catalog.SchemaVersion != PermissionCatalogSchemaVersion || len(catalog.Permissions) != 11 || len(catalog.Operations) != 37 || len(catalog.Digest) != 64 {
+	if catalog.SchemaVersion != PermissionCatalogSchemaVersion || len(catalog.Permissions) != 13 || len(catalog.Operations) != 42 || len(catalog.Digest) != 64 {
 		t.Fatalf("系统管理权限目录不完整: permissions=%d operations=%d digest=%s", len(catalog.Permissions), len(catalog.Operations), catalog.Digest)
 	}
 }

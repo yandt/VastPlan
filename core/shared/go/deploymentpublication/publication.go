@@ -14,6 +14,7 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 )
 
 const (
@@ -41,10 +42,11 @@ type PublishRequest struct {
 }
 
 type Result struct {
-	Deployment         deploymentv2.Deployment      `json:"deployment"`
-	Digest             string                       `json:"digest"`
-	KVRevision         uint64                       `json:"kvRevision,omitempty"`
-	ArtifactReferences []pluginv1.ArtifactReference `json:"artifactReferences"`
+	Deployment           deploymentv2.Deployment      `json:"deployment"`
+	Digest               string                       `json:"digest"`
+	KVRevision           uint64                       `json:"kvRevision,omitempty"`
+	ArtifactReferences   []pluginv1.ArtifactReference `json:"artifactReferences"`
+	ConfigurationCatalog pluginconfiguration.Catalog  `json:"configurationCatalog"`
 }
 
 type ReadinessStatus string

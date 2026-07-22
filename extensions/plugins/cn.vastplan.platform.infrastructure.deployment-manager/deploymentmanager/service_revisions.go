@@ -113,7 +113,7 @@ func (s *Service) CreateServiceDraft(ctx context.Context, host sdk.Host, call *c
 		return platformadminapi.ServiceRevision{}, err
 	}
 	now := s.now().Format(time.RFC3339Nano)
-	revision := platformadminapi.ServiceRevision{ID: id, Deployment: composition.Metadata.Name, Status: platformadminapi.ServiceDraft, Composition: composition, Preview: preview.Deployment, PreviewDigest: preview.Digest, ArtifactReferences: preview.ArtifactReferences, CreatedAt: now, UpdatedAt: now}
+	revision := platformadminapi.ServiceRevision{ID: id, Deployment: composition.Metadata.Name, Status: platformadminapi.ServiceDraft, Composition: composition, Preview: preview.Deployment, PreviewDigest: preview.Digest, ArtifactReferences: preview.ArtifactReferences, ConfigurationCatalog: preview.ConfigurationCatalog, CreatedAt: now, UpdatedAt: now}
 	state.NextRevision = id
 	state.Revisions = append(state.Revisions, revision)
 	s.auditServiceLocked(state, revision, "service.draft.created", actorOrUnknown(call))
@@ -150,7 +150,7 @@ func (s *Service) UpdateServiceDraft(ctx context.Context, host sdk.Host, call *c
 	}
 	old := state.Revisions[index]
 	revision := old
-	revision.Composition, revision.Preview, revision.PreviewDigest, revision.ArtifactReferences = composition, preview.Deployment, preview.Digest, preview.ArtifactReferences
+	revision.Composition, revision.Preview, revision.PreviewDigest, revision.ArtifactReferences, revision.ConfigurationCatalog = composition, preview.Deployment, preview.Digest, preview.ArtifactReferences, preview.ConfigurationCatalog
 	revision.UpdatedAt = s.now().Format(time.RFC3339Nano)
 	state.Revisions[index] = revision
 	s.auditServiceLocked(state, revision, "service.draft.updated", actorOrUnknown(call))
@@ -254,7 +254,7 @@ func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, cal
 	oldAuditLength, oldNextAudit := len(state.ServiceAudit), state.NextAudit
 	revision.Status, revision.Active, revision.PublishedBy = platformadminapi.ServicePublished, true, publisher
 	revision.ReferencePending = true
-	revision.Preview, revision.PreviewDigest, revision.KVRevision, revision.ArtifactReferences = result.Deployment, result.Digest, result.KVRevision, result.ArtifactReferences
+	revision.Preview, revision.PreviewDigest, revision.KVRevision, revision.ArtifactReferences, revision.ConfigurationCatalog = result.Deployment, result.Digest, result.KVRevision, result.ArtifactReferences, result.ConfigurationCatalog
 	revision.UpdatedAt = s.now().Format(time.RFC3339Nano)
 	for i := range state.Revisions {
 		if i != index && state.Revisions[i].Deployment == revision.Deployment {
@@ -375,7 +375,7 @@ func (s *Service) transitionService(ctx context.Context, host sdk.Host, call *co
 		if err != nil {
 			return platformadminapi.ServiceRevision{}, err
 		}
-		revision.Preview, revision.PreviewDigest = preview.Deployment, preview.Digest
+		revision.Preview, revision.PreviewDigest, revision.ArtifactReferences, revision.ConfigurationCatalog = preview.Deployment, preview.Digest, preview.ArtifactReferences, preview.ConfigurationCatalog
 	}
 	old := state.Revisions[index]
 	revision.Status, revision.UpdatedAt = to, s.now().Format(time.RFC3339Nano)

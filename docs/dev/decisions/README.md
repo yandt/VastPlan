@@ -143,3 +143,4 @@
 - [ADR-0110 治理式 API Exposure 与独立数据面](ADR-0110-治理式API-Exposure与独立数据面.md)
 - [ADR-0111 语义图标与 Workbench 页面动作宿主](ADR-0111-语义图标与Workbench页面动作宿主.md)
 - [ADR-0112 PortalPreference 服务端真源与候选提交事务](ADR-0112-PortalPreference服务端真源与候选提交事务.md)
+- [ADR-0113 可信插件配置目录与分路径生效](ADR-0113-可信插件配置目录与分路径生效.md)

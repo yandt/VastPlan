@@ -15,6 +15,34 @@ export interface Setting {
   updatedAt: string;
 }
 
+export interface PluginConfigurationDefinition {
+  id: string;
+  deployment: string;
+  unitId: string;
+  pluginId: string;
+  pluginName: string;
+  origin: "platform-profile" | "application";
+  artifact: { version: string; channel: string; sha256: string };
+  scope: "service" | "tenant" | "user";
+  applyMode: "restart" | "hot";
+  applyPath: "application-deployment" | "platform-profile" | "hot-service" | "hot-scoped";
+  schema: Record<string, unknown>;
+  schemaDigest: string;
+  managedCredentials: Array<{ id: string; title: string; description?: string; purpose: string; required?: boolean }>;
+  values: Record<string, unknown>;
+  deploymentRevision: number;
+  deploymentDigest: string;
+  catalogDigest: string;
+}
+
+export type PluginConfigurationCandidateStatus = "Draft" | "Preparing" | "Publishing" | "Activating" | "Ready" | "Failed" | "RollingBack" | "RolledBack";
+export interface PluginConfigurationCandidate {
+  id: string; configurationId: string; revision: number; status: PluginConfigurationCandidateStatus;
+  catalogDigest: string; schemaDigest: string; artifactSha256: string; values: Record<string, unknown>;
+  createdBy: string; createdAt: string; updatedAt: string; errorCode?: string; errorMessage?: string;
+  externalRevision?: number; rollbackRevision?: number;
+}
+
 export interface CredentialMetadata {
   name: string;
   version: number;
@@ -303,6 +331,18 @@ export class PlatformAdminClient {
   public deleteSetting(key: string, ifVersion?: number): Promise<void> {
     const suffix = ifVersion === undefined ? "" : query({ ifVersion: String(ifVersion) });
     return this.mutate(`${this.basePath}/settings/${segment(key)}${suffix}`, "DELETE").then(() => undefined);
+  }
+
+  public listPluginConfigurationDefinitions(): Promise<PluginConfigurationDefinition[]> { return this.get(`${this.basePath}/plugin-configurations`); }
+  public getPluginConfigurationDefinition(id: string, catalogDigest?: string): Promise<PluginConfigurationDefinition> {
+    return this.get(`${this.basePath}/plugin-configurations/${segment(id)}${query({ catalogDigest })}`);
+  }
+  public listPluginConfigurationCandidates(): Promise<PluginConfigurationCandidate[]> { return this.get(`${this.basePath}/plugin-configurations/candidates`); }
+  public createPluginConfigurationDraft(configurationId: string, catalogDigest: string, values: Record<string, unknown>): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates`, "POST", { configurationId, catalogDigest, values });
+  }
+  public discardPluginConfigurationDraft(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}`, "DELETE", { expectedRevision });
   }
 
   public listCredentials(prefix = ""): Promise<CredentialMetadata[]> { return this.get(`${this.basePath}/credentials${query({ prefix })}`); }

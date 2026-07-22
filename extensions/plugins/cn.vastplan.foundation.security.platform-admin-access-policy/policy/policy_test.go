@@ -71,6 +71,16 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "putReferences"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 应可发布自己的引用快照: %s", got)
 	}
+	configurationPlugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.configuration.plugin-settings"}}
+	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: "kernel.config.get", Operation: "get"}); got != extpoint.DecisionAllow {
+		t.Fatalf("配置协调器必须能读取自己的部署配置: %s", got)
+	}
+	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: "kernel.configuration.catalogs", Operation: "list"}); got != extpoint.DecisionAllow {
+		t.Fatalf("配置协调器必须能读取活动可信配置目录: %s", got)
+	}
+	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "listServiceRevisions"}); got != extpoint.DecisionDeny {
+		t.Fatalf("配置协调器不得继承其他部署读取权限: %s", got)
+	}
 	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "putReferences"}); got != extpoint.DecisionDeny {
 		t.Fatalf("业务插件不得伪造平台引用快照: %s", got)
 	}

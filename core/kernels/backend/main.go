@@ -33,6 +33,7 @@ import (
 	nodebootstrapcommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/nodebootstrap"
 	seedrepositorycommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/seedrepository"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/configurationcatalog"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/credentialbroker"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentpublisher"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
@@ -326,12 +327,14 @@ func runReconcile(args []string) (runErr error) {
 		if err != nil {
 			return err
 		}
-		publisher, err := deploymentpublisher.New(catalog, artifacts, deploymentpublisher.KVApplier{KV: plane.buckets.Deployments}, compositionresolver.Options{AllowDevelopmentPlugins: options.allowDevelopmentPlugins}, compositionresolver.Resolve)
+		catalogStore := configurationcatalog.Store{KV: plane.buckets.Deployments}
+		publisher, err := deploymentpublisher.New(catalog, artifacts, deploymentpublisher.KVApplier{KV: plane.buckets.Deployments}, catalogStore, compositionresolver.Options{AllowDevelopmentPlugins: options.allowDevelopmentPlugins}, compositionresolver.Resolve)
 		if err != nil {
 			return err
 		}
 		runtime.Dependencies.DeploymentPublication = publisher
 		runtime.Dependencies.DeploymentReadiness = natsDeploymentReadiness{KV: plane.buckets.Compositions}
+		runtime.Dependencies.ConfigurationCatalogs = catalogStore
 	}
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
 	if plane.router != nil {

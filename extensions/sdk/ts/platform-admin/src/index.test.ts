@@ -147,7 +147,7 @@ describe("PlatformAdminClient", () => {
     expect(() => client.quarantineArtifacts("bad", 72)).toThrowError(PlatformAdminError);
   });
 
-  it("uses a fixed catalog route with encoded filters and bounded pagination", async () => {
+	it("uses a fixed catalog route with encoded filters and bounded pagination", async () => {
 		const calls: Array<{ path: string; method?: string }> = [];
 		const fetcher: PlatformFetch = async (path, init) => {
 			calls.push({ path, method: init?.method });
@@ -158,4 +158,23 @@ describe("PlatformAdminClient", () => {
 		expect(calls[0]).toEqual({ path: "/v1/portals/operations/platform/services/artifacts/artifacts/catalog?pluginPrefix=cn.vastplan&target=backend&lifecycle=active&page=2&pageSize=10", method: "GET" });
 		expect(() => client.listArtifactCatalog({ pageSize: 101 })).toThrowError(PlatformAdminError);
 	});
+
+  it("uses opaque fixed routes for plugin configuration drafts", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : [] };
+    }, "operations", "configuration");
+    await client.listPluginConfigurationDefinitions();
+    await client.createPluginConfigurationDraft("cfg_aaaaaaaaaaaaaaaaaaaaaaaa", "b".repeat(64), { region: "cn-east" });
+    await client.discardPluginConfigurationDraft("pcfg_cccccccccccccccccccccccccccccccc", 1);
+    expect(calls).toEqual([
+      { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations", method: "GET", body: undefined },
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates", method: "POST", body: JSON.stringify({ configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64), values: { region: "cn-east" } }) },
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/pcfg_cccccccccccccccccccccccccccccccc", method: "DELETE", body: "{\"expectedRevision\":1}" },
+    ]);
+    expect(calls.some((call) => call.path.includes("com.example"))).toBe(false);
+  });
 });

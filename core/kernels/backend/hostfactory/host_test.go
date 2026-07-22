@@ -19,6 +19,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
 )
 
@@ -29,6 +30,13 @@ type readinessObserver struct{ called bool }
 type deploymentController struct{ tenant string }
 
 type deploymentReadinessObserver struct{ called bool }
+
+type configurationCatalogReader struct{ tenant string }
+
+func (r *configurationCatalogReader) List(_ context.Context, tenant string) ([]pluginconfiguration.Catalog, error) {
+	r.tenant = tenant
+	return []pluginconfiguration.Catalog{}, nil
+}
 
 type runtimeLeaseBroker struct {
 	tenant   string
@@ -223,6 +231,23 @@ func TestKernelDeploymentReadinessAcceptsOnlyDeploymentManager(t *testing.T) {
 	untrusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "third.party"}}
 	if _, _, err := service(context.Background(), untrusted, request); err == nil {
 		t.Fatal("其他插件不得读取部署 readiness")
+	}
+}
+
+func TestKernelConfigurationCatalogsAcceptOnlyPluginSettings(t *testing.T) {
+	reader := &configurationCatalogReader{}
+	service := kernelConfigurationCatalogs(reader)
+	trusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: pluginconfiguration.PluginSettingsID}}
+	result, raw, err := service(context.Background(), trusted, []byte(`{}`))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || reader.tenant != "tenant-a" || string(raw) != `{"items":[]}` {
+		t.Fatalf("plugin-settings 配置目录查询失败: result=%+v raw=%s err=%v", result, raw, err)
+	}
+	untrusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: deploymentpublication.DeploymentManagerPluginID}}
+	if _, _, err := service(context.Background(), untrusted, []byte(`{}`)); err == nil {
+		t.Fatal("其他插件不得读取内核配置目录")
+	}
+	if _, _, err := service(context.Background(), trusted, []byte(`{"tenant":"other"}`)); err == nil {
+		t.Fatal("配置目录查询不得接受 payload tenant")
 	}
 }
 

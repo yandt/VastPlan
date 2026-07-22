@@ -18,6 +18,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
@@ -89,7 +90,29 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			return nil, err
 		}
 	}
+	if dependencies.ConfigurationCatalogs != nil {
+		if err := host.RegisterHostService(extpoint.KernelService, pluginconfiguration.KernelCatalogsService, kernelConfigurationCatalogs(dependencies.ConfigurationCatalogs)); err != nil {
+			return nil, err
+		}
+	}
 	return host, nil
+}
+
+func kernelConfigurationCatalogs(reader pluginconfiguration.Reader) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != pluginconfiguration.PluginSettingsID || callCtx.GetTenantId() == "" {
+			return nil, nil, errors.New("kernel.configuration.catalogs 只接受 plugin-settings 认证会话")
+		}
+		if err := decodeStrict(payload, &struct{}{}); err != nil {
+			return nil, nil, errors.New("配置目录请求无效")
+		}
+		items, err := reader.List(ctx, callCtx.GetTenantId())
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(map[string]any{"items": items})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+	}
 }
 
 func kernelRuntimeMaterialLease(broker kernelspi.RuntimeMaterialLeaseBroker) protocolbus.HostService {
