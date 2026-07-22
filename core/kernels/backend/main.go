@@ -155,7 +155,7 @@ func runDemo(pluginBins []string) {
 	// ── 3. 调用插件贡献的能力（契约全程透传）─────────────────
 	callCtx := &contractv1.CallContext{
 		Principal: &contractv1.Principal{
-			UserId: "u-1001", Username: "zhanghui", TenantId: "acme", IsAdmin: true,
+			UserId: "u-1001", Username: "zhanghui", TenantId: "acme", IsAdmin: false,
 		},
 		Caller:   &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_AGENT, Id: "agent-42"},
 		Scene:    "agent.tool_call", // 三元组之 scene

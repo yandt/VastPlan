@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.security.credentials",
   "name": "VastPlan 凭证管理服务",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -10,6 +10,22 @@
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "capabilities": { "kernelServices": ["kernel.config.get"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "authorization": {
+    "namespace": "platform.credentials",
+    "permissions": [
+      { "code": "platform.credentials.read", "title": "查看凭证元数据", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.credentials.write", "title": "管理凭证引用", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.credentials.rotate", "title": "轮换凭证包裹密钥", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.credentials.revoke", "title": "撤销凭证引用", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "describe", "permissions": ["platform.credentials.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "list", "permissions": ["platform.credentials.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "put", "permissions": ["platform.credentials.write"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "rotate", "permissions": ["platform.credentials.rotate"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "revoke", "permissions": ["platform.credentials.revoke"], "access": "execute", "approval": "none" }
+    ]
+  },
   "runtime": {
     "instancePolicy": "leader", "stateModel": "leader-owned", "visibility": "cluster", "routing": "leader", "routingDomain": "platform",
     "requires": [{ "capability": "platform.settings", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.settings", "routingDomain": "platform" }],

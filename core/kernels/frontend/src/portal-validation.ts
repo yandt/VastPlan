@@ -40,6 +40,9 @@ export function validatePortalShape(portal: PortalSpec): void {
       !isJSONRecord(portal.shell.config) || !isJSONRecord(portal.renderAdapter.config)) {
     throw new PortalAssemblyError("PORTAL_INVALID", "Portal 品牌、Renderer 与 Shell 配置必须是 JSON 对象");
   }
+  if (portal.experience !== undefined && (!Array.isArray(portal.experience.permissions) || portal.experience.permissions.some((permission) => !managementName(permission)) || new Set(portal.experience.permissions).size !== portal.experience.permissions.length)) {
+    throw new PortalAssemblyError("PORTAL_EXPERIENCE_INVALID", "Portal 权限体验投影无效");
+  }
   const refs = [portal.resolution.platformCatalog, portal.resolution.platformProfile, portal.resolution.applicationComposition];
   if (refs.some((ref) => !ref.id || !Number.isSafeInteger(ref.revision) || ref.revision <= 0 || !/^[a-f0-9]{64}$/.test(ref.digest))) {
     throw new PortalAssemblyError("RESOLUTION_INVALID", "Portal 输入解析锁无效");

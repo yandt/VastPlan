@@ -1,0 +1,52 @@
+{
+  "id": "cn.vastplan.platform.security.authorization-policy",
+  "name": "VastPlan Authorization Policy",
+  "description": "管理版本化角色、主体绑定、撤权和签名授权快照",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1" },
+  "contextAccess": { "required": ["caller", "subject.id", "scope.tenant"], "optional": ["authorization.roles", "scene", "trace", "request.deadline", "propagation.callPath"] },
+  "runtime": { "instancePolicy": "leader", "stateModel": "leader-owned", "visibility": "cluster", "routing": "leader", "routingDomain": "security" },
+  "authorization": {
+    "namespace": "platform.authorization",
+    "permissions": [
+      { "code": "platform.authorization.catalog", "title": "查看权限目录与策略状态", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.authorization.role", "title": "编辑角色 revision", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.authorization.binding", "title": "编辑主体绑定 revision", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.authorization.approve", "title": "审批角色和主体绑定", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.authorization.publish", "title": "发布授权 revision 与策略快照", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.authorization.revoke", "title": "即时撤销授权", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.authorization.audit", "title": "查看授权审计", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "get", "permissions": ["platform.authorization.catalog"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "listAudit", "permissions": ["platform.authorization.audit"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "createRole", "permissions": ["platform.authorization.role"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "updateRole", "permissions": ["platform.authorization.role"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "submitRole", "permissions": ["platform.authorization.role"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "retireRole", "permissions": ["platform.authorization.role"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "createBinding", "permissions": ["platform.authorization.binding"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "updateBinding", "permissions": ["platform.authorization.binding"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "submitBinding", "permissions": ["platform.authorization.binding"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "retireBinding", "permissions": ["platform.authorization.binding"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "approveRole", "permissions": ["platform.authorization.approve"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "approveBinding", "permissions": ["platform.authorization.approve"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "publishRole", "permissions": ["platform.authorization.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "publishBinding", "permissions": ["platform.authorization.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "publishSnapshot", "permissions": ["platform.authorization.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.authorization", "operation": "revoke", "permissions": ["platform.authorization.revoke"], "access": "execute", "approval": "different-subject" }
+    ]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/authorization-policy" },
+  "contributes": { "backend": { "tools": [{ "id": "platform.authorization", "service_role": "backend", "title": "在线角色与权限策略", "subcommands": [
+    { "name": "get", "description": "读取权限目录、角色和绑定" }, { "name": "listAudit", "description": "读取授权审计" },
+    { "name": "createRole", "description": "创建角色 revision" }, { "name": "updateRole", "description": "修改 Draft 角色" }, { "name": "submitRole", "description": "提交角色审批" }, { "name": "approveRole", "description": "批准角色" }, { "name": "publishRole", "description": "发布角色" }, { "name": "retireRole", "description": "退役角色" },
+    { "name": "createBinding", "description": "创建主体绑定" }, { "name": "updateBinding", "description": "修改 Draft 主体绑定" }, { "name": "submitBinding", "description": "提交绑定审批" }, { "name": "approveBinding", "description": "批准绑定" }, { "name": "publishBinding", "description": "发布绑定" }, { "name": "retireBinding", "description": "退役绑定" },
+    { "name": "revoke", "description": "即时撤权" }, { "name": "publishSnapshot", "description": "签发策略快照" }
+  ] }] } }
+}

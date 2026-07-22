@@ -42,6 +42,55 @@ type PermissionCatalog struct {
 	Digest        string                     `json:"digest"`
 }
 
+// ParsePermissionCatalog strictly parses a trusted-host catalog projection and
+// re-computes its content digest. The caller still owns the artifact-trust
+// boundary that supplied the source manifests.
+func ParsePermissionCatalog(raw []byte) (PermissionCatalog, error) {
+	var catalog PermissionCatalog
+	decoder := json.NewDecoder(strings.NewReader(string(raw)))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&catalog); err != nil {
+		return PermissionCatalog{}, fmt.Errorf("解析权限目录: %w", err)
+	}
+	if catalog.SchemaVersion != PermissionCatalogSchemaVersion || len(catalog.Permissions) == 0 || len(catalog.Operations) == 0 {
+		return PermissionCatalog{}, fmt.Errorf("权限目录版本或内容无效")
+	}
+	permissionCodes := map[string]struct{}{}
+	for _, permission := range catalog.Permissions {
+		if permission.Code == "" || permission.PluginID == "" || permission.PluginVersion == "" || permission.Publisher == "" || len(permission.ArtifactSHA256) != 64 {
+			return PermissionCatalog{}, fmt.Errorf("权限目录条目无效: %s", permission.Code)
+		}
+		if _, duplicate := permissionCodes[permission.Code]; duplicate {
+			return PermissionCatalog{}, fmt.Errorf("权限目录代码重复: %s", permission.Code)
+		}
+		permissionCodes[permission.Code] = struct{}{}
+	}
+	operations := map[string]struct{}{}
+	for _, operation := range catalog.Operations {
+		key := operation.ExtensionPoint + "\x00" + operation.Capability + "\x00" + operation.Operation
+		if operation.ExtensionPoint == "" || operation.Capability == "" || operation.Operation == "" || len(operation.Permissions) == 0 {
+			return PermissionCatalog{}, fmt.Errorf("权限目录操作无效: %s/%s#%s", operation.ExtensionPoint, operation.Capability, operation.Operation)
+		}
+		if _, duplicate := operations[key]; duplicate {
+			return PermissionCatalog{}, fmt.Errorf("权限目录操作重复: %s/%s#%s", operation.ExtensionPoint, operation.Capability, operation.Operation)
+		}
+		operations[key] = struct{}{}
+		for _, code := range operation.Permissions {
+			if _, exists := permissionCodes[code]; !exists {
+				return PermissionCatalog{}, fmt.Errorf("权限目录操作引用未知权限: %s", code)
+			}
+		}
+	}
+	recomputed, err := PermissionCatalogDigest(catalog)
+	if err != nil {
+		return PermissionCatalog{}, err
+	}
+	if catalog.Digest != recomputed {
+		return PermissionCatalog{}, fmt.Errorf("权限目录 digest 不匹配")
+	}
+	return catalog, nil
+}
+
 func BuildPermissionCatalog(sources []PermissionCatalogSource) (PermissionCatalog, error) {
 	catalog := PermissionCatalog{SchemaVersion: PermissionCatalogSchemaVersion}
 	permissions := map[string]string{}

@@ -1,0 +1,17 @@
+{
+  "id": "cn.vastplan.foundation.security.authorization-enforcer",
+  "name": "VastPlan Authorization Enforcer",
+  "description": "在每个内核服务附近验证签名策略快照并执行授权判定",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1" },
+  "contextAccess": { "required": ["caller"], "optional": ["subject.id", "scope.tenant", "scope.project", "authorization.roles", "scene", "trace", "request.deadline", "propagation.callPath"] },
+  "runtime": { "instancePolicy": "per-kernel", "stateModel": "local-ephemeral", "visibility": "local", "routing": "direct" },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/authorization-enforcer" },
+  "contributes": { "backend": { "permissionCheckers": [{ "id": "foundation.security.authorization-enforcer", "service_role": "backend", "title": "签名策略授权执行器", "priority": 2000, "applies": {} }] } }
+}

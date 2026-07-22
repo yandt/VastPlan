@@ -3,7 +3,7 @@
 插件 ID：`cn.vastplan.platform.configuration.global-settings`
 状态：已实现（首个基础服务）
 能力：`tool.package/platform.settings`
-当前制品版本：`0.3.0`
+当前制品版本：`0.4.0`
 
 ## 边界
 

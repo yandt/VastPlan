@@ -275,6 +275,9 @@ func (r *runtime) signPackageRepository() error {
 	if err := r.writeAPIExposureConfiguration(signed, refs); err != nil {
 		return err
 	}
+	if err := r.writeAuthorizationBootstrap(repository, refs); err != nil {
+		return fmt.Errorf("生成开发授权策略: %w", err)
+	}
 	if err := r.writeBootstrapInventory(repository, refs); err != nil {
 		return err
 	}
@@ -285,6 +288,7 @@ func (r *runtime) signPackageRepository() error {
 func (r *runtime) writeBootstrapInventory(repository *pluginservice.Repository, refs []pluginservice.Ref) error {
 	items := make([]bootstrapinventory.Item, 0, len(refs))
 	lkgIDs := map[string]struct{}{
+		"cn.vastplan.foundation.security.authorization-enforcer":       {},
 		"cn.vastplan.foundation.security.platform-admin-access-policy": {},
 		"cn.vastplan.platform.artifacts.storage.file":                  {},
 		"cn.vastplan.platform.artifacts.repository":                    {},
@@ -455,7 +459,7 @@ func (r *runtime) writeFixtures() error {
 	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "vault-token"), []byte("vastplan-local-vault-token\n"), 0o600); err != nil {
 		return err
 	}
-	if err := writeSessions(filepath.Join(r.runDir, "secrets", "portal-sessions.json")); err != nil {
+	if err := writeSessions(filepath.Join(r.runDir, "secrets", "portal-sessions.json"), nil); err != nil {
 		return err
 	}
 	if err := writeDevelopmentTransportIdentities(filepath.Join(r.runDir, "secrets")); err != nil {
@@ -588,7 +592,7 @@ func (r *runtime) start(ctx context.Context) error {
 		return err
 	}
 	time.Sleep(750 * time.Millisecond)
-	platformRevision, err := r.platformManagementRevision()
+	platformRevision, platformUnitCount, err := r.platformManagementDeployment()
 	if err != nil {
 		return err
 	}
@@ -603,7 +607,7 @@ func (r *runtime) start(ctx context.Context) error {
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
 	}
-	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), 9, platformNodeStartedAt, 90*time.Second); err != nil {
+	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), platformUnitCount, platformNodeStartedAt, 90*time.Second); err != nil {
 		return fmt.Errorf("平台 Backend 未收敛: %w", err)
 	}
 	if err := waitHTTP(ctx, "https://"+r.options.artifactListen, 30*time.Second, true); err != nil {
@@ -673,35 +677,52 @@ func (r *runtime) start(ctx context.Context) error {
 	return nil
 }
 
-func (r *runtime) platformManagementRevision() (string, error) {
+func (r *runtime) platformManagementDeployment() (string, int, error) {
 	profile, err := backendcompositionv1.ParsePlatformProfileFile(filepath.Join(r.runDir, "platform-management-profile.json"))
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	if profile.Revision == 0 {
-		return "", errors.New("开发 Platform Profile revision 必须大于 0")
+		return "", 0, errors.New("开发 Platform Profile revision 必须大于 0")
 	}
-	return fmt.Sprint(profile.Revision), nil
+	activeUnits := 0
+	for _, service := range profile.Services {
+		if service.Enabled {
+			activeUnits++
+		}
+	}
+	if activeUnits == 0 {
+		return "", 0, errors.New("开发 Platform Profile 必须至少包含一个启用的 service unit")
+	}
+	return fmt.Sprint(profile.Revision), activeUnits, nil
 }
 
 func (r *runtime) serviceEnv() map[string]string {
+	authorizationRoot := filepath.Join(r.persistentStateRoot(), "authorization")
 	return map[string]string{
-		"VASTPLAN_CREDENTIALS_STATE_FILE":          filepath.Join(r.persistentStateRoot(), "credentials.json"),
-		"VASTPLAN_VAULT_ADDR":                      "http://" + r.options.vaultListen,
-		"VASTPLAN_VAULT_TRANSIT_KEY":               "vastplan-local",
-		"VASTPLAN_VAULT_TOKEN_FILE":                filepath.Join(r.runDir, "secrets", "vault-token"),
-		"VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE": filepath.Join(r.persistentStateRoot(), "database-connections.json"),
-		"VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE":   filepath.Join(r.persistentStateRoot(), "deployment-manager.json"),
-		"VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT":     r.testingRepositoryVolumes(),
-		"VASTPLAN_ARTIFACT_REPOSITORY":             r.testingRepositoryData(),
-		"VASTPLAN_ARTIFACT_TRUST":                  r.testingRepositoryTrust(),
-		"VASTPLAN_ARTIFACT_TLS_CERT":               filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
-		"VASTPLAN_ARTIFACT_TLS_KEY":                filepath.Join(r.runDir, "secrets", "tls-key.pem"),
-		"VASTPLAN_ARTIFACT_READ_TOKEN":             "vastplan-local-artifact-reader",
-		"VASTPLAN_ARTIFACT_PUBLISH_TOKEN":          "vastplan-local-artifact-publisher",
-		"VASTPLAN_ARTIFACT_BUNDLE_TOKEN":           "vastplan-local-artifact-bundle",
-		"VASTPLAN_ARTIFACT_MIGRATION_STATE":        filepath.Join(r.testingRepositoryRoot(), "control", "repository-migration.json"),
-		"VASTPLAN_DYNAMIC_GO_HOST":                 filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
+		"VASTPLAN_CREDENTIALS_STATE_FILE":           filepath.Join(r.persistentStateRoot(), "credentials.json"),
+		"VASTPLAN_VAULT_ADDR":                       "http://" + r.options.vaultListen,
+		"VASTPLAN_VAULT_TRANSIT_KEY":                "vastplan-local",
+		"VASTPLAN_VAULT_TOKEN_FILE":                 filepath.Join(r.runDir, "secrets", "vault-token"),
+		"VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE":  filepath.Join(r.persistentStateRoot(), "database-connections.json"),
+		"VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE":    filepath.Join(r.persistentStateRoot(), "deployment-manager.json"),
+		"VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT":      r.testingRepositoryVolumes(),
+		"VASTPLAN_ARTIFACT_REPOSITORY":              r.testingRepositoryData(),
+		"VASTPLAN_ARTIFACT_TRUST":                   r.testingRepositoryTrust(),
+		"VASTPLAN_ARTIFACT_TLS_CERT":                filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
+		"VASTPLAN_ARTIFACT_TLS_KEY":                 filepath.Join(r.runDir, "secrets", "tls-key.pem"),
+		"VASTPLAN_ARTIFACT_READ_TOKEN":              "vastplan-local-artifact-reader",
+		"VASTPLAN_ARTIFACT_PUBLISH_TOKEN":           "vastplan-local-artifact-publisher",
+		"VASTPLAN_ARTIFACT_BUNDLE_TOKEN":            "vastplan-local-artifact-bundle",
+		"VASTPLAN_ARTIFACT_MIGRATION_STATE":         filepath.Join(r.testingRepositoryRoot(), "control", "repository-migration.json"),
+		"VASTPLAN_DYNAMIC_GO_HOST":                  filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
+		"VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG": filepath.Join(authorizationRoot, "permission-catalog.json"),
+		"VASTPLAN_AUTHORIZATION_POLICY_STATE":       filepath.Join(authorizationRoot, "policy-state.json"),
+		"VASTPLAN_AUTHORIZATION_POLICY_KEY":         filepath.Join(authorizationRoot, "policy-key.json"),
+		"VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT":    filepath.Join(authorizationRoot, "policy-snapshot.json"),
+		"VASTPLAN_AUTHORIZATION_POLICY_TRUST":       filepath.Join(authorizationRoot, "policy-trust.json"),
+		"VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE":    developmentAuthorizationAudience,
+		"VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS":   filepath.Join(authorizationRoot, "directory-groups.json"),
 	}
 }
 
@@ -1163,7 +1184,7 @@ func portalRequest(client *http.Client, baseURL, session, method, path string, p
 	return response.StatusCode, raw, err
 }
 
-func writeSessions(filename string) error {
+func writeSessions(filename string, ownerPermissions []string) error {
 	type record struct {
 		TokenSHA256 string   `json:"tokenSHA256"`
 		ID          string   `json:"id"`
@@ -1171,11 +1192,13 @@ func writeSessions(filename string) error {
 		Roles       []string `json:"roles"`
 		ExpiresAt   string   `json:"expiresAt"`
 	}
+	ownerRoles := append([]string{"portal.read", "portal.compose", "portal.approve", "portal.publish"}, ownerPermissions...)
+	sort.Strings(ownerRoles)
 	sessions := []struct {
 		token, id string
 		roles     []string
 	}{
-		{devAdminToken, "local-admin", []string{"platform.admin", "portal.read", "portal.compose", "portal.approve", "portal.publish"}},
+		{devAdminToken, "local-admin", ownerRoles},
 		{authorToken, "local-author", []string{"portal.read", "portal.compose", "platform.deployment.read", "platform.deployment.compose"}},
 		{approverToken, "local-approver", []string{"portal.read", "portal.approve", "platform.deployment.read", "platform.deployment.approve"}},
 		{publisherToken, "local-publisher", []string{"portal.read", "portal.publish", "platform.deployment.read", "platform.deployment.publish"}},

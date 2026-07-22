@@ -3,7 +3,7 @@
 插件 ID：`cn.vastplan.platform.security.credentials`
 能力：`tool.package/platform.credentials`、`tool.package/platform.credentials.material-lease`
 运行模型：`leader + leader-owned + cluster + leader`
-当前制品版本：`0.5.0`
+当前制品版本：`0.6.0`
 
 ## 安全模型
 

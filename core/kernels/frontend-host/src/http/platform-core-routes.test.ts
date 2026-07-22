@@ -7,7 +7,7 @@ afterEach(async () => Promise.all(close.splice(0).map((action) => action())));
 describe("Platform core management routes", () => {
   it("routes Settings, Credentials and Database through verified server-owned targets", async () => {
     const calls: PlatformInvocation[] = [];
-    const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls, (capability, operation) => capability === "platform.settings" && operation === "list" ? { items: [] } : {}), ["platform.admin"], fullBinding());
+    const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls, (capability, operation) => capability === "platform.settings" && operation === "list" ? { items: [] } : {}), ["platform.settings.read", "platform.settings.write", "platform.credentials.write", "platform.credentials.rotate", "platform.database.write", "platform.database.probe"], fullBinding());
     close.push(server.close);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/settings?prefix=ui.`, { headers: server.readHeaders })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/settings/ui.theme`, { method: "PUT", headers: server.writeHeaders, body: '{"key":"forged","value":"dark","ifVersion":2}' })).status).toBe(200);
@@ -30,7 +30,7 @@ describe("Platform core management routes", () => {
 
   it("enforces Binding grants before roles", async () => {
     const calls: PlatformInvocation[] = [];
-    const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.admin"], managementBinding([{ capability: "platform.settings", read: ["list"] }]));
+    const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.settings.write"], managementBinding([{ capability: "platform.settings", read: ["list"] }]));
     close.push(server.close);
     const denied = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/settings/ui.theme`, { method: "PUT", headers: server.writeHeaders, body: '{"value":"dark"}' });
     expect(denied.status).toBe(403);

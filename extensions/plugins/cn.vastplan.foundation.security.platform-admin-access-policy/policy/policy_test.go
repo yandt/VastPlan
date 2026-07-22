@@ -9,55 +9,17 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 )
 
-func TestPlatformAdminRolesAndUnknownOperations(t *testing.T) {
-	read := extpoint.PermissionRequest{Capability: platformadminapi.CredentialsCapability, Operation: "list"}
-	if got, _ := decide(user("platform.credentials.read"), read); got != extpoint.DecisionAllow {
-		t.Fatalf("读角色应允许: %s", got)
-	}
-	if got, _ := decide(user("platform.credentials.write"), read); got != extpoint.DecisionDeny {
-		t.Fatalf("写角色不能隐含读取: %s", got)
-	}
-	if got, _ := decide(user("platform.admin"), extpoint.PermissionRequest{Capability: platformadminapi.DatabaseCapability, Operation: "probe"}); got != extpoint.DecisionAllow {
-		t.Fatalf("平台管理员应允许: %s", got)
-	}
-	if got, _ := decide(user("platform.admin"), extpoint.PermissionRequest{Capability: platformadminapi.DatabaseCapability, Operation: "future"}); got != extpoint.DecisionDeny {
-		t.Fatalf("未知操作必须拒绝: %s", got)
-	}
-	if got, _ := decide(user("platform.deployment.bootstrap"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "approveBootstrap"}); got != extpoint.DecisionDeny {
-		t.Fatalf("引导申请角色不能隐含审批: %s", got)
-	}
-	if got, _ := decide(user("platform.deployment.approve"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "approveBootstrap"}); got != extpoint.DecisionAllow {
-		t.Fatalf("部署审批角色应允许: %s", got)
-	}
-	if got, _ := decide(user("platform.deployment.compose"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "publishServiceRevision"}); got != extpoint.DecisionDeny {
-		t.Fatalf("服务组合编辑角色不能隐含发布: %s", got)
-	}
-	if got, _ := decide(user("platform.deployment.publish"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "publishServiceRevision"}); got != extpoint.DecisionAllow {
-		t.Fatalf("服务组合发布角色应允许: %s", got)
-	}
-	if got, _ := decide(user("platform.deployment.test-target"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "putTestTargetBinding"}); got != extpoint.DecisionAllow {
-		t.Fatalf("测试目标授权应使用独立权限: %s", got)
-	}
-	if got, _ := decide(user("platform.deployment.publish"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "putTestTargetBinding"}); got != extpoint.DecisionDeny {
-		t.Fatalf("服务发布权限不得隐含测试目标授权: %s", got)
-	}
-	if got, _ := decide(user("platform.artifacts.migrate"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "cutoverMigration"}); got != extpoint.DecisionAllow {
-		t.Fatalf("制品迁移角色应允许切换: %s", got)
-	}
-	if got, _ := decide(user("platform.artifacts.read"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "cutoverMigration"}); got != extpoint.DecisionDeny {
-		t.Fatalf("制品读取角色不得隐含迁移: %s", got)
-	}
-	if got, _ := decide(user("platform.artifacts.lifecycle"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "setLifecycle"}); got != extpoint.DecisionAllow {
-		t.Fatalf("制品生命周期角色应允许状态变更: %s", got)
-	}
-	if got, _ := decide(user("platform.artifacts.migrate"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "setLifecycle"}); got != extpoint.DecisionDeny {
-		t.Fatalf("制品迁移角色不得隐含生命周期权限: %s", got)
-	}
-	if got, _ := decide(user("platform.artifacts.gc"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "gcQuarantine"}); got != extpoint.DecisionAllow {
-		t.Fatalf("制品 GC 角色应允许隔离: %s", got)
-	}
-	if got, _ := decide(user("platform.artifacts.lifecycle"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "gcSweep"}); got != extpoint.DecisionDeny {
-		t.Fatalf("生命周期角色不得隐含永久清扫权限: %s", got)
+func TestUserRolesNeverFallThroughLegacyWorkloadPolicy(t *testing.T) {
+	for _, test := range []extpoint.PermissionRequest{
+		{Capability: platformadminapi.CredentialsCapability, Operation: "list"},
+		{Capability: platformadminapi.DatabaseCapability, Operation: "probe"},
+		{Capability: platformadminapi.DeploymentCapability, Operation: "approveBootstrap"},
+		{Capability: platformadminapi.ArtifactsCapability, Operation: "cutoverMigration"},
+		{Capability: "platform.api-exposure", Operation: "publish"},
+	} {
+		if got, _ := decide(user("platform.admin", "platform.credentials.read", "platform.database.probe", "platform.deployment.approve", "platform.artifacts.migrate", "platform.api-exposure.publish"), test); got != extpoint.DecisionDeny {
+			t.Fatalf("用户权限必须由 Authorization Enforcer 判定，legacy policy 不得放行 %s/%s: %s", test.Capability, test.Operation, got)
+		}
 	}
 }
 
@@ -141,14 +103,6 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 }
 
 func TestAPIExposureManagementAndRuntimeBoundaries(t *testing.T) {
-	for role, operation := range map[string]string{
-		"platform.api-exposure.read": "list", "platform.api-exposure.edit": "createDraft",
-		"platform.api-exposure.approve": "approve", "platform.api-exposure.publish": "publish",
-	} {
-		if got, _ := decide(user(role), extpoint.PermissionRequest{Capability: "platform.api-exposure", Operation: operation}); got != extpoint.DecisionAllow {
-			t.Fatalf("角色 %s 应允许 %s: %s", role, operation, got)
-		}
-	}
 	plugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.example.data-plane"}}
 	if got, _ := decide(plugin, extpoint.PermissionRequest{Capability: "platform.api-exposure", Operation: "registerEndpointLease"}); got != extpoint.DecisionAllow {
 		t.Fatalf("插件应能登记自身 Lease: %s", got)

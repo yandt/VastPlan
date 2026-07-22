@@ -79,7 +79,9 @@ export class PortalRuntimeRoutes {
 
   private async runtime(active: PortalActivation, principal: Principal, response: ServerResponse, head: boolean): Promise<true> {
     try {
-      const runtime = await this.delivery.runtime(principal.tenantId, active.resolved);
+      const runtime = projectExperience(await this.delivery.runtime(principal.tenantId, active.resolved), principal);
+      response.setHeader("Cache-Control", "private, no-store");
+      response.setHeader("Vary", "Cookie");
       addPreloads(response, runtime);
       sendJSON(response, 200, runtime, head);
     } catch { sendAPIError(response, 409, "portal_runtime_rejected", head); }
@@ -93,7 +95,9 @@ export class PortalRuntimeRoutes {
       return true;
     }
     try {
-      const runtime = recoveryRuntime(await this.delivery.runtime(principal.tenantId, fallback.resolved), active.id, fallback.id);
+      const runtime = projectExperience(recoveryRuntime(await this.delivery.runtime(principal.tenantId, fallback.resolved), active.id, fallback.id), principal);
+      response.setHeader("Cache-Control", "private, no-store");
+      response.setHeader("Vary", "Cookie");
       response.setHeader("X-VastPlan-Recovery-From", String(active.id));
       response.setHeader("X-VastPlan-Recovery-Revision", String(fallback.id));
       addPreloads(response, runtime);
@@ -119,6 +123,13 @@ export class PortalRuntimeRoutes {
     catch { sendAPIError(response, 404, "portal_module_not_found", request.method === "HEAD"); }
     return true;
   }
+}
+
+export function projectExperience(runtime: PortalRuntimeSpec, principal: Principal): PortalRuntimeSpec {
+  const projected = structuredClone(runtime) as PortalRuntimeSpec;
+  const permissions = [...new Set(principal.roles)].sort();
+  (projected.portal as PortalRuntimeSpec["portal"] & { experience: { permissions: string[] } }).experience = { permissions };
+  return projected;
 }
 
 function writeUpdate(response: ServerResponse, update: PortalUpdate | { portalId: string; activationId: number; mode: string }): void {

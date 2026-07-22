@@ -359,9 +359,6 @@ func projectPrincipal(callCtx *contractv1.CallContext) (Principal, error) {
 		return Principal{}, errors.New("API Exposure 操作必须携带可信 Principal")
 	}
 	roles := append([]string(nil), callCtx.Principal.SystemRoles...)
-	if callCtx.Principal.IsAdmin {
-		roles = append(roles, "platform.api-exposure.read", "platform.api-exposure.edit", "platform.api-exposure.approve", "platform.api-exposure.publish")
-	}
 	return Principal{ID: callCtx.Principal.UserId, TenantID: callCtx.TenantId, Roles: roles}, nil
 }
 

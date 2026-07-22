@@ -7,6 +7,7 @@ export interface PortalSpec extends Readonly<Record<string, unknown>> {
   readonly route: string;
   readonly domains?: readonly string[];
   readonly audience?: readonly string[];
+  readonly experience?: { readonly permissions: readonly string[] };
 }
 
 export interface FrontendModule extends Readonly<Record<string, unknown>> {

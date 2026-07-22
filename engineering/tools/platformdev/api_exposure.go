@@ -35,7 +35,7 @@ func (r *runtime) writeAPIExposureConfiguration(repository *pluginservice.Signed
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(r.runDir, "api-contract-catalog.json"), append(catalogRaw, '\n'), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(r.persistentStateRoot(), "api-contract-catalog.json"), append(catalogRaw, '\n'), 0o600); err != nil {
 		return fmt.Errorf("写入 API Contract Catalog: %w", err)
 	}
 	return nil

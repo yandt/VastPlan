@@ -11,6 +11,7 @@ export function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
   }));
   return Object.freeze({
     ...portal,
+    experience: portal.experience === undefined ? undefined : Object.freeze({ permissions: Object.freeze([...portal.experience.permissions]) }),
     branding: portal.branding === undefined ? undefined : freezeJSONRecord(portal.branding),
     localization: portal.localization === undefined ? undefined : Object.freeze({
       defaultLocale: portal.localization.defaultLocale,

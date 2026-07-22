@@ -53,7 +53,7 @@ cn.vastplan.<layer>.<category...>.<component>
 
 插件向 `permission.checker` 扩展点注册两个检查器：
 
-1. `write-guard`，优先级 `1000000`：保护写操作。除 system 和直接登录的管理员用户外，其他调用者执行非只读或未知操作时立即拒绝。
+1. `write-guard`，优先级 `1000000`：保护写操作。system 和 caller/principal 一致的可信用户可继续交给 Authorization Enforcer；插件、匿名或身份不一致调用执行非只读/未知操作时立即拒绝。
 2. `baseline`，优先级 `-1000000`：在其他策略均未给出结论时提供最低权限基线。
 
 两个检查器都声明：
@@ -70,11 +70,11 @@ bootstrap-policy 主动调用 settings；代码内部还会再次核对 capabili
 | 调用身份 | `get` / `list` / `changesSince` | 其他或未知操作 |
 |---|---:|---:|
 | system | 允许 | 允许 |
-| 直接登录的管理员用户 | 允许 | 允许 |
+| 可信用户 | 由 Authorization Enforcer 判定 | 由 Authorization Enforcer 判定 |
 | 已验证的 `foundation` / `platform` 首方插件 | 允许 | 拒绝 |
 | 其他身份 | 拒绝 | 拒绝 |
 
-插件调用者即使携带管理员 principal，也不能继承系统设置写权限，避免 confused-deputy
+插件调用者即使携带用户 principal，也不能继承系统设置写权限，避免 confused-deputy
 风险。后续动态策略可使用介于两个检查器之间的优先级细化读取权限，但不能绕过最高优先级写保护。
 
 ## 目录结构

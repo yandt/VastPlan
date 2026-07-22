@@ -7,7 +7,7 @@ afterEach(async () => Promise.all(close.splice(0).map((action) => action())));
 describe("Platform deployment node routes", () => {
   it("maps node inventory and Bootstrap workflows with path-owned IDs", async () => {
     const calls: PlatformInvocation[] = [];
-    const server = await start(calls, ["platform.admin"]);
+    const server = await start(calls, ["platform.deployment.read", "platform.deployment.write", "platform.deployment.bootstrap", "platform.deployment.approve"]);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/deployment/nodes`, { headers: server.readHeaders })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/deployment/bootstrap-jobs`, { headers: server.readHeaders })).status).toBe(200);
     expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core/deployment/nodes/node-a`, { method: "PUT", headers: server.writeHeaders, body: '{"id":"forged","plan":{"node":{"id":"node-a","tenant":"tenant-a"}},"ifVersion":2}' })).status).toBe(200);
@@ -22,7 +22,7 @@ describe("Platform deployment node routes", () => {
 
   it("requires exact empty action bodies", async () => {
     const calls: PlatformInvocation[] = [];
-    const server = await start(calls, ["platform.admin"]);
+    const server = await start(calls, ["platform.deployment.bootstrap"]);
     const invalid = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/deployment/nodes/node-a/bootstrap`, { method: "POST", headers: server.writeHeaders, body: '{"force":true}' });
     expect(invalid.status).toBe(400);
     expect(calls).toEqual([]);

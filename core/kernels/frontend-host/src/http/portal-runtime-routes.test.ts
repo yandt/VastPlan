@@ -20,8 +20,11 @@ describe("Portal runtime routes", () => {
     const runtimeResponse = await fetch(`${fixture.origin}/v1/portal-runtime?path=/operations/settings`, { headers: fixture.headers });
     expect(runtimeResponse.status).toBe(200);
     expect(runtimeResponse.headers.get("link")).toContain("crossorigin=use-credentials");
-    const runtime = await runtimeResponse.json() as { portal: { revision: number }; modules: Array<{ url: string; sha256: string }> };
+    const runtime = await runtimeResponse.json() as { portal: { revision: number; experience: { permissions: string[] } }; modules: Array<{ url: string; sha256: string }> };
     expect(runtime.portal.revision).toBe(7);
+    expect(runtime.portal.experience.permissions).toEqual(["portal.read"]);
+    expect(runtimeResponse.headers.get("cache-control")).toContain("no-store");
+    expect(runtimeResponse.headers.get("vary")).toContain("Cookie");
     expect(runtime.modules[0]?.sha256).toBe(fixture.activeDigest);
 
     const module = await fetch(`${fixture.origin}${runtime.modules[0]!.url}`, { headers: fixture.headers });

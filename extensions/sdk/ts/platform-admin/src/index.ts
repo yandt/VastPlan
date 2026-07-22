@@ -193,6 +193,38 @@ export interface DataPlaneExposureDraftRequest {
   };
 }
 
+export type AuthorizationLifecycleState = "Draft" | "PendingApproval" | "Approved" | "Published" | "Retired";
+export interface AuthorizationPermission {
+  code: string; title: string; description?: string; scope: "platform" | "tenant" | "project" | "resource";
+  resourceType?: string; risk: "low" | "medium" | "high" | "critical"; assignable: boolean; offlineAllowed: boolean;
+  pluginId: string; pluginVersion: string; publisher: string; artifactSha256: string;
+}
+export interface AuthorizationStatement {
+  id: string; effect: "allow" | "deny"; permissions: string[];
+  resource?: { type: string; ids: string[]; labels: Record<string, string[]>; ownership: string };
+  constraints: Array<{ source: string; key: string; operator: "eq" | "in" | "prefix"; values: string[] }>;
+}
+export interface AuthorizationRoleRevision {
+  id: string; revision: number; domainId: string; title: string; description?: string; statements: AuthorizationStatement[];
+  state: AuthorizationLifecycleState; createdBy: string; approvedBy?: string; createdAt: string; updatedAt: string;
+}
+export interface AuthorizationBindingRevision {
+  id: string; revision: number; domainId: string; subject: { kind: "user" | "group" | "service" | "device"; id: string; issuer?: string };
+  roleId: string; roleRevision: number; notBefore: string; expiresAt: string; state: AuthorizationLifecycleState;
+  createdBy: string; approvedBy?: string; createdAt: string; updatedAt: string;
+}
+export interface AuthorizationAuditEvent { id: string; action: string; objectKind: string; objectId: string; revision: number; subjectId: string; reason?: string; occurredAt: string; }
+export interface AuthorizationPolicyState {
+  version: number; generation: number; policyRevision: number; revocationRevision: number;
+  catalog: { schemaVersion: string; permissions: AuthorizationPermission[]; operations: unknown[]; digest: string };
+  roles: AuthorizationRoleRevision[]; bindings: AuthorizationBindingRevision[];
+  revocations: Array<{ id: string; revision: number; kind: string; targetId: string; effectiveAt: string; reasonCode: string }>;
+  audit: AuthorizationAuditEvent[]; currentSnapshot?: { snapshotId: string; revision: number; audience: string[]; issuedAt: string; expiresAt: string };
+}
+export interface CreateAuthorizationRoleRequest { expectedGeneration: number; id: string; domainId: string; title: string; description?: string; statements: AuthorizationStatement[]; }
+export interface CreateAuthorizationBindingRequest { expectedGeneration: number; id: string; domainId: string; subject: AuthorizationBindingRevision["subject"]; roleId: string; roleRevision: number; notBefore: string; expiresAt: string; }
+export type UpdateAuthorizationBindingRequest = Omit<CreateAuthorizationBindingRequest, "id">;
+
 export interface NodeBootstrapPlan {
   target: { address: string; port?: number; user: string };
   release: { version: string; url: string; sha256: string };
@@ -377,6 +409,17 @@ export class PlatformAdminClient {
   public approveDataPlaneExposure(id: number): Promise<DataPlaneExposureRevision> { return this.dataPlaneExposureAction(id, "approve"); }
   public publishDataPlaneExposure(id: number): Promise<DataPlaneExposureRevision> { return this.dataPlaneExposureAction(id, "publish"); }
   public retireDataPlaneExposure(exposureId: string): Promise<void> { return this.mutate(`${this.basePath}/data-plane-exposures/exposure/${segment(exposureId)}/retire`, "POST", {}).then(() => undefined); }
+
+  public getAuthorizationPolicy(): Promise<AuthorizationPolicyState> { return this.get(`${this.basePath}/authorization`); }
+  public listAuthorizationAudit(): Promise<AuthorizationAuditEvent[]> { return this.get(`${this.basePath}/authorization/audit`); }
+  public createAuthorizationRole(request: CreateAuthorizationRoleRequest): Promise<{role:AuthorizationRoleRevision;generation:number}> { return this.mutate(`${this.basePath}/authorization/roles`, "POST", request); }
+  public updateAuthorizationRole(id:string, revisionId:number, request:Omit<CreateAuthorizationRoleRequest,"id"|"domainId">): Promise<{role:AuthorizationRoleRevision;generation:number}> { return this.mutate(`${this.basePath}/authorization/roles/${segment(id)}/${revision(revisionId)}`, "PUT", request); }
+  public transitionAuthorizationRole(id:string, revisionId:number, action:"submit"|"approve"|"publish"|"retire", expectedGeneration:number, reason=""): Promise<{role:AuthorizationRoleRevision;generation:number}> { return this.mutate(`${this.basePath}/authorization/roles/${segment(id)}/${revision(revisionId)}/${action}`, "POST", {expectedGeneration,reason}); }
+  public createAuthorizationBinding(request:CreateAuthorizationBindingRequest):Promise<{binding:AuthorizationBindingRevision;generation:number}> { return this.mutate(`${this.basePath}/authorization/bindings`,"POST",request); }
+  public updateAuthorizationBinding(id:string, revisionId:number, request:UpdateAuthorizationBindingRequest):Promise<{binding:AuthorizationBindingRevision;generation:number}> { return this.mutate(`${this.basePath}/authorization/bindings/${segment(id)}/${revision(revisionId)}`,"PUT",request); }
+  public transitionAuthorizationBinding(id:string, revisionId:number, action:"submit"|"approve"|"publish"|"retire", expectedGeneration:number, reason=""):Promise<{binding:AuthorizationBindingRevision;generation:number}> { return this.mutate(`${this.basePath}/authorization/bindings/${segment(id)}/${revision(revisionId)}/${action}`,"POST",{expectedGeneration,reason}); }
+  public revokeAuthorization(request:{expectedGeneration:number;id:string;kind:"subject"|"binding"|"role";targetId:string;effectiveAt:string;reasonCode:string}):Promise<unknown> { return this.mutate(`${this.basePath}/authorization/revocations`,"POST",request); }
+  public publishAuthorizationSnapshot(expectedGeneration:number,audience:string[]=[],ttlSeconds=300,reason="policy update"):Promise<unknown> { return this.mutate(`${this.basePath}/authorization/snapshots`,"POST",{expectedGeneration,audience,ttlSeconds,reason}); }
 
   private serviceRevisionAction(id: number, action: string): Promise<ServiceRevision> {
     return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}/${action}`, "POST", {});

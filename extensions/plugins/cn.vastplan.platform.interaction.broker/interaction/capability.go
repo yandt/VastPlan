@@ -10,11 +10,11 @@ import (
 	"time"
 
 	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
-	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext) error {
@@ -207,9 +207,6 @@ func anySubject(callCtx *contractv1.CallContext) (interactionapi.Subject, error)
 	subject := interactionapi.Subject{ID: callCtx.Caller.Id, TenantID: callCtx.TenantId, System: callCtx.Caller.Kind == contractv1.CallerKind_CALLER_KIND_SYSTEM}
 	if callCtx.Principal != nil {
 		subject.Roles = append([]string(nil), callCtx.Principal.SystemRoles...)
-		if callCtx.Principal.IsAdmin {
-			subject.Roles = append(subject.Roles, "admin")
-		}
 	}
 	return subject, nil
 }

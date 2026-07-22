@@ -22,15 +22,33 @@ const (
 )
 
 type Resolver struct {
-	store SnapshotStore
-	now   func() time.Time
+	store     SnapshotStore
+	directory GroupDirectory
+	now       func() time.Time
+}
+
+type GroupDirectory interface {
+	Groups(subjectID string) ([]authorizationv1.ExternalGroup, uint64, error)
+}
+
+type EmptyGroupDirectory struct{}
+
+func (EmptyGroupDirectory) Groups(string) ([]authorizationv1.ExternalGroup, uint64, error) {
+	return []authorizationv1.ExternalGroup{}, 0, nil
 }
 
 func NewResolver(store SnapshotStore) (*Resolver, error) {
+	return NewResolverWithDirectory(store, EmptyGroupDirectory{})
+}
+
+func NewResolverWithDirectory(store SnapshotStore, directory GroupDirectory) (*Resolver, error) {
 	if store == nil {
 		return nil, errors.New("Authorization Session 需要 Policy Snapshot Store")
 	}
-	return &Resolver{store: store, now: func() time.Time { return time.Now().UTC() }}, nil
+	if directory == nil {
+		directory = EmptyGroupDirectory{}
+	}
+	return &Resolver{store: store, directory: directory, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 func Descriptor() []byte {
@@ -61,7 +79,11 @@ func (r *Resolver) resolve(_ context.Context, _ sdk.Host, callCtx *contractv1.Ca
 		return failure("foundation.authorization-session.snapshot-inactive", errors.New("Policy Snapshot 未生效、已过期或 audience 不匹配")), nil, nil
 	}
 	subjectID := StableSubjectID(request.ProviderProfileID, request.Issuer, request.Subject)
-	permissions := resolvePermissions(snapshot.Payload.Policy, subjectID, now)
+	groups, _, err := r.directory.Groups(subjectID)
+	if err != nil {
+		return failure("foundation.authorization-session.directory-unavailable", err), nil, nil
+	}
+	permissions := resolvePermissions(snapshot.Payload.Policy, subjectID, groups, now)
 	if len(permissions) == 0 {
 		return failure("foundation.authorization-session.subject-unbound", errors.New("稳定主体没有有效授权绑定")), nil, nil
 	}
@@ -74,7 +96,7 @@ func (r *Resolver) resolve(_ context.Context, _ sdk.Host, callCtx *contractv1.Ca
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, response, nil
 }
 
-func resolvePermissions(policy authorizationv1.AuthorizationIR, subjectID string, now time.Time) []string {
+func resolvePermissions(policy authorizationv1.AuthorizationIR, subjectID string, groups []authorizationv1.ExternalGroup, now time.Time) []string {
 	revoked := map[string]struct{}{}
 	for _, item := range policy.Revocations {
 		if !now.Before(item.EffectiveAt) {
@@ -89,8 +111,14 @@ func resolvePermissions(policy authorizationv1.AuthorizationIR, subjectID string
 		roles[fmt.Sprintf("%s@%d", role.ID, role.Revision)] = role
 	}
 	allowed, denied := map[string]struct{}{}, map[string]struct{}{}
+	externalGroups := map[string]struct{}{}
+	for _, group := range groups {
+		externalGroups[group.Issuer+"\x00"+group.ID] = struct{}{}
+	}
 	for _, binding := range policy.Bindings {
-		if binding.Subject.Kind != authorizationv1.SubjectUser || binding.Subject.ID != subjectID || binding.Subject.Issuer != StableSubjectIssuer || now.Before(binding.NotBefore) || !now.Before(binding.ExpiresAt) {
+		directUser := binding.Subject.Kind == authorizationv1.SubjectUser && binding.Subject.ID == subjectID && binding.Subject.Issuer == StableSubjectIssuer
+		_, externalGroup := externalGroups[binding.Subject.Issuer+"\x00"+binding.Subject.ID]
+		if (!directUser && (binding.Subject.Kind != authorizationv1.SubjectGroup || !externalGroup)) || now.Before(binding.NotBefore) || !now.Before(binding.ExpiresAt) {
 			continue
 		}
 		if _, off := revoked["binding\x00"+binding.ID]; off {

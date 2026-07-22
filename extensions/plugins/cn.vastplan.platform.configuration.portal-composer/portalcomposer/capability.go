@@ -530,8 +530,5 @@ func projectPrincipal(callCtx *contractv1.CallContext) (portalapi.Principal, err
 		return portalapi.Principal{}, fmt.Errorf("Portal capability 必须携带经验证的 Principal 和 tenant")
 	}
 	roles := append([]string(nil), callCtx.Principal.SystemRoles...)
-	if callCtx.Principal.IsAdmin {
-		roles = append(roles, "portal.compose", "portal.approve", "portal.publish")
-	}
 	return portalapi.Principal{ID: callCtx.Principal.UserId, TenantID: callCtx.TenantId, Roles: roles, System: callCtx.Principal.UserId == "system"}, nil
 }

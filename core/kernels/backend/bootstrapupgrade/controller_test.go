@@ -119,6 +119,32 @@ func TestControllerRestartRecoversActivatedCandidate(t *testing.T) {
 	}
 }
 
+func TestControllerRestartIgnoresActualStateOlderThanCommittedLKG(t *testing.T) {
+	store := &memoryInventoryStore{inventory: initialInventory(t)}
+	v2 := bootstrapItem("2.0.0", strings.Repeat("2", 64))
+	store.inventory.Generation++
+	store.inventory.Seed = append(store.inventory.Seed, v2)
+	store.inventory.LastKnownGood = []bootstrapinventory.Item{v2}
+	var err error
+	store.inventory, err = bootstrapinventory.Normalize(store.inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	restarted, _ := New(store, &acceptingSeed{})
+	staleActual := bootstrapItem("1.0.0", strings.Repeat("1", 64))
+	if _, err := restarted.Begin([]bootstrapinventory.Item{staleActual}); err != nil {
+		t.Fatalf("LKG 提交后遗留的旧 ActualState 不得被解释为降级事务: %v", err)
+	}
+	committed, err := restarted.Commit(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if committed.LastKnownGood[0] != v2 {
+		t.Fatalf("旧 ActualState 不得回退 LKG: %+v", committed.LastKnownGood)
+	}
+}
+
 func TestControllerRejectsAutomaticDowngradeAndChannelSwitch(t *testing.T) {
 	store := &memoryInventoryStore{inventory: initialInventory(t)}
 	controller, _ := New(store, &acceptingSeed{})

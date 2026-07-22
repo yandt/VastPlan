@@ -65,17 +65,17 @@ func evaluateWriteGuard(callCtx *contractv1.CallContext, request extpoint.Permis
 	if request.Capability != SettingsCapability {
 		return decision(extpoint.DecisionAbstain, "非系统设置能力")
 	}
-	if privilegedSettingsWriter(callCtx) || isSettingsRead(request.Operation) {
+	if trustedSettingsCaller(callCtx) || isSettingsRead(request.Operation) {
 		return decision(extpoint.DecisionAbstain, "交给后续策略")
 	}
-	return decision(extpoint.DecisionDeny, "系统设置写操作只允许 system 或直接登录的管理员用户")
+	return decision(extpoint.DecisionDeny, "系统设置写操作只接受 system 或可信用户，再交给 Authorization Enforcer")
 }
 
 func evaluateBaseline(callCtx *contractv1.CallContext, request extpoint.PermissionRequest) extpoint.PermissionResponse {
 	if request.Capability != SettingsCapability {
 		return decision(extpoint.DecisionAbstain, "非系统设置能力")
 	}
-	if privilegedSettingsWriter(callCtx) {
+	if trustedSystemWriter(callCtx) {
 		return decision(extpoint.DecisionAllow, "系统自举身份允许访问系统设置")
 	}
 	if isSettingsRead(request.Operation) && firstPartyBootstrapReader(callCtx) {
@@ -84,7 +84,7 @@ func evaluateBaseline(callCtx *contractv1.CallContext, request extpoint.Permissi
 	return decision(extpoint.DecisionDeny, "自举基线默认拒绝该系统设置访问")
 }
 
-func privilegedSettingsWriter(callCtx *contractv1.CallContext) bool {
+func trustedSettingsCaller(callCtx *contractv1.CallContext) bool {
 	if callCtx == nil || callCtx.Caller == nil {
 		return false
 	}
@@ -92,10 +92,14 @@ func privilegedSettingsWriter(callCtx *contractv1.CallContext) bool {
 	case contractv1.CallerKind_CALLER_KIND_SYSTEM:
 		return true
 	case contractv1.CallerKind_CALLER_KIND_USER:
-		return callCtx.Principal != nil && callCtx.Principal.IsAdmin
+		return callCtx.Principal != nil && callCtx.Principal.UserId != "" && callCtx.Caller.Id == callCtx.Principal.UserId
 	default:
 		return false
 	}
+}
+
+func trustedSystemWriter(callCtx *contractv1.CallContext) bool {
+	return callCtx != nil && callCtx.Caller != nil && callCtx.Caller.Kind == contractv1.CallerKind_CALLER_KIND_SYSTEM
 }
 
 func firstPartyBootstrapReader(callCtx *contractv1.CallContext) bool {

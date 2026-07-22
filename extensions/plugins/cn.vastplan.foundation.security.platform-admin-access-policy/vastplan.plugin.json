@@ -9,7 +9,7 @@
   "description": "以经验证身份和角色授权数据库管理面、受控数据面及其他平台管理能力",
   "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
-  "contextAccess": { "required": ["caller", "authorization.roles"], "optional": ["scope.tenant", "scene", "subject.id", "authorization.admin", "trace", "request.deadline", "propagation.callPath"] },
+  "contextAccess": { "required": ["caller"], "optional": ["scope.tenant", "scene", "subject.id", "trace", "request.deadline", "propagation.callPath"] },
   "runtime": { "instancePolicy": "per-kernel", "stateModel": "local-ephemeral", "visibility": "local", "routing": "direct" },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "activation": ["onStartup"],

@@ -21,6 +21,14 @@ type staticSnapshotStore struct {
 	value authorizationv1.SignedPolicySnapshot
 }
 
+type staticGroupDirectory struct {
+	groups []authorizationv1.ExternalGroup
+}
+
+func (d staticGroupDirectory) Groups(string) ([]authorizationv1.ExternalGroup, uint64, error) {
+	return d.groups, 9, nil
+}
+
 func (s staticSnapshotStore) Load() (authorizationv1.SignedPolicySnapshot, error) {
 	return s.value, nil
 }
@@ -57,6 +65,31 @@ func TestResolverRejectsUnboundAndUntrustedCaller(t *testing.T) {
 	result, _, _ = resolver.resolve(context.Background(), nil, &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER}}, mustJSON(request))
 	if result.Error.Code != "foundation.authorization-session.forbidden" {
 		t.Fatalf("非可信调用必须拒绝: %+v", result)
+	}
+}
+
+func TestResolverProjectsPublishedExternalGroupBinding(t *testing.T) {
+	now := time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC)
+	subjectID := StableSubjectID("enterprise-users", "urn:users", "bob")
+	snapshot := testSnapshot(now, "someone-else")
+	snapshot.Payload.Policy.Bindings = append(snapshot.Payload.Policy.Bindings, authorizationv1.SubjectBinding{
+		ID: "binding.ops", Revision: 1, DomainID: "platform.root",
+		Subject: authorizationv1.Subject{Kind: authorizationv1.SubjectGroup, ID: "ops", Issuer: "https://id.example"},
+		RoleID:  "platform.viewer", RoleRevision: 1, NotBefore: now, ExpiresAt: now.Add(time.Hour),
+	})
+	resolver, _ := NewResolverWithDirectory(staticSnapshotStore{value: snapshot}, staticGroupDirectory{groups: []authorizationv1.ExternalGroup{{ID: "ops", Issuer: "https://id.example"}}})
+	resolver.now = func() time.Time { return now.Add(time.Minute) }
+	request := ResolveRequest{ProviderProfileID: "enterprise-users", Issuer: "urn:users", Subject: "bob", TenantID: "acme", PortalID: "operations", AMR: []string{"pwd"}, ACR: "aal1"}
+	result, raw, err := resolver.resolve(context.Background(), nil, trustedContext("acme"), mustJSON(request))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("外部组授权解析失败: %+v %v", result, err)
+	}
+	var resolved ResolveResult
+	if err := json.Unmarshal(raw, &resolved); err != nil {
+		t.Fatal(err)
+	}
+	if resolved.SubjectID != subjectID || strings.Join(resolved.Roles, ",") != "platform.settings.read" {
+		t.Fatalf("外部组投影错误: %+v", resolved)
 	}
 }
 

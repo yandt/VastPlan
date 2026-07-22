@@ -36,6 +36,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	if c == nil || c.Caller == nil {
 		return extpoint.DecisionDeny, "缺少经验证调用身份"
 	}
+	if c.Caller.Kind == v1.CallerKind_CALLER_KIND_SYSTEM && request.Capability == "foundation.security.authorization-engine.native" {
+		return extpoint.DecisionAllow, "可信宿主可调用本地 Native Authorization Engine"
+	}
 	if allowedKernelCallback(c, request) {
 		return extpoint.DecisionAllow, "平台基础插件受限宿主回调"
 	}
@@ -63,15 +66,11 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	if materialLeaseAllowed(c, request) {
 		return extpoint.DecisionAllow, "可信宿主可申请绑定身份的一次性加密 material lease"
 	}
-	role := operationRole(request.Capability, request.Operation)
-	if role == "" {
+	if c.Caller.Kind == v1.CallerKind_CALLER_KIND_SYSTEM {
 		if governedCapability(request.Capability) {
-			return extpoint.DecisionDeny, "未知平台管理操作"
+			return extpoint.DecisionAllow, "系统平台管理调用"
 		}
 		return extpoint.DecisionAbstain, "非平台管理能力"
-	}
-	if c.Caller.Kind == v1.CallerKind_CALLER_KIND_SYSTEM {
-		return extpoint.DecisionAllow, "系统平台管理调用"
 	}
 	if c.Caller.Kind == v1.CallerKind_CALLER_KIND_PLUGIN {
 		if pluginMetadataReadAllowed(c.Caller.Id, request.Capability, request.Operation) {
@@ -81,15 +80,18 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 		if request.Capability == platformadminapi.SettingsCapability {
 			return extpoint.DecisionAbstain, "系统设置插件读取交给自举基线"
 		}
-		return extpoint.DecisionDeny, "插件不能继承用户的平台管理权限"
+		if governedCapability(request.Capability) {
+			return extpoint.DecisionDeny, "插件不能继承用户的平台管理权限"
+		}
+		return extpoint.DecisionAbstain, "非平台管理能力"
 	}
-	if c.Caller.Kind != v1.CallerKind_CALLER_KIND_USER {
+	if c.Caller.Kind == v1.CallerKind_CALLER_KIND_USER && governedCapability(request.Capability) {
+		return extpoint.DecisionDeny, "用户授权必须由签名 Permission Catalog 与 Authorization Enforcer 判定"
+	}
+	if c.Caller.Kind != v1.CallerKind_CALLER_KIND_USER && governedCapability(request.Capability) {
 		return extpoint.DecisionDeny, "仅已认证用户可管理平台资源"
 	}
-	if hasRole(c, "platform.admin") || hasRole(c, role) {
-		return extpoint.DecisionAllow, "平台角色授权"
-	}
-	return extpoint.DecisionDeny, "缺少平台管理角色"
+	return extpoint.DecisionAbstain, "非平台管理能力"
 }
 
 func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
@@ -194,23 +196,6 @@ func managedCredentialLifecycleAllowed(c *v1.CallContext, request extpoint.Permi
 	}
 }
 
-func operationRole(capability, operation string) string {
-	roles := map[string]map[string]string{
-		platformadminapi.SettingsCapability:    {"get": "platform.settings.read", "list": "platform.settings.read", "changesSince": "platform.settings.read", "put": "platform.admin", "delete": "platform.admin"},
-		platformadminapi.CredentialsCapability: {"describe": "platform.credentials.read", "list": "platform.credentials.read", "put": "platform.credentials.write", "rotate": "platform.credentials.rotate", "revoke": "platform.credentials.revoke"},
-		platformadminapi.DatabaseCapability:    {"describe": "platform.database.read", "list": "platform.database.read", "define": "platform.database.write", "remove": "platform.database.write", "probe": "platform.database.probe"},
-		platformadminapi.ArtifactsCapability:   {"status": "platform.artifacts.read", "capacity": "platform.artifacts.read", "listCatalog": "platform.artifacts.read", "listPublishJournal": "platform.artifacts.read", "resolve": "platform.artifacts.read", "listReferences": "platform.artifacts.read", "gcPlan": "platform.artifacts.read", "gcStatus": "platform.artifacts.read", "setLifecycle": "platform.artifacts.lifecycle", "gcQuarantine": "platform.artifacts.gc", "gcSweep": "platform.artifacts.gc", "migrationStatus": "platform.artifacts.read", "prepareMigration": "platform.artifacts.migrate", "syncMigration": "platform.artifacts.migrate", "cutoverMigration": "platform.artifacts.migrate", "rollbackMigration": "platform.artifacts.migrate", "finalizeMigration": "platform.artifacts.migrate", "releaseMigration": "platform.artifacts.migrate"},
-		platformadminapi.DeploymentCapability:  {"listNodes": "platform.deployment.read", "putNode": "platform.deployment.write", "listBootstrapJobs": "platform.deployment.read", "createBootstrap": "platform.deployment.bootstrap", "approveBootstrap": "platform.deployment.approve", "listDeploymentTargets": "platform.deployment.read", "listServiceRevisions": "platform.deployment.read", "listServiceRevisionAudit": "platform.deployment.read", "createServiceDraft": "platform.deployment.compose", "updateServiceDraft": "platform.deployment.compose", "submitServiceDraft": "platform.deployment.compose", "approveServiceRevision": "platform.deployment.approve", "publishServiceRevision": "platform.deployment.publish", "rollbackServiceRevision": "platform.deployment.publish", "listTestTargetBindings": "platform.deployment.read", "putTestTargetBinding": "platform.deployment.test-target", "listTestReleases": "platform.deployment.read", "createTestRelease": "platform.deployment.publish", "rollbackTestRelease": "platform.deployment.publish"},
-		"platform.api-exposure": {
-			"list": "platform.api-exposure.read", "listDataPlanes": "platform.api-exposure.read", "listAudit": "platform.api-exposure.read", "apiList": "platform.api-exposure.read",
-			"createDraft": "platform.api-exposure.edit", "updateDraft": "platform.api-exposure.edit", "submit": "platform.api-exposure.edit", "createDataPlaneDraft": "platform.api-exposure.edit", "submitDataPlane": "platform.api-exposure.edit", "apiCreateDraft": "platform.api-exposure.edit", "apiUpdateDraft": "platform.api-exposure.edit", "apiSubmit": "platform.api-exposure.edit",
-			"approve": "platform.api-exposure.approve", "approveDataPlane": "platform.api-exposure.approve", "apiApprove": "platform.api-exposure.approve",
-			"publish": "platform.api-exposure.publish", "publishDataPlane": "platform.api-exposure.publish", "retire": "platform.api-exposure.publish", "retireDataPlane": "platform.api-exposure.publish", "apiPublish": "platform.api-exposure.publish", "apiRetire": "platform.api-exposure.publish",
-		},
-	}
-	return roles[capability][operation]
-}
-
 func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest) bool {
 	if c.Caller.Kind != v1.CallerKind_CALLER_KIND_PLUGIN {
 		return false
@@ -231,14 +216,14 @@ func pluginMetadataReadAllowed(id, capability, operation string) bool {
 	if len(id) < len("cn.vastplan.platform.") || id[:len("cn.vastplan.platform.")] != "cn.vastplan.platform." {
 		return false
 	}
-	return operationRole(capability, operation) == "platform.credentials.read" || operationRole(capability, operation) == "platform.database.read" || operationRole(capability, operation) == "platform.artifacts.read"
-}
-
-func hasRole(c *v1.CallContext, role string) bool {
-	for _, candidate := range c.GetPrincipal().GetSystemRoles() {
-		if candidate == role {
-			return true
-		}
+	switch capability {
+	case platformadminapi.CredentialsCapability:
+		return operation == "describe" || operation == "list"
+	case platformadminapi.DatabaseCapability:
+		return operation == "describe" || operation == "list"
+	case platformadminapi.ArtifactsCapability:
+		return operation == "status" || operation == "capacity" || operation == "listCatalog" || operation == "listPublishJournal" || operation == "resolve" || operation == "listReferences" || operation == "gcPlan" || operation == "gcStatus" || operation == "migrationStatus"
+	default:
+		return false
 	}
-	return false
 }

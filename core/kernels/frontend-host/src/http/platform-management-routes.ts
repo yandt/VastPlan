@@ -13,6 +13,7 @@ import { PlatformAuthenticationProviderRoutes } from "./platform-authentication-
 import { PlatformSeedHandoffRoutes } from "./platform-seed-handoff-routes";
 import type { IdentityProvider } from "../identity/identity-provider";
 import { PlatformAPIExposureRoutes } from "./platform-api-exposure-routes";
+import { PlatformAuthorizationRoutes } from "./platform-authorization-routes";
 
 const prefix = "/v1/portals/";
 
@@ -25,6 +26,7 @@ export class PlatformManagementRoutes {
   private readonly authenticationProviders: PlatformAuthenticationProviderRoutes;
   private readonly seedHandoff: PlatformSeedHandoffRoutes;
   private readonly apiExposures: PlatformAPIExposureRoutes;
+  private readonly authorization: PlatformAuthorizationRoutes;
 
   public constructor(private readonly resolver: PlatformManagementResolver, client: PlatformCapabilityPort, identity: IdentityProvider) {
     this.settings = new PlatformSettingsRoutes(client);
@@ -35,6 +37,7 @@ export class PlatformManagementRoutes {
     this.authenticationProviders = new PlatformAuthenticationProviderRoutes(client, identity);
     this.seedHandoff = new PlatformSeedHandoffRoutes(client, identity);
     this.apiExposures = new PlatformAPIExposureRoutes(client);
+    this.authorization = new PlatformAuthorizationRoutes(client);
   }
 
   public async handle(path: string, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
@@ -60,6 +63,7 @@ export class PlatformManagementRoutes {
     if (await this.authenticationProviders.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.seedHandoff.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.apiExposures.handle(resourceParts, principal, target, request, response, signal)) return true;
+    if (await this.authorization.handle(resourceParts, principal, target, request, response, signal)) return true;
     return reject(response, 404, "not_found", method);
   }
 }

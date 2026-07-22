@@ -3,7 +3,7 @@ import type { Principal } from "../identity/identity-provider";
 import { sendAPIError } from "./json-response";
 
 export function requirePlatformRole(principal: Principal, role: string, response: ServerResponse): boolean {
-  if (principal.system === true || principal.roles.includes("platform.admin") || principal.roles.includes(role)) return true;
+  if (principal.system === true || principal.roles.includes(role)) return true;
   sendAPIError(response, 403, "forbidden");
   return false;
 }

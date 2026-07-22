@@ -131,6 +131,8 @@ export interface ActionSpec {
   confirm?: import("./i18n.js").LocalizedText;
   form?: string;
   overlay?: string;
+  /** UX projection only; Backend authorization remains authoritative. */
+  requiredPermissions?: readonly string[];
   /** Evaluated only against the selected record; authorization stays server-side. */
   visibleWhen?: FormCondition;
 }

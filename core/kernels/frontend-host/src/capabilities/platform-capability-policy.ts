@@ -9,6 +9,7 @@ const operations = Object.freeze({
   "foundation.security.authentication.providers": new Set(["get", "createDraft", "validate", "recordTest", "approve", "publish", "retire"]),
   "foundation.security.seed.handoff": new Set(["get", "configureProvider", "verifyProvider", "prepareHandoff", "completeHandoff"]),
   "platform.api-exposure": new Set(["list", "createDraft", "updateDraft", "submit", "approve", "publish", "retire", "listDataPlanes", "createDataPlaneDraft", "submitDataPlane", "approveDataPlane", "publishDataPlane", "retireDataPlane"]),
+  "platform.authorization": new Set(["get", "createRole", "updateRole", "submitRole", "approveRole", "publishRole", "retireRole", "createBinding", "updateBinding", "submitBinding", "approveBinding", "publishBinding", "retireBinding", "revoke", "publishSnapshot", "listAudit"]),
 });
 
 export type PlatformCapability = keyof typeof operations;

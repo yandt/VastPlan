@@ -96,6 +96,10 @@ export interface CollectionPageDefinition<Row extends Record<string, unknown> = 
   path: string;
   title: LocalizedText;
   description?: LocalizedText;
+  /** Hides the page when the trusted session projection lacks a permission. */
+  requiredPermissions?: readonly string[];
+  /** At least one permission is sufficient to expose a shared governance page. */
+  requiredAnyPermissions?: readonly string[];
   navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
   collection: CollectionSpec;
   load(query: CollectionQuery, signal: AbortSignal): Promise<CollectionResult<Row>>;
@@ -110,6 +114,8 @@ export interface FormPageDefinition {
   path: string;
   title: LocalizedText;
   description?: LocalizedText;
+  requiredPermissions?: readonly string[];
+  requiredAnyPermissions?: readonly string[];
   navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
   form: WorkbenchFormDefinition;
 }
@@ -122,7 +128,7 @@ export interface WorkbenchPluginContext {
 
 export interface WorkbenchManagementCapability { capability: string; read?: readonly string[]; write?: readonly string[]; }
 export interface WorkbenchManagementService { id: string; label?: string; logicalService: string; routingDomain: string; capabilities: readonly WorkbenchManagementCapability[]; }
-export interface WorkbenchPortalRuntime { revision: number; id: string; tenantId: string; route: string; management: { services: readonly WorkbenchManagementService[] }; }
+export interface WorkbenchPortalRuntime { revision: number; id: string; tenantId: string; route: string; experience?: { permissions: readonly string[] }; management: { services: readonly WorkbenchManagementService[] }; }
 export interface WorkbenchFrontendPluginContext extends WorkbenchPluginContext {
   readonly portal: Readonly<WorkbenchPortalRuntime>;
   readonly lifecycle: Readonly<{ pluginID: string; generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" | "shutdown" }>;
@@ -135,6 +141,8 @@ export function managementServicesFor(portal: Readonly<WorkbenchPortalRuntime>, 
 
 /** Makes page definitions discoverable and prevents a future arbitrary component escape hatch. */
 export function defineCollectionPage<Row extends Record<string, unknown>>(definition: CollectionPageDefinition<Row>): CollectionPageDefinition<Row> {
+	validatePermissionRequirements(definition.requiredPermissions, "Collection page requiredPermissions");
+	validatePermissionRequirements(definition.requiredAnyPermissions, "Collection page requiredAnyPermissions");
   if (definition.collection.view === "cards" && definition.collection.query.mode !== "cursor") {
     throw new Error("Card Collection 必须使用 cursor 查询");
   }
@@ -147,6 +155,7 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
   if (overlays.size !== (definition.overlays ?? []).length) throw new Error("Collection Overlay ID 必须唯一");
   for (const form of forms.values()) validateFormDefinition(form);
   for (const action of definition.collection.actions ?? []) {
+		validatePermissionRequirements(action.requiredPermissions, `Action ${action.id} requiredPermissions`);
     if ((action.placement === "page.primary" || action.placement === "page.secondary") && action.icon === undefined) {
       throw new Error(`Page Action ${action.id} 必须声明语义图标`);
     }
@@ -158,9 +167,18 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
 }
 
 export function defineFormPage(definition: FormPageDefinition): FormPageDefinition {
+	validatePermissionRequirements(definition.requiredPermissions, "Form page requiredPermissions");
+	validatePermissionRequirements(definition.requiredAnyPermissions, "Form page requiredAnyPermissions");
   if (definition.form.workflow.surface !== "page") throw new Error("Form Page 的 workflow.surface 必须为 page");
   validateFormDefinition(definition.form);
   return Object.freeze({ ...definition, form: Object.freeze({ ...definition.form }) });
+}
+
+function validatePermissionRequirements(values: readonly string[] | undefined, label: string): void {
+	if (values === undefined) return;
+	if (values.length === 0 || new Set(values).size !== values.length || values.some((value) => !/^[a-z][a-z0-9.-]{1,159}$/.test(value))) {
+		throw new Error(`${label} 无效`);
+	}
 }
 
 function validateFormDefinition(form: WorkbenchFormDefinition): void {

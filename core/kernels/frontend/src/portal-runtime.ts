@@ -166,21 +166,24 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
     },
     addPage: (page) => registerPage(portal, ref, registration, page),
     addCollectionPage: (page) => {
-      if (!page.id || !page.collection.id || !["table", "cards"].includes(page.collection.view) || !["page", "cursor"].includes(page.collection.query.mode) ||
-          (page.collection.view === "table" && page.collection.columns.length === 0) || (page.collection.view === "cards" && page.collection.card === undefined) || typeof page.load !== "function" ||
-          (page.loadSummary !== undefined && typeof page.loadSummary !== "function") || (page.runAction !== undefined && typeof page.runAction !== "function") ||
-          (page.overlays ?? []).some((overlay) => !overlay.id || !["dialog", "drawer"].includes(overlay.surface) || typeof overlay.load !== "function") ||
-          (page.collection.actions ?? []).some((action) => (action.placement === "page.primary" || action.placement === "page.secondary") && (action.icon === undefined || !semanticIconNames.includes(action.icon)))) {
-        throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${page.id}`);
+			if (!experienceAllows(portal, page.requiredPermissions) || !experienceAllowsAny(portal, page.requiredAnyPermissions)) return;
+			const projectedPage = projectCollectionActions(portal, page);
+      if (!projectedPage.id || !projectedPage.collection.id || !["table", "cards"].includes(projectedPage.collection.view) || !["page", "cursor"].includes(projectedPage.collection.query.mode) ||
+          (projectedPage.collection.view === "table" && projectedPage.collection.columns.length === 0) || (projectedPage.collection.view === "cards" && projectedPage.collection.card === undefined) || typeof projectedPage.load !== "function" ||
+          (projectedPage.loadSummary !== undefined && typeof projectedPage.loadSummary !== "function") || (projectedPage.runAction !== undefined && typeof projectedPage.runAction !== "function") ||
+          (projectedPage.overlays ?? []).some((overlay) => !overlay.id || !["dialog", "drawer"].includes(overlay.surface) || typeof overlay.load !== "function") ||
+          (projectedPage.collection.actions ?? []).some((action) => (action.placement === "page.primary" || action.placement === "page.secondary") && (action.icon === undefined || !semanticIconNames.includes(action.icon)))) {
+        throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${projectedPage.id}`);
       }
-      const Page = () => createElement(workbench.CollectionPage, { page, preferenceScope: `${portal.tenantId}/${portal.id}`, presentation: portal.workbench.config });
-      const PageActions = () => createElement(workbench.CollectionPageActions, { page });
-      context.addPage({ id: page.id, path: page.path, title: page.title, description: page.description, navigation: page.navigation, slots: [
+      const Page = () => createElement(workbench.CollectionPage, { page: projectedPage, preferenceScope: `${portal.tenantId}/${portal.id}`, presentation: portal.workbench.config });
+      const PageActions = () => createElement(workbench.CollectionPageActions, { page: projectedPage });
+      context.addPage({ id: projectedPage.id, path: projectedPage.path, title: projectedPage.title, description: projectedPage.description, navigation: projectedPage.navigation, slots: [
         { id: "workbench.collection.actions", slot: "page.header.end", component: PageActions },
         { id: "workbench.collection", slot: "page.body.main", component: Page },
       ] });
     },
     addFormPage: (page) => {
+      if (!experienceAllows(portal, page.requiredPermissions) || !experienceAllowsAny(portal, page.requiredAnyPermissions)) return;
       if (!page.id || !page.form?.id || page.form.workflow.surface !== "page" || typeof page.form.submit !== "function") {
         throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `表单页面定义无效: ${page.id}`);
       }
@@ -189,6 +192,23 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
     },
   };
   return context;
+}
+
+function experienceAllows(portal: PortalSpec, required: readonly string[] | undefined): boolean {
+	if (required === undefined || required.length === 0) return true;
+	const granted = new Set(portal.experience?.permissions ?? []);
+	return required.every((permission) => granted.has(permission));
+}
+
+function experienceAllowsAny(portal: PortalSpec, required: readonly string[] | undefined): boolean {
+	if (required === undefined || required.length === 0) return true;
+	const granted = new Set(portal.experience?.permissions ?? []);
+	return required.some((permission) => granted.has(permission));
+}
+
+function projectCollectionActions<Row extends Record<string, unknown>>(portal: PortalSpec, page: import("@vastplan/workbench-sdk").CollectionPageDefinition<Row>): import("@vastplan/workbench-sdk").CollectionPageDefinition<Row> {
+	const actions = page.collection.actions?.filter((action) => experienceAllows(portal, action.requiredPermissions));
+	return { ...page, collection: { ...page.collection, ...(actions === undefined ? {} : { actions }) } };
 }
 
 function registerPage(

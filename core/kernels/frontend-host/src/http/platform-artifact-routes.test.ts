@@ -56,7 +56,7 @@ describe("Platform artifact routes", () => {
 
   it("rejects duplicate catalog query keys and ungranted operations before invocation", async () => {
     const calls: PlatformInvocation[] = [];
-    const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.admin"], managementBinding([{ capability: "platform.artifacts.repository", read: ["status", "listCatalog"] }]));
+    const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.artifacts.read"], managementBinding([{ capability: "platform.artifacts.repository", read: ["status", "listCatalog"] }]));
     close.push(server.close);
     const duplicate = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/artifacts/catalog?page=1&page=2`, { headers: server.readHeaders });
     expect(duplicate.status).toBe(400);
@@ -67,7 +67,7 @@ describe("Platform artifact routes", () => {
 });
 
 async function start(calls: PlatformInvocation[]) {
-  const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.admin"], managementBinding([{
+  const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.artifacts.read", "platform.artifacts.lifecycle", "platform.artifacts.gc", "platform.artifacts.migrate"], managementBinding([{
     capability: "platform.artifacts.repository",
     read: ["status", "listCatalog", "capacity", "listReferences", "migrationStatus", "gcPlan", "gcStatus"],
     write: ["setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"],

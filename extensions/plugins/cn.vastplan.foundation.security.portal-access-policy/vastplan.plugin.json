@@ -11,7 +11,7 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": {
     "required": ["caller", "authorization.roles"],
-    "optional": ["scope.tenant", "scene", "subject.id", "authorization.admin", "trace", "request.deadline", "propagation.callPath"]
+    "optional": ["scope.tenant", "scene", "subject.id", "trace", "request.deadline", "propagation.callPath"]
   },
   "runtime": { "instancePolicy": "per-kernel", "stateModel": "local-ephemeral", "visibility": "local", "routing": "direct" },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },

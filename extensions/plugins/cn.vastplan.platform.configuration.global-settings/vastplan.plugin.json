@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.configuration.global-settings",
   "name": "VastPlan 全局设置服务",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -14,6 +14,20 @@
     "resources": []
   },
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "authorization": {
+    "namespace": "platform.settings",
+    "permissions": [
+      { "code": "platform.settings.read", "title": "查看全局设置", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.settings.write", "title": "修改全局设置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "platform.settings", "operation": "get", "permissions": ["platform.settings.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.settings", "operation": "list", "permissions": ["platform.settings.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.settings", "operation": "changesSince", "permissions": ["platform.settings.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.settings", "operation": "put", "permissions": ["platform.settings.write"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.settings", "operation": "delete", "permissions": ["platform.settings.write"], "access": "write", "approval": "none" }
+    ]
+  },
   "runtime": {
     "instancePolicy": "leader",
     "stateModel": "leader-owned",

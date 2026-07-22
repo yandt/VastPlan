@@ -45,8 +45,8 @@ func TestBootstrapBaselineUsesVerifiedNamespaceClassification(t *testing.T) {
 	if got := evaluateBaseline(systemContext(), write); got.Decision != extpoint.DecisionAllow {
 		t.Fatalf("system 应允许写入: %+v", got)
 	}
-	if got := evaluateBaseline(adminUserContext(), write); got.Decision != extpoint.DecisionAllow {
-		t.Fatalf("直接登录管理员应允许写入: %+v", got)
+	if got := evaluateBaseline(adminUserContext(), write); got.Decision != extpoint.DecisionDeny {
+		t.Fatalf("用户写入不得越过 Authorization Enforcer 到达 bootstrap baseline: %+v", got)
 	}
 }
 
@@ -65,7 +65,7 @@ func systemContext() *contractv1.CallContext {
 }
 
 func adminUserContext() *contractv1.CallContext {
-	return &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "admin"}, Principal: &contractv1.Principal{IsAdmin: true}}
+	return &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "admin"}, Principal: &contractv1.Principal{UserId: "admin"}}
 }
 
 func pluginContext(id string, inheritedAdmin bool) *contractv1.CallContext {

@@ -72,6 +72,7 @@ export interface PortalSpec {
   id: string;
   tenantId: string;
   route: string;
+  experience?: { permissions: readonly string[] };
   branding?: Record<string, unknown>;
   localization?: PortalLocalizationPolicy;
   updates?: { mode: "refresh" | "notify" | "automatic" };

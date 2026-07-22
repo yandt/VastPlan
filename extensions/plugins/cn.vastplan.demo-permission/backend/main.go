@@ -67,8 +67,10 @@ func baseline(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContex
 	if callCtx == nil || callCtx.Caller == nil {
 		return decide(extpoint.DecisionAbstain, "") // 身份不明 → 不表态，最终 fail-closed
 	}
-	if callCtx.Principal.GetIsAdmin() {
-		return decide(extpoint.DecisionAllow, "管理员放行")
+	for _, role := range callCtx.Principal.GetSystemRoles() {
+		if role == "demo.permission.admin" {
+			return decide(extpoint.DecisionAllow, "示例精确角色放行")
+		}
 	}
 	switch callCtx.Caller.Kind {
 	case contractv1.CallerKind_CALLER_KIND_AGENT,

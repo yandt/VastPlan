@@ -68,6 +68,17 @@ func (c *Controller) Begin(installed []bootstrapinventory.Item) (bootstrapinvent
 		if !ok || current == item {
 			continue
 		}
+		order, err := upgradeOrder(current, item)
+		if err != nil {
+			return bootstrapinventory.Inventory{}, err
+		}
+		// Commit may durably advance LKG immediately before the Node Agent
+		// checkpoints its newer ActualState. After a crash, that checkpoint can
+		// still describe the older installed version. It is recovery input, not a
+		// downgrade candidate; normal reconcile will install the current LKG.
+		if order < 0 {
+			continue
+		}
 		if err := validateUpgrade(current, item); err != nil {
 			return bootstrapinventory.Inventory{}, err
 		}
@@ -232,21 +243,29 @@ func criticalPluginItems(inventory bootstrapinventory.Inventory) (map[string]boo
 }
 
 func validateUpgrade(current, candidate bootstrapinventory.Item) error {
-	if candidate.Ref.Channel != current.Ref.Channel {
-		return fmt.Errorf("Bootstrap 关键插件 %s 不允许自动跨通道升级: %s -> %s", current.Ref.PluginID, current.Ref.Channel, candidate.Ref.Channel)
-	}
-	currentVersion, err := semver.NewVersion(current.Ref.Version)
+	order, err := upgradeOrder(current, candidate)
 	if err != nil {
-		return fmt.Errorf("Bootstrap LKG 版本无效: %w", err)
+		return err
 	}
-	candidateVersion, err := semver.NewVersion(candidate.Ref.Version)
-	if err != nil {
-		return fmt.Errorf("Bootstrap 候选版本无效: %w", err)
-	}
-	if candidateVersion.LessThan(currentVersion) {
+	if order < 0 {
 		return fmt.Errorf("Bootstrap 关键插件 %s 不允许自动降级: %s -> %s", current.Ref.PluginID, current.Ref.Version, candidate.Ref.Version)
 	}
 	return nil
+}
+
+func upgradeOrder(current, candidate bootstrapinventory.Item) (int, error) {
+	if candidate.Ref.Channel != current.Ref.Channel {
+		return 0, fmt.Errorf("Bootstrap 关键插件 %s 不允许自动跨通道升级: %s -> %s", current.Ref.PluginID, current.Ref.Channel, candidate.Ref.Channel)
+	}
+	currentVersion, err := semver.NewVersion(current.Ref.Version)
+	if err != nil {
+		return 0, fmt.Errorf("Bootstrap LKG 版本无效: %w", err)
+	}
+	candidateVersion, err := semver.NewVersion(candidate.Ref.Version)
+	if err != nil {
+		return 0, fmt.Errorf("Bootstrap 候选版本无效: %w", err)
+	}
+	return candidateVersion.Compare(currentVersion), nil
 }
 
 func containsItem(values []bootstrapinventory.Item, item bootstrapinventory.Item) bool {

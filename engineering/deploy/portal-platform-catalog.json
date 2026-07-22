@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 3,
+  "revision": 5,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 3,
+      "revision": 5,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -46,13 +46,14 @@
           },
           "navigationGroups": [
             { "id": "platform.artifacts", "label": "制品仓库", "zone": "settings", "icon": "settings", "parentID": "settings", "order": 50 },
-            { "id": "platform.api-exposure", "label": "API 暴露", "zone": "settings", "icon": "settings", "parentID": "settings", "order": 55 }
+            { "id": "platform.api-exposure", "label": "API 暴露", "zone": "settings", "icon": "settings", "parentID": "settings", "order": 55 },
+            { "id": "platform.authorization", "label": "角色与权限", "zone": "settings", "icon": "settings", "parentID": "settings", "order": 60 }
           ]
         }
       },
       "workbench": {
         "id": "cn.vastplan.foundation.frontend.workflow.workbench",
-        "version": "1.4.0",
+        "version": "1.5.0",
         "channel": "stable",
         "uiContract": "^4.0.0"
       },
@@ -64,14 +65,15 @@
         { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "1.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "1.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "1.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "1.4.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.3.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.3.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.credentials", "version": "0.5.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.5.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.14.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.7.1", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "1.5.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.4.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.4.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.credentials", "version": "0.6.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.6.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.15.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.2.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.8.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.role-management", "version": "0.1.0", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
     }
@@ -82,8 +84,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 3,
-        "digest": "96f8c9d78bd254417edaddbc391c71ade3a3b5e26c5316a97dee272766da2456"
+        "revision": 5,
+        "digest": "5b2a8c053799b2a4ac572ce734d70f23b238aa20f7190b2382977a6c5a79e601"
       },
       "services": [
         {
@@ -138,6 +140,15 @@
           "routingDomain": "platform",
           "capabilities": [
             { "capability": "platform.deployment", "read": ["listNodes", "listBootstrapJobs", "listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit", "listTestTargetBindings", "listTestReleases"], "write": ["putNode", "createBootstrap", "approveBootstrap", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "putTestTargetBinding", "createTestRelease", "rollbackTestRelease"] }
+          ]
+        },
+        {
+          "id": "authorization",
+          "label": "角色与权限服务",
+          "logicalService": "platform.authorization",
+          "routingDomain": "security",
+          "capabilities": [
+            { "capability": "platform.authorization", "read": ["get", "listAudit"], "write": ["createRole", "updateRole", "submitRole", "approveRole", "publishRole", "retireRole", "createBinding", "updateBinding", "submitBinding", "approveBinding", "publishBinding", "retireBinding", "revoke", "publishSnapshot"] }
           ]
         }
       ]

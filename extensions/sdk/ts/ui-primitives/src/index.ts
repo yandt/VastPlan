@@ -423,6 +423,8 @@ export interface PortalPluginRuntime {
   id: string;
   tenantId: string;
   route: string;
+  /** Short-lived, session-specific UX projection; never an authorization proof. */
+  experience?: { permissions: readonly string[] };
   management: { services: readonly PortalManagementService[] };
 }
 

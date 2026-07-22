@@ -9,7 +9,7 @@ describe("Platform deployment test release routes", () => {
     const calls: PlatformInvocation[] = [];
     const read = ["listTestTargetBindings", "listTestReleases"];
     const write = ["putTestTargetBinding", "createTestRelease", "rollbackTestRelease"];
-    const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls, (_capability, operation) => read.includes(operation) ? { items: [] } : {}), ["platform.admin"], managementBinding([{ capability: "platform.deployment", read, write }]));
+    const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls, (_capability, operation) => read.includes(operation) ? { items: [] } : {}), ["platform.deployment.read", "platform.deployment.test-target", "platform.deployment.publish"], managementBinding([{ capability: "platform.deployment", read, write }]));
     close.push(server.close);
     const base = `${server.origin}/v1/portals/operations/platform/services/core/deployment`;
     expect((await fetch(`${base}/test-target-bindings`, { headers: server.readHeaders })).status).toBe(200);

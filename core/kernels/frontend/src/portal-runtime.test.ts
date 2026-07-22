@@ -138,4 +138,26 @@ describe("PortalRuntime shell", () => {
     expect(prepared.pages.map((page) => page.id)).toEqual(["cards", "profile"]);
     expect(prepared.pages[0]?.slots.map((slot) => slot.slot)).toEqual(["page.header.end", "page.body.main"]);
   });
+
+  it("projects session permissions into Workbench pages and actions", async () => {
+    const securedPortal = { ...portal, experience: { permissions: ["platform.demo.read"] } };
+    const prepared = await new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
+      context.addCollectionPage({
+        id: "visible", path: "/visible", title: "Visible", requiredAnyPermissions: ["platform.demo.read", "platform.demo.write"],
+        collection: { id: "visible", title: "Visible", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [{ key: "id", label: "ID" }], actions: [
+          { id: "read", label: "Read", placement: "record.row", requiredPermissions: ["platform.demo.read"] },
+          { id: "write", label: "Write", placement: "record.row", requiredPermissions: ["platform.demo.write"] },
+        ] },
+        async load() { return { items: [] }; },
+      });
+      context.addCollectionPage({
+        id: "hidden", path: "/hidden", title: "Hidden", requiredPermissions: ["platform.demo.write"],
+        collection: { id: "hidden", title: "Hidden", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [{ key: "id", label: "ID" }] },
+        async load() { return { items: [] }; },
+      });
+    } } })).prepare(securedPortal);
+    expect(prepared.pages.map((page) => page.id)).toEqual(["visible"]);
+    const collectionSlot = prepared.pages[0]?.slots.find((slot) => slot.slot === "page.body.main");
+    expect(collectionSlot).toBeDefined();
+  });
 });

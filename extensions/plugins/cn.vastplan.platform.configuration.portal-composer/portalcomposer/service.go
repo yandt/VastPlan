@@ -20,7 +20,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.configuration.portal-composer"
-	PluginVersion = "1.3.0"
+	PluginVersion = "1.4.0"
 	Capability    = portalapi.ComposerCapability
 	// StateFileConfigKey is read only through the authenticated host callback;
 	// plugin process environment must not decide where governed state is stored.

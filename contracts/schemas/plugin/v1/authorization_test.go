@@ -1,6 +1,7 @@
 package pluginv1
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,6 +72,18 @@ func TestBuildPermissionCatalogIsDeterministicAndRejectsConflicts(t *testing.T) 
 	}
 	if _, err := BuildPermissionCatalog([]PermissionCatalogSource{{Manifest: first, ArtifactSHA256: a}, {Manifest: first, ArtifactSHA256: b}}); err == nil {
 		t.Fatal("权限代码或操作重复所有者必须拒绝")
+	}
+	raw, err := json.Marshal(left)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := ParsePermissionCatalog(raw)
+	if err != nil || parsed.Digest != left.Digest {
+		t.Fatalf("权限目录必须可严格复核: parsed=%+v err=%v", parsed, err)
+	}
+	tampered := strings.Replace(string(raw), left.Digest, strings.Repeat("f", 64), 1)
+	if _, err := ParsePermissionCatalog([]byte(tampered)); err == nil {
+		t.Fatal("被篡改的权限目录必须拒绝")
 	}
 }
 

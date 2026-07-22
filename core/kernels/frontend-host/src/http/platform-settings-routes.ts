@@ -25,12 +25,12 @@ export class PlatformSettingsRoutes {
     const key = resourceName(parts[1], 320);
     if (key === undefined) return invalidName(response, method);
     if (method === "PUT") {
-      if (!authorizePlatformOperation(this.client, target, capability, "put", true, response) || !requirePlatformRole(principal, "platform.admin", response)) return true;
+      if (!authorizePlatformOperation(this.client, target, capability, "put", true, response) || !requirePlatformRole(principal, "platform.settings.write", response)) return true;
       await withRequestJSON(request, response, async (body) => this.call(principal, target, "put", true, { ...requireJSONObject(body), key }, response, signal));
       return true;
     }
     if (method === "DELETE") {
-      if (!authorizePlatformOperation(this.client, target, capability, "delete", true, response) || !requirePlatformRole(principal, "platform.admin", response)) return true;
+      if (!authorizePlatformOperation(this.client, target, capability, "delete", true, response) || !requirePlatformRole(principal, "platform.settings.write", response)) return true;
       const ifVersion = optionalNonnegativeVersion(request.url);
       if (ifVersion === "invalid") { sendAPIError(response, 400, "invalid_version"); return true; }
       await this.call(principal, target, "delete", true, { key, ...(ifVersion === undefined ? {} : { ifVersion }) }, response, signal, false, () => ({ deleted: true }));

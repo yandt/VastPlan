@@ -28,7 +28,7 @@ describe("Platform deployment service revision routes", () => {
 async function start(calls: PlatformInvocation[]) {
   const read = ["listDeploymentTargets", "listServiceRevisions", "listServiceRevisionAudit"];
   const write = ["createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision"];
-  const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls, (_capability, operation) => read.includes(operation) ? { items: [] } : {}), ["platform.admin"], managementBinding([{ capability: "platform.deployment", read, write }]));
+  const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls, (_capability, operation) => read.includes(operation) ? { items: [] } : {}), ["platform.deployment.read", "platform.deployment.compose", "platform.deployment.approve", "platform.deployment.publish"], managementBinding([{ capability: "platform.deployment", read, write }]));
   close.push(server.close);
   return server;
 }

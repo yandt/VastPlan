@@ -28,7 +28,7 @@ export class AddressingCapabilityInvoker implements TrustedCapabilityInvoker {
       ...(route.logicalService === undefined ? {} : { logical_service: route.logicalService }),
     }, {
       caller: { kind: principal.system === true ? 4 : 1, id: principal.id },
-      principal: { user_id: principal.id, tenant_id: principal.tenantId, system_roles: [...principal.roles], is_admin: principal.roles.includes("platform.admin") },
+      principal: { user_id: principal.id, tenant_id: principal.tenantId, system_roles: [...principal.roles], is_admin: false },
       scene: "portal.bff", tenant_id: principal.tenantId,
       trace: { trace_id: randomBytes(16).toString("hex"), span_id: randomBytes(8).toString("hex") },
     }, payload, signal);
