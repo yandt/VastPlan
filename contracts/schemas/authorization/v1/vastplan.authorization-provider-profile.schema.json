@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-provider-profile.schema.json",
+  "title": "VastPlan Authorization Provider Profile v1",
+  "$defs": {
+    "configurationRevisionRef": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "profileId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,255}$" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      },
+      "required": ["profileId", "revision", "digest"]
+    },
+    "providerRef": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "protocol": { "enum": ["authorization.store.v1", "authorization.engine.v1", "authorization.directory.v1", "authorization.exchange.v1"] },
+        "providerId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+        "pluginId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "capability": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$", "maxLength": 160 },
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+        "configuration": { "$ref": "#/$defs/configurationRevisionRef" }
+      },
+      "required": ["protocol", "providerId", "pluginId", "capability", "version", "configuration"]
+    },
+    "providerProfile": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,255}$" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "store": { "$ref": "#/$defs/providerRef" },
+        "engine": { "$ref": "#/$defs/providerRef" },
+        "directory": { "$ref": "#/$defs/providerRef" },
+        "exchange": { "type": "array", "items": { "$ref": "#/$defs/providerRef" }, "maxItems": 32 }
+      },
+      "required": ["id", "revision", "store", "engine", "exchange"]
+    },
+    "protocolSupport": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "protocol": { "enum": ["authorization.store.v1", "authorization.engine.v1", "authorization.directory.v1", "authorization.exchange.v1"] },
+        "operations": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]{0,63}$" }, "uniqueItems": true, "minItems": 1, "maxItems": 16 }
+      },
+      "required": ["protocol", "operations"]
+    },
+    "providerDescriptor": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "providerId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+        "pluginId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+        "protocols": { "type": "array", "items": { "$ref": "#/$defs/protocolSupport" }, "uniqueItems": true, "minItems": 1, "maxItems": 4 },
+        "configurationSchema": { "type": "object" }
+      },
+      "required": ["providerId", "pluginId", "version", "protocols", "configurationSchema"]
+    }
+  }
+}

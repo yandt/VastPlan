@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-ir.schema.json",
+  "title": "VastPlan Authorization IR v1",
+  "$defs": {
+    "authorizationIR": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": "v1" },
+        "catalogDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" },
+        "rootDomainId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/domainId" },
+        "providerProfiles": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-provider-profile.schema.json#/$defs/providerProfile" }, "minItems": 1, "maxItems": 256 },
+        "domains": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/policyDomain" }, "minItems": 1, "maxItems": 8192 },
+        "roles": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/compiledRole" }, "maxItems": 65536 },
+        "bindings": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/subjectBinding" }, "maxItems": 262144 },
+        "revocations": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/revocation" }, "maxItems": 262144 },
+        "revocationRevision": { "type": "integer", "minimum": 0 }
+      },
+      "required": ["schemaVersion", "catalogDigest", "rootDomainId", "providerProfiles", "domains", "roles", "bindings", "revocations", "revocationRevision"]
+    },
+    "policySnapshot": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": "v1" },
+        "snapshotId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,255}$" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "audience": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 }, "uniqueItems": true, "minItems": 1, "maxItems": 64 },
+        "issuedAt": { "type": "string", "format": "date-time" },
+        "notBefore": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "policy": { "$ref": "#/$defs/authorizationIR" }
+      },
+      "required": ["schemaVersion", "snapshotId", "revision", "audience", "issuedAt", "notBefore", "expiresAt", "policy"]
+    },
+    "signature": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "Ed25519" },
+        "keyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,255}$" },
+        "value": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$" }
+      },
+      "required": ["algorithm", "keyId", "value"]
+    },
+    "signedPolicySnapshot": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "payload": { "$ref": "#/$defs/policySnapshot" },
+        "signature": { "$ref": "#/$defs/signature" }
+      },
+      "required": ["payload", "signature"]
+    }
+  },
+  "$ref": "#/$defs/authorizationIR"
+}

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-directory.schema.json",
+  "title": "VastPlan Authorization Directory Protocol v1",
+  "$defs": {
+    "externalIdentity": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "issuer": { "type": "string", "minLength": 1, "maxLength": 512 }, "subject": { "type": "string", "minLength": 1, "maxLength": 512 }, "claimsDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" } },
+      "required": ["issuer", "subject", "claimsDigest"]
+    },
+    "resolveSubjectRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "identity": { "$ref": "#/$defs/externalIdentity" }, "tenantId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" } },
+      "required": ["identity"]
+    },
+    "resolveSubjectResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "subject": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/subject" }, "directoryRevision": { "type": "integer", "minimum": 1 } },
+      "required": ["subject", "directoryRevision"]
+    },
+    "resolveGroupsRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "subject": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/subject" }, "cursor": { "type": "string", "maxLength": 512 }, "limit": { "type": "integer", "minimum": 1, "maximum": 1000 } },
+      "required": ["subject", "limit"]
+    },
+    "externalGroup": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" }, "displayName": { "type": "string", "maxLength": 256 }, "issuer": { "type": "string", "minLength": 1, "maxLength": 512 } },
+      "required": ["id", "issuer"]
+    },
+    "resolveGroupsResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "groups": { "type": "array", "items": { "$ref": "#/$defs/externalGroup" }, "maxItems": 4096 }, "directoryRevision": { "type": "integer", "minimum": 1 }, "nextCursor": { "type": "string", "maxLength": 512 } },
+      "required": ["groups", "directoryRevision"]
+    },
+    "watchRevisionRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "afterRevision": { "type": "integer", "minimum": 0 }, "cursor": { "type": "string", "maxLength": 512 } },
+      "required": ["afterRevision"]
+    },
+    "watchRevisionResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "revision": { "type": "integer", "minimum": 0 }, "cursor": { "type": "string", "maxLength": 512 }, "changed": { "type": "boolean" } },
+      "required": ["revision", "cursor", "changed"]
+    }
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-exchange.schema.json",
+  "title": "VastPlan Authorization Exchange Protocol v1",
+  "$defs": {
+    "exchangeDocument": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "format": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 }, "schemaVersion": { "type": "string", "pattern": "^v[1-9][0-9]*$" }, "digest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" }, "content": { "type": "object" } },
+      "required": ["format", "schemaVersion", "digest", "content"]
+    },
+    "planImportRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "domainId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/domainId" }, "document": { "$ref": "#/$defs/exchangeDocument" } },
+      "required": ["domainId", "document"]
+    },
+    "importSummary": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "roles": { "type": "integer", "minimum": 0 }, "bindings": { "type": "integer", "minimum": 0 }, "warnings": { "type": "integer", "minimum": 0 } },
+      "required": ["roles", "bindings", "warnings"]
+    },
+    "planImportResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "planId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" }, "sourceDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" }, "proposalDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" }, "summary": { "$ref": "#/$defs/importSummary" } },
+      "required": ["planId", "sourceDigest", "proposalDigest", "summary"]
+    },
+    "validateRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "planId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" }, "proposalDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" } },
+      "required": ["planId", "proposalDigest"]
+    },
+    "diagnostic": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "severity": { "enum": ["info", "warning", "error"] }, "code": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 }, "path": { "type": "string", "maxLength": 512 }, "message": { "type": "string", "minLength": 1, "maxLength": 2048 } },
+      "required": ["severity", "code", "message"]
+    },
+    "validateResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "valid": { "type": "boolean" }, "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/diagnostic" }, "maxItems": 4096 } },
+      "required": ["valid", "diagnostics"]
+    },
+    "importRequest": { "$ref": "#/$defs/validateRequest" },
+    "policyImportProposal": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "domainId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/domainId" },
+        "sourceDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" },
+        "roles": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/compiledRole" }, "maxItems": 65536 },
+        "bindings": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/subjectBinding" }, "maxItems": 262144 }
+      },
+      "required": ["domainId", "sourceDigest", "roles", "bindings"]
+    },
+    "importResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "proposal": { "$ref": "#/$defs/policyImportProposal" } },
+      "required": ["proposal"]
+    },
+    "exportRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "domainId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/domainId" }, "format": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 }, "snapshot": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-ir.schema.json#/$defs/signedPolicySnapshot" } },
+      "required": ["domainId", "format", "snapshot"]
+    },
+    "exportResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "document": { "$ref": "#/$defs/exchangeDocument" } },
+      "required": ["document"]
+    }
+  }
+}

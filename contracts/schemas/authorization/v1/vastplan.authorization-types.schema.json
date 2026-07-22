@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json",
+  "title": "VastPlan Authorization Types v1",
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "stableId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,255}$" },
+    "domainId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,159}$" },
+    "permissionCode": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$", "maxLength": 200 },
+    "subject": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["user", "group", "service", "device"] },
+        "id": { "$ref": "#/$defs/stableId" },
+        "issuer": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["kind", "id"]
+    },
+    "domainScope": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "tenantId": { "$ref": "#/$defs/stableId" },
+        "projectId": { "$ref": "#/$defs/stableId" },
+        "resourceType": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$", "maxLength": 160 },
+        "resourceId": { "$ref": "#/$defs/stableId" }
+      }
+    },
+    "delegationCeiling": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "permissions": { "type": "array", "items": { "$ref": "#/$defs/permissionCode" }, "uniqueItems": true, "minItems": 1, "maxItems": 4096 },
+        "maxRisk": { "enum": ["low", "medium", "high", "critical"] },
+        "mayDelegate": { "type": "boolean" },
+        "offlineAllowed": { "type": "boolean" },
+        "maxTtlSeconds": { "type": "integer", "minimum": 1, "maximum": 2678400 }
+      },
+      "required": ["permissions", "maxRisk", "mayDelegate", "offlineAllowed", "maxTtlSeconds"]
+    },
+    "policyDomain": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/domainId" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "kind": { "enum": ["platform", "tenant", "project", "resource"] },
+        "parentId": { "$ref": "#/$defs/domainId" },
+        "scope": { "$ref": "#/$defs/domainScope" },
+        "providerProfileId": { "$ref": "#/$defs/stableId" },
+        "delegation": { "$ref": "#/$defs/delegationCeiling" }
+      },
+      "required": ["id", "revision", "kind", "scope", "providerProfileId", "delegation"]
+    },
+    "resourceSelector": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$", "maxLength": 160 },
+        "ids": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true, "maxItems": 1024 },
+        "labels": {
+          "type": "object", "maxProperties": 64,
+          "propertyNames": { "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+          "additionalProperties": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 }, "uniqueItems": true, "minItems": 1, "maxItems": 64 }
+        },
+        "ownership": { "enum": ["any", "subject", "tenant", "project"] }
+      },
+      "required": ["type", "ids", "labels", "ownership"]
+    },
+    "attributeConstraint": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "source": { "enum": ["subject", "scope", "resource", "request", "environment"] },
+        "key": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+        "operator": { "enum": ["eq", "in", "prefix"] },
+        "values": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 512 }, "uniqueItems": true, "minItems": 1, "maxItems": 128 }
+      },
+      "required": ["source", "key", "operator", "values"]
+    },
+    "policyStatement": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "effect": { "enum": ["allow", "deny"] },
+        "permissions": { "type": "array", "items": { "$ref": "#/$defs/permissionCode" }, "uniqueItems": true, "minItems": 1, "maxItems": 512 },
+        "resource": { "$ref": "#/$defs/resourceSelector" },
+        "constraints": { "type": "array", "items": { "$ref": "#/$defs/attributeConstraint" }, "maxItems": 64 }
+      },
+      "required": ["id", "effect", "permissions", "constraints"]
+    },
+    "compiledRole": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "domainId": { "$ref": "#/$defs/domainId" },
+        "statements": { "type": "array", "items": { "$ref": "#/$defs/policyStatement" }, "minItems": 1, "maxItems": 1024 }
+      },
+      "required": ["id", "revision", "domainId", "statements"]
+    },
+    "subjectBinding": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "domainId": { "$ref": "#/$defs/domainId" },
+        "subject": { "$ref": "#/$defs/subject" },
+        "roleId": { "$ref": "#/$defs/stableId" },
+        "roleRevision": { "type": "integer", "minimum": 1 },
+        "notBefore": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "revision", "domainId", "subject", "roleId", "roleRevision", "notBefore", "expiresAt"]
+    },
+    "revocation": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "kind": { "enum": ["binding", "role", "subject", "provider"] },
+        "targetId": { "$ref": "#/$defs/stableId" },
+        "effectiveAt": { "type": "string", "format": "date-time" },
+        "reasonCode": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 }
+      },
+      "required": ["id", "revision", "kind", "targetId", "effectiveAt", "reasonCode"]
+    }
+  }
+}

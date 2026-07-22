@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-engine.schema.json",
+  "title": "VastPlan Authorization Engine Protocol v1",
+  "$defs": {
+    "empty": { "type": "object", "additionalProperties": false },
+    "prepareRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "snapshot": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-ir.schema.json#/$defs/signedPolicySnapshot" } },
+      "required": ["snapshot"]
+    },
+    "prepareResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "handle": { "type": "string", "pattern": "^[A-Za-z0-9._~-]{16,256}$" }, "policyDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" }, "expiresAt": { "type": "string", "format": "date-time" } },
+      "required": ["handle", "policyDigest", "expiresAt"]
+    },
+    "evaluationTarget": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "extensionPoint": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$", "maxLength": 160 }, "capability": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$", "maxLength": 160 }, "operation": { "type": "string", "pattern": "^[a-z][A-Za-z0-9._-]{0,127}$" } },
+      "required": ["extensionPoint", "capability", "operation"]
+    },
+    "evaluationScope": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "tenantId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" }, "projectId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" }, "resourceType": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)+$", "maxLength": 160 }, "resourceId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" } }
+    },
+    "evaluationInput": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "requestId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" },
+        "policyDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" },
+        "domainId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/domainId" },
+        "subject": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/subject" },
+        "externalGroups": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-directory.schema.json#/$defs/externalGroup" }, "uniqueItems": true, "maxItems": 4096 },
+        "target": { "$ref": "#/$defs/evaluationTarget" },
+        "scope": { "$ref": "#/$defs/evaluationScope" },
+        "requiredPermissions": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/permissionCode" }, "uniqueItems": true, "minItems": 1, "maxItems": 128 },
+        "contextDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" },
+        "evaluatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["requestId", "policyDigest", "domainId", "subject", "externalGroups", "target", "scope", "requiredPermissions", "contextDigest", "evaluatedAt"]
+    },
+    "evaluateRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "handle": { "type": "string", "pattern": "^[A-Za-z0-9._~-]{16,256}$" }, "input": { "$ref": "#/$defs/evaluationInput" } },
+      "required": ["handle", "input"]
+    },
+    "decisionProof": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "proofId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" },
+        "providerId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+        "policyDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" },
+        "inputDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/digest" },
+        "decision": { "enum": ["allow", "deny", "indeterminate"] },
+        "reasonCode": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+        "matchedRoleIds": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" }, "uniqueItems": true, "maxItems": 256 },
+        "matchedBindingIds": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" }, "uniqueItems": true, "maxItems": 256 },
+        "revocationRevision": { "type": "integer", "minimum": 0 },
+        "evaluatedAt": { "type": "string", "format": "date-time" },
+        "validUntil": { "type": "string", "format": "date-time" }
+      },
+      "required": ["proofId", "providerId", "policyDigest", "inputDigest", "decision", "reasonCode", "matchedRoleIds", "matchedBindingIds", "revocationRevision", "evaluatedAt", "validUntil"]
+    },
+    "evaluateResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "decision": { "enum": ["allow", "deny", "indeterminate"] }, "proof": { "$ref": "#/$defs/decisionProof" } },
+      "required": ["decision", "proof"]
+    },
+    "explainRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "handle": { "type": "string", "pattern": "^[A-Za-z0-9._~-]{16,256}$" }, "proofId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" } },
+      "required": ["handle", "proofId"]
+    },
+    "explanationStep": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "code": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 }, "outcome": { "enum": ["matched", "not-matched", "denied", "missing", "revoked"] }, "references": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" }, "uniqueItems": true, "maxItems": 256 } },
+      "required": ["code", "outcome", "references"]
+    },
+    "explainResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "proofId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authorization/v1/vastplan.authorization-types.schema.json#/$defs/stableId" }, "steps": { "type": "array", "items": { "$ref": "#/$defs/explanationStep" }, "maxItems": 1024 } },
+      "required": ["proofId", "steps"]
+    },
+    "healthRequest": { "$ref": "#/$defs/empty" },
+    "healthResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "ready": { "type": "boolean" }, "preparedPolicies": { "type": "integer", "minimum": 0 }, "providerId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" } },
+      "required": ["ready", "preparedPolicies", "providerId"]
+    }
+  }
+}
