@@ -30,7 +30,7 @@ export class PlatformManagementRoutes {
     this.database = new PlatformDatabaseRoutes(client);
     this.artifacts = new PlatformArtifactRoutes(client);
     this.deployment = new PlatformDeploymentRoutes(client);
-    this.authenticationProviders = new PlatformAuthenticationProviderRoutes(client);
+    this.authenticationProviders = new PlatformAuthenticationProviderRoutes(client, identity);
     this.seedHandoff = new PlatformSeedHandoffRoutes(client, identity);
   }
 

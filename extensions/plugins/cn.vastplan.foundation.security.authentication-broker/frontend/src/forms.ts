@@ -12,7 +12,6 @@ export function providerForms(
 ): WorkbenchFormDefinition<ProviderRow>[] {
   return [
     createForm(client, generation),
-    testForm(client),
     publishForm(client, generation),
   ];
 }
@@ -108,82 +107,6 @@ function createForm(
         subjectNamespace: String(value.subjectNamespace),
         requiredCapabilities: [],
       });
-    },
-  };
-}
-
-function testForm(
-  client: PlatformAdminClient,
-): WorkbenchFormDefinition<ProviderRow> {
-  return {
-    id: "test",
-    schema: {
-      id: "authentication-provider-test.v1",
-      schema: {
-        $schema: jsonSchemaDialect,
-        type: "object",
-        additionalProperties: false,
-        required: ["assertion"],
-        properties: {
-          assertion: {
-            type: "string",
-            title: "Broker signed test Assertion",
-            minLength: 1,
-          },
-        },
-      },
-    },
-    presentation: {
-      layout: "vertical",
-      navigation: "sections",
-      sections: [
-        {
-          id: "test",
-          title: message(namespace, "test.section", "真实认证测试收据"),
-          columns: 1,
-          fields: ["/assertion"],
-        },
-      ],
-      fields: [
-        {
-          pointer: "/assertion",
-          widget: "textarea",
-          help: message(
-            namespace,
-            "test.help",
-            "只接受 Broker 为 authentication-provider-test audience 签发的短时 Assertion。",
-          ),
-        },
-      ],
-    },
-    workflow: {
-      surface: "drawer",
-      title: message(namespace, "test.title", "确认真实认证测试"),
-      submitLabel: message(namespace, "test.submit", "验签并记录"),
-      success: { refreshCollection: true, close: true },
-    },
-    async submit({ value, selected }) {
-      const row = selected[0];
-      if (row === undefined) return;
-      let assertion: unknown;
-      try {
-        assertion = JSON.parse(String(value.assertion));
-      } catch {
-        return {
-          fieldErrors: {
-            assertion: message(
-              namespace,
-              "test.invalid",
-              "Assertion 不是有效 JSON",
-            ),
-          },
-        };
-      }
-      await client.testAuthenticationProvider(
-        row.id,
-        row.generation,
-        assertion,
-      );
     },
   };
 }

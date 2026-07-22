@@ -126,3 +126,21 @@ func (c StateCatalog) Load() (authenticationv1.AuthenticationProviderCatalog, er
 	}
 	return *state.Catalog, nil
 }
+
+func (c StateCatalog) ResolveTestProfile(profileID, methodID string) (authenticationv1.ProviderCatalogEntry, bool, error) {
+	state, err := c.Store.LoadState()
+	if err != nil {
+		return authenticationv1.ProviderCatalogEntry{}, false, err
+	}
+	for _, provider := range state.Providers {
+		if provider.Profile.ID != profileID || provider.Lifecycle.State != authenticationv1.ProviderValidated {
+			continue
+		}
+		for _, method := range provider.Profile.Methods {
+			if method == methodID {
+				return authenticationv1.ProviderCatalogEntry{Profile: provider.Lifecycle.Profile, ContributionID: provider.Profile.ContributionID, Purposes: append([]authenticationv1.ProviderPurpose(nil), provider.Profile.Purposes...), Methods: append([]string(nil), provider.Profile.Methods...), SubjectNamespace: provider.Profile.SubjectNamespace, RequiredCapabilities: append([]string(nil), provider.Profile.RequiredCapabilities...)}, true, nil
+			}
+		}
+	}
+	return authenticationv1.ProviderCatalogEntry{}, false, nil
+}

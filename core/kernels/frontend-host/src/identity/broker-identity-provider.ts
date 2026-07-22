@@ -17,6 +17,7 @@ import { SealedCookieCodec } from "./sealed-cookie";
 
 const sessionCookie = "vastplan_session";
 const transactionCookie = "vastplan_auth_tx";
+const providerTestCookie = "vastplan_auth_test";
 
 export class BrokerIdentityProvider implements IdentityProvider {
   private constructor(
@@ -50,6 +51,15 @@ export class BrokerIdentityProvider implements IdentityProvider {
     catch { return undefined; }
   }
 
+  public async authenticationTestProof(request: IncomingMessage) {
+    const token = onlyCookie(request, providerTestCookie);
+    if (token === undefined) return undefined;
+    try {
+      const value = this.cookies.unseal(token);
+      return value.kind === "provider-test-proof" ? parseSignedAuthenticationAssertion(value.assertion) : undefined;
+    } catch { return undefined; }
+  }
+
   public loginRedirect(path: string): string { return `/auth/access?returnTo=${encodeURIComponent(validReturnTo(path) ? path : "/")}`; }
 
   public async handle(request: IncomingMessage, response: ServerResponse, path: string, secure: boolean): Promise<boolean> {
@@ -60,6 +70,7 @@ export class BrokerIdentityProvider implements IdentityProvider {
     if (path === "/auth/v1/csrf") return this.csrf(request, response, secure);
     if (path === "/auth/v1/methods") return this.methods(request, response);
     if (path === "/auth/v1/transactions") return this.begin(request, response, secure);
+    if (path === "/auth/v1/provider-tests") return this.beginProviderTest(request, response, secure);
     const match = /^\/auth\/v1\/transactions\/([A-Za-z0-9_-]{32,256})(?:\/(continue|resend))?$/.exec(path);
     if (match !== null) {
       if (match[2] === undefined && request.method === "DELETE") return this.cancel(request, response, secure, match[1]);
@@ -108,10 +119,31 @@ export class BrokerIdentityProvider implements IdentityProvider {
         locale: body.locale, clientContextDigest: clientContextDigest(request),
       }), false).result;
       if (result.state !== "challenge" || result.step === undefined) throw new Error("Broker begin 未返回 challenge");
-      const transaction = createBrokerTransaction({ transactionId, stepId: result.step.stepId, tenantId: target.profile.tenantId, portalId: target.profile.portalId, audience, generationId: target.id, methodId: body.methodId, returnTo: body.returnTo }, result.step.expiresAt);
+      const transaction = createBrokerTransaction({ transactionId, stepId: result.step.stepId, tenantId: target.profile.tenantId, portalId: target.profile.portalId, audience, generationId: target.id, methodId: body.methodId, returnTo: body.returnTo, purpose: "login" }, result.step.expiresAt);
       appendSetCookie(response, cookie(transactionCookie, this.cookies.seal(transaction), transaction.exp - nowSeconds(), "/auth", secure, "Lax"));
       sendJSON(response, 201, { transactionId, result });
     } catch (error) { if (error instanceof RequestJSONError) return apiError(response, 400, "invalid_authentication_request"); throw error; }
+    return true;
+  }
+
+  private async beginProviderTest(request: IncomingMessage, response: ServerResponse, secure: boolean): Promise<true> {
+    if (request.method !== "POST") return apiError(response, 405, "method_not_allowed");
+    if (!validMutation(request, secure)) return apiError(response, 403, "csrf_rejected");
+    let principal: Principal;
+    try { principal = await this.authenticate(request); } catch { return apiError(response, 401, "session_required"); }
+    if (!principal.roles.includes("foundation.security.authentication.providers.test")) return apiError(response, 403, "forbidden");
+    try {
+      const body = requireJSONObject(await readRequestJSON(request, 8192));
+      if (!hasOnlyFrom(body, ["providerProfileId", "methodId", "locale", "returnTo"]) || !safeID(body.providerProfileId) || !safeID(body.methodId) || typeof body.locale !== "string" || body.locale.length > 64 || typeof body.returnTo !== "string" || !validReturnTo(body.returnTo)) throw new RequestJSONError("Provider 测试请求无效");
+      const target = await this.target(request, body.returnTo);
+      if (target === undefined) return apiError(response, 404, "access_profile_not_found");
+      const transactionId = randomBytes(24).toString("base64url");
+      const result = parseResultEnvelope(await this.broker.call(target.profile.tenantId, "beginProviderTest", { transactionId, providerProfileId: body.providerProfileId, methodId: body.methodId, tenantId: target.profile.tenantId, portalId: target.profile.portalId, locale: body.locale, clientContextDigest: clientContextDigest(request) }), false).result;
+      if (result.state !== "challenge" || result.step === undefined) throw new Error("Provider 测试未返回 challenge");
+      const transaction = createBrokerTransaction({ transactionId, stepId: result.step.stepId, tenantId: target.profile.tenantId, portalId: target.profile.portalId, audience: "authentication-provider-test", generationId: target.id, methodId: body.methodId, returnTo: body.returnTo, purpose: "provider-test" }, result.step.expiresAt);
+      appendSetCookie(response, cookie(transactionCookie, this.cookies.seal(transaction), transaction.exp - nowSeconds(), "/auth", secure, "Lax"));
+      sendJSON(response, 201, { transactionId, result });
+    } catch (error) { if (error instanceof RequestJSONError) return apiError(response, 400, "invalid_provider_test_request"); throw error; }
     return true;
   }
 
@@ -132,6 +164,13 @@ export class BrokerIdentityProvider implements IdentityProvider {
       const signed = this.assertions.verify(value.assertion, transaction);
       const consumed = await this.broker.call(transaction.tenantId, "consumeAssertion", { assertion: signed, audience: transaction.audience, tenantId: transaction.tenantId, portalId: transaction.portalId, transactionId: transaction.transactionId });
       if (!isRecord(consumed) || consumed.consumed !== true) throw new Error("Broker 未确认 Assertion 消费");
+      if (transaction.purpose === "provider-test") {
+        const proof = { kind: "provider-test-proof", exp: Math.floor(Date.parse(signed.payload.expiresAt) / 1000), assertion: signed };
+        appendSetCookie(response, clearCookie(transactionCookie, "/auth", secure, "Lax"));
+        appendSetCookie(response, cookie(providerTestCookie, this.cookies.seal(proof), Number(proof.exp) - nowSeconds(), "/", secure, "Strict"));
+        sendJSON(response, 200, { transactionId: id, result: { state: "authenticated" }, returnTo: transaction.returnTo });
+        return true;
+      }
       const authorization = await this.authorization.resolve(signed.payload);
       const session = createBrokerSession(signed, authorization, this.config.sessionMaxAgeSeconds);
       appendSetCookie(response, clearCookie(transactionCookie, "/auth", secure, "Lax"));

@@ -1,3 +1,4 @@
+// Package main starts the database authentication Provider runtime.
 package main
 
 import (

@@ -1,3 +1,4 @@
+// Package broker routes governed authentication flows and signs one-use assertions.
 package broker
 
 import (
@@ -19,10 +20,11 @@ import (
 )
 
 const (
-	PluginID                  = "cn.vastplan.foundation.security.authentication-broker"
-	PluginVersion             = "0.1.0"
-	Capability                = "foundation.security.authentication.broker"
-	OperationConsumeAssertion = "consumeAssertion"
+	PluginID                   = "cn.vastplan.foundation.security.authentication-broker"
+	PluginVersion              = "0.1.0"
+	Capability                 = "foundation.security.authentication.broker"
+	OperationConsumeAssertion  = "consumeAssertion"
+	OperationBeginProviderTest = "beginProviderTest"
 )
 
 type Broker struct {
@@ -56,7 +58,7 @@ func New(catalog Catalog, transactions TransactionStore, signers ...AssertionSig
 }
 
 func Descriptor() []byte {
-	return []byte(`{"title":"企业认证 Broker","subcommands":[{"name":"describe","description":"列出门户允许的认证方式"},{"name":"begin","description":"开始认证事务"},{"name":"continue","description":"继续认证事务"},{"name":"resend","description":"重发认证挑战"},{"name":"cancel","description":"取消认证事务"},{"name":"health","description":"检查认证 Provider"},{"name":"consumeAssertion","description":"原子消费 Broker Assertion"}]}`)
+	return []byte(`{"title":"企业认证 Broker","subcommands":[{"name":"describe","description":"列出门户允许的认证方式"},{"name":"begin","description":"开始认证事务"},{"name":"continue","description":"继续认证事务"},{"name":"resend","description":"重发认证挑战"},{"name":"cancel","description":"取消认证事务"},{"name":"health","description":"检查认证 Provider"},{"name":"consumeAssertion","description":"原子消费 Broker Assertion"},{"name":"beginProviderTest","description":"对已验证草稿发起隔离认证测试"}]}`)
 }
 
 func (b *Broker) Contribution() sdk.Contribution {
@@ -70,6 +72,9 @@ func (b *Broker) Contribution() sdk.Contribution {
 	handlers[OperationConsumeAssertion] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 		return b.consumeAssertion(callCtx, payload)
 	}
+	handlers[OperationBeginProviderTest] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		return b.beginProviderTest(ctx, host, callCtx, payload)
+	}
 	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: handlers}
 }
 
@@ -79,6 +84,9 @@ func (b *Broker) Handle(ctx context.Context, host sdk.Host, callCtx *contractv1.
 	}
 	if operation == OperationConsumeAssertion {
 		return b.consumeAssertion(callCtx, payload)
+	}
+	if operation == OperationBeginProviderTest {
+		return b.beginProviderTest(ctx, host, callCtx, payload)
 	}
 	if operation == authenticationv1.OperationDescribe {
 		return b.describe(ctx, host, callCtx, payload)
@@ -120,6 +128,54 @@ func (b *Broker) Handle(ctx context.Context, host sdk.Host, callCtx *contractv1.
 	}
 	return result, response, nil
 }
+
+type TestProfileCatalog interface {
+	ResolveTestProfile(profileID, methodID string) (authenticationv1.ProviderCatalogEntry, bool, error)
+}
+
+type BeginProviderTestRequest struct {
+	TransactionID       string `json:"transactionId"`
+	ProviderProfileID   string `json:"providerProfileId"`
+	MethodID            string `json:"methodId"`
+	TenantID            string `json:"tenantId"`
+	PortalID            string `json:"portalId"`
+	Locale              string `json:"locale"`
+	ClientContextDigest string `json:"clientContextDigest"`
+}
+
+func (b *Broker) beginProviderTest(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+	if callCtx == nil || callCtx.Caller == nil || callCtx.Caller.Kind != contractv1.CallerKind_CALLER_KIND_SYSTEM || callCtx.Scene != "portal.bff" {
+		return brokerError("foundation.authentication.test_forbidden", errors.New("只有可信 Portal BFF 可以发起 Provider 测试")), nil, nil
+	}
+	catalog, ok := b.catalog.(TestProfileCatalog)
+	if !ok {
+		return brokerError("foundation.authentication.test_unavailable", errors.New("Catalog 不支持未发布 Provider 测试")), nil, nil
+	}
+	var request BeginProviderTestRequest
+	if err := strictJSON(raw, &request); err != nil {
+		return brokerError("foundation.authentication.invalid_request", err), nil, nil
+	}
+	provider, found, err := catalog.ResolveTestProfile(request.ProviderProfileID, request.MethodID)
+	if err != nil || !found {
+		return brokerError("foundation.authentication.test_profile_unavailable", errors.New("Provider Profile 未处于 Validated 或不支持该 Method")), nil, nil
+	}
+	begin := authenticationv1.BeginRequest{TransactionID: request.TransactionID, MethodID: request.MethodID, Audience: "authentication-provider-test", TenantID: request.TenantID, PortalID: request.PortalID, Locale: request.Locale, ClientContextDigest: request.ClientContextDigest, ProviderProfileID: provider.Profile.ID}
+	result, response, err := callProvider(ctx, host, callCtx, provider.ContributionID, authenticationv1.OperationBegin, mustMarshal(begin))
+	if err != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return brokerError("foundation.authentication.provider_failed", errors.New("测试 Provider 不可用")), nil, nil
+	}
+	parsed, err := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, response)
+	if err != nil {
+		return brokerError("foundation.authentication.provider_invalid", err), nil, nil
+	}
+	route := TransactionRoute{ProviderID: provider.ContributionID, ProfileID: provider.Profile.ID, MethodID: request.MethodID, TenantID: request.TenantID, PortalID: request.PortalID, Audience: "authentication-provider-test"}
+	if err := b.updateTransaction(authenticationv1.OperationBegin, &begin, parsed, route, false); err != nil {
+		return brokerError("foundation.authentication.transaction_unavailable", err), nil, nil
+	}
+	return result, response, nil
+}
+
+func mustMarshal(value any) []byte { raw, _ := json.Marshal(value); return raw }
 
 func (b *Broker) describe(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 	var request DescribeRequest

@@ -19,6 +19,15 @@ type staticCatalog struct {
 	value authenticationv1.AuthenticationProviderCatalog
 }
 
+type testableCatalog struct{ staticCatalog }
+
+func (testableCatalog) ResolveTestProfile(profileID, methodID string) (authenticationv1.ProviderCatalogEntry, bool, error) {
+	if profileID != "corp-draft" || methodID != "corporate-sso" {
+		return authenticationv1.ProviderCatalogEntry{}, false, nil
+	}
+	return authenticationv1.ProviderCatalogEntry{Profile: compositioncommonv1.Ref{ID: profileID, Revision: 1, Digest: strings.Repeat("e", 64)}, ContributionID: "oidc", Purposes: []authenticationv1.ProviderPurpose{authenticationv1.PurposePortalLogin}, Methods: []string{methodID}, SubjectNamespace: "enterprise.identity.oidc"}, true, nil
+}
+
 func (s staticCatalog) Load() (authenticationv1.AuthenticationProviderCatalog, error) {
 	return s.value, nil
 }
@@ -164,6 +173,27 @@ func TestBrokerKeepsIndependentOIDCAvailableWhenDatabaseProviderFails(t *testing
 	parsed, err := authenticationv1.ParseMethodResult(authenticationv1.OperationDescribe, raw)
 	if result.GetStatus() != contractv1.CallResult_STATUS_OK || err != nil || len(parsed.(*authenticationv1.DescribeResult).Methods) != 1 || parsed.(*authenticationv1.DescribeResult).Methods[0].MethodID != "corporate-sso" {
 		t.Fatalf("数据库 Provider 故障不应拖垮独立 OIDC: result=%+v raw=%s err=%v", result, raw, err)
+	}
+}
+
+func TestBrokerStartsIsolatedTestForValidatedUnpublishedProfile(t *testing.T) {
+	now := time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC)
+	transactions := NewMemoryTransactionStore(8)
+	transactions.now = func() time.Time { return now }
+	service, _ := New(testableCatalog{staticCatalog{testCatalog()}}, transactions)
+	service.now = func() time.Time { return now }
+	request := BeginProviderTestRequest{TransactionID: strings.Repeat("p", 32), ProviderProfileID: "corp-draft", MethodID: "corporate-sso", TenantID: "acme", PortalID: "management", Locale: "zh-CN", ClientContextDigest: strings.Repeat("c", 64)}
+	ctx := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "portal-host"}, Scene: "portal.bff"}
+	result, raw, _ := service.Handle(context.Background(), &fakeHost{now: now}, ctx, OperationBeginProviderTest, mustJSON(request))
+	if result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("未发布 Provider 测试启动失败: %+v", result)
+	}
+	if _, err := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, raw); err != nil {
+		t.Fatal(err)
+	}
+	route, found := transactions.Get(request.TransactionID)
+	if !found || route.ProfileID != "corp-draft" || route.Audience != "authentication-provider-test" {
+		t.Fatalf("测试事务未隔离: %+v", route)
 	}
 }
 

@@ -33,7 +33,7 @@ func TestCompatibility_BackendV1Matrix(t *testing.T) {
 	}
 
 	assertStringSet(t, "Backend 公开扩展点", extpoint.BackendPluginPoints(), []string{
-		"agent", "api.route", "event.sink", "hook", "permission.checker", "runner.capability", "tool.package",
+		"agent", "api.route", "authentication.provider", "event.sink", "hook", "permission.checker", "runner.capability", "tool.package",
 	})
 	assertStringSet(t, "内核稳定错误码", errorcode.KernelCodes(), []string{
 		"call.cycle_detected", "call.depth_exceeded", "capability.not_found",

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   AuthenticationProviderManagementState,
   PlatformAdminClient,
@@ -39,6 +39,8 @@ const state: AuthenticationProviderManagementState = {
   ],
 };
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe("Authentication Provider Workbench", () => {
   it("uses the collection framework and preserves CAS generation", async () => {
     const validate = vi.fn(async () => state);
@@ -73,10 +75,10 @@ describe("Authentication Provider Workbench", () => {
     expect(validate).toHaveBeenCalledWith("corporate-oidc", 4);
     expect(
       page.collection.actions?.map((item) => item.form).filter(Boolean),
-    ).toEqual(["create", "publish", "test"]);
+    ).toEqual(["create", "publish"]);
   });
 
-  it("does not turn a checkbox into a successful authentication test", async () => {
+  it("never accepts a browser-pasted Assertion as an authentication test", () => {
     const testProvider = vi.fn();
     const client = {
       testAuthenticationProvider: testProvider,
@@ -87,21 +89,19 @@ describe("Authentication Provider Workbench", () => {
       "/settings/authentication-providers",
       message("test", "title", "Providers"),
     );
-    const form = page.forms?.find((item) => item.id === "test")!;
-    const result = await form.submit(
-      {
-        value: { assertion: "not-json" },
-        selected: [
-          {
-            ...state.providers[0],
-            id: "corporate-oidc",
-            generation: 4,
-          } as never,
-        ],
-      },
-      new AbortController().signal,
-    );
-    expect(result).toHaveProperty("fieldErrors.assertion");
+    expect(page.forms?.some((item) => item.id === "test")).toBe(false);
+    expect(page.collection.actions?.find((item) => item.id === "test")?.form).toBeUndefined();
     expect(testProvider).not.toHaveBeenCalled();
+  });
+
+  it("records a server-sealed Provider test receipt on return", async () => {
+    const testProvider = vi.fn(async () => state);
+    vi.stubGlobal("location", { href: "https://portal.example/settings/authentication-providers?providerTestReceipt=corporate-oidc" });
+    vi.stubGlobal("history", { replaceState: vi.fn() });
+    const client = { authenticationProviderState: vi.fn(async () => state), testAuthenticationProvider: testProvider } as unknown as PlatformAdminClient;
+    const page = createAuthenticationProviderPage(client, "security", "/settings/authentication-providers", message("test", "title", "Providers"));
+    await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
+    expect(testProvider).toHaveBeenCalledWith("corporate-oidc", 4);
+    expect(globalThis.history.replaceState).toHaveBeenCalled();
   });
 });

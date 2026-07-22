@@ -6,6 +6,7 @@ import { startPortalDevelopmentUpdates } from "./portal-development";
 import { startPortalActivationUpdates, type PortalActivationUpdate } from "./portal-updates";
 import { PortalGenerationManager } from "./portal-generation";
 import { PortalRuntime, type PreparedPortal } from "./portal-runtime";
+import { AccessLoginPage } from "./access-login";
 
 declare const __VASTPLAN_DEV_HMR__: boolean;
 
@@ -27,6 +28,10 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   const recoveryEndpoint = options.recoveryEndpoint ?? "/v1/portal-recovery";
 	const hydrated = options.element.hasChildNodes();
 	const root = hydrated ? hydrateRoot(options.element, <PortalStarting />) : createRoot(options.element);
+  if (pathname === "/auth/access") {
+    root.render(<AccessLoginPage fetcher={fetcher} />);
+    return root;
+  }
   let prepared: PreparedPortal | undefined;
   let recoveryMode = false;
   let developmentError: string | undefined;

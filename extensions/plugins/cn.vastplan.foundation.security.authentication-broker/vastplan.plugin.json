@@ -28,6 +28,7 @@
       { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "cancel", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "execute", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "health", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "consumeAssertion", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "beginProviderTest", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "execute", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "get", "permissions": ["foundation.security.authentication.providers.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "createDraft", "permissions": ["foundation.security.authentication.providers.edit"], "access": "write", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "validate", "permissions": ["foundation.security.authentication.providers.edit"], "access": "write", "approval": "none" },
@@ -51,7 +52,8 @@
       { "name": "resend", "description": "重发认证挑战" },
       { "name": "cancel", "description": "取消认证事务" },
       { "name": "health", "description": "检查认证 Provider" },
-      { "name": "consumeAssertion", "description": "原子消费 Broker Assertion" }
+      { "name": "consumeAssertion", "description": "原子消费 Broker Assertion" },
+      { "name": "beginProviderTest", "description": "对已验证草稿发起隔离认证测试" }
     ]
   }, {
     "id": "foundation.security.authentication.providers",

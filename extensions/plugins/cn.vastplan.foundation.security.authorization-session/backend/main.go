@@ -1,3 +1,4 @@
+// Package main starts the trusted Authorization Session resolver runtime.
 package main
 
 import (

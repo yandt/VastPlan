@@ -50,3 +50,5 @@
 - Portal Host 删除直连 OIDC 模式；生产身份只接受 Authentication Broker。Node 本地验签后必须由 leader-routed Broker 原子消费 Assertion，再通过独立 Authorization Session 插件读取受签名 Policy Snapshot，外部 claim/Group/Role 不得直接进入权限上下文。
 - 新增 `cn.vastplan.foundation.security.authorization-session` Go 插件与稳定主体哈希；会话只投影无资源/属性约束的 allow 权限，deny 与撤销优先，细粒度约束仍交给 Authorization Engine。
 - Seed Handoff 接入 Broker Assertion 和签名 Policy Snapshot 双证明；可信 BFF 在 HttpOnly 密封 Session 内转交证明，企业主体完成授权绑定后经 CAS 进入 `EnterpriseActive`，Seed 登录随即关闭。
+- `/auth/access` 完成会话前语义 AuthenticationFlow；页面只渲染受限步骤，Provider 无法注入前端代码、样式或任意 Schema。
+- 未发布但已 `Validated` 的 Provider Profile 可由授权管理员启动隔离真实认证测试。Broker 锁定测试用 Profile 与 audience，Node 原子消费 Assertion 后只写入短时密封测试证明，不创建、替换或提权正常 Session；管理 BFF 只接受该服务端证明，拒绝浏览器自报 Assertion。

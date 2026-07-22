@@ -27,27 +27,33 @@ describe("BrokerIdentityProvider", () => {
     const rawPublic = Buffer.from(publicJWK.x!, "base64url");
     await writeFile(trustFile, JSON.stringify({ version: 1, keys: [{ keyId: "broker-key.1", publicKey: rawPublic.toString("base64").replace(/=+$/, "") }] }), { mode: 0o600 });
 
-    let consumed = false;
+    const consumed = new Set<string>();
+    const routes = new Map<string, { audience: string; profile: string }>();
     const broker: AuthenticationBrokerPort = { async call(_tenant, operation, payload) {
       const request = payload as Record<string, unknown>;
       if (operation === "describe") return { protocol: "authentication.method.v1", methods: [{ methodId: "password", providerId: "database", kind: "password", interaction: "form", displayName: { "zh-CN": "密码登录" }, amr: ["pwd"], acr: "aal1", supportsResend: false }] };
-      if (operation === "begin") return { result: { state: "challenge", step: { stepId: "s".repeat(32), kind: "password", expiresAt: new Date(Date.now() + 60_000).toISOString() } } };
+      if (operation === "begin" || operation === "beginProviderTest") {
+        routes.set(String(request.transactionId), { audience: operation === "begin" ? `portal:127.0.0.1:operations` : "authentication-provider-test", profile: operation === "begin" ? "enterprise-users" : String(request.providerProfileId) });
+        return { result: { state: "challenge", step: { stepId: "s".repeat(32), kind: "password", expiresAt: new Date(Date.now() + 60_000).toISOString() } } };
+      }
       if (operation === "continue") {
+        const route = routes.get(String(request.transactionId))!;
         const now = new Date(), assertion: AuthenticationAssertion = {
-          schemaVersion: "v1", assertionId: "assertion.00000001", transactionId: String(request.transactionId), providerId: "database", providerProfileId: "enterprise-users",
-          subject: { id: "alice", issuer: "urn:vastplan:database-users" }, tenantId: "acme", portalId: "operations", audience: `portal:127.0.0.1:operations`,
+          schemaVersion: "v1", assertionId: `assertion.${String(request.transactionId).slice(0, 16)}`, transactionId: String(request.transactionId), providerId: "database", providerProfileId: route.profile,
+          subject: { id: "alice", issuer: "urn:vastplan:database-users" }, tenantId: "acme", portalId: "operations", audience: route.audience,
           amr: ["pwd"], acr: "aal1", issuedAt: now.toISOString(), expiresAt: new Date(now.getTime() + 30_000).toISOString(), nonce: "n".repeat(32),
         };
         const signature = sign(null, Buffer.from(canonicalAssertion(assertion)), privateKey).toString("base64url");
         return { result: { state: "authenticated", evidence: { transactionId: assertion.transactionId } }, assertion: { payload: assertion, signature: { algorithm: "Ed25519", keyId: "broker-key.1", value: signature } } };
       }
       if (operation === "consumeAssertion") {
-        if (consumed) throw new Error("assertion replayed");
-        consumed = true; return { consumed: true };
+        const id = String((request.assertion as { payload: { assertionId: string } }).payload.assertionId);
+        if (consumed.has(id)) throw new Error("assertion replayed");
+        consumed.add(id); return { consumed: true };
       }
       throw new Error(`unexpected operation ${operation}`);
     } };
-    const authorization: SessionAuthorizationPort = { async resolve(assertion) { return { subjectId: "enterprise.alice", tenantId: assertion.tenantId, roles: ["platform.settings.read"], policy: { id: "platform.root", revision: 7, digest: "a".repeat(64) }, expiresAt: new Date(Date.now() + 300_000).toISOString() }; } };
+    const authorization: SessionAuthorizationPort = { async resolve(assertion) { return { subjectId: "enterprise.alice", tenantId: assertion.tenantId, roles: ["platform.settings.read", "foundation.security.authentication.providers.test"], policy: { id: "platform.root", revision: 7, digest: "a".repeat(64) }, expiresAt: new Date(Date.now() + 300_000).toISOString() }; } };
     const generation = createAccessGeneration({
       version: 1, revision: 1, id: "operations-access", tenantId: "acme", portalId: "operations", route: "/", domains: ["127.0.0.1"],
       platformProfile: { id: "portal", revision: 1, digest: "b".repeat(64) }, accessTemplate: "access",
@@ -76,8 +82,17 @@ describe("BrokerIdentityProvider", () => {
     const session = cookieFrom(complete.headers, "vastplan_session");
     expect(session).not.toContain("alice");
     const current = await fetch(`${portal}/auth/session`, { headers: { Cookie: `vastplan_session=${session}` } });
-    expect(await current.json()).toEqual({ authenticated: true, subject: "enterprise.alice", tenantId: "acme", roles: ["platform.settings.read"] });
-    expect(consumed).toBe(true);
+    expect(await current.json()).toEqual({ authenticated: true, subject: "enterprise.alice", tenantId: "acme", roles: ["platform.settings.read", "foundation.security.authentication.providers.test"] });
+
+    const testHeaders = { ...headers, Cookie: `vastplan_session=${session}; vastplan_csrf=${csrfCookie}` };
+    const beginTest = await fetch(`${portal}/auth/v1/provider-tests`, { method: "POST", headers: testHeaders, body: JSON.stringify({ providerProfileId: "draft-provider", methodId: "password", locale: "zh-CN", returnTo: "/settings/providers?providerTestReceipt=draft-provider" }) });
+    expect(beginTest.status).toBe(201);
+    const testTransactionId = (await beginTest.json() as { transactionId: string }).transactionId;
+    const testTransaction = cookieFrom(beginTest.headers, "vastplan_auth_tx");
+    const completeTest = await fetch(`${portal}/auth/v1/transactions/${testTransactionId}/continue`, { method: "POST", headers: { ...testHeaders, Cookie: `vastplan_session=${session}; vastplan_csrf=${csrfCookie}; vastplan_auth_tx=${testTransaction}` }, body: JSON.stringify({ stepId: "s".repeat(32), responses: [{ fieldId: "password", value: "test-only" }] }) });
+    expect(completeTest.status).toBe(200);
+    expect(cookieFrom(completeTest.headers, "vastplan_auth_test")).not.toContain("alice");
+    expect(consumed.size).toBe(2);
   });
 });
 

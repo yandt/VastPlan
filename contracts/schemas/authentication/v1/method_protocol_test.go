@@ -80,6 +80,27 @@ func TestAuthenticationStepEnforcesLoginSpecificSecretSemantics(t *testing.T) {
 	}
 }
 
+func TestAuthenticationRedirectRequiresHTTPSOutsideLoopback(t *testing.T) {
+	now := time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC)
+	step := authenticationv1.AuthenticationStep{
+		StepID: strings.Repeat("s", 32), Kind: authenticationv1.StepRedirect,
+		Title: localized("SSO"), Description: localized("继续登录"), SubmitLabel: localized("继续"),
+		Fields: []authenticationv1.AuthenticationField{}, RedirectURI: "http://identity.example.test/authorize", ExpiresAt: now.Add(time.Minute),
+	}
+	result := authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateChallenge, Step: &step}}
+	if _, err := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, marshal(t, result)); err == nil {
+		t.Fatal("企业认证 redirect 不得使用非回环 HTTP")
+	}
+	step.RedirectURI = "http://127.0.0.1:18080/callback"
+	if _, err := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, marshal(t, result)); err != nil {
+		t.Fatalf("本地开发回环 redirect 应可用: %v", err)
+	}
+	step.RedirectURI = "https://identity.example.test/authorize"
+	if _, err := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, marshal(t, result)); err != nil {
+		t.Fatalf("HTTPS redirect 应可用: %v", err)
+	}
+}
+
 func TestAuthenticatedMethodReturnsShortEvidenceNotRolesOrSession(t *testing.T) {
 	now := time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC)
 	evidence := authenticationv1.AuthenticationEvidence{

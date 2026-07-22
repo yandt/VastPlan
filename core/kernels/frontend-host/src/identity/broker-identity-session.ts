@@ -13,11 +13,12 @@ export interface BrokerTransaction extends Readonly<Record<string, unknown>> {
   readonly generationId: string;
   readonly methodId: string;
   readonly returnTo: string;
+  readonly purpose: "login" | "provider-test";
 }
 
 interface BrokerTransactionInput {
   readonly transactionId: string; readonly stepId: string; readonly tenantId: string; readonly portalId: string;
-  readonly audience: string; readonly generationId: string; readonly methodId: string; readonly returnTo: string;
+  readonly audience: string; readonly generationId: string; readonly methodId: string; readonly returnTo: string; readonly purpose: "login" | "provider-test";
 }
 
 export function createBrokerTransaction(value: BrokerTransactionInput, expiresAt: string): BrokerTransaction {
@@ -29,7 +30,7 @@ export function createBrokerTransaction(value: BrokerTransactionInput, expiresAt
 export function parseBrokerTransaction(value: Readonly<Record<string, unknown>>): BrokerTransaction {
   if (value.kind !== "broker-transaction" || !Number.isSafeInteger(value.exp) || !token(value.transactionId) || !token(value.stepId)
     || !safeID(value.tenantId) || !safeID(value.portalId) || typeof value.audience !== "string" || !/^[a-f0-9]{64}$/.test(String(value.generationId))
-    || !safeID(value.methodId) || typeof value.returnTo !== "string" || !validReturnTo(value.returnTo)) throw new Error("Broker transaction cookie 无效");
+    || !safeID(value.methodId) || typeof value.returnTo !== "string" || !validReturnTo(value.returnTo) || (value.purpose !== "login" && value.purpose !== "provider-test")) throw new Error("Broker transaction cookie 无效");
   return value as BrokerTransaction;
 }
 

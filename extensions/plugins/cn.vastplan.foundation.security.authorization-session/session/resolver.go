@@ -1,3 +1,4 @@
+// Package session projects signed authorization policy into bounded Portal sessions.
 package session
 
 import (

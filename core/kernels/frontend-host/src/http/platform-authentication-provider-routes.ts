@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { PlatformCapabilityPort } from "../capabilities/platform-management-client";
 import type { PlatformManagementTarget } from "../capabilities/platform-management-resolver";
-import type { Principal } from "../identity/identity-provider";
+import type { IdentityProvider, Principal } from "../identity/identity-provider";
 import { sendAPIError } from "./json-response";
 import { authorizePlatformOperation, sendPlatformResponse } from "./platform-response";
 import { requirePlatformRole, resourceName } from "./platform-route-contract";
@@ -11,7 +11,7 @@ const capability = "foundation.security.authentication.providers";
 const permissionPrefix = "foundation.security.authentication.providers";
 
 export class PlatformAuthenticationProviderRoutes {
-  public constructor(private readonly client: PlatformCapabilityPort) {}
+  public constructor(private readonly client: PlatformCapabilityPort, private readonly identity: IdentityProvider) {}
 
   public async handle(parts: readonly string[], principal: Principal, target: PlatformManagementTarget, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
     if (parts[0] !== "authentication-providers") return false;
@@ -29,7 +29,15 @@ export class PlatformAuthenticationProviderRoutes {
     };
     const action = actions[parts[2] ?? ""];
     if (action === undefined) return reject(response, 404, "not_found", method);
-    await withRequestJSON(request, response, async (body) => { await this.call(principal, target, action.operation, true, action.permission, { ...requireJSONObject(body), providerId }, response, signal); });
+    await withRequestJSON(request, response, async (body) => {
+      const payload: Record<string, unknown> = { ...requireJSONObject(body), providerId };
+      if (action.operation === "recordTest") {
+        const assertion = await this.identity.authenticationTestProof?.(request);
+        if (assertion === undefined) { reject(response, 409, "provider_authentication_test_required", method); return; }
+        payload.assertion = assertion;
+      }
+      await this.call(principal, target, action.operation, true, action.permission, payload, response, signal);
+    });
     return true;
   }
 

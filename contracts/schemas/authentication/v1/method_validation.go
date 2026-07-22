@@ -3,6 +3,7 @@ package authenticationv1
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"strings"
 	"time"
@@ -123,8 +124,8 @@ func validateStep(step AuthenticationStep) error {
 			return errors.New("redirect Step 只能携带 redirectUri")
 		}
 		parsed, err := url.Parse(step.RedirectURI)
-		if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.User != nil {
-			return errors.New("redirectUri 必须是无凭据 HTTP(S) URL")
+		if err != nil || parsed.Host == "" || (parsed.Scheme != "https" && !isLoopbackHTTP(parsed)) || parsed.User != nil {
+			return errors.New("redirectUri 必须是无凭据 HTTPS URL，HTTP 仅允许本机回环地址")
 		}
 		return nil
 	}
@@ -148,6 +149,18 @@ func validateStep(step AuthenticationStep) error {
 		}
 	}
 	return fmt.Errorf("Authentication Step %s 缺少对应字段", step.Kind)
+}
+
+func isLoopbackHTTP(parsed *url.URL) bool {
+	if parsed.Scheme != "http" {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 func validateField(field AuthenticationField) error {

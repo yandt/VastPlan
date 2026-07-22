@@ -18,6 +18,7 @@ export function createAuthenticationProviderPage(
   title: ReturnType<typeof message>,
 ): CollectionPageDefinition<ProviderRow> {
   let generation = 0;
+  let receiptConsumed = false;
   return defineCollectionPage<ProviderRow>({
     id: `authentication.providers.${serviceID}`,
     path,
@@ -103,7 +104,6 @@ export function createAuthenticationProviderPage(
           id: "test",
           label: message(namespace, "action.test", "认证测试"),
           placement: "record.row",
-          form: "test",
         },
         {
           id: "approve",
@@ -125,8 +125,16 @@ export function createAuthenticationProviderPage(
     },
     forms: providerForms(client, () => generation),
     async load(query: CollectionQuery, signal) {
-      const state: AuthenticationProviderManagementState =
+      let state: AuthenticationProviderManagementState =
         await client.authenticationProviderState();
+      const receipt = !receiptConsumed && globalThis.location !== undefined ? new URL(globalThis.location.href).searchParams.get("providerTestReceipt") : null;
+      if (receipt !== null && state.providers.some((item) => item.profile.id === receipt && item.lifecycle.state === "validated")) {
+        receiptConsumed = true;
+        state = await client.testAuthenticationProvider(receipt, state.generation);
+        const current = new URL(globalThis.location.href);
+        current.searchParams.delete("providerTestReceipt");
+        globalThis.history.replaceState({}, "", `${current.pathname}${current.search}${current.hash}`);
+      }
       generation = state.generation;
       const rows: ProviderRow[] = state.providers.map((item) => ({
         ...item,
@@ -156,6 +164,20 @@ export function createAuthenticationProviderPage(
         await client.validateAuthenticationProvider(row.id, row.generation);
       if (action.id === "approve")
         await client.approveAuthenticationProvider(row.id, row.generation);
+      if (action.id === "test") {
+        const current = new URL(globalThis.location.href);
+        if (current.searchParams.get("providerTestReceipt") === row.id) {
+          await client.testAuthenticationProvider(row.id, row.generation);
+          current.searchParams.delete("providerTestReceipt");
+          globalThis.history.replaceState({}, "", `${current.pathname}${current.search}${current.hash}`);
+        } else {
+          const returnTo = new URL(globalThis.location.href);
+          returnTo.searchParams.set("providerTestReceipt", row.id);
+          const method = row.profile.methods[0];
+          if (method === undefined) throw new Error("Provider Profile 未声明测试 Method");
+          globalThis.location.assign(`/auth/access?returnTo=${encodeURIComponent(`${returnTo.pathname}${returnTo.search}${returnTo.hash}`)}&providerTest=${encodeURIComponent(row.id)}&method=${encodeURIComponent(method)}`);
+        }
+      }
       if (action.id === "retire")
         await client.retireAuthenticationProvider(row.id, row.generation);
       return { notify: { title: action.label, kind: "success" } };

@@ -1,3 +1,4 @@
+// Package oidcmanifest_test verifies the OIDC Provider signed manifest contract.
 package oidcmanifest_test
 
 import (

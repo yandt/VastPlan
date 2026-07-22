@@ -1,3 +1,4 @@
+// Package databaseprovider authenticates enterprise subjects through the generic relational runtime.
 package databaseprovider
 
 import (

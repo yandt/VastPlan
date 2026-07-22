@@ -8,6 +8,8 @@ import { AddressingPlatformManagementClient } from "../capabilities/platform-man
 import { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import { FileIdentityProvider } from "../identity/file-identity-provider";
+import type { IdentityProvider } from "../identity/identity-provider";
+import type { SignedAuthenticationAssertion } from "../identity/signed-authentication-assertion";
 import { createPortalHandler } from "../http/portal-handler";
 import { createPortalFixture } from "./portal-fixture";
 import { writeSessionFixture } from "./session-fixture";
@@ -21,7 +23,7 @@ export function recordingPlatformInvoker(calls: PlatformInvocation[], response: 
   } };
 }
 
-export async function startPlatformManagementTestServer(invoker: TrustedCapabilityInvoker, roles: string[], rawBinding: Record<string, unknown>): Promise<{
+export async function startPlatformManagementTestServer(invoker: TrustedCapabilityInvoker, roles: string[], rawBinding: Record<string, unknown>, authenticationTestProof?: SignedAuthenticationAssertion): Promise<{
   origin: string; readHeaders: Record<string, string>; writeHeaders: Record<string, string>; close(): Promise<void>;
 }> {
   const binding = parseManagementBinding(rawBinding);
@@ -34,7 +36,10 @@ export async function startPlatformManagementTestServer(invoker: TrustedCapabili
   const sessionFile = join(root, "sessions.json");
   await writeSessionFixture(sessionFile, "browser-token", new Date(Date.now() + 60_000), roles);
   const assets = await PortalAssets.load(root);
-  const identity = await FileIdentityProvider.open(sessionFile);
+  const identity: IdentityProvider = authenticationTestProof === undefined ? await FileIdentityProvider.open(sessionFile) : {
+    async authenticate() { return { id: "alice", tenantId: "tenant-a", roles }; },
+    async authenticationTestProof() { return authenticationTestProof; },
+  };
   const platform = { resolver: new PlatformManagementResolver(composer), client: new AddressingPlatformManagementClient(invoker) };
   const server = createServer(createPortalHandler({ assets, identity, platform, secureCookies: false }));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

@@ -1,3 +1,4 @@
+// Package main starts the trusted Authentication Broker plugin runtime.
 package main
 
 import (

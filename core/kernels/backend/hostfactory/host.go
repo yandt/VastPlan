@@ -37,6 +37,7 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 		{Name: extpoint.ToolPackage, Dispatch: registry.DispatchSingle},
 		{Name: extpoint.Agent, Dispatch: registry.DispatchSingle},
 		{Name: extpoint.APIRoute, Dispatch: registry.DispatchSingle},
+		{Name: extpoint.AuthenticationProvider, Dispatch: registry.DispatchSingle},
 		{Name: extpoint.PermissionChecker, Dispatch: registry.DispatchSelect},
 		{Name: extpoint.EventSink, Dispatch: registry.DispatchFanout},
 		{Name: extpoint.Hook, Dispatch: registry.DispatchFanout},

@@ -18,8 +18,8 @@ import (
 )
 
 type databaseHost struct {
-	hash    string
-	queries int
+	hash        string
+	queries     int
 	unavailable bool
 }
 

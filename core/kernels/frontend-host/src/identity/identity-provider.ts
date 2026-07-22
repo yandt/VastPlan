@@ -11,6 +11,7 @@ export interface Principal {
 export interface IdentityProvider {
 	authenticate(request: IncomingMessage): Promise<Principal>;
 	authenticationProof?(request: IncomingMessage): Promise<SignedAuthenticationAssertion | undefined>;
+	authenticationTestProof?(request: IncomingMessage): Promise<SignedAuthenticationAssertion | undefined>;
 	handle?(request: IncomingMessage, response: ServerResponse, path: string, secureCookies: boolean): Promise<boolean>;
 	loginRedirect?(path: string): string;
 }

@@ -25,4 +25,4 @@ export class AddressingAuthenticationBroker implements AuthenticationBrokerPort 
   }
 }
 
-const allowedOperations = new Set(["describe", "begin", "continue", "resend", "cancel", "health", "consumeAssertion"]);
+const allowedOperations = new Set(["describe", "begin", "continue", "resend", "cancel", "health", "consumeAssertion", "beginProviderTest"]);
