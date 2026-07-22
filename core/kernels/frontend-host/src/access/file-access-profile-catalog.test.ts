@@ -31,6 +31,15 @@ describe("FileAccessProfileCatalog", () => {
     const duplicate = await writeCatalog([profile("one", "/"), profile("two", "/")]);
     await expect(FileAccessProfileCatalog.open(duplicate)).rejects.toThrow(/路由冲突/);
   });
+
+  it("reads the atomically published accessCatalog from Provider Management state", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vastplan-auth-publication-"));
+    const path = join(root, "providers.json");
+    await writeFile(path, JSON.stringify({ version: 1, generation: 7, providers: [], accessCatalog: { version: 1, revision: 2, id: "managed-access", profiles: [profile("managed", "/")] }, updatedAt: "2026-07-23T00:00:00Z" }), { mode: 0o600 });
+    await chmod(path, 0o600);
+    const catalog = await FileAccessProfileCatalog.open(path);
+    expect((await catalog.resolve("portal.example.test", "/"))?.profile.id).toBe("managed");
+  });
 });
 
 async function writeCatalog(profiles: readonly ReturnType<typeof profile>[]): Promise<string> {

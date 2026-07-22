@@ -9,6 +9,8 @@
         "schemaVersion": { "const": "v1" },
         "assertionId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
         "transactionId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/nonce" },
+        "providerId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/providerId" },
+        "providerProfileId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
         "subject": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/subjectIdentity" },
         "tenantId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
         "portalId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
@@ -19,7 +21,7 @@
         "expiresAt": { "type": "string", "format": "date-time" },
         "nonce": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/nonce" }
       },
-      "required": ["schemaVersion", "assertionId", "transactionId", "subject", "tenantId", "portalId", "audience", "amr", "acr", "issuedAt", "expiresAt", "nonce"]
+      "required": ["schemaVersion", "assertionId", "transactionId", "providerId", "providerProfileId", "subject", "tenantId", "portalId", "audience", "amr", "acr", "issuedAt", "expiresAt", "nonce"]
     },
     "signedAssertion": {
       "type": "object", "additionalProperties": false,

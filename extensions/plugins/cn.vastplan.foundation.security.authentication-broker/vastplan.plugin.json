@@ -7,12 +7,31 @@
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "engines": { "backend": "^0.1" },
+  "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": { "instancePolicy": "leader", "stateModel": "leader-owned", "visibility": "cluster", "routing": "leader", "routingDomain": "security" },
+  "authorization": {
+    "namespace": "foundation.security.authentication-provider-catalog",
+    "permissions": [
+      { "code": "foundation.security.authentication-provider-catalog.providers.read", "title": "读取认证 Provider", "scope": "platform", "risk": "medium", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.authentication-provider-catalog.providers.edit", "title": "编辑认证 Provider 草稿", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.authentication-provider-catalog.providers.test", "title": "测试认证 Provider", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.authentication-provider-catalog.providers.approve", "title": "批准认证 Provider", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.authentication-provider-catalog.providers.publish", "title": "发布认证 Provider Catalog", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "get", "permissions": ["foundation.security.authentication-provider-catalog.providers.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "createDraft", "permissions": ["foundation.security.authentication-provider-catalog.providers.edit"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "validate", "permissions": ["foundation.security.authentication-provider-catalog.providers.edit"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "recordTest", "permissions": ["foundation.security.authentication-provider-catalog.providers.test"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "approve", "permissions": ["foundation.security.authentication-provider-catalog.providers.approve"], "access": "approve", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "publish", "permissions": ["foundation.security.authentication-provider-catalog.providers.publish"], "access": "approve", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "retire", "permissions": ["foundation.security.authentication-provider-catalog.providers.edit"], "access": "write", "approval": "none" }
+    ]
+  },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "activation": ["onStartup", "onPortalStartup"],
-  "entry": { "backend": "backend/authentication-broker" },
+  "entry": { "backend": "backend/authentication-broker", "frontend": "frontend/dist/index.js" },
   "contributes": { "backend": { "tools": [{
     "id": "foundation.security.authentication-broker",
     "service_role": "backend",
@@ -25,5 +44,21 @@
       { "name": "cancel", "description": "取消认证事务" },
       { "name": "health", "description": "检查认证 Provider" }
     ]
-  }] } }
+  }, {
+    "id": "foundation.security.authentication-provider-catalog",
+    "service_role": "backend",
+    "title": "认证 Provider 目录管理",
+    "subcommands": [
+      { "name": "get", "description": "读取 Provider 管理状态" },
+      { "name": "createDraft", "description": "创建不可变 Provider Profile 草稿" },
+      { "name": "validate", "description": "验证 Provider Profile" },
+      { "name": "recordTest", "description": "记录隔离认证测试" },
+      { "name": "approve", "description": "批准已测试 Provider" },
+      { "name": "publish", "description": "原子发布 Provider Catalog 与门户 Binding" },
+      { "name": "retire", "description": "退役 Provider" }
+    ]
+  }] }, "frontend": {
+    "views": [{ "id": "foundation.security.authentication-provider-catalog", "title": "企业认证 Provider" }],
+    "menus": [{ "id": "foundation.security.authentication-provider-catalog.menu", "title": "企业认证 Provider" }]
+  } }
 }

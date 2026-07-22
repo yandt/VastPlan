@@ -9,6 +9,7 @@ import { PlatformDeploymentRoutes } from "./platform-deployment-routes";
 import { PlatformDatabaseRoutes } from "./platform-database-routes";
 import { requestHostname, resourceName } from "./platform-route-contract";
 import { PlatformSettingsRoutes } from "./platform-settings-routes";
+import { PlatformAuthenticationProviderRoutes } from "./platform-authentication-provider-routes";
 
 const prefix = "/v1/portals/";
 
@@ -18,6 +19,7 @@ export class PlatformManagementRoutes {
   private readonly database: PlatformDatabaseRoutes;
   private readonly artifacts: PlatformArtifactRoutes;
   private readonly deployment: PlatformDeploymentRoutes;
+  private readonly authenticationProviders: PlatformAuthenticationProviderRoutes;
 
   public constructor(private readonly resolver: PlatformManagementResolver, client: PlatformCapabilityPort) {
     this.settings = new PlatformSettingsRoutes(client);
@@ -25,6 +27,7 @@ export class PlatformManagementRoutes {
     this.database = new PlatformDatabaseRoutes(client);
     this.artifacts = new PlatformArtifactRoutes(client);
     this.deployment = new PlatformDeploymentRoutes(client);
+    this.authenticationProviders = new PlatformAuthenticationProviderRoutes(client);
   }
 
   public async handle(path: string, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
@@ -47,6 +50,7 @@ export class PlatformManagementRoutes {
     if (await this.database.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.artifacts.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.deployment.handle(resourceParts, principal, target, request, response, signal)) return true;
+    if (await this.authenticationProviders.handle(resourceParts, principal, target, request, response, signal)) return true;
     return reject(response, 404, "not_found", method);
   }
 }

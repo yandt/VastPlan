@@ -93,6 +93,7 @@ func TestAuthenticationAssertionIsOneUseSizedAndContainsNoAuthorization(t *testi
 	now := time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC)
 	payload := authenticationv1.AuthenticationAssertion{
 		SchemaVersion: authenticationv1.SchemaVersion, AssertionID: "assertion.00000001", TransactionID: strings.Repeat("t", 32),
+		ProviderID: "enterprise-oidc", ProviderProfileID: "corporate-oidc",
 		Subject: authenticationv1.SubjectIdentity{ID: "alice", Issuer: "https://identity.example.test"}, TenantID: "acme", PortalID: "operations", Audience: "portal.example.test",
 		AMR: []string{"pwd"}, ACR: "aal1", IssuedAt: now, ExpiresAt: now.Add(30 * time.Second), Nonce: strings.Repeat("n", 32),
 	}
@@ -117,5 +118,35 @@ func TestAuthenticationAssertionIsOneUseSizedAndContainsNoAuthorization(t *testi
 	payloadObject["roles"] = []string{"platform.admin"}
 	if _, err := authenticationv1.ParseSignedAssertion(marshal(t, object)); err == nil {
 		t.Fatal("Authentication Assertion 不得携带授权角色")
+	}
+}
+
+func TestBrokerContinueResultRequiresAssertionOnlyAfterAuthentication(t *testing.T) {
+	now := time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC)
+	evidence := authenticationv1.AuthenticationEvidence{
+		EvidenceID: "evidence.00000001", TransactionID: strings.Repeat("t", 32), MethodID: "password", ProviderID: "enterprise-oidc",
+		Subject: authenticationv1.SubjectIdentity{ID: "alice", Issuer: "https://identity.example.test"},
+		AMR:     []string{"pwd"}, ACR: "aal1", AuthenticatedAt: now, ExpiresAt: now.Add(30 * time.Second), Nonce: strings.Repeat("n", 32),
+	}
+	payload := authenticationv1.AuthenticationAssertion{
+		SchemaVersion: authenticationv1.SchemaVersion, AssertionID: "assertion.00000001", TransactionID: evidence.TransactionID,
+		ProviderID: evidence.ProviderID, ProviderProfileID: "corporate-oidc", Subject: evidence.Subject,
+		TenantID: "acme", PortalID: "operations", Audience: "portal.example.test", AMR: evidence.AMR, ACR: evidence.ACR,
+		IssuedAt: now, ExpiresAt: now.Add(30 * time.Second), Nonce: evidence.Nonce,
+	}
+	signed := authenticationv1.SignedAuthenticationAssertion{Payload: payload, Signature: authenticationv1.Signature{Algorithm: "Ed25519", KeyID: "auth-key.1", Value: strings.Repeat("A", 86)}}
+	authenticated := authenticationv1.BrokerContinueResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateAuthenticated, Evidence: &evidence}, Assertion: &signed}
+	if _, err := authenticationv1.ParseBrokerContinueResult(marshal(t, authenticated)); err != nil {
+		t.Fatal(err)
+	}
+	authenticated.Assertion = nil
+	if _, err := authenticationv1.ParseBrokerContinueResult(marshal(t, authenticated)); err == nil {
+		t.Fatal("authenticated Broker 响应必须携带 Assertion")
+	}
+	step := passwordStep(now)
+	challenge := authenticationv1.BrokerContinueResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateChallenge, Step: &step}}
+	challenge.Assertion = &signed
+	if _, err := authenticationv1.ParseBrokerContinueResult(marshal(t, challenge)); err == nil {
+		t.Fatal("非 authenticated Broker 响应不得携带 Assertion")
 	}
 }

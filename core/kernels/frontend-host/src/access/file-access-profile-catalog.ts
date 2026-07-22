@@ -33,7 +33,13 @@ export class FileAccessProfileCatalog implements AccessCatalogPort {
         throw new Error("Access Profile Catalog 必须是不可由组或其他用户写入的普通文件");
       }
       if (file.size > maxCatalogBytes) throw new Error("Access Profile Catalog 超过大小上限");
-      return parseAccessProfileCatalog(await handle.readFile("utf8")).profiles;
+      const raw = await handle.readFile("utf8");
+      let document: unknown;
+      try { document = JSON.parse(raw) as unknown; } catch { throw new Error("Access Profile Catalog 不是有效 JSON"); }
+      const candidate = typeof document === "object" && document !== null && !Array.isArray(document) && "accessCatalog" in document
+        ? (document as { accessCatalog?: unknown }).accessCatalog : document;
+      if (candidate === undefined) throw new Error("Provider Management publication 尚未包含 Access Catalog");
+      return parseAccessProfileCatalog(JSON.stringify(candidate)).profiles;
     } finally {
       await handle.close();
     }

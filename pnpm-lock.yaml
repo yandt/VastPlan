@@ -313,6 +313,31 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@26.1.1)
 
+  extensions/plugins/cn.vastplan.foundation.security.authentication-broker/frontend:
+    dependencies:
+      '@vastplan/platform-admin':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/platform-admin
+      '@vastplan/workbench-sdk':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/workbench-sdk
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@26.1.1)
+
+  extensions/plugins/cn.vastplan.foundation.security.authentication.provider.oidc/backend:
+    dependencies:
+      '@vastplan/backend-plugin':
+        specifier: workspace:*
+        version: link:../../../sdk/node/backend-plugin
+      '@vastplan/credential-lease-node':
+        specifier: workspace:*
+        version: link:../../../sdk/node/credential-lease
+
   extensions/plugins/cn.vastplan.platform.artifacts.repository/frontend:
     dependencies:
       '@vastplan/platform-admin':
@@ -460,6 +485,8 @@ importers:
       '@grpc/proto-loader':
         specifier: 0.8.0
         version: 0.8.0
+
+  extensions/sdk/node/credential-lease: {}
 
   extensions/sdk/ts/frontend-engine-contract:
     devDependencies:

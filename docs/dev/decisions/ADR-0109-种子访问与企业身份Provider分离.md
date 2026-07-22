@@ -43,3 +43,7 @@
 - Seed Authority、Provider Broker、管理 Workbench 与首个 OIDC Provider 继续按本文阶段实施。
 - 完成 Authentication Broker：按 tenant/Portal/method 唯一路由、服务端注入 Profile ID、transaction 锁定 Provider、Provider 输出复验与 TTL 上限；静态文件 Catalog 只是同一窄接口的 Seed 适配器。
 - 完成首个 Node OIDC Provider 的 public-client 路径：Authorization Code + PKCE、state/nonce、JWKS RS256/ES256、issuer/audience/azp/time 校验和一次性回调；confidential client 必须等待 Material Lease，禁止把 client secret 放入普通配置。
+- Provider 管理面完成 CAS 生命周期、职责分离审批、Broker 签名真实认证测试，以及 Provider Catalog 与 Access Catalog 的同代原子发布；管理 UI 只使用统一 Workbench 契约。
+- Broker 完成短时 Ed25519 Assertion 签发，Assertion 绑定 Provider Profile、transaction、tenant、Portal、audience 与稳定 subject；Provider Evidence 不再能直接建立平台 Session。
+- Node OIDC Provider 完成 confidential client 路径：配置只保存 `clientSecretRef`，秘密通过 audience/tenant/purpose 绑定的单次 Material Lease 取得并在回调后清零。
+- 新增通用关系数据库用户 Provider：通过 `foundation.data.relational.runtime` 与现有连接池查询，支持 `?`/`$1` 参数方言，使用有界 Argon2id PHC 验证、伪校验路径与统一凭据错误；它不属于内核，也不构成平台用户系统。

@@ -28,7 +28,7 @@ type fakeHost struct {
 	now   time.Time
 }
 
-func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 	h.calls = append(h.calls, target.Capability+"/"+target.GetOperation())
 	switch target.GetOperation() {
 	case authenticationv1.OperationDescribe:
@@ -38,10 +38,44 @@ func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *con
 		return okResult(), mustJSON(authenticationv1.BeginResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateChallenge, Step: &step}}), nil
 	case authenticationv1.OperationCancel:
 		return okResult(), []byte(`{"cancelled":true}`), nil
+	case authenticationv1.OperationContinue:
+		var request authenticationv1.ContinueRequest
+		_ = json.Unmarshal(payload, &request)
+		evidence := authenticationv1.AuthenticationEvidence{EvidenceID: "evidence.1", TransactionID: request.TransactionID, MethodID: "corporate-sso", ProviderID: "oidc", Subject: authenticationv1.SubjectIdentity{ID: "alice", Issuer: "https://identity.example.test"}, AMR: []string{"oidc"}, ACR: "aal2", AuthenticatedAt: h.now, ExpiresAt: h.now.Add(30 * time.Second), Nonce: strings.Repeat("n", 32)}
+		return okResult(), mustJSON(authenticationv1.ContinueResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateAuthenticated, Evidence: &evidence}}), nil
 	case authenticationv1.OperationHealth:
 		return okResult(), []byte(`{"ready":true,"providerId":"oidc"}`), nil
 	}
 	return nil, nil, nil
+}
+
+func TestBrokerSignsProfileBoundAssertionAfterRealEvidence(t *testing.T) {
+	now := time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC)
+	transactions := NewMemoryTransactionStore(8)
+	transactions.now = func() time.Time { return now }
+	signer, _ := GenerateAssertionKey("test-key")
+	service, _ := New(staticCatalog{testCatalog()}, transactions, signer)
+	service.now = func() time.Time { return now }
+	host := &fakeHost{now: now}
+	begin := authenticationv1.BeginRequest{TransactionID: strings.Repeat("z", 32), MethodID: "corporate-sso", Audience: "authentication-provider-test", TenantID: "acme", PortalID: "management", Locale: "en-US", ClientContextDigest: strings.Repeat("c", 64)}
+	_, beginRaw, _ := service.Handle(context.Background(), host, &contractv1.CallContext{}, authenticationv1.OperationBegin, mustJSON(begin))
+	parsed, _ := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, beginRaw)
+	step := parsed.(*authenticationv1.BeginResult).Result.Step
+	request := authenticationv1.ContinueRequest{TransactionID: begin.TransactionID, StepID: step.StepID, Redirect: &authenticationv1.RedirectResponse{Code: "code", State: strings.Repeat("q", 32)}}
+	result, raw, err := service.Handle(context.Background(), host, &contractv1.CallContext{}, authenticationv1.OperationContinue, mustJSON(request))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("Broker continue 失败: %+v %v", result, err)
+	}
+	brokerResult, err := authenticationv1.ParseBrokerContinueResult(raw)
+	if err != nil || brokerResult.Assertion == nil {
+		t.Fatalf("Broker Assertion 无效: %s %v", raw, err)
+	}
+	if err := signer.Verify(*brokerResult.Assertion); err != nil {
+		t.Fatal(err)
+	}
+	if brokerResult.Assertion.Payload.ProviderProfileID != "corp" || brokerResult.Assertion.Payload.Audience != "authentication-provider-test" {
+		t.Fatalf("Assertion 未绑定服务端 route: %+v", brokerResult.Assertion.Payload)
+	}
 }
 
 func testCatalog() authenticationv1.AuthenticationProviderCatalog {
@@ -103,14 +137,17 @@ func TestBrokerDescriptorMatchesManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err := pluginv1.BackendRuntimeContributions(manifest)
-	if err != nil || len(items) != 1 {
+	if err != nil || len(items) != 2 {
 		t.Fatalf("Manifest 无效: %+v %v", items, err)
 	}
-	var signed, runtime any
-	_ = json.Unmarshal(items[0].Descriptor, &signed)
-	_ = json.Unmarshal(Descriptor(), &runtime)
-	if string(mustJSON(signed)) != string(mustJSON(runtime)) {
-		t.Fatalf("descriptor 漂移: %s != %s", mustJSON(signed), mustJSON(runtime))
+	runtimeDescriptors := map[string][]byte{Capability: Descriptor(), ManagementCapability: ManagementDescriptor()}
+	for _, item := range items {
+		var signed, runtime any
+		_ = json.Unmarshal(item.Descriptor, &signed)
+		_ = json.Unmarshal(runtimeDescriptors[item.ID], &runtime)
+		if string(mustJSON(signed)) != string(mustJSON(runtime)) {
+			t.Fatalf("descriptor 漂移: %s != %s", mustJSON(signed), mustJSON(runtime))
+		}
 	}
 }
 

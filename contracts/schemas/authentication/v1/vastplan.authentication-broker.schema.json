@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-broker.schema.json",
+  "title": "VastPlan Authentication Broker v1",
+  "$defs": {
+    "continueResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "result": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/methodResult" },
+        "assertion": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-assertion.schema.json" }
+      },
+      "required": ["result"],
+      "allOf": [
+        {
+          "if": { "properties": { "result": { "properties": { "state": { "const": "authenticated" } }, "required": ["state"] } } },
+          "then": { "required": ["assertion"] },
+          "else": { "not": { "required": ["assertion"] } }
+        }
+      ]
+    }
+  },
+  "$ref": "#/$defs/continueResult"
+}

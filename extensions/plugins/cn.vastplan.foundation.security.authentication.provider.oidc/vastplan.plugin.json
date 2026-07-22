@@ -8,6 +8,7 @@
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "engines": { "backend": "^0.1" },
+  "capabilities": { "kernelServices": ["kernel.credential.material-lease"], "credentials": ["oidc.client-secret"], "resources": ["network.identity"] },
   "contextAccess": { "optional": ["trace", "request.deadline", "propagation.callPath"] },
   "execution": { "backend": { "driver": "node-worker", "minimumIsolation": "trusted-runtime", "requirements": { "node": ">=20" }, "features": ["channel.cancel.v1"], "node": { "workerSafe": true, "moduleFormat": "esm" } } },
   "runtime": { "instancePolicy": "leader", "stateModel": "leader-owned", "visibility": "cluster", "routing": "leader", "routingDomain": "security" },
@@ -30,6 +31,17 @@
             "properties": {
               "issuer": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 },
               "clientId": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "clientSecretRef": {
+                "type": "object", "additionalProperties": false,
+                "required": ["handle", "scope", "owner", "purpose", "version"],
+                "properties": {
+                  "handle": { "type": "string", "pattern": "^credential://managed/", "maxLength": 256 },
+                  "scope": { "const": "tenant" },
+                  "owner": { "const": "cn.vastplan.foundation.security.authentication.provider.oidc" },
+                  "purpose": { "const": "oidc.client-secret" },
+                  "version": { "type": "integer", "minimum": 1 }
+                }
+              },
               "authorizationEndpoint": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 },
               "tokenEndpoint": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 },
               "jwksUri": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 },

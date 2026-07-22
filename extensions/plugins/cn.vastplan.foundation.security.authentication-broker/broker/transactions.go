@@ -10,6 +10,9 @@ type TransactionRoute struct {
 	ProviderID string
 	ProfileID  string
 	MethodID   string
+	TenantID   string
+	PortalID   string
+	Audience   string
 	ExpiresAt  time.Time
 }
 

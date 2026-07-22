@@ -52,6 +52,25 @@ export interface PutDatabaseConnectionRequest {
 }
 
 export interface DatabaseProbe { ready: boolean; message?: string; }
+export type AuthenticationProviderState = "draft" | "validated" | "tested" | "approved" | "published" | "retired";
+export type AuthenticationProviderReadiness = "unknown" | "blocked" | "ready" | "degraded" | "failed";
+export interface AuthenticationProviderProfile {
+  version: 1; revision: number; id: string; contributionId: string; configuration: CompositionRef;
+  purposes: string[]; methods: string[]; subjectNamespace: string; requiredCapabilities: string[];
+}
+export interface ManagedAuthenticationProvider {
+  profile: AuthenticationProviderProfile;
+  lifecycle: { schemaVersion: "v1"; profile: CompositionRef; state: AuthenticationProviderState; readiness: AuthenticationProviderReadiness; unmetCapabilities: string[]; updatedAt: string; testedAt?: string; approvedAt?: string; publishedAt?: string };
+  testedBy?: string; approvedBy?: string;
+}
+export interface AuthenticationProviderManagementState {
+  version: 1;
+  generation: number;
+  providers: ManagedAuthenticationProvider[];
+  catalog?: unknown;
+  accessCatalog?: unknown;
+  updatedAt: string;
+}
 export interface ArtifactRepositoryMigration {
   migrationId?: string; phase?: string; sourceProvider?: string; sourceVolumeId?: string;
   targetProvider?: string; targetVolumeId?: string; files?: number; bytes?: number; digest?: string;
@@ -210,6 +229,13 @@ export class PlatformAdminClient {
   }
   public deleteDatabaseConnection(name: string): Promise<void> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}`, "DELETE").then(() => undefined); }
   public probeDatabaseConnection(name: string): Promise<DatabaseProbe> { return this.mutate(`${this.basePath}/database-connections/${segment(name)}/probe`, "POST", {}); }
+  public authenticationProviderState(): Promise<AuthenticationProviderManagementState> { return this.get(`${this.basePath}/authentication-providers`); }
+  public createAuthenticationProviderDraft(expectedGeneration: number, profile: AuthenticationProviderProfile): Promise<AuthenticationProviderManagementState> { return this.mutate(`${this.basePath}/authentication-providers`, "POST", { expectedGeneration, profile }); }
+  public validateAuthenticationProvider(id: string, expectedGeneration: number): Promise<AuthenticationProviderManagementState> { return this.authenticationProviderAction(id, "validate", { expectedGeneration }); }
+  public testAuthenticationProvider(id: string, expectedGeneration: number, assertion: unknown): Promise<AuthenticationProviderManagementState> { return this.authenticationProviderAction(id, "test", { expectedGeneration, assertion }); }
+  public approveAuthenticationProvider(id: string, expectedGeneration: number): Promise<AuthenticationProviderManagementState> { return this.authenticationProviderAction(id, "approve", { expectedGeneration }); }
+  public retireAuthenticationProvider(id: string, expectedGeneration: number): Promise<AuthenticationProviderManagementState> { return this.authenticationProviderAction(id, "retire", { expectedGeneration }); }
+  public publishAuthenticationProviders(request: { expectedGeneration: number; catalogId: string; catalogRevision: number; bindings: unknown[]; accessCatalog: unknown }): Promise<AuthenticationProviderManagementState> { return this.mutate(`${this.basePath}/authentication-providers/publish`, "POST", request); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
   public listArtifactCatalog(value: ArtifactCatalogQuery = {}): Promise<ArtifactCatalogPage> {
     const page = value.page ?? 1, pageSize = value.pageSize ?? 20;
@@ -284,6 +310,10 @@ export class PlatformAdminClient {
 
   private artifactMigrationAction(id: string, action: string, body: Record<string, unknown> = {}): Promise<ArtifactRepositoryMigration> {
     return this.mutate(`${this.basePath}/artifacts/migrations/${segment(id)}/${action}`, "POST", body);
+  }
+
+  private authenticationProviderAction(id: string, action: string, body: Record<string, unknown>): Promise<AuthenticationProviderManagementState> {
+    return this.mutate(`${this.basePath}/authentication-providers/${segment(id)}/${action}`, "POST", body);
   }
 
   private get<T>(path: string): Promise<T> { return this.call<T>(path, { method: "GET" }); }

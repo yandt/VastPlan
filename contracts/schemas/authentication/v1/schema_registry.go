@@ -16,6 +16,7 @@ const (
 	TypesSchemaURL     = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json"
 	MethodSchemaURL    = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-method.schema.json"
 	AssertionSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-assertion.schema.json"
+	BrokerSchemaURL    = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-broker.schema.json"
 	AccessSchemaURL    = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.access-profile.schema.json"
 	ProviderSchemaURL  = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-provider.schema.json"
 
@@ -35,6 +36,9 @@ var methodSchemaJSON []byte
 
 //go:embed vastplan.authentication-assertion.schema.json
 var assertionSchemaJSON []byte
+
+//go:embed vastplan.authentication-broker.schema.json
+var brokerSchemaJSON []byte
 
 //go:embed vastplan.access-profile.schema.json
 var accessSchemaJSON []byte
@@ -63,7 +67,8 @@ func compileSchemas() {
 		raw []byte
 	}{
 		{TypesSchemaURL, typesSchemaJSON}, {MethodSchemaURL, methodSchemaJSON},
-		{AssertionSchemaURL, assertionSchemaJSON}, {AccessSchemaURL, accessSchemaJSON},
+		{AssertionSchemaURL, assertionSchemaJSON}, {BrokerSchemaURL, brokerSchemaJSON},
+		{AccessSchemaURL, accessSchemaJSON},
 		{ProviderSchemaURL, providerSchemaJSON},
 	}
 	for _, resource := range resources {

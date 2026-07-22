@@ -3,6 +3,8 @@ package broker
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +27,7 @@ const (
 type Broker struct {
 	catalog      Catalog
 	transactions TransactionStore
+	signer       AssertionSigner
 	now          func() time.Time
 }
 
@@ -33,11 +36,15 @@ type DescribeRequest struct {
 	PortalID string `json:"portalId"`
 }
 
-func New(catalog Catalog, transactions TransactionStore) (*Broker, error) {
+func New(catalog Catalog, transactions TransactionStore, signers ...AssertionSigner) (*Broker, error) {
 	if catalog == nil || transactions == nil {
 		return nil, errors.New("Authentication Broker 需要 Catalog 和 Transaction Store")
 	}
-	return &Broker{catalog: catalog, transactions: transactions, now: func() time.Time { return time.Now().UTC() }}, nil
+	var signer AssertionSigner
+	if len(signers) > 0 {
+		signer = signers[0]
+	}
+	return &Broker{catalog: catalog, transactions: transactions, signer: signer, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
 func Descriptor() []byte {
@@ -87,6 +94,12 @@ func (b *Broker) Handle(ctx context.Context, host sdk.Host, callCtx *contractv1.
 	parsed, err := authenticationv1.ParseMethodResult(operation, response)
 	if err != nil {
 		return brokerError("foundation.authentication.provider_invalid", err), nil, nil
+	}
+	if operation == authenticationv1.OperationContinue {
+		response, err = b.finalizeContinue(parsed.(*authenticationv1.ContinueResult), route)
+		if err != nil {
+			return brokerError("foundation.authentication.assertion_failed", err), nil, nil
+		}
 	}
 	if err := b.updateTransaction(operation, request, parsed, route, terminal); err != nil {
 		return brokerError("foundation.authentication.transaction_unavailable", err), nil, nil
@@ -149,7 +162,7 @@ func (b *Broker) route(operation string, request any) (TransactionRoute, bool, e
 		if !found {
 			return TransactionRoute{}, false, errors.New("认证方式未绑定到已发布 Provider")
 		}
-		return TransactionRoute{ProviderID: provider.ContributionID, ProfileID: provider.Profile.ID, MethodID: begin.MethodID}, false, nil
+		return TransactionRoute{ProviderID: provider.ContributionID, ProfileID: provider.Profile.ID, MethodID: begin.MethodID, TenantID: begin.TenantID, PortalID: begin.PortalID, Audience: begin.Audience}, false, nil
 	}
 	transactionID := transactionID(request)
 	route, found := b.transactions.Get(transactionID)
@@ -157,6 +170,45 @@ func (b *Broker) route(operation string, request any) (TransactionRoute, bool, e
 		return TransactionRoute{}, true, errors.New("认证事务不存在或已过期")
 	}
 	return route, operation == authenticationv1.OperationCancel, nil
+}
+
+func (b *Broker) finalizeContinue(result *authenticationv1.ContinueResult, route TransactionRoute) ([]byte, error) {
+	if result.Result.State != authenticationv1.StateAuthenticated {
+		return json.Marshal(authenticationv1.BrokerContinueResult{Result: result.Result})
+	}
+	evidence := result.Result.Evidence
+	if evidence == nil || evidence.TransactionID == "" || evidence.ProviderID != route.ProviderID || evidence.MethodID != route.MethodID {
+		return nil, errors.New("Provider Evidence 与 Broker transaction 不一致")
+	}
+	if b.signer == nil {
+		return nil, errors.New("Authentication Broker 未配置 Assertion signer")
+	}
+	now := b.now()
+	if !evidence.ExpiresAt.After(now) {
+		return nil, errors.New("Provider Evidence 已过期")
+	}
+	assertionID, err := randomBrokerID()
+	if err != nil {
+		return nil, err
+	}
+	nonce, err := randomBrokerID()
+	if err != nil {
+		return nil, err
+	}
+	payload := authenticationv1.AuthenticationAssertion{SchemaVersion: authenticationv1.SchemaVersion, AssertionID: "assertion." + assertionID, TransactionID: evidence.TransactionID, ProviderID: route.ProviderID, ProviderProfileID: route.ProfileID, Subject: evidence.Subject, TenantID: route.TenantID, PortalID: route.PortalID, Audience: route.Audience, AMR: append([]string(nil), evidence.AMR...), ACR: evidence.ACR, IssuedAt: now, ExpiresAt: now.Add(30 * time.Second), Nonce: nonce}
+	signed, err := b.signer.Sign(payload)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(authenticationv1.BrokerContinueResult{Result: result.Result, Assertion: &signed})
+}
+
+func randomBrokerID() (string, error) {
+	raw := make([]byte, 24)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
 func (b *Broker) updateTransaction(operation string, request, result any, route TransactionRoute, terminal bool) error {

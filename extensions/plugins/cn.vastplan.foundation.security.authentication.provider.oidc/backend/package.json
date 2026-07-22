@@ -3,6 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "dependencies": { "@vastplan/backend-plugin": "workspace:*" },
+  "dependencies": { "@vastplan/backend-plugin": "workspace:*", "@vastplan/credential-lease-node": "workspace:*" },
   "scripts": { "test": "node --test test/*.test.mjs" }
 }
