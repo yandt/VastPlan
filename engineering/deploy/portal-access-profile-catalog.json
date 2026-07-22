@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "revision": 1,
+  "id": "local-portal-access",
+  "profiles": [
+    {
+      "version": 1,
+      "revision": 1,
+      "id": "local-operations-login",
+      "tenantId": "local",
+      "portalId": "operations",
+      "route": "/",
+      "domains": ["127.0.0.1", "localhost"],
+      "platformProfile": {
+        "id": "portal-default",
+        "revision": 2,
+        "digest": "9f4eaeff3f0c93c414f8bf4d4957d144cd5d48c4bf9daf42a0d05eb893b9d9ac"
+      },
+      "accessTemplate": "access",
+      "localization": {
+        "defaultLocale": "zh-CN",
+        "supportedLocales": ["zh-CN", "en-US"]
+      },
+      "authentication": {
+        "allowedMethods": ["password", "one-time-code"],
+        "defaultMethod": "password",
+        "reuseIdentifier": true
+      },
+      "branding": {
+        "productName": {
+          "zh-CN": "VastPlan 平台管理中心",
+          "en-US": "VastPlan Platform Center"
+        },
+        "supportPath": "/support",
+        "privacyPath": "/privacy"
+      }
+    }
+  ]
+}

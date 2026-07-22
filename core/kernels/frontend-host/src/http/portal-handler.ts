@@ -9,10 +9,13 @@ import type { PortalDeliveryStore } from "../runtime/portal-delivery-store";
 import type { PortalSSRPort } from "../runtime/portal-ssr-coordinator";
 import { createAPIHandler } from "./api-handler";
 import { setBaseSecurityHeaders, setIndexSecurityHeaders } from "./security-headers";
+import type { AccessCatalogPort } from "../access/access-catalog-port";
+import { serveAccessBootstrap } from "./access-bootstrap-route";
 
 export interface PortalHandlerOptions {
   assets: PortalAssets;
   identity?: IdentityProvider;
+  access?: AccessCatalogPort;
   secureCookies?: boolean;
   composer?: PortalComposerPort;
   interaction?: InteractionPort;
@@ -38,6 +41,11 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     if (path === "/v1" || path.startsWith("/v1/")) {
       if (api === undefined) return sendEmpty(response, 404);
       void api(request, response, path);
+      return;
+    }
+    if (path === "/auth/v1/bootstrap") {
+      if (options.access === undefined) return sendEmpty(response, 404);
+      void serveAccessBootstrap(options.access, request, response);
       return;
     }
     if (path === "/auth" || path.startsWith("/auth/")) {

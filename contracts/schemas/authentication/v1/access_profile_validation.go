@@ -48,6 +48,34 @@ func ParseAccessProfileCatalog(raw []byte) (AccessProfileCatalog, error) {
 	return catalog, nil
 }
 
+func ParseAccessBootstrap(raw []byte) (AccessBootstrap, error) {
+	if len(raw) > MaxAccessProfileBytes {
+		return AccessBootstrap{}, errors.New("Access Bootstrap 超过大小上限")
+	}
+	if err := validateSchema(AccessSchemaURL+"#/$defs/accessBootstrap", raw); err != nil {
+		return AccessBootstrap{}, err
+	}
+	var bootstrap AccessBootstrap
+	if err := decodeStrict(raw, &bootstrap); err != nil {
+		return AccessBootstrap{}, err
+	}
+	if err := validateAccessLocalization(bootstrap.Localization); err != nil {
+		return AccessBootstrap{}, err
+	}
+	if !contains(bootstrap.Authentication.AllowedMethods, bootstrap.Authentication.DefaultMethod) {
+		return AccessBootstrap{}, errors.New("Access Bootstrap defaultMethod 必须包含在 allowedMethods 中")
+	}
+	if err := validateLocalizedText(bootstrap.Branding.ProductName); err != nil {
+		return AccessBootstrap{}, fmt.Errorf("Access Bootstrap branding: %w", err)
+	}
+	for _, path := range []string{bootstrap.Branding.SupportPath, bootstrap.Branding.PrivacyPath} {
+		if path != "" && !validLocalPath(path) {
+			return AccessBootstrap{}, errors.New("Access Bootstrap 支持与隐私路径必须是安全同源路径")
+		}
+	}
+	return bootstrap, nil
+}
+
 func (profile AccessProfile) Digest() string {
 	clone := cloneAccessProfile(profile)
 	normalizeAccessProfile(&clone)
@@ -70,6 +98,7 @@ func cloneAccessProfile(profile AccessProfile) AccessProfile {
 	clone := profile
 	clone.Domains = append([]string(nil), profile.Domains...)
 	clone.Authentication.AllowedMethods = append([]string(nil), profile.Authentication.AllowedMethods...)
+	clone.Localization.SupportedLocales = append([]string(nil), profile.Localization.SupportedLocales...)
 	return clone
 }
 
@@ -101,10 +130,22 @@ func validateAccessProfile(profile AccessProfile) error {
 	if !contains(profile.Authentication.AllowedMethods, profile.Authentication.DefaultMethod) {
 		return errors.New("Access Profile defaultMethod 必须包含在 allowedMethods 中")
 	}
+	if err := validateAccessLocalization(profile.Localization); err != nil {
+		return fmt.Errorf("Access Profile localization: %w", err)
+	}
 	if (profile.Branding.LogoAssetID == "") != (profile.Branding.LogoSHA256 == "") {
 		return errors.New("Access Profile logoAssetId 与 logoSha256 必须同时出现")
 	}
 	return nil
+}
+
+func validateAccessLocalization(policy AccessLocalizationPolicy) error {
+	for _, locale := range policy.SupportedLocales {
+		if strings.EqualFold(locale, policy.DefaultLocale) {
+			return nil
+		}
+	}
+	return errors.New("defaultLocale 必须包含在 supportedLocales 中")
 }
 
 func validLocalPath(value string) bool {

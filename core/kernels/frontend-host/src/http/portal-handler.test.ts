@@ -10,6 +10,9 @@ import type { PortalSSRPort } from "../runtime/portal-ssr-coordinator";
 import { createPortalFixture } from "../testing/portal-fixture";
 import { writeSessionFixture } from "../testing/session-fixture";
 import { createPortalHandler } from "./portal-handler";
+import type { AccessCatalogPort } from "../access/access-catalog-port";
+import { createAccessGeneration } from "../access/access-generation";
+import type { AccessProfile } from "../access/access-profile-contract";
 
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve())))));
@@ -92,13 +95,35 @@ describe("createPortalHandler", () => {
 		const body = await response.text();
 		expect(body).toContain('<template shadowrootmode="open"><div id="vastplan-portal-root"><main aria-busy="true">VastPlan</main>');
 	});
+
+  it("serves a host-bound public bootstrap before identity login routes", async () => {
+    const access: AccessCatalogPort = { async resolve(_host, path) {
+      if (path !== "/admin") return undefined;
+      return createAccessGeneration(accessProfile);
+    } };
+    const origin = await startFixtureServer(undefined, undefined, undefined, access);
+    const response = await fetch(`${origin}/auth/v1/bootstrap?returnTo=%2Fadmin`, { headers: { Host: "portal.example.test" } });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(await response.json()).toMatchObject({ schemaVersion: "v1", accessTemplate: "access" });
+    expect((await fetch(`${origin}/auth/v1/bootstrap?returnTo=https%3A%2F%2Fevil.example`, { headers: { Host: "portal.example.test" } })).status).toBe(400);
+    expect((await fetch(`${origin}/auth/v1/bootstrap`, { method: "POST", headers: { Host: "portal.example.test" } })).status).toBe(405);
+  });
 });
 
-async function startFixtureServer(identity?: IdentityProvider, composer?: PortalComposerPort, ssr?: PortalSSRPort): Promise<string> {
+async function startFixtureServer(identity?: IdentityProvider, composer?: PortalComposerPort, ssr?: PortalSSRPort, access?: AccessCatalogPort): Promise<string> {
   const assets = await PortalAssets.load(await createPortalFixture());
-  const server = createServer(createPortalHandler({ assets, identity, secureCookies: false, ...(composer === undefined ? {} : { composer }), ...(ssr === undefined ? {} : { ssr }) }));
+  const server = createServer(createPortalHandler({ assets, identity, secureCookies: false, ...(composer === undefined ? {} : { composer }), ...(ssr === undefined ? {} : { ssr }), ...(access === undefined ? {} : { access }) }));
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
   return `http://127.0.0.1:${address.port}`;
 }
+
+const accessProfile: AccessProfile = Object.freeze({
+  version: 1, revision: 1, id: "admin-login", tenantId: "acme", portalId: "admin", route: "/admin", domains: Object.freeze(["portal.example.test"]),
+  platformProfile: Object.freeze({ id: "portal-default", revision: 2, digest: "a".repeat(64) }), accessTemplate: "access",
+  localization: Object.freeze({ defaultLocale: "zh-CN", supportedLocales: Object.freeze(["zh-CN", "en-US"]) }),
+  authentication: Object.freeze({ allowedMethods: Object.freeze(["password"]), defaultMethod: "password", reuseIdentifier: true }),
+  branding: Object.freeze({ productName: Object.freeze({ "zh-CN": "VastPlan", "en-US": "VastPlan" }) }),
+});

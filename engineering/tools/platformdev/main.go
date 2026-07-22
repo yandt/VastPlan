@@ -489,6 +489,13 @@ func (r *runtime) writeFixtures() error {
 	if err := os.WriteFile(filepath.Join(r.runDir, "backend-platform-catalog.json"), catalogRaw, 0o600); err != nil {
 		return err
 	}
+	if err := materializeAccessProfileCatalog(
+		filepath.Join(r.options.root, "engineering", "deploy", "portal-access-profile-catalog.json"),
+		filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json"),
+		filepath.Join(r.runDir, "access-profile-catalog.json"),
+	); err != nil {
+		return err
+	}
 	return r.writeSeedRepositoryProfile()
 }
 
@@ -605,6 +612,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"--tls-cert", filepath.Join(r.runDir, "secrets", "tls-cert.pem"), "--tls-key", filepath.Join(r.runDir, "secrets", "tls-key.pem"),
 		"--session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json"),
 		"--portal-assets", filepath.Join(r.runDir, "portal-assets"),
+		"--access-profile-catalog", filepath.Join(r.runDir, "access-profile-catalog.json"),
 		"--frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
 		"--frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
 		"--nats-servers", natsURL, "--allow-insecure-nats",
@@ -855,7 +863,7 @@ func (r *runtime) startProxy() error {
 		mux.HandleFunc("/__vastplan_dev/modules/", r.hmr.module)
 		mux.HandleFunc("/assets/", r.hmr.portalAssets)
 		mux.HandleFunc("/", func(w http.ResponseWriter, request *http.Request) {
-			if request.URL.Path == "/v1" || strings.HasPrefix(request.URL.Path, "/v1/") {
+			if request.URL.Path == "/v1" || strings.HasPrefix(request.URL.Path, "/v1/") || request.URL.Path == "/auth" || strings.HasPrefix(request.URL.Path, "/auth/") {
 				proxy.ServeHTTP(w, request)
 				return
 			}

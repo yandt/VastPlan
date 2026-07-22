@@ -60,6 +60,9 @@ importers:
       '@vastplan/frontend-engine-contract':
         specifier: workspace:*
         version: link:../../../extensions/sdk/ts/frontend-engine-contract
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
       openid-client:
         specifier: ^6.8.4
         version: 6.8.4

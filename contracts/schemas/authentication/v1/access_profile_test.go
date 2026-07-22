@@ -15,8 +15,35 @@ func validAccessProfile(id, route string) authenticationv1.AccessProfile {
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: id},
 		TenantID: "acme", PortalID: "operations", Route: route, Domains: []string{"portal.example.test"},
 		PlatformProfile: compositioncommonv1.Ref{ID: "portal-default", Revision: 3, Digest: strings.Repeat("a", 64)},
-		AccessTemplate:  "access", Authentication: authenticationv1.AccessMethodPolicy{AllowedMethods: []string{"password", "one-time-code"}, DefaultMethod: "password", ReuseIdentifier: true},
-		Branding: authenticationv1.AccessBranding{ProductName: localized("VastPlan"), SupportPath: "/support", PrivacyPath: "/privacy"},
+		AccessTemplate:  "access", Localization: authenticationv1.AccessLocalizationPolicy{DefaultLocale: "zh-CN", SupportedLocales: []string{"zh-CN", "en-US"}},
+		Authentication: authenticationv1.AccessMethodPolicy{AllowedMethods: []string{"password", "one-time-code"}, DefaultMethod: "password", ReuseIdentifier: true},
+		Branding:       authenticationv1.AccessBranding{ProductName: localized("VastPlan"), SupportPath: "/support", PrivacyPath: "/privacy"},
+	}
+}
+
+func TestAccessBootstrapExcludesServerSideSelectionData(t *testing.T) {
+	bootstrap := authenticationv1.AccessBootstrap{
+		SchemaVersion: authenticationv1.SchemaVersion, GenerationID: strings.Repeat("b", 64), AccessTemplate: "access",
+		Localization:   authenticationv1.AccessLocalizationPolicy{DefaultLocale: "zh-CN", SupportedLocales: []string{"zh-CN", "en-US"}},
+		Authentication: authenticationv1.AccessMethodPolicy{AllowedMethods: []string{"password"}, DefaultMethod: "password", ReuseIdentifier: true},
+		Branding:       authenticationv1.PublicAccessBranding{ProductName: localized("VastPlan")},
+	}
+	parsed, err := authenticationv1.ParseAccessBootstrap(marshal(t, bootstrap))
+	if err != nil || parsed.GenerationID != bootstrap.GenerationID {
+		t.Fatalf("Access Bootstrap 解析失败: %+v err=%v", parsed, err)
+	}
+	var public map[string]any
+	if err := json.Unmarshal(marshal(t, bootstrap), &public); err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"tenantId", "portalId", "platformProfile"} {
+		if _, exists := public[forbidden]; exists {
+			t.Fatalf("公共 bootstrap 不得暴露 %s", forbidden)
+		}
+	}
+	public["branding"].(map[string]any)["logoSha256"] = strings.Repeat("c", 64)
+	if _, err := authenticationv1.ParseAccessBootstrap(marshal(t, public)); err == nil {
+		t.Fatal("公共 bootstrap 不得接受内部 Logo 摘要")
 	}
 }
 

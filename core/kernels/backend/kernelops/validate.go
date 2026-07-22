@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"io"
 
+	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
 )
 
 const (
@@ -22,6 +24,7 @@ const (
 	ConfigKindPortalPlatformV1    = "portal-platform-profile-v1"
 	ConfigKindPortalCatalogV1     = "portal-platform-catalog-v1"
 	ConfigKindPortalApplicationV1 = "portal-application-composition-v1"
+	ConfigKindAccessCatalogV1     = "access-profile-catalog-v1"
 	ConfigKindDeploymentV2        = "deployment-v2"
 	ConfigKindActualState         = "actual-state"
 )
@@ -47,7 +50,7 @@ func RunValidate(output io.Writer, args []string) error {
 		return err
 	}
 	if flags.NArg() != 0 || *kind == "" || *filename == "" {
-		return errors.New("用法: validate -kind <desired-v1|platform-profile-v1|application-composition-v1|backend-platform-catalog-v1|portal-platform-profile-v1|portal-platform-catalog-v1|portal-application-composition-v1|deployment-v2|actual-state> -file <配置.json|yaml>")
+		return errors.New("用法: validate -kind <desired-v1|platform-profile-v1|application-composition-v1|backend-platform-catalog-v1|portal-platform-profile-v1|portal-platform-catalog-v1|portal-application-composition-v1|access-profile-catalog-v1|deployment-v2|actual-state> -file <配置.json|yaml>")
 	}
 
 	result := validationResult{Kind: *kind, Valid: true}
@@ -112,6 +115,16 @@ func RunValidate(output io.Writer, args []string) error {
 			return err
 		}
 		result.SchemaVersion, result.Revision, result.Digest, result.Units = composition.Version, composition.Revision, composition.Digest(), len(composition.Plugins)
+	case ConfigKindAccessCatalogV1:
+		raw, err := configfile.Load(*filename)
+		if err != nil {
+			return err
+		}
+		catalog, err := authenticationv1.ParseAccessProfileCatalog(raw)
+		if err != nil {
+			return err
+		}
+		result.SchemaVersion, result.Revision, result.Digest, result.Units = catalog.Version, catalog.Revision, catalog.Digest(), len(catalog.Profiles)
 	case ConfigKindActualState:
 		if err := checkRegularFile(*filename, maxActualStateBytes); err != nil {
 			return fmt.Errorf("实际态文件: %w", err)

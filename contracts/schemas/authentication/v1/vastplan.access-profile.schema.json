@@ -23,6 +23,24 @@
       },
       "required": ["productName"]
     },
+    "publicAccessBranding": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "productName": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/localizedText" },
+        "logoAssetId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+        "supportPath": { "type": "string", "pattern": "^/", "not": { "pattern": "^//" }, "maxLength": 512 },
+        "privacyPath": { "type": "string", "pattern": "^/", "not": { "pattern": "^//" }, "maxLength": 512 }
+      },
+      "required": ["productName"]
+    },
+    "accessLocalizationPolicy": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "defaultLocale": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/locale" },
+        "supportedLocales": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/locale" }, "uniqueItems": true, "minItems": 1, "maxItems": 32 }
+      },
+      "required": ["defaultLocale", "supportedLocales"]
+    },
     "accessProfile": {
       "type": "object", "additionalProperties": false,
       "properties": {
@@ -32,13 +50,14 @@
         "tenantId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
         "portalId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
         "route": { "type": "string", "pattern": "^/", "not": { "pattern": "^//" }, "maxLength": 512 },
-        "domains": { "type": "array", "items": { "type": "string", "pattern": "^(?:localhost|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$", "maxLength": 253 }, "uniqueItems": true, "minItems": 1, "maxItems": 64 },
+        "domains": { "type": "array", "items": { "type": "string", "pattern": "^(?:localhost|(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})(?:\\.(?:25[0-5]|2[0-4][0-9]|1?[0-9]{1,2})){3}|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$", "maxLength": 253 }, "uniqueItems": true, "minItems": 1, "maxItems": 64 },
         "platformProfile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionRef" },
         "accessTemplate": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "localization": { "$ref": "#/$defs/accessLocalizationPolicy" },
         "authentication": { "$ref": "#/$defs/accessMethodPolicy" },
         "branding": { "$ref": "#/$defs/accessBranding" }
       },
-      "required": ["version", "revision", "id", "tenantId", "portalId", "route", "domains", "platformProfile", "accessTemplate", "authentication", "branding"]
+      "required": ["version", "revision", "id", "tenantId", "portalId", "route", "domains", "platformProfile", "accessTemplate", "localization", "authentication", "branding"]
     },
     "accessProfileCatalog": {
       "type": "object", "additionalProperties": false,
@@ -49,6 +68,18 @@
         "profiles": { "type": "array", "items": { "$ref": "#/$defs/accessProfile" }, "minItems": 1, "maxItems": 4096 }
       },
       "required": ["version", "revision", "id", "profiles"]
+    },
+    "accessBootstrap": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": "v1" },
+        "generationId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/digest" },
+        "accessTemplate": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "localization": { "$ref": "#/$defs/accessLocalizationPolicy" },
+        "authentication": { "$ref": "#/$defs/accessMethodPolicy" },
+        "branding": { "$ref": "#/$defs/publicAccessBranding" }
+      },
+      "required": ["schemaVersion", "generationId", "accessTemplate", "localization", "authentication", "branding"]
     }
   },
   "$ref": "#/$defs/accessProfile"

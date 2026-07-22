@@ -10,6 +10,14 @@ describe("parseHostArguments", () => {
     expect(config.identity).toEqual({ kind: "file", sessionFile: "/srv/vastplan/sessions.json" });
   });
 
+  it("accepts an explicit pre-session Access Profile Catalog", () => {
+    const config = parseHostArguments([
+      "--portal-assets", "bin/portal", "--session-file", "sessions.json", "--allow-insecure-http",
+      "--access-profile-catalog", "config/access-profiles.json",
+    ], "/srv/vastplan");
+    expect(config.accessProfileCatalog).toBe("/srv/vastplan/config/access-profiles.json");
+  });
+
   it("requires a complete HTTPS OIDC code-flow configuration", () => {
     const base = ["--portal-assets", "bin/portal", "--tls-cert", "portal.crt", "--tls-key", "portal.key", "--identity-provider", "oidc"];
     expect(() => parseHostArguments([...base, "--oidc-issuer", "https://id.example.com"])).toThrow(/oidc-client-id/i);

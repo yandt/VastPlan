@@ -15,6 +15,7 @@ import { PlatformManagementResolver } from "../capabilities/platform-management-
 import { PortalDeliveryStore } from "../runtime/portal-delivery-store";
 import { PortalSSRCoordinator } from "../runtime/portal-ssr-coordinator";
 import { ServerGenerationManager } from "../workers/server-generation-manager";
+import { FileAccessProfileCatalog } from "../access/file-access-profile-catalog";
 
 interface PortalServerResources {
 	readonly addressing?: NodeAddressingRuntime;
@@ -26,6 +27,7 @@ const serverResources = new WeakMap<Server, PortalServerResources>();
 export async function createPortalServer(config: PortalHostConfig): Promise<Server> {
   const assets = await PortalAssets.load(config.portalAssets);
   const identity = await openIdentityProvider(config.identity);
+  const access = config.accessProfileCatalog === undefined ? undefined : await FileAccessProfileCatalog.open(config.accessProfileCatalog);
   const addressing = config.addressing === undefined ? undefined : await openNodeAddressing(config.addressing);
   let generations: ServerGenerationManager | undefined;
   try {
@@ -42,6 +44,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
     const ssr = composer === undefined || generations === undefined ? undefined : new PortalSSRCoordinator(composer, identity, generations);
     const handler = createPortalHandler({
       assets, identity, secureCookies: config.tls !== undefined,
+      ...(access === undefined ? {} : { access }),
       ...(composer === undefined ? {} : { composer }),
       ...(interaction === undefined ? {} : { interaction }),
       ...(platform === undefined ? {} : { platform }),
