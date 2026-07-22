@@ -108,24 +108,14 @@ func startPortalKernelProcess(t *testing.T, root string, arguments ...string) *p
 	return process
 }
 
-func startOIDCPortalKernel(t *testing.T, root string, addressing *portalAddressingFixture, oidc *portalOIDCProvider, deliveryOrigin string) *portalKernelProcess {
+func startFilePortalKernel(t *testing.T, root string, addressing *portalAddressingFixture, identity *portalFileIdentityFixture, deliveryOrigin string) *portalKernelProcess {
 	t.Helper()
 	temporary := t.TempDir()
 	portalAssets := writePortalKernelAssets(t, temporary)
 	portalCert, portalKey := writePortalKernelTLSCertificate(t, temporary)
-	sessionKey := make([]byte, 32)
-	if _, err := rand.Read(sessionKey); err != nil {
-		t.Fatal(err)
-	}
-	sessionKeyFile := filepath.Join(temporary, "portal-session.key")
-	if err := os.WriteFile(sessionKeyFile, sessionKey, 0o600); err != nil {
-		t.Fatal(err)
-	}
 	arguments := []string{
 		"--portal-assets", portalAssets, "--tls-cert", portalCert, "--tls-key", portalKey,
-		"--identity-provider", "oidc", "--oidc-issuer", oidc.issuer, "--oidc-client-id", oidc.clientID,
-		"--oidc-client-auth-method", "none", "--oidc-redirect-uri", portalBaseURLPlaceholder + "/auth/callback",
-		"--oidc-session-key-file", sessionKeyFile, "--oidc-allow-insecure",
+		"--identity-provider", "file", "--session-file", identity.path,
 	}
 	if deliveryOrigin != "" {
 		arguments = append(arguments, "--frontend-delivery-cache", filepath.Join(temporary, "frontend-cache"), "--frontend-delivery-origin", deliveryOrigin)

@@ -1,8 +1,11 @@
 package authorizationv1
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 )
 
 func ParseSignedPolicySnapshot(raw []byte) (SignedPolicySnapshot, error) {
@@ -30,4 +33,28 @@ func ValidatePolicySnapshot(snapshot PolicySnapshot) error {
 		return errors.New("Policy Snapshot 时间窗无效")
 	}
 	return ValidateAuthorizationIR(snapshot.Policy)
+}
+
+// CanonicalPolicySnapshot defines the language-neutral bytes covered by the
+// Ed25519 signature. Set-like audience values and the embedded IR are
+// normalized before encoding.
+func CanonicalPolicySnapshot(snapshot PolicySnapshot) ([]byte, error) {
+	normalized := snapshot
+	normalized.Audience = append([]string(nil), snapshot.Audience...)
+	sort.Strings(normalized.Audience)
+	normalized.IssuedAt = normalized.IssuedAt.UTC()
+	normalized.NotBefore = normalized.NotBefore.UTC()
+	normalized.ExpiresAt = normalized.ExpiresAt.UTC()
+	policy, err := NormalizeAuthorizationIR(snapshot.Policy)
+	if err != nil {
+		return nil, err
+	}
+	normalized.Policy = policy
+	var output bytes.Buffer
+	encoder := json.NewEncoder(&output)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(normalized); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(output.Bytes(), []byte("\n")), nil
 }

@@ -11,7 +11,7 @@ export default {
   register(context: WorkbenchFrontendPluginContext) {
     const services = managementServicesFor(
       context.portal,
-      "foundation.security.authentication-provider-catalog",
+      "foundation.security.authentication.providers",
     );
     if (services.length === 0)
       throw new Error("Portal 未绑定 Authentication Provider Catalog");

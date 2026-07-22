@@ -10,6 +10,8 @@ import { PlatformDatabaseRoutes } from "./platform-database-routes";
 import { requestHostname, resourceName } from "./platform-route-contract";
 import { PlatformSettingsRoutes } from "./platform-settings-routes";
 import { PlatformAuthenticationProviderRoutes } from "./platform-authentication-provider-routes";
+import { PlatformSeedHandoffRoutes } from "./platform-seed-handoff-routes";
+import type { IdentityProvider } from "../identity/identity-provider";
 
 const prefix = "/v1/portals/";
 
@@ -20,14 +22,16 @@ export class PlatformManagementRoutes {
   private readonly artifacts: PlatformArtifactRoutes;
   private readonly deployment: PlatformDeploymentRoutes;
   private readonly authenticationProviders: PlatformAuthenticationProviderRoutes;
+  private readonly seedHandoff: PlatformSeedHandoffRoutes;
 
-  public constructor(private readonly resolver: PlatformManagementResolver, client: PlatformCapabilityPort) {
+  public constructor(private readonly resolver: PlatformManagementResolver, client: PlatformCapabilityPort, identity: IdentityProvider) {
     this.settings = new PlatformSettingsRoutes(client);
     this.credentials = new PlatformCredentialsRoutes(client);
     this.database = new PlatformDatabaseRoutes(client);
     this.artifacts = new PlatformArtifactRoutes(client);
     this.deployment = new PlatformDeploymentRoutes(client);
     this.authenticationProviders = new PlatformAuthenticationProviderRoutes(client);
+    this.seedHandoff = new PlatformSeedHandoffRoutes(client, identity);
   }
 
   public async handle(path: string, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
@@ -51,6 +55,7 @@ export class PlatformManagementRoutes {
     if (await this.artifacts.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.deployment.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.authenticationProviders.handle(resourceParts, principal, target, request, response, signal)) return true;
+    if (await this.seedHandoff.handle(resourceParts, principal, target, request, response, signal)) return true;
     return reject(response, 404, "not_found", method);
   }
 }

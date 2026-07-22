@@ -48,6 +48,11 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
       void serveAccessBootstrap(options.access, request, response);
       return;
     }
+    if (path === "/auth/access") {
+      if (method !== "GET" && method !== "HEAD") return sendEmpty(response, 405, { Allow: "GET, HEAD" });
+      void serveIndex(options.assets, undefined, request, response, method, path);
+      return;
+    }
     if (path === "/auth" || path.startsWith("/auth/")) {
       if (options.identity?.handle === undefined) return sendEmpty(response, 404);
       void options.identity.handle(request, response, path, options.secureCookies ?? true).then((handled) => {

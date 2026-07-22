@@ -7,8 +7,8 @@ import { authorizePlatformOperation, sendPlatformResponse } from "./platform-res
 import { requirePlatformRole, resourceName } from "./platform-route-contract";
 import { requireJSONObject, withRequestJSON } from "./request-json";
 
-const capability = "foundation.security.authentication-provider-catalog";
-const permissionPrefix = "foundation.security.authentication-provider-catalog.providers";
+const capability = "foundation.security.authentication.providers";
+const permissionPrefix = "foundation.security.authentication.providers";
 
 export class PlatformAuthenticationProviderRoutes {
   public constructor(private readonly client: PlatformCapabilityPort) {}

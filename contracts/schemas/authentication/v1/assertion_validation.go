@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const StableSubjectIssuer = "vastplan.authentication"
+
 func ParseSignedAssertion(raw []byte) (SignedAuthenticationAssertion, error) {
 	if len(raw) > MaxAssertionBytes {
 		return SignedAuthenticationAssertion{}, errors.New("Signed Authentication Assertion 超过大小上限")
@@ -70,4 +72,12 @@ func AssertionDigest(assertion AuthenticationAssertion) (string, error) {
 	}
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:]), nil
+}
+
+// StableSubjectID is the platform-internal, non-PII identifier for one
+// enterprise identity. Provider Profile is part of the key so equal issuer/sub
+// pairs in two configured Provider instances cannot collide.
+func StableSubjectID(providerProfileID, issuer, subject string) string {
+	digest := sha256.Sum256([]byte(providerProfileID + "\x00" + issuer + "\x00" + subject))
+	return "subject." + hex.EncodeToString(digest[:])
 }

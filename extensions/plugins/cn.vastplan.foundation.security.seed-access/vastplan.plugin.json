@@ -8,7 +8,7 @@
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "engines": { "backend": "^0.1" },
-  "contextAccess": { "optional": ["trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "contextAccess": { "optional": ["caller", "scene", "scope.tenant", "subject.id", "authorization.roles", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": {
     "instancePolicy": "leader",
     "stateModel": "leader-owned",
@@ -17,6 +17,21 @@
     "routingDomain": "security"
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "authorization": {
+    "namespace": "foundation.security.seed",
+    "permissions": [
+      { "code": "foundation.security.seed.state.read", "title": "读取 Seed 交接状态", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.seed.provider.configure", "title": "配置并验证企业身份 Provider", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.seed.handoff.complete", "title": "完成 Seed 企业身份交接", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "foundation.security.seed.handoff", "operation": "get", "permissions": ["foundation.security.seed.state.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.seed.handoff", "operation": "configureProvider", "permissions": ["foundation.security.seed.provider.configure"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.seed.handoff", "operation": "verifyProvider", "permissions": ["foundation.security.seed.provider.configure"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.seed.handoff", "operation": "prepareHandoff", "permissions": ["foundation.security.seed.handoff.complete"], "access": "approve", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.seed.handoff", "operation": "completeHandoff", "permissions": ["foundation.security.seed.handoff.complete"], "access": "approve", "approval": "none" }
+    ]
+  },
   "state": { "backend": { "format": "cn.vastplan.foundation.security.seed-access", "formatVersion": 1 } },
   "activation": ["onStartup"],
   "entry": { "backend": "backend/seed-access" },
@@ -29,5 +44,16 @@
     "methods": [{ "id": "seed-password", "kind": "password", "interaction": "form" }],
     "subjectNamespace": "foundation.identity.seed",
     "requiredCapabilities": []
+  }], "tools": [{
+    "id": "foundation.security.seed.handoff",
+    "service_role": "backend",
+    "title": "Seed 企业身份交接",
+    "subcommands": [
+      { "name": "get", "description": "读取 Seed 交接状态" },
+      { "name": "configureProvider", "description": "绑定已批准企业 Provider" },
+      { "name": "verifyProvider", "description": "验证 Broker 签名企业身份" },
+      { "name": "prepareHandoff", "description": "校验授权快照并准备交接" },
+      { "name": "completeHandoff", "description": "原子完成企业身份交接" }
+    ]
   }] } }
 }

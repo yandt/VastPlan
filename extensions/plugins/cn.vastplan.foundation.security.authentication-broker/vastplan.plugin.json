@@ -11,29 +11,37 @@
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "runtime": { "instancePolicy": "leader", "stateModel": "leader-owned", "visibility": "cluster", "routing": "leader", "routingDomain": "security" },
   "authorization": {
-    "namespace": "foundation.security.authentication-provider-catalog",
+    "namespace": "foundation.security.authentication",
     "permissions": [
-      { "code": "foundation.security.authentication-provider-catalog.providers.read", "title": "读取认证 Provider", "scope": "platform", "risk": "medium", "assignable": true, "offlineAllowed": false },
-      { "code": "foundation.security.authentication-provider-catalog.providers.edit", "title": "编辑认证 Provider 草稿", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
-      { "code": "foundation.security.authentication-provider-catalog.providers.test", "title": "测试认证 Provider", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
-      { "code": "foundation.security.authentication-provider-catalog.providers.approve", "title": "批准认证 Provider", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
-      { "code": "foundation.security.authentication-provider-catalog.providers.publish", "title": "发布认证 Provider Catalog", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+      { "code": "foundation.security.authentication.providers.broker.invoke", "title": "调用企业认证流程", "scope": "platform", "risk": "high", "assignable": false, "offlineAllowed": false },
+      { "code": "foundation.security.authentication.providers.read", "title": "读取认证 Provider", "scope": "platform", "risk": "medium", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.authentication.providers.edit", "title": "编辑认证 Provider 草稿", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.authentication.providers.test", "title": "测试认证 Provider", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.authentication.providers.approve", "title": "批准认证 Provider", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "foundation.security.authentication.providers.publish", "title": "发布认证 Provider Catalog", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
     ],
     "operationGuards": [
-      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "get", "permissions": ["foundation.security.authentication-provider-catalog.providers.read"], "access": "read", "approval": "none" },
-      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "createDraft", "permissions": ["foundation.security.authentication-provider-catalog.providers.edit"], "access": "write", "approval": "none" },
-      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "validate", "permissions": ["foundation.security.authentication-provider-catalog.providers.edit"], "access": "write", "approval": "none" },
-      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "recordTest", "permissions": ["foundation.security.authentication-provider-catalog.providers.test"], "access": "execute", "approval": "none" },
-      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "approve", "permissions": ["foundation.security.authentication-provider-catalog.providers.approve"], "access": "approve", "approval": "different-subject" },
-      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "publish", "permissions": ["foundation.security.authentication-provider-catalog.providers.publish"], "access": "approve", "approval": "different-subject" },
-      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication-provider-catalog", "operation": "retire", "permissions": ["foundation.security.authentication-provider-catalog.providers.edit"], "access": "write", "approval": "none" }
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "describe", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "begin", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "continue", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "resend", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "cancel", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "health", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.broker", "operation": "consumeAssertion", "permissions": ["foundation.security.authentication.providers.broker.invoke"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "get", "permissions": ["foundation.security.authentication.providers.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "createDraft", "permissions": ["foundation.security.authentication.providers.edit"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "validate", "permissions": ["foundation.security.authentication.providers.edit"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "recordTest", "permissions": ["foundation.security.authentication.providers.test"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "approve", "permissions": ["foundation.security.authentication.providers.approve"], "access": "approve", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "publish", "permissions": ["foundation.security.authentication.providers.publish"], "access": "approve", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "foundation.security.authentication.providers", "operation": "retire", "permissions": ["foundation.security.authentication.providers.edit"], "access": "write", "approval": "none" }
     ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/authentication-broker", "frontend": "frontend/dist/index.js" },
   "contributes": { "backend": { "tools": [{
-    "id": "foundation.security.authentication-broker",
+    "id": "foundation.security.authentication.broker",
     "service_role": "backend",
     "title": "企业认证 Broker",
     "subcommands": [
@@ -42,10 +50,11 @@
       { "name": "continue", "description": "继续认证事务" },
       { "name": "resend", "description": "重发认证挑战" },
       { "name": "cancel", "description": "取消认证事务" },
-      { "name": "health", "description": "检查认证 Provider" }
+      { "name": "health", "description": "检查认证 Provider" },
+      { "name": "consumeAssertion", "description": "原子消费 Broker Assertion" }
     ]
   }, {
-    "id": "foundation.security.authentication-provider-catalog",
+    "id": "foundation.security.authentication.providers",
     "service_role": "backend",
     "title": "认证 Provider 目录管理",
     "subcommands": [
@@ -58,7 +67,7 @@
       { "name": "retire", "description": "退役 Provider" }
     ]
   }] }, "frontend": {
-    "views": [{ "id": "foundation.security.authentication-provider-catalog", "title": "企业认证 Provider" }],
-    "menus": [{ "id": "foundation.security.authentication-provider-catalog.menu", "title": "企业认证 Provider" }]
+    "views": [{ "id": "foundation.security.authentication.providers", "title": "企业认证 Provider" }],
+    "menus": [{ "id": "foundation.security.authentication.providers.menu", "title": "企业认证 Provider" }]
   } }
 }

@@ -71,6 +71,15 @@ export interface AuthenticationProviderManagementState {
   accessCatalog?: unknown;
   updatedAt: string;
 }
+export interface SeedHandoffState {
+  version: 1;
+  generation: number;
+  phase: "uninitialized" | "seed-active" | "provider-configured" | "provider-verified" | "handoff-ready" | "enterprise-active" | "recovery-lease";
+  providerProfile?: CompositionRef;
+  providerSubject?: { id: string; issuer: string };
+  handoff?: { providerProfile: CompositionRef; subject: { id: string; issuer: string }; policySnapshot: CompositionRef; sessionId: string; authenticatedAt: string; expiresAt: string; recoveryReady: boolean; digest: string };
+  updatedAt: string;
+}
 export interface ArtifactRepositoryMigration {
   migrationId?: string; phase?: string; sourceProvider?: string; sourceVolumeId?: string;
   targetProvider?: string; targetVolumeId?: string; files?: number; bytes?: number; digest?: string;
@@ -236,6 +245,11 @@ export class PlatformAdminClient {
   public approveAuthenticationProvider(id: string, expectedGeneration: number): Promise<AuthenticationProviderManagementState> { return this.authenticationProviderAction(id, "approve", { expectedGeneration }); }
   public retireAuthenticationProvider(id: string, expectedGeneration: number): Promise<AuthenticationProviderManagementState> { return this.authenticationProviderAction(id, "retire", { expectedGeneration }); }
   public publishAuthenticationProviders(request: { expectedGeneration: number; catalogId: string; catalogRevision: number; bindings: unknown[]; accessCatalog: unknown }): Promise<AuthenticationProviderManagementState> { return this.mutate(`${this.basePath}/authentication-providers/publish`, "POST", request); }
+  public seedHandoffState(): Promise<SeedHandoffState> { return this.get(`${this.basePath}/seed-handoff`); }
+  public configureSeedEnterpriseProvider(expectedGeneration: number, providerProfile: CompositionRef): Promise<SeedHandoffState> { return this.mutate(`${this.basePath}/seed-handoff/configure-provider`, "POST", { expectedGeneration, providerProfile }); }
+  public verifySeedEnterpriseProvider(expectedGeneration: number, providerProfile: CompositionRef): Promise<SeedHandoffState> { return this.mutate(`${this.basePath}/seed-handoff/verify-provider`, "POST", { expectedGeneration, providerProfile }); }
+  public prepareSeedHandoff(expectedGeneration: number, providerProfile: CompositionRef, recoveryReady: boolean): Promise<SeedHandoffState> { return this.mutate(`${this.basePath}/seed-handoff/prepare`, "POST", { expectedGeneration, providerProfile, recoveryReady }); }
+  public completeSeedHandoff(expectedGeneration: number, sealDigest: string): Promise<SeedHandoffState> { return this.mutate(`${this.basePath}/seed-handoff/complete`, "POST", { expectedGeneration, sealDigest }); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
   public listArtifactCatalog(value: ArtifactCatalogQuery = {}): Promise<ArtifactCatalogPage> {
     const page = value.page ?? 1, pageSize = value.pageSize ?? 20;

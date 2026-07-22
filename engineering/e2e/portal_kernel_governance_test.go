@@ -20,15 +20,15 @@ func TestNodePortalKernelGovernanceLifecycleWithRealPlugins(t *testing.T) {
 	buildPortalKernel(t, root)
 	addressing := startPortalAddressingFixture(t)
 	composer := startPortalComposerFixture(t, root, addressing)
-	oidc := startPortalOIDCProvider(t, "vastplan-portal-governance-e2e")
-	process := startOIDCPortalKernel(t, root, addressing, oidc, composer.deliveryOrigin)
+	identity := startPortalFileIdentityFixture(t)
+	process := startFilePortalKernel(t, root, addressing, identity, composer.deliveryOrigin)
 	probe := portalKernelBrowserClient(t)
 	waitForNodePortalKernel(t, process, probe)
 
-	author := loginPortalUser(t, process, oidc, "author", "portal.compose", "portal.approve")
-	approver := loginPortalUser(t, process, oidc, "approver", "portal.approve")
-	publisher := loginPortalUser(t, process, oidc, "publisher", "portal.publish")
-	reader := loginPortalUser(t, process, oidc, "reader", "portal.read")
+	author := loginPortalUser(t, process, identity, "author", "portal.compose", "portal.approve")
+	approver := loginPortalUser(t, process, identity, "approver", "portal.approve")
+	publisher := loginPortalUser(t, process, identity, "publisher", "portal.publish")
+	reader := loginPortalUser(t, process, identity, "reader", "portal.read")
 
 	if status, _ := portalJSON(t, probe, process.baseURL(), http.MethodPost, "/v1/portal-drafts", portalApplication(1, "Initial"), false); status != http.StatusUnauthorized {
 		t.Fatalf("匿名浏览器写请求必须拒绝: status=%d", status)
@@ -70,17 +70,16 @@ func TestNodePortalKernelGovernanceLifecycleWithRealPlugins(t *testing.T) {
 	assertPortalRuntime(t, process, reader, rollback.ID)
 }
 
-func loginPortalUser(t *testing.T, process *portalKernelProcess, provider *portalOIDCProvider, subject string, roles ...string) *http.Client {
+func loginPortalUser(t *testing.T, process *portalKernelProcess, identity *portalFileIdentityFixture, subject string, roles ...string) *http.Client {
 	t.Helper()
-	provider.selectIdentity(subject, "acme", roles...)
-	client := portalKernelBrowserClient(t)
+	client := identity.login(t, process, subject, "acme", roles...)
 	response, err := client.Get(process.baseURL() + "/operations")
 	if err != nil {
-		t.Fatalf("OIDC 登录 %s: %v\n%s", subject, err, process.logs.String())
+		t.Fatalf("Portal 登录 %s: %v\n%s", subject, err, process.logs.String())
 	}
 	body := readPortalResponse(t, response)
 	if response.StatusCode != http.StatusOK || response.Request.URL.Path != "/operations" || !bytes.Contains(body, []byte(`id="vastplan-portal"`)) {
-		t.Fatalf("OIDC 登录 %s 未返回 Portal: status=%d url=%s body=%s", subject, response.StatusCode, response.Request.URL, body)
+		t.Fatalf("Portal 登录 %s 未返回 Portal: status=%d url=%s body=%s", subject, response.StatusCode, response.Request.URL, body)
 	}
 	return client
 }

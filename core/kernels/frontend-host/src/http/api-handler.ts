@@ -24,7 +24,7 @@ export interface APIHandlerOptions {
 export function createAPIHandler(options: APIHandlerOptions): (request: IncomingMessage, response: ServerResponse, path: string) => Promise<void> {
   const portalControl = options.composer === undefined ? undefined : new PortalControlRoutes(options.composer);
   const interactions = options.interaction === undefined ? undefined : new InteractionRoutes(options.interaction);
-  const platform = options.platform === undefined ? undefined : new PlatformManagementRoutes(options.platform.resolver, options.platform.client);
+  const platform = options.platform === undefined ? undefined : new PlatformManagementRoutes(options.platform.resolver, options.platform.client, options.identity);
   const runtime = options.composer === undefined || options.delivery === undefined ? undefined : new PortalRuntimeRoutes(options.composer, options.delivery);
   return async (request, response, path) => {
     const method = request.method ?? "GET";

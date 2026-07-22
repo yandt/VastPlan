@@ -13,6 +13,18 @@ type BrokerContinueResult struct {
 	Assertion *SignedAuthenticationAssertion `json:"assertion,omitempty"`
 }
 
+type ConsumeAssertionRequest struct {
+	Assertion    SignedAuthenticationAssertion `json:"assertion"`
+	Audience     string                        `json:"audience"`
+	TenantID     string                        `json:"tenantId"`
+	PortalID     string                        `json:"portalId"`
+	TransactionID string                       `json:"transactionId"`
+}
+
+type ConsumeAssertionResult struct {
+	Consumed bool `json:"consumed"`
+}
+
 func ParseBrokerContinueResult(raw []byte) (BrokerContinueResult, error) {
 	if len(raw) > MaxMethodMessageBytes+MaxAssertionBytes {
 		return BrokerContinueResult{}, errors.New("Authentication Broker 响应超过大小上限")

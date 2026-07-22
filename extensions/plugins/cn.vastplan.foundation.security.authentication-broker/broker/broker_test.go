@@ -76,6 +76,24 @@ func TestBrokerSignsProfileBoundAssertionAfterRealEvidence(t *testing.T) {
 	if brokerResult.Assertion.Payload.ProviderProfileID != "corp" || brokerResult.Assertion.Payload.Audience != "authentication-provider-test" {
 		t.Fatalf("Assertion 未绑定服务端 route: %+v", brokerResult.Assertion.Payload)
 	}
+	trustedPortal := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "portal-host"}, Scene: "portal.bff"}
+	consume := authenticationv1.ConsumeAssertionRequest{Assertion: *brokerResult.Assertion, Audience: begin.Audience, TenantID: begin.TenantID, PortalID: begin.PortalID, TransactionID: begin.TransactionID}
+	consumed, consumedRaw, _ := service.Handle(context.Background(), host, trustedPortal, OperationConsumeAssertion, mustJSON(consume))
+	if consumed.GetStatus() != contractv1.CallResult_STATUS_OK || string(consumedRaw) != `{"consumed":true}` {
+		t.Fatalf("可信 Portal 应能消费 Assertion: %+v %s", consumed, consumedRaw)
+	}
+	replay, _, _ := service.Handle(context.Background(), host, trustedPortal, OperationConsumeAssertion, mustJSON(consume))
+	if replay.GetStatus() != contractv1.CallResult_STATUS_ERROR || replay.Error.Code != "foundation.authentication.assertion_replayed" {
+		t.Fatalf("Assertion 重放必须拒绝: %+v", replay)
+	}
+}
+
+func TestBrokerRejectsAssertionConsumptionOutsideTrustedPortal(t *testing.T) {
+	service, _ := New(staticCatalog{testCatalog()}, NewMemoryTransactionStore(8))
+	result, _, _ := service.Handle(context.Background(), &fakeHost{}, &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER}}, OperationConsumeAssertion, []byte(`{}`))
+	if result.GetStatus() != contractv1.CallResult_STATUS_ERROR || result.Error.Code != "foundation.authentication.consume_forbidden" {
+		t.Fatalf("普通用户不得消费 Assertion: %+v", result)
+	}
 }
 
 func testCatalog() authenticationv1.AuthenticationProviderCatalog {
@@ -124,6 +142,28 @@ func TestBrokerDescribeOnlyUsesBoundProviders(t *testing.T) {
 	parsed, err := authenticationv1.ParseMethodResult(authenticationv1.OperationDescribe, raw)
 	if err != nil || len(parsed.(*authenticationv1.DescribeResult).Methods) != 1 {
 		t.Fatalf("describe 输出无效: %s %v", raw, err)
+	}
+}
+
+type degradedProviderHost struct{}
+
+func (degradedProviderHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+	if target.Capability == "database-user" {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "database.runtime.connection_unavailable"}}, nil, nil
+	}
+	descriptor := authenticationv1.MethodDescriptor{MethodID: "corporate-sso", ProviderID: "oidc", Kind: authenticationv1.MethodRedirect, Interaction: authenticationv1.InteractionRedirect, DisplayName: authenticationv1.LocalizedText{"en-US": "Corporate SSO"}, AMR: []string{"sso"}, ACR: "aal2"}
+	return okResult(), mustJSON(authenticationv1.DescribeResult{Protocol: authenticationv1.Protocol, Methods: []authenticationv1.MethodDescriptor{descriptor}}), nil
+}
+
+func TestBrokerKeepsIndependentOIDCAvailableWhenDatabaseProviderFails(t *testing.T) {
+	catalog := testCatalog()
+	catalog.Providers = append(catalog.Providers, authenticationv1.ProviderCatalogEntry{Profile: compositioncommonv1.Ref{ID: "database-users", Revision: 1, Digest: strings.Repeat("d", 64)}, ContributionID: "database-user", Purposes: []authenticationv1.ProviderPurpose{authenticationv1.PurposePortalLogin}, Methods: []string{"database-password"}, SubjectNamespace: "enterprise.identity.database", RequiredCapabilities: []string{"foundation.data.relational.runtime"}})
+	catalog.Bindings[0].AllowedProviders = append(catalog.Bindings[0].AllowedProviders, "database-users")
+	service, _ := New(staticCatalog{catalog}, NewMemoryTransactionStore(8))
+	result, raw, _ := service.Handle(context.Background(), degradedProviderHost{}, &contractv1.CallContext{}, authenticationv1.OperationDescribe, []byte(`{"tenantId":"acme","portalId":"management"}`))
+	parsed, err := authenticationv1.ParseMethodResult(authenticationv1.OperationDescribe, raw)
+	if result.GetStatus() != contractv1.CallResult_STATUS_OK || err != nil || len(parsed.(*authenticationv1.DescribeResult).Methods) != 1 || parsed.(*authenticationv1.DescribeResult).Methods[0].MethodID != "corporate-sso" {
+		t.Fatalf("数据库 Provider 故障不应拖垮独立 OIDC: result=%+v raw=%s err=%v", result, raw, err)
 	}
 }
 

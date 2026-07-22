@@ -17,7 +17,6 @@
   "dependencies": {
     "@vastplan/addressing-node": "workspace:*",
     "@vastplan/frontend-engine-contract": "workspace:*",
-    "ajv": "^8.20.0",
-    "openid-client": "^6.8.4"
+    "ajv": "^8.20.0"
   }
 }

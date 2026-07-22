@@ -18,7 +18,6 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
   const values = new Map<string, string>();
   let allowInsecureHTTP = false;
   let allowInsecureNATS = false;
-  let allowInsecureOIDC = false;
   for (let index = 0; index < args.length; index += 1) {
     const name = args[index];
     if (name === "--allow-insecure-http") {
@@ -27,10 +26,6 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
     }
     if (name === "--allow-insecure-nats") {
       allowInsecureNATS = true;
-      continue;
-    }
-    if (name === "--oidc-allow-insecure") {
-      allowInsecureOIDC = true;
       continue;
     }
     if (!name.startsWith("--") || index + 1 >= args.length || args[index + 1].startsWith("--")) {
@@ -54,7 +49,7 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
   }
   const portalAssets = values.get("--portal-assets");
   if (!portalAssets) throw new Error("必须配置 --portal-assets");
-  const identity = parseIdentityConfig(values, allowInsecureOIDC, cwd);
+  const identity = parseIdentityConfig(values, cwd);
   const certFile = values.get("--tls-cert");
   const keyFile = values.get("--tls-key");
   if ((certFile === undefined) !== (keyFile === undefined)) throw new Error("TLS 证书与私钥必须同时配置");

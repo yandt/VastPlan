@@ -24,12 +24,15 @@ func TestProviderDescriptorMatchesManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
-	if err != nil || len(contributions) != 1 {
+	if err != nil || len(contributions) != 2 {
 		t.Fatalf("Manifest Provider 贡献无效: %+v %v", contributions, err)
 	}
-	var signed, runtime any
-	if json.Unmarshal(contributions[0].Descriptor, &signed) != nil || json.Unmarshal(ProviderDescriptor(), &runtime) != nil || !equalJSON(signed, runtime) {
-		t.Fatalf("运行态 descriptor 与签名 Manifest 不一致\nsigned=%s\nruntime=%s", contributions[0].Descriptor, ProviderDescriptor())
+	runtimeDescriptors := map[string][]byte{ProviderID: ProviderDescriptor(), HandoffCapability: HandoffDescriptor()}
+	for _, contribution := range contributions {
+		var signed, runtime any
+		if json.Unmarshal(contribution.Descriptor, &signed) != nil || json.Unmarshal(runtimeDescriptors[contribution.ID], &runtime) != nil || !equalJSON(signed, runtime) {
+			t.Fatalf("运行态 descriptor 与签名 Manifest 不一致\nsigned=%s\nruntime=%s", contribution.Descriptor, runtimeDescriptors[contribution.ID])
+		}
 	}
 }
 

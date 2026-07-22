@@ -20,6 +20,7 @@ import (
 type databaseHost struct {
 	hash    string
 	queries int
+	unavailable bool
 }
 
 func (h *databaseHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -27,6 +28,9 @@ func (h *databaseHost) Call(_ context.Context, target *contractv1.CallTarget, _ 
 		return nil, nil, nil
 	}
 	h.queries++
+	if h.unavailable {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: databasev1.ErrorConnectionUnavailable, Message: "database offline"}}, nil, nil
+	}
 	var request databasev1.QueryRequest
 	_ = json.Unmarshal(payload, &request)
 	if len(request.Statement.Parameters) != 1 || request.MaxRows != 2 {
@@ -89,6 +93,23 @@ func TestDatabaseProviderRejectsWrongPasswordWithoutLeakingRow(t *testing.T) {
 	value := parsed.(*authenticationv1.ContinueResult).Result
 	if value.State != authenticationv1.StateRejected || value.ReasonCode != authenticationv1.ReasonInvalidCredentials || strings.Contains(string(raw), "user-1") {
 		t.Fatalf("错误密码响应泄露: %s", raw)
+	}
+}
+
+func TestDatabaseProviderFailureIsContainedAsGenericAuthenticationFailure(t *testing.T) {
+	hash, _ := EncodeArgon2id([]byte("correct horse battery staple"), []byte("0123456789abcdef"))
+	host := &databaseHost{hash: hash, unavailable: true}
+	provider := testProvider(t)
+	begin := authenticationv1.BeginRequest{TransactionID: strings.Repeat("f", 32), MethodID: MethodID, ProviderProfileID: "database-users", TenantID: "acme", PortalID: "management", Audience: "portal.example", Locale: "zh-CN", ClientContextDigest: strings.Repeat("b", 64)}
+	_, raw, _ := provider.Contribution().Handlers[authenticationv1.OperationBegin](context.Background(), host, &contractv1.CallContext{}, marshal(t, begin))
+	parsed, _ := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, raw)
+	step := parsed.(*authenticationv1.BeginResult).Result.Step
+	request := authenticationv1.ContinueRequest{TransactionID: begin.TransactionID, StepID: step.StepID, Responses: []authenticationv1.FieldResponse{{FieldID: "identifier", Value: "alice"}, {FieldID: "password", Value: "correct horse battery staple"}}}
+	_, raw, _ = provider.Contribution().Handlers[authenticationv1.OperationContinue](context.Background(), host, &contractv1.CallContext{}, marshal(t, request))
+	parsed, _ = authenticationv1.ParseMethodResult(authenticationv1.OperationContinue, raw)
+	result := parsed.(*authenticationv1.ContinueResult).Result
+	if result.State != authenticationv1.StateRejected || result.ReasonCode != authenticationv1.ReasonInvalidCredentials || strings.Contains(string(raw), "database offline") {
+		t.Fatalf("数据库故障不得泄露拓扑或改变凭据错误形状: %s", raw)
 	}
 }
 

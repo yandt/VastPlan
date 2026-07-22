@@ -18,24 +18,16 @@ describe("parseHostArguments", () => {
     expect(config.accessProfileCatalog).toBe("/srv/vastplan/config/access-profiles.json");
   });
 
-  it("requires a complete HTTPS OIDC code-flow configuration", () => {
-    const base = ["--portal-assets", "bin/portal", "--tls-cert", "portal.crt", "--tls-key", "portal.key", "--identity-provider", "oidc"];
-    expect(() => parseHostArguments([...base, "--oidc-issuer", "https://id.example.com"])).toThrow(/oidc-client-id/i);
+  it("requires Broker trust, session protection and pluggable service routing", () => {
+    const base = ["--portal-assets", "bin/portal", "--tls-cert", "portal.crt", "--tls-key", "portal.key", "--identity-provider", "broker"];
+    expect(() => parseHostArguments(base)).toThrow(/assertion-trust/i);
     const config = parseHostArguments([
-      ...base, "--oidc-issuer", "https://id.example.com", "--oidc-client-id", "portal",
-      "--oidc-client-secret-file", "client.secret", "--oidc-client-auth-method", "client_secret_basic",
-      "--oidc-redirect-uri", "https://portal.example.com/auth/callback", "--oidc-session-key-file", "session.key",
-      "--oidc-tenant-claim", "tenant", "--oidc-roles-claim", "groups", "--oidc-session-max-age", "600",
+      ...base, "--authentication-assertion-trust-file", "assertion-trust.json", "--portal-session-key-file", "session.key",
+      "--portal-session-max-age", "600", "--authentication-broker-logical-service", "identity-broker",
+      "--authorization-session-logical-service", "authorization-session",
     ], "/srv/vastplan");
-    expect(config.identity).toMatchObject({ kind: "oidc", issuer: "https://id.example.com/", clientId: "portal", redirectURI: "https://portal.example.com/auth/callback", sessionMaxAgeSeconds: 600 });
-    expect(() => parseHostArguments([
-      "--portal-assets", "bin/portal", "--allow-insecure-http", "--identity-provider", "oidc", "--oidc-issuer", "http://id.example.com",
-      "--oidc-client-id", "portal", "--oidc-redirect-uri", "http://portal.example.com/auth/callback", "--oidc-session-key-file", "session.key",
-    ])).toThrow(/HTTPS/);
-    expect(() => parseHostArguments([
-      ...base, "--oidc-issuer", "https://id.example.com", "--oidc-client-id", "portal",
-      "--oidc-redirect-uri", "https://portal.example.com/auth/callback", "--oidc-session-key-file", "session.key", "--oidc-scopes", "profile email",
-    ])).toThrow(/openid/);
+    expect(config.identity).toEqual({ kind: "broker", assertionTrustFile: "/srv/vastplan/assertion-trust.json", sessionKeyFile: "/srv/vastplan/session.key", sessionMaxAgeSeconds: 600, brokerLogicalService: "identity-broker", authorizationLogicalService: "authorization-session" });
+    expect(() => parseHostArguments([...base, "--authentication-assertion-trust-file", "trust", "--portal-session-key-file", "key", "--oidc-issuer", "https://id.example.com"])).toThrow(/未知/);
   });
 
   it("rejects unknown and duplicate parameters", () => {

@@ -16,6 +16,8 @@ import { PortalDeliveryStore } from "../runtime/portal-delivery-store";
 import { PortalSSRCoordinator } from "../runtime/portal-ssr-coordinator";
 import { ServerGenerationManager } from "../workers/server-generation-manager";
 import { FileAccessProfileCatalog } from "../access/file-access-profile-catalog";
+import { AddressingAuthenticationBroker } from "../identity/authentication-broker-port";
+import { AddressingSessionAuthorization } from "../identity/session-authorization-port";
 
 interface PortalServerResources {
 	readonly addressing?: NodeAddressingRuntime;
@@ -26,12 +28,14 @@ const serverResources = new WeakMap<Server, PortalServerResources>();
 
 export async function createPortalServer(config: PortalHostConfig): Promise<Server> {
   const assets = await PortalAssets.load(config.portalAssets);
-  const identity = await openIdentityProvider(config.identity);
   const access = config.accessProfileCatalog === undefined ? undefined : await FileAccessProfileCatalog.open(config.accessProfileCatalog);
   const addressing = config.addressing === undefined ? undefined : await openNodeAddressing(config.addressing);
   let generations: ServerGenerationManager | undefined;
   try {
     const invoker = addressing === undefined ? undefined : new AddressingCapabilityInvoker(addressing.client);
+    const broker = invoker === undefined || config.identity.kind !== "broker" ? undefined : new AddressingAuthenticationBroker(invoker, config.identity.brokerLogicalService);
+    const authorization = invoker === undefined || config.identity.kind !== "broker" ? undefined : new AddressingSessionAuthorization(invoker, config.identity.authorizationLogicalService);
+    const identity = await openIdentityProvider(config.identity, { ...(access === undefined ? {} : { access }), ...(broker === undefined ? {} : { broker }), ...(authorization === undefined ? {} : { authorization }) });
     const composer = invoker === undefined ? undefined : new AddressingPortalComposerClient(invoker, config.addressing?.composerLogicalService);
     const interaction = invoker === undefined ? undefined : new AddressingInteractionClient(invoker, config.addressing?.interactionLogicalService);
     const platform = invoker === undefined || composer === undefined ? undefined : {

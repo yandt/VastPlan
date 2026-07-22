@@ -4,8 +4,8 @@ import { managementBinding, recordingPlatformInvoker, startPlatformManagementTes
 const close: (() => Promise<void>)[] = [];
 afterEach(async () => Promise.all(close.splice(0).map((action) => action())));
 
-const capability = "foundation.security.authentication-provider-catalog";
-const prefix = "foundation.security.authentication-provider-catalog.providers";
+const capability = "foundation.security.authentication.providers";
+const prefix = "foundation.security.authentication.providers";
 
 describe("Authentication Provider management routes", () => {
   it("uses server-owned provider IDs and separate operation permissions", async () => {

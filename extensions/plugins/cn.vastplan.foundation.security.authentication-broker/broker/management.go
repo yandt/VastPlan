@@ -16,7 +16,7 @@ import (
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
-const ManagementCapability = "foundation.security.authentication-provider-catalog"
+const ManagementCapability = "foundation.security.authentication.providers"
 
 type ManagementService struct {
 	store    ManagementStore

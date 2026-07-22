@@ -1,0 +1,22 @@
+{
+  "id": "cn.vastplan.foundation.security.authorization-session",
+  "name": "VastPlan Authorization Session",
+  "description": "将企业认证稳定主体映射到受签名策略约束的内部会话权限",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1" },
+  "contextAccess": { "required": ["caller", "scene", "scope.tenant"], "optional": ["trace", "request.deadline", "propagation.callPath"] },
+  "runtime": { "instancePolicy": "active-active", "stateModel": "external-shared", "visibility": "cluster", "routing": "queue", "routingDomain": "security" },
+  "authorization": {
+    "namespace": "foundation.security.authorization-session",
+    "permissions": [{ "code": "foundation.security.authorization-session.resolve", "title": "解析登录会话授权", "scope": "platform", "risk": "critical", "assignable": false, "offlineAllowed": false }],
+    "operationGuards": [{ "extensionPoint": "tool.package", "capability": "foundation.security.authorization-session", "operation": "resolve", "permissions": ["foundation.security.authorization-session.resolve"], "access": "execute", "approval": "none" }]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/authorization-session" },
+  "contributes": { "backend": { "tools": [{ "id": "foundation.security.authorization-session", "service_role": "backend", "title": "企业身份会话授权", "subcommands": [{ "name": "resolve", "description": "将稳定认证主体解析为内部会话权限" }] }] } }
+}

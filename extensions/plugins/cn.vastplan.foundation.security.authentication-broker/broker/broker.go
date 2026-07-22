@@ -19,15 +19,18 @@ import (
 )
 
 const (
-	PluginID      = "cn.vastplan.foundation.security.authentication-broker"
-	PluginVersion = "0.1.0"
-	Capability    = "foundation.security.authentication-broker"
+	PluginID                  = "cn.vastplan.foundation.security.authentication-broker"
+	PluginVersion             = "0.1.0"
+	Capability                = "foundation.security.authentication.broker"
+	OperationConsumeAssertion = "consumeAssertion"
 )
 
 type Broker struct {
 	catalog      Catalog
 	transactions TransactionStore
 	signer       AssertionSigner
+	verifier     AssertionVerifier
+	assertions   AssertionStore
 	now          func() time.Time
 }
 
@@ -44,11 +47,16 @@ func New(catalog Catalog, transactions TransactionStore, signers ...AssertionSig
 	if len(signers) > 0 {
 		signer = signers[0]
 	}
-	return &Broker{catalog: catalog, transactions: transactions, signer: signer, now: func() time.Time { return time.Now().UTC() }}, nil
+	service := &Broker{catalog: catalog, transactions: transactions, signer: signer, now: func() time.Time { return time.Now().UTC() }}
+	if verifier, ok := signer.(AssertionVerifier); ok {
+		service.verifier = verifier
+		service.assertions = NewMemoryAssertionStore(4096)
+	}
+	return service, nil
 }
 
 func Descriptor() []byte {
-	return []byte(`{"title":"企业认证 Broker","subcommands":[{"name":"describe","description":"列出门户允许的认证方式"},{"name":"begin","description":"开始认证事务"},{"name":"continue","description":"继续认证事务"},{"name":"resend","description":"重发认证挑战"},{"name":"cancel","description":"取消认证事务"},{"name":"health","description":"检查认证 Provider"}]}`)
+	return []byte(`{"title":"企业认证 Broker","subcommands":[{"name":"describe","description":"列出门户允许的认证方式"},{"name":"begin","description":"开始认证事务"},{"name":"continue","description":"继续认证事务"},{"name":"resend","description":"重发认证挑战"},{"name":"cancel","description":"取消认证事务"},{"name":"health","description":"检查认证 Provider"},{"name":"consumeAssertion","description":"原子消费 Broker Assertion"}]}`)
 }
 
 func (b *Broker) Contribution() sdk.Contribution {
@@ -59,12 +67,18 @@ func (b *Broker) Contribution() sdk.Contribution {
 			return b.Handle(ctx, host, callCtx, op, payload)
 		}
 	}
+	handlers[OperationConsumeAssertion] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		return b.consumeAssertion(callCtx, payload)
+	}
 	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: handlers}
 }
 
 func (b *Broker) Handle(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, operation string, payload []byte) (*contractv1.CallResult, []byte, error) {
 	if host == nil {
 		return brokerError("foundation.authentication.host_unavailable", errors.New("可信宿主不可用")), nil, nil
+	}
+	if operation == OperationConsumeAssertion {
+		return b.consumeAssertion(callCtx, payload)
 	}
 	if operation == authenticationv1.OperationDescribe {
 		return b.describe(ctx, host, callCtx, payload)
@@ -200,7 +214,45 @@ func (b *Broker) finalizeContinue(result *authenticationv1.ContinueResult, route
 	if err != nil {
 		return nil, err
 	}
+	if b.assertions == nil {
+		return nil, errors.New("Authentication Broker 未配置 Assertion Store")
+	}
+	if err := b.assertions.Issue(payload); err != nil {
+		return nil, err
+	}
 	return json.Marshal(authenticationv1.BrokerContinueResult{Result: result.Result, Assertion: &signed})
+}
+
+func (b *Broker) consumeAssertion(callCtx *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+	if callCtx == nil || callCtx.Caller == nil || callCtx.Caller.Kind != contractv1.CallerKind_CALLER_KIND_SYSTEM || callCtx.Scene != "portal.bff" {
+		return brokerError("foundation.authentication.consume_forbidden", errors.New("只有可信 Portal BFF 可以消费 Assertion")), nil, nil
+	}
+	var request authenticationv1.ConsumeAssertionRequest
+	if err := strictJSON(raw, &request); err != nil {
+		return brokerError("foundation.authentication.invalid_request", err), nil, nil
+	}
+	assertionRaw, _ := json.Marshal(request.Assertion)
+	parsed, err := authenticationv1.ParseSignedAssertion(assertionRaw)
+	if err != nil {
+		return brokerError("foundation.authentication.assertion_invalid", err), nil, nil
+	}
+	request.Assertion = parsed
+	if b.verifier == nil || b.assertions == nil {
+		return brokerError("foundation.authentication.assertion_unavailable", errors.New("Assertion verifier/store 未配置")), nil, nil
+	}
+	if err := b.verifier.Verify(request.Assertion); err != nil {
+		return brokerError("foundation.authentication.assertion_invalid", err), nil, nil
+	}
+	payload := request.Assertion.Payload
+	now := b.now()
+	if now.Before(payload.IssuedAt.Add(-5*time.Second)) || !now.Before(payload.ExpiresAt) || payload.Audience != request.Audience || payload.TenantID != request.TenantID || payload.PortalID != request.PortalID || payload.TransactionID != request.TransactionID {
+		return brokerError("foundation.authentication.assertion_binding_mismatch", errors.New("Assertion 与 Portal transaction 不匹配")), nil, nil
+	}
+	if !b.assertions.Consume(payload.AssertionID, payload.ExpiresAt) {
+		return brokerError("foundation.authentication.assertion_replayed", errors.New("Assertion 未签发、已过期或已消费")), nil, nil
+	}
+	response, _ := json.Marshal(authenticationv1.ConsumeAssertionResult{Consumed: true})
+	return okResult(), response, nil
 }
 
 func randomBrokerID() (string, error) {

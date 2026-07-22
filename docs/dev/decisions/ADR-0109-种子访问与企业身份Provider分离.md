@@ -47,3 +47,6 @@
 - Broker 完成短时 Ed25519 Assertion 签发，Assertion 绑定 Provider Profile、transaction、tenant、Portal、audience 与稳定 subject；Provider Evidence 不再能直接建立平台 Session。
 - Node OIDC Provider 完成 confidential client 路径：配置只保存 `clientSecretRef`，秘密通过 audience/tenant/purpose 绑定的单次 Material Lease 取得并在回调后清零。
 - 新增通用关系数据库用户 Provider：通过 `foundation.data.relational.runtime` 与现有连接池查询，支持 `?`/`$1` 参数方言，使用有界 Argon2id PHC 验证、伪校验路径与统一凭据错误；它不属于内核，也不构成平台用户系统。
+- Portal Host 删除直连 OIDC 模式；生产身份只接受 Authentication Broker。Node 本地验签后必须由 leader-routed Broker 原子消费 Assertion，再通过独立 Authorization Session 插件读取受签名 Policy Snapshot，外部 claim/Group/Role 不得直接进入权限上下文。
+- 新增 `cn.vastplan.foundation.security.authorization-session` Go 插件与稳定主体哈希；会话只投影无资源/属性约束的 allow 权限，deny 与撤销优先，细粒度约束仍交给 Authorization Engine。
+- Seed Handoff 接入 Broker Assertion 和签名 Policy Snapshot 双证明；可信 BFF 在 HttpOnly 密封 Session 内转交证明，企业主体完成授权绑定后经 CAS 进入 `EnterpriseActive`，Seed 登录随即关闭。

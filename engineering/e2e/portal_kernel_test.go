@@ -19,7 +19,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 )
 
-func TestNodePortalKernelOIDCMTLSPrincipalProjection(t *testing.T) {
+func TestNodePortalKernelMTLSPrincipalProjection(t *testing.T) {
 	root := repoRoot(t)
 	buildPortalKernel(t, root)
 	addressing := startPortalAddressingFixture(t)
@@ -35,19 +35,18 @@ func TestNodePortalKernelOIDCMTLSPrincipalProjection(t *testing.T) {
 		return successfulCapability([]byte("[]"))
 	})
 
-	const clientID = "vastplan-portal-e2e"
-	oidc := startPortalOIDCProvider(t, clientID)
-	process := startOIDCPortalKernel(t, root, addressing, oidc, "")
-	browser := portalKernelBrowserClient(t)
+	identity := startPortalFileIdentityFixture(t)
+	process := startFilePortalKernel(t, root, addressing, identity, "")
+	browser := identity.login(t, process, "alice", "acme", "portal.read")
 	waitForNodePortalKernel(t, process, browser)
 	page, err := browser.Get(process.baseURL() + "/operations")
 	if err != nil {
-		t.Fatalf("完成 OIDC 浏览器登录: %v\n%s", err, process.logs.String())
+		t.Fatalf("完成浏览器会话访问: %v\n%s", err, process.logs.String())
 	}
 	pageBody := readPortalResponse(t, page)
 	if page.StatusCode != http.StatusOK || page.Request.URL.Path != "/operations" || page.Header.Get("Strict-Transport-Security") != "max-age=31536000" ||
 		bytes.Contains(pageBody, []byte("__VASTPLAN_CSP_NONCE__")) || !bytes.Contains(pageBody, []byte(`id="vastplan-portal"`)) {
-		t.Fatalf("OIDC 登录后的 Portal 页面无效: status=%d url=%s headers=%v body=%s", page.StatusCode, page.Request.URL, page.Header, pageBody)
+		t.Fatalf("登录后的 Portal 页面无效: status=%d url=%s headers=%v body=%s", page.StatusCode, page.Request.URL, page.Header, pageBody)
 	}
 	sessionResponse, err := browser.Get(process.baseURL() + "/auth/session")
 	if err != nil {
@@ -55,7 +54,7 @@ func TestNodePortalKernelOIDCMTLSPrincipalProjection(t *testing.T) {
 	}
 	session := decodePortalSession(t, sessionResponse)
 	if sessionResponse.StatusCode != http.StatusOK || session["subject"] != "alice" || session["tenantId"] != "acme" {
-		t.Fatalf("OIDC BFF Session 无效: status=%d body=%v", sessionResponse.StatusCode, session)
+		t.Fatalf("BFF Session 无效: status=%d body=%v", sessionResponse.StatusCode, session)
 	}
 	drafts, err := browser.Get(process.baseURL() + "/v1/portal-drafts")
 	if err != nil {
@@ -68,7 +67,7 @@ func TestNodePortalKernelOIDCMTLSPrincipalProjection(t *testing.T) {
 	requirePortalPrincipal(t, observed)
 	for _, cookie := range browser.Jar.Cookies(page.Request.URL) {
 		if cookie.Name == "access_token" || cookie.Value == "must-not-reach-browser" {
-			t.Fatalf("OIDC Access Token 泄露到浏览器 Cookie: %+v", cookie)
+			t.Fatalf("上游 Access Token 泄露到浏览器 Cookie: %+v", cookie)
 		}
 	}
 }

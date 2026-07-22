@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { SignedAuthenticationAssertion } from "./signed-authentication-assertion";
 
 export interface Principal {
   id: string;
@@ -8,7 +9,8 @@ export interface Principal {
 }
 
 export interface IdentityProvider {
-  authenticate(request: IncomingMessage): Promise<Principal>;
+	authenticate(request: IncomingMessage): Promise<Principal>;
+	authenticationProof?(request: IncomingMessage): Promise<SignedAuthenticationAssertion | undefined>;
 	handle?(request: IncomingMessage, response: ServerResponse, path: string, secureCookies: boolean): Promise<boolean>;
 	loginRedirect?(path: string): string;
 }
