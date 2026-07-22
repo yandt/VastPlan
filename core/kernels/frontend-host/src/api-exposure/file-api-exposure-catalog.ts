@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
 import { open } from "node:fs/promises";
-import type { APIExposureCatalog, APIExposureCatalogPort, ResolvedAPIExposure } from "./api-exposure-contract";
+import type { APIExposureCatalog, APIExposureCatalogPort, DataPlaneExposure, ResolvedAPIExposure } from "./api-exposure-contract";
 import { parseAPIExposureCatalog } from "./api-exposure-schema";
 
 const maximumCatalogBytes = 64 << 20;
@@ -25,6 +25,12 @@ export class FileAPIExposureCatalog implements APIExposureCatalogPort {
     return this.catalog.exposures.find((resolved) => resolved.exposure.routeKey === routeKey
       && contractMajor(resolved.contract.contractVersion) === majorVersion
       && resolved.exposure.hosts.includes(normalizedHost));
+  }
+
+  public async resolveDataPlane(host: string, routeKey: string): Promise<DataPlaneExposure | undefined> {
+    await this.reload(false);
+    const normalizedHost = normalizeHost(host);
+    return this.catalog.dataPlaneExposures.find((exposure) => exposure.routeKey === routeKey && exposure.hosts.includes(normalizedHost));
   }
 
   private async reload(required: boolean): Promise<void> {

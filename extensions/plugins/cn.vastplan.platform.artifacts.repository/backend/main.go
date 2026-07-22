@@ -34,13 +34,14 @@ const pluginID = "cn.vastplan.platform.artifacts.repository"
 // pluginVersion defaults to the checked-in manifest version for go test/go run.
 // Production and development builds inject the manifest value from build.sh,
 // keeping the packaged binary and signed manifest on the same version source.
-var pluginVersion = "0.13.1"
+var pluginVersion = "0.14.0"
 
-var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"capacity","description":"读取已验证容量与配额用量"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"gcPlan","description":"生成无副作用 GC 计划"},{"name":"gcStatus","description":"读取隔离与清扫状态"},{"name":"gcQuarantine","description":"按精确计划隔离制品"},{"name":"gcSweep","description":"复核并清扫过期隔离制品"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"}]}`)
+var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"capacity","description":"读取已验证容量与配额用量"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"gcPlan","description":"生成无副作用 GC 计划"},{"name":"gcStatus","description":"读取隔离与清扫状态"},{"name":"gcQuarantine","description":"按精确计划隔离制品"},{"name":"gcSweep","description":"复核并清扫过期隔离制品"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"},{"name":"installDataPlaneTicket","description":"安装控制面签发的一次性下载 Ticket"}]}`)
 
 type serverConfig struct {
 	addr, repository, storageProvider, volumeID, migrationState, trust, cert, key, readToken, publishToken, bundleToken string
 	quota                                                                                                               repositoryruntime.QuotaPolicy
+	apiExposure                                                                                                         *dataPlaneLeaseConfig
 }
 
 func loadConfig() (serverConfig, error) {
@@ -49,6 +50,7 @@ func loadConfig() (serverConfig, error) {
 		StorageProvider string                        `json:"storageProvider"`
 		VolumeID        string                        `json:"volumeId"`
 		Quota           repositoryruntime.QuotaPolicy `json:"quota"`
+		APIExposure     *dataPlaneLeaseConfig         `json:"apiExposure,omitempty"`
 	}
 	if err := sdk.DecodeStartupConfiguration(&startup); err != nil {
 		return serverConfig{}, err
@@ -66,6 +68,7 @@ func loadConfig() (serverConfig, error) {
 		publishToken:    os.Getenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN"),
 		bundleToken:     os.Getenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN"),
 		quota:           startup.Quota,
+		apiExposure:     startup.APIExposure,
 	}
 	if config.addr == "" {
 		config.addr = "127.0.0.1:8443"
@@ -84,6 +87,9 @@ func loadConfig() (serverConfig, error) {
 	}
 	if config.repository == "" || config.migrationState == "" || config.trust == "" || config.cert == "" || config.key == "" || config.readToken == "" || config.publishToken == "" || config.bundleToken == "" || config.readToken == config.publishToken || config.readToken == config.bundleToken || config.publishToken == config.bundleToken {
 		return config, errors.New("制品仓库必须配置存储、信任文档、TLS 证书和互不相同的读取/发布/Bundle 令牌")
+	}
+	if err := validateDataPlaneLeaseConfig(config.apiExposure); err != nil {
+		return config, err
 	}
 	return config, nil
 }
@@ -123,10 +129,23 @@ func main() {
 		Logf: func(format string, args ...any) { log.Printf("[artifact-audit] "+format, args...) },
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", func(response http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet {
+			response.Header().Set("Allow", http.MethodGet)
+			http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		response.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = response.Write([]byte("ok\n"))
+	})
 	mux.Handle("/v1/catalog/", catalogHandler)
 	mux.Handle("/", handler)
+	var tickets *dataPlaneTicketStore
+	if config.apiExposure != nil {
+		tickets = newDataPlaneTicketStore(config.apiExposure.InstanceID)
+	}
 	server := &http.Server{
-		Addr: config.addr, Handler: mux,
+		Addr: config.addr, Handler: dataPlaneTicketMiddleware(mux, tickets, config.readToken),
 		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 5 * time.Minute,
 		WriteTimeout: 5 * time.Minute, IdleTimeout: 90 * time.Second,
 	}
@@ -149,16 +168,27 @@ func main() {
 	}()
 
 	p := sdk.New(pluginID, pluginVersion, map[string]string{"backend": "^0.1"})
+	leaseRegistrar := &dataPlaneLeaseRegistrar{config: config.apiExposure}
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage, ID: "platform.artifacts.repository",
 		Descriptor: runtimeRepositoryDescriptor,
 		Handlers: map[string]sdk.Handler{
-			"status": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
-				status, marshalErr := json.Marshal(map[string]any{"listen": config.addr, "ready": ready.Load(), "storageProvider": config.storageProvider, "storageVolumeId": manager.ActiveVolume().VolumeID, "catalog": manager.Stats(), "migration": manager.Migration()})
+			"status": func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+				leaseRegistrar.ensure(ctx, host, callCtx)
+				status, marshalErr := json.Marshal(map[string]any{"listen": config.addr, "ready": ready.Load(), "storageProvider": config.storageProvider, "storageVolumeId": manager.ActiveVolume().VolumeID, "catalog": manager.Stats(), "migration": manager.Migration(), "dataPlaneLease": leaseRegistrar.status()})
 				if marshalErr != nil {
 					return nil, nil, marshalErr
 				}
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, status, nil
+			},
+			"installDataPlaneTicket": func(_ context.Context, _ sdk.Host, callCtx *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+				if tickets == nil {
+					return nil, nil, errors.New("制品仓库未启用 API Exposure 数据面")
+				}
+				if err := tickets.install(callCtx, raw); err != nil {
+					return nil, nil, err
+				}
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"installed":true}`), nil
 			},
 			"capacity": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
 				payload, err := json.Marshal(manager.Capacity())

@@ -54,14 +54,15 @@ type ErrorMapping struct {
 // Its runtime endpoint is never package metadata and is supplied only by a
 // short-lived trusted-host lease.
 type DataPlaneServiceContribution struct {
-	ID             string   `json:"id"`
-	ServiceRole    string   `json:"service_role"`
-	Title          string   `json:"title,omitempty"`
-	Protocol       string   `json:"protocol"`
-	Purposes       []string `json:"purposes"`
-	SupportedModes []string `json:"supportedModes"`
-	HealthPath     string   `json:"healthPath"`
-	MaxObjectBytes uint64   `json:"maxObjectBytes"`
+	ID             string            `json:"id"`
+	ServiceRole    string            `json:"service_role"`
+	Title          string            `json:"title,omitempty"`
+	Protocol       string            `json:"protocol"`
+	Purposes       []string          `json:"purposes"`
+	SupportedModes []string          `json:"supportedModes"`
+	HealthPath     string            `json:"healthPath"`
+	MaxObjectBytes uint64            `json:"maxObjectBytes"`
+	TicketTarget   *CapabilityTarget `json:"ticketTarget,omitempty"`
 }
 
 type ContractReference struct {
@@ -71,6 +72,31 @@ type ContractReference struct {
 	ContractID      string `json:"contractId"`
 	ContractVersion string `json:"contractVersion"`
 	ContractDigest  string `json:"contractDigest"`
+}
+
+type ResolvedContract struct {
+	Reference ContractReference    `json:"reference"`
+	Contract  ContractContribution `json:"contract"`
+}
+
+type DataPlaneServiceReference struct {
+	PluginID       string `json:"pluginId"`
+	ArtifactSHA256 string `json:"artifactSha256"`
+	ContributionID string `json:"contributionId"`
+}
+
+type ResolvedDataPlaneService struct {
+	Reference DataPlaneServiceReference    `json:"reference"`
+	Service   DataPlaneServiceContribution `json:"service"`
+}
+
+// ContractCatalog 只能由可信宿主从已验签制品生成；管理插件不得接受浏览器
+// 自行拼装的 ContractContribution 作为发布依据。
+type ContractCatalog struct {
+	SchemaVersion     string                     `json:"schemaVersion"`
+	Generation        uint64                     `json:"generation"`
+	Contracts         []ResolvedContract         `json:"contracts"`
+	DataPlaneServices []ResolvedDataPlaneService `json:"dataPlaneServices"`
 }
 
 type ExposureTarget struct {
@@ -116,24 +142,27 @@ type ResolvedExposure struct {
 }
 
 type ExposureCatalog struct {
-	SchemaVersion string             `json:"schemaVersion"`
-	Generation    uint64             `json:"generation"`
-	Exposures     []ResolvedExposure `json:"exposures"`
+	SchemaVersion      string              `json:"schemaVersion"`
+	Generation         uint64              `json:"generation"`
+	Exposures          []ResolvedExposure  `json:"exposures"`
+	DataPlaneExposures []DataPlaneExposure `json:"dataPlaneExposures"`
 }
 
 type DataPlaneExposure struct {
-	SchemaVersion       string               `json:"schemaVersion"`
-	ID                  string               `json:"id"`
-	Revision            uint64               `json:"revision"`
-	RouteKey            string               `json:"routeKey"`
-	TenantID            string               `json:"tenantId"`
-	Hosts               []string             `json:"hosts"`
-	Contract            ContractReference    `json:"contract"`
-	DataPlaneServiceID  string               `json:"dataPlaneServiceId"`
-	AllowedModes        []string             `json:"allowedModes"`
-	Authentication      AuthenticationPolicy `json:"authentication"`
-	RequiredPermissions []string             `json:"requiredPermissions"`
-	MaxObjectBytes      uint64               `json:"maxObjectBytes"`
+	SchemaVersion          string                    `json:"schemaVersion"`
+	ID                     string                    `json:"id"`
+	Revision               uint64                    `json:"revision"`
+	RouteKey               string                    `json:"routeKey"`
+	TenantID               string                    `json:"tenantId"`
+	Hosts                  []string                  `json:"hosts"`
+	Service                DataPlaneServiceReference `json:"service"`
+	DataPlaneServiceID     string                    `json:"dataPlaneServiceId"`
+	AllowedModes           []string                  `json:"allowedModes"`
+	AllowedEndpointOrigins []string                  `json:"allowedEndpointOrigins"`
+	TLSIdentityPrefix      string                    `json:"tlsIdentityPrefix"`
+	Authentication         AuthenticationPolicy      `json:"authentication"`
+	RequiredPermissions    []string                  `json:"requiredPermissions"`
+	MaxObjectBytes         uint64                    `json:"maxObjectBytes"`
 }
 
 type EndpointLease struct {
@@ -146,6 +175,40 @@ type EndpointLease struct {
 	Modes               []string  `json:"modes"`
 	IssuedAt            time.Time `json:"issuedAt"`
 	ExpiresAt           time.Time `json:"expiresAt"`
+}
+
+type EndpointLeaseRegistration struct {
+	DataPlaneExposureID string   `json:"dataPlaneExposureId"`
+	InstanceID          string   `json:"instanceId"`
+	Endpoint            string   `json:"endpoint"`
+	TLSIdentity         string   `json:"tlsIdentity"`
+	Modes               []string `json:"modes"`
+	TTLSeconds          uint64   `json:"ttlSeconds"`
+}
+
+type EndpointLeaseRenewal struct {
+	LeaseID    string `json:"leaseId"`
+	TTLSeconds uint64 `json:"ttlSeconds"`
+}
+
+type EndpointLeaseRevocation struct {
+	LeaseID string `json:"leaseId"`
+}
+
+type DataPlaneTicketClaims struct {
+	TenantID            string    `json:"tenantId"`
+	PrincipalID         string    `json:"principalId"`
+	DataPlaneExposureID string    `json:"dataPlaneExposureId"`
+	InstanceID          string    `json:"instanceId"`
+	Method              string    `json:"method"`
+	Resource            string    `json:"resource"`
+	ContentSHA256       string    `json:"contentSha256,omitempty"`
+	ExpiresAt           time.Time `json:"expiresAt"`
+}
+
+type DataPlaneTicketInstallation struct {
+	Ticket string                `json:"ticket"`
+	Claims DataPlaneTicketClaims `json:"claims"`
 }
 
 // GatewayInvocation is the bounded language-neutral request passed to a route

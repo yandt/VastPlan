@@ -140,6 +140,31 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	}
 }
 
+func TestAPIExposureManagementAndRuntimeBoundaries(t *testing.T) {
+	for role, operation := range map[string]string{
+		"platform.api-exposure.read": "list", "platform.api-exposure.edit": "createDraft",
+		"platform.api-exposure.approve": "approve", "platform.api-exposure.publish": "publish",
+	} {
+		if got, _ := decide(user(role), extpoint.PermissionRequest{Capability: "platform.api-exposure", Operation: operation}); got != extpoint.DecisionAllow {
+			t.Fatalf("角色 %s 应允许 %s: %s", role, operation, got)
+		}
+	}
+	plugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.example.data-plane"}}
+	if got, _ := decide(plugin, extpoint.PermissionRequest{Capability: "platform.api-exposure", Operation: "registerEndpointLease"}); got != extpoint.DecisionAllow {
+		t.Fatalf("插件应能登记自身 Lease: %s", got)
+	}
+	if got, _ := decide(plugin, extpoint.PermissionRequest{Capability: "platform.api-exposure", Operation: "publish"}); got != extpoint.DecisionDeny {
+		t.Fatalf("插件不得发布 Exposure: %s", got)
+	}
+	if got, _ := decide(user("platform.artifacts.read"), extpoint.PermissionRequest{Capability: "platform.api-exposure", Operation: "issueDataPlaneTicket"}); got != extpoint.DecisionAllow {
+		t.Fatalf("对象权限应交由 Exposure 服务复核: %s", got)
+	}
+	exposure := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.integration.api-exposure"}}
+	if got, _ := decide(exposure, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "installDataPlaneTicket"}); got != extpoint.DecisionAllow {
+		t.Fatalf("Exposure 控制面应能安装制品数据面 Ticket: %s", got)
+	}
+}
+
 func TestDatabaseRuntimeManagementAndExecutionBoundary(t *testing.T) {
 	manager := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: databasev1.ConnectionManagerPluginID}}
 	if got, _ := decide(manager, extpoint.PermissionRequest{Capability: databasev1.Capability, Operation: databasev1.OperationActivate}); got != extpoint.DecisionAllow {

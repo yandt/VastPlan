@@ -7,14 +7,17 @@ import { sendAPIError, sendJSON } from "../http/json-response";
 import type { APIExposureCatalogPort, APIRouteContract, GatewayInvocation, ResolvedAPIExposure } from "./api-exposure-contract";
 import { matchAPIRoute } from "./api-route-matcher";
 import { APIExposureRateLimiter } from "./api-rate-limiter";
+import { DataPlaneTicketGateway } from "./data-plane-ticket-gateway";
 
 const publicPath = /^\/api\/r\/([a-z2-7]{20})\/v([1-9][0-9]*)(\/.*)$/;
+const dataPlaneTicketPath = /^\/api\/d\/([a-z2-7]{20})\/ticket$/;
 const maximumQueryKeys = 64;
 const maximumQueryValues = 32;
 const maximumQueryValueBytes = 4_096;
 
 export class APIExposureGateway {
   private readonly rateLimiter: APIExposureRateLimiter;
+  private readonly dataPlane: DataPlaneTicketGateway;
   private readonly validators = new Map<string, { request: ValidateFunction; response: ValidateFunction }>();
 
   public constructor(
@@ -25,9 +28,12 @@ export class APIExposureGateway {
     rateLimiter?: APIExposureRateLimiter,
   ) {
     this.rateLimiter = rateLimiter ?? new APIExposureRateLimiter();
+    this.dataPlane = new DataPlaneTicketGateway(catalog, identity, invoker);
   }
 
   public async handle(request: IncomingMessage, response: ServerResponse, path: string): Promise<void> {
+    const dataPlaneMatch = dataPlaneTicketPath.exec(path);
+    if (dataPlaneMatch !== null) return this.dataPlane.handle(request, response, dataPlaneMatch[1]);
     const publicMatch = publicPath.exec(path);
     if (publicMatch === null) return sendAPIError(response, 404, "not_found");
     const host = request.headers.host;
@@ -44,7 +50,7 @@ export class APIExposureGateway {
     const principal = await this.authenticate(request, resolved);
     if (principal === undefined) return sendAPIError(response, 401, "authentication_required");
     if (!this.authorizedPrincipal(principal, resolved)) return sendAPIError(response, 403, "forbidden");
-    if (method !== "GET" && !resolved.exposure.authentication.allowAnonymous && !validCSRF(request)) {
+    if (method !== "GET" && principal.requiresCSRF !== false && !resolved.exposure.authentication.allowAnonymous && !validCSRF(request)) {
       return sendAPIError(response, 403, "csrf_rejected");
     }
     if (!this.rateLimiter.allow(resolved.exposure.routeKey, principal.id, resolved.exposure.limits.requestsPerMinute)) {

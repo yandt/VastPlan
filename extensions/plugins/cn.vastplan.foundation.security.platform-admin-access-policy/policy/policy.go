@@ -15,7 +15,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.17.1"
+	PluginVersion = "0.18.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -41,6 +41,15 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if databaseRuntimeAllowed(c, request) {
 		return extpoint.DecisionAllow, "数据库管理面与受控数据面调用"
+	}
+	if apiExposureRuntimeAllowed(c, request) {
+		return extpoint.DecisionAllow, "插件可登记自身已发布数据面的短租约或消费绑定 Ticket"
+	}
+	if apiExposureTicketInstallationAllowed(c, request) {
+		return extpoint.DecisionAllow, "API Exposure 控制面可向精确数据面安装短时一次性 Ticket"
+	}
+	if apiExposureTicketAllowed(c, request) {
+		return extpoint.DecisionAllow, "已认证主体的数据面权限由 Exposure 服务做对象级复核"
 	}
 	if artifactStorageAllowed(c, request) {
 		return extpoint.DecisionAllow, "制品仓库 leader 可执行受限存储迁移"
@@ -103,7 +112,7 @@ func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.Permissio
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability:
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability, "platform.api-exposure":
 		return true
 	default:
 		return strings.HasPrefix(capability, artifactstorage.CapabilityPrefix)
@@ -149,6 +158,26 @@ func databaseRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionReques
 	}
 }
 
+func apiExposureRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || c.GetCaller().GetId() == "" || request.Capability != "platform.api-exposure" {
+		return false
+	}
+	switch request.Operation {
+	case "registerEndpointLease", "renewEndpointLease", "revokeEndpointLease", "consumeDataPlaneTicket":
+		return true
+	default:
+		return false
+	}
+}
+
+func apiExposureTicketAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	return c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_USER && c.GetCaller().GetId() != "" && request.Capability == "platform.api-exposure" && request.Operation == "issueDataPlaneTicket"
+}
+
+func apiExposureTicketInstallationAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	return c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN && c.GetCaller().GetId() == "cn.vastplan.platform.integration.api-exposure" && request.Capability == platformadminapi.ArtifactsCapability && request.Operation == "installDataPlaneTicket"
+}
+
 func materialLeaseAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
 	return c.Caller.Kind == v1.CallerKind_CALLER_KIND_SYSTEM && c.Caller.Id != "" && request.Capability == "platform.credentials.material-lease" && request.Operation == "issue"
 }
@@ -172,6 +201,12 @@ func operationRole(capability, operation string) string {
 		platformadminapi.DatabaseCapability:    {"describe": "platform.database.read", "list": "platform.database.read", "define": "platform.database.write", "remove": "platform.database.write", "probe": "platform.database.probe"},
 		platformadminapi.ArtifactsCapability:   {"status": "platform.artifacts.read", "capacity": "platform.artifacts.read", "listCatalog": "platform.artifacts.read", "listPublishJournal": "platform.artifacts.read", "resolve": "platform.artifacts.read", "listReferences": "platform.artifacts.read", "gcPlan": "platform.artifacts.read", "gcStatus": "platform.artifacts.read", "setLifecycle": "platform.artifacts.lifecycle", "gcQuarantine": "platform.artifacts.gc", "gcSweep": "platform.artifacts.gc", "migrationStatus": "platform.artifacts.read", "prepareMigration": "platform.artifacts.migrate", "syncMigration": "platform.artifacts.migrate", "cutoverMigration": "platform.artifacts.migrate", "rollbackMigration": "platform.artifacts.migrate", "finalizeMigration": "platform.artifacts.migrate", "releaseMigration": "platform.artifacts.migrate"},
 		platformadminapi.DeploymentCapability:  {"listNodes": "platform.deployment.read", "putNode": "platform.deployment.write", "listBootstrapJobs": "platform.deployment.read", "createBootstrap": "platform.deployment.bootstrap", "approveBootstrap": "platform.deployment.approve", "listDeploymentTargets": "platform.deployment.read", "listServiceRevisions": "platform.deployment.read", "listServiceRevisionAudit": "platform.deployment.read", "createServiceDraft": "platform.deployment.compose", "updateServiceDraft": "platform.deployment.compose", "submitServiceDraft": "platform.deployment.compose", "approveServiceRevision": "platform.deployment.approve", "publishServiceRevision": "platform.deployment.publish", "rollbackServiceRevision": "platform.deployment.publish", "listTestTargetBindings": "platform.deployment.read", "putTestTargetBinding": "platform.deployment.test-target", "listTestReleases": "platform.deployment.read", "createTestRelease": "platform.deployment.publish", "rollbackTestRelease": "platform.deployment.publish"},
+		"platform.api-exposure": {
+			"list": "platform.api-exposure.read", "listDataPlanes": "platform.api-exposure.read", "listAudit": "platform.api-exposure.read", "apiList": "platform.api-exposure.read",
+			"createDraft": "platform.api-exposure.edit", "updateDraft": "platform.api-exposure.edit", "submit": "platform.api-exposure.edit", "createDataPlaneDraft": "platform.api-exposure.edit", "submitDataPlane": "platform.api-exposure.edit", "apiCreateDraft": "platform.api-exposure.edit", "apiUpdateDraft": "platform.api-exposure.edit", "apiSubmit": "platform.api-exposure.edit",
+			"approve": "platform.api-exposure.approve", "approveDataPlane": "platform.api-exposure.approve", "apiApprove": "platform.api-exposure.approve",
+			"publish": "platform.api-exposure.publish", "publishDataPlane": "platform.api-exposure.publish", "retire": "platform.api-exposure.publish", "retireDataPlane": "platform.api-exposure.publish", "apiPublish": "platform.api-exposure.publish", "apiRetire": "platform.api-exposure.publish",
+		},
 	}
 	return roles[capability][operation]
 }

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -96,6 +97,42 @@ func ValidateDataPlaneService(service DataPlaneServiceContribution) error {
 	return validateDefinition("dataPlaneServiceContribution", document)
 }
 
+func ValidateContractCatalog(catalog ContractCatalog) error {
+	document, err := jsonDocument(catalog)
+	if err != nil {
+		return err
+	}
+	if err := validateDefinition("contractCatalog", document); err != nil {
+		return err
+	}
+	seenContracts := map[string]struct{}{}
+	for _, resolved := range catalog.Contracts {
+		if err := validateResolvedReference(resolved.Reference, resolved.Contract); err != nil {
+			return err
+		}
+		key := resolved.Reference.PluginID + "\x00" + resolved.Reference.ArtifactSHA256 + "\x00" + resolved.Reference.ContributionID
+		if _, duplicate := seenContracts[key]; duplicate {
+			return fmt.Errorf("Contract Catalog 契约重复: %s/%s", resolved.Reference.PluginID, resolved.Reference.ContributionID)
+		}
+		seenContracts[key] = struct{}{}
+	}
+	seenServices := map[string]struct{}{}
+	for _, resolved := range catalog.DataPlaneServices {
+		if err := ValidateDataPlaneService(resolved.Service); err != nil {
+			return err
+		}
+		if resolved.Reference.ContributionID != resolved.Service.ID {
+			return errors.New("Contract Catalog Data Plane 引用与贡献不一致")
+		}
+		key := resolved.Reference.PluginID + "\x00" + resolved.Reference.ArtifactSHA256 + "\x00" + resolved.Reference.ContributionID
+		if _, duplicate := seenServices[key]; duplicate {
+			return fmt.Errorf("Contract Catalog Data Plane 服务重复: %s/%s", resolved.Reference.PluginID, resolved.Reference.ContributionID)
+		}
+		seenServices[key] = struct{}{}
+	}
+	return nil
+}
+
 func ContractDigest(contract ContractContribution) (string, error) {
 	if err := ValidateContractContribution(contract); err != nil {
 		return "", err
@@ -172,6 +209,19 @@ func ValidateExposureCatalog(catalog ExposureCatalog) error {
 		}
 		seenKeys[exposure.RouteKey] = struct{}{}
 	}
+	for _, exposure := range catalog.DataPlaneExposures {
+		if err := ValidateDataPlaneExposure(exposure); err != nil {
+			return fmt.Errorf("Data Plane Exposure %s: %w", exposure.ID, err)
+		}
+		if _, duplicate := seenIDs[exposure.ID]; duplicate {
+			return fmt.Errorf("Exposure id 重复: %s", exposure.ID)
+		}
+		if _, duplicate := seenKeys[exposure.RouteKey]; duplicate {
+			return fmt.Errorf("Exposure routeKey 冲突: %s", exposure.RouteKey)
+		}
+		seenIDs[exposure.ID] = struct{}{}
+		seenKeys[exposure.RouteKey] = struct{}{}
+	}
 	return nil
 }
 
@@ -180,7 +230,35 @@ func ValidateDataPlaneExposure(exposure DataPlaneExposure) error {
 	if err != nil {
 		return err
 	}
-	return validateDefinition("dataPlaneExposure", document)
+	if err := validateDefinition("dataPlaneExposure", document); err != nil {
+		return err
+	}
+	for _, host := range exposure.Hosts {
+		if host != strings.ToLower(host) || strings.HasSuffix(host, ".") {
+			return fmt.Errorf("Data Plane Exposure host 必须规范化为小写且无尾点: %s", host)
+		}
+	}
+	for _, origin := range exposure.AllowedEndpointOrigins {
+		parsed, err := url.Parse(origin)
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" || origin != strings.ToLower(origin) {
+			return fmt.Errorf("Data Plane Endpoint Origin 必须是规范化的小写 HTTPS origin: %s", origin)
+		}
+	}
+	identity, err := url.Parse(exposure.TLSIdentityPrefix)
+	if err != nil || identity.Scheme != "spiffe" || identity.Host == "" || !strings.HasSuffix(identity.Path, "/") || identity.RawQuery != "" || identity.Fragment != "" {
+		return errors.New("Data Plane TLS Identity Prefix 必须是以 / 结尾的 SPIFFE URI prefix")
+	}
+	return nil
+}
+
+func ResolveDataPlaneExposure(catalog ExposureCatalog, host, routeKey string) (DataPlaneExposure, bool) {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	for _, exposure := range catalog.DataPlaneExposures {
+		if exposure.RouteKey == routeKey && slices.Contains(exposure.Hosts, host) {
+			return exposure, true
+		}
+	}
+	return DataPlaneExposure{}, false
 }
 
 func ValidateEndpointLease(lease EndpointLease, now time.Time) error {
@@ -197,6 +275,10 @@ func ValidateEndpointLease(lease EndpointLease, now time.Time) error {
 	}
 	if lease.IssuedAt.After(now.Add(30*time.Second)) || !lease.ExpiresAt.After(now) || !lease.ExpiresAt.After(lease.IssuedAt) || lease.ExpiresAt.Sub(lease.IssuedAt) > maxEndpointLease {
 		return errors.New("Data Plane Endpoint Lease 时间窗无效")
+	}
+	identity, err := url.Parse(lease.TLSIdentity)
+	if err != nil || identity.Scheme != "spiffe" || identity.Host == "" || identity.RawQuery != "" || identity.Fragment != "" || strings.Contains(identity.Path, "..") {
+		return errors.New("Data Plane Endpoint Lease TLS identity 必须是规范 SPIFFE URI")
 	}
 	return nil
 }
@@ -232,16 +314,19 @@ func contractMajor(version string) uint64 {
 }
 
 func validateResolvedContract(resolved ResolvedExposure) error {
-	if err := ValidateContractContribution(resolved.Contract); err != nil {
+	return validateResolvedReference(resolved.Exposure.Contract, resolved.Contract)
+}
+
+func validateResolvedReference(reference ContractReference, contract ContractContribution) error {
+	if err := ValidateContractContribution(contract); err != nil {
 		return err
 	}
-	reference := resolved.Exposure.Contract
-	if reference.ContributionID != resolved.Contract.ID ||
-		reference.ContractID != resolved.Contract.ContractID ||
-		reference.ContractVersion != resolved.Contract.ContractVersion {
+	if reference.ContributionID != contract.ID ||
+		reference.ContractID != contract.ContractID ||
+		reference.ContractVersion != contract.ContractVersion {
 		return errors.New("已解析契约与 Exposure 契约引用不一致")
 	}
-	digest, err := ContractDigest(resolved.Contract)
+	digest, err := ContractDigest(contract)
 	if err != nil {
 		return err
 	}

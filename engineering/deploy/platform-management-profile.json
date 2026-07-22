@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 4,
+  "revision": 5,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -28,8 +28,35 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.bootstrap-policy", "version": "0.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.17.1", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.18.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.3.0", "channel": "stable" }
+      ]
+    },
+    {
+      "id": "platform-api-exposure",
+      "kind": "service",
+      "enabled": true,
+      "service_role": "backend",
+      "logical_service": "platform.api-exposure",
+      "instance_policy": "leader",
+      "state_model": "leader-owned",
+      "visibility": "cluster",
+      "routing": "leader",
+      "routing_domain": "platform",
+      "replicas": 1,
+      "placement": { "nodeSelector": { "environment": "local-platform" } },
+      "config": {
+        "plugins": {
+          "cn.vastplan.platform.integration.api-exposure": {
+            "stateFile": "__VASTPLAN_DEV_STATE__/api-exposure.json",
+            "gatewayCatalogFile": "__VASTPLAN_DEV_STATE__/api-exposure-gateway.json",
+            "contractCatalogFile": "__VASTPLAN_DEV_ROOT__/api-contract-catalog.json"
+          }
+        }
+      },
+      "plugins": [
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.18.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.1.0", "channel": "stable" }
       ]
     },
     {
@@ -80,9 +107,9 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.17.1", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.18.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.13.1", "channel": "stable" }
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.14.0", "channel": "stable" }
       ]
     },
     {
@@ -109,7 +136,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.17.1", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.18.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.5.0", "channel": "stable" }
       ]
     },
@@ -132,7 +159,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.17.1", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.18.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.5.0", "channel": "stable" }
       ]
     },
@@ -155,7 +182,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.17.1", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.18.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.data.relational.runtime", "version": "0.7.0", "channel": "stable" }
       ]
     },
@@ -178,7 +205,7 @@
         }
       },
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.17.1", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.18.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.7.1", "channel": "stable" }
       ]
     },

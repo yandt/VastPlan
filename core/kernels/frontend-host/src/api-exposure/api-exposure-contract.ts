@@ -51,10 +51,27 @@ export interface APIExposureCatalog {
   readonly schemaVersion: "v1";
   readonly generation: number;
   readonly exposures: readonly ResolvedAPIExposure[];
+  readonly dataPlaneExposures: readonly DataPlaneExposure[];
 }
 
 export interface APIExposureCatalogPort {
   resolve(host: string, routeKey: string, majorVersion: number): Promise<ResolvedAPIExposure | undefined>;
+  resolveDataPlane(host: string, routeKey: string): Promise<DataPlaneExposure | undefined>;
+}
+
+export interface DataPlaneExposure {
+  readonly schemaVersion: "v1";
+  readonly id: string;
+  readonly revision: number;
+  readonly routeKey: string;
+  readonly tenantId: string;
+  readonly hosts: readonly string[];
+  readonly allowedModes: readonly ("gateway-proxy" | "ticket-redirect" | "private-direct")[];
+  readonly allowedEndpointOrigins: readonly string[];
+  readonly tlsIdentityPrefix: string;
+  readonly authentication: { readonly profileId: string; readonly allowAnonymous: boolean };
+  readonly requiredPermissions: readonly string[];
+  readonly maxObjectBytes: number;
 }
 
 export interface GatewayInvocation {

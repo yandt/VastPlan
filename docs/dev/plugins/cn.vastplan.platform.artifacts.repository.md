@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.13.1`
+当前制品版本：`0.14.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -32,6 +32,7 @@
 | `volumeId` | 部署配置指向的活动 volume ID；迁移 finalize 后必须更新它并重启，才允许 release 旧卷 |
 | `quota.maxArtifacts` / `quota.maxBytes` | 可选全仓活动制品数量/对象字节上限；`0` 表示该维度不限额 |
 | `quota.rules[]` | 可选累积规则；每条以稳定 `id` 按 namespace、publisher、channel 中至少一个维度匹配，并设置数量和/或字节上限 |
+| `apiExposure` | 可选 Data Plane Exposure 接入；包含已发布 `exposureId`、稳定 `instanceId`、外部 HTTPS `endpoint` 与 `tlsIdentity` |
 
 部署适配器仍需向该第一方进程提供以下受控挂载/秘密；它们不属于普通插件设置：
 
@@ -63,6 +64,8 @@
 - `POST /v1/catalog/bundles/import`：使用发布 token 流式上传 Bundle；服务先在仓库外的私有临时目录解包，再将每个对象送回相同的签名、摘要、包内清单和不可变发布强制点。部分导入只会留下已验证的幂等对象，不会激活任何锁或部署。
 
 包体默认上限为 256 MiB，证明上限为 2 MiB。未授权、明文请求、超限或不可信制品均 fail-closed。小载荷管理操作已经 Node Portal Kernel BFF；制品包与 Bundle 大字节仍使用独立 TLS 入口。通用设置/凭证句柄与签名种子 Bundle 尚未接入，所以 `artifact-server` 子命令仍保留为兼容启动路径，不能据此删除自举能力。
+
+清单从 `0.14.0` 起声明 `artifact-data` Data Plane Service。配置 `apiExposure` 后，仓库实例通过受委托插件调用登记/续租 Endpoint Lease；API Exposure 控制面只向精确的 `installDataPlaneTicket` operation 安装 Ticket。公开客户端先请求 `/api/d/{routeKey}/ticket`，再以 `vp_ticket` 访问仓库；中间件本地单次消费 Ticket、移除 query，并只在进程内投影私有读取凭证。Ticket 不写日志、不写持久状态，也不会替代仓库的原有 TLS 与签名复验。
 
 Resolver 请求示例：
 

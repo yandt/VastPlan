@@ -17,7 +17,7 @@ export function exampleContract(): APIContractContribution {
 export function exampleCatalog(contract = exampleContract()): APIExposureCatalog {
   return {
     schemaVersion: "v1", generation: 1,
-    exposures: [{
+    dataPlaneExposures: [], exposures: [{
       exposure: {
         schemaVersion: "v1", id: "exp_aaaaaaaaaaaaaaaaaaaa", revision: 1, routeKey: "aaaaaaaaaaaaaaaaaaaa",
         displayName: "演示 API", tenantId: "tenant-a", portalId: "operations", hosts: ["127.0.0.1"],

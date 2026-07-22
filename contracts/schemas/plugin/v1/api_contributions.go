@@ -79,6 +79,12 @@ func validateAPIContributions(manifest Manifest) error {
 			return fmt.Errorf("dataPlaneServices id 重复: %s", service.ID)
 		}
 		seenDataPlane[service.ID] = struct{}{}
+		if service.TicketTarget != nil {
+			tool, exists := tools[service.TicketTarget.Capability]
+			if !exists || tool.ServiceRole != service.ServiceRole || !toolDeclaresOperation(tool, service.TicketTarget.Operation) {
+				return fmt.Errorf("dataPlaneServices/%s ticketTarget 未绑定同一清单拥有的 operation", service.ID)
+			}
+		}
 	}
 	return nil
 }

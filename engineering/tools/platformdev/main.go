@@ -272,6 +272,9 @@ func (r *runtime) signPackageRepository() error {
 			return err
 		}
 	}
+	if err := r.writeAPIExposureConfiguration(signed, refs); err != nil {
+		return err
+	}
 	if err := r.writeBootstrapInventory(repository, refs); err != nil {
 		return err
 	}
@@ -600,7 +603,7 @@ func (r *runtime) start(ctx context.Context) error {
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
 	}
-	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), 8, platformNodeStartedAt, 90*time.Second); err != nil {
+	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), 9, platformNodeStartedAt, 90*time.Second); err != nil {
 		return fmt.Errorf("平台 Backend 未收敛: %w", err)
 	}
 	if err := waitHTTP(ctx, "https://"+r.options.artifactListen, 30*time.Second, true); err != nil {
@@ -613,6 +616,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"--session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json"),
 		"--portal-assets", filepath.Join(r.runDir, "portal-assets"),
 		"--access-profile-catalog", filepath.Join(r.runDir, "access-profile-catalog.json"),
+		"--api-exposure-catalog", filepath.Join(r.persistentStateRoot(), "api-exposure-gateway.json"),
 		"--frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
 		"--frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
 		"--nats-servers", natsURL, "--allow-insecure-nats",
@@ -863,7 +867,7 @@ func (r *runtime) startProxy() error {
 		mux.HandleFunc("/__vastplan_dev/modules/", r.hmr.module)
 		mux.HandleFunc("/assets/", r.hmr.portalAssets)
 		mux.HandleFunc("/", func(w http.ResponseWriter, request *http.Request) {
-			if request.URL.Path == "/v1" || strings.HasPrefix(request.URL.Path, "/v1/") || request.URL.Path == "/auth" || strings.HasPrefix(request.URL.Path, "/auth/") {
+			if isPortalKernelRoute(request.URL.Path) {
 				proxy.ServeHTTP(w, request)
 				return
 			}
@@ -879,6 +883,15 @@ func (r *runtime) startProxy() error {
 	}
 	go func() { _ = r.proxy.Serve(listener) }()
 	return nil
+}
+
+func isPortalKernelRoute(path string) bool {
+	for _, prefix := range []string{"/v1", "/auth", "/api"} {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {

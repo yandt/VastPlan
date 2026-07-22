@@ -25,5 +25,6 @@
 - [cn.vastplan.platform.data.relational.connection-manager](cn.vastplan.platform.data.relational.connection-manager.md) —— 数据库连接定义与可信探测
 - [cn.vastplan.platform.artifacts.repository](cn.vastplan.platform.artifacts.repository.md) —— HTTPS 制品仓库与状态能力
 - [cn.vastplan.platform.artifacts.storage.file](cn.vastplan.platform.artifacts.storage.file.md) —— 本地文件制品 volume 供给 Provider
+- [cn.vastplan.platform.integration.api-exposure](cn.vastplan.platform.integration.api-exposure.md) —— API Contract、稳定 Route Key、Gateway Catalog 与独立数据面租约治理
 - [cn.vastplan.platform.infrastructure.deployment-manager](cn.vastplan.platform.infrastructure.deployment-manager.md) —— 节点计划、首次引导审批与可信执行桥
 - [cn.vastplan.platform.configuration.portal-composer](cn.vastplan.platform.configuration.portal-composer.md) —— Portal 分域治理、不可变 Activation 与前端制品引用保护

@@ -1,6 +1,6 @@
 # ADR-0110 治理式 API Exposure 与独立数据面
 
-- 状态：已采纳，实施中
+- 状态：已实施
 - 日期：2026-07-22
 - 关联：[ADR-0021](ADR-0021-权限判定强制点.md)、[ADR-0025](ADR-0025-NATS控制面寻址与多节点调度.md)、[ADR-0068](ADR-0068-分布式平台管理中心与强类型BFF.md)、[ADR-0091](ADR-0091-制品存储Provider供给边界.md)、[ADR-0106](ADR-0106-多端统一身份授权与Runner执行租约.md)
 
@@ -16,6 +16,7 @@
 4. Gateway 使用自包含 `ExposureCatalog`，其中完整契约与 Reference digest 相互校验。公开协议不得返回 plugin、capability、service、node 或内部 endpoint。
 5. Gateway 做入口认证、租户/Portal 绑定、权限预检、限流、大小限制、请求/响应 Schema 与错误映射；Backend `Host.Invoke` 继续作为最终授权强制点，入口预检不能替代它。
 6. 新增 `dataPlaneServices` 和短时 `EndpointLease`，支持 `gateway-proxy`、`ticket-redirect`、`private-direct`，以兼容独立 HTTPS 数据面。控制面故障时仅允许已签发且未过期的 Lease 继续工作。
+   `ticket-redirect` 的公开入口固定为 `/api/d/{routeKey}/ticket`；控制面先把短时一次性 Ticket 主动安装到目标数据面，再把 endpoint 与不透明 Ticket 返回客户端，公开数据请求不反向依赖控制面。
 7. 旧 `api.route` 保留在 Backend v1 兼容矩阵和 Schema 中，但标记为 deprecated；新插件、Node Gateway 和管理控制面不得依赖它。
 8. 公共契约、校验和控制面优先 Go；现有 Node Portal Kernel 承载 HTTP Gateway；独立数据面服务保持按驱动生态选语言。运行方式与语言分别决策。
 
@@ -33,4 +34,3 @@
 - Route Key 与插件无关，插件替换或重构不会破坏客户端地址。
 - 控制面必须维护 Exposure 生命周期、Route Key tombstone、职责分离审批、Catalog generation 和 Endpoint Lease。
 - Portal、Mobile、Runner 与服务客户端使用相同 Token/身份验证原则；不同入口只负责载体校验，最终权限仍由统一 Authorization Policy 与 Backend PEP 裁决。
-

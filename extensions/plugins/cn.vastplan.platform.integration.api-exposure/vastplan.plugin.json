@@ -1,0 +1,146 @@
+{
+  "id": "cn.vastplan.platform.integration.api-exposure",
+  "name": "VastPlan API Exposure",
+  "description": "治理插件 API Contract、稳定公开 Route Key 与独立数据面 Endpoint Lease",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1", "frontend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["subject.id", "authorization.roles", "authorization.admin", "scene", "trace", "request.deadline"] },
+  "authorization": {
+    "namespace": "platform.api-exposure",
+    "permissions": [
+      { "code": "platform.api-exposure.read", "title": "查看 API 暴露", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.api-exposure.edit", "title": "编辑 API 暴露", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.api-exposure.approve", "title": "审批 API 暴露", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.api-exposure.publish", "title": "发布 API 暴露", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "list", "permissions": ["platform.api-exposure.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "listDataPlanes", "permissions": ["platform.api-exposure.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "listAudit", "permissions": ["platform.api-exposure.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "createDraft", "permissions": ["platform.api-exposure.edit"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "updateDraft", "permissions": ["platform.api-exposure.edit"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "createDataPlaneDraft", "permissions": ["platform.api-exposure.edit"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "submit", "permissions": ["platform.api-exposure.edit"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "approve", "permissions": ["platform.api-exposure.approve"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "publish", "permissions": ["platform.api-exposure.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "submitDataPlane", "permissions": ["platform.api-exposure.edit"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "approveDataPlane", "permissions": ["platform.api-exposure.approve"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "publishDataPlane", "permissions": ["platform.api-exposure.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "retireDataPlane", "permissions": ["platform.api-exposure.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "retire", "permissions": ["platform.api-exposure.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "apiList", "permissions": ["platform.api-exposure.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "apiCreateDraft", "permissions": ["platform.api-exposure.edit"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "apiUpdateDraft", "permissions": ["platform.api-exposure.edit"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "apiSubmit", "permissions": ["platform.api-exposure.edit"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "apiApprove", "permissions": ["platform.api-exposure.approve"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "apiPublish", "permissions": ["platform.api-exposure.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.api-exposure", "operation": "apiRetire", "permissions": ["platform.api-exposure.publish"], "access": "execute", "approval": "different-subject" }
+    ]
+  },
+  "runtime": {
+    "instancePolicy": "leader",
+    "stateModel": "leader-owned",
+    "visibility": "cluster",
+    "routing": "leader",
+    "routingDomain": "platform",
+    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.api-exposure", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "restart",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stateFile": { "type": "string", "minLength": 1 },
+        "gatewayCatalogFile": { "type": "string", "minLength": 1 },
+        "contractCatalogFile": { "type": "string", "minLength": 1 }
+      },
+      "required": ["stateFile", "gatewayCatalogFile", "contractCatalogFile"]
+    }
+  },
+  "state": { "backend": { "format": "cn.vastplan.platform.integration.api-exposure", "formatVersion": 1 } },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/api-exposure", "frontend": "frontend/dist/index.js" },
+  "frontendModuleGraphs": {
+    "browser": {
+      "schemaVersion": "v1",
+      "target": "browser",
+      "entry": "frontend/dist/index.js",
+      "externals": ["@vastplan/workbench-sdk"],
+      "nodes": [{
+        "path": "frontend/dist/index.js",
+          "sha256": "047537ae8cff94f6a92a7ec15997c1ae2a4f76852aad6cff03edc254db8f1f69",
+          "size": 24924,
+        "mediaType": "text/javascript",
+        "purpose": "entry",
+        "dependencies": []
+      }],
+      "digest": "13be2148ed24437e15ab0aad104cb44c0b49deec1fbd61573e88470d342b6645"
+    }
+  },
+  "contributes": {
+    "backend": {
+      "tools": [{
+        "id": "platform.api-exposure",
+        "service_role": "backend",
+        "title": "API 暴露治理",
+        "subcommands": [
+          { "name": "list", "description": "列出 HTTP API Exposure revisions" },
+          { "name": "createDraft", "description": "创建 HTTP API Exposure 草稿" },
+          { "name": "updateDraft", "description": "CAS 更新 HTTP API Exposure 草稿" },
+          { "name": "submit", "description": "提交 HTTP API Exposure 审批" },
+          { "name": "approve", "description": "审批 HTTP API Exposure" },
+          { "name": "publish", "description": "发布 HTTP API Exposure" },
+          { "name": "retire", "description": "退役 HTTP API Exposure" },
+          { "name": "listDataPlanes", "description": "列出 Data Plane Exposure revisions" },
+          { "name": "createDataPlaneDraft", "description": "创建 Data Plane Exposure 草稿" },
+          { "name": "submitDataPlane", "description": "提交 Data Plane Exposure 审批" },
+          { "name": "approveDataPlane", "description": "审批 Data Plane Exposure" },
+          { "name": "publishDataPlane", "description": "发布 Data Plane Exposure" },
+          { "name": "retireDataPlane", "description": "退役 Data Plane Exposure" },
+          { "name": "registerEndpointLease", "description": "登记短时 Data Plane Endpoint Lease" },
+          { "name": "renewEndpointLease", "description": "续租 Data Plane Endpoint" },
+          { "name": "revokeEndpointLease", "description": "撤销 Data Plane Endpoint Lease" },
+          { "name": "issueDataPlaneTicket", "description": "签发一次性 Data Plane Ticket" },
+          { "name": "consumeDataPlaneTicket", "description": "原子消费 Data Plane Ticket" },
+          { "name": "listAudit", "description": "读取 API Exposure 审计" },
+          { "name": "apiList", "description": "HTTP API 查询适配器" },
+          { "name": "apiCreateDraft", "description": "HTTP API 创建草稿适配器" },
+          { "name": "apiUpdateDraft", "description": "HTTP API 更新草稿适配器" },
+          { "name": "apiSubmit", "description": "HTTP API 提交适配器" },
+          { "name": "apiApprove", "description": "HTTP API 审批适配器" },
+          { "name": "apiPublish", "description": "HTTP API 发布适配器" },
+          { "name": "apiRetire", "description": "HTTP API 退役适配器" }
+        ]
+      }],
+      "apiContracts": [{
+        "id": "management-api",
+        "service_role": "backend",
+        "title": "API Exposure 管理 API",
+        "contractId": "platform.api-exposure.management-api",
+        "contractVersion": "1.0.0",
+        "protocol": "http-json",
+        "routes": [
+          { "id": "platform.api-exposure.list", "method": "GET", "path": "/exposures", "target": { "capability": "platform.api-exposure", "operation": "apiList" }, "requestSchema": { "type": "object", "maxProperties": 0 }, "responseSchema": { "type": "object" }, "successStatus": 200 },
+          { "id": "platform.api-exposure.create", "method": "POST", "path": "/exposures", "target": { "capability": "platform.api-exposure", "operation": "apiCreateDraft" }, "requestSchema": { "type": "object" }, "responseSchema": { "type": "object" }, "successStatus": 201, "errors": [{ "code": "platform.api-exposure.invalid", "status": 422 }] },
+          { "id": "platform.api-exposure.update", "method": "PUT", "path": "/exposures/{revisionId}", "target": { "capability": "platform.api-exposure", "operation": "apiUpdateDraft" }, "requestSchema": { "type": "object" }, "responseSchema": { "type": "object" }, "successStatus": 200, "errors": [{ "code": "platform.api-exposure.not_found", "status": 404 }, { "code": "platform.api-exposure.state_conflict", "status": 409 }, { "code": "platform.api-exposure.invalid", "status": 422 }] },
+          { "id": "platform.api-exposure.submit", "method": "POST", "path": "/exposures/{revisionId}/submit", "target": { "capability": "platform.api-exposure", "operation": "apiSubmit" }, "requestSchema": { "type": "object", "maxProperties": 0 }, "responseSchema": { "type": "object" }, "successStatus": 200, "errors": [{ "code": "platform.api-exposure.not_found", "status": 404 }, { "code": "platform.api-exposure.state_conflict", "status": 409 }] },
+          { "id": "platform.api-exposure.approve", "method": "POST", "path": "/exposures/{revisionId}/approve", "target": { "capability": "platform.api-exposure", "operation": "apiApprove" }, "requestSchema": { "type": "object", "maxProperties": 0 }, "responseSchema": { "type": "object" }, "successStatus": 200, "errors": [{ "code": "platform.api-exposure.not_found", "status": 404 }, { "code": "platform.api-exposure.state_conflict", "status": 409 }] },
+          { "id": "platform.api-exposure.publish", "method": "POST", "path": "/exposures/{revisionId}/publish", "target": { "capability": "platform.api-exposure", "operation": "apiPublish" }, "requestSchema": { "type": "object", "maxProperties": 0 }, "responseSchema": { "type": "object" }, "successStatus": 200, "errors": [{ "code": "platform.api-exposure.not_found", "status": 404 }, { "code": "platform.api-exposure.state_conflict", "status": 409 }] },
+          { "id": "platform.api-exposure.retire", "method": "POST", "path": "/exposures/{exposureId}/retire", "target": { "capability": "platform.api-exposure", "operation": "apiRetire" }, "requestSchema": { "type": "object", "maxProperties": 0 }, "responseSchema": { "type": "object" }, "successStatus": 200, "errors": [{ "code": "platform.api-exposure.not_found", "status": 404 }] }
+        ]
+      }]
+    },
+    "frontend": {
+      "views": [{ "id": "platform.api-exposure", "title": "API 暴露" }],
+      "menus": [{ "id": "platform.api-exposure.menu", "title": "API 暴露" }]
+    }
+  }
+}

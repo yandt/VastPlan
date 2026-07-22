@@ -1,6 +1,7 @@
 package pluginv1
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -23,6 +24,24 @@ func TestParseManifestGovernedAPIContributions(t *testing.T) {
 	}
 	if len(runtime) != 1 || runtime[0].ExtensionPoint != "tool.package" {
 		t.Fatalf("声明式 API 不得直接注册协议总线: %+v", runtime)
+	}
+}
+
+func TestBuildAPIContractCatalogIsDeterministic(t *testing.T) {
+	manifest, err := ParseManifest(governedAPIManifest())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := BuildAPIContractCatalog(3, []APIContractCatalogSource{{Manifest: manifest, ArtifactSHA256: strings.Repeat("a", 64)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := BuildAPIContractCatalog(3, []APIContractCatalogSource{{Manifest: manifest, ArtifactSHA256: strings.Repeat("a", 64)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(first, second) || len(first.Contracts) != 1 || len(first.DataPlaneServices) != 1 {
+		t.Fatalf("API Contract Catalog 必须确定且完整: %+v", first)
 	}
 }
 
@@ -51,7 +70,7 @@ func governedAPIManifest() []byte {
       "id":"management-api","service_role":"backend","contractId":"platform.demo.api","contractVersion":"1.0.0","protocol":"http-json",
       "routes":[{"id":"platform.demo.list","method":"POST","path":"/items","target":{"capability":"platform.demo","operation":"listItems"},"requestSchema":{"type":"object"},"responseSchema":{"type":"object"},"successStatus":200}]
     }],
-    "dataPlaneServices":[{"id":"object-store","service_role":"backend","protocol":"https","purposes":["artifact-download"],"supportedModes":["ticket-redirect"],"healthPath":"/healthz","maxObjectBytes":1073741824}]
+    "dataPlaneServices":[{"id":"object-store","service_role":"backend","protocol":"https","purposes":["artifact-download"],"supportedModes":["ticket-redirect"],"healthPath":"/healthz","maxObjectBytes":1073741824,"ticketTarget":{"capability":"platform.demo","operation":"listItems"}}]
   }}
 }`)
 }

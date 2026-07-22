@@ -8,6 +8,7 @@ const operations = Object.freeze({
   "platform.deployment": new Set(["listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"]),
   "foundation.security.authentication.providers": new Set(["get", "createDraft", "validate", "recordTest", "approve", "publish", "retire"]),
   "foundation.security.seed.handoff": new Set(["get", "configureProvider", "verifyProvider", "prepareHandoff", "completeHandoff"]),
+  "platform.api-exposure": new Set(["list", "createDraft", "updateDraft", "submit", "approve", "publish", "retire", "listDataPlanes", "createDataPlaneDraft", "submitDataPlane", "approveDataPlane", "publishDataPlane", "retireDataPlane"]),
 });
 
 export type PlatformCapability = keyof typeof operations;

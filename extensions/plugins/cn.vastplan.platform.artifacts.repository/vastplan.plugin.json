@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -45,7 +45,8 @@
     "visibility": "cluster",
     "routing": "leader",
     "routingDomain": "platform",
-    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
+    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }],
+    "requires": [{ "capability": "platform.api-exposure", "scope": "remote", "kind": "soft", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "platform.api-exposure", "routingDomain": "platform" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
   "configuration": {
@@ -58,6 +59,17 @@
         "listen": { "type": "string", "minLength": 1 },
         "storageProvider": { "type": "string", "minLength": 1, "maxLength": 160 },
         "volumeId": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "apiExposure": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exposureId": { "type": "string", "pattern": "^dpx_[a-z2-7]{20}$" },
+            "instanceId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$" },
+            "endpoint": { "type": "string", "pattern": "^https://", "maxLength": 2048 },
+            "tlsIdentity": { "type": "string", "pattern": "^spiffe://", "maxLength": 512 }
+          },
+          "required": ["exposureId", "instanceId", "endpoint", "tlsIdentity"]
+        },
         "quota": {
           "type": "object",
           "additionalProperties": false,
@@ -120,7 +132,19 @@
           { "name": "rollbackMigration", "description": "回滚到源 volume" },
           { "name": "finalizeMigration", "description": "结束观察双写" },
           { "name": "releaseMigration", "description": "隔离旧 volume" }
+          ,{ "name": "installDataPlaneTicket", "description": "安装控制面签发的一次性下载 Ticket" }
         ]
+      }],
+      "dataPlaneServices": [{
+        "id": "artifact-data",
+        "service_role": "backend",
+        "title": "制品大对象 HTTPS 数据面",
+        "protocol": "https",
+        "purposes": ["artifact-download", "artifact-upload", "offline-bundle"],
+        "supportedModes": ["ticket-redirect", "private-direct"],
+        "healthPath": "/healthz",
+        "maxObjectBytes": 1099511627776,
+        "ticketTarget": { "capability": "platform.artifacts.repository", "operation": "installDataPlaneTicket" }
       }]
     },
     "frontend": {

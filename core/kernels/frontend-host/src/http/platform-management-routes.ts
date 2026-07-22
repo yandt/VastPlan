@@ -12,6 +12,7 @@ import { PlatformSettingsRoutes } from "./platform-settings-routes";
 import { PlatformAuthenticationProviderRoutes } from "./platform-authentication-provider-routes";
 import { PlatformSeedHandoffRoutes } from "./platform-seed-handoff-routes";
 import type { IdentityProvider } from "../identity/identity-provider";
+import { PlatformAPIExposureRoutes } from "./platform-api-exposure-routes";
 
 const prefix = "/v1/portals/";
 
@@ -23,6 +24,7 @@ export class PlatformManagementRoutes {
   private readonly deployment: PlatformDeploymentRoutes;
   private readonly authenticationProviders: PlatformAuthenticationProviderRoutes;
   private readonly seedHandoff: PlatformSeedHandoffRoutes;
+  private readonly apiExposures: PlatformAPIExposureRoutes;
 
   public constructor(private readonly resolver: PlatformManagementResolver, client: PlatformCapabilityPort, identity: IdentityProvider) {
     this.settings = new PlatformSettingsRoutes(client);
@@ -32,6 +34,7 @@ export class PlatformManagementRoutes {
     this.deployment = new PlatformDeploymentRoutes(client);
     this.authenticationProviders = new PlatformAuthenticationProviderRoutes(client, identity);
     this.seedHandoff = new PlatformSeedHandoffRoutes(client, identity);
+    this.apiExposures = new PlatformAPIExposureRoutes(client);
   }
 
   public async handle(path: string, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
@@ -56,6 +59,7 @@ export class PlatformManagementRoutes {
     if (await this.deployment.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.authenticationProviders.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.seedHandoff.handle(resourceParts, principal, target, request, response, signal)) return true;
+    if (await this.apiExposures.handle(resourceParts, principal, target, request, response, signal)) return true;
     return reject(response, 404, "not_found", method);
   }
 }

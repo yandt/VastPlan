@@ -147,6 +147,52 @@ export interface ArtifactCapacity {
   reclaimedBytes: number; storedBytes: number; buckets: ArtifactCapacityBucket[]; quotas: ArtifactQuotaUsage[];
 }
 
+export type APIExposureStatus = "Draft" | "PendingApproval" | "Approved" | "Published" | "Superseded" | "Retired";
+export interface APIExposureRevision {
+  id: number; status: APIExposureStatus;
+  exposure: {
+    id: string; revision: number; routeKey: string; displayName: string; tenantId: string; portalId?: string;
+    hosts: string[]; contract: { pluginId: string; artifactSha256: string; contributionId: string; contractId: string; contractVersion: string; contractDigest: string };
+    authentication: { profileId: string; allowAnonymous: boolean }; requiredPermissions: string[];
+    limits: { maxBodyBytes: number; maxResponseBytes: number; requestsPerMinute: number; timeoutMs: number };
+    target: { logicalService: string; routingDomain: string };
+  };
+  submittedBy?: string; approvedBy?: string; publishedBy?: string; createdAt: string; updatedAt: string;
+}
+export interface APIExposureDraftRequest {
+  baseExposureId?: string;
+  contract: { pluginId: string; artifactSha256: string; contributionId: string };
+  input: {
+    displayName: string; portalId?: string; hosts: string[]; authentication: { profileId: string; allowAnonymous: boolean };
+    requiredPermissions: string[]; limits: { maxBodyBytes: number; maxResponseBytes: number; requestsPerMinute: number; timeoutMs: number };
+    target: { logicalService: string; routingDomain: string };
+  };
+}
+export interface DataPlaneExposureRevision {
+  id: number; status: APIExposureStatus;
+  exposure: {
+    id: string; revision: number; routeKey: string; tenantId: string; hosts: string[];
+    service: { pluginId: string; artifactSha256: string; contributionId: string };
+    dataPlaneServiceId: string; allowedModes: Array<"gateway-proxy" | "ticket-redirect" | "private-direct">;
+    allowedEndpointOrigins: string[]; tlsIdentityPrefix: string;
+    authentication: { profileId: string; allowAnonymous: boolean }; requiredPermissions: string[]; maxObjectBytes: number;
+  };
+  submittedBy?: string; approvedBy?: string; publishedBy?: string; createdAt: string; updatedAt: string;
+}
+export interface DataPlaneExposureDraftRequest {
+  baseExposureId?: string;
+  input: {
+    hosts: string[];
+    service: { pluginId: string; artifactSha256: string; contributionId: string };
+    allowedModes: Array<"gateway-proxy" | "ticket-redirect" | "private-direct">;
+    allowedEndpointOrigins: string[];
+    tlsIdentityPrefix: string;
+    authentication: { profileId: string; allowAnonymous: boolean };
+    requiredPermissions: string[];
+    maxObjectBytes: number;
+  };
+}
+
 export interface NodeBootstrapPlan {
   target: { address: string; port?: number; user: string };
   release: { version: string; url: string; sha256: string };
@@ -318,9 +364,26 @@ export class PlatformAdminClient {
     return this.mutate(`${this.basePath}/deployment/test-releases/${revision(id)}/rollback`, "POST", {});
   }
 
+  public listAPIExposures(): Promise<APIExposureRevision[]> { return this.get<{items:APIExposureRevision[]}>(`${this.basePath}/api-exposures`).then(value=>value.items); }
+  public createAPIExposureDraft(request:APIExposureDraftRequest):Promise<APIExposureRevision> { return this.mutate(`${this.basePath}/api-exposures`,"POST",request); }
+  public updateAPIExposureDraft(id:number,expectedRevision:number,request:APIExposureDraftRequest):Promise<APIExposureRevision> { return this.mutate(`${this.basePath}/api-exposures/${revision(id)}`,"PUT",{expectedRevision,contract:request.contract,input:request.input}); }
+  public submitAPIExposure(id:number):Promise<APIExposureRevision> { return this.apiExposureAction(id,"submit"); }
+  public approveAPIExposure(id:number):Promise<APIExposureRevision> { return this.apiExposureAction(id,"approve"); }
+  public publishAPIExposure(id:number):Promise<APIExposureRevision> { return this.apiExposureAction(id,"publish"); }
+  public retireAPIExposure(exposureId:string):Promise<void> { return this.mutate(`${this.basePath}/api-exposures/exposure/${segment(exposureId)}/retire`,"POST",{}).then(()=>undefined); }
+  public listDataPlaneExposures(): Promise<DataPlaneExposureRevision[]> { return this.get<{items:DataPlaneExposureRevision[]}>(`${this.basePath}/data-plane-exposures`).then((value) => value.items); }
+  public createDataPlaneExposureDraft(request: DataPlaneExposureDraftRequest): Promise<DataPlaneExposureRevision> { return this.mutate(`${this.basePath}/data-plane-exposures`, "POST", request); }
+  public submitDataPlaneExposure(id: number): Promise<DataPlaneExposureRevision> { return this.dataPlaneExposureAction(id, "submit"); }
+  public approveDataPlaneExposure(id: number): Promise<DataPlaneExposureRevision> { return this.dataPlaneExposureAction(id, "approve"); }
+  public publishDataPlaneExposure(id: number): Promise<DataPlaneExposureRevision> { return this.dataPlaneExposureAction(id, "publish"); }
+  public retireDataPlaneExposure(exposureId: string): Promise<void> { return this.mutate(`${this.basePath}/data-plane-exposures/exposure/${segment(exposureId)}/retire`, "POST", {}).then(() => undefined); }
+
   private serviceRevisionAction(id: number, action: string): Promise<ServiceRevision> {
     return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}/${action}`, "POST", {});
   }
+
+  private apiExposureAction(id:number,action:"submit"|"approve"|"publish"):Promise<APIExposureRevision> { return this.mutate(`${this.basePath}/api-exposures/${revision(id)}/${action}`,"POST",{}); }
+  private dataPlaneExposureAction(id: number, action: "submit" | "approve" | "publish"): Promise<DataPlaneExposureRevision> { return this.mutate(`${this.basePath}/data-plane-exposures/${revision(id)}/${action}`, "POST", {}); }
 
   private artifactMigrationAction(id: string, action: string, body: Record<string, unknown> = {}): Promise<ArtifactRepositoryMigration> {
     return this.mutate(`${this.basePath}/artifacts/migrations/${segment(id)}/${action}`, "POST", body);

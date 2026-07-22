@@ -81,7 +81,7 @@ func TestContractRejectsExternalSchemaReference(t *testing.T) {
 
 func TestExposureCatalogIsSelfContainedAndRejectsRouteKeyCollision(t *testing.T) {
 	resolved := validResolvedExposure(t)
-	catalog := ExposureCatalog{SchemaVersion: SchemaVersion, Generation: 1, Exposures: []ResolvedExposure{resolved}}
+	catalog := ExposureCatalog{SchemaVersion: SchemaVersion, Generation: 1, Exposures: []ResolvedExposure{resolved}, DataPlaneExposures: []DataPlaneExposure{}}
 	if err := ValidateExposureCatalog(catalog); err != nil {
 		t.Fatal(err)
 	}

@@ -54,6 +54,28 @@ describe("APIExposureGateway", () => {
     expect(undeclaredResponse.status).toBe(502);
     expect(await undeclaredResponse.json()).toEqual({ error: "upstream_rejected" });
   });
+
+  it("issues a bounded data-plane ticket through an opaque route key", async () => {
+    const calls: unknown[] = [];
+    const origin = await startGateway({ ...principal(), roles: ["platform.artifacts.download"] }, {
+      async invoke(_principal, route, operation, payload) {
+        calls.push({ route, operation, payload: JSON.parse(new TextDecoder().decode(payload)) });
+        return Buffer.from(JSON.stringify({ endpoint: "https://repo.internal:9443", leaseId: "lease_demo", ticket: "a".repeat(43), expiresAt: new Date(Date.now() + 30_000).toISOString() }));
+      },
+    }, true);
+    const token = "c".repeat(64);
+    const response = await fetch(`${origin}/api/d/bbbbbbbbbbbbbbbbbbbb/ticket`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: `vastplan_csrf=${token}`, "X-VastPlan-CSRF": token },
+      body: JSON.stringify({ method: "GET", resource: "/v1/artifacts/demo?channel=testing" }),
+    });
+    expect(response.status).toBe(200);
+    expect(calls).toEqual([{
+      route: { capability: "platform.api-exposure", logicalService: "platform.api-exposure", routingDomain: "platform" },
+      operation: "issueDataPlaneTicket",
+      payload: { dataPlaneExposureId: "dpx_bbbbbbbbbbbbbbbbbbbb", method: "GET", resource: "/v1/artifacts/demo?channel=testing" },
+    }]);
+  });
 });
 
 function principal(): Principal {
@@ -64,9 +86,20 @@ function successfulInvoker(): TrustedCapabilityInvoker {
   return { async invoke() { return Buffer.from('{"ok":true}'); } };
 }
 
-async function startGateway(principalValue: Principal, invoker: TrustedCapabilityInvoker): Promise<string> {
-  const resolved = exampleCatalog().exposures[0];
-  const catalog: APIExposureCatalogPort = { async resolve() { return resolved; } };
+async function startGateway(principalValue: Principal, invoker: TrustedCapabilityInvoker, dataPlane = false): Promise<string> {
+  const fixture = exampleCatalog();
+  const resolved = fixture.exposures[0];
+  const catalog: APIExposureCatalogPort = {
+    async resolve() { return resolved; },
+    async resolveDataPlane() {
+      return dataPlane ? {
+        schemaVersion: "v1", id: "dpx_bbbbbbbbbbbbbbbbbbbb", revision: 1, routeKey: "bbbbbbbbbbbbbbbbbbbb",
+        tenantId: "tenant-a", hosts: ["127.0.0.1"], allowedModes: ["ticket-redirect"],
+        allowedEndpointOrigins: ["https://repo.internal:9443"], tlsIdentityPrefix: "spiffe://vastplan/repository/",
+        authentication: { profileId: "auth.file", allowAnonymous: false }, requiredPermissions: ["platform.artifacts.download"], maxObjectBytes: 1_073_741_824,
+      } : undefined;
+    },
+  };
   const identity: IdentityProvider = { async authenticate() { return principalValue; } };
   const gateway = new APIExposureGateway(catalog, identity, invoker, false);
   const server = createServer((request, response) => void gateway.handle(request, response, new URL(request.url ?? "/", "http://local").pathname));

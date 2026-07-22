@@ -34,6 +34,26 @@ describe("PlatformAdminClient", () => {
     ]);
   });
 
+  it("keeps API Exposure lifecycle on fixed CSRF-protected routes",async()=>{
+    const calls:Array<{path:string;method?:string}>=[];
+    const client=new PlatformAdminClient(async(path,init)=>{calls.push({path,method:init?.method});return {ok:true,status:200,json:async()=>path==="/v1/csrf"?{token:"safe"}:{id:7,status:"Approved"}};},"operations","core");
+    await client.approveAPIExposure(7);
+    expect(calls).toEqual([{path:"/v1/csrf",method:"GET"},{path:"/v1/portals/operations/platform/services/core/api-exposures/7/approve",method:"POST"}]);
+  });
+
+  it("keeps Data Plane Exposure retirement on a fixed CSRF-protected route", async () => {
+    const calls: Array<{ path: string; method?: string }> = [];
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { retired: true } };
+    }, "operations", "api-exposure");
+    await client.retireDataPlaneExposure("dpx_aaaaaaaaaaaaaaaaaaaa");
+    expect(calls).toEqual([
+      { path: "/v1/csrf", method: "GET" },
+      { path: "/v1/portals/operations/platform/services/api-exposure/data-plane-exposures/exposure/dpx_aaaaaaaaaaaaaaaaaaaa/retire", method: "POST" },
+    ]);
+  });
+
   it("keeps online service composition on portal-scoped fixed routes", async () => {
     const calls: Array<{ path: string; method?: string }> = [];
     const fetcher: PlatformFetch = async (path, init) => {

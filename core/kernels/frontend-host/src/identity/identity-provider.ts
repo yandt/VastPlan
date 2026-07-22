@@ -7,6 +7,7 @@ export interface Principal {
   portalId?: string;
   roles: readonly string[];
   authenticationProfileId?: string;
+  requiresCSRF?: boolean;
   system?: boolean;
 }
 

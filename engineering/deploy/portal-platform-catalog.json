@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 2,
+  "revision": 3,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 2,
+      "revision": 3,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -45,7 +45,8 @@
             "top-navigation": { "pageBodyWidth": "fluid" }
           },
           "navigationGroups": [
-            { "id": "platform.artifacts", "label": "制品仓库", "zone": "settings", "icon": "settings", "parentID": "settings", "order": 50 }
+            { "id": "platform.artifacts", "label": "制品仓库", "zone": "settings", "icon": "settings", "parentID": "settings", "order": 50 },
+            { "id": "platform.api-exposure", "label": "API 暴露", "zone": "settings", "icon": "settings", "parentID": "settings", "order": 55 }
           ]
         }
       },
@@ -68,7 +69,8 @@
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.3.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.5.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.5.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.13.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.14.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.7.1", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
@@ -80,8 +82,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 2,
-        "digest": "9f4eaeff3f0c93c414f8bf4d4957d144cd5d48c4bf9daf42a0d05eb893b9d9ac"
+        "revision": 3,
+        "digest": "0dc5350709fc09f8ef35fb0db6434c89fad7f50af31c380e02cadf00c7efe480"
       },
       "services": [
         {
@@ -109,6 +111,15 @@
           "routingDomain": "platform",
           "capabilities": [
             { "capability": "platform.database", "read": ["list"], "write": ["define", "remove", "probe"] }
+          ]
+        },
+        {
+          "id": "api-exposure",
+          "label": "API 暴露服务",
+          "logicalService": "platform.api-exposure",
+          "routingDomain": "platform",
+          "capabilities": [
+            { "capability": "platform.api-exposure", "read": ["list", "listDataPlanes"], "write": ["createDraft", "updateDraft", "submit", "approve", "publish", "retire", "createDataPlaneDraft", "submitDataPlane", "approveDataPlane", "publishDataPlane", "retireDataPlane"] }
           ]
         },
         {

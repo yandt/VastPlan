@@ -31,6 +31,25 @@ export function parseAPIExposureCatalog(raw: string): APIExposureCatalog {
     ids.add(resolved.exposure.id);
     routeKeys.add(resolved.exposure.routeKey);
   }
+  for (const exposure of catalog.dataPlaneExposures) {
+    if (ids.has(exposure.id)) throw new APIExposureContractError(`Exposure id 重复: ${exposure.id}`);
+    if (routeKeys.has(exposure.routeKey)) throw new APIExposureContractError(`Exposure Route Key 冲突: ${exposure.routeKey}`);
+    if (exposure.hosts.some((host) => host !== host.toLowerCase() || host.endsWith("."))) {
+      throw new APIExposureContractError(`Data Plane Exposure ${exposure.id} 的 Host 未规范化`);
+    }
+    for (const origin of exposure.allowedEndpointOrigins) {
+      const parsed = new URL(origin);
+      if (parsed.protocol !== "https:" || parsed.username !== "" || parsed.password !== "" || parsed.pathname !== "/" || parsed.search !== "" || parsed.hash !== "" || origin !== origin.toLowerCase()) {
+        throw new APIExposureContractError(`Data Plane Exposure ${exposure.id} 的 Endpoint Origin 未规范化`);
+      }
+    }
+    const identityPrefix = new URL(exposure.tlsIdentityPrefix);
+    if (identityPrefix.protocol !== "spiffe:" || identityPrefix.host === "" || !identityPrefix.pathname.endsWith("/") || identityPrefix.search !== "" || identityPrefix.hash !== "") {
+      throw new APIExposureContractError(`Data Plane Exposure ${exposure.id} 的 TLS Identity Prefix 无效`);
+    }
+    ids.add(exposure.id);
+    routeKeys.add(exposure.routeKey);
+  }
   return deepFreeze(structuredClone(catalog));
 }
 
