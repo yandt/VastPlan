@@ -23,7 +23,7 @@ const adapter: UIRenderAdapter = {
 };
 const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: "4.0.0", templates: [{ id: "standard", label: "Standard", module: standardShellRef }, { id: "top-navigation", label: "Top", module: topShellRef }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
 const shellLibrary = (id: string): UIShellLibrary => ({ id, shell: "ui.structure.shell", uiContract: "4.0.0", Shell: () => null });
-const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "4.0.0", CollectionPage: () => null, CollectionPageActions: () => null, FormPage: () => null };
+const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "4.0.0", CollectionPage: () => null, CollectionPageActions: () => null, FormPage: () => null, RecordPage: () => null, RecordPageActions: () => null };
 
 const portal: PortalSpec = {
   revision: 1, id: "admin", tenantId: "acme", route: "/",
@@ -159,5 +159,29 @@ describe("PortalRuntime shell", () => {
     expect(prepared.pages.map((page) => page.id)).toEqual(["visible"]);
     const collectionSlot = prepared.pages[0]?.slots.find((slot) => slot.slot === "page.body.main");
     expect(collectionSlot).toBeDefined();
+  });
+
+  it("registers governed record patterns and projects their actions", async () => {
+    const securedPortal = { ...portal, experience: { permissions: ["platform.demo.read"] } };
+    const prepared = await new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
+      context.addRecordPage({
+        id: "services", path: "/services", title: "Services", pattern: "master-detail", requiredPermissions: ["platform.demo.read"],
+        master: { id: "services", title: "Services", keyField: "id", titleField: "name", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] } },
+        detail: { titleKey: "name", sections: [{ id: "main", fields: [{ key: "name", label: "Name" }] }] },
+        actions: [
+          { id: "view", label: "View", icon: "info", placement: "page.primary", requiredPermissions: ["platform.demo.read"] },
+          { id: "delete", label: "Delete", placement: "record.detail", requiredPermissions: ["platform.demo.write"] },
+        ],
+        async loadMaster() { return { items: [], total: 0 }; }, async loadRecord() { return undefined; },
+      });
+    } } })).prepare(securedPortal);
+    expect(prepared.pages.map((page) => page.id)).toContain("services");
+    expect(prepared.pages.find((page) => page.id === "services")?.slots.map((slot) => slot.slot)).toEqual(["page.header.end", "page.body.main"]);
+  });
+
+  it("rejects a malformed record pattern even when a plugin bypasses SDK helpers", async () => {
+    await expect(new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
+      context.addRecordPage({ id: "bad", path: "/bad", title: "Bad", pattern: "record-detail", detail: { titleKey: "", sections: [] }, async load() { return undefined; } });
+    } } })).prepare(portal)).rejects.toMatchObject({ code: "WORKBENCH_PAGE_REJECTED" });
   });
 });

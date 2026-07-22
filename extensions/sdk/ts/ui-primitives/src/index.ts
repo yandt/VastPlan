@@ -2,7 +2,7 @@ import { createContext, createElement, useContext } from "react";
 import type { ComponentType, KeyboardEvent, ReactNode } from "react";
 import type { FormPresentation, FormSchema, FormValidationResult, JSONValue, UICapability } from "@vastplan/ui-contract";
 import type { LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy } from "@vastplan/ui-contract";
-import type { CollectionPageDefinition, FormPageDefinition } from "@vastplan/workbench-sdk";
+import type { CollectionPageDefinition, FormPageDefinition, RecordPageDefinition } from "@vastplan/workbench-sdk";
 import type { SemanticIconName } from "./icon.js";
 
 export type { FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormUISchema, FormValidationIssue, FormValidationResult, FormWidget, FormWorkflow, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
@@ -197,6 +197,43 @@ export interface DataCardProps {
   onSelectionChange?(selected: boolean): void;
 }
 
+export interface SplitViewProps {
+  primaryLabel: string;
+  secondaryLabel: string;
+  primary: ReactNode;
+  secondary: ReactNode;
+  mode?: "both" | "primary" | "secondary";
+  primaryWidth?: "sm" | "md" | "lg";
+}
+
+export interface RecordNavigationItem {
+  id: string;
+  title: ReactNode;
+  description?: ReactNode;
+  status?: ReactNode;
+  disabled?: boolean;
+}
+
+export interface RecordNavigationListProps {
+  items: readonly RecordNavigationItem[];
+  selectedID?: string;
+  ariaLabel: string;
+  onSelect(id: string): void;
+}
+
+export interface RecordTreeItem extends RecordNavigationItem {
+  children?: readonly RecordTreeItem[];
+}
+
+export interface RecordTreeProps {
+  items: readonly RecordTreeItem[];
+  selectedID?: string;
+  expandedIDs: readonly string[];
+  ariaLabel: string;
+  onSelect(id: string): void;
+  onExpandedChange(ids: readonly string[]): void;
+}
+
 export interface FilterBarProps {
   children: ReactNode;
   actions?: ReactNode;
@@ -252,6 +289,9 @@ export interface PortalUI {
   FilterBar: ComponentType<FilterBarProps>;
   Table: ComponentType<TableProps>;
   DataCard: ComponentType<DataCardProps>;
+  SplitView: ComponentType<SplitViewProps>;
+  RecordNavigationList: ComponentType<RecordNavigationListProps>;
+  RecordTree: ComponentType<RecordTreeProps>;
   Pagination: ComponentType<PaginationProps>;
   Descriptions: ComponentType<{ title?: ReactNode; items: DescriptionItem[]; columns?: ResponsiveColumns }>;
   Status: ComponentType<{ tone?: StatusTone; children: ReactNode }>;
@@ -439,6 +479,7 @@ export interface FrontendPluginContext {
 	/** Registers a governed collection page. Functional plugins should prefer this over addPage. */
 	addCollectionPage<Row extends Record<string, unknown>>(page: CollectionPageDefinition<Row>): void;
 	addFormPage(page: FormPageDefinition): void;
+	addRecordPage<Row extends Record<string, unknown>>(page: RecordPageDefinition<Row>): void;
 	/** Platform-profile plugins only; application plugins cannot mutate global Shell regions. */
 	addShellContribution(contribution: PortalShellContribution): void;
 }
@@ -450,6 +491,8 @@ export interface UIWorkbenchAdapter {
   CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } } }>;
   CollectionPageActions: ComponentType<{ page: CollectionPageDefinition }>;
   FormPage: ComponentType<{ page: FormPageDefinition }>;
+  RecordPage: ComponentType<{ page: RecordPageDefinition }>;
+  RecordPageActions: ComponentType<{ page: RecordPageDefinition }>;
   localization?: PluginLocalization;
 }
 

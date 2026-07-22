@@ -1,0 +1,16 @@
+{
+  "name": "@vastplan/rjsf-csp-validator",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": {
+    "@rjsf/utils": "^6.7.0",
+    "json-schema-library": "11.6.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
+  }
+}

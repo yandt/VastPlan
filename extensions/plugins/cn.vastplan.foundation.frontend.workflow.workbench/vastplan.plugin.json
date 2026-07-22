@@ -1,8 +1,8 @@
 {
   "id": "cn.vastplan.foundation.frontend.workflow.workbench",
   "name": "VastPlan UI Workbench",
-  "description": "提供受治理的集合查询、选择、动作与偏好工作流",
-  "version": "1.5.0",
+  "description": "提供受治理的集合、记录详情、主从编辑、树形详情、动作与表单工作流",
+  "version": "1.7.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

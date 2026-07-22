@@ -116,6 +116,8 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 		"core/kernels/frontend/package.json":                           "{}",
 		"extensions/sdk/ts/ui-primitives/src/index.ts":                 "ui-primitives-v1",
 		"extensions/sdk/ts/ui-primitives/package.json":                 "{}",
+		"extensions/sdk/ts/rjsf-csp-validator/src/index.ts":            "rjsf-validator-v1",
+		"extensions/sdk/ts/rjsf-csp-validator/package.json":            "{}",
 		"extensions/sdk/ts/ui-contract/src/index.ts":                   "contract-v1",
 		"extensions/sdk/ts/ui-contract/package.json":                   "{}",
 		"extensions/sdk/ts/workbench-sdk/src/index.ts":                 "workbench-v1",
@@ -167,6 +169,14 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	}
 	if workbenchChange.host == hostChange.host || workbenchChange.plugins != hostChange.plugins {
 		t.Fatalf("workbench change signatures = %#v, host = %#v", workbenchChange, hostChange)
+	}
+	write("extensions/sdk/ts/rjsf-csp-validator/src/index.ts", "rjsf-validator-v2")
+	validatorChange, err := hmr.sourceSignatures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if validatorChange.host == workbenchChange.host || validatorChange.plugins != workbenchChange.plugins {
+		t.Fatalf("RJSF validator change signatures = %#v, workbench = %#v", validatorChange, workbenchChange)
 	}
 }
 

@@ -1,6 +1,6 @@
-import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, ColumnSpec, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, ColumnSpec, DataValueFormat, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec } from "@vastplan/ui-contract";
 export { jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
 
@@ -120,10 +120,67 @@ export interface FormPageDefinition {
   form: WorkbenchFormDefinition;
 }
 
+export interface RecordTreeNode {
+  id: string;
+  title: string;
+  description?: string;
+  status?: { label: string; tone?: "neutral" | "info" | "success" | "warning" | "error" };
+  disabled?: boolean;
+  children?: readonly RecordTreeNode[];
+}
+
+export interface RecordActionContext<Row extends Record<string, unknown> = Record<string, unknown>> {
+  action: ActionSpec;
+  record?: Readonly<Row>;
+  refresh(): void;
+}
+
+interface RecordPageCommon<Row extends Record<string, unknown>> {
+  id: string;
+  path: string;
+  title: LocalizedText;
+  description?: LocalizedText;
+  requiredPermissions?: readonly string[];
+  requiredAnyPermissions?: readonly string[];
+  navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
+  detail: RecordDetailSpec;
+  /** Optional page-surface editor rendered in the detail pane. */
+  editor?: WorkbenchFormDefinition<Row>;
+  forms?: readonly WorkbenchFormDefinition<Row>[];
+  overlays?: readonly WorkbenchOverlayDefinition<Row>[];
+  actions?: readonly ActionSpec[];
+  runAction?(context: RecordActionContext<Row>, signal: AbortSignal): Promise<CollectionActionResult | void>;
+}
+
+export interface RecordDetailPageDefinition<Row extends Record<string, unknown> = Record<string, unknown>> extends RecordPageCommon<Row> {
+  pattern: "record-detail";
+  load(signal: AbortSignal): Promise<Readonly<Row> | undefined>;
+}
+
+export interface MasterDetailPageDefinition<Row extends Record<string, unknown> = Record<string, unknown>> extends RecordPageCommon<Row> {
+  pattern: "master-detail";
+  master: RecordMasterSpec;
+  loadMaster(query: CollectionQuery, signal: AbortSignal): Promise<CollectionResult<Row>>;
+  loadRecord(key: string, signal: AbortSignal): Promise<Readonly<Row> | undefined>;
+}
+
+export interface TreeDetailPageDefinition<Row extends Record<string, unknown> = Record<string, unknown>> extends RecordPageCommon<Row> {
+  pattern: "tree-detail";
+  tree: RecordTreeSpec;
+  loadTree(signal: AbortSignal): Promise<readonly RecordTreeNode[]>;
+  loadRecord(key: string, signal: AbortSignal): Promise<Readonly<Row> | undefined>;
+}
+
+export type RecordPageDefinition<Row extends Record<string, unknown> = Record<string, unknown>> =
+  | RecordDetailPageDefinition<Row>
+  | MasterDetailPageDefinition<Row>
+  | TreeDetailPageDefinition<Row>;
+
 /** The only registration surface a functional Collection page receives. */
 export interface WorkbenchPluginContext {
   addCollectionPage<Row extends Record<string, unknown>>(page: CollectionPageDefinition<Row>): void;
   addFormPage(page: FormPageDefinition): void;
+  addRecordPage<Row extends Record<string, unknown>>(page: RecordPageDefinition<Row>): void;
 }
 
 export interface WorkbenchManagementCapability { capability: string; read?: readonly string[]; write?: readonly string[]; }
@@ -174,12 +231,88 @@ export function defineFormPage(definition: FormPageDefinition): FormPageDefiniti
   return Object.freeze({ ...definition, form: Object.freeze({ ...definition.form }) });
 }
 
+export function defineRecordDetailPage<Row extends Record<string, unknown>>(definition: RecordDetailPageDefinition<Row>): RecordDetailPageDefinition<Row> {
+  validateRecordPage(definition);
+  return Object.freeze({ ...definition });
+}
+
+export function defineMasterDetailPage<Row extends Record<string, unknown>>(definition: MasterDetailPageDefinition<Row>): MasterDetailPageDefinition<Row> {
+  validateRecordPage(definition);
+  validateMaster(definition.master);
+  return Object.freeze({ ...definition });
+}
+
+export function defineTreeDetailPage<Row extends Record<string, unknown>>(definition: TreeDetailPageDefinition<Row>): TreeDetailPageDefinition<Row> {
+  validateRecordPage(definition);
+  if (!validIdentifier(definition.tree.id) || (definition.tree.selectionParam !== undefined && !validSelectionParam(definition.tree.selectionParam)) ||
+      definition.tree.defaultExpandedDepth !== undefined && (!Number.isSafeInteger(definition.tree.defaultExpandedDepth) || definition.tree.defaultExpandedDepth < 0 || definition.tree.defaultExpandedDepth > 8)) {
+    throw new Error(`TreeDetail ${definition.id} 的树定义无效`);
+  }
+  return Object.freeze({ ...definition });
+}
+
 function validatePermissionRequirements(values: readonly string[] | undefined, label: string): void {
 	if (values === undefined) return;
 	if (values.length === 0 || new Set(values).size !== values.length || values.some((value) => !/^[a-z][a-z0-9.-]{1,159}$/.test(value))) {
 		throw new Error(`${label} 无效`);
 	}
 }
+
+function validateRecordPage(definition: RecordPageDefinition): void {
+  validatePermissionRequirements(definition.requiredPermissions, `Record page ${definition.id} requiredPermissions`);
+  validatePermissionRequirements(definition.requiredAnyPermissions, `Record page ${definition.id} requiredAnyPermissions`);
+  if (!validIdentifier(definition.id) || !definition.path.startsWith("/") || !validFieldKey(definition.detail.titleKey) || definition.detail.sections.length === 0) {
+    throw new Error(`Record page ${definition.id} 定义无效`);
+  }
+  const sectionIDs = new Set<string>();
+  const fieldKeys = new Set<string>();
+  for (const section of definition.detail.sections) {
+    if (!validIdentifier(section.id) || sectionIDs.has(section.id) || section.fields.length === 0 ||
+        !Number.isSafeInteger(section.columns ?? 1) || (section.columns ?? 1) < 1 || (section.columns ?? 1) > 4) {
+      throw new Error(`Record page ${definition.id} 的 section 无效或重复: ${section.id}`);
+    }
+    sectionIDs.add(section.id);
+    for (const field of section.fields) {
+      if (!validFieldKey(field.key) || fieldKeys.has(field.key)) throw new Error(`Record page ${definition.id} 的字段无效或重复: ${field.key}`);
+      fieldKeys.add(field.key);
+    }
+  }
+  for (const key of [definition.detail.subtitleKey, definition.detail.status?.labelKey, definition.detail.status?.toneKey]) {
+    if (key !== undefined && !validFieldKey(key)) throw new Error(`Record page ${definition.id} 的记录字段无效: ${key}`);
+  }
+  if (definition.editor !== undefined) {
+    if (definition.editor.workflow.surface !== "page") throw new Error(`Record page ${definition.id} 的 editor 必须使用 page surface`);
+    validateFormDefinition(definition.editor);
+  }
+  const forms = new Map((definition.forms ?? []).map((form) => [form.id, form]));
+  if (forms.size !== (definition.forms ?? []).length) throw new Error(`Record page ${definition.id} 的表单 ID 必须唯一`);
+  for (const form of forms.values()) validateFormDefinition(form);
+  const overlays = new Map((definition.overlays ?? []).map((overlay) => [overlay.id, overlay]));
+  if (overlays.size !== (definition.overlays ?? []).length) throw new Error(`Record page ${definition.id} 的 Overlay ID 必须唯一`);
+  for (const action of definition.actions ?? []) {
+    validatePermissionRequirements(action.requiredPermissions, `Action ${action.id} requiredPermissions`);
+    if (!validIdentifier(action.id) || !["page.primary", "page.secondary", "record.detail"].includes(action.placement)) throw new Error(`Record page ${definition.id} 的 Action 位置无效: ${action.id}`);
+    if ((action.placement === "page.primary" || action.placement === "page.secondary") && action.icon === undefined) throw new Error(`Page Action ${action.id} 必须声明语义图标`);
+    if (action.form !== undefined && !forms.has(action.form)) throw new Error(`Action ${action.id} 引用了未声明的表单 ${action.form}`);
+    if (action.overlay !== undefined && !overlays.has(action.overlay)) throw new Error(`Action ${action.id} 引用了未声明的 Overlay ${action.overlay}`);
+    if (action.form !== undefined && action.overlay !== undefined) throw new Error(`Action ${action.id} 不能同时打开表单和 Overlay`);
+  }
+}
+
+function validateMaster(master: RecordMasterSpec): void {
+  if (!validIdentifier(master.id) || !validFieldKey(master.keyField) || !validFieldKey(master.titleField) ||
+      (master.subtitleField !== undefined && !validFieldKey(master.subtitleField)) ||
+      (master.status !== undefined && (!validFieldKey(master.status.labelField) || master.status.toneField !== undefined && !validFieldKey(master.status.toneField))) ||
+      (master.selectionParam !== undefined && !validSelectionParam(master.selectionParam)) ||
+      !Number.isSafeInteger(master.query.defaultPageSize) || master.query.defaultPageSize < 1 || master.query.pageSizeOptions.length === 0 ||
+      master.query.pageSizeOptions.some((size) => !Number.isSafeInteger(size) || size < 1)) {
+    throw new Error(`MasterDetail ${master.id} 的列表定义无效`);
+  }
+}
+
+function validIdentifier(value: string): boolean { return /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value); }
+function validFieldKey(value: string): boolean { return /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/.test(value); }
+function validSelectionParam(value: string): boolean { return /^[a-z][a-z0-9_-]{0,39}$/.test(value); }
 
 function validateFormDefinition(form: WorkbenchFormDefinition): void {
   const sections = form.presentation?.sections ?? [];

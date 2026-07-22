@@ -1,0 +1,22 @@
+{
+  "id": "cn.vastplan.product.developer.workbench-gallery",
+  "name": "VastPlan Workbench Pattern Gallery",
+  "description": "展示 RecordDetail、MasterDetail 与 TreeDetail 三种受治理 Workbench 模式",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "frontend": "^1.0" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "activation": ["onPortalStartup"],
+  "entry": { "frontend": "frontend/dist/index.js" },
+  "contributes": { "frontend": {
+    "views": [
+      { "id": "example.workbench.record-detail", "title": "记录详情示例" },
+      { "id": "example.workbench.master-detail", "title": "列表主从示例" },
+      { "id": "example.workbench.tree-detail", "title": "树形主从示例" }
+    ],
+    "menus": [{ "id": "example.workbench.records.menu", "title": "Workbench 记录模式" }]
+  } }
+}

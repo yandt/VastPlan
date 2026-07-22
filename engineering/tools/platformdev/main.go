@@ -477,6 +477,18 @@ func (r *runtime) writeFixtures() error {
 	if err != nil {
 		return err
 	}
+	sourceDigest, err := platformManagementSourceDigest(template, portalCatalog, r.options.artifactListen)
+	if err != nil {
+		return err
+	}
+	rendered, _, err = materializeDevelopmentDeploymentRevision(
+		rendered,
+		sourceDigest,
+		filepath.Join(r.persistentStateRoot(), "platform-management-revision.json"),
+	)
+	if err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(r.runDir, "platform-management-profile.json"), rendered, 0o600); err != nil {
 		return err
 	}
@@ -1018,7 +1030,9 @@ func publishPortal(baseURL string) error {
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: insecureLocalTLS()}, Timeout: 10 * time.Second}
 	spec := map[string]any{
 		"version": 1, "revision": 1, "id": "operations", "target": map[string]string{"kernel": "frontend"},
-		"route": "/operations", "audience": []string{"portal.read"}, "plugins": []any{}, "config": map[string]any{},
+		"route": "/operations", "audience": []string{"portal.read"}, "plugins": []any{
+			map[string]any{"id": "cn.vastplan.product.developer.workbench-gallery", "version": "0.1.0", "channel": "stable"},
+		}, "config": map[string]any{},
 		"branding": map[string]any{"title": "VastPlan 平台管理中心"},
 	}
 	status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, "/v1/portal-drafts", spec, true)

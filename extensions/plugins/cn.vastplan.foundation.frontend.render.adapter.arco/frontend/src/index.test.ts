@@ -11,7 +11,7 @@ describe("Arco portal UI adapter", () => {
     expect(Object.keys(arcoPortalUIComponents).sort()).toEqual([
       "Breadcrumb", "Busy", "Button", "CommandPalette", "Descriptions", "Dialog", "Divider", "Drawer",
       "DataCard", "EmptyState", "ErrorState", "FilterBar", "FormRenderer", "Grid", "GridItem", "Icon", "IconButton", "Menu", "Page", "Pagination",
-      "Panel", "Popover", "PortalShell", "Select", "Skeleton", "Stack", "Status", "Table", "Tabs", "theme",
+      "Panel", "Popover", "PortalShell", "RecordNavigationList", "RecordTree", "Select", "Skeleton", "SplitView", "Stack", "Status", "Table", "Tabs", "theme",
     ].sort());
   });
 
@@ -81,6 +81,16 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("Select Node A");
     expect(html).toContain("arco-card");
     expect(html).toContain("arco-checkbox-checked");
+  });
+
+  it("renders accessible record navigation and split regions", () => {
+    const List = arcoPortalUIComponents.RecordNavigationList;
+    const Split = arcoPortalUIComponents.SplitView;
+    const markup = renderToStaticMarkup(createElement(Split, { primaryLabel: "Services", secondaryLabel: "Detail",
+      primary: createElement(List, { ariaLabel: "Services", items: [{ id: "one", title: "One" }], selectedID: "one", onSelect() {} }), secondary: "Detail" }));
+    expect(markup).toContain('role="listbox"');
+    expect(markup).toContain('aria-selected="true"');
+    expect(markup).toContain('aria-label="Detail"');
   });
 
   it("keeps navigation destinations as real links", () => {

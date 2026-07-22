@@ -30,7 +30,7 @@ export interface FrontendModuleGraphDescriptor extends PluginRef {
 
 const allowedSharedExternals = new Set([
   "react", "react-dom", "react-dom/client", "react/jsx-runtime",
-  "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk", "@vastplan/frontend-engine-contract",
+  "@vastplan/rjsf-csp-validator", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk", "@vastplan/frontend-engine-contract",
 ]);
 
 /** Validates the untrusted Browser RuntimeSpec projection before any fetch. */

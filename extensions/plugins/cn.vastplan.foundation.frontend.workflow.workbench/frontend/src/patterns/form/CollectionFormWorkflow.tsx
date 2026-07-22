@@ -3,18 +3,20 @@ import { message, usePortalI18n, usePortalUI, type FormRendererProps, type FormR
 import type { WorkbenchFormDefinition, WorkbenchFormPreparation } from "@vastplan/workbench-sdk";
 import { projectFormPresentation } from "./presentation.js";
 import { containsSecretMaterial, discardSecretMaterial, secretMaterialPointers } from "./secret-material.js";
+import { useStableSelection } from "./stable-selection.js";
 import type { CollectionRow } from "../collection/model.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 const emptyValidation: FormRendererValidationState = { valid: false, validating: false, issues: [], errors: {} };
 const emptyContext: Readonly<Record<string, unknown>> = Object.freeze({});
 
-export function CollectionFormWorkflow({ definition, selected, open, onClose, onRefresh }: {
+export function CollectionFormWorkflow({ definition, selected, open, onClose, onRefresh, onDirtyChange }: {
   definition?: WorkbenchFormDefinition;
   selected: readonly CollectionRow[];
   open: boolean;
   onClose?(): void;
   onRefresh(): void;
+  onDirtyChange?(dirty: boolean): void;
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
@@ -29,6 +31,7 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
   const [preparation, setPreparation] = useState<WorkbenchFormPreparation>();
   const loadRef = useRef<AbortController>();
   const submitRef = useRef<AbortController>();
+  const stableSelected = useStableSelection(selected);
   const presentation = preparation?.presentation ?? definition?.presentation;
   const context = preparation?.context ?? definition?.context ?? emptyContext;
   const secretPointers = useMemo(() => secretMaterialPointers(presentation), [presentation]);
@@ -42,11 +45,11 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
     loadRef.current = controller;
     setLoading(true); setFailure(undefined); setFieldErrors({}); setValidation(emptyValidation); setPreparation(undefined);
     void (async () => {
-      const prepared = await definition.prepare?.(selected, controller.signal) ?? {};
+      const prepared = await definition.prepare?.(stableSelected, controller.signal) ?? {};
       if (controller.signal.aborted) return;
       const resolvedPresentation = prepared.presentation ?? definition.presentation;
       const pointers = secretMaterialPointers(resolvedPresentation);
-      const loaded = definition.load === undefined ? prepared.initialValue ?? definition.initialValue ?? {} : await definition.load(selected, controller.signal);
+      const loaded = definition.load === undefined ? prepared.initialValue ?? definition.initialValue ?? {} : await definition.load(stableSelected, controller.signal);
       if (controller.signal.aborted) return;
       if (containsSecretMaterial(loaded, pointers)) setFailure(i18n.text(message(namespace, "form.secretLoadRejected", "一次性秘密字段禁止从存储中回填；已安全丢弃该值。")));
       const next = discardSecretMaterial(loaded, pointers);
@@ -55,15 +58,19 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
     })().catch((error: unknown) => { if (!controller.signal.aborted) setFailure(errorText(error)); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [definition, i18n.text, open, selected]);
+  }, [definition, i18n.text, open, stableSelected]);
   useEffect(() => () => submitRef.current?.abort(), []);
   const schema = useMemo(() => definition === undefined ? undefined : projectFormPresentation(preparation?.schema ?? definition.schema, presentation, value, context, i18n.text), [context, definition, i18n.text, preparation?.schema, presentation, value]);
   const asyncValidator = useMemo<FormRendererProps["validate"]>(() => definition?.validate === undefined ? undefined : async ({ value: next, context: nextContext, signal }) => {
     const errors = await definition.validate!({ value: next, context: nextContext, signal });
     return Object.fromEntries(Object.entries(errors).map(([pointer, error]) => [pointer, i18n.text(error)]));
   }, [definition, i18n.text]);
-  if (definition === undefined) return null;
   const dirty = JSON.stringify(discardSecretMaterial(value, secretPointers)) !== baseline || containsSecretMaterial(value, secretPointers);
+  useEffect(() => {
+    onDirtyChange?.(open && definition !== undefined && dirty);
+    return () => onDirtyChange?.(false);
+  }, [definition, dirty, onDirtyChange, open]);
+  if (definition === undefined) return null;
   const sections = presentation?.sections ?? [];
   const sectionIndex = Math.max(0, sections.findIndex((section) => section.id === activeSection));
   const steps = presentation?.navigation === "steps" && sections.length > 0;
@@ -86,7 +93,7 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
     submitRef.current = controller;
     setSubmitting(true); setFailure(undefined); setFieldErrors({});
     try {
-      const result = await definition.submit({ value, selected }, controller.signal);
+      const result = await definition.submit({ value, selected: stableSelected }, controller.signal);
       if (controller.signal.aborted) return;
       if (result?.fieldErrors !== undefined && Object.keys(result.fieldErrors).length > 0) {
         setFieldErrors(Object.fromEntries(Object.entries(result.fieldErrors).map(([pointer, error]) => [pointer, i18n.text(error)])));

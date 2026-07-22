@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vastplan/frontend-engine-contract": "workspace:*",
+    "@vastplan/rjsf-csp-validator": "workspace:*",
     "@vastplan/ui-primitives": "workspace:*",
     "@vastplan/ui-contract": "workspace:*",
     "@vastplan/workbench-sdk": "workspace:*",

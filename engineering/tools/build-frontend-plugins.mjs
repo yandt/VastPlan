@@ -18,7 +18,7 @@ const common = {
   legalComments: "none",
   minify: true,
   define: { "process.env.NODE_ENV": '"production"' },
-  external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
+  external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/rjsf-csp-validator", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
 };
 const allowedExternals = new Set(common.external);
 

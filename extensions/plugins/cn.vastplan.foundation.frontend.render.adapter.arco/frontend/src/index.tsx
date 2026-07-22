@@ -28,7 +28,7 @@ import {
   Typography,
 } from "./arco-components";
 import { useEffect, useId, useMemo, useRef } from "react";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, KeyboardEvent, ReactNode } from "react";
 import type {
   ButtonProps,
   CommandItem,
@@ -44,7 +44,10 @@ import type {
   PortalShellProps,
   PortalUI,
   ResponsiveColumns,
+  RecordNavigationListProps,
+  RecordTreeProps,
   SelectProps,
+  SplitViewProps,
   StackProps,
   StatusTone,
   TableProps,
@@ -281,6 +284,45 @@ function DataCard({ title, subtitle, status, summary, children, actions, selecta
   </Card>;
 }
 
+function SplitView({ primaryLabel, secondaryLabel, primary, secondary, mode = "both", primaryWidth = "md" }: SplitViewProps) {
+  const width = { sm: 280, md: 360, lg: 440 }[primaryWidth];
+  return <div style={{ display: "grid", gridTemplateColumns: mode === "both" ? `${width}px minmax(0,1fr)` : "minmax(0,1fr)", gap: 16, width: "100%", minWidth: 0, minHeight: 480 }}>
+    {mode === "secondary" ? null : <section aria-label={primaryLabel} style={{ minWidth: 0, overflow: "auto", border: "1px solid var(--color-border-2)", borderRadius: 8, padding: 16, background: "var(--color-bg-2)" }}>{primary}</section>}
+    {mode === "primary" ? null : <section aria-label={secondaryLabel} style={{ minWidth: 0, overflow: "auto", border: "1px solid var(--color-border-2)", borderRadius: 8, padding: 16, background: "var(--color-bg-2)" }}>{secondary}</section>}
+  </div>;
+}
+
+function RecordNavigationList({ items, selectedID, ariaLabel, onSelect }: RecordNavigationListProps) {
+  return <div role="listbox" aria-label={ariaLabel} style={{ display: "grid", gap: 4 }}>{items.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === selectedID} disabled={item.disabled} onClick={() => onSelect(item.id)} style={{ width: "100%", minHeight: 52, display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 8, padding: "10px 12px", textAlign: "left", border: 0, borderRadius: 6, cursor: item.disabled ? "not-allowed" : "pointer", color: "var(--color-text-1)", background: item.id === selectedID ? "var(--color-primary-light-1)" : "transparent" }}>
+    <span style={{ minWidth: 0 }}><strong style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.title}</strong>{item.description === undefined ? null : <span style={{ display: "block", marginTop: 3, color: "var(--color-text-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.description}</span>}</span>{item.status}
+  </button>)}</div>;
+}
+
+function RecordTree({ items, selectedID, expandedIDs, ariaLabel, onSelect, onExpandedChange }: RecordTreeProps) {
+  const expanded = new Set(expandedIDs);
+  const toggle = (id: string) => onExpandedChange(expanded.has(id) ? expandedIDs.filter((value) => value !== id) : [...expandedIDs, id]);
+  const branch = (nodes: RecordTreeProps["items"], level: number) => <ul role={level === 1 ? "tree" : "group"} aria-label={level === 1 ? ariaLabel : undefined} style={{ listStyle: "none", margin: 0, padding: level === 1 ? 0 : "0 0 0 20px" }}>{nodes.map((item) => {
+    const children = item.children ?? [];
+    const open = expanded.has(item.id);
+    return <li key={item.id} role="treeitem" aria-level={level} aria-selected={item.id === selectedID} aria-expanded={children.length === 0 ? undefined : open}>
+      <div style={{ display: "grid", gridTemplateColumns: "32px minmax(0,1fr) auto", alignItems: "center", borderRadius: 6, background: item.id === selectedID ? "var(--color-primary-light-1)" : "transparent" }}>
+        {children.length === 0 ? <span /> : <button type="button" aria-label={open ? "Collapse" : "Expand"} onClick={() => toggle(item.id)} style={{ border: 0, background: "transparent", cursor: "pointer" }}>{open ? "▾" : "▸"}</button>}
+        <button data-record-tree-select type="button" disabled={item.disabled} onClick={() => onSelect(item.id)} onKeyDown={(event) => treeKeyboard(event, item.id, children.length > 0, open, toggle)} style={{ minHeight: 44, border: 0, background: "transparent", textAlign: "left", color: "var(--color-text-1)", cursor: item.disabled ? "not-allowed" : "pointer" }}><strong>{item.title}</strong>{item.description === undefined ? null : <span style={{ display: "block", color: "var(--color-text-3)" }}>{item.description}</span>}</button>{item.status}
+      </div>{children.length > 0 && open ? branch(children, level + 1) : null}
+    </li>;
+  })}</ul>;
+  return branch(items, 1);
+}
+
+function treeKeyboard(event: KeyboardEvent<HTMLButtonElement>, id: string, hasChildren: boolean, open: boolean, toggle: (id: string) => void) {
+  if ((event.key === "ArrowRight" && hasChildren && !open) || (event.key === "ArrowLeft" && hasChildren && open)) { event.preventDefault(); toggle(id); return; }
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  const buttons = [...(event.currentTarget.closest('[role="tree"]')?.querySelectorAll<HTMLButtonElement>("[data-record-tree-select]") ?? [])];
+  const index = buttons.indexOf(event.currentTarget);
+  const target = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
+  if (target !== undefined) { event.preventDefault(); target.focus(); }
+}
+
 const arcoThemeTemplates = Object.freeze([
   { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
   { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
@@ -333,6 +375,9 @@ export const arcoPortalUIComponents: ArcoComponents = {
     : <Card size="small"><Space wrap size={12}>{children}</Space>{actions === undefined ? null : <div style={{ float: "right" }}>{actions}</div>}</Card>,
   Table,
   DataCard,
+  SplitView,
+  RecordNavigationList,
+  RecordTree,
   Pagination: ({ page, pageSize, total, disabled, align = "start", onChange }) => <div style={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><ArcoPagination current={page} pageSize={pageSize} total={total} disabled={disabled} showTotal sizeCanChange onChange={onChange} /></div>,
   Descriptions: ({ title, items, columns }) => <ArcoDescriptions title={title} data={items.map((item) => ({ key: item.id, label: item.label, value: item.value }))} column={columnsForDescriptions(columns)} border />,
   Status: ({ tone = "neutral", children }) => <Tag color={statusColors[tone]}>{children}</Tag>,

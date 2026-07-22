@@ -14,7 +14,7 @@ import { useCollectionData } from "./useCollectionData.js";
 import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
 import { evaluateFormCondition } from "../form/presentation.js";
 import { CollectionOverlayWorkflow } from "../overlay/CollectionOverlayWorkflow.js";
-import { collectionPageActionController } from "./action-controller.js";
+import { pageActionController } from "../action/page-action-controller.js";
 
 export function CollectionPage({ page, preferenceScope, presentation }: { page: CollectionPageDefinition; preferenceScope: string; presentation?: WorkbenchPresentationConfig }) {
   const ui = usePortalUI();
@@ -87,7 +87,7 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
   const bulkActions = actions.filter((action) => action.placement === "collection.bulk" && visibleAction(action));
   const hasFilters = collection.filters !== undefined && collection.filters.length > 0;
 
-  useEffect(() => collectionPageActionController(page).bind({
+  useEffect(() => pageActionController(page).bind({
     selectedCount: selected.length,
     visibleActionIDs: new Set(actions.filter(visibleAction).map((action) => action.id)),
   }, (action) => { void runAction(action, selected); }), [actions, page, runAction, selected]);

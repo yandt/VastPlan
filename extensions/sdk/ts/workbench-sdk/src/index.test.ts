@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defineCollectionPage } from "./index.js";
+import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage } from "./index.js";
 
 describe("defineCollectionPage", () => {
   it("keeps the serializable collection contract and runtime loader together without exposing a component", async () => {
@@ -79,5 +79,32 @@ describe("defineCollectionPage", () => {
       collection: { id: "revisions", title: "Revisions", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [{ key: "id", label: "ID" }], actions: [{ id: "audit", label: "Audit", placement: "record.row", overlay: "audit" }] },
       async load() { return { items: [], total: 0 }; },
     })).toThrow("未声明的 Overlay");
+  });
+});
+
+describe("record pattern definitions", () => {
+  const detail = { titleKey: "name", sections: [{ id: "main", fields: [{ key: "name", label: "Name" }] }] } as const;
+
+  it("accepts the three governed record patterns", () => {
+    expect(defineRecordDetailPage({ id: "detail", path: "/detail", title: "Detail", pattern: "record-detail", detail, async load() { return { name: "A" }; } }).pattern).toBe("record-detail");
+    expect(defineMasterDetailPage({ id: "master", path: "/master", title: "Master", pattern: "master-detail", detail,
+      master: { id: "items", title: "Items", keyField: "id", titleField: "name", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] } },
+      async loadMaster() { return { items: [], total: 0 }; }, async loadRecord() { return undefined; },
+    }).pattern).toBe("master-detail");
+    expect(defineTreeDetailPage({ id: "tree", path: "/tree", title: "Tree", pattern: "tree-detail", detail,
+      tree: { id: "items", title: "Items", defaultExpandedDepth: 2 }, async loadTree() { return []; }, async loadRecord() { return undefined; },
+    }).pattern).toBe("tree-detail");
+  });
+
+  it("rejects duplicate fields, arbitrary action positions and non-page editors", () => {
+    expect(() => defineRecordDetailPage({ id: "detail", path: "/detail", title: "Detail", pattern: "record-detail",
+      detail: { titleKey: "name", sections: [{ id: "main", fields: [{ key: "name", label: "Name" }, { key: "name", label: "Again" }] }] }, async load() { return undefined; },
+    })).toThrow("重复");
+    expect(() => defineRecordDetailPage({ id: "detail", path: "/detail", title: "Detail", pattern: "record-detail", detail,
+      actions: [{ id: "bad", label: "Bad", placement: "collection.toolbar" }], async load() { return undefined; },
+    })).toThrow("位置");
+    expect(() => defineRecordDetailPage({ id: "detail", path: "/detail", title: "Detail", pattern: "record-detail", detail,
+      editor: { id: "edit", schema: { id: "edit", schema: { type: "object" } }, workflow: { surface: "drawer", title: "Edit" }, async submit() {} }, async load() { return undefined; },
+    })).toThrow("page surface");
   });
 });

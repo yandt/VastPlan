@@ -1,5 +1,6 @@
 import { createElement } from "react";
 import { message, semanticIconNames } from "@vastplan/ui-primitives";
+import { defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage } from "@vastplan/workbench-sdk";
 import type {
   FrontendPluginContext,
   PluginLocalization,
@@ -61,7 +62,7 @@ export class PortalRuntime {
     const workbenchModule = requiredModule(modules, portal.workbench);
     assertTrustedFirstParty(workbenchModule, portal.workbench.id);
     const workbench = workbenchModule.workbench;
-    if (workbench?.id !== "ui.workflow.workbench" || typeof workbench.CollectionPage !== "function" || typeof workbench.CollectionPageActions !== "function" || !contractSatisfies(workbench.uiContract, portal.workbench.uiContract)) {
+    if (workbench?.id !== "ui.workflow.workbench" || typeof workbench.CollectionPage !== "function" || typeof workbench.CollectionPageActions !== "function" || typeof workbench.RecordPage !== "function" || typeof workbench.RecordPageActions !== "function" || !contractSatisfies(workbench.uiContract, portal.workbench.uiContract)) {
       throw new PortalAssemblyError("WORKBENCH_INVALID", "UI Workbench 插件缺失或 UI 契约不兼容");
     }
 
@@ -190,6 +191,16 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
       const Page = () => createElement(workbench.FormPage, { page });
       context.addPage({ id: page.id, path: page.path, title: page.title, description: page.description, navigation: page.navigation, slots: [{ id: "workbench.form", slot: "page.body.main", component: Page }] });
     },
+    addRecordPage: (page) => {
+      if (!experienceAllows(portal, page.requiredPermissions) || !experienceAllowsAny(portal, page.requiredAnyPermissions)) return;
+      const projected = projectRecordActions(portal, validateRecordPage(page));
+      const Page = () => createElement(workbench.RecordPage, { page: projected });
+      const PageActions = () => createElement(workbench.RecordPageActions, { page: projected });
+      context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, navigation: projected.navigation, slots: [
+        { id: "workbench.record.actions", slot: "page.header.end", component: PageActions },
+        { id: "workbench.record", slot: "page.body.main", component: Page },
+      ] });
+    },
   };
   return context;
 }
@@ -209,6 +220,21 @@ function experienceAllowsAny(portal: PortalSpec, required: readonly string[] | u
 function projectCollectionActions<Row extends Record<string, unknown>>(portal: PortalSpec, page: import("@vastplan/workbench-sdk").CollectionPageDefinition<Row>): import("@vastplan/workbench-sdk").CollectionPageDefinition<Row> {
 	const actions = page.collection.actions?.filter((action) => experienceAllows(portal, action.requiredPermissions));
 	return { ...page, collection: { ...page.collection, ...(actions === undefined ? {} : { actions }) } };
+}
+
+function validateRecordPage<Row extends Record<string, unknown>>(page: import("@vastplan/workbench-sdk").RecordPageDefinition<Row>): import("@vastplan/workbench-sdk").RecordPageDefinition<Row> {
+  try {
+    if (page.pattern === "master-detail") return defineMasterDetailPage(page);
+    if (page.pattern === "tree-detail") return defineTreeDetailPage(page);
+    return defineRecordDetailPage(page);
+  } catch (error) {
+    throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", error instanceof Error ? error.message : `记录页面定义无效: ${page.id}`);
+  }
+}
+
+function projectRecordActions<Row extends Record<string, unknown>>(portal: PortalSpec, page: import("@vastplan/workbench-sdk").RecordPageDefinition<Row>): import("@vastplan/workbench-sdk").RecordPageDefinition<Row> {
+  const actions = page.actions?.filter((action) => experienceAllows(portal, action.requiredPermissions));
+  return { ...page, ...(actions === undefined ? {} : { actions }) };
 }
 
 function registerPage(

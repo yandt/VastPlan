@@ -84,7 +84,8 @@ export type CollectionQueryMode = "page" | "cursor";
 export type CollectionFilterKind = "text" | "select" | "boolean" | "numberRange" | "dateRange";
 export type CollectionSelectionMode = "none" | "single" | "multiple";
 export type CollectionDensity = "compact" | "standard" | "comfortable";
-export type CollectionActionPlacement = "page.primary" | "page.secondary" | "collection.toolbar" | "collection.bulk" | "record.row" | "card.footer";
+export type CollectionActionPlacement = "page.primary" | "page.secondary" | "collection.toolbar" | "collection.bulk" | "record.row" | "record.detail" | "card.footer";
+export type DataValueFormat = "text" | "number" | "date" | "datetime" | "boolean" | "status";
 
 export interface FilterOption { value: string; label: import("./i18n.js").LocalizedText; }
 export interface FilterSpec {
@@ -97,7 +98,7 @@ export interface FilterSpec {
 export interface ColumnSpec {
   key: string;
   label: import("./i18n.js").LocalizedText;
-  format?: "text" | "number" | "date" | "datetime" | "boolean" | "status";
+  format?: DataValueFormat;
   valueLabels?: Readonly<Record<string, import("./i18n.js").LocalizedText>>;
   statusTones?: Readonly<Record<string, "neutral" | "info" | "success" | "warning" | "error">>;
   sortable?: boolean;
@@ -149,6 +150,48 @@ export interface CollectionSpec {
   /** A governed presentation preference, never arbitrary CSS or framework props. */
   presentation?: { density?: CollectionDensity };
   preferences?: { allowedColumns?: readonly string[]; density?: boolean };
+}
+
+/** Framework-neutral record projection shared by detail, list-detail and tree-detail pages. */
+export interface RecordFieldSpec {
+  key: string;
+  label: import("./i18n.js").LocalizedText;
+  format?: DataValueFormat;
+  valueLabels?: Readonly<Record<string, import("./i18n.js").LocalizedText>>;
+  statusTones?: Readonly<Record<string, "neutral" | "info" | "success" | "warning" | "error">>;
+}
+export interface RecordSectionSpec {
+  id: string;
+  title?: import("./i18n.js").LocalizedText;
+  description?: import("./i18n.js").LocalizedText;
+  columns?: number;
+  fields: readonly RecordFieldSpec[];
+}
+export interface RecordDetailSpec {
+  titleKey: string;
+  subtitleKey?: string;
+  status?: { labelKey: string; toneKey?: string };
+  sections: readonly RecordSectionSpec[];
+  emptyTitle?: import("./i18n.js").LocalizedText;
+}
+export interface RecordMasterSpec {
+  id: string;
+  title: import("./i18n.js").LocalizedText;
+  keyField: string;
+  titleField: string;
+  subtitleField?: string;
+  status?: { labelField: string; toneField?: string };
+  query: { mode: CollectionQueryMode; defaultPageSize: number; pageSizeOptions: readonly number[] };
+  filters?: readonly FilterSpec[];
+  selectionParam?: string;
+  emptyTitle?: import("./i18n.js").LocalizedText;
+}
+export interface RecordTreeSpec {
+  id: string;
+  title: import("./i18n.js").LocalizedText;
+  selectionParam?: string;
+  defaultExpandedDepth?: number;
+  emptyTitle?: import("./i18n.js").LocalizedText;
 }
 
 export type InteractionKind = "confirm" | "form" | "approval" | "notification" | "progress";

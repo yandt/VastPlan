@@ -134,6 +134,8 @@ func (h *frontendHMR) sourceSignatures() (frontendSourceSignatures, error) {
 		"core/kernels/frontend/package.json",
 		"extensions/sdk/ts/ui-primitives/src",
 		"extensions/sdk/ts/ui-primitives/package.json",
+		"extensions/sdk/ts/rjsf-csp-validator/src",
+		"extensions/sdk/ts/rjsf-csp-validator/package.json",
 		"extensions/sdk/ts/ui-contract/src",
 		"extensions/sdk/ts/ui-contract/package.json",
 		"extensions/sdk/ts/workbench-sdk/src",

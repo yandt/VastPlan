@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ActionSpec } from "@vastplan/ui-contract";
 import type { CollectionPageDefinition } from "@vastplan/workbench-sdk";
-import { collectionPageActionController } from "./action-controller.js";
+import { pageActionController } from "./page-action-controller.js";
 
 const page = {
   id: "test", path: "/test", title: "Test",
@@ -9,9 +9,9 @@ const page = {
   async load() { return { items: [], total: 0 }; },
 } satisfies CollectionPageDefinition;
 
-describe("CollectionPageActionController", () => {
+describe("PageActionController", () => {
   it("bridges the page header to the mounted collection workflow", () => {
-    const controller = collectionPageActionController(page);
+    const controller = pageActionController(page);
     const action: ActionSpec = { id: "create", label: "Create", icon: "add", placement: "page.primary" };
     const handler = vi.fn();
     const listener = vi.fn();

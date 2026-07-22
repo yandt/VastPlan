@@ -5,6 +5,8 @@
   "target": { "kernel": "frontend" },
   "route": "/operations",
   "audience": ["portal.read"],
-  "plugins": [],
+  "plugins": [
+    { "id": "cn.vastplan.product.developer.workbench-gallery", "version": "0.1.0", "channel": "stable" }
+  ],
   "config": {}
 }

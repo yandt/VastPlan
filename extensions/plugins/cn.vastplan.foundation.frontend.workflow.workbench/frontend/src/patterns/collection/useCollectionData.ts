@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CollectionPageDefinition, CollectionQuery } from "@vastplan/workbench-sdk";
+import type { CollectionQuery, CollectionResult } from "@vastplan/workbench-sdk";
+import type { CollectionSpec } from "@vastplan/ui-contract";
 import type { CollectionRow } from "./model.js";
 
 export interface CollectionDataState {
@@ -13,6 +14,11 @@ export interface CollectionDataState {
   resetToken: number;
   refresh(): void;
   loadMore(): void;
+}
+
+export interface CollectionDataSource {
+  collection: Pick<CollectionSpec, "query">;
+  load(query: CollectionQuery, signal: AbortSignal): Promise<CollectionResult>;
 }
 
 export function mergeCursorRows(previous: readonly CollectionRow[], incoming: readonly CollectionRow[], keyOf: (row: CollectionRow) => string): readonly CollectionRow[] {
@@ -38,7 +44,7 @@ export function normalizeNextCursor(requested: string | undefined, returned: str
 }
 
 export function useCollectionData({ page, pageNumber, pageSize, filters, keyOf }: {
-  page: CollectionPageDefinition;
+  page: CollectionDataSource;
   pageNumber: number;
   pageSize: number;
   filters: Readonly<Record<string, unknown>>;

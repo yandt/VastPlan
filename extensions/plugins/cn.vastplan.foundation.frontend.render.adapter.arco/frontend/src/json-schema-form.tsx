@@ -47,9 +47,9 @@ import type {
   WrapIfAdditionalTemplateProps,
 } from "@rjsf/utils";
 import { useEffect, useMemo, useState } from "react";
+import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import type { FormPresentation, FormRendererProps, FormSectionPresentation, FormValidationIssue } from "@vastplan/ui-primitives";
 import { jsonSchemaDialect, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
-import { cspJSONSchemaValidator } from "./csp-json-schema-validator";
 
 type FormData = Record<string, unknown>;
 type FormContext = Readonly<Record<string, unknown>>;

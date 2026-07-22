@@ -1,9 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
 import RJSFForm from "@rjsf/core";
-import { customizeValidator } from "@rjsf/validator-ajv8";
+import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import {
   Alert,
   Box,
@@ -67,7 +67,10 @@ import type {
   PopoverProps,
   PortalShellProps,
   PortalUI,
+  RecordNavigationListProps,
+  RecordTreeProps,
   SelectProps,
+  SplitViewProps,
   StackProps,
   StatusTone,
   TableProps,
@@ -81,10 +84,7 @@ const tones: Record<StatusTone, "default" | "info" | "success" | "warning" | "er
   neutral: "default", info: "info", success: "success", warning: "warning", error: "error",
 };
 const namespace = "cn.vastplan.foundation.frontend.render.adapter";
-const validator = customizeValidator({ customFormats: {
-  "vastplan-credential-ref": /^credential:\/\/[A-Za-z0-9][A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]*$/,
-  "vastplan-secret-material": /^.*$/s,
-} });
+const validator = cspJSONSchemaValidator;
 
 function PortalShell({ header, navigation, inspector, statusBar, children }: PortalShellProps) {
   return <Box sx={{ minHeight: "100%", display: "grid", gridTemplateRows: "auto 1fr auto" }}>
@@ -356,6 +356,45 @@ function DataCard({ title, subtitle, status, summary, children, actions, selecta
   </Card>;
 }
 
+function SplitView({ primaryLabel, secondaryLabel, primary, secondary, mode = "both", primaryWidth = "md" }: SplitViewProps) {
+  const width = { sm: 280, md: 360, lg: 440 }[primaryWidth];
+  return <Box sx={{ display: "grid", gridTemplateColumns: mode === "both" ? `${width}px minmax(0,1fr)` : "minmax(0,1fr)", gap: 2, width: "100%", minWidth: 0, minHeight: 480 }}>
+    {mode === "secondary" ? null : <Paper component="section" aria-label={primaryLabel} variant="outlined" sx={{ minWidth: 0, overflow: "auto", p: 2 }}>{primary}</Paper>}
+    {mode === "primary" ? null : <Paper component="section" aria-label={secondaryLabel} variant="outlined" sx={{ minWidth: 0, overflow: "auto", p: 2 }}>{secondary}</Paper>}
+  </Box>;
+}
+
+function RecordNavigationList({ items, selectedID, ariaLabel, onSelect }: RecordNavigationListProps) {
+  return <List role="listbox" aria-label={ariaLabel} disablePadding>{items.map((item) => <ListItemButton key={item.id} role="option" aria-selected={item.id === selectedID} selected={item.id === selectedID} disabled={item.disabled} onClick={() => onSelect(item.id)} sx={{ borderRadius: 1, mb: 0.5, alignItems: "flex-start" }}>
+    <ListItemText primary={item.title} secondary={item.description} primaryTypographyProps={{ fontWeight: 600, noWrap: true }} secondaryTypographyProps={{ noWrap: true }} />{item.status}
+  </ListItemButton>)}</List>;
+}
+
+function RecordTree({ items, selectedID, expandedIDs, ariaLabel, onSelect, onExpandedChange }: RecordTreeProps) {
+  const expanded = new Set(expandedIDs);
+  const toggle = (id: string) => onExpandedChange(expanded.has(id) ? expandedIDs.filter((value) => value !== id) : [...expandedIDs, id]);
+  const branch = (nodes: RecordTreeProps["items"], level: number) => <Box component="ul" role={level === 1 ? "tree" : "group"} aria-label={level === 1 ? ariaLabel : undefined} sx={{ listStyle: "none", m: 0, p: 0, pl: level === 1 ? 0 : 2.5 }}>{nodes.map((item) => {
+    const children = item.children ?? [];
+    const open = expanded.has(item.id);
+    return <Box component="li" key={item.id} role="treeitem" aria-level={level} aria-selected={item.id === selectedID} aria-expanded={children.length === 0 ? undefined : open}>
+      <Box sx={{ display: "grid", gridTemplateColumns: "36px minmax(0,1fr) auto", alignItems: "center", borderRadius: 1, bgcolor: item.id === selectedID ? "action.selected" : "transparent" }}>
+        {children.length === 0 ? <span /> : <MuiIconButton aria-label={open ? "Collapse" : "Expand"} size="small" onClick={() => toggle(item.id)}>{open ? "▾" : "▸"}</MuiIconButton>}
+        <ListItemButton data-record-tree-select disabled={item.disabled} selected={item.id === selectedID} onClick={() => onSelect(item.id)} onKeyDown={(event) => treeKeyboard(event, item.id, children.length > 0, open, toggle)} sx={{ minHeight: 44, borderRadius: 1 }}><ListItemText primary={item.title} secondary={item.description} primaryTypographyProps={{ fontWeight: 600 }} /></ListItemButton>{item.status}
+      </Box>{children.length > 0 && open ? branch(children, level + 1) : null}
+    </Box>;
+  })}</Box>;
+  return branch(items, 1);
+}
+
+function treeKeyboard(event: KeyboardEvent<HTMLDivElement>, id: string, hasChildren: boolean, open: boolean, toggle: (id: string) => void) {
+  if ((event.key === "ArrowRight" && hasChildren && !open) || (event.key === "ArrowLeft" && hasChildren && open)) { event.preventDefault(); toggle(id); return; }
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  const buttons = [...(event.currentTarget.closest('[role="tree"]')?.querySelectorAll<HTMLElement>("[data-record-tree-select]") ?? [])];
+  const index = buttons.indexOf(event.currentTarget);
+  const target = buttons[index + (event.key === "ArrowDown" ? 1 : -1)];
+  if (target !== undefined) { event.preventDefault(); target.focus(); }
+}
+
 const muiThemeTemplates = Object.freeze([
   { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
   { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
@@ -384,6 +423,9 @@ export const muiPortalUIComponents: MuiComponents = {
     : <Paper variant="outlined" sx={{ p: 2 }}><MuiStack direction="row" gap={2} alignItems="center" flexWrap="wrap">{children}<Box sx={{ ml: "auto" }}>{actions}</Box></MuiStack></Paper>,
   Table,
   DataCard,
+  SplitView,
+  RecordNavigationList,
+  RecordTree,
   Pagination: ({ page, total, pageSize, disabled, align = "start", onChange }) => <Box sx={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><MuiPagination page={page} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} /></Box>,
   Descriptions: ({ title, items, columns = 2 }) => <Box><Typography variant="h6">{title}</Typography><Grid columns={columns}>{items.map((item) => <Box key={item.id}><Typography variant="caption" color="text.secondary">{item.label}</Typography><Typography>{item.value}</Typography></Box>)}</Grid></Box>,
   Status: ({ tone = "neutral", children }) => <Chip color={tones[tone]} label={children} size="small" />,

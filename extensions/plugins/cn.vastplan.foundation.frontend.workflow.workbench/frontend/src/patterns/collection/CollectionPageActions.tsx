@@ -2,7 +2,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import type { ActionSpec } from "@vastplan/ui-contract";
 import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import type { CollectionPageDefinition } from "@vastplan/workbench-sdk";
-import { collectionPageActionController } from "./action-controller.js";
+import { pageActionController } from "../action/page-action-controller.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 const directActionLimit = 4;
@@ -11,7 +11,7 @@ const directActionLimit = 4;
 export function CollectionPageActions({ page }: { page: CollectionPageDefinition }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const controller = useMemo(() => collectionPageActionController(page), [page]);
+  const controller = useMemo(() => pageActionController(page), [page]);
   const snapshot = useSyncExternalStore(controller.subscribe, controller.getSnapshot, controller.getSnapshot);
   const [overflowOpen, setOverflowOpen] = useState(false);
   const actions = (page.collection.actions ?? []).filter((action) =>

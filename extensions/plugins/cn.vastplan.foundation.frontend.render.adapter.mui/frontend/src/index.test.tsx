@@ -6,7 +6,7 @@ import { muiIconForTheme, muiRenderAdapter, muiPortalUIComponents } from "./inde
 describe("MUI portal UI adapter", () => {
   it("implements the full framework-neutral component surface", () => {
     const required: Array<keyof Omit<PortalUI, "notify" | "confirm" | "theme">> = [
-      "PortalShell", "Page", "Panel", "Stack", "Grid", "GridItem", "Divider", "Button", "IconButton", "Select", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "DataCard", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
+      "PortalShell", "Page", "Panel", "Stack", "Grid", "GridItem", "Divider", "Button", "IconButton", "Select", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "DataCard", "SplitView", "RecordNavigationList", "RecordTree", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
     ];
     expect(muiRenderAdapter).toMatchObject({ id: "mui", framework: "mui" });
     expect(required.every((name) => typeof muiPortalUIComponents[name] === "function")).toBe(true);
@@ -34,6 +34,15 @@ describe("MUI portal UI adapter", () => {
     const markup = renderToStaticMarkup(<Page title="Portal"><Button kind="primary">保存</Button></Page>);
     expect(markup).toContain("Portal");
     expect(markup).toContain("保存");
+  });
+
+  it("renders accessible record navigation and tree semantics", () => {
+    const List = muiPortalUIComponents.RecordNavigationList;
+    const Tree = muiPortalUIComponents.RecordTree;
+    const markup = renderToStaticMarkup(<><List ariaLabel="Services" items={[{ id: "one", title: "One" }]} selectedID="one" onSelect={() => undefined} /><Tree ariaLabel="Tree" items={[{ id: "root", title: "Root", children: [{ id: "leaf", title: "Leaf" }] }]} expandedIDs={["root"]} onSelect={() => undefined} onExpandedChange={() => undefined} /></>);
+    expect(markup).toContain('role="listbox"');
+    expect(markup).toContain('role="tree"');
+    expect(markup).toContain('aria-expanded="true"');
   });
 
   it("maps the same shell, overlay, focus and touch baselines as other adapters", () => {

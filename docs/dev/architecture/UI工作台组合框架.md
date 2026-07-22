@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：Collection、表单与 Overlay 工作流、首方页面迁移和导入门禁均已实施｜最后更新：2026-07-21
+> 状态：Collection、RecordDetail/MasterDetail/TreeDetail、表单、Overlay、首方页面迁移和导入门禁均已实施｜最后更新：2026-07-23
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md) 与 [ADR-0104](../decisions/ADR-0104-Frontend-Runtime-Engine与React单实现.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -38,6 +38,8 @@ flowchart TB
 5. 功能插件制品必须使用 `@vastplan/workbench-sdk`；构建门禁与 Go 架构适应度测试拒绝 React、Arco/MUI、裸 `context.addPage` 和 `@vastplan/ui-primitives` 视觉导入。当前唯一例外是尚在该包中的非视觉 `PortalControlClient` 与 `Portal*` 数据契约。
 
 `CollectionWorkbench` 共享一套查询、筛选、选择、动作、取消和错误状态机，并提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。表单工作流已提供 page/Dialog/Drawer、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏数据关闭保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表。全局设置、凭证、数据库连接、制品仓库、Portal 治理与部署管理均已迁移为真实 fixture。
+
+Record 工作流共享详情字段投影、状态、页面/详情动作、表单、Overlay、取消和错误状态机，并提供 `record-detail`、`master-detail` 与 `tree-detail` 三种 Pattern。MasterDetail 的左侧列表复用 Collection 查询、筛选、page/cursor 和取消语义，右侧可以展示详情或 page-surface 编辑器；TreeDetail 对节点数、深度、ID 唯一性和默认展开层级做有界校验。选择写入受限 URL 参数，窄屏在主区/详情间切换，页内编辑存在脏数据时切换记录必须确认。功能插件不能提供 React render function、HTML、任意树组件或自行实现分栏。
 
 ### 2.1 严格入口与受控 Pattern 演进
 
@@ -128,6 +130,20 @@ Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为
 
 密集管理场景默认优先 Table；只有摘要、状态和少量操作比多列对比更重要时使用 Card。详情仍进入详情页、Drawer 或 master-detail，不让卡片承载完整编辑器。
 
+### 3.5 记录详情与主从工作区
+
+`RecordDetailSpec` 只声明标题、副标题、状态和分区字段；字段沿用 Workbench 的标准文本、数字、日期、布尔和状态格式，不接受 HTML 或组件。三种页面定义为：
+
+| Pattern | 主区域 | 详情区域 | 适用场景 |
+|---|---|---|---|
+| `record-detail` | 无 | 单条记录详情或编辑器 | 当前平台、当前主体等固定对象 |
+| `master-detail` | 可筛选的 page/cursor 列表 | 选中记录详情或编辑器 | 账号、服务、连接等扁平实体 |
+| `tree-detail` | 有界层级树 | 选中节点对应记录详情或编辑器 | 组织、目录、资源层级 |
+
+Master/Tree 只返回数据和稳定 ID。Workbench 拥有选择、URL 恢复、请求取消、窄屏模式、脏数据切换确认和详情动作；Render Adapter 只实现 `SplitView`、`RecordNavigationList`、`RecordTree` 的 DOM、焦点、键盘和主题。树最多 5,000 个节点、16 层，ID 全局唯一；超限或重复直接拒绝，不允许以虚拟 DOM 函数绕过。
+
+Record Foundation 使用 TypeScript + React：代码直接运行在现有浏览器 Runtime Engine，能够复用 UI Contract、Workbench 状态与 Arco/MUI Adapter；Go、Python 或后端 Node 在浏览器 UI 层没有生态或运行优势。领域数据 Provider 仍由功能插件按数据库、协议和 SDK 生态独立选择语言，经类型化 BFF/capability 进入 Loader。
+
 ## 4. 安全、可访问性与国际化
 
 - 可序列化契约只允许 JSON 数据；禁止函数、URL、HTML、组件引用、任意模板表达式和客户端权限结论。
@@ -143,5 +159,6 @@ Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为
 3. 已完成：Card cursor 模式、共享查询状态、稳定键去重、重复 cursor 防护、手动/视口增量加载，以及 Arco/MUI `DataCard` 语义组件。
 4. 已完成：`FormPresentation`、`FormWorkflow`、Page/Dialog/Drawer 表单，以及 Arco/MUI 的分区、标签、步骤、分栏和条件字段语义；全局设置是非敏感 fixture，凭证和数据库连接验证 `secretMaterial` 一次性秘密边界。
 5. 已完成：首方功能插件已迁移到当前 4.x 契约；Portal 治理按 Profile/Application/Binding/Activation 分页，部署管理复用动态 Form 和预览/审计 Overlay。生产构建与 `engineering/arch` 同时拒绝遗留基础组件 import、UI 框架 import 和裸页面注册。
+6. 已完成：`RecordDetail`、`MasterDetail`、`TreeDetail`，共享详情投影、列表查询、树边界、URL 选择、页内编辑脏状态、动作与 Overlay；Arco/MUI 实现等价 Split/List/Tree 语义，开发 Application 通过 `cn.vastplan.product.developer.workbench-gallery` 展示三种模式。
 
-当前首方功能页已全部强制使用 Workbench。后续新增业务呈现若不适合 Collection/Form/Overlay，必须先扩展 Foundation Workbench Pattern，不能在功能插件中恢复任意组件逃生口。
+当前首方功能页已全部强制使用 Workbench。后续新增业务呈现若不适合 Collection/Record/Form/Overlay，必须先扩展 Foundation Workbench Pattern，不能在功能插件中恢复任意组件逃生口。

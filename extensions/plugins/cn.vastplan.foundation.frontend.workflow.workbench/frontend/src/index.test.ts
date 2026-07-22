@@ -7,5 +7,7 @@ describe("UI Workbench", () => {
     expect(typeof workbench.CollectionPage).toBe("function");
     expect(typeof workbench.CollectionPageActions).toBe("function");
     expect(typeof workbench.FormPage).toBe("function");
+    expect(typeof workbench.RecordPage).toBe("function");
+    expect(typeof workbench.RecordPageActions).toBe("function");
   });
 });
