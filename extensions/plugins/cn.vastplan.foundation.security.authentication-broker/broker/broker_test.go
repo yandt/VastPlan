@@ -85,15 +85,16 @@ func TestBrokerSignsProfileBoundAssertionAfterRealEvidence(t *testing.T) {
 	if brokerResult.Assertion.Payload.ProviderProfileID != "corp" || brokerResult.Assertion.Payload.Audience != "authentication-provider-test" {
 		t.Fatalf("Assertion 未绑定服务端 route: %+v", brokerResult.Assertion.Payload)
 	}
-	trustedPortal := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "portal-host"}, Scene: "portal.bff"}
+	trustedPortal := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "portal-node-a"}, Scene: "portal.bff"}
 	consume := authenticationv1.ConsumeAssertionRequest{Assertion: *brokerResult.Assertion, Audience: begin.Audience, TenantID: begin.TenantID, PortalID: begin.PortalID, TransactionID: begin.TransactionID}
 	consumed, consumedRaw, _ := service.Handle(context.Background(), host, trustedPortal, OperationConsumeAssertion, mustJSON(consume))
 	if consumed.GetStatus() != contractv1.CallResult_STATUS_OK || string(consumedRaw) != `{"consumed":true}` {
 		t.Fatalf("可信 Portal 应能消费 Assertion: %+v %s", consumed, consumedRaw)
 	}
-	replay, _, _ := service.Handle(context.Background(), host, trustedPortal, OperationConsumeAssertion, mustJSON(consume))
+	secondPortalNode := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "portal-node-b"}, Scene: "portal.bff"}
+	replay, _, _ := service.Handle(context.Background(), host, secondPortalNode, OperationConsumeAssertion, mustJSON(consume))
 	if replay.GetStatus() != contractv1.CallResult_STATUS_ERROR || replay.Error.Code != "foundation.authentication.assertion_replayed" {
-		t.Fatalf("Assertion 重放必须拒绝: %+v", replay)
+		t.Fatalf("第二 Portal Node 的 Assertion 重放必须被集群 Broker 拒绝: %+v", replay)
 	}
 }
 

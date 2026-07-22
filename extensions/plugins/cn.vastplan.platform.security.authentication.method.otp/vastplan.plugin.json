@@ -1,0 +1,66 @@
+{
+  "id": "cn.vastplan.platform.security.authentication.method.otp",
+  "name": "VastPlan Enterprise One-Time-Code Authentication Provider",
+  "description": "通过可插拔 Delivery Port 提供企业邮箱和短信一次性验证码认证",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1" },
+  "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["trace", "request.deadline", "propagation.callPath"] },
+  "runtime": {
+    "instancePolicy": "leader",
+    "stateModel": "leader-owned",
+    "visibility": "cluster",
+    "routing": "leader",
+    "routingDomain": "security",
+    "requires": [{ "capability": "foundation.security.authentication.delivery", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "authentication-delivery", "routingDomain": "security" }]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "hot",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profiles"],
+      "properties": {
+        "capacity": { "type": "integer", "minimum": 1, "maximum": 100000 },
+        "profiles": {
+          "type": "object", "minProperties": 1, "maxProperties": 64,
+          "additionalProperties": {
+            "type": "object", "additionalProperties": false,
+            "required": ["methodId", "deliveryProfileId", "channel", "issuer"],
+            "properties": {
+              "methodId": { "enum": ["enterprise-email-code", "enterprise-sms-code"] },
+              "deliveryProfileId": { "type": "string", "minLength": 1, "maxLength": 256 },
+              "channel": { "enum": ["email", "sms"] },
+              "issuer": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "codeLength": { "type": "integer", "minimum": 4, "maximum": 12, "default": 6 },
+              "ttlSeconds": { "type": "integer", "minimum": 30, "maximum": 600, "default": 300 },
+              "resendSeconds": { "type": "integer", "minimum": 5, "maximum": 600, "default": 60 },
+              "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 10, "default": 5 },
+              "maxResends": { "type": "integer", "minimum": 0, "maximum": 10, "default": 3 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/otp-authentication" },
+  "contributes": { "backend": { "authenticationProviders": [{
+    "id": "enterprise-one-time-code",
+    "service_role": "backend",
+    "title": "企业一次性验证码认证 Provider",
+    "protocol": "authentication.method.v1",
+    "purposes": ["portal-login"],
+    "methods": [
+      { "id": "enterprise-email-code", "kind": "one-time-code", "interaction": "form" },
+      { "id": "enterprise-sms-code", "kind": "one-time-code", "interaction": "form" }
+    ],
+    "subjectNamespace": "enterprise.identity.otp",
+    "requiredCapabilities": ["foundation.security.authentication.delivery"]
+  }] } }
+}

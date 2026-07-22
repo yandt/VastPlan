@@ -11,6 +11,7 @@ import { createAPIHandler } from "./api-handler";
 import { setBaseSecurityHeaders, setIndexSecurityHeaders } from "./security-headers";
 import type { AccessCatalogPort } from "../access/access-catalog-port";
 import { serveAccessBootstrap } from "./access-bootstrap-route";
+import { serveAccessBrandAsset } from "./access-brand-asset-route";
 
 export interface PortalHandlerOptions {
   assets: PortalAssets;
@@ -46,6 +47,11 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     if (path === "/auth/v1/bootstrap") {
       if (options.access === undefined) return sendEmpty(response, 404);
       void serveAccessBootstrap(options.access, request, response);
+      return;
+    }
+    if (path.startsWith("/auth/v1/assets/")) {
+      if (options.access === undefined) return sendEmpty(response, 404);
+      void serveAccessBrandAsset(options.access, options.assets, request, response, path);
       return;
     }
     if (path === "/auth/access") {

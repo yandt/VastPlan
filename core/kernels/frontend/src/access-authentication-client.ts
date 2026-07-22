@@ -2,6 +2,8 @@ import type { ModuleFetcher } from "./module-loader";
 
 export interface AccessBootstrap {
   readonly schemaVersion: "v1";
+  readonly generationId: string;
+  readonly accessTemplate: string;
   readonly localization: { readonly defaultLocale: string; readonly supportedLocales: readonly string[] };
   readonly authentication: { readonly allowedMethods: readonly string[]; readonly defaultMethod: string; readonly reuseIdentifier: boolean };
   readonly branding: { readonly productName: Readonly<Record<string, string>>; readonly logoAssetId?: string; readonly supportPath?: string; readonly privacyPath?: string };
@@ -107,6 +109,20 @@ export function providerTestSelection(location: Pick<Location, "search"> | undef
   if (location === undefined) return undefined;
   const params = new URLSearchParams(location.search), providerProfileId = params.get("providerTest"), methodId = params.get("method");
   return safeID(providerProfileId) && safeID(methodId) ? { providerProfileId, methodId } : undefined;
+}
+
+export function accessBrandAssetURL(access: AccessBootstrap, returnTo: string): string | undefined {
+  const id = access.branding.logoAssetId;
+  if (id === undefined || !/^[a-z][a-z0-9._-]{0,127}$/.test(id) || !/^[a-f0-9]{64}$/.test(access.generationId)) return undefined;
+  return `/auth/v1/assets/${access.generationId}/${encodeURIComponent(id)}?returnTo=${encodeURIComponent(returnTo)}`;
+}
+
+export function accessLocaleDirection(locale: string): "ltr" | "rtl" {
+  return /^(ar|fa|he|ur)(?:-|$)/i.test(locale) ? "rtl" : "ltr";
+}
+
+export function localizeAccessText(value: Readonly<Record<string,string>> | undefined, locale: string, fallback: string): string {
+  return value?.[locale] ?? value?.[locale.split("-")[0]] ?? value?.["en-US"] ?? value?.["zh-CN"] ?? value?.[Object.keys(value)[0] ?? ""] ?? fallback;
 }
 
 function safeID(value: string | null): value is string { return value !== null && /^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,255}$/.test(value); }

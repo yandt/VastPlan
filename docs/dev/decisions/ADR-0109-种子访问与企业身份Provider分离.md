@@ -1,6 +1,6 @@
 # ADR-0109 种子访问与企业身份 Provider 分离
 
-- 状态：已采纳，分阶段实施
+- 状态：已采纳，已实施
 - 日期：2026-07-23
 - 关联：[ADR-0047](ADR-0047-多语言运行驱动与第三方隔离边界.md)、[ADR-0090](ADR-0090-插件配置与托管凭证闭环.md)、[ADR-0106](ADR-0106-多端统一身份授权与Runner执行租约.md)、[ADR-0107](ADR-0107-插件权限目录与系统管理授权治理.md)、[ADR-0108](ADR-0108-会话前Access-Profile与认证方法协议.md)
 
@@ -52,3 +52,5 @@
 - Seed Handoff 接入 Broker Assertion 和签名 Policy Snapshot 双证明；可信 BFF 在 HttpOnly 密封 Session 内转交证明，企业主体完成授权绑定后经 CAS 进入 `EnterpriseActive`，Seed 登录随即关闭。
 - `/auth/access` 完成会话前语义 AuthenticationFlow；页面只渲染受限步骤，Provider 无法注入前端代码、样式或任意 Schema。
 - 未发布但已 `Validated` 的 Provider Profile 可由授权管理员启动隔离真实认证测试。Broker 锁定测试用 Profile 与 audience，Node 原子消费 Assertion 后只写入短时密封测试证明，不创建、替换或提权正常 Session；管理 BFF 只接受该服务端证明，拒绝浏览器自报 Assertion。
+- 完成邮箱/短信 OTP Provider 和稳定 `authentication.delivery.v1` 窄端口；验证码 HMAC、重发换代、尝试锁定、TTL 和并发单次消费由 leader-owned Go Provider 管理。通用 Node Webhook Delivery 只访问 HTTPS，通过 Material Lease 获取企业网关凭证，且只接受 OTP Provider 调用链。
+- Access 品牌 Logo 完成 Host/returnTo/Generation/asset ID 四重绑定和服务端 SHA-256 复验；浏览器只使用同源内容寻址 URL，不获取内部 digest 或外部品牌 URL。

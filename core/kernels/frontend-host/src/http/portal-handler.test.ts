@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,7 +8,7 @@ import { FileIdentityProvider } from "../identity/file-identity-provider";
 import type { IdentityProvider } from "../identity/identity-provider";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import type { PortalSSRPort } from "../runtime/portal-ssr-coordinator";
-import { createPortalFixture } from "../testing/portal-fixture";
+import { createPortalFixture, portalFixtureLogo } from "../testing/portal-fixture";
 import { writeSessionFixture } from "../testing/session-fixture";
 import { createPortalHandler } from "./portal-handler";
 import type { AccessCatalogPort } from "../access/access-catalog-port";
@@ -105,7 +106,13 @@ describe("createPortalHandler", () => {
     const response = await fetch(`${origin}/auth/v1/bootstrap?returnTo=%2Fadmin`, { headers: { Host: "portal.example.test" } });
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toMatchObject({ schemaVersion: "v1", accessTemplate: "access" });
+		const bootstrap = await response.json() as { schemaVersion:string; accessTemplate:string; generationId:string };
+		expect(bootstrap).toMatchObject({ schemaVersion: "v1", accessTemplate: "access" });
+		const logo = await fetch(`${origin}/auth/v1/assets/${bootstrap.generationId}/vastplan.svg?returnTo=%2Fadmin`, { headers: { Host: "portal.example.test" } });
+		expect(logo.status).toBe(200);
+		expect(logo.headers.get("cache-control")).toContain("immutable");
+		expect(await logo.text()).toBe(portalFixtureLogo);
+		expect((await fetch(`${origin}/auth/v1/assets/${"0".repeat(64)}/vastplan.svg?returnTo=%2Fadmin`, { headers: { Host: "portal.example.test" } })).status).toBe(404);
     expect((await fetch(`${origin}/auth/v1/bootstrap?returnTo=https%3A%2F%2Fevil.example`, { headers: { Host: "portal.example.test" } })).status).toBe(400);
     expect((await fetch(`${origin}/auth/v1/bootstrap`, { method: "POST", headers: { Host: "portal.example.test" } })).status).toBe(405);
   });
@@ -125,5 +132,5 @@ const accessProfile: AccessProfile = Object.freeze({
   platformProfile: Object.freeze({ id: "portal-default", revision: 2, digest: "a".repeat(64) }), accessTemplate: "access",
   localization: Object.freeze({ defaultLocale: "zh-CN", supportedLocales: Object.freeze(["zh-CN", "en-US"]) }),
   authentication: Object.freeze({ allowedMethods: Object.freeze(["password"]), defaultMethod: "password", reuseIdentifier: true }),
-  branding: Object.freeze({ productName: Object.freeze({ "zh-CN": "VastPlan", "en-US": "VastPlan" }) }),
+  branding: Object.freeze({ productName: Object.freeze({ "zh-CN": "VastPlan", "en-US": "VastPlan" }), logoAssetId:"vastplan.svg", logoSha256:createHash("sha256").update(portalFixtureLogo).digest("hex") }),
 });

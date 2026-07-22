@@ -21,6 +21,7 @@ type databaseHost struct {
 	hash        string
 	queries     int
 	unavailable bool
+	notFound    bool
 }
 
 func (h *databaseHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -39,6 +40,10 @@ func (h *databaseHost) Call(_ context.Context, target *contractv1.CallTarget, _ 
 	values := func(value any) databasev1.Value {
 		raw, _ := json.Marshal(value)
 		return databasev1.Value{Type: "string", Value: raw}
+	}
+	if h.notFound {
+		raw, _ := json.Marshal(databasev1.QueryResult{Columns: []databasev1.Column{{Name: "subject_id"}, {Name: "password_hash"}, {Name: "disabled"}}, Rows: [][]databasev1.Value{}, Truncated: false})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 	}
 	result := databasev1.QueryResult{Columns: []databasev1.Column{{Name: "subject_id"}, {Name: "password_hash"}, {Name: "disabled"}}, Rows: [][]databasev1.Value{{values("user-1"), values(h.hash), func() databasev1.Value {
 		raw, _ := json.Marshal(false)
@@ -111,6 +116,33 @@ func TestDatabaseProviderFailureIsContainedAsGenericAuthenticationFailure(t *tes
 	if result.State != authenticationv1.StateRejected || result.ReasonCode != authenticationv1.ReasonInvalidCredentials || strings.Contains(string(raw), "database offline") {
 		t.Fatalf("数据库故障不得泄露拓扑或改变凭据错误形状: %s", raw)
 	}
+}
+
+func TestDatabaseProviderUnknownAndWrongPasswordHaveSameExternalShape(t *testing.T) {
+	hash, _ := EncodeArgon2id([]byte("correct horse battery staple"), []byte("0123456789abcdef"))
+	known, knownKDF := databaseAttempt(t, &databaseHost{hash: hash}, strings.Repeat("k", 32), "wrong password value")
+	missing, missingKDF := databaseAttempt(t, &databaseHost{hash: hash, notFound: true}, strings.Repeat("m", 32), "wrong password value")
+	if string(known) != string(missing) || strings.Contains(string(missing), "not_found") {
+		t.Fatalf("未知账号与错误密码必须同形: known=%s missing=%s", known, missing)
+	}
+	const parameters = "$argon2id$v=19$m=65536,t=3,p=2$"
+	if knownKDF != 1 || missingKDF != 1 || !strings.HasPrefix(hash, parameters) {
+		t.Fatalf("已知/未知账号必须各执行一次同参数 Argon2id: known=%d missing=%d hash=%s", knownKDF, missingKDF, hash)
+	}
+}
+
+func databaseAttempt(t *testing.T, host *databaseHost, transactionID, password string) ([]byte, int) {
+	t.Helper()
+	provider := testProvider(t)
+	kdfCalls := 0
+	provider.verifyPassword = func(candidate string, password []byte) bool { kdfCalls++; return VerifyArgon2id(candidate, password) }
+	begin := authenticationv1.BeginRequest{TransactionID: transactionID, MethodID: MethodID, ProviderProfileID: "database-users", TenantID: "acme", PortalID: "management", Audience: "portal.example", Locale: "zh-CN", ClientContextDigest: strings.Repeat("b", 64)}
+	_, raw, _ := provider.Contribution().Handlers[authenticationv1.OperationBegin](context.Background(), host, &contractv1.CallContext{}, marshal(t, begin))
+	parsed, _ := authenticationv1.ParseMethodResult(authenticationv1.OperationBegin, raw)
+	step := parsed.(*authenticationv1.BeginResult).Result.Step
+	request := authenticationv1.ContinueRequest{TransactionID: transactionID, StepID: step.StepID, Responses: []authenticationv1.FieldResponse{{FieldID: "identifier", Value: "alice"}, {FieldID: "password", Value: password}}}
+	_, raw, _ = provider.Contribution().Handlers[authenticationv1.OperationContinue](context.Background(), host, &contractv1.CallContext{}, marshal(t, request))
+	return raw, kdfCalls
 }
 
 func TestDatabaseProviderManifestAndDialectTemplates(t *testing.T) {

@@ -8,7 +8,7 @@ export async function serveAccessBootstrap(
 ): Promise<void> {
   const method = request.method ?? "GET";
   if (method !== "GET" && method !== "HEAD") return sendEmpty(response, 405, { Allow: "GET, HEAD" });
-  const target = parseTarget(request);
+  const target = parseAccessTarget(request);
   if (target === undefined) return sendEmpty(response, 400);
   try {
     const generation = await access.resolve(target.host, target.returnTo);
@@ -28,7 +28,7 @@ export async function serveAccessBootstrap(
   }
 }
 
-function parseTarget(request: IncomingMessage): { host: string; returnTo: string } | undefined {
+export function parseAccessTarget(request: IncomingMessage): { host: string; returnTo: string } | undefined {
   const rawHost = request.headers.host;
   if (rawHost === undefined || rawHost.includes(",") || rawHost.length > 512) return undefined;
   let host: string;

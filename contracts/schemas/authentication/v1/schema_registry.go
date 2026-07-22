@@ -19,6 +19,7 @@ const (
 	BrokerSchemaURL    = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-broker.schema.json"
 	AccessSchemaURL    = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.access-profile.schema.json"
 	ProviderSchemaURL  = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-provider.schema.json"
+	DeliverySchemaURL  = "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-delivery.schema.json"
 
 	MaxMethodMessageBytes   = 64 << 10
 	MaxAssertionBytes       = 64 << 10
@@ -26,6 +27,7 @@ const (
 	MaxAccessCatalogBytes   = 16 << 20
 	MaxProviderProfileBytes = 1 << 20
 	MaxProviderCatalogBytes = 16 << 20
+	MaxDeliveryMessageBytes = 16 << 10
 )
 
 //go:embed vastplan.authentication-types.schema.json
@@ -45,6 +47,9 @@ var accessSchemaJSON []byte
 
 //go:embed vastplan.authentication-provider.schema.json
 var providerSchemaJSON []byte
+
+//go:embed vastplan.authentication-delivery.schema.json
+var deliverySchemaJSON []byte
 
 var (
 	schemaOnce sync.Once
@@ -70,6 +75,7 @@ func compileSchemas() {
 		{AssertionSchemaURL, assertionSchemaJSON}, {BrokerSchemaURL, brokerSchemaJSON},
 		{AccessSchemaURL, accessSchemaJSON},
 		{ProviderSchemaURL, providerSchemaJSON},
+		{DeliverySchemaURL, deliverySchemaJSON},
 	}
 	for _, resource := range resources {
 		document, err := jsonschema.UnmarshalJSON(bytes.NewReader(resource.raw))

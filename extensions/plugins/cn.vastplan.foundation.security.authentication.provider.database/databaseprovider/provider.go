@@ -27,11 +27,12 @@ type transaction struct {
 	expires           time.Time
 }
 type Provider struct {
-	profiles     map[string]Profile
-	dummyHash    string
-	mu           sync.Mutex
-	transactions map[string]transaction
-	now          func() time.Time
+	profiles       map[string]Profile
+	dummyHash      string
+	verifyPassword func(string, []byte) bool
+	mu             sync.Mutex
+	transactions   map[string]transaction
+	now            func() time.Time
 }
 
 func New(configuration Configuration) (*Provider, error) {
@@ -42,7 +43,7 @@ func New(configuration Configuration) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Provider{profiles: configuration.Profiles, dummyHash: dummy, transactions: map[string]transaction{}, now: func() time.Time { return time.Now().UTC() }}, nil
+	return &Provider{profiles: configuration.Profiles, dummyHash: dummy, verifyPassword: VerifyArgon2id, transactions: map[string]transaction{}, now: func() time.Time { return time.Now().UTC() }}, nil
 }
 func Descriptor() []byte {
 	return []byte(`{"title":"数据库用户认证 Provider","protocol":"authentication.method.v1","purposes":["portal-login"],"methods":[{"id":"database-password","kind":"password","interaction":"form"}],"subjectNamespace":"enterprise.identity.database","requiredCapabilities":["foundation.data.relational.runtime"]}`)
@@ -132,7 +133,7 @@ func (p *Provider) continueLogin(ctx context.Context, host sdk.Host, call *contr
 	if err != nil || hash == "" {
 		hash = p.dummyHash
 	}
-	valid := VerifyArgon2id(hash, fields["password"])
+	valid := p.verifyPassword(hash, fields["password"])
 	if err != nil || row.Disabled || !valid {
 		return authenticationv1.ContinueResult{Result: rejected(authenticationv1.ReasonInvalidCredentials)}
 	}

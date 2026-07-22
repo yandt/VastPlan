@@ -72,15 +72,18 @@ describe("BrokerIdentityProvider", () => {
     const csrfResponse = await fetch(`${portal}/auth/v1/csrf`), csrf = (await csrfResponse.json() as { token: string }).token;
     const csrfCookie = cookieFrom(csrfResponse.headers, "vastplan_csrf");
     const headers = { Origin: portal, "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json", "X-VastPlan-CSRF": csrf, Cookie: `vastplan_csrf=${csrfCookie}` };
+		expect((await fetch(`${portal}/auth/v1/transactions`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({methodId:"password",locale:"zh-CN",returnTo:"/operations"}) })).status).toBe(403);
+		expect((await fetch(`${portal}/auth/v1/transactions`, { method:"POST", headers:{...headers,Origin:"https://evil.example"}, body:JSON.stringify({methodId:"password",locale:"zh-CN",returnTo:"/operations"}) })).status).toBe(403);
     const begin = await fetch(`${portal}/auth/v1/transactions`, { method: "POST", headers, body: JSON.stringify({ methodId: "password", locale: "zh-CN", returnTo: "/operations" }) });
     expect(begin.status).toBe(201);
     const transactionId = (await begin.json() as { transactionId: string }).transactionId;
     const transaction = cookieFrom(begin.headers, "vastplan_auth_tx");
-    const complete = await fetch(`${portal}/auth/v1/transactions/${transactionId}/continue`, { method: "POST", headers: { ...headers, Cookie: `vastplan_csrf=${csrfCookie}; vastplan_auth_tx=${transaction}` }, body: JSON.stringify({ stepId: "s".repeat(32), responses: [{ fieldId: "password", value: "never-logged" }] }) });
+    const complete = await fetch(`${portal}/auth/v1/transactions/${transactionId}/continue`, { method: "POST", headers: { ...headers, Cookie: `vastplan_session=attacker-fixed; vastplan_csrf=${csrfCookie}; vastplan_auth_tx=${transaction}` }, body: JSON.stringify({ stepId: "s".repeat(32), responses: [{ fieldId: "password", value: "never-logged" }] }) });
     expect(complete.status).toBe(200);
     expect(await complete.json()).toMatchObject({ result: { state: "authenticated" }, returnTo: "/operations" });
     const session = cookieFrom(complete.headers, "vastplan_session");
     expect(session).not.toContain("alice");
+		expect(session).not.toBe("attacker-fixed");
     const current = await fetch(`${portal}/auth/session`, { headers: { Cookie: `vastplan_session=${session}` } });
     expect(await current.json()).toEqual({ authenticated: true, subject: "enterprise.alice", tenantId: "acme", roles: ["platform.settings.read", "foundation.security.authentication.providers.test"] });
 

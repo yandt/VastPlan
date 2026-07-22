@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-delivery.schema.json",
+  "title": "VastPlan Authentication Delivery Protocol v1",
+  "$defs": {
+    "deliveryRequest": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "challengeId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{7,255}$" },
+        "deliveryProfileId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
+        "channel": { "enum": ["email", "sms"] },
+        "identifier": { "type": "string", "minLength": 1, "maxLength": 320 },
+        "locale": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/locale" },
+        "code": { "type": "string", "pattern": "^[0-9]{4,32}$" },
+        "expiresAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["challengeId", "deliveryProfileId", "channel", "identifier", "locale", "code", "expiresAt"]
+    },
+    "deliveryResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "accepted": { "type": "boolean" },
+        "subjectId": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["accepted"]
+    },
+    "healthRequest": { "type": "object", "additionalProperties": false },
+    "healthResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "ready": { "type": "boolean" } },
+      "required": ["ready"]
+    }
+  }
+}

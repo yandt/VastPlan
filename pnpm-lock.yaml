@@ -427,6 +427,15 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@26.1.1)
 
+  extensions/plugins/cn.vastplan.platform.security.authentication.delivery.webhook/backend:
+    dependencies:
+      '@vastplan/backend-plugin':
+        specifier: workspace:*
+        version: link:../../../sdk/node/backend-plugin
+      '@vastplan/credential-lease-node':
+        specifier: workspace:*
+        version: link:../../../sdk/node/credential-lease
+
   extensions/plugins/cn.vastplan.platform.security.credentials/frontend:
     dependencies:
       '@vastplan/platform-admin':

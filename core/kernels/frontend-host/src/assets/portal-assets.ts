@@ -60,6 +60,11 @@ export class PortalAssets {
   public get(name: string): PortalAsset | undefined {
     return this.assets.get(name);
   }
+
+  public getVerified(name: string, sha256: string): PortalAsset | undefined {
+    const asset = this.assets.get(name);
+    return asset?.etag === `"sha256-${sha256}"` ? asset : undefined;
+  }
 }
 
 async function* walkRegularFiles(root: string): AsyncGenerator<{ absolutePath: string; relativePath: string }> {
@@ -91,6 +96,9 @@ function contentType(name: string): string {
     case ".css": return "text/css; charset=utf-8";
     case ".json": return "application/json; charset=utf-8";
     case ".svg": return "image/svg+xml";
+    case ".png": return "image/png";
+    case ".jpg": case ".jpeg": return "image/jpeg";
+    case ".webp": return "image/webp";
     case ".woff2": return "font/woff2";
     default: return "application/octet-stream";
   }

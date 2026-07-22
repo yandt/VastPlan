@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AccessAuthenticationClient, accessReturnTo, providerTestSelection } from "./access-authentication-client";
+import { AccessAuthenticationClient, accessBrandAssetURL, accessLocaleDirection, accessReturnTo, localizeAccessText, providerTestSelection } from "./access-authentication-client";
 
 describe("AccessAuthenticationClient", () => {
   it("loads only host-governed access and method descriptions", async () => {
@@ -30,5 +30,9 @@ describe("AccessAuthenticationClient", () => {
     expect(accessReturnTo({ search: "?returnTo=https%3A%2F%2Fevil.example" } as Location)).toBe("/");
     expect(accessReturnTo({ search: "?returnTo=%2F%2Fevil.example" } as Location)).toBe("/");
     expect(providerTestSelection({ search: "?providerTest=corporate-oidc&method=sso" } as Location)).toEqual({ providerProfileId: "corporate-oidc", methodId: "sso" });
+		expect(accessBrandAssetURL({ schemaVersion:"v1", generationId:"a".repeat(64), accessTemplate:"access", localization:{defaultLocale:"zh-CN",supportedLocales:["zh-CN"]}, authentication:{allowedMethods:["password"],defaultMethod:"password",reuseIdentifier:true}, branding:{productName:{"zh-CN":"VastPlan"},logoAssetId:"vastplan.svg"} }, "/operations")).toBe(`/auth/v1/assets/${"a".repeat(64)}/vastplan.svg?returnTo=%2Foperations`);
+		expect(accessLocaleDirection("ar-SA")).toBe("rtl");
+		expect(accessLocaleDirection("en-US")).toBe("ltr");
+		expect(localizeAccessText({"zh-CN":"中文","en-US":"English"},"ar-SA","fallback")).toBe("English");
   });
 });
