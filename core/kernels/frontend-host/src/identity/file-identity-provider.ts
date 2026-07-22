@@ -11,7 +11,9 @@ interface SessionRecord {
   tokenSHA256: string;
   id: string;
   tenantId: string;
+  portalId?: string;
   roles: readonly string[];
+  authenticationProfileId: string;
   expiresAt: string;
 }
 
@@ -34,7 +36,10 @@ export class FileIdentityProvider implements IdentityProvider {
       if (expected.byteLength !== actual.byteLength || !timingSafeEqual(actual, expected)) continue;
       const expiresAt = Date.parse(record.expiresAt);
       if (!Number.isFinite(expiresAt) || expiresAt <= this.now().getTime()) throw new SessionRejectedError();
-      return Object.freeze({ id: record.id, tenantId: record.tenantId, roles: Object.freeze([...record.roles]) });
+      return Object.freeze({
+        id: record.id, tenantId: record.tenantId, ...(record.portalId === undefined ? {} : { portalId: record.portalId }), roles: Object.freeze([...record.roles]),
+        authenticationProfileId: record.authenticationProfileId,
+      });
     }
     throw new SessionRejectedError();
   }
@@ -56,14 +61,23 @@ export class FileIdentityProvider implements IdentityProvider {
 }
 
 function parseSessionRecord(value: unknown): SessionRecord {
-  const keys = ["tokenSHA256", "id", "tenantId", "roles", "expiresAt"];
-  if (!isRecord(value) || !hasOnlyKeys(value, keys) || typeof value.tokenSHA256 !== "string" || !/^[a-f0-9]{64}$/.test(value.tokenSHA256) ||
+  const requiredKeys = ["tokenSHA256", "id", "tenantId", "roles", "expiresAt"];
+  const allowedKeys = [...requiredKeys, "authenticationProfileId", "portalId"];
+  if (!isRecord(value) || !hasRequiredOnlyKeys(value, requiredKeys, allowedKeys) || typeof value.tokenSHA256 !== "string" || !/^[a-f0-9]{64}$/.test(value.tokenSHA256) ||
       typeof value.id !== "string" || value.id === "" || typeof value.tenantId !== "string" || value.tenantId === "" ||
       !Array.isArray(value.roles) || value.roles.some((role) => typeof role !== "string" || role === "") || new Set(value.roles).size !== value.roles.length ||
-      typeof value.expiresAt !== "string") {
+      typeof value.expiresAt !== "string" || (value.authenticationProfileId !== undefined && (typeof value.authenticationProfileId !== "string" || value.authenticationProfileId === "")) ||
+      (value.portalId !== undefined && (typeof value.portalId !== "string" || value.portalId === ""))) {
     throw new Error("Portal session 文件格式无效");
   }
-  return { tokenSHA256: value.tokenSHA256, id: value.id, tenantId: value.tenantId, roles: Object.freeze([...value.roles]), expiresAt: value.expiresAt };
+  return {
+    tokenSHA256: value.tokenSHA256, id: value.id, tenantId: value.tenantId, ...(value.portalId === undefined ? {} : { portalId: value.portalId }), roles: Object.freeze([...value.roles]),
+    authenticationProfileId: value.authenticationProfileId ?? "auth.file", expiresAt: value.expiresAt,
+  };
+}
+
+function hasRequiredOnlyKeys(value: Record<string, unknown>, required: readonly string[], allowed: readonly string[]): boolean {
+  return required.every((key) => Object.hasOwn(value, key)) && Object.keys(value).every((key) => allowed.includes(key));
 }
 
 function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {

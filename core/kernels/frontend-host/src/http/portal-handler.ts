@@ -12,11 +12,15 @@ import { setBaseSecurityHeaders, setIndexSecurityHeaders } from "./security-head
 import type { AccessCatalogPort } from "../access/access-catalog-port";
 import { serveAccessBootstrap } from "./access-bootstrap-route";
 import { serveAccessBrandAsset } from "./access-brand-asset-route";
+import type { APIExposureCatalogPort } from "../api-exposure/api-exposure-contract";
+import { APIExposureGateway } from "../api-exposure/api-exposure-gateway";
+import type { TrustedCapabilityInvoker } from "../capabilities/capability-invoker";
 
 export interface PortalHandlerOptions {
   assets: PortalAssets;
   identity?: IdentityProvider;
   access?: AccessCatalogPort;
+  apiExposure?: { catalog: APIExposureCatalogPort; invoker: TrustedCapabilityInvoker };
   secureCookies?: boolean;
   composer?: PortalComposerPort;
   interaction?: InteractionPort;
@@ -34,11 +38,23 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     ...(options.platform === undefined ? {} : { platform: options.platform }),
     ...(options.delivery === undefined ? {} : { delivery: options.delivery }),
   });
+  const apiExposure = options.identity === undefined || options.apiExposure === undefined ? undefined : new APIExposureGateway(
+    options.apiExposure.catalog, options.identity, options.apiExposure.invoker, options.secureCookies ?? true,
+  );
   return (request, response) => {
     setBaseSecurityHeaders(response, options.secureCookies ?? true);
     const method = request.method ?? "GET";
     const path = requestPath(request.url);
     if (path === undefined) return sendEmpty(response, 400);
+    if (path === "/api" || path.startsWith("/api/")) {
+      if (apiExposure === undefined) return sendEmpty(response, 404);
+      void apiExposure.handle(request, response, path).catch((error: unknown) => {
+        process.stderr.write(`${JSON.stringify({ level: "error", message: "api exposure request failed", error: error instanceof Error ? error.message : String(error) })}\n`);
+        if (!response.headersSent) sendEmpty(response, 500);
+        else response.destroy();
+      });
+      return;
+    }
     if (path === "/v1" || path.startsWith("/v1/")) {
       if (api === undefined) return sendEmpty(response, 404);
       void api(request, response, path);

@@ -32,6 +32,7 @@ func TestContractDigestIsIndependentFromDeclarationOrder(t *testing.T) {
 	right := left
 	right.Routes = append([]RouteContract(nil), left.Routes...)
 	right.Routes[0].Errors = []ErrorMapping{{Code: "platform.demo.invalid", Status: 422}, {Code: "platform.demo.conflict", Status: 409}}
+	right.Routes[0].RequestSchema = json.RawMessage("{\n  \"additionalProperties\": false,\n  \"type\": \"object\"\n}")
 	leftDigest, err := ContractDigest(left)
 	if err != nil {
 		t.Fatal(err)
@@ -42,6 +43,31 @@ func TestContractDigestIsIndependentFromDeclarationOrder(t *testing.T) {
 	}
 	if leftDigest != rightDigest {
 		t.Fatalf("声明顺序不应改变契约摘要: %s != %s", leftDigest, rightDigest)
+	}
+}
+
+func TestContractDigestMatchesNodeGateway(t *testing.T) {
+	contract := ContractContribution{
+		ID: "management-api", ServiceRole: "backend", ContractID: "platform.demo.api",
+		ContractVersion: "1.0.0", Protocol: ProtocolHTTPJSON,
+		Routes: []RouteContract{{
+			ID: "platform.demo.list", Method: "GET", Path: "/items/{itemId}", SuccessStatus: 200,
+			Target:        CapabilityTarget{Capability: "platform.demo", Operation: "listItems"},
+			RequestSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
+			ResponseSchema: json.RawMessage(`{
+              "type":"object","additionalProperties":false,
+              "properties":{"ok":{"type":"boolean"}},"required":["ok"]
+            }`),
+			Errors: []ErrorMapping{{Code: "platform.demo.not_found", Status: 404}},
+		}},
+	}
+	digest, err := ContractDigest(contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const nodeDigest = "f4a83624f391ff26825cddcffb48bfa970687749a3aa3dd2a4f8b38c00dfdc3f"
+	if digest != nodeDigest {
+		t.Fatalf("Go/Node API Contract 摘要不一致: go=%s node=%s", digest, nodeDigest)
 	}
 }
 
@@ -125,7 +151,7 @@ func validResolvedExposure(t *testing.T) ResolvedExposure {
 			},
 			Authentication:      AuthenticationPolicy{ProfileID: "auth.default", AllowAnonymous: false},
 			RequiredPermissions: []string{"platform.demo.read"},
-			Limits:              ExposureLimits{MaxBodyBytes: 1024, RequestsPerMinute: 60, TimeoutMS: 5000},
+			Limits:              ExposureLimits{MaxBodyBytes: 1024, MaxResponseBytes: 4096, RequestsPerMinute: 60, TimeoutMS: 5000},
 			Target:              ExposureTarget{LogicalService: "backend.default", RoutingDomain: "platform.default"},
 		},
 		Contract: contract,

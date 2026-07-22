@@ -18,6 +18,14 @@ describe("parseHostArguments", () => {
     expect(config.accessProfileCatalog).toBe("/srv/vastplan/config/access-profiles.json");
   });
 
+  it("accepts an API Exposure Catalog as an explicit trusted input", () => {
+    const config = parseHostArguments([
+      "--portal-assets", "bin/portal", "--session-file", "sessions.json", "--allow-insecure-http",
+      "--api-exposure-catalog", "config/api-exposures.json",
+    ], "/srv/vastplan");
+    expect(config.apiExposureCatalog).toBe("/srv/vastplan/config/api-exposures.json");
+  });
+
   it("requires Broker trust, session protection and pluggable service routing", () => {
     const base = ["--portal-assets", "bin/portal", "--tls-cert", "portal.crt", "--tls-key", "portal.key", "--identity-provider", "broker"];
     expect(() => parseHostArguments(base)).toThrow(/assertion-trust/i);

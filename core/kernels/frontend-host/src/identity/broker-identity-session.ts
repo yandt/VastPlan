@@ -40,16 +40,19 @@ export function createBrokerSession(signed: SignedAuthenticationAssertion, autho
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new Error("Authorization Session 已过期");
   return Object.freeze({
     kind: "broker-session", exp: Math.floor(expiresAt / 1000), sessionId: assertion.assertionId,
-    subjectId: authorization.subjectId, tenantId: authorization.tenantId, roles: authorization.roles,
+    subjectId: authorization.subjectId, tenantId: authorization.tenantId, portalId: assertion.portalId, roles: authorization.roles,
     providerProfileId: assertion.providerProfileId, issuer: assertion.subject.issuer, externalSubject: assertion.subject.id,
     amr: assertion.amr, acr: assertion.acr, policy: authorization.policy, authenticationProof: signed,
   });
 }
 
 export function principalFromBrokerSession(value: Readonly<Record<string, unknown>>): Principal {
-  if (value.kind !== "broker-session" || !safeID(value.subjectId) || !safeID(value.tenantId) || !Array.isArray(value.roles)
-    || value.roles.some((item) => typeof item !== "string")) throw new Error("Broker session 无效");
-  return Object.freeze({ id: value.subjectId, tenantId: value.tenantId, roles: Object.freeze([...(value.roles as string[])]) });
+  if (value.kind !== "broker-session" || !safeID(value.subjectId) || !safeID(value.tenantId) || !safeID(value.portalId) || !Array.isArray(value.roles)
+    || value.roles.some((item) => typeof item !== "string") || !safeID(value.providerProfileId)) throw new Error("Broker session 无效");
+  return Object.freeze({
+    id: value.subjectId, tenantId: value.tenantId, portalId: value.portalId, roles: Object.freeze([...(value.roles as string[])]),
+    authenticationProfileId: value.providerProfileId,
+  });
 }
 
 export function validReturnTo(value: string): boolean { return value.startsWith("/") && !value.startsWith("//") && value.length <= 2048 && !/[\u0000-\u001f\u007f\\]/.test(value); }

@@ -12,7 +12,7 @@ describe("FileIdentityProvider", () => {
     await writeSessionFixture(path, "opaque-token", new Date(now.getTime() + 60_000));
     const provider = await FileIdentityProvider.open(path, () => now);
     const principal = await provider.authenticate(requestWithCookie("vastplan_session=opaque-token"));
-    expect(principal).toEqual({ id: "alice", tenantId: "tenant-a", roles: ["portal.compose"] });
+    expect(principal).toEqual({ id: "alice", tenantId: "tenant-a", roles: ["portal.compose"], authenticationProfileId: "auth.file" });
 
     await writeSessionFixture(path, "opaque-token", new Date(now.getTime() - 1));
     await expect(provider.authenticate(requestWithCookie("vastplan_session=opaque-token"))).rejects.toThrow(/无效或已过期/);

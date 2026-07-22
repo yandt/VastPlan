@@ -7,6 +7,7 @@ export interface PortalHostConfig {
   listenPort: number;
   portalAssets: string;
   accessProfileCatalog?: string;
+  apiExposureCatalog?: string;
   identity: PortalIdentityConfig;
   tls?: { certFile: string; keyFile: string };
   allowInsecureHTTP: boolean;
@@ -37,7 +38,7 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
   }
   const allowed = new Set([
     "--listen", "--portal-assets", "--tls-cert", "--tls-key",
-    "--access-profile-catalog",
+    "--access-profile-catalog", "--api-exposure-catalog",
     "--frontend-delivery-cache", "--frontend-delivery-origin", ...identityValueArguments, ...addressingValueArguments,
   ]);
   for (const name of values.keys()) if (!allowed.has(name)) throw new Error(`未知启动参数: ${name}`);
@@ -60,12 +61,14 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
   const cacheRoot = values.get("--frontend-delivery-cache");
   const originRoot = values.get("--frontend-delivery-origin");
   const accessProfileCatalog = values.get("--access-profile-catalog");
+  const apiExposureCatalog = values.get("--api-exposure-catalog");
   if (originRoot !== undefined && cacheRoot === undefined) throw new Error("配置 delivery origin 时必须同时配置本机 cache");
   return Object.freeze({
     listenHost,
     listenPort,
     portalAssets: absolutePath(portalAssets, cwd),
     ...(accessProfileCatalog === undefined ? {} : { accessProfileCatalog: absolutePath(accessProfileCatalog, cwd) }),
+    ...(apiExposureCatalog === undefined ? {} : { apiExposureCatalog: absolutePath(apiExposureCatalog, cwd) }),
     identity,
     tls: certFile === undefined ? undefined : Object.freeze({ certFile: absolutePath(certFile, cwd), keyFile: absolutePath(keyFile!, cwd) }),
     allowInsecureHTTP,

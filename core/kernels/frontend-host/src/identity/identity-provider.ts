@@ -4,7 +4,9 @@ import type { SignedAuthenticationAssertion } from "./signed-authentication-asse
 export interface Principal {
   id: string;
   tenantId: string;
+  portalId?: string;
   roles: readonly string[];
+  authenticationProfileId?: string;
   system?: boolean;
 }
 

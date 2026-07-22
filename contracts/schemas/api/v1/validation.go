@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 const (
@@ -73,6 +75,9 @@ func ValidateContractContribution(contract ContractContribution) error {
 			return fmt.Errorf("API Contract route %d responseSchema: %w", index, err)
 		}
 		seenErrors := map[string]struct{}{}
+		if err := validateRouteParameterNames(route.Path); err != nil {
+			return fmt.Errorf("API Contract route %s: %w", route.ID, err)
+		}
 		for _, mapping := range route.Errors {
 			if _, duplicate := seenErrors[mapping.Code]; duplicate {
 				return fmt.Errorf("API Contract route %s 错误映射重复: %s", route.ID, mapping.Code)
@@ -110,7 +115,17 @@ func ContractDigest(contract ContractContribution) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	digest := sha256.Sum256(raw)
+	var document any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		return "", err
+	}
+	var normalized bytes.Buffer
+	encoder := json.NewEncoder(&normalized)
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(document); err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(bytes.TrimSuffix(normalized.Bytes(), []byte{'\n'}))
 	return hex.EncodeToString(digest[:]), nil
 }
 
@@ -252,6 +267,29 @@ func validateInlineSchema(raw json.RawMessage) error {
 	}
 	if ref := externalReference(root); ref != "" {
 		return fmt.Errorf("内联 JSON Schema 不得引用外部资源: %s", ref)
+	}
+	compiler := jsonschema.NewCompiler()
+	const resource = "urn:vastplan:api:inline-schema"
+	if err := compiler.AddResource(resource, root); err != nil {
+		return fmt.Errorf("登记内联 JSON Schema: %w", err)
+	}
+	if _, err := compiler.Compile(resource); err != nil {
+		return fmt.Errorf("编译内联 JSON Schema: %w", err)
+	}
+	return nil
+}
+
+func validateRouteParameterNames(path string) error {
+	seen := map[string]struct{}{}
+	for _, segment := range strings.Split(path, "/") {
+		if !strings.HasPrefix(segment, "{") {
+			continue
+		}
+		name := strings.TrimSuffix(strings.TrimPrefix(segment, "{"), "}")
+		if _, duplicate := seen[name]; duplicate {
+			return fmt.Errorf("path 参数重复: %s", name)
+		}
+		seen[name] = struct{}{}
 	}
 	return nil
 }

@@ -18,6 +18,7 @@ import { ServerGenerationManager } from "../workers/server-generation-manager";
 import { FileAccessProfileCatalog } from "../access/file-access-profile-catalog";
 import { AddressingAuthenticationBroker } from "../identity/authentication-broker-port";
 import { AddressingSessionAuthorization } from "../identity/session-authorization-port";
+import { FileAPIExposureCatalog } from "../api-exposure/file-api-exposure-catalog";
 
 interface PortalServerResources {
 	readonly addressing?: NodeAddressingRuntime;
@@ -33,6 +34,8 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
   let generations: ServerGenerationManager | undefined;
   try {
     const invoker = addressing === undefined ? undefined : new AddressingCapabilityInvoker(addressing.client);
+    if (config.apiExposureCatalog !== undefined && invoker === undefined) throw new Error("API Exposure Gateway 需要 Addressing 配置");
+    const apiExposureCatalog = config.apiExposureCatalog === undefined ? undefined : await FileAPIExposureCatalog.open(config.apiExposureCatalog);
     const broker = invoker === undefined || config.identity.kind !== "broker" ? undefined : new AddressingAuthenticationBroker(invoker, config.identity.brokerLogicalService);
     const authorization = invoker === undefined || config.identity.kind !== "broker" ? undefined : new AddressingSessionAuthorization(invoker, config.identity.authorizationLogicalService);
     const identity = await openIdentityProvider(config.identity, { ...(access === undefined ? {} : { access }), ...(broker === undefined ? {} : { broker }), ...(authorization === undefined ? {} : { authorization }) });
@@ -49,6 +52,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
     const handler = createPortalHandler({
       assets, identity, secureCookies: config.tls !== undefined,
       ...(access === undefined ? {} : { access }),
+      ...(apiExposureCatalog === undefined || invoker === undefined ? {} : { apiExposure: { catalog: apiExposureCatalog, invoker } }),
       ...(composer === undefined ? {} : { composer }),
       ...(interaction === undefined ? {} : { interaction }),
       ...(platform === undefined ? {} : { platform }),

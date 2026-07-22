@@ -85,6 +85,7 @@ type AuthenticationPolicy struct {
 
 type ExposureLimits struct {
 	MaxBodyBytes      uint64 `json:"maxBodyBytes"`
+	MaxResponseBytes  uint64 `json:"maxResponseBytes"`
 	RequestsPerMinute uint64 `json:"requestsPerMinute"`
 	TimeoutMS         uint64 `json:"timeoutMs"`
 }
