@@ -619,6 +619,8 @@
         "tools": { "type": "array", "items": { "$ref": "#/$defs/tool" } },
         "agents": { "type": "array", "items": { "$ref": "#/$defs/agent" } },
         "apiRoutes": { "type": "array", "items": { "$ref": "#/$defs/apiRoute" } },
+        "apiContracts": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/api/v1/vastplan.api-exposure.schema.json#/$defs/apiContractContribution" } },
+        "dataPlaneServices": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/api/v1/vastplan.api-exposure.schema.json#/$defs/dataPlaneServiceContribution" } },
         "permissionCheckers": { "type": "array", "items": { "$ref": "#/$defs/permissionChecker" } },
         "eventSinks": { "type": "array", "items": { "$ref": "#/$defs/eventSink" } },
         "hooks": { "type": "array", "items": { "$ref": "#/$defs/hook" } },

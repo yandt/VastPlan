@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 
+	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
@@ -294,6 +295,11 @@ var backendContributionPoints = map[string]string{
 	"authenticationProviders": "authentication.provider",
 }
 
+var declarativeBackendContributionGroups = map[string]struct{}{
+	"apiContracts":      {},
+	"dataPlaneServices": {},
+}
+
 // BackendRuntimeContributions 把已经通过 Schema 的 backend 清单贡献规范化为协议总线
 // 可比较的声明。id/priority 属于注册元数据，其余字段构成运行态 descriptor。
 func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, error) {
@@ -316,6 +322,9 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 	for group, entries := range groups {
 		point, ok := backendContributionPoints[group]
 		if !ok {
+			if _, declarative := declarativeBackendContributionGroups[group]; declarative {
+				continue
+			}
 			return nil, fmt.Errorf("未知 backend contribution 组 %q", group)
 		}
 		for _, entry := range entries {
@@ -461,6 +470,10 @@ func schemas() error {
 			compileErr = err
 			return
 		}
+		if err := apiv1.AddResources(compiler); err != nil {
+			compileErr = err
+			return
+		}
 		for url, raw := range map[string][]byte{
 			ManifestSchemaURL:        manifestSchemaJSON,
 			DescriptorSchemaURL:      descriptorSchemaJSON,
@@ -544,6 +557,9 @@ func ParseManifest(raw []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	if err := validateAuthenticationProviderDependencies(manifest); err != nil {
+		return Manifest{}, err
+	}
+	if err := validateAPIContributions(manifest); err != nil {
 		return Manifest{}, err
 	}
 	return manifest, nil
