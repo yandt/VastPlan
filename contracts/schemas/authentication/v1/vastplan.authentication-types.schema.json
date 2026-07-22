@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json",
+  "title": "VastPlan Authentication Types v1",
+  "$defs": {
+    "stableId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,255}$" },
+    "methodId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+    "providerId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "nonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{32,256}$" },
+    "locale": { "type": "string", "pattern": "^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$", "maxLength": 64 },
+    "localizedText": {
+      "type": "object", "minProperties": 1, "maxProperties": 16,
+      "propertyNames": { "$ref": "#/$defs/locale" },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 512 }
+    },
+    "subjectIdentity": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/stableId" },
+        "issuer": { "type": "string", "minLength": 1, "maxLength": 512 }
+      },
+      "required": ["id", "issuer"]
+    },
+    "fieldChoice": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "value": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "label": { "$ref": "#/$defs/localizedText" }
+      },
+      "required": ["value", "label"]
+    },
+    "authenticationField": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9._-]{0,63}$" },
+        "kind": { "enum": ["identifier", "password", "one-time-code", "select"] },
+        "label": { "$ref": "#/$defs/localizedText" },
+        "help": { "$ref": "#/$defs/localizedText" },
+        "autocomplete": { "enum": ["username", "email", "tel", "current-password", "one-time-code", "off"] },
+        "required": { "type": "boolean" },
+        "minLength": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "maxLength": { "type": "integer", "minimum": 1, "maximum": 4096 },
+        "choices": { "type": "array", "items": { "$ref": "#/$defs/fieldChoice" }, "uniqueItems": true, "maxItems": 64 }
+      },
+      "required": ["id", "kind", "label", "help", "autocomplete", "required", "minLength", "maxLength", "choices"]
+    },
+    "authenticationStep": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "stepId": { "$ref": "#/$defs/nonce" },
+        "kind": { "enum": ["identifier", "password", "one-time-code", "redirect", "context-selection"] },
+        "title": { "$ref": "#/$defs/localizedText" },
+        "description": { "$ref": "#/$defs/localizedText" },
+        "submitLabel": { "$ref": "#/$defs/localizedText" },
+        "fields": { "type": "array", "items": { "$ref": "#/$defs/authenticationField" }, "uniqueItems": true, "maxItems": 8 },
+        "redirectUri": { "type": "string", "pattern": "^https?://", "maxLength": 2048 },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "resendAfter": { "type": "string", "format": "date-time" }
+      },
+      "required": ["stepId", "kind", "title", "description", "submitLabel", "fields", "expiresAt"]
+    },
+    "authenticationEvidence": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "evidenceId": { "$ref": "#/$defs/stableId" },
+        "transactionId": { "$ref": "#/$defs/nonce" },
+        "methodId": { "$ref": "#/$defs/methodId" },
+        "providerId": { "$ref": "#/$defs/providerId" },
+        "subject": { "$ref": "#/$defs/subjectIdentity" },
+        "amr": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,63}$" }, "uniqueItems": true, "minItems": 1, "maxItems": 16 },
+        "acr": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,127}$" },
+        "authenticatedAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "nonce": { "$ref": "#/$defs/nonce" }
+      },
+      "required": ["evidenceId", "transactionId", "methodId", "providerId", "subject", "amr", "acr", "authenticatedAt", "expiresAt", "nonce"]
+    },
+    "methodResult": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "state": { "enum": ["challenge", "authenticated", "rejected", "locked", "expired", "cancelled"] },
+        "step": { "$ref": "#/$defs/authenticationStep" },
+        "evidence": { "$ref": "#/$defs/authenticationEvidence" },
+        "reasonCode": { "enum": ["authentication.invalid_credentials", "authentication.challenge_rejected", "authentication.challenge_expired", "authentication.rate_limited", "authentication.method_unavailable", "authentication.transaction_invalid"] }
+      },
+      "required": ["state"]
+    }
+  }
+}

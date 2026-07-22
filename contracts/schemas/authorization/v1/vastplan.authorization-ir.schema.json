@@ -32,20 +32,11 @@
       },
       "required": ["schemaVersion", "snapshotId", "revision", "audience", "issuedAt", "notBefore", "expiresAt", "policy"]
     },
-    "signature": {
-      "type": "object", "additionalProperties": false,
-      "properties": {
-        "algorithm": { "const": "Ed25519" },
-        "keyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,255}$" },
-        "value": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$" }
-      },
-      "required": ["algorithm", "keyId", "value"]
-    },
     "signedPolicySnapshot": {
       "type": "object", "additionalProperties": false,
       "properties": {
         "payload": { "$ref": "#/$defs/policySnapshot" },
-        "signature": { "$ref": "#/$defs/signature" }
+        "signature": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/ed25519Signature" }
       },
       "required": ["payload", "signature"]
     }

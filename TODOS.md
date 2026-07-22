@@ -21,6 +21,15 @@
 - **Depends on / blocked by**：插件权限 Manifest Schema、可信权限 Catalog、企业身份主体接口、内核授权执行点和本次 Portal Governance 分域权限。
 - **Progress（2026-07-22）**：B1 已完成 Manifest 权限声明与确定性 Catalog；B2 已完成 Authorization IR、Policy Domain、Provider Profile、签名快照 wire shape 及 store/engine/directory/exchange Provider Protocol。Policy 状态机与签发、每内核 Enforcer、在线 Role/Subject Binding 和管理 Workbench 仍待 B3—B6。权威设计见《[在线角色与权限治理](docs/dev/architecture/在线角色与权限治理.md)》。
 
+## 会话前登录与认证方法插件
+
+- **What**：实现会话前 Access Generation、统一 AuthenticationFlow、Authentication Broker，以及首批密码和临时验证码 Method Provider。
+- **Why**：当前生产 OIDC 会直接跳转外部 Provider，普通 Portal Generation 又依赖已认证 Principal，无法安全承载本地多方式登录页面。
+- **Pros**：登录 UI 继续遵守 Runtime/Renderer/Shell/Workbench 层级；密码、OTP、OIDC、Passkey 可通过稳定协议扩展；Node 仍是唯一浏览器 Session 签发者。
+- **Cons**：需要集群 transaction、一次性 Assertion、账号枚举防护、密码 pepper、验证码 Delivery、pre-auth CSRF 和独立公网安全验收。
+- **Context**：Method Provider 不提供前端组件、不签发 Cookie、不返回角色；密码与验证码作为替代登录都只是单因素。权威设计见《[登录与认证协议](docs/dev/architecture/登录与认证协议.md)》。
+- **Progress（2026-07-23）**：L0 已完成 Method/Assertion/Access Profile 公共 DTO、JSON Schema、解析与测试；L1—L6 的 Access Generation、UI、Broker、Password/OTP 和 OIDC 协议化仍待实施。
+
 ## 生产 Portal 实时 Activation 通知
 
 - **What**：在出现明确实时需求后，为已打开的 Portal 增加生产 Activation revision 通知，使新布局或插件组合无需用户刷新即可事务替换 Generation。

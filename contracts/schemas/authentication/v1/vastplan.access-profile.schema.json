@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.access-profile.schema.json",
+  "title": "VastPlan Pre-session Access Profile v1",
+  "$defs": {
+    "accessMethodPolicy": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "allowedMethods": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/methodId" }, "uniqueItems": true, "minItems": 1, "maxItems": 32 },
+        "defaultMethod": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/methodId" },
+        "reuseIdentifier": { "type": "boolean" }
+      },
+      "required": ["allowedMethods", "defaultMethod", "reuseIdentifier"]
+    },
+    "accessBranding": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "productName": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/localizedText" },
+        "logoAssetId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+        "logoSha256": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/digest" },
+        "supportPath": { "type": "string", "pattern": "^/", "not": { "pattern": "^//" }, "maxLength": 512 },
+        "privacyPath": { "type": "string", "pattern": "^/", "not": { "pattern": "^//" }, "maxLength": 512 }
+      },
+      "required": ["productName"]
+    },
+    "accessProfile": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
+        "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
+        "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
+        "tenantId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
+        "portalId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
+        "route": { "type": "string", "pattern": "^/", "not": { "pattern": "^//" }, "maxLength": 512 },
+        "domains": { "type": "array", "items": { "type": "string", "pattern": "^(?:localhost|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+)$", "maxLength": 253 }, "uniqueItems": true, "minItems": 1, "maxItems": 64 },
+        "platformProfile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionRef" },
+        "accessTemplate": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$" },
+        "authentication": { "$ref": "#/$defs/accessMethodPolicy" },
+        "branding": { "$ref": "#/$defs/accessBranding" }
+      },
+      "required": ["version", "revision", "id", "tenantId", "portalId", "route", "domains", "platformProfile", "accessTemplate", "authentication", "branding"]
+    },
+    "accessProfileCatalog": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
+        "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
+        "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
+        "profiles": { "type": "array", "items": { "$ref": "#/$defs/accessProfile" }, "minItems": 1, "maxItems": 4096 }
+      },
+      "required": ["version", "revision", "id", "profiles"]
+    }
+  },
+  "$ref": "#/$defs/accessProfile"
+}

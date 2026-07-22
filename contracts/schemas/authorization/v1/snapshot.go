@@ -1,6 +1,10 @@
 package authorizationv1
 
-import "time"
+import (
+	"time"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
+)
 
 type PolicySnapshot struct {
 	SchemaVersion string          `json:"schemaVersion"`
@@ -13,11 +17,7 @@ type PolicySnapshot struct {
 	Policy        AuthorizationIR `json:"policy"`
 }
 
-type Signature struct {
-	Algorithm string `json:"algorithm"`
-	KeyID     string `json:"keyId"`
-	Value     string `json:"value"`
-}
+type Signature = commonv1.Ed25519Signature
 
 type SignedPolicySnapshot struct {
 	Payload   PolicySnapshot `json:"payload"`

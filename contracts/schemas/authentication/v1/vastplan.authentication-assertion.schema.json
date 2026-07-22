@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-assertion.schema.json",
+  "title": "VastPlan Authentication Assertion v1",
+  "$defs": {
+    "assertion": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": "v1" },
+        "assertionId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
+        "transactionId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/nonce" },
+        "subject": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/subjectIdentity" },
+        "tenantId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
+        "portalId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
+        "audience": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "amr": { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,63}$" }, "uniqueItems": true, "minItems": 1, "maxItems": 16 },
+        "acr": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,127}$" },
+        "issuedAt": { "type": "string", "format": "date-time" },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "nonce": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/nonce" }
+      },
+      "required": ["schemaVersion", "assertionId", "transactionId", "subject", "tenantId", "portalId", "audience", "amr", "acr", "issuedAt", "expiresAt", "nonce"]
+    },
+    "signedAssertion": {
+      "type": "object", "additionalProperties": false,
+      "properties": { "payload": { "$ref": "#/$defs/assertion" }, "signature": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/ed25519Signature" } },
+      "required": ["payload", "signature"]
+    }
+  },
+  "$ref": "#/$defs/signedAssertion"
+}

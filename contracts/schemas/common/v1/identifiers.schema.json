@@ -41,6 +41,16 @@
         "name": { "type": "string", "minLength": 1, "maxLength": 160 }
       },
       "required": ["handle", "scope", "owner", "purpose", "version"]
+    },
+    "ed25519Signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "const": "Ed25519" },
+        "keyId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,255}$" },
+        "value": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$" }
+      },
+      "required": ["algorithm", "keyId", "value"]
     }
   }
 }
