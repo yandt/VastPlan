@@ -20,15 +20,6 @@
 - **Context**：B1—B6 已完成；`platform.admin/is_admin` 通用旁路及 legacy operation-role 表已经移除。B7 不新增第二套角色系统，只为不同终端投影合适的可信载体。
 - **Depends on / blocked by**：Runner Profile 的构建、签名与实际装配，Mobile Profile/Gateway/Native Adapter，以及设备注册和吊销模型。权威设计见《[在线角色与权限治理](docs/dev/architecture/在线角色与权限治理.md)》与 [ADR-0106](docs/dev/decisions/ADR-0106-多端统一身份授权与Runner执行租约.md)。
 
-## Portal 用户偏好服务端真源
-
-- **What**：把当前浏览器本地的 Shell Library、Renderer、主题和 Workbench 展示偏好提升为租户/Portal/用户隔离的服务端 `PortalPreference`，localStorage 只保留启动缓存。
-- **Why**：当前用户已经可以即时切换 Shell Library，且只下载所选模块，但偏好只保存在当前浏览器配置文件，无法跨设备同步，也不能在管理员撤销允许项后形成集中失效事实。
-- **Pros**：跨设备一致；管理员调整允许范围后可确定回退；偏好 revision 可参与候选切换和审计，而不需要修改 Platform Profile 或创建 Activation。
-- **Cons**：需要认证后的窄 BFF、用户级 CAS、隐私边界、离线缓存和失败回退；不能让偏好接口接受模块 URL、版本、摘要、CSS 或任意组件配置。
-- **Context**：Shell Catalog、deferred Library、允许范围校验和候选 Generation 已实施。服务端只保存稳定选择 ID；浏览器仍以活动 RuntimeSpec 的允许目录为权威，候选成功后才提交偏好。
-- **Depends on / blocked by**：稳定企业主体、Portal Session、偏好 Store 与多 Node 一致性。
-
 ## 生产 Portal Activation 实时模式容量验收
 
 - **What**：在生产启用 `updates.mode=notify|automatic` 前，对已实现的认证 SSE 更新链路完成容量、代理兼容、断线恢复和集中更新控制验收。

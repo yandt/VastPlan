@@ -1,5 +1,14 @@
 export const frontendEngineContractVersion = "1.0.0" as const;
 
+export type {
+  CollectionPreference,
+  PortalPreference,
+  PortalPreferenceScope,
+  PortalPreferenceValues,
+  PreferenceCatalogScope,
+  RendererPreference,
+} from "./portal-preference.js";
+
 export type FrontendEngineCapability =
   | "csr"
   | "ssr"

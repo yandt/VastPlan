@@ -13,6 +13,7 @@ import type {
   UIShellAdapter,
   UIShellLibrary,
   UIWorkbenchAdapter,
+  WorkbenchPreferencePort,
 } from "@vastplan/ui-primitives";
 import type { RuntimeEngineSelection } from "./runtime-engine";
 
@@ -28,7 +29,7 @@ export interface RenderAdapterSelection extends PluginRef {
     defaultRenderer: string;
     allowedRenderers: readonly string[];
     userSelectable: boolean;
-    rendererOptions?: Readonly<Record<string, { themeTemplate?: string; iconTheme?: string }>>;
+    rendererOptions?: Readonly<Record<string, { themeTemplate?: string; allowedThemeTemplates?: readonly string[]; themeUserSelectable?: boolean; iconTheme?: string; allowedIconThemes?: readonly string[]; iconUserSelectable?: boolean }>>;
   };
 }
 
@@ -123,6 +124,8 @@ export interface PreparedPortal {
   portal: Readonly<PortalSpec>;
   runtimeEngine: FrontendRuntimeEngine;
   renderAdapter: UIRenderer;
+  themeTemplateID: string;
+  iconThemeID: string;
   renderAdapterCatalog: UIRenderAdapter;
   shell: UIShellAdapter;
   shellLibrary: UIShellLibrary;
@@ -141,4 +144,7 @@ export interface PortalPrepareOptions {
   reason?: "bootstrap" | "replace";
   rendererID?: string;
   shellTemplateID?: string;
+  themeTemplateID?: string;
+  iconThemeID?: string;
+  preferences?: WorkbenchPreferencePort;
 }

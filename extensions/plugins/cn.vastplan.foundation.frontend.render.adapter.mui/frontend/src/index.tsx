@@ -288,7 +288,7 @@ function FormRenderer({ schema, value, onChange, presentation, presentationSecti
     });
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
   const templates = useMemo(() => ({ ObjectFieldTemplate: (props: MuiObjectFieldTemplateProps) => <MuiObjectFieldTemplate {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
-  return <Box sx={presentation?.layout === "horizontal" ? { "& .form-group": { display: "grid", gridTemplateColumns: "104px minmax(0, 1fr)", alignItems: "center", columnGap: 1.5 }, "& .form-group > label": { margin: 0 }, "& .form-group > .field-description": { gridColumn: "2" } } : undefined}><RJSFForm
+  return <Box sx={presentation?.layout === "horizontal" ? { "& .form-group:not(.rjsf-field-object)": { display: "grid", gridTemplateColumns: "104px minmax(0, 1fr)", alignItems: "center", columnGap: 1.5 }, "& .form-group:not(.rjsf-field-object) > label": { margin: 0 }, "& .form-group:not(.rjsf-field-object) > .field-description": { gridColumn: "2" } } : undefined}><RJSFForm
     schema={localizedSchema}
     uiSchema={localizedUISchema}
     formData={value}
@@ -426,7 +426,7 @@ export const muiPortalUIComponents: MuiComponents = {
   SplitView,
   RecordNavigationList,
   RecordTree,
-  Pagination: ({ page, total, pageSize, disabled, align = "start", onChange }) => <Box sx={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><MuiPagination page={page} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} /></Box>,
+  Pagination: ({ page, total, pageSize, pageSizeOptions, disabled, align = "start", onChange }) => <Box sx={{ display: "flex", gap: 1, alignItems: "center", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><MuiPagination page={page} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} />{(pageSizeOptions?.length ?? 0) <= 1 ? null : <TextField select size="small" value={String(pageSize)} disabled={disabled} slotProps={{ htmlInput: { "aria-label": "Rows per page" } }} onChange={(event) => onChange(1, Number(event.target.value))}>{pageSizeOptions!.map((size) => <MuiMenuItem key={size} value={String(size)}>{size}</MuiMenuItem>)}</TextField>}</Box>,
   Descriptions: ({ title, items, columns = 2 }) => <Box><Typography variant="h6">{title}</Typography><Grid columns={columns}>{items.map((item) => <Box key={item.id}><Typography variant="caption" color="text.secondary">{item.label}</Typography><Typography>{item.value}</Typography></Box>)}</Grid></Box>,
   Status: ({ tone = "neutral", children }) => <Chip color={tones[tone]} label={children} size="small" />,
   Icon: VastPlanIcon,

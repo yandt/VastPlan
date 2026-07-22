@@ -70,8 +70,12 @@ type RenderAdapterConfig struct {
 }
 
 type RendererOptions struct {
-	ThemeTemplate string `json:"themeTemplate,omitempty"`
-	IconTheme     string `json:"iconTheme,omitempty"`
+	ThemeTemplate         string   `json:"themeTemplate,omitempty"`
+	AllowedThemeTemplates []string `json:"allowedThemeTemplates,omitempty"`
+	ThemeUserSelectable   bool     `json:"themeUserSelectable,omitempty"`
+	IconTheme             string   `json:"iconTheme,omitempty"`
+	AllowedIconThemes     []string `json:"allowedIconThemes,omitempty"`
+	IconUserSelectable    bool     `json:"iconUserSelectable,omitempty"`
 }
 
 // Shell owns the platform-owned semantic page/slot topology and the governed
@@ -306,6 +310,34 @@ func ValidateRenderAdapterConfig(config RenderAdapterConfig) error {
 		if _, ok := allowed[renderer]; !ok || (options.ThemeTemplate != "" && !templateName.MatchString(options.ThemeTemplate)) ||
 			(options.IconTheme != "" && !templateName.MatchString(options.IconTheme)) {
 			return fmt.Errorf("渲染器选项无效: %s", renderer)
+		}
+		if err := validateSelectableRendererOptions(renderer, options.ThemeTemplate, options.AllowedThemeTemplates, options.ThemeUserSelectable, "主题模板"); err != nil {
+			return err
+		}
+		if err := validateSelectableRendererOptions(renderer, options.IconTheme, options.AllowedIconThemes, options.IconUserSelectable, "图标主题"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSelectableRendererOptions(renderer, selected string, allowed []string, selectable bool, label string) error {
+	seen := map[string]struct{}{}
+	for _, value := range allowed {
+		if !templateName.MatchString(value) {
+			return fmt.Errorf("渲染器 %s 的%s目录无效", renderer, label)
+		}
+		if _, duplicate := seen[value]; duplicate {
+			return fmt.Errorf("渲染器 %s 的%s目录重复", renderer, label)
+		}
+		seen[value] = struct{}{}
+	}
+	if selectable && len(allowed) == 0 {
+		return fmt.Errorf("渲染器 %s 允许用户切换%s时必须提供允许目录", renderer, label)
+	}
+	if selected != "" && len(allowed) > 0 {
+		if _, ok := seen[selected]; !ok {
+			return fmt.Errorf("渲染器 %s 的默认%s必须属于允许目录", renderer, label)
 		}
 	}
 	return nil

@@ -8,6 +8,7 @@ import { createPortalHandler } from "../http/portal-handler";
 import { openIdentityProvider } from "../identity/identity-provider-factory";
 import { openNodeAddressing, type NodeAddressingRuntime } from "@vastplan/addressing-node";
 import { AddressingPortalComposerClient } from "../capabilities/portal-composer-client";
+import { AddressingPortalPreferenceClient } from "../capabilities/portal-preference-client";
 import { AddressingCapabilityInvoker } from "../capabilities/capability-invoker";
 import { AddressingInteractionClient } from "../capabilities/interaction-client";
 import { AddressingPlatformManagementClient } from "../capabilities/platform-management-client";
@@ -40,6 +41,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
     const authorization = invoker === undefined || config.identity.kind !== "broker" ? undefined : new AddressingSessionAuthorization(invoker, config.identity.authorizationLogicalService);
     const identity = await openIdentityProvider(config.identity, { ...(access === undefined ? {} : { access }), ...(broker === undefined ? {} : { broker }), ...(authorization === undefined ? {} : { authorization }) });
     const composer = invoker === undefined ? undefined : new AddressingPortalComposerClient(invoker, config.addressing?.composerLogicalService);
+    const preferences = invoker === undefined ? undefined : new AddressingPortalPreferenceClient(invoker, config.addressing?.composerLogicalService);
     const interaction = invoker === undefined ? undefined : new AddressingInteractionClient(invoker, config.addressing?.interactionLogicalService);
     const platform = invoker === undefined || composer === undefined ? undefined : {
       resolver: new PlatformManagementResolver(composer), client: new AddressingPlatformManagementClient(invoker),
@@ -54,6 +56,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
       ...(access === undefined ? {} : { access }),
       ...(apiExposureCatalog === undefined || invoker === undefined ? {} : { apiExposure: { catalog: apiExposureCatalog, invoker } }),
       ...(composer === undefined ? {} : { composer }),
+      ...(preferences === undefined ? {} : { preferences }),
       ...(interaction === undefined ? {} : { interaction }),
       ...(platform === undefined ? {} : { platform }),
       ...(delivery === undefined ? {} : { delivery }),

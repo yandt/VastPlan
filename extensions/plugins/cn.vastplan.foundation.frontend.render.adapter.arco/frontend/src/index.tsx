@@ -378,7 +378,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
   SplitView,
   RecordNavigationList,
   RecordTree,
-  Pagination: ({ page, pageSize, total, disabled, align = "start", onChange }) => <div style={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><ArcoPagination current={page} pageSize={pageSize} total={total} disabled={disabled} showTotal sizeCanChange onChange={onChange} /></div>,
+  Pagination: ({ page, pageSize, pageSizeOptions, total, disabled, align = "start", onChange }) => <div style={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><ArcoPagination current={page} pageSize={pageSize} sizeOptions={pageSizeOptions === undefined ? undefined : [...pageSizeOptions]} total={total} disabled={disabled} showTotal sizeCanChange={(pageSizeOptions?.length ?? 0) > 1} onChange={onChange} /></div>,
   Descriptions: ({ title, items, columns }) => <ArcoDescriptions title={title} data={items.map((item) => ({ key: item.id, label: item.label, value: item.value }))} column={columnsForDescriptions(columns)} border />,
   Status: ({ tone = "neutral", children }) => <Tag color={statusColors[tone]}>{children}</Tag>,
   Icon: VastPlanIcon,

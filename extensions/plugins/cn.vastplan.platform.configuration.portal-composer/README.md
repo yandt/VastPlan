@@ -10,6 +10,8 @@ Profile、Application 和 Binding 均执行 `Draft → PendingApproval → Appro
 
 Frontend Test Release 也在本插件中复用同一组 revision/Activation 分配器。`application-plugin` 只替换当前 Application 已有槽位；`platform-profile-plugin` 创建 tenant 专用测试 Profile 与 Binding，不原地修改共享基线。制品摘要、repository revision、发布者与 frontend target 由 Backend `portaltrust` 回调验证，Composer 进程不持有仓库凭证。
 
+同一 leader-owned 进程还发布独立的 `platform.portal-preference` 能力，但它不属于 Portal 发布治理状态。偏好使用单独的 `platform.portal-composer.preferenceStateFile`，按认证 tenant、subject、Portal 和三个 UI Catalog contract major 隔离，只保存 Renderer、主题、图标、Shell Library 与 Workbench 集合的稳定 ID。只有 Node Portal Kernel 投影的 `portal.bff` 用户场景可读写；浏览器不能提交身份或 scope。写入采用 revision CAS，状态文件通过私有目录中的 `0600` 临时文件、`fsync` 和原子替换持久化。
+
 ```bash
 pnpm --filter @vastplan/portal-composer typecheck
 ```

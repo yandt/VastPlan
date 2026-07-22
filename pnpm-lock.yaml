@@ -568,6 +568,9 @@ importers:
 
   extensions/sdk/ts/ui-primitives:
     dependencies:
+      '@vastplan/frontend-engine-contract':
+        specifier: workspace:*
+        version: link:../frontend-engine-contract
       '@vastplan/ui-contract':
         specifier: workspace:*
         version: link:../ui-contract

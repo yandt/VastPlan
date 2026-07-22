@@ -17,6 +17,7 @@ func main() {
 	}
 	p := sdk.New(portalcomposer.PluginID, portalcomposer.PluginVersion, map[string]string{"backend": "^0.1"})
 	p.Contribute(portalcomposer.Contribution(service))
+	p.Contribute(portalcomposer.PreferenceContribution(service))
 	if err := p.Serve(); err != nil {
 		log.Fatalf("Portal Composer 插件退出: %v", err)
 	}

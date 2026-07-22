@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { PortalAssets } from "../assets/portal-assets";
 import type { IdentityProvider } from "../identity/identity-provider";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
+import type { PortalPreferencePort } from "../capabilities/portal-preference-client";
 import type { InteractionPort } from "../capabilities/interaction-client";
 import type { PlatformCapabilityPort } from "../capabilities/platform-management-client";
 import type { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
@@ -23,6 +24,7 @@ export interface PortalHandlerOptions {
   apiExposure?: { catalog: APIExposureCatalogPort; invoker: TrustedCapabilityInvoker };
   secureCookies?: boolean;
   composer?: PortalComposerPort;
+  preferences?: PortalPreferencePort;
   interaction?: InteractionPort;
   platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort };
   delivery?: PortalDeliveryStore;
@@ -34,6 +36,7 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     identity: options.identity,
     secureCookies: options.secureCookies ?? true,
     ...(options.composer === undefined ? {} : { composer: options.composer }),
+    ...(options.preferences === undefined ? {} : { preferences: options.preferences }),
     ...(options.interaction === undefined ? {} : { interaction: options.interaction }),
     ...(options.platform === undefined ? {} : { platform: options.platform }),
     ...(options.delivery === undefined ? {} : { delivery: options.delivery }),

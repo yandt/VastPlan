@@ -204,7 +204,7 @@ func (c hostCatalog) call(ctx context.Context, tenantID string, spec portalapi.P
 
 func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext) error {
 	s.mu.Lock()
-	configured := s.stateFile != "" && s.catalogConfigured
+	configured := s.stateFile != "" && s.catalogConfigured && s.preferenceStore != nil
 	s.mu.Unlock()
 	if configured {
 		return nil
@@ -225,6 +225,14 @@ func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *
 	if err := json.Unmarshal(catalogRaw, &encodedCatalog); err != nil || strings.TrimSpace(encodedCatalog) == "" {
 		return fmt.Errorf("%s 必须是非空 JSON 字符串", PlatformCatalogConfigKey)
 	}
+	preferenceRaw, err := readConfig(ctx, host, callCtx, PreferenceStateFileConfigKey)
+	if err != nil {
+		return err
+	}
+	var preferenceStateFile string
+	if err := json.Unmarshal(preferenceRaw, &preferenceStateFile); err != nil || strings.TrimSpace(preferenceStateFile) == "" {
+		return fmt.Errorf("%s 必须是非空 JSON 字符串", PreferenceStateFileConfigKey)
+	}
 	catalog, err := frontendcompositionv1.ParsePortalPlatformCatalog([]byte(encodedCatalog))
 	if err != nil {
 		return err
@@ -235,7 +243,10 @@ func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *
 	if err != nil {
 		return err
 	}
-	return s.BindPlatformCatalog(catalog)
+	if err := s.BindPlatformCatalog(catalog); err != nil {
+		return err
+	}
+	return s.configurePreferenceStore(preferenceStateFile)
 }
 
 func readConfig(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, key string) ([]byte, error) {

@@ -1,12 +1,12 @@
 {
   "id": "cn.vastplan.foundation.security.portal-access-policy",
   "name": "VastPlan 门户访问策略",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "以经验证角色控制 Portal Composer 和其受限宿主回调",
+  "description": "以经验证角色控制 Portal Composer，并限制用户偏好只能来自可信 Portal BFF",
   "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": {

@@ -1,5 +1,7 @@
-import { createContext, createElement, useContext } from "react";
+import { createElement } from "react";
 import type { ComponentType, KeyboardEvent, ReactNode } from "react";
+import type { CollectionPreference } from "@vastplan/frontend-engine-contract";
+export type { CollectionPreference } from "@vastplan/frontend-engine-contract";
 import type { FormPresentation, FormSchema, FormValidationResult, JSONValue, UICapability } from "@vastplan/ui-contract";
 import type { LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy } from "@vastplan/ui-contract";
 import type { CollectionPageDefinition, FormPageDefinition, RecordPageDefinition } from "@vastplan/workbench-sdk";
@@ -244,6 +246,7 @@ export interface FilterBarProps {
 export interface PaginationProps {
   page: number;
   pageSize: number;
+  pageSizeOptions?: readonly number[];
   total: number;
   disabled?: boolean;
   align?: "start" | "center" | "end";
@@ -488,12 +491,18 @@ export interface FrontendPluginContext {
 export interface UIWorkbenchAdapter {
   id: "ui.workflow.workbench";
   uiContract: string;
-  CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } } }>;
+  CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string; preferences?: WorkbenchPreferencePort; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } } }>;
   CollectionPageActions: ComponentType<{ page: CollectionPageDefinition }>;
   FormPage: ComponentType<{ page: FormPageDefinition }>;
   RecordPage: ComponentType<{ page: RecordPageDefinition }>;
   RecordPageActions: ComponentType<{ page: RecordPageDefinition }>;
   localization?: PluginLocalization;
+}
+
+/** Narrow user-preference boundary. Workbench never receives identity, transport, or the full Portal preference document. */
+export interface WorkbenchPreferencePort {
+  readCollection(collectionID: string): CollectionPreference | undefined;
+  writeCollection(collectionID: string, preference: CollectionPreference): Promise<CollectionPreference>;
 }
 
 export interface FrontendPluginLifecycleContext {
@@ -572,11 +581,19 @@ export interface UIShellProps {
   renderers?: readonly UIRendererChoice[];
   renderer?: { id: string; options: Readonly<Record<string, unknown>> };
   onRendererChange?(rendererID: string): void;
+  themeTemplates?: readonly ThemeTemplate[];
+  themeTemplateID?: string;
+  onThemeTemplateChange?(themeTemplateID: string): void;
+  iconThemes?: readonly IconThemeTemplate[];
+  iconThemeID?: string;
+  onIconThemeChange?(iconThemeID: string): void;
   branding: ShellBranding;
   pathname: string;
   recoveryNotice?: ReactNode;
   onNavigate(pageID: string): void;
 }
+
+export { PortalPreferenceControl } from "./portal-preference-control.js";
 
 /** Owns stable shell semantics and a governed catalog of visual templates. */
 export interface UIShellAdapter {
@@ -597,17 +614,4 @@ export interface UIShellLibrary {
   localization?: PluginLocalization;
 }
 
-const portalUIContext = createContext<PortalUI | null>(null);
-
-export function PortalUIProvider({ ui, children }: { ui: PortalUI; children?: ReactNode }) {
-  return createElement(portalUIContext.Provider, { value: ui }, children);
-}
-
-/** Obtains the Portal-selected design system without exposing its underlying framework. */
-export function usePortalUI(): PortalUI {
-  const ui = useContext(portalUIContext);
-  if (ui === null) {
-    throw new Error("Portal UI 未初始化：功能插件只能在设计系统 Provider 内渲染");
-  }
-  return ui;
-}
+export { PortalUIProvider, usePortalUI } from "./portal-ui-context.js";

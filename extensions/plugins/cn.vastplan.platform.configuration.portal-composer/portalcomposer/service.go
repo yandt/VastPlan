@@ -20,7 +20,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.configuration.portal-composer"
-	PluginVersion = "1.4.0"
+	PluginVersion = "1.5.0"
 	Capability    = portalapi.ComposerCapability
 	// StateFileConfigKey is read only through the authenticated host callback;
 	// plugin process environment must not decide where governed state is stored.
@@ -68,10 +68,42 @@ type Service struct {
 	mu                sync.Mutex
 	state             state
 	stateFile         string
+	preferenceStore   *preferenceStore
 	artifactCatalog   Catalog
 	platformCatalog   frontendcompositionv1.PortalPlatformCatalog
 	catalogConfigured bool
 	now               func() time.Time
+}
+
+func (s *Service) configurePreferenceStore(stateFile string) error {
+	stateFile = strings.TrimSpace(stateFile)
+	if stateFile == "" {
+		return errors.New("PortalPreference stateFile 不能为空")
+	}
+	s.mu.Lock()
+	if s.preferenceStore != nil {
+		current := s.preferenceStore.path
+		s.mu.Unlock()
+		if current != stateFile {
+			return errors.New("PortalPreference stateFile 不允许在运行中切换")
+		}
+		return nil
+	}
+	s.mu.Unlock()
+	store, err := openPreferenceStore(stateFile)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.preferenceStore != nil {
+		if s.preferenceStore.path != stateFile {
+			return errors.New("PortalPreference stateFile 不允许在运行中切换")
+		}
+		return nil
+	}
+	s.preferenceStore = store
+	return nil
 }
 
 func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatformCatalog) error {

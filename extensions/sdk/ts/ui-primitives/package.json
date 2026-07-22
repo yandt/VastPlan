@@ -7,6 +7,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@vastplan/frontend-engine-contract": "workspace:*",
     "@vastplan/ui-contract": "workspace:*",
     "@vastplan/workbench-sdk": "workspace:*"
   },

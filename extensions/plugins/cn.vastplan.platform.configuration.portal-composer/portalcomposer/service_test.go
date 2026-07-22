@@ -34,9 +34,16 @@ func TestDescriptorMatchesSignedManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var signed, runtime any
-	if len(contributions) != 1 || json.Unmarshal(contributions[0].Descriptor, &signed) != nil || json.Unmarshal(Descriptor(), &runtime) != nil || !reflect.DeepEqual(signed, runtime) {
-		t.Fatalf("运行时 descriptor 与签名 Manifest 不一致\nsigned=%s\nruntime=%s", contributions[0].Descriptor, Descriptor())
+	runtimeDescriptors := map[string][]byte{portalapi.ComposerCapability: Descriptor(), portalapi.PreferenceCapability: PreferenceDescriptor()}
+	if len(contributions) != len(runtimeDescriptors) {
+		t.Fatalf("运行时 contribution 数与签名 Manifest 不一致: signed=%d runtime=%d", len(contributions), len(runtimeDescriptors))
+	}
+	for _, contribution := range contributions {
+		var signed, runtime any
+		raw, ok := runtimeDescriptors[contribution.ID]
+		if !ok || json.Unmarshal(contribution.Descriptor, &signed) != nil || json.Unmarshal(raw, &runtime) != nil || !reflect.DeepEqual(signed, runtime) {
+			t.Fatalf("运行时 descriptor 与签名 Manifest 不一致: %s\nsigned=%s\nruntime=%s", contribution.ID, contribution.Descriptor, raw)
+		}
 	}
 }
 
@@ -388,8 +395,9 @@ func activationRequest(s *Service, application portalapi.Revision, expected uint
 }
 
 type configuredHost struct {
-	stateFile string
-	calls     []string
+	stateFile      string
+	preferenceFile string
+	calls          []string
 }
 
 var _ sdk.Host = (*configuredHost)(nil)
@@ -412,6 +420,8 @@ func (h *configuredHost) Call(_ context.Context, target *contractv1.CallTarget, 
 		case PlatformCatalogConfigKey:
 			raw, _ := json.Marshal(testPlatformCatalog())
 			value = string(raw)
+		case PreferenceStateFileConfigKey:
+			value = h.preferenceFile
 		default:
 			return nil, nil, errors.New("unexpected configuration key")
 		}
@@ -436,7 +446,7 @@ func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	host := &configuredHost{stateFile: filepath.Join(t.TempDir(), "portals.json")}
+	host := &configuredHost{stateFile: filepath.Join(t.TempDir(), "portals.json"), preferenceFile: filepath.Join(t.TempDir(), "preferences.json")}
 	callCtx := &contractv1.CallContext{
 		TenantId:  "tenant-a",
 		Principal: &contractv1.Principal{UserId: "author", SystemRoles: []string{"portal.compose"}},
@@ -447,7 +457,7 @@ func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) 
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("通过可信宿主创建草稿失败: result=%+v err=%v", result, err)
 	}
-	if len(host.calls) != 3 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.config.get" || host.calls[2] != portalapi.KernelCatalogValidationCapability {
+	if len(host.calls) != 4 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.config.get" || host.calls[2] != "kernel.config.get" || host.calls[3] != portalapi.KernelCatalogValidationCapability {
 		t.Fatalf("宿主调用路径错误: %v", host.calls)
 	}
 	var revision portalapi.Revision

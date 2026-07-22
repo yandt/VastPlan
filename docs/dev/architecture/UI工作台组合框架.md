@@ -72,7 +72,7 @@ CollectionLoader(query, signal) -> CollectionResult
 
 - Table 使用 `page` 或 `cursor` 二选一。需要总数、跳页和审计浏览的管理表使用 `page`；Card feed 和高数据量连续浏览使用 `cursor`。
 - Filter 的值、排序、页码/cursor 都属于 URL 可恢复状态；敏感筛选值不得进入 URL。查询切换时取消上一请求，保留已成功数据并展示刷新状态。
-- V1 保存列移动与显隐到浏览器本地偏好，命名空间为 `tenant / portal / collectionId`；浏览器用户隔离由其登录配置文件承担。宽度、密度与 page size 的跨会话偏好属于后续增强。偏好无法新增未声明列，服务端也绝不依据它扩大数据字段或权限。
+- Workbench 通过 Portal Kernel 提供的窄 `WorkbenchPreferencePort` 保存列顺序、显隐、密度与 page size。服务端记录按 `tenant / subject / portal / catalog contract major / collectionId` 隔离并使用 revision CAS，localStorage 只作验证缓存；偏好无法新增未声明列，服务端也绝不依据它扩大数据字段或权限。
 - Workbench 统一渲染 loading、refreshing、empty、error、stale、selection 和 retry，不允许同一集合同时由插件再渲染另一套分页或工具栏。
 - Cursor 只来自上次成功结果的 `nextCursor`。加载更多会按稳定记录键去重并用新事实替换重复项；Loader 返回与请求相同的 cursor 时立即失败，避免无限请求。筛选或刷新会重新从首 cursor 装配，未提交请求由 `AbortSignal` 取消。
 - Collection 的默认管理工作区采用三列筛选栅格、主操作在左/次操作在右、浅色表头与行分隔、页脚右对齐分页。该视觉语义通过 `FilterBar`、`Table`、`Pagination` 的 `collection` 呈现能力交由渲染适配器实现，Workbench 不注入框架 CSS。

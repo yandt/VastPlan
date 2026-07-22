@@ -25,6 +25,8 @@ export interface LoadedPortalFoundations {
   runtimeEngine: Awaited<ReturnType<typeof prepareRuntimeEngine>>;
   renderAdapterCatalog: NonNullable<FrontendPluginModule["renderAdapter"]>;
   renderer: NonNullable<FrontendPluginModule["renderer"]>;
+  themeTemplateID: string;
+  iconThemeID: string;
   shell: NonNullable<FrontendPluginModule["shell"]>;
   shellLibrary: NonNullable<FrontendPluginModule["shellLibrary"]>;
   loaded: readonly { ref: PluginRef; module: FrontendPluginModule }[];
@@ -70,8 +72,9 @@ export async function loadPortalFoundations(
   if (!requiredCapabilities.every((capability) => capabilities.has(capability)) || !validThemeTemplateCatalog(renderer) || !validIconThemeCatalog(renderer)) {
     throw new PortalAssemblyError("DESIGN_SYSTEM_INCOMPLETE", "选定 Renderer 未实现 Portal 所需的全部 UI 能力或主题目录无效");
   }
-  const configuredThemeTemplate = portal.renderAdapter.config.rendererOptions?.[rendererID]?.themeTemplate;
-  const configuredIconTheme = portal.renderAdapter.config.rendererOptions?.[rendererID]?.iconTheme;
+  const rendererOptions = portal.renderAdapter.config.rendererOptions?.[rendererID];
+  const configuredThemeTemplate = rendererOptions?.themeTemplate;
+  const configuredIconTheme = rendererOptions?.iconTheme;
   const declaredThemeTemplates = new Set(renderer.themeTemplates.map((template) => template.id));
   if (!declaredThemeTemplates.has(renderer.defaultThemeTemplate) || (configuredThemeTemplate !== undefined && !declaredThemeTemplates.has(configuredThemeTemplate))) {
     throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_TEMPLATE_INVALID", `Renderer 不支持主题模板: ${configuredThemeTemplate ?? renderer.defaultThemeTemplate}`);
@@ -80,6 +83,13 @@ export async function loadPortalFoundations(
   if (!declaredIconThemes.has(renderer.defaultIconTheme) || (configuredIconTheme !== undefined && !declaredIconThemes.has(configuredIconTheme))) {
     throw new PortalAssemblyError("DESIGN_SYSTEM_ICON_THEME_INVALID", `Renderer 不支持图标主题: ${configuredIconTheme ?? renderer.defaultIconTheme}`);
   }
+  if ((rendererOptions?.allowedThemeTemplates ?? []).some((id) => !declaredThemeTemplates.has(id)) || (rendererOptions?.allowedIconThemes ?? []).some((id) => !declaredIconThemes.has(id))) {
+    throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_POLICY_INVALID", `Renderer 主题允许目录与模块声明不一致: ${rendererID}`);
+  }
+  const themeTemplateID = options.themeTemplateID !== undefined && rendererOptions?.themeUserSelectable === true && rendererOptions.allowedThemeTemplates?.includes(options.themeTemplateID) === true
+    ? options.themeTemplateID : configuredThemeTemplate ?? renderer.defaultThemeTemplate;
+  const iconThemeID = options.iconThemeID !== undefined && rendererOptions?.iconUserSelectable === true && rendererOptions.allowedIconThemes?.includes(options.iconThemeID) === true
+    ? options.iconThemeID : configuredIconTheme ?? renderer.defaultIconTheme;
 
   const shellModule = await loader.load(portal.shell);
   assertTrustedFirstParty(shellModule, portal.shell.id);
@@ -113,6 +123,8 @@ export async function loadPortalFoundations(
     runtimeEngine,
     renderAdapterCatalog: renderAdapter,
     renderer,
+    themeTemplateID,
+    iconThemeID,
     shell,
     shellLibrary,
     rendererModuleKeys,

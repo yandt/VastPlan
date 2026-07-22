@@ -1,43 +1,57 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ActionSpec } from "@vastplan/ui-contract";
-import { usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
+import type { ActionSpec, CollectionDensity } from "@vastplan/ui-contract";
+import { usePortalI18n, usePortalUI, type WorkbenchPreferencePort } from "@vastplan/ui-primitives";
 import type { CollectionActionContext, CollectionPageDefinition, CollectionSummary, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
 import { CollectionCards } from "./CollectionCards.js";
 import { CollectionFilters } from "./CollectionFilters.js";
 import { CollectionPreferencesDialog } from "./CollectionPreferencesDialog.js";
 import { CollectionTable } from "./CollectionTable.js";
 import { CollectionToolbar } from "./CollectionToolbar.js";
-import { collectionDensity } from "./density.js";
+import { collectionDensity, collectionDensityOptions } from "./density.js";
 import type { CollectionRow } from "./model.js";
-import { readCollectionColumns, writeCollectionColumns } from "./preferences.js";
+import { collectionPreferenceFromColumns, readCollectionColumns, writeCollectionColumns } from "./preferences.js";
 import { useCollectionData } from "./useCollectionData.js";
 import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
 import { evaluateFormCondition } from "../form/presentation.js";
 import { CollectionOverlayWorkflow } from "../overlay/CollectionOverlayWorkflow.js";
 import { pageActionController } from "../action/page-action-controller.js";
 
-export function CollectionPage({ page, preferenceScope, presentation }: { page: CollectionPageDefinition; preferenceScope: string; presentation?: WorkbenchPresentationConfig }) {
+export function CollectionPage({ page, preferenceScope, preferences, presentation }: { page: CollectionPageDefinition; preferenceScope: string; preferences?: WorkbenchPreferencePort; presentation?: WorkbenchPresentationConfig }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const collection = page.collection;
-  const density = collectionDensity(collection, presentation);
+  const initialPreference = preferences?.readCollection(collection.id);
+  const densityOptions = collectionDensityOptions(collection, presentation);
   const [filters, setFilters] = useState<Record<string, unknown>>({});
   const [pageNumber, setPageNumber] = useState(1);
-  const [pageSize, setPageSize] = useState(collection.query.defaultPageSize);
+  const [pageSize, setPageSize] = useState(() => validPageSize(collection, initialPreference?.pageSize));
+  const [density, setDensity] = useState(() => collectionDensity(collection, presentation, initialPreference?.density));
   const [summary, setSummary] = useState<CollectionSummary>();
   const [summaryFailure, setSummaryFailure] = useState<string>();
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const [columns, setColumns] = useState(() => readCollectionColumns(preferenceScope, collection));
+  const [columns, setColumns] = useState(() => readCollectionColumns(preferenceScope, collection, initialPreference));
   const [activeForm, setActiveForm] = useState<{ id: string; selected: readonly CollectionRow[] }>();
   const [activeOverlay, setActiveOverlay] = useState<{ id: string; selected: readonly CollectionRow[] }>();
   const summaryRequestRef = useRef<AbortController>();
+  const preferenceMutationRef = useRef(0);
   const keyOf = useCallback((row: CollectionRow) => String(row.id ?? row.key ?? ""), []);
   const data = useCollectionData({ page, pageNumber, pageSize, filters, keyOf });
   const { rows } = data;
   const selected = useMemo(() => rows.filter((row) => selectedKeys.includes(keyOf(row))), [keyOf, rows, selectedKeys]);
 
-  useEffect(() => { writeCollectionColumns(preferenceScope, collection, columns); }, [collection, columns, preferenceScope]);
+  const persistPreference = useCallback((nextColumns: typeof columns, nextDensity: CollectionDensity, nextPageSize: number, rollback: () => void) => {
+    if (preferences === undefined) {
+      writeCollectionColumns(preferenceScope, collection, nextColumns);
+      return;
+    }
+    const mutation = ++preferenceMutationRef.current;
+    const next = collectionPreferenceFromColumns(nextColumns, { ...preferences.readCollection(collection.id), density: nextDensity, pageSize: nextPageSize });
+    void preferences.writeCollection(collection.id, next).catch((error) => {
+      if (preferenceMutationRef.current === mutation) rollback();
+      ui.notify({ title: i18n.text({ namespace: "cn.vastplan.foundation.frontend.workflow.workbench", key: "preference.saveFailed", fallback: "显示偏好保存失败" }), content: error instanceof Error ? error.message : String(error), kind: "error" });
+    });
+  }, [collection, i18n, preferenceScope, preferences, ui]);
   const requestSummary = useCallback(async (signal: AbortSignal) => {
     if (page.loadSummary === undefined) { setSummary(undefined); setSummaryFailure(undefined); return; }
     try {
@@ -100,10 +114,26 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
     <div style={{ width: "100%", minWidth: 0 }}>{collection.view === "cards"
       ? <CollectionCards collection={collection} rows={rows} selectedKeys={selectedKeys} loading={data.loading} loadingMore={data.loadingMore} nextCursor={data.nextCursor} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} onLoadMore={data.loadMore} />
       : <CollectionTable collection={collection} columns={columns} rows={rows} selectedKeys={selectedKeys} loading={data.loading} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} />}</div>
-    {collection.query.mode !== "page" ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Pagination align="end" page={pageNumber} pageSize={pageSize} total={data.total} disabled={data.loading} onChange={(nextPage, nextSize) => { setPageNumber(nextPage); setPageSize(nextSize); }} /></div>}
+    {collection.query.mode !== "page" ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Pagination align="end" page={pageNumber} pageSize={pageSize} pageSizeOptions={collection.query.pageSizeOptions} total={data.total} disabled={data.loading} onChange={(nextPage, requestedSize) => {
+      const nextSize = validPageSize(collection, requestedSize);
+      const previousSize = pageSize;
+      setPageNumber(nextPage);
+      setPageSize(nextSize);
+      if (nextSize !== previousSize) persistPreference(columns, density, nextSize, () => setPageSize(previousSize));
+    }} /></div>}
     {collection.view !== "table" || collection.query.mode !== "cursor" || data.nextCursor === undefined ? null : <ui.Stack direction="row" justify="center"><ui.Button kind="secondary" loading={data.loadingMore} disabled={data.loadingMore} onClick={data.loadMore}>{i18n.text({ namespace: "cn.vastplan.foundation.frontend.workflow.workbench", key: "cursor.more", fallback: "加载更多" })}</ui.Button></ui.Stack>}
-    {collection.view !== "table" ? null : <CollectionPreferencesDialog open={preferencesOpen} collection={collection} columns={columns} onChange={setColumns} onClose={() => setPreferencesOpen(false)} />}
+    {collection.view !== "table" ? null : <CollectionPreferencesDialog open={preferencesOpen} collection={collection} columns={columns} density={density} densityOptions={densityOptions} onApply={(nextColumns, nextDensity) => {
+      const previousColumns = columns;
+      const previousDensity = density;
+      setColumns([...nextColumns]);
+      setDensity(nextDensity);
+      persistPreference([...nextColumns], nextDensity, pageSize, () => { setColumns(previousColumns); setDensity(previousDensity); });
+    }} onClose={() => setPreferencesOpen(false)} />}
     <CollectionFormWorkflow definition={page.forms?.find((form) => form.id === activeForm?.id)} selected={activeForm?.selected ?? []} open={activeForm !== undefined} onClose={() => setActiveForm(undefined)} onRefresh={refresh} />
     <CollectionOverlayWorkflow definition={page.overlays?.find((overlay) => overlay.id === activeOverlay?.id)} selected={activeOverlay?.selected ?? []} open={activeOverlay !== undefined} onClose={() => setActiveOverlay(undefined)} />
   </ui.Stack>;
+}
+
+function validPageSize(collection: CollectionPageDefinition["collection"], preferred: number | undefined): number {
+  return preferred !== undefined && collection.query.pageSizeOptions.includes(preferred) ? preferred : collection.query.defaultPageSize;
 }

@@ -88,6 +88,7 @@ export class PortalRuntime {
         signal,
         reason,
         workbench,
+        preferences: options.preferences,
         registration,
       });
       await plugin.register?.(context);
@@ -98,6 +99,8 @@ export class PortalRuntime {
       portal: portalSnapshot,
       runtimeEngine: foundations.runtimeEngine,
       renderAdapter: foundations.renderer,
+      themeTemplateID: foundations.themeTemplateID,
+      iconThemeID: foundations.iconThemeID,
       renderAdapterCatalog: foundations.renderAdapterCatalog,
       shell: foundations.shell,
       shellLibrary: foundations.shellLibrary,
@@ -145,11 +148,12 @@ interface ContextInput {
   signal: AbortSignal;
   reason: "bootstrap" | "replace";
   workbench: NonNullable<ReturnType<typeof requiredModule>["workbench"]>;
+  preferences?: import("@vastplan/ui-primitives").WorkbenchPreferencePort;
   registration: RegistrationState;
 }
 
 function createPluginContext(input: ContextInput): FrontendPluginContext {
-  const { portal, portalSnapshot, ref, generation, signal, reason, workbench, registration } = input;
+  const { portal, portalSnapshot, ref, generation, signal, reason, workbench, preferences, registration } = input;
   const context: FrontendPluginContext = {
     portal: portalSnapshot,
     lifecycle: Object.freeze({ pluginID: ref.id, generation, signal, reason }),
@@ -176,7 +180,7 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
           (projectedPage.collection.actions ?? []).some((action) => (action.placement === "page.primary" || action.placement === "page.secondary") && (action.icon === undefined || !semanticIconNames.includes(action.icon)))) {
         throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${projectedPage.id}`);
       }
-      const Page = () => createElement(workbench.CollectionPage, { page: projectedPage, preferenceScope: `${portal.tenantId}/${portal.id}`, presentation: portal.workbench.config });
+      const Page = () => createElement(workbench.CollectionPage, { page: projectedPage, preferenceScope: `${portal.tenantId}/${portal.id}`, preferences, presentation: portal.workbench.config });
       const PageActions = () => createElement(workbench.CollectionPageActions, { page: projectedPage });
       context.addPage({ id: projectedPage.id, path: projectedPage.path, title: projectedPage.title, description: projectedPage.description, navigation: projectedPage.navigation, slots: [
         { id: "workbench.collection.actions", slot: "page.header.end", component: PageActions },

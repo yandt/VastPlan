@@ -1,6 +1,7 @@
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import {
   message,
+  PortalPreferenceControl,
   usePortalI18n,
   usePortalUI,
   type MenuItem,
@@ -15,7 +16,8 @@ import { hasRegionContent } from "./region-visibility";
 const shellHeaderSlots = ["shell.header.start", "shell.header.center", "shell.header.end"] as const;
 const shellNavigationSlots = ["shell.navigation.start", "shell.navigation.center", "shell.navigation.end"] as const;
 
-export function StandardShell({ composition, branding, template, pathname, recoveryNotice, onNavigate }: UIShellProps) {
+export function StandardShell(props: UIShellProps) {
+  const { composition, branding, template, pathname, recoveryNotice, onNavigate } = props;
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -100,11 +102,12 @@ export function StandardShell({ composition, branding, template, pathname, recov
         mainGroups={mainGroups}
         settingsGroups={settingsGroups}
         selectedGroup={selectedGroup}
+        preferences={<PortalPreferenceControl {...props} />}
         onSelectGroup={setSelectedGroupID}
         onNavigate={navigate}
       /> : null}
       <div className="vp-shell-content">
-        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /></div> : null}
+        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalPreferenceControl {...props} /></span></div> : null}
         {pageHeader}
         {pageBody}
       </div>
@@ -116,12 +119,13 @@ export function StandardShell({ composition, branding, template, pathname, recov
   </div>;
 }
 
-function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, selectedGroup, onSelectGroup, onNavigate }: {
+function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, selectedGroup, preferences, onSelectGroup, onNavigate }: {
   branding: ReactNode;
   composition: UIShellProps["composition"];
   mainGroups: readonly PortalNavigationGroup[];
   settingsGroups: readonly PortalNavigationGroup[];
   selectedGroup: PortalNavigationGroup | undefined;
+  preferences: ReactNode;
   onSelectGroup(id: string): void;
   onNavigate(id: string): void;
 }) {
@@ -143,7 +147,7 @@ function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, 
     <aside className="vp-navigation-rail" aria-label={i18n.text(message(namespace, "navigation.groups", "主菜单分组"))} onKeyDown={moveRailFocus}>
       <div className="vp-navigation-start">{branding}{shellSlot(composition.shellSlots, "shell.navigation.start")}</div>
       <div className="vp-navigation-center">{shellSlot(composition.shellSlots, "shell.navigation.center")}{mainGroups.map(groupButton)}</div>
-      <div className="vp-navigation-end">{settingsGroups.map(groupButton)}{shellSlot(composition.shellSlots, "shell.navigation.end")}</div>
+      <div className="vp-navigation-end">{settingsGroups.map(groupButton)}{preferences}{shellSlot(composition.shellSlots, "shell.navigation.end")}</div>
     </aside>
     {selectedGroup === undefined ? null : <aside id={panelID} ref={panelRef} className="vp-navigation-panel" aria-label={i18n.text(message(namespace, "navigation.secondaryLabel", "{group}二级导航", { group: i18n.text(selectedGroup.label) }))} onKeyDown={(event) => returnToRail(event, selectedButtonRef)}>
       <header className="vp-navigation-panel-header"><span className="vp-navigation-panel-icon"><IconForGroup group={selectedGroup} /></span><strong>{i18n.text(selectedGroup.label)}</strong></header>
@@ -278,7 +282,7 @@ export const standardShellCSS = `
 .vp-rail-button{width:var(--vp-shell-touch-minimum);height:var(--vp-shell-touch-minimum);flex:0 0 var(--vp-shell-touch-minimum);display:grid;place-items:center;border:0;border-radius:10px;background:transparent;color:var(--vp-shell-muted);cursor:pointer}.vp-rail-button:hover{background:var(--vp-shell-hover);color:var(--vp-shell-primary)}.vp-rail-button[data-selected]{background:var(--vp-shell-selected);color:var(--vp-shell-primary)}.vp-rail-button:focus-visible,.vp-mobile-menu-button:focus-visible,.vp-navigation-child-trigger:focus-visible,.vp-navigation-link:focus-visible{outline:var(--vp-shell-focus-width) solid var(--vp-shell-focus);outline-offset:2px}
 .vp-navigation-panel{width:var(--vp-shell-navigation-width);flex:0 0 var(--vp-shell-navigation-width);min-height:0;display:grid;grid-template-rows:auto minmax(0,1fr);background:var(--vp-shell-surface);border-right:1px solid var(--vp-shell-border)}.vp-navigation-panel-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--vp-shell-border)}.vp-navigation-panel-icon{color:var(--vp-shell-primary)}.vp-navigation-panel-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:8px;scrollbar-width:thin}
 .vp-navigation-tree{display:grid;gap:4px}.vp-navigation-page-list{list-style:none;margin:0;padding:4px 0 8px}.vp-navigation-root-pages{border-bottom:1px solid var(--vp-shell-border);margin-bottom:4px}.vp-navigation-link{display:flex;align-items:center;min-height:var(--vp-shell-touch-minimum);box-sizing:border-box;padding:8px 12px;border-radius:8px;color:var(--vp-shell-text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-navigation-link:hover{background:var(--vp-shell-hover);color:var(--vp-shell-primary)}.vp-navigation-link[aria-current=page]{background:var(--vp-shell-selected);color:var(--vp-shell-primary);font-weight:600}.vp-navigation-child{border-radius:8px}.vp-navigation-child[data-active]{background:color-mix(in srgb,var(--vp-shell-selected) 35%,transparent)}.vp-navigation-child-trigger{width:100%;min-height:var(--vp-shell-touch-minimum);display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border:0;border-radius:8px;background:transparent;color:var(--vp-shell-text);font:inherit;font-weight:600;text-align:left;cursor:pointer}.vp-navigation-child-trigger:hover{background:var(--vp-shell-hover)}.vp-navigation-chevron{color:var(--vp-shell-muted);transition:transform var(--vp-shell-motion-fast) ease}.vp-navigation-child-trigger[aria-expanded=true] .vp-navigation-chevron{transform:rotate(90deg)}.vp-navigation-child .vp-navigation-page-list{padding-left:8px}
-.vp-shell-content{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}.vp-mobile-header{display:none}.vp-page-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height);display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;padding:8px 24px;background:var(--vp-shell-surface);border-bottom:1px solid var(--vp-shell-border);z-index:10}.vp-page-header-side{display:flex;align-items:center;gap:12px;min-width:0}.vp-page-header-center{display:flex;justify-content:center;gap:12px;min-width:0}.vp-page-header-end{justify-content:flex-end}.vp-page-title-copy{min-width:0}.vp-page-title{font-size:22px;line-height:1.2;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-page-description{font-size:14px;line-height:1.3;color:var(--vp-shell-muted);margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-shell-surface)}.vp-page{box-sizing:border-box;width:100%;margin:0 auto;padding:24px}.vp-page-body-row{display:flex;align-items:flex-start;gap:20px}.vp-page-body-main{flex:1;min-width:0}.vp-page-aside{width:320px;flex:0 0 320px;max-height:calc(100dvh - 120px);overflow:auto}.vp-shell-footer{flex:0 0 auto}.vp-brand{display:flex;align-items:center;gap:10px;min-height:40px;min-width:0}.vp-brand-compact{justify-content:center}.vp-brand-mark{width:32px;height:32px;flex:0 0 32px;border-radius:9px;display:grid;place-items:center;color:var(--vp-shell-surface);background:var(--vp-shell-primary)}.vp-brand-logo{width:32px;height:32px;object-fit:contain}.vp-mobile-menu-button{width:44px;height:44px;border:0;border-radius:8px;background:transparent;color:var(--vp-shell-text);display:grid;place-items:center}
+.vp-shell-content{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}.vp-mobile-header{display:none}.vp-mobile-preferences{margin-left:auto;display:flex}.vp-page-header{box-sizing:border-box;height:var(--vp-shell-bar-height);min-height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height);display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center;gap:16px;padding:8px 24px;background:var(--vp-shell-surface);border-bottom:1px solid var(--vp-shell-border);z-index:10}.vp-page-header-side{display:flex;align-items:center;gap:12px;min-width:0}.vp-page-header-center{display:flex;justify-content:center;gap:12px;min-width:0}.vp-page-header-end{justify-content:flex-end}.vp-page-title-copy{min-width:0}.vp-page-title{font-size:22px;line-height:1.2;margin:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-page-description{font-size:14px;line-height:1.3;color:var(--vp-shell-muted);margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.vp-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-shell-surface)}.vp-page{box-sizing:border-box;width:100%;margin:0 auto;padding:24px}.vp-page-body-row{display:flex;align-items:flex-start;gap:20px}.vp-page-body-main{flex:1;min-width:0}.vp-page-aside{width:320px;flex:0 0 320px;max-height:calc(100dvh - 120px);overflow:auto}.vp-shell-footer{flex:0 0 auto}.vp-brand{display:flex;align-items:center;gap:10px;min-height:40px;min-width:0}.vp-brand-compact{justify-content:center}.vp-brand-mark{width:32px;height:32px;flex:0 0 32px;border-radius:9px;display:grid;place-items:center;color:var(--vp-shell-surface);background:var(--vp-shell-primary)}.vp-brand-logo{width:32px;height:32px;object-fit:contain}.vp-mobile-menu-button{width:44px;height:44px;border:0;border-radius:8px;background:transparent;color:var(--vp-shell-text);display:grid;place-items:center}
 @media (max-width:1199px){.vp-navigation-panel{width:var(--vp-shell-navigation-compact-width);flex-basis:var(--vp-shell-navigation-compact-width)}.vp-page{padding:20px}.vp-page-header{padding-left:20px;padding-right:20px}}
 @media (max-width:767px){.vp-desktop-navigation{display:none}.vp-mobile-header{box-sizing:border-box;height:var(--vp-shell-bar-height);flex:0 0 var(--vp-shell-bar-height);display:flex;align-items:center;gap:8px;padding:0 12px;background:var(--vp-shell-surface);border-bottom:1px solid var(--vp-shell-border)}.vp-page-header{height:auto;min-height:var(--vp-shell-bar-height);flex:0 0 auto;grid-template-columns:minmax(0,1fr) auto;padding:8px 16px}.vp-page-header-center{grid-column:1/-1;justify-content:flex-start;overflow-x:auto}.vp-page-header-end{grid-column:2}.vp-page-title{font-size:20px}.vp-page-description{max-width:65vw}.vp-page{padding:16px}.vp-page-body-row{display:block}.vp-page-aside{width:auto;max-height:none;margin-top:16px;overflow:visible}}
 @media (prefers-reduced-motion:reduce){.vp-shell-root *{scroll-behavior:auto!important;transition:none!important}}

@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { IdentityProvider } from "../identity/identity-provider";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
+import type { PortalPreferencePort } from "../capabilities/portal-preference-client";
 import type { InteractionPort } from "../capabilities/interaction-client";
 import type { PlatformCapabilityPort } from "../capabilities/platform-management-client";
 import type { PlatformManagementResolver } from "../capabilities/platform-management-resolver";
@@ -11,11 +12,13 @@ import { PortalControlRoutes } from "./portal-control-routes";
 import { InteractionRoutes } from "./interaction-routes";
 import { PlatformManagementRoutes } from "./platform-management-routes";
 import { PortalRuntimeRoutes } from "./portal-runtime-routes";
+import { PortalPreferenceRoutes } from "./portal-preference-routes";
 
 export interface APIHandlerOptions {
   identity: IdentityProvider;
   secureCookies: boolean;
   composer?: PortalComposerPort;
+  preferences?: PortalPreferencePort;
   interaction?: InteractionPort;
   platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort };
   delivery?: PortalDeliveryStore;
@@ -26,6 +29,7 @@ export function createAPIHandler(options: APIHandlerOptions): (request: Incoming
   const interactions = options.interaction === undefined ? undefined : new InteractionRoutes(options.interaction);
   const platform = options.platform === undefined ? undefined : new PlatformManagementRoutes(options.platform.resolver, options.platform.client, options.identity);
   const runtime = options.composer === undefined || options.delivery === undefined ? undefined : new PortalRuntimeRoutes(options.composer, options.delivery);
+  const preferences = options.composer === undefined || options.preferences === undefined ? undefined : new PortalPreferenceRoutes(options.composer, options.preferences);
   return async (request, response, path) => {
     const method = request.method ?? "GET";
     let principal;
@@ -45,6 +49,9 @@ export function createAPIHandler(options: APIHandlerOptions): (request: Incoming
     request.once("aborted", () => controller.abort(new Error("Browser request aborted")));
     if (runtime !== undefined) {
       if (await runtime.handle(path, principal, request, response, controller.signal)) return;
+    }
+    if (preferences !== undefined) {
+      if (await preferences.handle(path, principal, request, response, controller.signal)) return;
     }
     if (portalControl !== undefined) {
       if (await portalControl.handle(path, method, principal, request, response, controller.signal)) return;

@@ -142,3 +142,4 @@
 - [ADR-0109 种子访问与企业身份 Provider 分离](ADR-0109-种子访问与企业身份Provider分离.md)
 - [ADR-0110 治理式 API Exposure 与独立数据面](ADR-0110-治理式API-Exposure与独立数据面.md)
 - [ADR-0111 语义图标与 Workbench 页面动作宿主](ADR-0111-语义图标与Workbench页面动作宿主.md)
+- [ADR-0112 PortalPreference 服务端真源与候选提交事务](ADR-0112-PortalPreference服务端真源与候选提交事务.md)

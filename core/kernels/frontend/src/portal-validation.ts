@@ -144,9 +144,18 @@ export function validRenderAdapterConfig(config: RenderAdapterSelection["config"
   for (const [renderer, options] of Object.entries(config.rendererOptions ?? {})) {
     if (!allowed.has(renderer) || !isJSONRecord(options) ||
         (options.themeTemplate !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(options.themeTemplate)) ||
-        (options.iconTheme !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(options.iconTheme))) return false;
+        (options.iconTheme !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(options.iconTheme)) ||
+        !validSelectableCatalog(options.allowedThemeTemplates, options.themeUserSelectable, options.themeTemplate) ||
+        !validSelectableCatalog(options.allowedIconThemes, options.iconUserSelectable, options.iconTheme)) return false;
   }
   return true;
+}
+
+function validSelectableCatalog(values: unknown, selectable: unknown, selected: unknown): boolean {
+  if (selectable !== undefined && typeof selectable !== "boolean") return false;
+  if (values === undefined) return selectable !== true;
+  if (!Array.isArray(values) || values.length > 16 || values.some((value) => typeof value !== "string" || !/^[a-z][a-z0-9-]{0,63}$/.test(value)) || new Set(values).size !== values.length) return false;
+  return (selectable !== true || values.length > 0) && (selected === undefined || values.includes(selected));
 }
 
 export function validShellTemplateCatalog(shell: UIShellAdapter): boolean {

@@ -11,7 +11,7 @@ import (
 )
 
 const PluginID = "cn.vastplan.foundation.security.portal-access-policy"
-const PluginVersion = "0.2.0"
+const PluginVersion = "0.3.0"
 const Capability = "foundation.security.portal-access-policy"
 
 func Check(_ context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -33,6 +33,15 @@ func decide(c *contractv1.CallContext, request extpoint.PermissionRequest) (extp
 	}
 	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && (request.Capability == "kernel.config.get" || request.Capability == portalapi.KernelCatalogValidationCapability || request.Capability == portalapi.KernelCatalogMaterializationCapability || request.Capability == portalapi.KernelArtifactReferencePublicationCapability || request.Capability == portalapi.KernelTestArtifactValidationCapability) {
 		return extpoint.DecisionAllow, "Composer 受限宿主回调"
+	}
+	if request.Capability == portalapi.PreferenceCapability {
+		if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_USER && c.GetScene() == "portal.bff" && c.GetPrincipal().GetUserId() != "" {
+			if request.Operation == "get" || request.Operation == "put" {
+				return extpoint.DecisionAllow, "当前主体 Portal 偏好"
+			}
+			return extpoint.DecisionDeny, "未知 PortalPreference 操作"
+		}
+		return extpoint.DecisionDeny, "PortalPreference 只允许可信 Portal BFF 用户场景"
 	}
 	if request.Capability != portalapi.ComposerCapability {
 		return extpoint.DecisionAbstain, "非门户组合能力"

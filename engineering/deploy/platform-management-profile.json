@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 13,
+  "revision": 14,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -119,7 +119,7 @@
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.18.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.15.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.16.0", "channel": "stable" }
       ]
     },
     {
@@ -226,7 +226,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.18.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.8.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.9.0", "channel": "stable" }
       ]
     },
     {
@@ -246,6 +246,7 @@
         "plugins": {
           "cn.vastplan.platform.configuration.portal-composer": {
             "platform.portal-composer.stateFile": "__VASTPLAN_DEV_STATE__/portal-composer.json",
+            "platform.portal-composer.preferenceStateFile": "__VASTPLAN_DEV_STATE__/portal-preferences.json",
             "platform.portal-composer.platformCatalog": "__VASTPLAN_PORTAL_PLATFORM_CATALOG__"
           }
         },
@@ -255,8 +256,8 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.security.portal-access-policy", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.4.0", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.portal-access-policy", "version": "0.3.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.5.0", "channel": "stable" }
       ]
     },
     {

@@ -80,4 +80,16 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain("Name");
     expect(markup).toContain("Region");
   });
+
+  it("keeps horizontal layout on leaf fields instead of collapsing the root object grid", () => {
+    const Form = muiPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
+      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { profile: { type: "string", title: "Profile" } } } }}
+      value={{}}
+      onChange={() => undefined}
+      presentation={{ layout: "horizontal" }}
+    /></PortalI18nProvider>);
+    expect(markup).toContain(".form-group:not(.rjsf-field-object)");
+    expect(markup).toContain('class="form-group rjsf-field rjsf-field-object"');
+  });
 });
