@@ -16,7 +16,7 @@ export class PlatformDeploymentTestRoutes {
       if (parts.length === 1) return listDeployment(this.client, "listTestTargetBindings", principal, target, request, response, signal);
       const id = parts.length === 2 ? resourceName(parts[1], 128) : undefined;
       if (id === undefined) return rejectDeploymentRoute(response, parts.length === 2 ? 400 : 404, parts.length === 2 ? "invalid_resource_name" : "not_found", method);
-      if (!authorizeDeployment(this.client, target, "putTestTargetBinding", true, principal, "platform.admin", response)) return true;
+      if (!authorizeDeployment(this.client, target, "putTestTargetBinding", true, principal, "platform.deployment.test-target", response)) return true;
       if (method !== "PUT") return rejectDeploymentRoute(response, 405, "method_not_allowed", method);
       await withRequestJSON(request, response, async (binding) => callDeployment({
         client: this.client, principal, target, operation: "putTestTargetBinding", write: true,

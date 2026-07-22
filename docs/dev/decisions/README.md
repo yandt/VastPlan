@@ -133,3 +133,8 @@
 - [ADR-0100 制品生命周期、引用保护与垃圾回收](ADR-0100-制品生命周期引用保护与垃圾回收.md)
 - [ADR-0101 离线 Bootstrap Inventory 与 LKG 推进](ADR-0101-离线Bootstrap-Inventory与LKG推进.md)
 - [ADR-0102 可信宿主仓库自升级事务](ADR-0102-可信宿主仓库自升级事务.md)
+- [ADR-0103 Node Portal Kernel 渐进替代 Go Portal Edge](ADR-0103-Node-Portal-Kernel渐进替代Go-Edge.md)
+- [ADR-0104 Frontend Runtime Engine 与 React 单实现](ADR-0104-Frontend-Runtime-Engine与React单实现.md)
+- [ADR-0105 可信多文件前端模块图与双端 Generation](ADR-0105-可信多文件前端模块图与双端Generation.md)
+- [ADR-0106 多端统一身份授权与 Runner 执行租约](ADR-0106-多端统一身份授权与Runner执行租约.md)
+- [ADR-0107 插件权限目录与系统管理授权治理](ADR-0107-插件权限目录与系统管理授权治理.md)

@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -10,6 +10,39 @@
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "capabilities": { "kernelServices": ["kernel.node.bootstrap", "kernel.node.readiness", "kernel.deployment.targets", "kernel.deployment.preview", "kernel.deployment.publish", "kernel.deployment.readiness"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "authorization": {
+    "namespace": "platform.deployment",
+    "permissions": [
+      { "code": "platform.deployment.read", "title": "查看服务与节点", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.deployment.write", "title": "维护节点计划", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.deployment.bootstrap", "title": "申请节点引导", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.deployment.approve", "title": "审批部署变更", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.deployment.compose", "title": "编辑服务组合", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.deployment.publish", "title": "发布或回滚服务", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.deployment.test-target", "title": "管理测试发布目标", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listNodes", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listBootstrapJobs", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listDeploymentTargets", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listServiceRevisions", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listServiceRevisionAudit", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listTestTargetBindings", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "listTestReleases", "permissions": ["platform.deployment.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "putNode", "permissions": ["platform.deployment.write"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createBootstrap", "permissions": ["platform.deployment.bootstrap"], "access": "write", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "approveBootstrap", "permissions": ["platform.deployment.approve"], "access": "approve", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createServiceDraft", "permissions": ["platform.deployment.compose"], "access": "write", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "updateServiceDraft", "permissions": ["platform.deployment.compose"], "access": "write", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "submitServiceDraft", "permissions": ["platform.deployment.compose"], "access": "write", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "approveServiceRevision", "permissions": ["platform.deployment.approve"], "access": "approve", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "publishServiceRevision", "permissions": ["platform.deployment.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "rollbackServiceRevision", "permissions": ["platform.deployment.publish"], "access": "execute", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "putTestTargetBinding", "permissions": ["platform.deployment.test-target"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createTestRelease", "permissions": ["platform.deployment.publish"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "rollbackTestRelease", "permissions": ["platform.deployment.publish"], "access": "execute", "approval": "none" }
+    ]
+  },
   "runtime": {
     "instancePolicy": "leader",
     "stateModel": "leader-owned",

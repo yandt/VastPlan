@@ -77,6 +77,7 @@ type Manifest struct {
 	Runtime              *RuntimePolicy             `json:"runtime,omitempty"`
 	Execution            *ExecutionPolicy           `json:"execution,omitempty"`
 	Configuration        *ConfigurationContract     `json:"configuration,omitempty"`
+	Authorization        *AuthorizationContract     `json:"authorization,omitempty"`
 	State                *State                     `json:"state,omitempty"`
 	Activation           []string                   `json:"activation"`
 	Dependencies         map[string]string          `json:"dependencies,omitempty"`
@@ -533,6 +534,9 @@ func ParseManifest(raw []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	if err := validateConfiguration(manifest.Configuration); err != nil {
+		return Manifest{}, err
+	}
+	if err := validateAuthorization(manifest); err != nil {
 		return Manifest{}, err
 	}
 	if err := validateFrontendModuleGraphs(manifest); err != nil {

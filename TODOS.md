@@ -19,6 +19,7 @@
 - **Cons**：需要职责分离、角色版本、授权审批、主体目录对接、缓存失效、紧急撤权和失效权限清理，不能退化成简单复选框页面。
 - **Context**：权限代码由所属插件在签名 Manifest 中声明，可信内核校验命名空间、scope、风险等级和冲突；角色插件只能授权 Catalog 中已知权限，不能创建权限，也不负责最终判定。
 - **Depends on / blocked by**：插件权限 Manifest Schema、可信权限 Catalog、企业身份主体接口、内核授权执行点和本次 Portal Governance 分域权限。
+- **Progress（2026-07-22）**：B1 已完成 Manifest 权限声明与确定性 Catalog，并先覆盖制品/插件仓库和服务/节点部署管理；Authorization IR/Provider Protocol、在线 Role/Subject Binding、签名 Policy Snapshot、每内核 Enforcer 与管理 Workbench 仍待 B2—B6。权威设计见《[在线角色与权限治理](docs/dev/architecture/在线角色与权限治理.md)》。
 
 ## 生产 Portal 实时 Activation 通知
 

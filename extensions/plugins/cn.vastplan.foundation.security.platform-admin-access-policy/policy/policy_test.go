@@ -35,6 +35,12 @@ func TestPlatformAdminRolesAndUnknownOperations(t *testing.T) {
 	if got, _ := decide(user("platform.deployment.publish"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "publishServiceRevision"}); got != extpoint.DecisionAllow {
 		t.Fatalf("服务组合发布角色应允许: %s", got)
 	}
+	if got, _ := decide(user("platform.deployment.test-target"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "putTestTargetBinding"}); got != extpoint.DecisionAllow {
+		t.Fatalf("测试目标授权应使用独立权限: %s", got)
+	}
+	if got, _ := decide(user("platform.deployment.publish"), extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "putTestTargetBinding"}); got != extpoint.DecisionDeny {
+		t.Fatalf("服务发布权限不得隐含测试目标授权: %s", got)
+	}
 	if got, _ := decide(user("platform.artifacts.migrate"), extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "cutoverMigration"}); got != extpoint.DecisionAllow {
 		t.Fatalf("制品迁移角色应允许切换: %s", got)
 	}

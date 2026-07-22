@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -10,6 +10,35 @@
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": { "optional": ["scope.tenant", "caller", "scene", "trace", "request.deadline", "propagation.callPath"] },
+  "authorization": {
+    "namespace": "platform.artifacts",
+    "permissions": [
+      { "code": "platform.artifacts.read", "title": "查看制品仓库", "description": "查看仓库状态、目录、发布流水、引用、容量和只读计划", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.artifacts.lifecycle", "title": "管理制品生命周期", "description": "变更制品 deprecated、yanked 或 revoked 生命周期", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.artifacts.gc", "title": "执行制品回收", "description": "隔离或永久清扫无引用制品", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.artifacts.migrate", "title": "迁移制品仓库", "description": "准备、切换、回滚和释放制品存储卷", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+    ],
+    "operationGuards": [
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "status", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "capacity", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "listCatalog", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "listPublishJournal", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "resolve", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "listReferences", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "gcPlan", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "gcStatus", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "migrationStatus", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "setLifecycle", "permissions": ["platform.artifacts.lifecycle"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "gcQuarantine", "permissions": ["platform.artifacts.gc"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "gcSweep", "permissions": ["platform.artifacts.gc"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "prepareMigration", "permissions": ["platform.artifacts.migrate"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "syncMigration", "permissions": ["platform.artifacts.migrate"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "cutoverMigration", "permissions": ["platform.artifacts.migrate"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "rollbackMigration", "permissions": ["platform.artifacts.migrate"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "finalizeMigration", "permissions": ["platform.artifacts.migrate"], "access": "execute", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "releaseMigration", "permissions": ["platform.artifacts.migrate"], "access": "execute", "approval": "none" }
+    ]
+  },
   "runtime": {
     "instancePolicy": "leader",
     "stateModel": "leader-owned",
