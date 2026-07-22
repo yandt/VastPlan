@@ -29,6 +29,7 @@ type BeginRequest struct {
 	PortalID            string `json:"portalId"`
 	Locale              string `json:"locale"`
 	ClientContextDigest string `json:"clientContextDigest"`
+	ProviderProfileID   string `json:"providerProfileId,omitempty"`
 }
 
 type BeginResult struct {
@@ -36,9 +37,19 @@ type BeginResult struct {
 }
 
 type ContinueRequest struct {
-	TransactionID string          `json:"transactionId"`
-	StepID        string          `json:"stepId"`
-	Responses     []FieldResponse `json:"responses"`
+	TransactionID string            `json:"transactionId"`
+	StepID        string            `json:"stepId"`
+	Responses     []FieldResponse   `json:"responses,omitempty"`
+	Redirect      *RedirectResponse `json:"redirect,omitempty"`
+}
+
+// RedirectResponse is the only callback payload accepted for redirect
+// Methods. Tokens, arbitrary query parameters and URLs are intentionally absent.
+type RedirectResponse struct {
+	Code             string `json:"code,omitempty"`
+	State            string `json:"state"`
+	Error            string `json:"error,omitempty"`
+	ErrorDescription string `json:"errorDescription,omitempty"`
 }
 
 type ContinueResult struct {

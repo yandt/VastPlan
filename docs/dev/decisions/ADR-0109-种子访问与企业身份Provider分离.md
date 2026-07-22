@@ -41,3 +41,5 @@
 - 完成稳定主体键、规范摘要、数据库依赖 Blocked、模糊 Method 路由和秘密/用户字段拒绝测试。
 - Plugin Manifest 新增 `authenticationProviders`，运行态扩展点新增 `authentication.provider`；Provider 依赖必须闭合到 `runtime.requires`。
 - Seed Authority、Provider Broker、管理 Workbench 与首个 OIDC Provider 继续按本文阶段实施。
+- 完成 Authentication Broker：按 tenant/Portal/method 唯一路由、服务端注入 Profile ID、transaction 锁定 Provider、Provider 输出复验与 TTL 上限；静态文件 Catalog 只是同一窄接口的 Seed 适配器。
+- 完成首个 Node OIDC Provider 的 public-client 路径：Authorization Code + PKCE、state/nonce、JWKS RS256/ES256、issuer/audience/azp/time 校验和一次性回调；confidential client 必须等待 Material Lease，禁止把 client secret 放入普通配置。

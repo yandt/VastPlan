@@ -33,7 +33,8 @@
         "tenantId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
         "portalId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
         "locale": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/locale" },
-        "clientContextDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/digest" }
+        "clientContextDigest": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/digest" },
+        "providerProfileId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" }
       },
       "required": ["transactionId", "methodId", "audience", "tenantId", "portalId", "locale", "clientContextDigest"]
     },
@@ -48,14 +49,33 @@
       "properties": { "fieldId": { "type": "string", "pattern": "^[a-z][a-zA-Z0-9._-]{0,63}$" }, "value": { "type": "string", "maxLength": 4096 } },
       "required": ["fieldId", "value"]
     },
+    "redirectResponse": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "state": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/nonce" },
+        "error": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$" },
+        "errorDescription": { "type": "string", "maxLength": 512 }
+      },
+      "required": ["state"],
+      "oneOf": [
+        { "required": ["code"], "not": { "required": ["error"] } },
+        { "required": ["error"], "not": { "required": ["code"] } }
+      ]
+    },
     "continueRequest": {
       "type": "object", "additionalProperties": false,
       "properties": {
         "transactionId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/nonce" },
         "stepId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/nonce" },
-        "responses": { "type": "array", "items": { "$ref": "#/$defs/fieldResponse" }, "uniqueItems": true, "minItems": 1, "maxItems": 8 }
+        "responses": { "type": "array", "items": { "$ref": "#/$defs/fieldResponse" }, "uniqueItems": true, "minItems": 1, "maxItems": 8 },
+        "redirect": { "$ref": "#/$defs/redirectResponse" }
       },
-      "required": ["transactionId", "stepId", "responses"]
+      "required": ["transactionId", "stepId"],
+      "oneOf": [
+        { "required": ["responses"], "not": { "required": ["redirect"] } },
+        { "required": ["redirect"], "not": { "required": ["responses"] } }
+      ]
     },
     "continueResult": { "$ref": "#/$defs/resultEnvelope" },
     "resendRequest": {

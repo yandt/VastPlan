@@ -1,0 +1,57 @@
+{
+  "id": "cn.vastplan.foundation.security.authentication.provider.oidc",
+  "name": "VastPlan Enterprise OIDC Provider",
+  "description": "使用 Authorization Code + PKCE 验证企业 OIDC 身份",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1" },
+  "contextAccess": { "optional": ["trace", "request.deadline", "propagation.callPath"] },
+  "execution": { "backend": { "driver": "node-worker", "minimumIsolation": "trusted-runtime", "requirements": { "node": ">=20" }, "features": ["channel.cancel.v1"], "node": { "workerSafe": true, "moduleFormat": "esm" } } },
+  "runtime": { "instancePolicy": "leader", "stateModel": "leader-owned", "visibility": "cluster", "routing": "leader", "routingDomain": "security" },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "hot",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profiles"],
+      "properties": {
+        "profiles": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 64,
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["issuer", "clientId", "authorizationEndpoint", "tokenEndpoint", "jwksUri", "redirectUri"],
+            "properties": {
+              "issuer": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 },
+              "clientId": { "type": "string", "minLength": 1, "maxLength": 512 },
+              "authorizationEndpoint": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 },
+              "tokenEndpoint": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 },
+              "jwksUri": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 },
+              "redirectUri": { "type": "string", "format": "uri", "pattern": "^https://", "maxLength": 2048 },
+              "scopes": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,80}$" }, "minItems": 1, "maxItems": 16, "uniqueItems": true },
+              "acr": { "type": "string", "minLength": 1, "maxLength": 128 }
+            }
+          }
+        }
+      }
+    }
+  },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/main.mjs" },
+  "contributes": { "backend": { "authenticationProviders": [{
+    "id": "enterprise-oidc",
+    "service_role": "backend",
+    "title": "企业 OIDC Provider",
+    "protocol": "authentication.method.v1",
+    "purposes": ["portal-login", "mobile-token", "runner-token", "token-verification"],
+    "methods": [{ "id": "oidc", "kind": "redirect", "interaction": "redirect" }],
+    "subjectNamespace": "enterprise.identity.oidc",
+    "requiredCapabilities": []
+  }] } }
+}

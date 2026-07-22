@@ -24,12 +24,20 @@ func validateMethodMessage(message any) error {
 	case *BeginResult:
 		return validateMethodResult(typed.Result)
 	case *ContinueRequest:
+		if (len(typed.Responses) == 0) == (typed.Redirect == nil) {
+			return errors.New("Authentication continue 必须且只能提交表单 responses 或 redirect 回调")
+		}
 		seen := map[string]struct{}{}
 		for _, response := range typed.Responses {
 			if _, duplicate := seen[response.FieldID]; duplicate {
 				return fmt.Errorf("Authentication 字段响应重复: %s", response.FieldID)
 			}
 			seen[response.FieldID] = struct{}{}
+		}
+		if typed.Redirect != nil {
+			if (typed.Redirect.Code == "") == (typed.Redirect.Error == "") {
+				return errors.New("redirect 回调必须且只能包含 code 或 error")
+			}
 		}
 	case *ContinueResult:
 		return validateMethodResult(typed.Result)

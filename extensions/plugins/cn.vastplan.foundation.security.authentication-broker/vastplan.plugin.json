@@ -1,0 +1,29 @@
+{
+  "id": "cn.vastplan.foundation.security.authentication-broker",
+  "name": "VastPlan Authentication Broker",
+  "description": "按不可变 Provider Catalog 路由统一认证方法并约束事务所有权",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1" },
+  "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "runtime": { "instancePolicy": "leader", "stateModel": "leader-owned", "visibility": "cluster", "routing": "leader", "routingDomain": "security" },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "activation": ["onStartup", "onPortalStartup"],
+  "entry": { "backend": "backend/authentication-broker" },
+  "contributes": { "backend": { "tools": [{
+    "id": "foundation.security.authentication-broker",
+    "service_role": "backend",
+    "title": "企业认证 Broker",
+    "subcommands": [
+      { "name": "describe", "description": "列出门户允许的认证方式" },
+      { "name": "begin", "description": "开始认证事务" },
+      { "name": "continue", "description": "继续认证事务" },
+      { "name": "resend", "description": "重发认证挑战" },
+      { "name": "cancel", "description": "取消认证事务" },
+      { "name": "health", "description": "检查认证 Provider" }
+    ]
+  }] } }
+}
