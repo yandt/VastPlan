@@ -260,13 +260,14 @@ func TestValidateDescriptor_RejectsInvalidHookPhase(t *testing.T) {
 
 func TestValidateDescriptor_BackendPublicCatalog(t *testing.T) {
 	valid := map[string]string{
-		"tool.package":       `{"title":"工具","subcommands":[{"name":"run","description":"运行"}]}`,
-		"agent":              `{"systemPrompt":"你是助手","tools":[{"extensionPoint":"tool.package","capability":"demo.tool","operation":"run"}]}`,
-		"api.route":          `{"service_role":"backend","method":"POST","path":"/v1/demo","auth":"session"}`,
-		"permission.checker": `{"applies":{"caller":"CALLER_KIND_*"}}`,
-		"event.sink":         `{"subscribe":["task.*"]}`,
-		"hook":               `{"point":"invoke","phase":"before"}`,
-		"runner.capability":  `{"service_role":"rs","kind":"process.exec","params":{"sandbox":true}}`,
+		"tool.package":            `{"title":"工具","subcommands":[{"name":"run","description":"运行"}]}`,
+		"agent":                   `{"systemPrompt":"你是助手","tools":[{"extensionPoint":"tool.package","capability":"demo.tool","operation":"run"}]}`,
+		"api.route":               `{"service_role":"backend","method":"POST","path":"/v1/demo","auth":"session"}`,
+		"permission.checker":      `{"applies":{"caller":"CALLER_KIND_*"}}`,
+		"event.sink":              `{"subscribe":["task.*"]}`,
+		"hook":                    `{"point":"invoke","phase":"before"}`,
+		"runner.capability":       `{"service_role":"rs","kind":"process.exec","params":{"sandbox":true}}`,
+		"authentication.provider": `{"protocol":"authentication.method.v1","purposes":["portal-login"],"methods":[{"id":"corporate-sso","kind":"redirect","interaction":"redirect"}],"subjectNamespace":"enterprise.identity.corporate","requiredCapabilities":[]}`,
 	}
 	for point, descriptor := range valid {
 		t.Run(point, func(t *testing.T) {

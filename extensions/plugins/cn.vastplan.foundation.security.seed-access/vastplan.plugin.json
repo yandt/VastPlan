@@ -1,0 +1,33 @@
+{
+  "id": "cn.vastplan.foundation.security.seed-access",
+  "name": "VastPlan Seed Access",
+  "description": "数据库无关的首次配置与本机授权灾难恢复认证 Provider",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "engines": { "backend": "^0.1" },
+  "contextAccess": { "optional": ["trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "runtime": {
+    "instancePolicy": "leader",
+    "stateModel": "leader-owned",
+    "visibility": "cluster",
+    "routing": "leader",
+    "routingDomain": "security"
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "state": { "backend": { "format": "cn.vastplan.foundation.security.seed-access", "formatVersion": 1 } },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/seed-access" },
+  "contributes": { "backend": { "authenticationProviders": [{
+    "id": "seed-local",
+    "service_role": "backend",
+    "title": "平台种子访问",
+    "protocol": "authentication.method.v1",
+    "purposes": ["portal-login"],
+    "methods": [{ "id": "seed-password", "kind": "password", "interaction": "form" }],
+    "subjectNamespace": "foundation.identity.seed",
+    "requiredCapabilities": []
+  }] } }
+}

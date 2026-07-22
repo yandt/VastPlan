@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-provider.schema.json",
+  "title": "VastPlan Enterprise Authentication Provider v1",
+  "$defs": {
+    "providerPurpose": { "enum": ["portal-login", "mobile-token", "runner-token", "token-verification", "directory", "provisioning"] },
+    "capability": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+    "subjectNamespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+    "providerProfile": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
+        "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
+        "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
+        "contributionId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/providerId" },
+        "configuration": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionRef" },
+        "purposes": { "type": "array", "items": { "$ref": "#/$defs/providerPurpose" }, "minItems": 1, "maxItems": 16, "uniqueItems": true },
+        "methods": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/methodId" }, "minItems": 1, "maxItems": 32, "uniqueItems": true },
+        "subjectNamespace": { "$ref": "#/$defs/subjectNamespace" },
+        "requiredCapabilities": { "type": "array", "items": { "$ref": "#/$defs/capability" }, "maxItems": 32, "uniqueItems": true }
+      },
+      "required": ["version", "revision", "id", "contributionId", "configuration", "purposes", "methods", "subjectNamespace", "requiredCapabilities"]
+    },
+    "providerCatalogEntry": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "profile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionRef" },
+        "contributionId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/providerId" },
+        "purposes": { "type": "array", "items": { "$ref": "#/$defs/providerPurpose" }, "minItems": 1, "maxItems": 16, "uniqueItems": true },
+        "methods": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/methodId" }, "minItems": 1, "maxItems": 32, "uniqueItems": true },
+        "subjectNamespace": { "$ref": "#/$defs/subjectNamespace" },
+        "requiredCapabilities": { "type": "array", "items": { "$ref": "#/$defs/capability" }, "maxItems": 32, "uniqueItems": true }
+      },
+      "required": ["profile", "contributionId", "purposes", "methods", "subjectNamespace", "requiredCapabilities"]
+    },
+    "providerBinding": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "tenantId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
+        "portalId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/authentication/v1/vastplan.authentication-types.schema.json#/$defs/stableId" },
+        "defaultProvider": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
+        "allowedProviders": { "type": "array", "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" }, "minItems": 1, "maxItems": 32, "uniqueItems": true }
+      },
+      "required": ["tenantId", "portalId", "defaultProvider", "allowedProviders"]
+    },
+    "providerCatalog": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
+        "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
+        "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
+        "providers": { "type": "array", "items": { "$ref": "#/$defs/providerCatalogEntry" }, "minItems": 1, "maxItems": 4096 },
+        "bindings": { "type": "array", "items": { "$ref": "#/$defs/providerBinding" }, "minItems": 1, "maxItems": 4096 }
+      },
+      "required": ["version", "revision", "id", "providers", "bindings"]
+    },
+    "providerLifecycle": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "const": "v1" },
+        "profile": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionRef" },
+        "state": { "enum": ["draft", "validated", "tested", "approved", "published", "retired"] },
+        "readiness": { "enum": ["unknown", "blocked", "ready", "degraded", "failed"] },
+        "unmetCapabilities": { "type": "array", "items": { "$ref": "#/$defs/capability" }, "maxItems": 32, "uniqueItems": true },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "testedAt": { "type": "string", "format": "date-time" },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "publishedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["schemaVersion", "profile", "state", "readiness", "unmetCapabilities", "updatedAt"]
+    }
+  },
+  "$ref": "#/$defs/providerProfile"
+}

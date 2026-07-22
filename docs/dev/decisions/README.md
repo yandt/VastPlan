@@ -139,3 +139,4 @@
 - [ADR-0106 多端统一身份授权与 Runner 执行租约](ADR-0106-多端统一身份授权与Runner执行租约.md)
 - [ADR-0107 插件权限目录与系统管理授权治理](ADR-0107-插件权限目录与系统管理授权治理.md)
 - [ADR-0108 会话前 Access Profile 与认证方法协议](ADR-0108-会话前Access-Profile与认证方法协议.md)
+- [ADR-0109 种子访问与企业身份 Provider 分离](ADR-0109-种子访问与企业身份Provider分离.md)

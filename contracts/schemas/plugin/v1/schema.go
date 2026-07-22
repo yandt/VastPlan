@@ -284,13 +284,14 @@ type RuntimeContribution struct {
 }
 
 var backendContributionPoints = map[string]string{
-	"tools":              "tool.package",
-	"agents":             "agent",
-	"apiRoutes":          "api.route",
-	"permissionCheckers": "permission.checker",
-	"eventSinks":         "event.sink",
-	"hooks":              "hook",
-	"runnerCapabilities": "runner.capability",
+	"tools":                   "tool.package",
+	"agents":                  "agent",
+	"apiRoutes":               "api.route",
+	"permissionCheckers":      "permission.checker",
+	"eventSinks":              "event.sink",
+	"hooks":                   "hook",
+	"runnerCapabilities":      "runner.capability",
+	"authenticationProviders": "authentication.provider",
 }
 
 // BackendRuntimeContributions 把已经通过 Schema 的 backend 清单贡献规范化为协议总线
@@ -542,7 +543,40 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	if err := validateFrontendModuleGraphs(manifest); err != nil {
 		return Manifest{}, err
 	}
+	if err := validateAuthenticationProviderDependencies(manifest); err != nil {
+		return Manifest{}, err
+	}
 	return manifest, nil
+}
+
+func validateAuthenticationProviderDependencies(manifest Manifest) error {
+	raw := manifest.Contributes["backend"]
+	if len(raw) == 0 {
+		return nil
+	}
+	var backend struct {
+		Providers []struct {
+			ID                   string   `json:"id"`
+			RequiredCapabilities []string `json:"requiredCapabilities"`
+		} `json:"authenticationProviders"`
+	}
+	if err := json.Unmarshal(raw, &backend); err != nil {
+		return fmt.Errorf("解析 authenticationProviders: %w", err)
+	}
+	declared := map[string]struct{}{}
+	if manifest.Runtime != nil {
+		for _, requirement := range manifest.Runtime.Requires {
+			declared[requirement.Capability] = struct{}{}
+		}
+	}
+	for _, provider := range backend.Providers {
+		for _, capability := range provider.RequiredCapabilities {
+			if _, exists := declared[capability]; !exists {
+				return fmt.Errorf("authentication Provider %s 依赖 %s，但未在 runtime.requires 声明", provider.ID, capability)
+			}
+		}
+	}
+	return nil
 }
 
 func validateConfiguration(contract *ConfigurationContract) error {
