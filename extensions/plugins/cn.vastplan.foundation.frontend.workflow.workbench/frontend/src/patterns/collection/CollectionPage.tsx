@@ -14,6 +14,7 @@ import { useCollectionData } from "./useCollectionData.js";
 import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
 import { evaluateFormCondition } from "../form/presentation.js";
 import { CollectionOverlayWorkflow } from "../overlay/CollectionOverlayWorkflow.js";
+import { collectionPageActionController } from "./action-controller.js";
 
 export function CollectionPage({ page, preferenceScope, presentation }: { page: CollectionPageDefinition; preferenceScope: string; presentation?: WorkbenchPresentationConfig }) {
   const ui = usePortalUI();
@@ -82,15 +83,19 @@ export function CollectionPage({ page, preferenceScope, presentation }: { page: 
   }, [i18n, page, refresh, ui]);
   const actions = collection.actions ?? [];
   const visibleAction = (action: ActionSpec) => action.visibleWhen === undefined || (selected[0] !== undefined && evaluateFormCondition(action.visibleWhen, selected[0]));
-  const primaryActions = actions.filter((action) => (action.placement === "page.primary" || action.placement === "collection.toolbar") && visibleAction(action));
-  const secondaryActions = actions.filter((action) => action.placement === "page.secondary" && visibleAction(action));
+  const toolbarActions = actions.filter((action) => action.placement === "collection.toolbar" && visibleAction(action));
   const bulkActions = actions.filter((action) => action.placement === "collection.bulk" && visibleAction(action));
   const hasFilters = collection.filters !== undefined && collection.filters.length > 0;
+
+  useEffect(() => collectionPageActionController(page).bind({
+    selectedCount: selected.length,
+    visibleActionIDs: new Set(actions.filter(visibleAction).map((action) => action.id)),
+  }, (action) => { void runAction(action, selected); }), [actions, page, runAction, selected]);
 
   return <ui.Stack gap={density === "compact" ? "sm" : density === "comfortable" ? "lg" : "md"}>
     {summary === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Panel title={summary.title === undefined ? undefined : i18n.text(summary.title)}><ui.Descriptions columns={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 3 }} items={summary.metrics.map((metric) => ({ id: metric.id, label: i18n.text(metric.label), value: metric.tone === undefined ? metric.value : <ui.Status tone={metric.tone}>{metric.value}</ui.Status> }))} /></ui.Panel></div>}
     {hasFilters ? <div style={{ width: "100%", minWidth: 0 }}><CollectionFilters filters={collection.filters!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div> : null}
-    <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} primaryActions={primaryActions} secondaryActions={secondaryActions} bulkActions={bulkActions} onRefresh={refresh} onColumns={collection.view === "table" ? () => setPreferencesOpen(true) : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
+    <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} onColumns={collection.view === "table" && collection.preferences !== undefined ? () => setPreferencesOpen(true) : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
     {data.failure === undefined && summaryFailure === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.ErrorState title={data.failure ?? summaryFailure!} retry={refresh} /></div>}
     <div style={{ width: "100%", minWidth: 0 }}>{collection.view === "cards"
       ? <CollectionCards collection={collection} rows={rows} selectedKeys={selectedKeys} loading={data.loading} loadingMore={data.loadingMore} nextCursor={data.nextCursor} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} onLoadMore={data.loadMore} />

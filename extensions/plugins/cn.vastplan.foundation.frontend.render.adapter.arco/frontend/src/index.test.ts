@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RJSFSchema } from "@rjsf/utils";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { arcoRenderAdapter, arcoPortalUIComponents, cascadeResponsiveColumns } from "./index";
+import { arcoIconForTheme, arcoRenderAdapter, arcoPortalUIComponents, cascadeResponsiveColumns } from "./index";
 import { arcoJSONSchemaValidator, transformArcoFormErrors } from "./json-schema-form";
 import { PortalI18nProvider } from "@vastplan/ui-primitives";
 
@@ -10,9 +10,24 @@ describe("Arco portal UI adapter", () => {
   it("implements the complete stable component surface", () => {
     expect(Object.keys(arcoPortalUIComponents).sort()).toEqual([
       "Breadcrumb", "Busy", "Button", "CommandPalette", "Descriptions", "Dialog", "Divider", "Drawer",
-      "DataCard", "EmptyState", "ErrorState", "FilterBar", "FormRenderer", "Grid", "GridItem", "Icon", "Menu", "Page", "Pagination",
-      "Panel", "Popover", "PortalShell", "Skeleton", "Stack", "Status", "Table", "Tabs", "theme",
+      "DataCard", "EmptyState", "ErrorState", "FilterBar", "FormRenderer", "Grid", "GridItem", "Icon", "IconButton", "Menu", "Page", "Pagination",
+      "Panel", "Popover", "PortalShell", "Select", "Skeleton", "Stack", "Status", "Table", "Tabs", "theme",
     ].sort());
+  });
+
+  it("uses the VastPlan-owned SVG icon geometry", () => {
+    const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.Icon, { name: "publish", label: "Publish" }));
+    expect(html).toContain('data-vastplan-icon="publish"');
+    expect(html).toContain('aria-label="Publish"');
+  });
+
+  it("offers an adapter-native icon theme behind the same semantic name", () => {
+    const NativeIcon = arcoIconForTheme("renderer-native");
+    const html = renderToStaticMarkup(createElement(NativeIcon, { name: "publish", label: "Publish" }));
+    expect(html).toContain('data-vastplan-icon="publish"');
+    expect(html).toContain('data-vastplan-icon-source="renderer-native"');
+    expect(arcoRenderAdapter.iconThemes.map((theme) => theme.id)).toEqual(["canonical", "renderer-native"]);
+    expect(arcoIconForTheme("missing")).toBe(arcoPortalUIComponents.Icon);
   });
 
   it("declares every capability implemented by the adapter", () => {

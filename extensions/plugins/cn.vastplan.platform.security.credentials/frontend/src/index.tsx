@@ -85,7 +85,7 @@ export function createCredentialsPage(client: PlatformAdminClient, serviceID: st
         { key: "updatedAt", label: message(namespace, "column.updatedAt", "更新时间"), format: "datetime", defaultVisible: true, minWidth: 180 },
       ],
       actions: [
-        { id: "save", label: message(namespace, "action.create", "保存或替换凭证"), placement: "page.primary", tone: "primary", form: "save" },
+        { id: "save", label: message(namespace, "action.create", "保存或替换凭证"), icon: "add", placement: "page.primary", tone: "primary", form: "save" },
         { id: "rotate", label: message(namespace, "action.rotate", "轮换包裹密钥"), placement: "record.row", confirm: message(namespace, "confirm.rotate", "确认轮换此凭证的包裹密钥？") },
         { id: "revoke", label: message(namespace, "action.revoke", "撤销"), placement: "record.row", tone: "danger", confirm: message(namespace, "confirm.revoke", "确认撤销此凭证？撤销后依赖它的服务将无法取得材料租约。") },
       ],

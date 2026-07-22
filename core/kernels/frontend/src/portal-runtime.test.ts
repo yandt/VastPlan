@@ -13,7 +13,7 @@ const topShellRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.
 const workbenchRef: PluginRef = { id: "cn.vastplan.foundation.frontend.workflow.workbench", version: "1.0.0" };
 const featureRef: PluginRef = { id: "cn.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 
-const renderer = (id: string) => ({ id, label: id, framework: id, capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"] as const, themeTemplates: [{ id: "light", label: "Light", scheme: "light" as const }], defaultThemeTemplate: "light", Provider: ({ children }: { children: ReactNode }) => children, localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { label: "测试" }, "en-US": { label: "Test" } } } });
+const renderer = (id: string) => ({ id, label: id, framework: id, capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"] as const, themeTemplates: [{ id: "light", label: "Light", scheme: "light" as const }], defaultThemeTemplate: "light", iconThemes: [{ id: "canonical", label: "Canonical", source: "canonical" as const }], defaultIconTheme: "canonical", Provider: ({ children }: { children: ReactNode }) => children, localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { label: "测试" }, "en-US": { label: "Test" } } } });
 const adapter: UIRenderAdapter = {
   id: "ui.render.adapter", uiContract: "4.0.0", defaultRenderer: "arco",
   renderers: [
@@ -23,7 +23,7 @@ const adapter: UIRenderAdapter = {
 };
 const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: "4.0.0", templates: [{ id: "standard", label: "Standard", module: standardShellRef }, { id: "top-navigation", label: "Top", module: topShellRef }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
 const shellLibrary = (id: string): UIShellLibrary => ({ id, shell: "ui.structure.shell", uiContract: "4.0.0", Shell: () => null });
-const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "4.0.0", CollectionPage: () => null, FormPage: () => null };
+const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "4.0.0", CollectionPage: () => null, CollectionPageActions: () => null, FormPage: () => null };
 
 const portal: PortalSpec = {
   revision: 1, id: "admin", tenantId: "acme", route: "/",
@@ -64,6 +64,12 @@ describe("PortalRuntime shell", () => {
     expect(prepared.renderAdapter.id).toBe("mui");
     await expect(new PortalRuntime(loader()).prepare({ ...portal, renderAdapter: { ...portal.renderAdapter, config: { ...portal.renderAdapter.config, allowedRenderers: ["arco"], defaultRenderer: "mui" } } }))
       .rejects.toMatchObject({ code: "DESIGN_SYSTEM_RENDERER_CATALOG_INVALID" } satisfies Partial<PortalAssemblyError>);
+  });
+
+  it("rejects an icon theme not declared by the selected Renderer", async () => {
+    const invalid = { ...portal, renderAdapter: { ...portal.renderAdapter, config: { ...portal.renderAdapter.config, rendererOptions: { arco: { iconTheme: "missing" } } } } };
+    await expect(new PortalRuntime(loader()).prepare(invalid))
+      .rejects.toMatchObject({ code: "DESIGN_SYSTEM_ICON_THEME_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 
   it("loads only the selected Renderer module", async () => {
@@ -121,7 +127,7 @@ describe("PortalRuntime shell", () => {
     const prepared = await new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
       context.addCollectionPage({
         id: "cards", path: "/cards", title: "Cards",
-        collection: { id: "cards", title: "Cards", view: "cards", query: { mode: "cursor", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], card: { titleKey: "name" } },
+        collection: { id: "cards", title: "Cards", view: "cards", query: { mode: "cursor", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], card: { titleKey: "name" }, actions: [{ id: "publish", label: "Publish", icon: "publish", placement: "page.primary" }] },
         async load() { return { items: [] }; },
       });
       context.addFormPage({
@@ -130,5 +136,6 @@ describe("PortalRuntime shell", () => {
       });
     } } })).prepare(portal);
     expect(prepared.pages.map((page) => page.id)).toEqual(["cards", "profile"]);
+    expect(prepared.pages[0]?.slots.map((slot) => slot.slot)).toEqual(["page.header.end", "page.body.main"]);
   });
 });

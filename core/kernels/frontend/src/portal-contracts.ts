@@ -28,7 +28,7 @@ export interface RenderAdapterSelection extends PluginRef {
     defaultRenderer: string;
     allowedRenderers: readonly string[];
     userSelectable: boolean;
-    rendererOptions?: Readonly<Record<string, { themeTemplate?: string }>>;
+    rendererOptions?: Readonly<Record<string, { themeTemplate?: string; iconTheme?: string }>>;
   };
 }
 

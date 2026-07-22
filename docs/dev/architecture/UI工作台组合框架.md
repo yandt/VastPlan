@@ -82,12 +82,16 @@ CollectionLoader(query, signal) -> CollectionResult
 
 | Placement | 规则 |
 |---|---|
-| `page.primary` / `page.secondary` | 每区域最多一个主操作；次要操作可进入更多菜单 |
-| `collection.toolbar` / `collection.bulk` | 批量操作必须声明选择数量与对象状态前置条件 |
+| `page.primary` / `page.secondary` | 由可信宿主挂入 `page.header.end`；桌面为纯图标 + Tooltip，最多直接显示 4 个，其余进入更多菜单 |
+| `collection.toolbar` / `collection.bulk` | 集合局部工具保留在集合内；批量动作使用 Select 选择后再显式执行，且必须声明选择数量与对象状态前置条件 |
 | `record.row` / `card.footer` | 常用非破坏性操作可见，其余收纳 overflow |
 | `form.submit` / `form.cancel` / `form.danger` | 提交只有一个主操作；危险操作必须确认且保留失败上下文 |
 
 浏览器的可见/禁用状态只是体验提示。Action handler 每次执行仍经类型化 BFF 或 capability 调用，由服务端重新判定主体、租户、对象状态、并发版本和权限。
+
+页面动作的 `icon` 必须来自 UI Contract 的稳定语义词表，不允许功能插件传入框架图标、任意 SVG 或 React 节点。`canonical` 图标主题由 VastPlan 自有 SVG 提供完整基线；`renderer-native` 主题由当前 Arco/MUI Renderer 按需映射，缺项回退基线。Platform Profile 只配置 `iconTheme`，不能传组件或资源 URL。Workbench 页面动作控制器只桥接当前选择、可见性和执行入口；功能插件仍不知道 Slot，Portal Kernel 才负责把动作宿主编译为 `page.header.end` 贡献。Slot 是 Shell 的结构协议，不因 Workbench 自动填充而删除。
+
+新增、导入、发布属于页面功能动作，必须放在 Page Header；刷新、列设置属于当前集合的展示控制，保留在集合工具区并同样使用图标与 Tooltip。列设置只有在 Collection 明确声明 `preferences` 时显示，不能把未声明的列暴露给用户。
 
 ### 3.3 表单与 Overlay 工作流
 

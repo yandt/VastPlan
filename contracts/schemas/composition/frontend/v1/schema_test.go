@@ -27,11 +27,11 @@ func TestFrontendInputsRejectBoundaryViolations(t *testing.T) {
 	}
 }
 
-func TestPlatformProfileUsesRendererAndThemeTemplateSelection(t *testing.T) {
+func TestPlatformProfileUsesRendererThemeAndIconSelection(t *testing.T) {
 	base := `{"version":1,"revision":1,"id":"theme-template","target":{"kernel":"frontend"},"runtimeEngine":{"id":"cn.vastplan.foundation.frontend.runtime.engine.react","version":"1.0.0","engineContract":"^1.0.0","family":"react"},"renderAdapter":{"id":"cn.vastplan.foundation.frontend.render.adapter","version":"1.0.0","uiContract":"^4.0.0","config":%s},"shell":{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0","uiContract":"^4.0.0","config":{"defaultTemplate":"standard","allowedTemplates":["standard"],"userSelectable":false}},"workbench":{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0","uiContract":"^4.0.0"},"plugins":[{"id":"cn.vastplan.foundation.frontend.runtime.engine.react","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.render.adapter","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.structure.shell","version":"1.0.0"},{"id":"cn.vastplan.foundation.frontend.workflow.workbench","version":"1.0.0"}],"security":{"firstPartyOnly":true,"requireIntegrity":true}}`
-	profile, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, `{"defaultRenderer":"arco","allowedRenderers":["arco","mui"],"userSelectable":true,"rendererOptions":{"arco":{"themeTemplate":"dark"}}}`)))
-	if err != nil || profile.RenderAdapter.Config.RendererOptions["arco"].ThemeTemplate != "dark" {
-		t.Fatalf("Renderer 与主题模板选择应能解析: %+v %v", profile.RenderAdapter.Config, err)
+	profile, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, `{"defaultRenderer":"arco","allowedRenderers":["arco","mui"],"userSelectable":true,"rendererOptions":{"arco":{"themeTemplate":"dark","iconTheme":"renderer-native"}}}`)))
+	if err != nil || profile.RenderAdapter.Config.RendererOptions["arco"].ThemeTemplate != "dark" || profile.RenderAdapter.Config.RendererOptions["arco"].IconTheme != "renderer-native" {
+		t.Fatalf("Renderer、主题模板与图标主题选择应能解析: %+v %v", profile.RenderAdapter.Config, err)
 	}
 	if _, err := ParsePlatformProfile([]byte(fmt.Sprintf(base, `{"defaultRenderer":"arco","allowedRenderers":["arco"],"userSelectable":false,"themeTemplate":"dark"}`))); err == nil {
 		t.Fatal("顶层 themeTemplate 必须拒绝，主题必须属于指定 Renderer")

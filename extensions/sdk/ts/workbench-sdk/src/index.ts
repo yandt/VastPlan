@@ -147,6 +147,9 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
   if (overlays.size !== (definition.overlays ?? []).length) throw new Error("Collection Overlay ID 必须唯一");
   for (const form of forms.values()) validateFormDefinition(form);
   for (const action of definition.collection.actions ?? []) {
+    if ((action.placement === "page.primary" || action.placement === "page.secondary") && action.icon === undefined) {
+      throw new Error(`Page Action ${action.id} 必须声明语义图标`);
+    }
     if (action.form !== undefined && !forms.has(action.form)) throw new Error(`Action ${action.id} 引用了未声明的表单 ${action.form}`);
     if (action.overlay !== undefined && !overlays.has(action.overlay)) throw new Error(`Action ${action.id} 引用了未声明的 Overlay ${action.overlay}`);
     if (action.form !== undefined && action.overlay !== undefined) throw new Error(`Action ${action.id} 不能同时打开表单和 Overlay`);

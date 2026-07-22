@@ -105,6 +105,17 @@ export function validThemeTemplateCatalog(adapter: UIRenderer): boolean {
   return true;
 }
 
+export function validIconThemeCatalog(renderer: UIRenderer): boolean {
+  if (renderer.iconThemes.length === 0 || !/^[a-z][a-z0-9-]{0,63}$/.test(renderer.defaultIconTheme)) return false;
+  const identifiers = new Set<string>();
+  for (const theme of renderer.iconThemes) {
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(theme.id) || identifiers.has(theme.id) || !validLocalizedText(theme.label) ||
+        (theme.source !== "canonical" && theme.source !== "renderer-native")) return false;
+    identifiers.add(theme.id);
+  }
+  return identifiers.has(renderer.defaultIconTheme);
+}
+
 export function validRendererCatalog(adapter: UIRenderAdapter): boolean {
   if (!/^[a-z][a-z0-9-]{0,63}$/.test(adapter.defaultRenderer) || adapter.renderers.length === 0) return false;
   const identifiers = new Set<string>();
@@ -128,7 +139,9 @@ export function validRenderAdapterConfig(config: RenderAdapterSelection["config"
   }
   if (!allowed.has(config.defaultRenderer)) return false;
   for (const [renderer, options] of Object.entries(config.rendererOptions ?? {})) {
-    if (!allowed.has(renderer) || !isJSONRecord(options) || (options.themeTemplate !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(options.themeTemplate))) return false;
+    if (!allowed.has(renderer) || !isJSONRecord(options) ||
+        (options.themeTemplate !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(options.themeTemplate)) ||
+        (options.iconTheme !== undefined && !/^[a-z][a-z0-9-]{0,63}$/.test(options.iconTheme))) return false;
   }
   return true;
 }

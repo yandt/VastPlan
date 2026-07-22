@@ -17,24 +17,15 @@ import {
   Notification,
   Pagination as ArcoPagination,
   Skeleton as ArcoSkeleton,
+  Select as ArcoSelect,
   Space,
   Spin,
   Table as ArcoTable,
   Tabs as ArcoTabs,
   Tag,
   Trigger,
+  Tooltip,
   Typography,
-  IconCheckCircle,
-  IconClose,
-  IconCloseCircle,
-  IconDelete,
-  IconEdit,
-  IconExclamationCircle,
-  IconInfoCircle,
-  IconMenu,
-  IconPlus,
-  IconSearch,
-  IconSettings,
 } from "./arco-components";
 import { useEffect, useId, useMemo, useRef } from "react";
 import type { ComponentType, ReactNode } from "react";
@@ -47,27 +38,28 @@ import type {
   DrawerProps,
   GridItemProps,
   GridProps,
+  IconButtonProps,
   MenuItem,
   PopoverProps,
   PortalShellProps,
   PortalUI,
   ResponsiveColumns,
-  SemanticIconName,
+  SelectProps,
   StackProps,
   StatusTone,
   TableProps,
 } from "@vastplan/ui-primitives";
-import { PortalUIProvider } from "@vastplan/ui-primitives";
+import { PortalUIProvider, VastPlanIcon } from "@vastplan/ui-primitives";
 import { message, usePortalI18n } from "@vastplan/ui-primitives";
 import enUS from "@arco-design/web-react/es/locale/en-US";
 import zhCN from "@arco-design/web-react/es/locale/zh-CN";
 import { arcoCSS } from "./arco-styles";
 import { ArcoJSONSchemaForm } from "./json-schema-form";
 import { scopeDocumentCSS } from "./scope-css";
+import { ArcoNativeIcon } from "./native-icons";
 
 const gapPixels = { xs: 4, sm: 8, md: 16, lg: 24 } as const;
 const dialogWidths = { sm: 480, md: 720, lg: 960 } as const;
-const iconSizes = { sm: 14, md: 16, lg: 20 } as const;
 const namespace = "cn.vastplan.foundation.frontend.render.adapter";
 
 function PortalShell({ header, navigation, inspector, statusBar, children }: PortalShellProps) {
@@ -221,6 +213,34 @@ function buttonProps({ kind }: Pick<ButtonProps, "kind">): { type?: "primary" | 
   return { type: "secondary" };
 }
 
+function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
+  return <Tooltip content={label}><Button
+    aria-label={label}
+    type={tone === "primary" ? "primary" : "text"}
+    status={tone === "danger" ? "danger" : undefined}
+    iconOnly
+    loading={loading}
+    disabled={disabled}
+    onClick={onClick}
+    style={{ width: 44, height: 44 }}
+    icon={<Icon name={icon} />}
+  /></Tooltip>;
+}
+
+function IconButton(props: IconButtonProps) { return iconButtonWith(VastPlanIcon, props); }
+
+function Select({ value, options, placeholder, ariaLabel, disabled, onChange }: SelectProps) {
+  return <ArcoSelect
+    aria-label={ariaLabel}
+    value={value}
+    placeholder={placeholder}
+    disabled={disabled}
+    allowClear
+    style={{ minWidth: 180 }}
+    onChange={(next) => onChange(typeof next === "string" ? next : undefined)}
+  >{options.map((option) => <ArcoSelect.Option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</ArcoSelect.Option>)}</ArcoSelect>;
+}
+
 function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", appearance = "default" }: TableProps) {
   return <ArcoTable
     columns={columns.map((column) => ({
@@ -266,27 +286,17 @@ const arcoThemeTemplates = Object.freeze([
   { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
 ]);
 
+const arcoIconThemes = Object.freeze([
+  { id: "canonical", label: message(namespace, "iconTheme.canonical", "VastPlan 图标"), source: "canonical" as const },
+  { id: "renderer-native", label: message(namespace, "iconTheme.native", "Arco 原生图标"), source: "renderer-native" as const },
+]);
+
 function arcoThemeTemplate(id: string | undefined) { return arcoThemeTemplates.find((template) => template.id === id) ?? arcoThemeTemplates[0]; }
+function arcoIconTheme(id: string | undefined) { return arcoIconThemes.find((theme) => theme.id === id) ?? arcoIconThemes[0]; }
+export function arcoIconForTheme(id: string | undefined) { return arcoIconTheme(id).source === "renderer-native" ? ArcoNativeIcon : VastPlanIcon; }
 
 function columnsForDescriptions(columns: ResponsiveColumns | undefined): number | Record<string, number> | undefined {
   return columns;
-}
-
-function SemanticIcon({ name, label, size = "md" }: { name: SemanticIconName; label?: string; size?: "sm" | "md" | "lg" }) {
-  const props = { style: { fontSize: iconSizes[size] }, ...(label === undefined ? { "aria-hidden": true } : { "aria-label": label }) };
-  switch (name) {
-    case "add": return <IconPlus {...props} />;
-    case "remove": return <IconDelete {...props} />;
-    case "edit": return <IconEdit {...props} />;
-    case "search": return <IconSearch {...props} />;
-    case "settings": return <IconSettings {...props} />;
-    case "success": return <IconCheckCircle {...props} />;
-    case "warning": return <IconExclamationCircle {...props} />;
-    case "error": return <IconCloseCircle {...props} />;
-    case "info": return <IconInfoCircle {...props} />;
-    case "close": return <IconClose {...props} />;
-    case "menu": return <IconMenu {...props} />;
-  }
 }
 
 const statusColors: Record<StatusTone, string | undefined> = {
@@ -308,6 +318,8 @@ export const arcoPortalUIComponents: ArcoComponents = {
   GridItem,
   Divider: ({ label }) => <ArcoDivider orientation={label === undefined ? undefined : "left"}>{label}</ArcoDivider>,
   Button: ({ children, kind, ...props }) => <Button {...buttonProps({ kind })} {...props}>{children}</Button>,
+  IconButton,
+  Select,
   Menu,
   Breadcrumb: ({ items }) => <ArcoBreadcrumb>{items.map((item) => <ArcoBreadcrumb.Item key={item.id} href={item.href} onClick={item.onSelect}>{item.label}</ArcoBreadcrumb.Item>)}</ArcoBreadcrumb>,
   Tabs: ({ items, activeID, onChange }) => <ArcoTabs activeTab={activeID} onChange={onChange}>{items.map((item) => <ArcoTabs.TabPane key={item.id} title={item.label} disabled={item.disabled}>{item.content}</ArcoTabs.TabPane>)}</ArcoTabs>,
@@ -324,7 +336,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
   Pagination: ({ page, pageSize, total, disabled, align = "start", onChange }) => <div style={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><ArcoPagination current={page} pageSize={pageSize} total={total} disabled={disabled} showTotal sizeCanChange onChange={onChange} /></div>,
   Descriptions: ({ title, items, columns }) => <ArcoDescriptions title={title} data={items.map((item) => ({ key: item.id, label: item.label, value: item.value }))} column={columnsForDescriptions(columns)} border />,
   Status: ({ tone = "neutral", children }) => <Tag color={statusColors[tone]}>{children}</Tag>,
-  Icon: SemanticIcon,
+  Icon: VastPlanIcon,
   theme: {
     mode: "system",
     tokens: {
@@ -354,8 +366,10 @@ export const arcoPortalUIComponents: ArcoComponents = {
 // shadow host instead of leaking into the surrounding page.
 export const scopedArcoCSS = scopeDocumentCSS(arcoCSS);
 
-function ArcoProvider({ children, locale, direction, themeTemplate }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string }) {
+function ArcoProvider({ children, locale, direction, themeTemplate, iconTheme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string; iconTheme?: string }) {
   const activeTemplate = arcoThemeTemplate(themeTemplate);
+  const activeIconTheme = arcoIconTheme(iconTheme);
+  const ActiveIcon = arcoIconForTheme(activeIconTheme.id);
   const popupRoot = useRef<HTMLDivElement>(null);
   // Arco's complete dark mode is the framework-provided [arco-theme=dark]
   // stylesheet, not a hand-maintained subset of CSS variables. The scoped
@@ -376,17 +390,19 @@ function ArcoProvider({ children, locale, direction, themeTemplate }: { children
   const [modals, modalHolder] = Modal.useModal();
   const ui = useMemo<PortalUI>(() => ({
     ...arcoPortalUIComponents,
+    Icon: ActiveIcon,
+    IconButton: (props) => iconButtonWith(ActiveIcon, props),
     notify: ({ title, content, kind = "info" }) => notifications[kind]?.({ title, content: content ?? "" }),
     confirm: ({ title, content }) => new Promise((resolve) => {
       if (modals.confirm === undefined) { resolve(false); return; }
       modals.confirm({ title, content, onOk: () => resolve(true), onCancel: () => resolve(false) });
     }),
     theme: { ...arcoPortalUIComponents.theme, mode: activeTemplate.scheme === "dark" ? "dark" : "light" },
-  }), [activeTemplate.scheme, modals, notifications]);
+  }), [ActiveIcon, activeTemplate.scheme, modals, notifications]);
 
   return <>
     <style data-vastplan-design-system="arco">{scopedArcoCSS}</style>
-    <div ref={popupRoot} data-vastplan-design-system="arco" data-vastplan-theme-template={activeTemplate.id} lang={locale} dir={direction}>
+    <div ref={popupRoot} data-vastplan-design-system="arco" data-vastplan-theme-template={activeTemplate.id} data-vastplan-icon-theme={activeIconTheme.id} lang={locale} dir={direction}>
       <ConfigProvider getPopupContainer={requirePopupRoot} locale={locale.toLowerCase().startsWith("zh") ? zhCN : enUS}>
         <PortalUIProvider ui={ui}>{children}</PortalUIProvider>
         {notificationHolder}
@@ -403,12 +419,14 @@ export const arcoRenderer: UIRenderer = {
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   themeTemplates: arcoThemeTemplates,
   defaultThemeTemplate: "light",
+  iconThemes: arcoIconThemes,
+  defaultIconTheme: "canonical",
   Provider: ArcoProvider,
   localization: {
     defaultLocale: "zh-CN",
     messages: {
-      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "command.empty": "没有匹配命令", "action.retry": "重试", "theme.light":"浅色", "theme.dark":"深色", "form.validationFailed": "表单校验未通过", "form.issueCount": "请检查 {count} 个问题", "form.addProperty":"添加属性", "form.add":"添加", "form.empty":"暂无条目", "form.item":"第 {index} 项", "form.propertyName":"属性名称", "form.removeProperty":"删除属性", "form.fileUnsupported":"表单不接受内嵌文件数据；请使用受控制品上传能力。", "form.credentialPlaceholder":"输入 credential:// 凭证引用（禁止填写明文）", "action.moveUp":"上移", "action.moveDown":"下移", "action.copy":"复制", "action.delete":"删除", "form.asyncUnavailable":"异步校验暂时不可用", "form.unsupported":"表单 Schema 不受支持", "form.validating":"正在校验" },
-      "en-US": { "command.title": "Commands", "command.search": "Search commands", "command.empty": "No matching commands", "action.retry": "Retry", "theme.light":"Light", "theme.dark":"Dark", "form.validationFailed": "Form validation failed", "form.issueCount": "Please check {count} issues", "form.addProperty":"Add property", "form.add":"Add", "form.empty":"No items", "form.item":"Item {index}", "form.propertyName":"Property name", "form.removeProperty":"Remove property", "form.fileUnsupported":"Embedded file data is not accepted; use the governed artifact upload capability.", "form.credentialPlaceholder":"Enter a credential:// reference (plaintext is forbidden)", "action.moveUp":"Move up", "action.moveDown":"Move down", "action.copy":"Copy", "action.delete":"Delete", "form.asyncUnavailable":"Asynchronous validation is temporarily unavailable", "form.unsupported":"Unsupported form schema", "form.validating":"Validating" },
+      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "command.empty": "没有匹配命令", "action.retry": "重试", "theme.light":"浅色", "theme.dark":"深色", "iconTheme.canonical":"VastPlan 图标", "iconTheme.native":"Arco 原生图标", "form.validationFailed": "表单校验未通过", "form.issueCount": "请检查 {count} 个问题", "form.addProperty":"添加属性", "form.add":"添加", "form.empty":"暂无条目", "form.item":"第 {index} 项", "form.propertyName":"属性名称", "form.removeProperty":"删除属性", "form.fileUnsupported":"表单不接受内嵌文件数据；请使用受控制品上传能力。", "form.credentialPlaceholder":"输入 credential:// 凭证引用（禁止填写明文）", "action.moveUp":"上移", "action.moveDown":"下移", "action.copy":"复制", "action.delete":"删除", "form.asyncUnavailable":"异步校验暂时不可用", "form.unsupported":"表单 Schema 不受支持", "form.validating":"正在校验" },
+      "en-US": { "command.title": "Commands", "command.search": "Search commands", "command.empty": "No matching commands", "action.retry": "Retry", "theme.light":"Light", "theme.dark":"Dark", "iconTheme.canonical":"VastPlan Icons", "iconTheme.native":"Native Arco Icons", "form.validationFailed": "Form validation failed", "form.issueCount": "Please check {count} issues", "form.addProperty":"Add property", "form.add":"Add", "form.empty":"No items", "form.item":"Item {index}", "form.propertyName":"Property name", "form.removeProperty":"Remove property", "form.fileUnsupported":"Embedded file data is not accepted; use the governed artifact upload capability.", "form.credentialPlaceholder":"Enter a credential:// reference (plaintext is forbidden)", "action.moveUp":"Move up", "action.moveDown":"Move down", "action.copy":"Copy", "action.delete":"Delete", "form.asyncUnavailable":"Asynchronous validation is temporarily unavailable", "form.unsupported":"Unsupported form schema", "form.validating":"Validating" },
     },
   },
 };

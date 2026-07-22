@@ -140,3 +140,5 @@
 - [ADR-0107 插件权限目录与系统管理授权治理](ADR-0107-插件权限目录与系统管理授权治理.md)
 - [ADR-0108 会话前 Access Profile 与认证方法协议](ADR-0108-会话前Access-Profile与认证方法协议.md)
 - [ADR-0109 种子访问与企业身份 Provider 分离](ADR-0109-种子访问与企业身份Provider分离.md)
+- [ADR-0110 治理式 API Exposure 与独立数据面](ADR-0110-治理式API-Exposure与独立数据面.md)
+- [ADR-0111 语义图标与 Workbench 页面动作宿主](ADR-0111-语义图标与Workbench页面动作宿主.md)

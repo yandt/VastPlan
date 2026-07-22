@@ -58,6 +58,10 @@ for (const { id, entry, source, serverEntry, serverSource, deferred, pluginRoot 
     const result = spawnSync(process.execPath, ["engineering/tools/check-arco-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ARCO_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
+  if (id === "cn.vastplan.foundation.frontend.render.adapter.mui") {
+    const result = spawnSync(process.execPath, ["engineering/tools/check-mui-icons-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, MUI_BUNDLE_FILE: outfile } });
+    if (result.status !== 0) process.exit(result.status ?? 1);
+  }
   if (outputRoot !== undefined) {
     const bytes = await readFile(outfile);
     modules.push({ id, entry, file: outfile, sha256: createHash("sha256").update(bytes).digest("hex"), graphFile, graph, deferred,

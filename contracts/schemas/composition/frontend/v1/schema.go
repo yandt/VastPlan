@@ -63,14 +63,15 @@ type RenderAdapter struct {
 // trusted adapter plugin. It carries identifiers only, never CSS or framework
 // objects.
 type RenderAdapterConfig struct {
-	DefaultRenderer  string                          `json:"defaultRenderer"`
-	AllowedRenderers []string                        `json:"allowedRenderers"`
-	UserSelectable   bool                            `json:"userSelectable"`
-	RendererOptions  map[string]RendererThemeOptions `json:"rendererOptions,omitempty"`
+	DefaultRenderer  string                     `json:"defaultRenderer"`
+	AllowedRenderers []string                   `json:"allowedRenderers"`
+	UserSelectable   bool                       `json:"userSelectable"`
+	RendererOptions  map[string]RendererOptions `json:"rendererOptions,omitempty"`
 }
 
-type RendererThemeOptions struct {
+type RendererOptions struct {
 	ThemeTemplate string `json:"themeTemplate,omitempty"`
+	IconTheme     string `json:"iconTheme,omitempty"`
 }
 
 // Shell owns the platform-owned semantic page/slot topology and the governed
@@ -130,7 +131,7 @@ type UpdatePolicy struct {
 type PlatformProfile struct {
 	compositioncommonv1.Document
 	Target        compositioncommonv1.Target `json:"target"`
-	RuntimeEngine RuntimeEngine               `json:"runtimeEngine"`
+	RuntimeEngine RuntimeEngine              `json:"runtimeEngine"`
 	RenderAdapter RenderAdapter              `json:"renderAdapter"`
 	Shell         Shell                      `json:"shell"`
 	Workbench     Workbench                  `json:"workbench"`
@@ -302,7 +303,8 @@ func ValidateRenderAdapterConfig(config RenderAdapterConfig) error {
 		return fmt.Errorf("默认渲染器必须属于允许目录")
 	}
 	for renderer, options := range config.RendererOptions {
-		if _, ok := allowed[renderer]; !ok || (options.ThemeTemplate != "" && !templateName.MatchString(options.ThemeTemplate)) {
+		if _, ok := allowed[renderer]; !ok || (options.ThemeTemplate != "" && !templateName.MatchString(options.ThemeTemplate)) ||
+			(options.IconTheme != "" && !templateName.MatchString(options.IconTheme)) {
 			return fmt.Errorf("渲染器选项无效: %s", renderer)
 		}
 	}

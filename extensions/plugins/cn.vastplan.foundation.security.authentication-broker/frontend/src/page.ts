@@ -85,6 +85,7 @@ export function createAuthenticationProviderPage(
         {
           id: "create",
           label: message(namespace, "action.create", "新增 Provider"),
+          icon: "add",
           placement: "page.primary",
           tone: "primary",
           form: "create",
@@ -92,6 +93,7 @@ export function createAuthenticationProviderPage(
         {
           id: "publish",
           label: message(namespace, "action.publish", "发布目录"),
+          icon: "publish",
           placement: "page.secondary",
           form: "publish",
         },

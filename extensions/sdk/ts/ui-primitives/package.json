@@ -11,7 +11,8 @@
     "@vastplan/workbench-sdk": "workspace:*"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "react": "^18.3.1",
@@ -21,6 +22,7 @@
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "react-dom": "^18.3.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.4"
   }
 }

@@ -432,7 +432,7 @@ func cloneSpec(in portalapi.PortalSpec) portalapi.PortalSpec {
 func cloneRenderAdapterConfig(in frontendcompositionv1.RenderAdapterConfig) frontendcompositionv1.RenderAdapterConfig {
 	out := frontendcompositionv1.RenderAdapterConfig{DefaultRenderer: in.DefaultRenderer, AllowedRenderers: append([]string(nil), in.AllowedRenderers...)}
 	if len(in.RendererOptions) != 0 {
-		out.RendererOptions = make(map[string]frontendcompositionv1.RendererThemeOptions, len(in.RendererOptions))
+		out.RendererOptions = make(map[string]frontendcompositionv1.RendererOptions, len(in.RendererOptions))
 		for id, options := range in.RendererOptions {
 			out.RendererOptions[id] = options
 		}

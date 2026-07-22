@@ -3,6 +3,7 @@ import type { ComponentType, KeyboardEvent, ReactNode } from "react";
 import type { FormPresentation, FormSchema, FormValidationResult, JSONValue, UICapability } from "@vastplan/ui-contract";
 import type { LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy } from "@vastplan/ui-contract";
 import type { CollectionPageDefinition, FormPageDefinition } from "@vastplan/workbench-sdk";
+import type { SemanticIconName } from "./icon.js";
 
 export type { FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormUISchema, FormValidationIssue, FormValidationResult, FormWidget, FormWorkflow, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
 export { jsonSchemaDialect } from "@vastplan/ui-contract";
@@ -13,6 +14,8 @@ export type { PortalI18n, PortalI18nProviderProps, PortalMessageCatalogs } from 
 export { PortalInteractionClient, PortalInteractionError } from "./interaction-client.js";
 export type { PortalFetch, PortalFetchResponse, PortalInteractionClientOptions } from "./interaction-client.js";
 export { PortalControlClient, PortalControlError } from "./portal-control-client.js";
+export { VastPlanIcon, semanticIconNames } from "./icon.js";
+export type { SemanticIconName, VastPlanIconProps } from "./icon.js";
 export type { PortalActivation, PortalActivationPhase, PortalActivationRequest, PortalActivationStatus, PortalApplicationComposition, PortalAuditEvent, PortalBindingRevision, PortalCompositionRef, PortalControlClientOptions, PortalGovernanceSnapshot, PortalManagementBinding, PortalManagementGrant, PortalPlatformProfile, PortalPluginRef, PortalProfileRevision, PortalPutTestTargetBindingRequest, PortalResolvedSpec, PortalRevision, PortalRevisionStatus, PortalTestRelease, PortalTestReleaseRequest, PortalTestReleaseStatus, PortalTestTargetBinding, PortalTestTargetScope } from "./portal-control-client.js";
 
 export interface FormRendererProps {
@@ -91,6 +94,30 @@ export interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   kind?: "primary" | "secondary" | "danger" | "text";
+}
+
+export interface IconButtonProps {
+  icon: SemanticIconName;
+  label: string;
+  onClick?(): void;
+  disabled?: boolean;
+  loading?: boolean;
+  tone?: "normal" | "primary" | "danger";
+}
+
+export interface SelectOption {
+  value: string;
+  label: ReactNode;
+  disabled?: boolean;
+}
+
+export interface SelectProps {
+  value?: string;
+  options: readonly SelectOption[];
+  placeholder?: string;
+  ariaLabel: string;
+  disabled?: boolean;
+  onChange(value: string | undefined): void;
 }
 
 export interface BreadcrumbItem { id: string; label: string; href?: string; onSelect?(): void; }
@@ -188,8 +215,6 @@ export interface PaginationProps {
 
 export interface DescriptionItem { id: string; label: ReactNode; value: ReactNode; }
 export type StatusTone = "neutral" | "info" | "success" | "warning" | "error";
-export const semanticIconNames = Object.freeze(["add", "remove", "edit", "search", "settings", "success", "warning", "error", "info", "close", "menu"] as const);
-export type SemanticIconName = (typeof semanticIconNames)[number];
 export interface SemanticThemeTokens {
   color: {
     canvas: string; surface: string; overlaySurface: string; text: string; mutedText: string; border: string;
@@ -214,6 +239,8 @@ export interface PortalUI {
   GridItem: ComponentType<GridItemProps>;
   Divider: ComponentType<{ label?: ReactNode }>;
   Button: ComponentType<ButtonProps>;
+  IconButton: ComponentType<IconButtonProps>;
+  Select: ComponentType<SelectProps>;
   Menu: ComponentType<{ items: MenuItem[]; activeID?: string; onSelect?(id: string): void }>;
   Breadcrumb: ComponentType<{ items: BreadcrumbItem[] }>;
   Tabs: ComponentType<{ items: TabItem[]; activeID?: string; onChange?(id: string): void }>;
@@ -228,7 +255,7 @@ export interface PortalUI {
   Pagination: ComponentType<PaginationProps>;
   Descriptions: ComponentType<{ title?: ReactNode; items: DescriptionItem[]; columns?: ResponsiveColumns }>;
   Status: ComponentType<{ tone?: StatusTone; children: ReactNode }>;
-  Icon: ComponentType<{ name: SemanticIconName; label?: string; size?: "sm" | "md" | "lg" }>;
+  Icon: ComponentType<import("./icon.js").VastPlanIconProps>;
   theme: { mode: "light" | "dark" | "system"; tokens: SemanticThemeTokens };
   EmptyState: ComponentType<{ title: string; description?: string }>;
   ErrorState: ComponentType<{ title: string; retry?(): void }>;
@@ -253,6 +280,13 @@ export interface ThemeTemplate {
   scheme: ThemeTemplateScheme;
 }
 
+/** Selects icon geometry without exposing a framework package to consumers. */
+export interface IconThemeTemplate {
+  id: string;
+  label: LocalizedText;
+  source: "canonical" | "renderer-native";
+}
+
 /** A concrete UI framework implementation owned by the selected render adapter. */
 export interface UIRenderer {
   id: string;
@@ -261,7 +295,9 @@ export interface UIRenderer {
   capabilities: readonly UICapability[];
   themeTemplates: readonly ThemeTemplate[];
   defaultThemeTemplate: string;
-  Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection; themeTemplate?: string }>;
+  iconThemes: readonly IconThemeTemplate[];
+  defaultIconTheme: string;
+  Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection; themeTemplate?: string; iconTheme?: string }>;
   localization?: PluginLocalization;
 }
 
@@ -410,6 +446,7 @@ export interface UIWorkbenchAdapter {
   id: "ui.workflow.workbench";
   uiContract: string;
   CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } } }>;
+  CollectionPageActions: ComponentType<{ page: CollectionPageDefinition }>;
   FormPage: ComponentType<{ page: FormPageDefinition }>;
   localization?: PluginLocalization;
 }

@@ -24,6 +24,7 @@ export { default as Notification } from "@arco-design/web-react/es/Notification"
 export { default as Pagination } from "@arco-design/web-react/es/Pagination";
 export { default as Rate } from "@arco-design/web-react/es/Rate";
 export { default as Select } from "@arco-design/web-react/es/Select";
+export { default as Tooltip } from "@arco-design/web-react/es/Tooltip";
 export { default as Skeleton } from "@arco-design/web-react/es/Skeleton";
 export { default as Space } from "@arco-design/web-react/es/Space";
 export { default as Spin } from "@arco-design/web-react/es/Spin";
@@ -40,12 +41,19 @@ export { default as IconClose } from "@arco-design/web-react/icon/react-icon/Ico
 export { default as IconCloseCircle } from "@arco-design/web-react/icon/react-icon/IconCloseCircle";
 export { default as IconCopy } from "@arco-design/web-react/icon/react-icon/IconCopy";
 export { default as IconDelete } from "@arco-design/web-react/icon/react-icon/IconDelete";
+export { default as IconDownload } from "@arco-design/web-react/icon/react-icon/IconDownload";
 export { default as IconDown } from "@arco-design/web-react/icon/react-icon/IconDown";
 export { default as IconEdit } from "@arco-design/web-react/icon/react-icon/IconEdit";
 export { default as IconExclamationCircle } from "@arco-design/web-react/icon/react-icon/IconExclamationCircle";
+export { default as IconExport } from "@arco-design/web-react/icon/react-icon/IconExport";
+export { default as IconImport } from "@arco-design/web-react/icon/react-icon/IconImport";
 export { default as IconInfoCircle } from "@arco-design/web-react/icon/react-icon/IconInfoCircle";
 export { default as IconMenu } from "@arco-design/web-react/icon/react-icon/IconMenu";
+export { default as IconMore } from "@arco-design/web-react/icon/react-icon/IconMore";
 export { default as IconPlus } from "@arco-design/web-react/icon/react-icon/IconPlus";
 export { default as IconSearch } from "@arco-design/web-react/icon/react-icon/IconSearch";
+export { default as IconRefresh } from "@arco-design/web-react/icon/react-icon/IconRefresh";
 export { default as IconSettings } from "@arco-design/web-react/icon/react-icon/IconSettings";
+export { default as IconUpload } from "@arco-design/web-react/icon/react-icon/IconUpload";
+export { default as IconLayout } from "@arco-design/web-react/icon/react-icon/IconLayout";
 export { default as IconUp } from "@arco-design/web-react/icon/react-icon/IconUp";

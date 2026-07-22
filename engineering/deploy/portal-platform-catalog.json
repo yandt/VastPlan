@@ -26,8 +26,8 @@
           "allowedRenderers": ["arco", "mui"],
           "userSelectable": true,
           "rendererOptions": {
-            "arco": { "themeTemplate": "light" },
-            "mui": { "themeTemplate": "light" }
+            "arco": { "themeTemplate": "light", "iconTheme": "canonical" },
+            "mui": { "themeTemplate": "light", "iconTheme": "canonical" }
           }
         }
       },
@@ -83,7 +83,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 3,
-        "digest": "0dc5350709fc09f8ef35fb0db6434c89fad7f50af31c380e02cadf00c7efe480"
+        "digest": "96f8c9d78bd254417edaddbc391c71ade3a3b5e26c5316a97dee272766da2456"
       },
       "services": [
         {

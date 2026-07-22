@@ -176,7 +176,8 @@ function LocalizedPortalApplication({ prepared, pathname, onNavigate, page, reco
   const Provider = prepared.renderAdapter.Provider;
   const i18n = usePortalI18n();
   const themeTemplate = prepared.portal.renderAdapter.config.rendererOptions?.[prepared.renderAdapter.id]?.themeTemplate;
-  return <Provider locale={i18n.locale} direction={i18n.direction} themeTemplate={themeTemplate}>
+  const iconTheme = prepared.portal.renderAdapter.config.rendererOptions?.[prepared.renderAdapter.id]?.iconTheme;
+  return <Provider locale={i18n.locale} direction={i18n.direction} themeTemplate={themeTemplate} iconTheme={iconTheme}>
     <PortalContent prepared={prepared} pathname={pathname} onNavigate={onNavigate} page={page} recoveryMode={recoveryMode} onRendererChange={onRendererChange} onShellTemplateChange={onShellTemplateChange} />
     {developmentError === undefined ? null : <PortalDevelopmentNotice message={developmentError} />}
     {updateNotice === undefined ? null : <PortalUpdateNotice update={updateNotice} onApply={onApplyUpdate} />}

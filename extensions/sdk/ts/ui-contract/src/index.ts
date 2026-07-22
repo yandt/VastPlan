@@ -72,6 +72,9 @@ export interface FormValidationIssue {
 }
 export interface FormValidationResult { valid: boolean; issues: FormValidationIssue[]; }
 
+export { semanticIconNames } from "./icons.js";
+export type { SemanticIconName } from "./icons.js";
+
 /**
  * Serializable collection presentation. Runtime loaders and action handlers live
  * in @vastplan/workbench-sdk so this contract remains portable to Mobile/Runner.
@@ -120,6 +123,8 @@ export interface CollectionCardSpec {
 export interface ActionSpec {
   id: string;
   label: import("./i18n.js").LocalizedText;
+  /** Semantic icon rendered consistently by every UI framework adapter. */
+  icon?: import("./icons.js").SemanticIconName;
   placement: CollectionActionPlacement;
   tone?: "primary" | "secondary" | "danger";
   requiresSelection?: boolean;

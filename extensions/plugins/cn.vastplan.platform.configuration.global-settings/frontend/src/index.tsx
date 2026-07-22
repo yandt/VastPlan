@@ -73,7 +73,7 @@ export function createGlobalSettingsPage(client: PlatformAdminClient, serviceID:
         { key: "updatedAt", label: message(namespace, "column.updatedAt", "更新时间"), format: "datetime", defaultVisible: true, minWidth: 180 },
       ],
       actions: [
-        { id: "create", label: message(namespace, "action.create", "新增设置"), placement: "page.primary", tone: "primary", form: "create" },
+        { id: "create", label: message(namespace, "action.create", "新增设置"), icon: "add", placement: "page.primary", tone: "primary", form: "create" },
         { id: "edit", label: message(namespace, "action.edit", "编辑"), placement: "record.row", form: "edit" },
         { id: "delete", label: message(namespace, "action.delete", "删除"), placement: "record.row", tone: "danger", confirm: message(namespace, "confirm.delete", "确认删除此设置？版本不匹配时系统会拒绝。") },
       ],

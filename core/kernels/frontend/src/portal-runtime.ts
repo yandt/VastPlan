@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { message } from "@vastplan/ui-primitives";
+import { message, semanticIconNames } from "@vastplan/ui-primitives";
 import type {
   FrontendPluginContext,
   PluginLocalization,
@@ -61,7 +61,7 @@ export class PortalRuntime {
     const workbenchModule = requiredModule(modules, portal.workbench);
     assertTrustedFirstParty(workbenchModule, portal.workbench.id);
     const workbench = workbenchModule.workbench;
-    if (workbench?.id !== "ui.workflow.workbench" || typeof workbench.CollectionPage !== "function" || !contractSatisfies(workbench.uiContract, portal.workbench.uiContract)) {
+    if (workbench?.id !== "ui.workflow.workbench" || typeof workbench.CollectionPage !== "function" || typeof workbench.CollectionPageActions !== "function" || !contractSatisfies(workbench.uiContract, portal.workbench.uiContract)) {
       throw new PortalAssemblyError("WORKBENCH_INVALID", "UI Workbench 插件缺失或 UI 契约不兼容");
     }
 
@@ -169,11 +169,16 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
       if (!page.id || !page.collection.id || !["table", "cards"].includes(page.collection.view) || !["page", "cursor"].includes(page.collection.query.mode) ||
           (page.collection.view === "table" && page.collection.columns.length === 0) || (page.collection.view === "cards" && page.collection.card === undefined) || typeof page.load !== "function" ||
           (page.loadSummary !== undefined && typeof page.loadSummary !== "function") || (page.runAction !== undefined && typeof page.runAction !== "function") ||
-          (page.overlays ?? []).some((overlay) => !overlay.id || !["dialog", "drawer"].includes(overlay.surface) || typeof overlay.load !== "function")) {
+          (page.overlays ?? []).some((overlay) => !overlay.id || !["dialog", "drawer"].includes(overlay.surface) || typeof overlay.load !== "function") ||
+          (page.collection.actions ?? []).some((action) => (action.placement === "page.primary" || action.placement === "page.secondary") && (action.icon === undefined || !semanticIconNames.includes(action.icon)))) {
         throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${page.id}`);
       }
       const Page = () => createElement(workbench.CollectionPage, { page, preferenceScope: `${portal.tenantId}/${portal.id}`, presentation: portal.workbench.config });
-      context.addPage({ id: page.id, path: page.path, title: page.title, description: page.description, navigation: page.navigation, slots: [{ id: "workbench.collection", slot: "page.body.main", component: Page }] });
+      const PageActions = () => createElement(workbench.CollectionPageActions, { page });
+      context.addPage({ id: page.id, path: page.path, title: page.title, description: page.description, navigation: page.navigation, slots: [
+        { id: "workbench.collection.actions", slot: "page.header.end", component: PageActions },
+        { id: "workbench.collection", slot: "page.body.main", component: Page },
+      ] });
     },
     addFormPage: (page) => {
       if (!page.id || !page.form?.id || page.form.workflow.surface !== "page" || typeof page.form.submit !== "function") {

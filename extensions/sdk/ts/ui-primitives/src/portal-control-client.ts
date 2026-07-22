@@ -51,7 +51,7 @@ export interface PortalPlatformProfile {
   id: string;
   target: { kernel: "frontend" };
   runtimeEngine: PortalPluginRef & { engineContract: string; family: string };
-  renderAdapter: PortalPluginRef & { uiContract: string; config: { defaultRenderer: string; allowedRenderers: string[]; userSelectable: boolean; rendererOptions?: Record<string, { themeTemplate?: string }> } };
+  renderAdapter: PortalPluginRef & { uiContract: string; config: { defaultRenderer: string; allowedRenderers: string[]; userSelectable: boolean; rendererOptions?: Record<string, { themeTemplate?: string; iconTheme?: string }> } };
   shell: PortalPluginRef & { uiContract: string; config: { navigationGroups?: JSONValue; defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
   workbench: PortalPluginRef & { uiContract: string };
   localization?: { defaultLocale: string; supportedLocales: string[] };
@@ -84,7 +84,7 @@ export interface PortalResolvedSpec {
     audience?: string[];
     branding?: Record<string, JSONValue>;
     runtimeEngine: PortalPluginRef & { engineContract: string; family: string };
-    renderAdapter: PortalPluginRef & { uiContract: string; config: { defaultRenderer: string; allowedRenderers: string[]; userSelectable: boolean; rendererOptions?: Record<string, { themeTemplate?: string }> } };
+    renderAdapter: PortalPluginRef & { uiContract: string; config: { defaultRenderer: string; allowedRenderers: string[]; userSelectable: boolean; rendererOptions?: Record<string, { themeTemplate?: string; iconTheme?: string }> } };
     shell: PortalPluginRef & { uiContract: string; config: { defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
     workbench: PortalPluginRef & { uiContract: string };
     plugins: PortalPluginRef[];

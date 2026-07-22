@@ -20,9 +20,11 @@ import {
   DialogTitle,
   Divider as MuiDivider,
   Drawer as MuiDrawer,
+  IconButton as MuiIconButton,
   List,
   ListItemButton,
   ListItemText,
+  MenuItem as MuiMenuItem,
   Pagination as MuiPagination,
   Paper,
   Popover as MuiPopover,
@@ -41,6 +43,7 @@ import {
   TableRow,
   Tabs as MuiTabs,
   TextField,
+  Tooltip,
   ThemeProvider,
   Typography,
   Chip,
@@ -59,16 +62,18 @@ import type {
   FormSectionPresentation,
   GridItemProps,
   GridProps,
+  IconButtonProps,
   MenuItem,
   PopoverProps,
   PortalShellProps,
   PortalUI,
-  SemanticIconName,
+  SelectProps,
   StackProps,
   StatusTone,
   TableProps,
 } from "@vastplan/ui-primitives";
-import { PortalUIProvider, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { MuiNativeIcon } from "./native-icons";
 
 const gaps = { xs: 0.5, sm: 1, md: 2, lg: 3 } as const;
 const widths = { sm: "sm", md: "md", lg: "lg" } as const;
@@ -110,6 +115,22 @@ function Stack({ direction = "column", gap = "md", align = "stretch", justify = 
 function responsiveColumns(columns: GridProps["columns"]): string | Record<string, string> {
   if (typeof columns === "number" || columns === undefined) return `repeat(${columns ?? 1}, minmax(0, 1fr))`;
   return Object.fromEntries(Object.entries(columns).map(([key, count]) => [key, `repeat(${count}, minmax(0, 1fr))`]));
+}
+
+function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
+  const color = tone === "danger" ? "error" : tone === "primary" ? "primary" : "default";
+  return <Tooltip title={label}><span><MuiIconButton aria-label={label} color={color} disabled={disabled || loading} onClick={onClick} sx={{ width: 44, height: 44 }}>
+    {loading ? <CircularProgress size={20} /> : <Icon name={icon} />}
+  </MuiIconButton></span></Tooltip>;
+}
+
+function IconButton(props: IconButtonProps) { return iconButtonWith(VastPlanIcon, props); }
+
+function Select({ value, options, placeholder, ariaLabel, disabled, onChange }: SelectProps) {
+  return <TextField select size="small" value={value ?? ""} disabled={disabled} inputProps={{ "aria-label": ariaLabel }} sx={{ minWidth: 180 }} onChange={(event) => onChange(event.target.value || undefined)}>
+    {placeholder === undefined ? null : <MuiMenuItem value="" disabled>{placeholder}</MuiMenuItem>}
+    {options.map((option) => <MuiMenuItem key={option.value} value={option.value} disabled={option.disabled}>{option.label}</MuiMenuItem>)}
+  </TextField>;
 }
 
 function Grid({ columns = 1, gap = "md", children }: GridProps) {
@@ -335,18 +356,25 @@ function DataCard({ title, subtitle, status, summary, children, actions, selecta
   </Card>;
 }
 
-const symbols: Record<SemanticIconName, string> = { add: "+", remove: "−", edit: "✎", search: "⌕", settings: "⚙", success: "✓", warning: "!", error: "×", info: "i", close: "×", menu: "☰" };
 const muiThemeTemplates = Object.freeze([
   { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
   { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
 ]);
+const muiIconThemes = Object.freeze([
+  { id: "canonical", label: message(namespace, "iconTheme.canonical", "VastPlan 图标"), source: "canonical" as const },
+  { id: "renderer-native", label: message(namespace, "iconTheme.native", "Material 原生图标"), source: "renderer-native" as const },
+]);
 function muiThemeTemplate(id: string | undefined) { return muiThemeTemplates.find((template) => template.id === id) ?? muiThemeTemplates[0]; }
+function muiIconTheme(id: string | undefined) { return muiIconThemes.find((theme) => theme.id === id) ?? muiIconThemes[0]; }
+export function muiIconForTheme(id: string | undefined) { return muiIconTheme(id).source === "renderer-native" ? MuiNativeIcon : VastPlanIcon; }
 type MuiComponents = Omit<PortalUI, "notify" | "confirm">;
 
 export const muiPortalUIComponents: MuiComponents = {
   PortalShell, Page, Panel, Stack, Grid, GridItem,
   Divider: ({ label }) => <MuiDivider>{label}</MuiDivider>,
   Button: ({ children, kind, loading, ...props }) => <MuiButton {...buttonVariant(kind)} {...props}>{loading ? <CircularProgress size={16} /> : children}</MuiButton>,
+  IconButton,
+  Select,
   Menu: ({ items, activeID, onSelect }) => <List><MenuBranch items={items} activeID={activeID} onSelect={onSelect} /></List>,
   Breadcrumb: ({ items }) => <Breadcrumbs>{items.map((item) => <MuiButton key={item.id} href={item.href} onClick={item.onSelect} variant="text">{item.label}</MuiButton>)}</Breadcrumbs>,
   Tabs: ({ items, activeID, onChange }) => <><MuiTabs value={activeID ?? false} onChange={(_, id: string) => onChange?.(id)}>{items.map((item) => <Tab key={item.id} value={item.id} label={item.label} disabled={item.disabled} />)}</MuiTabs>{items.find((item) => item.id === activeID)?.content}</>,
@@ -359,7 +387,7 @@ export const muiPortalUIComponents: MuiComponents = {
   Pagination: ({ page, total, pageSize, disabled, align = "start", onChange }) => <Box sx={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><MuiPagination page={page} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} /></Box>,
   Descriptions: ({ title, items, columns = 2 }) => <Box><Typography variant="h6">{title}</Typography><Grid columns={columns}>{items.map((item) => <Box key={item.id}><Typography variant="caption" color="text.secondary">{item.label}</Typography><Typography>{item.value}</Typography></Box>)}</Grid></Box>,
   Status: ({ tone = "neutral", children }) => <Chip color={tones[tone]} label={children} size="small" />,
-  Icon: ({ name, label, size = "md" }) => <Box component="span" aria-label={label} aria-hidden={label === undefined} sx={{ fontSize: size === "sm" ? 14 : size === "md" ? 16 : 20 }}>{symbols[name]}</Box>,
+  Icon: VastPlanIcon,
   theme: { mode: "system", tokens: {
     color: { canvas: "#fafafa", surface: "#fff", overlaySurface: "#fff", text: "#1d2129", mutedText: "#6b7785", border: "#d9d9d9", primary: "#1976d2", danger: "#d32f2f", warning: "#ed6c02", success: "#2e7d32", hover: "rgba(25,118,210,.06)", selected: "rgba(25,118,210,.12)", focusRing: "#1976d2" },
     radius: { sm: 4, md: 8, lg: 12 }, spacing: { xs: 4, sm: 8, md: 16, lg: 24 },
@@ -372,8 +400,10 @@ export const muiPortalUIComponents: MuiComponents = {
   Busy: ({ label }) => <MuiStack direction="row" gap={1} alignItems="center"><CircularProgress size={20} /><span>{label}</span></MuiStack>,
 };
 
-function MuiProvider({ children, locale, direction, themeTemplate }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string }) {
+function MuiProvider({ children, locale, direction, themeTemplate, iconTheme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string; iconTheme?: string }) {
   const activeTemplate = muiThemeTemplate(themeTemplate);
+  const activeIconTheme = muiIconTheme(iconTheme);
+  const ActiveIcon = muiIconForTheme(activeIconTheme.id);
   const i18n = usePortalI18n();
   const boundary = useRef<HTMLDivElement>(null);
   const [shadowRuntime, setShadowRuntime] = useState<{ cache: ReturnType<typeof createCache>; theme: ReturnType<typeof createTheme> }>();
@@ -381,10 +411,12 @@ function MuiProvider({ children, locale, direction, themeTemplate }: { children:
   const [confirmation, setConfirmation] = useState<{ title: string; content?: string; resolve(value: boolean): void }>();
   const ui = useMemo<PortalUI>(() => ({
     ...muiPortalUIComponents,
+    Icon: ActiveIcon,
+    IconButton: (props) => iconButtonWith(ActiveIcon, props),
     notify: ({ title, content, kind = "info" }) => setNotice({ title, content, kind }),
     confirm: ({ title, content }) => new Promise((resolve) => setConfirmation({ title, content, resolve })),
     theme: { ...muiPortalUIComponents.theme, mode: activeTemplate.scheme === "dark" ? "dark" : "light" },
-  }), [activeTemplate.scheme]);
+  }), [ActiveIcon, activeTemplate.scheme]);
   const finishConfirmation = (accepted: boolean) => {
     confirmation?.resolve(accepted);
     setConfirmation(undefined);
@@ -403,7 +435,7 @@ function MuiProvider({ children, locale, direction, themeTemplate }: { children:
       } }, locale.toLowerCase().startsWith("zh") ? zhCN : enUS),
     });
   }, [activeTemplate.id, activeTemplate.scheme, direction, locale]);
-  return <div ref={boundary} data-vastplan-design-system="mui" data-vastplan-theme-template={activeTemplate.id} lang={locale} dir={direction}>{shadowRuntime === undefined ? null : <CacheProvider value={shadowRuntime.cache}><ThemeProvider theme={shadowRuntime.theme}><ScopedCssBaseline><PortalUIProvider ui={ui}>{children}</PortalUIProvider>
+  return <div ref={boundary} data-vastplan-design-system="mui" data-vastplan-theme-template={activeTemplate.id} data-vastplan-icon-theme={activeIconTheme.id} lang={locale} dir={direction}>{shadowRuntime === undefined ? null : <CacheProvider value={shadowRuntime.cache}><ThemeProvider theme={shadowRuntime.theme}><ScopedCssBaseline><PortalUIProvider ui={ui}>{children}</PortalUIProvider>
     <Snackbar open={notice !== undefined} autoHideDuration={5000} onClose={() => setNotice(undefined)}><Alert severity={notice?.kind ?? "info"} onClose={() => setNotice(undefined)}><strong>{notice?.title}</strong>{notice?.content === undefined ? null : ` — ${notice.content}`}</Alert></Snackbar>
     <MuiDialog open={confirmation !== undefined} onClose={() => finishConfirmation(false)}><DialogTitle>{confirmation?.title}</DialogTitle><DialogContent>{confirmation?.content}</DialogContent><DialogActions><MuiButton onClick={() => finishConfirmation(false)}>{i18n.text(message(namespace, "action.cancel", "取消"))}</MuiButton><MuiButton variant="contained" onClick={() => finishConfirmation(true)}>{i18n.text(message(namespace, "action.confirm", "确认"))}</MuiButton></DialogActions></MuiDialog>
   </ScopedCssBaseline></ThemeProvider></CacheProvider>}</div>;
@@ -416,12 +448,14 @@ export const muiRenderer: UIRenderer = {
   capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme", "navigation"],
   themeTemplates: muiThemeTemplates,
   defaultThemeTemplate: "light",
+  iconThemes: muiIconThemes,
+  defaultIconTheme: "canonical",
   Provider: MuiProvider,
   localization: {
     defaultLocale: "zh-CN",
     messages: {
-      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "action.retry": "重试", "action.cancel": "取消", "action.confirm": "确认", "theme.light":"浅色", "theme.dark":"深色", "form.invalid": "值不符合 Schema" },
-      "en-US": { "command.title": "Commands", "command.search": "Search commands", "action.retry": "Retry", "action.cancel": "Cancel", "action.confirm": "Confirm", "theme.light":"Light", "theme.dark":"Dark", "form.invalid": "Value does not match the schema" },
+      "zh-CN": { "command.title": "命令", "command.search": "搜索命令", "action.retry": "重试", "action.cancel": "取消", "action.confirm": "确认", "theme.light":"浅色", "theme.dark":"深色", "iconTheme.canonical":"VastPlan 图标", "iconTheme.native":"Material 原生图标", "form.invalid": "值不符合 Schema" },
+      "en-US": { "command.title": "Commands", "command.search": "Search commands", "action.retry": "Retry", "action.cancel": "Cancel", "action.confirm": "Confirm", "theme.light":"Light", "theme.dark":"Dark", "iconTheme.canonical":"VastPlan Icons", "iconTheme.native":"Native Material Icons", "form.invalid": "Value does not match the schema" },
     },
   },
 };

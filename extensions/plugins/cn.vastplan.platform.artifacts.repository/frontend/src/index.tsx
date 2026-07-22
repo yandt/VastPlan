@@ -197,8 +197,8 @@ function garbageCollectionPage(client: PlatformAdminClient, id: string, path: st
         { key: "sweepAfter", label: text("column.sweepAfter", "最早清扫时间"), defaultVisible: true, minWidth: 190 },
       ],
       actions: [
-        { id: "quarantine", label: text("action.quarantine", "隔离当前计划"), placement: "page.primary", tone: "danger", confirm: text("confirm.quarantine", "将重新生成计划并隔离全部候选，默认宽限期为 72 小时。") },
-        { id: "sweep", label: text("action.sweep", "清扫到期制品"), placement: "page.secondary", tone: "danger", confirm: text("confirm.sweep", "只会删除已超过宽限期且复核无引用的隔离制品。") },
+        { id: "quarantine", label: text("action.quarantine", "隔离当前计划"), icon: "warning", placement: "page.primary", tone: "danger", confirm: text("confirm.quarantine", "将重新生成计划并隔离全部候选，默认宽限期为 72 小时。") },
+        { id: "sweep", label: text("action.sweep", "清扫到期制品"), icon: "remove", placement: "page.secondary", tone: "danger", confirm: text("confirm.sweep", "只会删除已超过宽限期且复核无引用的隔离制品。") },
       ],
       preferences: { allowedColumns: ["pluginId", "version", "channel", "lifecycle", "status", "size", "sweepAfter"], density: true },
     },

@@ -14,6 +14,7 @@ import {
   requiredCapabilities,
   samePlugin,
   validRenderAdapterConfig,
+  validIconThemeCatalog,
   validRendererCatalog,
   validShellConfig,
   validShellTemplateCatalog,
@@ -66,13 +67,18 @@ export async function loadPortalFoundations(
     throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_INVALID", `Renderer 模块与 Adapter 目录不匹配: ${rendererID}`);
   }
   const capabilities = new Set(renderer.capabilities);
-  if (!requiredCapabilities.every((capability) => capabilities.has(capability)) || !validThemeTemplateCatalog(renderer)) {
+  if (!requiredCapabilities.every((capability) => capabilities.has(capability)) || !validThemeTemplateCatalog(renderer) || !validIconThemeCatalog(renderer)) {
     throw new PortalAssemblyError("DESIGN_SYSTEM_INCOMPLETE", "选定 Renderer 未实现 Portal 所需的全部 UI 能力或主题目录无效");
   }
   const configuredThemeTemplate = portal.renderAdapter.config.rendererOptions?.[rendererID]?.themeTemplate;
+  const configuredIconTheme = portal.renderAdapter.config.rendererOptions?.[rendererID]?.iconTheme;
   const declaredThemeTemplates = new Set(renderer.themeTemplates.map((template) => template.id));
   if (!declaredThemeTemplates.has(renderer.defaultThemeTemplate) || (configuredThemeTemplate !== undefined && !declaredThemeTemplates.has(configuredThemeTemplate))) {
     throw new PortalAssemblyError("DESIGN_SYSTEM_THEME_TEMPLATE_INVALID", `Renderer 不支持主题模板: ${configuredThemeTemplate ?? renderer.defaultThemeTemplate}`);
+  }
+  const declaredIconThemes = new Set(renderer.iconThemes.map((theme) => theme.id));
+  if (!declaredIconThemes.has(renderer.defaultIconTheme) || (configuredIconTheme !== undefined && !declaredIconThemes.has(configuredIconTheme))) {
+    throw new PortalAssemblyError("DESIGN_SYSTEM_ICON_THEME_INVALID", `Renderer 不支持图标主题: ${configuredIconTheme ?? renderer.defaultIconTheme}`);
   }
 
   const shellModule = await loader.load(portal.shell);

@@ -67,9 +67,11 @@ describe("VerifiedFrontendPluginLoader", () => {
     const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.runtime.engine.react" });
     const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({
       runtimeEngine: { id: "ui.runtime.engine", family: "react", engineContract: "1.0.0", capabilities: ["csr", "generation"] },
+      localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { "engine.react": "React 运行引擎" } } },
     }));
     const loaded = await loader.load({ id: locked.id, version: locked.version });
     expect(loaded.runtimeEngine).toMatchObject({ id: "ui.runtime.engine", family: "react" });
+    expect(loaded.localization?.messages["zh-CN"]?.["engine.react"]).toBe("React 运行引擎");
   });
 
   it("recognizes a Renderer only from its explicit named module export", async () => {
@@ -82,6 +84,8 @@ describe("VerifiedFrontendPluginLoader", () => {
         capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"],
         themeTemplates: [{ id: "light" }],
         defaultThemeTemplate: "light",
+        iconThemes: [{ id: "canonical", source: "canonical" }],
+        defaultIconTheme: "canonical",
       },
     }));
 

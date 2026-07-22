@@ -1,15 +1,31 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { PortalI18nProvider, type PortalUI } from "@vastplan/ui-primitives";
-import { muiRenderAdapter, muiPortalUIComponents } from "./index";
+import { muiIconForTheme, muiRenderAdapter, muiPortalUIComponents } from "./index";
 
 describe("MUI portal UI adapter", () => {
   it("implements the full framework-neutral component surface", () => {
     const required: Array<keyof Omit<PortalUI, "notify" | "confirm" | "theme">> = [
-      "PortalShell", "Page", "Panel", "Stack", "Grid", "GridItem", "Divider", "Button", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "DataCard", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
+      "PortalShell", "Page", "Panel", "Stack", "Grid", "GridItem", "Divider", "Button", "IconButton", "Select", "Menu", "Breadcrumb", "Tabs", "CommandPalette", "Popover", "Dialog", "Drawer", "FormRenderer", "FilterBar", "Table", "DataCard", "Pagination", "Descriptions", "Status", "Icon", "EmptyState", "ErrorState", "Skeleton", "Busy",
     ];
     expect(muiRenderAdapter).toMatchObject({ id: "mui", framework: "mui" });
     expect(required.every((name) => typeof muiPortalUIComponents[name] === "function")).toBe(true);
+  });
+
+  it("uses the same VastPlan-owned SVG icon geometry", () => {
+    const Icon = muiPortalUIComponents.Icon;
+    const markup = renderToStaticMarkup(<Icon name="publish" label="Publish" />);
+    expect(markup).toContain('data-vastplan-icon="publish"');
+    expect(markup).toContain('aria-label="Publish"');
+  });
+
+  it("offers a Material-native icon theme behind the same semantic name", () => {
+    const NativeIcon = muiIconForTheme("renderer-native");
+    const markup = renderToStaticMarkup(<NativeIcon name="publish" label="Publish" />);
+    expect(markup).toContain('data-vastplan-icon="publish"');
+    expect(markup).toContain('data-vastplan-icon-source="renderer-native"');
+    expect(muiRenderAdapter.iconThemes.map((theme) => theme.id)).toEqual(["canonical", "renderer-native"]);
+    expect(muiIconForTheme("missing")).toBe(muiPortalUIComponents.Icon);
   });
 
   it("renders semantic UI without exposing MUI types to consumers", () => {

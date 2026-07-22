@@ -24,7 +24,7 @@ export function normalizeFrontendModule(namespace: unknown, identity: ModuleExpo
   const exported = isRecord(namespace.default) ? namespace.default : namespace;
   const provenance = { signed: true, firstParty: true, integrity: `sha256:${identity.sha256}` };
   const hot = normalizeHotLifecycle(exported.hot, identity.id);
-  const localization = normalizeLocalizationExport(exported.localization, identity.id);
+  const localization = normalizeLocalizationExport(namespace.localization ?? exported.localization, identity.id);
   const runtimeEngineExport = isRecord(namespace.runtimeEngine) ? namespace.runtimeEngine : exported.id === "ui.runtime.engine" ? exported : undefined;
   if (runtimeEngineExport !== undefined) {
     try {
@@ -38,7 +38,8 @@ export function normalizeFrontendModule(namespace: unknown, identity: ModuleExpo
   }
   const renderer = isRecord(namespace.renderer) ? namespace.renderer : undefined;
   if (renderer !== undefined && typeof renderer.id === "string" && typeof renderer.framework === "string" && typeof renderer.Provider === "function" &&
-      Array.isArray(renderer.capabilities) && Array.isArray(renderer.themeTemplates) && typeof renderer.defaultThemeTemplate === "string") {
+      Array.isArray(renderer.capabilities) && Array.isArray(renderer.themeTemplates) && typeof renderer.defaultThemeTemplate === "string" &&
+      Array.isArray(renderer.iconThemes) && typeof renderer.defaultIconTheme === "string") {
     return { provenance, renderer: renderer as unknown as UIRenderer, hot, localization };
   }
   if (exported.id === "ui.structure.shell" && typeof exported.compose === "function" && Array.isArray(exported.templates)) {

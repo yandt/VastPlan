@@ -113,7 +113,7 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
         { key: "credentialVersion", label: message(namespace,"column.credentialVersion","凭证版本"), format: "number", defaultVisible: false, minWidth: 100 },
       ],
       actions: [
-        { id: "create", label: message(namespace,"action.create","新增连接"), placement: "page.primary", tone: "primary", form: "create" }, { id: "edit", label: message(namespace,"action.edit","编辑"), placement: "record.row", form: "edit" }, { id: "probe", label: message(namespace,"action.probe","探测"), placement: "record.row" }, { id: "delete", label: message(namespace,"action.delete","删除"), placement: "record.row", tone: "danger", confirm: message(namespace,"confirm.delete","确认删除此连接并退役其托管凭证？") },
+        { id: "create", label: message(namespace,"action.create","新增连接"), icon: "add", placement: "page.primary", tone: "primary", form: "create" }, { id: "edit", label: message(namespace,"action.edit","编辑"), placement: "record.row", form: "edit" }, { id: "probe", label: message(namespace,"action.probe","探测"), placement: "record.row" }, { id: "delete", label: message(namespace,"action.delete","删除"), placement: "record.row", tone: "danger", confirm: message(namespace,"confirm.delete","确认删除此连接并退役其托管凭证？") },
       ],
     },
     forms: [form("create"), form("edit")],
