@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/shared-state/v1/vastplan.shared-state.schema.json",
+  "$defs": {
+    "scope": { "type": "string", "enum": ["tenant", "service"] },
+    "namespace": { "type": "string", "pattern": "^[a-z](?:[a-z0-9._-]{0,119})$" },
+    "key": { "type": "string", "minLength": 1, "maxLength": 320 },
+    "value": { "type": "string", "contentEncoding": "base64url", "maxLength": 1398102 },
+    "keyRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "namespace", "key"],
+      "properties": { "scope": { "$ref": "#/$defs/scope" }, "namespace": { "$ref": "#/$defs/namespace" }, "key": { "$ref": "#/$defs/key" } }
+    },
+    "createRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "namespace", "key", "value"],
+      "properties": { "scope": { "$ref": "#/$defs/scope" }, "namespace": { "$ref": "#/$defs/namespace" }, "key": { "$ref": "#/$defs/key" }, "value": { "$ref": "#/$defs/value" } }
+    },
+    "updateRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "namespace", "key", "value", "expectedRevision"],
+      "properties": { "scope": { "$ref": "#/$defs/scope" }, "namespace": { "$ref": "#/$defs/namespace" }, "key": { "$ref": "#/$defs/key" }, "value": { "$ref": "#/$defs/value" }, "expectedRevision": { "type": "integer", "minimum": 1 } }
+    },
+    "deleteRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "namespace", "key", "expectedRevision"],
+      "properties": { "scope": { "$ref": "#/$defs/scope" }, "namespace": { "$ref": "#/$defs/namespace" }, "key": { "$ref": "#/$defs/key" }, "expectedRevision": { "type": "integer", "minimum": 1 } }
+    },
+    "listRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "namespace", "limit"],
+      "properties": { "scope": { "$ref": "#/$defs/scope" }, "namespace": { "$ref": "#/$defs/namespace" }, "prefix": { "type": "string", "maxLength": 320 }, "limit": { "type": "integer", "minimum": 1, "maximum": 200 }, "pageCursor": { "type": "string", "minLength": 1, "maxLength": 320 } }
+    },
+    "entry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "key", "value", "revision", "updatedAt"],
+      "properties": { "protocol": { "const": "state.shared.v1" }, "key": { "$ref": "#/$defs/key" }, "value": { "$ref": "#/$defs/value" }, "revision": { "type": "integer", "minimum": 1 }, "updatedAt": { "type": "string", "format": "date-time" } }
+    },
+    "page": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "items"],
+      "properties": { "protocol": { "const": "state.shared.v1" }, "items": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/entry" } }, "nextPageCursor": { "$ref": "#/$defs/key" } }
+    },
+    "ack": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol"], "properties": { "protocol": { "const": "state.shared.v1" } }
+    }
+  }
+}

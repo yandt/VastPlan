@@ -38,6 +38,8 @@ nats-server -c /secure/vastplan-nats/nats-server.conf
 
 生产 JetStream 至少三副本。NATS 集群节点间 Route TLS 需随实际拓扑另行配置，但客户端 mTLS/NKey/ACL 不变。
 
+`VASTPLAN_SHARED_STATE_V1` 保存插件跨实例状态，必须纳入 JetStream 三副本、磁盘容量、快照备份和恢复演练。Node 身份可读写该 bucket 是因为 Shared State Provider 位于可信 Backend 进程；插件进程不取得 Node NKey。Provider 故障时不得回退本地 File Store。value 可能包含业务私有状态，运维日志和支持包不得导出明文内容。
+
 ## 4. 初始化 Bucket
 
 ```bash

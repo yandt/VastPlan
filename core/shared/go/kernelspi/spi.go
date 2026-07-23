@@ -17,6 +17,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
 
 var ErrNotFound = errors.New("kernel SPI 资源不存在")
@@ -84,6 +85,7 @@ type Dependencies struct {
 	RuntimeMaterialLeases          RuntimeMaterialLeaseBroker
 	Persistence                    Persistence
 	Transactions                   TransactionManager
+	SharedState                    sharedstate.Store
 	NodeBootstrap                  nodebootstrap.Broker
 	NodeReadiness                  nodebootstrap.ReadinessObserver
 	DeploymentPublication          deploymentpublication.Controller

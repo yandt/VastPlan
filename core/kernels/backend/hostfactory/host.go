@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strings"
 
+	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
@@ -27,6 +28,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
 
 // KernelName 是 backend 内核规范 ID。
@@ -132,7 +134,113 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			return nil, err
 		}
 	}
+	if dependencies.SharedState != nil {
+		for _, operation := range []string{
+			sharedstatev1.OperationGet, sharedstatev1.OperationCreate, sharedstatev1.OperationUpdate,
+			sharedstatev1.OperationDelete, sharedstatev1.OperationList,
+		} {
+			if err := host.RegisterHostService(extpoint.KernelService, sharedstatev1.KernelService(operation), kernelSharedState(dependencies.SharedState, operation)); err != nil {
+				return nil, err
+			}
+		}
+	}
 	return host, nil
+}
+
+func kernelSharedState(store sharedstate.Store, operation string) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		identity, ok := runtimeidentity.FromContext(ctx)
+		if !ok || identity.Validate() != nil || callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != identity.PluginID {
+			return sharedStateError("state.identity_invalid", "Shared State 缺少可信 Runtime 身份", false), nil, nil
+		}
+		request, err := sharedstatev1.ParseRequest(operation, payload)
+		if err != nil {
+			return sharedStateError("state.invalid", "Shared State 请求无效", false), nil, nil
+		}
+		scopeName, namespace := sharedStateRequestScope(request)
+		scope := sharedstate.Scope{Kind: sharedstate.ScopeKind(scopeName), PluginID: identity.PluginID, RuntimeScope: identity.RuntimeScope, Namespace: namespace}
+		if scope.Kind == sharedstate.ScopeTenant {
+			scope.TenantID = callCtx.GetTenantId()
+		}
+		if err := scope.Validate(); err != nil {
+			return sharedStateError("state.scope_invalid", "Shared State scope 无效", false), nil, nil
+		}
+		var response any
+		switch typed := request.(type) {
+		case *sharedstatev1.KeyRequest:
+			response, err = store.Get(ctx, scope, typed.Key)
+		case *sharedstatev1.WriteRequest:
+			var value []byte
+			value, err = sharedstatev1.DecodeValue(typed.Value)
+			if err == nil && operation == sharedstatev1.OperationCreate {
+				response, err = store.Create(ctx, scope, typed.Key, value)
+			} else if err == nil {
+				response, err = store.Update(ctx, scope, typed.Key, value, typed.ExpectedRevision)
+			}
+		case *sharedstatev1.DeleteRequest:
+			err = store.Delete(ctx, scope, typed.Key, typed.ExpectedRevision)
+			response = map[string]any{"protocol": sharedstatev1.Protocol}
+		case *sharedstatev1.ListRequest:
+			response, err = store.List(ctx, scope, typed.Prefix, typed.Limit, typed.PageCursor)
+		default:
+			err = sharedstate.ErrInvalid
+		}
+		if err != nil {
+			return sharedStateStoreError(err), nil, nil
+		}
+		raw, err := marshalSharedStateResponse(response)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
+}
+
+func sharedStateRequestScope(request any) (string, string) {
+	switch typed := request.(type) {
+	case *sharedstatev1.KeyRequest:
+		return typed.Scope, typed.Namespace
+	case *sharedstatev1.WriteRequest:
+		return typed.Scope, typed.Namespace
+	case *sharedstatev1.DeleteRequest:
+		return typed.Scope, typed.Namespace
+	case *sharedstatev1.ListRequest:
+		return typed.Scope, typed.Namespace
+	default:
+		return "", ""
+	}
+}
+
+func marshalSharedStateResponse(value any) ([]byte, error) {
+	switch typed := value.(type) {
+	case sharedstate.Entry:
+		return json.Marshal(sharedstatev1.Entry{Protocol: sharedstatev1.Protocol, Key: typed.Key, Value: sharedstatev1.EncodeValue(typed.Value), Revision: typed.Revision, UpdatedAt: typed.UpdatedAt})
+	case sharedstate.Page:
+		items := make([]sharedstatev1.Entry, 0, len(typed.Items))
+		for _, item := range typed.Items {
+			items = append(items, sharedstatev1.Entry{Protocol: sharedstatev1.Protocol, Key: item.Key, Value: sharedstatev1.EncodeValue(item.Value), Revision: item.Revision, UpdatedAt: item.UpdatedAt})
+		}
+		return json.Marshal(sharedstatev1.Page{Protocol: sharedstatev1.Protocol, Items: items, NextPageCursor: typed.NextCursor})
+	default:
+		return json.Marshal(value)
+	}
+}
+
+func sharedStateStoreError(err error) *contractv1.CallResult {
+	switch {
+	case errors.Is(err, sharedstate.ErrNotFound):
+		return sharedStateError("state.not_found", "Shared State 条目不存在", false)
+	case errors.Is(err, sharedstate.ErrConflict):
+		return sharedStateError("state.conflict", "Shared State revision 冲突", true)
+	case errors.Is(err, sharedstate.ErrInvalid):
+		return sharedStateError("state.invalid", "Shared State 请求无效", false)
+	default:
+		return sharedStateError("state.unavailable", "Shared State Provider 不可用", true)
+	}
+}
+
+func sharedStateError(code, message string, retryable bool) *contractv1.CallResult {
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: message, Retryable: retryable}}
 }
 
 func kernelConfigurationAuthorityIssue(issuer configurationauthority.Issuer) protocolbus.HostService {

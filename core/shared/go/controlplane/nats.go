@@ -27,6 +27,7 @@ const (
 	AutoscalingBucket              = "VASTPLAN_AUTOSCALING_V1"
 	ConfigurationAuthoritiesBucket = "VASTPLAN_CONFIGURATION_AUTHORITIES_V1"
 	BackendPlatformCatalogsBucket  = "VASTPLAN_BACKEND_PLATFORM_CATALOGS_V1"
+	SharedStateBucket              = "VASTPLAN_SHARED_STATE_V1"
 	EventsStream                   = "VASTPLAN_EVENTS_V1"
 
 	MaxDesiredStateBytes = 1 << 20
@@ -46,6 +47,7 @@ type Buckets struct {
 	Autoscaling              jetstream.KeyValue
 	ConfigurationAuthorities jetstream.KeyValue
 	BackendPlatformCatalogs  jetstream.KeyValue
+	SharedState              jetstream.KeyValue
 	Events                   jetstream.Stream
 }
 
@@ -146,6 +148,13 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	if err != nil {
 		return Buckets{}, fmt.Errorf("创建 Backend Platform Catalog bucket: %w", err)
 	}
+	sharedState, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket: SharedStateBucket, Description: "VastPlan caller-isolated shared plugin state v1",
+		History: 64, MaxValueSize: MaxDesiredStateBytes, Replicas: replicas, Storage: storage,
+	})
+	if err != nil {
+		return Buckets{}, fmt.Errorf("创建 Shared State bucket: %w", err)
+	}
 	events, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name: EventsStream, Description: "VastPlan durable domain events v1",
 		Subjects: []string{"vp.event.persist.v1.>"}, Retention: jetstream.LimitsPolicy,
@@ -161,6 +170,7 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 		Controllers: controllers, Autoscaling: autoscaling, Events: events,
 		ConfigurationAuthorities: configurationAuthorities,
 		BackendPlatformCatalogs:  backendPlatformCatalogs,
+		SharedState:              sharedState,
 	}, nil
 }
 
@@ -211,6 +221,10 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开 Backend Platform Catalog bucket: %w", err)
 	}
+	sharedState, err := js.KeyValue(ctx, SharedStateBucket)
+	if err != nil {
+		return Buckets{}, fmt.Errorf("打开 Shared State bucket: %w", err)
+	}
 	events, err := js.Stream(ctx, EventsStream)
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开持久事件 stream: %w", err)
@@ -221,6 +235,7 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 		Controllers: controllers, Autoscaling: autoscaling, Events: events,
 		ConfigurationAuthorities: configurationAuthorities,
 		BackendPlatformCatalogs:  backendPlatformCatalogs,
+		SharedState:              sharedState,
 	}, nil
 }
 

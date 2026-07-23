@@ -179,10 +179,11 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID, catalogID string) (S
 		}
 		acl := SubjectACL{
 			PublishAllow: append(openAllAPI(), append(
-				kvAPIForRead(DesiredBucket, DeploymentsBucket, AssignmentsBucket, CapabilitiesBucket, ConfigurationAuthoritiesBucket),
+				kvAPIForRead(DesiredBucket, DeploymentsBucket, AssignmentsBucket, CapabilitiesBucket, ConfigurationAuthoritiesBucket, SharedStateBucket),
 				"$KV."+ActualBucket+"."+ActualKey(tenant, deployment, nodeID), "$KV."+NodesBucket+"."+NodeKey(tenant, deployment, nodeID),
 				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
 				"$KV."+ConfigurationAuthoritiesBucket+"."+ConfigurationAuthorityPrefix(tenant)+">",
+				"$KV."+SharedStateBucket+".>",
 				"vp.event.persist.v1.>",
 				"$JS.API.CONSUMER.CREATE."+EventsStream, "$JS.API.CONSUMER.CREATE."+EventsStream+".>",
 				"$JS.API.CONSUMER.DURABLE.CREATE."+EventsStream+".>", "$JS.API.CONSUMER.INFO."+EventsStream+".>",
@@ -193,7 +194,7 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID, catalogID string) (S
 			},
 			SubscribeAllow: []string{
 				"_INBOX.>", "$KV." + DesiredBucket + ".>", "$KV." + DeploymentsBucket + ".>", "$KV." + AssignmentsBucket + ".>",
-				"$KV." + CapabilitiesBucket + ".>", "$KV." + ConfigurationAuthoritiesBucket + ".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
+				"$KV." + CapabilitiesBucket + ".>", "$KV." + ConfigurationAuthoritiesBucket + ".>", "$KV." + SharedStateBucket + ".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
 			},
 		}
 		if role == RoleManager {
@@ -220,7 +221,7 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID, catalogID string) (S
 }
 
 func openAllAPI() []string {
-	return append(kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, CompositionsBucket, ControllersBucket, AutoscalingBucket, ConfigurationAuthoritiesBucket, BackendPlatformCatalogsBucket), "$JS.API.STREAM.INFO."+EventsStream)
+	return append(kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, CompositionsBucket, ControllersBucket, AutoscalingBucket, ConfigurationAuthoritiesBucket, BackendPlatformCatalogsBucket, SharedStateBucket), "$JS.API.STREAM.INFO."+EventsStream)
 }
 
 func kvAPIForInfo(buckets ...string) []string {

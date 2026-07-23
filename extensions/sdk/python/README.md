@@ -16,4 +16,6 @@ python3 -m pip install -e extensions/sdk/python
 
 `python-subinterpreter` 共享 Runtime 也支持处理器内同步 HostCall。opaque 委托令牌只保存在可信主解释器，子解释器只收到裁剪后的上下文和纯 Python target；桥接受父 deadline、显式取消、30 秒超时与 4 MiB payload 上限约束。
 
+`SharedStateClient` 通过 `state.shared.v1` 使用宿主提供的 CAS 状态服务。插件只提交局部 namespace/key；tenant、插件与 Runtime scope 由宿主从认证上下文和启动身份生成。客户端不会直接取得 NATS 或数据库连接凭证。
+
 当前 Python 驱动属于第一方可信进程运行模式。未知发布者会被节点策略提升到至少 `process-sandbox`，在隔离驱动落地前拒绝启动，不会自动降级到可信进程。

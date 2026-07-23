@@ -48,6 +48,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicewatchdog"
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
 
 // KernelName 本内核的规范 ID（ADR-0015）。
@@ -281,6 +282,13 @@ func runReconcile(args []string) (runErr error) {
 	runtime.HostingPolicy = options.hostingPolicy
 	runtime.Identity = options.nodeID
 	runtime.LeaderKV = plane.buckets.Controllers
+	if plane.buckets.SharedState != nil {
+		stateStore, err := sharedstate.NewNATSStore(plane.buckets.SharedState)
+		if err != nil {
+			return err
+		}
+		runtime.Dependencies.SharedState = stateStore
+	}
 	if err := configurePortalHostServices(options, artifacts, plane, runtime, logf); err != nil {
 		return err
 	}
