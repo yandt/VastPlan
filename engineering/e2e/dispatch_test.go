@@ -261,10 +261,19 @@ func TestHook_BeforeAbortsAndAfterMeters(t *testing.T) {
 	if err := json.Unmarshal(resp.Payload, &usage); err != nil {
 		t.Fatalf("配额计量结果解析失败: %v", err)
 	}
-	if len(usage.Metered) != 3 {
-		t.Fatalf("after 钩子应只计量 3 次已放行调用，实际: %+v", usage.Metered)
+	var targetRecords []struct {
+		Capability string `json:"capability"`
+		Status     string `json:"status"`
 	}
-	for i, record := range usage.Metered {
+	for _, record := range usage.Metered {
+		if record.Capability == "vastplan.hello" {
+			targetRecords = append(targetRecords, record)
+		}
+	}
+	if len(targetRecords) != 3 {
+		t.Fatalf("after 钩子应计量 3 次已放行目标调用，实际全部=%+v 目标=%+v", usage.Metered, targetRecords)
+	}
+	for i, record := range targetRecords {
 		if record.Capability != "vastplan.hello" || record.Status != "STATUS_OK" {
 			t.Fatalf("第 %d 条计量记录不符合预期: %+v", i, record)
 		}

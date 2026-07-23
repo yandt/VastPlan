@@ -46,7 +46,7 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
+	helloRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
 	server := startE2ENATS(t)
 	admin, err := nats.Connect(server.ClientURL())
 	if err != nil {
@@ -82,15 +82,17 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer caller.Close()
+	registerAddressingScopedConfiguration(t, caller)
 
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "mesh", Tenant: "acme"},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "backend-api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 2,
-			Placement: deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},
+			RoutingDomain: "application",
+			Placement:     deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},
 			Plugins: []deploymentv1.PluginRef{
 				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
-				{ID: "cn.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.hello-world", Version: helloRef.Version, Channel: "stable"},
 			},
 		}},
 	}
@@ -113,10 +115,7 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 		waitMemoryUnits(t, node.store, plan.Generation, want)
 	}
 	waitAddressingInstances(t, caller, "vastplan.hello", 2)
-	composition, err := scheduler.ObserveComposition(context.Background(), deployment)
-	if err != nil || composition.Status != deploymentcontroller.CompositionReady || composition.Generation != plan.Generation {
-		t.Fatalf("初始组合状态未收敛: report=%+v err=%v", composition, err)
-	}
+	waitCompositionReady(t, scheduler, deployment, plan.Generation)
 
 	failedID := ""
 	for nodeID := range selected {
@@ -145,10 +144,7 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 		waitMemoryUnits(t, node.store, rescheduled.Generation, want)
 	}
 	waitAddressingInstances(t, caller, "vastplan.hello", 2)
-	composition, err = scheduler.ObserveComposition(context.Background(), deployment)
-	if err != nil || composition.Status != deploymentcontroller.CompositionReady || composition.Generation != rescheduled.Generation {
-		t.Fatalf("故障漂移后组合状态未恢复: report=%+v err=%v", composition, err)
-	}
+	waitCompositionReady(t, scheduler, deployment, rescheduled.Generation)
 	result, payload, err := caller.Invoke(context.Background(), toolTarget("vastplan.hello", "greet"), testCallContext(), []byte(`{"name":"replica recovery"}`))
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !strings.Contains(string(payload), "replica recovery") {
 		t.Fatalf("漂移后 queue group 不可调用: result=%+v payload=%s err=%v", result, payload, err)
@@ -156,6 +152,17 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 }
 
 func TestNodeAgent_RuntimePublishesRealPluginToNATSMesh(t *testing.T) {
+	repository, err := pluginservice.NewRepository(filepath.Join(t.TempDir(), "repository"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
+	helloRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
+	verifier := nodeagent.NewLocalDevelopmentArtifactVerifier()
+	installer := nodeagent.LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")}
+	permission := installPublishedPlugin(t, repository, verifier, installer, permissionRef)
+	hello := installPublishedPlugin(t, repository, verifier, installer, helloRef)
+
 	server := startE2ENATS(t)
 	admin, err := nats.Connect(server.ClientURL())
 	if err != nil {
@@ -190,18 +197,19 @@ func TestNodeAgent_RuntimePublishesRealPluginToNATSMesh(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer worker.Close()
+	registerAddressingScopedConfiguration(t, caller)
 
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", t.Logf)
+	runtime.Identity = "node-b"
 	defer runtime.Close()
 	if err := runtime.AttachRouter(worker); err != nil {
 		t.Fatal(err)
 	}
 	if err := runtime.Apply(context.Background(), nodeagent.RuntimeUnit{
 		ID: "backend-worker", Fingerprint: "mesh-e2e", ServiceRole: "backend",
-		Plugins: []nodeagent.InstalledPlugin{
-			{ID: "cn.vastplan.demo-permission", Version: "0.1.0", EntryPath: buildPlugin(t, "./extensions/plugins/cn.vastplan.demo-permission/backend")},
-			{ID: "cn.vastplan.hello-world", Version: "0.1.0", EntryPath: buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")},
-		},
+		InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster",
+		Routing: "queue", RoutingDomain: "application",
+		Plugins: []nodeagent.InstalledPlugin{permission, hello},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +237,7 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 		t.Fatal(err)
 	}
 	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-quota/backend", "extensions/plugins/cn.vastplan.demo-quota/vastplan.plugin.json")
 	publishBrokenPlugin(t, repository)
 
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", func(format string, args ...any) { t.Logf("[runtime] "+format, args...) })
@@ -245,7 +253,7 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
 				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
-				{ID: "cn.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-quota", Version: "0.1.0", Channel: "stable"},
 			},
 		}},
 	}
@@ -259,7 +267,7 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 	if !ok {
 		t.Fatal("装配后缺少 backend-main 宿主")
 	}
-	resp, err := host.Invoke(ctx, toolTarget("vastplan.hello", "greet"), testCallContext(), []byte(`{"name":"Node Agent"}`))
+	resp, err := host.Invoke(ctx, toolTarget("demo.quota", "usage"), testCallContext(), []byte(`{}`))
 	if err != nil || resp.Result.Status != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("自动装配贡献不可调用: response=%+v err=%v", resp, err)
 	}
@@ -282,7 +290,7 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 	if err == nil || failed.Converged || stillOld != host {
 		t.Fatalf("候选失败后旧宿主必须保留: result=%+v sameHost=%v err=%v", failed, stillOld == host, err)
 	}
-	resp, err = stillOld.Invoke(ctx, toolTarget("vastplan.hello", "greet"), testCallContext(), []byte(`{"name":"Rollback"}`))
+	resp, err = stillOld.Invoke(ctx, toolTarget("demo.quota", "usage"), testCallContext(), []byte(`{}`))
 	if err != nil || resp.Result.Status != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("失败升级破坏了旧实例: response=%+v err=%v", resp, err)
 	}
@@ -383,14 +391,14 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 		t.Fatal(err)
 	}
 	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
+	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-quota/backend", "extensions/plugins/cn.vastplan.demo-quota/vastplan.plugin.json")
 	desired := deploymentv1.DesiredState{
 		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "nats-e2e"},
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
 				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
-				{ID: "cn.vastplan.hello-world", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-quota", Version: "0.1.0", Channel: "stable"},
 			},
 		}},
 	}
@@ -398,6 +406,7 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 	applyDesiredE2E(t, ctx, buckets.Desired, desiredKey, desired)
 
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", t.Logf)
+	runtime.Identity = "nats-node"
 	localStore := nodeagent.FileStateStore{Path: filepath.Join(t.TempDir(), "actual.json")}
 	remoteStore := nodeagent.NATSStateStore{KV: buckets.Actual, Key: controlplane.ActualKey("_global", "nats-e2e", "nats-node")}
 	reconciler := &nodeagent.Reconciler{
@@ -518,6 +527,21 @@ func waitAddressingInstances(t *testing.T, router *addressing.Router, capability
 	t.Fatalf("等待 capability=%s instances=%d 超时，当前=%d", capability, want, len(router.Instances(capability)))
 }
 
+func waitCompositionReady(t *testing.T, scheduler deploymentcontroller.Scheduler, deployment deploymentv2.Deployment, generation uint64) {
+	t.Helper()
+	deadline := time.Now().Add(8 * time.Second)
+	var report deploymentcontroller.CompositionReport
+	var err error
+	for time.Now().Before(deadline) {
+		report, err = scheduler.ObserveComposition(context.Background(), deployment)
+		if err == nil && report.Status == deploymentcontroller.CompositionReady && report.Generation == generation {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("组合状态未收敛 generation=%d: report=%+v err=%v", generation, report, err)
+}
+
 func startClusterNode(t *testing.T, server *natsserver.Server, buckets controlplane.Buckets, repository *pluginservice.Repository, nodeID, runtimeRoot string) *clusterNode {
 	t.Helper()
 	conn, err := nats.Connect(server.ClientURL())
@@ -530,6 +554,7 @@ func startClusterNode(t *testing.T, server *natsserver.Server, buckets controlpl
 		t.Fatal(err)
 	}
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", t.Logf)
+	runtime.Identity = nodeID
 	if err := runtime.AttachRouter(router); err != nil {
 		_ = router.Close()
 		conn.Close()
@@ -681,6 +706,23 @@ func publishBuiltPlugin(t *testing.T, repository *pluginservice.Repository, pack
 		t.Fatal(err)
 	}
 	return pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+}
+
+func installPublishedPlugin(t *testing.T, repository *pluginservice.Repository, verifier nodeagent.ArtifactVerifier, installer nodeagent.LocalInstaller, ref pluginv1.ArtifactRef) nodeagent.InstalledPlugin {
+	t.Helper()
+	envelope, err := repository.Fetch(context.Background(), ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verified, err := verifier.Verify(ref, envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed, err := installer.Install(verified)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return installed
 }
 
 func publishBrokenPlugin(t *testing.T, repository *pluginservice.Repository) {

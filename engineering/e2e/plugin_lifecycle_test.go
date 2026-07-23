@@ -57,6 +57,7 @@ func newHost(t *testing.T, kernelVersion string) *protocolbus.Host {
 		{Name: "event.sink", Dispatch: registry.DispatchFanout},
 		{Name: "hook", Dispatch: registry.DispatchFanout},
 		{Name: "kernel.service", Dispatch: registry.DispatchSingle},
+		{Name: scopedConfigurationExtensionPoint, Dispatch: registry.DispatchSingle},
 	} {
 		reg.DefinePoint(p)
 	}
@@ -89,6 +90,7 @@ func newHost(t *testing.T, kernelVersion string) *protocolbus.Host {
 	if err != nil {
 		t.Fatalf("登记内核能力失败: %v", err)
 	}
+	registerHostScopedConfiguration(t, h)
 	return h
 }
 

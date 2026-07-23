@@ -186,15 +186,21 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 		return false, err
 	}
 	if current, ok := actual.Units[id]; ok && current.Fingerprint == fingerprint && r.Runtime.IsRunning(id, fingerprint) {
+		revisionChanged := current.AppliedRevision != revision
 		if err := r.setUnitPhase(&current, PhaseActive); err != nil {
 			return false, err
 		}
+		// A new assignment generation can preserve the exact same unit
+		// fingerprint (for example, a surviving replica after node loss). The
+		// runtime is already correct, but the controller must still be able to
+		// prove that this unit observed and accepted the new generation.
+		current.AppliedRevision = revision
 		current.LastError, current.Candidate = "", nil
 		if err := r.refreshRuntimeState(&current, id); err != nil {
 			return false, err
 		}
 		actual.Units[id] = current
-		return false, nil
+		return revisionChanged, nil
 	}
 	current := actual.Units[id]
 	if current.Fingerprint != "" {
