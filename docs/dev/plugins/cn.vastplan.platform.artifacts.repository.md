@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.19.0`
+当前制品版本：`0.20.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -99,6 +99,6 @@ GC 只把已显式 `yanked/revoked`、无精确引用且不在既有 retirement 
 
 ## Portal 管理页
 
-同一签名制品从 `/settings/artifacts` 进入统一 Workbench，并在受治理的“系统设置 → 制品仓库”三级导航下提供目录、容量/配额、引用快照和 GC 四个 Collection 页面。目录经新的固定 BFF/TypeScript SDK 路由按 plugin prefix、namespace、publisher、channel、target、lifecycle 与分页查询，不把仓库读令牌交给浏览器；概览与集合查询独立，筛选/翻页不会重复拉取容量。GC 页面展示阻断项、候选与 retirement 记录，隔离前重新生成 plan，quarantine/sweep 继续受 CSRF 和独立 `platform.artifacts.gc` 角色保护。
+同一签名制品从 `/settings/artifacts` 进入统一 Workbench，并在受治理的“系统设置 → 制品仓库”三级导航下提供目录、容量/配额、引用快照、GC 和存储迁移五个 Collection 页面。目录经固定 BFF/TypeScript SDK 路由按 plugin prefix、namespace、publisher、channel、target、lifecycle 与分页查询，不把仓库读令牌交给浏览器；概览与集合查询独立，筛选/翻页不会重复拉取容量。目录行通过受治理的 Workbench Form 以当前 Catalog revision CAS 变更生命周期，原因必填，替代插件与 SemVer 约束只能同时用于 `deprecated`，`revoked` 不提供再次编辑入口。GC 页面展示阻断项、候选与 retirement 记录，隔离前重新生成 plan，quarantine/sweep 继续受 CSRF 和独立 `platform.artifacts.gc` 角色保护。
 
-生命周期原因/替代约束编辑、迁移阶段操作、发布审批和供应链证明需要 Workbench Form/Overlay Pattern，不能退回裸 React 表单，因此仍属于下一阶段。现有页面和 API 均不返回令牌、信任根、mount path、Provider endpoint 或制品正文。
+存储迁移页面直接投影后端阶段状态，只在记录操作区提供 `sync/cutover/rollback/finalize/release`，准备与切换参数进入 Workbench Form；所有按钮仍受 `platform.artifacts.migrate`、CSRF 和后端状态机三重校验。页面不接收 mount path，只显示稳定 Provider/Volume ID、摘要、计数、观察期与脱敏错误。发布审批和供应链证明仍需先补可信领域协议，再建设 Workbench Overlay，不能退回浏览器本地状态或裸 React 表单。现有页面和 API 均不返回令牌、信任根、Provider endpoint 或制品正文。

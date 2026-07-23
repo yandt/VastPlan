@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

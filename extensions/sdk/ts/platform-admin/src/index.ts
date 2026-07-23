@@ -188,6 +188,7 @@ export interface ArtifactCatalogEntry {
   namespace: string; license?: string; targets: string[]; platforms?: string[];
   lifecycleStatus: "active" | "deprecated" | "yanked" | "revoked";
   lifecycleRevision?: number; lifecycleReason?: string;
+  replacement?: ArtifactRequirement;
 }
 export interface ArtifactCatalogPage { revision: number; total: number; page: number; pageSize: number; items: ArtifactCatalogEntry[]; }
 export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
