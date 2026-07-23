@@ -50,6 +50,9 @@ type session struct {
 	// principal / tenant / caller。委托随对应 Invoke 完成而销毁。
 	delegationMu sync.RWMutex
 	delegations  map[string]*contractv1.CallContext
+	// autonomousActive is enabled only after ACTIVATE succeeds and is cleared
+	// before DRAIN/SHUTDOWN. It cannot be toggled by plugin wire messages.
+	autonomousActive atomic.Bool
 
 	seq atomic.Uint64
 

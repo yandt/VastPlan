@@ -51,45 +51,13 @@ func (s *Service) AssessAdmission(ctx context.Context, host sdk.Host, callCtx *c
 	if err := decodeStrict(raw, &request); err != nil || artifactassessment.ValidateProviderAssessmentRequest(request) != nil {
 		return nil, errors.New("Assessment Provider 请求无效")
 	}
-	lease, err := requestScanLease(ctx, host, callCtx.GetTenantId(), request.ScanLeaseRequest, s.now().UTC())
-	if err != nil {
-		return nil, err
-	}
-	packageBytes, err := s.downloader.Download(ctx, lease)
-	if err != nil {
-		return nil, err
-	}
-	packageDigest := sha256.Sum256(packageBytes)
-	if hex.EncodeToString(packageDigest[:]) != request.SubjectSHA256 {
-		return nil, errors.New("下载制品摘要与扫描租约不一致")
-	}
-	manifest, _, err := artifacttrust.InspectPackage(packageBytes)
-	if err != nil || manifest.ID != request.Ref.PluginID || manifest.Version != request.Ref.Version || manifest.SupplyChain == nil || manifest.SupplyChain.SBOM == nil {
-		return nil, errors.New("下载制品清单或 SBOM 绑定无效")
-	}
-	sbom, err := artifacttrust.ReadPackageFile(packageBytes, manifest.SupplyChain.SBOM.Path, artifactsupplychain.MaxCycloneDXBytes)
-	if err != nil {
-		return nil, err
-	}
-	sbomDigest := sha256.Sum256(sbom)
-	if hex.EncodeToString(sbomDigest[:]) != request.SBOMSHA256 {
-		return nil, errors.New("下载制品 SBOM 摘要与扫描租约不一致")
-	}
-	material, err := credentialmaterial.NewFromEnvironment(host, callCtx.GetTenantId(), s.config.SigningKeyRef)
+	scan, err := s.prepareScan(ctx, host, callCtx.GetTenantId(), request)
 	if err != nil {
 		return nil, err
 	}
 	var evidence provider.Evidence
-	err = material.WithMaterial(ctx, s.now().UTC(), func(secret credentialmaterial.Material) error {
-		key, err := provider.ParseEd25519PrivateKey(secret.Bytes())
-		if err != nil {
-			return err
-		}
-		defer provider.ZeroPrivateKey(key)
-		evidence, err = s.provider.AssessWithEvidenceKey(ctx, artifactassessment.ScanRequest{
-			Identity: artifactassessment.ArtifactIdentity{PluginID: manifest.ID, Channel: request.Ref.Channel, Publisher: manifest.Publisher, SHA256: request.SubjectSHA256, SBOMSHA256: request.SBOMSHA256},
-			Package:  packageBytes, SBOM: sbom, PolicyID: request.PolicyID,
-		}, ed25519.PrivateKey(key))
+	err = s.withSigningKey(ctx, host, callCtx.GetTenantId(), func(key ed25519.PrivateKey) error {
+		evidence, err = s.provider.AssessWithEvidenceKey(ctx, scan, key)
 		return err
 	})
 	if err != nil {
@@ -99,6 +67,49 @@ func (s *Service) AssessAdmission(ctx context.Context, host sdk.Host, callCtx *c
 		return nil, err
 	}
 	return json.Marshal(evidence.Admission)
+}
+
+func (s *Service) prepareScan(ctx context.Context, host sdk.Host, tenant string, request artifactassessment.ProviderAssessmentRequest) (artifactassessment.ScanRequest, error) {
+	lease, err := requestScanLease(ctx, host, tenant, request.ScanLeaseRequest, s.now().UTC())
+	if err != nil {
+		return artifactassessment.ScanRequest{}, err
+	}
+	packageBytes, err := s.downloader.Download(ctx, lease)
+	if err != nil {
+		return artifactassessment.ScanRequest{}, err
+	}
+	packageDigest := sha256.Sum256(packageBytes)
+	if hex.EncodeToString(packageDigest[:]) != request.SubjectSHA256 {
+		return artifactassessment.ScanRequest{}, errors.New("下载制品摘要与扫描租约不一致")
+	}
+	manifest, _, err := artifacttrust.InspectPackage(packageBytes)
+	if err != nil || manifest.ID != request.Ref.PluginID || manifest.Version != request.Ref.Version || manifest.SupplyChain == nil || manifest.SupplyChain.SBOM == nil {
+		return artifactassessment.ScanRequest{}, errors.New("下载制品清单或 SBOM 绑定无效")
+	}
+	sbom, err := artifacttrust.ReadPackageFile(packageBytes, manifest.SupplyChain.SBOM.Path, artifactsupplychain.MaxCycloneDXBytes)
+	if err != nil {
+		return artifactassessment.ScanRequest{}, err
+	}
+	sbomDigest := sha256.Sum256(sbom)
+	if hex.EncodeToString(sbomDigest[:]) != request.SBOMSHA256 {
+		return artifactassessment.ScanRequest{}, errors.New("下载制品 SBOM 摘要与扫描租约不一致")
+	}
+	return artifactassessment.ScanRequest{Identity: artifactassessment.ArtifactIdentity{PluginID: manifest.ID, Channel: request.Ref.Channel, Publisher: manifest.Publisher, SHA256: request.SubjectSHA256, SBOMSHA256: request.SBOMSHA256}, Package: packageBytes, SBOM: sbom, PolicyID: request.PolicyID}, nil
+}
+
+func (s *Service) withSigningKey(ctx context.Context, host sdk.Host, tenant string, use func(ed25519.PrivateKey) error) error {
+	material, err := credentialmaterial.NewFromEnvironment(host, tenant, s.config.SigningKeyRef)
+	if err != nil {
+		return err
+	}
+	return material.WithMaterial(ctx, s.now().UTC(), func(secret credentialmaterial.Material) error {
+		key, err := provider.ParseEd25519PrivateKey(secret.Bytes())
+		if err != nil {
+			return err
+		}
+		defer provider.ZeroPrivateKey(key)
+		return use(key)
+	})
 }
 
 func requestScanLease(ctx context.Context, host sdk.Host, tenant string, request artifactassessment.ScanLeaseRequest, now time.Time) (artifactassessment.ScanLease, error) {

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +20,14 @@ import (
 type fixedAssessmentCatalog struct{ page catalog.Page }
 
 func (f fixedAssessmentCatalog) Query(catalog.Query) catalog.Page { return f.page }
+
+type captureStatusAppender struct{ called bool }
+
+func (a *captureStatusAppender) AppendSecurityStatus(_ pluginv1.ArtifactRef, raw []byte, _ time.Time) (*artifactassessment.StatusRecord, string, error) {
+	a.called = true
+	record, digest, err := artifactassessment.InspectStatus(raw)
+	return &record, digest, err
+}
 
 func TestAssessmentLeaseIsExactProviderOnlyAndSingleUse(t *testing.T) {
 	now := time.Date(2026, 7, 24, 5, 0, 0, 0, time.UTC)
@@ -76,5 +86,23 @@ func TestAssessmentLeaseRejectsDigestOrLifecycleMismatch(t *testing.T) {
 	callCtx := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: artifactassessment.AssessmentProviderPluginID}}
 	if _, err := issuer.issue(callCtx, raw); err == nil {
 		t.Fatal("非 active 或摘要失配制品不得签发扫描租约")
+	}
+}
+
+func TestAppendAssessmentStatusRequiresExactControllerIdentity(t *testing.T) {
+	_, key, _ := ed25519.GenerateKey(rand.Reader)
+	ref := pluginv1.ArtifactRef{PluginID: "cn.vastplan.product.demo", Version: "1.2.3", Channel: "testing"}
+	record, _ := artifactassessment.SignStatus(artifactassessment.StatusRecord{AdmissionSHA256: strings.Repeat("c", 64), Sequence: 1, PreviousSHA256: strings.Repeat("c", 64), Evaluation: artifactassessment.Evaluation{SubjectSHA256: strings.Repeat("a", 64), SBOMSHA256: strings.Repeat("b", 64), Scanner: artifactassessment.Scanner{ID: "trivy.filesystem", Version: "1", DatabaseRevision: strings.Repeat("d", 64)}, Decision: artifactassessment.DecisionPass, EvaluatedAt: time.Now().UTC(), ExpiresAt: time.Now().UTC().Add(time.Hour)}, ProviderID: "security.vastplan", KeyID: "release", PolicyID: "testing-default"}, key)
+	recordRaw, _ := json.Marshal(record)
+	requestRaw, _ := json.Marshal(artifactassessment.AppendStatusRequest{Ref: ref, Record: recordRaw})
+	appender := &captureStatusAppender{}
+	call := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: artifactassessment.AssessmentControllerPluginID}}
+	if _, err := appendAssessmentStatus(appender, call, requestRaw, time.Now().UTC()); err != nil || !appender.called {
+		t.Fatalf("精确 Controller 追加失败: %v", err)
+	}
+	appender.called = false
+	call.Caller.Id = "cn.vastplan.platform.other"
+	if _, err := appendAssessmentStatus(appender, call, requestRaw, time.Now().UTC()); err == nil || appender.called {
+		t.Fatal("其他首方插件不得追加复扫状态")
 	}
 }

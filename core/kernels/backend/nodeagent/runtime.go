@@ -164,6 +164,10 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 		if pluginValues == nil {
 			pluginValues = map[string]any{}
 		}
+		autonomousTenantID, err := backgroundServiceTenant(plugin, pluginValues)
+		if err != nil {
+			return err
+		}
 		startupConfig, err := json.Marshal(pluginValues)
 		if err != nil {
 			return fmt.Errorf("序列化插件 %s 启动配置: %w", plugin.ID, err)
@@ -184,6 +188,8 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 			RequiredFeatures:     append([]string(nil), plugin.Execution.Features...),
 			RuntimeScope:         unit.ID,
 			RuntimeGeneration:    unit.Fingerprint,
+			BackgroundService:    plugin.Contract.BackgroundService,
+			AutonomousTenantID:   autonomousTenantID,
 		})
 		if err != nil {
 			return fmt.Errorf("启动插件 %s@%s: %w", plugin.ID, plugin.Version, err)

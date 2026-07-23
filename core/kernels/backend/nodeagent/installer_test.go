@@ -37,6 +37,42 @@ func TestLocalInstaller_ContentAddressedAndIdempotent(t *testing.T) {
 	}
 }
 
+func TestLocalInstallerFreezesBackgroundServiceFromSignedManifest(t *testing.T) {
+	dir := t.TempDir()
+	manifest := []byte(`{
+  "id":"com.example.background","name":"background","description":"background","version":"1.0.0","publisher":"example",
+  "engines":{"backend":"^1.0"},
+  "runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","backgroundService":true},
+  "configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"required":["tenantId"],"properties":{"tenantId":{"type":"string"}}}},
+  "activation":["onStartup"],"entry":{"backend":"backend/plugin"},
+  "contributes":{"backend":{"tools":[{"id":"example.background","service_role":"backend"}]}}
+}`)
+	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "backend"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "backend", "plugin"), []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	packageBytes, _, err := pluginservice.PackageDirectory(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := pluginservice.Describe("stable", packageBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed, err := (LocalInstaller{Root: t.TempDir()}).Install(verifiedForTest(artifact, packageBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !installed.Contract.BackgroundService {
+		t.Fatal("安装器必须从已验签 Manifest 冻结后台服务权限")
+	}
+}
+
 func TestLocalInstaller_RejectsCorruptBytesAndNonExecutableEntry(t *testing.T) {
 	packageBytes, artifact := testPackage(t, 0o755)
 	installer := LocalInstaller{Root: t.TempDir()}

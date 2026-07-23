@@ -1,6 +1,7 @@
 package artifactassessment
 
 import (
+	"encoding/json"
 	"errors"
 	"net/url"
 	"regexp"
@@ -33,9 +34,41 @@ type ProviderAssessmentRequest struct {
 	PolicyID string `json:"policyId"`
 }
 
+type ProviderStatusRequest struct {
+	ProviderAssessmentRequest
+	AdmissionSHA256 string `json:"admissionSha256"`
+	Sequence        uint64 `json:"sequence"`
+	PreviousSHA256  string `json:"previousSha256"`
+}
+
+type AppendStatusRequest struct {
+	Ref    pluginv1.ArtifactRef `json:"ref"`
+	Record json.RawMessage      `json:"record"`
+}
+
+type ProviderRuntimeStatus struct {
+	SchemaVersion      string  `json:"schemaVersion"`
+	Scanner            Scanner `json:"scanner"`
+	AssessmentRevision string  `json:"assessmentRevision"`
+}
+
+func ValidateProviderRuntimeStatus(value ProviderRuntimeStatus) error {
+	if value.SchemaVersion != SchemaVersion || value.Scanner.ID == "" || value.Scanner.Version == "" || value.Scanner.DatabaseRevision == "" || !validSHA256(value.AssessmentRevision) {
+		return errors.New("安全评估 Provider runtime status 无效")
+	}
+	return nil
+}
+
 func ValidateProviderAssessmentRequest(value ProviderAssessmentRequest) error {
 	if ValidateScanLeaseRequest(value.ScanLeaseRequest) != nil || value.PolicyID == "" || strings.TrimSpace(value.PolicyID) != value.PolicyID || len(value.PolicyID) > 160 {
 		return errors.New("安全评估 Provider 请求无效")
+	}
+	return nil
+}
+
+func ValidateProviderStatusRequest(value ProviderStatusRequest) error {
+	if ValidateProviderAssessmentRequest(value.ProviderAssessmentRequest) != nil || value.Sequence == 0 || !validSHA256(value.AdmissionSHA256) || !validSHA256(value.PreviousSHA256) {
+		return errors.New("安全复扫 Provider 请求无效")
 	}
 	return nil
 }

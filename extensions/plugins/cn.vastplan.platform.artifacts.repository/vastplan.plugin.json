@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.29.0",
+  "version": "0.30.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -167,6 +167,7 @@
           ,{ "name": "cancelPublication", "description": "由原提交人撤销 stable 发布申请" }
           ,{ "name": "getSupplyChainEvidence", "description": "读取已验证供应链证据摘要" }
           ,{ "name": "prepareAssessment", "description": "向精确首方扫描 Provider 签发一次性制品读取租约" }
+          ,{ "name": "appendAssessmentStatus", "description": "由精确 Controller 追加 Provider 签名复扫状态" }
           ,{ "name": "installDataPlaneTicket", "description": "安装控制面签发的一次性下载 Ticket" }
         ]
       }],

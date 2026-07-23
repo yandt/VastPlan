@@ -73,42 +73,71 @@ func (p *Provider) AssessWithEvidenceKey(ctx context.Context, request artifactas
 	if len(privateKey) != ed25519.PrivateKeySize {
 		return Evidence{}, errors.New("安全评估 Provider 私钥不是 Ed25519")
 	}
-	if err := validateRequest(request); err != nil {
-		return Evidence{}, err
-	}
-	if err := os.MkdirAll(p.workRoot, 0o700); err != nil {
-		return Evidence{}, fmt.Errorf("创建安全评估工作根目录: %w", err)
-	}
-	if err := secureDirectory(p.workRoot); err != nil {
-		return Evidence{}, err
-	}
-	workspace, err := os.MkdirTemp(p.workRoot, "assessment-")
+	evaluation, report, err := p.evaluate(ctx, request)
 	if err != nil {
-		return Evidence{}, fmt.Errorf("创建安全评估临时目录: %w", err)
-	}
-	defer func() { _ = os.RemoveAll(workspace) }()
-	packageRoot := filepath.Join(workspace, "package")
-	if err := os.Mkdir(packageRoot, 0o700); err != nil {
-		return Evidence{}, fmt.Errorf("创建安全评估制品目录: %w", err)
-	}
-	if err := extractPackage(request.Package, packageRoot); err != nil {
 		return Evidence{}, err
 	}
-	result, err := p.engine.Scan(ctx, packageRoot)
-	if err != nil {
-		return Evidence{}, fmt.Errorf("执行安全评估扫描: %w", err)
-	}
-	if err := validateEngineResult(result); err != nil {
-		return Evidence{}, err
-	}
-	evaluation := normalizeEvaluation(request, result, p.config, p.now().UTC())
 	record, err := artifactassessment.SignAdmission(artifactassessment.AdmissionRecord{
 		Evaluation: evaluation, ProviderID: p.config.ProviderID, KeyID: p.config.KeyID, PolicyID: request.PolicyID,
 	}, privateKey)
 	if err != nil {
 		return Evidence{}, err
 	}
-	return Evidence{Admission: record, Report: append([]byte(nil), result.Report...)}, nil
+	return Evidence{Admission: record, Report: report}, nil
+}
+
+func (p *Provider) AssessStatusWithEvidenceKey(ctx context.Context, request StatusRequest, privateKey ed25519.PrivateKey) (StatusEvidence, error) {
+	if p == nil || ctx == nil || len(privateKey) != ed25519.PrivateKeySize || request.Sequence == 0 || len(request.AdmissionSHA256) != 64 || len(request.PreviousSHA256) != 64 {
+		return StatusEvidence{}, errors.New("安全复扫 Provider 请求或私钥无效")
+	}
+	evaluation, report, err := p.evaluate(ctx, request.Scan)
+	if err != nil {
+		return StatusEvidence{}, err
+	}
+	record, err := artifactassessment.SignStatus(artifactassessment.StatusRecord{
+		AdmissionSHA256: request.AdmissionSHA256, Sequence: request.Sequence, PreviousSHA256: request.PreviousSHA256,
+		Evaluation: evaluation, ProviderID: p.config.ProviderID, KeyID: p.config.KeyID, PolicyID: request.Scan.PolicyID,
+	}, privateKey)
+	if err != nil {
+		return StatusEvidence{}, err
+	}
+	return StatusEvidence{Status: record, Report: report}, nil
+}
+
+func (p *Provider) evaluate(ctx context.Context, request artifactassessment.ScanRequest) (artifactassessment.Evaluation, []byte, error) {
+	if p == nil || ctx == nil {
+		return artifactassessment.Evaluation{}, nil, errors.New("安全评估 Provider 未初始化")
+	}
+	if err := validateRequest(request); err != nil {
+		return artifactassessment.Evaluation{}, nil, err
+	}
+	if err := os.MkdirAll(p.workRoot, 0o700); err != nil {
+		return artifactassessment.Evaluation{}, nil, fmt.Errorf("创建安全评估工作根目录: %w", err)
+	}
+	if err := secureDirectory(p.workRoot); err != nil {
+		return artifactassessment.Evaluation{}, nil, err
+	}
+	workspace, err := os.MkdirTemp(p.workRoot, "assessment-")
+	if err != nil {
+		return artifactassessment.Evaluation{}, nil, fmt.Errorf("创建安全评估临时目录: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(workspace) }()
+	packageRoot := filepath.Join(workspace, "package")
+	if err := os.Mkdir(packageRoot, 0o700); err != nil {
+		return artifactassessment.Evaluation{}, nil, fmt.Errorf("创建安全评估制品目录: %w", err)
+	}
+	if err := extractPackage(request.Package, packageRoot); err != nil {
+		return artifactassessment.Evaluation{}, nil, err
+	}
+	result, err := p.engine.Scan(ctx, packageRoot)
+	if err != nil {
+		return artifactassessment.Evaluation{}, nil, fmt.Errorf("执行安全评估扫描: %w", err)
+	}
+	if err := validateEngineResult(result); err != nil {
+		return artifactassessment.Evaluation{}, nil, err
+	}
+	evaluation := normalizeEvaluation(request, result, p.config, p.now().UTC())
+	return evaluation, append([]byte(nil), result.Report...), nil
 }
 
 func validateRequest(request artifactassessment.ScanRequest) error {

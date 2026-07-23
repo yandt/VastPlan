@@ -434,6 +434,7 @@
         "visibility": { "enum": ["local", "service", "cluster", "global"] },
         "routing": { "enum": ["direct", "queue", "leader", "shard"] },
         "routingDomain": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "backgroundService": { "type": "boolean", "default": false },
         "provides": {
           "type": "array",
           "uniqueItems": true,
@@ -444,7 +445,19 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/runtimeRequirement" }
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "backgroundService": { "const": true } }, "required": ["backgroundService"] },
+          "then": {
+            "properties": {
+              "instancePolicy": { "const": "leader" },
+              "stateModel": { "const": "leader-owned" },
+              "routing": { "const": "leader" }
+            }
+          }
+        }
+      ]
     },
     "runtimeCapabilityPolicy": {
       "type": "object",

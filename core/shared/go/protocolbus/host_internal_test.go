@@ -261,6 +261,63 @@ func TestAuthenticatedPluginContextOverridesForgedCallerWithoutMutatingInput(t *
 	}
 }
 
+func TestBackgroundServiceContextIsHostBoundAndLifecycleScoped(t *testing.T) {
+	sess := newSession("sess-background", "plugin.controller", "1.0.0")
+	sess.policy = LaunchPolicy{BackgroundService: true, AutonomousTenantID: "tenant-a"}
+	forged := &contractv1.CallContext{
+		TenantId:    "tenant-a",
+		Principal:   &contractv1.Principal{UserId: "attacker", TenantId: "tenant-a", IsAdmin: true},
+		Caller:      &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "forged"},
+		Credentials: []*contractv1.CredentialRef{{Name: "secret"}},
+		Metadata:    map[string]string{"forged": "true"},
+	}
+	if _, ok := authenticatedHostCallContext(sess, "", sess.pluginID, forged); ok {
+		t.Fatal("插件激活前不得发起自主 HostCall")
+	}
+	sess.autonomousActive.Store(true)
+	got, ok := authenticatedHostCallContext(sess, "", sess.pluginID, forged)
+	if !ok {
+		t.Fatal("已激活后台服务应获得宿主绑定上下文")
+	}
+	if got.GetTenantId() != "tenant-a" || got.GetScene() != "system.background" ||
+		got.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || got.GetCaller().GetId() != sess.pluginID {
+		t.Fatalf("后台服务权威上下文错误: %+v", got)
+	}
+	if got.GetPrincipal() != nil || len(got.GetCredentials()) != 0 || len(got.GetMetadata()) != 0 {
+		t.Fatalf("插件伪造字段不得进入后台上下文: %+v", got)
+	}
+	if _, ok := authenticatedHostCallContext(sess, "", sess.pluginID, &contractv1.CallContext{TenantId: "tenant-b"}); ok {
+		t.Fatal("后台服务不得覆盖宿主绑定租户")
+	}
+	sess.autonomousActive.Store(false)
+	if _, ok := authenticatedHostCallContext(sess, "", sess.pluginID, &contractv1.CallContext{TenantId: "tenant-a"}); ok {
+		t.Fatal("排空后的后台服务委托必须失效")
+	}
+}
+
+func TestOrdinaryPluginStillRequiresInvocationDelegation(t *testing.T) {
+	sess := newSession("sess-ordinary", "plugin.ordinary", "1.0.0")
+	sess.autonomousActive.Store(true)
+	if _, ok := authenticatedHostCallContext(sess, "", sess.pluginID, &contractv1.CallContext{TenantId: "tenant-a"}); ok {
+		t.Fatal("普通插件不得因处于 active 状态获得自主 HostCall")
+	}
+}
+
+func TestAutonomousLaunchPolicyIsInternallyConsistent(t *testing.T) {
+	if err := validateAutonomousPolicy(LaunchPolicy{BackgroundService: true, AutonomousTenantID: "tenant-a"}); err != nil {
+		t.Fatalf("完整后台服务策略应通过: %v", err)
+	}
+	for _, policy := range []LaunchPolicy{
+		{BackgroundService: true},
+		{AutonomousTenantID: "tenant-a"},
+		{BackgroundService: true, AutonomousTenantID: " tenant-a"},
+	} {
+		if err := validateAutonomousPolicy(policy); err == nil {
+			t.Fatalf("不一致后台服务策略必须拒绝: %+v", policy)
+		}
+	}
+}
+
 func TestKernelServicePolicyRequiresSignedManifestDeclaration(t *testing.T) {
 	policy := LaunchPolicy{KernelServices: []string{"kernel.info"}}
 	if !kernelServiceAllowed(policy, "kernel.info") {

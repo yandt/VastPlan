@@ -170,3 +170,4 @@
 - [ADR-0137 Python 标准依赖锁与离线 Overlay](ADR-0137-Python标准依赖锁与离线Overlay.md)
 - [ADR-0138 插件安全准入与可追加复扫状态](ADR-0138-插件安全准入与可追加复扫状态.md)
 - [ADR-0139 安全评估 Provider 与持续复扫控制器](ADR-0139-安全评估Provider与持续复扫控制器.md)
+- [ADR-0140 后台服务自主 HostCall 与宿主绑定上下文](ADR-0140-后台服务自主HostCall与宿主绑定上下文.md)

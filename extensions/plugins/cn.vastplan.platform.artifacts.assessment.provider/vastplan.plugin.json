@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.assessment.provider",
   "name": "VastPlan Artifact Security Assessment Provider",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -58,5 +58,5 @@
   },
   "activation": ["onStartup"],
   "entry": { "backend": "backend/artifact-assessment-provider" },
-  "contributes": { "backend": { "tools": [{ "id": "platform.artifacts.assessment", "service_role": "backend", "title": "插件制品安全评估 Provider", "subcommands": [{ "name": "assessAdmission", "description": "扫描精确制品并签署不可变准入记录" }] }] } }
+  "contributes": { "backend": { "tools": [{ "id": "platform.artifacts.assessment", "service_role": "backend", "title": "插件制品安全评估 Provider", "subcommands": [{ "name": "status", "description": "读取扫描器与评估策略 revision" }, { "name": "assessAdmission", "description": "扫描精确制品并签署不可变准入记录" }, { "name": "assessStatus", "description": "复扫精确制品并签署只追加状态记录" }] }] } }
 }

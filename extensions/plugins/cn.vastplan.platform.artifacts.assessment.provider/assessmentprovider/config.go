@@ -3,6 +3,9 @@
 package assessmentprovider
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"time"
@@ -14,7 +17,7 @@ import (
 
 const (
 	PluginID       = artifactassessment.AssessmentProviderPluginID
-	PluginVersion  = "0.1.0"
+	PluginVersion  = "0.2.0"
 	Capability     = "platform.artifacts.assessment"
 	SigningPurpose = "artifact.assessment.signing-key"
 )
@@ -53,3 +56,16 @@ func (c Config) Validate() error {
 
 func (c Config) TTL() time.Duration     { return time.Duration(c.TTLHours) * time.Hour }
 func (c Config) Timeout() time.Duration { return time.Duration(c.TimeoutSeconds) * time.Second }
+
+func (c Config) AssessmentRevision() string {
+	raw, _ := json.Marshal(struct {
+		ScannerVersion   string                             `json:"scannerVersion"`
+		DatabaseRevision string                             `json:"databaseRevision"`
+		AllowedLicenses  []string                           `json:"allowedLicenses"`
+		FullLicenseScan  bool                               `json:"fullLicenseScan"`
+		Maximum          artifactassessment.MaximumFindings `json:"maximum"`
+		TTLHours         int                                `json:"ttlHours"`
+	}{c.ScannerVersion, c.DatabaseRevision, c.AllowedLicenses, c.FullLicenseScan, c.Maximum, c.TTLHours})
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:])
+}

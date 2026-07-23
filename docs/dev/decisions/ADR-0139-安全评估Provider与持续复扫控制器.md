@@ -57,3 +57,9 @@ Rust 可进一步缩小资源和内存安全风险，但首版工程成本更高
 - **制品正文通过插件 RPC**：大对象占用控制面消息、内存和超时预算，否决。
 - **在线扫描器自行更新数据库**：生产扫描结果不可复现且会在扫描请求路径引入外网，否决。
 - **首版同时强绑多个扫描器**：报告合并、安装和故障面不必要地放大；保留适配接口但默认单引擎，否决。
+
+## 实施记录
+
+- 2026-07-24：完成 Provider SDK、Trivy 离线适配、本地/CI 入口、Repository 单次扫描租约、精确 Material Lease 授权和独立 active-active Provider。Provider 0.2.0 增加 StatusRecord 与数据库/评估配置 revision。
+- 2026-07-24：完成 leader-owned Rescan Controller。计划按 ref 分 key 保存于 fenced Shared State，Provider 记录先持久为 pending 再追加；后台循环通过 ADR-0140 的 Manifest 权限和宿主绑定 tenant 上下文发起 HostCall，Runtime Host 在 leader lease 丢失后阻止外部 HostCall，Repository 只追加链继续作为竞态最终 CAS。Portal 配置和企业目标环境验收仍是后续阶段。
+- 2026-07-24：真实子进程 E2E 已覆盖 Controller 激活后自主调用、Provider/Repository capability 链、Shared State fenced CAS 与最终计划提交；确定性故障测试覆盖追加暂时失败复用 pending、追加成功但最终计划保存失败后的 Catalog 链头恢复，以及数据库 revision 变化立即生成下一 sequence。该验证不包含 soak。

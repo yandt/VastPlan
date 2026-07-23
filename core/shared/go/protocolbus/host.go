@@ -91,6 +91,11 @@ type LaunchPolicy struct {
 	// RuntimeGeneration separates providers that cannot unload code (notably
 	// dynamic-go) while a candidate and current service generation overlap.
 	RuntimeGeneration string
+	// BackgroundService allows calls that are not descendants of a host Invoke.
+	// The trusted runtime binds those calls to exactly one configured tenant;
+	// plugin-supplied CallContext fields never widen that identity.
+	BackgroundService  bool
+	AutonomousTenantID string
 }
 
 // LaunchSpec 是运行驱动交给协议宿主的语言无关启动结果。Command/Args 直接传给

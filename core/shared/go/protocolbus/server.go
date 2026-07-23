@@ -277,6 +277,7 @@ func (h *Host) activate(sess *session) error {
 		}
 		return fmt.Errorf("插件拒绝激活: %s", msg)
 	}
+	sess.autonomousActive.Store(true)
 	h.Logf("插件已激活 %s@%s", sess.pluginID, sess.pluginVersion)
 	return nil
 }
@@ -356,6 +357,9 @@ func migrationLifecycleOp(operation MigrationOperation) (pluginhostv1.Lifecycle_
 
 func (h *Host) lifecycleRequest(ctx context.Context, sess *session, request *pluginhostv1.Lifecycle) (*pluginhostv1.LifecycleAck, error) {
 	timeout := h.callTimeout()
+	if request.Op == pluginhostv1.Lifecycle_OP_DEACTIVATE || request.Op == pluginhostv1.Lifecycle_OP_DRAIN || request.Op == pluginhostv1.Lifecycle_OP_SHUTDOWN {
+		sess.autonomousActive.Store(false)
+	}
 	if request.Op == pluginhostv1.Lifecycle_OP_DRAIN || request.Op == pluginhostv1.Lifecycle_OP_SHUTDOWN {
 		timeout = h.limits().DrainTimeout
 	}
@@ -584,6 +588,7 @@ func (h *Host) heartbeat(sess *session) {
 func (h *Host) teardown(sess *session, cause error) {
 	sess.teardownOnce.Do(func() {
 		defer close(sess.teardownDone)
+		sess.autonomousActive.Store(false)
 		sess.markDead(cause)
 
 		if n := h.Registry.UnregisterPlugin(sess.pluginID); n > 0 {

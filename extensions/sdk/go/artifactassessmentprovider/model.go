@@ -70,3 +70,15 @@ type Evidence struct {
 	Admission artifactassessment.AdmissionRecord
 	Report    []byte
 }
+
+type StatusEvidence struct {
+	Status artifactassessment.StatusRecord
+	Report []byte
+}
+
+type StatusRequest struct {
+	Scan            artifactassessment.ScanRequest
+	AdmissionSHA256 string
+	Sequence        uint64
+	PreviousSHA256  string
+}

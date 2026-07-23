@@ -283,6 +283,7 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, publisher, entry 
 	}
 	if manifest.Runtime != nil {
 		installed.Contract.Requires = append([]pluginv1.RuntimeRequirement(nil), manifest.Runtime.Requires...)
+		installed.Contract.BackgroundService = manifest.Runtime.BackgroundService
 	}
 	if manifest.Capabilities != nil {
 		installed.Contract.KernelServices = append([]string(nil), manifest.Capabilities.KernelServices...)

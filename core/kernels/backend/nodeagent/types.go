@@ -60,10 +60,11 @@ type InstalledPlugin struct {
 
 // PluginRuntimeContract 是安装时从已验签清单冻结的运行授权，宿主不再相信进程自报。
 type PluginRuntimeContract struct {
-	Contributions  []pluginv1.RuntimeContribution `json:"contributions"`
-	Requires       []pluginv1.RuntimeRequirement  `json:"requires,omitempty"`
-	KernelServices []string                       `json:"kernel_services,omitempty"`
-	ContextAccess  pluginv1.ContextAccess         `json:"context_access,omitempty"`
+	Contributions     []pluginv1.RuntimeContribution `json:"contributions"`
+	Requires          []pluginv1.RuntimeRequirement  `json:"requires,omitempty"`
+	KernelServices    []string                       `json:"kernel_services,omitempty"`
+	ContextAccess     pluginv1.ContextAccess         `json:"context_access,omitempty"`
+	BackgroundService bool                           `json:"background_service,omitempty"`
 }
 
 // PluginStateIdentity 只标识插件私有状态格式，不暴露其存储结构。

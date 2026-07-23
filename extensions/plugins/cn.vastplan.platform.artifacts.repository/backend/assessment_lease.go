@@ -12,6 +12,7 @@ import (
 	"time"
 
 	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
@@ -19,6 +20,10 @@ import (
 
 type assessmentCatalog interface {
 	Query(catalog.Query) catalog.Page
+}
+
+type assessmentStatusAppender interface {
+	AppendSecurityStatus(pluginv1.ArtifactRef, []byte, time.Time) (*artifactassessment.StatusRecord, string, error)
 }
 
 type assessmentLeaseIssuer struct {
@@ -84,3 +89,22 @@ func (i *assessmentLeaseIssuer) issue(callCtx *contractv1.CallContext, raw []byt
 }
 
 func marshalScanLease(value artifactassessment.ScanLease) ([]byte, error) { return json.Marshal(value) }
+
+func appendAssessmentStatus(appender assessmentStatusAppender, callCtx *contractv1.CallContext, raw []byte, now time.Time) ([]byte, error) {
+	if appender == nil || callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != artifactassessment.AssessmentControllerPluginID || callCtx.GetTenantId() == "" {
+		return nil, errors.New("复扫状态只允许精确 Assessment Controller 追加")
+	}
+	var request artifactassessment.AppendStatusRequest
+	if err := decodeParams(raw, &request); err != nil || len(request.Record) == 0 {
+		return nil, errors.New("追加安全复扫状态请求无效")
+	}
+	record, _, err := artifactassessment.InspectStatus(request.Record)
+	if err != nil || artifactassessment.ValidateScanLeaseRequest(artifactassessment.ScanLeaseRequest{Ref: request.Ref, SubjectSHA256: record.Evaluation.SubjectSHA256, SBOMSHA256: record.Evaluation.SBOMSHA256}) != nil {
+		return nil, errors.New("追加安全复扫状态记录或 ref 无效")
+	}
+	verified, digest, err := appender.AppendSecurityStatus(request.Ref, request.Record, now.UTC())
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(map[string]any{"sequence": verified.Sequence, "recordSha256": digest})
+}

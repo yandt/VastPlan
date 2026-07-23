@@ -148,6 +148,7 @@ type ArtifactCatalogEntry struct {
 	PythonLock         *ArtifactPythonLockDeclaration        `json:"pythonLock,omitempty"`
 	Provenance         *ArtifactProvenanceDeclaration        `json:"provenance,omitempty"`
 	SecurityAdmission  *ArtifactSecurityAdmissionDeclaration `json:"securityAdmission,omitempty"`
+	SecurityStatus     *ArtifactSecurityStatusEvidence       `json:"securityStatus,omitempty"`
 }
 
 type ArtifactSBOMDeclaration struct {

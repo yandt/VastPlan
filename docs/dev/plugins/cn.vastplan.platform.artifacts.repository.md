@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.26.0 增加插件制品安全准入 sidecar；0.27.0 增加签名只追加复扫链、独立 scanner 写权限、迁移双写、Portal 状态和 Node 本机高水位防回滚；0.28.0 增加低基数安全状态汇总、Portal 告警指标与企业验收矩阵；0.29.0 增加只向精确首方 Assessment Provider 签发、绑定 active ref/制品/SBOM、30 秒且仅可消费一次的 HTTPS 扫描租约。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.26.0 增加插件制品安全准入 sidecar；0.27.0 增加签名只追加复扫链、独立 scanner 写权限、迁移双写、Portal 状态和 Node 本机高水位防回滚；0.28.0 增加低基数安全状态汇总、Portal 告警指标与企业验收矩阵；0.29.0 增加只向精确首方 Assessment Provider 签发、绑定 active ref/制品/SBOM、30 秒且仅可消费一次的 HTTPS 扫描租约；0.30.0 增加仅允许精确 Assessment Controller 追加 Provider 签名状态的内部能力，不向 Portal 或普通发布者暴露 Assessment token。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 

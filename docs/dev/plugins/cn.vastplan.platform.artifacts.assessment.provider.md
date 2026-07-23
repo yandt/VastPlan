@@ -12,7 +12,7 @@
 
 Trivy binary、数据库内容摘要、离线参数和报告 Schema 均由 Provider SDK 强制。每次扫描验证 binary 版本和 `db/metadata.json + db/trivy.db` 内容摘要，固定启用 filesystem `vuln,license`、JSON、`--offline-scan`、`--skip-db-update`。未知 Schema、空扫描、报告超限、数据库漂移、未知许可证超过策略阈值均 fail-closed。
 
-原始 JSON 以报告 SHA-256 为文件名写入仅属主可访问的 `reportRoot`。相同摘要可幂等复用，摘要路径出现不同内容时拒绝；只有归档成功才返回签名 `AdmissionRecord`。插件为 active-active、queue 路由且不持有调度状态，同一 ref 的 sequence、重试与幂等由 leader Rescan Controller 负责。
+原始 JSON 以报告 SHA-256 为文件名写入仅属主可访问的 `reportRoot`。相同摘要可幂等复用，摘要路径出现不同内容时拒绝；只有归档成功才返回签名记录。插件为 active-active、queue 路由且不持有调度状态；`assessAdmission` 生成不可变准入，`assessStatus` 生成只追加复扫记录。`status` 只向精确 Controller 返回扫描器、数据库和评估配置 revision，使数据库或策略切换能触发立即复扫。
 
 ## 生产要求
 

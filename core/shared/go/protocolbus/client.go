@@ -84,6 +84,9 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 	if err := validateStartupConfiguration(policy.Configuration); err != nil {
 		return nil, err
 	}
+	if err := validateAutonomousPolicy(policy); err != nil {
+		return nil, err
+	}
 	if err := validateExtraEnvironment(spec.ExtraEnv); err != nil {
 		return nil, err
 	}
@@ -202,6 +205,9 @@ func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSp
 	if err := validateStartupConfiguration(policy.Configuration); err != nil {
 		return nil, err
 	}
+	if err := validateAutonomousPolicy(policy); err != nil {
+		return nil, err
+	}
 	token := newToken()
 	resultCh := make(chan launchResult, 1)
 	h.mu.Lock()
@@ -297,6 +303,17 @@ func validateStartupConfiguration(raw []byte) error {
 	var object map[string]any
 	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
 		return errors.New("插件启动配置根必须是 JSON object")
+	}
+	return nil
+}
+
+func validateAutonomousPolicy(policy LaunchPolicy) error {
+	tenantID := policy.AutonomousTenantID
+	if policy.BackgroundService != (tenantID != "") {
+		return errors.New("后台服务启动策略必须同时声明能力并绑定租户")
+	}
+	if tenantID != "" && (strings.TrimSpace(tenantID) != tenantID || len(tenantID) > 160) {
+		return errors.New("后台服务启动策略 tenantId 无效")
 	}
 	return nil
 }
@@ -613,7 +630,7 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 	defer sess.endHostCall(req.RequestId)
 
 	h.Logf("插件 %s 回调宿主：%s/%s", sess.pluginID, req.Target.ExtensionPoint, req.Target.Capability)
-	callCtx, ok := authenticatedPluginContext(sess, req.GetDelegationToken(), sess.pluginID)
+	callCtx, ok := authenticatedHostCallContext(sess, req.GetDelegationToken(), sess.pluginID, req.Context)
 	if !ok {
 		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.PermissionDenied,
 			"HostCall 缺少有效的宿主身份委托", false))
@@ -630,6 +647,11 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 	h.mu.RLock()
 	_, localKernelService := h.services[req.Target.Capability]
 	h.mu.RUnlock()
+	if !localKernelService && !h.externalHostCallAllowed() {
+		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.PermissionDenied,
+			"leader runtime 已失去当前 execution fence", true))
+		return
+	}
 	if req.Target.ExtensionPoint == extpoint.KernelService && localKernelService {
 		if trustedCtx, identityErr := withLaunchRuntimeIdentity(ctx, sess.policy); identityErr == nil {
 			ctx = trustedCtx
@@ -642,6 +664,20 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 		return
 	}
 	h.replyHostCall(sess, req.RequestId, resp)
+}
+
+// externalHostCallAllowed closes the stale-leader window before a plugin call
+// leaves its Runtime Host. Downstream append-only/CAS rules remain the final
+// fencing layer for a lease loss racing with an already-started request.
+func (h *Host) externalHostCallAllowed() bool {
+	h.mu.RLock()
+	provider := h.fenceProvider
+	h.mu.RUnlock()
+	if provider == nil {
+		return true
+	}
+	_, current := provider.Current()
+	return current
 }
 
 func kernelServiceAllowed(policy LaunchPolicy, capability string) bool {
@@ -663,6 +699,26 @@ func authenticatedPluginContext(sess *session, token, pluginID string) (*contrac
 	}
 	bounded.Caller = &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: pluginID}
 	return bounded, true
+}
+
+func authenticatedHostCallContext(sess *session, token, pluginID string, claimed *contractv1.CallContext) (*contractv1.CallContext, bool) {
+	if token != "" {
+		return authenticatedPluginContext(sess, token, pluginID)
+	}
+	if !sess.policy.BackgroundService || sess.policy.AutonomousTenantID == "" || !sess.autonomousActive.Load() {
+		return nil, false
+	}
+	// A mismatched tenant is rejected so configuration bugs and cross-tenant
+	// attempts are visible. Every other claimed field is ignored: principal,
+	// credentials, metadata and caller can only come from a host delegation.
+	if claimed != nil && claimed.GetTenantId() != "" && claimed.GetTenantId() != sess.policy.AutonomousTenantID {
+		return nil, false
+	}
+	return &contractv1.CallContext{
+		TenantId: sess.policy.AutonomousTenantID,
+		Scene:    "system.background",
+		Caller:   &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: pluginID},
+	}, true
 }
 
 func (h *Host) replyHostCall(sess *session, requestID string, resp *pluginhostv1.InvokeResponse) {

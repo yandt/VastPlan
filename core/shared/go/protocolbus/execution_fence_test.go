@@ -40,3 +40,19 @@ func TestHostServiceReceivesOnlyCurrentExecutionFence(t *testing.T) {
 		t.Fatalf("失效 evidence 不得继续注入: observed=%v err=%v", observed, err)
 	}
 }
+
+func TestExternalHostCallsStopImmediatelyAfterLeaderLeaseLoss(t *testing.T) {
+	host := NewHost("backend", "1.0.0", registry.New(), nil)
+	if !host.externalHostCallAllowed() {
+		t.Fatal("非 leader runtime 不应被额外拦截")
+	}
+	provider := &testFenceProvider{evidence: operationfence.Evidence{LogicalService: "platform.assessment", UnitID: "controller", Epoch: 2, Token: "token-2"}, current: true}
+	host.SetExecutionFenceProvider(provider)
+	if !host.externalHostCallAllowed() {
+		t.Fatal("当前 leader 应允许外部能力调用")
+	}
+	provider.current = false
+	if host.externalHostCallAllowed() {
+		t.Fatal("失去 leader lease 后必须在 Runtime Host 阻止外部能力调用")
+	}
+}

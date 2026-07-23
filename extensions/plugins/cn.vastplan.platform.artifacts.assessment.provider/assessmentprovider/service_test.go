@@ -111,7 +111,7 @@ func TestServiceUsesScanLeaseAndMaterialLeaseWithoutReturningSecrets(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	record, _, err := artifactassessment.InspectAdmission(raw)
+	record, admissionDigest, err := artifactassessment.InspectAdmission(raw)
 	if err != nil || record.ProviderID != "security.vastplan" || host.repositoryCalls != 1 || host.materialCalls != 1 {
 		t.Fatalf("运行态评估链路无效: record=%+v err=%v", record, err)
 	}
@@ -130,6 +130,24 @@ func TestServiceUsesScanLeaseAndMaterialLeaseWithoutReturningSecrets(t *testing.
 	}
 	if _, err := os.Stat(filepath.Join(config.ReportRoot, record.Evaluation.Vulnerabilities.ReportSHA256+".json")); err != nil {
 		t.Fatal("原始报告未按摘要归档")
+	}
+	statusRequest, _ := json.Marshal(artifactassessment.ProviderStatusRequest{
+		ProviderAssessmentRequest: artifactassessment.ProviderAssessmentRequest{
+			ScanLeaseRequest: artifactassessment.ScanLeaseRequest{Ref: ref, SubjectSHA256: hex.EncodeToString(packageDigest[:]), SBOMSHA256: hex.EncodeToString(sbomDigest[:])},
+			PolicyID:         "testing-default",
+		},
+		AdmissionSHA256: admissionDigest, Sequence: 1, PreviousSHA256: admissionDigest,
+	})
+	statusRaw, err := service.AssessStatus(context.Background(), host, &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: artifactassessment.AssessmentControllerPluginID}}, statusRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, _, err := policy.VerifyStatus(artifactassessment.ArtifactIdentity{PluginID: ref.PluginID, Channel: ref.Channel, Publisher: "vastplan", SHA256: hex.EncodeToString(packageDigest[:]), SBOMSHA256: hex.EncodeToString(sbomDigest[:])}, raw, nil, statusRaw, now)
+	if err != nil || status.Sequence != 1 || status.PreviousSHA256 != admissionDigest || host.repositoryCalls != 2 || host.materialCalls != 2 {
+		t.Fatalf("复扫 StatusRecord 链路无效: status=%+v err=%v repositoryCalls=%d materialCalls=%d", status, err, host.repositoryCalls, host.materialCalls)
+	}
+	if bytes.Contains(statusRaw, privateKey) {
+		t.Fatal("Provider 复扫响应不得包含私钥 material")
 	}
 }
 

@@ -245,13 +245,14 @@ func BackendExecutionContract(manifest Manifest) BackendExecution {
 // RuntimePolicy 声明插件贡献的实例化策略和默认能力边界。
 // Provides 可按 extensionPoint + capability 覆盖顶层策略。
 type RuntimePolicy struct {
-	InstancePolicy string                    `json:"instancePolicy"`
-	StateModel     string                    `json:"stateModel"`
-	Visibility     string                    `json:"visibility"`
-	Routing        string                    `json:"routing"`
-	RoutingDomain  string                    `json:"routingDomain,omitempty"`
-	Provides       []RuntimeCapabilityPolicy `json:"provides,omitempty"`
-	Requires       []RuntimeRequirement      `json:"requires,omitempty"`
+	InstancePolicy    string                    `json:"instancePolicy"`
+	StateModel        string                    `json:"stateModel"`
+	Visibility        string                    `json:"visibility"`
+	Routing           string                    `json:"routing"`
+	RoutingDomain     string                    `json:"routingDomain,omitempty"`
+	BackgroundService bool                      `json:"backgroundService,omitempty"`
+	Provides          []RuntimeCapabilityPolicy `json:"provides,omitempty"`
+	Requires          []RuntimeRequirement      `json:"requires,omitempty"`
 }
 
 type RuntimeCapabilityPolicy struct {
@@ -645,6 +646,9 @@ func ParseManifest(raw []byte) (Manifest, error) {
 		if _, _, err := runtimePolicies(manifest); err != nil {
 			return Manifest{}, err
 		}
+		if err := validateBackgroundService(manifest); err != nil {
+			return Manifest{}, err
+		}
 	}
 	if err := validateContextAccess(manifest.ContextAccess); err != nil {
 		return Manifest{}, err
@@ -679,6 +683,45 @@ func ParseManifest(raw []byte) (Manifest, error) {
 		return Manifest{}, err
 	}
 	return manifest, nil
+}
+
+func validateBackgroundService(manifest Manifest) error {
+	if manifest.Runtime == nil || !manifest.Runtime.BackgroundService {
+		return nil
+	}
+	if manifest.Runtime.InstancePolicy != "leader" || manifest.Runtime.StateModel != "leader-owned" || manifest.Runtime.Routing != "leader" {
+		return errors.New("runtime.backgroundService 首版只允许 leader/leader-owned/leader")
+	}
+	if manifest.Configuration == nil || manifest.Configuration.Scope != "service" || manifest.Configuration.ApplyMode != "restart" {
+		return errors.New("runtime.backgroundService 要求 service-scoped restart 配置")
+	}
+	var schema struct {
+		Required   []string                   `json:"required"`
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(manifest.Configuration.Schema, &schema); err != nil {
+		return errors.New("runtime.backgroundService 配置 Schema 无效")
+	}
+	requiredTenant := false
+	for _, field := range schema.Required {
+		if field == "tenantId" {
+			requiredTenant = true
+			break
+		}
+	}
+	var tenantSchema struct {
+		Type string `json:"type"`
+	}
+	if raw := schema.Properties["tenantId"]; len(raw) == 0 || json.Unmarshal(raw, &tenantSchema) != nil || tenantSchema.Type != "string" || !requiredTenant {
+		return errors.New("runtime.backgroundService 配置 Schema 必须要求字符串 tenantId")
+	}
+	if _, ok := manifest.Engines["backend"]; !ok || manifest.Entry["backend"] == "" {
+		return errors.New("runtime.backgroundService 要求 backend 执行入口")
+	}
+	if manifest.Execution != nil && manifest.Execution.Backend != nil && manifest.Execution.Backend.DynamicGo != nil {
+		return errors.New("runtime.backgroundService 不允许 dynamic-go 内嵌入口")
+	}
+	return nil
 }
 
 func validateAuthenticationProviderDependencies(manifest Manifest) error {

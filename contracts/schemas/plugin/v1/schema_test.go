@@ -497,6 +497,43 @@ func TestParseManifest_RuntimeRequirements(t *testing.T) {
 	}
 }
 
+func TestParseManifest_BackgroundServiceRequiresLeaderAndServiceConfiguration(t *testing.T) {
+	valid := []byte(`{
+		"id":"com.example.background","name":"background","description":"background",
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","backgroundService":true},
+		"configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"required":["tenantId"],"properties":{"tenantId":{"type":"string"}}}},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
+	}`)
+	manifest, err := ParseManifest(valid)
+	if err != nil || manifest.Runtime == nil || !manifest.Runtime.BackgroundService {
+		t.Fatalf("合法后台服务契约应通过: manifest=%+v err=%v", manifest, err)
+	}
+
+	for name, replacement := range map[string]string{
+		"非 leader":     `"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","backgroundService":true`,
+		"非 service 配置": `"scope":"tenant","applyMode":"hot"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw := valid
+			switch name {
+			case "非 leader":
+				raw = bytes.Replace(raw, []byte(`"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","backgroundService":true`), []byte(replacement), 1)
+			case "非 service 配置":
+				raw = bytes.Replace(raw, []byte(`"scope":"service","applyMode":"restart"`), []byte(replacement), 1)
+			}
+			if _, err := ParseManifest(raw); err == nil {
+				t.Fatal("越权后台服务契约必须被拒绝")
+			}
+		})
+	}
+	missingTenantSchema := bytes.Replace(valid,
+		[]byte(`,"required":["tenantId"],"properties":{"tenantId":{"type":"string"}}`), nil, 1)
+	if _, err := ParseManifest(missingTenantSchema); err == nil {
+		t.Fatal("后台服务配置必须显式要求字符串 tenantId")
+	}
+}
+
 func TestParseManifest_BackendStateMigrationContract(t *testing.T) {
 	valid := []byte(`{
 		"id":"com.example.stateful","name":"stateful","description":"stateful plugin",

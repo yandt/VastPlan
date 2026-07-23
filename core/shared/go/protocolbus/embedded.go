@@ -89,6 +89,9 @@ func (h *Host) LaunchEmbeddedWithPolicy(ctx context.Context, definition Embedded
 // 只用于诊断，身份与权限仍完全来自 LaunchPolicy。
 func (h *Host) LaunchEmbeddedKindWithPolicy(ctx context.Context, definition EmbeddedPlugin, policy LaunchPolicy, kind string) (*PluginInstance, error) {
 	policy = cloneLaunchPolicy(policy)
+	if policy.BackgroundService || policy.AutonomousTenantID != "" {
+		return nil, errors.New("后台服务不能以内嵌模式运行")
+	}
 	if definition.ID == "" || definition.Version == "" || policy.PluginID == "" || policy.Version == "" {
 		return nil, errors.New("内嵌插件及启动策略必须包含身份和版本")
 	}
