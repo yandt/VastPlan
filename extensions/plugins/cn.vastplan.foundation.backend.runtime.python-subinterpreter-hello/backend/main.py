@@ -28,7 +28,7 @@ def whoami(invocation, host, call_context, _payload):
 
 plugin = Plugin(
     "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello",
-    "0.2.0",
+    "0.3.0",
     {"backend": "^0.1 || ^1.0"},
 )
 plugin.contribute(Contribution(

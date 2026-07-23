@@ -84,14 +84,15 @@ func TestParseManifest_LicenseFieldsArePaired(t *testing.T) {
 
 func TestParseManifestSupplyChainDeclarationIsClosed(t *testing.T) {
 	base := `{"id":"com.example.demo","name":"demo","description":"demo","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}},"supplyChain":%s}`
-	valid := `{"sbom":{"format":"cyclonedx-json","specVersion":"1.5","path":"supply-chain/sbom.cdx.json","sha256":"` + strings.Repeat("a", 64) + `"}}`
+	valid := `{"sbom":{"format":"cyclonedx-json","specVersion":"1.5","path":"supply-chain/sbom.cdx.json","sha256":"` + strings.Repeat("a", 64) + `"},"pythonLock":{"format":"pylock-toml","specVersion":"1.0","path":"supply-chain/pylock.toml","sha256":"` + strings.Repeat("b", 64) + `"}}`
 	manifest, err := ParseManifest([]byte(fmt.Sprintf(base, valid)))
-	if err != nil || manifest.SupplyChain == nil || manifest.SupplyChain.SBOM == nil {
+	if err != nil || manifest.SupplyChain == nil || manifest.SupplyChain.SBOM == nil || manifest.SupplyChain.PythonLock == nil {
 		t.Fatalf("有效供应链声明应通过: manifest=%+v err=%v", manifest, err)
 	}
 	for _, invalid := range []string{
 		`{"sbom":{"format":"spdx-json","specVersion":"1.5","path":"supply-chain/sbom.cdx.json","sha256":"` + strings.Repeat("a", 64) + `"}}`,
 		`{"sbom":{"format":"cyclonedx-json","specVersion":"1.5","path":"other/sbom.json","sha256":"` + strings.Repeat("a", 64) + `"}}`,
+		`{"pythonLock":{"format":"uv-lock","specVersion":"1.0","path":"supply-chain/pylock.toml","sha256":"` + strings.Repeat("a", 64) + `"}}`,
 	} {
 		if _, err := ParseManifest([]byte(fmt.Sprintf(base, invalid))); err == nil {
 			t.Fatalf("非法供应链声明必须拒绝: %s", invalid)

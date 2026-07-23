@@ -226,6 +226,28 @@ def _declaration(responses, timeout: float = 15.0) -> Mapping[str, Any]:
     return message
 
 
+def _plugin_sys_path(entry: Path, environment: Optional[Mapping[str, str]]) -> tuple[str, ...]:
+    values = list(sys.path)
+    if not environment:
+        return tuple(values)
+    dependency_value = environment.get("VASTPLAN_PYTHON_DEPENDENCIES", "").strip()
+    if not dependency_value:
+        return tuple(values)
+    root_value = environment.get("VASTPLAN_PLUGIN_ROOT", "").strip()
+    if not root_value:
+        raise RuntimeError("Python 依赖 overlay 缺少 VASTPLAN_PLUGIN_ROOT")
+    root = Path(root_value).resolve(strict=True)
+    dependency_path = Path(dependency_value).resolve(strict=True)
+    try:
+        dependency_path.relative_to(root)
+        entry.relative_to(root)
+    except ValueError as error:
+        raise RuntimeError("Python 依赖或入口越出已验签插件安装根") from error
+    if not root.is_dir() or not dependency_path.is_dir():
+        raise RuntimeError("Python 依赖 overlay 越出已验签插件安装根")
+    return (str(dependency_path), *values)
+
+
 def run(entry: str, plugin_args: Sequence[str], environment: Optional[Mapping[str, str]] = None,
         stop_requested: Optional[threading.Event] = None) -> int:
     capability = runtime_capability()
@@ -234,6 +256,7 @@ def run(entry: str, plugin_args: Sequence[str], environment: Optional[Mapping[st
     entry_path = Path(entry).resolve(strict=True)
     if not entry_path.is_file():
         raise RuntimeError(f"插件入口不是普通文件: {entry_path}")
+    plugin_sys_path = _plugin_sys_path(entry_path, environment)
 
     from concurrent import interpreters
     from vastplan_plugin import Contribution, Plugin
@@ -246,7 +269,7 @@ def run(entry: str, plugin_args: Sequence[str], environment: Optional[Mapping[st
         __vastplan_args=tuple(plugin_args),
         __vastplan_requests=requests,
         __vastplan_responses=responses,
-        __vastplan_sys_path=tuple(sys.path),
+        __vastplan_sys_path=plugin_sys_path,
     )
     worker = interpreter.call_in_thread(exec, BOOTSTRAP)
     bridge = None

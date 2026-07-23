@@ -1,6 +1,8 @@
 package nodeagent
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -52,12 +54,15 @@ func TestLocalInstaller_RejectsCorruptBytesAndNonExecutableEntry(t *testing.T) {
 
 func TestLocalInstaller_PythonEntryNeedNotBeExecutable(t *testing.T) {
 	dir := t.TempDir()
-	manifest := []byte(`{
+	lock := []byte("lock-version=\"1.0\"\nrequires-python=\">=3.8\"\ncreated-by=\"test\"\npackages=[]\n")
+	lockDigest := sha256.Sum256(lock)
+	manifest := []byte(fmt.Sprintf(`{
   "id":"com.example.python","name":"python","description":"python","version":"1.0.0","publisher":"example",
-  "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"python","requirements":{"python":">=3.11"}}},
+  "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"python","requirements":{"python":">=3.8"}}},
   "activation":["onStartup"],"entry":{"backend":"backend/main.py"},
+  "supplyChain":{"pythonLock":{"format":"pylock-toml","specVersion":"1.0","path":"supply-chain/pylock.toml","sha256":"%s"}},
   "contributes":{"backend":{"tools":[{"id":"example.python","service_role":"backend"}]}}
-}`)
+}`, hex.EncodeToString(lockDigest[:])))
 	if err := os.WriteFile(filepath.Join(dir, "vastplan.plugin.json"), manifest, 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -65,6 +70,12 @@ func TestLocalInstaller_PythonEntryNeedNotBeExecutable(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "backend", "main.py"), []byte("print('ok')\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "supply-chain"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "supply-chain", "pylock.toml"), lock, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	packageBytes, _, err := pluginservice.PackageDirectory(dir)
@@ -79,7 +90,7 @@ func TestLocalInstaller_PythonEntryNeedNotBeExecutable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if installed.Publisher != "example" || installed.Execution.Driver != "python" {
+	if installed.Publisher != "example" || installed.Execution.Driver != "python" || installed.PythonPath == "" {
 		t.Fatalf("安装器没有冻结发布者和执行契约: %+v", installed)
 	}
 }

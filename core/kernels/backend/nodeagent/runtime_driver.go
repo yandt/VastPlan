@@ -68,17 +68,21 @@ func NewExecutionDriverRegistry(drivers ...PluginExecutionDriver) (*ExecutionDri
 func DefaultExecutionDrivers() *ExecutionDriverRegistry {
 	nodeHost := strings.TrimSpace(os.Getenv("VASTPLAN_NODE_WORKER_HOST"))
 	pythonHost := strings.TrimSpace(os.Getenv("VASTPLAN_PYTHON_SUBINTERPRETER_HOST"))
+	pythonInterpreter := strings.TrimSpace(os.Getenv("VASTPLAN_PYTHON_INTERPRETER"))
+	if pythonInterpreter == "" {
+		pythonInterpreter = "python3"
+	}
 	nodeDriver := NodeWorkerExecutionDriver{Command: "vastplan-node-worker-host"}
 	if nodeHost != "" {
 		nodeDriver = NodeWorkerExecutionDriver{Command: "node", HostArgs: []string{nodeHost}}
 	}
 	pythonDriver := PythonSubinterpreterExecutionDriver{Command: "vastplan-python-subinterpreter-host"}
 	if pythonHost != "" {
-		pythonDriver = PythonSubinterpreterExecutionDriver{Command: "python3", HostArgs: []string{pythonHost}}
+		pythonDriver = PythonSubinterpreterExecutionDriver{Command: pythonInterpreter, HostArgs: []string{pythonHost}}
 	}
 	drivers := []PluginExecutionDriver{
 		NativeExecutionDriver{},
-		PythonProcessExecutionDriver{Interpreter: "python3"},
+		PythonProcessExecutionDriver{Interpreter: pythonInterpreter},
 		nodeDriver,
 		pythonDriver,
 	}
@@ -240,6 +244,7 @@ func startManagedRuntime(ctx context.Context, host *protocolbus.Host, plugin Ins
 		"VASTPLAN_PLUGIN_ROOT=" + plugin.Root,
 		"VASTPLAN_PLUGIN_DRIVER=" + plugin.Execution.Driver,
 	}
+	extraEnvironment = append(extraEnvironment, pythonEnvironmentVariables(plugin)...)
 	return host.LaunchManagedWithPolicy(ctx, protocolbus.ManagedLaunchSpec{
 		PID: lease.PID(), RuntimeKind: driver.Name(),
 		Start: func(environment []string) error {
@@ -252,10 +257,23 @@ func startManagedRuntime(ctx context.Context, host *protocolbus.Host, plugin Ins
 }
 
 func processLaunchSpec(plugin InstalledPlugin, command string, args []string, kind string) protocolbus.LaunchSpec {
+	extraEnvironment := []string{"VASTPLAN_PLUGIN_ROOT=" + plugin.Root, "VASTPLAN_PLUGIN_DRIVER=" + plugin.Execution.Driver}
+	extraEnvironment = append(extraEnvironment, pythonEnvironmentVariables(plugin)...)
 	return protocolbus.LaunchSpec{
 		Command: command, Args: append([]string(nil), args...), Dir: plugin.Root,
-		ExtraEnv:    []string{"VASTPLAN_PLUGIN_ROOT=" + plugin.Root, "VASTPLAN_PLUGIN_DRIVER=" + plugin.Execution.Driver},
+		ExtraEnv:    extraEnvironment,
 		RuntimeKind: kind,
+	}
+}
+
+func pythonEnvironmentVariables(plugin InstalledPlugin) []string {
+	if strings.TrimSpace(plugin.PythonPath) == "" {
+		return nil
+	}
+	return []string{
+		"VASTPLAN_PYTHON_DEPENDENCIES=" + plugin.PythonPath,
+		"PYTHONPATH=" + plugin.PythonPath,
+		"PYTHONNOUSERSITE=1",
 	}
 }
 

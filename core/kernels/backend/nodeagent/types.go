@@ -52,6 +52,7 @@ type InstalledPlugin struct {
 	Root          string                    `json:"root"`
 	EntryPath     string                    `json:"entry_path"`
 	DynamicGoPath string                    `json:"dynamic_go_path,omitempty"`
+	PythonPath    string                    `json:"python_path,omitempty"`
 	Execution     pluginv1.BackendExecution `json:"execution"`
 	State         *PluginStateContract      `json:"state,omitempty"`
 	Contract      PluginRuntimeContract     `json:"contract"`

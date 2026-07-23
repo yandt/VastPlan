@@ -37,7 +37,7 @@ def echo(context, host, call_context, payload):
     return contract_pb2.CallResult(status=contract_pb2.CallResult.STATUS_OK), output
 
 
-plugin = Plugin("cn.vastplan.python-hello", "0.1.0", {"backend": "^0.1 || ^1.0"})
+plugin = Plugin("cn.vastplan.python-hello", "0.2.0", {"backend": "^0.1 || ^1.0"})
 plugin.contribute(Contribution(
     extension_point="tool.package",
     id="vastplan.python-hello",

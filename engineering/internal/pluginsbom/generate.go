@@ -13,6 +13,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pythonlock"
 	"cdsoft.com.cn/VastPlan/engineering/internal/cyclonedx"
 )
 
@@ -72,7 +73,7 @@ func Generate(options Options) (Result, error) {
 		}
 		components = append(components, nodeValues...)
 	}
-	pythonValues, runtimeProperties, err := manifestDependencies(manifest)
+	pythonValues, runtimeProperties, err := manifestDependencies(pluginDir, manifest)
 	if err != nil {
 		return Result{}, err
 	}
@@ -164,11 +165,41 @@ func requireBuildFacts(manifest pluginv1.Manifest, goBinaries, metafiles []strin
 	return nil
 }
 
-func manifestDependencies(manifest pluginv1.Manifest) ([]cyclonedx.Component, []cyclonedx.Property, error) {
+func manifestDependencies(pluginDir string, manifest pluginv1.Manifest) ([]cyclonedx.Component, []cyclonedx.Property, error) {
 	if manifest.Execution == nil || manifest.Execution.Backend == nil {
 		return nil, nil, nil
 	}
 	execution := manifest.Execution.Backend
+	pythonDriver := execution.Driver == "python" || execution.Driver == "python-subinterpreter"
+	if pythonDriver {
+		raw, err := os.ReadFile(filepath.Join(pluginDir, filepath.FromSlash(pythonlock.PackagePath)))
+		if err != nil {
+			return nil, nil, fmt.Errorf("读取 Python 完整依赖锁: %w", err)
+		}
+		summary, err := pythonlock.Inspect(raw)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := pythonlock.ValidateManifestRequirements(execution.Requirements, summary); err != nil {
+			return nil, nil, err
+		}
+		components := make([]cyclonedx.Component, 0, len(summary.Packages))
+		for _, item := range summary.Packages {
+			purl := "pkg:pypi/" + item.Name + "@" + item.Version
+			properties := []cyclonedx.Property{{Name: "vastplan:dependency.evidence", Value: "signed-pylock-toml"}}
+			if item.Marker != "" {
+				properties = append(properties, cyclonedx.Property{Name: "vastplan:python.marker", Value: item.Marker})
+			}
+			if item.RequiresPython != "" {
+				properties = append(properties, cyclonedx.Property{Name: "vastplan:python.requires", Value: item.RequiresPython})
+			}
+			components = append(components, cyclonedx.Component{Type: "library", BOMRef: purl, Name: item.Name, Version: item.Version, PURL: purl, Properties: properties})
+		}
+		return components, []cyclonedx.Property{
+			{Name: "vastplan:runtime.requirement.python", Value: summary.RequiresPython},
+			{Name: "vastplan:python.lock.sha256", Value: summary.SHA256},
+		}, nil
+	}
 	keys := make([]string, 0, len(execution.Requirements))
 	for key := range execution.Requirements {
 		keys = append(keys, key)
@@ -176,39 +207,11 @@ func manifestDependencies(manifest pluginv1.Manifest) ([]cyclonedx.Component, []
 	sort.Strings(keys)
 	components := make([]cyclonedx.Component, 0)
 	properties := make([]cyclonedx.Property, 0)
-	pythonDriver := execution.Driver == "python" || execution.Driver == "python-subinterpreter"
 	for _, key := range keys {
 		value := strings.TrimSpace(execution.Requirements[key])
-		if key == "python" || key == "node" || !pythonDriver {
-			properties = append(properties, cyclonedx.Property{Name: "vastplan:runtime.requirement." + key, Value: value})
-			continue
-		}
-		if !exactPackageVersion(value) {
-			return nil, nil, fmt.Errorf("Python 依赖 %s 必须使用精确版本生成 SBOM，当前为 %s", key, value)
-		}
-		name := normalizePyPIName(key)
-		purl := "pkg:pypi/" + name + "@" + value
-		components = append(components, cyclonedx.Component{Type: "library", BOMRef: purl, Name: name, Version: value, PURL: purl, Properties: []cyclonedx.Property{{Name: "vastplan:dependency.evidence", Value: "signed-manifest-requirement"}}})
+		properties = append(properties, cyclonedx.Property{Name: "vastplan:runtime.requirement." + key, Value: value})
 	}
 	return components, properties, nil
-}
-
-func exactPackageVersion(value string) bool {
-	if value == "" || strings.ContainsAny(value, "<>=~^* ,") {
-		return false
-	}
-	for _, part := range strings.Split(value, ".") {
-		if part == "" {
-			return false
-		}
-	}
-	return true
-}
-
-func normalizePyPIName(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	replacer := strings.NewReplacer("_", "-", ".", "-")
-	return replacer.Replace(value)
 }
 
 func decodeJSONFile(filename string, target any) error {

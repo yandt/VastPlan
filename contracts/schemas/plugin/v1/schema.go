@@ -89,7 +89,8 @@ type Manifest struct {
 }
 
 type SupplyChain struct {
-	SBOM *SupplyChainDocument `json:"sbom,omitempty"`
+	SBOM       *SupplyChainDocument `json:"sbom,omitempty"`
+	PythonLock *SupplyChainDocument `json:"pythonLock,omitempty"`
 }
 
 type SupplyChainDocument struct {

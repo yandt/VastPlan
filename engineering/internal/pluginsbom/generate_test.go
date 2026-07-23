@@ -51,6 +51,18 @@ func TestGeneratePythonSBOMFromSignedRequirements(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plugin, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	lockDirectory := filepath.Join(plugin, "supply-chain")
+	if err := os.MkdirAll(lockDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lock := `lock-version="1.0"
+requires-python=">=3.11"
+created-by="test"
+packages=[{name="grpcio",version="1.70.0",wheels=[{path="python-wheels/grpcio-1.70.0-py3-none-any.whl",size=1,hashes={sha256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]}]
+`
+	if err := os.WriteFile(filepath.Join(lockDirectory, "pylock.toml"), []byte(lock), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	result, err := Generate(Options{Root: root, PluginDir: plugin})
 	if err != nil {
 		t.Fatal(err)

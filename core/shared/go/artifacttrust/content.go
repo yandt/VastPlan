@@ -182,26 +182,25 @@ func InspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 }
 
 func validatePackagedSupplyChain(packageBytes []byte, manifest pluginv1.Manifest, facts map[string]packageFileFact) error {
-	if manifest.SupplyChain == nil || manifest.SupplyChain.SBOM == nil {
-		return nil
+	if manifest.SupplyChain != nil && manifest.SupplyChain.SBOM != nil {
+		declaration := manifest.SupplyChain.SBOM
+		fact, exists := facts[declaration.Path]
+		if !exists || fact.size <= 0 || fact.size > artifactsupplychain.MaxCycloneDXBytes || fact.sha256 != declaration.SHA256 {
+			return errors.New("插件包 CycloneDX SBOM 与签名清单声明失配")
+		}
+		raw, err := ReadPackageFile(packageBytes, declaration.Path, artifactsupplychain.MaxCycloneDXBytes)
+		if err != nil {
+			return fmt.Errorf("读取插件包 CycloneDX SBOM: %w", err)
+		}
+		summary, err := artifactsupplychain.InspectCycloneDX(raw)
+		if err != nil {
+			return err
+		}
+		if declaration.Format != "cyclonedx-json" || declaration.SpecVersion != summary.SpecVersion || declaration.SHA256 != summary.SHA256 || summary.RootName != manifest.ID || summary.RootVersion != manifest.Version {
+			return errors.New("插件包 CycloneDX SBOM 主体或摘要与签名清单失配")
+		}
 	}
-	declaration := manifest.SupplyChain.SBOM
-	fact, exists := facts[declaration.Path]
-	if !exists || fact.size <= 0 || fact.size > artifactsupplychain.MaxCycloneDXBytes || fact.sha256 != declaration.SHA256 {
-		return errors.New("插件包 CycloneDX SBOM 与签名清单声明失配")
-	}
-	raw, err := ReadPackageFile(packageBytes, declaration.Path, artifactsupplychain.MaxCycloneDXBytes)
-	if err != nil {
-		return fmt.Errorf("读取插件包 CycloneDX SBOM: %w", err)
-	}
-	summary, err := artifactsupplychain.InspectCycloneDX(raw)
-	if err != nil {
-		return err
-	}
-	if declaration.Format != "cyclonedx-json" || declaration.SpecVersion != summary.SpecVersion || declaration.SHA256 != summary.SHA256 || summary.RootName != manifest.ID || summary.RootVersion != manifest.Version {
-		return errors.New("插件包 CycloneDX SBOM 主体或摘要与签名清单失配")
-	}
-	return nil
+	return validatePackagedPythonLock(packageBytes, manifest, facts)
 }
 
 // ReadPackageFile returns one regular file from an already validated package.

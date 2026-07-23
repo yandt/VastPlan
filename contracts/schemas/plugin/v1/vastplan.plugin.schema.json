@@ -105,6 +105,17 @@
             "path": { "const": "supply-chain/sbom.cdx.json" },
             "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
           }
+        },
+        "pythonLock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "specVersion", "path", "sha256"],
+          "properties": {
+            "format": { "const": "pylock-toml" },
+            "specVersion": { "const": "1.0" },
+            "path": { "const": "supply-chain/pylock.toml" },
+            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
         }
       }
     },

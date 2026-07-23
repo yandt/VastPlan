@@ -78,7 +78,7 @@ func TestPythonSubinterpreterPlugin_CrossInterpreterInvoke(t *testing.T) {
 		RuntimeKind: "python-subinterpreter",
 	}, protocolbus.LaunchPolicy{
 		PluginID:  "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello",
-		Publisher: "vastplan", Version: "0.2.0", Contributions: contributions,
+		Publisher: "vastplan", Version: "0.3.0", Contributions: contributions,
 		KernelServices: []string{"kernel.info"},
 	})
 	if err != nil {

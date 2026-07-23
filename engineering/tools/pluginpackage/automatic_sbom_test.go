@@ -29,6 +29,18 @@ func TestGenerateAutomaticSBOMForPythonPlugin(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plugin, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	lockDirectory := filepath.Join(plugin, "supply-chain")
+	if err := os.MkdirAll(lockDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lock := `lock-version="1.0"
+requires-python=">=3.11"
+created-by="test"
+packages=[{name="protobuf",version="4.25.8",wheels=[{path="python-wheels/protobuf-4.25.8-py3-none-any.whl",size=1,hashes={sha256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}]}]
+`
+	if err := os.WriteFile(filepath.Join(lockDirectory, "pylock.toml"), []byte(lock), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	filename, cleanup, err := generateAutomaticSBOM(automaticSBOMInputs{Source: plugin})
 	if err != nil {
 		t.Fatal(err)

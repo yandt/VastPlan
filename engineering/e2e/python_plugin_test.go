@@ -53,7 +53,7 @@ func TestPythonPlugin_CrossLanguageInvokeAndFeatureNegotiation(t *testing.T) {
 			"PYTHONPATH=" + filepath.Join(root, "extensions/sdk/python"),
 		},
 	}, protocolbus.LaunchPolicy{
-		PluginID: "cn.vastplan.python-hello", Version: "0.1.0", Contributions: contributions,
+		PluginID: "cn.vastplan.python-hello", Version: "0.2.0", Contributions: contributions,
 		RequiredFeatures: []string{protocol.FeatureCancellation, protocol.FeatureEventPublish},
 	})
 	if err != nil {

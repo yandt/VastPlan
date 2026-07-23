@@ -37,6 +37,33 @@ class RuntimeHostTest(unittest.TestCase):
         self.assertTrue(arguments.pool)
         self.assertIsNone(arguments.entry)
 
+    def test_plugin_dependency_overlay_must_stay_under_plugin_root(self):
+        with self.subTest("valid overlay"):
+            from tempfile import TemporaryDirectory
+            with TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                entry = root / "backend" / "main.py"
+                dependencies = root / ".vastplan" / "python" / "site-packages"
+                entry.parent.mkdir(parents=True)
+                dependencies.mkdir(parents=True)
+                entry.write_text("", encoding="utf-8")
+                values = HOST._plugin_sys_path(entry.resolve(), {
+                    "VASTPLAN_PLUGIN_ROOT": str(root),
+                    "VASTPLAN_PYTHON_DEPENDENCIES": str(dependencies),
+                })
+                self.assertEqual(values[0], str(dependencies.resolve()))
+        with self.subTest("escaped overlay"):
+            from tempfile import TemporaryDirectory
+            with TemporaryDirectory() as root_value, TemporaryDirectory() as dependency_value:
+                root = Path(root_value)
+                entry = root / "main.py"
+                entry.write_text("", encoding="utf-8")
+                with self.assertRaises(RuntimeError):
+                    HOST._plugin_sys_path(entry.resolve(), {
+                        "VASTPLAN_PLUGIN_ROOT": str(root),
+                        "VASTPLAN_PYTHON_DEPENDENCIES": dependency_value,
+                    })
+
     def test_host_call_is_executed_on_invocation_thread(self):
         from contract.v1 import contract_pb2
 

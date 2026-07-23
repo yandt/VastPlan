@@ -10,6 +10,8 @@
 
 源码入口为 `extensions/plugins/cn.vastplan.python-hello/backend/main.py`。本地开发需先安装 `extensions/sdk/python/requirements.txt`，或执行 `python3 -m pip install -e extensions/sdk/python`。
 
+插件私有依赖使用 PEP 751 `supply-chain/pylock.toml`。当前示例没有业务第三方包，因此锁中的 `packages` 为空；SDK、gRPC 和 Protobuf 属于 Runtime Host 基座。新增业务依赖时，必须同时在清单写入精确直接版本、把完整传递 wheel 放入 `supply-chain/python-wheels/`，并重新生成标准锁。
+
 发布时使用通用打包工具且不传 `-backend-bin`，保留 Python 源入口，并从仓库根注入许可证与 NOTICE：
 
 ```bash

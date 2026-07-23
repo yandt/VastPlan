@@ -30,10 +30,11 @@ const (
 // LocalInstaller 把插件解包到 Root/<sha256>。目录名绑定内容而非版本标签，
 // 使升级候选可与当前实例并存，运行时成功切换前不会破坏旧版本。
 type LocalInstaller struct {
-	Root             string
-	MaxFiles         int
-	MaxFileBytes     int64
-	MaxExpandedBytes int64
+	Root               string
+	MaxFiles           int
+	MaxFileBytes       int64
+	MaxExpandedBytes   int64
+	PythonDependencies PythonDependencyInstaller
 }
 
 // Install 只接受内核验证器产生的 VerifiedArtifact，并再次复验摘要后以临时目录
@@ -84,6 +85,9 @@ func (i LocalInstaller) Install(verified VerifiedArtifact) (InstalledPlugin, err
 	}()
 	if err := extractPackage(tmp, packageBytes, i.packageLimits()); err != nil {
 		return InstalledPlugin{}, err
+	}
+	if err := preparePythonEnvironment(tmp, manifest, i.PythonDependencies); err != nil {
+		return InstalledPlugin{}, fmt.Errorf("准备 Python 完整依赖环境: %w", err)
 	}
 	if _, err := inspectInstalled(tmp, artifact, manifest.Publisher, entry, execution); err != nil {
 		return InstalledPlugin{}, fmt.Errorf("校验安装结果: %w", err)
@@ -263,10 +267,14 @@ func inspectInstalled(root string, artifact pluginv1.Artifact, publisher, entry 
 			return InstalledPlugin{}, fmt.Errorf("dynamic-go 入口不是普通文件: %s", execution.DynamicGo.Entry)
 		}
 	}
+	pythonPath, err := inspectPythonEnvironment(root, manifest)
+	if err != nil {
+		return InstalledPlugin{}, fmt.Errorf("校验 Python 完整依赖环境: %w", err)
+	}
 	installed := InstalledPlugin{
 		ID: artifact.PluginID, Publisher: publisher, Version: artifact.Version, Channel: artifact.Channel,
 		Engines: cloneStringMap(manifest.Engines),
-		SHA256:  artifact.SHA256, Root: root, EntryPath: entryPath, DynamicGoPath: dynamicGoPath,
+		SHA256:  artifact.SHA256, Root: root, EntryPath: entryPath, DynamicGoPath: dynamicGoPath, PythonPath: pythonPath,
 		Execution: execution,
 		Contract:  PluginRuntimeContract{Contributions: contributions, ContextAccess: pluginv1.ContextAccessContract(manifest)},
 	}

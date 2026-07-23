@@ -41,13 +41,17 @@ func stagePackageWithSupplyChain(source, backendBin, backendModule, frontendBund
 	licensePresent := declaredFilePresent(source, manifest.LicenseFile, manifest.License != "", "许可证")
 	noticePresent := declaredFilePresent(source, manifest.NoticeFile, manifest.NoticeFile != "", "归属告示")
 	validateFrontendInputs(frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot)
-	if backendBin == "" && backendModule == "" && frontendBundle == "" && frontendGraph == "" && frontendServerGraph == "" && dynamicGoBin == "" && sbomSource == "" && licensePresent && noticePresent {
+	pythonLockChanged, err := bindPythonLock(&manifest, source)
+	if err != nil {
+		fatalf("Python 完整依赖锁无效: %v", err)
+	}
+	if backendBin == "" && backendModule == "" && frontendBundle == "" && frontendGraph == "" && frontendServerGraph == "" && dynamicGoBin == "" && sbomSource == "" && !pythonLockChanged && licensePresent && noticePresent {
 		return source, func() {}
 	}
 
-	manifestChanged := false
+	manifestChanged := pythonLockChanged
 	dynamicGoEntry := validateDynamicGoInput(&manifest, dynamicGoBin, dynamicGoFingerprint)
-	manifestChanged = dynamicGoEntry != ""
+	manifestChanged = manifestChanged || dynamicGoEntry != ""
 	backendEntry := validateBackendInput(manifest, backendBin)
 	backendModuleEntry := validateBackendModuleInput(manifest, backendModule)
 	frontendEntry := validateLegacyFrontendInput(manifest, frontendBundle)
@@ -71,7 +75,10 @@ func stagePackageWithSupplyChain(source, backendBin, backendModule, frontendBund
 		if summary.RootName != manifest.ID || summary.RootVersion != manifest.Version {
 			fatalf("CycloneDX SBOM 主体必须是 %s@%s", manifest.ID, manifest.Version)
 		}
-		manifest.SupplyChain = &pluginv1.SupplyChain{SBOM: &pluginv1.SupplyChainDocument{Format: "cyclonedx-json", SpecVersion: summary.SpecVersion, Path: packagedSBOMPath, SHA256: summary.SHA256}}
+		if manifest.SupplyChain == nil {
+			manifest.SupplyChain = &pluginv1.SupplyChain{}
+		}
+		manifest.SupplyChain.SBOM = &pluginv1.SupplyChainDocument{Format: "cyclonedx-json", SpecVersion: summary.SpecVersion, Path: packagedSBOMPath, SHA256: summary.SHA256}
 		manifestChanged = true
 	}
 

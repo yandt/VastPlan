@@ -53,6 +53,19 @@ func TestRuntimeDriversResolveLanguageAndEnforcePublisherIsolation(t *testing.T)
 	}
 }
 
+func TestPythonLaunchSpecUsesOnlyMaterializedDependencyOverlay(t *testing.T) {
+	plugin := InstalledPlugin{
+		Root: "/plugins/python", EntryPath: "/plugins/python/backend/main.py",
+		PythonPath: "/plugins/python/.vastplan/python/site-packages",
+		Execution:  pluginv1.BackendExecution{Driver: "python"},
+	}
+	spec := processLaunchSpec(plugin, "python3", []string{plugin.EntryPath}, "process")
+	joined := strings.Join(spec.ExtraEnv, "\n")
+	if !strings.Contains(joined, "VASTPLAN_PYTHON_DEPENDENCIES="+plugin.PythonPath) || !strings.Contains(joined, "PYTHONPATH="+plugin.PythonPath) || !strings.Contains(joined, "PYTHONNOUSERSITE=1") {
+		t.Fatalf("Python 启动未使用隔离依赖 overlay: %#v", spec.ExtraEnv)
+	}
+}
+
 func TestManagedRuntimeDriversRequireExplicitCompatibilityDeclaration(t *testing.T) {
 	nodeDriver := NodeWorkerExecutionDriver{Command: "node-host"}
 	plugin := InstalledPlugin{ID: "com.example.node", EntryPath: "/plugin/main.mjs",

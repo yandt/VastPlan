@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello",
   "name": "Python Subinterpreter Hello",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

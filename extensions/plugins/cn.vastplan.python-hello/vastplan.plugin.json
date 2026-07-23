@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.python-hello",
   "name": "Python Hello",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -12,7 +12,7 @@
   "execution": {
     "backend": {
       "driver": "python",
-      "requirements": { "python": ">=3.8", "grpcio": "1.70.0", "protobuf": "4.25.8" },
+      "requirements": { "python": ">=3.8" },
       "minimumIsolation": "trusted-process",
       "features": ["channel.cancel.v1", "event.publish.v1"]
     }
