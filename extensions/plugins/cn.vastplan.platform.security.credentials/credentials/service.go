@@ -13,7 +13,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -25,14 +24,14 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
+	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
 const (
 	PluginID                = "cn.vastplan.platform.security.credentials"
-	PluginVersion           = "0.10.0"
+	PluginVersion           = "0.11.0"
 	Capability              = "platform.credentials"
 	MaterialLeaseCapability = "platform.credentials.material-lease"
-	stateFileKey            = "platform.credentials.stateFile"
 	vaultAddressKey         = "platform.credentials.vault.address"
 	vaultKeyKey             = "platform.credentials.vault.transitKey"
 	vaultTokenFileKey       = "platform.credentials.vault.tokenFile"
@@ -191,17 +190,19 @@ type ManagedRecord struct {
 }
 type Service struct {
 	mu          sync.Mutex
-	file        string
+	workflowMu  sync.Mutex
 	transit     Transit
 	data        persisted
+	session     *credentialStateSession
+	testSave    func(persisted) error
 	leaseSlots  chan struct{}
 	maintenance MaintenancePolicy
 	now         func() time.Time
 }
 
-func New(file string, transit Transit) (*Service, error) {
+func New(transit Transit) (*Service, error) {
 	policy, _ := (Configuration{}).Policy()
-	return NewWithOptions(file, transit, ServiceOptions{Maintenance: policy})
+	return NewWithOptions(transit, ServiceOptions{Maintenance: policy})
 }
 
 type ServiceOptions struct {
@@ -209,7 +210,7 @@ type ServiceOptions struct {
 	Now         func() time.Time
 }
 
-func NewWithOptions(file string, transit Transit, options ServiceOptions) (*Service, error) {
+func NewWithOptions(transit Transit, options ServiceOptions) (*Service, error) {
 	if transit == nil {
 		return nil, errors.New("凭证 Transit 适配器不能为空")
 	}
@@ -223,40 +224,10 @@ func NewWithOptions(file string, transit Transit, options ServiceOptions) (*Serv
 		options.Now = func() time.Time { return time.Now().UTC() }
 	}
 	s := &Service{
-		file: file, transit: transit, leaseSlots: make(chan struct{}, 32), maintenance: options.Maintenance, now: options.Now,
+		transit: transit, leaseSlots: make(chan struct{}, 32), maintenance: options.Maintenance, now: options.Now,
 		data: persisted{Tenants: map[string]map[string]Record{}, Managed: map[string]map[string]ManagedRecord{}, ManagedAudit: map[string]managedAuditState{}, ManagedMaintenance: map[string]ManagedMaintenanceStatus{}},
 	}
-	if file != "" {
-		if err := s.load(); err != nil {
-			return nil, err
-		}
-	}
 	return s, nil
-}
-func (s *Service) load() error {
-	raw, err := os.ReadFile(s.file)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, &s.data); err != nil {
-		return err
-	}
-	if s.data.Tenants == nil {
-		s.data.Tenants = map[string]map[string]Record{}
-	}
-	if s.data.Managed == nil {
-		s.data.Managed = map[string]map[string]ManagedRecord{}
-	}
-	if s.data.ManagedAudit == nil {
-		s.data.ManagedAudit = map[string]managedAuditState{}
-	}
-	if s.data.ManagedMaintenance == nil {
-		s.data.ManagedMaintenance = map[string]ManagedMaintenanceStatus{}
-	}
-	return validateManagedState(s.data.Managed, s.data.ManagedAudit, s.data.ManagedMaintenance)
 }
 
 func validateManagedState(tenants map[string]map[string]ManagedRecord, audit map[string]managedAuditState, maintenance map[string]ManagedMaintenanceStatus) error {
@@ -305,46 +276,89 @@ func validateManagedState(tenants map[string]map[string]ManagedRecord, audit map
 	return nil
 }
 func (s *Service) save() error {
-	if s.file == "" {
-		return errors.New("凭证状态文件未配置")
+	if s.session == nil {
+		if s.testSave != nil {
+			return s.testSave(s.data)
+		}
+		return errors.New("Credentials 写入缺少 Shared State 会话")
 	}
-	raw, err := json.Marshal(s.data)
+	value, err := s.snapshotLocked(s.session.tenant)
 	if err != nil {
 		return err
 	}
-	if err = os.MkdirAll(filepath.Dir(s.file), 0700); err != nil {
-		return err
-	}
-	temp, err := os.CreateTemp(filepath.Dir(s.file), ".credentials-*")
+	revision, err := s.session.repository.save(s.session.ctx, s.session.call, value, s.session.revision)
 	if err != nil {
 		return err
 	}
-	name := temp.Name()
-	defer os.Remove(name)
-	if _, err = temp.Write(raw); err != nil {
-		temp.Close()
-		return err
+	s.session.revision = revision
+	return nil
+}
+
+func (s *Service) snapshotLocked(tenantID string) (credentialSnapshot, error) {
+	value := credentialSnapshot{
+		Records: s.data.Tenants[tenantID], Managed: s.data.Managed[tenantID], Audit: s.data.ManagedAudit[tenantID], Maintenance: s.data.ManagedMaintenance[tenantID],
 	}
-	if err = temp.Chmod(0600); err != nil {
-		temp.Close()
-		return err
+	if value.Records == nil {
+		value.Records = map[string]Record{}
 	}
-	if err = temp.Sync(); err != nil {
-		temp.Close()
-		return err
+	if value.Managed == nil {
+		value.Managed = map[string]ManagedRecord{}
 	}
-	if err = temp.Close(); err != nil {
-		return err
+	if value.Audit.Events == nil {
+		value.Audit.Events = []ManagedAuditEvent{}
 	}
-	if err := os.Rename(name, s.file); err != nil {
-		return err
+	if value.Maintenance.Counts == nil {
+		value.Maintenance.Counts = managedStateCounts(value.Managed)
 	}
-	directory, err := os.Open(filepath.Dir(s.file))
+	return value, validateCredentialSnapshot(value)
+}
+
+func (s *Service) installSnapshotLocked(tenantID string, value credentialSnapshot) {
+	s.data = persisted{
+		Tenants: map[string]map[string]Record{tenantID: value.Records}, Managed: map[string]map[string]ManagedRecord{tenantID: value.Managed},
+		ManagedAudit: map[string]managedAuditState{tenantID: value.Audit}, ManagedMaintenance: map[string]ManagedMaintenanceStatus{tenantID: value.Maintenance},
+	}
+}
+
+func (s *Service) withTenantState(ctx context.Context, host sdk.Host, call *contractv1.CallContext, work func() error) error {
+	tenantID, err := tenant(call)
 	if err != nil {
 		return err
 	}
-	defer directory.Close()
-	return directory.Sync()
+	s.workflowMu.Lock()
+	defer s.workflowMu.Unlock()
+	if s.testSave != nil {
+		return work()
+	}
+	repository, err := newCredentialStateRepository(host)
+	if err != nil {
+		return err
+	}
+	value, revision, err := repository.load(ctx, call)
+	if err != nil {
+		return err
+	}
+	s.mu.Lock()
+	s.installSnapshotLocked(tenantID, value)
+	s.session = &credentialStateSession{ctx: ctx, call: call, repository: repository, tenant: tenantID, revision: revision}
+	maintenanceChanged := s.collectExpiredTenantLocked(tenantID, s.now().UTC(), false)
+	if maintenanceChanged {
+		err = s.save()
+	}
+	s.mu.Unlock()
+	if err != nil {
+		s.closeStateSession()
+		return err
+	}
+	defer s.closeStateSession()
+	return work()
+}
+
+func (s *Service) closeStateSession() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.session = nil
+	s.data = persisted{Tenants: map[string]map[string]Record{}, Managed: map[string]map[string]ManagedRecord{}, ManagedAudit: map[string]managedAuditState{}, ManagedMaintenance: map[string]ManagedMaintenanceStatus{}}
 }
 func tenant(ctx *contractv1.CallContext) (string, error) {
 	if ctx == nil || strings.TrimSpace(ctx.TenantId) == "" {
@@ -581,12 +595,25 @@ func (s *Service) IssueMaterialLease(ctx context.Context, call *contractv1.CallC
 			material[index] = 0
 		}
 	}()
-	// A revoke/retire racing the KMS request wins. Do not issue a lease from a
-	// stale record merely because decryption started while it was Active.
+	// A revoke/retire racing the KMS request wins. Shared State 模式下必须重新
+	// 读取最新 Root，而不能只复核当前进程的缓存。
 	s.mu.Lock()
-	current, ok := s.managedRecords(t)[matched.StageID]
-	stillUsable := ok && (current.State == managedCandidate || current.State == managedActive) && current.Ref == matched.Ref && current.Ciphertext == ciphertext
+	session := s.session
 	s.mu.Unlock()
+	current := ManagedRecord{}
+	ok := false
+	if session != nil {
+		latest, _, loadErr := session.repository.load(ctx, call)
+		if loadErr != nil {
+			return credentiallease.Envelope{}, loadErr
+		}
+		current, ok = latest.Managed[matched.StageID]
+	} else {
+		s.mu.Lock()
+		current, ok = s.managedRecords(t)[matched.StageID]
+		s.mu.Unlock()
+	}
+	stillUsable := ok && (current.State == managedCandidate || current.State == managedActive) && current.Ref == matched.Ref && current.Ciphertext == ciphertext
 	if !stillUsable {
 		return credentiallease.Envelope{}, errors.New("托管凭证在 lease 签发期间已变化")
 	}
@@ -607,7 +634,21 @@ func decodeMaterialLeaseRequest(payload []byte) (credentiallease.Request, error)
 	return request, nil
 }
 
-func (s *Service) MaterialLeaseHandler(ctx context.Context, _ sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
+func (s *Service) MaterialLeaseHandler(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
+	var result *contractv1.CallResult
+	var raw []byte
+	var handlerErr error
+	err := s.withTenantState(ctx, host, call, func() error {
+		result, raw, handlerErr = s.materialLeaseLoaded(ctx, call, payload, operation)
+		return handlerErr
+	})
+	if err != nil {
+		return credentialDomainError(err)
+	}
+	return result, raw, handlerErr
+}
+
+func (s *Service) materialLeaseLoaded(ctx context.Context, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
 	if operation != "issue" {
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "platform.credentials.material_lease.invalid", Message: "不支持的 material lease 操作"}}, nil, nil
 	}
@@ -744,6 +785,20 @@ func transitVersion(cipher string) string {
 }
 
 func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, op string) (*contractv1.CallResult, []byte, error) {
+	var result *contractv1.CallResult
+	var raw []byte
+	var handlerErr error
+	err := s.withTenantState(ctx, host, call, func() error {
+		result, raw, handlerErr = s.handleLoaded(ctx, host, call, payload, op)
+		return handlerErr
+	})
+	if err != nil {
+		return credentialDomainError(err)
+	}
+	return result, raw, handlerErr
+}
+
+func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, op string) (*contractv1.CallResult, []byte, error) {
 	var in struct {
 		Name        string `json:"name"`
 		Value       string `json:"value"`
@@ -827,6 +882,16 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		return nil, nil, err
 	}
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+}
+
+func credentialDomainError(err error) (*contractv1.CallResult, []byte, error) {
+	code := "platform.credentials.unavailable"
+	retryable := errors.Is(err, errStateConflict)
+	var stateError *sharedstatesdk.ServiceError
+	if errors.As(err, &stateError) {
+		retryable = stateError.Retryable
+	}
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error(), Retryable: retryable}}, nil, nil
 }
 func Descriptor() []byte {
 	return []byte(`{"title":"凭证管理","subcommands":[

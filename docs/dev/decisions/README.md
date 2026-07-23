@@ -157,3 +157,4 @@
 - [ADR-0124 Plugin Settings 租户聚合与 Active-Active 协调](ADR-0124-Plugin-Settings租户聚合与Active-Active协调.md)
 - [ADR-0125 Portal Composer 与 Preference 共享状态分区](ADR-0125-Portal-Composer与Preference共享状态分区.md)
 - [ADR-0126 Deployment Manager 共享账本与副作用 Fencing](ADR-0126-Deployment-Manager共享账本与副作用Fencing.md)
+- [ADR-0127 Credentials 内容寻址快照与 Material Lease 复核](ADR-0127-Credentials内容寻址快照与Material-Lease复核.md)

@@ -33,8 +33,8 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 		t.Fatalf("非平台能力必须弃权: %s", got)
 	}
 	plugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.security.credentials"}}
-	if got, _ := decide(plugin, extpoint.PermissionRequest{Capability: "kernel.config.get", Operation: "get"}); got != extpoint.DecisionAllow {
-		t.Fatalf("受限回调应允许: %s", got)
+	if got, _ := decide(plugin, extpoint.PermissionRequest{Capability: "kernel.config.get", Operation: "get"}); got == extpoint.DecisionAllow {
+		t.Fatalf("Credentials 使用启动快照和 Shared State 后不得保留 kernel.config.get: %s", got)
 	}
 	if got, _ := decide(plugin, extpoint.PermissionRequest{Capability: platformadminapi.CredentialsCapability, Operation: "put"}); got != extpoint.DecisionDeny {
 		t.Fatalf("插件不能继承写权限: %s", got)
@@ -67,7 +67,7 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.deployment.readiness", Operation: "execute"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 的部署就绪观察回调应允许: %s", got)
 	}
-	for _, pluginID := range []string{"cn.vastplan.platform.configuration.global-settings", configurationauthority.CoordinatorPluginID, "cn.vastplan.platform.infrastructure.deployment-manager"} {
+	for _, pluginID := range []string{"cn.vastplan.platform.configuration.global-settings", configurationauthority.CoordinatorPluginID, configurationauthority.CustodianPluginID, "cn.vastplan.platform.infrastructure.deployment-manager"} {
 		plugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: pluginID}}
 		for _, capability := range []string{"kernel.state.shared.get", "kernel.state.shared.create", "kernel.state.shared.update"} {
 			if got, _ := decide(plugin, extpoint.PermissionRequest{Capability: capability}); got != extpoint.DecisionAllow {

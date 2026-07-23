@@ -71,7 +71,7 @@ func managedContext(tenant, pluginID string) *contractv1.CallContext {
 func TestEnvelopeCredentialNeverReturnsCiphertextOrPlaintext(t *testing.T) {
 	transit := &fakeTransit{}
 	path := filepath.Join(t.TempDir(), "credentials.json")
-	service, err := New(path, transit)
+	service, err := openTestService(path, transit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestEnvelopeCredentialNeverReturnsCiphertextOrPlaintext(t *testing.T) {
 	if err != nil || record.Ciphertext == "" || transit.encrypts != 1 {
 		t.Fatalf("加密保存失败: record=%+v err=%v", record, err)
 	}
-	reopened, err := New(path, transit)
+	reopened, err := openTestService(path, transit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestEnvelopeCredentialNeverReturnsCiphertextOrPlaintext(t *testing.T) {
 }
 
 func TestManagedCredentialIsOwnedByCallingPluginAndNeverExposesCiphertext(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
+	service, err := openTestService(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestManagedCredentialIsOwnedByCallingPluginAndNeverExposesCiphertext(t *tes
 
 func TestMaterialLeaseOnlyOpensForTrustedAudienceAndNeverReturnsPlaintext(t *testing.T) {
 	transit := &fakeTransit{}
-	service, err := New(filepath.Join(t.TempDir(), "credentials.json"), transit)
+	service, err := openTestService(filepath.Join(t.TempDir(), "credentials.json"), transit)
 	if err != nil {
 		t.Fatal(err)
 	}

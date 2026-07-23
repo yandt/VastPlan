@@ -726,7 +726,6 @@ func (r *runtime) platformManagementDeployment() (string, int, error) {
 func (r *runtime) serviceEnv() map[string]string {
 	authorizationRoot := filepath.Join(r.persistentStateRoot(), "authorization")
 	return map[string]string{
-		"VASTPLAN_CREDENTIALS_STATE_FILE":           filepath.Join(r.persistentStateRoot(), "credentials.json"),
 		"VASTPLAN_VAULT_ADDR":                       "http://" + r.options.vaultListen,
 		"VASTPLAN_VAULT_TRANSIT_KEY":                "vastplan-local",
 		"VASTPLAN_VAULT_TOKEN_FILE":                 filepath.Join(r.runDir, "secrets", "vault-token"),

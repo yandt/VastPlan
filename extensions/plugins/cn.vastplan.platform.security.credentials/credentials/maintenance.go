@@ -1,7 +1,6 @@
 package credentials
 
 import (
-	"context"
 	"sort"
 	"time"
 )
@@ -50,50 +49,62 @@ func (s *Service) CollectExpiredManaged() error {
 	}
 	sort.Strings(tenantIDs)
 	for _, tenantID := range tenantIDs {
-		records := s.data.Managed[tenantID]
-		stageIDs := make([]string, 0, len(records))
-		for stageID := range records {
-			stageIDs = append(stageIDs, stageID)
-		}
-		sort.Slice(stageIDs, func(left, right int) bool {
-			a, b := records[stageIDs[left]], records[stageIDs[right]]
-			if a.UpdatedAt.Equal(b.UpdatedAt) {
-				return stageIDs[left] < stageIDs[right]
-			}
-			return a.UpdatedAt.Before(b.UpdatedAt)
-		})
-		status := s.data.ManagedMaintenance[tenantID]
-		processed := 0
-		for _, stageID := range stageIDs {
-			if processed >= s.maintenance.BatchSize {
-				break
-			}
-			record := records[stageID]
-			switch {
-			case record.State == managedPreparing && !record.UpdatedAt.Add(s.maintenance.PreparingMaxAge).After(now):
-				record.State, record.Ciphertext, record.UpdatedAt = managedAborted, "", now
-				records[stageID] = record
-				s.appendManagedAuditLocked(tenantID, "managed.auto-aborted", record, now)
-				status.AutoAborted++
-				processed++
-			case record.State == managedAborted && !record.UpdatedAt.Add(s.maintenance.AbortedRetention).After(now):
-				s.appendManagedAuditLocked(tenantID, "managed.collected", record, now)
-				delete(records, stageID)
-				status.Collected++
-				processed++
-			}
-		}
-		s.pruneManagedAuditLocked(tenantID, now)
-		runAt := now
-		status.LastRunAt = &runAt
-		status.Counts = managedStateCounts(records)
-		s.data.ManagedMaintenance[tenantID] = status
+		s.collectExpiredTenantLocked(tenantID, now, true)
 	}
 	if err := s.save(); err != nil {
 		s.data.Managed, s.data.ManagedAudit, s.data.ManagedMaintenance = previousManaged, previousAudit, previousMaintenance
 		return err
 	}
 	return nil
+}
+
+func (s *Service) collectExpiredTenantLocked(tenantID string, now time.Time, force bool) bool {
+	status := s.data.ManagedMaintenance[tenantID]
+	if !force && status.LastRunAt != nil && status.LastRunAt.Add(s.maintenance.Interval).After(now) {
+		return false
+	}
+	records := s.data.Managed[tenantID]
+	if records == nil {
+		records = map[string]ManagedRecord{}
+		s.data.Managed[tenantID] = records
+	}
+	stageIDs := make([]string, 0, len(records))
+	for stageID := range records {
+		stageIDs = append(stageIDs, stageID)
+	}
+	sort.Slice(stageIDs, func(left, right int) bool {
+		a, b := records[stageIDs[left]], records[stageIDs[right]]
+		if a.UpdatedAt.Equal(b.UpdatedAt) {
+			return stageIDs[left] < stageIDs[right]
+		}
+		return a.UpdatedAt.Before(b.UpdatedAt)
+	})
+	processed := 0
+	for _, stageID := range stageIDs {
+		if processed >= s.maintenance.BatchSize {
+			break
+		}
+		record := records[stageID]
+		switch {
+		case record.State == managedPreparing && !record.UpdatedAt.Add(s.maintenance.PreparingMaxAge).After(now):
+			record.State, record.Ciphertext, record.UpdatedAt = managedAborted, "", now
+			records[stageID] = record
+			s.appendManagedAuditLocked(tenantID, "managed.auto-aborted", record, now)
+			status.AutoAborted++
+			processed++
+		case record.State == managedAborted && !record.UpdatedAt.Add(s.maintenance.AbortedRetention).After(now):
+			s.appendManagedAuditLocked(tenantID, "managed.collected", record, now)
+			delete(records, stageID)
+			status.Collected++
+			processed++
+		}
+	}
+	s.pruneManagedAuditLocked(tenantID, now)
+	runAt := now
+	status.LastRunAt = &runAt
+	status.Counts = managedStateCounts(records)
+	s.data.ManagedMaintenance[tenantID] = status
+	return true
 }
 
 func (s *Service) pruneManagedAuditLocked(tenantID string, now time.Time) {
@@ -114,25 +125,6 @@ func (s *Service) pruneManagedAuditLocked(tenantID string, now time.Time) {
 		return
 	}
 	s.data.ManagedAudit[tenantID] = state
-}
-
-func (s *Service) RunMaintenance(ctx context.Context, report func(error)) {
-	run := func() {
-		if err := s.CollectExpiredManaged(); err != nil && report != nil {
-			report(err)
-		}
-	}
-	run()
-	ticker := time.NewTicker(s.maintenance.Interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			run()
-		}
-	}
 }
 
 func cloneManagedTenants(source map[string]map[string]ManagedRecord) map[string]map[string]ManagedRecord {

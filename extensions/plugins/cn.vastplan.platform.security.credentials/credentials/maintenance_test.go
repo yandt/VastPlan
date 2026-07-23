@@ -42,7 +42,7 @@ func TestManagedMaintenanceCollectsOnlyExpiredNonRunnableRecordsAndPersistsAudit
 	now := time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC)
 	policy := MaintenancePolicy{PreparingMaxAge: time.Hour, AbortedRetention: 2 * time.Hour, AuditRetention: 4 * time.Hour, Interval: time.Hour, BatchSize: 20}
 	path := filepath.Join(t.TempDir(), "credentials.json")
-	service, err := NewWithOptions(path, &fakeTransit{}, ServiceOptions{Maintenance: policy, Now: func() time.Time { return now }})
+	service, err := openTestServiceWithOptions(path, &fakeTransit{}, ServiceOptions{Maintenance: policy, Now: func() time.Time { return now }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestManagedMaintenanceCollectsOnlyExpiredNonRunnableRecordsAndPersistsAudit
 			t.Fatalf("脱敏审计泄露 %q: %s", forbidden, raw)
 		}
 	}
-	reopened, err := NewWithOptions(path, &fakeTransit{}, ServiceOptions{Maintenance: policy, Now: func() time.Time { return now }})
+	reopened, err := openTestServiceWithOptions(path, &fakeTransit{}, ServiceOptions{Maintenance: policy, Now: func() time.Time { return now }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestManagedMaintenanceCollectsOnlyExpiredNonRunnableRecordsAndPersistsAudit
 
 func TestManagedAuditLifecycleIsTenantIsolatedAndPaged(t *testing.T) {
 	now := time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC)
-	service, err := NewWithOptions(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{}, ServiceOptions{
+	service, err := openTestServiceWithOptions(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{}, ServiceOptions{
 		Maintenance: MaintenancePolicy{PreparingMaxAge: time.Hour, AbortedRetention: 2 * time.Hour, AuditRetention: 4 * time.Hour, Interval: time.Hour, BatchSize: 20},
 		Now:         func() time.Time { return now },
 	})
@@ -163,7 +163,7 @@ func TestManagedAuditLifecycleIsTenantIsolatedAndPaged(t *testing.T) {
 }
 
 func TestManagedAuditIsBoundedAtWriteTime(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
+	service, err := openTestService(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
 	if err != nil {
 		t.Fatal(err)
 	}

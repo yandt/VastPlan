@@ -41,7 +41,7 @@ func TestDelegatedStageDerivesOwnerPurposeAndLifecycleFromAuthority(t *testing.T
 		IssuedAt: now.Add(-time.Second), ExpiresAt: now.Add(30 * time.Second),
 	}
 	host := &authorityHost{claims: claims}
-	service, err := New(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
+	service, err := openTestService(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestDelegatedStageDerivesOwnerPurposeAndLifecycleFromAuthority(t *testing.T
 
 func TestDelegatedStageRejectsUntrustedCoordinatorBeforeConsumingAuthority(t *testing.T) {
 	host := &authorityHost{}
-	service, _ := New(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
+	service, _ := openTestService(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
 	if _, err := service.StageDelegated(context.Background(), host, managedContext("tenant-a", "cn.example.attacker"), configurationauthority.TokenPrefix+strings.Repeat("1", 64), []byte("secret")); err == nil || host.calls != 0 {
 		t.Fatalf("非协调器必须在消费授权前拒绝: calls=%d err=%v", host.calls, err)
 	}

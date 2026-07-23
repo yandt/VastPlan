@@ -90,8 +90,7 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 	}
 	environment := r.serviceEnv()
 	wantStateRoot := filepath.Join(stateRoot, "state")
-	if environment["VASTPLAN_CREDENTIALS_STATE_FILE"] != filepath.Join(wantStateRoot, "credentials.json") ||
-		environment["VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"] != filepath.Join(wantStateRoot, "database-connections.json") {
+	if environment["VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE"] != filepath.Join(wantStateRoot, "database-connections.json") {
 		t.Fatalf("有永久引用或治理事实的插件状态必须跨普通重启保留: %#v", environment)
 	}
 	if r.persistentStateRoot() != wantStateRoot {

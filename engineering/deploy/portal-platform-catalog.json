@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 24,
+  "revision": 25,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 24,
+      "revision": 25,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -69,7 +69,7 @@
         { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.6.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.12.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.credentials", "version": "0.10.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.credentials", "version": "0.11.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.19.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.0", "channel": "stable" },
@@ -85,8 +85,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 24,
-        "digest": "9a2ac577e5808321568ea9a1caa5ba5cd1d58d303121bf9ff82a4be9a6ce8700"
+        "revision": 25,
+        "digest": "14ffefc050ed8cfd7ab89cfae55e5ef689010d10e785c238e9200410d1af6b98"
       },
       "services": [
         {

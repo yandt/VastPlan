@@ -23,7 +23,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.27.0"
+	PluginVersion = "0.28.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -292,7 +292,7 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	case configurationauthority.CoordinatorPluginID:
 		return request.Capability == configurationauthority.KernelIssueService || sharedStateKernelService(request.Capability)
 	case configurationauthority.CustodianPluginID:
-		return request.Capability == "kernel.config.get" || request.Capability == configurationauthority.KernelConsumeService
+		return request.Capability == configurationauthority.KernelConsumeService || sharedStateKernelService(request.Capability)
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":
