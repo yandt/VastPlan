@@ -152,3 +152,4 @@
 - [ADR-0119 Tenant 与 User Scoped Hot 配置真源](ADR-0119-Tenant与User-Scoped-Hot配置真源.md)
 - [ADR-0120 Service Hot 托管凭证提交与退役](ADR-0120-Service-Hot托管凭证提交与退役.md)
 - [ADR-0121 托管凭证过期回收与脱敏审计](ADR-0121-托管凭证过期回收与脱敏审计.md)
+- [ADR-0122 CredentialRef 与 Scoped 配置多语言 SDK](ADR-0122-CredentialRef与Scoped配置多语言SDK.md)

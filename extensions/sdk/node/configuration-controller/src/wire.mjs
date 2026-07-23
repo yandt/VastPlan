@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { normalizeManagedCredentialRefs as normalizeCredentials } from "@vastplan/credential-reference";
 
 export const CONFIGURATION_CONTROLLER_PROTOCOL = "configuration.v1";
 export const CONFIGURATION_CONTROLLER_EXTENSION_POINT = "configuration.controller";
@@ -6,7 +7,6 @@ export const CONFIGURATION_CONTROLLER_EXTENSION_POINT = "configuration.controlle
 const digestPattern = /^[a-f0-9]{64}$/;
 const candidatePattern = /^pcfg_[a-f0-9]{32}$/;
 const configurationPattern = /^cfg_[a-f0-9]{24}$/;
-const fieldPattern = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
 const rfc3339Pattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 export function configurationControllerCapability(pluginId) {
@@ -103,20 +103,6 @@ function candidateObservation(value) {
     ...(candidate.errorCode === undefined ? {} : { errorCode: boundedString(candidate.errorCode, 160, "errorCode") }),
     ...(candidate.errorMessage === undefined ? {} : { errorMessage: boundedString(candidate.errorMessage, 1000, "errorMessage") }),
   });
-}
-
-function normalizeCredentials(value) {
-  if (value === undefined || value === null) return Object.freeze({});
-  const source = record(value, "managedCredentials");
-  const names = Object.keys(source).sort(utf8Compare);
-  if (names.length > 64) throw new Error("managedCredentials 数量超限");
-  return Object.freeze(Object.fromEntries(names.map((name) => {
-    if (!fieldPattern.test(name) || name.length > 80) throw new Error(`managedCredentials 字段 ${name} 无效`);
-    const ref = record(source[name], `managedCredentials.${name}`);
-    exactKeys(ref, ["handle", "scope", "owner", "purpose", "version", "name"], `managedCredentials.${name}`, ["handle", "scope", "owner", "purpose", "version"]);
-    if (!String(ref.handle).startsWith("credential://managed/") || ref.scope !== "tenant" || !ref.owner || !ref.purpose || !Number.isSafeInteger(ref.version) || ref.version < 1) throw new Error(`managedCredentials.${name} 引用无效`);
-    return [name, Object.freeze({ handle: String(ref.handle), scope: "tenant", owner: String(ref.owner), purpose: String(ref.purpose), version: ref.version, ...(ref.name === undefined ? {} : { name: String(ref.name) }) })];
-  })));
 }
 
 function activeReference(value) {

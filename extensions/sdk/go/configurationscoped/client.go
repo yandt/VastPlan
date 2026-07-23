@@ -26,11 +26,8 @@ func Resolve(ctx context.Context, host sdk.Host, call *contractv1.CallContext, o
 	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
 		return configurationscopedv1.Resolution{}, resultError(result)
 	}
-	var response configurationscopedv1.Resolution
-	if err := json.Unmarshal(raw, &response); err != nil {
-		return configurationscopedv1.Resolution{}, err
-	}
-	if err := configurationscopedv1.ValidateResolution(response); err != nil {
+	response, err := configurationscopedv1.ParseResolution(raw)
+	if err != nil {
 		return configurationscopedv1.Resolution{}, err
 	}
 	if err := json.Unmarshal(response.Values, output); err != nil {
@@ -45,6 +42,9 @@ func WatchRevision(ctx context.Context, host sdk.Host, call *contractv1.CallCont
 	}
 	rawRequest, _ := json.Marshal(request)
 	operation := configurationscopedv1.OperationWatchRevision
+	if _, err := configurationscopedv1.ParseRequest(operation, rawRequest); err != nil {
+		return configurationscopedv1.RevisionObservation{}, err
+	}
 	result, raw, err := host.Call(ctx, target(operation), call, rawRequest)
 	if err != nil {
 		return configurationscopedv1.RevisionObservation{}, err
@@ -52,11 +52,7 @@ func WatchRevision(ctx context.Context, host sdk.Host, call *contractv1.CallCont
 	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
 		return configurationscopedv1.RevisionObservation{}, resultError(result)
 	}
-	var response configurationscopedv1.RevisionObservation
-	if err := json.Unmarshal(raw, &response); err != nil {
-		return configurationscopedv1.RevisionObservation{}, err
-	}
-	return response, configurationscopedv1.ValidateRevisionObservation(response)
+	return configurationscopedv1.ParseRevisionObservation(raw)
 }
 
 func target(operation string) *contractv1.CallTarget {

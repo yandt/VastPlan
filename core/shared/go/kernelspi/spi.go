@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
@@ -105,7 +106,7 @@ func NewPluginMapManagedCredentialRefs(values map[string]map[string]CredentialRe
 		}
 		out.values[pluginID] = map[string]CredentialRef{}
 		for fieldID, ref := range fields {
-			if fieldID == "" || ref.Owner != pluginID || ref.Handle == "" || ref.Scope != "tenant" || ref.Purpose == "" || ref.Version < 1 {
+			if fieldID == "" || ref.Owner != pluginID || ref.Scope != "tenant" || commonv1.ValidateManagedCredentialRef(ref) != nil {
 				return nil, fmt.Errorf("插件 %q 的托管凭证字段 %q 无效", pluginID, fieldID)
 			}
 			out.values[pluginID][fieldID] = ref

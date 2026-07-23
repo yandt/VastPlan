@@ -9,6 +9,7 @@ import (
 	"errors"
 	"strings"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 )
 
@@ -63,8 +64,7 @@ func (r CreateRequest) Validate() error {
 		return errors.New("配置激活请求身份无效")
 	}
 	for fieldID, ref := range r.Credentials {
-		if strings.TrimSpace(fieldID) == "" || !strings.HasPrefix(ref.Handle, "credential://managed/") ||
-			ref.Scope != "tenant" || strings.TrimSpace(ref.Owner) == "" || strings.TrimSpace(ref.Purpose) == "" || ref.Version < 1 {
+		if strings.TrimSpace(fieldID) == "" || ref.Scope != "tenant" || commonv1.ValidateManagedCredentialRef(ref) != nil {
 			return errors.New("配置激活请求包含无效凭证引用")
 		}
 	}

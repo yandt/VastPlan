@@ -1,13 +1,14 @@
 {
   "id": "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello",
   "name": "Python Subinterpreter Hello",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "CPython 子解释器 Runtime Host 与纯 Python 桥接参考插件",
   "engines": { "backend": "^0.1 || ^1.0" },
+  "capabilities": { "kernelServices": ["kernel.info"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant"], "optional": ["trace", "request.deadline"] },
   "execution": {
     "backend": {
@@ -33,6 +34,9 @@
             "properties": { "text": { "type": "string" } },
             "required": ["text"]
           }
+        }, {
+          "name": "whoami",
+          "description": "通过子解释器 HostCall 桥接读取内核信息"
         }]
       }]
     }

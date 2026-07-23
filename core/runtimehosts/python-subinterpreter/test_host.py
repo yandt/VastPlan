@@ -1,7 +1,10 @@
 import importlib.util
 import json
+import queue
 import subprocess
 import sys
+import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -33,6 +36,73 @@ class RuntimeHostTest(unittest.TestCase):
         arguments = HOST.parse_arguments(("--pool",))
         self.assertTrue(arguments.pool)
         self.assertIsNone(arguments.entry)
+
+    def test_host_call_is_executed_on_invocation_thread(self):
+        from contract.v1 import contract_pb2
+
+        requests = queue.Queue()
+        responses = queue.Queue()
+        bridge = HOST.SubinterpreterBridge(requests, responses)
+        bridge.start()
+
+        class Invocation:
+            deadline_unix_ms = int(time.time() * 1000) + 5_000
+            delegation_token = "opaque-host-token"
+
+            @staticmethod
+            def raise_if_cancelled():
+                return None
+
+        class OuterHost:
+            call_thread = None
+
+            def call(self, target, context, payload, timeout, cancelled=None):
+                self.call_thread = threading.current_thread()
+                self.target = target
+                self.context = context
+                self.payload = payload
+                self.timeout = timeout
+                self.cancelled = cancelled
+                return contract_pb2.CallResult(status=contract_pb2.CallResult.STATUS_OK), b'{"resolved":true}'
+
+        outer_host = OuterHost()
+        outcome = {}
+
+        def invoke():
+            outcome["value"] = bridge.invoke(
+                Invocation(), outer_host, contract_pb2.CallContext(tenant_id="tenant-a"), b"request",
+                {"extension_point": "tool.package", "capability": "example", "operation": "resolve"},
+            )
+
+        invocation_thread = threading.Thread(target=invoke)
+        invocation_thread.start()
+        parent = requests.get(timeout=1.0)
+        self.assertNotIn("delegation_token", parent)
+        responses.put({
+            "type": "host_call",
+            "request_id": parent["request_id"],
+            "host_call_id": "hc-1",
+            "target": {"extension_point": "configuration.scoped-resolver", "capability": "configuration.scoped", "operation": "resolve"},
+            "context": {"tenant_id": "tenant-a"},
+            "payload": b"{}",
+            "timeout_ms": 1_000,
+        })
+        host_call_result = requests.get(timeout=1.0)
+        self.assertEqual(host_call_result["type"], "host_call_result")
+        self.assertEqual(host_call_result["result"]["status"], "ok")
+        self.assertIs(outer_host.call_thread, invocation_thread)
+        responses.put({
+            "type": "result",
+            "request_id": parent["request_id"],
+            "status": "ok",
+            "metadata": {},
+            "payload": b"done",
+        })
+        invocation_thread.join(timeout=1.0)
+        bridge.close()
+
+        self.assertFalse(invocation_thread.is_alive())
+        self.assertEqual(outcome["value"][1], b"done")
 
 
 if __name__ == "__main__":

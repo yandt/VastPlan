@@ -34,6 +34,23 @@ class SDKTest(unittest.TestCase):
             plugin.call(contract_pb2.CallTarget(capability="x"), contract_pb2.CallContext(),
                         b"x" * (MAX_PAYLOAD_BYTES + 1))
 
+    def test_host_call_accepts_pure_mapping_wire(self):
+        plugin = Plugin("com.example.python", "1.0.0", {"backend": "^0.1"})
+        with self.assertRaises(ValueError):
+            plugin.call(
+                {"extension_point": "kernel.service", "capability": "kernel.info", "operation": "get"},
+                {"tenant_id": "acme"},
+                b"x" * (MAX_PAYLOAD_BYTES + 1),
+            )
+
+    def test_host_call_observes_parent_cancellation(self):
+        plugin = Plugin("com.example.python", "1.0.0", {"backend": "^0.1"})
+        with self.assertRaisesRegex(TimeoutError, "cancelled"):
+            plugin.call(
+                {"extension_point": "kernel.service", "capability": "kernel.info", "operation": "get"},
+                {"tenant_id": "acme"}, b"", timeout=1.0, cancelled=lambda: True,
+            )
+
     def test_context_views_copy_projected_wire(self):
         wire = contract_pb2.CallContext(tenant_id="acme", metadata={"com.example.flag": "on"})
         wire.principal.user_id = "u1"

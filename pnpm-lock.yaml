@@ -545,14 +545,32 @@ importers:
       '@vastplan/backend-plugin':
         specifier: workspace:*
         version: link:../backend-plugin
+      '@vastplan/credential-reference':
+        specifier: workspace:*
+        version: link:../credential-reference
 
   extensions/sdk/node/configuration-resource-controller:
     dependencies:
       '@vastplan/backend-plugin':
         specifier: workspace:*
         version: link:../backend-plugin
+      '@vastplan/credential-reference':
+        specifier: workspace:*
+        version: link:../credential-reference
 
-  extensions/sdk/node/credential-lease: {}
+  extensions/sdk/node/configuration-scoped:
+    dependencies:
+      '@vastplan/backend-plugin':
+        specifier: workspace:*
+        version: link:../backend-plugin
+
+  extensions/sdk/node/credential-lease:
+    dependencies:
+      '@vastplan/credential-reference':
+        specifier: workspace:*
+        version: link:../credential-reference
+
+  extensions/sdk/node/credential-reference: {}
 
   extensions/sdk/ts/frontend-engine-contract:
     devDependencies:

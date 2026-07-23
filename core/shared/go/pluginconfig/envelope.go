@@ -10,8 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
 )
 
@@ -161,7 +161,7 @@ func managedCredentialRef(value any) (ManagedCredentialRef, error) {
 	var ref ManagedCredentialRef
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&ref); err != nil || !strings.HasPrefix(ref.Handle, "credential://managed/") || ref.Scope != "tenant" || ref.Owner == "" || ref.Purpose == "" || ref.Version < 1 {
+	if err := decoder.Decode(&ref); err != nil || ref.Scope != "tenant" || commonv1.ValidateManagedCredentialRef(ref) != nil {
 		return ManagedCredentialRef{}, errors.New("必须是有效托管凭证引用")
 	}
 	return ref, nil

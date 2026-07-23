@@ -13,9 +13,22 @@ def echo(invocation, _host, call_context, payload):
     }, ensure_ascii=False).encode())
 
 
+def whoami(invocation, host, call_context, _payload):
+    invocation.raise_if_cancelled()
+    result, payload = host.call({
+        "extension_point": "kernel.service",
+        "capability": "kernel.info",
+        "operation": "get",
+    }, call_context, b"", timeout=5.0)
+    if result.get("status") != "ok":
+        error = result.get("error", {})
+        raise RuntimeError(error.get("message", "kernel.info HostCall failed"))
+    return call_ok(payload)
+
+
 plugin = Plugin(
     "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello",
-    "0.1.0",
+    "0.2.0",
     {"backend": "^0.1 || ^1.0"},
 )
 plugin.contribute(Contribution(
@@ -31,8 +44,11 @@ plugin.contribute(Contribution(
                 "properties": {"text": {"type": "string"}},
                 "required": ["text"],
             },
+        }, {
+            "name": "whoami",
+            "description": "通过子解释器 HostCall 桥接读取内核信息",
         }],
     }, ensure_ascii=False).encode(),
-    handlers={"echo": echo},
+    handlers={"echo": echo, "whoami": whoami},
 ))
 plugin.serve()

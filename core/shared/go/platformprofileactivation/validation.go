@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
@@ -99,8 +100,7 @@ func normalizeCredentials(values map[string]pluginconfig.ManagedCredentialRef) (
 	}
 	out := make(map[string]pluginconfig.ManagedCredentialRef, len(values))
 	for fieldID, ref := range values {
-		if strings.TrimSpace(fieldID) == "" || !strings.HasPrefix(ref.Handle, "credential://managed/") ||
-			ref.Scope != "tenant" || strings.TrimSpace(ref.Owner) == "" || strings.TrimSpace(ref.Purpose) == "" || ref.Version < 1 {
+		if strings.TrimSpace(fieldID) == "" || ref.Scope != "tenant" || commonv1.ValidateManagedCredentialRef(ref) != nil {
 			return nil, errors.New("Platform Profile 配置候选包含无效凭证引用")
 		}
 		out[fieldID] = ref

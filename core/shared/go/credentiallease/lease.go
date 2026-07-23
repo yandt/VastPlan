@@ -14,10 +14,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 )
 
@@ -265,9 +265,7 @@ func envelopeAAD(envelope Envelope) ([]byte, error) {
 }
 
 func validateRef(ref pluginconfig.ManagedCredentialRef) error {
-	if !strings.HasPrefix(ref.Handle, "credential://managed/") || len(ref.Handle) > 256 ||
-		ref.Scope != "tenant" || strings.TrimSpace(ref.Owner) == "" || len(ref.Owner) > 160 ||
-		strings.TrimSpace(ref.Purpose) == "" || len(ref.Purpose) > 160 || ref.Version < 1 || ref.Name != "" {
+	if ref.Scope != "tenant" || ref.Name != "" || commonv1.ValidateManagedCredentialRef(ref) != nil {
 		return errors.New("managed CredentialRef 无效")
 	}
 	return nil

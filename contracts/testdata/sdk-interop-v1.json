@@ -1,0 +1,11 @@
+{
+  "managedCredentialRef": {
+    "handle": "credential://managed/opaque-1",
+    "scope": "tenant",
+    "owner": "cn.vastplan.demo",
+    "purpose": "demo.token",
+    "version": 1
+  },
+  "scopedValues": { "b": 2, "a": "<&", "small": 1e-7, "large": 1e21, "whole": 1.0 },
+  "scopedValuesDigest": "b810573e4a44da2cf68cd4331e354309b257f5a1a046f3df73c880f8211f9cf9"
+}

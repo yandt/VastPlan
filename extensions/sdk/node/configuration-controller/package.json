@@ -6,5 +6,5 @@
   "exports": "./src/index.mjs",
   "scripts": { "test": "node --test ./test/*.test.mjs" },
   "engines": { "node": ">=20" },
-  "dependencies": { "@vastplan/backend-plugin": "workspace:*" }
+  "dependencies": { "@vastplan/backend-plugin": "workspace:*", "@vastplan/credential-reference": "workspace:*" }
 }

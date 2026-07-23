@@ -158,8 +158,7 @@ func NormalizePrepareRequest(request PrepareRequest) (PrepareRequest, error) {
 	}
 	credentials := make(map[string]commonv1.ManagedCredentialRef, len(request.ManagedCredentials))
 	for fieldID, ref := range request.ManagedCredentials {
-		if strings.TrimSpace(fieldID) == "" || !strings.HasPrefix(ref.Handle, "credential://managed/") || ref.Scope != "tenant" ||
-			strings.TrimSpace(ref.Owner) == "" || strings.TrimSpace(ref.Purpose) == "" || ref.Version < 1 {
+		if strings.TrimSpace(fieldID) == "" || ref.Scope != "tenant" || commonv1.ValidateManagedCredentialRef(ref) != nil {
 			return PrepareRequest{}, errors.New("Configuration Resource 包含无效托管凭证引用")
 		}
 		credentials[fieldID] = ref

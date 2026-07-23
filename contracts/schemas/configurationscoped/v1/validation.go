@@ -138,3 +138,38 @@ func ValidateRevisionObservation(response RevisionObservation) error {
 	}
 	return nil
 }
+
+// ParseResolution validates the original wire document before decoding so
+// unknown fields cannot be discarded by a typed unmarshal.
+func ParseResolution(raw []byte) (Resolution, error) {
+	var response Resolution
+	if err := parseResponse("resolution", raw, &response); err != nil {
+		return Resolution{}, err
+	}
+	return response, ValidateResolution(response)
+}
+
+// ParseRevisionObservation is the strict wire decoder for watchRevision.
+func ParseRevisionObservation(raw []byte) (RevisionObservation, error) {
+	var response RevisionObservation
+	if err := parseResponse("revisionObservation", raw, &response); err != nil {
+		return RevisionObservation{}, err
+	}
+	return response, ValidateRevisionObservation(response)
+}
+
+func parseResponse(definition string, raw []byte, target any) error {
+	if err := validateDefinition(definition, raw); err != nil {
+		return err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return errors.New("Scoped Configuration 响应只能包含一个 JSON 文档")
+	}
+	return nil
+}

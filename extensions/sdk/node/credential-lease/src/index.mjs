@@ -5,18 +5,11 @@ import {
   diffieHellman,
   generateKeyPairSync,
 } from "node:crypto";
+import { normalizeManagedCredentialRef } from "@vastplan/credential-reference";
 
 const info = Buffer.from("vastplan/material-lease/v1");
 const x25519Prefix = Buffer.from("302a300506032b656e032100", "hex");
 const raw = (value) => Buffer.from(value, "base64url");
-const validRef = (ref) =>
-  ref &&
-  String(ref.handle).startsWith("credential://managed/") &&
-  ref.scope === "tenant" &&
-  ref.owner &&
-  ref.purpose &&
-  Number.isSafeInteger(ref.version) &&
-  ref.version > 0;
 
 export class MaterialLeaseClient {
   constructor(plugin, { audience, now = () => Date.now() }) {
@@ -27,12 +20,14 @@ export class MaterialLeaseClient {
   }
 
   async withMaterial(ref, tenantId, invocationContext, use) {
-    if (!validRef(ref) || !tenantId || typeof use !== "function")
+    let normalizedRef;
+    try { normalizedRef = normalizeManagedCredentialRef(ref, { allowedScopes: ["tenant"] }); } catch { throw new Error("Managed CredentialRef 无效"); }
+    if (!tenantId || typeof use !== "function")
       throw new Error("Managed CredentialRef 无效");
     const { publicKey, privateKey } = generateKeyPairSync("x25519");
     const publicDer = publicKey.export({ format: "der", type: "spki" });
     const request = {
-      ref,
+      ref: normalizedRef,
       recipientPublicKey: publicDer
         .subarray(publicDer.length - 32)
         .toString("base64url"),
@@ -53,7 +48,7 @@ export class MaterialLeaseClient {
     const envelope = JSON.parse(
       Buffer.from(response.payload ?? []).toString("utf8"),
     );
-    const expected = JSON.stringify(ref);
+    const expected = JSON.stringify(normalizedRef);
     if (
       envelope.version !== 1 ||
       envelope.tenantId !== tenantId ||

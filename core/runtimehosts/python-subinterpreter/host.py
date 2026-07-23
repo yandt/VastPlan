@@ -108,7 +108,6 @@ class SubinterpreterBridge:
             "capability": target["capability"],
             "operation": target["operation"],
             "deadline_unix_ms": invocation.deadline_unix_ms,
-            "delegation_token": invocation.delegation_token,
             "context": MessageToDict(call_context, preserving_proto_field_name=True),
             "payload": bytes(payload),
         })
@@ -117,6 +116,9 @@ class SubinterpreterBridge:
                 invocation.raise_if_cancelled()
                 try:
                     result = response_queue.get(timeout=0.05)
+                    if result.get("type") == "host_call":
+                        self._host_call(invocation, _host, result)
+                        continue
                     break
                 except queue.Empty:
                     if self.closed.is_set():
@@ -139,6 +141,46 @@ class SubinterpreterBridge:
             with self.lock:
                 self.pending.pop(request_id, None)
 
+    def _host_call(self, invocation, host, message: Mapping[str, Any]) -> None:
+        from contract.v1 import contract_pb2
+        from google.protobuf.json_format import ParseDict
+
+        host_call_id = message.get("host_call_id")
+        response: dict[str, Any] = {"type": "host_call_result", "host_call_id": host_call_id}
+        try:
+            if not isinstance(host_call_id, str) or not host_call_id:
+                raise ValueError("子解释器 HostCall 缺少 ID")
+            target_value = message.get("target")
+            context_value = message.get("context")
+            payload = message.get("payload", b"")
+            timeout_ms = message.get("timeout_ms")
+            if not isinstance(target_value, Mapping) or not isinstance(context_value, Mapping):
+                raise ValueError("子解释器 HostCall target/context 无效")
+            if not isinstance(payload, (bytes, bytearray)) or len(payload) > 4 << 20:
+                raise ValueError("子解释器 HostCall payload 无效")
+            if isinstance(timeout_ms, bool) or not isinstance(timeout_ms, int) or not 1 <= timeout_ms <= 30_000:
+                raise ValueError("子解释器 HostCall timeout 无效")
+            target = ParseDict(dict(target_value), contract_pb2.CallTarget(), ignore_unknown_fields=False)
+            context = ParseDict(dict(context_value), contract_pb2.CallContext(), ignore_unknown_fields=False)
+            if not target.extension_point or not target.capability:
+                raise ValueError("子解释器 HostCall target 不完整")
+            invocation.raise_if_cancelled()
+            timeout = timeout_ms / 1000.0
+            if invocation.deadline_unix_ms is not None:
+                remaining = (invocation.deadline_unix_ms - time.time_ns() // 1_000_000) / 1000.0
+                if remaining <= 0:
+                    raise TimeoutError("VastPlan invocation timed out")
+                timeout = min(timeout, remaining)
+            result, result_payload = host.call(
+                target, context, bytes(payload), timeout=timeout,
+                cancelled=lambda: invocation.cancelled,
+            )
+            response["result"] = _call_result_mapping(result)
+            response["payload"] = bytes(result_payload)
+        except Exception as error:
+            response["bridge_error"] = str(error)
+        self.requests.put(response)
+
     def close(self) -> None:
         if self.closed.is_set():
             return
@@ -156,6 +198,23 @@ class SubinterpreterBridge:
                 target = self.pending.get(request_id)
             if target is not None:
                 target.put(message)
+
+
+def _call_result_mapping(result) -> Mapping[str, Any]:
+    from contract.v1 import contract_pb2
+
+    if result.status == contract_pb2.CallResult.STATUS_OK:
+        return {"status": "ok", "metadata": dict(result.metadata)}
+    error = result.error if result.HasField("error") else None
+    return {
+        "status": "error",
+        "metadata": dict(result.metadata),
+        "error": {
+            "code": error.code if error is not None else "host_call.error",
+            "message": error.message if error is not None else "HostCall failed",
+            "retryable": bool(error.retryable) if error is not None else False,
+        },
+    }
 
 
 def _declaration(responses, timeout: float = 15.0) -> Mapping[str, Any]:

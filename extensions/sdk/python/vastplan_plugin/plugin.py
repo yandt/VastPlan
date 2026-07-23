@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable, Mapping, Optional, Tuple
 
 import grpc
+from google.protobuf.json_format import ParseDict
 
 from contract.v1 import contract_pb2
 from pluginhost.v1 import pluginhost_pb2, pluginhost_pb2_grpc
@@ -160,8 +161,10 @@ class Plugin:
             # and process generation guard.
             pass
 
-    def call(self, target: contract_pb2.CallTarget, call_context: contract_pb2.CallContext, payload: bytes,
-             timeout: float = 30.0) -> tuple[contract_pb2.CallResult, bytes]:
+    def call(self, target, call_context, payload: bytes, timeout: float = 30.0,
+             cancelled: Optional[Callable[[], bool]] = None) -> tuple[contract_pb2.CallResult, bytes]:
+        target = _call_target(target)
+        call_context = _call_context(call_context)
         if len(payload) > MAX_PAYLOAD_BYTES:
             raise ValueError("HostCall payload 超过协议上限")
         if call_context.ByteSize() > MAX_METADATA_BYTES:
@@ -176,12 +179,20 @@ class Plugin:
             if delegation_token:
                 request.delegation_token = delegation_token
             self._send(pluginhost_pb2.FromPlugin(host_call=request))
-            try:
-                response = response_queue.get(timeout=timeout).host_call_result
-            except queue.Empty as error:
-                if "channel.cancel.v1" in self._features:
-                    self._send(pluginhost_pb2.FromPlugin(cancel=pluginhost_pb2.Cancel(request_id=request_id)))
-                raise TimeoutError("HostCall timed out") from error
+            deadline = time.monotonic() + timeout
+            while True:
+                if cancelled is not None and cancelled():
+                    self._cancel_host_call(request_id)
+                    raise TimeoutError("HostCall cancelled")
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    self._cancel_host_call(request_id)
+                    raise TimeoutError("HostCall timed out")
+                try:
+                    response = response_queue.get(timeout=min(remaining, 0.05)).host_call_result
+                    break
+                except queue.Empty:
+                    continue
             if len(response.payload) > MAX_PAYLOAD_BYTES:
                 raise RuntimeError("HostCall 响应 payload 超过协议上限")
             return response.result, response.payload
@@ -379,6 +390,10 @@ class Plugin:
         with self._pending_lock:
             self._pending.pop(request_id, None)
 
+    def _cancel_host_call(self, request_id: str) -> None:
+        if "channel.cancel.v1" in self._features:
+            self._send(pluginhost_pb2.FromPlugin(cancel=pluginhost_pb2.Cancel(request_id=request_id)))
+
     def _reply_error(self, request: pluginhost_pb2.InvokeRequest, code: str, message: str) -> None:
         self._send(pluginhost_pb2.FromPlugin(invoke_result=self._error_response(request.request_id, code, message)))
 
@@ -396,3 +411,19 @@ class Plugin:
     @staticmethod
     def _new_id(prefix: str) -> str:
         return f"{prefix}-{uuid.uuid4().hex}"
+
+
+def _call_target(value) -> contract_pb2.CallTarget:
+    if isinstance(value, contract_pb2.CallTarget):
+        return value
+    if isinstance(value, Mapping):
+        return ParseDict(dict(value), contract_pb2.CallTarget(), ignore_unknown_fields=False)
+    raise TypeError("HostCall target 必须是 CallTarget 或映射")
+
+
+def _call_context(value) -> contract_pb2.CallContext:
+    if isinstance(value, contract_pb2.CallContext):
+        return value
+    if isinstance(value, Mapping):
+        return ParseDict(dict(value), contract_pb2.CallContext(), ignore_unknown_fields=False)
+    raise TypeError("HostCall context 必须是 CallContext 或映射")

@@ -78,7 +78,8 @@ func TestPythonSubinterpreterPlugin_CrossInterpreterInvoke(t *testing.T) {
 		RuntimeKind: "python-subinterpreter",
 	}, protocolbus.LaunchPolicy{
 		PluginID:  "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello",
-		Publisher: "vastplan", Version: "0.1.0", Contributions: contributions,
+		Publisher: "vastplan", Version: "0.2.0", Contributions: contributions,
+		KernelServices: []string{"kernel.info"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -98,5 +99,21 @@ func TestPythonSubinterpreterPlugin_CrossInterpreterInvoke(t *testing.T) {
 	}
 	if output["echo"] != "子解释器成功" || output["runtime"] != "python-subinterpreter" {
 		t.Fatalf("子解释器响应异常: %v", output)
+	}
+
+	response, err = host.Invoke(ctx, toolTarget("vastplan.python-subinterpreter-hello", "whoami"), testCallContext(), []byte(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.Result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("Python 子解释器 HostCall 失败: %+v", response.Result)
+	}
+	if err := json.Unmarshal(response.Payload, &output); err != nil {
+		t.Fatal(err)
+	}
+	if output["callerKind"] != "CALLER_KIND_PLUGIN" ||
+		output["callerId"] != "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello" ||
+		output["tenant"] != "acme" {
+		t.Fatalf("子解释器 HostCall 信任边界错误: %v", output)
 	}
 }

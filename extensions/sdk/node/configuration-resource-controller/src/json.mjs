@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { normalizeManagedCredentialRefs } from "@vastplan/credential-reference";
 
 const patterns = {
   digest: /^[a-f0-9]{64}$/,
@@ -37,19 +38,7 @@ export function normalizeJSON(value) {
   throw new Error("values 包含非 JSON 值");
 }
 
-export function normalizeCredentials(value) {
-  if (value === undefined || value === null) return Object.freeze({});
-  const source = record(value, "managedCredentials");
-  const names = Object.keys(source).sort(utf8Compare);
-  if (names.length > 64) throw new Error("managedCredentials 数量超限");
-  return Object.freeze(Object.fromEntries(names.map((name) => {
-    if (!patterns.field.test(name) || name.length > 80) throw new Error(`managedCredentials 字段 ${name} 无效`);
-    const ref = record(source[name], `managedCredentials.${name}`);
-    exactKeys(ref, ["handle", "scope", "owner", "purpose", "version", "name"], `managedCredentials.${name}`, ["handle", "scope", "owner", "purpose", "version"]);
-    if (!String(ref.handle).startsWith("credential://managed/") || ref.scope !== "tenant" || !ref.owner || !ref.purpose || !Number.isSafeInteger(ref.version) || ref.version < 1) throw new Error(`managedCredentials.${name} 引用无效`);
-    return [name, Object.freeze({ handle: String(ref.handle), scope: "tenant", owner: String(ref.owner), purpose: String(ref.purpose), version: ref.version, ...(ref.name === undefined ? {} : { name: String(ref.name) }) })];
-  })));
-}
+export function normalizeCredentials(value) { return normalizeManagedCredentialRefs(value, { allowedScopes: ["tenant"] }); }
 
 export function activeReference(value) {
   const active = record(value, "active reference");
