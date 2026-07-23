@@ -84,6 +84,7 @@ type Manager struct {
 	configuredProvider string
 	configuredVolumeID string
 	quota              QuotaPolicy
+	publication        PublicationPolicy
 
 	publishMu    sync.Mutex
 	mu           sync.RWMutex
@@ -95,7 +96,8 @@ type Manager struct {
 }
 
 type Options struct {
-	Quota QuotaPolicy
+	Quota       QuotaPolicy
+	Publication PublicationPolicy
 }
 
 func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, statePath string, options ...Options) (*Manager, error) {
@@ -112,13 +114,16 @@ func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, state
 	if err := runtimeOptions.Quota.Validate(); err != nil {
 		return nil, err
 	}
+	if err := runtimeOptions.Publication.Validate(); err != nil {
+		return nil, err
+	}
 	if err := validateVolume(initial); err != nil {
 		return nil, fmt.Errorf("校验初始制品 volume: %w", err)
 	}
 	if err := ensureStateDirectory(filepath.Dir(filepath.Clean(statePath))); err != nil {
 		return nil, err
 	}
-	manager := &Manager{trust: trust, statePath: filepath.Clean(statePath), configuredProvider: initial.ProviderID, configuredVolumeID: initial.VolumeID, quota: runtimeOptions.Quota}
+	manager := &Manager{trust: trust, statePath: filepath.Clean(statePath), configuredProvider: initial.ProviderID, configuredVolumeID: initial.VolumeID, quota: runtimeOptions.Quota, publication: runtimeOptions.Publication.normalized()}
 	state, err := manager.loadState()
 	if err != nil {
 		return nil, err
@@ -167,12 +172,13 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 	if err := m.admitPublish(attestation.Artifact); err != nil {
 		return pluginv1.Artifact{}, err
 	}
-	publicationID, err := active.catalog.AuthorizePublication(attestation)
+	now := time.Now().UTC()
+	publicationID, err := active.catalog.AuthorizePublication(attestation, now)
 	if err != nil {
 		return pluginv1.Artifact{}, err
 	}
 	if mirror != nil {
-		mirrorPublicationID, authorizeErr := mirror.catalog.AuthorizePublication(attestation)
+		mirrorPublicationID, authorizeErr := mirror.catalog.AuthorizePublication(attestation, now)
 		if authorizeErr != nil || mirrorPublicationID != publicationID {
 			m.recordMigrationError(errors.New("观察卷发布审批状态不一致"))
 			return pluginv1.Artifact{}, errors.New("制品迁移观察卷审批状态不一致，发布已冻结")
@@ -181,7 +187,7 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 			m.recordMigrationError(fmt.Errorf("观察卷镜像发布失败: %w", err))
 			return pluginv1.Artifact{}, errors.New("制品迁移观察卷不可用，发布已冻结")
 		}
-		if err := mirror.catalog.MarkPublicationPublished(mirrorPublicationID, attestationRaw, time.Now().UTC()); err != nil {
+		if err := mirror.catalog.MarkPublicationPublished(mirrorPublicationID, attestationRaw, now); err != nil {
 			m.recordMigrationError(fmt.Errorf("观察卷发布审批提交失败: %w", err))
 			return pluginv1.Artifact{}, errors.New("制品迁移观察卷审批状态不可用，发布已冻结")
 		}
@@ -193,7 +199,7 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 		}
 		return pluginv1.Artifact{}, err
 	}
-	if err := active.catalog.MarkPublicationPublished(publicationID, attestationRaw, time.Now().UTC()); err != nil {
+	if err := active.catalog.MarkPublicationPublished(publicationID, attestationRaw, now); err != nil {
 		if mirror != nil {
 			m.recordMigrationError(fmt.Errorf("活动卷发布审批提交失败: %w", err))
 		}
@@ -203,6 +209,9 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 }
 
 func (m *Manager) SubmitPublication(request catalog.PublicationRequest, actor string, occurredAt time.Time) (catalog.Publication, uint64, error) {
+	if occurredAt.IsZero() {
+		occurredAt = time.Now().UTC()
+	}
 	m.publishMu.Lock()
 	defer m.publishMu.Unlock()
 	m.mu.RLock()
@@ -211,15 +220,52 @@ func (m *Manager) SubmitPublication(request catalog.PublicationRequest, actor st
 	if active == nil {
 		return catalog.Publication{}, 0, errors.New("活动制品仓库不可用")
 	}
+	expiresAt := occurredAt.Add(m.publication.approvalTTL())
 	if mirror != nil {
-		if _, _, err := mirror.catalog.SubmitPublication(request, actor, occurredAt); err != nil {
+		if _, _, err := mirror.catalog.SubmitPublication(request, actor, occurredAt, expiresAt); err != nil {
 			m.recordMigrationError(fmt.Errorf("观察卷发布申请镜像失败: %w", err))
 			return catalog.Publication{}, 0, errors.New("制品迁移观察卷不可用，发布申请已冻结")
 		}
 	}
-	record, revision, err := active.catalog.SubmitPublication(request, actor, occurredAt)
+	record, revision, err := active.catalog.SubmitPublication(request, actor, occurredAt, expiresAt)
 	if err != nil && mirror != nil {
 		m.recordMigrationError(fmt.Errorf("活动卷发布申请失败: %w", err))
+	}
+	return record, revision, err
+}
+
+func (m *Manager) RejectPublication(request catalog.PublicationTransitionRequest, actor string, occurredAt time.Time) (catalog.Publication, uint64, error) {
+	return m.terminatePublication(request, actor, occurredAt, false)
+}
+
+func (m *Manager) CancelPublication(request catalog.PublicationTransitionRequest, actor string, occurredAt time.Time) (catalog.Publication, uint64, error) {
+	return m.terminatePublication(request, actor, occurredAt, true)
+}
+
+func (m *Manager) terminatePublication(request catalog.PublicationTransitionRequest, actor string, occurredAt time.Time, cancel bool) (catalog.Publication, uint64, error) {
+	m.publishMu.Lock()
+	defer m.publishMu.Unlock()
+	m.mu.RLock()
+	active, mirror := m.active, m.mirror
+	m.mu.RUnlock()
+	if active == nil {
+		return catalog.Publication{}, 0, errors.New("活动制品仓库不可用")
+	}
+	transition := func(set *repositorySet) (catalog.Publication, uint64, error) {
+		if cancel {
+			return set.catalog.CancelPublication(request, actor, occurredAt)
+		}
+		return set.catalog.RejectPublication(request, actor, occurredAt)
+	}
+	if mirror != nil {
+		if _, _, err := transition(mirror); err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷发布审批终止失败: %w", err))
+			return catalog.Publication{}, 0, errors.New("制品迁移观察卷不可用，发布审批终止已冻结")
+		}
+	}
+	record, revision, err := transition(active)
+	if err != nil && mirror != nil {
+		m.recordMigrationError(fmt.Errorf("活动卷发布审批终止失败: %w", err))
 	}
 	return record, revision, err
 }
@@ -246,22 +292,46 @@ func (m *Manager) ApprovePublication(request catalog.PublicationApprovalRequest,
 	return record, revision, err
 }
 
-func (m *Manager) Publications() catalog.PublicationPage {
+func (m *Manager) Publications() (catalog.PublicationPage, error) {
+	m.publishMu.Lock()
+	defer m.publishMu.Unlock()
 	m.mu.RLock()
-	active := m.active
+	active, mirror := m.active, m.mirror
 	m.mu.RUnlock()
 	if active == nil {
-		return catalog.PublicationPage{}
+		return catalog.PublicationPage{}, errors.New("活动制品仓库不可用")
 	}
-	return active.catalog.Publications()
+	now := time.Now().UTC()
+	if mirror != nil {
+		if _, err := mirror.catalog.ExpirePublications(now); err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷发布审批过期收敛失败: %w", err))
+			return catalog.PublicationPage{}, errors.New("制品迁移观察卷不可用，发布审批读取已冻结")
+		}
+	}
+	if _, err := active.catalog.ExpirePublications(now); err != nil {
+		return catalog.PublicationPage{}, err
+	}
+	return active.catalog.Publications(), nil
 }
 
 func (m *Manager) SupplyChainEvidence(ref pluginv1.ArtifactRef) (catalog.SupplyChainEvidence, error) {
+	m.publishMu.Lock()
+	defer m.publishMu.Unlock()
 	m.mu.RLock()
-	active := m.active
+	active, mirror := m.active, m.mirror
 	m.mu.RUnlock()
 	if active == nil {
 		return catalog.SupplyChainEvidence{}, errors.New("活动制品仓库不可用")
+	}
+	now := time.Now().UTC()
+	if mirror != nil {
+		if _, err := mirror.catalog.ExpirePublications(now); err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷供应链审批过期收敛失败: %w", err))
+			return catalog.SupplyChainEvidence{}, errors.New("制品迁移观察卷不可用，供应链证据读取已冻结")
+		}
+	}
+	if _, err := active.catalog.ExpirePublications(now); err != nil {
+		return catalog.SupplyChainEvidence{}, err
 	}
 	return active.catalog.Evidence(ref)
 }

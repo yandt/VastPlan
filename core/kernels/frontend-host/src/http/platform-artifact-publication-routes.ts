@@ -28,10 +28,13 @@ export class PlatformArtifactPublicationRoutes {
     if (parts.length === 1 && parts[0] === "publications") {
       return this.write("submitPublication", "platform.artifacts.publication.submit", undefined, principal, target, request, response, signal);
     }
-    if (parts.length === 3 && parts[0] === "publications" && parts[2] === "approve") {
+    if (parts.length === 3 && parts[0] === "publications" && ["approve", "reject", "cancel"].includes(parts[2] ?? "")) {
       const id = resourceName(parts[1], 64);
       if (id === undefined || !/^[a-f0-9]{64}$/.test(id)) { sendAPIError(response, 400, "invalid_publication_id"); return true; }
-      return this.write("approvePublication", "platform.artifacts.publication.approve", id, principal, target, request, response, signal);
+      const action = parts[2];
+      if (action === "approve") return this.write("approvePublication", "platform.artifacts.publication.approve", id, principal, target, request, response, signal);
+      if (action === "reject") return this.write("rejectPublication", "platform.artifacts.publication.approve", id, principal, target, request, response, signal);
+      return this.write("cancelPublication", "platform.artifacts.publication.submit", id, principal, target, request, response, signal);
     }
     return false;
   }

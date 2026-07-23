@@ -39,6 +39,8 @@ describe("Platform artifact routes", () => {
       ["/artifacts/migrations/move-1/release", "{}"],
       ["/artifacts/publications", '{"source":{"pluginId":"cn.vastplan.demo","version":"1.0.0","channel":"testing"},"targetChannel":"stable","reason":"ready","expectedRevision":0}'],
       [`/artifacts/publications/${"b".repeat(64)}/approve`, '{"expectedRevision":1,"id":"forged"}'],
+      [`/artifacts/publications/${"c".repeat(64)}/reject`, '{"expectedRevision":2,"reason":"unsafe","id":"forged"}'],
+      [`/artifacts/publications/${"d".repeat(64)}/cancel`, '{"expectedRevision":3,"reason":"superseded","id":"forged"}'],
     ];
     for (const [path, body] of requests) expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core${path}`, { method: "POST", headers: server.writeHeaders, body })).status, path).toBe(200);
     expect(calls.map(({ operation, payload }) => ({ operation, payload }))).toEqual([
@@ -53,6 +55,8 @@ describe("Platform artifact routes", () => {
       { operation: "releaseMigration", payload: { migrationId: "move-1" } },
       { operation: "submitPublication", payload: { source: { pluginId: "cn.vastplan.demo", version: "1.0.0", channel: "testing" }, targetChannel: "stable", reason: "ready", expectedRevision: 0 } },
       { operation: "approvePublication", payload: { expectedRevision: 1, id: "b".repeat(64) } },
+      { operation: "rejectPublication", payload: { expectedRevision: 2, reason: "unsafe", id: "c".repeat(64) } },
+      { operation: "cancelPublication", payload: { expectedRevision: 3, reason: "superseded", id: "d".repeat(64) } },
     ]);
     const before = calls.length;
     const invalidEmpty = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/artifacts/gc/sweep`, { method: "POST", headers: server.writeHeaders, body: '{"force":true}' });
@@ -76,7 +80,7 @@ async function start(calls: PlatformInvocation[]) {
   const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.artifacts.read", "platform.artifacts.lifecycle", "platform.artifacts.gc", "platform.artifacts.migrate", "platform.artifacts.publication.submit", "platform.artifacts.publication.approve"], managementBinding([{
     capability: "platform.artifacts.repository",
     read: ["status", "listCatalog", "capacity", "listReferences", "migrationStatus", "gcPlan", "gcStatus", "listPublications", "getSupplyChainEvidence"],
-    write: ["setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration", "submitPublication", "approvePublication"],
+    write: ["setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration", "submitPublication", "approvePublication", "rejectPublication", "cancelPublication"],
   }]));
   close.push(server.close);
   return server;

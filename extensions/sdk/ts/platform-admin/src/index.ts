@@ -233,11 +233,12 @@ export interface ArtifactCapacity {
   quarantinedArtifacts: number; quarantinedBytes: number; sweptArtifacts: number;
   reclaimedBytes: number; storedBytes: number; buckets: ArtifactCapacityBucket[]; quotas: ArtifactQuotaUsage[];
 }
-export type ArtifactPublicationStatus = "PendingApproval" | "Approved" | "Published";
+export type ArtifactPublicationStatus = "PendingApproval" | "Approved" | "Published" | "Rejected" | "Cancelled" | "Expired";
 export interface ArtifactPublication {
   id: string; revision: number; status: ArtifactPublicationStatus; source: ArtifactRef; target: ArtifactRef;
   sha256: string; publisher: string; keyId: string; sourceAttestationSha256: string; publishedAttestationSha256?: string;
-  reason: string; submittedBy: string; approvedBy?: string; submittedAt: string; approvedAt?: string; publishedAt?: string;
+  reason: string; submittedBy: string; approvedBy?: string; submittedAt: string; expiresAt: string; approvedAt?: string; publishedAt?: string;
+  terminalReason?: string; terminalBy?: string; terminalAt?: string;
 }
 export interface ArtifactPublicationPage { revision: number; items: ArtifactPublication[]; }
 export interface SubmitArtifactPublicationRequest { source: ArtifactRef; targetChannel: "stable"; reason: string; expectedRevision: number; }
@@ -550,6 +551,8 @@ export class PlatformAdminClient {
   public listArtifactPublications(): Promise<ArtifactPublicationPage> { return this.get(`${this.basePath}/artifacts/publications`); }
   public submitArtifactPublication(request: SubmitArtifactPublicationRequest): Promise<ArtifactPublicationResult> { return this.mutate(`${this.basePath}/artifacts/publications`, "POST", request); }
   public approveArtifactPublication(id: string, expectedRevision: number): Promise<ArtifactPublicationResult> { return this.mutate(`${this.basePath}/artifacts/publications/${segment(id)}/approve`, "POST", { expectedRevision }); }
+  public rejectArtifactPublication(id: string, expectedRevision: number, reason: string): Promise<ArtifactPublicationResult> { return this.mutate(`${this.basePath}/artifacts/publications/${segment(id)}/reject`, "POST", { expectedRevision, reason }); }
+  public cancelArtifactPublication(id: string, expectedRevision: number, reason: string): Promise<ArtifactPublicationResult> { return this.mutate(`${this.basePath}/artifacts/publications/${segment(id)}/cancel`, "POST", { expectedRevision, reason }); }
   public artifactSupplyChainEvidence(ref: ArtifactRef): Promise<ArtifactSupplyChainEvidence> {
     return this.get(`${this.basePath}/artifacts/evidence${query({ pluginId: ref.pluginId, version: ref.version, channel: ref.channel })}`);
   }

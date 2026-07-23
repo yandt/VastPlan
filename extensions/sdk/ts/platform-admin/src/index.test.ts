@@ -219,11 +219,15 @@ describe("PlatformAdminClient", () => {
     await client.listArtifactPublications();
     await client.submitArtifactPublication({ source: { pluginId: "cn.vastplan.demo", version: "1.0.0", channel: "testing" }, targetChannel: "stable", reason: "ready", expectedRevision: 2 });
     await client.approveArtifactPublication("a".repeat(64), 3);
+    await client.rejectArtifactPublication("b".repeat(64), 4, "risk found");
+    await client.cancelArtifactPublication("c".repeat(64), 5, "superseded");
     await client.artifactSupplyChainEvidence({ pluginId: "cn.vastplan.demo", version: "1.0.0", channel: "stable" });
     expect(calls.map((call) => call.path)).toEqual([
       "/v1/portals/operations/platform/services/artifacts/artifacts/publications",
       "/v1/csrf", "/v1/portals/operations/platform/services/artifacts/artifacts/publications",
       "/v1/csrf", `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"a".repeat(64)}/approve`,
+      "/v1/csrf", `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"b".repeat(64)}/reject`,
+      "/v1/csrf", `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"c".repeat(64)}/cancel`,
       "/v1/portals/operations/platform/services/artifacts/artifacts/evidence?pluginId=cn.vastplan.demo&version=1.0.0&channel=stable",
     ]);
   });

@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -43,6 +43,8 @@
       ,{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "getSupplyChainEvidence", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" }
       ,{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "submitPublication", "permissions": ["platform.artifacts.publication.submit"], "access": "write", "approval": "none" }
       ,{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "approvePublication", "permissions": ["platform.artifacts.publication.approve"], "access": "execute", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "rejectPublication", "permissions": ["platform.artifacts.publication.approve"], "access": "execute", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "cancelPublication", "permissions": ["platform.artifacts.publication.submit"], "access": "write", "approval": "none" }
     ]
   },
   "runtime": {
@@ -75,6 +77,13 @@
             "tlsIdentity": { "type": "string", "pattern": "^spiffe://", "maxLength": 512 }
           },
           "required": ["exposureId", "instanceId", "endpoint", "tlsIdentity"]
+        },
+        "publication": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "approvalTTLHours": { "type": "integer", "minimum": 1, "maximum": 720, "default": 168 }
+          }
         },
         "quota": {
           "type": "object",
@@ -109,7 +118,7 @@
       "required": ["storageProvider", "volumeId"]
     }
   },
-  "state": { "backend": { "format": "cn.vastplan.platform.artifacts.repository", "formatVersion": 2 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.artifacts.repository", "formatVersion": 3 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/artifact-repository", "frontend": "frontend/dist/index.js" },
   "contributes": {
@@ -141,6 +150,8 @@
           ,{ "name": "listPublications", "description": "读取 stable 发布审批" }
           ,{ "name": "submitPublication", "description": "提交 testing 到 stable 发布审批" }
           ,{ "name": "approvePublication", "description": "以双人分离批准 stable 发布" }
+          ,{ "name": "rejectPublication", "description": "驳回或撤回 stable 发布批准" }
+          ,{ "name": "cancelPublication", "description": "由原提交人撤销 stable 发布申请" }
           ,{ "name": "getSupplyChainEvidence", "description": "读取已验证供应链证据摘要" }
           ,{ "name": "installDataPlaneTicket", "description": "安装控制面签发的一次性下载 Ticket" }
         ]

@@ -27,6 +27,32 @@ export function publicationForm(client: PlatformAdminClient): WorkbenchFormDefin
   };
 }
 
+export function publicationTransitionForm(client: PlatformAdminClient, mode: "reject" | "cancel"): WorkbenchFormDefinition<Row> {
+  const rejecting = mode === "reject";
+  return {
+    id: mode,
+    schema: {
+      id: `artifact-publication-${mode}.v1`,
+      schema: { $schema: jsonSchemaDialect, type: "object", additionalProperties: false, required: ["reason"], properties: { reason: { type: "string", title: "原因", minLength: 1, maxLength: 500 } } },
+      localization: { "/properties/reason/title": text(`form.publication.${mode}Reason`, rejecting ? "驳回原因" : "撤销原因") },
+    },
+    presentation: { layout: "vertical", fields: [{ pointer: "/reason", widget: "textarea" }] },
+    workflow: {
+      surface: "dialog", size: "sm",
+      title: text(`form.publication.${mode}Title`, rejecting ? "驳回发布审批" : "撤销发布审批"),
+      description: text(`form.publication.${mode}Description`, rejecting ? "驳回会立即使当前 stable 发布授权失效；提交人与驳回人必须分离。" : "只有原提交人可以撤销，撤销后该申请不可恢复。"),
+      submitLabel: text(`action.publication.${mode}`, rejecting ? "确认驳回" : "确认撤销"),
+      success: { notify: text(`notice.publication${rejecting ? "Rejected" : "Cancelled"}`, rejecting ? "发布审批已驳回" : "发布审批已撤销"), refreshCollection: true, close: true },
+    },
+    async submit({ value, selected }) {
+      const row = selected[0]; if (row === undefined) return;
+      const reason = String(value.reason ?? "").trim(), id = String(row.id), revision = Number(row.publicationRevision);
+      if (rejecting) await client.rejectArtifactPublication(id, revision, reason);
+      else await client.cancelArtifactPublication(id, revision, reason);
+    },
+  };
+}
+
 export function evidenceOverlay(client: PlatformAdminClient): WorkbenchOverlayDefinition<Row> {
   return {
     id: "evidence", surface: "drawer", size: "lg", title: text("overlay.evidence.title", "供应链证据"),

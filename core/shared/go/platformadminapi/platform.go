@@ -188,8 +188,12 @@ type ArtifactPublication struct {
 	SubmittedBy                string               `json:"submittedBy"`
 	ApprovedBy                 string               `json:"approvedBy,omitempty"`
 	SubmittedAt                string               `json:"submittedAt"`
+	ExpiresAt                  string               `json:"expiresAt"`
 	ApprovedAt                 string               `json:"approvedAt,omitempty"`
 	PublishedAt                string               `json:"publishedAt,omitempty"`
+	TerminalReason             string               `json:"terminalReason,omitempty"`
+	TerminalBy                 string               `json:"terminalBy,omitempty"`
+	TerminalAt                 string               `json:"terminalAt,omitempty"`
 }
 
 type ArtifactPublicationRequest struct {
@@ -201,6 +205,11 @@ type ArtifactPublicationRequest struct {
 type ArtifactPublicationApprovalRequest struct {
 	ID               string `json:"id"`
 	ExpectedRevision uint64 `json:"expectedRevision"`
+}
+type ArtifactPublicationTransitionRequest struct {
+	ID               string `json:"id"`
+	ExpectedRevision uint64 `json:"expectedRevision"`
+	Reason           string `json:"reason"`
 }
 type ArtifactPublicationPage struct {
 	Revision uint64                `json:"revision"`

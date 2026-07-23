@@ -1,6 +1,7 @@
 import type { PlatformAdminClient } from "@vastplan/platform-admin";
 import { defineCollectionPage, type CollectionPageDefinition } from "@vastplan/workbench-sdk";
 import { paged, text, type Row } from "./shared.js";
+import { publicationTransitionForm } from "./publication-workflow.js";
 
 export function publicationPage(client: PlatformAdminClient, id: string, path: string): CollectionPageDefinition<Row> {
   return defineCollectionPage<Row>({
@@ -8,11 +9,11 @@ export function publicationPage(client: PlatformAdminClient, id: string, path: s
     navigation: { id, label: text("page.publication.navigation", "发布审批"), zone: "settings", groupID: "platform.artifacts", order: 55 },
     collection: {
       id: `${id}.collection`, title: text("panel.publications", "发布申请"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
-      filters: [{ id: "status", label: text("filter.publicationStatus", "审批状态"), kind: "select", options: ["PendingApproval", "Approved", "Published"].map((value) => ({ value, label: text(`publication.${value}`, value) })) }],
+      filters: [{ id: "status", label: text("filter.publicationStatus", "审批状态"), kind: "select", options: ["PendingApproval", "Approved", "Published", "Rejected", "Cancelled", "Expired"].map((value) => ({ value, label: text(`publication.${value}`, value) })) }],
       columns: [
         { key: "pluginId", label: text("column.plugin", "插件 ID"), defaultVisible: true, minWidth: 260 },
         { key: "version", label: text("column.version", "版本"), defaultVisible: true, minWidth: 150 },
-        { key: "status", label: text("column.publicationStatus", "审批状态"), format: "status", valueLabels: { PendingApproval: text("publication.PendingApproval", "待批准"), Approved: text("publication.Approved", "已批准"), Published: text("publication.Published", "已发布") }, statusTones: { PendingApproval: "warning", Approved: "info", Published: "success" }, defaultVisible: true, minWidth: 120 },
+        { key: "status", label: text("column.publicationStatus", "审批状态"), format: "status", valueLabels: { PendingApproval: text("publication.PendingApproval", "待批准"), Approved: text("publication.Approved", "已批准"), Published: text("publication.Published", "已发布"), Rejected: text("publication.Rejected", "已驳回"), Cancelled: text("publication.Cancelled", "已撤销"), Expired: text("publication.Expired", "已过期") }, statusTones: { PendingApproval: "warning", Approved: "info", Published: "success", Rejected: "error", Cancelled: "neutral", Expired: "neutral" }, defaultVisible: true, minWidth: 120 },
         { key: "publisher", label: text("column.publisher", "发布者"), defaultVisible: true, minWidth: 120 },
         { key: "keyId", label: text("column.keyId", "签名 Key"), defaultVisible: true, minWidth: 140 },
         { key: "reason", label: text("column.publicationReason", "发布原因"), defaultVisible: true, minWidth: 220 },
@@ -20,16 +21,25 @@ export function publicationPage(client: PlatformAdminClient, id: string, path: s
         { key: "submittedBy", label: text("column.submittedBy", "提交人"), defaultVisible: true, minWidth: 120 },
         { key: "approvedBy", label: text("column.approvedBy", "批准人"), defaultVisible: true, minWidth: 120 },
         { key: "submittedAt", label: text("column.submittedAt", "提交时间"), format: "datetime", defaultVisible: true, minWidth: 190 },
+        { key: "expiresAt", label: text("column.publicationExpiresAt", "有效期至"), format: "datetime", defaultVisible: true, minWidth: 190 },
         { key: "publishedAt", label: text("column.publicationPublishedAt", "发布时间"), format: "datetime", defaultVisible: false, minWidth: 190 },
+        { key: "terminalReason", label: text("column.publicationTerminalReason", "终止原因"), defaultVisible: false, minWidth: 220 },
+        { key: "terminalBy", label: text("column.publicationTerminalBy", "终止人"), defaultVisible: false, minWidth: 120 },
+        { key: "terminalAt", label: text("column.publicationTerminalAt", "终止时间"), format: "datetime", defaultVisible: false, minWidth: 190 },
       ],
-      actions: [{ id: "approve", label: text("action.publication.approve", "批准"), placement: "record.row", confirm: text("confirm.publication.approve", "确认该 testing 制品可晋级 stable？系统会强制提交人与批准人分离。"), requiredPermissions: ["platform.artifacts.publication.approve"], visibleWhen: { pointer: "/status", equals: "PendingApproval" } }],
-      preferences: { allowedColumns: ["pluginId", "version", "status", "publisher", "keyId", "reason", "sha256", "submittedBy", "approvedBy", "submittedAt", "publishedAt"], density: true },
+      actions: [
+        { id: "approve", label: text("action.publication.approve", "批准"), placement: "record.row", confirm: text("confirm.publication.approve", "确认该 testing 制品可晋级 stable？系统会强制提交人与批准人分离。"), requiredPermissions: ["platform.artifacts.publication.approve"], visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
+        { id: "reject", label: text("action.publication.reject", "驳回"), placement: "record.row", form: "reject", requiredPermissions: ["platform.artifacts.publication.approve"], visibleWhen: { pointer: "/status", in: ["PendingApproval", "Approved"] } },
+        { id: "cancel", label: text("action.publication.cancel", "撤销"), placement: "record.row", form: "cancel", requiredPermissions: ["platform.artifacts.publication.submit"], visibleWhen: { pointer: "/status", in: ["PendingApproval", "Approved"] } },
+      ],
+      preferences: { allowedColumns: ["pluginId", "version", "status", "publisher", "keyId", "reason", "sha256", "submittedBy", "approvedBy", "submittedAt", "expiresAt", "publishedAt", "terminalReason", "terminalBy", "terminalAt"], density: true },
     },
+    forms: [publicationTransitionForm(client, "reject"), publicationTransitionForm(client, "cancel")],
     async load(query, signal) {
       const page = await client.listArtifactPublications();
       if (signal.aborted) throw new DOMException("aborted", "AbortError");
       const status = typeof query.filters.status === "string" ? query.filters.status : "";
-      const rows = page.items.filter((item) => status === "" || item.status === status).map((item) => ({ id: item.id, pluginId: item.target.pluginId, version: item.target.version, status: item.status, publisher: item.publisher, keyId: item.keyId, sha256: item.sha256, reason: item.reason, submittedBy: item.submittedBy, approvedBy: item.approvedBy ?? "-", submittedAt: item.submittedAt, publishedAt: item.publishedAt ?? "", publicationRevision: page.revision }));
+      const rows = page.items.filter((item) => status === "" || item.status === status).map((item) => ({ id: item.id, pluginId: item.target.pluginId, version: item.target.version, status: item.status, publisher: item.publisher, keyId: item.keyId, sha256: item.sha256, reason: item.reason, submittedBy: item.submittedBy, approvedBy: item.approvedBy ?? "-", submittedAt: item.submittedAt, expiresAt: item.expiresAt, publishedAt: item.publishedAt ?? "", terminalReason: item.terminalReason ?? "", terminalBy: item.terminalBy ?? "", terminalAt: item.terminalAt ?? "", publicationRevision: page.revision }));
       return paged(rows, query);
     },
     async runAction({ action, selected }) {

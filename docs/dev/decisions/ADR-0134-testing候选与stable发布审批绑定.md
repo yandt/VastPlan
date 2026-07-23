@@ -16,9 +16,13 @@ stable 发布必须来自仓库中已经验签且处于 `active` 的精确 testi
 4. 发布成功后原子推进为 `Published` 并记录最终证明摘要。若进程在对象提交后、状态推进前崩溃，启动恢复会以已验签 Catalog 重新收敛；批准不能被不同字节复用；
 5. testing 发布保持原路径，Seed 自举仍与托管仓库分离。发布审批状态随 File Volume 迁移复制，观察期双写时两卷必须具有相同审批状态，否则冻结发布；
 6. Portal 只读取证据摘要和审批轨迹，不接收原始包、签名私钥、信任文档、仓库 token、mount path 或 Provider endpoint。
+7. 审批状态机由仓库可信进程执行。`PendingApproval` 可由异人批准或驳回、由原提交人撤销；`Approved` 在真正发布前仍可由异人驳回或原提交人撤销；`Rejected/Cancelled/Expired/Published` 都是不可恢复终态。驳回人与提交人继续分离，撤销只允许原提交人，人工终止必须记录原因。
+8. 每个申请由服务端按 `publication.approvalTTLHours` 写入不可伪造的 `expiresAt`，默认 168 小时，可配置范围为 1–720 小时。仓库在审批读取、证据读取、状态变更和 stable 写入授权前惰性收敛过期记录；因此不需要后台轮询线程，也不能通过不打开 Portal 绕过过期门。
 
 ## 取舍
 
 该方案不需要 staging 大对象，复用测试发布闭环且把审批绑定到不可变内容。代价是 stable 制品必须先经过 testing 仓库，且最终发布仍由 CI/CLI 完成；Portal 的批准按钮本身不会上传大对象。未来若必须支持“首次即 stable”的外部供应商制品，应新增隔离 staging Provider，而不是放宽本 ADR 的绑定规则。
 
 2026-07-24 实施补充：生产发布继续使用现有 Go `pluginpackage`，不新增第二套签名 CLI。stable 模式要求独立读取/发布令牌，先拉取并复验 testing 候选，再核对 SHA、大小、publisher 与 key ID；`-package` 可原样复用 testing 阶段归档的同一 tar.gz，且禁止再次注入构建内容。客户端预检用于尽早诊断，服务端 Approved 强制点仍是最终授权依据。
+
+2026-07-24 治理补充：审批记录增加 `Rejected/Cancelled/Expired` 终态和统一终态审计字段。过期收敛与 File Volume 迁移观察双写使用同一串行发布边界；任一卷不能持久化相同状态时，读取或发布均 fail-closed。

@@ -55,9 +55,34 @@ func TestManagerRequiresTwoPersonApprovalForStablePublication(t *testing.T) {
 	if _, err := manager.Publish(stableProof, body); err != nil {
 		t.Fatalf("精确匹配的批准发布应成功: %v", err)
 	}
-	page := manager.Publications()
+	page, err := manager.Publications()
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(page.Items) != 1 || page.Items[0].Status != catalog.PublicationPublished {
 		t.Fatalf("发布审批未消费: %+v", page)
+	}
+}
+
+func TestManagerExpiresPublicationUsingTrustedPolicy(t *testing.T) {
+	volume, _ := migrationVolumes(t, "repository.expiry-unused")
+	trust, privateKey := migrationTrust(t)
+	manager, err := Open(volume, trust, filepath.Join(t.TempDir(), "state", "migration.json"), Options{Publication: PublicationPolicy{ApprovalTTLHours: 1}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, proof, body := migrationArtifact(t, privateKey, "9.1.0")
+	if _, err := manager.Publish(proof, body); err != nil {
+		t.Fatal(err)
+	}
+	submittedAt := time.Now().UTC().Add(-2 * time.Hour)
+	request := catalog.PublicationRequest{Source: pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: "testing"}, TargetChannel: "stable", Reason: "expired candidate", ExpectedRevision: 0}
+	if _, _, err := manager.SubmitPublication(request, "alice", submittedAt); err != nil {
+		t.Fatal(err)
+	}
+	page, err := manager.Publications()
+	if err != nil || len(page.Items) != 1 || page.Items[0].Status != catalog.PublicationExpired || page.Items[0].ExpiresAt == "" {
+		t.Fatalf("可信审批策略未收敛过期状态: page=%+v err=%v", page, err)
 	}
 }
 

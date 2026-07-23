@@ -20,7 +20,11 @@ func publicationHandlers(manager *repositoryruntime.Manager) map[string]sdk.Hand
 			if err := requireEmptyObject(raw); err != nil {
 				return nil, nil, err
 			}
-			payload, err := json.Marshal(manager.Publications())
+			page, err := manager.Publications()
+			if err != nil {
+				return nil, nil, err
+			}
+			payload, err := json.Marshal(page)
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 		},
 		"submitPublication": func(_ context.Context, _ sdk.Host, call *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
@@ -55,6 +59,8 @@ func publicationHandlers(manager *repositoryruntime.Manager) map[string]sdk.Hand
 			payload, err := json.Marshal(map[string]any{"revision": revision, "entry": record})
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 		},
+		"rejectPublication": publicationTransitionHandler(manager.RejectPublication),
+		"cancelPublication": publicationTransitionHandler(manager.CancelPublication),
 		"getSupplyChainEvidence": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
 			var ref pluginv1.ArtifactRef
 			if err := decodeParams(raw, &ref); err != nil {
@@ -67,6 +73,25 @@ func publicationHandlers(manager *repositoryruntime.Manager) map[string]sdk.Hand
 			payload, err := json.Marshal(evidence)
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 		},
+	}
+}
+
+func publicationTransitionHandler(transition func(catalog.PublicationTransitionRequest, string, time.Time) (catalog.Publication, uint64, error)) sdk.Handler {
+	return func(_ context.Context, _ sdk.Host, call *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+		principal, err := publicationActor(call)
+		if err != nil {
+			return nil, nil, err
+		}
+		var request catalog.PublicationTransitionRequest
+		if err := decodeParams(raw, &request); err != nil {
+			return nil, nil, err
+		}
+		record, revision, err := transition(request, principal, time.Now().UTC())
+		if err != nil {
+			return nil, nil, err
+		}
+		payload, err := json.Marshal(map[string]any{"revision": revision, "entry": record})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 	}
 }
 

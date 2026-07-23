@@ -21,7 +21,8 @@ func TestPublicationApprovalBindsExactVerifiedTestingArtifact(t *testing.T) {
 	}
 
 	request := PublicationRequest{Source: pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: "testing"}, TargetChannel: "stable", Reason: "release candidate passed", ExpectedRevision: 0}
-	pending, revision, err := store.SubmitPublication(request, "alice", time.Now().UTC())
+	now := time.Now().UTC()
+	pending, revision, err := store.SubmitPublication(request, "alice", now, now.Add(24*time.Hour))
 	if err != nil || revision != 1 || pending.Status != PublicationPending {
 		t.Fatalf("提交发布审批失败: record=%+v revision=%d err=%v", pending, revision, err)
 	}
@@ -39,13 +40,13 @@ func TestPublicationApprovalBindsExactVerifiedTestingArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publicationID, err := store.AuthorizePublication(attestation)
+	publicationID, err := store.AuthorizePublication(attestation, now)
 	if err != nil || publicationID != pending.ID {
 		t.Fatalf("精确批准未授权 stable 发布: id=%s err=%v", publicationID, err)
 	}
 	tampered := attestation
 	tampered.Artifact.SHA256 = "f" + tampered.Artifact.SHA256[1:]
-	if _, err := store.AuthorizePublication(tampered); err == nil {
+	if _, err := store.AuthorizePublication(tampered, now); err == nil {
 		t.Fatal("摘要不一致的 stable 发布必须拒绝")
 	}
 
@@ -86,7 +87,8 @@ func TestApprovedPublicationRecoversAfterObjectCommitCrash(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := PublicationRequest{Source: pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: "testing"}, TargetChannel: "stable", Reason: "recover", ExpectedRevision: 0}
-	pending, revision, err := store.SubmitPublication(request, "alice", time.Now().UTC())
+	now := time.Now().UTC()
+	pending, revision, err := store.SubmitPublication(request, "alice", now, now.Add(24*time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,11 +122,82 @@ func TestApprovedPublicationRecoversAfterObjectCommitCrash(t *testing.T) {
 func TestStablePublicationRequiresApproval(t *testing.T) {
 	store := &Store{publications: map[string]Publication{}}
 	attestation := pluginservice.Attestation{Artifact: pluginv1.Artifact{PluginID: "cn.example.demo", Version: "1.0.0", Channel: "stable", SHA256: "a"}, Publisher: "example", KeyID: "release"}
-	if _, err := store.AuthorizePublication(attestation); err == nil {
+	if _, err := store.AuthorizePublication(attestation, time.Now().UTC()); err == nil {
 		t.Fatal("没有批准记录的 stable 发布必须拒绝")
 	}
 	attestation.Artifact.Channel = "testing"
-	if id, err := store.AuthorizePublication(attestation); err != nil || id != "" {
+	if id, err := store.AuthorizePublication(attestation, time.Now().UTC()); err != nil || id != "" {
 		t.Fatalf("testing 发布不应进入 stable 审批门: id=%s err=%v", id, err)
+	}
+}
+
+func TestPublicationApprovalExpiresBeforeStableAuthorization(t *testing.T) {
+	repository, privateKey := testSignedRepository(t, t.TempDir())
+	artifact, proof := publishTestArtifact(t, repository, privateKey, "3.0.0")
+	store, err := Open(t.TempDir(), repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	if _, err := store.RecordPublished(artifact, proof, now); err != nil {
+		t.Fatal(err)
+	}
+	request := PublicationRequest{Source: pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: "testing"}, TargetChannel: "stable", Reason: "short approval", ExpectedRevision: 0}
+	pending, revision, err := store.SubmitPublication(request, "alice", now, now.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := store.ApprovePublication(PublicationApprovalRequest{ID: pending.ID, ExpectedRevision: revision}, "bob", now.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	stable := artifact
+	stable.Channel = "stable"
+	attestation, err := pluginservice.SignArtifact(stable, "example", "testing", privateKey, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AuthorizePublication(attestation, now.Add(2*time.Hour)); err == nil {
+		t.Fatal("过期的批准不得授权 stable 发布")
+	}
+	page := store.Publications()
+	if page.Revision != 3 || page.Items[0].Status != PublicationExpired || page.Items[0].TerminalBy != "system" || page.Items[0].TerminalAt == "" {
+		t.Fatalf("审批未收敛到过期终态: %+v", page)
+	}
+}
+
+func TestPublicationRejectAndCancelEnforceActorBoundaries(t *testing.T) {
+	repository, privateKey := testSignedRepository(t, t.TempDir())
+	store, err := Open(t.TempDir(), repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	submit := func(version string, expected uint64) (Publication, uint64) {
+		artifact, proof := publishTestArtifact(t, repository, privateKey, version)
+		if _, err := store.RecordPublished(artifact, proof, now); err != nil {
+			t.Fatal(err)
+		}
+		request := PublicationRequest{Source: pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: "testing"}, TargetChannel: "stable", Reason: "release", ExpectedRevision: expected}
+		record, revision, err := store.SubmitPublication(request, "alice", now, now.Add(24*time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return record, revision
+	}
+	rejected, revision := submit("4.0.0", 0)
+	transition := PublicationTransitionRequest{ID: rejected.ID, ExpectedRevision: revision, Reason: "risk found"}
+	if _, _, err := store.RejectPublication(transition, "alice", now); err == nil {
+		t.Fatal("提交人不得驳回自己的申请")
+	}
+	if record, next, err := store.RejectPublication(transition, "bob", now); err != nil || record.Status != PublicationRejected || next != 2 {
+		t.Fatalf("独立审批人驳回失败: record=%+v revision=%d err=%v", record, next, err)
+	}
+	cancelled, revision := submit("5.0.0", 2)
+	cancel := PublicationTransitionRequest{ID: cancelled.ID, ExpectedRevision: revision, Reason: "superseded"}
+	if _, _, err := store.CancelPublication(cancel, "bob", now); err == nil {
+		t.Fatal("非提交人不得撤销申请")
+	}
+	if record, next, err := store.CancelPublication(cancel, "alice", now); err != nil || record.Status != PublicationCancelled || next != 4 {
+		t.Fatalf("原提交人撤销失败: record=%+v revision=%d err=%v", record, next, err)
 	}
 }
