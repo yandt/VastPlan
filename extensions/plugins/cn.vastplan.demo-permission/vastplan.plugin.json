@@ -14,6 +14,13 @@
 
   "activation": ["onStartup"],
 
+  "runtime": {
+    "instancePolicy": "per-kernel",
+    "stateModel": "local-ephemeral",
+    "visibility": "local",
+    "routing": "direct"
+  },
+
   "entry": { "backend": "backend/demo-permission" },
 
   "contributes": {
