@@ -92,11 +92,13 @@ type Manifest struct {
 // form inputs whose values are handed directly to the platform credential
 // custodian and never inserted into the schema value document.
 type ConfigurationContract struct {
-	Scope              string                   `json:"scope"`
-	ApplyMode          string                   `json:"applyMode"`
-	Schema             json.RawMessage          `json:"schema"`
-	Controller         *ConfigurationController `json:"controller,omitempty"`
-	ManagedCredentials []ManagedCredentialField `json:"managedCredentials,omitempty"`
+	Scope               string                            `json:"scope"`
+	ApplyMode           string                            `json:"applyMode"`
+	Schema              json.RawMessage                   `json:"schema"`
+	Controller          *ConfigurationController          `json:"controller,omitempty"`
+	ResourceController  *ConfigurationResourceController  `json:"resourceController,omitempty"`
+	ResourceCollections []ConfigurationResourceCollection `json:"resourceCollections,omitempty"`
+	ManagedCredentials  []ManagedCredentialField          `json:"managedCredentials,omitempty"`
 }
 
 // ConfigurationController declares that a service-scoped hot configuration
@@ -105,6 +107,25 @@ type ConfigurationContract struct {
 // second author-maintained identity.
 type ConfigurationController struct {
 	Protocol string `json:"protocol"`
+}
+
+// ConfigurationResourceController declares a plugin-owned collection of
+// independently versioned configuration resources. The first published kind
+// is profile; the wire remains generic so future bounded resource kinds do not
+// need a domain-specific lifecycle API.
+type ConfigurationResourceController struct {
+	Protocol string `json:"protocol"`
+}
+
+type ConfigurationResourceCollection struct {
+	ID                 string                   `json:"id"`
+	Kind               string                   `json:"kind"`
+	Title              string                   `json:"title"`
+	Description        string                   `json:"description,omitempty"`
+	Schema             json.RawMessage          `json:"schema"`
+	ManagedCredentials []ManagedCredentialField `json:"managedCredentials,omitempty"`
+	MinItems           uint32                   `json:"minItems,omitempty"`
+	MaxItems           uint32                   `json:"maxItems"`
 }
 
 type ManagedCredentialField struct {
@@ -314,7 +335,8 @@ var declarativeBackendContributionGroups = map[string]struct{}{
 func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, error) {
 	raw := manifest.Contributes["backend"]
 	hasConfigurationController := manifest.Configuration != nil && manifest.Configuration.Controller != nil
-	if len(raw) == 0 && !hasConfigurationController {
+	hasResourceController := manifest.Configuration != nil && manifest.Configuration.ResourceController != nil
+	if len(raw) == 0 && !hasConfigurationController && !hasResourceController {
 		return nil, nil
 	}
 	groups := map[string][]map[string]any{}
@@ -404,6 +426,33 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 		}
 		out = append(out, RuntimeContribution{
 			ExtensionPoint: ConfigurationControllerExtensionPoint, ID: id, Descriptor: descriptor,
+			InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
+			Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain,
+		})
+	}
+	if hasResourceController {
+		id, err := ConfigurationResourceControllerCapability(manifest.ID)
+		if err != nil {
+			return nil, err
+		}
+		descriptor := configurationResourceControllerDescriptor()
+		if err := ValidateDescriptor(ConfigurationResourceControllerExtensionPoint, descriptor); err != nil {
+			return nil, err
+		}
+		key := ConfigurationResourceControllerExtensionPoint + "\x00" + id
+		if _, duplicate := seen[key]; duplicate {
+			return nil, fmt.Errorf("运行时贡献重复: %s/%s", ConfigurationResourceControllerExtensionPoint, id)
+		}
+		seen[key] = struct{}{}
+		policy := defaultPolicy
+		if override, ok := overrides[key]; ok {
+			policy.Visibility = override.Visibility
+			policy.Routing = override.Routing
+			policy.RoutingDomain = override.RoutingDomain
+			policy = servicemodel.Normalize(policy)
+		}
+		out = append(out, RuntimeContribution{
+			ExtensionPoint: ConfigurationResourceControllerExtensionPoint, ID: id, Descriptor: descriptor,
 			InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
 			Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain,
 		})
@@ -660,6 +709,14 @@ func validateConfiguration(contract *ConfigurationContract) error {
 			return errors.New("configuration.controller 只允许 service + hot + configuration.v1")
 		}
 	}
+	if (contract.ResourceController == nil) != (len(contract.ResourceCollections) == 0) {
+		return errors.New("configuration.resourceController 与 resourceCollections 必须同时声明")
+	}
+	if contract.ResourceController != nil {
+		if contract.Scope != "service" || contract.ResourceController.Protocol != ConfigurationResourceControllerProtocol {
+			return errors.New("configuration.resourceController 只允许 service + configuration.resource.v1")
+		}
+	}
 	var schema map[string]any
 	if err := json.Unmarshal(contract.Schema, &schema); err != nil || schema == nil {
 		return errors.New("configuration.schema 必须是 JSON Schema 对象")
@@ -684,6 +741,33 @@ func validateConfiguration(contract *ConfigurationContract) error {
 		}
 		seenIDs[field.ID] = struct{}{}
 		seenPurposes[field.Purpose] = struct{}{}
+	}
+	seenCollections := map[string]struct{}{}
+	for _, collection := range contract.ResourceCollections {
+		if _, duplicate := seenCollections[collection.ID]; duplicate {
+			return fmt.Errorf("configuration.resourceCollections id 重复: %q", collection.ID)
+		}
+		seenCollections[collection.ID] = struct{}{}
+		if collection.Kind != "profile" || collection.MaxItems == 0 || collection.MaxItems > 256 || collection.MinItems > collection.MaxItems {
+			return fmt.Errorf("configuration.resourceCollections %q 数量或 kind 无效", collection.ID)
+		}
+		var resourceSchema map[string]any
+		if err := json.Unmarshal(collection.Schema, &resourceSchema); err != nil || resourceSchema == nil || resourceSchema["type"] != "object" || resourceSchema["additionalProperties"] != false {
+			return fmt.Errorf("configuration.resourceCollections %q schema 必须是闭合 object", collection.ID)
+		}
+		if err := rejectRemoteSchemaRefs(resourceSchema); err != nil {
+			return fmt.Errorf("configuration.resourceCollections %q: %w", collection.ID, err)
+		}
+		resourceFieldIDs, resourcePurposes := map[string]struct{}{}, map[string]struct{}{}
+		for _, field := range collection.ManagedCredentials {
+			if _, duplicate := resourceFieldIDs[field.ID]; duplicate {
+				return fmt.Errorf("configuration.resourceCollections %q 托管凭证 id 重复: %q", collection.ID, field.ID)
+			}
+			if _, duplicate := resourcePurposes[field.Purpose]; duplicate {
+				return fmt.Errorf("configuration.resourceCollections %q 托管凭证 purpose 重复: %q", collection.ID, field.Purpose)
+			}
+			resourceFieldIDs[field.ID], resourcePurposes[field.Purpose] = struct{}{}, struct{}{}
+		}
 	}
 	return nil
 }

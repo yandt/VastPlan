@@ -13,8 +13,9 @@ import (
 
 type DefinitionView struct {
 	pluginconfiguration.Definition
-	CatalogDigest       string `json:"catalogDigest"`
-	ControllerAvailable bool   `json:"controllerAvailable"`
+	CatalogDigest               string `json:"catalogDigest"`
+	ControllerAvailable         bool   `json:"controllerAvailable"`
+	ResourceControllerAvailable bool   `json:"resourceControllerAvailable"`
 }
 
 func (s *Service) catalogs(ctx context.Context, host sdk.Host, call *contractv1.CallContext) ([]pluginconfiguration.Catalog, error) {
@@ -94,8 +95,10 @@ func publicDefinitionView(definition pluginconfiguration.Definition, catalogDige
 	// definitions without managed credentials. Retained/new reference merge
 	// semantics must be completed before the UI can safely offer that path.
 	available := definition.Controller != nil && len(definition.ManagedCredentials) == 0
+	resourceAvailable := definition.ResourceController != nil && len(definition.ResourceCollections) > 0
 	definition.Controller = nil
-	return DefinitionView{Definition: definition, CatalogDigest: catalogDigest, ControllerAvailable: available}
+	definition.ResourceController = nil
+	return DefinitionView{Definition: definition, CatalogDigest: catalogDigest, ControllerAvailable: available, ResourceControllerAvailable: resourceAvailable}
 }
 
 func findDefinition(catalogs []pluginconfiguration.Catalog, id, digest string) (DefinitionView, error) {

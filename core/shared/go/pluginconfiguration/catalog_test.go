@@ -114,3 +114,51 @@ func TestBuildDerivesHotControllerFromSignedArtifactAndResolvedUnit(t *testing.T
 		t.Fatal("目录不得接受与插件身份不一致的 controller capability")
 	}
 }
+
+func TestBuildDerivesIndependentResourceCollections(t *testing.T) {
+	const pluginID = "cn.vastplan.demo-profile-provider"
+	manifest := []byte(fmt.Sprintf(`{
+		"id":%q,"name":"Profile provider","description":"profiles","version":"1.0.0","publisher":"vastplan",
+		"engines":{"backend":"^0.1"},
+		"runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","routingDomain":"security"},
+		"configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false},
+			"resourceController":{"protocol":"configuration.resource.v1"},
+			"resourceCollections":[{"id":"delivery-profile","kind":"profile","title":"Delivery Profile","schema":{"type":"object","additionalProperties":false,"required":["endpoint"],"properties":{"endpoint":{"type":"string"}}},"managedCredentials":[{"id":"authorization","title":"Authorization","purpose":"delivery.authorization","required":true}],"maxItems":64}]},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
+	}`, pluginID))
+	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.0.0", Channel: "stable"}
+	deployment := deploymentv2.Deployment{
+		Version: 2, Revision: 10, Metadata: deploymentv1.Metadata{Name: "security-services", Tenant: "acme"},
+		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}},
+		Units: []deploymentv2.ServiceUnit{{
+			ID: "delivery", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "authentication-delivery", Replicas: 1,
+			Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}},
+			Config:  map[string]any{"plugins": map[string]any{pluginID: map[string]any{}}},
+		}},
+	}
+	catalog, err := Build(deployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {
+		PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("d", 64), Manifest: manifest,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := catalog.Items[0]
+	wantCapability, _ := pluginv1.ConfigurationResourceControllerCapability(pluginID)
+	wantCollection, _ := pluginv1.ConfigurationResourceCollectionID(pluginID, "delivery-profile")
+	if item.ResourceController == nil || item.ResourceController.Capability != wantCapability || item.ResourceController.LogicalService != "authentication-delivery" ||
+		len(item.ResourceCollections) != 1 || item.ResourceCollections[0].ID != wantCollection || item.ResourceCollections[0].Kind != "profile" ||
+		len(item.ResourceCollections[0].ManagedCredentials) != 1 {
+		t.Fatalf("资源控制器或集合未由签名制品派生: %+v", item)
+	}
+	if err := catalog.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	tampered := catalog
+	tampered.Items = append([]Definition(nil), catalog.Items...)
+	collections := append([]ResourceCollection(nil), item.ResourceCollections...)
+	collections[0].SchemaDigest = strings.Repeat("0", 64)
+	tampered.Items[0].ResourceCollections = collections
+	if err := tampered.Validate(); err == nil {
+		t.Fatal("目录不得接受被替换的资源 Schema 摘要")
+	}
+}

@@ -16,7 +16,7 @@
         "hook",
         "runner.capability",
         "authentication.provider",
-        "configuration.controller"
+        "configuration.controller", "configuration.resource-controller"
       ]
     },
     "descriptor": { "type": "object" }
@@ -242,6 +242,21 @@
             "required": ["protocol"],
             "properties": {
               "protocol": { "const": "configuration.v1" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "extensionPoint": { "const": "configuration.resource-controller" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["protocol"],
+            "properties": {
+              "protocol": { "const": "configuration.resource.v1" }
             }
           }
         }

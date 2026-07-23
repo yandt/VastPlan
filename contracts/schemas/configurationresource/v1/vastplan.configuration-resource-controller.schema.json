@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/configuration-resource/v1/vastplan.configuration-resource-controller.schema.json",
+  "title": "VastPlan Configuration Resource Controller v1",
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "candidateId": { "type": "string", "pattern": "^pcfg_[a-f0-9]{32}$" },
+    "configurationId": { "type": "string", "pattern": "^cfg_[a-f0-9]{24}$" },
+    "collectionId": { "type": "string", "pattern": "^cfgc_[a-f0-9]{24}$" },
+    "resourceId": { "type": "string", "pattern": "^cfgp_[a-f0-9]{32}$" },
+    "activeReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["revision", "digest"],
+      "properties": { "revision": { "type": "integer", "minimum": 1 }, "digest": { "$ref": "#/$defs/digest" } }
+    },
+    "listRequest": {
+      "type": "object", "additionalProperties": false, "required": ["collectionId"],
+      "properties": {
+        "collectionId": { "$ref": "#/$defs/collectionId" },
+        "cursor": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 256 }
+      }
+    },
+    "getRequest": {
+      "type": "object", "additionalProperties": false, "required": ["collectionId", "resourceId"],
+      "properties": { "collectionId": { "$ref": "#/$defs/collectionId" }, "resourceId": { "$ref": "#/$defs/resourceId" } }
+    },
+    "prepareRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidateId", "configurationId", "collectionId", "resourceId", "action", "catalogDigest", "schemaDigest", "artifactSha256"],
+      "properties": {
+        "candidateId": { "$ref": "#/$defs/candidateId" },
+        "configurationId": { "$ref": "#/$defs/configurationId" },
+        "collectionId": { "$ref": "#/$defs/collectionId" },
+        "resourceId": { "$ref": "#/$defs/resourceId" },
+        "action": { "enum": ["create", "update", "delete"] },
+        "catalogDigest": { "$ref": "#/$defs/digest" },
+        "schemaDigest": { "$ref": "#/$defs/digest" },
+        "artifactSha256": { "$ref": "#/$defs/digest" },
+        "expectedActive": { "$ref": "#/$defs/activeReference" },
+        "values": { "type": "object" },
+        "managedCredentials": {
+          "type": "object", "maxProperties": 64,
+          "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
+          "additionalProperties": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/managedCredentialRef" }
+        }
+      }
+    },
+    "candidateRequest": {
+      "type": "object", "additionalProperties": false, "required": ["candidateId", "requestDigest"],
+      "properties": { "candidateId": { "$ref": "#/$defs/candidateId" }, "requestDigest": { "$ref": "#/$defs/digest" } }
+    },
+    "statusRequest": {
+      "type": "object", "additionalProperties": false, "required": ["collectionId", "resourceId"],
+      "properties": {
+        "collectionId": { "$ref": "#/$defs/collectionId" }, "resourceId": { "$ref": "#/$defs/resourceId" },
+        "candidateId": { "$ref": "#/$defs/candidateId" }, "requestDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "credentialState": {
+      "type": "object", "additionalProperties": false, "required": ["fieldId", "configured"],
+      "properties": {
+        "fieldId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
+        "configured": { "type": "boolean" }, "version": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "resourceView": {
+      "type": "object", "additionalProperties": false, "required": ["resourceId", "active", "values", "updatedAt"],
+      "properties": {
+        "resourceId": { "$ref": "#/$defs/resourceId" }, "active": { "$ref": "#/$defs/activeReference" },
+        "values": { "type": "object" },
+        "credentialStates": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/credentialState" } },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "listResponse": {
+      "type": "object", "additionalProperties": false, "required": ["protocol", "collectionId", "items", "observedAt"],
+      "properties": {
+        "protocol": { "const": "configuration.resource.v1" }, "collectionId": { "$ref": "#/$defs/collectionId" },
+        "items": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/resourceView" } },
+        "nextCursor": { "type": "string", "minLength": 1, "maxLength": 512 }, "observedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "getResponse": {
+      "type": "object", "additionalProperties": false, "required": ["protocol", "collectionId", "item", "observedAt"],
+      "properties": {
+        "protocol": { "const": "configuration.resource.v1" }, "collectionId": { "$ref": "#/$defs/collectionId" },
+        "item": { "$ref": "#/$defs/resourceView" }, "observedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "candidateObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidateId", "requestDigest", "resultDigest", "action", "status", "ready"],
+      "properties": {
+        "candidateId": { "$ref": "#/$defs/candidateId" }, "requestDigest": { "$ref": "#/$defs/digest" },
+        "resultDigest": { "$ref": "#/$defs/digest" }, "action": { "enum": ["create", "update", "delete"] },
+        "status": { "enum": ["Prepared", "Committed", "Aborted"] }, "ready": { "type": "boolean" },
+        "errorCode": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "errorMessage": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "collectionId", "resourceId", "observedAt"],
+      "properties": {
+        "protocol": { "const": "configuration.resource.v1" }, "collectionId": { "$ref": "#/$defs/collectionId" },
+        "resourceId": { "$ref": "#/$defs/resourceId" }, "active": { "$ref": "#/$defs/activeReference" },
+        "candidate": { "$ref": "#/$defs/candidateObservation" }, "observedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
