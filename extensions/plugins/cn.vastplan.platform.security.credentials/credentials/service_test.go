@@ -42,6 +42,34 @@ func TestDescriptorMatchesSignedManifest(t *testing.T) {
 	}
 }
 
+func TestManifestKeepsCredentialsLeaderAndFencedUntilActiveActivePrerequisites(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.Runtime == nil || manifest.Runtime.InstancePolicy != "leader" || manifest.Runtime.StateModel != "external-shared" || manifest.Runtime.Routing != "leader" {
+		t.Fatalf("Credentials 在 durable command 与独立维护 owner 完成前必须保持 leader: %+v", manifest.Runtime)
+	}
+	services := map[string]bool{}
+	for _, capability := range manifest.Capabilities.KernelServices {
+		services[capability] = true
+	}
+	for _, required := range []string{"kernel.state.shared.get", "kernel.state.shared.list", "kernel.state.shared.fenced.create", "kernel.state.shared.fenced.update", "kernel.state.shared.fenced.delete"} {
+		if !services[required] {
+			t.Fatalf("Credentials 缺少 fenced Shared State 契约 %s", required)
+		}
+	}
+	for _, forbidden := range []string{"kernel.state.shared.create", "kernel.state.shared.update", "kernel.state.shared.delete"} {
+		if services[forbidden] {
+			t.Fatalf("Credentials 不得以普通 mutation 绕过 leader fencing: %s", forbidden)
+		}
+	}
+}
+
 type fakeTransit struct{ encrypts, rewraps, decrypts int }
 
 func (f *fakeTransit) Encrypt(_ context.Context, value []byte) (string, error) {

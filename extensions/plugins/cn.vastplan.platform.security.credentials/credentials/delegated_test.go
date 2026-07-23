@@ -3,6 +3,7 @@ package credentials
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -16,13 +17,17 @@ import (
 )
 
 type authorityHost struct {
-	claims configurationauthority.Claims
-	calls  int
+	claims      configurationauthority.Claims
+	calls       int
+	rejectReuse bool
 }
 
 func (h *authorityHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 	h.calls++
 	if target.GetExtensionPoint() != extpoint.KernelService || target.GetCapability() != configurationauthority.KernelConsumeService || target.GetOperation() != "consume" || !strings.Contains(string(payload), configurationauthority.TokenPrefix) {
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR}, nil, nil
+	}
+	if h.rejectReuse && h.calls > 1 {
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR}, nil, nil
 	}
 	raw, _ := json.Marshal(h.claims)
@@ -33,13 +38,7 @@ var _ sdk.Host = (*authorityHost)(nil)
 
 func TestDelegatedStageDerivesOwnerPurposeAndLifecycleFromAuthority(t *testing.T) {
 	now := time.Now().UTC()
-	claims := configurationauthority.Claims{
-		SchemaVersion: configurationauthority.SchemaVersion, AuthorityID: configurationauthority.TokenPrefix + strings.Repeat("a", 64), TenantID: "tenant-a",
-		ConfigurationID: "cfg_" + strings.Repeat("b", 24), CatalogDigest: strings.Repeat("c", 64), Deployment: "platform", UnitID: "api",
-		CandidateID: "pcfg_" + strings.Repeat("d", 32), FieldID: "token", Owner: "cn.example.target", Purpose: "remote.token",
-		Resource: "plugin-configuration/resource", ArtifactSHA256: strings.Repeat("e", 64), SchemaDigest: strings.Repeat("f", 64),
-		IssuedAt: now.Add(-time.Second), ExpiresAt: now.Add(30 * time.Second),
-	}
+	claims := validAuthorityClaims(now)
 	host := &authorityHost{claims: claims}
 	service, err := openTestService(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
 	if err != nil {
@@ -88,10 +87,42 @@ func TestDelegatedStageDerivesOwnerPurposeAndLifecycleFromAuthority(t *testing.T
 	}
 }
 
+func TestActiveActiveReadinessDelegatedStageCannotRecoverCASAfterAuthorityConsumption(t *testing.T) {
+	now := time.Now().UTC()
+	host := &authorityHost{claims: validAuthorityClaims(now), rejectReuse: true}
+	service, err := openTestService(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.testSave = func(persisted) error { return errStateConflict }
+	coordinator := managedContext("tenant-a", configurationauthority.CoordinatorPluginID)
+	token := configurationauthority.TokenPrefix + strings.Repeat("1", 64)
+	if _, err := service.StageDelegated(context.Background(), host, coordinator, token, []byte("secret")); !errors.Is(err, errStateConflict) || host.calls != 1 {
+		t.Fatalf("测试必须命中 consume 后 Root CAS 冲突: calls=%d err=%v", host.calls, err)
+	}
+	service.testSave = func(persisted) error { return nil }
+	if _, err := service.StageDelegated(context.Background(), host, coordinator, token, []byte("secret")); err == nil || host.calls != 2 {
+		t.Fatalf("一次性 authority 已消费后不得伪装可安全重试: calls=%d err=%v", host.calls, err)
+	}
+	if len(service.data.Managed["tenant-a"]) != 0 {
+		t.Fatalf("CAS 冲突和失败重试后不得留下未提交凭证: %+v", service.data.Managed["tenant-a"])
+	}
+}
+
 func TestDelegatedStageRejectsUntrustedCoordinatorBeforeConsumingAuthority(t *testing.T) {
 	host := &authorityHost{}
 	service, _ := openTestService(filepath.Join(t.TempDir(), "credentials.json"), &fakeTransit{})
 	if _, err := service.StageDelegated(context.Background(), host, managedContext("tenant-a", "cn.example.attacker"), configurationauthority.TokenPrefix+strings.Repeat("1", 64), []byte("secret")); err == nil || host.calls != 0 {
 		t.Fatalf("非协调器必须在消费授权前拒绝: calls=%d err=%v", host.calls, err)
+	}
+}
+
+func validAuthorityClaims(now time.Time) configurationauthority.Claims {
+	return configurationauthority.Claims{
+		SchemaVersion: configurationauthority.SchemaVersion, AuthorityID: configurationauthority.TokenPrefix + strings.Repeat("a", 64), TenantID: "tenant-a",
+		ConfigurationID: "cfg_" + strings.Repeat("b", 24), CatalogDigest: strings.Repeat("c", 64), Deployment: "platform", UnitID: "api",
+		CandidateID: "pcfg_" + strings.Repeat("d", 32), FieldID: "token", Owner: "cn.example.target", Purpose: "remote.token",
+		Resource: "plugin-configuration/resource", ArtifactSHA256: strings.Repeat("e", 64), SchemaDigest: strings.Repeat("f", 64),
+		IssuedAt: now.Add(-time.Second), ExpiresAt: now.Add(30 * time.Second),
 	}
 }

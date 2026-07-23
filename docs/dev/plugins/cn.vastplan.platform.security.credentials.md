@@ -27,6 +27,8 @@
 
 `configuration.maintenance` 控制托管候选维护，默认 Preparing 24 小时、Aborted 保留 30 天、审计保留 180 天、每小时最多对每租户执行一次、每轮最多 200 条。孤儿 chunk GC 默认宽限 24 小时、每次请求最多推进 100 条，安全范围分别为 1 小时至 30 天和 1 至 200 条。GC 以 `mark -> sweep -> idle` 跨请求恢复；删除前重新读取当前 Root 并复核 blob revision 和摘要，重新可达的 chunk 只清 marker。Shared State tenant scope 禁止后台自报 tenant，因此维护由该租户的任意受信请求有界触发；未来无请求租户的定时回收必须使用可信 tenant-scoped scheduler。完整取舍见 [ADR-0132](../decisions/ADR-0132-Credentials孤儿Chunk安全回收.md)。
 
+本插件经 A5 评估后明确保持 Active-Passive。Root CAS 可以拒绝双写，但 `stageDelegated` 会在 Root 提交前消费一次性 ConfigurationAuthority，Active-Active 冲突会造成授权已消费而凭证未落账；GC 也必须保留唯一 fenced owner。只有 durable command/outbox、Vault 结果对账和 tenant-scoped maintenance owner 全部完成且有容量收益证据时才重新评估，见 [ADR-0133](../decisions/ADR-0133-Credentials保持Leader与Active-Active前置条件.md)。
+
 ## API
 
 所有操作都按 `CallContext.tenant_id` 隔离。
