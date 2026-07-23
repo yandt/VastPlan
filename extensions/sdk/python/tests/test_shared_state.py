@@ -33,6 +33,14 @@ class SharedStateSDKTest(unittest.TestCase):
             client.update({}, "active", b"{}", 1)
         self.assertTrue(is_shared_state_conflict(caught.exception))
 
+    def test_fenced_mode_only_changes_mutation_capabilities(self):
+        plugin = FakePlugin()
+        client = SharedStateClient(plugin, "tenant", "settings", fenced=True)
+        client.create({}, "active", b"{}")
+        client.get({}, "active")
+        self.assertEqual(plugin.calls[0][0]["capability"], "kernel.state.shared.fenced.create")
+        self.assertEqual(plugin.calls[1][0]["capability"], "kernel.state.shared.get")
+
 
 if __name__ == "__main__":
     unittest.main()

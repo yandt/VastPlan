@@ -22,7 +22,7 @@ func TestMaintenanceConfigurationDefaultsAndRejectsUnsafeValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if policy.PreparingMaxAge != defaultPreparingMaxAge || policy.AbortedRetention != defaultAbortedRetention || policy.AuditRetention != defaultAuditRetention || policy.Interval != defaultMaintenancePeriod || policy.BatchSize != defaultMaintenanceBatch {
+	if policy.PreparingMaxAge != defaultPreparingMaxAge || policy.AbortedRetention != defaultAbortedRetention || policy.AuditRetention != defaultAuditRetention || policy.Interval != defaultMaintenancePeriod || policy.BatchSize != defaultMaintenanceBatch || policy.OrphanChunkGrace != defaultOrphanChunkGrace || policy.ChunkGCBatchSize != defaultChunkGCBatch {
 		t.Fatalf("默认维护策略不一致: %+v", policy)
 	}
 	invalid := []Configuration{
@@ -30,6 +30,8 @@ func TestMaintenanceConfigurationDefaultsAndRejectsUnsafeValues(t *testing.T) {
 		{Maintenance: MaintenanceConfiguration{IntervalSeconds: math.MaxInt64}},
 		{Maintenance: MaintenanceConfiguration{AbortedRetentionSeconds: 7200, AuditRetentionSeconds: 3600}},
 		{Maintenance: MaintenanceConfiguration{BatchSize: 1001}},
+		{Maintenance: MaintenanceConfiguration{OrphanChunkGraceSeconds: 3599}},
+		{Maintenance: MaintenanceConfiguration{ChunkGCBatchSize: 201}},
 	}
 	for _, configuration := range invalid {
 		if _, err := configuration.Policy(); err == nil {

@@ -22,3 +22,16 @@ test("preserves stable conflict errors", async () => {
   const client = new SharedStateClient(plugin, { scope: "service", namespace: "ledger" });
   await assert.rejects(() => client.update({}, "active", Buffer.from("{}"), 1), isSharedStateConflict);
 });
+
+test("fenced mode only changes mutation capabilities", async () => {
+  const calls = [];
+  const plugin = { call: async (...args) => {
+    calls.push(args);
+    return { result: { status: "STATUS_OK" }, payload: Buffer.from(JSON.stringify({ protocol: "state.shared.v1", key: "active", value: "e30", revision: 1, updatedAt: "2026-07-23T00:00:00Z" })) };
+  } };
+  const client = new SharedStateClient(plugin, { scope: "tenant", namespace: "settings", fenced: true });
+  await client.create({}, "active", Buffer.from("{}"));
+  await client.get({}, "active");
+  assert.equal(calls[0][0].capability, "kernel.state.shared.fenced.create");
+  assert.equal(calls[1][0].capability, "kernel.state.shared.get");
+});

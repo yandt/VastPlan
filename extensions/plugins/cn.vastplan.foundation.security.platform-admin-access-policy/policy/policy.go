@@ -10,6 +10,7 @@ import (
 	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
@@ -23,7 +24,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.28.0"
+	PluginVersion = "0.29.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -292,7 +293,7 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	case configurationauthority.CoordinatorPluginID:
 		return request.Capability == configurationauthority.KernelIssueService || sharedStateKernelService(request.Capability)
 	case configurationauthority.CustodianPluginID:
-		return request.Capability == configurationauthority.KernelConsumeService || sharedStateKernelService(request.Capability)
+		return request.Capability == configurationauthority.KernelConsumeService || credentialsSharedStateKernelService(request.Capability)
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":
@@ -303,7 +304,13 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 }
 
 func sharedStateKernelService(capability string) bool {
-	return capability == "kernel.state.shared.get" || capability == "kernel.state.shared.create" || capability == "kernel.state.shared.update"
+	return capability == sharedstatev1.KernelService(sharedstatev1.OperationGet) || capability == sharedstatev1.KernelService(sharedstatev1.OperationCreate) || capability == sharedstatev1.KernelService(sharedstatev1.OperationUpdate)
+}
+
+func credentialsSharedStateKernelService(capability string) bool {
+	return capability == sharedstatev1.KernelService(sharedstatev1.OperationGet) || capability == sharedstatev1.KernelService(sharedstatev1.OperationList) ||
+		capability == sharedstatev1.FencedKernelService(sharedstatev1.OperationCreate) || capability == sharedstatev1.FencedKernelService(sharedstatev1.OperationUpdate) ||
+		capability == sharedstatev1.FencedKernelService(sharedstatev1.OperationDelete)
 }
 
 func platformProfileKernelService(capability string) bool {

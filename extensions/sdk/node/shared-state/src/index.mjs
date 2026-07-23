@@ -1,5 +1,6 @@
 export const SHARED_STATE_PROTOCOL = "state.shared.v1";
 export const SHARED_STATE_KERNEL_PREFIX = "kernel.state.shared.";
+export const SHARED_STATE_FENCED_KERNEL_PREFIX = "kernel.state.shared.fenced.";
 export const MAX_SHARED_STATE_VALUE_BYTES = 1 << 20;
 export const MAX_SHARED_STATE_PAGE_SIZE = 200;
 
@@ -13,13 +14,14 @@ export class SharedStateError extends Error {
 }
 
 export class SharedStateClient {
-  constructor(plugin, { scope, namespace }) {
-    if (!plugin || typeof plugin.call !== "function" || !["tenant", "service"].includes(scope) || !validNamespace(namespace)) {
+  constructor(plugin, { scope, namespace, fenced = false }) {
+    if (!plugin || typeof plugin.call !== "function" || !["tenant", "service"].includes(scope) || !validNamespace(namespace) || typeof fenced !== "boolean") {
       throw new Error("Shared State client 配置无效");
     }
     this.plugin = plugin;
     this.scope = scope;
     this.namespace = namespace;
+    this.fenced = fenced;
   }
 
   async get(callContext, key) { key = validKey(key); return this.#entry("get", callContext, { key }, key); }
@@ -57,7 +59,9 @@ export class SharedStateClient {
   }
   async #call(operation, callContext, request) {
     const payload = Buffer.from(JSON.stringify({ scope: this.scope, namespace: this.namespace, ...request }));
-    const response = await this.plugin.call({ extension_point: "kernel.service", capability: SHARED_STATE_KERNEL_PREFIX + operation }, callContext, payload);
+    const mutation = operation === "create" || operation === "update" || operation === "delete";
+    const prefix = this.fenced && mutation ? SHARED_STATE_FENCED_KERNEL_PREFIX : SHARED_STATE_KERNEL_PREFIX;
+    const response = await this.plugin.call({ extension_point: "kernel.service", capability: prefix + operation }, callContext, payload);
     if (response?.result?.status !== "STATUS_OK") {
       const error = response?.result?.error;
       throw new SharedStateError(error?.code ?? "state.unavailable", error?.message ?? "Shared State 调用失败", Boolean(error?.retryable));

@@ -7,14 +7,21 @@ import "time"
 const (
 	Protocol            = "state.shared.v1"
 	KernelServicePrefix = "kernel.state.shared."
-	OperationGet        = "get"
-	OperationCreate     = "create"
-	OperationUpdate     = "update"
-	OperationDelete     = "delete"
-	OperationList       = "list"
+	// FencedKernelServicePrefix exposes the same identity-free request shapes,
+	// but mutating calls additionally require current host-only leader evidence.
+	// It is a separate capability so active-active writers keep their existing
+	// CAS contract and cannot accidentally become leader-only.
+	FencedKernelServicePrefix = "kernel.state.shared.fenced."
+	OperationGet              = "get"
+	OperationCreate           = "create"
+	OperationUpdate           = "update"
+	OperationDelete           = "delete"
+	OperationList             = "list"
 )
 
 func KernelService(operation string) string { return KernelServicePrefix + operation }
+
+func FencedKernelService(operation string) string { return FencedKernelServicePrefix + operation }
 
 type KeyRequest struct {
 	Scope     string `json:"scope"`

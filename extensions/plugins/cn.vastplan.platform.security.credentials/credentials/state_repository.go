@@ -31,7 +31,10 @@ type credentialStateSession struct {
 	revision   uint64
 }
 
-type credentialStateRepository struct{ client *sharedstatesdk.Client }
+type credentialStateRepository struct {
+	client *sharedstatesdk.Client
+	writer *sharedstatesdk.Client
+}
 
 type credentialSnapshot struct {
 	Records     map[string]Record        `json:"records"`
@@ -45,7 +48,11 @@ func newCredentialStateRepository(host sdk.Host) (*credentialStateRepository, er
 	if err != nil {
 		return nil, err
 	}
-	return &credentialStateRepository{client: client}, nil
+	writer, err := sharedstatesdk.NewFenced(host, "tenant", credentialsStateNamespace)
+	if err != nil {
+		return nil, err
+	}
+	return &credentialStateRepository{client: client, writer: writer}, nil
 }
 
 func emptyCredentialSnapshot() credentialSnapshot {
@@ -111,7 +118,7 @@ func (r *credentialStateRepository) save(ctx context.Context, call *contractv1.C
 		chunk := raw[offset:end]
 		digest := credentialsstate.DigestHex(chunk)
 		key := credentialsBlobPrefix + digest
-		if _, err := r.client.Create(ctx, call, key, chunk); err != nil {
+		if _, err := r.writer.Create(ctx, call, key, chunk); err != nil {
 			if !sharedstatesdk.IsConflict(err) {
 				return 0, fmt.Errorf("写入 Credentials Shared State chunk: %w", err)
 			}
@@ -128,9 +135,9 @@ func (r *credentialStateRepository) save(ctx context.Context, call *contractv1.C
 	}
 	var entry sharedstatesdk.Entry
 	if expected == 0 {
-		entry, err = r.client.Create(ctx, call, credentialsRootKey, rootRaw)
+		entry, err = r.writer.Create(ctx, call, credentialsRootKey, rootRaw)
 	} else {
-		entry, err = r.client.Update(ctx, call, credentialsRootKey, rootRaw, expected)
+		entry, err = r.writer.Update(ctx, call, credentialsRootKey, rootRaw, expected)
 	}
 	if sharedstatesdk.IsConflict(err) {
 		return 0, errStateConflict

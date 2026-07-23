@@ -54,3 +54,25 @@ func TestClientExposesStableConflict(t *testing.T) {
 		t.Fatalf("必须保留 conflict 语义: %v", err)
 	}
 }
+
+func TestFencedClientUsesDedicatedMutationCapabilityOnly(t *testing.T) {
+	entry := sharedstatev1.Entry{Protocol: sharedstatev1.Protocol, Key: "active", Value: sharedstatev1.EncodeValue([]byte(`{}`)), Revision: 1, UpdatedAt: time.Now().UTC()}
+	raw, _ := json.Marshal(entry)
+	host := &fakeHost{result: &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw: raw}
+	client, err := NewFenced(host, "tenant", "ledger")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Create(context.Background(), &contractv1.CallContext{TenantId: "tenant-a"}, "active", []byte(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if host.target.GetCapability() != sharedstatev1.FencedKernelService(sharedstatev1.OperationCreate) {
+		t.Fatalf("fenced mutation target 错误: %+v", host.target)
+	}
+	if _, err := client.Get(context.Background(), &contractv1.CallContext{TenantId: "tenant-a"}, "active"); err != nil {
+		t.Fatal(err)
+	}
+	if host.target.GetCapability() != sharedstatev1.KernelService(sharedstatev1.OperationGet) {
+		t.Fatalf("fenced client 的读取不应要求 leader: %+v", host.target)
+	}
+}

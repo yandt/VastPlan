@@ -12,6 +12,7 @@ from typing import Any, Mapping, Optional, Tuple
 
 PROTOCOL = "state.shared.v1"
 KERNEL_PREFIX = "kernel.state.shared."
+FENCED_KERNEL_PREFIX = "kernel.state.shared.fenced."
 MAX_VALUE_BYTES = 1 << 20
 MAX_PAGE_SIZE = 200
 _NAMESPACE = re.compile(r"^[a-z][a-z0-9._-]{0,119}$")
@@ -39,10 +40,10 @@ class SharedStatePage:
 
 
 class SharedStateClient:
-    def __init__(self, plugin: Any, scope: str, namespace: str):
-        if plugin is None or not callable(getattr(plugin, "call", None)) or scope not in ("tenant", "service") or not isinstance(namespace, str) or _NAMESPACE.fullmatch(namespace) is None:
+    def __init__(self, plugin: Any, scope: str, namespace: str, fenced: bool = False):
+        if plugin is None or not callable(getattr(plugin, "call", None)) or scope not in ("tenant", "service") or not isinstance(namespace, str) or _NAMESPACE.fullmatch(namespace) is None or not isinstance(fenced, bool):
             raise ValueError("Shared State client 配置无效")
-        self._plugin, self._scope, self._namespace = plugin, scope, namespace
+        self._plugin, self._scope, self._namespace, self._fenced = plugin, scope, namespace, fenced
 
     def get(self, call_context: Any, key: str) -> SharedStateEntry:
         key = _key(key)
@@ -87,7 +88,9 @@ class SharedStateClient:
 
     def _call(self, operation: str, call_context: Any, request: Mapping[str, Any]) -> bytes:
         payload = json.dumps({"scope": self._scope, "namespace": self._namespace, **request}, separators=(",", ":")).encode()
-        result, response = self._plugin.call({"extension_point": "kernel.service", "capability": KERNEL_PREFIX + operation}, call_context, payload)
+        mutation = operation in ("create", "update", "delete")
+        prefix = FENCED_KERNEL_PREFIX if self._fenced and mutation else KERNEL_PREFIX
+        result, response = self._plugin.call({"extension_point": "kernel.service", "capability": prefix + operation}, call_context, payload)
         if isinstance(result, Mapping):
             if result.get("status") == "ok":
                 return bytes(response)

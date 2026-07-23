@@ -20,6 +20,7 @@ type Client struct {
 	host      sdk.Host
 	scope     string
 	namespace string
+	fenced    bool
 }
 
 type Entry struct {
@@ -43,6 +44,17 @@ type ServiceError struct {
 func (e *ServiceError) Error() string { return e.Code + ": " + e.Message }
 
 func New(host sdk.Host, scope, namespace string) (*Client, error) {
+	return newClient(host, scope, namespace, false)
+}
+
+// NewFenced creates a client whose mutations require the current Runtime Host
+// to own a leader execution fence. Reads keep using the ordinary service; the
+// fence never enters plugin payloads or CallContext.
+func NewFenced(host sdk.Host, scope, namespace string) (*Client, error) {
+	return newClient(host, scope, namespace, true)
+}
+
+func newClient(host sdk.Host, scope, namespace string, fenced bool) (*Client, error) {
 	probe, _ := json.Marshal(sharedstatev1.KeyRequest{Scope: scope, Namespace: namespace, Key: "probe"})
 	if host == nil {
 		return nil, errors.New("Shared State client 缺少宿主")
@@ -50,7 +62,7 @@ func New(host sdk.Host, scope, namespace string) (*Client, error) {
 	if _, err := sharedstatev1.ParseRequest(sharedstatev1.OperationGet, probe); err != nil {
 		return nil, errors.New("Shared State scope/namespace 无效")
 	}
-	return &Client{host: host, scope: scope, namespace: namespace}, nil
+	return &Client{host: host, scope: scope, namespace: namespace, fenced: fenced}, nil
 }
 
 func (c *Client) Get(ctx context.Context, call *contractv1.CallContext, key string) (Entry, error) {
@@ -144,7 +156,11 @@ func (c *Client) call(ctx context.Context, call *contractv1.CallContext, operati
 	if _, err := sharedstatev1.ParseRequest(operation, raw); err != nil {
 		return nil, err
 	}
-	target := &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: sharedstatev1.KernelService(operation)}
+	capability := sharedstatev1.KernelService(operation)
+	if c.fenced && operation != sharedstatev1.OperationGet && operation != sharedstatev1.OperationList {
+		capability = sharedstatev1.FencedKernelService(operation)
+	}
+	target := &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: capability}
 	result, response, err := c.host.Call(ctx, target, call, raw)
 	if err != nil {
 		return nil, err

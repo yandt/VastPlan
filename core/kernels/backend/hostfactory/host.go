@@ -146,6 +146,13 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 				return nil, err
 			}
 		}
+		for _, operation := range []string{
+			sharedstatev1.OperationCreate, sharedstatev1.OperationUpdate, sharedstatev1.OperationDelete,
+		} {
+			if err := host.RegisterHostService(extpoint.KernelService, sharedstatev1.FencedKernelService(operation), kernelFencedSharedStateWithMetrics(dependencies.SharedState, operation, host.Observer.Metrics)); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return host, nil
 }
@@ -155,6 +162,14 @@ func kernelSharedState(store sharedstate.Store, operation string) protocolbus.Ho
 }
 
 func kernelSharedStateWithMetrics(store sharedstate.Store, operation string, metrics observability.MetricSink) protocolbus.HostService {
+	return kernelSharedStateService(store, operation, metrics, false)
+}
+
+func kernelFencedSharedStateWithMetrics(store sharedstate.Store, operation string, metrics observability.MetricSink) protocolbus.HostService {
+	return kernelSharedStateService(store, operation, metrics, true)
+}
+
+func kernelSharedStateService(store sharedstate.Store, operation string, metrics observability.MetricSink, requireFence bool) protocolbus.HostService {
 	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 		started := time.Now()
 		outcome := "internal_error"
@@ -169,6 +184,13 @@ func kernelSharedStateWithMetrics(store sharedstate.Store, operation string, met
 		if !ok || identity.Validate() != nil || callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != identity.PluginID {
 			outcome = "identity_rejected"
 			return sharedStateError("state.identity_invalid", "Shared State 缺少可信 Runtime 身份", false), nil, nil
+		}
+		if requireFence {
+			evidence, current := operationfence.FromContext(ctx)
+			if !current || evidence.UnitID != identity.RuntimeScope {
+				outcome = "fence_rejected"
+				return sharedStateError("state.fence_invalid", "Shared State fenced mutation 缺少当前 Leader evidence", true), nil, nil
+			}
 		}
 		request, err := sharedstatev1.ParseRequest(operation, payload)
 		if err != nil {

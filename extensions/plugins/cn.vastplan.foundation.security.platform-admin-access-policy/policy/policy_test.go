@@ -67,12 +67,23 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.deployment.readiness", Operation: "execute"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 的部署就绪观察回调应允许: %s", got)
 	}
-	for _, pluginID := range []string{"cn.vastplan.platform.configuration.global-settings", configurationauthority.CoordinatorPluginID, configurationauthority.CustodianPluginID, "cn.vastplan.platform.infrastructure.deployment-manager"} {
+	for _, pluginID := range []string{"cn.vastplan.platform.configuration.global-settings", configurationauthority.CoordinatorPluginID, "cn.vastplan.platform.infrastructure.deployment-manager"} {
 		plugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: pluginID}}
 		for _, capability := range []string{"kernel.state.shared.get", "kernel.state.shared.create", "kernel.state.shared.update"} {
 			if got, _ := decide(plugin, extpoint.PermissionRequest{Capability: capability}); got != extpoint.DecisionAllow {
 				t.Fatalf("%s 的 Shared State 回调 %s 应允许: %s", pluginID, capability, got)
 			}
+		}
+	}
+	credentials := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: configurationauthority.CustodianPluginID}}
+	for _, capability := range []string{"kernel.state.shared.get", "kernel.state.shared.list", "kernel.state.shared.fenced.create", "kernel.state.shared.fenced.update", "kernel.state.shared.fenced.delete"} {
+		if got, _ := decide(credentials, extpoint.PermissionRequest{Capability: capability}); got != extpoint.DecisionAllow {
+			t.Fatalf("Credentials 的 fenced Shared State 回调 %s 应允许: %s", capability, got)
+		}
+	}
+	for _, capability := range []string{"kernel.state.shared.create", "kernel.state.shared.update", "kernel.state.shared.delete"} {
+		if got, _ := decide(credentials, extpoint.PermissionRequest{Capability: capability}); got == extpoint.DecisionAllow {
+			t.Fatalf("Credentials 不得回退无 fence mutation %s: %s", capability, got)
 		}
 	}
 	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: "kernel.state.shared.get"}); got == extpoint.DecisionAllow {

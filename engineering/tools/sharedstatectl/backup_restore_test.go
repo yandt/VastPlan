@@ -56,6 +56,17 @@ func TestSignedNativeBackupRestorePreservesCASAndCredentialsIntegrity(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
+	completed := time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC)
+	gcStateRaw, _ := json.Marshal(credentialsstate.ChunkGCState{Format: credentialsstate.GCStateFormat, Phase: credentialsstate.GCPhaseIdle, LastCompletedAt: &completed})
+	if _, err := store.Create(ctx, credentialScope, credentialsstate.GCStateKey, gcStateRaw); err != nil {
+		t.Fatal(err)
+	}
+	orphanDigest := credentialsstate.DigestHex([]byte("already-deleted-orphan"))
+	gcMarker, _ := credentialsstate.NewChunkGCMarker(orphanDigest, 999, completed.Add(-24*time.Hour))
+	gcMarkerRaw, _ := json.Marshal(gcMarker)
+	if _, err := store.Create(ctx, credentialScope, credentialsstate.GCMarkerKey(orphanDigest), gcMarkerRaw); err != nil {
+		t.Fatal(err)
+	}
 	settingsScope := sharedstate.Scope{Kind: sharedstate.ScopeTenant, TenantID: "tenant-a", PluginID: "cn.vastplan.settings", RuntimeScope: "platform-settings", Namespace: "values"}
 	setting, err := store.Create(ctx, settingsScope, "theme", []byte(`{"mode":"light"}`))
 	if err != nil {
@@ -79,7 +90,8 @@ func TestSignedNativeBackupRestorePreservesCASAndCredentialsIntegrity(t *testing
 		t.Fatal(err)
 	}
 	verified, err := sharedstatebackup.VerifyArchive(directory, trust)
-	if err != nil || verified.Manifest.Logical.Entries != 4 || verified.Manifest.Validations[0].Counters["roots"] != 1 {
+	if err != nil || verified.Manifest.Logical.Entries != 6 || verified.Manifest.Validations[0].Counters["roots"] != 1 ||
+		verified.Manifest.Validations[0].Counters["gcStates"] != 1 || verified.Manifest.Validations[0].Counters["gcMarkers"] != 1 {
 		t.Fatalf("verify archive: manifest=%+v err=%v", verified.Manifest, err)
 	}
 	if _, err := sharedstatebackup.Restore(ctx, nc, js, verified, sharedstatebackup.RestoreOptions{

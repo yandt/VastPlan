@@ -22,7 +22,10 @@ const ValidatorName = "credentials.root-chunks.v1"
 type Factory struct{}
 
 func (Factory) NewValidator(kv jetstream.KeyValue) sharedstatebackup.Validator {
-	return &validator{kv: kv, roots: map[scopeKey]credentialsstate.Root{}, blobs: map[scopeKey]map[string]blobMeta{}}
+	return &validator{
+		kv: kv, roots: map[scopeKey]credentialsstate.Root{}, blobs: map[scopeKey]map[string]blobMeta{},
+		gcStates: map[scopeKey]struct{}{}, gcMarkers: map[scopeKey]map[string]struct{}{},
+	}
 }
 
 type scopeKey struct {
@@ -38,9 +41,11 @@ type blobMeta struct {
 }
 
 type validator struct {
-	kv    jetstream.KeyValue
-	roots map[scopeKey]credentialsstate.Root
-	blobs map[scopeKey]map[string]blobMeta
+	kv        jetstream.KeyValue
+	roots     map[scopeKey]credentialsstate.Root
+	blobs     map[scopeKey]map[string]blobMeta
+	gcStates  map[scopeKey]struct{}
+	gcMarkers map[scopeKey]map[string]struct{}
 }
 
 func (v *validator) Name() string { return ValidatorName }
@@ -76,6 +81,29 @@ func (v *validator) Observe(entry sharedstatebackup.LogicalEntry) error {
 			return errors.New("同一 Credentials scope 出现重复 chunk")
 		}
 		v.blobs[key][digest] = blobMeta{physical: entry.PhysicalKey, revision: entry.Revision, size: len(entry.Value)}
+		return nil
+	case entry.Key == credentialsstate.GCStateKey:
+		if _, exists := v.gcStates[key]; exists {
+			return errors.New("同一 Credentials scope 出现重复 chunk GC state")
+		}
+		if _, err := credentialsstate.ParseChunkGCState(entry.Value); err != nil {
+			return fmt.Errorf("Credentials chunk GC state 无效: %w", err)
+		}
+		v.gcStates[key] = struct{}{}
+		return nil
+	case strings.HasPrefix(entry.Key, credentialsstate.GCMarkerPrefix):
+		digest := strings.TrimPrefix(entry.Key, credentialsstate.GCMarkerPrefix)
+		marker, err := credentialsstate.ParseChunkGCMarker(entry.Value)
+		if err != nil || marker.Digest != digest {
+			return errors.New("Credentials chunk GC marker key 或内容无效")
+		}
+		if v.gcMarkers[key] == nil {
+			v.gcMarkers[key] = map[string]struct{}{}
+		}
+		if _, exists := v.gcMarkers[key][digest]; exists {
+			return errors.New("同一 Credentials scope 出现重复 chunk GC marker")
+		}
+		v.gcMarkers[key][digest] = struct{}{}
 		return nil
 	default:
 		return fmt.Errorf("Credentials Shared State 出现未知 key %q", entry.Key)
@@ -123,5 +151,9 @@ func (v *validator) Finish(ctx context.Context) (sharedstatebackup.ValidationRes
 	result.Counters["chunks"] = chunks
 	result.Counters["referencedChunks"] = referencedChunks
 	result.Counters["orphanChunks"] = chunks - referencedChunks
+	result.Counters["gcStates"] = uint64(len(v.gcStates))
+	for _, markers := range v.gcMarkers {
+		result.Counters["gcMarkers"] += uint64(len(markers))
+	}
 	return result, nil
 }

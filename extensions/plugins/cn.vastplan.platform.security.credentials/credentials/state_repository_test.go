@@ -201,7 +201,10 @@ func (h *credentialStateHost) scope(tenantID string) sharedstate.Scope {
 }
 
 func (h *credentialStateHost) Call(ctx context.Context, target *contractv1.CallTarget, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
-	operation := strings.TrimPrefix(target.GetCapability(), sharedstatev1.KernelServicePrefix)
+	operation := strings.TrimPrefix(target.GetCapability(), sharedstatev1.FencedKernelServicePrefix)
+	if operation == target.GetCapability() {
+		operation = strings.TrimPrefix(target.GetCapability(), sharedstatev1.KernelServicePrefix)
+	}
 	request, err := sharedstatev1.ParseRequest(operation, payload)
 	if err != nil {
 		return credentialStateResult("state.invalid", false), nil, nil
@@ -220,6 +223,11 @@ func (h *credentialStateHost) Call(ctx context.Context, target *contractv1.CallT
 		} else {
 			response, err = h.store.Update(ctx, scope, typed.Key, value, typed.ExpectedRevision)
 		}
+	case *sharedstatev1.DeleteRequest:
+		err = h.store.Delete(ctx, scope, typed.Key, typed.ExpectedRevision)
+		response = sharedstatev1.Ack{Protocol: sharedstatev1.Protocol}
+	case *sharedstatev1.ListRequest:
+		response, err = h.store.List(ctx, scope, typed.Prefix, typed.Limit, typed.PageCursor)
 	}
 	if err != nil {
 		switch {
@@ -231,8 +239,20 @@ func (h *credentialStateHost) Call(ctx context.Context, target *contractv1.CallT
 			return credentialStateResult("state.unavailable", true), nil, nil
 		}
 	}
-	entry := response.(sharedstate.Entry)
-	raw, _ := json.Marshal(sharedstatev1.Entry{Protocol: sharedstatev1.Protocol, Key: entry.Key, Value: sharedstatev1.EncodeValue(entry.Value), Revision: entry.Revision, UpdatedAt: entry.UpdatedAt})
+	var wire any
+	switch typed := response.(type) {
+	case sharedstate.Entry:
+		wire = sharedstatev1.Entry{Protocol: sharedstatev1.Protocol, Key: typed.Key, Value: sharedstatev1.EncodeValue(typed.Value), Revision: typed.Revision, UpdatedAt: typed.UpdatedAt}
+	case sharedstate.Page:
+		page := sharedstatev1.Page{Protocol: sharedstatev1.Protocol, Items: make([]sharedstatev1.Entry, 0, len(typed.Items)), NextPageCursor: typed.NextCursor}
+		for _, item := range typed.Items {
+			page.Items = append(page.Items, sharedstatev1.Entry{Protocol: sharedstatev1.Protocol, Key: item.Key, Value: sharedstatev1.EncodeValue(item.Value), Revision: item.Revision, UpdatedAt: item.UpdatedAt})
+		}
+		wire = page
+	default:
+		wire = typed
+	}
+	raw, _ := json.Marshal(wire)
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 }
 

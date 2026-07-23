@@ -11,6 +11,8 @@ const (
 	defaultAuditRetention    = 180 * 24 * time.Hour
 	defaultMaintenancePeriod = time.Hour
 	defaultMaintenanceBatch  = 200
+	defaultOrphanChunkGrace  = 24 * time.Hour
+	defaultChunkGCBatch      = 100
 )
 
 type Configuration struct {
@@ -23,6 +25,8 @@ type MaintenanceConfiguration struct {
 	AuditRetentionSeconds   int64 `json:"auditRetentionSeconds,omitempty"`
 	IntervalSeconds         int64 `json:"intervalSeconds,omitempty"`
 	BatchSize               int   `json:"batchSize,omitempty"`
+	OrphanChunkGraceSeconds int64 `json:"orphanChunkGraceSeconds,omitempty"`
+	ChunkGCBatchSize        int   `json:"chunkGcBatchSize,omitempty"`
 }
 
 type MaintenancePolicy struct {
@@ -31,6 +35,8 @@ type MaintenancePolicy struct {
 	AuditRetention   time.Duration
 	Interval         time.Duration
 	BatchSize        int
+	OrphanChunkGrace time.Duration
+	ChunkGCBatchSize int
 }
 
 func (configuration Configuration) Policy() (MaintenancePolicy, error) {
@@ -38,7 +44,8 @@ func (configuration Configuration) Policy() (MaintenancePolicy, error) {
 	if !secondsWithin(value.PreparingMaxAgeSeconds, 300, 604800) ||
 		!secondsWithin(value.AbortedRetentionSeconds, 3600, 31536000) ||
 		!secondsWithin(value.AuditRetentionSeconds, 3600, 63072000) ||
-		!secondsWithin(value.IntervalSeconds, 60, 86400) || value.BatchSize < 0 || value.BatchSize > 1000 {
+		!secondsWithin(value.IntervalSeconds, 60, 86400) || value.BatchSize < 0 || value.BatchSize > 1000 ||
+		!secondsWithin(value.OrphanChunkGraceSeconds, 3600, 2592000) || value.ChunkGCBatchSize < 0 || value.ChunkGCBatchSize > 200 {
 		return MaintenancePolicy{}, errors.New("凭证维护配置超出安全范围")
 	}
 	policy := MaintenancePolicy{
@@ -47,9 +54,14 @@ func (configuration Configuration) Policy() (MaintenancePolicy, error) {
 		AuditRetention:   durationOrDefault(value.AuditRetentionSeconds, defaultAuditRetention),
 		Interval:         durationOrDefault(value.IntervalSeconds, defaultMaintenancePeriod),
 		BatchSize:        value.BatchSize,
+		OrphanChunkGrace: durationOrDefault(value.OrphanChunkGraceSeconds, defaultOrphanChunkGrace),
+		ChunkGCBatchSize: value.ChunkGCBatchSize,
 	}
 	if policy.BatchSize == 0 {
 		policy.BatchSize = defaultMaintenanceBatch
+	}
+	if policy.ChunkGCBatchSize == 0 {
+		policy.ChunkGCBatchSize = defaultChunkGCBatch
 	}
 	if err := validateMaintenancePolicy(policy); err != nil {
 		return MaintenancePolicy{}, err
@@ -61,7 +73,8 @@ func validateMaintenancePolicy(policy MaintenancePolicy) error {
 	if policy.PreparingMaxAge < 5*time.Minute || policy.PreparingMaxAge > 7*24*time.Hour ||
 		policy.AbortedRetention < time.Hour || policy.AbortedRetention > 365*24*time.Hour ||
 		policy.AuditRetention < policy.AbortedRetention || policy.AuditRetention > 730*24*time.Hour ||
-		policy.Interval < time.Minute || policy.Interval > 24*time.Hour || policy.BatchSize < 1 || policy.BatchSize > 1000 {
+		policy.Interval < time.Minute || policy.Interval > 24*time.Hour || policy.BatchSize < 1 || policy.BatchSize > 1000 ||
+		policy.OrphanChunkGrace < time.Hour || policy.OrphanChunkGrace > 30*24*time.Hour || policy.ChunkGCBatchSize < 1 || policy.ChunkGCBatchSize > 200 {
 		return errors.New("凭证维护配置超出安全范围")
 	}
 	return nil

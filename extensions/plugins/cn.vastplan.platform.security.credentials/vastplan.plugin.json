@@ -1,14 +1,14 @@
 {
   "id": "cn.vastplan.platform.security.credentials",
   "name": "VastPlan 凭证管理服务",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "使用 Vault Transit/KMS 信封加密保存凭证密文；任何插件调用均不可读取凭证明文",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
-  "capabilities": { "kernelServices": ["kernel.configuration.authority.consume", "kernel.state.shared.get", "kernel.state.shared.create", "kernel.state.shared.update"], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.configuration.authority.consume", "kernel.state.shared.get", "kernel.state.shared.list", "kernel.state.shared.fenced.create", "kernel.state.shared.fenced.update", "kernel.state.shared.fenced.delete"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "configuration": {
     "scope": "service",
@@ -25,7 +25,9 @@
             "abortedRetentionSeconds": { "type": "integer", "minimum": 3600, "maximum": 31536000, "default": 2592000 },
             "auditRetentionSeconds": { "type": "integer", "minimum": 3600, "maximum": 63072000, "default": 15552000 },
             "intervalSeconds": { "type": "integer", "minimum": 60, "maximum": 86400, "default": 3600 },
-            "batchSize": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200 }
+            "batchSize": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200 },
+            "orphanChunkGraceSeconds": { "type": "integer", "minimum": 3600, "maximum": 2592000, "default": 86400 },
+            "chunkGcBatchSize": { "type": "integer", "minimum": 1, "maximum": 200, "default": 100 }
           }
         }
       }

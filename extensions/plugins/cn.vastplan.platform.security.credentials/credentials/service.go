@@ -30,7 +30,7 @@ import (
 
 const (
 	PluginID                = credentialsstate.PluginID
-	PluginVersion           = "0.11.0"
+	PluginVersion           = "0.12.0"
 	Capability              = "platform.credentials"
 	MaterialLeaseCapability = "platform.credentials.material-lease"
 	vaultAddressKey         = "platform.credentials.vault.address"
@@ -218,6 +218,12 @@ func NewWithOptions(transit Transit, options ServiceOptions) (*Service, error) {
 	if options.Maintenance.Interval == 0 {
 		options.Maintenance, _ = (Configuration{}).Policy()
 	}
+	if options.Maintenance.OrphanChunkGrace == 0 {
+		options.Maintenance.OrphanChunkGrace = defaultOrphanChunkGrace
+	}
+	if options.Maintenance.ChunkGCBatchSize == 0 {
+		options.Maintenance.ChunkGCBatchSize = defaultChunkGCBatch
+	}
 	if err := validateMaintenancePolicy(options.Maintenance); err != nil {
 		return nil, err
 	}
@@ -347,6 +353,9 @@ func (s *Service) withTenantState(ctx context.Context, host sdk.Host, call *cont
 		err = s.save()
 	}
 	s.mu.Unlock()
+	if err == nil {
+		err = repository.collectOrphanChunks(ctx, call, s.now().UTC(), s.maintenance)
+	}
 	if err != nil {
 		s.closeStateSession()
 		return err

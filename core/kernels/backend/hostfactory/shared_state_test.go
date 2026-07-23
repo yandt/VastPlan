@@ -11,6 +11,7 @@ import (
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/observability"
+	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
 	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
@@ -84,6 +85,33 @@ func TestKernelSharedStateRejectsMissingRuntimeIdentity(t *testing.T) {
 	result, _, err := service(context.Background(), &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.demo"}}, payload)
 	if err != nil || result.GetError().GetCode() != "state.identity_invalid" {
 		t.Fatalf("缺少 host-only identity 必须 fail-closed: result=%+v err=%v", result, err)
+	}
+}
+
+func TestKernelFencedSharedStateRequiresCurrentUnitLeader(t *testing.T) {
+	store, _ := sharedstate.OpenFileStore(filepath.Join(t.TempDir(), "state.json"))
+	metrics := observability.NewMemoryMetrics()
+	create := kernelFencedSharedStateWithMetrics(store, sharedstatev1.OperationCreate, metrics)
+	identity := runtimeidentity.Identity{
+		PluginID: "cn.vastplan.platform.security.credentials", Publisher: "vastplan", Version: "0.12.0", ArtifactSHA256: strings.Repeat("a", 64),
+		NodeID: "node-a", RuntimeScope: "platform-credentials", InstanceID: "instance-a",
+	}
+	trusted, _ := runtimeidentity.WithIdentity(context.Background(), identity)
+	call := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: identity.PluginID}}
+	payload, _ := json.Marshal(sharedstatev1.WriteRequest{Scope: "tenant", Namespace: "credentials.ledger", Key: "root", Value: sharedstatev1.EncodeValue([]byte(`{}`))})
+	if result, _, _ := create(trusted, call, payload); result.GetError().GetCode() != "state.fence_invalid" {
+		t.Fatalf("缺少 leader evidence 必须拒绝 fenced mutation: %+v", result)
+	}
+	wrong, _ := operationfence.WithEvidence(trusted, operationfence.Evidence{LogicalService: "platform.credentials", UnitID: "other-unit", Epoch: 2, Token: "token-2"})
+	if result, _, _ := create(wrong, call, payload); result.GetError().GetCode() != "state.fence_invalid" {
+		t.Fatalf("其他 unit 的 evidence 必须拒绝: %+v", result)
+	}
+	current, _ := operationfence.WithEvidence(trusted, operationfence.Evidence{LogicalService: "platform.credentials", UnitID: identity.RuntimeScope, Epoch: 3, Token: "token-3"})
+	if result, _, err := create(current, call, payload); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("当前 unit leader fenced mutation 失败: result=%+v err=%v", result, err)
+	}
+	if metrics.Snapshot().Counters["shared_state_operations_total|operation=create|outcome=fence_rejected"] != 2 {
+		t.Fatalf("fence 拒绝指标缺失: %+v", metrics.Snapshot().Counters)
 	}
 }
 

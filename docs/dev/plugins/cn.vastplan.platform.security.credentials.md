@@ -3,7 +3,7 @@
 插件 ID：`cn.vastplan.platform.security.credentials`
 能力：`tool.package/platform.credentials`、`tool.package/platform.credentials.material-lease`
 运行模型：`leader + external-shared + cluster + leader`
-当前制品版本：`0.11.0`
+当前制品版本：`0.12.0`
 
 ## 安全模型
 
@@ -23,9 +23,9 @@
 | `VASTPLAN_VAULT_TRANSIT_KEY` | Transit 包裹密钥名称 |
 | `VASTPLAN_VAULT_TOKEN_FILE` | 只读 token 挂载文件（建议 `0600`） |
 
-生产部署必须使用 HTTPS、最小 Vault policy、短期/可轮换工作负载 token、三副本 Shared State Provider 和 Vault 高可用。插件不持有 NATS/SQL 凭证，Provider 不可用时 fail-closed，绝不回退本地文件。Root 与全部不可变 chunk 必须进入同一备份/恢复边界；无 writer lease 前不在线删除孤儿 chunk。
+生产部署必须使用 HTTPS、最小 Vault policy、短期/可轮换工作负载 token、三副本 Shared State Provider 和 Vault 高可用。插件不持有 NATS/SQL 凭证，Provider 不可用时 fail-closed，绝不回退本地文件。Root、全部不可变 chunk、GC marker 与控制器状态进入同一备份/恢复边界。Root、chunk 和 GC mutation 只能通过当前 Unit Leader evidence 约束的 fenced Shared State 能力执行；epoch/token 不进入插件 payload。
 
-`configuration.maintenance` 控制托管候选维护，默认 Preparing 24 小时、Aborted 保留 30 天、审计保留 180 天、每小时最多对每租户执行一次、每轮最多 200 条。Shared State tenant scope 禁止后台自报 tenant，因此维护由该租户的任意受信请求有界触发并与快照原子提交；Material Lease 入口也会先执行到期判定。Candidate/Active/Retired 不参与通用 TTL 删除。未来无请求租户的定时回收必须使用可信 tenant-scoped scheduler。
+`configuration.maintenance` 控制托管候选维护，默认 Preparing 24 小时、Aborted 保留 30 天、审计保留 180 天、每小时最多对每租户执行一次、每轮最多 200 条。孤儿 chunk GC 默认宽限 24 小时、每次请求最多推进 100 条，安全范围分别为 1 小时至 30 天和 1 至 200 条。GC 以 `mark -> sweep -> idle` 跨请求恢复；删除前重新读取当前 Root 并复核 blob revision 和摘要，重新可达的 chunk 只清 marker。Shared State tenant scope 禁止后台自报 tenant，因此维护由该租户的任意受信请求有界触发；未来无请求租户的定时回收必须使用可信 tenant-scoped scheduler。完整取舍见 [ADR-0132](../decisions/ADR-0132-Credentials孤儿Chunk安全回收.md)。
 
 ## API
 
