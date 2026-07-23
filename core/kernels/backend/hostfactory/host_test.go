@@ -12,6 +12,7 @@ import (
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
@@ -20,6 +21,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
@@ -115,6 +117,12 @@ func TestPlatformProfileActivationKernelServicesRequireExactDeploymentManager(t 
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || controller.tenant != "tenant-a" {
 		t.Fatalf("可信 deployment-manager Profile 状态调用失败: result=%+v tenant=%q err=%v", result, controller.tenant, err)
 	}
+	if _, _, err := services[platformprofileactivation.KernelActivateService](context.Background(), trusted, payload); err == nil {
+		t.Fatal("Profile 激活缺少当前 leader fence 时必须拒绝")
+	}
+	if result, _, err = services[platformprofileactivation.KernelActivateService](fencedDeploymentContext(t), trusted, payload); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("当前 leader 应可执行 Profile 激活: result=%+v err=%v", result, err)
+	}
 	forged := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.example.attacker"}}
 	for name, service := range services {
 		if _, _, err := service(context.Background(), forged, payload); err == nil {
@@ -157,9 +165,26 @@ func (o *readinessObserver) Observe(_ context.Context, expectation nodebootstrap
 	return nodebootstrap.ReadinessObservation{Status: nodebootstrap.ReadinessReady}, nil
 }
 
-func (b *bootstrapBroker) Bootstrap(_ context.Context, scope nodebootstrap.Scope, plan nodebootstrap.Plan) (nodebootstrap.Result, error) {
-	b.called = scope.TenantID == plan.Node.Tenant
+func (b *bootstrapBroker) Bootstrap(_ context.Context, scope nodebootstrap.Scope, fence operationfence.Fence, plan nodebootstrap.Plan) (nodebootstrap.Result, error) {
+	b.called = scope.TenantID == plan.Node.Tenant && fence.Epoch == 7 && fence.OperationID == "node-bootstrap/job-a"
 	return nodebootstrap.Result{SystemdActive: true, NodeID: plan.Node.ID}, nil
+}
+
+func fencedDeploymentContext(t *testing.T) context.Context {
+	t.Helper()
+	identity := runtimeidentity.Identity{
+		PluginID: deploymentpublication.DeploymentManagerPluginID, Publisher: "vastplan", Version: "1.0.0", ArtifactSHA256: strings.Repeat("a", 64),
+		NodeID: "node-a", RuntimeScope: "platform-deployment", InstanceID: "deployment-a",
+	}
+	ctx, err := runtimeidentity.WithIdentity(context.Background(), identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, err = operationfence.WithEvidence(ctx, operationfence.Evidence{LogicalService: "platform.deployment", UnitID: "platform-deployment", Epoch: 7, Token: "token-7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ctx
 }
 
 func TestRuntimeMaterialLeaseRequiresHostOnlyLaunchIdentity(t *testing.T) {
@@ -257,9 +282,12 @@ func TestKernelNodeBootstrapAcceptsOnlyDeploymentManager(t *testing.T) {
 	broker := &bootstrapBroker{}
 	service := kernelNodeBootstrap(broker)
 	plan := hostBootstrapPlan()
-	payload, _ := json.Marshal(plan)
+	payload, _ := json.Marshal(nodebootstrap.ExecutionRequest{OperationID: "job-a", Plan: plan})
 	trusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: nodebootstrap.DeploymentManagerPluginID}}
-	result, _, err := service(context.Background(), trusted, payload)
+	if _, _, err := service(context.Background(), trusted, payload); err == nil {
+		t.Fatal("缺少 host-only leader fence 时必须拒绝 SSH 引导")
+	}
+	result, _, err := service(fencedDeploymentContext(t), trusted, payload)
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !broker.called {
 		t.Fatalf("deployment-manager 可信调用失败: result=%+v err=%v", result, err)
 	}
@@ -301,6 +329,17 @@ func TestKernelDeploymentPublicationAcceptsOnlyDeploymentManager(t *testing.T) {
 	}
 	if _, _, err := service(context.Background(), trusted, []byte(`{"routingDomain":"attacker"}`)); err == nil {
 		t.Fatal("内核部署服务必须拒绝未知路由字段")
+	}
+	publish := kernelDeploymentPublish(controller)
+	publishPayload, _ := json.Marshal(deploymentpublication.PublishRequest{
+		Composition:        backendcompositionv1.ApplicationComposition{Metadata: deploymentv1.Metadata{Name: "services", Tenant: "tenant-a"}},
+		DeploymentRevision: 2, ExpectedDigest: "digest-2",
+	})
+	if _, _, err := publish(context.Background(), trusted, publishPayload); err == nil {
+		t.Fatal("Deployment 发布缺少当前 leader fence 时必须拒绝")
+	}
+	if result, _, err := publish(fencedDeploymentContext(t), trusted, publishPayload); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("当前 leader 应可执行 Deployment 发布: result=%+v err=%v", result, err)
 	}
 }
 

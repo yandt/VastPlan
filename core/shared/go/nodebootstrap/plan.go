@@ -114,11 +114,20 @@ func RenderInstallScript(request Request, secrets []SecretPayload) ([]byte, erro
 	totalSecretBytes := 0
 	var script bytes.Buffer
 	script.WriteString("#!/bin/sh\nset -eu\numask 077\n")
-	script.WriteString("for command in curl sha256sum systemctl base64 getent groupadd useradd usermod install mktemp; do command -v \"$command\" >/dev/null 2>&1; done\n")
+	script.WriteString("for command in curl sha256sum systemctl base64 getent groupadd useradd usermod install mktemp flock cat; do command -v \"$command\" >/dev/null 2>&1; done\n")
 	script.WriteString("if ! getent group " + ServiceUser + " >/dev/null 2>&1; then groupadd --system " + ServiceUser + "; fi\n")
 	script.WriteString("if ! getent passwd " + ServiceUser + " >/dev/null 2>&1; then useradd --system --gid " + ServiceUser + " --home " + StateRoot + " --shell /usr/sbin/nologin " + ServiceUser + "; else usermod -a -G " + ServiceUser + " " + ServiceUser + "; fi\n")
 	script.WriteString("install -d -m 0755 " + InstallRoot + "/releases\n")
 	script.WriteString("install -d -o " + ServiceUser + " -g " + ServiceUser + " -m 0700 " + StateRoot + " " + StateRoot + "/runtime\n")
+	if request.Fence != nil {
+		script.WriteString("install -d -o root -g root -m 0700 " + FenceRoot + "\n")
+		script.WriteString("exec 9>" + FenceRoot + "/bootstrap.lock\nflock -x 9\n")
+		script.WriteString("current_epoch=0\nif [ -f " + FenceRoot + "/bootstrap.epoch ]; then current_epoch=$(cat " + FenceRoot + "/bootstrap.epoch); fi\n")
+		script.WriteString("case \"$current_epoch\" in ''|*[!0-9]*) exit 75 ;; esac\n")
+		script.WriteString("if [ \"$current_epoch\" -gt \"" + strconv.FormatUint(request.Fence.Epoch, 10) + "\" ]; then exit 75; fi\n")
+		script.WriteString("printf '%s\\n' '" + strconv.FormatUint(request.Fence.Epoch, 10) + "' > " + FenceRoot + "/bootstrap.epoch.next\nchmod 0600 " + FenceRoot + "/bootstrap.epoch.next\nmv -f " + FenceRoot + "/bootstrap.epoch.next " + FenceRoot + "/bootstrap.epoch\n")
+		writeBase64File(&script, []byte(request.Fence.OperationID+"\n"), FenceRoot+"/bootstrap.operation", 0o600, "root:root")
+	}
 	script.WriteString("install -d -m 0755 " + ConfigRoot + "\n")
 	// The agent may read secret files through its group but cannot replace them.
 	script.WriteString("install -d -o root -g " + ServiceUser + " -m 0750 " + SecretsRoot + "\n")

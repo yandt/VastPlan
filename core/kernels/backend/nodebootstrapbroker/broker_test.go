@@ -7,6 +7,7 @@ import (
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 )
 
 type testMaterial []byte
@@ -47,11 +48,12 @@ func TestBrokerResolvesCredentialsOnlyInsideTrustedExecution(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := broker.Bootstrap(context.Background(), nodebootstrap.Scope{TenantID: "tenant-a", PluginID: nodebootstrap.DeploymentManagerPluginID}, plan)
+	fence := operationfence.Fence{SchemaVersion: 1, LogicalService: "platform.deployment", UnitID: "platform-deployment", Epoch: 3, Token: "token-3", OperationID: "node-bootstrap/job-a"}
+	result, err := broker.Bootstrap(context.Background(), nodebootstrap.Scope{TenantID: "tenant-a", PluginID: nodebootstrap.DeploymentManagerPluginID}, fence, plan)
 	if err != nil || !result.SystemdActive || result.NodeID != "node-a" {
 		t.Fatalf("可信引导失败: %+v %v", result, err)
 	}
-	if string(executor.identity) != "identity" || string(executor.knownHosts) != "known-host" || !strings.Contains(string(executor.script), "systemctl enable --now") {
+	if string(executor.identity) != "identity" || string(executor.knownHosts) != "known-host" || !strings.Contains(string(executor.script), "systemctl enable --now") || !strings.Contains(string(executor.script), "bootstrap.epoch") {
 		t.Fatalf("执行器未收到受控 material 或固定脚本")
 	}
 }

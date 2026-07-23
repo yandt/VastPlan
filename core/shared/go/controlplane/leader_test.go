@@ -42,8 +42,14 @@ func TestLeaderElection_SingleWriterFailoverAndFencing(t *testing.T) {
 	case <-time.After(150 * time.Millisecond):
 	}
 	firstRecord := first.Record()
+	if current, ok := first.Current(); !ok || current.Token != firstRecord.Token {
+		t.Fatalf("活动 leader 必须提供当前 fencing evidence: current=%+v ok=%v", current, ok)
+	}
 	if err := first.Close(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	if _, ok := first.Current(); ok {
+		t.Fatal("释放领导权后旧 execution fence 必须立即失效")
 	}
 	var second *Leadership
 	select {

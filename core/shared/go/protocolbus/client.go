@@ -18,6 +18,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/processguard"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
@@ -704,9 +705,17 @@ func (h *Host) callHostService(ctx context.Context, target *contractv1.CallTarge
 
 	h.mu.RLock()
 	fn, ok := h.services[target.Capability]
+	fenceProvider := h.fenceProvider
 	h.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("内核能力 %s 无实现", target.Capability)
+	}
+	if fenceProvider != nil {
+		if evidence, current := fenceProvider.Current(); current {
+			if fenced, fenceErr := operationfence.WithEvidence(ctx, evidence); fenceErr == nil {
+				ctx = fenced
+			}
+		}
 	}
 	res, out, err := fn(ctx, callCtx, payload)
 	if err != nil {

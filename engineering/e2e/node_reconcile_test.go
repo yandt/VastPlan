@@ -618,7 +618,7 @@ func waitMemoryUnits(t *testing.T, store *nodeagent.MemoryStateStore, revision u
 	t.Fatalf("等待内存实际态 revision=%d units=%d 超时: actual=%+v err=%v", revision, units, actual, err)
 }
 
-func publishBuiltPlugin(t *testing.T, repository *pluginservice.Repository, packageDir, manifestPath string) {
+func publishBuiltPlugin(t *testing.T, repository *pluginservice.Repository, packageDir, manifestPath string) pluginv1.ArtifactRef {
 	t.Helper()
 	bin := buildPlugin(t, packageDir)
 	manifestRaw, err := os.ReadFile(filepath.Join(repoRoot(t), manifestPath))
@@ -676,9 +676,11 @@ func publishBuiltPlugin(t *testing.T, repository *pluginservice.Repository, pack
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repository.Publish("stable", packageBytes); err != nil {
+	artifact, err := repository.Publish("stable", packageBytes)
+	if err != nil {
 		t.Fatal(err)
 	}
+	return pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 }
 
 func publishBrokenPlugin(t *testing.T, repository *pluginservice.Repository) {

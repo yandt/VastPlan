@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 	"github.com/nats-io/nkeys"
 )
 
@@ -17,6 +18,21 @@ const (
 )
 
 var credentialNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$`)
+var operationIDPattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,255}$`)
+
+// ExecutionRequest adds a stable workflow checkpoint without putting leader
+// epoch/token into plugin-controlled payload. The trusted host creates Fence.
+type ExecutionRequest struct {
+	OperationID string `json:"operationId"`
+	Plan        Plan   `json:"plan"`
+}
+
+func (r ExecutionRequest) Validate() error {
+	if !operationIDPattern.MatchString(r.OperationID) {
+		return errors.New("节点引导 operationId 无效")
+	}
+	return r.Plan.Validate()
+}
 
 // CredentialSecretFile maps a credential reference to one fixed remote file.
 // The referenced material is resolved only inside a trusted Broker callback.
@@ -176,5 +192,5 @@ type ReadinessObserver interface {
 // Broker is implemented by the trusted kernel deployment adapter. Plugins can
 // submit a Plan but can neither resolve credentials nor choose a shell command.
 type Broker interface {
-	Bootstrap(context.Context, Scope, Plan) (Result, error)
+	Bootstrap(context.Context, Scope, operationfence.Fence, Plan) (Result, error)
 }

@@ -10,6 +10,7 @@ import (
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 )
 
 type MaterialExecutor interface {
@@ -32,12 +33,15 @@ func NewSSH(credentials kernelspi.CredentialBroker, timeout time.Duration) (*Bro
 	return New(credentials, nodebootstrap.MaterialSSHExecutor{Timeout: timeout})
 }
 
-func (b *Broker) Bootstrap(ctx context.Context, scope nodebootstrap.Scope, plan nodebootstrap.Plan) (nodebootstrap.Result, error) {
+func (b *Broker) Bootstrap(ctx context.Context, scope nodebootstrap.Scope, fence operationfence.Fence, plan nodebootstrap.Plan) (nodebootstrap.Result, error) {
 	if err := scope.Validate(); err != nil {
 		return nodebootstrap.Result{}, err
 	}
 	if err := plan.Validate(); err != nil {
 		return nodebootstrap.Result{}, err
+	}
+	if err := fence.Validate(); err != nil || fence.LogicalService != "platform.deployment" {
+		return nodebootstrap.Result{}, errors.New("节点引导缺少有效 execution fence")
 	}
 	type reference struct {
 		name        string
@@ -70,7 +74,7 @@ func (b *Broker) Bootstrap(ctx context.Context, scope nodebootstrap.Scope, plan 
 				return execute(index + 1)
 			})
 		}
-		request := nodebootstrap.Request{Target: plan.Target, Release: plan.Release, Node: plan.Node}
+		request := nodebootstrap.Request{Target: plan.Target, Release: plan.Release, Node: plan.Node, Fence: &nodebootstrap.BootstrapFence{Epoch: fence.Epoch, OperationID: fence.OperationID}}
 		payloads := make([]nodebootstrap.SecretPayload, 0, len(plan.SecretFiles))
 		for i, file := range plan.SecretFiles {
 			request.SecretFiles = append(request.SecretFiles, nodebootstrap.SecretFile{Source: fmt.Sprintf("/credential/material-%02d", i), Destination: file.Destination, Mode: file.Mode})

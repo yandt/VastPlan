@@ -24,6 +24,7 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/observability"
+	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/processguard"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
@@ -248,6 +249,7 @@ type Host struct {
 	launches         map[string]*launchAttempt
 	services         map[string]HostService // 内核自身能力：capability → 实现
 	forwarder        CapabilityForwarder
+	fenceProvider    operationfence.Provider
 
 	stopped atomic.Bool
 
@@ -267,6 +269,15 @@ func (h *Host) SetCapabilityForwarder(forwarder CapabilityForwarder) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.forwarder = forwarder
+}
+
+// SetExecutionFenceProvider binds host-only leader evidence after the runtime
+// has acquired its unit lease. Before binding, and immediately after lease
+// loss, mutating kernel services cannot obtain fencing evidence.
+func (h *Host) SetExecutionFenceProvider(provider operationfence.Provider) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.fenceProvider = provider
 }
 
 type launchResult struct {

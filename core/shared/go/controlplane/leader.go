@@ -49,6 +49,7 @@ type Leadership struct {
 	done     chan struct{}
 	lost     chan error
 	mu       sync.Mutex
+	active   bool
 	once     sync.Once
 }
 
@@ -112,7 +113,7 @@ func startLeadership(parent context.Context, kv jetstream.KeyValue, key string, 
 	ctx, cancel := context.WithCancel(parent)
 	leadership := &Leadership{
 		kv: kv, key: key, record: record, revision: revision, options: options,
-		cancel: cancel, done: make(chan struct{}), lost: make(chan error, 1),
+		cancel: cancel, done: make(chan struct{}), lost: make(chan error, 1), active: true,
 	}
 	go leadership.renew(ctx)
 	return leadership
@@ -123,11 +124,25 @@ func (l *Leadership) Record() LeaderRecord {
 	defer l.mu.Unlock()
 	return l.record
 }
+
+// Current returns the lease record only while this process still owns a
+// recently renewed leadership. It is suitable for host-side fencing checks,
+// not for persistence or transport to plugins.
+func (l *Leadership) Current() (LeaderRecord, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.record, l.active && time.Since(l.record.UpdatedAt) < l.options.LeaseDuration
+}
 func (l *Leadership) Lost() <-chan error    { return l.lost }
 func (l *Leadership) Done() <-chan struct{} { return l.done }
 
 func (l *Leadership) renew(ctx context.Context) {
-	defer close(l.done)
+	defer func() {
+		l.mu.Lock()
+		l.active = false
+		l.mu.Unlock()
+		close(l.done)
+	}()
 	ticker := time.NewTicker(l.options.RenewEvery)
 	defer ticker.Stop()
 	for {
@@ -158,6 +173,9 @@ func (l *Leadership) renew(ctx context.Context) {
 func (l *Leadership) Close(ctx context.Context) error {
 	var closeErr error
 	l.once.Do(func() {
+		l.mu.Lock()
+		l.active = false
+		l.mu.Unlock()
 		l.cancel()
 		select {
 		case <-l.done:

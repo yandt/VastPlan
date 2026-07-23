@@ -109,8 +109,8 @@ func TestProtocolRuntimeLeaderRollingUpgradeKeepsMonotonicFencing(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
-	artifact, packageBytes, err := repository.Read(pluginv1.ArtifactRef{PluginID: "cn.vastplan.hello-world", Version: "0.1.0", Channel: "stable"})
+	ref := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-audit/backend", "extensions/plugins/cn.vastplan.demo-audit/vastplan.plugin.json")
+	artifact, packageBytes, err := repository.Read(ref)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,13 +169,13 @@ func TestProtocolRuntimeLeaderRollingUpgradeKeepsMonotonicFencing(t *testing.T) 
 	if err := runtime.Apply(ctx, unit); err != nil {
 		t.Fatal(err)
 	}
-	first := waitAnnouncement(t, router, "vastplan.hello")
+	first := waitAnnouncement(t, router, "demo.audit")
 	oldHost, _ := runtime.Host(unit.ID)
 	unit.Fingerprint = "leader-v2"
 	if err := runtime.Apply(ctx, unit); err != nil {
 		t.Fatal(err)
 	}
-	second := waitAnnouncementAfter(t, router, "vastplan.hello", first.Generation)
+	second := waitAnnouncementAfter(t, router, "demo.audit", first.Generation)
 	newHost, _ := runtime.Host(unit.ID)
 	if newHost == oldHost || !runtime.IsRunning(unit.ID, "leader-v2") {
 		t.Fatal("leader 滚动升级没有原子替换旧宿主")

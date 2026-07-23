@@ -19,6 +19,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
@@ -255,6 +256,9 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 			}
 		}()
 	}
+	if err := bindExecutionFence(candidate, unit, policy, leaderships); err != nil {
+		return err
+	}
 	r.mu.RLock()
 	router := r.router
 	r.mu.RUnlock()
@@ -419,6 +423,12 @@ func (r *ProtocolRuntime) restoreOwnership(ctx context.Context, unitID string, o
 	if err != nil {
 		return err
 	}
+	if err := bindExecutionFence(old.host, restoredSpec, policy, leaderships); err != nil {
+		for _, leadership := range leaderships {
+			_ = leadership.Close(context.Background())
+		}
+		return err
+	}
 	r.mu.RLock()
 	router := r.router
 	r.mu.RUnlock()
@@ -448,6 +458,39 @@ func (r *ProtocolRuntime) restoreOwnership(ctx context.Context, unitID string, o
 	for _, leadership := range leaderships {
 		go r.monitorLeadership(unitID, old.generation, leadership)
 	}
+	return nil
+}
+
+type leadershipFenceProvider struct {
+	leadership     *controlplane.Leadership
+	logicalService string
+	unitID         string
+}
+
+func (p leadershipFenceProvider) Current() (operationfence.Evidence, bool) {
+	if p.leadership == nil {
+		return operationfence.Evidence{}, false
+	}
+	record, ok := p.leadership.Current()
+	if !ok {
+		return operationfence.Evidence{}, false
+	}
+	evidence := operationfence.Evidence{LogicalService: p.logicalService, UnitID: p.unitID, Epoch: record.Epoch, Token: record.Token}
+	return evidence, evidence.Validate() == nil
+}
+
+func bindExecutionFence(host *protocolbus.Host, unit RuntimeUnit, policy servicemodel.Policy, leaderships []*controlplane.Leadership) error {
+	if policy.InstancePolicy != servicemodel.PolicyLeader {
+		return nil
+	}
+	if host == nil || len(leaderships) != 1 {
+		return errors.New("leader runtime 缺少唯一 execution fence")
+	}
+	logicalService := unit.LogicalService
+	if logicalService == "" {
+		logicalService = unit.ID
+	}
+	host.SetExecutionFenceProvider(leadershipFenceProvider{leadership: leaderships[0], logicalService: logicalService, unitID: unit.ID})
 	return nil
 }
 

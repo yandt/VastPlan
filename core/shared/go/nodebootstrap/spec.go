@@ -19,6 +19,7 @@ import (
 const (
 	InstallRoot       = "/opt/vastplan/backend"
 	StateRoot         = "/var/lib/vastplan"
+	FenceRoot         = "/var/lib/vastplan-fencing"
 	ConfigRoot        = "/etc/vastplan"
 	SecretsRoot       = ConfigRoot + "/secrets"
 	SystemdUnitPath   = "/etc/systemd/system/vastplan-node-agent.service"
@@ -41,10 +42,23 @@ var (
 // are read locally by the trusted bootstrap command and their contents travel
 // through the encrypted SSH stream; they are never embedded in Deployment v2.
 type Request struct {
-	Target      Target       `json:"target"`
-	Release     Release      `json:"release"`
-	Node        NodeAgent    `json:"node"`
-	SecretFiles []SecretFile `json:"secretFiles"`
+	Target      Target          `json:"target"`
+	Release     Release         `json:"release"`
+	Node        NodeAgent       `json:"node"`
+	SecretFiles []SecretFile    `json:"secretFiles"`
+	Fence       *BootstrapFence `json:"fence,omitempty"`
+}
+
+type BootstrapFence struct {
+	Epoch       uint64 `json:"epoch"`
+	OperationID string `json:"operationId"`
+}
+
+func (f BootstrapFence) Validate() error {
+	if f.Epoch == 0 || !operationIDPattern.MatchString(f.OperationID) {
+		return errors.New("节点引导 fence 无效")
+	}
+	return nil
 }
 
 type Target struct {
@@ -98,6 +112,11 @@ func (r Request) Validate() error {
 	}
 	if err := r.Node.Validate(); err != nil {
 		return err
+	}
+	if r.Fence != nil {
+		if err := r.Fence.Validate(); err != nil {
+			return err
+		}
 	}
 	if len(r.SecretFiles) > maxBootstrapSecretFiles {
 		return fmt.Errorf("秘密文件不能超过 %d 个", maxBootstrapSecretFiles)

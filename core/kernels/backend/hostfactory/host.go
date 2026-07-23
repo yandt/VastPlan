@@ -22,6 +22,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
@@ -325,6 +326,25 @@ func authenticatedDeploymentManager(callCtx *contractv1.CallContext) bool {
 	return callCtx.GetCaller().GetKind() == contractv1.CallerKind_CALLER_KIND_PLUGIN && callCtx.GetCaller().GetId() == deploymentpublication.DeploymentManagerPluginID && callCtx.GetTenantId() != ""
 }
 
+func deploymentManagerFence(ctx context.Context, callCtx *contractv1.CallContext, operationID string) (operationfence.Fence, error) {
+	if !authenticatedDeploymentManager(callCtx) {
+		return operationfence.Fence{}, errors.New("Deployment Manager execution fence 身份无效")
+	}
+	identity, ok := runtimeidentity.FromContext(ctx)
+	if !ok || identity.Validate() != nil || identity.PluginID != deploymentpublication.DeploymentManagerPluginID {
+		return operationfence.Fence{}, errors.New("Deployment Manager execution fence 缺少可信 Runtime 身份")
+	}
+	evidence, ok := operationfence.FromContext(ctx)
+	if !ok || evidence.LogicalService != "platform.deployment" || evidence.UnitID != identity.RuntimeScope {
+		return operationfence.Fence{}, errors.New("Deployment Manager 已失去当前 leader execution fence")
+	}
+	fence, err := evidence.ForOperation(operationID)
+	if err != nil {
+		return operationfence.Fence{}, errors.New("Deployment Manager operationId 无效")
+	}
+	return fence, nil
+}
+
 func kernelDeploymentTargets(controller deploymentpublication.Controller) protocolbus.HostService {
 	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 		if !authenticatedDeploymentManager(callCtx) {
@@ -369,6 +389,9 @@ func kernelDeploymentPublish(controller deploymentpublication.Controller) protoc
 		if err := decodeStrict(payload, &request); err != nil {
 			return nil, nil, errors.New("部署发布请求无效")
 		}
+		if _, err := deploymentManagerFence(ctx, callCtx, fmt.Sprintf("deployment/%s/revision/%d", request.Composition.Metadata.Name, request.DeploymentRevision)); err != nil {
+			return nil, nil, err
+		}
 		result, err := controller.Publish(ctx, callCtx.GetTenantId(), request.Composition, request.DeploymentRevision, request.ExpectedDigest)
 		if err != nil {
 			return nil, nil, err
@@ -397,7 +420,7 @@ func kernelDeploymentReadiness(observer deploymentpublication.ReadinessObserver)
 }
 
 func kernelPlatformProfileActivation(controller platformprofileactivation.Controller) map[string]protocolbus.HostService {
-	candidate := func(run func(context.Context, string, platformprofileactivation.CandidateRequest) (platformprofileactivation.Candidate, error)) protocolbus.HostService {
+	candidate := func(action string, mutating bool, run func(context.Context, string, platformprofileactivation.CandidateRequest) (platformprofileactivation.Candidate, error)) protocolbus.HostService {
 		return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 			if !authenticatedDeploymentManager(callCtx) {
 				return nil, nil, errors.New("Platform Profile Activation 只接受 deployment-manager 认证会话")
@@ -405,6 +428,11 @@ func kernelPlatformProfileActivation(controller platformprofileactivation.Contro
 			var request platformprofileactivation.CandidateRequest
 			if err := decodeStrict(payload, &request); err != nil {
 				return nil, nil, errors.New("Platform Profile 候选请求无效")
+			}
+			if mutating {
+				if _, err := deploymentManagerFence(ctx, callCtx, "platform-profile/"+request.CandidateID+"/"+action); err != nil {
+					return nil, nil, err
+				}
 			}
 			result, err := run(ctx, callCtx.GetTenantId(), request)
 			if err != nil {
@@ -423,6 +451,9 @@ func kernelPlatformProfileActivation(controller platformprofileactivation.Contro
 			if err := decodeStrict(payload, &request); err != nil {
 				return nil, nil, errors.New("Platform Profile 候选准备请求无效")
 			}
+			if _, err := deploymentManagerFence(ctx, callCtx, "platform-profile/"+request.CandidateID+"/prepare"); err != nil {
+				return nil, nil, err
+			}
 			result, err := controller.Prepare(ctx, callCtx.GetTenantId(), request)
 			if err != nil {
 				return nil, nil, err
@@ -430,11 +461,11 @@ func kernelPlatformProfileActivation(controller platformprofileactivation.Contro
 			raw, err := json.Marshal(result)
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
 		},
-		platformprofileactivation.KernelStatusService:   candidate(controller.Status),
-		platformprofileactivation.KernelActivateService: candidate(controller.Activate),
-		platformprofileactivation.KernelFinalizeService: candidate(controller.Finalize),
-		platformprofileactivation.KernelAbortService:    candidate(controller.Abort),
-		platformprofileactivation.KernelRollbackService: candidate(controller.Rollback),
+		platformprofileactivation.KernelStatusService:   candidate("status", false, controller.Status),
+		platformprofileactivation.KernelActivateService: candidate("activate", true, controller.Activate),
+		platformprofileactivation.KernelFinalizeService: candidate("finalize", true, controller.Finalize),
+		platformprofileactivation.KernelAbortService:    candidate("abort", true, controller.Abort),
+		platformprofileactivation.KernelRollbackService: candidate("rollback", true, controller.Rollback),
 		platformprofileactivation.KernelPublishService: func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 			if !authenticatedDeploymentManager(callCtx) {
 				return nil, nil, errors.New("Platform Profile Activation 只接受 deployment-manager 认证会话")
@@ -442,6 +473,9 @@ func kernelPlatformProfileActivation(controller platformprofileactivation.Contro
 			var request platformprofileactivation.PublishRequest
 			if err := decodeStrict(payload, &request); err != nil {
 				return nil, nil, errors.New("Platform Profile 候选发布请求无效")
+			}
+			if _, err := deploymentManagerFence(ctx, callCtx, "platform-profile/"+request.Prepare.CandidateID+"/publish"); err != nil {
+				return nil, nil, err
 			}
 			result, err := controller.Publish(ctx, callCtx.GetTenantId(), request)
 			if err != nil {
@@ -503,22 +537,26 @@ func kernelNodeBootstrap(broker nodebootstrap.Broker) protocolbus.HostService {
 		}
 		decoder := json.NewDecoder(bytes.NewReader(payload))
 		decoder.DisallowUnknownFields()
-		var plan nodebootstrap.Plan
-		if err := decoder.Decode(&plan); err != nil {
+		var request nodebootstrap.ExecutionRequest
+		if err := decoder.Decode(&request); err != nil {
 			return nil, nil, fmt.Errorf("节点引导计划无效: %w", err)
 		}
 		var trailing any
 		if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
 			return nil, nil, errors.New("节点引导计划只能包含一个 JSON 文档")
 		}
-		if err := plan.Validate(); err != nil || plan.Node.Tenant != callCtx.GetTenantId() {
+		if err := request.Validate(); err != nil || request.Plan.Node.Tenant != callCtx.GetTenantId() {
 			return nil, nil, errors.New("节点引导计划与认证租户不匹配")
+		}
+		fence, err := deploymentManagerFence(ctx, callCtx, "node-bootstrap/"+request.OperationID)
+		if err != nil {
+			return nil, nil, err
 		}
 		scope := nodebootstrap.Scope{TenantID: callCtx.GetTenantId(), ProjectID: callCtx.GetProjectId(), PluginID: callCtx.GetCaller().GetId()}
 		if err := scope.Validate(); err != nil {
 			return nil, nil, err
 		}
-		result, err := broker.Bootstrap(ctx, scope, plan)
+		result, err := broker.Bootstrap(ctx, scope, fence, request.Plan)
 		if err != nil {
 			return nil, nil, errors.New("可信节点引导执行失败")
 		}

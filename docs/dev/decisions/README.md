@@ -158,3 +158,4 @@
 - [ADR-0125 Portal Composer 与 Preference 共享状态分区](ADR-0125-Portal-Composer与Preference共享状态分区.md)
 - [ADR-0126 Deployment Manager 共享账本与副作用 Fencing](ADR-0126-Deployment-Manager共享账本与副作用Fencing.md)
 - [ADR-0127 Credentials 内容寻址快照与 Material Lease 复核](ADR-0127-Credentials内容寻址快照与Material-Lease复核.md)
+- [ADR-0128 统一 Leader Epoch 与外部副作用 Fencing](ADR-0128-统一Leader-Epoch与外部副作用Fencing.md)

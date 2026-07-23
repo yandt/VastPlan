@@ -42,6 +42,7 @@ func TestRequestValidateRequiresProductionTrustMaterial(t *testing.T) {
 
 func TestRenderInstallScriptIsFixedAndSystemdHardened(t *testing.T) {
 	request := validRequest()
+	request.Fence = &BootstrapFence{Epoch: 7, OperationID: "node-bootstrap/job-a"}
 	payloads := make([]SecretPayload, 0, len(request.SecretFiles))
 	for _, file := range request.SecretFiles {
 		content := []byte("sensitive-" + file.Destination)
@@ -60,6 +61,7 @@ func TestRenderInstallScriptIsFixedAndSystemdHardened(t *testing.T) {
 		"groupadd --system vastplan", "usermod -a -G vastplan vastplan",
 		"install -d -o root -g vastplan -m 0750 /etc/vastplan/secrets",
 		"sha256sum --check --status", "systemctl enable --now vastplan-node-agent.service",
+		"flock -x 9", FenceRoot + "/bootstrap.epoch", "-gt \"7\"",
 		base64.StdEncoding.EncodeToString([]byte("VASTPLAN_ARTIFACT_READ_TOKEN=artifact-secret-1234\n")),
 	} {
 		if expected == "sudo" {

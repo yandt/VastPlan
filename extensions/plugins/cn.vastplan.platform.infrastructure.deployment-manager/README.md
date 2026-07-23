@@ -27,6 +27,6 @@
 
 测试目标绑定只能指向活动 Application Composition 内已有的应用插件，不能增加插件，也不能覆盖 `cn.vastplan.foundation.*` 或 `cn.vastplan.platform.*`。测试发布只接受 `testing` channel 的 SemVer 预发布版本和精确 SHA/repositoryRevision；上传与发布是两个事务。候选就绪与回滚通过 `kernel.deployment.readiness` 读取内核持有的 NATS Composition report，插件不获得 KV 句柄。
 
-0.17.0 起，租户状态通过可信宿主 `kernel.state.shared.get/create/update` 保存为 `tenant/deployment.control/tenant` 单文档 CAS 聚合；插件不持有 NATS、数据库或文件系统凭证。当前仍采用 `leader + external-shared + leader routing`：新 leader 可以读取同一账本并执行中断恢复，旧 leader 的过期写入会被 Store revision 拒绝。CAS 只能 fence 状态提交，不能撤销已经发出的 SSH、systemd 或 Deployment 发布副作用，因此在 operation lease 与外部执行 fencing token 落地前不得把本插件声明为 active-active。
+0.17.0 起，租户状态通过可信宿主 `kernel.state.shared.get/create/update` 保存为 `tenant/deployment.control/tenant` 单文档 CAS 聚合；插件不持有 NATS、数据库或文件系统凭证。0.18.0 进一步复用 Unit Leadership 的 host-only epoch/token 保护 mutating 内核回调：新 leader 可以读取同一账本并执行中断恢复，旧 leader 的过期写入被 Store revision 拒绝，失效 Runtime 不能开始新副作用；SSH 远端再用 root-owned `flock` 与单调 epoch 拒绝延迟旧请求。当前仍采用 `leader + external-shared + leader routing`，不宣称 active-active。
 
 运行该插件的管理节点必须使用与自身作用域绑定的 `manager-node` NATS 身份，并配置 `-tenant`、`-deployment`、`-node-id`、`-transport-seed` 与 `-transport-trust`。生产在线编排还必须配置 `-backend-platform-catalog /etc/vastplan/backend-platform-catalog.json`，并给该可信内核身份最小 Deployment KV 写权；Controller 进程使用同一 Catalog 的 `controlplane -controller -backend-platform-catalog ...` 为全部目标调度。它还必须配置 `-credential-root /secure/vastplan-credentials`；目录布局固定为 `<root>/<tenant>/<credential-name>`，material 文件必须为 `0600`。缺少任一依赖时相应内核服务不注册并 fail-closed。

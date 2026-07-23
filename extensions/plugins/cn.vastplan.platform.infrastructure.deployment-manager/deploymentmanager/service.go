@@ -29,7 +29,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.17.0"
+	PluginVersion = "0.18.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 1 << 20
@@ -746,7 +746,7 @@ func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contrac
 		job, node, err = s.beginApproval(call, request.JobID)
 		if err == nil {
 			operationName := "bootstrap"
-			raw, marshalErr := json.Marshal(node.Plan)
+			raw, marshalErr := json.Marshal(nodebootstrap.ExecutionRequest{OperationID: job.ID, Plan: node.Plan})
 			if marshalErr != nil {
 				err = marshalErr
 			} else {
