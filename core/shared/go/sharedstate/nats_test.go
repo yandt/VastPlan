@@ -60,6 +60,67 @@ func TestNATSStoreCrossInstanceCASIsolationAndPagination(t *testing.T) {
 	}
 }
 
+func TestNATSStoreFailsClosedAndRecoversAfterServerRestart(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "js-restart")
+	options := &server.Options{JetStream: true, StoreDir: directory, Host: "127.0.0.1", Port: -1, NoLog: true, NoSigs: true}
+	first, err := server.NewServer(options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	go first.Start()
+	if !first.ReadyForConnections(5 * time.Second) {
+		t.Fatal("初始 NATS 未就绪")
+	}
+	port := first.Addr().(*net.TCPAddr).Port
+	nc, err := nats.Connect(first.ClientURL(), nats.MaxReconnects(-1), nats.ReconnectWait(25*time.Millisecond))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nc.Close()
+	js, _ := jetstream.New(nc)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	kv, err := js.CreateKeyValue(ctx, jetstream.KeyValueConfig{Bucket: "VASTPLAN_SHARED_STATE_RESTART", History: 16, Storage: jetstream.FileStorage, MaxValueSize: MaxValueBytes})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, _ := NewNATSStore(kv)
+	scope := Scope{Kind: ScopeTenant, TenantID: "tenant-a", PluginID: "cn.vastplan.demo", RuntimeScope: "service-a", Namespace: "state"}
+	if _, err := store.Create(ctx, scope, "active", []byte("persisted")); err != nil {
+		t.Fatal(err)
+	}
+	first.Shutdown()
+	first.WaitForShutdown()
+	unavailableCtx, unavailableCancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
+	defer unavailableCancel()
+	if _, err := store.Get(unavailableCtx, scope, "active"); err == nil {
+		t.Fatal("NATS 中断时 Shared State 不得假装成功或回退本地")
+	}
+
+	second, err := server.NewServer(&server.Options{JetStream: true, StoreDir: directory, Host: "127.0.0.1", Port: port, NoLog: true, NoSigs: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go second.Start()
+	if !second.ReadyForConnections(5 * time.Second) {
+		t.Fatal("重启 NATS 未就绪")
+	}
+	defer func() { second.Shutdown(); second.WaitForShutdown() }()
+	deadline := time.Now().Add(5 * time.Second)
+	for !nc.IsConnected() && time.Now().Before(deadline) {
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !nc.IsConnected() {
+		t.Fatal("NATS 客户端未重连")
+	}
+	recoveryCtx, recoveryCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer recoveryCancel()
+	entry, err := store.Get(recoveryCtx, scope, "active")
+	if err != nil || string(entry.Value) != "persisted" {
+		t.Fatalf("NATS 重启后状态未恢复: entry=%+v err=%v", entry, err)
+	}
+}
+
 func testKV(t *testing.T, ctx context.Context) jetstream.KeyValue {
 	t.Helper()
 	srv, err := server.NewServer(&server.Options{JetStream: true, StoreDir: filepath.Join(t.TempDir(), "js"), Host: "127.0.0.1", Port: -1, NoLog: true, NoSigs: true})

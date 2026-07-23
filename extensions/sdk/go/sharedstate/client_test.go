@@ -30,7 +30,8 @@ func TestClientOmitsTrustedIdentityAndParsesStrictEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Create(context.Background(), &contractv1.CallContext{TenantId: "trusted"}, "active", []byte(`{}`)); err != nil {
+	created, err := client.Create(context.Background(), &contractv1.CallContext{TenantId: "trusted"}, "active", []byte(`{}`))
+	if err != nil || string(created.Value) != "{}" {
 		t.Fatal(err)
 	}
 	if host.target.GetCapability() != sharedstatev1.KernelService(sharedstatev1.OperationCreate) {

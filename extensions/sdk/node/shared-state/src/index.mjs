@@ -22,11 +22,12 @@ export class SharedStateClient {
     this.namespace = namespace;
   }
 
-  async get(callContext, key) { return this.#entry("get", callContext, { key: validKey(key) }); }
-  async create(callContext, key, value) { return this.#entry("create", callContext, { key: validKey(key), value: encodeValue(value) }); }
+  async get(callContext, key) { key = validKey(key); return this.#entry("get", callContext, { key }, key); }
+  async create(callContext, key, value) { key = validKey(key); return this.#entry("create", callContext, { key, value: encodeValue(value) }, key); }
   async update(callContext, key, value, expectedRevision) {
     if (!positiveRevision(expectedRevision)) throw new Error("Shared State expectedRevision 无效");
-    return this.#entry("update", callContext, { key: validKey(key), value: encodeValue(value), expectedRevision });
+    key = validKey(key);
+    return this.#entry("update", callContext, { key, value: encodeValue(value), expectedRevision }, key);
   }
   async delete(callContext, key, expectedRevision) {
     if (!positiveRevision(expectedRevision)) throw new Error("Shared State expectedRevision 无效");
@@ -43,12 +44,16 @@ export class SharedStateClient {
     exactKeys(page, ["protocol", "items", "nextPageCursor"], ["protocol", "items"]);
     if (page.protocol !== SHARED_STATE_PROTOCOL || !Array.isArray(page.items) || page.items.length > MAX_SHARED_STATE_PAGE_SIZE ||
         (page.nextPageCursor !== undefined && !validKeyValue(page.nextPageCursor))) throw new Error("Shared State page 无效");
-    return Object.freeze({ protocol: page.protocol, items: Object.freeze(page.items.map(parseEntry)), ...(page.nextPageCursor === undefined ? {} : { nextPageCursor: page.nextPageCursor }) });
+    const items = page.items.map(parseEntry);
+    if (items.some((item, index) => !item.key.startsWith(prefix) || item.key <= (index === 0 ? (pageCursor ?? "") : items[index - 1].key))) throw new Error("Shared State page 顺序或范围无效");
+    return Object.freeze({ protocol: page.protocol, items: Object.freeze(items), ...(page.nextPageCursor === undefined ? {} : { nextPageCursor: page.nextPageCursor }) });
   }
 
-  async #entry(operation, callContext, request) {
+  async #entry(operation, callContext, request, expectedKey) {
     const response = await this.#call(operation, callContext, request);
-    return parseEntry(parseObject(response.payload, "Shared State entry"));
+    const entry = parseEntry(parseObject(response.payload, "Shared State entry"));
+    if (entry.key !== expectedKey) throw new Error("Shared State entry key 与请求不一致");
+    return entry;
   }
   async #call(operation, callContext, request) {
     const payload = Buffer.from(JSON.stringify({ scope: this.scope, namespace: this.namespace, ...request }));

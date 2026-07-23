@@ -45,15 +45,18 @@ class SharedStateClient:
         self._plugin, self._scope, self._namespace = plugin, scope, namespace
 
     def get(self, call_context: Any, key: str) -> SharedStateEntry:
-        return parse_shared_state_entry(self._call("get", call_context, {"key": _key(key)}))
+        key = _key(key)
+        return _expected_entry(self._call("get", call_context, {"key": key}), key)
 
     def create(self, call_context: Any, key: str, value: bytes) -> SharedStateEntry:
-        return parse_shared_state_entry(self._call("create", call_context, {"key": _key(key), "value": _encode(value)}))
+        key = _key(key)
+        return _expected_entry(self._call("create", call_context, {"key": key, "value": _encode(value)}), key)
 
     def update(self, call_context: Any, key: str, value: bytes, expected_revision: int) -> SharedStateEntry:
         if not _revision(expected_revision):
             raise ValueError("Shared State expectedRevision 无效")
-        return parse_shared_state_entry(self._call("update", call_context, {"key": _key(key), "value": _encode(value), "expectedRevision": expected_revision}))
+        key = _key(key)
+        return _expected_entry(self._call("update", call_context, {"key": key, "value": _encode(value), "expectedRevision": expected_revision}), key)
 
     def delete(self, call_context: Any, key: str, expected_revision: int) -> None:
         if not _revision(expected_revision):
@@ -74,7 +77,13 @@ class SharedStateClient:
                 not isinstance(value["items"], list) or len(value["items"]) > MAX_PAGE_SIZE or \
                 ("nextPageCursor" in value and not _valid_key(value["nextPageCursor"])):
             raise ValueError("Shared State page 无效")
-        return SharedStatePage(tuple(_entry(item) for item in value["items"]), value.get("nextPageCursor"))
+        items = tuple(_entry(item) for item in value["items"])
+        previous = page_cursor or ""
+        for item in items:
+            if not item.key.startswith(prefix) or item.key <= previous:
+                raise ValueError("Shared State page 顺序或范围无效")
+            previous = item.key
+        return SharedStatePage(items, value.get("nextPageCursor"))
 
     def _call(self, operation: str, call_context: Any, request: Mapping[str, Any]) -> bytes:
         payload = json.dumps({"scope": self._scope, "namespace": self._namespace, **request}, separators=(",", ":")).encode()
@@ -92,6 +101,13 @@ class SharedStateClient:
 
 def parse_shared_state_entry(payload: Any) -> SharedStateEntry:
     return _entry(_object(payload, "Shared State entry"))
+
+
+def _expected_entry(payload: Any, key: str) -> SharedStateEntry:
+    entry = parse_shared_state_entry(payload)
+    if entry.key != key:
+        raise ValueError("Shared State entry key 与请求不一致")
+    return entry
 
 
 def is_shared_state_conflict(error: BaseException) -> bool:

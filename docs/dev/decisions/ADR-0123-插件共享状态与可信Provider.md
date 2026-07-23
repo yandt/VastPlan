@@ -1,6 +1,6 @@
 # ADR-0123 插件共享状态与可信 Provider
 
-- 状态：已采纳，实施中
+- 状态：已采纳，基础能力与首个消费者已实现
 - 日期：2026-07-23
 
 ## 背景
@@ -29,3 +29,9 @@
 正面：多语言插件不持有存储凭证；身份隔离和 CAS 只有一套真源；同一插件副本可安全共享状态；Provider 可在不改变业务协议的前提下替换。
 
 代价：大状态需重新建模，不能滥用 1 MiB value；List 不是事务快照；现有本地文件插件需逐个设计迁移；NATS bucket 进入生产备份、容量和 ACL 范围。
+
+## 实施记录
+
+- Shared State 已完成严格 Wire、可信宿主身份派生、NATS KV/File Provider、NKey ACL 和 Go/Node/Python SDK。
+- global-settings 0.8.0 已将每 tenant 的完整状态聚合为单 key CAS 文档，切换为 `active-active + external-shared + queue`；清单只申请 get/create/update 三项最小内核能力。
+- 单元测试覆盖两个插件实例共享读取、tenant 隔离、身份字段不进入请求、并发更新单赢家，以及 NATS 中断时 fail-closed、原存储目录重启后的自动重连恢复。真实跨进程 E2E 已验证实例 A 写入并退出后实例 B 从同一 NATS KV 继续读取。旧 `platform.settings.stateFile` 已从清单与开发 Profile 删除。

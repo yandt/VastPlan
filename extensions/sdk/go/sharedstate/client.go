@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
@@ -18,6 +20,18 @@ type Client struct {
 	host      sdk.Host
 	scope     string
 	namespace string
+}
+
+type Entry struct {
+	Key       string
+	Value     []byte
+	Revision  uint64
+	UpdatedAt time.Time
+}
+
+type Page struct {
+	Items      []Entry
+	NextCursor string
 }
 
 type ServiceError struct {
@@ -39,31 +53,31 @@ func New(host sdk.Host, scope, namespace string) (*Client, error) {
 	return &Client{host: host, scope: scope, namespace: namespace}, nil
 }
 
-func (c *Client) Get(ctx context.Context, call *contractv1.CallContext, key string) (sharedstatev1.Entry, error) {
+func (c *Client) Get(ctx context.Context, call *contractv1.CallContext, key string) (Entry, error) {
 	request := sharedstatev1.KeyRequest{Scope: c.scope, Namespace: c.namespace, Key: key}
 	raw, err := c.call(ctx, call, sharedstatev1.OperationGet, request)
 	if err != nil {
-		return sharedstatev1.Entry{}, err
+		return Entry{}, err
 	}
-	return sharedstatev1.ParseEntry(raw)
+	return parseExpectedEntry(raw, key)
 }
 
-func (c *Client) Create(ctx context.Context, call *contractv1.CallContext, key string, value []byte) (sharedstatev1.Entry, error) {
+func (c *Client) Create(ctx context.Context, call *contractv1.CallContext, key string, value []byte) (Entry, error) {
 	request := sharedstatev1.WriteRequest{Scope: c.scope, Namespace: c.namespace, Key: key, Value: sharedstatev1.EncodeValue(value)}
 	raw, err := c.call(ctx, call, sharedstatev1.OperationCreate, request)
 	if err != nil {
-		return sharedstatev1.Entry{}, err
+		return Entry{}, err
 	}
-	return sharedstatev1.ParseEntry(raw)
+	return parseExpectedEntry(raw, key)
 }
 
-func (c *Client) Update(ctx context.Context, call *contractv1.CallContext, key string, value []byte, expected uint64) (sharedstatev1.Entry, error) {
+func (c *Client) Update(ctx context.Context, call *contractv1.CallContext, key string, value []byte, expected uint64) (Entry, error) {
 	request := sharedstatev1.WriteRequest{Scope: c.scope, Namespace: c.namespace, Key: key, Value: sharedstatev1.EncodeValue(value), ExpectedRevision: expected}
 	raw, err := c.call(ctx, call, sharedstatev1.OperationUpdate, request)
 	if err != nil {
-		return sharedstatev1.Entry{}, err
+		return Entry{}, err
 	}
-	return sharedstatev1.ParseEntry(raw)
+	return parseExpectedEntry(raw, key)
 }
 
 func (c *Client) Delete(ctx context.Context, call *contractv1.CallContext, key string, expected uint64) error {
@@ -75,13 +89,51 @@ func (c *Client) Delete(ctx context.Context, call *contractv1.CallContext, key s
 	return sharedstatev1.ParseAck(raw)
 }
 
-func (c *Client) List(ctx context.Context, call *contractv1.CallContext, prefix string, limit int, cursor string) (sharedstatev1.Page, error) {
+func (c *Client) List(ctx context.Context, call *contractv1.CallContext, prefix string, limit int, cursor string) (Page, error) {
 	request := sharedstatev1.ListRequest{Scope: c.scope, Namespace: c.namespace, Prefix: prefix, Limit: limit, PageCursor: cursor}
 	raw, err := c.call(ctx, call, sharedstatev1.OperationList, request)
 	if err != nil {
-		return sharedstatev1.Page{}, err
+		return Page{}, err
 	}
-	return sharedstatev1.ParsePage(raw)
+	wire, err := sharedstatev1.ParsePage(raw)
+	if err != nil {
+		return Page{}, err
+	}
+	page := Page{Items: make([]Entry, 0, len(wire.Items)), NextCursor: wire.NextPageCursor}
+	for _, item := range wire.Items {
+		value, err := sharedstatev1.DecodeValue(item.Value)
+		if err != nil {
+			return Page{}, err
+		}
+		if !strings.HasPrefix(item.Key, prefix) || item.Key <= cursor || (len(page.Items) != 0 && item.Key <= page.Items[len(page.Items)-1].Key) {
+			return Page{}, errors.New("Shared State page 顺序或范围无效")
+		}
+		page.Items = append(page.Items, Entry{Key: item.Key, Value: value, Revision: item.Revision, UpdatedAt: item.UpdatedAt})
+	}
+	return page, nil
+}
+
+func parseEntry(raw []byte) (Entry, error) {
+	wire, err := sharedstatev1.ParseEntry(raw)
+	if err != nil {
+		return Entry{}, err
+	}
+	value, err := sharedstatev1.DecodeValue(wire.Value)
+	if err != nil {
+		return Entry{}, err
+	}
+	return Entry{Key: wire.Key, Value: value, Revision: wire.Revision, UpdatedAt: wire.UpdatedAt}, nil
+}
+
+func parseExpectedEntry(raw []byte, key string) (Entry, error) {
+	entry, err := parseEntry(raw)
+	if err != nil {
+		return Entry{}, err
+	}
+	if entry.Key != key {
+		return Entry{}, errors.New("Shared State entry key 与请求不一致")
+	}
+	return entry, nil
 }
 
 func (c *Client) call(ctx context.Context, call *contractv1.CallContext, operation string, request any) ([]byte, error) {

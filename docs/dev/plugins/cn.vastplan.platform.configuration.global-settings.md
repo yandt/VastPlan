@@ -3,27 +3,17 @@
 插件 ID：`cn.vastplan.platform.configuration.global-settings`
 状态：已实现（首个基础服务）
 能力：`tool.package/platform.settings`
-当前制品版本：`0.7.0`
+当前制品版本：`0.8.0`
 
 ## 边界
 
 该插件负责租户隔离的全局设置读写、版本前置条件和变更游标；不负责凭证明文、数据库连接或业务插件私有状态。权限由先于它启动的 `bootstrap-policy` 强制：只有 system 或直接登录的管理员可写，首方 foundation/platform 插件仅可读。
 
-插件以 `leader + leader-owned + cluster + leader` 运行。内核负责 leader fencing、能力租约和故障重调度；状态卷的持久化、备份与故障域由部署适配器负责，内核不会复制插件私有状态。
+插件以 `active-active + external-shared + cluster + queue` 运行。每个 tenant 的完整设置、变更窗口和业务 revision 聚合为 Shared State 中的单个 CAS 文档；多个实例可以并行读取，写入使用 Store revision 防止 stale writer 覆盖。业务 API 仍只暴露设置 version，不泄漏 NATS revision。
 
 ## 部署配置
 
-设置状态文件必须由同一 service unit 的 `config` 提供，键为 `platform.settings.stateFile`，值为非空 JSON 字符串，例如：
-
-```json
-{
-  "config": {
-    "platform.settings.stateFile": "/var/lib/vastplan/settings/state.json"
-  }
-}
-```
-
-插件在首次调用时通过认证的 `kernel.config.get` 读取该值，不读取环境变量、请求 payload 或其他插件配置。文件以原子替换写入、权限为 `0600`；生产部署应将其置于持久卷，并确保 leader 故障接管时能够访问同一持久状态。
+插件不再接受 `platform.settings.stateFile`，也不直接连接 NATS 或数据库。签名清单只申请 `kernel.state.shared.get/create/update`；宿主从验签 RuntimeIdentity 与可信 tenant 构造命名空间。生产使用 NATS KV Provider，本地 File Provider 只可由 Backend 开发入口注入，Provider 不可用时禁止自动回退。
 
 ## API
 
@@ -49,7 +39,7 @@ go run ./engineering/tools/pluginpackage \
   -out /tmp/global-settings.tar.gz
 ```
 
-制品安装、leader 选举与启动依赖仍由 Node Agent 和 Deployment Controller 按签名 Manifest 执行。
+制品安装、副本调度与启动依赖仍由 Node Agent 和 Deployment Controller 按签名 Manifest 执行。状态格式已从旧插件私有文件切换为 `cn.vastplan.platform.settings.shared@1`；当前开发阶段不迁移旧测试文件，生产形成历史数据后必须使用独立迁移事务。
 
 ## Portal 管理页
 
