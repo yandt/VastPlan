@@ -69,15 +69,16 @@ type child struct {
 }
 
 type runtime struct {
-	options  options
-	runDir   string
-	nats     *natsserver.Server
-	vault    *http.Server
-	proxy    *http.Server
-	children []*child
-	mu       sync.RWMutex
-	ready    bool
-	hmr      *frontendHMR
+	options            options
+	runDir             string
+	nats               *natsserver.Server
+	vault              *http.Server
+	proxy              *http.Server
+	children           []*child
+	mu                 sync.RWMutex
+	ready              bool
+	hmr                *frontendHMR
+	backendInputDigest string
 }
 
 type packageSpec struct {
@@ -176,7 +177,7 @@ func (r *runtime) prepare(ctx context.Context) error {
 		}
 	}
 	log.Printf("[1/6] 生成仅限本地开发的 TLS、session、Seed 仓库配置与签名身份")
-	if err := r.writeFixtures(); err != nil {
+	if err := r.writeFixtures(ctx); err != nil {
 		return err
 	}
 	if err := r.prepareCachedBuilds(ctx); err != nil {
@@ -425,7 +426,7 @@ func pluginManifestVersion(root, pluginID string) (string, error) {
 	return manifest.Version, nil
 }
 
-func (r *runtime) writeFixtures() error {
+func (r *runtime) writeFixtures(ctx context.Context) error {
 	certFile, keyFile := filepath.Join(r.runDir, "secrets", "tls-cert.pem"), filepath.Join(r.runDir, "secrets", "tls-key.pem")
 	if err := writeTLS(certFile, keyFile); err != nil {
 		return err
@@ -477,7 +478,12 @@ func (r *runtime) writeFixtures() error {
 	if err != nil {
 		return err
 	}
-	sourceDigest, err := platformManagementSourceDigest(template, portalCatalog, r.options.artifactListen)
+	backendDigest, err := r.computeBackendBuildDigest(ctx)
+	if err != nil {
+		return err
+	}
+	r.backendInputDigest = backendDigest
+	sourceDigest, err := platformManagementSourceDigest(template, portalCatalog, r.options.artifactListen, backendDigest)
 	if err != nil {
 		return err
 	}

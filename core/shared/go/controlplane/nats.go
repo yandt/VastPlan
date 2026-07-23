@@ -26,6 +26,7 @@ const (
 	ControllersBucket              = "VASTPLAN_CONTROLLERS_V1"
 	AutoscalingBucket              = "VASTPLAN_AUTOSCALING_V1"
 	ConfigurationAuthoritiesBucket = "VASTPLAN_CONFIGURATION_AUTHORITIES_V1"
+	BackendPlatformCatalogsBucket  = "VASTPLAN_BACKEND_PLATFORM_CATALOGS_V1"
 	EventsStream                   = "VASTPLAN_EVENTS_V1"
 
 	MaxDesiredStateBytes = 1 << 20
@@ -44,6 +45,7 @@ type Buckets struct {
 	Controllers              jetstream.KeyValue
 	Autoscaling              jetstream.KeyValue
 	ConfigurationAuthorities jetstream.KeyValue
+	BackendPlatformCatalogs  jetstream.KeyValue
 	Events                   jetstream.Stream
 }
 
@@ -137,6 +139,13 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	if err != nil {
 		return Buckets{}, fmt.Errorf("创建配置授权 bucket: %w", err)
 	}
+	backendPlatformCatalogs, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket: BackendPlatformCatalogsBucket, Description: "VastPlan Backend Platform Catalog activation v1",
+		History: 64, MaxValueSize: MaxDesiredStateBytes, Replicas: replicas, Storage: storage,
+	})
+	if err != nil {
+		return Buckets{}, fmt.Errorf("创建 Backend Platform Catalog bucket: %w", err)
+	}
 	events, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name: EventsStream, Description: "VastPlan durable domain events v1",
 		Subjects: []string{"vp.event.persist.v1.>"}, Retention: jetstream.LimitsPolicy,
@@ -151,6 +160,7 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 		Deployments: deployments, Assignments: assignments, Compositions: compositions,
 		Controllers: controllers, Autoscaling: autoscaling, Events: events,
 		ConfigurationAuthorities: configurationAuthorities,
+		BackendPlatformCatalogs:  backendPlatformCatalogs,
 	}, nil
 }
 
@@ -197,6 +207,10 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开配置授权 bucket: %w", err)
 	}
+	backendPlatformCatalogs, err := js.KeyValue(ctx, BackendPlatformCatalogsBucket)
+	if err != nil {
+		return Buckets{}, fmt.Errorf("打开 Backend Platform Catalog bucket: %w", err)
+	}
 	events, err := js.Stream(ctx, EventsStream)
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开持久事件 stream: %w", err)
@@ -206,6 +220,7 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 		Deployments: deployments, Assignments: assignments, Compositions: compositions,
 		Controllers: controllers, Autoscaling: autoscaling, Events: events,
 		ConfigurationAuthorities: configurationAuthorities,
+		BackendPlatformCatalogs:  backendPlatformCatalogs,
 	}, nil
 }
 
@@ -218,6 +233,10 @@ func DesiredKey(tenant, name string) string {
 }
 
 func DeploymentKey(tenant, name string) string { return DesiredKey(tenant, name) }
+
+func BackendPlatformCatalogKey(catalogID string) string {
+	return "catalogs." + keyToken(catalogID)
+}
 
 // DeploymentPrefix returns the encoded tenant prefix shared by Deployment
 // facts and their trusted sidecar snapshots. Callers must still validate the

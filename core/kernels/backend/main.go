@@ -42,6 +42,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapbroker"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapobserver"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/platformcatalog"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
@@ -328,8 +329,12 @@ func runReconcile(args []string) (runErr error) {
 		if err != nil {
 			return err
 		}
+		catalogSource, err := platformcatalog.NewStore(plane.buckets.BackendPlatformCatalogs, catalog)
+		if err != nil {
+			return err
+		}
 		catalogStore := configurationcatalog.Store{KV: plane.buckets.Deployments}
-		publisher, err := deploymentpublisher.New(catalog, artifacts, deploymentpublisher.KVApplier{KV: plane.buckets.Deployments}, catalogStore, compositionresolver.Options{AllowDevelopmentPlugins: options.allowDevelopmentPlugins}, compositionresolver.Resolve)
+		publisher, err := deploymentpublisher.NewWithCatalogSource(catalogSource, artifacts, deploymentpublisher.KVApplier{KV: plane.buckets.Deployments}, catalogStore, compositionresolver.Options{AllowDevelopmentPlugins: options.allowDevelopmentPlugins}, compositionresolver.Resolve)
 		if err != nil {
 			return err
 		}

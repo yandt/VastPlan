@@ -21,6 +21,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/configurationcatalog"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/platformcatalog"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/compositioncore"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
@@ -156,6 +157,15 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	if err != nil {
 		return err
+	}
+	if *backendCatalogPath != "" && *bootstrap {
+		catalogStore, err := platformcatalog.NewStore(buckets.BackendPlatformCatalogs, backendCatalog)
+		if err != nil {
+			return err
+		}
+		if _, err := catalogStore.Seed(openCtx); err != nil {
+			return fmt.Errorf("持久 Backend Platform Catalog Seed: %w", err)
+		}
 	}
 	if len(raw) > 0 {
 		if err := publishDeployment(openCtx, stdout, buckets, key, raw, configurationCatalog); err != nil {

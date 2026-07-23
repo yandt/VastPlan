@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.plugin-settings`
 
-当前制品版本：`0.5.0`
+当前制品版本：`0.6.0`
 
 该 platform 基础插件以 `leader + leader-owned + cluster + platform routing domain` 运行。它只通过宿主窄能力读取与活动 Deployment revision/digest 精确匹配的 `ConfigurationCatalog v1`，保存租户隔离的配置候选和审计；不依赖 Deployment Manager 存量状态，不读取工作区 Manifest，也不接受浏览器上传 Schema、插件身份或凭证 owner。
 

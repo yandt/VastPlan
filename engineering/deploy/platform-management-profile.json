@@ -226,7 +226,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.22.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.13.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.14.0", "channel": "stable" }
       ]
     },
     {
@@ -255,7 +255,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.22.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.5.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.6.0", "channel": "stable" }
       ]
     },
     {

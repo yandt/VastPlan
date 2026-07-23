@@ -69,3 +69,9 @@ Profile 候选提交和发布使用独立的 `platform.plugin-configuration.prof
 - ADR-0077 的“运行内核只在启动时解析 Catalog”改为“启动文件是 Seed，内核每次使用可信活动 Snapshot”；“插件和浏览器不能修改 Catalog”仍保持。
 - 任一已发布服务仍不依赖管理面存活；候选只阻塞目标 binding 的新变更。
 - Catalog Store 和生产 NATS ACL 必须有独立版本与最小写入权限，不得依赖本地 insecure NATS 权限验证。
+
+## 实施记录（2026-07-23）
+
+- 第 1 阶段已完成：`deploymentpublisher` 通过 `CatalogSource.Snapshot` 逐次读取、严格复核并使用 Catalog；静态启动 Catalog 仅是同端口的 Seed 适配器。
+- 第 2 阶段的读取基座已完成：新增 `VASTPLAN_BACKEND_PLATFORM_CATALOGS_V1` 独立 KV，保留 64 代历史；`platformcatalog.Store` 实现严格快照、摘要和身份复核，持久数据损坏时不得回退 Seed。Bootstrap/Controlplane 可 create-only 发布 Seed，Manager Node 只读且 NATS ACL 明确拒绝写入。
+- 待续：专用 Publisher 身份、候选锁与 CAS 状态机，以及 Deployment Manager Profile Activation Saga。

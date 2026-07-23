@@ -145,6 +145,18 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	if entry, err := managerBuckets.ConfigurationAuthorities.Get(ctx, authorityKey); err != nil || string(entry.Value()) != "hashed-ticket" {
 		t.Fatalf("同 tenant 的可信内核应能消费配置授权: entry=%v err=%v", entry, err)
 	}
+	catalogKey := BackendPlatformCatalogKey("backend-production")
+	if _, err := bootstrapBuckets.BackendPlatformCatalogs.Put(ctx, catalogKey, []byte("catalog-snapshot")); err != nil {
+		t.Fatalf("bootstrap 应能发布 Backend Platform Catalog Seed: %v", err)
+	}
+	if entry, err := managerBuckets.BackendPlatformCatalogs.Get(ctx, catalogKey); err != nil || string(entry.Value()) != "catalog-snapshot" {
+		t.Fatalf("manager-node 应能读取 Backend Platform Catalog 快照: entry=%v err=%v", entry, err)
+	}
+	managerDeniedCtx, managerDeniedCancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer managerDeniedCancel()
+	if _, err := managerBuckets.BackendPlatformCatalogs.Put(managerDeniedCtx, "forbidden", []byte("tampered")); err == nil {
+		t.Fatal("manager-node 不得使用运行身份写 Backend Platform Catalog")
+	}
 	otherAuthorityCtx, otherAuthorityCancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer otherAuthorityCancel()
 	if _, err := nodeBuckets.ConfigurationAuthorities.Put(otherAuthorityCtx, ConfigurationAuthorityKey("other", strings.Repeat("b", 64)), []byte("forbidden")); err == nil {
@@ -252,7 +264,7 @@ func TestRoleACL_ManagerNodeCanReadLeasesWithoutGlobalWrites(t *testing.T) {
 		t.Fatal("manager-node 必须能读取节点 lease 以执行可信就绪观察")
 	}
 	for _, subject := range manager.PublishAllow {
-		if strings.HasPrefix(subject, "$KV."+DeploymentsBucket+".") || strings.HasPrefix(subject, "$KV."+AssignmentsBucket+".") {
+		if strings.HasPrefix(subject, "$KV."+DeploymentsBucket+".") || strings.HasPrefix(subject, "$KV."+AssignmentsBucket+".") || strings.HasPrefix(subject, "$KV."+BackendPlatformCatalogsBucket+".") {
 			t.Fatalf("manager-node 不得获得全局期望态写权限: %s", subject)
 		}
 	}

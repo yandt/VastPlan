@@ -60,7 +60,8 @@ func TestPlatformManagementSourceDigestIncludesPortalCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := platformManagementSourceDigest(template, catalog, "127.0.0.1:18443")
+	backendDigest := strings.Repeat("a", 64)
+	first, err := platformManagementSourceDigest(template, catalog, "127.0.0.1:18443", backendDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,12 +74,19 @@ func TestPlatformManagementSourceDigestIncludesPortalCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := platformManagementSourceDigest(template, changedRaw, "127.0.0.1:18443")
+	second, err := platformManagementSourceDigest(template, changedRaw, "127.0.0.1:18443", backendDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first == second {
 		t.Fatal("嵌入的 Portal Catalog 变化必须改变开发平台部署指纹")
+	}
+	third, err := platformManagementSourceDigest(template, catalog, "127.0.0.1:18443", strings.Repeat("b", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == third {
+		t.Fatal("Backend 制品构建输入变化必须改变开发平台部署指纹")
 	}
 }
 

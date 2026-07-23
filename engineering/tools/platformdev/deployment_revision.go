@@ -25,7 +25,10 @@ type developmentDeploymentRevisionState struct {
 // platformManagementSourceDigest fingerprints the stable inputs that produce
 // the local platform Deployment. Runtime paths are normalized, while the
 // selected listen address remains part of the desired configuration.
-func platformManagementSourceDigest(template, portalCatalog []byte, artifactListen string) (string, error) {
+func platformManagementSourceDigest(template, portalCatalog []byte, artifactListen, backendBuildDigest string) (string, error) {
+	if err := validateDevelopmentSourceDigest(backendBuildDigest); err != nil {
+		return "", fmt.Errorf("Backend 构建摘要无效: %w", err)
+	}
 	rendered, err := renderPlatformProfile(
 		template,
 		portalCatalog,
@@ -44,8 +47,7 @@ func platformManagementSourceDigest(template, portalCatalog []byte, artifactList
 	if err != nil {
 		return "", fmt.Errorf("规范化开发平台部署指纹: %w", err)
 	}
-	digest := sha256.Sum256(canonical)
-	return hex.EncodeToString(digest[:]), nil
+	return digestStrings(string(canonical), backendBuildDigest, "platform-management-deployment-v2"), nil
 }
 
 // materializeDevelopmentDeploymentRevision gives each distinct local desired

@@ -252,6 +252,20 @@ func requireCachedFiles(root string, files ...string) error {
 	return nil
 }
 
+func (r *runtime) computeBackendBuildDigest(ctx context.Context) (string, error) {
+	goIdentity, err := developmentGoIdentity(ctx)
+	if err != nil {
+		return "", err
+	}
+	digest, err := digestBuildInputs(r.options.root, []string{
+		"go.mod", "go.sum", "contracts", "core", "extensions/plugins", "extensions/sdk/go", "engineering/tools/build.sh",
+	}, []string{goIdentity, "backend-build-v1"}, backendBuildInput)
+	if err != nil {
+		return "", fmt.Errorf("计算 Backend 构建摘要: %w", err)
+	}
+	return digest, nil
+}
+
 func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	cacheRoot := filepath.Join(r.options.stateRoot, "build-cache")
 	goCache := filepath.Join(r.options.stateRoot, "go-cache")
@@ -267,12 +281,14 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 		return err
 	}
 
-	backendDigest, err := digestBuildInputs(r.options.root, []string{
-		"go.mod", "go.sum", "contracts", "core", "extensions/plugins", "extensions/sdk/go", "engineering/tools/build.sh",
-	}, []string{goIdentity, "backend-build-v1"}, backendBuildInput)
-	if err != nil {
-		return fmt.Errorf("计算 Backend 构建摘要: %w", err)
+	backendDigest := r.backendInputDigest
+	if backendDigest == "" {
+		backendDigest, err = r.computeBackendBuildDigest(ctx)
+		if err != nil {
+			return err
+		}
 	}
+	r.backendInputDigest = backendDigest
 	log.Printf("[2/6] 准备 Backend 内核与插件 digest=%s", backendDigest[:12])
 	backend, err := ensureCachedBuild(cacheRoot, "backend", backendDigest, func(candidate string) error {
 		return r.command(ctx, map[string]string{
