@@ -210,6 +210,24 @@ describe("PlatformAdminClient", () => {
 		expect(() => client.listArtifactCatalog({ pageSize: 101 })).toThrowError(PlatformAdminError);
 	});
 
+  it("keeps publication approval and evidence on fixed protected routes", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { revision: 2, items: [] } };
+    }, "operations", "artifacts");
+    await client.listArtifactPublications();
+    await client.submitArtifactPublication({ source: { pluginId: "cn.vastplan.demo", version: "1.0.0", channel: "testing" }, targetChannel: "stable", reason: "ready", expectedRevision: 2 });
+    await client.approveArtifactPublication("a".repeat(64), 3);
+    await client.artifactSupplyChainEvidence({ pluginId: "cn.vastplan.demo", version: "1.0.0", channel: "stable" });
+    expect(calls.map((call) => call.path)).toEqual([
+      "/v1/portals/operations/platform/services/artifacts/artifacts/publications",
+      "/v1/csrf", "/v1/portals/operations/platform/services/artifacts/artifacts/publications",
+      "/v1/csrf", `/v1/portals/operations/platform/services/artifacts/artifacts/publications/${"a".repeat(64)}/approve`,
+      "/v1/portals/operations/platform/services/artifacts/artifacts/evidence?pluginId=cn.vastplan.demo&version=1.0.0&channel=stable",
+    ]);
+  });
+
   it("uses opaque fixed routes for plugin configuration drafts", async () => {
     const calls: Array<{ path: string; method?: string; body?: string }> = [];
     const client = new PlatformAdminClient(async (path, init) => {

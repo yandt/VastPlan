@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -17,6 +17,8 @@
       { "code": "platform.artifacts.lifecycle", "title": "管理制品生命周期", "description": "变更制品 deprecated、yanked 或 revoked 生命周期", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
       { "code": "platform.artifacts.gc", "title": "执行制品回收", "description": "隔离或永久清扫无引用制品", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
       { "code": "platform.artifacts.migrate", "title": "迁移制品仓库", "description": "准备、切换、回滚和释放制品存储卷", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+      ,{ "code": "platform.artifacts.publication.submit", "title": "提交制品发布审批", "description": "将已验签 testing 制品提交为 stable 发布候选", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false }
+      ,{ "code": "platform.artifacts.publication.approve", "title": "批准制品发布", "description": "以独立用户身份批准精确绑定的 stable 制品发布", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
     ],
     "operationGuards": [
       { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "status", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
@@ -37,6 +39,10 @@
       { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "rollbackMigration", "permissions": ["platform.artifacts.migrate"], "access": "execute", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "finalizeMigration", "permissions": ["platform.artifacts.migrate"], "access": "execute", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "releaseMigration", "permissions": ["platform.artifacts.migrate"], "access": "execute", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "listPublications", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "getSupplyChainEvidence", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "submitPublication", "permissions": ["platform.artifacts.publication.submit"], "access": "write", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "approvePublication", "permissions": ["platform.artifacts.publication.approve"], "access": "execute", "approval": "none" }
     ]
   },
   "runtime": {
@@ -132,6 +138,10 @@
           { "name": "rollbackMigration", "description": "回滚到源 volume" },
           { "name": "finalizeMigration", "description": "结束观察双写" },
           { "name": "releaseMigration", "description": "隔离旧 volume" }
+          ,{ "name": "listPublications", "description": "读取 stable 发布审批" }
+          ,{ "name": "submitPublication", "description": "提交 testing 到 stable 发布审批" }
+          ,{ "name": "approvePublication", "description": "以双人分离批准 stable 发布" }
+          ,{ "name": "getSupplyChainEvidence", "description": "读取已验证供应链证据摘要" }
           ,{ "name": "installDataPlaneTicket", "description": "安装控制面签发的一次性下载 Ticket" }
         ]
       }],

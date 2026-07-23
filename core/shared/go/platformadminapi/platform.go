@@ -105,9 +105,11 @@ type ArtifactRepositoryStatus struct {
 }
 
 type ArtifactCatalogStatus struct {
-	Revision        uint64 `json:"revision"`
-	Artifacts       int    `json:"artifacts"`
-	InventorySHA256 string `json:"inventorySHA256,omitempty"`
+	Revision                   uint64 `json:"revision"`
+	Artifacts                  int    `json:"artifacts"`
+	InventorySHA256            string `json:"inventorySHA256,omitempty"`
+	PublicationRevision        uint64 `json:"publicationRevision"`
+	PublicationInventorySHA256 string `json:"publicationInventorySHA256,omitempty"`
 }
 
 type ArtifactCatalogQuery struct {
@@ -124,23 +126,24 @@ type ArtifactCatalogQuery struct {
 }
 
 type ArtifactCatalogEntry struct {
-	Ref                pluginv1.ArtifactRef `json:"ref"`
-	SHA256             string               `json:"sha256"`
-	Size               int64                `json:"size"`
-	Publisher          string               `json:"publisher"`
-	KeyID              string               `json:"keyId"`
-	SignedAt           string               `json:"signedAt"`
-	PublishedAt        string               `json:"publishedAt"`
-	RepositoryRevision uint64               `json:"repositoryRevision"`
-	Name               string               `json:"name"`
-	Description        string               `json:"description"`
-	Namespace          string               `json:"namespace"`
-	License            string               `json:"license,omitempty"`
-	Targets            []string             `json:"targets"`
-	Platforms          []string             `json:"platforms,omitempty"`
-	LifecycleStatus    string               `json:"lifecycleStatus"`
-	LifecycleRevision  uint64               `json:"lifecycleRevision,omitempty"`
-	LifecycleReason    string               `json:"lifecycleReason,omitempty"`
+	Ref                pluginv1.ArtifactRef          `json:"ref"`
+	SHA256             string                        `json:"sha256"`
+	Size               int64                         `json:"size"`
+	Publisher          string                        `json:"publisher"`
+	KeyID              string                        `json:"keyId"`
+	SignedAt           string                        `json:"signedAt"`
+	PublishedAt        string                        `json:"publishedAt"`
+	RepositoryRevision uint64                        `json:"repositoryRevision"`
+	Name               string                        `json:"name"`
+	Description        string                        `json:"description"`
+	Namespace          string                        `json:"namespace"`
+	License            string                        `json:"license,omitempty"`
+	Targets            []string                      `json:"targets"`
+	Platforms          []string                      `json:"platforms,omitempty"`
+	LifecycleStatus    string                        `json:"lifecycleStatus"`
+	LifecycleRevision  uint64                        `json:"lifecycleRevision,omitempty"`
+	LifecycleReason    string                        `json:"lifecycleReason,omitempty"`
+	Replacement        *pluginv1.ArtifactRequirement `json:"replacement,omitempty"`
 }
 
 type ArtifactCatalogPage struct {
@@ -168,6 +171,58 @@ type ArtifactLifecycleResult struct {
 		LifecycleReason   string                        `json:"lifecycleReason,omitempty"`
 		Replacement       *pluginv1.ArtifactRequirement `json:"replacement,omitempty"`
 	} `json:"entry"`
+}
+
+type ArtifactPublication struct {
+	ID                         string               `json:"id"`
+	Revision                   uint64               `json:"revision"`
+	Status                     string               `json:"status"`
+	Source                     pluginv1.ArtifactRef `json:"source"`
+	Target                     pluginv1.ArtifactRef `json:"target"`
+	SHA256                     string               `json:"sha256"`
+	Publisher                  string               `json:"publisher"`
+	KeyID                      string               `json:"keyId"`
+	SourceAttestationSHA256    string               `json:"sourceAttestationSha256"`
+	PublishedAttestationSHA256 string               `json:"publishedAttestationSha256,omitempty"`
+	Reason                     string               `json:"reason"`
+	SubmittedBy                string               `json:"submittedBy"`
+	ApprovedBy                 string               `json:"approvedBy,omitempty"`
+	SubmittedAt                string               `json:"submittedAt"`
+	ApprovedAt                 string               `json:"approvedAt,omitempty"`
+	PublishedAt                string               `json:"publishedAt,omitempty"`
+}
+
+type ArtifactPublicationRequest struct {
+	Source           pluginv1.ArtifactRef `json:"source"`
+	TargetChannel    string               `json:"targetChannel"`
+	Reason           string               `json:"reason"`
+	ExpectedRevision uint64               `json:"expectedRevision"`
+}
+type ArtifactPublicationApprovalRequest struct {
+	ID               string `json:"id"`
+	ExpectedRevision uint64 `json:"expectedRevision"`
+}
+type ArtifactPublicationPage struct {
+	Revision uint64                `json:"revision"`
+	Items    []ArtifactPublication `json:"items"`
+}
+type ArtifactSupplyChainEvidence struct {
+	Ref                pluginv1.ArtifactRef  `json:"ref"`
+	SHA256             string                `json:"sha256"`
+	Size               int64                 `json:"size"`
+	Publisher          string                `json:"publisher"`
+	KeyID              string                `json:"keyId"`
+	SignedAt           string                `json:"signedAt"`
+	AttestationSHA256  string                `json:"attestationSha256"`
+	Verification       string                `json:"verification"`
+	Name               string                `json:"name"`
+	Description        string                `json:"description"`
+	License            string                `json:"license,omitempty"`
+	Targets            []string              `json:"targets"`
+	Engines            map[string]string     `json:"engines"`
+	RepositoryRevision uint64                `json:"repositoryRevision"`
+	LifecycleStatus    string                `json:"lifecycleStatus"`
+	Publications       []ArtifactPublication `json:"publications"`
 }
 
 type ArtifactReferenceSnapshot struct {

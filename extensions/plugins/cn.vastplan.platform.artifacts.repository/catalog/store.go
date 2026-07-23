@@ -104,9 +104,11 @@ type JournalPage struct {
 }
 
 type Stats struct {
-	Revision        uint64 `json:"revision"`
-	Artifacts       int    `json:"artifacts"`
-	InventorySHA256 string `json:"inventorySHA256"`
+	Revision                   uint64 `json:"revision"`
+	Artifacts                  int    `json:"artifacts"`
+	InventorySHA256            string `json:"inventorySHA256"`
+	PublicationRevision        uint64 `json:"publicationRevision"`
+	PublicationInventorySHA256 string `json:"publicationInventorySHA256"`
 }
 
 type snapshot struct {
@@ -116,14 +118,16 @@ type snapshot struct {
 }
 
 type Store struct {
-	root       string
-	repository VerifiedRepository
-	mu         sync.RWMutex
-	revision   uint64
-	entries    map[string]Entry
-	events     []Event
-	lifecycle  map[string][]LifecycleTransition
-	retired    MissingArtifactRegistry
+	root                string
+	repository          VerifiedRepository
+	mu                  sync.RWMutex
+	revision            uint64
+	entries             map[string]Entry
+	events              []Event
+	lifecycle           map[string][]LifecycleTransition
+	retired             MissingArtifactRegistry
+	publicationRevision uint64
+	publications        map[string]Publication
 }
 
 func Open(repositoryRoot string, repository VerifiedRepository, retired ...MissingArtifactRegistry) (*Store, error) {
@@ -132,7 +136,7 @@ func Open(repositoryRoot string, repository VerifiedRepository, retired ...Missi
 	}
 	store := &Store{
 		root: filepath.Join(filepath.Clean(repositoryRoot), "catalog"), repository: repository,
-		entries: map[string]Entry{}, lifecycle: map[string][]LifecycleTransition{},
+		entries: map[string]Entry{}, lifecycle: map[string][]LifecycleTransition{}, publications: map[string]Publication{},
 	}
 	if len(retired) > 1 {
 		return nil, errors.New("Catalog 只能配置一个制品 retirement 注册表")
@@ -149,6 +153,9 @@ func Open(repositoryRoot string, repository VerifiedRepository, retired ...Missi
 		return nil, err
 	}
 	if err := store.rebuild(); err != nil {
+		return nil, err
+	}
+	if err := store.loadPublications(); err != nil {
 		return nil, err
 	}
 	return store, nil
@@ -236,7 +243,7 @@ func (s *Store) Journal(afterRevision uint64, limit int) JournalPage {
 func (s *Store) Stats() Stats {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return Stats{Revision: s.revision, Artifacts: len(s.entries), InventorySHA256: inventoryDigest(s.entries)}
+	return Stats{Revision: s.revision, Artifacts: len(s.entries), InventorySHA256: inventoryDigest(s.entries), PublicationRevision: s.publicationRevision, PublicationInventorySHA256: publicationInventoryDigest(s.publications)}
 }
 
 func (s *Store) Lookup(ref pluginv1.ArtifactRef) (Entry, bool) {

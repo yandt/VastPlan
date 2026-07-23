@@ -174,7 +174,7 @@ export interface ArtifactRepositoryMigration {
 }
 export interface ArtifactRepositoryStatus {
   ready: boolean; listen?: string; storageProvider?: string; storageVolumeId?: string;
-  catalog?: { revision: number; artifacts: number; inventorySHA256?: string };
+  catalog?: { revision: number; artifacts: number; inventorySHA256?: string; publicationRevision?: number; publicationInventorySHA256?: string };
   migration?: ArtifactRepositoryMigration;
 }
 export interface ArtifactCatalogQuery {
@@ -232,6 +232,20 @@ export interface ArtifactCapacity {
   catalogRevision: number; gcRevision: number; activeArtifacts: number; activeBytes: number;
   quarantinedArtifacts: number; quarantinedBytes: number; sweptArtifacts: number;
   reclaimedBytes: number; storedBytes: number; buckets: ArtifactCapacityBucket[]; quotas: ArtifactQuotaUsage[];
+}
+export type ArtifactPublicationStatus = "PendingApproval" | "Approved" | "Published";
+export interface ArtifactPublication {
+  id: string; revision: number; status: ArtifactPublicationStatus; source: ArtifactRef; target: ArtifactRef;
+  sha256: string; publisher: string; keyId: string; sourceAttestationSha256: string; publishedAttestationSha256?: string;
+  reason: string; submittedBy: string; approvedBy?: string; submittedAt: string; approvedAt?: string; publishedAt?: string;
+}
+export interface ArtifactPublicationPage { revision: number; items: ArtifactPublication[]; }
+export interface SubmitArtifactPublicationRequest { source: ArtifactRef; targetChannel: "stable"; reason: string; expectedRevision: number; }
+export interface ArtifactPublicationResult { revision: number; entry: ArtifactPublication; }
+export interface ArtifactSupplyChainEvidence {
+  ref: ArtifactRef; sha256: string; size: number; publisher: string; keyId: string; signedAt: string;
+  attestationSha256: string; verification: "verified"; name: string; description: string; license?: string;
+  targets: string[]; engines: Record<string, string>; repositoryRevision: number; lifecycleStatus: string; publications: ArtifactPublication[];
 }
 
 export type APIExposureStatus = "Draft" | "PendingApproval" | "Approved" | "Published" | "Superseded" | "Retired";
@@ -533,6 +547,12 @@ export class PlatformAdminClient {
   public rollbackArtifactMigration(id: string): Promise<ArtifactRepositoryMigration> { return this.artifactMigrationAction(id, "rollback"); }
   public finalizeArtifactMigration(id: string): Promise<ArtifactRepositoryMigration> { return this.artifactMigrationAction(id, "finalize"); }
   public releaseArtifactMigration(id: string): Promise<ArtifactRepositoryMigration> { return this.artifactMigrationAction(id, "release"); }
+  public listArtifactPublications(): Promise<ArtifactPublicationPage> { return this.get(`${this.basePath}/artifacts/publications`); }
+  public submitArtifactPublication(request: SubmitArtifactPublicationRequest): Promise<ArtifactPublicationResult> { return this.mutate(`${this.basePath}/artifacts/publications`, "POST", request); }
+  public approveArtifactPublication(id: string, expectedRevision: number): Promise<ArtifactPublicationResult> { return this.mutate(`${this.basePath}/artifacts/publications/${segment(id)}/approve`, "POST", { expectedRevision }); }
+  public artifactSupplyChainEvidence(ref: ArtifactRef): Promise<ArtifactSupplyChainEvidence> {
+    return this.get(`${this.basePath}/artifacts/evidence${query({ pluginId: ref.pluginId, version: ref.version, channel: ref.channel })}`);
+  }
 
   public listManagedNodes(): Promise<ManagedNode[]> { return this.get(`${this.basePath}/deployment/nodes`); }
   public putManagedNode(id: string, plan: NodeBootstrapPlan, ifVersion?: number): Promise<ManagedNode> {

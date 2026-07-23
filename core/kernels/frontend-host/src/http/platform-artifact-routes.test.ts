@@ -11,13 +11,15 @@ describe("Platform artifact routes", () => {
     for (const path of [
       "/artifacts/status",
       "/artifacts/catalog?pluginPrefix=cn.vastplan&target=frontend&lifecycle=active&page=2&pageSize=10",
-      "/artifacts/capacity", "/artifacts/references", "/artifacts/migration", "/artifacts/gc/plan", "/artifacts/gc/status",
+      "/artifacts/capacity", "/artifacts/references", "/artifacts/migration", "/artifacts/gc/plan", "/artifacts/gc/status", "/artifacts/publications",
+      "/artifacts/evidence?pluginId=cn.vastplan.demo&version=1.0.0&channel=testing",
     ]) expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core${path}`, { headers: server.readHeaders })).status, path).toBe(200);
     expect(calls.map(({ operation, payload }) => ({ operation, payload }))).toEqual([
       { operation: "status", payload: {} },
       { operation: "listCatalog", payload: { pluginPrefix: "cn.vastplan", target: "frontend", lifecycle: "active", page: 2, pageSize: 10 } },
       { operation: "capacity", payload: {} }, { operation: "listReferences", payload: {} }, { operation: "migrationStatus", payload: {} },
       { operation: "gcPlan", payload: {} }, { operation: "gcStatus", payload: {} },
+      { operation: "listPublications", payload: {} }, { operation: "getSupplyChainEvidence", payload: { pluginId: "cn.vastplan.demo", version: "1.0.0", channel: "testing" } },
     ]);
     expect(calls.every((call) => call.capability === "platform.artifacts.repository")).toBe(true);
   });
@@ -35,6 +37,8 @@ describe("Platform artifact routes", () => {
       ["/artifacts/migrations/move-1/rollback", "{}"],
       ["/artifacts/migrations/move-1/finalize", "{}"],
       ["/artifacts/migrations/move-1/release", "{}"],
+      ["/artifacts/publications", '{"source":{"pluginId":"cn.vastplan.demo","version":"1.0.0","channel":"testing"},"targetChannel":"stable","reason":"ready","expectedRevision":0}'],
+      [`/artifacts/publications/${"b".repeat(64)}/approve`, '{"expectedRevision":1,"id":"forged"}'],
     ];
     for (const [path, body] of requests) expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core${path}`, { method: "POST", headers: server.writeHeaders, body })).status, path).toBe(200);
     expect(calls.map(({ operation, payload }) => ({ operation, payload }))).toEqual([
@@ -47,6 +51,8 @@ describe("Platform artifact routes", () => {
       { operation: "rollbackMigration", payload: { migrationId: "move-1" } },
       { operation: "finalizeMigration", payload: { migrationId: "move-1" } },
       { operation: "releaseMigration", payload: { migrationId: "move-1" } },
+      { operation: "submitPublication", payload: { source: { pluginId: "cn.vastplan.demo", version: "1.0.0", channel: "testing" }, targetChannel: "stable", reason: "ready", expectedRevision: 0 } },
+      { operation: "approvePublication", payload: { expectedRevision: 1, id: "b".repeat(64) } },
     ]);
     const before = calls.length;
     const invalidEmpty = await fetch(`${server.origin}/v1/portals/operations/platform/services/core/artifacts/gc/sweep`, { method: "POST", headers: server.writeHeaders, body: '{"force":true}' });
@@ -67,10 +73,10 @@ describe("Platform artifact routes", () => {
 });
 
 async function start(calls: PlatformInvocation[]) {
-  const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.artifacts.read", "platform.artifacts.lifecycle", "platform.artifacts.gc", "platform.artifacts.migrate"], managementBinding([{
+  const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.artifacts.read", "platform.artifacts.lifecycle", "platform.artifacts.gc", "platform.artifacts.migrate", "platform.artifacts.publication.submit", "platform.artifacts.publication.approve"], managementBinding([{
     capability: "platform.artifacts.repository",
-    read: ["status", "listCatalog", "capacity", "listReferences", "migrationStatus", "gcPlan", "gcStatus"],
-    write: ["setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration"],
+    read: ["status", "listCatalog", "capacity", "listReferences", "migrationStatus", "gcPlan", "gcStatus", "listPublications", "getSupplyChainEvidence"],
+    write: ["setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration", "submitPublication", "approvePublication"],
   }]));
   close.push(server.close);
   return server;

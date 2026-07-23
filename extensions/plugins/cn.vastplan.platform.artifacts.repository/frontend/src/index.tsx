@@ -4,6 +4,7 @@ import { defineCollectionPage, managementServicesFor, message, type CollectionPa
 import { catalogPage } from "./catalog-page.js";
 import { localization } from "./localization.js";
 import { migrationPage } from "./migration-page.js";
+import { publicationPage } from "./publication-page.js";
 import { filterString, formatBytes, lifecycleOptions, namespace, paged, text, type Row } from "./shared.js";
 
 function capacityRows(capacity: ArtifactCapacity): Row[] {
@@ -162,6 +163,7 @@ export function createArtifactRepositoryPages(client: PlatformAdminClient, servi
     referencesPage(client, `${idBase}.references`, `${base}/references`),
     garbageCollectionPage(client, `${idBase}.gc`, `${base}/gc`),
     migrationPage(client, `${idBase}.migration`, `${base}/migration`),
+    publicationPage(client, `${idBase}.publications`, `${base}/publications`),
   ];
 }
 

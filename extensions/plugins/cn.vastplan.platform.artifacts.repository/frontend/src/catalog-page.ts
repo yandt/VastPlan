@@ -1,6 +1,7 @@
 import type { ArtifactCatalogQuery, PlatformAdminClient } from "@vastplan/platform-admin";
 import { defineCollectionPage, type CollectionPageDefinition } from "@vastplan/workbench-sdk";
 import { lifecycleForm } from "./lifecycle-form.js";
+import { evidenceOverlay, publicationForm } from "./publication-workflow.js";
 import { filterString, formatBytes, lifecycleOptions, targetOptions, text, type Row } from "./shared.js";
 
 export function catalogPage(client: PlatformAdminClient, id: string, path: string, title: ReturnType<typeof text>, navigationLabel: ReturnType<typeof text>): CollectionPageDefinition<Row> {
@@ -31,10 +32,13 @@ export function catalogPage(client: PlatformAdminClient, id: string, path: strin
       ],
       actions: [
         { id: "lifecycle", label: text("action.lifecycle", "变更生命周期"), placement: "record.row", form: "lifecycle", requiredPermissions: ["platform.artifacts.lifecycle"], visibleWhen: { not: { pointer: "/lifecycle", equals: "revoked" } } },
+        { id: "publication", label: text("action.publication.submit", "提交发布审批"), placement: "record.row", form: "publication", requiredPermissions: ["platform.artifacts.publication.submit"], visibleWhen: { pointer: "/channel", equals: "testing" } },
+        { id: "evidence", label: text("action.evidence", "供应链证据"), placement: "record.row", overlay: "evidence", requiredPermissions: ["platform.artifacts.read"] },
       ],
       preferences: { allowedColumns: ["pluginId", "version", "channel", "publisher", "targets", "size", "lifecycle", "repositoryRevision", "publishedAt"], density: true },
     },
-    forms: [lifecycleForm(client)],
+    forms: [lifecycleForm(client), publicationForm(client)],
+    overlays: [evidenceOverlay(client)],
     async load(query, signal) {
       const targetValue = filterString(query, "target");
       const lifecycleValue = filterString(query, "lifecycle");

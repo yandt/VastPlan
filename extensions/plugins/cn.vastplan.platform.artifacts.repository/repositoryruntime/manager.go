@@ -167,10 +167,23 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 	if err := m.admitPublish(attestation.Artifact); err != nil {
 		return pluginv1.Artifact{}, err
 	}
+	publicationID, err := active.catalog.AuthorizePublication(attestation)
+	if err != nil {
+		return pluginv1.Artifact{}, err
+	}
 	if mirror != nil {
+		mirrorPublicationID, authorizeErr := mirror.catalog.AuthorizePublication(attestation)
+		if authorizeErr != nil || mirrorPublicationID != publicationID {
+			m.recordMigrationError(errors.New("观察卷发布审批状态不一致"))
+			return pluginv1.Artifact{}, errors.New("制品迁移观察卷审批状态不一致，发布已冻结")
+		}
 		if _, err := mirror.publish(attestationRaw, packageBytes); err != nil {
 			m.recordMigrationError(fmt.Errorf("观察卷镜像发布失败: %w", err))
 			return pluginv1.Artifact{}, errors.New("制品迁移观察卷不可用，发布已冻结")
+		}
+		if err := mirror.catalog.MarkPublicationPublished(mirrorPublicationID, attestationRaw, time.Now().UTC()); err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷发布审批提交失败: %w", err))
+			return pluginv1.Artifact{}, errors.New("制品迁移观察卷审批状态不可用，发布已冻结")
 		}
 	}
 	artifact, err := active.publish(attestationRaw, packageBytes)
@@ -180,7 +193,77 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 		}
 		return pluginv1.Artifact{}, err
 	}
+	if err := active.catalog.MarkPublicationPublished(publicationID, attestationRaw, time.Now().UTC()); err != nil {
+		if mirror != nil {
+			m.recordMigrationError(fmt.Errorf("活动卷发布审批提交失败: %w", err))
+		}
+		return pluginv1.Artifact{}, fmt.Errorf("提交发布审批状态: %w", err)
+	}
 	return artifact, nil
+}
+
+func (m *Manager) SubmitPublication(request catalog.PublicationRequest, actor string, occurredAt time.Time) (catalog.Publication, uint64, error) {
+	m.publishMu.Lock()
+	defer m.publishMu.Unlock()
+	m.mu.RLock()
+	active, mirror := m.active, m.mirror
+	m.mu.RUnlock()
+	if active == nil {
+		return catalog.Publication{}, 0, errors.New("活动制品仓库不可用")
+	}
+	if mirror != nil {
+		if _, _, err := mirror.catalog.SubmitPublication(request, actor, occurredAt); err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷发布申请镜像失败: %w", err))
+			return catalog.Publication{}, 0, errors.New("制品迁移观察卷不可用，发布申请已冻结")
+		}
+	}
+	record, revision, err := active.catalog.SubmitPublication(request, actor, occurredAt)
+	if err != nil && mirror != nil {
+		m.recordMigrationError(fmt.Errorf("活动卷发布申请失败: %w", err))
+	}
+	return record, revision, err
+}
+
+func (m *Manager) ApprovePublication(request catalog.PublicationApprovalRequest, actor string, occurredAt time.Time) (catalog.Publication, uint64, error) {
+	m.publishMu.Lock()
+	defer m.publishMu.Unlock()
+	m.mu.RLock()
+	active, mirror := m.active, m.mirror
+	m.mu.RUnlock()
+	if active == nil {
+		return catalog.Publication{}, 0, errors.New("活动制品仓库不可用")
+	}
+	if mirror != nil {
+		if _, _, err := mirror.catalog.ApprovePublication(request, actor, occurredAt); err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷发布批准镜像失败: %w", err))
+			return catalog.Publication{}, 0, errors.New("制品迁移观察卷不可用，发布批准已冻结")
+		}
+	}
+	record, revision, err := active.catalog.ApprovePublication(request, actor, occurredAt)
+	if err != nil && mirror != nil {
+		m.recordMigrationError(fmt.Errorf("活动卷发布批准失败: %w", err))
+	}
+	return record, revision, err
+}
+
+func (m *Manager) Publications() catalog.PublicationPage {
+	m.mu.RLock()
+	active := m.active
+	m.mu.RUnlock()
+	if active == nil {
+		return catalog.PublicationPage{}
+	}
+	return active.catalog.Publications()
+}
+
+func (m *Manager) SupplyChainEvidence(ref pluginv1.ArtifactRef) (catalog.SupplyChainEvidence, error) {
+	m.mu.RLock()
+	active := m.active
+	m.mu.RUnlock()
+	if active == nil {
+		return catalog.SupplyChainEvidence{}, errors.New("活动制品仓库不可用")
+	}
+	return active.catalog.Evidence(ref)
 }
 
 func (m *Manager) SetLifecycle(request catalog.LifecycleRequest, occurredAt time.Time) (catalog.Entry, uint64, error) {
@@ -691,7 +774,7 @@ func decodeStrict(raw []byte, output any) error {
 }
 
 func sameCatalog(left, right catalog.Stats) bool {
-	return left.Revision == right.Revision && left.Artifacts == right.Artifacts && left.InventorySHA256 != "" && left.InventorySHA256 == right.InventorySHA256
+	return left.Revision == right.Revision && left.Artifacts == right.Artifacts && left.InventorySHA256 != "" && left.InventorySHA256 == right.InventorySHA256 && left.PublicationRevision == right.PublicationRevision && left.PublicationInventorySHA256 != "" && left.PublicationInventorySHA256 == right.PublicationInventorySHA256
 }
 
 func validPhase(phase string) bool {
