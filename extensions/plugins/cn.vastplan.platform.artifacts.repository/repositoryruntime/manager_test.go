@@ -17,7 +17,49 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 )
+
+func TestManagerRequiresTwoPersonApprovalForStablePublication(t *testing.T) {
+	volume, _ := migrationVolumes(t, "repository.unused")
+	trust, privateKey := migrationTrust(t)
+	manager, err := Open(volume, trust, filepath.Join(t.TempDir(), "state", "migration.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	testingArtifact, testingProof, body := migrationArtifact(t, privateKey, "9.0.0")
+	if _, err := manager.Publish(testingProof, body); err != nil {
+		t.Fatal(err)
+	}
+	stable := testingArtifact
+	stable.Channel = "stable"
+	stableAttestation, err := pluginservice.SignArtifact(stable, "example", "testing", privateKey, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stableProof, _ := json.Marshal(stableAttestation)
+	if _, err := manager.Publish(stableProof, body); err == nil {
+		t.Fatal("stable 发布不得绕过审批")
+	}
+	request := catalog.PublicationRequest{Source: pluginv1.ArtifactRef{PluginID: testingArtifact.PluginID, Version: testingArtifact.Version, Channel: "testing"}, TargetChannel: "stable", Reason: "release", ExpectedRevision: 0}
+	pending, revision, err := manager.SubmitPublication(request, "alice", time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := manager.ApprovePublication(catalog.PublicationApprovalRequest{ID: pending.ID, ExpectedRevision: revision}, "alice", time.Now().UTC()); err == nil {
+		t.Fatal("提交人不得批准自己的发布")
+	}
+	if _, _, err := manager.ApprovePublication(catalog.PublicationApprovalRequest{ID: pending.ID, ExpectedRevision: revision}, "bob", time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Publish(stableProof, body); err != nil {
+		t.Fatalf("精确匹配的批准发布应成功: %v", err)
+	}
+	page := manager.Publications()
+	if len(page.Items) != 1 || page.Items[0].Status != catalog.PublicationPublished {
+		t.Fatalf("发布审批未消费: %+v", page)
+	}
+}
 
 func TestManagerCutsOverMirrorsFinalizesAndReleases(t *testing.T) {
 	source, target := migrationVolumes(t, "repository.next")

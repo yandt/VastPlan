@@ -2,7 +2,6 @@
 package main
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"flag"
@@ -16,6 +15,7 @@ import (
 
 func main() {
 	source := flag.String("source", "", "插件目录（须含 vastplan.plugin.json）")
+	packageFile := flag.String("package", "", "复用已生成的不可变 .tar.gz；与 -source 互斥")
 	backendBin := flag.String("backend-bin", "", "写入清单 entry.backend 的已构建可执行文件")
 	backendModule := flag.String("backend-module", "", "写入 node-worker entry.backend 的自包含 ESM bundle")
 	frontendBundle := flag.String("frontend-bundle", "", "写入清单 entry.frontend 的旧单文件 ESM bundle")
@@ -30,6 +30,9 @@ func main() {
 	repositoryRoot := flag.String("repository", "", "可选：直接发布到本地制品仓库")
 	remoteRepository := flag.String("remote-repository", "", "可选：发布到 HTTPS 远端制品仓库")
 	remoteToken := flag.String("remote-token", "", "远端仓库发布令牌；建议通过环境注入")
+	remoteReadToken := flag.String("remote-read-token", "", "远端仓库读取令牌；stable 发布用于复验 testing 候选")
+	remoteCA := flag.String("remote-ca", "", "远端仓库自定义 CA PEM")
+	remoteTimeout := flag.Duration("remote-timeout", 5*time.Minute, "远端发布总超时")
 	trustFile := flag.String("trust", "", "远端仓库发布者信任文档")
 	signKey := flag.String("sign-key", "", "Ed25519 PKCS#8 PEM 发布私钥")
 	keyID := flag.String("key-id", "", "发布密钥 ID")
@@ -38,16 +41,35 @@ func main() {
 	if *remoteToken == "" {
 		*remoteToken = os.Getenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN")
 	}
-	if *source == "" || (*out == "" && *repositoryRoot == "" && *remoteRepository == "") {
-		fmt.Fprintln(os.Stderr, "用法: go run ./engineering/tools/pluginpackage -source <插件目录> [-backend-bin <二进制>] [-frontend-graph <graph.json> -frontend-graph-root <构建根>] [-out <制品.tar.gz>] [-repository <仓库>]")
+	if *remoteReadToken == "" {
+		*remoteReadToken = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
+	}
+	if (*source == "") == (*packageFile == "") || (*out == "" && *repositoryRoot == "" && *remoteRepository == "") {
+		fmt.Fprintln(os.Stderr, "用法: go run ./engineering/tools/pluginpackage (-source <插件目录> | -package <候选.tar.gz>) [-out <制品.tar.gz>] [-remote-repository <HTTPS 仓库>]")
 		os.Exit(2)
 	}
 
-	packageSource, cleanup := stagePackageWithBackendModuleAndGraphs(*source, *backendBin, *backendModule, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile)
-	defer cleanup()
-	packageBytes, manifest, err := pluginservice.PackageDirectory(packageSource)
-	if err != nil {
-		fatalf("打包失败: %v", err)
+	var packageBytes []byte
+	var manifestID, manifestVersion, manifestPublisher string
+	if *packageFile != "" {
+		if *backendBin != "" || *backendModule != "" || *frontendBundle != "" || *frontendGraph != "" || *frontendServerGraph != "" || *frontendGraphRoot != "" || *dynamicGoBin != "" || *dynamicGoFingerprint != "" {
+			fatalf("-package 复用不可变候选时不能再注入 Backend、Frontend 或 dynamic-go 内容")
+		}
+		var err error
+		packageBytes, manifestID, manifestVersion, manifestPublisher, err = loadExistingPackage(*packageFile)
+		if err != nil {
+			fatalf("读取候选制品失败: %v", err)
+		}
+	} else {
+		packageSource, cleanup := stagePackageWithBackendModuleAndGraphs(*source, *backendBin, *backendModule, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile)
+		defer cleanup()
+		var err error
+		builtBytes, manifest, err := pluginservice.PackageDirectory(packageSource)
+		if err != nil {
+			fatalf("打包失败: %v", err)
+		}
+		packageBytes = builtBytes
+		manifestID, manifestVersion, manifestPublisher = manifest.ID, manifest.Version, manifest.Publisher
 	}
 	if *out != "" {
 		if err := os.MkdirAll(filepath.Dir(*out), 0o755); err != nil {
@@ -58,7 +80,7 @@ func main() {
 		}
 	}
 	digest := sha256.Sum256(packageBytes)
-	fmt.Printf("已打包 %s@%s\nSHA-256: %s\n", manifest.ID, manifest.Version, hex.EncodeToString(digest[:]))
+	fmt.Printf("已准备 %s@%s\nSHA-256: %s\n", manifestID, manifestVersion, hex.EncodeToString(digest[:]))
 	if *out != "" {
 		fmt.Printf("制品文件: %s\n", *out)
 	}
@@ -74,36 +96,12 @@ func main() {
 		fmt.Printf("已发布: %s@%s/%s (%s)\n", artifact.PluginID, artifact.Version, artifact.Channel, artifact.Object)
 	}
 	if *remoteRepository != "" {
-		publishRemote(packageBytes, manifest.Publisher, *channel, *remoteRepository, *remoteToken, *trustFile, *signKey, *keyID)
+		published, err := publishRemote(packageBytes, manifestPublisher, *channel, remotePublishOptions{RepositoryURL: *remoteRepository, PublishToken: *remoteToken, ReadToken: *remoteReadToken, TrustFile: *trustFile, SignKey: *signKey, KeyID: *keyID, CAFile: *remoteCA, Timeout: *remoteTimeout})
+		if err != nil {
+			fatalf("远端发布失败: %v", err)
+		}
+		fmt.Printf("已签名并发布到远端: %s@%s/%s publisher=%s keyId=%s sha256=%s\n", published.PluginID, published.Version, published.Channel, manifestPublisher, *keyID, published.SHA256)
 	}
-}
-
-func publishRemote(packageBytes []byte, publisher, channel, repositoryURL, token, trustFile, signKey, keyID string) {
-	if trustFile == "" || signKey == "" || keyID == "" || token == "" {
-		fatalf("远端发布必须配置 -trust、-sign-key、-key-id 和发布令牌")
-	}
-	artifact, err := pluginservice.Describe(channel, packageBytes)
-	if err != nil {
-		fatalf("生成制品元数据失败: %v", err)
-	}
-	privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(signKey)
-	if err != nil {
-		fatalf("加载发布私钥失败: %v", err)
-	}
-	trust, err := pluginservice.LoadTrustStore(trustFile)
-	if err != nil {
-		fatalf("加载信任文档失败: %v", err)
-	}
-	attestation, err := pluginservice.SignArtifact(artifact, publisher, keyID, privateKey, time.Now().UTC())
-	if err != nil {
-		fatalf("签署制品失败: %v", err)
-	}
-	remote := &pluginservice.RemoteRepository{BaseURL: repositoryURL, Token: token, Trust: trust}
-	published, err := remote.PublishRemote(context.Background(), attestation, packageBytes)
-	if err != nil {
-		fatalf("远端发布失败: %v", err)
-	}
-	fmt.Printf("已签名并发布到远端: %s@%s/%s publisher=%s keyId=%s sha256=%s\n", published.PluginID, published.Version, published.Channel, publisher, keyID, published.SHA256)
 }
 
 func fatalf(format string, values ...any) {

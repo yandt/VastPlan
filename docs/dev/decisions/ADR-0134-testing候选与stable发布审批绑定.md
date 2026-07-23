@@ -20,3 +20,5 @@ stable 发布必须来自仓库中已经验签且处于 `active` 的精确 testi
 ## 取舍
 
 该方案不需要 staging 大对象，复用测试发布闭环且把审批绑定到不可变内容。代价是 stable 制品必须先经过 testing 仓库，且最终发布仍由 CI/CLI 完成；Portal 的批准按钮本身不会上传大对象。未来若必须支持“首次即 stable”的外部供应商制品，应新增隔离 staging Provider，而不是放宽本 ADR 的绑定规则。
+
+2026-07-24 实施补充：生产发布继续使用现有 Go `pluginpackage`，不新增第二套签名 CLI。stable 模式要求独立读取/发布令牌，先拉取并复验 testing 候选，再核对 SHA、大小、publisher 与 key ID；`-package` 可原样复用 testing 阶段归档的同一 tar.gz，且禁止再次注入构建内容。客户端预检用于尽早诊断，服务端 Approved 强制点仍是最终授权依据。
