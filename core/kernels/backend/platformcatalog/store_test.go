@@ -64,6 +64,47 @@ func TestStoreFallsBackSeedsOnceAndReadsDurableSnapshot(t *testing.T) {
 	}
 }
 
+func TestStoreReadsAndCASUpgradesValidatedSchemaV1Seed(t *testing.T) {
+	ctx := context.Background()
+	serverInstance, buckets := startCatalogNATS(t)
+	defer serverInstance.Shutdown()
+	seed := testCatalog(1)
+	store, err := NewStore(buckets.BackendPlatformCatalogs, seed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacyRaw, err := json.Marshal(persistedSnapshot{SchemaVersion: 1, Catalog: seed, Digest: seed.Digest()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := buckets.BackendPlatformCatalogs.Create(ctx, store.key, legacyRaw); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot, err := store.Snapshot(ctx); err != nil || snapshot.Digest() != seed.Digest() {
+		t.Fatalf("已验证 v1 Seed 应可只读迁移: snapshot=%+v err=%v", snapshot, err)
+	}
+	if _, err := store.Seed(ctx); err != nil {
+		t.Fatalf("Bootstrap 应以 CAS 持久升级 v1 Seed: %v", err)
+	}
+	entry, err := buckets.BackendPlatformCatalogs.Get(ctx, store.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var upgraded persistedSnapshot
+	if err := json.Unmarshal(entry.Value(), &upgraded); err != nil || upgraded.SchemaVersion != schemaVersion {
+		t.Fatalf("v1 Seed 未升级为当前 schema: state=%+v err=%v", upgraded, err)
+	}
+
+	tampered := persistedSnapshot{SchemaVersion: 1, Catalog: seed, Digest: strings.Repeat("f", 64), Candidate: &Candidate{}}
+	tamperedRaw, _ := json.Marshal(tampered)
+	if _, err := buckets.BackendPlatformCatalogs.Update(ctx, store.key, tamperedRaw, entry.Revision()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Snapshot(ctx); err == nil {
+		t.Fatal("带未知候选或错误摘要的 v1 快照不得迁移")
+	}
+}
+
 func testCatalog(revision uint64) backendcompositionv1.BackendPlatformCatalog {
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: revision, ID: "backend-default"},

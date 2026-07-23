@@ -39,6 +39,15 @@ type CatalogSource interface {
 	Snapshot(context.Context) (backendcompositionv1.BackendPlatformCatalog, error)
 }
 
+// BindingCatalogSource is implemented by the persistent Catalog Store. It
+// fences ordinary Application publication while the exact binding is owned by
+// a Profile Activation candidate. Static Seed sources deliberately do not
+// implement this online-only port.
+type BindingCatalogSource interface {
+	CatalogSource
+	SnapshotForBinding(context.Context, string, string) (backendcompositionv1.BackendPlatformCatalog, error)
+}
+
 type staticCatalogSource struct {
 	catalog backendcompositionv1.BackendPlatformCatalog
 }
@@ -112,6 +121,21 @@ func (p *Publisher) catalogSnapshot(ctx context.Context) (backendcompositionv1.B
 	return validated, nil
 }
 
+func (p *Publisher) catalogSnapshotForBinding(ctx context.Context, tenantID, deploymentName string) (backendcompositionv1.BackendPlatformCatalog, error) {
+	if source, ok := p.catalog.(BindingCatalogSource); ok {
+		catalog, err := source.SnapshotForBinding(ctx, tenantID, deploymentName)
+		if err != nil {
+			return backendcompositionv1.BackendPlatformCatalog{}, fmt.Errorf("读取 Backend Platform binding 发布快照: %w", err)
+		}
+		validated, err := backendcompositionv1.ValidateBackendPlatformCatalog(catalog)
+		if err != nil {
+			return backendcompositionv1.BackendPlatformCatalog{}, fmt.Errorf("复核 Backend Platform binding 发布快照: %w", err)
+		}
+		return validated, nil
+	}
+	return p.catalogSnapshot(ctx)
+}
+
 func (p *Publisher) Targets(ctx context.Context, tenantID string) ([]deploymentpublication.Target, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, errors.New("部署目标 tenant 不能为空")
@@ -133,11 +157,11 @@ func (p *Publisher) Preview(ctx context.Context, tenantID string, application ba
 	if err := validateIdentity(tenantID, application); err != nil {
 		return deploymentpublication.Result{}, err
 	}
-	catalog, err := p.catalogSnapshot(ctx)
+	catalog, err := p.catalogSnapshotForBinding(ctx, tenantID, application.Metadata.Name)
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}
-	profile, _, err := catalog.Resolve(tenantID, application.Metadata.Name)
+	profile, profileRef, err := catalog.Resolve(tenantID, application.Metadata.Name)
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}
@@ -154,7 +178,10 @@ func (p *Publisher) Preview(ctx context.Context, tenantID string, application ba
 	if err != nil {
 		return deploymentpublication.Result{}, fmt.Errorf("生成可信插件配置目录: %w", err)
 	}
-	return deploymentpublication.Result{Deployment: resolved, Digest: resolved.Digest(), ArtifactReferences: references, ConfigurationCatalog: configurationCatalog}, nil
+	return deploymentpublication.Result{
+		Deployment: resolved, Digest: resolved.Digest(), PlatformCatalogDigest: catalog.Digest(), PlatformProfile: profileRef,
+		ArtifactReferences: references, ConfigurationCatalog: configurationCatalog,
+	}, nil
 }
 
 func resolvedArtifactReferences(deployment deploymentv2.Deployment, artifacts map[pluginv1.ArtifactRef]pluginv1.Artifact) ([]pluginv1.ArtifactReference, error) {
@@ -192,6 +219,14 @@ func (p *Publisher) Publish(ctx context.Context, tenantID string, application ba
 	}
 	if expectedDigest == "" || preview.Digest != expectedDigest {
 		return deploymentpublication.Result{}, errors.New("发布预览摘要已变化，必须重新预览和审批")
+	}
+	currentCatalog, err := p.catalogSnapshotForBinding(ctx, tenantID, application.Metadata.Name)
+	if err != nil {
+		return deploymentpublication.Result{}, err
+	}
+	_, currentProfile, err := currentCatalog.Resolve(tenantID, application.Metadata.Name)
+	if err != nil || currentCatalog.Digest() != preview.PlatformCatalogDigest || currentProfile != preview.PlatformProfile {
+		return deploymentpublication.Result{}, errors.New("发布期间 Backend Platform Catalog 已变化，必须重新预览和审批")
 	}
 	raw, err := json.Marshal(preview.Deployment)
 	if err != nil {

@@ -25,6 +25,8 @@ func main() {
 	tenant := flag.String("tenant", "", "node/manager-node 绑定的租户")
 	deployment := flag.String("deployment", "", "node/manager-node 绑定的 Deployment")
 	controllerCount := flag.Int("controller-count", 1, "生成独立 controller 身份数量")
+	catalogPublisherCount := flag.Int("catalog-publisher-count", 1, "生成独立 Backend Platform Catalog publisher 身份数量")
+	catalogID := flag.String("catalog-id", "", "catalog-publisher 精确绑定的 Backend Platform Catalog ID")
 	runtimeCount := flag.Int("runtime-count", 1, "生成独立 runtime 身份数量")
 	flag.Parse()
 	if *outDir == "" || *tlsCert == "" || *tlsKey == "" || *tlsCA == "" || *tenant == "" || *deployment == "" {
@@ -35,10 +37,13 @@ func main() {
 		fatalf("创建输出目录失败: %v", err)
 	}
 	systemPublic, systemSeed := generateIdentity()
-	if *nodeCount < 1 || *managerNodeCount < 0 || *controllerCount < 1 || *runtimeCount < 1 {
-		fatalf("node/controller/runtime 数量必须至少为 1，manager-node 不能为负数")
+	if *nodeCount < 1 || *managerNodeCount < 0 || *controllerCount < 1 || *catalogPublisherCount < 1 || *runtimeCount < 1 {
+		fatalf("node/controller/catalog-publisher/runtime 数量必须至少为 1，manager-node 不能为负数")
 	}
-	identities := make([]controlplane.NKeyIdentity, 0, 1+*nodeCount+*managerNodeCount+*controllerCount+*runtimeCount)
+	if *catalogPublisherCount > 0 && *catalogID == "" {
+		fatalf("生成 catalog-publisher 身份必须指定 -catalog-id")
+	}
+	identities := make([]controlplane.NKeyIdentity, 0, 1+*nodeCount+*managerNodeCount+*controllerCount+*catalogPublisherCount+*runtimeCount)
 	seeds := map[string][]byte{"system.seed": systemSeed}
 	addIdentity := func(role controlplane.SecurityRole, name, nodeID string) {
 		publicKey, seed := generateIdentity()
@@ -52,6 +57,11 @@ func main() {
 	addIdentity(controlplane.RoleBootstrap, "bootstrap", "")
 	for index := 1; index <= *controllerCount; index++ {
 		addIdentity(controlplane.RoleController, fmt.Sprintf("controller-%d", index), "")
+	}
+	for index := 1; index <= *catalogPublisherCount; index++ {
+		name := fmt.Sprintf("catalog-publisher-%d", index)
+		addIdentity(controlplane.RoleCatalogPublisher, name, "")
+		identities[len(identities)-1].CatalogID = *catalogID
 	}
 	for index := 1; index <= *nodeCount; index++ {
 		name := fmt.Sprintf("node-%d", index)

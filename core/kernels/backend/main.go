@@ -329,7 +329,7 @@ func runReconcile(args []string) (runErr error) {
 		if err != nil {
 			return err
 		}
-		catalogSource, err := platformcatalog.NewStore(plane.buckets.BackendPlatformCatalogs, catalog)
+		catalogSource, err := platformcatalog.NewWritableStore(plane.buckets.BackendPlatformCatalogs, plane.catalogPublisherKV, catalog)
 		if err != nil {
 			return err
 		}

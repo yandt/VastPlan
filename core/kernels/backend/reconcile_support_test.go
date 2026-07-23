@@ -60,6 +60,26 @@ func TestParseReconcileOptionsSupportsYAMLStartupFileAlias(t *testing.T) {
 	}
 }
 
+func TestParseReconcileOptionsRequiresDedicatedCatalogPublisherIdentity(t *testing.T) {
+	base := []string{"-nats-url", "tls://nats.example.test:4222", "-backend-platform-catalog", "/etc/vastplan/backend-catalog.json"}
+	if _, err := parseReconcileOptions(base); err == nil || !strings.Contains(err.Error(), "catalog-publisher-nats-seed") {
+		t.Fatalf("生产 Profile 激活缺少专用 Publisher 身份时必须拒绝: %v", err)
+	}
+	configured, err := parseReconcileOptions(append(append([]string{}, base...), "-catalog-publisher-nats-seed", "/run/secrets/catalog-publisher.seed"))
+	if err != nil || configured.catalogPublisherNATSSeed == "" {
+		t.Fatalf("完整 Publisher 身份参数未被接受: options=%+v err=%v", configured, err)
+	}
+	if _, err := parseReconcileOptions([]string{
+		"-nats-url", "nats://127.0.0.1:4222", "-nats-allow-insecure",
+		"-backend-platform-catalog", "/tmp/backend-catalog.json", "-catalog-publisher-nats-seed", "/tmp/publisher.seed",
+	}); err == nil {
+		t.Fatal("insecure NATS 不得伪装使用生产 Publisher seed")
+	}
+	if _, err := parseReconcileOptions([]string{"-desired", "desired.json", "-catalog-publisher-nats-seed", "/tmp/publisher.seed"}); err == nil {
+		t.Fatal("未启用 Backend Platform Catalog 时不得挂载 Publisher seed")
+	}
+}
+
 func TestParseReconcileOptionsSupportsPlacementPrecedence(t *testing.T) {
 	configured, err := parseReconcileOptions([]string{
 		"-desired", "desired.json",

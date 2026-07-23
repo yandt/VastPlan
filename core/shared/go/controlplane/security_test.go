@@ -35,7 +35,7 @@ func TestConnectWithConfig_FailsClosedOnPartialSecurity(t *testing.T) {
 
 func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	files := generateTestCertificates(t)
-	roles := []SecurityRole{RoleBootstrap, RoleController, RoleNode, RoleManager, RoleRuntime}
+	roles := []SecurityRole{RoleBootstrap, RoleCatalogPublisher, RoleController, RoleNode, RoleManager, RoleRuntime}
 	identities := make([]NKeyIdentity, 0, len(roles))
 	seedFiles := map[SecurityRole]string{}
 	for _, role := range roles {
@@ -48,7 +48,11 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 			}
 			tenant, deployment = "acme", "prod"
 		}
-		identities = append(identities, NKeyIdentity{Role: role, PublicKey: publicKey, TenantID: tenant, Deployment: deployment, NodeID: nodeID})
+		catalogID := ""
+		if role == RoleCatalogPublisher {
+			catalogID = "backend-production"
+		}
+		identities = append(identities, NKeyIdentity{Role: role, PublicKey: publicKey, TenantID: tenant, Deployment: deployment, NodeID: nodeID, CatalogID: catalogID})
 		seedFiles[role] = writeTestFile(t, string(role)+".seed", append(seed, '\n'), 0o600)
 	}
 	systemPublic, _ := generateNKey(t)
@@ -90,6 +94,7 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 		return nc
 	}
 	bootstrap := connect(RoleBootstrap)
+	catalogPublisher := connect(RoleCatalogPublisher)
 	controller := connect(RoleController)
 	node := connect(RoleNode)
 	manager := connect(RoleManager)
@@ -151,6 +156,24 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	}
 	if entry, err := managerBuckets.BackendPlatformCatalogs.Get(ctx, catalogKey); err != nil || string(entry.Value()) != "catalog-snapshot" {
 		t.Fatalf("manager-node 应能读取 Backend Platform Catalog 快照: entry=%v err=%v", entry, err)
+	}
+	catalogPublisherJS, _ := jetstream.New(catalogPublisher)
+	catalogPublisherKV, err := catalogPublisherJS.KeyValue(ctx, BackendPlatformCatalogsBucket)
+	if err != nil {
+		t.Fatalf("catalog-publisher 应能打开专用 Catalog bucket: %v", err)
+	}
+	if _, err := catalogPublisherKV.Put(ctx, catalogKey, []byte("candidate-snapshot")); err != nil {
+		t.Fatalf("catalog-publisher 应能写专用 Catalog bucket: %v", err)
+	}
+	otherCatalogDeniedCtx, otherCatalogDeniedCancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer otherCatalogDeniedCancel()
+	if _, err := catalogPublisherKV.Put(otherCatalogDeniedCtx, BackendPlatformCatalogKey("other-catalog"), []byte("forbidden")); err == nil {
+		t.Fatal("catalog-publisher 不得写其他 Catalog ID")
+	}
+	catalogPublisherDeniedCtx, catalogPublisherDeniedCancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer catalogPublisherDeniedCancel()
+	if _, err := catalogPublisherJS.KeyValue(catalogPublisherDeniedCtx, DeploymentsBucket); err == nil {
+		t.Fatal("catalog-publisher 不得打开 Deployment bucket")
 	}
 	managerDeniedCtx, managerDeniedCancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer managerDeniedCancel()
@@ -267,6 +290,29 @@ func TestRoleACL_ManagerNodeCanReadLeasesWithoutGlobalWrites(t *testing.T) {
 		if strings.HasPrefix(subject, "$KV."+DeploymentsBucket+".") || strings.HasPrefix(subject, "$KV."+AssignmentsBucket+".") || strings.HasPrefix(subject, "$KV."+BackendPlatformCatalogsBucket+".") {
 			t.Fatalf("manager-node 不得获得全局期望态写权限: %s", subject)
 		}
+	}
+}
+
+func TestRoleACL_CatalogPublisherCanOnlyMutateCatalogBucket(t *testing.T) {
+	publisher, err := RoleACLForIdentity(NKeyIdentity{Role: RoleCatalogPublisher, CatalogID: "backend-production"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(publisher.PublishAllow, "\n")
+	exactSubject := "$KV." + BackendPlatformCatalogsBucket + "." + BackendPlatformCatalogKey("backend-production")
+	if !strings.Contains(joined, exactSubject) {
+		t.Fatal("catalog-publisher 必须能写 Backend Platform Catalog bucket")
+	}
+	if strings.Contains(joined, "$KV."+BackendPlatformCatalogsBucket+".>") {
+		t.Fatal("catalog-publisher 不得获得 Catalog bucket 通配写权限")
+	}
+	for _, forbidden := range []string{DeploymentsBucket, DesiredBucket, AssignmentsBucket, ConfigurationAuthoritiesBucket, EventsStream} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("catalog-publisher 获得了越界 Subject: %s", forbidden)
+		}
+	}
+	if _, err := RoleACL(RoleCatalogPublisher); err == nil {
+		t.Fatal("未绑定 Catalog ID 不得生成 publisher ACL")
 	}
 }
 

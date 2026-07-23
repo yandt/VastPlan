@@ -74,4 +74,5 @@ Profile 候选提交和发布使用独立的 `platform.plugin-configuration.prof
 
 - 第 1 阶段已完成：`deploymentpublisher` 通过 `CatalogSource.Snapshot` 逐次读取、严格复核并使用 Catalog；静态启动 Catalog 仅是同端口的 Seed 适配器。
 - 第 2 阶段的读取基座已完成：新增 `VASTPLAN_BACKEND_PLATFORM_CATALOGS_V1` 独立 KV，保留 64 代历史；`platformcatalog.Store` 实现严格快照、摘要和身份复核，持久数据损坏时不得回退 Seed。Bootstrap/Controlplane 可 create-only 发布 Seed，Manager Node 只读且 NATS ACL 明确拒绝写入。
-- 待续：专用 Publisher 身份、候选锁与 CAS 状态机，以及 Deployment Manager Profile Activation Saga。
+- 第 2 阶段的写入基座已完成：新增绑定精确 Catalog ID、只能读写对应确定性 key 的 `catalog-publisher` NKey 角色；承载 Deployment Manager 的可信内核以第二条连接持有该 object capability，Manager 连接仍只读。候选状态与活动 Catalog 在同一 value 中 CAS，覆盖 Prepare/Activate/Finalize/Abort/Rollback、精确请求幂等、并发单赢家、目标 binding 发布锁和单调回滚；普通 Application 预览/发布同时锁定 Catalog digest 与 Profile ref。
+- 待续：精确 Deployment Manager Profile Activation 内核端口与可恢复 Saga。

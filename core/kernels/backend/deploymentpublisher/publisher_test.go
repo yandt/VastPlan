@@ -39,9 +39,17 @@ type memoryCatalogPublisher struct {
 
 type mutableCatalogSource struct {
 	catalog backendcompositionv1.BackendPlatformCatalog
+	locked  map[string]bool
 }
 
 func (s *mutableCatalogSource) Snapshot(context.Context) (backendcompositionv1.BackendPlatformCatalog, error) {
+	return s.catalog, nil
+}
+
+func (s *mutableCatalogSource) SnapshotForBinding(_ context.Context, tenantID, deploymentName string) (backendcompositionv1.BackendPlatformCatalog, error) {
+	if s.locked[tenantID+"\x00"+deploymentName] {
+		return backendcompositionv1.BackendPlatformCatalog{}, errors.New("binding locked")
+	}
 	return s.catalog, nil
 }
 
@@ -91,6 +99,9 @@ func TestPublisherUsesCatalogProfileAndDigestLock(t *testing.T) {
 	if preview.Deployment.Units[0].Replicas != 2 || preview.Digest == "" {
 		t.Fatalf("预览不完整: %+v", preview)
 	}
+	if preview.PlatformCatalogDigest != catalog.Digest() || preview.PlatformProfile.Revision != profile.Revision {
+		t.Fatalf("预览必须锁定精确 Platform Catalog/Profile: %+v", preview)
+	}
 	if len(preview.ArtifactReferences) != 1 || preview.ArtifactReferences[0].Ref.PluginID != applicationID || preview.ArtifactReferences[0].SHA256 != strings.Repeat("a", 64) {
 		t.Fatalf("预览必须返回由可信多来源读取器解析的精确制品事实: %+v", preview.ArtifactReferences)
 	}
@@ -125,7 +136,7 @@ func TestPublisherReadsCurrentCatalogSnapshotPerOperation(t *testing.T) {
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "backend-production"}, Profiles: []backendcompositionv1.PlatformProfile{profile},
 		Bindings: []backendcompositionv1.BackendPlatformBinding{{TenantID: "acme", DeploymentName: "agent-services", PlatformProfile: compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()}}},
 	}
-	source := &mutableCatalogSource{catalog: catalog}
+	source := &mutableCatalogSource{catalog: catalog, locked: map[string]bool{}}
 	publisher, err := NewWithCatalogSource(source, artifactReader{}, &memoryApplier{}, &memoryCatalogPublisher{}, compositionresolver.Options{}, compositionresolver.Resolve)
 	if err != nil {
 		t.Fatal(err)
@@ -139,6 +150,16 @@ func TestPublisherReadsCurrentCatalogSnapshotPerOperation(t *testing.T) {
 	if err != nil || len(targets) != 1 || targets[0].DeploymentName != "analytics-services" {
 		t.Fatalf("发布器未重新读取 Catalog 快照: targets=%+v err=%v", targets, err)
 	}
+	application := backendcompositionv1.ApplicationComposition{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "analytics-services"},
+		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend},
+		Metadata: deploymentv1.Metadata{Name: "analytics-services", Tenant: "acme"}, Units: []backendcompositionv1.ApplicationUnit{},
+	}
+	source.locked["acme\x00analytics-services"] = true
+	if _, err := publisher.Preview(context.Background(), "acme", application, 2); err == nil || !strings.Contains(err.Error(), "binding locked") {
+		t.Fatalf("活动 Profile 候选必须阻塞目标 Application 发布: %v", err)
+	}
+	delete(source.locked, "acme\x00analytics-services")
 	source.catalog.Bindings[0].PlatformProfile.Digest = strings.Repeat("f", 64)
 	if _, err := publisher.Targets(context.Background(), "acme"); err == nil {
 		t.Fatal("运行期 Catalog 快照损坏时必须 fail-closed")

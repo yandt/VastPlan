@@ -42,11 +42,13 @@ type PublishRequest struct {
 }
 
 type Result struct {
-	Deployment           deploymentv2.Deployment      `json:"deployment"`
-	Digest               string                       `json:"digest"`
-	KVRevision           uint64                       `json:"kvRevision,omitempty"`
-	ArtifactReferences   []pluginv1.ArtifactReference `json:"artifactReferences"`
-	ConfigurationCatalog pluginconfiguration.Catalog  `json:"configurationCatalog"`
+	Deployment            deploymentv2.Deployment      `json:"deployment"`
+	Digest                string                       `json:"digest"`
+	PlatformCatalogDigest string                       `json:"platformCatalogDigest"`
+	PlatformProfile       compositioncommonv1.Ref      `json:"platformProfile"`
+	KVRevision            uint64                       `json:"kvRevision,omitempty"`
+	ArtifactReferences    []pluginv1.ArtifactReference `json:"artifactReferences"`
+	ConfigurationCatalog  pluginconfiguration.Catalog  `json:"configurationCatalog"`
 }
 
 type ReadinessStatus string

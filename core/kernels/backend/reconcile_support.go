@@ -36,7 +36,7 @@ type reconcileOptions struct {
 	runtimeHostingDefault, publisherRuntimeHosting, pluginRuntimeHosting                                    string
 	capacityCPU, capacityMemory, capacityGPU                                                                int64
 	interval                                                                                                time.Duration
-	natsURL, natsCA, natsCert, natsKey, natsSeed, transportSeed, transportTrust                             string
+	natsURL, natsCA, natsCert, natsKey, natsSeed, catalogPublisherNATSSeed, transportSeed, transportTrust   string
 	natsAllowInsecure, natsBootstrap, allowDevelopmentPlugins                                               bool
 	bootstrapUpgrade                                                                                        bool
 	publishBootstrapReferences                                                                              bool
@@ -92,6 +92,7 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.natsCert, "nats-cert", "", "NATS mTLS 客户端证书 PEM")
 	flags.StringVar(&options.natsKey, "nats-key", "", "NATS mTLS 客户端私钥 PEM")
 	flags.StringVar(&options.natsSeed, "nats-seed", "", "NATS 角色 NKey seed 文件（0600）")
+	flags.StringVar(&options.catalogPublisherNATSSeed, "catalog-publisher-nats-seed", "", "独立 Backend Platform Catalog publisher NKey seed 文件（0600）")
 	flags.StringVar(&options.transportSeed, "transport-seed", "", "addressing 传输身份 NKey seed 文件（0600）")
 	flags.StringVar(&options.transportTrust, "transport-trust", "", "addressing 传输身份信任文档 JSON")
 	flags.BoolVar(&options.natsAllowInsecure, "nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
@@ -159,6 +160,15 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	}
 	if options.backendPlatformCatalog != "" && options.natsURL == "" {
 		return reconcileOptions{}, errors.New("在线部署发布必须同时配置 -backend-platform-catalog 与 -nats-url")
+	}
+	if options.catalogPublisherNATSSeed != "" && options.backendPlatformCatalog == "" {
+		return reconcileOptions{}, errors.New("-catalog-publisher-nats-seed 只能与 -backend-platform-catalog 同时配置")
+	}
+	if options.backendPlatformCatalog != "" && !options.natsAllowInsecure && options.catalogPublisherNATSSeed == "" {
+		return reconcileOptions{}, errors.New("生产在线 Profile 激活必须配置独立 -catalog-publisher-nats-seed")
+	}
+	if options.natsAllowInsecure && options.catalogPublisherNATSSeed != "" {
+		return reconcileOptions{}, errors.New("本地 insecure NATS 不得混用 catalog-publisher NKey seed")
 	}
 	if options.frontendDeliveryOrigin != "" && (!filepath.IsAbs(options.frontendDeliveryOrigin) || filepath.Clean(options.frontendDeliveryOrigin) != options.frontendDeliveryOrigin) {
 		return reconcileOptions{}, errors.New("-frontend-delivery-origin 必须是规范绝对路径")
@@ -299,12 +309,14 @@ func buildArtifactResolution(options reconcileOptions) (artifactResolution, erro
 }
 
 type nodeControlPlane struct {
-	source     nodeagent.DesiredStateSource
-	stateStore nodeagent.StateStore
-	router     *addressing.Router
-	transport  *addressing.TransportSecurity
-	buckets    controlplane.Buckets
-	closeNATS  func()
+	source                nodeagent.DesiredStateSource
+	stateStore            nodeagent.StateStore
+	router                *addressing.Router
+	transport             *addressing.TransportSecurity
+	buckets               controlplane.Buckets
+	closeNATS             func()
+	catalogPublisherKV    jetstream.KeyValue
+	closeCatalogPublisher func()
 }
 
 func newNodeControlPlane(options reconcileOptions, logf func(string, ...any)) (*nodeControlPlane, error) {
@@ -356,6 +368,28 @@ func newNodeControlPlane(options reconcileOptions, logf func(string, ...any)) (*
 		_ = plane.Close() // 初始化尚未交给调用方，优先返回 bucket 失败。
 		return nil, err
 	}
+	if options.backendPlatformCatalog != "" {
+		publisherConnection, connectErr := controlplane.ConnectWithConfig(controlplane.ConnectionConfig{
+			URL: options.natsURL, ClientName: "vastplan-catalog-publisher-" + options.nodeID,
+			CAFile: options.natsCA, CertFile: options.natsCert, KeyFile: options.natsKey, SeedFile: options.catalogPublisherNATSSeed,
+			Insecure: options.natsAllowInsecure, Logf: logf,
+		})
+		if connectErr != nil {
+			_ = plane.Close()
+			return nil, fmt.Errorf("连接 Backend Platform Catalog Publisher: %w", connectErr)
+		}
+		plane.closeCatalogPublisher = publisherConnection.Close
+		publisherJS, jsErr := jetstream.New(publisherConnection)
+		if jsErr != nil {
+			_ = plane.Close()
+			return nil, fmt.Errorf("创建 Backend Platform Catalog Publisher JetStream 客户端: %w", jsErr)
+		}
+		plane.catalogPublisherKV, jsErr = publisherJS.KeyValue(openCtx, controlplane.BackendPlatformCatalogsBucket)
+		if jsErr != nil {
+			_ = plane.Close()
+			return nil, fmt.Errorf("打开 Backend Platform Catalog Publisher bucket: %w", jsErr)
+		}
+	}
 	if options.assignmentKey != "" {
 		plane.source = nodeagent.NATSDesiredStateSource{KV: plane.buckets.Assignments, Key: options.assignmentKey, Conn: nc}
 	} else {
@@ -387,6 +421,9 @@ func (p *nodeControlPlane) Close() error {
 	}
 	if p != nil && p.closeNATS != nil {
 		p.closeNATS()
+	}
+	if p != nil && p.closeCatalogPublisher != nil {
+		p.closeCatalogPublisher()
 	}
 	if p != nil && p.transport != nil {
 		p.transport.Close()

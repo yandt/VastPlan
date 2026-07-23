@@ -117,11 +117,12 @@ func loadNATSTLSConfig(caFile, certFile, keyFile string) (*tls.Config, error) {
 type SecurityRole string
 
 const (
-	RoleBootstrap  SecurityRole = "bootstrap"
-	RoleController SecurityRole = "controller"
-	RoleNode       SecurityRole = "node"
-	RoleManager    SecurityRole = "manager-node"
-	RoleRuntime    SecurityRole = "runtime"
+	RoleBootstrap        SecurityRole = "bootstrap"
+	RoleCatalogPublisher SecurityRole = "catalog-publisher"
+	RoleController       SecurityRole = "controller"
+	RoleNode             SecurityRole = "node"
+	RoleManager          SecurityRole = "manager-node"
+	RoleRuntime          SecurityRole = "runtime"
 )
 
 type SubjectACL struct {
@@ -133,20 +134,34 @@ type SubjectACL struct {
 
 // RoleACL 是代码中的权限单一真相源，配置生成和测试都引用同一份策略。
 func RoleACL(role SecurityRole) (SubjectACL, error) {
-	return roleACL(role, "", "", "")
+	return roleACL(role, "", "", "", "")
 }
 
 // RoleACLForIdentity 在生成服务端配置时把节点身份绑定到自己的状态 key。
 // Node 角色若没有 NodeID 不允许生成生产 ACL；无节点范围的 RoleACL 仅供策略检查，
 // 不得直接用于 NATS 用户配置。
 func RoleACLForIdentity(identity NKeyIdentity) (SubjectACL, error) {
-	return roleACL(identity.Role, identity.TenantID, identity.Deployment, identity.NodeID)
+	return roleACL(identity.Role, identity.TenantID, identity.Deployment, identity.NodeID, identity.CatalogID)
 }
 
-func roleACL(role SecurityRole, tenant, deployment, nodeID string) (SubjectACL, error) {
+func roleACL(role SecurityRole, tenant, deployment, nodeID, catalogID string) (SubjectACL, error) {
 	switch role {
 	case RoleBootstrap:
 		return SubjectACL{PublishAllow: []string{">"}, SubscribeAllow: []string{">"}}, nil
+	case RoleCatalogPublisher:
+		if strings.TrimSpace(catalogID) == "" {
+			return SubjectACL{}, errors.New("catalog-publisher NATS ACL 必须绑定 catalog id")
+		}
+		key := BackendPlatformCatalogKey(catalogID)
+		stream := "KV_" + BackendPlatformCatalogsBucket
+		return SubjectACL{
+			PublishAllow: []string{
+				"$JS.API.STREAM.INFO." + stream,
+				"$JS.API.DIRECT.GET." + stream + "." + key,
+				"$KV." + BackendPlatformCatalogsBucket + "." + key,
+			},
+			SubscribeAllow: []string{"_INBOX.>"},
+		}, nil
 	case RoleController:
 		return SubjectACL{
 			PublishAllow: append(openAllAPI(), append(
@@ -241,6 +256,7 @@ type NKeyIdentity struct {
 	TenantID   string
 	Deployment string
 	NodeID     string
+	CatalogID  string
 }
 
 type ServerSecurityConfig struct {
