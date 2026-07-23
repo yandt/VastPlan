@@ -23,7 +23,7 @@ import (
 func TestManagerRequiresTwoPersonApprovalForStablePublication(t *testing.T) {
 	volume, _ := migrationVolumes(t, "repository.unused")
 	trust, privateKey := migrationTrust(t)
-	manager, err := Open(volume, trust, filepath.Join(t.TempDir(), "state", "migration.json"))
+	manager, err := Open(volume, trust, filepath.Join(t.TempDir(), "state", "migration.json"), Options{SupplyChain: SupplyChainPolicy{RequiredSBOMChannels: []string{}}})
 	if err != nil {
 		t.Fatal(err)
 	}

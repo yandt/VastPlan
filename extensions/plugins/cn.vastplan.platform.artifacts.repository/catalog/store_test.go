@@ -3,8 +3,10 @@ package catalog
 import (
 	"bytes"
 	"crypto/ed25519"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -188,11 +190,27 @@ func testSignedRepository(t *testing.T, root string) (*pluginservice.SignedRepos
 }
 
 func publishTestArtifact(t *testing.T, repository *pluginservice.SignedRepository, privateKey ed25519.PrivateKey, version string) (pluginservice.Artifact, []byte) {
+	return publishTestArtifactWithSupplyChain(t, repository, privateKey, version, false)
+}
+
+func publishTestArtifactWithSupplyChain(t *testing.T, repository *pluginservice.SignedRepository, privateKey ed25519.PrivateKey, version string, includeSBOM bool) (pluginservice.Artifact, []byte) {
 	t.Helper()
 	directory := t.TempDir()
+	supplyChain := ""
+	if includeSBOM {
+		sbom := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"serialNumber":"urn:uuid:catalog-test","metadata":{"component":{"type":"application","name":"com.example.catalog","version":"` + version + `"}},"components":[{"type":"library","name":"example.org/dependency","version":"2.0.0"}]}`)
+		digest := sha256.Sum256(sbom)
+		if err := os.MkdirAll(filepath.Join(directory, "supply-chain"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(directory, "supply-chain", "sbom.cdx.json"), sbom, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		supplyChain = `"supplyChain":{"sbom":{"format":"cyclonedx-json","specVersion":"1.5","path":"supply-chain/sbom.cdx.json","sha256":"` + hex.EncodeToString(digest[:]) + `"}},`
+	}
 	manifest := []byte(`{
   "id":"com.example.catalog","name":"Catalog example","description":"Catalog example plugin","version":"` + version + `","publisher":"example",
-  "engines":{"backend":"^0.1"},"activation":["onStartup"],"entry":{"backend":"backend/main"},
+  "engines":{"backend":"^0.1"},` + supplyChain + `"activation":["onStartup"],"entry":{"backend":"backend/main"},
   "contributes":{"backend":{"tools":[{"id":"example.catalog","service_role":"backend","subcommands":[]}]}}
 }`)
 	if err := os.WriteFile(filepath.Join(directory, "vastplan.plugin.json"), manifest, 0o600); err != nil {
@@ -224,4 +242,25 @@ func publishTestArtifact(t *testing.T, repository *pluginservice.SignedRepositor
 		t.Fatal(err)
 	}
 	return artifact, proof
+}
+
+func TestCatalogIndexesAndReverifiesCycloneDXEvidence(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repository")
+	repository, privateKey := testSignedRepository(t, root)
+	artifact, proof := publishTestArtifactWithSupplyChain(t, repository, privateKey, "6.0.0", true)
+	store, err := Open(root, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RecordPublished(artifact, proof, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	page := store.Query(Query{PluginID: artifact.PluginID, Page: 1, PageSize: 20})
+	if len(page.Items) != 1 || page.Items[0].SBOM == nil || page.Items[0].SBOM.SHA256 == "" {
+		t.Fatalf("Catalog 未索引 SBOM 声明: %+v", page)
+	}
+	evidence, err := store.Evidence(pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
+	if err != nil || evidence.SBOM == nil || evidence.SBOM.Verification != "verified" || evidence.SBOM.Components != 1 || evidence.SBOM.SerialNumber != "urn:uuid:catalog-test" {
+		t.Fatalf("SBOM 证据未按包体复验: evidence=%+v err=%v", evidence, err)
+	}
 }

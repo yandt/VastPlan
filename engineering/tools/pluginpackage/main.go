@@ -26,6 +26,7 @@ func main() {
 	dynamicGoFingerprint := flag.String("dynamic-go-fingerprint", "", "写入签名清单并在 plugin.Open 前校验的 64 位构建指纹")
 	licenseFile := flag.String("license-file", "LICENSE", "清单声明 license 时注入制品的许可证文本；默认仓库根 LICENSE")
 	noticeFile := flag.String("notice-file", "NOTICE", "清单声明 noticeFile 时注入制品的归属告示；默认仓库根 NOTICE")
+	sbomFile := flag.String("sbom", "", "可选：注入并绑定标准 CycloneDX JSON SBOM")
 	out := flag.String("out", "", "可选：输出 .tar.gz 文件")
 	repositoryRoot := flag.String("repository", "", "可选：直接发布到本地制品仓库")
 	remoteRepository := flag.String("remote-repository", "", "可选：发布到 HTTPS 远端制品仓库")
@@ -52,8 +53,8 @@ func main() {
 	var packageBytes []byte
 	var manifestID, manifestVersion, manifestPublisher string
 	if *packageFile != "" {
-		if *backendBin != "" || *backendModule != "" || *frontendBundle != "" || *frontendGraph != "" || *frontendServerGraph != "" || *frontendGraphRoot != "" || *dynamicGoBin != "" || *dynamicGoFingerprint != "" {
-			fatalf("-package 复用不可变候选时不能再注入 Backend、Frontend 或 dynamic-go 内容")
+		if *backendBin != "" || *backendModule != "" || *frontendBundle != "" || *frontendGraph != "" || *frontendServerGraph != "" || *frontendGraphRoot != "" || *dynamicGoBin != "" || *dynamicGoFingerprint != "" || *sbomFile != "" {
+			fatalf("-package 复用不可变候选时不能再注入 Backend、Frontend、dynamic-go 或 SBOM 内容")
 		}
 		var err error
 		packageBytes, manifestID, manifestVersion, manifestPublisher, err = loadExistingPackage(*packageFile)
@@ -61,7 +62,7 @@ func main() {
 			fatalf("读取候选制品失败: %v", err)
 		}
 	} else {
-		packageSource, cleanup := stagePackageWithBackendModuleAndGraphs(*source, *backendBin, *backendModule, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile)
+		packageSource, cleanup := stagePackageWithSupplyChain(*source, *backendBin, *backendModule, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile, *sbomFile)
 		defer cleanup()
 		var err error
 		builtBytes, manifest, err := pluginservice.PackageDirectory(packageSource)

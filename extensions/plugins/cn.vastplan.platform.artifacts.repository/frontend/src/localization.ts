@@ -15,7 +15,7 @@ export const localization = {
       "filter.plugin": "插件 ID / 命名空间", "filter.namespace": "命名空间", "filter.publisher": "发布者", "filter.channel": "通道", "filter.target": "目标内核",
       "filter.lifecycle": "生命周期", "filter.exceeded": "仅超限", "filter.ownerKind": "Owner 类型", "filter.gcStatus": "回收状态",
       "column.plugin": "插件 ID", "column.version": "版本", "column.channel": "通道", "column.publisher": "发布者", "column.targets": "目标内核", "column.size": "大小",
-      "column.lifecycle": "生命周期", "column.revision": "仓库 Revision", "column.publishedAt": "发布时间", "column.quota": "配额", "column.scope": "作用范围",
+      "column.lifecycle": "生命周期", "column.sbom": "SBOM", "column.revision": "仓库 Revision", "column.publishedAt": "发布时间", "column.quota": "配额", "column.scope": "作用范围",
       "column.artifacts": "制品数", "column.artifactLimit": "数量上限", "column.bytes": "对象字节", "column.byteLimit": "字节上限", "column.state": "状态",
       "column.tenant": "租户", "column.ownerKind": "Owner 类型", "column.ownerId": "Owner ID", "column.referencePublisher": "可信发布者", "column.generation": "Generation",
       "column.referenceCount": "引用数", "column.expiresAt": "租约到期", "column.gcStatus": "回收状态", "column.sweepAfter": "最早清扫时间",
@@ -53,6 +53,7 @@ export const localization = {
       "lifecycle.active": "活动", "lifecycle.deprecated": "已弃用", "lifecycle.yanked": "已下架", "lifecycle.revoked": "已撤销",
       "migration.none": "未开始", "migration.prepared": "已准备", "migration.synced": "已同步", "migration.observing": "观察中", "migration.finalized": "已确认", "migration.rolledBack": "已回滚", "migration.released": "已释放",
       "publication.PendingApproval": "待批准", "publication.Approved": "已批准", "publication.Published": "已发布", "publication.Rejected": "已驳回", "publication.Cancelled": "已撤销", "publication.Expired": "已过期",
+      "sbom.bound": "已绑定", "sbom.missing": "未提供",
     },
     "en-US": {
       "page.title": "Artifact repository", "page.titleService": "Artifact repository · {service}",
@@ -68,7 +69,7 @@ export const localization = {
       "filter.plugin": "Plugin ID / namespace", "filter.namespace": "Namespace", "filter.publisher": "Publisher", "filter.channel": "Channel", "filter.target": "Target kernel",
       "filter.lifecycle": "Lifecycle", "filter.exceeded": "Exceeded only", "filter.ownerKind": "Owner kind", "filter.gcStatus": "GC status",
       "column.plugin": "Plugin ID", "column.version": "Version", "column.channel": "Channel", "column.publisher": "Publisher", "column.targets": "Target kernels", "column.size": "Size",
-      "column.lifecycle": "Lifecycle", "column.revision": "Repository revision", "column.publishedAt": "Published", "column.quota": "Quota", "column.scope": "Scope",
+      "column.lifecycle": "Lifecycle", "column.sbom": "SBOM", "column.revision": "Repository revision", "column.publishedAt": "Published", "column.quota": "Quota", "column.scope": "Scope",
       "column.artifacts": "Artifacts", "column.artifactLimit": "Artifact limit", "column.bytes": "Object bytes", "column.byteLimit": "Byte limit", "column.state": "Status",
       "column.tenant": "Tenant", "column.ownerKind": "Owner kind", "column.ownerId": "Owner ID", "column.referencePublisher": "Trusted publisher", "column.generation": "Generation",
       "column.referenceCount": "References", "column.expiresAt": "Lease expiry", "column.gcStatus": "GC status", "column.sweepAfter": "Earliest sweep",
@@ -106,6 +107,7 @@ export const localization = {
       "lifecycle.active": "Active", "lifecycle.deprecated": "Deprecated", "lifecycle.yanked": "Yanked", "lifecycle.revoked": "Revoked",
       "migration.none": "Not started", "migration.prepared": "Prepared", "migration.synced": "Synced", "migration.observing": "Observing", "migration.finalized": "Finalized", "migration.rolledBack": "Rolled back", "migration.released": "Released",
       "publication.PendingApproval": "Pending approval", "publication.Approved": "Approved", "publication.Published": "Published", "publication.Rejected": "Rejected", "publication.Cancelled": "Cancelled", "publication.Expired": "Expired",
+      "sbom.bound": "Bound", "sbom.missing": "Missing",
     },
   },
 } as const;

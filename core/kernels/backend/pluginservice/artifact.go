@@ -129,7 +129,11 @@ func PackageDirectory(dir string) ([]byte, pluginv1.Manifest, error) {
 	if err := gz.Close(); err != nil {
 		return nil, pluginv1.Manifest{}, fmt.Errorf("完成 gzip 包: %w", err)
 	}
-	return out.Bytes(), manifest, nil
+	packageBytes := out.Bytes()
+	if _, _, err := inspectPackage(packageBytes); err != nil {
+		return nil, pluginv1.Manifest{}, fmt.Errorf("复验已打包插件: %w", err)
+	}
+	return packageBytes, manifest, nil
 }
 
 // Publish 校验并不可变地保存一个插件包。相同 ref 仅允许幂等重传完全相同的字节；

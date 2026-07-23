@@ -2,6 +2,8 @@ package pluginservice
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -188,6 +190,36 @@ func TestPackageDirectory_RequiresDeclaredLicenseFile(t *testing.T) {
 	}
 	if _, _, err := inspectPackage(packageBytes); err != nil {
 		t.Fatalf("制品读取必须接受唯一、非空的许可证文本: %v", err)
+	}
+}
+
+func TestPackageDirectoryBindsDeclaredCycloneDXSBOM(t *testing.T) {
+	dir := writeTestPlugin(t)
+	sbom := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"metadata":{"component":{"type":"application","name":"com.example.package-test","version":"1.2.3"}},"components":[{"type":"library","name":"example","version":"2.0.0"}]}`)
+	digest := sha256.Sum256(sbom)
+	if err := os.MkdirAll(filepath.Join(dir, "supply-chain"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "supply-chain", "sbom.cdx.json"), sbom, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	manifestPath := filepath.Join(dir, manifestName)
+	raw, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw = bytes.Replace(raw, []byte(`"activation"`), []byte(`"supplyChain":{"sbom":{"format":"cyclonedx-json","specVersion":"1.5","path":"supply-chain/sbom.cdx.json","sha256":"`+hex.EncodeToString(digest[:])+`"}},"activation"`), 1)
+	if err := os.WriteFile(manifestPath, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := PackageDirectory(dir); err != nil {
+		t.Fatalf("有效 SBOM 应通过打包: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "supply-chain", "sbom.cdx.json"), append(sbom, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := PackageDirectory(dir); err == nil {
+		t.Fatal("SBOM 字节变化后必须因摘要失配而拒绝")
 	}
 }
 

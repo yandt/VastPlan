@@ -85,6 +85,7 @@ type Manager struct {
 	configuredVolumeID string
 	quota              QuotaPolicy
 	publication        PublicationPolicy
+	supplyChain        SupplyChainPolicy
 
 	publishMu    sync.Mutex
 	mu           sync.RWMutex
@@ -98,6 +99,7 @@ type Manager struct {
 type Options struct {
 	Quota       QuotaPolicy
 	Publication PublicationPolicy
+	SupplyChain SupplyChainPolicy
 }
 
 func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, statePath string, options ...Options) (*Manager, error) {
@@ -117,13 +119,16 @@ func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, state
 	if err := runtimeOptions.Publication.Validate(); err != nil {
 		return nil, err
 	}
+	if err := runtimeOptions.SupplyChain.Validate(); err != nil {
+		return nil, err
+	}
 	if err := validateVolume(initial); err != nil {
 		return nil, fmt.Errorf("校验初始制品 volume: %w", err)
 	}
 	if err := ensureStateDirectory(filepath.Dir(filepath.Clean(statePath))); err != nil {
 		return nil, err
 	}
-	manager := &Manager{trust: trust, statePath: filepath.Clean(statePath), configuredProvider: initial.ProviderID, configuredVolumeID: initial.VolumeID, quota: runtimeOptions.Quota, publication: runtimeOptions.Publication.normalized()}
+	manager := &Manager{trust: trust, statePath: filepath.Clean(statePath), configuredProvider: initial.ProviderID, configuredVolumeID: initial.VolumeID, quota: runtimeOptions.Quota, publication: runtimeOptions.Publication.normalized(), supplyChain: runtimeOptions.SupplyChain.normalized()}
 	state, err := manager.loadState()
 	if err != nil {
 		return nil, err
@@ -170,6 +175,9 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 		return pluginv1.Artifact{}, errors.New("已进入 GC retirement 的不可变 ref 禁止重新发布")
 	}
 	if err := m.admitPublish(attestation.Artifact); err != nil {
+		return pluginv1.Artifact{}, err
+	}
+	if err := m.supplyChain.admit(attestation.Artifact); err != nil {
 		return pluginv1.Artifact{}, err
 	}
 	now := time.Now().UTC()

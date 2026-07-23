@@ -93,6 +93,8 @@ stable 发布提供 `listPublications/submitPublication/approvePublication/rejec
 
 生产 CI 使用 `pluginpackage -package <testing候选.tar.gz> -channel stable` 完成最终上传。CLI 要求与发布 token 分离的读取 token，先从远端重新验签同版本 testing 候选并比较 SHA、大小、publisher 与 key ID，再签署 stable 证明；自定义企业 CA 通过 `-remote-ca` 指定。该预检不替代仓库批准强制点。
 
+插件包可在签名清单 `supplyChain.sbom` 中声明固定路径 `supply-chain/sbom.cdx.json`。内核接受 CycloneDX JSON 1.5/1.6，并在发布时校验文档大小、组件上限、插件 ID/版本、路径与摘要绑定；仓库默认对 `stable` 强制要求 SBOM，策略键为 `supplyChain.requiredSBOMChannels`。Catalog 列表只显示是否已绑定，避免列表读取大包；供应链证据 Overlay 会按需读取完整包和证明并返回实际组件数、serial number、规范版本和复验摘要。构建来源证明保持包外 SLSA/in-toto sidecar，不能以内嵌自报字段代替。
+
 发布准入在仓库 leader 的同一串行临界区内执行：全仓上限与所有匹配规则累积生效，任一超限即在物理写入前拒绝，且不会自动运行 GC。已隔离/清扫对象不再占活动配额，因此可以发布替代版本；隔离字节仍计入实际存储容量，直到 sweep 后才计入 reclaimed。`capacity` 只聚合已验证 Catalog 与持久 GC 元数据，分别返回活动、隔离、已清扫、已回收和按 namespace/publisher/channel 的活动 bucket；对象字节不包含 Catalog/证明等小型元数据开销。降低配置到当前用量以下不会阻止仓库启动，但会把对应 quota 标为 `exceeded` 并冻结后续新增发布，便于先治理再恢复。
 
 GC 只把已显式 `yanked/revoked`、无精确引用且不在既有 retirement 状态的制品列为候选，绝不隐式下架 `active/deprecated`。plan 不写状态；quarantine 重新计算 plan 身份并要求至少一个健康 Seed/LKG、所有租约源未过期、仓库迁移完全结束，随后逐项原子移出活动命名空间。隔离宽限期至少 24 小时；sweep 再次复核引用健康、生命周期和精确保护后才删除。中断的 quarantining/sweeping 在启动时幂等恢复，Catalog 只允许 GC 状态中精确记录的缺失制品继续保留历史。已进入 retirement 的 ref 禁止重发、重新激活或被新快照引用。迁移采用可重试阶段命令；观察期的发布、生命周期和引用快照都先镜像后提交活动卷，失败可回滚；GC 在迁移未完全结束时冻结。物理 path/handle 不返回 Portal，Bundle 大字节只走 HTTPS，不穿过协议总线。
@@ -105,4 +107,4 @@ GC 只把已显式 `yanked/revoked`、无精确引用且不在既有 retirement 
 
 同一签名制品从 `/settings/artifacts` 进入统一 Workbench，并在受治理的“系统设置 → 制品仓库”三级导航下提供目录、容量/配额、引用快照、GC 和存储迁移五个 Collection 页面。目录经固定 BFF/TypeScript SDK 路由按 plugin prefix、namespace、publisher、channel、target、lifecycle 与分页查询，不把仓库读令牌交给浏览器；概览与集合查询独立，筛选/翻页不会重复拉取容量。目录行通过受治理的 Workbench Form 以当前 Catalog revision CAS 变更生命周期，原因必填，替代插件与 SemVer 约束只能同时用于 `deprecated`，`revoked` 不提供再次编辑入口。GC 页面展示阻断项、候选与 retirement 记录，隔离前重新生成 plan，quarantine/sweep 继续受 CSRF 和独立 `platform.artifacts.gc` 角色保护。
 
-存储迁移页面直接投影后端阶段状态，只在记录操作区提供 `sync/cutover/rollback/finalize/release`，准备与切换参数进入 Workbench Form；所有按钮仍受 `platform.artifacts.migrate`、CSRF 和后端状态机三重校验。页面不接收 mount path，只显示稳定 Provider/Volume ID、摘要、计数、观察期与脱敏错误。目录中的 testing 制品可提交 stable 发布申请，独立“发布审批”页面提供批准、驳回和撤销，并显示有效期及可选终态审计列；按钮可见性只用于体验，身份分离和状态转移仍由后端强制。供应链证据 Overlay 每次通过可信仓库复验证明，只显示 SHA、publisher、key ID、证明摘要、清单摘要和审批轨迹。现有页面和 API 均不返回令牌、信任根、Provider endpoint、原始签名或制品正文。
+存储迁移页面直接投影后端阶段状态，只在记录操作区提供 `sync/cutover/rollback/finalize/release`，准备与切换参数进入 Workbench Form；所有按钮仍受 `platform.artifacts.migrate`、CSRF 和后端状态机三重校验。页面不接收 mount path，只显示稳定 Provider/Volume ID、摘要、计数、观察期与脱敏错误。目录中的 testing 制品可提交 stable 发布申请，独立“发布审批”页面提供批准、驳回和撤销，并显示有效期及可选终态审计列；按钮可见性只用于体验，身份分离和状态转移仍由后端强制。目录新增 SBOM 绑定状态；供应链证据 Overlay 每次通过可信仓库复验证明和可选 SBOM，只显示 SHA、publisher、key ID、证明摘要、SBOM 摘要/组件计数和审批轨迹。现有页面和 API 均不返回令牌、信任根、Provider endpoint、原始签名、SBOM 正文或制品正文。

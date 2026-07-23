@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.22.0",
+  "version": "0.23.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -83,6 +83,19 @@
           "additionalProperties": false,
           "properties": {
             "approvalTTLHours": { "type": "integer", "minimum": 1, "maximum": 720, "default": 168 }
+          }
+        },
+        "supplyChain": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "requiredSBOMChannels": {
+              "type": "array",
+              "maxItems": 16,
+              "uniqueItems": true,
+              "default": ["stable"],
+              "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$" }
+            }
           }
         },
         "quota": {

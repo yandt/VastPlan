@@ -13,6 +13,8 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 )
 
@@ -38,6 +40,10 @@ type publicationSnapshot struct {
 }
 
 type SupplyChainEvidence = platformadminapi.ArtifactSupplyChainEvidence
+
+type verifiedPackageReader interface {
+	ReadWithAttestation(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, error)
+}
 
 func (s *Store) SubmitPublication(request PublicationRequest, actor string, now, expiresAt time.Time) (Publication, uint64, error) {
 	actor, request.Reason = strings.TrimSpace(actor), strings.TrimSpace(request.Reason)
@@ -321,7 +327,31 @@ func (s *Store) Evidence(ref pluginv1.ArtifactRef) (SupplyChainEvidence, error) 
 			related = append(related, item)
 		}
 	}
-	return SupplyChainEvidence{Ref: ref, SHA256: entry.SHA256, Size: entry.Size, Publisher: entry.Publisher, KeyID: entry.KeyID, SignedAt: entry.SignedAt.Format(time.RFC3339Nano), AttestationSHA256: digestBytes(proof), Verification: "verified", Name: entry.Name, Description: entry.Description, License: entry.License, Targets: append([]string(nil), entry.Targets...), Engines: cloneStringMap(entry.Engines), RepositoryRevision: entry.RepositoryRevision, LifecycleStatus: entry.LifecycleStatus, Publications: related}, nil
+	evidence := SupplyChainEvidence{Ref: ref, SHA256: entry.SHA256, Size: entry.Size, Publisher: entry.Publisher, KeyID: entry.KeyID, SignedAt: entry.SignedAt.Format(time.RFC3339Nano), AttestationSHA256: digestBytes(proof), Verification: "verified", Name: entry.Name, Description: entry.Description, License: entry.License, Targets: append([]string(nil), entry.Targets...), Engines: cloneStringMap(entry.Engines), RepositoryRevision: entry.RepositoryRevision, LifecycleStatus: entry.LifecycleStatus, Publications: related}
+	if entry.SBOM != nil {
+		reader, ok := s.repository.(verifiedPackageReader)
+		if !ok {
+			return SupplyChainEvidence{}, errors.New("仓库不支持复验 SBOM 包体")
+		}
+		artifact, packageBytes, currentProof, err := reader.ReadWithAttestation(ref)
+		if err != nil || artifact.SHA256 != entry.SHA256 || digestBytes(currentProof) != evidence.AttestationSHA256 {
+			return SupplyChainEvidence{}, errors.New("制品 SBOM 包体或证明复验失败")
+		}
+		manifest, err := pluginv1.ParseManifest(artifact.Manifest)
+		if err != nil || manifest.SupplyChain == nil || manifest.SupplyChain.SBOM == nil {
+			return SupplyChainEvidence{}, errors.New("制品 SBOM 签名声明缺失")
+		}
+		raw, err := artifacttrust.ReadPackageFile(packageBytes, manifest.SupplyChain.SBOM.Path, artifactsupplychain.MaxCycloneDXBytes)
+		if err != nil {
+			return SupplyChainEvidence{}, errors.New("读取制品 SBOM 失败")
+		}
+		summary, err := artifactsupplychain.InspectCycloneDX(raw)
+		if err != nil || summary.SHA256 != entry.SBOM.SHA256 || summary.RootName != ref.PluginID || summary.RootVersion != ref.Version {
+			return SupplyChainEvidence{}, errors.New("制品 SBOM 摘要或主体复验失败")
+		}
+		evidence.SBOM = &platformadminapi.ArtifactSBOMEvidence{ArtifactSBOMDeclaration: *entry.SBOM, SerialNumber: summary.SerialNumber, Components: summary.Components, Verification: "verified"}
+	}
+	return evidence, nil
 }
 
 func (s *Store) loadPublications() error {

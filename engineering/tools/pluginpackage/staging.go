@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
 )
 
 // stagePackage creates a temporary package only when build outputs or legal
@@ -25,6 +26,10 @@ func stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, f
 }
 
 func stagePackageWithBackendModuleAndGraphs(source, backendBin, backendModule, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
+	return stagePackageWithSupplyChain(source, backendBin, backendModule, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource, "")
+}
+
+func stagePackageWithSupplyChain(source, backendBin, backendModule, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource, sbomSource string) (string, func()) {
 	manifestRaw, err := os.ReadFile(filepath.Join(source, "vastplan.plugin.json"))
 	if err != nil {
 		fatalf("读取插件清单失败: %v", err)
@@ -36,7 +41,7 @@ func stagePackageWithBackendModuleAndGraphs(source, backendBin, backendModule, f
 	licensePresent := declaredFilePresent(source, manifest.LicenseFile, manifest.License != "", "许可证")
 	noticePresent := declaredFilePresent(source, manifest.NoticeFile, manifest.NoticeFile != "", "归属告示")
 	validateFrontendInputs(frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot)
-	if backendBin == "" && backendModule == "" && frontendBundle == "" && frontendGraph == "" && frontendServerGraph == "" && dynamicGoBin == "" && licensePresent && noticePresent {
+	if backendBin == "" && backendModule == "" && frontendBundle == "" && frontendGraph == "" && frontendServerGraph == "" && dynamicGoBin == "" && sbomSource == "" && licensePresent && noticePresent {
 		return source, func() {}
 	}
 
@@ -50,6 +55,23 @@ func stagePackageWithBackendModuleAndGraphs(source, backendBin, backendModule, f
 	if frontendGraph != "" {
 		frontendGraphContract = loadVerifiedFrontendGraphs(frontendGraph, frontendServerGraph, frontendGraphRoot, manifest)
 		manifest.FrontendModuleGraphs = &pluginv1.FrontendModuleGraphs{Browser: &frontendGraphContract.Browser, Server: frontendGraphContract.Server}
+		manifestChanged = true
+	}
+	const packagedSBOMPath = "supply-chain/sbom.cdx.json"
+	if sbomSource != "" {
+		validateRegularInput(sbomSource, false, "CycloneDX SBOM")
+		raw, err := os.ReadFile(sbomSource)
+		if err != nil {
+			fatalf("读取 CycloneDX SBOM 失败: %v", err)
+		}
+		summary, err := artifactsupplychain.InspectCycloneDX(raw)
+		if err != nil {
+			fatalf("CycloneDX SBOM 无效: %v", err)
+		}
+		if summary.RootName != manifest.ID || summary.RootVersion != manifest.Version {
+			fatalf("CycloneDX SBOM 主体必须是 %s@%s", manifest.ID, manifest.Version)
+		}
+		manifest.SupplyChain = &pluginv1.SupplyChain{SBOM: &pluginv1.SupplyChainDocument{Format: "cyclonedx-json", SpecVersion: summary.SpecVersion, Path: packagedSBOMPath, SHA256: summary.SHA256}}
 		manifestChanged = true
 	}
 
@@ -66,6 +88,7 @@ func stagePackageWithBackendModuleAndGraphs(source, backendBin, backendModule, f
 	copyBuildInput(staging, backendModuleEntry, backendModule, 0o644, "node-worker backend bundle")
 	copyBuildInput(staging, frontendEntry, frontendBundle, 0o644, "frontend bundle")
 	copyBuildInput(staging, dynamicGoEntry, dynamicGoBin, 0o644, "dynamic-go 模块")
+	copyBuildInput(staging, packagedSBOMPath, sbomSource, 0o644, "CycloneDX SBOM")
 	if frontendGraphContract != nil {
 		if err := frontendGraphContract.CopyTo(staging); err != nil {
 			cleanup()

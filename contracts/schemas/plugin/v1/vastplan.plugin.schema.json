@@ -71,6 +71,7 @@
       }
     },
     "frontendModuleGraphs": { "$ref": "#/$defs/frontendModuleGraphs" },
+    "supplyChain": { "$ref": "#/$defs/supplyChain" },
     "contributes": {
       "type": "object",
       "minProperties": 1,
@@ -89,6 +90,24 @@
     { "if": { "required": ["noticeFile"] }, "then": { "required": ["license"] } }
   ],
   "$defs": {
+    "supplyChain": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "sbom": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["format", "specVersion", "path", "sha256"],
+          "properties": {
+            "format": { "const": "cyclonedx-json" },
+            "specVersion": { "enum": ["1.5", "1.6"] },
+            "path": { "const": "supply-chain/sbom.cdx.json" },
+            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
+        }
+      }
+    },
     "frontendModuleGraphs": {
       "type": "object",
       "additionalProperties": false,

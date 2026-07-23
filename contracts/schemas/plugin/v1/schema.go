@@ -84,7 +84,19 @@ type Manifest struct {
 	Dependencies         map[string]string          `json:"dependencies,omitempty"`
 	Entry                map[string]string          `json:"entry"`
 	FrontendModuleGraphs *FrontendModuleGraphs      `json:"frontendModuleGraphs,omitempty"`
+	SupplyChain          *SupplyChain               `json:"supplyChain,omitempty"`
 	Contributes          map[string]json.RawMessage `json:"contributes"`
+}
+
+type SupplyChain struct {
+	SBOM *SupplyChainDocument `json:"sbom,omitempty"`
+}
+
+type SupplyChainDocument struct {
+	Format      string `json:"format"`
+	SpecVersion string `json:"specVersion"`
+	Path        string `json:"path"`
+	SHA256      string `json:"sha256"`
 }
 
 // ConfigurationContract declares the plugin-owned configuration surface. The

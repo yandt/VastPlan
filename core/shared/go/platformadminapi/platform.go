@@ -144,6 +144,20 @@ type ArtifactCatalogEntry struct {
 	LifecycleRevision  uint64                        `json:"lifecycleRevision,omitempty"`
 	LifecycleReason    string                        `json:"lifecycleReason,omitempty"`
 	Replacement        *pluginv1.ArtifactRequirement `json:"replacement,omitempty"`
+	SBOM               *ArtifactSBOMDeclaration      `json:"sbom,omitempty"`
+}
+
+type ArtifactSBOMDeclaration struct {
+	Format      string `json:"format"`
+	SpecVersion string `json:"specVersion"`
+	SHA256      string `json:"sha256"`
+}
+
+type ArtifactSBOMEvidence struct {
+	ArtifactSBOMDeclaration
+	SerialNumber string `json:"serialNumber,omitempty"`
+	Components   int    `json:"components"`
+	Verification string `json:"verification"`
 }
 
 type ArtifactCatalogPage struct {
@@ -232,6 +246,7 @@ type ArtifactSupplyChainEvidence struct {
 	RepositoryRevision uint64                `json:"repositoryRevision"`
 	LifecycleStatus    string                `json:"lifecycleStatus"`
 	Publications       []ArtifactPublication `json:"publications"`
+	SBOM               *ArtifactSBOMEvidence `json:"sbom,omitempty"`
 }
 
 type ArtifactReferenceSnapshot struct {

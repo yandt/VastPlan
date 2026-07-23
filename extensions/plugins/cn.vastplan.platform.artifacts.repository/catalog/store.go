@@ -24,6 +24,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 )
 
 const schemaVersion = "v1"
@@ -59,29 +60,30 @@ type Event struct {
 }
 
 type Entry struct {
-	Ref                  pluginv1.ArtifactRef               `json:"ref"`
-	SHA256               string                             `json:"sha256"`
-	Size                 int64                              `json:"size"`
-	Publisher            string                             `json:"publisher"`
-	KeyID                string                             `json:"keyId"`
-	SignedAt             time.Time                          `json:"signedAt"`
-	PublishedAt          time.Time                          `json:"publishedAt"`
-	RepositoryRevision   uint64                             `json:"repositoryRevision"`
-	Name                 string                             `json:"name"`
-	Description          string                             `json:"description"`
-	Namespace            string                             `json:"namespace"`
-	License              string                             `json:"license,omitempty"`
-	Engines              map[string]string                  `json:"engines"`
-	Dependencies         map[string]string                  `json:"dependencies,omitempty"`
-	Targets              []string                           `json:"targets"`
-	Platforms            []string                           `json:"platforms,omitempty"`
-	RuntimeRequires      []pluginv1.RuntimeRequirement      `json:"runtimeRequires,omitempty"`
-	RuntimeProvides      []pluginv1.RuntimeCapabilityPolicy `json:"runtimeProvides,omitempty"`
-	ProvidedCapabilities []string                           `json:"providedCapabilities,omitempty"`
-	LifecycleStatus      string                             `json:"lifecycleStatus"`
-	LifecycleRevision    uint64                             `json:"lifecycleRevision,omitempty"`
-	LifecycleReason      string                             `json:"lifecycleReason,omitempty"`
-	Replacement          *pluginv1.ArtifactRequirement      `json:"replacement,omitempty"`
+	Ref                  pluginv1.ArtifactRef                      `json:"ref"`
+	SHA256               string                                    `json:"sha256"`
+	Size                 int64                                     `json:"size"`
+	Publisher            string                                    `json:"publisher"`
+	KeyID                string                                    `json:"keyId"`
+	SignedAt             time.Time                                 `json:"signedAt"`
+	PublishedAt          time.Time                                 `json:"publishedAt"`
+	RepositoryRevision   uint64                                    `json:"repositoryRevision"`
+	Name                 string                                    `json:"name"`
+	Description          string                                    `json:"description"`
+	Namespace            string                                    `json:"namespace"`
+	License              string                                    `json:"license,omitempty"`
+	Engines              map[string]string                         `json:"engines"`
+	Dependencies         map[string]string                         `json:"dependencies,omitempty"`
+	Targets              []string                                  `json:"targets"`
+	Platforms            []string                                  `json:"platforms,omitempty"`
+	RuntimeRequires      []pluginv1.RuntimeRequirement             `json:"runtimeRequires,omitempty"`
+	RuntimeProvides      []pluginv1.RuntimeCapabilityPolicy        `json:"runtimeProvides,omitempty"`
+	ProvidedCapabilities []string                                  `json:"providedCapabilities,omitempty"`
+	SBOM                 *platformadminapi.ArtifactSBOMDeclaration `json:"sbom,omitempty"`
+	LifecycleStatus      string                                    `json:"lifecycleStatus"`
+	LifecycleRevision    uint64                                    `json:"lifecycleRevision,omitempty"`
+	LifecycleReason      string                                    `json:"lifecycleReason,omitempty"`
+	Replacement          *pluginv1.ArtifactRequirement             `json:"replacement,omitempty"`
 }
 
 type Query struct {
@@ -487,7 +489,7 @@ func entryFrom(artifact pluginservice.Artifact, attestationRaw []byte) (Entry, e
 	if last := strings.LastIndex(namespace, "."); last > 0 {
 		namespace = namespace[:last]
 	}
-	return Entry{
+	entry := Entry{
 		Ref:    pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel},
 		SHA256: artifact.SHA256, Size: artifact.Size, Publisher: attestation.Publisher, KeyID: attestation.KeyID,
 		SignedAt: attestation.SignedAt.UTC(), Name: manifest.Name, Description: manifest.Description,
@@ -495,7 +497,11 @@ func entryFrom(artifact pluginservice.Artifact, attestationRaw []byte) (Entry, e
 		Dependencies: manifest.Dependencies, Targets: targets,
 		Platforms: backendPlatforms(manifest), RuntimeRequires: runtimeRequires(manifest), RuntimeProvides: runtimeProvides(manifest),
 		ProvidedCapabilities: providedCapabilities,
-	}, nil
+	}
+	if manifest.SupplyChain != nil && manifest.SupplyChain.SBOM != nil {
+		entry.SBOM = &platformadminapi.ArtifactSBOMDeclaration{Format: manifest.SupplyChain.SBOM.Format, SpecVersion: manifest.SupplyChain.SBOM.SpecVersion, SHA256: manifest.SupplyChain.SBOM.SHA256}
+	}
+	return entry, nil
 }
 
 func backendPlatforms(manifest pluginv1.Manifest) []string {

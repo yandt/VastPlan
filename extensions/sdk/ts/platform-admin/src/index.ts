@@ -189,6 +189,7 @@ export interface ArtifactCatalogEntry {
   lifecycleStatus: "active" | "deprecated" | "yanked" | "revoked";
   lifecycleRevision?: number; lifecycleReason?: string;
   replacement?: ArtifactRequirement;
+  sbom?: { format: "cyclonedx-json"; specVersion: "1.5" | "1.6"; sha256: string };
 }
 export interface ArtifactCatalogPage { revision: number; total: number; page: number; pageSize: number; items: ArtifactCatalogEntry[]; }
 export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
@@ -247,6 +248,7 @@ export interface ArtifactSupplyChainEvidence {
   ref: ArtifactRef; sha256: string; size: number; publisher: string; keyId: string; signedAt: string;
   attestationSha256: string; verification: "verified"; name: string; description: string; license?: string;
   targets: string[]; engines: Record<string, string>; repositoryRevision: number; lifecycleStatus: string; publications: ArtifactPublication[];
+  sbom?: { format: "cyclonedx-json"; specVersion: "1.5" | "1.6"; sha256: string; serialNumber?: string; components: number; verification: "verified" };
 }
 
 export type APIExposureStatus = "Draft" | "PendingApproval" | "Approved" | "Published" | "Superseded" | "Retired";

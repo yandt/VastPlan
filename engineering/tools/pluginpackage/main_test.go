@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -115,6 +116,35 @@ func TestStagePackageInjectsFrontendBundleAtManifestEntry(t *testing.T) {
 	}
 	if string(got) != string(content) {
 		t.Fatalf("frontend bundle 注入内容不一致: %q", got)
+	}
+}
+
+func TestStagePackageBindsCycloneDXSBOM(t *testing.T) {
+	source := t.TempDir()
+	manifest := []byte(`{"id":"cn.vastplan.product.test.sbom","name":"sbom","description":"sbom","version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`)
+	if err := os.WriteFile(filepath.Join(source, "vastplan.plugin.json"), manifest, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sbom := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"metadata":{"component":{"type":"application","name":"cn.vastplan.product.test.sbom","version":"1.0.0"}},"components":[]}`)
+	sbomFile := filepath.Join(t.TempDir(), "sbom.cdx.json")
+	if err := os.WriteFile(sbomFile, sbom, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	staged, cleanup := stagePackageWithSupplyChain(source, "", "", "", "", "", "", "", "", "", "", sbomFile)
+	defer cleanup()
+	raw, err := os.ReadFile(filepath.Join(staged, "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.SupplyChain == nil || parsed.SupplyChain.SBOM == nil || parsed.SupplyChain.SBOM.Path != "supply-chain/sbom.cdx.json" || len(parsed.SupplyChain.SBOM.SHA256) != 64 {
+		t.Fatalf("签名清单未绑定 SBOM: %+v", parsed.SupplyChain)
+	}
+	if got, err := os.ReadFile(filepath.Join(staged, "supply-chain", "sbom.cdx.json")); err != nil || !bytes.Equal(got, sbom) {
+		t.Fatalf("SBOM 未注入制品: %v", err)
 	}
 }
 
