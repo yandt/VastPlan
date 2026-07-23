@@ -73,6 +73,32 @@ func TestLeaderElection_SingleWriterFailoverAndFencing(t *testing.T) {
 	}
 }
 
+func TestOpenBucketsRejectsSharedStateWithoutCapacityPolicy(t *testing.T) {
+	server, buckets := startControlplaneNATS(t)
+	nc, err := nats.Connect(server.ClientURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nc.Close()
+	js, err := jetstream.New(nc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := buckets.SharedState.Status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := status.Config()
+	config.MaxBytes = 0
+	config.Metadata = nil
+	if _, err := js.UpdateKeyValue(context.Background(), config); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenBuckets(context.Background(), js); err == nil {
+		t.Fatal("缺少硬上限和 metadata 的 Shared State 不得进入运行态")
+	}
+}
+
 func startControlplaneNATS(t *testing.T) (*natsserver.Server, Buckets) {
 	t.Helper()
 	server, err := natsserver.NewServer(&natsserver.Options{

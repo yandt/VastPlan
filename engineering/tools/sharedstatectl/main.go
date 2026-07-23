@@ -20,6 +20,8 @@ func main() {
 		err = runBackup(os.Args[2:])
 	case "verify":
 		err = runVerify(os.Args[2:])
+	case "capacity":
+		err = runCapacity(os.Args[2:], os.Stdout)
 	case "restore":
 		err = runRestore(os.Args[2:])
 	default:
@@ -33,5 +35,5 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: sharedstatectl <keygen|backup|verify|restore> [flags]")
+	fmt.Fprintln(os.Stderr, "usage: sharedstatectl <keygen|backup|verify|capacity|restore> [flags]")
 }

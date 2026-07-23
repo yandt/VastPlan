@@ -19,6 +19,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
 
 type reconcileOptions struct {
@@ -47,6 +48,9 @@ type reconcileOptions struct {
 	hostingPolicy                                                                                           nodeagent.RuntimeHostingPolicy
 	desiredKey, assignmentKey, deploymentName, deploymentTenant                                             string
 	natsReplicas                                                                                            int
+	sharedStateMaxBytes                                                                                     int64
+	sharedStateWarningPercent, sharedStateCriticalPercent                                                   int
+	sharedStateCapacity                                                                                     sharedstate.CapacityPolicy
 }
 
 func parseReconcileOptions(args []string) (reconcileOptions, error) {
@@ -100,6 +104,9 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.desiredKey, "desired-key", controlplane.DesiredKey("", "local-development"), "NATS DesiredState key")
 	flags.BoolVar(&options.natsBootstrap, "nats-bootstrap", false, "创建/校准控制面 KV bucket（仅初始化/开发使用）")
 	flags.IntVar(&options.natsReplicas, "nats-replicas", 1, "初始化 KV bucket 的 JetStream 副本数；生产建议至少 3")
+	flags.Int64Var(&options.sharedStateMaxBytes, "shared-state-max-bytes", 0, "初始化 Shared State 的硬上限；生产 bootstrap 必须显式配置")
+	flags.IntVar(&options.sharedStateWarningPercent, "shared-state-warning-percent", sharedstate.DefaultWarningPercent, "Shared State warning 阈值百分比")
+	flags.IntVar(&options.sharedStateCriticalPercent, "shared-state-critical-percent", sharedstate.DefaultCriticalPercent, "Shared State critical 阈值百分比")
 	flags.StringVar(&options.assignmentKey, "assignment-key", "", "节点级 assignment key；设置后从 ASSIGNMENTS_V1 消费，覆盖 -desired-key")
 	flags.StringVar(&options.deploymentName, "deployment", "", "集群 Deployment v2 名称；自动生成当前节点 assignment key")
 	flags.StringVar(&options.deploymentTenant, "tenant", "", "集群 Deployment v2 租户；与 -deployment 一起使用")
@@ -169,6 +176,16 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	}
 	if options.natsAllowInsecure && options.catalogPublisherNATSSeed != "" {
 		return reconcileOptions{}, errors.New("本地 insecure NATS 不得混用 catalog-publisher NKey seed")
+	}
+	if options.natsBootstrap {
+		options.sharedStateCapacity, err = sharedstate.ResolveCapacityPolicy(
+			options.sharedStateMaxBytes, options.sharedStateWarningPercent, options.sharedStateCriticalPercent, options.natsAllowInsecure,
+		)
+		if err != nil {
+			return reconcileOptions{}, err
+		}
+	} else if options.sharedStateMaxBytes != 0 {
+		return reconcileOptions{}, errors.New("-shared-state-max-bytes 只能与 -nats-bootstrap 同时配置")
 	}
 	if options.frontendDeliveryOrigin != "" && (!filepath.IsAbs(options.frontendDeliveryOrigin) || filepath.Clean(options.frontendDeliveryOrigin) != options.frontendDeliveryOrigin) {
 		return reconcileOptions{}, errors.New("-frontend-delivery-origin 必须是规范绝对路径")
@@ -360,7 +377,9 @@ func newNodeControlPlane(options reconcileOptions, logf func(string, ...any)) (*
 	openCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if options.natsBootstrap {
-		plane.buckets, err = controlplane.EnsureBuckets(openCtx, js, options.natsReplicas, jetstream.FileStorage)
+		plane.buckets, err = controlplane.EnsureBucketsWithOptions(openCtx, js, controlplane.EnsureBucketsOptions{
+			Replicas: options.natsReplicas, Storage: jetstream.FileStorage, SharedStateCapacity: options.sharedStateCapacity,
+		})
 	} else {
 		plane.buckets, err = controlplane.OpenBuckets(openCtx, js)
 	}

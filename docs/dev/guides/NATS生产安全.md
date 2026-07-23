@@ -52,6 +52,9 @@ go run ./core/kernels/backend controlplane \
   -nats-key /etc/vastplan/pki/bootstrap.key \
   -nats-seed /secure/vastplan-nats/bootstrap.seed \
   -bootstrap -replicas 3 \
+  -shared-state-max-bytes 21474836480 \
+  -shared-state-warning-percent 70 \
+  -shared-state-critical-percent 85 \
   -platform-profile /etc/vastplan/platform-profile.json \
   -application-composition /etc/vastplan/application-composition.json \
   -deployment-revision 1 \
@@ -59,6 +62,8 @@ go run ./core/kernels/backend controlplane \
 ```
 
 bootstrap seed 只在初始化/迁移作业中挂载，常驻 controller 和 node 不得持有。
+生产 bootstrap 必须显式选择 `shared-state-max-bytes`，不能接受 unlimited；示例的 20 GiB 只是部署起点，应按租户数、Credentials 密文和历史增长测量调整。本地 `-nats-allow-insecure` 未指定时使用明确的 1 GiB 开发上限。容量达到硬上限时 KV 使用 `DiscardNew` 拒绝新写，不淘汰旧状态。
+从旧版本升级时必须先用 bootstrap 身份执行一次带容量参数的校准，再启动 Controller/Node；普通运行入口发现 Shared State 仍为 unlimited 或缺少阈值 metadata 会拒绝打开，而不会偷偷套用开发默认值。
 服务配置入口不接受人工编写的 Deployment v2。上述两份输入会先经 Composition Resolver
 校验插件分级与来源，生成锁定输入摘要的 Deployment v2，再由 Controller 消费。
 
@@ -171,6 +176,20 @@ go run ./engineering/tools/sharedstatectl verify \
 ```
 
 记录命令输出的完整 `manifestSHA256`。备份签名私钥轮换时，先把新公钥加入恢复环境信任文档，再启用新 key ID；旧公钥至少保留到使用它签名的最后一份备份过期。
+
+使用同一只读 backup 身份采集不含 tenant/plugin/key/value 的容量快照。默认达到 `critical` 时命令返回非零，便于 systemd、Prometheus textfile 包装器或企业监控执行告警；`-fail-on warning|critical|full|none` 可调整退出门槛：
+
+```bash
+go run ./engineering/tools/sharedstatectl capacity \
+  -nats-url tls://nats.example.com:4222 \
+  -nats-ca /etc/vastplan/pki/ca.crt \
+  -nats-cert /etc/vastplan/pki/backup.crt \
+  -nats-key /etc/vastplan/pki/backup.key \
+  -nats-seed /secure/vastplan-nats/shared-state-backup-1.seed \
+  -fail-on critical
+```
+
+容量 JSON 只返回 `used/max/available bytes`、basis points、历史消息数、每 key 历史上限、存储类型、压缩状态和四级状态。阈值从 stream metadata 读取；缺失硬上限或 metadata 时 fail-closed，监控不得自行假设默认值。
 
 ## 8. Shared State 灾难恢复
 

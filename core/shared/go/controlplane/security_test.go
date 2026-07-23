@@ -20,6 +20,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstatebackup"
 )
 
@@ -106,9 +107,20 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	bootstrapJS, _ := jetstream.New(bootstrap)
-	bootstrapBuckets, err := EnsureBuckets(ctx, bootstrapJS, 1, jetstream.FileStorage)
+	bootstrapBuckets, err := EnsureBucketsWithOptions(ctx, bootstrapJS, EnsureBucketsOptions{
+		Replicas: 1, Storage: jetstream.FileStorage,
+		SharedStateCapacity: sharedstate.CapacityPolicy{MaxBytes: 128 << 20, WarningPercent: 65, CriticalPercent: 90},
+	})
 	if err != nil {
 		t.Fatalf("bootstrap 应能创建控制面 buckets: %v", err)
+	}
+	capacity, err := sharedstate.InspectCapacity(ctx, bootstrapBuckets.SharedState)
+	if err != nil || capacity.MaxBytes != 128<<20 || capacity.WarningPercent != 65 || capacity.CriticalPercent != 90 {
+		t.Fatalf("Shared State 容量策略未进入 stream 真源: snapshot=%+v err=%v", capacity, err)
+	}
+	sharedStateStream, err := bootstrapJS.Stream(ctx, "KV_"+SharedStateBucket)
+	if err != nil || sharedStateStream.CachedInfo().Config.Discard != jetstream.DiscardNew {
+		t.Fatalf("Shared State 达到硬上限时必须拒绝新写而非淘汰旧状态: err=%v", err)
 	}
 	if _, err := bootstrapBuckets.SharedState.Put(ctx, "v1.tenant.dGVuYW50.c2VydmljZQ.cGx1Z2lu.c3RhdGU.a2V5", []byte("encrypted-state")); err != nil {
 		t.Fatal(err)
@@ -285,6 +297,9 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	backupKV, err := backupJS.KeyValue(ctx, SharedStateBucket)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if _, err := sharedstate.InspectCapacity(ctx, backupKV); err != nil {
+		t.Fatalf("最小 backup 身份应能采集无敏感容量快照: %v", err)
 	}
 	private, trust, err := sharedstatebackup.GenerateSigningKey("security-test")
 	if err != nil {

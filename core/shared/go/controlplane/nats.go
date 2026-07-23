@@ -13,6 +13,8 @@ import (
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
 
 const (
@@ -59,13 +61,34 @@ func Connect(url, clientName string, logf func(string, ...any)) (*nats.Conn, err
 	})
 }
 
-// EnsureBuckets 创建或校准控制面 bucket。生产集群 replicas 应至少为 3；本地和 E2E
-// 可显式传 1。节点租约使用短 TTL；实际态保留最近 16 个生命周期检查点，期望态
-// 保留 64 份历史。两者均有硬上限，不能把 KV 误用成无限增长的审计日志。
+type EnsureBucketsOptions struct {
+	Replicas            int
+	Storage             jetstream.StorageType
+	SharedStateCapacity sharedstate.CapacityPolicy
+}
+
+// EnsureBuckets 创建或校准控制面 bucket，并为本地/E2E 使用明确的 1 GiB
+// Shared State 开发上限。生产入口必须调用 EnsureBucketsWithOptions 提供容量策略。
 func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, storage jetstream.StorageType) (Buckets, error) {
-	if replicas <= 0 {
-		replicas = 1
+	return EnsureBucketsWithOptions(ctx, js, EnsureBucketsOptions{
+		Replicas: replicas, Storage: storage, SharedStateCapacity: sharedstate.DevelopmentCapacityPolicy(),
+	})
+}
+
+// EnsureBucketsWithOptions 创建或校准控制面 bucket。生产集群 replicas 应至少为 3；
+// 节点租约使用短 TTL；实际态保留最近 16 个生命周期检查点，期望态保留 64 份历史。
+func EnsureBucketsWithOptions(ctx context.Context, js jetstream.JetStream, options EnsureBucketsOptions) (Buckets, error) {
+	if options.Replicas <= 0 {
+		options.Replicas = 1
 	}
+	if err := options.SharedStateCapacity.Validate(); err != nil {
+		return Buckets{}, fmt.Errorf("Shared State 容量策略无效: %w", err)
+	}
+	sharedStateMetadata, err := options.SharedStateCapacity.Metadata()
+	if err != nil {
+		return Buckets{}, err
+	}
+	replicas, storage := options.Replicas, options.Storage
 	desired, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
 		Bucket: DesiredBucket, Description: "VastPlan DesiredState v1",
 		History: 64, MaxValueSize: MaxDesiredStateBytes, Replicas: replicas, Storage: storage,
@@ -150,10 +173,14 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	}
 	sharedState, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
 		Bucket: SharedStateBucket, Description: "VastPlan caller-isolated shared plugin state v1",
-		History: 64, MaxValueSize: MaxDesiredStateBytes, Replicas: replicas, Storage: storage,
+		History: 64, MaxValueSize: MaxDesiredStateBytes, MaxBytes: options.SharedStateCapacity.MaxBytes,
+		Replicas: replicas, Storage: storage, Metadata: sharedStateMetadata,
 	})
 	if err != nil {
 		return Buckets{}, fmt.Errorf("创建 Shared State bucket: %w", err)
+	}
+	if _, err := sharedstate.InspectCapacity(ctx, sharedState); err != nil {
+		return Buckets{}, fmt.Errorf("复核 Shared State 容量策略: %w", err)
 	}
 	events, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name: EventsStream, Description: "VastPlan durable domain events v1",
@@ -224,6 +251,9 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 	sharedState, err := js.KeyValue(ctx, SharedStateBucket)
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开 Shared State bucket: %w", err)
+	}
+	if _, err := sharedstate.InspectCapacity(ctx, sharedState); err != nil {
+		return Buckets{}, fmt.Errorf("Shared State 容量策略未就绪: %w", err)
 	}
 	events, err := js.Stream(ctx, EventsStream)
 	if err != nil {

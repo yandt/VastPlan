@@ -80,6 +80,23 @@ func TestParseReconcileOptionsRequiresDedicatedCatalogPublisherIdentity(t *testi
 	}
 }
 
+func TestParseReconcileOptionsRequiresProductionSharedStateCapacity(t *testing.T) {
+	secure := []string{"-nats-url", "tls://nats.example.test:4222", "-deployment", "api", "-tenant", "acme", "-node-id", "node-a", "-nats-bootstrap"}
+	if _, err := parseReconcileOptions(secure); err == nil || !strings.Contains(err.Error(), "shared-state-max-bytes") {
+		t.Fatalf("生产 bootstrap 缺少 Shared State 上限必须拒绝: %v", err)
+	}
+	configured, err := parseReconcileOptions(append(append([]string{}, secure...), "-shared-state-max-bytes", "134217728", "-shared-state-warning-percent", "60", "-shared-state-critical-percent", "90"))
+	if err != nil || configured.sharedStateCapacity.MaxBytes != 128<<20 || configured.sharedStateCapacity.WarningPercent != 60 {
+		t.Fatalf("生产容量策略未解析: options=%+v err=%v", configured, err)
+	}
+	development, err := parseReconcileOptions([]string{
+		"-nats-url", "nats://127.0.0.1:4222", "-nats-allow-insecure", "-deployment", "api", "-tenant", "local", "-node-id", "node-a", "-nats-bootstrap",
+	})
+	if err != nil || development.sharedStateCapacity.MaxBytes != 1<<30 {
+		t.Fatalf("本地 bootstrap 应使用明确开发上限: options=%+v err=%v", development, err)
+	}
+}
+
 func TestParseReconcileOptionsSupportsPlacementPrecedence(t *testing.T) {
 	configured, err := parseReconcileOptions([]string{
 		"-desired", "desired.json",

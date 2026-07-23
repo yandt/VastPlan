@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net"
@@ -24,9 +25,10 @@ func TestSignedNativeBackupRestorePreservesCASAndCredentialsIntegrity(t *testing
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	nc, js := startNATS(t)
+	metadata, _ := sharedstate.DevelopmentCapacityPolicy().Metadata()
 	kv, err := js.CreateKeyValue(ctx, jetstream.KeyValueConfig{
 		Bucket: controlplane.SharedStateBucket, History: 64, Storage: jetstream.FileStorage,
-		MaxValueSize: sharedstate.MaxValueBytes,
+		MaxValueSize: sharedstate.MaxValueBytes, MaxBytes: sharedstate.DevelopmentMaxBytes, Metadata: metadata,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -114,6 +116,13 @@ func TestSignedNativeBackupRestorePreservesCASAndCredentialsIntegrity(t *testing
 	}
 	if _, err := restoredStore.Update(ctx, settingsScope, "theme", []byte(`{"mode":"system"}`), restoredSetting.Revision); err != nil {
 		t.Fatalf("恢复后的 CAS revision 不可继续使用: %v", err)
+	}
+	var capacityOutput bytes.Buffer
+	if err := runCapacity([]string{"-nats-url", nc.ConnectedUrl(), "-nats-allow-insecure", "-fail-on", "none"}, &capacityOutput); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(capacityOutput.Bytes(), []byte(`"maxBytes":1073741824`)) || bytes.Contains(capacityOutput.Bytes(), []byte("tenant-a")) {
+		t.Fatalf("capacity 输出不正确或泄漏租户: %s", capacityOutput.String())
 	}
 }
 

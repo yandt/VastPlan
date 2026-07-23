@@ -13,6 +13,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
@@ -22,6 +23,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/observability"
 	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
@@ -140,7 +142,7 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			sharedstatev1.OperationGet, sharedstatev1.OperationCreate, sharedstatev1.OperationUpdate,
 			sharedstatev1.OperationDelete, sharedstatev1.OperationList,
 		} {
-			if err := host.RegisterHostService(extpoint.KernelService, sharedstatev1.KernelService(operation), kernelSharedState(dependencies.SharedState, operation)); err != nil {
+			if err := host.RegisterHostService(extpoint.KernelService, sharedstatev1.KernelService(operation), kernelSharedStateWithMetrics(dependencies.SharedState, operation, host.Observer.Metrics)); err != nil {
 				return nil, err
 			}
 		}
@@ -149,13 +151,28 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 }
 
 func kernelSharedState(store sharedstate.Store, operation string) protocolbus.HostService {
+	return kernelSharedStateWithMetrics(store, operation, nil)
+}
+
+func kernelSharedStateWithMetrics(store sharedstate.Store, operation string, metrics observability.MetricSink) protocolbus.HostService {
 	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		started := time.Now()
+		outcome := "internal_error"
+		defer func() {
+			if metrics != nil {
+				labels := map[string]string{"operation": operation, "outcome": outcome}
+				metrics.AddCounter("shared_state_operations_total", 1, labels)
+				metrics.ObserveDuration("shared_state_operation_duration", time.Since(started), labels)
+			}
+		}()
 		identity, ok := runtimeidentity.FromContext(ctx)
 		if !ok || identity.Validate() != nil || callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != identity.PluginID {
+			outcome = "identity_rejected"
 			return sharedStateError("state.identity_invalid", "Shared State 缺少可信 Runtime 身份", false), nil, nil
 		}
 		request, err := sharedstatev1.ParseRequest(operation, payload)
 		if err != nil {
+			outcome = "invalid"
 			return sharedStateError("state.invalid", "Shared State 请求无效", false), nil, nil
 		}
 		scopeName, namespace := sharedStateRequestScope(request)
@@ -164,6 +181,7 @@ func kernelSharedState(store sharedstate.Store, operation string) protocolbus.Ho
 			scope.TenantID = callCtx.GetTenantId()
 		}
 		if err := scope.Validate(); err != nil {
+			outcome = "invalid"
 			return sharedStateError("state.scope_invalid", "Shared State scope 无效", false), nil, nil
 		}
 		var response any
@@ -187,13 +205,29 @@ func kernelSharedState(store sharedstate.Store, operation string) protocolbus.Ho
 			err = sharedstate.ErrInvalid
 		}
 		if err != nil {
+			outcome = sharedStateMetricOutcome(err)
 			return sharedStateStoreError(err), nil, nil
 		}
 		raw, err := marshalSharedStateResponse(response)
 		if err != nil {
+			outcome = "encoding_error"
 			return nil, nil, err
 		}
+		outcome = "ok"
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
+}
+
+func sharedStateMetricOutcome(err error) string {
+	switch {
+	case errors.Is(err, sharedstate.ErrNotFound):
+		return "not_found"
+	case errors.Is(err, sharedstate.ErrConflict):
+		return "conflict"
+	case errors.Is(err, sharedstate.ErrInvalid):
+		return "invalid"
+	default:
+		return "unavailable"
 	}
 }
 

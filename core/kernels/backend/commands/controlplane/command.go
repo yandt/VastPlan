@@ -26,6 +26,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/compositioncore"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
 
 type catalogRecordingArtifactReader struct {
@@ -66,6 +67,9 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	repositoryCA := flags.String("repository-ca", "", "controller 远端制品仓库自定义 CA PEM")
 	bootstrap := flags.Bool("bootstrap", false, "创建/校准控制面 bucket")
 	replicas := flags.Int("replicas", 1, "bootstrap 时的 JetStream 副本数；生产建议至少 3")
+	sharedStateMaxBytes := flags.Int64("shared-state-max-bytes", 0, "bootstrap 时 Shared State 硬上限；生产必须显式配置")
+	sharedStateWarningPercent := flags.Int("shared-state-warning-percent", sharedstate.DefaultWarningPercent, "Shared State 容量 warning 阈值百分比")
+	sharedStateCriticalPercent := flags.Int("shared-state-critical-percent", sharedstate.DefaultCriticalPercent, "Shared State 容量 critical 阈值百分比")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
@@ -85,6 +89,14 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	if publish && *deploymentRevision == 0 {
 		return errors.New("发布服务配置必须提供大于 0 的 -deployment-revision")
+	}
+	capacityPolicy := sharedstate.CapacityPolicy{}
+	if *bootstrap {
+		resolved, resolveErr := sharedstate.ResolveCapacityPolicy(*sharedStateMaxBytes, *sharedStateWarningPercent, *sharedStateCriticalPercent, *natsAllowInsecure)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		capacityPolicy = resolved
 	}
 
 	artifacts, err := pluginservice.NewRepository(*repositoryRoot)
@@ -151,7 +163,9 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	defer cancel()
 	var buckets sharedcontrolplane.Buckets
 	if *bootstrap {
-		buckets, err = sharedcontrolplane.EnsureBuckets(openCtx, js, *replicas, jetstream.FileStorage)
+		buckets, err = sharedcontrolplane.EnsureBucketsWithOptions(openCtx, js, sharedcontrolplane.EnsureBucketsOptions{
+			Replicas: *replicas, Storage: jetstream.FileStorage, SharedStateCapacity: capacityPolicy,
+		})
 	} else {
 		buckets, err = sharedcontrolplane.OpenBuckets(openCtx, js)
 	}

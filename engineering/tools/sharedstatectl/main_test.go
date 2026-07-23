@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstatebackup"
 )
 
@@ -31,5 +32,21 @@ func TestKeygenCreatesNonOverwritingPrivateKeyAndTrust(t *testing.T) {
 	}
 	if err := runKeygen(arguments); err == nil {
 		t.Fatal("keygen 不得覆盖已有密钥")
+	}
+}
+
+func TestCapacityAlertLevelsAreClosedAndOrdered(t *testing.T) {
+	for _, value := range []string{"none", "warning", "critical", "full"} {
+		if _, err := parseCapacityLevel(value); err != nil {
+			t.Fatalf("合法 fail-on 被拒绝 %s: %v", value, err)
+		}
+	}
+	if _, err := parseCapacityLevel("tenant-a"); err == nil {
+		t.Fatal("未知或业务化告警级别不得接受")
+	}
+	if !(capacityRank(sharedstate.CapacityReady) < capacityRank(sharedstate.CapacityWarning) &&
+		capacityRank(sharedstate.CapacityWarning) < capacityRank(sharedstate.CapacityCritical) &&
+		capacityRank(sharedstate.CapacityCritical) < capacityRank(sharedstate.CapacityFull)) {
+		t.Fatal("容量级别顺序错误")
 	}
 }
