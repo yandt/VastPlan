@@ -9,10 +9,7 @@ import (
 )
 
 func main() {
-	service, err := pluginsettings.New("")
-	if err != nil {
-		log.Fatalf("初始化插件配置协调器失败: %v", err)
-	}
+	service := pluginsettings.New()
 	plugin := sdk.New(pluginsettings.PluginID, pluginsettings.PluginVersion, map[string]string{"backend": "^0.1"})
 	plugin.Contribute(pluginsettings.Contribution(service))
 	plugin.Contribute(pluginsettings.ScopedContribution(service))

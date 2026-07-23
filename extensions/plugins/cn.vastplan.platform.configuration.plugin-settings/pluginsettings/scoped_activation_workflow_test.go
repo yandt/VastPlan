@@ -19,7 +19,7 @@ import (
 
 func TestTenantScopedCandidateBecomesAtomicActiveAndSurvivesRestart(t *testing.T) {
 	stateFile := filepath.Join(t.TempDir(), "plugin-settings.json")
-	service, _ := New(stateFile)
+	service, _ := newTestService(stateFile)
 	host, definition := scopedFixture(t, "tenant")
 	alice, bob := userCall("tenant-a", "alice"), userCall("tenant-a", "bob")
 	draft, err := service.CreateDraft(context.Background(), host, alice, pluginconfiguration.CreateDraftRequest{
@@ -35,7 +35,7 @@ func TestTenantScopedCandidateBecomesAtomicActiveAndSurvivesRestart(t *testing.T
 	if _, err := service.ApproveScopedCandidate(alice, pending.ID, pending.Revision); err == nil {
 		t.Fatal("创建者不得自批")
 	}
-	service, err = New(stateFile)
+	service, err = newTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestTenantScopedCandidateBecomesAtomicActiveAndSurvivesRestart(t *testing.T
 		t.Fatalf("激活 scoped 候选: %+v err=%v", ready, err)
 	}
 
-	reopened, err := New(stateFile)
+	reopened, err := newTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestTenantScopedCandidateBecomesAtomicActiveAndSurvivesRestart(t *testing.T
 }
 
 func TestUserScopedResolutionUsesTrustedPrincipalAndWatchIsValueFree(t *testing.T) {
-	service, _ := New(filepath.Join(t.TempDir(), "plugin-settings.json"))
+	service, _ := newTestService(filepath.Join(t.TempDir(), "plugin-settings.json"))
 	host, definition := scopedFixture(t, "user")
 	alice, bob := userCall("tenant-a", "alice"), userCall("tenant-a", "bob")
 	draft, err := service.CreateDraft(context.Background(), host, alice, pluginconfiguration.CreateDraftRequest{

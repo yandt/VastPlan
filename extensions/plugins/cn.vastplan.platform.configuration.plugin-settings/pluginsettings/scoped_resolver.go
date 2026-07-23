@@ -10,6 +10,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
+	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
 const scopedResolverDescriptor = `{"title":"Tenant/User Scoped Configuration Resolver","protocol":"configuration.scoped.v1"}`
@@ -63,29 +64,18 @@ func (s *Service) handleScopedWatch(ctx context.Context, host sdk.Host, call *co
 		if timeout == 0 {
 			timeout = time.Duration(configurationscopedv1.MaxWatchTimeoutMS) * time.Millisecond
 		}
-		tenant := call.GetTenantId()
-		s.mu.Lock()
-		state := s.tenantLocked(tenant)
-		current := scopedActiveReference{}
-		if active, exists := state.ScopedActives[key]; exists {
-			current = active.reference()
-		} else {
-			current.Digest = resolution.Digest
-		}
-		if current.Revision != request.AfterRevision || current.Digest != request.AfterDigest {
-			changed = true
-			s.mu.Unlock()
-		} else {
-			updates := s.scopedChangeChannelLocked(tenant, key)
-			s.mu.Unlock()
-			timer := time.NewTimer(timeout)
+		deadline := time.NewTimer(timeout)
+		defer deadline.Stop()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for !changed {
 			select {
 			case <-ctx.Done():
-				timer.Stop()
 				return nil, nil, ctx.Err()
-			case <-updates:
-				timer.Stop()
-			case <-timer.C:
+			case <-deadline.C:
+				goto observed
+			case <-ticker.C:
+			case <-s.scopedChangeSignal(call.GetTenantId(), key):
 			}
 			resolution, _, err = s.resolveScoped(ctx, host, call)
 			if err != nil {
@@ -94,6 +84,8 @@ func (s *Service) handleScopedWatch(ctx context.Context, host sdk.Host, call *co
 			changed = resolution.Revision != request.AfterRevision || resolution.Digest != request.AfterDigest
 		}
 	}
+
+observed:
 	observation := configurationscopedv1.RevisionObservation{
 		Protocol: configurationscopedv1.Protocol, ConfigurationID: resolution.ConfigurationID, Changed: changed,
 		Revision: resolution.Revision, Digest: resolution.Digest, ObservedAt: s.now(),
@@ -112,9 +104,17 @@ func (s *Service) resolveScoped(ctx context.Context, host sdk.Host, call *contra
 	if call == nil || call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || call.GetCaller().GetId() == "" || call.GetTenantId() == "" {
 		return configurationscopedv1.Resolution{}, "", errors.New("Scoped Configuration 只接受认证插件调用")
 	}
-	if err := s.ensureConfigured(ctx, host, call); err != nil {
-		return configurationscopedv1.Resolution{}, "", err
-	}
+	var resolution configurationscopedv1.Resolution
+	var key string
+	err := s.withTenantState(ctx, host, call, func() error {
+		var err error
+		resolution, key, err = s.resolveScopedLoaded(ctx, host, call)
+		return err
+	})
+	return resolution, key, err
+}
+
+func (s *Service) resolveScopedLoaded(ctx context.Context, host sdk.Host, call *contractv1.CallContext) (configurationscopedv1.Resolution, string, error) {
 	catalogs, err := s.catalogs(ctx, host, call)
 	if err != nil {
 		return configurationscopedv1.Resolution{}, "", err
@@ -169,6 +169,12 @@ func (s *Service) resolveScoped(ctx context.Context, host sdk.Host, call *contra
 	return resolution, key, nil
 }
 
+func (s *Service) scopedChangeSignal(tenant, key string) <-chan struct{} {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.scopedChangeChannelLocked(tenant, key)
+}
+
 func scopedErrorCode(err error) string {
 	switch {
 	case errors.Is(err, ErrNotFound):
@@ -181,5 +187,10 @@ func scopedErrorCode(err error) string {
 }
 
 func scopedError(code string, err error) (*contractv1.CallResult, []byte, error) {
-	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error()}}, nil, nil
+	retryable := errors.Is(err, ErrConflict)
+	var stateError *sharedstatesdk.ServiceError
+	if errors.As(err, &stateError) {
+		retryable = stateError.Retryable
+	}
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error(), Retryable: retryable}}, nil, nil
 }

@@ -1,89 +1,115 @@
 package pluginsettings
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
+	"io"
 	"strings"
 
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
+	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
-func (s *Service) configure(stateFile string) error {
-	if !filepath.IsAbs(stateFile) || filepath.Clean(stateFile) != stateFile {
-		return errors.New("插件配置协调器 stateFile 必须是规范绝对路径")
-	}
-	if s.stateFile != "" && s.stateFile != stateFile {
-		return errors.New("插件配置协调器 stateFile 不允许运行中切换")
-	}
-	if s.stateFile != "" {
-		return nil
-	}
-	if err := os.MkdirAll(filepath.Dir(stateFile), 0o700); err != nil {
-		return err
-	}
-	if err := secureDirectory(filepath.Dir(stateFile)); err != nil {
-		return err
-	}
-	s.stateFile = stateFile
-	return s.load()
+const (
+	stateNamespace = "configuration.coordinator"
+	stateKey       = "tenant"
+)
+
+type stateSession struct {
+	ctx        context.Context
+	call       *contractv1.CallContext
+	repository *tenantStateRepository
+	tenant     string
+	revision   uint64
 }
 
-func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, call *contractv1.CallContext) error {
-	s.mu.Lock()
-	configured := s.stateFile != ""
-	s.mu.Unlock()
-	if configured {
-		return nil
+type tenantStateRepository struct{ client *sharedstatesdk.Client }
+
+func newTenantStateRepository(host sdk.Host) (*tenantStateRepository, error) {
+	client, err := sharedstatesdk.New(host, "tenant", stateNamespace)
+	if err != nil {
+		return nil, err
 	}
-	if host == nil {
-		return errors.New("插件配置协调器缺少可信宿主")
+	return &tenantStateRepository{client: client}, nil
+}
+
+func (r *tenantStateRepository) load(ctx context.Context, call *contractv1.CallContext) (*tenantState, uint64, error) {
+	entry, err := r.client.Get(ctx, call, stateKey)
+	if sharedstatesdk.IsNotFound(err) {
+		return emptyTenantState(), 0, nil
 	}
-	operation := "get"
-	payload, _ := json.Marshal(map[string]string{"key": StateFileConfigKey})
-	result, raw, err := host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: "kernel.config.get", Operation: &operation}, call, payload)
-	if err != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
-		return errors.New("未提供插件配置协调器部署配置")
+	if err != nil {
+		return nil, 0, fmt.Errorf("读取插件配置 Shared State: %w", err)
 	}
-	var stateFile string
-	if err := json.Unmarshal(raw, &stateFile); err != nil {
-		return errors.New("插件配置协调器 stateFile 必须是 JSON 字符串")
+	decoder := json.NewDecoder(bytes.NewReader(entry.Value))
+	decoder.DisallowUnknownFields()
+	state := emptyTenantState()
+	if err := decoder.Decode(state); err != nil {
+		return nil, 0, fmt.Errorf("解析插件配置 Shared State: %w", err)
 	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, 0, errors.New("插件配置 Shared State 包含尾随数据")
+	}
+	return state, entry.Revision, nil
+}
+
+func (r *tenantStateRepository) save(ctx context.Context, call *contractv1.CallContext, state *tenantState, expected uint64) (uint64, error) {
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return 0, err
+	}
+	if len(raw) > maxStateBytes {
+		return 0, errors.New("插件配置租户聚合超过 Shared State 单值上限")
+	}
+	var entry sharedstatesdk.Entry
+	if expected == 0 {
+		entry, err = r.client.Create(ctx, call, stateKey, raw)
+	} else {
+		entry, err = r.client.Update(ctx, call, stateKey, raw, expected)
+	}
+	if sharedstatesdk.IsConflict(err) {
+		return 0, ErrConflict
+	}
+	if err != nil {
+		return 0, fmt.Errorf("保存插件配置 Shared State: %w", err)
+	}
+	return entry.Revision, nil
+}
+
+func (s *Service) openStateSession(ctx context.Context, host sdk.Host, call *contractv1.CallContext, tenant string) error {
+	if s.session != nil {
+		return errors.New("插件配置状态会话发生嵌套")
+	}
+	repository, err := newTenantStateRepository(host)
+	if err != nil {
+		return fmt.Errorf("插件配置 Shared State client 不可用: %w", err)
+	}
+	state, revision, err := repository.load(ctx, call)
+	if err != nil {
+		return err
+	}
+	s.state = persistedState{Tenants: map[string]*tenantState{tenant: state}}
+	s.session = &stateSession{ctx: ctx, call: call, repository: repository, tenant: tenant, revision: revision}
+	if err := s.validateLoaded(); err != nil {
+		s.session = nil
+		return err
+	}
+	return nil
+}
+
+func (s *Service) closeStateSession() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.configure(stateFile)
-}
-
-func (s *Service) load() error {
-	info, err := os.Lstat(s.stateFile)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() <= 0 || info.Size() > maxStateBytes {
-		return errors.New("插件配置协调器状态文件必须是仅属主可访问且大小受限的普通文件")
-	}
-	raw, err := os.ReadFile(s.stateFile)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, &s.state); err != nil {
-		return fmt.Errorf("解析插件配置协调器状态: %w", err)
-	}
-	if s.state.Tenants == nil {
-		s.state.Tenants = map[string]*tenantState{}
-	}
-	return s.validateLoaded()
+	s.session = nil
+	s.state = persistedState{Tenants: map[string]*tenantState{}}
 }
 
 func (s *Service) validateLoaded() error {
@@ -91,33 +117,7 @@ func (s *Service) validateLoaded() error {
 		if strings.TrimSpace(tenant) == "" || state == nil {
 			return errors.New("插件配置协调器状态包含无效租户")
 		}
-		if state.Candidates == nil {
-			state.Candidates = map[string]pluginconfiguration.Candidate{}
-		}
-		if state.Current == nil {
-			state.Current = map[string]string{}
-		}
-		if state.CredentialStages == nil {
-			state.CredentialStages = map[string]map[string]credentialStage{}
-		}
-		if state.HotActivations == nil {
-			state.HotActivations = map[string]hotActivationRecord{}
-		}
-		if state.HotDraftBases == nil {
-			state.HotDraftBases = map[string]configurationv1.ActiveReference{}
-		}
-		if state.ResourceActivations == nil {
-			state.ResourceActivations = map[string]resourceActivationRecord{}
-		}
-		if state.ScopedActives == nil {
-			state.ScopedActives = map[string]scopedActiveRecord{}
-		}
-		if state.ScopedDraftBases == nil {
-			state.ScopedDraftBases = map[string]scopedActiveReference{}
-		}
-		if state.ScopedActivations == nil {
-			state.ScopedActivations = map[string]scopedActivationRecord{}
-		}
+		initializeTenantState(state)
 		if len(state.Candidates) > maxCandidates {
 			return errors.New("插件配置协调器候选数量超过上限")
 		}
@@ -199,63 +199,67 @@ func (s *Service) validateLoaded() error {
 }
 
 func (s *Service) saveLocked() error {
-	raw, err := json.Marshal(s.state)
+	if s.session == nil {
+		if s.testSave != nil {
+			return s.testSave(s.state)
+		}
+		return errors.New("插件配置写入缺少 Shared State 会话")
+	}
+	state := s.state.Tenants[s.session.tenant]
+	if state == nil {
+		return errors.New("插件配置写入缺少租户聚合")
+	}
+	if err := s.validateLoaded(); err != nil {
+		return err
+	}
+	revision, err := s.session.repository.save(s.session.ctx, s.session.call, state, s.session.revision)
 	if err != nil {
 		return err
 	}
-	if len(raw) > maxStateBytes {
-		return errors.New("插件配置协调器状态超过上限")
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(s.stateFile), ".plugin-settings-*")
-	if err != nil {
-		return err
-	}
-	name := temporary.Name()
-	defer os.Remove(name)
-	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if _, err := temporary.Write(raw); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(name, s.stateFile); err != nil {
-		return err
-	}
-	directory, err := os.Open(filepath.Dir(s.stateFile))
-	if err != nil {
-		return err
-	}
-	syncErr, closeErr := directory.Sync(), directory.Close()
-	if syncErr != nil {
-		return syncErr
-	}
-	return closeErr
+	s.session.revision = revision
+	return nil
 }
 
-func secureDirectory(path string) error {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return err
+func emptyTenantState() *tenantState {
+	state := &tenantState{}
+	initializeTenantState(state)
+	return state
+}
+
+func initializeTenantState(state *tenantState) {
+	if state.Candidates == nil {
+		state.Candidates = map[string]pluginconfiguration.Candidate{}
 	}
-	if !info.IsDir() || info.Mode().Perm()&0o022 != 0 {
-		return errors.New("插件配置协调器状态目录不能是符号链接或被 group/other 写入")
+	if state.Current == nil {
+		state.Current = map[string]string{}
 	}
-	return nil
+	if state.CredentialStages == nil {
+		state.CredentialStages = map[string]map[string]credentialStage{}
+	}
+	if state.HotActivations == nil {
+		state.HotActivations = map[string]hotActivationRecord{}
+	}
+	if state.HotDraftBases == nil {
+		state.HotDraftBases = map[string]configurationv1.ActiveReference{}
+	}
+	if state.ResourceActivations == nil {
+		state.ResourceActivations = map[string]resourceActivationRecord{}
+	}
+	if state.ScopedActives == nil {
+		state.ScopedActives = map[string]scopedActiveRecord{}
+	}
+	if state.ScopedDraftBases == nil {
+		state.ScopedDraftBases = map[string]scopedActiveReference{}
+	}
+	if state.ScopedActivations == nil {
+		state.ScopedActivations = map[string]scopedActivationRecord{}
+	}
 }
 
 func (s *Service) tenantLocked(id string) *tenantState {
 	state := s.state.Tenants[id]
 	if state == nil {
-		state = &tenantState{Candidates: map[string]pluginconfiguration.Candidate{}, Current: map[string]string{}, CredentialStages: map[string]map[string]credentialStage{}, HotDraftBases: map[string]configurationv1.ActiveReference{}, HotActivations: map[string]hotActivationRecord{}, ResourceActivations: map[string]resourceActivationRecord{}, ScopedActives: map[string]scopedActiveRecord{}, ScopedDraftBases: map[string]scopedActiveReference{}, ScopedActivations: map[string]scopedActivationRecord{}}
+		state = emptyTenantState()
 		s.state.Tenants[id] = state
 	}
 	return state

@@ -72,3 +72,4 @@ Portal 继续只调用固定 `platform.plugin-configuration` BFF。Scoped 发布
 - hello-world 0.2.0 已作为首个 tenant-scoped consumer 接入 Go SDK；Application Composition Seed 明确保存 `greetingTemplate`。
 - 本地 fresh 纵向验收完成：Backend Platform 的 12 个单元与 managed-services 的 1 个单元均收敛 Ready，plugin-settings 0.10.0 实际注册 `configuration.scoped-resolver/configuration.scoped`，hello-world 0.2.0 在独立 managed node 以跨 Deployment 强依赖完成激活；前台持活时 `/operations` 与 `/` 均返回 HTTP 200，随后 Ctrl+C 优雅停止。按既定决定未执行 soak。
 - 验收同时消除了两项集成漂移：platformdev 不再内嵌过期的 hello-world 版本，而读取独立受管服务组合；Deployment 发布校验不再把“当前 Deployment 中没有 provider”误判为“全局没有 provider”，带完整 `logicalService + routingDomain` 的外部依赖由 Node Agent readiness 继续 fail-closed。
+- 2026-07-23：plugin-settings 0.12.0 已按 [ADR-0124](ADR-0124-Plugin-Settings租户聚合与Active-Active协调.md) 把原 File State 迁移到 tenant Shared State CAS，并切换为 active-active；上文 File State 描述仅保留为本 ADR 落地时的历史记录。Scoped watch 现以本实例即时通知加跨实例一秒观察保持 value-free 更新语义。

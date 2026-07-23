@@ -49,7 +49,7 @@ type resourceWorkflowCandidate struct {
 
 func TestResourceProfileSecretSagaUsesExactIdentityAndRecovers(t *testing.T) {
 	stateFile := filepath.Join(t.TempDir(), "plugin-settings.json")
-	service, err := New(stateFile)
+	service, err := newTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestResourceProfileSecretSagaUsesExactIdentityAndRecovers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	restarted, err := New(stateFile)
+	restarted, err := newTestService(stateFile)
 	if err != nil {
 		t.Fatalf("资源 Saga 无法跨重启恢复: %v", err)
 	}
@@ -91,7 +91,7 @@ func TestResourceProfileSecretSagaUsesExactIdentityAndRecovers(t *testing.T) {
 	if strings.Contains(string(raw), "credential://") || strings.Contains(string(raw), "Bearer secret") {
 		t.Fatal("资源查询泄露了凭证 handle 或 material")
 	}
-	if _, err := New(stateFile); err != nil {
+	if _, err := newTestService(stateFile); err != nil {
 		t.Fatalf("Ready resource activation 持久状态无效: %v", err)
 	}
 }

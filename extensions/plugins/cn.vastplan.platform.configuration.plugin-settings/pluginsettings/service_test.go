@@ -99,7 +99,7 @@ func (h *credentialDraftHost) Call(ctx context.Context, target *contractv1.CallT
 func TestApplicationDraftSubmissionApprovalAndActivationSaga(t *testing.T) {
 	catalog := managedTestCatalog(t)
 	host := &credentialDraftHost{catalogHost: catalogHost{catalogs: []pluginconfiguration.Catalog{catalog}}, definition: catalog.Items[0]}
-	service, err := New(filepath.Join(t.TempDir(), "plugin-settings.json"))
+	service, err := newTestService(filepath.Join(t.TempDir(), "plugin-settings.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestDraftIsSchemaValidatedCASBoundAndDurable(t *testing.T) {
 	catalog := testCatalog(t)
 	host := &catalogHost{catalogs: []pluginconfiguration.Catalog{catalog}}
 	stateFile := filepath.Join(t.TempDir(), "plugin-settings.json")
-	service, err := New(stateFile)
+	service, err := newTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestDraftIsSchemaValidatedCASBoundAndDurable(t *testing.T) {
 	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("状态文件权限错误: info=%v err=%v", info, err)
 	}
-	reopened, err := New(stateFile)
+	reopened, err := newTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func TestDraftIsSchemaValidatedCASBoundAndDurable(t *testing.T) {
 func TestCatalogTamperingFailsClosed(t *testing.T) {
 	catalog := testCatalog(t)
 	catalog.Items[0].PluginName = "tampered"
-	service, err := New(filepath.Join(t.TempDir(), "plugin-settings.json"))
+	service, err := newTestService(filepath.Join(t.TempDir(), "plugin-settings.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ func TestDraftStagesDeclaredSecretWithoutPersistingMaterialOrAuthority(t *testin
 	catalog := managedTestCatalog(t)
 	host := &credentialDraftHost{catalogHost: catalogHost{catalogs: []pluginconfiguration.Catalog{catalog}}, definition: catalog.Items[0]}
 	stateFile := filepath.Join(t.TempDir(), "plugin-settings.json")
-	service, err := New(stateFile)
+	service, err := newTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +256,7 @@ func TestDraftStagesDeclaredSecretWithoutPersistingMaterialOrAuthority(t *testin
 func TestDraftRejectsMissingOrUndeclaredSecretBeforeAuthorityIssue(t *testing.T) {
 	catalog := managedTestCatalog(t)
 	host := &credentialDraftHost{catalogHost: catalogHost{catalogs: []pluginconfiguration.Catalog{catalog}}, definition: catalog.Items[0]}
-	service, _ := New(filepath.Join(t.TempDir(), "plugin-settings.json"))
+	service, _ := newTestService(filepath.Join(t.TempDir(), "plugin-settings.json"))
 	base := pluginconfiguration.CreateDraftRequest{ConfigurationID: catalog.Items[0].ID, CatalogDigest: catalog.Digest, Values: []byte(`{"region":"cn-east"}`)}
 	if _, err := service.CreateDraft(context.Background(), host, userCall("tenant-a", "alice"), base); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("缺少 required secret 必须拒绝: %v", err)

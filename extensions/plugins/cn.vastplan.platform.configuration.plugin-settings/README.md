@@ -2,7 +2,7 @@
 
 `cn.vastplan.platform.configuration.plugin-settings` 是通用插件配置协调器。它通过可信宿主读取 Backend Resolver 基于验签制品生成、且与活动 Deployment revision/digest 精确匹配的 `ConfigurationCatalog v1`，并保存配置候选与审计记录。
 
-当前 `0.11.0` 实现：
+当前 `0.12.0` 实现：
 
 - 只返回活动、已发布 Deployment 的可信配置定义；
 - 使用不透明 `cfg_` 资源 ID，浏览器不提交插件身份或 Schema；
@@ -10,7 +10,7 @@
 - 通过可信宿主签发、NATS CAS 一次性消费的 `ConfigurationAuthority`，把托管秘密交给凭证插件并派生目标 owner/purpose；
 - 以租户隔离、单候选、CAS 和 `Preparing -> Draft` / `RollingBack -> RolledBack` 语义创建和放弃 Draft；
 - 提供受 Management Binding、角色与 CSRF 保护的 Node BFF 和 Workbench 动态表单；
-- 使用私有状态目录、`0600` 原子文件、`fsync` 和大小/数量上限；
+- 使用可信宿主派生身份的 tenant Shared State 单文档 CAS；支持 active-active 副本、跨实例恢复和并发 stale-writer fencing；
 - Workbench 将托管字段渲染为一次性 `secretMaterial`，协调器不持久化明文、authority，也不向浏览器返回凭证 handle；
 - Application 来源 restart 配置可提交为独立服务修订，由不同主体在 Deployment Manager 审批后，再从本页面执行专用发布；
 - Platform Profile 来源 restart 配置使用独立权限与候选 Catalog：只能修改活动 Profile 的独立 service，不能编辑 attachment、共享 Profile 全文或其他 binding；
@@ -20,7 +20,7 @@
 - 目标控制器私有持久化旧引用退役 outbox；公开目录只投影配置状态和版本，不返回 handle；
 - 浏览器只看到控制器是否可用，不获得 capability、logical service、routing domain、request digest 或托管凭证 handle；
 - Tenant/User Scoped Hot 使用独立 `configuration.scoped-resolver`：运行时请求不接受配置 ID、插件 ID、tenant 或 subject，只按认证 caller 与上下文解析唯一签名定义；
-- Scoped 候选支持 Seed revision 0、目标主体隔离、异人审批、Active CAS、原子持久化、重启恢复和不携带 values 的有界 watch；
+- Scoped 候选支持 Seed revision 0、目标主体隔离、异人审批、Active CAS、重启恢复和不携带 values 的有界 watch；本实例即时通知，跨实例最多一秒观察更新；
 - 发布前把新凭证推进到 Candidate 窗口，精确 readiness 成功后转 Active，失败时自动发布单调回滚并终止候选凭证；
 - 已配置的必填秘密可留空保留，浏览器只看到字段状态和版本；
 - 动态 Profile 使用独立 `cfgc_*` 集合与 `cfgp_*` 资源身份，支持 create/update/delete 草稿、Active CAS、异人审批、prepare/commit/abort/status 恢复与独立资源权限；
@@ -30,4 +30,4 @@
 
 带托管凭证的 Scoped Hot 仍保持 fail-closed；Service Hot 与独立资源 Profile 已完成“保留旧引用 + 替换新引用”闭环。当前 Workbench 明确区分 Application/Platform/Service Hot/Scoped Hot/Resource 权限、Draft、外部审批、Activating、Ready 和回滚状态。
 
-状态文件由本插件自己的部署配置 `platform.plugin-configuration.stateFile` 提供，不能从请求或环境变量指定。完整边界见 [ADR-0113](../../../docs/dev/decisions/ADR-0113-可信插件配置目录与分路径生效.md)、[ADR-0114](../../../docs/dev/decisions/ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)、[ADR-0115](../../../docs/dev/decisions/ADR-0115-Application配置激活Saga与候选凭证窗口.md)、[ADR-0116](../../../docs/dev/decisions/ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md)、[ADR-0117](../../../docs/dev/decisions/ADR-0117-语言中立Service-Hot配置控制器.md)、[ADR-0118](../../../docs/dev/decisions/ADR-0118-独立配置资源与动态Profile.md)、[ADR-0119](../../../docs/dev/decisions/ADR-0119-Tenant与User-Scoped-Hot配置真源.md) 与 [ADR-0120](../../../docs/dev/decisions/ADR-0120-Service-Hot托管凭证提交与退役.md)。
+生产状态只经 `kernel.state.shared.get/create/update` 访问，插件不取得 NATS/SQL 凭证，也不接受状态路径配置；Provider 不可用时 fail-closed。完整边界见 [ADR-0113](../../../docs/dev/decisions/ADR-0113-可信插件配置目录与分路径生效.md)、[ADR-0114](../../../docs/dev/decisions/ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)、[ADR-0115](../../../docs/dev/decisions/ADR-0115-Application配置激活Saga与候选凭证窗口.md)、[ADR-0116](../../../docs/dev/decisions/ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md)、[ADR-0117](../../../docs/dev/decisions/ADR-0117-语言中立Service-Hot配置控制器.md)、[ADR-0118](../../../docs/dev/decisions/ADR-0118-独立配置资源与动态Profile.md)、[ADR-0119](../../../docs/dev/decisions/ADR-0119-Tenant与User-Scoped-Hot配置真源.md)、[ADR-0120](../../../docs/dev/decisions/ADR-0120-Service-Hot托管凭证提交与退役.md) 与 [ADR-0124](../../../docs/dev/decisions/ADR-0124-Plugin-Settings租户聚合与Active-Active协调.md)。

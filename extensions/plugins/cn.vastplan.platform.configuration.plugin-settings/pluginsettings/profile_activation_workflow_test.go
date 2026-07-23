@@ -79,7 +79,7 @@ func TestPlatformProfileDraftUsesDedicatedApprovalAndCredentialSaga(t *testing.T
 	base := &credentialDraftHost{catalogHost: catalogHost{catalogs: []pluginconfiguration.Catalog{catalog}}, definition: catalog.Items[0]}
 	host := &profileDraftHost{base: base}
 	stateFile := filepath.Join(t.TempDir(), "plugin-settings.json")
-	service, err := New(stateFile)
+	service, err := newTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestPlatformProfileDraftUsesDedicatedApprovalAndCredentialSaga(t *testing.T
 	if err != nil || submitted.ExternalStatus != string(platformprofileactivation.ActivationPendingApproval) || submitted.ExternalRevision != 9 {
 		t.Fatalf("Profile 草稿未进入专用审批: candidate=%+v err=%v", submitted, err)
 	}
-	reopened, err := New(stateFile)
+	reopened, err := newTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}

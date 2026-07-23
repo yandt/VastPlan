@@ -4,6 +4,7 @@
 package pluginsettings
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -13,15 +14,15 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
-	PluginID           = pluginconfiguration.PluginSettingsID
-	PluginVersion      = "0.11.0"
-	Capability         = "platform.plugin-configuration"
-	StateFileConfigKey = "platform.plugin-configuration.stateFile"
-	maxStateBytes      = 8 << 20
-	maxCandidates      = 2048
+	PluginID      = pluginconfiguration.PluginSettingsID
+	PluginVersion = "0.12.0"
+	Capability    = "platform.plugin-configuration"
+	maxStateBytes = 1 << 20
+	maxCandidates = 2048
 )
 
 var (
@@ -66,28 +67,40 @@ type persistedState struct {
 type Service struct {
 	mu            sync.Mutex
 	workflowMu    sync.Mutex
-	stateFile     string
 	state         persistedState
+	session       *stateSession
+	testSave      func(persistedState) error
 	now           func() time.Time
 	newID         func() (string, error)
 	newResourceID func() (string, error)
 	scopedChanged map[string]chan struct{}
 }
 
-func New(stateFile string) (*Service, error) {
-	service := &Service{
+func New() *Service {
+	return &Service{
 		state:         persistedState{Tenants: map[string]*tenantState{}},
 		now:           func() time.Time { return time.Now().UTC() },
 		newID:         randomID,
 		newResourceID: randomResourceID,
 		scopedChanged: map[string]chan struct{}{},
 	}
-	if strings.TrimSpace(stateFile) != "" {
-		if err := service.configure(stateFile); err != nil {
-			return nil, err
-		}
+}
+
+func (s *Service) withTenantState(ctx context.Context, host sdk.Host, call *contractv1.CallContext, work func() error) error {
+	tenant, _, err := tenantAndActor(call)
+	if err != nil {
+		return err
 	}
-	return service, nil
+	s.workflowMu.Lock()
+	defer s.workflowMu.Unlock()
+	if s.testSave != nil {
+		return work()
+	}
+	if err := s.openStateSession(ctx, host, call, tenant); err != nil {
+		return err
+	}
+	defer s.closeStateSession()
+	return work()
 }
 
 func tenantAndActor(call *contractv1.CallContext) (string, string, error) {

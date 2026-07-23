@@ -12,6 +12,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
+	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
 type operationRequest struct {
@@ -46,19 +47,19 @@ func decodeStrict(raw []byte, target any) error {
 }
 
 func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
-	if err := s.ensureConfigured(ctx, host, call); err != nil {
-		return domainError("platform.plugin_configuration.unavailable", err)
-	}
-	s.workflowMu.Lock()
-	defer s.workflowMu.Unlock()
-	if err := s.recoverInterrupted(ctx, host, call); err != nil {
-		return domainError("platform.plugin_configuration.unavailable", err)
-	}
 	var request operationRequest
 	if err := decodeStrict(payload, &request); err != nil {
 		return domainError("platform.plugin_configuration.invalid", ErrInvalid)
 	}
-	out, err := s.execute(ctx, host, call, operation, request)
+	var out any
+	err := s.withTenantState(ctx, host, call, func() error {
+		if err := s.recoverInterrupted(ctx, host, call); err != nil {
+			return err
+		}
+		var err error
+		out, err = s.execute(ctx, host, call, operation, request)
+		return err
+	})
 	if err != nil {
 		return domainError(domainErrorCode(err), err)
 	}
@@ -162,12 +163,15 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 }
 
 func domainErrorCode(err error) string {
+	var stateError *sharedstatesdk.ServiceError
 	switch {
 	case errors.Is(err, ErrNotFound):
 		return "platform.plugin_configuration.not_found"
 	case errors.Is(err, ErrConflict):
 		return "platform.plugin_configuration.conflict"
-	case strings.Contains(err.Error(), "不可用"):
+	case errors.As(err, &stateError):
+		return "platform.plugin_configuration.unavailable"
+	case strings.Contains(err.Error(), "不可用") || strings.Contains(err.Error(), "Shared State"):
 		return "platform.plugin_configuration.unavailable"
 	default:
 		return "platform.plugin_configuration.invalid"
@@ -175,5 +179,10 @@ func domainErrorCode(err error) string {
 }
 
 func domainError(code string, err error) (*contractv1.CallResult, []byte, error) {
-	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error()}}, nil, nil
+	retryable := errors.Is(err, ErrConflict)
+	var stateError *sharedstatesdk.ServiceError
+	if errors.As(err, &stateError) {
+		retryable = stateError.Retryable
+	}
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error(), Retryable: retryable}}, nil, nil
 }

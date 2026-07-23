@@ -1,14 +1,14 @@
 {
   "id": "cn.vastplan.platform.configuration.plugin-settings",
   "name": "VastPlan 插件配置协调器",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "从活动可信配置目录创建、审批并恢复根配置、Scoped Hot 与独立 Profile 资源候选；以一次性宿主授权委托凭证托管器保存秘密",
+  "description": "从活动可信配置目录创建、审批并恢复根配置、Scoped Hot 与独立 Profile 资源候选；以租户级 Shared State CAS 支持多实例协调",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
-  "capabilities": { "kernelServices": ["kernel.config.get", "kernel.configuration.catalogs", "kernel.configuration.authority.issue"], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.configuration.catalogs", "kernel.configuration.authority.issue", "kernel.state.shared.get", "kernel.state.shared.create", "kernel.state.shared.update"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "authorization": {
     "namespace": "platform.plugin-configuration",
@@ -53,34 +53,22 @@
     ]
   },
   "runtime": {
-    "instancePolicy": "leader",
-    "stateModel": "leader-owned",
+    "instancePolicy": "active-active",
+    "stateModel": "external-shared",
     "visibility": "cluster",
-    "routing": "leader",
+    "routing": "queue",
     "routingDomain": "platform",
     "requires": [
       { "capability": "platform.credentials", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.credentials", "routingDomain": "platform" }
       ,{ "capability": "platform.deployment", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.deployment", "routingDomain": "platform" }
     ],
     "provides": [
-      { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" },
-      { "extensionPoint": "configuration.scoped-resolver", "capability": "configuration.scoped", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }
+      { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "visibility": "cluster", "routing": "queue", "routingDomain": "platform" },
+      { "extensionPoint": "configuration.scoped-resolver", "capability": "configuration.scoped", "visibility": "cluster", "routing": "queue", "routingDomain": "platform" }
     ]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
-  "configuration": {
-    "scope": "service",
-    "applyMode": "restart",
-    "schema": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["platform.plugin-configuration.stateFile"],
-      "properties": {
-        "platform.plugin-configuration.stateFile": { "type": "string", "minLength": 1 }
-      }
-    }
-  },
-  "state": { "backend": { "format": "cn.vastplan.platform.plugin-configuration", "formatVersion": 6 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.plugin-configuration.shared", "formatVersion": 1 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/plugin-settings", "frontend": "frontend/dist/index.js" },
   "contributes": {

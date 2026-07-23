@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 27,
+  "revision": 28,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -270,19 +270,14 @@
       "enabled": true,
       "service_role": "backend",
       "logical_service": "platform.plugin-configuration",
-      "instance_policy": "leader",
-      "state_model": "leader-owned",
+      "instance_policy": "active-active",
+      "state_model": "external-shared",
       "visibility": "cluster",
-      "routing": "leader",
+      "routing": "queue",
       "routing_domain": "platform",
       "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
-        "plugins": {
-          "cn.vastplan.platform.configuration.plugin-settings": {
-            "platform.plugin-configuration.stateFile": "__VASTPLAN_DEV_STATE__/plugin-settings.json"
-          }
-        },
         "environment_allowlist": {
           "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"]
         }
@@ -290,7 +285,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.26.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.11.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.12.0", "channel": "stable" }
       ]
     },
     {

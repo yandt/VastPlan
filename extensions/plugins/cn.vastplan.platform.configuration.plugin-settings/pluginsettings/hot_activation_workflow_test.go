@@ -204,7 +204,7 @@ func (h *hotWorkflowHost) Call(ctx context.Context, target *contractv1.CallTarge
 
 func TestHotServiceWorkflowRequiresSeparateApprovalAndRecovers(t *testing.T) {
 	serviceFile := filepath.Join(t.TempDir(), "plugin-settings.json")
-	service, err := New(serviceFile)
+	service, err := newTestService(serviceFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestHotServiceWorkflowRequiresSeparateApprovalAndRecovers(t *testing.T) {
 	if err != nil || draft.ApplyPath != pluginconfiguration.ApplyHotService {
 		t.Fatalf("无法创建 hot-service Draft: candidate=%+v err=%v", draft, err)
 	}
-	service, err = New(serviceFile)
+	service, err = newTestService(serviceFile)
 	if err != nil {
 		t.Fatalf("hot-service Draft 基线无法跨重启恢复: %v", err)
 	}
@@ -233,7 +233,7 @@ func TestHotServiceWorkflowRequiresSeparateApprovalAndRecovers(t *testing.T) {
 		t.Fatalf("hot-service 审批失败: candidate=%+v err=%v", approved, err)
 	}
 
-	restarted, err := New(serviceFile)
+	restarted, err := newTestService(serviceFile)
 	if err != nil {
 		t.Fatalf("plugin-settings 重启无法恢复 hot activation: %v", err)
 	}
@@ -245,7 +245,7 @@ func TestHotServiceWorkflowRequiresSeparateApprovalAndRecovers(t *testing.T) {
 	if err != nil || status.Active.Revision != 2 {
 		t.Fatalf("OTP controller Active revision 错误: status=%+v err=%v", status, err)
 	}
-	if _, err := New(serviceFile); err != nil {
+	if _, err := newTestService(serviceFile); err != nil {
 		t.Fatalf("Ready hot activation 持久状态无效: %v", err)
 	}
 	views := restarted.publicDefinitions("tenant-a", []pluginconfiguration.Catalog{host.catalog})
@@ -256,7 +256,7 @@ func TestHotServiceWorkflowRequiresSeparateApprovalAndRecovers(t *testing.T) {
 
 func TestHotServiceManagedCredentialCommitsBeforeActivationAndRecovers(t *testing.T) {
 	serviceFile := filepath.Join(t.TempDir(), "plugin-settings.json")
-	service, err := New(serviceFile)
+	service, err := newTestService(serviceFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestHotServiceManagedCredentialCommitsBeforeActivationAndRecovers(t *testin
 		t.Fatalf("提交后激活失败未保留 Candidate 凭证检查点: %+v", interrupted)
 	}
 	host.failActivate = false
-	restarted, err := New(serviceFile)
+	restarted, err := newTestService(serviceFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +317,7 @@ func TestHotServiceManagedCredentialCommitsBeforeActivationAndRecovers(t *testin
 }
 
 func TestHotServicePendingCandidateCanAbortWithoutChangingActive(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "plugin-settings.json"))
+	service, err := newTestService(filepath.Join(t.TempDir(), "plugin-settings.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,7 +371,7 @@ func TestHotActivationStateRejectsPublicProjectionDrift(t *testing.T) {
 }
 
 func TestHotServiceDraftRejectsActiveChangedAfterCreation(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "plugin-settings.json"))
+	service, err := newTestService(filepath.Join(t.TempDir(), "plugin-settings.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
