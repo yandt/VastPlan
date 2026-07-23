@@ -16,6 +16,13 @@ func TestPrepareRequestHasStableCrossLanguageDigest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if first != "1f14aa9cf75025b0480065230c7ae1c34f81117072b846a07b8619df6323c744" {
+		t.Fatalf("Go/Node prepare digest 不一致: %s", first)
+	}
+	configurationDigest, err := configurationv1.DigestConfiguration(request.Values, request.ManagedCredentials)
+	if err != nil || configurationDigest != "0f4e0e9504882ed26dffe20c7d6cb101c7a4178dc73d7f58b1d1fd0a59d40210" {
+		t.Fatalf("Go/Node configuration digest 不一致: %s err=%v", configurationDigest, err)
+	}
 	request.Values = json.RawMessage("{\n  \"capacity\": 10\n}")
 	second, err := configurationv1.DigestPrepareRequest(request)
 	if err != nil || first != second {

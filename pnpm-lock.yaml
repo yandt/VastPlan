@@ -53,7 +53,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   core/kernels/frontend-host:
     dependencies:
@@ -123,7 +123,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.mui/frontend:
     dependencies:
@@ -169,7 +169,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/frontend:
     dependencies:
@@ -188,7 +188,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.foundation.frontend.runtime.engine.react/frontend:
     dependencies:
@@ -213,7 +213,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.standard/frontend:
     dependencies:
@@ -232,7 +232,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.top-navigation/frontend:
     dependencies:
@@ -251,7 +251,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/frontend:
     dependencies:
@@ -267,7 +267,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.foundation.frontend.workflow.workbench/frontend:
     dependencies:
@@ -292,7 +292,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.foundation.security.authentication-broker/frontend:
     dependencies:
@@ -308,7 +308,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.foundation.security.authentication.provider.oidc/backend:
     dependencies:
@@ -333,7 +333,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.platform.configuration.global-settings/frontend:
     dependencies:
@@ -349,7 +349,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.platform.configuration.plugin-settings/frontend:
     dependencies:
@@ -365,7 +365,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.platform.configuration.portal-composer/frontend:
     dependencies:
@@ -393,7 +393,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.platform.configuration.role-management/frontend:
     dependencies:
@@ -409,7 +409,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.platform.data.relational.connection-manager/frontend:
     dependencies:
@@ -425,7 +425,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/frontend:
     dependencies:
@@ -441,7 +441,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.platform.integration.api-exposure/frontend:
     dependencies:
@@ -457,7 +457,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.platform.security.authentication.delivery.webhook/backend:
     dependencies:
@@ -482,7 +482,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.product.developer.workbench-gallery/frontend:
     dependencies:
@@ -495,7 +495,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/sdk/node/addressing:
     dependencies:
@@ -537,6 +537,12 @@ importers:
         specifier: 0.8.0
         version: 0.8.0
 
+  extensions/sdk/node/configuration-controller:
+    dependencies:
+      '@vastplan/backend-plugin':
+        specifier: workspace:*
+        version: link:../backend-plugin
+
   extensions/sdk/node/credential-lease: {}
 
   extensions/sdk/ts/frontend-engine-contract:
@@ -546,7 +552,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/sdk/ts/platform-admin:
     devDependencies:
@@ -555,7 +561,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/sdk/ts/rjsf-csp-validator:
     dependencies:
@@ -571,7 +577,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/sdk/ts/ui-contract:
     devDependencies:
@@ -580,7 +586,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/sdk/ts/ui-primitives:
     dependencies:
@@ -611,7 +617,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/sdk/ts/workbench-sdk:
     dependencies:
@@ -624,7 +630,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
-        version: 3.2.7(@types/node@26.1.1)
+        version: 3.2.7(@types/node@22.20.1)
 
 packages:
 
@@ -1245,9 +1251,6 @@ packages:
   '@types/node@22.20.1':
     resolution: {integrity: sha512-EANqOCF9QFyra+4pfxUcX9STKJpCLjMbObVzljIJomAWSnuSIEAvyzEU53GaajbXJEgdh0iEcPL+DGvpUd4k1Q==, tarball: https://registry.npmmirror.com/@types/node/-/node-22.20.1.tgz}
 
-  '@types/node@26.1.1':
-    resolution: {integrity: sha512-nxAkRSVkN1Y0JC1W8ky/fTfkGsMmcrRsbx+3XoZE+rMOX71kLYTV7fLXpqud1GpbpP5TuffXFqfX7fH2GgZREw==, tarball: https://registry.npmmirror.com/@types/node/-/node-26.1.1.tgz}
-
   '@types/parse-json@4.0.2':
     resolution: {integrity: sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==, tarball: https://registry.npmmirror.com/@types/parse-json/-/parse-json-4.0.2.tgz}
 
@@ -1778,9 +1781,6 @@ packages:
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==, tarball: https://registry.npmmirror.com/undici-types/-/undici-types-6.21.0.tgz}
-
-  undici-types@8.3.0:
-    resolution: {integrity: sha512-j375ScV60dom+YkPFIfTLcOiPxkN/buHz5GobjLhixFuANaNs3C9l4GmrWqejgXWJ7BbJcFYpTEUkS1Ge8bpZQ==, tarball: https://registry.npmmirror.com/undici-types/-/undici-types-8.3.0.tgz}
 
   uri-js@4.4.1:
     resolution: {integrity: sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==, tarball: https://registry.npmmirror.com/uri-js/-/uri-js-4.4.1.tgz}
@@ -2447,11 +2447,6 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/node@26.1.1':
-    dependencies:
-      undici-types: 8.3.0
-    optional: true
-
   '@types/parse-json@4.0.2': {}
 
   '@types/prop-types@15.7.15': {}
@@ -2484,14 +2479,6 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: 7.3.6(@types/node@22.20.1)
-
-  '@vitest/mocker@3.2.7(vite@7.3.6(@types/node@26.1.1))':
-    dependencies:
-      '@vitest/spy': 3.2.7
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 7.3.6(@types/node@26.1.1)
 
   '@vitest/pretty-format@3.2.7':
     dependencies:
@@ -2981,9 +2968,6 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici-types@8.3.0:
-    optional: true
-
   uri-js@4.4.1:
     dependencies:
       punycode: 2.3.1
@@ -3026,27 +3010,6 @@ snapshots:
       - tsx
       - yaml
 
-  vite-node@3.2.4(@types/node@26.1.1):
-    dependencies:
-      cac: 6.7.14
-      debug: 4.4.3
-      es-module-lexer: 1.7.0
-      pathe: 2.0.3
-      vite: 7.3.6(@types/node@26.1.1)
-    transitivePeerDependencies:
-      - '@types/node'
-      - jiti
-      - less
-      - lightningcss
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-      - tsx
-      - yaml
-
   vite@7.3.6(@types/node@22.20.1):
     dependencies:
       esbuild: 0.28.1
@@ -3057,18 +3020,6 @@ snapshots:
       tinyglobby: 0.2.17
     optionalDependencies:
       '@types/node': 22.20.1
-      fsevents: 2.3.3
-
-  vite@7.3.6(@types/node@26.1.1):
-    dependencies:
-      esbuild: 0.28.1
-      fdir: 6.5.0(picomatch@4.0.5)
-      picomatch: 4.0.5
-      postcss: 8.5.19
-      rollup: 4.62.2
-      tinyglobby: 0.2.17
-    optionalDependencies:
-      '@types/node': 26.1.1
       fsevents: 2.3.3
 
   vitest@3.2.7(@types/node@22.20.1):
@@ -3098,47 +3049,6 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.20.1
-    transitivePeerDependencies:
-      - jiti
-      - less
-      - lightningcss
-      - msw
-      - sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - terser
-      - tsx
-      - yaml
-
-  vitest@3.2.7(@types/node@26.1.1):
-    dependencies:
-      '@types/chai': 5.2.3
-      '@vitest/expect': 3.2.7
-      '@vitest/mocker': 3.2.7(vite@7.3.6(@types/node@26.1.1))
-      '@vitest/pretty-format': 3.2.7
-      '@vitest/runner': 3.2.7
-      '@vitest/snapshot': 3.2.7
-      '@vitest/spy': 3.2.7
-      '@vitest/utils': 3.2.7
-      chai: 5.3.3
-      debug: 4.4.3
-      expect-type: 1.4.0
-      magic-string: 0.30.21
-      pathe: 2.0.3
-      picomatch: 4.0.5
-      std-env: 3.10.0
-      tinybench: 2.9.0
-      tinyexec: 0.3.2
-      tinyglobby: 0.2.17
-      tinypool: 1.1.1
-      tinyrainbow: 2.0.0
-      vite: 7.3.6(@types/node@26.1.1)
-      vite-node: 3.2.4(@types/node@26.1.1)
-      why-is-node-running: 2.3.0
-    optionalDependencies:
-      '@types/node': 26.1.1
     transitivePeerDependencies:
       - jiti
       - less

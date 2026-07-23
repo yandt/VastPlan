@@ -48,6 +48,16 @@ func TestConfigurationControllerIsOnlyValidForServiceHot(t *testing.T) {
 	}
 }
 
+func TestConfigurationControllerCapabilityMatchesNodeSDKGolden(t *testing.T) {
+	capability, err := pluginv1.ConfigurationControllerCapability("cn.vastplan.example.hot-controller")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capability != "configuration.3c183e12decc8e57e3ea513837dc8708" {
+		t.Fatalf("Go/Node controller capability 不一致: %s", capability)
+	}
+}
+
 func hotControllerManifest(mode, scope string, controller bool) string {
 	controllerJSON := ""
 	if controller {
