@@ -56,6 +56,10 @@ type verifiedSecurityAdmissionReader interface {
 	ReadSecurityAdmission(pluginservice.Ref) ([]byte, error)
 }
 
+type verifiedSecurityStatusReader interface {
+	ReadSecurityStatusChain(pluginservice.Ref) ([]byte, error)
+}
+
 func (s *Store) SubmitPublication(request PublicationRequest, actor string, now, expiresAt time.Time) (Publication, uint64, error) {
 	actor, request.Reason = strings.TrimSpace(actor), strings.TrimSpace(request.Reason)
 	if actor == "" || request.Reason == "" || len([]rune(request.Reason)) > 500 || request.Source.Channel != "testing" || request.TargetChannel != "stable" {
@@ -456,6 +460,30 @@ func (s *Store) Evidence(ref pluginv1.ArtifactRef) (SupplyChainEvidence, error) 
 			VulnerabilityReportSHA256:            record.Evaluation.Vulnerabilities.ReportSHA256,
 			LicenseReportSHA256:                  record.Evaluation.Licenses.ReportSHA256,
 			Verification:                         "verified",
+		}
+	}
+	if reader, ok := s.repository.(verifiedSecurityStatusReader); ok {
+		chainRaw, err := reader.ReadSecurityStatusChain(ref)
+		if err != nil {
+			return SupplyChainEvidence{}, errors.New("安全复扫状态链读取失败")
+		}
+		records, err := artifactassessment.InspectStatusChain(chainRaw)
+		if err != nil {
+			return SupplyChainEvidence{}, errors.New("安全复扫状态链解析失败")
+		}
+		if len(records) > 0 {
+			latest, digest, err := artifactassessment.InspectStatus(records[len(records)-1])
+			if err != nil {
+				return SupplyChainEvidence{}, errors.New("最新安全复扫状态无效")
+			}
+			evidence.SecurityStatus = &platformadminapi.ArtifactSecurityStatusEvidence{
+				Sequence: latest.Sequence, RecordSHA256: digest, PreviousSHA256: latest.PreviousSHA256,
+				Decision: latest.Evaluation.Decision, DatabaseRevision: latest.Evaluation.Scanner.DatabaseRevision,
+				EvaluatedAt: latest.Evaluation.EvaluatedAt.Format(time.RFC3339Nano), ExpiresAt: latest.Evaluation.ExpiresAt.Format(time.RFC3339Nano),
+				Critical: latest.Evaluation.Vulnerabilities.Critical, High: latest.Evaluation.Vulnerabilities.High,
+				DeniedLicense: latest.Evaluation.Licenses.Denied, UnknownLicense: latest.Evaluation.Licenses.Unknown,
+				Verification: "verified",
+			}
 		}
 	}
 	return evidence, nil

@@ -11,10 +11,12 @@ import (
 	"io"
 	"sort"
 	"sync"
+	"time"
 
 	semver "github.com/Masterminds/semver/v3"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 )
@@ -32,6 +34,10 @@ type supplyChainSeedRepository interface {
 	PublishWithSupplyChain(artifacttrust.Attestation, []byte, []byte, []byte, []byte) (pluginv1.Artifact, error)
 }
 
+type securityStatusSeedRepository interface {
+	AppendSecurityStatus(pluginv1.ArtifactRef, []byte, time.Time) (*artifactassessment.StatusRecord, string, error)
+}
+
 type Candidate struct {
 	Artifact               pluginv1.Artifact
 	PackageBytes           []byte
@@ -39,6 +45,7 @@ type Candidate struct {
 	Provenance             []byte
 	ProvenanceVerification []byte
 	SecurityAdmission      []byte
+	SecurityStatusChain    []byte
 }
 
 type Controller struct {
@@ -157,6 +164,21 @@ func (c *Controller) Prepare(ctx context.Context, candidates []Candidate) (boots
 		}
 		if !sameArtifact(published, candidate.Artifact) {
 			return bootstrapinventory.Inventory{}, errors.New("Seed Repository 返回了不同的 Bootstrap 制品身份")
+		}
+		statusRecords, err := artifactassessment.InspectStatusChain(candidate.SecurityStatusChain)
+		if err != nil {
+			return bootstrapinventory.Inventory{}, fmt.Errorf("解析 Bootstrap 安全复扫状态链: %w", err)
+		}
+		if len(statusRecords) > 0 {
+			statusRepository, ok := c.seed.(securityStatusSeedRepository)
+			if !ok {
+				return bootstrapinventory.Inventory{}, errors.New("Seed Repository 不支持复制安全复扫状态链")
+			}
+			for _, raw := range statusRecords {
+				if _, _, err := statusRepository.AppendSecurityStatus(item.Ref, raw, time.Now().UTC()); err != nil {
+					return bootstrapinventory.Inventory{}, fmt.Errorf("复制 Bootstrap 安全复扫状态: %w", err)
+				}
+			}
 		}
 		item = bootstrapinventory.Item{
 			Ref:    pluginv1.ArtifactRef{PluginID: published.PluginID, Version: published.Version, Channel: published.Channel},

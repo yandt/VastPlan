@@ -1,14 +1,22 @@
 package pluginservice
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
+	"time"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 )
 
@@ -183,6 +191,170 @@ func (r *SignedRepository) ReadSecurityAdmission(ref Ref) ([]byte, error) {
 	return admissionRaw, err
 }
 
+func (r *SignedRepository) VerifySecurityStatus(ref Ref, previousRaw, statusRaw []byte, now time.Time) (*artifactassessment.StatusRecord, string, error) {
+	artifact, admissionRaw, err := r.securityStatusInputs(ref, now)
+	if err != nil {
+		return nil, "", err
+	}
+	return r.Trust.VerifySecurityStatus(artifact, admissionRaw, previousRaw, statusRaw, now)
+}
+
+func (r *SignedRepository) securityStatusInputs(ref Ref, now time.Time) (Artifact, []byte, error) {
+	artifact, err := r.Local.ReadMetadata(ref)
+	if err != nil {
+		return Artifact{}, nil, err
+	}
+	directory, err := r.Local.artifactDir(ref)
+	if err != nil {
+		return Artifact{}, nil, err
+	}
+	proof, err := os.ReadFile(filepath.Join(directory, "attestation.json"))
+	if err != nil {
+		return Artifact{}, nil, fmt.Errorf("读取安全复扫对象证明: %w", err)
+	}
+	var attestation Attestation
+	if err := decodeJSONStrict(proof, &attestation); err != nil || !sameArtifact(artifact, attestation.Artifact) {
+		return Artifact{}, nil, errors.New("安全复扫对象证明与制品不一致")
+	}
+	if err := r.Trust.Verify(attestation); err != nil {
+		return Artifact{}, nil, err
+	}
+	manifest, err := pluginv1.ParseManifest(artifact.Manifest)
+	if err != nil {
+		return Artifact{}, nil, err
+	}
+	provenanceRaw, verificationRaw, err := readProvenanceSidecars(directory)
+	if err != nil {
+		return Artifact{}, nil, err
+	}
+	if _, err := r.Trust.provenanceVerifier().Verify(artifactprovenance.ArtifactIdentity{PluginID: artifact.PluginID, Channel: artifact.Channel, Publisher: manifest.Publisher, SHA256: artifact.SHA256}, provenanceRaw, verificationRaw, now); err != nil {
+		return Artifact{}, nil, err
+	}
+	admissionRaw, err := readSecurityAdmissionSidecar(directory)
+	if err != nil || len(admissionRaw) == 0 {
+		return Artifact{}, nil, errors.New("安全复扫对象缺少准入记录")
+	}
+	return artifact, admissionRaw, nil
+}
+
+func (r *SignedRepository) AppendSecurityStatus(ref Ref, statusRaw []byte, now time.Time) (*artifactassessment.StatusRecord, string, error) {
+	if r == nil || r.Local == nil || r.Trust == nil {
+		return nil, "", errors.New("签名制品仓库未完整配置")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	chain, err := r.readSecurityStatusRecords(ref)
+	if err != nil {
+		return nil, "", err
+	}
+	inspected, inspectedDigest, err := artifactassessment.InspectStatus(statusRaw)
+	if err != nil {
+		return nil, "", err
+	}
+	if inspected.Sequence <= uint64(len(chain)) {
+		if bytes.Equal(chain[inspected.Sequence-1], statusRaw) {
+			return &inspected, inspectedDigest, nil
+		}
+		return nil, "", errors.New("安全复扫状态同序号内容不可替换")
+	}
+	var previous []byte
+	if len(chain) > 0 {
+		previous = chain[len(chain)-1]
+	}
+	record, recordDigest, err := r.VerifySecurityStatus(ref, previous, statusRaw, now)
+	if err != nil {
+		return nil, "", err
+	}
+	if int(record.Sequence) != len(chain)+1 {
+		return nil, "", errors.New("安全复扫状态 sequence 不是下一连续值")
+	}
+	directory, err := r.securityStatusDir(ref)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return nil, "", fmt.Errorf("创建安全复扫状态目录: %w", err)
+	}
+	filename := filepath.Join(directory, fmt.Sprintf("%020d.json", record.Sequence))
+	if err := writeImmutableSidecar(filename, statusRaw, "安全复扫状态"); err != nil {
+		return nil, "", err
+	}
+	return record, recordDigest, nil
+}
+
+func (r *SignedRepository) ReadSecurityStatusChain(ref Ref) ([]byte, error) {
+	records, err := r.readSecurityStatusRecords(ref)
+	if err != nil {
+		return nil, err
+	}
+	if len(records) == 0 {
+		return nil, nil
+	}
+	artifact, admissionRaw, err := r.securityStatusInputs(ref, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	var previous []byte
+	for index, raw := range records {
+		status, _, err := artifactassessment.InspectStatus(raw)
+		if err != nil {
+			return nil, err
+		}
+		verifyAt := status.Evaluation.EvaluatedAt
+		if index == len(records)-1 {
+			verifyAt = time.Now().UTC()
+		}
+		if _, _, err := r.Trust.VerifySecurityStatus(artifact, admissionRaw, previous, raw, verifyAt); err != nil {
+			return nil, err
+		}
+		previous = raw
+	}
+	return artifactassessment.MarshalStatusChain(records)
+}
+
+func (r *SignedRepository) readSecurityStatusRecords(ref Ref) ([][]byte, error) {
+	directory, err := r.securityStatusDir(ref)
+	if err != nil {
+		return nil, err
+	}
+	entries, err := os.ReadDir(directory)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("读取安全复扫状态目录: %w", err)
+	}
+	if len(entries) > artifactassessment.MaxChainRecords {
+		return nil, errors.New("安全复扫状态链记录数超限")
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	result := make([][]byte, 0, len(entries))
+	for index, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || len(name) != 25 || !strings.HasSuffix(name, ".json") {
+			return nil, fmt.Errorf("安全复扫状态目录包含未知条目: %s", name)
+		}
+		sequence, parseErr := strconv.ParseUint(strings.TrimSuffix(name, ".json"), 10, 64)
+		if parseErr != nil || sequence != uint64(index+1) {
+			return nil, errors.New("安全复扫状态文件 sequence 不连续")
+		}
+		raw, readErr := os.ReadFile(filepath.Join(directory, name))
+		if readErr != nil {
+			return nil, readErr
+		}
+		result = append(result, raw)
+	}
+	return result, nil
+}
+
+func (r *SignedRepository) securityStatusDir(ref Ref) (string, error) {
+	directory, err := r.Local.artifactDir(ref)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(directory, "security-status"), nil
+}
+
 // HTTPRepositoryAdapter 是 HTTP 传输层使用的窄适配器。它把不可信网络字节
 // 交给内核的签名与内容强制点处理，而不向 HTTP 层暴露信任根或磁盘布局。
 type HTTPRepositoryAdapter struct{ Repository *SignedRepository }
@@ -266,5 +438,9 @@ func (r *SignedRepository) Fetch(_ context.Context, ref Ref) (artifacttrust.Enve
 	if err != nil {
 		return artifacttrust.Envelope{}, err
 	}
-	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: raw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: admissionRaw}, nil
+	statusChain, err := r.ReadSecurityStatusChain(ref)
+	if err != nil {
+		return artifacttrust.Envelope{}, err
+	}
+	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: raw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: admissionRaw, SecurityStatusChain: statusChain}, nil
 }

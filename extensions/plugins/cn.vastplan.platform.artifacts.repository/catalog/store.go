@@ -101,6 +101,7 @@ type Entry struct {
 	PythonLock           *platformadminapi.ArtifactPythonLockDeclaration        `json:"pythonLock,omitempty"`
 	Provenance           *platformadminapi.ArtifactProvenanceDeclaration        `json:"provenance,omitempty"`
 	SecurityAdmission    *platformadminapi.ArtifactSecurityAdmissionDeclaration `json:"securityAdmission,omitempty"`
+	SecurityStatus       *platformadminapi.ArtifactSecurityStatusEvidence       `json:"securityStatus,omitempty"`
 	LifecycleStatus      string                                                 `json:"lifecycleStatus"`
 	LifecycleRevision    uint64                                                 `json:"lifecycleRevision,omitempty"`
 	LifecycleReason      string                                                 `json:"lifecycleReason,omitempty"`

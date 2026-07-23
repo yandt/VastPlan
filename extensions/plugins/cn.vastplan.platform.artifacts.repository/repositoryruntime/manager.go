@@ -17,7 +17,9 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/garbagecollection"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/references"
@@ -450,10 +452,70 @@ func (m *Manager) ReadWithSupplyChain(ref pluginservice.Ref) (pluginservice.Arti
 	return m.active.adapter.ReadWithSupplyChain(ref)
 }
 
+func (m *Manager) ReadSecurityStatusChain(ref pluginservice.Ref) ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.active == nil {
+		return nil, errors.New("活动制品仓库不可用")
+	}
+	if err := m.active.catalog.RequireDelivery(ref); err != nil {
+		return nil, err
+	}
+	return m.active.signed.ReadSecurityStatusChain(ref)
+}
+
+func (m *Manager) AppendSecurityStatus(ref pluginservice.Ref, raw []byte, now time.Time) (*artifactassessment.StatusRecord, string, error) {
+	m.publishMu.Lock()
+	defer m.publishMu.Unlock()
+	m.mu.RLock()
+	active, mirror := m.active, m.mirror
+	m.mu.RUnlock()
+	if active == nil {
+		return nil, "", errors.New("活动制品仓库不可用")
+	}
+	if mirror != nil {
+		mirrorRecord, mirrorDigest, err := mirror.signed.AppendSecurityStatus(ref, raw, now)
+		if err != nil {
+			m.recordMigrationError(fmt.Errorf("观察卷安全复扫状态写入失败: %w", err))
+			return nil, "", errors.New("制品迁移观察卷不可用，安全复扫状态写入已冻结")
+		}
+		record, digest, err := active.signed.AppendSecurityStatus(ref, raw, now)
+		if err != nil || record.Sequence != mirrorRecord.Sequence || digest != mirrorDigest {
+			m.recordMigrationError(errors.New("活动卷与观察卷安全复扫状态不一致"))
+			return nil, "", errors.New("制品迁移双写安全复扫状态不一致")
+		}
+		return record, digest, nil
+	}
+	return active.signed.AppendSecurityStatus(ref, raw, now)
+}
+
 func (m *Manager) Query(query catalog.Query) catalog.Page {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.active.catalog.Query(query)
+	page := m.active.catalog.Query(query)
+	for index := range page.Items {
+		raw, err := m.active.signed.ReadSecurityStatusChain(page.Items[index].Ref)
+		if err != nil || len(raw) == 0 {
+			continue
+		}
+		records, err := artifactassessment.InspectStatusChain(raw)
+		if err != nil || len(records) == 0 {
+			continue
+		}
+		latest, digest, err := artifactassessment.InspectStatus(records[len(records)-1])
+		if err != nil {
+			continue
+		}
+		page.Items[index].SecurityStatus = &platformadminapi.ArtifactSecurityStatusEvidence{
+			Sequence: latest.Sequence, RecordSHA256: digest, PreviousSHA256: latest.PreviousSHA256,
+			Decision: latest.Evaluation.Decision, DatabaseRevision: latest.Evaluation.Scanner.DatabaseRevision,
+			EvaluatedAt: latest.Evaluation.EvaluatedAt.Format(time.RFC3339Nano), ExpiresAt: latest.Evaluation.ExpiresAt.Format(time.RFC3339Nano),
+			Critical: latest.Evaluation.Vulnerabilities.Critical, High: latest.Evaluation.Vulnerabilities.High,
+			DeniedLicense: latest.Evaluation.Licenses.Denied, UnknownLicense: latest.Evaluation.Licenses.Unknown,
+			Verification: "verified",
+		}
+	}
+	return page
 }
 
 func (m *Manager) Journal(after uint64, limit int) catalog.JournalPage {

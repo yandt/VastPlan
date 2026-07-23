@@ -66,6 +66,9 @@ func (i LocalInstaller) Install(verified VerifiedArtifact) (InstalledPlugin, err
 		return InstalledPlugin{}, errors.New("service 插件缺少 backend 入口")
 	}
 	execution := pluginv1.BackendExecutionContract(manifest)
+	if err := enforceSecurityWatermark(i.Root, verified); err != nil {
+		return InstalledPlugin{}, fmt.Errorf("校验安全复扫高水位: %w", err)
+	}
 
 	target := filepath.Join(filepath.Clean(i.Root), artifact.SHA256)
 	if installed, err := inspectInstalled(target, artifact, manifest.Publisher, entry, execution); err == nil {

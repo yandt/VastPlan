@@ -42,6 +42,10 @@ type SupplyChainRepository interface {
 	ReadWithSupplyChain(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, []byte, []byte, []byte, []byte, error)
 }
 
+type SecurityStatusRepository interface {
+	ReadSecurityStatusChain(ref pluginv1.ArtifactRef) ([]byte, error)
+}
+
 // Server 暴露最小远端制品 API。读写令牌分离；RequireTLS 默认应为 true，
 // 只有进程内测试或明确的本地开发反向代理场景才关闭。
 type Server struct {
@@ -161,6 +165,21 @@ func (s *Server) read(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: version, Channel: channel}
+	if parts[5] == "security-status" {
+		repository, ok := s.Repository.(SecurityStatusRepository)
+		if !ok {
+			http.NotFound(w, req)
+			return
+		}
+		raw, statusErr := repository.ReadSecurityStatusChain(ref)
+		if statusErr != nil || len(raw) == 0 {
+			http.NotFound(w, req)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(raw)
+		return
+	}
 	var artifact pluginv1.Artifact
 	var packageBytes, attestation, provenanceRaw, verificationRaw, securityAdmissionRaw []byte
 	var err error

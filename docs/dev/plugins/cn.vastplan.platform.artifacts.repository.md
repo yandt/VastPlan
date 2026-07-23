@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.26.0`
+当前制品版本：`0.27.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.26.0 增加插件制品安全准入 sidecar：仓库与 Node Agent 共同复验外部 Provider 签发、绑定 tar/SBOM/策略的漏洞与许可证评估，Catalog、stable 审批、Bootstrap 镜像和离线 Bundle 均保持同一原始记录。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.26.0 增加插件制品安全准入 sidecar；0.27.0 增加签名只追加复扫链、独立 scanner 写权限、迁移双写、Portal 状态和 Node 本机高水位防回滚。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
@@ -44,6 +44,7 @@
 | `VASTPLAN_ARTIFACT_READ_TOKEN` | 制品读取 Bearer token |
 | `VASTPLAN_ARTIFACT_PUBLISH_TOKEN` | 制品发布 Bearer token，必须与读取 token 不同 |
 | `VASTPLAN_ARTIFACT_BUNDLE_TOKEN` | 离线 Bundle 导出 Bearer token，必须与读取、发布 token 都不同 |
+| `VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN` | 安全扫描工作负载发布复扫状态的 Bearer token，必须与读取、发布、Bundle token 都不同 |
 | `VASTPLAN_ARTIFACT_MIGRATION_STATE` | 仓库 volume 之外的私有 `0600` 迁移状态文件 |
 
 令牌、私钥和信任文档不通过插件 API 返回，也不得写入日志、状态输出或普通设置。生产部署应以 Secret 文件或受控密钥注入提供这些值，并仅将需要的变量列入该第一方插件的环境白名单。
@@ -60,6 +61,8 @@
 - `GET /v1/artifacts/{pluginId}/{version}/{channel}/security-admission`：使用读取 token 下载已验证的不可变安全准入记录；未配置或非必需 channel 可以不存在。
 - `GET /v1/catalog/artifacts`：使用读取 token 分页查询目录；支持 `pluginId`、`pluginPrefix`、`namespace`、`publisher`、`version`、`channel`、`target`、`page` 和 `pageSize`；
 - `GET /v1/catalog/journal`：使用读取 token 按 `afterRevision` 与 `limit` 增量读取发布事件。
+- `GET /v1/catalog/security-status?pluginId=...&version=...&channel=...`：使用读取 token 读取签名复扫状态链。
+- `POST /v1/catalog/security-status`：只使用独立 Assessment token 追加一条外部 Provider 已签名的复扫状态；读取、发布、Bundle token 和浏览器会话均无权写入。
 - `POST /v1/catalog/resolve`：使用读取 token，根据根约束、目标内核/平台、channel、发布者和 Catalog revision 生成精确 `ArtifactLock v1`；
 - `POST /v1/catalog/bundles`：使用独立 Bundle token 提交一份已校验锁，下载包含锁、信任快照、精确包与证明的确定性 `tar.gz`。
 - `POST /v1/catalog/bundles/import`：使用发布 token 流式上传 Bundle；服务先在仓库外的私有临时目录解包，再将每个对象送回相同的签名、摘要、包内清单和不可变发布强制点。部分导入只会留下已验证的幂等对象，不会激活任何锁或部署。
@@ -100,7 +103,7 @@ Python 制品另外声明 `supplyChain.pythonLock`，固定绑定 PEP 751 `suppl
 
 包外来源证明现由 DSSE/in-toto SLSA 原文与外部 Verifier 签发的 Verification Record 组成。两者通过远端 multipart 与制品一起提交，但不改变 tar 字节；仓库在物理发布前用部署信任文档复验 Provider key、Record 有效期、策略、原文摘要和 tar subject，Node Agent 下载时再次执行同一检查。Catalog 只保存经过复验的 builder/build type/Provider/policy 与摘要，证据 Overlay 按需读取 sidecar 复核；原始证明不会进入普通列表。testing→stable 审批绑定两份 sidecar 摘要，CLI 原样复用 testing 证据。离线 Bundle、File Volume 迁移、恢复与 GC 均携带 sidecar，不能形成缺证据的旁路。参考外部静态 Provider 为 `engineering/tools/provenanceverify`；GitHub/Sigstore 或企业 CA Provider 只需输出同一 Record。
 
-漏洞与许可证准入使用独立 `security-admission.json`。记录由外部 Security Assessment Provider 生成，统一绑定 tar SHA-256、签名清单中的 SBOM SHA-256、scanner/database revision、策略、有效期、风险计数和两份原始报告摘要；内核不绑定 Trivy、OSV、Grype 或 ScanCode。部署信任文档的 `assessment` 段按 channel/publisher/plugin prefix 选择可信 Provider、scanner 和阈值。记录 decision 为 fail、过期、超阈值、签名无效或 tar/SBOM 绑定漂移时，仓库发布与 Node 安装均拒绝。当前 0.26.0 完成不可变准入记录；只追加复扫状态按 ADR-0138 下一阶段接入。
+漏洞与许可证准入使用独立 `security-admission.json`。记录由外部 Security Assessment Provider 生成，统一绑定 tar SHA-256、签名清单中的 SBOM SHA-256、scanner/database revision、策略、有效期、风险计数和两份原始报告摘要；内核不绑定 Trivy、OSV、Grype 或 ScanCode。部署信任文档的 `assessment` 段按 channel/publisher/plugin prefix 选择可信 Provider、scanner 和阈值。记录 decision 为 fail、过期、超阈值、签名无效或 tar/SBOM 绑定漂移时，仓库发布与 Node 安装均拒绝。0.27.0 的复扫状态以 sequence、前序摘要和准入摘要形成签名链；通过和失败记录都只追加保存，最新失败或过期会阻止新交付。Node 在宿主私有目录保存每个制品已接受的最高 sequence/digest，仓库即使返回较短的旧链也不能回滚为历史 pass。
 
 发布准入在仓库 leader 的同一串行临界区内执行：全仓上限与所有匹配规则累积生效，任一超限即在物理写入前拒绝，且不会自动运行 GC。已隔离/清扫对象不再占活动配额，因此可以发布替代版本；隔离字节仍计入实际存储容量，直到 sweep 后才计入 reclaimed。`capacity` 只聚合已验证 Catalog 与持久 GC 元数据，分别返回活动、隔离、已清扫、已回收和按 namespace/publisher/channel 的活动 bucket；对象字节不包含 Catalog/证明等小型元数据开销。降低配置到当前用量以下不会阻止仓库启动，但会把对应 quota 标为 `exceeded` 并冻结后续新增发布，便于先治理再恢复。
 

@@ -10,8 +10,10 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
 )
 
 const maxResolveRequestBytes = int64(256 << 10)
@@ -21,12 +23,26 @@ type HTTPHandler struct {
 	ReadToken         string
 	BundleToken       string
 	ImportToken       string
+	AssessmentToken   string
 	BundleSource      OfflineBundleSource
 	BundleDestination OfflineBundleDestination
 	TrustSnapshot     []byte
 	BundleDirectory   string
 	RequireTLS        bool
 	Logf              func(string, ...any)
+}
+
+func requireExactQuery(values url.Values, required ...string) error {
+	if err := allowQuery(values, required...); err != nil {
+		return err
+	}
+	for _, key := range required {
+		items := values[key]
+		if len(items) != 1 || items[0] == "" {
+			return fmt.Errorf("query parameter %q is required exactly once", key)
+		}
+	}
+	return nil
 }
 
 // Service is the catalog read surface. A repository migration coordinator can
@@ -36,6 +52,11 @@ type Service interface {
 	Query(Query) Page
 	Journal(uint64, int) JournalPage
 	Resolve(pluginv1.ArtifactResolveRequest) (pluginv1.ArtifactLock, error)
+}
+
+type SecurityStatusService interface {
+	AppendSecurityStatus(pluginv1.ArtifactRef, []byte, time.Time) (*artifactassessment.StatusRecord, string, error)
+	ReadSecurityStatusChain(pluginv1.ArtifactRef) ([]byte, error)
 }
 
 func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
@@ -52,6 +73,8 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		token = h.BundleToken
 	} else if request.URL.Path == "/v1/catalog/bundles/import" {
 		token = h.ImportToken
+	} else if request.URL.Path == "/v1/catalog/security-status" && request.Method == http.MethodPost {
+		token = h.AssessmentToken
 	}
 	if !catalogAuthorized(request, token) {
 		h.log("catalog.read_denied remote=%s", request.RemoteAddr)
@@ -88,6 +111,9 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		}
 		h.importBundle(w, request)
 		return
+	case "/v1/catalog/security-status":
+		h.securityStatus(w, request)
+		return
 	default:
 		http.NotFound(w, request)
 		return
@@ -105,6 +131,60 @@ func (h *HTTPHandler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (h *HTTPHandler) securityStatus(w http.ResponseWriter, request *http.Request) {
+	service, ok := h.Store.(SecurityStatusService)
+	if !ok {
+		http.Error(w, "security status unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if request.Method == http.MethodGet {
+		query := request.URL.Query()
+		if err := requireExactQuery(query, "pluginId", "version", "channel"); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		ref := pluginv1.ArtifactRef{PluginID: query.Get("pluginId"), Version: query.Get("version"), Channel: query.Get("channel")}
+		raw, err := service.ReadSecurityStatusChain(ref)
+		if err != nil || len(raw) == 0 {
+			http.NotFound(w, request)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(raw)
+		return
+	}
+	if request.Method != http.MethodPost {
+		w.Header().Set("Allow", "GET, POST")
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if len(request.URL.Query()) != 0 {
+		http.Error(w, "security status publish does not accept query", http.StatusBadRequest)
+		return
+	}
+	request.Body = http.MaxBytesReader(w, request.Body, artifactassessment.MaxRecordBytes+(16<<10))
+	var payload struct {
+		Ref    pluginv1.ArtifactRef `json:"ref"`
+		Record json.RawMessage      `json:"record"`
+	}
+	decoder := json.NewDecoder(request.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&payload); err != nil || payload.Ref.PluginID == "" || payload.Ref.Version == "" || payload.Ref.Channel == "" || len(payload.Record) == 0 {
+		http.Error(w, "invalid security status", http.StatusBadRequest)
+		return
+	}
+	record, digest, err := service.AppendSecurityStatus(payload.Ref, payload.Record, time.Now().UTC())
+	if err != nil {
+		h.log("security_status.publish_rejected ref=%s@%s/%s error=%v", payload.Ref.PluginID, payload.Ref.Version, payload.Ref.Channel, err)
+		http.Error(w, "security status rejected", http.StatusUnprocessableEntity)
+		return
+	}
+	h.log("security_status.published ref=%s@%s/%s sequence=%d digest=%s decision=%s", payload.Ref.PluginID, payload.Ref.Version, payload.Ref.Channel, record.Sequence, digest, record.Evaluation.Decision)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(map[string]any{"ref": payload.Ref, "sequence": record.Sequence, "digest": digest, "decision": record.Evaluation.Decision})
 }
 
 func (h *HTTPHandler) importBundle(w http.ResponseWriter, request *http.Request) {

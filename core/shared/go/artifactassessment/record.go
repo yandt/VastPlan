@@ -61,6 +61,54 @@ func InspectStatus(raw []byte) (StatusRecord, string, error) {
 	return record, digest(raw), nil
 }
 
+func MarshalStatusChain(records [][]byte) ([]byte, error) {
+	if len(records) == 0 {
+		return nil, nil
+	}
+	if len(records) > MaxChainRecords {
+		return nil, errors.New("安全复扫状态链记录数超限")
+	}
+	chain := StatusChain{Records: make([]json.RawMessage, len(records))}
+	for index, raw := range records {
+		if _, _, err := InspectStatus(raw); err != nil {
+			return nil, err
+		}
+		chain.Records[index] = append(json.RawMessage(nil), raw...)
+	}
+	result, err := json.Marshal(chain)
+	if err != nil {
+		return nil, err
+	}
+	if len(result) > MaxChainBytes {
+		return nil, errors.New("安全复扫状态链大小超限")
+	}
+	return result, nil
+}
+
+func InspectStatusChain(raw []byte) ([][]byte, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	if len(raw) > MaxChainBytes {
+		return nil, errors.New("安全复扫状态链大小超限")
+	}
+	var chain StatusChain
+	if err := decodeStrictJSON(raw, &chain); err != nil {
+		return nil, err
+	}
+	if len(chain.Records) == 0 || len(chain.Records) > MaxChainRecords {
+		return nil, errors.New("安全复扫状态链记录数无效")
+	}
+	result := make([][]byte, len(chain.Records))
+	for index, record := range chain.Records {
+		if _, _, err := InspectStatus(record); err != nil {
+			return nil, err
+		}
+		result[index] = append([]byte(nil), record...)
+	}
+	return result, nil
+}
+
 func verifyAdmissionSignature(record AdmissionRecord, key ed25519.PublicKey) error {
 	signature := record.Signature
 	record.Signature = ""
@@ -141,6 +189,10 @@ func decodeRecord(raw []byte, target any) error {
 	if len(raw) == 0 || len(raw) > MaxRecordBytes {
 		return errors.New("安全评估记录大小无效")
 	}
+	return decodeStrictJSON(raw, target)
+}
+
+func decodeStrictJSON(raw []byte, target any) error {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {

@@ -19,7 +19,7 @@ func TestSignedRepositoryRequiresAndReverifiesSecurityAdmission(t *testing.T) {
 	packageBytes, artifact, sbomSHA := testArtifactWithSBOM(t)
 	publisherPublic, publisherPrivate, _ := ed25519.GenerateKey(nil)
 	providerPublic, providerPrivate, _ := ed25519.GenerateKey(nil)
-	now := time.Now().UTC()
+	now := time.Now().UTC().Add(-6 * time.Hour)
 	zero := uint64(0)
 	document := TrustDocumentForPublicKeys(TrustKey{Publisher: "example", KeyID: "publisher", PublicKey: base64.StdEncoding.EncodeToString(publisherPublic)})
 	document.Assessment = &artifactassessment.TrustPolicy{
@@ -56,6 +56,67 @@ func TestSignedRepositoryRequiresAndReverifiesSecurityAdmission(t *testing.T) {
 	_, _, _, _, _, stored, err := repository.ReadWithSupplyChain(ref)
 	if err != nil || !bytes.Equal(stored, admissionRaw) {
 		t.Fatalf("安全准入记录未按原始字节保存和复验: %v", err)
+	}
+	_, admissionDigest, err := artifactassessment.InspectAdmission(admissionRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := artifactassessment.SignStatus(artifactassessment.StatusRecord{
+		AdmissionSHA256: admissionDigest, Sequence: 1, PreviousSHA256: admissionDigest,
+		Evaluation: evaluation, ProviderID: "assessment.static", KeyID: "scanner", PolicyID: "stable",
+	}, providerPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstRaw, _ := json.Marshal(first)
+	_, firstDigest, err := repository.AppendSecurityStatus(ref, firstRaw, now.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, _, _, _, err := repository.ReadWithSupplyChain(ref); err != nil {
+		t.Fatalf("最新复扫通过时应允许读取: %v", err)
+	}
+	failedEvaluation := evaluation
+	failedEvaluation.Scanner.DatabaseRevision = "db-2026-07-25"
+	failedEvaluation.Vulnerabilities.Critical = 1
+	failedEvaluation.Decision = artifactassessment.DecisionFail
+	failedEvaluation.EvaluatedAt, failedEvaluation.ExpiresAt = now.Add(2*time.Hour), now.Add(26*time.Hour)
+	second, err := artifactassessment.SignStatus(artifactassessment.StatusRecord{
+		AdmissionSHA256: admissionDigest, Sequence: 2, PreviousSHA256: firstDigest,
+		Evaluation: failedEvaluation, ProviderID: "assessment.static", KeyID: "scanner", PolicyID: "stable",
+	}, providerPrivate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondRaw, _ := json.Marshal(second)
+	_, secondDigest, err := repository.AppendSecurityStatus(ref, secondRaw, now.Add(3*time.Hour))
+	if err != nil {
+		t.Fatalf("可信失败复扫必须写入审计链: %v", err)
+	}
+	if _, _, _, _, _, _, err := repository.ReadWithSupplyChain(ref); err == nil {
+		t.Fatal("最新复扫失败必须阻止新的制品读取")
+	}
+	if _, _, err := repository.AppendSecurityStatus(ref, firstRaw, now.Add(3*time.Hour)); err != nil {
+		t.Fatalf("同字节旧记录重试应幂等但不能改变链头: %v", err)
+	}
+	if _, _, _, _, _, _, err := repository.ReadWithSupplyChain(ref); err == nil {
+		t.Fatal("幂等重试旧记录不得回滚覆盖最新失败状态")
+	}
+	recoveredEvaluation := failedEvaluation
+	recoveredEvaluation.Scanner.DatabaseRevision = "db-2026-07-26"
+	recoveredEvaluation.Vulnerabilities.Critical = 0
+	recoveredEvaluation.Decision = artifactassessment.DecisionPass
+	recoveredEvaluation.EvaluatedAt, recoveredEvaluation.ExpiresAt = now.Add(4*time.Hour), now.Add(28*time.Hour)
+	third, _ := artifactassessment.SignStatus(artifactassessment.StatusRecord{
+		AdmissionSHA256: admissionDigest, Sequence: 3, PreviousSHA256: secondDigest,
+		Evaluation: recoveredEvaluation, ProviderID: "assessment.static", KeyID: "scanner", PolicyID: "stable",
+	}, providerPrivate)
+	thirdRaw, _ := json.Marshal(third)
+	if _, _, err := repository.AppendSecurityStatus(ref, thirdRaw, now.Add(5*time.Hour)); err != nil {
+		t.Fatalf("失败后新的通过复扫应恢复交付: %v", err)
+	}
+	if _, _, _, _, _, _, err := repository.ReadWithSupplyChain(ref); err != nil {
+		t.Fatalf("最新复扫恢复为通过后应允许读取: %v", err)
 	}
 	mutated := append([]byte(nil), admissionRaw...)
 	mutated[len(mutated)-2] ^= 1

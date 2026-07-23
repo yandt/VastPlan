@@ -107,6 +107,32 @@ func TestFailedRescanIsTrustedEvidenceButCannotBeEnforced(t *testing.T) {
 	}
 }
 
+func TestFreshRescanExtendsExpiredAdmissionWithoutRewritingIt(t *testing.T) {
+	publicKey, privateKey, _ := ed25519.GenerateKey(rand.Reader)
+	issued := time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC)
+	now := issued.Add(48 * time.Hour)
+	identity := ArtifactIdentity{PluginID: "cn.example.plugin", Channel: "stable", Publisher: "example", SHA256: testDigest("artifact"), SBOMSHA256: testDigest("sbom")}
+	verifier, err := NewVerifier(TrustPolicy{MaxRecordTTLHours: 168, Keys: []ProviderKey{{ProviderID: "provider", KeyID: "key", PublicKey: base64.StdEncoding.EncodeToString(publicKey)}}, Requirements: []Requirement{{ID: "stable", Channel: "stable", ProviderIDs: []string{"provider"}, ScannerIDs: []string{"scanner"}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := Evaluation{SubjectSHA256: identity.SHA256, SBOMSHA256: identity.SBOMSHA256, Scanner: Scanner{ID: "scanner", Version: "1", DatabaseRevision: "db-1"}, Decision: DecisionPass, EvaluatedAt: issued, ExpiresAt: issued.Add(time.Hour)}
+	admission, _ := SignAdmission(AdmissionRecord{Evaluation: base, ProviderID: "provider", KeyID: "key", PolicyID: "stable"}, privateKey)
+	admissionRaw, _ := json.Marshal(admission)
+	if _, _, err := verifier.VerifyAdmission(identity, admissionRaw, now); err == nil {
+		t.Fatal("expired admission must not remain the current operational state")
+	}
+	_, admissionDigest, _ := InspectAdmission(admissionRaw)
+	fresh := base
+	fresh.Scanner.DatabaseRevision = "db-2"
+	fresh.EvaluatedAt, fresh.ExpiresAt = now.Add(-time.Hour), now.Add(24*time.Hour)
+	status, _ := SignStatus(StatusRecord{AdmissionSHA256: admissionDigest, Sequence: 1, PreviousSHA256: admissionDigest, Evaluation: fresh, ProviderID: "provider", KeyID: "key", PolicyID: "stable"}, privateKey)
+	statusRaw, _ := json.Marshal(status)
+	if _, _, err := verifier.VerifyStatus(identity, admissionRaw, nil, statusRaw, now); err != nil {
+		t.Fatalf("fresh rescan should extend the immutable admission root: %v", err)
+	}
+}
+
 func testDigest(value string) string {
 	digest := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(digest[:])

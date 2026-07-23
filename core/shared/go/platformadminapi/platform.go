@@ -224,6 +224,21 @@ type ArtifactSecurityAdmissionEvidence struct {
 	Verification              string `json:"verification"`
 }
 
+type ArtifactSecurityStatusEvidence struct {
+	Sequence         uint64 `json:"sequence"`
+	RecordSHA256     string `json:"recordSha256"`
+	PreviousSHA256   string `json:"previousSha256"`
+	Decision         string `json:"decision"`
+	DatabaseRevision string `json:"databaseRevision"`
+	EvaluatedAt      string `json:"evaluatedAt"`
+	ExpiresAt        string `json:"expiresAt"`
+	Critical         uint64 `json:"critical"`
+	High             uint64 `json:"high"`
+	DeniedLicense    uint64 `json:"deniedLicense"`
+	UnknownLicense   uint64 `json:"unknownLicense"`
+	Verification     string `json:"verification"`
+}
+
 type ArtifactCatalogPage struct {
 	Revision uint64                 `json:"revision"`
 	Total    int                    `json:"total"`
@@ -320,6 +335,7 @@ type ArtifactSupplyChainEvidence struct {
 	PythonLock         *ArtifactPythonLockEvidence        `json:"pythonLock,omitempty"`
 	Provenance         *ArtifactProvenanceEvidence        `json:"provenance,omitempty"`
 	SecurityAdmission  *ArtifactSecurityAdmissionEvidence `json:"securityAdmission,omitempty"`
+	SecurityStatus     *ArtifactSecurityStatusEvidence    `json:"securityStatus,omitempty"`
 }
 
 type ArtifactReferenceSnapshot struct {

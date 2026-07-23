@@ -140,7 +140,7 @@ func TestStablePublicationBindsTestingSupplyChainSidecars(t *testing.T) {
 		ID: "publication", Status: PublicationApproved, Source: source, Target: target, SHA256: "artifact-sha", Publisher: "example", KeyID: "release",
 		SourceProvenanceSHA256: digestBytes(provenance), SourceProvenanceVerificationSHA256: digestBytes(verification),
 		SourceSecurityAdmissionSHA256: digestBytes(admission),
-		ExpiresAt: time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano),
+		ExpiresAt:                     time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano),
 	}
 	store := &Store{entries: map[string]Entry{refKey(source): {Ref: source, SHA256: record.SHA256, Publisher: record.Publisher, KeyID: record.KeyID, LifecycleStatus: LifecycleActive}}, publications: map[string]Publication{record.ID: record}}
 	attestation := pluginservice.Attestation{Artifact: pluginv1.Artifact{PluginID: target.PluginID, Version: target.Version, Channel: target.Channel, SHA256: record.SHA256}, Publisher: record.Publisher, KeyID: record.KeyID}

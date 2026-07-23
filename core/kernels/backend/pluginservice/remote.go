@@ -87,14 +87,18 @@ func (r *RemoteRepository) Fetch(ctx context.Context, ref Ref) (artifacttrust.En
 			return artifacttrust.Envelope{}, err
 		}
 	}
-	var securityAdmissionRaw []byte
+	var securityAdmissionRaw, securityStatusRaw []byte
 	if r.Trust.AssessmentEnabled() {
 		securityAdmissionRaw, err = r.getOptional(ctx, client, endpoint+"/security-admission", artifactassessment.MaxRecordBytes)
 		if err != nil {
 			return artifacttrust.Envelope{}, err
 		}
+		securityStatusRaw, err = r.getOptional(ctx, client, endpoint+"/security-status", artifactassessment.MaxChainBytes)
+		if err != nil {
+			return artifacttrust.Envelope{}, err
+		}
 	}
-	preflight := artifacttrust.Envelope{Artifact: artifact, Proof: attestationRaw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: securityAdmissionRaw}
+	preflight := artifacttrust.Envelope{Artifact: artifact, Proof: attestationRaw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: securityAdmissionRaw, SecurityStatusChain: securityStatusRaw}
 	if err := r.Trust.VerifyProof(preflight); err != nil {
 		return artifacttrust.Envelope{}, fmt.Errorf("远端制品来源证明预检失败: %w", err)
 	}

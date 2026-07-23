@@ -65,6 +65,7 @@ type VerifiedArtifact struct {
 	provenance             []byte
 	provenanceVerification []byte
 	securityAdmission      []byte
+	securityStatusChain    []byte
 	verified               bool
 }
 
@@ -88,6 +89,10 @@ func (v VerifiedArtifact) SecurityAdmissionBytes() []byte {
 	return append([]byte(nil), v.securityAdmission...)
 }
 
+func (v VerifiedArtifact) SecurityStatusChainBytes() []byte {
+	return append([]byte(nil), v.securityStatusChain...)
+}
+
 func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrust.Envelope) (VerifiedArtifact, error) {
 	if !v.configured || v.validate == nil {
 		return VerifiedArtifact{}, errors.New("内核制品验证器未配置")
@@ -100,7 +105,7 @@ func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrus
 		return VerifiedArtifact{}, fmt.Errorf("制品内容验证失败: %w", err)
 	}
 	if len(bytes.TrimSpace(envelope.Proof)) == 0 {
-		if len(bytes.TrimSpace(envelope.Provenance)) != 0 || len(bytes.TrimSpace(envelope.ProvenanceVerification)) != 0 || len(bytes.TrimSpace(envelope.SecurityAdmission)) != 0 {
+		if len(bytes.TrimSpace(envelope.Provenance)) != 0 || len(bytes.TrimSpace(envelope.ProvenanceVerification)) != 0 || len(bytes.TrimSpace(envelope.SecurityAdmission)) != 0 || len(bytes.TrimSpace(envelope.SecurityStatusChain)) != 0 {
 			return VerifiedArtifact{}, errors.New("无发布者证明的本地制品不得携带供应链 sidecar")
 		}
 		if !v.allowUnsigned {
@@ -118,7 +123,8 @@ func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrus
 		artifact: artifact, packageBytes: append([]byte(nil), envelope.PackageBytes...),
 		proof: append([]byte(nil), envelope.Proof...), provenance: append([]byte(nil), envelope.Provenance...),
 		provenanceVerification: append([]byte(nil), envelope.ProvenanceVerification...),
-		securityAdmission:      append([]byte(nil), envelope.SecurityAdmission...), verified: true,
+		securityAdmission:      append([]byte(nil), envelope.SecurityAdmission...),
+		securityStatusChain:    append([]byte(nil), envelope.SecurityStatusChain...), verified: true,
 	}, nil
 }
 

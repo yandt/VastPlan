@@ -158,17 +158,42 @@ func (s *TrustStore) VerifyProof(envelope artifacttrust.Envelope) error {
 	if manifest.SupplyChain != nil && manifest.SupplyChain.SBOM != nil {
 		sbomSHA = manifest.SupplyChain.SBOM.SHA256
 	}
-	record, _, err := s.assessmentVerifier().VerifyAdmission(artifactassessment.ArtifactIdentity{
+	identity := artifactassessment.ArtifactIdentity{
 		PluginID: envelope.Artifact.PluginID, Channel: envelope.Artifact.Channel, Publisher: manifest.Publisher,
 		SHA256: envelope.Artifact.SHA256, SBOMSHA256: sbomSHA,
-	}, envelope.SecurityAdmission, time.Now().UTC())
+	}
+	statusChain, err := artifactassessment.InspectStatusChain(envelope.SecurityStatusChain)
 	if err != nil {
 		return err
 	}
-	if record != nil {
-		return artifactassessment.EnforceDecision(record.Evaluation)
+	if len(statusChain) == 0 {
+		record, _, err := s.assessmentVerifier().VerifyAdmission(identity, envelope.SecurityAdmission, time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		if record != nil {
+			return artifactassessment.EnforceDecision(record.Evaluation)
+		}
+		return nil
 	}
-	return nil
+	var previous []byte
+	var latest *artifactassessment.StatusRecord
+	for index, raw := range statusChain {
+		status, _, inspectErr := artifactassessment.InspectStatus(raw)
+		if inspectErr != nil {
+			return inspectErr
+		}
+		verifiedAt := status.Evaluation.EvaluatedAt
+		if index == len(statusChain)-1 {
+			verifiedAt = time.Now().UTC()
+		}
+		latest, _, err = s.assessmentVerifier().VerifyStatus(identity, envelope.SecurityAdmission, previous, raw, verifiedAt)
+		if err != nil {
+			return err
+		}
+		previous = raw
+	}
+	return artifactassessment.EnforceDecision(latest.Evaluation)
 }
 
 func (s *TrustStore) provenanceVerifier() *artifactprovenance.Verifier {
@@ -191,6 +216,23 @@ func (s *TrustStore) assessmentVerifier() *artifactassessment.Verifier {
 
 func (s *TrustStore) AssessmentEnabled() bool {
 	return s != nil && s.assessment != nil
+}
+
+func (s *TrustStore) VerifySecurityStatus(artifact Artifact, admissionRaw, previousRaw, statusRaw []byte, now time.Time) (*artifactassessment.StatusRecord, string, error) {
+	if s == nil || s.assessment == nil {
+		return nil, "", errors.New("安全评估验证器未配置")
+	}
+	manifest, err := pluginv1.ParseManifest(artifact.Manifest)
+	if err != nil {
+		return nil, "", err
+	}
+	if manifest.SupplyChain == nil || manifest.SupplyChain.SBOM == nil {
+		return nil, "", errors.New("安全复扫状态要求签名清单绑定 SBOM")
+	}
+	return s.assessment.VerifyStatus(artifactassessment.ArtifactIdentity{
+		PluginID: artifact.PluginID, Channel: artifact.Channel, Publisher: manifest.Publisher,
+		SHA256: artifact.SHA256, SBOMSHA256: manifest.SupplyChain.SBOM.SHA256,
+	}, admissionRaw, previousRaw, statusRaw, now)
 }
 
 func (s *TrustStore) verifyAt(attestation Attestation, now time.Time) error {

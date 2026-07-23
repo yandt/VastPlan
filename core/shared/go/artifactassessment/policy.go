@@ -115,7 +115,15 @@ func (v *Verifier) VerifyAdmission(identity ArtifactIdentity, raw []byte, now ti
 // decision is returned as verified evidence; EnforceDecision decides whether an
 // install or activation may proceed.
 func (v *Verifier) VerifyStatus(identity ArtifactIdentity, admissionRaw, previousRaw, statusRaw []byte, now time.Time) (*StatusRecord, string, error) {
-	admission, admissionDigest, err := v.VerifyAdmission(identity, admissionRaw, now)
+	inspectedAdmission, _, inspectErr := InspectAdmission(admissionRaw)
+	if inspectErr != nil {
+		return nil, "", errors.New("安全复扫状态缺少有效准入记录")
+	}
+	// Admission is the immutable chain root. A fresh rescan may legitimately
+	// extend operational trust after that admission's TTL elapsed, so verify the
+	// root at its evaluation time while still honoring key revocation. The new
+	// status itself is always checked against the current trusted clock.
+	admission, admissionDigest, err := v.VerifyAdmission(identity, admissionRaw, inspectedAdmission.Evaluation.EvaluatedAt)
 	if err != nil || admission == nil {
 		return nil, "", errors.New("安全复扫状态缺少有效准入记录")
 	}

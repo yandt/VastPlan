@@ -4,16 +4,23 @@ package artifactassessment
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
 const (
-	SchemaVersion  = "v1"
-	MaxRecordBytes = 256 << 10
-	MaxClockSkew   = 5 * time.Minute
-	DecisionPass   = "pass"
-	DecisionFail   = "fail"
+	SchemaVersion   = "v1"
+	MaxRecordBytes  = 256 << 10
+	MaxChainBytes   = 2 << 20
+	MaxChainRecords = 1024
+	MaxClockSkew    = 5 * time.Minute
+	DecisionPass    = "pass"
+	DecisionFail    = "fail"
 )
+
+type StatusChain struct {
+	Records []json.RawMessage `json:"records"`
+}
 
 // Scanner identifies the external engine and the exact advisory database used
 // for an evaluation. The kernel deliberately does not know vendor-specific

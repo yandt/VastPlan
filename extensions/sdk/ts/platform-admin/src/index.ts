@@ -192,11 +192,24 @@ export interface ArtifactCatalogEntry {
   sbom?: { format: "cyclonedx-json"; specVersion: "1.5" | "1.6"; sha256: string };
   pythonLock?: ArtifactPythonLockDeclaration;
   provenance?: ArtifactProvenanceDeclaration;
+	securityAdmission?: ArtifactSecurityAdmissionDeclaration;
+	securityStatus?: ArtifactSecurityStatusEvidence;
 }
 export interface ArtifactPythonLockDeclaration { format: "pylock-toml"; specVersion: "1.0"; sha256: string; }
 export interface ArtifactProvenanceDeclaration {
   provenanceSha256: string; verificationSha256: string; predicateType: string; builderId: string; buildType: string;
   providerId: string; keyId: string; policyId: string; verifiedAt: string; expiresAt: string;
+}
+export interface ArtifactSecurityAdmissionDeclaration {
+  admissionSha256: string; providerId: string; keyId: string; policyId: string;
+  scannerId: string; scannerVersion: string; databaseRevision: string; decision: "pass" | "fail";
+  evaluatedAt: string; expiresAt: string; critical: number; high: number; medium: number; low: number;
+  unknownVulnerability: number; deniedLicense: number; unknownLicense: number;
+}
+export interface ArtifactSecurityStatusEvidence {
+  sequence: number; recordSha256: string; previousSha256: string; decision: "pass" | "fail";
+  databaseRevision: string; evaluatedAt: string; expiresAt: string; critical: number; high: number;
+  deniedLicense: number; unknownLicense: number; verification: "verified";
 }
 export interface ArtifactCatalogPage { revision: number; total: number; page: number; pageSize: number; items: ArtifactCatalogEntry[]; }
 export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
@@ -246,7 +259,9 @@ export interface ArtifactPublication {
   id: string; revision: number; status: ArtifactPublicationStatus; source: ArtifactRef; target: ArtifactRef;
   sha256: string; publisher: string; keyId: string; sourceAttestationSha256: string; publishedAttestationSha256?: string;
   sourceProvenanceSha256?: string; sourceProvenanceVerificationSha256?: string;
+	 sourceSecurityAdmissionSha256?: string;
   publishedProvenanceSha256?: string; publishedProvenanceVerificationSha256?: string;
+	 publishedSecurityAdmissionSha256?: string;
   reason: string; submittedBy: string; approvedBy?: string; submittedAt: string; expiresAt: string; approvedAt?: string; publishedAt?: string;
   terminalReason?: string; terminalBy?: string; terminalAt?: string;
 }
@@ -260,6 +275,8 @@ export interface ArtifactSupplyChainEvidence {
   sbom?: { format: "cyclonedx-json"; specVersion: "1.5" | "1.6"; sha256: string; serialNumber?: string; components: number; verification: "verified" };
   pythonLock?: ArtifactPythonLockDeclaration & { requiresPython: string; createdBy: string; packages: number; wheels: number; verification: "verified" };
   provenance?: ArtifactProvenanceDeclaration & { sources: number; verification: "verified" };
+	securityAdmission?: ArtifactSecurityAdmissionDeclaration & { vulnerabilityReportSha256?: string; licenseReportSha256?: string; verification: "verified" };
+	securityStatus?: ArtifactSecurityStatusEvidence;
 }
 
 export type APIExposureStatus = "Draft" | "PendingApproval" | "Approved" | "Published" | "Superseded" | "Retired";
