@@ -27,6 +27,20 @@ type Provider struct {
 }
 
 func New(config Config, privateKey ed25519.PrivateKey, engine Engine, workRoot string) (*Provider, error) {
+	provider, err := NewRuntime(config, engine, workRoot)
+	if err != nil {
+		return nil, err
+	}
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return nil, errors.New("安全评估 Provider 私钥不是 Ed25519")
+	}
+	provider.privateKey = append(ed25519.PrivateKey(nil), privateKey...)
+	return provider, nil
+}
+
+// NewRuntime builds a keyless Provider for an independent process. The caller
+// must supply a short-lived key from Material Lease to AssessWithEvidenceKey.
+func NewRuntime(config Config, engine Engine, workRoot string) (*Provider, error) {
 	if strings.TrimSpace(config.ProviderID) != config.ProviderID || config.ProviderID == "" ||
 		strings.TrimSpace(config.KeyID) != config.KeyID || config.KeyID == "" || len(config.ProviderID) > 160 || len(config.KeyID) > 160 {
 		return nil, errors.New("安全评估 Provider 身份无效")
@@ -34,16 +48,13 @@ func New(config Config, privateKey ed25519.PrivateKey, engine Engine, workRoot s
 	if config.TTL <= 0 || config.TTL > 365*24*time.Hour {
 		return nil, errors.New("安全评估 Provider TTL 必须在 0..365 天内")
 	}
-	if len(privateKey) != ed25519.PrivateKeySize {
-		return nil, errors.New("安全评估 Provider 私钥不是 Ed25519")
-	}
 	if engine == nil {
 		return nil, errors.New("安全评估扫描引擎不能为空")
 	}
 	if !filepath.IsAbs(workRoot) || filepath.Clean(workRoot) != workRoot {
 		return nil, errors.New("安全评估工作根目录必须是规范绝对路径")
 	}
-	return &Provider{config: config, privateKey: append(ed25519.PrivateKey(nil), privateKey...), engine: engine, now: time.Now, workRoot: workRoot}, nil
+	return &Provider{config: config, engine: engine, now: time.Now, workRoot: workRoot}, nil
 }
 
 func (p *Provider) Assess(ctx context.Context, request artifactassessment.ScanRequest) (artifactassessment.AdmissionRecord, error) {
@@ -52,8 +63,15 @@ func (p *Provider) Assess(ctx context.Context, request artifactassessment.ScanRe
 }
 
 func (p *Provider) AssessWithEvidence(ctx context.Context, request artifactassessment.ScanRequest) (Evidence, error) {
+	return p.AssessWithEvidenceKey(ctx, request, p.privateKey)
+}
+
+func (p *Provider) AssessWithEvidenceKey(ctx context.Context, request artifactassessment.ScanRequest, privateKey ed25519.PrivateKey) (Evidence, error) {
 	if p == nil || ctx == nil {
 		return Evidence{}, errors.New("安全评估 Provider 未初始化")
+	}
+	if len(privateKey) != ed25519.PrivateKeySize {
+		return Evidence{}, errors.New("安全评估 Provider 私钥不是 Ed25519")
 	}
 	if err := validateRequest(request); err != nil {
 		return Evidence{}, err
@@ -86,7 +104,7 @@ func (p *Provider) AssessWithEvidence(ctx context.Context, request artifactasses
 	evaluation := normalizeEvaluation(request, result, p.config, p.now().UTC())
 	record, err := artifactassessment.SignAdmission(artifactassessment.AdmissionRecord{
 		Evaluation: evaluation, ProviderID: p.config.ProviderID, KeyID: p.config.KeyID, PolicyID: request.PolicyID,
-	}, p.privateKey)
+	}, privateKey)
 	if err != nil {
 		return Evidence{}, err
 	}

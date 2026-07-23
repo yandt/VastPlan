@@ -15,8 +15,9 @@ var scanLeaseIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{0,199}$`)
 var scanLeaseChannelPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 
 const (
-	AssessmentProviderPluginID = "cn.vastplan.platform.artifacts.assessment.provider"
-	ScanLeaseTTL               = 30 * time.Second
+	AssessmentProviderPluginID   = "cn.vastplan.platform.artifacts.assessment.provider"
+	AssessmentControllerPluginID = "cn.vastplan.platform.artifacts.assessment.controller"
+	ScanLeaseTTL                 = 30 * time.Second
 )
 
 // ScanLeaseRequest binds a one-time artifact data-plane read to the exact
@@ -25,6 +26,18 @@ type ScanLeaseRequest struct {
 	Ref           pluginv1.ArtifactRef `json:"ref"`
 	SubjectSHA256 string               `json:"subjectSha256"`
 	SBOMSHA256    string               `json:"sbomSha256"`
+}
+
+type ProviderAssessmentRequest struct {
+	ScanLeaseRequest
+	PolicyID string `json:"policyId"`
+}
+
+func ValidateProviderAssessmentRequest(value ProviderAssessmentRequest) error {
+	if ValidateScanLeaseRequest(value.ScanLeaseRequest) != nil || value.PolicyID == "" || strings.TrimSpace(value.PolicyID) != value.PolicyID || len(value.PolicyID) > 160 {
+		return errors.New("安全评估 Provider 请求无效")
+	}
+	return nil
 }
 
 // ScanLease carries a secret-bearing URL. It must never be logged, persisted
