@@ -1,6 +1,6 @@
 # ADR-0129 Shared State 签名备份与空目标恢复
 
-- 状态：已采纳，代码已实现；生产 RPO/RTO 实测并入故障矩阵阶段
+- 状态：已采纳，代码与本地三节点故障回归已实现；生产 RPO/RTO 待企业环境实测
 - 日期：2026-07-23
 
 ## 背景
@@ -18,7 +18,7 @@ Global Settings、Plugin Settings、Portal Composer、Deployment Manager 和 Cre
 7. restore 只允许目标 backing stream 不存在。禁止原地覆盖、merge、逻辑 upsert 或自动删除现有流；这同时避免恢复数据与运行 writer 发生 revision 分叉。操作者还必须提交已验签 manifest 的完整 SHA-256，并显式确认所有 writer 已停写、旧集群入口和身份已撤销。
 8. 恢复完成后重新读取全部最新 KV，复算逻辑摘要、领域验证结果及 stream state。任何差异都 fail-closed，服务不得启动；工具不自动删除失败目标，须在变更控制下调查、删除空目标并重试。
 9. 软件无法从目标集群证明旧集群不会重新联网。停流量、停止 Backend/Node、撤销旧 NKey、隔离旧 NATS 和确认单一恢复目标属于强制运维前置条件，不能用一个分布式锁伪装为已解决跨灾难域 split-brain。
-10. 首个默认运维目标为每小时一次签名备份、重要变更前额外备份、RPO 不超过一小时、RTO 目标两小时、异地不可变保存和至少季度恢复演练。该值是上线起点，不是性能证明；A3 必须在企业三节点 NATS/Vault 环境测量并按 SLA 收紧。
+10. 首个默认运维目标为每小时一次签名备份、重要变更前额外备份、RPO 不超过一小时、RTO 目标两小时、异地不可变保存和至少季度恢复演练。该值是上线起点，不是性能证明；[ADR-0131](ADR-0131-Shared-State与Vault有界故障矩阵.md) 明确要求在企业三节点 NATS/Vault 环境测量并按 SLA 收紧。
 
 ## 备选方案
 
@@ -40,4 +40,4 @@ Global Settings、Plugin Settings、Portal Composer、Deployment Manager 和 Cre
 - Root/chunk、普通插件状态、历史 revision 和恢复后 CAS 连续性保持；
 - 篡改 snapshot、错误签名、错误确认摘要、未确认停写和非空目标均拒绝；
 - backup/restore NATS 身份可读取复核但不能 `$KV` 写入，并且 snapshot/restore API 相互隔离；
-- 全量 Go、race、发布门禁与后续真实三节点故障矩阵共同验收。
+- 全量 Go、race、发布门禁与真实三节点故障矩阵共同验收；生产恢复 SLA 另留企业环境证据。

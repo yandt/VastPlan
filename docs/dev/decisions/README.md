@@ -161,3 +161,4 @@
 - [ADR-0128 统一 Leader Epoch 与外部副作用 Fencing](ADR-0128-统一Leader-Epoch与外部副作用Fencing.md)
 - [ADR-0129 Shared State 签名备份与空目标恢复](ADR-0129-Shared-State签名备份与空目标恢复.md)
 - [ADR-0130 Shared State 容量策略与低基数可观测](ADR-0130-Shared-State容量策略与低基数可观测.md)
+- [ADR-0131 Shared State 与 Vault 有界故障矩阵](ADR-0131-Shared-State与Vault有界故障矩阵.md)

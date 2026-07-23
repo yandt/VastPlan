@@ -1,6 +1,6 @@
 # ADR-0130 Shared State 容量策略与低基数可观测
 
-- 状态：已采纳，代码已实现；企业容量基线待 A3 实测
+- 状态：已采纳，代码已实现；企业容量基线与扩容恢复时延待目标环境实测
 - 日期：2026-07-23
 
 ## 背景
@@ -38,4 +38,4 @@ Shared State 已成为五个关键平台插件的共同状态真源，但 `VASTP
 - 自定义 max/warning/critical 进入 JetStream config/metadata，stream 使用 `DiscardNew`；
 - ready/warning/critical/full 边界和监控退出等级闭合；
 - Host 指标覆盖成功、CAS conflict、not found 等结果，metric key 不含 tenant/plugin/key/value；
-- 全仓 Go、race、架构守护和发布门禁通过；真实容量增长、告警时延和扩容恢复进入 A3。
+- 全仓 Go、race、架构守护和发布门禁通过；[ADR-0131](ADR-0131-Shared-State与Vault有界故障矩阵.md) 保留真实容量增长、告警时延和扩容恢复的企业环境验收项。

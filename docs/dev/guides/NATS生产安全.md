@@ -42,6 +42,10 @@ nats-server -c /secure/vastplan-nats/nats-server.conf
 
 `VASTPLAN_SHARED_STATE_V1` 保存插件跨实例状态，必须纳入 JetStream 三副本、磁盘容量、快照备份和恢复演练。Node 身份可读写该 bucket 是因为 Shared State Provider 位于可信 Backend 进程；插件进程不取得 Node NKey。Provider 故障时不得回退本地 File Store。value 可能包含业务私有状态，运维日志和支持包不得导出明文内容。
 
+代码侧有界故障回归使用 `./engineering/tools/shared-state-fault-matrix.sh`。它在本机临时启动三个真实 `nats-server` 并注入 leader/仲裁/Vault 故障，不连接现有环境，也不是 soak。上线前还必须按 [ADR-0131](../decisions/ADR-0131-Shared-State与Vault有界故障矩阵.md) 在目标网络执行 route 分区、非优雅终止、磁盘容量和 RPO/RTO 验收。
+
+失去多数派时写调用必须失败，但超时不等于确认未提交：已进入 Raft 的 CAS 可能在仲裁恢复后提交。调用方恢复后必须先读取权威 value/revision 或业务操作 ID 对账，再决定是否重试；不得盲目重放非幂等写入。旧 revision 始终应被 CAS fencing。
+
 ## 4. 初始化 Bucket
 
 ```bash
