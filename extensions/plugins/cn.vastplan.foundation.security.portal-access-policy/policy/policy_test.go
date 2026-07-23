@@ -77,9 +77,12 @@ func TestPortalPreferenceOnlyAllowsPortalBFFUser(t *testing.T) {
 			t.Fatalf("Portal BFF preference %s should be allowed: %+v", operation, got)
 		}
 	}
-	wrongScene := *user
-	wrongScene.Scene = "plugin.call"
-	if got := decisionFor(t, &wrongScene, portalapi.PreferenceCapability, "get"); got.Decision != extpoint.DecisionDeny {
+	wrongScene := &contractv1.CallContext{
+		Scene:     "plugin.call",
+		Caller:    &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "alice"},
+		Principal: &contractv1.Principal{UserId: "alice"},
+	}
+	if got := decisionFor(t, wrongScene, portalapi.PreferenceCapability, "get"); got.Decision != extpoint.DecisionDeny {
 		t.Fatalf("non-BFF preference call must be denied: %+v", got)
 	}
 	if got := decisionFor(t, user, portalapi.PreferenceCapability, "deleteAll"); got.Decision != extpoint.DecisionDeny {
