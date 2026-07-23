@@ -163,7 +163,7 @@ func activatePortalRevision(t *testing.T, process *portalKernelProcess, publishe
 	return activation
 }
 
-func assertPortalRuntime(t *testing.T, process *portalKernelProcess, reader *http.Client, revision uint64) {
+func assertPortalRuntime(t *testing.T, process *portalKernelProcess, reader *http.Client, activationRevision uint64) {
 	t.Helper()
 	status, raw := portalJSON(t, reader, process.baseURL(), http.MethodGet, "/v1/portal-runtime?path=/operations", nil, false)
 	if status != http.StatusOK {
@@ -171,8 +171,8 @@ func assertPortalRuntime(t *testing.T, process *portalKernelProcess, reader *htt
 	}
 	var runtime portalapi.RuntimeSpec
 	decodePortalJSON(t, raw, &runtime)
-	if runtime.Portal.Revision != revision || len(runtime.Modules) != 14 || len(runtime.ModuleGraphs) != 0 {
-		t.Fatalf("Portal Runtime 未绑定完整 Activation: revision=%d runtime=%+v", revision, runtime)
+	if runtime.Portal.Revision != activationRevision || len(runtime.Modules) != len(runtime.Portal.Plugins) || len(runtime.ModuleGraphs) != 0 {
+		t.Fatalf("Portal Runtime 未绑定完整 Activation: activationRevision=%d runtime=%+v", activationRevision, runtime)
 	}
 	module, err := reader.Get(process.baseURL() + runtime.Modules[0].URL)
 	if err != nil {

@@ -2,9 +2,9 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`1.4.0`
+当前制品版本：`1.6.0`
 
-该平台基础插件以 `leader + leader-owned + cluster` 方式治理 Portal Application、Platform Profile、PortalBinding 和不可变 Activation。发布输入只代表可选择；只有通过 Backend `portaltrust` 校验/物化并完成 `expectedCurrentId` CAS 的 Activation 才是线上事实。
+该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal Application、Platform Profile、PortalBinding 和不可变 Activation。发布输入只代表可选择；只有通过 Backend `portaltrust` 校验/物化并完成 `expectedCurrentId` CAS 的 Activation 才是线上事实。
 
 主要能力：
 
@@ -20,4 +20,4 @@
 
 Backend `portaltrust` 通过 `kernel.portal.artifact-references.publish` 将已密封快照路由到集群仓库。该服务只接受经宿主认证的 Composer 插件、当前租户，以及 `portal/*` owner 命名空间；它不是通用 capability 代理。仅显式开发模式且没有集群仓库时可使用内存校验发布器，生产环境缺少仓库路由会拒绝 Activation。
 
-状态格式为 v4。状态只保存治理数据、精确制品引用与 outbox 标记，不保存任何凭证 material。完整 Portal 边界见《[前端门户内核](../architecture/前端门户内核.md)》、《[制品仓库与测试发布](../architecture/制品仓库与测试发布.md)》和 [ADR-0100](../decisions/ADR-0100-制品生命周期引用保护与垃圾回收.md)。
+组合治理按 tenant 保存为单个 Shared State CAS 聚合；用户偏好按 tenant + subject 摘要独立分文档。状态只保存治理数据、精确制品引用、outbox 标记和稳定偏好 ID，不保存任何凭证 material。完整 Portal 边界见《[前端门户内核](../architecture/前端门户内核.md)》、《[制品仓库与测试发布](../architecture/制品仓库与测试发布.md)》、[ADR-0100](../decisions/ADR-0100-制品生命周期引用保护与垃圾回收.md) 和 [ADR-0125](../decisions/ADR-0125-Portal-Composer与Preference共享状态分区.md)。

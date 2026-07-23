@@ -22,6 +22,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
 
 type portalComposerFixture struct {
@@ -61,14 +62,13 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 	verifier := nodeagent.NewLocalDevelopmentArtifactVerifier()
 	installer := nodeagent.LocalInstaller{Root: filepath.Join(temporary, "installed")}
 	policy := installPortalFixturePlugin(t, repository, verifier, installer, pluginv1.ArtifactRef{
-		PluginID: "cn.vastplan.foundation.security.portal-access-policy", Version: "0.3.0", Channel: "stable",
+		PluginID: "cn.vastplan.foundation.security.portal-access-policy", Version: "0.4.0", Channel: "stable",
 	})
 	composer := installPortalFixturePlugin(t, repository, verifier, installer, pluginv1.ArtifactRef{
-		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.5.0", Channel: "stable",
+		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.6.0", Channel: "stable",
 	})
 	platformCatalog := portalPlatformCatalogForTenant(t, root, "acme")
 	config, err := kernelspi.NewMapConfig(map[string]any{
-		"platform.portal-composer.stateFile":       filepath.Join(temporary, "composer-state.json"),
 		"platform.portal-composer.platformCatalog": string(platformCatalog),
 	})
 	if err != nil {
@@ -81,7 +81,11 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 	if err != nil {
 		t.Fatal(err)
 	}
-	host, err := hostfactory.NewWithDependencies("0.1.0", t.Logf, kernelspi.Dependencies{Config: config})
+	sharedStore, err := sharedstate.OpenFileStore(filepath.Join(temporary, "shared-state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host, err := hostfactory.NewWithDependencies("0.1.0", t.Logf, kernelspi.Dependencies{Config: config, SharedState: sharedStore})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,6 +107,9 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 		}
 		if response == nil || response.Result == nil {
 			return nil, nil, errors.New("Portal Composer 响应为空")
+		}
+		if response.Result.GetStatus() != contractv1.CallResult_STATUS_OK {
+			t.Logf("Portal Composer 拒绝: code=%s message=%s", response.Result.GetError().GetCode(), response.Result.GetError().GetMessage())
 		}
 		return response.Result, response.Payload, nil
 	})
@@ -144,6 +151,7 @@ func installPortalFixturePlugin(t *testing.T, repository *pluginservice.Reposito
 func portalFixtureLaunchPolicy(installed nodeagent.InstalledPlugin) protocolbus.LaunchPolicy {
 	return protocolbus.LaunchPolicy{
 		PluginID: installed.ID, Publisher: installed.Publisher, Version: installed.Version,
+		ArtifactSHA256: installed.SHA256, NodeID: "portal-fixture", RuntimeScope: "platform-portal-composer", RuntimeInstanceID: "fixture-" + installed.ID,
 		Contributions: installed.Contract.Contributions, KernelServices: installed.Contract.KernelServices, ContextAccess: installed.Contract.ContextAccess,
 	}
 }
@@ -154,8 +162,27 @@ func portalPlatformCatalogForTenant(t *testing.T, root, tenantID string) []byte 
 	if err != nil {
 		t.Fatal(err)
 	}
+	excluded := map[string]struct{}{
+		"cn.vastplan.platform.integration.api-exposure":      {},
+		"cn.vastplan.platform.configuration.role-management": {},
+	}
+	for index := range catalog.Profiles {
+		plugins := catalog.Profiles[index].Plugins[:0]
+		for _, plugin := range catalog.Profiles[index].Plugins {
+			if _, omit := excluded[plugin.ID]; !omit {
+				plugins = append(plugins, plugin)
+			}
+		}
+		catalog.Profiles[index].Plugins = plugins
+	}
 	for index := range catalog.Bindings {
 		catalog.Bindings[index].TenantID = tenantID
+		for _, profile := range catalog.Profiles {
+			if profile.ID == catalog.Bindings[index].PlatformProfile.ID {
+				catalog.Bindings[index].PlatformProfile.Revision = profile.Revision
+				catalog.Bindings[index].PlatformProfile.Digest = profile.Digest()
+			}
+		}
 	}
 	raw, err := json.Marshal(catalog)
 	if err != nil {

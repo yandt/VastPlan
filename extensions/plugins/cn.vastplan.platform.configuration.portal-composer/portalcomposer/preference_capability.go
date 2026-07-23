@@ -13,6 +13,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
+	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
 const (
@@ -22,11 +23,8 @@ const (
 
 var errPreferenceInvalid = errors.New("PortalPreference 请求无效")
 
-func (s *Service) HandlePreference(principal portalapi.Principal, operation string, payload []byte) ([]byte, error) {
-	store, err := s.preferenceStoreForCall()
-	if err != nil {
-		return nil, err
-	}
+func handlePreference(store *preferenceStore, principal portalapi.Principal, operation string, payload []byte) ([]byte, error) {
+	var err error
 	var result portalapi.PortalPreference
 	switch operation {
 	case "get":
@@ -59,16 +57,8 @@ func (s *Service) HandlePreference(principal portalapi.Principal, operation stri
 	return json.Marshal(result)
 }
 
-func (s *Service) preferenceStoreForCall() (*preferenceStore, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.preferenceStore == nil {
-		return nil, errors.New("PortalPreference 尚未配置状态文件")
-	}
-	return s.preferenceStore, nil
-}
-
 func PreferenceContribution(service *Service) sdk.Contribution {
+	_ = service
 	handlers := map[string]sdk.Handler{}
 	for _, operation := range []string{"get", "put"} {
 		op := operation
@@ -76,14 +66,15 @@ func PreferenceContribution(service *Service) sdk.Contribution {
 			if !trustedPreferenceCaller(callCtx) {
 				return preferenceError(errorcode.PermissionDenied, "PortalPreference 只接受可信 Portal BFF 的已认证用户调用"), nil, nil
 			}
-			if err := service.ensureConfigured(ctx, host, callCtx); err != nil {
-				return nil, nil, err
-			}
 			principal, err := projectPrincipal(callCtx)
 			if err != nil {
 				return preferenceError(errorcode.PermissionDenied, err.Error()), nil, nil
 			}
-			raw, err := service.HandlePreference(principal, op, payload)
+			store, err := newPreferenceStore(ctx, host, callCtx, principal)
+			if err != nil {
+				return mapPreferenceStoreError(err), nil, nil
+			}
+			raw, err := handlePreference(store, principal, op, payload)
 			switch {
 			case errors.Is(err, portalapi.ErrPreferenceConflict):
 				return preferenceError(preferenceConflictCode, err.Error()), nil, nil
@@ -92,13 +83,19 @@ func PreferenceContribution(service *Service) sdk.Contribution {
 			case errors.Is(err, portalapi.ErrForbidden):
 				return preferenceError(errorcode.PermissionDenied, err.Error()), nil, nil
 			case err != nil:
-				return nil, nil, err
+				return mapPreferenceStoreError(err), nil, nil
 			default:
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 			}
 		}
 	}
 	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: portalapi.PreferenceCapability, Descriptor: PreferenceDescriptor(), Handlers: handlers}
+}
+
+func mapPreferenceStoreError(err error) *contractv1.CallResult {
+	var stateError *sharedstatesdk.ServiceError
+	retryable := errors.As(err, &stateError) && stateError.Retryable
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: "portal.preference.unavailable", Message: err.Error(), Retryable: retryable}}
 }
 
 func PreferenceDescriptor() []byte {

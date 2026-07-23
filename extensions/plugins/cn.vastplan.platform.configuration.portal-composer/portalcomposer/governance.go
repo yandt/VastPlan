@@ -15,7 +15,8 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
-func (s *Service) seedPublishedCatalogLocked(catalog frontendcompositionv1.PortalPlatformCatalog) error {
+func (s *Service) seedPublishedCatalogLocked(catalog frontendcompositionv1.PortalPlatformCatalog, tenant string) (bool, error) {
+	beforeGovernance := s.state.NextGovernance
 	profileRevisionByDigest := map[string]uint64{}
 	for _, existing := range s.state.Profiles {
 		if existing.Status == portalapi.StatusPublished {
@@ -34,9 +35,12 @@ func (s *Service) seedPublishedCatalogLocked(catalog frontendcompositionv1.Porta
 		profileRevisionByDigest[digest] = revision.ID
 	}
 	for _, binding := range catalog.Bindings {
+		if binding.TenantID != tenant {
+			continue
+		}
 		profileRevisionID := profileRevisionByDigest[binding.PlatformProfile.Digest]
 		if profileRevisionID == 0 {
-			return fmt.Errorf("Portal Binding %s/%s 未找到已发布 Profile revision", binding.TenantID, binding.PortalID)
+			return false, fmt.Errorf("Portal Binding %s/%s 未找到已发布 Profile revision", binding.TenantID, binding.PortalID)
 		}
 		duplicate := false
 		for _, existing := range s.state.Bindings {
@@ -51,7 +55,7 @@ func (s *Service) seedPublishedCatalogLocked(catalog frontendcompositionv1.Porta
 		s.state.NextGovernance++
 		s.state.Bindings = append(s.state.Bindings, portalapi.BindingRevision{ID: s.state.NextGovernance, TenantID: binding.TenantID, PortalID: binding.PortalID, ProfileRevisionID: profileRevisionID, Status: portalapi.StatusPublished, Binding: binding, PublishedBy: "system", CreatedAt: now, UpdatedAt: now})
 	}
-	return nil
+	return s.state.NextGovernance != beforeGovernance, nil
 }
 
 func (s *Service) Governance(ctx context.Context, principal portalapi.Principal) (portalapi.GovernanceSnapshot, error) {

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 28,
+  "revision": 29,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -294,18 +294,16 @@
       "enabled": true,
       "service_role": "backend",
       "logical_service": "platform.portal-composer",
-      "instance_policy": "leader",
-      "state_model": "leader-owned",
+      "instance_policy": "active-active",
+      "state_model": "external-shared",
       "visibility": "cluster",
-      "routing": "leader",
+      "routing": "queue",
       "routing_domain": "platform",
       "replicas": 1,
       "placement": { "nodeSelector": { "environment": "local-platform" } },
       "config": {
         "plugins": {
           "cn.vastplan.platform.configuration.portal-composer": {
-            "platform.portal-composer.stateFile": "__VASTPLAN_DEV_STATE__/portal-composer.json",
-            "platform.portal-composer.preferenceStateFile": "__VASTPLAN_DEV_STATE__/portal-preferences.json",
             "platform.portal-composer.platformCatalog": "__VASTPLAN_PORTAL_PLATFORM_CATALOG__"
           }
         },
@@ -315,8 +313,8 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.security.portal-access-policy", "version": "0.3.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.5.0", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.portal-access-policy", "version": "0.4.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.6.0", "channel": "stable" }
       ]
     },
     {

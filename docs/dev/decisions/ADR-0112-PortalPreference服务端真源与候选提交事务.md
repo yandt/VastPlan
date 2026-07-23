@@ -32,3 +32,7 @@ Portal 已允许用户切换 Renderer、Shell Library、主题、图标风格和
 - Portal Preference 不改变插件制品锁、Platform Profile、Activation 或 Backend 服务组合。
 - 完整文档 CAS 需要客户端在冲突后合并；当前 Collection 写端已串行并只重试一次，持续争用会明确提示用户而不是静默覆盖。
 - 当前文件 Store 是 leader-owned 开发/单卷适配器。生产多节点必须给该逻辑服务提供一致的持久卷或替换为实现同一 CAS 契约的共享 Store，不能让多个 leader 分别持有真源。
+
+## 后续实施
+
+- 2026-07-23：Portal Composer 1.6.0 已按 [ADR-0125](ADR-0125-Portal-Composer与Preference共享状态分区.md) 将偏好迁移为 `tenant + subject` Shared State 文档，并将组合治理迁移为 tenant CAS 聚合；插件切换为 active-active。上文独立状态文件描述保留为本 ADR 采纳时的历史记录。

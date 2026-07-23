@@ -3,11 +3,8 @@ package portalcomposer
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -15,16 +12,15 @@ import (
 
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
-	PluginID      = "cn.vastplan.platform.configuration.portal-composer"
-	PluginVersion = "1.5.0"
-	Capability    = portalapi.ComposerCapability
-	// StateFileConfigKey is read only through the authenticated host callback;
-	// plugin process environment must not decide where governed state is stored.
-	StateFileConfigKey       = "platform.portal-composer.stateFile"
+	PluginID                 = "cn.vastplan.platform.configuration.portal-composer"
+	PluginVersion            = "1.6.0"
+	Capability               = portalapi.ComposerCapability
 	PlatformCatalogConfigKey = "platform.portal-composer.platformCatalog"
 )
 
@@ -35,6 +31,7 @@ var (
 	ErrSelfApproval    = portalapi.ErrSelfApproval
 	ErrRouteConflict   = portalapi.ErrRouteConflict
 	ErrCatalogRejected = portalapi.ErrCatalogRejected
+	ErrStateConflict   = errors.New("Portal Composer Shared State 并发冲突")
 )
 
 // Catalog is the trust-aware adapter supplied by the artifact/control plane. A
@@ -66,44 +63,14 @@ type state struct {
 
 type Service struct {
 	mu                sync.Mutex
+	workflowMu        sync.Mutex
 	state             state
-	stateFile         string
-	preferenceStore   *preferenceStore
+	session           *composerStateSession
+	testSave          func(state) error
 	artifactCatalog   Catalog
 	platformCatalog   frontendcompositionv1.PortalPlatformCatalog
 	catalogConfigured bool
 	now               func() time.Time
-}
-
-func (s *Service) configurePreferenceStore(stateFile string) error {
-	stateFile = strings.TrimSpace(stateFile)
-	if stateFile == "" {
-		return errors.New("PortalPreference stateFile 不能为空")
-	}
-	s.mu.Lock()
-	if s.preferenceStore != nil {
-		current := s.preferenceStore.path
-		s.mu.Unlock()
-		if current != stateFile {
-			return errors.New("PortalPreference stateFile 不允许在运行中切换")
-		}
-		return nil
-	}
-	s.mu.Unlock()
-	store, err := openPreferenceStore(stateFile)
-	if err != nil {
-		return err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.preferenceStore != nil {
-		if s.preferenceStore.path != stateFile {
-			return errors.New("PortalPreference stateFile 不允许在运行中切换")
-		}
-		return nil
-	}
-	s.preferenceStore = store
-	return nil
 }
 
 func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatformCatalog) error {
@@ -120,95 +87,89 @@ func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatfo
 		return nil
 	}
 	s.platformCatalog, s.catalogConfigured = catalog, true
-	if err := s.seedPublishedCatalogLocked(catalog); err != nil {
-		return err
-	}
-	if s.stateFile != "" {
-		return s.save()
-	}
-	return nil
-}
-
-func New(stateFile string, catalog Catalog) (*Service, error) {
-	s := &Service{artifactCatalog: catalog, now: time.Now}
-	s.state.TestBindings = map[string]portalapi.TestTargetBinding{}
-	if strings.TrimSpace(stateFile) != "" {
-		if err := s.configure(stateFile); err != nil {
-			return nil, err
+	if s.testSave != nil {
+		tenants := map[string]struct{}{}
+		for _, binding := range catalog.Bindings {
+			tenants[binding.TenantID] = struct{}{}
+		}
+		changed := false
+		for tenant := range tenants {
+			seeded, err := s.seedPublishedCatalogLocked(catalog, tenant)
+			if err != nil {
+				return err
+			}
+			changed = changed || seeded
+		}
+		if changed {
+			return s.save()
 		}
 	}
-	return s, nil
-}
-
-// configure is intentionally one-way: a running plugin cannot be pointed at
-// another state file by a later call or by a tenant-controlled request.
-func (s *Service) configure(stateFile string) error {
-	if strings.TrimSpace(stateFile) == "" {
-		return errors.New("Portal Composer stateFile 不能为空")
-	}
-	if s.stateFile != "" && s.stateFile != stateFile {
-		return errors.New("Portal Composer stateFile 不允许在运行中切换")
-	}
-	if s.stateFile != "" {
-		return nil
-	}
-	s.stateFile = stateFile
-	return s.load()
-}
-
-func (s *Service) load() error {
-	raw, err := os.ReadFile(s.stateFile)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return fmt.Errorf("读取 Portal Composer 状态: %w", err)
-	}
-	if err := json.Unmarshal(raw, &s.state); err != nil {
-		return fmt.Errorf("解析 Portal Composer 状态: %w", err)
-	}
-	if s.state.TestBindings == nil {
-		s.state.TestBindings = map[string]portalapi.TestTargetBinding{}
-	}
-	changed := s.recoverInterruptedTestReleases()
-	if s.markCurrentReferencesPendingLocked() {
-		changed = true
-	}
-	if changed {
-		return s.save()
-	}
 	return nil
+}
+
+func New(catalog Catalog) *Service {
+	return &Service{state: emptyState(), artifactCatalog: catalog, now: time.Now}
 }
 
 func (s *Service) save() error {
-	if s.stateFile == "" {
-		return errors.New("Portal Composer 尚未配置状态文件")
+	if s.session == nil {
+		if s.testSave != nil {
+			return s.testSave(s.state)
+		}
+		return errors.New("Portal Composer 写入缺少 Shared State 会话")
 	}
-	raw, err := json.Marshal(s.state)
+	revision, err := s.session.repository.save(s.session.ctx, s.session.call, s.state, s.session.revision)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.stateFile), 0o700); err != nil {
-		return err
+	s.session.revision = revision
+	return nil
+}
+
+func (s *Service) withTenantState(ctx context.Context, host sdk.Host, call *contractv1.CallContext, tenant string, work func() error) error {
+	if tenant == "" || call == nil || call.GetTenantId() != tenant {
+		return ErrForbidden
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(s.stateFile), ".portal-composer-*")
+	s.workflowMu.Lock()
+	defer s.workflowMu.Unlock()
+	if s.testSave != nil {
+		return work()
+	}
+	repository, err := newComposerStateRepository(host)
 	if err != nil {
 		return err
 	}
-	name := tmp.Name()
-	defer os.Remove(name)
-	if _, err := tmp.Write(raw); err != nil {
-		_ = tmp.Close()
+	value, revision, err := repository.load(ctx, call)
+	if err != nil {
 		return err
 	}
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
+	if err := validateComposerTenantState(value, tenant); err != nil {
 		return err
 	}
-	if err := tmp.Close(); err != nil {
-		return err
+	s.mu.Lock()
+	s.state = value
+	s.session = &composerStateSession{ctx: ctx, call: call, repository: repository, tenant: tenant, revision: revision}
+	changed, seedErr := s.seedPublishedCatalogLocked(s.platformCatalog, tenant)
+	if seedErr == nil && s.recoverInterruptedTestReleases() {
+		changed = true
 	}
-	return os.Rename(name, s.stateFile)
+	if seedErr == nil && changed {
+		seedErr = s.save()
+	}
+	s.mu.Unlock()
+	if seedErr != nil {
+		s.closeStateSession()
+		return seedErr
+	}
+	defer s.closeStateSession()
+	return work()
+}
+
+func (s *Service) closeStateSession() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.session = nil
+	s.state = emptyState()
 }
 
 func (s *Service) CreateDraft(ctx context.Context, principal portalapi.Principal, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {

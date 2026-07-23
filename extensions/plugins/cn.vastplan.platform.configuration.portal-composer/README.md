@@ -6,11 +6,11 @@ Profile、Application 和 Binding 均执行 `Draft → PendingApproval → Appro
 
 只有 `PortalActivation` 是线上事实。成功 Activation 记录不可修改；更晚的成功记录会把旧记录投影为 `Superseded`。回滚引用历史 Activation 的精确输入创建一条新 Activation，不会复活或改写旧记录。请求必须携带 `expectedCurrentId`，并发管理员使用过期值时会被 CAS 拒绝。
 
-该插件只负责呈现与提交意图；校验、双人审批、发布、Activation、回滚与审计均通过 Node Portal Kernel/BFF 的受保护 API 完成。浏览器不得直接获得服务凭据、内部服务地址或原始身份令牌。生产插件仅经已认证的 `kernel.config.get` 取得状态位置，并通过窄化的 Catalog 能力请求内核验证和物化制品。
+该插件只负责呈现与提交意图；校验、双人审批、发布、Activation、回滚与审计均通过 Node Portal Kernel/BFF 的受保护 API 完成。浏览器不得直接获得服务凭据、内部服务地址或原始身份令牌。生产插件仅经已认证的 `kernel.config.get` 取得签名 Platform Catalog，并通过窄化的 Catalog 能力请求内核验证和物化制品；状态路径不再是配置项。
 
 Frontend Test Release 也在本插件中复用同一组 revision/Activation 分配器。`application-plugin` 只替换当前 Application 已有槽位；`platform-profile-plugin` 创建 tenant 专用测试 Profile 与 Binding，不原地修改共享基线。制品摘要、repository revision、发布者与 frontend target 由 Backend `portaltrust` 回调验证，Composer 进程不持有仓库凭证。
 
-同一 leader-owned 进程还发布独立的 `platform.portal-preference` 能力，但它不属于 Portal 发布治理状态。偏好使用单独的 `platform.portal-composer.preferenceStateFile`，按认证 tenant、subject、Portal 和三个 UI Catalog contract major 隔离，只保存 Renderer、主题、图标、Shell Library 与 Workbench 集合的稳定 ID。只有 Node Portal Kernel 投影的 `portal.bff` 用户场景可读写；浏览器不能提交身份或 scope。写入采用 revision CAS，状态文件通过私有目录中的 `0600` 临时文件、`fsync` 和原子替换持久化。
+同一 active-active 逻辑服务还发布独立的 `platform.portal-preference` 能力，但它不属于 Portal 发布治理状态。偏好按认证 tenant + subject 摘要独立保存 Shared State 文档，再按 Portal 和三个 UI Catalog contract major 隔离 scope，只保存 Renderer、主题、图标、Shell Library 与 Workbench 集合的稳定 ID。只有 Node Portal Kernel 投影的 `portal.bff` 用户场景可读写；浏览器不能提交身份或 scope。业务 revision CAS 与 Store CAS 同时阻止跨设备和跨实例覆盖。
 
 ```bash
 pnpm --filter @vastplan/portal-composer typecheck

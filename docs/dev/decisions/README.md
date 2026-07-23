@@ -155,3 +155,4 @@
 - [ADR-0122 CredentialRef 与 Scoped 配置多语言 SDK](ADR-0122-CredentialRef与Scoped配置多语言SDK.md)
 - [ADR-0123 插件共享状态与可信 Provider](ADR-0123-插件共享状态与可信Provider.md)
 - [ADR-0124 Plugin Settings 租户聚合与 Active-Active 协调](ADR-0124-Plugin-Settings租户聚合与Active-Active协调.md)
+- [ADR-0125 Portal Composer 与 Preference 共享状态分区](ADR-0125-Portal-Composer与Preference共享状态分区.md)

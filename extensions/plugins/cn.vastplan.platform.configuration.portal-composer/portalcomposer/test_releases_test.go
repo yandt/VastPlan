@@ -34,7 +34,7 @@ func (c *acceptingTestCatalog) PublishReferenceSnapshot(_ context.Context, value
 
 func TestFrontendTestReleaseReferenceProtectionFailsClosed(t *testing.T) {
 	catalog := &acceptingTestCatalog{}
-	service, err := New(filepath.Join(t.TempDir(), "portals.json"), catalog)
+	service, err := openTestService(filepath.Join(t.TempDir(), "portals.json"), catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func (c *acceptingTestCatalog) ValidateTestArtifact(_ context.Context, _ string,
 
 func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T) {
 	catalog := &acceptingTestCatalog{}
-	service, err := New(filepath.Join(t.TempDir(), "portals.json"), catalog)
+	service, err := openTestService(filepath.Join(t.TempDir(), "portals.json"), catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 
 func TestFrontendTestReleaseRejectsProfileSlotAndPreservesCurrentActivation(t *testing.T) {
 	catalog := &acceptingTestCatalog{reject: errors.New("catalog rejected")}
-	service, err := New(filepath.Join(t.TempDir(), "portals.json"), catalog)
+	service, err := openTestService(filepath.Join(t.TempDir(), "portals.json"), catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestFrontendTestReleaseRejectsProfileSlotAndPreservesCurrentActivation(t *t
 func TestFrontendTestReleaseRestartPersistsFailClosedRecovery(t *testing.T) {
 	catalog := &acceptingTestCatalog{}
 	stateFile := filepath.Join(t.TempDir(), "portals.json")
-	service, err := New(stateFile, catalog)
+	service, err := openTestService(stateFile, catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestFrontendTestReleaseRestartPersistsFailClosedRecovery(t *testing.T) {
 	if err := service.save(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := New(stateFile, catalog)
+	reopened, err := openTestService(stateFile, catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestFrontendTestReleaseRestartPersistsFailClosedRecovery(t *testing.T) {
 	if err != nil || len(recovered) != 1 || recovered[0].Status != portalapi.TestReleaseFailed || !recovered[0].RollbackRequired {
 		t.Fatalf("非终态重启必须 fail-closed 并要求回滚: %+v %v", recovered, err)
 	}
-	second, err := New(stateFile, catalog)
+	second, err := openTestService(stateFile, catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestFrontendTestReleaseRestartPersistsFailClosedRecovery(t *testing.T) {
 
 func TestFrontendProfileTestReleaseCreatesDedicatedProfileAndBindingRevisions(t *testing.T) {
 	catalog := &acceptingTestCatalog{}
-	service, err := New(filepath.Join(t.TempDir(), "portals.json"), catalog)
+	service, err := openTestService(filepath.Join(t.TempDir(), "portals.json"), catalog)
 	if err != nil {
 		t.Fatal(err)
 	}

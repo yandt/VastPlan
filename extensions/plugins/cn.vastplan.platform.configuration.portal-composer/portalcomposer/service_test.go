@@ -96,7 +96,7 @@ func spec(route string) frontendcompositionv1.ApplicationComposition {
 }
 func newTestService(t *testing.T) *Service {
 	t.Helper()
-	s, err := New(filepath.Join(t.TempDir(), "portals.json"), acceptingCatalog{})
+	s, err := openTestService(filepath.Join(t.TempDir(), "portals.json"), acceptingCatalog{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,14 @@ func newTestService(t *testing.T) *Service {
 }
 
 func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) {
-	s := newTestService(t)
+	stateFile := filepath.Join(t.TempDir(), "portals.json")
+	s, err := openTestService(stateFile, acceptingCatalog{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BindPlatformCatalog(testPlatformCatalog()); err != nil {
+		t.Fatal(err)
+	}
 	author := principal("author", "portal.compose", "portal.approve")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
@@ -136,7 +143,7 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 	if err != nil || len(audit) != 4 {
 		t.Fatalf("审计事件应完整保留: %+v %v", audit, err)
 	}
-	if reopened, err := New(filepath.Join(filepath.Dir(s.stateFile), "portals.json"), acceptingCatalog{}); err != nil {
+	if reopened, err := openTestService(stateFile, acceptingCatalog{}); err != nil {
 		t.Fatal(err)
 	} else if err := reopened.BindPlatformCatalog(testPlatformCatalog()); err != nil {
 		t.Fatal(err)
@@ -147,7 +154,7 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 
 func TestActivationReferenceOutboxRetriesAfterRepositoryRecovery(t *testing.T) {
 	catalog := &recordingReferenceCatalog{failAt: 2}
-	s, err := New(filepath.Join(t.TempDir(), "portals.json"), catalog)
+	s, err := openTestService(filepath.Join(t.TempDir(), "portals.json"), catalog)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,14 +402,13 @@ func activationRequest(s *Service, application portalapi.Revision, expected uint
 }
 
 type configuredHost struct {
-	stateFile      string
-	preferenceFile string
-	calls          []string
+	state *stateOnlyHost
+	calls []string
 }
 
 var _ sdk.Host = (*configuredHost)(nil)
 
-func (h *configuredHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+func (h *configuredHost) Call(ctx context.Context, target *contractv1.CallTarget, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 	if target.GetExtensionPoint() != extpoint.KernelService {
 		return nil, nil, errors.New("unexpected extension point")
 	}
@@ -415,13 +421,9 @@ func (h *configuredHost) Call(_ context.Context, target *contractv1.CallTarget, 
 		}
 		var value string
 		switch request["key"] {
-		case StateFileConfigKey:
-			value = h.stateFile
 		case PlatformCatalogConfigKey:
 			raw, _ := json.Marshal(testPlatformCatalog())
 			value = string(raw)
-		case PreferenceStateFileConfigKey:
-			value = h.preferenceFile
 		default:
 			return nil, nil, errors.New("unexpected configuration key")
 		}
@@ -437,16 +439,16 @@ func (h *configuredHost) Call(_ context.Context, target *contractv1.CallTarget, 
 		}
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"valid":true}`), nil
 	default:
+		if strings.HasPrefix(target.GetCapability(), "kernel.state.shared.") {
+			return h.state.Call(ctx, target, call, payload)
+		}
 		return nil, nil, errors.New("unexpected host capability")
 	}
 }
 
 func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) {
-	service, err := New("", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	host := &configuredHost{stateFile: filepath.Join(t.TempDir(), "portals.json"), preferenceFile: filepath.Join(t.TempDir(), "preferences.json")}
+	service := New(nil)
+	host := &configuredHost{state: newStateOnlyHost(t)}
 	callCtx := &contractv1.CallContext{
 		TenantId:  "tenant-a",
 		Principal: &contractv1.Principal{UserId: "author", SystemRoles: []string{"portal.compose"}},
@@ -457,7 +459,7 @@ func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) 
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("通过可信宿主创建草稿失败: result=%+v err=%v", result, err)
 	}
-	if len(host.calls) != 4 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.config.get" || host.calls[2] != "kernel.config.get" || host.calls[3] != portalapi.KernelCatalogValidationCapability {
+	if len(host.calls) != 5 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.state.shared.get" || host.calls[2] != "kernel.state.shared.create" || host.calls[3] != portalapi.KernelCatalogValidationCapability || host.calls[4] != "kernel.state.shared.update" {
 		t.Fatalf("宿主调用路径错误: %v", host.calls)
 	}
 	var revision portalapi.Revision

@@ -16,6 +16,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
+	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
 type catalogContextKey struct{}
@@ -204,18 +205,10 @@ func (c hostCatalog) call(ctx context.Context, tenantID string, spec portalapi.P
 
 func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext) error {
 	s.mu.Lock()
-	configured := s.stateFile != "" && s.catalogConfigured && s.preferenceStore != nil
+	configured := s.catalogConfigured
 	s.mu.Unlock()
 	if configured {
 		return nil
-	}
-	raw, err := readConfig(ctx, host, callCtx, StateFileConfigKey)
-	if err != nil {
-		return err
-	}
-	var stateFile string
-	if err := json.Unmarshal(raw, &stateFile); err != nil || strings.TrimSpace(stateFile) == "" {
-		return fmt.Errorf("%s 必须是非空 JSON 字符串", StateFileConfigKey)
 	}
 	catalogRaw, err := readConfig(ctx, host, callCtx, PlatformCatalogConfigKey)
 	if err != nil {
@@ -225,28 +218,11 @@ func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *
 	if err := json.Unmarshal(catalogRaw, &encodedCatalog); err != nil || strings.TrimSpace(encodedCatalog) == "" {
 		return fmt.Errorf("%s 必须是非空 JSON 字符串", PlatformCatalogConfigKey)
 	}
-	preferenceRaw, err := readConfig(ctx, host, callCtx, PreferenceStateFileConfigKey)
-	if err != nil {
-		return err
-	}
-	var preferenceStateFile string
-	if err := json.Unmarshal(preferenceRaw, &preferenceStateFile); err != nil || strings.TrimSpace(preferenceStateFile) == "" {
-		return fmt.Errorf("%s 必须是非空 JSON 字符串", PreferenceStateFileConfigKey)
-	}
 	catalog, err := frontendcompositionv1.ParsePortalPlatformCatalog([]byte(encodedCatalog))
 	if err != nil {
 		return err
 	}
-	s.mu.Lock()
-	err = s.configure(stateFile)
-	s.mu.Unlock()
-	if err != nil {
-		return err
-	}
-	if err := s.BindPlatformCatalog(catalog); err != nil {
-		return err
-	}
-	return s.configurePreferenceStore(preferenceStateFile)
+	return s.BindPlatformCatalog(catalog)
 }
 
 func readConfig(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, key string) ([]byte, error) {
@@ -520,10 +496,22 @@ func Contribution(service *Service) sdk.Contribution {
 			if err != nil {
 				return nil, nil, err
 			}
-			raw, err := service.Handle(withCatalog(ctx, hostCatalog{host: host, callCtx: callCtx}), principal, op, payload)
+			var raw []byte
+			err = service.withTenantState(ctx, host, callCtx, principal.TenantID, func() error {
+				var handleErr error
+				raw, handleErr = service.Handle(withCatalog(ctx, hostCatalog{host: host, callCtx: callCtx}), principal, op, payload)
+				return handleErr
+			})
 			if err != nil {
 				if errors.Is(err, ErrForbidden) || errors.Is(err, ErrSelfApproval) {
 					return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: errorcode.PermissionDenied, Message: err.Error()}}, nil, nil
+				}
+				if errors.Is(err, ErrStateConflict) {
+					return composerStateError("portal.composer.conflict", err, true), nil, nil
+				}
+				var stateError *sharedstatesdk.ServiceError
+				if errors.As(err, &stateError) {
+					return composerStateError("portal.composer.unavailable", err, stateError.Retryable), nil, nil
 				}
 				return nil, nil, err
 			}
@@ -531,6 +519,10 @@ func Contribution(service *Service) sdk.Contribution {
 		}
 	}
 	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: handlers}
+}
+
+func composerStateError(code string, err error, retryable bool) *contractv1.CallResult {
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error(), Retryable: retryable}}
 }
 
 func Descriptor() []byte {
