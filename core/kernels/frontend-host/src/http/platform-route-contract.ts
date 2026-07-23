@@ -32,3 +32,11 @@ export function optionalNonnegativeVersion(url: string | undefined): number | un
 export function queryValue(url: string | undefined, name: string): string {
   return new URL(url ?? "/", "https://portal.invalid").searchParams.get(name) ?? "";
 }
+
+export function boundedQueryInteger(url: string | undefined, name: string, minimum: number, maximum: number): number | undefined | "invalid" {
+  const raw = queryValue(url, name);
+  if (raw === "") return undefined;
+  if (!/^[1-9][0-9]*$/.test(raw)) return "invalid";
+  const value = Number(raw);
+  return Number.isSafeInteger(value) && value >= minimum && value <= maximum ? value : "invalid";
+}

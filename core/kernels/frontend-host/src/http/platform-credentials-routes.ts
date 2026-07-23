@@ -4,7 +4,7 @@ import type { PlatformManagementTarget } from "../capabilities/platform-manageme
 import type { Principal } from "../identity/identity-provider";
 import { sendAPIError } from "./json-response";
 import { authorizePlatformOperation, sendPlatformResponse } from "./platform-response";
-import { queryValue, requirePlatformRole, resourceName } from "./platform-route-contract";
+import { boundedQueryInteger, queryValue, requirePlatformRole, resourceName } from "./platform-route-contract";
 import { requireJSONObject, withRequestJSON } from "./request-json";
 
 const capability = "platform.credentials";
@@ -19,6 +19,15 @@ export class PlatformCredentialsRoutes {
       if (!authorizePlatformOperation(this.client, target, capability, "list", false, response) || !requirePlatformRole(principal, "platform.credentials.read", response)) return true;
       if (method !== "GET" && method !== "HEAD") return reject(response, 405, "method_not_allowed", method);
       await this.call(principal, target, "list", false, { prefix: queryValue(request.url, "prefix") }, response, signal, method === "HEAD");
+      return true;
+    }
+    if (parts.length === 2 && parts[1] === "managed-audit" && (method === "GET" || method === "HEAD")) {
+      if (!authorizePlatformOperation(this.client, target, capability, "listManagedAudit", false, response) || !requirePlatformRole(principal, "platform.credentials.audit", response)) return true;
+      const beforeId = boundedQueryInteger(request.url, "beforeId", 1, Number.MAX_SAFE_INTEGER);
+      const parsedLimit = boundedQueryInteger(request.url, "limit", 1, 200);
+      if (beforeId === "invalid" || parsedLimit === "invalid") return reject(response, 400, "invalid_query", method);
+      const limit = parsedLimit ?? 100;
+      await this.call(principal, target, "listManagedAudit", false, { ...(beforeId === undefined ? {} : { beforeId }), limit }, response, signal, method === "HEAD");
       return true;
     }
     const name = resourceName(parts[1], 160);

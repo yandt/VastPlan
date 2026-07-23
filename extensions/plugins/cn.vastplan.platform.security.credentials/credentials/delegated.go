@@ -44,7 +44,7 @@ func (s *Service) StageDelegated(ctx context.Context, host sdk.Host, call *contr
 	if err != nil {
 		return pluginconfig.StagedCredential{}, err
 	}
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	ref := pluginconfig.ManagedCredentialRef{Handle: handle, Scope: "tenant", Owner: claims.Owner, Purpose: claims.Purpose, Version: 1}
 	record := ManagedRecord{
 		StageID: stageID, Ref: ref, Resource: claims.Resource, State: managedPreparing,
@@ -55,8 +55,11 @@ func (s *Service) StageDelegated(ctx context.Context, host sdk.Host, call *contr
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.managedRecords(tenantID)[stageID] = record
+	previousAudit := cloneManagedAuditState(s.managedAuditStateLocked(tenantID))
+	s.appendManagedAuditLocked(tenantID, "managed.delegated-staged", record, now)
 	if err := s.save(); err != nil {
 		delete(s.managedRecords(tenantID), stageID)
+		s.data.ManagedAudit[tenantID] = previousAudit
 		return pluginconfig.StagedCredential{}, err
 	}
 	return pluginconfig.StagedCredential{ID: stageID, Ref: ref}, nil
@@ -106,6 +109,9 @@ func (s *Service) delegatedTransition(call *contractv1.CallContext, stageID, can
 	if record.Coordinator != configurationauthority.CoordinatorPluginID || record.CandidateID != candidateID {
 		return pluginconfig.ManagedCredentialRef{}, errors.New("委托凭证不属于当前配置候选")
 	}
+	if record.State == target {
+		return record.Ref, nil
+	}
 	switch target {
 	case managedCandidate:
 		if record.State != managedPreparing && record.State != managedCandidate {
@@ -123,9 +129,15 @@ func (s *Service) delegatedTransition(call *contractv1.CallContext, stageID, can
 	default:
 		return pluginconfig.ManagedCredentialRef{}, errors.New("未知委托凭证状态")
 	}
-	record.State, record.UpdatedAt = target, time.Now().UTC()
+	previousRecord := record
+	previousAudit := cloneManagedAuditState(s.managedAuditStateLocked(tenantID))
+	record.State, record.UpdatedAt = target, s.now().UTC()
 	s.managedRecords(tenantID)[stageID] = record
+	action := map[string]string{managedCandidate: "managed.candidate", managedActive: "managed.activated", managedAborted: "managed.aborted"}[target]
+	s.appendManagedAuditLocked(tenantID, action, record, record.UpdatedAt)
 	if err := s.save(); err != nil {
+		s.managedRecords(tenantID)[stageID] = previousRecord
+		s.data.ManagedAudit[tenantID] = previousAudit
 		return pluginconfig.ManagedCredentialRef{}, err
 	}
 	return record.Ref, nil

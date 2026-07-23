@@ -29,7 +29,7 @@ import (
 
 const (
 	PluginID                = "cn.vastplan.platform.security.credentials"
-	PluginVersion           = "0.9.0"
+	PluginVersion           = "0.10.0"
 	Capability              = "platform.credentials"
 	MaterialLeaseCapability = "platform.credentials.material-lease"
 	stateFileKey            = "platform.credentials.stateFile"
@@ -159,8 +159,10 @@ func metadata(record Record) Metadata {
 }
 
 type persisted struct {
-	Tenants map[string]map[string]Record        `json:"tenants"`
-	Managed map[string]map[string]ManagedRecord `json:"managed"`
+	Tenants            map[string]map[string]Record        `json:"tenants"`
+	Managed            map[string]map[string]ManagedRecord `json:"managed"`
+	ManagedAudit       map[string]managedAuditState        `json:"managedAudit,omitempty"`
+	ManagedMaintenance map[string]ManagedMaintenanceStatus `json:"managedMaintenance,omitempty"`
 }
 
 const (
@@ -188,18 +190,42 @@ type ManagedRecord struct {
 	FieldID         string                            `json:"fieldId,omitempty"`
 }
 type Service struct {
-	mu         sync.Mutex
-	file       string
-	transit    Transit
-	data       persisted
-	leaseSlots chan struct{}
+	mu          sync.Mutex
+	file        string
+	transit     Transit
+	data        persisted
+	leaseSlots  chan struct{}
+	maintenance MaintenancePolicy
+	now         func() time.Time
 }
 
 func New(file string, transit Transit) (*Service, error) {
+	policy, _ := (Configuration{}).Policy()
+	return NewWithOptions(file, transit, ServiceOptions{Maintenance: policy})
+}
+
+type ServiceOptions struct {
+	Maintenance MaintenancePolicy
+	Now         func() time.Time
+}
+
+func NewWithOptions(file string, transit Transit, options ServiceOptions) (*Service, error) {
 	if transit == nil {
 		return nil, errors.New("凭证 Transit 适配器不能为空")
 	}
-	s := &Service{file: file, transit: transit, data: persisted{Tenants: map[string]map[string]Record{}, Managed: map[string]map[string]ManagedRecord{}}, leaseSlots: make(chan struct{}, 32)}
+	if options.Maintenance.Interval == 0 {
+		options.Maintenance, _ = (Configuration{}).Policy()
+	}
+	if err := validateMaintenancePolicy(options.Maintenance); err != nil {
+		return nil, err
+	}
+	if options.Now == nil {
+		options.Now = func() time.Time { return time.Now().UTC() }
+	}
+	s := &Service{
+		file: file, transit: transit, leaseSlots: make(chan struct{}, 32), maintenance: options.Maintenance, now: options.Now,
+		data: persisted{Tenants: map[string]map[string]Record{}, Managed: map[string]map[string]ManagedRecord{}, ManagedAudit: map[string]managedAuditState{}, ManagedMaintenance: map[string]ManagedMaintenanceStatus{}},
+	}
 	if file != "" {
 		if err := s.load(); err != nil {
 			return nil, err
@@ -224,10 +250,16 @@ func (s *Service) load() error {
 	if s.data.Managed == nil {
 		s.data.Managed = map[string]map[string]ManagedRecord{}
 	}
-	return validateManagedState(s.data.Managed)
+	if s.data.ManagedAudit == nil {
+		s.data.ManagedAudit = map[string]managedAuditState{}
+	}
+	if s.data.ManagedMaintenance == nil {
+		s.data.ManagedMaintenance = map[string]ManagedMaintenanceStatus{}
+	}
+	return validateManagedState(s.data.Managed, s.data.ManagedAudit, s.data.ManagedMaintenance)
 }
 
-func validateManagedState(tenants map[string]map[string]ManagedRecord) error {
+func validateManagedState(tenants map[string]map[string]ManagedRecord, audit map[string]managedAuditState, maintenance map[string]ManagedMaintenanceStatus) error {
 	for tenantID, records := range tenants {
 		if strings.TrimSpace(tenantID) == "" {
 			return errors.New("托管凭证状态包含空 tenant")
@@ -251,6 +283,23 @@ func validateManagedState(tenants map[string]map[string]ManagedRecord) error {
 			default:
 				return fmt.Errorf("托管凭证状态 %q 的 state 无效", stageID)
 			}
+		}
+	}
+	for tenantID, state := range audit {
+		if strings.TrimSpace(tenantID) == "" || len(state.Events) > maximumManagedAuditEvents || (len(state.Events) > 0 && state.NextID < state.Events[len(state.Events)-1].ID) {
+			return errors.New("托管凭证审计状态无效")
+		}
+		previousID := uint64(0)
+		for _, event := range state.Events {
+			if !managedAuditEventValid(event) || event.ID <= previousID {
+				return errors.New("托管凭证审计事件无效")
+			}
+			previousID = event.ID
+		}
+	}
+	for tenantID := range maintenance {
+		if strings.TrimSpace(tenantID) == "" {
+			return errors.New("托管凭证维护状态无效")
 		}
 	}
 	return nil
@@ -280,10 +329,22 @@ func (s *Service) save() error {
 		temp.Close()
 		return err
 	}
+	if err = temp.Sync(); err != nil {
+		temp.Close()
+		return err
+	}
 	if err = temp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(name, s.file)
+	if err := os.Rename(name, s.file); err != nil {
+		return err
+	}
+	directory, err := os.Open(filepath.Dir(s.file))
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	return directory.Sync()
 }
 func tenant(ctx *contractv1.CallContext) (string, error) {
 	if ctx == nil || strings.TrimSpace(ctx.TenantId) == "" {
@@ -352,14 +413,17 @@ func (s *Service) StageManaged(ctx context.Context, call *contractv1.CallContext
 	if err != nil {
 		return pluginconfig.StagedCredential{}, err
 	}
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	ref := pluginconfig.ManagedCredentialRef{Handle: handle, Scope: "tenant", Owner: owner, Purpose: purpose, Version: 1}
 	record := ManagedRecord{StageID: stageID, Ref: ref, Resource: resource, State: managedPreparing, CreatedAt: now, UpdatedAt: now, Ciphertext: ciphertext}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.managedRecords(t)[stageID] = record
+	previousAudit := cloneManagedAuditState(s.managedAuditStateLocked(t))
+	s.appendManagedAuditLocked(t, "managed.staged", record, now)
 	if err := s.save(); err != nil {
 		delete(s.managedRecords(t), stageID)
+		s.data.ManagedAudit[t] = previousAudit
 		return pluginconfig.StagedCredential{}, err
 	}
 	return pluginconfig.StagedCredential{ID: stageID, Ref: ref}, nil
@@ -389,6 +453,9 @@ func (s *Service) managedTransition(call *contractv1.CallContext, stageID, targe
 	if record.Coordinator != "" {
 		return pluginconfig.ManagedCredentialRef{}, errors.New("委托凭证只能由配置协调器转换")
 	}
+	if record.State == target {
+		return record.Ref, nil
+	}
 	switch target {
 	case managedActive:
 		if record.State != managedPreparing && record.State != managedActive {
@@ -402,10 +469,19 @@ func (s *Service) managedTransition(call *contractv1.CallContext, stageID, targe
 	default:
 		return pluginconfig.ManagedCredentialRef{}, errors.New("未知托管凭证状态")
 	}
+	previousRecord := record
+	previousAudit := cloneManagedAuditState(s.managedAuditStateLocked(t))
 	record.State = target
-	record.UpdatedAt = time.Now().UTC()
+	record.UpdatedAt = s.now().UTC()
 	s.managedRecords(t)[stageID] = record
+	action := "managed.activated"
+	if target == managedAborted {
+		action = "managed.aborted"
+	}
+	s.appendManagedAuditLocked(t, action, record, record.UpdatedAt)
 	if err := s.save(); err != nil {
+		s.managedRecords(t)[stageID] = previousRecord
+		s.data.ManagedAudit[t] = previousAudit
 		return pluginconfig.ManagedCredentialRef{}, err
 	}
 	return record.Ref, nil
@@ -446,9 +522,14 @@ func (s *Service) RetireManaged(call *contractv1.CallContext, handle string) (pl
 		if record.State != managedActive {
 			return pluginconfig.ManagedCredentialRef{}, errors.New("只有 Active 托管凭证可以退役")
 		}
-		record.State, record.Ciphertext, record.UpdatedAt = managedRetired, "", time.Now().UTC()
+		previousRecord := record
+		previousAudit := cloneManagedAuditState(s.managedAuditStateLocked(t))
+		record.State, record.Ciphertext, record.UpdatedAt = managedRetired, "", s.now().UTC()
 		s.managedRecords(t)[id] = record
+		s.appendManagedAuditLocked(t, "managed.retired", record, record.UpdatedAt)
 		if err := s.save(); err != nil {
+			s.managedRecords(t)[id] = previousRecord
+			s.data.ManagedAudit[t] = previousAudit
 			return pluginconfig.ManagedCredentialRef{}, err
 		}
 		return record.Ref, nil
@@ -673,6 +754,8 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		Resource    string `json:"resource"`
 		Authority   string `json:"authority"`
 		CandidateID string `json:"candidateId"`
+		BeforeID    uint64 `json:"beforeId"`
+		Limit       int    `json:"limit"`
 	}
 	if err := json.Unmarshal(payload, &in); err != nil {
 		return nil, nil, err
@@ -695,6 +778,8 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		for _, record := range records {
 			out = append(out.([]Metadata), metadata(record))
 		}
+	case "listManagedAudit":
+		out, err = s.ListManagedAudit(call, in.BeforeID, in.Limit)
 	case "rotate":
 		var record Record
 		record, err = s.Rotate(ctx, call, in.Name)
@@ -748,6 +833,7 @@ func Descriptor() []byte {
 		{"name":"put","description":"以 Vault Transit 加密后保存凭证","paramsSchema":{"type":"object","properties":{"name":{"type":"string"},"value":{"type":"string"}},"required":["name","value"]}},
 		{"name":"describe","description":"读取凭证元数据，不返回明文或密文","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
 		{"name":"list","description":"列出当前租户的凭证元数据","paramsSchema":{"type":"object","properties":{"prefix":{"type":"string"}}}},
+		{"name":"listManagedAudit","description":"列出脱敏托管凭证生命周期审计和维护状态","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"beforeId":{"type":"integer","minimum":1},"limit":{"type":"integer","minimum":1,"maximum":200}}}},
 		{"name":"rotate","description":"通过 Vault Transit rewrap 轮换凭证包裹密钥","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
 		{"name":"revoke","description":"撤销凭证引用","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
 		{"name":"stageManaged","description":"由业务插件创建不可读取的凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"purpose":{"type":"string"},"resource":{"type":"string"},"value":{"type":"string"}},"required":["purpose","resource","value"]}},
@@ -773,7 +859,7 @@ func Contribution(s *Service) sdk.Contribution {
 			return s.Handler(ctx, host, call, payload, op)
 		}
 	}
-	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"put": h("put"), "describe": h("describe"), "list": h("list"), "rotate": h("rotate"), "revoke": h("revoke"), "stageManaged": h("stageManaged"), "stageDelegated": h("stageDelegated"), "prepareDelegated": h("prepareDelegated"), "activateManaged": h("activateManaged"), "abortManaged": h("abortManaged"), "activateDelegated": h("activateDelegated"), "abortDelegated": h("abortDelegated"), "retireManaged": h("retireManaged")}}
+	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"put": h("put"), "describe": h("describe"), "list": h("list"), "listManagedAudit": h("listManagedAudit"), "rotate": h("rotate"), "revoke": h("revoke"), "stageManaged": h("stageManaged"), "stageDelegated": h("stageDelegated"), "prepareDelegated": h("prepareDelegated"), "activateManaged": h("activateManaged"), "abortManaged": h("abortManaged"), "activateDelegated": h("activateDelegated"), "abortDelegated": h("abortDelegated"), "retireManaged": h("retireManaged")}}
 }
 
 func MaterialLeaseContribution(s *Service) sdk.Contribution {

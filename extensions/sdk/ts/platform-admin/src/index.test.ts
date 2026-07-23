@@ -20,6 +20,18 @@ describe("PlatformAdminClient", () => {
     expect(() => client.deleteSetting("bad/name")).toThrowError(PlatformAdminError);
   });
 
+  it("reads redacted managed credential audit through a bounded fixed route", async () => {
+    const calls: string[] = [];
+    const client = new PlatformAdminClient(async (path) => {
+      calls.push(path);
+      return { ok: true, status: 200, json: async () => ({ items: [], maintenance: { autoAborted: 0, collected: 0, counts: {} } }) };
+    }, "operations", "credentials");
+    await client.listManagedCredentialAudit(42, 50);
+    expect(calls).toEqual(["/v1/portals/operations/platform/services/credentials/credentials/managed-audit?beforeId=42&limit=50"]);
+    expect(() => client.listManagedCredentialAudit(0, 50)).toThrowError(PlatformAdminError);
+    expect(() => client.listManagedCredentialAudit(undefined, 201)).toThrowError(PlatformAdminError);
+  });
+
   it("uses fixed deployment routes and obtains CSRF before bootstrap approval", async () => {
     const calls: Array<{ path: string; method?: string }> = [];
     const fetcher: PlatformFetch = async (path, init) => {

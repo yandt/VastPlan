@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.security.credentials",
   "name": "VastPlan 凭证管理服务",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -10,10 +10,32 @@
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "capabilities": { "kernelServices": ["kernel.config.get", "kernel.configuration.authority.consume"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "restart",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maintenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "preparingMaxAgeSeconds": { "type": "integer", "minimum": 300, "maximum": 604800, "default": 86400 },
+            "abortedRetentionSeconds": { "type": "integer", "minimum": 3600, "maximum": 31536000, "default": 2592000 },
+            "auditRetentionSeconds": { "type": "integer", "minimum": 3600, "maximum": 63072000, "default": 15552000 },
+            "intervalSeconds": { "type": "integer", "minimum": 60, "maximum": 86400, "default": 3600 },
+            "batchSize": { "type": "integer", "minimum": 1, "maximum": 1000, "default": 200 }
+          }
+        }
+      }
+    }
+  },
   "authorization": {
     "namespace": "platform.credentials",
     "permissions": [
       { "code": "platform.credentials.read", "title": "查看凭证元数据", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.credentials.audit", "title": "审计托管凭证生命周期", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
       { "code": "platform.credentials.write", "title": "管理凭证引用", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
       { "code": "platform.credentials.rotate", "title": "轮换凭证包裹密钥", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
       { "code": "platform.credentials.revoke", "title": "撤销凭证引用", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
@@ -21,6 +43,7 @@
     "operationGuards": [
       { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "describe", "permissions": ["platform.credentials.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "list", "permissions": ["platform.credentials.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "listManagedAudit", "permissions": ["platform.credentials.audit"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "put", "permissions": ["platform.credentials.write"], "access": "write", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "rotate", "permissions": ["platform.credentials.rotate"], "access": "execute", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.credentials", "operation": "revoke", "permissions": ["platform.credentials.revoke"], "access": "execute", "approval": "none" }
@@ -42,6 +65,7 @@
     { "name": "put", "description": "以 Vault Transit 加密后保存凭证", "paramsSchema": { "type": "object", "properties": { "name": { "type": "string" }, "value": { "type": "string" } }, "required": ["name", "value"] } },
     { "name": "describe", "description": "读取凭证元数据，不返回明文或密文", "paramsSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] } },
     { "name": "list", "description": "列出当前租户的凭证元数据", "paramsSchema": { "type": "object", "properties": { "prefix": { "type": "string" } } } },
+    { "name": "listManagedAudit", "description": "列出脱敏托管凭证生命周期审计和维护状态", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "beforeId": { "type": "integer", "minimum": 1 }, "limit": { "type": "integer", "minimum": 1, "maximum": 200 } } } },
     { "name": "rotate", "description": "通过 Vault Transit rewrap 轮换凭证包裹密钥", "paramsSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] } },
     { "name": "revoke", "description": "撤销凭证引用", "paramsSchema": { "type": "object", "properties": { "name": { "type": "string" } }, "required": ["name"] } },
     { "name": "stageManaged", "description": "由业务插件创建不可读取的凭证候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "purpose": { "type": "string" }, "resource": { "type": "string" }, "value": { "type": "string" } }, "required": ["purpose", "resource", "value"] } },
@@ -55,7 +79,7 @@
   ] }, { "id": "platform.credentials.material-lease", "service_role": "backend", "title": "可信宿主凭证 Material Lease", "subcommands": [
     { "name": "issue", "description": "向可信宿主一次性公钥签发短期加密 material lease", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "ref": { "type": "object", "additionalProperties": false, "properties": { "handle": { "type": "string" }, "scope": { "const": "tenant" }, "owner": { "type": "string" }, "purpose": { "type": "string" }, "version": { "type": "integer", "minimum": 1 } }, "required": ["handle", "scope", "owner", "purpose", "version"] }, "recipientPublicKey": { "type": "string" } }, "required": ["ref", "recipientPublicKey"] } }
   ] }] }, "frontend": {
-    "views": [{ "id": "platform.credentials", "title": "凭证引用" }],
-    "menus": [{ "id": "platform.credentials.menu", "title": "凭证引用" }]
+    "views": [{ "id": "platform.credentials", "title": "凭证引用" }, { "id": "platform.credentials.audit", "title": "托管凭证审计" }],
+    "menus": [{ "id": "platform.credentials.menu", "title": "凭证引用" }, { "id": "platform.credentials.audit.menu", "title": "托管凭证审计" }]
   } }
 }

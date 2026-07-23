@@ -3,7 +3,7 @@
 插件 ID：`cn.vastplan.platform.security.credentials`
 能力：`tool.package/platform.credentials`、`tool.package/platform.credentials.material-lease`
 运行模型：`leader + leader-owned + cluster + leader`
-当前制品版本：`0.9.0`
+当前制品版本：`0.10.0`
 
 ## 安全模型
 
@@ -26,6 +26,8 @@
 
 生产部署必须使用 HTTPS、最小 Vault policy、短期/可轮换工作负载 token 和持久卷。leader fencing 约束同一逻辑服务的写入者；状态卷复制与 Vault 高可用仍由部署层提供。
 
+`configuration.maintenance` 控制托管候选维护，默认 Preparing 24 小时、Aborted 保留 30 天、审计保留 180 天、每小时执行、每租户每轮最多 200 条。配置有运行时安全上下界并采用 restart 生效。Candidate/Active/Retired 不参与通用 TTL 删除。
+
 ## API
 
 所有操作都按 `CallContext.tenant_id` 隔离。
@@ -35,6 +37,7 @@
 | `put(name, value)` | 将明文交给 Vault Transit 加密并保存新密文版本 |
 | `describe(name)` | 返回名称、版本、密钥版本、时间和撤销状态 |
 | `list(prefix)` | 返回当前租户的元数据列表 |
+| `listManagedAudit(beforeId, limit)` | 仅安全管理员：返回脱敏生命周期事件与维护状态，不返回 handle、stage ID、authority、密文或 material |
 | `rotate(name)` | 调用 Transit rewrap 轮换包裹密钥 |
 | `revoke(name)` | 撤销凭证引用 |
 | `stageManaged(purpose, resource, value)` | 仅限已认证业务插件，创建 Preparing 候选并返回随机句柄 |
@@ -51,6 +54,6 @@
 
 ## Portal 管理页
 
-同一签名制品提供 `/settings/credentials` 页面。0.5 已迁移到 Collection/Form Workbench：列表只渲染 `Metadata`；保存字段必须使用受治理的 `secretMaterial`，并由 Schema 同时声明 `format: vastplan-secret-material + writeOnly`。明文只进入 TLS + CSRF 写请求，不进入初始值、loader、偏好或脏状态 baseline；无论提交成功还是失败均立即从 Workbench 状态删除。轮换与撤销是受治理的行操作，详见《[平台管理中心](../architecture/平台管理中心.md)》。
+同一签名制品提供 `/settings/credentials` 和 `/settings/credentials-audit` 页面。前者的列表只渲染 `Metadata`；保存字段必须使用受治理的 `secretMaterial`，并由 Schema 同时声明 `format: vastplan-secret-material + writeOnly`。明文只进入 TLS + CSRF 写请求，不进入初始值、loader、偏好或脏状态 baseline；无论提交成功还是失败均立即从 Workbench 状态删除。后者只显示短指纹、状态、owner、purpose、resource 和维护统计，并要求独立 `platform.credentials.audit` 权限。轮换与撤销是受治理的行操作，详见《[平台管理中心](../architecture/平台管理中心.md)》。
 
 该独立页面将收敛为安全管理员的审计、轮换和应急撤销视图。普通业务配置不再要求用户先来此创建名称：数据库、制品仓库等插件在自己的配置页声明并采集 `managedCredentials`，由配置协调器交给本插件托管。完整状态机见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》。Vault 工作负载 token 是自举根凭证，仍由部署层安全挂载，不能由本插件托管自身。

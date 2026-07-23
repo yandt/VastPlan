@@ -69,7 +69,7 @@ export interface PluginConfigurationCandidate {
   scopeSubjectId?: string;
   catalogDigest: string; schemaDigest: string; artifactSha256: string; values: Record<string, unknown>;
   createdBy: string; createdAt: string; updatedAt: string; errorCode?: string; errorMessage?: string;
-  externalRevision?: number; externalDigest?: string; externalStatus?: "Preparing" | "Prepared" | "PendingApproval" | "Approved" | "Activating" | "Aborting" | "Committed" | "CatalogActivated" | "Publishing" | "Ready" | "RollingBack" | "Failed" | "RolledBack" | "Aborted"; rollbackRevision?: number;
+  externalRevision?: number; externalDigest?: string; externalStatus?: "Preparing" | "Prepared" | "PendingApproval" | "Approved" | "Activating" | "FinalizingCredentials" | "Aborting" | "Committed" | "CatalogActivated" | "Publishing" | "Ready" | "RollingBack" | "Failed" | "RolledBack" | "Aborted"; rollbackRevision?: number;
   managedCredentials?: Array<{ fieldId: string; staged: boolean; state: string; version?: number }>;
 }
 
@@ -80,6 +80,34 @@ export interface CredentialMetadata {
   createdAt: string;
   updatedAt: string;
   revoked: boolean;
+}
+
+export interface ManagedCredentialAuditEvent {
+  id: number;
+  credentialFingerprint: string;
+  action: string;
+  state: "Preparing" | "Candidate" | "Active" | "Aborted" | "Retired";
+  owner: string;
+  purpose: string;
+  resource: string;
+  delegated: boolean;
+  candidateId?: string;
+  configurationId?: string;
+  fieldId?: string;
+  occurredAt: string;
+}
+
+export interface ManagedCredentialMaintenanceStatus {
+  lastRunAt?: string;
+  autoAborted: number;
+  collected: number;
+  counts: Record<string, number>;
+}
+
+export interface ManagedCredentialAuditPage {
+  items: ManagedCredentialAuditEvent[];
+  nextBeforeId?: number;
+  maintenance: ManagedCredentialMaintenanceStatus;
 }
 
 export interface DatabaseConnection {
@@ -446,6 +474,12 @@ export class PlatformAdminClient {
   }
 
   public listCredentials(prefix = ""): Promise<CredentialMetadata[]> { return this.get(`${this.basePath}/credentials${query({ prefix })}`); }
+  public listManagedCredentialAudit(beforeId?: number, limit = 100): Promise<ManagedCredentialAuditPage> {
+    if ((beforeId !== undefined && (!Number.isSafeInteger(beforeId) || beforeId < 1)) || !Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
+      throw new PlatformAdminError(400, "invalid_credential_audit_query");
+    }
+    return this.get(`${this.basePath}/credentials/managed-audit${query({ beforeId: beforeId === undefined ? undefined : String(beforeId), limit: String(limit) })}`);
+  }
   public putCredential(name: string, value: string): Promise<CredentialMetadata> { return this.mutate(`${this.basePath}/credentials/${segment(name)}`, "PUT", { value }); }
   public rotateCredential(name: string): Promise<CredentialMetadata> { return this.mutate(`${this.basePath}/credentials/${segment(name)}/rotate`, "POST", {}); }
   public revokeCredential(name: string): Promise<CredentialMetadata> { return this.mutate(`${this.basePath}/credentials/${segment(name)}/revoke`, "POST", {}); }
