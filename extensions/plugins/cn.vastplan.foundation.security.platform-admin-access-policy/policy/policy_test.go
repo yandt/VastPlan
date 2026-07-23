@@ -67,6 +67,17 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.deployment.readiness", Operation: "execute"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 的部署就绪观察回调应允许: %s", got)
 	}
+	for _, pluginID := range []string{"cn.vastplan.platform.configuration.global-settings", configurationauthority.CoordinatorPluginID, "cn.vastplan.platform.infrastructure.deployment-manager"} {
+		plugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: pluginID}}
+		for _, capability := range []string{"kernel.state.shared.get", "kernel.state.shared.create", "kernel.state.shared.update"} {
+			if got, _ := decide(plugin, extpoint.PermissionRequest{Capability: capability}); got != extpoint.DecisionAllow {
+				t.Fatalf("%s 的 Shared State 回调 %s 应允许: %s", pluginID, capability, got)
+			}
+		}
+	}
+	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: "kernel.state.shared.get"}); got == extpoint.DecisionAllow {
+		t.Fatalf("普通插件不得继承平台 Shared State 授权: %s", got)
+	}
 	for _, capability := range []string{
 		platformprofileactivation.KernelPrepareService, platformprofileactivation.KernelStatusService,
 		platformprofileactivation.KernelActivateService, platformprofileactivation.KernelPublishService,
@@ -90,8 +101,8 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 		t.Fatalf("deployment-manager 应可发布自己的引用快照: %s", got)
 	}
 	configurationPlugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.configuration.plugin-settings"}}
-	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: "kernel.config.get", Operation: "get"}); got != extpoint.DecisionAllow {
-		t.Fatalf("配置协调器必须能读取自己的部署配置: %s", got)
+	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: "kernel.config.get", Operation: "get"}); got == extpoint.DecisionAllow {
+		t.Fatalf("配置协调器迁移到 Shared State 后不得保留已删除的 kernel.config.get 授权: %s", got)
 	}
 	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: "kernel.configuration.catalogs", Operation: "list"}); got != extpoint.DecisionAllow {
 		t.Fatalf("配置协调器必须能读取活动可信配置目录: %s", got)

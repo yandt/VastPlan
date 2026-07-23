@@ -35,4 +35,6 @@
 - Shared State 已完成严格 Wire、可信宿主身份派生、NATS KV/File Provider、NKey ACL 和 Go/Node/Python SDK。
 - global-settings 0.8.0 已将每 tenant 的完整状态聚合为单 key CAS 文档，切换为 `active-active + external-shared + queue`；清单只申请 get/create/update 三项最小内核能力。
 - plugin-settings 0.12.0 已按 [ADR-0124](ADR-0124-Plugin-Settings租户聚合与Active-Active协调.md) 将每 tenant 的候选、审批、凭证阶段、激活 Saga 与审计聚合为单 key CAS 文档，切换为 active-active；Scoped watch 以本地即时通知加跨实例一秒观察实现。
+- Portal Composer 1.6.0 已按 [ADR-0125](ADR-0125-Portal-Composer与Preference共享状态分区.md) 将组合治理和用户偏好迁入 Shared State，并切换为 active-active。
+- Deployment Manager 0.17.0 已按 [ADR-0126](ADR-0126-Deployment-Manager共享账本与副作用Fencing.md) 迁移租户账本；因 SSH/systemd/发布副作用尚未携带 fencing token，保持 `leader + external-shared + leader routing`。
 - 单元测试覆盖两个插件实例共享读取、tenant 隔离、身份字段不进入请求、并发更新单赢家，以及 NATS 中断时 fail-closed、原存储目录重启后的自动重连恢复。真实跨进程 E2E 已验证实例 A 写入并退出后实例 B 从同一 NATS KV 继续读取。旧 `platform.settings.stateFile` 已从清单与开发 Profile 删除。

@@ -160,7 +160,7 @@ func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
 		{name: "candidate failed rolls back", candidate: deploymentpublication.ReadinessFailed, wantStatus: platformadminapi.TestReleaseRolledBack, wantActive: 3, wantTotal: 3},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+			service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -249,7 +249,7 @@ func TestTestReleaseReferenceProtectionFailsClosed(t *testing.T) {
 }
 
 func TestTestTargetBindingRejectsPlatformPlugin(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func TestTestTargetBindingRejectsPlatformPlugin(t *testing.T) {
 }
 
 func TestInterruptedTestReleaseCanBeRecoveredWithMonotonicRollback(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +315,7 @@ func TestInterruptedTestReleaseCanBeRecoveredWithMonotonicRollback(t *testing.T)
 }
 
 func TestServiceCompositionWorkflowAndRollback(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +376,7 @@ func TestServiceCompositionWorkflowAndRollback(t *testing.T) {
 }
 
 func TestServiceReferenceOutboxRetriesAfterRepositoryRecovery(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -425,7 +425,7 @@ func (h *fakeHost) called(capability string) bool {
 }
 
 func TestApprovalRequiresSeparationAndUsesKernelService(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,7 +459,7 @@ func TestApprovalRequiresSeparationAndUsesKernelService(t *testing.T) {
 }
 
 func TestSignedLeaseObservationPromotesSystemdActiveToReady(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,7 +491,7 @@ func TestRejectedOrTimedOutLeaseFailsBootstrapJob(t *testing.T) {
 		errorCode string
 	}{{name: "identity rejected", status: nodebootstrap.ReadinessRejected, errorCode: "platform.deployment.readiness_rejected"}, {name: "lease timeout", status: nodebootstrap.ReadinessWaiting, advance: jobTTL + time.Second, errorCode: "platform.deployment.readiness_timeout"}} {
 		t.Run(test.name, func(t *testing.T) {
-			service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+			service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -526,7 +526,7 @@ func TestRejectedOrTimedOutLeaseFailsBootstrapJob(t *testing.T) {
 }
 
 func TestNodeCASAndActiveJobFreezeDefinition(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -548,7 +548,7 @@ func TestNodeCASAndActiveJobFreezeDefinition(t *testing.T) {
 
 func TestRestartFailsInterruptedBootstrapWithoutReexecution(t *testing.T) {
 	stateFile := filepath.Join(t.TempDir(), "deployment-manager.json")
-	service, err := New(stateFile)
+	service, err := openTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -565,7 +565,7 @@ func TestRestartFailsInterruptedBootstrapWithoutReexecution(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	restarted, err := New(stateFile)
+	restarted, err := openTestService(stateFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -579,7 +579,7 @@ func TestRestartFailsInterruptedBootstrapWithoutReexecution(t *testing.T) {
 }
 
 func TestKernelBootstrapFailurePersistsStableFailure(t *testing.T) {
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

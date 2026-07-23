@@ -71,6 +71,18 @@ func TestBuildSeparatesPlatformAndHotApplyPaths(t *testing.T) {
 	}
 }
 
+func TestControllerPolicyAllowsLeaderWithSharedState(t *testing.T) {
+	contribution := pluginv1.RuntimeContribution{
+		InstancePolicy: "leader",
+		StateModel:     "external-shared",
+		Visibility:     "cluster",
+		Routing:        "leader",
+	}
+	if err := validateControllerRuntimePolicy(contribution, pluginv1.ConfigurationControllerProtocol); err != nil {
+		t.Fatalf("单 leader 配置控制器应允许使用可接管的共享账本: %v", err)
+	}
+}
+
 func TestBuildDerivesHotControllerFromSignedArtifactAndResolvedUnit(t *testing.T) {
 	const pluginID = "cn.vastplan.demo-hot-configured"
 	manifest := []byte(fmt.Sprintf(`{

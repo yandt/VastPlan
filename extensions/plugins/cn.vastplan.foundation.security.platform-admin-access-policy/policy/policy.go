@@ -23,7 +23,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.26.0"
+	PluginVersion = "0.27.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -288,18 +288,22 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	}
 	switch c.Caller.Id {
 	case "cn.vastplan.platform.configuration.global-settings":
-		return request.Capability == "kernel.config.get"
+		return sharedStateKernelService(request.Capability)
 	case configurationauthority.CoordinatorPluginID:
-		return request.Capability == "kernel.config.get" || request.Capability == configurationauthority.KernelIssueService
+		return request.Capability == configurationauthority.KernelIssueService || sharedStateKernelService(request.Capability)
 	case configurationauthority.CustodianPluginID:
 		return request.Capability == "kernel.config.get" || request.Capability == configurationauthority.KernelConsumeService
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":
-		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness" || request.Capability == "kernel.deployment.targets" || request.Capability == "kernel.deployment.preview" || request.Capability == "kernel.deployment.publish" || request.Capability == "kernel.deployment.readiness" || platformProfileKernelService(request.Capability)
+		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness" || request.Capability == "kernel.deployment.targets" || request.Capability == "kernel.deployment.preview" || request.Capability == "kernel.deployment.publish" || request.Capability == "kernel.deployment.readiness" || platformProfileKernelService(request.Capability) || sharedStateKernelService(request.Capability)
 	default:
 		return false
 	}
+}
+
+func sharedStateKernelService(capability string) bool {
+	return capability == "kernel.state.shared.get" || capability == "kernel.state.shared.create" || capability == "kernel.state.shared.update"
 }
 
 func platformProfileKernelService(capability string) bool {

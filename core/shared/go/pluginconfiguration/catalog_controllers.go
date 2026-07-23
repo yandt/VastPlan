@@ -73,10 +73,10 @@ func findControllerContribution(manifest pluginv1.Manifest, extensionPoint, capa
 }
 
 func validateControllerRuntimePolicy(contribution pluginv1.RuntimeContribution, protocol string) error {
-	validLeader := contribution.InstancePolicy == "leader" && contribution.StateModel == "leader-owned" && contribution.Routing == "leader"
+	validLeader := contribution.InstancePolicy == "leader" && (contribution.StateModel == "leader-owned" || contribution.StateModel == "external-shared") && contribution.Routing == "leader"
 	validShared := contribution.InstancePolicy == "active-active" && contribution.StateModel == "external-shared" && contribution.Routing == "queue"
 	if contribution.Visibility == "local" || (!validLeader && !validShared) {
-		return errors.New(protocol + " 只接受 leader-owned 或 external-shared 控制器")
+		return errors.New(protocol + " 只接受 leader 路由或 active-active queue 的外部共享状态控制器")
 	}
 	return nil
 }

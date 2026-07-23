@@ -45,6 +45,18 @@ describe("NodeTransportSecurity", () => {
     directory.apply(key, "PUT", new TextEncoder().encode(JSON.stringify(signed)));
     expect(directory.instances({ capability: record.capability })).toMatchObject([{ instance_id: "settings-a" }]);
     expect(() => directory.apply(`${key}.tampered`, "PUT", new TextEncoder().encode(JSON.stringify(signed)))).toThrow(/key/);
+
+    const leaderRecord: CapabilityAnnouncement = {
+      ...record, capability: "platform.deployment", logical_service: "platform.deployment",
+      instance_policy: "leader", state_model: "external-shared", routing: "leader",
+      instance_id: "deployment-a", subject: rpcSubject("platform.deployment", "platform.deployment", "platform"), fencing_token: "7",
+    };
+    const leaderKey = capabilityKey(leaderRecord.capability, leaderRecord.instance_id);
+    const leaderSignature = backendSecurity.sign(leaderKey, canonicalAnnouncementBytes(leaderRecord));
+    const signedLeader = { ...leaderRecord, transport_public_key: leaderSignature.publicKey, transport_timestamp: leaderSignature.timestamp, transport_nonce: leaderSignature.nonce, transport_signature: leaderSignature.signature };
+    directory.apply(leaderKey, "PUT", new TextEncoder().encode(JSON.stringify(signedLeader)));
+    expect(directory.instances({ capability: leaderRecord.capability })).toMatchObject([{ instance_id: "deployment-a", state_model: "external-shared" }]);
+
     directory.apply(key, "DEL");
     expect(directory.instances({ capability: record.capability })).toEqual([]);
     callerSecurity.close();

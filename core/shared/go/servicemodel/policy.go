@@ -106,8 +106,8 @@ func Validate(raw Policy) error {
 			return fmt.Errorf("active-active 必须使用 external-shared、非 local visibility 和 queue")
 		}
 	case PolicyLeader:
-		if p.StateModel != StateLeaderOwned || p.Visibility == VisibilityLocal || p.Routing != RoutingLeader {
-			return fmt.Errorf("leader 必须使用 leader-owned、非 local visibility 和 leader")
+		if (p.StateModel != StateLeaderOwned && p.StateModel != StateExternalShared) || p.Visibility == VisibilityLocal || p.Routing != RoutingLeader {
+			return fmt.Errorf("leader 必须使用 leader-owned 或 external-shared、非 local visibility 和 leader")
 		}
 	case PolicyPartitioned:
 		if p.StateModel != StatePartitionOwned || p.Visibility == VisibilityLocal || p.Routing != RoutingShard {

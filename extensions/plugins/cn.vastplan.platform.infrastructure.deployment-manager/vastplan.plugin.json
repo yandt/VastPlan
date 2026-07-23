@@ -1,14 +1,14 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
   "description": "管理非敏感节点引导、应用服务修订和 Backend 测试发布；凭证、制品信任、KV 与就绪事实仍由可信内核持有",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
-  "capabilities": { "kernelServices": ["kernel.node.bootstrap", "kernel.node.readiness", "kernel.deployment.targets", "kernel.deployment.preview", "kernel.deployment.publish", "kernel.deployment.readiness", "kernel.platform-profile.prepare", "kernel.platform-profile.status", "kernel.platform-profile.activate", "kernel.platform-profile.publish", "kernel.platform-profile.finalize", "kernel.platform-profile.abort", "kernel.platform-profile.rollback"], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.node.bootstrap", "kernel.node.readiness", "kernel.deployment.targets", "kernel.deployment.preview", "kernel.deployment.publish", "kernel.deployment.readiness", "kernel.platform-profile.prepare", "kernel.platform-profile.status", "kernel.platform-profile.activate", "kernel.platform-profile.publish", "kernel.platform-profile.finalize", "kernel.platform-profile.abort", "kernel.platform-profile.rollback", "kernel.state.shared.get", "kernel.state.shared.create", "kernel.state.shared.update"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "authorization": {
     "namespace": "platform.deployment",
@@ -45,7 +45,7 @@
   },
   "runtime": {
     "instancePolicy": "leader",
-    "stateModel": "leader-owned",
+    "stateModel": "external-shared",
     "visibility": "cluster",
     "routing": "leader",
     "routingDomain": "platform",
@@ -57,7 +57,7 @@
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.deployment", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
   },
   "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
-  "state": { "backend": { "format": "cn.vastplan.platform.deployment-manager", "formatVersion": 5 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.deployment-manager.shared", "formatVersion": 1 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/deployment-manager", "frontend": "frontend/dist/index.js" },
   "contributes": {

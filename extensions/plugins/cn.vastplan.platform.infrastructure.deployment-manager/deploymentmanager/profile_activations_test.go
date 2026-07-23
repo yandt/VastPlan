@@ -148,7 +148,7 @@ func TestProfileConfigurationActivationRecoversAndReachesReady(t *testing.T) {
 	if _, err := service.ApproveProfileConfigurationActivation(bob, platformprofileactivation.ActivationLookup{CandidateID: request.CandidateID}); err != nil {
 		t.Fatal(err)
 	}
-	restarted, err := New(service.file)
+	restarted, err := openTestService(testStateFile(service))
 	if err != nil {
 		t.Fatalf("重启后无法恢复 Profile Activation: %v", err)
 	}
@@ -237,7 +237,7 @@ func profileActivationFixture(t *testing.T) (*Service, platformprofileactivation
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

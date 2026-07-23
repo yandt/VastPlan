@@ -115,7 +115,7 @@ function validateServicePolicy(record: CapabilityAnnouncement): void {
   const visibility = record.visibility || (policy === "per-kernel" ? "local" : "cluster");
   const routing = record.routing || (policy === "leader" ? "leader" : policy === "partitioned" ? "shard" : policy === "per-kernel" ? "direct" : "queue");
   const valid = policy === "active-active" ? state === "external-shared" && visibility !== "local" && routing === "queue"
-    : policy === "leader" ? state === "leader-owned" && visibility !== "local" && routing === "leader"
+    : policy === "leader" ? (state === "leader-owned" || state === "external-shared") && visibility !== "local" && routing === "leader"
     : policy === "partitioned" ? state === "partition-owned" && visibility !== "local" && routing === "shard"
     : policy === "per-kernel" && state === "local-ephemeral" && visibility === "local" && routing === "direct";
   if (!valid || visibility === "local") throw new Error("能力目录运行策略无效或暴露了 local capability");

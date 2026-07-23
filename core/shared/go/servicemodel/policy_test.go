@@ -28,4 +28,10 @@ func TestValidateLeaderAndPartitioned(t *testing.T) {
 			t.Fatalf("策略默认组合应通过: %+v: %v", policy, err)
 		}
 	}
+	if err := Validate(Policy{InstancePolicy: PolicyLeader, StateModel: StateExternalShared, Visibility: VisibilityCluster, Routing: RoutingLeader}); err != nil {
+		t.Fatalf("单 leader 应允许把可接管账本保存到外部共享状态: %v", err)
+	}
+	if err := Validate(Policy{InstancePolicy: PolicyLeader, StateModel: StateLocalEphemeral, Visibility: VisibilityCluster, Routing: RoutingLeader}); err == nil {
+		t.Fatal("单 leader 不得把持久控制状态声明为 local-ephemeral")
+	}
 }

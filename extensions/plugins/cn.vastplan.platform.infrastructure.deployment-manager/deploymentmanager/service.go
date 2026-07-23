@@ -11,8 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -26,14 +24,15 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
+	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.16.0"
+	PluginVersion = "0.17.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
-	maxStateBytes = 16 << 20
+	maxStateBytes = 1 << 20
 )
 
 var (
@@ -45,6 +44,7 @@ var (
 	errBootstrapFailed = errors.New("可信节点引导执行失败")
 	errServiceState    = errors.New("服务组合状态不允许此操作")
 	errServicePublish  = errors.New("可信服务组合发布失败")
+	errStoreConflict   = errors.New("Deployment Manager Shared State 并发冲突")
 )
 
 type tenantState struct {
@@ -67,63 +67,24 @@ type persisted struct {
 
 type Service struct {
 	mu                  sync.Mutex
-	file                string
+	workflowMu          sync.Mutex
 	now                 func() time.Time
 	newID               func() (string, error)
 	data                persisted
+	session             *deploymentStateSession
+	testSave            func(persisted) error
+	recoveredTenants    map[string]bool
 	releaseTimeout      time.Duration
 	releasePollInterval time.Duration
 }
 
-func New(file string) (*Service, error) {
-	if !filepath.IsAbs(file) || filepath.Clean(file) != file {
-		return nil, errors.New("deployment-manager 状态文件必须是规范绝对路径")
+func New() *Service {
+	return &Service{
+		now: func() time.Time { return time.Now().UTC() }, newID: randomID,
+		data:             persisted{Tenants: map[string]*tenantState{}},
+		recoveredTenants: map[string]bool{},
+		releaseTimeout:   2 * time.Minute, releasePollInterval: 500 * time.Millisecond,
 	}
-	if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
-		return nil, err
-	}
-	if err := secureStateDirectory(filepath.Dir(file)); err != nil {
-		return nil, err
-	}
-	s := &Service{
-		file: file, now: func() time.Time { return time.Now().UTC() }, newID: randomID,
-		data:           persisted{Tenants: map[string]*tenantState{}},
-		releaseTimeout: 2 * time.Minute, releasePollInterval: 500 * time.Millisecond,
-	}
-	if err := s.load(); err != nil {
-		return nil, err
-	}
-	return s, nil
-}
-
-func (s *Service) load() error {
-	info, err := os.Lstat(s.file)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() <= 0 || info.Size() > maxStateBytes {
-		return errors.New("deployment-manager 状态文件必须是仅属主可访问且大小受限的普通文件")
-	}
-	raw, err := os.ReadFile(s.file)
-	if err != nil {
-		return err
-	}
-	if err := json.Unmarshal(raw, &s.data); err != nil {
-		return err
-	}
-	if s.data.Tenants == nil {
-		s.data.Tenants = map[string]*tenantState{}
-	}
-	if err := s.validateLoaded(); err != nil {
-		return err
-	}
-	if s.recoverInterruptedLocked() {
-		return s.saveLocked()
-	}
-	return nil
 }
 
 func (s *Service) validateLoaded() error {
@@ -199,63 +160,21 @@ func (s *Service) validateLoaded() error {
 }
 
 func (s *Service) saveLocked() error {
-	raw, err := json.Marshal(s.data)
+	if s.session == nil {
+		if s.testSave != nil {
+			return s.testSave(s.data)
+		}
+		return errors.New("Deployment Manager 写入缺少 Shared State 会话")
+	}
+	value := s.data.Tenants[s.session.tenant]
+	if value == nil {
+		return errors.New("Deployment Manager 写入缺少 tenant 聚合")
+	}
+	revision, err := s.session.repository.save(s.session.ctx, s.session.call, value, s.session.revision)
 	if err != nil {
 		return err
 	}
-	if len(raw) > maxStateBytes {
-		return errors.New("deployment-manager 状态超过上限")
-	}
-	if err := os.MkdirAll(filepath.Dir(s.file), 0o700); err != nil {
-		return err
-	}
-	if err := secureStateDirectory(filepath.Dir(s.file)); err != nil {
-		return err
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(s.file), ".deployment-manager-*")
-	if err != nil {
-		return err
-	}
-	name := temporary.Name()
-	defer os.Remove(name)
-	if err := temporary.Chmod(0o600); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if _, err := temporary.Write(raw); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		_ = temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(name, s.file); err != nil {
-		return err
-	}
-	directory, err := os.Open(filepath.Dir(s.file))
-	if err != nil {
-		return err
-	}
-	syncErr := directory.Sync()
-	closeErr := directory.Close()
-	if syncErr != nil {
-		return syncErr
-	}
-	return closeErr
-}
-
-func secureStateDirectory(path string) error {
-	info, err := os.Lstat(path)
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() || info.Mode().Perm()&0o022 != 0 {
-		return errors.New("deployment-manager 状态目录不能是符号链接或被 group/other 写入")
-	}
+	s.session.revision = revision
 	return nil
 }
 
@@ -300,6 +219,54 @@ func (s *Service) recoverInterruptedLocked() bool {
 	return changed
 }
 
+func (s *Service) withTenantState(ctx context.Context, host sdk.Host, call *contractv1.CallContext, work func() error) error {
+	tenant, err := callTenant(call)
+	if err != nil {
+		return err
+	}
+	s.workflowMu.Lock()
+	defer s.workflowMu.Unlock()
+	if s.testSave != nil {
+		return work()
+	}
+	repository, err := newDeploymentStateRepository(host)
+	if err != nil {
+		return err
+	}
+	value, revision, err := repository.load(ctx, call)
+	if err != nil {
+		return err
+	}
+	s.data = persisted{Tenants: map[string]*tenantState{tenant: value}}
+	s.session = &deploymentStateSession{ctx: ctx, call: call, repository: repository, tenant: tenant, revision: revision}
+	if err := s.validateLoaded(); err != nil {
+		s.closeStateSession()
+		return err
+	}
+	if !s.recoveredTenants[tenant] {
+		s.mu.Lock()
+		changed := s.recoverInterruptedLocked()
+		if changed {
+			err = s.saveLocked()
+		}
+		s.mu.Unlock()
+		if err != nil {
+			s.closeStateSession()
+			return err
+		}
+		s.recoveredTenants[tenant] = true
+	}
+	defer s.closeStateSession()
+	return work()
+}
+
+func (s *Service) closeStateSession() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.session = nil
+	s.data = persisted{Tenants: map[string]*tenantState{}}
+}
+
 func validJobState(state platformadminapi.BootstrapJobState) bool {
 	switch state {
 	case platformadminapi.BootstrapPending, platformadminapi.BootstrapApproved, platformadminapi.BootstrapConnecting,
@@ -314,7 +281,7 @@ func validJobState(state platformadminapi.BootstrapJobState) bool {
 func (s *Service) tenantLocked(tenant string) *tenantState {
 	state := s.data.Tenants[tenant]
 	if state == nil {
-		state = &tenantState{Nodes: map[string]platformadminapi.ManagedNode{}, Jobs: map[string]platformadminapi.BootstrapJob{}, TestBindings: map[string]platformadminapi.TestTargetBinding{}}
+		state = emptyTenantState()
 		s.data.Tenants[tenant] = state
 	}
 	if state.Nodes == nil {
@@ -333,6 +300,14 @@ func (s *Service) tenantLocked(tenant string) *tenantState {
 		state.ProfileActivations = map[string]profileActivationRecord{}
 	}
 	return state
+}
+
+func emptyTenantState() *tenantState {
+	return &tenantState{
+		Nodes: map[string]platformadminapi.ManagedNode{}, Jobs: map[string]platformadminapi.BootstrapJob{},
+		TestBindings: map[string]platformadminapi.TestTargetBinding{}, ConfigurationRequests: map[string]string{},
+		ProfileActivations: map[string]profileActivationRecord{},
+	}
 }
 
 func validConfigurationRequestHash(value string) bool {
@@ -712,6 +687,20 @@ func terminal(state platformadminapi.BootstrapJobState) bool {
 }
 
 func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
+	var result *contractv1.CallResult
+	var raw []byte
+	var handlerErr error
+	err := s.withTenantState(ctx, host, call, func() error {
+		result, raw, handlerErr = s.handleLoaded(ctx, host, call, payload, operation)
+		return handlerErr
+	})
+	if err != nil {
+		return domainError(errorCode(err), err)
+	}
+	return result, raw, handlerErr
+}
+
+func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
 	var request struct {
 		ID                string                                            `json:"id"`
 		NodeID            string                                            `json:"nodeId"`
@@ -870,6 +859,8 @@ func errorCode(err error) string {
 		return "platform.deployment.service_state_conflict"
 	case errors.Is(err, errServicePublish):
 		return "platform.deployment.service_publish_failed"
+	case errors.Is(err, errStoreConflict):
+		return "platform.deployment.store_conflict"
 	case errors.Is(err, errConfigurationActivation):
 		return "platform.deployment.configuration_activation_failed"
 	case errors.Is(err, errProfileActivation):
@@ -880,13 +871,25 @@ func errorCode(err error) string {
 		return "platform.test_release.in_progress"
 	case errors.Is(err, errTestArtifact):
 		return "platform.test_release.artifact_rejected"
+	case isSharedStateError(err):
+		return "platform.deployment.unavailable"
 	default:
 		return "platform.deployment.invalid"
 	}
 }
 
 func domainError(code string, err error) (*contractv1.CallResult, []byte, error) {
-	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error()}}, nil, nil
+	retryable := errors.Is(err, errStoreConflict)
+	var stateError *sharedstatesdk.ServiceError
+	if errors.As(err, &stateError) {
+		retryable = stateError.Retryable
+	}
+	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error(), Retryable: retryable}}, nil, nil
+}
+
+func isSharedStateError(err error) bool {
+	var stateError *sharedstatesdk.ServiceError
+	return errors.As(err, &stateError)
 }
 
 func randomID() (string, error) {

@@ -100,7 +100,7 @@ func TestApplicationConfigurationActivationIsGovernedAndReady(t *testing.T) {
 	if _, err := service.CreateConfigurationActivation(context.Background(), host, alice, changed); err == nil {
 		t.Fatal("同一候选 ID 不得将不同请求误判为幂等重试")
 	}
-	restarted, err := New(service.file)
+	restarted, err := openTestService(testStateFile(service))
 	if err != nil {
 		t.Fatalf("重启后无法恢复配置激活摘要: %v", err)
 	}
@@ -174,7 +174,7 @@ func configuredActivationFixture(t *testing.T) (*Service, configurationactivatio
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := New(filepath.Join(t.TempDir(), "deployment-manager.json"))
+	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

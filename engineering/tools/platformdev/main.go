@@ -731,7 +731,6 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_VAULT_TRANSIT_KEY":                "vastplan-local",
 		"VASTPLAN_VAULT_TOKEN_FILE":                 filepath.Join(r.runDir, "secrets", "vault-token"),
 		"VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE":  filepath.Join(r.persistentStateRoot(), "database-connections.json"),
-		"VASTPLAN_DEPLOYMENT_MANAGER_STATE_FILE":    filepath.Join(r.persistentStateRoot(), "deployment-manager.json"),
 		"VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT":      r.testingRepositoryVolumes(),
 		"VASTPLAN_ARTIFACT_REPOSITORY":              r.testingRepositoryData(),
 		"VASTPLAN_ARTIFACT_TRUST":                   r.testingRepositoryTrust(),
