@@ -33,28 +33,31 @@ type ManagedCredentialStatus struct {
 // Candidate never contains secret material, authority tokens, stage IDs or
 // managed credential handles. Only browser-safe field status is returned.
 type Candidate struct {
-	ID                   string                    `json:"id"`
-	ConfigurationID      string                    `json:"configurationId"`
-	ResourceCollectionID string                    `json:"resourceCollectionId,omitempty"`
-	ResourceID           string                    `json:"resourceId,omitempty"`
-	ResourceAction       string                    `json:"resourceAction,omitempty"`
-	Revision             uint64                    `json:"revision"`
-	Status               CandidateStatus           `json:"status"`
-	ApplyPath            ApplyPath                 `json:"applyPath"`
-	CatalogDigest        string                    `json:"catalogDigest"`
-	SchemaDigest         string                    `json:"schemaDigest"`
-	ArtifactSHA256       string                    `json:"artifactSha256"`
-	Values               json.RawMessage           `json:"values"`
-	CreatedBy            string                    `json:"createdBy"`
-	CreatedAt            string                    `json:"createdAt"`
-	UpdatedAt            string                    `json:"updatedAt"`
-	ErrorCode            string                    `json:"errorCode,omitempty"`
-	ErrorMessage         string                    `json:"errorMessage,omitempty"`
-	ExternalRevision     uint64                    `json:"externalRevision,omitempty"`
-	ExternalDigest       string                    `json:"externalDigest,omitempty"`
-	ExternalStatus       string                    `json:"externalStatus,omitempty"`
-	RollbackRevision     uint64                    `json:"rollbackRevision,omitempty"`
-	ManagedCredentials   []ManagedCredentialStatus `json:"managedCredentials,omitempty"`
+	ID                   string `json:"id"`
+	ConfigurationID      string `json:"configurationId"`
+	ResourceCollectionID string `json:"resourceCollectionId,omitempty"`
+	ResourceID           string `json:"resourceId,omitempty"`
+	ResourceAction       string `json:"resourceAction,omitempty"`
+	// ScopeSubjectID is present only for user-scoped hot configuration. Tenant
+	// identity always comes from CallContext and is never stored in a candidate.
+	ScopeSubjectID     string                    `json:"scopeSubjectId,omitempty"`
+	Revision           uint64                    `json:"revision"`
+	Status             CandidateStatus           `json:"status"`
+	ApplyPath          ApplyPath                 `json:"applyPath"`
+	CatalogDigest      string                    `json:"catalogDigest"`
+	SchemaDigest       string                    `json:"schemaDigest"`
+	ArtifactSHA256     string                    `json:"artifactSha256"`
+	Values             json.RawMessage           `json:"values"`
+	CreatedBy          string                    `json:"createdBy"`
+	CreatedAt          string                    `json:"createdAt"`
+	UpdatedAt          string                    `json:"updatedAt"`
+	ErrorCode          string                    `json:"errorCode,omitempty"`
+	ErrorMessage       string                    `json:"errorMessage,omitempty"`
+	ExternalRevision   uint64                    `json:"externalRevision,omitempty"`
+	ExternalDigest     string                    `json:"externalDigest,omitempty"`
+	ExternalStatus     string                    `json:"externalStatus,omitempty"`
+	RollbackRevision   uint64                    `json:"rollbackRevision,omitempty"`
+	ManagedCredentials []ManagedCredentialStatus `json:"managedCredentials,omitempty"`
 }
 
 func ValidApplyPath(path ApplyPath) bool {
@@ -69,6 +72,7 @@ func ValidApplyPath(path ApplyPath) bool {
 type CreateDraftRequest struct {
 	ConfigurationID string            `json:"configurationId"`
 	CatalogDigest   string            `json:"catalogDigest"`
+	ScopeSubjectID  string            `json:"scopeSubjectId,omitempty"`
 	Values          json.RawMessage   `json:"values"`
 	Secrets         map[string]string `json:"secrets,omitempty"`
 }

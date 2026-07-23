@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
@@ -148,9 +149,20 @@ func TestDescriptorMatchesSignedManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(contributions) != 2 {
+		t.Fatalf("运行时贡献数量=%d want=2", len(contributions))
+	}
+	byPoint := map[string]json.RawMessage{}
+	for _, contribution := range contributions {
+		byPoint[contribution.ExtensionPoint] = contribution.Descriptor
+	}
 	var signed, runtime any
-	if len(contributions) != 1 || json.Unmarshal(contributions[0].Descriptor, &signed) != nil || json.Unmarshal(Descriptor(), &runtime) != nil || !reflect.DeepEqual(signed, runtime) {
-		t.Fatalf("运行时 descriptor 与签名 Manifest 不一致\nsigned=%s\nruntime=%s", contributions[0].Descriptor, Descriptor())
+	tool := byPoint[extpoint.ToolPackage]
+	if json.Unmarshal(tool, &signed) != nil || json.Unmarshal(Descriptor(), &runtime) != nil || !reflect.DeepEqual(signed, runtime) {
+		t.Fatalf("运行时 tool descriptor 与签名 Manifest 不一致\nsigned=%s\nruntime=%s", tool, Descriptor())
+	}
+	if json.Unmarshal(byPoint[configurationscopedv1.ExtensionPoint], &signed) != nil || json.Unmarshal([]byte(scopedResolverDescriptor), &runtime) != nil || !reflect.DeepEqual(signed, runtime) {
+		t.Fatalf("运行时 scoped descriptor 与签名 Manifest 不一致")
 	}
 }
 

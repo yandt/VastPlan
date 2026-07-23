@@ -270,6 +270,7 @@ func TestValidateDescriptor_BackendPublicCatalog(t *testing.T) {
 		"authentication.provider":           `{"protocol":"authentication.method.v1","purposes":["portal-login"],"methods":[{"id":"corporate-sso","kind":"redirect","interaction":"redirect"}],"subjectNamespace":"enterprise.identity.corporate","requiredCapabilities":[]}`,
 		"configuration.controller":          `{"protocol":"configuration.v1"}`,
 		"configuration.resource-controller": `{"protocol":"configuration.resource.v1"}`,
+		"configuration.scoped-resolver":     `{"protocol":"configuration.scoped.v1"}`,
 	}
 	for point, descriptor := range valid {
 		t.Run(point, func(t *testing.T) {

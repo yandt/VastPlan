@@ -28,7 +28,7 @@ const descriptor = `{
 
 func main() {
 	// id/version/engines 与 vastplan.plugin.json 保持一致（清单是单一真源，ADR-0017 §1）
-	p := sdk.New("cn.vastplan.hello-world", "0.1.0", map[string]string{
+	p := sdk.New("cn.vastplan.hello-world", "0.2.0", map[string]string{
 		"backend": "^0.1 || ^1.0", // 只贡献 backend 面；已通过 Backend 0.1/1.0 兼容门禁
 	})
 
@@ -62,9 +62,14 @@ func greet(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, 
 		return nil, nil, fmt.Errorf("参数 name 不能为空")
 	}
 
-	// 上下文全程透传：插件能看到调用方是谁、在哪个租户、什么场景
+	configuration, err := resolveGreetingConfiguration(ctx, host, callCtx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("解析租户问候配置: %w", err)
+	}
+	// 上下文全程透传：插件能看到调用方是谁、在哪个租户、什么场景。
+	// 模板来自受认证的 tenant-scoped Active/seed，不接受请求自报 tenant。
 	out, _ := json.Marshal(map[string]any{
-		"greeting":   fmt.Sprintf("你好，%s！我是插件 cn.vastplan.hello-world。", in.Name),
+		"greeting":   configuration.render(in.Name),
 		"calledBy":   callCtx.Principal.Username,
 		"tenant":     callCtx.TenantId,
 		"scene":      callCtx.Scene,
@@ -109,7 +114,7 @@ func whoami(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext,
 		return nil, nil, fmt.Errorf("解析内核信息失败: %w", err)
 	}
 	out, _ := json.Marshal(map[string]any{
-		"plugin":       "cn.vastplan.hello-world@0.1.0",
+		"plugin":       "cn.vastplan.hello-world@0.2.0",
 		"hostReported": kernel,
 	})
 	return sdk.OK(time.Since(start).Milliseconds()), out, nil

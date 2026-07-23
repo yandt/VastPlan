@@ -17,7 +17,7 @@ import (
 
 const (
 	PluginID           = pluginconfiguration.PluginSettingsID
-	PluginVersion      = "0.9.0"
+	PluginVersion      = "0.10.0"
 	Capability         = "platform.plugin-configuration"
 	StateFileConfigKey = "platform.plugin-configuration.stateFile"
 	maxStateBytes      = 8 << 20
@@ -48,6 +48,9 @@ type tenantState struct {
 	HotDraftBases       map[string]configurationv1.ActiveReference `json:"hotDraftBases,omitempty"`
 	HotActivations      map[string]hotActivationRecord             `json:"hotActivations,omitempty"`
 	ResourceActivations map[string]resourceActivationRecord        `json:"resourceActivations,omitempty"`
+	ScopedActives       map[string]scopedActiveRecord              `json:"scopedActives,omitempty"`
+	ScopedDraftBases    map[string]scopedActiveReference           `json:"scopedDraftBases,omitempty"`
+	ScopedActivations   map[string]scopedActivationRecord          `json:"scopedActivations,omitempty"`
 }
 
 type credentialStage struct {
@@ -68,6 +71,7 @@ type Service struct {
 	now           func() time.Time
 	newID         func() (string, error)
 	newResourceID func() (string, error)
+	scopedChanged map[string]chan struct{}
 }
 
 func New(stateFile string) (*Service, error) {
@@ -76,6 +80,7 @@ func New(stateFile string) (*Service, error) {
 		now:           func() time.Time { return time.Now().UTC() },
 		newID:         randomID,
 		newResourceID: randomResourceID,
+		scopedChanged: map[string]chan struct{}{},
 	}
 	if strings.TrimSpace(stateFile) != "" {
 		if err := service.configure(stateFile); err != nil {

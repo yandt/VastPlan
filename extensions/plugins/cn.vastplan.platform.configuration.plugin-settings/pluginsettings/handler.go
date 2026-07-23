@@ -20,6 +20,7 @@ type operationRequest struct {
 	ResourceCollectionID string            `json:"resourceCollectionId"`
 	ResourceID           string            `json:"resourceId"`
 	CatalogDigest        string            `json:"catalogDigest"`
+	ScopeSubjectID       string            `json:"scopeSubjectId"`
 	Cursor               string            `json:"cursor"`
 	Limit                uint32            `json:"limit"`
 	Values               json.RawMessage   `json:"values"`
@@ -86,7 +87,7 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 		if err != nil {
 			return nil, err
 		}
-		return s.publicDefinition(tenant, view), nil
+		return s.publicDefinition(tenant, view, request.ScopeSubjectID), nil
 	case "listCandidates":
 		items, err := s.ListCandidates(call)
 		return map[string]any{"items": items}, err
@@ -113,6 +114,7 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 		return s.CreateDraft(ctx, host, call, pluginconfiguration.CreateDraftRequest{
 			ConfigurationID: request.ConfigurationID,
 			CatalogDigest:   request.CatalogDigest,
+			ScopeSubjectID:  request.ScopeSubjectID,
 			Values:          request.Values,
 			Secrets:         request.Secrets,
 		})
@@ -138,6 +140,14 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 		return s.ActivateHotServiceCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
 	case "abortHotServiceCandidate":
 		return s.AbortHotServiceCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "submitScopedDraft":
+		return s.SubmitScopedDraft(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "approveScopedCandidate":
+		return s.ApproveScopedCandidate(call, request.ID, request.ExpectedRevision)
+	case "activateScopedCandidate":
+		return s.ActivateScopedCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "abortScopedCandidate":
+		return s.AbortScopedCandidate(call, request.ID, request.ExpectedRevision)
 	case "submitResourceDraft":
 		return s.SubmitResourceDraft(ctx, host, call, request.ID, request.ExpectedRevision)
 	case "approveResourceCandidate":

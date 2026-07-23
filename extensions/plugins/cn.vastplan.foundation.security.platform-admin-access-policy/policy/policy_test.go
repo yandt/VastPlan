@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
+	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
@@ -130,6 +131,17 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	}
 	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: "configuration.0123456789abcdef0123456789abcdef", Operation: configurationv1.OperationCommit}); got != extpoint.DecisionDeny {
 		t.Fatalf("configuration.v1 必须绑定专用扩展点: %s", got)
+	}
+	scopedResolve := extpoint.PermissionRequest{ExtensionPoint: configurationscopedv1.ExtensionPoint, Capability: configurationscopedv1.Capability, Operation: configurationscopedv1.OperationResolve}
+	if got, _ := decide(businessPlugin, scopedResolve); got != extpoint.DecisionAllow {
+		t.Fatalf("插件应能调用自校验的 scoped resolver: %s", got)
+	}
+	if got, _ := decide(user("platform.admin"), scopedResolve); got != extpoint.DecisionDeny {
+		t.Fatalf("用户不得直接调用 scoped resolver: %s", got)
+	}
+	scopedResolve.ExtensionPoint = extpoint.ToolPackage
+	if got, _ := decide(businessPlugin, scopedResolve); got != extpoint.DecisionDeny {
+		t.Fatalf("scoped resolver 不得退化为 tool.package: %s", got)
 	}
 	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: platformadminapi.CredentialsCapability, Operation: "stageDelegated"}); got != extpoint.DecisionDeny {
 		t.Fatalf("普通插件不得使用委托凭证入口: %s", got)

@@ -64,7 +64,7 @@
 ## 影响
 
 - Backend 公开插件扩展点由七个增加为八个，兼容矩阵和 descriptor Schema 固定 `configuration.controller`。
-- hot-service 已形成可管理、可审批、可恢复路径；`tenant/user + hot` 的 `hot-scoped` resolve/watch 真源仍是下一阶段，不由本 ADR 假装完成。
+- hot-service 已形成可管理、可审批、可恢复路径。本 ADR 当时未实现的 `tenant/user + hot` resolve/watch 真源，已于 2026-07-23 由 [ADR-0119](ADR-0119-Tenant与User-Scoped-Hot配置真源.md) 独立落地；两条路径继续保持不同的 Active 所有权，不合并为双真相源。
 - 0.8.0 首批只向无托管凭证字段的 Service Hot 定义开放操作；带秘密配置必须先补齐“保留旧引用 + 替换新引用”的完整摘要和恢复语义，当前 fail-closed 且界面显示不可用。
 - 控制器作者必须持久化 Active 与候选事实并实现幂等；不满足者只能使用 restart 生效或保持只读。
 - 第一方 Go 插件可复用 Go SDK；其他 Runtime 只需遵守 JSON wire，不需依赖 Go 构建或与内核整体编译。

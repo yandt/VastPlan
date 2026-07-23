@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/configuration-scoped/v1/vastplan.configuration-scoped.schema.json",
+  "title": "VastPlan Scoped Configuration v1",
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "configurationId": { "type": "string", "pattern": "^cfg_[a-f0-9]{24}$" },
+    "resolveRequest": { "type": "object", "additionalProperties": false, "properties": {} },
+    "watchRevisionRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["afterRevision", "afterDigest"],
+      "properties": {
+        "afterRevision": { "type": "integer", "minimum": 0 },
+        "afterDigest": { "$ref": "#/$defs/digest" },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 30000 }
+      }
+    },
+    "resolution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "configurationId", "scope", "revision", "digest", "schemaDigest", "artifactSha256", "values", "source", "observedAt"],
+      "properties": {
+        "protocol": { "const": "configuration.scoped.v1" },
+        "configurationId": { "$ref": "#/$defs/configurationId" },
+        "scope": { "enum": ["tenant", "user"] },
+        "revision": { "type": "integer", "minimum": 0 },
+        "digest": { "$ref": "#/$defs/digest" },
+        "schemaDigest": { "$ref": "#/$defs/digest" },
+        "artifactSha256": { "$ref": "#/$defs/digest" },
+        "values": { "type": "object" },
+        "source": { "enum": ["seed", "active"] },
+        "observedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "revisionObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "configurationId", "changed", "revision", "digest", "observedAt"],
+      "properties": {
+        "protocol": { "const": "configuration.scoped.v1" },
+        "configurationId": { "$ref": "#/$defs/configurationId" },
+        "changed": { "type": "boolean" },
+        "revision": { "type": "integer", "minimum": 0 },
+        "digest": { "$ref": "#/$defs/digest" },
+        "observedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

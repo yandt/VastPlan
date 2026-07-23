@@ -13,8 +13,8 @@
     },
     "application_composition": {
       "id": "cluster-demo",
-      "revision": 1,
-      "digest": "1e58dd32e66344b0fe6557d9374872dbb7337336422fe2f889f87b93eb0944ec"
+      "revision": 2,
+      "digest": "6b9ef13187a1a992a5b1cf86e57ab249c58204ec5c0e89c87b0fdfb6ec78882e"
     },
     "development_mode": true,
     "plugin_origins": {
@@ -28,6 +28,12 @@
       "kind": "service",
       "enabled": true,
       "service_role": "backend",
+      "logical_service": "cluster-demo.hello",
+      "instance_policy": "active-active",
+      "state_model": "external-shared",
+      "visibility": "cluster",
+      "routing": "queue",
+      "routing_domain": "application",
       "replicas": 2,
       "placement": {
         "nodeSelector": {
@@ -42,10 +48,17 @@
         },
         {
           "id": "cn.vastplan.hello-world",
-          "version": "0.1.0",
+          "version": "0.2.0",
           "channel": "stable"
         }
-      ]
+      ],
+      "config": {
+        "plugins": {
+          "cn.vastplan.hello-world": {
+            "greetingTemplate": "你好，{{name}}！我是 VastPlan 租户级插件。"
+          }
+        }
+      }
     }
   ]
 }

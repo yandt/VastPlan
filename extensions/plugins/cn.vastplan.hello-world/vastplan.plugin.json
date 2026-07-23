@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.hello-world",
   "name": "Hello World",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -15,6 +15,23 @@
     "resources": []
   },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.profile", "trace"], "optional": ["scene", "request.deadline", "propagation.callPath"] },
+
+  "runtime": {
+    "instancePolicy": "active-active", "stateModel": "external-shared", "visibility": "cluster", "routing": "queue", "routingDomain": "application",
+    "provides": [{ "extensionPoint": "tool.package", "capability": "vastplan.hello", "visibility": "cluster", "routing": "queue", "routingDomain": "application" }],
+    "requires": [{ "capability": "configuration.scoped", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.plugin-configuration", "routingDomain": "platform" }]
+  },
+
+  "configuration": {
+    "scope": "tenant", "applyMode": "hot",
+    "schema": {
+      "type": "object", "additionalProperties": false,
+      "required": ["greetingTemplate"],
+      "properties": {
+        "greetingTemplate": { "type": "string", "minLength": 10, "maxLength": 256, "pattern": "\\{\\{name\\}\\}" }
+      }
+    }
+  },
 
   "activation": ["onAgentTool:vastplan.hello"],
 

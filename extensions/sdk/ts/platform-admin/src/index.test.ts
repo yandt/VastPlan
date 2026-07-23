@@ -86,6 +86,10 @@ describe("PlatformAdminClient", () => {
     await client.approveHotServiceConfigurationCandidate(id, 11);
     await client.activateHotServiceConfigurationCandidate(id, 12);
     await client.abortHotServiceConfigurationCandidate(id, 13);
+	await client.submitScopedConfigurationDraft(id, 14);
+	await client.approveScopedConfigurationCandidate(id, 15);
+	await client.activateScopedConfigurationCandidate(id, 16);
+	await client.abortScopedConfigurationCandidate(id, 17);
     expect(calls.filter((call) => call.path !== "/v1/csrf")).toEqual([
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/submit`, method: "POST", body: '{"expectedRevision":4}' },
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/activate`, method: "POST", body: '{"expectedRevision":5}' },
@@ -97,6 +101,10 @@ describe("PlatformAdminClient", () => {
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/approve-hot`, method: "POST", body: '{"expectedRevision":11}' },
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/activate-hot`, method: "POST", body: '{"expectedRevision":12}' },
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/abort-hot`, method: "POST", body: '{"expectedRevision":13}' },
+	  { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/submit-scoped`, method: "POST", body: '{"expectedRevision":14}' },
+	  { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/approve-scoped`, method: "POST", body: '{"expectedRevision":15}' },
+	  { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/activate-scoped`, method: "POST", body: '{"expectedRevision":16}' },
+	  { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/abort-scoped`, method: "POST", body: '{"expectedRevision":17}' },
     ]);
   });
 

@@ -8,6 +8,7 @@ import (
 
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
+	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
@@ -22,7 +23,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.25.0"
+	PluginVersion = "0.26.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -79,6 +80,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	if configurationControllerAllowed(c, request) {
 		return extpoint.DecisionAllow, "配置协调器只能调用目标插件的标准 Hot Service 控制端口"
 	}
+	if scopedConfigurationResolveAllowed(c, request) {
+		return extpoint.DecisionAllow, "插件只能在可信 tenant/subject 上下文中读取自身 Scoped Configuration"
+	}
 	if pluginConfigurationCatalogReadAllowed(c, request) {
 		return extpoint.DecisionAllow, "插件配置协调器只能读取活动可信配置目录"
 	}
@@ -111,6 +115,13 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 		return extpoint.DecisionDeny, "仅已认证用户可管理平台资源"
 	}
 	return extpoint.DecisionAbstain, "非平台管理能力"
+}
+
+func scopedConfigurationResolveAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || request.ExtensionPoint != configurationscopedv1.ExtensionPoint || request.Capability != configurationscopedv1.Capability {
+		return false
+	}
+	return request.Operation == configurationscopedv1.OperationResolve || request.Operation == configurationscopedv1.OperationWatchRevision
 }
 
 func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {

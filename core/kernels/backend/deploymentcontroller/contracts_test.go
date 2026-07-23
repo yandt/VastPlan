@@ -63,6 +63,32 @@ func TestValidateDeploymentContractsBuildsRemoteDAGAndChecksVersion(t *testing.T
 	}
 }
 
+func TestValidateDeploymentContractsDefersExplicitExternalRemoteDependencyToReadiness(t *testing.T) {
+	consumerManifest := []byte(`{
+		"id":"com.example.consumer","name":"consumer","description":"consumer",
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"runtime":{"instancePolicy":"active-active","stateModel":"external-shared","visibility":"cluster","routing":"queue","routingDomain":"application",
+			"requires":[{"capability":"platform.settings","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"fail","logicalService":"platform.settings","routingDomain":"platform"}]},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},
+		"contributes":{"backend":{"tools":[{"id":"consumer.tool","service_role":"backend","title":"consumer","subcommands":[]}]}}
+	}`)
+	reader := contractArtifactReader{"com.example.consumer@1.0.0": {
+		PluginID: "com.example.consumer", Version: "1.0.0", Channel: "stable", Manifest: consumerManifest,
+	}}
+	deployment := deploymentv2.Deployment{
+		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "application"},
+		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{"com.example.consumer": deploymentv2.OriginApplication}},
+		Units: []deploymentv2.ServiceUnit{{
+			ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "application.api",
+			InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue", RoutingDomain: "application", Replicas: 1,
+			Plugins: []deploymentv1.PluginRef{{ID: "com.example.consumer", Version: "1.0.0", Channel: "stable"}},
+		}},
+	}
+	if err := validateDeploymentContracts(deployment, map[string][]string{"api": nil}, reader); err != nil {
+		t.Fatalf("跨 Deployment 的精确 logical service 依赖应交给全局 readiness gate: %v", err)
+	}
+}
+
 func TestValidateDeploymentContractsRejectsForgedApplicationOrigin(t *testing.T) {
 	manifest := []byte(`{
 		"id":"cn.vastplan.foundation.security.policy","name":"policy","description":"policy",

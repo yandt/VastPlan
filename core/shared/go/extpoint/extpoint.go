@@ -28,6 +28,10 @@ const (
 	// ConfigurationResourceController owns independently versioned dynamic
 	// resources such as authentication or delivery profiles.
 	ConfigurationResourceController = "configuration.resource-controller"
+	// ConfigurationScopedResolver exposes the one tenant/user-scoped Active
+	// configuration truth source. It is a runtime data port, not a management
+	// tool and never accepts tenant or subject identity from payloads.
+	ConfigurationScopedResolver = "configuration.scoped-resolver"
 	// KernelService 是宿主内部能力命名空间，不是插件可贡献的公共扩展点。
 	// 插件只能在清单 capabilities.kernelServices 中声明依赖，再经 HostCall 调用；
 	// 运行态声明 kernel.service contribution 必须被 descriptor Schema 拒绝。
@@ -45,6 +49,7 @@ var backendPluginPoints = []string{
 	AuthenticationProvider,
 	ConfigurationController,
 	ConfigurationResourceController,
+	ConfigurationScopedResolver,
 }
 
 // BackendPluginPoints 返回 Backend 1.0 对插件公开的封闭扩展点目录。

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
+	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
@@ -55,6 +56,8 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 		return pluginconfiguration.Candidate{}, err
 	}
 	var hotBase *configurationv1.ActiveReference
+	var scopedBase *scopedActiveReference
+	scopeSubjectID := ""
 	if definition.ApplyPath == pluginconfiguration.ApplyHotService {
 		if definition.Controller == nil || definition.Controller.Protocol != configurationv1.Protocol {
 			return pluginconfiguration.Candidate{}, fmt.Errorf("%w: 目标插件未实现 configuration.v1", ErrInvalid)
@@ -69,6 +72,20 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 		base := observation.Active
 		hotBase = &base
 	}
+	if definition.ApplyPath == pluginconfiguration.ApplyHotScoped {
+		scopeSubjectID, err = scopedSubject(definition, request.ScopeSubjectID)
+		if err != nil {
+			return pluginconfiguration.Candidate{}, fmt.Errorf("%w: %v", ErrInvalid, err)
+		}
+		if len(definition.ManagedCredentials) > 0 || len(request.Secrets) > 0 {
+			return pluginconfiguration.Candidate{}, fmt.Errorf("%w: 当前 Scoped Hot 阶段尚未开放托管凭证", ErrInvalid)
+		}
+		seedDigest, digestErr := configurationscopedv1.DigestValues(definition.Values)
+		if digestErr != nil {
+			return pluginconfiguration.Candidate{}, fmt.Errorf("%w: 签名 scoped seed 无效", ErrInvalid)
+		}
+		scopedBase = &scopedActiveReference{Digest: seedDigest}
+	}
 	id, err := s.newID()
 	if err != nil {
 		return pluginconfiguration.Candidate{}, err
@@ -80,8 +97,9 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 	}
 	candidate := pluginconfiguration.Candidate{
 		ID: id, ConfigurationID: definition.ID, Revision: 1, Status: status,
-		ApplyPath:     definition.ApplyPath,
-		CatalogDigest: request.CatalogDigest, SchemaDigest: definition.SchemaDigest, ArtifactSHA256: definition.Artifact.SHA256,
+		ScopeSubjectID: scopeSubjectID,
+		ApplyPath:      definition.ApplyPath,
+		CatalogDigest:  request.CatalogDigest, SchemaDigest: definition.SchemaDigest, ArtifactSHA256: definition.Artifact.SHA256,
 		Values: append(json.RawMessage(nil), request.Values...), CreatedBy: actor, CreatedAt: now, UpdatedAt: now,
 		ManagedCredentials: credentialStatus,
 	}
@@ -90,20 +108,30 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 	}
 	s.mu.Lock()
 	state := s.tenantLocked(tenant)
+	if scopedBase != nil {
+		if active, exists := state.ScopedActives[scopedRecordKey(definition.ID, scopeSubjectID)]; exists {
+			*scopedBase = active.reference()
+		}
+		candidate.ExternalRevision, candidate.ExternalDigest = scopedBase.Revision, scopedBase.Digest
+	}
 	if len(state.Candidates) >= maxCandidates {
 		s.mu.Unlock()
 		return pluginconfiguration.Candidate{}, ErrConflict
 	}
-	if currentID := state.Current[definition.ID]; currentID != "" {
+	currentKey := candidateCurrentKey(candidate)
+	if currentID := state.Current[currentKey]; currentID != "" {
 		if current, ok := state.Candidates[currentID]; ok && !terminal(current.Status) {
 			s.mu.Unlock()
 			return pluginconfiguration.Candidate{}, ErrConflict
 		}
 	}
-	state.Candidates[id], state.Current[definition.ID] = candidate, id
+	state.Candidates[id], state.Current[currentKey] = candidate, id
 	state.CredentialStages[id] = map[string]credentialStage{}
 	if hotBase != nil {
 		state.HotDraftBases[id] = *hotBase
+	}
+	if scopedBase != nil {
+		state.ScopedDraftBases[id] = *scopedBase
 	}
 	action := "configuration.draft.created"
 	if status == pluginconfiguration.CandidatePreparing {
@@ -112,9 +140,10 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 	s.auditLocked(state, candidate, action, actor)
 	if err := s.saveLocked(); err != nil {
 		delete(state.Candidates, id)
-		delete(state.Current, definition.ID)
+		delete(state.Current, currentKey)
 		delete(state.CredentialStages, id)
 		delete(state.HotDraftBases, id)
+		delete(state.ScopedDraftBases, id)
 		state.Audit = state.Audit[:len(state.Audit)-1]
 		state.NextAudit--
 		s.mu.Unlock()
@@ -152,14 +181,19 @@ func (s *Service) DiscardDraft(ctx context.Context, host sdk.Host, call *contrac
 	}
 	old := cloneCandidate(candidate)
 	base, hadBase := state.HotDraftBases[id]
+	scopedBase, hadScopedBase := state.ScopedDraftBases[id]
 	candidate.Status, candidate.Revision, candidate.UpdatedAt = pluginconfiguration.CandidateRollingBack, candidate.Revision+1, s.now().Format(time.RFC3339Nano)
 	state.Candidates[id] = candidate
 	delete(state.HotDraftBases, id)
+	delete(state.ScopedDraftBases, id)
 	s.auditLocked(state, candidate, "configuration.draft.discarding", actor)
 	if err := s.saveLocked(); err != nil {
 		state.Candidates[id] = old
 		if hadBase {
 			state.HotDraftBases[id] = base
+		}
+		if hadScopedBase {
+			state.ScopedDraftBases[id] = scopedBase
 		}
 		state.Audit = state.Audit[:len(state.Audit)-1]
 		state.NextAudit--
@@ -234,6 +268,7 @@ func (s *Service) failPreparing(tenant, candidateID, actor string, cause error) 
 	currentKey := candidateCurrentKey(candidate)
 	currentID, hadCurrent := state.Current[currentKey]
 	base, hadBase := state.HotDraftBases[candidateID]
+	scopedBase, hadScopedBase := state.ScopedDraftBases[candidateID]
 	auditLength, nextAudit := len(state.Audit), state.NextAudit
 	candidate.Status, candidate.Revision, candidate.UpdatedAt = pluginconfiguration.CandidateFailed, candidate.Revision+1, s.now().Format(time.RFC3339Nano)
 	candidate.ErrorCode = "platform.plugin_configuration.credential_stage_failed"
@@ -243,6 +278,7 @@ func (s *Service) failPreparing(tenant, candidateID, actor string, cause error) 
 	}
 	state.Candidates[candidateID] = candidate
 	delete(state.HotDraftBases, candidateID)
+	delete(state.ScopedDraftBases, candidateID)
 	delete(state.Current, currentKey)
 	s.auditLocked(state, candidate, "configuration.credentials.failed", actor)
 	if err := s.saveLocked(); err != nil {
@@ -252,6 +288,9 @@ func (s *Service) failPreparing(tenant, candidateID, actor string, cause error) 
 		}
 		if hadBase {
 			state.HotDraftBases[candidateID] = base
+		}
+		if hadScopedBase {
+			state.ScopedDraftBases[candidateID] = scopedBase
 		}
 		state.Audit, state.NextAudit = state.Audit[:auditLength], nextAudit
 		return err
@@ -271,6 +310,7 @@ func (s *Service) completeRollback(tenant, candidateID, actor string) (plugincon
 	currentKey := candidateCurrentKey(candidate)
 	currentID, hadCurrent := state.Current[currentKey]
 	base, hadBase := state.HotDraftBases[candidateID]
+	scopedBase, hadScopedBase := state.ScopedDraftBases[candidateID]
 	auditLength, nextAudit := len(state.Audit), state.NextAudit
 	candidate.Status, candidate.Revision, candidate.UpdatedAt = pluginconfiguration.CandidateRolledBack, candidate.Revision+1, s.now().Format(time.RFC3339Nano)
 	candidate.ErrorCode, candidate.ErrorMessage = "platform.plugin_configuration.discarded", "候选已由操作者放弃"
@@ -280,6 +320,7 @@ func (s *Service) completeRollback(tenant, candidateID, actor string) (plugincon
 	}
 	state.Candidates[candidateID] = candidate
 	delete(state.HotDraftBases, candidateID)
+	delete(state.ScopedDraftBases, candidateID)
 	delete(state.Current, currentKey)
 	s.auditLocked(state, candidate, "configuration.draft.discarded", actor)
 	if err := s.saveLocked(); err != nil {
@@ -289,6 +330,9 @@ func (s *Service) completeRollback(tenant, candidateID, actor string) (plugincon
 		}
 		if hadBase {
 			state.HotDraftBases[candidateID] = base
+		}
+		if hadScopedBase {
+			state.ScopedDraftBases[candidateID] = scopedBase
 		}
 		state.Audit, state.NextAudit = state.Audit[:auditLength], nextAudit
 		return pluginconfiguration.Candidate{}, err
@@ -340,6 +384,9 @@ func terminal(status pluginconfiguration.CandidateStatus) bool {
 func candidateCurrentKey(candidate pluginconfiguration.Candidate) string {
 	if candidate.ApplyPath == pluginconfiguration.ApplyResourceProfile && candidate.ResourceID != "" {
 		return candidate.ResourceID
+	}
+	if candidate.ApplyPath == pluginconfiguration.ApplyHotScoped {
+		return scopedRecordKey(candidate.ConfigurationID, candidate.ScopeSubjectID)
 	}
 	return candidate.ConfigurationID
 }

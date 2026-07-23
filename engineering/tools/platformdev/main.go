@@ -662,7 +662,10 @@ func (r *runtime) start(ctx context.Context) error {
 	if err := publishPortal("https://" + r.options.portalListen); err != nil {
 		return fmt.Errorf("发布初始 Portal 组合: %w", err)
 	}
-	if err := publishManagedService("https://" + r.options.portalListen); err != nil {
+	if err := publishManagedService(
+		"https://"+r.options.portalListen,
+		filepath.Join(r.options.root, "engineering", "deploy", "managed-services-application.json"),
+	); err != nil {
 		return fmt.Errorf("发布初始在线服务组合: %w", err)
 	}
 	// Publish the managed deployment before joining its first node. Starting the
@@ -1123,19 +1126,11 @@ func publishPortal(baseURL string) error {
 	return verifyPortalSSR(client, baseURL, devAdminToken)
 }
 
-func publishManagedService(baseURL string) error {
+func publishManagedService(baseURL, compositionFile string) error {
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: insecureLocalTLS()}, Timeout: 10 * time.Second}
-	composition := map[string]any{
-		"version": 1, "revision": 1, "id": "managed-services", "target": map[string]string{"kernel": "backend"},
-		"metadata": map[string]string{"name": "managed-services"},
-		"units": []any{map[string]any{
-			"serviceClass": "application.backend",
-			"spec": map[string]any{
-				"id": "hello-service", "kind": "service", "enabled": true, "service_role": "backend", "replicas": 1,
-				"placement": map[string]any{"nodeSelector": map[string]string{"environment": "local-managed"}},
-				"plugins":   []any{map[string]string{"id": "cn.vastplan.hello-world", "version": "0.1.0", "channel": "stable"}},
-			},
-		}},
+	composition, err := backendcompositionv1.ParseApplicationCompositionFile(compositionFile)
+	if err != nil {
+		return fmt.Errorf("读取在线服务组合 %s: %w", compositionFile, err)
 	}
 	basePath := "/v1/portals/operations/platform/services/deployment/deployment/service-revisions"
 	status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, basePath, map[string]any{"composition": composition}, true)

@@ -126,7 +126,14 @@ func validateDeploymentContracts(deployment deploymentv2.Deployment, graph map[s
 						if mismatch {
 							return fmt.Errorf("unit %s 的 capability %s 版本范围 %q 无可用提供者", contract.unit.ID, requirement.Capability, requirement.Version)
 						}
-						return fmt.Errorf("unit %s 缺少远端 capability %s", contract.unit.ID, requirement.Capability)
+						// A deployment revision only owns its own units. An explicitly
+						// addressed remote service may belong to another deployment (for
+						// example, an application consuming a platform service). Its
+						// availability and version are therefore fenced by the global
+						// readiness directory at the Node Agent, not guessed here.
+						if requirement.LogicalService == "" || requirement.RoutingDomain == "" {
+							return fmt.Errorf("unit %s 缺少远端 capability %s", contract.unit.ID, requirement.Capability)
+						}
 					}
 					for _, provider := range matches {
 						if provider.visibility == servicemodel.VisibilityLocal {

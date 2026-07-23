@@ -27,8 +27,11 @@ export class PlatformPluginConfigurationRoutes {
     const configurationId = resourceName(parts[1], 64);
     if (configurationId === undefined) return invalidName(response, method);
     if (!this.authorize(principal, target, "getDefinition", false, "platform.plugin-configuration.read", response)) return true;
-    const catalogDigest = new URL(request.url ?? "/", "https://portal.invalid").searchParams.get("catalogDigest") ?? "";
-    await this.call(principal, target, "getDefinition", false, { configurationId, ...(catalogDigest === "" ? {} : { catalogDigest }) }, response, signal, method === "HEAD");
+    const query = new URL(request.url ?? "/", "https://portal.invalid").searchParams;
+    const catalogDigest = query.get("catalogDigest") ?? "";
+    const scopeSubjectId = query.get("scopeSubjectId") ?? "";
+    if (scopeSubjectId.length > 256) return invalidName(response, method);
+    await this.call(principal, target, "getDefinition", false, { configurationId, ...(catalogDigest === "" ? {} : { catalogDigest }), ...(scopeSubjectId === "" ? {} : { scopeSubjectId }) }, response, signal, method === "HEAD");
     return true;
   }
 
@@ -84,6 +87,20 @@ export class PlatformPluginConfigurationRoutes {
       if (id === undefined) return invalidName(response, method);
       const operation = hotOperations[parts[3]]!;
       if (!this.authorize(principal, target, operation, true, "platform.plugin-configuration.hot.publish", response)) return true;
+      await withRequestJSON(request, response, async (body) => this.call(principal, target, operation, true, { ...requireJSONObject(body), id }, response, signal));
+      return true;
+    }
+    const scopedOperations: Readonly<Record<string, string>> = {
+      "submit-scoped": "submitScopedDraft",
+      "approve-scoped": "approveScopedCandidate",
+      "activate-scoped": "activateScopedCandidate",
+      "abort-scoped": "abortScopedCandidate",
+    };
+    if (parts.length === 4 && method === "POST" && parts[3] !== undefined && scopedOperations[parts[3]] !== undefined) {
+      const id = resourceName(parts[2], 64);
+      if (id === undefined) return invalidName(response, method);
+      const operation = scopedOperations[parts[3]]!;
+      if (!this.authorize(principal, target, operation, true, "platform.plugin-configuration.scoped.publish", response)) return true;
       await withRequestJSON(request, response, async (body) => this.call(principal, target, operation, true, { ...requireJSONObject(body), id }, response, signal));
       return true;
     }

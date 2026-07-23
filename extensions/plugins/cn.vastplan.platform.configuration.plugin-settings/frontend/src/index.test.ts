@@ -29,7 +29,7 @@ describe("plugin configuration workbench", () => {
     const prepared = await form?.prepare?.(result.items, new AbortController().signal);
 	expect(prepared?.schema?.schema).toMatchObject({ properties: { values: definition.schema } });
 	await form?.submit({ value: { values: { region: "cn-west" }, secrets: {} }, selected: result.items }, new AbortController().signal);
-	expect(createDraft).toHaveBeenCalledWith(definition.id, definition.catalogDigest, { region: "cn-west" }, {});
+	  expect(createDraft).toHaveBeenCalledWith(definition.id, definition.catalogDigest, { region: "cn-west" }, {}, "");
   });
 
   it("renders declared managed fields as one-use secret material and submits them separately", async () => {
@@ -42,7 +42,7 @@ describe("plugin configuration workbench", () => {
 	const prepared = await form?.prepare?.(result.items, new AbortController().signal);
 	expect(prepared?.schema?.schema).toMatchObject({ properties: { secrets: { required: ["token"], properties: { token: { format: "vastplan-secret-material", writeOnly: true } } } } });
 	await form?.submit({ value: { values: { region: "cn-west" }, secrets: { token: "one-use-secret" } }, selected: result.items }, new AbortController().signal);
-	expect(createDraft).toHaveBeenCalledWith(definition.id, definition.catalogDigest, { region: "cn-west" }, { token: "one-use-secret" });
+	  expect(createDraft).toHaveBeenCalledWith(definition.id, definition.catalogDigest, { region: "cn-west" }, { token: "one-use-secret" }, "");
   });
 
   it("allows a configured required credential to be retained without re-entry", async () => {
@@ -134,6 +134,31 @@ describe("plugin configuration workbench", () => {
     expect(activate).toHaveBeenCalledWith("pcfg_hot", 5);
     expect(abort).toHaveBeenCalledWith("pcfg_hot", 5);
     expect((page.collection.actions ?? []).filter((action) => action.id.includes("hot")).every((action) => action.requiredPermissions?.includes("platform.plugin-configuration.hot.publish"))).toBe(true);
+  });
+
+  it("routes tenant/user scoped actions through the dedicated permission", async () => {
+    const submit = vi.fn(), approve = vi.fn(), activate = vi.fn(), abort = vi.fn();
+    const scopedDefinition = { ...definition, scope: "tenant" as const, applyMode: "hot" as const, applyPath: "hot-scoped" as const, controllerAvailable: false };
+    const client = {
+      listPluginConfigurationDefinitions: vi.fn(async () => [scopedDefinition]),
+      listPluginConfigurationCandidates: vi.fn(async () => [{
+        id: "pcfg_scoped", configurationId: scopedDefinition.id, revision: 6, status: "Publishing", applyPath: "hot-scoped",
+        catalogDigest: scopedDefinition.catalogDigest, schemaDigest: scopedDefinition.schemaDigest, artifactSha256: scopedDefinition.artifact.sha256,
+        values: scopedDefinition.values, createdBy: "alice", createdAt: "2026-07-23T00:00:00Z", updatedAt: "2026-07-23T00:00:00Z", externalStatus: "Approved",
+      }]),
+      submitScopedConfigurationDraft: submit, approveScopedConfigurationCandidate: approve,
+      activateScopedConfigurationCandidate: activate, abortScopedConfigurationCandidate: abort,
+    } as unknown as PlatformAdminClient;
+    const page = createPluginConfigurationPage(client, "configuration", "/settings/plugin-configurations", message("test", "title", "Plugin configuration"));
+    const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
+    for (const id of ["submit-scoped", "approve-scoped", "activate-scoped", "abort-scoped"]) {
+      await page.runAction?.({ action: { id, label: id, placement: "record.row" }, selected: result.items, refresh() {} }, new AbortController().signal);
+    }
+    expect(submit).toHaveBeenCalledWith("pcfg_scoped", 6);
+    expect(approve).toHaveBeenCalledWith("pcfg_scoped", 6);
+    expect(activate).toHaveBeenCalledWith("pcfg_scoped", 6);
+    expect(abort).toHaveBeenCalledWith("pcfg_scoped", 6);
+    expect((page.collection.actions ?? []).filter((action) => action.id.includes("scoped")).every((action) => action.requiredPermissions?.includes("platform.plugin-configuration.scoped.publish"))).toBe(true);
   });
 
   it("manages resource profiles through the dedicated resource Saga", async () => {

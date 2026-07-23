@@ -1,32 +1,32 @@
 {
   "version": 1,
-  "revision": 2,
-  "id": "cluster-demo",
+  "revision": 1,
+  "id": "managed-services",
   "target": {
     "kernel": "backend"
   },
   "metadata": {
-    "name": "cluster-demo",
-    "tenant": "acme"
+    "name": "managed-services",
+    "tenant": "local"
   },
   "units": [
     {
       "serviceClass": "application.backend",
       "spec": {
-        "id": "backend-main",
+        "id": "hello-service",
         "kind": "service",
         "enabled": true,
         "service_role": "backend",
-        "logical_service": "cluster-demo.hello",
+        "logical_service": "managed.hello",
         "instance_policy": "active-active",
         "state_model": "external-shared",
         "visibility": "cluster",
         "routing": "queue",
         "routing_domain": "application",
-        "replicas": 2,
+        "replicas": 1,
         "placement": {
           "nodeSelector": {
-            "region": "cn"
+            "environment": "local-managed"
           }
         },
         "plugins": [

@@ -10,6 +10,7 @@ type ConfigurationRow = PluginConfigurationDefinition & Record<string, unknown> 
   candidateRevision: number;
   candidateExternalStatus: string;
   managedCredentialCount: number;
+	  scopeSubjectId: string;
 };
 
 const placeholderSchema: FormSchema = { id: "plugin-configuration.loading", schema: { type: "object", additionalProperties: false, properties: {} } };
@@ -31,18 +32,19 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
       if (definition === undefined) throw new Error("未选择插件配置");
       return {
 		schema: configurationFormSchema(definition),
-		initialValue: { values: definition.values, secrets: {} },
+		initialValue: { scopeSubjectId: "", values: definition.values, secrets: {} },
       };
     },
     async load(selected) {
-	  return { values: selected[0]?.values ?? {}, secrets: {} };
+	  return { scopeSubjectId: selected[0]?.scopeSubjectId ?? "", values: selected[0]?.values ?? {}, secrets: {} };
     },
     async submit({ value, selected }) {
       const definition = selected[0];
       if (definition === undefined) return;
 	  const values = asRecord(value.values);
 	  const secrets = Object.fromEntries(Object.entries(asRecord(value.secrets)).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""));
-	  await client.createPluginConfigurationDraft(definition.id, definition.catalogDigest, values, secrets);
+	  const scopeSubjectId = typeof value.scopeSubjectId === "string" ? value.scopeSubjectId.trim() : "";
+	  await client.createPluginConfigurationDraft(definition.id, definition.catalogDigest, values, secrets, scopeSubjectId);
     },
   };
 
@@ -64,6 +66,7 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
         { id: "applyMode", label: message(namespace, "filter.applyMode", "生效方式"), kind: "select", options: [
           { value: "restart", label: message(namespace, "mode.restart", "重启发布") }, { value: "hot", label: message(namespace, "mode.hot", "热配置") },
         ] },
+		{ id: "scopeSubjectId", label: message(namespace, "filter.scopeSubject", "用户主体 ID"), kind: "text" },
       ],
       columns: [
         { key: "pluginName", label: message(namespace, "column.plugin", "插件"), defaultVisible: true, minWidth: 180 },
@@ -71,6 +74,7 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
         { key: "unitId", label: message(namespace, "column.unit", "服务单元"), defaultVisible: true, minWidth: 150 },
         { key: "origin", label: message(namespace, "column.origin", "管理来源"), defaultVisible: true, minWidth: 130 },
         { key: "scope", label: message(namespace, "column.scope", "作用域"), defaultVisible: true, minWidth: 100 },
+		{ key: "scopeSubjectId", label: message(namespace, "column.scopeSubject", "目标主体"), defaultVisible: false, minWidth: 180 },
         { key: "applyMode", label: message(namespace, "column.applyMode", "生效方式"), defaultVisible: true, minWidth: 110 },
         { key: "controllerAvailable", label: message(namespace, "column.controller", "热控制器"), format: "boolean", defaultVisible: true, minWidth: 100 },
         { key: "managedCredentialCount", label: message(namespace, "column.credentials", "托管字段"), format: "number", defaultVisible: true, minWidth: 100 },
@@ -90,16 +94,25 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
         { id: "approve-hot", label: message(namespace, "action.approveHot", "批准热配置"), icon: "success", placement: "page.primary", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.hot.publish"], confirm: message(namespace, "confirm.approveHot", "确认以不同主体批准已由目标插件准备的服务级热配置？"), visibleWhen: { all: [{ pointer: "/candidateExternalStatus", equals: "PendingApproval" }, { pointer: "/applyPath", equals: "hot-service" }] } },
         { id: "activate-hot", label: message(namespace, "action.activateHot", "激活热配置"), icon: "publish", placement: "page.primary", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.hot.publish"], confirm: message(namespace, "confirm.activateHot", "将先激活新凭证，再由目标插件原子切换配置；中断后可安全恢复。"), visibleWhen: { all: [{ pointer: "/candidateExternalStatus", equals: "Approved" }, { pointer: "/applyPath", equals: "hot-service" }] } },
         { id: "abort-hot", label: message(namespace, "action.abortHot", "放弃热配置"), icon: "remove", placement: "page.secondary", tone: "danger", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.hot.publish"], confirm: message(namespace, "confirm.abortHot", "放弃已准备但未提交的热配置，并回滚候选凭证？"), visibleWhen: { all: [{ pointer: "/candidateStatus", equals: "Publishing" }, { pointer: "/applyPath", equals: "hot-service" }] } },
+		{ id: "submit-scoped", label: message(namespace, "action.submitScoped", "提交范围配置"), icon: "publish", placement: "page.primary", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.scoped.publish"], confirm: message(namespace, "confirm.submitScoped", "提交 Tenant/User 范围配置进入异人审批；当前 Active 不会改变。"), visibleWhen: { all: [{ pointer: "/candidateStatus", equals: "Draft" }, { pointer: "/applyPath", equals: "hot-scoped" }] } },
+		{ id: "approve-scoped", label: message(namespace, "action.approveScoped", "批准范围配置"), icon: "success", placement: "page.primary", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.scoped.publish"], confirm: message(namespace, "confirm.approveScoped", "确认以不同主体批准该 Tenant/User 范围配置？"), visibleWhen: { all: [{ pointer: "/candidateExternalStatus", equals: "PendingApproval" }, { pointer: "/applyPath", equals: "hot-scoped" }] } },
+		{ id: "activate-scoped", label: message(namespace, "action.activateScoped", "激活范围配置"), icon: "publish", placement: "page.primary", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.scoped.publish"], confirm: message(namespace, "confirm.activateScoped", "以 Active revision/digest CAS 原子切换，并通知运行时重新 resolve。"), visibleWhen: { all: [{ pointer: "/candidateExternalStatus", equals: "Approved" }, { pointer: "/applyPath", equals: "hot-scoped" }] } },
+		{ id: "abort-scoped", label: message(namespace, "action.abortScoped", "放弃范围配置"), icon: "remove", placement: "page.secondary", tone: "danger", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.scoped.publish"], confirm: message(namespace, "confirm.abortScoped", "放弃该 Tenant/User 范围候选？"), visibleWhen: { all: [{ pointer: "/candidateStatus", equals: "Publishing" }, { pointer: "/applyPath", equals: "hot-scoped" }] } },
       ],
     },
     forms: [form],
     async load(query: CollectionQuery, signal) {
-      const [definitions, candidates] = await Promise.all([client.listPluginConfigurationDefinitions(), client.listPluginConfigurationCandidates()]);
+      const [baseDefinitions, candidates] = await Promise.all([client.listPluginConfigurationDefinitions(), client.listPluginConfigurationCandidates()]);
       if (signal.aborted) return { items: [], total: 0 };
-      const latest = latestCandidates(candidates);
+	  const scopeSubjectId = typeof query.filters.scopeSubjectId === "string" ? query.filters.scopeSubjectId.trim() : "";
+	  const definitions = scopeSubjectId === "" ? baseDefinitions : await Promise.all(baseDefinitions.map((definition) =>
+		definition.scope === "user" ? client.getPluginConfigurationDefinition(definition.id, definition.catalogDigest, scopeSubjectId) : definition,
+	  ));
+	  if (signal.aborted) return { items: [], total: 0 };
+	  const latest = latestCandidates(candidates, scopeSubjectId);
       const keyword = typeof query.filters.keyword === "string" ? query.filters.keyword.trim().toLowerCase() : "";
       const applyMode = typeof query.filters.applyMode === "string" ? query.filters.applyMode : "";
-      const rows = definitions.map((definition) => configurationRow(definition, latest.get(definition.id))).filter((row) =>
+	  const rows = definitions.map((definition) => configurationRow(definition, latest.get(definition.id), scopeSubjectId)).filter((row) =>
         (keyword === "" || `${row.pluginName} ${row.pluginId} ${row.deployment} ${row.unitId}`.toLowerCase().includes(keyword)) &&
         (applyMode === "" || row.applyMode === applyMode),
       );
@@ -120,6 +133,10 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
       if (action.id === "approve-hot") await client.approveHotServiceConfigurationCandidate(row.candidateId, row.candidateRevision);
       if (action.id === "activate-hot") await client.activateHotServiceConfigurationCandidate(row.candidateId, row.candidateRevision);
       if (action.id === "abort-hot") await client.abortHotServiceConfigurationCandidate(row.candidateId, row.candidateRevision);
+	  if (action.id === "submit-scoped") await client.submitScopedConfigurationDraft(row.candidateId, row.candidateRevision);
+	  if (action.id === "approve-scoped") await client.approveScopedConfigurationCandidate(row.candidateId, row.candidateRevision);
+	  if (action.id === "activate-scoped") await client.activateScopedConfigurationCandidate(row.candidateId, row.candidateRevision);
+	  if (action.id === "abort-scoped") await client.abortScopedConfigurationCandidate(row.candidateId, row.candidateRevision);
     },
   });
 }
@@ -137,8 +154,11 @@ function configurationFormSchema(definition: PluginConfigurationDefinition): For
 	id: `plugin-configuration.${definition.id}`,
 	schema: {
 	  type: "object", additionalProperties: false,
-	  properties: { values: definition.schema, secrets: secretsSchema },
-	  required: ["values", ...(requiredSecrets.length === 0 ? [] : ["secrets"])],
+	  properties: {
+		scopeSubjectId: definition.scope === "user" ? { type: "string", title: "目标用户主体 ID", minLength: 1, maxLength: 256 } : { type: "string", readOnly: true },
+		values: definition.schema, secrets: secretsSchema,
+	  },
+	  required: [...(definition.scope === "user" ? ["scopeSubjectId"] : []), "values", ...(requiredSecrets.length === 0 ? [] : ["secrets"])],
 	} as FormSchema["schema"],
   };
 }
@@ -147,22 +167,24 @@ function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
-function latestCandidates(candidates: readonly PluginConfigurationCandidate[]): Map<string, PluginConfigurationCandidate> {
+function latestCandidates(candidates: readonly PluginConfigurationCandidate[], scopeSubjectId = ""): Map<string, PluginConfigurationCandidate> {
   const latest = new Map<string, PluginConfigurationCandidate>();
   for (const candidate of candidates) {
+	if (candidate.applyPath === "hot-scoped" && (candidate.scopeSubjectId ?? "") !== scopeSubjectId) continue;
     const current = latest.get(candidate.configurationId);
     if (current === undefined || candidate.updatedAt > current.updatedAt) latest.set(candidate.configurationId, candidate);
   }
   return latest;
 }
 
-function configurationRow(definition: PluginConfigurationDefinition, candidate: PluginConfigurationCandidate | undefined): ConfigurationRow {
+function configurationRow(definition: PluginConfigurationDefinition, candidate: PluginConfigurationCandidate | undefined, scopeSubjectId = ""): ConfigurationRow {
   return {
     ...definition,
     candidateStatus: candidate?.status ?? "None",
     candidateId: candidate?.id ?? "",
     candidateRevision: candidate?.revision ?? 0,
     candidateExternalStatus: candidate?.externalStatus ?? "None",
+	  scopeSubjectId: candidate?.scopeSubjectId ?? (definition.scope === "user" ? scopeSubjectId : ""),
     managedCredentialCount: definition.managedCredentials?.length ?? 0,
   };
 }

@@ -16,7 +16,7 @@
         "hook",
         "runner.capability",
         "authentication.provider",
-        "configuration.controller", "configuration.resource-controller"
+        "configuration.controller", "configuration.resource-controller", "configuration.scoped-resolver"
       ]
     },
     "descriptor": { "type": "object" }
@@ -257,6 +257,21 @@
             "required": ["protocol"],
             "properties": {
               "protocol": { "const": "configuration.resource.v1" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "extensionPoint": { "const": "configuration.scoped-resolver" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object", "additionalProperties": false,
+            "required": ["protocol"],
+            "properties": {
+              "title": { "$ref": "#/$defs/title" },
+              "protocol": { "const": "configuration.scoped.v1" }
             }
           }
         }

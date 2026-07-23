@@ -109,6 +109,15 @@ func (s *Service) validateLoaded() error {
 		if state.ResourceActivations == nil {
 			state.ResourceActivations = map[string]resourceActivationRecord{}
 		}
+		if state.ScopedActives == nil {
+			state.ScopedActives = map[string]scopedActiveRecord{}
+		}
+		if state.ScopedDraftBases == nil {
+			state.ScopedDraftBases = map[string]scopedActiveReference{}
+		}
+		if state.ScopedActivations == nil {
+			state.ScopedActivations = map[string]scopedActivationRecord{}
+		}
 		if len(state.Candidates) > maxCandidates {
 			return errors.New("插件配置协调器候选数量超过上限")
 		}
@@ -162,6 +171,26 @@ func (s *Service) validateLoaded() error {
 			candidate, ok := state.Candidates[candidateID]
 			if !ok || candidate.ApplyPath != pluginconfiguration.ApplyHotService || candidate.Status != pluginconfiguration.CandidateDraft || base.Revision == 0 || len(base.Digest) != 64 {
 				return fmt.Errorf("插件配置协调器 hot draft 基线 %q 无效", candidateID)
+			}
+		}
+		for key, active := range state.ScopedActives {
+			if err := active.validate(key); err != nil {
+				return fmt.Errorf("插件配置协调器 scoped active %q 无效: %w", key, err)
+			}
+		}
+		for candidateID, base := range state.ScopedDraftBases {
+			candidate, ok := state.Candidates[candidateID]
+			if !ok || candidate.ApplyPath != pluginconfiguration.ApplyHotScoped || candidate.Status != pluginconfiguration.CandidateDraft || base.Digest == "" {
+				return fmt.Errorf("插件配置协调器 scoped draft 基线 %q 无效", candidateID)
+			}
+		}
+		for candidateID, activation := range state.ScopedActivations {
+			candidate, ok := state.Candidates[candidateID]
+			if !ok || candidate.ApplyPath != pluginconfiguration.ApplyHotScoped || candidate.Status != pluginconfiguration.CandidatePublishing {
+				return fmt.Errorf("插件配置协调器 scoped activation 指向未知候选 %q", candidateID)
+			}
+			if err := activation.validate(candidate); err != nil {
+				return fmt.Errorf("插件配置协调器 scoped activation %q 无效: %w", candidateID, err)
 			}
 		}
 	}
@@ -225,7 +254,7 @@ func secureDirectory(path string) error {
 func (s *Service) tenantLocked(id string) *tenantState {
 	state := s.state.Tenants[id]
 	if state == nil {
-		state = &tenantState{Candidates: map[string]pluginconfiguration.Candidate{}, Current: map[string]string{}, CredentialStages: map[string]map[string]credentialStage{}, HotDraftBases: map[string]configurationv1.ActiveReference{}, HotActivations: map[string]hotActivationRecord{}, ResourceActivations: map[string]resourceActivationRecord{}}
+		state = &tenantState{Candidates: map[string]pluginconfiguration.Candidate{}, Current: map[string]string{}, CredentialStages: map[string]map[string]credentialStage{}, HotDraftBases: map[string]configurationv1.ActiveReference{}, HotActivations: map[string]hotActivationRecord{}, ResourceActivations: map[string]resourceActivationRecord{}, ScopedActives: map[string]scopedActiveRecord{}, ScopedDraftBases: map[string]scopedActiveReference{}, ScopedActivations: map[string]scopedActivationRecord{}}
 		s.state.Tenants[id] = state
 	}
 	return state

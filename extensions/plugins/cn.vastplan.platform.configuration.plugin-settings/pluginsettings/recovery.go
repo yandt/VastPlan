@@ -101,6 +101,10 @@ func (s *Service) recoverInterrupted(ctx context.Context, host sdk.Host, call *c
 				if err := s.recoverResourcePublishing(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
 					return err
 				}
+			case pluginconfiguration.ApplyHotScoped:
+				if err := s.recoverScopedPublishing(item.tenant, item.candidate.ID); err != nil {
+					return err
+				}
 			default:
 				return ErrInvalid
 			}
@@ -141,6 +145,16 @@ func (s *Service) recoverInterrupted(ctx context.Context, host sdk.Host, call *c
 				return ErrInvalid
 			}
 		}
+	}
+	return nil
+}
+
+func (s *Service) recoverScopedPublishing(tenant, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	record, ok := s.tenantLocked(tenant).ScopedActivations[id]
+	if !ok || (record.Status != scopedPendingApproval && record.Status != scopedApproved) {
+		return ErrConflict
 	}
 	return nil
 }

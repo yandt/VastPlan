@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -50,6 +51,7 @@ func (s *Service) publicDefinitions(tenant string, catalogs []pluginconfiguratio
 			if candidate, ok := overlays[definition.ID]; ok && candidate.CatalogDigest == catalog.Digest && candidate.SchemaDigest == definition.SchemaDigest && candidate.ArtifactSHA256 == definition.Artifact.SHA256 {
 				definition.Values = append([]byte(nil), candidate.Values...)
 			}
+			definition = s.scopedDefinitionOverlay(tenant, definition, "")
 			items = append(items, publicDefinitionView(definition, catalog.Digest))
 		}
 	}
@@ -65,11 +67,30 @@ func (s *Service) publicDefinitions(tenant string, catalogs []pluginconfiguratio
 	return items
 }
 
-func (s *Service) publicDefinition(tenant string, view DefinitionView) DefinitionView {
+func (s *Service) publicDefinition(tenant string, view DefinitionView, scopeSubjectID string) DefinitionView {
 	if candidate, ok := s.hotValueOverlays(tenant)[view.ID]; ok && candidate.CatalogDigest == view.CatalogDigest && candidate.SchemaDigest == view.SchemaDigest && candidate.ArtifactSHA256 == view.Artifact.SHA256 {
 		view.Values = append([]byte(nil), candidate.Values...)
 	}
+	view.Definition = s.scopedDefinitionOverlay(tenant, view.Definition, scopeSubjectID)
 	return publicDefinitionView(view.Definition, view.CatalogDigest)
+}
+
+func (s *Service) scopedDefinitionOverlay(tenant string, definition pluginconfiguration.Definition, scopeSubjectID string) pluginconfiguration.Definition {
+	if definition.ApplyPath != pluginconfiguration.ApplyHotScoped {
+		return definition
+	}
+	if definition.Scope == "tenant" {
+		scopeSubjectID = ""
+	} else if definition.Scope == "user" && strings.TrimSpace(scopeSubjectID) == "" {
+		return definition
+	}
+	s.mu.Lock()
+	active, ok := s.tenantLocked(tenant).ScopedActives[scopedRecordKey(definition.ID, strings.TrimSpace(scopeSubjectID))]
+	s.mu.Unlock()
+	if ok && active.SchemaDigest == definition.SchemaDigest && active.ArtifactSHA256 == definition.Artifact.SHA256 {
+		definition.Values = append([]byte(nil), active.Values...)
+	}
+	return definition
 }
 
 func (s *Service) hotValueOverlays(tenant string) map[string]pluginconfiguration.Candidate {

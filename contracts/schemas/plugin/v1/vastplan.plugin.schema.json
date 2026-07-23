@@ -665,6 +665,21 @@
         }
       ]
     },
+    "configurationScopedResolver": {
+      "allOf": [
+        { "$ref": "#/$defs/baseContribution" },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["service_role", "protocol"],
+          "properties": {
+            "id": { "const": "configuration.scoped" },
+            "service_role": { "const": "backend" },
+            "title": true, "priority": true,
+            "protocol": { "const": "configuration.scoped.v1" }
+          }
+        }
+      ]
+    },
     "genericContribution": {
       "allOf": [
         { "$ref": "#/$defs/baseContribution" },
@@ -683,7 +698,8 @@
         "eventSinks": { "type": "array", "items": { "$ref": "#/$defs/eventSink" } },
         "hooks": { "type": "array", "items": { "$ref": "#/$defs/hook" } },
         "runnerCapabilities": { "type": "array", "items": { "$ref": "#/$defs/runnerCapability" } },
-        "authenticationProviders": { "type": "array", "items": { "$ref": "#/$defs/authenticationProvider" } }
+        "authenticationProviders": { "type": "array", "items": { "$ref": "#/$defs/authenticationProvider" } },
+        "configurationScopedResolvers": { "type": "array", "maxItems": 1, "items": { "$ref": "#/$defs/configurationScopedResolver" } }
       }
     },
     "frontendContributes": {

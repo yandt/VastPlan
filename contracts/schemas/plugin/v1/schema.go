@@ -315,14 +315,15 @@ type RuntimeContribution struct {
 }
 
 var backendContributionPoints = map[string]string{
-	"tools":                   "tool.package",
-	"agents":                  "agent",
-	"apiRoutes":               "api.route",
-	"permissionCheckers":      "permission.checker",
-	"eventSinks":              "event.sink",
-	"hooks":                   "hook",
-	"runnerCapabilities":      "runner.capability",
-	"authenticationProviders": "authentication.provider",
+	"tools":                        "tool.package",
+	"agents":                       "agent",
+	"apiRoutes":                    "api.route",
+	"permissionCheckers":           "permission.checker",
+	"eventSinks":                   "event.sink",
+	"hooks":                        "hook",
+	"runnerCapabilities":           "runner.capability",
+	"authenticationProviders":      "authentication.provider",
+	"configurationScopedResolvers": ConfigurationScopedResolverExtensionPoint,
 }
 
 var declarativeBackendContributionGroups = map[string]struct{}{
@@ -635,7 +636,7 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	if err := validateContextAccess(manifest.ContextAccess); err != nil {
 		return Manifest{}, err
 	}
-	if err := validateConfiguration(manifest.Configuration); err != nil {
+	if err := validateConfiguration(manifest); err != nil {
 		return Manifest{}, err
 	}
 	if manifest.Configuration != nil && len(manifest.Configuration.ManagedCredentials) > 0 {
@@ -697,7 +698,8 @@ func validateAuthenticationProviderDependencies(manifest Manifest) error {
 	return nil
 }
 
-func validateConfiguration(contract *ConfigurationContract) error {
+func validateConfiguration(manifest Manifest) error {
+	contract := manifest.Configuration
 	if contract == nil {
 		return nil
 	}
@@ -707,6 +709,20 @@ func validateConfiguration(contract *ConfigurationContract) error {
 	if contract.Controller != nil {
 		if contract.Scope != "service" || contract.ApplyMode != "hot" || contract.Controller.Protocol != ConfigurationControllerProtocol {
 			return errors.New("configuration.controller 只允许 service + hot + configuration.v1")
+		}
+	}
+	if contract.ApplyMode == "hot" && (contract.Scope == "tenant" || contract.Scope == "user") {
+		found := false
+		if manifest.Runtime != nil {
+			for _, requirement := range manifest.Runtime.Requires {
+				if requirement.Capability == ConfigurationScopedResolverCapability && requirement.Scope == "remote" && requirement.Kind == "strong" && requirement.Ready == "readiness" && requirement.FailurePolicy == "fail" {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return errors.New("tenant/user hot configuration 必须强依赖 configuration.scoped resolver")
 		}
 	}
 	if (contract.ResourceController == nil) != (len(contract.ResourceCollections) == 0) {
