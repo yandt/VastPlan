@@ -93,3 +93,32 @@ func TestRuntimeLeaseRejectsUntrustedIdentityAndCredentialScopeBeforeInvocation(
 		t.Fatalf("跨 owner 凭证必须在调用前拒绝: err=%v called=%v", err, called)
 	}
 }
+
+func TestRuntimeCredentialGrantTableRequiresExactPluginOwnerPurposeTuple(t *testing.T) {
+	tests := []struct{ pluginID, owner, purpose string }{
+		{DatabaseRuntimePluginID, DatabaseCredentialOwner, DatabaseCredentialPurpose},
+		{OIDCProviderPluginID, OIDCProviderPluginID, OIDCCredentialPurpose},
+		{WebhookProviderPluginID, WebhookProviderPluginID, WebhookCredentialPurpose},
+		{AssessmentProviderPluginID, AssessmentProviderPluginID, AssessmentCredentialPurpose},
+	}
+	for _, item := range tests {
+		identity := databaseRuntimeIdentity()
+		identity.PluginID = item.pluginID
+		request, _, err := credentiallease.NewRequest(commonv1.ManagedCredentialRef{
+			Handle: "credential://managed/exact", Scope: "tenant", Owner: item.owner, Purpose: item.purpose, Version: 1,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := authorizeRuntimeCredential(identity, request); err != nil {
+			t.Fatalf("精确授权 %s 被拒绝: %v", item.pluginID, err)
+		}
+		request.Ref.Purpose = DatabaseCredentialPurpose
+		if item.purpose == DatabaseCredentialPurpose {
+			request.Ref.Purpose = OIDCCredentialPurpose
+		}
+		if err := authorizeRuntimeCredential(identity, request); err == nil {
+			t.Fatalf("跨 purpose 借权必须拒绝: %s", item.pluginID)
+		}
+	}
+}

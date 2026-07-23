@@ -106,9 +106,19 @@ func (s *dataPlaneTicketStore) install(callCtx *contractv1.CallContext, raw []by
 	if err := decodeParams(raw, &installation); err != nil {
 		return err
 	}
-	now := s.now().UTC()
 	claims := installation.Claims
-	if !dataPlaneTicketPattern.MatchString(installation.Ticket) || claims.TenantID != callCtx.GetTenantId() || claims.InstanceID != s.instanceID || claims.Method != http.MethodGet || claims.Resource == "" || !claims.ExpiresAt.After(now) || claims.ExpiresAt.Sub(now) > 35*time.Second {
+	if claims.TenantID != callCtx.GetTenantId() {
+		return errors.New("Data Plane Ticket 安装内容无效")
+	}
+	return s.installClaims(installation.Ticket, claims)
+}
+
+func (s *dataPlaneTicketStore) installClaims(ticket string, claims apiv1.DataPlaneTicketClaims) error {
+	if s == nil {
+		return errors.New("Data Plane Ticket store 未配置")
+	}
+	now := s.now().UTC()
+	if !dataPlaneTicketPattern.MatchString(ticket) || claims.TenantID == "" || claims.InstanceID != s.instanceID || claims.Method != http.MethodGet || claims.Resource == "" || !claims.ExpiresAt.After(now) || claims.ExpiresAt.Sub(now) > 35*time.Second {
 		return errors.New("Data Plane Ticket 安装内容无效")
 	}
 	s.mu.Lock()
@@ -117,10 +127,10 @@ func (s *dataPlaneTicketStore) install(callCtx *contractv1.CallContext, raw []by
 	if len(s.items) >= 100_000 {
 		return errors.New("Data Plane Ticket 容量达到上限")
 	}
-	if _, duplicate := s.items[installation.Ticket]; duplicate {
+	if _, duplicate := s.items[ticket]; duplicate {
 		return errors.New("Data Plane Ticket 重复")
 	}
-	s.items[installation.Ticket] = claims
+	s.items[ticket] = claims
 	return nil
 }
 
