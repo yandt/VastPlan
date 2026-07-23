@@ -96,6 +96,10 @@ type Manager struct {
 	activeVolume artifactstorage.Volume
 	mirrorVolume artifactstorage.Volume
 	state        *MigrationState
+
+	securityStatsMu sync.Mutex
+	securityStats   SecurityAssessmentStats
+	securityStatsAt time.Time
 }
 
 type Options struct {
@@ -223,6 +227,7 @@ func (m *Manager) PublishWithSupplyChain(attestationRaw, packageBytes, provenanc
 		}
 		return pluginv1.Artifact{}, fmt.Errorf("提交发布审批状态: %w", err)
 	}
+	m.invalidateSecurityAssessmentStats()
 	return artifact, nil
 }
 
@@ -484,9 +489,14 @@ func (m *Manager) AppendSecurityStatus(ref pluginservice.Ref, raw []byte, now ti
 			m.recordMigrationError(errors.New("活动卷与观察卷安全复扫状态不一致"))
 			return nil, "", errors.New("制品迁移双写安全复扫状态不一致")
 		}
+		m.invalidateSecurityAssessmentStats()
 		return record, digest, nil
 	}
-	return active.signed.AppendSecurityStatus(ref, raw, now)
+	record, digest, err := active.signed.AppendSecurityStatus(ref, raw, now)
+	if err == nil {
+		m.invalidateSecurityAssessmentStats()
+	}
+	return record, digest, err
 }
 
 func (m *Manager) Query(query catalog.Query) catalog.Page {

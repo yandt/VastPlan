@@ -64,6 +64,26 @@ func TestManagerRequiresTwoPersonApprovalForStablePublication(t *testing.T) {
 	}
 }
 
+func TestSecurityAssessmentStatsRemainLowCardinality(t *testing.T) {
+	volume, _ := migrationVolumes(t, "repository.security-stats")
+	trust, privateKey := migrationTrust(t)
+	manager, err := Open(volume, trust, filepath.Join(t.TempDir(), "state", "migration.json"), Options{SupplyChain: SupplyChainPolicy{RequiredSBOMChannels: []string{}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, proof, body := migrationArtifact(t, privateKey, "9.1.0")
+	if _, err := manager.Publish(proof, body); err != nil {
+		t.Fatal(err)
+	}
+	stats := manager.SecurityAssessmentStats(time.Now().UTC())
+	if stats.Artifacts != 1 || stats.Unassessed != 1 || stats.Alert {
+		t.Fatalf("unexpected aggregate security status: %+v", stats)
+	}
+	if again := manager.SecurityAssessmentStats(time.Now().UTC()); again != stats {
+		t.Fatalf("cached aggregate changed without a repository mutation: before=%+v after=%+v", stats, again)
+	}
+}
+
 func TestManagerExpiresPublicationUsingTrustedPolicy(t *testing.T) {
 	volume, _ := migrationVolumes(t, "repository.expiry-unused")
 	trust, privateKey := migrationTrust(t)

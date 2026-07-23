@@ -76,6 +76,7 @@ export function catalogPage(client: PlatformAdminClient, id: string, path: strin
         { id: "active", label: text("metric.activeArtifacts", "活动制品"), value: capacity.activeArtifacts },
         { id: "stored", label: text("metric.storedBytes", "实际存储"), value: formatBytes(capacity.storedBytes) },
         { id: "quota", label: text("metric.quota", "配额状态"), value: exceeded === 0 ? "Ready" : `${exceeded} exceeded`, tone: exceeded === 0 ? "success" : "error" },
+        { id: "security", label: text("metric.security", "安全准入"), value: status.securityAssessment === undefined ? "-" : status.securityAssessment.alert ? `${status.securityAssessment.rescanFailed + status.securityAssessment.stale + status.securityAssessment.invalid} alerts` : "Ready", tone: status.securityAssessment === undefined ? "neutral" : status.securityAssessment.alert ? "error" : "success" },
         { id: "provider", label: text("metric.provider", "存储 Provider"), value: status.storageProvider ?? "-" },
         { id: "volume", label: text("metric.volume", "活动 Volume"), value: status.storageVolumeId ?? "-" },
         { id: "revision", label: text("metric.catalogRevision", "Catalog Revision"), value: status.catalog?.revision ?? 0 },

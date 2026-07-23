@@ -175,6 +175,7 @@ export interface ArtifactRepositoryMigration {
 export interface ArtifactRepositoryStatus {
   ready: boolean; listen?: string; storageProvider?: string; storageVolumeId?: string;
   catalog?: { revision: number; artifacts: number; inventorySHA256?: string; publicationRevision?: number; publicationInventorySHA256?: string };
+  securityAssessment?: { artifacts: number; unassessed: number; admissionCurrent: number; rescanPassed: number; rescanFailed: number; stale: number; invalid: number; alert: boolean };
   migration?: ArtifactRepositoryMigration;
 }
 export interface ArtifactCatalogQuery {
