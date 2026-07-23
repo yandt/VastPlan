@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
@@ -77,6 +78,19 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	}
 	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: "kernel.configuration.catalogs", Operation: "list"}); got != extpoint.DecisionAllow {
 		t.Fatalf("配置协调器必须能读取活动可信配置目录: %s", got)
+	}
+	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: configurationauthority.KernelIssueService, Operation: "issue"}); got != extpoint.DecisionAllow {
+		t.Fatalf("配置协调器必须能申请精确的一次性配置授权: %s", got)
+	}
+	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: platformadminapi.CredentialsCapability, Operation: "stageDelegated"}); got != extpoint.DecisionAllow {
+		t.Fatalf("配置协调器必须能暂存宿主授权的委托凭证: %s", got)
+	}
+	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: platformadminapi.CredentialsCapability, Operation: "stageDelegated"}); got != extpoint.DecisionDeny {
+		t.Fatalf("普通插件不得使用委托凭证入口: %s", got)
+	}
+	custodian := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: configurationauthority.CustodianPluginID}}
+	if got, _ := decide(custodian, extpoint.PermissionRequest{Capability: configurationauthority.KernelConsumeService, Operation: "consume"}); got != extpoint.DecisionAllow {
+		t.Fatalf("凭证托管器必须能原子消费配置授权: %s", got)
 	}
 	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "listServiceRevisions"}); got != extpoint.DecisionDeny {
 		t.Fatalf("配置协调器不得继承其他部署读取权限: %s", got)

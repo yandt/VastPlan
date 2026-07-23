@@ -95,12 +95,31 @@ func (s *Service) validateLoaded() error {
 		if state.Current == nil {
 			state.Current = map[string]string{}
 		}
+		if state.CredentialStages == nil {
+			state.CredentialStages = map[string]map[string]credentialStage{}
+		}
 		if len(state.Candidates) > maxCandidates {
 			return errors.New("插件配置协调器候选数量超过上限")
 		}
 		for id, candidate := range state.Candidates {
 			if id == "" || candidate.ID != id || candidate.ConfigurationID == "" || candidate.Revision == 0 || !pluginconfiguration.ValidCandidateStatus(candidate.Status) || !json.Valid(candidate.Values) {
 				return fmt.Errorf("插件配置协调器状态包含无效候选 %q", id)
+			}
+			for _, status := range candidate.ManagedCredentials {
+				if strings.TrimSpace(status.FieldID) == "" || strings.TrimSpace(status.State) == "" {
+					return fmt.Errorf("插件配置协调器候选 %q 包含无效凭证状态", id)
+				}
+			}
+		}
+		for candidateID, fields := range state.CredentialStages {
+			candidate, ok := state.Candidates[candidateID]
+			if !ok || candidate.ID != candidateID {
+				return fmt.Errorf("插件配置协调器凭证阶段指向未知候选 %q", candidateID)
+			}
+			for fieldID, stage := range fields {
+				if fieldID == "" || stage.FieldID != fieldID || stage.Stage.ID == "" || stage.Stage.Ref.Handle == "" {
+					return fmt.Errorf("插件配置协调器候选 %q 包含无效凭证阶段", candidateID)
+				}
 			}
 		}
 		for configurationID, candidateID := range state.Current {
@@ -170,7 +189,7 @@ func secureDirectory(path string) error {
 func (s *Service) tenantLocked(id string) *tenantState {
 	state := s.state.Tenants[id]
 	if state == nil {
-		state = &tenantState{Candidates: map[string]pluginconfiguration.Candidate{}, Current: map[string]string{}}
+		state = &tenantState{Candidates: map[string]pluginconfiguration.Candidate{}, Current: map[string]string{}, CredentialStages: map[string]map[string]credentialStage{}}
 		s.state.Tenants[id] = state
 	}
 	return state

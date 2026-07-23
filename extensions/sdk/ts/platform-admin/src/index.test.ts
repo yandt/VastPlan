@@ -166,12 +166,12 @@ describe("PlatformAdminClient", () => {
       return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : [] };
     }, "operations", "configuration");
     await client.listPluginConfigurationDefinitions();
-    await client.createPluginConfigurationDraft("cfg_aaaaaaaaaaaaaaaaaaaaaaaa", "b".repeat(64), { region: "cn-east" });
+	await client.createPluginConfigurationDraft("cfg_aaaaaaaaaaaaaaaaaaaaaaaa", "b".repeat(64), { region: "cn-east" }, { token: "one-use-secret" });
     await client.discardPluginConfigurationDraft("pcfg_cccccccccccccccccccccccccccccccc", 1);
     expect(calls).toEqual([
       { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations", method: "GET", body: undefined },
       { path: "/v1/csrf", method: "GET", body: undefined },
-      { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates", method: "POST", body: JSON.stringify({ configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64), values: { region: "cn-east" } }) },
+	  { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates", method: "POST", body: JSON.stringify({ configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64), values: { region: "cn-east" }, secrets: { token: "one-use-secret" } }) },
       { path: "/v1/csrf", method: "GET", body: undefined },
       { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/pcfg_cccccccccccccccccccccccccccccccc", method: "DELETE", body: "{\"expectedRevision\":1}" },
     ]);

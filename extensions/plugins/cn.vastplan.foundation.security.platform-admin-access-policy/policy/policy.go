@@ -8,6 +8,7 @@ import (
 
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	v1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
@@ -16,7 +17,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.20.0"
+	PluginVersion = "0.21.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -63,6 +64,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if managedCredentialLifecycleAllowed(c, request) {
 		return extpoint.DecisionAllow, "业务插件只能管理自己拥有的托管凭证"
+	}
+	if delegatedManagedCredentialLifecycleAllowed(c, request) {
+		return extpoint.DecisionAllow, "配置协调器只能操作宿主授权绑定的委托凭证"
 	}
 	if pluginConfigurationCatalogReadAllowed(c, request) {
 		return extpoint.DecisionAllow, "插件配置协调器只能读取活动可信配置目录"
@@ -118,7 +122,7 @@ func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.Permissio
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, "platform.api-exposure":
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", configurationauthority.KernelIssueService, configurationauthority.KernelConsumeService, platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, "platform.api-exposure":
 		return true
 	default:
 		return strings.HasPrefix(capability, artifactstorage.CapabilityPrefix)
@@ -206,13 +210,29 @@ func managedCredentialLifecycleAllowed(c *v1.CallContext, request extpoint.Permi
 	}
 }
 
+func delegatedManagedCredentialLifecycleAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.Caller.Kind != v1.CallerKind_CALLER_KIND_PLUGIN || c.Caller.Id != configurationauthority.CoordinatorPluginID || request.Capability != platformadminapi.CredentialsCapability {
+		return false
+	}
+	switch request.Operation {
+	case "stageDelegated", "activateDelegated", "abortDelegated":
+		return true
+	default:
+		return false
+	}
+}
+
 func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest) bool {
 	if c.Caller.Kind != v1.CallerKind_CALLER_KIND_PLUGIN {
 		return false
 	}
 	switch c.Caller.Id {
-	case "cn.vastplan.platform.configuration.global-settings", "cn.vastplan.platform.configuration.plugin-settings", "cn.vastplan.platform.security.credentials":
+	case "cn.vastplan.platform.configuration.global-settings":
 		return request.Capability == "kernel.config.get"
+	case configurationauthority.CoordinatorPluginID:
+		return request.Capability == "kernel.config.get" || request.Capability == configurationauthority.KernelIssueService
+	case configurationauthority.CustodianPluginID:
+		return request.Capability == "kernel.config.get" || request.Capability == configurationauthority.KernelConsumeService
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":

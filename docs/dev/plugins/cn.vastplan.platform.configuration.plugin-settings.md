@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.plugin-settings`
 
-当前制品版本：`0.3.0`
+当前制品版本：`0.4.0`
 
 该 platform 基础插件以 `leader + leader-owned + cluster + platform routing domain` 运行。它只通过宿主窄能力读取与活动 Deployment revision/digest 精确匹配的 `ConfigurationCatalog v1`，保存租户隔离的配置候选和审计；不依赖 Deployment Manager 存量状态，不读取工作区 Manifest，也不接受浏览器上传 Schema、插件身份或凭证 owner。
 
@@ -10,11 +10,11 @@
 
 - `listDefinitions/getDefinition`：查询可信配置目录；
 - `listCandidates`：查询候选及后续生效状态；
-- `createDraft`：按 Catalog digest 与签名 JSON Schema 创建非敏感 Draft；
-- `discardDraft`：以 revision CAS 放弃尚未发布的 Draft。
+- `createDraft`：按 Catalog digest 与签名 JSON Schema 创建 Draft；非敏感 `values` 与只写 `secrets` 分离，秘密逐字段使用宿主一次性授权交给凭证托管器；
+- `discardDraft`：以 revision CAS 进入回滚，终止该候选的全部委托凭证后才完成放弃。
 
-`0.1.0` 尚未开放 publish。Draft 不会改变 Deployment、Platform Profile 或目标插件状态，也不会显示为 Active；托管秘密输入要等 `ConfigurationAuthority` 与 delegated credential stage 落地后才接入。状态使用私有目录、`0600` 原子文件、`fsync`、大小和候选数量上限。
+`0.4.0` 尚未开放 publish。Draft 不会改变 Deployment、Platform Profile 或目标插件状态，也不会显示为 Active。`ConfigurationAuthority` 默认 45 秒有效且只能由凭证插件 CAS 消费一次；协调器状态只保存恢复 Saga 所需的 stage/ref，公开候选只返回字段状态，不返回 handle、stage ID、authority、密文或明文。状态使用私有目录、`0600` 原子文件、`fsync`、大小和候选数量上限。
 
-Node Portal Kernel 已提供固定、无插件 ID 的 `/plugin-configurations` BFF 路由；Management Binding、在线角色和 CSRF 同时强制。Workbench 页面从定义返回的签名 Schema 动态准备表单，功能插件不直接拼接基础 UI。带 `managedCredentials` 的定义当前只显示字段数量，不渲染秘密输入，避免在 Owner Delegation 尚未落地时形成不安全半实现。
+Node Portal Kernel 已提供固定、无插件 ID 的 `/plugin-configurations` BFF 路由；Management Binding、在线角色和 CSRF 同时强制。Workbench 页面从定义返回的签名 Schema 动态准备表单，并把 `managedCredentials` 渲染为 `vastplan-secret-material + writeOnly` 字段；提交完成后由 Workbench 删除短时材料状态，功能插件不直接拼接基础 UI。
 
-完整设计见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》和 [ADR-0113](../decisions/ADR-0113-可信插件配置目录与分路径生效.md)。
+完整设计见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》、[ADR-0113](../decisions/ADR-0113-可信插件配置目录与分路径生效.md) 和 [ADR-0114](../decisions/ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)。

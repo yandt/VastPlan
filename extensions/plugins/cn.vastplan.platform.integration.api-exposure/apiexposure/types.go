@@ -9,7 +9,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.integration.api-exposure"
-	PluginVersion = "0.3.0"
+	PluginVersion = "0.4.0"
 	Capability    = "platform.api-exposure"
 )
 

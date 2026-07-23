@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.security.authentication-broker",
   "name": "VastPlan Authentication Broker",
   "description": "按不可变 Provider Catalog 路由统一认证方法并约束事务所有权",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

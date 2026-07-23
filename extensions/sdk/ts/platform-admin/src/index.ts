@@ -41,6 +41,7 @@ export interface PluginConfigurationCandidate {
   catalogDigest: string; schemaDigest: string; artifactSha256: string; values: Record<string, unknown>;
   createdBy: string; createdAt: string; updatedAt: string; errorCode?: string; errorMessage?: string;
   externalRevision?: number; rollbackRevision?: number;
+  managedCredentials?: Array<{ fieldId: string; staged: boolean; state: string }>;
 }
 
 export interface CredentialMetadata {
@@ -338,8 +339,8 @@ export class PlatformAdminClient {
     return this.get(`${this.basePath}/plugin-configurations/${segment(id)}${query({ catalogDigest })}`);
   }
   public listPluginConfigurationCandidates(): Promise<PluginConfigurationCandidate[]> { return this.get(`${this.basePath}/plugin-configurations/candidates`); }
-  public createPluginConfigurationDraft(configurationId: string, catalogDigest: string, values: Record<string, unknown>): Promise<PluginConfigurationCandidate> {
-    return this.mutate(`${this.basePath}/plugin-configurations/candidates`, "POST", { configurationId, catalogDigest, values });
+  public createPluginConfigurationDraft(configurationId: string, catalogDigest: string, values: Record<string, unknown>, secrets: Record<string, string> = {}): Promise<PluginConfigurationCandidate> {
+	return this.mutate(`${this.basePath}/plugin-configurations/candidates`, "POST", { configurationId, catalogDigest, values, ...(Object.keys(secrets).length === 0 ? {} : { secrets }) });
   }
   public discardPluginConfigurationDraft(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
     return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}`, "DELETE", { expectedRevision });

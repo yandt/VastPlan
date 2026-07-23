@@ -65,6 +65,7 @@ func TestBrokerSignsProfileBoundAssertionAfterRealEvidence(t *testing.T) {
 	signer, _ := GenerateAssertionKey("test-key")
 	service, _ := New(staticCatalog{testCatalog()}, transactions, signer)
 	service.now = func() time.Time { return now }
+	service.assertions.(*MemoryAssertionStore).now = service.now
 	host := &fakeHost{now: now}
 	begin := authenticationv1.BeginRequest{TransactionID: strings.Repeat("z", 32), MethodID: "corporate-sso", Audience: "authentication-provider-test", TenantID: "acme", PortalID: "management", Locale: "en-US", ClientContextDigest: strings.Repeat("c", 64)}
 	_, beginRaw, _ := service.Handle(context.Background(), host, &contractv1.CallContext{}, authenticationv1.OperationBegin, mustJSON(begin))

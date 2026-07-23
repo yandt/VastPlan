@@ -123,6 +123,10 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	if entry, err := nodeBuckets.Deployments.Get(ctx, DeploymentKey("acme", "prod")); err != nil || string(entry.Value()) != "deployment" {
 		t.Fatalf("可信节点内核应能读取 deployment 与配置目录 sidecar: entry=%v err=%v", entry, err)
 	}
+	authorityKey := ConfigurationAuthorityKey("acme", strings.Repeat("a", 64))
+	if _, err := nodeBuckets.ConfigurationAuthorities.Put(ctx, authorityKey, []byte("hashed-ticket")); err != nil {
+		t.Fatalf("可信节点内核应能写本 tenant 的一次性配置授权: %v", err)
+	}
 	if _, err := nodeBuckets.Actual.Put(ctx, ActualKey("acme", "prod", "node-1"), []byte("healthy")); err != nil {
 		t.Fatalf("node 应能写 actual KV: %v", err)
 	}
@@ -137,6 +141,14 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	}
 	if entry, err := managerBuckets.Nodes.Get(ctx, leaseKey); err != nil || string(entry.Value()) != "signed-lease" {
 		t.Fatalf("manager-node 应能读取节点 lease: entry=%v err=%v", entry, err)
+	}
+	if entry, err := managerBuckets.ConfigurationAuthorities.Get(ctx, authorityKey); err != nil || string(entry.Value()) != "hashed-ticket" {
+		t.Fatalf("同 tenant 的可信内核应能消费配置授权: entry=%v err=%v", entry, err)
+	}
+	otherAuthorityCtx, otherAuthorityCancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer otherAuthorityCancel()
+	if _, err := nodeBuckets.ConfigurationAuthorities.Put(otherAuthorityCtx, ConfigurationAuthorityKey("other", strings.Repeat("b", 64)), []byte("forbidden")); err == nil {
+		t.Fatal("节点不得为其他 tenant 写配置授权")
 	}
 	runtimeJS, _ := jetstream.New(runtime)
 	runtimeMetrics, err := runtimeJS.KeyValue(ctx, AutoscalingBucket)

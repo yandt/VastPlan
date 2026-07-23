@@ -3,7 +3,7 @@
 插件 ID：`cn.vastplan.platform.security.credentials`
 能力：`tool.package/platform.credentials`、`tool.package/platform.credentials.material-lease`
 运行模型：`leader + leader-owned + cluster + leader`
-当前制品版本：`0.7.0`
+当前制品版本：`0.8.0`
 
 ## 安全模型
 
@@ -38,12 +38,15 @@
 | `rotate(name)` | 调用 Transit rewrap 轮换包裹密钥 |
 | `revoke(name)` | 撤销凭证引用 |
 | `stageManaged(purpose, resource, value)` | 仅限已认证业务插件，创建 Preparing 候选并返回随机句柄 |
+| `stageDelegated(authority, value)` | 仅配置协调器：原子消费宿主一次性授权，按 claims 派生目标 owner/purpose/resource 后暂存 |
 | `activateManaged(stageId)` | 仅允许创建该候选的插件激活，重复调用幂等 |
 | `abortManaged(stageId)` | 终止未激活候选并删除其密文 |
+| `activateDelegated(stageId, candidateId)` | 仅配置协调器：激活精确候选绑定的委托凭证 |
+| `abortDelegated(stageId, candidateId)` | 仅配置协调器：终止精确候选绑定的委托凭证 |
 | `retireManaged(handle)` | 由所有者插件退役不再使用的 Active 句柄 |
 | `material-lease/issue(ref, recipientPublicKey)` | 仅可信宿主：将 Active 托管凭证重加密给本次一次性公钥 |
 
-托管操作的 owner 从宿主认证后的插件 caller 注入，payload 不能指定或冒充。该 API **没有**面向普通插件的 `get` 或 `decrypt` 操作。数据库插件不能索取明文；可信宿主适配器按 tenant、owner、purpose 和 version 校验后，仅在受限同步回调内使用 `CredentialRef`。
+普通托管操作的 owner 从宿主认证后的插件 caller 注入；委托操作的 owner/purpose/resource 只来自 `kernel.configuration.authority.consume` 返回的活动目录 claims，payload 都不能指定或冒充。原始 authority 只使用一次且不进入状态文件。该 API **没有**面向普通插件的 `get` 或 `decrypt` 操作。数据库插件不能索取明文；可信宿主适配器按 tenant、owner、purpose 和 version 校验后，仅在受限同步回调内使用 `CredentialRef`。
 
 ## Portal 管理页
 

@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -28,7 +29,7 @@ import (
 
 const (
 	PluginID                = "cn.vastplan.platform.security.credentials"
-	PluginVersion           = "0.7.0"
+	PluginVersion           = "0.8.0"
 	Capability              = "platform.credentials"
 	MaterialLeaseCapability = "platform.credentials.material-lease"
 	stateFileKey            = "platform.credentials.stateFile"
@@ -172,13 +173,18 @@ const (
 // ManagedRecord is the custodian-owned representation. Ciphertext is persisted
 // only here; callers receive Ref and StageID, never ciphertext or plaintext.
 type ManagedRecord struct {
-	StageID    string                            `json:"stageId"`
-	Ref        pluginconfig.ManagedCredentialRef `json:"ref"`
-	Resource   string                            `json:"resource"`
-	State      string                            `json:"state"`
-	CreatedAt  time.Time                         `json:"createdAt"`
-	UpdatedAt  time.Time                         `json:"updatedAt"`
-	Ciphertext string                            `json:"ciphertext,omitempty"`
+	StageID         string                            `json:"stageId"`
+	Ref             pluginconfig.ManagedCredentialRef `json:"ref"`
+	Resource        string                            `json:"resource"`
+	State           string                            `json:"state"`
+	CreatedAt       time.Time                         `json:"createdAt"`
+	UpdatedAt       time.Time                         `json:"updatedAt"`
+	Ciphertext      string                            `json:"ciphertext,omitempty"`
+	AuthorityID     string                            `json:"authorityId,omitempty"`
+	Coordinator     string                            `json:"coordinator,omitempty"`
+	CandidateID     string                            `json:"candidateId,omitempty"`
+	ConfigurationID string                            `json:"configurationId,omitempty"`
+	FieldID         string                            `json:"fieldId,omitempty"`
 }
 type Service struct {
 	mu         sync.Mutex
@@ -228,6 +234,9 @@ func validateManagedState(tenants map[string]map[string]ManagedRecord) error {
 		for stageID, record := range records {
 			if stageID != record.StageID || !strings.HasPrefix(stageID, "stage-") || !strings.HasPrefix(record.Ref.Handle, "credential://managed/") || record.Ref.Scope != "tenant" || record.Ref.Owner == "" || record.Ref.Purpose == "" || record.Resource == "" || record.Ref.Version < 1 {
 				return fmt.Errorf("托管凭证状态 %q 元数据无效", stageID)
+			}
+			if record.Coordinator != "" && (record.Coordinator != configurationauthority.CoordinatorPluginID || !strings.HasPrefix(record.AuthorityID, configurationauthority.TokenPrefix) || !strings.HasPrefix(record.CandidateID, "pcfg_") || !strings.HasPrefix(record.ConfigurationID, "cfg_") || record.FieldID == "") {
+				return fmt.Errorf("委托托管凭证状态 %q 元数据无效", stageID)
 			}
 			switch record.State {
 			case managedPreparing, managedActive:
@@ -375,6 +384,9 @@ func (s *Service) managedTransition(call *contractv1.CallContext, stageID, targe
 	}
 	if record.Ref.Owner != owner {
 		return pluginconfig.ManagedCredentialRef{}, errors.New("托管凭证不属于当前插件")
+	}
+	if record.Coordinator != "" {
+		return pluginconfig.ManagedCredentialRef{}, errors.New("委托凭证只能由配置协调器转换")
 	}
 	switch target {
 	case managedActive:
@@ -649,15 +661,17 @@ func transitVersion(cipher string) string {
 	return "unknown"
 }
 
-func (s *Service) Handler(ctx context.Context, _ sdk.Host, call *contractv1.CallContext, payload []byte, op string) (*contractv1.CallResult, []byte, error) {
+func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, op string) (*contractv1.CallResult, []byte, error) {
 	var in struct {
-		Name     string `json:"name"`
-		Value    string `json:"value"`
-		Prefix   string `json:"prefix"`
-		StageID  string `json:"stageId"`
-		Handle   string `json:"handle"`
-		Purpose  string `json:"purpose"`
-		Resource string `json:"resource"`
+		Name        string `json:"name"`
+		Value       string `json:"value"`
+		Prefix      string `json:"prefix"`
+		StageID     string `json:"stageId"`
+		Handle      string `json:"handle"`
+		Purpose     string `json:"purpose"`
+		Resource    string `json:"resource"`
+		Authority   string `json:"authority"`
+		CandidateID string `json:"candidateId"`
 	}
 	if err := json.Unmarshal(payload, &in); err != nil {
 		return nil, nil, err
@@ -696,10 +710,18 @@ func (s *Service) Handler(ctx context.Context, _ sdk.Host, call *contractv1.Call
 			}
 		}()
 		out, err = s.StageManaged(ctx, call, in.Purpose, in.Resource, secret)
+	case "stageDelegated":
+		secret := []byte(in.Value)
+		defer zeroBytes(secret)
+		out, err = s.StageDelegated(ctx, host, call, in.Authority, secret)
 	case "activateManaged":
 		out, err = s.ActivateManaged(call, in.StageID)
 	case "abortManaged":
 		out, err = s.AbortManaged(call, in.StageID)
+	case "activateDelegated":
+		out, err = s.ActivateDelegated(call, in.StageID, in.CandidateID)
+	case "abortDelegated":
+		out, err = s.AbortDelegated(call, in.StageID, in.CandidateID)
 	case "retireManaged":
 		out, err = s.RetireManaged(call, in.Handle)
 	default:
@@ -726,8 +748,11 @@ func Descriptor() []byte {
 		{"name":"rotate","description":"通过 Vault Transit rewrap 轮换凭证包裹密钥","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
 		{"name":"revoke","description":"撤销凭证引用","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
 		{"name":"stageManaged","description":"由业务插件创建不可读取的凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"purpose":{"type":"string"},"resource":{"type":"string"},"value":{"type":"string"}},"required":["purpose","resource","value"]}},
+		{"name":"stageDelegated","description":"以可信宿主一次性配置授权创建目标插件凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"authority":{"type":"string"},"value":{"type":"string"}},"required":["authority","value"]}},
 		{"name":"activateManaged","description":"由创建者激活托管凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"}},"required":["stageId"]}},
 		{"name":"abortManaged","description":"由创建者终止托管凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"}},"required":["stageId"]}},
+		{"name":"activateDelegated","description":"由配置协调器激活已绑定候选的委托凭证","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"},"candidateId":{"type":"string"}},"required":["stageId","candidateId"]}},
+		{"name":"abortDelegated","description":"由配置协调器终止已绑定候选的委托凭证","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"},"candidateId":{"type":"string"}},"required":["stageId","candidateId"]}},
 		{"name":"retireManaged","description":"由创建者退役不再使用的托管凭证","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"handle":{"type":"string"}},"required":["handle"]}}
 	]}`)
 }
@@ -744,7 +769,7 @@ func Contribution(s *Service) sdk.Contribution {
 			return s.Handler(ctx, host, call, payload, op)
 		}
 	}
-	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"put": h("put"), "describe": h("describe"), "list": h("list"), "rotate": h("rotate"), "revoke": h("revoke"), "stageManaged": h("stageManaged"), "activateManaged": h("activateManaged"), "abortManaged": h("abortManaged"), "retireManaged": h("retireManaged")}}
+	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"put": h("put"), "describe": h("describe"), "list": h("list"), "rotate": h("rotate"), "revoke": h("revoke"), "stageManaged": h("stageManaged"), "stageDelegated": h("stageDelegated"), "activateManaged": h("activateManaged"), "abortManaged": h("abortManaged"), "activateDelegated": h("activateDelegated"), "abortDelegated": h("abortDelegated"), "retireManaged": h("retireManaged")}}
 }
 
 func MaterialLeaseContribution(s *Service) sdk.Contribution {

@@ -13,6 +13,7 @@ import (
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
@@ -33,9 +34,47 @@ type deploymentReadinessObserver struct{ called bool }
 
 type configurationCatalogReader struct{ tenant string }
 
+type configurationAuthorityPort struct {
+	issuedTenant, consumedTenant, consumedToken string
+}
+
+func (p *configurationAuthorityPort) Issue(_ context.Context, tenant string, request configurationauthority.IssueRequest) (configurationauthority.Issued, error) {
+	p.issuedTenant = tenant
+	return configurationauthority.Issued{Token: configurationauthority.TokenPrefix + strings.Repeat("a", 64), ExpiresAt: time.Now().UTC().Add(time.Minute)}, nil
+}
+
+func (p *configurationAuthorityPort) Consume(_ context.Context, tenant, token string) (configurationauthority.Claims, error) {
+	p.consumedTenant, p.consumedToken = tenant, token
+	return configurationauthority.Claims{TenantID: tenant, CandidateID: "pcfg_" + strings.Repeat("b", 32)}, nil
+}
+
 func (r *configurationCatalogReader) List(_ context.Context, tenant string) ([]pluginconfiguration.Catalog, error) {
 	r.tenant = tenant
 	return []pluginconfiguration.Catalog{}, nil
+}
+
+func TestConfigurationAuthorityKernelServicesEnforceExactPluginIdentities(t *testing.T) {
+	port := &configurationAuthorityPort{}
+	issue := kernelConfigurationAuthorityIssue(port)
+	issuePayload := []byte(`{"configurationId":"cfg_123","catalogDigest":"digest","candidateId":"pcfg_123","fieldId":"token"}`)
+	coordinator := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: configurationauthority.CoordinatorPluginID}}
+	if _, _, err := issue(context.Background(), coordinator, issuePayload); err != nil || port.issuedTenant != "tenant-a" {
+		t.Fatalf("配置协调器应能申请宿主授权: tenant=%q err=%v", port.issuedTenant, err)
+	}
+	forged := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.example.attacker"}}
+	if _, _, err := issue(context.Background(), forged, issuePayload); err == nil {
+		t.Fatal("其他插件不得申请配置授权")
+	}
+
+	consume := kernelConfigurationAuthorityConsume(port)
+	token := configurationauthority.TokenPrefix + strings.Repeat("c", 64)
+	custodian := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: configurationauthority.CustodianPluginID}}
+	if _, _, err := consume(context.Background(), custodian, []byte(`{"token":"`+token+`"}`)); err != nil || port.consumedTenant != "tenant-a" || port.consumedToken != token {
+		t.Fatalf("凭证托管器应能消费配置授权: tenant=%q token=%q err=%v", port.consumedTenant, port.consumedToken, err)
+	}
+	if _, _, err := consume(context.Background(), coordinator, []byte(`{"token":"`+token+`"}`)); err == nil {
+		t.Fatal("配置协调器不得自行消费并解释授权")
+	}
 }
 
 type runtimeLeaseBroker struct {

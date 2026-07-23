@@ -20,7 +20,7 @@ import (
 
 const (
 	PluginID           = "cn.vastplan.platform.configuration.global-settings"
-	PluginVersion      = "0.5.0"
+	PluginVersion      = "0.6.0"
 	Capability         = "platform.settings"
 	StateFileConfigKey = "platform.settings.stateFile"
 	changeLimit        = 512

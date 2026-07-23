@@ -24,30 +24,38 @@ const (
 	CandidateRolledBack  CandidateStatus = "RolledBack"
 )
 
-// Candidate never contains secret material or managed credential handles.
-// Credential field status will be attached after ConfigurationAuthority lands.
+type ManagedCredentialStatus struct {
+	FieldID string `json:"fieldId"`
+	Staged  bool   `json:"staged"`
+	State   string `json:"state"`
+}
+
+// Candidate never contains secret material, authority tokens, stage IDs or
+// managed credential handles. Only browser-safe field status is returned.
 type Candidate struct {
-	ID               string          `json:"id"`
-	ConfigurationID  string          `json:"configurationId"`
-	Revision         uint64          `json:"revision"`
-	Status           CandidateStatus `json:"status"`
-	CatalogDigest    string          `json:"catalogDigest"`
-	SchemaDigest     string          `json:"schemaDigest"`
-	ArtifactSHA256   string          `json:"artifactSha256"`
-	Values           json.RawMessage `json:"values"`
-	CreatedBy        string          `json:"createdBy"`
-	CreatedAt        string          `json:"createdAt"`
-	UpdatedAt        string          `json:"updatedAt"`
-	ErrorCode        string          `json:"errorCode,omitempty"`
-	ErrorMessage     string          `json:"errorMessage,omitempty"`
-	ExternalRevision uint64          `json:"externalRevision,omitempty"`
-	RollbackRevision uint64          `json:"rollbackRevision,omitempty"`
+	ID                 string                    `json:"id"`
+	ConfigurationID    string                    `json:"configurationId"`
+	Revision           uint64                    `json:"revision"`
+	Status             CandidateStatus           `json:"status"`
+	CatalogDigest      string                    `json:"catalogDigest"`
+	SchemaDigest       string                    `json:"schemaDigest"`
+	ArtifactSHA256     string                    `json:"artifactSha256"`
+	Values             json.RawMessage           `json:"values"`
+	CreatedBy          string                    `json:"createdBy"`
+	CreatedAt          string                    `json:"createdAt"`
+	UpdatedAt          string                    `json:"updatedAt"`
+	ErrorCode          string                    `json:"errorCode,omitempty"`
+	ErrorMessage       string                    `json:"errorMessage,omitempty"`
+	ExternalRevision   uint64                    `json:"externalRevision,omitempty"`
+	RollbackRevision   uint64                    `json:"rollbackRevision,omitempty"`
+	ManagedCredentials []ManagedCredentialStatus `json:"managedCredentials,omitempty"`
 }
 
 type CreateDraftRequest struct {
-	ConfigurationID string          `json:"configurationId"`
-	CatalogDigest   string          `json:"catalogDigest"`
-	Values          json.RawMessage `json:"values"`
+	ConfigurationID string            `json:"configurationId"`
+	CatalogDigest   string            `json:"catalogDigest"`
+	Values          json.RawMessage   `json:"values"`
+	Secrets         map[string]string `json:"secrets,omitempty"`
 }
 
 // ValidateValues evaluates the exact schema frozen in the trusted catalog.

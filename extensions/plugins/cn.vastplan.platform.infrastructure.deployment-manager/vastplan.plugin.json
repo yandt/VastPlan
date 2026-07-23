@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

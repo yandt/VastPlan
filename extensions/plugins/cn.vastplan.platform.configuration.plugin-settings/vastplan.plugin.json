@@ -1,14 +1,14 @@
 {
   "id": "cn.vastplan.platform.configuration.plugin-settings",
   "name": "VastPlan 插件配置协调器",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "从活动可信配置目录创建、审计并恢复插件配置候选；不保存秘密，不绕过部署或 Profile 控制器",
+  "description": "从活动可信配置目录创建、审计并恢复插件配置候选；以一次性宿主授权委托凭证托管器保存秘密",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
-  "capabilities": { "kernelServices": ["kernel.config.get", "kernel.configuration.catalogs"], "credentials": [], "resources": [] },
+  "capabilities": { "kernelServices": ["kernel.config.get", "kernel.configuration.catalogs", "kernel.configuration.authority.issue"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
   "authorization": {
     "namespace": "platform.plugin-configuration",
@@ -30,7 +30,9 @@
     "visibility": "cluster",
     "routing": "leader",
     "routingDomain": "platform",
-    "requires": [],
+    "requires": [
+      { "capability": "platform.credentials", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.credentials", "routingDomain": "platform" }
+    ],
     "provides": [
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }
     ]
@@ -62,7 +64,7 @@
             { "name": "listDefinitions", "description": "列出活动部署中的可信插件配置定义", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
             { "name": "getDefinition", "description": "按不透明资源 ID 读取可信配置定义", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "configurationId": { "type": "string" }, "catalogDigest": { "type": "string" } }, "required": ["configurationId"] } },
             { "name": "listCandidates", "description": "列出配置候选与生效状态", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
-            { "name": "createDraft", "description": "按活动目录和签名 Schema 创建非敏感配置草稿", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "configurationId": { "type": "string" }, "catalogDigest": { "type": "string" }, "values": { "type": "object" } }, "required": ["configurationId", "catalogDigest", "values"] } },
+            { "name": "createDraft", "description": "按活动目录和签名 Schema 创建配置草稿并委托暂存只写秘密", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "configurationId": { "type": "string" }, "catalogDigest": { "type": "string" }, "values": { "type": "object" }, "secrets": { "type": "object", "additionalProperties": { "type": "string" } } }, "required": ["configurationId", "catalogDigest", "values"] } },
             { "name": "discardDraft", "description": "以 CAS 放弃尚未发布的配置草稿", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
           ]
         }

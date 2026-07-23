@@ -25,9 +25,22 @@ describe("plugin configuration workbench", () => {
     expect(result.items[0]).toMatchObject({ pluginName: "Configured", candidateStatus: "None" });
     const form = page.forms?.[0];
     const prepared = await form?.prepare?.(result.items, new AbortController().signal);
-    expect(prepared?.schema?.schema).toEqual(definition.schema);
-    await form?.submit({ value: { region: "cn-west" }, selected: result.items }, new AbortController().signal);
-    expect(createDraft).toHaveBeenCalledWith(definition.id, definition.catalogDigest, { region: "cn-west" });
+	expect(prepared?.schema?.schema).toMatchObject({ properties: { values: definition.schema } });
+	await form?.submit({ value: { values: { region: "cn-west" }, secrets: {} }, selected: result.items }, new AbortController().signal);
+	expect(createDraft).toHaveBeenCalledWith(definition.id, definition.catalogDigest, { region: "cn-west" }, {});
+  });
+
+  it("renders declared managed fields as one-use secret material and submits them separately", async () => {
+	const createDraft = vi.fn(async () => ({ id: "pcfg_x" }));
+	const managed = { ...definition, managedCredentials: [{ id: "token", title: "API token", description: "Write only", purpose: "remote.token", required: true }] };
+	const client = { listPluginConfigurationDefinitions: vi.fn(async () => [managed]), listPluginConfigurationCandidates: vi.fn(async () => []), createPluginConfigurationDraft: createDraft } as unknown as PlatformAdminClient;
+	const page = createPluginConfigurationPage(client, "configuration", "/settings/plugin-configurations", message("test", "title", "Plugin configuration"));
+	const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
+	const form = page.forms?.[0];
+	const prepared = await form?.prepare?.(result.items, new AbortController().signal);
+	expect(prepared?.schema?.schema).toMatchObject({ properties: { secrets: { required: ["token"], properties: { token: { format: "vastplan-secret-material", writeOnly: true } } } } });
+	await form?.submit({ value: { values: { region: "cn-west" }, secrets: { token: "one-use-secret" } }, selected: result.items }, new AbortController().signal);
+	expect(createDraft).toHaveBeenCalledWith(definition.id, definition.catalogDigest, { region: "cn-west" }, { token: "one-use-secret" });
   });
 
   it("treats a legacy omitted managed credential list as empty", async () => {

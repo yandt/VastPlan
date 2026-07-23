@@ -28,17 +28,19 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
       const definition = selected[0];
       if (definition === undefined) throw new Error("未选择插件配置");
       return {
-        schema: { id: `plugin-configuration.${definition.id}`, schema: definition.schema as FormSchema["schema"] },
-        initialValue: definition.values,
+		schema: configurationFormSchema(definition),
+		initialValue: { values: definition.values, secrets: {} },
       };
     },
     async load(selected) {
-      return selected[0]?.values ?? {};
+	  return { values: selected[0]?.values ?? {}, secrets: {} };
     },
     async submit({ value, selected }) {
       const definition = selected[0];
       if (definition === undefined) return;
-      await client.createPluginConfigurationDraft(definition.id, definition.catalogDigest, { ...value });
+	  const values = asRecord(value.values);
+	  const secrets = Object.fromEntries(Object.entries(asRecord(value.secrets)).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== ""));
+	  await client.createPluginConfigurationDraft(definition.id, definition.catalogDigest, values, secrets);
     },
   };
 
@@ -96,6 +98,28 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
       await client.discardPluginConfigurationDraft(row.candidateId, row.candidateRevision);
     },
   });
+}
+
+function configurationFormSchema(definition: PluginConfigurationDefinition): FormSchema {
+  const secretProperties = Object.fromEntries((definition.managedCredentials ?? []).map((field) => [field.id, {
+	type: "string", format: "vastplan-secret-material", writeOnly: true, title: field.title,
+	...(field.description === undefined ? {} : { description: field.description }),
+  }]));
+  const requiredSecrets = (definition.managedCredentials ?? []).filter((field) => field.required === true).map((field) => field.id);
+  const secretsSchema: Record<string, unknown> = { type: "object", additionalProperties: false, properties: secretProperties };
+  if (requiredSecrets.length > 0) secretsSchema.required = requiredSecrets;
+  return {
+	id: `plugin-configuration.${definition.id}`,
+	schema: {
+	  type: "object", additionalProperties: false,
+	  properties: { values: definition.schema, secrets: secretsSchema },
+	  required: ["values", ...(requiredSecrets.length === 0 ? [] : ["secrets"])],
+	} as FormSchema["schema"],
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
 function latestCandidates(candidates: readonly PluginConfigurationCandidate[]): Map<string, PluginConfigurationCandidate> {

@@ -33,6 +33,7 @@ import (
 	nodebootstrapcommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/nodebootstrap"
 	seedrepositorycommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/seedrepository"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
+	backendconfigurationauthority "cdsoft.com.cn/VastPlan/core/kernels/backend/configurationauthority"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/configurationcatalog"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/credentialbroker"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentpublisher"
@@ -335,6 +336,9 @@ func runReconcile(args []string) (runErr error) {
 		runtime.Dependencies.DeploymentPublication = publisher
 		runtime.Dependencies.DeploymentReadiness = natsDeploymentReadiness{KV: plane.buckets.Compositions}
 		runtime.Dependencies.ConfigurationCatalogs = catalogStore
+		authorityStore := backendconfigurationauthority.Store{KV: plane.buckets.ConfigurationAuthorities, Catalogs: catalogStore}
+		runtime.Dependencies.ConfigurationAuthorityIssuer = authorityStore
+		runtime.Dependencies.ConfigurationAuthorityConsumer = authorityStore
 	}
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
 	if plane.router != nil {

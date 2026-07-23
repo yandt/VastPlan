@@ -10,12 +10,13 @@ import (
 	"time"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 )
 
 const (
 	PluginID           = pluginconfiguration.PluginSettingsID
-	PluginVersion      = "0.3.0"
+	PluginVersion      = "0.4.0"
 	Capability         = "platform.plugin-configuration"
 	StateFileConfigKey = "platform.plugin-configuration.stateFile"
 	maxStateBytes      = 8 << 20
@@ -38,10 +39,16 @@ type AuditEvent struct {
 }
 
 type tenantState struct {
-	NextAudit  uint64                                   `json:"nextAudit"`
-	Candidates map[string]pluginconfiguration.Candidate `json:"candidates"`
-	Current    map[string]string                        `json:"current"`
-	Audit      []AuditEvent                             `json:"audit"`
+	NextAudit        uint64                                   `json:"nextAudit"`
+	Candidates       map[string]pluginconfiguration.Candidate `json:"candidates"`
+	Current          map[string]string                        `json:"current"`
+	Audit            []AuditEvent                             `json:"audit"`
+	CredentialStages map[string]map[string]credentialStage    `json:"credentialStages,omitempty"`
+}
+
+type credentialStage struct {
+	FieldID string                        `json:"fieldId"`
+	Stage   pluginconfig.StagedCredential `json:"stage"`
 }
 
 type persistedState struct {
@@ -49,11 +56,12 @@ type persistedState struct {
 }
 
 type Service struct {
-	mu        sync.Mutex
-	stateFile string
-	state     persistedState
-	now       func() time.Time
-	newID     func() (string, error)
+	mu         sync.Mutex
+	workflowMu sync.Mutex
+	stateFile  string
+	state      persistedState
+	now        func() time.Time
+	newID      func() (string, error)
 }
 
 func New(stateFile string) (*Service, error) {

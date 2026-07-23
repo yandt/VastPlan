@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.data.relational.connection-manager`
 能力：`tool.package/platform.database`
-当前制品版本：`0.7.0`
+当前制品版本：`0.8.0`
 
 ## 边界
 

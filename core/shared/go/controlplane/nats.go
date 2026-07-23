@@ -16,16 +16,17 @@ import (
 )
 
 const (
-	DesiredBucket      = "VASTPLAN_DESIRED_V1"
-	ActualBucket       = "VASTPLAN_ACTUAL_V1"
-	NodesBucket        = "VASTPLAN_NODES_V1"
-	CapabilitiesBucket = "VASTPLAN_CAPABILITIES_V1"
-	DeploymentsBucket  = "VASTPLAN_DEPLOYMENTS_V2"
-	AssignmentsBucket  = "VASTPLAN_ASSIGNMENTS_V1"
-	CompositionsBucket = "VASTPLAN_COMPOSITIONS_V1"
-	ControllersBucket  = "VASTPLAN_CONTROLLERS_V1"
-	AutoscalingBucket  = "VASTPLAN_AUTOSCALING_V1"
-	EventsStream       = "VASTPLAN_EVENTS_V1"
+	DesiredBucket                  = "VASTPLAN_DESIRED_V1"
+	ActualBucket                   = "VASTPLAN_ACTUAL_V1"
+	NodesBucket                    = "VASTPLAN_NODES_V1"
+	CapabilitiesBucket             = "VASTPLAN_CAPABILITIES_V1"
+	DeploymentsBucket              = "VASTPLAN_DEPLOYMENTS_V2"
+	AssignmentsBucket              = "VASTPLAN_ASSIGNMENTS_V1"
+	CompositionsBucket             = "VASTPLAN_COMPOSITIONS_V1"
+	ControllersBucket              = "VASTPLAN_CONTROLLERS_V1"
+	AutoscalingBucket              = "VASTPLAN_AUTOSCALING_V1"
+	ConfigurationAuthoritiesBucket = "VASTPLAN_CONFIGURATION_AUTHORITIES_V1"
+	EventsStream                   = "VASTPLAN_EVENTS_V1"
 
 	MaxDesiredStateBytes = 1 << 20
 	ActualStateHistory   = 16
@@ -33,16 +34,17 @@ const (
 
 // Buckets 集中返回控制面的版本化 KV 句柄，避免组件各自拼 bucket 名。
 type Buckets struct {
-	Desired      jetstream.KeyValue
-	Actual       jetstream.KeyValue
-	Nodes        jetstream.KeyValue
-	Capabilities jetstream.KeyValue
-	Deployments  jetstream.KeyValue
-	Assignments  jetstream.KeyValue
-	Compositions jetstream.KeyValue
-	Controllers  jetstream.KeyValue
-	Autoscaling  jetstream.KeyValue
-	Events       jetstream.Stream
+	Desired                  jetstream.KeyValue
+	Actual                   jetstream.KeyValue
+	Nodes                    jetstream.KeyValue
+	Capabilities             jetstream.KeyValue
+	Deployments              jetstream.KeyValue
+	Assignments              jetstream.KeyValue
+	Compositions             jetstream.KeyValue
+	Controllers              jetstream.KeyValue
+	Autoscaling              jetstream.KeyValue
+	ConfigurationAuthorities jetstream.KeyValue
+	Events                   jetstream.Stream
 }
 
 // Connect 建立可无限重连的 NATS 连接。首次连接仍 fail-fast，让启动配置错误明确暴露；
@@ -127,6 +129,14 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 	if err != nil {
 		return Buckets{}, fmt.Errorf("创建自动伸缩指标 bucket: %w", err)
 	}
+	configurationAuthorities, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
+		Bucket: ConfigurationAuthoritiesBucket, Description: "VastPlan one-use configuration authorities v1",
+		History: 2, TTL: 2 * time.Minute, LimitMarkerTTL: time.Minute,
+		MaxValueSize: 16 << 10, Replicas: replicas, Storage: storage,
+	})
+	if err != nil {
+		return Buckets{}, fmt.Errorf("创建配置授权 bucket: %w", err)
+	}
 	events, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name: EventsStream, Description: "VastPlan durable domain events v1",
 		Subjects: []string{"vp.event.persist.v1.>"}, Retention: jetstream.LimitsPolicy,
@@ -140,6 +150,7 @@ func EnsureBuckets(ctx context.Context, js jetstream.JetStream, replicas int, st
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
 		Deployments: deployments, Assignments: assignments, Compositions: compositions,
 		Controllers: controllers, Autoscaling: autoscaling, Events: events,
+		ConfigurationAuthorities: configurationAuthorities,
 	}, nil
 }
 
@@ -182,6 +193,10 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开自动伸缩指标 bucket: %w", err)
 	}
+	configurationAuthorities, err := js.KeyValue(ctx, ConfigurationAuthoritiesBucket)
+	if err != nil {
+		return Buckets{}, fmt.Errorf("打开配置授权 bucket: %w", err)
+	}
 	events, err := js.Stream(ctx, EventsStream)
 	if err != nil {
 		return Buckets{}, fmt.Errorf("打开持久事件 stream: %w", err)
@@ -190,6 +205,7 @@ func OpenBuckets(ctx context.Context, js jetstream.JetStream) (Buckets, error) {
 		Desired: desired, Actual: actual, Nodes: nodes, Capabilities: capabilities,
 		Deployments: deployments, Assignments: assignments, Compositions: compositions,
 		Controllers: controllers, Autoscaling: autoscaling, Events: events,
+		ConfigurationAuthorities: configurationAuthorities,
 	}, nil
 }
 
@@ -211,6 +227,14 @@ func DeploymentPrefix(tenant string) string {
 		tenant = "_global"
 	}
 	return "tenants." + keyToken(tenant) + ".states."
+}
+
+func ConfigurationAuthorityKey(tenant, tokenDigest string) string {
+	return "tenants." + keyToken(tenant) + ".authorities." + tokenDigest
+}
+
+func ConfigurationAuthorityPrefix(tenant string) string {
+	return "tenants." + keyToken(tenant) + ".authorities."
 }
 
 func AssignmentPrefix(tenant, name string) string {

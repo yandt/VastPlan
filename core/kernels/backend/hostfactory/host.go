@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
@@ -95,7 +96,55 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 			return nil, err
 		}
 	}
+	if dependencies.ConfigurationAuthorityIssuer != nil {
+		if err := host.RegisterHostService(extpoint.KernelService, configurationauthority.KernelIssueService, kernelConfigurationAuthorityIssue(dependencies.ConfigurationAuthorityIssuer)); err != nil {
+			return nil, err
+		}
+	}
+	if dependencies.ConfigurationAuthorityConsumer != nil {
+		if err := host.RegisterHostService(extpoint.KernelService, configurationauthority.KernelConsumeService, kernelConfigurationAuthorityConsume(dependencies.ConfigurationAuthorityConsumer)); err != nil {
+			return nil, err
+		}
+	}
 	return host, nil
+}
+
+func kernelConfigurationAuthorityIssue(issuer configurationauthority.Issuer) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != configurationauthority.CoordinatorPluginID || callCtx.GetTenantId() == "" {
+			return nil, nil, errors.New("配置授权签发只接受 plugin-settings 认证会话")
+		}
+		var request configurationauthority.IssueRequest
+		if err := decodeStrict(payload, &request); err != nil {
+			return nil, nil, configurationauthority.ErrInvalid
+		}
+		issued, err := issuer.Issue(ctx, callCtx.GetTenantId(), request)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(issued)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+	}
+}
+
+func kernelConfigurationAuthorityConsume(consumer configurationauthority.Consumer) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != configurationauthority.CustodianPluginID || callCtx.GetTenantId() == "" {
+			return nil, nil, errors.New("配置授权消费只接受 credentials 认证会话")
+		}
+		var request struct {
+			Token string `json:"token"`
+		}
+		if err := decodeStrict(payload, &request); err != nil {
+			return nil, nil, configurationauthority.ErrInvalid
+		}
+		claims, err := consumer.Consume(ctx, callCtx.GetTenantId(), request.Token)
+		if err != nil {
+			return nil, nil, err
+		}
+		raw, err := json.Marshal(claims)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+	}
 }
 
 func kernelConfigurationCatalogs(reader pluginconfiguration.Reader) protocolbus.HostService {

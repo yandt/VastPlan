@@ -150,7 +150,7 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID string) (SubjectACL, 
 	case RoleController:
 		return SubjectACL{
 			PublishAllow: append(openAllAPI(), append(
-				kvAPIForRead(DeploymentsBucket, NodesBucket, ActualBucket, AssignmentsBucket, CompositionsBucket, ControllersBucket, AutoscalingBucket),
+				kvAPIForRead(DeploymentsBucket, NodesBucket, ActualBucket, AssignmentsBucket, CompositionsBucket, ControllersBucket, AutoscalingBucket, ConfigurationAuthoritiesBucket),
 				"$KV."+AssignmentsBucket+".>", "$KV."+CompositionsBucket+".>", "$KV."+ControllersBucket+".>",
 			)...),
 			SubscribeAllow: []string{
@@ -164,9 +164,10 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID string) (SubjectACL, 
 		}
 		acl := SubjectACL{
 			PublishAllow: append(openAllAPI(), append(
-				kvAPIForRead(DesiredBucket, DeploymentsBucket, AssignmentsBucket, CapabilitiesBucket),
+				kvAPIForRead(DesiredBucket, DeploymentsBucket, AssignmentsBucket, CapabilitiesBucket, ConfigurationAuthoritiesBucket),
 				"$KV."+ActualBucket+"."+ActualKey(tenant, deployment, nodeID), "$KV."+NodesBucket+"."+NodeKey(tenant, deployment, nodeID),
 				"$KV."+CapabilitiesBucket+".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
+				"$KV."+ConfigurationAuthoritiesBucket+"."+ConfigurationAuthorityPrefix(tenant)+">",
 				"vp.event.persist.v1.>",
 				"$JS.API.CONSUMER.CREATE."+EventsStream, "$JS.API.CONSUMER.CREATE."+EventsStream+".>",
 				"$JS.API.CONSUMER.DURABLE.CREATE."+EventsStream+".>", "$JS.API.CONSUMER.INFO."+EventsStream+".>",
@@ -177,7 +178,7 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID string) (SubjectACL, 
 			},
 			SubscribeAllow: []string{
 				"_INBOX.>", "$KV." + DesiredBucket + ".>", "$KV." + DeploymentsBucket + ".>", "$KV." + AssignmentsBucket + ".>",
-				"$KV." + CapabilitiesBucket + ".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
+				"$KV." + CapabilitiesBucket + ".>", "$KV." + ConfigurationAuthoritiesBucket + ".>", "vp.rpc.v1.>", "vp.rpc.cancel.v1", "vp.event.v1.>",
 			},
 		}
 		if role == RoleManager {
@@ -203,7 +204,7 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID string) (SubjectACL, 
 }
 
 func openAllAPI() []string {
-	return append(kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, CompositionsBucket, ControllersBucket, AutoscalingBucket), "$JS.API.STREAM.INFO."+EventsStream)
+	return append(kvAPIForInfo(DesiredBucket, ActualBucket, NodesBucket, CapabilitiesBucket, DeploymentsBucket, AssignmentsBucket, CompositionsBucket, ControllersBucket, AutoscalingBucket, ConfigurationAuthoritiesBucket), "$JS.API.STREAM.INFO."+EventsStream)
 }
 
 func kvAPIForInfo(buckets ...string) []string {

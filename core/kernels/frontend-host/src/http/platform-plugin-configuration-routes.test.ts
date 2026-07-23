@@ -17,13 +17,13 @@ describe("Platform plugin configuration routes", () => {
     expect((await fetch(base, { headers: server.readHeaders })).status).toBe(200);
     expect((await fetch(`${base}/cfg_aaaaaaaaaaaaaaaaaaaaaaaa?catalogDigest=${"b".repeat(64)}`, { headers: server.readHeaders })).status).toBe(200);
     expect((await fetch(`${base}/candidates`, { headers: server.readHeaders })).status).toBe(200);
-    expect((await fetch(`${base}/candidates`, { method: "POST", headers: server.writeHeaders, body: JSON.stringify({ configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64), values: { region: "cn-east" } }) })).status).toBe(200);
+	expect((await fetch(`${base}/candidates`, { method: "POST", headers: server.writeHeaders, body: JSON.stringify({ configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64), values: { region: "cn-east" }, secrets: { token: "one-use-secret" } }) })).status).toBe(200);
     expect((await fetch(`${base}/candidates/pcfg_cccccccccccccccccccccccccccccccc`, { method: "DELETE", headers: server.writeHeaders, body: '{"id":"forged","expectedRevision":1}' })).status).toBe(200);
     expect(calls.map(({ capability, operation, payload }) => ({ capability, operation, payload }))).toEqual([
       { capability: "platform.plugin-configuration", operation: "listDefinitions", payload: {} },
       { capability: "platform.plugin-configuration", operation: "getDefinition", payload: { configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64) } },
       { capability: "platform.plugin-configuration", operation: "listCandidates", payload: {} },
-      { capability: "platform.plugin-configuration", operation: "createDraft", payload: { configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64), values: { region: "cn-east" } } },
+	  { capability: "platform.plugin-configuration", operation: "createDraft", payload: { configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64), values: { region: "cn-east" }, secrets: { token: "one-use-secret" } } },
       { capability: "platform.plugin-configuration", operation: "discardDraft", payload: { id: "pcfg_cccccccccccccccccccccccccccccccc", expectedRevision: 1 } },
     ]);
     expect(calls.every((call) => call.logicalService === "platform.core.primary")).toBe(true);

@@ -15,11 +15,12 @@ import (
 )
 
 type operationRequest struct {
-	ID               string          `json:"id"`
-	ConfigurationID  string          `json:"configurationId"`
-	CatalogDigest    string          `json:"catalogDigest"`
-	Values           json.RawMessage `json:"values"`
-	ExpectedRevision uint64          `json:"expectedRevision"`
+	ID               string            `json:"id"`
+	ConfigurationID  string            `json:"configurationId"`
+	CatalogDigest    string            `json:"catalogDigest"`
+	Values           json.RawMessage   `json:"values"`
+	Secrets          map[string]string `json:"secrets"`
+	ExpectedRevision uint64            `json:"expectedRevision"`
 }
 
 func ensureEOF(decoder *json.Decoder) error {
@@ -41,6 +42,11 @@ func decodeStrict(raw []byte, target any) error {
 
 func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
 	if err := s.ensureConfigured(ctx, host, call); err != nil {
+		return domainError("platform.plugin_configuration.unavailable", err)
+	}
+	s.workflowMu.Lock()
+	defer s.workflowMu.Unlock()
+	if err := s.recoverInterrupted(ctx, host, call); err != nil {
 		return domainError("platform.plugin_configuration.unavailable", err)
 	}
 	var request operationRequest
@@ -77,9 +83,10 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 			ConfigurationID: request.ConfigurationID,
 			CatalogDigest:   request.CatalogDigest,
 			Values:          request.Values,
+			Secrets:         request.Secrets,
 		})
 	case "discardDraft":
-		return s.DiscardDraft(call, request.ID, request.ExpectedRevision)
+		return s.DiscardDraft(ctx, host, call, request.ID, request.ExpectedRevision)
 	default:
 		return nil, ErrInvalid
 	}
@@ -107,7 +114,7 @@ func Descriptor() []byte {
 		{"name":"listDefinitions","description":"列出活动部署中的可信插件配置定义","paramsSchema":{"type":"object","additionalProperties":false,"properties":{}}},
 		{"name":"getDefinition","description":"按不透明资源 ID 读取可信配置定义","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"configurationId":{"type":"string"},"catalogDigest":{"type":"string"}},"required":["configurationId"]}},
 		{"name":"listCandidates","description":"列出配置候选与生效状态","paramsSchema":{"type":"object","additionalProperties":false,"properties":{}}},
-		{"name":"createDraft","description":"按活动目录和签名 Schema 创建非敏感配置草稿","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"configurationId":{"type":"string"},"catalogDigest":{"type":"string"},"values":{"type":"object"}},"required":["configurationId","catalogDigest","values"]}},
+		{"name":"createDraft","description":"按活动目录和签名 Schema 创建配置草稿并委托暂存只写秘密","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"configurationId":{"type":"string"},"catalogDigest":{"type":"string"},"values":{"type":"object"},"secrets":{"type":"object","additionalProperties":{"type":"string"}}},"required":["configurationId","catalogDigest","values"]}},
 		{"name":"discardDraft","description":"以 CAS 放弃尚未发布的配置草稿","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
 	]}`)
 }
