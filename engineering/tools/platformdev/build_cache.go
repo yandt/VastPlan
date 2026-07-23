@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 )
 
@@ -350,11 +351,17 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 		return fmt.Errorf("装配前端插件构建缓存: %w", err)
 	}
 
+	supplyChainToolingDigest, err := digestBuildInputs(r.options.root, []string{
+		"LICENSE", "NOTICE", "engineering/internal/cyclonedx", "engineering/internal/pluginsbom", "engineering/tools/pluginpackage",
+	}, []string{"plugin-supply-chain-tooling-v1"}, packageBuildInput)
+	if err != nil {
+		return fmt.Errorf("计算插件供应链工具摘要: %w", err)
+	}
 	dynamicFingerprint, err := r.dynamicGoFingerprint(ctx, goCache)
 	if err != nil {
 		return err
 	}
-	dynamicDigest := digestStrings(goIdentity, dynamicFingerprint, "dynamic-go-build-v1")
+	dynamicDigest := digestStrings(goIdentity, dynamicFingerprint, supplyChainToolingDigest, "dynamic-go-build-v2")
 	log.Printf("[4/6] 准备 bootstrap-policy dynamic-go 制品 digest=%s", dynamicDigest[:12])
 	dynamic, err := ensureCachedBuild(cacheRoot, "dynamic-go", dynamicDigest, func(candidate string) error {
 		return r.command(ctx, map[string]string{
@@ -375,8 +382,8 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	}
 
 	packageSourceDigest, err := digestBuildInputs(r.options.root, []string{
-		"LICENSE", "NOTICE", "package.json", "pnpm-lock.yaml", "extensions/plugins", "extensions/sdk/node", "engineering/tools/pluginpackage", "engineering/tools/build-node-backend-plugins.mjs",
-	}, []string{backendDigest, frontendDigest, dynamicDigest, "package-build-v2"}, packageBuildInput)
+		"LICENSE", "NOTICE", "package.json", "pnpm-lock.yaml", "extensions/plugins", "extensions/sdk/node", "engineering/internal/cyclonedx", "engineering/internal/pluginsbom", "engineering/tools/pluginpackage", "engineering/tools/build-node-backend-plugins.mjs",
+	}, []string{backendDigest, frontendDigest, dynamicDigest, supplyChainToolingDigest, "package-build-v3"}, packageBuildInput)
 	if err != nil {
 		return fmt.Errorf("计算插件制品摘要: %w", err)
 	}
@@ -499,9 +506,9 @@ func (r *runtime) validateFrontendBuild(candidate string) error {
 	var files []string
 	for _, spec := range specs {
 		if spec.frontend {
-			files = append(files, filepath.Join(spec.id, "frontend", "dist", "vastplan.browser-graph.json"), filepath.Join(spec.id, filepath.FromSlash(spec.frontendEntry)))
+			files = append(files, filepath.Join(spec.id, "frontend", "dist", "vastplan.browser-graph.json"), filepath.Join(spec.id, "frontend", "dist", "vastplan.browser-metafile.json"), filepath.Join(spec.id, filepath.FromSlash(spec.frontendEntry)))
 			if spec.frontendServerEntry != "" {
-				files = append(files, filepath.Join(spec.id, "frontend", "dist", "vastplan.server-graph.json"), filepath.Join(spec.id, filepath.FromSlash(spec.frontendServerEntry)))
+				files = append(files, filepath.Join(spec.id, "frontend", "dist", "vastplan.server-graph.json"), filepath.Join(spec.id, "frontend", "dist", "vastplan.server-metafile.json"), filepath.Join(spec.id, filepath.FromSlash(spec.frontendServerEntry)))
 			}
 		}
 	}
@@ -527,8 +534,13 @@ func (r *runtime) validatePackageRepository(repository string) error {
 		return err
 	}
 	for _, ref := range refs {
-		if _, _, err := repo.Read(ref); err != nil {
+		artifact, _, err := repo.Read(ref)
+		if err != nil {
 			return fmt.Errorf("校验缓存制品 %s@%s/%s: %w", ref.PluginID, ref.Version, ref.Channel, err)
+		}
+		manifest, err := pluginv1.ParseManifest(artifact.Manifest)
+		if err != nil || manifest.SupplyChain == nil || manifest.SupplyChain.SBOM == nil {
+			return fmt.Errorf("缓存制品 %s@%s/%s 缺少已绑定 SBOM", ref.PluginID, ref.Version, ref.Channel)
 		}
 	}
 	for _, pluginID := range pluginIDs {

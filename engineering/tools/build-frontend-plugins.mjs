@@ -50,6 +50,7 @@ for (const { id, entry, source, serverEntry, serverSource, deferred, pluginRoot 
   const graph = await createFrontendModuleGraph({ target: "browser", pluginRoot: buildRoot, entry, metafile: result.metafile, allowedExternals });
   const graphFile = resolve(outdir, "vastplan.browser-graph.json");
   await writeFile(graphFile, `${JSON.stringify(graph, null, 2)}\n`);
+  await writeFile(resolve(outdir, "vastplan.browser-metafile.json"), `${JSON.stringify(result.metafile, null, 2)}\n`);
   let serverGraph;
   let serverGraphFile;
   if (serverEntry !== undefined && serverSource !== undefined) {

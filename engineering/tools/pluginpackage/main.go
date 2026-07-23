@@ -62,7 +62,16 @@ func main() {
 			fatalf("读取候选制品失败: %v", err)
 		}
 	} else {
-		packageSource, cleanup := stagePackageWithSupplyChain(*source, *backendBin, *backendModule, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile, *sbomFile)
+		effectiveSBOM := *sbomFile
+		if effectiveSBOM == "" {
+			generated, cleanup, err := generateAutomaticSBOM(automaticSBOMInputs{Source: *source, BackendBin: *backendBin, NodeBackendModule: *backendModule, FrontendGraphRoot: *frontendGraphRoot, DynamicGoBin: *dynamicGoBin})
+			if err != nil {
+				fatalf("自动生成插件 SBOM 失败: %v", err)
+			}
+			defer cleanup()
+			effectiveSBOM = generated
+		}
+		packageSource, cleanup := stagePackageWithSupplyChain(*source, *backendBin, *backendModule, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile, effectiveSBOM)
 		defer cleanup()
 		var err error
 		builtBytes, manifest, err := pluginservice.PackageDirectory(packageSource)

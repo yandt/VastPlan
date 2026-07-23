@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 const outputRoot = option("--out-dir");
@@ -24,7 +24,7 @@ for (const directory of directories) {
   const outfile = resolve(outputRoot, id, entry);
   await rm(dirname(outfile), { recursive: true, force: true });
   await mkdir(dirname(outfile), { recursive: true });
-  await build({
+  const result = await build({
     entryPoints: [source],
     outfile,
     bundle: true,
@@ -34,8 +34,10 @@ for (const directory of directories) {
     legalComments: "none",
     minify: true,
     sourcemap: false,
+    metafile: true,
     banner: { js: 'import { createRequire as __vastplanCreateRequire } from "node:module"; const require = __vastplanCreateRequire(import.meta.url);' },
   });
+  await writeFile(resolve(dirname(outfile), "vastplan.node-metafile.json"), `${JSON.stringify(result.metafile, null, 2)}\n`);
 }
 
 function option(name) {

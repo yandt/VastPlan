@@ -142,6 +142,8 @@ func (h *frontendHMR) sourceSignatures() (frontendSourceSignatures, error) {
 		"extensions/sdk/ts/workbench-sdk/package.json",
 		"engineering/tools/build-frontend.sh",
 		"engineering/tools/build-frontend-plugins.mjs",
+		"engineering/tools/frontend-module-graph.mjs",
+		"engineering/tools/frontend-server-build.mjs",
 		"package.json",
 		"pnpm-lock.yaml",
 		"pnpm-workspace.yaml",

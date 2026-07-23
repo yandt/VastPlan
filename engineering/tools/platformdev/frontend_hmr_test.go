@@ -124,6 +124,8 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 		"extensions/sdk/ts/workbench-sdk/package.json":                 "{}",
 		"engineering/tools/build-frontend.sh":                          "build-v1",
 		"engineering/tools/build-frontend-plugins.mjs":                 "build-v1",
+		"engineering/tools/frontend-module-graph.mjs":                  "graph-v1",
+		"engineering/tools/frontend-server-build.mjs":                  "server-v1",
 		"package.json":        "{}",
 		"pnpm-lock.yaml":      "lockfileVersion: 1",
 		"pnpm-workspace.yaml": "packages: []",

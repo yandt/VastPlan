@@ -29,5 +29,7 @@ export async function buildFrontendServerGraph({ buildRoot, serverEntry, serverS
   const graph = await createFrontendModuleGraph({ target: "server", pluginRoot: buildRoot, entry: serverEntry, metafile: result.metafile, allowedExternals: serverAllowedExternals });
   const graphFile = resolve(serverOutdir, "vastplan.server-graph.json");
   await writeFile(graphFile, `${JSON.stringify(graph, null, 2)}\n`);
-  return { graph, graphFile };
+  const metafile = resolve(serverOutdir, "vastplan.server-metafile.json");
+  await writeFile(metafile, `${JSON.stringify(result.metafile, null, 2)}\n`);
+  return { graph, graphFile, metafile };
 }
