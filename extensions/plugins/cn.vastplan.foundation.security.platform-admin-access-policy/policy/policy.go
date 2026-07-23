@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
+	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
@@ -21,7 +22,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.24.0"
+	PluginVersion = "0.25.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -140,16 +141,23 @@ func governedCapability(capability string) bool {
 }
 
 func configurationControllerAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
-	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || c.GetCaller().GetId() != pluginconfiguration.PluginSettingsID ||
-		request.ExtensionPoint != configurationv1.ExtensionPoint || !strings.HasPrefix(request.Capability, "configuration.") {
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || c.GetCaller().GetId() != pluginconfiguration.PluginSettingsID || !strings.HasPrefix(request.Capability, "configuration.") {
 		return false
 	}
-	switch request.Operation {
-	case configurationv1.OperationPrepare, configurationv1.OperationCommit, configurationv1.OperationAbort, configurationv1.OperationStatus:
-		return true
-	default:
-		return false
+	if request.ExtensionPoint == configurationv1.ExtensionPoint {
+		switch request.Operation {
+		case configurationv1.OperationPrepare, configurationv1.OperationCommit, configurationv1.OperationAbort, configurationv1.OperationStatus:
+			return true
+		}
 	}
+	if request.ExtensionPoint == configurationresourcev1.ExtensionPoint {
+		switch request.Operation {
+		case configurationresourcev1.OperationList, configurationresourcev1.OperationGet, configurationresourcev1.OperationPrepare,
+			configurationresourcev1.OperationCommit, configurationresourcev1.OperationAbort, configurationresourcev1.OperationStatus:
+			return true
+		}
+	}
+	return false
 }
 
 func pluginConfigurationCatalogReadAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {

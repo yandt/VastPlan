@@ -252,9 +252,11 @@ func archiveName(name string) (string, error) {
 }
 
 func sameJSON(left, right []byte) bool {
-	var a, b bytes.Buffer
-	if json.Compact(&a, left) != nil || json.Compact(&b, right) != nil {
+	var leftValue, rightValue any
+	if json.Unmarshal(left, &leftValue) != nil || json.Unmarshal(right, &rightValue) != nil {
 		return false
 	}
-	return bytes.Equal(a.Bytes(), b.Bytes())
+	leftCanonical, leftErr := json.Marshal(leftValue)
+	rightCanonical, rightErr := json.Marshal(rightValue)
+	return leftErr == nil && rightErr == nil && bytes.Equal(leftCanonical, rightCanonical)
 }

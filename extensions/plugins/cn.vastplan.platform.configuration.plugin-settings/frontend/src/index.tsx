@@ -1,5 +1,6 @@
 import { createBrowserPlatformAdminClient, type PlatformAdminClient, type PluginConfigurationCandidate, type PluginConfigurationDefinition } from "@vastplan/platform-admin";
 import { defineCollectionPage, managementServicesFor, message, type CollectionPageDefinition, type CollectionQuery, type FormSchema, type WorkbenchFormDefinition, type WorkbenchFrontendPluginContext } from "@vastplan/workbench-sdk";
+import { createPluginConfigurationResourcePage } from "./resource-page";
 
 const namespace = "cn.vastplan.platform.configuration.plugin-settings";
 
@@ -174,6 +175,7 @@ export default {
       const suffix = services.length === 1 ? "" : `/${service.id}`;
       const title = context.i18n.message(services.length === 1 ? "page.title" : "page.titleService", services.length === 1 ? "插件配置" : "插件配置 · {service}", { service: service.label ?? service.id });
       context.addCollectionPage(createPluginConfigurationPage(createBrowserPlatformAdminClient(context.portal.id, service.id), service.id, `/settings/plugin-configurations${suffix}`, title));
+      context.addRecordPage(createPluginConfigurationResourcePage(createBrowserPlatformAdminClient(context.portal.id, service.id), service.id, `/settings/plugin-configuration-resources${suffix}`));
     }
   },
   localization: { defaultLocale: "zh-CN", messages: {

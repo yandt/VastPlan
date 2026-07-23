@@ -8,19 +8,23 @@ import (
 	"io"
 	"strings"
 
+	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 type operationRequest struct {
-	ID               string            `json:"id"`
-	ConfigurationID  string            `json:"configurationId"`
-	CatalogDigest    string            `json:"catalogDigest"`
-	Values           json.RawMessage   `json:"values"`
-	Secrets          map[string]string `json:"secrets"`
-	ExpectedRevision uint64            `json:"expectedRevision"`
+	ID                   string            `json:"id"`
+	ConfigurationID      string            `json:"configurationId"`
+	ResourceCollectionID string            `json:"resourceCollectionId"`
+	ResourceID           string            `json:"resourceId"`
+	CatalogDigest        string            `json:"catalogDigest"`
+	Cursor               string            `json:"cursor"`
+	Limit                uint32            `json:"limit"`
+	Values               json.RawMessage   `json:"values"`
+	Secrets              map[string]string `json:"secrets"`
+	ExpectedRevision     uint64            `json:"expectedRevision"`
 }
 
 func ensureEOF(decoder *json.Decoder) error {
@@ -86,6 +90,25 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 	case "listCandidates":
 		items, err := s.ListCandidates(call)
 		return map[string]any{"items": items}, err
+	case "listResourceItems":
+		return s.ListResourceItems(ctx, host, call, request.ConfigurationID, request.ResourceCollectionID, request.CatalogDigest, request.Cursor, request.Limit)
+	case "getResourceItem":
+		return s.GetResourceItem(ctx, host, call, request.ConfigurationID, request.ResourceCollectionID, request.ResourceID, request.CatalogDigest)
+	case "createResourceDraft":
+		return s.CreateResourceDraft(ctx, host, call, resourceDraftRequest{
+			ConfigurationID: request.ConfigurationID, ResourceCollectionID: request.ResourceCollectionID, CatalogDigest: request.CatalogDigest,
+			Action: configurationresourcev1.ActionCreate, Values: request.Values, Secrets: request.Secrets,
+		})
+	case "updateResourceDraft":
+		return s.CreateResourceDraft(ctx, host, call, resourceDraftRequest{
+			ConfigurationID: request.ConfigurationID, ResourceCollectionID: request.ResourceCollectionID, ResourceID: request.ResourceID, CatalogDigest: request.CatalogDigest,
+			Action: configurationresourcev1.ActionUpdate, Values: request.Values, Secrets: request.Secrets,
+		})
+	case "deleteResourceDraft":
+		return s.CreateResourceDraft(ctx, host, call, resourceDraftRequest{
+			ConfigurationID: request.ConfigurationID, ResourceCollectionID: request.ResourceCollectionID, ResourceID: request.ResourceID, CatalogDigest: request.CatalogDigest,
+			Action: configurationresourcev1.ActionDelete,
+		})
 	case "createDraft":
 		return s.CreateDraft(ctx, host, call, pluginconfiguration.CreateDraftRequest{
 			ConfigurationID: request.ConfigurationID,
@@ -115,6 +138,14 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 		return s.ActivateHotServiceCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
 	case "abortHotServiceCandidate":
 		return s.AbortHotServiceCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "submitResourceDraft":
+		return s.SubmitResourceDraft(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "approveResourceCandidate":
+		return s.ApproveResourceCandidate(call, request.ID, request.ExpectedRevision)
+	case "activateResourceCandidate":
+		return s.ActivateResourceCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "abortResourceCandidate":
+		return s.AbortResourceCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
 	default:
 		return nil, ErrInvalid
 	}
@@ -135,38 +166,4 @@ func domainErrorCode(err error) string {
 
 func domainError(code string, err error) (*contractv1.CallResult, []byte, error) {
 	return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: err.Error()}}, nil, nil
-}
-
-func Descriptor() []byte {
-	return []byte(`{"title":"插件配置协调器","subcommands":[
-		{"name":"listDefinitions","description":"列出活动部署中的可信插件配置定义","paramsSchema":{"type":"object","additionalProperties":false,"properties":{}}},
-		{"name":"getDefinition","description":"按不透明资源 ID 读取可信配置定义","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"configurationId":{"type":"string"},"catalogDigest":{"type":"string"}},"required":["configurationId"]}},
-		{"name":"listCandidates","description":"列出配置候选与生效状态","paramsSchema":{"type":"object","additionalProperties":false,"properties":{}}},
-		{"name":"createDraft","description":"按活动目录和签名 Schema 创建配置草稿并委托暂存只写秘密","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"configurationId":{"type":"string"},"catalogDigest":{"type":"string"},"values":{"type":"object"},"secrets":{"type":"object","additionalProperties":{"type":"string"}}},"required":["configurationId","catalogDigest","values"]}},
-		{"name":"discardDraft","description":"以 CAS 放弃尚未发布的配置草稿","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"submitDraft","description":"把 Application Deployment 配置草稿提交为受治理服务修订","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"activateCandidate","description":"发布已审批配置修订并以 readiness 驱动凭证提交或回滚","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"submitProfileDraft","description":"把 Platform Profile 配置草稿提交为独立候选和异人审批","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"approveProfileCandidate","description":"由不同主体批准 Platform Profile 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"activateProfileCandidate","description":"执行 Platform Catalog、Deployment、readiness 与凭证激活 Saga","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"abortProfileCandidate","description":"放弃待审批或已审批的 Platform Profile 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"submitHotServiceDraft","description":"向目标插件 configuration.v1 控制器准备 Hot Service 候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"approveHotServiceCandidate","description":"由不同主体批准 Hot Service 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"activateHotServiceCandidate","description":"激活候选凭证并原子提交目标插件 Hot Service 配置","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-		,{"name":"abortHotServiceCandidate","description":"放弃尚未提交的 Hot Service 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
-	]}`)
-}
-
-func Contribution(service *Service) sdk.Contribution {
-	handler := func(operation string) sdk.Handler {
-		return func(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
-			return service.Handler(ctx, host, call, payload, operation)
-		}
-	}
-	operations := []string{"listDefinitions", "getDefinition", "listCandidates", "createDraft", "discardDraft", "submitDraft", "activateCandidate", "submitProfileDraft", "approveProfileCandidate", "activateProfileCandidate", "abortProfileCandidate", "submitHotServiceDraft", "approveHotServiceCandidate", "activateHotServiceCandidate", "abortHotServiceCandidate"}
-	handlers := make(map[string]sdk.Handler, len(operations))
-	for _, operation := range operations {
-		handlers[operation] = handler(operation)
-	}
-	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: handlers}
 }

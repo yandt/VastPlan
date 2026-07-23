@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { loadConfiguration } from "../config.mjs";
+import { normalizeProfile } from "../config.mjs";
 import { WebhookDelivery } from "../delivery.mjs";
 
 const ref = {handle:"credential://managed/webhook-token",scope:"tenant",owner:"cn.vastplan.platform.security.authentication.delivery.webhook",purpose:"authentication.delivery.webhook",version:1};
-const configuration = () => loadConfiguration(JSON.stringify({profiles:{"enterprise-mail":{endpoint:"https://delivery.example.test/v1/code",authorizationRef:ref,channels:["email"],timeoutMs:1000}}}));
-const request = {challengeId:"challenge.12345678",deliveryProfileId:"enterprise-mail",channel:"email",identifier:"alice@example.com",locale:"zh-CN",code:"123456",expiresAt:new Date(Date.now()+300000).toISOString()};
+const resourceId = `cfgp_${"2".repeat(32)}`;
+const values = {displayName:"Enterprise Mail",endpoint:"https://delivery.example.test/v1/code",channels:["email"],timeoutMs:1000};
+const configuration = () => new Map([[`tenant-a\0${resourceId}`, normalizeProfile(resourceId, values, {authorization:ref})]]);
+const request = {challengeId:"challenge.12345678",deliveryProfileId:resourceId,channel:"email",identifier:"alice@example.com",locale:"zh-CN",code:"123456",expiresAt:new Date(Date.now()+300000).toISOString()};
 const context = {tenant_id:"tenant-a",call_path:["authentication.provider/enterprise-one-time-code#continue","tool.package/foundation.security.authentication.delivery#deliver"]};
 
 test("Webhook Delivery obtains authorization only through Material Lease", async () => {
@@ -27,6 +29,6 @@ test("Webhook Delivery rejects untrusted callers and malformed upstream results"
 });
 
 test("Webhook Delivery configuration requires HTTPS and managed credentials", () => {
-  assert.throws(()=>loadConfiguration(JSON.stringify({profiles:{bad:{endpoint:"http://delivery.example.test",authorizationRef:ref,channels:["email"]}}})),/HTTPS/);
-  assert.throws(()=>loadConfiguration(JSON.stringify({profiles:{bad:{endpoint:"https://delivery.example.test",authorizationRef:{...ref,handle:"plain-secret"},channels:["email"]}}})),/authorizationRef/);
+  assert.throws(()=>normalizeProfile(resourceId,{...values,endpoint:"http://delivery.example.test"},{authorization:ref}),/HTTPS/);
+  assert.throws(()=>normalizeProfile(resourceId,values,{authorization:{...ref,handle:"plain-secret"}}),/authorizationRef/);
 });

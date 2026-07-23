@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
+	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
@@ -46,6 +47,17 @@ func (s *Service) recoverInterrupted(ctx context.Context, host sdk.Host, call *c
 				return errors.Join(abortErr, err)
 			}
 		case pluginconfiguration.CandidateRollingBack:
+			if item.candidate.ApplyPath == pluginconfiguration.ApplyResourceProfile {
+				s.mu.Lock()
+				activation, exists := s.tenantLocked(item.tenant).ResourceActivations[item.candidate.ID]
+				s.mu.Unlock()
+				if exists && activation.Status == resourceAborting {
+					if _, err := s.continueResourceAbort(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
+						return err
+					}
+					continue
+				}
+			}
 			if item.candidate.ApplyPath == pluginconfiguration.ApplyHotService {
 				s.mu.Lock()
 				activation, exists := s.tenantLocked(item.tenant).HotActivations[item.candidate.ID]
@@ -85,10 +97,20 @@ func (s *Service) recoverInterrupted(ctx context.Context, host sdk.Host, call *c
 				if err := s.recoverHotPublishing(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
 					return err
 				}
+			case pluginconfiguration.ApplyResourceProfile:
+				if err := s.recoverResourcePublishing(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
+					return err
+				}
 			default:
 				return ErrInvalid
 			}
 		case pluginconfiguration.CandidateActivating:
+			if item.candidate.ApplyPath == pluginconfiguration.ApplyResourceProfile {
+				if _, err := s.continueResourceActivation(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
+					return err
+				}
+				continue
+			}
 			if item.candidate.ApplyPath == pluginconfiguration.ApplyHotService {
 				if _, err := s.continueHotActivation(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
 					return err
@@ -119,6 +141,32 @@ func (s *Service) recoverInterrupted(ctx context.Context, host sdk.Host, call *c
 				return ErrInvalid
 			}
 		}
+	}
+	return nil
+}
+
+func (s *Service) recoverResourcePublishing(ctx context.Context, host sdk.Host, call *contractv1.CallContext, tenant, actor, id string) error {
+	s.mu.Lock()
+	record, ok := s.tenantLocked(tenant).ResourceActivations[id]
+	s.mu.Unlock()
+	if !ok {
+		return ErrNotFound
+	}
+	if record.Status == resourcePreparing {
+		_, err := s.resumeResourcePreparation(ctx, host, call, tenant, actor, id)
+		return err
+	}
+	if record.Status != resourcePendingApproval && record.Status != resourceApproved {
+		return ErrConflict
+	}
+	observation, err := callResourceObservation(ctx, host, call, record.Target, configurationresourcev1.OperationStatus, configurationresourcev1.StatusRequest{
+		CollectionID: record.Prepare.CollectionID, ResourceID: record.Prepare.ResourceID, CandidateID: id, RequestDigest: record.RequestDigest,
+	})
+	if err != nil {
+		return err
+	}
+	if observation.Candidate == nil || observation.Candidate.Status != configurationresourcev1.StatusPrepared {
+		return errors.New("configuration.resource.v1 待审批 Candidate 状态漂移")
 	}
 	return nil
 }

@@ -21,6 +21,10 @@ func stagePackage(source, backendBin, frontendBundle, frontendGraph, frontendGra
 }
 
 func stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
+	return stagePackageWithBackendModuleAndGraphs(source, backendBin, "", frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource)
+}
+
+func stagePackageWithBackendModuleAndGraphs(source, backendBin, backendModule, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
 	manifestRaw, err := os.ReadFile(filepath.Join(source, "vastplan.plugin.json"))
 	if err != nil {
 		fatalf("读取插件清单失败: %v", err)
@@ -32,7 +36,7 @@ func stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, f
 	licensePresent := declaredFilePresent(source, manifest.LicenseFile, manifest.License != "", "许可证")
 	noticePresent := declaredFilePresent(source, manifest.NoticeFile, manifest.NoticeFile != "", "归属告示")
 	validateFrontendInputs(frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot)
-	if backendBin == "" && frontendBundle == "" && frontendGraph == "" && frontendServerGraph == "" && dynamicGoBin == "" && licensePresent && noticePresent {
+	if backendBin == "" && backendModule == "" && frontendBundle == "" && frontendGraph == "" && frontendServerGraph == "" && dynamicGoBin == "" && licensePresent && noticePresent {
 		return source, func() {}
 	}
 
@@ -40,6 +44,7 @@ func stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, f
 	dynamicGoEntry := validateDynamicGoInput(&manifest, dynamicGoBin, dynamicGoFingerprint)
 	manifestChanged = dynamicGoEntry != ""
 	backendEntry := validateBackendInput(manifest, backendBin)
+	backendModuleEntry := validateBackendModuleInput(manifest, backendModule)
 	frontendEntry := validateLegacyFrontendInput(manifest, frontendBundle)
 	var frontendGraphContract *verifiedFrontendGraph
 	if frontendGraph != "" {
@@ -58,6 +63,7 @@ func stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, f
 		fatalf("复制插件目录失败: %v", err)
 	}
 	copyBuildInput(staging, backendEntry, backendBin, 0o755, "backend 入口")
+	copyBuildInput(staging, backendModuleEntry, backendModule, 0o644, "node-worker backend bundle")
 	copyBuildInput(staging, frontendEntry, frontendBundle, 0o644, "frontend bundle")
 	copyBuildInput(staging, dynamicGoEntry, dynamicGoBin, 0o644, "dynamic-go 模块")
 	if frontendGraphContract != nil {
@@ -72,6 +78,21 @@ func stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, f
 		writeStagedManifest(staging, manifest, cleanup)
 	}
 	return staging, cleanup
+}
+
+func validateBackendModuleInput(manifest pluginv1.Manifest, filename string) string {
+	if filename == "" {
+		return ""
+	}
+	if manifest.Execution == nil || manifest.Execution.Backend == nil || manifest.Execution.Backend.Driver != "node-worker" {
+		fatalf("-backend-module 只允许 node-worker 插件")
+	}
+	entry := manifest.Entry["backend"]
+	if entry == "" || (!strings.HasSuffix(entry, ".js") && !strings.HasSuffix(entry, ".mjs")) {
+		fatalf("node-worker 清单未声明 JavaScript entry.backend")
+	}
+	validateRegularInput(filename, false, "node-worker backend bundle")
+	return entry
 }
 
 func validateFrontendInputs(bundle, graph, serverGraph, root string) {

@@ -58,4 +58,31 @@ describe("Platform plugin configuration routes", () => {
     expect((await fetch(base, { method: "POST", headers: server.writeHeaders, body: "{}" })).status).toBe(405);
     expect(calls).toHaveLength(0);
   });
+
+  it("routes resource-profile reads and mutations through governed operations", async () => {
+    const calls: PlatformInvocation[] = [];
+    const operations = ["listResourceItems", "getResourceItem", "createResourceDraft", "updateResourceDraft", "deleteResourceDraft", "submitResourceDraft", "approveResourceCandidate", "activateResourceCandidate", "abortResourceCandidate"];
+    const server = await startPlatformManagementTestServer(
+      recordingPlatformInvoker(calls, (_capability, operation) => operation.startsWith("list") ? { items: [] } : {}),
+      ["platform.plugin-configuration.read", "platform.plugin-configuration.write", "platform.plugin-configuration.resource.publish"],
+      managementBinding([{ capability: "platform.plugin-configuration", read: operations.slice(0, 2), write: operations.slice(2) }]),
+    );
+    close.push(server.close);
+    const base = `${server.origin}/v1/portals/operations/platform/services/core/plugin-configurations`;
+    const configurationId = "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", resourceCollectionId = "cfgc_bbbbbbbbbbbbbbbbbbbbbbbb", resourceId = "cfgp_cccccccccccccccccccccccc", catalogDigest = "d".repeat(64);
+    const query = `configurationId=${configurationId}&resourceCollectionId=${resourceCollectionId}&catalogDigest=${catalogDigest}`;
+    expect((await fetch(`${base}/resources?${query}`, { headers: server.readHeaders })).status).toBe(200);
+    expect((await fetch(`${base}/resources/${resourceId}?${query}`, { headers: server.readHeaders })).status).toBe(200);
+    for (const action of ["create", "update", "delete"]) {
+      expect((await fetch(`${base}/resources/candidates/${action}`, { method: "POST", headers: server.writeHeaders, body: JSON.stringify({ configurationId, resourceCollectionId, resourceId, catalogDigest, values: { endpoint: "https://notify.example.test" } }) })).status).toBe(200);
+    }
+    const candidateId = "pcfg_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+    for (const action of ["submit-resource", "approve-resource", "activate-resource", "abort-resource"]) {
+      expect((await fetch(`${base}/candidates/${candidateId}/${action}`, { method: "POST", headers: server.writeHeaders, body: '{"expectedRevision":4}' })).status).toBe(200);
+    }
+    expect(calls.map((call) => call.operation)).toEqual(operations);
+    expect(calls[0]?.payload).toEqual({ configurationId, resourceCollectionId, catalogDigest });
+    expect(calls[1]?.payload).toEqual({ configurationId, resourceCollectionId, catalogDigest, resourceId });
+    expect(calls.every((call) => call.logicalService === "platform.core.primary")).toBe(true);
+  });
 });

@@ -82,8 +82,8 @@ type runtime struct {
 }
 
 type packageSpec struct {
-	id, frontendEntry, frontendServerEntry string
-	backend, frontend                      bool
+	id, backendEntry, frontendEntry, frontendServerEntry string
+	backend, nodeBackend, frontend                       bool
 }
 
 func main() {
@@ -200,7 +200,7 @@ func (r *runtime) command(ctx context.Context, extra map[string]string, name str
 	return nil
 }
 
-func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, frontendModulesDir, dynamicDir string) error {
+func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, nodeBackendModulesDir, frontendModulesDir, dynamicDir string) error {
 	specs, err := discoverPackageSpecs(r.options.root)
 	if err != nil {
 		return err
@@ -209,6 +209,9 @@ func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, fron
 		args := []string{"run", "./engineering/tools/pluginpackage", "-source", filepath.Join("extensions", "plugins", spec.id), "-repository", repository}
 		if spec.backend {
 			args = append(args, "-backend-bin", filepath.Join(binDir, spec.id))
+		}
+		if spec.nodeBackend {
+			args = append(args, "-backend-module", filepath.Join(nodeBackendModulesDir, spec.id, filepath.FromSlash(spec.backendEntry)))
 		}
 		if spec.frontend {
 			graphRoot := filepath.Join(frontendModulesDir, spec.id)
@@ -259,7 +262,7 @@ func (r *runtime) signPackageRepository() error {
 	for _, ref := range refs {
 		artifact, packageBytes, err := repository.Read(ref)
 		if err != nil {
-			return err
+			return fmt.Errorf("读取待签制品 %s@%s/%s: %w", ref.PluginID, ref.Version, ref.Channel, err)
 		}
 		manifest, err := pluginv1.ParseManifest(artifact.Manifest)
 		if err != nil {
@@ -363,8 +366,8 @@ func packageRepositoryRefs(root string) ([]pluginservice.Ref, error) {
 }
 
 // discoverPackageSpecs makes plugin manifests the sole development-time source
-// for frontend and native-Go package inputs. A new UI plugin therefore needs
-// no platformdev allow-list entry before its source can be hot-reloaded.
+// for every source-packaged backend plus frontend and native-Go build inputs.
+// New Node/Python plugins therefore need no platformdev allow-list entry.
 func discoverPackageSpecs(root string) ([]packageSpec, error) {
 	pluginsRoot := filepath.Join(root, "extensions", "plugins")
 	directories, err := os.ReadDir(pluginsRoot)
@@ -390,6 +393,7 @@ func discoverPackageSpecs(root string) ([]packageSpec, error) {
 		}
 		frontendEntry := strings.TrimSpace(manifest.Entry["frontend"])
 		frontendServerEntry := strings.TrimSpace(manifest.Entry["frontendServer"])
+		backendEntry := strings.TrimSpace(manifest.Entry["backend"])
 		if frontendEntry != "" && (!strings.HasPrefix(frontendEntry, "frontend/dist/") || strings.Contains(frontendEntry, "..")) {
 			return nil, fmt.Errorf("插件 %s entry.frontend 必须位于 frontend/dist/", manifest.ID)
 		}
@@ -399,13 +403,14 @@ func discoverPackageSpecs(root string) ([]packageSpec, error) {
 		_, backendErr := os.Stat(filepath.Join(pluginRoot, "backend", "main.go"))
 		dynamicGo := manifest.Execution != nil && manifest.Execution.Backend != nil && manifest.Execution.Backend.DynamicGo != nil
 		backend := backendErr == nil && !dynamicGo
+		nodeBackend := manifest.Execution != nil && manifest.Execution.Backend != nil && manifest.Execution.Backend.Driver == "node-worker"
 		if backendErr != nil && !errors.Is(backendErr, os.ErrNotExist) {
 			return nil, fmt.Errorf("读取插件 %s backend 入口: %w", manifest.ID, backendErr)
 		}
-		if !backend && frontendEntry == "" {
+		if (backendEntry == "" || dynamicGo) && frontendEntry == "" {
 			continue
 		}
-		specs = append(specs, packageSpec{id: manifest.ID, backend: backend, frontend: frontendEntry != "", frontendEntry: frontendEntry, frontendServerEntry: frontendServerEntry})
+		specs = append(specs, packageSpec{id: manifest.ID, backend: backend, nodeBackend: nodeBackend, frontend: frontendEntry != "", backendEntry: backendEntry, frontendEntry: frontendEntry, frontendServerEntry: frontendServerEntry})
 	}
 	return specs, nil
 }

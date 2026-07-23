@@ -44,15 +44,30 @@ type Store struct {
 
 func (s Store) Issue(ctx context.Context, tenant string, request sharedauthority.IssueRequest) (sharedauthority.Issued, error) {
 	if s.KV == nil || s.Catalogs == nil || strings.TrimSpace(tenant) == "" || !validCandidateID(request.CandidateID) ||
-		!strings.HasPrefix(request.ConfigurationID, "cfg_") || len(request.CatalogDigest) != 64 || strings.TrimSpace(request.FieldID) == "" {
+		!strings.HasPrefix(request.ConfigurationID, "cfg_") || len(request.CatalogDigest) != 64 || strings.TrimSpace(request.FieldID) == "" ||
+		(request.ResourceCollectionID == "") != (request.ResourceID == "") {
 		return sharedauthority.Issued{}, sharedauthority.ErrInvalid
 	}
 	definition, err := s.findDefinition(ctx, tenant, request)
 	if err != nil {
 		return sharedauthority.Issued{}, err
 	}
+	fields := definition.ManagedCredentials
+	schemaDigest := definition.SchemaDigest
+	resourcePrefix := "plugin-configuration/" + definition.ID
+	if request.ResourceCollectionID != "" {
+		if !validResourceID(request.ResourceCollectionID, "cfgc_", 24) || !validResourceID(request.ResourceID, "cfgp_", 32) {
+			return sharedauthority.Issued{}, sharedauthority.ErrInvalid
+		}
+		collection, ok := findResourceCollection(definition, request.ResourceCollectionID)
+		if !ok {
+			return sharedauthority.Issued{}, sharedauthority.ErrNotFound
+		}
+		fields, schemaDigest = collection.ManagedCredentials, collection.SchemaDigest
+		resourcePrefix += "/" + collection.ID + "/" + request.ResourceID
+	}
 	purpose := ""
-	for _, field := range definition.ManagedCredentials {
+	for _, field := range fields {
 		if field.ID == request.FieldID {
 			purpose = field.Purpose
 			break
@@ -69,11 +84,11 @@ func (s Store) Issue(ctx context.Context, tenant string, request sharedauthority
 		}
 		claims := sharedauthority.Claims{
 			SchemaVersion: sharedauthority.SchemaVersion, AuthorityID: sharedauthority.TokenPrefix + digest,
-			TenantID: tenant, ConfigurationID: definition.ID, CatalogDigest: request.CatalogDigest,
+			TenantID: tenant, ConfigurationID: definition.ID, ResourceCollectionID: request.ResourceCollectionID, ResourceID: request.ResourceID, CatalogDigest: request.CatalogDigest,
 			Deployment: definition.Deployment, UnitID: definition.UnitID, CandidateID: request.CandidateID,
 			FieldID: request.FieldID, Owner: definition.PluginID, Purpose: purpose,
-			Resource:       "plugin-configuration/" + definition.ID + "/" + request.CandidateID + "/" + request.FieldID,
-			ArtifactSHA256: definition.Artifact.SHA256, SchemaDigest: definition.SchemaDigest,
+			Resource:       resourcePrefix + "/" + request.CandidateID + "/" + request.FieldID,
+			ArtifactSHA256: definition.Artifact.SHA256, SchemaDigest: schemaDigest,
 			IssuedAt: now, ExpiresAt: now.Add(sharedauthority.DefaultTTL),
 		}
 		if err := claims.Validate(now, tenant); err != nil {
@@ -92,6 +107,23 @@ func (s Store) Issue(ctx context.Context, tenant string, request sharedauthority
 		}
 	}
 	return sharedauthority.Issued{}, errors.New("生成配置授权时连续发生随机标识冲突")
+}
+
+func findResourceCollection(definition pluginconfiguration.Definition, id string) (pluginconfiguration.ResourceCollection, bool) {
+	for _, collection := range definition.ResourceCollections {
+		if collection.ID == id {
+			return collection, true
+		}
+	}
+	return pluginconfiguration.ResourceCollection{}, false
+}
+
+func validResourceID(value, prefix string, hexLength int) bool {
+	if len(value) != len(prefix)+hexLength || !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	_, err := hex.DecodeString(strings.TrimPrefix(value, prefix))
+	return err == nil
 }
 
 func (s Store) Consume(ctx context.Context, tenant, token string) (sharedauthority.Claims, error) {

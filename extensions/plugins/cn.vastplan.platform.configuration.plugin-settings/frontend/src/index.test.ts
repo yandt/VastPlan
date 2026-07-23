@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PlatformAdminClient, PluginConfigurationDefinition } from "@vastplan/platform-admin";
 import { message } from "@vastplan/workbench-sdk";
 import { createPluginConfigurationPage } from "./index";
+import { createPluginConfigurationResourcePage } from "./resource-page";
 
 const definition: PluginConfigurationDefinition = {
   id: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", deployment: "agent-services", unitId: "api", pluginId: "com.example.configured", pluginName: "Configured",
@@ -133,5 +134,59 @@ describe("plugin configuration workbench", () => {
     expect(activate).toHaveBeenCalledWith("pcfg_hot", 5);
     expect(abort).toHaveBeenCalledWith("pcfg_hot", 5);
     expect((page.collection.actions ?? []).filter((action) => action.id.includes("hot")).every((action) => action.requiredPermissions?.includes("platform.plugin-configuration.hot.publish"))).toBe(true);
+  });
+
+  it("manages resource profiles through the dedicated resource Saga", async () => {
+    const resourceDefinition: PluginConfigurationDefinition = {
+      ...definition,
+      resourceCollections: [{
+        id: "cfgc_aaaaaaaaaaaaaaaaaaaaaaaa",
+        kind: "profile",
+        title: "Webhook Delivery Profiles",
+        minItems: 1,
+        maxItems: 8,
+        schema: { type: "object", additionalProperties: false, required: ["displayName", "endpoint"], properties: { displayName: { type: "string" }, endpoint: { type: "string" } } },
+        schemaDigest: "e".repeat(64),
+        managedCredentials: [{ id: "authorization", title: "Authorization", purpose: "authentication.delivery.webhook.authorization", required: true }],
+      }],
+    };
+    const item = {
+      resourceId: "cfgp_aaaaaaaaaaaaaaaaaaaaaaaa",
+      revision: 3,
+      values: { displayName: "Enterprise SMS", endpoint: "https://notify.example.test" },
+      credentialStates: [{ fieldId: "authorization", configured: true, version: 2 }],
+      updatedAt: "2026-07-23T00:00:00Z",
+    };
+    const update = vi.fn(), submit = vi.fn(), approve = vi.fn(), activate = vi.fn(), abort = vi.fn();
+    const client = {
+      listPluginConfigurationDefinitions: vi.fn(async () => [resourceDefinition]),
+      listPluginConfigurationCandidates: vi.fn(async () => [{
+        id: "pcfg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", configurationId: definition.id, revision: 4,
+        status: "Publishing", applyPath: "resource-profile", resourceCollectionId: resourceDefinition.resourceCollections![0]!.id,
+        resourceId: item.resourceId, resourceAction: "update", externalStatus: "Approved", values: item.values,
+        catalogDigest: definition.catalogDigest, schemaDigest: definition.schemaDigest, artifactSha256: definition.artifact.sha256,
+        createdBy: "alice", createdAt: item.updatedAt, updatedAt: item.updatedAt,
+      }]),
+      listPluginConfigurationResources: vi.fn(async () => ({ items: [item] })),
+      updatePluginConfigurationResourceDraft: update,
+      submitPluginConfigurationResourceDraft: submit,
+      approvePluginConfigurationResourceCandidate: approve,
+      activatePluginConfigurationResourceCandidate: activate,
+      abortPluginConfigurationResourceCandidate: abort,
+    } as unknown as PlatformAdminClient;
+    const page = createPluginConfigurationResourcePage(client, "configuration", "/settings/plugin-configuration-resources");
+    const result = await page.loadMaster({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
+    expect(result.items[0]).toMatchObject({ id: item.resourceId, name: "Enterprise SMS", status: "Publishing" });
+    const prepared = await page.editor?.prepare?.(result.items, new AbortController().signal);
+    expect((prepared?.schema?.schema.properties as Record<string, unknown>).values).toEqual(resourceDefinition.resourceCollections![0]!.schema);
+    await page.editor?.submit({ value: { values: { displayName: "Enterprise SMS v2", endpoint: "https://notify.example.test" }, secrets: {} }, selected: [{ ...result.items[0]!, candidate: undefined }] }, new AbortController().signal);
+    expect(update).toHaveBeenCalledWith(definition.id, resourceDefinition.resourceCollections![0]!.id, item.resourceId, definition.catalogDigest, { displayName: "Enterprise SMS v2", endpoint: "https://notify.example.test" }, {});
+    for (const id of ["resource-submit", "resource-approve", "resource-activate", "resource-abort"]) {
+      await page.runAction?.({ action: { id, label: id, placement: "record.detail" }, record: result.items[0], refresh() {} }, new AbortController().signal);
+    }
+    expect(submit).toHaveBeenCalledWith("pcfg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 4);
+    expect(approve).toHaveBeenCalledWith("pcfg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 4);
+    expect(activate).toHaveBeenCalledWith("pcfg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 4);
+    expect(abort).toHaveBeenCalledWith("pcfg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 4);
   });
 });

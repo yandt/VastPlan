@@ -33,6 +33,29 @@ func TestPrepareRequestUsesIndependentResourceIdentityAndReplacementCredentials(
 	}
 }
 
+func TestPrepareDigestMatchesNodeSDKGolden(t *testing.T) {
+	request := configurationresourcev1.PrepareRequest{
+		CandidateID: candidateID(), ConfigurationID: "cfg_" + strings.Repeat("9", 24), CollectionID: collectionID(), ResourceID: resourceID(), Action: configurationresourcev1.ActionCreate,
+		CatalogDigest: strings.Repeat("c", 64), SchemaDigest: strings.Repeat("d", 64), ArtifactSHA256: strings.Repeat("e", 64),
+		Values: json.RawMessage(`{"endpoint":"https://delivery.example.test","displayName":"Enterprise Mail"}`),
+		ManagedCredentials: map[string]commonv1.ManagedCredentialRef{"authorization": {
+			Handle: "credential://managed/opaque", Scope: "tenant", Owner: "cn.vastplan.demo", Purpose: "demo.authorization", Version: 1,
+		}},
+	}
+	digest, err := configurationresourcev1.DigestPrepareRequest(request)
+	if err != nil || digest != "c00b448b09303ea0d4764706a2e6e5ddae2b01fc17dfee9aed967596b8e5424d" {
+		t.Fatalf("Go/Node resource prepare digest 不一致: %s err=%v", digest, err)
+	}
+	configurationDigest, err := configurationresourcev1.DigestResourceConfiguration(request.Values, request.ManagedCredentials)
+	if err != nil || configurationDigest != "13f3e6cda2ac6eb08697aec48ac96c4afeeec471891b6366e7677b93d22eed6d" {
+		t.Fatalf("Go/Node resource configuration digest 不一致: %s err=%v", configurationDigest, err)
+	}
+	deletedDigest, err := configurationresourcev1.DigestDeletedResource(request.ResourceID)
+	if err != nil || deletedDigest != "8e4e709267c0aada3b915401047fcf63d7c3ca2a7f46590d80105eb7dbd3e679" {
+		t.Fatalf("Go/Node deleted resource digest 不一致: %s err=%v", deletedDigest, err)
+	}
+}
+
 func TestQueryViewsExposeCredentialStatusButNeverHandles(t *testing.T) {
 	response := configurationresourcev1.GetResponse{
 		Protocol: configurationresourcev1.Protocol, CollectionID: collectionID(), ObservedAt: time.Now().UTC(),

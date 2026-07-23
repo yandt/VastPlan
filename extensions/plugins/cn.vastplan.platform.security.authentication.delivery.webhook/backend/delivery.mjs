@@ -15,7 +15,7 @@ export class WebhookDelivery {
     if (!path.some((item) => String(item).startsWith("authentication.provider/enterprise-one-time-code#"))) throw new Error("Delivery 只接受 OTP Provider 调用链");
     const tenantId = String(context.tenant_id ?? "");
     if (!safeId.test(tenantId)) throw new Error("Delivery 缺少可信 tenant")
-    const profile = this.profiles.get(request.deliveryProfileId);
+    const profile = this.profiles.get(`${tenantId}\0${request.deliveryProfileId}`);
     if (!profile || !profile.channels.includes(request.channel)) throw new Error("Delivery Profile 不可用");
     const body = Buffer.from(JSON.stringify({ protocol:"authentication.delivery.v1", ...request }));
     try {

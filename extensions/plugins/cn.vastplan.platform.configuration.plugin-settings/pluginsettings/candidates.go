@@ -231,7 +231,8 @@ func (s *Service) failPreparing(tenant, candidateID, actor string, cause error) 
 		return ErrNotFound
 	}
 	previous := cloneCandidate(candidate)
-	currentID, hadCurrent := state.Current[candidate.ConfigurationID]
+	currentKey := candidateCurrentKey(candidate)
+	currentID, hadCurrent := state.Current[currentKey]
 	base, hadBase := state.HotDraftBases[candidateID]
 	auditLength, nextAudit := len(state.Audit), state.NextAudit
 	candidate.Status, candidate.Revision, candidate.UpdatedAt = pluginconfiguration.CandidateFailed, candidate.Revision+1, s.now().Format(time.RFC3339Nano)
@@ -242,12 +243,12 @@ func (s *Service) failPreparing(tenant, candidateID, actor string, cause error) 
 	}
 	state.Candidates[candidateID] = candidate
 	delete(state.HotDraftBases, candidateID)
-	delete(state.Current, candidate.ConfigurationID)
+	delete(state.Current, currentKey)
 	s.auditLocked(state, candidate, "configuration.credentials.failed", actor)
 	if err := s.saveLocked(); err != nil {
 		state.Candidates[candidateID] = previous
 		if hadCurrent {
-			state.Current[candidate.ConfigurationID] = currentID
+			state.Current[currentKey] = currentID
 		}
 		if hadBase {
 			state.HotDraftBases[candidateID] = base
@@ -267,7 +268,8 @@ func (s *Service) completeRollback(tenant, candidateID, actor string) (plugincon
 		return pluginconfiguration.Candidate{}, ErrConflict
 	}
 	previous := cloneCandidate(candidate)
-	currentID, hadCurrent := state.Current[candidate.ConfigurationID]
+	currentKey := candidateCurrentKey(candidate)
+	currentID, hadCurrent := state.Current[currentKey]
 	base, hadBase := state.HotDraftBases[candidateID]
 	auditLength, nextAudit := len(state.Audit), state.NextAudit
 	candidate.Status, candidate.Revision, candidate.UpdatedAt = pluginconfiguration.CandidateRolledBack, candidate.Revision+1, s.now().Format(time.RFC3339Nano)
@@ -278,12 +280,12 @@ func (s *Service) completeRollback(tenant, candidateID, actor string) (plugincon
 	}
 	state.Candidates[candidateID] = candidate
 	delete(state.HotDraftBases, candidateID)
-	delete(state.Current, candidate.ConfigurationID)
+	delete(state.Current, currentKey)
 	s.auditLocked(state, candidate, "configuration.draft.discarded", actor)
 	if err := s.saveLocked(); err != nil {
 		state.Candidates[candidateID] = previous
 		if hadCurrent {
-			state.Current[candidate.ConfigurationID] = currentID
+			state.Current[currentKey] = currentID
 		}
 		if hadBase {
 			state.HotDraftBases[candidateID] = base
@@ -335,10 +337,25 @@ func terminal(status pluginconfiguration.CandidateStatus) bool {
 	}
 }
 
+func candidateCurrentKey(candidate pluginconfiguration.Candidate) string {
+	if candidate.ApplyPath == pluginconfiguration.ApplyResourceProfile && candidate.ResourceID != "" {
+		return candidate.ResourceID
+	}
+	return candidate.ConfigurationID
+}
+
 func randomID() (string, error) {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
 		return "", err
 	}
 	return "pcfg_" + hex.EncodeToString(raw[:]), nil
+}
+
+func randomResourceID() (string, error) {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return "", err
+	}
+	return "cfgp_" + hex.EncodeToString(raw[:]), nil
 }

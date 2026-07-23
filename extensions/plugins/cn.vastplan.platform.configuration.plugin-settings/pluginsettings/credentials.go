@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -19,14 +20,18 @@ import (
 const credentialCapability = "platform.credentials"
 
 func credentialStatuses(definition pluginconfiguration.Definition, secrets map[string]string) ([]pluginconfiguration.ManagedCredentialStatus, error) {
-	declared := make(map[string]bool, len(definition.ManagedCredentials))
-	configured := make(map[string]bool, len(definition.CredentialStates))
-	for _, state := range definition.CredentialStates {
+	return credentialStatusesFor(definition.ManagedCredentials, definition.CredentialStates, secrets)
+}
+
+func credentialStatusesFor(fields []pluginv1.ManagedCredentialField, states []pluginconfiguration.CredentialState, secrets map[string]string) ([]pluginconfiguration.ManagedCredentialStatus, error) {
+	declared := make(map[string]bool, len(fields))
+	configured := make(map[string]bool, len(states))
+	for _, state := range states {
 		configured[state.FieldID] = state.Configured
 	}
-	statuses := make([]pluginconfiguration.ManagedCredentialStatus, 0, len(definition.ManagedCredentials))
+	statuses := make([]pluginconfiguration.ManagedCredentialStatus, 0, len(fields))
 	total := 0
-	for _, field := range definition.ManagedCredentials {
+	for _, field := range fields {
 		declared[field.ID] = true
 		value := secrets[field.ID]
 		if field.Required && value == "" && !configured[field.ID] {
@@ -57,6 +62,20 @@ func credentialStatuses(definition pluginconfiguration.Definition, secrets map[s
 }
 
 func (s *Service) stageSecrets(ctx context.Context, host sdk.Host, call *contractv1.CallContext, definition pluginconfiguration.Definition, candidateID, catalogDigest string, secrets map[string]string, checkpoint func(string, pluginconfig.StagedCredential) error) ([]credentialStage, error) {
+	return s.stageSecretsFor(ctx, host, call, credentialStagingTarget{
+		ConfigurationID: definition.ID, PluginID: definition.PluginID, Fields: definition.ManagedCredentials,
+	}, candidateID, catalogDigest, secrets, checkpoint)
+}
+
+type credentialStagingTarget struct {
+	ConfigurationID      string
+	ResourceCollectionID string
+	ResourceID           string
+	PluginID             string
+	Fields               []pluginv1.ManagedCredentialField
+}
+
+func (s *Service) stageSecretsFor(ctx context.Context, host sdk.Host, call *contractv1.CallContext, target credentialStagingTarget, candidateID, catalogDigest string, secrets map[string]string, checkpoint func(string, pluginconfig.StagedCredential) error) ([]credentialStage, error) {
 	fieldIDs := make([]string, 0, len(secrets))
 	for fieldID := range secrets {
 		fieldIDs = append(fieldIDs, fieldID)
@@ -65,7 +84,8 @@ func (s *Service) stageSecrets(ctx context.Context, host sdk.Host, call *contrac
 	staged := make([]credentialStage, 0, len(fieldIDs))
 	for _, fieldID := range fieldIDs {
 		issued, err := issueAuthority(ctx, host, call, configurationauthority.IssueRequest{
-			ConfigurationID: definition.ID, CatalogDigest: catalogDigest, CandidateID: candidateID, FieldID: fieldID,
+			ConfigurationID: target.ConfigurationID, ResourceCollectionID: target.ResourceCollectionID, ResourceID: target.ResourceID,
+			CatalogDigest: catalogDigest, CandidateID: candidateID, FieldID: fieldID,
 		})
 		if err != nil {
 			return staged, err
@@ -75,13 +95,13 @@ func (s *Service) stageSecrets(ctx context.Context, host sdk.Host, call *contrac
 			return staged, err
 		}
 		purpose := ""
-		for _, field := range definition.ManagedCredentials {
+		for _, field := range target.Fields {
 			if field.ID == fieldID {
 				purpose = field.Purpose
 				break
 			}
 		}
-		if result.ID == "" || result.Ref.Handle == "" || result.Ref.Owner != definition.PluginID || result.Ref.Purpose != purpose || result.Ref.Scope != "tenant" || result.Ref.Version < 1 {
+		if result.ID == "" || result.Ref.Handle == "" || result.Ref.Owner != target.PluginID || result.Ref.Purpose != purpose || result.Ref.Scope != "tenant" || result.Ref.Version < 1 {
 			_ = callCredentials(ctx, host, call, "abortDelegated", map[string]string{"stageId": result.ID, "candidateId": candidateID}, nil)
 			return staged, errors.New("凭证插件返回了不符合配置授权边界的委托引用")
 		}

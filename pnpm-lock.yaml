@@ -464,6 +464,9 @@ importers:
       '@vastplan/backend-plugin':
         specifier: workspace:*
         version: link:../../../sdk/node/backend-plugin
+      '@vastplan/configuration-resource-controller-node':
+        specifier: workspace:*
+        version: link:../../../sdk/node/configuration-resource-controller
       '@vastplan/credential-lease-node':
         specifier: workspace:*
         version: link:../../../sdk/node/credential-lease
@@ -538,6 +541,12 @@ importers:
         version: 0.8.0
 
   extensions/sdk/node/configuration-controller:
+    dependencies:
+      '@vastplan/backend-plugin':
+        specifier: workspace:*
+        version: link:../backend-plugin
+
+  extensions/sdk/node/configuration-resource-controller:
     dependencies:
       '@vastplan/backend-plugin':
         specifier: workspace:*

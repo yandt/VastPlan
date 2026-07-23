@@ -44,6 +44,7 @@ const (
 	ApplyPlatformProfile       ApplyPath = "platform-profile"
 	ApplyHotService            ApplyPath = "hot-service"
 	ApplyHotScoped             ApplyPath = "hot-scoped"
+	ApplyResourceProfile       ApplyPath = "resource-profile"
 )
 
 // ArtifactIdentity is the immutable package identity that supplied a

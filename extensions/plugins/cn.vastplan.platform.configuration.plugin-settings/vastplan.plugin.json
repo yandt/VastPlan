@@ -1,12 +1,12 @@
 {
   "id": "cn.vastplan.platform.configuration.plugin-settings",
   "name": "VastPlan 插件配置协调器",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "从活动可信配置目录创建、审批并恢复 Application 与 Platform Profile 配置候选；以一次性宿主授权委托凭证托管器保存秘密",
+  "description": "从活动可信配置目录创建、审批并恢复根配置与独立 Profile 资源候选；以一次性宿主授权委托凭证托管器保存秘密",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "capabilities": { "kernelServices": ["kernel.config.get", "kernel.configuration.catalogs", "kernel.configuration.authority.issue"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
@@ -17,7 +17,8 @@
       { "code": "platform.plugin-configuration.write", "title": "编辑插件配置候选", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
       { "code": "platform.plugin-configuration.publish", "title": "提交和激活应用级插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
       { "code": "platform.plugin-configuration.profile.publish", "title": "审批和激活平台级插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
-      { "code": "platform.plugin-configuration.hot.publish", "title": "审批和激活 Hot Service 插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+      { "code": "platform.plugin-configuration.hot.publish", "title": "审批和激活 Hot Service 插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.plugin-configuration.resource.publish", "title": "审批和激活独立 Profile 配置资源", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
     ],
     "operationGuards": [
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "listDefinitions", "permissions": ["platform.plugin-configuration.read"], "access": "read", "approval": "none" },
@@ -35,6 +36,15 @@
       ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "approveHotServiceCandidate", "permissions": ["platform.plugin-configuration.hot.publish"], "access": "approve", "approval": "different-subject" }
       ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "activateHotServiceCandidate", "permissions": ["platform.plugin-configuration.hot.publish"], "access": "execute", "approval": "different-subject" }
       ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "abortHotServiceCandidate", "permissions": ["platform.plugin-configuration.hot.publish"], "access": "write", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "listResourceItems", "permissions": ["platform.plugin-configuration.read"], "access": "read", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "getResourceItem", "permissions": ["platform.plugin-configuration.read"], "access": "read", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "createResourceDraft", "permissions": ["platform.plugin-configuration.write"], "access": "write", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "updateResourceDraft", "permissions": ["platform.plugin-configuration.write"], "access": "write", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "deleteResourceDraft", "permissions": ["platform.plugin-configuration.write"], "access": "write", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "submitResourceDraft", "permissions": ["platform.plugin-configuration.resource.publish"], "access": "write", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "approveResourceCandidate", "permissions": ["platform.plugin-configuration.resource.publish"], "access": "approve", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "activateResourceCandidate", "permissions": ["platform.plugin-configuration.resource.publish"], "access": "execute", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "abortResourceCandidate", "permissions": ["platform.plugin-configuration.resource.publish"], "access": "write", "approval": "none" }
     ]
   },
   "runtime": {
@@ -64,7 +74,7 @@
       }
     }
   },
-  "state": { "backend": { "format": "cn.vastplan.platform.plugin-configuration", "formatVersion": 4 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.plugin-configuration", "formatVersion": 5 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/plugin-settings", "frontend": "frontend/dist/index.js" },
   "contributes": {
@@ -90,6 +100,15 @@
             ,{ "name": "approveHotServiceCandidate", "description": "由不同主体批准 Hot Service 配置候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
             ,{ "name": "activateHotServiceCandidate", "description": "激活候选凭证并原子提交目标插件 Hot Service 配置", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
             ,{ "name": "abortHotServiceCandidate", "description": "放弃尚未提交的 Hot Service 配置候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "listResourceItems", "description": "列出独立配置资源的非敏感值与凭证状态", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "configurationId": { "type": "string" }, "resourceCollectionId": { "type": "string" }, "catalogDigest": { "type": "string" }, "cursor": { "type": "string" }, "limit": { "type": "integer", "minimum": 1, "maximum": 256 } }, "required": ["configurationId", "resourceCollectionId", "catalogDigest"] } }
+            ,{ "name": "getResourceItem", "description": "读取一个独立配置资源的非敏感值与凭证状态", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "configurationId": { "type": "string" }, "resourceCollectionId": { "type": "string" }, "resourceId": { "type": "string" }, "catalogDigest": { "type": "string" } }, "required": ["configurationId", "resourceCollectionId", "resourceId", "catalogDigest"] } }
+            ,{ "name": "createResourceDraft", "description": "创建独立配置资源草稿并暂存只写秘密", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "configurationId": { "type": "string" }, "resourceCollectionId": { "type": "string" }, "catalogDigest": { "type": "string" }, "values": { "type": "object" }, "secrets": { "type": "object", "additionalProperties": { "type": "string" } } }, "required": ["configurationId", "resourceCollectionId", "catalogDigest", "values"] } }
+            ,{ "name": "updateResourceDraft", "description": "按 Active CAS 创建独立配置资源更新草稿", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "configurationId": { "type": "string" }, "resourceCollectionId": { "type": "string" }, "resourceId": { "type": "string" }, "catalogDigest": { "type": "string" }, "values": { "type": "object" }, "secrets": { "type": "object", "additionalProperties": { "type": "string" } } }, "required": ["configurationId", "resourceCollectionId", "resourceId", "catalogDigest", "values"] } }
+            ,{ "name": "deleteResourceDraft", "description": "按 Active CAS 创建独立配置资源删除草稿", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "configurationId": { "type": "string" }, "resourceCollectionId": { "type": "string" }, "resourceId": { "type": "string" }, "catalogDigest": { "type": "string" } }, "required": ["configurationId", "resourceCollectionId", "resourceId", "catalogDigest"] } }
+            ,{ "name": "submitResourceDraft", "description": "向 configuration.resource.v1 提交独立资源候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "approveResourceCandidate", "description": "由不同主体批准独立配置资源候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "activateResourceCandidate", "description": "提交独立资源并激活候选凭证", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "abortResourceCandidate", "description": "终止尚未提交的独立配置资源候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
           ]
         }
       ]

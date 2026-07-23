@@ -18,6 +18,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 )
 
 const developmentBuildCacheSchema = 1
@@ -96,6 +98,17 @@ func validCachedBuild(path, category, digest string, validate func(string) error
 }
 
 func materializeCachedDirectory(source, target string) error {
+	return materializeCachedDirectoryMode(source, target, true)
+}
+
+// materializeMutableCachedDirectory copies cache objects because the caller
+// will rewrite them. Hard-linking a package repository before signing would
+// mutate the supposedly immutable cache through the shared inode.
+func materializeMutableCachedDirectory(source, target string) error {
+	return materializeCachedDirectoryMode(source, target, false)
+}
+
+func materializeCachedDirectoryMode(source, target string, allowHardLinks bool) error {
 	if err := os.RemoveAll(target); err != nil {
 		return err
 	}
@@ -130,10 +143,12 @@ func materializeCachedDirectory(source, target string) error {
 		if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
 			return err
 		}
-		if err := os.Link(path, destination); err == nil {
-			return nil
-		} else if !errors.Is(err, syscall.EXDEV) && !errors.Is(err, syscall.EPERM) && !errors.Is(err, syscall.ENOTSUP) {
-			return err
+		if allowHardLinks {
+			if err := os.Link(path, destination); err == nil {
+				return nil
+			} else if !errors.Is(err, syscall.EXDEV) && !errors.Is(err, syscall.EPERM) && !errors.Is(err, syscall.ENOTSUP) {
+				return err
+			}
 		}
 		return copyBuildFile(path, destination, info.Mode().Perm())
 	})
@@ -360,15 +375,19 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	}
 
 	packageSourceDigest, err := digestBuildInputs(r.options.root, []string{
-		"LICENSE", "NOTICE", "extensions/plugins", "engineering/tools/pluginpackage",
+		"LICENSE", "NOTICE", "package.json", "pnpm-lock.yaml", "extensions/plugins", "extensions/sdk/node", "engineering/tools/pluginpackage", "engineering/tools/build-node-backend-plugins.mjs",
 	}, []string{backendDigest, frontendDigest, dynamicDigest, "package-build-v2"}, packageBuildInput)
 	if err != nil {
 		return fmt.Errorf("计算插件制品摘要: %w", err)
 	}
 	log.Printf("[5/6] 准备本地不可变插件仓库 digest=%s", packageSourceDigest[:12])
 	packages, err := ensureCachedBuild(cacheRoot, "packages", packageSourceDigest, func(candidate string) error {
+		nodeBackendModules := filepath.Join(candidate, "node-backend-modules")
+		if err := r.command(ctx, nil, "node", "engineering/tools/build-node-backend-plugins.mjs", "--out-dir", nodeBackendModules); err != nil {
+			return fmt.Errorf("构建 node-worker 插件: %w", err)
+		}
 		return r.packageArtifacts(ctx, filepath.Join(candidate, "repository"),
-			filepath.Join(r.runDir, "bin"), filepath.Join(r.runDir, "frontend-modules"), filepath.Join(r.runDir, "dynamic"))
+			filepath.Join(r.runDir, "bin"), nodeBackendModules, filepath.Join(r.runDir, "frontend-modules"), filepath.Join(r.runDir, "dynamic"))
 	}, func(candidate string) error {
 		return r.validatePackageRepository(filepath.Join(candidate, "repository"))
 	})
@@ -376,7 +395,7 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 		return err
 	}
 	logBuildCacheResult("插件制品仓库", packages)
-	if err := materializeCachedDirectory(filepath.Join(packages.Path, "repository"), filepath.Join(r.runDir, "repository")); err != nil {
+	if err := materializeMutableCachedDirectory(filepath.Join(packages.Path, "repository"), filepath.Join(r.runDir, "repository")); err != nil {
 		return fmt.Errorf("装配插件仓库缓存: %w", err)
 	}
 	return nil
@@ -499,6 +518,19 @@ func (r *runtime) validatePackageRepository(repository string) error {
 		pluginIDs = append(pluginIDs, spec.id)
 	}
 	pluginIDs = append(pluginIDs, "cn.vastplan.foundation.security.bootstrap-policy")
+	refs, err := packageRepositoryRefs(repository)
+	if err != nil {
+		return fmt.Errorf("读取插件仓库索引: %w", err)
+	}
+	repo, err := pluginservice.NewRepository(repository)
+	if err != nil {
+		return err
+	}
+	for _, ref := range refs {
+		if _, _, err := repo.Read(ref); err != nil {
+			return fmt.Errorf("校验缓存制品 %s@%s/%s: %w", ref.PluginID, ref.Version, ref.Channel, err)
+		}
+	}
 	for _, pluginID := range pluginIDs {
 		root := filepath.Join(repository, "artifacts", pluginID)
 		found := false

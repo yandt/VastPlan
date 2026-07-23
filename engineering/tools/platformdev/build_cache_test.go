@@ -48,6 +48,24 @@ func TestEnsureCachedBuildBuildsOnceAndRejectsIncompleteEntry(t *testing.T) {
 	}
 }
 
+func TestMutableCacheMaterializationDoesNotMutateSource(t *testing.T) {
+	source := t.TempDir()
+	target := filepath.Join(t.TempDir(), "mutable")
+	if err := os.WriteFile(filepath.Join(source, "artifact"), []byte("immutable"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := materializeMutableCachedDirectory(source, target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "artifact"), []byte("signed"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(source, "artifact"))
+	if err != nil || string(raw) != "immutable" {
+		t.Fatalf("mutable target changed cache source: content=%q err=%v", raw, err)
+	}
+}
+
 func TestEnsureCachedBuildConvergesConcurrentIdenticalCandidates(t *testing.T) {
 	cacheRoot := t.TempDir()
 	digest := digestStrings("concurrent-v1")

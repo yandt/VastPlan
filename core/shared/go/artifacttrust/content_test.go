@@ -53,6 +53,18 @@ func TestReadPackageFileReturnsOnlyBoundedRegularEntry(t *testing.T) {
 	}
 }
 
+func TestSameJSONAcceptsEquivalentSafeEscapingAndRejectsChanges(t *testing.T) {
+	plain := []byte(`{"requirements":{"node":">=20"},"enabled":true}`)
+	escaped := []byte(`{"enabled":true,"requirements":{"node":"\u003e=20"}}`)
+	changed := []byte(`{"enabled":true,"requirements":{"node":"\u003e=22"}}`)
+	if !sameJSON(plain, escaped) {
+		t.Fatal("对象顺序和 HTML 安全转义差异不应改变 JSON 语义")
+	}
+	if sameJSON(plain, changed) {
+		t.Fatal("Manifest 字段变化必须被拒绝")
+	}
+}
+
 func TestInspectPackageBindsFrontendGraphToActualBytes(t *testing.T) {
 	module := []byte("export const ready = true;\n")
 	digest := sha256.Sum256(module)

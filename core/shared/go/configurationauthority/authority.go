@@ -30,10 +30,12 @@ var (
 )
 
 type IssueRequest struct {
-	ConfigurationID string `json:"configurationId"`
-	CatalogDigest   string `json:"catalogDigest"`
-	CandidateID     string `json:"candidateId"`
-	FieldID         string `json:"fieldId"`
+	ConfigurationID      string `json:"configurationId"`
+	ResourceCollectionID string `json:"resourceCollectionId,omitempty"`
+	ResourceID           string `json:"resourceId,omitempty"`
+	CatalogDigest        string `json:"catalogDigest"`
+	CandidateID          string `json:"candidateId"`
+	FieldID              string `json:"fieldId"`
 }
 
 type Issued struct {
@@ -44,22 +46,24 @@ type Issued struct {
 // Claims are derived by the trusted host from the active catalog. The browser,
 // coordinator and credential custodian cannot override owner or purpose.
 type Claims struct {
-	SchemaVersion   string    `json:"schemaVersion"`
-	AuthorityID     string    `json:"authorityId"`
-	TenantID        string    `json:"tenantId"`
-	ConfigurationID string    `json:"configurationId"`
-	CatalogDigest   string    `json:"catalogDigest"`
-	Deployment      string    `json:"deployment"`
-	UnitID          string    `json:"unitId"`
-	CandidateID     string    `json:"candidateId"`
-	FieldID         string    `json:"fieldId"`
-	Owner           string    `json:"owner"`
-	Purpose         string    `json:"purpose"`
-	Resource        string    `json:"resource"`
-	ArtifactSHA256  string    `json:"artifactSha256"`
-	SchemaDigest    string    `json:"schemaDigest"`
-	IssuedAt        time.Time `json:"issuedAt"`
-	ExpiresAt       time.Time `json:"expiresAt"`
+	SchemaVersion        string    `json:"schemaVersion"`
+	AuthorityID          string    `json:"authorityId"`
+	TenantID             string    `json:"tenantId"`
+	ConfigurationID      string    `json:"configurationId"`
+	ResourceCollectionID string    `json:"resourceCollectionId,omitempty"`
+	ResourceID           string    `json:"resourceId,omitempty"`
+	CatalogDigest        string    `json:"catalogDigest"`
+	Deployment           string    `json:"deployment"`
+	UnitID               string    `json:"unitId"`
+	CandidateID          string    `json:"candidateId"`
+	FieldID              string    `json:"fieldId"`
+	Owner                string    `json:"owner"`
+	Purpose              string    `json:"purpose"`
+	Resource             string    `json:"resource"`
+	ArtifactSHA256       string    `json:"artifactSha256"`
+	SchemaDigest         string    `json:"schemaDigest"`
+	IssuedAt             time.Time `json:"issuedAt"`
+	ExpiresAt            time.Time `json:"expiresAt"`
 }
 
 func (c Claims) Validate(now time.Time, tenant string) error {
@@ -71,6 +75,12 @@ func (c Claims) Validate(now time.Time, tenant string) error {
 		strings.TrimSpace(c.FieldID) == "" || strings.TrimSpace(c.Owner) == "" ||
 		strings.TrimSpace(c.Purpose) == "" || strings.TrimSpace(c.Resource) == "" ||
 		len(c.ArtifactSHA256) != 64 || len(c.SchemaDigest) != 64 || c.IssuedAt.IsZero() || c.ExpiresAt.IsZero() {
+		return ErrInvalid
+	}
+	if (c.ResourceCollectionID == "") != (c.ResourceID == "") {
+		return ErrInvalid
+	}
+	if c.ResourceCollectionID != "" && (!validHexID(c.ResourceCollectionID, "cfgc_", 24) || !validHexID(c.ResourceID, "cfgp_", 32)) {
 		return ErrInvalid
 	}
 	if !c.ExpiresAt.After(c.IssuedAt) || c.ExpiresAt.Sub(c.IssuedAt) > MaximumTTL {

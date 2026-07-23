@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
+	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
@@ -105,11 +106,15 @@ func (s *Service) validateLoaded() error {
 		if state.HotDraftBases == nil {
 			state.HotDraftBases = map[string]configurationv1.ActiveReference{}
 		}
+		if state.ResourceActivations == nil {
+			state.ResourceActivations = map[string]resourceActivationRecord{}
+		}
 		if len(state.Candidates) > maxCandidates {
 			return errors.New("插件配置协调器候选数量超过上限")
 		}
 		for id, candidate := range state.Candidates {
-			if id == "" || candidate.ID != id || candidate.ConfigurationID == "" || candidate.Revision == 0 || !pluginconfiguration.ValidCandidateStatus(candidate.Status) || !pluginconfiguration.ValidApplyPath(candidate.ApplyPath) || !json.Valid(candidate.Values) {
+			validValues := json.Valid(candidate.Values) || (candidate.ApplyPath == pluginconfiguration.ApplyResourceProfile && candidate.ResourceAction == string(configurationresourcev1.ActionDelete) && len(candidate.Values) == 0)
+			if id == "" || candidate.ID != id || candidate.ConfigurationID == "" || candidate.Revision == 0 || !pluginconfiguration.ValidCandidateStatus(candidate.Status) || !pluginconfiguration.ValidApplyPath(candidate.ApplyPath) || !validValues {
 				return fmt.Errorf("插件配置协调器状态包含无效候选 %q", id)
 			}
 			for _, status := range candidate.ManagedCredentials {
@@ -131,8 +136,17 @@ func (s *Service) validateLoaded() error {
 		}
 		for configurationID, candidateID := range state.Current {
 			candidate, ok := state.Candidates[candidateID]
-			if configurationID == "" || !ok || candidate.ConfigurationID != configurationID || terminal(candidate.Status) {
+			if configurationID == "" || !ok || candidateCurrentKey(candidate) != configurationID || terminal(candidate.Status) {
 				return fmt.Errorf("插件配置协调器 current 指向无效候选 %q", candidateID)
+			}
+		}
+		for candidateID, activation := range state.ResourceActivations {
+			candidate, ok := state.Candidates[candidateID]
+			if !ok || candidate.ID != candidateID || candidate.ApplyPath != pluginconfiguration.ApplyResourceProfile {
+				return fmt.Errorf("插件配置协调器 resource activation 指向未知候选 %q", candidateID)
+			}
+			if err := activation.validate(candidate, tenant); err != nil {
+				return fmt.Errorf("插件配置协调器 resource activation %q 无效: %w", candidateID, err)
 			}
 		}
 		for candidateID, activation := range state.HotActivations {
@@ -211,7 +225,7 @@ func secureDirectory(path string) error {
 func (s *Service) tenantLocked(id string) *tenantState {
 	state := s.state.Tenants[id]
 	if state == nil {
-		state = &tenantState{Candidates: map[string]pluginconfiguration.Candidate{}, Current: map[string]string{}, CredentialStages: map[string]map[string]credentialStage{}, HotDraftBases: map[string]configurationv1.ActiveReference{}, HotActivations: map[string]hotActivationRecord{}}
+		state = &tenantState{Candidates: map[string]pluginconfiguration.Candidate{}, Current: map[string]string{}, CredentialStages: map[string]map[string]credentialStage{}, HotDraftBases: map[string]configurationv1.ActiveReference{}, HotActivations: map[string]hotActivationRecord{}, ResourceActivations: map[string]resourceActivationRecord{}}
 		s.state.Tenants[id] = state
 	}
 	return state

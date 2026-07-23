@@ -27,6 +27,8 @@ export interface PluginConfigurationDefinition {
   applyMode: "restart" | "hot";
   applyPath: "application-deployment" | "platform-profile" | "hot-service" | "hot-scoped";
   controllerAvailable: boolean;
+  resourceControllerAvailable?: boolean;
+  resourceCollections?: PluginConfigurationResourceCollection[];
   schema: Record<string, unknown>;
   schemaDigest: string;
   managedCredentials: Array<{ id: string; title: string; description?: string; purpose: string; required?: boolean }>;
@@ -37,13 +39,36 @@ export interface PluginConfigurationDefinition {
   catalogDigest: string;
 }
 
+export interface PluginConfigurationResourceCollection {
+  id: string; kind: "profile"; title: string; description?: string;
+  schema: Record<string, unknown>; schemaDigest: string;
+  managedCredentials?: Array<{ id: string; title: string; description?: string; purpose: string; required?: boolean }>;
+  minItems?: number; maxItems: number;
+}
+
+export interface PluginConfigurationResourceItem {
+  resourceId: string; active: { revision: number; digest: string }; values: Record<string, unknown>;
+  credentialStates?: Array<{ fieldId: string; configured: boolean; version?: number }>;
+  updatedAt: string;
+}
+
+export interface PluginConfigurationResourcePage {
+  protocol: "configuration.resource.v1"; collectionId: string; items: PluginConfigurationResourceItem[];
+  nextCursor?: string; observedAt: string;
+}
+
+export interface PluginConfigurationResourceResponse {
+  protocol: "configuration.resource.v1"; collectionId: string; item: PluginConfigurationResourceItem; observedAt: string;
+}
+
 export type PluginConfigurationCandidateStatus = "Draft" | "Preparing" | "Publishing" | "Activating" | "Ready" | "Failed" | "RollingBack" | "RolledBack";
 export interface PluginConfigurationCandidate {
   id: string; configurationId: string; revision: number; status: PluginConfigurationCandidateStatus;
-  applyPath: "application-deployment" | "platform-profile" | "hot-service" | "hot-scoped";
+  applyPath: "application-deployment" | "platform-profile" | "hot-service" | "hot-scoped" | "resource-profile";
+  resourceCollectionId?: string; resourceId?: string; resourceAction?: "create" | "update" | "delete";
   catalogDigest: string; schemaDigest: string; artifactSha256: string; values: Record<string, unknown>;
   createdBy: string; createdAt: string; updatedAt: string; errorCode?: string; errorMessage?: string;
-  externalRevision?: number; externalStatus?: "Preparing" | "Prepared" | "PendingApproval" | "Approved" | "Activating" | "Aborting" | "Committed" | "CatalogActivated" | "Publishing" | "Ready" | "RollingBack" | "Failed" | "RolledBack" | "Aborted"; rollbackRevision?: number;
+  externalRevision?: number; externalDigest?: string; externalStatus?: "Preparing" | "Prepared" | "PendingApproval" | "Approved" | "Activating" | "Aborting" | "Committed" | "CatalogActivated" | "Publishing" | "Ready" | "RollingBack" | "Failed" | "RolledBack" | "Aborted"; rollbackRevision?: number;
   managedCredentials?: Array<{ fieldId: string; staged: boolean; state: string }>;
 }
 
@@ -378,6 +403,33 @@ export class PlatformAdminClient {
   }
   public abortHotServiceConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
     return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/abort-hot`, "POST", { expectedRevision });
+  }
+  public listPluginConfigurationResources(configurationId: string, resourceCollectionId: string, catalogDigest: string, cursor?: string, limit?: number): Promise<PluginConfigurationResourcePage> {
+    return this.get(`${this.basePath}/plugin-configurations/resources${query({ configurationId, resourceCollectionId, catalogDigest, cursor, limit: limit?.toString() })}`);
+  }
+  public getPluginConfigurationResource(configurationId: string, resourceCollectionId: string, resourceId: string, catalogDigest: string): Promise<PluginConfigurationResourceResponse> {
+    return this.get(`${this.basePath}/plugin-configurations/resources/${segment(resourceId)}${query({ configurationId, resourceCollectionId, catalogDigest })}`);
+  }
+  public createPluginConfigurationResourceDraft(configurationId: string, resourceCollectionId: string, catalogDigest: string, values: Record<string, unknown>, secrets: Record<string, string> = {}): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/resources/candidates/create`, "POST", { configurationId, resourceCollectionId, catalogDigest, values, ...(Object.keys(secrets).length === 0 ? {} : { secrets }) });
+  }
+  public updatePluginConfigurationResourceDraft(configurationId: string, resourceCollectionId: string, resourceId: string, catalogDigest: string, values: Record<string, unknown>, secrets: Record<string, string> = {}): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/resources/candidates/update`, "POST", { configurationId, resourceCollectionId, resourceId, catalogDigest, values, ...(Object.keys(secrets).length === 0 ? {} : { secrets }) });
+  }
+  public deletePluginConfigurationResourceDraft(configurationId: string, resourceCollectionId: string, resourceId: string, catalogDigest: string): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/resources/candidates/delete`, "POST", { configurationId, resourceCollectionId, resourceId, catalogDigest });
+  }
+  public submitPluginConfigurationResourceDraft(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/submit-resource`, "POST", { expectedRevision });
+  }
+  public approvePluginConfigurationResourceCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/approve-resource`, "POST", { expectedRevision });
+  }
+  public activatePluginConfigurationResourceCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/activate-resource`, "POST", { expectedRevision });
+  }
+  public abortPluginConfigurationResourceCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/abort-resource`, "POST", { expectedRevision });
   }
 
   public listCredentials(prefix = ""): Promise<CredentialMetadata[]> { return this.get(`${this.basePath}/credentials${query({ prefix })}`); }

@@ -1,6 +1,6 @@
 # ADR-0118 独立配置资源与动态 Profile
 
-- 状态：已采纳，契约与可信目录阶段已实施
+- 状态：已采纳，首个纵向闭环已实施
 - 日期：2026-07-23
 - 关联：[ADR-0090](ADR-0090-插件配置与托管凭证闭环.md)、[ADR-0114](ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)、[ADR-0117](ADR-0117-语言中立Service-Hot配置控制器.md)
 
@@ -44,9 +44,15 @@ OIDC 与 Webhook Delivery 都需要在运行时维护 0—N 个 Profile。每个
 - 成本：新增资源控制器协议、目录字段、协调 Saga 与插件持久状态；引用 Profile 的现有配置需要改用 `cfgp_*`。
 - 边界：本 ADR 不开放任意业务对象数据库，也不允许功能插件定义脚本化路径规则。新 kind 必须单独证明通用生命周期适用。
 
-## 实施记录
+## 实施记录（2026-07-23）
 
 - 已新增签名 `resourceController/resourceCollections`、闭合 Schema 和语义校验。
 - 已新增 `configuration.resource.v1` Go wire、严格请求/响应校验、独立 create/update/delete 不变量与无 handle 查询视图。
 - Backend 公开扩展点、运行时贡献合成和 Configuration Catalog 已识别不透明资源控制器与 `cfgc_*` 集合；浏览器视图裁剪真实路由目标。
-- 后续按顺序实施 ConfigurationAuthority 集合字段绑定、plugin-settings Saga、Node SDK 和 Webhook Delivery 真实试点。
+- `ConfigurationAuthority` 已把授权精确绑定到 `cfgc_* + cfgp_* + field`；只允许认证后的凭证服务一次性消费，跨集合、跨资源和跨字段均拒绝。
+- plugin-settings 0.9.0 已实现 create/update/delete Draft、Active CAS、委托凭证、prepare/commit/abort/status、异人审批、显式放弃和重启恢复；公开状态不含 handle、stage ID、请求摘要或控制器目标。
+- Node `@vastplan/configuration-resource-controller-node` SDK 已实现闭合 wire、精确 caller、无 handle 查询裁剪与 Go/Node 摘要 golden；共享 node-worker 不增加 Profile 级进程。
+- Webhook Delivery 0.2.0 已作为首个 Node 纵切：持久化租户隔离 Profile、Material Lease 探测、原子切换、旧引用退休补偿和 Delivery 热查表。因为当前状态是本地耐久文件，运行策略收紧为 `leader + leader-owned`。
+- Node BFF、TypeScript Platform Admin SDK 和 Workbench MasterDetail 已接入固定资源路由与独立权限；浏览器不直接暴露插件 ID、控制器路由或 CredentialRef。
+- 单元测试已覆盖跨租户拒绝、Active CAS、精确资源秘密授权、重启恢复、旧引用退休、跨语言摘要和 BFF 固定路由。
+- 真实多服务验收完成：Backend Platform revision 23 的 12 个服务单元与受管服务 revision 2 的 1 个单元均收敛 Ready；Webhook 0.2.0 以自包含 ESM bundle 在共享 node-worker 中完成协议协商并注册业务贡献和资源控制器，plugin-settings 0.9.0 与访问策略 0.25.0 实际激活。Portal `/operations` 与 `/` 均返回 HTTP 200，状态接口 `ready=true`；固定 BFF 实际返回 Webhook 的不透明 `cfg_* / cfgc_*` 签名目录并通过资源控制器读取空集合。随后 Ctrl+C 优雅停止且退出码为 0；按既定决定未执行 soak。

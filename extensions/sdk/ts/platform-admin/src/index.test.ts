@@ -208,4 +208,28 @@ describe("PlatformAdminClient", () => {
     ]);
     expect(calls.some((call) => call.path.includes("com.example"))).toBe(false);
   });
+
+  it("uses fixed resource-profile routes without exposing plugin ids", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { items: [] } };
+    }, "operations", "configuration");
+    const configurationId = "cfg_aaaaaaaaaaaaaaaaaaaaaaaa";
+    const collectionId = "cfgc_bbbbbbbbbbbbbbbbbbbbbbbb";
+    const resourceId = "cfgp_cccccccccccccccccccccccc";
+    const digest = "d".repeat(64);
+    await client.listPluginConfigurationResources(configurationId, collectionId, digest, undefined, 20);
+    await client.createPluginConfigurationResourceDraft(configurationId, collectionId, digest, { endpoint: "https://notify.example.test" }, { authorization: "secret" });
+    await client.activatePluginConfigurationResourceCandidate("pcfg_" + "e".repeat(32), 7);
+    expect(calls).toEqual([
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/resources?configurationId=${configurationId}&resourceCollectionId=${collectionId}&catalogDigest=${digest}&limit=20`, method: "GET", body: undefined },
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/configuration/plugin-configurations/resources/candidates/create", method: "POST", body: JSON.stringify({ configurationId, resourceCollectionId: collectionId, catalogDigest: digest, values: { endpoint: "https://notify.example.test" }, secrets: { authorization: "secret" } }) },
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/pcfg_${"e".repeat(32)}/activate-resource`, method: "POST", body: '{"expectedRevision":7}' },
+    ]);
+    expect(calls.some((call) => call.path.includes("authentication.delivery.webhook"))).toBe(false);
+    expect(resourceId).toMatch(/^cfgp_/);
+  });
 });

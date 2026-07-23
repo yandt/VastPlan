@@ -99,6 +99,43 @@ func TestAuthorityRejectsUnknownFieldWrongTenantAndExpiry(t *testing.T) {
 	}
 }
 
+func TestAuthorityBindsExactResourceCollectionAndInstance(t *testing.T) {
+	ctx := context.Background()
+	server := startJetStream(t)
+	nc, _ := nats.Connect(server.ClientURL())
+	defer nc.Close()
+	js, _ := jetstream.New(nc)
+	buckets, _ := sharedcontrolplane.EnsureBuckets(ctx, js, 1, jetstream.MemoryStorage)
+	catalog := configuredResourceCatalog(t)
+	definition, collection := catalog.Items[0], catalog.Items[0].ResourceCollections[0]
+	request := sharedauthority.IssueRequest{
+		ConfigurationID: definition.ID, ResourceCollectionID: collection.ID, ResourceID: "cfgp_" + strings.Repeat("2", 32),
+		CatalogDigest: catalog.Digest, CandidateID: "pcfg_" + strings.Repeat("d", 32), FieldID: "authorization",
+	}
+	store := Store{KV: buckets.ConfigurationAuthorities, Catalogs: catalogReader{catalog}}
+	issued, err := store.Issue(ctx, "acme", request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claims, err := store.Consume(ctx, "acme", issued.Token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claims.ResourceCollectionID != collection.ID || claims.ResourceID != request.ResourceID || claims.Purpose != "delivery.authorization" ||
+		claims.SchemaDigest != collection.SchemaDigest || !strings.Contains(claims.Resource, "/"+collection.ID+"/"+request.ResourceID+"/") {
+		t.Fatalf("资源授权未绑定精确集合、实例和签名字段: %+v", claims)
+	}
+	request.ResourceCollectionID = "cfgc_" + strings.Repeat("0", 24)
+	if _, err := store.Issue(ctx, "acme", request); !errors.Is(err, sharedauthority.ErrNotFound) {
+		t.Fatalf("未知资源集合不得签发授权: %v", err)
+	}
+	request.ResourceCollectionID = collection.ID
+	request.ResourceID = ""
+	if _, err := store.Issue(ctx, "acme", request); !errors.Is(err, sharedauthority.ErrInvalid) {
+		t.Fatalf("集合授权必须绑定资源实例: %v", err)
+	}
+}
+
 func TestConcurrentConsumeHasSingleWinner(t *testing.T) {
 	ctx := context.Background()
 	server := startJetStream(t)
@@ -156,6 +193,36 @@ func configuredCatalog(t *testing.T) pluginconfiguration.Catalog {
 		}},
 	}
 	catalog, err := pluginconfiguration.Build(deployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("d", 64), Manifest: manifest}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return catalog
+}
+
+func configuredResourceCatalog(t *testing.T) pluginconfiguration.Catalog {
+	t.Helper()
+	const pluginID = "cn.vastplan.demo-resource-authority"
+	manifest := []byte(fmt.Sprintf(`{
+		"id":%q,"name":"Resource configured","description":"resource configured","version":"1.0.0","publisher":"vastplan",
+		"engines":{"backend":"^0.1"},
+		"runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","routingDomain":"security"},
+		"configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false},
+			"resourceController":{"protocol":"configuration.resource.v1"},
+			"resourceCollections":[{"id":"delivery-profile","kind":"profile","title":"Delivery Profile","schema":{"type":"object","additionalProperties":false,"properties":{"endpoint":{"type":"string"}}},"managedCredentials":[{"id":"authorization","title":"Authorization","purpose":"delivery.authorization","required":true}],"maxItems":64}]},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
+	}`, pluginID))
+	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.0.0", Channel: "stable"}
+	deployment := deploymentv2.Deployment{
+		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "services", Tenant: "acme"},
+		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}},
+		Units: []deploymentv2.ServiceUnit{{
+			ID: "delivery", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "authentication-delivery", Replicas: 1,
+			Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}}, Config: map[string]any{"plugins": map[string]any{pluginID: map[string]any{}}},
+		}},
+	}
+	catalog, err := pluginconfiguration.Build(deployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {
+		PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("e", 64), Manifest: manifest,
+	}})
 	if err != nil {
 		t.Fatal(err)
 	}

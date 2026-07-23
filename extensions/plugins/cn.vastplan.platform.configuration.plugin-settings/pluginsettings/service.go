@@ -17,7 +17,7 @@ import (
 
 const (
 	PluginID           = pluginconfiguration.PluginSettingsID
-	PluginVersion      = "0.8.0"
+	PluginVersion      = "0.9.0"
 	Capability         = "platform.plugin-configuration"
 	StateFileConfigKey = "platform.plugin-configuration.stateFile"
 	maxStateBytes      = 8 << 20
@@ -40,13 +40,14 @@ type AuditEvent struct {
 }
 
 type tenantState struct {
-	NextAudit        uint64                                     `json:"nextAudit"`
-	Candidates       map[string]pluginconfiguration.Candidate   `json:"candidates"`
-	Current          map[string]string                          `json:"current"`
-	Audit            []AuditEvent                               `json:"audit"`
-	CredentialStages map[string]map[string]credentialStage      `json:"credentialStages,omitempty"`
-	HotDraftBases    map[string]configurationv1.ActiveReference `json:"hotDraftBases,omitempty"`
-	HotActivations   map[string]hotActivationRecord             `json:"hotActivations,omitempty"`
+	NextAudit           uint64                                     `json:"nextAudit"`
+	Candidates          map[string]pluginconfiguration.Candidate   `json:"candidates"`
+	Current             map[string]string                          `json:"current"`
+	Audit               []AuditEvent                               `json:"audit"`
+	CredentialStages    map[string]map[string]credentialStage      `json:"credentialStages,omitempty"`
+	HotDraftBases       map[string]configurationv1.ActiveReference `json:"hotDraftBases,omitempty"`
+	HotActivations      map[string]hotActivationRecord             `json:"hotActivations,omitempty"`
+	ResourceActivations map[string]resourceActivationRecord        `json:"resourceActivations,omitempty"`
 }
 
 type credentialStage struct {
@@ -60,19 +61,21 @@ type persistedState struct {
 }
 
 type Service struct {
-	mu         sync.Mutex
-	workflowMu sync.Mutex
-	stateFile  string
-	state      persistedState
-	now        func() time.Time
-	newID      func() (string, error)
+	mu            sync.Mutex
+	workflowMu    sync.Mutex
+	stateFile     string
+	state         persistedState
+	now           func() time.Time
+	newID         func() (string, error)
+	newResourceID func() (string, error)
 }
 
 func New(stateFile string) (*Service, error) {
 	service := &Service{
-		state: persistedState{Tenants: map[string]*tenantState{}},
-		now:   func() time.Time { return time.Now().UTC() },
-		newID: randomID,
+		state:         persistedState{Tenants: map[string]*tenantState{}},
+		now:           func() time.Time { return time.Now().UTC() },
+		newID:         randomID,
+		newResourceID: randomResourceID,
 	}
 	if strings.TrimSpace(stateFile) != "" {
 		if err := service.configure(stateFile); err != nil {

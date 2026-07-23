@@ -188,6 +188,42 @@ func DigestPrepareRequest(request PrepareRequest) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
+func DigestResourceConfiguration(values json.RawMessage, credentials map[string]commonv1.ManagedCredentialRef) (string, error) {
+	normalized, err := NormalizePrepareRequest(PrepareRequest{Action: ActionCreate, Values: values, ManagedCredentials: credentials})
+	if err != nil {
+		return "", err
+	}
+	raw, err := json.Marshal(struct {
+		Values             json.RawMessage                          `json:"values"`
+		ManagedCredentials map[string]commonv1.ManagedCredentialRef `json:"managedCredentials,omitempty"`
+	}{Values: normalized.Values, ManagedCredentials: normalized.ManagedCredentials})
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func DigestDeletedResource(resourceID string) (string, error) {
+	if !validOpaqueID(resourceID, "cfgp_", 32) {
+		return "", errors.New("Configuration Resource resourceId 无效")
+	}
+	raw, _ := json.Marshal(struct {
+		Deleted    bool   `json:"deleted"`
+		ResourceID string `json:"resourceId"`
+	}{Deleted: true, ResourceID: resourceID})
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+func validOpaqueID(value, prefix string, hexLength int) bool {
+	if len(value) != len(prefix)+hexLength || !strings.HasPrefix(value, prefix) {
+		return false
+	}
+	_, err := hex.DecodeString(strings.TrimPrefix(value, prefix))
+	return err == nil
+}
+
 func ValidateListResponse(response ListResponse) error {
 	return validateQueryResponse("listResponse", response, response.Protocol, response.CollectionID, response.ObservedAt.IsZero(), response.Items)
 }

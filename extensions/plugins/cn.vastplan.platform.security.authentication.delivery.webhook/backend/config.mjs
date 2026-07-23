@@ -1,33 +1,44 @@
-const pluginId = "cn.vastplan.platform.security.authentication.delivery.webhook";
+import path from "node:path";
 
-export function loadConfiguration(raw = process.env.VASTPLAN_PLUGIN_CONFIG_JSON ?? "{}") {
+export const pluginId = "cn.vastplan.platform.security.authentication.delivery.webhook";
+export const profileCollectionKey = "delivery-profile";
+export const authorizationPurpose = "authentication.delivery.webhook";
+
+export function loadBootstrapConfiguration(raw = process.env.VASTPLAN_PLUGIN_CONFIG_JSON ?? "{}") {
   const document = JSON.parse(raw);
-  exactObject(document, ["profiles"], "Webhook Delivery 配置");
-  if (!document.profiles || typeof document.profiles !== "object" || Array.isArray(document.profiles)) throw new Error("Webhook Delivery profiles 不能为空");
-  const profiles = new Map();
-  for (const [id, value] of Object.entries(document.profiles)) {
-    exactObject(value, ["endpoint", "authorizationRef", "channels", "timeoutMs"], `Webhook Delivery Profile ${id}`);
-    if (!/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,255}$/.test(id)) throw new Error(`Webhook Delivery Profile ${id} ID 无效`);
-    const endpoint = new URL(String(value.endpoint));
-    if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.hash) throw new Error(`Webhook Delivery Profile ${id} endpoint 必须是无凭据 HTTPS URL`);
-    const channels = [...new Set(value.channels ?? ["email", "sms"])];
-    if (channels.length < 1 || channels.some((item) => item !== "email" && item !== "sms")) throw new Error(`Webhook Delivery Profile ${id} channels 无效`);
-    const timeoutMs = Number(value.timeoutMs ?? 5000);
-    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 500 || timeoutMs > 15000) throw new Error(`Webhook Delivery Profile ${id} timeoutMs 无效`);
-    profiles.set(id, Object.freeze({ id, endpoint: endpoint.toString(), authorizationRef: credentialRef(value.authorizationRef, id), channels: Object.freeze(channels), timeoutMs }));
-  }
-  if (profiles.size < 1 || profiles.size > 64) throw new Error("Webhook Delivery profiles 数量必须为 1-64");
-  return profiles;
+  exactObject(document, ["stateFile"], "Webhook Delivery 启动配置");
+  if (typeof document.stateFile !== "string" || !path.isAbsolute(document.stateFile) || path.normalize(document.stateFile) !== document.stateFile) throw new Error("Webhook Delivery stateFile 必须是规范绝对路径");
+  return Object.freeze({ stateFile: document.stateFile });
 }
 
-function credentialRef(value, id) {
-  exactObject(value, ["handle", "scope", "owner", "purpose", "version"], `Webhook Delivery Profile ${id} authorizationRef`);
-  if (!String(value.handle).startsWith("credential://managed/") || value.scope !== "tenant" || value.owner !== pluginId || value.purpose !== "authentication.delivery.webhook" || !Number.isSafeInteger(value.version) || value.version < 1) throw new Error(`Webhook Delivery Profile ${id} authorizationRef 无效`);
-  return Object.freeze({ handle:String(value.handle), scope:"tenant", owner:pluginId, purpose:"authentication.delivery.webhook", version:value.version });
+export function normalizeProfile(resourceId, values, managedCredentials) {
+  exactObject(values, ["displayName", "endpoint", "channels", "timeoutMs"], `Webhook Delivery Profile ${resourceId}`);
+  if (typeof values.displayName !== "string" || values.displayName.trim().length < 1 || values.displayName.length > 160) throw new Error(`Webhook Delivery Profile ${resourceId} displayName 无效`);
+  const endpoint = new URL(String(values.endpoint));
+  if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.hash) throw new Error(`Webhook Delivery Profile ${resourceId} endpoint 必须是无凭据 HTTPS URL`);
+  if (!Array.isArray(values.channels)) throw new Error(`Webhook Delivery Profile ${resourceId} channels 无效`);
+  const channels = [...new Set(values.channels)];
+  if (channels.length < 1 || channels.length > 2 || channels.some((item) => item !== "email" && item !== "sms")) throw new Error(`Webhook Delivery Profile ${resourceId} channels 无效`);
+  const timeoutMs = Number(values.timeoutMs ?? 5000);
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 500 || timeoutMs > 15000) throw new Error(`Webhook Delivery Profile ${resourceId} timeoutMs 无效`);
+  exactObject(managedCredentials, ["authorization"], `Webhook Delivery Profile ${resourceId} credentials`);
+  const authorizationRef = normalizeAuthorizationRef(managedCredentials.authorization, resourceId);
+  return Object.freeze({ id: resourceId, displayName: values.displayName.trim(), endpoint: endpoint.toString(), channels: Object.freeze(channels), timeoutMs, authorizationRef });
 }
 
-function exactObject(value, keys, name) {
+export function publicProfileValues(profile) {
+  return Object.freeze({ displayName: profile.displayName, endpoint: profile.endpoint, channels: [...profile.channels], timeoutMs: profile.timeoutMs });
+}
+
+export function normalizeAuthorizationRef(value, id) {
+  exactObject(value, ["handle", "scope", "owner", "purpose", "version", "name"], `Webhook Delivery Profile ${id} authorizationRef`, ["name"]);
+  if (!String(value.handle).startsWith("credential://managed/") || value.scope !== "tenant" || value.owner !== pluginId || value.purpose !== authorizationPurpose || !Number.isSafeInteger(value.version) || value.version < 1) throw new Error(`Webhook Delivery Profile ${id} authorizationRef 无效`);
+  return Object.freeze({ handle: String(value.handle), scope: "tenant", owner: pluginId, purpose: authorizationPurpose, version: value.version, ...(value.name === undefined ? {} : { name: String(value.name) }) });
+}
+
+function exactObject(value, keys, name, optional = []) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`${name} 必须是对象`);
   const allowed = new Set(keys);
   for (const key of Object.keys(value)) if (!allowed.has(key)) throw new Error(`${name} 存在未知字段 ${key}`);
+  for (const key of keys) if (!optional.includes(key) && value[key] === undefined) throw new Error(`${name} 缺少字段 ${key}`);
 }

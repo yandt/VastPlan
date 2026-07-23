@@ -17,6 +17,7 @@ import (
 func main() {
 	source := flag.String("source", "", "插件目录（须含 vastplan.plugin.json）")
 	backendBin := flag.String("backend-bin", "", "写入清单 entry.backend 的已构建可执行文件")
+	backendModule := flag.String("backend-module", "", "写入 node-worker entry.backend 的自包含 ESM bundle")
 	frontendBundle := flag.String("frontend-bundle", "", "写入清单 entry.frontend 的旧单文件 ESM bundle")
 	frontendGraph := flag.String("frontend-graph", "", "写入签名清单的 browser Module Graph JSON")
 	frontendServerGraph := flag.String("frontend-server-graph", "", "写入签名清单的 server Module Graph JSON")
@@ -42,7 +43,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	packageSource, cleanup := stagePackageWithGraphs(*source, *backendBin, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile)
+	packageSource, cleanup := stagePackageWithBackendModuleAndGraphs(*source, *backendBin, *backendModule, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile)
 	defer cleanup()
 	packageBytes, manifest, err := pluginservice.PackageDirectory(packageSource)
 	if err != nil {

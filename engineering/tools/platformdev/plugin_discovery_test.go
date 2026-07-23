@@ -34,6 +34,30 @@ func TestDiscoverPackageSpecsIncludesFrontendManifestWithoutAllowList(t *testing
 	}
 }
 
+func TestDiscoverPackageSpecsIncludesNodeBackendWithoutNativeBinary(t *testing.T) {
+	root := t.TempDir()
+	pluginID := "cn.vastplan.platform.security.authentication.delivery.webhook"
+	pluginRoot := filepath.Join(root, "extensions", "plugins", pluginID)
+	if err := os.MkdirAll(pluginRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	reference := filepath.Join(repositoryRoot(t), "extensions", "plugins", pluginID, "vastplan.plugin.json")
+	raw, err := os.ReadFile(reference)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginRoot, "vastplan.plugin.json"), raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	specs, err := discoverPackageSpecs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(specs) != 1 || specs[0].id != pluginID || specs[0].backend || specs[0].frontend {
+		t.Fatalf("Node backend must be source-packaged without a native binary: %#v", specs)
+	}
+}
+
 func TestDiscoverPackageSpecsLeavesDynamicGoToDedicatedPackager(t *testing.T) {
 	specs, err := discoverPackageSpecs(repositoryRoot(t))
 	if err != nil {

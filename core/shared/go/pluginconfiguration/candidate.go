@@ -33,29 +33,33 @@ type ManagedCredentialStatus struct {
 // Candidate never contains secret material, authority tokens, stage IDs or
 // managed credential handles. Only browser-safe field status is returned.
 type Candidate struct {
-	ID                 string                    `json:"id"`
-	ConfigurationID    string                    `json:"configurationId"`
-	Revision           uint64                    `json:"revision"`
-	Status             CandidateStatus           `json:"status"`
-	ApplyPath          ApplyPath                 `json:"applyPath"`
-	CatalogDigest      string                    `json:"catalogDigest"`
-	SchemaDigest       string                    `json:"schemaDigest"`
-	ArtifactSHA256     string                    `json:"artifactSha256"`
-	Values             json.RawMessage           `json:"values"`
-	CreatedBy          string                    `json:"createdBy"`
-	CreatedAt          string                    `json:"createdAt"`
-	UpdatedAt          string                    `json:"updatedAt"`
-	ErrorCode          string                    `json:"errorCode,omitempty"`
-	ErrorMessage       string                    `json:"errorMessage,omitempty"`
-	ExternalRevision   uint64                    `json:"externalRevision,omitempty"`
-	ExternalStatus     string                    `json:"externalStatus,omitempty"`
-	RollbackRevision   uint64                    `json:"rollbackRevision,omitempty"`
-	ManagedCredentials []ManagedCredentialStatus `json:"managedCredentials,omitempty"`
+	ID                   string                    `json:"id"`
+	ConfigurationID      string                    `json:"configurationId"`
+	ResourceCollectionID string                    `json:"resourceCollectionId,omitempty"`
+	ResourceID           string                    `json:"resourceId,omitempty"`
+	ResourceAction       string                    `json:"resourceAction,omitempty"`
+	Revision             uint64                    `json:"revision"`
+	Status               CandidateStatus           `json:"status"`
+	ApplyPath            ApplyPath                 `json:"applyPath"`
+	CatalogDigest        string                    `json:"catalogDigest"`
+	SchemaDigest         string                    `json:"schemaDigest"`
+	ArtifactSHA256       string                    `json:"artifactSha256"`
+	Values               json.RawMessage           `json:"values"`
+	CreatedBy            string                    `json:"createdBy"`
+	CreatedAt            string                    `json:"createdAt"`
+	UpdatedAt            string                    `json:"updatedAt"`
+	ErrorCode            string                    `json:"errorCode,omitempty"`
+	ErrorMessage         string                    `json:"errorMessage,omitempty"`
+	ExternalRevision     uint64                    `json:"externalRevision,omitempty"`
+	ExternalDigest       string                    `json:"externalDigest,omitempty"`
+	ExternalStatus       string                    `json:"externalStatus,omitempty"`
+	RollbackRevision     uint64                    `json:"rollbackRevision,omitempty"`
+	ManagedCredentials   []ManagedCredentialStatus `json:"managedCredentials,omitempty"`
 }
 
 func ValidApplyPath(path ApplyPath) bool {
 	switch path {
-	case ApplyApplicationDeployment, ApplyPlatformProfile, ApplyHotService, ApplyHotScoped:
+	case ApplyApplicationDeployment, ApplyPlatformProfile, ApplyHotService, ApplyHotScoped, ApplyResourceProfile:
 		return true
 	default:
 		return false
@@ -72,6 +76,14 @@ type CreateDraftRequest struct {
 // ValidateValues evaluates the exact schema frozen in the trusted catalog.
 // Remote refs were already rejected when the signed manifest was parsed.
 func ValidateValues(definition Definition, raw json.RawMessage) error {
+	return validateValues(definition.Schema, definition.SchemaDigest, raw)
+}
+
+func ValidateResourceValues(collection ResourceCollection, raw json.RawMessage) error {
+	return validateValues(collection.Schema, collection.SchemaDigest, raw)
+}
+
+func validateValues(schemaRaw json.RawMessage, schemaDigest string, raw json.RawMessage) error {
 	if len(raw) == 0 || len(raw) > MaxValuesBytes || !json.Valid(raw) {
 		return errors.New("配置 values 必须是大小受限的有效 JSON")
 	}
@@ -80,8 +92,8 @@ func ValidateValues(definition Definition, raw json.RawMessage) error {
 		return errors.New("配置 values 必须是 JSON 对象")
 	}
 	compiler := jsonschema.NewCompiler()
-	url := "https://schemas.cdsoft.com.cn/vastplan/plugin-configuration/" + definition.SchemaDigest + ".json"
-	document, err := jsonschema.UnmarshalJSON(bytes.NewReader(definition.Schema))
+	url := "https://schemas.cdsoft.com.cn/vastplan/plugin-configuration/" + schemaDigest + ".json"
+	document, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaRaw))
 	if err != nil {
 		return fmt.Errorf("解析配置 Schema: %w", err)
 	}
