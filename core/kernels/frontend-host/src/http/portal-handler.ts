@@ -16,6 +16,7 @@ import { serveAccessBrandAsset } from "./access-brand-asset-route";
 import type { APIExposureCatalogPort } from "../api-exposure/api-exposure-contract";
 import { APIExposureGateway } from "../api-exposure/api-exposure-gateway";
 import type { TrustedCapabilityInvoker } from "../capabilities/capability-invoker";
+import { sendAPIError, sendJSON } from "./json-response";
 
 export interface PortalHandlerOptions {
   assets: PortalAssets;
@@ -63,6 +64,11 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
       void api(request, response, path);
       return;
     }
+    if (path === "/auth/session") {
+      if (options.identity === undefined) return sendEmpty(response, 404);
+      void serveIdentitySession(options.identity, request, response, method);
+      return;
+    }
     if (path === "/auth/v1/bootstrap") {
       if (options.access === undefined) return sendEmpty(response, 404);
       void serveAccessBootstrap(options.access, request, response);
@@ -94,6 +100,17 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     if (path.startsWith("/assets/")) return serveAsset(options.assets, path.slice("/assets/".length), method, request, response);
     void servePage(options, request, response, method, path);
   };
+}
+
+async function serveIdentitySession(identity: IdentityProvider, request: IncomingMessage, response: ServerResponse, method: string): Promise<void> {
+  response.setHeader("Cache-Control", "no-store");
+  if (method !== "GET" && method !== "HEAD") return sendAPIError(response, 405, "method_not_allowed", method === "HEAD");
+  try {
+    const principal = await identity.authenticate(request);
+    sendJSON(response, 200, { authenticated: true, subject: principal.id, tenantId: principal.tenantId, roles: principal.roles }, method === "HEAD");
+  } catch {
+    sendAPIError(response, 401, "session_required", method === "HEAD");
+  }
 }
 
 async function servePage(options: PortalHandlerOptions, request: IncomingMessage, response: ServerResponse, method: string, path: string): Promise<void> {
