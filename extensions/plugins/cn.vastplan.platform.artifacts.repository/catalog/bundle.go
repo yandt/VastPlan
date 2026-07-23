@@ -40,6 +40,14 @@ type OfflineBundleProvenanceDestination interface {
 	PublishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte) (pluginservice.Artifact, error)
 }
 
+type OfflineBundleSupplyChainSource interface {
+	ReadWithSupplyChain(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, []byte, []byte, error)
+}
+
+type OfflineBundleSupplyChainDestination interface {
+	PublishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, securityAdmissionRaw []byte) (pluginservice.Artifact, error)
+}
+
 type OfflineBundle struct {
 	Path   string
 	Size   int64
@@ -63,9 +71,11 @@ type bundleArtifact struct {
 	ProvenanceSHA256             string               `json:"provenanceSHA256,omitempty"`
 	ProvenanceVerificationPath   string               `json:"provenanceVerificationPath,omitempty"`
 	ProvenanceVerificationSHA256 string               `json:"provenanceVerificationSHA256,omitempty"`
+	SecurityAdmissionPath        string               `json:"securityAdmissionPath,omitempty"`
+	SecurityAdmissionSHA256      string               `json:"securityAdmissionSHA256,omitempty"`
 }
 
-var bundleArtifactPathPattern = regexp.MustCompile(`^artifacts/[a-f0-9]{64}/(?:package\.tar\.gz|attestation\.json|provenance\.dsse\.json|provenance-verification\.json)$`)
+var bundleArtifactPathPattern = regexp.MustCompile(`^artifacts/[a-f0-9]{64}/(?:package\.tar\.gz|attestation\.json|provenance\.dsse\.json|provenance-verification\.json|security-admission\.json)$`)
 
 // CreateOfflineBundle materializes a deterministic gzip tar in a private
 // temporary file. The caller owns deletion after serving or moving it.
@@ -124,8 +134,14 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 	for _, item := range lock.Packages {
 		var artifact pluginservice.Artifact
 		var packageBytes, proof []byte
-		var provenanceRaw, verificationRaw []byte
-		if provenanceSource, ok := source.(OfflineBundleProvenanceSource); ok {
+		var provenanceRaw, verificationRaw, admissionRaw []byte
+		if supplyChainSource, ok := source.(OfflineBundleSupplyChainSource); ok {
+			artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw, err = supplyChainSource.ReadWithSupplyChain(item.Ref)
+			if err != nil {
+				_ = closeWriters()
+				return OfflineBundle{}, fmt.Errorf("读取 Bundle 供应链证据 %s: %w", refKey(item.Ref), err)
+			}
+		} else if provenanceSource, ok := source.(OfflineBundleProvenanceSource); ok {
 			artifact, packageBytes, proof, provenanceRaw, verificationRaw, err = provenanceSource.ReadWithProvenance(item.Ref)
 			if err != nil {
 				_ = closeWriters()
@@ -136,17 +152,21 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 				_ = closeWriters()
 				return OfflineBundle{}, errors.New("离线 Bundle 来源不支持导出必需的来源证明")
 			}
+			if trustStore.AssessmentEnabled() {
+				_ = closeWriters()
+				return OfflineBundle{}, errors.New("离线 Bundle 来源不支持导出必需的安全准入记录")
+			}
 			artifact, packageBytes, proof, err = source.ReadWithAttestation(item.Ref)
 			if err != nil {
 				_ = closeWriters()
 				return OfflineBundle{}, fmt.Errorf("读取 Bundle 制品 %s: %w", refKey(item.Ref), err)
 			}
 		}
-		if err := validateBundleArtifact(item, artifact, packageBytes, proof, provenanceRaw, verificationRaw, trustStore); err != nil {
+		if err := validateBundleArtifact(item, artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw, trustStore); err != nil {
 			_ = closeWriters()
 			return OfflineBundle{}, err
 		}
-		total += int64(len(packageBytes)) + int64(len(proof)) + int64(len(provenanceRaw)) + int64(len(verificationRaw))
+		total += int64(len(packageBytes)) + int64(len(proof)) + int64(len(provenanceRaw)) + int64(len(verificationRaw)) + int64(len(admissionRaw))
 		if total > maxOfflineBundleBytes {
 			_ = closeWriters()
 			return OfflineBundle{}, fmt.Errorf("离线 Bundle 制品总量超过 %d 字节上限", maxOfflineBundleBytes)
@@ -173,12 +193,21 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 				return OfflineBundle{}, err
 			}
 		}
+		admissionPath := ""
+		if len(admissionRaw) != 0 {
+			admissionPath = base + "/security-admission.json"
+			if err := writeBundleEntry(tw, admissionPath, admissionRaw); err != nil {
+				_ = closeWriters()
+				return OfflineBundle{}, err
+			}
+		}
 		proofDigest := sha256.Sum256(proof)
-		provenanceDigest, verificationDigest := sha256.Sum256(provenanceRaw), sha256.Sum256(verificationRaw)
+		provenanceDigest, verificationDigest, admissionDigest := sha256.Sum256(provenanceRaw), sha256.Sum256(verificationRaw), sha256.Sum256(admissionRaw)
 		manifest.Artifacts = append(manifest.Artifacts, bundleArtifact{
 			Ref: item.Ref, SHA256: item.SHA256, PackagePath: packagePath, AttestationPath: proofPath,
 			AttestationSHA256: hex.EncodeToString(proofDigest[:]), ProvenancePath: provenancePath, ProvenanceVerificationPath: verificationPath,
 			ProvenanceSHA256: digestIfPresent(provenanceRaw, provenanceDigest), ProvenanceVerificationSHA256: digestIfPresent(verificationRaw, verificationDigest),
+			SecurityAdmissionPath: admissionPath, SecurityAdmissionSHA256: digestIfPresent(admissionRaw, admissionDigest),
 		})
 	}
 	manifestRaw, err := json.MarshalIndent(manifest, "", "  ")
@@ -255,6 +284,33 @@ func canonicalTrustDocument(raw []byte) ([]byte, *pluginservice.TrustStore, erro
 			sort.Strings(requirement.SourceURIPrefixes)
 			sort.Strings(requirement.Issuers)
 			sort.Strings(requirement.Workflows)
+		}
+	}
+	if document.Assessment != nil {
+		sort.Strings(document.Assessment.RequiredChannels)
+		sort.Slice(document.Assessment.Keys, func(i, j int) bool {
+			if document.Assessment.Keys[i].ProviderID != document.Assessment.Keys[j].ProviderID {
+				return document.Assessment.Keys[i].ProviderID < document.Assessment.Keys[j].ProviderID
+			}
+			return document.Assessment.Keys[i].KeyID < document.Assessment.Keys[j].KeyID
+		})
+		sort.Slice(document.Assessment.Requirements, func(i, j int) bool {
+			left, right := document.Assessment.Requirements[i], document.Assessment.Requirements[j]
+			if left.ID != right.ID {
+				return left.ID < right.ID
+			}
+			if left.Channel != right.Channel {
+				return left.Channel < right.Channel
+			}
+			if left.Publisher != right.Publisher {
+				return left.Publisher < right.Publisher
+			}
+			return left.PluginPrefix < right.PluginPrefix
+		})
+		for index := range document.Assessment.Requirements {
+			requirement := &document.Assessment.Requirements[index]
+			sort.Strings(requirement.ProviderIDs)
+			sort.Strings(requirement.ScannerIDs)
 		}
 	}
 	canonical, err := json.MarshalIndent(document, "", "  ")

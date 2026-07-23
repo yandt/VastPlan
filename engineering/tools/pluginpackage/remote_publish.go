@@ -28,6 +28,7 @@ type remotePublishOptions struct {
 	Client                 *http.Client
 	Provenance             []byte
 	ProvenanceVerification []byte
+	SecurityAdmission      []byte
 }
 
 func publishRemote(packageBytes []byte, publisher, channel string, options remotePublishOptions) (pluginservice.Artifact, error) {
@@ -61,10 +62,10 @@ func publishRemote(packageBytes []byte, publisher, channel string, options remot
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), options.Timeout)
 	defer cancel()
-	provenanceRaw, verificationRaw := options.Provenance, options.ProvenanceVerification
+	provenanceRaw, verificationRaw, securityAdmissionRaw := options.Provenance, options.ProvenanceVerification, options.SecurityAdmission
 	if channel == "stable" {
 		reader := &pluginservice.RemoteRepository{BaseURL: options.RepositoryURL, Token: options.ReadToken, Trust: trust, Client: client}
-		sourceProvenance, sourceVerification, err := verifyStableCandidate(ctx, reader, artifact, publisher, options.KeyID)
+		sourceProvenance, sourceVerification, sourceAdmission, err := verifyStableCandidate(ctx, reader, artifact, publisher, options.KeyID)
 		if err != nil {
 			return pluginservice.Artifact{}, err
 		}
@@ -73,39 +74,44 @@ func publishRemote(packageBytes []byte, publisher, channel string, options remot
 		} else if !bytes.Equal(bytes.TrimSpace(provenanceRaw), bytes.TrimSpace(sourceProvenance)) || !bytes.Equal(bytes.TrimSpace(verificationRaw), bytes.TrimSpace(sourceVerification)) {
 			return pluginservice.Artifact{}, errors.New("stable 来源证明与 testing 候选不是同一组不可变 sidecar")
 		}
+		if len(securityAdmissionRaw) == 0 {
+			securityAdmissionRaw = sourceAdmission
+		} else if !bytes.Equal(bytes.TrimSpace(securityAdmissionRaw), bytes.TrimSpace(sourceAdmission)) {
+			return pluginservice.Artifact{}, errors.New("stable 安全准入记录与 testing 候选不是同一不可变 sidecar")
+		}
 	}
 	attestation, err := pluginservice.SignArtifact(artifact, publisher, options.KeyID, privateKey, time.Now().UTC())
 	if err != nil {
 		return pluginservice.Artifact{}, fmt.Errorf("签署制品: %w", err)
 	}
 	remote := &pluginservice.RemoteRepository{BaseURL: options.RepositoryURL, Token: options.PublishToken, Trust: trust, Client: client}
-	published, err := remote.PublishRemoteWithProvenance(ctx, attestation, packageBytes, provenanceRaw, verificationRaw)
+	published, err := remote.PublishRemoteWithSupplyChain(ctx, attestation, packageBytes, provenanceRaw, verificationRaw, securityAdmissionRaw)
 	if err != nil {
 		return pluginservice.Artifact{}, fmt.Errorf("提交签名制品: %w", err)
 	}
 	return published, nil
 }
 
-func verifyStableCandidate(ctx context.Context, reader *pluginservice.RemoteRepository, stable pluginservice.Artifact, publisher, keyID string) ([]byte, []byte, error) {
+func verifyStableCandidate(ctx context.Context, reader *pluginservice.RemoteRepository, stable pluginservice.Artifact, publisher, keyID string) ([]byte, []byte, []byte, error) {
 	if reader == nil {
-		return nil, nil, errors.New("stable 发布缺少 testing 候选读取器")
+		return nil, nil, nil, errors.New("stable 发布缺少 testing 候选读取器")
 	}
 	source := pluginservice.Ref{PluginID: stable.PluginID, Version: stable.Version, Channel: "testing"}
 	envelope, err := reader.Fetch(ctx, source)
 	if err != nil {
-		return nil, nil, fmt.Errorf("读取已批准的 testing 候选: %w", err)
+		return nil, nil, nil, fmt.Errorf("读取已批准的 testing 候选: %w", err)
 	}
 	if envelope.Artifact.PluginID != stable.PluginID || envelope.Artifact.Version != stable.Version || envelope.Artifact.Channel != "testing" || envelope.Artifact.SHA256 != stable.SHA256 || envelope.Artifact.Size != stable.Size {
-		return nil, nil, errors.New("stable 包与 testing 候选的不可变身份或 SHA-256 不一致")
+		return nil, nil, nil, errors.New("stable 包与 testing 候选的不可变身份或 SHA-256 不一致")
 	}
 	var proof pluginservice.Attestation
 	if err := json.Unmarshal(envelope.Proof, &proof); err != nil {
-		return nil, nil, errors.New("testing 候选证明无法解析")
+		return nil, nil, nil, errors.New("testing 候选证明无法解析")
 	}
 	if proof.Publisher != strings.TrimSpace(publisher) || proof.KeyID != strings.TrimSpace(keyID) {
-		return nil, nil, errors.New("stable 发布者或 key ID 与 testing 候选不一致")
+		return nil, nil, nil, errors.New("stable 发布者或 key ID 与 testing 候选不一致")
 	}
-	return append([]byte(nil), envelope.Provenance...), append([]byte(nil), envelope.ProvenanceVerification...), nil
+	return append([]byte(nil), envelope.Provenance...), append([]byte(nil), envelope.ProvenanceVerification...), append([]byte(nil), envelope.SecurityAdmission...), nil
 }
 
 func loadProvenanceFiles(provenanceFile, verificationFile string) ([]byte, []byte, error) {
@@ -127,6 +133,20 @@ func loadProvenanceFiles(provenanceFile, verificationFile string) ([]byte, []byt
 		return nil, nil, errors.New("来源证明及验证记录不能为空")
 	}
 	return provenanceRaw, verificationRaw, nil
+}
+
+func loadOptionalEvidenceFile(filename, label string) ([]byte, error) {
+	if strings.TrimSpace(filename) == "" {
+		return nil, nil
+	}
+	raw, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return nil, fmt.Errorf("%s不能为空", label)
+	}
+	return raw, nil
 }
 
 func repositoryHTTPClient(caFile string, timeout time.Duration) (*http.Client, error) {

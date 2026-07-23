@@ -126,27 +126,28 @@ type ArtifactCatalogQuery struct {
 }
 
 type ArtifactCatalogEntry struct {
-	Ref                pluginv1.ArtifactRef           `json:"ref"`
-	SHA256             string                         `json:"sha256"`
-	Size               int64                          `json:"size"`
-	Publisher          string                         `json:"publisher"`
-	KeyID              string                         `json:"keyId"`
-	SignedAt           string                         `json:"signedAt"`
-	PublishedAt        string                         `json:"publishedAt"`
-	RepositoryRevision uint64                         `json:"repositoryRevision"`
-	Name               string                         `json:"name"`
-	Description        string                         `json:"description"`
-	Namespace          string                         `json:"namespace"`
-	License            string                         `json:"license,omitempty"`
-	Targets            []string                       `json:"targets"`
-	Platforms          []string                       `json:"platforms,omitempty"`
-	LifecycleStatus    string                         `json:"lifecycleStatus"`
-	LifecycleRevision  uint64                         `json:"lifecycleRevision,omitempty"`
-	LifecycleReason    string                         `json:"lifecycleReason,omitempty"`
-	Replacement        *pluginv1.ArtifactRequirement  `json:"replacement,omitempty"`
-	SBOM               *ArtifactSBOMDeclaration       `json:"sbom,omitempty"`
-	PythonLock         *ArtifactPythonLockDeclaration `json:"pythonLock,omitempty"`
-	Provenance         *ArtifactProvenanceDeclaration `json:"provenance,omitempty"`
+	Ref                pluginv1.ArtifactRef                  `json:"ref"`
+	SHA256             string                                `json:"sha256"`
+	Size               int64                                 `json:"size"`
+	Publisher          string                                `json:"publisher"`
+	KeyID              string                                `json:"keyId"`
+	SignedAt           string                                `json:"signedAt"`
+	PublishedAt        string                                `json:"publishedAt"`
+	RepositoryRevision uint64                                `json:"repositoryRevision"`
+	Name               string                                `json:"name"`
+	Description        string                                `json:"description"`
+	Namespace          string                                `json:"namespace"`
+	License            string                                `json:"license,omitempty"`
+	Targets            []string                              `json:"targets"`
+	Platforms          []string                              `json:"platforms,omitempty"`
+	LifecycleStatus    string                                `json:"lifecycleStatus"`
+	LifecycleRevision  uint64                                `json:"lifecycleRevision,omitempty"`
+	LifecycleReason    string                                `json:"lifecycleReason,omitempty"`
+	Replacement        *pluginv1.ArtifactRequirement         `json:"replacement,omitempty"`
+	SBOM               *ArtifactSBOMDeclaration              `json:"sbom,omitempty"`
+	PythonLock         *ArtifactPythonLockDeclaration        `json:"pythonLock,omitempty"`
+	Provenance         *ArtifactProvenanceDeclaration        `json:"provenance,omitempty"`
+	SecurityAdmission  *ArtifactSecurityAdmissionDeclaration `json:"securityAdmission,omitempty"`
 }
 
 type ArtifactSBOMDeclaration struct {
@@ -196,6 +197,33 @@ type ArtifactProvenanceEvidence struct {
 	Verification string `json:"verification"`
 }
 
+type ArtifactSecurityAdmissionDeclaration struct {
+	AdmissionSHA256      string `json:"admissionSha256"`
+	ProviderID           string `json:"providerId"`
+	KeyID                string `json:"keyId"`
+	PolicyID             string `json:"policyId"`
+	ScannerID            string `json:"scannerId"`
+	ScannerVersion       string `json:"scannerVersion"`
+	DatabaseRevision     string `json:"databaseRevision"`
+	Decision             string `json:"decision"`
+	EvaluatedAt          string `json:"evaluatedAt"`
+	ExpiresAt            string `json:"expiresAt"`
+	Critical             uint64 `json:"critical"`
+	High                 uint64 `json:"high"`
+	Medium               uint64 `json:"medium"`
+	Low                  uint64 `json:"low"`
+	UnknownVulnerability uint64 `json:"unknownVulnerability"`
+	DeniedLicense        uint64 `json:"deniedLicense"`
+	UnknownLicense       uint64 `json:"unknownLicense"`
+}
+
+type ArtifactSecurityAdmissionEvidence struct {
+	ArtifactSecurityAdmissionDeclaration
+	VulnerabilityReportSHA256 string `json:"vulnerabilityReportSha256,omitempty"`
+	LicenseReportSHA256       string `json:"licenseReportSha256,omitempty"`
+	Verification              string `json:"verification"`
+}
+
 type ArtifactCatalogPage struct {
 	Revision uint64                 `json:"revision"`
 	Total    int                    `json:"total"`
@@ -235,9 +263,11 @@ type ArtifactPublication struct {
 	SourceAttestationSHA256               string               `json:"sourceAttestationSha256"`
 	SourceProvenanceSHA256                string               `json:"sourceProvenanceSha256,omitempty"`
 	SourceProvenanceVerificationSHA256    string               `json:"sourceProvenanceVerificationSha256,omitempty"`
+	SourceSecurityAdmissionSHA256         string               `json:"sourceSecurityAdmissionSha256,omitempty"`
 	PublishedAttestationSHA256            string               `json:"publishedAttestationSha256,omitempty"`
 	PublishedProvenanceSHA256             string               `json:"publishedProvenanceSha256,omitempty"`
 	PublishedProvenanceVerificationSHA256 string               `json:"publishedProvenanceVerificationSha256,omitempty"`
+	PublishedSecurityAdmissionSHA256      string               `json:"publishedSecurityAdmissionSha256,omitempty"`
 	Reason                                string               `json:"reason"`
 	SubmittedBy                           string               `json:"submittedBy"`
 	ApprovedBy                            string               `json:"approvedBy,omitempty"`
@@ -270,25 +300,26 @@ type ArtifactPublicationPage struct {
 	Items    []ArtifactPublication `json:"items"`
 }
 type ArtifactSupplyChainEvidence struct {
-	Ref                pluginv1.ArtifactRef        `json:"ref"`
-	SHA256             string                      `json:"sha256"`
-	Size               int64                       `json:"size"`
-	Publisher          string                      `json:"publisher"`
-	KeyID              string                      `json:"keyId"`
-	SignedAt           string                      `json:"signedAt"`
-	AttestationSHA256  string                      `json:"attestationSha256"`
-	Verification       string                      `json:"verification"`
-	Name               string                      `json:"name"`
-	Description        string                      `json:"description"`
-	License            string                      `json:"license,omitempty"`
-	Targets            []string                    `json:"targets"`
-	Engines            map[string]string           `json:"engines"`
-	RepositoryRevision uint64                      `json:"repositoryRevision"`
-	LifecycleStatus    string                      `json:"lifecycleStatus"`
-	Publications       []ArtifactPublication       `json:"publications"`
-	SBOM               *ArtifactSBOMEvidence       `json:"sbom,omitempty"`
-	PythonLock         *ArtifactPythonLockEvidence `json:"pythonLock,omitempty"`
-	Provenance         *ArtifactProvenanceEvidence `json:"provenance,omitempty"`
+	Ref                pluginv1.ArtifactRef               `json:"ref"`
+	SHA256             string                             `json:"sha256"`
+	Size               int64                              `json:"size"`
+	Publisher          string                             `json:"publisher"`
+	KeyID              string                             `json:"keyId"`
+	SignedAt           string                             `json:"signedAt"`
+	AttestationSHA256  string                             `json:"attestationSha256"`
+	Verification       string                             `json:"verification"`
+	Name               string                             `json:"name"`
+	Description        string                             `json:"description"`
+	License            string                             `json:"license,omitempty"`
+	Targets            []string                           `json:"targets"`
+	Engines            map[string]string                  `json:"engines"`
+	RepositoryRevision uint64                             `json:"repositoryRevision"`
+	LifecycleStatus    string                             `json:"lifecycleStatus"`
+	Publications       []ArtifactPublication              `json:"publications"`
+	SBOM               *ArtifactSBOMEvidence              `json:"sbom,omitempty"`
+	PythonLock         *ArtifactPythonLockEvidence        `json:"pythonLock,omitempty"`
+	Provenance         *ArtifactProvenanceEvidence        `json:"provenance,omitempty"`
+	SecurityAdmission  *ArtifactSecurityAdmissionEvidence `json:"securityAdmission,omitempty"`
 }
 
 type ArtifactReferenceSnapshot struct {

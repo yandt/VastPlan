@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 )
@@ -86,7 +87,14 @@ func (r *RemoteRepository) Fetch(ctx context.Context, ref Ref) (artifacttrust.En
 			return artifacttrust.Envelope{}, err
 		}
 	}
-	preflight := artifacttrust.Envelope{Artifact: artifact, Proof: attestationRaw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw}
+	var securityAdmissionRaw []byte
+	if r.Trust.AssessmentEnabled() {
+		securityAdmissionRaw, err = r.getOptional(ctx, client, endpoint+"/security-admission", artifactassessment.MaxRecordBytes)
+		if err != nil {
+			return artifacttrust.Envelope{}, err
+		}
+	}
+	preflight := artifacttrust.Envelope{Artifact: artifact, Proof: attestationRaw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: securityAdmissionRaw}
 	if err := r.Trust.VerifyProof(preflight); err != nil {
 		return artifacttrust.Envelope{}, fmt.Errorf("远端制品来源证明预检失败: %w", err)
 	}
@@ -181,6 +189,10 @@ func (r *RemoteRepository) PublishRemote(ctx context.Context, attestation Attest
 }
 
 func (r *RemoteRepository) PublishRemoteWithProvenance(ctx context.Context, attestation Attestation, packageBytes, provenanceRaw, verificationRaw []byte) (Artifact, error) {
+	return r.PublishRemoteWithSupplyChain(ctx, attestation, packageBytes, provenanceRaw, verificationRaw, nil)
+}
+
+func (r *RemoteRepository) PublishRemoteWithSupplyChain(ctx context.Context, attestation Attestation, packageBytes, provenanceRaw, verificationRaw, securityAdmissionRaw []byte) (Artifact, error) {
 	base, client, maxBytes, err := r.validate()
 	if err != nil {
 		return Artifact{}, err
@@ -195,7 +207,7 @@ func (r *RemoteRepository) PublishRemoteWithProvenance(ctx context.Context, atte
 	if err != nil {
 		return Artifact{}, err
 	}
-	if err := r.Trust.VerifyProof(artifacttrust.Envelope{Artifact: attestation.Artifact, PackageBytes: packageBytes, Proof: attestationRaw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw}); err != nil {
+	if err := r.Trust.VerifyProof(artifacttrust.Envelope{Artifact: attestation.Artifact, PackageBytes: packageBytes, Proof: attestationRaw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: securityAdmissionRaw}); err != nil {
 		return Artifact{}, err
 	}
 	var body bytes.Buffer
@@ -217,7 +229,7 @@ func (r *RemoteRepository) PublishRemoteWithProvenance(ctx context.Context, atte
 	for _, sidecar := range []struct {
 		name string
 		raw  []byte
-	}{{name: "provenance", raw: provenanceRaw}, {name: "provenance-verification", raw: verificationRaw}} {
+	}{{name: "provenance", raw: provenanceRaw}, {name: "provenance-verification", raw: verificationRaw}, {name: "security-admission", raw: securityAdmissionRaw}} {
 		if len(sidecar.raw) == 0 {
 			continue
 		}

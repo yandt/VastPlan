@@ -28,12 +28,17 @@ type SeedRepository interface {
 	PublishWithProvenance(artifacttrust.Attestation, []byte, []byte, []byte) (pluginv1.Artifact, error)
 }
 
+type supplyChainSeedRepository interface {
+	PublishWithSupplyChain(artifacttrust.Attestation, []byte, []byte, []byte, []byte) (pluginv1.Artifact, error)
+}
+
 type Candidate struct {
 	Artifact               pluginv1.Artifact
 	PackageBytes           []byte
 	Proof                  []byte
 	Provenance             []byte
 	ProvenanceVerification []byte
+	SecurityAdmission      []byte
 }
 
 type Controller struct {
@@ -139,7 +144,14 @@ func (c *Controller) Prepare(ctx context.Context, candidates []Candidate) (boots
 		if !sameArtifact(attestation.Artifact, candidate.Artifact) {
 			return bootstrapinventory.Inventory{}, errors.New("Bootstrap 候选证明与已验证制品不一致")
 		}
-		published, err := c.seed.PublishWithProvenance(attestation, candidate.PackageBytes, candidate.Provenance, candidate.ProvenanceVerification)
+		var published pluginv1.Artifact
+		if repository, ok := c.seed.(supplyChainSeedRepository); ok {
+			published, err = repository.PublishWithSupplyChain(attestation, candidate.PackageBytes, candidate.Provenance, candidate.ProvenanceVerification, candidate.SecurityAdmission)
+		} else if len(candidate.SecurityAdmission) != 0 {
+			return bootstrapinventory.Inventory{}, errors.New("Seed Repository 不支持复制安全准入记录")
+		} else {
+			published, err = c.seed.PublishWithProvenance(attestation, candidate.PackageBytes, candidate.Provenance, candidate.ProvenanceVerification)
+		}
 		if err != nil {
 			return bootstrapinventory.Inventory{}, fmt.Errorf("复制 Bootstrap 候选到 Seed: %w", err)
 		}

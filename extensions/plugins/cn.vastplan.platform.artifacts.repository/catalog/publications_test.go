@@ -131,23 +131,27 @@ func TestStablePublicationRequiresApproval(t *testing.T) {
 	}
 }
 
-func TestStablePublicationBindsTestingProvenanceSidecars(t *testing.T) {
+func TestStablePublicationBindsTestingSupplyChainSidecars(t *testing.T) {
 	source := pluginv1.ArtifactRef{PluginID: "cn.example.demo", Version: "1.0.0", Channel: "testing"}
 	target := source
 	target.Channel = "stable"
-	provenance, verification := []byte("provenance"), []byte("verification")
+	provenance, verification, admission := []byte("provenance"), []byte("verification"), []byte("security admission")
 	record := Publication{
 		ID: "publication", Status: PublicationApproved, Source: source, Target: target, SHA256: "artifact-sha", Publisher: "example", KeyID: "release",
 		SourceProvenanceSHA256: digestBytes(provenance), SourceProvenanceVerificationSHA256: digestBytes(verification),
+		SourceSecurityAdmissionSHA256: digestBytes(admission),
 		ExpiresAt: time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano),
 	}
 	store := &Store{entries: map[string]Entry{refKey(source): {Ref: source, SHA256: record.SHA256, Publisher: record.Publisher, KeyID: record.KeyID, LifecycleStatus: LifecycleActive}}, publications: map[string]Publication{record.ID: record}}
 	attestation := pluginservice.Attestation{Artifact: pluginv1.Artifact{PluginID: target.PluginID, Version: target.Version, Channel: target.Channel, SHA256: record.SHA256}, Publisher: record.Publisher, KeyID: record.KeyID}
-	if id, err := store.AuthorizePublicationWithProvenance(attestation, provenance, verification, time.Now().UTC()); err != nil || id != record.ID {
-		t.Fatalf("完全匹配的来源证明应通过: id=%s err=%v", id, err)
+	if id, err := store.AuthorizePublicationWithSupplyChain(attestation, provenance, verification, admission, time.Now().UTC()); err != nil || id != record.ID {
+		t.Fatalf("完全匹配的供应链 sidecar 应通过: id=%s err=%v", id, err)
 	}
-	if _, err := store.AuthorizePublicationWithProvenance(attestation, provenance, []byte("reverified"), time.Now().UTC()); err == nil {
+	if _, err := store.AuthorizePublicationWithSupplyChain(attestation, provenance, []byte("reverified"), admission, time.Now().UTC()); err == nil {
 		t.Fatal("审批后替换 Verification Record 必须拒绝")
+	}
+	if _, err := store.AuthorizePublicationWithSupplyChain(attestation, provenance, verification, []byte("rescanned"), time.Now().UTC()); err == nil {
+		t.Fatal("审批后替换安全准入记录必须拒绝")
 	}
 }
 

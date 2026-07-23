@@ -29,6 +29,7 @@ func main() {
 	sbomFile := flag.String("sbom", "", "可选：注入并绑定标准 CycloneDX JSON SBOM")
 	provenanceFile := flag.String("provenance", "", "可选：随远端发布上传包外 DSSE/in-toto 来源证明")
 	provenanceVerificationFile := flag.String("provenance-verification", "", "可选：外部 Verifier 签发的来源证明验证记录")
+	securityAdmissionFile := flag.String("security-admission", "", "可选：外部安全评估 Provider 签发的准入记录")
 	out := flag.String("out", "", "可选：输出 .tar.gz 文件")
 	repositoryRoot := flag.String("repository", "", "可选：直接发布到本地制品仓库")
 	remoteRepository := flag.String("remote-repository", "", "可选：发布到 HTTPS 远端制品仓库")
@@ -56,6 +57,9 @@ func main() {
 	}
 	if *provenanceFile != "" && *remoteRepository == "" {
 		fatalf("包外来源证明只能通过 -remote-repository 发布")
+	}
+	if *securityAdmissionFile != "" && *remoteRepository == "" {
+		fatalf("安全准入记录只能通过 -remote-repository 发布")
 	}
 
 	var packageBytes []byte
@@ -118,7 +122,11 @@ func main() {
 		if err != nil {
 			fatalf("读取来源证明失败: %v", err)
 		}
-		published, err := publishRemote(packageBytes, manifestPublisher, *channel, remotePublishOptions{RepositoryURL: *remoteRepository, PublishToken: *remoteToken, ReadToken: *remoteReadToken, TrustFile: *trustFile, SignKey: *signKey, KeyID: *keyID, CAFile: *remoteCA, Timeout: *remoteTimeout, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw})
+		securityAdmissionRaw, err := loadOptionalEvidenceFile(*securityAdmissionFile, "安全准入记录")
+		if err != nil {
+			fatalf("读取安全准入记录失败: %v", err)
+		}
+		published, err := publishRemote(packageBytes, manifestPublisher, *channel, remotePublishOptions{RepositoryURL: *remoteRepository, PublishToken: *remoteToken, ReadToken: *remoteReadToken, TrustFile: *trustFile, SignKey: *signKey, KeyID: *keyID, CAFile: *remoteCA, Timeout: *remoteTimeout, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: securityAdmissionRaw})
 		if err != nil {
 			fatalf("远端发布失败: %v", err)
 		}

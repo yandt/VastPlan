@@ -34,6 +34,7 @@ func (a bootstrapUpgradeAdapter) Prepare(ctx context.Context, verified []nodeage
 		candidates[index] = bootstrapupgrade.Candidate{
 			Artifact: artifact.Artifact(), PackageBytes: artifact.PackageBytes(), Proof: artifact.ProofBytes(),
 			Provenance: artifact.ProvenanceBytes(), ProvenanceVerification: artifact.ProvenanceVerificationBytes(),
+			SecurityAdmission: artifact.SecurityAdmissionBytes(),
 		}
 	}
 	return a.controller.Prepare(ctx, candidates)

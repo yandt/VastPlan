@@ -44,6 +44,10 @@ func readProvenanceSidecars(directory string) ([]byte, []byte, error) {
 	return provenance, verification, nil
 }
 
+func readSecurityAdmissionSidecar(directory string) ([]byte, error) {
+	return readOptionalSidecar(filepath.Join(directory, "security-admission.json"), "安全准入记录")
+}
+
 func readOptionalSidecar(filename, label string) ([]byte, error) {
 	raw, err := os.ReadFile(filename)
 	if errors.Is(err, os.ErrNotExist) {

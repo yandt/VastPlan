@@ -44,6 +44,7 @@ type Envelope struct {
 	Proof                  json.RawMessage
 	Provenance             json.RawMessage
 	ProvenanceVerification json.RawMessage
+	SecurityAdmission      json.RawMessage
 }
 
 // Attestation is the stable publisher-proof wire value shared by trusted

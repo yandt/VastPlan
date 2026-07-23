@@ -26,6 +26,10 @@ func (r *SignedRepository) Publish(attestation Attestation, packageBytes []byte)
 }
 
 func (r *SignedRepository) PublishWithProvenance(attestation Attestation, packageBytes, provenanceRaw, verificationRaw []byte) (Artifact, error) {
+	return r.PublishWithSupplyChain(attestation, packageBytes, provenanceRaw, verificationRaw, nil)
+}
+
+func (r *SignedRepository) PublishWithSupplyChain(attestation Attestation, packageBytes, provenanceRaw, verificationRaw, admissionRaw []byte) (Artifact, error) {
 	if r == nil || r.Local == nil || r.Trust == nil {
 		return Artifact{}, errors.New("签名制品仓库未完整配置")
 	}
@@ -38,7 +42,7 @@ func (r *SignedRepository) PublishWithProvenance(attestation Attestation, packag
 	if err != nil {
 		return Artifact{}, err
 	}
-	if err := r.Trust.VerifyProof(artifacttrust.Envelope{Artifact: attestation.Artifact, PackageBytes: packageBytes, Proof: raw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw}); err != nil {
+	if err := r.Trust.VerifyProof(artifacttrust.Envelope{Artifact: attestation.Artifact, PackageBytes: packageBytes, Proof: raw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: admissionRaw}); err != nil {
 		return Artifact{}, err
 	}
 	r.Local.mu.Lock()
@@ -59,6 +63,7 @@ func (r *SignedRepository) PublishWithProvenance(attestation Attestation, packag
 		{name: "attestation.json", raw: raw, label: "签名证明"},
 		{name: "provenance.dsse.json", raw: provenanceRaw, label: "来源证明"},
 		{name: "provenance-verification.json", raw: verificationRaw, label: "来源证明验证记录"},
+		{name: "security-admission.json", raw: admissionRaw, label: "安全准入记录"},
 	} {
 		if err := writeImmutableSidecar(filepath.Join(dir, sidecar.name), sidecar.raw, sidecar.label); err != nil {
 			return Artifact{}, err
@@ -85,46 +90,55 @@ func (r *SignedRepository) ListRefs() ([]Ref, error) {
 // 启动重建使用，避免仓库启动时间按全部对象字节数增长；任何实际交付仍必须走
 // ReadWithAttestation，对包体重新计算摘要并检查清单绑定。
 func (r *SignedRepository) ReadMetadataWithAttestation(ref Ref) (Artifact, []byte, error) {
-	artifact, proof, _, _, err := r.ReadMetadataWithProvenance(ref)
+	artifact, proof, _, _, _, err := r.ReadMetadataWithSupplyChain(ref)
 	return artifact, proof, err
 }
 
 // ReadMetadataWithProvenance 在一次磁盘读取和信任校验中返回 Catalog 所需的全部
 // 元数据 sidecar，避免调用方随后再次读取并重复验签。
 func (r *SignedRepository) ReadMetadataWithProvenance(ref Ref) (Artifact, []byte, []byte, []byte, error) {
+	artifact, proof, provenance, verification, _, err := r.ReadMetadataWithSupplyChain(ref)
+	return artifact, proof, provenance, verification, err
+}
+
+func (r *SignedRepository) ReadMetadataWithSupplyChain(ref Ref) (Artifact, []byte, []byte, []byte, []byte, error) {
 	if r == nil || r.Local == nil || r.Trust == nil {
-		return Artifact{}, nil, nil, nil, errors.New("签名制品仓库未完整配置")
+		return Artifact{}, nil, nil, nil, nil, errors.New("签名制品仓库未完整配置")
 	}
 	artifact, err := r.Local.ReadMetadata(ref)
 	if err != nil {
-		return Artifact{}, nil, nil, nil, err
+		return Artifact{}, nil, nil, nil, nil, err
 	}
 	dir, err := r.Local.artifactDir(ref)
 	if err != nil {
-		return Artifact{}, nil, nil, nil, err
+		return Artifact{}, nil, nil, nil, nil, err
 	}
 	raw, err := os.ReadFile(filepath.Join(dir, "attestation.json"))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return Artifact{}, nil, nil, nil, errors.New("签名制品缺少发布者证明")
+			return Artifact{}, nil, nil, nil, nil, errors.New("签名制品缺少发布者证明")
 		}
-		return Artifact{}, nil, nil, nil, fmt.Errorf("读取签名证明: %w", err)
+		return Artifact{}, nil, nil, nil, nil, fmt.Errorf("读取签名证明: %w", err)
 	}
 	var attestation Attestation
 	if err := decodeJSONStrict(raw, &attestation); err != nil {
-		return Artifact{}, nil, nil, nil, fmt.Errorf("解析签名证明: %w", err)
+		return Artifact{}, nil, nil, nil, nil, fmt.Errorf("解析签名证明: %w", err)
 	}
 	if !sameArtifact(artifact, attestation.Artifact) {
-		return Artifact{}, nil, nil, nil, errors.New("签名证明与制品元数据不一致")
+		return Artifact{}, nil, nil, nil, nil, errors.New("签名证明与制品元数据不一致")
 	}
 	provenanceRaw, verificationRaw, err := readProvenanceSidecars(dir)
 	if err != nil {
-		return Artifact{}, nil, nil, nil, err
+		return Artifact{}, nil, nil, nil, nil, err
 	}
-	if err := r.Trust.VerifyProof(artifacttrust.Envelope{Artifact: artifact, Proof: raw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw}); err != nil {
-		return Artifact{}, nil, nil, nil, err
+	admissionRaw, err := readSecurityAdmissionSidecar(dir)
+	if err != nil {
+		return Artifact{}, nil, nil, nil, nil, err
 	}
-	return artifact, append([]byte(nil), raw...), append([]byte(nil), provenanceRaw...), append([]byte(nil), verificationRaw...), nil
+	if err := r.Trust.VerifyProof(artifacttrust.Envelope{Artifact: artifact, Proof: raw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: admissionRaw}); err != nil {
+		return Artifact{}, nil, nil, nil, nil, err
+	}
+	return artifact, append([]byte(nil), raw...), append([]byte(nil), provenanceRaw...), append([]byte(nil), verificationRaw...), append([]byte(nil), admissionRaw...), nil
 }
 
 // ReadWithAttestation 返回通过内核信任根验证的制品、原始包和签名证明。
@@ -144,19 +158,29 @@ func (r *SignedRepository) ReadWithAttestation(ref Ref) (Artifact, []byte, []byt
 }
 
 func (r *SignedRepository) ReadWithProvenance(ref Ref) (Artifact, []byte, []byte, []byte, []byte, error) {
+	artifact, packageBytes, proof, provenance, verification, _, err := r.ReadWithSupplyChain(ref)
+	return artifact, packageBytes, proof, provenance, verification, err
+}
+
+func (r *SignedRepository) ReadWithSupplyChain(ref Ref) (Artifact, []byte, []byte, []byte, []byte, []byte, error) {
 	envelope, err := r.Fetch(context.Background(), ref)
 	if err != nil {
-		return Artifact{}, nil, nil, nil, nil, err
+		return Artifact{}, nil, nil, nil, nil, nil, err
 	}
 	if err := r.Trust.VerifyProof(envelope); err != nil {
-		return Artifact{}, nil, nil, nil, nil, err
+		return Artifact{}, nil, nil, nil, nil, nil, err
 	}
-	return envelope.Artifact, envelope.PackageBytes, append([]byte(nil), envelope.Proof...), append([]byte(nil), envelope.Provenance...), append([]byte(nil), envelope.ProvenanceVerification...), nil
+	return envelope.Artifact, envelope.PackageBytes, append([]byte(nil), envelope.Proof...), append([]byte(nil), envelope.Provenance...), append([]byte(nil), envelope.ProvenanceVerification...), append([]byte(nil), envelope.SecurityAdmission...), nil
 }
 
 func (r *SignedRepository) ReadProvenance(ref Ref) ([]byte, []byte, error) {
 	_, _, provenanceRaw, verificationRaw, err := r.ReadMetadataWithProvenance(ref)
 	return provenanceRaw, verificationRaw, err
+}
+
+func (r *SignedRepository) ReadSecurityAdmission(ref Ref) ([]byte, error) {
+	_, _, _, _, admissionRaw, err := r.ReadMetadataWithSupplyChain(ref)
+	return admissionRaw, err
 }
 
 // HTTPRepositoryAdapter 是 HTTP 传输层使用的窄适配器。它把不可信网络字节
@@ -182,6 +206,10 @@ func (a HTTPRepositoryAdapter) Read(ref Ref) (Artifact, []byte, []byte, error) {
 }
 
 func (a HTTPRepositoryAdapter) PublishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte) (Artifact, error) {
+	return a.PublishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, nil)
+}
+
+func (a HTTPRepositoryAdapter) PublishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, admissionRaw []byte) (Artifact, error) {
 	if a.Repository == nil {
 		return Artifact{}, errors.New("签名制品仓库未完整配置")
 	}
@@ -189,7 +217,7 @@ func (a HTTPRepositoryAdapter) PublishWithProvenance(attestationRaw, packageByte
 	if err := decodeJSONStrict(attestationRaw, &attestation); err != nil {
 		return Artifact{}, fmt.Errorf("解析制品证明: %w", err)
 	}
-	return a.Repository.PublishWithProvenance(attestation, packageBytes, provenanceRaw, verificationRaw)
+	return a.Repository.PublishWithSupplyChain(attestation, packageBytes, provenanceRaw, verificationRaw, admissionRaw)
 }
 
 func (a HTTPRepositoryAdapter) ReadWithProvenance(ref Ref) (Artifact, []byte, []byte, []byte, []byte, error) {
@@ -197,6 +225,13 @@ func (a HTTPRepositoryAdapter) ReadWithProvenance(ref Ref) (Artifact, []byte, []
 		return Artifact{}, nil, nil, nil, nil, errors.New("签名制品仓库未完整配置")
 	}
 	return a.Repository.ReadWithProvenance(ref)
+}
+
+func (a HTTPRepositoryAdapter) ReadWithSupplyChain(ref Ref) (Artifact, []byte, []byte, []byte, []byte, []byte, error) {
+	if a.Repository == nil {
+		return Artifact{}, nil, nil, nil, nil, nil, errors.New("签名制品仓库未完整配置")
+	}
+	return a.Repository.ReadWithSupplyChain(ref)
 }
 
 // Fetch 返回带原始证明的未信任 Envelope，供 Node Agent 在自己的强制点复验。
@@ -227,5 +262,9 @@ func (r *SignedRepository) Fetch(_ context.Context, ref Ref) (artifacttrust.Enve
 	if err != nil {
 		return artifacttrust.Envelope{}, err
 	}
-	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: raw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw}, nil
+	admissionRaw, err := readSecurityAdmissionSidecar(dir)
+	if err != nil {
+		return artifacttrust.Envelope{}, err
+	}
+	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: raw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: admissionRaw}, nil
 }

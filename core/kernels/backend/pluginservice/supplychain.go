@@ -16,6 +16,7 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 )
@@ -51,6 +52,7 @@ type TrustDocument struct {
 	SchemaVersion string                          `json:"schemaVersion"`
 	Keys          []TrustKey                      `json:"keys"`
 	Provenance    *artifactprovenance.TrustPolicy `json:"provenance,omitempty"`
+	Assessment    *artifactassessment.TrustPolicy `json:"assessment,omitempty"`
 }
 
 // TrustStore 是只读信任根快照。配置更新通过构造新实例完成，避免验证过程中半更新。
@@ -58,6 +60,7 @@ type TrustStore struct {
 	keys       map[string]ed25519.PublicKey
 	meta       map[string]TrustKey
 	provenance *artifactprovenance.Verifier
+	assessment *artifactassessment.Verifier
 }
 
 func trustKeyID(publisher, keyID string) string { return publisher + "\x00" + keyID }
@@ -97,6 +100,13 @@ func NewTrustStore(document TrustDocument) (*TrustStore, error) {
 			return nil, fmt.Errorf("来源证明信任策略无效: %w", err)
 		}
 		store.provenance = verifier
+	}
+	if document.Assessment != nil {
+		verifier, err := artifactassessment.NewVerifier(*document.Assessment)
+		if err != nil {
+			return nil, fmt.Errorf("安全评估信任策略无效: %w", err)
+		}
+		store.assessment = verifier
 	}
 	return store, nil
 }
@@ -141,7 +151,24 @@ func (s *TrustStore) VerifyProof(envelope artifacttrust.Envelope) error {
 	_, err = s.provenanceVerifier().Verify(artifactprovenance.ArtifactIdentity{
 		PluginID: envelope.Artifact.PluginID, Channel: envelope.Artifact.Channel, Publisher: manifest.Publisher, SHA256: envelope.Artifact.SHA256,
 	}, envelope.Provenance, envelope.ProvenanceVerification, time.Now().UTC())
-	return err
+	if err != nil {
+		return err
+	}
+	sbomSHA := ""
+	if manifest.SupplyChain != nil && manifest.SupplyChain.SBOM != nil {
+		sbomSHA = manifest.SupplyChain.SBOM.SHA256
+	}
+	record, _, err := s.assessmentVerifier().VerifyAdmission(artifactassessment.ArtifactIdentity{
+		PluginID: envelope.Artifact.PluginID, Channel: envelope.Artifact.Channel, Publisher: manifest.Publisher,
+		SHA256: envelope.Artifact.SHA256, SBOMSHA256: sbomSHA,
+	}, envelope.SecurityAdmission, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	if record != nil {
+		return artifactassessment.EnforceDecision(record.Evaluation)
+	}
+	return nil
 }
 
 func (s *TrustStore) provenanceVerifier() *artifactprovenance.Verifier {
@@ -153,6 +180,17 @@ func (s *TrustStore) provenanceVerifier() *artifactprovenance.Verifier {
 
 func (s *TrustStore) ProvenanceEnabled() bool {
 	return s != nil && s.provenance != nil
+}
+
+func (s *TrustStore) assessmentVerifier() *artifactassessment.Verifier {
+	if s == nil {
+		return nil
+	}
+	return s.assessment
+}
+
+func (s *TrustStore) AssessmentEnabled() bool {
+	return s != nil && s.assessment != nil
 }
 
 func (s *TrustStore) verifyAt(attestation Attestation, now time.Time) error {

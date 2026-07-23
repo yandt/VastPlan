@@ -15,6 +15,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 )
@@ -82,7 +83,7 @@ func ImportOfflineBundle(bundlePath string, destination OfflineBundleDestination
 	for _, item := range lock.Packages {
 		manifestItem, ok := manifestByID[item.Ref.PluginID]
 		expectedBase := "artifacts/" + item.SHA256
-		if !ok || manifestItem.Ref != item.Ref || manifestItem.SHA256 != item.SHA256 || manifestItem.PackagePath != expectedBase+"/package.tar.gz" || manifestItem.AttestationPath != expectedBase+"/attestation.json" || !validBundleProvenancePaths(manifestItem, expectedBase) {
+		if !ok || manifestItem.Ref != item.Ref || manifestItem.SHA256 != item.SHA256 || manifestItem.PackagePath != expectedBase+"/package.tar.gz" || manifestItem.AttestationPath != expectedBase+"/attestation.json" || !validBundleProvenancePaths(manifestItem, expectedBase) || !validBundleAdmissionPath(manifestItem, expectedBase) {
 			return pluginv1.ArtifactLock{}, fmt.Errorf("Bundle manifest 制品路径与锁不一致: %s", item.Ref.PluginID)
 		}
 		packageBytes, err := os.ReadFile(filepath.Join(staging, filepath.FromSlash(manifestItem.PackagePath)))
@@ -108,15 +109,26 @@ func ImportOfflineBundle(bundlePath string, destination OfflineBundleDestination
 				return pluginv1.ArtifactLock{}, fmt.Errorf("Bundle 来源证明摘要不一致: %s", item.Ref.PluginID)
 			}
 		}
+		var admissionRaw []byte
+		if manifestItem.SecurityAdmissionPath != "" {
+			admissionRaw, err = os.ReadFile(filepath.Join(staging, filepath.FromSlash(manifestItem.SecurityAdmissionPath)))
+			if err != nil || digestBytes(admissionRaw) != manifestItem.SecurityAdmissionSHA256 {
+				return pluginv1.ArtifactLock{}, fmt.Errorf("Bundle 安全准入记录摘要不一致: %s", item.Ref.PluginID)
+			}
+		}
 		var attestation pluginservice.Attestation
 		if err := decodeStrict(proof, &attestation); err != nil {
 			return pluginv1.ArtifactLock{}, err
 		}
-		if err := validateBundleArtifact(item, attestation.Artifact, packageBytes, proof, provenanceRaw, verificationRaw, bundleTrust); err != nil {
+		if err := validateBundleArtifact(item, attestation.Artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw, bundleTrust); err != nil {
 			return pluginv1.ArtifactLock{}, err
 		}
 		var published pluginservice.Artifact
-		if provenanceDestination, ok := destination.(OfflineBundleProvenanceDestination); ok {
+		if supplyChainDestination, ok := destination.(OfflineBundleSupplyChainDestination); ok {
+			published, err = supplyChainDestination.PublishWithSupplyChain(proof, packageBytes, provenanceRaw, verificationRaw, admissionRaw)
+		} else if len(admissionRaw) != 0 {
+			return pluginv1.ArtifactLock{}, errors.New("目标仓库不支持导入安全准入记录")
+		} else if provenanceDestination, ok := destination.(OfflineBundleProvenanceDestination); ok {
 			published, err = provenanceDestination.PublishWithProvenance(proof, packageBytes, provenanceRaw, verificationRaw)
 		} else if len(provenanceRaw) != 0 {
 			return pluginv1.ArtifactLock{}, errors.New("目标仓库不支持导入来源证明")
@@ -171,6 +183,8 @@ func extractOfflineBundle(bundlePath, staging string) error {
 			limit = 256 << 20
 		} else if strings.HasSuffix(header.Name, "/provenance-verification.json") {
 			limit = artifactprovenance.MaxRecordBytes
+		} else if strings.HasSuffix(header.Name, "/security-admission.json") {
+			limit = artifactassessment.MaxRecordBytes
 		}
 		if header.Size < 0 || header.Size > limit {
 			return fmt.Errorf("离线 Bundle 条目超限: %s", header.Name)
@@ -192,7 +206,7 @@ func extractOfflineBundle(bundlePath, staging string) error {
 	return nil
 }
 
-func validateBundleArtifact(item pluginv1.ArtifactLockPackage, artifact pluginservice.Artifact, packageBytes, proof, provenanceRaw, verificationRaw []byte, trust *pluginservice.TrustStore) error {
+func validateBundleArtifact(item pluginv1.ArtifactLockPackage, artifact pluginservice.Artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw []byte, trust *pluginservice.TrustStore) error {
 	if artifact.PluginID != item.Ref.PluginID || artifact.Version != item.Ref.Version || artifact.Channel != item.Ref.Channel || artifact.SHA256 != item.SHA256 || artifact.Size != item.Size {
 		return fmt.Errorf("Bundle 制品与锁不一致: %s", refKey(item.Ref))
 	}
@@ -207,10 +221,16 @@ func validateBundleArtifact(item pluginv1.ArtifactLockPackage, artifact pluginse
 	if attestation.Publisher != item.Publisher || attestation.KeyID != item.KeyID || attestation.Artifact.SHA256 != item.SHA256 {
 		return fmt.Errorf("Bundle 制品证明与锁不一致: %s", refKey(item.Ref))
 	}
-	if err := trust.VerifyProof(artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw}); err != nil {
+	if err := trust.VerifyProof(artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw, SecurityAdmission: admissionRaw}); err != nil {
 		return fmt.Errorf("Bundle 信任快照不接受制品 %s: %w", refKey(item.Ref), err)
 	}
 	return nil
+}
+
+func validBundleAdmissionPath(item bundleArtifact, base string) bool {
+	allEmpty := item.SecurityAdmissionPath == "" && item.SecurityAdmissionSHA256 == ""
+	allPresent := item.SecurityAdmissionPath == base+"/security-admission.json" && len(item.SecurityAdmissionSHA256) == 64
+	return allEmpty || allPresent
 }
 
 func validBundleProvenancePaths(item bundleArtifact, base string) bool {

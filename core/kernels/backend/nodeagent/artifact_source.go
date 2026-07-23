@@ -64,6 +64,7 @@ type VerifiedArtifact struct {
 	proof                  []byte
 	provenance             []byte
 	provenanceVerification []byte
+	securityAdmission      []byte
 	verified               bool
 }
 
@@ -83,6 +84,10 @@ func (v VerifiedArtifact) ProvenanceVerificationBytes() []byte {
 	return append([]byte(nil), v.provenanceVerification...)
 }
 
+func (v VerifiedArtifact) SecurityAdmissionBytes() []byte {
+	return append([]byte(nil), v.securityAdmission...)
+}
+
 func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrust.Envelope) (VerifiedArtifact, error) {
 	if !v.configured || v.validate == nil {
 		return VerifiedArtifact{}, errors.New("内核制品验证器未配置")
@@ -95,8 +100,8 @@ func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrus
 		return VerifiedArtifact{}, fmt.Errorf("制品内容验证失败: %w", err)
 	}
 	if len(bytes.TrimSpace(envelope.Proof)) == 0 {
-		if len(bytes.TrimSpace(envelope.Provenance)) != 0 || len(bytes.TrimSpace(envelope.ProvenanceVerification)) != 0 {
-			return VerifiedArtifact{}, errors.New("无发布者证明的本地制品不得携带来源证明 sidecar")
+		if len(bytes.TrimSpace(envelope.Provenance)) != 0 || len(bytes.TrimSpace(envelope.ProvenanceVerification)) != 0 || len(bytes.TrimSpace(envelope.SecurityAdmission)) != 0 {
+			return VerifiedArtifact{}, errors.New("无发布者证明的本地制品不得携带供应链 sidecar")
 		}
 		if !v.allowUnsigned {
 			return VerifiedArtifact{}, errors.New("签名模式下制品缺少发布者证明")
@@ -112,7 +117,8 @@ func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrus
 	return VerifiedArtifact{
 		artifact: artifact, packageBytes: append([]byte(nil), envelope.PackageBytes...),
 		proof: append([]byte(nil), envelope.Proof...), provenance: append([]byte(nil), envelope.Provenance...),
-		provenanceVerification: append([]byte(nil), envelope.ProvenanceVerification...), verified: true,
+		provenanceVerification: append([]byte(nil), envelope.ProvenanceVerification...),
+		securityAdmission:      append([]byte(nil), envelope.SecurityAdmission...), verified: true,
 	}, nil
 }
 
