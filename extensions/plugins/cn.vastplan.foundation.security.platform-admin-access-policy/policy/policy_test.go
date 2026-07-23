@@ -9,6 +9,7 @@ import (
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 )
 
 func TestUserRolesNeverFallThroughLegacyWorkloadPolicy(t *testing.T) {
@@ -64,6 +65,19 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: "kernel.deployment.readiness", Operation: "execute"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 的部署就绪观察回调应允许: %s", got)
 	}
+	for _, capability := range []string{
+		platformprofileactivation.KernelPrepareService, platformprofileactivation.KernelStatusService,
+		platformprofileactivation.KernelActivateService, platformprofileactivation.KernelPublishService,
+		platformprofileactivation.KernelFinalizeService, platformprofileactivation.KernelAbortService,
+		platformprofileactivation.KernelRollbackService,
+	} {
+		if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: capability, Operation: "execute"}); got != extpoint.DecisionAllow {
+			t.Fatalf("deployment-manager 的 Profile Activation 回调 %s 应允许: %s", capability, got)
+		}
+		if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: capability, Operation: "execute"}); got == extpoint.DecisionAllow {
+			t.Fatalf("普通插件不得调用 Profile Activation 回调 %s: %s", capability, got)
+		}
+	}
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "listCatalog"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 应只能读取制品目录元数据: %s", got)
 	}
@@ -91,6 +105,18 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	}
 	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: configurationactivation.CreateOperation}); got != extpoint.DecisionAllow {
 		t.Fatalf("配置协调器必须能创建候选绑定部署修订: %s", got)
+	}
+	for _, operation := range []string{
+		platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation,
+		platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation,
+		platformprofileactivation.AbortActivationOperation,
+	} {
+		if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: operation}); got != extpoint.DecisionAllow {
+			t.Fatalf("配置协调器必须能调用 Profile Activation 操作 %s: %s", operation, got)
+		}
+		if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: operation}); got == extpoint.DecisionAllow {
+			t.Fatalf("普通插件不得调用 Profile Activation 操作 %s: %s", operation, got)
+		}
 	}
 	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: platformadminapi.CredentialsCapability, Operation: "stageDelegated"}); got != extpoint.DecisionDeny {
 		t.Fatalf("普通插件不得使用委托凭证入口: %s", got)

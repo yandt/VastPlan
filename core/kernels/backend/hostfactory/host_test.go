@@ -20,6 +20,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
@@ -34,6 +35,33 @@ type deploymentController struct{ tenant string }
 type deploymentReadinessObserver struct{ called bool }
 
 type configurationCatalogReader struct{ tenant string }
+
+type profileActivationController struct{ tenant string }
+
+func (c *profileActivationController) Prepare(_ context.Context, tenant string, _ platformprofileactivation.PrepareRequest) (platformprofileactivation.PrepareResult, error) {
+	c.tenant = tenant
+	return platformprofileactivation.PrepareResult{}, nil
+}
+func (c *profileActivationController) Status(_ context.Context, tenant string, _ platformprofileactivation.CandidateRequest) (platformprofileactivation.Candidate, error) {
+	c.tenant = tenant
+	return platformprofileactivation.Candidate{}, nil
+}
+func (c *profileActivationController) Activate(ctx context.Context, tenant string, request platformprofileactivation.CandidateRequest) (platformprofileactivation.Candidate, error) {
+	return c.Status(ctx, tenant, request)
+}
+func (c *profileActivationController) Publish(_ context.Context, tenant string, _ platformprofileactivation.PublishRequest) (deploymentpublication.Result, error) {
+	c.tenant = tenant
+	return deploymentpublication.Result{}, nil
+}
+func (c *profileActivationController) Finalize(ctx context.Context, tenant string, request platformprofileactivation.CandidateRequest) (platformprofileactivation.Candidate, error) {
+	return c.Status(ctx, tenant, request)
+}
+func (c *profileActivationController) Abort(ctx context.Context, tenant string, request platformprofileactivation.CandidateRequest) (platformprofileactivation.Candidate, error) {
+	return c.Status(ctx, tenant, request)
+}
+func (c *profileActivationController) Rollback(ctx context.Context, tenant string, request platformprofileactivation.CandidateRequest) (platformprofileactivation.Candidate, error) {
+	return c.Status(ctx, tenant, request)
+}
 
 type configurationAuthorityPort struct {
 	issuedTenant, consumedTenant, consumedToken string
@@ -75,6 +103,23 @@ func TestConfigurationAuthorityKernelServicesEnforceExactPluginIdentities(t *tes
 	}
 	if _, _, err := consume(context.Background(), coordinator, []byte(`{"token":"`+token+`"}`)); err == nil {
 		t.Fatal("配置协调器不得自行消费并解释授权")
+	}
+}
+
+func TestPlatformProfileActivationKernelServicesRequireExactDeploymentManager(t *testing.T) {
+	controller := &profileActivationController{}
+	services := kernelPlatformProfileActivation(controller)
+	trusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: deploymentpublication.DeploymentManagerPluginID}}
+	payload := []byte(`{"candidateId":"pcfg_11111111111111111111111111111111","requestDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`)
+	result, _, err := services[platformprofileactivation.KernelStatusService](context.Background(), trusted, payload)
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || controller.tenant != "tenant-a" {
+		t.Fatalf("可信 deployment-manager Profile 状态调用失败: result=%+v tenant=%q err=%v", result, controller.tenant, err)
+	}
+	forged := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.example.attacker"}}
+	for name, service := range services {
+		if _, _, err := service(context.Background(), forged, payload); err == nil {
+			t.Fatalf("其他插件不得调用 Profile Activation 内核端口 %s", name)
+		}
 	}
 }
 

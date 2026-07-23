@@ -24,12 +24,13 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.15.0"
+	PluginVersion = "0.16.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 16 << 20
@@ -53,6 +54,7 @@ type tenantState struct {
 	NextAudit             uint64                                        `json:"nextAudit"`
 	Revisions             []platformadminapi.ServiceRevision            `json:"revisions"`
 	ConfigurationRequests map[string]string                             `json:"configurationRequests,omitempty"`
+	ProfileActivations    map[string]profileActivationRecord            `json:"profileActivations,omitempty"`
 	ServiceAudit          []platformadminapi.ServiceAuditEvent          `json:"serviceAudit"`
 	TestBindings          map[string]platformadminapi.TestTargetBinding `json:"testBindings"`
 	NextTestRelease       uint64                                        `json:"nextTestRelease"`
@@ -140,6 +142,14 @@ func (s *Service) validateLoaded() error {
 		}
 		if state.ConfigurationRequests == nil {
 			state.ConfigurationRequests = map[string]string{}
+		}
+		if state.ProfileActivations == nil {
+			state.ProfileActivations = map[string]profileActivationRecord{}
+		}
+		for id, activation := range state.ProfileActivations {
+			if id != activation.CandidateID || activation.validate(tenant) != nil {
+				return fmt.Errorf("deployment-manager 状态包含无效 Platform Profile 激活 %q", id)
+			}
 		}
 		for _, revision := range state.Revisions {
 			if revision.ID == 0 || revision.Deployment == "" || revision.Composition.Metadata.Tenant != tenant || revision.Composition.Metadata.Name != revision.Deployment || revision.PreviewDigest == "" || !validServiceRevisionState(revision.Status) {
@@ -318,6 +328,9 @@ func (s *Service) tenantLocked(tenant string) *tenantState {
 	}
 	if state.ConfigurationRequests == nil {
 		state.ConfigurationRequests = map[string]string{}
+	}
+	if state.ProfileActivations == nil {
+		state.ProfileActivations = map[string]profileActivationRecord{}
 	}
 	return state
 }
@@ -700,18 +713,19 @@ func terminal(state platformadminapi.BootstrapJobState) bool {
 
 func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
 	var request struct {
-		ID          string                                       `json:"id"`
-		NodeID      string                                       `json:"nodeId"`
-		JobID       string                                       `json:"jobId"`
-		Plan        nodebootstrap.Plan                           `json:"plan"`
-		IfVersion   *int64                                       `json:"ifVersion,omitempty"`
-		RevisionID  uint64                                       `json:"revisionId"`
-		ReleaseID   uint64                                       `json:"releaseId"`
-		Composition backendcompositionv1.ApplicationComposition  `json:"composition"`
-		Binding     platformadminapi.PutTestTargetBindingRequest `json:"binding"`
-		Release     platformadminapi.CreateTestReleaseRequest    `json:"release"`
-		Activation  configurationactivation.CreateRequest        `json:"activation"`
-		CandidateID string                                       `json:"candidateId"`
+		ID                string                                            `json:"id"`
+		NodeID            string                                            `json:"nodeId"`
+		JobID             string                                            `json:"jobId"`
+		Plan              nodebootstrap.Plan                                `json:"plan"`
+		IfVersion         *int64                                            `json:"ifVersion,omitempty"`
+		RevisionID        uint64                                            `json:"revisionId"`
+		ReleaseID         uint64                                            `json:"releaseId"`
+		Composition       backendcompositionv1.ApplicationComposition       `json:"composition"`
+		Binding           platformadminapi.PutTestTargetBindingRequest      `json:"binding"`
+		Release           platformadminapi.CreateTestReleaseRequest         `json:"release"`
+		Activation        configurationactivation.CreateRequest             `json:"activation"`
+		ProfileActivation platformprofileactivation.CreateActivationRequest `json:"profileActivation"`
+		CandidateID       string                                            `json:"candidateId"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
@@ -787,6 +801,16 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		out, err = s.GetConfigurationActivation(ctx, host, call, configurationactivation.LookupRequest{CandidateID: request.CandidateID})
 	case configurationactivation.PublishOperation:
 		out, err = s.PublishConfigurationActivation(ctx, host, call, configurationactivation.LookupRequest{CandidateID: request.CandidateID})
+	case platformprofileactivation.CreateActivationOperation:
+		out, err = s.CreateProfileConfigurationActivation(ctx, host, call, request.ProfileActivation)
+	case platformprofileactivation.GetActivationOperation:
+		out, err = s.GetProfileConfigurationActivation(ctx, host, call, platformprofileactivation.ActivationLookup{CandidateID: request.CandidateID})
+	case platformprofileactivation.ApproveActivationOperation:
+		out, err = s.ApproveProfileConfigurationActivation(call, platformprofileactivation.ActivationLookup{CandidateID: request.CandidateID})
+	case platformprofileactivation.PublishActivationOperation:
+		out, err = s.PublishProfileConfigurationActivation(ctx, host, call, platformprofileactivation.ActivationLookup{CandidateID: request.CandidateID})
+	case platformprofileactivation.AbortActivationOperation:
+		out, err = s.AbortProfileConfigurationActivation(ctx, host, call, platformprofileactivation.ActivationLookup{CandidateID: request.CandidateID})
 	case "listServiceRevisionAudit":
 		_ = s.ReconcileServiceReferences(ctx, host, call)
 		var items []platformadminapi.ServiceAuditEvent
@@ -848,6 +872,8 @@ func errorCode(err error) string {
 		return "platform.deployment.service_publish_failed"
 	case errors.Is(err, errConfigurationActivation):
 		return "platform.deployment.configuration_activation_failed"
+	case errors.Is(err, errProfileActivation):
+		return "platform.deployment.profile_configuration_activation_failed"
 	case errors.Is(err, errTestBindingConflict):
 		return "platform.test_release.binding_version_conflict"
 	case errors.Is(err, errTestReleaseConflict):
@@ -889,6 +915,11 @@ func Descriptor() []byte {
 		,{"name":"createConfigurationActivation","description":"从活动可信目录创建应用插件配置审批修订","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"activation":{"type":"object"}},"required":["activation"]}}
 		,{"name":"getConfigurationActivation","description":"按配置候选读取外部发布与就绪状态","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
 		,{"name":"publishConfigurationActivation","description":"发布已审批配置修订并在 readiness 失败时单调回滚","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"createProfileConfigurationActivation","description":"从活动可信目录创建 Platform Profile 配置审批候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"profileActivation":{"type":"object"}},"required":["profileActivation"]}}
+		,{"name":"getProfileConfigurationActivation","description":"读取 Platform Profile 配置激活状态","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"approveProfileConfigurationActivation","description":"由不同主体批准 Platform Profile 配置激活","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"publishProfileConfigurationActivation","description":"执行可恢复的 Catalog、Deployment 与 readiness 激活 Saga","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"abortProfileConfigurationActivation","description":"放弃尚未激活的 Platform Profile 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
 		,{"name":"listServiceRevisionAudit","description":"列出服务组合审计记录","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
 		,{"name":"listTestTargetBindings","description":"列出 Backend 测试目标预授权绑定","paramsSchema":{"type":"object","properties":{}}}
 		,{"name":"putTestTargetBinding","description":"以 CAS 保存 Backend 应用插件测试目标绑定","paramsSchema":{"type":"object","properties":{"id":{"type":"string"},"binding":{"type":"object"}},"required":["id","binding"]}}
@@ -904,7 +935,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
+	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

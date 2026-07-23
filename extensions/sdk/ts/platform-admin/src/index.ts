@@ -39,9 +39,10 @@ export interface PluginConfigurationDefinition {
 export type PluginConfigurationCandidateStatus = "Draft" | "Preparing" | "Publishing" | "Activating" | "Ready" | "Failed" | "RollingBack" | "RolledBack";
 export interface PluginConfigurationCandidate {
   id: string; configurationId: string; revision: number; status: PluginConfigurationCandidateStatus;
+  applyPath: "application-deployment" | "platform-profile" | "hot-service" | "hot-scoped";
   catalogDigest: string; schemaDigest: string; artifactSha256: string; values: Record<string, unknown>;
   createdBy: string; createdAt: string; updatedAt: string; errorCode?: string; errorMessage?: string;
-  externalRevision?: number; externalStatus?: "PendingApproval" | "Approved" | "Publishing" | "Ready" | "Failed" | "RolledBack"; rollbackRevision?: number;
+  externalRevision?: number; externalStatus?: "Preparing" | "PendingApproval" | "Approved" | "CatalogActivated" | "Publishing" | "Ready" | "RollingBack" | "Failed" | "RolledBack" | "Aborted"; rollbackRevision?: number;
   managedCredentials?: Array<{ fieldId: string; staged: boolean; state: string }>;
 }
 
@@ -352,6 +353,18 @@ export class PlatformAdminClient {
   }
   public activatePluginConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
     return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/activate`, "POST", { expectedRevision });
+  }
+  public submitPlatformProfileConfigurationDraft(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/submit-profile`, "POST", { expectedRevision });
+  }
+  public approvePlatformProfileConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/approve-profile`, "POST", { expectedRevision });
+  }
+  public activatePlatformProfileConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/activate-profile`, "POST", { expectedRevision });
+  }
+  public abortPlatformProfileConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/abort-profile`, "POST", { expectedRevision });
   }
 
   public listCredentials(prefix = ""): Promise<CredentialMetadata[]> { return this.get(`${this.basePath}/credentials${query({ prefix })}`); }

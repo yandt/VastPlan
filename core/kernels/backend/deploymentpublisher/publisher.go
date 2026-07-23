@@ -48,6 +48,15 @@ type BindingCatalogSource interface {
 	SnapshotForBinding(context.Context, string, string) (backendcompositionv1.BackendPlatformCatalog, error)
 }
 
+// CandidateCatalogSource is implemented only by the trusted persistent
+// Platform Catalog Store. Preview can materialize a Prepared candidate without
+// activating it; publication accepts only the active candidate snapshot.
+type CandidateCatalogSource interface {
+	CatalogSource
+	SnapshotForCandidatePreview(context.Context, string, string) (backendcompositionv1.BackendPlatformCatalog, error)
+	SnapshotForCandidate(context.Context, string, string) (backendcompositionv1.BackendPlatformCatalog, error)
+}
+
 type staticCatalogSource struct {
 	catalog backendcompositionv1.BackendPlatformCatalog
 }
@@ -161,6 +170,29 @@ func (p *Publisher) Preview(ctx context.Context, tenantID string, application ba
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}
+	return p.previewWithCatalog(tenantID, application, deploymentRevision, catalog)
+}
+
+func (p *Publisher) PreviewCandidate(ctx context.Context, tenantID string, application backendcompositionv1.ApplicationComposition, deploymentRevision uint64, candidateID, requestDigest string) (deploymentpublication.Result, error) {
+	if err := validateIdentity(tenantID, application); err != nil {
+		return deploymentpublication.Result{}, err
+	}
+	source, ok := p.catalog.(CandidateCatalogSource)
+	if !ok {
+		return deploymentpublication.Result{}, errors.New("Backend Platform Catalog 源不支持候选预览")
+	}
+	catalog, err := source.SnapshotForCandidatePreview(ctx, candidateID, requestDigest)
+	if err != nil {
+		return deploymentpublication.Result{}, fmt.Errorf("读取 Backend Platform Profile 候选预览: %w", err)
+	}
+	validated, err := backendcompositionv1.ValidateBackendPlatformCatalog(catalog)
+	if err != nil {
+		return deploymentpublication.Result{}, fmt.Errorf("复核 Backend Platform Profile 候选预览: %w", err)
+	}
+	return p.previewWithCatalog(tenantID, application, deploymentRevision, validated)
+}
+
+func (p *Publisher) previewWithCatalog(tenantID string, application backendcompositionv1.ApplicationComposition, deploymentRevision uint64, catalog backendcompositionv1.BackendPlatformCatalog) (deploymentpublication.Result, error) {
 	profile, profileRef, err := catalog.Resolve(tenantID, application.Metadata.Name)
 	if err != nil {
 		return deploymentpublication.Result{}, err
@@ -228,11 +260,49 @@ func (p *Publisher) Publish(ctx context.Context, tenantID string, application ba
 	if err != nil || currentCatalog.Digest() != preview.PlatformCatalogDigest || currentProfile != preview.PlatformProfile {
 		return deploymentpublication.Result{}, errors.New("发布期间 Backend Platform Catalog 已变化，必须重新预览和审批")
 	}
+	return p.apply(ctx, tenantID, preview)
+}
+
+func (p *Publisher) PublishCandidate(ctx context.Context, tenantID string, application backendcompositionv1.ApplicationComposition, deploymentRevision uint64, expectedDigest, candidateID, requestDigest string) (deploymentpublication.Result, error) {
+	if err := validateIdentity(tenantID, application); err != nil {
+		return deploymentpublication.Result{}, err
+	}
+	source, ok := p.catalog.(CandidateCatalogSource)
+	if !ok {
+		return deploymentpublication.Result{}, errors.New("Backend Platform Catalog 源不支持候选发布")
+	}
+	catalog, err := source.SnapshotForCandidate(ctx, candidateID, requestDigest)
+	if err != nil {
+		return deploymentpublication.Result{}, fmt.Errorf("读取已激活 Backend Platform Profile 候选: %w", err)
+	}
+	validated, err := backendcompositionv1.ValidateBackendPlatformCatalog(catalog)
+	if err != nil {
+		return deploymentpublication.Result{}, fmt.Errorf("复核已激活 Backend Platform Profile 候选: %w", err)
+	}
+	preview, err := p.previewWithCatalog(tenantID, application, deploymentRevision, validated)
+	if err != nil {
+		return deploymentpublication.Result{}, err
+	}
+	if expectedDigest == "" || preview.Digest != expectedDigest {
+		return deploymentpublication.Result{}, errors.New("候选发布预览摘要已变化，必须重新审批")
+	}
+	current, err := source.SnapshotForCandidate(ctx, candidateID, requestDigest)
+	if err != nil {
+		return deploymentpublication.Result{}, err
+	}
+	_, profileRef, err := current.Resolve(tenantID, application.Metadata.Name)
+	if err != nil || current.Digest() != preview.PlatformCatalogDigest || profileRef != preview.PlatformProfile {
+		return deploymentpublication.Result{}, errors.New("候选发布期间 Backend Platform Catalog 已变化")
+	}
+	return p.apply(ctx, tenantID, preview)
+}
+
+func (p *Publisher) apply(ctx context.Context, tenantID string, preview deploymentpublication.Result) (deploymentpublication.Result, error) {
 	raw, err := json.Marshal(preview.Deployment)
 	if err != nil {
 		return deploymentpublication.Result{}, fmt.Errorf("编码在线 Deployment v2: %w", err)
 	}
-	key := sharedcontrolplane.DeploymentKey(tenantID, application.Metadata.Name)
+	key := sharedcontrolplane.DeploymentKey(tenantID, preview.Deployment.Metadata.Name)
 	kvRevision, applied, err := p.applier.Apply(ctx, key, raw)
 	if err != nil {
 		return deploymentpublication.Result{}, fmt.Errorf("CAS 发布在线 Deployment v2: %w", err)

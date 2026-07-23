@@ -9,8 +9,8 @@ describe("Platform plugin configuration routes", () => {
     const calls: PlatformInvocation[] = [];
     const server = await startPlatformManagementTestServer(
       recordingPlatformInvoker(calls, (_capability, operation) => operation.startsWith("list") ? { items: [] } : {}),
-      ["platform.plugin-configuration.read", "platform.plugin-configuration.write", "platform.plugin-configuration.publish"],
-      managementBinding([{ capability: "platform.plugin-configuration", read: ["listDefinitions", "getDefinition", "listCandidates"], write: ["createDraft", "discardDraft", "submitDraft", "activateCandidate"] }]),
+      ["platform.plugin-configuration.read", "platform.plugin-configuration.write", "platform.plugin-configuration.publish", "platform.plugin-configuration.profile.publish"],
+      managementBinding([{ capability: "platform.plugin-configuration", read: ["listDefinitions", "getDefinition", "listCandidates"], write: ["createDraft", "discardDraft", "submitDraft", "activateCandidate", "submitProfileDraft", "approveProfileCandidate", "activateProfileCandidate", "abortProfileCandidate"] }]),
     );
     close.push(server.close);
     const base = `${server.origin}/v1/portals/operations/platform/services/core/plugin-configurations`;
@@ -21,6 +21,10 @@ describe("Platform plugin configuration routes", () => {
     expect((await fetch(`${base}/candidates/pcfg_cccccccccccccccccccccccccccccccc`, { method: "DELETE", headers: server.writeHeaders, body: '{"id":"forged","expectedRevision":1}' })).status).toBe(200);
     expect((await fetch(`${base}/candidates/pcfg_cccccccccccccccccccccccccccccccc/submit`, { method: "POST", headers: server.writeHeaders, body: '{"expectedRevision":2}' })).status).toBe(200);
     expect((await fetch(`${base}/candidates/pcfg_cccccccccccccccccccccccccccccccc/activate`, { method: "POST", headers: server.writeHeaders, body: '{"expectedRevision":3}' })).status).toBe(200);
+    expect((await fetch(`${base}/candidates/pcfg_cccccccccccccccccccccccccccccccc/submit-profile`, { method: "POST", headers: server.writeHeaders, body: '{"expectedRevision":4}' })).status).toBe(200);
+    expect((await fetch(`${base}/candidates/pcfg_cccccccccccccccccccccccccccccccc/approve-profile`, { method: "POST", headers: server.writeHeaders, body: '{"expectedRevision":5}' })).status).toBe(200);
+    expect((await fetch(`${base}/candidates/pcfg_cccccccccccccccccccccccccccccccc/activate-profile`, { method: "POST", headers: server.writeHeaders, body: '{"expectedRevision":6}' })).status).toBe(200);
+    expect((await fetch(`${base}/candidates/pcfg_cccccccccccccccccccccccccccccccc/abort-profile`, { method: "POST", headers: server.writeHeaders, body: '{"expectedRevision":7}' })).status).toBe(200);
     expect(calls.map(({ capability, operation, payload }) => ({ capability, operation, payload }))).toEqual([
       { capability: "platform.plugin-configuration", operation: "listDefinitions", payload: {} },
       { capability: "platform.plugin-configuration", operation: "getDefinition", payload: { configurationId: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", catalogDigest: "b".repeat(64) } },
@@ -29,6 +33,10 @@ describe("Platform plugin configuration routes", () => {
       { capability: "platform.plugin-configuration", operation: "discardDraft", payload: { id: "pcfg_cccccccccccccccccccccccccccccccc", expectedRevision: 1 } },
       { capability: "platform.plugin-configuration", operation: "submitDraft", payload: { id: "pcfg_cccccccccccccccccccccccccccccccc", expectedRevision: 2 } },
       { capability: "platform.plugin-configuration", operation: "activateCandidate", payload: { id: "pcfg_cccccccccccccccccccccccccccccccc", expectedRevision: 3 } },
+      { capability: "platform.plugin-configuration", operation: "submitProfileDraft", payload: { id: "pcfg_cccccccccccccccccccccccccccccccc", expectedRevision: 4 } },
+      { capability: "platform.plugin-configuration", operation: "approveProfileCandidate", payload: { id: "pcfg_cccccccccccccccccccccccccccccccc", expectedRevision: 5 } },
+      { capability: "platform.plugin-configuration", operation: "activateProfileCandidate", payload: { id: "pcfg_cccccccccccccccccccccccccccccccc", expectedRevision: 6 } },
+      { capability: "platform.plugin-configuration", operation: "abortProfileCandidate", payload: { id: "pcfg_cccccccccccccccccccccccccccccccc", expectedRevision: 7 } },
     ]);
     expect(calls.every((call) => call.logicalService === "platform.core.primary")).toBe(true);
   });

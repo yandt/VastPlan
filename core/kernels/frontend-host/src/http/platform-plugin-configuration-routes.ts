@@ -58,6 +58,20 @@ export class PlatformPluginConfigurationRoutes {
       await withRequestJSON(request, response, async (body) => this.call(principal, target, operation, true, { ...requireJSONObject(body), id }, response, signal));
       return true;
     }
+    const profileOperations: Readonly<Record<string, string>> = {
+      "submit-profile": "submitProfileDraft",
+      "approve-profile": "approveProfileCandidate",
+      "activate-profile": "activateProfileCandidate",
+      "abort-profile": "abortProfileCandidate",
+    };
+    if (parts.length === 4 && method === "POST" && parts[3] !== undefined && profileOperations[parts[3]] !== undefined) {
+      const id = resourceName(parts[2], 64);
+      if (id === undefined) return invalidName(response, method);
+      const operation = profileOperations[parts[3]]!;
+      if (!this.authorize(principal, target, operation, true, "platform.plugin-configuration.profile.publish", response)) return true;
+      await withRequestJSON(request, response, async (body) => this.call(principal, target, operation, true, { ...requireJSONObject(body), id }, response, signal));
+      return true;
+    }
     return parts.length > 4 ? notFound(response, method) : methodNotAllowed(response, method);
   }
 

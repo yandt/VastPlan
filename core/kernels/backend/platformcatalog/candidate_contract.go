@@ -31,6 +31,7 @@ const (
 type PrepareRequest struct {
 	CandidateID           string                               `json:"candidateId"`
 	RequestDigest         string                               `json:"requestDigest"`
+	ConfigurationID       string                               `json:"configurationId"`
 	TenantID              string                               `json:"tenantId"`
 	DeploymentName        string                               `json:"deploymentName"`
 	ExpectedCatalogDigest string                               `json:"expectedCatalogDigest"`
@@ -45,6 +46,7 @@ type PrepareRequest struct {
 type Candidate struct {
 	CandidateID           string                               `json:"candidateId"`
 	RequestDigest         string                               `json:"requestDigest"`
+	ConfigurationID       string                               `json:"configurationId"`
 	TenantID              string                               `json:"tenantId"`
 	DeploymentName        string                               `json:"deploymentName"`
 	ExpectedCatalogDigest string                               `json:"expectedCatalogDigest"`
@@ -72,7 +74,7 @@ func requireCandidate(candidate *Candidate, candidateID, requestDigest string) (
 
 func (c Candidate) prepareRequest() PrepareRequest {
 	return PrepareRequest{
-		CandidateID: c.CandidateID, RequestDigest: c.RequestDigest, TenantID: c.TenantID,
+		CandidateID: c.CandidateID, RequestDigest: c.RequestDigest, ConfigurationID: c.ConfigurationID, TenantID: c.TenantID,
 		DeploymentName: c.DeploymentName, ExpectedCatalogDigest: c.ExpectedCatalogDigest,
 		ExpectedProfile: c.PreviousProfile, NextProfile: c.NextProfile,
 		NextCatalogRevision: c.NextCatalogRevision, NextCatalogDigest: c.NextCatalogDigest,

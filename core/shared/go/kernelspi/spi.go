@@ -12,6 +12,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
@@ -86,6 +87,7 @@ type Dependencies struct {
 	NodeReadiness                  nodebootstrap.ReadinessObserver
 	DeploymentPublication          deploymentpublication.Controller
 	DeploymentReadiness            deploymentpublication.ReadinessObserver
+	PlatformProfileActivation      platformprofileactivation.Controller
 	ConfigurationCatalogs          pluginconfiguration.Reader
 	ConfigurationAuthorityIssuer   configurationauthority.Issuer
 	ConfigurationAuthorityConsumer configurationauthority.Consumer

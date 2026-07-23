@@ -1,6 +1,6 @@
 # ADR-0116 Backend Platform Profile 候选 Catalog 与配置激活
 
-- 状态：已采纳，分阶段实施中
+- 状态：已采纳，已实现
 - 日期：2026-07-23
 - 关联：[ADR-0057](ADR-0057-插件分级管理与双输入组合解析.md)、[ADR-0077](ADR-0077-Backend在线组合与可信发布边界.md)、[ADR-0113](ADR-0113-可信插件配置目录与分路径生效.md)、[ADR-0115](ADR-0115-Application配置激活Saga与候选凭证窗口.md)
 
@@ -75,4 +75,7 @@ Profile 候选提交和发布使用独立的 `platform.plugin-configuration.prof
 - 第 1 阶段已完成：`deploymentpublisher` 通过 `CatalogSource.Snapshot` 逐次读取、严格复核并使用 Catalog；静态启动 Catalog 仅是同端口的 Seed 适配器。
 - 第 2 阶段的读取基座已完成：新增 `VASTPLAN_BACKEND_PLATFORM_CATALOGS_V1` 独立 KV，保留 64 代历史；`platformcatalog.Store` 实现严格快照、摘要和身份复核，持久数据损坏时不得回退 Seed。Bootstrap/Controlplane 可 create-only 发布 Seed，Manager Node 只读且 NATS ACL 明确拒绝写入。
 - 第 2 阶段的写入基座已完成：新增绑定精确 Catalog ID、只能读写对应确定性 key 的 `catalog-publisher` NKey 角色；承载 Deployment Manager 的可信内核以第二条连接持有该 object capability，Manager 连接仍只读。候选状态与活动 Catalog 在同一 value 中 CAS，覆盖 Prepare/Activate/Finalize/Abort/Rollback、精确请求幂等、并发单赢家、目标 binding 发布锁和单调回滚；普通 Application 预览/发布同时锁定 Catalog digest 与 Profile ref。
-- 待续：精确 Deployment Manager Profile Activation 内核端口与可恢复 Saga。
+- 当时待续：精确 Deployment Manager Profile Activation 内核端口与可恢复 Saga；完成情况见下一条记录。
+- 第 3、4 阶段随后完成：新增不返回 Profile/Catalog 全文的 `kernel.platform-profile.*` 窄端口，内核从活动 ConfigurationCatalog 与目标 binding 重建精确 service 配置、选择高于同 ID 全部历史的 Profile revision，并区分 Prepared 预览与 Activated 发布。deployment-manager 0.16.0 持久化独立 Profile Activation 记录、请求摘要、预览、异人审批和恢复检查点；成功路径固定为 Catalog activate → Deployment publish → readiness → finalize，失败路径固定为单调 Catalog rollback → 新 Deployment rollback。普通 Application 发布在同 binding 候选期间被本地账本和 Catalog Store 双重阻断。
+- plugin-settings 0.7.0、Node BFF、TypeScript SDK 与 Workbench 已接入独立 `platform.plugin-configuration.profile.publish` 权限，提供提交、审批、激活和放弃动作；候选凭证继续只以 managed ref 进入 Candidate 窗口，公开状态不含 handle、stage ID 或请求摘要。单元与纵向测试覆盖精确 caller、跨租户拒绝、attachment 拒绝、制品漂移、重启恢复、激活前发布拒绝、readiness 失败双重回滚和用户直达拒绝。真实多服务启动验收在本次实施记录之后执行并记录结果。
+- 真实多服务启动验收已完成：清理仅限本地开发的旧状态后，平台 Backend revision 21 的 11 个 active unit 与受管服务 revision 2 的 1 个 unit 均收敛 `Ready`；deployment-manager 0.16.0、plugin-settings 0.7.0 和 platform-admin-access-policy 0.23.0 均以目标版本激活，Portal `/operations` 实测 HTTP 200。测试结束后由开发编排器优雅停止全部受管进程。旧开发状态因格式 4→5、1→2 且无 lifecycle migration 被拒绝符合 fail-closed 预期；生产升级不得依赖清理，必须在形成历史数据前单独补充迁移策略。

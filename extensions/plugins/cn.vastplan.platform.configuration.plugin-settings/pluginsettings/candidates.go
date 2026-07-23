@@ -64,6 +64,7 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 	}
 	candidate := pluginconfiguration.Candidate{
 		ID: id, ConfigurationID: definition.ID, Revision: 1, Status: status,
+		ApplyPath:     definition.ApplyPath,
 		CatalogDigest: request.CatalogDigest, SchemaDigest: definition.SchemaDigest, ArtifactSHA256: definition.Artifact.SHA256,
 		Values: append(json.RawMessage(nil), request.Values...), CreatedBy: actor, CreatedAt: now, UpdatedAt: now,
 		ManagedCredentials: credentialStatus,

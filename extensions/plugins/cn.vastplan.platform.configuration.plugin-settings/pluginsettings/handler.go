@@ -91,6 +91,14 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 		return s.SubmitDraft(ctx, host, call, request.ID, request.ExpectedRevision)
 	case "activateCandidate":
 		return s.ActivateCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "submitProfileDraft":
+		return s.SubmitProfileDraft(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "approveProfileCandidate":
+		return s.ApproveProfileCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "activateProfileCandidate":
+		return s.ActivateProfileCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "abortProfileCandidate":
+		return s.AbortProfileCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
 	default:
 		return nil, ErrInvalid
 	}
@@ -122,6 +130,10 @@ func Descriptor() []byte {
 		{"name":"discardDraft","description":"以 CAS 放弃尚未发布的配置草稿","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
 		,{"name":"submitDraft","description":"把 Application Deployment 配置草稿提交为受治理服务修订","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
 		,{"name":"activateCandidate","description":"发布已审批配置修订并以 readiness 驱动凭证提交或回滚","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"submitProfileDraft","description":"把 Platform Profile 配置草稿提交为独立候选和异人审批","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"approveProfileCandidate","description":"由不同主体批准 Platform Profile 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"activateProfileCandidate","description":"执行 Platform Catalog、Deployment、readiness 与凭证激活 Saga","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"abortProfileCandidate","description":"放弃待审批或已审批的 Platform Profile 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
 	]}`)
 }
 
@@ -131,7 +143,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listDefinitions", "getDefinition", "listCandidates", "createDraft", "discardDraft", "submitDraft", "activateCandidate"}
+	operations := []string{"listDefinitions", "getDefinition", "listCandidates", "createDraft", "discardDraft", "submitDraft", "activateCandidate", "submitProfileDraft", "approveProfileCandidate", "activateProfileCandidate", "abortProfileCandidate"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

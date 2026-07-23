@@ -227,7 +227,7 @@ func candidateTestRequest(active backendcompositionv1.BackendPlatformCatalog, ca
 		panic(err)
 	}
 	return PrepareRequest{
-		CandidateID: candidateID, RequestDigest: requestDigest, TenantID: "tenant-a", DeploymentName: "services-a",
+		CandidateID: candidateID, RequestDigest: requestDigest, ConfigurationID: "cfg_aaaaaaaaaaaaaaaaaaaaaaaa", TenantID: "tenant-a", DeploymentName: "services-a",
 		ExpectedCatalogDigest: active.Digest(), ExpectedProfile: previous, NextProfile: profile,
 		NextCatalogRevision: validated.Revision, NextCatalogDigest: validated.Digest(),
 	}

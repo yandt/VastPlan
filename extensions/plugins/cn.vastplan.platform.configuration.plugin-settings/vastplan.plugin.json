@@ -1,12 +1,12 @@
 {
   "id": "cn.vastplan.platform.configuration.plugin-settings",
   "name": "VastPlan 插件配置协调器",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "从活动可信配置目录创建、审计并恢复插件配置候选；以一次性宿主授权委托凭证托管器保存秘密",
+  "description": "从活动可信配置目录创建、审批并恢复 Application 与 Platform Profile 配置候选；以一次性宿主授权委托凭证托管器保存秘密",
   "engines": { "backend": "^0.1", "frontend": "^1.0" },
   "capabilities": { "kernelServices": ["kernel.config.get", "kernel.configuration.catalogs", "kernel.configuration.authority.issue"], "credentials": [], "resources": [] },
   "contextAccess": { "required": ["scope.tenant", "caller", "subject.id", "authorization.roles"], "optional": ["scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"] },
@@ -15,7 +15,8 @@
     "permissions": [
       { "code": "platform.plugin-configuration.read", "title": "查看插件配置", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
       { "code": "platform.plugin-configuration.write", "title": "编辑插件配置候选", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
-      { "code": "platform.plugin-configuration.publish", "title": "提交和激活插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+      { "code": "platform.plugin-configuration.publish", "title": "提交和激活应用级插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.plugin-configuration.profile.publish", "title": "审批和激活平台级插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
     ],
     "operationGuards": [
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "listDefinitions", "permissions": ["platform.plugin-configuration.read"], "access": "read", "approval": "none" },
@@ -25,6 +26,10 @@
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "discardDraft", "permissions": ["platform.plugin-configuration.write"], "access": "write", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "submitDraft", "permissions": ["platform.plugin-configuration.publish"], "access": "write", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "activateCandidate", "permissions": ["platform.plugin-configuration.publish"], "access": "execute", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "submitProfileDraft", "permissions": ["platform.plugin-configuration.profile.publish"], "access": "write", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "approveProfileCandidate", "permissions": ["platform.plugin-configuration.profile.publish"], "access": "approve", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "activateProfileCandidate", "permissions": ["platform.plugin-configuration.profile.publish"], "access": "execute", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "abortProfileCandidate", "permissions": ["platform.plugin-configuration.profile.publish"], "access": "write", "approval": "none" }
     ]
   },
   "runtime": {
@@ -54,7 +59,7 @@
       }
     }
   },
-  "state": { "backend": { "format": "cn.vastplan.platform.plugin-configuration", "formatVersion": 1 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.plugin-configuration", "formatVersion": 2 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/plugin-settings", "frontend": "frontend/dist/index.js" },
   "contributes": {
@@ -72,6 +77,10 @@
             { "name": "discardDraft", "description": "以 CAS 放弃尚未发布的配置草稿", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
             ,{ "name": "submitDraft", "description": "把 Application Deployment 配置草稿提交为受治理服务修订", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
             ,{ "name": "activateCandidate", "description": "发布已审批配置修订并以 readiness 驱动凭证提交或回滚", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "submitProfileDraft", "description": "把 Platform Profile 配置草稿提交为独立候选和异人审批", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "approveProfileCandidate", "description": "由不同主体批准 Platform Profile 配置候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "activateProfileCandidate", "description": "执行 Platform Catalog、Deployment、readiness 与凭证激活 Saga", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "abortProfileCandidate", "description": "放弃待审批或已审批的 Platform Profile 配置候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
           ]
         }
       ]

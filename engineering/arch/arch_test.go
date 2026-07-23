@@ -136,8 +136,9 @@ func TestArch_SDKMustNotImportKernels(t *testing.T) {
 // 其余少数有向依赖逐项登记，新增边必须先做架构决策。
 func TestArch_BackendSiblingImportsAreExplicit(t *testing.T) {
 	allowed := map[string]map[string]bool{
-		"kernelops": {"nodeagent": true},
-		"nodeagent": {"hostfactory": true},
+		"kernelops":         {"nodeagent": true},
+		"nodeagent":         {"hostfactory": true},
+		"profileactivation": {"platformcatalog": true}, // ADR-0116: trusted controller owns the exact candidate Store state machine.
 	}
 	backendImport := modulePath + "/core/kernels/backend/"
 	for _, file := range collectGoFiles(t) {

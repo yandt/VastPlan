@@ -18,7 +18,7 @@ import (
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 type persistedSnapshot struct {
 	SchemaVersion int                                         `json:"schemaVersion"`
@@ -120,6 +120,35 @@ func (s *Store) SnapshotForCandidate(ctx context.Context, candidateID, requestDi
 		return backendcompositionv1.BackendPlatformCatalog{}, ErrInvalidTransition
 	}
 	return cloneCatalog(snapshot.Catalog), nil
+}
+
+// SnapshotForCandidatePreview deterministically materializes the candidate
+// Catalog while it is still Prepared. It does not change the active snapshot
+// and is intentionally unavailable through the ordinary publication port.
+func (s *Store) SnapshotForCandidatePreview(ctx context.Context, candidateID, requestDigest string) (backendcompositionv1.BackendPlatformCatalog, error) {
+	snapshot, err := s.readPersisted(ctx)
+	if err != nil {
+		return backendcompositionv1.BackendPlatformCatalog{}, err
+	}
+	candidate, err := requireCandidate(snapshot.Candidate, candidateID, requestDigest)
+	if err != nil {
+		return backendcompositionv1.BackendPlatformCatalog{}, err
+	}
+	switch candidate.Status {
+	case CandidatePrepared:
+		next, _, err := buildCandidateCatalog(snapshot.Catalog, candidate.prepareRequest())
+		if err != nil || next.Digest() != candidate.NextCatalogDigest {
+			return backendcompositionv1.BackendPlatformCatalog{}, ErrCatalogConflict
+		}
+		return next, nil
+	case CandidateActivated, CandidateFinalized:
+		if snapshot.Digest != candidate.NextCatalogDigest {
+			return backendcompositionv1.BackendPlatformCatalog{}, ErrCatalogConflict
+		}
+		return cloneCatalog(snapshot.Catalog), nil
+	default:
+		return backendcompositionv1.BackendPlatformCatalog{}, ErrInvalidTransition
+	}
 }
 
 // Seed persists the initial snapshot with create-only semantics. It is intended
@@ -235,7 +264,7 @@ func parseSnapshot(raw []byte) (persistedSnapshot, error) {
 }
 
 func validateSnapshot(snapshot persistedSnapshot) (persistedSnapshot, error) {
-	if snapshot.SchemaVersion == 1 {
+	if snapshot.SchemaVersion == 1 || snapshot.SchemaVersion == 2 {
 		if snapshot.Candidate != nil {
 			return persistedSnapshot{}, errors.New("旧版 Backend Platform Catalog 快照不得包含候选")
 		}

@@ -10,7 +10,7 @@ import (
 )
 
 func normalizePrepareRequest(request PrepareRequest) (PrepareRequest, error) {
-	if !validPrefixedHex(request.CandidateID, "pcfg_", 32) || !validPrefixedHex(request.RequestDigest, "", 64) ||
+	if !validPrefixedHex(request.CandidateID, "pcfg_", 32) || !validPrefixedHex(request.RequestDigest, "", 64) || !validPrefixedHex(request.ConfigurationID, "cfg_", 24) ||
 		strings.TrimSpace(request.TenantID) == "" || strings.TrimSpace(request.DeploymentName) == "" ||
 		!validPrefixedHex(request.ExpectedCatalogDigest, "", 64) || !validRef(request.ExpectedProfile) ||
 		request.NextCatalogRevision == 0 || !validPrefixedHex(request.NextCatalogDigest, "", 64) {
@@ -74,7 +74,7 @@ func validateCandidateAgainstSnapshot(snapshot persistedSnapshot) error {
 		return nil
 	}
 	candidate := *snapshot.Candidate
-	if !validPrefixedHex(candidate.CandidateID, "pcfg_", 32) || !validPrefixedHex(candidate.RequestDigest, "", 64) ||
+	if !validPrefixedHex(candidate.CandidateID, "pcfg_", 32) || !validPrefixedHex(candidate.RequestDigest, "", 64) || !validPrefixedHex(candidate.ConfigurationID, "cfg_", 24) ||
 		!validPrefixedHex(candidate.ExpectedCatalogDigest, "", 64) || !validPrefixedHex(candidate.NextCatalogDigest, "", 64) ||
 		!validRef(candidate.PreviousProfile) || strings.TrimSpace(candidate.TenantID) == "" || strings.TrimSpace(candidate.DeploymentName) == "" ||
 		candidate.CreatedAt.IsZero() || candidate.UpdatedAt.Before(candidate.CreatedAt) {

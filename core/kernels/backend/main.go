@@ -43,6 +43,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapbroker"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapobserver"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/platformcatalog"
+	kernelprofileactivation "cdsoft.com.cn/VastPlan/core/kernels/backend/profileactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
@@ -339,6 +340,11 @@ func runReconcile(args []string) (runErr error) {
 			return err
 		}
 		runtime.Dependencies.DeploymentPublication = publisher
+		profileActivation, err := kernelprofileactivation.New(catalogSource, catalogStore, publisher)
+		if err != nil {
+			return err
+		}
+		runtime.Dependencies.PlatformProfileActivation = profileActivation
 		runtime.Dependencies.DeploymentReadiness = natsDeploymentReadiness{KV: plane.buckets.Compositions}
 		runtime.Dependencies.ConfigurationCatalogs = catalogStore
 		authorityStore := backendconfigurationauthority.Store{KV: plane.buckets.ConfigurationAuthorities, Catalogs: catalogStore}

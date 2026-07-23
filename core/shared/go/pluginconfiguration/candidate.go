@@ -37,6 +37,7 @@ type Candidate struct {
 	ConfigurationID    string                    `json:"configurationId"`
 	Revision           uint64                    `json:"revision"`
 	Status             CandidateStatus           `json:"status"`
+	ApplyPath          ApplyPath                 `json:"applyPath"`
 	CatalogDigest      string                    `json:"catalogDigest"`
 	SchemaDigest       string                    `json:"schemaDigest"`
 	ArtifactSHA256     string                    `json:"artifactSha256"`
@@ -50,6 +51,15 @@ type Candidate struct {
 	ExternalStatus     string                    `json:"externalStatus,omitempty"`
 	RollbackRevision   uint64                    `json:"rollbackRevision,omitempty"`
 	ManagedCredentials []ManagedCredentialStatus `json:"managedCredentials,omitempty"`
+}
+
+func ValidApplyPath(path ApplyPath) bool {
+	switch path {
+	case ApplyApplicationDeployment, ApplyPlatformProfile, ApplyHotService, ApplyHotScoped:
+		return true
+	default:
+		return false
+	}
 }
 
 type CreateDraftRequest struct {

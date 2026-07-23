@@ -44,7 +44,8 @@ func (s *Store) Prepare(ctx context.Context, request PrepareRequest) (Candidate,
 		now := time.Now().UTC()
 		candidate := Candidate{
 			CandidateID: request.CandidateID, RequestDigest: request.RequestDigest,
-			TenantID: request.TenantID, DeploymentName: request.DeploymentName,
+			ConfigurationID: request.ConfigurationID,
+			TenantID:        request.TenantID, DeploymentName: request.DeploymentName,
 			ExpectedCatalogDigest: request.ExpectedCatalogDigest, PreviousProfile: previousProfile,
 			NextProfile: candidateProfile, NextCatalogRevision: request.NextCatalogRevision,
 			NextCatalogDigest: nextCatalog.Digest(), Status: CandidatePrepared,

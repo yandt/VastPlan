@@ -221,6 +221,9 @@ func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, cal
 		return platformadminapi.ServiceRevision{}, err
 	}
 	revision := state.Revisions[index]
+	if profileActivationLocksDeployment(state, revision.Deployment) {
+		return platformadminapi.ServiceRevision{}, errServiceState
+	}
 	if revision.ConfigurationCandidateID != "" && !configurationActivation {
 		return platformadminapi.ServiceRevision{}, errServiceState
 	}

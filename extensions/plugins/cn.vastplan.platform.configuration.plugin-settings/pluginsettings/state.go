@@ -102,7 +102,7 @@ func (s *Service) validateLoaded() error {
 			return errors.New("插件配置协调器候选数量超过上限")
 		}
 		for id, candidate := range state.Candidates {
-			if id == "" || candidate.ID != id || candidate.ConfigurationID == "" || candidate.Revision == 0 || !pluginconfiguration.ValidCandidateStatus(candidate.Status) || !json.Valid(candidate.Values) {
+			if id == "" || candidate.ID != id || candidate.ConfigurationID == "" || candidate.Revision == 0 || !pluginconfiguration.ValidCandidateStatus(candidate.Status) || !pluginconfiguration.ValidApplyPath(candidate.ApplyPath) || !json.Valid(candidate.Values) {
 				return fmt.Errorf("插件配置协调器状态包含无效候选 %q", id)
 			}
 			for _, status := range candidate.ManagedCredentials {

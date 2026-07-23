@@ -78,4 +78,32 @@ describe("plugin configuration workbench", () => {
     await page.runAction?.({ action: { id: "discard", label: "Discard", placement: "record.row" }, selected: result.items, refresh() {} }, new AbortController().signal);
     expect(discard).toHaveBeenCalledWith("pcfg_x", 3);
   });
+
+  it("routes Platform Profile actions through the dedicated permission operations", async () => {
+    const submit = vi.fn(), approve = vi.fn(), activate = vi.fn(), abort = vi.fn();
+    const platformDefinition = { ...definition, origin: "platform-profile" as const, applyPath: "platform-profile" as const };
+    const client = {
+      listPluginConfigurationDefinitions: vi.fn(async () => [platformDefinition]),
+      listPluginConfigurationCandidates: vi.fn(async () => [{
+        id: "pcfg_x", configurationId: platformDefinition.id, revision: 4, status: "Publishing", applyPath: "platform-profile",
+        catalogDigest: platformDefinition.catalogDigest, schemaDigest: platformDefinition.schemaDigest, artifactSha256: platformDefinition.artifact.sha256,
+        values: platformDefinition.values, createdBy: "alice", createdAt: "2026-07-23T00:00:00Z", updatedAt: "2026-07-23T00:00:00Z", externalStatus: "PendingApproval",
+      }]),
+      submitPlatformProfileConfigurationDraft: submit,
+      approvePlatformProfileConfigurationCandidate: approve,
+      activatePlatformProfileConfigurationCandidate: activate,
+      abortPlatformProfileConfigurationCandidate: abort,
+    } as unknown as PlatformAdminClient;
+    const page = createPluginConfigurationPage(client, "configuration", "/settings/plugin-configurations", message("test", "title", "Plugin configuration"));
+    const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
+    const selected = result.items;
+    for (const id of ["submit-profile", "approve-profile", "activate-profile", "abort-profile"]) {
+      await page.runAction?.({ action: { id, label: id, placement: "record.row" }, selected, refresh() {} }, new AbortController().signal);
+    }
+    expect(submit).toHaveBeenCalledWith("pcfg_x", 4);
+    expect(approve).toHaveBeenCalledWith("pcfg_x", 4);
+    expect(activate).toHaveBeenCalledWith("pcfg_x", 4);
+    expect(abort).toHaveBeenCalledWith("pcfg_x", 4);
+    expect((page.collection.actions ?? []).filter((action) => action.id.includes("profile")).every((action) => action.requiredPermissions?.includes("platform.plugin-configuration.profile.publish"))).toBe(true);
+  });
 });

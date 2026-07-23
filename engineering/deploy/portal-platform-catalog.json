@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 14,
+  "revision": 15,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 14,
+      "revision": 15,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -68,12 +68,12 @@
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "1.8.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.5.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.7.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.6.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.7.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.9.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.19.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.15.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.16.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.role-management", "version": "0.4.0", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
@@ -85,8 +85,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 14,
-        "digest": "67f70f598dcb6dd48b131d8a38374e3b346861cc1ca8316f7219985036b3cab7"
+        "revision": 15,
+        "digest": "eba76c42f8dcc059efa480f225903a9d39a8ccb75e25885ec2953b9342bb2826"
       },
       "services": [
         {
@@ -104,7 +104,7 @@
           "logicalService": "platform.plugin-configuration",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.plugin-configuration", "read": ["listDefinitions", "getDefinition", "listCandidates"], "write": ["createDraft", "discardDraft", "submitDraft", "activateCandidate"] }
+            { "capability": "platform.plugin-configuration", "read": ["listDefinitions", "getDefinition", "listCandidates"], "write": ["createDraft", "discardDraft", "submitDraft", "activateCandidate", "submitProfileDraft", "approveProfileCandidate", "activateProfileCandidate", "abortProfileCandidate"] }
           ]
         },
         {

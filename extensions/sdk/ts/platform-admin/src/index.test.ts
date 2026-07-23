@@ -78,9 +78,17 @@ describe("PlatformAdminClient", () => {
     const id = "pcfg_" + "a".repeat(32);
     await client.submitPluginConfigurationDraft(id, 4);
     await client.activatePluginConfigurationCandidate(id, 5);
+    await client.submitPlatformProfileConfigurationDraft(id, 6);
+    await client.approvePlatformProfileConfigurationCandidate(id, 7);
+    await client.activatePlatformProfileConfigurationCandidate(id, 8);
+    await client.abortPlatformProfileConfigurationCandidate(id, 9);
     expect(calls.filter((call) => call.path !== "/v1/csrf")).toEqual([
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/submit`, method: "POST", body: '{"expectedRevision":4}' },
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/activate`, method: "POST", body: '{"expectedRevision":5}' },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/submit-profile`, method: "POST", body: '{"expectedRevision":6}' },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/approve-profile`, method: "POST", body: '{"expectedRevision":7}' },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/activate-profile`, method: "POST", body: '{"expectedRevision":8}' },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/abort-profile`, method: "POST", body: '{"expectedRevision":9}' },
     ]);
   });
 

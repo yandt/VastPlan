@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
@@ -20,6 +21,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
@@ -96,6 +98,20 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 	if dependencies.DeploymentReadiness != nil {
 		if err := host.RegisterHostService(extpoint.KernelService, deploymentpublication.KernelReadinessService, kernelDeploymentReadiness(dependencies.DeploymentReadiness)); err != nil {
 			return nil, err
+		}
+	}
+	if dependencies.PlatformProfileActivation != nil {
+		services := kernelPlatformProfileActivation(dependencies.PlatformProfileActivation)
+		names := make([]string, 0, len(services))
+		for name := range services {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			service := services[name]
+			if err := host.RegisterHostService(extpoint.KernelService, name, service); err != nil {
+				return nil, err
+			}
 		}
 	}
 	if dependencies.ConfigurationCatalogs != nil {
@@ -266,6 +282,63 @@ func kernelDeploymentReadiness(observer deploymentpublication.ReadinessObserver)
 		}
 		raw, err := json.Marshal(observation)
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+	}
+}
+
+func kernelPlatformProfileActivation(controller platformprofileactivation.Controller) map[string]protocolbus.HostService {
+	candidate := func(run func(context.Context, string, platformprofileactivation.CandidateRequest) (platformprofileactivation.Candidate, error)) protocolbus.HostService {
+		return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+			if !authenticatedDeploymentManager(callCtx) {
+				return nil, nil, errors.New("Platform Profile Activation 只接受 deployment-manager 认证会话")
+			}
+			var request platformprofileactivation.CandidateRequest
+			if err := decodeStrict(payload, &request); err != nil {
+				return nil, nil, errors.New("Platform Profile 候选请求无效")
+			}
+			result, err := run(ctx, callCtx.GetTenantId(), request)
+			if err != nil {
+				return nil, nil, err
+			}
+			raw, err := json.Marshal(result)
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+		}
+	}
+	return map[string]protocolbus.HostService{
+		platformprofileactivation.KernelPrepareService: func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+			if !authenticatedDeploymentManager(callCtx) {
+				return nil, nil, errors.New("Platform Profile Activation 只接受 deployment-manager 认证会话")
+			}
+			var request platformprofileactivation.PrepareRequest
+			if err := decodeStrict(payload, &request); err != nil {
+				return nil, nil, errors.New("Platform Profile 候选准备请求无效")
+			}
+			result, err := controller.Prepare(ctx, callCtx.GetTenantId(), request)
+			if err != nil {
+				return nil, nil, err
+			}
+			raw, err := json.Marshal(result)
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+		},
+		platformprofileactivation.KernelStatusService:   candidate(controller.Status),
+		platformprofileactivation.KernelActivateService: candidate(controller.Activate),
+		platformprofileactivation.KernelFinalizeService: candidate(controller.Finalize),
+		platformprofileactivation.KernelAbortService:    candidate(controller.Abort),
+		platformprofileactivation.KernelRollbackService: candidate(controller.Rollback),
+		platformprofileactivation.KernelPublishService: func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+			if !authenticatedDeploymentManager(callCtx) {
+				return nil, nil, errors.New("Platform Profile Activation 只接受 deployment-manager 认证会话")
+			}
+			var request platformprofileactivation.PublishRequest
+			if err := decodeStrict(payload, &request); err != nil {
+				return nil, nil, errors.New("Platform Profile 候选发布请求无效")
+			}
+			result, err := controller.Publish(ctx, callCtx.GetTenantId(), request)
+			if err != nil {
+				return nil, nil, err
+			}
+			raw, err := json.Marshal(result)
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, err
+		},
 	}
 }
 

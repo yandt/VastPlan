@@ -13,13 +13,14 @@ import (
 	v1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 )
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.22.0"
+	PluginVersion = "0.23.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -232,7 +233,10 @@ func configurationActivationAllowed(c *v1.CallContext, request extpoint.Permissi
 		return false
 	}
 	switch request.Operation {
-	case configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation:
+	case configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation,
+		platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation,
+		platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation,
+		platformprofileactivation.AbortActivationOperation:
 		return true
 	default:
 		return false
@@ -256,7 +260,19 @@ func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest
 	case databasev1.RuntimePluginID:
 		return request.Capability == "kernel.credential.material-lease"
 	case "cn.vastplan.platform.infrastructure.deployment-manager":
-		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness" || request.Capability == "kernel.deployment.targets" || request.Capability == "kernel.deployment.preview" || request.Capability == "kernel.deployment.publish" || request.Capability == "kernel.deployment.readiness"
+		return request.Capability == "kernel.node.bootstrap" || request.Capability == "kernel.node.readiness" || request.Capability == "kernel.deployment.targets" || request.Capability == "kernel.deployment.preview" || request.Capability == "kernel.deployment.publish" || request.Capability == "kernel.deployment.readiness" || platformProfileKernelService(request.Capability)
+	default:
+		return false
+	}
+}
+
+func platformProfileKernelService(capability string) bool {
+	switch capability {
+	case platformprofileactivation.KernelPrepareService, platformprofileactivation.KernelStatusService,
+		platformprofileactivation.KernelActivateService, platformprofileactivation.KernelPublishService,
+		platformprofileactivation.KernelFinalizeService, platformprofileactivation.KernelAbortService,
+		platformprofileactivation.KernelRollbackService:
+		return true
 	default:
 		return false
 	}
