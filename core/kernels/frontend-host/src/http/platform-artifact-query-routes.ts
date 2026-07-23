@@ -9,12 +9,13 @@ import { requirePlatformRole } from "./platform-route-contract";
 const capability = "platform.artifacts.repository";
 const simpleQueries: Readonly<Record<string, string>> = Object.freeze({ status: "status", capacity: "capacity", references: "listReferences", migration: "migrationStatus" });
 const gcQueries: Readonly<Record<string, string>> = Object.freeze({ plan: "gcPlan", status: "gcStatus" });
+const assessmentQueries: Readonly<Record<string, string>> = Object.freeze({ inventory: "assessmentInventory" });
 
 export class PlatformArtifactQueryRoutes {
   public constructor(private readonly client: PlatformCapabilityPort) {}
 
   public async handle(parts: readonly string[], principal: Principal, target: PlatformManagementTarget, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
-    let operation = parts.length === 1 ? simpleQueries[parts[0]!] : parts.length === 2 && parts[0] === "gc" ? gcQueries[parts[1]!] : undefined;
+    let operation = parts.length === 1 ? simpleQueries[parts[0]!] : parts.length === 2 && parts[0] === "gc" ? gcQueries[parts[1]!] : parts.length === 2 && parts[0] === "assessment" ? assessmentQueries[parts[1]!] : undefined;
     const catalog = parts.length === 1 && parts[0] === "catalog";
     if (catalog) operation = "listCatalog";
     if (operation === undefined) return false;

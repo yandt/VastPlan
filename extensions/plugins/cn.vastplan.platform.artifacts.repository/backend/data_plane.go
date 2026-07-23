@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -99,6 +100,14 @@ func newDataPlaneTicketStore(instanceID string) *dataPlaneTicketStore {
 }
 
 func (s *dataPlaneTicketStore) install(callCtx *contractv1.CallContext, raw []byte) error {
+	return s.installMatching(callCtx, raw, func(resource string) bool { return !strings.HasPrefix(resource, "/v1/assessment-reports/") })
+}
+
+func (s *dataPlaneTicketStore) installAssessmentReport(callCtx *contractv1.CallContext, raw []byte) error {
+	return s.installMatching(callCtx, raw, validAssessmentReportResource)
+}
+
+func (s *dataPlaneTicketStore) installMatching(callCtx *contractv1.CallContext, raw []byte, resourceAllowed func(string) bool) error {
 	if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != "cn.vastplan.platform.integration.api-exposure" || callCtx.GetTenantId() == "" {
 		return errors.New("Ticket 只能由 API Exposure 控制面安装")
 	}
@@ -107,10 +116,27 @@ func (s *dataPlaneTicketStore) install(callCtx *contractv1.CallContext, raw []by
 		return err
 	}
 	claims := installation.Claims
-	if claims.TenantID != callCtx.GetTenantId() {
+	if claims.TenantID != callCtx.GetTenantId() || resourceAllowed == nil || !resourceAllowed(claims.Resource) {
 		return errors.New("Data Plane Ticket 安装内容无效")
 	}
 	return s.installClaims(installation.Ticket, claims)
+}
+
+func validAssessmentReportResource(resource string) bool {
+	const prefix = "/v1/assessment-reports/"
+	return strings.HasPrefix(resource, prefix) && validReportDigest(strings.TrimPrefix(resource, prefix))
+}
+
+func validReportDigest(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *dataPlaneTicketStore) installClaims(ticket string, claims apiv1.DataPlaneTicketClaims) error {

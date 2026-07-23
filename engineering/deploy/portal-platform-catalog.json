@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 31,
+  "revision": 32,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 31,
+      "revision": 32,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -71,7 +71,7 @@
         { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.12.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.31.0", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.32.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.18.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.role-management", "version": "0.4.0", "channel": "stable" }
@@ -85,8 +85,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 31,
-        "digest": "2208f9b9c03a7de75f4624f727cf1f3bf20bbbac34f09cdbc6165e0054bd88e2"
+        "revision": 32,
+        "digest": "08af076574ca8d62ff6edcc3daaa5894abac7e0581dc258c8e85715b66b5b92b"
       },
       "services": [
         {
@@ -140,7 +140,7 @@
           "logicalService": "platform.artifacts.repository",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.artifacts.repository", "read": ["status", "capacity", "listCatalog", "listPublishJournal", "resolve", "listReferences", "gcPlan", "gcStatus", "migrationStatus", "listPublications", "getSupplyChainEvidence"], "write": ["setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration", "submitPublication", "approvePublication", "rejectPublication", "cancelPublication"] }
+            { "capability": "platform.artifacts.repository", "read": ["status", "assessmentInventory", "prepareAssessmentReport", "capacity", "listCatalog", "listPublishJournal", "resolve", "listReferences", "gcPlan", "gcStatus", "migrationStatus", "listPublications", "getSupplyChainEvidence"], "write": ["setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration", "submitPublication", "approvePublication", "rejectPublication", "cancelPublication"] }
           ]
         },
         {

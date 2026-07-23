@@ -3,8 +3,9 @@ import { defineCollectionPage, type CollectionPageDefinition } from "@vastplan/w
 import { lifecycleForm } from "./lifecycle-form.js";
 import { evidenceOverlay, publicationForm } from "./publication-workflow.js";
 import { filterString, formatBytes, lifecycleOptions, targetOptions, text, type Row } from "./shared.js";
+import type { AssessmentReportDownloader } from "./assessment-report-downloader.js";
 
-export function catalogPage(client: PlatformAdminClient, id: string, path: string, title: ReturnType<typeof text>, navigationLabel: ReturnType<typeof text>): CollectionPageDefinition<Row> {
+export function catalogPage(client: PlatformAdminClient, id: string, path: string, title: ReturnType<typeof text>, navigationLabel: ReturnType<typeof text>, reports?: AssessmentReportDownloader): CollectionPageDefinition<Row> {
   return defineCollectionPage<Row>({
     id, path, title, description: text("page.catalog.description", "查询可信制品、发布者、目标内核与生命周期"),
     navigation: { id, label: navigationLabel, zone: "settings", groupID: "platform.artifacts", order: 50 },
@@ -38,6 +39,10 @@ export function catalogPage(client: PlatformAdminClient, id: string, path: strin
         { id: "lifecycle", label: text("action.lifecycle", "变更生命周期"), placement: "record.row", form: "lifecycle", requiredPermissions: ["platform.artifacts.lifecycle"], visibleWhen: { not: { pointer: "/lifecycle", equals: "revoked" } } },
         { id: "publication", label: text("action.publication.submit", "提交发布审批"), placement: "record.row", form: "publication", requiredPermissions: ["platform.artifacts.publication.submit"], visibleWhen: { pointer: "/channel", equals: "testing" } },
         { id: "evidence", label: text("action.evidence", "供应链证据"), placement: "record.row", overlay: "evidence", requiredPermissions: ["platform.artifacts.read"] },
+        ...(reports === undefined ? [] : [
+          { id: "vulnerabilityReport", label: text("action.vulnerabilityReport", "下载漏洞报告"), placement: "record.row" as const, requiredPermissions: ["platform.artifacts.assessment.report.read"], visibleWhen: { not: { pointer: "/security", equals: "missing" } } },
+          { id: "licenseReport", label: text("action.licenseReport", "下载许可证报告"), placement: "record.row" as const, requiredPermissions: ["platform.artifacts.assessment.report.read"], visibleWhen: { not: { pointer: "/security", equals: "missing" } } },
+        ]),
       ],
       preferences: { allowedColumns: ["pluginId", "version", "channel", "publisher", "targets", "size", "lifecycle", "sbom", "pythonLock", "provenance", "security", "repositoryRevision", "publishedAt"], density: true },
     },
@@ -82,6 +87,12 @@ export function catalogPage(client: PlatformAdminClient, id: string, path: strin
         { id: "revision", label: text("metric.catalogRevision", "Catalog Revision"), value: status.catalog?.revision ?? 0 },
         { id: "migration", label: text("metric.migration", "迁移状态"), value: status.migration?.phase ?? "none", tone: status.migration?.lastError ? "error" : "neutral" },
       ] };
+    },
+    async runAction({ action, selected }) {
+      if (reports === undefined || (action.id !== "vulnerabilityReport" && action.id !== "licenseReport")) return;
+      const row = selected[0];
+      if (row === undefined) return;
+      await reports.download({ pluginId: String(row.pluginId), version: String(row.version), channel: String(row.channel) }, action.id === "vulnerabilityReport" ? "vulnerability" : "license");
     },
   });
 }

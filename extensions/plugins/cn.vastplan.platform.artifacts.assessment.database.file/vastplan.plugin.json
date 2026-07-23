@@ -18,12 +18,12 @@
   "configuration": {
     "scope": "service", "applyMode": "restart",
     "schema": {
-      "type": "object", "additionalProperties": false,
+      "type": "object", "title": "扫描数据库 File Source", "description": "从部署适配器准备的私有 staging 原子发布钉死摘要的本地快照", "additionalProperties": false,
       "required": ["sourceDirectory", "snapshotRoot", "databaseRevision"],
       "properties": {
-        "sourceDirectory": { "type": "string", "pattern": "^/", "maxLength": 4096 },
-        "snapshotRoot": { "type": "string", "pattern": "^/", "maxLength": 4096 },
-        "databaseRevision": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+        "sourceDirectory": { "type": "string", "title": "私有 Staging 目录", "description": "由部署适配器准备，必须包含 db/metadata.json 与 db/trivy.db", "pattern": "^/", "maxLength": 4096 },
+        "snapshotRoot": { "type": "string", "title": "不可变快照根目录", "description": "物化结果写入 snapshots/<databaseRevision>，不得与 staging 重叠", "pattern": "^/", "maxLength": 4096 },
+        "databaseRevision": { "type": "string", "title": "数据库内容 Revision", "description": "对规范相对路径和两个数据库文件字节计算的 SHA-256", "pattern": "^[a-f0-9]{64}$" }
       }
     }
   },

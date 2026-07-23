@@ -27,6 +27,7 @@ function clientStub() {
     value: {
       listArtifactCatalog,
       artifactRepositoryStatus: vi.fn(async () => ({ ready: true, storageProvider: "file", storageVolumeId: "primary", catalog: { revision: 3, artifacts: 1 }, securityAssessment: { artifacts: 1, unassessed: 0, admissionCurrent: 0, rescanPassed: 1, rescanFailed: 0, stale: 0, invalid: 0, alert: false } })),
+      artifactAssessmentInventory: vi.fn(async () => ({ observedAt: "2026-07-24T00:00:00Z", reportArchiveReady: true, truncated: false, revisions: [{ databaseRevision: "f".repeat(64), artifacts: 1, current: 1, failed: 0, stale: 0, invalid: 0, lastEvaluatedAt: "2026-07-24T00:00:00Z" }] })),
       artifactRepositoryCapacity: vi.fn(async () => ({ catalogRevision: 3, gcRevision: 1, activeArtifacts: 1, activeBytes: 1024, quarantinedArtifacts: 0, quarantinedBytes: 0, sweptArtifacts: 0, reclaimedBytes: 0, storedBytes: 1024, buckets: [], quotas: [] })),
       listArtifactReferences: vi.fn(async () => ({ revision: 1, items: [] })),
       artifactGarbageCollectionStatus: vi.fn(async () => ({ revision: 1, items: [] })),
@@ -63,6 +64,7 @@ describe("artifact repository Workbench", () => {
       "platform.artifact-repository.artifacts.gc.collection",
       "platform.artifact-repository.artifacts.migration.collection",
       "platform.artifact-repository.artifacts.publications.collection",
+      "platform.artifact-repository.artifacts.assessment.collection",
     ]);
     const result = await pages[0]!.load({ mode: "page", page: 1, pageSize: 20, filters: { pluginPrefix: "cn.vastplan", target: "backend", lifecycle: "active" } }, new AbortController().signal);
     expect(result.total).toBe(1);
@@ -70,6 +72,13 @@ describe("artifact repository Workbench", () => {
 	const summary = await pages[0]!.loadSummary!(new AbortController().signal);
 	expect(summary.metrics).toEqual(expect.arrayContaining([expect.objectContaining({ id: "security", value: "Ready", tone: "success" })]));
     expect(stub.listArtifactCatalog).toHaveBeenCalledWith(expect.objectContaining({ pluginPrefix: "cn.vastplan", target: "backend", lifecycle: "active", page: 1, pageSize: 20 }));
+  });
+
+  it("shows accepted database revisions without exposing snapshot paths", async () => {
+    const page = createArtifactRepositoryPages(clientStub().value, "artifacts")[6]!;
+    const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
+    expect(result.items[0]).toMatchObject({ databaseRevision: "f".repeat(64), current: 1 });
+    expect(JSON.stringify(result)).not.toContain("snapshotRoot");
   });
 
   it("binds publication submission and approval to current workflow revisions", async () => {

@@ -46,6 +46,10 @@ type SecurityStatusRepository interface {
 	ReadSecurityStatusChain(ref pluginv1.ArtifactRef) ([]byte, error)
 }
 
+type AssessmentReportRepository interface {
+	ReadAssessmentReport(digest string) ([]byte, error)
+}
+
 // Server 暴露最小远端制品 API。读写令牌分离；RequireTLS 默认应为 true，
 // 只有进程内测试或明确的本地开发反向代理场景才关闭。
 type Server struct {
@@ -71,11 +75,60 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if req.Method == http.MethodGet {
+		if strings.HasPrefix(req.URL.EscapedPath(), "/v1/assessment-reports/") {
+			s.readAssessmentReport(w, req)
+			return
+		}
 		s.read(w, req)
 		return
 	}
 	w.Header().Set("Allow", "GET, POST")
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (s *Server) readAssessmentReport(w http.ResponseWriter, req *http.Request) {
+	if !authorized(req, s.ReadToken) {
+		s.log("assessment_report.read_denied remote=%s", req.RemoteAddr)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if len(req.URL.Query()) != 0 {
+		http.Error(w, "query not allowed", http.StatusBadRequest)
+		return
+	}
+	parts := strings.Split(strings.Trim(req.URL.EscapedPath(), "/"), "/")
+	if len(parts) != 3 || parts[0] != "v1" || parts[1] != "assessment-reports" || !validSHA256(parts[2]) {
+		http.NotFound(w, req)
+		return
+	}
+	repository, ok := s.Repository.(AssessmentReportRepository)
+	if !ok {
+		http.NotFound(w, req)
+		return
+	}
+	raw, err := repository.ReadAssessmentReport(parts[2])
+	if err != nil {
+		http.NotFound(w, req)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="assessment-report-%s.json"`, parts[2]))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(raw)))
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(raw)
+}
+
+func validSHA256(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' && (char < 'a' || char > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) publish(w http.ResponseWriter, req *http.Request) {

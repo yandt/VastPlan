@@ -24,7 +24,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.29.0"
+	PluginVersion = "0.30.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -234,7 +234,7 @@ func apiExposureTicketAllowed(c *v1.CallContext, request extpoint.PermissionRequ
 }
 
 func apiExposureTicketInstallationAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
-	return c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN && c.GetCaller().GetId() == "cn.vastplan.platform.integration.api-exposure" && request.Capability == platformadminapi.ArtifactsCapability && request.Operation == "installDataPlaneTicket"
+	return c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN && c.GetCaller().GetId() == "cn.vastplan.platform.integration.api-exposure" && request.Capability == platformadminapi.ArtifactsCapability && (request.Operation == "installDataPlaneTicket" || request.Operation == "installAssessmentReportTicket")
 }
 
 func materialLeaseAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {

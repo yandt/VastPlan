@@ -181,6 +181,24 @@ describe("PlatformAdminClient", () => {
     expect(calls).toEqual(["/v1/portals/operations/platform/services/artifacts/artifacts/capacity"]);
   });
 
+  it("preauthorizes assessment reports and requests only the fixed data-plane resource", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const digest = "a".repeat(64), routeKey = "a234567a234567a23456";
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : path.includes("/assessment/reports/")
+        ? { sha256: digest, resource: `/v1/assessment-reports/${digest}` }
+        : { endpoint: "https://repo.example/", leaseId: "lease", ticket: "b234567890123456789012345678901234567890123", expiresAt: new Date(Date.now() + 30_000).toISOString() } };
+    }, "operations", "artifacts");
+    await client.prepareArtifactAssessmentReport(digest);
+    await client.issueArtifactAssessmentReportTicket(routeKey, digest);
+    expect(calls).toEqual([
+      { path: `/v1/portals/operations/platform/services/artifacts/artifacts/assessment/reports/${digest}`, method: "GET", body: undefined },
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: `/api/d/${routeKey}/ticket`, method: "POST", body: JSON.stringify({ method: "GET", resource: `/v1/assessment-reports/${digest}` }) },
+    ]);
+  });
+
   it("keeps artifact GC on fixed read and CSRF-protected mutation routes", async () => {
     const calls: Array<{ path: string; method?: string; body?: string }> = [];
     const fetcher: PlatformFetch = async (path, init) => {

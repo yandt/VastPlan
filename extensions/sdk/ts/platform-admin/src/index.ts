@@ -178,6 +178,14 @@ export interface ArtifactRepositoryStatus {
   securityAssessment?: { artifacts: number; unassessed: number; admissionCurrent: number; rescanPassed: number; rescanFailed: number; stale: number; invalid: number; alert: boolean };
   migration?: ArtifactRepositoryMigration;
 }
+export interface ArtifactAssessmentRevisionStatus {
+  databaseRevision: string; artifacts: number; current: number; failed: number; stale: number; invalid: number; lastEvaluatedAt?: string;
+}
+export interface ArtifactAssessmentInventory {
+  observedAt: string; reportArchiveReady: boolean; truncated: boolean; revisions: ArtifactAssessmentRevisionStatus[];
+}
+export interface DataPlaneTicketGrant { endpoint: string; leaseId: string; ticket: string; expiresAt: string; }
+export interface ArtifactAssessmentReportGrant { sha256: string; resource: string; }
 export interface ArtifactCatalogQuery {
   pluginId?: string; pluginPrefix?: string; namespace?: string; publisher?: string; version?: string;
   channel?: string; target?: "backend" | "frontend" | "runner" | "mobile";
@@ -210,7 +218,7 @@ export interface ArtifactSecurityAdmissionDeclaration {
 export interface ArtifactSecurityStatusEvidence {
   sequence: number; recordSha256: string; previousSha256: string; decision: "pass" | "fail";
   databaseRevision: string; evaluatedAt: string; expiresAt: string; critical: number; high: number;
-  deniedLicense: number; unknownLicense: number; verification: "verified";
+  deniedLicense: number; unknownLicense: number; vulnerabilityReportSha256?: string; licenseReportSha256?: string; verification: "verified";
 }
 export interface ArtifactCatalogPage { revision: number; total: number; page: number; pageSize: number; items: ArtifactCatalogEntry[]; }
 export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
@@ -550,6 +558,14 @@ export class PlatformAdminClient {
   public prepareSeedHandoff(expectedGeneration: number, providerProfile: CompositionRef, recoveryReady: boolean): Promise<SeedHandoffState> { return this.mutate(`${this.basePath}/seed-handoff/prepare`, "POST", { expectedGeneration, providerProfile, recoveryReady }); }
   public completeSeedHandoff(expectedGeneration: number, sealDigest: string): Promise<SeedHandoffState> { return this.mutate(`${this.basePath}/seed-handoff/complete`, "POST", { expectedGeneration, sealDigest }); }
   public artifactRepositoryStatus(): Promise<ArtifactRepositoryStatus> { return this.get(`${this.basePath}/artifacts/status`); }
+  public artifactAssessmentInventory(): Promise<ArtifactAssessmentInventory> { return this.get(`${this.basePath}/artifacts/assessment/inventory`); }
+  public prepareArtifactAssessmentReport(digest: string): Promise<ArtifactAssessmentReportGrant> {
+    if (!/^[a-f0-9]{64}$/.test(digest)) throw new PlatformAdminError(400, "invalid_assessment_report");
+    return this.get<ArtifactAssessmentReportGrant>(`${this.basePath}/artifacts/assessment/reports/${digest}`).then((grant) => {
+      if (grant.sha256 !== digest || grant.resource !== `/v1/assessment-reports/${digest}`) throw new PlatformAdminError(502, "invalid_assessment_report_grant");
+      return grant;
+    });
+  }
   public listArtifactCatalog(value: ArtifactCatalogQuery = {}): Promise<ArtifactCatalogPage> {
     const page = value.page ?? 1, pageSize = value.pageSize ?? 20;
     if (!Number.isSafeInteger(page) || page < 1 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) throw new PlatformAdminError(400, "invalid_catalog_query");
@@ -586,6 +602,10 @@ export class PlatformAdminClient {
   public cancelArtifactPublication(id: string, expectedRevision: number, reason: string): Promise<ArtifactPublicationResult> { return this.mutate(`${this.basePath}/artifacts/publications/${segment(id)}/cancel`, "POST", { expectedRevision, reason }); }
   public artifactSupplyChainEvidence(ref: ArtifactRef): Promise<ArtifactSupplyChainEvidence> {
     return this.get(`${this.basePath}/artifacts/evidence${query({ pluginId: ref.pluginId, version: ref.version, channel: ref.channel })}`);
+  }
+  public issueArtifactAssessmentReportTicket(routeKey: string, digest: string): Promise<DataPlaneTicketGrant> {
+    if (!/^[a-z2-7]{20}$/.test(routeKey) || !/^[a-f0-9]{64}$/.test(digest)) throw new PlatformAdminError(400, "invalid_assessment_report_ticket");
+    return this.mutate<unknown>(`/api/d/${routeKey}/ticket`, "POST", { method: "GET", resource: `/v1/assessment-reports/${digest}` }).then(validateDataPlaneTicketGrant);
   }
 
   public listManagedNodes(): Promise<ManagedNode[]> { return this.get(`${this.basePath}/deployment/nodes`); }
@@ -691,6 +711,20 @@ export class PlatformAdminClient {
     }
     return value as T;
   }
+}
+
+function validateDataPlaneTicketGrant(value: unknown): DataPlaneTicketGrant {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new PlatformAdminError(502, "invalid_data_plane_ticket");
+  const record = value as Record<string, unknown>;
+  if (typeof record.endpoint !== "string" || typeof record.leaseId !== "string" || typeof record.ticket !== "string" || typeof record.expiresAt !== "string") throw new PlatformAdminError(502, "invalid_data_plane_ticket");
+  let endpoint: URL;
+  try { endpoint = new URL(record.endpoint); } catch { throw new PlatformAdminError(502, "invalid_data_plane_ticket"); }
+  const expiresAt = Date.parse(record.expiresAt);
+  const now = Date.now();
+  if (endpoint.protocol !== "https:" || endpoint.username !== "" || endpoint.password !== "" || endpoint.search !== "" || endpoint.hash !== "" || !/^[A-Za-z0-9_-]{43}$/.test(record.ticket) || !Number.isFinite(expiresAt) || expiresAt <= now || expiresAt > now + 35_000) {
+    throw new PlatformAdminError(502, "invalid_data_plane_ticket");
+  }
+  return { endpoint: endpoint.toString(), leaseId: record.leaseId, ticket: record.ticket, expiresAt: record.expiresAt };
 }
 
 export function createBrowserPlatformAdminClient(portalID: string, serviceID: string): PlatformAdminClient {

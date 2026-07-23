@@ -22,7 +22,7 @@
   "configuration": {
     "scope": "service", "applyMode": "restart",
     "schema": {
-      "type": "object", "additionalProperties": false,
+      "type": "object", "title": "持续复扫 Controller Profile", "description": "为单一租户定义扫描通道、提前量、稳定抖动和有界退避", "additionalProperties": false,
       "required": ["tenantId", "channels", "intervalSeconds", "leadTimeSeconds", "jitterSeconds", "retryBaseSeconds", "retryMaxSeconds", "pageSize"],
       "properties": {
         "tenantId": { "type": "string", "minLength": 1, "maxLength": 160 },

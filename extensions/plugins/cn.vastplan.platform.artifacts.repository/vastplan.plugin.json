@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.31.0",
+  "version": "0.32.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -14,6 +14,7 @@
     "namespace": "platform.artifacts",
     "permissions": [
       { "code": "platform.artifacts.read", "title": "查看制品仓库", "description": "查看仓库状态、目录、发布流水、引用、容量和只读计划", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.artifacts.assessment.report.read", "title": "下载安全评估原始报告", "description": "通过短时一次性数据面 Ticket 下载扫描器原始报告，内容可能包含敏感依赖信息", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
       { "code": "platform.artifacts.lifecycle", "title": "管理制品生命周期", "description": "变更制品 deprecated、yanked 或 revoked 生命周期", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
       { "code": "platform.artifacts.gc", "title": "执行制品回收", "description": "隔离或永久清扫无引用制品", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
       { "code": "platform.artifacts.migrate", "title": "迁移制品仓库", "description": "准备、切换、回滚和释放制品存储卷", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
@@ -22,6 +23,8 @@
     ],
     "operationGuards": [
       { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "status", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "assessmentInventory", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "prepareAssessmentReport", "permissions": ["platform.artifacts.assessment.report.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "capacity", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "listCatalog", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.artifacts.repository", "operation": "listPublishJournal", "permissions": ["platform.artifacts.read"], "access": "read", "approval": "none" },
@@ -142,6 +145,8 @@
         "title": "制品仓库",
         "subcommands": [
           { "name": "status", "description": "读取仓库运行状态" },
+          { "name": "assessmentInventory", "description": "读取评估数据库 revision 与报告归档状态" },
+          { "name": "prepareAssessmentReport", "description": "验证原始报告仍被当前评估证据引用" },
           { "name": "capacity", "description": "读取已验证容量与配额用量" },
           { "name": "listCatalog", "description": "分页查询已验证制品目录" },
           { "name": "listPublishJournal", "description": "按 revision 查询发布流水账" },
@@ -168,7 +173,8 @@
           ,{ "name": "getSupplyChainEvidence", "description": "读取已验证供应链证据摘要" }
           ,{ "name": "prepareAssessment", "description": "向精确首方扫描 Provider 签发一次性制品读取租约" }
           ,{ "name": "appendAssessmentStatus", "description": "由精确 Controller 追加 Provider 签名复扫状态" }
-          ,{ "name": "installDataPlaneTicket", "description": "安装控制面签发的一次性下载 Ticket" }
+          ,{ "name": "installDataPlaneTicket", "description": "安装控制面签发的一次性制品 Ticket" }
+          ,{ "name": "installAssessmentReportTicket", "description": "安装控制面签发的一次性评估报告 Ticket" }
         ]
       }],
       "dataPlaneServices": [{
@@ -181,6 +187,16 @@
         "healthPath": "/healthz",
         "maxObjectBytes": 1099511627776,
         "ticketTarget": { "capability": "platform.artifacts.repository", "operation": "installDataPlaneTicket" }
+      }, {
+        "id": "assessment-reports",
+        "service_role": "backend",
+        "title": "安全评估原始报告 HTTPS 数据面",
+        "protocol": "https",
+        "purposes": ["assessment-report"],
+        "supportedModes": ["ticket-redirect"],
+        "healthPath": "/healthz",
+        "maxObjectBytes": 67108864,
+        "ticketTarget": { "capability": "platform.artifacts.repository", "operation": "installAssessmentReportTicket" }
       }]
     },
     "frontend": {

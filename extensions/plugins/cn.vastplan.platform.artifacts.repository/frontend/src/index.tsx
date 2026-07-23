@@ -2,6 +2,8 @@ import type { ArtifactCapacity, ArtifactGCPlan, PlatformAdminClient } from "@vas
 import { createBrowserPlatformAdminClient } from "@vastplan/platform-admin";
 import { defineCollectionPage, managementServicesFor, message, type CollectionPageDefinition, type WorkbenchFrontendPluginContext } from "@vastplan/workbench-sdk";
 import { catalogPage } from "./catalog-page.js";
+import { assessmentPage } from "./assessment-page.js";
+import { AssessmentReportDownloader } from "./assessment-report-downloader.js";
 import { localization } from "./localization.js";
 import { migrationPage } from "./migration-page.js";
 import { publicationPage } from "./publication-page.js";
@@ -152,18 +154,19 @@ function garbageCollectionPage(client: PlatformAdminClient, id: string, path: st
   });
 }
 
-export function createArtifactRepositoryPages(client: PlatformAdminClient, serviceID: string, serviceLabel?: string): readonly CollectionPageDefinition<Row>[] {
+export function createArtifactRepositoryPages(client: PlatformAdminClient, serviceID: string, serviceLabel?: string, reports?: AssessmentReportDownloader): readonly CollectionPageDefinition<Row>[] {
   const suffix = serviceLabel === undefined ? "" : `/${serviceID}`;
   const base = `/settings/artifacts${suffix}`;
   const idBase = `platform.artifact-repository.${serviceID}`;
   const title = serviceLabel === undefined ? text("page.title", "制品仓库") : message(namespace, "page.titleService", "制品仓库 · {service}", { service: serviceLabel });
   return [
-    catalogPage(client, `${idBase}.catalog`, base, title, title),
+    catalogPage(client, `${idBase}.catalog`, base, title, title, reports),
     capacityPage(client, `${idBase}.capacity`, `${base}/capacity`),
     referencesPage(client, `${idBase}.references`, `${base}/references`),
     garbageCollectionPage(client, `${idBase}.gc`, `${base}/gc`),
     migrationPage(client, `${idBase}.migration`, `${base}/migration`),
     publicationPage(client, `${idBase}.publications`, `${base}/publications`),
+    assessmentPage(client, `${idBase}.assessment`, `${base}/assessment`),
   ];
 }
 
@@ -171,10 +174,12 @@ export default {
   register(context: WorkbenchFrontendPluginContext) {
     const services = managementServicesFor(context.portal, "platform.artifacts.repository");
     if (services.length === 0) throw new Error("Portal 未绑定 platform.artifacts.repository 服务");
+    const exposureClients = managementServicesFor(context.portal, "platform.api-exposure").map((service) => createBrowserPlatformAdminClient(context.portal.id, service.id));
     for (const service of services) {
       const client = createBrowserPlatformAdminClient(context.portal.id, service.id);
+      const reports = exposureClients.length === 0 ? undefined : new AssessmentReportDownloader(client, exposureClients);
       const label = services.length === 1 ? undefined : service.label ?? service.id;
-      for (const page of createArtifactRepositoryPages(client, service.id, label)) context.addCollectionPage(page);
+      for (const page of createArtifactRepositoryPages(client, service.id, label, reports)) context.addCollectionPage(page);
     }
   },
   localization,

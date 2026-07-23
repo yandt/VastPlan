@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.26.0 增加插件制品安全准入 sidecar；0.27.0 增加签名只追加复扫链、独立 scanner 写权限、迁移双写、Portal 状态和 Node 本机高水位防回滚；0.28.0 增加低基数安全状态汇总、Portal 告警指标与企业验收矩阵；0.29.0 增加只向精确首方 Assessment Provider 签发、绑定 active ref/制品/SBOM、30 秒且仅可消费一次的 HTTPS 扫描租约；0.30.0 增加仅允许精确 Assessment Controller 追加 Provider 签名状态的内部能力；0.31.0 在接受 Admission/Status 前复核共享原始报告，并让离线 Bundle 去重携带报告及签名复扫状态链，在目标仓库按原顺序重新验链。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.26.0 增加插件制品安全准入 sidecar；0.27.0 增加签名只追加复扫链、独立 scanner 写权限、迁移双写、Portal 状态和 Node 本机高水位防回滚；0.28.0 增加低基数安全状态汇总、Portal 告警指标与企业验收矩阵；0.29.0 增加只向精确首方 Assessment Provider 签发、绑定 active ref/制品/SBOM、30 秒且仅可消费一次的 HTTPS 扫描租约；0.30.0 增加仅允许精确 Assessment Controller 追加 Provider 签名状态的内部能力；0.31.0 在接受 Admission/Status 前复核共享原始报告，并让离线 Bundle 去重携带报告及签名复扫状态链，在目标仓库按原顺序重新验链；0.32.0 增加 Portal 评估 revision 概览，以及“高风险权限预授权 → 当前证据引用复核 → API Exposure 30 秒单次 Ticket → HTTPS 报告数据面”的原始报告下载闭环。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
@@ -70,7 +70,7 @@
 
 包体默认上限为 256 MiB，证明上限为 2 MiB。未授权、明文请求、超限或不可信制品均 fail-closed。小载荷管理操作已经 Node Portal Kernel BFF；制品包与 Bundle 大字节仍使用独立 TLS 入口。通用设置/凭证句柄与签名种子 Bundle 尚未接入，所以 `artifact-server` 子命令仍保留为兼容启动路径，不能据此删除自举能力。
 
-清单从 `0.14.0` 起声明 `artifact-data` Data Plane Service。配置 `apiExposure` 后，仓库实例通过受委托插件调用登记/续租 Endpoint Lease；API Exposure 控制面只向精确的 `installDataPlaneTicket` operation 安装 Ticket。公开客户端先请求 `/api/d/{routeKey}/ticket`，再以 `vp_ticket` 访问仓库；中间件本地单次消费 Ticket、移除 query，并只在进程内投影私有读取凭证。Ticket 不写日志、不写持久状态，也不会替代仓库的原有 TLS 与签名复验。
+清单从 `0.14.0` 起声明 `artifact-data` Data Plane Service。配置 `apiExposure` 后，仓库实例通过受委托插件调用登记/续租 Endpoint Lease；API Exposure 控制面只向精确 Ticket 安装 operation 写入 30 秒单次 Ticket。公开客户端先请求 `/api/d/{routeKey}/ticket`，再以 `vp_ticket` 访问仓库；中间件本地单次消费 Ticket、移除 query，并只在进程内投影私有读取凭证。0.32.0 把原始报告拆成独立 `assessment-reports` Data Plane Service：普通 `artifact-data` 安装操作拒绝报告路径，报告安装操作只接受 `/v1/assessment-reports/<sha256>`；下载前还必须通过 `prepareAssessmentReport` 证明摘要仍被当前 Admission/Status 证据引用，并要求独立 `platform.artifacts.assessment.report.read` 权限。Ticket 不写日志、不写持久状态，也不会替代仓库的原有 TLS 与签名复验。
 
 Resolver 请求示例：
 

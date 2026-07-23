@@ -16,6 +16,8 @@ const MaxBytes int64 = 64 << 20
 
 type Archive struct{ root string }
 
+func (a *Archive) Ready() error { return a.secureRoot() }
+
 func New(root string) (*Archive, error) {
 	if !filepath.IsAbs(root) || filepath.Clean(root) != root {
 		return nil, errors.New("安全评估报告归档根必须是规范绝对路径")

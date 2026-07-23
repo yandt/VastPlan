@@ -61,5 +61,6 @@ Rust 可进一步缩小资源和内存安全风险，但首版工程成本更高
 ## 实施记录
 
 - 2026-07-24：完成 Provider SDK、Trivy 离线适配、本地/CI 入口、Repository 单次扫描租约、精确 Material Lease 授权和独立 active-active Provider。Provider 0.2.0 增加 StatusRecord 与数据库/评估配置 revision；0.3.0 按 ADR-0141 改为只读精确不可变 snapshot，并使用共享内容寻址报告归档。
-- 2026-07-24：完成 leader-owned Rescan Controller。计划按 ref 分 key 保存于 fenced Shared State，Provider 记录先持久为 pending 再追加；后台循环通过 ADR-0140 的 Manifest 权限和宿主绑定 tenant 上下文发起 HostCall，Runtime Host 在 leader lease 丢失后阻止外部 HostCall，Repository 只追加链继续作为竞态最终 CAS。Portal 配置和企业目标环境验收仍是后续阶段。
+- 2026-07-24：完成 leader-owned Rescan Controller。计划按 ref 分 key 保存于 fenced Shared State，Provider 记录先持久为 pending 再追加；后台循环通过 ADR-0140 的 Manifest 权限和宿主绑定 tenant 上下文发起 HostCall，Runtime Host 在 leader lease 丢失后阻止外部 HostCall，Repository 只追加链继续作为竞态最终 CAS。
 - 2026-07-24：真实子进程 E2E 已覆盖 Controller 激活后自主调用、Provider/Repository capability 链、Shared State fenced CAS 与最终计划提交；确定性故障测试覆盖追加暂时失败复用 pending、追加成功但最终计划保存失败后的 Catalog 链头恢复，以及数据库 revision 变化立即生成下一 sequence。该验证不包含 soak。
+- 2026-07-24：ADR-0141 已完成通用在线配置语义、不可变 File Snapshot、共享报告归档、Portal 数据库 revision 概览与独立报告数据面。短时企业故障矩阵覆盖快照摘要/符号链接、报告篡改/权限、普通与报告 Ticket 跨路径、Controller pending/恢复、真实插件进程和 Portal 路由；目标企业网络、真实 Vault/CA/扫描器和 SLA 仍需现场验收，soak 继续延期。

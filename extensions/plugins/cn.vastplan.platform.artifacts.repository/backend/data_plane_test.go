@@ -57,6 +57,30 @@ func TestDataPlaneTicketMiddlewareInjectsOnlyInternalReadCredential(t *testing.T
 	}
 }
 
+func TestAssessmentReportTicketUsesDedicatedInstallationBoundary(t *testing.T) {
+	now := time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC)
+	store := newDataPlaneTicketStore("repo-1")
+	store.now = func() time.Time { return now }
+	digest := "a234567890123456789012345678901234567890123456789012345678901234"
+	claims := apiv1.DataPlaneTicketClaims{TenantID: "tenant-a", PrincipalID: "alice", DataPlaneExposureID: "dpx_aaaaaaaaaaaaaaaaaaaa", InstanceID: "repo-1", Method: http.MethodGet, Resource: "/v1/assessment-reports/" + digest, ExpiresAt: now.Add(30 * time.Second)}
+	installation := apiv1.DataPlaneTicketInstallation{Ticket: "c234567890123456789012345678901234567890123", Claims: claims}
+	raw, _ := json.Marshal(installation)
+	trusted := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.integration.api-exposure"}}
+	if err := store.install(trusted, raw); err == nil {
+		t.Fatal("普通制品数据面不得安装评估报告 Ticket")
+	}
+	if err := store.installAssessmentReport(trusted, raw); err != nil {
+		t.Fatalf("独立评估报告数据面应接受精确摘要资源: %v", err)
+	}
+	claims.Resource = "/v1/artifacts/demo/1.0.0/stable/package"
+	installation.Ticket = "d234567890123456789012345678901234567890123"
+	installation.Claims = claims
+	raw, _ = json.Marshal(installation)
+	if err := store.installAssessmentReport(trusted, raw); err == nil {
+		t.Fatal("评估报告数据面不得安装普通制品 Ticket")
+	}
+}
+
 func TestLeaseRegistrarUsesPluginHostCallAndCachesHealthyLease(t *testing.T) {
 	config := &dataPlaneLeaseConfig{ExposureID: "dpx_aaaaaaaaaaaaaaaaaaaa", InstanceID: "repo-1", Endpoint: "https://repo.internal:9443", TLSIdentity: "spiffe://vastplan/repository/repo-1"}
 	registrar := &dataPlaneLeaseRegistrar{config: config}

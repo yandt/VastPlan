@@ -224,6 +224,9 @@ func TestAPIExposureManagementAndRuntimeBoundaries(t *testing.T) {
 	if got, _ := decide(exposure, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "installDataPlaneTicket"}); got != extpoint.DecisionAllow {
 		t.Fatalf("Exposure 控制面应能安装制品数据面 Ticket: %s", got)
 	}
+	if got, _ := decide(exposure, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "installAssessmentReportTicket"}); got != extpoint.DecisionAllow {
+		t.Fatalf("Exposure 控制面应能安装独立评估报告 Ticket: %s", got)
+	}
 }
 
 func TestDatabaseRuntimeManagementAndExecutionBoundary(t *testing.T) {

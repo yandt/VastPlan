@@ -11,15 +11,18 @@ describe("Platform artifact routes", () => {
     for (const path of [
       "/artifacts/status",
       "/artifacts/catalog?pluginPrefix=cn.vastplan&target=frontend&lifecycle=active&page=2&pageSize=10",
-      "/artifacts/capacity", "/artifacts/references", "/artifacts/migration", "/artifacts/gc/plan", "/artifacts/gc/status", "/artifacts/publications",
+      "/artifacts/capacity", "/artifacts/references", "/artifacts/migration", "/artifacts/gc/plan", "/artifacts/gc/status", "/artifacts/assessment/inventory", "/artifacts/publications",
       "/artifacts/evidence?pluginId=cn.vastplan.demo&version=1.0.0&channel=testing",
+      `/artifacts/assessment/reports/${"f".repeat(64)}`,
     ]) expect((await fetch(`${server.origin}/v1/portals/operations/platform/services/core${path}`, { headers: server.readHeaders })).status, path).toBe(200);
     expect(calls.map(({ operation, payload }) => ({ operation, payload }))).toEqual([
       { operation: "status", payload: {} },
       { operation: "listCatalog", payload: { pluginPrefix: "cn.vastplan", target: "frontend", lifecycle: "active", page: 2, pageSize: 10 } },
       { operation: "capacity", payload: {} }, { operation: "listReferences", payload: {} }, { operation: "migrationStatus", payload: {} },
       { operation: "gcPlan", payload: {} }, { operation: "gcStatus", payload: {} },
+      { operation: "assessmentInventory", payload: {} },
       { operation: "listPublications", payload: {} }, { operation: "getSupplyChainEvidence", payload: { pluginId: "cn.vastplan.demo", version: "1.0.0", channel: "testing" } },
+      { operation: "prepareAssessmentReport", payload: { sha256: "f".repeat(64) } },
     ]);
     expect(calls.every((call) => call.capability === "platform.artifacts.repository")).toBe(true);
   });
@@ -77,9 +80,9 @@ describe("Platform artifact routes", () => {
 });
 
 async function start(calls: PlatformInvocation[]) {
-  const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.artifacts.read", "platform.artifacts.lifecycle", "platform.artifacts.gc", "platform.artifacts.migrate", "platform.artifacts.publication.submit", "platform.artifacts.publication.approve"], managementBinding([{
+  const server = await startPlatformManagementTestServer(recordingPlatformInvoker(calls), ["platform.artifacts.read", "platform.artifacts.assessment.report.read", "platform.artifacts.lifecycle", "platform.artifacts.gc", "platform.artifacts.migrate", "platform.artifacts.publication.submit", "platform.artifacts.publication.approve"], managementBinding([{
     capability: "platform.artifacts.repository",
-    read: ["status", "listCatalog", "capacity", "listReferences", "migrationStatus", "gcPlan", "gcStatus", "listPublications", "getSupplyChainEvidence"],
+    read: ["status", "assessmentInventory", "prepareAssessmentReport", "listCatalog", "capacity", "listReferences", "migrationStatus", "gcPlan", "gcStatus", "listPublications", "getSupplyChainEvidence"],
     write: ["setLifecycle", "gcQuarantine", "gcSweep", "prepareMigration", "syncMigration", "cutoverMigration", "rollbackMigration", "finalizeMigration", "releaseMigration", "submitPublication", "approvePublication", "rejectPublication", "cancelPublication"],
   }]));
   close.push(server.close);

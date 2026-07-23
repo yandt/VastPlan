@@ -482,7 +482,9 @@ func (s *Store) Evidence(ref pluginv1.ArtifactRef) (SupplyChainEvidence, error) 
 				EvaluatedAt: latest.Evaluation.EvaluatedAt.Format(time.RFC3339Nano), ExpiresAt: latest.Evaluation.ExpiresAt.Format(time.RFC3339Nano),
 				Critical: latest.Evaluation.Vulnerabilities.Critical, High: latest.Evaluation.Vulnerabilities.High,
 				DeniedLicense: latest.Evaluation.Licenses.Denied, UnknownLicense: latest.Evaluation.Licenses.Unknown,
-				Verification: "verified",
+				VulnerabilityReportSHA256: latest.Evaluation.Vulnerabilities.ReportSHA256,
+				LicenseReportSHA256:       latest.Evaluation.Licenses.ReportSHA256,
+				Verification:              "verified",
 			}
 		}
 	}

@@ -226,18 +226,20 @@ type ArtifactSecurityAdmissionEvidence struct {
 }
 
 type ArtifactSecurityStatusEvidence struct {
-	Sequence         uint64 `json:"sequence"`
-	RecordSHA256     string `json:"recordSha256"`
-	PreviousSHA256   string `json:"previousSha256"`
-	Decision         string `json:"decision"`
-	DatabaseRevision string `json:"databaseRevision"`
-	EvaluatedAt      string `json:"evaluatedAt"`
-	ExpiresAt        string `json:"expiresAt"`
-	Critical         uint64 `json:"critical"`
-	High             uint64 `json:"high"`
-	DeniedLicense    uint64 `json:"deniedLicense"`
-	UnknownLicense   uint64 `json:"unknownLicense"`
-	Verification     string `json:"verification"`
+	Sequence                  uint64 `json:"sequence"`
+	RecordSHA256              string `json:"recordSha256"`
+	PreviousSHA256            string `json:"previousSha256"`
+	Decision                  string `json:"decision"`
+	DatabaseRevision          string `json:"databaseRevision"`
+	EvaluatedAt               string `json:"evaluatedAt"`
+	ExpiresAt                 string `json:"expiresAt"`
+	Critical                  uint64 `json:"critical"`
+	High                      uint64 `json:"high"`
+	DeniedLicense             uint64 `json:"deniedLicense"`
+	UnknownLicense            uint64 `json:"unknownLicense"`
+	VulnerabilityReportSHA256 string `json:"vulnerabilityReportSha256,omitempty"`
+	LicenseReportSHA256       string `json:"licenseReportSha256,omitempty"`
+	Verification              string `json:"verification"`
 }
 
 type ArtifactCatalogPage struct {

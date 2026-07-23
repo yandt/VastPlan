@@ -35,9 +35,9 @@ const pluginID = "cn.vastplan.platform.artifacts.repository"
 // pluginVersion defaults to the checked-in manifest version for go test/go run.
 // Production and development builds inject the manifest value from build.sh,
 // keeping the packaged binary and signed manifest on the same version source.
-var pluginVersion = "0.31.0"
+var pluginVersion = "0.32.0"
 
-var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"capacity","description":"读取已验证容量与配额用量"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"gcPlan","description":"生成无副作用 GC 计划"},{"name":"gcStatus","description":"读取隔离与清扫状态"},{"name":"gcQuarantine","description":"按精确计划隔离制品"},{"name":"gcSweep","description":"复核并清扫过期隔离制品"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"},{"name":"listPublications","description":"读取 stable 发布审批"},{"name":"submitPublication","description":"提交 testing 到 stable 发布审批"},{"name":"approvePublication","description":"以双人分离批准 stable 发布"},{"name":"rejectPublication","description":"驳回或撤回 stable 发布批准"},{"name":"cancelPublication","description":"由原提交人撤销 stable 发布申请"},{"name":"getSupplyChainEvidence","description":"读取已验证供应链证据摘要"},{"name":"prepareAssessment","description":"向精确首方扫描 Provider 签发一次性制品读取租约"},{"name":"appendAssessmentStatus","description":"由精确 Controller 追加 Provider 签名复扫状态"},{"name":"installDataPlaneTicket","description":"安装控制面签发的一次性下载 Ticket"}]}`)
+var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"assessmentInventory","description":"读取评估数据库 revision 与报告归档状态"},{"name":"prepareAssessmentReport","description":"验证原始报告仍被当前评估证据引用"},{"name":"capacity","description":"读取已验证容量与配额用量"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"gcPlan","description":"生成无副作用 GC 计划"},{"name":"gcStatus","description":"读取隔离与清扫状态"},{"name":"gcQuarantine","description":"按精确计划隔离制品"},{"name":"gcSweep","description":"复核并清扫过期隔离制品"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"},{"name":"listPublications","description":"读取 stable 发布审批"},{"name":"submitPublication","description":"提交 testing 到 stable 发布审批"},{"name":"approvePublication","description":"以双人分离批准 stable 发布"},{"name":"rejectPublication","description":"驳回或撤回 stable 发布批准"},{"name":"cancelPublication","description":"由原提交人撤销 stable 发布申请"},{"name":"getSupplyChainEvidence","description":"读取已验证供应链证据摘要"},{"name":"prepareAssessment","description":"向精确首方扫描 Provider 签发一次性制品读取租约"},{"name":"appendAssessmentStatus","description":"由精确 Controller 追加 Provider 签名复扫状态"},{"name":"installDataPlaneTicket","description":"安装控制面签发的一次性制品 Ticket"},{"name":"installAssessmentReportTicket","description":"安装控制面签发的一次性评估报告 Ticket"}]}`)
 
 type serverConfig struct {
 	addr, repository, storageProvider, volumeID, migrationState, trust, cert, key, readToken, publishToken, bundleToken, assessmentToken string
@@ -217,11 +217,38 @@ func main() {
 				}
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, status, nil
 			},
+			"assessmentInventory": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
+				payload, err := json.Marshal(manager.AssessmentInventory(time.Now().UTC()))
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
+			},
+			"prepareAssessmentReport": func(_ context.Context, _ sdk.Host, _ *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+				var request struct {
+					SHA256 string `json:"sha256"`
+				}
+				if err := decodeParams(raw, &request); err != nil {
+					return nil, nil, err
+				}
+				resource, err := manager.PrepareAssessmentReport(request.SHA256)
+				if err != nil {
+					return nil, nil, err
+				}
+				payload, err := json.Marshal(map[string]string{"sha256": request.SHA256, "resource": resource})
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
+			},
 			"installDataPlaneTicket": func(_ context.Context, _ sdk.Host, callCtx *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
 				if tickets == nil {
 					return nil, nil, errors.New("制品仓库未启用 API Exposure 数据面")
 				}
 				if err := tickets.install(callCtx, raw); err != nil {
+					return nil, nil, err
+				}
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"installed":true}`), nil
+			},
+			"installAssessmentReportTicket": func(_ context.Context, _ sdk.Host, callCtx *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+				if tickets == nil {
+					return nil, nil, errors.New("制品仓库未启用 API Exposure 数据面")
+				}
+				if err := tickets.installAssessmentReport(callCtx, raw); err != nil {
 					return nil, nil, err
 				}
 				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{"installed":true}`), nil
