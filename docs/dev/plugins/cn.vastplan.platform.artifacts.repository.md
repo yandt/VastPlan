@@ -95,6 +95,8 @@ stable 发布提供 `listPublications/submitPublication/approvePublication/rejec
 
 插件包可在签名清单 `supplyChain.sbom` 中声明固定路径 `supply-chain/sbom.cdx.json`。内核接受 CycloneDX JSON 1.5/1.6，并在发布时校验文档大小、组件上限、插件 ID/版本、路径与摘要绑定；仓库默认对 `stable` 强制要求 SBOM，策略键为 `supplyChain.requiredSBOMChannels`。Catalog 列表只显示是否已绑定，避免列表读取大包；供应链证据 Overlay 会按需读取完整包和证明并返回实际组件数、serial number、规范版本和复验摘要。构建来源证明保持包外 SLSA/in-toto sidecar，不能以内嵌自报字段代替。
 
+包外来源证明现由 DSSE/in-toto SLSA 原文与外部 Verifier 签发的 Verification Record 组成。两者通过远端 multipart 与制品一起提交，但不改变 tar 字节；仓库在物理发布前用部署信任文档复验 Provider key、Record 有效期、策略、原文摘要和 tar subject，Node Agent 下载时再次执行同一检查。Catalog 只保存经过复验的 builder/build type/Provider/policy 与摘要，证据 Overlay 按需读取 sidecar 复核；原始证明不会进入普通列表。testing→stable 审批绑定两份 sidecar 摘要，CLI 原样复用 testing 证据。离线 Bundle、File Volume 迁移、恢复与 GC 均携带 sidecar，不能形成缺证据的旁路。参考外部静态 Provider 为 `engineering/tools/provenanceverify`；GitHub/Sigstore 或企业 CA Provider 只需输出同一 Record。
+
 发布准入在仓库 leader 的同一串行临界区内执行：全仓上限与所有匹配规则累积生效，任一超限即在物理写入前拒绝，且不会自动运行 GC。已隔离/清扫对象不再占活动配额，因此可以发布替代版本；隔离字节仍计入实际存储容量，直到 sweep 后才计入 reclaimed。`capacity` 只聚合已验证 Catalog 与持久 GC 元数据，分别返回活动、隔离、已清扫、已回收和按 namespace/publisher/channel 的活动 bucket；对象字节不包含 Catalog/证明等小型元数据开销。降低配置到当前用量以下不会阻止仓库启动，但会把对应 quota 标为 `exceeded` 并冻结后续新增发布，便于先治理再恢复。
 
 GC 只把已显式 `yanked/revoked`、无精确引用且不在既有 retirement 状态的制品列为候选，绝不隐式下架 `active/deprecated`。plan 不写状态；quarantine 重新计算 plan 身份并要求至少一个健康 Seed/LKG、所有租约源未过期、仓库迁移完全结束，随后逐项原子移出活动命名空间。隔离宽限期至少 24 小时；sweep 再次复核引用健康、生命周期和精确保护后才删除。中断的 quarantining/sweeping 在启动时幂等恢复，Catalog 只允许 GC 状态中精确记录的缺失制品继续保留历史。已进入 retirement 的 ref 禁止重发、重新激活或被新快照引用。迁移采用可重试阶段命令；观察期的发布、生命周期和引用快照都先镜像后提交活动卷，失败可回滚；GC 在迁移未完全结束时冻结。物理 path/handle 不返回 Portal，Bundle 大字节只走 HTTPS，不穿过协议总线。

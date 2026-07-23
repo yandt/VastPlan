@@ -158,6 +158,10 @@ func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, state
 }
 
 func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifact, error) {
+	return m.PublishWithProvenance(attestationRaw, packageBytes, nil, nil)
+}
+
+func (m *Manager) PublishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte) (pluginv1.Artifact, error) {
 	m.publishMu.Lock()
 	defer m.publishMu.Unlock()
 	m.mu.RLock()
@@ -181,33 +185,33 @@ func (m *Manager) Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifac
 		return pluginv1.Artifact{}, err
 	}
 	now := time.Now().UTC()
-	publicationID, err := active.catalog.AuthorizePublication(attestation, now)
+	publicationID, err := active.catalog.AuthorizePublicationWithProvenance(attestation, provenanceRaw, verificationRaw, now)
 	if err != nil {
 		return pluginv1.Artifact{}, err
 	}
 	if mirror != nil {
-		mirrorPublicationID, authorizeErr := mirror.catalog.AuthorizePublication(attestation, now)
+		mirrorPublicationID, authorizeErr := mirror.catalog.AuthorizePublicationWithProvenance(attestation, provenanceRaw, verificationRaw, now)
 		if authorizeErr != nil || mirrorPublicationID != publicationID {
 			m.recordMigrationError(errors.New("观察卷发布审批状态不一致"))
 			return pluginv1.Artifact{}, errors.New("制品迁移观察卷审批状态不一致，发布已冻结")
 		}
-		if _, err := mirror.publish(attestationRaw, packageBytes); err != nil {
+		if _, err := mirror.publishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw); err != nil {
 			m.recordMigrationError(fmt.Errorf("观察卷镜像发布失败: %w", err))
 			return pluginv1.Artifact{}, errors.New("制品迁移观察卷不可用，发布已冻结")
 		}
-		if err := mirror.catalog.MarkPublicationPublished(mirrorPublicationID, attestationRaw, now); err != nil {
+		if err := mirror.catalog.MarkPublicationPublishedWithProvenance(mirrorPublicationID, attestationRaw, provenanceRaw, verificationRaw, now); err != nil {
 			m.recordMigrationError(fmt.Errorf("观察卷发布审批提交失败: %w", err))
 			return pluginv1.Artifact{}, errors.New("制品迁移观察卷审批状态不可用，发布已冻结")
 		}
 	}
-	artifact, err := active.publish(attestationRaw, packageBytes)
+	artifact, err := active.publishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw)
 	if err != nil {
 		if mirror != nil {
 			m.recordMigrationError(fmt.Errorf("候选卷发布失败: %w", err))
 		}
 		return pluginv1.Artifact{}, err
 	}
-	if err := active.catalog.MarkPublicationPublished(publicationID, attestationRaw, now); err != nil {
+	if err := active.catalog.MarkPublicationPublishedWithProvenance(publicationID, attestationRaw, provenanceRaw, verificationRaw, now); err != nil {
 		if mirror != nil {
 			m.recordMigrationError(fmt.Errorf("活动卷发布审批提交失败: %w", err))
 		}
@@ -423,6 +427,18 @@ func (m *Manager) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, []b
 
 func (m *Manager) ReadWithAttestation(ref pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, error) {
 	return m.Read(ref)
+}
+
+func (m *Manager) ReadWithProvenance(ref pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, []byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.active == nil {
+		return pluginservice.Artifact{}, nil, nil, nil, nil, errors.New("活动制品仓库不可用")
+	}
+	if err := m.active.catalog.RequireDelivery(ref); err != nil {
+		return pluginservice.Artifact{}, nil, nil, nil, nil, err
+	}
+	return m.active.adapter.ReadWithProvenance(ref)
 }
 
 func (m *Manager) Query(query catalog.Query) catalog.Page {
@@ -685,7 +701,11 @@ func (m *Manager) openSet(root string) (*repositorySet, error) {
 }
 
 func (s *repositorySet) publish(attestationRaw, packageBytes []byte) (pluginservice.Artifact, error) {
-	artifact, err := s.adapter.Publish(attestationRaw, packageBytes)
+	return s.publishWithProvenance(attestationRaw, packageBytes, nil, nil)
+}
+
+func (s *repositorySet) publishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte) (pluginservice.Artifact, error) {
+	artifact, err := s.adapter.PublishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw)
 	if err != nil {
 		return pluginservice.Artifact{}, err
 	}

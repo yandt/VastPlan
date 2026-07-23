@@ -190,6 +190,11 @@ export interface ArtifactCatalogEntry {
   lifecycleRevision?: number; lifecycleReason?: string;
   replacement?: ArtifactRequirement;
   sbom?: { format: "cyclonedx-json"; specVersion: "1.5" | "1.6"; sha256: string };
+  provenance?: ArtifactProvenanceDeclaration;
+}
+export interface ArtifactProvenanceDeclaration {
+  provenanceSha256: string; verificationSha256: string; predicateType: string; builderId: string; buildType: string;
+  providerId: string; keyId: string; policyId: string; verifiedAt: string; expiresAt: string;
 }
 export interface ArtifactCatalogPage { revision: number; total: number; page: number; pageSize: number; items: ArtifactCatalogEntry[]; }
 export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
@@ -238,6 +243,8 @@ export type ArtifactPublicationStatus = "PendingApproval" | "Approved" | "Publis
 export interface ArtifactPublication {
   id: string; revision: number; status: ArtifactPublicationStatus; source: ArtifactRef; target: ArtifactRef;
   sha256: string; publisher: string; keyId: string; sourceAttestationSha256: string; publishedAttestationSha256?: string;
+  sourceProvenanceSha256?: string; sourceProvenanceVerificationSha256?: string;
+  publishedProvenanceSha256?: string; publishedProvenanceVerificationSha256?: string;
   reason: string; submittedBy: string; approvedBy?: string; submittedAt: string; expiresAt: string; approvedAt?: string; publishedAt?: string;
   terminalReason?: string; terminalBy?: string; terminalAt?: string;
 }
@@ -249,6 +256,7 @@ export interface ArtifactSupplyChainEvidence {
   attestationSha256: string; verification: "verified"; name: string; description: string; license?: string;
   targets: string[]; engines: Record<string, string>; repositoryRevision: number; lifecycleStatus: string; publications: ArtifactPublication[];
   sbom?: { format: "cyclonedx-json"; specVersion: "1.5" | "1.6"; sha256: string; serialNumber?: string; components: number; verification: "verified" };
+  provenance?: ArtifactProvenanceDeclaration & { sources: number; verification: "verified" };
 }
 
 export type APIExposureStatus = "Draft" | "PendingApproval" | "Approved" | "Published" | "Superseded" | "Retired";

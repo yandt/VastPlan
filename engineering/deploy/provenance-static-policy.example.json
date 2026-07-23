@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "v1",
+  "id": "vastplan-release",
+  "builderIds": ["https://cdsoft.com.cn/VastPlan/builders/plugin-release/v1"],
+  "buildTypes": ["https://cdsoft.com.cn/VastPlan/build/plugin/v1"],
+  "sourceUriPrefixes": ["git+https://github.com/yandt/VastPlan"],
+  "requireSourceDigest": true,
+  "recordTtlHours": 8760
+}

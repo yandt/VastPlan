@@ -25,13 +25,15 @@ type InventoryStore interface {
 }
 
 type SeedRepository interface {
-	Publish(artifacttrust.Attestation, []byte) (pluginv1.Artifact, error)
+	PublishWithProvenance(artifacttrust.Attestation, []byte, []byte, []byte) (pluginv1.Artifact, error)
 }
 
 type Candidate struct {
-	Artifact     pluginv1.Artifact
-	PackageBytes []byte
-	Proof        []byte
+	Artifact               pluginv1.Artifact
+	PackageBytes           []byte
+	Proof                  []byte
+	Provenance             []byte
+	ProvenanceVerification []byte
 }
 
 type Controller struct {
@@ -137,7 +139,7 @@ func (c *Controller) Prepare(ctx context.Context, candidates []Candidate) (boots
 		if !sameArtifact(attestation.Artifact, candidate.Artifact) {
 			return bootstrapinventory.Inventory{}, errors.New("Bootstrap 候选证明与已验证制品不一致")
 		}
-		published, err := c.seed.Publish(attestation, candidate.PackageBytes)
+		published, err := c.seed.PublishWithProvenance(attestation, candidate.PackageBytes, candidate.Provenance, candidate.ProvenanceVerification)
 		if err != nil {
 			return bootstrapinventory.Inventory{}, fmt.Errorf("复制 Bootstrap 候选到 Seed: %w", err)
 		}

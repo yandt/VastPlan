@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.artifacts.repository",
   "name": "VastPlan 制品仓库服务",
-  "version": "0.23.0",
+  "version": "0.24.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -131,7 +131,7 @@
       "required": ["storageProvider", "volumeId"]
     }
   },
-  "state": { "backend": { "format": "cn.vastplan.platform.artifacts.repository", "formatVersion": 3 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.artifacts.repository", "formatVersion": 4 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/artifact-repository", "frontend": "frontend/dist/index.js" },
   "contributes": {

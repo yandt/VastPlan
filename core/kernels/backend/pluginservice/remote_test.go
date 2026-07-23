@@ -56,6 +56,34 @@ func TestRemoteRepository_TLSAuthPublishAndRead(t *testing.T) {
 	}
 }
 
+func TestRemoteRepositoryTransportsAndReverifiesProvenance(t *testing.T) {
+	packageBytes, artifact := testArtifact(t)
+	publisherPublic, publisherPrivate, _ := ed25519.GenerateKey(nil)
+	now := time.Now().UTC()
+	fixture := provenanceTrustForArtifact(t, artifact, publisherPublic, now)
+	local, _ := NewRepository(filepath.Join(t.TempDir(), "repository"))
+	handler := &artifactapi.Server{
+		Repository: HTTPRepositoryAdapter{Repository: &SignedRepository{Local: local, Trust: fixture.trust}},
+		ReadToken:  "reader", PublishToken: "publisher", RequireTLS: true,
+	}
+	client := &http.Client{Transport: handlerTransport{handler: handler}}
+	attestation, _ := SignArtifact(artifact, "example", "publisher-key", publisherPrivate, now)
+	publisher := &RemoteRepository{BaseURL: "https://artifacts.example.test", Token: "publisher", Trust: fixture.trust, Client: client}
+	if _, err := publisher.PublishRemoteWithProvenance(context.Background(), attestation, packageBytes, fixture.provenance, fixture.verification); err != nil {
+		t.Fatal(err)
+	}
+	reader := &RemoteRepository{BaseURL: "https://artifacts.example.test", Token: "reader", Trust: fixture.trust, Client: client}
+	envelope, err := reader.Fetch(context.Background(), Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
+	if err != nil || string(envelope.Provenance) != string(fixture.provenance) || string(envelope.ProvenanceVerification) != string(fixture.verification) {
+		t.Fatalf("远端没有原样传输来源证明: err=%v", err)
+	}
+	mutated := append([]byte(nil), fixture.verification...)
+	mutated[len(mutated)-1] ^= 1
+	if _, err := publisher.PublishRemoteWithProvenance(context.Background(), attestation, packageBytes, fixture.provenance, mutated); err == nil {
+		t.Fatal("客户端预检必须拒绝被篡改的 Verification Record")
+	}
+}
+
 type handlerTransport struct{ handler http.Handler }
 
 func (t handlerTransport) RoundTrip(req *http.Request) (*http.Response, error) {

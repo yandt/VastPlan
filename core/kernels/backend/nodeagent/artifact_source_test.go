@@ -22,6 +22,10 @@ type staticArtifactSource struct {
 	calls int
 }
 
+type acceptingArtifactProofVerifier struct{}
+
+func (acceptingArtifactProofVerifier) VerifyProof(artifacttrust.Envelope) error { return nil }
+
 func (s *staticArtifactSource) SourceName() string { return s.name }
 func (s *staticArtifactSource) Fetch(context.Context, pluginv1.ArtifactRef) (artifacttrust.Envelope, error) {
 	s.calls++
@@ -60,6 +64,23 @@ func TestArtifactVerifierRequiresProofAndProducesInstallerToken(t *testing.T) {
 	}
 	if _, err := (LocalInstaller{Root: t.TempDir()}).Install(VerifiedArtifact{}); err == nil {
 		t.Fatal("安装器必须拒绝未由内核验证器构造的零值")
+	}
+}
+
+func TestVerifiedArtifactPreservesProvenanceForTrustedBootstrapMirroring(t *testing.T) {
+	packageBytes, artifact := testPackage(t, 0o755)
+	ref := pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+	verifier, err := NewSignedArtifactVerifier(acceptingArtifactProofVerifier{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	envelope := artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: []byte("proof"), Provenance: []byte("provenance"), ProvenanceVerification: []byte("verification")}
+	verified, err := verifier.Verify(ref, envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(verified.ProvenanceBytes()) != "provenance" || string(verified.ProvenanceVerificationBytes()) != "verification" {
+		t.Fatal("VerifiedArtifact 丢失已验证来源证明 sidecar")
 	}
 }
 

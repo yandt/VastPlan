@@ -26,10 +26,14 @@ func (s *memoryInventoryStore) Update(expected uint64, next bootstrapinventory.I
 	return next, nil
 }
 
-type acceptingSeed struct{ publishes int }
+type acceptingSeed struct {
+	publishes                          int
+	provenance, provenanceVerification []byte
+}
 
-func (s *acceptingSeed) Publish(value pluginservice.Attestation, _ []byte) (pluginv1.Artifact, error) {
+func (s *acceptingSeed) PublishWithProvenance(value pluginservice.Attestation, _ []byte, provenance, verification []byte) (pluginv1.Artifact, error) {
 	s.publishes++
+	s.provenance, s.provenanceVerification = append([]byte(nil), provenance...), append([]byte(nil), verification...)
 	return value.Artifact, nil
 }
 
@@ -76,12 +80,16 @@ func TestControllerPrepareAndCommitAdvanceSeedThenLKG(t *testing.T) {
 		t.Fatal(err)
 	}
 	candidate := upgradeCandidate(t, "2.0.0", strings.Repeat("2", 64))
+	candidate.Provenance, candidate.ProvenanceVerification = []byte("provenance"), []byte("verification")
 	prepared, err := controller.Prepare(context.Background(), []Candidate{candidate})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if prepared.Generation != 8 || len(prepared.Seed) != 2 || prepared.LastKnownGood[0].Ref.Version != "1.0.0" || seed.publishes != 1 {
 		t.Fatalf("Prepare 只能扩展 Seed: %+v publishes=%d", prepared, seed.publishes)
+	}
+	if string(seed.provenance) != "provenance" || string(seed.provenanceVerification) != "verification" {
+		t.Fatal("Bootstrap Seed 镜像丢失来源证明 sidecar")
 	}
 	committed, err := controller.Commit(context.Background())
 	if err != nil {

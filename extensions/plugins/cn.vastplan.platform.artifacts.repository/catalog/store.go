@@ -24,6 +24,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 )
 
@@ -32,6 +33,14 @@ const schemaVersion = "v1"
 type VerifiedRepository interface {
 	ListRefs() ([]pluginservice.Ref, error)
 	ReadMetadataWithAttestation(pluginservice.Ref) (pluginservice.Artifact, []byte, error)
+}
+
+type VerifiedProvenanceReader interface {
+	ReadProvenance(pluginservice.Ref) ([]byte, []byte, error)
+}
+
+type VerifiedMetadataProvenanceReader interface {
+	ReadMetadataWithProvenance(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, error)
 }
 
 // MissingArtifactRegistry allows Catalog history to retain an exact artifact
@@ -60,30 +69,31 @@ type Event struct {
 }
 
 type Entry struct {
-	Ref                  pluginv1.ArtifactRef                      `json:"ref"`
-	SHA256               string                                    `json:"sha256"`
-	Size                 int64                                     `json:"size"`
-	Publisher            string                                    `json:"publisher"`
-	KeyID                string                                    `json:"keyId"`
-	SignedAt             time.Time                                 `json:"signedAt"`
-	PublishedAt          time.Time                                 `json:"publishedAt"`
-	RepositoryRevision   uint64                                    `json:"repositoryRevision"`
-	Name                 string                                    `json:"name"`
-	Description          string                                    `json:"description"`
-	Namespace            string                                    `json:"namespace"`
-	License              string                                    `json:"license,omitempty"`
-	Engines              map[string]string                         `json:"engines"`
-	Dependencies         map[string]string                         `json:"dependencies,omitempty"`
-	Targets              []string                                  `json:"targets"`
-	Platforms            []string                                  `json:"platforms,omitempty"`
-	RuntimeRequires      []pluginv1.RuntimeRequirement             `json:"runtimeRequires,omitempty"`
-	RuntimeProvides      []pluginv1.RuntimeCapabilityPolicy        `json:"runtimeProvides,omitempty"`
-	ProvidedCapabilities []string                                  `json:"providedCapabilities,omitempty"`
-	SBOM                 *platformadminapi.ArtifactSBOMDeclaration `json:"sbom,omitempty"`
-	LifecycleStatus      string                                    `json:"lifecycleStatus"`
-	LifecycleRevision    uint64                                    `json:"lifecycleRevision,omitempty"`
-	LifecycleReason      string                                    `json:"lifecycleReason,omitempty"`
-	Replacement          *pluginv1.ArtifactRequirement             `json:"replacement,omitempty"`
+	Ref                  pluginv1.ArtifactRef                            `json:"ref"`
+	SHA256               string                                          `json:"sha256"`
+	Size                 int64                                           `json:"size"`
+	Publisher            string                                          `json:"publisher"`
+	KeyID                string                                          `json:"keyId"`
+	SignedAt             time.Time                                       `json:"signedAt"`
+	PublishedAt          time.Time                                       `json:"publishedAt"`
+	RepositoryRevision   uint64                                          `json:"repositoryRevision"`
+	Name                 string                                          `json:"name"`
+	Description          string                                          `json:"description"`
+	Namespace            string                                          `json:"namespace"`
+	License              string                                          `json:"license,omitempty"`
+	Engines              map[string]string                               `json:"engines"`
+	Dependencies         map[string]string                               `json:"dependencies,omitempty"`
+	Targets              []string                                        `json:"targets"`
+	Platforms            []string                                        `json:"platforms,omitempty"`
+	RuntimeRequires      []pluginv1.RuntimeRequirement                   `json:"runtimeRequires,omitempty"`
+	RuntimeProvides      []pluginv1.RuntimeCapabilityPolicy              `json:"runtimeProvides,omitempty"`
+	ProvidedCapabilities []string                                        `json:"providedCapabilities,omitempty"`
+	SBOM                 *platformadminapi.ArtifactSBOMDeclaration       `json:"sbom,omitempty"`
+	Provenance           *platformadminapi.ArtifactProvenanceDeclaration `json:"provenance,omitempty"`
+	LifecycleStatus      string                                          `json:"lifecycleStatus"`
+	LifecycleRevision    uint64                                          `json:"lifecycleRevision,omitempty"`
+	LifecycleReason      string                                          `json:"lifecycleReason,omitempty"`
+	Replacement          *pluginv1.ArtifactRequirement                   `json:"replacement,omitempty"`
 }
 
 type Query struct {
@@ -166,6 +176,9 @@ func Open(repositoryRoot string, repository VerifiedRepository, retired ...Missi
 func (s *Store) RecordPublished(artifact pluginservice.Artifact, attestationRaw []byte, occurredAt time.Time) (uint64, error) {
 	entry, err := entryFrom(artifact, attestationRaw)
 	if err != nil {
+		return 0, err
+	}
+	if err := s.enrichProvenance(&entry); err != nil {
 		return 0, err
 	}
 	if occurredAt.IsZero() {
@@ -312,13 +325,16 @@ func (s *Store) rebuild() error {
 	}
 	seen := make(map[string]struct{}, len(refs))
 	for _, ref := range refs {
-		artifact, proof, err := s.repository.ReadMetadataWithAttestation(ref)
+		artifact, proof, provenanceRaw, verificationRaw, err := s.readMetadata(ref)
 		if err != nil {
 			return fmt.Errorf("重建 Catalog 读取 %s: %w", refKey(ref), err)
 		}
 		entry, err := entryFrom(artifact, proof)
 		if err != nil {
 			return fmt.Errorf("重建 Catalog 解析 %s: %w", refKey(ref), err)
+		}
+		if err := populateProvenance(&entry, provenanceRaw, verificationRaw); err != nil {
+			return fmt.Errorf("重建 Catalog 来源证明 %s: %w", refKey(ref), err)
 		}
 		key := refKey(ref)
 		seen[key] = struct{}{}
@@ -350,6 +366,14 @@ func (s *Store) rebuild() error {
 		}
 	}
 	return s.writeSnapshotLocked()
+}
+
+func (s *Store) readMetadata(ref pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, error) {
+	if reader, ok := s.repository.(VerifiedMetadataProvenanceReader); ok {
+		return reader.ReadMetadataWithProvenance(ref)
+	}
+	artifact, proof, err := s.repository.ReadMetadataWithAttestation(ref)
+	return artifact, proof, nil, nil, err
 }
 
 func (s *Store) loadJournal() error {
@@ -504,6 +528,39 @@ func entryFrom(artifact pluginservice.Artifact, attestationRaw []byte) (Entry, e
 	return entry, nil
 }
 
+func (s *Store) enrichProvenance(entry *Entry) error {
+	reader, ok := s.repository.(VerifiedProvenanceReader)
+	if !ok {
+		return nil
+	}
+	provenanceRaw, verificationRaw, err := reader.ReadProvenance(entry.Ref)
+	if err != nil {
+		return err
+	}
+	return populateProvenance(entry, provenanceRaw, verificationRaw)
+}
+
+func populateProvenance(entry *Entry, provenanceRaw, verificationRaw []byte) error {
+	if len(provenanceRaw) == 0 && len(verificationRaw) == 0 {
+		return nil
+	}
+	record, verificationSHA, err := artifactprovenance.InspectVerificationRecord(verificationRaw)
+	if err != nil {
+		return err
+	}
+	_, provenanceSHA, err := artifactprovenance.InspectDSSE(provenanceRaw, entry.SHA256)
+	if err != nil || record.SubjectSHA256 != entry.SHA256 || record.ProvenanceSHA256 != provenanceSHA {
+		return errors.New("来源证明 sidecar 摘要或 subject 不一致")
+	}
+	entry.Provenance = &platformadminapi.ArtifactProvenanceDeclaration{
+		ProvenanceSHA256: provenanceSHA, VerificationSHA256: verificationSHA,
+		PredicateType: record.PredicateType, BuilderID: record.BuilderID, BuildType: record.BuildType,
+		ProviderID: record.ProviderID, KeyID: record.KeyID, PolicyID: record.PolicyID,
+		VerifiedAt: record.VerifiedAt.Format(time.RFC3339Nano), ExpiresAt: record.ExpiresAt.Format(time.RFC3339Nano),
+	}
+	return nil
+}
+
 func backendPlatforms(manifest pluginv1.Manifest) []string {
 	if manifest.Execution == nil || manifest.Execution.Backend == nil {
 		return nil
@@ -555,7 +612,14 @@ func validateEvent(event Event, revision uint64) error {
 
 func sameIdentity(left, right Entry) bool {
 	return left.Ref == right.Ref && left.SHA256 == right.SHA256 && left.Size == right.Size &&
-		left.Publisher == right.Publisher && left.KeyID == right.KeyID && left.SignedAt.Equal(right.SignedAt)
+		left.Publisher == right.Publisher && left.KeyID == right.KeyID && left.SignedAt.Equal(right.SignedAt) && sameProvenanceDeclaration(left.Provenance, right.Provenance)
+}
+
+func sameProvenanceDeclaration(left, right *platformadminapi.ArtifactProvenanceDeclaration) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 func matches(entry Entry, query Query) bool {

@@ -33,6 +33,7 @@ func (a bootstrapUpgradeAdapter) Prepare(ctx context.Context, verified []nodeage
 	for index, artifact := range verified {
 		candidates[index] = bootstrapupgrade.Candidate{
 			Artifact: artifact.Artifact(), PackageBytes: artifact.PackageBytes(), Proof: artifact.ProofBytes(),
+			Provenance: artifact.ProvenanceBytes(), ProvenanceVerification: artifact.ProvenanceVerificationBytes(),
 		}
 	}
 	return a.controller.Prepare(ctx, candidates)

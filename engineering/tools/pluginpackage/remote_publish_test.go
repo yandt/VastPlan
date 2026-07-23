@@ -39,6 +39,25 @@ func TestStableRemotePublishRejectsRebuiltDifferentBytes(t *testing.T) {
 	}
 }
 
+func TestLoadProvenanceFilesRequiresAnExactPair(t *testing.T) {
+	directory := t.TempDir()
+	provenance := filepath.Join(directory, "provenance.json")
+	verification := filepath.Join(directory, "verification.json")
+	if err := os.WriteFile(provenance, []byte("provenance"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(verification, []byte("verification"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loadProvenanceFiles(provenance, ""); err == nil {
+		t.Fatal("只提供原始 Provenance 必须拒绝")
+	}
+	gotProvenance, gotVerification, err := loadProvenanceFiles(provenance, verification)
+	if err != nil || string(gotProvenance) != "provenance" || string(gotVerification) != "verification" {
+		t.Fatalf("来源证明文件对读取失败: %v", err)
+	}
+}
+
 type remotePublishFixture struct {
 	packageBytes []byte
 	testing      pluginservice.Artifact

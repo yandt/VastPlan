@@ -13,6 +13,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
@@ -45,6 +46,10 @@ type verifiedPackageReader interface {
 	ReadWithAttestation(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, error)
 }
 
+type verifiedProvenanceReader interface {
+	ReadProvenance(pluginservice.Ref) ([]byte, []byte, error)
+}
+
 func (s *Store) SubmitPublication(request PublicationRequest, actor string, now, expiresAt time.Time) (Publication, uint64, error) {
 	actor, request.Reason = strings.TrimSpace(actor), strings.TrimSpace(request.Reason)
 	if actor == "" || request.Reason == "" || len([]rune(request.Reason)) > 500 || request.Source.Channel != "testing" || request.TargetChannel != "stable" {
@@ -72,6 +77,13 @@ func (s *Store) SubmitPublication(request PublicationRequest, actor string, now,
 	if err != nil {
 		return Publication{}, s.publicationRevision, errors.New("候选制品供应链证明复验失败")
 	}
+	var provenanceRaw, verificationRaw []byte
+	if reader, ok := s.repository.(verifiedProvenanceReader); ok {
+		provenanceRaw, verificationRaw, err = reader.ReadProvenance(request.Source)
+		if err != nil {
+			return Publication{}, s.publicationRevision, errors.New("候选制品来源证明复验失败")
+		}
+	}
 	target := request.Source
 	target.Channel = request.TargetChannel
 	if existing, exists := s.entries[refKey(target)]; exists {
@@ -80,11 +92,12 @@ func (s *Store) SubmitPublication(request PublicationRequest, actor string, now,
 		}
 		return Publication{}, s.publicationRevision, errors.New("目标 stable 引用已被其他不可变制品占用")
 	}
-	id := publicationID(request.Source, target, entry.SHA256)
+	provenanceSHA, verificationSHA := digestOptional(provenanceRaw), digestOptional(verificationRaw)
+	id := publicationID(request.Source, target, entry.SHA256, provenanceSHA, verificationSHA)
 	if prior, exists := s.publications[id]; exists {
 		return prior, s.publicationRevision, nil
 	}
-	record := Publication{ID: id, Revision: s.publicationRevision + 1, Status: PublicationPending, Source: request.Source, Target: target, SHA256: entry.SHA256, Publisher: entry.Publisher, KeyID: entry.KeyID, SourceAttestationSHA256: digestBytes(proof), Reason: request.Reason, SubmittedBy: actor, SubmittedAt: now.UTC().Format(time.RFC3339Nano), ExpiresAt: expiresAt.UTC().Format(time.RFC3339Nano)}
+	record := Publication{ID: id, Revision: s.publicationRevision + 1, Status: PublicationPending, Source: request.Source, Target: target, SHA256: entry.SHA256, Publisher: entry.Publisher, KeyID: entry.KeyID, SourceAttestationSHA256: digestBytes(proof), SourceProvenanceSHA256: provenanceSHA, SourceProvenanceVerificationSHA256: verificationSHA, Reason: request.Reason, SubmittedBy: actor, SubmittedAt: now.UTC().Format(time.RFC3339Nano), ExpiresAt: expiresAt.UTC().Format(time.RFC3339Nano)}
 	previousRevision := s.publicationRevision
 	s.publicationRevision, s.publications[id] = record.Revision, record
 	if err := s.writePublicationsLocked(); err != nil {
@@ -181,6 +194,10 @@ func (s *Store) terminatePublication(request PublicationTransitionRequest, actor
 }
 
 func (s *Store) AuthorizePublication(attestation pluginservice.Attestation, now time.Time) (string, error) {
+	return s.AuthorizePublicationWithProvenance(attestation, nil, nil, now)
+}
+
+func (s *Store) AuthorizePublicationWithProvenance(attestation pluginservice.Attestation, provenanceRaw, verificationRaw []byte, now time.Time) (string, error) {
 	if attestation.Artifact.Channel != "stable" {
 		return "", nil
 	}
@@ -197,6 +214,9 @@ func (s *Store) AuthorizePublication(attestation pluginservice.Attestation, now 
 		if record.Target != target || record.SHA256 != attestation.Artifact.SHA256 || record.Publisher != attestation.Publisher || record.KeyID != attestation.KeyID || (record.Status != PublicationApproved && record.Status != PublicationPublished) {
 			continue
 		}
+		if record.SourceProvenanceSHA256 != digestOptional(provenanceRaw) || record.SourceProvenanceVerificationSHA256 != digestOptional(verificationRaw) {
+			return "", errors.New("stable 来源证明与已批准 testing sidecar 不一致")
+		}
 		if record.Status == PublicationApproved {
 			source, exists := s.entries[refKey(record.Source)]
 			if !exists || source.LifecycleStatus != LifecycleActive || source.SHA256 != record.SHA256 || source.Publisher != record.Publisher || source.KeyID != record.KeyID {
@@ -209,6 +229,10 @@ func (s *Store) AuthorizePublication(attestation pluginservice.Attestation, now 
 }
 
 func (s *Store) MarkPublicationPublished(id string, attestationRaw []byte, now time.Time) error {
+	return s.MarkPublicationPublishedWithProvenance(id, attestationRaw, nil, nil, now)
+}
+
+func (s *Store) MarkPublicationPublishedWithProvenance(id string, attestationRaw, provenanceRaw, verificationRaw []byte, now time.Time) error {
 	if id == "" {
 		return nil
 	}
@@ -225,15 +249,16 @@ func (s *Store) MarkPublicationPublished(id string, attestationRaw []byte, now t
 		return errors.New("发布批准状态已失效")
 	}
 	proofDigest := digestBytes(attestationRaw)
+	provenanceDigest, verificationDigest := digestOptional(provenanceRaw), digestOptional(verificationRaw)
 	if record.Status == PublicationPublished {
-		if record.PublishedAttestationSHA256 != proofDigest {
+		if record.PublishedAttestationSHA256 != proofDigest || record.PublishedProvenanceSHA256 != provenanceDigest || record.PublishedProvenanceVerificationSHA256 != verificationDigest {
 			return errors.New("已发布证明摘要不一致")
 		}
 		return nil
 	}
 	prior := record
 	previousRevision := s.publicationRevision
-	record.Revision, record.Status, record.PublishedAttestationSHA256, record.PublishedAt = s.publicationRevision+1, PublicationPublished, proofDigest, now.UTC().Format(time.RFC3339Nano)
+	record.Revision, record.Status, record.PublishedAttestationSHA256, record.PublishedProvenanceSHA256, record.PublishedProvenanceVerificationSHA256, record.PublishedAt = s.publicationRevision+1, PublicationPublished, proofDigest, provenanceDigest, verificationDigest, now.UTC().Format(time.RFC3339Nano)
 	s.publicationRevision, s.publications[id] = record.Revision, record
 	if err := s.writePublicationsLocked(); err != nil {
 		s.publications[id], s.publicationRevision = prior, previousRevision
@@ -351,7 +376,29 @@ func (s *Store) Evidence(ref pluginv1.ArtifactRef) (SupplyChainEvidence, error) 
 		}
 		evidence.SBOM = &platformadminapi.ArtifactSBOMEvidence{ArtifactSBOMDeclaration: *entry.SBOM, SerialNumber: summary.SerialNumber, Components: summary.Components, Verification: "verified"}
 	}
+	if entry.Provenance != nil {
+		reader, ok := s.repository.(verifiedProvenanceReader)
+		if !ok {
+			return SupplyChainEvidence{}, errors.New("仓库不支持复验来源证明 sidecar")
+		}
+		provenanceRaw, verificationRaw, err := reader.ReadProvenance(ref)
+		if err != nil || digestBytes(provenanceRaw) != entry.Provenance.ProvenanceSHA256 || digestBytes(verificationRaw) != entry.Provenance.VerificationSHA256 {
+			return SupplyChainEvidence{}, errors.New("来源证明 sidecar 复验失败")
+		}
+		summary, _, err := artifactprovenance.InspectDSSE(provenanceRaw, entry.SHA256)
+		record, _, recordErr := artifactprovenance.InspectVerificationRecord(verificationRaw)
+		if err != nil || recordErr != nil || record.SubjectSHA256 != entry.SHA256 || record.ProvenanceSHA256 != entry.Provenance.ProvenanceSHA256 || !sameProvenanceSummary(record.StatementSummary, summary) {
+			return SupplyChainEvidence{}, errors.New("来源证明内容复验失败")
+		}
+		evidence.Provenance = &platformadminapi.ArtifactProvenanceEvidence{ArtifactProvenanceDeclaration: *entry.Provenance, Sources: len(record.Sources), Verification: "verified"}
+	}
 	return evidence, nil
+}
+
+func sameProvenanceSummary(left, right artifactprovenance.StatementSummary) bool {
+	a, _ := json.Marshal(left)
+	b, _ := json.Marshal(right)
+	return string(a) == string(b)
 }
 
 func (s *Store) loadPublications() error {
@@ -448,11 +495,17 @@ func (s *Store) writePublicationsLocked() error {
 }
 
 func (s *Store) publicationsPath() string { return s.root + "/publications.json" }
-func publicationID(source, target pluginv1.ArtifactRef, digest string) string {
-	sum := sha256.Sum256([]byte(refKey(source) + "\x00" + refKey(target) + "\x00" + digest))
+func publicationID(source, target pluginv1.ArtifactRef, digest, provenanceDigest, verificationDigest string) string {
+	sum := sha256.Sum256([]byte(refKey(source) + "\x00" + refKey(target) + "\x00" + digest + "\x00" + provenanceDigest + "\x00" + verificationDigest))
 	return hex.EncodeToString(sum[:])
 }
 func digestBytes(raw []byte) string { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }
+func digestOptional(raw []byte) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	return digestBytes(raw)
+}
 func publicationInventoryDigest(values map[string]Publication) string {
 	items := make([]Publication, 0, len(values))
 	for _, item := range values {

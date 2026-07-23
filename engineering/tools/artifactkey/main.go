@@ -2,7 +2,6 @@
 package main
 
 import (
-	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -11,6 +10,7 @@ import (
 	"path/filepath"
 
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/engineering/internal/signingkey"
 )
 
 func main() {
@@ -23,27 +23,9 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
-	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	publicKey, err := signingkey.Generate(*privateOut)
 	if err != nil {
 		fatalf("生成 Ed25519 密钥失败: %v", err)
-	}
-	privatePEM, err := pluginservice.MarshalEd25519PrivateKeyPEM(privateKey)
-	if err != nil {
-		fatalf("编码私钥失败: %v", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(*privateOut), 0o700); err != nil {
-		fatalf("创建私钥目录失败: %v", err)
-	}
-	privateFile, err := os.OpenFile(*privateOut, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if err != nil {
-		fatalf("创建私钥文件失败（不会覆盖已有密钥）: %v", err)
-	}
-	if _, err := privateFile.Write(privatePEM); err != nil {
-		_ = privateFile.Close()
-		fatalf("写入私钥失败: %v", err)
-	}
-	if err := privateFile.Close(); err != nil {
-		fatalf("关闭私钥文件失败: %v", err)
 	}
 	document := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
 		Publisher: *publisher, KeyID: *keyID,

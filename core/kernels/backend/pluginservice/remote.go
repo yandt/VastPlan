@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 )
 
@@ -74,11 +75,55 @@ func (r *RemoteRepository) Fetch(ctx context.Context, ref Ref) (artifacttrust.En
 	if artifact.Size > maxBytes {
 		return artifacttrust.Envelope{}, fmt.Errorf("远端制品大小 %d 超过客户端上限 %d", artifact.Size, maxBytes)
 	}
+	var provenanceRaw, verificationRaw []byte
+	if r.Trust.ProvenanceEnabled() {
+		provenanceRaw, err = r.getOptional(ctx, client, endpoint+"/provenance", artifactprovenance.MaxProvenanceBytes)
+		if err != nil {
+			return artifacttrust.Envelope{}, err
+		}
+		verificationRaw, err = r.getOptional(ctx, client, endpoint+"/provenance-verification", artifactprovenance.MaxRecordBytes)
+		if err != nil {
+			return artifacttrust.Envelope{}, err
+		}
+	}
+	preflight := artifacttrust.Envelope{Artifact: artifact, Proof: attestationRaw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw}
+	if err := r.Trust.VerifyProof(preflight); err != nil {
+		return artifacttrust.Envelope{}, fmt.Errorf("远端制品来源证明预检失败: %w", err)
+	}
 	packageBytes, err := r.get(ctx, client, endpoint+"/package", maxBytes, false)
 	if err != nil {
 		return artifacttrust.Envelope{}, err
 	}
-	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: attestationRaw}, nil
+	preflight.PackageBytes = packageBytes
+	return preflight, nil
+}
+
+func (r *RemoteRepository) getOptional(ctx context.Context, client *http.Client, endpoint string, limit int64) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	setBearer(req, r.Token)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("读取远端制品 %s: %w", endpoint, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		message, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return nil, fmt.Errorf("远端制品服务返回 %s: %s", resp.Status, strings.TrimSpace(string(message)))
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(raw)) > limit {
+		return nil, fmt.Errorf("远端响应超过 %d 字节上限", limit)
+	}
+	return raw, nil
 }
 
 func (r *RemoteRepository) SourceName() string { return "remote-https" }
@@ -132,6 +177,10 @@ func (r *RemoteRepository) get(ctx context.Context, client *http.Client, endpoin
 
 // PublishRemote 通过 multipart 上传签名证明和制品，不把制品再 base64 膨胀一遍。
 func (r *RemoteRepository) PublishRemote(ctx context.Context, attestation Attestation, packageBytes []byte) (Artifact, error) {
+	return r.PublishRemoteWithProvenance(ctx, attestation, packageBytes, nil, nil)
+}
+
+func (r *RemoteRepository) PublishRemoteWithProvenance(ctx context.Context, attestation Attestation, packageBytes, provenanceRaw, verificationRaw []byte) (Artifact, error) {
 	base, client, maxBytes, err := r.validate()
 	if err != nil {
 		return Artifact{}, err
@@ -142,7 +191,11 @@ func (r *RemoteRepository) PublishRemote(ctx context.Context, attestation Attest
 	if err := ValidateArtifact(attestation.Artifact, packageBytes); err != nil {
 		return Artifact{}, err
 	}
-	if err := r.Trust.Verify(attestation); err != nil {
+	attestationRaw, err := json.Marshal(attestation)
+	if err != nil {
+		return Artifact{}, err
+	}
+	if err := r.Trust.VerifyProof(artifacttrust.Envelope{Artifact: attestation.Artifact, PackageBytes: packageBytes, Proof: attestationRaw, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw}); err != nil {
 		return Artifact{}, err
 	}
 	var body bytes.Buffer
@@ -160,6 +213,21 @@ func (r *RemoteRepository) PublishRemote(ctx context.Context, attestation Attest
 	}
 	if _, err := packagePart.Write(packageBytes); err != nil {
 		return Artifact{}, err
+	}
+	for _, sidecar := range []struct {
+		name string
+		raw  []byte
+	}{{name: "provenance", raw: provenanceRaw}, {name: "provenance-verification", raw: verificationRaw}} {
+		if len(sidecar.raw) == 0 {
+			continue
+		}
+		part, err := writer.CreateFormField(sidecar.name)
+		if err != nil {
+			return Artifact{}, err
+		}
+		if _, err := part.Write(sidecar.raw); err != nil {
+			return Artifact{}, err
+		}
 	}
 	if err := writer.Close(); err != nil {
 		return Artifact{}, err

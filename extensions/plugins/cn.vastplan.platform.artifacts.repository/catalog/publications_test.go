@@ -131,6 +131,26 @@ func TestStablePublicationRequiresApproval(t *testing.T) {
 	}
 }
 
+func TestStablePublicationBindsTestingProvenanceSidecars(t *testing.T) {
+	source := pluginv1.ArtifactRef{PluginID: "cn.example.demo", Version: "1.0.0", Channel: "testing"}
+	target := source
+	target.Channel = "stable"
+	provenance, verification := []byte("provenance"), []byte("verification")
+	record := Publication{
+		ID: "publication", Status: PublicationApproved, Source: source, Target: target, SHA256: "artifact-sha", Publisher: "example", KeyID: "release",
+		SourceProvenanceSHA256: digestBytes(provenance), SourceProvenanceVerificationSHA256: digestBytes(verification),
+		ExpiresAt: time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano),
+	}
+	store := &Store{entries: map[string]Entry{refKey(source): {Ref: source, SHA256: record.SHA256, Publisher: record.Publisher, KeyID: record.KeyID, LifecycleStatus: LifecycleActive}}, publications: map[string]Publication{record.ID: record}}
+	attestation := pluginservice.Attestation{Artifact: pluginv1.Artifact{PluginID: target.PluginID, Version: target.Version, Channel: target.Channel, SHA256: record.SHA256}, Publisher: record.Publisher, KeyID: record.KeyID}
+	if id, err := store.AuthorizePublicationWithProvenance(attestation, provenance, verification, time.Now().UTC()); err != nil || id != record.ID {
+		t.Fatalf("完全匹配的来源证明应通过: id=%s err=%v", id, err)
+	}
+	if _, err := store.AuthorizePublicationWithProvenance(attestation, provenance, []byte("reverified"), time.Now().UTC()); err == nil {
+		t.Fatal("审批后替换 Verification Record 必须拒绝")
+	}
+}
+
 func TestPublicationApprovalExpiresBeforeStableAuthorization(t *testing.T) {
 	repository, privateKey := testSignedRepository(t, t.TempDir())
 	artifact, proof := publishTestArtifact(t, repository, privateKey, "3.0.0")

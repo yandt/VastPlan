@@ -39,9 +39,11 @@ var ErrNotFound = errors.New("制品不存在")
 // Envelope 是制品源返回的未信任载荷。Proof 是可选的发布者证明原始 JSON；
 // 即使来源声称已经验证，内核仍必须独立验证 Artifact、PackageBytes 和 Proof。
 type Envelope struct {
-	Artifact     pluginv1.Artifact
-	PackageBytes []byte
-	Proof        json.RawMessage
+	Artifact               pluginv1.Artifact
+	PackageBytes           []byte
+	Proof                  json.RawMessage
+	Provenance             json.RawMessage
+	ProvenanceVerification json.RawMessage
 }
 
 // Attestation is the stable publisher-proof wire value shared by trusted

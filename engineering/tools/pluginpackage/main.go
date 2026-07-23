@@ -27,6 +27,8 @@ func main() {
 	licenseFile := flag.String("license-file", "LICENSE", "清单声明 license 时注入制品的许可证文本；默认仓库根 LICENSE")
 	noticeFile := flag.String("notice-file", "NOTICE", "清单声明 noticeFile 时注入制品的归属告示；默认仓库根 NOTICE")
 	sbomFile := flag.String("sbom", "", "可选：注入并绑定标准 CycloneDX JSON SBOM")
+	provenanceFile := flag.String("provenance", "", "可选：随远端发布上传包外 DSSE/in-toto 来源证明")
+	provenanceVerificationFile := flag.String("provenance-verification", "", "可选：外部 Verifier 签发的来源证明验证记录")
 	out := flag.String("out", "", "可选：输出 .tar.gz 文件")
 	repositoryRoot := flag.String("repository", "", "可选：直接发布到本地制品仓库")
 	remoteRepository := flag.String("remote-repository", "", "可选：发布到 HTTPS 远端制品仓库")
@@ -48,6 +50,12 @@ func main() {
 	if (*source == "") == (*packageFile == "") || (*out == "" && *repositoryRoot == "" && *remoteRepository == "") {
 		fmt.Fprintln(os.Stderr, "用法: go run ./engineering/tools/pluginpackage (-source <插件目录> | -package <候选.tar.gz>) [-out <制品.tar.gz>] [-remote-repository <HTTPS 仓库>]")
 		os.Exit(2)
+	}
+	if (*provenanceFile == "") != (*provenanceVerificationFile == "") {
+		fatalf("-provenance 与 -provenance-verification 必须同时提供")
+	}
+	if *provenanceFile != "" && *remoteRepository == "" {
+		fatalf("包外来源证明只能通过 -remote-repository 发布")
 	}
 
 	var packageBytes []byte
@@ -106,7 +114,11 @@ func main() {
 		fmt.Printf("已发布: %s@%s/%s (%s)\n", artifact.PluginID, artifact.Version, artifact.Channel, artifact.Object)
 	}
 	if *remoteRepository != "" {
-		published, err := publishRemote(packageBytes, manifestPublisher, *channel, remotePublishOptions{RepositoryURL: *remoteRepository, PublishToken: *remoteToken, ReadToken: *remoteReadToken, TrustFile: *trustFile, SignKey: *signKey, KeyID: *keyID, CAFile: *remoteCA, Timeout: *remoteTimeout})
+		provenanceRaw, verificationRaw, err := loadProvenanceFiles(*provenanceFile, *provenanceVerificationFile)
+		if err != nil {
+			fatalf("读取来源证明失败: %v", err)
+		}
+		published, err := publishRemote(packageBytes, manifestPublisher, *channel, remotePublishOptions{RepositoryURL: *remoteRepository, PublishToken: *remoteToken, ReadToken: *remoteReadToken, TrustFile: *trustFile, SignKey: *signKey, KeyID: *keyID, CAFile: *remoteCA, Timeout: *remoteTimeout, Provenance: provenanceRaw, ProvenanceVerification: verificationRaw})
 		if err != nil {
 			fatalf("远端发布失败: %v", err)
 		}

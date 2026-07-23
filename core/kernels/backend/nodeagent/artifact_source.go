@@ -59,10 +59,12 @@ func NewLocalDevelopmentArtifactVerifierWithTrust(proofVerifier ArtifactProofVer
 // VerifiedArtifact 只能由 ArtifactVerifier 构造。安装器接收该类型而非来源直接返回的
 // Artifact+bytes，避免可插拔制品源绕过内核验证链。
 type VerifiedArtifact struct {
-	artifact     pluginv1.Artifact
-	packageBytes []byte
-	proof        []byte
-	verified     bool
+	artifact               pluginv1.Artifact
+	packageBytes           []byte
+	proof                  []byte
+	provenance             []byte
+	provenanceVerification []byte
+	verified               bool
 }
 
 func (v VerifiedArtifact) Artifact() pluginv1.Artifact { return v.artifact }
@@ -72,6 +74,14 @@ func (v VerifiedArtifact) PackageBytes() []byte { return append([]byte(nil), v.p
 // ProofBytes returns the already verified publisher proof for trusted host
 // adapters such as Bootstrap upgrade mirroring. Plugins never receive it.
 func (v VerifiedArtifact) ProofBytes() []byte { return append([]byte(nil), v.proof...) }
+
+func (v VerifiedArtifact) ProvenanceBytes() []byte {
+	return append([]byte(nil), v.provenance...)
+}
+
+func (v VerifiedArtifact) ProvenanceVerificationBytes() []byte {
+	return append([]byte(nil), v.provenanceVerification...)
+}
 
 func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrust.Envelope) (VerifiedArtifact, error) {
 	if !v.configured || v.validate == nil {
@@ -85,6 +95,9 @@ func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrus
 		return VerifiedArtifact{}, fmt.Errorf("制品内容验证失败: %w", err)
 	}
 	if len(bytes.TrimSpace(envelope.Proof)) == 0 {
+		if len(bytes.TrimSpace(envelope.Provenance)) != 0 || len(bytes.TrimSpace(envelope.ProvenanceVerification)) != 0 {
+			return VerifiedArtifact{}, errors.New("无发布者证明的本地制品不得携带来源证明 sidecar")
+		}
 		if !v.allowUnsigned {
 			return VerifiedArtifact{}, errors.New("签名模式下制品缺少发布者证明")
 		}
@@ -98,7 +111,8 @@ func (v ArtifactVerifier) Verify(ref pluginv1.ArtifactRef, envelope artifacttrus
 	}
 	return VerifiedArtifact{
 		artifact: artifact, packageBytes: append([]byte(nil), envelope.PackageBytes...),
-		proof: append([]byte(nil), envelope.Proof...), verified: true,
+		proof: append([]byte(nil), envelope.Proof...), provenance: append([]byte(nil), envelope.Provenance...),
+		provenanceVerification: append([]byte(nil), envelope.ProvenanceVerification...), verified: true,
 	}, nil
 }
 

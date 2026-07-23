@@ -20,6 +20,8 @@ import (
 const (
 	DefaultMaxArtifactBytes = int64(256 << 20)
 	maxAttestationBytes     = int64(2 << 20)
+	maxProvenanceBytes      = int64(2 << 20)
+	maxVerificationBytes    = int64(256 << 10)
 )
 
 // Repository 是 HTTP 层所需的最小仓库适配器。实现必须在 Publish 和 Read 内
@@ -27,6 +29,11 @@ const (
 type Repository interface {
 	Publish(attestationRaw, packageBytes []byte) (pluginv1.Artifact, error)
 	Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, []byte, error)
+}
+
+type ProvenanceRepository interface {
+	PublishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte) (pluginv1.Artifact, error)
+	ReadWithProvenance(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, []byte, []byte, []byte, error)
 }
 
 // Server 暴露最小远端制品 API。读写令牌分离；RequireTLS 默认应为 true，
@@ -68,13 +75,13 @@ func (s *Server) publish(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	maxBytes := s.maxBytes()
-	req.Body = http.MaxBytesReader(w, req.Body, maxBytes+maxAttestationBytes+(1<<20))
+	req.Body = http.MaxBytesReader(w, req.Body, maxBytes+maxAttestationBytes+maxProvenanceBytes+maxVerificationBytes+(1<<20))
 	reader, err := req.MultipartReader()
 	if err != nil {
 		http.Error(w, "multipart required", http.StatusBadRequest)
 		return
 	}
-	var attestationRaw, packageBytes []byte
+	var attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte
 	for {
 		part, partErr := reader.NextPart()
 		if errors.Is(partErr, io.EOF) {
@@ -89,6 +96,10 @@ func (s *Server) publish(w http.ResponseWriter, req *http.Request) {
 			attestationRaw, err = readLimited(part, maxAttestationBytes)
 		case "package":
 			packageBytes, err = readLimited(part, maxBytes)
+		case "provenance":
+			provenanceRaw, err = readLimited(part, maxProvenanceBytes)
+		case "provenance-verification":
+			verificationRaw, err = readLimited(part, maxVerificationBytes)
 		}
 		_ = part.Close()
 		if err != nil {
@@ -100,7 +111,14 @@ func (s *Server) publish(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "attestation and package are required", http.StatusBadRequest)
 		return
 	}
-	artifact, err := s.Repository.Publish(attestationRaw, packageBytes)
+	var artifact pluginv1.Artifact
+	if repository, ok := s.Repository.(ProvenanceRepository); ok {
+		artifact, err = repository.PublishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw)
+	} else if len(provenanceRaw) != 0 || len(verificationRaw) != 0 {
+		err = errors.New("repository does not support provenance")
+	} else {
+		artifact, err = s.Repository.Publish(attestationRaw, packageBytes)
+	}
 	if err != nil {
 		s.log("artifact.publish_rejected error=%v", err)
 		http.Error(w, "artifact rejected", http.StatusUnprocessableEntity)
@@ -130,7 +148,15 @@ func (s *Server) read(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "invalid artifact reference", http.StatusBadRequest)
 		return
 	}
-	artifact, packageBytes, attestation, err := s.Repository.Read(pluginv1.ArtifactRef{PluginID: pluginID, Version: version, Channel: channel})
+	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: version, Channel: channel}
+	var artifact pluginv1.Artifact
+	var packageBytes, attestation, provenanceRaw, verificationRaw []byte
+	var err error
+	if repository, ok := s.Repository.(ProvenanceRepository); ok {
+		artifact, packageBytes, attestation, provenanceRaw, verificationRaw, err = repository.ReadWithProvenance(ref)
+	} else {
+		artifact, packageBytes, attestation, err = s.Repository.Read(ref)
+	}
 	if err != nil {
 		http.Error(w, "artifact not found or untrusted", http.StatusNotFound)
 		return
@@ -143,6 +169,20 @@ func (s *Server) read(w http.ResponseWriter, req *http.Request) {
 	case "attestation":
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(attestation)
+	case "provenance":
+		if len(provenanceRaw) == 0 {
+			http.NotFound(w, req)
+			return
+		}
+		w.Header().Set("Content-Type", "application/vnd.dsse.envelope.v1+json")
+		_, _ = w.Write(provenanceRaw)
+	case "provenance-verification":
+		if len(verificationRaw) == 0 {
+			http.NotFound(w, req)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(verificationRaw)
 	default:
 		http.NotFound(w, req)
 		return

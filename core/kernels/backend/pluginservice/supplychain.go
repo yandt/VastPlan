@@ -2,7 +2,6 @@ package pluginservice
 
 import (
 	"bytes"
-	"context"
 	"crypto/ed25519"
 	"crypto/x509"
 	"encoding/base64"
@@ -12,13 +11,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 )
 
@@ -50,14 +48,16 @@ type TrustKey struct {
 }
 
 type TrustDocument struct {
-	SchemaVersion string     `json:"schemaVersion"`
-	Keys          []TrustKey `json:"keys"`
+	SchemaVersion string                          `json:"schemaVersion"`
+	Keys          []TrustKey                      `json:"keys"`
+	Provenance    *artifactprovenance.TrustPolicy `json:"provenance,omitempty"`
 }
 
 // TrustStore 是只读信任根快照。配置更新通过构造新实例完成，避免验证过程中半更新。
 type TrustStore struct {
-	keys map[string]ed25519.PublicKey
-	meta map[string]TrustKey
+	keys       map[string]ed25519.PublicKey
+	meta       map[string]TrustKey
+	provenance *artifactprovenance.Verifier
 }
 
 func trustKeyID(publisher, keyID string) string { return publisher + "\x00" + keyID }
@@ -90,6 +90,13 @@ func NewTrustStore(document TrustDocument) (*TrustStore, error) {
 		}
 		store.keys[id] = append(ed25519.PublicKey(nil), raw...)
 		store.meta[id] = item
+	}
+	if document.Provenance != nil {
+		verifier, err := artifactprovenance.NewVerifier(*document.Provenance)
+		if err != nil {
+			return nil, fmt.Errorf("来源证明信任策略无效: %w", err)
+		}
+		store.provenance = verifier
 	}
 	return store, nil
 }
@@ -124,7 +131,28 @@ func (s *TrustStore) VerifyProof(envelope artifacttrust.Envelope) error {
 	if !sameArtifact(attestation.Artifact, envelope.Artifact) {
 		return errors.New("发布者证明与制品 Envelope 不一致")
 	}
-	return s.Verify(attestation)
+	if err := s.Verify(attestation); err != nil {
+		return err
+	}
+	manifest, err := pluginv1.ParseManifest(envelope.Artifact.Manifest)
+	if err != nil {
+		return err
+	}
+	_, err = s.provenanceVerifier().Verify(artifactprovenance.ArtifactIdentity{
+		PluginID: envelope.Artifact.PluginID, Channel: envelope.Artifact.Channel, Publisher: manifest.Publisher, SHA256: envelope.Artifact.SHA256,
+	}, envelope.Provenance, envelope.ProvenanceVerification, time.Now().UTC())
+	return err
+}
+
+func (s *TrustStore) provenanceVerifier() *artifactprovenance.Verifier {
+	if s == nil {
+		return nil
+	}
+	return s.provenance
+}
+
+func (s *TrustStore) ProvenanceEnabled() bool {
+	return s != nil && s.provenance != nil
 }
 
 func (s *TrustStore) verifyAt(attestation Attestation, now time.Time) error {
@@ -253,170 +281,6 @@ func MarshalEd25519PrivateKeyPEM(privateKey ed25519.PrivateKey) ([]byte, error) 
 		return nil, err
 	}
 	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: raw}), nil
-}
-
-// SignedRepository 在本地不可变仓库上增加发布者签名强制点。
-type SignedRepository struct {
-	Local *Repository
-	Trust *TrustStore
-	mu    sync.Mutex // 证明写入与不可变性检查必须在同一临界区。
-}
-
-func (r *SignedRepository) SourceName() string { return "bootstrap-signed-file" }
-
-func (r *SignedRepository) Publish(attestation Attestation, packageBytes []byte) (Artifact, error) {
-	if r == nil || r.Local == nil || r.Trust == nil {
-		return Artifact{}, errors.New("签名制品仓库未完整配置")
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if err := ValidateArtifact(attestation.Artifact, packageBytes); err != nil {
-		return Artifact{}, err
-	}
-	if err := r.Trust.Verify(attestation); err != nil {
-		return Artifact{}, err
-	}
-	r.Local.mu.Lock()
-	published, err := r.Local.publishArtifact(attestation.Artifact, packageBytes)
-	r.Local.mu.Unlock()
-	if err != nil {
-		return Artifact{}, err
-	}
-	dir, err := r.Local.artifactDir(Ref{PluginID: published.PluginID, Version: published.Version, Channel: published.Channel})
-	if err != nil {
-		return Artifact{}, err
-	}
-	raw, err := json.Marshal(attestation)
-	if err != nil {
-		return Artifact{}, err
-	}
-	filename := filepath.Join(dir, "attestation.json")
-	if existing, readErr := os.ReadFile(filename); readErr == nil {
-		if !bytes.Equal(bytes.TrimSpace(existing), raw) {
-			return Artifact{}, errors.New("同一不可变制品已经存在不同的签名证明")
-		}
-		return published, nil
-	} else if !errors.Is(readErr, os.ErrNotExist) {
-		return Artifact{}, fmt.Errorf("读取既有签名证明: %w", readErr)
-	}
-	if err := writeFileAtomically(filename, append(raw, '\n'), 0o644); err != nil {
-		return Artifact{}, fmt.Errorf("写入签名证明: %w", err)
-	}
-	return published, nil
-}
-
-func (r *SignedRepository) Read(ref Ref) (Artifact, []byte, error) {
-	artifact, packageBytes, _, err := r.ReadWithAttestation(ref)
-	return artifact, packageBytes, err
-}
-
-// ListRefs 只枚举本地不可变索引中的精确引用。返回值尚未代表可信制品；Catalog
-// 等调用方必须继续使用 ReadWithAttestation 逐项完成签名与内容复验。
-func (r *SignedRepository) ListRefs() ([]Ref, error) {
-	if r == nil || r.Local == nil || r.Trust == nil {
-		return nil, errors.New("签名制品仓库未完整配置")
-	}
-	return r.Local.ListRefs()
-}
-
-// ReadMetadataWithAttestation 校验元数据与发布者证明，不读取包体。它供 Catalog
-// 启动重建使用，避免仓库启动时间按全部对象字节数增长；任何实际交付仍必须走
-// ReadWithAttestation，对包体重新计算摘要并检查清单绑定。
-func (r *SignedRepository) ReadMetadataWithAttestation(ref Ref) (Artifact, []byte, error) {
-	if r == nil || r.Local == nil || r.Trust == nil {
-		return Artifact{}, nil, errors.New("签名制品仓库未完整配置")
-	}
-	artifact, err := r.Local.ReadMetadata(ref)
-	if err != nil {
-		return Artifact{}, nil, err
-	}
-	dir, err := r.Local.artifactDir(ref)
-	if err != nil {
-		return Artifact{}, nil, err
-	}
-	raw, err := os.ReadFile(filepath.Join(dir, "attestation.json"))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return Artifact{}, nil, errors.New("签名制品缺少发布者证明")
-		}
-		return Artifact{}, nil, fmt.Errorf("读取签名证明: %w", err)
-	}
-	var attestation Attestation
-	if err := decodeJSONStrict(raw, &attestation); err != nil {
-		return Artifact{}, nil, fmt.Errorf("解析签名证明: %w", err)
-	}
-	if !sameArtifact(artifact, attestation.Artifact) {
-		return Artifact{}, nil, errors.New("签名证明与制品元数据不一致")
-	}
-	if err := r.Trust.Verify(attestation); err != nil {
-		return Artifact{}, nil, err
-	}
-	return artifact, append([]byte(nil), raw...), nil
-}
-
-// ReadWithAttestation 返回通过内核信任根验证的制品、原始包和签名证明。
-// 对外 HTTP 层只能转发这份已验证的结果，不能自行读取仓库目录或绕过验签。
-func (r *SignedRepository) ReadWithAttestation(ref Ref) (Artifact, []byte, []byte, error) {
-	if r == nil || r.Local == nil || r.Trust == nil {
-		return Artifact{}, nil, nil, errors.New("签名制品仓库未完整配置")
-	}
-	envelope, err := r.Fetch(context.Background(), ref)
-	if err != nil {
-		return Artifact{}, nil, nil, err
-	}
-	if err := r.Trust.VerifyProof(envelope); err != nil {
-		return Artifact{}, nil, nil, err
-	}
-	return envelope.Artifact, envelope.PackageBytes, append([]byte(nil), envelope.Proof...), nil
-}
-
-// HTTPRepositoryAdapter 是 HTTP 传输层使用的窄适配器。它把不可信网络字节
-// 交给内核的签名与内容强制点处理，而不向 HTTP 层暴露信任根或磁盘布局。
-type HTTPRepositoryAdapter struct{ Repository *SignedRepository }
-
-func (a HTTPRepositoryAdapter) Publish(attestationRaw, packageBytes []byte) (Artifact, error) {
-	if a.Repository == nil {
-		return Artifact{}, errors.New("签名制品仓库未完整配置")
-	}
-	var attestation Attestation
-	if err := decodeJSONStrict(attestationRaw, &attestation); err != nil {
-		return Artifact{}, fmt.Errorf("解析制品证明: %w", err)
-	}
-	return a.Repository.Publish(attestation, packageBytes)
-}
-
-func (a HTTPRepositoryAdapter) Read(ref Ref) (Artifact, []byte, []byte, error) {
-	if a.Repository == nil {
-		return Artifact{}, nil, nil, errors.New("签名制品仓库未完整配置")
-	}
-	return a.Repository.ReadWithAttestation(ref)
-}
-
-// Fetch 返回带原始证明的未信任 Envelope，供 Node Agent 在自己的强制点复验。
-// SignedRepository.Read 的服务端预验证只是纵深防御。
-func (r *SignedRepository) Fetch(_ context.Context, ref Ref) (artifacttrust.Envelope, error) {
-	if r == nil || r.Local == nil || r.Trust == nil {
-		return artifacttrust.Envelope{}, errors.New("签名制品仓库未完整配置")
-	}
-	artifact, packageBytes, err := r.Local.Read(ref)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return artifacttrust.Envelope{}, fmt.Errorf("%w: %s@%s/%s", artifacttrust.ErrNotFound, ref.PluginID, ref.Version, ref.Channel)
-		}
-		return artifacttrust.Envelope{}, err
-	}
-	dir, err := r.Local.artifactDir(ref)
-	if err != nil {
-		return artifacttrust.Envelope{}, err
-	}
-	raw, err := os.ReadFile(filepath.Join(dir, "attestation.json"))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return artifacttrust.Envelope{}, errors.New("签名制品缺少发布者证明")
-		}
-		return artifacttrust.Envelope{}, fmt.Errorf("读取签名证明: %w", err)
-	}
-	return artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: raw}, nil
 }
 
 func sameArtifact(left, right Artifact) bool {
