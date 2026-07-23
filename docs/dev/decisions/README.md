@@ -147,3 +147,4 @@
 - [ADR-0114 一次性 ConfigurationAuthority 与委托凭证暂存](ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)
 - [ADR-0115 Application 配置激活 Saga 与候选凭证窗口](ADR-0115-Application配置激活Saga与候选凭证窗口.md)
 - [ADR-0116 Backend Platform Profile 候选 Catalog 与配置激活](ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md)
+- [ADR-0117 语言中立 Service Hot 配置控制器](ADR-0117-语言中立Service-Hot配置控制器.md)

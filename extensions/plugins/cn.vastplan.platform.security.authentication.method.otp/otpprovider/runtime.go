@@ -43,7 +43,10 @@ func (p *Provider) handle(ctx context.Context, host sdk.Host, call *contractv1.C
 		p.store.Delete(value.TransactionID)
 		result = authenticationv1.CancelResult{Cancelled: true}
 	case *authenticationv1.HealthRequest:
-		result = authenticationv1.HealthResult{Ready: len(p.profiles) > 0, ProviderID: ProviderID}
+		p.mu.RLock()
+		ready := len(p.profiles) > 0
+		p.mu.RUnlock()
+		result = authenticationv1.HealthResult{Ready: ready, ProviderID: ProviderID}
 	}
 	raw, err := json.Marshal(result)
 	if err != nil {

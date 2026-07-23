@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/configuration/v1/vastplan.configuration-controller.schema.json",
+  "title": "VastPlan Configuration Controller v1",
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "candidateId": { "type": "string", "pattern": "^pcfg_[a-f0-9]{32}$" },
+    "configurationId": { "type": "string", "pattern": "^cfg_[a-f0-9]{24}$" },
+    "activeReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "digest"],
+      "properties": {
+        "revision": { "type": "integer", "minimum": 1 },
+        "digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "prepareRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateId", "configurationId", "catalogDigest", "schemaDigest", "artifactSha256", "expectedActive", "values"],
+      "properties": {
+        "candidateId": { "$ref": "#/$defs/candidateId" },
+        "configurationId": { "$ref": "#/$defs/configurationId" },
+        "catalogDigest": { "$ref": "#/$defs/digest" },
+        "schemaDigest": { "$ref": "#/$defs/digest" },
+        "artifactSha256": { "$ref": "#/$defs/digest" },
+        "expectedActive": { "$ref": "#/$defs/activeReference" },
+        "values": { "type": "object" },
+        "managedCredentials": {
+          "type": "object",
+          "maxProperties": 64,
+          "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
+          "additionalProperties": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/managedCredentialRef" }
+        }
+      }
+    },
+    "candidateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateId", "requestDigest"],
+      "properties": {
+        "candidateId": { "$ref": "#/$defs/candidateId" },
+        "requestDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "statusRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configurationId"],
+      "properties": {
+        "configurationId": { "$ref": "#/$defs/configurationId" },
+        "candidateId": { "$ref": "#/$defs/candidateId" },
+        "requestDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "candidateObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateId", "requestDigest", "configurationDigest", "status", "ready"],
+      "properties": {
+        "candidateId": { "$ref": "#/$defs/candidateId" },
+        "requestDigest": { "$ref": "#/$defs/digest" },
+        "configurationDigest": { "$ref": "#/$defs/digest" },
+        "status": { "enum": ["Prepared", "Committed", "Aborted"] },
+        "ready": { "type": "boolean" },
+        "errorCode": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "errorMessage": { "type": "string", "minLength": 1, "maxLength": 1000 }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "configurationId", "active", "observedAt"],
+      "properties": {
+        "protocol": { "const": "configuration.v1" },
+        "configurationId": { "$ref": "#/$defs/configurationId" },
+        "active": { "$ref": "#/$defs/activeReference" },
+        "candidate": { "$ref": "#/$defs/candidateObservation" },
+        "observedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

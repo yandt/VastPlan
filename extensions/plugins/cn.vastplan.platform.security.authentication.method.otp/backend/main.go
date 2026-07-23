@@ -19,6 +19,11 @@ func main() {
 	}
 	plugin := sdk.New(otpprovider.PluginID, otpprovider.PluginVersion, map[string]string{"backend": "^0.1"})
 	plugin.Contribute(provider.Contribution())
+	configurationContribution, err := provider.ConfigurationContribution()
+	if err != nil {
+		log.Fatalf("初始化 OTP configuration.v1 控制器: %v", err)
+	}
+	plugin.Contribute(configurationContribution)
 	if err := plugin.Serve(); err != nil {
 		log.Fatalf("OTP Provider 退出: %v", err)
 	}

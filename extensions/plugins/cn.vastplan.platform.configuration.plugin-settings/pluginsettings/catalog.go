@@ -13,7 +13,8 @@ import (
 
 type DefinitionView struct {
 	pluginconfiguration.Definition
-	CatalogDigest string `json:"catalogDigest"`
+	CatalogDigest       string `json:"catalogDigest"`
+	ControllerAvailable bool   `json:"controllerAvailable"`
 }
 
 func (s *Service) catalogs(ctx context.Context, host sdk.Host, call *contractv1.CallContext) ([]pluginconfiguration.Catalog, error) {
@@ -40,11 +41,15 @@ func (s *Service) catalogs(ctx context.Context, host sdk.Host, call *contractv1.
 	return response.Items, nil
 }
 
-func flattenDefinitions(catalogs []pluginconfiguration.Catalog) []DefinitionView {
+func (s *Service) publicDefinitions(tenant string, catalogs []pluginconfiguration.Catalog) []DefinitionView {
+	overlays := s.hotValueOverlays(tenant)
 	items := make([]DefinitionView, 0)
 	for _, catalog := range catalogs {
 		for _, definition := range catalog.Items {
-			items = append(items, DefinitionView{Definition: definition, CatalogDigest: catalog.Digest})
+			if candidate, ok := overlays[definition.ID]; ok && candidate.CatalogDigest == catalog.Digest && candidate.SchemaDigest == definition.SchemaDigest && candidate.ArtifactSHA256 == definition.Artifact.SHA256 {
+				definition.Values = append([]byte(nil), candidate.Values...)
+			}
+			items = append(items, publicDefinitionView(definition, catalog.Digest))
 		}
 	}
 	sort.Slice(items, func(i, j int) bool {
@@ -57,6 +62,40 @@ func flattenDefinitions(catalogs []pluginconfiguration.Catalog) []DefinitionView
 		return items[i].PluginID < items[j].PluginID
 	})
 	return items
+}
+
+func (s *Service) publicDefinition(tenant string, view DefinitionView) DefinitionView {
+	if candidate, ok := s.hotValueOverlays(tenant)[view.ID]; ok && candidate.CatalogDigest == view.CatalogDigest && candidate.SchemaDigest == view.SchemaDigest && candidate.ArtifactSHA256 == view.Artifact.SHA256 {
+		view.Values = append([]byte(nil), candidate.Values...)
+	}
+	return publicDefinitionView(view.Definition, view.CatalogDigest)
+}
+
+func (s *Service) hotValueOverlays(tenant string) map[string]pluginconfiguration.Candidate {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := s.tenantLocked(tenant)
+	overlays := map[string]pluginconfiguration.Candidate{}
+	for id, record := range state.HotActivations {
+		candidate, ok := state.Candidates[id]
+		if !ok || record.Status != hotReady || candidate.Status != pluginconfiguration.CandidateReady || candidate.ApplyPath != pluginconfiguration.ApplyHotService {
+			continue
+		}
+		current, exists := overlays[candidate.ConfigurationID]
+		if !exists || candidate.UpdatedAt > current.UpdatedAt {
+			overlays[candidate.ConfigurationID] = cloneCandidate(candidate)
+		}
+	}
+	return overlays
+}
+
+func publicDefinitionView(definition pluginconfiguration.Definition, catalogDigest string) DefinitionView {
+	// 0.8.0 deliberately exposes the first hot-service pilot only for
+	// definitions without managed credentials. Retained/new reference merge
+	// semantics must be completed before the UI can safely offer that path.
+	available := definition.Controller != nil && len(definition.ManagedCredentials) == 0
+	definition.Controller = nil
+	return DefinitionView{Definition: definition, CatalogDigest: catalogDigest, ControllerAvailable: available}
 }
 
 func findDefinition(catalogs []pluginconfiguration.Catalog, id, digest string) (DefinitionView, error) {

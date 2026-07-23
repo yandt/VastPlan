@@ -12,7 +12,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.security.authentication.method.otp"
-	PluginVersion = "0.1.0"
+	PluginVersion = "0.2.0"
 	ProviderID    = "enterprise-one-time-code"
 	EmailMethodID = "enterprise-email-code"
 	SMSMethodID   = "enterprise-sms-code"
@@ -21,8 +21,9 @@ const (
 var stableID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,255}$`)
 
 type Configuration struct {
-	Profiles map[string]Profile `json:"profiles"`
-	Capacity int                `json:"capacity,omitempty"`
+	Profiles  map[string]Profile `json:"profiles"`
+	Capacity  int                `json:"capacity,omitempty"`
+	StateFile string             `json:"stateFile,omitempty"`
 }
 
 type Profile struct {

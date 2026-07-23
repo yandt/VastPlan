@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
@@ -16,7 +17,7 @@ import (
 
 const (
 	PluginID           = pluginconfiguration.PluginSettingsID
-	PluginVersion      = "0.7.0"
+	PluginVersion      = "0.8.0"
 	Capability         = "platform.plugin-configuration"
 	StateFileConfigKey = "platform.plugin-configuration.stateFile"
 	maxStateBytes      = 8 << 20
@@ -39,11 +40,13 @@ type AuditEvent struct {
 }
 
 type tenantState struct {
-	NextAudit        uint64                                   `json:"nextAudit"`
-	Candidates       map[string]pluginconfiguration.Candidate `json:"candidates"`
-	Current          map[string]string                        `json:"current"`
-	Audit            []AuditEvent                             `json:"audit"`
-	CredentialStages map[string]map[string]credentialStage    `json:"credentialStages,omitempty"`
+	NextAudit        uint64                                     `json:"nextAudit"`
+	Candidates       map[string]pluginconfiguration.Candidate   `json:"candidates"`
+	Current          map[string]string                          `json:"current"`
+	Audit            []AuditEvent                               `json:"audit"`
+	CredentialStages map[string]map[string]credentialStage      `json:"credentialStages,omitempty"`
+	HotDraftBases    map[string]configurationv1.ActiveReference `json:"hotDraftBases,omitempty"`
+	HotActivations   map[string]hotActivationRecord             `json:"hotActivations,omitempty"`
 }
 
 type credentialStage struct {

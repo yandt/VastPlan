@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
@@ -98,6 +99,12 @@ func (s *Service) validateLoaded() error {
 		if state.CredentialStages == nil {
 			state.CredentialStages = map[string]map[string]credentialStage{}
 		}
+		if state.HotActivations == nil {
+			state.HotActivations = map[string]hotActivationRecord{}
+		}
+		if state.HotDraftBases == nil {
+			state.HotDraftBases = map[string]configurationv1.ActiveReference{}
+		}
 		if len(state.Candidates) > maxCandidates {
 			return errors.New("插件配置协调器候选数量超过上限")
 		}
@@ -126,6 +133,21 @@ func (s *Service) validateLoaded() error {
 			candidate, ok := state.Candidates[candidateID]
 			if configurationID == "" || !ok || candidate.ConfigurationID != configurationID || terminal(candidate.Status) {
 				return fmt.Errorf("插件配置协调器 current 指向无效候选 %q", candidateID)
+			}
+		}
+		for candidateID, activation := range state.HotActivations {
+			candidate, ok := state.Candidates[candidateID]
+			if !ok || candidate.ID != candidateID || candidate.ApplyPath != pluginconfiguration.ApplyHotService {
+				return fmt.Errorf("插件配置协调器 hot activation 指向未知候选 %q", candidateID)
+			}
+			if err := activation.validate(candidate, tenant); err != nil {
+				return fmt.Errorf("插件配置协调器 hot activation %q 无效: %w", candidateID, err)
+			}
+		}
+		for candidateID, base := range state.HotDraftBases {
+			candidate, ok := state.Candidates[candidateID]
+			if !ok || candidate.ApplyPath != pluginconfiguration.ApplyHotService || candidate.Status != pluginconfiguration.CandidateDraft || base.Revision == 0 || len(base.Digest) != 64 {
+				return fmt.Errorf("插件配置协调器 hot draft 基线 %q 无效", candidateID)
 			}
 		}
 	}
@@ -189,7 +211,7 @@ func secureDirectory(path string) error {
 func (s *Service) tenantLocked(id string) *tenantState {
 	state := s.state.Tenants[id]
 	if state == nil {
-		state = &tenantState{Candidates: map[string]pluginconfiguration.Candidate{}, Current: map[string]string{}, CredentialStages: map[string]map[string]credentialStage{}}
+		state = &tenantState{Candidates: map[string]pluginconfiguration.Candidate{}, Current: map[string]string{}, CredentialStages: map[string]map[string]credentialStage{}, HotDraftBases: map[string]configurationv1.ActiveReference{}, HotActivations: map[string]hotActivationRecord{}}
 		s.state.Tenants[id] = state
 	}
 	return state

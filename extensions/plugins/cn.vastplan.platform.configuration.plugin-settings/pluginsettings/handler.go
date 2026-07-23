@@ -65,16 +65,24 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 }
 
 func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.CallContext, operation string, request operationRequest) (any, error) {
+	tenant, _, tenantErr := tenantAndActor(call)
+	if tenantErr != nil {
+		return nil, tenantErr
+	}
 	switch operation {
 	case "listDefinitions":
 		catalogs, err := s.catalogs(ctx, host, call)
-		return map[string]any{"items": flattenDefinitions(catalogs)}, err
+		return map[string]any{"items": s.publicDefinitions(tenant, catalogs)}, err
 	case "getDefinition":
 		catalogs, err := s.catalogs(ctx, host, call)
 		if err != nil {
 			return nil, err
 		}
-		return findDefinition(catalogs, request.ConfigurationID, request.CatalogDigest)
+		view, err := findDefinition(catalogs, request.ConfigurationID, request.CatalogDigest)
+		if err != nil {
+			return nil, err
+		}
+		return s.publicDefinition(tenant, view), nil
 	case "listCandidates":
 		items, err := s.ListCandidates(call)
 		return map[string]any{"items": items}, err
@@ -99,6 +107,14 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 		return s.ActivateProfileCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
 	case "abortProfileCandidate":
 		return s.AbortProfileCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "submitHotServiceDraft":
+		return s.SubmitHotServiceDraft(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "approveHotServiceCandidate":
+		return s.ApproveHotServiceCandidate(call, request.ID, request.ExpectedRevision)
+	case "activateHotServiceCandidate":
+		return s.ActivateHotServiceCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "abortHotServiceCandidate":
+		return s.AbortHotServiceCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
 	default:
 		return nil, ErrInvalid
 	}
@@ -134,6 +150,10 @@ func Descriptor() []byte {
 		,{"name":"approveProfileCandidate","description":"由不同主体批准 Platform Profile 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
 		,{"name":"activateProfileCandidate","description":"执行 Platform Catalog、Deployment、readiness 与凭证激活 Saga","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
 		,{"name":"abortProfileCandidate","description":"放弃待审批或已审批的 Platform Profile 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"submitHotServiceDraft","description":"向目标插件 configuration.v1 控制器准备 Hot Service 候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"approveHotServiceCandidate","description":"由不同主体批准 Hot Service 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"activateHotServiceCandidate","description":"激活候选凭证并原子提交目标插件 Hot Service 配置","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"abortHotServiceCandidate","description":"放弃尚未提交的 Hot Service 配置候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
 	]}`)
 }
 
@@ -143,7 +163,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listDefinitions", "getDefinition", "listCandidates", "createDraft", "discardDraft", "submitDraft", "activateCandidate", "submitProfileDraft", "approveProfileCandidate", "activateProfileCandidate", "abortProfileCandidate"}
+	operations := []string{"listDefinitions", "getDefinition", "listCandidates", "createDraft", "discardDraft", "submitDraft", "activateCandidate", "submitProfileDraft", "approveProfileCandidate", "activateProfileCandidate", "abortProfileCandidate", "submitHotServiceDraft", "approveHotServiceCandidate", "activateHotServiceCandidate", "abortHotServiceCandidate"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

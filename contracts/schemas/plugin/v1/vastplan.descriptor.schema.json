@@ -15,7 +15,8 @@
         "event.sink",
         "hook",
         "runner.capability",
-        "authentication.provider"
+        "authentication.provider",
+        "configuration.controller"
       ]
     },
     "descriptor": { "type": "object" }
@@ -226,6 +227,21 @@
                 "type": "array", "maxItems": 32, "uniqueItems": true,
                 "items": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 }
               }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "extensionPoint": { "const": "configuration.controller" } } },
+      "then": {
+        "properties": {
+          "descriptor": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["protocol"],
+            "properties": {
+              "protocol": { "const": "configuration.v1" }
             }
           }
         }

@@ -70,3 +70,47 @@ func TestBuildSeparatesPlatformAndHotApplyPaths(t *testing.T) {
 		t.Fatal("tenant restart 必须拒绝")
 	}
 }
+
+func TestBuildDerivesHotControllerFromSignedArtifactAndResolvedUnit(t *testing.T) {
+	const pluginID = "cn.vastplan.demo-hot-configured"
+	manifest := []byte(fmt.Sprintf(`{
+		"id":%q,"name":"Hot plugin","description":"hot configured","version":"1.0.0","publisher":"vastplan",
+		"engines":{"backend":"^0.1"},
+		"runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","routingDomain":"security"},
+		"configuration":{"scope":"service","applyMode":"hot","controller":{"protocol":"configuration.v1"},"schema":{"type":"object","additionalProperties":false,"properties":{"capacity":{"type":"integer"}}}},
+		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
+	}`, pluginID))
+	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.0.0", Channel: "stable"}
+	deployment := deploymentv2.Deployment{
+		Version: 2, Revision: 9, Metadata: deploymentv1.Metadata{Name: "security-services", Tenant: "acme"},
+		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}},
+		Units: []deploymentv2.ServiceUnit{{
+			ID: "otp", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "authentication-otp", Replicas: 1,
+			Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}},
+			Config:  map[string]any{"plugins": map[string]any{pluginID: map[string]any{"capacity": 100}}},
+		}},
+	}
+	catalog, err := Build(deployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {
+		PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("b", 64), Manifest: manifest,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := catalog.Items[0]
+	wantCapability, _ := pluginv1.ConfigurationControllerCapability(pluginID)
+	if item.ApplyPath != ApplyHotService || item.Controller == nil || item.Controller.Capability != wantCapability ||
+		item.Controller.ExtensionPoint != pluginv1.ConfigurationControllerExtensionPoint || item.Controller.LogicalService != "authentication-otp" || item.Controller.RoutingDomain != "security" {
+		t.Fatalf("hot controller 未由可信制品与解析单元精确派生: %+v", item.Controller)
+	}
+	if err := catalog.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	tampered := catalog
+	tampered.Items = append([]Definition(nil), catalog.Items...)
+	controller := *tampered.Items[0].Controller
+	controller.Capability = "configuration.forged"
+	tampered.Items[0].Controller = &controller
+	if err := tampered.Validate(); err == nil {
+		t.Fatal("目录不得接受与插件身份不一致的 controller capability")
+	}
+}

@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.configuration.plugin-settings",
   "name": "VastPlan 插件配置协调器",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -16,7 +16,8 @@
       { "code": "platform.plugin-configuration.read", "title": "查看插件配置", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
       { "code": "platform.plugin-configuration.write", "title": "编辑插件配置候选", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
       { "code": "platform.plugin-configuration.publish", "title": "提交和激活应用级插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
-      { "code": "platform.plugin-configuration.profile.publish", "title": "审批和激活平台级插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
+      { "code": "platform.plugin-configuration.profile.publish", "title": "审批和激活平台级插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.plugin-configuration.hot.publish", "title": "审批和激活 Hot Service 插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
     ],
     "operationGuards": [
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "listDefinitions", "permissions": ["platform.plugin-configuration.read"], "access": "read", "approval": "none" },
@@ -30,6 +31,10 @@
       ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "approveProfileCandidate", "permissions": ["platform.plugin-configuration.profile.publish"], "access": "approve", "approval": "different-subject" }
       ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "activateProfileCandidate", "permissions": ["platform.plugin-configuration.profile.publish"], "access": "execute", "approval": "different-subject" }
       ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "abortProfileCandidate", "permissions": ["platform.plugin-configuration.profile.publish"], "access": "write", "approval": "none" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "submitHotServiceDraft", "permissions": ["platform.plugin-configuration.hot.publish"], "access": "write", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "approveHotServiceCandidate", "permissions": ["platform.plugin-configuration.hot.publish"], "access": "approve", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "activateHotServiceCandidate", "permissions": ["platform.plugin-configuration.hot.publish"], "access": "execute", "approval": "different-subject" }
+      ,{ "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "abortHotServiceCandidate", "permissions": ["platform.plugin-configuration.hot.publish"], "access": "write", "approval": "none" }
     ]
   },
   "runtime": {
@@ -59,7 +64,7 @@
       }
     }
   },
-  "state": { "backend": { "format": "cn.vastplan.platform.plugin-configuration", "formatVersion": 2 } },
+  "state": { "backend": { "format": "cn.vastplan.platform.plugin-configuration", "formatVersion": 4 } },
   "activation": ["onStartup", "onPortalStartup"],
   "entry": { "backend": "backend/plugin-settings", "frontend": "frontend/dist/index.js" },
   "contributes": {
@@ -81,6 +86,10 @@
             ,{ "name": "approveProfileCandidate", "description": "由不同主体批准 Platform Profile 配置候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
             ,{ "name": "activateProfileCandidate", "description": "执行 Platform Catalog、Deployment、readiness 与凭证激活 Saga", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
             ,{ "name": "abortProfileCandidate", "description": "放弃待审批或已审批的 Platform Profile 配置候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "submitHotServiceDraft", "description": "向目标插件 configuration.v1 控制器准备 Hot Service 候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "approveHotServiceCandidate", "description": "由不同主体批准 Hot Service 配置候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "activateHotServiceCandidate", "description": "激活候选凭证并原子提交目标插件 Hot Service 配置", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "abortHotServiceCandidate", "description": "放弃尚未提交的 Hot Service 配置候选", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
           ]
         }
       ]

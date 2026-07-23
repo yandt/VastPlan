@@ -95,7 +95,16 @@ type ConfigurationContract struct {
 	Scope              string                   `json:"scope"`
 	ApplyMode          string                   `json:"applyMode"`
 	Schema             json.RawMessage          `json:"schema"`
+	Controller         *ConfigurationController `json:"controller,omitempty"`
 	ManagedCredentials []ManagedCredentialField `json:"managedCredentials,omitempty"`
+}
+
+// ConfigurationController declares that a service-scoped hot configuration
+// is owned by the plugin's configuration.v1 control port. The runtime
+// capability name is derived from the signed plugin ID and is therefore not a
+// second author-maintained identity.
+type ConfigurationController struct {
+	Protocol string `json:"protocol"`
 }
 
 type ManagedCredentialField struct {
@@ -304,14 +313,17 @@ var declarativeBackendContributionGroups = map[string]struct{}{
 // 可比较的声明。id/priority 属于注册元数据，其余字段构成运行态 descriptor。
 func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, error) {
 	raw := manifest.Contributes["backend"]
-	if len(raw) == 0 {
+	hasConfigurationController := manifest.Configuration != nil && manifest.Configuration.Controller != nil
+	if len(raw) == 0 && !hasConfigurationController {
 		return nil, nil
 	}
-	var groups map[string][]map[string]any
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	if err := decoder.Decode(&groups); err != nil {
-		return nil, fmt.Errorf("解析 backend contributions: %w", err)
+	groups := map[string][]map[string]any{}
+	if len(raw) > 0 {
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if err := decoder.Decode(&groups); err != nil {
+			return nil, fmt.Errorf("解析 backend contributions: %w", err)
+		}
 	}
 	var out []RuntimeContribution
 	defaultPolicy, overrides, err := runtimePolicies(manifest)
@@ -368,6 +380,33 @@ func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, erro
 				Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain,
 			})
 		}
+	}
+	if hasConfigurationController {
+		id, err := ConfigurationControllerCapability(manifest.ID)
+		if err != nil {
+			return nil, err
+		}
+		descriptor := configurationControllerDescriptor()
+		if err := ValidateDescriptor(ConfigurationControllerExtensionPoint, descriptor); err != nil {
+			return nil, err
+		}
+		key := ConfigurationControllerExtensionPoint + "\x00" + id
+		if _, duplicate := seen[key]; duplicate {
+			return nil, fmt.Errorf("运行时贡献重复: %s/%s", ConfigurationControllerExtensionPoint, id)
+		}
+		seen[key] = struct{}{}
+		policy := defaultPolicy
+		if override, ok := overrides[key]; ok {
+			policy.Visibility = override.Visibility
+			policy.Routing = override.Routing
+			policy.RoutingDomain = override.RoutingDomain
+			policy = servicemodel.Normalize(policy)
+		}
+		out = append(out, RuntimeContribution{
+			ExtensionPoint: ConfigurationControllerExtensionPoint, ID: id, Descriptor: descriptor,
+			InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
+			Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain,
+		})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].ExtensionPoint != out[j].ExtensionPoint {
@@ -615,6 +654,11 @@ func validateConfiguration(contract *ConfigurationContract) error {
 	}
 	if contract.ApplyMode == "restart" && contract.Scope != "service" {
 		return errors.New("configuration restart 只允许 service scope")
+	}
+	if contract.Controller != nil {
+		if contract.Scope != "service" || contract.ApplyMode != "hot" || contract.Controller.Protocol != ConfigurationControllerProtocol {
+			return errors.New("configuration.controller 只允许 service + hot + configuration.v1")
+		}
 	}
 	var schema map[string]any
 	if err := json.Unmarshal(contract.Schema, &schema); err != nil || schema == nil {

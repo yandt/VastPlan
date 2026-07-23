@@ -54,6 +54,17 @@ type ArtifactIdentity struct {
 	SHA256  string `json:"sha256"`
 }
 
+// ControllerTarget is a trusted internal routing fact derived from the signed
+// artifact and resolved ServiceUnit. The browser still addresses this resource
+// by Definition.ID; it never chooses a controller capability or route.
+type ControllerTarget struct {
+	Protocol       string `json:"protocol"`
+	ExtensionPoint string `json:"extensionPoint"`
+	Capability     string `json:"capability"`
+	LogicalService string `json:"logicalService"`
+	RoutingDomain  string `json:"routingDomain,omitempty"`
+}
+
 // Definition is safe for the management plane. Values are non-sensitive by
 // manifest contract; managed credential handles and material are never present.
 type Definition struct {
@@ -67,6 +78,7 @@ type Definition struct {
 	Scope              string                            `json:"scope"`
 	ApplyMode          string                            `json:"applyMode"`
 	ApplyPath          ApplyPath                         `json:"applyPath"`
+	Controller         *ControllerTarget                 `json:"controller,omitempty"`
 	Schema             json.RawMessage                   `json:"schema"`
 	SchemaDigest       string                            `json:"schemaDigest"`
 	ManagedCredentials []pluginv1.ManagedCredentialField `json:"managedCredentials,omitempty"`
@@ -162,6 +174,10 @@ func definitionFor(deployment deploymentv2.Deployment, deploymentDigest string, 
 	if err != nil {
 		return Definition{}, false, fmt.Errorf("插件 %s 配置契约: %w", ref.ID, err)
 	}
+	controller, err := configurationControllerFor(manifest, unit, applyPath)
+	if err != nil {
+		return Definition{}, false, fmt.Errorf("插件 %s 配置控制器: %w", ref.ID, err)
+	}
 	values := envelope.Plugins[ref.ID]
 	if values == nil {
 		values = map[string]any{}
@@ -179,7 +195,7 @@ func definitionFor(deployment deploymentv2.Deployment, deploymentDigest string, 
 		ID: resourceID(deployment.Metadata.Tenant, deployment.Metadata.Name, unit.ID, ref.ID), Deployment: deployment.Metadata.Name,
 		UnitID: unit.ID, PluginID: ref.ID, PluginName: manifest.Name, Origin: origin,
 		Artifact: ArtifactIdentity{Version: ref.Version, Channel: channel, SHA256: artifact.SHA256},
-		Scope:    manifest.Configuration.Scope, ApplyMode: manifest.Configuration.ApplyMode, ApplyPath: applyPath,
+		Scope:    manifest.Configuration.Scope, ApplyMode: manifest.Configuration.ApplyMode, ApplyPath: applyPath, Controller: controller,
 		Schema: schema, SchemaDigest: schemaDigest, ManagedCredentials: append([]pluginv1.ManagedCredentialField(nil), manifest.Configuration.ManagedCredentials...),
 		Values: valuesRaw, DeploymentRevision: deployment.Revision, DeploymentDigest: deploymentDigest,
 	}
@@ -206,6 +222,50 @@ func definitionFor(deployment deploymentv2.Deployment, deploymentDigest string, 
 		return Definition{}, false, fmt.Errorf("插件 %s 当前配置不符合签名 Schema: %w", ref.ID, err)
 	}
 	return definition, true, nil
+}
+
+func configurationControllerFor(manifest pluginv1.Manifest, unit deploymentv2.ServiceUnit, applyPath ApplyPath) (*ControllerTarget, error) {
+	if manifest.Configuration == nil || manifest.Configuration.Controller == nil {
+		return nil, nil
+	}
+	if applyPath != ApplyHotService || manifest.Configuration.Controller.Protocol != pluginv1.ConfigurationControllerProtocol {
+		return nil, errors.New("controller 声明与 hot-service 路径不一致")
+	}
+	capability, err := pluginv1.ConfigurationControllerCapability(manifest.ID)
+	if err != nil {
+		return nil, err
+	}
+	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
+	if err != nil {
+		return nil, err
+	}
+	var matched *pluginv1.RuntimeContribution
+	for index := range contributions {
+		contribution := &contributions[index]
+		if contribution.ExtensionPoint != pluginv1.ConfigurationControllerExtensionPoint || contribution.ID != capability {
+			continue
+		}
+		if matched != nil {
+			return nil, errors.New("controller runtime contribution 重复")
+		}
+		matched = contribution
+	}
+	if matched == nil {
+		return nil, errors.New("controller runtime contribution 缺失")
+	}
+	validLeader := matched.InstancePolicy == "leader" && matched.StateModel == "leader-owned" && matched.Routing == "leader"
+	validShared := matched.InstancePolicy == "active-active" && matched.StateModel == "external-shared" && matched.Routing == "queue"
+	if matched.Visibility == "local" || (!validLeader && !validShared) {
+		return nil, errors.New("configuration.v1 只接受 leader-owned 或 external-shared 控制器")
+	}
+	logicalService := unit.LogicalService
+	if logicalService == "" {
+		logicalService = unit.ID
+	}
+	return &ControllerTarget{
+		Protocol: pluginv1.ConfigurationControllerProtocol, ExtensionPoint: pluginv1.ConfigurationControllerExtensionPoint,
+		Capability: capability, LogicalService: logicalService, RoutingDomain: matched.RoutingDomain,
+	}, nil
 }
 
 func applyPathFor(origin, scope, mode string) (ApplyPath, error) {
@@ -281,12 +341,30 @@ func (c Catalog) Validate() error {
 		if err != nil || expectedPath != item.ApplyPath {
 			return fmt.Errorf("配置目录项生效路径无效: %s", item.ID)
 		}
+		if err := validateControllerTarget(item); err != nil {
+			return fmt.Errorf("配置目录项控制器无效 %s: %w", item.ID, err)
+		}
 	}
 	copy := c
 	copy.Digest = ""
 	expected, err := digestJSON(copy)
 	if err != nil || expected != c.Digest {
 		return errors.New("配置目录摘要无效")
+	}
+	return nil
+}
+
+func validateControllerTarget(item Definition) error {
+	if item.Controller == nil {
+		return nil
+	}
+	if item.ApplyPath != ApplyHotService || item.Controller.Protocol != pluginv1.ConfigurationControllerProtocol ||
+		item.Controller.ExtensionPoint != pluginv1.ConfigurationControllerExtensionPoint || strings.TrimSpace(item.Controller.LogicalService) == "" {
+		return errors.New("controller 身份与生效路径不一致")
+	}
+	expected, err := pluginv1.ConfigurationControllerCapability(item.PluginID)
+	if err != nil || item.Controller.Capability != expected {
+		return errors.New("controller capability 与签名插件身份不一致")
 	}
 	return nil
 }

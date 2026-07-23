@@ -26,6 +26,7 @@ export interface PluginConfigurationDefinition {
   scope: "service" | "tenant" | "user";
   applyMode: "restart" | "hot";
   applyPath: "application-deployment" | "platform-profile" | "hot-service" | "hot-scoped";
+  controllerAvailable: boolean;
   schema: Record<string, unknown>;
   schemaDigest: string;
   managedCredentials: Array<{ id: string; title: string; description?: string; purpose: string; required?: boolean }>;
@@ -42,7 +43,7 @@ export interface PluginConfigurationCandidate {
   applyPath: "application-deployment" | "platform-profile" | "hot-service" | "hot-scoped";
   catalogDigest: string; schemaDigest: string; artifactSha256: string; values: Record<string, unknown>;
   createdBy: string; createdAt: string; updatedAt: string; errorCode?: string; errorMessage?: string;
-  externalRevision?: number; externalStatus?: "Preparing" | "PendingApproval" | "Approved" | "CatalogActivated" | "Publishing" | "Ready" | "RollingBack" | "Failed" | "RolledBack" | "Aborted"; rollbackRevision?: number;
+  externalRevision?: number; externalStatus?: "Preparing" | "Prepared" | "PendingApproval" | "Approved" | "Activating" | "Aborting" | "Committed" | "CatalogActivated" | "Publishing" | "Ready" | "RollingBack" | "Failed" | "RolledBack" | "Aborted"; rollbackRevision?: number;
   managedCredentials?: Array<{ fieldId: string; staged: boolean; state: string }>;
 }
 
@@ -365,6 +366,18 @@ export class PlatformAdminClient {
   }
   public abortPlatformProfileConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
     return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/abort-profile`, "POST", { expectedRevision });
+  }
+  public submitHotServiceConfigurationDraft(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/submit-hot`, "POST", { expectedRevision });
+  }
+  public approveHotServiceConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/approve-hot`, "POST", { expectedRevision });
+  }
+  public activateHotServiceConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/activate-hot`, "POST", { expectedRevision });
+  }
+  public abortHotServiceConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/abort-hot`, "POST", { expectedRevision });
   }
 
   public listCredentials(prefix = ""): Promise<CredentialMetadata[]> { return this.get(`${this.basePath}/credentials${query({ prefix })}`); }

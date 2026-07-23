@@ -241,6 +241,14 @@
         "scope": { "enum": ["service", "tenant", "user"] },
         "applyMode": { "enum": ["restart", "hot"] },
         "schema": { "type": "object" },
+        "controller": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["protocol"],
+          "properties": {
+            "protocol": { "const": "configuration.v1" }
+          }
+        },
         "managedCredentials": {
           "type": "array",
           "uniqueItems": true,

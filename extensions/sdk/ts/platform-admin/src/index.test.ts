@@ -82,6 +82,10 @@ describe("PlatformAdminClient", () => {
     await client.approvePlatformProfileConfigurationCandidate(id, 7);
     await client.activatePlatformProfileConfigurationCandidate(id, 8);
     await client.abortPlatformProfileConfigurationCandidate(id, 9);
+    await client.submitHotServiceConfigurationDraft(id, 10);
+    await client.approveHotServiceConfigurationCandidate(id, 11);
+    await client.activateHotServiceConfigurationCandidate(id, 12);
+    await client.abortHotServiceConfigurationCandidate(id, 13);
     expect(calls.filter((call) => call.path !== "/v1/csrf")).toEqual([
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/submit`, method: "POST", body: '{"expectedRevision":4}' },
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/activate`, method: "POST", body: '{"expectedRevision":5}' },
@@ -89,6 +93,10 @@ describe("PlatformAdminClient", () => {
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/approve-profile`, method: "POST", body: '{"expectedRevision":7}' },
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/activate-profile`, method: "POST", body: '{"expectedRevision":8}' },
       { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/abort-profile`, method: "POST", body: '{"expectedRevision":9}' },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/submit-hot`, method: "POST", body: '{"expectedRevision":10}' },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/approve-hot`, method: "POST", body: '{"expectedRevision":11}' },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/activate-hot`, method: "POST", body: '{"expectedRevision":12}' },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/abort-hot`, method: "POST", body: '{"expectedRevision":13}' },
     ]);
   });
 

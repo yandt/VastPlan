@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
@@ -20,7 +21,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.23.0"
+	PluginVersion = "0.24.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -73,6 +74,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if configurationActivationAllowed(c, request) {
 		return extpoint.DecisionAllow, "配置协调器只能驱动候选绑定的应用配置发布"
+	}
+	if configurationControllerAllowed(c, request) {
+		return extpoint.DecisionAllow, "配置协调器只能调用目标插件的标准 Hot Service 控制端口"
 	}
 	if pluginConfigurationCatalogReadAllowed(c, request) {
 		return extpoint.DecisionAllow, "插件配置协调器只能读取活动可信配置目录"
@@ -131,7 +135,20 @@ func governedCapability(capability string) bool {
 	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", configurationauthority.KernelIssueService, configurationauthority.KernelConsumeService, platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, "platform.api-exposure":
 		return true
 	default:
-		return strings.HasPrefix(capability, artifactstorage.CapabilityPrefix)
+		return strings.HasPrefix(capability, artifactstorage.CapabilityPrefix) || strings.HasPrefix(capability, "configuration.")
+	}
+}
+
+func configurationControllerAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || c.GetCaller().GetId() != pluginconfiguration.PluginSettingsID ||
+		request.ExtensionPoint != configurationv1.ExtensionPoint || !strings.HasPrefix(request.Capability, "configuration.") {
+		return false
+	}
+	switch request.Operation {
+	case configurationv1.OperationPrepare, configurationv1.OperationCommit, configurationv1.OperationAbort, configurationv1.OperationStatus:
+		return true
+	default:
+		return false
 	}
 }
 

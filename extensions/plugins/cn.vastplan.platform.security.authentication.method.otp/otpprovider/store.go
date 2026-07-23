@@ -18,6 +18,7 @@ type challenge struct {
 	Revision   uint64
 	Phase      challengePhase
 	ProfileID  string
+	Profile    Profile
 	MethodID   string
 	StepID     string
 	Identifier string
@@ -107,5 +108,9 @@ func (s *MemoryChallengeStore) prune() {
 }
 func cloneChallenge(value challenge) challenge {
 	value.CodeMAC = append([]byte(nil), value.CodeMAC...)
+	if value.Profile.MaxResends != nil {
+		maxResends := *value.Profile.MaxResends
+		value.Profile.MaxResends = &maxResends
+	}
 	return value
 }

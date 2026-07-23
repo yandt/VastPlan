@@ -1,9 +1,9 @@
 # 平台 Workload 访问策略
 
 插件 ID：`cn.vastplan.foundation.security.platform-admin-access-policy`
-当前制品版本：`0.23.0`
+当前制品版本：`0.24.0`
 
-0.23.0 在既有 `kernel.config.credential-ref`、Application 配置激活和凭证 delegated 窄授权上，增加 Profile Activation 的双层对象能力：只有精确 plugin-settings 可调用 Deployment Manager 的 create/get/approve/publish/abort 内部操作，只有精确 Deployment Manager 可调用 `kernel.platform-profile.prepare/status/activate/publish/finalize/abort/rollback`。其他插件、用户和普通部署发布路径均不能取得该能力。
+0.24.0 在既有 `kernel.config.credential-ref`、Application/Profile 配置激活和凭证 delegated 窄授权上，增加 Service Hot 控制器访问：只有精确 plugin-settings、同租户且目标为 `configuration.controller + configuration.* + prepare/commit/abort/status` 时放行。业务插件、用户、错误扩展点或伪造 capability 均不能调用目标插件的内部配置事务端口。
 
 该 foundation 插件以 `per-kernel + local-ephemeral + local + direct` 运行，只治理系统与插件 workload 的精确回调。用户管理操作已全部交给签名 Permission Catalog 与优先级更高的 `authorization-enforcer`；本插件即使看到 `platform.admin`、精确 permission code 或 `is_admin` 也不会放行用户。
 

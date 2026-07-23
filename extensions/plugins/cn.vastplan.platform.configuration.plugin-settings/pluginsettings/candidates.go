@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
@@ -53,6 +54,21 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 	if err != nil {
 		return pluginconfiguration.Candidate{}, err
 	}
+	var hotBase *configurationv1.ActiveReference
+	if definition.ApplyPath == pluginconfiguration.ApplyHotService {
+		if definition.Controller == nil || definition.Controller.Protocol != configurationv1.Protocol {
+			return pluginconfiguration.Candidate{}, fmt.Errorf("%w: 目标插件未实现 configuration.v1", ErrInvalid)
+		}
+		if len(definition.ManagedCredentials) > 0 {
+			return pluginconfiguration.Candidate{}, fmt.Errorf("%w: 当前 Service Hot 阶段尚未开放托管凭证合并", ErrInvalid)
+		}
+		observation, statusErr := getHotControllerStatus(ctx, host, call, *definition.Controller, configurationv1.StatusRequest{ConfigurationID: definition.ID})
+		if statusErr != nil {
+			return pluginconfiguration.Candidate{}, statusErr
+		}
+		base := observation.Active
+		hotBase = &base
+	}
 	id, err := s.newID()
 	if err != nil {
 		return pluginconfiguration.Candidate{}, err
@@ -69,6 +85,9 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 		Values: append(json.RawMessage(nil), request.Values...), CreatedBy: actor, CreatedAt: now, UpdatedAt: now,
 		ManagedCredentials: credentialStatus,
 	}
+	if hotBase != nil {
+		candidate.ExternalRevision = hotBase.Revision
+	}
 	s.mu.Lock()
 	state := s.tenantLocked(tenant)
 	if len(state.Candidates) >= maxCandidates {
@@ -83,6 +102,9 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 	}
 	state.Candidates[id], state.Current[definition.ID] = candidate, id
 	state.CredentialStages[id] = map[string]credentialStage{}
+	if hotBase != nil {
+		state.HotDraftBases[id] = *hotBase
+	}
 	action := "configuration.draft.created"
 	if status == pluginconfiguration.CandidatePreparing {
 		action = "configuration.credentials.preparing"
@@ -92,6 +114,7 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 		delete(state.Candidates, id)
 		delete(state.Current, definition.ID)
 		delete(state.CredentialStages, id)
+		delete(state.HotDraftBases, id)
 		state.Audit = state.Audit[:len(state.Audit)-1]
 		state.NextAudit--
 		s.mu.Unlock()
@@ -128,11 +151,16 @@ func (s *Service) DiscardDraft(ctx context.Context, host sdk.Host, call *contrac
 		return pluginconfiguration.Candidate{}, ErrConflict
 	}
 	old := cloneCandidate(candidate)
+	base, hadBase := state.HotDraftBases[id]
 	candidate.Status, candidate.Revision, candidate.UpdatedAt = pluginconfiguration.CandidateRollingBack, candidate.Revision+1, s.now().Format(time.RFC3339Nano)
 	state.Candidates[id] = candidate
+	delete(state.HotDraftBases, id)
 	s.auditLocked(state, candidate, "configuration.draft.discarding", actor)
 	if err := s.saveLocked(); err != nil {
 		state.Candidates[id] = old
+		if hadBase {
+			state.HotDraftBases[id] = base
+		}
 		state.Audit = state.Audit[:len(state.Audit)-1]
 		state.NextAudit--
 		s.mu.Unlock()
@@ -204,6 +232,7 @@ func (s *Service) failPreparing(tenant, candidateID, actor string, cause error) 
 	}
 	previous := cloneCandidate(candidate)
 	currentID, hadCurrent := state.Current[candidate.ConfigurationID]
+	base, hadBase := state.HotDraftBases[candidateID]
 	auditLength, nextAudit := len(state.Audit), state.NextAudit
 	candidate.Status, candidate.Revision, candidate.UpdatedAt = pluginconfiguration.CandidateFailed, candidate.Revision+1, s.now().Format(time.RFC3339Nano)
 	candidate.ErrorCode = "platform.plugin_configuration.credential_stage_failed"
@@ -212,12 +241,16 @@ func (s *Service) failPreparing(tenant, candidateID, actor string, cause error) 
 		candidate.ErrorMessage = "托管凭证暂存失败，已回滚"
 	}
 	state.Candidates[candidateID] = candidate
+	delete(state.HotDraftBases, candidateID)
 	delete(state.Current, candidate.ConfigurationID)
 	s.auditLocked(state, candidate, "configuration.credentials.failed", actor)
 	if err := s.saveLocked(); err != nil {
 		state.Candidates[candidateID] = previous
 		if hadCurrent {
 			state.Current[candidate.ConfigurationID] = currentID
+		}
+		if hadBase {
+			state.HotDraftBases[candidateID] = base
 		}
 		state.Audit, state.NextAudit = state.Audit[:auditLength], nextAudit
 		return err
@@ -235,6 +268,7 @@ func (s *Service) completeRollback(tenant, candidateID, actor string) (plugincon
 	}
 	previous := cloneCandidate(candidate)
 	currentID, hadCurrent := state.Current[candidate.ConfigurationID]
+	base, hadBase := state.HotDraftBases[candidateID]
 	auditLength, nextAudit := len(state.Audit), state.NextAudit
 	candidate.Status, candidate.Revision, candidate.UpdatedAt = pluginconfiguration.CandidateRolledBack, candidate.Revision+1, s.now().Format(time.RFC3339Nano)
 	candidate.ErrorCode, candidate.ErrorMessage = "platform.plugin_configuration.discarded", "候选已由操作者放弃"
@@ -243,12 +277,16 @@ func (s *Service) completeRollback(tenant, candidateID, actor string) (plugincon
 		candidate.ManagedCredentials[index].State = "Aborted"
 	}
 	state.Candidates[candidateID] = candidate
+	delete(state.HotDraftBases, candidateID)
 	delete(state.Current, candidate.ConfigurationID)
 	s.auditLocked(state, candidate, "configuration.draft.discarded", actor)
 	if err := s.saveLocked(); err != nil {
 		state.Candidates[candidateID] = previous
 		if hadCurrent {
 			state.Current[candidate.ConfigurationID] = currentID
+		}
+		if hadBase {
+			state.HotDraftBases[candidateID] = base
 		}
 		state.Audit, state.NextAudit = state.Audit[:auditLength], nextAudit
 		return pluginconfiguration.Candidate{}, err

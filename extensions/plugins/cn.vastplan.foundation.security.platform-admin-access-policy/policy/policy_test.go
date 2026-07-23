@@ -3,6 +3,7 @@ package policy
 import (
 	"testing"
 
+	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
@@ -117,6 +118,18 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 		if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: operation}); got == extpoint.DecisionAllow {
 			t.Fatalf("普通插件不得调用 Profile Activation 操作 %s: %s", operation, got)
 		}
+	}
+	for _, operation := range []string{configurationv1.OperationPrepare, configurationv1.OperationCommit, configurationv1.OperationAbort, configurationv1.OperationStatus} {
+		request := extpoint.PermissionRequest{ExtensionPoint: configurationv1.ExtensionPoint, Capability: "configuration.0123456789abcdef0123456789abcdef", Operation: operation}
+		if got, _ := decide(configurationPlugin, request); got != extpoint.DecisionAllow {
+			t.Fatalf("配置协调器必须能调用 configuration.v1 %s: %s", operation, got)
+		}
+		if got, _ := decide(businessPlugin, request); got != extpoint.DecisionDeny {
+			t.Fatalf("普通插件不得调用 configuration.v1 %s: %s", operation, got)
+		}
+	}
+	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: "configuration.0123456789abcdef0123456789abcdef", Operation: configurationv1.OperationCommit}); got != extpoint.DecisionDeny {
+		t.Fatalf("configuration.v1 必须绑定专用扩展点: %s", got)
 	}
 	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: platformadminapi.CredentialsCapability, Operation: "stageDelegated"}); got != extpoint.DecisionDeny {
 		t.Fatalf("普通插件不得使用委托凭证入口: %s", got)

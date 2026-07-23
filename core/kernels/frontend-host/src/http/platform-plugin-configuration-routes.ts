@@ -72,6 +72,20 @@ export class PlatformPluginConfigurationRoutes {
       await withRequestJSON(request, response, async (body) => this.call(principal, target, operation, true, { ...requireJSONObject(body), id }, response, signal));
       return true;
     }
+    const hotOperations: Readonly<Record<string, string>> = {
+      "submit-hot": "submitHotServiceDraft",
+      "approve-hot": "approveHotServiceCandidate",
+      "activate-hot": "activateHotServiceCandidate",
+      "abort-hot": "abortHotServiceCandidate",
+    };
+    if (parts.length === 4 && method === "POST" && parts[3] !== undefined && hotOperations[parts[3]] !== undefined) {
+      const id = resourceName(parts[2], 64);
+      if (id === undefined) return invalidName(response, method);
+      const operation = hotOperations[parts[3]]!;
+      if (!this.authorize(principal, target, operation, true, "platform.plugin-configuration.hot.publish", response)) return true;
+      await withRequestJSON(request, response, async (body) => this.call(principal, target, operation, true, { ...requireJSONObject(body), id }, response, signal));
+      return true;
+    }
     return parts.length > 4 ? notFound(response, method) : methodNotAllowed(response, method);
   }
 

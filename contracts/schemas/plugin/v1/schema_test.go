@@ -268,6 +268,7 @@ func TestValidateDescriptor_BackendPublicCatalog(t *testing.T) {
 		"hook":                    `{"point":"invoke","phase":"before"}`,
 		"runner.capability":       `{"service_role":"rs","kind":"process.exec","params":{"sandbox":true}}`,
 		"authentication.provider": `{"protocol":"authentication.method.v1","purposes":["portal-login"],"methods":[{"id":"corporate-sso","kind":"redirect","interaction":"redirect"}],"subjectNamespace":"enterprise.identity.corporate","requiredCapabilities":[]}`,
+		"configuration.controller": `{"protocol":"configuration.v1"}`,
 	}
 	for point, descriptor := range valid {
 		t.Run(point, func(t *testing.T) {

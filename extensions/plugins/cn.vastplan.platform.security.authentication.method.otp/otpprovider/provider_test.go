@@ -171,11 +171,15 @@ func TestOTPManifestMatchesRuntimeDescriptor(t *testing.T) {
 		t.Fatal(err)
 	}
 	items, err := pluginv1.BackendRuntimeContributions(manifest)
-	if err != nil || len(items) != 1 {
+	if err != nil || len(items) != 2 {
 		t.Fatalf("OTP Manifest 无效: %+v %v", items, err)
 	}
 	var signed, runtime any
-	_ = json.Unmarshal(items[0].Descriptor, &signed)
+	for _, item := range items {
+		if item.ExtensionPoint == "authentication.provider" {
+			_ = json.Unmarshal(item.Descriptor, &signed)
+		}
+	}
 	_ = json.Unmarshal(Descriptor(), &runtime)
 	if !reflect.DeepEqual(signed, runtime) {
 		t.Fatal("OTP 运行 descriptor 与 Manifest 漂移")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"strings"
+	"sync"
 	"time"
 
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
@@ -12,10 +13,13 @@ import (
 )
 
 type Provider struct {
-	profiles map[string]Profile
-	store    ChallengeStore
-	hmacKey  []byte
-	now      func() time.Time
+	mu         sync.RWMutex
+	profiles   map[string]Profile
+	store      ChallengeStore
+	hmacKey    []byte
+	now        func() time.Time
+	stateFile  string
+	controller controllerState
 }
 
 func New(configuration Configuration, stores ...ChallengeStore) (*Provider, error) {
@@ -31,11 +35,22 @@ func New(configuration Configuration, stores ...ChallengeStore) (*Provider, erro
 	if len(stores) > 0 && stores[0] != nil {
 		store = stores[0]
 	}
-	return &Provider{profiles: normalized.Profiles, store: store, hmacKey: key, now: func() time.Time { return time.Now().UTC() }}, nil
+	provider := &Provider{profiles: normalized.Profiles, store: store, hmacKey: key, now: func() time.Time { return time.Now().UTC() }}
+	if err := provider.configureController(normalized); err != nil {
+		return nil, err
+	}
+	return provider, nil
+}
+
+func (p *Provider) profile(id string) (Profile, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	profile, ok := p.profiles[id]
+	return profile, ok
 }
 
 func (p *Provider) begin(request authenticationv1.BeginRequest) authenticationv1.BeginResult {
-	profile, ok := p.profiles[request.ProviderProfileID]
+	profile, ok := p.profile(request.ProviderProfileID)
 	if !ok || profile.MethodID != request.MethodID {
 		return authenticationv1.BeginResult{Result: terminal(authenticationv1.StateRejected, authenticationv1.ReasonMethodUnavailable)}
 	}
@@ -44,7 +59,7 @@ func (p *Provider) begin(request authenticationv1.BeginRequest) authenticationv1
 		return authenticationv1.BeginResult{Result: terminal(authenticationv1.StateRejected, authenticationv1.ReasonMethodUnavailable)}
 	}
 	expires := p.now().Add(profile.ttl())
-	value := challenge{Phase: phaseIdentifier, ProfileID: request.ProviderProfileID, MethodID: request.MethodID, StepID: stepID, Locale: request.Locale, ExpiresAt: expires}
+	value := challenge{Phase: phaseIdentifier, ProfileID: request.ProviderProfileID, Profile: profile, MethodID: request.MethodID, StepID: stepID, Locale: request.Locale, ExpiresAt: expires}
 	if err := p.store.Create(request.TransactionID, value); err != nil {
 		return authenticationv1.BeginResult{Result: terminal(authenticationv1.StateRejected, authenticationv1.ReasonRateLimited)}
 	}
@@ -75,7 +90,7 @@ func (p *Provider) continueAuthentication(ctx context.Context, host sdk.Host, ca
 }
 
 func (p *Provider) startCodeChallenge(ctx context.Context, host sdk.Host, call *contractv1.CallContext, transactionID string, current challenge, identifier string, resend bool) authenticationv1.MethodResult {
-	profile := p.profiles[current.ProfileID]
+	profile := current.Profile
 	code, err := randomCode(profile.CodeLength)
 	if err != nil {
 		p.store.Delete(transactionID)
@@ -124,7 +139,7 @@ func (p *Provider) startCodeChallenge(ctx context.Context, host sdk.Host, call *
 }
 
 func (p *Provider) verifyCode(transactionID string, current challenge, code string) authenticationv1.MethodResult {
-	profile := p.profiles[current.ProfileID]
+	profile := current.Profile
 	valid := len(code) == profile.CodeLength && hmac.Equal(current.CodeMAC, p.codeMAC(transactionID, code)) && current.SubjectID != ""
 	if valid {
 		evidenceID, evidenceErr := randomID()
@@ -154,7 +169,7 @@ func (p *Provider) resend(ctx context.Context, host sdk.Host, call *contractv1.C
 	if !ok || current.Phase != phaseCode || current.StepID != request.StepID || !p.now().Before(current.ExpiresAt) {
 		return authenticationv1.ResendResult{Result: terminal(authenticationv1.StateExpired, authenticationv1.ReasonTransactionInvalid)}
 	}
-	profile := p.profiles[current.ProfileID]
+	profile := current.Profile
 	if p.now().Before(current.ResendAt) {
 		return authenticationv1.ResendResult{Result: authenticationv1.MethodResult{State: authenticationv1.StateChallenge, Step: codeStep(current.StepID, current.ExpiresAt, current.ResendAt, profile.CodeLength)}}
 	}
