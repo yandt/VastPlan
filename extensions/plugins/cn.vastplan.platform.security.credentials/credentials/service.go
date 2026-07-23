@@ -23,12 +23,13 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.credentials/credentialsstate"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
 const (
-	PluginID                = "cn.vastplan.platform.security.credentials"
+	PluginID                = credentialsstate.PluginID
 	PluginVersion           = "0.11.0"
 	Capability              = "platform.credentials"
 	MaterialLeaseCapability = "platform.credentials.material-lease"

@@ -25,6 +25,8 @@ func main() {
 	tenant := flag.String("tenant", "", "node/manager-node 绑定的租户")
 	deployment := flag.String("deployment", "", "node/manager-node 绑定的 Deployment")
 	controllerCount := flag.Int("controller-count", 1, "生成独立 controller 身份数量")
+	sharedStateBackupCount := flag.Int("shared-state-backup-count", 1, "生成只读 Shared State snapshot 身份数量")
+	sharedStateRestoreCount := flag.Int("shared-state-restore-count", 1, "生成只允许恢复 Shared State 空目标流的身份数量")
 	catalogPublisherCount := flag.Int("catalog-publisher-count", 1, "生成独立 Backend Platform Catalog publisher 身份数量")
 	catalogID := flag.String("catalog-id", "", "catalog-publisher 精确绑定的 Backend Platform Catalog ID")
 	runtimeCount := flag.Int("runtime-count", 1, "生成独立 runtime 身份数量")
@@ -37,13 +39,13 @@ func main() {
 		fatalf("创建输出目录失败: %v", err)
 	}
 	systemPublic, systemSeed := generateIdentity()
-	if *nodeCount < 1 || *managerNodeCount < 0 || *controllerCount < 1 || *catalogPublisherCount < 1 || *runtimeCount < 1 {
-		fatalf("node/controller/catalog-publisher/runtime 数量必须至少为 1，manager-node 不能为负数")
+	if *nodeCount < 1 || *managerNodeCount < 0 || *controllerCount < 1 || *sharedStateBackupCount < 1 || *sharedStateRestoreCount < 1 || *catalogPublisherCount < 1 || *runtimeCount < 1 {
+		fatalf("node/controller/shared-state-backup/shared-state-restore/catalog-publisher/runtime 数量必须至少为 1，manager-node 不能为负数")
 	}
 	if *catalogPublisherCount > 0 && *catalogID == "" {
 		fatalf("生成 catalog-publisher 身份必须指定 -catalog-id")
 	}
-	identities := make([]controlplane.NKeyIdentity, 0, 1+*nodeCount+*managerNodeCount+*controllerCount+*catalogPublisherCount+*runtimeCount)
+	identities := make([]controlplane.NKeyIdentity, 0, 1+*nodeCount+*managerNodeCount+*controllerCount+*sharedStateBackupCount+*sharedStateRestoreCount+*catalogPublisherCount+*runtimeCount)
 	seeds := map[string][]byte{"system.seed": systemSeed}
 	addIdentity := func(role controlplane.SecurityRole, name, nodeID string) {
 		publicKey, seed := generateIdentity()
@@ -55,6 +57,12 @@ func main() {
 		seeds[name+".seed"] = seed
 	}
 	addIdentity(controlplane.RoleBootstrap, "bootstrap", "")
+	for index := 1; index <= *sharedStateBackupCount; index++ {
+		addIdentity(controlplane.RoleSharedStateBackup, fmt.Sprintf("shared-state-backup-%d", index), "")
+	}
+	for index := 1; index <= *sharedStateRestoreCount; index++ {
+		addIdentity(controlplane.RoleSharedStateRestore, fmt.Sprintf("shared-state-restore-%d", index), "")
+	}
 	for index := 1; index <= *controllerCount; index++ {
 		addIdentity(controlplane.RoleController, fmt.Sprintf("controller-%d", index), "")
 	}

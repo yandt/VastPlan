@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -165,6 +166,43 @@ func physicalKey(scope Scope, key string) (string, error) {
 		return "", err
 	}
 	return scopePrefix(scope) + encode(key), nil
+}
+
+// ParsePhysicalKeyForOperations decodes a physical Shared State key for
+// trusted backup, recovery, and capacity tooling. Plugin-facing protocols must
+// never expose this representation because it contains host-derived identity.
+func ParsePhysicalKeyForOperations(key string) (Scope, string, error) {
+	parts := strings.Split(key, ".")
+	if len(parts) != 7 || parts[0] != "v1" {
+		return Scope{}, "", fmt.Errorf("%w: physical key", ErrInvalid)
+	}
+	kind := ScopeKind(parts[1])
+	tenant := ""
+	if kind == ScopeTenant {
+		var err error
+		tenant, err = decode(parts[2])
+		if err != nil {
+			return Scope{}, "", fmt.Errorf("%w: physical tenant", ErrInvalid)
+		}
+	} else if kind != ScopeService || parts[2] != "-" {
+		return Scope{}, "", fmt.Errorf("%w: physical scope", ErrInvalid)
+	}
+	decoded := make([]string, 4)
+	for index, part := range parts[3:] {
+		value, err := decode(part)
+		if err != nil {
+			return Scope{}, "", fmt.Errorf("%w: physical component", ErrInvalid)
+		}
+		decoded[index] = value
+	}
+	scope := Scope{Kind: kind, TenantID: tenant, RuntimeScope: decoded[0], PluginID: decoded[1], Namespace: decoded[2]}
+	if err := scope.Validate(); err != nil {
+		return Scope{}, "", err
+	}
+	if err := ValidateKey(decoded[3]); err != nil {
+		return Scope{}, "", err
+	}
+	return scope, decoded[3], nil
 }
 
 func scopePrefix(scope Scope) string {

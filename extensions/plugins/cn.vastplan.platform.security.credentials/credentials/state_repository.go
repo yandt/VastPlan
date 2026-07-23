@@ -3,26 +3,22 @@ package credentials
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"strings"
 
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.credentials/credentialsstate"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
 const (
-	credentialsStateNamespace = "credentials.ledger"
-	credentialsRootKey        = "root"
-	credentialsBlobPrefix     = "blob."
-	credentialsSnapshotFormat = "credentials.snapshot.v1"
-	credentialsChunkBytes     = 512 << 10
-	credentialsMaxSnapshot    = 64 << 20
+	credentialsStateNamespace = credentialsstate.Namespace
+	credentialsRootKey        = credentialsstate.RootKey
+	credentialsBlobPrefix     = credentialsstate.BlobPrefix
+	credentialsChunkBytes     = credentialsstate.ChunkBytes
+	credentialsMaxSnapshot    = credentialsstate.MaxSnapshotSize
 )
 
 var errStateConflict = errors.New("Credentials Shared State 并发冲突")
@@ -42,18 +38,6 @@ type credentialSnapshot struct {
 	Managed     map[string]ManagedRecord `json:"managed"`
 	Audit       managedAuditState        `json:"audit"`
 	Maintenance ManagedMaintenanceStatus `json:"maintenance"`
-}
-
-type credentialSnapshotChunk struct {
-	Digest string `json:"digest"`
-	Size   int    `json:"size"`
-}
-
-type credentialSnapshotRoot struct {
-	Format string                    `json:"format"`
-	Digest string                    `json:"digest"`
-	Size   int                       `json:"size"`
-	Chunks []credentialSnapshotChunk `json:"chunks"`
 }
 
 func newCredentialStateRepository(host sdk.Host) (*credentialStateRepository, error) {
@@ -76,7 +60,7 @@ func (r *credentialStateRepository) load(ctx context.Context, call *contractv1.C
 	if err != nil {
 		return credentialSnapshot{}, 0, fmt.Errorf("读取 Credentials Shared State Root: %w", err)
 	}
-	root, err := parseCredentialSnapshotRoot(entry.Value)
+	root, err := credentialsstate.ParseRoot(entry.Value)
 	if err != nil {
 		return credentialSnapshot{}, 0, err
 	}
@@ -86,16 +70,16 @@ func (r *credentialStateRepository) load(ctx context.Context, call *contractv1.C
 		if err != nil {
 			return credentialSnapshot{}, 0, fmt.Errorf("读取 Credentials Shared State chunk: %w", err)
 		}
-		if len(blob.Value) != chunk.Size || digestHex(blob.Value) != chunk.Digest {
+		if len(blob.Value) != chunk.Size || credentialsstate.DigestHex(blob.Value) != chunk.Digest {
 			return credentialSnapshot{}, 0, errors.New("Credentials Shared State chunk 摘要或大小不一致")
 		}
 		raw = append(raw, blob.Value...)
 	}
-	if len(raw) != root.Size || digestHex(raw) != root.Digest {
+	if len(raw) != root.Size || credentialsstate.DigestHex(raw) != root.Digest {
 		return credentialSnapshot{}, 0, errors.New("Credentials Shared State 快照摘要或大小不一致")
 	}
 	value := emptyCredentialSnapshot()
-	if err := decodeStrictJSON(raw, &value); err != nil {
+	if err := credentialsstate.DecodeStrictJSON(raw, &value); err != nil {
 		return credentialSnapshot{}, 0, fmt.Errorf("解析 Credentials Shared State 快照: %w", err)
 	}
 	if err := validateCredentialSnapshot(value); err != nil {
@@ -115,14 +99,17 @@ func (r *credentialStateRepository) save(ctx context.Context, call *contractv1.C
 	if len(raw) == 0 || len(raw) > credentialsMaxSnapshot {
 		return 0, fmt.Errorf("Credentials tenant 快照必须为 1-%d 字节", credentialsMaxSnapshot)
 	}
-	root := credentialSnapshotRoot{Format: credentialsSnapshotFormat, Digest: digestHex(raw), Size: len(raw)}
+	root, err := credentialsstate.NewRoot(raw)
+	if err != nil {
+		return 0, err
+	}
 	for offset := 0; offset < len(raw); offset += credentialsChunkBytes {
 		end := offset + credentialsChunkBytes
 		if end > len(raw) {
 			end = len(raw)
 		}
 		chunk := raw[offset:end]
-		digest := digestHex(chunk)
+		digest := credentialsstate.DigestHex(chunk)
 		key := credentialsBlobPrefix + digest
 		if _, err := r.client.Create(ctx, call, key, chunk); err != nil {
 			if !sharedstatesdk.IsConflict(err) {
@@ -133,7 +120,7 @@ func (r *credentialStateRepository) save(ctx context.Context, call *contractv1.C
 				return 0, errors.New("Credentials 内容寻址 chunk 冲突")
 			}
 		}
-		root.Chunks = append(root.Chunks, credentialSnapshotChunk{Digest: digest, Size: len(chunk)})
+		root.Chunks = append(root.Chunks, credentialsstate.Chunk{Digest: digest, Size: len(chunk)})
 	}
 	rootRaw, err := json.Marshal(root)
 	if err != nil {
@@ -154,33 +141,6 @@ func (r *credentialStateRepository) save(ctx context.Context, call *contractv1.C
 	return entry.Revision, nil
 }
 
-func parseCredentialSnapshotRoot(raw []byte) (credentialSnapshotRoot, error) {
-	var root credentialSnapshotRoot
-	if err := decodeStrictJSON(raw, &root); err != nil {
-		return root, fmt.Errorf("解析 Credentials Shared State Root: %w", err)
-	}
-	if root.Format != credentialsSnapshotFormat || len(root.Digest) != sha256.Size*2 || root.Size < 1 || root.Size > credentialsMaxSnapshot || len(root.Chunks) == 0 || len(root.Chunks) > (credentialsMaxSnapshot+credentialsChunkBytes-1)/credentialsChunkBytes {
-		return root, errors.New("Credentials Shared State Root 无效")
-	}
-	total := 0
-	for _, chunk := range root.Chunks {
-		if len(chunk.Digest) != sha256.Size*2 || chunk.Size < 1 || chunk.Size > credentialsChunkBytes {
-			return root, errors.New("Credentials Shared State Root chunk 无效")
-		}
-		if _, err := hex.DecodeString(chunk.Digest); err != nil || strings.ToLower(chunk.Digest) != chunk.Digest {
-			return root, errors.New("Credentials Shared State Root chunk 摘要无效")
-		}
-		total += chunk.Size
-	}
-	if total != root.Size {
-		return root, errors.New("Credentials Shared State Root 总大小无效")
-	}
-	if _, err := hex.DecodeString(root.Digest); err != nil || strings.ToLower(root.Digest) != root.Digest {
-		return root, errors.New("Credentials Shared State Root 摘要无效")
-	}
-	return root, nil
-}
-
 func validateCredentialSnapshot(value credentialSnapshot) error {
 	if value.Records == nil || value.Managed == nil || value.Audit.Events == nil || value.Maintenance.Counts == nil {
 		return errors.New("Credentials tenant 快照缺少必填集合")
@@ -194,22 +154,4 @@ func validateCredentialSnapshot(value credentialSnapshot) error {
 		return err
 	}
 	return nil
-}
-
-func decodeStrictJSON(raw []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return errors.New("JSON 包含尾随数据")
-	}
-	return nil
-}
-
-func digestHex(value []byte) string {
-	digest := sha256.Sum256(value)
-	return hex.EncodeToString(digest[:])
 }

@@ -159,3 +159,4 @@
 - [ADR-0126 Deployment Manager 共享账本与副作用 Fencing](ADR-0126-Deployment-Manager共享账本与副作用Fencing.md)
 - [ADR-0127 Credentials 内容寻址快照与 Material Lease 复核](ADR-0127-Credentials内容寻址快照与Material-Lease复核.md)
 - [ADR-0128 统一 Leader Epoch 与外部副作用 Fencing](ADR-0128-统一Leader-Epoch与外部副作用Fencing.md)
+- [ADR-0129 Shared State 签名备份与空目标恢复](ADR-0129-Shared-State签名备份与空目标恢复.md)

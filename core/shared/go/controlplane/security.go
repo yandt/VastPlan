@@ -117,12 +117,14 @@ func loadNATSTLSConfig(caFile, certFile, keyFile string) (*tls.Config, error) {
 type SecurityRole string
 
 const (
-	RoleBootstrap        SecurityRole = "bootstrap"
-	RoleCatalogPublisher SecurityRole = "catalog-publisher"
-	RoleController       SecurityRole = "controller"
-	RoleNode             SecurityRole = "node"
-	RoleManager          SecurityRole = "manager-node"
-	RoleRuntime          SecurityRole = "runtime"
+	RoleBootstrap          SecurityRole = "bootstrap"
+	RoleSharedStateBackup  SecurityRole = "shared-state-backup"
+	RoleSharedStateRestore SecurityRole = "shared-state-restore"
+	RoleCatalogPublisher   SecurityRole = "catalog-publisher"
+	RoleController         SecurityRole = "controller"
+	RoleNode               SecurityRole = "node"
+	RoleManager            SecurityRole = "manager-node"
+	RoleRuntime            SecurityRole = "runtime"
 )
 
 type SubjectACL struct {
@@ -148,6 +150,26 @@ func roleACL(role SecurityRole, tenant, deployment, nodeID, catalogID string) (S
 	switch role {
 	case RoleBootstrap:
 		return SubjectACL{PublishAllow: []string{">"}, SubscribeAllow: []string{">"}}, nil
+	case RoleSharedStateBackup:
+		stream := "KV_" + SharedStateBucket
+		return SubjectACL{
+			PublishAllow: append(kvAPIForRead(SharedStateBucket),
+				"$JS.API.STREAM.SNAPSHOT."+stream,
+				"$JS.SNAPSHOT.ACK."+stream+".>",
+				"$JS.API.CONSUMER.DELETE."+stream+".>",
+			),
+			SubscribeAllow: []string{"_INBOX.>"},
+		}, nil
+	case RoleSharedStateRestore:
+		stream := "KV_" + SharedStateBucket
+		return SubjectACL{
+			PublishAllow: append(kvAPIForRead(SharedStateBucket),
+				"$JS.API.STREAM.RESTORE."+stream,
+				"$JS.SNAPSHOT.RESTORE."+stream+".>",
+				"$JS.API.CONSUMER.DELETE."+stream+".>",
+			),
+			SubscribeAllow: []string{"_INBOX.>"},
+		}, nil
 	case RoleCatalogPublisher:
 		if strings.TrimSpace(catalogID) == "" {
 			return SubjectACL{}, errors.New("catalog-publisher NATS ACL 必须绑定 catalog id")

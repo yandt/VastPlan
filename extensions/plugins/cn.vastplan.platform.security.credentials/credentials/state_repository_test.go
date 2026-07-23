@@ -14,6 +14,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.credentials/credentialsstate"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -65,7 +66,7 @@ func TestCredentialSnapshotCASRejectsStaleLeaderAndTamperedChunk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	root, err := parseCredentialSnapshotRoot(rootEntry.Value)
+	root, err := credentialsstate.ParseRoot(rootEntry.Value)
 	if err != nil {
 		t.Fatal(err)
 	}

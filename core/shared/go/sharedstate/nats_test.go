@@ -60,6 +60,28 @@ func TestNATSStoreCrossInstanceCASIsolationAndPagination(t *testing.T) {
 	}
 }
 
+func TestParsePhysicalKeyForOperationsRoundTrip(t *testing.T) {
+	scopes := []Scope{
+		{Kind: ScopeTenant, TenantID: "tenant-a", PluginID: "cn.vastplan.credentials", RuntimeScope: "platform-credentials", Namespace: "credentials.ledger"},
+		{Kind: ScopeService, PluginID: "cn.vastplan.service", RuntimeScope: "service-a", Namespace: "state"},
+	}
+	for _, scope := range scopes {
+		physical, err := physicalKey(scope, "root.value")
+		if err != nil {
+			t.Fatal(err)
+		}
+		decoded, key, err := ParsePhysicalKeyForOperations(physical)
+		if err != nil || decoded != scope || key != "root.value" {
+			t.Fatalf("physical key round trip: scope=%+v key=%q err=%v", decoded, key, err)
+		}
+	}
+	for _, invalid := range []string{"", "v2.tenant.-.x.x.x.x", "v1.service.dGVuYW50.c2VydmljZQ.cGx1Z2lu.c3RhdGU.a2V5", "v1.tenant.bad"} {
+		if _, _, err := ParsePhysicalKeyForOperations(invalid); err == nil {
+			t.Fatalf("非法 physical key 未拒绝: %q", invalid)
+		}
+	}
+}
+
 func TestNATSStoreFailsClosedAndRecoversAfterServerRestart(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "js-restart")
 	options := &server.Options{JetStream: true, StoreDir: directory, Host: "127.0.0.1", Port: -1, NoLog: true, NoSigs: true}

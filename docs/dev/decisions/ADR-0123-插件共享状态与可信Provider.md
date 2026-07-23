@@ -38,4 +38,5 @@
 - Portal Composer 1.6.0 已按 [ADR-0125](ADR-0125-Portal-Composer与Preference共享状态分区.md) 将组合治理和用户偏好迁入 Shared State，并切换为 active-active。
 - Deployment Manager 0.18.0 已按 [ADR-0126](ADR-0126-Deployment-Manager共享账本与副作用Fencing.md) 迁移租户账本，并按 [ADR-0128](ADR-0128-统一Leader-Epoch与外部副作用Fencing.md) 把现有 Unit Leadership evidence 接入 mutating 内核回调和 SSH 远端 epoch；继续保持 `leader + external-shared + leader routing`。
 - Credentials 0.11.0 已按 [ADR-0127](ADR-0127-Credentials内容寻址快照与Material-Lease复核.md) 使用小型 CAS Root 提交多 chunk 内容寻址安全快照，并在 Vault decrypt 后复核最新 Root；仍保持单 Leader。
+- Shared State 已按 [ADR-0129](ADR-0129-Shared-State签名备份与空目标恢复.md) 完成 Ed25519 签名的 JetStream 原生 snapshot、无正文逻辑摘要、Credentials Root/chunk 验证、空目标 restore 和恢复后 revision/CAS 复核；生产 RPO/RTO 实测进入故障矩阵阶段。
 - 单元测试覆盖两个插件实例共享读取、tenant 隔离、身份字段不进入请求、并发更新单赢家，以及 NATS 中断时 fail-closed、原存储目录重启后的自动重连恢复。真实跨进程 E2E 已验证实例 A 写入并退出后实例 B 从同一 NATS KV 继续读取。旧 `platform.settings.stateFile` 已从清单与开发 Profile 删除。

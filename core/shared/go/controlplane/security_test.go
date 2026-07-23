@@ -19,6 +19,8 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
+
+	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstatebackup"
 )
 
 func TestConnectWithConfig_FailsClosedOnPartialSecurity(t *testing.T) {
@@ -35,7 +37,7 @@ func TestConnectWithConfig_FailsClosedOnPartialSecurity(t *testing.T) {
 
 func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	files := generateTestCertificates(t)
-	roles := []SecurityRole{RoleBootstrap, RoleCatalogPublisher, RoleController, RoleNode, RoleManager, RoleRuntime}
+	roles := []SecurityRole{RoleBootstrap, RoleSharedStateBackup, RoleSharedStateRestore, RoleCatalogPublisher, RoleController, RoleNode, RoleManager, RoleRuntime}
 	identities := make([]NKeyIdentity, 0, len(roles))
 	seedFiles := map[SecurityRole]string{}
 	for _, role := range roles {
@@ -94,6 +96,8 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 		return nc
 	}
 	bootstrap := connect(RoleBootstrap)
+	backup := connect(RoleSharedStateBackup)
+	restore := connect(RoleSharedStateRestore)
 	catalogPublisher := connect(RoleCatalogPublisher)
 	controller := connect(RoleController)
 	node := connect(RoleNode)
@@ -102,9 +106,28 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	bootstrapJS, _ := jetstream.New(bootstrap)
-	bootstrapBuckets, err := EnsureBuckets(ctx, bootstrapJS, 1, jetstream.MemoryStorage)
+	bootstrapBuckets, err := EnsureBuckets(ctx, bootstrapJS, 1, jetstream.FileStorage)
 	if err != nil {
 		t.Fatalf("bootstrap 应能创建控制面 buckets: %v", err)
+	}
+	if _, err := bootstrapBuckets.SharedState.Put(ctx, "v1.tenant.dGVuYW50.c2VydmljZQ.cGx1Z2lu.c3RhdGU.a2V5", []byte("encrypted-state")); err != nil {
+		t.Fatal(err)
+	}
+	for role, connection := range map[SecurityRole]*nats.Conn{RoleSharedStateBackup: backup, RoleSharedStateRestore: restore} {
+		roleJS, _ := jetstream.New(connection)
+		roleKV, openErr := roleJS.KeyValue(ctx, SharedStateBucket)
+		if openErr != nil {
+			t.Fatalf("%s 应能打开 Shared State bucket: %v", role, openErr)
+		}
+		if entry, readErr := roleKV.Get(ctx, "v1.tenant.dGVuYW50.c2VydmljZQ.cGx1Z2lu.c3RhdGU.a2V5"); readErr != nil || string(entry.Value()) != "encrypted-state" {
+			t.Fatalf("%s 应能执行恢复校验读取: entry=%v err=%v", role, entry, readErr)
+		}
+		deniedCtx, deniedCancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+		if _, writeErr := roleKV.Put(deniedCtx, "forbidden", []byte("tampered")); writeErr == nil {
+			deniedCancel()
+			t.Fatalf("%s 不得通过 KV 写业务状态", role)
+		}
+		deniedCancel()
 	}
 	controllerJS, _ := jetstream.New(controller)
 	controllerBuckets, err := OpenBuckets(ctx, controllerJS)
@@ -257,6 +280,36 @@ func TestNATSSecurity_mTLSNKeyAndRoleSubjectACL(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("node 的授权 actual 未送达")
 	}
+
+	backupJS, _ := jetstream.New(backup)
+	backupKV, err := backupJS.KeyValue(ctx, SharedStateBucket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, trust, err := sharedstatebackup.GenerateSigningKey("security-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	archiveDirectory := filepath.Join(t.TempDir(), "shared-state-backup")
+	archive, err := sharedstatebackup.Backup(ctx, backup, backupJS, backupKV, sharedstatebackup.BackupOptions{
+		Bucket: SharedStateBucket, Directory: archiveDirectory, KeyID: "security-test", PrivateKey: private,
+	})
+	if err != nil {
+		t.Fatalf("最小 backup 身份无法完成原生 snapshot: %v", err)
+	}
+	verified, err := sharedstatebackup.VerifyArchive(archive.Directory, trust)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := bootstrapJS.DeleteKeyValue(ctx, SharedStateBucket); err != nil {
+		t.Fatal(err)
+	}
+	restoreJS, _ := jetstream.New(restore)
+	if _, err := sharedstatebackup.Restore(ctx, restore, restoreJS, verified, sharedstatebackup.RestoreOptions{
+		ConfirmManifestSHA256: verified.ManifestHash, WritersStopped: true,
+	}); err != nil {
+		t.Fatalf("最小 restore 身份无法完成空目标恢复与复核: %v", err)
+	}
 }
 
 func TestRoleACL_NodeCannotMutateGlobalIntent(t *testing.T) {
@@ -313,6 +366,33 @@ func TestRoleACL_CatalogPublisherCanOnlyMutateCatalogBucket(t *testing.T) {
 	}
 	if _, err := RoleACL(RoleCatalogPublisher); err == nil {
 		t.Fatal("未绑定 Catalog ID 不得生成 publisher ACL")
+	}
+}
+
+func TestRoleACL_SharedStateBackupAndRestoreAreSeparated(t *testing.T) {
+	backup, err := RoleACL(RoleSharedStateBackup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restore, err := RoleACL(RoleSharedStateRestore)
+	if err != nil {
+		t.Fatal(err)
+	}
+	backupSubjects := strings.Join(backup.PublishAllow, "\n")
+	restoreSubjects := strings.Join(restore.PublishAllow, "\n")
+	stream := "KV_" + SharedStateBucket
+	if !strings.Contains(backupSubjects, "$JS.API.STREAM.SNAPSHOT."+stream) || strings.Contains(backupSubjects, "$JS.API.STREAM.RESTORE.") {
+		t.Fatalf("backup ACL 未与 restore 分离: %s", backupSubjects)
+	}
+	if !strings.Contains(restoreSubjects, "$JS.API.STREAM.RESTORE."+stream) || strings.Contains(restoreSubjects, "$JS.API.STREAM.SNAPSHOT.") {
+		t.Fatalf("restore ACL 未与 snapshot 分离: %s", restoreSubjects)
+	}
+	for role, acl := range map[SecurityRole]SubjectACL{RoleSharedStateBackup: backup, RoleSharedStateRestore: restore} {
+		for _, subject := range acl.PublishAllow {
+			if strings.HasPrefix(subject, "$KV.") || strings.Contains(subject, DesiredBucket) || strings.Contains(subject, DeploymentsBucket) {
+				t.Fatalf("%s 获得越界写或控制面权限: %s", role, subject)
+			}
+		}
 	}
 }
 

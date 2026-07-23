@@ -19,6 +19,8 @@ go run ./engineering/tools/natssecurity \
   -tenant acme \
   -deployment cluster \
   -controller-count 3 \
+  -shared-state-backup-count 1 \
+  -shared-state-restore-count 1 \
   -catalog-publisher-count 1 \
   -catalog-id backend-production \
   -node-count 10 \
@@ -28,7 +30,7 @@ go run ./engineering/tools/natssecurity \
 
 工具不会覆盖已有文件。`*.seed` 均为 `0600` 且每个实例独立；`nats-server.conf` 只含公钥、ACL 和证书路径。`node` 与 `manager-node` 的 ACL 固定绑定到生成时声明的 tenant、Deployment 与 cluster-global node ID；不同作用域必须分别生成身份，重复 node ID 会被拒绝。
 
-除 NATS 连接用的角色 seed 外，跨节点 addressing 还需要为每个 Node Agent 单独生成一枚传输签名 NKey，并把所有允许互调的公钥登记到 `transport-trust.json`（文件权限至少 `0600`）。传输 seed 不得复用 bootstrap/controller/node/manager-node/catalog-publisher 的 NATS seed；信任文档随发布配置原子更新并纳入密钥轮换流程。
+除 NATS 连接用的角色 seed 外，跨节点 addressing 还需要为每个 Node Agent 单独生成一枚传输签名 NKey，并把所有允许互调的公钥登记到 `transport-trust.json`（文件权限至少 `0600`）。传输 seed 不得复用 bootstrap/controller/node/manager-node/catalog-publisher/shared-state-backup/shared-state-restore 的 NATS seed；备份 manifest 的 Ed25519 私钥也必须独立。信任文档随发布配置原子更新并纳入密钥轮换流程。
 
 ## 3. 启动 NATS
 
@@ -123,6 +125,8 @@ Node Agent 每次续租都会对完整 v3 Lease 做 detached signature。Lease k
 | 角色 | 允许 | 明确禁止 |
 |---|---|---|
 | bootstrap | 创建/校准全部 KV 与发布初始配置 | 常驻业务进程持有 |
+| shared-state-backup | 读取 Shared State、创建/删除该流的只读扫描 consumer、请求原生 snapshot、发送 snapshot flow ack | 写 `$KV`、执行 restore、访问其他控制面 |
+| shared-state-restore | 读取恢复结果、创建/删除该流的只读复核 consumer、向空目标执行原生 restore | 写 `$KV`、执行 snapshot、覆盖/删除现有流、访问其他控制面 |
 | catalog-publisher | 只读写身份绑定的精确 Backend Platform Catalog key | 写同 Bucket 其他 Catalog，或访问 Deployment/Desired/Assignment/Capability/配置授权/事件 |
 | controller | 读 Deployment/Node/Actual/Autoscaling Metric，写 Assignment/Composition/Controller Lease | 改 Stream、写 Actual/Capability/Metric |
 | node | 读 Desired/Assignment，写自身作用域的 Actual/Node、Capability/Autoscaling Metric，RPC/事件 | 读取其他节点 Lease，写 Deployment/Desired/Assignment |
@@ -130,3 +134,68 @@ Node Agent 每次续租都会对完整 v3 Lease 做 detached signature。Lease k
 | runtime | Capability、RPC、事件、写 Autoscaling Metric | 读取或改写部署控制面 |
 
 新增 bucket 或 Subject 时，必须先修改 `RoleACL` 并增加真实权限允许/拒绝测试，不得在部署配置里临时放开 `>`。
+
+## 7. Shared State 签名备份
+
+首次生成独立备份签名密钥。该私钥不得复用 NATS 登录 seed、制品签名密钥或 addressing transport seed：
+
+```bash
+go run ./engineering/tools/sharedstatectl keygen \
+  -key-id shared-state-backup-2026-01 \
+  -private-out /secure/vastplan-backup/signing.pem \
+  -trust-out /etc/vastplan/shared-state-backup-trust.json
+```
+
+使用 `shared-state-backup-1.seed` 创建在线一致备份。输出目录必须不存在；工具不会覆盖旧备份。备份扫描只在内存中读取 value，不把物理 key、tenant、CredentialRef、ciphertext 或配置正文写入 manifest/标准输出：
+
+```bash
+go run ./engineering/tools/sharedstatectl backup \
+  -nats-url tls://nats.example.com:4222 \
+  -nats-ca /etc/vastplan/pki/ca.crt \
+  -nats-cert /etc/vastplan/pki/backup.crt \
+  -nats-key /etc/vastplan/pki/backup.key \
+  -nats-seed /secure/vastplan-nats/shared-state-backup-1.seed \
+  -sign-key /secure/vastplan-backup/signing.pem \
+  -key-id shared-state-backup-2026-01 \
+  -out /var/backups/vastplan/shared-state/2026-07-23T120000Z
+```
+
+在线写入导致 stream sequence 变化时，整次扫描和 snapshot 会自动重试；持续写入超过重试上限则失败，不留下已提交目录。备份系统应每小时运行一次，重要发布、凭证批量轮换和 NATS 升级前额外执行；起始目标为 RPO ≤ 1 小时、RTO ≤ 2 小时、小时备份至少保留 7 天、日备份至少保留 35 天，并复制到异地不可变存储。目标 SLA 和保留期必须按企业要求收紧。
+
+复制或恢复前离线验签和校验 snapshot SHA-256：
+
+```bash
+go run ./engineering/tools/sharedstatectl verify \
+  -archive /var/backups/vastplan/shared-state/2026-07-23T120000Z \
+  -trust /etc/vastplan/shared-state-backup-trust.json
+```
+
+记录命令输出的完整 `manifestSHA256`。备份签名私钥轮换时，先把新公钥加入恢复环境信任文档，再启用新 key ID；旧公钥至少保留到使用它签名的最后一份备份过期。
+
+## 8. Shared State 灾难恢复
+
+恢复是停机流程，不是在线合并：
+
+1. 停止全部 Backend/Node writer 和入口流量，撤销或禁用旧集群 Node/Manager NKey，隔离旧 NATS；必须确认旧集群不会在网络恢复后重新成为可写真源。
+2. 启动已经配置 `shared-state-restore` 身份的空恢复 NATS 集群，但**不要先运行 controlplane bootstrap**；目标 `KV_VASTPLAN_SHARED_STATE_V1` 必须不存在。
+3. 使用公开信任文档执行 `verify`，人工核对备份时间、SHA-256 和变更单。
+4. 使用 `shared-state-restore-1.seed` 恢复；命令要求完整 manifest SHA-256 和显式停写确认：
+
+```bash
+go run ./engineering/tools/sharedstatectl restore \
+  -nats-url tls://nats-recovery.example.com:4222 \
+  -nats-ca /etc/vastplan/pki/ca.crt \
+  -nats-cert /etc/vastplan/pki/restore.crt \
+  -nats-key /etc/vastplan/pki/restore.key \
+  -nats-seed /secure/vastplan-nats/shared-state-restore-1.seed \
+  -archive /var/backups/vastplan/shared-state/2026-07-23T120000Z \
+  -trust /etc/vastplan/shared-state-backup-trust.json \
+  -confirm-manifest-sha256 '<verify 输出的完整摘要>' \
+  -confirm-writers-stopped
+```
+
+5. 工具完成原生 restore 后会重新计算最新 KV 的 key/revision/value 整体摘要，并再次验证 Credentials Root/chunk。任一步失败都不得启动服务；工具不会自动删除失败流，需保留证据、调查后由 NATS 管理员在变更控制下删除失败目标再重试。
+6. 恢复成功后再运行第 4 节的 controlplane bootstrap，创建其他 bucket 并校准已恢复 Shared State 的副本/限制；随后先启动单个管理节点做只读检查，再逐批恢复 Controller 和 Node。
+7. 至少每季度在隔离环境完成一次完整恢复演练；NATS Server 升级前必须用目标版本恢复最近备份，不能把“备份命令成功”当作可恢复证明。
+
+逐 KV JSON 导入、恢复到已存在 stream、自动删除目标和让 File Provider 临时顶替生产数据都被禁止。完整决策见 [ADR-0129](../decisions/ADR-0129-Shared-State签名备份与空目标恢复.md)。
