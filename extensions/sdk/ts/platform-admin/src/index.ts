@@ -70,7 +70,7 @@ export interface PluginConfigurationCandidate {
   catalogDigest: string; schemaDigest: string; artifactSha256: string; values: Record<string, unknown>;
   createdBy: string; createdAt: string; updatedAt: string; errorCode?: string; errorMessage?: string;
   externalRevision?: number; externalDigest?: string; externalStatus?: "Preparing" | "Prepared" | "PendingApproval" | "Approved" | "Activating" | "Aborting" | "Committed" | "CatalogActivated" | "Publishing" | "Ready" | "RollingBack" | "Failed" | "RolledBack" | "Aborted"; rollbackRevision?: number;
-  managedCredentials?: Array<{ fieldId: string; staged: boolean; state: string }>;
+  managedCredentials?: Array<{ fieldId: string; staged: boolean; state: string; version?: number }>;
 }
 
 export interface CredentialMetadata {

@@ -5,6 +5,8 @@ import {
   configurationControllerCapability,
   configurationControllerContribution,
   configurationDigest,
+  mergeManagedCredentials,
+  replacedManagedCredentials,
   validateObservation,
   prepareRequestDigest,
 } from "../src/index.mjs";
@@ -23,6 +25,16 @@ test("derives an opaque controller capability and stable normalized digests", ()
   assert.equal(configurationDigest(request.values, request.managedCredentials), "0f4e0e9504882ed26dffe20c7d6cb101c7a4178dc73d7f58b1d1fd0a59d40210");
   assert.equal(prepareRequestDigest({ ...request, values: { z: true, capacity: 10 } }), prepareRequestDigest({ ...request, values: { capacity: 10, z: true } }));
   assert.equal(configurationDigest({ b: 2, a: 1 }), configurationDigest({ a: 1, b: 2 }));
+});
+
+test("retains omitted managed credentials and selects only replaced refs for retirement", () => {
+  const retained = { handle: "credential://managed/retained", scope: "tenant", owner: "cn.vastplan.demo", purpose: "demo.token", version: 1 };
+  const oldRef = { ...retained, handle: "credential://managed/old" };
+  const newRef = { ...retained, handle: "credential://managed/new", version: 2 };
+  const merged = mergeManagedCredentials({ retained, token: oldRef }, { token: newRef });
+  assert.equal(merged.retained.handle, retained.handle);
+  assert.equal(merged.token.version, 2);
+  assert.deepEqual(replacedManagedCredentials({ retained, token: oldRef }, merged), [oldRef]);
 });
 
 test("requires an RFC 3339 observation timestamp", () => {

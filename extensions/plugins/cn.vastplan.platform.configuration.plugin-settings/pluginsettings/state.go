@@ -127,7 +127,8 @@ func (s *Service) validateLoaded() error {
 				return fmt.Errorf("插件配置协调器状态包含无效候选 %q", id)
 			}
 			for _, status := range candidate.ManagedCredentials {
-				if strings.TrimSpace(status.FieldID) == "" || strings.TrimSpace(status.State) == "" {
+				if strings.TrimSpace(status.FieldID) == "" || strings.TrimSpace(status.State) == "" || status.Version < 0 ||
+					((status.State == "Retained" || status.State == "Staged" || status.State == "Candidate" || status.State == "Active") && status.Version < 1) {
 					return fmt.Errorf("插件配置协调器候选 %q 包含无效凭证状态", id)
 				}
 			}

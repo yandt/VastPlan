@@ -36,13 +36,16 @@ type ActiveReference struct {
 }
 
 type PrepareRequest struct {
-	CandidateID        string                                   `json:"candidateId"`
-	ConfigurationID    string                                   `json:"configurationId"`
-	CatalogDigest      string                                   `json:"catalogDigest"`
-	SchemaDigest       string                                   `json:"schemaDigest"`
-	ArtifactSHA256     string                                   `json:"artifactSha256"`
-	ExpectedActive     ActiveReference                          `json:"expectedActive"`
-	Values             json.RawMessage                          `json:"values"`
+	CandidateID     string          `json:"candidateId"`
+	ConfigurationID string          `json:"configurationId"`
+	CatalogDigest   string          `json:"catalogDigest"`
+	SchemaDigest    string          `json:"schemaDigest"`
+	ArtifactSHA256  string          `json:"artifactSha256"`
+	ExpectedActive  ActiveReference `json:"expectedActive"`
+	Values          json.RawMessage `json:"values"`
+	// ManagedCredentials contains only replacements staged for this candidate.
+	// The target controller owns the complete Active reference set and MUST
+	// merge omitted fields from Active before computing ConfigurationDigest.
 	ManagedCredentials map[string]commonv1.ManagedCredentialRef `json:"managedCredentials,omitempty"`
 }
 

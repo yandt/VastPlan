@@ -148,3 +148,6 @@
 - [ADR-0115 Application 配置激活 Saga 与候选凭证窗口](ADR-0115-Application配置激活Saga与候选凭证窗口.md)
 - [ADR-0116 Backend Platform Profile 候选 Catalog 与配置激活](ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md)
 - [ADR-0117 语言中立 Service Hot 配置控制器](ADR-0117-语言中立Service-Hot配置控制器.md)
+- [ADR-0118 独立配置资源与动态 Profile](ADR-0118-独立配置资源与动态Profile.md)
+- [ADR-0119 Tenant 与 User Scoped Hot 配置真源](ADR-0119-Tenant与User-Scoped-Hot配置真源.md)
+- [ADR-0120 Service Hot 托管凭证提交与退役](ADR-0120-Service-Hot托管凭证提交与退役.md)

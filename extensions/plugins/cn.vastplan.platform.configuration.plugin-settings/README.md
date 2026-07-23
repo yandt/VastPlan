@@ -2,7 +2,7 @@
 
 `cn.vastplan.platform.configuration.plugin-settings` 是通用插件配置协调器。它通过可信宿主读取 Backend Resolver 基于验签制品生成、且与活动 Deployment revision/digest 精确匹配的 `ConfigurationCatalog v1`，并保存配置候选与审计记录。
 
-当前 `0.10.0` 实现：
+当前 `0.11.0` 实现：
 
 - 只返回活动、已发布 Deployment 的可信配置定义；
 - 使用不透明 `cfg_` 资源 ID，浏览器不提交插件身份或 Schema；
@@ -16,7 +16,8 @@
 - Platform Profile 来源 restart 配置使用独立权限与候选 Catalog：只能修改活动 Profile 的独立 service，不能编辑 attachment、共享 Profile 全文或其他 binding；
 - Profile 配置支持提交、异人审批、发布、显式放弃和重启恢复；readiness 失败时单调回滚 Catalog 与 Deployment；
 - Service Hot 配置通过签名清单派生的专用 `configuration.controller` 目标执行 `configuration.v1 prepare/commit/abort/status`，不复用产品工具 API；
-- 首批无托管凭证的 Hot 候选先由目标插件耐久准备，再经异人审批并原子提交；中断后从目标 `status` 恢复，不盲目重放；
+- Service Hot 固定托管字段支持留空保留和新值替换：目标控制器以完整合并引用集计算摘要并原子提交，Candidate 凭证随后转 Active；提交与激活之间中断时从目标 `status` 恢复，不产生提交失败后的孤儿 Active 凭证；
+- 目标控制器私有持久化旧引用退役 outbox；公开目录只投影配置状态和版本，不返回 handle；
 - 浏览器只看到控制器是否可用，不获得 capability、logical service、routing domain、request digest 或托管凭证 handle；
 - Tenant/User Scoped Hot 使用独立 `configuration.scoped-resolver`：运行时请求不接受配置 ID、插件 ID、tenant 或 subject，只按认证 caller 与上下文解析唯一签名定义；
 - Scoped 候选支持 Seed revision 0、目标主体隔离、异人审批、Active CAS、原子持久化、重启恢复和不携带 values 的有界 watch；
@@ -27,6 +28,6 @@
 - Portal 提供独立 Workbench MasterDetail 页面；签名 Schema 动态生成资源表单，浏览器不获得控制器目标、凭证 handle、密文或 material；
 - 不把 Draft、PendingApproval 或 Publishing 宣称为 Active。
 
-带托管凭证的 Service Hot 和 Scoped Hot 在“保留旧引用 + 替换新引用”合并与摘要语义完成前保持 fail-closed；这不影响已采用独立资源协议的 Profile。当前 Workbench 明确区分 Application/Platform/Service Hot/Scoped Hot/Resource 权限、Draft、外部审批、Activating、Ready 和回滚状态。
+带托管凭证的 Scoped Hot 仍保持 fail-closed；Service Hot 与独立资源 Profile 已完成“保留旧引用 + 替换新引用”闭环。当前 Workbench 明确区分 Application/Platform/Service Hot/Scoped Hot/Resource 权限、Draft、外部审批、Activating、Ready 和回滚状态。
 
-状态文件由本插件自己的部署配置 `platform.plugin-configuration.stateFile` 提供，不能从请求或环境变量指定。完整边界见 [ADR-0113](../../../docs/dev/decisions/ADR-0113-可信插件配置目录与分路径生效.md)、[ADR-0114](../../../docs/dev/decisions/ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)、[ADR-0115](../../../docs/dev/decisions/ADR-0115-Application配置激活Saga与候选凭证窗口.md)、[ADR-0116](../../../docs/dev/decisions/ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md)、[ADR-0117](../../../docs/dev/decisions/ADR-0117-语言中立Service-Hot配置控制器.md)、[ADR-0118](../../../docs/dev/decisions/ADR-0118-独立配置资源与动态Profile.md) 与 [ADR-0119](../../../docs/dev/decisions/ADR-0119-Tenant与User-Scoped-Hot配置真源.md)。
+状态文件由本插件自己的部署配置 `platform.plugin-configuration.stateFile` 提供，不能从请求或环境变量指定。完整边界见 [ADR-0113](../../../docs/dev/decisions/ADR-0113-可信插件配置目录与分路径生效.md)、[ADR-0114](../../../docs/dev/decisions/ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)、[ADR-0115](../../../docs/dev/decisions/ADR-0115-Application配置激活Saga与候选凭证窗口.md)、[ADR-0116](../../../docs/dev/decisions/ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md)、[ADR-0117](../../../docs/dev/decisions/ADR-0117-语言中立Service-Hot配置控制器.md)、[ADR-0118](../../../docs/dev/decisions/ADR-0118-独立配置资源与动态Profile.md)、[ADR-0119](../../../docs/dev/decisions/ADR-0119-Tenant与User-Scoped-Hot配置真源.md) 与 [ADR-0120](../../../docs/dev/decisions/ADR-0120-Service-Hot托管凭证提交与退役.md)。

@@ -76,3 +76,7 @@
 - OTP 0.2.0 已实现首个真实 Go 控制器；platform-admin-access-policy 0.24.0 只授权精确 plugin-settings 调用四个标准操作。Go 全仓、前端全工作区、相关竞态测试全部通过。
 - 本地 fresh 真实启动验收完成：Backend revision 21 的 11 个单元与受管服务 revision 2 的 1 个单元均收敛 Ready，plugin-settings 0.8.0 和访问策略 0.24.0 实际激活，Portal `/operations` 与 `/` 均返回 HTTP 200；随后已优雅停止。按既定决定未执行 soak。
 - Node `@vastplan/configuration-controller-node` SDK 随后完成：使用现有共享 node-worker，不增加进程；调用者校验、闭合 wire、Observation 裁剪、capability 与 prepare/configuration digest 均由 Go/Node 双边 golden 锁定。OIDC/Webhook 的动态 profile 秘密仍待专门契约选择，未被伪装成已支持。
+
+## 后续修正（2026-07-23）
+
+本 ADR 第 3 节的“先把托管凭证推进为 Active，再调用 commit”已由 [ADR-0120](ADR-0120-Service-Hot托管凭证提交与退役.md) 修正。Candidate 凭证本来就允许受控 Material Lease；因此当前顺序为控制器原子 commit、耐久记录 `FinalizingCredentials`、再把 replacement 推进为 Active。这样 commit 失败时引用仍可 abort，commit 已成事实时又能从 status 恢复，不产生无人引用的 Active 凭证。其余 `configuration.v1` 四操作、Active 所有权和无 handle Observation 决策保持不变。

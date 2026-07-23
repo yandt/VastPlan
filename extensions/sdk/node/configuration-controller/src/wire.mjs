@@ -62,6 +62,18 @@ export function configurationDigest(values, managedCredentials = {}) {
   return sha256(JSON.stringify({ values: normalizedValues, ...(Object.keys(credentials).length === 0 ? {} : { managedCredentials: credentials }) }));
 }
 
+export function mergeManagedCredentials(active = {}, replacements = {}) {
+  return normalizeCredentials({ ...normalizeCredentials(active), ...normalizeCredentials(replacements) });
+}
+
+export function replacedManagedCredentials(active = {}, merged = {}) {
+  const normalizedActive = normalizeCredentials(active);
+  const normalizedMerged = normalizeCredentials(merged);
+  return Object.freeze(Object.keys(normalizedActive).sort(utf8Compare)
+    .filter((fieldId) => normalizedMerged[fieldId]?.handle !== normalizedActive[fieldId].handle)
+    .map((fieldId) => normalizedActive[fieldId]));
+}
+
 export function validateObservation(value) {
   const observation = record(value, "configuration.v1 observation");
   exactKeys(observation, ["protocol", "configurationId", "active", "candidate", "observedAt"], "observation", ["protocol", "configurationId", "active", "observedAt"]);

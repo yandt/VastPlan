@@ -48,9 +48,7 @@ func (s *Service) publicDefinitions(tenant string, catalogs []pluginconfiguratio
 	items := make([]DefinitionView, 0)
 	for _, catalog := range catalogs {
 		for _, definition := range catalog.Items {
-			if candidate, ok := overlays[definition.ID]; ok && candidate.CatalogDigest == catalog.Digest && candidate.SchemaDigest == definition.SchemaDigest && candidate.ArtifactSHA256 == definition.Artifact.SHA256 {
-				definition.Values = append([]byte(nil), candidate.Values...)
-			}
+			definition = hotDefinitionOverlayFrom(definition, catalog.Digest, overlays)
 			definition = s.scopedDefinitionOverlay(tenant, definition, "")
 			items = append(items, publicDefinitionView(definition, catalog.Digest))
 		}
@@ -68,11 +66,21 @@ func (s *Service) publicDefinitions(tenant string, catalogs []pluginconfiguratio
 }
 
 func (s *Service) publicDefinition(tenant string, view DefinitionView, scopeSubjectID string) DefinitionView {
-	if candidate, ok := s.hotValueOverlays(tenant)[view.ID]; ok && candidate.CatalogDigest == view.CatalogDigest && candidate.SchemaDigest == view.SchemaDigest && candidate.ArtifactSHA256 == view.Artifact.SHA256 {
-		view.Values = append([]byte(nil), candidate.Values...)
-	}
+	view.Definition = s.hotDefinitionOverlay(tenant, view.Definition, view.CatalogDigest)
 	view.Definition = s.scopedDefinitionOverlay(tenant, view.Definition, scopeSubjectID)
 	return publicDefinitionView(view.Definition, view.CatalogDigest)
+}
+
+func (s *Service) hotDefinitionOverlay(tenant string, definition pluginconfiguration.Definition, catalogDigest string) pluginconfiguration.Definition {
+	return hotDefinitionOverlayFrom(definition, catalogDigest, s.hotValueOverlays(tenant))
+}
+
+func hotDefinitionOverlayFrom(definition pluginconfiguration.Definition, catalogDigest string, overlays map[string]pluginconfiguration.Candidate) pluginconfiguration.Definition {
+	if candidate, ok := overlays[definition.ID]; ok && candidate.CatalogDigest == catalogDigest && candidate.SchemaDigest == definition.SchemaDigest && candidate.ArtifactSHA256 == definition.Artifact.SHA256 {
+		definition.Values = append([]byte(nil), candidate.Values...)
+		definition.CredentialStates = activeCredentialStates(candidate.ManagedCredentials)
+	}
+	return definition
 }
 
 func (s *Service) scopedDefinitionOverlay(tenant string, definition pluginconfiguration.Definition, scopeSubjectID string) pluginconfiguration.Definition {
@@ -112,14 +120,20 @@ func (s *Service) hotValueOverlays(tenant string) map[string]pluginconfiguration
 }
 
 func publicDefinitionView(definition pluginconfiguration.Definition, catalogDigest string) DefinitionView {
-	// 0.8.0 deliberately exposes the first hot-service pilot only for
-	// definitions without managed credentials. Retained/new reference merge
-	// semantics must be completed before the UI can safely offer that path.
-	available := definition.Controller != nil && len(definition.ManagedCredentials) == 0
+	available := definition.Controller != nil
 	resourceAvailable := definition.ResourceController != nil && len(definition.ResourceCollections) > 0
 	definition.Controller = nil
 	definition.ResourceController = nil
 	return DefinitionView{Definition: definition, CatalogDigest: catalogDigest, ControllerAvailable: available, ResourceControllerAvailable: resourceAvailable}
+}
+
+func activeCredentialStates(statuses []pluginconfiguration.ManagedCredentialStatus) []pluginconfiguration.CredentialState {
+	states := make([]pluginconfiguration.CredentialState, 0, len(statuses))
+	for _, status := range statuses {
+		configured := status.Version > 0 && status.State != "Missing" && status.State != "Aborted"
+		states = append(states, pluginconfiguration.CredentialState{FieldID: status.FieldID, Configured: configured, Version: status.Version})
+	}
+	return states
 }
 
 func findDefinition(catalogs []pluginconfiguration.Catalog, id, digest string) (DefinitionView, error) {

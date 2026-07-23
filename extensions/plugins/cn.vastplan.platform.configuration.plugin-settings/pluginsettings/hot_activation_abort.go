@@ -75,10 +75,7 @@ func (s *Service) finishHotAbort(tenant, actor, id string, observation configura
 	candidate.Status, candidate.ExternalStatus, candidate.ExternalRevision = pluginconfiguration.CandidateRolledBack, string(configurationv1.StatusAborted), observation.Active.Revision
 	candidate.ErrorCode, candidate.ErrorMessage = "platform.plugin_configuration.hot_aborted", "Hot Service 配置候选已放弃"
 	candidate.Revision, candidate.UpdatedAt = candidate.Revision+1, now
-	for index := range candidate.ManagedCredentials {
-		candidate.ManagedCredentials[index].Staged = false
-		candidate.ManagedCredentials[index].State = "Aborted"
-	}
+	markCredentialStagesAborted(&candidate, cloneStages(state.CredentialStages[id]))
 	state.Candidates[id], state.HotActivations[id] = candidate, record
 	delete(state.Current, candidate.ConfigurationID)
 	s.auditLocked(state, candidate, "configuration.hot-service.aborted", actor)

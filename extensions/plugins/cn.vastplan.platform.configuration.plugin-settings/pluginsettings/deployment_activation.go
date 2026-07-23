@@ -289,6 +289,9 @@ func (s *Service) checkpointCredentialStageState(tenant, candidateID, fieldID, t
 	if !ok {
 		return ErrNotFound
 	}
+	if binding.State == target {
+		return nil
+	}
 	previous := binding
 	candidate, candidateOK := state.Candidates[candidateID]
 	if !candidateOK {
@@ -300,6 +303,9 @@ func (s *Service) checkpointCredentialStageState(tenant, candidateID, fieldID, t
 	for index := range candidate.ManagedCredentials {
 		if candidate.ManagedCredentials[index].FieldID == fieldID {
 			candidate.ManagedCredentials[index].State = target
+			if target == "Active" {
+				candidate.ManagedCredentials[index].Staged = false
+			}
 		}
 	}
 	candidate.Revision++

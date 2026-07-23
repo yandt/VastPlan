@@ -47,7 +47,7 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 	if err != nil {
 		return pluginconfiguration.Candidate{}, err
 	}
-	definition := definitionView.Definition
+	definition := s.hotDefinitionOverlay(tenant, definitionView.Definition, definitionView.CatalogDigest)
 	if err := pluginconfiguration.ValidateValues(definition, request.Values); err != nil {
 		return pluginconfiguration.Candidate{}, fmt.Errorf("%w: %v", ErrInvalid, err)
 	}
@@ -61,9 +61,6 @@ func (s *Service) CreateDraft(ctx context.Context, host sdk.Host, call *contract
 	if definition.ApplyPath == pluginconfiguration.ApplyHotService {
 		if definition.Controller == nil || definition.Controller.Protocol != configurationv1.Protocol {
 			return pluginconfiguration.Candidate{}, fmt.Errorf("%w: 目标插件未实现 configuration.v1", ErrInvalid)
-		}
-		if len(definition.ManagedCredentials) > 0 {
-			return pluginconfiguration.Candidate{}, fmt.Errorf("%w: 当前 Service Hot 阶段尚未开放托管凭证合并", ErrInvalid)
 		}
 		observation, statusErr := getHotControllerStatus(ctx, host, call, *definition.Controller, configurationv1.StatusRequest{ConfigurationID: definition.ID})
 		if statusErr != nil {
@@ -222,6 +219,7 @@ func (s *Service) checkpointCredential(tenant, candidateID, fieldID string, stag
 		if candidate.ManagedCredentials[index].FieldID == fieldID {
 			candidate.ManagedCredentials[index].Staged = true
 			candidate.ManagedCredentials[index].State = "Staged"
+			candidate.ManagedCredentials[index].Version = stage.Ref.Version
 		}
 	}
 	candidate.Revision++
@@ -314,10 +312,7 @@ func (s *Service) completeRollback(tenant, candidateID, actor string) (plugincon
 	auditLength, nextAudit := len(state.Audit), state.NextAudit
 	candidate.Status, candidate.Revision, candidate.UpdatedAt = pluginconfiguration.CandidateRolledBack, candidate.Revision+1, s.now().Format(time.RFC3339Nano)
 	candidate.ErrorCode, candidate.ErrorMessage = "platform.plugin_configuration.discarded", "候选已由操作者放弃"
-	for index := range candidate.ManagedCredentials {
-		candidate.ManagedCredentials[index].Staged = false
-		candidate.ManagedCredentials[index].State = "Aborted"
-	}
+	markCredentialStagesAborted(&candidate, cloneStages(state.CredentialStages[candidateID]))
 	state.Candidates[candidateID] = candidate
 	delete(state.HotDraftBases, candidateID)
 	delete(state.ScopedDraftBases, candidateID)
@@ -359,6 +354,20 @@ func cloneStages(values map[string]credentialStage) []credentialStage {
 		out = append(out, values[key])
 	}
 	return out
+}
+
+func markCredentialStagesAborted(candidate *pluginconfiguration.Candidate, stages []credentialStage) {
+	staged := make(map[string]struct{}, len(stages))
+	for _, stage := range stages {
+		staged[stage.FieldID] = struct{}{}
+	}
+	for index := range candidate.ManagedCredentials {
+		if _, ok := staged[candidate.ManagedCredentials[index].FieldID]; !ok {
+			continue
+		}
+		candidate.ManagedCredentials[index].Staged = false
+		candidate.ManagedCredentials[index].State = "Aborted"
+	}
 }
 
 func (s *Service) auditLocked(state *tenantState, candidate pluginconfiguration.Candidate, action, actor string) {

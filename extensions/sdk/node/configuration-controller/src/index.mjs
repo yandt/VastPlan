@@ -3,6 +3,8 @@ export {
   CONFIGURATION_CONTROLLER_PROTOCOL,
   configurationControllerCapability,
   configurationDigest,
+  mergeManagedCredentials,
+  replacedManagedCredentials,
   parseControllerRequest,
   prepareRequestDigest,
   validateObservation,

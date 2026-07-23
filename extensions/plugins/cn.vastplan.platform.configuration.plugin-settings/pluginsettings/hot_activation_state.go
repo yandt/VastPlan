@@ -18,6 +18,7 @@ const (
 	hotPendingApproval hotActivationStatus = "PendingApproval"
 	hotApproved        hotActivationStatus = "Approved"
 	hotActivating      hotActivationStatus = "Activating"
+	hotFinalizing      hotActivationStatus = "FinalizingCredentials"
 	hotAborting        hotActivationStatus = "Aborting"
 	hotReady           hotActivationStatus = "Ready"
 	hotAborted         hotActivationStatus = "Aborted"
@@ -63,7 +64,7 @@ func (record hotActivationRecord) validate(candidate pluginconfiguration.Candida
 		if record.ApprovedBy != "" {
 			return errors.New("未审批 hot activation 携带 approver")
 		}
-	case hotApproved, hotActivating, hotAborting, hotReady:
+	case hotApproved, hotActivating, hotFinalizing, hotAborting, hotReady:
 		if strings.TrimSpace(record.ApprovedBy) == "" || record.ApprovedBy == record.SubmittedBy {
 			return errors.New("hot activation 未满足异人审批")
 		}
@@ -87,6 +88,8 @@ func hotCandidateProjection(status hotActivationStatus) (pluginconfiguration.Can
 		return pluginconfiguration.CandidatePublishing, string(hotApproved), true
 	case hotActivating:
 		return pluginconfiguration.CandidateActivating, string(hotActivating), true
+	case hotFinalizing:
+		return pluginconfiguration.CandidateActivating, string(hotFinalizing), true
 	case hotAborting:
 		return pluginconfiguration.CandidateRollingBack, string(hotAborting), true
 	case hotReady:

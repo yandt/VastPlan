@@ -25,16 +25,17 @@ func credentialStatuses(definition pluginconfiguration.Definition, secrets map[s
 
 func credentialStatusesFor(fields []pluginv1.ManagedCredentialField, states []pluginconfiguration.CredentialState, secrets map[string]string) ([]pluginconfiguration.ManagedCredentialStatus, error) {
 	declared := make(map[string]bool, len(fields))
-	configured := make(map[string]bool, len(states))
+	configured := make(map[string]pluginconfiguration.CredentialState, len(states))
 	for _, state := range states {
-		configured[state.FieldID] = state.Configured
+		configured[state.FieldID] = state
 	}
 	statuses := make([]pluginconfiguration.ManagedCredentialStatus, 0, len(fields))
 	total := 0
 	for _, field := range fields {
 		declared[field.ID] = true
 		value := secrets[field.ID]
-		if field.Required && value == "" && !configured[field.ID] {
+		current := configured[field.ID]
+		if field.Required && value == "" && !current.Configured {
 			return nil, fmt.Errorf("%w: 必须提供托管凭证字段 %s", ErrInvalid, field.ID)
 		}
 		if len(value) > 4<<20 {
@@ -42,13 +43,16 @@ func credentialStatusesFor(fields []pluginv1.ManagedCredentialField, states []pl
 		}
 		total += len(value)
 		state := "Missing"
-		if configured[field.ID] {
+		version := int64(0)
+		if current.Configured {
 			state = "Retained"
+			version = current.Version
 		}
 		if value != "" {
 			state = "Pending"
+			version = 0
 		}
-		statuses = append(statuses, pluginconfiguration.ManagedCredentialStatus{FieldID: field.ID, State: state})
+		statuses = append(statuses, pluginconfiguration.ManagedCredentialStatus{FieldID: field.ID, State: state, Version: version})
 	}
 	if total > 8<<20 {
 		return nil, fmt.Errorf("%w: 托管凭证总大小超过上限", ErrInvalid)

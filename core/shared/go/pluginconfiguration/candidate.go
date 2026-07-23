@@ -28,6 +28,7 @@ type ManagedCredentialStatus struct {
 	FieldID string `json:"fieldId"`
 	Staged  bool   `json:"staged"`
 	State   string `json:"state"`
+	Version int64  `json:"version,omitempty"`
 }
 
 // Candidate never contains secret material, authority tokens, stage IDs or
