@@ -146,3 +146,4 @@
 - [ADR-0113 可信插件配置目录与分路径生效](ADR-0113-可信插件配置目录与分路径生效.md)
 - [ADR-0114 一次性 ConfigurationAuthority 与委托凭证暂存](ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)
 - [ADR-0115 Application 配置激活 Saga 与候选凭证窗口](ADR-0115-Application配置激活Saga与候选凭证窗口.md)
+- [ADR-0116 Backend Platform Profile 候选 Catalog 与配置激活](ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md)

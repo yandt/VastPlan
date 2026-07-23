@@ -32,6 +32,21 @@ type KVApplier struct{ KV jetstream.KeyValue }
 // concrete composition-resolver package.
 type Resolver func(backendcompositionv1.PlatformProfile, backendcompositionv1.ApplicationComposition, uint64, compositioncore.ArtifactReader, compositioncore.Options) (deploymentv2.Deployment, error)
 
+// CatalogSource returns the current trusted Backend Platform Catalog snapshot.
+// Static startup files and the future NATS-backed activation store implement
+// the same narrow port; callers never receive a mutable catalog pointer.
+type CatalogSource interface {
+	Snapshot(context.Context) (backendcompositionv1.BackendPlatformCatalog, error)
+}
+
+type staticCatalogSource struct {
+	catalog backendcompositionv1.BackendPlatformCatalog
+}
+
+func (s staticCatalogSource) Snapshot(context.Context) (backendcompositionv1.BackendPlatformCatalog, error) {
+	return s.catalog, nil
+}
+
 func (a KVApplier) Apply(ctx context.Context, key string, raw []byte) (uint64, deploymentv2.Deployment, error) {
 	if a.KV == nil {
 		return 0, deploymentv2.Deployment{}, errors.New("deployment KV 未配置")
@@ -40,7 +55,7 @@ func (a KVApplier) Apply(ctx context.Context, key string, raw []byte) (uint64, d
 }
 
 type Publisher struct {
-	catalog   backendcompositionv1.BackendPlatformCatalog
+	catalog   CatalogSource
 	artifacts compositioncore.ArtifactReader
 	options   compositioncore.Options
 	applier   Applier
@@ -66,17 +81,46 @@ func New(catalog backendcompositionv1.BackendPlatformCatalog, artifacts composit
 	if err != nil {
 		return nil, err
 	}
+	return NewWithCatalogSource(staticCatalogSource{catalog: validated}, artifacts, applier, catalogs, options, resolve)
+}
+
+// NewWithCatalogSource enables an online, CAS-governed catalog without moving
+// Profile ownership, NATS credentials or trust roots into deployment-manager.
+func NewWithCatalogSource(catalog CatalogSource, artifacts compositioncore.ArtifactReader, applier Applier, catalogs pluginconfiguration.Publisher, options compositioncore.Options, resolve Resolver) (*Publisher, error) {
 	if artifacts == nil || applier == nil || catalogs == nil || resolve == nil {
 		return nil, errors.New("在线部署发布器必须配置可信制品读取器、Composition Resolver、Deployment CAS 与配置目录发布器")
 	}
-	return &Publisher{catalog: validated, artifacts: artifacts, options: options, applier: applier, catalogs: catalogs, resolve: resolve}, nil
+	if catalog == nil {
+		return nil, errors.New("在线部署发布器必须配置可信 Backend Platform Catalog 源")
+	}
+	publisher := &Publisher{catalog: catalog, artifacts: artifacts, options: options, applier: applier, catalogs: catalogs, resolve: resolve}
+	if _, err := publisher.catalogSnapshot(context.Background()); err != nil {
+		return nil, err
+	}
+	return publisher, nil
 }
 
-func (p *Publisher) Targets(_ context.Context, tenantID string) ([]deploymentpublication.Target, error) {
+func (p *Publisher) catalogSnapshot(ctx context.Context) (backendcompositionv1.BackendPlatformCatalog, error) {
+	catalog, err := p.catalog.Snapshot(ctx)
+	if err != nil {
+		return backendcompositionv1.BackendPlatformCatalog{}, fmt.Errorf("读取 Backend Platform Catalog 快照: %w", err)
+	}
+	validated, err := backendcompositionv1.ValidateBackendPlatformCatalog(catalog)
+	if err != nil {
+		return backendcompositionv1.BackendPlatformCatalog{}, fmt.Errorf("复核 Backend Platform Catalog 快照: %w", err)
+	}
+	return validated, nil
+}
+
+func (p *Publisher) Targets(ctx context.Context, tenantID string) ([]deploymentpublication.Target, error) {
 	if strings.TrimSpace(tenantID) == "" {
 		return nil, errors.New("部署目标 tenant 不能为空")
 	}
-	bindings := p.catalog.Targets(tenantID)
+	catalog, err := p.catalogSnapshot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bindings := catalog.Targets(tenantID)
 	out := make([]deploymentpublication.Target, len(bindings))
 	for i, binding := range bindings {
 		out[i] = deploymentpublication.Target{DeploymentName: binding.DeploymentName, PlatformProfile: binding.PlatformProfile}
@@ -85,11 +129,15 @@ func (p *Publisher) Targets(_ context.Context, tenantID string) ([]deploymentpub
 	return out, nil
 }
 
-func (p *Publisher) Preview(_ context.Context, tenantID string, application backendcompositionv1.ApplicationComposition, deploymentRevision uint64) (deploymentpublication.Result, error) {
+func (p *Publisher) Preview(ctx context.Context, tenantID string, application backendcompositionv1.ApplicationComposition, deploymentRevision uint64) (deploymentpublication.Result, error) {
 	if err := validateIdentity(tenantID, application); err != nil {
 		return deploymentpublication.Result{}, err
 	}
-	profile, _, err := p.catalog.Resolve(tenantID, application.Metadata.Name)
+	catalog, err := p.catalogSnapshot(ctx)
+	if err != nil {
+		return deploymentpublication.Result{}, err
+	}
+	profile, _, err := catalog.Resolve(tenantID, application.Metadata.Name)
 	if err != nil {
 		return deploymentpublication.Result{}, err
 	}

@@ -30,3 +30,7 @@
 ## 结果
 
 平台管理中心获得完整在线服务组合能力，同时 Backend 微内核仍只拥有 Catalog 选择、可信解析和 CAS 发布等通用治理能力。代价是生产部署必须预先发布 Catalog，并为每个目标运行 Controller fleet 和带精确 deployment 身份的 Node Agent；新增部署槽位属于平台运维变更，不是应用管理员操作。
+
+## 后续修订（2026-07-23）
+
+[ADR-0116](ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md) 将“运行中内核只在启动时解析一次 Catalog”收窄为静态 Seed 适配器，并引入内核可信 `CatalogSource.Snapshot` 端口。插件和浏览器仍不能提交或读取 Catalog 全文；只有经独立权限、异人审批、binding lock、Deployment readiness 和单调回滚的 Profile Activation 才能更新活动快照。

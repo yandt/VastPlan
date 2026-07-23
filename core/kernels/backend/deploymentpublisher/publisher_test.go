@@ -37,6 +37,14 @@ type memoryCatalogPublisher struct {
 	catalog pluginconfiguration.Catalog
 }
 
+type mutableCatalogSource struct {
+	catalog backendcompositionv1.BackendPlatformCatalog
+}
+
+func (s *mutableCatalogSource) Snapshot(context.Context) (backendcompositionv1.BackendPlatformCatalog, error) {
+	return s.catalog, nil
+}
+
 func (p *memoryCatalogPublisher) Publish(_ context.Context, tenant string, catalog pluginconfiguration.Catalog) error {
 	p.tenant, p.catalog = tenant, catalog
 	return nil
@@ -104,5 +112,35 @@ func TestPublisherUsesCatalogProfileAndDigestLock(t *testing.T) {
 	}
 	if _, err := publisher.Preview(context.Background(), "other", application, 6); err == nil {
 		t.Fatal("认证 tenant 与 composition tenant 不一致必须拒绝")
+	}
+}
+
+func TestPublisherReadsCurrentCatalogSnapshotPerOperation(t *testing.T) {
+	profile := backendcompositionv1.PlatformProfile{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "backend-default"},
+		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"},
+		Attachments: []backendcompositionv1.Attachment{}, Services: []deploymentv2.ServiceUnit{},
+	}
+	catalog := backendcompositionv1.BackendPlatformCatalog{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "backend-production"}, Profiles: []backendcompositionv1.PlatformProfile{profile},
+		Bindings: []backendcompositionv1.BackendPlatformBinding{{TenantID: "acme", DeploymentName: "agent-services", PlatformProfile: compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()}}},
+	}
+	source := &mutableCatalogSource{catalog: catalog}
+	publisher, err := NewWithCatalogSource(source, artifactReader{}, &memoryApplier{}, &memoryCatalogPublisher{}, compositionresolver.Options{}, compositionresolver.Resolve)
+	if err != nil {
+		t.Fatal(err)
+	}
+	targets, err := publisher.Targets(context.Background(), "acme")
+	if err != nil || len(targets) != 1 || targets[0].DeploymentName != "agent-services" {
+		t.Fatalf("初始 Catalog 快照未生效: targets=%+v err=%v", targets, err)
+	}
+	source.catalog.Bindings[0].DeploymentName = "analytics-services"
+	targets, err = publisher.Targets(context.Background(), "acme")
+	if err != nil || len(targets) != 1 || targets[0].DeploymentName != "analytics-services" {
+		t.Fatalf("发布器未重新读取 Catalog 快照: targets=%+v err=%v", targets, err)
+	}
+	source.catalog.Bindings[0].PlatformProfile.Digest = strings.Repeat("f", 64)
+	if _, err := publisher.Targets(context.Background(), "acme"); err == nil {
+		t.Fatal("运行期 Catalog 快照损坏时必须 fail-closed")
 	}
 }
