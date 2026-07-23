@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.21.0`
+当前制品版本：`0.25.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -95,6 +95,8 @@ stable 发布提供 `listPublications/submitPublication/approvePublication/rejec
 
 插件包可在签名清单 `supplyChain.sbom` 中声明固定路径 `supply-chain/sbom.cdx.json`。内核接受 CycloneDX JSON 1.5/1.6，并在发布时校验文档大小、组件上限、插件 ID/版本、路径与摘要绑定；仓库默认对 `stable` 强制要求 SBOM，策略键为 `supplyChain.requiredSBOMChannels`。Catalog 列表只显示是否已绑定，避免列表读取大包；供应链证据 Overlay 会按需读取完整包和证明并返回实际组件数、serial number、规范版本和复验摘要。构建来源证明保持包外 SLSA/in-toto sidecar，不能以内嵌自报字段代替。
 
+Python 制品另外声明 `supplyChain.pythonLock`，固定绑定 PEP 751 `supply-chain/pylock.toml` 1.0。内核在发布和读取时复核全部本地 wheel 的路径、大小和 SHA-256；Catalog 显示锁是否闭合，证据 Overlay 按需返回解释器范围、生成器、包数和 wheel 数。Node Agent 只从这些已验证字节离线物化依赖，不访问远端索引。
+
 包外来源证明现由 DSSE/in-toto SLSA 原文与外部 Verifier 签发的 Verification Record 组成。两者通过远端 multipart 与制品一起提交，但不改变 tar 字节；仓库在物理发布前用部署信任文档复验 Provider key、Record 有效期、策略、原文摘要和 tar subject，Node Agent 下载时再次执行同一检查。Catalog 只保存经过复验的 builder/build type/Provider/policy 与摘要，证据 Overlay 按需读取 sidecar 复核；原始证明不会进入普通列表。testing→stable 审批绑定两份 sidecar 摘要，CLI 原样复用 testing 证据。离线 Bundle、File Volume 迁移、恢复与 GC 均携带 sidecar，不能形成缺证据的旁路。参考外部静态 Provider 为 `engineering/tools/provenanceverify`；GitHub/Sigstore 或企业 CA Provider 只需输出同一 Record。
 
 发布准入在仓库 leader 的同一串行临界区内执行：全仓上限与所有匹配规则累积生效，任一超限即在物理写入前拒绝，且不会自动运行 GC。已隔离/清扫对象不再占活动配额，因此可以发布替代版本；隔离字节仍计入实际存储容量，直到 sweep 后才计入 reclaimed。`capacity` 只聚合已验证 Catalog 与持久 GC 元数据，分别返回活动、隔离、已清扫、已回收和按 namespace/publisher/channel 的活动 bucket；对象字节不包含 Catalog/证明等小型元数据开销。降低配置到当前用量以下不会阻止仓库启动，但会把对应 quota 标为 `exceeded` 并冻结后续新增发布，便于先治理再恢复。
@@ -109,4 +111,4 @@ GC 只把已显式 `yanked/revoked`、无精确引用且不在既有 retirement 
 
 同一签名制品从 `/settings/artifacts` 进入统一 Workbench，并在受治理的“系统设置 → 制品仓库”三级导航下提供目录、容量/配额、引用快照、GC 和存储迁移五个 Collection 页面。目录经固定 BFF/TypeScript SDK 路由按 plugin prefix、namespace、publisher、channel、target、lifecycle 与分页查询，不把仓库读令牌交给浏览器；概览与集合查询独立，筛选/翻页不会重复拉取容量。目录行通过受治理的 Workbench Form 以当前 Catalog revision CAS 变更生命周期，原因必填，替代插件与 SemVer 约束只能同时用于 `deprecated`，`revoked` 不提供再次编辑入口。GC 页面展示阻断项、候选与 retirement 记录，隔离前重新生成 plan，quarantine/sweep 继续受 CSRF 和独立 `platform.artifacts.gc` 角色保护。
 
-存储迁移页面直接投影后端阶段状态，只在记录操作区提供 `sync/cutover/rollback/finalize/release`，准备与切换参数进入 Workbench Form；所有按钮仍受 `platform.artifacts.migrate`、CSRF 和后端状态机三重校验。页面不接收 mount path，只显示稳定 Provider/Volume ID、摘要、计数、观察期与脱敏错误。目录中的 testing 制品可提交 stable 发布申请，独立“发布审批”页面提供批准、驳回和撤销，并显示有效期及可选终态审计列；按钮可见性只用于体验，身份分离和状态转移仍由后端强制。目录新增 SBOM 绑定状态；供应链证据 Overlay 每次通过可信仓库复验证明和可选 SBOM，只显示 SHA、publisher、key ID、证明摘要、SBOM 摘要/组件计数和审批轨迹。现有页面和 API 均不返回令牌、信任根、Provider endpoint、原始签名、SBOM 正文或制品正文。
+存储迁移页面直接投影后端阶段状态，只在记录操作区提供 `sync/cutover/rollback/finalize/release`，准备与切换参数进入 Workbench Form；所有按钮仍受 `platform.artifacts.migrate`、CSRF 和后端状态机三重校验。页面不接收 mount path，只显示稳定 Provider/Volume ID、摘要、计数、观察期与脱敏错误。目录中的 testing 制品可提交 stable 发布申请，独立“发布审批”页面提供批准、驳回和撤销，并显示有效期及可选终态审计列；按钮可见性只用于体验，身份分离和状态转移仍由后端强制。目录新增 SBOM、Python 标准锁和来源证明状态；供应链证据 Overlay 每次通过可信仓库复验证明、可选 SBOM 与 Python 锁，只显示 SHA、publisher、key ID、证明摘要、SBOM 摘要/组件计数、Python 包/wheel 计数和审批轨迹。现有页面和 API 均不返回令牌、信任根、Provider endpoint、原始签名、SBOM 正文、锁正文或制品正文。

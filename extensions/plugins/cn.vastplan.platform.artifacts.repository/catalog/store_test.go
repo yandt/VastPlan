@@ -264,3 +264,61 @@ func TestCatalogIndexesAndReverifiesCycloneDXEvidence(t *testing.T) {
 		t.Fatalf("SBOM 证据未按包体复验: evidence=%+v err=%v", evidence, err)
 	}
 }
+
+func TestCatalogIndexesAndReverifiesPythonLockEvidence(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repository")
+	repository, privateKey := testSignedRepository(t, root)
+	directory := t.TempDir()
+	lock := []byte("lock-version=\"1.0\"\nrequires-python=\">=3.8\"\ncreated-by=\"catalog-test\"\npackages=[]\n")
+	lockDigest := sha256.Sum256(lock)
+	manifest := []byte(`{
+  "id":"com.example.python-catalog","name":"Python Catalog","description":"test","version":"1.0.0","publisher":"example",
+  "engines":{"backend":"^1.0"},"execution":{"backend":{"driver":"python","requirements":{"python":">=3.8"}}},
+  "activation":["onStartup"],"entry":{"backend":"backend/main.py"},
+  "supplyChain":{"pythonLock":{"format":"pylock-toml","specVersion":"1.0","path":"supply-chain/pylock.toml","sha256":"` + hex.EncodeToString(lockDigest[:]) + `"}},
+  "contributes":{"backend":{"tools":[]}}
+}`)
+	for _, item := range []struct {
+		path string
+		raw  []byte
+	}{
+		{path: "vastplan.plugin.json", raw: manifest},
+		{path: "backend/main.py", raw: []byte("print('ok')\n")},
+		{path: "supply-chain/pylock.toml", raw: lock},
+	} {
+		filename := filepath.Join(directory, filepath.FromSlash(item.path))
+		if err := os.MkdirAll(filepath.Dir(filename), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filename, item.raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	packageBytes, parsed, err := pluginservice.PackageDirectory(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := pluginservice.Describe("testing", packageBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attestation, err := pluginservice.SignArtifact(artifact, parsed.Publisher, "testing", privateKey, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repository.Publish(attestation, packageBytes); err != nil {
+		t.Fatal(err)
+	}
+	store, err := Open(root, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := store.Query(Query{PluginID: artifact.PluginID, Page: 1, PageSize: 20})
+	if len(page.Items) != 1 || page.Items[0].PythonLock == nil {
+		t.Fatalf("Catalog 未索引 Python 锁声明: %+v", page)
+	}
+	evidence, err := store.Evidence(pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
+	if err != nil || evidence.PythonLock == nil || evidence.PythonLock.Verification != "verified" || evidence.PythonLock.CreatedBy != "catalog-test" || evidence.PythonLock.Packages != 0 {
+		t.Fatalf("Python 锁证据未按包体复验: evidence=%+v err=%v", evidence, err)
+	}
+}

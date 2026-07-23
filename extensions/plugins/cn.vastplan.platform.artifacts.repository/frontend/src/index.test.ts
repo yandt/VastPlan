@@ -8,6 +8,7 @@ function clientStub() {
     publisher: "vastplan", keyId: "release", signedAt: "2026-07-21T00:00:00Z", publishedAt: "2026-07-21T00:00:00Z",
     repositoryRevision: 3, name: "Demo", description: "", namespace: "cn.vastplan.example", targets: ["backend"], lifecycleStatus: "active" as const,
     sbom: { format: "cyclonedx-json" as const, specVersion: "1.5" as const, sha256: "f".repeat(64) },
+    pythonLock: { format: "pylock-toml" as const, specVersion: "1.0" as const, sha256: "d".repeat(64) },
     provenance: { provenanceSha256: "b".repeat(64), verificationSha256: "c".repeat(64), predicateType: "https://slsa.dev/provenance/v1", builderId: "builder", buildType: "plugin-build", providerId: "provider.static", keyId: "provider-key", policyId: "stable", verifiedAt: "2026-07-21T00:00:00Z", expiresAt: "2026-07-28T00:00:00Z" },
   }] }));
   const planArtifactGarbageCollection = vi.fn(async () => ({ schemaVersion: "v1" as const, planId: "b".repeat(64), ready: true, createdAt: "2026-07-21T00:00:00Z", catalogRevision: 3, referenceRevision: 2, candidates: [{ ref: { pluginId: "cn.vastplan.example.old", version: "1.0.0", channel: "stable" }, sha256: "c".repeat(64), size: 100, lifecycle: "yanked" as const }], bytes: 100 }));
@@ -64,7 +65,7 @@ describe("artifact repository Workbench", () => {
     ]);
     const result = await pages[0]!.load({ mode: "page", page: 1, pageSize: 20, filters: { pluginPrefix: "cn.vastplan", target: "backend", lifecycle: "active" } }, new AbortController().signal);
     expect(result.total).toBe(1);
-    expect(result.items[0]).toMatchObject({ sbom: "bound", provenance: "verified" });
+    expect(result.items[0]).toMatchObject({ sbom: "bound", pythonLock: "bound", provenance: "verified" });
     expect(stub.listArtifactCatalog).toHaveBeenCalledWith(expect.objectContaining({ pluginPrefix: "cn.vastplan", target: "backend", lifecycle: "active", page: 1, pageSize: 20 }));
   });
 

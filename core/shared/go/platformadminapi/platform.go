@@ -145,6 +145,7 @@ type ArtifactCatalogEntry struct {
 	LifecycleReason    string                         `json:"lifecycleReason,omitempty"`
 	Replacement        *pluginv1.ArtifactRequirement  `json:"replacement,omitempty"`
 	SBOM               *ArtifactSBOMDeclaration       `json:"sbom,omitempty"`
+	PythonLock         *ArtifactPythonLockDeclaration `json:"pythonLock,omitempty"`
 	Provenance         *ArtifactProvenanceDeclaration `json:"provenance,omitempty"`
 }
 
@@ -159,6 +160,21 @@ type ArtifactSBOMEvidence struct {
 	SerialNumber string `json:"serialNumber,omitempty"`
 	Components   int    `json:"components"`
 	Verification string `json:"verification"`
+}
+
+type ArtifactPythonLockDeclaration struct {
+	Format      string `json:"format"`
+	SpecVersion string `json:"specVersion"`
+	SHA256      string `json:"sha256"`
+}
+
+type ArtifactPythonLockEvidence struct {
+	ArtifactPythonLockDeclaration
+	RequiresPython string `json:"requiresPython"`
+	CreatedBy      string `json:"createdBy"`
+	Packages       int    `json:"packages"`
+	Wheels         int    `json:"wheels"`
+	Verification   string `json:"verification"`
 }
 
 type ArtifactProvenanceDeclaration struct {
@@ -271,6 +287,7 @@ type ArtifactSupplyChainEvidence struct {
 	LifecycleStatus    string                      `json:"lifecycleStatus"`
 	Publications       []ArtifactPublication       `json:"publications"`
 	SBOM               *ArtifactSBOMEvidence       `json:"sbom,omitempty"`
+	PythonLock         *ArtifactPythonLockEvidence `json:"pythonLock,omitempty"`
 	Provenance         *ArtifactProvenanceEvidence `json:"provenance,omitempty"`
 }
 

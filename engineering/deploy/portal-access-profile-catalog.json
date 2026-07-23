@@ -14,7 +14,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 31,
-        "digest": "d32cf6dfcd22354d6e689642047ba0e0b5ccd81ceac2f4c24e6f231d34cbc2b2"
+        "digest": "0fdf5da951d516cf51c6b9122d7a983b58424bc898031bdfbe914de5abc83ee4"
       },
       "accessTemplate": "access",
       "localization": {

@@ -190,8 +190,10 @@ export interface ArtifactCatalogEntry {
   lifecycleRevision?: number; lifecycleReason?: string;
   replacement?: ArtifactRequirement;
   sbom?: { format: "cyclonedx-json"; specVersion: "1.5" | "1.6"; sha256: string };
+  pythonLock?: ArtifactPythonLockDeclaration;
   provenance?: ArtifactProvenanceDeclaration;
 }
+export interface ArtifactPythonLockDeclaration { format: "pylock-toml"; specVersion: "1.0"; sha256: string; }
 export interface ArtifactProvenanceDeclaration {
   provenanceSha256: string; verificationSha256: string; predicateType: string; builderId: string; buildType: string;
   providerId: string; keyId: string; policyId: string; verifiedAt: string; expiresAt: string;
@@ -256,6 +258,7 @@ export interface ArtifactSupplyChainEvidence {
   attestationSha256: string; verification: "verified"; name: string; description: string; license?: string;
   targets: string[]; engines: Record<string, string>; repositoryRevision: number; lifecycleStatus: string; publications: ArtifactPublication[];
   sbom?: { format: "cyclonedx-json"; specVersion: "1.5" | "1.6"; sha256: string; serialNumber?: string; components: number; verification: "verified" };
+  pythonLock?: ArtifactPythonLockDeclaration & { requiresPython: string; createdBy: string; packages: number; wheels: number; verification: "verified" };
   provenance?: ArtifactProvenanceDeclaration & { sources: number; verification: "verified" };
 }
 

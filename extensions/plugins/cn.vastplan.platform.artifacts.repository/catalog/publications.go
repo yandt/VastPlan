@@ -17,6 +17,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pythonlock"
 )
 
 const (
@@ -353,20 +354,28 @@ func (s *Store) Evidence(ref pluginv1.ArtifactRef) (SupplyChainEvidence, error) 
 		}
 	}
 	evidence := SupplyChainEvidence{Ref: ref, SHA256: entry.SHA256, Size: entry.Size, Publisher: entry.Publisher, KeyID: entry.KeyID, SignedAt: entry.SignedAt.Format(time.RFC3339Nano), AttestationSHA256: digestBytes(proof), Verification: "verified", Name: entry.Name, Description: entry.Description, License: entry.License, Targets: append([]string(nil), entry.Targets...), Engines: cloneStringMap(entry.Engines), RepositoryRevision: entry.RepositoryRevision, LifecycleStatus: entry.LifecycleStatus, Publications: related}
-	if entry.SBOM != nil {
+	var packageBytes []byte
+	var packageManifest pluginv1.Manifest
+	if entry.SBOM != nil || entry.PythonLock != nil {
 		reader, ok := s.repository.(verifiedPackageReader)
 		if !ok {
-			return SupplyChainEvidence{}, errors.New("仓库不支持复验 SBOM 包体")
+			return SupplyChainEvidence{}, errors.New("仓库不支持复验供应链包体")
 		}
-		artifact, packageBytes, currentProof, err := reader.ReadWithAttestation(ref)
+		artifact, currentPackage, currentProof, err := reader.ReadWithAttestation(ref)
 		if err != nil || artifact.SHA256 != entry.SHA256 || digestBytes(currentProof) != evidence.AttestationSHA256 {
-			return SupplyChainEvidence{}, errors.New("制品 SBOM 包体或证明复验失败")
+			return SupplyChainEvidence{}, errors.New("制品供应链包体或证明复验失败")
 		}
-		manifest, err := pluginv1.ParseManifest(artifact.Manifest)
-		if err != nil || manifest.SupplyChain == nil || manifest.SupplyChain.SBOM == nil {
+		packageManifest, err = pluginv1.ParseManifest(artifact.Manifest)
+		if err != nil || packageManifest.SupplyChain == nil {
+			return SupplyChainEvidence{}, errors.New("制品供应链签名声明缺失")
+		}
+		packageBytes = currentPackage
+	}
+	if entry.SBOM != nil {
+		if packageManifest.SupplyChain.SBOM == nil {
 			return SupplyChainEvidence{}, errors.New("制品 SBOM 签名声明缺失")
 		}
-		raw, err := artifacttrust.ReadPackageFile(packageBytes, manifest.SupplyChain.SBOM.Path, artifactsupplychain.MaxCycloneDXBytes)
+		raw, err := artifacttrust.ReadPackageFile(packageBytes, packageManifest.SupplyChain.SBOM.Path, artifactsupplychain.MaxCycloneDXBytes)
 		if err != nil {
 			return SupplyChainEvidence{}, errors.New("读取制品 SBOM 失败")
 		}
@@ -375,6 +384,20 @@ func (s *Store) Evidence(ref pluginv1.ArtifactRef) (SupplyChainEvidence, error) 
 			return SupplyChainEvidence{}, errors.New("制品 SBOM 摘要或主体复验失败")
 		}
 		evidence.SBOM = &platformadminapi.ArtifactSBOMEvidence{ArtifactSBOMDeclaration: *entry.SBOM, SerialNumber: summary.SerialNumber, Components: summary.Components, Verification: "verified"}
+	}
+	if entry.PythonLock != nil {
+		if packageManifest.SupplyChain.PythonLock == nil {
+			return SupplyChainEvidence{}, errors.New("制品 Python 锁签名声明缺失")
+		}
+		raw, err := artifacttrust.ReadPackageFile(packageBytes, packageManifest.SupplyChain.PythonLock.Path, pythonlock.MaxLockBytes)
+		if err != nil {
+			return SupplyChainEvidence{}, errors.New("读取制品 Python 锁失败")
+		}
+		summary, err := pythonlock.Inspect(raw)
+		if err != nil || summary.SHA256 != entry.PythonLock.SHA256 {
+			return SupplyChainEvidence{}, errors.New("制品 Python 锁摘要或内容复验失败")
+		}
+		evidence.PythonLock = &platformadminapi.ArtifactPythonLockEvidence{ArtifactPythonLockDeclaration: *entry.PythonLock, RequiresPython: summary.RequiresPython, CreatedBy: summary.CreatedBy, Packages: len(summary.Packages), Wheels: len(summary.Wheels), Verification: "verified"}
 	}
 	if entry.Provenance != nil {
 		reader, ok := s.repository.(verifiedProvenanceReader)

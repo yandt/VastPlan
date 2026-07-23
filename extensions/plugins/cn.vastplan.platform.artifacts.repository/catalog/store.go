@@ -89,6 +89,7 @@ type Entry struct {
 	RuntimeProvides      []pluginv1.RuntimeCapabilityPolicy              `json:"runtimeProvides,omitempty"`
 	ProvidedCapabilities []string                                        `json:"providedCapabilities,omitempty"`
 	SBOM                 *platformadminapi.ArtifactSBOMDeclaration       `json:"sbom,omitempty"`
+	PythonLock           *platformadminapi.ArtifactPythonLockDeclaration `json:"pythonLock,omitempty"`
 	Provenance           *platformadminapi.ArtifactProvenanceDeclaration `json:"provenance,omitempty"`
 	LifecycleStatus      string                                          `json:"lifecycleStatus"`
 	LifecycleRevision    uint64                                          `json:"lifecycleRevision,omitempty"`
@@ -524,6 +525,9 @@ func entryFrom(artifact pluginservice.Artifact, attestationRaw []byte) (Entry, e
 	}
 	if manifest.SupplyChain != nil && manifest.SupplyChain.SBOM != nil {
 		entry.SBOM = &platformadminapi.ArtifactSBOMDeclaration{Format: manifest.SupplyChain.SBOM.Format, SpecVersion: manifest.SupplyChain.SBOM.SpecVersion, SHA256: manifest.SupplyChain.SBOM.SHA256}
+	}
+	if manifest.SupplyChain != nil && manifest.SupplyChain.PythonLock != nil {
+		entry.PythonLock = &platformadminapi.ArtifactPythonLockDeclaration{Format: manifest.SupplyChain.PythonLock.Format, SpecVersion: manifest.SupplyChain.PythonLock.SpecVersion, SHA256: manifest.SupplyChain.PythonLock.SHA256}
 	}
 	return entry, nil
 }
