@@ -5,16 +5,19 @@
 package pluginconfig
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
 )
 
 const (
 	PluginsKey              = "plugins"
+	ManagedCredentialsKey   = "managed_credentials"
 	EnvironmentAllowlistKey = "environment_allowlist"
 	PartitionKeysKey        = "partition_keys"
 )
@@ -22,8 +25,36 @@ const (
 // Envelope is the normalized, immutable view of ServiceUnit.config.
 type Envelope struct {
 	Plugins              map[string]map[string]any
+	ManagedCredentials   map[string]map[string]ManagedCredentialRef
 	EnvironmentAllowlist map[string][]string
 	PartitionKeys        []string
+}
+
+// Map returns a detached configuration envelope suitable for a new immutable
+// Deployment revision. Credential references are non-secret but remain scoped
+// under their owning plugin instead of being mixed into plugin values.
+func (e Envelope) Map() map[string]any {
+	out := map[string]any{}
+	if len(e.Plugins) > 0 {
+		out[PluginsKey] = cloneJSONValue(e.Plugins)
+	}
+	if len(e.ManagedCredentials) > 0 {
+		out[ManagedCredentialsKey] = cloneJSONValue(e.ManagedCredentials)
+	}
+	if len(e.EnvironmentAllowlist) > 0 {
+		out[EnvironmentAllowlistKey] = cloneJSONValue(e.EnvironmentAllowlist)
+	}
+	if len(e.PartitionKeys) > 0 {
+		out[PartitionKeysKey] = append([]string(nil), e.PartitionKeys...)
+	}
+	return out
+}
+
+func cloneJSONValue[T any](value T) T {
+	raw, _ := json.Marshal(value)
+	var out T
+	_ = json.Unmarshal(raw, &out)
+	return out
 }
 
 // Parse validates the configuration envelope against the plugins installed in
@@ -32,6 +63,7 @@ type Envelope struct {
 func Parse(config map[string]any, installedPluginIDs []string) (Envelope, error) {
 	envelope := Envelope{
 		Plugins:              map[string]map[string]any{},
+		ManagedCredentials:   map[string]map[string]ManagedCredentialRef{},
 		EnvironmentAllowlist: map[string][]string{},
 	}
 	installed := make(map[string]struct{}, len(installedPluginIDs))
@@ -46,9 +78,32 @@ func Parse(config map[string]any, installedPluginIDs []string) (Envelope, error)
 	}
 	for key := range config {
 		switch key {
-		case PluginsKey, EnvironmentAllowlistKey, PartitionKeysKey:
+		case PluginsKey, ManagedCredentialsKey, EnvironmentAllowlistKey, PartitionKeysKey:
 		default:
 			return Envelope{}, fmt.Errorf("service config 包含未知顶层字段 %q", key)
+		}
+	}
+	if raw, ok := config[ManagedCredentialsKey]; ok {
+		values, err := object(raw)
+		if err != nil {
+			return Envelope{}, fmt.Errorf("service config.%s: %w", ManagedCredentialsKey, err)
+		}
+		for pluginID, rawFields := range values {
+			if _, ok := installed[pluginID]; !ok {
+				return Envelope{}, fmt.Errorf("service config 为未安装插件 %q 提供托管凭证", pluginID)
+			}
+			fields, err := object(rawFields)
+			if err != nil {
+				return Envelope{}, fmt.Errorf("插件 %q 托管凭证: %w", pluginID, err)
+			}
+			envelope.ManagedCredentials[pluginID] = map[string]ManagedCredentialRef{}
+			for fieldID, rawRef := range fields {
+				ref, err := managedCredentialRef(rawRef)
+				if err != nil || fieldID == "" || ref.Owner != pluginID {
+					return Envelope{}, fmt.Errorf("插件 %q 托管凭证字段 %q 无效", pluginID, fieldID)
+				}
+				envelope.ManagedCredentials[pluginID][fieldID] = ref
+			}
 		}
 	}
 	if raw, ok := config[PluginsKey]; ok {
@@ -96,6 +151,20 @@ func Parse(config map[string]any, installedPluginIDs []string) (Envelope, error)
 		envelope.PartitionKeys = keys
 	}
 	return envelope, nil
+}
+
+func managedCredentialRef(value any) (ManagedCredentialRef, error) {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return ManagedCredentialRef{}, err
+	}
+	var ref ManagedCredentialRef
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&ref); err != nil || !strings.HasPrefix(ref.Handle, "credential://managed/") || ref.Scope != "tenant" || ref.Owner == "" || ref.Purpose == "" || ref.Version < 1 {
+		return ManagedCredentialRef{}, errors.New("必须是有效托管凭证引用")
+	}
+	return ref, nil
 }
 
 func object(value any) (map[string]any, error) {

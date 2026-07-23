@@ -107,9 +107,13 @@ func (s *Service) delegatedTransition(call *contractv1.CallContext, stageID, can
 		return pluginconfig.ManagedCredentialRef{}, errors.New("委托凭证不属于当前配置候选")
 	}
 	switch target {
+	case managedCandidate:
+		if record.State != managedPreparing && record.State != managedCandidate {
+			return pluginconfig.ManagedCredentialRef{}, errors.New("只有 Preparing 委托凭证可以进入候选窗口")
+		}
 	case managedActive:
-		if record.State != managedPreparing && record.State != managedActive {
-			return pluginconfig.ManagedCredentialRef{}, errors.New("只有 Preparing 委托凭证可以激活")
+		if record.State != managedCandidate && record.State != managedActive {
+			return pluginconfig.ManagedCredentialRef{}, errors.New("只有 Candidate 委托凭证可以激活")
 		}
 	case managedAborted:
 		if record.State == managedActive || record.State == managedRetired {
@@ -125,6 +129,10 @@ func (s *Service) delegatedTransition(call *contractv1.CallContext, stageID, can
 		return pluginconfig.ManagedCredentialRef{}, err
 	}
 	return record.Ref, nil
+}
+
+func (s *Service) PrepareDelegated(call *contractv1.CallContext, stageID, candidateID string) (pluginconfig.ManagedCredentialRef, error) {
+	return s.delegatedTransition(call, stageID, candidateID, managedCandidate)
 }
 
 func (s *Service) ActivateDelegated(call *contractv1.CallContext, stageID, candidateID string) (pluginconfig.ManagedCredentialRef, error) {

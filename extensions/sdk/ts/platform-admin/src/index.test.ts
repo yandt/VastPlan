@@ -69,6 +69,21 @@ describe("PlatformAdminClient", () => {
     expect(() => client.rollbackServiceRevision(0)).toThrowError(PlatformAdminError);
   });
 
+  it("submits and activates plugin configuration on fixed candidate routes", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { id: "pcfg_" + "a".repeat(32), status: "Publishing" } };
+    }, "operations", "configuration");
+    const id = "pcfg_" + "a".repeat(32);
+    await client.submitPluginConfigurationDraft(id, 4);
+    await client.activatePluginConfigurationCandidate(id, 5);
+    expect(calls.filter((call) => call.path !== "/v1/csrf")).toEqual([
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/submit`, method: "POST", body: '{"expectedRevision":4}' },
+      { path: `/v1/portals/operations/platform/services/configuration/plugin-configurations/candidates/${id}/activate`, method: "POST", body: '{"expectedRevision":5}' },
+    ]);
+  });
+
   it("publishes an exact test artifact through the deployment BFF", async () => {
     const calls: Array<{ path: string; method?: string; body?: string }> = [];
     const fetcher: PlatformFetch = async (path, init) => {

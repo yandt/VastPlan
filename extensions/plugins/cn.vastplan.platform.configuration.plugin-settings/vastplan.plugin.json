@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.configuration.plugin-settings",
   "name": "VastPlan 插件配置协调器",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -14,14 +14,17 @@
     "namespace": "platform.plugin-configuration",
     "permissions": [
       { "code": "platform.plugin-configuration.read", "title": "查看插件配置", "scope": "platform", "risk": "low", "assignable": true, "offlineAllowed": false },
-      { "code": "platform.plugin-configuration.write", "title": "编辑插件配置候选", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false }
+      { "code": "platform.plugin-configuration.write", "title": "编辑插件配置候选", "scope": "platform", "risk": "high", "assignable": true, "offlineAllowed": false },
+      { "code": "platform.plugin-configuration.publish", "title": "提交和激活插件配置", "scope": "platform", "risk": "critical", "assignable": true, "offlineAllowed": false }
     ],
     "operationGuards": [
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "listDefinitions", "permissions": ["platform.plugin-configuration.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "getDefinition", "permissions": ["platform.plugin-configuration.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "listCandidates", "permissions": ["platform.plugin-configuration.read"], "access": "read", "approval": "none" },
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "createDraft", "permissions": ["platform.plugin-configuration.write"], "access": "write", "approval": "different-subject" },
-      { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "discardDraft", "permissions": ["platform.plugin-configuration.write"], "access": "write", "approval": "none" }
+      { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "discardDraft", "permissions": ["platform.plugin-configuration.write"], "access": "write", "approval": "none" },
+      { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "submitDraft", "permissions": ["platform.plugin-configuration.publish"], "access": "write", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "operation": "activateCandidate", "permissions": ["platform.plugin-configuration.publish"], "access": "execute", "approval": "different-subject" }
     ]
   },
   "runtime": {
@@ -32,6 +35,7 @@
     "routingDomain": "platform",
     "requires": [
       { "capability": "platform.credentials", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.credentials", "routingDomain": "platform" }
+      ,{ "capability": "platform.deployment", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.deployment", "routingDomain": "platform" }
     ],
     "provides": [
       { "extensionPoint": "tool.package", "capability": "platform.plugin-configuration", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }
@@ -66,6 +70,8 @@
             { "name": "listCandidates", "description": "列出配置候选与生效状态", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": {} } },
             { "name": "createDraft", "description": "按活动目录和签名 Schema 创建配置草稿并委托暂存只写秘密", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "configurationId": { "type": "string" }, "catalogDigest": { "type": "string" }, "values": { "type": "object" }, "secrets": { "type": "object", "additionalProperties": { "type": "string" } } }, "required": ["configurationId", "catalogDigest", "values"] } },
             { "name": "discardDraft", "description": "以 CAS 放弃尚未发布的配置草稿", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "submitDraft", "description": "把 Application Deployment 配置草稿提交为受治理服务修订", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
+            ,{ "name": "activateCandidate", "description": "发布已审批配置修订并以 readiness 驱动凭证提交或回滚", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "id": { "type": "string" }, "expectedRevision": { "type": "integer", "minimum": 1 } }, "required": ["id", "expectedRevision"] } }
           ]
         }
       ]

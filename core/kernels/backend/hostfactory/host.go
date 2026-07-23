@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
@@ -19,6 +20,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
@@ -57,6 +59,11 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 	}
 	if dependencies.Config != nil {
 		if err := host.RegisterHostService(extpoint.KernelService, "kernel.config.get", kernelConfigGet(dependencies.Config)); err != nil {
+			return nil, err
+		}
+	}
+	if dependencies.ManagedCredentialRefs != nil {
+		if err := host.RegisterHostService(extpoint.KernelService, pluginconfig.KernelCredentialRefService, kernelManagedCredentialRef(dependencies.ManagedCredentialRefs)); err != nil {
 			return nil, err
 		}
 	}
@@ -341,6 +348,34 @@ func kernelNodeBootstrap(broker nodebootstrap.Broker) protocolbus.HostService {
 
 type configGetRequest struct {
 	Key string `json:"key"`
+}
+
+type managedCredentialRefRequest struct {
+	FieldID string `json:"fieldId"`
+}
+
+func kernelManagedCredentialRef(provider kernelspi.ManagedCredentialRefProvider) protocolbus.HostService {
+	return func(ctx context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() == "" {
+			return nil, nil, fmt.Errorf("kernel.config.credential-ref 只接受已认证插件会话")
+		}
+		var request managedCredentialRefRequest
+		if err := json.Unmarshal(payload, &request); err != nil || strings.TrimSpace(request.FieldID) == "" {
+			return nil, nil, fmt.Errorf("托管凭证字段不能为空")
+		}
+		ref, ok, err := provider.LookupManagedCredential(ctx, callCtx.GetCaller().GetId(), request.FieldID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !ok {
+			return nil, nil, kernelspi.ErrNotFound
+		}
+		raw, err := json.Marshal(ref)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}
 }
 
 func kernelConfigGet(provider kernelspi.ConfigProvider) protocolbus.HostService {

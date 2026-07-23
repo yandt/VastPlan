@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.security.platform-admin-access-policy",
   "name": "VastPlan 平台管理访问策略",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

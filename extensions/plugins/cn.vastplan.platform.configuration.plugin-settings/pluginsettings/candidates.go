@@ -154,7 +154,7 @@ func (s *Service) checkpointCredential(tenant, candidateID, fieldID string, stag
 		return ErrConflict
 	}
 	previous := cloneCandidate(candidate)
-	state.CredentialStages[candidateID][fieldID] = credentialStage{FieldID: fieldID, Stage: stage}
+	state.CredentialStages[candidateID][fieldID] = credentialStage{FieldID: fieldID, Stage: stage, State: "Staged"}
 	for index := range candidate.ManagedCredentials {
 		if candidate.ManagedCredentials[index].FieldID == fieldID {
 			candidate.ManagedCredentials[index].Staged = true

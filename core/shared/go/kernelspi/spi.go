@@ -38,6 +38,10 @@ type ConfigProvider interface {
 	Lookup(context.Context, string, string) (json.RawMessage, bool, error)
 }
 
+type ManagedCredentialRefProvider interface {
+	LookupManagedCredential(context.Context, string, string) (CredentialRef, bool, error)
+}
+
 type CredentialRef = pluginconfig.ManagedCredentialRef
 
 // CredentialMaterial 只允许可信宿主适配器在回调期间使用；不得序列化或返回插件。
@@ -73,6 +77,7 @@ type TransactionManager interface {
 // Dependencies 是一个 backend Host 的可替换依赖集合。nil 表示该能力不可用并 fail-closed。
 type Dependencies struct {
 	Config                         ConfigProvider
+	ManagedCredentialRefs          ManagedCredentialRefProvider
 	Credentials                    CredentialBroker
 	RuntimeMaterialLeases          RuntimeMaterialLeaseBroker
 	Persistence                    Persistence
@@ -84,6 +89,35 @@ type Dependencies struct {
 	ConfigurationCatalogs          pluginconfiguration.Reader
 	ConfigurationAuthorityIssuer   configurationauthority.Issuer
 	ConfigurationAuthorityConsumer configurationauthority.Consumer
+}
+
+type MapManagedCredentialRefs struct {
+	values map[string]map[string]CredentialRef
+}
+
+func NewPluginMapManagedCredentialRefs(values map[string]map[string]CredentialRef) (*MapManagedCredentialRefs, error) {
+	out := &MapManagedCredentialRefs{values: map[string]map[string]CredentialRef{}}
+	for pluginID, fields := range values {
+		if pluginID == "" {
+			return nil, errors.New("托管凭证 plugin id 不能为空")
+		}
+		out.values[pluginID] = map[string]CredentialRef{}
+		for fieldID, ref := range fields {
+			if fieldID == "" || ref.Owner != pluginID || ref.Handle == "" || ref.Scope != "tenant" || ref.Purpose == "" || ref.Version < 1 {
+				return nil, fmt.Errorf("插件 %q 的托管凭证字段 %q 无效", pluginID, fieldID)
+			}
+			out.values[pluginID][fieldID] = ref
+		}
+	}
+	return out, nil
+}
+
+func (m *MapManagedCredentialRefs) LookupManagedCredential(_ context.Context, pluginID, fieldID string) (CredentialRef, bool, error) {
+	if m == nil {
+		return CredentialRef{}, false, nil
+	}
+	ref, ok := m.values[pluginID][fieldID]
+	return ref, ok, nil
 }
 
 type MapConfig struct {

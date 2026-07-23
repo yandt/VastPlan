@@ -29,6 +29,7 @@ export interface PluginConfigurationDefinition {
   schema: Record<string, unknown>;
   schemaDigest: string;
   managedCredentials: Array<{ id: string; title: string; description?: string; purpose: string; required?: boolean }>;
+  credentialStates?: Array<{ fieldId: string; configured: boolean; version?: number }>;
   values: Record<string, unknown>;
   deploymentRevision: number;
   deploymentDigest: string;
@@ -40,7 +41,7 @@ export interface PluginConfigurationCandidate {
   id: string; configurationId: string; revision: number; status: PluginConfigurationCandidateStatus;
   catalogDigest: string; schemaDigest: string; artifactSha256: string; values: Record<string, unknown>;
   createdBy: string; createdAt: string; updatedAt: string; errorCode?: string; errorMessage?: string;
-  externalRevision?: number; rollbackRevision?: number;
+  externalRevision?: number; externalStatus?: "PendingApproval" | "Approved" | "Publishing" | "Ready" | "Failed" | "RolledBack"; rollbackRevision?: number;
   managedCredentials?: Array<{ fieldId: string; staged: boolean; state: string }>;
 }
 
@@ -298,6 +299,7 @@ export interface ServiceRevision {
   composition: BackendApplicationComposition; preview: Record<string, unknown>; previewDigest: string; kvRevision?: number;
   artifactReferences: ArtifactReference[];
   referencePending?: boolean;
+  configurationCandidateId?: string; configurationId?: string; previousServiceRevision?: number; rollbackServiceRevision?: number;
   submittedBy?: string; approvedBy?: string; publishedBy?: string; createdAt: string; updatedAt: string;
 }
 export interface ServiceAuditEvent { id: number; revisionId: number; deployment: string; action: string; actorId: string; at: string; }
@@ -344,6 +346,12 @@ export class PlatformAdminClient {
   }
   public discardPluginConfigurationDraft(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
     return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}`, "DELETE", { expectedRevision });
+  }
+  public submitPluginConfigurationDraft(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/submit`, "POST", { expectedRevision });
+  }
+  public activatePluginConfigurationCandidate(id: string, expectedRevision: number): Promise<PluginConfigurationCandidate> {
+    return this.mutate(`${this.basePath}/plugin-configurations/candidates/${segment(id)}/activate`, "POST", { expectedRevision });
   }
 
   public listCredentials(prefix = ""): Promise<CredentialMetadata[]> { return this.get(`${this.basePath}/credentials${query({ prefix })}`); }

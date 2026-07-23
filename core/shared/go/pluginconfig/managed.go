@@ -10,6 +10,8 @@ import (
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
+const KernelCredentialRefService = "kernel.config.credential-ref"
+
 // ManagedCredentialRef is the non-sensitive runtime projection of a credential
 // entered through a plugin's own configuration form.
 type ManagedCredentialRef = commonv1.ManagedCredentialRef

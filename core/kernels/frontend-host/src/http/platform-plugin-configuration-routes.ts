@@ -50,7 +50,15 @@ export class PlatformPluginConfigurationRoutes {
       await withRequestJSON(request, response, async (body) => this.call(principal, target, "discardDraft", true, { ...requireJSONObject(body), id }, response, signal));
       return true;
     }
-    return parts.length > 3 ? notFound(response, method) : methodNotAllowed(response, method);
+    if (parts.length === 4 && method === "POST" && (parts[3] === "submit" || parts[3] === "activate")) {
+      const id = resourceName(parts[2], 64);
+      if (id === undefined) return invalidName(response, method);
+      const operation = parts[3] === "submit" ? "submitDraft" : "activateCandidate";
+      if (!this.authorize(principal, target, operation, true, "platform.plugin-configuration.publish", response)) return true;
+      await withRequestJSON(request, response, async (body) => this.call(principal, target, operation, true, { ...requireJSONObject(body), id }, response, signal));
+      return true;
+    }
+    return parts.length > 4 ? notFound(response, method) : methodNotAllowed(response, method);
   }
 
   private authorize(principal: Principal, target: PlatformManagementTarget, operation: string, write: boolean, role: string, response: ServerResponse): boolean {

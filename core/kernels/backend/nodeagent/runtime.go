@@ -132,8 +132,13 @@ func (r *ProtocolRuntime) Apply(ctx context.Context, unit RuntimeUnit) (applyErr
 	if err != nil {
 		return fmt.Errorf("冻结 unit 配置: %w", err)
 	}
+	credentialRefs, err := kernelspi.NewPluginMapManagedCredentialRefs(envelope.ManagedCredentials)
+	if err != nil {
+		return fmt.Errorf("冻结 unit 托管凭证引用: %w", err)
+	}
 	dependencies := r.Dependencies
 	dependencies.Config = configProvider
+	dependencies.ManagedCredentialRefs = credentialRefs
 	candidate, err := hostfactory.NewWithDependencies(r.KernelVersion, r.Logf, dependencies)
 	if err != nil {
 		return fmt.Errorf("创建候选宿主: %w", err)

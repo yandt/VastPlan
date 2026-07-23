@@ -70,9 +70,16 @@ type Definition struct {
 	Schema             json.RawMessage                   `json:"schema"`
 	SchemaDigest       string                            `json:"schemaDigest"`
 	ManagedCredentials []pluginv1.ManagedCredentialField `json:"managedCredentials,omitempty"`
+	CredentialStates   []CredentialState                 `json:"credentialStates,omitempty"`
 	Values             json.RawMessage                   `json:"values"`
 	DeploymentRevision uint64                            `json:"deploymentRevision"`
 	DeploymentDigest   string                            `json:"deploymentDigest"`
+}
+
+type CredentialState struct {
+	FieldID    string `json:"fieldId"`
+	Configured bool   `json:"configured"`
+	Version    int64  `json:"version,omitempty"`
 }
 
 // Catalog is a complete replacement snapshot for one resolved Deployment.
@@ -176,6 +183,25 @@ func definitionFor(deployment deploymentv2.Deployment, deploymentDigest string, 
 		Schema: schema, SchemaDigest: schemaDigest, ManagedCredentials: append([]pluginv1.ManagedCredentialField(nil), manifest.Configuration.ManagedCredentials...),
 		Values: valuesRaw, DeploymentRevision: deployment.Revision, DeploymentDigest: deploymentDigest,
 	}
+	for _, field := range definition.ManagedCredentials {
+		state := CredentialState{FieldID: field.ID}
+		if credentialRef, ok := envelope.ManagedCredentials[ref.ID][field.ID]; ok {
+			if credentialRef.Owner != definition.PluginID || credentialRef.Purpose != field.Purpose {
+				return Definition{}, false, fmt.Errorf("插件 %s 托管凭证字段 %s 与签名清单不匹配", ref.ID, field.ID)
+			}
+			state.Configured, state.Version = true, credentialRef.Version
+		}
+		definition.CredentialStates = append(definition.CredentialStates, state)
+	}
+	declaredCredentials := make(map[string]struct{}, len(definition.ManagedCredentials))
+	for _, field := range definition.ManagedCredentials {
+		declaredCredentials[field.ID] = struct{}{}
+	}
+	for fieldID := range envelope.ManagedCredentials[ref.ID] {
+		if _, ok := declaredCredentials[fieldID]; !ok {
+			return Definition{}, false, fmt.Errorf("插件 %s 配置包含未声明托管凭证字段", ref.ID)
+		}
+	}
 	if err := ValidateValues(definition, valuesRaw); err != nil {
 		return Definition{}, false, fmt.Errorf("插件 %s 当前配置不符合签名 Schema: %w", ref.ID, err)
 	}
@@ -233,6 +259,23 @@ func (c Catalog) Validate() error {
 		}
 		if item.Origin != deploymentv2.OriginApplication && item.Origin != deploymentv2.OriginPlatformProfile {
 			return fmt.Errorf("配置目录项来源无效: %s", item.ID)
+		}
+		declared := make(map[string]pluginv1.ManagedCredentialField, len(item.ManagedCredentials))
+		for _, field := range item.ManagedCredentials {
+			declared[field.ID] = field
+		}
+		if len(item.CredentialStates) != len(item.ManagedCredentials) {
+			return fmt.Errorf("配置目录项托管凭证状态不完整: %s", item.ID)
+		}
+		seenFields := map[string]struct{}{}
+		for _, state := range item.CredentialStates {
+			if _, ok := declared[state.FieldID]; !ok || state.Configured != (state.Version > 0) {
+				return fmt.Errorf("配置目录项托管凭证状态无效: %s", item.ID)
+			}
+			if _, duplicate := seenFields[state.FieldID]; duplicate {
+				return fmt.Errorf("配置目录项托管凭证状态重复: %s", item.ID)
+			}
+			seenFields[state.FieldID] = struct{}{}
 		}
 		expectedPath, err := applyPathFor(item.Origin, item.Scope, item.ApplyMode)
 		if err != nil || expectedPath != item.ApplyPath {

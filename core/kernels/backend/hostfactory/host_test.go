@@ -20,6 +20,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
 )
@@ -287,6 +288,25 @@ func TestKernelConfigurationCatalogsAcceptOnlyPluginSettings(t *testing.T) {
 	}
 	if _, _, err := service(context.Background(), trusted, []byte(`{"tenant":"other"}`)); err == nil {
 		t.Fatal("配置目录查询不得接受 payload tenant")
+	}
+}
+
+func TestKernelManagedCredentialRefUsesAuthenticatedPluginIdentity(t *testing.T) {
+	provider, err := kernelspi.NewPluginMapManagedCredentialRefs(map[string]map[string]pluginconfig.ManagedCredentialRef{
+		"plugin.a": {"token": {Handle: "credential://managed/a", Scope: "tenant", Owner: "plugin.a", Purpose: "example.token", Version: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := kernelManagedCredentialRef(provider)
+	call := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "plugin.a"}}
+	result, raw, err := service(context.Background(), call, []byte(`{"fieldId":"token"}`))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || !strings.Contains(string(raw), `"owner":"plugin.a"`) {
+		t.Fatalf("owner 插件应读取自己的托管引用: result=%+v raw=%s err=%v", result, raw, err)
+	}
+	call.Caller.Id = "plugin.b"
+	if _, _, err := service(context.Background(), call, []byte(`{"fieldId":"token"}`)); !errors.Is(err, kernelspi.ErrNotFound) {
+		t.Fatalf("其他插件不得读取托管引用: %v", err)
 	}
 }
 

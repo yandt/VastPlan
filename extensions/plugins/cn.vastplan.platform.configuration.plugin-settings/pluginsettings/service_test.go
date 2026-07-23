@@ -15,6 +15,7 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -29,8 +30,9 @@ type catalogHost struct {
 
 type credentialDraftHost struct {
 	catalogHost
-	definition             pluginconfiguration.Definition
-	stageCalls, abortCalls int
+	definition                                          pluginconfiguration.Definition
+	stageCalls, prepareCalls, activateCalls, abortCalls int
+	activationStatus                                    configurationactivation.Status
 }
 
 func (h *credentialDraftHost) Call(ctx context.Context, target *contractv1.CallTarget, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
@@ -61,9 +63,67 @@ func (h *credentialDraftHost) Call(ctx context.Context, target *contractv1.CallT
 		case "abortDelegated":
 			h.abortCalls++
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{}`), nil
+		case "prepareDelegated":
+			h.prepareCalls++
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{}`), nil
+		case "activateDelegated":
+			h.activateCalls++
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte(`{}`), nil
 		}
+	case configurationactivation.DeploymentCapability:
+		status := h.activationStatus
+		if status == "" {
+			status = configurationactivation.StatusPendingApproval
+		}
+		activation := configurationactivation.Activation{CandidateID: "pcfg_" + strings.Repeat("9", 32), ConfigurationID: h.definition.ID, Deployment: h.definition.Deployment, ServiceRevision: 9, PreviousServiceRevision: h.definition.DeploymentRevision, Status: status}
+		var request map[string]json.RawMessage
+		_ = json.Unmarshal(payload, &request)
+		if rawCandidate := request["candidateId"]; len(rawCandidate) > 0 {
+			_ = json.Unmarshal(rawCandidate, &activation.CandidateID)
+		}
+		if rawActivation := request["activation"]; len(rawActivation) > 0 {
+			var create configurationactivation.CreateRequest
+			_ = json.Unmarshal(rawActivation, &create)
+			activation.CandidateID, activation.ConfigurationID = create.CandidateID, create.ConfigurationID
+		}
+		if target.GetOperation() == configurationactivation.PublishOperation && status == configurationactivation.StatusApproved {
+			activation.Status = configurationactivation.StatusReady
+		}
+		raw, _ := json.Marshal(activation)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 	}
 	return nil, nil, fmt.Errorf("unexpected target: %+v", target)
+}
+
+func TestApplicationDraftSubmissionApprovalAndActivationSaga(t *testing.T) {
+	catalog := managedTestCatalog(t)
+	host := &credentialDraftHost{catalogHost: catalogHost{catalogs: []pluginconfiguration.Catalog{catalog}}, definition: catalog.Items[0]}
+	service, err := New(filepath.Join(t.TempDir(), "plugin-settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call := userCall("tenant-a", "alice")
+	draft, err := service.CreateDraft(context.Background(), host, call, pluginconfiguration.CreateDraftRequest{ConfigurationID: catalog.Items[0].ID, CatalogDigest: catalog.Digest, Values: []byte(`{"region":"cn-west"}`), Secrets: map[string]string{"token": "secret"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	submitted, err := service.SubmitDraft(context.Background(), host, call, draft.ID, draft.Revision)
+	if err != nil || submitted.Status != pluginconfiguration.CandidatePublishing || submitted.ExternalRevision != 9 || submitted.ExternalStatus != string(configurationactivation.StatusPendingApproval) {
+		t.Fatalf("配置草稿未提交外部审批: candidate=%+v err=%v", submitted, err)
+	}
+	host.activationStatus = configurationactivation.StatusApproved
+	if err := service.recoverInterrupted(context.Background(), host, call); err != nil {
+		t.Fatal(err)
+	}
+	items, _ := service.ListCandidates(call)
+	approved := items[0]
+	if approved.ExternalStatus != string(configurationactivation.StatusApproved) {
+		t.Fatalf("外部审批状态未恢复: %+v", approved)
+	}
+	ready, err := service.ActivateCandidate(context.Background(), host, call, approved.ID, approved.Revision)
+	if err != nil || ready.Status != pluginconfiguration.CandidateReady || ready.ExternalStatus != string(configurationactivation.StatusReady) || host.prepareCalls != 1 || host.activateCalls != 1 {
+		t.Fatalf("配置候选未完成激活 Saga: candidate=%+v prepare=%d activate=%d err=%v", ready, host.prepareCalls, host.activateCalls, err)
+	}
 }
 
 func (h *catalogHost) Call(_ context.Context, target *contractv1.CallTarget, _ *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
@@ -218,7 +278,7 @@ func testCatalog(t *testing.T) pluginconfiguration.Catalog {
 func managedTestCatalog(t *testing.T) pluginconfiguration.Catalog {
 	t.Helper()
 	const pluginID = "com.example.managed"
-	manifest := []byte(fmt.Sprintf(`{"id":%q,"name":"Managed","description":"managed","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"required":["region"],"properties":{"region":{"type":"string"}}},"managedCredentials":[{"id":"token","title":"Token","purpose":"remote.token","required":true}]},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`, pluginID))
+	manifest := []byte(fmt.Sprintf(`{"id":%q,"name":"Managed","description":"managed","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"capabilities":{"kernelServices":["kernel.config.credential-ref"]},"configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"required":["region"],"properties":{"region":{"type":"string"}}},"managedCredentials":[{"id":"token","title":"Token","purpose":"remote.token","required":true}]},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`, pluginID))
 	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.0.0", Channel: "stable"}
 	deployment := deploymentv2.Deployment{Version: 2, Revision: 8, Metadata: deploymentv1.Metadata{Name: "managed-services", Tenant: "tenant-a"}, Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginApplication}}, Units: []deploymentv2.ServiceUnit{{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}}, Config: map[string]any{"plugins": map[string]any{pluginID: map[string]any{"region": "cn-east"}}}}}}
 	catalog, err := pluginconfiguration.Build(deployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("b", 64), Manifest: manifest}})

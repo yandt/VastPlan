@@ -16,7 +16,7 @@ import (
 
 const (
 	PluginID           = pluginconfiguration.PluginSettingsID
-	PluginVersion      = "0.4.0"
+	PluginVersion      = "0.5.0"
 	Capability         = "platform.plugin-configuration"
 	StateFileConfigKey = "platform.plugin-configuration.stateFile"
 	maxStateBytes      = 8 << 20
@@ -49,6 +49,7 @@ type tenantState struct {
 type credentialStage struct {
 	FieldID string                        `json:"fieldId"`
 	Stage   pluginconfig.StagedCredential `json:"stage"`
+	State   string                        `json:"state"`
 }
 
 type persistedState struct {

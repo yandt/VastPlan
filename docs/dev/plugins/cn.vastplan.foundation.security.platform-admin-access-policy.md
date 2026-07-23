@@ -1,7 +1,9 @@
 # 平台 Workload 访问策略
 
 插件 ID：`cn.vastplan.foundation.security.platform-admin-access-policy`
-当前制品版本：`0.21.0`
+当前制品版本：`0.22.0`
+
+0.22.0 允许按认证插件隔离的 `kernel.config.credential-ref`，并把 plugin-settings 的权限收窄为 Deployment Manager 的 candidate 绑定配置创建/查询/发布，以及凭证 delegated stage/prepare/activate/abort；其他部署读取和普通发布仍被拒绝。
 
 该 foundation 插件以 `per-kernel + local-ephemeral + local + direct` 运行，只治理系统与插件 workload 的精确回调。用户管理操作已全部交给签名 Permission Catalog 与优先级更高的 `authorization-enforcer`；本插件即使看到 `platform.admin`、精确 permission code 或 `is_admin` 也不会放行用户。
 

@@ -7,6 +7,7 @@ type ConfigurationRow = PluginConfigurationDefinition & Record<string, unknown> 
   candidateStatus: string;
   candidateId: string;
   candidateRevision: number;
+  candidateExternalStatus: string;
   managedCredentialCount: number;
 };
 
@@ -48,7 +49,7 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
     id: `platform.plugin-configuration.${serviceID}`,
     path,
     title,
-    description: message(namespace, "page.description", "按已验签插件清单查看配置，并以候选事务安全变更。当前阶段只开放 Draft，不会伪装为已生效。"),
+    description: message(namespace, "page.description", "按已验签插件清单创建候选；应用配置经独立审批、Deployment 发布和 readiness 后才显示为 Ready。"),
     requiredPermissions: ["platform.plugin-configuration.read"],
     navigation: { id: `platform.plugin-configuration.${serviceID}`, label: title, zone: "settings", order: 25 },
     collection: {
@@ -72,10 +73,13 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
         { key: "applyMode", label: message(namespace, "column.applyMode", "生效方式"), defaultVisible: true, minWidth: 110 },
         { key: "managedCredentialCount", label: message(namespace, "column.credentials", "托管字段"), format: "number", defaultVisible: true, minWidth: 100 },
         { key: "candidateStatus", label: message(namespace, "column.candidate", "候选状态"), format: "status", defaultVisible: true, minWidth: 120 },
+        { key: "candidateExternalStatus", label: message(namespace, "column.external", "外部发布"), format: "status", defaultVisible: true, minWidth: 130 },
       ],
       actions: [
         { id: "draft", label: message(namespace, "action.edit", "编辑配置草稿"), icon: "edit", placement: "page.secondary", requiresSelection: true, form: "draft", requiredPermissions: ["platform.plugin-configuration.write"], visibleWhen: { pointer: "/candidateStatus", in: ["None", "Ready", "Failed", "RolledBack"] } },
         { id: "discard", label: message(namespace, "action.discard", "放弃草稿"), icon: "remove", placement: "page.secondary", tone: "danger", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.write"], confirm: message(namespace, "confirm.discard", "放弃所选草稿？该操作使用候选 revision CAS。"), visibleWhen: { pointer: "/candidateStatus", equals: "Draft" } },
+        { id: "submit", label: message(namespace, "action.submit", "提交审批"), icon: "publish", placement: "page.primary", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.publish"], confirm: message(namespace, "confirm.submit", "提交后将创建独立服务修订，并由另一位审批人审批。"), visibleWhen: { all: [{ pointer: "/candidateStatus", equals: "Draft" }, { pointer: "/applyPath", equals: "application-deployment" }] } },
+        { id: "activate", label: message(namespace, "action.activate", "发布并激活"), icon: "publish", placement: "page.primary", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.publish"], confirm: message(namespace, "confirm.activate", "发布已审批修订；readiness 失败将自动创建单调回滚修订。"), visibleWhen: { pointer: "/candidateExternalStatus", equals: "Approved" } },
       ],
     },
     forms: [form],
@@ -94,8 +98,10 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
     },
     async runAction({ action, selected }) {
       const row = selected[0];
-      if (action.id !== "discard" || row === undefined || row.candidateId === "") return;
-      await client.discardPluginConfigurationDraft(row.candidateId, row.candidateRevision);
+      if (row === undefined || row.candidateId === "") return;
+      if (action.id === "discard") await client.discardPluginConfigurationDraft(row.candidateId, row.candidateRevision);
+      if (action.id === "submit") await client.submitPluginConfigurationDraft(row.candidateId, row.candidateRevision);
+      if (action.id === "activate") await client.activatePluginConfigurationCandidate(row.candidateId, row.candidateRevision);
     },
   });
 }
@@ -105,7 +111,8 @@ function configurationFormSchema(definition: PluginConfigurationDefinition): For
 	type: "string", format: "vastplan-secret-material", writeOnly: true, title: field.title,
 	...(field.description === undefined ? {} : { description: field.description }),
   }]));
-  const requiredSecrets = (definition.managedCredentials ?? []).filter((field) => field.required === true).map((field) => field.id);
+  const configured = new Set((definition.credentialStates ?? []).filter((state) => state.configured).map((state) => state.fieldId));
+  const requiredSecrets = (definition.managedCredentials ?? []).filter((field) => field.required === true && !configured.has(field.id)).map((field) => field.id);
   const secretsSchema: Record<string, unknown> = { type: "object", additionalProperties: false, properties: secretProperties };
   if (requiredSecrets.length > 0) secretsSchema.required = requiredSecrets;
   return {
@@ -137,6 +144,7 @@ function configurationRow(definition: PluginConfigurationDefinition, candidate: 
     candidateStatus: candidate?.status ?? "None",
     candidateId: candidate?.id ?? "",
     candidateRevision: candidate?.revision ?? 0,
+    candidateExternalStatus: candidate?.externalStatus ?? "None",
     managedCredentialCount: definition.managedCredentials?.length ?? 0,
   };
 }
@@ -153,16 +161,16 @@ export default {
   },
   localization: { defaultLocale: "zh-CN", messages: {
     "zh-CN": {
-      "page.title":"插件配置","page.titleService":"插件配置 · {service}","page.description":"按已验签插件清单查看配置，并以候选事务安全变更。当前阶段只开放 Draft，不会伪装为已生效。",
+      "page.title":"插件配置","page.titleService":"插件配置 · {service}","page.description":"按已验签插件清单创建候选；应用配置经独立审批、Deployment 发布和 readiness 后才显示为 Ready。",
       "filter.keyword":"插件或服务","filter.applyMode":"生效方式","mode.restart":"重启发布","mode.hot":"热配置",
-      "column.plugin":"插件","column.deployment":"部署","column.unit":"服务单元","column.origin":"管理来源","column.scope":"作用域","column.applyMode":"生效方式","column.credentials":"托管字段","column.candidate":"候选状态",
-      "form.title":"编辑配置草稿","form.description":"保存只创建候选草稿，不会立即重启服务或改变活动配置。","action.saveDraft":"保存草稿","notice.draftSaved":"配置草稿已保存","action.edit":"编辑配置草稿","action.discard":"放弃草稿","confirm.discard":"放弃所选草稿？该操作使用候选 revision CAS。"
+      "column.plugin":"插件","column.deployment":"部署","column.unit":"服务单元","column.origin":"管理来源","column.scope":"作用域","column.applyMode":"生效方式","column.credentials":"托管字段","column.candidate":"候选状态","column.external":"外部发布",
+      "form.title":"编辑配置草稿","form.description":"保存只创建候选草稿，不会立即重启服务或改变活动配置。","action.saveDraft":"保存草稿","notice.draftSaved":"配置草稿已保存","action.edit":"编辑配置草稿","action.discard":"放弃草稿","confirm.discard":"放弃所选草稿？该操作使用候选 revision CAS。","action.submit":"提交审批","confirm.submit":"提交后将创建独立服务修订，并由另一位审批人审批。","action.activate":"发布并激活","confirm.activate":"发布已审批修订；readiness 失败将自动创建单调回滚修订。"
     },
     "en-US": {
-      "page.title":"Plugin configuration","page.titleService":"Plugin configuration · {service}","page.description":"Inspect signed plugin configuration contracts and create governed candidates. Drafts are never presented as active.",
+      "page.title":"Plugin configuration","page.titleService":"Plugin configuration · {service}","page.description":"Create candidates from signed contracts. Application configuration becomes Ready only after independent approval, Deployment publication, and readiness.",
       "filter.keyword":"Plugin or service","filter.applyMode":"Apply mode","mode.restart":"Restart publication","mode.hot":"Hot configuration",
-      "column.plugin":"Plugin","column.deployment":"Deployment","column.unit":"Service unit","column.origin":"Managed by","column.scope":"Scope","column.applyMode":"Apply mode","column.credentials":"Managed fields","column.candidate":"Candidate status",
-      "form.title":"Edit configuration draft","form.description":"Saving creates a candidate draft only; it does not restart services or change active configuration.","action.saveDraft":"Save draft","notice.draftSaved":"Configuration draft saved","action.edit":"Edit draft","action.discard":"Discard draft","confirm.discard":"Discard the selected draft using its candidate revision?"
+      "column.plugin":"Plugin","column.deployment":"Deployment","column.unit":"Service unit","column.origin":"Managed by","column.scope":"Scope","column.applyMode":"Apply mode","column.credentials":"Managed fields","column.candidate":"Candidate status","column.external":"External publication",
+      "form.title":"Edit configuration draft","form.description":"Saving creates a candidate draft only; it does not restart services or change active configuration.","action.saveDraft":"Save draft","notice.draftSaved":"Configuration draft saved","action.edit":"Edit draft","action.discard":"Discard draft","confirm.discard":"Discard the selected draft using its candidate revision?","action.submit":"Submit for approval","confirm.submit":"Submission creates a separate service revision for another subject to approve.","action.activate":"Publish and activate","confirm.activate":"Publish the approved revision; readiness failure creates a monotonic rollback revision."
     }
   } },
 };

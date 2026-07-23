@@ -14,7 +14,7 @@ func TestBuildUsesVerifiedManifestAndOpaqueResourceIdentity(t *testing.T) {
 	const pluginID = "com.example.configured"
 	manifest := []byte(fmt.Sprintf(`{
 		"id":%q,"name":"Configured plugin","description":"configured","version":"1.0.0","publisher":"example",
-		"engines":{"backend":"^1.0"},
+		"engines":{"backend":"^1.0"},"capabilities":{"kernelServices":["kernel.config.credential-ref"]},
 		"configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"properties":{"region":{"type":"string"}}},"managedCredentials":[{"id":"token","title":"Token","purpose":"remote.token"}]},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
 	}`, pluginID))

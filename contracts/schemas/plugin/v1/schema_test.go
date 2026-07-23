@@ -321,7 +321,7 @@ func TestValidateDescriptor_RejectsUnpublishedOrInvalidPoint(t *testing.T) {
 func TestParseManifest_BackendDescriptorsAreClosed(t *testing.T) {
 	valid := []byte(`{
 		"id":"com.example.closed-contract","name":"closed","description":"closed contract",
-		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"capabilities":{"kernelServices":["kernel.config.credential-ref"]},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
 		"contributes":{"backend":{
 			"agents":[{"id":"demo.agent","service_role":"backend","systemPrompt":"你是助手","tools":[{"extensionPoint":"tool.package","capability":"demo.tool"}]}],
@@ -535,6 +535,7 @@ func TestParseManifest_ConfigurationAndManagedCredentials(t *testing.T) {
 	valid := []byte(`{
 		"id":"com.example.configured","name":"configured","description":"configured plugin",
 		"version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},
+		"capabilities":{"kernelServices":["kernel.config.credential-ref"]},
 		"configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"properties":{"listen":{"type":"string"}}},
 			"managedCredentials":[{"id":"api-token","title":"API token","purpose":"remote.api-token","required":true}]},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}

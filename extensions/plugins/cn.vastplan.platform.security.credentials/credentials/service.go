@@ -29,7 +29,7 @@ import (
 
 const (
 	PluginID                = "cn.vastplan.platform.security.credentials"
-	PluginVersion           = "0.8.0"
+	PluginVersion           = "0.9.0"
 	Capability              = "platform.credentials"
 	MaterialLeaseCapability = "platform.credentials.material-lease"
 	stateFileKey            = "platform.credentials.stateFile"
@@ -165,6 +165,7 @@ type persisted struct {
 
 const (
 	managedPreparing = "Preparing"
+	managedCandidate = "Candidate"
 	managedActive    = "Active"
 	managedAborted   = "Aborted"
 	managedRetired   = "Retired"
@@ -239,7 +240,7 @@ func validateManagedState(tenants map[string]map[string]ManagedRecord) error {
 				return fmt.Errorf("委托托管凭证状态 %q 元数据无效", stageID)
 			}
 			switch record.State {
-			case managedPreparing, managedActive:
+			case managedPreparing, managedCandidate, managedActive:
 				if record.Ciphertext == "" {
 					return fmt.Errorf("托管凭证状态 %q 缺少密文", stageID)
 				}
@@ -484,7 +485,7 @@ func (s *Service) IssueMaterialLease(ctx context.Context, call *contractv1.CallC
 			break
 		}
 	}
-	if matched.StageID == "" || matched.State != managedActive || matched.Ref != request.Ref || matched.Ciphertext == "" {
+	if matched.StageID == "" || (matched.State != managedCandidate && matched.State != managedActive) || matched.Ref != request.Ref || matched.Ciphertext == "" {
 		s.mu.Unlock()
 		return credentiallease.Envelope{}, errors.New("托管凭证不存在、未激活或引用不匹配")
 	}
@@ -503,9 +504,9 @@ func (s *Service) IssueMaterialLease(ctx context.Context, call *contractv1.CallC
 	// stale record merely because decryption started while it was Active.
 	s.mu.Lock()
 	current, ok := s.managedRecords(t)[matched.StageID]
-	stillActive := ok && current.State == managedActive && current.Ref == matched.Ref && current.Ciphertext == ciphertext
+	stillUsable := ok && (current.State == managedCandidate || current.State == managedActive) && current.Ref == matched.Ref && current.Ciphertext == ciphertext
 	s.mu.Unlock()
-	if !stillActive {
+	if !stillUsable {
 		return credentiallease.Envelope{}, errors.New("托管凭证在 lease 签发期间已变化")
 	}
 	return credentiallease.Seal(request, credentiallease.Claims{TenantID: t, Audience: audience, Ref: matched.Ref}, material, time.Now().UTC(), credentiallease.DefaultTTL)
@@ -720,6 +721,8 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		out, err = s.AbortManaged(call, in.StageID)
 	case "activateDelegated":
 		out, err = s.ActivateDelegated(call, in.StageID, in.CandidateID)
+	case "prepareDelegated":
+		out, err = s.PrepareDelegated(call, in.StageID, in.CandidateID)
 	case "abortDelegated":
 		out, err = s.AbortDelegated(call, in.StageID, in.CandidateID)
 	case "retireManaged":
@@ -749,6 +752,7 @@ func Descriptor() []byte {
 		{"name":"revoke","description":"撤销凭证引用","paramsSchema":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}},
 		{"name":"stageManaged","description":"由业务插件创建不可读取的凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"purpose":{"type":"string"},"resource":{"type":"string"},"value":{"type":"string"}},"required":["purpose","resource","value"]}},
 		{"name":"stageDelegated","description":"以可信宿主一次性配置授权创建目标插件凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"authority":{"type":"string"},"value":{"type":"string"}},"required":["authority","value"]}},
+		{"name":"prepareDelegated","description":"使配置候选引用仅在候选 Deployment 窗口可用","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"},"candidateId":{"type":"string"}},"required":["stageId","candidateId"]}},
 		{"name":"activateManaged","description":"由创建者激活托管凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"}},"required":["stageId"]}},
 		{"name":"abortManaged","description":"由创建者终止托管凭证候选","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"}},"required":["stageId"]}},
 		{"name":"activateDelegated","description":"由配置协调器激活已绑定候选的委托凭证","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"stageId":{"type":"string"},"candidateId":{"type":"string"}},"required":["stageId","candidateId"]}},
@@ -769,7 +773,7 @@ func Contribution(s *Service) sdk.Contribution {
 			return s.Handler(ctx, host, call, payload, op)
 		}
 	}
-	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"put": h("put"), "describe": h("describe"), "list": h("list"), "rotate": h("rotate"), "revoke": h("revoke"), "stageManaged": h("stageManaged"), "stageDelegated": h("stageDelegated"), "activateManaged": h("activateManaged"), "abortManaged": h("abortManaged"), "activateDelegated": h("activateDelegated"), "abortDelegated": h("abortDelegated"), "retireManaged": h("retireManaged")}}
+	return sdk.Contribution{ExtensionPoint: extpoint.ToolPackage, ID: Capability, Descriptor: Descriptor(), Handlers: map[string]sdk.Handler{"put": h("put"), "describe": h("describe"), "list": h("list"), "rotate": h("rotate"), "revoke": h("revoke"), "stageManaged": h("stageManaged"), "stageDelegated": h("stageDelegated"), "prepareDelegated": h("prepareDelegated"), "activateManaged": h("activateManaged"), "abortManaged": h("abortManaged"), "activateDelegated": h("activateDelegated"), "abortDelegated": h("abortDelegated"), "retireManaged": h("retireManaged")}}
 }
 
 func MaterialLeaseContribution(s *Service) sdk.Contribution {

@@ -15,6 +15,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -200,6 +201,10 @@ func (s *Service) ApproveServiceRevision(call *contractv1.CallContext, id uint64
 }
 
 func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64) (platformadminapi.ServiceRevision, error) {
+	return s.publishServiceRevision(ctx, host, call, id, false)
+}
+
+func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64, configurationActivation bool) (platformadminapi.ServiceRevision, error) {
 	tenant, err := callTenant(call)
 	if err != nil {
 		return platformadminapi.ServiceRevision{}, err
@@ -216,6 +221,9 @@ func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, cal
 		return platformadminapi.ServiceRevision{}, err
 	}
 	revision := state.Revisions[index]
+	if revision.ConfigurationCandidateID != "" && !configurationActivation {
+		return platformadminapi.ServiceRevision{}, errServiceState
+	}
 	if revision.Status != platformadminapi.ServiceApproved && revision.Status != platformadminapi.ServicePublishing {
 		return platformadminapi.ServiceRevision{}, errServiceState
 	}
@@ -469,6 +477,28 @@ func cloneServiceRevisions(in []platformadminapi.ServiceRevision) []platformadmi
 	out := make([]platformadminapi.ServiceRevision, len(in))
 	for i := range in {
 		out[i] = cloneServiceRevision(in[i])
+	}
+	return out
+}
+
+// publicServiceRevision removes credential handles at the protocol boundary.
+// The persisted control-plane revision still carries them so Node Agent can
+// project the exact reference to the authenticated owning plugin.
+func publicServiceRevision(in platformadminapi.ServiceRevision) platformadminapi.ServiceRevision {
+	out := cloneServiceRevision(in)
+	for index := range out.Composition.Units {
+		delete(out.Composition.Units[index].Spec.Config, pluginconfig.ManagedCredentialsKey)
+	}
+	for index := range out.Preview.Units {
+		delete(out.Preview.Units[index].Config, pluginconfig.ManagedCredentialsKey)
+	}
+	return out
+}
+
+func publicServiceRevisions(in []platformadminapi.ServiceRevision) []platformadminapi.ServiceRevision {
+	out := make([]platformadminapi.ServiceRevision, len(in))
+	for index := range in {
+		out[index] = publicServiceRevision(in[index])
 	}
 	return out
 }

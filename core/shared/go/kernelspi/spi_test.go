@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 )
 
 func TestMapConfigIsImmutableAndScopeFailsClosed(t *testing.T) {
@@ -21,6 +22,21 @@ func TestMapConfigIsImmutableAndScopeFailsClosed(t *testing.T) {
 	}
 	if err := (kernelspi.Scope{TenantID: "t", PluginID: "p"}).Validate(); err == nil {
 		t.Fatal("缺 namespace 的 scope 必须拒绝")
+	}
+}
+
+func TestPluginManagedCredentialRefsFailClosedAcrossPlugins(t *testing.T) {
+	provider, err := kernelspi.NewPluginMapManagedCredentialRefs(map[string]map[string]pluginconfig.ManagedCredentialRef{
+		"plugin.a": {"token": {Handle: "credential://managed/a", Scope: "tenant", Owner: "plugin.a", Purpose: "example.token", Version: 1}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, err := provider.LookupManagedCredential(context.Background(), "plugin.b", "token"); err != nil || ok {
+		t.Fatalf("plugin.b 不得读取 plugin.a 托管凭证: ok=%v err=%v", ok, err)
+	}
+	if ref, ok, err := provider.LookupManagedCredential(context.Background(), "plugin.a", "token"); err != nil || !ok || ref.Owner != "plugin.a" {
+		t.Fatalf("plugin.a 应读取自己的托管凭证: ref=%+v ok=%v err=%v", ref, ok, err)
 	}
 }
 

@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.configuration.role-management",
   "name": "VastPlan Role Management",
   "description": "在线管理权限目录、角色 revision、主体绑定、撤权和审计",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

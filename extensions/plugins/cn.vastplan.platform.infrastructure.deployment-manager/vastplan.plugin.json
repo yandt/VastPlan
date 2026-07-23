@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -80,6 +80,9 @@
           { "name": "approveServiceRevision", "description": "批准服务组合修订", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
           { "name": "publishServiceRevision", "description": "通过可信内核发布服务组合", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
           { "name": "rollbackServiceRevision", "description": "以新修订回滚到历史服务组合", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
+          { "name": "createConfigurationActivation", "description": "从活动可信目录创建应用插件配置审批修订", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "activation": { "type": "object" } }, "required": ["activation"] } },
+          { "name": "getConfigurationActivation", "description": "按配置候选读取外部发布与就绪状态", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
+          { "name": "publishConfigurationActivation", "description": "发布已审批配置修订并在 readiness 失败时单调回滚", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "candidateId": { "type": "string" } }, "required": ["candidateId"] } },
           { "name": "listServiceRevisionAudit", "description": "列出服务组合审计记录", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
           { "name": "listTestTargetBindings", "description": "列出 Backend 测试目标预授权绑定", "paramsSchema": { "type": "object", "properties": {} } },
           { "name": "putTestTargetBinding", "description": "以 CAS 保存 Backend 应用插件测试目标绑定", "paramsSchema": { "type": "object", "properties": { "id": { "type": "string" }, "binding": { "type": "object" } }, "required": ["id", "binding"] } },

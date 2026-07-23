@@ -346,22 +346,26 @@ const (
 )
 
 type ServiceRevision struct {
-	ID                   uint64                                      `json:"id"`
-	Deployment           string                                      `json:"deployment"`
-	Status               ServiceRevisionStatus                       `json:"status"`
-	Active               bool                                        `json:"active"`
-	Composition          backendcompositionv1.ApplicationComposition `json:"composition"`
-	Preview              deploymentv2.Deployment                     `json:"preview"`
-	PreviewDigest        string                                      `json:"previewDigest"`
-	ArtifactReferences   []pluginv1.ArtifactReference                `json:"artifactReferences"`
-	ConfigurationCatalog pluginconfiguration.Catalog                 `json:"configurationCatalog"`
-	KVRevision           uint64                                      `json:"kvRevision,omitempty"`
-	ReferencePending     bool                                        `json:"referencePending,omitempty"`
-	SubmittedBy          string                                      `json:"submittedBy,omitempty"`
-	ApprovedBy           string                                      `json:"approvedBy,omitempty"`
-	PublishedBy          string                                      `json:"publishedBy,omitempty"`
-	CreatedAt            string                                      `json:"createdAt"`
-	UpdatedAt            string                                      `json:"updatedAt"`
+	ID                       uint64                                      `json:"id"`
+	Deployment               string                                      `json:"deployment"`
+	Status                   ServiceRevisionStatus                       `json:"status"`
+	Active                   bool                                        `json:"active"`
+	Composition              backendcompositionv1.ApplicationComposition `json:"composition"`
+	Preview                  deploymentv2.Deployment                     `json:"preview"`
+	PreviewDigest            string                                      `json:"previewDigest"`
+	ArtifactReferences       []pluginv1.ArtifactReference                `json:"artifactReferences"`
+	ConfigurationCatalog     pluginconfiguration.Catalog                 `json:"configurationCatalog"`
+	ConfigurationCandidateID string                                      `json:"configurationCandidateId,omitempty"`
+	ConfigurationID          string                                      `json:"configurationId,omitempty"`
+	PreviousServiceRevision  uint64                                      `json:"previousServiceRevision,omitempty"`
+	RollbackServiceRevision  uint64                                      `json:"rollbackServiceRevision,omitempty"`
+	KVRevision               uint64                                      `json:"kvRevision,omitempty"`
+	ReferencePending         bool                                        `json:"referencePending,omitempty"`
+	SubmittedBy              string                                      `json:"submittedBy,omitempty"`
+	ApprovedBy               string                                      `json:"approvedBy,omitempty"`
+	PublishedBy              string                                      `json:"publishedBy,omitempty"`
+	CreatedAt                string                                      `json:"createdAt"`
+	UpdatedAt                string                                      `json:"updatedAt"`
 }
 
 type ServiceAuditEvent struct {

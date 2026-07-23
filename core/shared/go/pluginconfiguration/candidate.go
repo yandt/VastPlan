@@ -47,6 +47,7 @@ type Candidate struct {
 	ErrorCode          string                    `json:"errorCode,omitempty"`
 	ErrorMessage       string                    `json:"errorMessage,omitempty"`
 	ExternalRevision   uint64                    `json:"externalRevision,omitempty"`
+	ExternalStatus     string                    `json:"externalStatus,omitempty"`
 	RollbackRevision   uint64                    `json:"rollbackRevision,omitempty"`
 	ManagedCredentials []ManagedCredentialStatus `json:"managedCredentials,omitempty"`
 }

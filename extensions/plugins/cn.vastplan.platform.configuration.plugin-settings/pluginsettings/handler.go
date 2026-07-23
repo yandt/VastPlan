@@ -87,6 +87,10 @@ func (s *Service) execute(ctx context.Context, host sdk.Host, call *contractv1.C
 		})
 	case "discardDraft":
 		return s.DiscardDraft(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "submitDraft":
+		return s.SubmitDraft(ctx, host, call, request.ID, request.ExpectedRevision)
+	case "activateCandidate":
+		return s.ActivateCandidate(ctx, host, call, request.ID, request.ExpectedRevision)
 	default:
 		return nil, ErrInvalid
 	}
@@ -116,6 +120,8 @@ func Descriptor() []byte {
 		{"name":"listCandidates","description":"列出配置候选与生效状态","paramsSchema":{"type":"object","additionalProperties":false,"properties":{}}},
 		{"name":"createDraft","description":"按活动目录和签名 Schema 创建配置草稿并委托暂存只写秘密","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"configurationId":{"type":"string"},"catalogDigest":{"type":"string"},"values":{"type":"object"},"secrets":{"type":"object","additionalProperties":{"type":"string"}}},"required":["configurationId","catalogDigest","values"]}},
 		{"name":"discardDraft","description":"以 CAS 放弃尚未发布的配置草稿","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"submitDraft","description":"把 Application Deployment 配置草稿提交为受治理服务修订","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
+		,{"name":"activateCandidate","description":"发布已审批配置修订并以 readiness 驱动凭证提交或回滚","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"id":{"type":"string"},"expectedRevision":{"type":"integer","minimum":1}},"required":["id","expectedRevision"]}}
 	]}`)
 }
 
@@ -125,7 +131,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listDefinitions", "getDefinition", "listCandidates", "createDraft", "discardDraft"}
+	operations := []string{"listDefinitions", "getDefinition", "listCandidates", "createDraft", "discardDraft", "submitDraft", "activateCandidate"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

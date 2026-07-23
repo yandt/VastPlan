@@ -550,6 +550,20 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	if err := validateConfiguration(manifest.Configuration); err != nil {
 		return Manifest{}, err
 	}
+	if manifest.Configuration != nil && len(manifest.Configuration.ManagedCredentials) > 0 {
+		found := false
+		if manifest.Capabilities != nil {
+			for _, capability := range manifest.Capabilities.KernelServices {
+				if capability == "kernel.config.credential-ref" {
+					found = true
+					break
+				}
+			}
+		}
+		if !found {
+			return Manifest{}, errors.New("configuration.managedCredentials 要求声明 kernel.config.credential-ref")
+		}
+	}
 	if err := validateAuthorization(manifest); err != nil {
 		return Manifest{}, err
 	}

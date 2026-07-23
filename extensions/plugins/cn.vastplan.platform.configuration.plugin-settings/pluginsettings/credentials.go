@@ -20,12 +20,16 @@ const credentialCapability = "platform.credentials"
 
 func credentialStatuses(definition pluginconfiguration.Definition, secrets map[string]string) ([]pluginconfiguration.ManagedCredentialStatus, error) {
 	declared := make(map[string]bool, len(definition.ManagedCredentials))
+	configured := make(map[string]bool, len(definition.CredentialStates))
+	for _, state := range definition.CredentialStates {
+		configured[state.FieldID] = state.Configured
+	}
 	statuses := make([]pluginconfiguration.ManagedCredentialStatus, 0, len(definition.ManagedCredentials))
 	total := 0
 	for _, field := range definition.ManagedCredentials {
 		declared[field.ID] = true
 		value := secrets[field.ID]
-		if field.Required && value == "" {
+		if field.Required && value == "" && !configured[field.ID] {
 			return nil, fmt.Errorf("%w: 必须提供托管凭证字段 %s", ErrInvalid, field.ID)
 		}
 		if len(value) > 4<<20 {
@@ -33,6 +37,9 @@ func credentialStatuses(definition pluginconfiguration.Definition, secrets map[s
 		}
 		total += len(value)
 		state := "Missing"
+		if configured[field.ID] {
+			state = "Retained"
+		}
 		if value != "" {
 			state = "Pending"
 		}

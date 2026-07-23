@@ -117,7 +117,7 @@ func (s *Service) validateLoaded() error {
 				return fmt.Errorf("插件配置协调器凭证阶段指向未知候选 %q", candidateID)
 			}
 			for fieldID, stage := range fields {
-				if fieldID == "" || stage.FieldID != fieldID || stage.Stage.ID == "" || stage.Stage.Ref.Handle == "" {
+				if fieldID == "" || stage.FieldID != fieldID || stage.Stage.ID == "" || stage.Stage.Ref.Handle == "" || (stage.State != "Staged" && stage.State != "Candidate" && stage.State != "Active") {
 					return fmt.Errorf("插件配置协调器候选 %q 包含无效凭证阶段", candidateID)
 				}
 			}

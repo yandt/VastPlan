@@ -19,6 +19,7 @@ import (
 	"time"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
@@ -28,7 +29,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.12.0"
+	PluginVersion = "0.13.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 16 << 20
@@ -46,15 +47,16 @@ var (
 )
 
 type tenantState struct {
-	Nodes           map[string]platformadminapi.ManagedNode       `json:"nodes"`
-	Jobs            map[string]platformadminapi.BootstrapJob      `json:"jobs"`
-	NextRevision    uint64                                        `json:"nextRevision"`
-	NextAudit       uint64                                        `json:"nextAudit"`
-	Revisions       []platformadminapi.ServiceRevision            `json:"revisions"`
-	ServiceAudit    []platformadminapi.ServiceAuditEvent          `json:"serviceAudit"`
-	TestBindings    map[string]platformadminapi.TestTargetBinding `json:"testBindings"`
-	NextTestRelease uint64                                        `json:"nextTestRelease"`
-	TestReleases    []platformadminapi.TestRelease                `json:"testReleases"`
+	Nodes                 map[string]platformadminapi.ManagedNode       `json:"nodes"`
+	Jobs                  map[string]platformadminapi.BootstrapJob      `json:"jobs"`
+	NextRevision          uint64                                        `json:"nextRevision"`
+	NextAudit             uint64                                        `json:"nextAudit"`
+	Revisions             []platformadminapi.ServiceRevision            `json:"revisions"`
+	ConfigurationRequests map[string]string                             `json:"configurationRequests,omitempty"`
+	ServiceAudit          []platformadminapi.ServiceAuditEvent          `json:"serviceAudit"`
+	TestBindings          map[string]platformadminapi.TestTargetBinding `json:"testBindings"`
+	NextTestRelease       uint64                                        `json:"nextTestRelease"`
+	TestReleases          []platformadminapi.TestRelease                `json:"testReleases"`
 }
 
 type persisted struct {
@@ -136,9 +138,15 @@ func (s *Service) validateLoaded() error {
 		if state.TestBindings == nil {
 			state.TestBindings = map[string]platformadminapi.TestTargetBinding{}
 		}
+		if state.ConfigurationRequests == nil {
+			state.ConfigurationRequests = map[string]string{}
+		}
 		for _, revision := range state.Revisions {
 			if revision.ID == 0 || revision.Deployment == "" || revision.Composition.Metadata.Tenant != tenant || revision.Composition.Metadata.Name != revision.Deployment || revision.PreviewDigest == "" || !validServiceRevisionState(revision.Status) {
 				return fmt.Errorf("deployment-manager 状态包含无效服务组合 revision %d", revision.ID)
+			}
+			if revision.ConfigurationCandidateID != "" && !validConfigurationRequestHash(state.ConfigurationRequests[revision.ConfigurationCandidateID]) {
+				return fmt.Errorf("deployment-manager 配置修订 %d 缺少幂等请求摘要", revision.ID)
 			}
 		}
 		for id, node := range state.Nodes {
@@ -308,7 +316,18 @@ func (s *Service) tenantLocked(tenant string) *tenantState {
 	if state.TestBindings == nil {
 		state.TestBindings = map[string]platformadminapi.TestTargetBinding{}
 	}
+	if state.ConfigurationRequests == nil {
+		state.ConfigurationRequests = map[string]string{}
+	}
 	return state
+}
+
+func validConfigurationRequestHash(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
 }
 
 func validServiceRevisionState(state platformadminapi.ServiceRevisionStatus) bool {
@@ -691,6 +710,8 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		Composition backendcompositionv1.ApplicationComposition  `json:"composition"`
 		Binding     platformadminapi.PutTestTargetBindingRequest `json:"binding"`
 		Release     platformadminapi.CreateTestReleaseRequest    `json:"release"`
+		Activation  configurationactivation.CreateRequest        `json:"activation"`
+		CandidateID string                                       `json:"candidateId"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
@@ -747,7 +768,7 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		_ = s.ReconcileServiceReferences(ctx, host, call)
 		var items []platformadminapi.ServiceRevision
 		items, err = s.ListServiceRevisions(call)
-		out = map[string]any{"items": items}
+		out = map[string]any{"items": publicServiceRevisions(items)}
 	case "createServiceDraft":
 		out, err = s.CreateServiceDraft(ctx, host, call, request.Composition)
 	case "updateServiceDraft":
@@ -760,6 +781,12 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 		out, err = s.PublishServiceRevision(ctx, host, call, request.RevisionID)
 	case "rollbackServiceRevision":
 		out, err = s.RollbackServiceRevision(ctx, host, call, request.RevisionID)
+	case configurationactivation.CreateOperation:
+		out, err = s.CreateConfigurationActivation(ctx, host, call, request.Activation)
+	case configurationactivation.GetOperation:
+		out, err = s.GetConfigurationActivation(ctx, host, call, configurationactivation.LookupRequest{CandidateID: request.CandidateID})
+	case configurationactivation.PublishOperation:
+		out, err = s.PublishConfigurationActivation(ctx, host, call, configurationactivation.LookupRequest{CandidateID: request.CandidateID})
 	case "listServiceRevisionAudit":
 		_ = s.ReconcileServiceReferences(ctx, host, call)
 		var items []platformadminapi.ServiceAuditEvent
@@ -784,6 +811,9 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 	}
 	if err != nil {
 		return domainError(errorCode(err), err)
+	}
+	if revision, ok := out.(platformadminapi.ServiceRevision); ok {
+		out = publicServiceRevision(revision)
 	}
 	raw, err := json.Marshal(out)
 	if err != nil {
@@ -816,6 +846,8 @@ func errorCode(err error) string {
 		return "platform.deployment.service_state_conflict"
 	case errors.Is(err, errServicePublish):
 		return "platform.deployment.service_publish_failed"
+	case errors.Is(err, errConfigurationActivation):
+		return "platform.deployment.configuration_activation_failed"
 	case errors.Is(err, errTestBindingConflict):
 		return "platform.test_release.binding_version_conflict"
 	case errors.Is(err, errTestReleaseConflict):
@@ -854,6 +886,9 @@ func Descriptor() []byte {
 		,{"name":"approveServiceRevision","description":"批准服务组合修订","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
 		,{"name":"publishServiceRevision","description":"通过可信内核发布服务组合","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
 		,{"name":"rollbackServiceRevision","description":"以新修订回滚到历史服务组合","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
+		,{"name":"createConfigurationActivation","description":"从活动可信目录创建应用插件配置审批修订","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"activation":{"type":"object"}},"required":["activation"]}}
+		,{"name":"getConfigurationActivation","description":"按配置候选读取外部发布与就绪状态","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
+		,{"name":"publishConfigurationActivation","description":"发布已审批配置修订并在 readiness 失败时单调回滚","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"candidateId":{"type":"string"}},"required":["candidateId"]}}
 		,{"name":"listServiceRevisionAudit","description":"列出服务组合审计记录","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
 		,{"name":"listTestTargetBindings","description":"列出 Backend 测试目标预授权绑定","paramsSchema":{"type":"object","properties":{}}}
 		,{"name":"putTestTargetBinding","description":"以 CAS 保存 Backend 应用插件测试目标绑定","paramsSchema":{"type":"object","properties":{"id":{"type":"string"},"binding":{"type":"object"}},"required":["id","binding"]}}
@@ -869,7 +904,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
+	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

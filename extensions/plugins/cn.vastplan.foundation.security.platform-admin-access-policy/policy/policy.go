@@ -8,16 +8,18 @@ import (
 
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	v1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 )
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.21.0"
+	PluginVersion = "0.22.0"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -67,6 +69,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if delegatedManagedCredentialLifecycleAllowed(c, request) {
 		return extpoint.DecisionAllow, "配置协调器只能操作宿主授权绑定的委托凭证"
+	}
+	if configurationActivationAllowed(c, request) {
+		return extpoint.DecisionAllow, "配置协调器只能驱动候选绑定的应用配置发布"
 	}
 	if pluginConfigurationCatalogReadAllowed(c, request) {
 		return extpoint.DecisionAllow, "插件配置协调器只能读取活动可信配置目录"
@@ -215,7 +220,19 @@ func delegatedManagedCredentialLifecycleAllowed(c *v1.CallContext, request extpo
 		return false
 	}
 	switch request.Operation {
-	case "stageDelegated", "activateDelegated", "abortDelegated":
+	case "stageDelegated", "prepareDelegated", "activateDelegated", "abortDelegated":
+		return true
+	default:
+		return false
+	}
+}
+
+func configurationActivationAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || c.GetCaller().GetId() != pluginconfiguration.PluginSettingsID || request.Capability != platformadminapi.DeploymentCapability {
+		return false
+	}
+	switch request.Operation {
+	case configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation:
 		return true
 	default:
 		return false
@@ -225,6 +242,9 @@ func delegatedManagedCredentialLifecycleAllowed(c *v1.CallContext, request extpo
 func allowedKernelCallback(c *v1.CallContext, request extpoint.PermissionRequest) bool {
 	if c.Caller.Kind != v1.CallerKind_CALLER_KIND_PLUGIN {
 		return false
+	}
+	if request.Capability == pluginconfig.KernelCredentialRefService && request.Operation == "get" {
+		return true
 	}
 	switch c.Caller.Id {
 	case "cn.vastplan.platform.configuration.global-settings":

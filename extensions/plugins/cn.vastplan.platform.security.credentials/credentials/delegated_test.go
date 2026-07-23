@@ -10,6 +10,7 @@ import (
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
@@ -55,8 +56,29 @@ func TestDelegatedStageDerivesOwnerPurposeAndLifecycleFromAuthority(t *testing.T
 	if _, err := service.ActivateManaged(managedContext("tenant-a", claims.Owner), staged.ID); err == nil {
 		t.Fatal("目标插件不得绕过配置候选直接激活委托凭证")
 	}
-	if _, err := service.ActivateDelegated(coordinator, staged.ID, "pcfg_"+strings.Repeat("0", 32)); err == nil {
+	if _, err := service.PrepareDelegated(coordinator, staged.ID, "pcfg_"+strings.Repeat("0", 32)); err == nil {
 		t.Fatal("错误 candidate 不得激活委托凭证")
+	}
+	request, recipient, err := credentiallease.NewRequest(staged.Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kernel := &contractv1.CallContext{TenantId: "tenant-a", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "backend/runtime-candidate"}}
+	if _, err := service.IssueMaterialLease(context.Background(), kernel, request); err == nil {
+		t.Fatal("Preparing 委托凭证不得签发 material lease")
+	}
+	recipient.Discard()
+	if _, err := service.PrepareDelegated(coordinator, staged.ID, claims.CandidateID); err != nil {
+		t.Fatalf("配置协调器无法打开候选使用窗口: %v", err)
+	}
+	request, recipient, _ = credentiallease.NewRequest(staged.Ref)
+	envelope, err := service.IssueMaterialLease(context.Background(), kernel, request)
+	if err != nil {
+		t.Fatalf("Candidate 委托凭证应允许候选宿主签发 material lease: %v", err)
+	}
+	material, err := recipient.Open(envelope, credentiallease.Claims{TenantID: "tenant-a", Audience: "backend/runtime-candidate", Ref: staged.Ref}, time.Now().UTC())
+	if err != nil || string(material) != "secret" {
+		t.Fatalf("Candidate material lease 无法解封: material=%q err=%v", material, err)
 	}
 	if _, err := service.ActivateDelegated(coordinator, staged.ID, claims.CandidateID); err != nil {
 		t.Fatalf("配置协调器无法激活绑定候选: %v", err)

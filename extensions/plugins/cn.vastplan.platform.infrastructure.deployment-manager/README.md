@@ -11,6 +11,7 @@
 - 通过窄化的 `kernel.node.readiness` 观察签名 Node Lease，并在引导完成或查询作业时收敛最终状态。
 - 列出平台预授权的 Backend 部署目标；
 - 管理 Application Composition 草稿、异人审批、发布审计和单调 revision 回滚；
+- 为 plugin-settings 创建 candidate 绑定的 Application 配置修订，禁止普通发布入口绕过候选凭证准备，并在 readiness 失败时自动发布回滚 revision；
 - 通过 `kernel.deployment.preview/publish` 请求可信内核选择固定 Platform Profile、验签制品并 CAS 发布 Deployment v2；
 - 以 CAS 保存 Backend 应用插件的 `TestTargetBinding`，精确复核 testing Catalog ref、摘要、publisher 与 repository revision；
 - 通过 `kernel.deployment.readiness` 等待候选修订真实收敛，失败时以新的单调 revision 自动恢复上一组合；

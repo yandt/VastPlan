@@ -43,6 +43,15 @@ describe("plugin configuration workbench", () => {
 	expect(createDraft).toHaveBeenCalledWith(definition.id, definition.catalogDigest, { region: "cn-west" }, { token: "one-use-secret" });
   });
 
+  it("allows a configured required credential to be retained without re-entry", async () => {
+    const managed = { ...definition, managedCredentials: [{ id: "token", title: "API token", purpose: "remote.token", required: true }], credentialStates: [{ fieldId: "token", configured: true, version: 2 }] };
+    const client = { listPluginConfigurationDefinitions: vi.fn(async () => [managed]), listPluginConfigurationCandidates: vi.fn(async () => []) } as unknown as PlatformAdminClient;
+    const page = createPluginConfigurationPage(client, "configuration", "/settings/plugin-configurations", message("test", "title", "Plugin configuration"));
+    const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
+    const prepared = await page.forms?.[0]?.prepare?.(result.items, new AbortController().signal);
+    expect((prepared?.schema?.schema.properties as Record<string, Record<string, unknown>>).secrets.required).toBeUndefined();
+  });
+
   it("treats a legacy omitted managed credential list as empty", async () => {
     const client = {
       listPluginConfigurationDefinitions: vi.fn(async () => [{ ...definition, managedCredentials: undefined }]),
