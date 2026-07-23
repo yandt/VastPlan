@@ -17,6 +17,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 )
 
@@ -73,6 +74,18 @@ func ImportOfflineBundle(bundlePath string, destination OfflineBundleDestination
 	if manifest.SchemaVersion != offlineBundleSchemaVersion || manifest.LockDigest != lock.Digest || manifest.TrustSHA256 != hex.EncodeToString(trustDigest[:]) || len(manifest.Artifacts) != len(lock.Packages) {
 		return pluginv1.ArtifactLock{}, errors.New("Bundle manifest 与锁、信任快照或制品数量不一致")
 	}
+	reportsByDigest := make(map[string]bundleReport, len(manifest.Reports))
+	for _, report := range manifest.Reports {
+		decoded, decodeErr := hex.DecodeString(report.SHA256)
+		if decodeErr != nil || len(decoded) != sha256.Size || hex.EncodeToString(decoded) != report.SHA256 || report.Path != "reports/"+report.SHA256+".json" || report.Size <= 0 || report.Size > artifactreport.MaxBytes {
+			return pluginv1.ArtifactLock{}, errors.New("Bundle manifest 安全评估报告声明无效")
+		}
+		if _, duplicate := reportsByDigest[report.SHA256]; duplicate {
+			return pluginv1.ArtifactLock{}, errors.New("Bundle manifest 安全评估报告重复")
+		}
+		reportsByDigest[report.SHA256] = report
+	}
+	usedReports := make(map[string]struct{}, len(reportsByDigest))
 	manifestByID := make(map[string]bundleArtifact, len(manifest.Artifacts))
 	for _, item := range manifest.Artifacts {
 		if _, duplicate := manifestByID[item.Ref.PluginID]; duplicate {
@@ -83,7 +96,7 @@ func ImportOfflineBundle(bundlePath string, destination OfflineBundleDestination
 	for _, item := range lock.Packages {
 		manifestItem, ok := manifestByID[item.Ref.PluginID]
 		expectedBase := "artifacts/" + item.SHA256
-		if !ok || manifestItem.Ref != item.Ref || manifestItem.SHA256 != item.SHA256 || manifestItem.PackagePath != expectedBase+"/package.tar.gz" || manifestItem.AttestationPath != expectedBase+"/attestation.json" || !validBundleProvenancePaths(manifestItem, expectedBase) || !validBundleAdmissionPath(manifestItem, expectedBase) {
+		if !ok || manifestItem.Ref != item.Ref || manifestItem.SHA256 != item.SHA256 || manifestItem.PackagePath != expectedBase+"/package.tar.gz" || manifestItem.AttestationPath != expectedBase+"/attestation.json" || !validBundleProvenancePaths(manifestItem, expectedBase) || !validBundleAdmissionPath(manifestItem, expectedBase) || !validBundleStatusPath(manifestItem, expectedBase) {
 			return pluginv1.ArtifactLock{}, fmt.Errorf("Bundle manifest 制品路径与锁不一致: %s", item.Ref.PluginID)
 		}
 		packageBytes, err := os.ReadFile(filepath.Join(staging, filepath.FromSlash(manifestItem.PackagePath)))
@@ -116,11 +129,31 @@ func ImportOfflineBundle(bundlePath string, destination OfflineBundleDestination
 				return pluginv1.ArtifactLock{}, fmt.Errorf("Bundle 安全准入记录摘要不一致: %s", item.Ref.PluginID)
 			}
 		}
+		var statusRecords [][]byte
+		if manifestItem.SecurityStatusPath != "" {
+			statusChainRaw, readErr := os.ReadFile(filepath.Join(staging, filepath.FromSlash(manifestItem.SecurityStatusPath)))
+			if readErr != nil || digestBytes(statusChainRaw) != manifestItem.SecurityStatusSHA256 {
+				return pluginv1.ArtifactLock{}, fmt.Errorf("Bundle 安全复扫状态链摘要不一致: %s", item.Ref.PluginID)
+			}
+			statusRecords, err = artifactassessment.InspectStatusChain(statusChainRaw)
+			if err != nil {
+				return pluginv1.ArtifactLock{}, fmt.Errorf("Bundle 安全复扫状态链无效: %s: %w", item.Ref.PluginID, err)
+			}
+			if len(admissionRaw) == 0 {
+				return pluginv1.ArtifactLock{}, fmt.Errorf("Bundle 安全复扫状态链缺少准入记录: %s", item.Ref.PluginID)
+			}
+			if _, ok := destination.(OfflineBundleAssessmentStatusDestination); !ok {
+				return pluginv1.ArtifactLock{}, errors.New("目标仓库不支持导入安全复扫状态链")
+			}
+		}
 		var attestation pluginservice.Attestation
 		if err := decodeStrict(proof, &attestation); err != nil {
 			return pluginv1.ArtifactLock{}, err
 		}
 		if err := validateBundleArtifact(item, attestation.Artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw, bundleTrust); err != nil {
+			return pluginv1.ArtifactLock{}, err
+		}
+		if err := importAssessmentReports(staging, admissionRaw, reportsByDigest, usedReports, destination); err != nil {
 			return pluginv1.ArtifactLock{}, err
 		}
 		var published pluginservice.Artifact
@@ -141,8 +174,78 @@ func ImportOfflineBundle(bundlePath string, destination OfflineBundleDestination
 		if published.PluginID != item.Ref.PluginID || published.Version != item.Ref.Version || published.Channel != item.Ref.Channel || published.SHA256 != item.SHA256 {
 			return pluginv1.ArtifactLock{}, fmt.Errorf("目标仓库导入回执与锁不一致: %s", item.Ref.PluginID)
 		}
+		if err := importAssessmentStatusRecords(staging, item.Ref, statusRecords, reportsByDigest, usedReports, destination); err != nil {
+			return pluginv1.ArtifactLock{}, err
+		}
+	}
+	if len(usedReports) != len(reportsByDigest) {
+		return pluginv1.ArtifactLock{}, errors.New("Bundle 包含未被安全准入或复扫状态引用的报告")
 	}
 	return lock, nil
+}
+
+func importAssessmentReports(staging string, admissionRaw []byte, reports map[string]bundleReport, used map[string]struct{}, destination OfflineBundleDestination) error {
+	if len(admissionRaw) == 0 {
+		return nil
+	}
+	record, _, err := artifactassessment.InspectAdmission(admissionRaw)
+	if err != nil {
+		return err
+	}
+	return importEvaluationReports(staging, record.Evaluation, reports, used, destination)
+}
+
+func importAssessmentStatusRecords(staging string, ref pluginservice.Ref, records [][]byte, reports map[string]bundleReport, used map[string]struct{}, destination OfflineBundleDestination) error {
+	if len(records) == 0 {
+		return nil
+	}
+	statusDestination, ok := destination.(OfflineBundleAssessmentStatusDestination)
+	if !ok {
+		return errors.New("目标仓库不支持导入安全复扫状态链")
+	}
+	for _, raw := range records {
+		record, expectedDigest, err := artifactassessment.InspectStatus(raw)
+		if err != nil {
+			return err
+		}
+		if err := importEvaluationReports(staging, record.Evaluation, reports, used, destination); err != nil {
+			return err
+		}
+		stored, storedDigest, err := statusDestination.AppendSecurityStatus(ref, raw, record.Evaluation.EvaluatedAt)
+		if err != nil {
+			return fmt.Errorf("导入安全复扫状态 sequence=%d: %w", record.Sequence, err)
+		}
+		if stored == nil || stored.Sequence != record.Sequence || storedDigest != expectedDigest {
+			return errors.New("目标仓库安全复扫状态回执与 Bundle 不一致")
+		}
+	}
+	return nil
+}
+
+func importEvaluationReports(staging string, evaluation artifactassessment.Evaluation, reports map[string]bundleReport, used map[string]struct{}, destination OfflineBundleDestination) error {
+	digests := evaluationReportDigests(evaluation)
+	if len(digests) == 0 {
+		return nil
+	}
+	reportDestination, ok := destination.(OfflineBundleAssessmentReportDestination)
+	if !ok {
+		return errors.New("目标仓库不支持导入安全评估原始报告")
+	}
+	for _, digest := range digests {
+		declaration, exists := reports[digest]
+		if !exists {
+			return errors.New("Bundle 缺少安全准入或复扫状态引用的原始报告")
+		}
+		raw, err := os.ReadFile(filepath.Join(staging, filepath.FromSlash(declaration.Path)))
+		if err != nil || int64(len(raw)) != declaration.Size || digestBytes(raw) != digest {
+			return errors.New("Bundle 安全评估原始报告摘要或大小无效")
+		}
+		if err := reportDestination.PutAssessmentReport(digest, raw); err != nil {
+			return fmt.Errorf("导入安全评估原始报告: %w", err)
+		}
+		used[digest] = struct{}{}
+	}
+	return nil
 }
 
 func extractOfflineBundle(bundlePath, staging string) error {
@@ -168,7 +271,7 @@ func extractOfflineBundle(bundlePath, staging string) error {
 			return fmt.Errorf("解析离线 Bundle tar: %w", err)
 		}
 		count++
-		if count > 4099 || header.Typeflag != tar.TypeReg || header.Name != pathpkg.Clean(header.Name) || strings.HasPrefix(header.Name, "/") || strings.HasPrefix(header.Name, "../") {
+		if count > 12291 || header.Typeflag != tar.TypeReg || header.Name != pathpkg.Clean(header.Name) || strings.HasPrefix(header.Name, "/") || strings.HasPrefix(header.Name, "../") {
 			return fmt.Errorf("离线 Bundle 包含非法条目: %s", header.Name)
 		}
 		if header.Name != "vastplan.lock.json" && header.Name != "trust.json" && header.Name != "bundle.manifest.json" && !bundleArtifactPathPattern.MatchString(header.Name) {
@@ -185,6 +288,10 @@ func extractOfflineBundle(bundlePath, staging string) error {
 			limit = artifactprovenance.MaxRecordBytes
 		} else if strings.HasSuffix(header.Name, "/security-admission.json") {
 			limit = artifactassessment.MaxRecordBytes
+		} else if strings.HasSuffix(header.Name, "/security-status-chain.json") {
+			limit = artifactassessment.MaxChainBytes
+		} else if strings.HasPrefix(header.Name, "reports/") {
+			limit = artifactreport.MaxBytes
 		}
 		if header.Size < 0 || header.Size > limit {
 			return fmt.Errorf("离线 Bundle 条目超限: %s", header.Name)
@@ -230,6 +337,12 @@ func validateBundleArtifact(item pluginv1.ArtifactLockPackage, artifact pluginse
 func validBundleAdmissionPath(item bundleArtifact, base string) bool {
 	allEmpty := item.SecurityAdmissionPath == "" && item.SecurityAdmissionSHA256 == ""
 	allPresent := item.SecurityAdmissionPath == base+"/security-admission.json" && len(item.SecurityAdmissionSHA256) == 64
+	return allEmpty || allPresent
+}
+
+func validBundleStatusPath(item bundleArtifact, base string) bool {
+	allEmpty := item.SecurityStatusPath == "" && item.SecurityStatusSHA256 == ""
+	allPresent := item.SecurityStatusPath == base+"/security-status-chain.json" && len(item.SecurityStatusSHA256) == 64
 	return allEmpty || allPresent
 }
 

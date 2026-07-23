@@ -1,0 +1,33 @@
+{
+  "id": "cn.vastplan.platform.artifacts.assessment.database.file",
+  "name": "VastPlan Trivy Database File Snapshot",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "将私有本地 staging 中钉死摘要的 Trivy 数据库原子物化为每节点不可变快照",
+  "engines": { "backend": "^0.1" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": ["filesystem.scanner-data"] },
+  "contextAccess": { "optional": ["caller", "scene", "trace", "request.deadline"] },
+  "runtime": {
+    "instancePolicy": "per-kernel", "stateModel": "local-ephemeral", "visibility": "local", "routing": "direct",
+    "provides": [{ "extensionPoint": "tool.package", "capability": "platform.artifacts.assessment.database.file", "visibility": "local", "routing": "direct" }]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": {
+    "scope": "service", "applyMode": "restart",
+    "schema": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceDirectory", "snapshotRoot", "databaseRevision"],
+      "properties": {
+        "sourceDirectory": { "type": "string", "pattern": "^/", "maxLength": 4096 },
+        "snapshotRoot": { "type": "string", "pattern": "^/", "maxLength": 4096 },
+        "databaseRevision": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/artifact-assessment-database-file" },
+  "contributes": { "backend": { "tools": [{ "id": "platform.artifacts.assessment.database.file", "service_role": "backend", "title": "Trivy 数据库 File Snapshot", "subcommands": [{ "name": "status", "description": "读取本节点已验证数据库 revision" }] }] } }
+}

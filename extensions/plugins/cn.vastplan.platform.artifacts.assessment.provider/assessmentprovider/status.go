@@ -32,7 +32,7 @@ func (s *Service) AssessStatus(ctx context.Context, host sdk.Host, callCtx *cont
 	if err != nil {
 		return nil, err
 	}
-	if err := archiveReport(s.config.ReportRoot, evidence.Status.Evaluation.Vulnerabilities.ReportSHA256, evidence.Report); err != nil {
+	if err := s.archive.Put(evidence.Status.Evaluation.Vulnerabilities.ReportSHA256, evidence.Report); err != nil {
 		return nil, err
 	}
 	return json.Marshal(evidence.Status)

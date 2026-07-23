@@ -17,33 +17,36 @@ import (
 
 const (
 	PluginID       = artifactassessment.AssessmentProviderPluginID
-	PluginVersion  = "0.2.0"
+	PluginVersion  = "0.3.0"
 	Capability     = "platform.artifacts.assessment"
 	SigningPurpose = "artifact.assessment.signing-key"
 )
 
 type Config struct {
-	ProviderID          string                             `json:"providerId"`
-	KeyID               string                             `json:"keyId"`
-	SigningKeyRef       commonv1.ManagedCredentialRef      `json:"signingKeyRef"`
-	TrivyBinary         string                             `json:"trivyBinary"`
-	TrivyCacheDirectory string                             `json:"trivyCacheDirectory"`
-	ScannerVersion      string                             `json:"scannerVersion"`
-	DatabaseRevision    string                             `json:"databaseRevision"`
-	WorkRoot            string                             `json:"workRoot"`
-	ReportRoot          string                             `json:"reportRoot"`
-	TTLHours            int                                `json:"ttlHours"`
-	TimeoutSeconds      int                                `json:"timeoutSeconds"`
-	AllowedLicenses     []string                           `json:"allowedLicenses"`
-	FullLicenseScan     bool                               `json:"fullLicenseScan"`
-	Maximum             artifactassessment.MaximumFindings `json:"maximum"`
+	ProviderID             string                             `json:"providerId"`
+	KeyID                  string                             `json:"keyId"`
+	SigningKeyRef          commonv1.ManagedCredentialRef      `json:"signingKeyRef"`
+	TrivyBinary            string                             `json:"trivyBinary"`
+	TrivySnapshotDirectory string                             `json:"trivySnapshotDirectory"`
+	ScannerVersion         string                             `json:"scannerVersion"`
+	DatabaseRevision       string                             `json:"databaseRevision"`
+	WorkRoot               string                             `json:"workRoot"`
+	ReportArchiveDirectory string                             `json:"reportArchiveDirectory"`
+	TTLHours               int                                `json:"ttlHours"`
+	TimeoutSeconds         int                                `json:"timeoutSeconds"`
+	AllowedLicenses        []string                           `json:"allowedLicenses"`
+	FullLicenseScan        bool                               `json:"fullLicenseScan"`
+	Maximum                artifactassessment.MaximumFindings `json:"maximum"`
 }
 
 func (c Config) Validate() error {
-	for _, path := range []string{c.TrivyBinary, c.TrivyCacheDirectory, c.WorkRoot, c.ReportRoot} {
+	for _, path := range []string{c.TrivyBinary, c.TrivySnapshotDirectory, c.WorkRoot, c.ReportArchiveDirectory} {
 		if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return errors.New("Assessment Provider 路径必须是规范绝对路径")
 		}
+	}
+	if filepath.Base(c.TrivySnapshotDirectory) != c.DatabaseRevision || filepath.Base(filepath.Dir(c.TrivySnapshotDirectory)) != "snapshots" {
+		return errors.New("Assessment Provider Trivy snapshot 路径必须精确绑定 databaseRevision")
 	}
 	if c.SigningKeyRef.Owner != PluginID || c.SigningKeyRef.Purpose != SigningPurpose || c.SigningKeyRef.Scope != "tenant" || c.SigningKeyRef.Name != "" || credentiallease.ValidateCredentialRef(c.SigningKeyRef) != nil {
 		return errors.New("Assessment Provider signingKeyRef owner/purpose 无效")

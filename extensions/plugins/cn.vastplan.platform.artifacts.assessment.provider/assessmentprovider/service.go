@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
@@ -26,6 +27,7 @@ type Service struct {
 	config     Config
 	provider   *provider.Provider
 	downloader PackageDownloader
+	archive    *artifactreport.Archive
 	now        func() time.Time
 }
 
@@ -40,7 +42,11 @@ func New(config Config, scanner provider.Engine, downloader PackageDownloader) (
 	if err != nil {
 		return nil, err
 	}
-	return &Service{config: config, provider: runtime, downloader: downloader, now: time.Now}, nil
+	archive, err := artifactreport.New(config.ReportArchiveDirectory)
+	if err != nil {
+		return nil, err
+	}
+	return &Service{config: config, provider: runtime, downloader: downloader, archive: archive, now: time.Now}, nil
 }
 
 func (s *Service) AssessAdmission(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, raw []byte) ([]byte, error) {
@@ -63,7 +69,7 @@ func (s *Service) AssessAdmission(ctx context.Context, host sdk.Host, callCtx *c
 	if err != nil {
 		return nil, err
 	}
-	if err := archiveReport(s.config.ReportRoot, evidence.Admission.Evaluation.Vulnerabilities.ReportSHA256, evidence.Report); err != nil {
+	if err := s.archive.Put(evidence.Admission.Evaluation.Vulnerabilities.ReportSHA256, evidence.Report); err != nil {
 		return nil, err
 	}
 	return json.Marshal(evidence.Admission)

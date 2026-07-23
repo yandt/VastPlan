@@ -103,6 +103,9 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 	if environment["VASTPLAN_ARTIFACT_REPOSITORY"] != filepath.Join(wantVolumeRoot, "repository.primary") {
 		t.Fatalf("托管仓库必须使用持久化测试 volume: %#v", environment)
 	}
+	if environment["VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS"] != filepath.Join(stateRoot, "repositories", "testing", "assessment-reports") {
+		t.Fatalf("安全评估报告必须使用独立共享归档: %#v", environment)
+	}
 	if environment["VASTPLAN_ARTIFACT_TRUST"] != filepath.Join(stateRoot, "repositories", "testing", "artifact-trust.json") {
 		t.Fatalf("托管仓库只能信任稳定测试发布身份: %#v", environment)
 	}

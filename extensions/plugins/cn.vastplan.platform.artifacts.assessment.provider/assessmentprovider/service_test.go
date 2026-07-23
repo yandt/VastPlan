@@ -88,14 +88,15 @@ func TestServiceUsesScanLeaseAndMaterialLeaseWithoutReturningSecrets(t *testing.
 	}
 	t.Setenv(protocol.RuntimeAudienceEnvKey, audience)
 	root := t.TempDir()
+	databaseRevision := strings.Repeat("d", 64)
 	config := Config{
 		ProviderID: "security.vastplan", KeyID: "release", SigningKeyRef: credentialRef,
-		TrivyBinary: "/trivy", TrivyCacheDirectory: "/cache", ScannerVersion: "1", DatabaseRevision: strings.Repeat("d", 64),
-		WorkRoot: filepath.Join(root, "work"), ReportRoot: filepath.Join(root, "reports"), TTLHours: 24, TimeoutSeconds: 60,
+		TrivyBinary: "/trivy", TrivySnapshotDirectory: filepath.Join(root, "snapshots", databaseRevision), ScannerVersion: "1", DatabaseRevision: databaseRevision,
+		WorkRoot: filepath.Join(root, "work"), ReportArchiveDirectory: filepath.Join(root, "reports"), TTLHours: 24, TimeoutSeconds: 60,
 		AllowedLicenses: []string{"MIT"}, Maximum: artifactassessment.MaximumFindings{},
 	}
 	service, err := New(config, fixedEngine{result: provider.EngineResult{
-		Scanner: artifactassessment.Scanner{ID: provider.DefaultScannerID, Version: "1", DatabaseRevision: strings.Repeat("d", 64)},
+		Scanner: artifactassessment.Scanner{ID: provider.DefaultScannerID, Version: "1", DatabaseRevision: databaseRevision},
 		Report:  []byte(`{"SchemaVersion":2,"Results":[{"Packages":[{}]}]}`), Licenses: []provider.LicenseFinding{{Name: "MIT", Disposition: provider.LicenseAllowed}},
 	}}, fixedDownloader{raw: packageBytes})
 	if err != nil {
@@ -128,7 +129,7 @@ func TestServiceUsesScanLeaseAndMaterialLeaseWithoutReturningSecrets(t *testing.
 	if bytes.Contains(raw, privateKey) {
 		t.Fatal("Provider 响应不得包含私钥 material")
 	}
-	if _, err := os.Stat(filepath.Join(config.ReportRoot, record.Evaluation.Vulnerabilities.ReportSHA256+".json")); err != nil {
+	if _, err := os.Stat(filepath.Join(config.ReportArchiveDirectory, record.Evaluation.Vulnerabilities.ReportSHA256+".json")); err != nil {
 		t.Fatal("原始报告未按摘要归档")
 	}
 	statusRequest, _ := json.Marshal(artifactassessment.ProviderStatusRequest{

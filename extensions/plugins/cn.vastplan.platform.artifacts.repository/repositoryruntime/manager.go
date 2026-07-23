@@ -18,6 +18,7 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
@@ -88,6 +89,7 @@ type Manager struct {
 	quota              QuotaPolicy
 	publication        PublicationPolicy
 	supplyChain        SupplyChainPolicy
+	assessmentReports  *artifactreport.Archive
 
 	publishMu    sync.Mutex
 	mu           sync.RWMutex
@@ -103,9 +105,10 @@ type Manager struct {
 }
 
 type Options struct {
-	Quota       QuotaPolicy
-	Publication PublicationPolicy
-	SupplyChain SupplyChainPolicy
+	Quota             QuotaPolicy
+	Publication       PublicationPolicy
+	SupplyChain       SupplyChainPolicy
+	AssessmentReports *artifactreport.Archive
 }
 
 func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, statePath string, options ...Options) (*Manager, error) {
@@ -134,7 +137,7 @@ func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, state
 	if err := ensureStateDirectory(filepath.Dir(filepath.Clean(statePath))); err != nil {
 		return nil, err
 	}
-	manager := &Manager{trust: trust, statePath: filepath.Clean(statePath), configuredProvider: initial.ProviderID, configuredVolumeID: initial.VolumeID, quota: runtimeOptions.Quota, publication: runtimeOptions.Publication.normalized(), supplyChain: runtimeOptions.SupplyChain.normalized()}
+	manager := &Manager{trust: trust, statePath: filepath.Clean(statePath), configuredProvider: initial.ProviderID, configuredVolumeID: initial.VolumeID, quota: runtimeOptions.Quota, publication: runtimeOptions.Publication.normalized(), supplyChain: runtimeOptions.SupplyChain.normalized(), assessmentReports: runtimeOptions.AssessmentReports}
 	state, err := manager.loadState()
 	if err != nil {
 		return nil, err
@@ -192,6 +195,9 @@ func (m *Manager) PublishWithSupplyChain(attestationRaw, packageBytes, provenanc
 		return pluginv1.Artifact{}, err
 	}
 	if err := m.supplyChain.admit(attestation.Artifact); err != nil {
+		return pluginv1.Artifact{}, err
+	}
+	if err := m.requireAdmissionReports(admissionRaw); err != nil {
 		return pluginv1.Artifact{}, err
 	}
 	now := time.Now().UTC()
@@ -477,6 +483,9 @@ func (m *Manager) AppendSecurityStatus(ref pluginservice.Ref, raw []byte, now ti
 	m.mu.RUnlock()
 	if active == nil {
 		return nil, "", errors.New("活动制品仓库不可用")
+	}
+	if err := m.requireStatusReports(raw); err != nil {
+		return nil, "", err
 	}
 	if mirror != nil {
 		mirrorRecord, mirrorDigest, err := mirror.signed.AppendSecurityStatus(ref, raw, now)

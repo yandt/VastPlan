@@ -739,6 +739,7 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_ARTIFACT_PUBLISH_TOKEN":           "vastplan-local-artifact-publisher",
 		"VASTPLAN_ARTIFACT_BUNDLE_TOKEN":            "vastplan-local-artifact-bundle",
 		"VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN":        "vastplan-local-artifact-assessment",
+		"VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS":      r.testingAssessmentReports(),
 		"VASTPLAN_ARTIFACT_MIGRATION_STATE":         filepath.Join(r.testingRepositoryRoot(), "control", "repository-migration.json"),
 		"VASTPLAN_DYNAMIC_GO_HOST":                  filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
 		"VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG": filepath.Join(authorizationRoot, "permission-catalog.json"),
@@ -770,6 +771,10 @@ func (r *runtime) testingRepositoryVolumes() string {
 
 func (r *runtime) testingRepositoryData() string {
 	return filepath.Join(r.testingRepositoryVolumes(), "repository.primary")
+}
+
+func (r *runtime) testingAssessmentReports() string {
+	return filepath.Join(r.testingRepositoryRoot(), "assessment-reports")
 }
 
 func (r *runtime) testingRepositorySecrets() string {

@@ -79,6 +79,7 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	t.Setenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN", "")
 	t.Setenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN", "")
 	t.Setenv("VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN", "")
+	t.Setenv("VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS", "")
 	t.Setenv("VASTPLAN_ARTIFACT_MIGRATION_STATE", "")
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("incomplete artifact repository configuration must fail closed")
@@ -92,6 +93,7 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	t.Setenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN", "shared")
 	t.Setenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN", "bundle")
 	t.Setenv("VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN", "assessment")
+	t.Setenv("VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS", "/var/lib/vastplan/assessment-reports")
 	t.Setenv("VASTPLAN_ARTIFACT_MIGRATION_STATE", "/var/lib/vastplan/control/repository-migration.json")
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("read and publish tokens must be separated")
@@ -102,6 +104,11 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	t.Setenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN", "publisher")
 	t.Setenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN", "bundle")
 	t.Setenv("VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN", "assessment")
+	t.Setenv("VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS", "/var/lib/vastplan/artifacts/assessment-reports")
+	if _, err := loadConfig(); err == nil {
+		t.Fatal("assessment report archive must not overlap artifact volume")
+	}
+	t.Setenv("VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS", "/var/lib/vastplan/assessment-reports")
 	config, err := loadConfig()
 	if err != nil {
 		t.Fatalf("complete distinct configuration rejected: %v", err)

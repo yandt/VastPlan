@@ -15,7 +15,7 @@ func main() {
 		log.Fatalf("读取 Assessment Provider 配置: %v", err)
 	}
 	engine, err := provider.NewTrivy(provider.TrivyConfig{
-		Binary: config.TrivyBinary, CacheDirectory: config.TrivyCacheDirectory, ScannerVersion: config.ScannerVersion,
+		Binary: config.TrivyBinary, CacheDirectory: config.TrivySnapshotDirectory, ScannerVersion: config.ScannerVersion,
 		DatabaseRevision: config.DatabaseRevision, Timeout: config.Timeout(), AllowedLicenses: config.AllowedLicenses, FullLicenseScan: config.FullLicenseScan,
 	})
 	if err != nil {

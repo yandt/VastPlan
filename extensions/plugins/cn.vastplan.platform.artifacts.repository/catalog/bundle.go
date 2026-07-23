@@ -17,6 +17,8 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
 )
 
 const (
@@ -48,6 +50,22 @@ type OfflineBundleSupplyChainDestination interface {
 	PublishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, securityAdmissionRaw []byte) (pluginservice.Artifact, error)
 }
 
+type OfflineBundleAssessmentReportSource interface {
+	ReadAssessmentReport(digest string) ([]byte, error)
+}
+
+type OfflineBundleAssessmentReportDestination interface {
+	PutAssessmentReport(digest string, raw []byte) error
+}
+
+type OfflineBundleAssessmentStatusSource interface {
+	ReadSecurityStatusChain(pluginservice.Ref) ([]byte, error)
+}
+
+type OfflineBundleAssessmentStatusDestination interface {
+	AppendSecurityStatus(pluginservice.Ref, []byte, time.Time) (*artifactassessment.StatusRecord, string, error)
+}
+
 type OfflineBundle struct {
 	Path   string
 	Size   int64
@@ -59,6 +77,13 @@ type bundleManifest struct {
 	LockDigest    string           `json:"lockDigest"`
 	TrustSHA256   string           `json:"trustSHA256"`
 	Artifacts     []bundleArtifact `json:"artifacts"`
+	Reports       []bundleReport   `json:"reports,omitempty"`
+}
+
+type bundleReport struct {
+	SHA256 string `json:"sha256"`
+	Path   string `json:"path"`
+	Size   int64  `json:"size"`
 }
 
 type bundleArtifact struct {
@@ -73,9 +98,11 @@ type bundleArtifact struct {
 	ProvenanceVerificationSHA256 string               `json:"provenanceVerificationSHA256,omitempty"`
 	SecurityAdmissionPath        string               `json:"securityAdmissionPath,omitempty"`
 	SecurityAdmissionSHA256      string               `json:"securityAdmissionSHA256,omitempty"`
+	SecurityStatusPath           string               `json:"securityStatusPath,omitempty"`
+	SecurityStatusSHA256         string               `json:"securityStatusSHA256,omitempty"`
 }
 
-var bundleArtifactPathPattern = regexp.MustCompile(`^artifacts/[a-f0-9]{64}/(?:package\.tar\.gz|attestation\.json|provenance\.dsse\.json|provenance-verification\.json|security-admission\.json)$`)
+var bundleArtifactPathPattern = regexp.MustCompile(`^(?:artifacts/[a-f0-9]{64}/(?:package\.tar\.gz|attestation\.json|provenance\.dsse\.json|provenance-verification\.json|security-admission\.json|security-status-chain\.json)|reports/[a-f0-9]{64}\.json)$`)
 
 // CreateOfflineBundle materializes a deterministic gzip tar in a private
 // temporary file. The caller owns deletion after serving or moving it.
@@ -130,11 +157,12 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 	}
 	trustDigest := sha256.Sum256(trust)
 	manifest := bundleManifest{SchemaVersion: offlineBundleSchemaVersion, LockDigest: lock.Digest, TrustSHA256: hex.EncodeToString(trustDigest[:])}
+	reportsWritten := map[string]struct{}{}
 	var total int64
 	for _, item := range lock.Packages {
 		var artifact pluginservice.Artifact
 		var packageBytes, proof []byte
-		var provenanceRaw, verificationRaw, admissionRaw []byte
+		var provenanceRaw, verificationRaw, admissionRaw, statusChainRaw []byte
 		if supplyChainSource, ok := source.(OfflineBundleSupplyChainSource); ok {
 			artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw, err = supplyChainSource.ReadWithSupplyChain(item.Ref)
 			if err != nil {
@@ -166,7 +194,19 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 			_ = closeWriters()
 			return OfflineBundle{}, err
 		}
-		total += int64(len(packageBytes)) + int64(len(proof)) + int64(len(provenanceRaw)) + int64(len(verificationRaw)) + int64(len(admissionRaw))
+		if statusSource, ok := source.(OfflineBundleAssessmentStatusSource); ok {
+			statusChainRaw, err = statusSource.ReadSecurityStatusChain(item.Ref)
+			if err != nil {
+				_ = closeWriters()
+				return OfflineBundle{}, fmt.Errorf("读取 Bundle 安全复扫状态 %s: %w", refKey(item.Ref), err)
+			}
+		}
+		statusRecords, err := artifactassessment.InspectStatusChain(statusChainRaw)
+		if err != nil {
+			_ = closeWriters()
+			return OfflineBundle{}, fmt.Errorf("校验 Bundle 安全复扫状态 %s: %w", refKey(item.Ref), err)
+		}
+		total += int64(len(packageBytes)) + int64(len(proof)) + int64(len(provenanceRaw)) + int64(len(verificationRaw)) + int64(len(admissionRaw)) + int64(len(statusChainRaw))
 		if total > maxOfflineBundleBytes {
 			_ = closeWriters()
 			return OfflineBundle{}, fmt.Errorf("离线 Bundle 制品总量超过 %d 字节上限", maxOfflineBundleBytes)
@@ -194,22 +234,51 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 			}
 		}
 		admissionPath := ""
+		evaluations := make([]artifactassessment.Evaluation, 0, len(statusRecords)+1)
 		if len(admissionRaw) != 0 {
 			admissionPath = base + "/security-admission.json"
 			if err := writeBundleEntry(tw, admissionPath, admissionRaw); err != nil {
 				_ = closeWriters()
 				return OfflineBundle{}, err
 			}
+			record, _, inspectErr := artifactassessment.InspectAdmission(admissionRaw)
+			if inspectErr != nil {
+				_ = closeWriters()
+				return OfflineBundle{}, inspectErr
+			}
+			evaluations = append(evaluations, record.Evaluation)
+		}
+		statusPath := ""
+		if len(statusChainRaw) != 0 {
+			if len(admissionRaw) == 0 {
+				_ = closeWriters()
+				return OfflineBundle{}, errors.New("离线 Bundle 安全复扫状态缺少准入记录")
+			}
+			statusPath = base + "/security-status-chain.json"
+			if err := writeBundleEntry(tw, statusPath, statusChainRaw); err != nil {
+				_ = closeWriters()
+				return OfflineBundle{}, err
+			}
+			for _, raw := range statusRecords {
+				record, _, _ := artifactassessment.InspectStatus(raw)
+				evaluations = append(evaluations, record.Evaluation)
+			}
+		}
+		if err := appendBundleReports(tw, source, evaluations, reportsWritten, &manifest, &total); err != nil {
+			_ = closeWriters()
+			return OfflineBundle{}, err
 		}
 		proofDigest := sha256.Sum256(proof)
-		provenanceDigest, verificationDigest, admissionDigest := sha256.Sum256(provenanceRaw), sha256.Sum256(verificationRaw), sha256.Sum256(admissionRaw)
+		provenanceDigest, verificationDigest, admissionDigest, statusDigest := sha256.Sum256(provenanceRaw), sha256.Sum256(verificationRaw), sha256.Sum256(admissionRaw), sha256.Sum256(statusChainRaw)
 		manifest.Artifacts = append(manifest.Artifacts, bundleArtifact{
 			Ref: item.Ref, SHA256: item.SHA256, PackagePath: packagePath, AttestationPath: proofPath,
 			AttestationSHA256: hex.EncodeToString(proofDigest[:]), ProvenancePath: provenancePath, ProvenanceVerificationPath: verificationPath,
 			ProvenanceSHA256: digestIfPresent(provenanceRaw, provenanceDigest), ProvenanceVerificationSHA256: digestIfPresent(verificationRaw, verificationDigest),
 			SecurityAdmissionPath: admissionPath, SecurityAdmissionSHA256: digestIfPresent(admissionRaw, admissionDigest),
+			SecurityStatusPath: statusPath, SecurityStatusSHA256: digestIfPresent(statusChainRaw, statusDigest),
 		})
 	}
+	sort.Slice(manifest.Reports, func(i, j int) bool { return manifest.Reports[i].SHA256 < manifest.Reports[j].SHA256 })
 	manifestRaw, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		_ = closeWriters()
@@ -238,6 +307,49 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 	}
 	committed = true
 	return OfflineBundle{Path: path, Size: info.Size(), SHA256: digest}, nil
+}
+
+func appendBundleReports(tw *tar.Writer, source OfflineBundleSource, evaluations []artifactassessment.Evaluation, written map[string]struct{}, manifest *bundleManifest, total *int64) error {
+	reportSource, supportsReports := source.(OfflineBundleAssessmentReportSource)
+	for _, evaluation := range evaluations {
+		for _, digest := range evaluationReportDigests(evaluation) {
+			if _, exists := written[digest]; exists {
+				continue
+			}
+			if !supportsReports {
+				return errors.New("离线 Bundle 来源不支持导出安全评估原始报告")
+			}
+			report, err := reportSource.ReadAssessmentReport(digest)
+			if err != nil || int64(len(report)) <= 0 || int64(len(report)) > artifactreport.MaxBytes || digestBytes(report) != digest {
+				return errors.New("离线 Bundle 安全评估报告缺失或摘要无效")
+			}
+			reportPath := "reports/" + digest + ".json"
+			if err := writeBundleEntry(tw, reportPath, report); err != nil {
+				return err
+			}
+			*total += int64(len(report))
+			if *total > maxOfflineBundleBytes {
+				return fmt.Errorf("离线 Bundle 制品与报告总量超过 %d 字节上限", maxOfflineBundleBytes)
+			}
+			written[digest] = struct{}{}
+			manifest.Reports = append(manifest.Reports, bundleReport{SHA256: digest, Path: reportPath, Size: int64(len(report))})
+		}
+	}
+	return nil
+}
+
+func evaluationReportDigests(evaluation artifactassessment.Evaluation) []string {
+	values := []string{evaluation.Vulnerabilities.ReportSHA256, evaluation.Licenses.ReportSHA256}
+	result := make([]string, 0, 2)
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if len(result) == 0 || result[0] != value {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func canonicalTrustDocument(raw []byte) ([]byte, *pluginservice.TrustStore, error) {

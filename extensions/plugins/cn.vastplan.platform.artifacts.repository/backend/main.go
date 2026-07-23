@@ -21,6 +21,7 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -34,12 +35,13 @@ const pluginID = "cn.vastplan.platform.artifacts.repository"
 // pluginVersion defaults to the checked-in manifest version for go test/go run.
 // Production and development builds inject the manifest value from build.sh,
 // keeping the packaged binary and signed manifest on the same version source.
-var pluginVersion = "0.30.0"
+var pluginVersion = "0.31.0"
 
 var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"capacity","description":"读取已验证容量与配额用量"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"gcPlan","description":"生成无副作用 GC 计划"},{"name":"gcStatus","description":"读取隔离与清扫状态"},{"name":"gcQuarantine","description":"按精确计划隔离制品"},{"name":"gcSweep","description":"复核并清扫过期隔离制品"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"},{"name":"listPublications","description":"读取 stable 发布审批"},{"name":"submitPublication","description":"提交 testing 到 stable 发布审批"},{"name":"approvePublication","description":"以双人分离批准 stable 发布"},{"name":"rejectPublication","description":"驳回或撤回 stable 发布批准"},{"name":"cancelPublication","description":"由原提交人撤销 stable 发布申请"},{"name":"getSupplyChainEvidence","description":"读取已验证供应链证据摘要"},{"name":"prepareAssessment","description":"向精确首方扫描 Provider 签发一次性制品读取租约"},{"name":"appendAssessmentStatus","description":"由精确 Controller 追加 Provider 签名复扫状态"},{"name":"installDataPlaneTicket","description":"安装控制面签发的一次性下载 Ticket"}]}`)
 
 type serverConfig struct {
 	addr, repository, storageProvider, volumeID, migrationState, trust, cert, key, readToken, publishToken, bundleToken, assessmentToken string
+	assessmentReports                                                                                                                    string
 	quota                                                                                                                                repositoryruntime.QuotaPolicy
 	publication                                                                                                                          repositoryruntime.PublicationPolicy
 	supplyChain                                                                                                                          repositoryruntime.SupplyChainPolicy
@@ -60,22 +62,23 @@ func loadConfig() (serverConfig, error) {
 		return serverConfig{}, err
 	}
 	config := serverConfig{
-		addr:            startup.Listen,
-		repository:      os.Getenv("VASTPLAN_ARTIFACT_REPOSITORY"),
-		storageProvider: startup.StorageProvider,
-		volumeID:        startup.VolumeID,
-		migrationState:  os.Getenv("VASTPLAN_ARTIFACT_MIGRATION_STATE"),
-		trust:           os.Getenv("VASTPLAN_ARTIFACT_TRUST"),
-		cert:            os.Getenv("VASTPLAN_ARTIFACT_TLS_CERT"),
-		key:             os.Getenv("VASTPLAN_ARTIFACT_TLS_KEY"),
-		readToken:       os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN"),
-		publishToken:    os.Getenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN"),
-		bundleToken:     os.Getenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN"),
-		assessmentToken: os.Getenv("VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN"),
-		quota:           startup.Quota,
-		publication:     startup.Publication,
-		supplyChain:     startup.SupplyChain,
-		apiExposure:     startup.APIExposure,
+		addr:              startup.Listen,
+		repository:        os.Getenv("VASTPLAN_ARTIFACT_REPOSITORY"),
+		storageProvider:   startup.StorageProvider,
+		volumeID:          startup.VolumeID,
+		migrationState:    os.Getenv("VASTPLAN_ARTIFACT_MIGRATION_STATE"),
+		trust:             os.Getenv("VASTPLAN_ARTIFACT_TRUST"),
+		cert:              os.Getenv("VASTPLAN_ARTIFACT_TLS_CERT"),
+		key:               os.Getenv("VASTPLAN_ARTIFACT_TLS_KEY"),
+		readToken:         os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN"),
+		publishToken:      os.Getenv("VASTPLAN_ARTIFACT_PUBLISH_TOKEN"),
+		bundleToken:       os.Getenv("VASTPLAN_ARTIFACT_BUNDLE_TOKEN"),
+		assessmentToken:   os.Getenv("VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN"),
+		assessmentReports: os.Getenv("VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS"),
+		quota:             startup.Quota,
+		publication:       startup.Publication,
+		supplyChain:       startup.SupplyChain,
+		apiExposure:       startup.APIExposure,
 	}
 	if config.addr == "" {
 		config.addr = "127.0.0.1:8443"
@@ -92,13 +95,26 @@ func loadConfig() (serverConfig, error) {
 	if err := artifactstorage.ValidateVolumeID(config.volumeID); err != nil {
 		return config, err
 	}
-	if config.repository == "" || config.migrationState == "" || config.trust == "" || config.cert == "" || config.key == "" || config.readToken == "" || config.publishToken == "" || config.bundleToken == "" || config.assessmentToken == "" || config.readToken == config.publishToken || config.readToken == config.bundleToken || config.readToken == config.assessmentToken || config.publishToken == config.bundleToken || config.publishToken == config.assessmentToken || config.bundleToken == config.assessmentToken {
+	if config.repository == "" || config.assessmentReports == "" || config.migrationState == "" || config.trust == "" || config.cert == "" || config.key == "" || config.readToken == "" || config.publishToken == "" || config.bundleToken == "" || config.assessmentToken == "" || config.readToken == config.publishToken || config.readToken == config.bundleToken || config.readToken == config.assessmentToken || config.publishToken == config.bundleToken || config.publishToken == config.assessmentToken || config.bundleToken == config.assessmentToken {
 		return config, errors.New("制品仓库必须配置存储、信任文档、TLS 证书和互不相同的读取/发布/Bundle/Assessment 令牌")
+	}
+	if !filepath.IsAbs(config.assessmentReports) || filepath.Clean(config.assessmentReports) != config.assessmentReports || pathsOverlap(config.repository, config.assessmentReports) {
+		return config, errors.New("安全评估报告归档必须是与制品 volume 隔离的规范绝对路径")
 	}
 	if err := validateDataPlaneLeaseConfig(config.apiExposure); err != nil {
 		return config, err
 	}
 	return config, nil
+}
+
+func pathsOverlap(left, right string) bool {
+	for _, pair := range [][2]string{{left, right}, {right, left}} {
+		relative, err := filepath.Rel(filepath.Clean(pair[0]), filepath.Clean(pair[1]))
+		if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
 
 func main() {
@@ -114,10 +130,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("读取制品信任快照失败: %v", err)
 	}
+	reportArchive, err := artifactreport.New(config.assessmentReports)
+	if err != nil {
+		log.Fatalf("打开安全评估报告归档失败: %v", err)
+	}
 	manager, err := repositoryruntime.Open(artifactstorage.Volume{
 		Handle: "artifact-storage://configured", ProviderID: config.storageProvider, VolumeID: config.volumeID,
 		AccessMode: "filesystem", MountPath: config.repository, Generation: 1, Ready: true,
-	}, trust, config.migrationState, repositoryruntime.Options{Quota: config.quota, Publication: config.publication, SupplyChain: config.supplyChain})
+	}, trust, config.migrationState, repositoryruntime.Options{Quota: config.quota, Publication: config.publication, SupplyChain: config.supplyChain, AssessmentReports: reportArchive})
 	if err != nil {
 		log.Fatalf("打开可迁移制品仓库失败: %v", err)
 	}
