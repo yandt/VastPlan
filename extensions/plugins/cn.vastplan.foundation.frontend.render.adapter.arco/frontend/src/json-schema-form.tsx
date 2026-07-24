@@ -21,7 +21,9 @@ import {
   IconPlus,
   IconUp,
 } from "./arco-components";
-import RJSFForm from "@rjsf/core";
+// RJSF 6.7 的根入口会静态导入仅供测试使用的 AJV8 Validator。
+// 生产 Renderer 直接使用公开 Form 子路径，保持自有 CSP Validator 为唯一验证器。
+import RJSFForm from "@rjsf/core/lib/components/Form.js";
 import {
   canExpand,
   enumOptionsIndexForValue,

@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.frontend.render.adapter",
   "name": "VastPlan Unified Render Adapter",
   "description": "统一管理 Portal 的 Arco、MUI 与未来 UI Renderer",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
