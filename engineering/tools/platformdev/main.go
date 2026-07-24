@@ -659,7 +659,6 @@ func (r *runtime) start(ctx context.Context) error {
 		"--session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json"),
 		"--portal-assets", filepath.Join(r.runDir, "portal-assets"),
 		"--access-profile-catalog", filepath.Join(r.runDir, "access-profile-catalog.json"),
-		"--api-exposure-catalog", filepath.Join(r.persistentStateRoot(), "api-exposure-gateway.json"),
 		"--frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
 		"--frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
 		"--nats-servers", natsURL, "--allow-insecure-nats",
@@ -668,6 +667,10 @@ func (r *runtime) start(ctx context.Context) error {
 		"--transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
 		"--composer-logical-service", "platform.portal-composer",
 		"--interaction-logical-service", "platform.interaction-broker",
+	}
+	portalArgs, err = appendPublishedAPIExposureCatalog(portalArgs, filepath.Join(r.persistentStateRoot(), "api-exposure-gateway.json"))
+	if err != nil {
+		return err
 	}
 	if _, err := r.startChild("portal-kernel", env, "node", portalArgs...); err != nil {
 		return err
