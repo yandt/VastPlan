@@ -82,6 +82,7 @@
           },
           "cn.vastplan.platform.artifacts.repository": {
             "listen": "__VASTPLAN_ARTIFACT_LISTEN__",
+            "repositoryProfile": "__VASTPLAN_ARTIFACT_PROFILE__",
             "storageProvider": "platform.artifacts.storage.file",
             "volumeId": "repository.primary",
             "publication": { "approvalTTLHours": 168 },
@@ -110,7 +111,8 @@
             "VASTPLAN_ARTIFACT_BUNDLE_TOKEN",
             "VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN",
             "VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS",
-            "VASTPLAN_ARTIFACT_MIGRATION_STATE"
+            "VASTPLAN_ARTIFACT_MIGRATION_STATE",
+            "VASTPLAN_ARTIFACT_LOCAL_TOKEN_FILE"
           ]
         }
       },
@@ -118,7 +120,7 @@
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.30.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.32.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.33.0", "channel": "stable" }
       ]
     },
     {

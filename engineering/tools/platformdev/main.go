@@ -39,6 +39,7 @@ import (
 
 	natsserver "github.com/nats-io/nats-server/v2/server"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
@@ -58,6 +59,7 @@ const (
 type options struct {
 	root, stateRoot                                                                   string
 	listen, portalListen, artifactListen, seedArtifactListen, vaultListen, natsListen string
+	artifactProtocol                                                                  string
 	hot                                                                               bool
 	applyPlatform                                                                     bool
 }
@@ -81,6 +83,7 @@ type runtime struct {
 	ready              bool
 	hmr                *frontendHMR
 	backendInputDigest string
+	repositoryProfile  artifactrepositoryv1.Profile
 }
 
 type packageSpec struct {
@@ -96,6 +99,7 @@ func main() {
 	flag.StringVar(&opts.listen, "listen", "127.0.0.1:18080", "developer gateway address")
 	flag.StringVar(&opts.portalListen, "portal-listen", "127.0.0.1:18444", "internal Node Portal Kernel address")
 	flag.StringVar(&opts.artifactListen, "artifact-listen", "127.0.0.1:18443", "internal artifact repository address")
+	flag.StringVar(&opts.artifactProtocol, "artifact-protocol", "local-test", "development repository protocol: local-test or remote-compat")
 	flag.StringVar(&opts.seedArtifactListen, "seed-artifact-listen", "127.0.0.1:18442", "seed artifact repository address")
 	flag.StringVar(&opts.vaultListen, "vault-listen", "127.0.0.1:18200", "development Vault Transit stub address")
 	flag.StringVar(&opts.natsListen, "nats-listen", "127.0.0.1:0", "development NATS address; port 0 chooses a free port")
@@ -113,6 +117,9 @@ func run(opts options) error {
 		return errors.New("必须提供有效的 -root")
 	}
 	opts.root = filepath.Clean(root)
+	if opts.artifactProtocol != "local-test" && opts.artifactProtocol != "remote-compat" {
+		return errors.New("-artifact-protocol 只允许 local-test 或 remote-compat")
+	}
 	if !filepath.IsAbs(opts.stateRoot) {
 		opts.stateRoot = filepath.Join(opts.root, opts.stateRoot)
 	}
@@ -472,6 +479,10 @@ func (r *runtime) writeFixtures(ctx context.Context) error {
 	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "artifact-bundle.token"), []byte("vastplan-local-artifact-bundle\n"), 0o600); err != nil {
 		return err
 	}
+	repositoryProfile, err := r.prepareTestingRepositoryProtocol()
+	if err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(r.runDir, "secrets", "vault-token"), []byte("vastplan-local-vault-token\n"), 0o600); err != nil {
 		return err
 	}
@@ -489,7 +500,7 @@ func (r *runtime) writeFixtures(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rendered, err := renderPlatformProfile(template, portalCatalog, r.runDir, r.persistentStateRoot(), r.options.artifactListen)
+	rendered, err := renderPlatformProfile(template, portalCatalog, r.runDir, r.persistentStateRoot(), r.options.artifactListen, repositoryProfile)
 	if err != nil {
 		return err
 	}
@@ -498,7 +509,7 @@ func (r *runtime) writeFixtures(ctx context.Context) error {
 		return err
 	}
 	r.backendInputDigest = backendDigest
-	sourceDigest, err := platformManagementSourceDigest(template, portalCatalog, r.options.artifactListen, backendDigest)
+	sourceDigest, err := platformManagementSourceDigest(template, portalCatalog, repositoryProfile, backendDigest)
 	if err != nil {
 		return err
 	}
@@ -553,10 +564,15 @@ func yamlString(value string) string {
 	return string(raw)
 }
 
-func renderPlatformProfile(template, portalCatalog []byte, runDir, stateDir, artifactListen string) ([]byte, error) {
+func renderPlatformProfile(template, portalCatalog []byte, runDir, stateDir, artifactListen string, repositoryProfile artifactrepositoryv1.Profile) ([]byte, error) {
 	rendered := bytes.ReplaceAll(template, []byte("__VASTPLAN_DEV_ROOT__"), []byte(filepath.ToSlash(runDir)))
 	rendered = bytes.ReplaceAll(rendered, []byte("__VASTPLAN_DEV_STATE__"), []byte(filepath.ToSlash(stateDir)))
 	rendered = bytes.ReplaceAll(rendered, []byte("__VASTPLAN_ARTIFACT_LISTEN__"), []byte(artifactListen))
+	profileRaw, err := json.Marshal(repositoryProfile)
+	if err != nil {
+		return nil, err
+	}
+	rendered = bytes.ReplaceAll(rendered, []byte(`"__VASTPLAN_ARTIFACT_PROFILE__"`), profileRaw)
 	var canonicalCatalog any
 	if err := json.Unmarshal(portalCatalog, &canonicalCatalog); err != nil {
 		return nil, fmt.Errorf("解析 Portal Platform Catalog: %w", err)
@@ -575,6 +591,17 @@ func renderPlatformProfile(template, portalCatalog []byte, runDir, stateDir, art
 		return nil, fmt.Errorf("解析开发 Platform Profile 模板: %w", err)
 	}
 	for index := range profile.Services {
+		if profile.Services[index].ID == "platform-artifacts" && repositoryProfile.Protocol == artifactrepositoryv1.ProtocolLocalTest {
+			plugins, ok := profile.Services[index].Config["plugins"].(map[string]any)
+			if !ok {
+				return nil, errors.New("开发 Platform Profile 的 platform-artifacts plugins 配置无效")
+			}
+			repository, ok := plugins["cn.vastplan.platform.artifacts.repository"].(map[string]any)
+			if !ok {
+				return nil, errors.New("开发 Platform Profile 缺少仓库插件配置")
+			}
+			delete(repository, "listen")
+		}
 		if profile.Services[index].ID == "platform-database-runtime" {
 			// 开发编排器只有一个 local-platform 节点。生产模板保持两个
 			// active-active 副本，开发投影显式缩为一个，避免伪造第二节点。
@@ -751,6 +778,7 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN":        "vastplan-local-artifact-assessment",
 		"VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS":      r.testingAssessmentReports(),
 		"VASTPLAN_ARTIFACT_MIGRATION_STATE":         filepath.Join(r.testingRepositoryRoot(), "control", "repository-migration.json"),
+		"VASTPLAN_ARTIFACT_LOCAL_TOKEN_FILE":        r.testingRepositoryTokenFile(),
 		"VASTPLAN_DYNAMIC_GO_HOST":                  filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
 		"VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG": filepath.Join(authorizationRoot, "permission-catalog.json"),
 		"VASTPLAN_AUTHORIZATION_POLICY_STATE":       filepath.Join(authorizationRoot, "policy-state.json"),
@@ -769,52 +797,6 @@ func (r *runtime) serviceEnv() map[string]string {
 // `--fresh` still remove this entire development state root intentionally.
 func (r *runtime) persistentStateRoot() string {
 	return filepath.Join(r.options.stateRoot, "state")
-}
-
-func (r *runtime) testingRepositoryRoot() string {
-	return filepath.Join(r.options.stateRoot, "repositories", "testing")
-}
-
-func (r *runtime) testingRepositoryVolumes() string {
-	return filepath.Join(r.testingRepositoryRoot(), "volumes")
-}
-
-func (r *runtime) testingRepositoryData() string {
-	return filepath.Join(r.testingRepositoryVolumes(), "repository.primary")
-}
-
-func (r *runtime) testingAssessmentReports() string {
-	return filepath.Join(r.testingRepositoryRoot(), "assessment-reports")
-}
-
-func (r *runtime) testingRepositorySecrets() string {
-	return filepath.Join(r.testingRepositoryRoot(), "secrets")
-}
-
-func (r *runtime) testingRepositorySigningKey() string {
-	return filepath.Join(r.testingRepositorySecrets(), "artifact-signing.pem")
-}
-
-func (r *runtime) testingRepositoryTrust() string {
-	return filepath.Join(r.testingRepositoryRoot(), "artifact-trust.json")
-}
-
-func (r *runtime) managedArtifactSourceArgs() []string {
-	return []string{
-		"-bootstrap-repository", filepath.Join(r.runDir, "repository"),
-		"-bootstrap-inventory", filepath.Join(r.runDir, "seed-inventory.json"),
-		"-repository-url", "https://" + r.options.artifactListen,
-		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
-		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
-	}
-}
-
-func (r *runtime) controllerArtifactSourceArgs() []string {
-	return []string{
-		"-repository-url", "https://" + r.options.artifactListen,
-		"-repository-trust", filepath.Join(r.runDir, "secrets", "artifact-trust.json"),
-		"-repository-ca", filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
-	}
 }
 
 func (r *runtime) startChild(name string, env map[string]string, executable string, args ...string) (*child, error) {
@@ -965,8 +947,12 @@ func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 		"mode": "local-development", "productionEquivalent": false,
 		"hot": r.options.hot, "startupPublication": r.options.applyPlatform,
 		"repositories": map[string]any{
-			"seed":    map[string]any{"url": "https://" + r.options.seedArtifactListen, "persistent": false},
-			"testing": map[string]any{"url": "https://" + r.options.artifactListen, "persistent": true},
+			"seed": map[string]any{"url": "https://" + r.options.seedArtifactListen, "persistent": false},
+			"testing": map[string]any{
+				"protocol": r.repositoryProfile.Protocol, "endpoint": r.repositoryProfile.Endpoint,
+				"profileDigest": r.repositoryProfile.Digest(), "persistent": true,
+				"ready": r.testingRepositoryReady(),
+			},
 		},
 	}
 	if r.hmr != nil {

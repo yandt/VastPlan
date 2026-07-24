@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 )
 
@@ -38,10 +40,17 @@ func prepareDevelopmentPlatformProfile(rendered []byte, sourceDigest, stateFile 
 
 // platformManagementSourceDigest fingerprints the stable inputs that produce
 // the local platform Deployment. Runtime paths are normalized, while the
-// selected listen address remains part of the desired configuration.
-func platformManagementSourceDigest(template, portalCatalog []byte, artifactListen, backendBuildDigest string) (string, error) {
+// selected repository protocol remains part of the desired configuration.
+func platformManagementSourceDigest(template, portalCatalog []byte, repositoryProfile artifactrepositoryv1.Profile, backendBuildDigest string) (string, error) {
 	if err := validateDevelopmentSourceDigest(backendBuildDigest); err != nil {
 		return "", fmt.Errorf("Backend 构建摘要无效: %w", err)
+	}
+	normalizedProfile := repositoryProfile
+	artifactListen := "127.0.0.1:18443"
+	if normalizedProfile.Protocol == artifactrepositoryv1.ProtocolLocalTest {
+		normalizedProfile.Endpoint = "unix:///__vastplan_dev_repository__/repository.sock"
+	} else if endpoint, parseErr := url.Parse(normalizedProfile.Endpoint); parseErr == nil {
+		artifactListen = endpoint.Host
 	}
 	rendered, err := renderPlatformProfile(
 		template,
@@ -49,6 +58,7 @@ func platformManagementSourceDigest(template, portalCatalog []byte, artifactList
 		"/__vastplan_dev_run__",
 		"/__vastplan_dev_state__",
 		artifactListen,
+		normalizedProfile,
 	)
 	if err != nil {
 		return "", fmt.Errorf("生成开发平台部署指纹: %w", err)

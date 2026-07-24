@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 )
 
@@ -73,13 +74,17 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 	r := runtime{
 		runDir:  runDir,
 		options: options{stateRoot: stateRoot, artifactListen: "127.0.0.1:18443", seedArtifactListen: "127.0.0.1:18442"},
+		repositoryProfile: artifactrepositoryv1.Profile{
+			Version: 1, ID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest,
+			Endpoint: "unix://" + filepath.Join(stateRoot, "repositories", "testing", "repository.sock"), Channels: []string{"testing"}, DevelopmentOnly: true,
+		},
 	}
 	wantArgs := []string{
 		"-bootstrap-repository", filepath.Join(runDir, "repository"),
 		"-bootstrap-inventory", filepath.Join(runDir, "seed-inventory.json"),
-		"-repository-url", "https://127.0.0.1:18443",
+		"-repository-profile", filepath.Join(runDir, "repository-profile.json"),
+		"-repository-token-file", filepath.Join(runDir, "secrets", "artifact-local-test.token"),
 		"-repository-trust", filepath.Join(runDir, "secrets", "artifact-trust.json"),
-		"-repository-ca", filepath.Join(runDir, "secrets", "tls-cert.pem"),
 	}
 	if got := r.managedArtifactSourceArgs(); !reflect.DeepEqual(got, wantArgs) {
 		t.Fatalf("Node Agent 制品源错误:\n got=%#v\nwant=%#v", got, wantArgs)

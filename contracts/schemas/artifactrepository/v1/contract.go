@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -111,6 +112,14 @@ func ParseProfile(raw []byte) (Profile, error) {
 		return Profile{}, errors.New("制品仓库 Profile 只能包含一个 JSON 文档")
 	}
 	return ValidateProfile(profile)
+}
+
+func ParseProfileFile(filename string) (Profile, error) {
+	raw, err := os.ReadFile(filename)
+	if err != nil {
+		return Profile{}, fmt.Errorf("读取制品仓库 Profile: %w", err)
+	}
+	return ParseProfile(raw)
 }
 
 func ValidateProfile(profile Profile) (Profile, error) {

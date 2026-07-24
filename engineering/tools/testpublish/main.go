@@ -23,6 +23,7 @@ import (
 
 	semver "github.com/Masterminds/semver/v3"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
@@ -53,8 +54,11 @@ type developmentStatus struct {
 	Portal               string `json:"portal"`
 	Repositories         struct {
 		Testing struct {
-			URL        string `json:"url"`
-			Persistent bool   `json:"persistent"`
+			Protocol      string `json:"protocol"`
+			Endpoint      string `json:"endpoint"`
+			ProfileDigest string `json:"profileDigest"`
+			Persistent    bool   `json:"persistent"`
+			Ready         bool   `json:"ready"`
 		} `json:"testing"`
 	} `json:"repositories"`
 }
@@ -104,16 +108,19 @@ func publish(ctx context.Context, opts options) error {
 	if !status.Ready || status.Mode != "local-development" || status.ProductionEquivalent {
 		return errors.New("目标不是已就绪的本地开发平台")
 	}
-	if !status.Repositories.Testing.Persistent {
-		return errors.New("本地平台未声明持久化测试仓库")
-	}
-	repositoryURL, err := loopbackURL(status.Repositories.Testing.URL, true)
-	if err != nil {
-		return fmt.Errorf("测试仓库地址: %w", err)
+	if !status.Repositories.Testing.Persistent || !status.Repositories.Testing.Ready {
+		return errors.New("本地平台测试仓库尚未就绪；请先发布包含仓库服务的平台基线")
 	}
 	runDir, err := confinedRunDir(stateRoot, status.RunDir)
 	if err != nil {
 		return err
+	}
+	repositoryProfile, err := artifactrepositoryv1.ParseProfileFile(filepath.Join(runDir, "repository-profile.json"))
+	if err != nil {
+		return err
+	}
+	if repositoryProfile.Protocol != status.Repositories.Testing.Protocol || repositoryProfile.Endpoint != status.Repositories.Testing.Endpoint || repositoryProfile.Digest() != status.Repositories.Testing.ProfileDigest {
+		return errors.New("状态端点与受管 Repository Profile 身份不一致")
 	}
 
 	packageBytes, manifest, artifact, err := loadTestingArtifact(opts.PackageFile)
@@ -130,6 +137,21 @@ func publish(ctx context.Context, opts options) error {
 	trust, err := pluginservice.LoadTrustStore(trustFile)
 	if err != nil {
 		return err
+	}
+	if repositoryProfile.Protocol == artifactrepositoryv1.ProtocolLocalTest {
+		artifact, revision, wasExisting, err := publishLocalTest(ctx, runDir, stateRoot, repositoryProfile, trust, manifest, artifact, packageBytes)
+		if err != nil {
+			return err
+		}
+		printReceipt(artifact, repositoryProfile.Endpoint, revision, wasExisting)
+		return submitRequestedTestReleases(ctx, status, opts, artifact, revision)
+	}
+	if repositoryProfile.Protocol != artifactrepositoryv1.ProtocolRemote {
+		return errors.New("本地发布器没有精确匹配 Repository Profile 的 Adapter")
+	}
+	repositoryURL, err := loopbackURL(repositoryProfile.Endpoint, true)
+	if err != nil {
+		return fmt.Errorf("remote-compat 测试仓库地址: %w", err)
 	}
 	publishToken, err := readSecret(filepath.Join(runDir, "secrets", "artifact-publish.token"))
 	if err != nil {
@@ -191,7 +213,11 @@ func publish(ctx context.Context, opts options) error {
 			return errors.New("Catalog 未返回刚发布的精确制品")
 		}
 	}
-	printReceipt(artifact, repositoryURL, revision, wasExisting)
+	printReceipt(artifact, repositoryURL.String(), revision, wasExisting)
+	return submitRequestedTestReleases(ctx, status, opts, artifact, revision)
+}
+
+func submitRequestedTestReleases(ctx context.Context, status developmentStatus, opts options, artifact pluginservice.Artifact, revision uint64) error {
 	if opts.BackendTarget != "" || opts.BackendBinding != "" {
 		if err := submitBackendTestRelease(ctx, status, opts, artifact, revision); err != nil {
 			return err
@@ -254,13 +280,13 @@ func lookupRepositoryRevision(ctx context.Context, client *http.Client, reposito
 	return page.Items[0].RepositoryRevision, true, nil
 }
 
-func printReceipt(artifact pluginservice.Artifact, repositoryURL *url.URL, revision uint64, existing bool) {
+func printReceipt(artifact pluginservice.Artifact, repositoryEndpoint string, revision uint64, existing bool) {
 	status := "已发布测试制品"
 	if existing {
 		status = "测试制品已存在，按原 revision 幂等返回"
 	}
 	fmt.Printf("%s %s@%s/testing\nrepository: %s\nrevision: %d\nsha256: %s\n",
-		status, artifact.PluginID, artifact.Version, repositoryURL.String(), revision, artifact.SHA256)
+		status, artifact.PluginID, artifact.Version, repositoryEndpoint, revision, artifact.SHA256)
 }
 
 func readStatus(ctx context.Context, client *http.Client, endpoint string) (developmentStatus, error) {

@@ -14,16 +14,118 @@ import (
 	"testing"
 	"time"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository/localtest"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 	artifactcatalog "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/repositoryruntime"
 )
 
 type catalogingTestRepository struct {
 	upstream artifactapi.Repository
 	store    *artifactcatalog.Store
+}
+
+func TestPublishUsesLocalTestProtocolAndPersistentManagedRepository(t *testing.T) {
+	stateRoot, err := os.MkdirTemp("/tmp", "vptp-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(stateRoot) })
+	if err := os.Chmod(stateRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runDir := filepath.Join(stateRoot, "runs", "active")
+	if err := os.MkdirAll(filepath.Join(runDir, "secrets"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	trustDocument := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+		Publisher: "vastplan", KeyID: "local-testing", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
+	})
+	trustRaw, _ := json.Marshal(trustDocument)
+	testingRoot := filepath.Join(stateRoot, "repositories", "testing")
+	for _, directory := range []string{testingRoot, filepath.Join(testingRoot, "secrets"), filepath.Join(testingRoot, "repository")} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	trustFile := filepath.Join(testingRoot, "artifact-trust.json")
+	if err := os.WriteFile(trustFile, trustRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	privateRaw, _ := pluginservice.MarshalEd25519PrivateKeyPEM(privateKey)
+	if err := os.WriteFile(filepath.Join(testingRoot, "secrets", "artifact-signing.pem"), privateRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	trust, err := pluginservice.LoadTrustStore(trustFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := repositoryruntime.Open(artifactstorage.Volume{
+		Handle: "artifact-storage://test", ProviderID: "platform.artifacts.storage.file", VolumeID: "repository.primary",
+		AccessMode: "filesystem", MountPath: filepath.Join(testingRoot, "repository"), Generation: 1, Ready: true,
+	}, trust, filepath.Join(testingRoot, "control", "migration.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := artifactrepositoryv1.ValidateProfile(artifactrepositoryv1.Profile{
+		Version: 1, ID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest,
+		Endpoint: "unix://" + filepath.Join(testingRoot, "repository.sock"), Channels: []string{"testing"}, DevelopmentOnly: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileRaw, _ := json.Marshal(profile)
+	if err := os.WriteFile(filepath.Join(runDir, "repository-profile.json"), profileRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	const token = "0123456789abcdef0123456789abcdef"
+	if err := os.WriteFile(filepath.Join(runDir, "secrets", "artifact-local-test.token"), []byte(token), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := repositoryruntime.NewLocalTestAdapter(profile, manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler, err := localtest.NewServer(profile, adapter, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := localtest.Listen(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repositoryServer := &http.Server{Handler: handler}
+	go func() { _ = repositoryServer.Serve(listener) }()
+	defer repositoryServer.Close()
+
+	statusServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"ready": true, "mode": "local-development", "productionEquivalent": false, "runDir": runDir,
+			"repositories": map[string]any{"testing": map[string]any{
+				"protocol": profile.Protocol, "endpoint": profile.Endpoint, "profileDigest": profile.Digest(), "persistent": true, "ready": true,
+			}},
+		})
+	}))
+	defer statusServer.Close()
+	opts := options{PackageFile: writeTestPackage(t, "0.4.0-dev.20260724.1.local"), StateRoot: stateRoot, StatusURL: statusServer.URL, Timeout: 10 * time.Second}
+	if err := publish(context.Background(), opts); err != nil {
+		t.Fatalf("local-test 发布失败: %v", err)
+	}
+	if err := publish(context.Background(), opts); err != nil {
+		t.Fatalf("local-test 幂等发布失败: %v", err)
+	}
+	if stats := manager.Stats(); stats.Revision != 1 || stats.Artifacts != 1 {
+		t.Fatalf("local-test 必须复用 Manager Catalog 真源: %+v", stats)
+	}
 }
 
 func (r catalogingTestRepository) Publish(attestationRaw, packageBytes []byte) (pluginservice.Artifact, error) {
@@ -97,11 +199,24 @@ func TestPublishUsesOnlyManagedLocalTestingIdentity(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(runDir, "secrets", "tls-cert.pem"), certificatePEM, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	profile, err := artifactrepositoryv1.ValidateProfile(artifactrepositoryv1.Profile{
+		Version: 1, ID: "local-testing", Protocol: artifactrepositoryv1.ProtocolRemote,
+		Endpoint: artifactServer.URL, Channels: []string{"testing"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profileRaw, _ := json.Marshal(profile)
+	if err := os.WriteFile(filepath.Join(runDir, "repository-profile.json"), profileRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	statusServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"ready": true, "mode": "local-development", "productionEquivalent": false, "runDir": runDir,
-			"repositories": map[string]any{"testing": map[string]any{"url": artifactServer.URL, "persistent": true}},
+			"repositories": map[string]any{"testing": map[string]any{
+				"protocol": profile.Protocol, "endpoint": profile.Endpoint, "profileDigest": profile.Digest(), "persistent": true, "ready": true,
+			}},
 		})
 	}))
 	defer statusServer.Close()

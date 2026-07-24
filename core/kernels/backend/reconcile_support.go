@@ -12,10 +12,13 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository/localtest"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
@@ -24,6 +27,7 @@ import (
 
 type reconcileOptions struct {
 	desiredPath, startupFile, repositoryRoot, repositoryURL, repositoryTrust, repositoryToken, repositoryCA string
+	repositoryProfile, repositoryTokenFile                                                                  string
 	bootstrapRepository                                                                                     string
 	bootstrapInventory                                                                                      string
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                                    string
@@ -60,6 +64,8 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	flags.StringVar(&options.startupFile, "startup-file", "", "本地启动配置文件（JSON/YAML），等价于 -desired")
 	flags.StringVar(&options.repositoryRoot, "repository", ".vastplan/repository", "本地插件制品仓库")
 	flags.StringVar(&options.repositoryURL, "repository-url", "", "HTTPS 远端签名制品仓库；设置后替代本地仓库")
+	flags.StringVar(&options.repositoryProfile, "repository-profile", "", "精确仓库协议 Profile JSON；当前用于 local-test.v1")
+	flags.StringVar(&options.repositoryTokenFile, "repository-token-file", "", "local-test owner-only 访问令牌文件")
 	flags.StringVar(&options.repositoryTrust, "repository-trust", "", "远端制品发布者信任文档")
 	flags.StringVar(&options.repositoryToken, "repository-token", "", "远端制品读令牌；默认读取 VASTPLAN_ARTIFACT_READ_TOKEN")
 	flags.StringVar(&options.repositoryCA, "repository-ca", "", "远端制品仓库自定义 CA PEM")
@@ -202,13 +208,26 @@ func parseReconcileOptions(args []string) (reconcileOptions, error) {
 	if options.bootstrapInventory != "" && options.bootstrapRepository == "" {
 		return reconcileOptions{}, errors.New("-bootstrap-inventory 必须与 -bootstrap-repository 同时配置")
 	}
-	if options.repositoryURL != "" && options.bootstrapRepository != "" && options.bootstrapInventory == "" {
+	if options.repositoryURL != "" && options.repositoryProfile != "" {
+		return reconcileOptions{}, errors.New("-repository-url 与 -repository-profile 不能同时配置")
+	}
+	if options.repositoryProfile == "" && options.repositoryTokenFile != "" || options.repositoryProfile != "" && options.repositoryTokenFile == "" {
+		return reconcileOptions{}, errors.New("-repository-profile 与 -repository-token-file 必须同时配置")
+	}
+	if options.repositoryProfile != "" && (!filepath.IsAbs(options.repositoryProfile) || filepath.Clean(options.repositoryProfile) != options.repositoryProfile || !filepath.IsAbs(options.repositoryTokenFile) || filepath.Clean(options.repositoryTokenFile) != options.repositoryTokenFile) {
+		return reconcileOptions{}, errors.New("Repository Profile 与 token file 必须是规范绝对路径")
+	}
+	if options.repositoryProfile != "" && (options.repositoryToken != "" || options.repositoryCA != "") {
+		return reconcileOptions{}, errors.New("local-test Profile 不得混用 remote token 或 CA 参数")
+	}
+	repositoryConfigured := options.repositoryURL != "" || options.repositoryProfile != ""
+	if repositoryConfigured && options.bootstrapRepository != "" && options.bootstrapInventory == "" {
 		return reconcileOptions{}, errors.New("托管仓库与 Seed 后备源并用时必须提供 -bootstrap-inventory")
 	}
 	if options.publishBootstrapReferences && (options.bootstrapInventory == "" || options.natsURL == "") {
 		return reconcileOptions{}, errors.New("-publish-bootstrap-references 必须同时配置 Bootstrap Inventory 与 NATS 控制面")
 	}
-	if options.bootstrapUpgrade && (options.bootstrapInventory == "" || options.bootstrapRepository == "" || options.repositoryURL == "" || !options.publishBootstrapReferences) {
+	if options.bootstrapUpgrade && (options.bootstrapInventory == "" || options.bootstrapRepository == "" || !repositoryConfigured || !options.publishBootstrapReferences) {
 		return reconcileOptions{}, errors.New("-bootstrap-upgrade 必须同时配置 Bootstrap Inventory、Seed 仓库、远端候选仓库与引用发布职责")
 	}
 	if options.natsURL != "" && options.assignmentKey != "" {
@@ -277,7 +296,7 @@ func (r artifactResolution) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, [
 }
 
 func buildArtifactResolution(options reconcileOptions) (artifactResolution, error) {
-	if options.repositoryURL == "" && options.bootstrapRepository == "" {
+	if options.repositoryURL == "" && options.repositoryProfile == "" && options.bootstrapRepository == "" {
 		local, err := pluginservice.NewRepository(options.repositoryRoot)
 		if err != nil {
 			return artifactResolution{}, err
@@ -322,8 +341,38 @@ func buildArtifactResolution(options reconcileOptions) (artifactResolution, erro
 			BaseURL: options.repositoryURL, Token: token, Trust: trust, Client: httpClient,
 		})
 	}
+	if options.repositoryProfile != "" {
+		profile, err := artifactrepositoryv1.ParseProfileFile(options.repositoryProfile)
+		if err != nil {
+			return artifactResolution{}, err
+		}
+		if profile.Protocol != artifactrepositoryv1.ProtocolLocalTest {
+			return artifactResolution{}, errors.New("-repository-profile 当前只接受 local-test.v1；remote 继续使用 -repository-url")
+		}
+		token, err := localtest.ReadTokenFile(options.repositoryTokenFile)
+		if err != nil {
+			return artifactResolution{}, err
+		}
+		registry := artifactrepository.NewRegistry()
+		if err := registry.Register(artifactrepositoryv1.ProtocolLocalTest, localtest.Factory(token)); err != nil {
+			return artifactResolution{}, err
+		}
+		adapter, err := registry.Open(profile)
+		if err != nil {
+			return artifactResolution{}, err
+		}
+		resolution.sources = append(resolution.sources, protocolArtifactSource{adapter: adapter})
+	}
 	return resolution, nil
 }
+
+type protocolArtifactSource struct{ adapter artifactrepository.Adapter }
+
+func (s protocolArtifactSource) Fetch(ctx context.Context, ref pluginv1.ArtifactRef) (artifacttrust.Envelope, error) {
+	return s.adapter.ReadExact(ctx, ref)
+}
+
+func (s protocolArtifactSource) SourceName() string { return s.adapter.Profile().Protocol }
 
 type nodeControlPlane struct {
 	source                nodeagent.DesiredStateSource

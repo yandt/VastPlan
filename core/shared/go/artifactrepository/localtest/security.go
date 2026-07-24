@@ -1,14 +1,35 @@
 package localtest
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 )
+
+func ReadTokenFile(filename string) (string, error) {
+	if filename == "" || !filepath.IsAbs(filename) || filepath.Clean(filename) != filename {
+		return "", errors.New("local-test token file 必须是规范绝对路径")
+	}
+	info, err := os.Lstat(filename)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
+		return "", errors.New("local-test token file 必须是 owner-only 普通文件")
+	}
+	raw, err := os.ReadFile(filename)
+	if err != nil {
+		return "", err
+	}
+	value := strings.TrimSpace(string(raw))
+	if len(value) < minTokenBytes {
+		return "", errors.New("local-test token 至少需要 32 字节")
+	}
+	return value, nil
+}
 
 // Listen creates the protocol's only supported listener. The caller owns the
 // listener and socket lifecycle; an existing path is never removed implicitly.

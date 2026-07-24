@@ -4,24 +4,22 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
-	"net"
-	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"time"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository/localtest"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
@@ -35,12 +33,14 @@ const pluginID = "cn.vastplan.platform.artifacts.repository"
 // pluginVersion defaults to the checked-in manifest version for go test/go run.
 // Production and development builds inject the manifest value from build.sh,
 // keeping the packaged binary and signed manifest on the same version source.
-var pluginVersion = "0.32.0"
+var pluginVersion = "0.33.0"
 
 var runtimeRepositoryDescriptor = []byte(`{"title":"制品仓库","subcommands":[{"name":"status","description":"读取仓库运行状态"},{"name":"assessmentInventory","description":"读取评估数据库 revision 与报告归档状态"},{"name":"prepareAssessmentReport","description":"验证原始报告仍被当前评估证据引用"},{"name":"capacity","description":"读取已验证容量与配额用量"},{"name":"listCatalog","description":"分页查询已验证制品目录"},{"name":"listPublishJournal","description":"按 revision 查询发布流水账"},{"name":"resolve","description":"生成精确依赖锁"},{"name":"setLifecycle","description":"以 CAS 更新制品生命周期"},{"name":"putReferences","description":"发布完整制品引用快照"},{"name":"listReferences","description":"读取制品引用保护状态"},{"name":"gcPlan","description":"生成无副作用 GC 计划"},{"name":"gcStatus","description":"读取隔离与清扫状态"},{"name":"gcQuarantine","description":"按精确计划隔离制品"},{"name":"gcSweep","description":"复核并清扫过期隔离制品"},{"name":"migrationStatus","description":"读取迁移状态"},{"name":"prepareMigration","description":"准备候选 volume"},{"name":"syncMigration","description":"追平候选 volume"},{"name":"cutoverMigration","description":"原子切换候选 volume"},{"name":"rollbackMigration","description":"回滚到源 volume"},{"name":"finalizeMigration","description":"结束观察双写"},{"name":"releaseMigration","description":"隔离旧 volume"},{"name":"listPublications","description":"读取 stable 发布审批"},{"name":"submitPublication","description":"提交 testing 到 stable 发布审批"},{"name":"approvePublication","description":"以双人分离批准 stable 发布"},{"name":"rejectPublication","description":"驳回或撤回 stable 发布批准"},{"name":"cancelPublication","description":"由原提交人撤销 stable 发布申请"},{"name":"getSupplyChainEvidence","description":"读取已验证供应链证据摘要"},{"name":"prepareAssessment","description":"向精确首方扫描 Provider 签发一次性制品读取租约"},{"name":"appendAssessmentStatus","description":"由精确 Controller 追加 Provider 签名复扫状态"},{"name":"installDataPlaneTicket","description":"安装控制面签发的一次性制品 Ticket"},{"name":"installAssessmentReportTicket","description":"安装控制面签发的一次性评估报告 Ticket"}]}`)
 
 type serverConfig struct {
+	profile                                                                                                                              artifactrepositoryv1.Profile
 	addr, repository, storageProvider, volumeID, migrationState, trust, cert, key, readToken, publishToken, bundleToken, assessmentToken string
+	localToken                                                                                                                           string
 	assessmentReports                                                                                                                    string
 	quota                                                                                                                                repositoryruntime.QuotaPolicy
 	publication                                                                                                                          repositoryruntime.PublicationPolicy
@@ -50,19 +50,20 @@ type serverConfig struct {
 
 func loadConfig() (serverConfig, error) {
 	var startup struct {
-		Listen          string                              `json:"listen"`
-		StorageProvider string                              `json:"storageProvider"`
-		VolumeID        string                              `json:"volumeId"`
-		Quota           repositoryruntime.QuotaPolicy       `json:"quota"`
-		Publication     repositoryruntime.PublicationPolicy `json:"publication"`
-		SupplyChain     repositoryruntime.SupplyChainPolicy `json:"supplyChain"`
-		APIExposure     *dataPlaneLeaseConfig               `json:"apiExposure,omitempty"`
+		RepositoryProfile artifactrepositoryv1.Profile        `json:"repositoryProfile"`
+		Listen            string                              `json:"listen"`
+		StorageProvider   string                              `json:"storageProvider"`
+		VolumeID          string                              `json:"volumeId"`
+		Quota             repositoryruntime.QuotaPolicy       `json:"quota"`
+		Publication       repositoryruntime.PublicationPolicy `json:"publication"`
+		SupplyChain       repositoryruntime.SupplyChainPolicy `json:"supplyChain"`
+		APIExposure       *dataPlaneLeaseConfig               `json:"apiExposure,omitempty"`
 	}
 	if err := sdk.DecodeStartupConfiguration(&startup); err != nil {
 		return serverConfig{}, err
 	}
 	config := serverConfig{
-		addr:              startup.Listen,
+		profile:           startup.RepositoryProfile,
 		repository:        os.Getenv("VASTPLAN_ARTIFACT_REPOSITORY"),
 		storageProvider:   startup.StorageProvider,
 		volumeID:          startup.VolumeID,
@@ -80,8 +81,26 @@ func loadConfig() (serverConfig, error) {
 		supplyChain:       startup.SupplyChain,
 		apiExposure:       startup.APIExposure,
 	}
-	if config.addr == "" {
-		config.addr = "127.0.0.1:8443"
+	validatedProfile, err := artifactrepositoryv1.ValidateProfile(config.profile)
+	if err != nil {
+		return config, fmt.Errorf("制品仓库 Repository Profile: %w", err)
+	}
+	config.profile = validatedProfile
+	endpoint, err := url.Parse(config.profile.Endpoint)
+	if err != nil {
+		return config, err
+	}
+	if config.profile.Protocol == artifactrepositoryv1.ProtocolRemote {
+		config.addr = strings.TrimSpace(startup.Listen)
+		if config.addr == "" {
+			return config, errors.New("remote 制品仓库必须配置独立 listen 地址")
+		}
+	} else {
+		config.addr = endpoint.Path
+		config.localToken, err = localtest.ReadTokenFile(os.Getenv("VASTPLAN_ARTIFACT_LOCAL_TOKEN_FILE"))
+		if err != nil {
+			return config, err
+		}
 	}
 	if config.storageProvider == "" {
 		config.storageProvider = "platform.artifacts.storage.file"
@@ -95,8 +114,14 @@ func loadConfig() (serverConfig, error) {
 	if err := artifactstorage.ValidateVolumeID(config.volumeID); err != nil {
 		return config, err
 	}
-	if config.repository == "" || config.assessmentReports == "" || config.migrationState == "" || config.trust == "" || config.cert == "" || config.key == "" || config.readToken == "" || config.publishToken == "" || config.bundleToken == "" || config.assessmentToken == "" || config.readToken == config.publishToken || config.readToken == config.bundleToken || config.readToken == config.assessmentToken || config.publishToken == config.bundleToken || config.publishToken == config.assessmentToken || config.bundleToken == config.assessmentToken {
-		return config, errors.New("制品仓库必须配置存储、信任文档、TLS 证书和互不相同的读取/发布/Bundle/Assessment 令牌")
+	if config.repository == "" || config.assessmentReports == "" || config.migrationState == "" || config.trust == "" {
+		return config, errors.New("制品仓库必须配置存储、信任文档、评估归档和迁移状态")
+	}
+	if config.profile.Protocol == artifactrepositoryv1.ProtocolRemote && (config.cert == "" || config.key == "" || config.readToken == "" || config.publishToken == "" || config.bundleToken == "" || config.assessmentToken == "" || config.readToken == config.publishToken || config.readToken == config.bundleToken || config.readToken == config.assessmentToken || config.publishToken == config.bundleToken || config.publishToken == config.assessmentToken || config.bundleToken == config.assessmentToken) {
+		return config, errors.New("remote 制品仓库必须配置 TLS 和互不相同的读取/发布/Bundle/Assessment 令牌")
+	}
+	if config.profile.Protocol == artifactrepositoryv1.ProtocolLocalTest && config.apiExposure != nil {
+		return config, errors.New("local-test 制品仓库不得注册生产数据面 Exposure")
 	}
 	if !filepath.IsAbs(config.assessmentReports) || filepath.Clean(config.assessmentReports) != config.assessmentReports || pathsOverlap(config.repository, config.assessmentReports) {
 		return config, errors.New("安全评估报告归档必须是与制品 volume 隔离的规范绝对路径")
@@ -141,62 +166,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("打开可迁移制品仓库失败: %v", err)
 	}
-	handler := &artifactapi.Server{
-		Repository:   manager,
-		ReadToken:    config.readToken,
-		PublishToken: config.publishToken,
-		RequireTLS:   true,
-		Logf: func(format string, args ...any) {
-			log.Printf("[artifact-audit] "+format, args...)
-		},
-	}
-	catalogHandler := &catalog.HTTPHandler{
-		Store: manager, ReadToken: config.readToken, BundleToken: config.bundleToken, ImportToken: config.publishToken, AssessmentToken: config.assessmentToken,
-		BundleSource: manager, BundleDestination: manager, TrustSnapshot: trustRaw, BundleDirectory: filepath.Join(filepath.Dir(config.migrationState), "bundles"), RequireTLS: true,
-		Logf: func(format string, args ...any) { log.Printf("[artifact-audit] "+format, args...) },
-	}
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", func(response http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodGet {
-			response.Header().Set("Allow", http.MethodGet)
-			http.Error(response, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		response.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = response.Write([]byte("ok\n"))
-	})
-	mux.Handle("/v1/catalog/", catalogHandler)
-	mux.Handle("/", handler)
-	var tickets *dataPlaneTicketStore
-	if config.apiExposure != nil {
-		tickets = newDataPlaneTicketStore(config.apiExposure.InstanceID)
-	}
-	assessmentLeases, err := newAssessmentLeaseIssuer(manager, tickets, config.apiExposure)
+	transport, err := startRepositoryTransport(config, manager, trustRaw)
 	if err != nil {
-		log.Fatalf("初始化安全评估扫描租约: %v", err)
+		log.Fatalf("启动制品仓库传输失败: %v", err)
 	}
-	server := &http.Server{
-		Addr: config.addr, Handler: dataPlaneTicketMiddleware(mux, tickets, config.readToken),
-		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 5 * time.Minute,
-		WriteTimeout: 5 * time.Minute, IdleTimeout: 90 * time.Second,
-	}
-	certificate, err := tls.LoadX509KeyPair(config.cert, config.key)
-	if err != nil {
-		log.Fatalf("加载制品仓库 TLS 身份失败: %v", err)
-	}
-	listener, err := net.Listen("tcp", config.addr)
-	if err != nil {
-		log.Fatalf("监听制品仓库地址失败: %v", err)
-	}
-	tlsListener := tls.NewListener(listener, &tls.Config{Certificates: []tls.Certificate{certificate}, MinVersion: tls.VersionTLS12})
-	var ready atomic.Bool
-	ready.Store(true)
-	go func() {
-		if serveErr := server.Serve(tlsListener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
-			log.Printf("制品仓库服务退出: %v", serveErr)
-		}
-		ready.Store(false)
-	}()
+	tickets, assessmentLeases := transport.tickets, transport.assessmentLeases
 
 	p := sdk.New(pluginID, pluginVersion, map[string]string{"backend": "^0.1"})
 	leaseRegistrar := &dataPlaneLeaseRegistrar{config: config.apiExposure}
@@ -211,7 +185,7 @@ func main() {
 			"getSupplyChainEvidence": publicationOps["getSupplyChainEvidence"],
 			"status": func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, _ []byte) (*contractv1.CallResult, []byte, error) {
 				leaseRegistrar.ensure(ctx, host, callCtx)
-				status, marshalErr := json.Marshal(map[string]any{"listen": config.addr, "ready": ready.Load(), "storageProvider": config.storageProvider, "storageVolumeId": manager.ActiveVolume().VolumeID, "catalog": manager.Stats(), "securityAssessment": manager.SecurityAssessmentStats(time.Now().UTC()), "migration": manager.Migration(), "dataPlaneLease": leaseRegistrar.status()})
+				status, marshalErr := json.Marshal(map[string]any{"protocol": config.profile.Protocol, "endpoint": config.profile.Endpoint, "ready": transport.ready.Load(), "storageProvider": config.storageProvider, "storageVolumeId": manager.ActiveVolume().VolumeID, "catalog": manager.Stats(), "securityAssessment": manager.SecurityAssessmentStats(time.Now().UTC()), "migration": manager.Migration(), "dataPlaneLease": leaseRegistrar.status()})
 				if marshalErr != nil {
 					return nil, nil, marshalErr
 				}
@@ -405,7 +379,7 @@ func main() {
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_ = server.Shutdown(shutdownCtx)
+	_ = transport.Shutdown(shutdownCtx)
 }
 
 func referenceOwnerAllowed(callerID, ownerKind string) bool {

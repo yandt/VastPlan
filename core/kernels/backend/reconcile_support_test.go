@@ -60,6 +60,27 @@ func TestParseReconcileOptionsSupportsYAMLStartupFileAlias(t *testing.T) {
 	}
 }
 
+func TestParseReconcileOptionsKeepsLocalTestAndRemoteRepositoryInputsExclusive(t *testing.T) {
+	configured, err := parseReconcileOptions([]string{
+		"-desired", "desired.json", "-repository-profile", "/run/vastplan/repository-profile.json",
+		"-repository-token-file", "/run/vastplan/repository.token", "-repository-trust", "/run/vastplan/trust.json",
+	})
+	if err != nil || configured.repositoryProfile == "" || configured.repositoryURL != "" {
+		t.Fatalf("完整 local-test 输入未接受: options=%+v err=%v", configured, err)
+	}
+	for _, args := range [][]string{
+		{"-desired", "desired.json", "-repository-profile", "/run/profile.json"},
+		{"-desired", "desired.json", "-repository-token-file", "/run/token"},
+		{"-desired", "desired.json", "-repository-profile", "relative/profile.json", "-repository-token-file", "/run/token"},
+		{"-desired", "desired.json", "-repository-profile", "/run/profile.json", "-repository-token-file", "/run/token", "-repository-url", "https://repo.example"},
+		{"-desired", "desired.json", "-repository-profile", "/run/profile.json", "-repository-token-file", "/run/token", "-repository-ca", "/run/ca.pem"},
+	} {
+		if _, err := parseReconcileOptions(args); err == nil {
+			t.Fatalf("越界仓库输入必须拒绝: %v", args)
+		}
+	}
+}
+
 func TestParseReconcileOptionsRequiresDedicatedCatalogPublisherIdentity(t *testing.T) {
 	base := []string{"-nats-url", "tls://nats.example.test:4222", "-backend-platform-catalog", "/etc/vastplan/backend-catalog.json"}
 	if _, err := parseReconcileOptions(base); err == nil || !strings.Contains(err.Error(), "catalog-publisher-nats-seed") {

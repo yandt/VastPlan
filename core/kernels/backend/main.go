@@ -368,7 +368,7 @@ func runReconcile(args []string) (runErr error) {
 	reconciler := &nodeagent.Reconciler{
 		NodeID: options.nodeID, NodeLabels: labels, Sources: artifacts.sources, Verifier: artifacts.verifier,
 		Installer: nodeagent.LocalInstaller{Root: options.runtimeRoot}, Runtime: runtime,
-		StateStore: plane.stateStore, RequireArtifactReferences: options.repositoryURL != "", BootstrapInventory: bootstrapInventory,
+		StateStore: plane.stateStore, RequireArtifactReferences: options.repositoryURL != "" || options.repositoryProfile != "", BootstrapInventory: bootstrapInventory,
 		BootstrapUpgrade: bootstrapUpgrade,
 	}
 	if plane.router != nil {

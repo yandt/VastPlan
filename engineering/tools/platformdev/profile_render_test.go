@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
@@ -21,7 +22,11 @@ func TestRenderPlatformProfileProducesValidProviderComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := renderPlatformProfile(template, portalCatalog, "/private/tmp/vastplan-dev", "/private/tmp/vastplan-state", "127.0.0.1:9443")
+	repositoryProfile := artifactrepositoryv1.Profile{
+		Version: 1, ID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest,
+		Endpoint: "unix:///private/tmp/vastplan-state/repository.sock", Channels: []string{"testing"}, DevelopmentOnly: true,
+	}
+	raw, err := renderPlatformProfile(template, portalCatalog, "/private/tmp/vastplan-dev", "/private/tmp/vastplan-state", "127.0.0.1:9443", repositoryProfile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +53,8 @@ func TestRenderPlatformProfileProducesValidProviderComposition(t *testing.T) {
 		}
 		plugins := service.Config["plugins"].(map[string]any)
 		repository := plugins["cn.vastplan.platform.artifacts.repository"].(map[string]any)
-		if repository["listen"] != "127.0.0.1:9443" || repository["storageProvider"] != "platform.artifacts.storage.file" {
+		profile := repository["repositoryProfile"].(map[string]any)
+		if profile["protocol"] != artifactrepositoryv1.ProtocolLocalTest || profile["endpoint"] != repositoryProfile.Endpoint || repository["storageProvider"] != "platform.artifacts.storage.file" {
 			t.Fatalf("制品仓库插件配置未正确渲染: %#v", repository)
 		}
 		return

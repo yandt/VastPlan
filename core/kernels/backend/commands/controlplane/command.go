@@ -62,8 +62,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	controllerID := flags.String("controller-id", "", "controller 选主身份；默认 hostname-pid")
 	repositoryRoot := flags.String("repository", ".vastplan/repository", "controller 读取完整 manifest 的本地不可变制品仓库")
 	repositoryURL := flags.String("repository-url", "", "controller 使用的 HTTPS 托管制品仓库；本地 Seed 缺失时后备")
+	repositoryProfile := flags.String("repository-profile", "", "controller 使用的精确仓库协议 Profile；当前用于 local-test.v1")
 	repositoryTrust := flags.String("repository-trust", "", "controller 远端制品发布者信任文档")
 	repositoryToken := flags.String("repository-token", "", "controller 远端仓库读令牌；默认读取 VASTPLAN_ARTIFACT_READ_TOKEN")
+	repositoryTokenFile := flags.String("repository-token-file", "", "controller local-test owner-only 访问令牌文件")
 	repositoryCA := flags.String("repository-ca", "", "controller 远端制品仓库自定义 CA PEM")
 	bootstrap := flags.Bool("bootstrap", false, "创建/校准控制面 bucket")
 	replicas := flags.Int("replicas", 1, "bootstrap 时的 JetStream 副本数；生产建议至少 3")
@@ -103,10 +105,13 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if *repositoryToken == "" {
+	if *repositoryURL != "" && *repositoryToken == "" {
 		*repositoryToken = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
 	}
-	controllerArtifacts, err := buildControllerArtifactReader(artifacts, *repositoryURL, *repositoryTrust, *repositoryToken, *repositoryCA)
+	controllerArtifacts, err := buildControllerArtifactReader(artifacts, controllerRepositoryOptions{
+		URL: *repositoryURL, ProfileFile: *repositoryProfile, TrustFile: *repositoryTrust,
+		Token: *repositoryToken, TokenFile: *repositoryTokenFile, CAFile: *repositoryCA,
+	})
 	if err != nil {
 		return err
 	}

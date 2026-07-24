@@ -84,6 +84,7 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("incomplete artifact repository configuration must fail closed")
 	}
+	t.Setenv("VASTPLAN_PLUGIN_CONFIG_JSON", `{"listen":"127.0.0.1:8443","repositoryProfile":{"version":1,"id":"enterprise-primary","protocol":"artifact.repository.remote.v1","endpoint":"https://repo.example","channels":["testing"],"developmentOnly":false},"storageProvider":"platform.artifacts.storage.file","volumeId":"repository.primary"}`)
 
 	t.Setenv("VASTPLAN_ARTIFACT_REPOSITORY", "/var/lib/vastplan/artifacts")
 	t.Setenv("VASTPLAN_ARTIFACT_TRUST", "/etc/vastplan/trust.json")
@@ -122,8 +123,33 @@ func TestLoadConfigRequiresDistinctCompleteConfiguration(t *testing.T) {
 	if config.volumeID != "repository.primary" {
 		t.Fatalf("default storage volume = %q", config.volumeID)
 	}
-	t.Setenv("VASTPLAN_PLUGIN_CONFIG_JSON", `{"storageProvider":"../../escape"}`)
+	t.Setenv("VASTPLAN_PLUGIN_CONFIG_JSON", `{"listen":"127.0.0.1:8443","repositoryProfile":{"version":1,"id":"enterprise-primary","protocol":"artifact.repository.remote.v1","endpoint":"https://repo.example","channels":["testing"],"developmentOnly":false},"storageProvider":"../../escape","volumeId":"repository.primary"}`)
 	if _, err := loadConfig(); err == nil {
 		t.Fatal("invalid storage provider id must fail closed")
+	}
+}
+
+func TestLoadConfigSelectsLocalTestWithoutRemoteTLSMaterial(t *testing.T) {
+	root := t.TempDir()
+	tokenFile := filepath.Join(root, "local-test.token")
+	if err := os.WriteFile(tokenFile, []byte("0123456789abcdef0123456789abcdef"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(root, "repository.sock")
+	t.Setenv("VASTPLAN_PLUGIN_CONFIG_JSON", `{"repositoryProfile":{"version":1,"id":"local-testing","protocol":"artifact.repository.local-test.v1","endpoint":"unix://`+socket+`","channels":["testing"],"developmentOnly":true},"storageProvider":"platform.artifacts.storage.file","volumeId":"repository.primary"}`)
+	t.Setenv("VASTPLAN_ARTIFACT_REPOSITORY", filepath.Join(root, "repository"))
+	t.Setenv("VASTPLAN_ARTIFACT_TRUST", filepath.Join(root, "trust.json"))
+	t.Setenv("VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS", filepath.Join(root, "reports"))
+	t.Setenv("VASTPLAN_ARTIFACT_MIGRATION_STATE", filepath.Join(root, "control", "migration.json"))
+	t.Setenv("VASTPLAN_ARTIFACT_LOCAL_TOKEN_FILE", tokenFile)
+	for _, name := range []string{"VASTPLAN_ARTIFACT_TLS_CERT", "VASTPLAN_ARTIFACT_TLS_KEY", "VASTPLAN_ARTIFACT_READ_TOKEN", "VASTPLAN_ARTIFACT_PUBLISH_TOKEN", "VASTPLAN_ARTIFACT_BUNDLE_TOKEN", "VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN"} {
+		t.Setenv(name, "")
+	}
+	config, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.profile.Protocol != "artifact.repository.local-test.v1" || config.addr != socket || config.localToken == "" {
+		t.Fatalf("local-test 配置未精确选择: %+v", config)
 	}
 }

@@ -21,6 +21,7 @@ STATE_MARKER="$STATE_ROOT/.vastplan-platform-dev-state"
 GATEWAY_PORT="${VASTPLAN_DEV_GATEWAY_PORT:-18080}"
 PORTAL_PORT="${VASTPLAN_DEV_PORTAL_PORT:-18444}"
 ARTIFACT_PORT="${VASTPLAN_DEV_ARTIFACT_PORT:-18443}"
+ARTIFACT_PROTOCOL="${VASTPLAN_DEV_ARTIFACT_PROTOCOL:-local-test}"
 SEED_ARTIFACT_PORT="${VASTPLAN_DEV_SEED_ARTIFACT_PORT:-18442}"
 VAULT_PORT="${VASTPLAN_DEV_VAULT_PORT:-18200}"
 STATUS_URL="http://127.0.0.1:$GATEWAY_PORT/__vastplan_dev/status"
@@ -87,7 +88,8 @@ up/restart 参数:
   VASTPLAN_DEV_TIMEOUT         覆盖默认启动超时
   VASTPLAN_DEV_GATEWAY_PORT    开发网关端口（默认 18080）
   VASTPLAN_DEV_PORTAL_PORT     Node Portal Kernel 内部端口（默认 18444）
-  VASTPLAN_DEV_ARTIFACT_PORT   制品服务内部端口（默认 18443）
+  VASTPLAN_DEV_ARTIFACT_PROTOCOL 开发仓库协议：local-test（默认）或仅诊断用 remote-compat
+  VASTPLAN_DEV_ARTIFACT_PORT   remote-compat 制品服务内部端口（默认 18443）
   VASTPLAN_DEV_SEED_ARTIFACT_PORT Seed 制品仓库端口（默认 18442）
   VASTPLAN_DEV_VAULT_PORT      Vault 桩内部端口（默认 18200）
 EOF
@@ -116,6 +118,10 @@ validate_port() {
 }
 
 validate_configuration() {
+	case "$ARTIFACT_PROTOCOL" in
+	  local-test|remote-compat) ;;
+	  *) fail "开发仓库协议只允许 local-test 或 remote-compat: $ARTIFACT_PROTOCOL"; return 1 ;;
+	esac
   validate_port "开发网关端口" "$GATEWAY_PORT"
   validate_port "Node Portal Kernel 端口" "$PORTAL_PORT"
   validate_port "制品服务端口" "$ARTIFACT_PORT"
@@ -436,6 +442,7 @@ runtime_arguments() {
     -listen "127.0.0.1:$GATEWAY_PORT"
     -portal-listen "127.0.0.1:$PORTAL_PORT"
     -artifact-listen "127.0.0.1:$ARTIFACT_PORT"
+	-artifact-protocol "$ARTIFACT_PROTOCOL"
     -seed-artifact-listen "127.0.0.1:$SEED_ARTIFACT_PORT"
     -vault-listen "127.0.0.1:$VAULT_PORT"
 	-hot="$HOT_MODE"
@@ -465,7 +472,7 @@ wait_until_ready() {
       return 0
     fi
     if [ -f "$LOG_FILE" ]; then
-      progress="$(grep -E '\[[1-5]/5\]' "$LOG_FILE" 2>/dev/null | tail -n 1 || true)"
+      progress="$(grep -E '\[[1-6]/6\]' "$LOG_FILE" 2>/dev/null | tail -n 1 || true)"
       if [ -n "$progress" ] && [ "$progress" != "$last_progress" ]; then
         printf '%s%s%s\n' "$DIM" "$progress" "$NC"
         last_progress="$progress"

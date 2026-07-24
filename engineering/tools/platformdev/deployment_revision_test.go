@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
+
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 )
 
@@ -73,7 +75,8 @@ func TestPlatformManagementSourceDigestIncludesPortalCatalog(t *testing.T) {
 		t.Fatal(err)
 	}
 	backendDigest := strings.Repeat("a", 64)
-	first, err := platformManagementSourceDigest(template, catalog, "127.0.0.1:18443", backendDigest)
+	profile := artifactrepositoryv1.Profile{Version: 1, ID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest, Endpoint: "unix:///tmp/vastplan/repository.sock", Channels: []string{"testing"}, DevelopmentOnly: true}
+	first, err := platformManagementSourceDigest(template, catalog, profile, backendDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,14 +89,14 @@ func TestPlatformManagementSourceDigestIncludesPortalCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := platformManagementSourceDigest(template, changedRaw, "127.0.0.1:18443", backendDigest)
+	second, err := platformManagementSourceDigest(template, changedRaw, profile, backendDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first == second {
 		t.Fatal("嵌入的 Portal Catalog 变化必须改变开发平台部署指纹")
 	}
-	third, err := platformManagementSourceDigest(template, catalog, "127.0.0.1:18443", strings.Repeat("b", 64))
+	third, err := platformManagementSourceDigest(template, catalog, profile, strings.Repeat("b", 64))
 	if err != nil {
 		t.Fatal(err)
 	}

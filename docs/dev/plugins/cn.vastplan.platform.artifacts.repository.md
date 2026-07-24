@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.28.0`
+当前制品版本：`0.33.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件运行 HTTPS 制品发布与读取服务，负责 HTTP 传输、分离操作令牌、可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.26.0 增加插件制品安全准入 sidecar；0.27.0 增加签名只追加复扫链、独立 scanner 写权限、迁移双写、Portal 状态和 Node 本机高水位防回滚；0.28.0 增加低基数安全状态汇总、Portal 告警指标与企业验收矩阵；0.29.0 增加只向精确首方 Assessment Provider 签发、绑定 active ref/制品/SBOM、30 秒且仅可消费一次的 HTTPS 扫描租约；0.30.0 增加仅允许精确 Assessment Controller 追加 Provider 签名状态的内部能力；0.31.0 在接受 Admission/Status 前复核共享原始报告，并让离线 Bundle 去重携带报告及签名复扫状态链，在目标仓库按原顺序重新验链；0.32.0 增加 Portal 评估 revision 概览，以及“高风险权限预授权 → 当前证据引用复核 → API Exposure 30 秒单次 Ticket → HTTPS 报告数据面”的原始报告下载闭环。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件按受信 Repository Profile 运行 local-test 或 remote 制品服务，并负责可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.33.0 增加 `artifact.repository.local-test.v1` Unix Socket 传输并让开发环境原位迁移；正式远端仍使用 `artifact.repository.remote.v1` HTTPS。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
@@ -17,7 +17,7 @@
 
 当前以 `leader / leader-owned / cluster` 运行。集群成员可通过 `platform.artifacts.repository` 查询状态，数据复制与多活对象存储尚未在本版本提供，不能把多个实例指向不同本地目录后宣称高可用。
 
-本地平台开发组合已经把它与临时 Seed 仓库分离：Seed 只负责本次启动的基础制品，本插件使用 `.vastplan/dev-platform/repositories/testing/volumes/repository.primary` 作为跨普通重启保留的测试数据面。Node Agent 将 Seed 作为优先 bootstrap source，将本插件的 HTTPS 端点作为普通远端 source；Node Agent 通过本次运行的组合信任快照复验两者，而本插件自身只加载 testing-only 信任文档，不接受临时 Seed 身份发布的制品。
+本地平台开发组合已经把它与临时 Seed 仓库分离：Seed 只负责本次启动的基础制品，本插件使用 `.vastplan/dev-platform/repositories/testing/volumes/repository.primary` 作为跨普通重启保留的测试数据面。Node Agent 将 Seed 作为优先 bootstrap source，将本插件的 local-test Unix Socket 作为普通签名来源；Node Agent 通过本次运行的组合信任快照复验两者，而本插件自身只加载 testing-only 信任文档，不接受临时 Seed 身份发布的制品。
 
 仓库关键栈在线升级由 Node Agent 内的可信宿主适配器负责，而不是本插件自升级。本插件无权读取或写入 Seed 与 Bootstrap Inventory。候选证明与内容先经过内核固定验证点，再镜像到 Seed；只有候选 Runtime 健康且活动 Assignment 引用发布成功后才推进 LKG。自动路径拒绝跨 channel 和 SemVer 降级，详细事务见 [ADR-0102](../decisions/ADR-0102-可信宿主仓库自升级事务.md)。
 
@@ -27,7 +27,8 @@
 
 | 字段 | 含义 |
 |---|---|
-| `listen` | HTTPS 监听地址；默认 `127.0.0.1:8443` |
+| `repositoryProfile` | 精确仓库协议、endpoint、channel 和开发边界；未知协议或 Adapter 缺失均拒绝启动 |
+| `listen` | 仅 remote Profile 使用的独立 TCP 绑定地址；外部 HTTPS endpoint 仍以 Profile 为准 |
 | `storageProvider` | 已供给当前数据面的 Provider 能力 ID |
 | `volumeId` | 部署配置指向的活动 volume ID；迁移 finalize 后必须更新它并重启，才允许 release 旧卷 |
 | `quota.maxArtifacts` / `quota.maxBytes` | 可选全仓活动制品数量/对象字节上限；`0` 表示该维度不限额 |
@@ -47,12 +48,17 @@
 | `VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN` | 安全扫描工作负载发布复扫状态的 Bearer token，必须与读取、发布、Bundle token 都不同 |
 | `VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS` | Storage Provider 投影的私有共享报告归档；接受 Admission/Status 前按摘要复核 |
 | `VASTPLAN_ARTIFACT_MIGRATION_STATE` | 仓库 volume 之外的私有 `0600` 迁移状态文件 |
+| `VASTPLAN_ARTIFACT_LOCAL_TOKEN_FILE` | 仅 local-test 使用的 owner-only 短期令牌文件；不与 remote token 混用 |
 
 令牌、私钥和信任文档不通过插件 API 返回，也不得写入日志、状态输出或普通设置。生产部署应以 Secret 文件或受控密钥注入提供这些值，并仅将需要的变量列入该第一方插件的环境白名单。
 
-本地开发的稳定 `local-testing` 私钥由编排器保存在仓库目录之外的私有 `secrets/` 中，**不注入本插件**。插件只获得 testing-only 信任文档、TLS 材料和分离的读写 token。该自动生成行为不适用于生产环境。
+本地开发的稳定 `local-testing` 私钥由编排器保存在仓库目录之外的私有 `secrets/` 中，**不注入本插件**。local-test 模式下插件只获得 testing-only 信任文档和逐运行短期令牌文件；remote 模式才获得 TLS 材料和分离的 HTTP token。该自动生成行为不适用于生产环境。
 
-## HTTP 协议
+## 传输协议
+
+开发默认的 local-test 使用私有 `0600` Unix Socket、有界 multipart、Bearer 短期令牌和逐请求精确协议头，只开放精确读取、发布与 Catalog 快照；P2 尚未启用 workspace。Node Agent、Controller 和发布器收到 Envelope 后仍独立复验证明与内容。
+
+正式 remote 服务强制 TLS：
 
 该服务强制 TLS：
 
