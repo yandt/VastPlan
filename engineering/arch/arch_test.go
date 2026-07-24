@@ -322,7 +322,7 @@ func TestArch_TopLevelDirectoriesAreClosed(t *testing.T) {
 	allowed := map[string]bool{
 		"core": true, "extensions": true, "contracts": true, "engineering": true, "docs": true,
 		".git": true, ".github": true, ".githooks": true, ".claude": true, ".codex": true,
-		".gstack": true, ".obsidian": true, ".pnpm-store": true, ".vastplan": true,
+		".gstack": true, ".obsidian": true, ".vastplan": true,
 		"bin": true, "node_modules": true,
 	}
 	entries, err := os.ReadDir(repoRoot(t))
@@ -333,6 +333,38 @@ func TestArch_TopLevelDirectoriesAreClosed(t *testing.T) {
 		if entry.IsDir() && !allowed[entry.Name()] {
 			t.Errorf("根目录越界：%s/ 不在顶层白名单中；请归入 core/extensions/contracts/engineering/docs 之一，或先更新 ADR-0060", entry.Name())
 		}
+	}
+}
+
+func TestArch_PnpmGeneratedDataLivesUnderVastPlanCache(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(repoRoot(t), ".npmrc"))
+	if err != nil {
+		t.Fatalf("读取项目级 pnpm 配置失败: %v", err)
+	}
+	values := map[string]string{}
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if ok {
+			values[strings.TrimSpace(key)] = strings.TrimSpace(value)
+		}
+	}
+	want := map[string]string{
+		"store-dir":         ".vastplan/cache/node/content-store",
+		"virtual-store-dir": ".vastplan/cache/node/virtual-store",
+	}
+	for key, value := range want {
+		if values[key] != value {
+			t.Errorf("%s 必须为 %q，实际 %q；pnpm 重数据不得返回仓库根目录", key, value, values[key])
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(repoRoot(t), "node_modules", ".pnpm")); err == nil {
+		t.Error("根 node_modules/.pnpm 仍包含旧虚拟依赖树；首次迁移请先执行 pnpm install --frozen-lockfile --force，确认依赖链接指向 .vastplan/cache/node/virtual-store 后删除该旧目录")
+	} else if !os.IsNotExist(err) {
+		t.Fatalf("检查根 node_modules/.pnpm 失败: %v", err)
 	}
 }
 

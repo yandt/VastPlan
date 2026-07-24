@@ -20,7 +20,6 @@ tmp/
 bin/
 dist/
 node_modules/
-.pnpm-store/
 .vastplan/
 .gstack/
 __pycache__/

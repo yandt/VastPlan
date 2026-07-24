@@ -117,14 +117,14 @@ func TestGenerateNodeSBOMPreservesMultipleVersionsOfSamePackage(t *testing.T) {
 	}
 	inputs := map[string]any{}
 	for _, version := range []string{"3.1.3", "4.1.0"} {
-		packageRoot := filepath.Join(root, "node_modules", ".pnpm", "fast-uri@"+version, "node_modules", "fast-uri")
+		packageRoot := filepath.Join(root, ".vastplan", "cache", "node", "virtual-store", "fast-uri@"+version, "node_modules", "fast-uri")
 		if err := os.MkdirAll(packageRoot, 0o755); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(filepath.Join(packageRoot, "package.json"), []byte(`{"name":"fast-uri","version":"`+version+`"}`), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		input := filepath.ToSlash(filepath.Join("node_modules", ".pnpm", "fast-uri@"+version, "node_modules", "fast-uri", "index.js"))
+		input := filepath.ToSlash(filepath.Join(".vastplan", "cache", "node", "virtual-store", "fast-uri@"+version, "node_modules", "fast-uri", "index.js"))
 		inputs[input] = map[string]any{}
 	}
 	metadata := map[string]any{"inputs": inputs, "outputs": map[string]any{"out.js": map[string]any{}}}

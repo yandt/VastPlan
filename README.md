@@ -233,7 +233,7 @@ engineering/   架构守护、E2E、部署样例与构建发布工具
 docs/          架构、ADR、插件文档和开发指南
 ```
 
-根目录的 pnpm workspace 只服务前端开发。`node_modules/` 是 Git 忽略、可随时重建的本地依赖，不是 Backend 运行时，也不进入插件制品或发布包。
+根目录的 pnpm workspace 只服务前端开发。pnpm 的内容仓库和虚拟依赖树位于 `.vastplan/cache/node/`，根 `node_modules/` 仅是 Git 忽略、可随时重建的轻量解析入口；这些内容都不是 Backend 运行时，也不进入插件制品或发布包。已有工作区首次拉取本次布局变更后运行 `pnpm install --frozen-lockfile --force`；确认依赖链接指向新 virtual Store 且构建通过后，可删除 pnpm 不会自动清理的旧 `node_modules/.pnpm/` 和根 `.pnpm-store/`。后续仍使用普通 `pnpm install --frozen-lockfile`。
 
 详细放置规则见[代码目录结构](docs/dev/guides/代码目录结构.md)。
 
