@@ -126,13 +126,9 @@ func (d DynamicGoExecutionDriver) StartManaged(ctx context.Context, host *protoc
 	if err := validateRuntimeHostingMode(mode); err != nil {
 		return nil, err
 	}
-	key := runtimePoolKey(policy.RuntimeScope, plugin, d, mode)
-	key.Generation = policy.RuntimeGeneration
-	if key.Generation == "" {
-		key.Generation = plugin.SHA256
-	}
-	if key.Generation == "" {
-		key.Generation = plugin.ID + "@" + plugin.Version
+	key, err := managedRuntimePoolKey(policy.RuntimeScope, policy.RuntimeGeneration, plugin, d, mode)
+	if err != nil {
+		return nil, err
 	}
 	lease, err := pools.Acquire(key, runtimeHostProcessSpec{
 		Command: d.Command, Args: append(append([]string(nil), d.HostArgs...), "--pool"), Kind: d.Name(),

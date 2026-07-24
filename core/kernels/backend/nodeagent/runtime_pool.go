@@ -667,6 +667,27 @@ func runtimePoolKey(scope string, plugin InstalledPlugin, driver PluginExecution
 	return key
 }
 
+// managedRuntimePoolKey adds the service generation to every managed language
+// host boundary. Active and candidate service generations must never share a
+// physical Host: a broken candidate would otherwise be able to terminate the
+// last-known-good Node/Python execution units that it is supposed to replace.
+// Plugins in the same generation still share a Host when all other hard pool
+// boundaries match.
+func managedRuntimePoolKey(scope, generation string, plugin InstalledPlugin,
+	driver PluginExecutionDriver, mode RuntimeHostingMode) (RuntimeHostKey, error) {
+	scope = strings.TrimSpace(scope)
+	if scope == "" {
+		scope = "default"
+	}
+	generation = strings.TrimSpace(generation)
+	if generation == "" {
+		return RuntimeHostKey{}, fmt.Errorf("插件 %s 的托管 Runtime Host 缺少 service generation", plugin.ID)
+	}
+	key := runtimePoolKey(scope, plugin, driver, mode)
+	key.Generation = generation
+	return key, nil
+}
+
 func runtimeCompatibility(plugin InstalledPlugin) string {
 	parts := []string{plugin.Execution.Driver, runtime.GOOS, runtime.GOARCH}
 	keys := make([]string, 0, len(plugin.Execution.Requirements))

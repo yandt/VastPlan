@@ -217,6 +217,36 @@ func TestRuntimePoolCompatibilitySeparatesPublisherAndRequirements(t *testing.T)
 	}
 }
 
+func TestManagedRuntimePoolKeySeparatesServiceGenerations(t *testing.T) {
+	driver := NodeWorkerExecutionDriver{Command: "node"}
+	plugin := InstalledPlugin{ID: "cn.vastplan.test.generation", Publisher: "vastplan", Execution: pluginv1.BackendExecution{
+		Driver: "node-worker", Requirements: map[string]string{"node": ">=20"},
+		Node: &pluginv1.NodeExecution{WorkerSafe: true, ModuleFormat: "esm"},
+	}}
+	active, err := managedRuntimePoolKey("service-a", "generation-active", plugin, driver, RuntimeHostingShared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	same, err := managedRuntimePoolKey("service-a", "generation-active", plugin, driver, RuntimeHostingShared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, err := managedRuntimePoolKey("service-a", "generation-candidate", plugin, driver, RuntimeHostingShared)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if active.String() != same.String() {
+		t.Fatal("同一 service generation 的兼容插件必须继续共享 Runtime Host")
+	}
+	if active.String() == candidate.String() {
+		t.Fatal("活动与候选 service generation 不得共享 Runtime Host")
+	}
+	if _, err := managedRuntimePoolKey("service-a", "", plugin, driver, RuntimeHostingShared); err == nil ||
+		!strings.Contains(err.Error(), "缺少 service generation") {
+		t.Fatalf("缺少 service generation 必须 fail-closed: %v", err)
+	}
+}
+
 func TestRuntimeDriversRejectUnknownDriverAndUnsupportedPlatform(t *testing.T) {
 	runtime := NewProtocolRuntime("1.0.0", nil)
 	plugin := InstalledPlugin{ID: "p", Publisher: "vastplan", EntryPath: "/p", Execution: pluginv1.BackendExecution{

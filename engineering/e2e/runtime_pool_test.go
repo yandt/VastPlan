@@ -54,7 +54,7 @@ export const shutdown = () => plugin.shutdown();
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	start := func(id, capability string) *protocolbus.PluginInstance {
+	start := func(id, capability, generation string) *protocolbus.PluginInstance {
 		entry := writePlugin(id, capability)
 		plugin := nodeagent.InstalledPlugin{
 			ID: id, Publisher: "vastplan", Version: "1.0.0", Root: filepath.Dir(entry), EntryPath: entry,
@@ -66,6 +66,7 @@ export const shutdown = () => plugin.shutdown();
 		}
 		instance, err := driver.StartManaged(ctx, host, plugin, protocolbus.LaunchPolicy{
 			PluginID: id, Publisher: "vastplan", Version: "1.0.0", RuntimeScope: "backend-main",
+			RuntimeGeneration: generation,
 			Contributions: []pluginv1.RuntimeContribution{{
 				ExtensionPoint: "tool.package", ID: capability,
 				Descriptor: []byte(fmt.Sprintf(`{"title":%q}`, capability)),
@@ -77,13 +78,23 @@ export const shutdown = () => plugin.shutdown();
 		return instance
 	}
 
-	first := start("cn.vastplan.test.pool.first", "vastplan.pool.first")
-	second := start("cn.vastplan.test.pool.second", "vastplan.pool.second")
+	first := start("cn.vastplan.test.pool.first", "vastplan.pool.first", "generation-1")
+	second := start("cn.vastplan.test.pool.second", "vastplan.pool.second", "generation-1")
 	if first.PID <= 0 || first.PID != second.PID {
 		t.Fatalf("共享池应返回同一个物理 PID: first=%d second=%d", first.PID, second.PID)
 	}
 	if snapshot := pools.Snapshot(); len(snapshot) != 1 || snapshot[0].Units != 2 || !snapshot[0].Healthy {
 		t.Fatalf("共享池状态异常: %+v", snapshot)
+	}
+	candidate := start("cn.vastplan.test.pool.candidate", "vastplan.pool.candidate", "generation-2")
+	if candidate.PID <= 0 || candidate.PID == first.PID {
+		t.Fatalf("候选 generation 必须使用独立物理 Host: active=%d candidate=%d", first.PID, candidate.PID)
+	}
+	if snapshot := pools.Snapshot(); len(snapshot) != 2 {
+		t.Fatalf("活动代与候选代重叠时应存在两个 Runtime Pool: %+v", snapshot)
+	}
+	if err := host.Close(candidate); err != nil {
+		t.Fatal(err)
 	}
 	if err := host.Close(first); err != nil {
 		t.Fatal(err)
@@ -157,6 +168,7 @@ plugin.serve()
 		}
 		instance, err := driver.StartManaged(ctx, host, plugin, protocolbus.LaunchPolicy{
 			PluginID: id, Publisher: "vastplan", Version: "1.0.0", RuntimeScope: "backend-main",
+			RuntimeGeneration: "generation-1",
 			Contributions: []pluginv1.RuntimeContribution{{
 				ExtensionPoint: "tool.package", ID: capability,
 				Descriptor: []byte(fmt.Sprintf(`{"title":%q}`, capability)),

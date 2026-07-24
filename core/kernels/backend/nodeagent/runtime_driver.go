@@ -232,11 +232,11 @@ func startManagedRuntime(ctx context.Context, host *protocolbus.Host, plugin Ins
 	if err := validateRuntimeHostingMode(mode); err != nil {
 		return nil, err
 	}
-	scope := strings.TrimSpace(policy.RuntimeScope)
-	if scope == "" {
-		scope = "default"
+	key, err := managedRuntimePoolKey(policy.RuntimeScope, policy.RuntimeGeneration, plugin, driver, mode)
+	if err != nil {
+		return nil, err
 	}
-	lease, err := pools.Acquire(runtimePoolKey(scope, plugin, driver, mode), processSpec)
+	lease, err := pools.Acquire(key, processSpec)
 	if err != nil {
 		return nil, err
 	}
