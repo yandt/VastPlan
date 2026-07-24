@@ -93,7 +93,7 @@ func launchGlobalSettingsHost(t *testing.T, store sharedstate.Store, bin string,
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	instance, err := host.LaunchWithPolicy(ctx, bin, protocolbus.LaunchPolicy{
-		PluginID: "cn.vastplan.platform.configuration.global-settings", Publisher: "vastplan", Version: "0.8.0",
+		PluginID: "cn.vastplan.platform.configuration.global-settings", Publisher: "vastplan", Version: "0.8.1",
 		ArtifactSHA256: strings.Repeat("a", 64), NodeID: nodeID, RuntimeScope: "platform-settings", RuntimeInstanceID: instanceID,
 		Contributions:  contributions,
 		KernelServices: []string{"kernel.state.shared.get", "kernel.state.shared.create", "kernel.state.shared.update"},

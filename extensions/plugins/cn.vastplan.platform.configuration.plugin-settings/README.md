@@ -2,7 +2,7 @@
 
 `cn.vastplan.platform.configuration.plugin-settings` 是通用插件配置协调器。它通过可信宿主读取 Backend Resolver 基于验签制品生成、且与活动 Deployment revision/digest 精确匹配的 `ConfigurationCatalog v1`，并保存配置候选与审计记录。
 
-当前 `0.12.0` 实现：
+当前 `0.12.1` 实现：
 
 - 只返回活动、已发布 Deployment 的可信配置定义；
 - 使用不透明 `cfg_` 资源 ID，浏览器不提交插件身份或 Schema；

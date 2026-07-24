@@ -6,7 +6,7 @@ import { OIDCProvider } from "./provider.mjs";
 
 const plugin = new Plugin({
   id: "cn.vastplan.foundation.security.authentication.provider.oidc",
-  version: "0.1.0",
+  version: "0.1.1",
   engines: { backend: "^0.1" },
 });
 const provider = new OIDCProvider(loadConfiguration(), {

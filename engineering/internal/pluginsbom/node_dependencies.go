@@ -56,7 +56,7 @@ func nodeDependencies(root, pluginDir string, metafiles []string) ([]cyclonedx.C
 				return nil, err
 			}
 			if ok {
-				found[packageInfo.Name] = packageInfo
+				found[nodePackageIdentity(packageInfo)] = packageInfo
 			}
 			for _, imported := range facts.Imports {
 				if imported.External {
@@ -76,14 +76,14 @@ func nodeDependencies(root, pluginDir string, metafiles []string) ([]cyclonedx.C
 			}
 		}
 	}
-	names := make([]string, 0, len(found))
-	for name := range found {
-		names = append(names, name)
+	identities := make([]string, 0, len(found))
+	for identity := range found {
+		identities = append(identities, identity)
 	}
-	sort.Strings(names)
-	components := make([]cyclonedx.Component, 0, len(names))
-	for _, name := range names {
-		item := found[name]
+	sort.Strings(identities)
+	components := make([]cyclonedx.Component, 0, len(identities))
+	for _, identity := range identities {
+		item := found[identity]
 		purl := npmPURL(item.Name, item.Version)
 		components = append(components, cyclonedx.Component{Type: "library", BOMRef: purl, Name: item.Name, Version: item.Version, PURL: purl, Properties: []cyclonedx.Property{{Name: "vastplan:dependency.evidence", Value: "esbuild-metafile"}}})
 	}
@@ -157,14 +157,14 @@ func resolveExternalPackage(root, pluginDir, specifier string, workspace map[str
 	}
 	if item, ok := workspace[name]; ok {
 		if !within(pluginDir, item.Root) {
-			found[name] = item
+			found[nodePackageIdentity(item)] = item
 		}
 		return nil
 	}
 	for _, base := range []string{filepath.Join(pluginDir, "backend", "node_modules"), filepath.Join(pluginDir, "frontend", "node_modules"), filepath.Join(root, "node_modules")} {
 		item, err := readNodePackage(filepath.Join(base, filepath.FromSlash(name)))
 		if err == nil {
-			found[name] = item
+			found[nodePackageIdentity(item)] = item
 			return nil
 		}
 		if !errors.Is(err, os.ErrNotExist) {
@@ -254,4 +254,8 @@ func npmPURL(name, version string) string {
 		encoded = "%40" + strings.TrimPrefix(name, "@")
 	}
 	return "pkg:npm/" + encoded + "@" + version
+}
+
+func nodePackageIdentity(item nodePackage) string {
+	return npmPURL(item.Name, item.Version)
 }

@@ -313,6 +313,15 @@ check_dependencies() {
   fi
 }
 
+align_node_dependencies() {
+  info "[准备] 按 pnpm-lock.yaml 离线对齐 Node 工作区依赖..."
+  if ! (cd "$ROOT" && pnpm install --offline --frozen-lockfile); then
+    fail "离线依赖对齐失败；请先在项目根目录运行 'pnpm install --frozen-lockfile' 下载锁定依赖"
+    return 1
+  fi
+  success "Node 工作区依赖与锁文件一致"
+}
+
 port_in_use() {
   local port="$1"
   if command -v lsof >/dev/null 2>&1; then
@@ -551,6 +560,7 @@ start_runtime() {
   ensure_state_dirs
   check_dependencies
   check_ports_free
+	align_node_dependencies
   build_orchestrator
   build_portal_host
   runtime_arguments

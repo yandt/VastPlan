@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 38,
+  "revision": 40,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -28,7 +28,7 @@
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.bootstrap-policy", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.30.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.1", "channel": "stable" }
       ]
     },
     {
@@ -59,7 +59,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.30.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.1", "channel": "stable" }
       ]
     },
     {
@@ -160,7 +160,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.30.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.1", "channel": "stable" }
       ]
     },
     {
@@ -189,7 +189,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.30.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.authentication.delivery.webhook", "version": "0.2.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.security.authentication.delivery.webhook", "version": "0.2.1", "channel": "stable" }
       ]
     },
     {
@@ -214,7 +214,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.30.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.1", "channel": "stable" }
       ]
     },
     {
@@ -265,7 +265,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.30.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.18.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.18.1", "channel": "stable" }
       ]
     },
     {
@@ -289,7 +289,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.platform-admin-access-policy", "version": "0.30.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.12.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.12.1", "channel": "stable" }
       ]
     },
     {
@@ -318,7 +318,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.portal-access-policy", "version": "0.4.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.6.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.6.1", "channel": "stable" }
       ]
     },
     {

@@ -65,7 +65,7 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 		PluginID: "cn.vastplan.foundation.security.portal-access-policy", Version: "0.4.0", Channel: "stable",
 	})
 	composer := installPortalFixturePlugin(t, repository, verifier, installer, pluginv1.ArtifactRef{
-		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.6.0", Channel: "stable",
+		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.6.1", Channel: "stable",
 	})
 	platformCatalog := portalPlatformCatalogForTenant(t, root, "acme")
 	config, err := kernelspi.NewMapConfig(map[string]any{

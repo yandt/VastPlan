@@ -2,7 +2,7 @@
   "id":"cn.vastplan.platform.security.authentication.delivery.webhook",
   "name":"VastPlan Authentication Delivery Webhook",
   "description":"通过企业 HTTPS Webhook 投递认证一次性验证码",
-  "version":"0.2.0","publisher":"vastplan","license":"Apache-2.0","licenseFile":"LICENSE","noticeFile":"NOTICE",
+  "version":"0.2.1","publisher":"vastplan","license":"Apache-2.0","licenseFile":"LICENSE","noticeFile":"NOTICE",
   "engines":{"backend":"^0.1"},
   "capabilities":{"kernelServices":["kernel.credential.material-lease"],"credentials":["authentication.delivery.webhook"],"resources":["network.identity"]},
   "contextAccess":{"required":["scope.tenant","caller","propagation.callPath"],"optional":["trace","request.deadline"]},

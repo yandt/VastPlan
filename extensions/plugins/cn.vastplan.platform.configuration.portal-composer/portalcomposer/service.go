@@ -19,7 +19,7 @@ import (
 
 const (
 	PluginID                 = "cn.vastplan.platform.configuration.portal-composer"
-	PluginVersion            = "1.6.0"
+	PluginVersion            = "1.6.1"
 	Capability               = portalapi.ComposerCapability
 	PlatformCatalogConfigKey = "platform.portal-composer.platformCatalog"
 )

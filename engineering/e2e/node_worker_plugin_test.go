@@ -50,7 +50,7 @@ func TestNodeWorkerPlugin_CrossLanguageInvokeAndLifecycle(t *testing.T) {
 		Dir:         root,
 		RuntimeKind: "node-worker",
 	}, protocolbus.LaunchPolicy{
-		PluginID: "cn.vastplan.foundation.backend.runtime.node-worker-hello", Publisher: "vastplan", Version: "0.1.0",
+		PluginID: "cn.vastplan.foundation.backend.runtime.node-worker-hello", Publisher: "vastplan", Version: "0.1.1",
 		Contributions: contributions, RequiredFeatures: []string{protocol.FeatureCancellation},
 	})
 	if err != nil {

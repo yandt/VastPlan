@@ -6,7 +6,7 @@ import { WebhookDelivery } from "./delivery.mjs";
 import { WebhookProfileController } from "./profile-controller.mjs";
 import { ProfileStateStore } from "./state-store.mjs";
 
-const plugin = new Plugin({ id:pluginId, version:"0.2.0", engines:{backend:"^0.1"} });
+const plugin = new Plugin({ id:pluginId, version:"0.2.1", engines:{backend:"^0.1"} });
 const bootstrap = loadBootstrapConfiguration();
 const materialLease = new MaterialLeaseClient(plugin, {audience:process.env.VASTPLAN_RUNTIME_AUDIENCE});
 const profiles = new Map();

@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.integration.api-exposure",
   "name": "VastPlan API Exposure",
   "description": "治理插件 API Contract、稳定公开 Route Key 与独立数据面 Endpoint Lease",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

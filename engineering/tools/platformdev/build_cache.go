@@ -288,6 +288,10 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	if err := os.MkdirAll(goCache, 0o700); err != nil {
 		return err
 	}
+	log.Printf("校验并离线对齐 Node 工作区依赖与 pnpm-lock.yaml")
+	if err := ensureFrozenNodeDependencies(ctx, r.options.root, nil); err != nil {
+		return err
+	}
 	goIdentity, err := developmentGoIdentity(ctx)
 	if err != nil {
 		return err
@@ -402,6 +406,11 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 		return err
 	}
 	logBuildCacheResult("插件制品仓库", packages)
+	if err := reconcileStablePackageIdentities(
+		filepath.Join(packages.Path, "repository"), stablePackageIdentityLedgerPath(r.options.root),
+	); err != nil {
+		return err
+	}
 	if err := materializeMutableCachedDirectory(filepath.Join(packages.Path, "repository"), filepath.Join(r.runDir, "repository")); err != nil {
 		return fmt.Errorf("装配插件仓库缓存: %w", err)
 	}

@@ -93,7 +93,7 @@ func TestKernelFencedSharedStateRequiresCurrentUnitLeader(t *testing.T) {
 	metrics := observability.NewMemoryMetrics()
 	create := kernelFencedSharedStateWithMetrics(store, sharedstatev1.OperationCreate, metrics)
 	identity := runtimeidentity.Identity{
-		PluginID: "cn.vastplan.platform.security.credentials", Publisher: "vastplan", Version: "0.12.0", ArtifactSHA256: strings.Repeat("a", 64),
+		PluginID: "cn.vastplan.platform.security.credentials", Publisher: "vastplan", Version: "0.12.1", ArtifactSHA256: strings.Repeat("a", 64),
 		NodeID: "node-a", RuntimeScope: "platform-credentials", InstanceID: "instance-a",
 	}
 	trusted, _ := runtimeidentity.WithIdentity(context.Background(), identity)

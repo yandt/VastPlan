@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
+	"cdsoft.com.cn/VastPlan/engineering/internal/cyclonedx"
 )
 
 func TestGenerateGoSBOMFromActualBuildInfo(t *testing.T) {
@@ -101,5 +102,62 @@ func TestGenerateNodeSBOMFromActualMetafile(t *testing.T) {
 	}
 	if result.Components != 1 {
 		t.Fatalf("Node SBOM 应包含实际 bundle workspace 依赖: %s", result.Raw)
+	}
+}
+
+func TestGenerateNodeSBOMPreservesMultipleVersionsOfSamePackage(t *testing.T) {
+	root := t.TempDir()
+	plugin := filepath.Join(root, "extensions", "plugins", "cn.vastplan.node-multi-version")
+	if err := os.MkdirAll(plugin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"id":"cn.vastplan.node-multi-version","name":"test","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/dist/index.js"},"contributes":{"frontend":{"views":[{"id":"test"}]}}}`
+	if err := os.WriteFile(filepath.Join(plugin, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inputs := map[string]any{}
+	for _, version := range []string{"3.1.3", "4.1.0"} {
+		packageRoot := filepath.Join(root, "node_modules", ".pnpm", "fast-uri@"+version, "node_modules", "fast-uri")
+		if err := os.MkdirAll(packageRoot, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(packageRoot, "package.json"), []byte(`{"name":"fast-uri","version":"`+version+`"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		input := filepath.ToSlash(filepath.Join("node_modules", ".pnpm", "fast-uri@"+version, "node_modules", "fast-uri", "index.js"))
+		inputs[input] = map[string]any{}
+	}
+	metadata := map[string]any{"inputs": inputs, "outputs": map[string]any{"out.js": map[string]any{}}}
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metafile := filepath.Join(root, "meta.json")
+	if err := os.WriteFile(metafile, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	first, err := Generate(Options{Root: root, PluginDir: plugin, Metafiles: []string{metafile}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := Generate(Options{Root: root, PluginDir: plugin, Metafiles: []string{metafile}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(first.Raw, second.Raw) {
+		t.Fatal("相同的多版本 Node 构建事实必须生成确定性 SBOM")
+	}
+	var document cyclonedx.Document
+	if err := json.Unmarshal(first.Raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"3.1.3": false, "4.1.0": false}
+	for _, component := range document.Components {
+		if component.Name == "fast-uri" {
+			want[component.Version] = true
+		}
+	}
+	if !want["3.1.3"] || !want["4.1.0"] || first.Components != 2 {
+		t.Fatalf("同名包的两个实际版本必须分别进入 SBOM: components=%#v", document.Components)
 	}
 }

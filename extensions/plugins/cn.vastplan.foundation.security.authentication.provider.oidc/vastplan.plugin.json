@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.security.authentication.provider.oidc",
   "name": "VastPlan Enterprise OIDC Provider",
   "description": "使用 Authorization Code + PKCE 验证企业 OIDC 身份",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

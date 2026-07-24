@@ -2,7 +2,7 @@ import { Contribution, Plugin, callResult } from '@vastplan/backend-plugin';
 
 const plugin = new Plugin({
   id: 'cn.vastplan.foundation.backend.runtime.node-worker-hello',
-  version: '0.1.0',
+  version: '0.1.1',
   engines: { backend: '^0.1 || ^1.0' },
 });
 
