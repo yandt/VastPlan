@@ -90,6 +90,8 @@ func (r *runtime) testingRepositoryProfile() (artifactrepositoryv1.Profile, erro
 		profile.Protocol = artifactrepositoryv1.ProtocolLocalTest
 		profile.Endpoint = "unix://" + filepath.ToSlash(r.testingRepositorySocket())
 		profile.DevelopmentOnly = true
+		profile.Channels = []string{"testing", "workspace"}
+		profile.Workspace = &artifactrepositoryv1.WorkspacePolicy{TTLSeconds: 1800, MaxArtifacts: 256}
 	}
 	return artifactrepositoryv1.ValidateProfile(profile)
 }

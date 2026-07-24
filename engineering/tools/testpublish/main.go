@@ -139,12 +139,12 @@ func publish(ctx context.Context, opts options) error {
 		return err
 	}
 	if repositoryProfile.Protocol == artifactrepositoryv1.ProtocolLocalTest {
-		artifact, revision, wasExisting, err := publishLocalTest(ctx, runDir, stateRoot, repositoryProfile, trust, manifest, artifact, packageBytes)
+		artifact, receipt, wasExisting, err := publishLocalTest(ctx, runDir, stateRoot, repositoryProfile, trust, manifest, artifact, packageBytes)
 		if err != nil {
 			return err
 		}
-		printReceipt(artifact, repositoryProfile.Endpoint, revision, wasExisting)
-		return submitRequestedTestReleases(ctx, status, opts, artifact, revision)
+		printReceipt(artifact, repositoryProfile.Endpoint, receipt.Revision, wasExisting)
+		return submitRequestedTestReleases(ctx, status, opts, receipt)
 	}
 	if repositoryProfile.Protocol != artifactrepositoryv1.ProtocolRemote {
 		return errors.New("本地发布器没有精确匹配 Repository Profile 的 Adapter")
@@ -213,18 +213,22 @@ func publish(ctx context.Context, opts options) error {
 			return errors.New("Catalog 未返回刚发布的精确制品")
 		}
 	}
+	receipt := artifactrepositoryv1.Receipt{SchemaVersion: artifactrepositoryv1.ProfileVersion, RepositoryID: repositoryProfile.ID, Protocol: repositoryProfile.Protocol, ProfileDigest: repositoryProfile.Digest(), Ref: pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}, SHA256: artifact.SHA256, Revision: revision}
+	if err := artifactrepositoryv1.ValidateReceipt(repositoryProfile, receipt); err != nil {
+		return err
+	}
 	printReceipt(artifact, repositoryURL.String(), revision, wasExisting)
-	return submitRequestedTestReleases(ctx, status, opts, artifact, revision)
+	return submitRequestedTestReleases(ctx, status, opts, receipt)
 }
 
-func submitRequestedTestReleases(ctx context.Context, status developmentStatus, opts options, artifact pluginservice.Artifact, revision uint64) error {
+func submitRequestedTestReleases(ctx context.Context, status developmentStatus, opts options, receipt artifactrepositoryv1.Receipt) error {
 	if opts.BackendTarget != "" || opts.BackendBinding != "" {
-		if err := submitBackendTestRelease(ctx, status, opts, artifact, revision); err != nil {
+		if err := submitBackendTestRelease(ctx, status, opts, receipt); err != nil {
 			return err
 		}
 	}
 	if opts.FrontendTarget != "" || opts.FrontendBinding != "" {
-		if err := submitFrontendTestRelease(ctx, status, opts, artifact, revision); err != nil {
+		if err := submitFrontendTestRelease(ctx, status, opts, receipt); err != nil {
 			return err
 		}
 	}

@@ -23,6 +23,7 @@ type runningRepositoryTransport struct {
 	ready            atomic.Bool
 	tickets          *dataPlaneTicketStore
 	assessmentLeases *assessmentLeaseIssuer
+	localAdapter     *repositoryruntime.LocalTestAdapter
 }
 
 func startRepositoryTransport(config serverConfig, manager *repositoryruntime.Manager, trustRaw []byte) (*runningRepositoryTransport, error) {
@@ -35,6 +36,7 @@ func startRepositoryTransport(config serverConfig, manager *repositoryruntime.Ma
 		if adapterErr != nil {
 			return nil, adapterErr
 		}
+		running.localAdapter = adapter
 		handler, handlerErr := localtest.NewServer(config.profile, adapter, config.localToken)
 		if handlerErr != nil {
 			return nil, handlerErr
@@ -92,6 +94,26 @@ func startRepositoryTransport(config serverConfig, manager *repositoryruntime.Ma
 		running.ready.Store(false)
 	}()
 	return running, nil
+}
+
+func (r *runningRepositoryTransport) validateReceipt(profile artifactrepositoryv1.Profile, manager *repositoryruntime.Manager, receipt artifactrepositoryv1.Receipt, target string) (catalog.Entry, error) {
+	if err := artifactrepositoryv1.ValidateReceipt(profile, receipt); err != nil {
+		return catalog.Entry{}, err
+	}
+	if r != nil && r.localAdapter != nil {
+		if err := r.localAdapter.ValidateReceipt(receipt, time.Now().UTC()); err != nil {
+			return catalog.Entry{}, err
+		}
+	}
+	page := manager.Query(catalog.Query{PluginID: receipt.Ref.PluginID, Version: receipt.Ref.Version, Channel: receipt.Ref.Channel, Target: target, Page: 1, PageSize: 2})
+	if page.Total != 1 || len(page.Items) != 1 {
+		return catalog.Entry{}, errors.New("仓库回执没有命中唯一 Catalog 条目")
+	}
+	entry := page.Items[0]
+	if entry.Ref != receipt.Ref || entry.SHA256 != receipt.SHA256 || entry.RepositoryRevision != receipt.Revision {
+		return catalog.Entry{}, errors.New("仓库回执与不可变 Catalog 发生漂移")
+	}
+	return entry, nil
 }
 
 func remoteDataPlane(config serverConfig, manager *repositoryruntime.Manager) (*dataPlaneTicketStore, *assessmentLeaseIssuer, error) {

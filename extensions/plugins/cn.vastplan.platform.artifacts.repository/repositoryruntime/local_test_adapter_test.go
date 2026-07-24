@@ -3,7 +3,9 @@ package repositoryruntime
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
@@ -45,5 +47,54 @@ func TestLocalTestAdapterUsesManagedRepositoryAndBoundReceipts(t *testing.T) {
 	}
 	if _, err := adapter.Publish(context.Background(), artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof, SecurityStatusChain: []byte(`[]`)}); err == nil {
 		t.Fatal("发布路径不得覆盖追加式 security status chain")
+	}
+}
+
+func TestLocalTestAdapterPersistsWorkspaceLeaseAndRejectsReceiptDrift(t *testing.T) {
+	volume, _ := migrationVolumes(t, "repository.workspace")
+	trust, privateKey := migrationTrust(t)
+	manager, err := Open(volume, trust, filepath.Join(t.TempDir(), "state", "migration.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := artifactrepositoryv1.ValidateProfile(artifactrepositoryv1.Profile{
+		Version: 1, ID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest,
+		Endpoint: "unix:///tmp/vastplan-local-test.sock", Channels: []string{"testing", "workspace"}, DevelopmentOnly: true,
+		Workspace: &artifactrepositoryv1.WorkspacePolicy{TTLSeconds: 60, MaxArtifacts: 2},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := NewLocalTestAdapter(profile, manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, proof, packageBytes := migrationArtifactForChannel(t, privateKey, "11.1.0-dev.1", "workspace")
+	receipt, err := adapter.Publish(context.Background(), artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.WorkspaceLease == "" || receipt.ExpiresAt == nil || !receipt.ExpiresAt.After(time.Now().UTC()) {
+		t.Fatalf("workspace 发布未签发有界 lease: %+v", receipt)
+	}
+	restarted, err := NewLocalTestAdapter(profile, manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := restarted.ValidateReceipt(receipt, time.Now().UTC()); err != nil {
+		t.Fatalf("重启后完整回执应保持有效: %v", err)
+	}
+	stale := receipt
+	stale.ProfileDigest = strings.Repeat("f", 64)
+	if err := restarted.ValidateReceipt(stale, time.Now().UTC()); err == nil {
+		t.Fatal("跨 Profile 回执必须 fail-closed")
+	}
+	stale = receipt
+	stale.WorkspaceLease = "forged"
+	if err := restarted.ValidateReceipt(stale, time.Now().UTC()); err == nil {
+		t.Fatal("伪造 workspace lease 必须 fail-closed")
+	}
+	if _, err := restarted.ReadExact(context.Background(), receipt.Ref); err != nil {
+		t.Fatalf("活动 workspace lease 应允许精确读取: %v", err)
 	}
 }

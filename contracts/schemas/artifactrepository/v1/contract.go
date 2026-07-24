@@ -192,6 +192,9 @@ func ValidateReceipt(profile Profile, receipt Receipt) error {
 	if err != nil {
 		return err
 	}
+	if err := ValidateReceiptShape(receipt); err != nil {
+		return err
+	}
 	if receipt.SchemaVersion != ProfileVersion || receipt.RepositoryID != profile.ID || receipt.Protocol != profile.Protocol || receipt.ProfileDigest != profile.Digest() {
 		return errors.New("制品仓库回执与 Profile 身份不匹配")
 	}
@@ -200,6 +203,27 @@ func ValidateReceipt(profile Profile, receipt Receipt) error {
 	}
 	if receipt.Ref.Channel == "workspace" {
 		if profile.Protocol != ProtocolLocalTest || receipt.WorkspaceLease == "" || len(receipt.WorkspaceLease) > 256 || receipt.ExpiresAt == nil || receipt.ExpiresAt.IsZero() {
+			return errors.New("workspace 回执缺少 lease 或过期时间")
+		}
+	} else if receipt.WorkspaceLease != "" || receipt.ExpiresAt != nil {
+		return errors.New("非 workspace 回执不得携带 workspace lease")
+	}
+	return nil
+}
+
+// ValidateReceiptShape is the transport-neutral admission check used before a
+// trusted host resolves the active Profile. It does not establish repository
+// identity; ValidateReceipt must still run at the repository boundary.
+func ValidateReceiptShape(receipt Receipt) error {
+	if receipt.SchemaVersion != ProfileVersion || !validResourceID(receipt.RepositoryID) || len(protocolOperations[receipt.Protocol]) == 0 || !validSHA256(receipt.ProfileDigest) || !validPluginID(receipt.Ref.PluginID) || !validSemver(receipt.Ref.Version) || !validSHA256(receipt.SHA256) || receipt.Revision == 0 {
+		return errors.New("制品仓库回执基础字段无效")
+	}
+	allowedChannel := receipt.Ref.Channel == "testing" || receipt.Protocol == ProtocolRemote && (receipt.Ref.Channel == "candidate" || receipt.Ref.Channel == "stable") || receipt.Protocol == ProtocolLocalTest && receipt.Ref.Channel == "workspace"
+	if !allowedChannel {
+		return errors.New("制品仓库回执 channel 与协议不匹配")
+	}
+	if receipt.Ref.Channel == "workspace" {
+		if receipt.WorkspaceLease == "" || len(receipt.WorkspaceLease) > 256 || receipt.ExpiresAt == nil || receipt.ExpiresAt.IsZero() {
 			return errors.New("workspace 回执缺少 lease 或过期时间")
 		}
 	} else if receipt.WorkspaceLease != "" || receipt.ExpiresAt != nil {

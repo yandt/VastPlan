@@ -23,62 +23,62 @@ func publishLocalTest(
 	manifest pluginv1.Manifest,
 	artifact pluginservice.Artifact,
 	packageBytes []byte,
-) (pluginservice.Artifact, uint64, bool, error) {
+) (pluginservice.Artifact, artifactrepositoryv1.Receipt, bool, error) {
 	token, err := localtest.ReadTokenFile(filepath.Join(runDir, "secrets", "artifact-local-test.token"))
 	if err != nil {
-		return pluginservice.Artifact{}, 0, false, err
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 	}
 	client, err := localtest.NewClient(profile, token)
 	if err != nil {
-		return pluginservice.Artifact{}, 0, false, err
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 	}
 	defer client.CloseIdleConnections()
 	ref := pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 	snapshot, err := client.CatalogSnapshot(ctx)
 	if err != nil {
-		return pluginservice.Artifact{}, 0, false, fmt.Errorf("读取 local-test Catalog: %w", err)
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, fmt.Errorf("读取 local-test Catalog: %w", err)
 	}
 	if receipt, found := exactReceipt(snapshot, ref); found {
 		if receipt.SHA256 != artifact.SHA256 {
-			return pluginservice.Artifact{}, 0, false, errors.New("local-test 仓库已存在相同 ref 但摘要不同的不可变制品")
+			return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, errors.New("local-test 仓库已存在相同 ref 但摘要不同的不可变制品")
 		}
 		envelope, err := client.ReadExact(ctx, ref)
 		if err != nil {
-			return pluginservice.Artifact{}, 0, false, err
+			return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 		}
 		if err := verifyLocalEnvelope(trust, envelope); err != nil {
-			return pluginservice.Artifact{}, 0, false, err
+			return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 		}
-		return envelope.Artifact, receipt.Revision, true, nil
+		return envelope.Artifact, receipt, true, nil
 	}
 	privateKeyFile := filepath.Join(stateRoot, "repositories", "testing", "secrets", "artifact-signing.pem")
 	if err := requireRegularFile(privateKeyFile, true); err != nil {
-		return pluginservice.Artifact{}, 0, false, err
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 	}
 	privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(privateKeyFile)
 	if err != nil {
-		return pluginservice.Artifact{}, 0, false, err
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 	}
 	attestation, err := pluginservice.SignArtifact(artifact, manifest.Publisher, "local-testing", privateKey, time.Now().UTC())
 	if err != nil {
-		return pluginservice.Artifact{}, 0, false, err
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 	}
 	proof, err := json.Marshal(attestation)
 	if err != nil {
-		return pluginservice.Artifact{}, 0, false, err
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 	}
 	receipt, err := client.Publish(ctx, artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof})
 	if err != nil {
-		return pluginservice.Artifact{}, 0, false, err
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 	}
 	envelope, err := client.ReadExact(ctx, ref)
 	if err != nil {
-		return pluginservice.Artifact{}, 0, false, err
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 	}
 	if err := verifyLocalEnvelope(trust, envelope); err != nil {
-		return pluginservice.Artifact{}, 0, false, err
+		return pluginservice.Artifact{}, artifactrepositoryv1.Receipt{}, false, err
 	}
-	return envelope.Artifact, receipt.Revision, false, nil
+	return envelope.Artifact, receipt, false, nil
 }
 
 func exactReceipt(snapshot artifactrepositoryv1.CatalogSnapshot, ref pluginv1.ArtifactRef) (artifactrepositoryv1.Receipt, bool) {

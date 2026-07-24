@@ -377,6 +377,10 @@ func migrationTrust(t *testing.T) (*pluginservice.TrustStore, ed25519.PrivateKey
 }
 
 func migrationArtifact(t *testing.T, key ed25519.PrivateKey, version string) (pluginservice.Artifact, []byte, []byte) {
+	return migrationArtifactForChannel(t, key, version, "testing")
+}
+
+func migrationArtifactForChannel(t *testing.T, key ed25519.PrivateKey, version, channel string) (pluginservice.Artifact, []byte, []byte) {
 	t.Helper()
 	directory := t.TempDir()
 	manifest := []byte(`{"id":"com.example.migration","name":"Migration","description":"Migration fixture","version":"` + version + `","publisher":"example","engines":{"backend":"^0.1"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[{"id":"example.migration","service_role":"backend","subcommands":[]}]}}}`)
@@ -393,7 +397,7 @@ func migrationArtifact(t *testing.T, key ed25519.PrivateKey, version string) (pl
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("testing", body)
+	artifact, err := pluginservice.Describe(channel, body)
 	if err != nil {
 		t.Fatal(err)
 	}

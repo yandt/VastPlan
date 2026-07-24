@@ -7,7 +7,6 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/portaltrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
@@ -32,10 +31,8 @@ func configurePortalHostServices(options reconcileOptions, artifacts artifactRes
 	catalogOptions := []portaltrust.TrustedCatalogOption{portaltrust.WithFrontendDeliveryRoot(options.frontendDeliveryOrigin)}
 	for _, source := range artifacts.sources {
 		sources = append(sources, source)
-		if remote, ok := source.(*pluginservice.RemoteRepository); ok {
-			catalogOptions = append(catalogOptions, portaltrust.WithTestArtifactIndex(portaltrust.RemoteTestArtifactIndex{
-				BaseURL: remote.BaseURL, Token: remote.Token, Client: remote.Client,
-			}))
+		if local, ok := source.(protocolArtifactSource); ok {
+			catalogOptions = append(catalogOptions, portaltrust.WithTestArtifactIndex(portaltrust.LocalTestArtifactIndex{Adapter: local.adapter}))
 		}
 	}
 	if len(sources) == 0 {

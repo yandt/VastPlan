@@ -223,6 +223,12 @@ export interface ArtifactSecurityStatusEvidence {
 export interface ArtifactCatalogPage { revision: number; total: number; page: number; pageSize: number; items: ArtifactCatalogEntry[]; }
 export interface PrepareArtifactMigrationRequest { migrationId: string; targetProvider: string; targetVolumeId: string; }
 export interface ArtifactRef { pluginId: string; version: string; channel: string; }
+export interface ArtifactRepositoryReceipt {
+  schemaVersion: 1; repositoryId: string;
+  protocol: "artifact.repository.local-test.v1" | "artifact.repository.remote.v1";
+  profileDigest: string; ref: ArtifactRef; sha256: string; revision: number;
+  workspaceLease?: string; expiresAt?: string;
+}
 export interface ArtifactRequirement { pluginId: string; constraint: string; }
 export interface ArtifactLifecycleRequest {
   ref: ArtifactRef; status: "active" | "deprecated" | "yanked" | "revoked"; reason: string;
@@ -425,12 +431,12 @@ export interface PutTestTargetBindingRequest {
 }
 export type TestReleaseStatus = "Queued" | "Resolving" | "Preparing" | "Validating" | "Activating" | "Ready" | "RollingBack" | "RolledBack" | "Failed" | "Superseded";
 export interface TestRelease {
-  id: number; bindingId: string; artifact: ArtifactRef; sha256: string; repositoryRevision: number;
+	id: number; bindingId: string; receipt: ArtifactRepositoryReceipt;
   status: TestReleaseStatus; previousServiceRevisionId?: number; candidateServiceRevisionId?: number;
   rollbackServiceRevisionId?: number; rollbackRequired?: boolean; errorCode?: string; errorMessage?: string;
   requestedBy: string; createdAt: string; updatedAt: string;
 }
-export interface CreateTestReleaseRequest { bindingId: string; artifact: ArtifactRef; sha256: string; repositoryRevision: number; }
+export interface CreateTestReleaseRequest { bindingId: string; receipt: ArtifactRepositoryReceipt; }
 
 export class PlatformAdminClient {
 	private readonly basePath: string;

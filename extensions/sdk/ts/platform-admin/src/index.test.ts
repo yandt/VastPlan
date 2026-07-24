@@ -129,13 +129,12 @@ describe("PlatformAdminClient", () => {
     const client = new PlatformAdminClient(fetcher, "operations", "deployment");
     await client.createTestRelease({
       bindingId: "demo-api",
-      artifact: { pluginId: "cn.example.demo", version: "1.1.0-dev.1", channel: "testing" },
-      sha256: "a".repeat(64), repositoryRevision: 17,
+			receipt: { schemaVersion: 1, repositoryId: "local-testing", protocol: "artifact.repository.local-test.v1", profileDigest: "d".repeat(64), ref: { pluginId: "cn.example.demo", version: "1.1.0-dev.1", channel: "testing" }, sha256: "a".repeat(64), revision: 17 },
     });
     expect(calls[1]).toEqual({
       path: "/v1/portals/operations/platform/services/deployment/deployment/test-releases",
       method: "POST",
-      body: expect.stringContaining('"repositoryRevision":17'),
+			body: expect.stringContaining('"profileDigest":"' + "d".repeat(64) + '"'),
     });
   });
 

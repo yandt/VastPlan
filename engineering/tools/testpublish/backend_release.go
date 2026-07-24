@@ -15,8 +15,7 @@ import (
 	"sort"
 	"strings"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
 )
 
@@ -27,7 +26,7 @@ const (
 
 var backendTargetSegment = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,127}$`)
 
-func submitBackendTestRelease(ctx context.Context, status developmentStatus, opts options, artifact pluginservice.Artifact, repositoryRevision uint64) error {
+func submitBackendTestRelease(ctx context.Context, status developmentStatus, opts options, receipt artifactrepositoryv1.Receipt) error {
 	portalOrigin, portalID, err := developmentPortal(status.Portal)
 	if err != nil {
 		return err
@@ -39,17 +38,11 @@ func submitBackendTestRelease(ctx context.Context, status developmentStatus, opt
 	if err != nil {
 		return err
 	}
-	bindingID, err := selectOrEnsureBinding(ctx, client, portalOrigin, bindingsPath, opts, artifact.PluginID, bindings)
+	bindingID, err := selectOrEnsureBinding(ctx, client, portalOrigin, bindingsPath, opts, receipt.Ref.PluginID, bindings)
 	if err != nil {
 		return err
 	}
-	request := platformadminapi.CreateTestReleaseRequest{
-		BindingID: bindingID,
-		Artifact: pluginv1.ArtifactRef{
-			PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel,
-		},
-		SHA256: artifact.SHA256, RepositoryRevision: repositoryRevision,
-	}
+	request := platformadminapi.CreateTestReleaseRequest{BindingID: bindingID, Receipt: receipt}
 	var release platformadminapi.TestRelease
 	if err := developmentPortalRequest(ctx, client, portalOrigin, developmentPublisherSession, http.MethodPost, basePath+"/test-releases", request, true, &release); err != nil {
 		return fmt.Errorf("提交 Backend Test Release: %w", err)

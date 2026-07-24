@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
@@ -16,6 +17,13 @@ type acceptingTestCatalog struct {
 	referenceErr error
 	calls        int
 	snapshots    []pluginv1.ArtifactReferenceSnapshot
+}
+
+func portalTestReceipt(ref pluginv1.ArtifactRef, sha256 string, revision uint64) artifactrepositoryv1.Receipt {
+	return artifactrepositoryv1.Receipt{
+		SchemaVersion: 1, RepositoryID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest,
+		ProfileDigest: strings.Repeat("d", 64), Ref: ref, SHA256: sha256, Revision: revision,
+	}
 }
 
 func (*acceptingTestCatalog) ValidatePortal(context.Context, string, portalapi.PortalSpec) error {
@@ -54,8 +62,7 @@ func TestFrontendTestReleaseReferenceProtectionFailsClosed(t *testing.T) {
 	}
 	catalog.referenceErr = errors.New("repository unavailable")
 	release, err := service.CreateTestRelease(context.Background(), publisher, portalapi.CreateTestReleaseRequest{
-		BindingID: binding.ID, Artifact: pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.9.abcdef0", Channel: "testing"},
-		SHA256: strings.Repeat("f", 64), RepositoryRevision: 17,
+		BindingID: binding.ID, Receipt: portalTestReceipt(pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.9.abcdef0", Channel: "testing"}, strings.Repeat("f", 64), 17),
 	})
 	if err != nil || release.Status != portalapi.TestReleaseFailed || release.ErrorCode != "platform.portal_test_release.reference_protection_failed" || catalog.calls != 0 {
 		t.Fatalf("引用保护失败必须在可信目录验证和候选激活前 fail-closed: %+v err=%v calls=%d", release, err, catalog.calls)
@@ -66,7 +73,7 @@ func (c *acceptingTestCatalog) ValidateTestArtifact(_ context.Context, _ string,
 	if c.reject != nil {
 		return c.reject
 	}
-	if request.RepositoryRevision != 17 || request.Artifact.Channel != "testing" || len(publishers) != 1 || publishers[0] != "vastplan" {
+	if request.Receipt.Revision != 17 || request.Receipt.Ref.Channel != "testing" || len(publishers) != 1 || publishers[0] != "vastplan" {
 		return errors.New("unexpected exact receipt")
 	}
 	return nil
@@ -96,8 +103,7 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 	}
 	request := portalapi.CreateTestReleaseRequest{
 		BindingID: binding.ID,
-		Artifact:  pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.1.abcdef0", Channel: "testing"},
-		SHA256:    strings.Repeat("a", 64), RepositoryRevision: 17,
+		Receipt:   portalTestReceipt(pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.1.abcdef0", Channel: "testing"}, strings.Repeat("a", 64), 17),
 	}
 	release, err := service.CreateTestRelease(context.Background(), publisher, request)
 	if err != nil || release.Status != portalapi.TestReleaseReady || release.PreviousActivationID != first.ID || release.CandidateActivationID == 0 || release.CandidateApplicationRevisionID == 0 {
@@ -107,13 +113,19 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 		t.Fatalf("精确 testing 回执应验证一次: %d", catalog.calls)
 	}
 	var artifactLock pluginv1.ArtifactReferenceSnapshot
+	var releasedLock pluginv1.ArtifactReferenceSnapshot
 	for _, snapshot := range catalog.snapshots {
-		if snapshot.OwnerKind == "artifact-lock" {
+		if snapshot.OwnerKind == "artifact-lock" && snapshot.Generation == 1 {
 			artifactLock = snapshot
+		} else if snapshot.OwnerKind == "artifact-lock" && snapshot.Generation == 2 {
+			releasedLock = snapshot
 		}
 	}
-	if len(artifactLock.References) != 1 || artifactLock.References[0].Ref != request.Artifact || artifactLock.References[0].SHA256 != request.SHA256 {
+	if len(artifactLock.References) != 1 || artifactLock.References[0].Ref != request.Receipt.Ref || artifactLock.References[0].SHA256 != request.Receipt.SHA256 {
 		t.Fatalf("Frontend Test Release 必须在候选激活前保护精确 testing 制品: %+v", catalog.snapshots)
+	}
+	if releasedLock.Generation != 2 || len(releasedLock.References) != 0 {
+		t.Fatalf("Frontend Test Release 终态必须释放临时 artifact-lock: %+v", catalog.snapshots)
 	}
 	activations, err := service.ListActivations(context.Background(), publisher)
 	if err != nil || len(activations) != 2 || activations[0].ID != release.CandidateActivationID || activations[0].Status != portalapi.ActivationCurrent || activations[1].Status != portalapi.ActivationSuperseded {
@@ -122,7 +134,7 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 	if got := activations[0].Spec.Resolution.PluginOrigins[binding.PluginID]; got != "application" {
 		t.Fatalf("测试发布改变了插件所有权: %q", got)
 	}
-	if activations[0].Spec.Plugins[len(activations[0].Spec.Plugins)-1].Version != request.Artifact.Version {
+	if activations[0].Spec.Plugins[len(activations[0].Spec.Plugins)-1].Version != request.Receipt.Ref.Version {
 		t.Fatalf("候选未锁定测试版本: %+v", activations[0].Spec.Plugins)
 	}
 }
@@ -156,8 +168,7 @@ func TestFrontendTestReleaseRejectsProfileSlotAndPreservesCurrentActivation(t *t
 		t.Fatal(err)
 	}
 	release, err := service.CreateTestRelease(context.Background(), publisher, portalapi.CreateTestReleaseRequest{
-		BindingID: binding.ID, Artifact: pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.2.abcdef0", Channel: "testing"},
-		SHA256: strings.Repeat("b", 64), RepositoryRevision: 18,
+		BindingID: binding.ID, Receipt: portalTestReceipt(pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.2.abcdef0", Channel: "testing"}, strings.Repeat("b", 64), 18),
 	})
 	if err != nil || release.Status != portalapi.TestReleaseFailed || release.RollbackRequired {
 		t.Fatalf("目录拒绝应在 Activation 前安全失败: release=%+v err=%v", release, err)
@@ -191,8 +202,7 @@ func TestFrontendTestReleaseRestartPersistsFailClosedRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	release, err := service.CreateTestRelease(context.Background(), publisher, portalapi.CreateTestReleaseRequest{
-		BindingID: binding.ID, Artifact: pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.2.0-dev.20260721.3.abcdef0", Channel: "testing"},
-		SHA256: strings.Repeat("d", 64), RepositoryRevision: 17,
+		BindingID: binding.ID, Receipt: portalTestReceipt(pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.2.0-dev.20260721.3.abcdef0", Channel: "testing"}, strings.Repeat("d", 64), 17),
 	})
 	if err != nil || release.Status != portalapi.TestReleaseReady {
 		t.Fatalf("测试前置发布失败: %+v %v", release, err)
@@ -243,8 +253,7 @@ func TestFrontendProfileTestReleaseCreatesDedicatedProfileAndBindingRevisions(t 
 		t.Fatal(err)
 	}
 	release, err := service.CreateTestRelease(context.Background(), publisher, portalapi.CreateTestReleaseRequest{
-		BindingID: binding.ID, Artifact: pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.1.0-dev.20260721.4.abcdef0", Channel: "testing"},
-		SHA256: strings.Repeat("e", 64), RepositoryRevision: 17,
+		BindingID: binding.ID, Receipt: portalTestReceipt(pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.1.0-dev.20260721.4.abcdef0", Channel: "testing"}, strings.Repeat("e", 64), 17),
 	})
 	if err != nil || release.Status != portalapi.TestReleaseReady || release.CandidateProfileRevisionID == first.ProfileRevisionID || release.CandidateBindingRevisionID == first.BindingRevisionID || release.CandidateApplicationRevisionID != first.ApplicationRevisionID {
 		t.Fatalf("平台插件应使用专用测试 Profile/Binding revisions: release=%+v err=%v", release, err)

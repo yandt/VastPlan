@@ -14,6 +14,7 @@
 - 激活前发布“旧活动 + 新候选”引用并集，激活后先保护回滚历史、再收敛活动精确引用；
 - 持久化 `referencePending` outbox 在管理读取及控制器重启后幂等重试；
 - Frontend Test Release 在候选验证和激活前发布独立的精确 `artifact-lock`，仓库不可用时 fail-closed。
+- Test Release 请求保存完整 Repository Receipt；可信 Portal Host 用活动 Adapter 复核 Profile 身份、精确 Catalog 与 workspace lease，Composer 不接触仓库凭证。
 - Platform Profile 以 `updates.mode=refresh|notify|automatic` 决定已打开页面如何消费新 Activation；生产未配置时默认只在用户刷新时更新。
 
 1.3.0 起，管理中心不再由插件直接拼装 React 基础组件，而是注册四个受治理的 Workbench Collection：Platform Profile、Application、Binding 与 Activation。动态枚举只在表单打开时读取，状态迁移动作只在选中版本且状态匹配时显示，差异、审计与不可变内容统一通过 Overlay 呈现。

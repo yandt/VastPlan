@@ -430,6 +430,21 @@ func (m *Manager) References() (uint64, []references.Snapshot) {
 	return m.active.refs.List()
 }
 
+func (m *Manager) activeRepositoryRoot() (string, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.active == nil || m.active.root == "" {
+		return "", errors.New("活动制品仓库不可用")
+	}
+	return m.active.root, nil
+}
+
+func (m *Manager) artifactProtected(ref pluginv1.ArtifactRef, sha256 string) bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.active != nil && m.active.refs.IsProtected(ref, sha256)
+}
+
 func (m *Manager) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, []byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()

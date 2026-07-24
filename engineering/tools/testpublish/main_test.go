@@ -15,6 +15,7 @@ import (
 	"time"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository/localtest"
@@ -28,6 +29,15 @@ import (
 type catalogingTestRepository struct {
 	upstream artifactapi.Repository
 	store    *artifactcatalog.Store
+}
+
+func testPublishReceipt(artifact pluginservice.Artifact, revision uint64) artifactrepositoryv1.Receipt {
+	return artifactrepositoryv1.Receipt{
+		SchemaVersion: 1, RepositoryID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest,
+		ProfileDigest: strings.Repeat("d", 64),
+		Ref:           pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel},
+		SHA256:        artifact.SHA256, Revision: revision,
+	}
 }
 
 func TestPublishUsesLocalTestProtocolAndPersistentManagedRepository(t *testing.T) {
@@ -308,8 +318,8 @@ func TestSubmitBackendTestReleaseCreatesBindingAndPublishesExactReceipt(t *testi
 				return
 			}
 			_ = json.NewEncoder(w).Encode(platformadminapi.TestRelease{
-				ID: 3, BindingID: releaseRequest.BindingID, Artifact: releaseRequest.Artifact, SHA256: releaseRequest.SHA256,
-				RepositoryRevision: releaseRequest.RepositoryRevision, Status: platformadminapi.TestReleaseReady, CandidateServiceRevisionID: 8,
+				ID: 3, BindingID: releaseRequest.BindingID, Receipt: releaseRequest.Receipt,
+				Status: platformadminapi.TestReleaseReady, CandidateServiceRevisionID: 8,
 			})
 		default:
 			http.NotFound(w, request)
@@ -321,13 +331,14 @@ func TestSubmitBackendTestReleaseCreatesBindingAndPublishesExactReceipt(t *testi
 	}
 	status := developmentStatus{Portal: portal.URL + "/operations"}
 	opts := options{BackendTarget: "managed-services/hello-service", Timeout: 5 * time.Second}
-	if err := submitBackendTestRelease(context.Background(), status, opts, artifact, 17); err != nil {
+	receipt := testPublishReceipt(artifact, 17)
+	if err := submitBackendTestRelease(context.Background(), status, opts, receipt); err != nil {
 		t.Fatalf("Backend 测试发布入口失败: %v", err)
 	}
 	if bindingRequest.Deployment != "managed-services" || bindingRequest.UnitID != "hello-service" || bindingRequest.PluginID != artifact.PluginID || !bindingRequest.Enabled {
 		t.Fatalf("自动目标绑定错误: %+v", bindingRequest)
 	}
-	if releaseRequest.RepositoryRevision != 17 || releaseRequest.SHA256 != artifact.SHA256 || releaseRequest.Artifact.PluginID != artifact.PluginID || releaseRequest.BindingID == "" {
+	if releaseRequest.Receipt != receipt || releaseRequest.BindingID == "" {
 		t.Fatalf("Test Release 未使用精确仓库回执: %+v", releaseRequest)
 	}
 }
@@ -366,7 +377,7 @@ func TestSubmitFrontendTestReleaseCreatesApplicationBindingAndPublishesExactRece
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(portalapi.TestRelease{ID: 4, BindingID: releaseRequest.BindingID, Artifact: releaseRequest.Artifact, SHA256: releaseRequest.SHA256, RepositoryRevision: releaseRequest.RepositoryRevision, Status: portalapi.TestReleaseReady, CandidateApplicationRevisionID: 9, CandidateActivationID: 12})
+			_ = json.NewEncoder(w).Encode(portalapi.TestRelease{ID: 4, BindingID: releaseRequest.BindingID, Receipt: releaseRequest.Receipt, Status: portalapi.TestReleaseReady, CandidateApplicationRevisionID: 9, CandidateActivationID: 12})
 		default:
 			http.NotFound(w, request)
 		}
@@ -375,13 +386,14 @@ func TestSubmitFrontendTestReleaseCreatesApplicationBindingAndPublishesExactRece
 	artifact := pluginservice.Artifact{PluginID: "cn.vastplan.product.frontend.admin", Version: "1.1.0-dev.20260721.1.abcdef0", Channel: "testing", SHA256: strings.Repeat("c", 64)}
 	status := developmentStatus{Portal: portal.URL + "/operations"}
 	opts := options{FrontendTarget: "operations", Timeout: 5 * time.Second}
-	if err := submitFrontendTestRelease(context.Background(), status, opts, artifact, 31); err != nil {
+	receipt := testPublishReceipt(artifact, 31)
+	if err := submitFrontendTestRelease(context.Background(), status, opts, receipt); err != nil {
 		t.Fatalf("Frontend 测试发布入口失败: %v", err)
 	}
 	if bindingRequest.Scope != portalapi.TestTargetApplicationPlugin || bindingRequest.PortalID != "operations" || bindingRequest.PluginID != artifact.PluginID {
 		t.Fatalf("Frontend 自动目标绑定错误: %+v", bindingRequest)
 	}
-	if releaseRequest.RepositoryRevision != 31 || releaseRequest.SHA256 != artifact.SHA256 || releaseRequest.Artifact.PluginID != artifact.PluginID || releaseRequest.BindingID == "" {
+	if releaseRequest.Receipt != receipt || releaseRequest.BindingID == "" {
 		t.Fatalf("Frontend Test Release 未使用精确仓库回执: %+v", releaseRequest)
 	}
 }

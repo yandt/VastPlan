@@ -46,6 +46,9 @@ func TestReceiptsAndCatalogRemainBoundToExactProfile(t *testing.T) {
 	if err := ValidateReceipt(profile, receipt); err != nil {
 		t.Fatal(err)
 	}
+	if err := ValidateReceiptShape(receipt); err != nil {
+		t.Fatal(err)
+	}
 	snapshot := CatalogSnapshot{
 		SchemaVersion: 1, RepositoryID: profile.ID, Protocol: profile.Protocol, ProfileDigest: profile.Digest(),
 		Revision: 1, Items: []Receipt{receipt},
@@ -58,6 +61,11 @@ func TestReceiptsAndCatalogRemainBoundToExactProfile(t *testing.T) {
 	wrongProtocol.Protocol = ProtocolRemote
 	if err := ValidateReceipt(profile, wrongProtocol); err == nil {
 		t.Fatal("回执不得跨协议复用")
+	}
+	malformed := receipt
+	malformed.ProfileDigest = "caller-supplied-label"
+	if err := ValidateReceiptShape(malformed); err == nil {
+		t.Fatal("Controller 接收前必须拒绝结构不完整的回执")
 	}
 	workspace := receipt
 	workspace.Ref.Channel = "workspace"

@@ -11,12 +11,11 @@ import (
 	"sort"
 	"strings"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
-func submitFrontendTestRelease(ctx context.Context, status developmentStatus, opts options, artifact pluginservice.Artifact, repositoryRevision uint64) error {
+func submitFrontendTestRelease(ctx context.Context, status developmentStatus, opts options, receipt artifactrepositoryv1.Receipt) error {
 	origin, _, err := developmentPortal(status.Portal)
 	if err != nil {
 		return err
@@ -27,15 +26,11 @@ func submitFrontendTestRelease(ctx context.Context, status developmentStatus, op
 	if err := developmentPortalRequest(ctx, client, origin, developmentAdminSession, http.MethodGet, bindingsPath, nil, false, &bindings); err != nil {
 		return fmt.Errorf("读取 Frontend TestTargetBinding: %w", err)
 	}
-	bindingID, err := selectOrEnsureFrontendBinding(ctx, client, origin, bindingsPath, opts, artifact.PluginID, bindings)
+	bindingID, err := selectOrEnsureFrontendBinding(ctx, client, origin, bindingsPath, opts, receipt.Ref.PluginID, bindings)
 	if err != nil {
 		return err
 	}
-	request := portalapi.CreateTestReleaseRequest{
-		BindingID: bindingID,
-		Artifact:  pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel},
-		SHA256:    artifact.SHA256, RepositoryRevision: repositoryRevision,
-	}
+	request := portalapi.CreateTestReleaseRequest{BindingID: bindingID, Receipt: receipt}
 	var release portalapi.TestRelease
 	if err := developmentPortalRequest(ctx, client, origin, developmentPublisherSession, http.MethodPost, "/v1/portal-governance/test-releases", request, true, &release); err != nil {
 		return fmt.Errorf("提交 Frontend Test Release: %w", err)

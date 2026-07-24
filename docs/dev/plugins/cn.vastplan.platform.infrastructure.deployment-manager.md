@@ -29,6 +29,8 @@
 
 0.5.0 起，服务发布在内核切换前先提交“旧活动 + 新候选”引用并集，切换成功后先固化回滚引用、再收敛活动引用；任一步失败只会多保护对象。精确引用同步由持久化 `referencePending` outbox 驱动，仓库恢复后在管理读取路径自动幂等重试，控制器重启也会重新校验活动 revision。Backend Test Release 在候选激活前还会发布独立的精确 artifact-lock owner。仓库不可用时候选 fail-closed，GC 不会获得一个缺引用但看似健康的窗口。
 
+ADR-0145 P3 起，Backend Test Release 只接收完整 Repository Receipt。Controller 不再信任调用方分别提供的 ref、SHA 和 revision，而是通过仓库能力按当前 Profile 复核 repository ID、protocol、Profile digest、精确 Catalog 事实以及可选 workspace lease；引用保护仍先于候选激活，因此 workspace TTL 清理不会误删正在测试的候选。
+
 0.6.0 起，部署预览由可信内核返回跨 Seed、托管仓库等来源解析后的精确制品引用；Deployment Manager 只消费并持久化该结果，不再旁路查询某一个仓库。这样引用保护与实际部署解析使用同一份事实，也避免 Seed 基础插件被误判为托管仓库缺失。
 
 0.7.0 起，服务组合页面完全使用 Workbench Collection、动态 Form 与 Overlay 契约；部署目标枚举只在抽屉打开时加载，编辑和生命周期动作按所选 revision 状态显示，最终预览与审计不再由功能插件直接拼装 UI。

@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
@@ -102,20 +103,15 @@ func (h *fakeHost) Call(_ context.Context, target *contractv1.CallTarget, _ *con
 	}
 	if target.Capability == platformadminapi.ArtifactsCapability && target.GetOperation() == "listCatalog" {
 		h.catalogCalls++
-		page := artifactCatalogPage{}
 		var query struct {
-			PluginID string `json:"pluginId"`
-			Version  string `json:"version"`
-			Channel  string `json:"channel"`
+			Receipt artifactrepositoryv1.Receipt `json:"receipt"`
 		}
 		_ = json.Unmarshal(payload, &query)
-		if h.catalogEntry != nil && h.catalogEntry.Ref == (pluginv1.ArtifactRef{PluginID: query.PluginID, Version: query.Version, Channel: query.Channel}) {
-			page.Revision, page.Total, page.Items = h.catalogEntry.RepositoryRevision, 1, []artifactCatalogEntry{*h.catalogEntry}
-		} else {
-			entry := artifactCatalogEntry{Ref: pluginv1.ArtifactRef{PluginID: query.PluginID, Version: query.Version, Channel: query.Channel}, SHA256: strings.Repeat("c", 64), Publisher: "vastplan", RepositoryRevision: 1, Targets: []string{"backend"}}
-			page.Revision, page.Total, page.Items = 1, 1, []artifactCatalogEntry{entry}
+		entry := artifactCatalogEntry{Ref: query.Receipt.Ref, SHA256: query.Receipt.SHA256, Publisher: "vastplan", RepositoryRevision: query.Receipt.Revision, Targets: []string{"backend"}}
+		if h.catalogEntry != nil {
+			entry = *h.catalogEntry
 		}
-		raw, _ := json.Marshal(page)
+		raw, _ := json.Marshal(entry)
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
 	}
 	if target.Capability == platformadminapi.ArtifactsCapability && target.GetOperation() == "putReferences" {
@@ -146,6 +142,13 @@ func fakeArtifactReferences(composition backendcompositionv1.ApplicationComposit
 		}
 	}
 	return values
+}
+
+func testRepositoryReceipt(ref pluginv1.ArtifactRef, sha256 string, revision uint64) artifactrepositoryv1.Receipt {
+	return artifactrepositoryv1.Receipt{
+		SchemaVersion: 1, RepositoryID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest,
+		ProfileDigest: strings.Repeat("d", 64), Ref: ref, SHA256: sha256, Revision: revision,
+	}
 }
 
 func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
@@ -210,19 +213,25 @@ func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
 				3: {SchemaVersion: 1, Tenant: "tenant-a", Deployment: "agent-services", Revision: 3, Status: deploymentpublication.ReadinessReady, UpdatedAt: time.Now().UTC()},
 			}
 			release, err := service.CreateTestRelease(context.Background(), host, carol, platformadminapi.CreateTestReleaseRequest{
-				BindingID: binding.ID, Artifact: artifact, SHA256: digest, RepositoryRevision: 17,
+				BindingID: binding.ID, Receipt: testRepositoryReceipt(artifact, digest, 17),
 			})
 			if err != nil || release.Status != test.wantStatus || release.RollbackRequired {
 				t.Fatalf("测试发布终态错误: release=%+v err=%v", release, err)
 			}
 			var protected pluginv1.ArtifactReferenceSnapshot
+			var released pluginv1.ArtifactReferenceSnapshot
 			for _, snapshot := range host.referenceSnapshots {
-				if snapshot.OwnerKind == "artifact-lock" {
+				if snapshot.OwnerKind == "artifact-lock" && snapshot.Generation == 1 {
 					protected = snapshot
+				} else if snapshot.OwnerKind == "artifact-lock" && snapshot.Generation == 2 {
+					released = snapshot
 				}
 			}
 			if protected.OwnerKind != "artifact-lock" || len(protected.References) != 1 || protected.References[0].SHA256 != digest {
 				t.Fatalf("测试制品必须在激活前取得精确引用保护: %+v", host.referenceSnapshots)
+			}
+			if released.Generation != 2 || len(released.References) != 0 {
+				t.Fatalf("测试发布终态必须释放临时 artifact-lock: %+v", host.referenceSnapshots)
 			}
 			revisions, err := service.ListServiceRevisions(carol)
 			if err != nil || len(revisions) != test.wantTotal || revisions[0].ID != test.wantActive || !revisions[0].Active {
@@ -242,7 +251,7 @@ func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
 
 func TestTestReleaseReferenceProtectionFailsClosed(t *testing.T) {
 	host := &fakeHost{referenceErr: errors.New("repository unavailable")}
-	release := platformadminapi.TestRelease{ID: 7, Artifact: pluginv1.ArtifactRef{PluginID: "cn.example.demo", Version: "1.0.0-dev.1", Channel: "testing"}, SHA256: strings.Repeat("a", 64)}
+	release := platformadminapi.TestRelease{ID: 7, Receipt: testRepositoryReceipt(pluginv1.ArtifactRef{PluginID: "cn.example.demo", Version: "1.0.0-dev.1", Channel: "testing"}, strings.Repeat("a", 64), 1)}
 	if err := publishTestReleaseReference(context.Background(), host, userCall("tenant-a", "publisher"), release); err == nil {
 		t.Fatal("candidate activation must not proceed without reference protection")
 	}

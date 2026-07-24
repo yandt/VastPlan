@@ -18,7 +18,7 @@ export type { PortalFetch, PortalFetchResponse, PortalInteractionClientOptions }
 export { PortalControlClient, PortalControlError } from "./portal-control-client.js";
 export { VastPlanIcon, semanticIconNames } from "./icon.js";
 export type { SemanticIconName, VastPlanIconProps } from "./icon.js";
-export type { PortalActivation, PortalActivationPhase, PortalActivationRequest, PortalActivationStatus, PortalApplicationComposition, PortalAuditEvent, PortalBindingRevision, PortalCompositionRef, PortalControlClientOptions, PortalGovernanceSnapshot, PortalManagementBinding, PortalManagementGrant, PortalPlatformProfile, PortalPluginRef, PortalProfileRevision, PortalPutTestTargetBindingRequest, PortalResolvedSpec, PortalRevision, PortalRevisionStatus, PortalTestRelease, PortalTestReleaseRequest, PortalTestReleaseStatus, PortalTestTargetBinding, PortalTestTargetScope } from "./portal-control-client.js";
+export type { PortalActivation, PortalActivationPhase, PortalActivationRequest, PortalActivationStatus, PortalApplicationComposition, PortalArtifactRepositoryReceipt, PortalAuditEvent, PortalBindingRevision, PortalCompositionRef, PortalControlClientOptions, PortalGovernanceSnapshot, PortalManagementBinding, PortalManagementGrant, PortalPlatformProfile, PortalPluginRef, PortalProfileRevision, PortalPutTestTargetBindingRequest, PortalResolvedSpec, PortalRevision, PortalRevisionStatus, PortalTestRelease, PortalTestReleaseRequest, PortalTestReleaseStatus, PortalTestTargetBinding, PortalTestTargetScope } from "./portal-control-client.js";
 
 export interface FormRendererProps {
   schema: FormSchema;

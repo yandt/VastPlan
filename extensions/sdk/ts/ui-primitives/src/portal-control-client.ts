@@ -188,11 +188,20 @@ export interface PortalPutTestTargetBindingRequest {
   ifVersion?: number;
 }
 export type PortalTestReleaseStatus = "Queued" | "Resolving" | "Preparing" | "Validating" | "Activating" | "Ready" | "RollingBack" | "RolledBack" | "Failed" | "Superseded";
+export interface PortalArtifactRepositoryReceipt {
+  schemaVersion: 1;
+  repositoryId: string;
+  protocol: "artifact.repository.local-test.v1" | "artifact.repository.remote.v1";
+  profileDigest: string;
+  ref: { pluginId: string; version: string; channel: string };
+  sha256: string;
+  revision: number;
+  workspaceLease?: string;
+  expiresAt?: string;
+}
 export interface PortalTestReleaseRequest {
   bindingId: string;
-  artifact: { pluginId: string; version: string; channel: "testing" };
-  sha256: string;
-  repositoryRevision: number;
+	receipt: PortalArtifactRepositoryReceipt;
 }
 export interface PortalTestRelease extends PortalTestReleaseRequest {
   id: number;

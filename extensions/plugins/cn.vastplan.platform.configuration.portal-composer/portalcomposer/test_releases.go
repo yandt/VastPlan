@@ -11,6 +11,7 @@ import (
 
 	semver "github.com/Masterminds/semver/v3"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
@@ -126,7 +127,7 @@ func (s *Service) CreateTestRelease(ctx context.Context, principal portalapi.Pri
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	s.mu.Lock()
 	binding, exists := s.state.TestBindings[testBindingKey(principal.TenantID, request.BindingID)]
-	if !exists || !binding.Enabled || binding.PluginID != request.Artifact.PluginID || !s.bindingMatchesCurrentApplicationLocked(principal.TenantID, binding) {
+	if !exists || !binding.Enabled || binding.PluginID != request.Receipt.Ref.PluginID || !s.bindingMatchesCurrentApplicationLocked(principal.TenantID, binding) {
 		s.mu.Unlock()
 		return portalapi.TestRelease{}, errTestArtifact
 	}
@@ -138,8 +139,8 @@ func (s *Service) CreateTestRelease(ctx context.Context, principal portalapi.Pri
 	}
 	s.state.NextTestRelease++
 	release := portalapi.TestRelease{
-		ID: s.state.NextTestRelease, TenantID: principal.TenantID, BindingID: binding.ID, Artifact: request.Artifact, SHA256: strings.ToLower(request.SHA256),
-		RepositoryRevision: request.RepositoryRevision, Status: portalapi.TestReleaseQueued, RequestedBy: principal.ID, CreatedAt: now, UpdatedAt: now,
+		ID: s.state.NextTestRelease, TenantID: principal.TenantID, BindingID: binding.ID, Receipt: request.Receipt,
+		Status: portalapi.TestReleaseQueued, RequestedBy: principal.ID, CreatedAt: now, UpdatedAt: now,
 	}
 	s.state.TestReleases = append(s.state.TestReleases, release)
 	if err := s.save(); err != nil {
@@ -155,6 +156,9 @@ func (s *Service) CreateTestRelease(ctx context.Context, principal portalapi.Pri
 		return s.portalTestRelease(principal, release.ID)
 	}
 	s.executePortalTestRelease(ctx, principal, binding, request, release.ID)
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cleanupCancel()
+	_ = s.releasePortalTestReleaseReference(cleanupCtx, release)
 	return s.portalTestRelease(principal, release.ID)
 }
 
@@ -180,7 +184,7 @@ func (s *Service) executePortalTestRelease(ctx context.Context, principal portal
 	composition := cloneJSON(application.Composition)
 	profileValue := cloneJSON(profile.Profile)
 	s.mu.Unlock()
-	if binding.Scope == portalapi.TestTargetApplicationPlugin && !replaceApplicationPlugin(&composition, binding.PluginID, request.Artifact) {
+	if binding.Scope == portalapi.TestTargetApplicationPlugin && !replaceApplicationPlugin(&composition, binding.PluginID, request.Receipt.Ref) {
 		s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.target_changed", errTestArtifact, false)
 		return
 	}
@@ -203,7 +207,7 @@ func (s *Service) executePortalTestRelease(ctx context.Context, principal portal
 		}
 		candidateApplicationID = published.ID
 	} else {
-		if !replaceProfilePlugin(&profileValue, binding.PluginID, request.Artifact) {
+		if !replaceProfilePlugin(&profileValue, binding.PluginID, request.Receipt.Ref) {
 			s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.target_changed", errTestArtifact, false)
 			return
 		}
@@ -479,10 +483,13 @@ func replaceProfilePlugin(profile *frontendcompositionv1.PlatformProfile, plugin
 }
 
 func validatePortalTestArtifactRequest(request portalapi.CreateTestReleaseRequest) error {
-	if request.BindingID == "" || request.RepositoryRevision == 0 || request.Artifact.PluginID == "" || request.Artifact.Channel != "testing" || !regexp.MustCompile(`^[a-fA-F0-9]{64}$`).MatchString(request.SHA256) {
+	if request.BindingID == "" || request.Receipt.Ref.PluginID == "" || request.Receipt.Ref.Channel != "testing" && request.Receipt.Ref.Channel != "workspace" || !regexp.MustCompile(`^[a-fA-F0-9]{64}$`).MatchString(request.Receipt.SHA256) {
 		return errTestArtifact
 	}
-	version, err := semver.StrictNewVersion(request.Artifact.Version)
+	if err := artifactrepositoryv1.ValidateReceiptShape(request.Receipt); err != nil {
+		return errTestArtifact
+	}
+	version, err := semver.StrictNewVersion(request.Receipt.Ref.Version)
 	if err != nil || version.Prerelease() == "" || !strings.HasPrefix(version.Prerelease(), "dev.") {
 		return errTestArtifact
 	}

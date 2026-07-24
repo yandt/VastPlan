@@ -12,6 +12,7 @@ import (
 
 	semver "github.com/Masterminds/semver/v3"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
@@ -34,12 +35,6 @@ type artifactCatalogEntry struct {
 	Publisher          string               `json:"publisher"`
 	RepositoryRevision uint64               `json:"repositoryRevision"`
 	Targets            []string             `json:"targets"`
-}
-
-type artifactCatalogPage struct {
-	Revision uint64                 `json:"revision"`
-	Total    int                    `json:"total"`
-	Items    []artifactCatalogEntry `json:"items"`
 }
 
 func (s *Service) ListTestTargetBindings(call *contractv1.CallContext) ([]platformadminapi.TestTargetBinding, error) {
@@ -145,7 +140,7 @@ func (s *Service) CreateTestRelease(ctx context.Context, host sdk.Host, call *co
 	s.mu.Lock()
 	state := s.tenantLocked(tenant)
 	binding, exists := state.TestBindings[request.BindingID]
-	if !exists || !binding.Enabled || binding.PluginID != request.Artifact.PluginID {
+	if !exists || !binding.Enabled || binding.PluginID != request.Receipt.Ref.PluginID {
 		s.mu.Unlock()
 		return platformadminapi.TestRelease{}, errTestArtifact
 	}
@@ -157,8 +152,7 @@ func (s *Service) CreateTestRelease(ctx context.Context, host sdk.Host, call *co
 	}
 	state.NextTestRelease++
 	release := platformadminapi.TestRelease{
-		ID: state.NextTestRelease, BindingID: binding.ID, Artifact: request.Artifact,
-		SHA256: strings.ToLower(request.SHA256), RepositoryRevision: request.RepositoryRevision,
+		ID: state.NextTestRelease, BindingID: binding.ID, Receipt: request.Receipt,
 		Status: platformadminapi.TestReleaseQueued, RequestedBy: requester, CreatedAt: now, UpdatedAt: now,
 	}
 	state.TestReleases = append(state.TestReleases, release)
@@ -180,16 +174,27 @@ func (s *Service) CreateTestRelease(ctx context.Context, host sdk.Host, call *co
 	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), s.releaseTimeout)
 	defer cancel()
 	s.executeTestRelease(releaseCtx, host, call, tenant, binding, release.ID)
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cleanupCancel()
+	_ = releaseTestReleaseReference(cleanupCtx, host, call, release)
 	return s.testRelease(call, release.ID)
 }
 
 func publishTestReleaseReference(ctx context.Context, host sdk.Host, call *contractv1.CallContext, release platformadminapi.TestRelease) error {
+	return publishTestReleaseReferenceSnapshot(ctx, host, call, release, 1, []pluginv1.ArtifactReference{{Ref: release.Receipt.Ref, SHA256: release.Receipt.SHA256, Purpose: "test-release"}})
+}
+
+func releaseTestReleaseReference(ctx context.Context, host sdk.Host, call *contractv1.CallContext, release platformadminapi.TestRelease) error {
+	return publishTestReleaseReferenceSnapshot(ctx, host, call, release, 2, []pluginv1.ArtifactReference{})
+}
+
+func publishTestReleaseReferenceSnapshot(ctx context.Context, host sdk.Host, call *contractv1.CallContext, release platformadminapi.TestRelease, generation uint64, references []pluginv1.ArtifactReference) error {
 	if host == nil || call == nil {
 		return errors.New("引用保护缺少可信宿主")
 	}
 	snapshot, err := artifactreference.Seal(pluginv1.ArtifactReferenceSnapshot{
-		OwnerKind: artifactreference.OwnerArtifactLock, OwnerID: fmt.Sprintf("deployment/test-release-%d", release.ID), Generation: 1,
-		References: []pluginv1.ArtifactReference{{Ref: release.Artifact, SHA256: release.SHA256, Purpose: "test-release"}},
+		OwnerKind: artifactreference.OwnerArtifactLock, OwnerID: fmt.Sprintf("deployment/test-release-%d", release.ID), Generation: generation,
+		References: references,
 	})
 	if err != nil {
 		return err
@@ -293,7 +298,7 @@ func (s *Service) executeTestRelease(ctx context.Context, host sdk.Host, call *c
 	composition := cloneJSON(active.Composition)
 	previousID := active.ID
 	s.mu.Unlock()
-	if !replaceBoundPlugin(&composition, binding, release.Artifact) {
+	if !replaceBoundPlugin(&composition, binding, release.Receipt.Ref) {
 		s.failTestRelease(tenant, releaseID, "platform.test_release.target_changed", errTestArtifact, false)
 		return
 	}
@@ -391,10 +396,10 @@ func resolveTestArtifact(ctx context.Context, host sdk.Host, call *contractv1.Ca
 	if host == nil {
 		return artifactCatalogEntry{}, errors.New("测试发布缺少可信宿主")
 	}
-	request := map[string]any{
-		"pluginId": release.Artifact.PluginID, "version": release.Artifact.Version,
-		"channel": release.Artifact.Channel, "target": "backend", "page": 1, "pageSize": 2,
-	}
+	request := struct {
+		Receipt artifactrepositoryv1.Receipt `json:"receipt"`
+		Target  string                       `json:"target"`
+	}{Receipt: release.Receipt, Target: "backend"}
 	raw, err := json.Marshal(request)
 	if err != nil {
 		return artifactCatalogEntry{}, err
@@ -408,12 +413,11 @@ func resolveTestArtifact(ctx context.Context, host sdk.Host, call *contractv1.Ca
 	if err != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
 		return artifactCatalogEntry{}, fmt.Errorf("读取已验证制品目录失败: %w", coalesceError(err, errTestArtifact))
 	}
-	var page artifactCatalogPage
-	if err := json.Unmarshal(payload, &page); err != nil || page.Total != 1 || len(page.Items) != 1 {
+	var entry artifactCatalogEntry
+	if err := json.Unmarshal(payload, &entry); err != nil {
 		return artifactCatalogEntry{}, errTestArtifact
 	}
-	entry := page.Items[0]
-	if entry.Ref != release.Artifact || !strings.EqualFold(entry.SHA256, release.SHA256) || entry.RepositoryRevision != release.RepositoryRevision || !contains(entry.Targets, "backend") {
+	if entry.Ref != release.Receipt.Ref || !strings.EqualFold(entry.SHA256, release.Receipt.SHA256) || entry.RepositoryRevision != release.Receipt.Revision || !contains(entry.Targets, "backend") {
 		return artifactCatalogEntry{}, errTestArtifact
 	}
 	return entry, nil
@@ -536,15 +540,18 @@ func validateTestBindingShape(binding platformadminapi.TestTargetBinding) error 
 }
 
 func validateTestArtifactRequest(request platformadminapi.CreateTestReleaseRequest) error {
-	if strings.TrimSpace(request.BindingID) == "" || request.Artifact.PluginID == "" || request.Artifact.Channel != "testing" || request.RepositoryRevision == 0 {
+	if strings.TrimSpace(request.BindingID) == "" || request.Receipt.Ref.PluginID == "" || request.Receipt.Ref.Channel != "testing" && request.Receipt.Ref.Channel != "workspace" {
 		return errInvalid
 	}
-	version, err := semver.StrictNewVersion(request.Artifact.Version)
+	if err := artifactrepositoryv1.ValidateReceiptShape(request.Receipt); err != nil {
+		return errInvalid
+	}
+	version, err := semver.StrictNewVersion(request.Receipt.Ref.Version)
 	if err != nil || version.Prerelease() == "" {
 		return errInvalid
 	}
-	digest, err := hex.DecodeString(request.SHA256)
-	if err != nil || len(digest) != 32 || request.SHA256 != strings.ToLower(request.SHA256) {
+	digest, err := hex.DecodeString(request.Receipt.SHA256)
+	if err != nil || len(digest) != 32 || request.Receipt.SHA256 != strings.ToLower(request.Receipt.SHA256) {
 		return errInvalid
 	}
 	return nil

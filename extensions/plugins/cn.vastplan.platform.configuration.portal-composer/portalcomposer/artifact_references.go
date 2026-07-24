@@ -52,7 +52,15 @@ func (s *Service) publishPortalTestReleaseReference(ctx context.Context, release
 		OwnerKind:  artifactreference.OwnerArtifactLock,
 		OwnerID:    fmt.Sprintf("portal/test-release-%d", release.ID),
 		Generation: 1,
-		References: []pluginv1.ArtifactReference{{Ref: release.Artifact, SHA256: release.SHA256, Purpose: "test-release"}},
+		References: []pluginv1.ArtifactReference{{Ref: release.Receipt.Ref, SHA256: release.Receipt.SHA256, Purpose: "test-release"}},
+	})
+}
+
+func (s *Service) releasePortalTestReleaseReference(ctx context.Context, release portalapi.TestRelease) error {
+	return s.publishReferenceSnapshot(ctx, pluginv1.ArtifactReferenceSnapshot{
+		OwnerKind: artifactreference.OwnerArtifactLock,
+		OwnerID:   fmt.Sprintf("portal/test-release-%d", release.ID), Generation: 2,
+		References: []pluginv1.ArtifactReference{},
 	})
 }
 

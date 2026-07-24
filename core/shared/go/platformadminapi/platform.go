@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
@@ -594,28 +595,24 @@ const (
 )
 
 type TestRelease struct {
-	ID                         uint64               `json:"id"`
-	BindingID                  string               `json:"bindingId"`
-	Artifact                   pluginv1.ArtifactRef `json:"artifact"`
-	SHA256                     string               `json:"sha256"`
-	RepositoryRevision         uint64               `json:"repositoryRevision"`
-	Status                     TestReleaseStatus    `json:"status"`
-	PreviousServiceRevisionID  uint64               `json:"previousServiceRevisionId,omitempty"`
-	CandidateServiceRevisionID uint64               `json:"candidateServiceRevisionId,omitempty"`
-	RollbackServiceRevisionID  uint64               `json:"rollbackServiceRevisionId,omitempty"`
-	RollbackRequired           bool                 `json:"rollbackRequired,omitempty"`
-	ErrorCode                  string               `json:"errorCode,omitempty"`
-	ErrorMessage               string               `json:"errorMessage,omitempty"`
-	RequestedBy                string               `json:"requestedBy"`
-	CreatedAt                  string               `json:"createdAt"`
-	UpdatedAt                  string               `json:"updatedAt"`
+	ID                         uint64                       `json:"id"`
+	BindingID                  string                       `json:"bindingId"`
+	Receipt                    artifactrepositoryv1.Receipt `json:"receipt"`
+	Status                     TestReleaseStatus            `json:"status"`
+	PreviousServiceRevisionID  uint64                       `json:"previousServiceRevisionId,omitempty"`
+	CandidateServiceRevisionID uint64                       `json:"candidateServiceRevisionId,omitempty"`
+	RollbackServiceRevisionID  uint64                       `json:"rollbackServiceRevisionId,omitempty"`
+	RollbackRequired           bool                         `json:"rollbackRequired,omitempty"`
+	ErrorCode                  string                       `json:"errorCode,omitempty"`
+	ErrorMessage               string                       `json:"errorMessage,omitempty"`
+	RequestedBy                string                       `json:"requestedBy"`
+	CreatedAt                  string                       `json:"createdAt"`
+	UpdatedAt                  string                       `json:"updatedAt"`
 }
 
 type CreateTestReleaseRequest struct {
-	BindingID          string               `json:"bindingId"`
-	Artifact           pluginv1.ArtifactRef `json:"artifact"`
-	SHA256             string               `json:"sha256"`
-	RepositoryRevision uint64               `json:"repositoryRevision"`
+	BindingID string                       `json:"bindingId"`
+	Receipt   artifactrepositoryv1.Receipt `json:"receipt"`
 }
 
 type ServiceCompositionRequest struct {
