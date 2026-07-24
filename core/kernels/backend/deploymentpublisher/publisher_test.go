@@ -126,6 +126,49 @@ func TestPublisherUsesCatalogProfileAndDigestLock(t *testing.T) {
 	}
 }
 
+func TestSeedCatalogAdaptsFileConfigurationToOnlinePublicationContract(t *testing.T) {
+	profile := backendcompositionv1.PlatformProfile{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 7, ID: "platform-seed"},
+		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"},
+		Attachments: []backendcompositionv1.Attachment{}, Services: []deploymentv2.ServiceUnit{},
+	}
+	application := backendcompositionv1.ApplicationComposition{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 3, ID: "platform-management"},
+		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend},
+		Metadata: deploymentv1.Metadata{Name: "platform-management", Tenant: "local"}, Units: []backendcompositionv1.ApplicationUnit{},
+	}
+	catalog, err := SeedCatalog(profile, application)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, ref, err := catalog.Resolve("local", "platform-management")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Digest() != profile.Digest() || ref.ID != profile.ID || ref.Revision != profile.Revision || ref.Digest != profile.Digest() {
+		t.Fatalf("种子源没有生成精确 Profile binding: ref=%+v", ref)
+	}
+	if catalog.Revision != profile.Revision || catalog.ID != "platform-seed-seed" {
+		t.Fatalf("种子 Catalog 身份不稳定: %+v", catalog.Document)
+	}
+}
+
+func TestSeedCatalogRejectsUnboundApplicationIdentity(t *testing.T) {
+	profile := backendcompositionv1.PlatformProfile{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "platform-seed"},
+		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"},
+		Attachments: []backendcompositionv1.Attachment{}, Services: []deploymentv2.ServiceUnit{},
+	}
+	application := backendcompositionv1.ApplicationComposition{
+		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "wrong-id"},
+		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend},
+		Metadata: deploymentv1.Metadata{Name: "platform-management", Tenant: "local"}, Units: []backendcompositionv1.ApplicationUnit{},
+	}
+	if _, err := SeedCatalog(profile, application); err == nil || !strings.Contains(err.Error(), "identity") {
+		t.Fatalf("种子源必须拒绝 Document 与 Deployment 身份漂移: %v", err)
+	}
+}
+
 func TestPublisherReadsCurrentCatalogSnapshotPerOperation(t *testing.T) {
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "backend-default"},

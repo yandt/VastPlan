@@ -41,7 +41,7 @@ func prepareDevelopmentPlatformProfile(rendered []byte, sourceDigest, stateFile 
 // platformManagementSourceDigest fingerprints the stable inputs that produce
 // the local platform Deployment. Runtime paths are normalized, while the
 // selected repository protocol remains part of the desired configuration.
-func platformManagementSourceDigest(template, portalCatalog []byte, repositoryProfile artifactrepositoryv1.Profile, backendBuildDigest string) (string, error) {
+func platformManagementSourceDigest(template, application, portalCatalog []byte, repositoryProfile artifactrepositoryv1.Profile, backendBuildDigest string) (string, error) {
 	if err := validateDevelopmentSourceDigest(backendBuildDigest); err != nil {
 		return "", fmt.Errorf("Backend 构建摘要无效: %w", err)
 	}
@@ -71,7 +71,15 @@ func platformManagementSourceDigest(template, portalCatalog []byte, repositoryPr
 	if err != nil {
 		return "", fmt.Errorf("规范化开发平台部署指纹: %w", err)
 	}
-	return digestStrings(string(canonical), backendBuildDigest, "platform-management-deployment-v2"), nil
+	composition, err := backendcompositionv1.ParseApplicationComposition(application)
+	if err != nil {
+		return "", fmt.Errorf("解析开发平台种子 Application Composition: %w", err)
+	}
+	canonicalApplication, err := json.Marshal(composition)
+	if err != nil {
+		return "", fmt.Errorf("规范化开发平台种子 Application Composition: %w", err)
+	}
+	return digestStrings(string(canonical), string(canonicalApplication), backendBuildDigest, "platform-management-deployment-v3"), nil
 }
 
 // materializeDevelopmentDeploymentRevision gives each distinct local desired

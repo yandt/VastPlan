@@ -83,7 +83,7 @@ chmod 0755 backend-kernel-linux-amd64
   -kind actual-state -file /var/lib/vastplan/actual-state.json
 ```
 
-- 本地 Node Agent 可使用 DesiredState v1 进行开发；集群服务配置必须同时具备 Platform Profile 与 Application Composition。在线入口通过 Backend Platform Catalog 固定 Profile 后只接收应用输入。Deployment v2 只由 Resolver 生成并供 Controller 消费，不接受人工提交。
+- 本地 Node Agent 可使用 DesiredState v1 进行开发；集群服务配置必须同时具备 Platform Profile 与 Application Composition。显式 bootstrap 的文件是 `seed-file` 配置源，在线入口由共享账本读取应用输入并通过 Backend Platform Catalog 固定 Profile；两者统一经过 `deploymentpublisher` 的预览摘要锁、Resolver、Deployment CAS 和 Configuration Catalog，不接受人工提交 Deployment v2。普通进程启动不读取任一配置源产生发布。
 - actual-state v1 在预检中只于内存转换为 v2，不修改源文件。正式进程加载后，下一次成功保存只写 v2。
 - 未知 actual-state 版本、未知 v1 status、Schema 错误或同 revision 内容冲突必须先处理，不得跳过预检启动。
 - 所有待运行插件的 `engines.backend` 必须显式包含目标 Backend 1.0；`^0.1` 不会被 1.0 宿主默认为兼容。

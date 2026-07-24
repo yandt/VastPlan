@@ -496,6 +496,10 @@ func (r *runtime) writeFixtures(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	application, err := os.ReadFile(filepath.Join(r.options.root, "engineering", "deploy", "platform-management-application.json"))
+	if err != nil {
+		return err
+	}
 	portalCatalog, err := os.ReadFile(filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json"))
 	if err != nil {
 		return err
@@ -509,7 +513,7 @@ func (r *runtime) writeFixtures(ctx context.Context) error {
 		return err
 	}
 	r.backendInputDigest = backendDigest
-	sourceDigest, err := platformManagementSourceDigest(template, portalCatalog, repositoryProfile, backendDigest)
+	sourceDigest, err := platformManagementSourceDigest(template, application, portalCatalog, repositoryProfile, backendDigest)
 	if err != nil {
 		return err
 	}

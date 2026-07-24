@@ -3,7 +3,6 @@ package controlplanecommand
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,31 +15,15 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
-	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/configurationcatalog"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentpublisher"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/platformcatalog"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/compositioncore"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
-
-type catalogRecordingArtifactReader struct {
-	delegate compositioncore.ArtifactReader
-	values   map[pluginv1.ArtifactRef]pluginv1.Artifact
-}
-
-func (r *catalogRecordingArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
-	artifact, raw, err := r.delegate.Read(ref)
-	if err == nil {
-		r.values[ref] = artifact
-	}
-	return artifact, raw, err
-}
 
 // Run 初始化 NATS KV、发布部署规格，并可持续运行多节点 assignment 控制器。
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -52,8 +35,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	natsKey := flags.String("nats-key", "", "NATS mTLS 客户端私钥 PEM")
 	natsSeed := flags.String("nats-seed", "", "bootstrap 或 controller 角色 NKey seed（0600）")
 	natsAllowInsecure := flags.Bool("nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
-	platformProfilePath := flags.String("platform-profile", "", "平台管理员发布的 Platform Profile v1 JSON")
-	applicationPath := flags.String("application-composition", "", "应用配置人员发布的 Application Composition v1 JSON")
+	platformProfilePath := flags.String("platform-profile", "", "显式 bootstrap/apply 使用的种子 Platform Profile v1")
+	applicationPath := flags.String("application-composition", "", "显式 bootstrap/apply 使用的种子 Application Composition v1")
 	backendCatalogPath := flags.String("backend-platform-catalog", "", "平台签发的 Backend Platform Catalog；controller 为全部预授权目标持续调度")
 	deploymentRevision := flags.Uint64("deployment-revision", 0, "Resolver 输出的独立单调 Deployment revision")
 	allowDevelopmentPlugins := flags.Bool("allow-development-plugins", false, "仅本地开发：允许 example 或历史未分类首方插件")
@@ -125,8 +108,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			return errors.New("-backend-platform-catalog 只用于 controller fleet 模式")
 		}
 	}
-	var raw []byte
-	var configurationCatalog pluginconfiguration.Catalog
+	var publicationApplication backendcompositionv1.ApplicationComposition
+	var publicationCatalog backendcompositionv1.BackendPlatformCatalog
 	if publish {
 		profile, err := backendcompositionv1.ParsePlatformProfileFile(*platformProfilePath)
 		if err != nil {
@@ -136,19 +119,11 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		recording := &catalogRecordingArtifactReader{delegate: artifacts, values: map[pluginv1.ArtifactRef]pluginv1.Artifact{}}
-		resolved, err := compositionresolver.Resolve(profile, application, *deploymentRevision, recording, compositionresolver.Options{AllowDevelopmentPlugins: *allowDevelopmentPlugins})
+		publicationCatalog, err = deploymentpublisher.SeedCatalog(profile, application)
 		if err != nil {
-			return fmt.Errorf("解析平台与应用组合: %w", err)
+			return err
 		}
-		configurationCatalog, err = pluginconfiguration.Build(resolved, recording.values)
-		if err != nil {
-			return fmt.Errorf("生成可信插件配置目录: %w", err)
-		}
-		raw, err = json.Marshal(resolved)
-		if err != nil {
-			return fmt.Errorf("编码解析后的 Deployment: %w", err)
-		}
+		publicationApplication = application
 	}
 	nc, err := sharedcontrolplane.ConnectWithConfig(sharedcontrolplane.ConnectionConfig{
 		URL: *natsURL, ClientName: "vastplan-controlplane",
@@ -186,8 +161,31 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			return fmt.Errorf("持久 Backend Platform Catalog Seed: %w", err)
 		}
 	}
-	if len(raw) > 0 {
-		if err := publishDeployment(openCtx, stdout, buckets, key, raw, configurationCatalog); err != nil {
+	if publish {
+		derivedKey := sharedcontrolplane.DeploymentKey(publicationApplication.Metadata.Tenant, publicationApplication.Metadata.Name)
+		if *key != "" && *key != derivedKey {
+			return fmt.Errorf("种子配置目标与显式 Deployment key 不一致: expected=%s actual=%s", derivedKey, *key)
+		}
+		publisher, err := deploymentpublisher.New(
+			publicationCatalog,
+			controllerArtifacts,
+			deploymentpublisher.KVApplier{KV: buckets.Deployments},
+			configurationcatalog.Store{KV: buckets.Deployments},
+			compositionresolver.Options{AllowDevelopmentPlugins: *allowDevelopmentPlugins},
+			compositionresolver.Resolve,
+		)
+		if err != nil {
+			return fmt.Errorf("创建统一服务发布器: %w", err)
+		}
+		preview, err := publisher.Preview(openCtx, publicationApplication.Metadata.Tenant, publicationApplication, *deploymentRevision)
+		if err != nil {
+			return fmt.Errorf("预览种子服务配置: %w", err)
+		}
+		result, err := publisher.Publish(openCtx, publicationApplication.Metadata.Tenant, publicationApplication, *deploymentRevision, preview.Digest)
+		if err != nil {
+			return fmt.Errorf("发布种子服务配置: %w", err)
+		}
+		if _, err := fmt.Fprintf(stdout, "已通过统一服务发布器发布 Deployment %s revision=%d kv-revision=%d source=seed-file key=%s\n", result.Deployment.Metadata.Name, result.Deployment.Revision, result.KVRevision, derivedKey); err != nil {
 			return err
 		}
 	}
@@ -252,25 +250,4 @@ func runControllerFleet(ctx context.Context, template deploymentcontroller.Contr
 		return ctx.Err()
 	}
 	return first
-}
-
-func publishDeployment(ctx context.Context, stdout io.Writer, buckets sharedcontrolplane.Buckets, key *string, raw []byte, catalog pluginconfiguration.Catalog) error {
-	deployment, err := deploymentv2.Parse(raw)
-	if err != nil {
-		return fmt.Errorf("Resolver 生成的 deployment v2 无效: %w", err)
-	}
-	if *key == "" {
-		*key = sharedcontrolplane.DeploymentKey(deployment.Metadata.Tenant, deployment.Metadata.Name)
-	}
-	kvRevision, applied, err := sharedcontrolplane.ApplyDeployment(ctx, buckets.Deployments, *key, raw)
-	if err != nil {
-		return fmt.Errorf("发布集群部署: %w", err)
-	}
-	if err := (configurationcatalog.Store{KV: buckets.Deployments}).Publish(ctx, applied.Metadata.Tenant, catalog); err != nil {
-		return fmt.Errorf("发布集群部署配置目录: %w", err)
-	}
-	if _, err := fmt.Fprintf(stdout, "已发布 Deployment %s revision=%d kv-revision=%d key=%s\n", applied.Metadata.Name, applied.Revision, kvRevision, *key); err != nil {
-		return err
-	}
-	return nil
 }

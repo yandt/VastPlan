@@ -13,6 +13,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/compositioncore"
@@ -100,6 +101,37 @@ func New(catalog backendcompositionv1.BackendPlatformCatalog, artifacts composit
 		return nil, err
 	}
 	return NewWithCatalogSource(staticCatalogSource{catalog: validated}, artifacts, applier, catalogs, options, resolve)
+}
+
+// SeedCatalog adapts a trusted file-backed Platform Profile and Application
+// Composition to the same immutable Catalog input used by online publication.
+// It exists only for explicit bootstrap/apply workflows: ordinary startup must
+// not call it, and online callers continue to use a persistent CatalogSource.
+func SeedCatalog(profile backendcompositionv1.PlatformProfile, application backendcompositionv1.ApplicationComposition) (backendcompositionv1.BackendPlatformCatalog, error) {
+	validatedProfile, err := backendcompositionv1.ValidatePlatformProfile(profile)
+	if err != nil {
+		return backendcompositionv1.BackendPlatformCatalog{}, fmt.Errorf("校验种子 Platform Profile: %w", err)
+	}
+	validatedApplication, err := backendcompositionv1.ValidateApplicationComposition(application)
+	if err != nil {
+		return backendcompositionv1.BackendPlatformCatalog{}, fmt.Errorf("校验种子 Application Composition: %w", err)
+	}
+	if err := validateIdentity(validatedApplication.Metadata.Tenant, validatedApplication); err != nil {
+		return backendcompositionv1.BackendPlatformCatalog{}, fmt.Errorf("校验种子服务身份: %w", err)
+	}
+	profileRef := compositioncommonv1.Ref{ID: validatedProfile.ID, Revision: validatedProfile.Revision, Digest: validatedProfile.Digest()}
+	catalog := backendcompositionv1.BackendPlatformCatalog{
+		Document: compositioncommonv1.Document{Version: 1, Revision: validatedProfile.Revision, ID: validatedProfile.ID + "-seed"},
+		Profiles: []backendcompositionv1.PlatformProfile{validatedProfile},
+		Bindings: []backendcompositionv1.BackendPlatformBinding{{
+			TenantID: validatedApplication.Metadata.Tenant, DeploymentName: validatedApplication.Metadata.Name, PlatformProfile: profileRef,
+		}},
+	}
+	validated, err := backendcompositionv1.ValidateBackendPlatformCatalog(catalog)
+	if err != nil {
+		return backendcompositionv1.BackendPlatformCatalog{}, fmt.Errorf("构造种子 Backend Platform Catalog: %w", err)
+	}
+	return validated, nil
 }
 
 // NewWithCatalogSource enables an online, CAS-governed catalog without moving

@@ -74,9 +74,13 @@ func TestPlatformManagementSourceDigestIncludesPortalCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	application, err := os.ReadFile(filepath.Join("..", "..", "deploy", "platform-management-application.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	backendDigest := strings.Repeat("a", 64)
 	profile := artifactrepositoryv1.Profile{Version: 1, ID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest, Endpoint: "unix:///tmp/vastplan/repository.sock", Channels: []string{"testing"}, DevelopmentOnly: true}
-	first, err := platformManagementSourceDigest(template, catalog, profile, backendDigest)
+	first, err := platformManagementSourceDigest(template, application, catalog, profile, backendDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,19 +93,35 @@ func TestPlatformManagementSourceDigestIncludesPortalCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := platformManagementSourceDigest(template, changedRaw, profile, backendDigest)
+	second, err := platformManagementSourceDigest(template, application, changedRaw, profile, backendDigest)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first == second {
 		t.Fatal("嵌入的 Portal Catalog 变化必须改变开发平台部署指纹")
 	}
-	third, err := platformManagementSourceDigest(template, catalog, profile, strings.Repeat("b", 64))
+	third, err := platformManagementSourceDigest(template, application, catalog, profile, strings.Repeat("b", 64))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first == third {
 		t.Fatal("Backend 制品构建输入变化必须改变开发平台部署指纹")
+	}
+	var changedApplication map[string]any
+	if err := json.Unmarshal(application, &changedApplication); err != nil {
+		t.Fatal(err)
+	}
+	changedApplication["revision"] = changedApplication["revision"].(float64) + 1
+	changedApplicationRaw, err := json.Marshal(changedApplication)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fourth, err := platformManagementSourceDigest(template, changedApplicationRaw, catalog, profile, backendDigest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == fourth {
+		t.Fatal("种子 Application Composition 变化必须改变开发平台部署指纹")
 	}
 }
 
