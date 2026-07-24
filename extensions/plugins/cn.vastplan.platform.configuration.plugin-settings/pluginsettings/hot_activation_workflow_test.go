@@ -407,7 +407,7 @@ func hotWorkflowFixture(t *testing.T) (*hotWorkflowHost, pluginconfiguration.Def
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "security-services", Tenant: "tenant-a"},
 		Resolution: deploymentv2.Resolution{
 			PlatformProfile: compositioncommonv1.Ref{ID: "platform-default", Revision: 1, Digest: strings.Repeat("1", 64)},
-			PluginOrigins:   map[string]string{pluginID: deploymentv2.OriginPlatformProfile},
+			PluginOrigins:   map[string]string{pluginID: deploymentv2.OriginApplication},
 		},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "otp", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "authentication-otp", Replicas: 1,
@@ -420,6 +420,9 @@ func hotWorkflowFixture(t *testing.T) (*hotWorkflowHost, pluginconfiguration.Def
 	}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(catalog.Items) != 1 {
+		t.Fatalf("热配置夹具应生成 1 条目录定义，实际 %d", len(catalog.Items))
 	}
 	definition := catalog.Items[0]
 	activeCredentials := map[string]pluginconfig.ManagedCredentialRef{"token": hotCredentialRef(pluginID, "old", 1)}

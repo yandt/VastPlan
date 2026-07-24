@@ -46,20 +46,22 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 	}
 
 	platformRefs := map[string]compositioncore.Selection{}
-	attachmentPluginIDs := map[string]struct{}{}
-	for _, attachment := range profile.Attachments {
-		for _, ref := range attachment.Plugins {
+	baselinePluginIDs := map[string]struct{}{}
+	pluginBaselines := map[string]string{}
+	for _, baseline := range profile.ServiceBaselines {
+		for _, ref := range baseline.Plugins {
 			if err := compositioncore.VerifyRef(selection(ref), compositioncommonv1.OriginPlatformProfile, platformRefs, artifacts, options); err != nil {
-				return deploymentv2.Deployment{}, fmt.Errorf("Platform Profile attachment %s: %w", attachment.ServiceClass, err)
+				return deploymentv2.Deployment{}, fmt.Errorf("Platform Profile service baseline %s: %w", baseline.ID, err)
 			}
-			attachmentPluginIDs[ref.ID] = struct{}{}
+			baselinePluginIDs[ref.ID] = struct{}{}
+			pluginBaselines[ref.ID] = baseline.ID
 		}
 	}
 	servicePluginUnits := map[string]string{}
 	for _, unit := range profile.Services {
 		for _, ref := range unit.Plugins {
-			if _, attached := attachmentPluginIDs[ref.ID]; attached {
-				return deploymentv2.Deployment{}, fmt.Errorf("平台插件 %q 不能同时作为本地 attachment 和独立 service", ref.ID)
+			if _, baseline := baselinePluginIDs[ref.ID]; baseline {
+				return deploymentv2.Deployment{}, fmt.Errorf("平台插件 %q 不能同时属于公共 service baseline 和独立 seed service", ref.ID)
 			}
 			if previousUnit := servicePluginUnits[ref.ID]; previousUnit != "" && previousUnit != unit.ID {
 				reusable, err := reusableLocalPermissionPlugin(ref, artifacts)
@@ -89,16 +91,26 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 		}
 	}
 
-	attachments := map[string][]deploymentv1.PluginRef{}
-	for _, attachment := range profile.Attachments {
-		attachments[attachment.ServiceClass] = append(attachments[attachment.ServiceClass], attachment.Plugins...)
+	baselinePlugins := map[string][]deploymentv1.PluginRef{}
+	baselineConfigs := map[string]map[string]any{}
+	for _, baseline := range profile.ServiceBaselines {
+		baselinePlugins[baseline.ServiceClass] = append(baselinePlugins[baseline.ServiceClass], baseline.Plugins...)
+		merged, err := compositioncore.MergeProtectedConfig(baselineConfigs[baseline.ServiceClass], baseline.Config)
+		if err != nil {
+			return deploymentv2.Deployment{}, fmt.Errorf("合并 service class %q 的公共基线 %q: %w", baseline.ServiceClass, baseline.ID, err)
+		}
+		baselineConfigs[baseline.ServiceClass] = merged
 	}
 	units := make([]deploymentv2.ServiceUnit, 0, len(application.Units)+len(profile.Services))
 	unitIDs := map[string]struct{}{}
 	for _, applicationUnit := range application.Units {
 		unit := applicationUnit.Spec
-		injected := append([]deploymentv1.PluginRef(nil), attachments[applicationUnit.ServiceClass]...)
+		injected := append([]deploymentv1.PluginRef(nil), baselinePlugins[applicationUnit.ServiceClass]...)
 		unit.Plugins = append(injected, unit.Plugins...)
+		unit.Config, err = compositioncore.MergeProtectedConfig(baselineConfigs[applicationUnit.ServiceClass], unit.Config)
+		if err != nil {
+			return deploymentv2.Deployment{}, fmt.Errorf("应用 unit %q 的服务配置与公共基线冲突: %w", unit.ID, err)
+		}
 		if _, duplicate := unitIDs[unit.ID]; duplicate {
 			return deploymentv2.Deployment{}, fmt.Errorf("解析后 unit id 重复: %q", unit.ID)
 		}
@@ -127,6 +139,7 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 			ApplicationComposition: deploymentv2.CompositionRef{ID: application.ID, Revision: application.Revision, Digest: application.Digest()},
 			DevelopmentMode:        options.AllowDevelopmentPlugins,
 			PluginOrigins:          origins,
+			PluginBaselines:        pluginBaselines,
 		},
 		Units: units,
 	}

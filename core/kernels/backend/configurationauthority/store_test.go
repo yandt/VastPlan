@@ -196,6 +196,9 @@ func configuredCatalog(t *testing.T) pluginconfiguration.Catalog {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(catalog.Items) != 1 {
+		t.Fatalf("配置夹具应生成 1 条目录定义，实际 %d", len(catalog.Items))
+	}
 	return catalog
 }
 
@@ -214,7 +217,10 @@ func configuredResourceCatalog(t *testing.T) pluginconfiguration.Catalog {
 	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.0.0", Channel: "stable"}
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "services", Tenant: "acme"},
-		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}},
+		Resolution: deploymentv2.Resolution{
+			PluginOrigins:   map[string]string{pluginID: deploymentv2.OriginPlatformProfile},
+			PluginBaselines: map[string]string{pluginID: "authentication-delivery"},
+		},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "delivery", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "authentication-delivery", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}}, Config: map[string]any{"plugins": map[string]any{pluginID: map[string]any{}}},
@@ -225,6 +231,9 @@ func configuredResourceCatalog(t *testing.T) pluginconfiguration.Catalog {
 	}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(catalog.Items) != 1 {
+		t.Fatalf("资源配置夹具应生成 1 条目录定义，实际 %d", len(catalog.Items))
 	}
 	return catalog
 }

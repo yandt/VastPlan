@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.plugin-settings`
 
-当前制品版本：`0.12.0`
+当前制品版本：`0.13.0`
 
 该 platform 基础插件以 `active-active + external-shared + queue + platform routing domain` 运行。它只通过宿主窄能力读取与活动 Deployment revision/digest 精确匹配的 `ConfigurationCatalog v1`，按 tenant 单文档 CAS 保存配置候选、审计与恢复 Saga；不依赖 Deployment Manager 存量状态，不读取工作区 Manifest，也不接受浏览器上传 Schema、插件身份或凭证 owner。
 
@@ -14,7 +14,7 @@
 - `discardDraft`：以 revision CAS 进入回滚，终止该候选的全部委托凭证后才完成放弃。
 - `submitDraft`：仅对 Application 来源的 restart 配置创建 candidate 绑定的 `PendingApproval` 服务修订；调用以 candidate ID 幂等。
 - `activateCandidate`：仅在 Deployment Manager 已由不同主体批准后，打开候选凭证窗口、发布精确服务修订、等待 readiness，并提交凭证或执行单调回滚。
-- `submitProfileDraft/approveProfileCandidate/activateProfileCandidate/abortProfileCandidate`：使用独立 `platform.plugin-configuration.profile.publish` 权限管理 Platform Profile restart 配置；目标 Profile、Catalog revision 和 service 只能由可信内核从活动目录推导。失败时先生成更高 Catalog 回滚修订，再发布更高 Deployment 回滚修订。
+- `submitProfileDraft/approveProfileCandidate/activateProfileCandidate/abortProfileCandidate`：使用独立 `platform.plugin-configuration.profile.publish` 权限管理公共 Service Baseline restart 配置；目标 Profile、Catalog revision 和 baseline 只能由可信内核从活动目录推导。失败时先生成更高 Catalog 回滚修订，再发布更高 Deployment 回滚修订。
 - `submitHotServiceDraft/approveHotServiceCandidate/activateHotServiceCandidate/abortHotServiceCandidate`：使用独立 `platform.plugin-configuration.hot.publish` 权限驱动目标插件的 `configuration.v1` 控制器；目标由签名 Catalog 派生。0.11.0 支持固定托管字段：控制器把 replacement 与私有 Active 引用合并后耐久 prepare，经异人审批原子 commit，再由协调器把 Candidate 凭证推进为 Active；中断后以 status 恢复，旧引用由目标控制器私有退役 outbox 回收。
 - `submitScopedDraft/approveScopedCandidate/activateScopedCandidate/abortScopedCandidate`：使用独立 `platform.plugin-configuration.scoped.publish` 权限管理 tenant/user Hot；Seed 为 revision 0，Active 以 revision/digest CAS 原子提交，user 候选按目标主体隔离。
 - `configuration.scoped-resolver/configuration.scoped`：只接受认证插件的 `resolve {}` 与 value-free `watchRevision`；调用方不能提交配置 ID、插件 ID、tenant 或 subject，resolver 按活动 Catalog 和 CallContext 精确推导。
@@ -24,6 +24,6 @@
 
 Draft 不会改变 Deployment、Platform Profile 或目标插件状态，也不会显示为 Active。Application 和 Platform Profile 配置都在独立审批、精确 Deployment 发布和 readiness 完成后才进入 Ready；平台级路径额外要求 Catalog candidate 完成。失败候选只创建更高 revision 补偿，不能把 Catalog、Deployment 或 Store revision 倒退。`ConfigurationAuthority` 默认 45 秒有效且只能由凭证插件 CAS 消费一次；协调器状态只保存恢复 Saga 所需的 stage/ref 和 apply path，公开候选只返回字段状态，不返回 handle、stage ID、authority、密文或明文。Shared State 身份由可信宿主派生，单租户聚合受 1 MiB 和候选数量上限保护，Provider 不可用时不回退本地文件。
 
-Node Portal Kernel 已提供固定、无插件 ID 的 `/plugin-configurations` BFF 路由；Management Binding、在线角色和 CSRF 同时强制。Workbench 根配置页和 Profile MasterDetail 页都从签名 Schema 动态准备表单，并把 `managedCredentials` 渲染为 `vastplan-secret-material + writeOnly` 字段；提交完成后由 Workbench 删除短时材料状态，功能插件不直接拼接基础 UI。页面只显示控制器可用性和资源事实，不返回内部路由目标。
+Node Portal Kernel 已提供固定、无插件 ID 的 `/plugin-configurations` BFF 路由；Management Binding、在线角色和 CSRF 同时强制。Workbench 将 Application“服务配置”和 Platform Profile“公共基线配置”分成两个页面，使用 Configuration Catalog 的可信 `serviceBaselineId` 分流；Profile `services` 中的本地 Seed Service 配置不进入目录。根配置页和 Profile MasterDetail 页都从签名 Schema 动态准备表单，并把 `managedCredentials` 渲染为 `vastplan-secret-material + writeOnly` 字段；提交完成后由 Workbench 删除短时材料状态，功能插件不直接拼接基础 UI。页面只显示控制器可用性和资源事实，不返回内部路由目标。
 
-完整设计见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》、[ADR-0113](../decisions/ADR-0113-可信插件配置目录与分路径生效.md)、[ADR-0114](../decisions/ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)、[ADR-0115](../decisions/ADR-0115-Application配置激活Saga与候选凭证窗口.md)、[ADR-0116](../decisions/ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md)、[ADR-0117](../decisions/ADR-0117-语言中立Service-Hot配置控制器.md)、[ADR-0118](../decisions/ADR-0118-独立配置资源与动态Profile.md)、[ADR-0119](../decisions/ADR-0119-Tenant与User-Scoped-Hot配置真源.md)、[ADR-0120](../decisions/ADR-0120-Service-Hot托管凭证提交与退役.md) 和 [ADR-0124](../decisions/ADR-0124-Plugin-Settings租户聚合与Active-Active协调.md)。
+完整设计见《[插件配置与托管凭证](../architecture/插件配置与托管凭证.md)》、[ADR-0113](../decisions/ADR-0113-可信插件配置目录与分路径生效.md)、[ADR-0114](../decisions/ADR-0114-一次性ConfigurationAuthority与委托凭证暂存.md)、[ADR-0115](../decisions/ADR-0115-Application配置激活Saga与候选凭证窗口.md)、[ADR-0116](../decisions/ADR-0116-Backend-Platform-Profile候选Catalog与配置激活.md)、[ADR-0117](../decisions/ADR-0117-语言中立Service-Hot配置控制器.md)、[ADR-0118](../decisions/ADR-0118-独立配置资源与动态Profile.md)、[ADR-0119](../decisions/ADR-0119-Tenant与User-Scoped-Hot配置真源.md)、[ADR-0120](../decisions/ADR-0120-Service-Hot托管凭证提交与退役.md)、[ADR-0124](../decisions/ADR-0124-Plugin-Settings租户聚合与Active-Active协调.md) 和 [ADR-0148](../decisions/ADR-0148-公共服务基线与种子配置分域.md)。

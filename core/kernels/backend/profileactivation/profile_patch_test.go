@@ -45,15 +45,15 @@ func TestBuildProfileCandidatePatchesOnlyIndependentServiceAndUsesGlobalNextRevi
 	}
 }
 
-func TestBuildProfileCandidateRejectsAttachmentOrArtifactDrift(t *testing.T) {
+func TestBuildProfileCandidateRejectsBaselineOrArtifactDrift(t *testing.T) {
 	active := profileTestCatalog(t)
 	definition := profileTestDefinition()
 	request := profileTestRequest()
-	active.Profiles[0].Services = nil
-	active.Profiles[0].Attachments = []backendcompositionv1.Attachment{{ServiceClass: "application.backend", Plugins: []deploymentv1.PluginRef{{ID: definition.PluginID, Version: definition.Artifact.Version, Channel: "stable"}}}}
+	active.Profiles[0].Services = []deploymentv2.ServiceUnit{}
+	active.Profiles[0].ServiceBaselines = []backendcompositionv1.ServiceBaseline{{ID: "application-security", ServiceClass: "application.backend", Plugins: []deploymentv1.PluginRef{{ID: definition.PluginID, Version: definition.Artifact.Version, Channel: "stable"}}}}
 	active.Bindings[0].PlatformProfile = profileRef(active.Profiles[0])
 	if _, _, err := buildProfileCandidate(active, "tenant-a", "services-a", definition, request); err == nil {
-		t.Fatal("通用配置不得把 attachment 冒充为独立 Platform service")
+		t.Fatal("通用配置不得把公共 Service Baseline 冒充为独立 Platform service")
 	}
 	active = profileTestCatalog(t)
 	definition.Artifact.Version = "2.0.0"
@@ -62,12 +62,39 @@ func TestBuildProfileCandidateRejectsAttachmentOrArtifactDrift(t *testing.T) {
 	}
 }
 
+func TestBuildProfileCandidateUpdatesServiceBaselineConfiguration(t *testing.T) {
+	active := profileTestCatalog(t)
+	definition := profileTestDefinition()
+	definition.UnitID = "application-unit"
+	definition.ServiceBaselineID = "application-security"
+	request := profileTestRequest()
+	active.Profiles[0].Services = []deploymentv2.ServiceUnit{}
+	active.Profiles[0].ServiceBaselines = []backendcompositionv1.ServiceBaseline{{
+		ID: "application-security", ServiceClass: "application.backend",
+		Plugins: []deploymentv1.PluginRef{{ID: definition.PluginID, Version: definition.Artifact.Version, Channel: "stable"}},
+		Config: map[string]any{
+			"plugins":               map[string]any{definition.PluginID: map[string]any{"region": "east"}},
+			"environment_allowlist": map[string]any{definition.PluginID: []any{"CONFIG_PATH"}},
+		},
+	}}
+	active.Bindings[0].PlatformProfile = profileRef(active.Profiles[0])
+	next, _, err := buildProfileCandidate(active, "tenant-a", "services-a", definition, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := next.ServiceBaselines[0].Config
+	values := config["plugins"].(map[string]any)[definition.PluginID].(map[string]any)
+	if values["region"] != "west" || config["environment_allowlist"] == nil {
+		t.Fatalf("公共基线配置没有独立更新或丢失宿主配置: %+v", config)
+	}
+}
+
 func profileTestCatalog(t *testing.T) backendcompositionv1.BackendPlatformCatalog {
 	t.Helper()
 	pluginID := "cn.vastplan.platform.example.configurable"
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "platform-default"},
-		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"}, Attachments: []backendcompositionv1.Attachment{},
+		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"}, ServiceBaselines: []backendcompositionv1.ServiceBaseline{},
 		Services: []deploymentv2.ServiceUnit{{
 			ID: "platform-core", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}},

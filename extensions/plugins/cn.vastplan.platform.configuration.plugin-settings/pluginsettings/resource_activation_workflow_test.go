@@ -221,13 +221,16 @@ func resourceWorkflowFixture(t *testing.T) (*resourceWorkflowHost, pluginconfigu
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}
 	}`, pluginID))
 	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.0.0", Channel: "stable"}
-	deployment := deploymentv2.Deployment{Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "security", Tenant: "tenant-a"}, Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}}, Units: []deploymentv2.ServiceUnit{{
+	deployment := deploymentv2.Deployment{Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "security", Tenant: "tenant-a"}, Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}, PluginBaselines: map[string]string{pluginID: "application-delivery"}}, Units: []deploymentv2.ServiceUnit{{
 		ID: "delivery", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "authentication-delivery", Replicas: 1,
 		Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}}, Config: map[string]any{"plugins": map[string]any{pluginID: map[string]any{}}},
 	}}}
 	catalog, err := pluginconfiguration.Build(deployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("d", 64), Manifest: manifest}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(catalog.Items) != 1 || len(catalog.Items[0].ResourceCollections) != 1 {
+		t.Fatalf("资源配置夹具目录不完整: %+v", catalog.Items)
 	}
 	definition, collection := catalog.Items[0], catalog.Items[0].ResourceCollections[0]
 	controller := &resourceWorkflowController{collectionID: collection.ID, items: map[string]resourceWorkflowItem{}, candidates: map[string]resourceWorkflowCandidate{}}

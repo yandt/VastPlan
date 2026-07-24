@@ -108,9 +108,10 @@ func (p *candidatePublisher) PreviewCandidate(_ context.Context, tenant string, 
 	if err != nil || candidate.TenantID != tenant || candidate.DeploymentName != application.Metadata.Name {
 		return deploymentpublication.Result{}, platformcatalog.ErrCandidateNotFound
 	}
+	units, baselines := resolvedProfileUnits(candidate.NextProfile, p.artifact, "west")
 	deployment := deploymentv2.Deployment{
-		Version: 2, Revision: revision, Metadata: application.Metadata, Units: cloneJSON(candidate.NextProfile.Services),
-		Resolution: deploymentv2.Resolution{PlatformProfile: profileRef(candidate.NextProfile), ApplicationComposition: compositioncommonv1.Ref{ID: application.ID, Revision: application.Revision, Digest: application.Digest()}, PluginOrigins: map[string]string{p.artifact.PluginID: deploymentv2.OriginPlatformProfile}},
+		Version: 2, Revision: revision, Metadata: application.Metadata, Units: units,
+		Resolution: deploymentv2.Resolution{PlatformProfile: profileRef(candidate.NextProfile), ApplicationComposition: compositioncommonv1.Ref{ID: application.ID, Revision: application.Revision, Digest: application.Digest()}, PluginOrigins: map[string]string{p.artifact.PluginID: deploymentv2.OriginPlatformProfile}, PluginBaselines: baselines},
 	}
 	catalog, err := pluginconfiguration.Build(deployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{{PluginID: p.artifact.PluginID, Version: p.artifact.Version, Channel: p.artifact.Channel}: p.artifact})
 	if err != nil {
@@ -134,6 +135,12 @@ func (p *candidatePublisher) PublishCandidate(ctx context.Context, tenant string
 func TestControllerRunsPreparedActivatedPublishedFinalizedLifecycle(t *testing.T) {
 	active := profileTestCatalog(t)
 	artifact := profileTestArtifact()
+	configured := active.Profiles[0].Services[0]
+	active.Profiles[0].Services = []deploymentv2.ServiceUnit{}
+	active.Profiles[0].ServiceBaselines = []backendcompositionv1.ServiceBaseline{{
+		ID: "application-security", ServiceClass: "application.backend", Plugins: cloneJSON(configured.Plugins), Config: cloneJSON(configured.Config),
+	}}
+	active.Bindings[0].PlatformProfile = profileRef(active.Profiles[0])
 	initialCatalog := configurationCatalogFor(t, active.Profiles[0], 4, artifact, "east")
 	definition := initialCatalog.Items[0]
 	store := &memoryProfileStore{active: active}
@@ -183,17 +190,37 @@ func profileTestArtifact() pluginv1.Artifact {
 
 func configurationCatalogFor(t *testing.T, profile backendcompositionv1.PlatformProfile, revision uint64, artifact pluginv1.Artifact, region string) pluginconfiguration.Catalog {
 	t.Helper()
-	services := cloneJSON(profile.Services)
-	services[0].Config = map[string]any{"plugins": map[string]any{artifact.PluginID: map[string]any{"region": region}}}
+	services, baselines := resolvedProfileUnits(profile, artifact, region)
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: revision, Metadata: deploymentv1.Metadata{Name: "services-a", Tenant: "tenant-a"}, Units: services,
-		Resolution: deploymentv2.Resolution{PlatformProfile: profileRef(profile), ApplicationComposition: compositioncommonv1.Ref{ID: "services-a", Revision: 1, Digest: strings.Repeat("a", 64)}, PluginOrigins: map[string]string{artifact.PluginID: deploymentv2.OriginPlatformProfile}},
+		Resolution: deploymentv2.Resolution{PlatformProfile: profileRef(profile), ApplicationComposition: compositioncommonv1.Ref{ID: "services-a", Revision: 1, Digest: strings.Repeat("a", 64)}, PluginOrigins: map[string]string{artifact.PluginID: deploymentv2.OriginPlatformProfile}, PluginBaselines: baselines},
 	}
 	catalog, err := pluginconfiguration.Build(deployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}: artifact})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return catalog
+}
+
+func resolvedProfileUnits(profile backendcompositionv1.PlatformProfile, artifact pluginv1.Artifact, region string) ([]deploymentv2.ServiceUnit, map[string]string) {
+	if len(profile.ServiceBaselines) > 0 {
+		baseline := profile.ServiceBaselines[0]
+		config := cloneJSON(baseline.Config)
+		if config == nil {
+			config = map[string]any{}
+		}
+		plugins, _ := config["plugins"].(map[string]any)
+		if plugins == nil {
+			plugins = map[string]any{}
+			config["plugins"] = plugins
+		}
+		plugins[artifact.PluginID] = map[string]any{"region": region}
+		unit := deploymentv2.ServiceUnit{ID: "application-unit", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: cloneJSON(baseline.Plugins), Config: config}
+		return []deploymentv2.ServiceUnit{unit}, map[string]string{artifact.PluginID: baseline.ID}
+	}
+	services := cloneJSON(profile.Services)
+	services[0].Config = map[string]any{"plugins": map[string]any{artifact.PluginID: map[string]any{"region": region}}}
+	return services, nil
 }
 
 func profileTestApplication() backendcompositionv1.ApplicationComposition {

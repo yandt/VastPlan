@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -75,6 +76,7 @@ type Definition struct {
 	PluginID            string                            `json:"pluginId"`
 	PluginName          string                            `json:"pluginName"`
 	Origin              string                            `json:"origin"`
+	ServiceBaselineID   string                            `json:"serviceBaselineId,omitempty"`
 	Artifact            ArtifactIdentity                  `json:"artifact"`
 	Scope               string                            `json:"scope"`
 	ApplyMode           string                            `json:"applyMode"`
@@ -118,6 +120,7 @@ func Build(deployment deploymentv2.Deployment, artifacts map[pluginv1.ArtifactRe
 		return Catalog{}, errors.New("配置目录无法取得 Deployment digest")
 	}
 	items := make([]Definition, 0)
+	baselineDefinitions := map[string]Definition{}
 	for _, unit := range deployment.Units {
 		installed := make([]string, 0, len(unit.Plugins))
 		for _, plugin := range unit.Plugins {
@@ -133,6 +136,18 @@ func Build(deployment deploymentv2.Deployment, artifacts map[pluginv1.ArtifactRe
 				return Catalog{}, err
 			}
 			if configured {
+				if definition.ServiceBaselineID != "" {
+					definition.UnitID = "service-baseline." + definition.ServiceBaselineID
+					definition.ID = resourceID(deployment.Metadata.Tenant, deployment.Metadata.Name, definition.UnitID, definition.PluginID)
+					key := definition.ServiceBaselineID + "\x00" + definition.PluginID
+					if existing, duplicate := baselineDefinitions[key]; duplicate {
+						if !reflect.DeepEqual(existing, definition) {
+							return Catalog{}, fmt.Errorf("公共基线 %q 的插件 %q 在不同服务单元中解析出不一致配置", definition.ServiceBaselineID, definition.PluginID)
+						}
+						continue
+					}
+					baselineDefinitions[key] = definition
+				}
 				items = append(items, definition)
 			}
 		}
@@ -173,9 +188,19 @@ func definitionFor(deployment deploymentv2.Deployment, deploymentDigest string, 
 		return Definition{}, false, nil
 	}
 	origin := deployment.Resolution.PluginOrigins[ref.ID]
+	baselineID := deployment.Resolution.PluginBaselines[ref.ID]
+	// Platform Profile services 属于本地 Seed 平面，必要配置只由文件管理，
+	// 不进入在线目录；只有显式 Service Baseline 注入的平台插件才能进入
+	// 在线 Platform Profile 激活工作流。
+	if origin == deploymentv2.OriginPlatformProfile && baselineID == "" {
+		return Definition{}, false, nil
+	}
 	applyPath, err := applyPathFor(origin, manifest.Configuration.Scope, manifest.Configuration.ApplyMode)
 	if err != nil {
 		return Definition{}, false, fmt.Errorf("插件 %s 配置契约: %w", ref.ID, err)
+	}
+	if baselineID != "" && applyPath != ApplyPlatformProfile {
+		return Definition{}, false, fmt.Errorf("公共 Service Baseline 插件 %s 当前只允许 service + restart 配置，避免 Profile 与运行时配置产生双真相源", ref.ID)
 	}
 	controller, err := configurationControllerFor(manifest, unit, applyPath)
 	if err != nil {
@@ -204,7 +229,7 @@ func definitionFor(deployment deploymentv2.Deployment, deploymentDigest string, 
 	}
 	definition := Definition{
 		ID: resourceID(deployment.Metadata.Tenant, deployment.Metadata.Name, unit.ID, ref.ID), Deployment: deployment.Metadata.Name,
-		UnitID: unit.ID, PluginID: ref.ID, PluginName: manifest.Name, Origin: origin,
+		UnitID: unit.ID, PluginID: ref.ID, PluginName: manifest.Name, Origin: origin, ServiceBaselineID: baselineID,
 		Artifact: ArtifactIdentity{Version: ref.Version, Channel: channel, SHA256: artifact.SHA256},
 		Scope:    manifest.Configuration.Scope, ApplyMode: manifest.Configuration.ApplyMode, ApplyPath: applyPath, Controller: controller,
 		ResourceController: resourceController, ResourceCollections: resourceCollections,
@@ -287,6 +312,12 @@ func (c Catalog) Validate() error {
 		}
 		if item.Origin != deploymentv2.OriginApplication && item.Origin != deploymentv2.OriginPlatformProfile {
 			return fmt.Errorf("配置目录项来源无效: %s", item.ID)
+		}
+		if item.ServiceBaselineID != "" && item.Origin != deploymentv2.OriginPlatformProfile {
+			return fmt.Errorf("配置目录项公共基线来源无效: %s", item.ID)
+		}
+		if item.ServiceBaselineID != "" && (item.ApplyPath != ApplyPlatformProfile || item.UnitID != "service-baseline."+item.ServiceBaselineID) {
+			return fmt.Errorf("配置目录项公共基线生效路径无效: %s", item.ID)
 		}
 		declared := make(map[string]pluginv1.ManagedCredentialField, len(item.ManagedCredentials))
 		for _, field := range item.ManagedCredentials {

@@ -70,7 +70,7 @@ func TestPlatformManagementDeploymentCountsEnabledServices(t *testing.T) {
   "id": "test-profile",
   "target": {"kernel": "backend"},
   "serviceClasses": ["application.backend"],
-  "attachments": [],
+  "serviceBaselines": [],
   "services": [
     {"id":"enabled","kind":"service","enabled":true,"service_role":"backend","logical_service":"test.enabled","instance_policy":"per-kernel","state_model":"local-ephemeral","visibility":"local","routing":"direct","replicas":1,"plugins":[{"id":"cn.vastplan.test.enabled","version":"1.0.0","channel":"stable"}]},
     {"id":"disabled","kind":"service","enabled":false,"service_role":"backend","logical_service":"test.disabled","instance_policy":"per-kernel","state_model":"local-ephemeral","visibility":"local","routing":"direct","replicas":1,"plugins":[{"id":"cn.vastplan.test.disabled","version":"1.0.0","channel":"stable"}]}

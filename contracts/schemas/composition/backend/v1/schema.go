@@ -43,15 +43,19 @@ var (
 
 type PlatformProfile struct {
 	compositioncommonv1.Document
-	Target         compositioncommonv1.Target `json:"target"`
-	ServiceClasses []string                   `json:"serviceClasses"`
-	Attachments    []Attachment               `json:"attachments"`
-	Services       []deploymentv2.ServiceUnit `json:"services"`
+	Target           compositioncommonv1.Target `json:"target"`
+	ServiceClasses   []string                   `json:"serviceClasses"`
+	ServiceBaselines []ServiceBaseline          `json:"serviceBaselines"`
+	Services         []deploymentv2.ServiceUnit `json:"services"`
 }
 
-type Attachment struct {
+// ServiceBaseline 是按服务类别注入在线服务的平台所有策略与配置。
+// Seed Service 保持为 Platform Profile 显式服务，不继承在线公共基线。
+type ServiceBaseline struct {
+	ID           string                   `json:"id"`
 	ServiceClass string                   `json:"serviceClass"`
 	Plugins      []deploymentv1.PluginRef `json:"plugins"`
+	Config       map[string]any           `json:"config,omitempty"`
 }
 
 type ApplicationComposition struct {
@@ -145,21 +149,31 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	for _, serviceClass := range profile.ServiceClasses {
 		classes[serviceClass] = struct{}{}
 	}
-	for i := range profile.Attachments {
-		attachment := &profile.Attachments[i]
-		if _, ok := classes[attachment.ServiceClass]; !ok {
-			return PlatformProfile{}, fmt.Errorf("Backend Platform Profile attachment 使用未声明 serviceClass %q", attachment.ServiceClass)
+	baselineIDs := map[string]struct{}{}
+	baselinePluginIDs := map[string]string{}
+	for i := range profile.ServiceBaselines {
+		baseline := &profile.ServiceBaselines[i]
+		if _, duplicate := baselineIDs[baseline.ID]; duplicate {
+			return PlatformProfile{}, fmt.Errorf("Backend Platform Profile service baseline id 重复: %q", baseline.ID)
+		}
+		baselineIDs[baseline.ID] = struct{}{}
+		if _, ok := classes[baseline.ServiceClass]; !ok {
+			return PlatformProfile{}, fmt.Errorf("Backend Platform Profile service baseline 使用未声明 serviceClass %q", baseline.ServiceClass)
 		}
 		seen := map[string]struct{}{}
-		for j := range attachment.Plugins {
-			plugin := &attachment.Plugins[j]
+		for j := range baseline.Plugins {
+			plugin := &baseline.Plugins[j]
 			if plugin.Channel == "" {
 				plugin.Channel = "stable"
 			}
 			if _, duplicate := seen[plugin.ID]; duplicate {
-				return PlatformProfile{}, fmt.Errorf("Backend Platform Profile serviceClass %q 的插件 id 重复: %q", attachment.ServiceClass, plugin.ID)
+				return PlatformProfile{}, fmt.Errorf("Backend Platform Profile service baseline %q 的插件 id 重复: %q", baseline.ID, plugin.ID)
 			}
 			seen[plugin.ID] = struct{}{}
+			if previous := baselinePluginIDs[plugin.ID]; previous != "" {
+				return PlatformProfile{}, fmt.Errorf("Backend Platform Profile 插件 %q 同时属于 service baseline %q 和 %q", plugin.ID, previous, baseline.ID)
+			}
+			baselinePluginIDs[plugin.ID] = baseline.ID
 		}
 	}
 	profile.Services, err = deploymentv2.NormalizeServiceUnits(profile.Services)

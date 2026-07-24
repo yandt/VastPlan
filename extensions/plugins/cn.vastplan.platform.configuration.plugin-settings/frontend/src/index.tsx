@@ -14,8 +14,9 @@ type ConfigurationRow = PluginConfigurationDefinition & Record<string, unknown> 
 };
 
 const placeholderSchema: FormSchema = { id: "plugin-configuration.loading", schema: { type: "object", additionalProperties: false, properties: {} } };
+type ConfigurationLayer = "service" | "baseline";
 
-export function createPluginConfigurationPage(client: PlatformAdminClient, serviceID: string, path: string, title: ReturnType<typeof message>): CollectionPageDefinition<ConfigurationRow> {
+export function createPluginConfigurationPage(client: PlatformAdminClient, serviceID: string, path: string, title: ReturnType<typeof message>, layer: ConfigurationLayer = "service"): CollectionPageDefinition<ConfigurationRow> {
   const form: WorkbenchFormDefinition<ConfigurationRow> = {
     id: "draft",
     schema: placeholderSchema,
@@ -49,14 +50,16 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
   };
 
   return defineCollectionPage<ConfigurationRow>({
-    id: `platform.plugin-configuration.${serviceID}`,
+    id: `platform.plugin-configuration.${layer}.${serviceID}`,
     path,
     title,
-    description: message(namespace, "page.description", "按已验签插件清单创建候选；重启配置走 Deployment，服务级热配置由插件控制器原子提交，两者均需独立审批。"),
+    description: layer === "baseline"
+      ? message(namespace, "page.baselineDescription", "独立管理由 Platform Profile 注入在线服务的公共基线配置；发布会生成新的 Profile 与 Deployment revision。")
+      : message(namespace, "page.description", "管理在线服务自身配置；不会显示或修改本地 Seed Service 配置。"),
     requiredPermissions: ["platform.plugin-configuration.read"],
-    navigation: { id: `platform.plugin-configuration.${serviceID}`, label: title, zone: "settings", order: 25 },
+    navigation: { id: `platform.plugin-configuration.${layer}.${serviceID}`, label: title, zone: "settings", order: layer === "baseline" ? 24 : 25 },
     collection: {
-      id: `platform.plugin-configuration.${serviceID}`,
+      id: `platform.plugin-configuration.${layer}.${serviceID}`,
       title,
       view: "table",
       selection: "single",
@@ -73,6 +76,7 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
         { key: "deployment", label: message(namespace, "column.deployment", "部署"), defaultVisible: true, minWidth: 160 },
         { key: "unitId", label: message(namespace, "column.unit", "服务单元"), defaultVisible: true, minWidth: 150 },
         { key: "origin", label: message(namespace, "column.origin", "管理来源"), defaultVisible: true, minWidth: 130 },
+        { key: "serviceBaselineId", label: message(namespace, "column.baseline", "公共基线"), defaultVisible: layer === "baseline", minWidth: 150 },
         { key: "scope", label: message(namespace, "column.scope", "作用域"), defaultVisible: true, minWidth: 100 },
 		{ key: "scopeSubjectId", label: message(namespace, "column.scopeSubject", "目标主体"), defaultVisible: false, minWidth: 180 },
         { key: "applyMode", label: message(namespace, "column.applyMode", "生效方式"), defaultVisible: true, minWidth: 110 },
@@ -112,7 +116,7 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
 	  const latest = latestCandidates(candidates, scopeSubjectId);
       const keyword = typeof query.filters.keyword === "string" ? query.filters.keyword.trim().toLowerCase() : "";
       const applyMode = typeof query.filters.applyMode === "string" ? query.filters.applyMode : "";
-	  const rows = definitions.map((definition) => configurationRow(definition, latest.get(definition.id), scopeSubjectId)).filter((row) =>
+	  const rows = definitions.filter((definition) => layer === "baseline" ? definition.serviceBaselineId !== undefined && definition.serviceBaselineId !== "" : definition.serviceBaselineId === undefined || definition.serviceBaselineId === "").map((definition) => configurationRow(definition, latest.get(definition.id), scopeSubjectId)).filter((row) =>
         (keyword === "" || `${row.pluginName} ${row.pluginId} ${row.deployment} ${row.unitId}`.toLowerCase().includes(keyword)) &&
         (applyMode === "" || row.applyMode === applyMode),
       );
@@ -195,22 +199,25 @@ export default {
     if (services.length === 0) throw new Error("Portal 未绑定 platform.plugin-configuration 服务");
     for (const service of services) {
       const suffix = services.length === 1 ? "" : `/${service.id}`;
-      const title = context.i18n.message(services.length === 1 ? "page.title" : "page.titleService", services.length === 1 ? "插件配置" : "插件配置 · {service}", { service: service.label ?? service.id });
-      context.addCollectionPage(createPluginConfigurationPage(createBrowserPlatformAdminClient(context.portal.id, service.id), service.id, `/settings/plugin-configurations${suffix}`, title));
+      const client = createBrowserPlatformAdminClient(context.portal.id, service.id);
+      const title = context.i18n.message(services.length === 1 ? "page.title" : "page.titleService", services.length === 1 ? "服务配置" : "服务配置 · {service}", { service: service.label ?? service.id });
+      const baselineTitle = context.i18n.message(services.length === 1 ? "page.baselineTitle" : "page.baselineTitleService", services.length === 1 ? "公共基线配置" : "公共基线配置 · {service}", { service: service.label ?? service.id });
+      context.addCollectionPage(createPluginConfigurationPage(client, service.id, `/settings/service-configurations${suffix}`, title, "service"));
+      context.addCollectionPage(createPluginConfigurationPage(client, service.id, `/settings/service-baselines${suffix}`, baselineTitle, "baseline"));
       context.addRecordPage(createPluginConfigurationResourcePage(createBrowserPlatformAdminClient(context.portal.id, service.id), service.id, `/settings/plugin-configuration-resources${suffix}`));
     }
   },
   localization: { defaultLocale: "zh-CN", messages: {
     "zh-CN": {
-      "page.title":"插件配置","page.titleService":"插件配置 · {service}","page.description":"按已验签插件清单创建候选；重启配置走 Deployment，服务级热配置由插件控制器原子提交，两者均需独立审批。",
+      "page.title":"服务配置","page.titleService":"服务配置 · {service}","page.baselineTitle":"公共基线配置","page.baselineTitleService":"公共基线配置 · {service}","page.description":"管理在线服务自身配置；不会显示或修改本地 Seed Service 配置。","page.baselineDescription":"独立管理由 Platform Profile 注入在线服务的公共基线配置；发布会生成新的 Profile 与 Deployment revision。",
       "filter.keyword":"插件或服务","filter.applyMode":"生效方式","mode.restart":"重启发布","mode.hot":"热配置",
-      "column.plugin":"插件","column.deployment":"部署","column.unit":"服务单元","column.origin":"管理来源","column.scope":"作用域","column.applyMode":"生效方式","column.controller":"热控制器","column.credentials":"托管字段","column.candidate":"候选状态","column.external":"外部发布",
+      "column.plugin":"插件","column.deployment":"部署","column.unit":"服务单元","column.origin":"管理来源","column.baseline":"公共基线","column.scope":"作用域","column.applyMode":"生效方式","column.controller":"热控制器","column.credentials":"托管字段","column.candidate":"候选状态","column.external":"外部发布",
       "form.title":"编辑配置草稿","form.description":"保存只创建候选草稿，不会立即重启服务或改变活动配置。","action.saveDraft":"保存草稿","notice.draftSaved":"配置草稿已保存","action.edit":"编辑配置草稿","action.discard":"放弃草稿","confirm.discard":"放弃所选草稿？该操作使用候选 revision CAS。","action.submit":"提交审批","confirm.submit":"提交后将创建独立服务修订，并由另一位审批人审批。","action.activate":"发布并激活","confirm.activate":"发布已审批修订；readiness 失败将自动创建单调回滚修订。","action.submitProfile":"提交平台配置审批","confirm.submitProfile":"该变更会修改目标服务绑定的 Platform Profile，必须由另一位授权主体审批。","action.approveProfile":"批准平台配置","confirm.approveProfile":"确认以不同主体批准该 Platform Profile 配置候选？","action.activateProfile":"发布平台配置","confirm.activateProfile":"将依次激活 Catalog、发布 Deployment 并等待 readiness；失败会执行双重单调回滚。","action.abortProfile":"放弃平台配置","confirm.abortProfile":"放弃候选并释放目标服务的 Platform Profile 激活锁？","action.submitHot":"准备热配置","confirm.submitHot":"将托管凭证置为候选并要求目标插件准备新配置；当前活动配置不会改变。","action.approveHot":"批准热配置","confirm.approveHot":"确认以不同主体批准已由目标插件准备的服务级热配置？","action.activateHot":"激活热配置","confirm.activateHot":"由目标插件先原子切换配置，再激活候选凭证；中断后会依据已提交事实恢复。","action.abortHot":"放弃热配置","confirm.abortHot":"放弃已准备但未提交的热配置，并回滚候选凭证？"
     },
     "en-US": {
-      "page.title":"Plugin configuration","page.titleService":"Plugin configuration · {service}","page.description":"Create candidates from signed contracts. Restart changes use Deployment; service hot changes use an atomic plugin controller. Both require independent approval.",
+      "page.title":"Service configuration","page.titleService":"Service configuration · {service}","page.baselineTitle":"Common baseline configuration","page.baselineTitleService":"Common baseline configuration · {service}","page.description":"Manage online service-owned configuration; local Seed Service configuration is not exposed.","page.baselineDescription":"Manage Platform Profile baseline configuration independently; publication creates new Profile and Deployment revisions.",
       "filter.keyword":"Plugin or service","filter.applyMode":"Apply mode","mode.restart":"Restart publication","mode.hot":"Hot configuration",
-      "column.plugin":"Plugin","column.deployment":"Deployment","column.unit":"Service unit","column.origin":"Managed by","column.scope":"Scope","column.applyMode":"Apply mode","column.controller":"Hot controller","column.credentials":"Managed fields","column.candidate":"Candidate status","column.external":"External publication",
+      "column.plugin":"Plugin","column.deployment":"Deployment","column.unit":"Service unit","column.origin":"Managed by","column.baseline":"Common baseline","column.scope":"Scope","column.applyMode":"Apply mode","column.controller":"Hot controller","column.credentials":"Managed fields","column.candidate":"Candidate status","column.external":"External publication",
       "form.title":"Edit configuration draft","form.description":"Saving creates a candidate draft only; it does not restart services or change active configuration.","action.saveDraft":"Save draft","notice.draftSaved":"Configuration draft saved","action.edit":"Edit draft","action.discard":"Discard draft","confirm.discard":"Discard the selected draft using its candidate revision?","action.submit":"Submit for approval","confirm.submit":"Submission creates a separate service revision for another subject to approve.","action.activate":"Publish and activate","confirm.activate":"Publish the approved revision; readiness failure creates a monotonic rollback revision.","action.submitProfile":"Submit platform configuration","confirm.submitProfile":"This changes the target binding's Platform Profile and requires approval by another authorized subject.","action.approveProfile":"Approve platform configuration","confirm.approveProfile":"Approve this Platform Profile candidate as a different subject?","action.activateProfile":"Publish platform configuration","confirm.activateProfile":"Activate the Catalog, publish the Deployment, and wait for readiness; failure performs monotonic compensation.","action.abortProfile":"Abort platform configuration","confirm.abortProfile":"Abort the candidate and release the target Platform Profile activation lock?","action.submitHot":"Prepare hot configuration","confirm.submitHot":"Stage managed credentials and ask the target plugin to prepare the new configuration without changing the active generation.","action.approveHot":"Approve hot configuration","confirm.approveHot":"Approve the service hot configuration as a different subject after the target plugin has prepared it?","action.activateHot":"Activate hot configuration","confirm.activateHot":"Atomically switch the target plugin configuration first, then activate candidate credentials; interruptions recover from the committed fact.","action.abortHot":"Abort hot configuration","confirm.abortHot":"Abort the prepared configuration and roll back staged credentials?"
     }
   } },

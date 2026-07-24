@@ -41,6 +41,30 @@ func TestBuildUsesVerifiedManifestAndOpaqueResourceIdentity(t *testing.T) {
 	if err := catalog.Validate(); err != nil {
 		t.Fatalf("生成目录必须可自校验: %v", err)
 	}
+	baselineDeployment := deployment
+	baselineDeployment.Resolution = deploymentv2.Resolution{
+		PluginOrigins:   map[string]string{pluginID: deploymentv2.OriginPlatformProfile},
+		PluginBaselines: map[string]string{pluginID: "application-security"},
+	}
+	baselineCatalog, err := Build(baselineDeployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: manifest}})
+	if err != nil || baselineCatalog.Items[0].ServiceBaselineID != "application-security" || baselineCatalog.Items[0].ApplyPath != ApplyPlatformProfile {
+		t.Fatalf("配置目录没有把公共基线与服务配置分开标记: item=%+v err=%v", baselineCatalog.Items[0], err)
+	}
+	baselineDeployment.Units = append(baselineDeployment.Units, deploymentv2.ServiceUnit{
+		ID: "worker", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
+		Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}},
+		Config:  map[string]any{"plugins": map[string]any{pluginID: map[string]any{"region": "cn-east"}}},
+	})
+	deduplicated, err := Build(baselineDeployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: manifest}})
+	if err != nil || len(deduplicated.Items) != 1 || deduplicated.Items[0].UnitID != "service-baseline.application-security" {
+		t.Fatalf("同一公共基线在多个服务单元中必须只生成一条稳定定义: items=%+v err=%v", deduplicated.Items, err)
+	}
+	seedDeployment := deployment
+	seedDeployment.Resolution = deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}}
+	seedCatalog, err := Build(seedDeployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: manifest}})
+	if err != nil || len(seedCatalog.Items) != 0 {
+		t.Fatalf("本地 Seed Service 配置不得进入在线目录: items=%+v err=%v", seedCatalog.Items, err)
+	}
 
 	tampered := catalog
 	tampered.Items = append([]Definition(nil), catalog.Items...)
@@ -95,7 +119,7 @@ func TestBuildDerivesHotControllerFromSignedArtifactAndResolvedUnit(t *testing.T
 	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.0.0", Channel: "stable"}
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: 9, Metadata: deploymentv1.Metadata{Name: "security-services", Tenant: "acme"},
-		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}},
+		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginApplication}},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "otp", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "authentication-otp", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}},
@@ -116,6 +140,16 @@ func TestBuildDerivesHotControllerFromSignedArtifactAndResolvedUnit(t *testing.T
 	}
 	if err := catalog.Validate(); err != nil {
 		t.Fatal(err)
+	}
+	baselineHot := deployment
+	baselineHot.Resolution = deploymentv2.Resolution{
+		PluginOrigins:   map[string]string{pluginID: deploymentv2.OriginPlatformProfile},
+		PluginBaselines: map[string]string{pluginID: "application-hot-security"},
+	}
+	if _, err := Build(baselineHot, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {
+		PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("b", 64), Manifest: manifest,
+	}}); err == nil {
+		t.Fatal("公共基线 Hot 配置会产生 Profile/运行时双真相源，必须拒绝")
 	}
 	tampered := catalog
 	tampered.Items = append([]Definition(nil), catalog.Items...)
@@ -141,7 +175,7 @@ func TestBuildDerivesIndependentResourceCollections(t *testing.T) {
 	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.0.0", Channel: "stable"}
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: 10, Metadata: deploymentv1.Metadata{Name: "security-services", Tenant: "acme"},
-		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}},
+		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}, PluginBaselines: map[string]string{pluginID: "delivery-profiles"}},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "delivery", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "authentication-delivery", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}},

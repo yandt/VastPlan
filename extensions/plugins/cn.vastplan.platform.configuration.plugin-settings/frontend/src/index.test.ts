@@ -13,6 +13,23 @@ const definition: PluginConfigurationDefinition = {
 };
 
 describe("plugin configuration workbench", () => {
+  it("separates service configuration from common baseline configuration", async () => {
+    const baseline = { ...definition, id: "cfg_bbbbbbbbbbbbbbbbbbbbbbbb", origin: "platform-profile" as const, applyPath: "platform-profile" as const, serviceBaselineId: "application-security" };
+    const client = {
+      listPluginConfigurationDefinitions: vi.fn(async () => [definition, baseline]),
+      listPluginConfigurationCandidates: vi.fn(async () => []),
+    } as unknown as PlatformAdminClient;
+    const servicePage = createPluginConfigurationPage(client, "configuration", "/settings/service-configurations", message("test", "service", "Service configuration"));
+    const baselinePage = createPluginConfigurationPage(client, "configuration", "/settings/service-baselines", message("test", "baseline", "Common baseline configuration"), "baseline");
+    const query = { mode: "page" as const, page: 1, pageSize: 20, filters: {} };
+
+    const serviceResult = await servicePage.load(query, new AbortController().signal);
+    const baselineResult = await baselinePage.load(query, new AbortController().signal);
+
+    expect(serviceResult.items.map((item) => item.id)).toEqual([definition.id]);
+    expect(baselineResult.items.map((item) => item.id)).toEqual([baseline.id]);
+  });
+
   it("renders trusted definitions and prepares the selected signed schema", async () => {
     const createDraft = vi.fn(async () => ({ id: "pcfg_x" }));
     const client = {
@@ -83,7 +100,12 @@ describe("plugin configuration workbench", () => {
 
   it("routes Platform Profile actions through the dedicated permission operations", async () => {
     const submit = vi.fn(), approve = vi.fn(), activate = vi.fn(), abort = vi.fn();
-    const platformDefinition = { ...definition, origin: "platform-profile" as const, applyPath: "platform-profile" as const };
+    const platformDefinition = {
+      ...definition,
+      origin: "platform-profile" as const,
+      applyPath: "platform-profile" as const,
+      serviceBaselineId: "application-security",
+    };
     const client = {
       listPluginConfigurationDefinitions: vi.fn(async () => [platformDefinition]),
       listPluginConfigurationCandidates: vi.fn(async () => [{
@@ -96,7 +118,7 @@ describe("plugin configuration workbench", () => {
       activatePlatformProfileConfigurationCandidate: activate,
       abortPlatformProfileConfigurationCandidate: abort,
     } as unknown as PlatformAdminClient;
-    const page = createPluginConfigurationPage(client, "configuration", "/settings/plugin-configurations", message("test", "title", "Plugin configuration"));
+    const page = createPluginConfigurationPage(client, "configuration", "/settings/service-baselines", message("test", "title", "Common baseline configuration"), "baseline");
     const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
     const selected = result.items;
     for (const id of ["submit-profile", "approve-profile", "activate-profile", "abort-profile"]) {

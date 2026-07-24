@@ -79,3 +79,7 @@ Profile 候选提交和发布使用独立的 `platform.plugin-configuration.prof
 - 第 3、4 阶段随后完成：新增不返回 Profile/Catalog 全文的 `kernel.platform-profile.*` 窄端口，内核从活动 ConfigurationCatalog 与目标 binding 重建精确 service 配置、选择高于同 ID 全部历史的 Profile revision，并区分 Prepared 预览与 Activated 发布。deployment-manager 0.16.0 持久化独立 Profile Activation 记录、请求摘要、预览、异人审批和恢复检查点；成功路径固定为 Catalog activate → Deployment publish → readiness → finalize，失败路径固定为单调 Catalog rollback → 新 Deployment rollback。普通 Application 发布在同 binding 候选期间被本地账本和 Catalog Store 双重阻断。
 - plugin-settings 0.7.0、Node BFF、TypeScript SDK 与 Workbench 已接入独立 `platform.plugin-configuration.profile.publish` 权限，提供提交、审批、激活和放弃动作；候选凭证继续只以 managed ref 进入 Candidate 窗口，公开状态不含 handle、stage ID 或请求摘要。单元与纵向测试覆盖精确 caller、跨租户拒绝、attachment 拒绝、制品漂移、重启恢复、激活前发布拒绝、readiness 失败双重回滚和用户直达拒绝。真实多服务启动验收在本次实施记录之后执行并记录结果。
 - 真实多服务启动验收已完成：清理仅限本地开发的旧状态后，平台 Backend revision 21 的 11 个 active unit 与受管服务 revision 2 的 1 个 unit 均收敛 `Ready`；deployment-manager 0.16.0、plugin-settings 0.7.0 和 platform-admin-access-policy 0.23.0 均以目标版本激活，Portal `/operations` 实测 HTTP 200。测试结束后由开发编排器优雅停止全部受管进程。旧开发状态因格式 4→5、1→2 且无 lifecycle migration 被拒绝符合 fail-closed 预期；生产升级不得依赖清理，必须在形成历史数据前单独补充迁移策略。
+
+## 后续修订（2026-07-24）
+
+[ADR-0148](ADR-0148-公共服务基线与种子配置分域.md) 将开发期 `attachments` 升级为带稳定 ID 和独立 `config` 的 `serviceBaselines`。Profile Activation 现可精确修改公共基线中的签名插件配置；Deployment resolution 以 `plugin_baselines` 标记归属，plugin-settings 0.13.0 在独立“公共基线配置”页面驱动原有候选 Catalog Saga。Profile `services` 被明确收窄为本地 Seed Service，其必要配置不再进入在线 Configuration Catalog。原“只处理独立 service、拒绝 attachment”的第一阶段限制保留为历史记录，不再代表当前能力。

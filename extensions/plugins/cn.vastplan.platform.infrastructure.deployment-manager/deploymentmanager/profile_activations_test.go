@@ -116,6 +116,7 @@ func (h *profileActivationHost) result(tenant string, composition backendcomposi
 			PlatformProfile:        compositioncommonv1.Ref{ID: "platform-default", Revision: 1, Digest: strings.Repeat("1", 64)},
 			ApplicationComposition: compositioncommonv1.Ref{ID: composition.ID, Revision: composition.Revision, Digest: composition.Digest()},
 			PluginOrigins:          map[string]string{configuredPlatformPlugin: deploymentv2.OriginPlatformProfile},
+			PluginBaselines:        map[string]string{configuredPlatformPlugin: "application-platform-config"},
 		},
 	}
 	ref := pluginv1.ArtifactRef{PluginID: configuredPlatformPlugin, Version: "1.0.0", Channel: "stable"}
@@ -236,6 +237,9 @@ func profileActivationFixture(t *testing.T) (*Service, platformprofileactivation
 	initial, err := host.result("tenant-a", composition, 1, "east", 101)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(initial.ConfigurationCatalog.Items) != 1 {
+		t.Fatalf("公共基线配置夹具应生成 1 条目录定义，实际 %d", len(initial.ConfigurationCatalog.Items))
 	}
 	service, err := openTestService(filepath.Join(t.TempDir(), "deployment-manager.json"))
 	if err != nil {

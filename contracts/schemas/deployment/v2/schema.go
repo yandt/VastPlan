@@ -56,6 +56,7 @@ type Resolution struct {
 	ApplicationComposition CompositionRef    `json:"application_composition"`
 	DevelopmentMode        bool              `json:"development_mode"`
 	PluginOrigins          map[string]string `json:"plugin_origins"`
+	PluginBaselines        map[string]string `json:"plugin_baselines,omitempty"`
 }
 
 // CompositionRef is the cross-kernel resolution reference contract.
@@ -195,6 +196,11 @@ func Parse(raw []byte) (Deployment, error) {
 	for pluginID := range deployment.Resolution.PluginOrigins {
 		if _, ok := plugins[pluginID]; !ok {
 			return Deployment{}, fmt.Errorf("resolution.plugin_origins 包含未部署插件 %q", pluginID)
+		}
+	}
+	for pluginID, baselineID := range deployment.Resolution.PluginBaselines {
+		if _, ok := plugins[pluginID]; !ok || deployment.Resolution.PluginOrigins[pluginID] != OriginPlatformProfile || baselineID == "" {
+			return Deployment{}, fmt.Errorf("resolution.plugin_baselines 包含无效公共基线插件 %q", pluginID)
 		}
 	}
 	return deployment, nil

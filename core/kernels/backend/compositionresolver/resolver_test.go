@@ -47,9 +47,9 @@ func baseInputs() (backendcompositionv1.PlatformProfile, backendcompositionv1.Ap
 	applicationID := "com.example.agent"
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 2, ID: "backend-default"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend},
-		ServiceClasses: []string{"application.backend"},
-		Attachments:    []backendcompositionv1.Attachment{{ServiceClass: "application.backend", Plugins: []deploymentv1.PluginRef{ref(platformID)}}},
-		Services:       []deploymentv2.ServiceUnit{},
+		ServiceClasses:   []string{"application.backend"},
+		ServiceBaselines: []backendcompositionv1.ServiceBaseline{{ID: "application-security", ServiceClass: "application.backend", Plugins: []deploymentv1.PluginRef{ref(platformID)}, Config: map[string]any{"environment_allowlist": map[string]any{platformID: []any{"POLICY_FILE"}}}}},
+		Services:         []deploymentv2.ServiceUnit{},
 	}
 	application := backendcompositionv1.ApplicationComposition{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 4, ID: "agent-studio"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, Metadata: deploymentv1.Metadata{Name: "agent-studio", Tenant: "acme"},
@@ -62,7 +62,7 @@ func baseInputs() (backendcompositionv1.PlatformProfile, backendcompositionv1.Ap
 	return profile, application, reader
 }
 
-func TestResolveInjectsPlatformAttachmentsAndLocksOrigins(t *testing.T) {
+func TestResolveInjectsPlatformServiceBaselinesAndLocksOrigins(t *testing.T) {
 	profile, application, reader := baseInputs()
 	resolved, err := Resolve(profile, application, 9, reader, Options{})
 	if err != nil {
@@ -77,11 +77,15 @@ func TestResolveInjectsPlatformAttachmentsAndLocksOrigins(t *testing.T) {
 	if len(resolved.Resolution.PlatformProfile.Digest) != 64 || len(resolved.Resolution.ApplicationComposition.Digest) != 64 {
 		t.Fatalf("输入摘要未锁定: %+v", resolved.Resolution)
 	}
+	allowlist := resolved.Units[0].Config["environment_allowlist"].(map[string]any)
+	if allowlist[resolved.Units[0].Plugins[0].ID] == nil {
+		t.Fatalf("公共基线配置没有注入服务: %+v", resolved.Units[0].Config)
+	}
 }
 
 func TestResolveRejectsApplicationPlatformOverrideAndDevelopmentByDefault(t *testing.T) {
 	profile, application, reader := baseInputs()
-	platformID := profile.Attachments[0].Plugins[0].ID
+	platformID := profile.ServiceBaselines[0].Plugins[0].ID
 	application.Units[0].Spec.Plugins = []deploymentv1.PluginRef{ref(platformID)}
 	if _, err := Resolve(profile, application, 1, reader, Options{}); err == nil || !strings.Contains(err.Error(), "不能覆盖平台插件") {
 		t.Fatalf("应用覆盖平台插件必须拒绝: %v", err)
@@ -117,9 +121,9 @@ func TestResolveRejectsServiceClassAndUnitCollisions(t *testing.T) {
 
 func TestResolveRejectsPlatformPluginWithConflictingTopology(t *testing.T) {
 	profile, application, reader := baseInputs()
-	platformID := profile.Attachments[0].Plugins[0].ID
+	platformID := profile.ServiceBaselines[0].Plugins[0].ID
 	profile.Services = []deploymentv2.ServiceUnit{{ID: "policy-service", Kind: "service", Plugins: []deploymentv1.PluginRef{ref(platformID)}, Enabled: true, ServiceRole: "backend", Replicas: 1}}
-	if _, err := Resolve(profile, application, 1, reader, Options{}); err == nil || !strings.Contains(err.Error(), "同时作为本地 attachment 和独立 service") {
+	if _, err := Resolve(profile, application, 1, reader, Options{}); err == nil || !strings.Contains(err.Error(), "公共 service baseline 和独立 seed service") {
 		t.Fatalf("同一平台插件的本地与共享拓扑冲突必须拒绝: %v", err)
 	}
 }

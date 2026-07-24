@@ -69,7 +69,7 @@ func TestPublisherUsesCatalogProfileAndDigestLock(t *testing.T) {
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "backend-default"},
 		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"},
-		Attachments: []backendcompositionv1.Attachment{}, Services: []deploymentv2.ServiceUnit{},
+		ServiceBaselines: []backendcompositionv1.ServiceBaseline{}, Services: []deploymentv2.ServiceUnit{},
 	}
 	application := backendcompositionv1.ApplicationComposition{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "agent-services"}, Target: compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend},
@@ -130,7 +130,7 @@ func TestSeedCatalogAdaptsFileConfigurationToOnlinePublicationContract(t *testin
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 7, ID: "platform-seed"},
 		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"},
-		Attachments: []backendcompositionv1.Attachment{}, Services: []deploymentv2.ServiceUnit{},
+		ServiceBaselines: []backendcompositionv1.ServiceBaseline{}, Services: []deploymentv2.ServiceUnit{},
 	}
 	application := backendcompositionv1.ApplicationComposition{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 3, ID: "platform-management"},
@@ -157,7 +157,7 @@ func TestSeedCatalogRejectsUnboundApplicationIdentity(t *testing.T) {
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "platform-seed"},
 		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"},
-		Attachments: []backendcompositionv1.Attachment{}, Services: []deploymentv2.ServiceUnit{},
+		ServiceBaselines: []backendcompositionv1.ServiceBaseline{}, Services: []deploymentv2.ServiceUnit{},
 	}
 	application := backendcompositionv1.ApplicationComposition{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "wrong-id"},
@@ -173,7 +173,7 @@ func TestPublisherReadsCurrentCatalogSnapshotPerOperation(t *testing.T) {
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "backend-default"},
 		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"},
-		Attachments: []backendcompositionv1.Attachment{}, Services: []deploymentv2.ServiceUnit{},
+		ServiceBaselines: []backendcompositionv1.ServiceBaseline{}, Services: []deploymentv2.ServiceUnit{},
 	}
 	catalog := backendcompositionv1.BackendPlatformCatalog{
 		Document: compositioncommonv1.Document{Version: 1, Revision: 1, ID: "backend-production"}, Profiles: []backendcompositionv1.PlatformProfile{profile},

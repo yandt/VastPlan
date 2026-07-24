@@ -4,7 +4,7 @@
   "title": "VastPlan Backend Platform Profile v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "revision", "id", "target", "serviceClasses", "attachments", "services"],
+  "required": ["version", "revision", "id", "target", "serviceClasses", "serviceBaselines", "services"],
   "properties": {
     "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
     "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
@@ -21,19 +21,21 @@
       "uniqueItems": true,
       "items": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" }
     },
-    "attachments": {
+    "serviceBaselines": {
       "type": "array",
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["serviceClass", "plugins"],
+        "required": ["id", "serviceClass", "plugins"],
         "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
           "serviceClass": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
           "plugins": {
             "type": "array",
             "minItems": 1,
             "items": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/deployment/v2/vastplan.deployment.schema.json#/$defs/pluginRef" }
-          }
+          },
+          "config": { "type": "object" }
         }
       }
     },

@@ -45,6 +45,11 @@
           "type": "object",
           "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
           "additionalProperties": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/origin" }
+        },
+        "plugin_baselines": {
+          "type": "object",
+          "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+          "additionalProperties": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" }
         }
       }
     },

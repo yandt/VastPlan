@@ -2,7 +2,7 @@
 
 `cn.vastplan.platform.configuration.plugin-settings` 是通用插件配置协调器。它通过可信宿主读取 Backend Resolver 基于验签制品生成、且与活动 Deployment revision/digest 精确匹配的 `ConfigurationCatalog v1`，并保存配置候选与审计记录。
 
-当前 `0.12.1` 实现：
+当前 `0.13.0` 实现：
 
 - 只返回活动、已发布 Deployment 的可信配置定义；
 - 使用不透明 `cfg_` 资源 ID，浏览器不提交插件身份或 Schema；
@@ -13,7 +13,8 @@
 - 使用可信宿主派生身份的 tenant Shared State 单文档 CAS；支持 active-active 副本、跨实例恢复和并发 stale-writer fencing；
 - Workbench 将托管字段渲染为一次性 `secretMaterial`，协调器不持久化明文、authority，也不向浏览器返回凭证 handle；
 - Application 来源 restart 配置可提交为独立服务修订，由不同主体在 Deployment Manager 审批后，再从本页面执行专用发布；
-- Platform Profile 来源 restart 配置使用独立权限与候选 Catalog：只能修改活动 Profile 的独立 service，不能编辑 attachment、共享 Profile 全文或其他 binding；
+- Platform Profile 公共 Service Baseline 来源的 restart 配置使用独立权限与候选 Catalog；Workbench 将“公共基线配置”与 Application“服务配置”分开，不能编辑共享 Profile 全文或其他 binding；
+- Profile `services` 中的 Seed Service 必要配置只接受本地受信 Seed 文件管理，不进入在线 Configuration Catalog 或 Workbench；
 - Profile 配置支持提交、异人审批、发布、显式放弃和重启恢复；readiness 失败时单调回滚 Catalog 与 Deployment；
 - Service Hot 配置通过签名清单派生的专用 `configuration.controller` 目标执行 `configuration.v1 prepare/commit/abort/status`，不复用产品工具 API；
 - Service Hot 固定托管字段支持留空保留和新值替换：目标控制器以完整合并引用集计算摘要并原子提交，Candidate 凭证随后转 Active；提交与激活之间中断时从目标 `status` 恢复，不产生提交失败后的孤儿 Active 凭证；

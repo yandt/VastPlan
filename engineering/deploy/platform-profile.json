@@ -8,8 +8,9 @@
   "serviceClasses": [
     "application.backend"
   ],
-  "attachments": [
+  "serviceBaselines": [
     {
+      "id": "application-permission-demo",
       "serviceClass": "application.backend",
       "plugins": [
         {

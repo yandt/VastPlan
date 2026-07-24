@@ -1,9 +1,22 @@
 {
   "version": 1,
-  "revision": 1,
+  "revision": 2,
   "id": "managed-services-default",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
-  "attachments": [],
+  "serviceBaselines": [
+    {
+      "id": "application-authorization",
+      "serviceClass": "application.backend",
+      "plugins": [
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.0", "channel": "stable" }
+      ],
+      "config": {
+        "environment_allowlist": {
+          "cn.vastplan.foundation.security.authorization-enforcer": ["VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG", "VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT", "VASTPLAN_AUTHORIZATION_POLICY_TRUST", "VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE", "VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS"]
+        }
+      }
+    }
+  ],
   "services": []
 }

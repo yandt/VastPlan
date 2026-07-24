@@ -11,13 +11,13 @@ func TestParsePlatformProfileAndApplicationComposition(t *testing.T) {
 	profile, err := ParsePlatformProfile([]byte(`{
 		"version":1,"revision":2,"id":"backend-default","target":{"kernel":"backend"},
 		"serviceClasses":["application.backend"],
-		"attachments":[{"serviceClass":"application.backend","plugins":[{"id":"cn.vastplan.foundation.security.portal-access-policy","version":"1.0.0"}]}],
+		"serviceBaselines":[{"id":"application-security","serviceClass":"application.backend","plugins":[{"id":"cn.vastplan.foundation.security.portal-access-policy","version":"1.0.0"}],"config":{"security":{"mode":"enforced"}}}],
 		"services":[]
 	}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if profile.Attachments[0].Plugins[0].Channel != "stable" || len(profile.Digest()) != 64 {
+	if profile.ServiceBaselines[0].Plugins[0].Channel != "stable" || len(profile.Digest()) != 64 {
 		t.Fatalf("Backend Platform Profile 未规范化: %+v", profile)
 	}
 
@@ -36,7 +36,7 @@ func TestParsePlatformProfileAndApplicationComposition(t *testing.T) {
 func TestBackendPlatformCatalogAuthorizesExactDeployment(t *testing.T) {
 	profile, err := ParsePlatformProfile([]byte(`{
 		"version":1,"revision":2,"id":"backend-default","target":{"kernel":"backend"},
-		"serviceClasses":["application.backend"],"attachments":[],"services":[]
+		"serviceClasses":["application.backend"],"serviceBaselines":[],"services":[]
 	}`))
 	if err != nil {
 		t.Fatal(err)
@@ -72,8 +72,8 @@ func TestBackendPlatformCatalogAuthorizesExactDeployment(t *testing.T) {
 
 func TestCompositionSchemasRejectCrossBoundaryFields(t *testing.T) {
 	invalidProfiles := []string{
-		`{"version":1,"revision":1,"id":"default","target":{"kernel":"frontend"},"serviceClasses":["application.backend"],"attachments":[],"services":[]}`,
-		`{"version":1,"revision":1,"id":"default","target":{"kernel":"backend"},"serviceClasses":["application.backend"],"attachments":[{"serviceClass":"unknown","plugins":[{"id":"com.example.x","version":"1.0.0"}]}],"services":[]}`,
+		`{"version":1,"revision":1,"id":"default","target":{"kernel":"frontend"},"serviceClasses":["application.backend"],"serviceBaselines":[],"services":[]}`,
+		`{"version":1,"revision":1,"id":"default","target":{"kernel":"backend"},"serviceClasses":["application.backend"],"serviceBaselines":[{"id":"unknown","serviceClass":"unknown","plugins":[{"id":"com.example.x","version":"1.0.0"}]}],"services":[]}`,
 	}
 	for _, raw := range invalidProfiles {
 		if _, err := ParsePlatformProfile([]byte(raw)); err == nil {

@@ -22,6 +22,7 @@ export interface PluginConfigurationDefinition {
   pluginId: string;
   pluginName: string;
   origin: "platform-profile" | "application";
+  serviceBaselineId?: string;
   artifact: { version: string; channel: string; sha256: string };
   scope: "service" | "tenant" | "user";
   applyMode: "restart" | "hot";

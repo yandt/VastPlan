@@ -9,7 +9,7 @@
     "platform_profile": {
       "id": "local-backend",
       "revision": 1,
-      "digest": "030e998fc45858996beaf469c0c35e38a14c07389e537f78eeb169e11a5c4adc"
+      "digest": "36b5a63f6d596f6c2f29af2b27ce3e4f4fe5d042dfd3e35e117054bd8097ad43"
     },
     "application_composition": {
       "id": "cluster-demo",
@@ -20,6 +20,9 @@
     "plugin_origins": {
       "cn.vastplan.demo-permission": "platform-profile",
       "cn.vastplan.hello-world": "application"
+    },
+    "plugin_baselines": {
+      "cn.vastplan.demo-permission": "application-permission-demo"
     }
   },
   "units": [

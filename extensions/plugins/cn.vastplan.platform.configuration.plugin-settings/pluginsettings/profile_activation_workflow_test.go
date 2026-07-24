@@ -127,7 +127,7 @@ func managedPlatformTestCatalog(t *testing.T) pluginconfiguration.Catalog {
 	ref := pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.0.0", Channel: "stable"}
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: 8, Metadata: deploymentv1.Metadata{Name: "managed-services", Tenant: "tenant-a"},
-		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}},
+		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{pluginID: deploymentv2.OriginPlatformProfile}, PluginBaselines: map[string]string{pluginID: "application-profile-config"}},
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "platform-api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{{ID: pluginID, Version: "1.0.0", Channel: "stable"}},
@@ -137,6 +137,9 @@ func managedPlatformTestCatalog(t *testing.T) pluginconfiguration.Catalog {
 	catalog, err := pluginconfiguration.Build(deployment, map[pluginv1.ArtifactRef]pluginv1.Artifact{ref: {PluginID: pluginID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("b", 64), Manifest: manifest}})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(catalog.Items) != 1 {
+		t.Fatalf("公共基线配置夹具应生成 1 条目录定义，实际 %d", len(catalog.Items))
 	}
 	return catalog
 }

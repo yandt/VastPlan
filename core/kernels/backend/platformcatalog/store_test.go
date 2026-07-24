@@ -109,7 +109,7 @@ func testCatalog(revision uint64) backendcompositionv1.BackendPlatformCatalog {
 	profile := backendcompositionv1.PlatformProfile{
 		Document: compositioncommonv1.Document{Version: 1, Revision: revision, ID: "backend-default"},
 		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, ServiceClasses: []string{"application.backend"},
-		Attachments: []backendcompositionv1.Attachment{}, Services: []deploymentv2.ServiceUnit{},
+		ServiceBaselines: []backendcompositionv1.ServiceBaseline{}, Services: []deploymentv2.ServiceUnit{},
 	}
 	return backendcompositionv1.BackendPlatformCatalog{
 		Document: compositioncommonv1.Document{Version: 1, Revision: revision, ID: "backend-production"}, Profiles: []backendcompositionv1.PlatformProfile{profile},
