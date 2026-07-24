@@ -30,6 +30,18 @@ func TestMaterializeDevelopmentDeploymentRevisionAdvancesOnSourceChange(t *testi
 	}
 }
 
+func TestPrepareDevelopmentPlatformProfileDoesNotAllocateRevisionDuringStartup(t *testing.T) {
+	stateFile := filepath.Join(t.TempDir(), "platform-management-revision.json")
+	profile := developmentRevisionTestProfile(12)
+	prepared, err := prepareDevelopmentPlatformProfile(profile, strings.Repeat("a", 64), stateFile, false)
+	if err != nil || parsedDevelopmentRevision(t, prepared) != 12 {
+		t.Fatalf("零发布启动不得改写 Profile revision: err=%v profile=%s", err, prepared)
+	}
+	if _, err := os.Stat(stateFile); !os.IsNotExist(err) {
+		t.Fatalf("零发布启动不得创建 revision 状态文件: %v", err)
+	}
+}
+
 func TestMaterializeDevelopmentDeploymentRevisionHonorsNewTemplateFloor(t *testing.T) {
 	stateFile := filepath.Join(t.TempDir(), "platform-management-revision.json")
 	if _, _, err := materializeDevelopmentDeploymentRevision(developmentRevisionTestProfile(12), strings.Repeat("a", 64), stateFile); err != nil {

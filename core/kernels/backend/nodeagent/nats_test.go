@@ -3,6 +3,7 @@ package nodeagent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"path/filepath"
 	"testing"
@@ -36,6 +37,10 @@ func TestNATSKVSourceWatchReconnectAndActualStateReport(t *testing.T) {
 	buckets, err := controlplane.EnsureBuckets(ctx, js, 1, jetstream.FileStorage)
 	if err != nil {
 		t.Fatal(err)
+	}
+	missing := NATSDesiredStateSource{KV: buckets.Desired, Key: controlplane.DesiredKey("acme", "not-published"), Conn: nc}
+	if _, err := missing.Load(ctx); !errors.Is(err, ErrDesiredStateNotPublished) {
+		t.Fatalf("首次发布前应返回明确等待状态: %v", err)
 	}
 
 	desired := desired(1, "1.0.0", true)

@@ -148,7 +148,11 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 				Config: config, Enabled: true, ServiceRole: unit.ServiceRole,
 				LogicalService: unit.LogicalService, InstancePolicy: policy.InstancePolicy, StateModel: policy.StateModel,
 				Visibility: policy.Visibility, Routing: policy.Routing, RoutingDomain: policy.RoutingDomain, Replicas: 1,
-				DependsOn: append([]string(nil), unit.DependsOn...),
+				// validateDeploymentContracts enriches graph with strong/data runtime
+				// capability dependencies inferred from signed manifests. Assignments
+				// must carry that effective graph rather than only the author-supplied
+				// depends_on list, otherwise a single node falls back to unit-ID order.
+				DependsOn: effectiveUnitDependencies(graph, unit.ID),
 				Resources: deploymentv1.ResourceRequirements{Requests: deploymentv1.ResourceList{
 					CPUMillis: unit.Resources.Requests.CPUMillis, MemoryBytes: unit.Resources.Requests.MemoryBytes, GPU: unit.Resources.Requests.GPU,
 				}},
@@ -227,6 +231,12 @@ func (s Scheduler) Reconcile(ctx context.Context, deployment deploymentv2.Deploy
 		}
 	}
 	return Plan{Generation: generation, Assignments: assignments}, nil
+}
+
+func effectiveUnitDependencies(graph map[string][]string, unitID string) []string {
+	dependencies := append([]string(nil), graph[unitID]...)
+	sort.Strings(dependencies)
+	return dependencies
 }
 
 func (s Scheduler) occupiedResources(ctx context.Context, currentPrefix string) (map[string]controlplane.ResourceCapacity, error) {

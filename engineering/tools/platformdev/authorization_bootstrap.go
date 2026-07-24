@@ -20,6 +20,29 @@ import (
 
 const developmentAuthorizationAudience = "development:local"
 
+func (r *runtime) writeSessionsFromPublishedAuthorization() error {
+	catalogPath := filepath.Join(r.persistentStateRoot(), "authorization", "permission-catalog.json")
+	raw, err := os.ReadFile(catalogPath)
+	if errors.Is(err, os.ErrNotExist) {
+		// A fresh zero-publication startup intentionally has no platform roles yet.
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var catalog pluginv1.PermissionCatalog
+	if err := json.Unmarshal(raw, &catalog); err != nil {
+		return fmt.Errorf("解析已发布权限目录: %w", err)
+	}
+	ownerPermissions := make([]string, 0, len(catalog.Permissions))
+	for _, permission := range catalog.Permissions {
+		if permission.Assignable {
+			ownerPermissions = append(ownerPermissions, permission.Code)
+		}
+	}
+	return writeSessions(filepath.Join(r.runDir, "secrets", "portal-sessions.json"), ownerPermissions)
+}
+
 func (r *runtime) writeAuthorizationBootstrap(repository *pluginservice.Repository, refs []pluginservice.Ref) error {
 	root := filepath.Join(r.persistentStateRoot(), "authorization")
 	if err := ensurePrivateDirectory(root); err != nil {

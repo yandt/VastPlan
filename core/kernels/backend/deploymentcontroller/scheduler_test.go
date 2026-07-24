@@ -42,6 +42,18 @@ func TestConvergenceSummaryDetectsOnlyMeaningfulChanges(t *testing.T) {
 	}
 }
 
+func TestEffectiveUnitDependenciesCarryManifestInferredDAG(t *testing.T) {
+	graph := map[string][]string{"settings": nil, "credentials": {"settings"}, "database": {"settings", "credentials"}}
+	got := effectiveUnitDependencies(graph, "database")
+	if !slices.Equal(got, []string{"credentials", "settings"}) {
+		t.Fatalf("Assignment 必须携带签名清单推导的有效依赖: %v", got)
+	}
+	got[0] = "mutated"
+	if graph["database"][0] == "mutated" {
+		t.Fatal("Assignment 依赖不得复用控制器图的可变底层数组")
+	}
+}
+
 func TestWatchKeyMatchesOnlyDeploymentScope(t *testing.T) {
 	platform := controlplane.DeploymentKey("local", "platform-management")
 	managed := controlplane.DeploymentKey("local", "managed-services")

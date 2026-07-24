@@ -2,6 +2,7 @@ package nodeagent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"time"
@@ -88,6 +89,7 @@ func (a *Agent) Run(ctx context.Context) error {
 	var retry <-chan time.Time
 	var retryTimer *time.Timer
 	attempt := 0
+	waitingForDesired := false
 	run := func(reason string) {
 		pulse()
 		finishWork := func() {}
@@ -99,7 +101,26 @@ func (a *Agent) Run(ctx context.Context) error {
 		cancelReconcile()
 		finishWork()
 		pulse()
+		if errors.Is(err, ErrDesiredStateNotPublished) {
+			attempt = 0
+			if retryTimer != nil && !retryTimer.Stop() {
+				select {
+				case <-retryTimer.C:
+				default:
+				}
+			}
+			retry = nil
+			if !waitingForDesired {
+				a.Logf("期望态尚未发布，内核保持最小等待状态")
+				waitingForDesired = true
+			}
+			return
+		}
 		if err == nil {
+			if waitingForDesired {
+				a.Logf("期望态已发布，开始执行收敛")
+			}
+			waitingForDesired = false
 			attempt = 0
 			if retryTimer != nil && !retryTimer.Stop() {
 				select {
@@ -110,6 +131,7 @@ func (a *Agent) Run(ctx context.Context) error {
 			retry = nil
 			return
 		}
+		waitingForDesired = false
 		attempt++
 		delay := backoff(retryMin, retryMax, attempt)
 		if a.Jitter != nil {

@@ -26,6 +26,12 @@ type WatchableDesiredStateSource interface {
 	Watch(context.Context) (<-chan SourceEvent, error)
 }
 
+// ErrDesiredStateNotPublished is a normal waiting state for a kernel that has
+// joined the control plane before an operator publishes its first deployment.
+// It is distinct from transport and decoding failures so startup can remain
+// quiet without weakening fail-closed handling of malformed desired state.
+var ErrDesiredStateNotPublished = errors.New("期望态尚未发布")
+
 // NATSDesiredStateSource 从 JetStream KV 读取并 watch 一份完整期望态。
 type NATSDesiredStateSource struct {
 	KV   jetstream.KeyValue
@@ -38,6 +44,9 @@ func (s NATSDesiredStateSource) Load(ctx context.Context) (deploymentv1.DesiredS
 		return deploymentv1.DesiredState{}, errors.New("NATS 期望态 source 未配置")
 	}
 	entry, err := s.KV.Get(ctx, s.Key)
+	if errors.Is(err, jetstream.ErrKeyNotFound) {
+		return deploymentv1.DesiredState{}, fmt.Errorf("%w: key %s", ErrDesiredStateNotPublished, s.Key)
+	}
 	if err != nil {
 		return deploymentv1.DesiredState{}, fmt.Errorf("读取 NATS 期望态 key %s: %w", s.Key, err)
 	}

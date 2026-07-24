@@ -56,6 +56,7 @@ VastPlan 本地平台管理中心
 用法:
   $0 up [--debug] [--fresh] [--no-hot] [--timeout 秒]
   $0 restart [--debug] [--fresh] [--no-hot] [--timeout 秒]
+  $0 bootstrap [--debug] [--fresh] [--no-hot] [--timeout 秒]
   $0 down
   $0 status
   $0 logs [--follow] [--lines 行数]
@@ -65,8 +66,9 @@ VastPlan 本地平台管理中心
   $0 help
 
 命令:
-  up         后台构建并启动完整平台（默认命令）
-  restart    优雅停止后重新启动
+  up         只启动内核并恢复已有期望态，不执行任何发布（默认命令）
+  restart    优雅停止后按无发布模式重新启动
+  bootstrap  显式发布/更新平台基础组合后启动；不会发布示例业务服务
   down       优雅停止当前平台及其受管子进程
   status     显示编排器与开发网关状态
   logs       显示最近日志；加 --follow/-f 持续跟踪
@@ -437,6 +439,7 @@ runtime_arguments() {
     -seed-artifact-listen "127.0.0.1:$SEED_ARTIFACT_PORT"
     -vault-listen "127.0.0.1:$VAULT_PORT"
 	-hot="$HOT_MODE"
+	-apply-platform="$APPLY_PLATFORM"
   )
 }
 
@@ -552,7 +555,11 @@ start_runtime() {
   : > "$LOG_FILE"
 
   if [ "$debug" = true ]; then
-    info "前台启动完整平台；按 Ctrl+C 优雅停止"
+    if [ "$APPLY_PLATFORM" = true ]; then
+      info "前台执行平台基础发布并启动内核；按 Ctrl+C 优雅停止"
+    else
+      info "前台启动内核并恢复已有期望态（零发布）；按 Ctrl+C 优雅停止"
+    fi
     info "Portal 就绪后地址: $PORTAL_URL"
     set +e
     "$BIN" "${RUNTIME_ARGS[@]}" 2>&1 | tee "$LOG_FILE"
@@ -567,7 +574,11 @@ start_runtime() {
     return 0
   fi
 
-  info "后台启动完整平台，首次运行通常需要 1–3 分钟..."
+  if [ "$APPLY_PLATFORM" = true ]; then
+    info "后台执行平台基础发布并启动；首次运行通常需要 1–3 分钟..."
+  else
+    info "后台启动内核并恢复已有期望态（零发布）..."
+  fi
   nohup "$BIN" "${RUNTIME_ARGS[@]}" > "$LOG_FILE" 2>&1 &
   pid=$!
   printf '%s\n' "$pid" > "$PID_FILE"
@@ -652,6 +663,7 @@ START_TIMEOUT="${VASTPLAN_DEV_TIMEOUT:-300}"
 LOG_FOLLOW=false
 LOG_LINES=100
 HOT_MODE=true
+APPLY_PLATFORM=false
 
 parse_start_options() {
   while [ "$#" -gt 0 ]; do
@@ -710,6 +722,12 @@ case "$COMMAND" in
     ;;
   restart)
     parse_start_options "$@"
+    stop_runtime
+    start_runtime "$DEBUG_MODE" "$FRESH_MODE" "$START_TIMEOUT"
+    ;;
+  bootstrap)
+    parse_start_options "$@"
+    APPLY_PLATFORM=true
     stop_runtime
     start_runtime "$DEBUG_MODE" "$FRESH_MODE" "$START_TIMEOUT"
     ;;

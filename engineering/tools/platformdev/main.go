@@ -44,6 +44,7 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
+	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
 )
 
@@ -58,6 +59,7 @@ type options struct {
 	root, stateRoot                                                                   string
 	listen, portalListen, artifactListen, seedArtifactListen, vaultListen, natsListen string
 	hot                                                                               bool
+	applyPlatform                                                                     bool
 }
 
 type child struct {
@@ -98,6 +100,7 @@ func main() {
 	flag.StringVar(&opts.vaultListen, "vault-listen", "127.0.0.1:18200", "development Vault Transit stub address")
 	flag.StringVar(&opts.natsListen, "nats-listen", "127.0.0.1:0", "development NATS address; port 0 chooses a free port")
 	flag.BoolVar(&opts.hot, "hot", true, "enable transactional frontend plugin hot replacement")
+	flag.BoolVar(&opts.applyPlatform, "apply-platform", false, "explicitly publish the development platform baseline")
 	flag.Parse()
 	if err := run(opts); err != nil {
 		log.Fatalf("本地平台管理中心退出: %v", err)
@@ -134,7 +137,10 @@ func run(opts options) error {
 		return err
 	}
 
-	log.Printf("平台管理中心已就绪: http://%s/operations", opts.listen)
+	log.Printf("前后端最小内核已就绪: http://%s/operations", opts.listen)
+	if !opts.applyPlatform {
+		log.Printf("本次启动未执行任何 Deployment、Portal Activation 或业务服务发布")
+	}
 	log.Printf("本地会话由开发网关注入；不要把这些端口暴露到非本机网络")
 	select {
 	case <-ctx.Done():
@@ -276,11 +282,15 @@ func (r *runtime) signPackageRepository() error {
 			return err
 		}
 	}
-	if err := r.writeAPIExposureConfiguration(signed, refs); err != nil {
-		return err
-	}
-	if err := r.writeAuthorizationBootstrap(repository, refs); err != nil {
-		return fmt.Errorf("生成开发授权策略: %w", err)
+	if r.options.applyPlatform {
+		if err := r.writeAPIExposureConfiguration(signed, refs); err != nil {
+			return err
+		}
+		if err := r.writeAuthorizationBootstrap(repository, refs); err != nil {
+			return fmt.Errorf("生成开发授权策略: %w", err)
+		}
+	} else if err := r.writeSessionsFromPublishedAuthorization(); err != nil {
+		return fmt.Errorf("恢复已发布开发授权会话: %w", err)
 	}
 	if err := r.writeBootstrapInventory(repository, refs); err != nil {
 		return err
@@ -492,10 +502,10 @@ func (r *runtime) writeFixtures(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	rendered, _, err = materializeDevelopmentDeploymentRevision(
-		rendered,
-		sourceDigest,
+	rendered, err = prepareDevelopmentPlatformProfile(
+		rendered, sourceDigest,
 		filepath.Join(r.persistentStateRoot(), "platform-management-revision.json"),
+		r.options.applyPlatform,
 	)
 	if err != nil {
 		return err
@@ -620,21 +630,27 @@ func (r *runtime) start(ctx context.Context) error {
 		return err
 	}
 	controllerArgs := []string{
-		"controlplane", "-nats-url", natsURL, "-nats-allow-insecure", "-bootstrap", "-replicas", "1",
-		"-platform-profile", filepath.Join(r.runDir, "platform-management-profile.json"),
-		"-application-composition", filepath.Join(r.options.root, "engineering", "deploy", "platform-management-application.json"),
-		"-deployment-revision", platformRevision, "-repository", filepath.Join(r.runDir, "repository"), "-controller",
+		"controlplane", "-nats-url", natsURL, "-nats-allow-insecure",
+		"-key", sharedcontrolplane.DeploymentKey("local", "platform-management"),
+		"-repository", filepath.Join(r.runDir, "repository"), "-controller",
 		"-backend-platform-catalog", filepath.Join(r.runDir, "backend-platform-catalog.json"),
+	}
+	if r.options.applyPlatform {
+		controllerArgs = append(controllerArgs,
+			"-bootstrap", "-replicas", "1",
+			"-platform-profile", filepath.Join(r.runDir, "platform-management-profile.json"),
+			"-application-composition", filepath.Join(r.options.root, "engineering", "deploy", "platform-management-application.json"),
+			"-deployment-revision", platformRevision, "-allow-development-plugins",
+		)
 	}
 	controllerArgs = append(controllerArgs, r.controllerArtifactSourceArgs()...)
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
 	}
-	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), platformUnitCount, platformNodeStartedAt, 90*time.Second); err != nil {
-		return fmt.Errorf("平台 Backend 未收敛: %w", err)
-	}
-	if err := waitHTTP(ctx, "https://"+r.options.artifactListen, 30*time.Second, true); err != nil {
-		return fmt.Errorf("托管测试制品仓库未就绪: %w", err)
+	if r.options.applyPlatform {
+		if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), platformUnitCount, platformNodeStartedAt, 120*time.Second); err != nil {
+			return fmt.Errorf("显式发布的平台 Backend 未收敛: %w", err)
+		}
 	}
 	portalArgs := []string{
 		filepath.Join(r.options.root, "core", "kernels", "frontend-host", "dist", "portal-host.cjs"),
@@ -659,18 +675,13 @@ func (r *runtime) start(ctx context.Context) error {
 	if err := waitHTTP(ctx, "https://"+r.options.portalListen+"/v1/csrf", 45*time.Second, true); err != nil {
 		return fmt.Errorf("Node Portal Kernel 未就绪: %w", err)
 	}
-	if err := publishPortal("https://" + r.options.portalListen); err != nil {
-		return fmt.Errorf("发布初始 Portal 组合: %w", err)
+	if r.options.applyPlatform {
+		if err := publishPortal("https://" + r.options.portalListen); err != nil {
+			return fmt.Errorf("显式发布初始 Portal 组合: %w", err)
+		}
 	}
-	if err := publishManagedService(
-		"https://"+r.options.portalListen,
-		filepath.Join(r.options.root, "engineering", "deploy", "managed-services-application.json"),
-	); err != nil {
-		return fmt.Errorf("发布初始在线服务组合: %w", err)
-	}
-	// Publish the managed deployment before joining its first node. Starting the
-	// agent earlier turns the expected initial absence into exponential retries
-	// and can add tens of seconds to every local startup.
+	// Business deployments are never published by startup. This agent may join
+	// before the first explicit publication and remains in a quiet waiting state.
 	managedNodeArgs := []string{
 		"reconcile", "-nats-url", natsURL, "-nats-allow-insecure",
 		"-deployment", "managed-services", "-tenant", "local", "-node-id", "local-managed-node",
@@ -682,12 +693,8 @@ func (r *runtime) start(ctx context.Context) error {
 		"-transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
 	}
 	managedNodeArgs = append(managedNodeArgs, r.managedArtifactSourceArgs()...)
-	managedNodeStartedAt := time.Now().UTC()
 	if _, err := r.startChild("managed-node-agent", env, kernel, managedNodeArgs...); err != nil {
 		return err
-	}
-	if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "managed-services-actual.json"), 1, managedNodeStartedAt, 60*time.Second); err != nil {
-		return fmt.Errorf("在线服务组合未收敛: %w", err)
 	}
 	if r.options.hot {
 		if err := r.startFrontendHMR(ctx); err != nil {
@@ -953,7 +960,7 @@ func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 	status := map[string]any{
 		"ready": ready, "portal": "http://" + r.options.listen + "/operations", "runDir": r.runDir,
 		"mode": "local-development", "productionEquivalent": false,
-		"hot": r.options.hot,
+		"hot": r.options.hot, "startupPublication": r.options.applyPlatform,
 		"repositories": map[string]any{
 			"seed":    map[string]any{"url": "https://" + r.options.seedArtifactListen, "persistent": false},
 			"testing": map[string]any{"url": "https://" + r.options.artifactListen, "persistent": true},
@@ -1128,34 +1135,6 @@ func publishPortal(baseURL string) error {
 		return fmt.Errorf("runtime status=%d body=%s: %w", status, raw, err)
 	}
 	return verifyPortalSSR(client, baseURL, devAdminToken)
-}
-
-func publishManagedService(baseURL, compositionFile string) error {
-	client := &http.Client{Transport: &http.Transport{TLSClientConfig: insecureLocalTLS()}, Timeout: 10 * time.Second}
-	composition, err := backendcompositionv1.ParseApplicationCompositionFile(compositionFile)
-	if err != nil {
-		return fmt.Errorf("读取在线服务组合 %s: %w", compositionFile, err)
-	}
-	basePath := "/v1/portals/operations/platform/services/deployment/deployment/service-revisions"
-	status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, basePath, map[string]any{"composition": composition}, true)
-	if err != nil || status != http.StatusOK {
-		return fmt.Errorf("create service status=%d body=%s: %w", status, raw, err)
-	}
-	var revision struct {
-		ID uint64 `json:"id"`
-	}
-	if err := json.Unmarshal(raw, &revision); err != nil || revision.ID == 0 {
-		return errors.New("Deployment Manager 未返回有效服务 revision")
-	}
-	steps := []struct{ token, operation string }{{authorToken, "submit"}, {approverToken, "approve"}, {publisherToken, "publish"}}
-	for _, step := range steps {
-		path := fmt.Sprintf("%s/%d/%s", basePath, revision.ID, step.operation)
-		status, raw, err = portalRequest(client, baseURL, step.token, http.MethodPost, path, map[string]any{}, true)
-		if err != nil || status != http.StatusOK {
-			return fmt.Errorf("service %s status=%d body=%s: %w", step.operation, status, raw, err)
-		}
-	}
-	return nil
 }
 
 func portalRequest(client *http.Client, baseURL, session, method, path string, payload any, csrf bool) (int, []byte, error) {

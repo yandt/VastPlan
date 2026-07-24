@@ -22,6 +22,20 @@ type developmentDeploymentRevisionState struct {
 	Revision     uint64 `json:"revision"`
 }
 
+// prepareDevelopmentPlatformProfile keeps ordinary kernel startup read-only
+// with respect to business revisions. Only the explicit bootstrap/apply path
+// is allowed to allocate and persist a new Deployment revision.
+func prepareDevelopmentPlatformProfile(rendered []byte, sourceDigest, stateFile string, apply bool) ([]byte, error) {
+	if !apply {
+		if _, err := backendcompositionv1.ParsePlatformProfile(rendered); err != nil {
+			return nil, fmt.Errorf("解析开发 Platform Profile: %w", err)
+		}
+		return append([]byte(nil), rendered...), nil
+	}
+	materialized, _, err := materializeDevelopmentDeploymentRevision(rendered, sourceDigest, stateFile)
+	return materialized, err
+}
+
 // platformManagementSourceDigest fingerprints the stable inputs that produce
 // the local platform Deployment. Runtime paths are normalized, while the
 // selected listen address remains part of the desired configuration.
