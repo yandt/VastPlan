@@ -28,13 +28,11 @@ type sizeException struct {
 // once a file falls under the default limit this entry must be deleted.
 var productionFileSizeExceptions = map[string]sizeException{
 	"contracts/schemas/plugin/v1/schema.go":                                                                        {1039, "插件清单契约仍待按执行、贡献与配置验证拆分"},
-	"extensions/plugins/cn.vastplan.platform.artifacts.repository/repositoryruntime/manager.go":                    {1001, "仓库门面仍待拆分发布、读取与迁移用例"},
 	"extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/deploymentmanager/service.go":       {958, "部署服务仍待拆分节点引导状态与协议适配"},
 	"extensions/plugins/cn.vastplan.platform.security.credentials/credentials/service.go":                          {944, "凭证服务仍待拆分 Vault、生命周期与 material lease"},
 	"extensions/sdk/go/plugin/plugin.go":                                                                           {874, "Go SDK 稳定入口仍待拆分会话、调用与生命周期实现"},
 	"core/shared/go/protocolbus/client.go":                                                                         {846, "协议客户端仍待拆分启动、调用与 HostCall"},
 	"extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime/pool_manager.go":            {841, "连接池管理器仍待拆分代际、租约与回收策略"},
-	"extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog/store.go":                                {828, "Catalog Store 仍待拆分快照、Journal 与恢复"},
 	"core/shared/go/addressing/router.go":                                                                          {811, "寻址 Router 仍待拆分 Invoke 与订阅生命周期"},
 	"engineering/tools/platform-dev.sh":                                                                            {810, "开发入口脚本保留薄命令 UX，子命令仍待逐步迁入 Go"},
 	"extensions/plugins/cn.vastplan.platform.interaction.broker/interaction/service.go":                            {751, "交互 Broker 仍待拆分记录、观察与表单安全"},
