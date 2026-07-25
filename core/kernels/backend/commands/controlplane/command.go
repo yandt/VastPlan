@@ -29,93 +29,65 @@ import (
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("controlplane", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	natsURL := flags.String("nats-url", "tls://127.0.0.1:4222", "NATS URL")
-	natsCA := flags.String("nats-ca", "", "NATS CA PEM")
-	natsCert := flags.String("nats-cert", "", "NATS mTLS 客户端证书 PEM")
-	natsKey := flags.String("nats-key", "", "NATS mTLS 客户端私钥 PEM")
-	natsSeed := flags.String("nats-seed", "", "bootstrap 或 controller 角色 NKey seed（0600）")
-	natsAllowInsecure := flags.Bool("nats-allow-insecure", false, "仅本地开发：允许明文匿名 NATS")
-	platformProfilePath := flags.String("platform-profile", "", "显式 bootstrap/apply 使用的种子 Platform Profile v1")
-	applicationPath := flags.String("application-composition", "", "显式 bootstrap/apply 使用的种子 Application Composition v1")
-	backendCatalogPath := flags.String("backend-platform-catalog", "", "平台签发的 Backend Platform Catalog；controller 为全部预授权目标持续调度")
-	deploymentRevision := flags.Uint64("deployment-revision", 0, "Resolver 输出的独立单调 Deployment revision")
-	allowDevelopmentPlugins := flags.Bool("allow-development-plugins", false, "仅本地开发：允许 example 或历史未分类首方插件")
-	key := flags.String("key", "", "KV key；默认从 metadata.tenant/name 生成")
-	controllerMode := flags.Bool("controller", false, "持续 watch v2 部署与节点租约并生成每节点 assignment")
-	controllerID := flags.String("controller-id", "", "controller 选主身份；默认 hostname-pid")
-	repositoryRoot := flags.String("repository", ".vastplan/repository", "controller 读取完整 manifest 的本地不可变制品仓库")
-	repositoryURL := flags.String("repository-url", "", "controller 使用的 HTTPS 托管制品仓库；本地 Seed 缺失时后备")
-	repositoryProfile := flags.String("repository-profile", "", "controller 使用的精确仓库协议 Profile；当前用于 local-test.v1")
-	repositoryTrust := flags.String("repository-trust", "", "controller 远端制品发布者信任文档")
-	repositoryToken := flags.String("repository-token", "", "controller 远端仓库读令牌；默认读取 VASTPLAN_ARTIFACT_READ_TOKEN")
-	repositoryTokenFile := flags.String("repository-token-file", "", "controller local-test owner-only 访问令牌文件")
-	repositoryCA := flags.String("repository-ca", "", "controller 远端制品仓库自定义 CA PEM")
-	bootstrap := flags.Bool("bootstrap", false, "创建/校准控制面 bucket")
-	replicas := flags.Int("replicas", 1, "bootstrap 时的 JetStream 副本数；生产建议至少 3")
-	sharedStateMaxBytes := flags.Int64("shared-state-max-bytes", 0, "bootstrap 时 Shared State 硬上限；生产必须显式配置")
-	sharedStateWarningPercent := flags.Int("shared-state-warning-percent", sharedstate.DefaultWarningPercent, "Shared State 容量 warning 阈值百分比")
-	sharedStateCriticalPercent := flags.Int("shared-state-critical-percent", sharedstate.DefaultCriticalPercent, "Shared State 容量 critical 阈值百分比")
+	options := bindControlPlaneFlags(flags)
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
-	if *controllerID == "" {
-		hostname, _ := os.Hostname()
-		*controllerID = fmt.Sprintf("%s-%d", hostname, os.Getpid())
-	}
-	if (*platformProfilePath == "") != (*applicationPath == "") {
+	defaultControllerID(options.controllerID)
+	if (*options.platformProfilePath == "") != (*options.applicationPath == "") {
 		return errors.New("发布服务配置必须同时提供 -platform-profile 与 -application-composition")
 	}
-	publish := *platformProfilePath != ""
-	if !publish && !*controllerMode {
+	publish := *options.platformProfilePath != ""
+	if !publish && !*options.controllerMode {
 		return errors.New("发布模式必须提供 -platform-profile 与 -application-composition")
 	}
-	if !publish && *controllerMode && *key == "" && *backendCatalogPath == "" {
-		return errors.New("仅运行 controller 时必须提供 v2 部署 -key 或 -backend-platform-catalog")
+	if !publish && *options.controllerMode && *options.key == "" && *options.backendCatalogPath == "" {
+		return errors.New("仅运行 controller 时必须提供 v2 部署 -options.key 或 -backend-platform-catalog")
 	}
-	if publish && *deploymentRevision == 0 {
+	if publish && *options.deploymentRevision == 0 {
 		return errors.New("发布服务配置必须提供大于 0 的 -deployment-revision")
 	}
 	capacityPolicy := sharedstate.CapacityPolicy{}
-	if *bootstrap {
-		resolved, resolveErr := sharedstate.ResolveCapacityPolicy(*sharedStateMaxBytes, *sharedStateWarningPercent, *sharedStateCriticalPercent, *natsAllowInsecure)
+	if *options.bootstrap {
+		resolved, resolveErr := sharedstate.ResolveCapacityPolicy(*options.sharedStateMaxBytes, *options.sharedStateWarningPercent, *options.sharedStateCriticalPercent, *options.natsAllowInsecure)
 		if resolveErr != nil {
 			return resolveErr
 		}
 		capacityPolicy = resolved
 	}
 
-	artifacts, err := pluginservice.NewRepository(*repositoryRoot)
+	artifacts, err := pluginservice.NewRepository(*options.repositoryRoot)
 	if err != nil {
 		return err
 	}
-	if *repositoryURL != "" && *repositoryToken == "" {
-		*repositoryToken = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
+	if *options.repositoryURL != "" && *options.repositoryToken == "" {
+		*options.repositoryToken = os.Getenv("VASTPLAN_ARTIFACT_READ_TOKEN")
 	}
 	controllerArtifacts, err := buildControllerArtifactReader(artifacts, controllerRepositoryOptions{
-		URL: *repositoryURL, ProfileFile: *repositoryProfile, TrustFile: *repositoryTrust,
-		Token: *repositoryToken, TokenFile: *repositoryTokenFile, CAFile: *repositoryCA,
+		URL: *options.repositoryURL, ProfileFile: *options.repositoryProfile, TrustFile: *options.repositoryTrust,
+		Token: *options.repositoryToken, TokenFile: *options.repositoryTokenFile, CAFile: *options.repositoryCA,
 	})
 	if err != nil {
 		return err
 	}
 	var backendCatalog backendcompositionv1.BackendPlatformCatalog
-	if *backendCatalogPath != "" {
-		backendCatalog, err = backendcompositionv1.ParseBackendPlatformCatalogFile(*backendCatalogPath)
+	if *options.backendCatalogPath != "" {
+		backendCatalog, err = backendcompositionv1.ParseBackendPlatformCatalogFile(*options.backendCatalogPath)
 		if err != nil {
 			return err
 		}
-		if !*controllerMode {
+		if !*options.controllerMode {
 			return errors.New("-backend-platform-catalog 只用于 controller fleet 模式")
 		}
 	}
 	var publicationApplication backendcompositionv1.ApplicationComposition
 	var publicationCatalog backendcompositionv1.BackendPlatformCatalog
 	if publish {
-		profile, err := backendcompositionv1.ParsePlatformProfileFile(*platformProfilePath)
+		profile, err := backendcompositionv1.ParsePlatformProfileFile(*options.platformProfilePath)
 		if err != nil {
 			return err
 		}
-		application, err := backendcompositionv1.ParseApplicationCompositionFile(*applicationPath)
+		application, err := backendcompositionv1.ParseApplicationCompositionFile(*options.applicationPath)
 		if err != nil {
 			return err
 		}
@@ -126,9 +98,9 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		publicationApplication = application
 	}
 	nc, err := sharedcontrolplane.ConnectWithConfig(sharedcontrolplane.ConnectionConfig{
-		URL: *natsURL, ClientName: "vastplan-controlplane",
-		CAFile: *natsCA, CertFile: *natsCert, KeyFile: *natsKey, SeedFile: *natsSeed,
-		Insecure: *natsAllowInsecure,
+		URL: *options.natsURL, ClientName: "vastplan-controlplane",
+		CAFile: *options.natsCA, CertFile: *options.natsCert, KeyFile: *options.natsKey, SeedFile: *options.natsSeed,
+		Insecure: *options.natsAllowInsecure,
 		Logf:     func(format string, values ...any) { _, _ = fmt.Fprintf(stderr, format+"\n", values...) },
 	})
 	if err != nil {
@@ -142,9 +114,9 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	openCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	var buckets sharedcontrolplane.Buckets
-	if *bootstrap {
+	if *options.bootstrap {
 		buckets, err = sharedcontrolplane.EnsureBucketsWithOptions(openCtx, js, sharedcontrolplane.EnsureBucketsOptions{
-			Replicas: *replicas, Storage: jetstream.FileStorage, SharedStateCapacity: capacityPolicy,
+			Replicas: *options.replicas, Storage: jetstream.FileStorage, SharedStateCapacity: capacityPolicy,
 		})
 	} else {
 		buckets, err = sharedcontrolplane.OpenBuckets(openCtx, js)
@@ -152,7 +124,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	if *backendCatalogPath != "" && *bootstrap {
+	if *options.backendCatalogPath != "" && *options.bootstrap {
 		catalogStore, err := platformcatalog.NewStore(buckets.BackendPlatformCatalogs, backendCatalog)
 		if err != nil {
 			return err
@@ -163,33 +135,33 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	if publish {
 		derivedKey := sharedcontrolplane.DeploymentKey(publicationApplication.Metadata.Tenant, publicationApplication.Metadata.Name)
-		if *key != "" && *key != derivedKey {
-			return fmt.Errorf("种子配置目标与显式 Deployment key 不一致: expected=%s actual=%s", derivedKey, *key)
+		if *options.key != "" && *options.key != derivedKey {
+			return fmt.Errorf("种子配置目标与显式 Deployment options.key 不一致: expected=%s actual=%s", derivedKey, *options.key)
 		}
 		publisher, err := deploymentpublisher.New(
 			publicationCatalog,
 			controllerArtifacts,
 			deploymentpublisher.KVApplier{KV: buckets.Deployments},
 			configurationcatalog.Store{KV: buckets.Deployments},
-			compositionresolver.Options{AllowDevelopmentPlugins: *allowDevelopmentPlugins},
+			compositionresolver.Options{AllowDevelopmentPlugins: *options.allowDevelopmentPlugins},
 			compositionresolver.Resolve,
 		)
 		if err != nil {
 			return fmt.Errorf("创建统一服务发布器: %w", err)
 		}
-		preview, err := publisher.Preview(openCtx, publicationApplication.Metadata.Tenant, publicationApplication, *deploymentRevision)
+		preview, err := publisher.Preview(openCtx, publicationApplication.Metadata.Tenant, publicationApplication, *options.deploymentRevision)
 		if err != nil {
 			return fmt.Errorf("预览种子服务配置: %w", err)
 		}
-		result, err := publisher.Publish(openCtx, publicationApplication.Metadata.Tenant, publicationApplication, *deploymentRevision, preview.Digest)
+		result, err := publisher.Publish(openCtx, publicationApplication.Metadata.Tenant, publicationApplication, *options.deploymentRevision, preview.Digest)
 		if err != nil {
 			return fmt.Errorf("发布种子服务配置: %w", err)
 		}
-		if _, err := fmt.Fprintf(stdout, "已通过统一服务发布器发布 Deployment %s revision=%d kv-revision=%d source=seed-file key=%s\n", result.Deployment.Metadata.Name, result.Deployment.Revision, result.KVRevision, derivedKey); err != nil {
+		if _, err := fmt.Fprintf(stdout, "已通过统一服务发布器发布 Deployment %s revision=%d kv-revision=%d source=seed-file options.key=%s\n", result.Deployment.Metadata.Name, result.Deployment.Revision, result.KVRevision, derivedKey); err != nil {
 			return err
 		}
 	}
-	if !*controllerMode {
+	if !*options.controllerMode {
 		return nil
 	}
 	controller := deploymentcontroller.Controller{
@@ -198,12 +170,12 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			Nodes: buckets.Nodes, Assignments: buckets.Assignments, Metrics: buckets.Autoscaling,
 			Actual: buckets.Actual, Compositions: buckets.Compositions, Artifacts: controllerArtifacts,
 		},
-		Leaders: buckets.Controllers, Identity: *controllerID,
+		Leaders: buckets.Controllers, Identity: *options.controllerID,
 		Logf: func(format string, values ...any) { _, _ = fmt.Fprintf(stderr, format+"\n", values...) },
 	}
 	keys := make([]string, 0, len(backendCatalog.Bindings)+1)
-	if *key != "" {
-		keys = append(keys, *key)
+	if *options.key != "" {
+		keys = append(keys, *options.key)
 	}
 	for _, binding := range backendCatalog.Bindings {
 		keys = append(keys, sharedcontrolplane.DeploymentKey(binding.TenantID, binding.DeploymentName))

@@ -27,28 +27,15 @@ import (
 	"syscall"
 	"time"
 
-	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	artifactservercommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/artifactserver"
 	controlplanecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/controlplane"
 	nodebootstrapcommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/nodebootstrap"
 	seedrepositorycommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/seedrepository"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
-	backendconfigurationauthority "cdsoft.com.cn/VastPlan/core/kernels/backend/configurationauthority"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/configurationcatalog"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/credentialbroker"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentpublisher"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/kernelops"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapbroker"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapobserver"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/platformcatalog"
-	kernelprofileactivation "cdsoft.com.cn/VastPlan/core/kernels/backend/profileactivation"
-	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicewatchdog"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
 )
 
 // KernelName 本内核的规范 ID（ADR-0015）。
@@ -246,26 +233,7 @@ func runReconcile(args []string) (runErr error) {
 		return err
 	}
 	defer func() { runErr = errors.Join(runErr, processLock.Close()) }()
-	labels, err := parseLabels(options.labelsRaw)
-	if err != nil {
-		return err
-	}
-	artifacts, err := buildArtifactResolution(options)
-	if err != nil {
-		return err
-	}
-	var bootstrapInventory *bootstrapinventory.Inventory
-	if options.bootstrapInventory != "" {
-		inventory, err := bootstrapinventory.ParseFile(options.bootstrapInventory)
-		if err != nil {
-			return fmt.Errorf("读取 Bootstrap Inventory: %w", err)
-		}
-		if err := artifacts.VerifyBootstrapInventory(context.Background(), inventory); err != nil {
-			return err
-		}
-		bootstrapInventory = &inventory
-	}
-	bootstrapUpgrade, err := buildBootstrapUpgrade(options, artifacts)
+	prepared, err := prepareReconcile(options)
 	if err != nil {
 		return err
 	}
@@ -275,89 +243,9 @@ func runReconcile(args []string) (runErr error) {
 		return err
 	}
 	defer func() { runErr = errors.Join(runErr, plane.Close()) }()
-	runtime := nodeagent.NewProtocolRuntime(version, logf)
-	runtime.ExecutionPolicy = options.executionPolicy
-	runtime.ContextPolicy = options.contextPolicy
-	runtime.PlacementPolicy = options.placementPolicy
-	runtime.HostingPolicy = options.hostingPolicy
-	runtime.Identity = options.nodeID
-	runtime.LeaderKV = plane.buckets.Controllers
-	if plane.buckets.SharedState != nil {
-		stateStore, err := sharedstate.NewNATSStore(plane.buckets.SharedState)
-		if err != nil {
-			return err
-		}
-		runtime.Dependencies.SharedState = stateStore
-	}
-	if err := configurePortalHostServices(options, artifacts, plane, runtime, logf); err != nil {
+	runtime, err := buildReconcileRuntime(options, prepared.artifacts, plane, logf)
+	if err != nil {
 		return err
-	}
-	if plane.transport != nil && plane.buckets.Nodes != nil {
-		readiness, err := nodebootstrapobserver.New(plane.buckets.Nodes, plane.transport)
-		if err != nil {
-			return err
-		}
-		runtime.Dependencies.NodeReadiness = readiness
-	}
-	var namedCredentials kernelspi.CredentialBroker
-	if options.credentialRoot != "" {
-		credentials, err := credentialbroker.NewDirectory(options.credentialRoot)
-		if err != nil {
-			return err
-		}
-		bootstrapBroker, err := nodebootstrapbroker.NewSSH(credentials, 30*time.Second)
-		if err != nil {
-			return err
-		}
-		namedCredentials = credentials
-		runtime.Dependencies.NodeBootstrap = bootstrapBroker
-	}
-	var managedCredentials kernelspi.CredentialBroker
-	if plane.router != nil {
-		audience := options.nodeID
-		if plane.transport != nil && plane.transport.SelfIdentity().Name != "" {
-			audience = plane.transport.SelfIdentity().Name
-		}
-		managedCredentials, err = credentialbroker.NewManagedLease(audience, plane.router.Invoke)
-		if err != nil {
-			return err
-		}
-		runtime.Dependencies.RuntimeMaterialLeases, err = credentialbroker.NewRuntimeLease(plane.router.Invoke)
-		if err != nil {
-			return err
-		}
-	}
-	if managedCredentials != nil || namedCredentials != nil {
-		runtime.Dependencies.Credentials, err = credentialbroker.NewComposite(managedCredentials, namedCredentials)
-		if err != nil {
-			return err
-		}
-	}
-	if options.backendPlatformCatalog != "" {
-		catalog, err := backendcompositionv1.ParseBackendPlatformCatalogFile(options.backendPlatformCatalog)
-		if err != nil {
-			return err
-		}
-		catalogSource, err := platformcatalog.NewWritableStore(plane.buckets.BackendPlatformCatalogs, plane.catalogPublisherKV, catalog)
-		if err != nil {
-			return err
-		}
-		catalogStore := configurationcatalog.Store{KV: plane.buckets.Deployments}
-		publisher, err := deploymentpublisher.NewWithCatalogSource(catalogSource, artifacts, deploymentpublisher.KVApplier{KV: plane.buckets.Deployments}, catalogStore, compositionresolver.Options{AllowDevelopmentPlugins: options.allowDevelopmentPlugins}, compositionresolver.Resolve)
-		if err != nil {
-			return err
-		}
-		runtime.Dependencies.DeploymentPublication = publisher
-		profileActivation, err := kernelprofileactivation.New(catalogSource, catalogStore, publisher)
-		if err != nil {
-			return err
-		}
-		runtime.Dependencies.PlatformProfileActivation = profileActivation
-		runtime.Dependencies.DeploymentReadiness = natsDeploymentReadiness{KV: plane.buckets.Compositions}
-		runtime.Dependencies.ConfigurationCatalogs = catalogStore
-		authorityStore := backendconfigurationauthority.Store{KV: plane.buckets.ConfigurationAuthorities, Catalogs: catalogStore}
-		runtime.Dependencies.ConfigurationAuthorityIssuer = authorityStore
-		runtime.Dependencies.ConfigurationAuthorityConsumer = authorityStore
 	}
 	defer func() { runErr = errors.Join(runErr, runtime.Close()) }()
 	if plane.router != nil {
@@ -365,23 +253,9 @@ func runReconcile(args []string) (runErr error) {
 			return err
 		}
 	}
-	reconciler := &nodeagent.Reconciler{
-		NodeID: options.nodeID, NodeLabels: labels, Sources: artifacts.sources, Verifier: artifacts.verifier,
-		Installer: nodeagent.LocalInstaller{Root: options.runtimeRoot}, Runtime: runtime,
-		StateStore: plane.stateStore, RequireArtifactReferences: options.repositoryURL != "" || options.repositoryProfile != "", BootstrapInventory: bootstrapInventory,
-		BootstrapUpgrade: bootstrapUpgrade,
-	}
-	if plane.router != nil {
-		reconciler.References, err = nodeagent.NewAddressingArtifactReferencePublisher(plane.router, options.nodeID)
-		if err != nil {
-			return err
-		}
-		if bootstrapInventory != nil && options.publishBootstrapReferences {
-			reconciler.BootstrapReferences, err = nodeagent.NewBootstrapArtifactReferencePublisher(plane.router, bootstrapInventory.RepositoryID)
-			if err != nil {
-				return err
-			}
-		}
+	reconciler, err := buildNodeReconciler(options, prepared, plane, runtime)
+	if err != nil {
+		return err
 	}
 	liveness := &servicewatchdog.Liveness{}
 	reconciler.Pulse = liveness.Pulse
@@ -393,7 +267,7 @@ func runReconcile(args []string) (runErr error) {
 	defer stop()
 	liveness.Pulse()
 	serviceNotifier.Start(ctx, liveness, logf)
-	leaseGuard, err := startNodeLeaseGuard(ctx, stop, options, labels, plane.buckets, plane.transport, logf)
+	leaseGuard, err := startNodeLeaseGuard(ctx, stop, options, prepared.labels, plane.buckets, plane.transport, logf)
 	if err != nil {
 		return err
 	}

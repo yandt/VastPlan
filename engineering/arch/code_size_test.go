@@ -32,9 +32,6 @@ var productionFileSizeExceptions = map[string]sizeException{}
 // current span. Keep this list intentionally small; workflow-sized functions
 // should normally be decomposed before landing.
 var goFunctionSizeExceptions = map[string]sizeException{
-	"core/kernels/backend/commands/controlplane/command.go#Run":                                                             {187, "控制面命令仍待拆分参数投影、NATS 装配与运行阶段"},
-	"core/kernels/backend/main.go#runReconcile":                                                                             {181, "Backend reconcile 入口仍待拆分依赖装配和运行循环"},
-	"core/kernels/backend/reconcile_support.go#parseReconcileOptions":                                                       {181, "兼容参数解析仍待迁入分域配置结构"},
 	"extensions/plugins/cn.vastplan.platform.artifacts.repository/backend/main.go#main":                                     {263, "仓库插件入口仍待把协议 Handler 注册抽为装配模块"},
 	"extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog/bundle.go#CreateOfflineBundle":                    {202, "离线 Bundle 创建仍待拆分取证、复制与签名验证阶段"},
 	"extensions/plugins/cn.vastplan.platform.configuration.portal-composer/portalcomposer/capability.go#(*Service).Handle":  {232, "Portal Composer 能力分发仍待按治理领域拆分"},
