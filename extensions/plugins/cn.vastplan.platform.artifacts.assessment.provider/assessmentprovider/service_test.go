@@ -72,7 +72,9 @@ func (h *serviceHost) Call(_ context.Context, target *contractv1.CallTarget, _ *
 }
 
 func TestServiceUsesScanLeaseAndMaterialLeaseWithoutReturningSecrets(t *testing.T) {
-	now := time.Date(2026, 7, 24, 6, 0, 0, 0, time.UTC)
+	// 集成链路会按 24 小时 TTL 校验真实 Provider 生成的评估时间，
+	// 因此测试基准必须随执行时刻前进，避免固定日期自然过期。
+	now := time.Now().UTC().Truncate(time.Second)
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)

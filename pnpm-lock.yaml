@@ -578,6 +578,15 @@ importers:
         specifier: workspace:*
         version: link:../backend-plugin
 
+  extensions/sdk/ts/composition-planning:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)
+
   extensions/sdk/ts/frontend-engine-contract:
     devDependencies:
       typescript:

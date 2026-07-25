@@ -1,6 +1,10 @@
 package pluginv1
 
-import "encoding/json"
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+)
 
 // ArtifactRef 唯一定位一个已发布制品。它是制品生产者与消费者之间的稳定 DTO，
 // 不包含任何仓库实现细节。
@@ -74,6 +78,26 @@ type ArtifactLock struct {
 	Roots              []ArtifactRequirement `json:"roots"`
 	Packages           []ArtifactLockPackage `json:"packages"`
 	Digest             string                `json:"digest"`
+}
+
+// ArtifactLockDigest 对省略 Digest 的封闭锁定内容计算摘要。
+// 仓库、Planner 与所有消费内核必须复用这一份实现。
+func ArtifactLockDigest(lock ArtifactLock) (string, error) {
+	payload := struct {
+		SchemaVersion      string                `json:"schemaVersion"`
+		RepositoryRevision uint64                `json:"repositoryRevision"`
+		Target             string                `json:"target"`
+		KernelVersion      string                `json:"kernelVersion"`
+		Platform           string                `json:"platform,omitempty"`
+		Roots              []ArtifactRequirement `json:"roots"`
+		Packages           []ArtifactLockPackage `json:"packages"`
+	}{lock.SchemaVersion, lock.RepositoryRevision, lock.Target, lock.KernelVersion, lock.Platform, lock.Roots, lock.Packages}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(raw)
+	return hex.EncodeToString(digest[:]), nil
 }
 
 // ArtifactReference binds one exact immutable artifact to a consumer-owned

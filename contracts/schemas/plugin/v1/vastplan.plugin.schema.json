@@ -42,6 +42,7 @@
     "contextAccess": { "$ref": "#/$defs/contextAccess" },
     "runtime": { "$ref": "#/$defs/runtimePolicy" },
     "execution": { "$ref": "#/$defs/executionPolicy" },
+    "composition": { "$ref": "#/$defs/compositionContract" },
     "configuration": { "$ref": "#/$defs/configurationContract" },
     "authorization": { "$ref": "#/$defs/authorizationContract" },
     "activation": { "$ref": "#/$defs/stringList" },
@@ -255,6 +256,68 @@
         },
         "access": { "enum": ["read", "write", "approve", "execute"] },
         "approval": { "enum": ["none", "different-subject", "two-person"] }
+      }
+    },
+    "compositionContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["features"],
+      "properties": {
+        "features": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/compositionFeature" }
+        }
+      }
+    },
+    "compositionFeature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title"],
+      "anyOf": [
+        { "required": ["dependencies"] },
+        { "required": ["runtimeRequires"] },
+        { "required": ["configurationSchema"] }
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "dependencies": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+          "additionalProperties": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" }
+        },
+        "runtimeRequires": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/runtimeRequirement" }
+        },
+        "configurationSchema": { "$ref": "#/$defs/featureConfigurationSchema" }
+      }
+    },
+    "featureConfigurationSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "additionalProperties"],
+      "properties": {
+        "type": { "const": "object" },
+        "additionalProperties": { "const": false },
+        "properties": {
+          "type": "object",
+          "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 160 },
+          "additionalProperties": { "type": "object" }
+        },
+        "required": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 160 }
+        }
       }
     },
     "configurationContract": {

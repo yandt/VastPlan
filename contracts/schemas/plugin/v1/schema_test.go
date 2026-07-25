@@ -100,6 +100,39 @@ func TestParseManifestSupplyChainDeclarationIsClosed(t *testing.T) {
 	}
 }
 
+func TestParseManifestCompositionFeaturesAreSignedAndClosed(t *testing.T) {
+	base := `{
+  "id":"com.example.demo","name":"demo","description":"demo","version":"1.0.0","publisher":"example",
+  "engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},
+  "configuration":{"scope":"service","applyMode":"restart","schema":{"type":"object","additionalProperties":false,"properties":{"mode":{"type":"string"}}}},
+  "composition":{"features":%s},"contributes":{"backend":{"tools":[]}}
+}`
+	valid := `[{
+  "id":"audit.extended","title":"Extended audit",
+  "dependencies":{"com.example.audit":"^1.0"},
+  "runtimeRequires":[{"capability":"platform.audit","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"fail"}],
+  "configurationSchema":{"type":"object","additionalProperties":false,"properties":{"mode":{"const":"extended"}},"required":["mode"]}
+}]`
+	manifest, err := ParseManifest([]byte(fmt.Sprintf(base, valid)))
+	if err != nil || manifest.Composition == nil || len(manifest.Composition.Features) != 1 {
+		t.Fatalf("有效组合 Feature 应通过: manifest=%+v err=%v", manifest, err)
+	}
+	for name, features := range map[string]string{
+		"重复 Feature": valid[:len(valid)-1] + `,` + valid[1:],
+		"自依赖":        `[{"id":"self","title":"Self","dependencies":{"com.example.demo":"^1.0"}}]`,
+		"新增未声明配置字段":  `[{"id":"bad.config","title":"Bad","configurationSchema":{"type":"object","additionalProperties":false,"properties":{"secret":{"type":"string"}}}}]`,
+		"要求未声明配置字段":  `[{"id":"bad.required","title":"Bad","configurationSchema":{"type":"object","additionalProperties":false,"required":["secret"]}}]`,
+		"任意配置条件":     `[{"id":"bad.condition","title":"Bad","configurationSchema":{"type":"object","additionalProperties":false,"if":{"properties":{"mode":{"const":"extended"}}}}}]`,
+		"运行时表达式":     `[{"id":"scripted","title":"Scripted","dependencies":{"com.example.audit":"^1.0"},"when":"config.enabled"}]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := ParseManifest([]byte(fmt.Sprintf(base, features))); err == nil {
+				t.Fatal("非法组合 Feature 必须被拒绝")
+			}
+		})
+	}
+}
+
 func TestParseManifest_RenderAdapterContributionIsClosedAndComplete(t *testing.T) {
 	base := `{
   "id":"cn.vastplan.foundation.frontend.render.adapter.test","name":"test","description":"test","version":"1.0.0","publisher":"vastplan",

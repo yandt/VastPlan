@@ -1,8 +1,6 @@
 package catalog
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -556,21 +554,7 @@ func ValidateLock(lock pluginv1.ArtifactLock) error {
 }
 
 func artifactLockDigest(lock pluginv1.ArtifactLock) (string, error) {
-	payload := struct {
-		SchemaVersion      string                         `json:"schemaVersion"`
-		RepositoryRevision uint64                         `json:"repositoryRevision"`
-		Target             string                         `json:"target"`
-		KernelVersion      string                         `json:"kernelVersion"`
-		Platform           string                         `json:"platform,omitempty"`
-		Roots              []pluginv1.ArtifactRequirement `json:"roots"`
-		Packages           []pluginv1.ArtifactLockPackage `json:"packages"`
-	}{lock.SchemaVersion, lock.RepositoryRevision, lock.Target, lock.KernelVersion, lock.Platform, lock.Roots, lock.Packages}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-	digest := sha256.Sum256(raw)
-	return hex.EncodeToString(digest[:]), nil
+	return pluginv1.ArtifactLockDigest(lock)
 }
 
 func sortCandidates(entries []Entry, channelRank map[string]int) {

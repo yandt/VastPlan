@@ -77,6 +77,7 @@ type Manifest struct {
 	ContextAccess        *ContextAccess             `json:"contextAccess,omitempty"`
 	Runtime              *RuntimePolicy             `json:"runtime,omitempty"`
 	Execution            *ExecutionPolicy           `json:"execution,omitempty"`
+	Composition          *CompositionContract       `json:"composition,omitempty"`
 	Configuration        *ConfigurationContract     `json:"configuration,omitempty"`
 	Authorization        *AuthorizationContract     `json:"authorization,omitempty"`
 	State                *State                     `json:"state,omitempty"`
@@ -86,6 +87,22 @@ type Manifest struct {
 	FrontendModuleGraphs *FrontendModuleGraphs      `json:"frontendModuleGraphs,omitempty"`
 	SupplyChain          *SupplyChain               `json:"supplyChain,omitempty"`
 	Contributes          map[string]json.RawMessage `json:"contributes"`
+}
+
+// CompositionContract 声明随 Manifest 签名、可由用户选择的 Feature 开关。
+// Feature 只能增加预声明依赖、运行时要求与封闭配置约束，不能携带脚本或
+// 用户编写的依赖表达式。
+type CompositionContract struct {
+	Features []CompositionFeature `json:"features"`
+}
+
+type CompositionFeature struct {
+	ID                  string               `json:"id"`
+	Title               string               `json:"title"`
+	Description         string               `json:"description,omitempty"`
+	Dependencies        map[string]string    `json:"dependencies,omitempty"`
+	RuntimeRequires     []RuntimeRequirement `json:"runtimeRequires,omitempty"`
+	ConfigurationSchema json.RawMessage      `json:"configurationSchema,omitempty"`
 }
 
 type SupplyChain struct {
@@ -656,6 +673,9 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	if err := validateConfiguration(manifest); err != nil {
 		return Manifest{}, err
 	}
+	if err := validateCompositionFeatures(manifest); err != nil {
+		return Manifest{}, err
+	}
 	if manifest.Configuration != nil && len(manifest.Configuration.ManagedCredentials) > 0 {
 		found := false
 		if manifest.Capabilities != nil {
@@ -839,6 +859,65 @@ func validateConfiguration(manifest Manifest) error {
 				return fmt.Errorf("configuration.resourceCollections %q 托管凭证 purpose 重复: %q", collection.ID, field.Purpose)
 			}
 			resourceFieldIDs[field.ID], resourcePurposes[field.Purpose] = struct{}{}, struct{}{}
+		}
+	}
+	return nil
+}
+
+func validateCompositionFeatures(manifest Manifest) error {
+	if manifest.Composition == nil {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(manifest.Composition.Features))
+	var baseProperties map[string]any
+	if manifest.Configuration != nil {
+		var base map[string]any
+		if err := json.Unmarshal(manifest.Configuration.Schema, &base); err == nil {
+			baseProperties, _ = base["properties"].(map[string]any)
+		}
+	}
+	for _, feature := range manifest.Composition.Features {
+		if _, duplicate := seen[feature.ID]; duplicate {
+			return fmt.Errorf("composition.features id 重复: %q", feature.ID)
+		}
+		seen[feature.ID] = struct{}{}
+		if _, self := feature.Dependencies[manifest.ID]; self {
+			return fmt.Errorf("composition.features %q 不能依赖自身插件", feature.ID)
+		}
+		if err := validateRuntimeRequirements(feature.RuntimeRequires); err != nil {
+			return fmt.Errorf("composition.features %q: %w", feature.ID, err)
+		}
+		if len(feature.ConfigurationSchema) == 0 {
+			continue
+		}
+		if manifest.Configuration == nil {
+			return fmt.Errorf("composition.features %q 声明 configurationSchema，但插件没有 configuration 契约", feature.ID)
+		}
+		var schema map[string]any
+		if err := json.Unmarshal(feature.ConfigurationSchema, &schema); err != nil || schema == nil {
+			return fmt.Errorf("composition.features %q configurationSchema 必须是 JSON Schema 对象", feature.ID)
+		}
+		if schema["type"] != "object" {
+			return fmt.Errorf("composition.features %q configurationSchema 根类型必须是 object", feature.ID)
+		}
+		if additional, exists := schema["additionalProperties"]; !exists || additional != false {
+			return fmt.Errorf("composition.features %q configurationSchema 必须显式 additionalProperties=false", feature.ID)
+		}
+		if err := rejectRemoteSchemaRefs(schema); err != nil {
+			return fmt.Errorf("composition.features %q: %w", feature.ID, err)
+		}
+		properties, _ := schema["properties"].(map[string]any)
+		for property := range properties {
+			if _, declared := baseProperties[property]; !declared {
+				return fmt.Errorf("composition.features %q configurationSchema 引用了基础配置未声明的字段 %q", feature.ID, property)
+			}
+		}
+		required, _ := schema["required"].([]any)
+		for _, value := range required {
+			property, _ := value.(string)
+			if _, declared := baseProperties[property]; !declared {
+				return fmt.Errorf("composition.features %q configurationSchema 要求了基础配置未声明的字段 %q", feature.ID, property)
+			}
 		}
 	}
 	return nil

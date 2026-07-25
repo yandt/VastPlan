@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/composition/backend/v1/vastplan.application-intent.schema.json",
+  "title": "VastPlan Backend Application Intent v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "revision", "id", "target", "metadata", "services"],
+  "properties": {
+    "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
+    "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
+    "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/compositionId" },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kernel"],
+      "properties": { "kernel": { "const": "backend" } }
+    },
+    "metadata": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/deployment/v2/vastplan.deployment.schema.json#/$defs/deploymentMetadata" },
+    "services": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/serviceIntent" }
+    }
+  },
+  "$defs": {
+    "serviceId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+    "featureId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pluginId", "version", "channel"],
+      "properties": {
+        "pluginId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+        "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel" }
+      }
+    },
+    "rootPlugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref"],
+      "properties": {
+        "ref": { "$ref": "#/$defs/artifactRef" },
+        "features": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/featureId" }
+        }
+      }
+    },
+    "operations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replicas"],
+      "properties": {
+        "replicas": { "type": "integer", "minimum": 1, "maximum": 1024 },
+        "autoscaling": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/deployment/v2/vastplan.deployment.schema.json#/$defs/autoscaling" },
+        "resources": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/deployment/v2/vastplan.deployment.schema.json#/$defs/resources" },
+        "placement": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/deployment/v2/vastplan.deployment.schema.json#/$defs/placement" }
+      }
+    },
+    "serviceIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "serviceClass", "rootPlugins", "operations"],
+      "properties": {
+        "id": { "$ref": "#/$defs/serviceId" },
+        "serviceClass": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+        "rootPlugins": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/rootPlugin" }
+        },
+        "pluginConfig": {
+          "type": "object",
+          "maxProperties": 1024,
+          "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+          "additionalProperties": { "type": "object" }
+        },
+        "operations": { "$ref": "#/$defs/operations" }
+      }
+    }
+  }
+}
