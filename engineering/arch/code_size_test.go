@@ -26,10 +26,7 @@ type sizeException struct {
 // Existing oversized files are a burn-down list, not a blanket exemption.
 // Maximum freezes today's size: new responsibilities must be split out, and
 // once a file falls under the default limit this entry must be deleted.
-var productionFileSizeExceptions = map[string]sizeException{
-	"engineering/tools/platform-dev.sh":                                                                            {810, "开发入口脚本保留薄命令 UX，子命令仍待逐步迁入 Go"},
-	"extensions/sdk/ts/ui-primitives/src/index.ts":                                                                 {617, "公共 UI 契约待按 form、shell、collection 与 theme 分文件导出"},
-}
+var productionFileSizeExceptions = map[string]sizeException{}
 
 // Function exceptions use exact receiver/name identities and freeze the
 // current span. Keep this list intentionally small; workflow-sized functions
