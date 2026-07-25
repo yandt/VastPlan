@@ -315,7 +315,8 @@ type StateMigration struct {
 	From     []StateIdentity `json:"from"`
 }
 
-// Capabilities 是装配元数据，不承担运行时权限强制职责。
+// Capabilities 声明插件运行需求。KernelServices 既参与装配，也作为签名申请进入
+// 可信宿主的 Grant 编译；清单申请本身不等于授权。
 type Capabilities struct {
 	KernelServices []string `json:"kernelServices,omitempty"`
 	Credentials    []string `json:"credentials,omitempty"`

@@ -105,6 +105,7 @@ type RuntimeUnit struct {
 	PartitionGenerations   map[string]uint64
 	PartitionFencingTokens map[string]string
 	EnvironmentAllowlists  map[string][]string
+	KernelServiceGrants    map[string][]string
 	Config                 map[string]any
 	Plugins                []InstalledPlugin
 	Migrations             []StateMigrationPlan
@@ -122,12 +123,13 @@ type StateMigrationPlan struct {
 
 // RuntimeStatus 来自真实插件会话，不由持久化文件反推。
 type RuntimeStatus struct {
-	Healthy          bool
-	Readiness        string
-	DependencyIssues []string
-	PIDs             []int
-	StartedAt        time.Time
-	RestartCount     uint64
+	Healthy             bool
+	Readiness           string
+	DependencyIssues    []string
+	PIDs                []int
+	StartedAt           time.Time
+	RestartCount        uint64
+	KernelServiceGrants map[string][]string
 }
 
 // RuntimeEvent 通知 Agent 某 unit 的运行事实发生变化，使崩溃恢复无需等待配置轮询。
@@ -162,18 +164,19 @@ type ActualState struct {
 // UnitState 同时记录当前稳定实例和可选的升级候选。候选失败不会覆盖当前实例，
 // 控制面因此能区分“当前实例失效”和“新版本尝试失败”两种完全不同的事实。
 type UnitState struct {
-	Fingerprint      string            `json:"fingerprint"`
-	AppliedRevision  uint64            `json:"applied_revision"`
-	Phase            UnitPhase         `json:"phase"`
-	PhaseChangedAt   time.Time         `json:"phase_changed_at"`
-	Plugins          []InstalledPlugin `json:"plugins"`
-	PIDs             []int             `json:"pids,omitempty"`
-	StartedAt        *time.Time        `json:"started_at,omitempty"`
-	RestartCount     uint64            `json:"restart_count"`
-	LastError        string            `json:"last_error,omitempty"`
-	Readiness        string            `json:"readiness,omitempty"`
-	DependencyIssues []string          `json:"dependency_issues,omitempty"`
-	Candidate        *CandidateState   `json:"candidate,omitempty"`
+	Fingerprint         string              `json:"fingerprint"`
+	AppliedRevision     uint64              `json:"applied_revision"`
+	Phase               UnitPhase           `json:"phase"`
+	PhaseChangedAt      time.Time           `json:"phase_changed_at"`
+	Plugins             []InstalledPlugin   `json:"plugins"`
+	PIDs                []int               `json:"pids,omitempty"`
+	StartedAt           *time.Time          `json:"started_at,omitempty"`
+	RestartCount        uint64              `json:"restart_count"`
+	LastError           string              `json:"last_error,omitempty"`
+	Readiness           string              `json:"readiness,omitempty"`
+	DependencyIssues    []string            `json:"dependency_issues,omitempty"`
+	KernelServiceGrants map[string][]string `json:"kernel_service_grants,omitempty"`
+	Candidate           *CandidateState     `json:"candidate,omitempty"`
 }
 
 // CandidateState 描述尚未替换当前实例的候选组合。Plugins 只有在制品全部安装并

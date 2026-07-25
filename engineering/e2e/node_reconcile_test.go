@@ -16,16 +16,16 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 type clusterNode struct {
@@ -90,6 +90,9 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 			ID: "backend-api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 2,
 			RoutingDomain: "application",
 			Placement:     deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},
+			Config: map[string]any{"kernel_service_grants": map[string]any{
+				"cn.vastplan.hello-world": []any{"kernel.info"},
+			}},
 			Plugins: []deploymentv1.PluginRef{
 				{ID: "cn.vastplan.demo-permission", Version: "0.1.1", Channel: "stable"},
 				{ID: "cn.vastplan.hello-world", Version: helloRef.Version, Channel: "stable"},
@@ -209,7 +212,8 @@ func TestNodeAgent_RuntimePublishesRealPluginToNATSMesh(t *testing.T) {
 		ID: "backend-worker", Fingerprint: "mesh-e2e", ServiceRole: "backend",
 		InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster",
 		Routing: "queue", RoutingDomain: "application",
-		Plugins: []nodeagent.InstalledPlugin{permission, hello},
+		Plugins:             []nodeagent.InstalledPlugin{permission, hello},
+		KernelServiceGrants: map[string][]string{"cn.vastplan.hello-world": {"kernel.info"}},
 	}); err != nil {
 		t.Fatal(err)
 	}

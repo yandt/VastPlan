@@ -37,6 +37,9 @@
           }
         ],
         "config": {
+          "kernel_service_grants": {
+            "cn.vastplan.hello-world": ["kernel.info"]
+          },
           "plugins": {
             "cn.vastplan.hello-world": {
               "greetingTemplate": "你好，{{name}}！我是 VastPlan 租户级插件。"

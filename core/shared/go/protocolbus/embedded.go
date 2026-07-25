@@ -73,6 +73,9 @@ func (h *Host) LaunchEmbeddedWithPolicy(ctx context.Context, definition Embedded
 // 只用于诊断，身份与权限仍完全来自 LaunchPolicy。
 func (h *Host) LaunchEmbeddedKindWithPolicy(ctx context.Context, definition EmbeddedPlugin, policy LaunchPolicy, kind string) (*PluginInstance, error) {
 	policy = cloneLaunchPolicy(policy)
+	if err := h.validateKernelServiceGrants(policy.KernelServices); err != nil {
+		return nil, fmt.Errorf("校验 Capability Grant Plan: %w", err)
+	}
 	if policy.BackgroundService || policy.AutonomousTenantID != "" {
 		return nil, errors.New("后台服务不能以内嵌模式运行")
 	}

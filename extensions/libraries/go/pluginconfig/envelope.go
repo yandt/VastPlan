@@ -11,14 +11,15 @@ import (
 	"fmt"
 	"sort"
 
-	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 const (
 	PluginsKey              = "plugins"
 	ManagedCredentialsKey   = "managed_credentials"
 	EnvironmentAllowlistKey = "environment_allowlist"
+	KernelServiceGrantsKey  = "kernel_service_grants"
 	PartitionKeysKey        = "partition_keys"
 )
 
@@ -27,6 +28,7 @@ type Envelope struct {
 	Plugins              map[string]map[string]any
 	ManagedCredentials   map[string]map[string]ManagedCredentialRef
 	EnvironmentAllowlist map[string][]string
+	KernelServiceGrants  map[string][]string
 	PartitionKeys        []string
 }
 
@@ -43,6 +45,9 @@ func (e Envelope) Map() map[string]any {
 	}
 	if len(e.EnvironmentAllowlist) > 0 {
 		out[EnvironmentAllowlistKey] = cloneJSONValue(e.EnvironmentAllowlist)
+	}
+	if len(e.KernelServiceGrants) > 0 {
+		out[KernelServiceGrantsKey] = cloneJSONValue(e.KernelServiceGrants)
 	}
 	if len(e.PartitionKeys) > 0 {
 		out[PartitionKeysKey] = append([]string(nil), e.PartitionKeys...)
@@ -65,6 +70,7 @@ func Parse(config map[string]any, installedPluginIDs []string) (Envelope, error)
 		Plugins:              map[string]map[string]any{},
 		ManagedCredentials:   map[string]map[string]ManagedCredentialRef{},
 		EnvironmentAllowlist: map[string][]string{},
+		KernelServiceGrants:  map[string][]string{},
 	}
 	installed := make(map[string]struct{}, len(installedPluginIDs))
 	for _, id := range installedPluginIDs {
@@ -78,7 +84,7 @@ func Parse(config map[string]any, installedPluginIDs []string) (Envelope, error)
 	}
 	for key := range config {
 		switch key {
-		case PluginsKey, ManagedCredentialsKey, EnvironmentAllowlistKey, PartitionKeysKey:
+		case PluginsKey, ManagedCredentialsKey, EnvironmentAllowlistKey, KernelServiceGrantsKey, PartitionKeysKey:
 		default:
 			return Envelope{}, fmt.Errorf("service config 包含未知顶层字段 %q", key)
 		}
@@ -141,6 +147,22 @@ func Parse(config map[string]any, installedPluginIDs []string) (Envelope, error)
 				return Envelope{}, fmt.Errorf("插件 %q environment_allowlist: %w", pluginID, err)
 			}
 			envelope.EnvironmentAllowlist[pluginID] = names
+		}
+	}
+	if raw, ok := config[KernelServiceGrantsKey]; ok {
+		values, err := object(raw)
+		if err != nil {
+			return Envelope{}, fmt.Errorf("service config.%s: %w", KernelServiceGrantsKey, err)
+		}
+		for pluginID, rawNames := range values {
+			if _, ok := installed[pluginID]; !ok {
+				return Envelope{}, fmt.Errorf("service config 为未安装插件 %q 授予内核服务", pluginID)
+			}
+			names, err := stringList(rawNames)
+			if err != nil {
+				return Envelope{}, fmt.Errorf("插件 %q kernel_service_grants: %w", pluginID, err)
+			}
+			envelope.KernelServiceGrants[pluginID] = names
 		}
 	}
 	if raw, ok := config[PartitionKeysKey]; ok {

@@ -79,8 +79,8 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 	if err := validateAutonomousPolicy(policy); err != nil {
 		return nil, err
 	}
-	if _, err := compileCapabilityGrantPlan(policy.KernelServices); err != nil {
-		return nil, fmt.Errorf("编译 Capability Grant Plan: %w", err)
+	if err := h.validateKernelServiceGrants(policy.KernelServices); err != nil {
+		return nil, fmt.Errorf("校验 Capability Grant Plan: %w", err)
 	}
 	if err := validateExtraEnvironment(spec.ExtraEnv); err != nil {
 		return nil, err
@@ -203,8 +203,8 @@ func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSp
 	if err := validateAutonomousPolicy(policy); err != nil {
 		return nil, err
 	}
-	if _, err := compileCapabilityGrantPlan(policy.KernelServices); err != nil {
-		return nil, fmt.Errorf("编译 Capability Grant Plan: %w", err)
+	if err := h.validateKernelServiceGrants(policy.KernelServices); err != nil {
+		return nil, fmt.Errorf("校验 Capability Grant Plan: %w", err)
 	}
 	token := newToken()
 	resultCh := make(chan launchResult, 1)

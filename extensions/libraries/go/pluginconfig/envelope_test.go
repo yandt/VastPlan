@@ -15,6 +15,9 @@ func TestParseIsolatesPluginConfigurationAndEnvironment(t *testing.T) {
 		"environment_allowlist": map[string]any{
 			"plugin.b": []any{"B_TOKEN", "B_ENDPOINT"},
 		},
+		"kernel_service_grants": map[string]any{
+			"plugin.a": []any{"kernel.state.shared.update", "kernel.state.shared.get"},
+		},
 		"managed_credentials": map[string]any{
 			"plugin.a": map[string]any{"token": map[string]any{"handle": "credential://managed/opaque", "scope": "tenant", "owner": "plugin.a", "purpose": "example.token", "version": 2}},
 		},
@@ -30,6 +33,9 @@ func TestParseIsolatesPluginConfigurationAndEnvironment(t *testing.T) {
 	if got := envelope.EnvironmentAllowlist["plugin.b"]; len(got) != 2 || got[0] != "B_ENDPOINT" || got[1] != "B_TOKEN" {
 		t.Fatalf("plugin.b 环境授权错误: %#v", got)
 	}
+	if got := envelope.KernelServiceGrants["plugin.a"]; len(got) != 2 || got[0] != "kernel.state.shared.get" || got[1] != "kernel.state.shared.update" {
+		t.Fatalf("plugin.a 内核服务授权错误: %#v", got)
+	}
 	if ref := envelope.ManagedCredentials["plugin.a"]["token"]; ref.Owner != "plugin.a" || ref.Purpose != "example.token" || ref.Version != 2 {
 		t.Fatalf("plugin.a 托管凭证投影错误: %#v", ref)
 	}
@@ -42,6 +48,7 @@ func TestParseRejectsUnknownPluginAndLegacyFlatConfig(t *testing.T) {
 	for _, config := range []map[string]any{
 		{"plugins": map[string]any{"plugin.other": map[string]any{"token": "x"}}},
 		{"environment_allowlist": []any{"TOKEN"}},
+		{"kernel_service_grants": map[string]any{"plugin.other": []any{"kernel.info"}}},
 		{"managed_credentials": map[string]any{"plugin.a": map[string]any{"token": map[string]any{"handle": "credential://managed/x", "scope": "tenant", "owner": "plugin.other", "purpose": "x", "version": 1}}}},
 		{"platform.settings.stateFile": "/tmp/settings.json"},
 	} {

@@ -150,6 +150,10 @@ func TestTrustedConfigurationSnapshotCompletesManagedCredentialWithoutExposingMa
 	if managed["cn.vastplan.product.agent.api"] == nil {
 		t.Fatalf("已编译组合缺少不透明 CredentialRef: %+v", report.ApplicationComposition.Units[0].Spec.Config)
 	}
+	grants := report.ApplicationComposition.Units[0].Spec.Config["kernel_service_grants"].(map[string]any)
+	if services, ok := grants["cn.vastplan.product.agent.api"].([]any); !ok || len(services) != 1 || services[0] != "kernel.config.credential-ref" {
+		t.Fatalf("已编译组合缺少 Manifest 派生的精确 Kernel Service Grant: %+v", grants)
+	}
 	raw, _ := json.Marshal(report)
 	if strings.Contains(string(raw), "secret-material") {
 		t.Fatal("Resolution Report 不得包含凭证 material")

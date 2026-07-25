@@ -12,8 +12,8 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
@@ -146,10 +146,17 @@ func (transaction *applyTransaction) startPlugin(ctx context.Context, plugin Ins
 	if err != nil {
 		return nil, fmt.Errorf("生成插件 %s 运行实例身份: %w", plugin.ID, err)
 	}
+	platformGrants, platformConfigured := transaction.unit.KernelServiceGrants[plugin.ID]
+	kernelServices, err := transaction.runtime.GrantPolicy.Compile(
+		plugin.ID, plugin.Publisher, plugin.Contract.KernelServices, platformGrants, platformConfigured,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("编译插件 %s Capability Grant Plan: %w", plugin.ID, err)
+	}
 	instance, err := transaction.runtime.startPlugin(ctx, transaction.candidate, plugin, protocolbus.LaunchPolicy{
 		PluginID: plugin.ID, Publisher: plugin.Publisher, Version: plugin.Version, ArtifactChannel: plugin.Channel,
 		ArtifactSHA256: plugin.SHA256, NodeID: transaction.runtime.Identity, RuntimeInstanceID: runtimeInstanceID,
-		Contributions: plugin.Contract.Contributions, KernelServices: plugin.Contract.KernelServices,
+		Contributions: plugin.Contract.Contributions, KernelServices: kernelServices,
 		ContextAccess: plugin.Contract.ContextAccess, ContextCeiling: transaction.runtime.ContextPolicy.Ceiling(plugin.Publisher).Strings(),
 		EnvironmentAllowlist: append([]string(nil), transaction.unit.EnvironmentAllowlists[plugin.ID]...),
 		Configuration:        startupConfig, RequiredFeatures: append([]string(nil), plugin.Execution.Features...),

@@ -10,6 +10,7 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
 )
 
@@ -67,7 +68,7 @@ func (s *Service) compile(intent backendcompositionv1.ApplicationIntent, profile
 			pluginRefs = append(pluginRefs, deploymentv1.PluginRef{ID: id, Version: locked.Ref.Version, Channel: locked.Ref.Channel})
 		}
 		serviceCredentials := credentials[service.ID]
-		config, err := applicationConfig(service.PluginConfig, serviceCredentials, application)
+		config, err := applicationConfig(service.PluginConfig, serviceCredentials, application, artifacts.manifests)
 		if err != nil {
 			return compileResult{}, fmt.Errorf("service %s: %w", service.ID, err)
 		}
@@ -191,7 +192,7 @@ func (s *Service) validateApplicationPlugins(ids []string, artifacts resolvedArt
 	return nil
 }
 
-func applicationConfig(values map[string]map[string]any, credentials map[string]map[string]commonv1.ManagedCredentialRef, installed []string) (map[string]any, error) {
+func applicationConfig(values map[string]map[string]any, credentials map[string]map[string]commonv1.ManagedCredentialRef, installed []string, manifests map[string]pluginv1.Manifest) (map[string]any, error) {
 	allowed := map[string]struct{}{}
 	for _, id := range installed {
 		allowed[id] = struct{}{}
@@ -210,7 +211,17 @@ func applicationConfig(values map[string]map[string]any, credentials map[string]
 		}
 		managed[id] = fields
 	}
-	if len(plugins) == 0 && len(managed) == 0 {
+	kernelServiceGrants := map[string]any{}
+	for _, id := range installed {
+		manifest, exists := manifests[id]
+		if !exists {
+			return nil, fmt.Errorf("缺少插件 %s 的已验证 Manifest", id)
+		}
+		if manifest.Capabilities != nil && len(manifest.Capabilities.KernelServices) > 0 {
+			kernelServiceGrants[id] = append([]string(nil), manifest.Capabilities.KernelServices...)
+		}
+	}
+	if len(plugins) == 0 && len(managed) == 0 && len(kernelServiceGrants) == 0 {
 		return nil, nil
 	}
 	result := map[string]any{}
@@ -219,6 +230,9 @@ func applicationConfig(values map[string]map[string]any, credentials map[string]
 	}
 	if len(managed) > 0 {
 		result["managed_credentials"] = managed
+	}
+	if len(kernelServiceGrants) > 0 {
+		result[pluginconfig.KernelServiceGrantsKey] = kernelServiceGrants
 	}
 	return result, nil
 }

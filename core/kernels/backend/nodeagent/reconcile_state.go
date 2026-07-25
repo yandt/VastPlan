@@ -88,6 +88,7 @@ func (r *Reconciler) refreshRuntimeState(state *UnitState, unitID string) error 
 	startedAt := status.StartedAt
 	state.StartedAt = &startedAt
 	state.RestartCount = status.RestartCount
+	state.KernelServiceGrants = cloneStringSlices(status.KernelServiceGrants)
 	state.Readiness = status.Readiness
 	state.DependencyIssues = append(state.DependencyIssues[:0], status.DependencyIssues...)
 	if !status.Healthy {

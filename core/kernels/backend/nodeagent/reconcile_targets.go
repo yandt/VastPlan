@@ -107,6 +107,7 @@ func (r *Reconciler) reconcileTarget(ctx context.Context, revision uint64, unit 
 		RoutingDomain:         policy.RoutingDomain,
 		PartitionKeys:         envelope.PartitionKeys,
 		EnvironmentAllowlists: envelope.EnvironmentAllowlist,
+		KernelServiceGrants:   envelope.KernelServiceGrants,
 		Config:                RawConfig(unit.Config), Plugins: installed, Migrations: migrations,
 		RestartBase: current.RestartCount,
 	}

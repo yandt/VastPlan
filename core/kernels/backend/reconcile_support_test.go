@@ -202,6 +202,22 @@ func TestParseReconcileOptionsSupportsPublisherContextAccessPrecedence(t *testin
 	}
 }
 
+func TestParseReconcileOptionsSupportsKernelServicePublisherCeilings(t *testing.T) {
+	configured, err := parseReconcileOptions([]string{
+		"-desired", "desired.json",
+		"-publisher-plugin-kernel-services", "partner=kernel.info;vastplan=*",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := configured.grantPolicy.Compile("partner.plugin", "partner", []string{"kernel.info"}, []string{"kernel.info"}, true); err != nil {
+		t.Fatalf("显式发布者 Kernel Service 上限未生效: %v", err)
+	}
+	if _, err := configured.grantPolicy.Compile("unknown.plugin", "unknown", []string{"kernel.info"}, []string{"kernel.info"}, true); err == nil {
+		t.Fatal("未知发布者默认 Kernel Service 上限必须为空")
+	}
+}
+
 func TestBuildArtifactResolutionSeparatesLocalDevelopmentAndSignedBootstrap(t *testing.T) {
 	local, err := parseReconcileOptions([]string{"-desired", "desired.json", "-repository", t.TempDir()})
 	if err != nil {
@@ -261,6 +277,8 @@ func TestParseReconcileOptionsRejectsConflictingOrInvalidPluginPolicies(t *testi
 		{"-desired", "desired.json", "-plugin-placements", "one=prefer-embedded"},
 		{"-desired", "desired.json", "-default-plugin-context-access", "unknown"},
 		{"-desired", "desired.json", "-publisher-plugin-context-access", "partner=unknown"},
+		{"-desired", "desired.json", "-default-plugin-kernel-services", "not-kernel"},
+		{"-desired", "desired.json", "-publisher-plugin-kernel-services", "partner=kernel.info;partner=*"},
 		{"-desired", "desired.json", "-runtime-hosting-default", "elastic"},
 		{"-desired", "desired.json", "-publisher-runtime-hosting", "partner=shared,partner=dedicated"},
 		{"-desired", "desired.json", "-plugin-runtime-hosting", "missing-separator"},

@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"github.com/nats-io/nats.go/jetstream"
@@ -54,6 +54,7 @@ type ProtocolRuntime struct {
 	ExecutionPolicy ExecutionPolicy
 	HostingPolicy   RuntimeHostingPolicy
 	ContextPolicy   ContextPolicy
+	GrantPolicy     KernelServiceGrantPolicy
 	dynamicGoDriver PluginExecutionDriver
 	PlacementPolicy PlacementPolicy
 }
@@ -85,6 +86,7 @@ func NewProtocolRuntime(kernelVersion string, logf func(string, ...any)) *Protoc
 		RuntimePools:      NewRuntimePoolManager(logf),
 		HostingPolicy:     RuntimeHostingPolicy{Default: RuntimeHostingShared},
 		ContextPolicy:     DefaultContextPolicy(),
+		GrantPolicy:       DefaultKernelServiceGrantPolicy(),
 		units:             map[string]*runningUnit{},
 		events:            make(chan RuntimeEvent, 64),
 	}
@@ -118,6 +120,7 @@ func newRuntimeInstanceID() (string, error) {
 func cloneRuntimeUnit(unit RuntimeUnit) RuntimeUnit {
 	unit.PartitionKeys = append([]string(nil), unit.PartitionKeys...)
 	unit.EnvironmentAllowlists = cloneStringSlices(unit.EnvironmentAllowlists)
+	unit.KernelServiceGrants = cloneStringSlices(unit.KernelServiceGrants)
 	unit.Plugins = append([]InstalledPlugin(nil), unit.Plugins...)
 	for index := range unit.Plugins {
 		unit.Plugins[index].Engines = cloneStringMap(unit.Plugins[index].Engines)
@@ -203,11 +206,12 @@ func (r *ProtocolRuntime) Status(unitID string) (RuntimeStatus, bool) {
 		return RuntimeStatus{}, false
 	}
 	status := RuntimeStatus{
-		Healthy:          len(unit.instances) > 0,
-		Readiness:        "ready",
-		DependencyIssues: append([]string(nil), unit.dependencyIssues...),
-		StartedAt:        unit.startedAt,
-		RestartCount:     unit.restarts,
+		Healthy:             len(unit.instances) > 0,
+		Readiness:           "ready",
+		DependencyIssues:    append([]string(nil), unit.dependencyIssues...),
+		StartedAt:           unit.startedAt,
+		RestartCount:        unit.restarts,
+		KernelServiceGrants: cloneStringSlices(unit.spec.KernelServiceGrants),
 	}
 	seenPIDs := map[int]struct{}{}
 	for _, instance := range unit.instances {

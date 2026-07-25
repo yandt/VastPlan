@@ -14,7 +14,7 @@
     "application_composition": {
       "id": "cluster-demo",
       "revision": 2,
-      "digest": "48f4d2ffad56200a86439e6b5ea24abbd763974902d9e585471110be9364f21c"
+      "digest": "de27b69bcddae7caef0bcef5a32094c94b790a226ee83bd92d11fc29ca88dec3"
     },
     "development_mode": true,
     "plugin_origins": {
@@ -56,6 +56,9 @@
         }
       ],
       "config": {
+        "kernel_service_grants": {
+          "cn.vastplan.hello-world": ["kernel.info"]
+        },
         "plugins": {
           "cn.vastplan.hello-world": {
             "greetingTemplate": "你好，{{name}}！我是 VastPlan 租户级插件。"

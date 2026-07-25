@@ -46,6 +46,13 @@ func TestParseManifest_RejectsUnknownField(t *testing.T) {
 	}
 }
 
+func TestParseManifest_RejectsInvalidKernelServiceName(t *testing.T) {
+	raw := []byte(`{"id":"com.example.demo","name":"demo","description":"demo","version":"1.0.0","publisher":"example","engines":{"backend":"^1.0"},"capabilities":{"kernelServices":["host.secret"]},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`)
+	if _, err := ParseManifest(raw); err == nil {
+		t.Fatal("Kernel Service 申请必须使用受控 kernel.* 命名空间")
+	}
+}
+
 func TestParseManifest_BindsFirstPartyNamespaceToPublisher(t *testing.T) {
 	base := `{"id":%q,"name":"demo","description":"demo","version":"1.0.0","publisher":%q,"engines":{"backend":"^1.0"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`
 	for name, values := range map[string][2]string{

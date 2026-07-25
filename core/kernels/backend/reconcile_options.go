@@ -25,6 +25,7 @@ type reconcileOptions struct {
 	firstPartyPublishers                                                                                    string
 	thirdPartyPluginPolicy, publisherPluginPolicies                                                         string
 	defaultPluginContextAccess, publisherPluginContextAccess                                                string
+	defaultPluginKernelServices, publisherPluginKernelServices                                              string
 	pluginPlacementDefault, publisherPluginPlacements, pluginPlacements                                     string
 	runtimeHostingDefault, publisherRuntimeHosting, pluginRuntimeHosting                                    string
 	capacityCPU, capacityMemory, capacityGPU                                                                int64
@@ -36,6 +37,7 @@ type reconcileOptions struct {
 	requireThirdPartyIsolation                                                                              bool
 	executionPolicy                                                                                         nodeagent.ExecutionPolicy
 	contextPolicy                                                                                           nodeagent.ContextPolicy
+	grantPolicy                                                                                             nodeagent.KernelServiceGrantPolicy
 	placementPolicy                                                                                         nodeagent.PlacementPolicy
 	hostingPolicy                                                                                           nodeagent.RuntimeHostingPolicy
 	desiredKey, assignmentKey, deploymentName, deploymentTenant                                             string
@@ -83,6 +85,8 @@ func newReconcileFlagSet(options *reconcileOptions) *flag.FlagSet {
 	flags.StringVar(&options.publisherPluginPolicies, "publisher-plugin-policies", "", "发布者级策略，逗号分隔 publisher=policy；优先于全局策略")
 	flags.StringVar(&options.defaultPluginContextAccess, "default-plugin-context-access", "", "未知发布者的 CallContext 字段上限，逗号分隔；空值使用安全默认")
 	flags.StringVar(&options.publisherPluginContextAccess, "publisher-plugin-context-access", "", "发布者级 CallContext 上限，分号分隔 publisher=field,field；* 表示全部已知字段")
+	flags.StringVar(&options.defaultPluginKernelServices, "default-plugin-kernel-services", "", "未知发布者的 Kernel Service 上限，逗号分隔；空值默认不授予")
+	flags.StringVar(&options.publisherPluginKernelServices, "publisher-plugin-kernel-services", "", "发布者级 Kernel Service 上限，分号分隔 publisher=service,service；* 表示全部已注册服务")
 	flags.StringVar(&options.firstPartyPublishers, "first-party-publishers", "vastplan", "兼容参数：隐式配置 allow-trusted 的发布者，逗号分隔；显式发布者策略优先")
 	flags.StringVar(&options.pluginPlacementDefault, "plugin-placement-default", string(nodeagent.PlacementProcessOnly), "插件默认放置: process-only, prefer-dynamic-go, require-dynamic-go")
 	flags.StringVar(&options.publisherPluginPlacements, "publisher-plugin-placements", "", "发布者级放置策略，逗号分隔 publisher=mode")
@@ -144,6 +148,10 @@ func finalizeReconcileOptions(options reconcileOptions, visited map[string]bool)
 		return reconcileOptions{}, err
 	}
 	options.contextPolicy, err = nodeagent.ParseContextPolicy(options.defaultPluginContextAccess, options.publisherPluginContextAccess)
+	if err != nil {
+		return reconcileOptions{}, err
+	}
+	options.grantPolicy, err = nodeagent.ParseKernelServiceGrantPolicy(options.defaultPluginKernelServices, options.publisherPluginKernelServices)
 	if err != nil {
 		return reconcileOptions{}, err
 	}

@@ -59,6 +59,7 @@ func buildReconcileRuntime(options reconcileOptions, artifacts artifactResolutio
 	runtime := nodeagent.NewProtocolRuntime(version, logf)
 	runtime.ExecutionPolicy = options.executionPolicy
 	runtime.ContextPolicy = options.contextPolicy
+	runtime.GrantPolicy = options.grantPolicy
 	runtime.PlacementPolicy = options.placementPolicy
 	runtime.HostingPolicy = options.hostingPolicy
 	runtime.Identity = options.nodeID
