@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 type recordingCatalog struct {

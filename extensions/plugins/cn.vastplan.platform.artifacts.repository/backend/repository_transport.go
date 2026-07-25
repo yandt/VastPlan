@@ -12,8 +12,8 @@ import (
 	"time"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository/localtest"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository/localtest"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/repositoryruntime"
 )

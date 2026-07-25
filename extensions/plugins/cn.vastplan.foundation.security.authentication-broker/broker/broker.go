@@ -14,14 +14,14 @@ import (
 	"time"
 
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
 	PluginID                   = "cn.vastplan.foundation.security.authentication-broker"
-	PluginVersion              = "0.4.1"
+	PluginVersion              = "0.4.2"
 	Capability                 = "foundation.security.authentication.broker"
 	OperationConsumeAssertion  = "consumeAssertion"
 	OperationBeginProviderTest = "beginProviderTest"

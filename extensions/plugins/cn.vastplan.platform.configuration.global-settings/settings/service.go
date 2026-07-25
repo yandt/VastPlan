@@ -11,15 +11,15 @@ import (
 	"io"
 	"time"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )
 
 const (
 	PluginID      = "cn.vastplan.platform.configuration.global-settings"
-	PluginVersion = "0.8.2"
+	PluginVersion = "0.8.3"
 	Capability    = "platform.settings"
 )
 

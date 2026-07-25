@@ -16,8 +16,8 @@ import (
 	semver "github.com/Masterminds/semver/v3"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 )
 

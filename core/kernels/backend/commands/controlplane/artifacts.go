@@ -14,10 +14,9 @@ import (
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository/localtest"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository/localtest"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 type fallbackArtifactReader struct {
@@ -47,7 +46,7 @@ type controllerRepositoryOptions struct {
 	URL, ProfileFile, TrustFile, Token, TokenFile, CAFile string
 }
 
-func buildControllerArtifactReader(local *pluginservice.Repository, options controllerRepositoryOptions) (deploymentcontroller.ArtifactReader, error) {
+func buildControllerArtifactReader(local *artifactrepository.Repository, options controllerRepositoryOptions) (deploymentcontroller.ArtifactReader, error) {
 	if local == nil {
 		return nil, errors.New("controller 本地 Seed 制品源不能为空")
 	}
@@ -63,7 +62,7 @@ func buildControllerArtifactReader(local *pluginservice.Repository, options cont
 	if strings.TrimSpace(options.TrustFile) == "" {
 		return nil, errors.New("controller 托管仓库必须配置 trust")
 	}
-	trust, err := pluginservice.LoadTrustStore(options.TrustFile)
+	trust, err := artifactrepository.LoadTrustStore(options.TrustFile)
 	if err != nil {
 		return nil, fmt.Errorf("加载 controller 制品信任: %w", err)
 	}
@@ -99,13 +98,13 @@ func buildControllerArtifactReader(local *pluginservice.Repository, options cont
 	if err != nil {
 		return nil, err
 	}
-	remote := &pluginservice.RemoteRepository{BaseURL: options.URL, Token: options.Token, Trust: trust, Client: client}
+	remote := &artifactrepository.RemoteRepository{BaseURL: options.URL, Token: options.Token, Trust: trust, Client: client}
 	return fallbackArtifactReader{readers: []deploymentcontroller.ArtifactReader{local, remote}}, nil
 }
 
 type trustedProtocolReader struct {
 	adapter artifactrepository.Adapter
-	trust   *pluginservice.TrustStore
+	trust   *artifactrepository.TrustStore
 }
 
 func (r trustedProtocolReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {

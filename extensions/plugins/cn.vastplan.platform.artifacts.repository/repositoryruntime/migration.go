@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/garbagecollection"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/references"
@@ -224,11 +224,11 @@ func (m *Manager) openSet(root string) (*repositorySet, error) {
 	if err := validateRepositoryRoot(root); err != nil {
 		return nil, err
 	}
-	local, err := pluginservice.NewRepository(root)
+	local, err := artifactrepository.NewRepository(root)
 	if err != nil {
 		return nil, err
 	}
-	signed := &pluginservice.SignedRepository{Local: local, Trust: m.trust}
+	signed := &artifactrepository.SignedRepository{Local: local, Trust: m.trust}
 	gcStore, err := garbagecollection.Open(root)
 	if err != nil {
 		return nil, err
@@ -244,24 +244,24 @@ func (m *Manager) openSet(root string) (*repositorySet, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &repositorySet{root: filepath.Clean(root), signed: signed, adapter: pluginservice.HTTPRepositoryAdapter{Repository: signed}, catalog: store, refs: referenceStore, gc: gcStore}, nil
+	return &repositorySet{root: filepath.Clean(root), signed: signed, adapter: artifactrepository.HTTPRepositoryAdapter{Repository: signed}, catalog: store, refs: referenceStore, gc: gcStore}, nil
 }
 
-func (s *repositorySet) publish(attestationRaw, packageBytes []byte) (pluginservice.Artifact, error) {
+func (s *repositorySet) publish(attestationRaw, packageBytes []byte) (artifactrepository.Artifact, error) {
 	return s.publishWithProvenance(attestationRaw, packageBytes, nil, nil)
 }
 
-func (s *repositorySet) publishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte) (pluginservice.Artifact, error) {
+func (s *repositorySet) publishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte) (artifactrepository.Artifact, error) {
 	return s.publishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, nil)
 }
 
-func (s *repositorySet) publishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, admissionRaw []byte) (pluginservice.Artifact, error) {
+func (s *repositorySet) publishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, admissionRaw []byte) (artifactrepository.Artifact, error) {
 	artifact, err := s.adapter.PublishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, admissionRaw)
 	if err != nil {
-		return pluginservice.Artifact{}, err
+		return artifactrepository.Artifact{}, err
 	}
 	if _, err := s.catalog.RecordPublished(artifact, attestationRaw, time.Now().UTC()); err != nil {
-		return pluginservice.Artifact{}, fmt.Errorf("记录发布流水账: %w", err)
+		return artifactrepository.Artifact{}, fmt.Errorf("记录发布流水账: %w", err)
 	}
 	return artifact, nil
 }

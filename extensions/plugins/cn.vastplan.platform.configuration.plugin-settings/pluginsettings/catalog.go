@@ -6,9 +6,9 @@ import (
 	"sort"
 	"strings"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

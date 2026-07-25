@@ -10,10 +10,10 @@ import (
 	"time"
 
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.credentials/credentialsstate"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

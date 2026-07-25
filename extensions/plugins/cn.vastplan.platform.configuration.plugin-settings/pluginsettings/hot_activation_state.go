@@ -8,7 +8,7 @@ import (
 	"time"
 
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 
 type hotActivationStatus string

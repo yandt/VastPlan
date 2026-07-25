@@ -8,59 +8,43 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/dynamicgo"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 )
 
 // EmbeddedHost 是内嵌处理器唯一允许使用的回调入口。实现会忽略处理器传入的
 // Caller/Principal，以宿主保存的原始调用上下文重新签发插件身份，避免同进程代码
 // 因可直接构造 Go 对象而获得比独立进程更宽的权限。
-type EmbeddedHost interface {
-	Call(context.Context, *contractv1.CallTarget, *contractv1.CallContext, []byte) (*contractv1.CallResult, []byte, error)
-}
+type EmbeddedHost = dynamicgo.Host
 
-type EmbeddedHandler func(context.Context, EmbeddedHost, *contractv1.CallContext, []byte) (*contractv1.CallResult, []byte, error)
+type EmbeddedHandler = dynamicgo.Handler
 
-type EmbeddedContribution struct {
-	ExtensionPoint string
-	ID             string
-	Priority       int32
-	Descriptor     []byte
-	Handlers       map[string]EmbeddedHandler
-}
+type EmbeddedContribution = dynamicgo.Contribution
 
 // EmbeddedLifecycle 与进程协议使用同一套生命周期操作。migration 只在迁移阶段非空。
-type EmbeddedLifecycle func(context.Context, pluginhostv1.Lifecycle_Op, *MigrationCommand) error
+type EmbeddedLifecycle = dynamicgo.Lifecycle
 
 // EmbeddedPlugin 是 dynamic-go 模块返回的进程内定义。它不是插件清单的替代品；
 // LaunchEmbeddedWithPolicy 仍会逐项核对已经验签的 LaunchPolicy。
-type EmbeddedPlugin struct {
-	ID            string
-	Version       string
-	Contributions []EmbeddedContribution
-	Lifecycle     EmbeddedLifecycle
-}
+type EmbeddedPlugin = dynamicgo.Plugin
 
 const (
 	// DynamicGoABIV1 是 Go .so 与 Backend 之间的窄入口版本。数据面仍使用
 	// EmbeddedPlugin/Host.Invoke 契约，不向动态模块暴露 Host 内部实现。
-	DynamicGoABIV1  = "vastplan.dynamic-go.v1"
-	DynamicGoSymbol = "VastPlanDynamicGo"
+	DynamicGoABIV1  = dynamicgo.ABIV1
+	DynamicGoSymbol = dynamicgo.Symbol
 )
 
 // DynamicGoModule 是 DynamicGoSymbol 导出函数返回的不可变模块说明。
 // BuildFingerprint 必须由同一发布构建为 Backend 和 .so 同时注入。
-type DynamicGoModule struct {
-	ABI              string
-	BuildFingerprint string
-	Plugin           EmbeddedPlugin
-}
+type DynamicGoModule = dynamicgo.Module
 
-type DynamicGoEntrypoint func() DynamicGoModule
+type DynamicGoEntrypoint = dynamicgo.Entrypoint
 
 type embeddedInstance struct {
 	id, pluginID, version string

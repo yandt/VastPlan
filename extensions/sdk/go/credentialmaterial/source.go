@@ -14,12 +14,12 @@ import (
 	"strings"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/runtimeaudience"
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
-	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -34,7 +34,7 @@ type Source struct {
 
 func New(host sdk.Host, tenant string, ref commonv1.ManagedCredentialRef, audience string) (*Source, error) {
 	tenant, audience = strings.TrimSpace(tenant), strings.TrimSpace(audience)
-	if host == nil || tenant == "" || runtimeidentity.ValidateAudience(audience) != nil {
+	if host == nil || tenant == "" || runtimeaudience.Validate(audience) != nil {
 		return nil, errors.New("runtime material source 启动身份无效")
 	}
 	if err := credentiallease.ValidateCredentialRef(ref); err != nil {

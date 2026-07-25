@@ -19,8 +19,8 @@ import (
 	"testing"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 )
 
 const modulePath = "cdsoft.com.cn/VastPlan"
@@ -128,7 +128,7 @@ func TestArch_SharedMustNotImportComponents(t *testing.T) {
 func TestArch_SDKMustNotImportKernels(t *testing.T) {
 	files := collectGoFiles(t)
 	assertNoImport(t, files, "extensions/sdk/", "core/kernels/",
-		"SDK 面向插件开发者，只应依赖 proto 契约与 shared，不得依赖内核实现")
+		"SDK 面向插件开发者，只能依赖公开 Contracts/Library，不得依赖内核实现")
 	assertNoImport(t, files, "extensions/sdk/", "extensions/plugins/", "SDK 不得依赖具体插件")
 }
 
@@ -213,7 +213,7 @@ func TestArch_ClientCoreOnlyForRunnerAndMobile(t *testing.T) {
 
 // ── 单一真源（工程规范 §5）──────────────────────────────
 
-// 协议常量只许在 core/shared/go/protocol 定义。
+// 协议常量只许在 contracts/runtime/go/protocol 定义。
 // 这正是 ADR-0017 §3 曾被违反的那条——本测试确保它不再重演。
 //
 // 注意：needle 由真源常量在运行时构造（而非在本文件硬编码字面量），
@@ -221,7 +221,7 @@ func TestArch_ClientCoreOnlyForRunnerAndMobile(t *testing.T) {
 func TestArch_ProtocolConstantsSingleSource(t *testing.T) {
 	root := repoRoot(t)
 	magicLiteral := strconv.Quote(protocol.MagicCookie)
-	const singleSource = "core/shared/go/protocol/"
+	const singleSource = "contracts/runtime/go/protocol/"
 
 	for _, f := range collectGoFiles(t) {
 		if strings.HasPrefix(f.relPath, singleSource) {
@@ -238,11 +238,11 @@ func TestArch_ProtocolConstantsSingleSource(t *testing.T) {
 	}
 }
 
-// 内核稳定错误码只许在 core/shared/go/errorcode 定义；调用链必须引用常量。
+// 稳定 wire 错误码只许在 contracts/runtime/go/errorcode 定义；调用链必须引用常量。
 // 否则字符串改名不会触发编译失败，旧插件和调用方会在运行时静默分叉。
 func TestArch_KernelErrorCodesSingleSource(t *testing.T) {
 	root := repoRoot(t)
-	const singleSource = "core/shared/go/errorcode/"
+	const singleSource = "contracts/runtime/go/errorcode/"
 	for _, f := range collectGoFiles(t) {
 		if strings.HasPrefix(f.relPath, singleSource) || strings.HasSuffix(f.relPath, "_test.go") {
 			continue

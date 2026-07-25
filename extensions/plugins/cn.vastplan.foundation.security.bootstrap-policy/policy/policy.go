@@ -7,14 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
 )
 
 const (
 	PluginID           = "cn.vastplan.foundation.security.bootstrap-policy"
-	PluginVersion      = "0.1.0"
+	PluginVersion      = "0.1.1"
 	WriteGuardID       = "foundation.security.bootstrap-policy.write-guard"
 	BaselineID         = "foundation.security.bootstrap-policy.baseline"
 	SettingsCapability = "platform.settings"

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 func (r *Reconciler) reconcileTargets(ctx context.Context, revision uint64, targets map[string]deploymentv1.Unit, actual *ActualState) (bool, error) {

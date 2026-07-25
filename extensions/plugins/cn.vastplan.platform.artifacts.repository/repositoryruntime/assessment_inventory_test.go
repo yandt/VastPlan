@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreport"
 )
 
 func TestAssessmentInventoryReportsArchiveReadinessWithoutPhysicalPath(t *testing.T) {

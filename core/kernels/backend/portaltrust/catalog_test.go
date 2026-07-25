@@ -14,9 +14,9 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 type catalogSource map[string]artifacttrust.Envelope
@@ -101,11 +101,11 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 	if err := os.WriteFile(filepath.Join(dir, "frontend", "main.js"), module, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	pkg, _, err := pluginservice.PackageDirectory(dir)
+	pkg, _, err := artifactrepository.PackageDirectory(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("stable", pkg)
+	artifact, err := artifactrepository.Describe("stable", pkg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,11 +228,11 @@ func packageFrontendFixture(t *testing.T, manifest string, module []byte) (plugi
 	if err := os.WriteFile(filepath.Join(dir, "frontend", "main.js"), module, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	pkg, _, err := pluginservice.PackageDirectory(dir)
+	pkg, _, err := artifactrepository.PackageDirectory(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("stable", pkg)
+	artifact, err := artifactrepository.Describe("stable", pkg)
 	if err != nil {
 		t.Fatal(err)
 	}

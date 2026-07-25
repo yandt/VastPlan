@@ -8,8 +8,8 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/portaltrust"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 

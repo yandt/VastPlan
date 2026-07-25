@@ -13,7 +13,7 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 )
 
@@ -45,7 +45,7 @@ func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, node
 	if err != nil {
 		return err
 	}
-	repo, err := pluginservice.NewRepository(repository)
+	repo, err := artifactrepository.NewRepository(repository)
 	if err != nil {
 		return err
 	}
@@ -59,15 +59,15 @@ func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, node
 // signed Seed repository after it has been materialized from the reproducible
 // build cache. The signing key is generated per run and is never cached.
 func (r *runtime) signPackageRepository() error {
-	repository, err := pluginservice.NewRepository(filepath.Join(r.runDir, "repository"))
+	repository, err := artifactrepository.NewRepository(filepath.Join(r.runDir, "repository"))
 	if err != nil {
 		return err
 	}
-	trust, err := pluginservice.LoadTrustStore(filepath.Join(r.runDir, "secrets", "seed-artifact-trust.json"))
+	trust, err := artifactrepository.LoadTrustStore(filepath.Join(r.runDir, "secrets", "seed-artifact-trust.json"))
 	if err != nil {
 		return err
 	}
-	privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(filepath.Join(r.runDir, "secrets", "artifact-signing.pem"))
+	privateKey, err := artifactrepository.LoadEd25519PrivateKeyPEM(filepath.Join(r.runDir, "secrets", "artifact-signing.pem"))
 	if err != nil {
 		return err
 	}
@@ -75,7 +75,7 @@ func (r *runtime) signPackageRepository() error {
 	if err != nil {
 		return err
 	}
-	signed := &pluginservice.SignedRepository{Local: repository, Trust: trust}
+	signed := &artifactrepository.SignedRepository{Local: repository, Trust: trust}
 	for _, ref := range refs {
 		artifact, packageBytes, err := repository.Read(ref)
 		if err != nil {
@@ -85,7 +85,7 @@ func (r *runtime) signPackageRepository() error {
 		if err != nil {
 			return fmt.Errorf("解析 %s 的制品清单: %w", ref.PluginID, err)
 		}
-		attestation, err := pluginservice.SignArtifact(artifact, manifest.Publisher, "local-development", privateKey, time.Now().UTC())
+		attestation, err := artifactrepository.SignArtifact(artifact, manifest.Publisher, "local-development", privateKey, time.Now().UTC())
 		if err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ func (r *runtime) signPackageRepository() error {
 	return nil
 }
 
-func (r *runtime) writeBootstrapInventory(repository *pluginservice.Repository, refs []pluginservice.Ref) error {
+func (r *runtime) writeBootstrapInventory(repository *artifactrepository.Repository, refs []artifactrepository.Ref) error {
 	items := make([]bootstrapinventory.Item, 0, len(refs))
 	lkgIDs := map[string]struct{}{
 		"cn.vastplan.foundation.security.authorization-enforcer":       {},
@@ -144,8 +144,8 @@ func (r *runtime) writeBootstrapInventory(repository *pluginservice.Repository, 
 	return os.WriteFile(filepath.Join(r.runDir, "seed-inventory.json"), append(raw, '\n'), 0o600)
 }
 
-func packageRepositoryRefs(root string) ([]pluginservice.Ref, error) {
-	refs := make([]pluginservice.Ref, 0)
+func packageRepositoryRefs(root string) ([]artifactrepository.Ref, error) {
+	refs := make([]artifactrepository.Ref, 0)
 	err := filepath.WalkDir(filepath.Join(root, "artifacts"), func(path string, entry os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -160,11 +160,11 @@ func packageRepositoryRefs(root string) ([]pluginservice.Ref, error) {
 		if err := pluginv1.ValidateArtifactMetadata(raw); err != nil {
 			return err
 		}
-		var artifact pluginservice.Artifact
+		var artifact artifactrepository.Artifact
 		if err := json.Unmarshal(raw, &artifact); err != nil {
 			return err
 		}
-		refs = append(refs, pluginservice.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
+		refs = append(refs, artifactrepository.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
 		return nil
 	})
 	if err != nil {

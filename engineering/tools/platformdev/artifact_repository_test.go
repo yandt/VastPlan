@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestEnsureSigningIdentityReusesPersistentPrivateKey(t *testing.T) {
@@ -56,14 +56,14 @@ func TestWriteTrustDocumentCombinesSeedAndTestingIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var document pluginservice.TrustDocument
+	var document artifactrepository.TrustDocument
 	if err := json.Unmarshal(raw, &document); err != nil {
 		t.Fatal(err)
 	}
 	if len(document.Keys) != 2 || document.Keys[0].KeyID != "local-development" || document.Keys[1].KeyID != "local-testing" {
 		t.Fatalf("组合信任快照必须同时包含 Seed 与测试身份: %#v", document.Keys)
 	}
-	if _, err := pluginservice.LoadTrustStore(filename); err != nil {
+	if _, err := artifactrepository.LoadTrustStore(filename); err != nil {
 		t.Fatalf("组合信任快照必须可由内核加载: %v", err)
 	}
 }

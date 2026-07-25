@@ -20,9 +20,9 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentpublisher"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/platformcatalog"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 // Run 初始化 NATS KV、发布部署规格，并可持续运行多节点 assignment 控制器。
@@ -56,7 +56,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		capacityPolicy = resolved
 	}
 
-	artifacts, err := pluginservice.NewRepository(*options.repositoryRoot)
+	artifacts, err := artifactrepository.NewRepository(*options.repositoryRoot)
 	if err != nil {
 		return err
 	}

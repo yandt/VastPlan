@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 )
 
 func TestProvisionIsIdempotentPrivateAndContained(t *testing.T) {

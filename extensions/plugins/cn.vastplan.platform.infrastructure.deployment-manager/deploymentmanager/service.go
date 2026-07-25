@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
 
 const (

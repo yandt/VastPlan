@@ -16,12 +16,12 @@ import (
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository/localtest"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository/localtest"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	artifactcatalog "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/repositoryruntime"
 )
@@ -31,7 +31,7 @@ type catalogingTestRepository struct {
 	store    *artifactcatalog.Store
 }
 
-func testPublishReceipt(artifact pluginservice.Artifact, revision uint64) artifactrepositoryv1.Receipt {
+func testPublishReceipt(artifact artifactrepository.Artifact, revision uint64) artifactrepositoryv1.Receipt {
 	return artifactrepositoryv1.Receipt{
 		SchemaVersion: 1, RepositoryID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest,
 		ProfileDigest: strings.Repeat("d", 64),
@@ -57,7 +57,7 @@ func TestPublishUsesLocalTestProtocolAndPersistentManagedRepository(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	trustDocument := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+	trustDocument := artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{
 		Publisher: "vastplan", KeyID: "local-testing", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	})
 	trustRaw, _ := json.Marshal(trustDocument)
@@ -71,11 +71,11 @@ func TestPublishUsesLocalTestProtocolAndPersistentManagedRepository(t *testing.T
 	if err := os.WriteFile(trustFile, trustRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	privateRaw, _ := pluginservice.MarshalEd25519PrivateKeyPEM(privateKey)
+	privateRaw, _ := artifactrepository.MarshalEd25519PrivateKeyPEM(privateKey)
 	if err := os.WriteFile(filepath.Join(testingRoot, "secrets", "artifact-signing.pem"), privateRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	trust, err := pluginservice.LoadTrustStore(trustFile)
+	trust, err := artifactrepository.LoadTrustStore(trustFile)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,16 +138,16 @@ func TestPublishUsesLocalTestProtocolAndPersistentManagedRepository(t *testing.T
 	}
 }
 
-func (r catalogingTestRepository) Publish(attestationRaw, packageBytes []byte) (pluginservice.Artifact, error) {
+func (r catalogingTestRepository) Publish(attestationRaw, packageBytes []byte) (artifactrepository.Artifact, error) {
 	artifact, err := r.upstream.Publish(attestationRaw, packageBytes)
 	if err != nil {
-		return pluginservice.Artifact{}, err
+		return artifactrepository.Artifact{}, err
 	}
 	_, err = r.store.RecordPublished(artifact, attestationRaw, time.Now().UTC())
 	return artifact, err
 }
 
-func (r catalogingTestRepository) Read(ref pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, error) {
+func (r catalogingTestRepository) Read(ref artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, error) {
 	return r.upstream.Read(ref)
 }
 
@@ -168,7 +168,7 @@ func TestPublishUsesOnlyManagedLocalTestingIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trustDocument := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+	trustDocument := artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{
 		Publisher: "vastplan", KeyID: "local-testing", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	})
 	trustRaw, _ := json.Marshal(trustDocument)
@@ -180,21 +180,21 @@ func TestPublishUsesOnlyManagedLocalTestingIdentity(t *testing.T) {
 	if err := os.WriteFile(trustFile, trustRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	privateRaw, _ := pluginservice.MarshalEd25519PrivateKeyPEM(privateKey)
+	privateRaw, _ := artifactrepository.MarshalEd25519PrivateKeyPEM(privateKey)
 	if err := os.WriteFile(filepath.Join(testingRoot, "secrets", "artifact-signing.pem"), privateRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	trust, err := pluginservice.LoadTrustStore(trustFile)
+	trust, err := artifactrepository.LoadTrustStore(trustFile)
 	if err != nil {
 		t.Fatal(err)
 	}
-	local, _ := pluginservice.NewRepository(filepath.Join(testingRoot, "repository"))
-	signed := &pluginservice.SignedRepository{Local: local, Trust: trust}
+	local, _ := artifactrepository.NewRepository(filepath.Join(testingRoot, "repository"))
+	signed := &artifactrepository.SignedRepository{Local: local, Trust: trust}
 	catalogStore, err := artifactcatalog.Open(filepath.Join(testingRoot, "repository"), signed)
 	if err != nil {
 		t.Fatal(err)
 	}
-	adapter := pluginservice.HTTPRepositoryAdapter{Repository: signed}
+	adapter := artifactrepository.HTTPRepositoryAdapter{Repository: signed}
 	artifactHandler := &artifactapi.Server{
 		Repository: catalogingTestRepository{upstream: adapter, store: catalogStore},
 		ReadToken:  "reader", PublishToken: "publisher", RequireTLS: true,
@@ -243,7 +243,7 @@ func TestPublishUsesOnlyManagedLocalTestingIdentity(t *testing.T) {
 	if stats := catalogStore.Stats(); stats.Revision != 1 || stats.Artifacts != 1 {
 		t.Fatalf("幂等重试不得增加流水账 revision: %#v", stats)
 	}
-	if _, _, err := (&pluginservice.SignedRepository{Local: local, Trust: trust}).Read(pluginservice.Ref{
+	if _, _, err := (&artifactrepository.SignedRepository{Local: local, Trust: trust}).Read(artifactrepository.Ref{
 		PluginID: "cn.vastplan.product.test.publish", Version: "0.4.0-dev.20260720.1.abcdef0", Channel: "testing",
 	}); err != nil {
 		t.Fatalf("仓库没有收到 testing 制品: %v", err)
@@ -333,7 +333,7 @@ func TestSubmitBackendTestReleaseCreatesBindingAndPublishesExactReceipt(t *testi
 		}
 	}))
 	defer portal.Close()
-	artifact := pluginservice.Artifact{
+	artifact := artifactrepository.Artifact{
 		PluginID: "cn.vastplan.product.test.publish", Version: "0.4.0-dev.20260721.1.abcdef0", Channel: "testing", SHA256: strings.Repeat("a", 64),
 	}
 	status := developmentStatus{Portal: portal.URL + "/operations"}
@@ -390,7 +390,7 @@ func TestSubmitFrontendTestReleaseCreatesApplicationBindingAndPublishesExactRece
 		}
 	}))
 	defer portal.Close()
-	artifact := pluginservice.Artifact{PluginID: "cn.vastplan.product.frontend.admin", Version: "1.1.0-dev.20260721.1.abcdef0", Channel: "testing", SHA256: strings.Repeat("c", 64)}
+	artifact := artifactrepository.Artifact{PluginID: "cn.vastplan.product.frontend.admin", Version: "1.1.0-dev.20260721.1.abcdef0", Channel: "testing", SHA256: strings.Repeat("c", 64)}
 	status := developmentStatus{Portal: portal.URL + "/operations"}
 	opts := options{FrontendTarget: "operations", Timeout: 5 * time.Second}
 	receipt := testPublishReceipt(artifact, 31)
@@ -422,7 +422,7 @@ func writeTestPackage(t *testing.T, version string) string {
 	if err := os.WriteFile(filepath.Join(directory, "backend", "main"), []byte("binary"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(directory)
+	packageBytes, _, err := artifactrepository.PackageDirectory(directory)
 	if err != nil {
 		t.Fatal(err)
 	}

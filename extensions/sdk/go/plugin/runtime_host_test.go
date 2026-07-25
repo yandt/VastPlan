@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 )
 
 func TestShutdownBeforeServePreventsSharedHostUnitStart(t *testing.T) {

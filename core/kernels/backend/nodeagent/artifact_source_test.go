@@ -11,8 +11,8 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 type staticArtifactSource struct {
@@ -36,7 +36,7 @@ func TestArtifactVerifierRequiresProofAndProducesInstallerToken(t *testing.T) {
 	packageBytes, artifact := testPackage(t, 0o755)
 	ref := pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 	publicKey, privateKey, _ := ed25519.GenerateKey(nil)
-	trust, err := pluginservice.NewTrustStore(pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+	trust, err := artifactrepository.NewTrustStore(artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{
 		Publisher: "example", KeyID: "release", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}))
 	if err != nil {
@@ -50,7 +50,7 @@ func TestArtifactVerifierRequiresProofAndProducesInstallerToken(t *testing.T) {
 	if _, err := verifier.Verify(ref, envelope); err == nil || !strings.Contains(err.Error(), "缺少发布者证明") {
 		t.Fatalf("签名模式必须拒绝无证明来源: %v", err)
 	}
-	attestation, err := pluginservice.SignArtifact(artifact, "example", "release", privateKey, time.Now().UTC())
+	attestation, err := artifactrepository.SignArtifact(artifact, "example", "release", privateKey, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestDevelopmentMixedVerifierAcceptsUnsignedSeedAndVerifiesSignedTestingArti
 	packageBytes, artifact := testPackage(t, 0o755)
 	ref := pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 	publicKey, privateKey, _ := ed25519.GenerateKey(nil)
-	trust, err := pluginservice.NewTrustStore(pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+	trust, err := artifactrepository.NewTrustStore(artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{
 		Publisher: "example", KeyID: "testing", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}))
 	if err != nil {
@@ -101,7 +101,7 @@ func TestDevelopmentMixedVerifierAcceptsUnsignedSeedAndVerifiesSignedTestingArti
 	if _, err := verifier.Verify(ref, artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes}); err != nil {
 		t.Fatalf("显式开发模式应允许无签名 Seed: %v", err)
 	}
-	attestation, err := pluginservice.SignArtifact(artifact, "example", "testing", privateKey, time.Now().UTC())
+	attestation, err := artifactrepository.SignArtifact(artifact, "example", "testing", privateKey, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}

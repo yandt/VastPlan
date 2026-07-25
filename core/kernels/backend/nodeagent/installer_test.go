@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestLocalInstaller_ContentAddressedAndIdempotent(t *testing.T) {
@@ -56,11 +56,11 @@ func TestLocalInstallerFreezesBackgroundServiceFromSignedManifest(t *testing.T) 
 	if err := os.WriteFile(filepath.Join(dir, "backend", "plugin"), []byte("binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(dir)
+	packageBytes, _, err := artifactrepository.PackageDirectory(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("stable", packageBytes)
+	artifact, err := artifactrepository.Describe("stable", packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,11 +114,11 @@ func TestLocalInstaller_PythonEntryNeedNotBeExecutable(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "supply-chain", "pylock.toml"), lock, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(dir)
+	packageBytes, _, err := artifactrepository.PackageDirectory(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("stable", packageBytes)
+	artifact, err := artifactrepository.Describe("stable", packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,11 +160,11 @@ func TestLocalInstallerFreezesDynamicGoEntryFromSignedManifest(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		packageBytes, _, err := pluginservice.PackageDirectory(dir)
+		packageBytes, _, err := artifactrepository.PackageDirectory(dir)
 		if err != nil {
 			t.Fatal(err)
 		}
-		artifact, err := pluginservice.Describe("stable", packageBytes)
+		artifact, err := artifactrepository.Describe("stable", packageBytes)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -256,11 +256,11 @@ func testPackage(t *testing.T, mode os.FileMode) ([]byte, pluginv1.Artifact) {
 	if err := os.WriteFile(filepath.Join(dir, "backend", "plugin"), []byte("binary"), mode); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, parsed, err := pluginservice.PackageDirectory(dir)
+	packageBytes, parsed, err := artifactrepository.PackageDirectory(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("stable", packageBytes)
+	artifact, err := artifactrepository.Describe("stable", packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}

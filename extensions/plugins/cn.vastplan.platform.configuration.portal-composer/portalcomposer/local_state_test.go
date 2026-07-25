@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func openTestService(path string, catalog Catalog) (*Service, error) {

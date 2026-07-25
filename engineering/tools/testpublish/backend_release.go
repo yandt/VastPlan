@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
 
 const (

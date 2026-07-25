@@ -5,13 +5,13 @@ import (
 	"context"
 	"encoding/json"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 const PluginID = "cn.vastplan.foundation.security.portal-access-policy"
-const PluginVersion = "0.4.0"
+const PluginVersion = "0.4.1"
 const Capability = "foundation.security.portal-access-policy"
 
 func Check(_ context.Context, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {

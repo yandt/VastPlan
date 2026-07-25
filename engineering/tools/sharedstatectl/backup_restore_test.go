@@ -15,8 +15,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstatebackup"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstatebackup"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.credentials/credentialsbackup"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.credentials/credentialsstate"
 )

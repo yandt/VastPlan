@@ -17,12 +17,12 @@ import (
 
 	"google.golang.org/grpc"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/contextview"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocollimit"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
 )
 
 // DecodeStartupConfiguration decodes the caller-isolated, non-sensitive
@@ -65,8 +65,8 @@ type Handler func(ctx context.Context, host Host, callCtx *contractv1.CallContex
 
 // ContextViews returns defensive, semantic views over the host-projected
 // context. It does not expose fields removed by audience projection.
-func ContextViews(callCtx *contractv1.CallContext) callcontext.Views {
-	return callcontext.ReadOnlyViews(callCtx)
+func ContextViews(callCtx *contractv1.CallContext) contextview.Views {
+	return contextview.FromWire(callCtx)
 }
 
 // invocationCallPathKey 只在一次处理器调用的 context 内携带宿主已验证的调用路径。

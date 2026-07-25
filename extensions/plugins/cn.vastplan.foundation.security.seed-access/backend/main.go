@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/authorizationtrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/authorizationtrust"
 	seedaccess "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.security.seed-access/seedaccess"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

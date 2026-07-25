@@ -3,7 +3,7 @@ package portaltrust
 import (
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 // serverRuntimeSpec is sealed inside the trusted delivery snapshot. It is

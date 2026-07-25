@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocollimit"
 )
 
 func BenchmarkBackend_AddressingLocalInvoke(b *testing.B) {

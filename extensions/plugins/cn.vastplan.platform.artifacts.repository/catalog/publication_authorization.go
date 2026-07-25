@@ -7,18 +7,18 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
-func (s *Store) AuthorizePublication(attestation pluginservice.Attestation, now time.Time) (string, error) {
+func (s *Store) AuthorizePublication(attestation artifactrepository.Attestation, now time.Time) (string, error) {
 	return s.AuthorizePublicationWithProvenance(attestation, nil, nil, now)
 }
 
-func (s *Store) AuthorizePublicationWithProvenance(attestation pluginservice.Attestation, provenanceRaw, verificationRaw []byte, now time.Time) (string, error) {
+func (s *Store) AuthorizePublicationWithProvenance(attestation artifactrepository.Attestation, provenanceRaw, verificationRaw []byte, now time.Time) (string, error) {
 	return s.AuthorizePublicationWithSupplyChain(attestation, provenanceRaw, verificationRaw, nil, now)
 }
 
-func (s *Store) AuthorizePublicationWithSupplyChain(attestation pluginservice.Attestation, provenanceRaw, verificationRaw, admissionRaw []byte, now time.Time) (string, error) {
+func (s *Store) AuthorizePublicationWithSupplyChain(attestation artifactrepository.Attestation, provenanceRaw, verificationRaw, admissionRaw []byte, now time.Time) (string, error) {
 	if attestation.Artifact.Channel != "stable" {
 		return "", nil
 	}

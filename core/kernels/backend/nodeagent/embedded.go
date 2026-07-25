@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 

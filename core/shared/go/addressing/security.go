@@ -17,8 +17,8 @@ import (
 	"github.com/nats-io/nkeys"
 	"google.golang.org/protobuf/proto"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 

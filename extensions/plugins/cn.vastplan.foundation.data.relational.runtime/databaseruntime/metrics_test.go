@@ -7,7 +7,7 @@ import (
 	"time"
 
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 )
 
 func TestRuntimeMetricsExposeBoundedPoolAndTransactionSignals(t *testing.T) {

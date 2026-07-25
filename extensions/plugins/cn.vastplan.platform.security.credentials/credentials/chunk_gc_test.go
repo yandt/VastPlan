@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.credentials/credentialsstate"
 )
 

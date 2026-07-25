@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func decisionFor(t *testing.T, ctx *contractv1.CallContext, capability, operation string) extpoint.PermissionResponse {

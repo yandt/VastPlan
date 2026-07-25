@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 )
 
 const securityWatermarkSchemaVersion = "v1"

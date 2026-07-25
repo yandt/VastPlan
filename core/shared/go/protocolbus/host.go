@@ -21,14 +21,15 @@ import (
 
 	"google.golang.org/grpc"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/dynamicgo"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocollimit"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/observability"
-	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/processguard"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/observability"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
 )
 
 // randomHex 生成随机十六进制串（会话票据 / launch token 用）。
@@ -118,23 +119,18 @@ type launchAttempt struct {
 }
 
 // MigrationOperation 是插件私有状态 copy-on-write 事务的三个可回滚阶段。
-type MigrationOperation string
+type MigrationOperation = dynamicgo.MigrationOperation
 
 const (
-	MigrationPrepare  MigrationOperation = "prepare"
-	MigrationCommit   MigrationOperation = "commit"
-	MigrationRollback MigrationOperation = "rollback"
+	MigrationPrepare  = dynamicgo.MigrationPrepare
+	MigrationCommit   = dynamicgo.MigrationCommit
+	MigrationRollback = dynamicgo.MigrationRollback
 )
 
 type StateIdentity = pluginv1.StateIdentity
 
 // MigrationCommand 是宿主发给候选插件的一次迁移阶段命令。
-type MigrationCommand struct {
-	Operation     MigrationOperation
-	TransactionID string
-	From          StateIdentity
-	To            StateIdentity
-}
+type MigrationCommand = dynamicgo.MigrationCommand
 
 // MigrationRequest 保留为源代码兼容别名；新代码使用语义更准确的 MigrationCommand。
 type MigrationRequest = MigrationCommand

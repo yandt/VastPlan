@@ -6,10 +6,10 @@ import (
 	"os"
 	"testing"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 )
 
 func TestContributionRejectsUntrustedCallerAndTenantDrift(t *testing.T) {
@@ -44,8 +44,20 @@ func TestManifestMatchesPlannerContribution(t *testing.T) {
 		t.Fatal(err)
 	}
 	found := false
+	runtimeContribution := Contribution(nil)
 	for _, contribution := range contributions {
-		found = found || contribution.ExtensionPoint == extpoint.ToolPackage && contribution.ID == backendcompositionv1.PlanningCapability
+		if contribution.ExtensionPoint == extpoint.ToolPackage && contribution.ID == backendcompositionv1.PlanningCapability {
+			found = true
+			var declared, running any
+			if json.Unmarshal(contribution.Descriptor, &declared) != nil || json.Unmarshal(runtimeContribution.Descriptor, &running) != nil {
+				t.Fatal("Planner contribution descriptor 不是有效 JSON")
+			}
+			declaredJSON, _ := json.Marshal(declared)
+			runningJSON, _ := json.Marshal(running)
+			if string(declaredJSON) != string(runningJSON) {
+				t.Fatalf("Planner 运行时 descriptor 与签名 Manifest 不一致\nmanifest=%s\nruntime=%s", declaredJSON, runningJSON)
+			}
+		}
 	}
 	if !found {
 		t.Fatalf("Planner Manifest 未声明稳定 capability: %+v", contributions)

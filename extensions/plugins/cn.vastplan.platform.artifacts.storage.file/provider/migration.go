@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 )
 
 const migrationRecordVersion = "v1"

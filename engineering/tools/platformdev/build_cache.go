@@ -20,7 +20,7 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 const developmentBuildCacheSchema = 1
@@ -273,13 +273,15 @@ func (r *runtime) computeBackendBuildDigest(ctx context.Context) (string, error)
 	if err != nil {
 		return "", err
 	}
-	digest, err := digestBuildInputs(r.options.root, []string{
-		"go.mod", "go.sum", "contracts", "core", "extensions/plugins", "extensions/sdk/go", "engineering/tools/build.sh",
-	}, []string{goIdentity, "backend-build-v1"}, backendBuildInput)
-	if err != nil {
-		return "", fmt.Errorf("计算 Backend 构建摘要: %w", err)
+	goCache := filepath.Join(r.options.stateRoot, "go-cache")
+	if err := os.MkdirAll(goCache, 0o700); err != nil {
+		return "", err
 	}
-	return digest, nil
+	plan, err := r.computeGoBuildPlan(ctx, goIdentity, goCache)
+	if err != nil {
+		return "", err
+	}
+	return plan.Aggregate, nil
 }
 
 func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
@@ -301,29 +303,15 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 		return err
 	}
 
-	backendDigest := r.backendInputDigest
-	if backendDigest == "" {
-		backendDigest, err = r.computeBackendBuildDigest(ctx)
-		if err != nil {
-			return err
-		}
-	}
-	r.backendInputDigest = backendDigest
-	log.Printf("[2/6] 准备 Backend 内核与插件 digest=%s", backendDigest[:12])
-	backend, err := ensureCachedBuild(cacheRoot, "backend", backendDigest, func(candidate string) error {
-		return r.command(ctx, map[string]string{
-			"CGO_ENABLED": "1", "OUT_DIR": filepath.Join(candidate, "bin"), "GOCACHE": goCache,
-		}, "./engineering/tools/build.sh")
-	}, func(candidate string) error {
-		return r.validateBackendBuild(filepath.Join(candidate, "bin"))
-	})
+	log.Printf("[2/6] 按实际 Go 依赖准备 Backend Kernel 与插件")
+	backendDigest, err := r.prepareCachedGoBinaries(ctx, cacheRoot, goCache, goIdentity)
 	if err != nil {
 		return err
 	}
-	logBuildCacheResult("Backend 内核与插件", backend)
-	if err := materializeCachedDirectory(filepath.Join(backend.Path, "bin"), filepath.Join(r.runDir, "bin")); err != nil {
-		return fmt.Errorf("装配 Backend 构建缓存: %w", err)
+	if r.backendInputDigest != "" && r.backendInputDigest != backendDigest {
+		return errors.New("Backend 构建计划在配置物化后发生漂移")
 	}
+	r.backendInputDigest = backendDigest
 
 	hmr := frontendHMR{root: r.options.root}
 	frontendSources, err := hmr.sourceSignatures()
@@ -538,7 +526,7 @@ func (r *runtime) validatePackageRepository(repository string) error {
 	if err != nil {
 		return fmt.Errorf("读取插件仓库索引: %w", err)
 	}
-	repo, err := pluginservice.NewRepository(repository)
+	repo, err := artifactrepository.NewRepository(repository)
 	if err != nil {
 		return err
 	}

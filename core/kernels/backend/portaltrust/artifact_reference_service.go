@@ -11,12 +11,12 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
-	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 

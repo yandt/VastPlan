@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
 
 const (
@@ -34,19 +34,19 @@ type publicationSnapshot struct {
 type SupplyChainEvidence = platformadminapi.ArtifactSupplyChainEvidence
 
 type verifiedPackageReader interface {
-	ReadWithAttestation(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, error)
+	ReadWithAttestation(artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, error)
 }
 
 type verifiedProvenanceReader interface {
-	ReadProvenance(pluginservice.Ref) ([]byte, []byte, error)
+	ReadProvenance(artifactrepository.Ref) ([]byte, []byte, error)
 }
 
 type verifiedSecurityAdmissionReader interface {
-	ReadSecurityAdmission(pluginservice.Ref) ([]byte, error)
+	ReadSecurityAdmission(artifactrepository.Ref) ([]byte, error)
 }
 
 type verifiedSecurityStatusReader interface {
-	ReadSecurityStatusChain(pluginservice.Ref) ([]byte, error)
+	ReadSecurityStatusChain(artifactrepository.Ref) ([]byte, error)
 }
 
 func (s *Store) SubmitPublication(request PublicationRequest, actor string, now, expiresAt time.Time) (Publication, uint64, error) {

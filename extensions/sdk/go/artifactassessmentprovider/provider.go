@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 type Provider struct {

@@ -9,15 +9,15 @@ import (
 	"fmt"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
-	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
-	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
-	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
-	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 var ErrNotFound = errors.New("kernel SPI 资源不存在")

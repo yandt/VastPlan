@@ -10,10 +10,10 @@ import (
 	"time"
 
 	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/interactionapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

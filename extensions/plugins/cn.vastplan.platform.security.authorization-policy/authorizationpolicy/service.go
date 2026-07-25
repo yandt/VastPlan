@@ -11,7 +11,7 @@ import (
 
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 )
 
 type SnapshotWriter interface {

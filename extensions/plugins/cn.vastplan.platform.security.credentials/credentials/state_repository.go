@@ -7,7 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.credentials/credentialsstate"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"

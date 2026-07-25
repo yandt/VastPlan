@@ -3,7 +3,7 @@ package nodeagent
 import (
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
 )
 
 // validateDynamicGoFirstParty is the Backend-side trust gate. Actual .so

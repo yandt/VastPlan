@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestGenerateCreatesOwnerOnlyNonOverwritableKey(t *testing.T) {
@@ -20,7 +20,7 @@ func TestGenerateCreatesOwnerOnlyNonOverwritableKey(t *testing.T) {
 	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("私钥权限无效: info=%v err=%v", info, err)
 	}
-	privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(filename)
+	privateKey, err := artifactrepository.LoadEd25519PrivateKeyPEM(filename)
 	if err != nil || !bytes.Equal(privateKey.Public().(ed25519.PublicKey), publicKey) {
 		t.Fatalf("生成的公私钥不匹配: %v", err)
 	}

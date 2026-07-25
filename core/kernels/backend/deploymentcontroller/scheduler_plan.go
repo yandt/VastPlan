@@ -13,7 +13,7 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 type scheduleBuilder struct {

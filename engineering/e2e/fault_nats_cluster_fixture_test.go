@@ -14,7 +14,7 @@ import (
 	natsserver "github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 type faultNATSCluster struct {

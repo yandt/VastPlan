@@ -13,7 +13,7 @@ import (
 	"syscall"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 const developmentStablePackageIdentitySchema = 1
@@ -103,7 +103,7 @@ func readStablePackageIdentities(repositoryRoot string) ([]stablePackageIdentity
 		if err := pluginv1.ValidateArtifactMetadata(raw); err != nil {
 			return fmt.Errorf("验证稳定制品元数据 %s: %w", path, err)
 		}
-		var artifact pluginservice.Artifact
+		var artifact artifactrepository.Artifact
 		if err := json.Unmarshal(raw, &artifact); err != nil {
 			return err
 		}

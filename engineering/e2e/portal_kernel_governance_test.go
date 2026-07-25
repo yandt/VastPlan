@@ -12,7 +12,7 @@ import (
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func TestNodePortalKernelGovernanceLifecycleWithRealPlugins(t *testing.T) {

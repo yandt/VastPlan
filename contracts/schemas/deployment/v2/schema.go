@@ -20,8 +20,8 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 const DeploymentSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/deployment/v2/vastplan.deployment.schema.json"

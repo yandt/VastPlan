@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstatebackup"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstatebackup"
 )
 
 func TestKeygenCreatesNonOverwritingPrivateKeyAndTrust(t *testing.T) {

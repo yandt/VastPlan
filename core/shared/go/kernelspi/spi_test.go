@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 )
 
 func TestMapConfigIsImmutableAndScopeFailsClosed(t *testing.T) {

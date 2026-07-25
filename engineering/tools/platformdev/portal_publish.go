@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func publishPortal(baseURL string) error {

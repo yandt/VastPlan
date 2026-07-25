@@ -7,7 +7,7 @@ import (
 	"time"
 
 	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 
 type resourceActivationStatus string

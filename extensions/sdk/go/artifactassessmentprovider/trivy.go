@@ -15,7 +15,7 @@ import (
 	"time"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 )
 
 type TrivyConfig struct {

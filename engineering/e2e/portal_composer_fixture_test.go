@@ -14,15 +14,15 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/portaltrust"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 type portalComposerFixture struct {
@@ -42,7 +42,7 @@ func (v portalFixtureVerifier) Verify(_ context.Context, ref pluginv1.ArtifactRe
 func startPortalComposerFixture(t *testing.T, root string, addressing *portalAddressingFixture) portalComposerFixture {
 	t.Helper()
 	temporary := t.TempDir()
-	repository, err := pluginservice.NewRepository(filepath.Join(temporary, "repository"))
+	repository, err := artifactrepository.NewRepository(filepath.Join(temporary, "repository"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,10 +62,10 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 	verifier := nodeagent.NewLocalDevelopmentArtifactVerifier()
 	installer := nodeagent.LocalInstaller{Root: filepath.Join(temporary, "installed")}
 	policy := installPortalFixturePlugin(t, repository, verifier, installer, pluginv1.ArtifactRef{
-		PluginID: "cn.vastplan.foundation.security.portal-access-policy", Version: "0.4.0", Channel: "stable",
+		PluginID: "cn.vastplan.foundation.security.portal-access-policy", Version: "0.4.1", Channel: "stable",
 	})
 	composer := installPortalFixturePlugin(t, repository, verifier, installer, pluginv1.ArtifactRef{
-		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.6.1", Channel: "stable",
+		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.6.2", Channel: "stable",
 	})
 	platformCatalog := portalPlatformCatalogForTenant(t, root, "acme")
 	config, err := kernelspi.NewMapConfig(map[string]any{
@@ -131,7 +131,7 @@ func registerPortalTrustServices(t *testing.T, host *protocolbus.Host, catalog *
 	}
 }
 
-func installPortalFixturePlugin(t *testing.T, repository *pluginservice.Repository, verifier nodeagent.ArtifactVerifier, installer nodeagent.LocalInstaller, ref pluginv1.ArtifactRef) nodeagent.InstalledPlugin {
+func installPortalFixturePlugin(t *testing.T, repository *artifactrepository.Repository, verifier nodeagent.ArtifactVerifier, installer nodeagent.LocalInstaller, ref pluginv1.ArtifactRef) nodeagent.InstalledPlugin {
 	t.Helper()
 	envelope, err := repository.Fetch(context.Background(), ref)
 	if err != nil {
@@ -191,7 +191,7 @@ func portalPlatformCatalogForTenant(t *testing.T, root, tenantID string) []byte 
 	return raw
 }
 
-func publishPortalFrontendFixture(t *testing.T, repository *pluginservice.Repository, manifestPath string) {
+func publishPortalFrontendFixture(t *testing.T, repository *artifactrepository.Repository, manifestPath string) {
 	t.Helper()
 	manifestRaw, err := os.ReadFile(filepath.Join(repoRoot(t), manifestPath))
 	if err != nil {
@@ -220,7 +220,7 @@ func publishPortalFrontendFixture(t *testing.T, repository *pluginservice.Reposi
 	}
 	copyPortalFixtureNotice(t, directory, manifest.LicenseFile)
 	copyPortalFixtureNotice(t, directory, manifest.NoticeFile)
-	packageBytes, _, err := pluginservice.PackageDirectory(directory)
+	packageBytes, _, err := artifactrepository.PackageDirectory(directory)
 	if err != nil {
 		t.Fatal(err)
 	}

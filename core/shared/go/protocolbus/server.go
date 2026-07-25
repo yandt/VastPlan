@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 )
 
 // Handshake 校验 magic、协商协议版本、校验 engines，通过后签发会话票据（§2.2）。

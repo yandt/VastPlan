@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
 )
 
 func TestStableRemotePublishReusesExactVerifiedTestingCandidate(t *testing.T) {
@@ -23,7 +23,7 @@ func TestStableRemotePublishReusesExactVerifiedTestingCandidate(t *testing.T) {
 	if published.Channel != "stable" || published.SHA256 != fixture.testing.SHA256 {
 		t.Fatalf("stable 发布结果未绑定 testing 候选: %+v", published)
 	}
-	if _, _, err := fixture.repository.Read(pluginservice.Ref{PluginID: published.PluginID, Version: published.Version, Channel: "stable"}); err != nil {
+	if _, _, err := fixture.repository.Read(artifactrepository.Ref{PluginID: published.PluginID, Version: published.Version, Channel: "stable"}); err != nil {
 		t.Fatalf("stable 制品未写入仓库: %v", err)
 	}
 }
@@ -34,7 +34,7 @@ func TestStableRemotePublishRejectsRebuiltDifferentBytes(t *testing.T) {
 	if _, err := publishRemote(different, "vastplan", "stable", fixture.options); err == nil {
 		t.Fatal("与 testing 候选 SHA 不一致的 stable 包必须在上传前拒绝")
 	}
-	if _, _, err := fixture.repository.Read(pluginservice.Ref{PluginID: fixture.testing.PluginID, Version: fixture.testing.Version, Channel: "stable"}); err == nil {
+	if _, _, err := fixture.repository.Read(artifactrepository.Ref{PluginID: fixture.testing.PluginID, Version: fixture.testing.Version, Channel: "stable"}); err == nil {
 		t.Fatal("预检失败不得产生 stable 制品")
 	}
 }
@@ -60,8 +60,8 @@ func TestLoadProvenanceFilesRequiresAnExactPair(t *testing.T) {
 
 type remotePublishFixture struct {
 	packageBytes []byte
-	testing      pluginservice.Artifact
-	repository   *pluginservice.SignedRepository
+	testing      artifactrepository.Artifact
+	repository   *artifactrepository.SignedRepository
 	options      remotePublishOptions
 }
 
@@ -71,36 +71,36 @@ func newRemotePublishFixture(t *testing.T, payload string) remotePublishFixture 
 	if err != nil {
 		t.Fatal(err)
 	}
-	trustDocument := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{Publisher: "vastplan", KeyID: "release", PublicKey: base64.StdEncoding.EncodeToString(public)})
-	trust, err := pluginservice.NewTrustStore(trustDocument)
+	trustDocument := artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{Publisher: "vastplan", KeyID: "release", PublicKey: base64.StdEncoding.EncodeToString(public)})
+	trust, err := artifactrepository.NewTrustStore(trustDocument)
 	if err != nil {
 		t.Fatal(err)
 	}
-	local, err := pluginservice.NewRepository(t.TempDir())
+	local, err := artifactrepository.NewRepository(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	repository := &pluginservice.SignedRepository{Local: local, Trust: trust}
+	repository := &artifactrepository.SignedRepository{Local: local, Trust: trust}
 	packageBytes := packageForRemotePublish(t, payload)
-	testingArtifact, err := pluginservice.Describe("testing", packageBytes)
+	testingArtifact, err := artifactrepository.Describe("testing", packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	proof, err := pluginservice.SignArtifact(testingArtifact, "vastplan", "release", private, time.Now().UTC())
+	proof, err := artifactrepository.SignArtifact(testingArtifact, "vastplan", "release", private, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err := repository.Publish(proof, packageBytes); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewTLSServer(&artifactapi.Server{Repository: pluginservice.HTTPRepositoryAdapter{Repository: repository}, ReadToken: "reader", PublishToken: "publisher", RequireTLS: true})
+	server := httptest.NewTLSServer(&artifactapi.Server{Repository: artifactrepository.HTTPRepositoryAdapter{Repository: repository}, ReadToken: "reader", PublishToken: "publisher", RequireTLS: true})
 	t.Cleanup(server.Close)
 	trustRaw, _ := json.Marshal(trustDocument)
 	trustFile := filepath.Join(t.TempDir(), "trust.json")
 	if err := os.WriteFile(trustFile, trustRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	privateRaw, err := pluginservice.MarshalEd25519PrivateKeyPEM(private)
+	privateRaw, err := artifactrepository.MarshalEd25519PrivateKeyPEM(private)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func packageForRemotePublish(t *testing.T, payload string) []byte {
 	if err := os.WriteFile(filepath.Join(root, "backend", "main"), []byte(payload), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(root)
+	packageBytes, _, err := artifactrepository.PackageDirectory(root)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

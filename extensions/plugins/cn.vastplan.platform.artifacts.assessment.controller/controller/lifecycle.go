@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

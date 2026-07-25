@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
-	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 )
 
 func launchRuntimeIdentity(policy LaunchPolicy) (runtimeidentity.Identity, error) {

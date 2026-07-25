@@ -7,7 +7,7 @@ import (
 	"time"
 
 	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/interactionapi"
 )
 
 func (s *Service) Open(_ context.Context, source interactionapi.Subject, request uiv1.InteractionRequest) (interactionapi.Record, error) {

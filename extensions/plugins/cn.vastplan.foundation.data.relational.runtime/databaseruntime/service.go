@@ -10,8 +10,8 @@ import (
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

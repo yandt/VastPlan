@@ -1,6 +1,6 @@
 // Package catalog implements the managed repository's derived artifact catalog
 // and append-only publish journal. Trust and immutable storage remain owned by
-// pluginservice; this package only indexes artifacts that the signed repository
+// artifactrepository; this package only indexes artifacts that the signed repository
 // has already verified.
 package catalog
 
@@ -16,31 +16,31 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
 
 const schemaVersion = "v1"
 
 type VerifiedRepository interface {
-	ListRefs() ([]pluginservice.Ref, error)
-	ReadMetadataWithAttestation(pluginservice.Ref) (pluginservice.Artifact, []byte, error)
+	ListRefs() ([]artifactrepository.Ref, error)
+	ReadMetadataWithAttestation(artifactrepository.Ref) (artifactrepository.Artifact, []byte, error)
 }
 
 type VerifiedProvenanceReader interface {
-	ReadProvenance(pluginservice.Ref) ([]byte, []byte, error)
+	ReadProvenance(artifactrepository.Ref) ([]byte, []byte, error)
 }
 
 type VerifiedSecurityAdmissionReader interface {
-	ReadSecurityAdmission(pluginservice.Ref) ([]byte, error)
+	ReadSecurityAdmission(artifactrepository.Ref) ([]byte, error)
 }
 
 type VerifiedMetadataProvenanceReader interface {
-	ReadMetadataWithProvenance(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, error)
+	ReadMetadataWithProvenance(artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, []byte, error)
 }
 
 type VerifiedMetadataSupplyChainReader interface {
-	ReadMetadataWithSupplyChain(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, []byte, error)
+	ReadMetadataWithSupplyChain(artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, []byte, []byte, error)
 }
 
 // MissingArtifactRegistry allows Catalog history to retain an exact artifact
@@ -176,7 +176,7 @@ func Open(repositoryRoot string, repository VerifiedRepository, retired ...Missi
 	return store, nil
 }
 
-func (s *Store) RecordPublished(artifact pluginservice.Artifact, attestationRaw []byte, occurredAt time.Time) (uint64, error) {
+func (s *Store) RecordPublished(artifact artifactrepository.Artifact, attestationRaw []byte, occurredAt time.Time) (uint64, error) {
 	entry, err := entryFrom(artifact, attestationRaw)
 	if err != nil {
 		return 0, err

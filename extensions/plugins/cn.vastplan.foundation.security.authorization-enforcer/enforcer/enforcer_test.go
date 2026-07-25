@@ -12,8 +12,8 @@ import (
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/extensions/sdk/go/authorizationnative"
 )
 
@@ -145,7 +145,7 @@ func testBundle(t *testing.T, now time.Time) PolicyBundle {
 	catalog.Digest = digest
 	configuration := authorizationv1.ConfigurationRevisionRef{ProfileID: "authorization.native", Revision: 1, Digest: strings.Repeat("c", 64)}
 	provider := authorizationv1.ProviderProfile{ID: "authorization.native", Revision: 1,
-		Store:  authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolStore, ProviderID: "native-file", PluginID: "cn.vastplan.platform.security.authorization-policy", Capability: "platform.authorization.store", Version: "0.1.0", Configuration: configuration},
+		Store:  authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolStore, ProviderID: "native-file", PluginID: "cn.vastplan.platform.security.authorization-policy", Capability: "platform.authorization.store", Version: "0.1.1", Configuration: configuration},
 		Engine: authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolEngine, ProviderID: "native-rbac", PluginID: "cn.vastplan.foundation.security.authorization-engine.native", Capability: authorizationnative.Capability, Version: PluginVersion, Configuration: configuration}, Exchange: []authorizationv1.ProviderRef{}}
 	role := authorizationv1.CompiledRole{ID: "reader", Revision: 1, DomainID: "platform.root", Statements: []authorizationv1.PolicyStatement{{ID: "allow", Effect: authorizationv1.EffectAllow, Permissions: []string{"platform.demo.read"}, Constraints: []authorizationv1.AttributeConstraint{}}}}
 	policy := authorizationv1.AuthorizationIR{SchemaVersion: "v1", CatalogDigest: digest, RootDomainID: "platform.root", ProviderProfiles: []authorizationv1.ProviderProfile{provider}, Domains: []authorizationv1.PolicyDomain{{ID: "platform.root", Revision: 1, Kind: authorizationv1.DomainPlatform, ProviderProfileID: provider.ID, Delegation: authorizationv1.DelegationCeiling{Permissions: []string{"platform.demo.read"}, MaxRisk: authorizationv1.RiskCritical, MayDelegate: true, MaxTTLSeconds: 300}}}, Roles: []authorizationv1.CompiledRole{role}, Bindings: []authorizationv1.SubjectBinding{{ID: "alice", Revision: 1, DomainID: "platform.root", Subject: authorizationv1.Subject{Kind: authorizationv1.SubjectUser, ID: "enterprise.alice", Issuer: authenticationv1.StableSubjectIssuer}, RoleID: "reader", RoleRevision: 1, NotBefore: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}, {ID: "ops", Revision: 1, DomainID: "platform.root", Subject: authorizationv1.Subject{Kind: authorizationv1.SubjectGroup, ID: "ops", Issuer: "https://id.example"}, RoleID: "reader", RoleRevision: 1, NotBefore: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}}, Revocations: []authorizationv1.Revocation{}}

@@ -10,7 +10,7 @@ import (
 
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 type reconcileOptions struct {

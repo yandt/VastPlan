@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func (s *Store) rebuild() error {
@@ -64,7 +64,7 @@ func (s *Store) rebuild() error {
 	return s.writeSnapshotLocked()
 }
 
-func (s *Store) readMetadata(ref pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, []byte, error) {
+func (s *Store) readMetadata(ref artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, []byte, []byte, error) {
 	if reader, ok := s.repository.(VerifiedMetadataSupplyChainReader); ok {
 		return reader.ReadMetadataWithSupplyChain(ref)
 	}

@@ -9,9 +9,9 @@ import (
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 
-	addressingv1 "cdsoft.com.cn/VastPlan/core/shared/go/addressing/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
-	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
+	addressingv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/addressing/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 )
 
 func ActivateRegistrations(ctx context.Context, registrations []*Registration) error {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestDiscoverUsesManifestAndDetectsCurrentBackendDrivers(t *testing.T) {
@@ -71,7 +71,7 @@ func TestCommandBuilderBuildsImmutableNativeWorkspaceCandidate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("workspace", raw)
+	artifact, err := artifactrepository.Describe("workspace", raw)
 	if err != nil {
 		t.Fatal(err)
 	}

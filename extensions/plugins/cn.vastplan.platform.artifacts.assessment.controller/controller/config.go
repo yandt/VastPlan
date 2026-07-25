@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 )
 
 const (
 	PluginID      = artifactassessment.AssessmentControllerPluginID
-	PluginVersion = "0.1.0"
+	PluginVersion = "0.1.1"
 	Capability    = "platform.artifacts.assessment.controller"
 )
 

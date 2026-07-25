@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 )
 
 func TestParseManifest_ExistingPluginsConform(t *testing.T) {

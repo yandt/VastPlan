@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 )
 
 type profileActivationRecord struct {

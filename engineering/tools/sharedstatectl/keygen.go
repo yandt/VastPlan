@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstatebackup"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstatebackup"
 )
 
 func runKeygen(arguments []string) error {

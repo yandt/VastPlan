@@ -14,10 +14,10 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	addressing "cdsoft.com.cn/VastPlan/core/shared/go/addressing"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
@@ -105,7 +105,7 @@ func TestClusterLeaderFailoverAndPartitionRouting(t *testing.T) {
 }
 
 func TestProtocolRuntimeLeaderRollingUpgradeKeepsMonotonicFencing(t *testing.T) {
-	repository, err := pluginservice.NewRepository(filepath.Join(t.TempDir(), "repository"))
+	repository, err := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "repository"))
 	if err != nil {
 		t.Fatal(err)
 	}

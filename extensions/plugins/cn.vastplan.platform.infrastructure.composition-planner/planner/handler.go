@@ -7,15 +7,15 @@ import (
 	"errors"
 	"io"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.composition-planner"
-	PluginVersion = "0.1.0"
+	PluginVersion = "0.1.1"
 	CallerID      = "cn.vastplan.platform.infrastructure.deployment-manager"
 )
 
@@ -23,7 +23,7 @@ func Contribution(service *Service) sdk.Contribution {
 	return sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage,
 		ID:             backendcompositionv1.PlanningCapability,
-		Descriptor:     []byte(`{"title":"应用组合规划器","subcommands":[{"name":"plan","description":"把 Application Intent 编译为可解释的只读组合方案"}]}`),
+		Descriptor:     []byte(`{"title":"应用组合规划器","subcommands":[{"name":"plan","description":"把 Application Intent 编译为可解释的只读组合方案","paramsSchema":{"type":"object","additionalProperties":false,"required":["intent","platformProfile"],"properties":{"intent":{"type":"object"},"platformProfile":{"type":"object"},"configurationSnapshot":{"type":"object"}}},"resultSchema":{"type":"object"}}]}`),
 		Handlers: map[string]sdk.Handler{backendcompositionv1.PlanningOperation: func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
 			if callCtx == nil || callCtx.GetTenantId() == "" || callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != CallerID {
 				return nil, nil, errors.New("Composition Planner 只接受可信 Deployment Manager 调用")

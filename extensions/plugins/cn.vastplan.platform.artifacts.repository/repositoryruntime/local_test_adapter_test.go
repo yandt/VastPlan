@@ -8,7 +8,7 @@ import (
 	"time"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 func TestLocalTestAdapterUsesManagedRepositoryAndBoundReceipts(t *testing.T) {

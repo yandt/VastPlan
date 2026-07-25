@@ -25,9 +25,9 @@ import (
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 const maximumPackageBytes = int64(256 << 20)
@@ -143,7 +143,7 @@ func publish(ctx context.Context, opts options) error {
 	if err := requireRegularFile(trustFile, false); err != nil {
 		return err
 	}
-	trust, err := pluginservice.LoadTrustStore(trustFile)
+	trust, err := artifactrepository.LoadTrustStore(trustFile)
 	if err != nil {
 		return err
 	}
@@ -183,9 +183,9 @@ func publish(ctx context.Context, opts options) error {
 	}
 	wasExisting := found
 	if !found {
-		reader := &pluginservice.RemoteRepository{BaseURL: repositoryURL.String(), Token: readToken, Trust: trust, Client: repositoryClient}
-		existing, fetchErr := reader.Fetch(ctx, pluginservice.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
-		var attestation pluginservice.Attestation
+		reader := &artifactrepository.RemoteRepository{BaseURL: repositoryURL.String(), Token: readToken, Trust: trust, Client: repositoryClient}
+		existing, fetchErr := reader.Fetch(ctx, artifactrepository.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
+		var attestation artifactrepository.Attestation
 		if fetchErr == nil {
 			if existing.Artifact.SHA256 != artifact.SHA256 || existing.Artifact.Size != artifact.Size {
 				return errors.New("测试仓库已经存在相同 ref 但摘要不同的不可变制品")
@@ -200,16 +200,16 @@ func publish(ctx context.Context, opts options) error {
 			if err := requireRegularFile(privateKeyFile, true); err != nil {
 				return err
 			}
-			privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(privateKeyFile)
+			privateKey, err := artifactrepository.LoadEd25519PrivateKeyPEM(privateKeyFile)
 			if err != nil {
 				return err
 			}
-			attestation, err = pluginservice.SignArtifact(artifact, manifest.Publisher, "local-testing", privateKey, time.Now().UTC())
+			attestation, err = artifactrepository.SignArtifact(artifact, manifest.Publisher, "local-testing", privateKey, time.Now().UTC())
 			if err != nil {
 				return err
 			}
 		}
-		remote := &pluginservice.RemoteRepository{
+		remote := &artifactrepository.RemoteRepository{
 			BaseURL: repositoryURL.String(), Token: publishToken, Trust: trust, Client: repositoryClient,
 		}
 		published, err := remote.PublishRemote(ctx, attestation, packageBytes)
@@ -247,7 +247,7 @@ func submitRequestedTestReleases(ctx context.Context, status developmentStatus, 
 	return nil
 }
 
-func lookupRepositoryRevision(ctx context.Context, client *http.Client, repositoryURL *url.URL, readToken string, artifact pluginservice.Artifact) (uint64, bool, error) {
+func lookupRepositoryRevision(ctx context.Context, client *http.Client, repositoryURL *url.URL, readToken string, artifact artifactrepository.Artifact) (uint64, bool, error) {
 	query := url.Values{
 		"pluginId": {artifact.PluginID}, "version": {artifact.Version}, "channel": {artifact.Channel},
 		"page": {"1"}, "pageSize": {"1"},
@@ -296,7 +296,7 @@ func lookupRepositoryRevision(ctx context.Context, client *http.Client, reposito
 	return page.Items[0].RepositoryRevision, true, nil
 }
 
-func printReceipt(artifact pluginservice.Artifact, repositoryEndpoint string, revision uint64, existing bool) {
+func printReceipt(artifact artifactrepository.Artifact, repositoryEndpoint string, revision uint64, existing bool) {
 	status := "已发布测试制品"
 	if existing {
 		status = "测试制品已存在，按原 revision 幂等返回"
@@ -326,38 +326,38 @@ func readStatus(ctx context.Context, client *http.Client, endpoint string) (deve
 	return status, nil
 }
 
-func loadTestingArtifact(filename, channel string) ([]byte, pluginv1.Manifest, pluginservice.Artifact, error) {
+func loadTestingArtifact(filename, channel string) ([]byte, pluginv1.Manifest, artifactrepository.Artifact, error) {
 	if err := requireRegularFile(filename, false); err != nil {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, err
+		return nil, pluginv1.Manifest{}, artifactrepository.Artifact{}, err
 	}
 	info, err := os.Stat(filename)
 	if err != nil {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, err
+		return nil, pluginv1.Manifest{}, artifactrepository.Artifact{}, err
 	}
 	if info.Size() <= 0 || info.Size() > maximumPackageBytes {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, fmt.Errorf("制品大小必须在 1 到 %d 字节之间", maximumPackageBytes)
+		return nil, pluginv1.Manifest{}, artifactrepository.Artifact{}, fmt.Errorf("制品大小必须在 1 到 %d 字节之间", maximumPackageBytes)
 	}
 	raw, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, err
+		return nil, pluginv1.Manifest{}, artifactrepository.Artifact{}, err
 	}
-	artifact, err := pluginservice.Describe(channel, raw)
+	artifact, err := artifactrepository.Describe(channel, raw)
 	if err != nil {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, err
+		return nil, pluginv1.Manifest{}, artifactrepository.Artifact{}, err
 	}
 	manifest, err := pluginv1.ParseManifest(artifact.Manifest)
 	if err != nil {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, err
+		return nil, pluginv1.Manifest{}, artifactrepository.Artifact{}, err
 	}
 	version, err := semver.StrictNewVersion(manifest.Version)
 	if err != nil {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, errors.New("测试制品版本必须是严格 SemVer")
+		return nil, pluginv1.Manifest{}, artifactrepository.Artifact{}, errors.New("测试制品版本必须是严格 SemVer")
 	}
 	if channel == "testing" && (!developmentPrerelease.MatchString(version.Prerelease()) || workspacePrerelease.MatchString(version.Prerelease())) {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, errors.New("testing 制品版本必须是唯一的 dev.* SemVer 预发布版本，例如 0.4.0-dev.20260720.3.a81c33f")
+		return nil, pluginv1.Manifest{}, artifactrepository.Artifact{}, errors.New("testing 制品版本必须是唯一的 dev.* SemVer 预发布版本，例如 0.4.0-dev.20260720.3.a81c33f")
 	}
 	if channel == "workspace" && !workspacePrerelease.MatchString(version.Prerelease()) {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, errors.New("workspace 制品版本必须是 dev.workspace.<source-digest>")
+		return nil, pluginv1.Manifest{}, artifactrepository.Artifact{}, errors.New("workspace 制品版本必须是 dev.workspace.<source-digest>")
 	}
 	return raw, manifest, artifact, nil
 }

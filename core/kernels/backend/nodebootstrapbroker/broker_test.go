@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
-	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
 )
 
 type testMaterial []byte

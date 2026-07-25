@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"log"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	policy "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.security.interaction-access-policy/policy"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

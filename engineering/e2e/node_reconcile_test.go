@@ -21,9 +21,9 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
@@ -41,7 +41,7 @@ type clusterNode struct {
 }
 
 func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
-	repository, err := pluginservice.NewRepository(filepath.Join(t.TempDir(), "repository"))
+	repository, err := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "repository"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 			RoutingDomain: "application",
 			Placement:     deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-permission", Version: "0.1.1", Channel: "stable"},
 				{ID: "cn.vastplan.hello-world", Version: helloRef.Version, Channel: "stable"},
 			},
 		}},
@@ -152,7 +152,7 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 }
 
 func TestNodeAgent_RuntimePublishesRealPluginToNATSMesh(t *testing.T) {
-	repository, err := pluginservice.NewRepository(filepath.Join(t.TempDir(), "repository"))
+	repository, err := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "repository"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func (s staticDesiredSource) Load(context.Context) (deploymentv1.DesiredState, e
 }
 
 func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
-	repository, err := pluginservice.NewRepository(filepath.Join(t.TempDir(), "repository"))
+	repository, err := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "repository"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,8 +252,8 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
-				{ID: "cn.vastplan.demo-quota", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-permission", Version: "0.1.1", Channel: "stable"},
+				{ID: "cn.vastplan.demo-quota", Version: "0.1.1", Channel: "stable"},
 			},
 		}},
 	}
@@ -308,7 +308,7 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 }
 
 func TestNodeAgent_ProcessCrashTriggersImmediateRecovery(t *testing.T) {
-	repository, err := pluginservice.NewRepository(filepath.Join(t.TempDir(), "repository"))
+	repository, err := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "repository"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +319,7 @@ func TestNodeAgent_ProcessCrashTriggersImmediateRecovery(t *testing.T) {
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-permission", Version: "0.1.1", Channel: "stable"},
 				{ID: "cn.vastplan.fixture.crasher", Version: "0.1.0", Channel: "stable"},
 			},
 		}},
@@ -386,7 +386,7 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	repository, err := pluginservice.NewRepository(filepath.Join(t.TempDir(), "repository"))
+	repository, err := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "repository"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -397,8 +397,8 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "cn.vastplan.demo-permission", Version: "0.1.0", Channel: "stable"},
-				{ID: "cn.vastplan.demo-quota", Version: "0.1.0", Channel: "stable"},
+				{ID: "cn.vastplan.demo-permission", Version: "0.1.1", Channel: "stable"},
+				{ID: "cn.vastplan.demo-quota", Version: "0.1.1", Channel: "stable"},
 			},
 		}},
 	}
@@ -542,7 +542,7 @@ func waitCompositionReady(t *testing.T, scheduler deploymentcontroller.Scheduler
 	t.Fatalf("组合状态未收敛 generation=%d: report=%+v err=%v", generation, report, err)
 }
 
-func startClusterNode(t *testing.T, server *natsserver.Server, buckets controlplane.Buckets, repository *pluginservice.Repository, nodeID, runtimeRoot string) *clusterNode {
+func startClusterNode(t *testing.T, server *natsserver.Server, buckets controlplane.Buckets, repository *artifactrepository.Repository, nodeID, runtimeRoot string) *clusterNode {
 	t.Helper()
 	conn, err := nats.Connect(server.ClientURL())
 	if err != nil {
@@ -643,7 +643,7 @@ func waitMemoryUnits(t *testing.T, store *nodeagent.MemoryStateStore, revision u
 	t.Fatalf("等待内存实际态 revision=%d units=%d 超时: actual=%+v err=%v", revision, units, actual, err)
 }
 
-func publishBuiltPlugin(t *testing.T, repository *pluginservice.Repository, packageDir, manifestPath string) pluginv1.ArtifactRef {
+func publishBuiltPlugin(t *testing.T, repository *artifactrepository.Repository, packageDir, manifestPath string) pluginv1.ArtifactRef {
 	t.Helper()
 	bin := buildPlugin(t, packageDir)
 	manifestRaw, err := os.ReadFile(filepath.Join(repoRoot(t), manifestPath))
@@ -697,7 +697,7 @@ func publishBuiltPlugin(t *testing.T, repository *pluginservice.Repository, pack
 			t.Fatal(err)
 		}
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(dir)
+	packageBytes, _, err := artifactrepository.PackageDirectory(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -708,7 +708,7 @@ func publishBuiltPlugin(t *testing.T, repository *pluginservice.Repository, pack
 	return pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 }
 
-func installPublishedPlugin(t *testing.T, repository *pluginservice.Repository, verifier nodeagent.ArtifactVerifier, installer nodeagent.LocalInstaller, ref pluginv1.ArtifactRef) nodeagent.InstalledPlugin {
+func installPublishedPlugin(t *testing.T, repository *artifactrepository.Repository, verifier nodeagent.ArtifactVerifier, installer nodeagent.LocalInstaller, ref pluginv1.ArtifactRef) nodeagent.InstalledPlugin {
 	t.Helper()
 	envelope, err := repository.Fetch(context.Background(), ref)
 	if err != nil {
@@ -725,7 +725,7 @@ func installPublishedPlugin(t *testing.T, repository *pluginservice.Repository, 
 	return installed
 }
 
-func publishBrokenPlugin(t *testing.T, repository *pluginservice.Repository) {
+func publishBrokenPlugin(t *testing.T, repository *artifactrepository.Repository) {
 	t.Helper()
 	dir := t.TempDir()
 	manifest := []byte(`{
@@ -743,7 +743,7 @@ func publishBrokenPlugin(t *testing.T, repository *pluginservice.Repository) {
 	if err := os.WriteFile(filepath.Join(dir, "backend", "broken"), []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(dir)
+	packageBytes, _, err := artifactrepository.PackageDirectory(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -752,7 +752,7 @@ func publishBrokenPlugin(t *testing.T, repository *pluginservice.Repository) {
 	}
 }
 
-func publishCrasherPlugin(t *testing.T, repository *pluginservice.Repository) {
+func publishCrasherPlugin(t *testing.T, repository *artifactrepository.Repository) {
 	t.Helper()
 	bin := buildPlugin(t, "./engineering/e2e/fixtures/plugins/crasher")
 	dir := t.TempDir()
@@ -775,7 +775,7 @@ func publishCrasherPlugin(t *testing.T, repository *pluginservice.Repository) {
 	if err := os.WriteFile(filepath.Join(dir, "backend", "crasher"), binBytes, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(dir)
+	packageBytes, _, err := artifactrepository.PackageDirectory(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

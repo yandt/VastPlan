@@ -1,7 +1,7 @@
 # Authorization Policy
 
 插件 ID：`cn.vastplan.platform.security.authorization-policy`
-当前制品版本：`0.1.0`
+当前制品版本：`0.1.1`
 
 该平台插件是在线授权唯一写入真相源，以 leader + leader-owned + cluster 运行。它消费签名制品构建的 Permission Catalog，管理 Role revision、Subject Binding revision、不同主体审批、即时撤权、审计和 Ed25519 Policy Snapshot。写入使用 generation CAS；Snapshot audience、TTL 和 Provider Profile 由可信宿主配置。
 

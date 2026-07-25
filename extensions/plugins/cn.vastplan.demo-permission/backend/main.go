@@ -15,8 +15,8 @@ import (
 	"encoding/json"
 	"log"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -26,7 +26,7 @@ var deniedCapabilities = map[string]string{
 }
 
 func main() {
-	p := sdk.New("cn.vastplan.demo-permission", "0.1.0", map[string]string{"backend": "^0.1 || ^1.0"})
+	p := sdk.New("cn.vastplan.demo-permission", "0.1.1", map[string]string{"backend": "^0.1 || ^1.0"})
 
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.PermissionChecker,

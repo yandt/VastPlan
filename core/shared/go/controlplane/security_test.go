@@ -20,8 +20,8 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/nats-io/nkeys"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstatebackup"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstatebackup"
 )
 
 func TestConnectWithConfig_FailsClosedOnPartialSecurity(t *testing.T) {

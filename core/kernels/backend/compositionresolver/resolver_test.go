@@ -163,7 +163,7 @@ func TestDeploySampleIsResolverOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	reader := artifactReader{}
-	for _, item := range []struct{ id, version string }{{"cn.vastplan.demo-permission", "0.1.0"}, {"cn.vastplan.hello-world", "0.2.0"}} {
+	for _, item := range []struct{ id, version string }{{"cn.vastplan.demo-permission", "0.1.1"}, {"cn.vastplan.hello-world", "0.2.1"}} {
 		id := item.id
 		raw, readErr := os.ReadFile(filepath.Join(root, "extensions", "plugins", id, "vastplan.plugin.json"))
 		if readErr != nil {

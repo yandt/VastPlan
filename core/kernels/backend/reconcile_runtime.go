@@ -18,7 +18,7 @@ import (
 	kernelprofileactivation "cdsoft.com.cn/VastPlan/core/kernels/backend/profileactivation"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 type reconcilePreparation struct {

@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 )
 
 type PackageDownloader interface {

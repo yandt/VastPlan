@@ -10,8 +10,8 @@ import (
 	"testing"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func TestFrontendObjectURLUsesGovernedMediaExtension(t *testing.T) {
@@ -46,11 +46,11 @@ func TestMaterializeFrontendModuleGraphProjectsOnlyVerifiedBrowserNodes(t *testi
 	writeGraphFixture(t, directory, "vastplan.plugin.json", mustJSON(t, manifest))
 	writeGraphFixture(t, directory, entryPath, entry)
 	writeGraphFixture(t, directory, chunkPath, chunk)
-	packageBytes, parsed, err := pluginservice.PackageDirectory(directory)
+	packageBytes, parsed, err := artifactrepository.PackageDirectory(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("stable", packageBytes)
+	artifact, err := artifactrepository.Describe("stable", packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}

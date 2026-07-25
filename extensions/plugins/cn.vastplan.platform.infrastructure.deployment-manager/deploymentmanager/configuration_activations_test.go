@@ -14,12 +14,12 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 
 const configuredApplicationPlugin = "cn.example.configured-application"

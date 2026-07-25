@@ -13,9 +13,9 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 const maxFrontendModuleBytes = int64(32 << 20)

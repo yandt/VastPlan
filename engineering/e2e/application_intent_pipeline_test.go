@@ -18,9 +18,9 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/deploymentcontroller"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/deploymentmanager"
 )
 

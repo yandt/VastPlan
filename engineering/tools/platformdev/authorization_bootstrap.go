@@ -14,7 +14,7 @@ import (
 
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	policy "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.security.authorization-policy/authorizationpolicy"
 )
 
@@ -43,7 +43,7 @@ func (r *runtime) writeSessionsFromPublishedAuthorization() error {
 	return writeSessions(filepath.Join(r.runDir, "secrets", "portal-sessions.json"), ownerPermissions)
 }
 
-func (r *runtime) writeAuthorizationBootstrap(repository *pluginservice.Repository, refs []pluginservice.Ref) error {
+func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Repository, refs []artifactrepository.Ref) error {
 	root := filepath.Join(r.persistentStateRoot(), "authorization")
 	if err := ensurePrivateDirectory(root); err != nil {
 		return err

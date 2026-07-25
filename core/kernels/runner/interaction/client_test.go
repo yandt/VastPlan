@@ -6,7 +6,7 @@ import (
 	"time"
 
 	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/interactionapi"
 )
 
 type brokerStub struct {

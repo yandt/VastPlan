@@ -3,7 +3,7 @@ package pluginv1
 import (
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 func runtimePolicies(manifest Manifest) (servicemodel.Policy, map[string]RuntimeCapabilityPolicy, error) {

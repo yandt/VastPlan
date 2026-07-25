@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 )
 
 func (p *Plugin) Serve() error {

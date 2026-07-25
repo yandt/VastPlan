@@ -11,8 +11,8 @@ import (
 	"github.com/nats-io/nats.go"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 // RegisterOptions 描述一个可被本地直调和远端 queue group 调用的实例。

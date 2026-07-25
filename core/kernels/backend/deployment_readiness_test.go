@@ -13,7 +13,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 )
 
 func TestNATSDeploymentReadinessFencesRevisions(t *testing.T) {

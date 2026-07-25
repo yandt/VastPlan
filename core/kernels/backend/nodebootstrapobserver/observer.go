@@ -14,7 +14,7 @@ import (
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 )
 
 const defaultMaxLeaseAge = 45 * time.Second

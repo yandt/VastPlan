@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
 
 func validateServiceRevisionRecord(tenant string, revision platformadminapi.ServiceRevision) error {

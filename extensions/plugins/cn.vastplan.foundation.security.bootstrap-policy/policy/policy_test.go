@@ -3,8 +3,8 @@ package bootstrappolicy
 import (
 	"testing"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 )
 
 func TestBootstrapPolicyProtectsSettingsWrites(t *testing.T) {

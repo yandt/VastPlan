@@ -12,9 +12,9 @@ import (
 	"log"
 	"os"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 	provider "cdsoft.com.cn/VastPlan/extensions/sdk/go/artifactassessmentprovider"
 )
 

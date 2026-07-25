@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/engineering/internal/signingkey"
 )
 
@@ -27,7 +27,7 @@ func main() {
 	if err != nil {
 		fatalf("生成 Ed25519 密钥失败: %v", err)
 	}
-	document := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+	document := artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{
 		Publisher: *publisher, KeyID: *keyID,
 		PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	})

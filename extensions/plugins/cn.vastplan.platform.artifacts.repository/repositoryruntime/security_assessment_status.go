@@ -3,7 +3,7 @@ package repositoryruntime
 import (
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 )
 
 // SecurityAssessmentStats is deliberately low-cardinality. Detailed artifact

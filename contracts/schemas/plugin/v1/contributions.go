@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sort"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 func BackendRuntimeContributions(manifest Manifest) ([]RuntimeContribution, error) {

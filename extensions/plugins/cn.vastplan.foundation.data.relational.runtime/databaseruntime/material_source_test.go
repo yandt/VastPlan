@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 )
 
 func testRuntimeAudience(symbol string) string { return "runtime:v1:" + strings.Repeat(symbol, 43) }

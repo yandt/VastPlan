@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 func extractPackage(packageBytes []byte, destination string) error {

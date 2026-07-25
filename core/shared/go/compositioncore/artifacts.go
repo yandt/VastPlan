@@ -8,7 +8,7 @@ import (
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
 )
 
 type ArtifactReader interface {

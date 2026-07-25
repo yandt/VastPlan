@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pythonlock"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pythonlock"
 )
 
 func bindPythonLock(manifest *pluginv1.Manifest, source string) (bool, error) {

@@ -10,9 +10,9 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 
 func buildProfileCandidate(catalog backendcompositionv1.BackendPlatformCatalog, tenantID, deploymentName string, definition pluginconfiguration.Definition, request platformprofileactivation.PrepareRequest) (backendcompositionv1.PlatformProfile, compositioncommonv1.Ref, error) {

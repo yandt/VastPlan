@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 )
 
 const maxAssessmentInventoryRevisions = 128

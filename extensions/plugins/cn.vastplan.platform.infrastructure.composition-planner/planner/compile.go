@@ -10,7 +10,7 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
 )
 
 type plannedUnit struct {

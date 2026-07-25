@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/authorizationdirectory"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/authorizationdirectory"
 	session "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.security.authorization-session/session"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

@@ -16,11 +16,11 @@ import (
 	"time"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository/localtest"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreport"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository/localtest"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/repositoryruntime"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
@@ -144,7 +144,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	trust, err := pluginservice.LoadTrustStore(config.trust)
+	trust, err := artifactrepository.LoadTrustStore(config.trust)
 	if err != nil {
 		log.Fatal(err)
 	}

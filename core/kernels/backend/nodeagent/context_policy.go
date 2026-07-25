@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 )
 
 // ContextPolicy is configured by the kernel user. Exact publisher overrides

@@ -3,7 +3,7 @@ package nodeagent
 import (
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 )
 
 func TestContextPolicyPublisherOverrideTakesPrecedence(t *testing.T) {

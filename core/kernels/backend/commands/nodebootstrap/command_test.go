@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 )
 
 type fakeExecutor struct {

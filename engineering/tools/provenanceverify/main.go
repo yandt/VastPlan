@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/engineering/internal/provenanceprovider"
 )
 
@@ -40,7 +40,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(*providerKeyFile)
+	privateKey, err := artifactrepository.LoadEd25519PrivateKeyPEM(*providerKeyFile)
 	if err != nil {
 		fatal(err)
 	}

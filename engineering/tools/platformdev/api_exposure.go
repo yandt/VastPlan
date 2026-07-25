@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 // writeAPIExposureConfiguration derives the API Contract Catalog only from
 // local Seed artifacts whose publisher proof has just been verified. The
 // resulting private file is referenced by the service startup snapshot;
 // browsers and the API Exposure plugin cannot contribute arbitrary contracts.
-func (r *runtime) writeAPIExposureConfiguration(repository *pluginservice.SignedRepository, refs []pluginservice.Ref) error {
+func (r *runtime) writeAPIExposureConfiguration(repository *artifactrepository.SignedRepository, refs []artifactrepository.Ref) error {
 	sources := make([]pluginv1.APIContractCatalogSource, 0, len(refs))
 	for _, ref := range refs {
 		artifact, _, err := repository.ReadMetadataWithAttestation(ref)

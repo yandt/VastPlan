@@ -12,19 +12,18 @@ import (
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactrepository/localtest"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository/localtest"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 type artifactResolution struct {
 	sources   []nodeagent.ArtifactSource
 	verifier  nodeagent.ArtifactVerifier
-	bootstrap *pluginservice.SignedRepository
+	bootstrap *artifactrepository.SignedRepository
 }
 
 func (r artifactResolution) VerifyBootstrapInventory(ctx context.Context, inventory bootstrapinventory.Inventory) error {
@@ -79,7 +78,7 @@ func (r artifactResolution) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, [
 
 func buildArtifactResolution(options reconcileOptions) (artifactResolution, error) {
 	if options.repositoryURL == "" && options.repositoryProfile == "" && options.bootstrapRepository == "" {
-		local, err := pluginservice.NewRepository(options.repositoryRoot)
+		local, err := artifactrepository.NewRepository(options.repositoryRoot)
 		if err != nil {
 			return artifactResolution{}, err
 		}
@@ -90,7 +89,7 @@ func buildArtifactResolution(options reconcileOptions) (artifactResolution, erro
 	if options.repositoryTrust == "" {
 		return artifactResolution{}, errors.New("远端或种子制品源必须配置 -repository-trust")
 	}
-	trust, err := pluginservice.LoadTrustStore(options.repositoryTrust)
+	trust, err := artifactrepository.LoadTrustStore(options.repositoryTrust)
 	if err != nil {
 		return artifactResolution{}, err
 	}
@@ -100,11 +99,11 @@ func buildArtifactResolution(options reconcileOptions) (artifactResolution, erro
 	}
 	resolution := artifactResolution{verifier: verifier}
 	if options.bootstrapRepository != "" {
-		local, err := pluginservice.NewRepository(options.bootstrapRepository)
+		local, err := artifactrepository.NewRepository(options.bootstrapRepository)
 		if err != nil {
 			return artifactResolution{}, err
 		}
-		resolution.bootstrap = &pluginservice.SignedRepository{Local: local, Trust: trust}
+		resolution.bootstrap = &artifactrepository.SignedRepository{Local: local, Trust: trust}
 		resolution.sources = append(resolution.sources, resolution.bootstrap)
 	}
 	if options.repositoryURL != "" {
@@ -119,7 +118,7 @@ func buildArtifactResolution(options reconcileOptions) (artifactResolution, erro
 		if err != nil {
 			return artifactResolution{}, err
 		}
-		resolution.sources = append(resolution.sources, &pluginservice.RemoteRepository{
+		resolution.sources = append(resolution.sources, &artifactrepository.RemoteRepository{
 			BaseURL: options.repositoryURL, Token: token, Trust: trust, Client: httpClient,
 		})
 	}

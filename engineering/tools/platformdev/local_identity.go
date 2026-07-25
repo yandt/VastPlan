@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func writeSessions(filename string, ownerPermissions []string) error {
@@ -79,22 +79,22 @@ func ensurePrivateDirectory(path string) error {
 	return nil
 }
 
-func ensureSigningIdentity(privateFilename, publisher, keyID string) (pluginservice.TrustKey, error) {
+func ensureSigningIdentity(privateFilename, publisher, keyID string) (artifactrepository.TrustKey, error) {
 	if strings.TrimSpace(publisher) == "" || strings.TrimSpace(keyID) == "" {
-		return pluginservice.TrustKey{}, errors.New("签名身份 publisher 和 keyId 不能为空")
+		return artifactrepository.TrustKey{}, errors.New("签名身份 publisher 和 keyId 不能为空")
 	}
 	if err := ensurePrivateDirectory(filepath.Dir(privateFilename)); err != nil {
-		return pluginservice.TrustKey{}, err
+		return artifactrepository.TrustKey{}, err
 	}
 	info, err := os.Lstat(privateFilename)
 	if errors.Is(err, os.ErrNotExist) {
 		_, privateKey, generateErr := ed25519.GenerateKey(rand.Reader)
 		if generateErr != nil {
-			return pluginservice.TrustKey{}, generateErr
+			return artifactrepository.TrustKey{}, generateErr
 		}
-		encoded, marshalErr := pluginservice.MarshalEd25519PrivateKeyPEM(privateKey)
+		encoded, marshalErr := artifactrepository.MarshalEd25519PrivateKeyPEM(privateKey)
 		if marshalErr != nil {
-			return pluginservice.TrustKey{}, marshalErr
+			return artifactrepository.TrustKey{}, marshalErr
 		}
 		file, createErr := os.OpenFile(privateFilename, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if createErr == nil {
@@ -106,37 +106,37 @@ func ensureSigningIdentity(privateFilename, publisher, keyID string) (pluginserv
 			closeErr := file.Close()
 			if writeErr != nil || syncErr != nil || closeErr != nil {
 				_ = os.Remove(privateFilename)
-				return pluginservice.TrustKey{}, errors.Join(writeErr, syncErr, closeErr)
+				return artifactrepository.TrustKey{}, errors.Join(writeErr, syncErr, closeErr)
 			}
 		} else if !errors.Is(createErr, os.ErrExist) {
-			return pluginservice.TrustKey{}, createErr
+			return artifactrepository.TrustKey{}, createErr
 		}
 		info, err = os.Lstat(privateFilename)
 	}
 	if err != nil {
-		return pluginservice.TrustKey{}, err
+		return artifactrepository.TrustKey{}, err
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return pluginservice.TrustKey{}, fmt.Errorf("签名私钥 %s 必须是普通文件且不能是符号链接", privateFilename)
+		return artifactrepository.TrustKey{}, fmt.Errorf("签名私钥 %s 必须是普通文件且不能是符号链接", privateFilename)
 	}
 	if info.Mode().Perm()&0o077 != 0 {
-		return pluginservice.TrustKey{}, fmt.Errorf("签名私钥 %s 权限过宽 %o，要求 0600 或更严格", privateFilename, info.Mode().Perm())
+		return artifactrepository.TrustKey{}, fmt.Errorf("签名私钥 %s 权限过宽 %o，要求 0600 或更严格", privateFilename, info.Mode().Perm())
 	}
-	privateKey, err := pluginservice.LoadEd25519PrivateKeyPEM(privateFilename)
+	privateKey, err := artifactrepository.LoadEd25519PrivateKeyPEM(privateFilename)
 	if err != nil {
-		return pluginservice.TrustKey{}, err
+		return artifactrepository.TrustKey{}, err
 	}
 	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
 	if !ok {
-		return pluginservice.TrustKey{}, errors.New("签名私钥无法导出 Ed25519 公钥")
+		return artifactrepository.TrustKey{}, errors.New("签名私钥无法导出 Ed25519 公钥")
 	}
-	return pluginservice.TrustKey{
+	return artifactrepository.TrustKey{
 		Publisher: publisher, KeyID: keyID, PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}, nil
 }
 
-func writeTrustDocument(filename string, keys ...pluginservice.TrustKey) error {
-	document := pluginservice.TrustDocumentForPublicKeys(keys...)
+func writeTrustDocument(filename string, keys ...artifactrepository.TrustKey) error {
+	document := artifactrepository.TrustDocumentForPublicKeys(keys...)
 	raw, err := json.MarshalIndent(document, "", "  ")
 	if err != nil {
 		return err

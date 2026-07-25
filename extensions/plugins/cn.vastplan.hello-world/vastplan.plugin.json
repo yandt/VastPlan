@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.hello-world",
   "name": "Hello World",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

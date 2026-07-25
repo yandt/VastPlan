@@ -34,7 +34,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/kernelops"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicewatchdog"
 )
 

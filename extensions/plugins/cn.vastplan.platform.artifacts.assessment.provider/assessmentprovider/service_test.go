@@ -17,13 +17,13 @@ import (
 	"testing"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/runtimeaudience"
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
-	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	provider "cdsoft.com.cn/VastPlan/extensions/sdk/go/artifactassessmentprovider"
 )
 
@@ -83,11 +83,7 @@ func TestServiceUsesScanLeaseAndMaterialLeaseWithoutReturningSecrets(t *testing.
 	packageDigest, sbomDigest := sha256.Sum256(packageBytes), sha256.Sum256(sbom)
 	ref := pluginv1.ArtifactRef{PluginID: "cn.vastplan.product.assessment-test", Version: "1.0.0", Channel: "testing"}
 	credentialRef := commonv1.ManagedCredentialRef{Handle: "credential://managed/assessment-key", Scope: "tenant", Owner: PluginID, Purpose: SigningPurpose, Version: 1}
-	identity := runtimeidentity.Identity{PluginID: PluginID, Publisher: "vastplan", Version: PluginVersion, ArtifactSHA256: strings.Repeat("c", 64), NodeID: "node-a", RuntimeScope: "assessment", InstanceID: "provider-a"}
-	audience, err := identity.Audience()
-	if err != nil {
-		t.Fatal(err)
-	}
+	audience := runtimeaudience.FromDigest(sha256.Sum256([]byte("assessment-provider-test-runtime")))
 	t.Setenv(protocol.RuntimeAudienceEnvKey, audience)
 	root := t.TempDir()
 	databaseRevision := strings.Repeat("d", 64)

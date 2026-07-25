@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 )
 
 func auditContext(tenant string) *contractv1.CallContext {

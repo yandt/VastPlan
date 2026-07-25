@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactprovenance"
 )
 
 func TestStaticProviderVerifiesBuilderAndSignsRecord(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestStagePackageNormalizesPnpmVirtualStoreWithoutChangingStableBytes(t *testing.T) {
@@ -32,7 +32,7 @@ func packageStagedMetafileFixture(t *testing.T, source string) []byte {
 	if bytes.Contains(raw, projectVirtualStorePrefix) || !bytes.Contains(raw, canonicalVirtualStorePrefix) {
 		t.Fatalf("staging 中的 metafile 未规范化: %s", raw)
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(staged)
+	packageBytes, _, err := artifactrepository.PackageDirectory(staged)
 	if err != nil {
 		t.Fatal(err)
 	}

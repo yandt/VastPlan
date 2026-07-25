@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 type controlPlaneFlagValues struct {

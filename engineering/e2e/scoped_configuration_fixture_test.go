@@ -12,7 +12,7 @@ import (
 
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 

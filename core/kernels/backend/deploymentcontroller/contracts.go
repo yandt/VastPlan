@@ -10,8 +10,8 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 // ArtifactReader 是控制面需要的最小制品视图。生产入口注入与 Node Agent 相同的

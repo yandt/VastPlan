@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 	runtime "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

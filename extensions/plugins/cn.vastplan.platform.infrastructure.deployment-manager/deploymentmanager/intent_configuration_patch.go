@@ -6,9 +6,9 @@ import (
 	"sort"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 
 func patchIntentConfiguration(active platformadminapi.ServiceRevision, definition pluginconfiguration.Definition, request configurationactivation.CreateRequest) (backendcompositionv1.ApplicationIntent, *backendcompositionv1.PlanningConfigurationSnapshot, error) {

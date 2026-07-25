@@ -12,8 +12,8 @@ import (
 	"os"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
 )
 
 // Config is the fully resolved, non-interactive artifact server launch
@@ -70,17 +70,17 @@ func RunConfig(ctx context.Context, config Config, stderr io.Writer) error {
 	if config.ReadToken == config.PublishToken {
 		return errors.New("制品读令牌与发布令牌必须不同")
 	}
-	trust, err := pluginservice.LoadTrustStore(config.TrustFile)
+	trust, err := artifactrepository.LoadTrustStore(config.TrustFile)
 	if err != nil {
 		return err
 	}
-	local, err := pluginservice.NewRepository(config.Repository)
+	local, err := artifactrepository.NewRepository(config.Repository)
 	if err != nil {
 		return err
 	}
 	logger := log.New(stderr, "", log.LstdFlags)
 	handler := &artifactapi.Server{
-		Repository: pluginservice.HTTPRepositoryAdapter{Repository: &pluginservice.SignedRepository{Local: local, Trust: trust}},
+		Repository: artifactrepository.HTTPRepositoryAdapter{Repository: &artifactrepository.SignedRepository{Local: local, Trust: trust}},
 		ReadToken:  config.ReadToken, PublishToken: config.PublishToken, RequireTLS: true,
 		Logf: func(format string, values ...any) { logger.Printf("[artifact-audit] "+format, values...) },
 	}

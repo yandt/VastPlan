@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

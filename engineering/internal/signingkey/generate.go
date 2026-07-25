@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func Generate(privateOutput string) (ed25519.PublicKey, error) {
@@ -18,7 +18,7 @@ func Generate(privateOutput string) (ed25519.PublicKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	privatePEM, err := pluginservice.MarshalEd25519PrivateKeyPEM(privateKey)
+	privatePEM, err := artifactrepository.MarshalEd25519PrivateKeyPEM(privateKey)
 	if err != nil {
 		return nil, err
 	}

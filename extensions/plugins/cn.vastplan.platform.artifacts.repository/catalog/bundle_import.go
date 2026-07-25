@@ -14,11 +14,11 @@ import (
 	"strings"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactprovenance"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreport"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 // ImportOfflineBundle treats the archive as untrusted input, stages it outside
@@ -146,7 +146,7 @@ func ImportOfflineBundle(bundlePath string, destination OfflineBundleDestination
 				return pluginv1.ArtifactLock{}, errors.New("目标仓库不支持导入安全复扫状态链")
 			}
 		}
-		var attestation pluginservice.Attestation
+		var attestation artifactrepository.Attestation
 		if err := decodeStrict(proof, &attestation); err != nil {
 			return pluginv1.ArtifactLock{}, err
 		}
@@ -156,7 +156,7 @@ func ImportOfflineBundle(bundlePath string, destination OfflineBundleDestination
 		if err := importAssessmentReports(staging, admissionRaw, reportsByDigest, usedReports, destination); err != nil {
 			return pluginv1.ArtifactLock{}, err
 		}
-		var published pluginservice.Artifact
+		var published artifactrepository.Artifact
 		if supplyChainDestination, ok := destination.(OfflineBundleSupplyChainDestination); ok {
 			published, err = supplyChainDestination.PublishWithSupplyChain(proof, packageBytes, provenanceRaw, verificationRaw, admissionRaw)
 		} else if len(admissionRaw) != 0 {
@@ -195,7 +195,7 @@ func importAssessmentReports(staging string, admissionRaw []byte, reports map[st
 	return importEvaluationReports(staging, record.Evaluation, reports, used, destination)
 }
 
-func importAssessmentStatusRecords(staging string, ref pluginservice.Ref, records [][]byte, reports map[string]bundleReport, used map[string]struct{}, destination OfflineBundleDestination) error {
+func importAssessmentStatusRecords(staging string, ref artifactrepository.Ref, records [][]byte, reports map[string]bundleReport, used map[string]struct{}, destination OfflineBundleDestination) error {
 	if len(records) == 0 {
 		return nil
 	}
@@ -313,7 +313,7 @@ func extractOfflineBundle(bundlePath, staging string) error {
 	return nil
 }
 
-func validateBundleArtifact(item pluginv1.ArtifactLockPackage, artifact pluginservice.Artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw []byte, trust *pluginservice.TrustStore) error {
+func validateBundleArtifact(item pluginv1.ArtifactLockPackage, artifact artifactrepository.Artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw []byte, trust *artifactrepository.TrustStore) error {
 	if artifact.PluginID != item.Ref.PluginID || artifact.Version != item.Ref.Version || artifact.Channel != item.Ref.Channel || artifact.SHA256 != item.SHA256 || artifact.Size != item.Size {
 		return fmt.Errorf("Bundle 制品与锁不一致: %s", refKey(item.Ref))
 	}
@@ -321,7 +321,7 @@ func validateBundleArtifact(item pluginv1.ArtifactLockPackage, artifact pluginse
 	if hex.EncodeToString(digest[:]) != item.SHA256 || int64(len(packageBytes)) != item.Size {
 		return fmt.Errorf("Bundle 制品字节与锁不一致: %s", refKey(item.Ref))
 	}
-	var attestation pluginservice.Attestation
+	var attestation artifactrepository.Attestation
 	if err := decodeStrict(proof, &attestation); err != nil {
 		return fmt.Errorf("解析 Bundle 制品证明 %s: %w", refKey(item.Ref), err)
 	}

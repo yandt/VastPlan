@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"cdsoft.com.cn/VastPlan/engineering/internal/soakreport"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/observability"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/observability"
 )
 
 func TestBackendKernelSoak(t *testing.T) {

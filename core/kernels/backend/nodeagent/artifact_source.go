@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 // ArtifactSource 只负责获取未信任 Envelope。它可以由内置 file/HTTPS 实现或未来

@@ -9,8 +9,8 @@ import (
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 
 func TestBuildProfileCandidatePatchesOnlyIndependentServiceAndUsesGlobalNextRevision(t *testing.T) {

@@ -6,12 +6,12 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pythonlock"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactprovenance"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pythonlock"
 )
 
 func (s *Store) Evidence(ref pluginv1.ArtifactRef) (SupplyChainEvidence, error) {

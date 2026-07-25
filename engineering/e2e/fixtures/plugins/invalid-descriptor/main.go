@@ -6,7 +6,7 @@ import (
 	"log"
 
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 )
 
 func main() {

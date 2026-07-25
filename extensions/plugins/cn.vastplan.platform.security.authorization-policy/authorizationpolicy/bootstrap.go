@@ -25,7 +25,7 @@ func NativeProviderProfile(catalog pluginv1.PermissionCatalog) authorizationv1.P
 	return authorizationv1.ProviderProfile{
 		ID: "authorization.native", Revision: 1,
 		Store:    authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolStore, ProviderID: "native-file", PluginID: PluginID, Capability: Capability + ".store", Version: PluginVersion, Configuration: configuration},
-		Engine:   authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolEngine, ProviderID: "native-rbac", PluginID: "cn.vastplan.foundation.security.authorization-engine.native", Capability: "foundation.security.authorization-engine.native", Version: "0.1.0", Configuration: configuration},
+		Engine:   authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolEngine, ProviderID: "native-rbac", PluginID: "cn.vastplan.foundation.security.authorization-engine.native", Capability: "foundation.security.authorization-engine.native", Version: "0.1.1", Configuration: configuration},
 		Exchange: []authorizationv1.ProviderRef{},
 	}
 }

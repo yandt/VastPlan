@@ -13,9 +13,9 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 	repositoryruntime "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/repositoryruntime"
 )
 
@@ -32,7 +32,7 @@ const (
 
 type p5FixtureRepository struct {
 	manager    *repositoryruntime.Manager
-	trust      *pluginservice.TrustStore
+	trust      *artifactrepository.TrustStore
 	privateKey ed25519.PrivateKey
 	binary     []byte
 }
@@ -53,7 +53,7 @@ func newP5FixtureRepository(t *testing.T) *p5FixtureRepository {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trust, err := pluginservice.NewTrustStore(pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+	trust, err := artifactrepository.NewTrustStore(artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{
 		Publisher: "vastplan", KeyID: "p5", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}))
 	if err != nil {
@@ -108,15 +108,15 @@ func (r *p5FixtureRepository) publishChannel(t *testing.T, spec p5ManifestSpec, 
 	if err := os.WriteFile(entry, r.binary, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(directory)
+	packageBytes, _, err := artifactrepository.PackageDirectory(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe(channel, packageBytes)
+	artifact, err := artifactrepository.Describe(channel, packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	attestation, err := pluginservice.SignArtifact(artifact, "vastplan", "p5", r.privateKey, time.Now().UTC())
+	attestation, err := artifactrepository.SignArtifact(artifact, "vastplan", "p5", r.privateKey, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}

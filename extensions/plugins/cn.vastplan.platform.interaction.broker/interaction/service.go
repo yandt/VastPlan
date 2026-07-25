@@ -15,12 +15,12 @@ import (
 	"time"
 
 	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/interactionapi"
 )
 
 const (
 	PluginID           = "cn.vastplan.platform.interaction.broker"
-	PluginVersion      = "0.1.0"
+	PluginVersion      = "0.1.1"
 	Capability         = interactionapi.Capability
 	StateFileConfigKey = "platform.interaction-broker.stateFile"
 )

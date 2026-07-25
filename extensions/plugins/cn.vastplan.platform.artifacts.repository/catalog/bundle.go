@@ -16,9 +16,9 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreport"
 )
 
 const (
@@ -27,27 +27,27 @@ const (
 )
 
 type OfflineBundleSource interface {
-	ReadWithAttestation(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, error)
+	ReadWithAttestation(artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, error)
 }
 
 type OfflineBundleDestination interface {
-	Publish(attestationRaw, packageBytes []byte) (pluginservice.Artifact, error)
+	Publish(attestationRaw, packageBytes []byte) (artifactrepository.Artifact, error)
 }
 
 type OfflineBundleProvenanceSource interface {
-	ReadWithProvenance(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, []byte, error)
+	ReadWithProvenance(artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, []byte, []byte, error)
 }
 
 type OfflineBundleProvenanceDestination interface {
-	PublishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte) (pluginservice.Artifact, error)
+	PublishWithProvenance(attestationRaw, packageBytes, provenanceRaw, verificationRaw []byte) (artifactrepository.Artifact, error)
 }
 
 type OfflineBundleSupplyChainSource interface {
-	ReadWithSupplyChain(pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, []byte, []byte, error)
+	ReadWithSupplyChain(artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, []byte, []byte, []byte, error)
 }
 
 type OfflineBundleSupplyChainDestination interface {
-	PublishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, securityAdmissionRaw []byte) (pluginservice.Artifact, error)
+	PublishWithSupplyChain(attestationRaw, packageBytes, provenanceRaw, verificationRaw, securityAdmissionRaw []byte) (artifactrepository.Artifact, error)
 }
 
 type OfflineBundleAssessmentReportSource interface {
@@ -59,11 +59,11 @@ type OfflineBundleAssessmentReportDestination interface {
 }
 
 type OfflineBundleAssessmentStatusSource interface {
-	ReadSecurityStatusChain(pluginservice.Ref) ([]byte, error)
+	ReadSecurityStatusChain(artifactrepository.Ref) ([]byte, error)
 }
 
 type OfflineBundleAssessmentStatusDestination interface {
-	AppendSecurityStatus(pluginservice.Ref, []byte, time.Time) (*artifactassessment.StatusRecord, string, error)
+	AppendSecurityStatus(artifactrepository.Ref, []byte, time.Time) (*artifactassessment.StatusRecord, string, error)
 }
 
 type OfflineBundle struct {
@@ -195,9 +195,9 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 	return OfflineBundle{Path: path, Size: info.Size(), SHA256: digest}, nil
 }
 
-func appendBundleArtifact(tw *tar.Writer, source OfflineBundleSource, trustStore *pluginservice.TrustStore, item pluginv1.ArtifactLockPackage, reportsWritten map[string]struct{}, manifest *bundleManifest, total *int64, closeWriters func() error) error {
+func appendBundleArtifact(tw *tar.Writer, source OfflineBundleSource, trustStore *artifactrepository.TrustStore, item pluginv1.ArtifactLockPackage, reportsWritten map[string]struct{}, manifest *bundleManifest, total *int64, closeWriters func() error) error {
 	var err error
-	var artifact pluginservice.Artifact
+	var artifact artifactrepository.Artifact
 	var packageBytes, proof []byte
 	var provenanceRaw, verificationRaw, admissionRaw, statusChainRaw []byte
 	if supplyChainSource, ok := source.(OfflineBundleSupplyChainSource); ok {
@@ -360,12 +360,12 @@ func evaluationReportDigests(evaluation artifactassessment.Evaluation) []string 
 	return result
 }
 
-func canonicalTrustDocument(raw []byte) ([]byte, *pluginservice.TrustStore, error) {
-	var document pluginservice.TrustDocument
+func canonicalTrustDocument(raw []byte) ([]byte, *artifactrepository.TrustStore, error) {
+	var document artifactrepository.TrustDocument
 	if err := decodeStrict(raw, &document); err != nil {
 		return nil, nil, fmt.Errorf("解析 Bundle 信任快照: %w", err)
 	}
-	trustStore, err := pluginservice.NewTrustStore(document)
+	trustStore, err := artifactrepository.NewTrustStore(document)
 	if err != nil {
 		return nil, nil, fmt.Errorf("校验 Bundle 信任快照: %w", err)
 	}

@@ -7,12 +7,12 @@ import (
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/configurationactivation"
-	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 )
 
 func TestUserRolesNeverFallThroughLegacyWorkloadPolicy(t *testing.T) {

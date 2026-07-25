@@ -11,9 +11,9 @@ import (
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/platformcatalog"
-	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 )
 
 type CatalogStore interface {

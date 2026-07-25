@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestStablePackageIdentityLedgerRejectsSameRefWithDifferentBytes(t *testing.T) {
@@ -113,12 +113,12 @@ func writeStableIdentityRepository(t *testing.T, version, content, fingerprint s
 			t.Fatal(err)
 		}
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(pluginDir)
+	packageBytes, _, err := artifactrepository.PackageDirectory(pluginDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	repositoryRoot := t.TempDir()
-	repository, err := pluginservice.NewRepository(repositoryRoot)
+	repository, err := artifactrepository.NewRepository(repositoryRoot)
 	if err != nil {
 		t.Fatal(err)
 	}

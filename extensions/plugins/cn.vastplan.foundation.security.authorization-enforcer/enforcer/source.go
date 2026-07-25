@@ -7,7 +7,7 @@ import (
 
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/authorizationtrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/authorizationtrust"
 )
 
 type PolicyBundle struct {

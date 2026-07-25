@@ -7,8 +7,8 @@ import (
 	"errors"
 	"io"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 	sharedstatesdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/sharedstate"
 )

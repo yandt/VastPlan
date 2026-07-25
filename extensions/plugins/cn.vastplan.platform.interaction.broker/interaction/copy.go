@@ -2,7 +2,7 @@ package interaction
 
 import (
 	uiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/ui/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/interactionapi"
 )
 
 func copyRecord(record interactionapi.Record) interactionapi.Record {

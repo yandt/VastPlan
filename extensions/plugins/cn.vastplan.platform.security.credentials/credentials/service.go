@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 )
 
 type Record struct {

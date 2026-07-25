@@ -14,7 +14,7 @@ import (
 	"strings"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
 )
 

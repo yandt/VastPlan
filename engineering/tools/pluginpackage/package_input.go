@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 func loadExistingPackage(filename string) ([]byte, string, string, string, error) {

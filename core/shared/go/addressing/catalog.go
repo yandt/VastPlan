@@ -9,12 +9,12 @@ import (
 	"github.com/nats-io/nats.go"
 	"google.golang.org/protobuf/proto"
 
-	addressingv1 "cdsoft.com.cn/VastPlan/core/shared/go/addressing/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	addressingv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/addressing/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 func (r *Router) Publish(ctx context.Context, callCtx *contractv1.CallContext, event *contractv1.CallEvent) error {

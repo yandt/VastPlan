@@ -14,7 +14,7 @@ import (
 	"os"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 )
 
 const maxRequestBytes = 1 << 20

@@ -18,10 +18,10 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
-	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
 
 func TestDescriptorMatchesSignedManifest(t *testing.T) {

@@ -19,13 +19,13 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactprovenance"
 )
 
 type bundleReportSource struct {
-	*pluginservice.SignedRepository
+	*artifactrepository.SignedRepository
 	reports map[string][]byte
 }
 
@@ -34,8 +34,8 @@ func (s bundleReportSource) ReadAssessmentReport(digest string) ([]byte, error) 
 }
 
 type bundleReportDestination struct {
-	pluginservice.HTTPRepositoryAdapter
-	signed  *pluginservice.SignedRepository
+	artifactrepository.HTTPRepositoryAdapter
+	signed  *artifactrepository.SignedRepository
 	reports map[string][]byte
 }
 
@@ -44,7 +44,7 @@ func (d *bundleReportDestination) PutAssessmentReport(digest string, raw []byte)
 	return nil
 }
 
-func (d *bundleReportDestination) AppendSecurityStatus(ref pluginservice.Ref, raw []byte, now time.Time) (*artifactassessment.StatusRecord, string, error) {
+func (d *bundleReportDestination) AppendSecurityStatus(ref artifactrepository.Ref, raw []byte, now time.Time) (*artifactassessment.StatusRecord, string, error) {
 	return d.signed.AppendSecurityStatus(ref, raw, now)
 }
 
@@ -54,18 +54,18 @@ func TestOfflineBundleIsDeterministicAndContainsLockedProofs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	trustDocument := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+	trustDocument := artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{
 		Publisher: "example", KeyID: "testing", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	})
-	trust, err := pluginservice.NewTrustStore(trustDocument)
+	trust, err := artifactrepository.NewTrustStore(trustDocument)
 	if err != nil {
 		t.Fatal(err)
 	}
-	local, err := pluginservice.NewRepository(root)
+	local, err := artifactrepository.NewRepository(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	repository := &pluginservice.SignedRepository{Local: local, Trust: trust}
+	repository := &artifactrepository.SignedRepository{Local: local, Trust: trust}
 	artifact, _ := publishTestArtifact(t, repository, privateKey, "1.0.0-dev.20260721.1.abcdef0")
 	store, err := Open(root, repository)
 	if err != nil {
@@ -112,12 +112,12 @@ func TestOfflineBundleIsDeterministicAndContainsLockedProofs(t *testing.T) {
 		t.Fatalf("embedded lock changed: lock=%#v err=%v", embeddedLock, err)
 	}
 
-	destinationLocal, err := pluginservice.NewRepository(filepath.Join(t.TempDir(), "imported"))
+	destinationLocal, err := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "imported"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	destination := &pluginservice.SignedRepository{Local: destinationLocal, Trust: trust}
-	importedLock, err := ImportOfflineBundle(first.Path, pluginservice.HTTPRepositoryAdapter{Repository: destination})
+	destination := &artifactrepository.SignedRepository{Local: destinationLocal, Trust: trust}
+	importedLock, err := ImportOfflineBundle(first.Path, artifactrepository.HTTPRepositoryAdapter{Repository: destination})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,14 +128,14 @@ func TestOfflineBundleIsDeterministicAndContainsLockedProofs(t *testing.T) {
 		t.Fatalf("imported artifact did not pass destination trust boundary: artifact=%#v err=%v", imported, err)
 	}
 
-	httpDestinationLocal, err := pluginservice.NewRepository(filepath.Join(t.TempDir(), "http-imported"))
+	httpDestinationLocal, err := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "http-imported"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	httpDestination := &pluginservice.SignedRepository{Local: httpDestinationLocal, Trust: trust}
+	httpDestination := &artifactrepository.SignedRepository{Local: httpDestinationLocal, Trust: trust}
 	handler := &HTTPHandler{
 		Store: store, ReadToken: "reader", BundleToken: "bundle", ImportToken: "publisher",
-		BundleSource: repository, BundleDestination: pluginservice.HTTPRepositoryAdapter{Repository: httpDestination},
+		BundleSource: repository, BundleDestination: artifactrepository.HTTPRepositoryAdapter{Repository: httpDestination},
 		TrustSnapshot: trustRaw, BundleDirectory: bundleDirectory, RequireTLS: true,
 	}
 	lockRequest, err := json.Marshal(lock)
@@ -176,20 +176,20 @@ func TestOfflineBundlePreservesAndReverifiesProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	verificationRaw, _ := json.Marshal(record)
-	trustDocument := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{Publisher: "example", KeyID: "testing", PublicKey: base64.StdEncoding.EncodeToString(publisherPublic)})
+	trustDocument := artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{Publisher: "example", KeyID: "testing", PublicKey: base64.StdEncoding.EncodeToString(publisherPublic)})
 	trustDocument.Provenance = &artifactprovenance.TrustPolicy{
 		RequiredChannels: []string{"testing"}, MaxRecordTTLHours: 48,
 		Keys:         []artifactprovenance.VerifierKey{{ProviderID: record.ProviderID, KeyID: record.KeyID, PublicKey: base64.StdEncoding.EncodeToString(providerPublic)}},
 		Requirements: []artifactprovenance.Requirement{{ID: "testing", Channel: "testing", Publisher: "example", PluginPrefix: "com.example.", ProviderIDs: []string{record.ProviderID}, BuilderIDs: []string{summary.BuilderID}, BuildTypes: []string{summary.BuildType}, SourceURIPrefixes: []string{"git+https://example.com/"}, RequireSourceDigest: true}},
 	}
-	trust, err := pluginservice.NewTrustStore(trustDocument)
+	trust, err := artifactrepository.NewTrustStore(trustDocument)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sourceRoot := filepath.Join(t.TempDir(), "source")
-	sourceLocal, _ := pluginservice.NewRepository(sourceRoot)
-	source := &pluginservice.SignedRepository{Local: sourceLocal, Trust: trust}
-	attestation, _ := pluginservice.SignArtifact(artifact, "example", "testing", publisherPrivate, now)
+	sourceLocal, _ := artifactrepository.NewRepository(sourceRoot)
+	source := &artifactrepository.SignedRepository{Local: sourceLocal, Trust: trust}
+	attestation, _ := artifactrepository.SignArtifact(artifact, "example", "testing", publisherPrivate, now)
 	if _, err := source.PublishWithProvenance(attestation, packageBytes, provenanceRaw, verificationRaw); err != nil {
 		t.Fatal(err)
 	}
@@ -222,9 +222,9 @@ func TestOfflineBundlePreservesAndReverifiesProvenance(t *testing.T) {
 			t.Fatalf("离线 Bundle 缺少来源证明 %s", name)
 		}
 	}
-	destinationLocal, _ := pluginservice.NewRepository(filepath.Join(t.TempDir(), "destination"))
-	destination := &pluginservice.SignedRepository{Local: destinationLocal, Trust: trust}
-	if _, err := ImportOfflineBundle(bundle.Path, pluginservice.HTTPRepositoryAdapter{Repository: destination}); err != nil {
+	destinationLocal, _ := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "destination"))
+	destination := &artifactrepository.SignedRepository{Local: destinationLocal, Trust: trust}
+	if _, err := ImportOfflineBundle(bundle.Path, artifactrepository.HTTPRepositoryAdapter{Repository: destination}); err != nil {
 		t.Fatal(err)
 	}
 	_, _, _, importedProvenance, importedVerification, err := destination.ReadWithProvenance(pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel})
@@ -241,13 +241,13 @@ func TestOfflineBundleCarriesAssessmentReportsAndStatusChain(t *testing.T) {
 	reportDigest := digestBundleBytes(report)
 	now := time.Now().UTC().Add(-time.Hour)
 	zero := uint64(0)
-	trustDocument := pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{Publisher: "example", KeyID: "publisher", PublicKey: base64.StdEncoding.EncodeToString(publisherPublic)})
+	trustDocument := artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{Publisher: "example", KeyID: "publisher", PublicKey: base64.StdEncoding.EncodeToString(publisherPublic)})
 	trustDocument.Assessment = &artifactassessment.TrustPolicy{
 		RequiredChannels: []string{"stable"}, MaxRecordTTLHours: 48,
 		Keys:         []artifactassessment.ProviderKey{{ProviderID: "assessment.bundle", KeyID: "scanner", PublicKey: base64.StdEncoding.EncodeToString(providerPublic)}},
 		Requirements: []artifactassessment.Requirement{{ID: "stable", Channel: "stable", Publisher: "example", PluginPrefix: "com.example.", ProviderIDs: []string{"assessment.bundle"}, ScannerIDs: []string{"scanner.test"}, Maximum: artifactassessment.MaximumFindings{Critical: &zero, High: &zero, DeniedLicense: &zero, UnknownLicense: &zero}, RequireReportDigests: true}},
 	}
-	trust, err := pluginservice.NewTrustStore(trustDocument)
+	trust, err := artifactrepository.NewTrustStore(trustDocument)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,9 +267,9 @@ func TestOfflineBundleCarriesAssessmentReportsAndStatusChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := filepath.Join(t.TempDir(), "source")
-	local, _ := pluginservice.NewRepository(root)
-	signed := &pluginservice.SignedRepository{Local: local, Trust: trust}
-	attestation, _ := pluginservice.SignArtifact(artifact, "example", "publisher", publisherPrivate, now)
+	local, _ := artifactrepository.NewRepository(root)
+	signed := &artifactrepository.SignedRepository{Local: local, Trust: trust}
+	attestation, _ := artifactrepository.SignArtifact(artifact, "example", "publisher", publisherPrivate, now)
 	if _, err := signed.PublishWithSupplyChain(attestation, packageBytes, nil, nil, admissionRaw); err != nil {
 		t.Fatal(err)
 	}
@@ -289,7 +289,7 @@ func TestOfflineBundleCarriesAssessmentReportsAndStatusChain(t *testing.T) {
 		t.Fatal(err)
 	}
 	statusRaw, _ := json.Marshal(status)
-	ref := pluginservice.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+	ref := artifactrepository.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 	if _, _, err := signed.AppendSecurityStatus(ref, statusRaw, statusEvaluation.EvaluatedAt); err != nil {
 		t.Fatal(err)
 	}
@@ -318,9 +318,9 @@ func TestOfflineBundleCarriesAssessmentReportsAndStatusChain(t *testing.T) {
 	if raw := contents["artifacts/"+artifact.SHA256+"/security-status-chain.json"]; len(raw) == 0 {
 		t.Fatal("离线 Bundle 未携带安全复扫状态链")
 	}
-	destinationLocal, _ := pluginservice.NewRepository(filepath.Join(t.TempDir(), "destination"))
-	destinationSigned := &pluginservice.SignedRepository{Local: destinationLocal, Trust: trust}
-	destination := &bundleReportDestination{HTTPRepositoryAdapter: pluginservice.HTTPRepositoryAdapter{Repository: destinationSigned}, signed: destinationSigned, reports: map[string][]byte{}}
+	destinationLocal, _ := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "destination"))
+	destinationSigned := &artifactrepository.SignedRepository{Local: destinationLocal, Trust: trust}
+	destination := &bundleReportDestination{HTTPRepositoryAdapter: artifactrepository.HTTPRepositoryAdapter{Repository: destinationSigned}, signed: destinationSigned, reports: map[string][]byte{}}
 	if _, err := ImportOfflineBundle(bundle.Path, destination); err != nil {
 		t.Fatal(err)
 	}
@@ -340,7 +340,7 @@ func TestOfflineBundleCarriesAssessmentReportsAndStatusChain(t *testing.T) {
 	}
 }
 
-func bundleTestArtifact(t *testing.T) ([]byte, pluginservice.Artifact) {
+func bundleTestArtifact(t *testing.T) ([]byte, artifactrepository.Artifact) {
 	t.Helper()
 	directory := t.TempDir()
 	manifest := []byte(`{"id":"com.example.bundle-provenance","name":"Bundle provenance","description":"test","version":"1.0.0","publisher":"example","engines":{"backend":"^0.1"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[]}}}`)
@@ -353,18 +353,18 @@ func bundleTestArtifact(t *testing.T) ([]byte, pluginservice.Artifact) {
 	if err := os.WriteFile(filepath.Join(directory, "backend", "main"), []byte("binary"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(directory)
+	packageBytes, _, err := artifactrepository.PackageDirectory(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("testing", packageBytes)
+	artifact, err := artifactrepository.Describe("testing", packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return packageBytes, artifact
 }
 
-func bundleAssessmentArtifact(t *testing.T) ([]byte, pluginservice.Artifact, string) {
+func bundleAssessmentArtifact(t *testing.T) ([]byte, artifactrepository.Artifact, string) {
 	t.Helper()
 	directory := t.TempDir()
 	sbom := []byte(`{"bomFormat":"CycloneDX","specVersion":"1.5","version":1,"metadata":{"component":{"type":"application","name":"com.example.bundle-assessment","version":"1.0.0"}},"components":[]}`)
@@ -381,11 +381,11 @@ func bundleAssessmentArtifact(t *testing.T) ([]byte, pluginservice.Artifact, str
 			t.Fatal(err)
 		}
 	}
-	packageBytes, _, err := pluginservice.PackageDirectory(directory)
+	packageBytes, _, err := artifactrepository.PackageDirectory(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("stable", packageBytes)
+	artifact, err := artifactrepository.Describe("stable", packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}

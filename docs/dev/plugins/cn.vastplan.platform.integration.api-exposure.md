@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.integration.api-exposure`
 
-当前制品版本：`0.5.0`
+当前制品版本：`0.5.3`
 能力：`tool.package/platform.api-exposure`
 
 ## 职责

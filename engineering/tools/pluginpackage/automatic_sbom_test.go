@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
 )
 
 func TestGenerateAutomaticSBOMForPythonPlugin(t *testing.T) {

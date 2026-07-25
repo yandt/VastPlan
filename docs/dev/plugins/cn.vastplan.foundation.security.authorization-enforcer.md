@@ -1,7 +1,7 @@
 # Authorization Enforcer
 
 插件 ID：`cn.vastplan.foundation.security.authorization-enforcer`
-当前制品版本：`0.1.0`
+当前制品版本：`0.1.1`
 
 该 foundation 插件在每个 Backend unit 内以 per-kernel + local-ephemeral + direct 运行，位于用户调用的最终本地 PEP。它严格验证 Catalog、签名 Snapshot、audience 和有效期；未知目录操作弃权给 workload policy，目录内用户操作缺少策略或权限时拒绝。
 

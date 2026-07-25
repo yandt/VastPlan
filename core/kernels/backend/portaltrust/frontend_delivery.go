@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 type deliverySnapshot struct {

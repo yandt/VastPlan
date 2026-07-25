@@ -8,8 +8,8 @@ import (
 	"io"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 	"google.golang.org/grpc/metadata"
 )

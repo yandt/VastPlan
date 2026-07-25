@@ -16,7 +16,7 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestStoreRecoversCatalogAndKeepsMonotonicJournal(t *testing.T) {
@@ -170,30 +170,30 @@ func TestLifecycleIsCASAuditedSnapshotAwareAndRestartSafe(t *testing.T) {
 	}
 }
 
-func testSignedRepository(t *testing.T, root string) (*pluginservice.SignedRepository, ed25519.PrivateKey) {
+func testSignedRepository(t *testing.T, root string) (*artifactrepository.SignedRepository, ed25519.PrivateKey) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	trust, err := pluginservice.NewTrustStore(pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+	trust, err := artifactrepository.NewTrustStore(artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{
 		Publisher: "example", KeyID: "testing", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	local, err := pluginservice.NewRepository(root)
+	local, err := artifactrepository.NewRepository(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &pluginservice.SignedRepository{Local: local, Trust: trust}, privateKey
+	return &artifactrepository.SignedRepository{Local: local, Trust: trust}, privateKey
 }
 
-func publishTestArtifact(t *testing.T, repository *pluginservice.SignedRepository, privateKey ed25519.PrivateKey, version string) (pluginservice.Artifact, []byte) {
+func publishTestArtifact(t *testing.T, repository *artifactrepository.SignedRepository, privateKey ed25519.PrivateKey, version string) (artifactrepository.Artifact, []byte) {
 	return publishTestArtifactWithSupplyChain(t, repository, privateKey, version, false)
 }
 
-func publishTestArtifactWithSupplyChain(t *testing.T, repository *pluginservice.SignedRepository, privateKey ed25519.PrivateKey, version string, includeSBOM bool) (pluginservice.Artifact, []byte) {
+func publishTestArtifactWithSupplyChain(t *testing.T, repository *artifactrepository.SignedRepository, privateKey ed25519.PrivateKey, version string, includeSBOM bool) (artifactrepository.Artifact, []byte) {
 	t.Helper()
 	directory := t.TempDir()
 	supplyChain := ""
@@ -222,15 +222,15 @@ func publishTestArtifactWithSupplyChain(t *testing.T, repository *pluginservice.
 	if err := os.WriteFile(filepath.Join(directory, "backend", "main"), []byte("binary"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	packageBytes, parsed, err := pluginservice.PackageDirectory(directory)
+	packageBytes, parsed, err := artifactrepository.PackageDirectory(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("testing", packageBytes)
+	artifact, err := artifactrepository.Describe("testing", packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	attestation, err := pluginservice.SignArtifact(artifact, parsed.Publisher, "testing", privateKey, time.Now().UTC())
+	attestation, err := artifactrepository.SignArtifact(artifact, parsed.Publisher, "testing", privateKey, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,15 +294,15 @@ func TestCatalogIndexesAndReverifiesPythonLockEvidence(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	packageBytes, parsed, err := pluginservice.PackageDirectory(directory)
+	packageBytes, parsed, err := artifactrepository.PackageDirectory(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe("testing", packageBytes)
+	artifact, err := artifactrepository.Describe("testing", packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	attestation, err := pluginservice.SignArtifact(artifact, parsed.Publisher, "testing", privateKey, time.Now().UTC())
+	attestation, err := artifactrepository.SignArtifact(artifact, parsed.Publisher, "testing", privateKey, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}

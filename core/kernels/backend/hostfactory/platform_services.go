@@ -6,16 +6,16 @@ import (
 	"errors"
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
-	"cdsoft.com.cn/VastPlan/core/shared/go/deploymentpublication"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformprofileactivation"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
-	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 )
 
 func kernelConfigurationAuthorityIssue(issuer configurationauthority.Issuer) protocolbus.HostService {

@@ -6,10 +6,10 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 func registerCandidate(ctx context.Context, router *addressing.Router, host *protocolbus.Host, unit RuntimeUnit, instances []*protocolbus.PluginInstance) ([]*addressing.Registration, error) {

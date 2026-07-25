@@ -11,7 +11,7 @@ import (
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"github.com/nats-io/nats.go/jetstream"

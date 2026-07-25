@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 )
 
 func (m *Manager) PrepareAssessmentReport(digest string) (string, error) {

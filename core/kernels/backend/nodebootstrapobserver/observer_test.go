@@ -11,7 +11,7 @@ import (
 
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/nodebootstrap"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 )
 
 const testTransportPublicKey = "UBN2AENL65VCM6XLPUDC4FGKH4EMJN2DKU2TVBDF34PRQTEG32FHOZ5G"

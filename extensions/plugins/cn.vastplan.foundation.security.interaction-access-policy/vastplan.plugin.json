@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.security.interaction-access-policy",
   "name": "VastPlan 交互访问策略",
   "description": "以经验证调用身份约束跨端交互 Broker 的入口权限",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

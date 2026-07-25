@@ -10,7 +10,7 @@ import (
 
 	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginid"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
 )
 
 func schemas() error {

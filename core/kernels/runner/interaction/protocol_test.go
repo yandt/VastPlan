@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/interactionapi"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/interactionapi"
 )
 
 type invokeStub struct {

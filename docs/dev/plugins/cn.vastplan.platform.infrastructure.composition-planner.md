@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.infrastructure.composition-planner`
 
-当前制品版本：`0.1.0`
+当前制品版本：`0.1.1`
 
 该平台基础插件提供 `tool.package/platform.composition.plan`，把 Backend `ApplicationIntent` 编译为只读 `ApplicationComposition`、Artifact Lock、Configuration Plan、Provider Binding、Service DAG 与确定性 `planDigest`。它是无状态、可水平扩展的 `active-active + external-shared + cluster + queue` 服务，不进入 Seed Core 或仓库 LKG 子集。
 

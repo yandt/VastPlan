@@ -17,10 +17,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/observability"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/observability"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocollimit"
 )
 
 const cancelSubject = "vp.rpc.cancel.v1"

@@ -8,9 +8,9 @@ import (
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 func deploymentUnitForRuntime(unit RuntimeUnit) deploymentv1.Unit {

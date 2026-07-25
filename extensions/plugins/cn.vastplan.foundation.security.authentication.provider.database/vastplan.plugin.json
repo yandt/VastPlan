@@ -2,7 +2,7 @@
   "id":"cn.vastplan.foundation.security.authentication.provider.database",
   "name":"VastPlan Database User Authentication Provider",
   "description":"通过通用 Database Runtime 查询企业用户并验证 Argon2id 密码",
-  "version":"0.1.0","publisher":"vastplan","license":"Apache-2.0","licenseFile":"LICENSE","noticeFile":"NOTICE",
+  "version":"0.1.1","publisher":"vastplan","license":"Apache-2.0","licenseFile":"LICENSE","noticeFile":"NOTICE",
   "engines":{"backend":"^0.1"},
   "contextAccess":{"required":["scope.tenant","caller","grant.credentials"],"optional":["trace","request.deadline","propagation.callPath"]},
   "runtime":{"instancePolicy":"leader","stateModel":"leader-owned","visibility":"cluster","routing":"leader","routingDomain":"security","requires":[{"capability":"foundation.data.relational.runtime","scope":"remote","kind":"strong","ready":"readiness","failurePolicy":"degrade","logicalService":"foundation.database.runtime","routingDomain":"data"}]},

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 

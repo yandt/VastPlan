@@ -14,7 +14,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 	"google.golang.org/protobuf/proto"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 

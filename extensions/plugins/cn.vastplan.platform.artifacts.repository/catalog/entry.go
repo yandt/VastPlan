@@ -16,14 +16,14 @@ import (
 	semver "github.com/Masterminds/semver/v3"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactprovenance"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
 
-func entryFrom(artifact pluginservice.Artifact, attestationRaw []byte) (Entry, error) {
-	var attestation pluginservice.Attestation
+func entryFrom(artifact artifactrepository.Artifact, attestationRaw []byte) (Entry, error) {
+	var attestation artifactrepository.Attestation
 	if err := decodeStrict(attestationRaw, &attestation); err != nil {
 		return Entry{}, fmt.Errorf("解析制品证明: %w", err)
 	}

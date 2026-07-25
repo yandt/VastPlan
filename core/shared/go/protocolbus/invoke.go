@@ -9,13 +9,13 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/callcontext"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/errorcode"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocollimit"
 )
 
 func (h *Host) Invoke(ctx context.Context, target *contractv1.CallTarget,

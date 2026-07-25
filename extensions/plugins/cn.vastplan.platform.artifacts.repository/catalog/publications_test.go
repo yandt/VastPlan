@@ -6,7 +6,7 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestPublicationApprovalBindsExactVerifiedTestingArtifact(t *testing.T) {
@@ -36,7 +36,7 @@ func TestPublicationApprovalBindsExactVerifiedTestingArtifact(t *testing.T) {
 
 	stable := artifact
 	stable.Channel = "stable"
-	attestation, err := pluginservice.SignArtifact(stable, "example", "testing", privateKey, time.Now().UTC())
+	attestation, err := artifactrepository.SignArtifact(stable, "example", "testing", privateKey, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestPublicationApprovalBindsExactVerifiedTestingArtifact(t *testing.T) {
 	}
 
 	stableProof, _ := json.Marshal(attestation)
-	_, packageBytes, err := repository.Read(pluginservice.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: "testing"})
+	_, packageBytes, err := repository.Read(artifactrepository.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: "testing"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,11 +97,11 @@ func TestApprovedPublicationRecoversAfterObjectCommitCrash(t *testing.T) {
 	}
 	stable := artifact
 	stable.Channel = "stable"
-	attestation, err := pluginservice.SignArtifact(stable, "example", "testing", privateKey, time.Now().UTC())
+	attestation, err := artifactrepository.SignArtifact(stable, "example", "testing", privateKey, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, packageBytes, err := repository.Read(pluginservice.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: "testing"})
+	_, packageBytes, err := repository.Read(artifactrepository.Ref{PluginID: artifact.PluginID, Version: artifact.Version, Channel: "testing"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestApprovedPublicationRecoversAfterObjectCommitCrash(t *testing.T) {
 
 func TestStablePublicationRequiresApproval(t *testing.T) {
 	store := &Store{publications: map[string]Publication{}}
-	attestation := pluginservice.Attestation{Artifact: pluginv1.Artifact{PluginID: "cn.example.demo", Version: "1.0.0", Channel: "stable", SHA256: "a"}, Publisher: "example", KeyID: "release"}
+	attestation := artifactrepository.Attestation{Artifact: pluginv1.Artifact{PluginID: "cn.example.demo", Version: "1.0.0", Channel: "stable", SHA256: "a"}, Publisher: "example", KeyID: "release"}
 	if _, err := store.AuthorizePublication(attestation, time.Now().UTC()); err == nil {
 		t.Fatal("没有批准记录的 stable 发布必须拒绝")
 	}
@@ -143,7 +143,7 @@ func TestStablePublicationBindsTestingSupplyChainSidecars(t *testing.T) {
 		ExpiresAt:                     time.Now().UTC().Add(time.Hour).Format(time.RFC3339Nano),
 	}
 	store := &Store{entries: map[string]Entry{refKey(source): {Ref: source, SHA256: record.SHA256, Publisher: record.Publisher, KeyID: record.KeyID, LifecycleStatus: LifecycleActive}}, publications: map[string]Publication{record.ID: record}}
-	attestation := pluginservice.Attestation{Artifact: pluginv1.Artifact{PluginID: target.PluginID, Version: target.Version, Channel: target.Channel, SHA256: record.SHA256}, Publisher: record.Publisher, KeyID: record.KeyID}
+	attestation := artifactrepository.Attestation{Artifact: pluginv1.Artifact{PluginID: target.PluginID, Version: target.Version, Channel: target.Channel, SHA256: record.SHA256}, Publisher: record.Publisher, KeyID: record.KeyID}
 	if id, err := store.AuthorizePublicationWithSupplyChain(attestation, provenance, verification, admission, time.Now().UTC()); err != nil || id != record.ID {
 		t.Fatalf("完全匹配的供应链 sidecar 应通过: id=%s err=%v", id, err)
 	}
@@ -176,7 +176,7 @@ func TestPublicationApprovalExpiresBeforeStableAuthorization(t *testing.T) {
 	}
 	stable := artifact
 	stable.Channel = "stable"
-	attestation, err := pluginservice.SignArtifact(stable, "example", "testing", privateKey, now)
+	attestation, err := artifactrepository.SignArtifact(stable, "example", "testing", privateKey, now)
 	if err != nil {
 		t.Fatal(err)
 	}

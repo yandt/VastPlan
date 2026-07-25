@@ -15,8 +15,8 @@ import (
 	"sync/atomic"
 
 	"cdsoft.com.cn/VastPlan/core/runtimehosts/go-dynamic/loader"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	pluginsdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

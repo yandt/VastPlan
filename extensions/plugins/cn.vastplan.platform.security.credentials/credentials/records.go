@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 )
 
 func (s *Service) Put(ctx context.Context, call *contractv1.CallContext, name, value string) (Record, error) {

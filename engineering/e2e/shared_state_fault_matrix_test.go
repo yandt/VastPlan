@@ -11,7 +11,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 const sharedStateFaultBucket = "VASTPLAN_SHARED_STATE_FAULT_V1"

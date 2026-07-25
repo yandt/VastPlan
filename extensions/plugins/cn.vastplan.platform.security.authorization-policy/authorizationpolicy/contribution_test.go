@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 )
 
 func TestContributionDescriptorMatchesSignedManifest(t *testing.T) {

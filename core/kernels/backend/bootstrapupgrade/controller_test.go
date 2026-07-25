@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 )
 
@@ -31,7 +31,7 @@ type acceptingSeed struct {
 	provenance, provenanceVerification []byte
 }
 
-func (s *acceptingSeed) PublishWithProvenance(value pluginservice.Attestation, _ []byte, provenance, verification []byte) (pluginv1.Artifact, error) {
+func (s *acceptingSeed) PublishWithProvenance(value artifactrepository.Attestation, _ []byte, provenance, verification []byte) (pluginv1.Artifact, error) {
 	s.publishes++
 	s.provenance, s.provenanceVerification = append([]byte(nil), provenance...), append([]byte(nil), verification...)
 	return value.Artifact, nil
@@ -62,7 +62,7 @@ func upgradeCandidate(t *testing.T, version, digest string) Candidate {
 	artifact := pluginv1.Artifact{
 		PluginID: repositoryPluginID, Version: version, Channel: "stable", SHA256: digest, Size: 1,
 	}
-	proof, err := json.Marshal(pluginservice.Attestation{SchemaVersion: "v1", Artifact: artifact})
+	proof, err := json.Marshal(artifactrepository.Attestation{SchemaVersion: "v1", Artifact: artifact})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestControllerCommitCannotOverwriteNewerConcurrentLKG(t *testing.T) {
 
 func mustProof(t *testing.T, artifact pluginv1.Artifact) []byte {
 	t.Helper()
-	raw, err := json.Marshal(pluginservice.Attestation{SchemaVersion: "v1", Artifact: artifact})
+	raw, err := json.Marshal(artifactrepository.Attestation{SchemaVersion: "v1", Artifact: artifact})
 	if err != nil {
 		t.Fatal(err)
 	}

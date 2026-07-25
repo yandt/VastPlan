@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.security.credentials",
   "name": "VastPlan 凭证管理服务",
-  "version": "0.12.2",
+  "version": "0.12.3",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

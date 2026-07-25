@@ -16,8 +16,8 @@ import (
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 

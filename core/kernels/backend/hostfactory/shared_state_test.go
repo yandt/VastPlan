@@ -9,11 +9,11 @@ import (
 	"testing"
 
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/observability"
-	"cdsoft.com.cn/VastPlan/core/shared/go/operationfence"
-	"cdsoft.com.cn/VastPlan/core/shared/go/runtimeidentity"
-	"cdsoft.com.cn/VastPlan/core/shared/go/sharedstate"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/observability"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
+	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
 type unavailableSharedStateStore struct{}

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func TestPreferenceStorePersistsCASAndIsolatesSubjects(t *testing.T) {

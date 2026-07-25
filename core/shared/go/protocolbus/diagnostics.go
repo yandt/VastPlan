@@ -4,8 +4,8 @@ import (
 	"sort"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/observability"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocollimit"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/observability"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocollimit"
 )
 
 type SessionDiagnostic struct {

@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 )
 
 var errConnectionNotFound = errors.New("数据库连接不存在")

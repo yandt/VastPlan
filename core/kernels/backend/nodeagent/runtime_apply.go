@@ -12,9 +12,9 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/addressing"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
-	"cdsoft.com.cn/VastPlan/core/shared/go/servicemodel"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
 type applyTransaction struct {

@@ -66,15 +66,15 @@
         { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "1.2.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "1.2.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "1.8.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.6.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.2", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.6.2", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.3", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.1", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.3", "channel": "stable" },
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.3", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.34.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.2", "channel": "stable" },
+        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.3", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.20.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.role-management", "version": "0.4.2", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.role-management", "version": "0.4.3", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
     }
@@ -86,7 +86,7 @@
       "platformProfile": {
         "id": "portal-default",
         "revision": 40,
-        "digest": "95663019aef745b1e7694617c44e9b571d409eee95dd56a6aadcbda30b0786c9"
+        "digest": "432488451fcfa547b7ef646972ffe4a0c8bd58399faaa02d95b364bac011085d"
       },
       "services": [
         {

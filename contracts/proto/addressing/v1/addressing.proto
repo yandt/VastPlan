@@ -3,7 +3,7 @@ syntax = "proto3";
 // 后端服务间寻址 Wire v1。业务契约复用 contract.v1，本文件只定义远端传输信封。
 package vastplan.addressing.v1;
 
-option go_package = "cdsoft.com.cn/VastPlan/core/shared/go/addressing/v1;addressingv1";
+option go_package = "cdsoft.com.cn/VastPlan/contracts/generated/go/addressing/v1;addressingv1";
 
 import "contract/v1/contract.proto";
 

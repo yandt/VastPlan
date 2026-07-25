@@ -7,10 +7,10 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
-	"cdsoft.com.cn/VastPlan/core/shared/go/platformadminapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/references"
 )
@@ -32,7 +32,7 @@ func (m *Manager) PublishWithSupplyChain(attestationRaw, packageBytes, provenanc
 	if active == nil {
 		return pluginv1.Artifact{}, errors.New("活动制品仓库不可用")
 	}
-	var attestation pluginservice.Attestation
+	var attestation artifactrepository.Attestation
 	if err := json.Unmarshal(attestationRaw, &attestation); err != nil {
 		return pluginv1.Artifact{}, errors.New("解析待发布制品证明失败")
 	}
@@ -306,28 +306,28 @@ func (m *Manager) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, []b
 	return m.active.adapter.Read(ref)
 }
 
-func (m *Manager) ReadWithAttestation(ref pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, error) {
+func (m *Manager) ReadWithAttestation(ref artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, error) {
 	return m.Read(ref)
 }
 
-func (m *Manager) ReadWithProvenance(ref pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, []byte, error) {
+func (m *Manager) ReadWithProvenance(ref artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, []byte, []byte, error) {
 	artifact, packageBytes, proof, provenance, verification, _, err := m.ReadWithSupplyChain(ref)
 	return artifact, packageBytes, proof, provenance, verification, err
 }
 
-func (m *Manager) ReadWithSupplyChain(ref pluginservice.Ref) (pluginservice.Artifact, []byte, []byte, []byte, []byte, []byte, error) {
+func (m *Manager) ReadWithSupplyChain(ref artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, []byte, []byte, []byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.active == nil {
-		return pluginservice.Artifact{}, nil, nil, nil, nil, nil, errors.New("活动制品仓库不可用")
+		return artifactrepository.Artifact{}, nil, nil, nil, nil, nil, errors.New("活动制品仓库不可用")
 	}
 	if err := m.active.catalog.RequireDelivery(ref); err != nil {
-		return pluginservice.Artifact{}, nil, nil, nil, nil, nil, err
+		return artifactrepository.Artifact{}, nil, nil, nil, nil, nil, err
 	}
 	return m.active.adapter.ReadWithSupplyChain(ref)
 }
 
-func (m *Manager) ReadSecurityStatusChain(ref pluginservice.Ref) ([]byte, error) {
+func (m *Manager) ReadSecurityStatusChain(ref artifactrepository.Ref) ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	if m.active == nil {
@@ -339,7 +339,7 @@ func (m *Manager) ReadSecurityStatusChain(ref pluginservice.Ref) ([]byte, error)
 	return m.active.signed.ReadSecurityStatusChain(ref)
 }
 
-func (m *Manager) AppendSecurityStatus(ref pluginservice.Ref, raw []byte, now time.Time) (*artifactassessment.StatusRecord, string, error) {
+func (m *Manager) AppendSecurityStatus(ref artifactrepository.Ref, raw []byte, now time.Time) (*artifactassessment.StatusRecord, string, error) {
 	m.publishMu.Lock()
 	defer m.publishMu.Unlock()
 	m.mu.RLock()

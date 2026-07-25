@@ -9,7 +9,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactprovenance"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactprovenance"
 	"cdsoft.com.cn/VastPlan/engineering/internal/signingkey"
 )
 

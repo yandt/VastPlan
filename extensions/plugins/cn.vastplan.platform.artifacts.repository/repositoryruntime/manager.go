@@ -10,9 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreport"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreport"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/garbagecollection"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/references"
@@ -66,15 +66,15 @@ type MigrationView struct {
 
 type repositorySet struct {
 	root    string
-	signed  *pluginservice.SignedRepository
-	adapter pluginservice.HTTPRepositoryAdapter
+	signed  *artifactrepository.SignedRepository
+	adapter artifactrepository.HTTPRepositoryAdapter
 	catalog *catalog.Store
 	refs    *references.Store
 	gc      *garbagecollection.Store
 }
 
 type Manager struct {
-	trust              *pluginservice.TrustStore
+	trust              *artifactrepository.TrustStore
 	statePath          string
 	configuredProvider string
 	configuredVolumeID string
@@ -103,7 +103,7 @@ type Options struct {
 	AssessmentReports *artifactreport.Archive
 }
 
-func Open(initial artifactstorage.Volume, trust *pluginservice.TrustStore, statePath string, options ...Options) (*Manager, error) {
+func Open(initial artifactstorage.Volume, trust *artifactrepository.TrustStore, statePath string, options ...Options) (*Manager, error) {
 	if trust == nil || statePath == "" {
 		return nil, errors.New("仓库迁移运行时必须配置信任根和状态文件")
 	}

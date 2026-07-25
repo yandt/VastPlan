@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func main() {
@@ -91,7 +91,7 @@ func main() {
 		})
 		defer cleanup()
 		var err error
-		builtBytes, manifest, err := pluginservice.PackageDirectory(packageSource)
+		builtBytes, manifest, err := artifactrepository.PackageDirectory(packageSource)
 		if err != nil {
 			fatalf("打包失败: %v", err)
 		}
@@ -112,7 +112,7 @@ func main() {
 		fmt.Printf("制品文件: %s\n", *out)
 	}
 	if *repositoryRoot != "" {
-		repository, err := pluginservice.NewRepository(*repositoryRoot)
+		repository, err := artifactrepository.NewRepository(*repositoryRoot)
 		if err != nil {
 			fatalf("打开仓库失败: %v", err)
 		}

@@ -16,8 +16,8 @@ import (
 	"log"
 	"sync"
 
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -42,7 +42,7 @@ type meterRecord struct {
 
 func main() {
 	q := &quota{calls: map[string]int{}}
-	p := sdk.New("cn.vastplan.demo-quota", "0.1.0", map[string]string{"backend": "^0.1 || ^1.0"})
+	p := sdk.New("cn.vastplan.demo-quota", "0.1.1", map[string]string{"backend": "^0.1 || ^1.0"})
 
 	p.Contribute(sdk.Contribution{
 		ExtensionPoint: extpoint.Hook,

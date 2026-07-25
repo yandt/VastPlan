@@ -14,9 +14,9 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 )
 
@@ -33,7 +33,7 @@ func TestManagerRequiresTwoPersonApprovalForStablePublication(t *testing.T) {
 	}
 	stable := testingArtifact
 	stable.Channel = "stable"
-	stableAttestation, err := pluginservice.SignArtifact(stable, "example", "testing", privateKey, time.Now().UTC())
+	stableAttestation, err := artifactrepository.SignArtifact(stable, "example", "testing", privateKey, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestManagerCutsOverMirrorsFinalizesAndReleases(t *testing.T) {
 		t.Fatalf("cutover failed: view=%+v err=%v", view, err)
 	}
 	for _, ref := range []struct{ id, version, channel string }{{first.PluginID, first.Version, first.Channel}, {second.PluginID, second.Version, second.Channel}} {
-		if _, _, _, err := manager.Read(pluginservice.Ref{PluginID: ref.id, Version: ref.version, Channel: ref.channel}); err != nil {
+		if _, _, _, err := manager.Read(artifactrepository.Ref{PluginID: ref.id, Version: ref.version, Channel: ref.channel}); err != nil {
 			t.Fatalf("candidate missing %s: %v", ref.version, err)
 		}
 	}
@@ -181,7 +181,7 @@ func TestManagerCutsOverMirrorsFinalizesAndReleases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, _, err := restarted.Read(pluginservice.Ref{PluginID: third.PluginID, Version: third.Version, Channel: third.Channel}); err != nil {
+	if _, _, _, err := restarted.Read(artifactrepository.Ref{PluginID: third.PluginID, Version: third.Version, Channel: third.Channel}); err != nil {
 		t.Fatalf("finalized target did not survive restart: %v", err)
 	}
 	if revision, snapshots := restarted.References(); revision != 3 || len(snapshots) != 2 || snapshots[0].Value.OwnerKind != artifactreference.OwnerSeed || snapshots[1].Value.Generation != 2 {
@@ -363,24 +363,24 @@ func syncVolume(t *testing.T, source, target string) {
 	}
 }
 
-func migrationTrust(t *testing.T) (*pluginservice.TrustStore, ed25519.PrivateKey) {
+func migrationTrust(t *testing.T) (*artifactrepository.TrustStore, ed25519.PrivateKey) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	trust, err := pluginservice.NewTrustStore(pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{Publisher: "example", KeyID: "testing", PublicKey: base64.StdEncoding.EncodeToString(publicKey)}))
+	trust, err := artifactrepository.NewTrustStore(artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{Publisher: "example", KeyID: "testing", PublicKey: base64.StdEncoding.EncodeToString(publicKey)}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return trust, privateKey
 }
 
-func migrationArtifact(t *testing.T, key ed25519.PrivateKey, version string) (pluginservice.Artifact, []byte, []byte) {
+func migrationArtifact(t *testing.T, key ed25519.PrivateKey, version string) (artifactrepository.Artifact, []byte, []byte) {
 	return migrationArtifactForChannel(t, key, version, "testing")
 }
 
-func migrationArtifactForChannel(t *testing.T, key ed25519.PrivateKey, version, channel string) (pluginservice.Artifact, []byte, []byte) {
+func migrationArtifactForChannel(t *testing.T, key ed25519.PrivateKey, version, channel string) (artifactrepository.Artifact, []byte, []byte) {
 	t.Helper()
 	directory := t.TempDir()
 	manifest := []byte(`{"id":"com.example.migration","name":"Migration","description":"Migration fixture","version":"` + version + `","publisher":"example","engines":{"backend":"^0.1"},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[{"id":"example.migration","service_role":"backend","subcommands":[]}]}}}`)
@@ -393,15 +393,15 @@ func migrationArtifactForChannel(t *testing.T, key ed25519.PrivateKey, version, 
 	if err := os.WriteFile(filepath.Join(directory, "backend", "main"), []byte(version), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	body, parsed, err := pluginservice.PackageDirectory(directory)
+	body, parsed, err := artifactrepository.PackageDirectory(directory)
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe(channel, body)
+	artifact, err := artifactrepository.Describe(channel, body)
 	if err != nil {
 		t.Fatal(err)
 	}
-	attestation, err := pluginservice.SignArtifact(artifact, parsed.Publisher, "testing", key, time.Now().UTC())
+	attestation, err := artifactrepository.SignArtifact(artifact, parsed.Publisher, "testing", key, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}

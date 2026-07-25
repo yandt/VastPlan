@@ -13,7 +13,7 @@ import (
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

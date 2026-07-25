@@ -6,8 +6,8 @@ import (
 	"sort"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactreference"
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreference"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func (s *Service) protectPortalTransition(ctx context.Context, activationID uint64, portalID string, previous, candidate []pluginv1.ArtifactReference) error {

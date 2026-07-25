@@ -12,33 +12,33 @@ import (
 	"time"
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/pluginservice"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
 )
 
 func TestReconciler_RemoteSignedArtifactToInstalledRuntime(t *testing.T) {
 	packageBytes, artifact := testPackage(t, 0o755)
 	publicKey, privateKey, _ := ed25519.GenerateKey(nil)
-	trust, err := pluginservice.NewTrustStore(pluginservice.TrustDocumentForPublicKeys(pluginservice.TrustKey{
+	trust, err := artifactrepository.NewTrustStore(artifactrepository.TrustDocumentForPublicKeys(artifactrepository.TrustKey{
 		Publisher: "example", KeyID: "release", PublicKey: base64.StdEncoding.EncodeToString(publicKey),
 	}))
 	if err != nil {
 		t.Fatal(err)
 	}
-	attestation, err := pluginservice.SignArtifact(artifact, "example", "release", privateKey, time.Now().UTC())
+	attestation, err := artifactrepository.SignArtifact(artifact, "example", "release", privateKey, time.Now().UTC())
 	if err != nil {
 		t.Fatal(err)
 	}
-	local, _ := pluginservice.NewRepository(filepath.Join(t.TempDir(), "repository"))
-	signed := &pluginservice.SignedRepository{Local: local, Trust: trust}
+	local, _ := artifactrepository.NewRepository(filepath.Join(t.TempDir(), "repository"))
+	signed := &artifactrepository.SignedRepository{Local: local, Trust: trust}
 	if _, err := signed.Publish(attestation, packageBytes); err != nil {
 		t.Fatal(err)
 	}
 	handler := &artifactapi.Server{
-		Repository: pluginservice.HTTPRepositoryAdapter{Repository: signed},
+		Repository: artifactrepository.HTTPRepositoryAdapter{Repository: signed},
 		ReadToken:  "node-token", PublishToken: "publisher-token", RequireTLS: true,
 	}
-	remote := &pluginservice.RemoteRepository{
+	remote := &artifactrepository.RemoteRepository{
 		BaseURL: "https://artifacts.example.test", Token: "node-token", Trust: trust,
 		Client: &http.Client{Transport: nodeHandlerTransport{handler: handler}},
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 )
 
 func (p *Plugin) handleLifecycle(lc *pluginhostv1.Lifecycle) {

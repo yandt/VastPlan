@@ -11,13 +11,13 @@ import (
 	"time"
 
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
-	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
-	"cdsoft.com.cn/VastPlan/core/shared/go/credentiallease"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 )
 
 const (
 	PluginID       = artifactassessment.AssessmentProviderPluginID
-	PluginVersion  = "0.3.0"
+	PluginVersion  = "0.3.1"
 	Capability     = "platform.artifacts.assessment"
 	SigningPurpose = "artifact.assessment.signing-key"
 )

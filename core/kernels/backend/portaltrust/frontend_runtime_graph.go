@@ -3,7 +3,7 @@ package portaltrust
 import (
 	"fmt"
 
-	"cdsoft.com.cn/VastPlan/core/shared/go/portalapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func runtimeFrontendObjects(runtime portalapi.RuntimeSpec) []portalapi.FrontendModule {

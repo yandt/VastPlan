@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	pluginhostv1 "cdsoft.com.cn/VastPlan/core/shared/go/pluginhost/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 )
 
 func (h *Host) lifecycle(ctx context.Context, sess *session, op pluginhostv1.Lifecycle_Op) (*pluginhostv1.LifecycleAck, error) {

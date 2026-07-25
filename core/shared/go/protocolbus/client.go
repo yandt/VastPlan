@@ -15,7 +15,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/processguard"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 )
 
 type currentDispatchTargetKey struct{}
