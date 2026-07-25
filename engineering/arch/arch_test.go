@@ -55,7 +55,7 @@ func collectGoFiles(t *testing.T) []goFile {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", "bin", "node_modules", ".obsidian":
+			case ".git", ".vastplan", "bin", "node_modules", ".obsidian", "graphify-out", "dist", "coverage", "__pycache__":
 				return filepath.SkipDir
 			}
 			return nil
