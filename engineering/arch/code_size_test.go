@@ -32,8 +32,6 @@ var productionFileSizeExceptions = map[string]sizeException{}
 // current span. Keep this list intentionally small; workflow-sized functions
 // should normally be decomposed before landing.
 var goFunctionSizeExceptions = map[string]sizeException{
-	"extensions/plugins/cn.vastplan.platform.artifacts.repository/backend/main.go#main":                                     {263, "仓库插件入口仍待把协议 Handler 注册抽为装配模块"},
-	"extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog/bundle.go#CreateOfflineBundle":                    {202, "离线 Bundle 创建仍待拆分取证、复制与签名验证阶段"},
 	"extensions/plugins/cn.vastplan.platform.configuration.portal-composer/portalcomposer/capability.go#(*Service).Handle":  {232, "Portal Composer 能力分发仍待按治理领域拆分"},
 	"extensions/plugins/cn.vastplan.platform.integration.api-exposure/apiexposure/capability.go#(*Service).handlePrincipal": {186, "API Exposure 协议分发仍待按控制面和数据面拆分"},
 }

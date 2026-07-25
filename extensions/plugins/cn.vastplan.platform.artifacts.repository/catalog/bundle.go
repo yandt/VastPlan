@@ -160,123 +160,9 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 	reportsWritten := map[string]struct{}{}
 	var total int64
 	for _, item := range lock.Packages {
-		var artifact pluginservice.Artifact
-		var packageBytes, proof []byte
-		var provenanceRaw, verificationRaw, admissionRaw, statusChainRaw []byte
-		if supplyChainSource, ok := source.(OfflineBundleSupplyChainSource); ok {
-			artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw, err = supplyChainSource.ReadWithSupplyChain(item.Ref)
-			if err != nil {
-				_ = closeWriters()
-				return OfflineBundle{}, fmt.Errorf("读取 Bundle 供应链证据 %s: %w", refKey(item.Ref), err)
-			}
-		} else if provenanceSource, ok := source.(OfflineBundleProvenanceSource); ok {
-			artifact, packageBytes, proof, provenanceRaw, verificationRaw, err = provenanceSource.ReadWithProvenance(item.Ref)
-			if err != nil {
-				_ = closeWriters()
-				return OfflineBundle{}, fmt.Errorf("读取 Bundle 来源证明 %s: %w", refKey(item.Ref), err)
-			}
-		} else {
-			if trustStore.ProvenanceEnabled() {
-				_ = closeWriters()
-				return OfflineBundle{}, errors.New("离线 Bundle 来源不支持导出必需的来源证明")
-			}
-			if trustStore.AssessmentEnabled() {
-				_ = closeWriters()
-				return OfflineBundle{}, errors.New("离线 Bundle 来源不支持导出必需的安全准入记录")
-			}
-			artifact, packageBytes, proof, err = source.ReadWithAttestation(item.Ref)
-			if err != nil {
-				_ = closeWriters()
-				return OfflineBundle{}, fmt.Errorf("读取 Bundle 制品 %s: %w", refKey(item.Ref), err)
-			}
-		}
-		if err := validateBundleArtifact(item, artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw, trustStore); err != nil {
-			_ = closeWriters()
+		if err := appendBundleArtifact(tw, source, trustStore, item, reportsWritten, &manifest, &total, closeWriters); err != nil {
 			return OfflineBundle{}, err
 		}
-		if statusSource, ok := source.(OfflineBundleAssessmentStatusSource); ok {
-			statusChainRaw, err = statusSource.ReadSecurityStatusChain(item.Ref)
-			if err != nil {
-				_ = closeWriters()
-				return OfflineBundle{}, fmt.Errorf("读取 Bundle 安全复扫状态 %s: %w", refKey(item.Ref), err)
-			}
-		}
-		statusRecords, err := artifactassessment.InspectStatusChain(statusChainRaw)
-		if err != nil {
-			_ = closeWriters()
-			return OfflineBundle{}, fmt.Errorf("校验 Bundle 安全复扫状态 %s: %w", refKey(item.Ref), err)
-		}
-		total += int64(len(packageBytes)) + int64(len(proof)) + int64(len(provenanceRaw)) + int64(len(verificationRaw)) + int64(len(admissionRaw)) + int64(len(statusChainRaw))
-		if total > maxOfflineBundleBytes {
-			_ = closeWriters()
-			return OfflineBundle{}, fmt.Errorf("离线 Bundle 制品总量超过 %d 字节上限", maxOfflineBundleBytes)
-		}
-		base := "artifacts/" + item.SHA256
-		packagePath, proofPath := base+"/package.tar.gz", base+"/attestation.json"
-		if err := writeBundleEntry(tw, packagePath, packageBytes); err != nil {
-			_ = closeWriters()
-			return OfflineBundle{}, err
-		}
-		if err := writeBundleEntry(tw, proofPath, proof); err != nil {
-			_ = closeWriters()
-			return OfflineBundle{}, err
-		}
-		provenancePath, verificationPath := "", ""
-		if len(provenanceRaw) != 0 {
-			provenancePath, verificationPath = base+"/provenance.dsse.json", base+"/provenance-verification.json"
-			if err := writeBundleEntry(tw, provenancePath, provenanceRaw); err != nil {
-				_ = closeWriters()
-				return OfflineBundle{}, err
-			}
-			if err := writeBundleEntry(tw, verificationPath, verificationRaw); err != nil {
-				_ = closeWriters()
-				return OfflineBundle{}, err
-			}
-		}
-		admissionPath := ""
-		evaluations := make([]artifactassessment.Evaluation, 0, len(statusRecords)+1)
-		if len(admissionRaw) != 0 {
-			admissionPath = base + "/security-admission.json"
-			if err := writeBundleEntry(tw, admissionPath, admissionRaw); err != nil {
-				_ = closeWriters()
-				return OfflineBundle{}, err
-			}
-			record, _, inspectErr := artifactassessment.InspectAdmission(admissionRaw)
-			if inspectErr != nil {
-				_ = closeWriters()
-				return OfflineBundle{}, inspectErr
-			}
-			evaluations = append(evaluations, record.Evaluation)
-		}
-		statusPath := ""
-		if len(statusChainRaw) != 0 {
-			if len(admissionRaw) == 0 {
-				_ = closeWriters()
-				return OfflineBundle{}, errors.New("离线 Bundle 安全复扫状态缺少准入记录")
-			}
-			statusPath = base + "/security-status-chain.json"
-			if err := writeBundleEntry(tw, statusPath, statusChainRaw); err != nil {
-				_ = closeWriters()
-				return OfflineBundle{}, err
-			}
-			for _, raw := range statusRecords {
-				record, _, _ := artifactassessment.InspectStatus(raw)
-				evaluations = append(evaluations, record.Evaluation)
-			}
-		}
-		if err := appendBundleReports(tw, source, evaluations, reportsWritten, &manifest, &total); err != nil {
-			_ = closeWriters()
-			return OfflineBundle{}, err
-		}
-		proofDigest := sha256.Sum256(proof)
-		provenanceDigest, verificationDigest, admissionDigest, statusDigest := sha256.Sum256(provenanceRaw), sha256.Sum256(verificationRaw), sha256.Sum256(admissionRaw), sha256.Sum256(statusChainRaw)
-		manifest.Artifacts = append(manifest.Artifacts, bundleArtifact{
-			Ref: item.Ref, SHA256: item.SHA256, PackagePath: packagePath, AttestationPath: proofPath,
-			AttestationSHA256: hex.EncodeToString(proofDigest[:]), ProvenancePath: provenancePath, ProvenanceVerificationPath: verificationPath,
-			ProvenanceSHA256: digestIfPresent(provenanceRaw, provenanceDigest), ProvenanceVerificationSHA256: digestIfPresent(verificationRaw, verificationDigest),
-			SecurityAdmissionPath: admissionPath, SecurityAdmissionSHA256: digestIfPresent(admissionRaw, admissionDigest),
-			SecurityStatusPath: statusPath, SecurityStatusSHA256: digestIfPresent(statusChainRaw, statusDigest),
-		})
 	}
 	sort.Slice(manifest.Reports, func(i, j int) bool { return manifest.Reports[i].SHA256 < manifest.Reports[j].SHA256 })
 	manifestRaw, err := json.MarshalIndent(manifest, "", "  ")
@@ -307,6 +193,128 @@ func CreateOfflineBundle(lock pluginv1.ArtifactLock, trustRaw []byte, source Off
 	}
 	committed = true
 	return OfflineBundle{Path: path, Size: info.Size(), SHA256: digest}, nil
+}
+
+func appendBundleArtifact(tw *tar.Writer, source OfflineBundleSource, trustStore *pluginservice.TrustStore, item pluginv1.ArtifactLockPackage, reportsWritten map[string]struct{}, manifest *bundleManifest, total *int64, closeWriters func() error) error {
+	var err error
+	var artifact pluginservice.Artifact
+	var packageBytes, proof []byte
+	var provenanceRaw, verificationRaw, admissionRaw, statusChainRaw []byte
+	if supplyChainSource, ok := source.(OfflineBundleSupplyChainSource); ok {
+		artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw, err = supplyChainSource.ReadWithSupplyChain(item.Ref)
+		if err != nil {
+			_ = closeWriters()
+			return fmt.Errorf("读取 Bundle 供应链证据 %s: %w", refKey(item.Ref), err)
+		}
+	} else if provenanceSource, ok := source.(OfflineBundleProvenanceSource); ok {
+		artifact, packageBytes, proof, provenanceRaw, verificationRaw, err = provenanceSource.ReadWithProvenance(item.Ref)
+		if err != nil {
+			_ = closeWriters()
+			return fmt.Errorf("读取 Bundle 来源证明 %s: %w", refKey(item.Ref), err)
+		}
+	} else {
+		if trustStore.ProvenanceEnabled() {
+			_ = closeWriters()
+			return errors.New("离线 Bundle 来源不支持导出必需的来源证明")
+		}
+		if trustStore.AssessmentEnabled() {
+			_ = closeWriters()
+			return errors.New("离线 Bundle 来源不支持导出必需的安全准入记录")
+		}
+		artifact, packageBytes, proof, err = source.ReadWithAttestation(item.Ref)
+		if err != nil {
+			_ = closeWriters()
+			return fmt.Errorf("读取 Bundle 制品 %s: %w", refKey(item.Ref), err)
+		}
+	}
+	if err := validateBundleArtifact(item, artifact, packageBytes, proof, provenanceRaw, verificationRaw, admissionRaw, trustStore); err != nil {
+		_ = closeWriters()
+		return err
+	}
+	if statusSource, ok := source.(OfflineBundleAssessmentStatusSource); ok {
+		statusChainRaw, err = statusSource.ReadSecurityStatusChain(item.Ref)
+		if err != nil {
+			_ = closeWriters()
+			return fmt.Errorf("读取 Bundle 安全复扫状态 %s: %w", refKey(item.Ref), err)
+		}
+	}
+	statusRecords, err := artifactassessment.InspectStatusChain(statusChainRaw)
+	if err != nil {
+		_ = closeWriters()
+		return fmt.Errorf("校验 Bundle 安全复扫状态 %s: %w", refKey(item.Ref), err)
+	}
+	*total += int64(len(packageBytes)) + int64(len(proof)) + int64(len(provenanceRaw)) + int64(len(verificationRaw)) + int64(len(admissionRaw)) + int64(len(statusChainRaw))
+	if *total > maxOfflineBundleBytes {
+		_ = closeWriters()
+		return fmt.Errorf("离线 Bundle 制品总量超过 %d 字节上限", maxOfflineBundleBytes)
+	}
+	base := "artifacts/" + item.SHA256
+	packagePath, proofPath := base+"/package.tar.gz", base+"/attestation.json"
+	if err := writeBundleEntry(tw, packagePath, packageBytes); err != nil {
+		_ = closeWriters()
+		return err
+	}
+	if err := writeBundleEntry(tw, proofPath, proof); err != nil {
+		_ = closeWriters()
+		return err
+	}
+	provenancePath, verificationPath := "", ""
+	if len(provenanceRaw) != 0 {
+		provenancePath, verificationPath = base+"/provenance.dsse.json", base+"/provenance-verification.json"
+		if err := writeBundleEntry(tw, provenancePath, provenanceRaw); err != nil {
+			_ = closeWriters()
+			return err
+		}
+		if err := writeBundleEntry(tw, verificationPath, verificationRaw); err != nil {
+			_ = closeWriters()
+			return err
+		}
+	}
+	admissionPath := ""
+	evaluations := make([]artifactassessment.Evaluation, 0, len(statusRecords)+1)
+	if len(admissionRaw) != 0 {
+		admissionPath = base + "/security-admission.json"
+		if err := writeBundleEntry(tw, admissionPath, admissionRaw); err != nil {
+			_ = closeWriters()
+			return err
+		}
+		record, _, inspectErr := artifactassessment.InspectAdmission(admissionRaw)
+		if inspectErr != nil {
+			_ = closeWriters()
+			return inspectErr
+		}
+		evaluations = append(evaluations, record.Evaluation)
+	}
+	statusPath := ""
+	if len(statusChainRaw) != 0 {
+		if len(admissionRaw) == 0 {
+			_ = closeWriters()
+			return errors.New("离线 Bundle 安全复扫状态缺少准入记录")
+		}
+		statusPath = base + "/security-status-chain.json"
+		if err := writeBundleEntry(tw, statusPath, statusChainRaw); err != nil {
+			_ = closeWriters()
+			return err
+		}
+		for _, raw := range statusRecords {
+			record, _, _ := artifactassessment.InspectStatus(raw)
+			evaluations = append(evaluations, record.Evaluation)
+		}
+	}
+	if err := appendBundleReports(tw, source, evaluations, reportsWritten, manifest, total); err != nil {
+		_ = closeWriters()
+		return err
+	}
+	proofDigest := sha256.Sum256(proof)
+	provenanceDigest, verificationDigest, admissionDigest, statusDigest := sha256.Sum256(provenanceRaw), sha256.Sum256(verificationRaw), sha256.Sum256(admissionRaw), sha256.Sum256(statusChainRaw)
+	manifest.Artifacts = append(manifest.Artifacts, bundleArtifact{
+		Ref: item.Ref, SHA256: item.SHA256, PackagePath: packagePath, AttestationPath: proofPath,
+		AttestationSHA256: hex.EncodeToString(proofDigest[:]), ProvenancePath: provenancePath, ProvenanceVerificationPath: verificationPath,
+		ProvenanceSHA256: digestIfPresent(provenanceRaw, provenanceDigest), ProvenanceVerificationSHA256: digestIfPresent(verificationRaw, verificationDigest),
+		SecurityAdmissionPath: admissionPath, SecurityAdmissionSHA256: digestIfPresent(admissionRaw, admissionDigest),
+		SecurityStatusPath: statusPath, SecurityStatusSHA256: digestIfPresent(statusChainRaw, statusDigest),
+	})
+	return nil
 }
 
 func appendBundleReports(tw *tar.Writer, source OfflineBundleSource, evaluations []artifactassessment.Evaluation, written map[string]struct{}, manifest *bundleManifest, total *int64) error {
