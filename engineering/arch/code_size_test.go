@@ -27,11 +27,8 @@ type sizeException struct {
 // Maximum freezes today's size: new responsibilities must be split out, and
 // once a file falls under the default limit this entry must be deleted.
 var productionFileSizeExceptions = map[string]sizeException{
-	"contracts/schemas/plugin/v1/schema.go":                                                                        {1039, "插件清单契约仍待按执行、贡献与配置验证拆分"},
 	"engineering/tools/platform-dev.sh":                                                                            {810, "开发入口脚本保留薄命令 UX，子命令仍待逐步迁入 Go"},
 	"core/kernels/backend/hostfactory/host.go":                                                                     {699, "宿主组合根仍待把各领域 Host Service 工厂分文件"},
-	"core/shared/go/platformadminapi/platform.go":                                                                  {685, "平台管理 API 类型仍待按领域拆文件"},
-	"contracts/schemas/composition/frontend/v1/schema.go":                                                          {654, "Frontend Composition 契约仍待拆分类型与验证"},
 	"core/kernels/backend/nodeagent/reconciler.go":                                                                 {636, "Node Reconciler 仍待拆分安装计划与实际态提交"},
 	"extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/deploymentmanager/test_releases.go": {623, "测试发布 Saga 尚未按候选与回滚阶段拆分"},
 	"extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog/resolver.go":                             {623, "制品解析器仍待拆分约束求解与锁生成"},
