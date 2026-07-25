@@ -30,7 +30,7 @@ import (
 
 const (
 	PluginID                = credentialsstate.PluginID
-	PluginVersion           = "0.12.1"
+	PluginVersion           = "0.12.2"
 	Capability              = "platform.credentials"
 	MaterialLeaseCapability = "platform.credentials.material-lease"
 	vaultAddressKey         = "platform.credentials.vault.address"

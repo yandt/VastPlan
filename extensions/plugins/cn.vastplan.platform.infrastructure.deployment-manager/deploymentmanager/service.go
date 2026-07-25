@@ -29,7 +29,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.18.1"
+	PluginVersion = "0.18.2"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 1 << 20

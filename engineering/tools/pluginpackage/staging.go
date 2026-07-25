@@ -91,6 +91,10 @@ func stagePackageWithSupplyChain(source, backendBin, backendModule, frontendBund
 		cleanup()
 		fatalf("复制插件目录失败: %v", err)
 	}
+	if err := normalizePackagedFrontendMetafiles(staging); err != nil {
+		cleanup()
+		fatalf("规范化前端构建证据失败: %v", err)
+	}
 	copyBuildInput(staging, backendEntry, backendBin, 0o755, "backend 入口")
 	copyBuildInput(staging, backendModuleEntry, backendModule, 0o644, "node-worker backend bundle")
 	copyBuildInput(staging, frontendEntry, frontendBundle, 0o644, "frontend bundle")
