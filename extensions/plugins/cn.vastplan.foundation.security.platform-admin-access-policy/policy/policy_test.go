@@ -3,6 +3,7 @@ package policy
 import (
 	"testing"
 
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
@@ -107,6 +108,16 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	}
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "resolve"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 应可生成精确制品锁: %s", got)
+	}
+	plannerPlugin := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.platform.infrastructure.composition-planner"}}
+	if got, _ := decide(plannerPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "describePlanning"}); got != extpoint.DecisionAllow {
+		t.Fatalf("composition-planner 应可读取精确制品规划描述: %s", got)
+	}
+	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: backendcompositionv1.PlanningCapability, Operation: backendcompositionv1.PlanningOperation}); got != extpoint.DecisionAllow {
+		t.Fatalf("deployment-manager 应可调用应用组合规划器: %s", got)
+	}
+	if got, _ := decide(plannerPlugin, extpoint.PermissionRequest{ExtensionPoint: extpoint.ToolPackage, Capability: backendcompositionv1.PlanningCapability, Operation: backendcompositionv1.PlanningOperation}); got == extpoint.DecisionAllow {
+		t.Fatalf("非 deployment-manager 插件不得调用应用组合规划器: %s", got)
 	}
 	if got, _ := decide(deploymentPlugin, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "putReferences"}); got != extpoint.DecisionAllow {
 		t.Fatalf("deployment-manager 应可发布自己的引用快照: %s", got)

@@ -2,7 +2,9 @@ package backendcompositionv1
 
 import (
 	"encoding/json"
+	"sort"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
@@ -12,6 +14,8 @@ import (
 const (
 	ApplicationIntentSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/composition/backend/v1/vastplan.application-intent.schema.json"
 	ResolutionReportSchemaURL  = "https://schemas.cdsoft.com.cn/vastplan/composition/backend/v1/vastplan.resolution-report.schema.json"
+	PlanningCapability         = "platform.composition.plan"
+	PlanningOperation          = "plan"
 
 	ResolutionResolved           = "Resolved"
 	ResolutionNeedsConfiguration = "NeedsConfiguration"
@@ -50,8 +54,47 @@ type ServiceOperationsIntent struct {
 }
 
 type PlannerIdentity struct {
-	Ref        pluginv1.ArtifactRef `json:"ref"`
-	Capability string               `json:"capability"`
+	Ref                 pluginv1.ArtifactRef `json:"ref"`
+	Capability          string               `json:"capability"`
+	ConfigurationDigest string               `json:"configurationDigest"`
+}
+
+// PlanningRequest 是 Deployment Manager 调用 Planner 时唯一允许的输入。
+// 仓库策略和 Planner 身份由插件自身的受信配置注入，不能由调用方覆盖。
+type PlanningRequest struct {
+	Intent                ApplicationIntent              `json:"intent"`
+	PlatformProfile       PlatformProfile                `json:"platformProfile"`
+	ConfigurationSnapshot *PlanningConfigurationSnapshot `json:"configurationSnapshot,omitempty"`
+}
+
+// PlanningConfigurationSnapshot 只能由可信配置 Provider 生成。
+// 它只携带不透明 CredentialRef，不包含 material，也不进入用户可写 Intent。
+type PlanningConfigurationSnapshot struct {
+	Version  int                         `json:"version"`
+	Bindings []PlanningCredentialBinding `json:"bindings"`
+	Digest   string                      `json:"digest"`
+}
+
+type PlanningCredentialBinding struct {
+	UnitID   string                        `json:"unitId"`
+	PluginID string                        `json:"pluginId"`
+	FieldID  string                        `json:"fieldId"`
+	Ref      commonv1.ManagedCredentialRef `json:"ref"`
+}
+
+func (s PlanningConfigurationSnapshot) ComputedDigest() string {
+	s.Digest = ""
+	s.Bindings = append([]PlanningCredentialBinding(nil), s.Bindings...)
+	sort.Slice(s.Bindings, func(i, j int) bool {
+		if s.Bindings[i].UnitID != s.Bindings[j].UnitID {
+			return s.Bindings[i].UnitID < s.Bindings[j].UnitID
+		}
+		if s.Bindings[i].PluginID != s.Bindings[j].PluginID {
+			return s.Bindings[i].PluginID < s.Bindings[j].PluginID
+		}
+		return s.Bindings[i].FieldID < s.Bindings[j].FieldID
+	})
+	return compositioncommonv1.Digest(s)
 }
 
 type ResolvedFeature struct {

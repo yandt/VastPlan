@@ -46,9 +46,6 @@ func validateReportReferences(report ResolutionReport) error {
 	}
 	unitPlugins := map[string]map[string]struct{}{}
 	if report.ApplicationComposition != nil {
-		if len(nodes) != len(report.ApplicationComposition.Units) {
-			return fmt.Errorf("Resolution Report service graph 必须与 Application Composition unit 集合完全一致")
-		}
 		for _, unit := range report.ApplicationComposition.Units {
 			node, exists := nodes[unit.Spec.ID]
 			if !exists || node.ServiceClass != unit.ServiceClass {

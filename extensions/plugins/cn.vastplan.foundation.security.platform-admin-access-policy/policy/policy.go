@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	configurationresourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationresource/v1"
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
@@ -24,7 +25,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.30.0"
+	PluginVersion = "0.30.1"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -77,6 +78,9 @@ func decide(c *v1.CallContext, request extpoint.PermissionRequest) (extpoint.Dec
 	}
 	if configurationActivationAllowed(c, request) {
 		return extpoint.DecisionAllow, "配置协调器只能驱动候选绑定的应用配置发布"
+	}
+	if compositionPlanningAllowed(c, request) {
+		return extpoint.DecisionAllow, "Deployment Manager 只能调用无副作用的应用组合规划端口"
 	}
 	if configurationControllerAllowed(c, request) {
 		return extpoint.DecisionAllow, "配置协调器只能调用目标插件的标准 Hot Service 控制端口"
@@ -145,11 +149,18 @@ func artifactReferenceWriteAllowed(c *v1.CallContext, request extpoint.Permissio
 
 func governedCapability(capability string) bool {
 	switch capability {
-	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", configurationauthority.KernelIssueService, configurationauthority.KernelConsumeService, platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, "platform.api-exposure":
+	case platformadminapi.SettingsCapability, platformadminapi.CredentialsCapability, "platform.credentials.material-lease", "kernel.credential.material-lease", configurationauthority.KernelIssueService, configurationauthority.KernelConsumeService, platformadminapi.DatabaseCapability, databasev1.Capability, platformadminapi.ArtifactsCapability, platformadminapi.DeploymentCapability, platformadminapi.PluginConfigurationCapability, backendcompositionv1.PlanningCapability, "platform.api-exposure":
 		return true
 	default:
 		return strings.HasPrefix(capability, artifactstorage.CapabilityPrefix) || strings.HasPrefix(capability, "configuration.")
 	}
+}
+
+func compositionPlanningAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
+	return c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN &&
+		c.GetCaller().GetId() == "cn.vastplan.platform.infrastructure.deployment-manager" &&
+		request.ExtensionPoint == extpoint.ToolPackage && request.Capability == backendcompositionv1.PlanningCapability &&
+		request.Operation == backendcompositionv1.PlanningOperation
 }
 
 func configurationControllerAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
@@ -335,7 +346,7 @@ func pluginMetadataReadAllowed(id, capability, operation string) bool {
 	case platformadminapi.DatabaseCapability:
 		return operation == "describe" || operation == "list"
 	case platformadminapi.ArtifactsCapability:
-		return operation == "status" || operation == "capacity" || operation == "listCatalog" || operation == "listPublishJournal" || operation == "resolve" || operation == "listReferences" || operation == "gcPlan" || operation == "gcStatus" || operation == "migrationStatus"
+		return operation == "status" || operation == "capacity" || operation == "listCatalog" || operation == "listPublishJournal" || operation == "resolve" || operation == "describePlanning" || operation == "listReferences" || operation == "gcPlan" || operation == "gcStatus" || operation == "migrationStatus"
 	default:
 		return false
 	}

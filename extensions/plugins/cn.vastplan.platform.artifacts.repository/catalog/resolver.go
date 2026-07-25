@@ -35,9 +35,10 @@ func (e *ResolutionError) Error() string {
 }
 
 type requirementConstraint struct {
-	raw    string
-	source string
-	value  *semver.Constraints
+	raw     string
+	source  string
+	value   *semver.Constraints
+	channel string
 }
 
 type solveState struct {
@@ -96,7 +97,7 @@ func resolveEntries(currentRevision uint64, entries []Entry, request pluginv1.Ar
 		if parseErr != nil {
 			return pluginv1.ArtifactLock{}, resolutionError("REQUEST_INVALID", fmt.Sprintf("根依赖 %s 版本约束无效: %v", root.PluginID, parseErr))
 		}
-		state.constraints[root.PluginID] = append(state.constraints[root.PluginID], requirementConstraint{raw: root.Constraint, source: "root", value: constraint})
+		state.constraints[root.PluginID] = append(state.constraints[root.PluginID], requirementConstraint{raw: root.Constraint, source: "root", value: constraint, channel: root.Channel})
 	}
 	solved, err := solve(candidates, state)
 	if err != nil {
@@ -183,6 +184,14 @@ func validateResolveRequest(current uint64, request pluginv1.ArtifactResolveRequ
 	for _, root := range request.Roots {
 		if !capabilityPattern.MatchString(root.PluginID) || strings.TrimSpace(root.Constraint) == "" {
 			return 0, nil, nil, nil, nil, nil, resolutionError("REQUEST_INVALID", "roots 包含无效插件 ID 或空约束")
+		}
+		if root.Channel != "" {
+			if !channelPattern.MatchString(root.Channel) {
+				return 0, nil, nil, nil, nil, nil, resolutionError("REQUEST_INVALID", "roots 包含无效 channel")
+			}
+			if _, allowed := channels[root.Channel]; !allowed {
+				return 0, nil, nil, nil, nil, nil, resolutionError("REQUEST_INVALID", "roots 的精确 channel 不在 allowedChannels 中")
+			}
 		}
 		if _, duplicate := seenRoots[root.PluginID]; duplicate {
 			return 0, nil, nil, nil, nil, nil, resolutionError("REQUEST_INVALID", "roots 不得重复插件 ID")
@@ -303,7 +312,7 @@ func constraintsMatch(entry Entry, constraints []requirementConstraint) bool {
 		return false
 	}
 	for _, constraint := range constraints {
-		if !constraint.value.Check(version) {
+		if !constraint.value.Check(version) || (constraint.channel != "" && entry.Ref.Channel != constraint.channel) {
 			return false
 		}
 	}
@@ -313,7 +322,11 @@ func constraintsMatch(entry Entry, constraints []requirementConstraint) bool {
 func constraintSummary(values []requirementConstraint) string {
 	parts := make([]string, 0, len(values))
 	for _, value := range values {
-		parts = append(parts, fmt.Sprintf("%s (来自 %s)", value.raw, value.source))
+		description := value.raw
+		if value.channel != "" {
+			description += " @" + value.channel
+		}
+		parts = append(parts, fmt.Sprintf("%s (来自 %s)", description, value.source))
 	}
 	return strings.Join(parts, ", ")
 }

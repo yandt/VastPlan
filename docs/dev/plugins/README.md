@@ -30,6 +30,7 @@
 - [cn.vastplan.platform.artifacts.storage.file](cn.vastplan.platform.artifacts.storage.file.md) —— 本地文件制品 volume 供给 Provider
 - [cn.vastplan.platform.integration.api-exposure](cn.vastplan.platform.integration.api-exposure.md) —— API Contract、稳定 Route Key、Gateway Catalog 与独立数据面租约治理
 - [cn.vastplan.platform.infrastructure.deployment-manager](cn.vastplan.platform.infrastructure.deployment-manager.md) —— 节点计划、首次引导审批与可信执行桥
+- [cn.vastplan.platform.infrastructure.composition-planner](cn.vastplan.platform.infrastructure.composition-planner.md) —— Application Intent、依赖闭包、Provider Binding 与可解释方案
 - [cn.vastplan.platform.configuration.portal-composer](cn.vastplan.platform.configuration.portal-composer.md) —— Portal 分域治理、不可变 Activation 与前端制品引用保护
 - [cn.vastplan.platform.security.authorization-policy](cn.vastplan.platform.security.authorization-policy.md) —— 在线 Role/Binding、撤权与签名 Policy Snapshot 真相源
 - [cn.vastplan.platform.configuration.role-management](cn.vastplan.platform.configuration.role-management.md) —— 权限目录、角色、主体绑定与审计 Workbench

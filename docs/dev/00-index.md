@@ -243,6 +243,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [Native Authorization Engine](plugins/cn.vastplan.foundation.security.authorization-engine.native.md) —— 默认 Go Engine Provider 与有界 Decision Proof
 - [Database Runtime 基础插件](plugins/cn.vastplan.foundation.data.relational.runtime.md) —— 关系数据库 wire 契约、Provider SPI、错误分类与可信数据面边界
 - [节点部署管理服务](plugins/cn.vastplan.platform.infrastructure.deployment-manager.md) —— 节点引导、在线服务组合、异人审批与可信发布
+- [应用组合规划器](plugins/cn.vastplan.platform.infrastructure.composition-planner.md) —— Application Intent、Feature、依赖闭包、配置计划与 Provider Binding
 - [插件配置协调器](plugins/cn.vastplan.platform.configuration.plugin-settings.md) —— 活动可信配置目录、候选 CAS 与分路径生效协调
 - [Portal Composer](plugins/cn.vastplan.platform.configuration.portal-composer.md) —— Portal 分域治理、不可变 Activation、Frontend Test Release 与引用保护
 - [全局设置基础插件](plugins/cn.vastplan.platform.configuration.global-settings.md) —— 租户隔离设置、版本前置条件、变更游标与 Shared State CAS

@@ -55,6 +55,24 @@ func TestResolverBacktracksOnRootConflict(t *testing.T) {
 	}
 }
 
+func TestResolverPinsAnExplicitRootChannel(t *testing.T) {
+	stable := resolverEntry("cn.example.app", "1.0.0", 1, nil)
+	testing := resolverEntry("cn.example.app", "1.0.0", 2, nil)
+	testing.Ref.Channel = "testing"
+	request := resolverRequest(pluginv1.ArtifactRequirement{PluginID: "cn.example.app", Constraint: "=1.0.0", Channel: "testing"})
+	request.AllowedChannels = []string{"stable", "testing"}
+	lock, err := resolveEntries(2, []Entry{stable, testing}, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Packages[0].Ref.Channel != "testing" || lock.Roots[0].Channel != "testing" {
+		t.Fatalf("explicit root channel must be preserved in selection and lock: %#v", lock)
+	}
+	request.AllowedChannels = []string{"stable"}
+	_, err = resolveEntries(2, []Entry{stable, testing}, request)
+	assertResolutionCode(t, err, "REQUEST_INVALID")
+}
+
 func TestResolverRejectsCyclesAndMissingStrongCapabilities(t *testing.T) {
 	cyclic := []Entry{
 		resolverEntry("cn.example.a", "1.0.0", 1, map[string]string{"cn.example.b": "^1.0"}),

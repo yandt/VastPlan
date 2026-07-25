@@ -1,6 +1,6 @@
 export interface CompositionRef { id: string; revision: number; digest: string; }
 export interface ArtifactRef { pluginId: string; version: string; channel: string; }
-export interface ArtifactRequirement { pluginId: string; constraint: string; }
+export interface ArtifactRequirement { pluginId: string; constraint: string; channel?: string; }
 
 export interface ResourceList { cpu_millis?: number; memory_bytes?: number; gpu?: number; }
 export interface ResourceRequirements { requests?: ResourceList; }
@@ -40,6 +40,34 @@ export interface BackendApplicationIntent {
   target: { kernel: "backend" };
   metadata: { name: string; tenant?: string };
   services: BackendServiceIntent[];
+}
+
+// ManagedCredentialRef is deliberately material-free. Trusted hosts may pass
+// these references to the Planner, but callers must never embed credentials in
+// the application intent itself.
+export interface ManagedCredentialRef {
+  handle: string;
+  scope: string;
+  owner: string;
+  purpose: string;
+  version: number;
+  name?: string;
+}
+export interface PlanningCredentialBinding {
+  unitId: string;
+  pluginId: string;
+  fieldId: string;
+  ref: ManagedCredentialRef;
+}
+export interface PlanningConfigurationSnapshot {
+  version: number;
+  bindings: PlanningCredentialBinding[];
+  digest: string;
+}
+export interface BackendPlanningRequest {
+  intent: BackendApplicationIntent;
+  platformProfile: unknown;
+  configurationSnapshot?: PlanningConfigurationSnapshot;
 }
 
 export interface ArtifactLockPackage {
@@ -107,7 +135,7 @@ export interface BackendResolutionReport {
   version: 1;
   intent: CompositionRef;
   platformProfile: CompositionRef;
-  planner: { ref: ArtifactRef; capability: "platform.composition.plan" };
+  planner: { ref: ArtifactRef; capability: "platform.composition.plan"; configurationDigest: string };
   status: ResolutionStatus;
   applicationComposition?: unknown;
   applicationCompositionDigest?: string;

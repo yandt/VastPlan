@@ -1,7 +1,7 @@
 # 平台 Workload 访问策略
 
 插件 ID：`cn.vastplan.foundation.security.platform-admin-access-policy`
-当前制品版本：`0.30.0`
+当前制品版本：`0.30.1`
 
 0.25.0 在既有 `kernel.config.credential-ref`、Application/Profile 配置激活、凭证 delegated 和 Service Hot 窄授权上，增加独立资源控制器访问：只有精确 plugin-settings、同租户且目标为 `configuration.resource-controller + configuration.resource.* + list/get/prepare/commit/abort/status` 时放行。业务插件、用户、错误扩展点或伪造 capability 均不能调用目标插件的内部配置事务端口。
 
@@ -14,6 +14,8 @@
 0.29.0 将 Credentials 收窄为 `get/list + fenced.create/update/delete`：普通无 fence mutation 不再授权。当前 Unit Leader evidence 由可信 Host 校验，插件不可见 epoch/token；其他 Shared State 插件继续使用原有 CAS grant，不因本次变更获得 delete/list。
 
 0.30.0 允许 API Exposure 控制面向 Repository 的独立评估报告数据面安装短时单次 Ticket；普通制品 Ticket 与评估报告 Ticket 仍由 Repository 按资源路径分别收窄。
+
+0.30.1 允许精确 Composition Planner 读取 Repository 的 `resolve/describePlanning` 元数据，并只允许精确 Deployment Manager 调用 `platform.composition.plan/plan`；普通平台插件、业务插件和用户不能继承该规划权限。
 
 该 foundation 插件以 `per-kernel + local-ephemeral + local + direct` 运行，只治理系统与插件 workload 的精确回调。用户管理操作已全部交给签名 Permission Catalog 与优先级更高的 `authorization-enforcer`；本插件即使看到 `platform.admin`、精确 permission code 或 `is_admin` 也不会放行用户。
 

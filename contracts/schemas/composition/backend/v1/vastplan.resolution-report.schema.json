@@ -44,10 +44,11 @@
       }
     },
     "planner": {
-      "type": "object", "additionalProperties": false, "required": ["ref", "capability"],
+      "type": "object", "additionalProperties": false, "required": ["ref", "capability", "configurationDigest"],
       "properties": {
         "ref": { "$ref": "#/$defs/artifactRef" },
-        "capability": { "const": "platform.composition.plan" }
+        "capability": { "const": "platform.composition.plan" },
+        "configurationDigest": { "$ref": "#/$defs/sha256" }
       }
     },
     "resolvedFeature": {

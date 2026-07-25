@@ -67,7 +67,7 @@ func TestResolutionReportBindsPlanAndRejectsInvalidGraph(t *testing.T) {
 		PlatformProfile: compositioncommonv1.Ref{ID: "backend-default", Revision: 2, Digest: strings.Repeat("b", 64)},
 		Planner: PlannerIdentity{Ref: pluginv1.ArtifactRef{
 			PluginID: "cn.vastplan.platform.infrastructure.composition-planner", Version: "0.1.0", Channel: "stable",
-		}, Capability: "platform.composition.plan"},
+		}, Capability: "platform.composition.plan", ConfigurationDigest: strings.Repeat("f", 64)},
 		Status:                 ResolutionResolved,
 		ApplicationComposition: &composition,
 		ArtifactLock: &pluginv1.ArtifactLock{
@@ -132,12 +132,6 @@ func TestResolutionReportBindsPlanAndRejectsInvalidGraph(t *testing.T) {
 		t.Fatal("Resolution Report 必须拒绝 unit 中不存在的配置插件")
 	}
 
-	extraNode := cloneResolutionReport(t, finalized)
-	extraNode.ServiceGraph.Nodes = append(extraNode.ServiceGraph.Nodes, ServiceDependencyNode{UnitID: "extra", ServiceClass: "application.backend"})
-	extraNode.PlanDigest = extraNode.ComputedPlanDigest()
-	if _, err := ValidateResolutionReport(extraNode); err == nil {
-		t.Fatal("Resolution Report service graph 不得包含 Composition 之外的 unit")
-	}
 }
 
 func cloneResolutionReport(t *testing.T, source ResolutionReport) ResolutionReport {
