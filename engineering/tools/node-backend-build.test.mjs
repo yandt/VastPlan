@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -18,6 +18,18 @@ test("builds every node-worker backend as a self-contained ESM module", async ()
       assert.match(bundle, /__vastplanCreateRequire/);
       assert.doesNotMatch(bundle, /from\s*["']@vastplan\//);
     }
+  } finally {
+    await rm(output, { recursive: true, force: true });
+  }
+});
+
+test("builds one manifest-selected node-worker without a source allow-list", async () => {
+  const output = await mkdtemp(join(tmpdir(), "vastplan-node-backend-one-"));
+  const selected = "cn.vastplan.foundation.backend.runtime.node-worker-hello";
+  try {
+    execFileSync(process.execPath, ["engineering/tools/build-node-backend-plugins.mjs", "--out-dir", output, "--plugin", selected], { cwd: resolve("."), stdio: "pipe" });
+    await access(join(output, selected, "backend/main.mjs"));
+    await assert.rejects(access(join(output, "cn.vastplan.platform.security.authentication.delivery.webhook", "backend/main.mjs")));
   } finally {
     await rm(output, { recursive: true, force: true });
   }

@@ -29,6 +29,7 @@ var identities = map[string]identity{
 	"pipeline-quota-1.1.0":      {"cn.vastplan.fixture.composition.quota", "1.1.0", "fixture.composition.quota"},
 	"pipeline-common-1.5.0":     {"cn.vastplan.fixture.composition.common", "1.5.0", "fixture.composition.common"},
 	"pipeline-common-2.1.0":     {"cn.vastplan.fixture.composition.common", "2.1.0", "fixture.composition.common"},
+	"pipeline-common-workspace": {"cn.vastplan.fixture.composition.common", "1.5.0", "fixture.composition.common"},
 	"pipeline-conflict-1.0.0":   {"cn.vastplan.fixture.composition.conflict", "1.0.0", "fixture.composition.conflict"},
 	"pipeline-provider-a-1.0.0": {"cn.vastplan.fixture.composition.provider-a", "1.0.0", "fixture.settings"},
 	"pipeline-provider-b-1.0.0": {"cn.vastplan.fixture.composition.provider-b", "1.0.0", "fixture.settings"},

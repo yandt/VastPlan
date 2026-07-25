@@ -33,9 +33,11 @@ import (
 const maximumPackageBytes = int64(256 << 20)
 
 var developmentPrerelease = regexp.MustCompile(`^dev\.[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)+$`)
+var workspacePrerelease = regexp.MustCompile(`^dev\.workspace\.[0-9a-f]{12,64}$`)
 
 type options struct {
 	PackageFile     string
+	Channel         string
 	StateRoot       string
 	StatusURL       string
 	BackendTarget   string
@@ -66,6 +68,7 @@ type developmentStatus struct {
 func main() {
 	var opts options
 	flag.StringVar(&opts.PackageFile, "package", "", "已构建且清单使用 dev.* 预发布版本的插件 .tar.gz")
+	flag.StringVar(&opts.Channel, "channel", "testing", "发布通道：testing 或仅限 local-test 的 workspace")
 	flag.StringVar(&opts.StateRoot, "state-root", ".vastplan/dev-platform", "本地平台开发状态根")
 	flag.StringVar(&opts.StatusURL, "status-url", "http://127.0.0.1:18080/__vastplan_dev/status", "本地平台状态端点（仅允许回环地址）")
 	flag.StringVar(&opts.BackendTarget, "backend-target", "", "可选：发布到 Backend 测试目标，格式 deployment/unit")
@@ -87,6 +90,12 @@ func publish(ctx context.Context, opts options) error {
 	}
 	if opts.Timeout <= 0 || opts.Timeout > 10*time.Minute {
 		return errors.New("-timeout 必须在 0 到 10 分钟之间")
+	}
+	if opts.Channel == "" {
+		opts.Channel = "testing"
+	}
+	if opts.Channel != "testing" && opts.Channel != "workspace" {
+		return errors.New("-channel 只允许 testing 或 workspace")
 	}
 	stateRoot, err := filepath.Abs(opts.StateRoot)
 	if err != nil {
@@ -123,7 +132,7 @@ func publish(ctx context.Context, opts options) error {
 		return errors.New("状态端点与受管 Repository Profile 身份不一致")
 	}
 
-	packageBytes, manifest, artifact, err := loadTestingArtifact(opts.PackageFile)
+	packageBytes, manifest, artifact, err := loadTestingArtifact(opts.PackageFile, opts.Channel)
 	if err != nil {
 		return err
 	}
@@ -145,6 +154,9 @@ func publish(ctx context.Context, opts options) error {
 		}
 		printReceipt(artifact, repositoryProfile.Endpoint, receipt.Revision, wasExisting)
 		return submitRequestedTestReleases(ctx, status, opts, receipt)
+	}
+	if opts.Channel == "workspace" {
+		return errors.New("workspace 制品只能发布到 local-test 仓库")
 	}
 	if repositoryProfile.Protocol != artifactrepositoryv1.ProtocolRemote {
 		return errors.New("本地发布器没有精确匹配 Repository Profile 的 Adapter")
@@ -289,8 +301,8 @@ func printReceipt(artifact pluginservice.Artifact, repositoryEndpoint string, re
 	if existing {
 		status = "测试制品已存在，按原 revision 幂等返回"
 	}
-	fmt.Printf("%s %s@%s/testing\nrepository: %s\nrevision: %d\nsha256: %s\n",
-		status, artifact.PluginID, artifact.Version, repositoryEndpoint, revision, artifact.SHA256)
+	fmt.Printf("%s %s@%s/%s\nrepository: %s\nrevision: %d\nsha256: %s\n",
+		status, artifact.PluginID, artifact.Version, artifact.Channel, repositoryEndpoint, revision, artifact.SHA256)
 }
 
 func readStatus(ctx context.Context, client *http.Client, endpoint string) (developmentStatus, error) {
@@ -314,7 +326,7 @@ func readStatus(ctx context.Context, client *http.Client, endpoint string) (deve
 	return status, nil
 }
 
-func loadTestingArtifact(filename string) ([]byte, pluginv1.Manifest, pluginservice.Artifact, error) {
+func loadTestingArtifact(filename, channel string) ([]byte, pluginv1.Manifest, pluginservice.Artifact, error) {
 	if err := requireRegularFile(filename, false); err != nil {
 		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, err
 	}
@@ -329,7 +341,7 @@ func loadTestingArtifact(filename string) ([]byte, pluginv1.Manifest, pluginserv
 	if err != nil {
 		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, err
 	}
-	artifact, err := pluginservice.Describe("testing", raw)
+	artifact, err := pluginservice.Describe(channel, raw)
 	if err != nil {
 		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, err
 	}
@@ -338,8 +350,14 @@ func loadTestingArtifact(filename string) ([]byte, pluginv1.Manifest, pluginserv
 		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, err
 	}
 	version, err := semver.StrictNewVersion(manifest.Version)
-	if err != nil || !developmentPrerelease.MatchString(version.Prerelease()) {
-		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, errors.New("测试制品版本必须是唯一的 dev.* SemVer 预发布版本，例如 0.4.0-dev.20260720.3.a81c33f")
+	if err != nil {
+		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, errors.New("测试制品版本必须是严格 SemVer")
+	}
+	if channel == "testing" && (!developmentPrerelease.MatchString(version.Prerelease()) || workspacePrerelease.MatchString(version.Prerelease())) {
+		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, errors.New("testing 制品版本必须是唯一的 dev.* SemVer 预发布版本，例如 0.4.0-dev.20260720.3.a81c33f")
+	}
+	if channel == "workspace" && !workspacePrerelease.MatchString(version.Prerelease()) {
+		return nil, pluginv1.Manifest{}, pluginservice.Artifact{}, errors.New("workspace 制品版本必须是 dev.workspace.<source-digest>")
 	}
 	return raw, manifest, artifact, nil
 }

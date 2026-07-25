@@ -57,7 +57,11 @@ func (h *Host) Handshake(ctx context.Context, in *pluginhostv1.Hello) (*pluginho
 		return fail(fmt.Errorf("插件 %s@%s 与内核不兼容: %w", in.PluginId, in.PluginVersion, err))
 	}
 
-	sess := newSession(newSessionID(), in.PluginId, in.PluginVersion)
+	trustedVersion := in.PluginVersion
+	if policy.Version != "" {
+		trustedVersion = policy.Version
+	}
+	sess := newSession(newSessionID(), in.PluginId, trustedVersion)
 	sess.policy = policy
 	for _, feature := range negotiatedFeatures {
 		sess.features[feature] = true
@@ -67,7 +71,7 @@ func (h *Host) Handshake(ctx context.Context, in *pluginhostv1.Hello) (*pluginho
 	h.mu.Unlock()
 
 	h.Logf("协议版本已协商 v%d，插件=%s@%s，session=%s",
-		negotiated, in.PluginId, in.PluginVersion, sess.id)
+		negotiated, in.PluginId, trustedVersion, sess.id)
 	h.Logf("engines 校验通过：内核 %s@%s 满足插件要求 %q",
 		h.KernelName, h.KernelVersion, in.Engines[h.KernelName])
 
@@ -99,8 +103,10 @@ func (h *Host) claimLaunch(token, pluginID, version string) (LaunchPolicy, error
 	if attempt.policy.PluginID != "" && attempt.policy.PluginID != pluginID {
 		return LaunchPolicy{}, fmt.Errorf("插件身份与验签清单不一致: 期望 %s，实际 %s", attempt.policy.PluginID, pluginID)
 	}
-	if attempt.policy.Version != "" && attempt.policy.Version != version {
-		return LaunchPolicy{}, fmt.Errorf("插件版本与验签清单不一致: 期望 %s，实际 %s", attempt.policy.Version, version)
+	if attempt.policy.Version != "" {
+		if _, err := protocol.ResolveHandshakeVersion(version, attempt.policy.Version, attempt.policy.ArtifactChannel); err != nil {
+			return LaunchPolicy{}, fmt.Errorf("插件版本与验签清单不一致: 期望 %s，实际 %s: %w", attempt.policy.Version, version, err)
+		}
 	}
 	attempt.claimed = true
 	return cloneLaunchPolicy(attempt.policy), nil

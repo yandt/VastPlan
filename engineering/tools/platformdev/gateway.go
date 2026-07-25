@@ -152,6 +152,7 @@ func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 			},
 		},
 	}
+	status["backendPluginDevelopment"] = backendPluginDevelopmentStatus(r.options.stateRoot)
 	if r.hmr != nil {
 		generation, lastError := r.hmr.status()
 		status["hotGeneration"], status["hotError"] = generation, lastError

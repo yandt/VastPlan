@@ -71,3 +71,41 @@ func TestNegotiateFeatures(t *testing.T) {
 		t.Fatalf("特性查询错误: %v", got)
 	}
 }
+
+func TestResolveHandshakeVersion(t *testing.T) {
+	for _, test := range []struct {
+		name, declared, projected, channel, want string
+		wantErr                                  bool
+	}{
+		{name: "legacy declaration", declared: "1.2.3", want: "1.2.3"},
+		{name: "stable exact projection", declared: "1.2.3", projected: "1.2.3", channel: "stable", want: "1.2.3"},
+		{name: "workspace derived", declared: "1.2.3", projected: "1.2.3-dev.workspace.0123456789abcdef", channel: "workspace", want: "1.2.3-dev.workspace.0123456789abcdef"},
+		{name: "stable drift", declared: "1.2.3", projected: "1.2.4", channel: "stable", wantErr: true},
+		{name: "workspace base drift", declared: "1.2.3", projected: "1.2.4-dev.workspace.0123456789abcdef", channel: "workspace", wantErr: true},
+		{name: "workspace arbitrary prerelease", declared: "1.2.3", projected: "1.2.3-dev.manual.1", channel: "workspace", wantErr: true},
+		{name: "partial projection", declared: "1.2.3", channel: "workspace", wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := ResolveHandshakeVersion(test.declared, test.projected, test.channel)
+			if test.wantErr && err == nil {
+				t.Fatalf("expected error, got %q", got)
+			}
+			if !test.wantErr && (err != nil || got != test.want) {
+				t.Fatalf("got %q, %v; want %q", got, err, test.want)
+			}
+		})
+	}
+}
+
+func TestRuntimeDeclaredVersion(t *testing.T) {
+	got, err := RuntimeDeclaredVersion("1.2.3-dev.workspace.0123456789abcdef", "workspace")
+	if err != nil || got != "1.2.3" {
+		t.Fatalf("workspace source version = %q, %v", got, err)
+	}
+	if got, err := RuntimeDeclaredVersion("1.2.3-dev.7", "testing"); err != nil || got != "1.2.3-dev.7" {
+		t.Fatalf("testing version = %q, %v", got, err)
+	}
+	if _, err := RuntimeDeclaredVersion("1.2.3", "workspace"); err == nil {
+		t.Fatal("workspace channel must use derived prerelease")
+	}
+}

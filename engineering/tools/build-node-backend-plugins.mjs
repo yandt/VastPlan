@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 
 const outputRoot = option("--out-dir");
 if (outputRoot === undefined) throw new Error("必须提供 --out-dir");
+const selectedPlugin = stringOption("--plugin");
 
 const pluginsRoot = resolve("extensions/plugins");
 const directories = (await readdir(pluginsRoot, { withFileTypes: true }))
@@ -11,6 +12,7 @@ const directories = (await readdir(pluginsRoot, { withFileTypes: true }))
   .sort((left, right) => left.name.localeCompare(right.name));
 
 for (const directory of directories) {
+  if (selectedPlugin !== undefined && directory.name !== selectedPlugin) continue;
   const pluginRoot = resolve(pluginsRoot, directory.name);
   const manifest = JSON.parse(await readFile(resolve(pluginRoot, "vastplan.plugin.json"), "utf8"));
   if (manifest.execution?.backend?.driver !== "node-worker") continue;
@@ -40,10 +42,24 @@ for (const directory of directories) {
   await writeFile(resolve(dirname(outfile), "vastplan.node-metafile.json"), `${JSON.stringify(result.metafile, null, 2)}\n`);
 }
 
+if (selectedPlugin !== undefined && !directories.some((entry) => entry.name === selectedPlugin)) {
+  throw new Error(`插件目录不存在: ${selectedPlugin}`);
+}
+
 function option(name) {
   const index = process.argv.indexOf(name);
   if (index === -1) return undefined;
   const value = process.argv[index + 1];
   if (value === undefined || value.startsWith("--")) throw new Error(`${name} 缺少值`);
   return resolve(value);
+}
+
+function stringOption(name) {
+  const index = process.argv.indexOf(name);
+  if (index === -1) return undefined;
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith("--") || !/^[a-z0-9][a-z0-9._-]{0,159}$/.test(value)) {
+    throw new Error(`${name} 缺少合法插件 ID`);
+  }
+  return value;
 }

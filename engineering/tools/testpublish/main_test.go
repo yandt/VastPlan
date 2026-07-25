@@ -251,8 +251,15 @@ func TestPublishUsesOnlyManagedLocalTestingIdentity(t *testing.T) {
 }
 
 func TestTestingPublisherRejectsStableAndNonLoopbackTargets(t *testing.T) {
-	if _, _, _, err := loadTestingArtifact(writeTestPackage(t, "0.4.0")); err == nil || !strings.Contains(err.Error(), "dev.*") {
+	if _, _, _, err := loadTestingArtifact(writeTestPackage(t, "0.4.0"), "testing"); err == nil || !strings.Contains(err.Error(), "dev.*") {
 		t.Fatalf("稳定版本不得通过测试上传器: %v", err)
+	}
+	workspace := writeTestPackage(t, "0.4.0-dev.workspace.0123456789abcdef")
+	if _, _, _, err := loadTestingArtifact(workspace, "testing"); err == nil {
+		t.Fatal("workspace 版本不得伪装成 testing 通道制品")
+	}
+	if _, _, artifact, err := loadTestingArtifact(workspace, "workspace"); err != nil || artifact.Channel != "workspace" {
+		t.Fatalf("合法 workspace 版本应进入 local-test 发布器: artifact=%+v err=%v", artifact, err)
 	}
 	for _, raw := range []string{"https://example.com", "http://127.0.0.1:18443"} {
 		if _, err := loopbackURL(raw, true); err == nil {

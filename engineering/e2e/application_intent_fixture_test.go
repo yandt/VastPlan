@@ -91,6 +91,10 @@ func (r *p5FixtureRepository) publishAuditUpgrade(t *testing.T) pluginv1.Artifac
 }
 
 func (r *p5FixtureRepository) publish(t *testing.T, spec p5ManifestSpec) pluginv1.ArtifactRef {
+	return r.publishChannel(t, spec, p5Channel)
+}
+
+func (r *p5FixtureRepository) publishChannel(t *testing.T, spec p5ManifestSpec, channel string) pluginv1.ArtifactRef {
 	t.Helper()
 	manifestRaw := p5Manifest(t, spec)
 	directory := t.TempDir()
@@ -108,7 +112,7 @@ func (r *p5FixtureRepository) publish(t *testing.T, spec p5ManifestSpec) pluginv
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := pluginservice.Describe(p5Channel, packageBytes)
+	artifact, err := pluginservice.Describe(channel, packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}

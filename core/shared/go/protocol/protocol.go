@@ -6,6 +6,7 @@ package protocol
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/Masterminds/semver/v3"
 )
@@ -31,6 +32,54 @@ const (
 	// cannot choose or override the value.
 	RuntimeAudienceEnvKey = "VASTPLAN_RUNTIME_AUDIENCE"
 )
+
+var workspacePrerelease = regexp.MustCompile(`^dev\.workspace\.[0-9a-f]{12,64}$`)
+
+// RuntimeDeclaredVersion returns the version that executable code is expected
+// to declare for a verified artifact. Workspace packages derive an immutable
+// prerelease from a stable source version without rewriting source constants.
+func RuntimeDeclaredVersion(artifactVersion, channel string) (string, error) {
+	version, err := semver.StrictNewVersion(artifactVersion)
+	if err != nil {
+		return "", fmt.Errorf("制品版本无效: %w", err)
+	}
+	if channel != "workspace" {
+		return artifactVersion, nil
+	}
+	if version.Metadata() != "" || !workspacePrerelease.MatchString(version.Prerelease()) {
+		return "", fmt.Errorf("workspace 制品版本必须使用 dev.workspace.<source-digest> 预发布格式")
+	}
+	return fmt.Sprintf("%d.%d.%d", version.Major(), version.Minor(), version.Patch()), nil
+}
+
+// ResolveHandshakeVersion preserves checked-in version mismatch detection for
+// every normal artifact. Only a host-verified workspace artifact may project a
+// derived prerelease with the exact same major/minor/patch base.
+func ResolveHandshakeVersion(declared, projected, channel string) (string, error) {
+	if _, err := semver.StrictNewVersion(declared); err != nil {
+		return "", fmt.Errorf("插件声明版本无效: %w", err)
+	}
+	if projected == "" {
+		if channel != "" {
+			return "", fmt.Errorf("宿主制品版本投影不完整")
+		}
+		return declared, nil
+	}
+	if channel != "workspace" {
+		if projected == declared {
+			return declared, nil
+		}
+		return "", fmt.Errorf("非 workspace 制品版本投影与插件声明不一致")
+	}
+	expected, err := RuntimeDeclaredVersion(projected, channel)
+	if err != nil {
+		return "", err
+	}
+	if declared != expected {
+		return "", fmt.Errorf("workspace 制品版本不能改变源版本基线")
+	}
+	return projected, nil
+}
 
 // SessionMetadataKey 插件在 Channel 流的 gRPC metadata 中携带会话票据的键。
 // 必须小写：gRPC metadata 键大小写不敏感但规范化为小写。

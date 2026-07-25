@@ -66,6 +66,7 @@ type LaunchPolicy struct {
 	PluginID          string
 	Publisher         string
 	Version           string
+	ArtifactChannel   string
 	ArtifactSHA256    string
 	NodeID            string
 	RuntimeInstanceID string

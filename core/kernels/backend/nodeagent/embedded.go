@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"cdsoft.com.cn/VastPlan/core/shared/go/protocol"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 
@@ -122,6 +123,10 @@ func (d DynamicGoExecutionDriver) StartManaged(ctx context.Context, host *protoc
 	if err != nil {
 		return nil, err
 	}
+	runtimeVersion, err := protocol.RuntimeDeclaredVersion(plugin.Version, plugin.Channel)
+	if err != nil {
+		return nil, fmt.Errorf("解析 dynamic-go 运行代码版本: %w", err)
+	}
 	mode := hosting.modeFor(plugin)
 	if err := validateRuntimeHostingMode(mode); err != nil {
 		return nil, err
@@ -142,7 +147,7 @@ func (d DynamicGoExecutionDriver) StartManaged(ctx context.Context, host *protoc
 			environment = append(append([]string(nil), environment...),
 				"VASTPLAN_PLUGIN_ROOT="+plugin.Root, "VASTPLAN_PLUGIN_DRIVER=dynamic-go")
 			return lease.StartWithMetadata(ctx, plugin.DynamicGoPath, nil, environment, map[string]string{
-				"pluginId": plugin.ID, "version": plugin.Version,
+				"pluginId": plugin.ID, "version": runtimeVersion,
 				"fingerprint": plugin.Execution.DynamicGo.Fingerprint,
 				"engines":     string(engines),
 			})

@@ -147,7 +147,7 @@ func (transaction *applyTransaction) startPlugin(ctx context.Context, plugin Ins
 		return nil, fmt.Errorf("生成插件 %s 运行实例身份: %w", plugin.ID, err)
 	}
 	instance, err := transaction.runtime.startPlugin(ctx, transaction.candidate, plugin, protocolbus.LaunchPolicy{
-		PluginID: plugin.ID, Publisher: plugin.Publisher, Version: plugin.Version,
+		PluginID: plugin.ID, Publisher: plugin.Publisher, Version: plugin.Version, ArtifactChannel: plugin.Channel,
 		ArtifactSHA256: plugin.SHA256, NodeID: transaction.runtime.Identity, RuntimeInstanceID: runtimeInstanceID,
 		Contributions: plugin.Contract.Contributions, KernelServices: plugin.Contract.KernelServices,
 		ContextAccess: plugin.Contract.ContextAccess, ContextCeiling: transaction.runtime.ContextPolicy.Ceiling(plugin.Publisher).Strings(),

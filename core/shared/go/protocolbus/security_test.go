@@ -56,6 +56,41 @@ func TestHandshakeRequiresAndConsumesPendingLaunchToken(t *testing.T) {
 	}
 }
 
+func TestHandshakeAcceptsOnlyTrustedWorkspaceVersionProjection(t *testing.T) {
+	const candidate = "1.2.3-dev.workspace.0123456789abcdef"
+	newAttempt := func(sourceVersion string) (*Host, *pluginhostv1.Hello) {
+		host := NewHost("backend", "0.1.0", registry.New(), nil)
+		host.launches["workspace"] = &launchAttempt{
+			result: make(chan launchResult, 1),
+			policy: LaunchPolicy{
+				PluginID: "cn.vastplan.example.workspace", Version: candidate, ArtifactChannel: "workspace",
+			},
+		}
+		return host, &pluginhostv1.Hello{
+			Magic: protocol.MagicCookie, ProtoVersions: []int32{1},
+			PluginId: "cn.vastplan.example.workspace", PluginVersion: sourceVersion,
+			Engines: map[string]string{"backend": "^0.1"}, LaunchToken: "workspace",
+		}
+	}
+
+	host, hello := newAttempt("1.2.3")
+	if _, err := host.Handshake(context.Background(), hello); err != nil {
+		t.Fatalf("workspace 候选应允许插件报告相同基线源版本: %v", err)
+	}
+	var sessionVersion string
+	for _, session := range host.sessions {
+		sessionVersion = session.pluginVersion
+	}
+	if sessionVersion != candidate {
+		t.Fatalf("会话必须使用验签后的候选版本，got %q", sessionVersion)
+	}
+
+	host, hello = newAttempt("1.2.4")
+	if _, err := host.Handshake(context.Background(), hello); err == nil {
+		t.Fatal("workspace 候选不得改变插件源码版本基线")
+	}
+}
+
 func TestDeclaredContributionsMustMatchSignedManifest(t *testing.T) {
 	expected := []pluginv1.RuntimeContribution{{
 		ExtensionPoint: "permission.checker", ID: "safe.policy", Priority: 100,

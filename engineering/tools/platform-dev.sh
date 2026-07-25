@@ -63,6 +63,7 @@ VastPlan 本地平台管理中心
   $0 logs [--follow] [--lines 行数]
   $0 doctor
   $0 publish-test <插件制品.tar.gz> [--backend-target deployment/unit] [--frontend-target portal-id] [--frontend-scope application-plugin|platform-profile-plugin]
+  $0 dev-plugin <插件ID或目录> --backend-target deployment/unit [--backend-binding id]
   $0 clean
   $0 help
 
@@ -75,6 +76,7 @@ VastPlan 本地平台管理中心
   logs       显示最近日志；加 --follow/-f 持续跟踪
   doctor     检查依赖、运行状态和固定端口
   publish-test 以 testing channel 签名并上传唯一 dev.* 预发布制品；可选提交 Backend Test Release
+  dev-plugin  监听一个 Backend 插件，增量构建 workspace 候选并通过 Test Release 热切换
   clean      平台停止后删除 .vastplan/dev-platform 运行数据
 
 up/restart 参数:
@@ -510,6 +512,24 @@ publish_test_artifact() {
     -package "$package_file" -state-root "$STATE_ROOT" -status-url "$STATUS_URL" "$@")
 }
 
+develop_backend_plugin() {
+  local selector="$1"
+  shift
+  local pid
+  if ! pid="$(running_pid)"; then
+    fail "平台管理中心尚未运行；请先执行 '$0 up' 或 '$0 bootstrap'"
+    return 1
+  fi
+  if ! curl --silent --fail "$STATUS_URL" >/dev/null 2>&1; then
+    fail "平台管理中心尚未就绪"
+    return 1
+  fi
+  ensure_state_dirs
+  info "启动 Backend Plugin Dev Controller；Ctrl+C 只停止监听，不停止平台"
+  (cd "$ROOT" && env GOCACHE="$GO_CACHE" go run ./engineering/tools/plugindev \
+    -root "$ROOT" -state-root "$STATE_ROOT" -status-url "$STATUS_URL" -plugin "$selector" "$@")
+}
+
 clean_state() {
   local owned
   owned="$(owned_runtime_pids | unique_pids || true)"
@@ -768,6 +788,12 @@ case "$COMMAND" in
   publish-test)
     [ "$#" -ge 1 ] || { fail "publish-test 需要一个插件 .tar.gz 文件"; exit 2; }
     publish_test_artifact "$@"
+    ;;
+  dev-plugin)
+    [ "$#" -ge 1 ] || { fail "dev-plugin 需要插件 ID 或目录"; exit 2; }
+    selector="$1"
+    shift
+    develop_backend_plugin "$selector" "$@"
     ;;
   clean)
     [ "$#" -eq 0 ] || { fail "clean 不接受参数"; exit 2; }
