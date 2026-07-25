@@ -29,7 +29,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.18.2"
+	PluginVersion = "0.19.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 1 << 20
@@ -113,7 +113,7 @@ func (s *Service) validateLoaded() error {
 			}
 		}
 		for _, revision := range state.Revisions {
-			if revision.ID == 0 || revision.Deployment == "" || revision.Composition.Metadata.Tenant != tenant || revision.Composition.Metadata.Name != revision.Deployment || revision.PreviewDigest == "" || !validServiceRevisionState(revision.Status) {
+			if validateServiceRevisionRecord(tenant, revision) != nil {
 				return fmt.Errorf("deployment-manager 状态包含无效服务组合 revision %d", revision.ID)
 			}
 			if revision.ConfigurationCandidateID != "" && !validConfigurationRequestHash(state.ConfigurationRequests[revision.ConfigurationCandidateID]) {
@@ -702,19 +702,21 @@ func (s *Service) Handler(ctx context.Context, host sdk.Host, call *contractv1.C
 
 func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte, operation string) (*contractv1.CallResult, []byte, error) {
 	var request struct {
-		ID                string                                            `json:"id"`
-		NodeID            string                                            `json:"nodeId"`
-		JobID             string                                            `json:"jobId"`
-		Plan              nodebootstrap.Plan                                `json:"plan"`
-		IfVersion         *int64                                            `json:"ifVersion,omitempty"`
-		RevisionID        uint64                                            `json:"revisionId"`
-		ReleaseID         uint64                                            `json:"releaseId"`
-		Composition       backendcompositionv1.ApplicationComposition       `json:"composition"`
-		Binding           platformadminapi.PutTestTargetBindingRequest      `json:"binding"`
-		Release           platformadminapi.CreateTestReleaseRequest         `json:"release"`
-		Activation        configurationactivation.CreateRequest             `json:"activation"`
-		ProfileActivation platformprofileactivation.CreateActivationRequest `json:"profileActivation"`
-		CandidateID       string                                            `json:"candidateId"`
+		ID                    string                                             `json:"id"`
+		NodeID                string                                             `json:"nodeId"`
+		JobID                 string                                             `json:"jobId"`
+		Plan                  nodebootstrap.Plan                                 `json:"plan"`
+		IfVersion             *int64                                             `json:"ifVersion,omitempty"`
+		RevisionID            uint64                                             `json:"revisionId"`
+		ReleaseID             uint64                                             `json:"releaseId"`
+		Composition           backendcompositionv1.ApplicationComposition        `json:"composition"`
+		Intent                backendcompositionv1.ApplicationIntent             `json:"intent"`
+		ConfigurationSnapshot backendcompositionv1.PlanningConfigurationSnapshot `json:"configurationSnapshot"`
+		Binding               platformadminapi.PutTestTargetBindingRequest       `json:"binding"`
+		Release               platformadminapi.CreateTestReleaseRequest          `json:"release"`
+		Activation            configurationactivation.CreateRequest              `json:"activation"`
+		ProfileActivation     platformprofileactivation.CreateActivationRequest  `json:"profileActivation"`
+		CandidateID           string                                             `json:"candidateId"`
 	}
 	decoder := json.NewDecoder(bytes.NewReader(payload))
 	decoder.DisallowUnknownFields()
@@ -776,10 +778,18 @@ func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contrac
 		out, err = s.CreateServiceDraft(ctx, host, call, request.Composition)
 	case "updateServiceDraft":
 		out, err = s.UpdateServiceDraft(ctx, host, call, request.RevisionID, request.Composition)
+	case "createIntentDraft":
+		out, err = s.CreateIntentDraft(ctx, host, call, request.Intent)
+	case "updateIntentDraft":
+		out, err = s.UpdateIntentDraft(ctx, host, call, request.RevisionID, request.Intent)
+	case "refreshIntentDraft":
+		out, err = s.RefreshIntentPlan(ctx, host, call, request.RevisionID)
+	case "bindIntentConfiguration":
+		out, err = s.BindIntentConfiguration(ctx, host, call, request.RevisionID, request.ConfigurationSnapshot)
 	case "submitServiceDraft":
 		out, err = s.SubmitServiceDraft(ctx, host, call, request.RevisionID)
 	case "approveServiceRevision":
-		out, err = s.ApproveServiceRevision(call, request.RevisionID)
+		out, err = s.ApproveServiceRevision(ctx, host, call, request.RevisionID)
 	case "publishServiceRevision":
 		out, err = s.PublishServiceRevision(ctx, host, call, request.RevisionID)
 	case "rollbackServiceRevision":
@@ -855,6 +865,10 @@ func errorCode(err error) string {
 		return "platform.deployment.separation_required"
 	case errors.Is(err, errBootstrapFailed):
 		return "platform.deployment.bootstrap_failed"
+	case errors.Is(err, errPlanStale):
+		return "platform.deployment.plan_stale"
+	case errors.Is(err, errPlanNotReady):
+		return "platform.deployment.plan_not_ready"
 	case errors.Is(err, errServiceState):
 		return "platform.deployment.service_state_conflict"
 	case errors.Is(err, errServicePublish):
@@ -911,6 +925,10 @@ func Descriptor() []byte {
 		,{"name":"listServiceRevisions","description":"列出服务组合修订","paramsSchema":{"type":"object","properties":{}}}
 		,{"name":"createServiceDraft","description":"创建仅含应用配置的服务草稿","paramsSchema":{"type":"object","properties":{"composition":{"type":"object"}},"required":["composition"]}}
 		,{"name":"updateServiceDraft","description":"更新服务组合草稿","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1},"composition":{"type":"object"}},"required":["revisionId","composition"]}}
+		,{"name":"createIntentDraft","description":"创建 Application Intent 规划草稿","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"intent":{"type":"object"}},"required":["intent"]}}
+		,{"name":"updateIntentDraft","description":"更新 Application Intent 并重建计划快照","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"revisionId":{"type":"integer","minimum":1},"intent":{"type":"object"}},"required":["revisionId","intent"]}}
+		,{"name":"refreshIntentDraft","description":"显式接受最新 Planner 结果并清除 stale","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
+		,{"name":"bindIntentConfiguration","description":"由可信配置协调器绑定 CredentialRef 快照","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"revisionId":{"type":"integer","minimum":1},"configurationSnapshot":{"type":"object"}},"required":["revisionId","configurationSnapshot"]}}
 		,{"name":"submitServiceDraft","description":"提交服务组合审批","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
 		,{"name":"approveServiceRevision","description":"批准服务组合修订","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
 		,{"name":"publishServiceRevision","description":"通过可信内核发布服务组合","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
@@ -938,7 +956,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
+	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "bindIntentConfiguration", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

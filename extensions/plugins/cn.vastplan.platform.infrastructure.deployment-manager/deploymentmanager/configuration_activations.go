@@ -51,35 +51,62 @@ func (s *Service) CreateConfigurationActivation(ctx context.Context, host sdk.Ho
 	if err != nil {
 		return configurationactivation.Activation{}, err
 	}
-	composition, err := patchApplicationConfiguration(active, definition, request)
-	if err != nil {
-		return configurationactivation.Activation{}, err
-	}
 	id := state.NextRevision + 1
-	composition, err = normalizeServiceComposition(composition, tenant, id)
-	if err != nil {
-		return configurationactivation.Activation{}, errInvalid
-	}
-	preview, err := previewService(ctx, host, call, composition, id)
-	if err != nil || !previewMatchesConfigurationRequest(preview.ConfigurationCatalog, request) {
-		return configurationactivation.Activation{}, errConfigurationActivation
-	}
 	now := s.now().Format(time.RFC3339Nano)
-	revision := platformadminapi.ServiceRevision{
-		ID: id, Deployment: composition.Metadata.Name, Status: platformadminapi.ServicePendingApproval,
-		Composition: composition, Preview: preview.Deployment, PreviewDigest: preview.Digest,
-		ArtifactReferences: preview.ArtifactReferences, ConfigurationCatalog: preview.ConfigurationCatalog,
-		ConfigurationCandidateID: request.CandidateID, ConfigurationID: request.ConfigurationID,
-		PreviousServiceRevision: active.ID, SubmittedBy: principal, CreatedAt: now, UpdatedAt: now,
+	var revision platformadminapi.ServiceRevision
+	if active.Intent != nil {
+		intent, snapshot, patchErr := patchIntentConfiguration(active, definition, request)
+		if patchErr != nil {
+			return configurationactivation.Activation{}, patchErr
+		}
+		intent, patchErr = normalizeApplicationIntent(intent, tenant, id)
+		if patchErr != nil {
+			return configurationactivation.Activation{}, errInvalid
+		}
+		plan, planErr := buildIntentPlan(ctx, host, call, intent, snapshot, id)
+		if planErr != nil || plan.report.Status != backendcompositionv1.ResolutionResolved || plan.preview == nil || !previewMatchesConfigurationRequest(plan.preview.ConfigurationCatalog, request) {
+			return configurationactivation.Activation{}, errConfigurationActivation
+		}
+		revision = platformadminapi.ServiceRevision{
+			ID: id, Deployment: intent.Metadata.Name, Status: platformadminapi.ServicePendingApproval,
+			Intent: &intent, ConfigurationSnapshot: snapshot,
+			ConfigurationCandidateID: request.CandidateID, ConfigurationID: request.ConfigurationID,
+			PreviousServiceRevision: active.ID, SubmittedBy: principal, CreatedAt: now, UpdatedAt: now,
+		}
+		applyIntentPlan(&revision, plan)
+		revision.SubmittedPlanDigest = revision.ResolutionReport.PlanDigest
+	} else {
+		composition, patchErr := patchApplicationConfiguration(active, definition, request)
+		if patchErr != nil {
+			return configurationactivation.Activation{}, patchErr
+		}
+		composition, patchErr = normalizeServiceComposition(composition, tenant, id)
+		if patchErr != nil {
+			return configurationactivation.Activation{}, errInvalid
+		}
+		preview, previewErr := previewService(ctx, host, call, composition, id)
+		if previewErr != nil || !previewMatchesConfigurationRequest(preview.ConfigurationCatalog, request) {
+			return configurationactivation.Activation{}, errConfigurationActivation
+		}
+		revision = platformadminapi.ServiceRevision{
+			ID: id, Deployment: composition.Metadata.Name, Status: platformadminapi.ServicePendingApproval,
+			Composition: composition, Preview: preview.Deployment, PreviewDigest: preview.Digest,
+			ArtifactReferences: preview.ArtifactReferences, ConfigurationCatalog: preview.ConfigurationCatalog,
+			ConfigurationCandidateID: request.CandidateID, ConfigurationID: request.ConfigurationID,
+			PreviousServiceRevision: active.ID, SubmittedBy: principal, CreatedAt: now, UpdatedAt: now,
+		}
 	}
 	state.NextRevision = id
 	state.Revisions = append(state.Revisions, revision)
 	state.ConfigurationRequests[request.CandidateID] = requestHash
+	oldAuditLength, oldNextAudit := len(state.ServiceAudit), state.NextAudit
 	s.auditServiceLocked(state, revision, "service.configuration.submitted", principal)
 	if err := s.saveLocked(); err != nil {
 		state.Revisions = state.Revisions[:len(state.Revisions)-1]
 		state.NextRevision--
 		delete(state.ConfigurationRequests, request.CandidateID)
+		state.ServiceAudit = state.ServiceAudit[:oldAuditLength]
+		state.NextAudit = oldNextAudit
 		return configurationactivation.Activation{}, err
 	}
 	return activationFromRevision(revision), nil

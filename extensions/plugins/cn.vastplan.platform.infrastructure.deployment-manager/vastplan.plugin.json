@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.platform.infrastructure.deployment-manager",
   "name": "VastPlan 部署与测试发布管理服务",
-  "version": "0.18.2",
+  "version": "0.19.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -34,6 +34,9 @@
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "approveBootstrap", "permissions": ["platform.deployment.approve"], "access": "approve", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createServiceDraft", "permissions": ["platform.deployment.compose"], "access": "write", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "updateServiceDraft", "permissions": ["platform.deployment.compose"], "access": "write", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "createIntentDraft", "permissions": ["platform.deployment.compose"], "access": "write", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "updateIntentDraft", "permissions": ["platform.deployment.compose"], "access": "write", "approval": "different-subject" },
+      { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "refreshIntentDraft", "permissions": ["platform.deployment.compose"], "access": "write", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "submitServiceDraft", "permissions": ["platform.deployment.compose"], "access": "write", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "approveServiceRevision", "permissions": ["platform.deployment.approve"], "access": "approve", "approval": "different-subject" },
       { "extensionPoint": "tool.package", "capability": "platform.deployment", "operation": "publishServiceRevision", "permissions": ["platform.deployment.publish"], "access": "execute", "approval": "different-subject" },
@@ -52,7 +55,8 @@
     "requires": [
       { "capability": "platform.settings", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.settings", "routingDomain": "platform" },
       { "capability": "platform.credentials", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.credentials", "routingDomain": "platform" },
-      { "capability": "platform.artifacts.repository", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.artifacts.repository", "routingDomain": "platform" }
+      { "capability": "platform.artifacts.repository", "scope": "remote", "kind": "strong", "ready": "readiness", "failurePolicy": "fail", "logicalService": "platform.artifacts.repository", "routingDomain": "platform" },
+      { "capability": "platform.composition.plan", "scope": "remote", "kind": "soft", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "platform.composition.plan", "routingDomain": "platform" }
     ],
     "provides": [{ "extensionPoint": "tool.package", "capability": "platform.deployment", "visibility": "cluster", "routing": "leader", "routingDomain": "platform" }]
   },
@@ -76,6 +80,10 @@
           { "name": "listServiceRevisions", "description": "列出服务组合修订", "paramsSchema": { "type": "object", "properties": {} } },
           { "name": "createServiceDraft", "description": "创建仅含应用配置的服务草稿", "paramsSchema": { "type": "object", "properties": { "composition": { "type": "object" } }, "required": ["composition"] } },
           { "name": "updateServiceDraft", "description": "更新服务组合草稿", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 }, "composition": { "type": "object" } }, "required": ["revisionId", "composition"] } },
+          { "name": "createIntentDraft", "description": "创建 Application Intent 规划草稿", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "intent": { "type": "object" } }, "required": ["intent"] } },
+          { "name": "updateIntentDraft", "description": "更新 Application Intent 并重建计划快照", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "revisionId": { "type": "integer", "minimum": 1 }, "intent": { "type": "object" } }, "required": ["revisionId", "intent"] } },
+          { "name": "refreshIntentDraft", "description": "显式接受最新 Planner 结果并清除 stale", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
+          { "name": "bindIntentConfiguration", "description": "由可信配置协调器绑定 CredentialRef 快照", "paramsSchema": { "type": "object", "additionalProperties": false, "properties": { "revisionId": { "type": "integer", "minimum": 1 }, "configurationSnapshot": { "type": "object" } }, "required": ["revisionId", "configurationSnapshot"] } },
           { "name": "submitServiceDraft", "description": "提交服务组合审批", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
           { "name": "approveServiceRevision", "description": "批准服务组合修订", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },
           { "name": "publishServiceRevision", "description": "通过可信内核发布服务组合", "paramsSchema": { "type": "object", "properties": { "revisionId": { "type": "integer", "minimum": 1 } }, "required": ["revisionId"] } },

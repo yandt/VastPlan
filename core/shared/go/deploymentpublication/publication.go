@@ -1,7 +1,7 @@
 // Package deploymentpublication defines the narrow trusted boundary used by
-// deployment-manager. The plugin can submit only an Application Composition;
-// immutable platform profiles, artifact verification and control-plane KV stay
-// behind the kernel service.
+// deployment-manager. The plugin can read the bound Profile only for planning
+// and submit only a compiled Application Composition; Profile ownership,
+// artifact verification and control-plane KV stay behind the kernel service.
 package deploymentpublication
 
 import (
@@ -26,8 +26,9 @@ const (
 )
 
 type Target struct {
-	DeploymentName  string                  `json:"deploymentName"`
-	PlatformProfile compositioncommonv1.Ref `json:"platformProfile"`
+	DeploymentName  string                               `json:"deploymentName"`
+	PlatformProfile compositioncommonv1.Ref              `json:"platformProfile"`
+	PlanningProfile backendcompositionv1.PlatformProfile `json:"planningProfile"`
 }
 
 type PreviewRequest struct {

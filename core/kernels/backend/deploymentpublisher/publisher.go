@@ -188,7 +188,11 @@ func (p *Publisher) Targets(ctx context.Context, tenantID string) ([]deploymentp
 	bindings := catalog.Targets(tenantID)
 	out := make([]deploymentpublication.Target, len(bindings))
 	for i, binding := range bindings {
-		out[i] = deploymentpublication.Target{DeploymentName: binding.DeploymentName, PlatformProfile: binding.PlatformProfile}
+		profile, profileRef, resolveErr := catalog.Resolve(tenantID, binding.DeploymentName)
+		if resolveErr != nil || profileRef != binding.PlatformProfile {
+			return nil, errors.New("Backend Platform Catalog 规划目标与 binding 不一致")
+		}
+		out[i] = deploymentpublication.Target{DeploymentName: binding.DeploymentName, PlatformProfile: binding.PlatformProfile, PlanningProfile: profile}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].DeploymentName < out[j].DeploymentName })
 	return out, nil

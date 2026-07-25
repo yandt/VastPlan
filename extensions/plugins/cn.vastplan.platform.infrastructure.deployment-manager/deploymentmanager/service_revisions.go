@@ -163,10 +163,13 @@ func (s *Service) UpdateServiceDraft(ctx context.Context, host sdk.Host, call *c
 }
 
 func (s *Service) SubmitServiceDraft(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64) (platformadminapi.ServiceRevision, error) {
+	if revision, ok := s.intentRevision(call, id); ok && isIntentRevision(revision) {
+		return s.submitIntentDraft(ctx, host, call, id)
+	}
 	return s.transitionService(ctx, host, call, id, platformadminapi.ServiceDraft, platformadminapi.ServicePendingApproval, "service.draft.submitted", true)
 }
 
-func (s *Service) ApproveServiceRevision(call *contractv1.CallContext, id uint64) (platformadminapi.ServiceRevision, error) {
+func (s *Service) ApproveServiceRevision(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64) (platformadminapi.ServiceRevision, error) {
 	tenant, err := callTenant(call)
 	if err != nil {
 		return platformadminapi.ServiceRevision{}, err
@@ -189,15 +192,45 @@ func (s *Service) ApproveServiceRevision(call *contractv1.CallContext, id uint64
 	if revision.SubmittedBy == approver {
 		return platformadminapi.ServiceRevision{}, errSeparation
 	}
+	if isIntentRevision(revision) {
+		if revision.Intent == nil || revision.ResolutionReport == nil || revision.SubmittedPlanDigest != revision.ResolutionReport.PlanDigest {
+			return platformadminapi.ServiceRevision{}, errServiceState
+		}
+		if err := s.requireFreshIntentPlanLocked(ctx, host, call, state, index); err != nil {
+			return platformadminapi.ServiceRevision{}, err
+		}
+		revision = state.Revisions[index]
+	}
 	old := revision
 	revision.Status, revision.ApprovedBy, revision.UpdatedAt = platformadminapi.ServiceApproved, approver, s.now().Format(time.RFC3339Nano)
+	if revision.ResolutionReport != nil {
+		revision.ApprovedPlanDigest = revision.ResolutionReport.PlanDigest
+	}
 	state.Revisions[index] = revision
+	oldAuditLength, oldNextAudit := len(state.ServiceAudit), state.NextAudit
 	s.auditServiceLocked(state, revision, "service.revision.approved", approver)
 	if err := s.saveLocked(); err != nil {
 		state.Revisions[index] = old
+		state.ServiceAudit = state.ServiceAudit[:oldAuditLength]
+		state.NextAudit = oldNextAudit
 		return platformadminapi.ServiceRevision{}, err
 	}
 	return cloneServiceRevision(revision), nil
+}
+
+func (s *Service) intentRevision(call *contractv1.CallContext, id uint64) (platformadminapi.ServiceRevision, bool) {
+	tenant, err := callTenant(call)
+	if err != nil {
+		return platformadminapi.ServiceRevision{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state := s.tenantLocked(tenant)
+	index, err := serviceRevisionIndex(state, id)
+	if err != nil {
+		return platformadminapi.ServiceRevision{}, false
+	}
+	return cloneServiceRevision(state.Revisions[index]), true
 }
 
 func (s *Service) PublishServiceRevision(ctx context.Context, host sdk.Host, call *contractv1.CallContext, id uint64) (platformadminapi.ServiceRevision, error) {
@@ -229,6 +262,15 @@ func (s *Service) publishServiceRevision(ctx context.Context, host sdk.Host, cal
 	}
 	if revision.Status != platformadminapi.ServiceApproved && revision.Status != platformadminapi.ServicePublishing {
 		return platformadminapi.ServiceRevision{}, errServiceState
+	}
+	if isIntentRevision(revision) {
+		if revision.Intent == nil || revision.ResolutionReport == nil || revision.ApprovedPlanDigest == "" || revision.ApprovedPlanDigest != revision.ResolutionReport.PlanDigest {
+			return platformadminapi.ServiceRevision{}, errServiceState
+		}
+		if err := s.requireFreshIntentPlanLocked(ctx, host, call, state, index); err != nil {
+			return platformadminapi.ServiceRevision{}, err
+		}
+		revision = state.Revisions[index]
 	}
 	if revision.Status == platformadminapi.ServiceApproved {
 		revision.Status, revision.UpdatedAt = platformadminapi.ServicePublishing, s.now().Format(time.RFC3339Nano)
@@ -315,8 +357,18 @@ func (s *Service) RollbackServiceRevision(ctx context.Context, host sdk.Host, ca
 		return platformadminapi.ServiceRevision{}, errServiceState
 	}
 	input := source.Composition
+	intent := source.Intent
+	snapshot := clonePlanningSnapshot(source.ConfigurationSnapshot)
 	s.mu.Unlock()
-	draft, err := s.CreateServiceDraft(ctx, host, call, input)
+	var draft platformadminapi.ServiceRevision
+	if intent != nil {
+		draft, err = s.CreateIntentDraft(ctx, host, call, *intent)
+		if err == nil && snapshot != nil {
+			draft, err = s.replaceIntentPlan(ctx, host, call, draft.ID, snapshot, true, "service.intent.rollback_configuration_bound")
+		}
+	} else {
+		draft, err = s.CreateServiceDraft(ctx, host, call, input)
+	}
 	if err != nil {
 		return platformadminapi.ServiceRevision{}, err
 	}
@@ -331,6 +383,10 @@ func (s *Service) RollbackServiceRevision(ctx context.Context, host sdk.Host, ca
 	}
 	revision := state.Revisions[newIndex]
 	revision.Status = platformadminapi.ServicePublishing
+	if revision.ResolutionReport != nil {
+		revision.SubmittedPlanDigest = revision.ResolutionReport.PlanDigest
+		revision.ApprovedPlanDigest = revision.ResolutionReport.PlanDigest
+	}
 	state.Revisions[newIndex] = revision
 	s.auditServiceLocked(state, revision, "service.revision.rollback_started", actorOrUnknown(call))
 	if err := s.saveLocked(); err != nil {
@@ -458,7 +514,14 @@ func serviceRevisionIndex(state *tenantState, id uint64) (int, error) {
 
 func (s *Service) auditServiceLocked(state *tenantState, revision platformadminapi.ServiceRevision, action, principal string) {
 	state.NextAudit++
-	state.ServiceAudit = append(state.ServiceAudit, platformadminapi.ServiceAuditEvent{ID: state.NextAudit, RevisionID: revision.ID, Deployment: revision.Deployment, Action: action, ActorID: principal, At: s.now().Format(time.RFC3339Nano)})
+	event := platformadminapi.ServiceAuditEvent{ID: state.NextAudit, RevisionID: revision.ID, Deployment: revision.Deployment, Action: action, ActorID: principal, PreviewDigest: revision.PreviewDigest, At: s.now().Format(time.RFC3339Nano)}
+	if revision.Intent != nil {
+		event.IntentDigest = revision.Intent.Digest()
+	}
+	if revision.ResolutionReport != nil {
+		event.PlanDigest = revision.ResolutionReport.PlanDigest
+	}
+	state.ServiceAudit = append(state.ServiceAudit, event)
 }
 
 func actorOrUnknown(call *contractv1.CallContext) string {
@@ -489,8 +552,14 @@ func cloneServiceRevisions(in []platformadminapi.ServiceRevision) []platformadmi
 // project the exact reference to the authenticated owning plugin.
 func publicServiceRevision(in platformadminapi.ServiceRevision) platformadminapi.ServiceRevision {
 	out := cloneServiceRevision(in)
+	out.ConfigurationSnapshot = nil
 	for index := range out.Composition.Units {
 		delete(out.Composition.Units[index].Spec.Config, pluginconfig.ManagedCredentialsKey)
+	}
+	if out.ResolutionReport != nil && out.ResolutionReport.ApplicationComposition != nil {
+		for index := range out.ResolutionReport.ApplicationComposition.Units {
+			delete(out.ResolutionReport.ApplicationComposition.Units[index].Spec.Config, pluginconfig.ManagedCredentialsKey)
+		}
 	}
 	for index := range out.Preview.Units {
 		delete(out.Preview.Units[index].Config, pluginconfig.ManagedCredentialsKey)

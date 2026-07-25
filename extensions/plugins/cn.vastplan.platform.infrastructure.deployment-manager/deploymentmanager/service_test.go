@@ -184,7 +184,7 @@ func TestBackendTestReleaseReadyAndAutomaticRollback(t *testing.T) {
 			if _, err = service.SubmitServiceDraft(context.Background(), host, alice, draft.ID); err != nil {
 				t.Fatal(err)
 			}
-			if _, err = service.ApproveServiceRevision(bob, draft.ID); err != nil {
+			if _, err = service.ApproveServiceRevision(context.Background(), host, bob, draft.ID); err != nil {
 				t.Fatal(err)
 			}
 			if _, err = service.PublishServiceRevision(context.Background(), host, carol, draft.ID); err != nil {
@@ -346,10 +346,10 @@ func TestServiceCompositionWorkflowAndRollback(t *testing.T) {
 	if err != nil || pending.Status != platformadminapi.ServicePendingApproval || pending.SubmittedBy != "alice" {
 		t.Fatalf("服务草稿提交失败: %+v %v", pending, err)
 	}
-	if _, err := service.ApproveServiceRevision(alice, draft.ID); !errors.Is(err, errSeparation) {
+	if _, err := service.ApproveServiceRevision(context.Background(), host, alice, draft.ID); !errors.Is(err, errSeparation) {
 		t.Fatalf("提交人不得自批: %v", err)
 	}
-	approved, err := service.ApproveServiceRevision(bob, draft.ID)
+	approved, err := service.ApproveServiceRevision(context.Background(), host, bob, draft.ID)
 	if err != nil || approved.Status != platformadminapi.ServiceApproved {
 		t.Fatalf("服务修订审批失败: %+v %v", approved, err)
 	}
@@ -364,7 +364,7 @@ func TestServiceCompositionWorkflowAndRollback(t *testing.T) {
 	if _, err := service.SubmitServiceDraft(context.Background(), host, alice, secondDraft.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.ApproveServiceRevision(bob, secondDraft.ID); err != nil {
+	if _, err := service.ApproveServiceRevision(context.Background(), host, bob, secondDraft.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.PublishServiceRevision(context.Background(), host, carol, secondDraft.ID); err != nil {
@@ -405,7 +405,7 @@ func TestServiceReferenceOutboxRetriesAfterRepositoryRecovery(t *testing.T) {
 	if _, err = service.SubmitServiceDraft(context.Background(), host, alice, draft.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = service.ApproveServiceRevision(bob, draft.ID); err != nil {
+	if _, err = service.ApproveServiceRevision(context.Background(), host, bob, draft.ID); err != nil {
 		t.Fatal(err)
 	}
 	published, err := service.PublishServiceRevision(context.Background(), host, carol, draft.ID)

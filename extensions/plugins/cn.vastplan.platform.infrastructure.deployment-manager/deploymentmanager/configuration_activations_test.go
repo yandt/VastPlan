@@ -86,10 +86,10 @@ func TestApplicationConfigurationActivationIsGovernedAndReady(t *testing.T) {
 	if err != nil || activation.Status != configurationactivation.StatusPendingApproval || activation.ServiceRevision != 2 {
 		t.Fatalf("配置修订未进入审批: activation=%+v err=%v", activation, err)
 	}
-	if _, err := service.ApproveServiceRevision(alice, activation.ServiceRevision); err == nil {
+	if _, err := service.ApproveServiceRevision(context.Background(), host, alice, activation.ServiceRevision); err == nil {
 		t.Fatal("配置提交人不得自批")
 	}
-	if _, err := service.ApproveServiceRevision(bob, activation.ServiceRevision); err != nil {
+	if _, err := service.ApproveServiceRevision(context.Background(), host, bob, activation.ServiceRevision); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.PublishServiceRevision(context.Background(), host, bob, activation.ServiceRevision); err == nil {
@@ -133,7 +133,7 @@ func TestApplicationConfigurationReadinessFailureRollsBackMonotonically(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.ApproveServiceRevision(bob, activation.ServiceRevision); err != nil {
+	if _, err := service.ApproveServiceRevision(context.Background(), host, bob, activation.ServiceRevision); err != nil {
 		t.Fatal(err)
 	}
 	rolledBack, err := service.PublishConfigurationActivation(context.Background(), host, bob, configurationactivation.LookupRequest{CandidateID: request.CandidateID})
@@ -149,12 +149,21 @@ func TestApplicationConfigurationReadinessFailureRollsBackMonotonically(t *testi
 func TestPublicServiceRevisionRedactsManagedCredentialHandles(t *testing.T) {
 	service, _, _ := configuredActivationFixture(t)
 	revision := service.data.Tenants["tenant-a"].Revisions[0]
+	composition := cloneJSON(revision.Composition)
+	revision.ConfigurationSnapshot = &backendcompositionv1.PlanningConfigurationSnapshot{Version: 1, Bindings: []backendcompositionv1.PlanningCredentialBinding{}, Digest: strings.Repeat("a", 64)}
+	revision.ResolutionReport = &backendcompositionv1.ResolutionReport{ApplicationComposition: &composition}
 	public := publicServiceRevision(revision)
+	if public.ConfigurationSnapshot != nil {
+		t.Fatal("浏览器可见 revision 不得包含可信 Configuration Snapshot")
+	}
 	if _, ok := public.Composition.Units[0].Spec.Config[pluginconfig.ManagedCredentialsKey]; ok {
 		t.Fatal("浏览器可见 Composition 不得包含托管凭证句柄")
 	}
 	if _, ok := public.Preview.Units[0].Config[pluginconfig.ManagedCredentialsKey]; ok {
 		t.Fatal("浏览器可见 Preview 不得包含托管凭证句柄")
+	}
+	if _, ok := public.ResolutionReport.ApplicationComposition.Units[0].Spec.Config[pluginconfig.ManagedCredentialsKey]; ok {
+		t.Fatal("浏览器可见 Resolution Report 不得包含托管凭证句柄")
 	}
 	if _, ok := revision.Composition.Units[0].Spec.Config[pluginconfig.ManagedCredentialsKey]; !ok {
 		t.Fatal("公开裁剪不得修改内部不可变修订")

@@ -185,7 +185,7 @@ func TestPublisherReadsCurrentCatalogSnapshotPerOperation(t *testing.T) {
 		t.Fatal(err)
 	}
 	targets, err := publisher.Targets(context.Background(), "acme")
-	if err != nil || len(targets) != 1 || targets[0].DeploymentName != "agent-services" {
+	if err != nil || len(targets) != 1 || targets[0].DeploymentName != "agent-services" || targets[0].PlanningProfile.Digest() != targets[0].PlatformProfile.Digest {
 		t.Fatalf("初始 Catalog 快照未生效: targets=%+v err=%v", targets, err)
 	}
 	source.catalog.Bindings[0].DeploymentName = "analytics-services"

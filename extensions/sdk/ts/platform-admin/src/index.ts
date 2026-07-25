@@ -1,3 +1,5 @@
+import type { BackendApplicationIntent, BackendResolutionReport } from "@vastplan/composition-planning";
+
 export interface PlatformFetchResponse {
   ok: boolean;
   status: number;
@@ -414,13 +416,16 @@ export interface BackendApplicationComposition {
 export type ServiceRevisionStatus = "Draft" | "PendingApproval" | "Approved" | "Publishing" | "Published";
 export interface ServiceRevision {
   id: number; deployment: string; status: ServiceRevisionStatus; active: boolean;
+  intent?: BackendApplicationIntent; resolutionReport?: BackendResolutionReport;
+  planningStale?: boolean; planningStaleReason?: string; observedPlanDigest?: string;
+  submittedPlanDigest?: string; approvedPlanDigest?: string;
   composition: BackendApplicationComposition; preview: Record<string, unknown>; previewDigest: string; kvRevision?: number;
   artifactReferences: ArtifactReference[];
   referencePending?: boolean;
   configurationCandidateId?: string; configurationId?: string; previousServiceRevision?: number; rollbackServiceRevision?: number;
   submittedBy?: string; approvedBy?: string; publishedBy?: string; createdAt: string; updatedAt: string;
 }
-export interface ServiceAuditEvent { id: number; revisionId: number; deployment: string; action: string; actorId: string; at: string; }
+export interface ServiceAuditEvent { id: number; revisionId: number; deployment: string; action: string; actorId: string; intentDigest?: string; planDigest?: string; previewDigest?: string; at: string; }
 export interface ArtifactRef { pluginId: string; version: string; channel: string; }
 export interface TestTargetBinding {
   id: string; kind: "backend"; deployment: string; unitId: string; pluginId: string;
@@ -634,6 +639,15 @@ export class PlatformAdminClient {
   }
   public updateServiceDraft(id: number, composition: BackendApplicationComposition): Promise<ServiceRevision> {
     return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}`, "PUT", { composition });
+  }
+  public createIntentDraft(intent: BackendApplicationIntent): Promise<ServiceRevision> {
+    return this.mutate(`${this.basePath}/deployment/service-revisions`, "POST", { intent });
+  }
+  public updateIntentDraft(id: number, intent: BackendApplicationIntent): Promise<ServiceRevision> {
+    return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}`, "PUT", { intent });
+  }
+  public refreshIntentDraft(id: number): Promise<ServiceRevision> {
+    return this.serviceRevisionAction(id, "refresh-plan");
   }
   public submitServiceDraft(id: number): Promise<ServiceRevision> { return this.serviceRevisionAction(id, "submit"); }
   public approveServiceRevision(id: number): Promise<ServiceRevision> { return this.serviceRevisionAction(id, "approve"); }

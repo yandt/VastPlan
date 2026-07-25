@@ -518,35 +518,46 @@ const (
 )
 
 type ServiceRevision struct {
-	ID                       uint64                                      `json:"id"`
-	Deployment               string                                      `json:"deployment"`
-	Status                   ServiceRevisionStatus                       `json:"status"`
-	Active                   bool                                        `json:"active"`
-	Composition              backendcompositionv1.ApplicationComposition `json:"composition"`
-	Preview                  deploymentv2.Deployment                     `json:"preview"`
-	PreviewDigest            string                                      `json:"previewDigest"`
-	ArtifactReferences       []pluginv1.ArtifactReference                `json:"artifactReferences"`
-	ConfigurationCatalog     pluginconfiguration.Catalog                 `json:"configurationCatalog"`
-	ConfigurationCandidateID string                                      `json:"configurationCandidateId,omitempty"`
-	ConfigurationID          string                                      `json:"configurationId,omitempty"`
-	PreviousServiceRevision  uint64                                      `json:"previousServiceRevision,omitempty"`
-	RollbackServiceRevision  uint64                                      `json:"rollbackServiceRevision,omitempty"`
-	KVRevision               uint64                                      `json:"kvRevision,omitempty"`
-	ReferencePending         bool                                        `json:"referencePending,omitempty"`
-	SubmittedBy              string                                      `json:"submittedBy,omitempty"`
-	ApprovedBy               string                                      `json:"approvedBy,omitempty"`
-	PublishedBy              string                                      `json:"publishedBy,omitempty"`
-	CreatedAt                string                                      `json:"createdAt"`
-	UpdatedAt                string                                      `json:"updatedAt"`
+	ID                       uint64                                              `json:"id"`
+	Deployment               string                                              `json:"deployment"`
+	Status                   ServiceRevisionStatus                               `json:"status"`
+	Active                   bool                                                `json:"active"`
+	Intent                   *backendcompositionv1.ApplicationIntent             `json:"intent,omitempty"`
+	ResolutionReport         *backendcompositionv1.ResolutionReport              `json:"resolutionReport,omitempty"`
+	ConfigurationSnapshot    *backendcompositionv1.PlanningConfigurationSnapshot `json:"configurationSnapshot,omitempty"`
+	PlanningStale            bool                                                `json:"planningStale,omitempty"`
+	PlanningStaleReason      string                                              `json:"planningStaleReason,omitempty"`
+	ObservedPlanDigest       string                                              `json:"observedPlanDigest,omitempty"`
+	SubmittedPlanDigest      string                                              `json:"submittedPlanDigest,omitempty"`
+	ApprovedPlanDigest       string                                              `json:"approvedPlanDigest,omitempty"`
+	Composition              backendcompositionv1.ApplicationComposition         `json:"composition"`
+	Preview                  deploymentv2.Deployment                             `json:"preview"`
+	PreviewDigest            string                                              `json:"previewDigest"`
+	ArtifactReferences       []pluginv1.ArtifactReference                        `json:"artifactReferences"`
+	ConfigurationCatalog     pluginconfiguration.Catalog                         `json:"configurationCatalog"`
+	ConfigurationCandidateID string                                              `json:"configurationCandidateId,omitempty"`
+	ConfigurationID          string                                              `json:"configurationId,omitempty"`
+	PreviousServiceRevision  uint64                                              `json:"previousServiceRevision,omitempty"`
+	RollbackServiceRevision  uint64                                              `json:"rollbackServiceRevision,omitempty"`
+	KVRevision               uint64                                              `json:"kvRevision,omitempty"`
+	ReferencePending         bool                                                `json:"referencePending,omitempty"`
+	SubmittedBy              string                                              `json:"submittedBy,omitempty"`
+	ApprovedBy               string                                              `json:"approvedBy,omitempty"`
+	PublishedBy              string                                              `json:"publishedBy,omitempty"`
+	CreatedAt                string                                              `json:"createdAt"`
+	UpdatedAt                string                                              `json:"updatedAt"`
 }
 
 type ServiceAuditEvent struct {
-	ID         uint64 `json:"id"`
-	RevisionID uint64 `json:"revisionId"`
-	Deployment string `json:"deployment"`
-	Action     string `json:"action"`
-	ActorID    string `json:"actorId"`
-	At         string `json:"at"`
+	ID            uint64 `json:"id"`
+	RevisionID    uint64 `json:"revisionId"`
+	Deployment    string `json:"deployment"`
+	Action        string `json:"action"`
+	ActorID       string `json:"actorId"`
+	IntentDigest  string `json:"intentDigest,omitempty"`
+	PlanDigest    string `json:"planDigest,omitempty"`
+	PreviewDigest string `json:"previewDigest,omitempty"`
+	At            string `json:"at"`
 }
 
 type TestTargetKind string
@@ -619,6 +630,10 @@ type ServiceCompositionRequest struct {
 	Composition backendcompositionv1.ApplicationComposition `json:"composition"`
 }
 
+type ServiceIntentRequest struct {
+	Intent backendcompositionv1.ApplicationIntent `json:"intent"`
+}
+
 // Service is the narrow BFF port consumed by HTTP handlers. Implementations
 // may reach local or cluster capabilities. Target is resolved from the active
 // Portal management binding by the BFF and cannot be supplied as routing fields
@@ -660,6 +675,9 @@ type Service interface {
 	ListServiceRevisions(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]ServiceRevision, error)
 	CreateServiceDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, ServiceCompositionRequest) (ServiceRevision, error)
 	UpdateServiceDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64, ServiceCompositionRequest) (ServiceRevision, error)
+	CreateIntentDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, ServiceIntentRequest) (ServiceRevision, error)
+	UpdateIntentDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64, ServiceIntentRequest) (ServiceRevision, error)
+	RefreshIntentDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) (ServiceRevision, error)
 	SubmitServiceDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) (ServiceRevision, error)
 	ApproveServiceRevision(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) (ServiceRevision, error)
 	PublishServiceRevision(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) (ServiceRevision, error)

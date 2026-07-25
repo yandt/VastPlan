@@ -141,6 +141,12 @@ func TestPlatformAdminDoesNotBecomeGenericPermissionPolicy(t *testing.T) {
 	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: configurationactivation.CreateOperation}); got != extpoint.DecisionAllow {
 		t.Fatalf("配置协调器必须能创建候选绑定部署修订: %s", got)
 	}
+	if got, _ := decide(configurationPlugin, extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "bindIntentConfiguration"}); got != extpoint.DecisionAllow {
+		t.Fatalf("配置协调器必须能向 Intent 草稿绑定可信 CredentialRef 快照: %s", got)
+	}
+	if got, _ := decide(businessPlugin, extpoint.PermissionRequest{Capability: platformadminapi.DeploymentCapability, Operation: "bindIntentConfiguration"}); got == extpoint.DecisionAllow {
+		t.Fatalf("普通插件不得向 Intent 草稿注入 CredentialRef 快照: %s", got)
+	}
 	for _, operation := range []string{
 		platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation,
 		platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation,

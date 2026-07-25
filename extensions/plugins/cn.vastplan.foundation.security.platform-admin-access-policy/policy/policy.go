@@ -25,7 +25,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.platform-admin-access-policy"
-	PluginVersion = "0.30.1"
+	PluginVersion = "0.30.2"
 	Capability    = "foundation.security.platform-admin-access-policy"
 )
 
@@ -284,7 +284,7 @@ func configurationActivationAllowed(c *v1.CallContext, request extpoint.Permissi
 	case configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation,
 		platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation,
 		platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation,
-		platformprofileactivation.AbortActivationOperation:
+		platformprofileactivation.AbortActivationOperation, "bindIntentConfiguration":
 		return true
 	default:
 		return false

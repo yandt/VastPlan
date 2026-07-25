@@ -81,6 +81,23 @@ describe("PlatformAdminClient", () => {
     expect(() => client.rollbackServiceRevision(0)).toThrowError(PlatformAdminError);
   });
 
+  it("uses the same portal route for Intent drafts and explicit plan refresh", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const client = new PlatformAdminClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { id: 4, status: "Draft" } };
+    }, "operations", "deployment");
+    const intent = { version: 1 as const, revision: 1, id: "agents", target: { kernel: "backend" as const }, metadata: { name: "agents" }, services: [] };
+    await client.createIntentDraft(intent);
+    await client.refreshIntentDraft(4);
+    expect(calls).toEqual([
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/deployment/deployment/service-revisions", method: "POST", body: JSON.stringify({ intent }) },
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/deployment/deployment/service-revisions/4/refresh-plan", method: "POST", body: "{}" },
+    ]);
+  });
+
   it("submits and activates plugin configuration on fixed candidate routes", async () => {
     const calls: Array<{ path: string; method?: string; body?: string }> = [];
     const client = new PlatformAdminClient(async (path, init) => {
