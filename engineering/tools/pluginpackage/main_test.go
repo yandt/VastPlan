@@ -78,7 +78,7 @@ func TestStagePackageInjectsSignedDynamicGoFingerprint(t *testing.T) {
 		t.Fatal(err)
 	}
 	fingerprint := strings.Repeat("a", 64)
-	staged, cleanup := stagePackage(source, backend, "", "", "", dynamic, fingerprint, "", "")
+	staged, cleanup := stagePackage(stagingOptions{Source: source, BackendBin: backend, DynamicGoBin: dynamic, DynamicGoFingerprint: fingerprint})
 	defer cleanup()
 	raw, err := os.ReadFile(filepath.Join(staged, "vastplan.plugin.json"))
 	if err != nil {
@@ -108,7 +108,7 @@ func TestStagePackageInjectsFrontendBundleAtManifestEntry(t *testing.T) {
 	if err := os.WriteFile(bundle, content, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	staged, cleanup := stagePackage(source, "", bundle, "", "", "", "", "", "")
+	staged, cleanup := stagePackage(stagingOptions{Source: source, FrontendBundle: bundle})
 	defer cleanup()
 	got, err := os.ReadFile(filepath.Join(staged, "frontend", "dist", "index.js"))
 	if err != nil {
@@ -130,7 +130,7 @@ func TestStagePackageBindsCycloneDXSBOM(t *testing.T) {
 	if err := os.WriteFile(sbomFile, sbom, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	staged, cleanup := stagePackageWithSupplyChain(source, "", "", "", "", "", "", "", "", "", "", sbomFile)
+	staged, cleanup := stagePackage(stagingOptions{Source: source, SBOMSource: sbomFile})
 	defer cleanup()
 	raw, err := os.ReadFile(filepath.Join(staged, "vastplan.plugin.json"))
 	if err != nil {
@@ -197,7 +197,7 @@ func TestStagePackageInjectsVerifiedFrontendModuleGraph(t *testing.T) {
 	if err := os.WriteFile(serverGraphFile, serverGraphRaw, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	staged, cleanup := stagePackageWithGraphs(source, "", "", graphFile, serverGraphFile, buildRoot, "", "", "", "")
+	staged, cleanup := stagePackage(stagingOptions{Source: source, FrontendGraph: graphFile, FrontendServerGraph: serverGraphFile, FrontendGraphRoot: buildRoot})
 	defer cleanup()
 	raw, err := os.ReadFile(filepath.Join(staged, "vastplan.plugin.json"))
 	if err != nil {

@@ -29,6 +29,23 @@ func New(version string, logf func(string, ...any)) (*protocolbus.Host, error) {
 }
 
 func NewWithDependencies(version string, logf func(string, ...any), dependencies kernelspi.Dependencies) (*protocolbus.Host, error) {
+	reg := backendRegistry()
+	host := protocolbus.NewHost(KernelName, version, reg, logf)
+	services := []hostServiceRegistration{
+		{name: "kernel.info", handler: kernelInfo(version)},
+		{name: "kernel.diagnostics", handler: kernelDiagnostics(host)},
+	}
+	services = append(services, dependencyHostServices(dependencies)...)
+	services = append(services, platformProfileActivationServices(dependencies)...)
+	services = append(services, configurationHostServices(dependencies)...)
+	services = append(services, sharedStateServices(dependencies, host)...)
+	if err := registerHostServices(host, services); err != nil {
+		return nil, err
+	}
+	return host, nil
+}
+
+func backendRegistry() *registry.Registry {
 	reg := registry.New()
 	for _, point := range []registry.ExtensionPoint{
 		{Name: extpoint.ToolPackage, Dispatch: registry.DispatchSingle},
@@ -46,99 +63,95 @@ func NewWithDependencies(version string, logf func(string, ...any), dependencies
 	} {
 		reg.DefinePoint(point)
 	}
-	host := protocolbus.NewHost(KernelName, version, reg, logf)
-	if err := host.RegisterHostService(extpoint.KernelService, "kernel.info", kernelInfo(version)); err != nil {
-		return nil, err
-	}
-	if err := host.RegisterHostService(extpoint.KernelService, "kernel.diagnostics", kernelDiagnostics(host)); err != nil {
-		return nil, err
-	}
+	return reg
+}
+
+type hostServiceRegistration struct {
+	name    string
+	handler protocolbus.HostService
+}
+
+func dependencyHostServices(dependencies kernelspi.Dependencies) []hostServiceRegistration {
+	services := make([]hostServiceRegistration, 0, 9)
 	if dependencies.Config != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, "kernel.config.get", kernelConfigGet(dependencies.Config)); err != nil {
-			return nil, err
-		}
+		services = append(services, hostServiceRegistration{name: "kernel.config.get", handler: kernelConfigGet(dependencies.Config)})
 	}
 	if dependencies.ManagedCredentialRefs != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, pluginconfig.KernelCredentialRefService, kernelManagedCredentialRef(dependencies.ManagedCredentialRefs)); err != nil {
-			return nil, err
-		}
+		services = append(services, hostServiceRegistration{name: pluginconfig.KernelCredentialRefService, handler: kernelManagedCredentialRef(dependencies.ManagedCredentialRefs)})
 	}
 	if dependencies.RuntimeMaterialLeases != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, credentiallease.RuntimeKernelService, kernelRuntimeMaterialLease(dependencies.RuntimeMaterialLeases)); err != nil {
-			return nil, err
-		}
+		services = append(services, hostServiceRegistration{name: credentiallease.RuntimeKernelService, handler: kernelRuntimeMaterialLease(dependencies.RuntimeMaterialLeases)})
 	}
 	if dependencies.NodeBootstrap != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, nodebootstrap.KernelService, kernelNodeBootstrap(dependencies.NodeBootstrap)); err != nil {
-			return nil, err
-		}
+		services = append(services, hostServiceRegistration{name: nodebootstrap.KernelService, handler: kernelNodeBootstrap(dependencies.NodeBootstrap)})
 	}
 	if dependencies.NodeReadiness != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, nodebootstrap.KernelReadinessService, kernelNodeReadiness(dependencies.NodeReadiness)); err != nil {
-			return nil, err
-		}
+		services = append(services, hostServiceRegistration{name: nodebootstrap.KernelReadinessService, handler: kernelNodeReadiness(dependencies.NodeReadiness)})
 	}
 	if dependencies.DeploymentPublication != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, deploymentpublication.KernelTargetsService, kernelDeploymentTargets(dependencies.DeploymentPublication)); err != nil {
-			return nil, err
-		}
-		if err := host.RegisterHostService(extpoint.KernelService, deploymentpublication.KernelPreviewService, kernelDeploymentPreview(dependencies.DeploymentPublication)); err != nil {
-			return nil, err
-		}
-		if err := host.RegisterHostService(extpoint.KernelService, deploymentpublication.KernelPublishService, kernelDeploymentPublish(dependencies.DeploymentPublication)); err != nil {
-			return nil, err
-		}
+		services = append(services,
+			hostServiceRegistration{name: deploymentpublication.KernelTargetsService, handler: kernelDeploymentTargets(dependencies.DeploymentPublication)},
+			hostServiceRegistration{name: deploymentpublication.KernelPreviewService, handler: kernelDeploymentPreview(dependencies.DeploymentPublication)},
+			hostServiceRegistration{name: deploymentpublication.KernelPublishService, handler: kernelDeploymentPublish(dependencies.DeploymentPublication)},
+		)
 	}
 	if dependencies.DeploymentReadiness != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, deploymentpublication.KernelReadinessService, kernelDeploymentReadiness(dependencies.DeploymentReadiness)); err != nil {
-			return nil, err
-		}
+		services = append(services, hostServiceRegistration{name: deploymentpublication.KernelReadinessService, handler: kernelDeploymentReadiness(dependencies.DeploymentReadiness)})
 	}
-	if dependencies.PlatformProfileActivation != nil {
-		services := kernelPlatformProfileActivation(dependencies.PlatformProfileActivation)
-		names := make([]string, 0, len(services))
-		for name := range services {
-			names = append(names, name)
-		}
-		sort.Strings(names)
-		for _, name := range names {
-			service := services[name]
-			if err := host.RegisterHostService(extpoint.KernelService, name, service); err != nil {
-				return nil, err
-			}
-		}
+	return services
+}
+
+func platformProfileActivationServices(dependencies kernelspi.Dependencies) []hostServiceRegistration {
+	if dependencies.PlatformProfileActivation == nil {
+		return nil
 	}
+	handlers := kernelPlatformProfileActivation(dependencies.PlatformProfileActivation)
+	names := make([]string, 0, len(handlers))
+	for name := range handlers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	services := make([]hostServiceRegistration, 0, len(names))
+	for _, name := range names {
+		services = append(services, hostServiceRegistration{name: name, handler: handlers[name]})
+	}
+	return services
+}
+
+func configurationHostServices(dependencies kernelspi.Dependencies) []hostServiceRegistration {
+	services := make([]hostServiceRegistration, 0, 3)
 	if dependencies.ConfigurationCatalogs != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, pluginconfiguration.KernelCatalogsService, kernelConfigurationCatalogs(dependencies.ConfigurationCatalogs)); err != nil {
-			return nil, err
-		}
+		services = append(services, hostServiceRegistration{name: pluginconfiguration.KernelCatalogsService, handler: kernelConfigurationCatalogs(dependencies.ConfigurationCatalogs)})
 	}
 	if dependencies.ConfigurationAuthorityIssuer != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, configurationauthority.KernelIssueService, kernelConfigurationAuthorityIssue(dependencies.ConfigurationAuthorityIssuer)); err != nil {
-			return nil, err
-		}
+		services = append(services, hostServiceRegistration{name: configurationauthority.KernelIssueService, handler: kernelConfigurationAuthorityIssue(dependencies.ConfigurationAuthorityIssuer)})
 	}
 	if dependencies.ConfigurationAuthorityConsumer != nil {
-		if err := host.RegisterHostService(extpoint.KernelService, configurationauthority.KernelConsumeService, kernelConfigurationAuthorityConsume(dependencies.ConfigurationAuthorityConsumer)); err != nil {
-			return nil, err
+		services = append(services, hostServiceRegistration{name: configurationauthority.KernelConsumeService, handler: kernelConfigurationAuthorityConsume(dependencies.ConfigurationAuthorityConsumer)})
+	}
+	return services
+}
+
+func sharedStateServices(dependencies kernelspi.Dependencies, host *protocolbus.Host) []hostServiceRegistration {
+	if dependencies.SharedState == nil {
+		return nil
+	}
+	operations := []string{sharedstatev1.OperationGet, sharedstatev1.OperationCreate, sharedstatev1.OperationUpdate, sharedstatev1.OperationDelete, sharedstatev1.OperationList}
+	services := make([]hostServiceRegistration, 0, len(operations)+3)
+	for _, operation := range operations {
+		services = append(services, hostServiceRegistration{name: sharedstatev1.KernelService(operation), handler: kernelSharedStateWithMetrics(dependencies.SharedState, operation, host.Observer.Metrics)})
+	}
+	for _, operation := range []string{sharedstatev1.OperationCreate, sharedstatev1.OperationUpdate, sharedstatev1.OperationDelete} {
+		services = append(services, hostServiceRegistration{name: sharedstatev1.FencedKernelService(operation), handler: kernelFencedSharedStateWithMetrics(dependencies.SharedState, operation, host.Observer.Metrics)})
+	}
+	return services
+}
+
+func registerHostServices(host *protocolbus.Host, services []hostServiceRegistration) error {
+	for _, service := range services {
+		if err := host.RegisterHostService(extpoint.KernelService, service.name, service.handler); err != nil {
+			return err
 		}
 	}
-	if dependencies.SharedState != nil {
-		for _, operation := range []string{
-			sharedstatev1.OperationGet, sharedstatev1.OperationCreate, sharedstatev1.OperationUpdate,
-			sharedstatev1.OperationDelete, sharedstatev1.OperationList,
-		} {
-			if err := host.RegisterHostService(extpoint.KernelService, sharedstatev1.KernelService(operation), kernelSharedStateWithMetrics(dependencies.SharedState, operation, host.Observer.Metrics)); err != nil {
-				return nil, err
-			}
-		}
-		for _, operation := range []string{
-			sharedstatev1.OperationCreate, sharedstatev1.OperationUpdate, sharedstatev1.OperationDelete,
-		} {
-			if err := host.RegisterHostService(extpoint.KernelService, sharedstatev1.FencedKernelService(operation), kernelFencedSharedStateWithMetrics(dependencies.SharedState, operation, host.Observer.Metrics)); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return host, nil
+	return nil
 }

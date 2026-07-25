@@ -83,7 +83,12 @@ func main() {
 			defer cleanup()
 			effectiveSBOM = generated
 		}
-		packageSource, cleanup := stagePackageWithSupplyChain(*source, *backendBin, *backendModule, *frontendBundle, *frontendGraph, *frontendServerGraph, *frontendGraphRoot, *dynamicGoBin, *dynamicGoFingerprint, *licenseFile, *noticeFile, effectiveSBOM)
+		packageSource, cleanup := stagePackage(stagingOptions{
+			Source: *source, BackendBin: *backendBin, BackendModule: *backendModule,
+			FrontendBundle: *frontendBundle, FrontendGraph: *frontendGraph, FrontendServerGraph: *frontendServerGraph, FrontendGraphRoot: *frontendGraphRoot,
+			DynamicGoBin: *dynamicGoBin, DynamicGoFingerprint: *dynamicGoFingerprint,
+			LicenseSource: *licenseFile, NoticeSource: *noticeFile, SBOMSource: effectiveSBOM,
+		})
 		defer cleanup()
 		var err error
 		builtBytes, manifest, err := pluginservice.PackageDirectory(packageSource)

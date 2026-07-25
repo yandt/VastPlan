@@ -129,7 +129,7 @@ func PackageDirectory(dir string) ([]byte, pluginv1.Manifest, error) {
 		return nil, pluginv1.Manifest{}, fmt.Errorf("完成 gzip 包: %w", err)
 	}
 	packageBytes := out.Bytes()
-	if _, _, err := inspectPackage(packageBytes); err != nil {
+	if _, _, err := artifacttrust.InspectPackage(packageBytes); err != nil {
 		return nil, pluginv1.Manifest{}, fmt.Errorf("复验已打包插件: %w", err)
 	}
 	return packageBytes, manifest, nil
@@ -156,7 +156,7 @@ func Describe(channel string, packageBytes []byte) (Artifact, error) {
 	if len(packageBytes) == 0 {
 		return Artifact{}, errors.New("插件包不能为空")
 	}
-	manifest, manifestRaw, err := inspectPackage(packageBytes)
+	manifest, manifestRaw, err := artifacttrust.InspectPackage(packageBytes)
 	if err != nil {
 		return Artifact{}, err
 	}
@@ -430,9 +430,4 @@ func validateLegalFile(dir, declaredName, kind string) error {
 		return fmt.Errorf("%s文件 %s 大小必须在 1..%d 字节内", kind, name, maxLegalFileBytes)
 	}
 	return nil
-}
-
-// inspectPackage 只读取 archive metadata 和根清单，绝不执行包内内容。
-func inspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, error) {
-	return artifacttrust.InspectPackage(packageBytes)
 }

@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"cdsoft.com.cn/VastPlan/core/shared/go/artifacttrust"
 )
 
 func TestPackageDirectoryIsReproducibleAcrossFilesystemMetadata(t *testing.T) {
@@ -188,7 +190,7 @@ func TestPackageDirectory_RequiresDeclaredLicenseFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("携带许可证文本后应可打包: %v", err)
 	}
-	if _, _, err := inspectPackage(packageBytes); err != nil {
+	if _, _, err := artifacttrust.InspectPackage(packageBytes); err != nil {
 		t.Fatalf("制品读取必须接受唯一、非空的许可证文本: %v", err)
 	}
 }

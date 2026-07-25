@@ -75,44 +75,51 @@ func (p *runtimeHostProcess) readResponses(reader io.Reader) {
 		var response runtimeControlResponse
 		if err := json.Unmarshal(scanner.Bytes(), &response); err != nil {
 			if p.logf != nil {
-				p.logf("runtime-host=%s pid=%d stream=stdout %s", p.spec.Kind, p.pid,
-					strings.TrimSpace(scanner.Text()))
+				p.logf("runtime-host=%s pid=%d stream=stdout %s", p.spec.Kind, p.pid, strings.TrimSpace(scanner.Text()))
 			}
 			continue
 		}
 		if response.RequestID == "" {
-			if response.Event == "unit-exited" {
-				p.mu.Lock()
-				failure := p.units[response.UnitID]
-				p.mu.Unlock()
-				if failure != nil {
-					message := response.Error
-					if message == "" {
-						message = "Runtime Host 执行单元已退出"
-					}
-					select {
-					case failure <- errors.New(message):
-					default:
-					}
-				}
-			}
-			if response.Event == "unit-exited" && response.Error != "" && p.logf != nil {
-				p.logf("Runtime Host 执行单元退出 provider=%s pid=%d unit=%s: %s",
-					p.spec.Kind, p.pid, response.UnitID, response.Error)
-			}
+			p.handleRuntimeEvent(response)
 			continue
 		}
-		p.mu.Lock()
-		waiting := p.pending[response.RequestID]
-		delete(p.pending, response.RequestID)
-		p.mu.Unlock()
-		if waiting != nil {
-			waiting <- response
-			close(waiting)
-		}
+		p.deliverRuntimeResponse(response)
 	}
 	if err := scanner.Err(); err != nil && p.logf != nil {
 		p.logf("Runtime Host 控制输出读取失败 provider=%s pid=%d: %v", p.spec.Kind, p.pid, err)
+	}
+}
+
+func (p *runtimeHostProcess) handleRuntimeEvent(response runtimeControlResponse) {
+	if response.Event != "unit-exited" {
+		return
+	}
+	p.mu.Lock()
+	failure := p.units[response.UnitID]
+	p.mu.Unlock()
+	if failure != nil {
+		message := response.Error
+		if message == "" {
+			message = "Runtime Host 执行单元已退出"
+		}
+		select {
+		case failure <- errors.New(message):
+		default:
+		}
+	}
+	if response.Error != "" && p.logf != nil {
+		p.logf("Runtime Host 执行单元退出 provider=%s pid=%d unit=%s: %s", p.spec.Kind, p.pid, response.UnitID, response.Error)
+	}
+}
+
+func (p *runtimeHostProcess) deliverRuntimeResponse(response runtimeControlResponse) {
+	p.mu.Lock()
+	waiting := p.pending[response.RequestID]
+	delete(p.pending, response.RequestID)
+	p.mu.Unlock()
+	if waiting != nil {
+		waiting <- response
+		close(waiting)
 	}
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ServiceRevision } from "@vastplan/platform-admin";
 import { buildBackendIntent, createDeploymentPage, deploymentRow, intentEditorValue, serviceIntentSchema } from "./index";
 import type { PlatformAdminClient } from "@vastplan/platform-admin";
+import type { DeploymentRow } from "./resolution-view";
 
 describe("deployment-manager Intent frontend contract", () => {
   it("exposes only user-owned Intent fields", () => {
@@ -60,5 +61,22 @@ describe("deployment-manager Intent frontend contract", () => {
       expect(JSON.stringify(actions[id]?.visibleWhen), id).toContain('"Intent"');
     }
     expect(page.forms?.every((form) => form.schema.id === "backend-application-intent.v1")).toBe(true);
+  });
+
+  it("dispatches mutation actions through the action dictionary", async () => {
+    const calls: string[] = [];
+    const client = {
+      async refreshIntentDraft(id: number) { calls.push(`refresh-plan:${id}`); },
+      async submitServiceDraft(id: number) { calls.push(`submit:${id}`); },
+      async approveServiceRevision(id: number) { calls.push(`approve:${id}`); },
+      async publishServiceRevision(id: number) { calls.push(`publish:${id}`); },
+      async rollbackServiceRevision(id: number) { calls.push(`rollback:${id}`); },
+    } as unknown as PlatformAdminClient;
+    const page = createDeploymentPage(client, "deployment", "/deployment", "Deployment");
+    const selected = [{ id: 7 } as DeploymentRow];
+    for (const id of ["refresh-plan", "submit", "approve", "publish", "rollback"]) {
+      await page.runAction?.({ action: { id, label: id, placement: "page.secondary" }, selected, refresh() {} }, new AbortController().signal);
+    }
+    expect(calls).toEqual(["refresh-plan:7", "submit:7", "approve:7", "publish:7", "rollback:7"]);
   });
 });

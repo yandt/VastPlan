@@ -206,8 +206,6 @@ func normalizedPublishers(values []string) ([]string, error) {
 	return out, nil
 }
 
-func publisherAllowed(allowed []string, publisher string) bool { return contains(allowed, publisher) }
-
 func sameTestTarget(left, right platformadminapi.TestTargetBinding) bool {
 	return left.Kind == right.Kind && left.Deployment == right.Deployment && left.UnitID == right.UnitID && left.PluginID == right.PluginID
 }

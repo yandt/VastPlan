@@ -76,7 +76,7 @@ func (s *Service) executeTestRelease(ctx context.Context, host sdk.Host, call *c
 		return
 	}
 	entry, err := resolveTestArtifact(ctx, host, call, release)
-	if err != nil || !publisherAllowed(binding.AllowedPublishers, entry.Publisher) {
+	if err != nil || !contains(binding.AllowedPublishers, entry.Publisher) {
 		s.failTestRelease(tenant, releaseID, "platform.test_release.artifact_rejected", coalesceError(err, errTestArtifact), false)
 		return
 	}

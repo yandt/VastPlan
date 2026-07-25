@@ -88,8 +88,6 @@ func (i *assessmentLeaseIssuer) issue(callCtx *contractv1.CallContext, raw []byt
 	return lease, nil
 }
 
-func marshalScanLease(value artifactassessment.ScanLease) ([]byte, error) { return json.Marshal(value) }
-
 func appendAssessmentStatus(appender assessmentStatusAppender, callCtx *contractv1.CallContext, raw []byte, now time.Time) ([]byte, error) {
 	if appender == nil || callCtx.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || callCtx.GetCaller().GetId() != artifactassessment.AssessmentControllerPluginID || callCtx.GetTenantId() == "" {
 		return nil, errors.New("复扫状态只允许精确 Assessment Controller 追加")

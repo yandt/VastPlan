@@ -122,33 +122,14 @@ func Build(deployment deploymentv2.Deployment, artifacts map[pluginv1.ArtifactRe
 	items := make([]Definition, 0)
 	baselineDefinitions := map[string]Definition{}
 	for _, unit := range deployment.Units {
-		installed := make([]string, 0, len(unit.Plugins))
-		for _, plugin := range unit.Plugins {
-			installed = append(installed, plugin.ID)
-		}
-		envelope, err := pluginconfig.Parse(unit.Config, installed)
+		definitions, err := definitionsForUnit(deployment, deploymentDigest, unit, artifacts)
 		if err != nil {
-			return Catalog{}, fmt.Errorf("解析 unit %s 配置信封: %w", unit.ID, err)
+			return Catalog{}, err
 		}
-		for _, plugin := range unit.Plugins {
-			definition, configured, err := definitionFor(deployment, deploymentDigest, unit, plugin, envelope, artifacts)
+		for _, definition := range definitions {
+			items, err = appendCatalogDefinition(items, baselineDefinitions, deployment.Metadata.Tenant, deployment.Metadata.Name, definition)
 			if err != nil {
 				return Catalog{}, err
-			}
-			if configured {
-				if definition.ServiceBaselineID != "" {
-					definition.UnitID = "service-baseline." + definition.ServiceBaselineID
-					definition.ID = resourceID(deployment.Metadata.Tenant, deployment.Metadata.Name, definition.UnitID, definition.PluginID)
-					key := definition.ServiceBaselineID + "\x00" + definition.PluginID
-					if existing, duplicate := baselineDefinitions[key]; duplicate {
-						if !reflect.DeepEqual(existing, definition) {
-							return Catalog{}, fmt.Errorf("公共基线 %q 的插件 %q 在不同服务单元中解析出不一致配置", definition.ServiceBaselineID, definition.PluginID)
-						}
-						continue
-					}
-					baselineDefinitions[key] = definition
-				}
-				items = append(items, definition)
 			}
 		}
 	}
@@ -165,6 +146,45 @@ func Build(deployment deploymentv2.Deployment, artifacts map[pluginv1.ArtifactRe
 	}
 	catalog.Digest = digest
 	return catalog, catalog.Validate()
+}
+
+func definitionsForUnit(deployment deploymentv2.Deployment, deploymentDigest string, unit deploymentv2.ServiceUnit, artifacts map[pluginv1.ArtifactRef]pluginv1.Artifact) ([]Definition, error) {
+	installed := make([]string, 0, len(unit.Plugins))
+	for _, plugin := range unit.Plugins {
+		installed = append(installed, plugin.ID)
+	}
+	envelope, err := pluginconfig.Parse(unit.Config, installed)
+	if err != nil {
+		return nil, fmt.Errorf("解析 unit %s 配置信封: %w", unit.ID, err)
+	}
+	definitions := make([]Definition, 0, len(unit.Plugins))
+	for _, plugin := range unit.Plugins {
+		definition, configured, err := definitionFor(deployment, deploymentDigest, unit, plugin, envelope, artifacts)
+		if err != nil {
+			return nil, err
+		}
+		if configured {
+			definitions = append(definitions, definition)
+		}
+	}
+	return definitions, nil
+}
+
+func appendCatalogDefinition(items []Definition, baselines map[string]Definition, tenant, deployment string, definition Definition) ([]Definition, error) {
+	if definition.ServiceBaselineID == "" {
+		return append(items, definition), nil
+	}
+	definition.UnitID = "service-baseline." + definition.ServiceBaselineID
+	definition.ID = resourceID(tenant, deployment, definition.UnitID, definition.PluginID)
+	key := definition.ServiceBaselineID + "\x00" + definition.PluginID
+	if existing, duplicate := baselines[key]; duplicate {
+		if !reflect.DeepEqual(existing, definition) {
+			return nil, fmt.Errorf("公共基线 %q 的插件 %q 在不同服务单元中解析出不一致配置", definition.ServiceBaselineID, definition.PluginID)
+		}
+		return items, nil
+	}
+	baselines[key] = definition
+	return append(items, definition), nil
 }
 
 func definitionFor(deployment deploymentv2.Deployment, deploymentDigest string, unit deploymentv2.ServiceUnit, ref deploymentv1.PluginRef, envelope pluginconfig.Envelope, artifacts map[pluginv1.ArtifactRef]pluginv1.Artifact) (Definition, bool, error) {

@@ -23,6 +23,13 @@ export function createDeploymentPage(client: PlatformAdminClient, serviceID: str
     Invalid: message("plan.invalid", "无效"), Legacy: message("plan.legacy", "历史组合"),
   };
   const kindLabels = { Intent: message("kind.intent", "Application Intent"), Legacy: message("kind.legacy", "历史 Composition") };
+  const actionHandlers: Record<string, (revisionID: number) => Promise<unknown>> = {
+    "refresh-plan": (revisionID) => client.refreshIntentDraft(revisionID),
+    submit: (revisionID) => client.submitServiceDraft(revisionID),
+    approve: (revisionID) => client.approveServiceRevision(revisionID),
+    publish: (revisionID) => client.publishServiceRevision(revisionID),
+    rollback: (revisionID) => client.rollbackServiceRevision(revisionID),
+  };
   return defineCollectionPage<DeploymentRow>({
     id: `platform.deployment.${serviceID}`, path, title,
     description: message("page.description", "声明应用意图，由 Planner 派生依赖与运行策略，经审批后发布到 Node Agent 集群"),
@@ -73,11 +80,9 @@ export function createDeploymentPage(client: PlatformAdminClient, serviceID: str
     async runAction({ action, selected }) {
       const item = selected[0];
       if (item === undefined) return;
-      if (action.id === "refresh-plan") await client.refreshIntentDraft(item.id);
-      else if (action.id === "submit") await client.submitServiceDraft(item.id);
-      else if (action.id === "approve") await client.approveServiceRevision(item.id);
-      else if (action.id === "publish") await client.publishServiceRevision(item.id);
-      else if (action.id === "rollback") await client.rollbackServiceRevision(item.id);
+      const handler = actionHandlers[action.id];
+      if (handler === undefined) return;
+      await handler(item.id);
       return { notify: { title: action.label, kind: "success" } };
     },
   });

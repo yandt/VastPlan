@@ -65,7 +65,7 @@ func Generate(options Options) (Result, error) {
 	if len(goBinaries) == 1 {
 		rootComponent.Hashes = append(rootComponent.Hashes, cyclonedx.Hash{Alg: "SHA-256", Content: soleGoBinaryHash})
 	}
-	metafiles := cleanMetafiles(options.Metafiles)
+	metafiles := cleanPaths(options.Metafiles)
 	if len(metafiles) > 0 {
 		nodeValues, err := nodeDependencies(root, pluginDir, metafiles)
 		if err != nil {
@@ -114,10 +114,6 @@ func normalizeOptions(options Options) (string, string, error) {
 		return "", "", errors.New("插件目录必须位于工作区根内")
 	}
 	return root, pluginDir, nil
-}
-
-func cleanMetafiles(values []string) []string {
-	return cleanPaths(values)
 }
 
 func cleanPaths(values []string) []string {

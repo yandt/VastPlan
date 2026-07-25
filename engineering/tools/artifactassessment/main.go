@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -91,9 +92,7 @@ func run(ctx context.Context) error {
 	}
 	fmt.Fprintf(os.Stdout, "assessment=%s decision=%s reportSha256=%s\n", options.outputPath, evidence.Admission.Evaluation.Decision, evidence.Admission.Evaluation.Vulnerabilities.ReportSHA256)
 	if evidence.Admission.Evaluation.Decision != artifactassessment.DecisionPass {
-		return errorsNewDecisionFailed()
+		return errors.New("安全评估未通过策略阈值")
 	}
 	return nil
 }
-
-func errorsNewDecisionFailed() error { return fmt.Errorf("安全评估未通过策略阈值") }

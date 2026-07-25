@@ -80,7 +80,7 @@ func coreRepositoryHandlers(config serverConfig, manager *repositoryruntime.Mana
 			if err != nil {
 				return nil, nil, err
 			}
-			payload, err := marshalScanLease(lease)
+			payload, err := json.Marshal(lease)
 			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, payload, err
 		},
 		"appendAssessmentStatus": func(_ context.Context, _ sdk.Host, callCtx *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {

@@ -23,7 +23,7 @@ func TestStagePackageNormalizesPnpmVirtualStoreWithoutChangingStableBytes(t *tes
 func packageStagedMetafileFixture(t *testing.T, source string) []byte {
 	t.Helper()
 	bundle := filepath.Join(source, "frontend", "dist", "index.js")
-	staged, cleanup := stagePackageWithSupplyChain(source, "", "", bundle, "", "", "", "", "", "", "", "")
+	staged, cleanup := stagePackage(stagingOptions{Source: source, FrontendBundle: bundle})
 	defer cleanup()
 	raw, err := os.ReadFile(filepath.Join(staged, "frontend", "dist", "vastplan.server-metafile.json"))
 	if err != nil {

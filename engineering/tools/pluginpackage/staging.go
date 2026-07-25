@@ -15,21 +15,28 @@ import (
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactsupplychain"
 )
 
+type stagingOptions struct {
+	Source               string
+	BackendBin           string
+	BackendModule        string
+	FrontendBundle       string
+	FrontendGraph        string
+	FrontendServerGraph  string
+	FrontendGraphRoot    string
+	DynamicGoBin         string
+	DynamicGoFingerprint string
+	LicenseSource        string
+	NoticeSource         string
+	SBOMSource           string
+}
+
 // stagePackage creates a temporary package only when build outputs or legal
 // files must be injected. Destination paths always come from the validated manifest.
-func stagePackage(source, backendBin, frontendBundle, frontendGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
-	return stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, "", frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource)
-}
-
-func stagePackageWithGraphs(source, backendBin, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
-	return stagePackageWithBackendModuleAndGraphs(source, backendBin, "", frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource)
-}
-
-func stagePackageWithBackendModuleAndGraphs(source, backendBin, backendModule, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource string) (string, func()) {
-	return stagePackageWithSupplyChain(source, backendBin, backendModule, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource, "")
-}
-
-func stagePackageWithSupplyChain(source, backendBin, backendModule, frontendBundle, frontendGraph, frontendServerGraph, frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint, licenseSource, noticeSource, sbomSource string) (string, func()) {
+func stagePackage(options stagingOptions) (string, func()) {
+	source, backendBin, backendModule := options.Source, options.BackendBin, options.BackendModule
+	frontendBundle, frontendGraph, frontendServerGraph := options.FrontendBundle, options.FrontendGraph, options.FrontendServerGraph
+	frontendGraphRoot, dynamicGoBin, dynamicGoFingerprint := options.FrontendGraphRoot, options.DynamicGoBin, options.DynamicGoFingerprint
+	licenseSource, noticeSource, sbomSource := options.LicenseSource, options.NoticeSource, options.SBOMSource
 	manifestRaw, err := os.ReadFile(filepath.Join(source, "vastplan.plugin.json"))
 	if err != nil {
 		fatalf("读取插件清单失败: %v", err)

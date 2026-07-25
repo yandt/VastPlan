@@ -24,7 +24,17 @@ func (s *Service) recoverInterrupted(ctx context.Context, host sdk.Host, call *c
 	if err != nil {
 		return err
 	}
+	for _, item := range s.interruptedCandidates(tenant) {
+		if err := s.recoverInterruptedCandidate(ctx, host, call, actor, item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) interruptedCandidates(tenant string) []interruptedCandidate {
 	s.mu.Lock()
+	defer s.mu.Unlock()
 	state := s.tenantLocked(tenant)
 	interrupted := make([]interruptedCandidate, 0)
 	for _, candidate := range state.Candidates {
@@ -32,121 +42,123 @@ func (s *Service) recoverInterrupted(ctx context.Context, host sdk.Host, call *c
 			interrupted = append(interrupted, interruptedCandidate{tenant: tenant, candidate: cloneCandidate(candidate), stages: cloneStages(state.CredentialStages[candidate.ID])})
 		}
 	}
-	s.mu.Unlock()
-	for _, item := range interrupted {
-		switch item.candidate.Status {
-		case pluginconfiguration.CandidatePreparing:
-			if allCredentialFieldsCheckpointed(item.candidate) {
-				if _, err := s.finishPreparing(item.tenant, item.candidate.ID, actor); err != nil {
-					return err
-				}
-				continue
-			}
-			abortErr := abortCredentialStages(ctx, host, call, item.candidate.ID, item.stages)
-			if err := s.failPreparing(item.tenant, item.candidate.ID, actor, abortErr); err != nil {
-				return errors.Join(abortErr, err)
-			}
-		case pluginconfiguration.CandidateRollingBack:
-			if item.candidate.ApplyPath == pluginconfiguration.ApplyResourceProfile {
-				s.mu.Lock()
-				activation, exists := s.tenantLocked(item.tenant).ResourceActivations[item.candidate.ID]
-				s.mu.Unlock()
-				if exists && activation.Status == resourceAborting {
-					if _, err := s.continueResourceAbort(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
-						return err
-					}
-					continue
-				}
-			}
-			if item.candidate.ApplyPath == pluginconfiguration.ApplyHotService {
-				s.mu.Lock()
-				activation, exists := s.tenantLocked(item.tenant).HotActivations[item.candidate.ID]
-				s.mu.Unlock()
-				if exists && activation.Status == hotAborting {
-					if _, err := s.continueHotAbort(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
-						return err
-					}
-					continue
-				}
-			}
-			if err := abortCredentialStages(ctx, host, call, item.candidate.ID, item.stages); err != nil {
-				return err
-			}
-			if _, err := s.completeRollback(item.tenant, item.candidate.ID, actor); err != nil {
-				return err
-			}
-		case pluginconfiguration.CandidatePublishing:
-			switch item.candidate.ApplyPath {
-			case pluginconfiguration.ApplyApplicationDeployment:
-				activation, err := s.recoverPublishing(ctx, host, call, item)
-				if err != nil {
-					return err
-				}
-				if _, err := s.refreshExternalStatus(item.tenant, item.candidate.ID, activation); err != nil {
-					return err
-				}
-			case pluginconfiguration.ApplyPlatformProfile:
-				activation, err := s.recoverProfilePublishing(ctx, host, call, item)
-				if err != nil {
-					return err
-				}
-				if _, err := s.refreshProfileExternal(item.tenant, actor, item.candidate.ID, activation); err != nil {
-					return err
-				}
-			case pluginconfiguration.ApplyHotService:
-				if err := s.recoverHotPublishing(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
-					return err
-				}
-			case pluginconfiguration.ApplyResourceProfile:
-				if err := s.recoverResourcePublishing(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
-					return err
-				}
-			case pluginconfiguration.ApplyHotScoped:
-				if err := s.recoverScopedPublishing(item.tenant, item.candidate.ID); err != nil {
-					return err
-				}
-			default:
-				return ErrInvalid
-			}
-		case pluginconfiguration.CandidateActivating:
-			if item.candidate.ApplyPath == pluginconfiguration.ApplyResourceProfile {
-				if _, err := s.continueResourceActivation(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
-					return err
-				}
-				continue
-			}
-			if item.candidate.ApplyPath == pluginconfiguration.ApplyHotService {
-				if _, err := s.continueHotActivation(ctx, host, call, item.tenant, actor, item.candidate.ID); err != nil {
-					return err
-				}
-				continue
-			}
-			if err := s.prepareCredentialStages(ctx, host, call, item.tenant, item.candidate.ID, item.stages); err != nil {
-				return err
-			}
-			switch item.candidate.ApplyPath {
-			case pluginconfiguration.ApplyApplicationDeployment:
-				activation, err := publishDeploymentActivation(ctx, host, call, item.candidate.ID)
-				if err != nil {
-					return err
-				}
-				if _, err := s.completeExternalActivation(ctx, host, call, item.tenant, actor, item.candidate.ID, activation); err != nil {
-					return err
-				}
-			case pluginconfiguration.ApplyPlatformProfile:
-				activation, err := publishProfileActivation(ctx, host, call, item.candidate.ID)
-				if err != nil {
-					return err
-				}
-				if _, err := s.completeProfileActivation(ctx, host, call, item.tenant, actor, item.candidate.ID, activation); err != nil {
-					return err
-				}
-			default:
-				return ErrInvalid
-			}
-		}
+	return interrupted
+}
+
+func (s *Service) recoverInterruptedCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, actor string, item interruptedCandidate) error {
+	switch item.candidate.Status {
+	case pluginconfiguration.CandidatePreparing:
+		return s.recoverPreparingCandidate(ctx, host, call, actor, item)
+	case pluginconfiguration.CandidateRollingBack:
+		return s.recoverRollingBackCandidate(ctx, host, call, actor, item)
+	case pluginconfiguration.CandidatePublishing:
+		return s.recoverPublishingCandidate(ctx, host, call, actor, item)
+	case pluginconfiguration.CandidateActivating:
+		return s.recoverActivatingCandidate(ctx, host, call, actor, item)
+	default:
+		return ErrInvalid
+	}
+}
+
+func (s *Service) recoverPreparingCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, actor string, item interruptedCandidate) error {
+	if allCredentialFieldsCheckpointed(item.candidate) {
+		_, err := s.finishPreparing(item.tenant, item.candidate.ID, actor)
+		return err
+	}
+	abortErr := abortCredentialStages(ctx, host, call, item.candidate.ID, item.stages)
+	if err := s.failPreparing(item.tenant, item.candidate.ID, actor, abortErr); err != nil {
+		return errors.Join(abortErr, err)
 	}
 	return nil
+}
+
+func (s *Service) recoverRollingBackCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, actor string, item interruptedCandidate) error {
+	if item.candidate.ApplyPath == pluginconfiguration.ApplyResourceProfile && s.resourceAbortInterrupted(item) {
+		_, err := s.continueResourceAbort(ctx, host, call, item.tenant, actor, item.candidate.ID)
+		return err
+	}
+	if item.candidate.ApplyPath == pluginconfiguration.ApplyHotService && s.hotAbortInterrupted(item) {
+		_, err := s.continueHotAbort(ctx, host, call, item.tenant, actor, item.candidate.ID)
+		return err
+	}
+	if err := abortCredentialStages(ctx, host, call, item.candidate.ID, item.stages); err != nil {
+		return err
+	}
+	_, err := s.completeRollback(item.tenant, item.candidate.ID, actor)
+	return err
+}
+
+func (s *Service) resourceAbortInterrupted(item interruptedCandidate) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	activation, exists := s.tenantLocked(item.tenant).ResourceActivations[item.candidate.ID]
+	return exists && activation.Status == resourceAborting
+}
+
+func (s *Service) hotAbortInterrupted(item interruptedCandidate) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	activation, exists := s.tenantLocked(item.tenant).HotActivations[item.candidate.ID]
+	return exists && activation.Status == hotAborting
+}
+
+func (s *Service) recoverPublishingCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, actor string, item interruptedCandidate) error {
+	switch item.candidate.ApplyPath {
+	case pluginconfiguration.ApplyApplicationDeployment:
+		activation, err := s.recoverPublishing(ctx, host, call, item)
+		if err != nil {
+			return err
+		}
+		_, err = s.refreshExternalStatus(item.tenant, item.candidate.ID, activation)
+		return err
+	case pluginconfiguration.ApplyPlatformProfile:
+		activation, err := s.recoverProfilePublishing(ctx, host, call, item)
+		if err != nil {
+			return err
+		}
+		_, err = s.refreshProfileExternal(item.tenant, actor, item.candidate.ID, activation)
+		return err
+	case pluginconfiguration.ApplyHotService:
+		return s.recoverHotPublishing(ctx, host, call, item.tenant, actor, item.candidate.ID)
+	case pluginconfiguration.ApplyResourceProfile:
+		return s.recoverResourcePublishing(ctx, host, call, item.tenant, actor, item.candidate.ID)
+	case pluginconfiguration.ApplyHotScoped:
+		return s.recoverScopedPublishing(item.tenant, item.candidate.ID)
+	default:
+		return ErrInvalid
+	}
+}
+
+func (s *Service) recoverActivatingCandidate(ctx context.Context, host sdk.Host, call *contractv1.CallContext, actor string, item interruptedCandidate) error {
+	switch item.candidate.ApplyPath {
+	case pluginconfiguration.ApplyResourceProfile:
+		_, err := s.continueResourceActivation(ctx, host, call, item.tenant, actor, item.candidate.ID)
+		return err
+	case pluginconfiguration.ApplyHotService:
+		_, err := s.continueHotActivation(ctx, host, call, item.tenant, actor, item.candidate.ID)
+		return err
+	}
+	if err := s.prepareCredentialStages(ctx, host, call, item.tenant, item.candidate.ID, item.stages); err != nil {
+		return err
+	}
+	switch item.candidate.ApplyPath {
+	case pluginconfiguration.ApplyApplicationDeployment:
+		activation, err := publishDeploymentActivation(ctx, host, call, item.candidate.ID)
+		if err != nil {
+			return err
+		}
+		_, err = s.completeExternalActivation(ctx, host, call, item.tenant, actor, item.candidate.ID, activation)
+		return err
+	case pluginconfiguration.ApplyPlatformProfile:
+		activation, err := publishProfileActivation(ctx, host, call, item.candidate.ID)
+		if err != nil {
+			return err
+		}
+		_, err = s.completeProfileActivation(ctx, host, call, item.tenant, actor, item.candidate.ID, activation)
+		return err
+	default:
+		return ErrInvalid
+	}
 }
 
 func (s *Service) recoverScopedPublishing(tenant, id string) error {

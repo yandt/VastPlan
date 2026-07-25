@@ -14,6 +14,8 @@ const endpoint = "/v1/portal-preference";
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
+type PreferenceInvocation = { operation: "get" | "put"; payload: unknown };
+
 export class PortalPreferenceRoutes {
   private readonly activations: PortalActivationCatalog;
 
@@ -53,30 +55,18 @@ export class PortalPreferenceRoutes {
     let scope: PortalPreferenceScope;
     try { scope = preferenceScopeForPortal(active.resolved); }
     catch { sendAPIError(response, 502, "portal_preference_unavailable", method === "HEAD"); return true; }
-    let operation: "get" | "put" = "get";
-    let payload: unknown = { scope };
-    if (method === "PUT") {
-      try {
-        operation = "put";
-        const body = parsePreferencePutBody(await readRequestJSON(request, 256 << 10));
-        payload = { scope, expectedRevision: body.expectedRevision, values: body.values };
-      } catch (error) {
-        if (error instanceof RequestJSONError || error instanceof Error) {
-          sendAPIError(response, 400, "portal_preference_invalid");
-          return true;
-        }
-        throw error;
-      }
+    let invocation: PreferenceInvocation;
+    try {
+      invocation = await preferenceInvocation(method, request, scope);
+    } catch (error) {
+      if (!(error instanceof RequestJSONError) && !(error instanceof Error)) throw error;
+      sendAPIError(response, 400, "portal_preference_invalid");
+      return true;
     }
     let raw: Uint8Array;
-    try { raw = await this.preferences.call(principal, operation, encoder.encode(JSON.stringify(payload)), signal); }
+    try { raw = await this.preferences.call(principal, invocation.operation, encoder.encode(JSON.stringify(invocation.payload)), signal); }
     catch (error) {
-      if (error instanceof CapabilityApplicationError) {
-        if (error.code === "portal.preference.conflict") sendAPIError(response, 409, "portal_preference_conflict", method === "HEAD");
-        else if (error.code === "portal.preference.invalid") sendAPIError(response, 400, "portal_preference_invalid", method === "HEAD");
-        else if (error.code === "permission.denied") sendAPIError(response, 403, "portal_preference_forbidden", method === "HEAD");
-        else sendAPIError(response, 502, "portal_preference_unavailable", method === "HEAD");
-      } else sendAPIError(response, 502, "portal_preference_unavailable", method === "HEAD");
+      sendPreferenceCallError(response, error, method === "HEAD");
       return true;
     }
     let preference: PortalPreference;
@@ -87,4 +77,21 @@ export class PortalPreferenceRoutes {
     sendJSON(response, 200, preference, method === "HEAD");
     return true;
   }
+
+}
+
+async function preferenceInvocation(method: string, request: IncomingMessage, scope: PortalPreferenceScope): Promise<PreferenceInvocation> {
+  if (method !== "PUT") return { operation: "get", payload: { scope } };
+  const body = parsePreferencePutBody(await readRequestJSON(request, 256 << 10));
+  return { operation: "put", payload: { scope, expectedRevision: body.expectedRevision, values: body.values } };
+}
+
+function sendPreferenceCallError(response: ServerResponse, error: unknown, head: boolean): void {
+  const failures: Record<string, { status: number; code: string }> = {
+    "portal.preference.conflict": { status: 409, code: "portal_preference_conflict" },
+    "portal.preference.invalid": { status: 400, code: "portal_preference_invalid" },
+    "permission.denied": { status: 403, code: "portal_preference_forbidden" },
+  };
+  const failure = error instanceof CapabilityApplicationError ? failures[error.code] : undefined;
+  sendAPIError(response, failure?.status ?? 502, failure?.code ?? "portal_preference_unavailable", head);
 }
