@@ -31,10 +31,7 @@ var productionFileSizeExceptions = map[string]sizeException{}
 // Function exceptions use exact receiver/name identities and freeze the
 // current span. Keep this list intentionally small; workflow-sized functions
 // should normally be decomposed before landing.
-var goFunctionSizeExceptions = map[string]sizeException{
-	"extensions/plugins/cn.vastplan.platform.configuration.portal-composer/portalcomposer/capability.go#(*Service).Handle":  {232, "Portal Composer 能力分发仍待按治理领域拆分"},
-	"extensions/plugins/cn.vastplan.platform.integration.api-exposure/apiexposure/capability.go#(*Service).handlePrincipal": {186, "API Exposure 协议分发仍待按控制面和数据面拆分"},
-}
+var goFunctionSizeExceptions = map[string]sizeException{}
 
 func TestArch_ProductionFilesDoNotAccumulateResponsibilities(t *testing.T) {
 	root := repoRoot(t)
