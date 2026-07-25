@@ -28,11 +28,7 @@ type sizeException struct {
 // once a file falls under the default limit this entry must be deleted.
 var productionFileSizeExceptions = map[string]sizeException{
 	"contracts/schemas/plugin/v1/schema.go":                                                                        {1039, "插件清单契约仍待按执行、贡献与配置验证拆分"},
-	"extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/deploymentmanager/service.go":       {958, "部署服务仍待拆分节点引导状态与协议适配"},
-	"extensions/plugins/cn.vastplan.platform.security.credentials/credentials/service.go":                          {944, "凭证服务仍待拆分 Vault、生命周期与 material lease"},
-	"extensions/plugins/cn.vastplan.foundation.data.relational.runtime/databaseruntime/pool_manager.go":            {841, "连接池管理器仍待拆分代际、租约与回收策略"},
 	"engineering/tools/platform-dev.sh":                                                                            {810, "开发入口脚本保留薄命令 UX，子命令仍待逐步迁入 Go"},
-	"extensions/plugins/cn.vastplan.platform.interaction.broker/interaction/service.go":                            {751, "交互 Broker 仍待拆分记录、观察与表单安全"},
 	"core/kernels/backend/hostfactory/host.go":                                                                     {699, "宿主组合根仍待把各领域 Host Service 工厂分文件"},
 	"core/shared/go/platformadminapi/platform.go":                                                                  {685, "平台管理 API 类型仍待按领域拆文件"},
 	"contracts/schemas/composition/frontend/v1/schema.go":                                                          {654, "Frontend Composition 契约仍待拆分类型与验证"},
