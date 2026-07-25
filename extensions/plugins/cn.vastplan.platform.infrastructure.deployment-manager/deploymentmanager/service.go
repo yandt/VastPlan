@@ -29,7 +29,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.infrastructure.deployment-manager"
-	PluginVersion = "0.19.0"
+	PluginVersion = "0.20.0"
 	Capability    = platformadminapi.DeploymentCapability
 	jobTTL        = 30 * time.Minute
 	maxStateBytes = 1 << 20
@@ -709,7 +709,6 @@ func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contrac
 		IfVersion             *int64                                             `json:"ifVersion,omitempty"`
 		RevisionID            uint64                                             `json:"revisionId"`
 		ReleaseID             uint64                                             `json:"releaseId"`
-		Composition           backendcompositionv1.ApplicationComposition        `json:"composition"`
 		Intent                backendcompositionv1.ApplicationIntent             `json:"intent"`
 		ConfigurationSnapshot backendcompositionv1.PlanningConfigurationSnapshot `json:"configurationSnapshot"`
 		Binding               platformadminapi.PutTestTargetBindingRequest       `json:"binding"`
@@ -774,10 +773,6 @@ func (s *Service) handleLoaded(ctx context.Context, host sdk.Host, call *contrac
 		var items []platformadminapi.ServiceRevision
 		items, err = s.ListServiceRevisions(call)
 		out = map[string]any{"items": publicServiceRevisions(items)}
-	case "createServiceDraft":
-		out, err = s.CreateServiceDraft(ctx, host, call, request.Composition)
-	case "updateServiceDraft":
-		out, err = s.UpdateServiceDraft(ctx, host, call, request.RevisionID, request.Composition)
 	case "createIntentDraft":
 		out, err = s.CreateIntentDraft(ctx, host, call, request.Intent)
 	case "updateIntentDraft":
@@ -923,8 +918,6 @@ func Descriptor() []byte {
 		{"name":"approveBootstrap","description":"由不同审批人批准并触发可信内核引导","paramsSchema":{"type":"object","properties":{"jobId":{"type":"string"}},"required":["jobId"]}}
 		,{"name":"listDeploymentTargets","description":"列出平台预授权的部署目标","paramsSchema":{"type":"object","properties":{}}}
 		,{"name":"listServiceRevisions","description":"列出服务组合修订","paramsSchema":{"type":"object","properties":{}}}
-		,{"name":"createServiceDraft","description":"创建仅含应用配置的服务草稿","paramsSchema":{"type":"object","properties":{"composition":{"type":"object"}},"required":["composition"]}}
-		,{"name":"updateServiceDraft","description":"更新服务组合草稿","paramsSchema":{"type":"object","properties":{"revisionId":{"type":"integer","minimum":1},"composition":{"type":"object"}},"required":["revisionId","composition"]}}
 		,{"name":"createIntentDraft","description":"创建 Application Intent 规划草稿","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"intent":{"type":"object"}},"required":["intent"]}}
 		,{"name":"updateIntentDraft","description":"更新 Application Intent 并重建计划快照","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"revisionId":{"type":"integer","minimum":1},"intent":{"type":"object"}},"required":["revisionId","intent"]}}
 		,{"name":"refreshIntentDraft","description":"显式接受最新 Planner 结果并清除 stale","paramsSchema":{"type":"object","additionalProperties":false,"properties":{"revisionId":{"type":"integer","minimum":1}},"required":["revisionId"]}}
@@ -956,7 +949,7 @@ func Contribution(service *Service) sdk.Contribution {
 			return service.Handler(ctx, host, call, payload, operation)
 		}
 	}
-	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createServiceDraft", "updateServiceDraft", "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "bindIntentConfiguration", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
+	operations := []string{"listNodes", "putNode", "listBootstrapJobs", "createBootstrap", "approveBootstrap", "listDeploymentTargets", "listServiceRevisions", "createIntentDraft", "updateIntentDraft", "refreshIntentDraft", "bindIntentConfiguration", "submitServiceDraft", "approveServiceRevision", "publishServiceRevision", "rollbackServiceRevision", configurationactivation.CreateOperation, configurationactivation.GetOperation, configurationactivation.PublishOperation, platformprofileactivation.CreateActivationOperation, platformprofileactivation.GetActivationOperation, platformprofileactivation.ApproveActivationOperation, platformprofileactivation.PublishActivationOperation, platformprofileactivation.AbortActivationOperation, "listServiceRevisionAudit", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"}
 	handlers := make(map[string]sdk.Handler, len(operations))
 	for _, operation := range operations {
 		handlers[operation] = handler(operation)

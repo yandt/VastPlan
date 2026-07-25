@@ -25,6 +25,8 @@
 
 0.19.0 起，在线服务组合以 Application Intent 为用户输入，并持久化 Planner 返回的 Resolution Report。提交、审批、发布前都重新规划；任一计划输入变化都会撤销审批并标记 stale，不能沿用旧摘要发布。`BackendPlatformCatalog` 的启动文件只是可信 Seed，以 `(tenantId, deploymentName)` 锁定精确 Platform Profile；内核只通过认证的 targets 回调向本插件提供规划所需 Profile，浏览器仍只能看到摘要。真正的 Profile 克隆、Catalog CAS、Composition 复验和 Deployment 发布仍在内核。Profile 候选存在时目标 binding 的普通 Application 发布被锁定；中断依靠 candidate/request digest 检查点恢复，不盲目重放副作用。
 
+0.20.0 起，Portal 只允许编辑 Application Intent：根插件、Feature、非敏感插件配置和受限容量/放置参数。依赖、实例策略、状态模型、逻辑服务、路由、Provider Binding 与精确制品锁全部由 Planner 派生并只读展示；旧 Composition 创建/更新操作已退出在线 API，历史 revision 只用于审计和查看。
+
 测试目标绑定只能指向活动 Application Composition 内已有的应用插件，不能增加插件，也不能覆盖 `cn.vastplan.foundation.*` 或 `cn.vastplan.platform.*`。测试发布只接受 `testing` channel 的 SemVer 预发布版本和精确 SHA/repositoryRevision；上传与发布是两个事务。候选就绪与回滚通过 `kernel.deployment.readiness` 读取内核持有的 NATS Composition report，插件不获得 KV 句柄。
 
 0.17.0 起，租户状态通过可信宿主 `kernel.state.shared.get/create/update` 保存为 `tenant/deployment.control/tenant` 单文档 CAS 聚合；插件不持有 NATS、数据库或文件系统凭证。0.18.0 进一步复用 Unit Leadership 的 host-only epoch/token 保护 mutating 内核回调：新 leader 可以读取同一账本并执行中断恢复，旧 leader 的过期写入被 Store revision 拒绝，失效 Runtime 不能开始新副作用；SSH 远端再用 root-owned `flock` 与单调 epoch 拒绝延迟旧请求。当前仍采用 `leader + external-shared + leader routing`，不宣称 active-active。

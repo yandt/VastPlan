@@ -1,11 +1,12 @@
 {
   "name": "@vastplan/deployment-manager-ui",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.tsx" },
   "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
   "dependencies": {
+    "@vastplan/composition-planning": "workspace:*",
     "@vastplan/platform-admin": "workspace:*",
     "@vastplan/workbench-sdk": "workspace:*"
   },

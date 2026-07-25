@@ -66,7 +66,7 @@ describe("PlatformAdminClient", () => {
     ]);
   });
 
-  it("keeps online service composition on portal-scoped fixed routes", async () => {
+  it("keeps online service revision publication on portal-scoped fixed routes", async () => {
     const calls: Array<{ path: string; method?: string }> = [];
     const fetcher: PlatformFetch = async (path, init) => {
       calls.push({ path, method: init?.method });

@@ -429,6 +429,9 @@ importers:
 
   extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/frontend:
     dependencies:
+      '@vastplan/composition-planning':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/composition-planning
       '@vastplan/platform-admin':
         specifier: workspace:*
         version: link:../../../sdk/ts/platform-admin

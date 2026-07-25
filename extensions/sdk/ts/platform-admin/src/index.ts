@@ -634,12 +634,6 @@ export class PlatformAdminClient {
 
   public listDeploymentTargets(): Promise<DeploymentTarget[]> { return this.get(`${this.basePath}/deployment/targets`); }
   public listServiceRevisions(): Promise<ServiceRevision[]> { return this.get(`${this.basePath}/deployment/service-revisions`); }
-  public createServiceDraft(composition: BackendApplicationComposition): Promise<ServiceRevision> {
-    return this.mutate(`${this.basePath}/deployment/service-revisions`, "POST", { composition });
-  }
-  public updateServiceDraft(id: number, composition: BackendApplicationComposition): Promise<ServiceRevision> {
-    return this.mutate(`${this.basePath}/deployment/service-revisions/${revision(id)}`, "PUT", { composition });
-  }
   public createIntentDraft(intent: BackendApplicationIntent): Promise<ServiceRevision> {
     return this.mutate(`${this.basePath}/deployment/service-revisions`, "POST", { intent });
   }

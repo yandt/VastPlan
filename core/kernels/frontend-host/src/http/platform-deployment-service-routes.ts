@@ -3,7 +3,7 @@ import type { PlatformCapabilityPort } from "../capabilities/platform-management
 import type { PlatformManagementTarget } from "../capabilities/platform-management-resolver";
 import type { Principal } from "../identity/identity-provider";
 import { authorizeDeployment, callDeployment, listDeployment, rejectDeploymentRoute } from "./platform-deployment-route-support";
-import { requireEmptyJSONObject, requireJSONObject, withRequestJSON } from "./request-json";
+import { RequestJSONError, requireEmptyJSONObject, requireJSONObject, withRequestJSON } from "./request-json";
 import { parseRevisionID } from "./revision-route-contract";
 
 const actions = Object.freeze({
@@ -25,8 +25,8 @@ export class PlatformDeploymentServiceRoutes {
       if (method === "GET" || method === "HEAD") return listDeployment(this.client, "listServiceRevisions", principal, target, request, response, signal);
       if (method === "POST") {
         await withRequestJSON(request, response, async (body) => {
-          const payload = requireJSONObject(body);
-          const operation = Object.hasOwn(payload, "intent") ? "createIntentDraft" : "createServiceDraft";
+          const payload = requireIntentPayload(body);
+          const operation = "createIntentDraft";
           if (!authorizeDeployment(this.client, target, operation, true, principal, "platform.deployment.compose", response)) return;
           await callDeployment({ client: this.client, principal, target, operation, write: true, payload, response, signal });
         });
@@ -39,8 +39,8 @@ export class PlatformDeploymentServiceRoutes {
     if (parts.length === 2) {
       if (method !== "PUT") return rejectDeploymentRoute(response, 405, "method_not_allowed", method);
       await withRequestJSON(request, response, async (body) => {
-        const payload = requireJSONObject(body);
-        const operation = Object.hasOwn(payload, "intent") ? "updateIntentDraft" : "updateServiceDraft";
+        const payload = requireIntentPayload(body);
+        const operation = "updateIntentDraft";
         if (!authorizeDeployment(this.client, target, operation, true, principal, "platform.deployment.compose", response)) return;
         await callDeployment({ client: this.client, principal, target, operation, write: true, payload: { ...payload, revisionId }, response, signal });
       });
@@ -69,4 +69,12 @@ export class PlatformDeploymentServiceRoutes {
     });
     return true;
   }
+}
+
+function requireIntentPayload(value: unknown): Readonly<{ intent: unknown }> {
+  const object = requireJSONObject(value);
+  if (Object.keys(object).length !== 1 || !Object.hasOwn(object, "intent") || typeof object.intent !== "object" || object.intent === null || Array.isArray(object.intent)) {
+    throw new RequestJSONError("请求只能包含 Application Intent");
+  }
+  return object as Readonly<{ intent: unknown }>;
 }

@@ -626,10 +626,6 @@ type CreateTestReleaseRequest struct {
 	Receipt   artifactrepositoryv1.Receipt `json:"receipt"`
 }
 
-type ServiceCompositionRequest struct {
-	Composition backendcompositionv1.ApplicationComposition `json:"composition"`
-}
-
 type ServiceIntentRequest struct {
 	Intent backendcompositionv1.ApplicationIntent `json:"intent"`
 }
@@ -673,8 +669,6 @@ type Service interface {
 	ApproveBootstrapJob(context.Context, portalapi.Principal, portalapi.ManagementTarget, string) (BootstrapJob, error)
 	ListDeploymentTargets(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]DeploymentTarget, error)
 	ListServiceRevisions(context.Context, portalapi.Principal, portalapi.ManagementTarget) ([]ServiceRevision, error)
-	CreateServiceDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, ServiceCompositionRequest) (ServiceRevision, error)
-	UpdateServiceDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64, ServiceCompositionRequest) (ServiceRevision, error)
 	CreateIntentDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, ServiceIntentRequest) (ServiceRevision, error)
 	UpdateIntentDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64, ServiceIntentRequest) (ServiceRevision, error)
 	RefreshIntentDraft(context.Context, portalapi.Principal, portalapi.ManagementTarget, uint64) (ServiceRevision, error)
