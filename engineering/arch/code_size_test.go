@@ -28,14 +28,10 @@ type sizeException struct {
 // once a file falls under the default limit this entry must be deleted.
 var productionFileSizeExceptions = map[string]sizeException{
 	"engineering/tools/platform-dev.sh":                                                                            {810, "开发入口脚本保留薄命令 UX，子命令仍待逐步迁入 Go"},
-	"core/kernels/backend/hostfactory/host.go":                                                                     {699, "宿主组合根仍待把各领域 Host Service 工厂分文件"},
-	"core/kernels/backend/nodeagent/reconciler.go":                                                                 {636, "Node Reconciler 仍待拆分安装计划与实际态提交"},
 	"extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/deploymentmanager/test_releases.go": {623, "测试发布 Saga 尚未按候选与回滚阶段拆分"},
 	"extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog/resolver.go":                             {623, "制品解析器仍待拆分约束求解与锁生成"},
-	"core/shared/go/protocolbus/server.go":                                                                         {620, "协议服务端仍待拆分握手、Channel 与 HostCall"},
 	"extensions/sdk/ts/ui-primitives/src/index.ts":                                                                 {617, "公共 UI 契约待按 form、shell、collection 与 theme 分文件导出"},
 	"extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog/publications.go":                         {613, "仓库发布审批与证据读取仍待拆分"},
-	"core/shared/go/addressing/registration.go":                                                                    {609, "寻址注册仍待拆分租约、更新与关闭流程"},
 }
 
 // Function exceptions use exact receiver/name identities and freeze the
