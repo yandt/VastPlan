@@ -28,6 +28,8 @@
 
 0.20.0 完成 ADR-0143 P4：Portal 改为 Workbench Application Intent 表单，移除依赖、实例策略、状态模型、逻辑服务和路由等内部执行输入，增加 Feature、插件配置及受限容量/放置意图；Resolution Report、服务依赖图、Provider Binding、配置计划、Artifact Lock、诊断和内核 Deployment 只读展示。在线 BFF、SDK、Descriptor 与管理绑定不再暴露 `createServiceDraft/updateServiceDraft`，历史 Composition revision 仅保留只读查看。
 
+ADR-0143 P5 的真实签名插件测试进一步验证了本插件的状态机边界：仓库解析结果变化会在审批时持久化 `planningStale`、退回 Draft 并撤销摘要；显式刷新和重新审批后，发布仍只经既有可信内核服务完成。该验收未给 Deployment Manager 增加仓库私钥、制品读取、Deployment CAS 或 Node Agent 控制权。
+
 活动作业期间节点定义被冻结。新执行实例首次读取某租户共享账本时，未确认的 `Connecting/Installing` 会落为 `Failed` 且不自动重放，避免高权限 SSH 被重复执行。服务发布采用不同语义：`Publishing` 可用同 revision/同摘要幂等重试；中断的 Test Release 则 fail-closed 并要求显式恢复回滚。`kernel.deployment.targets/preview/publish/readiness` 只接受精确插件身份，并由内核固定 Profile、验签制品、CAS 写入和判断真实收敛。租户状态使用 `tenant/deployment.control/tenant` 单文档 CAS 聚合；Store revision 可拒绝 stale writer，但不等同于外部 SSH/systemd 副作用 fencing，因此当前保持单 Leader。运行说明见插件目录 [README](../../../extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/README.md)，完整边界见《[服务部署控制台](../architecture/服务部署控制台.md)》、《[制品仓库与测试发布](../architecture/制品仓库与测试发布.md)》、[ADR-0070](../decisions/ADR-0070-Deployment-Manager与可信引导执行边界.md)、[ADR-0071](../decisions/ADR-0071-签名Node-Lease与可信就绪判定.md)、[ADR-0077](../decisions/ADR-0077-Backend在线组合与可信发布边界.md)、[ADR-0097](../decisions/ADR-0097-测试制品仓库与前端分级热升级.md) 与 [ADR-0126](../decisions/ADR-0126-Deployment-Manager共享账本与副作用Fencing.md)。
 
 0.18.0 起，mutating 内核回调必须携带 Runtime Host 注入的当前 Unit Leadership evidence；插件不可读取或提交 epoch/token。SSH 引导以持久 Job ID 作为 OperationID，远端使用 root-owned fence 目录、`flock` 和单调 epoch 拒绝旧 leader；Deployment 与 Platform Profile 写入继续叠加既有 revision/request digest CAS。完整设计见 [ADR-0128](../decisions/ADR-0128-统一Leader-Epoch与外部副作用Fencing.md)。
