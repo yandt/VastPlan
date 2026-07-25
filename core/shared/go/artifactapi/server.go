@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"strings"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
@@ -97,7 +98,7 @@ func (s *Server) readAssessmentReport(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	parts := strings.Split(strings.Trim(req.URL.EscapedPath(), "/"), "/")
-	if len(parts) != 3 || parts[0] != "v1" || parts[1] != "assessment-reports" || !validSHA256(parts[2]) {
+	if len(parts) != 3 || parts[0] != "v1" || parts[1] != "assessment-reports" || !commonv1.IsSHA256(parts[2]) {
 		http.NotFound(w, req)
 		return
 	}
@@ -117,18 +118,6 @@ func (s *Server) readAssessmentReport(w http.ResponseWriter, req *http.Request) 
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	_, _ = w.Write(raw)
-}
-
-func validSHA256(value string) bool {
-	if len(value) != 64 {
-		return false
-	}
-	for _, char := range value {
-		if char < '0' || char > '9' && (char < 'a' || char > 'f') {
-			return false
-		}
-	}
-	return true
 }
 
 func (s *Server) publish(w http.ResponseWriter, req *http.Request) {

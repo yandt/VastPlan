@@ -5,10 +5,11 @@ package configurationauthority
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 const (
@@ -67,9 +68,9 @@ type Claims struct {
 }
 
 func (c Claims) Validate(now time.Time, tenant string) error {
-	if c.SchemaVersion != SchemaVersion || !validHexID(c.AuthorityID, TokenPrefix, 64) ||
+	if c.SchemaVersion != SchemaVersion || !commonv1.IsPrefixedHex(c.AuthorityID, TokenPrefix, 64) ||
 		strings.TrimSpace(c.TenantID) == "" || c.TenantID != tenant ||
-		!validHexID(c.ConfigurationID, "cfg_", 24) || !validHexID(c.CandidateID, "pcfg_", 32) ||
+		!commonv1.IsPrefixedHex(c.ConfigurationID, "cfg_", 24) || !commonv1.IsPrefixedHex(c.CandidateID, "pcfg_", 32) ||
 		strings.TrimSpace(c.CatalogDigest) == "" || len(c.CatalogDigest) != 64 ||
 		strings.TrimSpace(c.Deployment) == "" || strings.TrimSpace(c.UnitID) == "" ||
 		strings.TrimSpace(c.FieldID) == "" || strings.TrimSpace(c.Owner) == "" ||
@@ -80,7 +81,7 @@ func (c Claims) Validate(now time.Time, tenant string) error {
 	if (c.ResourceCollectionID == "") != (c.ResourceID == "") {
 		return ErrInvalid
 	}
-	if c.ResourceCollectionID != "" && (!validHexID(c.ResourceCollectionID, "cfgc_", 24) || !validHexID(c.ResourceID, "cfgp_", 32)) {
+	if c.ResourceCollectionID != "" && (!commonv1.IsPrefixedHex(c.ResourceCollectionID, "cfgc_", 24) || !commonv1.IsPrefixedHex(c.ResourceID, "cfgp_", 32)) {
 		return ErrInvalid
 	}
 	if !c.ExpiresAt.After(c.IssuedAt) || c.ExpiresAt.Sub(c.IssuedAt) > MaximumTTL {
@@ -90,14 +91,6 @@ func (c Claims) Validate(now time.Time, tenant string) error {
 		return ErrExpired
 	}
 	return nil
-}
-
-func validHexID(value, prefix string, hexLength int) bool {
-	if len(value) != len(prefix)+hexLength || !strings.HasPrefix(value, prefix) {
-		return false
-	}
-	_, err := hex.DecodeString(strings.TrimPrefix(value, prefix))
-	return err == nil
 }
 
 type Issuer interface {

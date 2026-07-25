@@ -11,6 +11,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 func SignAdmission(record AdmissionRecord, privateKey ed25519.PrivateKey) (AdmissionRecord, error) {
@@ -144,7 +146,7 @@ func validateAdmission(record AdmissionRecord) error {
 }
 
 func validateStatus(record StatusRecord) error {
-	if record.SchemaVersion != SchemaVersion || record.Algorithm != "ed25519" || record.Sequence == 0 || !validSHA256(record.AdmissionSHA256) || !validSHA256(record.PreviousSHA256) {
+	if record.SchemaVersion != SchemaVersion || record.Algorithm != "ed25519" || record.Sequence == 0 || !commonv1.IsSHA256(record.AdmissionSHA256) || !commonv1.IsSHA256(record.PreviousSHA256) {
 		return errors.New("安全复扫状态版本、算法或链位置无效")
 	}
 	if err := validateIdentityFields(record.ProviderID, record.KeyID, record.PolicyID); err != nil {
@@ -163,7 +165,7 @@ func validateIdentityFields(values ...string) error {
 }
 
 func validateEvaluation(value Evaluation) error {
-	if !validSHA256(value.SubjectSHA256) || !validSHA256(value.SBOMSHA256) || value.Scanner.ID == "" || value.Scanner.Version == "" || value.Scanner.DatabaseRevision == "" {
+	if !commonv1.IsSHA256(value.SubjectSHA256) || !commonv1.IsSHA256(value.SBOMSHA256) || value.Scanner.ID == "" || value.Scanner.Version == "" || value.Scanner.DatabaseRevision == "" {
 		return errors.New("安全评估对象、SBOM 或扫描器身份无效")
 	}
 	for _, item := range []string{value.Scanner.ID, value.Scanner.Version, value.Scanner.DatabaseRevision} {
@@ -178,7 +180,7 @@ func validateEvaluation(value Evaluation) error {
 		return errors.New("安全评估时间窗口无效")
 	}
 	for _, report := range []string{value.Vulnerabilities.ReportSHA256, value.Licenses.ReportSHA256} {
-		if report != "" && !validSHA256(report) {
+		if report != "" && !commonv1.IsSHA256(report) {
 			return errors.New("安全评估报告摘要无效")
 		}
 	}
@@ -211,12 +213,4 @@ func decodeStrictJSON(raw []byte, target any) error {
 func digest(raw []byte) string {
 	value := sha256.Sum256(raw)
 	return hex.EncodeToString(value[:])
-}
-
-func validSHA256(value string) bool {
-	if len(value) != sha256.Size*2 || strings.ToLower(value) != value {
-		return false
-	}
-	_, err := hex.DecodeString(value)
-	return err == nil
 }

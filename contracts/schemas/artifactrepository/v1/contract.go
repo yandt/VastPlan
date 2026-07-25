@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	semver "github.com/Masterminds/semver/v3"
 )
@@ -198,7 +199,7 @@ func ValidateReceipt(profile Profile, receipt Receipt) error {
 	if receipt.SchemaVersion != ProfileVersion || receipt.RepositoryID != profile.ID || receipt.Protocol != profile.Protocol || receipt.ProfileDigest != profile.Digest() {
 		return errors.New("制品仓库回执与 Profile 身份不匹配")
 	}
-	if err := ValidateRef(profile, receipt.Ref); err != nil || !validSHA256(receipt.SHA256) || receipt.Revision == 0 {
+	if err := ValidateRef(profile, receipt.Ref); err != nil || !commonv1.IsSHA256(receipt.SHA256) || receipt.Revision == 0 {
 		return errors.New("制品仓库回执引用、摘要或 revision 无效")
 	}
 	if receipt.Ref.Channel == "workspace" {
@@ -215,7 +216,7 @@ func ValidateReceipt(profile Profile, receipt Receipt) error {
 // trusted host resolves the active Profile. It does not establish repository
 // identity; ValidateReceipt must still run at the repository boundary.
 func ValidateReceiptShape(receipt Receipt) error {
-	if receipt.SchemaVersion != ProfileVersion || !validResourceID(receipt.RepositoryID) || len(protocolOperations[receipt.Protocol]) == 0 || !validSHA256(receipt.ProfileDigest) || !validPluginID(receipt.Ref.PluginID) || !validSemver(receipt.Ref.Version) || !validSHA256(receipt.SHA256) || receipt.Revision == 0 {
+	if receipt.SchemaVersion != ProfileVersion || !validResourceID(receipt.RepositoryID) || len(protocolOperations[receipt.Protocol]) == 0 || !commonv1.IsSHA256(receipt.ProfileDigest) || !validPluginID(receipt.Ref.PluginID) || !validSemver(receipt.Ref.Version) || !commonv1.IsSHA256(receipt.SHA256) || receipt.Revision == 0 {
 		return errors.New("制品仓库回执基础字段无效")
 	}
 	allowedChannel := receipt.Ref.Channel == "testing" || receipt.Protocol == ProtocolRemote && (receipt.Ref.Channel == "candidate" || receipt.Ref.Channel == "stable") || receipt.Protocol == ProtocolLocalTest && receipt.Ref.Channel == "workspace"
@@ -320,18 +321,6 @@ func contains(values []string, wanted string) bool {
 		}
 	}
 	return false
-}
-
-func validSHA256(value string) bool {
-	if len(value) != sha256.Size*2 {
-		return false
-	}
-	for _, char := range value {
-		if char < '0' || char > '9' && (char < 'a' || char > 'f') {
-			return false
-		}
-	}
-	return true
 }
 
 func validPluginID(value string) bool {

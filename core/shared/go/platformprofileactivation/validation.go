@@ -14,9 +14,9 @@ import (
 )
 
 func NormalizePrepareRequest(request PrepareRequest) (PrepareRequest, error) {
-	if !validHexID(request.CandidateID, "pcfg_", 32) || !validHexID(request.ConfigurationID, "cfg_", 24) ||
-		!validHexID(request.ConfigCatalogDigest, "", 64) || !validHexID(request.SchemaDigest, "", 64) ||
-		!validHexID(request.ArtifactSHA256, "", 64) || request.DeploymentRevision == 0 {
+	if !commonv1.IsPrefixedLowerHex(request.CandidateID, "pcfg_", 32) || !commonv1.IsPrefixedLowerHex(request.ConfigurationID, "cfg_", 24) ||
+		!commonv1.IsSHA256(request.ConfigCatalogDigest) || !commonv1.IsSHA256(request.SchemaDigest) ||
+		!commonv1.IsSHA256(request.ArtifactSHA256) || request.DeploymentRevision == 0 {
 		return PrepareRequest{}, errors.New("Platform Profile 配置候选身份无效")
 	}
 	composition, err := backendcompositionv1.ValidateApplicationComposition(request.Composition)
@@ -53,7 +53,7 @@ func DigestPrepareRequest(request PrepareRequest) (string, error) {
 }
 
 func (request CandidateRequest) Validate() error {
-	if !validHexID(request.CandidateID, "pcfg_", 32) || !validHexID(request.RequestDigest, "", 64) {
+	if !commonv1.IsPrefixedLowerHex(request.CandidateID, "pcfg_", 32) || !commonv1.IsSHA256(request.RequestDigest) {
 		return errors.New("Platform Profile 候选恢复身份无效")
 	}
 	return nil
@@ -65,7 +65,7 @@ func (request PublishRequest) Normalize() (PublishRequest, error) {
 		return PublishRequest{}, err
 	}
 	digest, err := DigestPrepareRequest(normalized)
-	if err != nil || digest != request.RequestDigest || !validHexID(request.ExpectedDigest, "", 64) {
+	if err != nil || digest != request.RequestDigest || !commonv1.IsSHA256(request.ExpectedDigest) {
 		return PublishRequest{}, errors.New("Platform Profile 候选发布摘要无效")
 	}
 	request.Prepare = normalized
@@ -73,10 +73,10 @@ func (request PublishRequest) Normalize() (PublishRequest, error) {
 }
 
 func (candidate Candidate) Validate() error {
-	if !validHexID(candidate.CandidateID, "pcfg_", 32) || !validHexID(candidate.RequestDigest, "", 64) ||
-		!validHexID(candidate.ConfigurationID, "cfg_", 24) || strings.TrimSpace(candidate.Deployment) == "" ||
+	if !commonv1.IsPrefixedLowerHex(candidate.CandidateID, "pcfg_", 32) || !commonv1.IsSHA256(candidate.RequestDigest) ||
+		!commonv1.IsPrefixedLowerHex(candidate.ConfigurationID, "cfg_", 24) || strings.TrimSpace(candidate.Deployment) == "" ||
 		!validRef(candidate.PreviousProfile) || !validRef(candidate.NextProfile) ||
-		!validHexID(candidate.ExpectedCatalogDigest, "", 64) || !validHexID(candidate.NextCatalogDigest, "", 64) {
+		!commonv1.IsSHA256(candidate.ExpectedCatalogDigest) || !commonv1.IsSHA256(candidate.NextCatalogDigest) {
 		return errors.New("Platform Profile 候选响应身份无效")
 	}
 	switch candidate.Status {
@@ -85,7 +85,7 @@ func (candidate Candidate) Validate() error {
 			return errors.New("未回滚 Platform Profile 候选不得携带回滚摘要")
 		}
 	case StatusRolledBack:
-		if !validHexID(candidate.RollbackCatalogDigest, "", 64) {
+		if !commonv1.IsSHA256(candidate.RollbackCatalogDigest) {
 			return errors.New("已回滚 Platform Profile 候选缺少回滚摘要")
 		}
 	default:
@@ -109,17 +109,5 @@ func normalizeCredentials(values map[string]pluginconfig.ManagedCredentialRef) (
 }
 
 func validRef(ref compositioncommonv1.Ref) bool {
-	return strings.TrimSpace(ref.ID) != "" && ref.Revision > 0 && validHexID(ref.Digest, "", 64)
-}
-
-func validHexID(value, prefix string, length int) bool {
-	if !strings.HasPrefix(value, prefix) || len(value) != len(prefix)+length {
-		return false
-	}
-	for _, character := range value[len(prefix):] {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
+	return strings.TrimSpace(ref.ID) != "" && ref.Revision > 0 && commonv1.IsSHA256(ref.Digest)
 }

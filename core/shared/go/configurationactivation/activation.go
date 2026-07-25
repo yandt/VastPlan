@@ -58,8 +58,8 @@ type Activation struct {
 }
 
 func (r CreateRequest) Validate() error {
-	if !validID(r.CandidateID, "pcfg_", 32) || !validID(r.ConfigurationID, "cfg_", 24) ||
-		!validID(r.CatalogDigest, "", 64) || !validID(r.SchemaDigest, "", 64) || !validID(r.ArtifactSHA256, "", 64) ||
+	if !commonv1.IsPrefixedLowerHex(r.CandidateID, "pcfg_", 32) || !commonv1.IsPrefixedLowerHex(r.ConfigurationID, "cfg_", 24) ||
+		!commonv1.IsSHA256(r.CatalogDigest) || !commonv1.IsSHA256(r.SchemaDigest) || !commonv1.IsSHA256(r.ArtifactSHA256) ||
 		len(r.Values) == 0 || !json.Valid(r.Values) {
 		return errors.New("配置激活请求身份无效")
 	}
@@ -72,14 +72,14 @@ func (r CreateRequest) Validate() error {
 }
 
 func (r LookupRequest) Validate() error {
-	if !validID(r.CandidateID, "pcfg_", 32) {
+	if !commonv1.IsPrefixedLowerHex(r.CandidateID, "pcfg_", 32) {
 		return errors.New("配置激活候选身份无效")
 	}
 	return nil
 }
 
 func (a Activation) Validate() error {
-	if !validID(a.CandidateID, "pcfg_", 32) || !validID(a.ConfigurationID, "cfg_", 24) ||
+	if !commonv1.IsPrefixedLowerHex(a.CandidateID, "pcfg_", 32) || !commonv1.IsPrefixedLowerHex(a.ConfigurationID, "cfg_", 24) ||
 		strings.TrimSpace(a.Deployment) == "" || a.ServiceRevision == 0 {
 		return errors.New("配置激活响应身份无效")
 	}
@@ -89,16 +89,4 @@ func (a Activation) Validate() error {
 	default:
 		return errors.New("配置激活响应状态无效")
 	}
-}
-
-func validID(value, prefix string, hexLength int) bool {
-	if !strings.HasPrefix(value, prefix) || len(value) != len(prefix)+hexLength {
-		return false
-	}
-	for _, character := range value[len(prefix):] {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
 }

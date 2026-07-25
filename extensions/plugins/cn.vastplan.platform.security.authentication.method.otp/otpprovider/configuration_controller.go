@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
-	"strings"
 
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
@@ -216,20 +215,4 @@ func cloneProfiles(profiles map[string]Profile) map[string]Profile {
 func jsonEqual(left, right []byte) bool {
 	var a, b any
 	return json.Unmarshal(left, &a) == nil && json.Unmarshal(right, &b) == nil && reflect.DeepEqual(a, b)
-}
-
-func validPrefixedHex(value, prefix string, length int) bool {
-	return strings.HasPrefix(value, prefix) && validHex(value[len(prefix):], length)
-}
-
-func validHex(value string, length int) bool {
-	if len(value) != length {
-		return false
-	}
-	for _, character := range value {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
 }

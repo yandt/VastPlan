@@ -14,7 +14,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -85,7 +84,7 @@ func PackageDirectory(dir string) ([]byte, pluginv1.Manifest, error) {
 		if err != nil {
 			return err
 		}
-		name, err := archiveName(rel)
+		name, err := artifacttrust.NormalizeArchivePath(rel)
 		if err != nil {
 			return err
 		}
@@ -416,7 +415,7 @@ func validateLegalFiles(dir string, manifest pluginv1.Manifest) error {
 }
 
 func validateLegalFile(dir, declaredName, kind string) error {
-	name, err := archiveName(declaredName)
+	name, err := artifacttrust.NormalizeArchivePath(declaredName)
 	if err != nil {
 		return fmt.Errorf("非法%s文件路径: %w", kind, err)
 	}
@@ -436,15 +435,4 @@ func validateLegalFile(dir, declaredName, kind string) error {
 // inspectPackage 只读取 archive metadata 和根清单，绝不执行包内内容。
 func inspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, error) {
 	return artifacttrust.InspectPackage(packageBytes)
-}
-
-func archiveName(name string) (string, error) {
-	if name == "" || path.IsAbs(name) {
-		return "", fmt.Errorf("非法插件包路径 %q", name)
-	}
-	clean := path.Clean(strings.ReplaceAll(name, "\\", "/"))
-	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
-		return "", fmt.Errorf("插件包路径逃逸 %q", name)
-	}
-	return clean, nil
 }

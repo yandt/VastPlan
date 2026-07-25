@@ -5,15 +5,16 @@ import (
 	"fmt"
 	"strings"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 )
 
 func normalizePrepareRequest(request PrepareRequest) (PrepareRequest, error) {
-	if !validPrefixedHex(request.CandidateID, "pcfg_", 32) || !validPrefixedHex(request.RequestDigest, "", 64) || !validPrefixedHex(request.ConfigurationID, "cfg_", 24) ||
+	if !commonv1.IsPrefixedLowerHex(request.CandidateID, "pcfg_", 32) || !commonv1.IsSHA256(request.RequestDigest) || !commonv1.IsPrefixedLowerHex(request.ConfigurationID, "cfg_", 24) ||
 		strings.TrimSpace(request.TenantID) == "" || strings.TrimSpace(request.DeploymentName) == "" ||
-		!validPrefixedHex(request.ExpectedCatalogDigest, "", 64) || !validRef(request.ExpectedProfile) ||
-		request.NextCatalogRevision == 0 || !validPrefixedHex(request.NextCatalogDigest, "", 64) {
+		!commonv1.IsSHA256(request.ExpectedCatalogDigest) || !validRef(request.ExpectedProfile) ||
+		request.NextCatalogRevision == 0 || !commonv1.IsSHA256(request.NextCatalogDigest) {
 		return PrepareRequest{}, errors.New("Backend Platform Profile 候选请求身份无效")
 	}
 	normalized, err := backendcompositionv1.ValidatePlatformProfile(request.NextProfile)
@@ -74,8 +75,8 @@ func validateCandidateAgainstSnapshot(snapshot persistedSnapshot) error {
 		return nil
 	}
 	candidate := *snapshot.Candidate
-	if !validPrefixedHex(candidate.CandidateID, "pcfg_", 32) || !validPrefixedHex(candidate.RequestDigest, "", 64) || !validPrefixedHex(candidate.ConfigurationID, "cfg_", 24) ||
-		!validPrefixedHex(candidate.ExpectedCatalogDigest, "", 64) || !validPrefixedHex(candidate.NextCatalogDigest, "", 64) ||
+	if !commonv1.IsPrefixedLowerHex(candidate.CandidateID, "pcfg_", 32) || !commonv1.IsSHA256(candidate.RequestDigest) || !commonv1.IsPrefixedLowerHex(candidate.ConfigurationID, "cfg_", 24) ||
+		!commonv1.IsSHA256(candidate.ExpectedCatalogDigest) || !commonv1.IsSHA256(candidate.NextCatalogDigest) ||
 		!validRef(candidate.PreviousProfile) || strings.TrimSpace(candidate.TenantID) == "" || strings.TrimSpace(candidate.DeploymentName) == "" ||
 		candidate.CreatedAt.IsZero() || candidate.UpdatedAt.Before(candidate.CreatedAt) {
 		return errors.New("Backend Platform Profile 候选快照身份无效")
@@ -94,7 +95,7 @@ func validateCandidateAgainstSnapshot(snapshot persistedSnapshot) error {
 			return errors.New("已激活候选与活动 Catalog 摘要不一致")
 		}
 	case CandidateRolledBack:
-		if !validPrefixedHex(candidate.RollbackCatalogDigest, "", 64) || snapshot.Digest != candidate.RollbackCatalogDigest ||
+		if !commonv1.IsSHA256(candidate.RollbackCatalogDigest) || snapshot.Digest != candidate.RollbackCatalogDigest ||
 			snapshot.Catalog.Revision <= candidate.NextCatalogRevision || !catalogBindsRef(snapshot.Catalog, candidate.TenantID, candidate.DeploymentName, candidate.PreviousProfile) {
 			return errors.New("已回滚候选与活动 Catalog 摘要不一致")
 		}

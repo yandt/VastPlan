@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"time"
 )
 
@@ -166,7 +168,7 @@ func EnforceDecision(value Evaluation) error {
 }
 
 func (v *Verifier) verifyEvaluation(identity ArtifactIdentity, requirement Requirement, providerID, keyIDValue, policyID string, evaluation Evaluation, now time.Time, allowFailedDecision bool) error {
-	if !validSHA256(identity.SHA256) || !validSHA256(identity.SBOMSHA256) || evaluation.SubjectSHA256 != identity.SHA256 || evaluation.SBOMSHA256 != identity.SBOMSHA256 || policyID != requirement.ID {
+	if !commonv1.IsSHA256(identity.SHA256) || !commonv1.IsSHA256(identity.SBOMSHA256) || evaluation.SubjectSHA256 != identity.SHA256 || evaluation.SBOMSHA256 != identity.SBOMSHA256 || policyID != requirement.ID {
 		return errors.New("安全评估未绑定当前制品、SBOM 或选中策略")
 	}
 	key, exists := v.keys[keyID(providerID, keyIDValue)]
@@ -182,7 +184,7 @@ func (v *Verifier) verifyEvaluation(identity ArtifactIdentity, requirement Requi
 	if key.config.Revoked || key.config.NotBefore != nil && now.Before(*key.config.NotBefore) || key.config.NotAfter != nil && now.After(*key.config.NotAfter) || key.config.NotBefore != nil && evaluation.EvaluatedAt.Before(*key.config.NotBefore) || key.config.NotAfter != nil && evaluation.EvaluatedAt.After(*key.config.NotAfter) {
 		return errors.New("安全评估 Provider key 已撤销、未生效或已过期")
 	}
-	if requirement.RequireReportDigests && (!validSHA256(evaluation.Vulnerabilities.ReportSHA256) || !validSHA256(evaluation.Licenses.ReportSHA256)) {
+	if requirement.RequireReportDigests && (!commonv1.IsSHA256(evaluation.Vulnerabilities.ReportSHA256) || !commonv1.IsSHA256(evaluation.Licenses.ReportSHA256)) {
 		return errors.New("安全评估策略要求绑定漏洞与许可证报告摘要")
 	}
 	if evaluation.Decision == DecisionFail && allowFailedDecision {

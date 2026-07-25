@@ -17,6 +17,7 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	sharedauthority "cdsoft.com.cn/VastPlan/core/shared/go/configurationauthority"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfiguration"
@@ -56,7 +57,7 @@ func (s Store) Issue(ctx context.Context, tenant string, request sharedauthority
 	schemaDigest := definition.SchemaDigest
 	resourcePrefix := "plugin-configuration/" + definition.ID
 	if request.ResourceCollectionID != "" {
-		if !validResourceID(request.ResourceCollectionID, "cfgc_", 24) || !validResourceID(request.ResourceID, "cfgp_", 32) {
+		if !commonv1.IsPrefixedHex(request.ResourceCollectionID, "cfgc_", 24) || !commonv1.IsPrefixedHex(request.ResourceID, "cfgp_", 32) {
 			return sharedauthority.Issued{}, sharedauthority.ErrInvalid
 		}
 		collection, ok := findResourceCollection(definition, request.ResourceCollectionID)
@@ -116,14 +117,6 @@ func findResourceCollection(definition pluginconfiguration.Definition, id string
 		}
 	}
 	return pluginconfiguration.ResourceCollection{}, false
-}
-
-func validResourceID(value, prefix string, hexLength int) bool {
-	if len(value) != len(prefix)+hexLength || !strings.HasPrefix(value, prefix) {
-		return false
-	}
-	_, err := hex.DecodeString(strings.TrimPrefix(value, prefix))
-	return err == nil
 }
 
 func (s Store) Consume(ctx context.Context, tenant, token string) (sharedauthority.Claims, error) {
@@ -206,19 +199,11 @@ func (s Store) newToken() (string, string, error) {
 }
 
 func validToken(token string) bool {
-	if len(token) != len(sharedauthority.TokenPrefix)+64 || !strings.HasPrefix(token, sharedauthority.TokenPrefix) {
-		return false
-	}
-	_, err := hex.DecodeString(strings.TrimPrefix(token, sharedauthority.TokenPrefix))
-	return err == nil
+	return commonv1.IsPrefixedHex(token, sharedauthority.TokenPrefix, 64)
 }
 
 func validCandidateID(id string) bool {
-	if len(id) != len("pcfg_")+32 || !strings.HasPrefix(id, "pcfg_") {
-		return false
-	}
-	_, err := hex.DecodeString(strings.TrimPrefix(id, "pcfg_"))
-	return err == nil
+	return commonv1.IsPrefixedHex(id, "pcfg_", 32)
 }
 
 func tokenDigest(token string) string {

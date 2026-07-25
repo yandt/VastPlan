@@ -24,6 +24,21 @@ func TestInspectPackageRejectsNormalizedDuplicatePaths(t *testing.T) {
 	}
 }
 
+func TestNormalizeArchivePathRejectsPortableAbsoluteAndEscapingPaths(t *testing.T) {
+	t.Parallel()
+	for _, value := range []string{"", ".", "..", "../entry", "/entry", `\\entry`, `C:\\entry`, "entry\x00name"} {
+		if _, err := NormalizeArchivePath(value); err == nil {
+			t.Errorf("NormalizeArchivePath(%q) 应拒绝不安全路径", value)
+		}
+	}
+	for input, expected := range map[string]string{"dir/file": "dir/file", `dir\\file`: "dir/file", "dir/../file": "file"} {
+		actual, err := NormalizeArchivePath(input)
+		if err != nil || actual != expected {
+			t.Errorf("NormalizeArchivePath(%q) = %q, %v; want %q", input, actual, err, expected)
+		}
+	}
+}
+
 func TestInspectPackageRejectsTooManyFilesBeforeInstallation(t *testing.T) {
 	headers := make([]tar.Header, 0, DefaultMaxPackageFiles+1)
 	for index := 0; index <= DefaultMaxPackageFiles; index++ {

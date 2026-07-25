@@ -204,7 +204,7 @@ func DigestResourceConfiguration(values json.RawMessage, credentials map[string]
 }
 
 func DigestDeletedResource(resourceID string) (string, error) {
-	if !validOpaqueID(resourceID, "cfgp_", 32) {
+	if !commonv1.IsPrefixedHex(resourceID, "cfgp_", 32) {
 		return "", errors.New("Configuration Resource resourceId 无效")
 	}
 	raw, _ := json.Marshal(struct {
@@ -213,14 +213,6 @@ func DigestDeletedResource(resourceID string) (string, error) {
 	}{Deleted: true, ResourceID: resourceID})
 	digest := sha256.Sum256(raw)
 	return hex.EncodeToString(digest[:]), nil
-}
-
-func validOpaqueID(value, prefix string, hexLength int) bool {
-	if len(value) != len(prefix)+hexLength || !strings.HasPrefix(value, prefix) {
-		return false
-	}
-	_, err := hex.DecodeString(strings.TrimPrefix(value, prefix))
-	return err == nil
 }
 
 func ValidateListResponse(response ListResponse) error {

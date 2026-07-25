@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 )
@@ -82,17 +83,5 @@ func (c Candidate) prepareRequest() PrepareRequest {
 }
 
 func validRef(ref compositioncommonv1.Ref) bool {
-	return strings.TrimSpace(ref.ID) != "" && ref.Revision > 0 && validPrefixedHex(ref.Digest, "", 64)
-}
-
-func validPrefixedHex(value, prefix string, length int) bool {
-	if !strings.HasPrefix(value, prefix) || len(value) != len(prefix)+length {
-		return false
-	}
-	for _, character := range value[len(prefix):] {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
+	return strings.TrimSpace(ref.ID) != "" && ref.Revision > 0 && commonv1.IsSHA256(ref.Digest)
 }

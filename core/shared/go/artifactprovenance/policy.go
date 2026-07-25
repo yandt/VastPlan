@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"time"
 )
 
@@ -100,7 +102,7 @@ func (v *Verifier) Verify(identity ArtifactIdentity, provenanceRaw, recordRaw []
 	if len(provenanceRaw) == 0 || len(recordRaw) == 0 {
 		return nil, errors.New("原始 Provenance 与 Verification Record 必须同时提供")
 	}
-	if !validSHA256(identity.SHA256) || strings.TrimSpace(identity.PluginID) == "" || strings.TrimSpace(identity.Publisher) == "" {
+	if !commonv1.IsSHA256(identity.SHA256) || strings.TrimSpace(identity.PluginID) == "" || strings.TrimSpace(identity.Publisher) == "" {
 		return nil, errors.New("待验证制品身份无效")
 	}
 	requirement, err := v.selectRequirement(identity)

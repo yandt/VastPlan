@@ -110,7 +110,7 @@ func InspectPackage(packageBytes []byte) (pluginv1.Manifest, json.RawMessage, er
 		if err != nil {
 			return pluginv1.Manifest{}, nil, fmt.Errorf("读取 tar 条目: %w", err)
 		}
-		name, err := archiveName(header.Name)
+		name, err := NormalizeArchivePath(header.Name)
 		if err != nil {
 			return pluginv1.Manifest{}, nil, err
 		}
@@ -209,7 +209,7 @@ func validatePackagedSupplyChain(packageBytes []byte, manifest pluginv1.Manifest
 // It repeats path and size checks because callers may expose the result across
 // a different trust boundary, such as serving a Frontend module to a browser.
 func ReadPackageFile(packageBytes []byte, filename string, maxBytes int64) ([]byte, error) {
-	requested, err := archiveName(filename)
+	requested, err := NormalizeArchivePath(filename)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +231,7 @@ func ReadPackageFile(packageBytes []byte, filename string, maxBytes int64) ([]by
 		if err != nil {
 			return nil, fmt.Errorf("读取 tar 条目: %w", err)
 		}
-		name, err := archiveName(header.Name)
+		name, err := NormalizeArchivePath(header.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -256,7 +256,7 @@ func ReadPackageFile(packageBytes []byte, filename string, maxBytes int64) ([]by
 }
 
 func validatePackagedLegalFile(entrySizes map[string]int64, declaredName, kind string) error {
-	name, err := archiveName(declaredName)
+	name, err := NormalizeArchivePath(declaredName)
 	if err != nil {
 		return fmt.Errorf("非法%s文件路径: %w", kind, err)
 	}
@@ -270,15 +270,27 @@ func validatePackagedLegalFile(entrySizes map[string]int64, declaredName, kind s
 	return nil
 }
 
-func archiveName(name string) (string, error) {
-	if name == "" || path.IsAbs(name) {
+// NormalizeArchivePath returns one portable, relative POSIX archive path.
+// It rejects both POSIX and Windows absolute forms before callers convert the
+// result to an OS-native path, keeping verification and extraction identical.
+func NormalizeArchivePath(name string) (string, error) {
+	normalized := strings.ReplaceAll(name, "\\", "/")
+	if name == "" || strings.IndexByte(name, 0) >= 0 || path.IsAbs(normalized) || windowsDrivePath(normalized) {
 		return "", fmt.Errorf("非法插件包路径 %q", name)
 	}
-	clean := path.Clean(strings.ReplaceAll(name, "\\", "/"))
-	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
+	clean := path.Clean(normalized)
+	if clean == "." || clean == ".." || path.IsAbs(clean) || windowsDrivePath(clean) || strings.HasPrefix(clean, "../") {
 		return "", fmt.Errorf("插件包路径逃逸 %q", name)
 	}
 	return clean, nil
+}
+
+func windowsDrivePath(value string) bool {
+	if len(value) < 2 || value[1] != ':' {
+		return false
+	}
+	first := value[0]
+	return first >= 'A' && first <= 'Z' || first >= 'a' && first <= 'z'
 }
 
 func sameJSON(left, right []byte) bool {

@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 type dsseEnvelope struct {
@@ -59,7 +61,7 @@ func InspectDSSE(raw []byte, expectedSubjectSHA256 string) (StatementSummary, st
 	if len(raw) == 0 || len(raw) > MaxProvenanceBytes {
 		return StatementSummary{}, "", fmt.Errorf("来源证明大小必须为 1-%d 字节", MaxProvenanceBytes)
 	}
-	if !validSHA256(expectedSubjectSHA256) {
+	if !commonv1.IsSHA256(expectedSubjectSHA256) {
 		return StatementSummary{}, "", errors.New("来源证明期望 subject 不是规范 SHA-256")
 	}
 	envelope, payload, err := decodeEnvelope(raw)
@@ -189,14 +191,6 @@ func sortSources(values []Source) {
 		}
 		return bytes.Compare(left, right) < 0
 	})
-}
-
-func validSHA256(value string) bool {
-	if len(value) != sha256.Size*2 || value != strings.ToLower(value) {
-		return false
-	}
-	decoded, err := hex.DecodeString(value)
-	return err == nil && len(decoded) == sha256.Size
 }
 
 func decodeStrict(raw []byte, target any) error {

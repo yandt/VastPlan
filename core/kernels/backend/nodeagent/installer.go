@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -174,7 +173,7 @@ func extractPackage(root string, packageBytes []byte, limits packageLimits) erro
 		if err != nil {
 			return fmt.Errorf("读取插件包: %w", err)
 		}
-		name, err := safeArchiveName(h.Name)
+		name, err := artifacttrust.NormalizeArchivePath(h.Name)
 		if err != nil {
 			return err
 		}
@@ -213,17 +212,6 @@ func extractPackage(root string, packageBytes []byte, limits packageLimits) erro
 			return closeErr
 		}
 	}
-}
-
-func safeArchiveName(name string) (string, error) {
-	if name == "" || path.IsAbs(name) {
-		return "", fmt.Errorf("非法插件包路径 %q", name)
-	}
-	clean := path.Clean(strings.ReplaceAll(name, "\\", "/"))
-	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") {
-		return "", fmt.Errorf("插件包路径逃逸 %q", name)
-	}
-	return clean, nil
 }
 
 func inspectInstalled(root string, artifact pluginv1.Artifact, publisher, entry string, execution pluginv1.BackendExecution) (InstalledPlugin, error) {

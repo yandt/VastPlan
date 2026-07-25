@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
+
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	semver "github.com/Masterminds/semver/v3"
 )
@@ -53,7 +55,7 @@ type ProviderRuntimeStatus struct {
 }
 
 func ValidateProviderRuntimeStatus(value ProviderRuntimeStatus) error {
-	if value.SchemaVersion != SchemaVersion || value.Scanner.ID == "" || value.Scanner.Version == "" || value.Scanner.DatabaseRevision == "" || !validSHA256(value.AssessmentRevision) {
+	if value.SchemaVersion != SchemaVersion || value.Scanner.ID == "" || value.Scanner.Version == "" || value.Scanner.DatabaseRevision == "" || !commonv1.IsSHA256(value.AssessmentRevision) {
 		return errors.New("安全评估 Provider runtime status 无效")
 	}
 	return nil
@@ -67,7 +69,7 @@ func ValidateProviderAssessmentRequest(value ProviderAssessmentRequest) error {
 }
 
 func ValidateProviderStatusRequest(value ProviderStatusRequest) error {
-	if ValidateProviderAssessmentRequest(value.ProviderAssessmentRequest) != nil || value.Sequence == 0 || !validSHA256(value.AdmissionSHA256) || !validSHA256(value.PreviousSHA256) {
+	if ValidateProviderAssessmentRequest(value.ProviderAssessmentRequest) != nil || value.Sequence == 0 || !commonv1.IsSHA256(value.AdmissionSHA256) || !commonv1.IsSHA256(value.PreviousSHA256) {
 		return errors.New("安全复扫 Provider 请求无效")
 	}
 	return nil
@@ -86,7 +88,7 @@ type ScanLease struct {
 }
 
 func ValidateScanLeaseRequest(value ScanLeaseRequest) error {
-	if !scanLeaseIDPattern.MatchString(value.Ref.PluginID) || !scanLeaseChannelPattern.MatchString(value.Ref.Channel) || !validSHA256(value.SubjectSHA256) || !validSHA256(value.SBOMSHA256) {
+	if !scanLeaseIDPattern.MatchString(value.Ref.PluginID) || !scanLeaseChannelPattern.MatchString(value.Ref.Channel) || !commonv1.IsSHA256(value.SubjectSHA256) || !commonv1.IsSHA256(value.SBOMSHA256) {
 		return errors.New("安全评估扫描租约请求无效")
 	}
 	if _, err := semver.StrictNewVersion(value.Ref.Version); err != nil {

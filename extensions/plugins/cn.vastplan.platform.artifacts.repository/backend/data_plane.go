@@ -13,6 +13,7 @@ import (
 	"time"
 
 	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/core/shared/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/extpoint"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
@@ -124,19 +125,7 @@ func (s *dataPlaneTicketStore) installMatching(callCtx *contractv1.CallContext, 
 
 func validAssessmentReportResource(resource string) bool {
 	const prefix = "/v1/assessment-reports/"
-	return strings.HasPrefix(resource, prefix) && validReportDigest(strings.TrimPrefix(resource, prefix))
-}
-
-func validReportDigest(value string) bool {
-	if len(value) != 64 {
-		return false
-	}
-	for _, char := range value {
-		if char < '0' || char > '9' && (char < 'a' || char > 'f') {
-			return false
-		}
-	}
-	return true
+	return strings.HasPrefix(resource, prefix) && commonv1.IsSHA256(strings.TrimPrefix(resource, prefix))
 }
 
 func (s *dataPlaneTicketStore) installClaims(ticket string, claims apiv1.DataPlaneTicketClaims) error {

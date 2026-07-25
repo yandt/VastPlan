@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/artifactassessment"
 )
 
@@ -35,7 +36,7 @@ func NewTrivy(config TrivyConfig) (*Trivy, error) {
 		return nil, errors.New("Trivy binary 与 cacheDirectory 必须是规范绝对路径")
 	}
 	if strings.TrimSpace(config.ScannerVersion) != config.ScannerVersion || config.ScannerVersion == "" || len(config.ScannerVersion) > 80 ||
-		!validDigest(config.DatabaseRevision) || config.Timeout < time.Second || config.Timeout > 2*time.Hour {
+		!commonv1.IsHex(config.DatabaseRevision, 64) || config.Timeout < time.Second || config.Timeout > 2*time.Hour {
 		return nil, errors.New("Trivy 版本、数据库 revision 或超时无效")
 	}
 	allowed := append([]string(nil), config.AllowedLicenses...)

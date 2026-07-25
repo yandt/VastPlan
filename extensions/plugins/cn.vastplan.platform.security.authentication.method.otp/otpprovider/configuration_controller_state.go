@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 )
 
@@ -62,7 +63,7 @@ func (p *Provider) loadControllerState() error {
 }
 
 func validateControllerState(state controllerState, stateFile string) error {
-	if state.FormatVersion != controllerStateVersion || state.Active.Revision == 0 || !validHex(state.Active.Digest, 64) || !json.Valid(state.Active.Values) {
+	if state.FormatVersion != controllerStateVersion || state.Active.Revision == 0 || !commonv1.IsSHA256(state.Active.Digest) || !json.Valid(state.Active.Values) {
 		return errors.New("OTP configuration controller 状态身份无效")
 	}
 	configuration, err := state.Active.Configuration.normalized()
@@ -74,17 +75,17 @@ func validateControllerState(state controllerState, stateFile string) error {
 	if err != nil || digest != state.Active.Digest || !jsonEqual(values, state.Active.Values) {
 		return errors.New("OTP configuration controller Active 摘要无效")
 	}
-	if state.ConfigurationID != "" && !validPrefixedHex(state.ConfigurationID, "cfg_", 24) {
+	if state.ConfigurationID != "" && !commonv1.IsPrefixedLowerHex(state.ConfigurationID, "cfg_", 24) {
 		return errors.New("OTP configuration controller 配置身份无效")
 	}
-	if (state.SchemaDigest == "") != (state.ArtifactSHA256 == "") || (state.SchemaDigest != "" && (!validHex(state.SchemaDigest, 64) || !validHex(state.ArtifactSHA256, 64))) {
+	if (state.SchemaDigest == "") != (state.ArtifactSHA256 == "") || (state.SchemaDigest != "" && (!commonv1.IsSHA256(state.SchemaDigest) || !commonv1.IsSHA256(state.ArtifactSHA256))) {
 		return errors.New("OTP configuration controller 制品绑定无效")
 	}
 	if state.Candidate == nil {
 		return nil
 	}
 	candidate := state.Candidate
-	if !validPrefixedHex(candidate.CandidateID, "pcfg_", 32) || !validHex(candidate.RequestDigest, 64) || !validHex(candidate.ConfigurationDigest, 64) || !json.Valid(candidate.Values) {
+	if !commonv1.IsPrefixedLowerHex(candidate.CandidateID, "pcfg_", 32) || !commonv1.IsSHA256(candidate.RequestDigest) || !commonv1.IsSHA256(candidate.ConfigurationDigest) || !json.Valid(candidate.Values) {
 		return errors.New("OTP configuration controller Candidate 身份无效")
 	}
 	switch candidate.Status {

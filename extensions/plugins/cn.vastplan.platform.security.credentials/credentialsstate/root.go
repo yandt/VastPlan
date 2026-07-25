@@ -11,7 +11,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 const (
@@ -89,6 +90,5 @@ func DecodeStrictJSON(raw []byte, target any) error {
 }
 
 func validDigest(value string) bool {
-	_, err := hex.DecodeString(value)
-	return err == nil && strings.ToLower(value) == value
+	return commonv1.IsSHA256(value)
 }

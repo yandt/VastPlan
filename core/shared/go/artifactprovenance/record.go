@@ -9,6 +9,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 func InspectVerificationRecord(raw []byte) (VerificationRecord, string, error) {
@@ -76,7 +78,7 @@ func recordPayload(record VerificationRecord) ([]byte, error) {
 }
 
 func validateRecord(record VerificationRecord) error {
-	if record.SchemaVersion != RecordSchemaVersion || record.Algorithm != "ed25519" || !validSHA256(record.SubjectSHA256) || !validSHA256(record.ProvenanceSHA256) {
+	if record.SchemaVersion != RecordSchemaVersion || record.Algorithm != "ed25519" || !commonv1.IsSHA256(record.SubjectSHA256) || !commonv1.IsSHA256(record.ProvenanceSHA256) {
 		return errors.New("Verification Record 版本、算法或摘要无效")
 	}
 	if record.PredicateType != SLSAProvenanceType || strings.TrimSpace(record.BuilderID) == "" || strings.TrimSpace(record.BuildType) == "" || strings.TrimSpace(record.ProviderID) == "" || strings.TrimSpace(record.KeyID) == "" || strings.TrimSpace(record.PolicyID) == "" {

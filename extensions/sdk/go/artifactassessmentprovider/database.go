@@ -8,14 +8,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 var trivyDatabaseFiles = []string{"db/metadata.json", "db/trivy.db"}
-
-func validDigest(value string) bool {
-	raw, err := hex.DecodeString(value)
-	return err == nil && len(raw) == sha256.Size
-}
 
 func databaseSnapshotDigest(root string) (string, error) {
 	hash := sha256.New()
@@ -45,7 +42,7 @@ func databaseSnapshotDigest(root string) (string, error) {
 		}
 	}
 	result := hex.EncodeToString(hash.Sum(nil))
-	if !validDigest(result) {
+	if !commonv1.IsHex(result, 64) {
 		return "", errors.New("Trivy 数据库摘要计算失败")
 	}
 	return result, nil

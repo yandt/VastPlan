@@ -15,6 +15,8 @@ import (
 	"io"
 	"strings"
 	"time"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 const (
@@ -105,7 +107,7 @@ func (value Manifest) Validate() error {
 	if value.Format != ManifestFormat || value.CreatedAt.IsZero() || !safeToken(value.Bucket) || value.Stream != "KV_"+value.Bucket {
 		return errors.New("Shared State 备份清单身份无效")
 	}
-	if !validDigest(value.Snapshot.SHA256) || value.Snapshot.Bytes < 1 || !validDigest(value.Logical.Digest) {
+	if !commonv1.IsSHA256(value.Snapshot.SHA256) || value.Snapshot.Bytes < 1 || !commonv1.IsSHA256(value.Logical.Digest) {
 		return errors.New("Shared State 备份清单摘要无效")
 	}
 	if !validJSONObject(value.StreamConfig) || !validJSONObject(value.StreamState) {
@@ -191,11 +193,6 @@ func decodeStrictJSON(raw []byte, target any) error {
 func validJSONObject(raw json.RawMessage) bool {
 	trimmed := bytes.TrimSpace(raw)
 	return len(trimmed) >= 2 && trimmed[0] == '{' && trimmed[len(trimmed)-1] == '}' && json.Valid(trimmed)
-}
-
-func validDigest(value string) bool {
-	decoded, err := hex.DecodeString(value)
-	return err == nil && len(decoded) == sha256.Size && value == strings.ToLower(value)
 }
 
 func safeToken(value string) bool {

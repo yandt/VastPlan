@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/pluginconfig"
 )
 
@@ -64,9 +65,9 @@ type Activation struct {
 }
 
 func (request CreateActivationRequest) Validate() error {
-	if !validHexID(request.CandidateID, "pcfg_", 32) || !validHexID(request.ConfigurationID, "cfg_", 24) ||
-		!validHexID(request.ConfigCatalogDigest, "", 64) || !validHexID(request.SchemaDigest, "", 64) ||
-		!validHexID(request.ArtifactSHA256, "", 64) {
+	if !commonv1.IsPrefixedLowerHex(request.CandidateID, "pcfg_", 32) || !commonv1.IsPrefixedLowerHex(request.ConfigurationID, "cfg_", 24) ||
+		!commonv1.IsSHA256(request.ConfigCatalogDigest) || !commonv1.IsSHA256(request.SchemaDigest) ||
+		!commonv1.IsSHA256(request.ArtifactSHA256) {
 		return errors.New("Platform Profile 配置激活身份无效")
 	}
 	var values map[string]any
@@ -80,14 +81,14 @@ func (request CreateActivationRequest) Validate() error {
 }
 
 func (request ActivationLookup) Validate() error {
-	if !validHexID(request.CandidateID, "pcfg_", 32) {
+	if !commonv1.IsPrefixedLowerHex(request.CandidateID, "pcfg_", 32) {
 		return errors.New("Platform Profile 配置激活候选身份无效")
 	}
 	return nil
 }
 
 func (activation Activation) Validate() error {
-	if !validHexID(activation.CandidateID, "pcfg_", 32) || !validHexID(activation.ConfigurationID, "cfg_", 24) ||
+	if !commonv1.IsPrefixedLowerHex(activation.CandidateID, "pcfg_", 32) || !commonv1.IsPrefixedLowerHex(activation.ConfigurationID, "cfg_", 24) ||
 		strings.TrimSpace(activation.Deployment) == "" || activation.DeploymentRevision == 0 || activation.PreviousServiceRevision == 0 || strings.TrimSpace(activation.RequestedBy) == "" {
 		return errors.New("Platform Profile 配置激活响应身份无效")
 	}

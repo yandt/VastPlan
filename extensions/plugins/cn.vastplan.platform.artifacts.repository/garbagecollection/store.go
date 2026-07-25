@@ -5,7 +5,6 @@ package garbagecollection
 
 import (
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
@@ -240,17 +240,12 @@ func validateState(value State) error {
 	previous := ""
 	for _, record := range value.Items {
 		key := recordKey(record.Ref, record.SHA256)
-		if key <= previous || !validDigest(record.RetirementID) || !validDigest(record.SHA256) || !refPluginPattern.MatchString(record.Ref.PluginID) || !refVersionPattern.MatchString(record.Ref.Version) || !refChannelPattern.MatchString(record.Ref.Channel) || record.Size <= 0 || (record.Lifecycle != "yanked" && record.Lifecycle != "revoked") || record.QuarantinedAt.IsZero() || !record.SweepAfter.After(record.QuarantinedAt) || !validStatus(record.Status) || (record.Status == StatusSwept) != (record.SweptAt != nil) {
+		if key <= previous || !commonv1.IsHex(record.RetirementID, 64) || !commonv1.IsHex(record.SHA256, 64) || !refPluginPattern.MatchString(record.Ref.PluginID) || !refVersionPattern.MatchString(record.Ref.Version) || !refChannelPattern.MatchString(record.Ref.Channel) || record.Size <= 0 || (record.Lifecycle != "yanked" && record.Lifecycle != "revoked") || record.QuarantinedAt.IsZero() || !record.SweepAfter.After(record.QuarantinedAt) || !validStatus(record.Status) || (record.Status == StatusSwept) != (record.SweptAt != nil) {
 			return errors.New("持久化制品 GC 记录无效")
 		}
 		previous = key
 	}
 	return nil
-}
-
-func validDigest(value string) bool {
-	raw, err := hex.DecodeString(value)
-	return err == nil && len(raw) == 32
 }
 
 func validStatus(value string) bool {

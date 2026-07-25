@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 const ProviderCapabilityPrefix = "platform.artifacts.provenance."
@@ -21,7 +23,7 @@ type VerifyResult struct {
 }
 
 func ValidateVerifyRequest(request VerifyRequest) error {
-	if !validSHA256(request.SubjectSHA256) || request.PolicyID == "" || strings.TrimSpace(request.PolicyID) != request.PolicyID || len(request.PolicyID) > 160 {
+	if !commonv1.IsSHA256(request.SubjectSHA256) || request.PolicyID == "" || strings.TrimSpace(request.PolicyID) != request.PolicyID || len(request.PolicyID) > 160 {
 		return errors.New("Provenance Provider 请求 subject/policy 无效")
 	}
 	if len(request.Provenance) == 0 || len(request.Provenance) > MaxProvenanceBytes {

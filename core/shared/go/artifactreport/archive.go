@@ -10,6 +10,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 )
 
 const MaxBytes int64 = 64 << 20
@@ -33,7 +35,7 @@ func New(root string) (*Archive, error) {
 }
 
 func (a *Archive) Put(digest string, raw []byte) error {
-	if a == nil || !validDigest(digest) || len(raw) == 0 || int64(len(raw)) > MaxBytes || digestBytes(raw) != digest {
+	if a == nil || !commonv1.IsSHA256(digest) || len(raw) == 0 || int64(len(raw)) > MaxBytes || digestBytes(raw) != digest {
 		return errors.New("安全评估报告归档参数无效")
 	}
 	if err := a.secureRoot(); err != nil {
@@ -88,7 +90,7 @@ func (a *Archive) Require(digests ...string) error {
 		return err
 	}
 	for _, digest := range digests {
-		if !validDigest(digest) {
+		if !commonv1.IsSHA256(digest) {
 			return errors.New("安全评估报告摘要无效")
 		}
 		actual, err := hashPrivateRegularFile(a.path(digest))
@@ -103,7 +105,7 @@ func (a *Archive) Require(digests ...string) error {
 }
 
 func (a *Archive) Read(digest string) ([]byte, error) {
-	if a == nil || !validDigest(digest) {
+	if a == nil || !commonv1.IsSHA256(digest) {
 		return nil, errors.New("安全评估报告摘要无效")
 	}
 	if err := a.secureRoot(); err != nil {
@@ -156,11 +158,6 @@ func readPrivateRegularFile(path string) ([]byte, string, error) {
 		return nil, "", errors.New("读取安全评估报告失败或大小漂移")
 	}
 	return raw, digestBytes(raw), nil
-}
-
-func validDigest(value string) bool {
-	raw, err := hex.DecodeString(value)
-	return err == nil && len(raw) == sha256.Size && value == hex.EncodeToString(raw)
 }
 
 func digestBytes(raw []byte) string {
