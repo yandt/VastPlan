@@ -28,10 +28,7 @@ type sizeException struct {
 // once a file falls under the default limit this entry must be deleted.
 var productionFileSizeExceptions = map[string]sizeException{
 	"engineering/tools/platform-dev.sh":                                                                            {810, "开发入口脚本保留薄命令 UX，子命令仍待逐步迁入 Go"},
-	"extensions/plugins/cn.vastplan.platform.infrastructure.deployment-manager/deploymentmanager/test_releases.go": {623, "测试发布 Saga 尚未按候选与回滚阶段拆分"},
-	"extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog/resolver.go":                             {623, "制品解析器仍待拆分约束求解与锁生成"},
 	"extensions/sdk/ts/ui-primitives/src/index.ts":                                                                 {617, "公共 UI 契约待按 form、shell、collection 与 theme 分文件导出"},
-	"extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog/publications.go":                         {613, "仓库发布审批与证据读取仍待拆分"},
 }
 
 // Function exceptions use exact receiver/name identities and freeze the
