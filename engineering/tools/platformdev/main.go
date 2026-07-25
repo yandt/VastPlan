@@ -61,6 +61,7 @@ type runtime struct {
 	hmr                *frontendHMR
 	backendInputDigest string
 	repositoryProfile  artifactrepositoryv1.Profile
+	seedArtifacts      seedArtifactSelection
 }
 
 type packageSpec struct {
@@ -113,6 +114,11 @@ func run(opts options) error {
 		return fmt.Errorf("创建运行目录: %w", err)
 	}
 	r := &runtime{options: opts, runDir: runDir}
+	selection, err := r.seedSelection()
+	if err != nil {
+		return fmt.Errorf("解析最小 Seed 制品计划: %w", err)
+	}
+	log.Printf("最小 Seed 制品计划已确定: %d 个精确插件引用", len(selection.refs))
 	if err := r.prepare(ctx); err != nil {
 		return err
 	}
@@ -280,7 +286,8 @@ func (r *runtime) start(ctx context.Context) error {
 		return fmt.Errorf("Node Portal Kernel 未就绪: %w", err)
 	}
 	if r.options.applyPlatform {
-		if err := publishPortal("https://" + r.options.portalListen); err != nil {
+		if err := publishPortal("https://"+r.options.portalListen,
+			filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json")); err != nil {
 			return fmt.Errorf("显式发布初始 Portal 组合: %w", err)
 		}
 	}

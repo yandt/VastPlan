@@ -41,6 +41,10 @@ type listedGoPackage struct {
 }
 
 func (r *runtime) computeGoBuildPlan(ctx context.Context, goIdentity, goCache string) (goBuildPlan, error) {
+	selection, err := r.seedSelection()
+	if err != nil {
+		return goBuildPlan{}, err
+	}
 	kernelVersionRaw, err := os.ReadFile(filepath.Join(r.options.root, "core", "kernels", "backend", "VERSION"))
 	if err != nil {
 		return goBuildPlan{}, err
@@ -61,7 +65,7 @@ func (r *runtime) computeGoBuildPlan(ctx context.Context, goIdentity, goCache st
 		return goBuildPlan{}, err
 	}
 	for _, spec := range specs {
-		if !spec.backend {
+		if !spec.backend || !selection.contains(spec.id) {
 			continue
 		}
 		version, err := pluginManifestVersion(r.options.root, spec.id)

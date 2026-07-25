@@ -302,8 +302,17 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	selection, err := r.seedSelection()
+	if err != nil {
+		return err
+	}
+	seedSpecs, err := r.seedPackageSpecs()
+	if err != nil {
+		return err
+	}
+	frontendIDs := frontendPluginIDs(seedSpecs)
 
-	log.Printf("[2/6] 按实际 Go 依赖准备 Backend Kernel 与插件")
+	log.Printf("[2/6] 按实际 Go 依赖准备 Backend Kernel 与 Seed 插件")
 	backendDigest, err := r.prepareCachedGoBinaries(ctx, cacheRoot, goCache, goIdentity)
 	if err != nil {
 		return err
@@ -314,14 +323,17 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	r.backendInputDigest = backendDigest
 
 	hmr := frontendHMR{root: r.options.root}
-	frontendSources, err := hmr.sourceSignatures()
+	frontendSources, err := hmr.sourceSignaturesFor(frontendIDs)
 	if err != nil {
 		return err
 	}
-	frontendDigest := digestStrings(frontendIdentity, frontendSources.host, frontendSources.plugins, fmt.Sprintf("hot=%t", r.options.hot), "frontend-build-v2")
-	log.Printf("[3/6] 准备按需加载的 Portal 与前端插件 digest=%s", frontendDigest[:12])
+	frontendDigest := digestStrings(frontendIdentity, frontendSources.host, frontendSources.plugins, strings.Join(frontendIDs, ","), fmt.Sprintf("hot=%t", r.options.hot), "frontend-build-v3")
+	log.Printf("[3/6] 准备 Portal 与 %d 个 Seed 前端插件 digest=%s", len(frontendIDs), frontendDigest[:12])
 	frontend, err := ensureCachedBuild(cacheRoot, "frontend", frontendDigest, func(candidate string) error {
-		portalBuildEnv := map[string]string{"PORTAL_OUT_DIR": filepath.Join(candidate, "portal-assets")}
+		portalBuildEnv := map[string]string{
+			"PORTAL_OUT_DIR":               filepath.Join(candidate, "portal-assets"),
+			"VASTPLAN_FRONTEND_PLUGIN_IDS": strings.Join(frontendIDs, ","),
+		}
 		if r.options.hot {
 			portalBuildEnv["PORTAL_DEV_HMR"] = "1"
 		}
@@ -349,40 +361,48 @@ func (r *runtime) prepareCachedBuilds(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("计算插件供应链工具摘要: %w", err)
 	}
-	dynamicFingerprint, err := r.dynamicGoFingerprint(ctx, goCache)
-	if err != nil {
-		return err
-	}
-	dynamicDigest := digestStrings(goIdentity, dynamicFingerprint, supplyChainToolingDigest, "dynamic-go-build-v2")
-	log.Printf("[4/6] 准备 bootstrap-policy dynamic-go 制品 digest=%s", dynamicDigest[:12])
-	dynamic, err := ensureCachedBuild(cacheRoot, "dynamic-go", dynamicDigest, func(candidate string) error {
-		return r.command(ctx, map[string]string{
-			"OUT_DIR": filepath.Join(candidate, "dynamic"), "GOCACHE": goCache,
-		}, "./engineering/tools/build-dynamic-go.sh")
-	}, func(candidate string) error {
-		return requireCachedFiles(filepath.Join(candidate, "dynamic"),
-			"backend-kernel", "vastplan-go-dynamic-host",
-			"cn.vastplan.foundation.security.bootstrap-policy.so",
-			"cn.vastplan.foundation.security.bootstrap-policy.tar.gz")
-	})
-	if err != nil {
-		return err
-	}
-	logBuildCacheResult("dynamic-go", dynamic)
-	if err := materializeCachedDirectory(filepath.Join(dynamic.Path, "dynamic"), filepath.Join(r.runDir, "dynamic")); err != nil {
-		return fmt.Errorf("装配 dynamic-go 构建缓存: %w", err)
+	dynamicDigest := digestStrings("dynamic-go-not-selected-v1")
+	if selection.contains("cn.vastplan.foundation.security.bootstrap-policy") {
+		dynamicFingerprint, err := r.dynamicGoFingerprint(ctx, goCache)
+		if err != nil {
+			return err
+		}
+		dynamicDigest = digestStrings(goIdentity, dynamicFingerprint, supplyChainToolingDigest, "dynamic-go-build-v2")
+		log.Printf("[4/6] 准备 bootstrap-policy dynamic-go 制品 digest=%s", dynamicDigest[:12])
+		dynamic, err := ensureCachedBuild(cacheRoot, "dynamic-go", dynamicDigest, func(candidate string) error {
+			return r.command(ctx, map[string]string{
+				"OUT_DIR": filepath.Join(candidate, "dynamic"), "GOCACHE": goCache,
+			}, "./engineering/tools/build-dynamic-go.sh")
+		}, func(candidate string) error {
+			return requireCachedFiles(filepath.Join(candidate, "dynamic"),
+				"backend-kernel", "vastplan-go-dynamic-host",
+				"cn.vastplan.foundation.security.bootstrap-policy.so",
+				"cn.vastplan.foundation.security.bootstrap-policy.tar.gz")
+		})
+		if err != nil {
+			return err
+		}
+		logBuildCacheResult("dynamic-go", dynamic)
+		if err := materializeCachedDirectory(filepath.Join(dynamic.Path, "dynamic"), filepath.Join(r.runDir, "dynamic")); err != nil {
+			return fmt.Errorf("装配 dynamic-go 构建缓存: %w", err)
+		}
 	}
 
-	packageSourceDigest, err := digestBuildInputs(r.options.root, []string{
-		"LICENSE", "NOTICE", "package.json", "pnpm-lock.yaml", "extensions/plugins", "extensions/sdk/node", "engineering/internal/cyclonedx", "engineering/internal/pluginsbom", "engineering/tools/pluginpackage", "engineering/tools/build-node-backend-plugins.mjs",
-	}, []string{backendDigest, frontendDigest, dynamicDigest, supplyChainToolingDigest, "package-build-v3"}, packageBuildInput)
+	packageInputs := []string{
+		"LICENSE", "NOTICE", "package.json", "pnpm-lock.yaml", "extensions/sdk/node", "engineering/internal/cyclonedx", "engineering/internal/pluginsbom", "engineering/tools/pluginpackage", "engineering/tools/build-node-backend-plugins.mjs",
+	}
+	for _, ref := range selection.references() {
+		packageInputs = append(packageInputs, filepath.ToSlash(filepath.Join("extensions", "plugins", ref.PluginID)))
+	}
+	packageSourceDigest, err := digestBuildInputs(r.options.root, packageInputs,
+		[]string{backendDigest, frontendDigest, dynamicDigest, supplyChainToolingDigest, strings.Join(selection.pluginIDs(), ","), "package-build-v4"}, packageBuildInput)
 	if err != nil {
 		return fmt.Errorf("计算插件制品摘要: %w", err)
 	}
 	log.Printf("[5/6] 准备本地不可变插件仓库 digest=%s", packageSourceDigest[:12])
 	packages, err := ensureCachedBuild(cacheRoot, "packages", packageSourceDigest, func(candidate string) error {
 		nodeBackendModules := filepath.Join(candidate, "node-backend-modules")
-		if err := r.command(ctx, nil, "node", "engineering/tools/build-node-backend-plugins.mjs", "--out-dir", nodeBackendModules); err != nil {
+		if err := r.buildSeedNodeBackendPlugins(ctx, nodeBackendModules, seedSpecs); err != nil {
 			return fmt.Errorf("构建 node-worker 插件: %w", err)
 		}
 		return r.packageArtifacts(ctx, filepath.Join(candidate, "repository"),
@@ -459,7 +479,7 @@ func (r *runtime) dynamicGoFingerprint(ctx context.Context, goCache string) (str
 
 func (r *runtime) validateBackendBuild(binDir string) error {
 	files := []string{"backend-kernel"}
-	specs, err := discoverPackageSpecs(r.options.root)
+	specs, err := r.seedPackageSpecs()
 	if err != nil {
 		return err
 	}
@@ -472,7 +492,7 @@ func (r *runtime) validateBackendBuild(binDir string) error {
 }
 
 func (r *runtime) captureFrontendModules(target string) error {
-	specs, err := discoverPackageSpecs(r.options.root)
+	specs, err := r.seedPackageSpecs()
 	if err != nil {
 		return err
 	}
@@ -496,7 +516,7 @@ func (r *runtime) validateFrontendBuild(candidate string) error {
 	if err := requireCachedFiles(filepath.Join(candidate, "portal-assets"), "index.html", "assets/portal-kernel.js", "assets/portal.css"); err != nil {
 		return err
 	}
-	specs, err := discoverPackageSpecs(r.options.root)
+	specs, err := r.seedPackageSpecs()
 	if err != nil {
 		return err
 	}
@@ -513,15 +533,10 @@ func (r *runtime) validateFrontendBuild(candidate string) error {
 }
 
 func (r *runtime) validatePackageRepository(repository string) error {
-	specs, err := discoverPackageSpecs(r.options.root)
+	selection, err := r.seedSelection()
 	if err != nil {
 		return err
 	}
-	pluginIDs := make([]string, 0, len(specs)+1)
-	for _, spec := range specs {
-		pluginIDs = append(pluginIDs, spec.id)
-	}
-	pluginIDs = append(pluginIDs, "cn.vastplan.foundation.security.bootstrap-policy")
 	refs, err := packageRepositoryRefs(repository)
 	if err != nil {
 		return fmt.Errorf("读取插件仓库索引: %w", err)
@@ -540,23 +555,20 @@ func (r *runtime) validatePackageRepository(repository string) error {
 			return fmt.Errorf("缓存制品 %s@%s/%s 缺少已绑定 SBOM", ref.PluginID, ref.Version, ref.Channel)
 		}
 	}
-	for _, pluginID := range pluginIDs {
-		root := filepath.Join(repository, "artifacts", pluginID)
-		found := false
-		err := filepath.WalkDir(root, func(_ string, entry fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if !entry.IsDir() && entry.Name() == "artifact.json" {
-				found = true
-			}
-			return nil
-		})
-		if err != nil {
-			return err
+	expected := selection.references()
+	return validateExactSeedRefs("缓存校验", expected, refs)
+}
+
+func (r *runtime) buildSeedNodeBackendPlugins(ctx context.Context, target string, specs []packageSpec) error {
+	if err := os.MkdirAll(target, 0o700); err != nil {
+		return err
+	}
+	for _, spec := range specs {
+		if !spec.nodeBackend {
+			continue
 		}
-		if !found {
-			return fmt.Errorf("插件仓库缺少 %s", pluginID)
+		if err := r.command(ctx, nil, "node", "engineering/tools/build-node-backend-plugins.mjs", "--out-dir", target, "--plugin", spec.id); err != nil {
+			return err
 		}
 	}
 	return nil

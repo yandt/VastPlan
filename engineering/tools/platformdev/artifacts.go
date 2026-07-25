@@ -13,12 +13,16 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, nodeBackendModulesDir, frontendModulesDir, dynamicDir string) error {
-	specs, err := discoverPackageSpecs(r.options.root)
+	selection, err := r.seedSelection()
+	if err != nil {
+		return err
+	}
+	specs, err := r.seedPackageSpecs()
 	if err != nil {
 		return err
 	}
@@ -41,16 +45,18 @@ func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, node
 			return fmt.Errorf("打包 %s: %w", spec.id, err)
 		}
 	}
-	dynamicPackage, err := os.ReadFile(filepath.Join(dynamicDir, "cn.vastplan.foundation.security.bootstrap-policy.tar.gz"))
-	if err != nil {
-		return err
-	}
-	repo, err := artifactrepository.NewRepository(repository)
-	if err != nil {
-		return err
-	}
-	if _, err := repo.Publish("stable", dynamicPackage); err != nil {
-		return fmt.Errorf("发布 bootstrap-policy dynamic-go 制品: %w", err)
+	if selection.contains("cn.vastplan.foundation.security.bootstrap-policy") {
+		dynamicPackage, err := os.ReadFile(filepath.Join(dynamicDir, "cn.vastplan.foundation.security.bootstrap-policy.tar.gz"))
+		if err != nil {
+			return err
+		}
+		repo, err := artifactrepository.NewRepository(repository)
+		if err != nil {
+			return err
+		}
+		if _, err := repo.Publish("stable", dynamicPackage); err != nil {
+			return fmt.Errorf("发布 bootstrap-policy dynamic-go 制品: %w", err)
+		}
 	}
 	return nil
 }
@@ -73,6 +79,14 @@ func (r *runtime) signPackageRepository() error {
 	}
 	refs, err := packageRepositoryRefs(filepath.Join(r.runDir, "repository"))
 	if err != nil {
+		return err
+	}
+	selection, err := r.seedSelection()
+	if err != nil {
+		return err
+	}
+	expected := selection.references()
+	if err := validateExactSeedRefs("待签", expected, refs); err != nil {
 		return err
 	}
 	signed := &artifactrepository.SignedRepository{Local: repository, Trust: trust}
@@ -106,7 +120,7 @@ func (r *runtime) signPackageRepository() error {
 	if err := r.writeBootstrapInventory(repository, refs); err != nil {
 		return err
 	}
-	log.Printf("[6/6] 已签署 %d 个本地 Seed 制品", len(refs))
+	log.Printf("[6/6] 已签署 %d 个最小本地 Seed 制品", len(refs))
 	return nil
 }
 

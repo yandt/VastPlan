@@ -46,7 +46,19 @@ pnpm exec esbuild core/kernels/frontend/src/vendor/rjsf-csp-validator.ts "${comm
 pnpm exec esbuild core/kernels/frontend/src/vendor/ui-primitives.ts "${common[@]}" --external:react --external:@vastplan/ui-contract --outfile="$VENDOR/ui-primitives.js"
 pnpm exec esbuild core/kernels/frontend/src/vendor/workbench-sdk.ts "${common[@]}" --external:@vastplan/ui-contract --outfile="$VENDOR/workbench-sdk.js"
 
-pnpm run build:frontend:plugins
+frontend_plugin_args=()
+if [[ -n "${VASTPLAN_FRONTEND_PLUGIN_IDS:-}" ]]; then
+  IFS=',' read -r -a frontend_plugin_ids <<< "$VASTPLAN_FRONTEND_PLUGIN_IDS"
+  for plugin_id in "${frontend_plugin_ids[@]}"; do
+    [[ -n "$plugin_id" ]] || continue
+    frontend_plugin_args+=(--plugin "$plugin_id")
+  done
+fi
+if [[ -n "${VASTPLAN_FRONTEND_PLUGIN_IDS:-}" ]]; then
+  node engineering/tools/build-frontend-plugins.mjs "${frontend_plugin_args[@]}"
+else
+  node engineering/tools/build-frontend-plugins.mjs
+fi
 cp core/kernels/frontend/static/index.html "$OUT_DIR/index.html"
 cp core/kernels/frontend/static/portal.css "$ASSETS/portal.css"
 echo "已构建 Portal 静态产物: $OUT_DIR"

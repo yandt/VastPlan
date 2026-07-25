@@ -9,17 +9,15 @@ import (
 	"net/http"
 	"time"
 
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
-func publishPortal(baseURL string) error {
+func publishPortal(baseURL, applicationPath string) error {
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: insecureLocalTLS()}, Timeout: 10 * time.Second}
-	spec := map[string]any{
-		"version": 1, "revision": 1, "id": "operations", "target": map[string]string{"kernel": "frontend"},
-		"route": "/operations", "audience": []string{"portal.read"}, "plugins": []any{
-			map[string]any{"id": "cn.vastplan.product.developer.workbench-gallery", "version": "0.1.0", "channel": "stable"},
-		}, "config": map[string]any{},
-		"branding": map[string]any{"title": "VastPlan 平台管理中心"},
+	spec, err := frontendcompositionv1.ParseApplicationCompositionFile(applicationPath)
+	if err != nil {
+		return fmt.Errorf("读取初始 Portal Application Composition: %w", err)
 	}
 	status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, "/v1/portal-drafts", spec, true)
 	if err != nil || status != http.StatusOK {

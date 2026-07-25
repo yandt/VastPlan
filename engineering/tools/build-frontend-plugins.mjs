@@ -9,6 +9,7 @@ import { buildFrontendServerGraph } from "./frontend-server-build.mjs";
 
 const outputRoot = option("--out-dir");
 const manifestPath = option("--manifest");
+const selectedPlugins = new Set(stringOptions("--plugin"));
 
 const common = {
   bundle: true,
@@ -117,6 +118,7 @@ async function discoverFrontendPlugins() {
   const entries = await readdir(root, { withFileTypes: true });
   const plugins = [];
   for (const directory of entries.filter((entry) => entry.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
+    if (selectedPlugins.size > 0 && !selectedPlugins.has(directory.name)) continue;
     const pluginRoot = resolve(root, directory.name);
     const manifestPath = resolve(pluginRoot, "vastplan.plugin.json");
     const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -134,6 +136,11 @@ async function discoverFrontendPlugins() {
     }
     plugins.push({ id, entry, serverEntry, deferred, pluginRoot, source: await findFrontendSource(pluginRoot, id),
       ...(serverEntry === undefined ? {} : { serverSource: await findFrontendServerSource(pluginRoot, id) }) });
+  }
+  if (selectedPlugins.size > 0) {
+    const discovered = new Set(plugins.map((plugin) => plugin.id));
+    const missing = [...selectedPlugins].filter((id) => !discovered.has(id));
+    if (missing.length > 0) throw new Error(`选择的前端插件不存在或未声明前端入口: ${missing.join(", ")}`);
   }
   return plugins;
 }
@@ -171,4 +178,17 @@ function option(name) {
   const value = process.argv[index + 1];
   if (value === undefined || value.startsWith("--")) throw new Error(`${name} 缺少值`);
   return value;
+}
+
+function stringOptions(name) {
+  const values = [];
+  for (let index = 0; index < process.argv.length; index += 1) {
+    if (process.argv[index] !== name) continue;
+    const value = process.argv[index + 1];
+    if (value === undefined || value.startsWith("--") || !/^[a-z0-9][a-z0-9._-]{0,159}$/.test(value)) {
+      throw new Error(`${name} 缺少合法插件 ID`);
+    }
+    values.push(value);
+  }
+  return values;
 }

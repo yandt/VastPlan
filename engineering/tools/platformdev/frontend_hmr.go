@@ -120,11 +120,22 @@ func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignat
 }
 
 func (h *frontendHMR) sourceSignatures() (frontendSourceSignatures, error) {
-	plugins, err := sourceSignature(h.root, []string{
-		"extensions/plugins",
+	return h.sourceSignaturesFor(nil)
+}
+
+func (h *frontendHMR) sourceSignaturesFor(pluginIDs []string) (frontendSourceSignatures, error) {
+	pluginPaths := []string{
 		"extensions/sdk/ts/platform-admin/src",
 		"extensions/sdk/ts/platform-admin/package.json",
-	})
+	}
+	if pluginIDs == nil {
+		pluginPaths = append(pluginPaths, "extensions/plugins")
+	} else {
+		for _, id := range pluginIDs {
+			pluginPaths = append(pluginPaths, filepath.ToSlash(filepath.Join("extensions", "plugins", id)))
+		}
+	}
+	plugins, err := sourceSignature(h.root, pluginPaths)
 	if err != nil {
 		return frontendSourceSignatures{}, fmt.Errorf("扫描前端插件源码: %w", err)
 	}

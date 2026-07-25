@@ -126,6 +126,10 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 	} else if err != nil {
 		return err
 	} else {
+		transitionTime := time.Now().UTC()
+		if err := reconcileDevelopmentGrantsBeforeCatalogUpdate(store, catalog, transitionTime); err != nil {
+			return err
+		}
 		service, initErr := policy.NewService(policy.ServiceOptions{Store: store, Signer: signer, SnapshotWriter: policy.FileSnapshotWriter{Path: snapshotPath}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{domain}, DefaultAudience: []string{developmentAuthorizationAudience}, DefaultTTL: 24 * time.Hour})
 		if initErr != nil {
 			return initErr
@@ -135,7 +139,7 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 		if loadErr != nil {
 			return loadErr
 		}
-		reconcileDevelopmentGrants(&state, catalog, time.Now().UTC())
+		reconcileDevelopmentGrants(&state, catalog, transitionTime)
 		state.PolicyRevision++
 		snapshot, compileErr := policy.CompileSnapshot(state, []string{developmentAuthorizationAudience}, time.Now().UTC(), 24*time.Hour)
 		if compileErr != nil {
@@ -156,6 +160,31 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 		}
 	}
 	return nil
+}
+
+// Explicit development bootstrap may legitimately shrink the Seed permission
+// catalog after an unselected plugin moves to workspace/testing. Reconcile only
+// seed-owned revision-1 roles before the policy service performs its strict
+// catalog transition. User-created or subsequently revised roles retain the
+// production fail-closed behavior and still block removal of permissions they
+// actively use.
+func reconcileDevelopmentGrantsBeforeCatalogUpdate(store *policy.FileStore, catalog pluginv1.PermissionCatalog, now time.Time) error {
+	state, err := store.Load()
+	if err != nil {
+		return err
+	}
+	if state.Generation == 0 || state.Catalog.Digest == catalog.Digest {
+		return nil
+	}
+	previousGeneration := state.Generation
+	reconcileDevelopmentGrants(&state, catalog, now)
+	state.Generation++
+	state.Audit = append(state.Audit, policy.AuditEvent{
+		ID: fmt.Sprintf("audit.dev.catalog-transition.%d", now.UnixNano()), Action: "developmentSeedGrantReconcile",
+		ObjectKind: "catalog", ObjectID: catalog.Digest, Revision: state.Generation, SubjectID: "platformdev", OccurredAt: now,
+	})
+	_, err = store.CompareAndSwap(previousGeneration, state)
+	return err
 }
 
 func reconcileDevelopmentGrants(state *policy.State, catalog pluginv1.PermissionCatalog, now time.Time) {

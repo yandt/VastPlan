@@ -5,8 +5,7 @@
   "target": { "kernel": "frontend" },
   "route": "/operations",
   "audience": ["portal.read"],
-  "plugins": [
-    { "id": "cn.vastplan.product.developer.workbench-gallery", "version": "0.1.0", "channel": "stable" }
-  ],
-  "config": {}
+  "plugins": [],
+  "config": {},
+  "branding": { "title": "VastPlan 平台管理中心" }
 }
