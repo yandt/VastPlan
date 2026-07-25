@@ -12,4 +12,4 @@ Role 与 Binding 均使用 `Draft → PendingApproval → Approved → Published
 - `VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT`
 - `VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE`
 
-本插件不提供登录、目录同步或浏览器组件。在线页面由 `cn.vastplan.platform.configuration.role-management` 提供，最终判定由每内核的 `authorization-enforcer` 执行。
+本插件不提供登录或目录同步。它同时交付 Backend 授权治理服务和 Portal Workbench 管理页面，使角色、绑定、撤权、审计与签名 Policy Snapshot 共用一个插件身份和版本；最终判定仍由每内核的 `authorization-enforcer` 执行。

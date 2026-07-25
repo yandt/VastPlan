@@ -8,10 +8,11 @@ import (
 	"os"
 	"strings"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/authorizationdirectory"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/authorizationdirectory"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.security.authorization-enforcer/enforcer"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.foundation.security.authorization-enforcer/policybundle"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -34,6 +35,7 @@ func main() {
 		encoded, encodeErr := enforcer.EncodeResponse(response)
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, encoded, encodeErr
 	}}})
+	policybundle.Register(plugin)
 	if err := plugin.Serve(); err != nil {
 		log.Fatalf("Authorization Enforcer 退出: %v", err)
 	}

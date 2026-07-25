@@ -232,6 +232,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0149 源码职责规模门禁与渐进拆分](decisions/ADR-0149-源码职责规模门禁与渐进拆分.md)
 - [ADR-0150 插件共享代码与能力复用边界](decisions/ADR-0150-插件共享代码与能力复用边界.md)
 - [ADR-0151 最小 Seed 装配与开发插件候选分流](decisions/ADR-0151-最小Seed装配与开发插件候选分流.md)
+- [ADR-0152 插件边界门禁与权限策略物理收敛](decisions/ADR-0152-插件边界门禁与权限策略物理收敛.md)
 
 ### 插件共享代码与能力复用
 
@@ -245,8 +246,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [说明](plugins/README.md) —— 具体插件文档规则
 - [Python Hello 参考插件](plugins/cn.vastplan.python-hello.md) —— Python SDK、事件发布与跨语言调用参考
 - [自举权限基线](plugins/cn.vastplan.foundation.security.bootstrap-policy.md) —— 首方多级命名空间、settings 写保护与最低权限基线
-- [平台 Workload 访问策略](plugins/cn.vastplan.foundation.security.platform-admin-access-policy.md) —— 系统/插件精确回调与用户授权 fail-closed 兜底
-- [Authorization Enforcer](plugins/cn.vastplan.foundation.security.authorization-enforcer.md) —— 每内核签名策略强制、风险缓存与 Native Engine Provider
+- [Authorization Enforcer](plugins/cn.vastplan.foundation.security.authorization-enforcer.md) —— 每内核签名策略强制、风险缓存与首方 workload Policy Bundle
 - [Native Authorization Engine](plugins/cn.vastplan.foundation.security.authorization-engine.native.md) —— 默认 Go Engine Provider 与有界 Decision Proof
 - [Database Runtime 基础插件](plugins/cn.vastplan.foundation.data.relational.runtime.md) —— 关系数据库 wire 契约、Provider SPI、错误分类与可信数据面边界
 - [节点部署管理服务](plugins/cn.vastplan.platform.infrastructure.deployment-manager.md) —— 节点引导、在线服务组合、异人审批与可信发布
@@ -261,8 +261,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [制品持续复扫 Controller](plugins/cn.vastplan.platform.artifacts.assessment.controller.md) —— fenced leader、持久计划、稳定抖动、有界退避与只追加状态收敛
 - [Trivy Database File Snapshot](plugins/cn.vastplan.platform.artifacts.assessment.database.file.md) —— 每节点本地、摘要钉死、原子物化的离线数据库快照
 - [API Exposure 治理插件](plugins/cn.vastplan.platform.integration.api-exposure.md) —— 受治理 API Contract、随机 Route Key、Gateway Catalog、Endpoint Lease 与一次性 Ticket
-- [Authorization Policy](plugins/cn.vastplan.platform.security.authorization-policy.md) —— Role/Binding revision、即时撤权与签名 Policy Snapshot
-- [Role Management Workbench](plugins/cn.vastplan.platform.configuration.role-management.md) —— 权限目录、角色、主体绑定和审计管理面
+- [Authorization Policy](plugins/cn.vastplan.platform.security.authorization-policy.md) —— Role/Binding revision、即时撤权、签名 Policy Snapshot 与 Workbench 管理面
 - [Workbench Pattern Gallery](plugins/cn.vastplan.product.developer.workbench-gallery.md) —— RecordDetail、MasterDetail 与 TreeDetail 的开发 Application 示例
 - [本地文件制品存储 Provider](plugins/cn.vastplan.platform.artifacts.storage.file.md) —— 私有 volume 供给、路径隔离与非 RPC 数据面
 

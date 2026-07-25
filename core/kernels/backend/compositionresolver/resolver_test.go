@@ -128,11 +128,11 @@ func TestResolveRejectsPlatformPluginWithConflictingTopology(t *testing.T) {
 	}
 }
 
-func TestResolveAllowsExactLocalPermissionPluginInMultiplePlatformServices(t *testing.T) {
+func TestResolveAllowsExactHostLocalPluginInMultiplePlatformServices(t *testing.T) {
 	profile, application, reader := baseInputs()
-	policyID := "cn.vastplan.foundation.security.platform-admin-access-policy"
+	policyID := "cn.vastplan.foundation.security.host-local-guard-fixture"
 	policyManifest := []byte(`{
-		"id":"cn.vastplan.foundation.security.platform-admin-access-policy","name":"policy","description":"policy",
+		"id":"cn.vastplan.foundation.security.host-local-guard-fixture","name":"policy","description":"policy",
 		"version":"1.0.0","publisher":"vastplan","engines":{"backend":"^1.0"},
 		"runtime":{"instancePolicy":"per-kernel","stateModel":"local-ephemeral","visibility":"local","routing":"direct"},
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
@@ -145,7 +145,7 @@ func TestResolveAllowsExactLocalPermissionPluginInMultiplePlatformServices(t *te
 	}
 	resolved, err := Resolve(profile, application, 1, reader, Options{})
 	if err != nil {
-		t.Fatalf("同一精确本地权限插件应可保护多个平台 unit: %v", err)
+		t.Fatalf("同一精确 host-local 插件应可进入多个平台 unit: %v", err)
 	}
 	if len(resolved.Units) != 3 {
 		t.Fatalf("平台 unit 未完整保留: %+v", resolved.Units)

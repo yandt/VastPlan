@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 2,
+  "revision": 3,
   "id": "managed-services-default",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -9,7 +9,7 @@
       "id": "application-authorization",
       "serviceClass": "application.backend",
       "plugins": [
-        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.1.1", "channel": "stable" }
+        { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" }
       ],
       "config": {
         "environment_allowlist": {

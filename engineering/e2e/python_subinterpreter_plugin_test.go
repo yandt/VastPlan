@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 
@@ -47,7 +47,7 @@ func TestPythonSubinterpreterPlugin_CrossInterpreterInvoke(t *testing.T) {
 		t.Skipf("Python gRPC 依赖不可用: %v %s", err, output)
 	}
 
-	manifestPath := filepath.Join(root, "extensions/plugins/cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello/vastplan.plugin.json")
+	manifestPath := filepath.Join(root, "engineering/e2e/fixtures/plugins/cn.vastplan.test.runtime.python-subinterpreter-hello/vastplan.plugin.json")
 	manifestRaw, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestPythonSubinterpreterPlugin_CrossInterpreterInvoke(t *testing.T) {
 		Command: python,
 		Args: []string{
 			hostScript,
-			"--entry", filepath.Join(root, "extensions/plugins/cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello/backend/main.py"),
+			"--entry", filepath.Join(root, "engineering/e2e/fixtures/plugins/cn.vastplan.test.runtime.python-subinterpreter-hello/backend/main.py"),
 		},
 		Dir: root,
 		ExtraEnv: []string{
@@ -77,7 +77,7 @@ func TestPythonSubinterpreterPlugin_CrossInterpreterInvoke(t *testing.T) {
 		},
 		RuntimeKind: "python-subinterpreter",
 	}, protocolbus.LaunchPolicy{
-		PluginID:  "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello",
+		PluginID:  "cn.vastplan.test.runtime.python-subinterpreter-hello",
 		Publisher: "vastplan", Version: "0.3.0", Contributions: contributions,
 		KernelServices: []string{"kernel.info"},
 	})
@@ -86,7 +86,7 @@ func TestPythonSubinterpreterPlugin_CrossInterpreterInvoke(t *testing.T) {
 	}
 	defer func() { _ = host.Close(instance) }()
 
-	response, err := host.Invoke(ctx, toolTarget("vastplan.python-subinterpreter-hello", "echo"), testCallContext(), []byte(`{"text":"子解释器成功"}`))
+	response, err := host.Invoke(ctx, toolTarget("test.runtime.python-subinterpreter-hello", "echo"), testCallContext(), []byte(`{"text":"子解释器成功"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestPythonSubinterpreterPlugin_CrossInterpreterInvoke(t *testing.T) {
 		t.Fatalf("子解释器响应异常: %v", output)
 	}
 
-	response, err = host.Invoke(ctx, toolTarget("vastplan.python-subinterpreter-hello", "whoami"), testCallContext(), []byte(`{}`))
+	response, err = host.Invoke(ctx, toolTarget("test.runtime.python-subinterpreter-hello", "whoami"), testCallContext(), []byte(`{}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestPythonSubinterpreterPlugin_CrossInterpreterInvoke(t *testing.T) {
 		t.Fatal(err)
 	}
 	if output["callerKind"] != "CALLER_KIND_PLUGIN" ||
-		output["callerId"] != "cn.vastplan.foundation.backend.runtime.python-subinterpreter-hello" ||
+		output["callerId"] != "cn.vastplan.test.runtime.python-subinterpreter-hello" ||
 		output["tenant"] != "acme" {
 		t.Fatalf("子解释器 HostCall 信任边界错误: %v", output)
 	}

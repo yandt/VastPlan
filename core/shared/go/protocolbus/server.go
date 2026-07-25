@@ -51,7 +51,9 @@ func (h *Host) Handshake(ctx context.Context, in *pluginhostv1.Hello) (*pluginho
 		trustedVersion = policy.Version
 	}
 	sess := newSession(newSessionID(), in.PluginId, trustedVersion)
-	sess.policy = policy
+	if err := sess.bindLaunchPolicy(policy); err != nil {
+		return fail(fmt.Errorf("编译插件 Capability Grant Plan: %w", err))
+	}
 	for _, feature := range negotiatedFeatures {
 		sess.features[feature] = true
 	}

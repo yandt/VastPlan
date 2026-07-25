@@ -4,11 +4,11 @@ import (
 	"time"
 
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
-	"cdsoft.com.cn/VastPlan/extensions/sdk/go/authorizationnative"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/authorizationeval"
 )
 
-type Evaluation = authorizationnative.Evaluation
+type Evaluation = authorizationeval.Evaluation
 
 func Evaluate(policy authorizationv1.AuthorizationIR, input authorizationv1.EvaluationInput, now time.Time) Evaluation {
-	return authorizationnative.Evaluate(policy, input, now)
+	return authorizationeval.Evaluate(policy, input, now)
 }

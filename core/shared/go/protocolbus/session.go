@@ -24,6 +24,7 @@ type session struct {
 	pluginID      string
 	pluginVersion string
 	policy        LaunchPolicy
+	grants        CapabilityGrantPlan
 	launchToken   string // 关联到发起它的那次 Launch
 	cmdMu         sync.Mutex
 	cmd           *exec.Cmd
@@ -65,6 +66,16 @@ type session struct {
 	teardownDone chan struct{}
 	// deadErr 会话死亡原因（崩溃/心跳超时/主动关闭）。
 	deadErr atomic.Value
+}
+
+func (s *session) bindLaunchPolicy(policy LaunchPolicy) error {
+	plan, err := compileCapabilityGrantPlan(policy.KernelServices)
+	if err != nil {
+		return err
+	}
+	s.policy = policy
+	s.grants = plan
+	return nil
 }
 
 // bindManagedUnit associates the logical plugin session with a unit owned by a

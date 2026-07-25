@@ -18,8 +18,7 @@
 
 - [cn.vastplan.python-hello](cn.vastplan.python-hello.md) —— Python SDK 与异构运行参考插件
 - [cn.vastplan.foundation.security.bootstrap-policy](cn.vastplan.foundation.security.bootstrap-policy.md) —— 系统设置之前启动的首方权限基线
-- [cn.vastplan.foundation.security.platform-admin-access-policy](cn.vastplan.foundation.security.platform-admin-access-policy.md) —— 平台管理角色访问策略
-- [cn.vastplan.foundation.security.authorization-enforcer](cn.vastplan.foundation.security.authorization-enforcer.md) —— 每内核签名策略验证、缓存与最终强制
+- [cn.vastplan.foundation.security.authorization-enforcer](cn.vastplan.foundation.security.authorization-enforcer.md) —— 每内核签名策略验证、缓存、最终强制与 workload Policy Bundle
 - [cn.vastplan.foundation.security.authorization-engine.native](cn.vastplan.foundation.security.authorization-engine.native.md) —— 默认 Go authorization.engine.v1 与 Decision Proof Provider
 - [cn.vastplan.foundation.data.relational.runtime](cn.vastplan.foundation.data.relational.runtime.md) —— Database Runtime wire 契约、Provider SPI 与可信数据面边界
 - [cn.vastplan.platform.configuration.global-settings](cn.vastplan.platform.configuration.global-settings.md) —— 租户级版本化全局设置
@@ -32,5 +31,4 @@
 - [cn.vastplan.platform.infrastructure.deployment-manager](cn.vastplan.platform.infrastructure.deployment-manager.md) —— 节点计划、首次引导审批与可信执行桥
 - [cn.vastplan.platform.infrastructure.composition-planner](cn.vastplan.platform.infrastructure.composition-planner.md) —— Application Intent、依赖闭包、Provider Binding 与可解释方案
 - [cn.vastplan.platform.configuration.portal-composer](cn.vastplan.platform.configuration.portal-composer.md) —— Portal 分域治理、不可变 Activation 与前端制品引用保护
-- [cn.vastplan.platform.security.authorization-policy](cn.vastplan.platform.security.authorization-policy.md) —— 在线 Role/Binding、撤权与签名 Policy Snapshot 真相源
-- [cn.vastplan.platform.configuration.role-management](cn.vastplan.platform.configuration.role-management.md) —— 权限目录、角色、主体绑定与审计 Workbench
+- [cn.vastplan.platform.security.authorization-policy](cn.vastplan.platform.security.authorization-policy.md) —— 在线 Role/Binding、撤权、签名 Policy Snapshot 与管理 Workbench

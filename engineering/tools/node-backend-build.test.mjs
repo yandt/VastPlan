@@ -10,7 +10,6 @@ test("builds every node-worker backend as a self-contained ESM module", async ()
   try {
     execFileSync(process.execPath, ["engineering/tools/build-node-backend-plugins.mjs", "--out-dir", output], { cwd: resolve("."), stdio: "pipe" });
     for (const id of [
-      "cn.vastplan.foundation.backend.runtime.node-worker-hello",
       "cn.vastplan.foundation.security.authentication.provider.oidc",
       "cn.vastplan.platform.security.authentication.delivery.webhook",
     ]) {
@@ -25,7 +24,7 @@ test("builds every node-worker backend as a self-contained ESM module", async ()
 
 test("builds one manifest-selected node-worker without a source allow-list", async () => {
   const output = await mkdtemp(join(tmpdir(), "vastplan-node-backend-one-"));
-  const selected = "cn.vastplan.foundation.backend.runtime.node-worker-hello";
+  const selected = "cn.vastplan.foundation.security.authentication.provider.oidc";
   try {
     execFileSync(process.execPath, ["engineering/tools/build-node-backend-plugins.mjs", "--out-dir", output, "--plugin", selected], { cwd: resolve("."), stdio: "pipe" });
     await access(join(output, selected, "backend/main.mjs"));

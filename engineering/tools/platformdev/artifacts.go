@@ -127,10 +127,9 @@ func (r *runtime) signPackageRepository() error {
 func (r *runtime) writeBootstrapInventory(repository *artifactrepository.Repository, refs []artifactrepository.Ref) error {
 	items := make([]bootstrapinventory.Item, 0, len(refs))
 	lkgIDs := map[string]struct{}{
-		"cn.vastplan.foundation.security.authorization-enforcer":       {},
-		"cn.vastplan.foundation.security.platform-admin-access-policy": {},
-		"cn.vastplan.platform.artifacts.storage.file":                  {},
-		"cn.vastplan.platform.artifacts.repository":                    {},
+		"cn.vastplan.foundation.security.authorization-enforcer": {},
+		"cn.vastplan.platform.artifacts.storage.file":            {},
+		"cn.vastplan.platform.artifacts.repository":              {},
 	}
 	lkg := make([]bootstrapinventory.Item, 0, len(lkgIDs))
 	for _, ref := range refs {

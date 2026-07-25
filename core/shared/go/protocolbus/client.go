@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/processguard"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
 )
 
 type currentDispatchTargetKey struct{}
@@ -78,6 +78,9 @@ func (h *Host) LaunchSpecWithPolicy(ctx context.Context, spec LaunchSpec, policy
 	}
 	if err := validateAutonomousPolicy(policy); err != nil {
 		return nil, err
+	}
+	if _, err := compileCapabilityGrantPlan(policy.KernelServices); err != nil {
+		return nil, fmt.Errorf("编译 Capability Grant Plan: %w", err)
 	}
 	if err := validateExtraEnvironment(spec.ExtraEnv); err != nil {
 		return nil, err
@@ -199,6 +202,9 @@ func (h *Host) LaunchManagedWithPolicy(ctx context.Context, spec ManagedLaunchSp
 	}
 	if err := validateAutonomousPolicy(policy); err != nil {
 		return nil, err
+	}
+	if _, err := compileCapabilityGrantPlan(policy.KernelServices); err != nil {
+		return nil, fmt.Errorf("编译 Capability Grant Plan: %w", err)
 	}
 	token := newToken()
 	resultCh := make(chan launchResult, 1)

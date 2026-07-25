@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 
@@ -23,7 +23,7 @@ func TestNodeWorkerPlugin_CrossLanguageInvokeAndLifecycle(t *testing.T) {
 		t.Skip("未安装 Node.js")
 	}
 	root := repoRoot(t)
-	manifestPath := filepath.Join(root, "extensions/plugins/cn.vastplan.foundation.backend.runtime.node-worker-hello/vastplan.plugin.json")
+	manifestPath := filepath.Join(root, "engineering/e2e/fixtures/plugins/cn.vastplan.test.runtime.node-worker-hello/vastplan.plugin.json")
 	manifestRaw, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatal(err)
@@ -45,12 +45,12 @@ func TestNodeWorkerPlugin_CrossLanguageInvokeAndLifecycle(t *testing.T) {
 		Command: node,
 		Args: []string{
 			filepath.Join(root, "core/runtimehosts/node-worker/host.mjs"),
-			"--entry", filepath.Join(root, "extensions/plugins/cn.vastplan.foundation.backend.runtime.node-worker-hello/backend/main.mjs"),
+			"--entry", filepath.Join(root, "engineering/e2e/fixtures/plugins/cn.vastplan.test.runtime.node-worker-hello/backend/main.mjs"),
 		},
 		Dir:         root,
 		RuntimeKind: "node-worker",
 	}, protocolbus.LaunchPolicy{
-		PluginID: "cn.vastplan.foundation.backend.runtime.node-worker-hello", Publisher: "vastplan", Version: "0.1.1",
+		PluginID: "cn.vastplan.test.runtime.node-worker-hello", Publisher: "vastplan", Version: "0.1.1",
 		Contributions: contributions, RequiredFeatures: []string{protocol.FeatureCancellation},
 	})
 	if err != nil {
@@ -61,7 +61,7 @@ func TestNodeWorkerPlugin_CrossLanguageInvokeAndLifecycle(t *testing.T) {
 		t.Fatalf("运行形态异常: %s", instance.RuntimeKind())
 	}
 
-	response, err := host.Invoke(ctx, toolTarget("vastplan.node-worker-hello", "echo"), testCallContext(), []byte(`{"text":"Worker 成功"}`))
+	response, err := host.Invoke(ctx, toolTarget("test.runtime.node-worker-hello", "echo"), testCallContext(), []byte(`{"text":"Worker 成功"}`))
 	if err != nil {
 		t.Fatal(err)
 	}

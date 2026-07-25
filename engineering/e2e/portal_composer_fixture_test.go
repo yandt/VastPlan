@@ -10,18 +10,18 @@ import (
 	"path/filepath"
 	"testing"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/portaltrust"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
 )
 
@@ -47,9 +47,6 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 		t.Fatal(err)
 	}
 	publishBuiltPlugin(t, repository,
-		"./extensions/plugins/cn.vastplan.foundation.security.portal-access-policy/backend",
-		"extensions/plugins/cn.vastplan.foundation.security.portal-access-policy/vastplan.plugin.json")
-	publishBuiltPlugin(t, repository,
 		"./extensions/plugins/cn.vastplan.platform.configuration.portal-composer/backend",
 		"extensions/plugins/cn.vastplan.platform.configuration.portal-composer/vastplan.plugin.json")
 	for _, plugin := range portalPlatformBackendPlugins() {
@@ -61,9 +58,6 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 
 	verifier := nodeagent.NewLocalDevelopmentArtifactVerifier()
 	installer := nodeagent.LocalInstaller{Root: filepath.Join(temporary, "installed")}
-	policy := installPortalFixturePlugin(t, repository, verifier, installer, pluginv1.ArtifactRef{
-		PluginID: "cn.vastplan.foundation.security.portal-access-policy", Version: "0.4.1", Channel: "stable",
-	})
 	composer := installPortalFixturePlugin(t, repository, verifier, installer, pluginv1.ArtifactRef{
 		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.6.2", Channel: "stable",
 	})
@@ -94,9 +88,7 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 		t.Fatal(err)
 	}
 	t.Cleanup(host.Stop)
-	if _, err := host.LaunchWithPolicy(context.Background(), policy.EntryPath, portalFixtureLaunchPolicy(policy)); err != nil {
-		t.Fatalf("启动 Portal 访问策略: %v", err)
-	}
+	allowAllPermissions(t, host)
 	if _, err := host.LaunchWithPolicy(context.Background(), composer.EntryPath, portalFixtureLaunchPolicy(composer)); err != nil {
 		t.Fatalf("启动 Portal Composer: %v", err)
 	}
@@ -164,7 +156,7 @@ func portalPlatformCatalogForTenant(t *testing.T, root, tenantID string) []byte 
 	}
 	excluded := map[string]struct{}{
 		"cn.vastplan.platform.integration.api-exposure":      {},
-		"cn.vastplan.platform.configuration.role-management": {},
+		"cn.vastplan.platform.security.authorization-policy": {},
 	}
 	for index := range catalog.Profiles {
 		plugins := catalog.Profiles[index].Plugins[:0]

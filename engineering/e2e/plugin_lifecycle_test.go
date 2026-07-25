@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
 )
@@ -128,7 +128,6 @@ func toolTarget(capability, op string) *contractv1.CallTarget {
 func TestFirstPartyReferencePluginsSupportCurrentBackend(t *testing.T) {
 	plugins := []string{
 		"./extensions/plugins/cn.vastplan.foundation.security.bootstrap-policy/backend",
-		"./extensions/plugins/cn.vastplan.foundation.security.portal-access-policy/backend",
 		"./extensions/plugins/cn.vastplan.demo-audit/backend",
 		"./extensions/plugins/cn.vastplan.demo-permission/backend",
 		"./extensions/plugins/cn.vastplan.demo-quota/backend",

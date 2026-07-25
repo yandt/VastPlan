@@ -15,8 +15,8 @@ func TestSeedArtifactSelectionIsExactConfigurationClosure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(selection.refs) != 29 {
-		t.Fatalf("当前平台 Seed 应只包含 29 个精确插件引用，实际为 %d", len(selection.refs))
+	if len(selection.refs) != 25 {
+		t.Fatalf("当前平台 Seed 应只包含 25 个精确插件引用，实际为 %d", len(selection.refs))
 	}
 	for _, required := range []string{
 		"cn.vastplan.foundation.security.bootstrap-policy",
@@ -31,7 +31,7 @@ func TestSeedArtifactSelectionIsExactConfigurationClosure(t *testing.T) {
 		"cn.vastplan.demo-audit",
 		"cn.vastplan.hello-world",
 		"cn.vastplan.product.developer.workbench-gallery",
-		"cn.vastplan.foundation.backend.runtime.node-worker-hello",
+		"cn.vastplan.test.runtime.node-worker-hello",
 		"cn.vastplan.python-hello",
 	} {
 		if selection.contains(ordinary) {

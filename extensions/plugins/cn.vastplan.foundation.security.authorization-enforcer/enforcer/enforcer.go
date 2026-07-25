@@ -12,16 +12,16 @@ import (
 	"sync"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 )
 
 const (
 	PluginID      = "cn.vastplan.foundation.security.authorization-enforcer"
-	PluginVersion = "0.1.1"
+	PluginVersion = "0.2.0"
 	Capability    = "foundation.security.authorization-enforcer"
 )
 

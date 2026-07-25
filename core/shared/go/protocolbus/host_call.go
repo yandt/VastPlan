@@ -6,10 +6,10 @@ import (
 	"fmt"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
-	pluginhostv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/pluginhost/v1"
 )
 
 func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
@@ -33,7 +33,7 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 			"HostCall 缺少有效的宿主身份委托", false))
 		return
 	}
-	if req.Target.ExtensionPoint == extpoint.KernelService && !kernelServiceAllowed(sess.policy, req.Target.Capability) {
+	if req.Target.ExtensionPoint == extpoint.KernelService && !sess.grants.allowsKernelService(req.Target.Capability) {
 		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.PermissionDenied,
 			"插件未在签名清单中声明该内核服务", false))
 		return
@@ -75,18 +75,6 @@ func (h *Host) externalHostCallAllowed() bool {
 	}
 	_, current := provider.Current()
 	return current
-}
-
-func kernelServiceAllowed(policy LaunchPolicy, capability string) bool {
-	if capability == "" {
-		return false
-	}
-	for _, allowed := range policy.KernelServices {
-		if allowed == capability {
-			return true
-		}
-	}
-	return false
 }
 
 func authenticatedPluginContext(sess *session, token, pluginID string) (*contractv1.CallContext, bool) {

@@ -82,11 +82,11 @@ importers:
 
   core/runtimehosts/node-worker: {}
 
-  extensions/plugins/cn.vastplan.foundation.backend.runtime.node-worker-hello/backend:
+  engineering/e2e/fixtures/plugins/cn.vastplan.test.runtime.node-worker-hello/backend:
     dependencies:
       '@vastplan/backend-plugin':
         specifier: workspace:*
-        version: link:../../../sdk/node/backend-plugin
+        version: link:../../../../../../extensions/sdk/node/backend-plugin
 
   extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/frontend:
     dependencies:
@@ -395,22 +395,6 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.1)
 
-  extensions/plugins/cn.vastplan.platform.configuration.role-management/frontend:
-    dependencies:
-      '@vastplan/platform-admin':
-        specifier: workspace:*
-        version: link:../../../sdk/ts/platform-admin
-      '@vastplan/workbench-sdk':
-        specifier: workspace:*
-        version: link:../../../sdk/ts/workbench-sdk
-    devDependencies:
-      typescript:
-        specifier: ^5.8.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.7(@types/node@22.20.1)
-
   extensions/plugins/cn.vastplan.platform.data.relational.connection-manager/frontend:
     dependencies:
       '@vastplan/platform-admin':
@@ -473,6 +457,22 @@ importers:
       '@vastplan/credential-lease-node':
         specifier: workspace:*
         version: link:../../../sdk/node/credential-lease
+
+  extensions/plugins/cn.vastplan.platform.security.authorization-policy/frontend:
+    dependencies:
+      '@vastplan/platform-admin':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/platform-admin
+      '@vastplan/workbench-sdk':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/workbench-sdk
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/plugins/cn.vastplan.platform.security.credentials/frontend:
     dependencies:

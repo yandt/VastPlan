@@ -2,19 +2,15 @@ package enforcer
 
 import (
 	"context"
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
-	"cdsoft.com.cn/VastPlan/extensions/sdk/go/authorizationnative"
 )
 
 type staticSource struct {
@@ -78,63 +74,6 @@ func TestEnforcerFailsClosedOnRevocationAndAudience(t *testing.T) {
 	}
 }
 
-func TestNativeEngineReturnsBoundedDecisionProof(t *testing.T) {
-	now := time.Now().UTC()
-	bundle := testBundle(t, now)
-	digest, err := authorizationv1.AuthorizationIRDigest(bundle.Snapshot.Payload.Policy)
-	if err != nil {
-		t.Fatal(err)
-	}
-	engine := authorizationnative.NewEngine()
-	prepared, err := engine.Prepare(authorizationv1.EnginePrepareRequest{Snapshot: bundle.Snapshot})
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := engine.Evaluate(authorizationv1.EngineEvaluateRequest{Handle: prepared.Handle, Input: authorizationv1.EvaluationInput{
-		RequestID: "request-1", PolicyDigest: digest, DomainID: "platform.root",
-		Subject: authorizationv1.Subject{Kind: authorizationv1.SubjectUser, ID: "enterprise.alice", Issuer: authenticationv1.StableSubjectIssuer},
-		Target:  authorizationv1.EvaluationTarget{ExtensionPoint: "tool.package", Capability: "platform.demo", Operation: "list"},
-		Scope:   authorizationv1.EvaluationScope{TenantID: "tenant-a"}, RequiredPermissions: []string{"platform.demo.read"}, EvaluatedAt: now,
-	}})
-	if err != nil || result.Decision != authorizationv1.DecisionAllow || result.Proof.Decision != result.Decision || result.Proof.PolicyDigest != digest || result.Proof.ValidUntil.After(now.Add(5*time.Minute+time.Second)) {
-		t.Fatalf("Decision Proof 无效: result=%+v err=%v", result, err)
-	}
-}
-
-func TestNativeEngineDescriptorMatchesProviderManifest(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "cn.vastplan.foundation.security.authorization-engine.native", "vastplan.plugin.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	manifest, err := pluginv1.ParseManifest(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	items, err := pluginv1.BackendRuntimeContributions(manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, item := range items {
-		if item.ExtensionPoint != extpoint.ToolPackage || item.ID != authorizationnative.Capability {
-			continue
-		}
-		var signed, runtime any
-		_ = json.Unmarshal(item.Descriptor, &signed)
-		_ = json.Unmarshal(authorizationnative.Descriptor(), &runtime)
-		if !equalJSON(signed, runtime) {
-			t.Fatalf("Native Engine descriptor 漂移: signed=%v runtime=%v", signed, runtime)
-		}
-		return
-	}
-	t.Fatal("Manifest 缺少 Native Engine tool contribution")
-}
-
-func equalJSON(left, right any) bool {
-	a, _ := json.Marshal(left)
-	b, _ := json.Marshal(right)
-	return string(a) == string(b)
-}
-
 func testBundle(t *testing.T, now time.Time) PolicyBundle {
 	t.Helper()
 	catalog := pluginv1.PermissionCatalog{SchemaVersion: pluginv1.PermissionCatalogSchemaVersion, Permissions: []pluginv1.PermissionCatalogEntry{{PermissionDeclaration: pluginv1.PermissionDeclaration{Code: "platform.demo.read", Title: "Read", Scope: "platform", Risk: "high", Assignable: true}, PluginID: "cn.vastplan.platform.demo", PluginVersion: "1.0.0", Publisher: "vastplan", ArtifactSHA256: strings.Repeat("a", 64)}}, Operations: []pluginv1.PermissionOperationEntry{{OperationGuard: pluginv1.OperationGuard{ExtensionPoint: "tool.package", Capability: "platform.demo", Operation: "list", Permissions: []string{"platform.demo.read"}, Access: "read", Approval: "none"}, PluginID: "cn.vastplan.platform.demo", PluginVersion: "1.0.0", ArtifactSHA256: strings.Repeat("a", 64)}}}
@@ -145,8 +84,8 @@ func testBundle(t *testing.T, now time.Time) PolicyBundle {
 	catalog.Digest = digest
 	configuration := authorizationv1.ConfigurationRevisionRef{ProfileID: "authorization.native", Revision: 1, Digest: strings.Repeat("c", 64)}
 	provider := authorizationv1.ProviderProfile{ID: "authorization.native", Revision: 1,
-		Store:  authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolStore, ProviderID: "native-file", PluginID: "cn.vastplan.platform.security.authorization-policy", Capability: "platform.authorization.store", Version: "0.1.1", Configuration: configuration},
-		Engine: authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolEngine, ProviderID: "native-rbac", PluginID: "cn.vastplan.foundation.security.authorization-engine.native", Capability: authorizationnative.Capability, Version: PluginVersion, Configuration: configuration}, Exchange: []authorizationv1.ProviderRef{}}
+		Store:  authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolStore, ProviderID: "native-file", PluginID: "cn.vastplan.platform.security.authorization-policy", Capability: "platform.authorization.store", Version: "0.2.0", Configuration: configuration},
+		Engine: authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolEngine, ProviderID: "native-rbac", PluginID: "cn.vastplan.foundation.security.authorization-engine.native", Capability: "foundation.security.authorization-engine.native", Version: PluginVersion, Configuration: configuration}, Exchange: []authorizationv1.ProviderRef{}}
 	role := authorizationv1.CompiledRole{ID: "reader", Revision: 1, DomainID: "platform.root", Statements: []authorizationv1.PolicyStatement{{ID: "allow", Effect: authorizationv1.EffectAllow, Permissions: []string{"platform.demo.read"}, Constraints: []authorizationv1.AttributeConstraint{}}}}
 	policy := authorizationv1.AuthorizationIR{SchemaVersion: "v1", CatalogDigest: digest, RootDomainID: "platform.root", ProviderProfiles: []authorizationv1.ProviderProfile{provider}, Domains: []authorizationv1.PolicyDomain{{ID: "platform.root", Revision: 1, Kind: authorizationv1.DomainPlatform, ProviderProfileID: provider.ID, Delegation: authorizationv1.DelegationCeiling{Permissions: []string{"platform.demo.read"}, MaxRisk: authorizationv1.RiskCritical, MayDelegate: true, MaxTTLSeconds: 300}}}, Roles: []authorizationv1.CompiledRole{role}, Bindings: []authorizationv1.SubjectBinding{{ID: "alice", Revision: 1, DomainID: "platform.root", Subject: authorizationv1.Subject{Kind: authorizationv1.SubjectUser, ID: "enterprise.alice", Issuer: authenticationv1.StableSubjectIssuer}, RoleID: "reader", RoleRevision: 1, NotBefore: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}, {ID: "ops", Revision: 1, DomainID: "platform.root", Subject: authorizationv1.Subject{Kind: authorizationv1.SubjectGroup, ID: "ops", Issuer: "https://id.example"}, RoleID: "reader", RoleRevision: 1, NotBefore: now.Add(-time.Hour), ExpiresAt: now.Add(time.Hour)}}, Revocations: []authorizationv1.Revocation{}}
 	return PolicyBundle{Catalog: catalog, Snapshot: authorizationv1.SignedPolicySnapshot{Payload: authorizationv1.PolicySnapshot{SchemaVersion: "v1", SnapshotID: "policy.1", Revision: 1, Audience: []string{"service:platform"}, IssuedAt: now.Add(-time.Minute), NotBefore: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour), Policy: policy}}}

@@ -64,7 +64,7 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 				return deploymentv2.Deployment{}, fmt.Errorf("平台插件 %q 不能同时属于公共 service baseline 和独立 seed service", ref.ID)
 			}
 			if previousUnit := servicePluginUnits[ref.ID]; previousUnit != "" && previousUnit != unit.ID {
-				reusable, err := reusableLocalPermissionPlugin(ref, artifacts)
+				reusable, err := reusableHostLocalPlugin(ref, artifacts)
 				if err != nil {
 					return deploymentv2.Deployment{}, err
 				}
@@ -154,31 +154,33 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 	return resolved, nil
 }
 
-// reusableLocalPermissionPlugin permits one exact, immutable authorization
-// plugin to guard multiple platform service hosts. It must contribute only
-// local permission checkers; a shared/cluster capability remains single-owner.
-func reusableLocalPermissionPlugin(ref deploymentv1.PluginRef, artifacts ArtifactReader) (bool, error) {
+// reusableHostLocalPlugin permits an exact immutable per-kernel sidecar to be
+// instantiated in multiple service hosts. The rule is topology-based rather
+// than tied to a named permission plugin family; any shared/cluster
+// contribution remains single-owner.
+func reusableHostLocalPlugin(ref deploymentv1.PluginRef, artifacts ArtifactReader) (bool, error) {
 	channel := ref.Channel
 	if channel == "" {
 		channel = "stable"
 	}
 	artifact, _, err := artifacts.Read(pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: channel})
 	if err != nil {
-		return false, fmt.Errorf("读取可复用本地权限插件 %s@%s/%s: %w", ref.ID, ref.Version, channel, err)
+		return false, fmt.Errorf("读取可复用 host-local 插件 %s@%s/%s: %w", ref.ID, ref.Version, channel, err)
 	}
 	manifest, err := pluginv1.ParseManifest(artifact.Manifest)
 	if err != nil {
-		return false, fmt.Errorf("解析可复用本地权限插件 %s: %w", ref.ID, err)
+		return false, fmt.Errorf("解析可复用 host-local 插件 %s: %w", ref.ID, err)
 	}
 	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
 	if err != nil {
-		return false, fmt.Errorf("解析可复用本地权限插件 %s runtime: %w", ref.ID, err)
+		return false, fmt.Errorf("解析可复用 host-local 插件 %s runtime: %w", ref.ID, err)
 	}
 	if len(contributions) == 0 {
 		return false, nil
 	}
 	for _, contribution := range contributions {
-		if !pluginv1.IsLocalPermissionAuxiliary(contribution) {
+		if contribution.InstancePolicy != "per-kernel" || contribution.StateModel != "local-ephemeral" ||
+			contribution.Visibility != "local" || contribution.Routing != "direct" || contribution.RoutingDomain != "" {
 			return false, nil
 		}
 	}

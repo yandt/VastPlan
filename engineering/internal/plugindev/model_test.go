@@ -15,7 +15,6 @@ func TestDiscoverUsesManifestAndDetectsCurrentBackendDrivers(t *testing.T) {
 		driver Driver
 	}{
 		{"cn.vastplan.hello-world", DriverNativeGo},
-		{"cn.vastplan.foundation.backend.runtime.node-worker-hello", DriverNodeWorker},
 		{"cn.vastplan.python-hello", DriverPython},
 		{"cn.vastplan.foundation.security.bootstrap-policy", DriverDynamicGo},
 	} {
