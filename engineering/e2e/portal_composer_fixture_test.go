@@ -59,7 +59,7 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 	verifier := nodeagent.NewLocalDevelopmentArtifactVerifier()
 	installer := nodeagent.LocalInstaller{Root: filepath.Join(temporary, "installed")}
 	composer := installPortalFixturePlugin(t, repository, verifier, installer, pluginv1.ArtifactRef{
-		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.6.2", Channel: "stable",
+		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.7.0", Channel: "stable",
 	})
 	platformCatalog := portalPlatformCatalogForTenant(t, root, "acme")
 	config, err := kernelspi.NewMapConfig(map[string]any{
@@ -255,6 +255,7 @@ func portalFoundationFrontendManifests() []string {
 		"extensions/plugins/cn.vastplan.foundation.frontend.runtime.engine.react/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/vastplan.plugin.json",
+		"extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.antd/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.mui/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.standard/vastplan.plugin.json",

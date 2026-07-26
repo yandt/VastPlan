@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 44,
+  "revision": 45,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 44,
+      "revision": 45,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -18,14 +18,15 @@
       },
       "renderAdapter": {
         "id": "cn.vastplan.foundation.frontend.render.adapter",
-        "version": "1.7.3",
+        "version": "1.8.0",
         "channel": "stable",
         "uiContract": "^4.0.0",
         "config": {
-          "defaultRenderer": "arco",
-          "allowedRenderers": ["arco", "mui"],
+          "defaultRenderer": "antd",
+          "allowedRenderers": ["antd", "arco", "mui"],
           "userSelectable": true,
           "rendererOptions": {
+            "antd": { "themeTemplate": "light", "allowedThemeTemplates": ["light", "dark"], "themeUserSelectable": true, "iconTheme": "canonical", "allowedIconThemes": ["canonical", "renderer-native"], "iconUserSelectable": true },
             "arco": { "themeTemplate": "light", "allowedThemeTemplates": ["light", "dark"], "themeUserSelectable": true, "iconTheme": "canonical", "allowedIconThemes": ["canonical", "renderer-native"], "iconUserSelectable": true },
             "mui": { "themeTemplate": "light", "allowedThemeTemplates": ["light", "dark"], "themeUserSelectable": true, "iconTheme": "canonical", "allowedIconThemes": ["canonical", "renderer-native"], "iconUserSelectable": true }
           }
@@ -59,14 +60,15 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.frontend.runtime.engine.react", "version": "1.1.0", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "1.7.3", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "1.8.0", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.render.adapter.antd", "version": "1.0.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.render.adapter.arco", "version": "1.6.3", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.render.adapter.mui", "version": "1.7.3", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "1.3.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "1.2.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "1.2.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "1.8.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.6.2", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.7.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.3", "channel": "stable" },
         { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.1", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.3", "channel": "stable" },
@@ -85,8 +87,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 44,
-        "digest": "632e44217c8e5df4f147a35a3d40fc06e47ed22240b613b0bfadcd34312a5046"
+        "revision": 45,
+        "digest": "25b5b1fbb2b5809d39cc2356db1075c4ca3a48866627d3e8fcb60f4e2515b4b4"
       },
       "services": [
         {

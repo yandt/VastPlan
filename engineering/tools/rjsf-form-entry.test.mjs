@@ -4,6 +4,7 @@ import test from "node:test";
 
 const rendererEntries = [
   "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/frontend/src/json-schema-form.tsx",
+  "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.antd/frontend/src/form-renderer.tsx",
   "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.mui/frontend/src/index.tsx",
 ];
 
@@ -13,4 +14,10 @@ test("production renderers bypass the RJSF test registry entry", async () => {
     assert.match(source, /from "@rjsf\/core\/lib\/components\/Form\.js"/u, `${filename} 必须直接使用公开 Form 子路径`);
     assert.doesNotMatch(source, /from "@rjsf\/core"/u, `${filename} 不得通过根入口拉入未声明的 AJV8 测试依赖`);
   }
+});
+
+test("Ant Design safe templates avoid the RJSF root registry", async () => {
+  const filename = "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.antd/frontend/src/safe-rjsf-theme.tsx";
+  const source = await readFile(filename, "utf8");
+  assert.doesNotMatch(source, /from "@rjsf\/core"/u, `${filename} 不得通过根入口拉入 AJV8 测试依赖`);
 });

@@ -21,6 +21,7 @@
 - [cn.vastplan.foundation.security.authorization-enforcer](cn.vastplan.foundation.security.authorization-enforcer.md) —— 每内核签名策略验证、缓存、最终强制与 workload Policy Bundle
 - [cn.vastplan.foundation.security.authorization-engine.native](cn.vastplan.foundation.security.authorization-engine.native.md) —— 默认 Go authorization.engine.v1 与 Decision Proof Provider
 - [cn.vastplan.foundation.data.relational.runtime](cn.vastplan.foundation.data.relational.runtime.md) —— Database Runtime wire 契约、Provider SPI 与可信数据面边界
+- [cn.vastplan.foundation.frontend.render.adapter.antd](cn.vastplan.foundation.frontend.render.adapter.antd.md) —— 首选 Ant Design Renderer、原生主题/图标与 CSP 动态表单适配
 - [cn.vastplan.platform.configuration.global-settings](cn.vastplan.platform.configuration.global-settings.md) —— 租户级版本化全局设置
 - [cn.vastplan.platform.configuration.plugin-settings](cn.vastplan.platform.configuration.plugin-settings.md) —— 可信插件配置目录、候选 CAS 与分路径生效协调
 - [cn.vastplan.platform.security.credentials](cn.vastplan.platform.security.credentials.md) —— Vault Transit 凭证元数据与轮换

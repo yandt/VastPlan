@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`1.6.2`
+当前制品版本：`1.7.0`
 
 该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal Application、Platform Profile、PortalBinding 和不可变 Activation。发布输入只代表可选择；只有通过 Backend `portaltrust` 校验/物化并完成 `expectedCurrentId` CAS 的 Activation 才是线上事实。
 
@@ -16,6 +16,7 @@
 - Frontend Test Release 在候选验证和激活前发布独立的精确 `artifact-lock`，仓库不可用时 fail-closed。
 - Test Release 请求保存完整 Repository Receipt；可信 Portal Host 用活动 Adapter 复核 Profile 身份、精确 Catalog 与 workspace lease，Composer 不接触仓库凭证。
 - Platform Profile 以 `updates.mode=refresh|notify|automatic` 决定已打开页面如何消费新 Activation；生产未配置时默认只在用户刷新时更新。
+- Profile 编辑器支持 Ant Design、Arco 与 Material UI，默认首选 Ant Design；选择仍通过不可变 Profile revision 和安全整代刷新生效。
 
 1.3.0 起，管理中心不再由插件直接拼装 React 基础组件，而是注册四个受治理的 Workbench Collection：Platform Profile、Application、Binding 与 Activation。动态枚举只在表单打开时读取，状态迁移动作只在选中版本且状态匹配时显示，差异、审计与不可变内容统一通过 Overlay 呈现。
 

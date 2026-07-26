@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 38,
+  "revision": 39,
   "id": "local-portal-access",
   "profiles": [
     {
       "version": 1,
-      "revision": 38,
+      "revision": 39,
       "id": "local-operations-login",
       "tenantId": "local",
       "portalId": "operations",
@@ -13,8 +13,8 @@
       "domains": ["127.0.0.1", "localhost"],
       "platformProfile": {
         "id": "portal-default",
-        "revision": 44,
-        "digest": "632e44217c8e5df4f147a35a3d40fc06e47ed22240b613b0bfadcd34312a5046"
+        "revision": 45,
+        "digest": "25b5b1fbb2b5809d39cc2356db1075c4ca3a48866627d3e8fcb60f4e2515b4b4"
       },
       "accessTemplate": "access",
       "localization": {

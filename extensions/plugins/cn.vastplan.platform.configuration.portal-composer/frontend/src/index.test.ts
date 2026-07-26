@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { PortalControlClient, PortalControlError, type PortalApplicationComposition } from "@vastplan/ui-primitives";
 import { buildApplicationComposition, createApplicationPage, portalCompositionSchema } from "./index";
-import { createActivationPage, createBindingPage, createProfilePage } from "./governance-workspaces";
+import { createActivationPage, createBindingPage, createProfilePage, profileSchema } from "./governance-workspaces";
 
 describe("Portal application composition", () => {
   it("never exposes or submits platform-managed fields", () => {
@@ -37,6 +37,12 @@ describe("Portal application composition", () => {
     expect(pages.every((page) => page.collection.selection === "single")).toBe(true);
     expect(pages.every((page) => (page.overlays?.length ?? 0) > 0)).toBe(true);
     expect(pages.flatMap((page) => page.collection.actions ?? []).filter((action) => action.visibleWhen !== undefined).length).toBeGreaterThan(8);
+  });
+
+  it("offers Ant Design first in the governed Renderer choices", () => {
+    const properties = profileSchema.schema.properties as Record<string, { oneOf?: Array<{ const: string }> }>;
+    expect(properties.defaultRenderer?.oneOf?.map((choice) => choice.const)).toEqual(["antd", "arco", "mui"]);
+    expect((properties.allowedRenderers as { items?: { oneOf?: Array<{ const: string }> } }).items?.oneOf?.map((choice) => choice.const)).toEqual(["antd", "arco", "mui"]);
   });
 });
 

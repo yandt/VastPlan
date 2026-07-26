@@ -19,7 +19,7 @@ const common = {
   legalComments: "none",
   minify: true,
   define: { "process.env.NODE_ENV": '"production"' },
-  external: ["react", "react-dom", "react/jsx-runtime", "@vastplan/rjsf-csp-validator", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
+  external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "@vastplan/rjsf-csp-validator", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
 };
 const allowedExternals = new Set(common.external);
 
@@ -61,6 +61,10 @@ for (const { id, entry, source, serverEntry, serverSource, deferred, pluginRoot 
     const result = spawnSync(process.execPath, ["engineering/tools/check-arco-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ARCO_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
+  if (id === "cn.vastplan.foundation.frontend.render.adapter.antd") {
+    const result = spawnSync(process.execPath, ["engineering/tools/check-antd-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ANTD_BUNDLE_FILE: outfile } });
+    if (result.status !== 0) process.exit(result.status ?? 1);
+  }
   if (id === "cn.vastplan.foundation.frontend.render.adapter.mui") {
     const result = spawnSync(process.execPath, ["engineering/tools/check-mui-icons-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, MUI_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
@@ -85,7 +89,7 @@ async function enforceFunctionalPluginBoundary(id, frontendRoot) {
   for (const file of files) {
     const content = await readFile(file, "utf8");
     importsWorkbench ||= /from\s+["']@vastplan\/workbench-sdk["']/.test(content);
-    if (/from\s+["'](?:react|react-dom(?:\/[^"']*)?|@arco-design\/[^"']+|@mui\/[^"']+)["']/.test(content)) {
+    if (/from\s+["'](?:react|react-dom(?:\/[^"']*)?|antd(?:\/[^"']*)?|@ant-design\/[^"']+|@arco-design\/[^"']+|@mui\/[^"']+)["']/.test(content)) {
       throw new Error(`${id}: 功能插件不得直接导入 React 或 UI 框架 (${file})`);
     }
     if (/\bcontext\.addPage\s*\(/.test(content)) {

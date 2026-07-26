@@ -57,7 +57,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [**Portal Shell Catalog 与按需 Library**](architecture/Portal-Shell-Catalog与按需Library.md)
   - 稳定 Slot/Composition、按需 Shell Library、PageOutlet 与用户级候选切换
 - [**统一 Render Adapter 与可切换 Renderer**](decisions/ADR-0087-统一Render-Adapter与可切换Renderer.md)
-  - Arco/MUI 内部 Renderer、Profile 治理与安全整代切换边界
+  - Ant Design（首选）/Arco/MUI 内部 Renderer、Profile 治理与安全整代切换边界
 - [**UI 工作台组合框架**](architecture/UI工作台组合框架.md)
   - 跨插件的列表、卡片、动作、表单与 Overlay 工作流组合规范（目标设计）
 - [**平台管理中心**](architecture/平台管理中心.md)
@@ -239,6 +239,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0156 Authorization Policy 共享真相源与 Leader 接管](decisions/ADR-0156-Authorization-Policy共享真相源与Leader接管.md)
 - [ADR-0157 开发 Seed Runtime 的 Last-Known-Good 快照](decisions/ADR-0157-开发Seed-Runtime-LKG快照.md)
 - [ADR-0158 应用插件兼容范围与精确运行锁](decisions/ADR-0158-应用插件兼容范围与精确运行锁.md)
+- [ADR-0159 Ant Design 首选 Renderer 与按需交付](decisions/ADR-0159-Ant-Design首选Renderer与按需交付.md)
 
 ### 插件共享代码与能力复用
 
@@ -255,6 +256,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [Authorization Enforcer](plugins/cn.vastplan.foundation.security.authorization-enforcer.md) —— 每内核签名策略强制、风险缓存与首方 workload Policy Bundle
 - [Native Authorization Engine](plugins/cn.vastplan.foundation.security.authorization-engine.native.md) —— 默认 Go Engine Provider 与有界 Decision Proof
 - [Database Runtime 基础插件](plugins/cn.vastplan.foundation.data.relational.runtime.md) —— 关系数据库 wire 契约、Provider SPI、错误分类与可信数据面边界
+- [Ant Design Renderer](plugins/cn.vastplan.foundation.frontend.render.adapter.antd.md) —— 首选 Renderer、原生主题/图标、CSP 表单与延迟模块交付
 - [节点部署管理服务](plugins/cn.vastplan.platform.infrastructure.deployment-manager.md) —— 节点引导、在线服务组合、异人审批与可信发布
 - [应用组合规划器](plugins/cn.vastplan.platform.infrastructure.composition-planner.md) —— Application Intent、Feature、依赖闭包、配置计划与 Provider Binding
 - [插件配置协调器](plugins/cn.vastplan.platform.configuration.plugin-settings.md) —— 活动可信配置目录、候选 CAS 与分路径生效协调
