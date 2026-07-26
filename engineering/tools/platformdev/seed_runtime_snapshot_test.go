@@ -49,6 +49,38 @@ func TestSeedRuntimeSnapshotCommitsOnlyWhenExplicitlyPromotedAndRestores(t *test
 	}
 }
 
+func TestBootstrapRestoresStableRuntimeWithoutOverwritingFreshCatalogs(t *testing.T) {
+	root := platformDevTestProjectRoot(t)
+	stateRoot := filepath.Join(t.TempDir(), "state-root")
+	first := &runtime{options: options{root: root, stateRoot: stateRoot}, runDir: filepath.Join(stateRoot, "runs", "first")}
+	if err := first.stageSeedRuntimeSnapshot(writeSeedRuntimeSnapshotTestSource(t, root, "stable"), "test-build"); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.commitSeedRuntimeSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+
+	secondRun := filepath.Join(stateRoot, "runs", "bootstrap")
+	if err := os.MkdirAll(secondRun, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"access-profile-catalog.json", "backend-platform-catalog.json"} {
+		if err := os.WriteFile(filepath.Join(secondRun, name), []byte("fresh-"+name), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bootstrap := &runtime{options: options{root: root, stateRoot: stateRoot, applyPlatform: true}, runDir: secondRun}
+	if _, restored, err := bootstrap.restoreSeedRuntimeSnapshot(); err != nil || !restored {
+		t.Fatalf("显式 bootstrap 应能复用 stable LKG: restored=%v err=%v", restored, err)
+	}
+	for _, name := range []string{"access-profile-catalog.json", "backend-platform-catalog.json"} {
+		raw, err := os.ReadFile(filepath.Join(secondRun, name))
+		if err != nil || string(raw) != "fresh-"+name {
+			t.Fatalf("bootstrap 必须保留本次配置物化的 %s: %q err=%v", name, raw, err)
+		}
+	}
+}
+
 func TestSeedRuntimeSnapshotFailsClosedAfterTampering(t *testing.T) {
 	root := platformDevTestProjectRoot(t)
 	stateRoot := filepath.Join(t.TempDir(), "state-root")

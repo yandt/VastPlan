@@ -94,7 +94,11 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 	baselinePlugins := map[string][]deploymentv1.PluginRef{}
 	baselineConfigs := map[string]map[string]any{}
 	for _, baseline := range profile.ServiceBaselines {
-		baselinePlugins[baseline.ServiceClass] = append(baselinePlugins[baseline.ServiceClass], baseline.Plugins...)
+		resolved, err := resolvedPluginRefs(baseline.Plugins, platformRefs)
+		if err != nil {
+			return deploymentv2.Deployment{}, err
+		}
+		baselinePlugins[baseline.ServiceClass] = append(baselinePlugins[baseline.ServiceClass], resolved...)
 		merged, err := compositioncore.MergeProtectedConfig(baselineConfigs[baseline.ServiceClass], baseline.Config)
 		if err != nil {
 			return deploymentv2.Deployment{}, fmt.Errorf("合并 service class %q 的公共基线 %q: %w", baseline.ServiceClass, baseline.ID, err)
@@ -105,6 +109,10 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 	unitIDs := map[string]struct{}{}
 	for _, applicationUnit := range application.Units {
 		unit := applicationUnit.Spec
+		unit.Plugins, err = resolvedPluginRefs(unit.Plugins, applicationRefs)
+		if err != nil {
+			return deploymentv2.Deployment{}, err
+		}
 		injected := append([]deploymentv1.PluginRef(nil), baselinePlugins[applicationUnit.ServiceClass]...)
 		unit.Plugins = append(injected, unit.Plugins...)
 		unit.Config, err = compositioncore.MergeProtectedConfig(baselineConfigs[applicationUnit.ServiceClass], unit.Config)
@@ -118,6 +126,10 @@ func Resolve(profile backendcompositionv1.PlatformProfile, application backendco
 		units = append(units, unit)
 	}
 	for _, platformUnit := range profile.Services {
+		platformUnit.Plugins, err = resolvedPluginRefs(platformUnit.Plugins, platformRefs)
+		if err != nil {
+			return deploymentv2.Deployment{}, err
+		}
 		if _, duplicate := unitIDs[platformUnit.ID]; duplicate {
 			return deploymentv2.Deployment{}, fmt.Errorf("平台 service unit %q 与应用 unit 冲突", platformUnit.ID)
 		}
@@ -189,4 +201,18 @@ func reusableHostLocalPlugin(ref deploymentv1.PluginRef, artifacts ArtifactReade
 
 func selection(ref deploymentv1.PluginRef) compositioncore.Selection {
 	return compositioncore.Selection{ID: ref.ID, Version: ref.Version, Channel: ref.Channel}
+}
+
+func resolvedPluginRefs(refs []deploymentv1.PluginRef, selections map[string]compositioncore.Selection) ([]deploymentv1.PluginRef, error) {
+	resolved := make([]deploymentv1.PluginRef, len(refs))
+	copy(resolved, refs)
+	for index := range resolved {
+		selection, ok := selections[resolved[index].ID]
+		if !ok || selection.SHA256 == "" {
+			return nil, fmt.Errorf("插件 %s 缺少 Resolver 精确 SHA-256", resolved[index].ID)
+		}
+		resolved[index].Channel = compositioncore.NormalizeChannel(resolved[index].Channel)
+		resolved[index].SHA256 = selection.SHA256
+	}
+	return resolved, nil
 }

@@ -76,6 +76,7 @@ func (registration *Registration) updateLocalRecord(record Announcement) {
 		if entries[index].registrationID == registration.id {
 			entries[index].record = record
 			registration.router.local[record.Capability] = entries
+			registration.router.notifyTopologyChangeLocked()
 			return
 		}
 	}
@@ -103,6 +104,7 @@ func (registration *Registration) Close(ctx context.Context) error {
 		} else {
 			registration.router.local[record.Capability] = locals
 		}
+		registration.router.notifyTopologyChangeLocked()
 		if registration.stream {
 			streams := registration.router.streamLocal[record.Capability]
 			for index := range streams {

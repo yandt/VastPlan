@@ -54,6 +54,9 @@ func (c Controller) Run(ctx context.Context) error {
 	if c.Scheduler.Nodes == nil || c.Scheduler.Assignments == nil {
 		return errors.New("controller scheduler KV 未配置")
 	}
+	if c.Scheduler.ContractCache == nil {
+		c.Scheduler.ContractCache = &ContractValidationCache{}
+	}
 	if c.Interval <= 0 {
 		c.Interval = 5 * time.Second
 	}

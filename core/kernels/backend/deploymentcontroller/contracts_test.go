@@ -12,10 +12,19 @@ import (
 
 type contractArtifactReader map[string]pluginv1.Artifact
 
+var testArtifactSHA = strings.Repeat("a", 64)
+
+func lockedRef(id, version string) deploymentv1.PluginRef {
+	return deploymentv1.PluginRef{ID: id, Version: version, Channel: "stable", SHA256: testArtifactSHA}
+}
+
 func (r contractArtifactReader) Read(ref pluginv1.ArtifactRef) (pluginv1.Artifact, []byte, error) {
 	artifact, ok := r[ref.PluginID+"@"+ref.Version]
 	if !ok {
 		return pluginv1.Artifact{}, nil, errors.New("not found")
+	}
+	if artifact.SHA256 == "" {
+		artifact.SHA256 = testArtifactSHA
 	}
 	return artifact, nil, nil
 }
@@ -41,8 +50,8 @@ func TestValidateDeploymentContractsBuildsRemoteDAGAndChecksVersion(t *testing.T
 		"com.example.consumer@1.0.0": {PluginID: "com.example.consumer", Version: "1.0.0", Channel: "stable", Manifest: consumerManifest},
 	}
 	deployment := deploymentv2.Deployment{Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "prod"}, Units: []deploymentv2.ServiceUnit{
-		{ID: "database", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "platform.database", InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "com.example.database", Version: "1.2.0", Channel: "stable"}}},
-		{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "business.api", InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "com.example.consumer", Version: "1.0.0", Channel: "stable"}}},
+		{ID: "database", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "platform.database", InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue", Replicas: 1, Plugins: []deploymentv1.PluginRef{lockedRef("com.example.database", "1.2.0")}},
+		{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "business.api", InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue", Replicas: 1, Plugins: []deploymentv1.PluginRef{lockedRef("com.example.consumer", "1.0.0")}},
 	}}
 	deployment.Resolution.PluginOrigins = map[string]string{
 		"com.example.database": deploymentv2.OriginApplication,
@@ -81,7 +90,7 @@ func TestValidateDeploymentContractsDefersExplicitExternalRemoteDependencyToRead
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "application.api",
 			InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue", RoutingDomain: "application", Replicas: 1,
-			Plugins: []deploymentv1.PluginRef{{ID: "com.example.consumer", Version: "1.0.0", Channel: "stable"}},
+			Plugins: []deploymentv1.PluginRef{lockedRef("com.example.consumer", "1.0.0")},
 		}},
 	}
 	if err := validateDeploymentContracts(deployment, map[string][]string{"api": nil}, reader); err != nil {
@@ -102,7 +111,7 @@ func TestValidateDeploymentContractsRejectsForgedApplicationOrigin(t *testing.T)
 	deployment := deploymentv2.Deployment{
 		Version: 2, Revision: 1, Metadata: deploymentv1.Metadata{Name: "prod"},
 		Resolution: deploymentv2.Resolution{PluginOrigins: map[string]string{"cn.vastplan.foundation.security.policy": deploymentv2.OriginApplication}},
-		Units:      []deploymentv2.ServiceUnit{{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "cn.vastplan.foundation.security.policy", Version: "1.0.0", Channel: "stable"}}}},
+		Units:      []deploymentv2.ServiceUnit{{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{lockedRef("cn.vastplan.foundation.security.policy", "1.0.0")}}},
 	}
 	if err := validateDeploymentContracts(deployment, map[string][]string{"api": nil}, reader); err == nil || !strings.Contains(err.Error(), "应用来源") {
 		t.Fatalf("Controller 必须拒绝伪造的平台插件应用来源: %v", err)
@@ -135,7 +144,7 @@ func TestValidateDeploymentContractsAllowsHostLocalAuxiliary(t *testing.T) {
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "settings", Kind: "service", Enabled: true, ServiceRole: "backend", LogicalService: "platform.settings",
 			InstancePolicy: "leader", StateModel: "leader-owned", Visibility: "cluster", Routing: "leader", RoutingDomain: "platform", Replicas: 1,
-			Plugins: []deploymentv1.PluginRef{{ID: "cn.vastplan.platform.configuration.settings", Version: "1.0.0", Channel: "stable"}, {ID: "cn.vastplan.foundation.security.host-local-guard-fixture", Version: "1.0.0", Channel: "stable"}},
+			Plugins: []deploymentv1.PluginRef{lockedRef("cn.vastplan.platform.configuration.settings", "1.0.0"), lockedRef("cn.vastplan.foundation.security.host-local-guard-fixture", "1.0.0")},
 		}},
 	}
 	if err := validateDeploymentContracts(deployment, map[string][]string{"settings": nil}, reader); err != nil {

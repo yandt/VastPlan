@@ -10,8 +10,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	addressingv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/addressing/v1"
-	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
+	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 )
 
 func ActivateRegistrations(ctx context.Context, registrations []*Registration) error {
@@ -103,6 +103,7 @@ func ActivateRegistrations(ctx context.Context, registrations []*Registration) e
 		})
 		registration.active.Store(true)
 	}
+	router.notifyTopologyChangeLocked()
 	router.mu.Unlock()
 	return nil
 }

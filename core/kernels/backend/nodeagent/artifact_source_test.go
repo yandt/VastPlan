@@ -125,11 +125,14 @@ func TestArtifactResolutionFallsBackOnlyOnNotFound(t *testing.T) {
 	r := &Reconciler{
 		Sources: []ArtifactSource{seed, remote}, Verifier: NewLocalDevelopmentArtifactVerifier(),
 	}
-	if _, err := r.resolveArtifact(context.Background(), ref); err != nil {
+	if _, err := r.resolveArtifact(context.Background(), ref, artifact.SHA256); err != nil {
 		t.Fatalf("种子精确缺失时应读取远端源: %v", err)
 	}
 	if seed.calls != 1 || remote.calls != 1 {
 		t.Fatalf("来源调用顺序错误: seed=%d remote=%d", seed.calls, remote.calls)
+	}
+	if _, err := r.resolveArtifact(context.Background(), ref, strings.Repeat("b", 64)); err == nil || !strings.Contains(err.Error(), "Assignment 锁定摘要") {
+		t.Fatalf("Node Agent 必须按 Assignment SHA-256 拒绝同 ref 不同内容: %v", err)
 	}
 
 	tampered := valid
@@ -138,7 +141,7 @@ func TestArtifactResolutionFallsBackOnlyOnNotFound(t *testing.T) {
 	seed = &staticArtifactSource{name: "seed", env: tampered}
 	remote = &staticArtifactSource{name: "remote", env: valid}
 	r.Sources = []ArtifactSource{seed, remote}
-	if _, err := r.resolveArtifact(context.Background(), ref); err == nil || !strings.Contains(err.Error(), "不可信内容") {
+	if _, err := r.resolveArtifact(context.Background(), ref, artifact.SHA256); err == nil || !strings.Contains(err.Error(), "不可信内容") {
 		t.Fatalf("种子返回篡改内容必须 fail-closed: %v", err)
 	}
 	if remote.calls != 0 {
@@ -150,7 +153,7 @@ func TestArtifactResolutionDoesNotTreatTransportFailureAsNotFound(t *testing.T) 
 	first := &staticArtifactSource{name: "seed", err: errors.New("permission denied")}
 	second := &staticArtifactSource{name: "remote"}
 	r := &Reconciler{Sources: []ArtifactSource{first, second}, Verifier: NewLocalDevelopmentArtifactVerifier()}
-	_, err := r.resolveArtifact(context.Background(), pluginv1.ArtifactRef{PluginID: "com.example.demo", Version: "1.0.0", Channel: "stable"})
+	_, err := r.resolveArtifact(context.Background(), pluginv1.ArtifactRef{PluginID: "com.example.demo", Version: "1.0.0", Channel: "stable"}, strings.Repeat("a", 64))
 	if err == nil || !strings.Contains(err.Error(), "permission denied") {
 		t.Fatalf("来源传输/权限失败必须原样暴露: %v", err)
 	}

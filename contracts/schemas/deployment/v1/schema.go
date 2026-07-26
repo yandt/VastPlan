@@ -67,11 +67,13 @@ type Unit struct {
 	Resources      ResourceRequirements `json:"resources,omitempty"`
 }
 
-// PluginRef 通过不可变制品三元组引用一个插件；channel 留空时规范化为 stable。
+// PluginRef 通过不可变制品身份引用一个插件。组合输入可以只提供三元组，
+// Resolver 生成的 Deployment/Assignment 必须同时钉住最终包 SHA-256。
 type PluginRef struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
 	Channel string `json:"channel,omitempty"`
+	SHA256  string `json:"sha256,omitempty"`
 }
 
 // Placement 在本地版本只实现标签全匹配的 nodeSelector。

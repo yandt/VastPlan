@@ -11,9 +11,9 @@ import (
 
 	addressingv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/addressing/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
 
@@ -112,6 +112,42 @@ func (r *Router) Instances(capability string) []Announcement {
 	return r.InstancesFor(capability, "", "")
 }
 
+// SubscribeTopologyChanges 广播本地注册和已验证的远端目录变化。消费者只响应事件和
+// 精确租约到期时间，不再以亚秒级周期扫描能力图。
+func (r *Router) SubscribeTopologyChanges() (<-chan struct{}, func()) {
+	updates := make(chan struct{}, 1)
+	r.mu.Lock()
+	if r.closed {
+		close(updates)
+		r.mu.Unlock()
+		return updates, func() {}
+	}
+	r.nextTopologySubscriber++
+	id := r.nextTopologySubscriber
+	if r.topologySubscribers == nil {
+		r.topologySubscribers = map[uint64]chan struct{}{}
+	}
+	r.topologySubscribers[id] = updates
+	r.mu.Unlock()
+	return updates, func() {
+		r.mu.Lock()
+		if current, ok := r.topologySubscribers[id]; ok {
+			delete(r.topologySubscribers, id)
+			close(current)
+		}
+		r.mu.Unlock()
+	}
+}
+
+func (r *Router) notifyTopologyChangeLocked() {
+	for _, subscriber := range r.topologySubscribers {
+		select {
+		case subscriber <- struct{}{}:
+		default:
+		}
+	}
+}
+
 // HasLocal 用于同节点依赖 gate；local capability 刻意不进入全局目录，但仍必须可被
 // 后续 unit 观察到。它只报告已激活的本地 handler。
 func (r *Router) HasLocal(capability string) bool {
@@ -127,8 +163,9 @@ func (r *Router) LocalInstances(capability string) []Announcement {
 	defer r.mu.RUnlock()
 	entries := r.local[capability]
 	out := make([]Announcement, 0, len(entries))
+	now := time.Now().UTC()
 	for _, entry := range entries {
-		if entry.record.Health == "healthy" && (entry.record.Readiness == "" || entry.record.Readiness == "ready" || entry.record.Readiness == "degraded") {
+		if announcementAvailable(entry.record, now) {
 			out = append(out, entry.record)
 		}
 	}
@@ -145,12 +182,12 @@ func (r *Router) instancesFor(capability, logicalService, routingDomain, partiti
 	defer r.mu.RUnlock()
 	entries := r.instances[capability]
 	out := make([]Announcement, 0, len(entries))
+	now := time.Now().UTC()
 	for _, entry := range entries {
-		if entry.Health == "healthy" && (logicalService == "" || entry.LogicalService == logicalService) &&
+		if announcementAvailable(entry, now) && (logicalService == "" || entry.LogicalService == logicalService) &&
 			(routingDomain == "" || entry.RoutingDomain == routingDomain) &&
 			(partitionKey == "" || entry.PartitionKey == partitionKey) &&
-			(instanceID == "" || entry.InstanceID == instanceID) &&
-			(entry.Readiness == "" || entry.Readiness == "ready" || entry.Readiness == "degraded") {
+			(instanceID == "" || entry.InstanceID == instanceID) {
 			if r.Transport != nil && authorizeCapability(r.Transport.SelfIdentity(), entry) != nil {
 				continue
 			}
@@ -158,6 +195,13 @@ func (r *Router) instancesFor(capability, logicalService, routingDomain, partiti
 		}
 	}
 	return out
+}
+
+func announcementAvailable(entry Announcement, now time.Time) bool {
+	if entry.Health != "healthy" || (entry.Readiness != "" && entry.Readiness != "ready" && entry.Readiness != "degraded") {
+		return false
+	}
+	return entry.LeaseExpiresAt.IsZero() || entry.LeaseExpiresAt.After(now)
 }
 
 // WaitReady 等待指定 capability 至少出现一个可接收调用的 readiness lease。

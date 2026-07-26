@@ -15,12 +15,13 @@ import (
 )
 
 type Scheduler struct {
-	Nodes        jetstream.KeyValue
-	Assignments  jetstream.KeyValue
-	Metrics      jetstream.KeyValue
-	Actual       jetstream.KeyValue
-	Compositions jetstream.KeyValue
-	Artifacts    ArtifactReader
+	Nodes         jetstream.KeyValue
+	Assignments   jetstream.KeyValue
+	Metrics       jetstream.KeyValue
+	Actual        jetstream.KeyValue
+	Compositions  jetstream.KeyValue
+	Artifacts     ArtifactReader
+	ContractCache *ContractValidationCache
 }
 
 type Plan struct {

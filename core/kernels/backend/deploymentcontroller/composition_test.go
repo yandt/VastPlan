@@ -26,8 +26,8 @@ func TestObserveCompositionReportsDependencyLoss(t *testing.T) {
 		t.Fatal(err)
 	}
 	desired := deploymentv1.DesiredState{Version: 1, Revision: 7, Metadata: deploymentv1.Metadata{Name: "prod", Tenant: "acme"}, Units: []deploymentv1.Unit{
-		{ID: "database", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "com.example.db", Version: "1.0.0"}}},
-		{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "com.example.api", Version: "1.0.0"}}},
+		{ID: "database", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{lockedRef("com.example.db", "1.0.0")}},
+		{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{lockedRef("com.example.api", "1.0.0")}},
 	}}
 	desiredRaw, _ := json.Marshal(desired)
 	if _, _, err := controlplane.ApplyDesiredState(context.Background(), buckets.Assignments, controlplane.AssignmentKey("acme", "prod", "node-a"), desiredRaw); err != nil {
@@ -67,7 +67,7 @@ func TestObserveCompositionReportsContractedPartitionOwnersAsDegraded(t *testing
 		Version: 1, Revision: 8, Metadata: deploymentv1.Metadata{Name: "prod", Tenant: "acme"},
 		Units: []deploymentv1.Unit{{
 			ID: "database", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
-			Plugins: []deploymentv1.PluginRef{{ID: "com.example.database", Version: "1.0.0"}},
+			Plugins: []deploymentv1.PluginRef{lockedRef("com.example.database", "1.0.0")},
 		}},
 	}
 	assignmentRaw, _ := json.Marshal(assignment)
@@ -101,7 +101,7 @@ func TestObserveCompositionDoesNotHideFailedCandidateBehindOldReadyInstance(t *t
 	}
 	assignment := deploymentv1.DesiredState{
 		Version: 1, Revision: 8, Metadata: deploymentv1.Metadata{Name: "prod", Tenant: "acme"},
-		Units: []deploymentv1.Unit{{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{{ID: "cn.example.api", Version: "2.0.0"}}}},
+		Units: []deploymentv1.Unit{{ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{lockedRef("cn.example.api", "2.0.0")}}},
 	}
 	assignmentRaw, _ := json.Marshal(assignment)
 	if _, _, err := controlplane.ApplyDesiredState(ctx, buckets.Assignments, controlplane.AssignmentKey("acme", "prod", "node-a"), assignmentRaw); err != nil {

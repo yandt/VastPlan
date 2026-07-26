@@ -39,7 +39,7 @@ func ref(id string) deploymentv1.PluginRef {
 }
 
 func artifact(id, publisher string) pluginv1.Artifact {
-	return pluginv1.Artifact{PluginID: id, Version: "1.0.0", Channel: "stable", Manifest: manifest(id, publisher)}
+	return pluginv1.Artifact{PluginID: id, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: manifest(id, publisher)}
 }
 
 func baseInputs() (backendcompositionv1.PlatformProfile, backendcompositionv1.ApplicationComposition, artifactReader) {
@@ -76,6 +76,11 @@ func TestResolveInjectsPlatformServiceBaselinesAndLocksOrigins(t *testing.T) {
 	}
 	if len(resolved.Resolution.PlatformProfile.Digest) != 64 || len(resolved.Resolution.ApplicationComposition.Digest) != 64 {
 		t.Fatalf("输入摘要未锁定: %+v", resolved.Resolution)
+	}
+	for _, plugin := range resolved.Units[0].Plugins {
+		if plugin.SHA256 != strings.Repeat("a", 64) {
+			t.Fatalf("Resolver 输出必须把 Artifact SHA-256 贯穿 Deployment: %+v", plugin)
+		}
 	}
 	allowlist := resolved.Units[0].Config["environment_allowlist"].(map[string]any)
 	if allowlist[resolved.Units[0].Plugins[0].ID] == nil {
@@ -138,7 +143,7 @@ func TestResolveAllowsExactHostLocalPluginInMultiplePlatformServices(t *testing.
 		"activation":["onStartup"],"entry":{"backend":"backend/main"},
 		"contributes":{"backend":{"permissionCheckers":[{"id":"platform.admin","service_role":"backend","title":"policy","priority":1000,"applies":{}}]}}
 	}`)
-	reader[policyID+"@1.0.0/stable"] = pluginv1.Artifact{PluginID: policyID, Version: "1.0.0", Channel: "stable", Manifest: policyManifest}
+	reader[policyID+"@1.0.0/stable"] = pluginv1.Artifact{PluginID: policyID, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: policyManifest}
 	profile.Services = []deploymentv2.ServiceUnit{
 		{ID: "settings", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{ref(policyID)}},
 		{ID: "credentials", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1, Plugins: []deploymentv1.PluginRef{ref(policyID)}},
@@ -169,7 +174,7 @@ func TestDeploySampleIsResolverOutput(t *testing.T) {
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
-		reader[id+"@"+item.version+"/stable"] = pluginv1.Artifact{PluginID: id, Version: item.version, Channel: "stable", Manifest: raw}
+		reader[id+"@"+item.version+"/stable"] = pluginv1.Artifact{PluginID: id, Version: item.version, Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: raw}
 	}
 	resolved, err := Resolve(profile, application, 1, reader, Options{AllowDevelopmentPlugins: true})
 	if err != nil {

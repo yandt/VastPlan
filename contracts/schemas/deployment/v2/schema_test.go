@@ -17,6 +17,9 @@ func resolvedDeployment(t *testing.T, raw string) []byte {
 		unit := unitValue.(map[string]any)
 		for _, pluginValue := range unit["plugins"].([]any) {
 			plugin := pluginValue.(map[string]any)
+			if _, ok := plugin["sha256"]; !ok {
+				plugin["sha256"] = strings.Repeat("c", 64)
+			}
 			origins[plugin["id"].(string)] = OriginApplication
 		}
 	}
@@ -50,6 +53,20 @@ func TestParseAppProfileReferencesWithoutServiceUnits(t *testing.T) {
 	}
 	if len(deployment.Units) != 0 || len(deployment.AppProfiles) != 1 || deployment.AppProfiles[0].Revision != 3 {
 		t.Fatalf("App Profile 引用未独立解析: %+v", deployment)
+	}
+}
+
+func TestParseRequiresResolvedArtifactDigest(t *testing.T) {
+	raw := resolvedDeployment(t, `{"version":2,"revision":1,"metadata":{"name":"prod"},"units":[{"id":"api","kind":"service","plugins":[{"id":"com.example.api","version":"1.0.0"}],"enabled":true,"service_role":"backend","replicas":1}]}`)
+	var document map[string]any
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	plugin := document["units"].([]any)[0].(map[string]any)["plugins"].([]any)[0].(map[string]any)
+	delete(plugin, "sha256")
+	raw, _ = json.Marshal(document)
+	if _, err := Parse(raw); err == nil {
+		t.Fatal("Deployment 必须携带 Resolver 锁定的制品 SHA-256")
 	}
 }
 

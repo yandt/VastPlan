@@ -9,8 +9,8 @@ import (
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 func (r *Reconciler) Shutdown(ctx context.Context) error {
@@ -83,8 +83,11 @@ func (r *Reconciler) prepare(ctx context.Context, unit deploymentv1.Unit) ([]Ins
 	verifiedArtifacts := make([]VerifiedArtifact, 0, len(unit.Plugins))
 	for _, ref := range unit.Plugins {
 		r.pulse()
+		if ref.SHA256 == "" {
+			return nil, "download", fmt.Errorf("Assignment 缺少 %s@%s/%s 的精确 SHA-256", ref.ID, ref.Version, ref.Channel)
+		}
 		artifactRef := pluginv1.ArtifactRef{PluginID: ref.ID, Version: ref.Version, Channel: ref.Channel}
-		verified, err := r.resolveArtifact(ctx, artifactRef)
+		verified, err := r.resolveArtifact(ctx, artifactRef, ref.SHA256)
 		r.pulse()
 		if err != nil {
 			return nil, "download", fmt.Errorf("读取 %s@%s/%s: %w", ref.ID, ref.Version, ref.Channel, err)
@@ -107,7 +110,7 @@ func (r *Reconciler) prepare(ctx context.Context, unit deploymentv1.Unit) ([]Ins
 	return plugins, "", nil
 }
 
-func (r *Reconciler) resolveArtifact(ctx context.Context, ref pluginv1.ArtifactRef) (VerifiedArtifact, error) {
+func (r *Reconciler) resolveArtifact(ctx context.Context, ref pluginv1.ArtifactRef, expectedSHA256 string) (VerifiedArtifact, error) {
 	var notFound error
 	for _, source := range r.Sources {
 		if source == nil {
@@ -125,6 +128,9 @@ func (r *Reconciler) resolveArtifact(ctx context.Context, ref pluginv1.ArtifactR
 		if err != nil {
 			// 来源一旦返回内容，任何格式、摘要或证明失败都是安全事件；不得换源掩盖。
 			return VerifiedArtifact{}, fmt.Errorf("制品源 %s 返回不可信内容: %w", sourceName(source), err)
+		}
+		if verified.Artifact().SHA256 != expectedSHA256 {
+			return VerifiedArtifact{}, fmt.Errorf("制品源 %s 返回摘要 %s，与 Assignment 锁定摘要 %s 不一致", sourceName(source), verified.Artifact().SHA256, expectedSHA256)
 		}
 		return verified, nil
 	}

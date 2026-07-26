@@ -38,7 +38,7 @@ func copySeedRuntimeSnapshotPayload(source, target string) error {
 	return nil
 }
 
-func materializeSeedRuntimeSnapshot(snapshot, runDir string) error {
+func materializeSeedRuntimeSnapshot(snapshot, runDir string, restoreCatalogs bool) error {
 	for _, directory := range []string{"dynamic", "portal-assets"} {
 		if err := materializeCachedDirectory(filepath.Join(snapshot, directory), filepath.Join(runDir, directory)); err != nil {
 			return err
@@ -46,6 +46,9 @@ func materializeSeedRuntimeSnapshot(snapshot, runDir string) error {
 	}
 	if err := materializeMutableCachedDirectory(filepath.Join(snapshot, "repository"), filepath.Join(runDir, "repository")); err != nil {
 		return err
+	}
+	if !restoreCatalogs {
+		return nil
 	}
 	for _, name := range []string{"access-profile-catalog.json", "backend-platform-catalog.json"} {
 		if err := os.Remove(filepath.Join(runDir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {

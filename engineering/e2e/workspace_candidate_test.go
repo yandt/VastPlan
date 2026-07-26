@@ -34,7 +34,7 @@ func TestWorkspaceCandidateUsesTrustedDerivedVersionAndRealProcess(t *testing.T)
 		Units: []deploymentv1.Unit{{
 			ID: "workspace-service", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster", Routing: "queue", RoutingDomain: "application",
-			Plugins: []deploymentv1.PluginRef{{ID: ref.PluginID, Version: ref.Version, Channel: ref.Channel}},
+			Plugins: []deploymentv1.PluginRef{repository.lockedPluginRef(t, ref)},
 		}},
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)

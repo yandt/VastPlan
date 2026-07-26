@@ -69,11 +69,11 @@ func newApplyTransaction(ctx context.Context, runtime *ProtocolRuntime, unit Run
 	if err := validateInstalledPolicies(policy, unit.Plugins); err != nil {
 		return nil, err
 	}
-	degraded, err := validateRuntimeRequirements(ctx, unit.Plugins, runtime.router, runtime.DependencyTimeout)
+	dependencyStatus, err := validateRuntimeRequirements(ctx, unit.Plugins, runtime.router, runtime.DependencyTimeout)
 	if err != nil {
 		return nil, err
 	}
-	for _, message := range degraded {
+	for _, message := range dependencyStatus.Degraded {
 		if runtime.Logf != nil {
 			runtime.Logf("unit %s 依赖降级: %s", unit.ID, message)
 		}

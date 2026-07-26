@@ -38,7 +38,7 @@ func newScheduleBuilder(ctx context.Context, scheduler Scheduler, deployment dep
 		units[unit.ID] = unit
 	}
 	if scheduler.Artifacts != nil {
-		if err := validateDeploymentContracts(deployment, graph, scheduler.Artifacts); err != nil {
+		if err := scheduler.ContractCache.validate(deployment, graph, scheduler.Artifacts); err != nil {
 			return nil, err
 		}
 	}

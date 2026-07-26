@@ -26,7 +26,7 @@ func testArtifact(id, publisher string) pluginv1.Artifact {
 		"engines":{"backend":"^0.1"},"activation":["onStartup"],"entry":{"backend":"backend/main"},
 		"contributes":{"backend":{"tools":[{"id":"tool.%s","service_role":"backend","title":"tool","subcommands":[]}]}}
 	}`, id, publisher, strings.ReplaceAll(id, ".", "-")))
-	return pluginv1.Artifact{PluginID: id, Version: "1.0.0", Channel: "stable", Manifest: manifest}
+	return pluginv1.Artifact{PluginID: id, Version: "1.0.0", Channel: "stable", SHA256: strings.Repeat("a", 64), Manifest: manifest}
 }
 
 func TestVerifyRefEnforcesSharedOriginPolicy(t *testing.T) {

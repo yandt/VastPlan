@@ -52,6 +52,10 @@ func (r *Router) Close() error {
 		}
 		r.inflight = map[string]context.CancelFunc{}
 		r.pendingCancels = map[string]time.Time{}
+		for id, subscriber := range r.topologySubscribers {
+			delete(r.topologySubscribers, id)
+			close(subscriber)
+		}
 		r.local = map[string][]localHandler{}
 		r.localCursor = map[string]uint64{}
 		r.streamLocal = map[string][]localStreamHandler{}
@@ -126,11 +130,18 @@ func (r *Router) applyDirectoryEntry(entry jetstream.KeyValueEntry) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if entry.Operation() != jetstream.KeyValuePut {
+		changed := false
 		for capability, instances := range r.instances {
-			delete(instances, entry.Key())
+			if _, exists := instances[entry.Key()]; exists {
+				delete(instances, entry.Key())
+				changed = true
+			}
 			if len(instances) == 0 {
 				delete(r.instances, capability)
 			}
+		}
+		if changed {
+			r.notifyTopologyChangeLocked()
 		}
 		return
 	}
@@ -147,10 +158,11 @@ func (r *Router) applyDirectoryEntry(entry jetstream.KeyValueEntry) {
 		r.instances[announcement.Capability] = map[string]Announcement{}
 	}
 	r.instances[announcement.Capability][entry.Key()] = announcement
+	r.notifyTopologyChangeLocked()
 }
 
 func (r *Router) directoryRefreshLoop() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
@@ -170,7 +182,11 @@ func (r *Router) refreshDirectory() {
 	if err != nil {
 		if errors.Is(err, jetstream.ErrNoKeysFound) {
 			r.mu.Lock()
+			changed := len(r.instances) > 0
 			r.instances = map[string]map[string]Announcement{}
+			if changed {
+				r.notifyTopologyChangeLocked()
+			}
 			r.mu.Unlock()
 		}
 		return
@@ -195,6 +211,7 @@ func (r *Router) refreshDirectory() {
 	}
 	r.mu.Lock()
 	r.instances = next
+	r.notifyTopologyChangeLocked()
 	r.mu.Unlock()
 }
 

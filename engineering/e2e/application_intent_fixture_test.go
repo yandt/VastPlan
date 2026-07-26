@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
@@ -160,6 +161,15 @@ func (r *p5FixtureRepository) Fetch(_ context.Context, ref pluginv1.ArtifactRef)
 }
 
 func (r *p5FixtureRepository) SourceName() string { return "p5-signed-repository" }
+
+func (r *p5FixtureRepository) lockedPluginRef(t *testing.T, ref pluginv1.ArtifactRef) deploymentv1.PluginRef {
+	t.Helper()
+	artifact, _, _, err := r.manager.Read(ref)
+	if err != nil {
+		t.Fatalf("读取 P5 制品摘要 %s@%s/%s: %v", ref.PluginID, ref.Version, ref.Channel, err)
+	}
+	return deploymentv1.PluginRef{ID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: artifact.SHA256}
+}
 
 func p5BaseManifestSpecs() []p5ManifestSpec {
 	return []p5ManifestSpec{

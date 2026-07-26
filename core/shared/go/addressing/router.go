@@ -18,9 +18,9 @@ import (
 	"google.golang.org/grpc/credentials"
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocollimit"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/observability"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocollimit"
 )
 
 const cancelSubject = "vp.rpc.cancel.v1"
@@ -95,27 +95,29 @@ type Router struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mu             sync.RWMutex
-	local          map[string][]localHandler
-	localCursor    map[string]uint64
-	streamLocal    map[string][]localStreamHandler
-	streamCursor   map[string]uint64
-	streamResolve  map[string]uint64
-	instances      map[string]map[string]Announcement // capability -> directory key -> record
-	registrations  map[string]*Registration
-	inflight       map[string]context.CancelFunc
-	outboundCalls  int
-	activeCalls    int
-	pendingCancels map[string]time.Time
-	closed         bool
-	closeOnce      sync.Once
-	cancelSub      *nats.Subscription
-	directoryW     jetstream.KeyWatcher
-	streamServer   *grpc.Server
-	streamListener net.Listener
-	streamEndpoint string
-	streamCreds    credentials.TransportCredentials
-	streamInsecure bool
+	mu                     sync.RWMutex
+	local                  map[string][]localHandler
+	localCursor            map[string]uint64
+	streamLocal            map[string][]localStreamHandler
+	streamCursor           map[string]uint64
+	streamResolve          map[string]uint64
+	instances              map[string]map[string]Announcement // capability -> directory key -> record
+	registrations          map[string]*Registration
+	topologySubscribers    map[uint64]chan struct{}
+	nextTopologySubscriber uint64
+	inflight               map[string]context.CancelFunc
+	outboundCalls          int
+	activeCalls            int
+	pendingCancels         map[string]time.Time
+	closed                 bool
+	closeOnce              sync.Once
+	cancelSub              *nats.Subscription
+	directoryW             jetstream.KeyWatcher
+	streamServer           *grpc.Server
+	streamListener         net.Listener
+	streamEndpoint         string
+	streamCreds            credentials.TransportCredentials
+	streamInsecure         bool
 }
 
 func NewRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf func(string, ...any)) (*Router, error) {
@@ -158,7 +160,8 @@ func newRouter(nc *nats.Conn, directory jetstream.KeyValue, nodeID string, logf 
 		streamLocal: map[string][]localStreamHandler{}, streamCursor: map[string]uint64{},
 		streamResolve: map[string]uint64{},
 		instances:     map[string]map[string]Announcement{}, registrations: map[string]*Registration{},
-		inflight: map[string]context.CancelFunc{}, pendingCancels: map[string]time.Time{},
+		topologySubscribers: map[uint64]chan struct{}{},
+		inflight:            map[string]context.CancelFunc{}, pendingCancels: map[string]time.Time{},
 	}
 	sub, err := nc.Subscribe(cancelSubject, r.handleCancel)
 	if err != nil {

@@ -1,6 +1,6 @@
 # Application Composition Planner
 
-`cn.vastplan.platform.infrastructure.composition-planner` 把用户可写的 Backend `ApplicationIntent` 编译为只读的 `ApplicationComposition`、Artifact Lock、Configuration Plan、Provider Binding 和 Service DAG。
+`cn.vastplan.platform.infrastructure.composition-planner` 把用户可写的 Backend `ApplicationIntent` 编译为只读的 `ApplicationComposition`、Artifact Lock、Configuration Plan、Provider Binding 和 Service DAG。自 `0.2.1` 起，运行插件引用会从 Artifact Lock 继承精确 SHA-256，再由 Kernel Resolver 复验并贯穿 Deployment/Assignment。
 
 它是无状态平台基础插件，不是内核组件，也不拥有 Deployment CAS、NATS KV、SSH、凭证 material 或仓库签名密钥。插件只通过 `platform.artifacts.repository` 的 `resolve` 与 `describePlanning` 操作读取已验证制品元数据；最终发布仍由 Backend 内核重新复验。
 

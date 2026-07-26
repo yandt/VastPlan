@@ -3,6 +3,7 @@ package nodeagent
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
@@ -11,9 +12,16 @@ import (
 	"github.com/Masterminds/semver/v3"
 )
 
+type runtimeDependencyStatus struct {
+	Degraded   []string
+	NextExpiry time.Time
+}
+
+var dependencyConstraintCache sync.Map
+
 // validateRuntimeRequirements 只检查签名清单声明的运行时依赖。strong/data 在
 // readiness 未满足时阻断候选；soft 或 failurePolicy=degrade 允许启动，但返回诊断。
-func validateRuntimeRequirements(ctx context.Context, plugins []InstalledPlugin, router *addressing.Router, timeout time.Duration) ([]string, error) {
+func validateRuntimeRequirements(ctx context.Context, plugins []InstalledPlugin, router *addressing.Router, timeout time.Duration) (runtimeDependencyStatus, error) {
 	if timeout <= 0 {
 		timeout = 5 * time.Second
 	}
@@ -22,15 +30,15 @@ func validateRuntimeRequirements(ctx context.Context, plugins []InstalledPlugin,
 		for _, contribution := range plugin.Contract.Contributions {
 			policy, err := contributionPolicy(contribution)
 			if err != nil {
-				return nil, err
+				return runtimeDependencyStatus{}, err
 			}
 			local[contribution.ID] = append(local[contribution.ID], plugin.Version)
 			if policy.Visibility != servicemodel.VisibilityLocal && contribution.InstancePolicy == servicemodel.PolicyPerKernel {
-				return nil, fmt.Errorf("贡献 %s/%s 声明 per-kernel 但 visibility 不是 local", contribution.ExtensionPoint, contribution.ID)
+				return runtimeDependencyStatus{}, fmt.Errorf("贡献 %s/%s 声明 per-kernel 但 visibility 不是 local", contribution.ExtensionPoint, contribution.ID)
 			}
 		}
 	}
-	var degraded []string
+	status := runtimeDependencyStatus{}
 	for _, plugin := range plugins {
 		for _, requirement := range plugin.Contract.Requires {
 			if requirement.Kind == "lazy" {
@@ -38,40 +46,43 @@ func validateRuntimeRequirements(ctx context.Context, plugins []InstalledPlugin,
 				// 解析执行就绪检查，缺失实例会返回明确的 capability-not-found。
 				continue
 			}
-			ok, err := dependencyReady(ctx, requirement, local, router, timeout)
+			ok, expiresAt, err := dependencyReady(ctx, requirement, local, router, timeout)
 			if err != nil {
 				if requirement.FailurePolicy == "degrade" || requirement.Kind == "soft" {
-					degraded = append(degraded, plugin.ID+"->"+requirement.Capability+": "+err.Error())
+					status.Degraded = append(status.Degraded, plugin.ID+"->"+requirement.Capability+": "+err.Error())
 					continue
 				}
-				return degraded, fmt.Errorf("插件 %s 依赖 %s 未就绪: %w", plugin.ID, requirement.Capability, err)
+				return status, fmt.Errorf("插件 %s 依赖 %s 未就绪: %w", plugin.ID, requirement.Capability, err)
 			}
 			if !ok {
 				message := "未找到可用 readiness lease"
 				if requirement.FailurePolicy == "degrade" || requirement.Kind == "soft" {
-					degraded = append(degraded, plugin.ID+"->"+requirement.Capability+": "+message)
+					status.Degraded = append(status.Degraded, plugin.ID+"->"+requirement.Capability+": "+message)
 					continue
 				}
-				return degraded, fmt.Errorf("插件 %s 依赖 %s 未就绪", plugin.ID, requirement.Capability)
+				return status, fmt.Errorf("插件 %s 依赖 %s 未就绪", plugin.ID, requirement.Capability)
+			}
+			if !expiresAt.IsZero() && (status.NextExpiry.IsZero() || expiresAt.Before(status.NextExpiry)) {
+				status.NextExpiry = expiresAt
 			}
 		}
 	}
-	return degraded, nil
+	return status, nil
 }
 
-func dependencyReady(ctx context.Context, requirement pluginv1.RuntimeRequirement, local map[string][]string, router *addressing.Router, timeout time.Duration) (bool, error) {
+func dependencyReady(ctx context.Context, requirement pluginv1.RuntimeRequirement, local map[string][]string, router *addressing.Router, timeout time.Duration) (bool, time.Time, error) {
 	if requirement.Scope == "same-node" || requirement.Scope == "same-kernel" {
 		if router != nil {
 			for _, instance := range router.LocalInstances(requirement.Capability) {
 				if requirementSatisfied(instance, requirement) {
-					return true, nil
+					return true, instance.LeaseExpiresAt, nil
 				}
 			}
 		}
-		return versionsMatch(local[requirement.Capability], requirement.Version), nil
+		return versionsMatch(local[requirement.Capability], requirement.Version), time.Time{}, nil
 	}
 	if router == nil {
-		return false, fmt.Errorf("远端 addressing router 未接入")
+		return false, time.Time{}, fmt.Errorf("远端 addressing router 未接入")
 	}
 	waitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -80,12 +91,12 @@ func dependencyReady(ctx context.Context, requirement pluginv1.RuntimeRequiremen
 	for {
 		for _, instance := range router.InstancesFor(requirement.Capability, requirement.LogicalService, requirement.RoutingDomain) {
 			if requirementSatisfied(instance, requirement) {
-				return true, nil
+				return true, instance.LeaseExpiresAt, nil
 			}
 		}
 		select {
 		case <-waitCtx.Done():
-			return false, waitCtx.Err()
+			return false, time.Time{}, waitCtx.Err()
 		case <-ticker.C:
 		}
 	}
@@ -107,7 +118,7 @@ func versionsMatch(versions []string, constraint string) bool {
 	if constraint == "" {
 		return true
 	}
-	rangeConstraint, err := semver.NewConstraint(constraint)
+	rangeConstraint, err := cachedDependencyConstraint(constraint)
 	if err != nil {
 		return false
 	}
@@ -118,4 +129,16 @@ func versionsMatch(versions []string, constraint string) bool {
 		}
 	}
 	return false
+}
+
+func cachedDependencyConstraint(raw string) (*semver.Constraints, error) {
+	if cached, ok := dependencyConstraintCache.Load(raw); ok {
+		return cached.(*semver.Constraints), nil
+	}
+	constraint, err := semver.NewConstraint(raw)
+	if err != nil {
+		return nil, err
+	}
+	actual, _ := dependencyConstraintCache.LoadOrStore(raw, constraint)
+	return actual.(*semver.Constraints), nil
 }

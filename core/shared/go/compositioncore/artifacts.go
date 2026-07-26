@@ -4,6 +4,7 @@
 package compositioncore
 
 import (
+	"crypto/sha256"
 	"fmt"
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
@@ -25,6 +26,7 @@ type Selection struct {
 	ID      string
 	Version string
 	Channel string
+	SHA256  string
 }
 
 // VerifyRef verifies an exact immutable artifact before deriving management
@@ -52,6 +54,9 @@ func VerifyRef(ref Selection, origin string, seen map[string]Selection, artifact
 	if artifact.PluginID != ref.ID || artifact.Version != ref.Version || NormalizeChannel(artifact.Channel) != ref.Channel || manifest.ID != ref.ID || manifest.Version != ref.Version {
 		return fmt.Errorf("制品引用与不可变清单身份不一致: %s@%s/%s", ref.ID, ref.Version, ref.Channel)
 	}
+	if len(artifact.SHA256) != sha256.Size*2 {
+		return fmt.Errorf("制品 %s@%s/%s 缺少精确 SHA-256", ref.ID, ref.Version, ref.Channel)
+	}
 	class, err := pluginid.ClassifyManagement(manifest.ID, manifest.Publisher)
 	if err != nil {
 		return fmt.Errorf("插件 %s 身份分类失败: %w", ref.ID, err)
@@ -62,6 +67,7 @@ func VerifyRef(ref Selection, origin string, seen map[string]Selection, artifact
 	if origin == compositioncommonv1.OriginApplication && class == pluginid.ManagementPlatform {
 		return fmt.Errorf("应用配置不能选择平台管理插件 %q", ref.ID)
 	}
+	ref.SHA256 = artifact.SHA256
 	seen[ref.ID] = ref
 	return nil
 }

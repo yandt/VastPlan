@@ -363,6 +363,7 @@ runtime_arguments() {
     -vault-listen "127.0.0.1:$VAULT_PORT"
 	-hot="$HOT_MODE"
 	-apply-platform="$APPLY_PLATFORM"
+	-rebuild-seed="$REBUILD_SEED"
   )
 }
 
@@ -404,4 +405,3 @@ wait_until_ready() {
   show_recent_log
   return 1
 }
-

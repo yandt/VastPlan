@@ -47,12 +47,14 @@
         {
           "id": "cn.vastplan.demo-permission",
           "version": "0.1.1",
-          "channel": "stable"
+          "channel": "stable",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         },
         {
           "id": "cn.vastplan.hello-world",
           "version": "0.2.1",
-          "channel": "stable"
+          "channel": "stable",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
         }
       ],
       "config": {

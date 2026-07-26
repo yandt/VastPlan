@@ -45,7 +45,7 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
+	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
 	helloRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
 	server := startE2ENATS(t)
 	admin, err := nats.Connect(server.ClientURL())
@@ -94,8 +94,8 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 				"cn.vastplan.hello-world": []any{"kernel.info"},
 			}},
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "cn.vastplan.demo-permission", Version: "0.1.1", Channel: "stable"},
-				{ID: "cn.vastplan.hello-world", Version: helloRef.Version, Channel: "stable"},
+				lockedPluginRef(t, repository, permissionRef),
+				lockedPluginRef(t, repository, helloRef),
 			},
 		}},
 	}
@@ -240,9 +240,9 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-quota/backend", "extensions/plugins/cn.vastplan.demo-quota/vastplan.plugin.json")
-	publishBrokenPlugin(t, repository)
+	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
+	quotaRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-quota/backend", "extensions/plugins/cn.vastplan.demo-quota/vastplan.plugin.json")
+	brokenRef := publishBrokenPlugin(t, repository)
 
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", func(format string, args ...any) { t.Logf("[runtime] "+format, args...) })
 	t.Cleanup(func() { _ = runtime.Close() })
@@ -256,8 +256,8 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "cn.vastplan.demo-permission", Version: "0.1.1", Channel: "stable"},
-				{ID: "cn.vastplan.demo-quota", Version: "0.1.1", Channel: "stable"},
+				lockedPluginRef(t, repository, permissionRef),
+				lockedPluginRef(t, repository, quotaRef),
 			},
 		}},
 	}
@@ -286,7 +286,7 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 		Version: 1, Revision: 2, Metadata: deploymentv1.Metadata{Name: "e2e"},
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
-			Plugins: []deploymentv1.PluginRef{{ID: "cn.vastplan.broken", Version: "2.0.0", Channel: "stable"}},
+			Plugins: []deploymentv1.PluginRef{lockedPluginRef(t, repository, brokenRef)},
 		}},
 	}
 	failed, err := reconciler.Reconcile(ctx, broken)
@@ -316,15 +316,15 @@ func TestNodeAgent_ProcessCrashTriggersImmediateRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	publishCrasherPlugin(t, repository)
+	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
+	crasherRef := publishCrasherPlugin(t, repository)
 	desired := deploymentv1.DesiredState{
 		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "crash-recovery"},
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "cn.vastplan.demo-permission", Version: "0.1.1", Channel: "stable"},
-				{ID: "cn.vastplan.fixture.crasher", Version: "0.1.0", Channel: "stable"},
+				lockedPluginRef(t, repository, permissionRef),
+				lockedPluginRef(t, repository, crasherRef),
 			},
 		}},
 	}
@@ -363,13 +363,24 @@ func TestNodeAgent_ProcessCrashTriggersImmediateRecovery(t *testing.T) {
 	if err != nil || resp.Result.Status != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("自动恢复后的插件不可调用: response=%+v err=%v", resp, err)
 	}
+	waitForRecoveredActualState(t, store, "backend-main", 1, 2)
+}
+
+func waitForRecoveredActualState(t *testing.T, store *nodeagent.MemoryStateStore, unitID string, restartCount uint64, processCount int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		actual, err := store.Load()
+		if err == nil {
+			state := actual.Units[unitID]
+			if state.RestartCount == restartCount && state.Phase == nodeagent.PhaseActive && len(state.PIDs) == processCount {
+				return
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 	actual, err := store.Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if state := actual.Units["backend-main"]; state.RestartCount != 1 || state.Phase != nodeagent.PhaseActive || len(state.PIDs) != 2 {
-		t.Fatalf("恢复后的实际态不完整: %+v", state)
-	}
+	t.Fatalf("等待恢复后的实际态超时: unit=%s actual=%+v err=%v", unitID, actual.Units[unitID], err)
 }
 
 func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) {
@@ -394,15 +405,15 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-quota/backend", "extensions/plugins/cn.vastplan.demo-quota/vastplan.plugin.json")
+	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
+	quotaRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-quota/backend", "extensions/plugins/cn.vastplan.demo-quota/vastplan.plugin.json")
 	desired := deploymentv1.DesiredState{
 		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "nats-e2e"},
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
 			Plugins: []deploymentv1.PluginRef{
-				{ID: "cn.vastplan.demo-permission", Version: "0.1.1", Channel: "stable"},
-				{ID: "cn.vastplan.demo-quota", Version: "0.1.1", Channel: "stable"},
+				lockedPluginRef(t, repository, permissionRef),
+				lockedPluginRef(t, repository, quotaRef),
 			},
 		}},
 	}
@@ -712,6 +723,15 @@ func publishBuiltPlugin(t *testing.T, repository *artifactrepository.Repository,
 	return pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 }
 
+func lockedPluginRef(t *testing.T, repository *artifactrepository.Repository, ref pluginv1.ArtifactRef) deploymentv1.PluginRef {
+	t.Helper()
+	artifact, err := repository.ReadMetadata(ref)
+	if err != nil {
+		t.Fatalf("读取已发布制品摘要 %s@%s/%s: %v", ref.PluginID, ref.Version, ref.Channel, err)
+	}
+	return deploymentv1.PluginRef{ID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, SHA256: artifact.SHA256}
+}
+
 func installPublishedPlugin(t *testing.T, repository *artifactrepository.Repository, verifier nodeagent.ArtifactVerifier, installer nodeagent.LocalInstaller, ref pluginv1.ArtifactRef) nodeagent.InstalledPlugin {
 	t.Helper()
 	envelope, err := repository.Fetch(context.Background(), ref)
@@ -729,7 +749,7 @@ func installPublishedPlugin(t *testing.T, repository *artifactrepository.Reposit
 	return installed
 }
 
-func publishBrokenPlugin(t *testing.T, repository *artifactrepository.Repository) {
+func publishBrokenPlugin(t *testing.T, repository *artifactrepository.Repository) pluginv1.ArtifactRef {
 	t.Helper()
 	dir := t.TempDir()
 	manifest := []byte(`{
@@ -751,12 +771,14 @@ func publishBrokenPlugin(t *testing.T, repository *artifactrepository.Repository
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repository.Publish("stable", packageBytes); err != nil {
+	artifact, err := repository.Publish("stable", packageBytes)
+	if err != nil {
 		t.Fatal(err)
 	}
+	return pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 }
 
-func publishCrasherPlugin(t *testing.T, repository *artifactrepository.Repository) {
+func publishCrasherPlugin(t *testing.T, repository *artifactrepository.Repository) pluginv1.ArtifactRef {
 	t.Helper()
 	bin := buildPlugin(t, "./engineering/e2e/fixtures/plugins/crasher")
 	dir := t.TempDir()
@@ -783,7 +805,9 @@ func publishCrasherPlugin(t *testing.T, repository *artifactrepository.Repositor
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := repository.Publish("stable", packageBytes); err != nil {
+	artifact, err := repository.Publish("stable", packageBytes)
+	if err != nil {
 		t.Fatal(err)
 	}
+	return pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
 }

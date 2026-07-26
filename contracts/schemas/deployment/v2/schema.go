@@ -187,6 +187,9 @@ func Parse(raw []byte) (Deployment, error) {
 	plugins := map[string]struct{}{}
 	for _, unit := range deployment.Units {
 		for _, plugin := range unit.Plugins {
+			if len(plugin.SHA256) != sha256.Size*2 {
+				return Deployment{}, fmt.Errorf("集群部署插件 %q 缺少精确制品 SHA-256", plugin.ID)
+			}
 			plugins[plugin.ID] = struct{}{}
 			if _, ok := deployment.Resolution.PluginOrigins[plugin.ID]; !ok {
 				return Deployment{}, fmt.Errorf("集群部署插件 %q 缺少 resolution.plugin_origins", plugin.ID)

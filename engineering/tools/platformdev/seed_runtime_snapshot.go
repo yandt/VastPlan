@@ -111,7 +111,7 @@ func (r *runtime) restoreSeedRuntimeSnapshot() ([]artifactrepository.Ref, bool, 
 	if err != nil {
 		return nil, false, fmt.Errorf("活动 Seed Runtime 快照损坏: %w", err)
 	}
-	if err := materializeSeedRuntimeSnapshot(snapshot, r.runDir); err != nil {
+	if err := materializeSeedRuntimeSnapshot(snapshot, r.runDir, !r.options.applyPlatform); err != nil {
 		return nil, false, err
 	}
 	log.Printf("普通启动复用 Last-Known-Good Seed Runtime 快照 digest=%s", pointer.Digest[:12])

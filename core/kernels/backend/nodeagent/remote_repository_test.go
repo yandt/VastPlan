@@ -12,8 +12,8 @@ import (
 	"time"
 
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
 func TestReconciler_RemoteSignedArtifactToInstalledRuntime(t *testing.T) {
@@ -56,7 +56,7 @@ func TestReconciler_RemoteSignedArtifactToInstalledRuntime(t *testing.T) {
 		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "remote-artifact"},
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
-			Plugins: []deploymentv1.PluginRef{{ID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}},
+			Plugins: []deploymentv1.PluginRef{{ID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel, SHA256: artifact.SHA256}},
 		}},
 	}
 	result, err := reconciler.Reconcile(context.Background(), desiredState)

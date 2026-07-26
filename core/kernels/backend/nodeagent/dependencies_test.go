@@ -19,12 +19,12 @@ func TestValidateRuntimeRequirements_LocalAndDegraded(t *testing.T) {
 			{Capability: "platform.cache", Scope: "remote", Kind: "soft", Ready: "readiness", FailurePolicy: "degrade"},
 		}}},
 	}
-	degraded, err := validateRuntimeRequirements(context.Background(), plugins, nil, 10)
+	status, err := validateRuntimeRequirements(context.Background(), plugins, nil, 10)
 	if err != nil {
 		t.Fatalf("本地强依赖应满足，软依赖可降级: %v", err)
 	}
-	if len(degraded) != 1 {
-		t.Fatalf("预期一个降级依赖，实际 %v", degraded)
+	if len(status.Degraded) != 1 {
+		t.Fatalf("预期一个降级依赖，实际 %v", status.Degraded)
 	}
 }
 

@@ -103,6 +103,9 @@ func loadContractManifest(deployment deploymentv2.Deployment, unit deploymentv2.
 	if artifact.PluginID != ref.ID || artifact.Version != ref.Version || normalizeChannel(artifact.Channel) != artifactRef.Channel || manifest.ID != ref.ID || manifest.Version != ref.Version {
 		return pluginv1.Manifest{}, fmt.Errorf("unit %s 制品引用与不可变清单身份不一致: %s@%s", unit.ID, ref.ID, ref.Version)
 	}
+	if ref.SHA256 == "" || artifact.SHA256 != ref.SHA256 {
+		return pluginv1.Manifest{}, fmt.Errorf("unit %s 制品 %s@%s 摘要与解析锁不一致", unit.ID, ref.ID, ref.Version)
+	}
 	class, err := pluginid.ClassifyManagement(manifest.ID, manifest.Publisher)
 	if err != nil {
 		return pluginv1.Manifest{}, fmt.Errorf("unit %s 插件 %s 身份分类失败: %w", unit.ID, ref.ID, err)

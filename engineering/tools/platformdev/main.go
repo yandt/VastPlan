@@ -39,6 +39,7 @@ type options struct {
 	artifactProtocol                                                                  string
 	hot                                                                               bool
 	applyPlatform                                                                     bool
+	rebuildSeed                                                                       bool
 }
 
 type child struct {
@@ -84,6 +85,7 @@ func main() {
 	flag.StringVar(&opts.natsListen, "nats-listen", "127.0.0.1:0", "development NATS address; port 0 chooses a free port")
 	flag.BoolVar(&opts.hot, "hot", true, "enable transactional frontend plugin hot replacement")
 	flag.BoolVar(&opts.applyPlatform, "apply-platform", false, "explicitly publish the development platform baseline")
+	flag.BoolVar(&opts.rebuildSeed, "rebuild-seed", false, "explicitly rebuild and promote the stable development Seed Runtime")
 	flag.Parse()
 	if err := run(opts); err != nil {
 		log.Fatalf("本地平台管理中心退出: %v", err)
@@ -98,6 +100,9 @@ func run(opts options) error {
 	opts.root = filepath.Clean(root)
 	if opts.artifactProtocol != "local-test" && opts.artifactProtocol != "remote-compat" {
 		return errors.New("-artifact-protocol 只允许 local-test 或 remote-compat")
+	}
+	if opts.rebuildSeed && !opts.applyPlatform {
+		return errors.New("-rebuild-seed 只能与显式 -apply-platform 一起使用")
 	}
 	if !filepath.IsAbs(opts.stateRoot) {
 		opts.stateRoot = filepath.Join(opts.root, opts.stateRoot)
@@ -172,19 +177,30 @@ func (r *runtime) prepare(ctx context.Context) error {
 	if err := r.writeFixtures(ctx); err != nil {
 		return err
 	}
-	if !r.options.applyPlatform {
+	selection, err := r.seedSelection()
+	if err != nil {
+		return fmt.Errorf("解析最小 Seed 制品计划: %w", err)
+	}
+	if !r.options.rebuildSeed {
 		refs, restored, err := r.restoreOrMigrateSeedRuntimeSnapshot()
 		if err != nil {
 			return fmt.Errorf("恢复 Last-Known-Good Seed Runtime: %w", err)
 		}
 		if restored {
+			if !r.options.applyPlatform {
+				return r.signPackageRepository(refs)
+			}
+			if err := validateExactSeedRefs("Bootstrap Profile", selection.references(), refs); err != nil {
+				return fmt.Errorf("Bootstrap Profile 已引用新的 stable 版本，请显式使用 bootstrap --rebuild-seed: %w", err)
+			}
+			log.Printf("Bootstrap Profile 的精确引用未变化，复用 stable LKG；源码调试应通过 workspace Test Release")
 			return r.signPackageRepository(refs)
 		}
-		log.Printf("尚无可复用的 Seed Runtime 快照，本次普通启动执行一次安全初始化构建")
-	}
-	selection, err := r.seedSelection()
-	if err != nil {
-		return fmt.Errorf("解析最小 Seed 制品计划: %w", err)
+		if !r.options.applyPlatform {
+			log.Printf("尚无可复用的 Seed Runtime 快照，本次普通启动执行一次安全初始化构建")
+		}
+	} else {
+		log.Printf("已显式请求重建 stable Seed Runtime")
 	}
 	log.Printf("最小 Seed 制品计划已确定: %d 个精确插件引用", len(selection.refs))
 	if err := r.prepareCachedBuilds(ctx); err != nil {

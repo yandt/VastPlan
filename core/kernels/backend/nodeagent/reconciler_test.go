@@ -117,7 +117,7 @@ func desired(revision uint64, version string, enabled bool) deploymentv1.Desired
 		Version: 1, Revision: revision, Metadata: deploymentv1.Metadata{Name: "test"},
 		Units: []deploymentv1.Unit{{
 			ID: "backend-main", Kind: "service", Enabled: enabled, ServiceRole: "backend", Replicas: 1,
-			Plugins: []deploymentv1.PluginRef{{ID: "com.example.demo", Version: version, Channel: "stable"}},
+			Plugins: []deploymentv1.PluginRef{{ID: "com.example.demo", Version: version, Channel: "stable", SHA256: strings.Repeat("a", 64)}},
 		}},
 	}
 }

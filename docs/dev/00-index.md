@@ -240,6 +240,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0157 开发 Seed Runtime 的 Last-Known-Good 快照](decisions/ADR-0157-开发Seed-Runtime-LKG快照.md)
 - [ADR-0158 应用插件兼容范围与精确运行锁](decisions/ADR-0158-应用插件兼容范围与精确运行锁.md)
 - [ADR-0159 Ant Design 首选 Renderer 与按需交付](decisions/ADR-0159-Ant-Design首选Renderer与按需交付.md)
+- [ADR-0160 精确制品摘要贯穿与事件驱动依赖监督](decisions/ADR-0160-精确制品摘要贯穿与事件驱动依赖监督.md)
 
 ### 插件共享代码与能力复用
 

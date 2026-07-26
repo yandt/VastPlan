@@ -36,9 +36,13 @@ func (r *ProtocolRuntime) monitor(unitID string, generation uint64, instance *pr
 }
 
 func (r *ProtocolRuntime) monitorDependencies(unitID string, generation uint64) {
-	ticker := time.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
-	for range ticker.C {
+	var updates <-chan struct{}
+	cancelUpdates := func() {}
+	if r.router != nil {
+		updates, cancelUpdates = r.router.SubscribeTopologyChanges()
+	}
+	defer cancelUpdates()
+	for {
 		r.mu.RLock()
 		unit, ok := r.units[unitID]
 		if !ok || unit.generation != generation {
@@ -47,8 +51,8 @@ func (r *ProtocolRuntime) monitorDependencies(unitID string, generation uint64) 
 		}
 		plugins := append([]InstalledPlugin(nil), unit.plugins...)
 		r.mu.RUnlock()
-		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-		degraded, err := validateRuntimeRequirements(ctx, plugins, r.router, 150*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		status, err := validateRuntimeRequirements(ctx, plugins, r.router, 750*time.Millisecond)
 		cancel()
 		if err != nil {
 			if r.Logf != nil {
@@ -63,9 +67,40 @@ func (r *ProtocolRuntime) monitorDependencies(unitID string, generation uint64) 
 		}
 		r.mu.Lock()
 		if current, exists := r.units[unitID]; exists && current.generation == generation {
-			current.dependencyIssues = degraded
+			current.dependencyIssues = status.Degraded
+		} else {
+			r.mu.Unlock()
+			return
 		}
 		r.mu.Unlock()
+
+		if status.NextExpiry.IsZero() {
+			if updates == nil {
+				return
+			}
+			if _, open := <-updates; !open {
+				return
+			}
+			continue
+		}
+		delay := time.Until(status.NextExpiry) + 10*time.Millisecond
+		if delay < 10*time.Millisecond {
+			delay = 10 * time.Millisecond
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case _, open := <-updates:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			if !open {
+				return
+			}
+		case <-timer.C:
+		}
 	}
 }
 

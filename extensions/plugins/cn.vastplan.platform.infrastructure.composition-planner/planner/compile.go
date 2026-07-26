@@ -65,7 +65,7 @@ func (s *Service) compile(intent backendcompositionv1.ApplicationIntent, profile
 		pluginRefs := make([]deploymentv1.PluginRef, 0, len(application))
 		for _, id := range application {
 			locked := lockPackages[id]
-			pluginRefs = append(pluginRefs, deploymentv1.PluginRef{ID: id, Version: locked.Ref.Version, Channel: locked.Ref.Channel})
+			pluginRefs = append(pluginRefs, deploymentv1.PluginRef{ID: id, Version: locked.Ref.Version, Channel: locked.Ref.Channel, SHA256: locked.SHA256})
 		}
 		serviceCredentials := credentials[service.ID]
 		config, err := applicationConfig(service.PluginConfig, serviceCredentials, application, artifacts.manifests)

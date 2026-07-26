@@ -440,7 +440,7 @@ func TestSchedulerResourceAccountingAndAffinity(t *testing.T) {
 	deployment.Units[0].Placement.Affinity.Preferred = []deploymentv2.WeightedLabelTerm{{MatchLabels: map[string]string{"disk": "ssd"}, Weight: 100}}
 	deployment.Units = append(deployment.Units, deploymentv2.ServiceUnit{
 		ID: "worker", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
-		Plugins:   []deploymentv1.PluginRef{{ID: "com.example.worker", Version: "1.0.0", Channel: "stable"}},
+		Plugins:   []deploymentv1.PluginRef{lockedRef("com.example.worker", "1.0.0")},
 		Resources: deploymentv2.ResourceRequirements{Requests: deploymentv2.ResourceList{CPUMillis: 1000, MemoryBytes: 1000}},
 		Placement: deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}, AntiAffinity: deploymentv2.LabelPolicy{
 			Required: []deploymentv2.LabelTerm{{MatchLabels: map[string]string{"maintenance": "true"}}},
@@ -461,7 +461,7 @@ func TestSchedulerResourceAccountingAndAffinity(t *testing.T) {
 		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "foreign", Tenant: "acme"},
 		Units: []deploymentv1.Unit{{
 			ID: "foreign", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: 1,
-			Plugins:   []deploymentv1.PluginRef{{ID: "com.example.foreign", Version: "1.0.0", Channel: "stable"}},
+			Plugins:   []deploymentv1.PluginRef{lockedRef("com.example.foreign", "1.0.0")},
 			Resources: deploymentv1.ResourceRequirements{Requests: deploymentv1.ResourceList{CPUMillis: 600}},
 		}},
 	}
@@ -649,7 +649,7 @@ func testDeployment(replicas int) deploymentv2.Deployment {
 		Units: []deploymentv2.ServiceUnit{{
 			ID: "api", Kind: "service", Enabled: true, ServiceRole: "backend", Replicas: replicas,
 			Placement: deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},
-			Plugins:   []deploymentv1.PluginRef{{ID: "com.example.api", Version: "1.0.0", Channel: "stable"}},
+			Plugins:   []deploymentv1.PluginRef{lockedRef("com.example.api", "1.0.0")},
 		}},
 	}
 }
