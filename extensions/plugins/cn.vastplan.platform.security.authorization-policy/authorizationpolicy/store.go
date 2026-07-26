@@ -17,6 +17,8 @@ type Store interface {
 	CompareAndSwap(expected uint64, next State) (State, error)
 }
 
+var ErrStoreUnavailable = errors.New("Authorization Policy Store 不可用")
+
 type FileStore struct {
 	Path string
 	mu   sync.Mutex

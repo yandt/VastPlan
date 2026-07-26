@@ -11,13 +11,13 @@ import (
 
 var managedID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/~-]{0,159}$`)
 
-func (s *Service) commit(state State, expected uint64, event AuditEvent) (State, error) {
+func (s *Service) commit(store Store, state State, expected uint64, event AuditEvent) (State, error) {
 	state.Generation = expected + 1
 	state.Audit = append(state.Audit, event)
 	if len(state.Audit) > 10_000 {
 		state.Audit = append([]AuditEvent(nil), state.Audit[len(state.Audit)-10_000:]...)
 	}
-	return s.store.CompareAndSwap(expected, state)
+	return store.CompareAndSwap(expected, state)
 }
 
 func (s *Service) audit(subject, action, kind, id string, revision uint64, reason string) AuditEvent {

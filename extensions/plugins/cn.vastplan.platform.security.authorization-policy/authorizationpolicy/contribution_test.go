@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
 func TestContributionDescriptorMatchesSignedManifest(t *testing.T) {

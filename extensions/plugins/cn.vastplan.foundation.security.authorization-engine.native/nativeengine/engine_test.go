@@ -71,7 +71,7 @@ func TestDescriptorMatchesProviderManifest(t *testing.T) {
 func testPolicy(now time.Time) authorizationv1.AuthorizationIR {
 	configuration := authorizationv1.ConfigurationRevisionRef{ProfileID: "authorization.native", Revision: 1, Digest: strings.Repeat("c", 64)}
 	provider := authorizationv1.ProviderProfile{ID: "authorization.native", Revision: 1,
-		Store:  authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolStore, ProviderID: "native-file", PluginID: "cn.vastplan.platform.security.authorization-policy", Capability: "platform.authorization.store", Version: "0.2.0", Configuration: configuration},
+		Store:  authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolStore, ProviderID: "kernel-shared-state", PluginID: "cn.vastplan.platform.security.authorization-policy", Capability: "platform.authorization.store", Version: "0.2.1", Configuration: configuration},
 		Engine: authorizationv1.ProviderRef{Protocol: authorizationv1.ProtocolEngine, ProviderID: "native-rbac", PluginID: "cn.vastplan.foundation.security.authorization-engine.native", Capability: Capability, Version: "0.1.1", Configuration: configuration}, Exchange: []authorizationv1.ProviderRef{}}
 	return authorizationv1.AuthorizationIR{SchemaVersion: "v1", CatalogDigest: strings.Repeat("a", 64), RootDomainID: "platform.root", ProviderProfiles: []authorizationv1.ProviderProfile{provider},
 		Domains:     []authorizationv1.PolicyDomain{{ID: "platform.root", Revision: 1, Kind: authorizationv1.DomainPlatform, ProviderProfileID: provider.ID, Delegation: authorizationv1.DelegationCeiling{Permissions: []string{"platform.demo.read"}, MaxRisk: authorizationv1.RiskCritical, MaxTTLSeconds: 300}}},

@@ -26,8 +26,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("加载 Authorization Policy key: %v", err)
 	}
+	bootstrapState, err := loadBootstrapState(os.Getenv("VASTPLAN_AUTHORIZATION_POLICY_BOOTSTRAP_STATE"))
+	if err != nil {
+		log.Fatalf("加载 Authorization Policy 首次导入状态: %v", err)
+	}
 	service, err := policy.NewService(policy.ServiceOptions{
-		Store: &policy.FileStore{Path: os.Getenv("VASTPLAN_AUTHORIZATION_POLICY_STATE")}, Signer: signer,
+		StoreFactory: policy.SharedStateStoreFactory, BootstrapState: bootstrapState, Signer: signer,
 		SnapshotWriter: policy.FileSnapshotWriter{Path: os.Getenv("VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT")},
 		Catalog:        catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{root},
 		DefaultAudience: splitAudience(os.Getenv("VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE")), DefaultTTL: 5 * time.Minute,
@@ -40,6 +44,20 @@ func main() {
 	if err := plugin.Serve(); err != nil {
 		log.Fatalf("Authorization Policy 退出: %v", err)
 	}
+}
+
+func loadBootstrapState(path string) (*policy.State, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, nil
+	}
+	state, err := (&policy.FileStore{Path: path}).Load()
+	if err != nil {
+		return nil, err
+	}
+	if state.Generation == 0 {
+		return nil, nil
+	}
+	return &state, nil
 }
 
 func splitAudience(value string) []string {

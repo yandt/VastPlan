@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-func (s *Service) createRole(subject string, request CreateRoleRequest, decodeErr error) (any, error) {
+func (s *Service) createRole(store Store, subject string, request CreateRoleRequest, decodeErr error) (any, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
@@ -15,7 +15,7 @@ func (s *Service) createRole(subject string, request CreateRoleRequest, decodeEr
 	if request.Title == "" || len(request.Title) > 160 || len(request.Statements) == 0 {
 		return nil, errors.New("Role 标题或 Statements 无效")
 	}
-	state, err := s.store.Load()
+	state, err := store.Load()
 	if err != nil || ensureExpected(state, request.ExpectedGeneration) != nil {
 		if err != nil {
 			return nil, err
@@ -31,7 +31,7 @@ func (s *Service) createRole(subject string, request CreateRoleRequest, decodeEr
 		return nil, err
 	}
 	state.Roles = append(state.Roles, role)
-	committed, err := s.commit(state, request.ExpectedGeneration, s.audit(subject, "create", "role", role.ID, role.Revision, ""))
+	committed, err := s.commit(store, state, request.ExpectedGeneration, s.audit(subject, "create", "role", role.ID, role.Revision, ""))
 	if err != nil {
 		return nil, err
 	}
@@ -41,11 +41,11 @@ func (s *Service) createRole(subject string, request CreateRoleRequest, decodeEr
 	}{role, committed.Generation}, nil
 }
 
-func (s *Service) updateRole(subject string, request UpdateRoleRequest, decodeErr error) (any, error) {
+func (s *Service) updateRole(store Store, subject string, request UpdateRoleRequest, decodeErr error) (any, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
-	state, err := s.store.Load()
+	state, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (s *Service) updateRole(subject string, request UpdateRoleRequest, decodeEr
 		return nil, err
 	}
 	state.Roles[index] = role
-	committed, err := s.commit(state, request.ExpectedGeneration, s.audit(subject, "update", "role", role.ID, role.Revision, ""))
+	committed, err := s.commit(store, state, request.ExpectedGeneration, s.audit(subject, "update", "role", role.ID, role.Revision, ""))
 	if err != nil {
 		return nil, err
 	}
@@ -72,11 +72,11 @@ func (s *Service) updateRole(subject string, request UpdateRoleRequest, decodeEr
 	}{role, committed.Generation}, nil
 }
 
-func (s *Service) transitionRole(subject, operation string, request TransitionRequest, decodeErr error) (any, error) {
+func (s *Service) transitionRole(store Store, subject, operation string, request TransitionRequest, decodeErr error) (any, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
-	state, err := s.store.Load()
+	state, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (s *Service) transitionRole(subject, operation string, request TransitionRe
 	}
 	role.UpdatedAt = s.now().UTC()
 	state.Roles[index] = role
-	committed, err := s.commit(state, request.ExpectedGeneration, s.audit(subject, operation, "role", role.ID, role.Revision, request.Reason))
+	committed, err := s.commit(store, state, request.ExpectedGeneration, s.audit(subject, operation, "role", role.ID, role.Revision, request.Reason))
 	if err != nil {
 		return nil, err
 	}

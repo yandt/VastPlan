@@ -8,7 +8,7 @@ import (
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 )
 
-func (s *Service) revoke(subject string, request RevokeRequest, decodeErr error) (any, error) {
+func (s *Service) revoke(store Store, subject string, request RevokeRequest, decodeErr error) (any, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
@@ -24,7 +24,7 @@ func (s *Service) revoke(subject string, request RevokeRequest, decodeErr error)
 	if request.ReasonCode == "" || request.EffectiveAt.IsZero() {
 		return nil, errors.New("Revocation 必须声明生效时间与 reasonCode")
 	}
-	state, err := s.store.Load()
+	state, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (s *Service) revoke(subject string, request RevokeRequest, decodeErr error)
 	revocation := authorizationv1.Revocation{ID: request.ID, Revision: state.RevocationRevision, Kind: request.Kind, TargetID: request.TargetID, EffectiveAt: request.EffectiveAt.UTC(), ReasonCode: request.ReasonCode}
 	state.Revocations = append(state.Revocations, revocation)
 	publication, committed, err := s.publishState(
-		state,
+		store, state,
 		request.ExpectedGeneration,
 		s.defaultAudience,
 		s.defaultTTL,
@@ -56,14 +56,14 @@ func (s *Service) revoke(subject string, request RevokeRequest, decodeErr error)
 	}{revocation, publication, committed.Generation}, nil
 }
 
-func (s *Service) publishSnapshot(subject string, request PublishSnapshotRequest, decodeErr error) (any, error) {
+func (s *Service) publishSnapshot(store Store, subject string, request PublishSnapshotRequest, decodeErr error) (any, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
 	if request.Reason == "" {
 		return nil, errors.New("发布 Policy Snapshot 必须说明原因")
 	}
-	state, err := s.store.Load()
+	state, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (s *Service) publishSnapshot(subject string, request PublishSnapshotRequest
 		ttl = time.Duration(request.TTLSeconds) * time.Second
 	}
 	publication, committed, err := s.publishState(
-		state,
+		store, state,
 		request.ExpectedGeneration,
 		audience,
 		ttl,
@@ -97,7 +97,7 @@ func (s *Service) publishSnapshot(subject string, request PublishSnapshotRequest
 // publishState is the only path that advances PolicyRevision. Revocation uses
 // this path too, so an acknowledged emergency revoke always has a freshly
 // signed snapshot available to every local enforcer.
-func (s *Service) publishState(state State, expected uint64, audience []string, ttl time.Duration, event AuditEvent) (SnapshotPublication, State, error) {
+func (s *Service) publishState(store Store, state State, expected uint64, audience []string, ttl time.Duration, event AuditEvent) (SnapshotPublication, State, error) {
 	state.PolicyRevision++
 	snapshot, err := CompileSnapshot(state, audience, s.now(), ttl)
 	if err != nil {
@@ -112,7 +112,7 @@ func (s *Service) publishState(state State, expected uint64, audience []string, 
 	}
 	state.CurrentSnapshot = &snapshot
 	event.Revision = snapshot.Revision
-	committed, err := s.commit(state, expected, event)
+	committed, err := s.commit(store, state, expected, event)
 	if err != nil {
 		return SnapshotPublication{}, State{}, err
 	}

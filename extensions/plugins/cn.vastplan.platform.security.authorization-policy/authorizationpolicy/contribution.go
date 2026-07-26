@@ -36,8 +36,8 @@ func (s *Service) Contribution() sdk.Contribution {
 	handlers := make(map[string]sdk.Handler, len(authorizationOperations))
 	for _, operation := range authorizationOperations {
 		name := operation.Name
-		handlers[name] = func(ctx context.Context, _ sdk.Host, callCtx *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
-			return s.handle(ctx, callCtx, name, raw)
+		handlers[name] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, raw []byte) (*contractv1.CallResult, []byte, error) {
+			return s.handle(ctx, host, callCtx, name, raw)
 		}
 	}
 	return sdk.Contribution{

@@ -186,3 +186,4 @@
 - [ADR-0153 Kernel Service 可信授权编译](ADR-0153-Kernel-Service可信授权编译.md)
 - [ADR-0154 Portal 管理 API 合同驱动分发](ADR-0154-Portal管理API合同驱动分发.md)
 - [ADR-0155 Browser/Server 单一 Generation 协调提交](ADR-0155-Browser-Server单一Generation协调提交.md)
+- [ADR-0156 Authorization Policy 共享真相源与 Leader 接管](ADR-0156-Authorization-Policy共享真相源与Leader接管.md)

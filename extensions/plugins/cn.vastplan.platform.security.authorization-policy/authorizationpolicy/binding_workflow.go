@@ -7,7 +7,7 @@ import (
 	authorizationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authorization/v1"
 )
 
-func (s *Service) createBinding(subject string, request CreateBindingRequest, decodeErr error) (any, error) {
+func (s *Service) createBinding(store Store, subject string, request CreateBindingRequest, decodeErr error) (any, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
@@ -20,7 +20,7 @@ func (s *Service) createBinding(subject string, request CreateBindingRequest, de
 	if err := validWindow(request.NotBefore, request.ExpiresAt); err != nil {
 		return nil, err
 	}
-	state, err := s.store.Load()
+	state, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (s *Service) createBinding(subject string, request CreateBindingRequest, de
 	now := s.now().UTC()
 	binding := BindingRevision{ID: request.ID, Revision: revision, DomainID: request.DomainID, Subject: request.Subject, RoleID: request.RoleID, RoleRevision: request.RoleRevision, NotBefore: request.NotBefore.UTC(), ExpiresAt: request.ExpiresAt.UTC(), State: StateDraft, CreatedBy: subject, CreatedAt: now, UpdatedAt: now}
 	state.Bindings = append(state.Bindings, binding)
-	committed, err := s.commit(state, request.ExpectedGeneration, s.audit(subject, "create", "binding", binding.ID, binding.Revision, ""))
+	committed, err := s.commit(store, state, request.ExpectedGeneration, s.audit(subject, "create", "binding", binding.ID, binding.Revision, ""))
 	if err != nil {
 		return nil, err
 	}
@@ -51,14 +51,14 @@ func (s *Service) createBinding(subject string, request CreateBindingRequest, de
 	}{binding, committed.Generation}, nil
 }
 
-func (s *Service) updateBinding(subject string, request UpdateBindingRequest, decodeErr error) (any, error) {
+func (s *Service) updateBinding(store Store, subject string, request UpdateBindingRequest, decodeErr error) (any, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
 	if err := validWindow(request.NotBefore, request.ExpiresAt); err != nil {
 		return nil, err
 	}
-	state, err := s.store.Load()
+	state, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (s *Service) updateBinding(subject string, request UpdateBindingRequest, de
 	binding.ExpiresAt = request.ExpiresAt.UTC()
 	binding.UpdatedAt = s.now().UTC()
 	state.Bindings[index] = binding
-	committed, err := s.commit(state, request.ExpectedGeneration, s.audit(subject, "update", "binding", binding.ID, binding.Revision, ""))
+	committed, err := s.commit(store, state, request.ExpectedGeneration, s.audit(subject, "update", "binding", binding.ID, binding.Revision, ""))
 	if err != nil {
 		return nil, err
 	}
@@ -98,11 +98,11 @@ func (s *Service) updateBinding(subject string, request UpdateBindingRequest, de
 	}{binding, committed.Generation}, nil
 }
 
-func (s *Service) transitionBinding(subject, operation string, request TransitionRequest, decodeErr error) (any, error) {
+func (s *Service) transitionBinding(store Store, subject, operation string, request TransitionRequest, decodeErr error) (any, error) {
 	if decodeErr != nil {
 		return nil, decodeErr
 	}
-	state, err := s.store.Load()
+	state, err := store.Load()
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (s *Service) transitionBinding(subject, operation string, request Transitio
 	}
 	binding.UpdatedAt = s.now().UTC()
 	state.Bindings[index] = binding
-	committed, err := s.commit(state, request.ExpectedGeneration, s.audit(subject, operation, "binding", binding.ID, binding.Revision, request.Reason))
+	committed, err := s.commit(store, state, request.ExpectedGeneration, s.audit(subject, operation, "binding", binding.ID, binding.Revision, request.Reason))
 	if err != nil {
 		return nil, err
 	}

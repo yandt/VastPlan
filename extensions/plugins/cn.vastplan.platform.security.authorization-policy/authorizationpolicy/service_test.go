@@ -63,38 +63,38 @@ func TestRoleBindingApprovalAndSignedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	statement := authorizationv1.PolicyStatement{ID: "allow-read", Effect: authorizationv1.EffectAllow, Permissions: []string{"platform.demo.read"}, Constraints: []authorizationv1.AttributeConstraint{}}
-	if _, err := service.createRole("alice", CreateRoleRequest{ExpectedGeneration: 1, ID: "platform.reader", DomainID: "platform.root", Title: "Reader", Statements: []authorizationv1.PolicyStatement{statement}}, nil); err != nil {
+	if _, err := service.createRole(store, "alice", CreateRoleRequest{ExpectedGeneration: 1, ID: "platform.reader", DomainID: "platform.root", Title: "Reader", Statements: []authorizationv1.PolicyStatement{statement}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.transitionRole("alice", "submitRole", TransitionRequest{ExpectedGeneration: 2, ID: "platform.reader", Revision: 1}, nil); err != nil {
+	if _, err := service.transitionRole(store, "alice", "submitRole", TransitionRequest{ExpectedGeneration: 2, ID: "platform.reader", Revision: 1}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.transitionRole("alice", "approveRole", TransitionRequest{ExpectedGeneration: 3, ID: "platform.reader", Revision: 1}, nil); err == nil {
+	if _, err := service.transitionRole(store, "alice", "approveRole", TransitionRequest{ExpectedGeneration: 3, ID: "platform.reader", Revision: 1}, nil); err == nil {
 		t.Fatal("创建人不得审批自己的 Role")
 	}
-	if _, err := service.transitionRole("bob", "approveRole", TransitionRequest{ExpectedGeneration: 3, ID: "platform.reader", Revision: 1}, nil); err != nil {
+	if _, err := service.transitionRole(store, "bob", "approveRole", TransitionRequest{ExpectedGeneration: 3, ID: "platform.reader", Revision: 1}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.transitionRole("bob", "publishRole", TransitionRequest{ExpectedGeneration: 4, ID: "platform.reader", Revision: 1}, nil); err != nil {
+	if _, err := service.transitionRole(store, "bob", "publishRole", TransitionRequest{ExpectedGeneration: 4, ID: "platform.reader", Revision: 1}, nil); err != nil {
 		t.Fatal(err)
 	}
 	binding := CreateBindingRequest{ExpectedGeneration: 5, ID: "alice-reader", DomainID: "platform.root", Subject: authorizationv1.Subject{Kind: authorizationv1.SubjectUser, ID: "enterprise.alice", Issuer: authenticationv1.StableSubjectIssuer}, RoleID: "platform.reader", RoleRevision: 1, NotBefore: now.Add(-time.Minute), ExpiresAt: now.Add(time.Hour)}
-	if _, err := service.createBinding("alice", binding, nil); err != nil {
+	if _, err := service.createBinding(store, "alice", binding, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.updateBinding("alice", UpdateBindingRequest{ExpectedGeneration: 6, ID: "alice-reader", Revision: 1, DomainID: binding.DomainID, Subject: binding.Subject, RoleID: binding.RoleID, RoleRevision: binding.RoleRevision, NotBefore: binding.NotBefore, ExpiresAt: now.Add(2 * time.Hour)}, nil); err != nil {
+	if _, err := service.updateBinding(store, "alice", UpdateBindingRequest{ExpectedGeneration: 6, ID: "alice-reader", Revision: 1, DomainID: binding.DomainID, Subject: binding.Subject, RoleID: binding.RoleID, RoleRevision: binding.RoleRevision, NotBefore: binding.NotBefore, ExpiresAt: now.Add(2 * time.Hour)}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.transitionBinding("alice", "submitBinding", TransitionRequest{ExpectedGeneration: 7, ID: "alice-reader", Revision: 1}, nil); err != nil {
+	if _, err := service.transitionBinding(store, "alice", "submitBinding", TransitionRequest{ExpectedGeneration: 7, ID: "alice-reader", Revision: 1}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.transitionBinding("bob", "approveBinding", TransitionRequest{ExpectedGeneration: 8, ID: "alice-reader", Revision: 1}, nil); err != nil {
+	if _, err := service.transitionBinding(store, "bob", "approveBinding", TransitionRequest{ExpectedGeneration: 8, ID: "alice-reader", Revision: 1}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.transitionBinding("bob", "publishBinding", TransitionRequest{ExpectedGeneration: 9, ID: "alice-reader", Revision: 1}, nil); err != nil {
+	if _, err := service.transitionBinding(store, "bob", "publishBinding", TransitionRequest{ExpectedGeneration: 9, ID: "alice-reader", Revision: 1}, nil); err != nil {
 		t.Fatal(err)
 	}
-	value, err := service.publishSnapshot("bob", PublishSnapshotRequest{ExpectedGeneration: 10, Reason: "initial policy"}, nil)
+	value, err := service.publishSnapshot(store, "bob", PublishSnapshotRequest{ExpectedGeneration: 10, Reason: "initial policy"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestRoleBindingApprovalAndSignedSnapshot(t *testing.T) {
 	if !ed25519.Verify(private.Public().(ed25519.PublicKey), canonical, mustDecodeSignature(t, writer.snapshot.Signature.Value)) {
 		t.Fatal("Policy Snapshot 签名无效")
 	}
-	if _, err := service.revoke("bob", RevokeRequest{ExpectedGeneration: 11, ID: "security-incident-1", Kind: "binding", TargetID: "alice-reader", EffectiveAt: now, ReasonCode: "security_incident"}, nil); err != nil {
+	if _, err := service.revoke(store, "bob", RevokeRequest{ExpectedGeneration: 11, ID: "security-incident-1", Kind: "binding", TargetID: "alice-reader", EffectiveAt: now, ReasonCode: "security_incident"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if writer.snapshot.Payload.Revision != 2 || writer.snapshot.Payload.Policy.RevocationRevision != 1 || len(writer.snapshot.Payload.Policy.Revocations) != 1 {
