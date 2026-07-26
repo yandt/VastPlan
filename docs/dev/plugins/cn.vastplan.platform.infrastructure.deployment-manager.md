@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.infrastructure.deployment-manager`
 
-当前制品版本：`0.20.0`
+当前制品版本：`0.21.0`
 
 该 platform 基础插件以 `leader + external-shared + cluster + leader routing` 运行，持有租户隔离的节点计划、Bootstrap Job、Application Intent/Plan 快照、服务组合 revision、Test Target Binding、Test Release 和审计记录。它依赖 settings、credentials、artifact repository、Composition Planner 与窄内核服务，但只保存不透明 CredentialRef、已编译 Application Composition 和精确制品身份，永远不能读取 SSH/NATS/制品令牌 material、Platform Catalog、信任根或 KV 句柄。
 
@@ -27,6 +27,8 @@
 0.19.0 完成 ADR-0143 P3：Intent revision 持久化完整 Resolution Report，提交、审批和发布前分别重新调用 Planner；`planDigest`、活动 Platform Profile、Catalog revision 或配置摘要变化会把 revision 退回 Draft、标记 `planningStale` 并撤销已提交/已审批摘要，只有显式刷新后才能重新进入审批。`kernel.deployment.targets` 只向认证 Deployment Manager 返回内部 Planning Profile，公开 `listDeploymentTargets` 仍只暴露 Profile 摘要；最终发布继续走原有 `kernel.deployment.preview/publish` 强制点。
 
 0.20.0 完成 ADR-0143 P4：Portal 改为 Workbench Application Intent 表单，移除依赖、实例策略、状态模型、逻辑服务和路由等内部执行输入，增加 Feature、插件配置及受限容量/放置意图；Resolution Report、服务依赖图、Provider Binding、配置计划、Artifact Lock、诊断和内核 Deployment 只读展示。在线 BFF、SDK、Descriptor 与管理绑定不再暴露 `createServiceDraft/updateServiceDraft`，历史 Composition revision 仅保留只读查看。
+
+0.21.0 把根插件输入收窄为“固定版本/兼容升级”两种策略，提交共享 `ArtifactRequirement`，并继续只展示 Planner 生成的精确 Artifact Lock。复杂 SemVer 表达式不进入普通管理表单。
 
 ADR-0143 P5 的真实签名插件测试进一步验证了本插件的状态机边界：仓库解析结果变化会在审批时持久化 `planningStale`、退回 Draft 并撤销摘要；显式刷新和重新审批后，发布仍只经既有可信内核服务完成。该验收未给 Deployment Manager 增加仓库私钥、制品读取、Deployment CAS 或 Node Agent 控制权。
 

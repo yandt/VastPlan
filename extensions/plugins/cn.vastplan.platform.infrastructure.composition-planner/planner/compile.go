@@ -129,21 +129,25 @@ func serviceClosure(service backendcompositionv1.ServiceIntent, artifacts resolv
 	paths := map[string][]string{}
 	extra := map[string]map[string]string{}
 	for _, root := range service.RootPlugins {
-		queue = append(queue, root.Ref.PluginID)
-		paths[root.Ref.PluginID] = []string{root.Ref.PluginID}
-		if dependencies := artifacts.featureDeps[service.ID][root.Ref.PluginID]; len(dependencies) > 0 {
-			extra[root.Ref.PluginID] = dependencies
+		queue = append(queue, root.PluginID)
+		paths[root.PluginID] = []string{root.PluginID}
+		if dependencies := artifacts.featureDeps[service.ID][root.PluginID]; len(dependencies) > 0 {
+			extra[root.PluginID] = dependencies
 		}
 	}
 	for len(queue) > 0 {
 		id := queue[0]
 		queue = queue[1:]
-		item, ok := locked[id]
+		_, ok := locked[id]
 		if !ok {
 			return nil, nil, fmt.Errorf("service %s 的依赖闭包缺少锁定插件 %s", service.ID, id)
 		}
+		manifest, exists := artifacts.manifests[id]
+		if !exists {
+			return nil, nil, fmt.Errorf("service %s 的依赖闭包缺少已验证 Manifest %s", service.ID, id)
+		}
 		dependencies := map[string]struct{}{}
-		for dependency := range item.Dependencies {
+		for dependency := range manifest.Dependencies {
 			dependencies[dependency] = struct{}{}
 		}
 		for dependency := range extra[id] {
@@ -247,15 +251,15 @@ func selectedFeatures(service backendcompositionv1.ServiceIntent, manifests map[
 	var selected []selectedFeature
 	for _, root := range service.RootPlugins {
 		available := map[string]pluginv1.CompositionFeature{}
-		if manifest := manifests[root.Ref.PluginID]; manifest.Composition != nil {
+		if manifest := manifests[root.PluginID]; manifest.Composition != nil {
 			for _, feature := range manifest.Composition.Features {
 				available[feature.ID] = feature
 			}
 		}
 		for _, id := range root.Features {
 			feature := available[id]
-			byRoot[root.Ref.PluginID] = append(byRoot[root.Ref.PluginID], feature)
-			selected = append(selected, selectedFeature{pluginID: root.Ref.PluginID, feature: feature})
+			byRoot[root.PluginID] = append(byRoot[root.PluginID], feature)
+			selected = append(selected, selectedFeature{pluginID: root.PluginID, feature: feature})
 		}
 	}
 	return byRoot, selected

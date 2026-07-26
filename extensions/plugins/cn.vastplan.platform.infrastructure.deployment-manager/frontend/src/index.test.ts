@@ -11,6 +11,7 @@ describe("deployment-manager Intent frontend contract", () => {
     expect(schema.id).toBe("backend-application-intent.v1");
     expect(encoded).toContain("rootPlugins");
     expect(encoded).toContain("features");
+    expect(encoded).toContain("versionPolicy");
     expect(encoded).not.toContain("dependsOn");
     expect(encoded).not.toContain("instancePolicy");
     expect(encoded).not.toContain("stateModel");
@@ -23,7 +24,7 @@ describe("deployment-manager Intent frontend contract", () => {
       deployment: "agent-services",
       services: [{
         serviceClass: "application.backend", id: "api", replicas: 3,
-        rootPlugins: [{ pluginId: "cn.example.agent", version: "1.0.0", channel: "stable", features: ["audit"] }],
+        rootPlugins: [{ pluginId: "cn.example.agent", versionPolicy: "compatible", version: "1.0.0", channel: "stable", features: ["audit"] }],
         pluginConfig: { "cn.example.agent": { mode: "safe" } },
         autoscaling: { minReplicas: 2, maxReplicas: 5, metric: "requests", targetValuePerReplica: 50 },
         resources: { cpuMillis: 500, memoryBytes: 268435456 }, nodeSelector: { zone: "primary" },
@@ -32,7 +33,7 @@ describe("deployment-manager Intent frontend contract", () => {
     expect(intent.metadata).toEqual({ name: "agent-services" });
     expect(intent.services[0]).toEqual({
       id: "api", serviceClass: "application.backend",
-      rootPlugins: [{ ref: { pluginId: "cn.example.agent", version: "1.0.0", channel: "stable" }, features: ["audit"] }],
+      rootPlugins: [{ pluginId: "cn.example.agent", constraint: "^1.0.0", channel: "stable", features: ["audit"] }],
       pluginConfig: { "cn.example.agent": { mode: "safe" } },
       operations: {
         replicas: 3,
@@ -45,9 +46,9 @@ describe("deployment-manager Intent frontend contract", () => {
   });
 
   it("round-trips editable Intent state and marks legacy revisions read-only", () => {
-    const intent = buildBackendIntent({ deployment: "agent-services", services: [{ serviceClass: "application.backend", id: "api", replicas: 1, rootPlugins: [{ pluginId: "cn.example.agent", version: "1.0.0", channel: "stable" }] }] });
+    const intent = buildBackendIntent({ deployment: "agent-services", services: [{ serviceClass: "application.backend", id: "api", replicas: 1, rootPlugins: [{ pluginId: "cn.example.agent", versionPolicy: "exact", version: "1.0.0", channel: "stable" }] }] });
     const revision = { id: 7, deployment: "agent-services", status: "Draft", active: false, intent, resolutionReport: { status: "Resolved" }, composition: { units: [] }, preview: {}, previewDigest: "p", artifactReferences: [], createdAt: "now", updatedAt: "now" } as unknown as ServiceRevision;
-    expect(intentEditorValue(revision)).toMatchObject({ deployment: "agent-services", services: [{ id: "api", replicas: 1 }] });
+    expect(intentEditorValue(revision)).toMatchObject({ deployment: "agent-services", services: [{ id: "api", replicas: 1, rootPlugins: [{ versionPolicy: "exact", version: "1.0.0" }] }] });
     expect(deploymentRow(revision)).toMatchObject({ revisionKind: "Intent", planStatus: "Resolved", planningStale: false });
     expect(deploymentRow({ ...revision, intent: undefined, resolutionReport: undefined })).toMatchObject({ revisionKind: "Legacy", planStatus: "Legacy" });
   });

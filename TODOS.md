@@ -28,3 +28,21 @@
 - **Cons**：需要目标负载基线、代理超时配置、认证续期、退避重连、重复事件、多 Node 传播和刷新风暴控制。
 - **Context**：Node Portal Kernel 已提供认证、租户/Portal 隔离的 SSE，只分发最小 revision 事实；浏览器仍重新获取权威 RuntimeSpec，不信任事件携带模块内容。生产在验收完成前继续使用低负载的 `refresh` 默认值，禁止页面轮询仓库。
 - **Depends on / blocked by**：真实生产并发基线、多 Node 部署、RuntimeSpec/PortalGeneration 候选切换和目标代理环境。
+
+## 插件兼容升级候选差异与人工确认
+
+- **What**：管理中心基于原 Application Intent 与新的 Catalog revision 重新规划精确 `ArtifactLock`，展示插件新增、删除、升级、降级、渠道变化和 digest 变化，并由具备发布权限的管理员确认后形成新的候选 Revision。
+- **Why**：Backend P0/P1 只建立“范围输入、精确锁定、显式重新规划”的内核闭环；如果没有可读的锁差异，管理员仍可能在不了解传递依赖变化的情况下盲目刷新和发布。
+- **Pros**：升级过程可审计、可解释；active revision 不会静默漂移；审批者能够在发布前识别跨兼容边界、渠道变化和制品内容变化。
+- **Cons**：需要管理 API、在线角色权限、候选状态持久化和前端 Workbench 协同；还要处理 Catalog revision 变化、重复刷新、并发审批和旧候选失效。
+- **Context**：应用根配置只允许精确 `=x.y.z` 或兼容 `^x.y.z`；Manifest 传递依赖仍可使用完整 SemVer。当前阶段新版本进入仓库只会让待审批方案按既有 stale 规则失效，不会改变已发布服务。后续 UI 应展示 Intent digest、旧/新 Catalog revision 和旧/新 Lock digest，禁止直接修改 active Lock。权威边界见 [ADR-0158](docs/dev/decisions/ADR-0158-应用插件兼容范围与精确运行锁.md)。
+- **Depends on / blocked by**：Backend Application Intent 范围输入、Feature 感知 Resolver、精确 `ArtifactLock` 和显式 refresh/publish 流程稳定；实施时补充管理中心候选差异与人工确认设计。
+
+## Portal、Runner、Mobile 应用插件范围输入
+
+- **What**：在 Portal、Runner、Mobile 的应用插件选择输入层复用 `plugin/v1.ArtifactRequirement` 和统一错误模型，规划后仍生成各内核可消费的精确 Lock/Profile；不把范围扩散到平台基础和恢复配置。
+- **Why**：Backend 先行落地后，如果其他内核各自设计版本字段、兼容规则和刷新语义，会形成四套不一致的依赖管理机制。
+- **Pros**：四类内核共享 exact/caret 输入语义、Feature 可选依赖、候选回溯、渠道冲突和精确锁边界；插件开发者与平台管理员只需理解一套规则。
+- **Cons**：三个内核的应用输入边界不同，必须分别梳理 Portal 应用插件、Runner 工作流插件和 Mobile 能力插件，不能机械替换所有 `ArtifactRef`；需要较大的跨模块回归测试。
+- **Context**：仅应用插件选择允许范围。Portal Platform Profile、Frontend Runtime Engine、Render Adapter、Shell、Workbench、Seed/LKG、Runner/Mobile 已编译 Profile 和所有 Activation/Deployment/Assignment/回滚记录继续使用精确版本与 digest。
+- **Depends on / blocked by**：Backend P0/P1 和共享 Requirement Schema 稳定；Portal、Runner、Mobile 各自的在线应用组合输入与发布边界明确。实施前需逐内核制定小范围 ADR，禁止一次性替换全部精确引用。

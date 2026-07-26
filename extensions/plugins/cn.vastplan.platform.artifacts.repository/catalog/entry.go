@@ -16,9 +16,9 @@ import (
 	semver "github.com/Masterminds/semver/v3"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactprovenance"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
 
@@ -74,7 +74,7 @@ func entryFrom(artifact artifactrepository.Artifact, attestationRaw []byte) (Ent
 		SHA256: artifact.SHA256, Size: artifact.Size, Publisher: attestation.Publisher, KeyID: attestation.KeyID,
 		SignedAt: attestation.SignedAt.UTC(), Name: manifest.Name, Description: manifest.Description,
 		Namespace: namespace, License: manifest.License, Engines: manifest.Engines,
-		Dependencies: manifest.Dependencies, Targets: targets,
+		Dependencies: manifest.Dependencies, CompositionFeatures: compositionFeatures(manifest), Targets: targets,
 		Platforms: backendPlatforms(manifest), RuntimeRequires: runtimeRequires(manifest), RuntimeProvides: runtimeProvides(manifest),
 		ProvidedCapabilities: providedCapabilities,
 	}
@@ -85,6 +85,20 @@ func entryFrom(artifact artifactrepository.Artifact, attestationRaw []byte) (Ent
 		entry.PythonLock = &platformadminapi.ArtifactPythonLockDeclaration{Format: manifest.SupplyChain.PythonLock.Format, SpecVersion: manifest.SupplyChain.PythonLock.SpecVersion, SHA256: manifest.SupplyChain.PythonLock.SHA256}
 	}
 	return entry, nil
+}
+
+func compositionFeatures(manifest pluginv1.Manifest) map[string]pluginv1.CompositionFeature {
+	if manifest.Composition == nil || len(manifest.Composition.Features) == 0 {
+		return nil
+	}
+	result := make(map[string]pluginv1.CompositionFeature, len(manifest.Composition.Features))
+	for _, feature := range manifest.Composition.Features {
+		feature.Dependencies = cloneStringMap(feature.Dependencies)
+		feature.RuntimeRequires = append([]pluginv1.RuntimeRequirement(nil), feature.RuntimeRequires...)
+		feature.ConfigurationSchema = append([]byte(nil), feature.ConfigurationSchema...)
+		result[feature.ID] = feature
+	}
+	return result
 }
 
 func (s *Store) enrichProvenance(entry *Entry) error {

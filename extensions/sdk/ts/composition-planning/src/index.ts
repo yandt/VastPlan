@@ -1,6 +1,6 @@
 export interface CompositionRef { id: string; revision: number; digest: string; }
 export interface ArtifactRef { pluginId: string; version: string; channel: string; }
-export interface ArtifactRequirement { pluginId: string; constraint: string; channel?: string; }
+export interface ArtifactRequirement { pluginId: string; constraint: string; channel?: string; features?: string[]; }
 
 export interface ResourceList { cpu_millis?: number; memory_bytes?: number; gpu?: number; }
 export interface ResourceRequirements { requests?: ResourceList; }
@@ -19,7 +19,6 @@ export interface Autoscaling {
   target_value_per_replica: number;
 }
 
-export interface RootPluginSelection { ref: ArtifactRef; features?: string[]; }
 export interface ServiceOperationsIntent {
   replicas: number;
   autoscaling?: Autoscaling;
@@ -29,7 +28,7 @@ export interface ServiceOperationsIntent {
 export interface BackendServiceIntent {
   id: string;
   serviceClass: string;
-  rootPlugins: RootPluginSelection[];
+  rootPlugins: ArtifactRequirement[];
   pluginConfig?: Record<string, Record<string, unknown>>;
   operations: ServiceOperationsIntent;
 }
@@ -171,18 +170,35 @@ export async function backendApplicationIntentDigest(input: BackendApplicationIn
 }
 
 function normalizeServiceIntent(input: BackendServiceIntent): BackendServiceIntent {
-  const roots = input.rootPlugins.map((selection) => ({
-    ref: { pluginId: selection.ref.pluginId, version: selection.ref.version, channel: selection.ref.channel },
-    ...(selection.features === undefined ? {} : { features: [...selection.features].sort() }),
-  })).sort((left, right) => left.ref.pluginId.localeCompare(right.ref.pluginId));
-  rejectDuplicates(roots.map((selection) => selection.ref.pluginId), `root plugin in ${input.id}`);
-  for (const selection of roots) rejectDuplicates(selection.features ?? [], `feature in ${selection.ref.pluginId}`);
+  const roots = input.rootPlugins.map(normalizeApplicationRoot).sort((left, right) => left.pluginId.localeCompare(right.pluginId));
+  rejectDuplicates(roots.map((selection) => selection.pluginId), `root plugin in ${input.id}`);
   return {
     id: input.id,
     serviceClass: input.serviceClass,
     rootPlugins: roots,
     ...(input.pluginConfig === undefined ? {} : { pluginConfig: stableRecord(input.pluginConfig) as Record<string, Record<string, unknown>> }),
     operations: normalizeOperations(input.operations),
+  };
+}
+
+const pluginIdPattern = /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/;
+const applicationConstraintPattern = /^[=^](0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/;
+const channelPattern = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+const featurePattern = /^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$/;
+
+function normalizeApplicationRoot(input: ArtifactRequirement): ArtifactRequirement {
+  if (input.pluginId.length > 160 || !pluginIdPattern.test(input.pluginId)) throw new Error(`invalid root plugin ID: ${input.pluginId}`);
+  if (!applicationConstraintPattern.test(input.constraint)) throw new Error(`root plugin constraint must be =x.y.z or ^x.y.z: ${input.constraint}`);
+  if (input.channel !== undefined && !channelPattern.test(input.channel)) throw new Error(`invalid root plugin channel: ${input.channel}`);
+  const features = [...new Set(input.features ?? [])].sort();
+  if (features.length > 64 || features.some((feature) => feature.length > 80 || !featurePattern.test(feature))) {
+    throw new Error(`invalid feature in root plugin: ${input.pluginId}`);
+  }
+  return {
+    pluginId: input.pluginId,
+    constraint: input.constraint,
+    ...(input.channel === undefined ? {} : { channel: input.channel }),
+    ...(features.length === 0 ? {} : { features }),
   };
 }
 

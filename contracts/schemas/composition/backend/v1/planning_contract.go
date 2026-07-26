@@ -32,16 +32,11 @@ type ApplicationIntent struct {
 }
 
 type ServiceIntent struct {
-	ID           string                    `json:"id"`
-	ServiceClass string                    `json:"serviceClass"`
-	RootPlugins  []RootPluginSelection     `json:"rootPlugins"`
-	PluginConfig map[string]map[string]any `json:"pluginConfig,omitempty"`
-	Operations   ServiceOperationsIntent   `json:"operations"`
-}
-
-type RootPluginSelection struct {
-	Ref      pluginv1.ArtifactRef `json:"ref"`
-	Features []string             `json:"features,omitempty"`
+	ID           string                         `json:"id"`
+	ServiceClass string                         `json:"serviceClass"`
+	RootPlugins  []pluginv1.ArtifactRequirement `json:"rootPlugins"`
+	PluginConfig map[string]map[string]any      `json:"pluginConfig,omitempty"`
+	Operations   ServiceOperationsIntent        `json:"operations"`
 }
 
 // ServiceOperationsIntent 有意窄于 deployment/v2 的 ServiceUnit，只包含可独立授权

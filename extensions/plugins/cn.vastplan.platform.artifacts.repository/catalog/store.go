@@ -83,6 +83,7 @@ type Entry struct {
 	License              string                                                 `json:"license,omitempty"`
 	Engines              map[string]string                                      `json:"engines"`
 	Dependencies         map[string]string                                      `json:"dependencies,omitempty"`
+	CompositionFeatures  map[string]pluginv1.CompositionFeature                 `json:"compositionFeatures,omitempty"`
 	Targets              []string                                               `json:"targets"`
 	Platforms            []string                                               `json:"platforms,omitempty"`
 	RuntimeRequires      []pluginv1.RuntimeRequirement                          `json:"runtimeRequires,omitempty"`

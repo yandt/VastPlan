@@ -42,6 +42,7 @@ type requirementConstraint struct {
 type solveState struct {
 	constraints map[string][]requirementConstraint
 	selected    map[string]Entry
+	features    map[string][]string
 }
 
 // Resolve atomically snapshots the current derived catalog and returns one
@@ -74,6 +75,15 @@ func (s *Store) Resolve(request pluginv1.ArtifactResolveRequest) (pluginv1.Artif
 }
 
 func resolveEntries(currentRevision uint64, entries []Entry, request pluginv1.ArtifactResolveRequest) (pluginv1.ArtifactLock, error) {
+	return resolveEntriesWithBudget(currentRevision, entries, request, defaultSolveBudget)
+}
+
+func resolveEntriesWithBudget(currentRevision uint64, entries []Entry, request pluginv1.ArtifactResolveRequest, budgetLimit int) (pluginv1.ArtifactLock, error) {
+	var err error
+	request, err = normalizeResolveRequest(request)
+	if err != nil {
+		return pluginv1.ArtifactLock{}, resolutionError("REQUEST_INVALID", err.Error())
+	}
 	snapshot, kernelVersion, channelRank, publishers, prefixes, external, err := validateResolveRequest(currentRevision, request)
 	if err != nil {
 		return pluginv1.ArtifactLock{}, err
@@ -88,26 +98,37 @@ func resolveEntries(currentRevision uint64, entries []Entry, request pluginv1.Ar
 	for id := range candidates {
 		sortCandidates(candidates[id], channelRank)
 	}
+	prepared, err := prepareCandidates(candidates)
+	if err != nil {
+		return pluginv1.ArtifactLock{}, err
+	}
 
-	state := solveState{constraints: map[string][]requirementConstraint{}, selected: map[string]Entry{}}
+	state := solveState{constraints: map[string][]requirementConstraint{}, selected: map[string]Entry{}, features: map[string][]string{}}
 	for _, root := range request.Roots {
 		constraint, parseErr := semver.NewConstraint(root.Constraint)
 		if parseErr != nil {
 			return pluginv1.ArtifactLock{}, resolutionError("REQUEST_INVALID", fmt.Sprintf("根依赖 %s 版本约束无效: %v", root.PluginID, parseErr))
 		}
 		state.constraints[root.PluginID] = append(state.constraints[root.PluginID], requirementConstraint{raw: root.Constraint, source: "root", value: constraint, channel: root.Channel})
+		state.features[root.PluginID] = append([]string(nil), root.Features...)
 	}
-	solved, err := solve(candidates, state)
+	solved, err := solve(prepared, state, external, &solveBudget{remaining: budgetLimit})
 	if err != nil {
 		return pluginv1.ArtifactLock{}, err
 	}
-	if cycle := dependencyCycle(solved.selected); len(cycle) > 0 {
-		return pluginv1.ArtifactLock{}, resolutionError("DEPENDENCY_CYCLE", "制品依赖存在环: "+strings.Join(cycle, " -> "))
-	}
-	if err := validateRuntimeCapabilities(solved.selected, external); err != nil {
-		return pluginv1.ArtifactLock{}, err
-	}
 	return buildLock(snapshot, request, solved.selected)
+}
+
+func normalizeResolveRequest(request pluginv1.ArtifactResolveRequest) (pluginv1.ArtifactResolveRequest, error) {
+	request.Roots = append([]pluginv1.ArtifactRequirement(nil), request.Roots...)
+	for index := range request.Roots {
+		normalized, err := pluginv1.NormalizeArtifactRequirement(request.Roots[index])
+		if err != nil {
+			return pluginv1.ArtifactResolveRequest{}, err
+		}
+		request.Roots[index] = normalized
+	}
+	return request, nil
 }
 
 func validateResolveRequest(current uint64, request pluginv1.ArtifactResolveRequest) (uint64, *semver.Version, map[string]int, map[string]struct{}, []string, map[string][]string, error) {

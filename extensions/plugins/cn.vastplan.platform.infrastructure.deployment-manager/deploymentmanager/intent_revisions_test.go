@@ -7,12 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 )
@@ -136,7 +136,8 @@ func TestInvalidIntentPlanIsPersistedButCannotEnterApproval(t *testing.T) {
 }
 
 func fakeResolutionReport(request backendcompositionv1.PlanningRequest, generation byte, status string) (backendcompositionv1.ResolutionReport, error) {
-	root := request.Intent.Services[0].RootPlugins[0].Ref
+	requirement := request.Intent.Services[0].RootPlugins[0]
+	root := pluginv1.ArtifactRef{PluginID: requirement.PluginID, Version: strings.TrimLeft(requirement.Constraint, "=^"), Channel: requirement.Channel}
 	planner := backendcompositionv1.PlannerIdentity{Ref: pluginv1.ArtifactRef{PluginID: "cn.vastplan.platform.infrastructure.composition-planner", Version: "0.1.0", Channel: "stable"}, Capability: backendcompositionv1.PlanningCapability, ConfigurationDigest: strings.Repeat(string(generation), 64)}
 	intentRef := compositioncommonv1.Ref{ID: request.Intent.ID, Revision: request.Intent.Revision, Digest: request.Intent.Digest()}
 	profileRef := compositioncommonv1.Ref{ID: request.PlatformProfile.ID, Revision: request.PlatformProfile.Revision, Digest: request.PlatformProfile.Digest()}
@@ -177,7 +178,7 @@ func fakeResolutionReport(request backendcompositionv1.PlanningRequest, generati
 func intentFixture() backendcompositionv1.ApplicationIntent {
 	return backendcompositionv1.ApplicationIntent{
 		Metadata: deploymentv1.Metadata{Name: "agent-services"},
-		Services: []backendcompositionv1.ServiceIntent{{ID: "api", ServiceClass: "application.backend", RootPlugins: []backendcompositionv1.RootPluginSelection{{Ref: pluginv1.ArtifactRef{PluginID: "cn.vastplan.product.agent.api", Version: "1.0.0", Channel: "stable"}}}, Operations: backendcompositionv1.ServiceOperationsIntent{Replicas: 1}}},
+		Services: []backendcompositionv1.ServiceIntent{{ID: "api", ServiceClass: "application.backend", RootPlugins: []pluginv1.ArtifactRequirement{{PluginID: "cn.vastplan.product.agent.api", Constraint: "=1.0.0", Channel: "stable"}}, Operations: backendcompositionv1.ServiceOperationsIntent{Replicas: 1}}},
 	}
 }
 

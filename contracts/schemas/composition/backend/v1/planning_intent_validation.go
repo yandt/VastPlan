@@ -3,10 +3,14 @@ package backendcompositionv1
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
+
+var applicationRootConstraintPattern = regexp.MustCompile(`^[=\^](0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
 
 func ParseApplicationIntent(raw []byte) (ApplicationIntent, error) {
 	schema, _, err := planningSchemas()
@@ -44,15 +48,21 @@ func NormalizeApplicationIntent(intent ApplicationIntent) (ApplicationIntent, er
 		serviceIDs[service.ID] = struct{}{}
 		pluginIDs := make(map[string]struct{}, len(service.RootPlugins))
 		for pluginIndex := range service.RootPlugins {
-			selection := &service.RootPlugins[pluginIndex]
-			if _, duplicate := pluginIDs[selection.Ref.PluginID]; duplicate {
-				return ApplicationIntent{}, fmt.Errorf("Application Intent service %q root plugin 重复: %q", service.ID, selection.Ref.PluginID)
+			requirement, err := pluginv1.NormalizeArtifactRequirement(service.RootPlugins[pluginIndex])
+			if err != nil {
+				return ApplicationIntent{}, fmt.Errorf("Application Intent service %q root plugin: %w", service.ID, err)
 			}
-			pluginIDs[selection.Ref.PluginID] = struct{}{}
-			sort.Strings(selection.Features)
+			if !applicationRootConstraintPattern.MatchString(requirement.Constraint) {
+				return ApplicationIntent{}, fmt.Errorf("Application Intent service %q root plugin %q constraint 只允许 =x.y.z 或 ^x.y.z", service.ID, requirement.PluginID)
+			}
+			if _, duplicate := pluginIDs[requirement.PluginID]; duplicate {
+				return ApplicationIntent{}, fmt.Errorf("Application Intent service %q root plugin 重复: %q", service.ID, requirement.PluginID)
+			}
+			pluginIDs[requirement.PluginID] = struct{}{}
+			service.RootPlugins[pluginIndex] = requirement
 		}
 		sort.Slice(service.RootPlugins, func(i, j int) bool {
-			return service.RootPlugins[i].Ref.PluginID < service.RootPlugins[j].Ref.PluginID
+			return service.RootPlugins[i].PluginID < service.RootPlugins[j].PluginID
 		})
 		if service.Operations.Autoscaling != nil {
 			autoscaling := service.Operations.Autoscaling

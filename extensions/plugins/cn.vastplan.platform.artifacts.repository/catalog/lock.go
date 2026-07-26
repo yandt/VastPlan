@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -13,7 +14,11 @@ import (
 )
 
 func buildLock(revision uint64, request pluginv1.ArtifactResolveRequest, selected map[string]Entry) (pluginv1.ArtifactLock, error) {
-	roots := append([]pluginv1.ArtifactRequirement(nil), request.Roots...)
+	roots := make([]pluginv1.ArtifactRequirement, len(request.Roots))
+	for index, root := range request.Roots {
+		root.Features = append([]string(nil), root.Features...)
+		roots[index] = root
+	}
 	sort.Slice(roots, func(i, j int) bool { return roots[i].PluginID < roots[j].PluginID })
 	packages := make([]pluginv1.ArtifactLockPackage, 0, len(selected))
 	for _, entry := range selected {
@@ -116,10 +121,14 @@ func ValidateLock(lock pluginv1.ArtifactLock) error {
 		if rootPrevious != "" && root.PluginID <= rootPrevious {
 			return errors.New("制品锁 roots 必须按 pluginId 严格升序排列")
 		}
+		normalized, normalizeErr := pluginv1.NormalizeArtifactRequirement(root)
+		if normalizeErr != nil || normalized.PluginID != root.PluginID || normalized.Constraint != root.Constraint || normalized.Channel != root.Channel || !slices.Equal(normalized.Features, root.Features) {
+			return fmt.Errorf("制品锁根 Requirement 未规范化: %s", root.PluginID)
+		}
 		selected, ok := locked[root.PluginID]
 		constraint, constraintErr := semver.NewConstraint(root.Constraint)
 		version, versionErr := semver.NewVersion(selected.Ref.Version)
-		if !ok || constraintErr != nil || versionErr != nil || !constraint.Check(version) {
+		if !ok || constraintErr != nil || versionErr != nil || !constraint.Check(version) || root.Channel != "" && selected.Ref.Channel != root.Channel {
 			return fmt.Errorf("制品锁根依赖不满足: %s %s", root.PluginID, root.Constraint)
 		}
 		rootPrevious = root.PluginID
@@ -158,12 +167,27 @@ func sortCandidates(entries []Entry, channelRank map[string]int) {
 func cloneEntry(entry Entry) Entry {
 	entry.Engines = cloneStringMap(entry.Engines)
 	entry.Dependencies = cloneStringMap(entry.Dependencies)
+	entry.CompositionFeatures = cloneCompositionFeatures(entry.CompositionFeatures)
 	entry.Targets = append([]string(nil), entry.Targets...)
 	entry.Platforms = append([]string(nil), entry.Platforms...)
 	entry.RuntimeRequires = append([]pluginv1.RuntimeRequirement(nil), entry.RuntimeRequires...)
 	entry.RuntimeProvides = append([]pluginv1.RuntimeCapabilityPolicy(nil), entry.RuntimeProvides...)
 	entry.ProvidedCapabilities = append([]string(nil), entry.ProvidedCapabilities...)
 	return entry
+}
+
+func cloneCompositionFeatures(source map[string]pluginv1.CompositionFeature) map[string]pluginv1.CompositionFeature {
+	if len(source) == 0 {
+		return nil
+	}
+	out := make(map[string]pluginv1.CompositionFeature, len(source))
+	for id, feature := range source {
+		feature.Dependencies = cloneStringMap(feature.Dependencies)
+		feature.RuntimeRequires = append([]pluginv1.RuntimeRequirement(nil), feature.RuntimeRequires...)
+		feature.ConfigurationSchema = append([]byte(nil), feature.ConfigurationSchema...)
+		out[id] = feature
+	}
+	return out
 }
 
 func cloneStringMap(source map[string]string) map[string]string {

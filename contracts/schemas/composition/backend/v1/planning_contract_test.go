@@ -2,6 +2,7 @@ package backendcompositionv1
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -13,8 +14,8 @@ func TestApplicationIntentIsNarrowAndDeterministic(t *testing.T) {
 	left, err := ParseApplicationIntent([]byte(`{
   "version":1,"revision":3,"id":"agent-services","target":{"kernel":"backend"},"metadata":{"name":"agent-services","tenant":"acme"},
   "services":[
-    {"id":"worker","serviceClass":"application.backend","rootPlugins":[{"ref":{"pluginId":"cn.vastplan.product.agent.worker","version":"1.2.0","channel":"stable"},"features":["trace","audit"]}],"operations":{"replicas":2}},
-    {"id":"api","serviceClass":"application.backend","rootPlugins":[{"ref":{"pluginId":"cn.vastplan.product.agent.api","version":"1.0.0","channel":"stable"}}],"pluginConfig":{"cn.vastplan.product.agent.api":{"limit":10}},"operations":{"replicas":1}}
+    {"id":"worker","serviceClass":"application.backend","rootPlugins":[{"pluginId":"cn.vastplan.product.agent.worker","constraint":"^1.2.0","channel":"stable","features":["trace","audit"]}],"operations":{"replicas":2}},
+    {"id":"api","serviceClass":"application.backend","rootPlugins":[{"pluginId":"cn.vastplan.product.agent.api","constraint":"=1.0.0","channel":"stable"}],"pluginConfig":{"cn.vastplan.product.agent.api":{"limit":10}},"operations":{"replicas":1}}
   ]
 }`))
 	if err != nil {
@@ -23,8 +24,8 @@ func TestApplicationIntentIsNarrowAndDeterministic(t *testing.T) {
 	right, err := ParseApplicationIntent([]byte(`{
   "version":1,"revision":3,"id":"agent-services","target":{"kernel":"backend"},"metadata":{"tenant":"acme","name":"agent-services"},
   "services":[
-    {"id":"api","serviceClass":"application.backend","rootPlugins":[{"ref":{"channel":"stable","version":"1.0.0","pluginId":"cn.vastplan.product.agent.api"}}],"pluginConfig":{"cn.vastplan.product.agent.api":{"limit":10}},"operations":{"replicas":1}},
-    {"id":"worker","serviceClass":"application.backend","rootPlugins":[{"ref":{"pluginId":"cn.vastplan.product.agent.worker","version":"1.2.0","channel":"stable"},"features":["audit","trace"]}],"operations":{"replicas":2}}
+    {"id":"api","serviceClass":"application.backend","rootPlugins":[{"channel":"stable","constraint":"=1.0.0","pluginId":"cn.vastplan.product.agent.api"}],"pluginConfig":{"cn.vastplan.product.agent.api":{"limit":10}},"operations":{"replicas":1}},
+    {"id":"worker","serviceClass":"application.backend","rootPlugins":[{"pluginId":"cn.vastplan.product.agent.worker","constraint":"^1.2.0","channel":"stable","features":["audit","trace"]}],"operations":{"replicas":2}}
   ]
 }`))
 	if err != nil {
@@ -33,22 +34,39 @@ func TestApplicationIntentIsNarrowAndDeterministic(t *testing.T) {
 	if left.Digest() != right.Digest() {
 		t.Fatalf("同一 Intent 的 service/feature 声明顺序不应改变摘要: %s != %s", left.Digest(), right.Digest())
 	}
-	if got, want := left.Digest(), "c5dfab4c35ae3b65e496eea0ddf658ddb40d8da4d1aa43c99c39d8fea9db42a9"; got != want {
+	if got, want := left.Digest(), "a003aa32b1f344ae2adf463c478be507ee3af5c1fc969ba8caad7542b0fe8589"; got != want {
 		t.Fatalf("Application Intent 跨语言规范摘要漂移: got=%s want=%s", got, want)
 	}
 	invalid := `{
   "version":1,"revision":1,"id":"bad","target":{"kernel":"backend"},"metadata":{"name":"bad"},
-  "services":[{"id":"api","serviceClass":"application.backend","rootPlugins":[{"ref":{"pluginId":"cn.vastplan.product.agent.api","version":"1.0.0","channel":"stable"}}],"operations":{"replicas":1},"depends_on":["database"]}]
+  "services":[{"id":"api","serviceClass":"application.backend","rootPlugins":[{"pluginId":"cn.vastplan.product.agent.api","constraint":"=1.0.0","channel":"stable"}],"operations":{"replicas":1},"depends_on":["database"]}]
 }`
 	if _, err := ParseApplicationIntent([]byte(invalid)); err == nil {
 		t.Fatal("Application Intent 必须拒绝 depends_on 等内部执行字段")
 	}
 }
 
+func TestApplicationIntentRootConstraintOnlyAllowsExactOrCaret(t *testing.T) {
+	base := `{
+  "version":1,"revision":1,"id":"agent-services","target":{"kernel":"backend"},"metadata":{"name":"agent-services"},
+  "services":[{"id":"api","serviceClass":"application.backend","rootPlugins":[{"pluginId":"cn.vastplan.product.agent.api","constraint":%q,"channel":"stable"}],"operations":{"replicas":1}}]
+}`
+	for _, valid := range []string{"=1.2.3", "^1.2.3", "^0.4.0", "^0.0.5"} {
+		if _, err := ParseApplicationIntent([]byte(fmt.Sprintf(base, valid))); err != nil {
+			t.Fatalf("合法根约束 %s 被拒绝: %v", valid, err)
+		}
+	}
+	for _, invalid := range []string{">=1.2.3", "1.x", "*", "^1.2", "^1.2.3-beta.1", "^1.0.0 || ^2.0.0"} {
+		if _, err := ParseApplicationIntent([]byte(fmt.Sprintf(base, invalid))); err == nil {
+			t.Fatalf("复杂或非法应用根约束必须拒绝: %s", invalid)
+		}
+	}
+}
+
 func TestResolutionReportBindsPlanAndRejectsInvalidGraph(t *testing.T) {
 	intent, err := ParseApplicationIntent([]byte(`{
   "version":1,"revision":1,"id":"agent-services","target":{"kernel":"backend"},"metadata":{"name":"agent-services"},
-  "services":[{"id":"api","serviceClass":"application.backend","rootPlugins":[{"ref":{"pluginId":"cn.vastplan.product.agent.api","version":"1.0.0","channel":"stable"}}],"operations":{"replicas":1}}]
+  "services":[{"id":"api","serviceClass":"application.backend","rootPlugins":[{"pluginId":"cn.vastplan.product.agent.api","constraint":"=1.0.0","channel":"stable"}],"operations":{"replicas":1}}]
 }`))
 	if err != nil {
 		t.Fatal(err)

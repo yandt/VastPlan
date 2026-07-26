@@ -3,10 +3,9 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
-
-	semver "github.com/Masterminds/semver/v3"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
@@ -43,12 +42,14 @@ func (s *Store) SetLifecycle(request LifecycleRequest, occurredAt time.Time) (En
 		return Entry{}, 0, errors.New("生命周期状态或原因无效")
 	}
 	if request.Replacement != nil {
-		if request.Status != LifecycleDeprecated || !capabilityPattern.MatchString(request.Replacement.PluginID) {
+		if request.Status != LifecycleDeprecated || len(request.Replacement.Features) != 0 {
 			return Entry{}, 0, errors.New("只有 deprecated 状态可声明合法替代制品")
 		}
-		if _, err := semver.NewConstraint(request.Replacement.Constraint); err != nil {
+		normalized, err := pluginv1.NormalizeArtifactRequirement(*request.Replacement)
+		if err != nil {
 			return Entry{}, 0, fmt.Errorf("替代制品版本约束无效: %w", err)
 		}
+		request.Replacement = &normalized
 	}
 	if occurredAt.IsZero() {
 		occurredAt = time.Now().UTC()
@@ -167,9 +168,11 @@ func cloneRequirement(value *pluginv1.ArtifactRequirement) *pluginv1.ArtifactReq
 		return nil
 	}
 	copy := *value
+	copy.Features = append([]string(nil), value.Features...)
 	return &copy
 }
 
 func sameRequirement(left, right *pluginv1.ArtifactRequirement) bool {
-	return left == nil && right == nil || left != nil && right != nil && *left == *right
+	return left == nil && right == nil || left != nil && right != nil &&
+		left.PluginID == right.PluginID && left.Constraint == right.Constraint && left.Channel == right.Channel && slices.Equal(left.Features, right.Features)
 }

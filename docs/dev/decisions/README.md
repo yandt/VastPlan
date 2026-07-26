@@ -187,3 +187,5 @@
 - [ADR-0154 Portal 管理 API 合同驱动分发](ADR-0154-Portal管理API合同驱动分发.md)
 - [ADR-0155 Browser/Server 单一 Generation 协调提交](ADR-0155-Browser-Server单一Generation协调提交.md)
 - [ADR-0156 Authorization Policy 共享真相源与 Leader 接管](ADR-0156-Authorization-Policy共享真相源与Leader接管.md)
+- [ADR-0157 开发 Seed Runtime 的 Last-Known-Good 快照](ADR-0157-开发Seed-Runtime-LKG快照.md)
+- [ADR-0158 应用插件兼容范围与精确运行锁](ADR-0158-应用插件兼容范围与精确运行锁.md)

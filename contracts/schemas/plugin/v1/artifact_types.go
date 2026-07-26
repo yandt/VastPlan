@@ -29,9 +29,10 @@ type Artifact struct {
 // ArtifactRequirement is one root constraint supplied to the repository resolver.
 // Channel is optional for range-based callers and exact when present.
 type ArtifactRequirement struct {
-	PluginID   string `json:"pluginId"`
-	Constraint string `json:"constraint"`
-	Channel    string `json:"channel,omitempty"`
+	PluginID   string   `json:"pluginId"`
+	Constraint string   `json:"constraint"`
+	Channel    string   `json:"channel,omitempty"`
+	Features   []string `json:"features,omitempty"`
 }
 
 // AvailableCapability describes a capability supplied by the target environment

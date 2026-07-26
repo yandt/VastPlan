@@ -2,7 +2,7 @@ import { normalizeBackendApplicationIntent } from "@vastplan/composition-plannin
 import type {
   BackendApplicationIntent,
   BackendServiceIntent,
-  RootPluginSelection,
+  ArtifactRequirement,
   ServiceOperationsIntent,
 } from "@vastplan/composition-planning";
 import type { DeploymentTarget, ServiceRevision } from "@vastplan/platform-admin";
@@ -36,10 +36,11 @@ export function serviceIntentSchema(targets: readonly DeploymentTarget[]): FormS
               rootPlugins: {
                 type: "array", title: "根应用插件", minItems: 1, maxItems: 256,
                 items: {
-                  type: "object", additionalProperties: false, required: ["pluginId", "version", "channel"],
+                  type: "object", additionalProperties: false, required: ["pluginId", "versionPolicy", "version", "channel"],
                   properties: {
                     pluginId: { type: "string", title: "插件 ID", pattern: "^[a-z0-9]+(?:[.-][a-z0-9]+)+$" },
-                    version: { type: "string", title: "精确版本", pattern: "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$" },
+                    versionPolicy: { type: "string", title: "版本策略", default: "exact", oneOf: [{ const: "exact", title: "固定版本" }, { const: "compatible", title: "兼容升级" }] },
+                    version: { type: "string", title: "基准版本", pattern: "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
                     channel: { type: "string", title: "通道", default: "stable", oneOf: [{ const: "stable", title: "稳定版" }, { const: "preview", title: "预发布" }, { const: "testing", title: "测试版" }] },
                     features: { type: "array", title: "启用 Feature", uniqueItems: true, maxItems: 64, items: { type: "string", pattern: "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" } },
                   },
@@ -72,7 +73,7 @@ export function serviceIntentSchema(targets: readonly DeploymentTarget[]): FormS
       services: {
         "ui:help": "这里只声明根插件、Feature、非敏感配置及容量意图；依赖、运行策略、状态模型和路由由 Planner 推导。",
         items: {
-          rootPlugins: { items: { channel: { "ui:widget": "select" }, features: { "ui:help": "Feature 必须由插件签名 Manifest 预先声明。" } } },
+          rootPlugins: { items: { versionPolicy: { "ui:widget": "select", "ui:help": "固定版本始终使用指定版本；兼容升级按 SemVer caret 规则解析较新版本，0.x 的兼容边界更窄。" }, channel: { "ui:widget": "select" }, features: { "ui:help": "Feature 必须由插件签名 Manifest 预先声明。" } } },
           pluginConfig: { "ui:help": "以插件 ID 为键填写非敏感配置；密码和令牌必须通过凭证配置流程绑定。" },
         },
       },
@@ -82,7 +83,10 @@ export function serviceIntentSchema(targets: readonly DeploymentTarget[]): FormS
       "/properties/services/items/properties/serviceClass/title": message("form.serviceClass", "服务分类"), "/properties/services/items/properties/id/title": message("form.serviceId", "服务 ID"),
       "/properties/services/items/properties/rootPlugins/title": message("form.rootPlugins", "根应用插件"),
       "/properties/services/items/properties/rootPlugins/items/properties/pluginId/title": message("form.pluginId", "插件 ID"),
-      "/properties/services/items/properties/rootPlugins/items/properties/version/title": message("form.version", "精确版本"),
+      "/properties/services/items/properties/rootPlugins/items/properties/versionPolicy/title": message("form.versionPolicy", "版本策略"),
+      "/properties/services/items/properties/rootPlugins/items/properties/versionPolicy/oneOf/0/title": message("form.versionExact", "固定版本"),
+      "/properties/services/items/properties/rootPlugins/items/properties/versionPolicy/oneOf/1/title": message("form.versionCompatible", "兼容升级"),
+      "/properties/services/items/properties/rootPlugins/items/properties/version/title": message("form.version", "基准版本"),
       "/properties/services/items/properties/rootPlugins/items/properties/channel/title": message("form.channel", "通道"),
       "/properties/services/items/properties/rootPlugins/items/properties/channel/oneOf/0/title": message("form.stable", "稳定版"),
       "/properties/services/items/properties/rootPlugins/items/properties/channel/oneOf/1/title": message("form.preview", "预发布"),
@@ -104,6 +108,7 @@ export function serviceIntentSchema(targets: readonly DeploymentTarget[]): FormS
     uiLocalization: {
       "/deployment/ui:help": message("help.deployment", "目标及 Platform Profile 由平台运维预授权，不能在此修改。"),
       "/services/ui:help": message("help.services", "这里只声明根插件、Feature、非敏感配置及容量意图；依赖、运行策略、状态模型和路由由 Planner 推导。"),
+      "/services/items/rootPlugins/items/versionPolicy/ui:help": message("help.versionPolicy", "固定版本始终使用指定版本；兼容升级按 SemVer caret 规则解析较新版本，0.x 的兼容边界更窄。"),
       "/services/items/rootPlugins/items/features/ui:help": message("help.features", "Feature 必须由插件签名 Manifest 预先声明。"),
       "/services/items/pluginConfig/ui:help": message("help.config", "以插件 ID 为键填写非敏感配置；密码和令牌必须通过凭证配置流程绑定。"),
     },
@@ -124,7 +129,13 @@ export function intentEditorValue(revision: ServiceRevision): IntentEditorValue 
     deployment: revision.deployment,
     services: revision.intent.services.map((service) => ({
       serviceClass: service.serviceClass, id: service.id,
-      rootPlugins: service.rootPlugins.map((selection) => ({ pluginId: selection.ref.pluginId, version: selection.ref.version, channel: selection.ref.channel, features: selection.features ?? [] })),
+      rootPlugins: service.rootPlugins.map((selection) => ({
+        pluginId: selection.pluginId,
+        versionPolicy: selection.constraint.startsWith("^") ? "compatible" : "exact",
+        version: selection.constraint.slice(1),
+        channel: selection.channel ?? "stable",
+        features: selection.features ?? [],
+      })),
       pluginConfig: service.pluginConfig ?? {}, replicas: service.operations.replicas,
       ...(service.operations.autoscaling === undefined ? {} : { autoscaling: {
         minReplicas: service.operations.autoscaling.min_replicas, maxReplicas: service.operations.autoscaling.max_replicas,
@@ -160,13 +171,14 @@ function buildServiceIntent(value: unknown): BackendServiceIntent[] {
   return [{ id, serviceClass, rootPlugins: rootPlugins(item.rootPlugins), ...(pluginConfig === undefined ? {} : { pluginConfig }), operations }];
 }
 
-function rootPlugins(value: unknown): RootPluginSelection[] {
+function rootPlugins(value: unknown): ArtifactRequirement[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((candidate) => {
     const item = object(candidate), pluginId = text(item?.pluginId), version = text(item?.version);
     if (item === undefined || pluginId === undefined || version === undefined) return [];
     const features = strings(item.features);
-    return [{ ref: { pluginId, version, channel: text(item.channel) ?? "stable" }, ...(features.length === 0 ? {} : { features }) }];
+    const constraint = `${text(item.versionPolicy) === "compatible" ? "^" : "="}${version}`;
+    return [{ pluginId, constraint, channel: text(item.channel) ?? "stable", ...(features.length === 0 ? {} : { features }) }];
   });
 }
 

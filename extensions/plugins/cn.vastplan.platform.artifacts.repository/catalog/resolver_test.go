@@ -35,6 +35,25 @@ func TestResolverSelectsHighestCompatibleDependencyAndProducesStableLock(t *test
 	}
 }
 
+func TestResolverCaretCompatibilityHonorsZeroVersionBoundaries(t *testing.T) {
+	entries := []Entry{
+		resolverEntry("cn.example.app", "0.4.1", 1, nil),
+		resolverEntry("cn.example.app", "0.5.0", 2, nil),
+		resolverEntry("cn.example.micro", "0.0.5", 3, nil),
+		resolverEntry("cn.example.micro", "0.0.6", 4, nil),
+	}
+	lock, err := resolveEntries(4, entries, resolverRequest(
+		pluginv1.ArtifactRequirement{PluginID: "cn.example.app", Constraint: "^0.4.0"},
+		pluginv1.ArtifactRequirement{PluginID: "cn.example.micro", Constraint: "^0.0.5"},
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Packages[0].Ref.Version != "0.4.1" || lock.Packages[1].Ref.Version != "0.0.5" {
+		t.Fatalf("caret 0.x 兼容边界错误: %+v", lock.Packages)
+	}
+}
+
 func TestResolverBacktracksOnRootConflict(t *testing.T) {
 	entries := []Entry{
 		resolverEntry("cn.example.app", "1.0.0", 1, map[string]string{"cn.example.library": "^1.0"}),
@@ -127,6 +146,103 @@ func TestResolverHonorsSnapshotPlatformAndPublisherPolicy(t *testing.T) {
 	request.AllowedPublishers = []string{"other"}
 	_, err = resolveEntries(2, []Entry{old, latest}, request)
 	assertResolutionCode(t, err, "VERSION_CONFLICT")
+}
+
+func TestResolverBacktracksAcrossCandidateFeatureDefinitions(t *testing.T) {
+	high := resolverEntry("cn.example.app", "1.1.0", 2, nil)
+	low := resolverEntry("cn.example.app", "1.0.0", 1, nil)
+	low.CompositionFeatures = map[string]pluginv1.CompositionFeature{
+		"audit": {ID: "audit", Dependencies: map[string]string{"cn.example.library": "^1.0"}},
+	}
+	library := resolverEntry("cn.example.library", "1.5.0", 3, nil)
+	request := resolverRequest(pluginv1.ArtifactRequirement{PluginID: high.Ref.PluginID, Constraint: "^1.0", Features: []string{"audit"}})
+	lock, err := resolveEntries(3, []Entry{high, low, library}, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Packages[0].Ref.Version != "1.0.0" || lock.Packages[0].Dependencies["cn.example.library"] != "^1.0" {
+		t.Fatalf("Resolver 未回退到声明 Feature 的候选或未锁定有效依赖: %+v", lock.Packages)
+	}
+	request.Roots[0].Features = []string{"missing"}
+	_, err = resolveEntries(3, []Entry{high, low, library}, request)
+	assertResolutionCode(t, err, "FEATURE_UNAVAILABLE")
+}
+
+func TestResolverBacktracksWhenHighestFeatureDependencyConflicts(t *testing.T) {
+	high := resolverEntry("cn.example.app", "1.1.0", 2, nil)
+	high.CompositionFeatures = map[string]pluginv1.CompositionFeature{
+		"audit": {ID: "audit", Dependencies: map[string]string{"cn.example.library": "^2.0"}},
+	}
+	low := resolverEntry("cn.example.app", "1.0.0", 1, nil)
+	low.CompositionFeatures = map[string]pluginv1.CompositionFeature{
+		"audit": {ID: "audit", Dependencies: map[string]string{"cn.example.library": "^1.0"}},
+	}
+	library := resolverEntry("cn.example.library", "1.5.0", 3, nil)
+	request := resolverRequest(
+		pluginv1.ArtifactRequirement{PluginID: high.Ref.PluginID, Constraint: "^1.0", Features: []string{"audit"}},
+		pluginv1.ArtifactRequirement{PluginID: library.Ref.PluginID, Constraint: "^1.0"},
+	)
+	lock, err := resolveEntries(3, []Entry{high, low, library}, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lock.Packages[0].Ref.Version != "1.0.0" {
+		t.Fatalf("Feature 依赖冲突时未回退根候选: %+v", lock.Packages)
+	}
+}
+
+func TestResolverUnionsFeatureDependenciesAndCapabilities(t *testing.T) {
+	app := resolverEntry("cn.example.app", "1.0.0", 1, nil)
+	app.CompositionFeatures = map[string]pluginv1.CompositionFeature{
+		"audit": {
+			ID: "audit", Dependencies: map[string]string{"cn.example.audit": "^1.0"},
+			RuntimeRequires: []pluginv1.RuntimeRequirement{{Capability: "platform.database", Version: "^2.0", Scope: "remote", Kind: "strong", Ready: "readiness", FailurePolicy: "fail"}},
+		},
+		"quota": {ID: "quota", Dependencies: map[string]string{"cn.example.quota": "^1.0"}},
+	}
+	audit := resolverEntry("cn.example.audit", "1.1.0", 2, nil)
+	quota := resolverEntry("cn.example.quota", "1.2.0", 3, nil)
+	request := resolverRequest(pluginv1.ArtifactRequirement{PluginID: app.Ref.PluginID, Constraint: "=1.0.0", Features: []string{"quota", "audit"}})
+	request.AvailableCapabilities = []pluginv1.AvailableCapability{{Capability: "platform.database", Version: "1.9.0"}}
+	_, err := resolveEntries(3, []Entry{app, audit, quota}, request)
+	assertResolutionCode(t, err, "CAPABILITY_UNSATISFIED")
+	request.AvailableCapabilities[0].Version = "2.1.0"
+	lock, err := resolveEntries(3, []Entry{app, audit, quota}, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lock.Packages) != 3 || len(lock.Packages[0].Dependencies) != 2 || !equalFeatureIDs(lock.Roots[0].Features, []string{"audit", "quota"}) {
+		t.Fatalf("Feature 并集或有效闭包错误: %+v", lock)
+	}
+}
+
+func TestResolverRejectsFeatureCyclesAndBoundsSearch(t *testing.T) {
+	app := resolverEntry("cn.example.app", "1.0.0", 1, nil)
+	app.CompositionFeatures = map[string]pluginv1.CompositionFeature{
+		"cycle": {ID: "cycle", Dependencies: map[string]string{"cn.example.worker": "^1.0"}},
+	}
+	worker := resolverEntry("cn.example.worker", "1.0.0", 2, map[string]string{"cn.example.app": "^1.0"})
+	request := resolverRequest(pluginv1.ArtifactRequirement{PluginID: app.Ref.PluginID, Constraint: "^1.0", Features: []string{"cycle"}})
+	_, err := resolveEntries(2, []Entry{app, worker}, request)
+	assertResolutionCode(t, err, "DEPENDENCY_CYCLE")
+
+	app.CompositionFeatures = nil
+	app.Dependencies = map[string]string{"cn.example.worker": "^1.0"}
+	worker.Dependencies = nil
+	_, err = resolveEntriesWithBudget(2, []Entry{app, worker}, resolverRequest(pluginv1.ArtifactRequirement{PluginID: app.Ref.PluginID, Constraint: "^1.0"}), 1)
+	assertResolutionCode(t, err, "RESOLUTION_COMPLEXITY_LIMIT")
+}
+
+func equalFeatureIDs(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func resolverEntry(id, version string, revision uint64, dependencies map[string]string) Entry {

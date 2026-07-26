@@ -26,22 +26,18 @@
   "$defs": {
     "serviceId": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
     "featureId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 80 },
-    "artifactRef": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["pluginId", "version", "channel"],
-      "properties": {
-        "pluginId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
-        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
-        "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel" }
-      }
-    },
     "rootPlugin": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ref"],
+      "required": ["pluginId", "constraint"],
       "properties": {
-        "ref": { "$ref": "#/$defs/artifactRef" },
+        "pluginId": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "constraint": {
+          "type": "string",
+          "pattern": "^[=^](0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+          "maxLength": 65
+        },
+        "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel" },
         "features": {
           "type": "array",
           "maxItems": 64,

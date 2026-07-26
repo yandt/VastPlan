@@ -660,13 +660,14 @@ func TestParseManifest_ConfigurationAndManagedCredentials(t *testing.T) {
 }
 
 func TestArtifactLockSchemaRejectsMutableOrIncompleteLocks(t *testing.T) {
-	valid := []byte(`{"schemaVersion":"v1","repositoryRevision":7,"target":"backend","kernelVersion":"0.1.0","platform":"linux/amd64","roots":[{"pluginId":"cn.example.app","constraint":"^1.0","channel":"stable"}],"packages":[{"ref":{"pluginId":"cn.example.app","version":"1.2.0","channel":"stable"},"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":12,"publisher":"example","keyId":"release","repositoryRevision":7}],"digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`)
+	valid := []byte(`{"schemaVersion":"v1","repositoryRevision":7,"target":"backend","kernelVersion":"0.1.0","platform":"linux/amd64","roots":[{"pluginId":"cn.example.app","constraint":"^1.0","channel":"stable","features":["audit"]}],"packages":[{"ref":{"pluginId":"cn.example.app","version":"1.2.0","channel":"stable"},"sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","size":12,"publisher":"example","keyId":"release","repositoryRevision":7}],"digest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}`)
 	if err := ValidateArtifactLock(valid); err != nil {
 		t.Fatalf("合法制品锁应通过 Schema: %v", err)
 	}
 	for _, invalid := range [][]byte{
 		[]byte(`{"schemaVersion":"v1","repositoryRevision":0}`),
 		bytes.Replace(valid, []byte(`"channel":"stable"`), []byte(`"channel":"latest","url":"https://mutable.invalid"`), 1),
+		bytes.Replace(valid, []byte(`"features":["audit"]`), []byte(`"features":["audit","audit"]`), 1),
 	} {
 		if err := ValidateArtifactLock(invalid); err == nil {
 			t.Fatalf("不完整或可变制品锁必须被拒绝: %s", invalid)
@@ -675,7 +676,7 @@ func TestArtifactLockSchemaRejectsMutableOrIncompleteLocks(t *testing.T) {
 }
 
 func TestArtifactResolveSchemaRequiresExplicitPolicyInputs(t *testing.T) {
-	valid := []byte(`{"roots":[{"pluginId":"cn.example.app","constraint":"^1.0","channel":"stable"}],"target":"backend","kernelVersion":"0.1.0","platform":"linux/amd64","allowedChannels":["stable"],"allowedPublishers":["example"],"allowedPluginPrefixes":["cn.example"],"snapshotRevision":7}`)
+	valid := []byte(`{"roots":[{"pluginId":"cn.example.app","constraint":"^1.0","channel":"stable","features":["audit"]}],"target":"backend","kernelVersion":"0.1.0","platform":"linux/amd64","allowedChannels":["stable"],"allowedPublishers":["example"],"allowedPluginPrefixes":["cn.example"],"snapshotRevision":7}`)
 	if err := ValidateArtifactResolveRequest(valid); err != nil {
 		t.Fatalf("合法解析输入应通过 Schema: %v", err)
 	}
@@ -683,6 +684,7 @@ func TestArtifactResolveSchemaRequiresExplicitPolicyInputs(t *testing.T) {
 		[]byte(`{"roots":[],"target":"backend","kernelVersion":"0.1.0","allowedChannels":["stable"],"allowedPublishers":["example"]}`),
 		bytes.Replace(valid, []byte(`"allowedPublishers":["example"]`), []byte(`"allowedPublishers":[]`), 1),
 		bytes.Replace(valid, []byte(`"snapshotRevision":7`), []byte(`"snapshotRevision":-1`), 1),
+		bytes.Replace(valid, []byte(`"features":["audit"]`), []byte(`"features":["audit","audit"]`), 1),
 	} {
 		if err := ValidateArtifactResolveRequest(invalid); err == nil {
 			t.Fatalf("缺少显式策略的解析输入必须被拒绝: %s", invalid)

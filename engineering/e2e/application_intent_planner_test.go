@@ -91,8 +91,8 @@ func p5PlanningRequest(features []string, profile backendcompositionv1.PlatformP
 		Metadata: deploymentv1.Metadata{Name: "p5-pipeline", Tenant: "acme"},
 		Services: []backendcompositionv1.ServiceIntent{{
 			ID: "pipeline", ServiceClass: "application.backend",
-			RootPlugins: []backendcompositionv1.RootPluginSelection{{
-				Ref: pluginv1.ArtifactRef{PluginID: p5RootID, Version: "1.0.0", Channel: p5Channel}, Features: append([]string(nil), features...),
+			RootPlugins: []pluginv1.ArtifactRequirement{{
+				PluginID: p5RootID, Constraint: "^1.0.0", Channel: p5Channel, Features: append([]string(nil), features...),
 			}},
 			PluginConfig: map[string]map[string]any{p5RootID: {"endpoint": "https://pipeline.example", "audit_mode": true}},
 			Operations:   backendcompositionv1.ServiceOperationsIntent{Replicas: 1},

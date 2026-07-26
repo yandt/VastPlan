@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -89,9 +90,27 @@ func TestPlannerCompilesFeatureProviderGraphAndConfigurationPlan(t *testing.T) {
 		t.Fatalf("Platform Profile Provider 未投影到仓库求解: %+v", repository.lastResolve.AvailableCapabilities)
 	}
 	for _, root := range repository.lastResolve.Roots {
-		if root.PluginID == "cn.vastplan.product.agent.api" && root.Channel != "stable" {
-			t.Fatalf("Intent 根插件的精确 channel 未进入仓库锁约束: %+v", root)
+		if root.PluginID == "cn.vastplan.product.agent.api" && (root.Channel != "stable" || !slices.Equal(root.Features, []string{"audit"})) {
+			t.Fatalf("Intent 根插件的 channel/Feature 未进入仓库锁约束: %+v", root)
 		}
+	}
+}
+
+func TestResolveRequirementsIntersectsVersionsUnionsFeaturesAndRejectsChannels(t *testing.T) {
+	intent := backendcompositionv1.ApplicationIntent{Services: []backendcompositionv1.ServiceIntent{
+		{ID: "api", RootPlugins: []pluginv1.ArtifactRequirement{{PluginID: "cn.example.app", Constraint: "^1.0.0", Channel: "stable", Features: []string{"audit"}}}},
+		{ID: "worker", RootPlugins: []pluginv1.ArtifactRequirement{{PluginID: "cn.example.app", Constraint: "^1.2.0", Channel: "stable", Features: []string{"trace"}}}},
+	}}
+	roots, err := resolveRequirements(intent, backendcompositionv1.PlatformProfile{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roots) != 1 || roots[0].Constraint != "^1.0.0, ^1.2.0" || !slices.Equal(roots[0].Features, []string{"audit", "trace"}) {
+		t.Fatalf("多服务 Requirement 聚合错误: %+v", roots)
+	}
+	intent.Services[1].RootPlugins[0].Channel = "testing"
+	if _, err := resolveRequirements(intent, backendcompositionv1.PlatformProfile{}); err == nil || !strings.Contains(err.Error(), "冲突 channel") {
+		t.Fatalf("渠道冲突必须显式拒绝: %v", err)
 	}
 }
 
@@ -113,7 +132,7 @@ func TestFeatureDependenciesRemainScopedToSelectingService(t *testing.T) {
 	request := planningRequest()
 	request.Intent.Services = append(request.Intent.Services, backendcompositionv1.ServiceIntent{
 		ID: "worker", ServiceClass: "application.backend",
-		RootPlugins:  []backendcompositionv1.RootPluginSelection{{Ref: pluginv1.ArtifactRef{PluginID: "cn.vastplan.product.agent.api", Version: "1.0.0", Channel: "stable"}}},
+		RootPlugins:  []pluginv1.ArtifactRequirement{{PluginID: "cn.vastplan.product.agent.api", Constraint: "=1.0.0", Channel: "stable"}},
 		PluginConfig: map[string]map[string]any{"cn.vastplan.product.agent.api": {"endpoint": "https://worker.example"}},
 		Operations:   backendcompositionv1.ServiceOperationsIntent{Replicas: 1},
 	})
@@ -166,7 +185,7 @@ func planningRequest() backendcompositionv1.PlanningRequest {
 		Target:   compositioncommonv1.Target{Kernel: compositioncommonv1.KernelBackend}, Metadata: deploymentv1.Metadata{Name: "agent-suite", Tenant: "acme"},
 		Services: []backendcompositionv1.ServiceIntent{{
 			ID: "api", ServiceClass: "application.backend",
-			RootPlugins:  []backendcompositionv1.RootPluginSelection{{Ref: pluginv1.ArtifactRef{PluginID: "cn.vastplan.product.agent.api", Version: "1.0.0", Channel: "stable"}, Features: []string{"audit"}}},
+			RootPlugins:  []pluginv1.ArtifactRequirement{{PluginID: "cn.vastplan.product.agent.api", Constraint: "=1.0.0", Channel: "stable", Features: []string{"audit"}}},
 			PluginConfig: map[string]map[string]any{"cn.vastplan.product.agent.api": {"endpoint": "https://api.example"}},
 			Operations:   backendcompositionv1.ServiceOperationsIntent{Replicas: 2},
 		}},

@@ -21,57 +21,26 @@ type resolvedArtifacts struct {
 }
 
 func (s *Service) resolveArtifacts(ctx context.Context, repository Repository, intent backendcompositionv1.ApplicationIntent, profile backendcompositionv1.PlatformProfile) (resolvedArtifacts, error) {
-	initialRefs, baselineIDs, err := planningRefs(intent, profile)
+	initialRefs, baselineIDs, err := planningRefs(profile)
 	if err != nil {
 		return resolvedArtifacts{}, err
 	}
-	initial, err := repository.Describe(ctx, pluginv1.ArtifactPlanningRequest{Refs: initialRefs})
-	if err != nil {
-		return resolvedArtifacts{}, fmt.Errorf("读取根插件与 Platform Profile 规划描述: %w", err)
+	descriptors := map[string]pluginv1.ArtifactPlanningDescriptor{}
+	manifests := map[string]pluginv1.Manifest{}
+	if len(initialRefs) > 0 {
+		initial, err := repository.Describe(ctx, pluginv1.ArtifactPlanningRequest{Refs: initialRefs})
+		if err != nil {
+			return resolvedArtifacts{}, fmt.Errorf("读取 Platform Profile 规划描述: %w", err)
+		}
+		descriptors, manifests, err = descriptorMaps(initial.Items)
+		if err != nil {
+			return resolvedArtifacts{}, err
+		}
 	}
-	descriptors, manifests, err := descriptorMaps(initial.Items)
+	roots, err := resolveRequirements(intent, profile)
 	if err != nil {
 		return resolvedArtifacts{}, err
 	}
-	featureDeps, err := selectedFeatureDependencies(intent, manifests)
-	if err != nil {
-		return resolvedArtifacts{}, err
-	}
-	constraints := map[string][]string{}
-	channels := map[string]string{}
-	for _, service := range intent.Services {
-		for _, root := range service.RootPlugins {
-			constraints[root.Ref.PluginID] = append(constraints[root.Ref.PluginID], "="+root.Ref.Version)
-			channels[root.Ref.PluginID] = root.Ref.Channel
-		}
-	}
-	for _, baseline := range profile.ServiceBaselines {
-		for _, ref := range baseline.Plugins {
-			channel := ref.Channel
-			if channel == "" {
-				channel = "stable"
-			}
-			constraints[ref.ID] = append(constraints[ref.ID], "="+ref.Version)
-			channels[ref.ID] = channel
-		}
-	}
-	for _, roots := range featureDeps {
-		for _, dependencies := range roots {
-			for id, constraint := range dependencies {
-				constraints[id] = append(constraints[id], constraint)
-			}
-		}
-	}
-	roots := make([]pluginv1.ArtifactRequirement, 0, len(constraints))
-	for id, values := range constraints {
-		sort.Strings(values)
-		constraint := strings.Join(values, ", ")
-		if _, err := semver.NewConstraint(constraint); err != nil {
-			return resolvedArtifacts{}, fmt.Errorf("插件 %s 的组合版本约束无交集或无效: %s", id, constraint)
-		}
-		roots = append(roots, pluginv1.ArtifactRequirement{PluginID: id, Constraint: constraint, Channel: channels[id]})
-	}
-	sort.Slice(roots, func(i, j int) bool { return roots[i].PluginID < roots[j].PluginID })
 	lock, err := repository.Resolve(ctx, pluginv1.ArtifactResolveRequest{
 		Roots: roots, Target: "backend", KernelVersion: s.config.KernelVersion, Platform: s.config.Platform,
 		AllowedChannels: append([]string(nil), s.config.AllowedChannels...), AllowedPublishers: append([]string(nil), s.config.AllowedPublishers...),
@@ -100,10 +69,74 @@ func (s *Service) resolveArtifacts(ctx context.Context, repository Repository, i
 		descriptors[item.Ref.PluginID] = descriptor
 		manifests[item.Ref.PluginID] = lockedManifests[item.Ref.PluginID]
 	}
+	featureDeps, err := selectedFeatureDependencies(intent, manifests)
+	if err != nil {
+		return resolvedArtifacts{}, err
+	}
 	return resolvedArtifacts{lock: lock, descriptors: descriptors, manifests: manifests, featureDeps: featureDeps, baselineIDs: baselineIDs}, nil
 }
 
-func planningRefs(intent backendcompositionv1.ApplicationIntent, profile backendcompositionv1.PlatformProfile) ([]pluginv1.ArtifactRef, map[string]struct{}, error) {
+func resolveRequirements(intent backendcompositionv1.ApplicationIntent, profile backendcompositionv1.PlatformProfile) ([]pluginv1.ArtifactRequirement, error) {
+	constraints := map[string][]string{}
+	channels := map[string]string{}
+	features := map[string]map[string]struct{}{}
+	add := func(requirement pluginv1.ArtifactRequirement) error {
+		if channel := channels[requirement.PluginID]; channel != "" && requirement.Channel != "" && channel != requirement.Channel {
+			return fmt.Errorf("插件 %s 在同一 Application Intent 中声明了冲突 channel: %s 与 %s", requirement.PluginID, channel, requirement.Channel)
+		}
+		constraints[requirement.PluginID] = append(constraints[requirement.PluginID], requirement.Constraint)
+		if requirement.Channel != "" {
+			channels[requirement.PluginID] = requirement.Channel
+		}
+		if features[requirement.PluginID] == nil {
+			features[requirement.PluginID] = map[string]struct{}{}
+		}
+		for _, feature := range requirement.Features {
+			features[requirement.PluginID][feature] = struct{}{}
+		}
+		return nil
+	}
+	for _, service := range intent.Services {
+		for _, root := range service.RootPlugins {
+			if err := add(root); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, baseline := range profile.ServiceBaselines {
+		for _, ref := range baseline.Plugins {
+			channel := ref.Channel
+			if channel == "" {
+				channel = "stable"
+			}
+			if err := add(pluginv1.ArtifactRequirement{PluginID: ref.ID, Constraint: "=" + ref.Version, Channel: channel}); err != nil {
+				return nil, err
+			}
+		}
+	}
+	roots := make([]pluginv1.ArtifactRequirement, 0, len(constraints))
+	for id, values := range constraints {
+		sort.Strings(values)
+		constraint := strings.Join(values, ", ")
+		if _, err := semver.NewConstraint(constraint); err != nil {
+			return nil, fmt.Errorf("插件 %s 的组合版本约束无交集或无效: %s", id, constraint)
+		}
+		selectedFeatures := make([]string, 0, len(features[id]))
+		for feature := range features[id] {
+			selectedFeatures = append(selectedFeatures, feature)
+		}
+		sort.Strings(selectedFeatures)
+		requirement, err := pluginv1.NormalizeArtifactRequirement(pluginv1.ArtifactRequirement{PluginID: id, Constraint: constraint, Channel: channels[id], Features: selectedFeatures})
+		if err != nil {
+			return nil, fmt.Errorf("插件 %s 的组合 Requirement 无效: %w", id, err)
+		}
+		roots = append(roots, requirement)
+	}
+	sort.Slice(roots, func(i, j int) bool { return roots[i].PluginID < roots[j].PluginID })
+	return roots, nil
+}
+
+func planningRefs(profile backendcompositionv1.PlatformProfile) ([]pluginv1.ArtifactRef, map[string]struct{}, error) {
 	refs := map[string]pluginv1.ArtifactRef{}
 	baselineIDs := map[string]struct{}{}
 	add := func(ref pluginv1.ArtifactRef) error {
@@ -112,13 +145,6 @@ func planningRefs(intent backendcompositionv1.ApplicationIntent, profile backend
 		}
 		refs[ref.PluginID] = ref
 		return nil
-	}
-	for _, service := range intent.Services {
-		for _, root := range service.RootPlugins {
-			if err := add(root.Ref); err != nil {
-				return nil, nil, err
-			}
-		}
 	}
 	for _, baseline := range profile.ServiceBaselines {
 		for _, ref := range baseline.Plugins {
@@ -172,9 +198,9 @@ func selectedFeatureDependencies(intent backendcompositionv1.ApplicationIntent, 
 	for _, service := range intent.Services {
 		result[service.ID] = map[string]map[string]string{}
 		for _, root := range service.RootPlugins {
-			manifest, ok := manifests[root.Ref.PluginID]
+			manifest, ok := manifests[root.PluginID]
 			if !ok {
-				return nil, fmt.Errorf("缺少根插件 %s 的规划描述", root.Ref.PluginID)
+				return nil, fmt.Errorf("缺少根插件 %s 的规划描述", root.PluginID)
 			}
 			available := map[string]pluginv1.CompositionFeature{}
 			if manifest.Composition != nil {
@@ -185,16 +211,16 @@ func selectedFeatureDependencies(intent backendcompositionv1.ApplicationIntent, 
 			for _, id := range root.Features {
 				feature, exists := available[id]
 				if !exists {
-					return nil, fmt.Errorf("根插件 %s 未声明 Feature %s", root.Ref.PluginID, id)
+					return nil, fmt.Errorf("根插件 %s 未声明 Feature %s", root.PluginID, id)
 				}
-				if result[service.ID][root.Ref.PluginID] == nil {
-					result[service.ID][root.Ref.PluginID] = map[string]string{}
+				if result[service.ID][root.PluginID] == nil {
+					result[service.ID][root.PluginID] = map[string]string{}
 				}
 				for dependency, constraint := range feature.Dependencies {
-					if current := result[service.ID][root.Ref.PluginID][dependency]; current != "" && current != constraint {
-						result[service.ID][root.Ref.PluginID][dependency] = current + ", " + constraint
+					if current := result[service.ID][root.PluginID][dependency]; current != "" && current != constraint {
+						result[service.ID][root.PluginID][dependency] = current + ", " + constraint
 					} else {
-						result[service.ID][root.Ref.PluginID][dependency] = constraint
+						result[service.ID][root.PluginID][dependency] = constraint
 					}
 				}
 			}

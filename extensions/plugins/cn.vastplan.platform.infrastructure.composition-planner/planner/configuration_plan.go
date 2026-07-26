@@ -17,7 +17,7 @@ import (
 func configurationPlanForService(service backendcompositionv1.ServiceIntent, credentials map[string]map[string]commonv1.ManagedCredentialRef, application []string, paths map[string][]string, features map[string][]pluginv1.CompositionFeature, manifests map[string]pluginv1.Manifest) ([]backendcompositionv1.ConfigurationPlanItem, error) {
 	roots := map[string]struct{}{}
 	for _, root := range service.RootPlugins {
-		roots[root.Ref.PluginID] = struct{}{}
+		roots[root.PluginID] = struct{}{}
 	}
 	var result []backendcompositionv1.ConfigurationPlanItem
 	for _, id := range application {

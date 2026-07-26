@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.34.2`
+当前制品版本：`0.35.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件按受信 Repository Profile 运行 local-test 或 remote 制品服务，并负责可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.33.0 增加 `artifact.repository.local-test.v1` Unix Socket 传输并让开发环境原位迁移；0.34.0 增加同仓库 workspace lease、TTL/容量治理与 Profile 绑定 Receipt 复核；0.34.2 增加只返回精确身份和已验签 Manifest 的 `describePlanning` 窄投影，供 Composition Planner 使用，不暴露包体或物理存储信息。正式远端仍使用 `artifact.repository.remote.v1` HTTPS。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件按受信 Repository Profile 运行 local-test 或 remote 制品服务，并负责可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.33.0 增加 `artifact.repository.local-test.v1` Unix Socket 传输并让开发环境原位迁移；0.34.0 增加同仓库 workspace lease、TTL/容量治理与 Profile 绑定 Receipt 复核；0.34.2 增加只返回精确身份和已验签 Manifest 的 `describePlanning` 窄投影；0.35.0 增加候选级 Feature、有界 SemVer 回溯和复杂度限制。正式远端仍使用 `artifact.repository.remote.v1` HTTPS。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
@@ -98,7 +98,7 @@ Resolver 请求示例：
 
 Catalog 数据保存在仓库 volume 的 `catalog/` 下。发布流水账按单调 revision 使用原子事件文件，索引快照可从每个签名制品及流水账重建；启动时发现制品已成功落盘但事件缺失，会补写 `recovered` 事件。恢复路径只读取并验证 artifact metadata 与 attestation，不扫描全部大对象；实际读取仍由内核复验对象摘要。相同精确 ref、摘要和证明重传幂等，不增加 revision；受控测试 CLI 会先查 Catalog，避免重试产生不同证明。
 
-平台工具能力同时提供 `status/capacity`、`listCatalog`、`listPublishJournal`、小载荷 `resolve/describePlanning`、`setLifecycle`、`putReferences/listReferences`、`gcPlan/gcStatus/gcQuarantine/gcSweep`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。`resolve` 的根约束可以额外锁定精确 channel；未指定时传递依赖仍按 `allowedChannels` 顺序选择。`describePlanning` 只接受精确 ref，在当前 Catalog delivery policy 下返回 SHA-256、publisher 与已验签 Manifest；它不重新选择版本，也不返回 URL、路径、包字节或秘密。引用发布只接受宿主验证的租户与精确首方控制器身份；完整快照使用 generation、可选 TTL 和规范摘要，过期会令 GC fail-closed，且继续保护字节。完整快照可以包含由消费者从签名 Seed 等其他可信源取得、尚未复制进 Managed Catalog 的精确 ref+SHA；本仓已知 ref 仍必须摘要一致，已退休对象仍拒绝。未知对象只持久化为未来保护声明，GC 只保护本仓实际存在且精确 SHA 命中的对象。`bootstrap-inventory/<repositoryId>` 系统身份仍只能写匹配 ID 的 Seed/LKG 快照，且其清单由内核逐项从 Seed 重新验签。生命周期变更使用 Catalog revision CAS 和独立权限，`deprecated` 会进入锁提示，`yanked/revoked` 拒绝新的解析与交付。
+平台工具能力同时提供 `status/capacity`、`listCatalog`、`listPublishJournal`、小载荷 `resolve/describePlanning`、`setLifecycle`、`putReferences/listReferences`、`gcPlan/gcStatus/gcQuarantine/gcSweep`，以及 `migrationStatus/prepareMigration/syncMigration/cutoverMigration/rollbackMigration/finalizeMigration/releaseMigration`。`resolve` 的根约束可以额外锁定精确 channel；未指定时传递依赖仍按 `allowedChannels` 顺序选择。求解器预编译约束、优先处理剩余候选最少的插件，并让候选签名 Feature 的包依赖和 runtime requirement 参与有界回溯；超过确定性预算返回 `RESOLUTION_COMPLEXITY_LIMIT`，不产生部分锁。`ArtifactLock` 保存规范根要求、最终精确包和候选生效后的依赖闭包。`describePlanning` 只接受精确 ref，在当前 Catalog delivery policy 下返回 SHA-256、publisher 与已验签 Manifest；它不重新选择版本，也不返回 URL、路径、包字节或秘密。引用发布只接受宿主验证的租户与精确首方控制器身份；完整快照使用 generation、可选 TTL 和规范摘要，过期会令 GC fail-closed，且继续保护字节。完整快照可以包含由消费者从签名 Seed 等其他可信源取得、尚未复制进 Managed Catalog 的精确 ref+SHA；本仓已知 ref 仍必须摘要一致，已退休对象仍拒绝。未知对象只持久化为未来保护声明，GC 只保护本仓实际存在且精确 SHA 命中的对象。`bootstrap-inventory/<repositoryId>` 系统身份仍只能写匹配 ID 的 Seed/LKG 快照，且其清单由内核逐项从 Seed 重新验签。生命周期变更使用 Catalog revision CAS 和独立权限，`deprecated` 会进入锁提示，`yanked/revoked` 拒绝新的解析与交付。
 
 stable 发布提供 `listPublications/submitPublication/approvePublication/rejectPublication/cancelPublication/getSupplyChainEvidence`。申请只能引用仓库中已验签、active 的 testing 制品，并绑定目标 stable ref、SHA-256、publisher、key ID、来源证明摘要、安全准入记录摘要和服务端有效期；批准人与提交人必须不同。独立审批人可驳回待批或已批申请，原提交人可撤销，人工终止原因必填；默认 168 小时后自动进入 `Expired`。最终 HTTPS stable 上传在物理写入前再次验签、收敛过期状态并要求精确匹配批准记录，成功后记录最终证明摘要。只有发布 token、只有 Portal 权限或只有批准记录都不能单独完成 stable 发布。崩溃后从已验签 Catalog 收敛 `Approved -> Published`，迁移观察期两卷审批状态不一致会冻结读取和发布。
 
