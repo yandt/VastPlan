@@ -91,7 +91,7 @@ func TestFrontendDeliverySealsServerGraphFromBrowserAndPrefetchesIt(t *testing.T
 	browserContent, serverContent := []byte("export default {};"), []byte("export default { render() {} };")
 	browserDigest, serverDigest := sha256.Sum256(browserContent), sha256.Sum256(serverContent)
 	browserSHA, serverSHA := hex.EncodeToString(browserDigest[:]), hex.EncodeToString(serverDigest[:])
-	plugin := portalapi.PluginRef{ID: "cn.vastplan.foundation.frontend.runtime.engine.react", Version: "1.1.0"}
+	plugin := portalapi.PluginRef{ID: "cn.vastplan.foundation.frontend.runtime.engine.react", Version: "1.1.1"}
 	packageSHA := strings.Repeat("d", 64)
 	browserGraph := portalapi.FrontendModuleGraph{PluginRef: plugin, Target: "browser", Entry: "frontend/dist/index.js", Digest: strings.Repeat("a", 64), PackageSHA256: packageSHA,
 		Nodes: []portalapi.FrontendModuleNode{{Path: "frontend/dist/index.js", SHA256: browserSHA, Size: int64(len(browserContent)), MediaType: "text/javascript", Purpose: "entry"}}}

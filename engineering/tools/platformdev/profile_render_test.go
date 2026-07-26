@@ -12,7 +12,39 @@ import (
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/servicemodel"
 )
+
+func TestSeedPlatformServicePoliciesMatchSignedManifests(t *testing.T) {
+	root := repositoryRoot(t)
+	profile, err := backendcompositionv1.ParsePlatformProfileFile(filepath.Join(root, "engineering", "deploy", "platform-management-profile.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unit := range profile.Services {
+		unitPolicy := servicemodel.Policy{InstancePolicy: unit.InstancePolicy, StateModel: unit.StateModel, Visibility: unit.Visibility, Routing: unit.Routing, RoutingDomain: unit.RoutingDomain}
+		for _, ref := range unit.Plugins {
+			raw, readErr := os.ReadFile(filepath.Join(root, "extensions", "plugins", ref.ID, "vastplan.plugin.json"))
+			if readErr != nil {
+				t.Fatalf("读取 %s 签名清单: %v", ref.ID, readErr)
+			}
+			manifest, parseErr := pluginv1.ParseManifest(raw)
+			if parseErr != nil {
+				t.Fatalf("解析 %s 签名清单: %v", ref.ID, parseErr)
+			}
+			contributions, contributionErr := pluginv1.BackendRuntimeContributions(manifest)
+			if contributionErr != nil {
+				t.Fatalf("解析 %s runtime contribution: %v", ref.ID, contributionErr)
+			}
+			for _, contribution := range contributions {
+				contributionPolicy := servicemodel.Policy{InstancePolicy: contribution.InstancePolicy, StateModel: contribution.StateModel, Visibility: contribution.Visibility, Routing: contribution.Routing, RoutingDomain: contribution.RoutingDomain}
+				if !servicemodel.Equal(unitPolicy, contributionPolicy) && !pluginv1.IsLocalPermissionAuxiliary(contribution) {
+					t.Fatalf("Seed unit %s 策略与 %s/%s 签名清单不一致: unit=%+v contribution=%+v", unit.ID, ref.ID, contribution.ID, unitPolicy, contributionPolicy)
+				}
+			}
+		}
+	}
+}
 
 func TestRenderPlatformProfileProducesValidProviderComposition(t *testing.T) {
 	template, err := os.ReadFile(filepath.Join("..", "..", "deploy", "platform-management-profile.json"))

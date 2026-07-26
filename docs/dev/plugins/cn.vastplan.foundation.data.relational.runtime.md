@@ -4,7 +4,7 @@
 
 能力：`tool.package/foundation.data.relational.runtime`
 
-当前制品版本：`0.7.1`
+当前制品版本：`0.7.2`
 
 ## 职责边界
 

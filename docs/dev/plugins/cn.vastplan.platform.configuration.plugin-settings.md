@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.plugin-settings`
 
-当前制品版本：`0.13.1`
+当前制品版本：`0.13.2`
 
 该 platform 基础插件以 `active-active + external-shared + queue + platform routing domain` 运行。它只通过宿主窄能力读取与活动 Deployment revision/digest 精确匹配的 `ConfigurationCatalog v1`，按 tenant 单文档 CAS 保存配置候选、审计与恢复 Saga；不依赖 Deployment Manager 存量状态，不读取工作区 Manifest，也不接受浏览器上传 Schema、插件身份或凭证 owner。
 

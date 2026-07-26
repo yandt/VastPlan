@@ -163,7 +163,7 @@ func (r *runtime) prepare(ctx context.Context) error {
 			return err
 		}
 	}
-	for _, dir := range []string{r.persistentStateRoot(), r.testingRepositoryRoot(), r.testingRepositoryVolumes(), r.testingRepositorySecrets()} {
+	for _, dir := range []string{r.persistentStateRoot(), r.testingRepositoryRoot(), r.testingRepositoryVolumes(), r.testingRepositorySecrets(), r.nodeBootstrapCredentialRoot()} {
 		if err := ensurePrivateDirectory(dir); err != nil {
 			return fmt.Errorf("准备持久化开发目录: %w", err)
 		}
@@ -240,6 +240,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"-transport-seed", filepath.Join(r.runDir, "secrets", platformNodeTransportSeed),
 		"-transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
 	}
+	nodeArgs = append(nodeArgs, r.nodeBootstrapCredentialArgs()...)
 	nodeArgs = append(nodeArgs, r.managedArtifactSourceArgs()...)
 	nodeArgs = append(nodeArgs, "-bootstrap-upgrade", "-publish-bootstrap-references")
 	platformNodeStartedAt := time.Now().UTC()
@@ -402,6 +403,14 @@ func (r *runtime) serviceEnv() map[string]string {
 // `--fresh` still remove this entire development state root intentionally.
 func (r *runtime) persistentStateRoot() string {
 	return filepath.Join(r.options.stateRoot, "state")
+}
+
+func (r *runtime) nodeBootstrapCredentialRoot() string {
+	return filepath.Join(r.persistentStateRoot(), "node-bootstrap-credentials")
+}
+
+func (r *runtime) nodeBootstrapCredentialArgs() []string {
+	return []string{"-credential-root", r.nodeBootstrapCredentialRoot()}
 }
 
 func (r *runtime) startChild(name string, env map[string]string, executable string, args ...string) (*child, error) {

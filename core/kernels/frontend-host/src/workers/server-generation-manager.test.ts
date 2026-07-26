@@ -10,7 +10,7 @@ describe("ServerGenerationManager", () => {
     const fixture = await createPortalDeliveryFixture();
     const spec = {
       revision: 12, id: "operations", tenantId: "tenant-a", route: "/operations",
-      runtimeEngine: { id: "cn.vastplan.foundation.frontend.runtime.engine.react", version: "1.1.0" },
+      runtimeEngine: { id: "cn.vastplan.foundation.frontend.runtime.engine.react", version: "1.1.1" },
     };
     await writePortalDeliveryRevision(fixture, spec, undefined,
       "export default { id: 'ui.runtime.engine.server', render(input) { return { html: `<main>${input.portalId}:${input.path}</main>` }; } };\n");

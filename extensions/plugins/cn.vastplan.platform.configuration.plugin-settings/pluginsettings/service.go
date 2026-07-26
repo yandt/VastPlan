@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
@@ -19,7 +19,7 @@ import (
 
 const (
 	PluginID      = pluginconfiguration.PluginSettingsID
-	PluginVersion = "0.13.1"
+	PluginVersion = "0.13.2"
 	Capability    = "platform.plugin-configuration"
 	maxStateBytes = 1 << 20
 	maxCandidates = 2048

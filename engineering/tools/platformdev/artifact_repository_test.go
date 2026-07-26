@@ -104,6 +104,10 @@ func TestManagedArtifactSourceUsesSeedBootstrapAndPersistentRepository(t *testin
 	if r.persistentStateRoot() != wantStateRoot {
 		t.Fatalf("Node ActualState、Portal 交付快照与治理插件必须共享同一持久开发状态根: %s", r.persistentStateRoot())
 	}
+	wantCredentialRoot := filepath.Join(wantStateRoot, "node-bootstrap-credentials")
+	if got := r.nodeBootstrapCredentialArgs(); !reflect.DeepEqual(got, []string{"-credential-root", wantCredentialRoot}) {
+		t.Fatalf("开发 Node Agent 必须注册 fail-closed 的 Node Bootstrap Broker: got=%#v", got)
+	}
 	wantVolumeRoot := filepath.Join(stateRoot, "repositories", "testing", "volumes")
 	if environment["VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT"] != wantVolumeRoot {
 		t.Fatalf("File Provider 必须使用持久化测试目录: %#v", environment)

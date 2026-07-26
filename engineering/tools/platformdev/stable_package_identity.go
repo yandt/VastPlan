@@ -14,6 +14,7 @@ import (
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	semver "github.com/Masterminds/semver/v3"
 )
 
 const developmentStablePackageIdentitySchema = 1
@@ -67,18 +68,20 @@ func reconcileStablePackageIdentities(repositoryRoot, ledgerPath string) error {
 		known[key] = identity
 	}
 	drifts := make([]string, 0)
+	upgrades := make([]string, 0)
 	for _, identity := range current {
 		key := stablePackageIdentityKey(identity)
 		if previous, ok := known[key]; ok && previous.SHA256 != identity.SHA256 {
 			drifts = append(drifts, fmt.Sprintf("%s 已记录 sha256=%s，本次为 sha256=%s",
 				stablePackageIdentityLabel(identity), previous.SHA256, identity.SHA256))
+			upgrades = append(upgrades, stablePackageUpgradeSuggestion(identity))
 			continue
 		}
 		known[key] = identity
 	}
 	if len(drifts) > 0 {
-		return fmt.Errorf("稳定制品身份漂移（共 %d 项）:\n- %s\nstable 精确引用不可覆盖，请分别提升插件 SemVer 后重试",
-			len(drifts), strings.Join(drifts, "\n- "))
+		return fmt.Errorf("稳定制品身份漂移（共 %d 项）:\n- %s\n建议升级清单:\n- %s\nstable 精确引用不可覆盖；请同步 Manifest、运行常量和 Seed 精确引用后重试",
+			len(drifts), strings.Join(drifts, "\n- "), strings.Join(upgrades, "\n- "))
 	}
 	merged := make([]stablePackageIdentity, 0, len(known))
 	for _, identity := range known {
@@ -246,6 +249,14 @@ func stablePackageIdentityLabel(identity stablePackageIdentity) string {
 		label += " variant=" + identity.Variant
 	}
 	return label
+}
+
+func stablePackageUpgradeSuggestion(identity stablePackageIdentity) string {
+	next := "<next-semver>"
+	if current, err := semver.NewVersion(identity.Version); err == nil {
+		next = current.IncPatch().String()
+	}
+	return stablePackageIdentityLabel(identity) + " -> " + identity.PluginID + "@" + next + "/" + identity.Channel
 }
 
 func sortStablePackageIdentities(identities []stablePackageIdentity) {

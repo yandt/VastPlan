@@ -14,15 +14,15 @@ import (
 	"path/filepath"
 	"sync"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
 	PluginID      = "cn.vastplan.platform.artifacts.storage.file"
-	PluginVersion = "0.2.1"
+	PluginVersion = "0.2.2"
 	Capability    = "platform.artifacts.storage.file"
 )
 

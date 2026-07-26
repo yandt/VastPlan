@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-func verifyPortalSSR(client *http.Client, baseURL, session string) error {
+func verifyPortalColdStart(client *http.Client, baseURL, session string) error {
 	request, err := http.NewRequest(http.MethodGet, baseURL+"/operations", nil)
 	if err != nil {
 		return err
@@ -23,8 +23,11 @@ func verifyPortalSSR(client *http.Client, baseURL, session string) error {
 	if err != nil {
 		return err
 	}
-	if response.StatusCode != http.StatusOK || response.Header.Get("X-VastPlan-SSR") != "rendered" || !bytes.Contains(body, []byte(`template shadowrootmode="open"`)) {
-		return fmt.Errorf("SSR 验收失败 status=%d mode=%q", response.StatusCode, response.Header.Get("X-VastPlan-SSR"))
+	mode := response.Header.Get("X-VastPlan-SSR")
+	validBody := mode == "rendered" && bytes.Contains(body, []byte(`template shadowrootmode="open"`))
+	validBody = validBody || mode == "bypass" && bytes.Contains(body, []byte(`<div id="vastplan-portal" aria-live="polite"></div>`))
+	if response.StatusCode != http.StatusOK || !validBody {
+		return fmt.Errorf("Portal 冷启动验收失败 status=%d ssr-mode=%q", response.StatusCode, mode)
 	}
 	return nil
 }

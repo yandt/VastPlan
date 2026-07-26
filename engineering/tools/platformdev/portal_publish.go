@@ -93,7 +93,7 @@ func publishPortal(baseURL, applicationPath string) error {
 	if err != nil || status != http.StatusOK {
 		return fmt.Errorf("runtime status=%d body=%s: %w", status, raw, err)
 	}
-	return verifyPortalSSR(client, baseURL, devAdminToken)
+	return verifyPortalColdStart(client, baseURL, devAdminToken)
 }
 
 func portalRequest(client *http.Client, baseURL, session, method, path string, payload any, csrf bool) (int, []byte, error) {

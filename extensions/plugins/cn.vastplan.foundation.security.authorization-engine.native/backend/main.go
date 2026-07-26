@@ -10,7 +10,7 @@ import (
 
 const (
 	pluginID      = "cn.vastplan.foundation.security.authorization-engine.native"
-	pluginVersion = "0.1.1"
+	pluginVersion = "0.1.2"
 )
 
 func main() {

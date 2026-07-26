@@ -39,7 +39,7 @@ export async function writePortalDeliveryRevision(fixture: PortalDeliveryFixture
 	const serverContent = serverSource === undefined ? undefined : new TextEncoder().encode(serverSource);
 	const serverDigest = serverContent === undefined ? undefined : createHash("sha256").update(serverContent).digest("hex");
 	const server = serverDigest === undefined ? {} : { moduleGraphs: [{
-		id: "cn.vastplan.foundation.frontend.runtime.engine.react", version: "1.1.0", channel: "stable",
+		id: "cn.vastplan.foundation.frontend.runtime.engine.react", version: "1.1.1", channel: "stable",
 		target: "server", entry: "frontend/dist/server.js", digest: "c".repeat(64), packageSha256: "d".repeat(64), externals: ["stream"],
 		nodes: [{ path: "frontend/dist/server.js", url: `server-object:${serverDigest}`, sha256: serverDigest,
 			size: serverContent?.byteLength ?? 0, mediaType: "text/javascript", purpose: "entry", dependencies: [] }],

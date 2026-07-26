@@ -21,7 +21,7 @@ func TestStablePackageIdentityLedgerRejectsSameRefWithDifferentBytes(t *testing.
 	}
 	conflict := writeStableIdentityTestRepository(t, "1.0.0", "changed")
 	err := reconcileStablePackageIdentities(conflict, ledgerPath)
-	if err == nil || !strings.Contains(err.Error(), "提升插件 SemVer") || !strings.Contains(err.Error(), "cn.vastplan.test.identity@1.0.0/stable") {
+	if err == nil || !strings.Contains(err.Error(), "建议升级清单") || !strings.Contains(err.Error(), "cn.vastplan.test.identity@1.0.0/stable -> cn.vastplan.test.identity@1.0.1/stable") {
 		t.Fatalf("同一 stable ref 的不同字节必须提前失败: %v", err)
 	}
 	upgraded := writeStableIdentityTestRepository(t, "1.0.1", "changed")
@@ -71,7 +71,7 @@ func TestStablePackageIdentityLedgerReportsAllDrifts(t *testing.T) {
 		"cn.vastplan.test.beta":  "beta-changed",
 	})
 	err := reconcileStablePackageIdentities(changed, ledgerPath)
-	if err == nil || !strings.Contains(err.Error(), "共 2 项") || !strings.Contains(err.Error(), "cn.vastplan.test.alpha") || !strings.Contains(err.Error(), "cn.vastplan.test.beta") {
+	if err == nil || !strings.Contains(err.Error(), "共 2 项") || !strings.Contains(err.Error(), "cn.vastplan.test.alpha@1.0.0/stable -> cn.vastplan.test.alpha@1.0.1/stable") || !strings.Contains(err.Error(), "cn.vastplan.test.beta@1.0.0/stable -> cn.vastplan.test.beta@1.0.1/stable") {
 		t.Fatalf("必须一次报告全部稳定制品漂移: %v", err)
 	}
 }
