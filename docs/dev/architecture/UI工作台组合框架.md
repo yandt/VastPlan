@@ -37,7 +37,7 @@ flowchart TB
 4. Workbench 故障和设计系统故障一样，进入 Portal Kernel 恢复路径，而不是让功能插件退回自行组合。
 5. 功能插件制品必须使用 `@vastplan/workbench-sdk`；构建门禁与 Go 架构适应度测试拒绝 React、Arco/MUI、裸 `context.addPage` 和 `@vastplan/ui-primitives` 视觉导入。当前唯一例外是尚在该包中的非视觉 `PortalControlClient` 与 `Portal*` 数据契约。
 
-`CollectionWorkbench` 共享一套查询、筛选、选择、动作、取消和错误状态机，并提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。表单工作流已提供 page/Dialog/Drawer、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏数据关闭保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表。全局设置、凭证、数据库连接、制品仓库、Portal 治理与部署管理均已迁移为真实 fixture。
+`CollectionWorkbench` 共享一套查询、筛选、选择、动作、取消和错误状态机，并提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。筛选可用 `filterLayout.columns` 声明固定或 `xs…xl` 响应式列数，默认 `xs=1 / md=2 / xl=3`；列偏好由工具栏锚定 Popover 即时写入，不使用阻断式确认 Dialog。表单工作流已提供 page/Dialog/Drawer、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏数据关闭保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表。全局设置、凭证、数据库连接、制品仓库、Portal 治理与部署管理均已迁移为真实 fixture。
 
 Record 工作流共享详情字段投影、状态、页面/详情动作、表单、Overlay、取消和错误状态机，并提供 `record-detail`、`master-detail` 与 `tree-detail` 三种 Pattern。MasterDetail 的左侧列表复用 Collection 查询、筛选、page/cursor 和取消语义，右侧可以展示详情或 page-surface 编辑器；TreeDetail 对节点数、深度、ID 唯一性和默认展开层级做有界校验。选择写入受限 URL 参数，窄屏在主区/详情间切换，页内编辑存在脏数据时切换记录必须确认。功能插件不能提供 React render function、HTML、任意树组件或自行实现分栏。
 
@@ -76,7 +76,7 @@ CollectionLoader(query, signal) -> CollectionResult
 - Workbench 统一渲染 loading、refreshing、empty、error、stale、selection 和 retry，不允许同一集合同时由插件再渲染另一套分页或工具栏。
 - Cursor 只来自上次成功结果的 `nextCursor`。加载更多会按稳定记录键去重并用新事实替换重复项；Loader 返回与请求相同的 cursor 时立即失败，避免无限请求。筛选或刷新会重新从首 cursor 装配，未提交请求由 `AbortSignal` 取消。
 - Collection 的默认管理工作区采用三列筛选栅格、主操作在左/次操作在右、浅色表头与行分隔、页脚右对齐分页。该视觉语义通过 `FilterBar`、`Table`、`Pagination` 的 `collection` 呈现能力交由渲染适配器实现，Workbench 不注入框架 CSS。
-- 筛选字段在桌面三列栅格中不足两行（不超过 3 项）时采用直接查询：文本在 Enter 后提交，枚举/布尔/范围选择完成即提交，不显示“查询”按钮；达到两行时保留草稿并显示“查询 + 重置”，避免复杂筛选编辑过程反复请求。窄屏仍按栅格折行，但不改变已确定的查询安全语义。
+- 筛选字段在当前 `filterLayout.columns` 的最大桌面列数中不足两行时采用直接查询：文本在 Enter 后提交，枚举/布尔/范围选择完成即提交，不显示“查询”按钮；达到两行时保留草稿并显示“查询 + 重置”，避免复杂筛选编辑过程反复请求。窄屏仍按栅格折行，但不改变已确定的查询安全语义。
 
 ### 3.2 操作区
 
@@ -93,7 +93,7 @@ CollectionLoader(query, signal) -> CollectionResult
 
 页面动作的 `icon` 必须来自 UI Contract 的稳定语义词表，不允许功能插件传入框架图标、任意 SVG 或 React 节点。`canonical` 图标主题由 VastPlan 自有 SVG 提供完整基线；`renderer-native` 主题由当前 Arco/MUI Renderer 按需映射，缺项回退基线。Platform Profile 只配置 `iconTheme`，不能传组件或资源 URL。Workbench 页面动作控制器只桥接当前选择、可见性和执行入口；功能插件仍不知道 Slot，Portal Kernel 才负责把动作宿主编译为 `page.header.end` 贡献。Slot 是 Shell 的结构协议，不因 Workbench 自动填充而删除。
 
-新增、导入、发布属于页面功能动作，必须放在 Page Header；刷新、列设置属于当前集合的展示控制，保留在集合工具区并同样使用图标与 Tooltip。列设置只有在 Collection 明确声明 `preferences` 时显示，不能把未声明的列暴露给用户。
+新增、导入、发布属于页面功能动作，必须放在 Page Header；刷新、列设置属于当前集合的展示控制，保留在集合工具区并同样使用图标与 Tooltip。列设置只有在 Collection 明确声明 `preferences` 时显示，不能把未声明的列暴露给用户；它以触发按钮附近的 Popover 呈现，勾选、排序和密度变化即时应用并保存，无额外“确定”步骤。
 
 ### 3.3 表单与 Overlay 工作流
 

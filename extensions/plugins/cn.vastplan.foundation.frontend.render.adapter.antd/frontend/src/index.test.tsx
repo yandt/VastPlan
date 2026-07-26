@@ -32,6 +32,15 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("Select Node A");
   });
 
+  it("maps responsive grid columns to Ant breakpoint spans", () => {
+    const Grid = antdPortalUIComponents.Grid;
+    const GridItem = antdPortalUIComponents.GridItem;
+    const markup = renderToStaticMarkup(<Grid columns={{ xs: 1, md: 2, xl: 3 }}><GridItem>筛选 A</GridItem><GridItem>筛选 B</GridItem><GridItem>筛选 C</GridItem></Grid>);
+    expect(markup).toContain("ant-row");
+    expect(markup).toContain("ant-col-md-12");
+    expect(markup).toContain("ant-col-xl-8");
+  });
+
   it("keeps links and accessible record navigation semantics", () => {
     const Menu = antdPortalUIComponents.Menu;
     const List = antdPortalUIComponents.RecordNavigationList;

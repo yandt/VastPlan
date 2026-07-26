@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CollectionSpec } from "@vastplan/ui-contract";
-import { shouldAutoApplyCollectionFilters } from "./CollectionFilters.js";
+import { collectionFilterColumns, shouldAutoApplyCollectionFilters } from "./CollectionFilters.js";
 import { collectionDensity, collectionDensityOptions } from "./density.js";
 
 const collection: CollectionSpec = {
@@ -34,5 +34,12 @@ describe("collection filter interaction", () => {
 
   it("requires an explicit query after the filter grid reaches two rows", () => {
     expect(shouldAutoApplyCollectionFilters([{ id: "a", label: "A", kind: "text" }, { id: "b", label: "B", kind: "text" }, { id: "c", label: "C", kind: "text" }, { id: "d", label: "D", kind: "text" }])).toBe(false);
+  });
+
+  it("honors explicit filter column counts when choosing direct-query mode", () => {
+    const filters = [{ id: "a", label: "A", kind: "text" }, { id: "b", label: "B", kind: "text" }, { id: "c", label: "C", kind: "text" }] as const;
+    expect(shouldAutoApplyCollectionFilters(filters, 2)).toBe(false);
+    expect(shouldAutoApplyCollectionFilters(filters, { xs: 1, md: 2, xl: 3 })).toBe(true);
+    expect(collectionFilterColumns({ columns: 2 })).toBe(2);
   });
 });

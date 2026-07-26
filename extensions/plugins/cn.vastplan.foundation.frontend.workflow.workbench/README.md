@@ -10,9 +10,9 @@
 
 - `CollectionPage`：筛选、选择、摘要和动作的顶层编排；
 - `useCollectionData`：Table/Page 与 Card/Cursor 共用的加载、刷新、取消、游标和错误状态；
-- `CollectionFilters`、`CollectionToolbar`、`CollectionTable`、`CollectionCards`、`CollectionPreferencesDialog`：可独立演进的组合区域；
+- `CollectionFilters`、`CollectionToolbar`、`CollectionTable`、`CollectionCards`、`CollectionPreferencesPopover`：可独立演进的组合区域；
 - `density`、`filter-schema`、`preferences`：无框架私有依赖的策略与持久化辅助模块。
 
 这里的 `CollectionTable` / `CollectionCards` 是集合工作流的受控呈现区，不是 Arco/MUI 的基础组件。基础表格和卡片分别通过 `ui.Table` / `ui.DataCard` 由渲染适配器提供。`patterns/record/` 负责 RecordDetail、MasterDetail、TreeDetail 的详情加载、主从选择、树边界、URL 恢复、窄屏与页内编辑保护；`patterns/action/` 是 Collection/Record 共用的 Page Header 动作桥。`patterns/form/` 负责 Page/Dialog/Drawer 表单、条件投影、脏状态、校验与提交；校验和提交的字段错误使用 `LocalizedText`，统一在 Workbench 解析当前语言。`secret-material.ts` 统一识别和丢弃一次性秘密，禁止材料进入 baseline 或在提交/关闭后滞留。Render Adapter 只负责把同一语义映射为各框架的表单、分栏、列表和树，不允许功能插件直接组合基础 UI 组件。
 
-Collection 默认采用管理工作区呈现：三列筛选、左主右次操作、低对比表头、行分隔和右对齐分页。筛选字段不超过三项时不显示“查询”按钮：文本 Enter 后提交，选择类字段直接提交；达到两行时再使用“查询 + 重置”草稿模式。
+Collection 默认采用管理工作区呈现：筛选区默认 `xs=1 / md=2 / xl=3` 列，功能插件可通过 `filterLayout.columns` 覆盖为固定或响应式列数；左主右次操作、低对比表头、行分隔和右对齐分页。筛选字段未超过当前桌面列数时不显示“查询”按钮：文本 Enter 后提交，选择类字段直接提交；达到两行时再使用“查询 + 重置”草稿模式。列设置改为锚定工具栏图标的 Popover，顺序、可见列和密度修改即时生效并异步持久化。

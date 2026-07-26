@@ -20,6 +20,7 @@ export function catalogPage(client: PlatformAdminClient, id: string, path: strin
         { id: "target", label: text("filter.target", "目标内核"), kind: "select", options: targetOptions },
         { id: "lifecycle", label: text("filter.lifecycle", "生命周期"), kind: "select", options: lifecycleOptions },
       ],
+      filterLayout: { columns: { xs: 1, md: 2, xl: 3 } },
       columns: [
         { key: "pluginId", label: text("column.plugin", "插件 ID"), defaultVisible: true, minWidth: 270 },
         { key: "version", label: text("column.version", "版本"), defaultVisible: true, minWidth: 150 },

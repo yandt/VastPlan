@@ -1,17 +1,18 @@
 import type { ActionSpec } from "@vastplan/ui-contract";
 import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
-export function CollectionToolbar({ hasFilters, refreshing, selectedCount, toolbarActions, bulkActions, onRefresh, onColumns, onRunAction }: {
+export function CollectionToolbar({ hasFilters, refreshing, selectedCount, toolbarActions, bulkActions, onRefresh, preferences, onRunAction }: {
   hasFilters: boolean;
   refreshing: boolean;
   selectedCount: number;
   toolbarActions: readonly ActionSpec[];
   bulkActions: readonly ActionSpec[];
   onRefresh(): void;
-  onColumns?(): void;
+  preferences?: ReactNode;
   onRunAction(action: ActionSpec): void;
 }) {
   const ui = usePortalUI();
@@ -33,7 +34,7 @@ export function CollectionToolbar({ hasFilters, refreshing, selectedCount, toolb
       </ui.Stack>
       <ui.Stack direction="row" gap="sm" wrap>
         {hasFilters ? null : <ui.IconButton icon="refresh" label={i18n.text(message(namespace, "action.refresh", "刷新"))} onClick={onRefresh} loading={refreshing} />}
-        {onColumns === undefined ? null : <ui.IconButton icon="columns" label={i18n.text(message(namespace, "action.columns", "列设置"))} onClick={onColumns} />}
+        {preferences}
       </ui.Stack>
     </ui.Stack>
   </>;

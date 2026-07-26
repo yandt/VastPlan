@@ -1,6 +1,6 @@
 import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, ColumnSpec, DataValueFormat, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, CollectionFilterLayout, ColumnSpec, DataValueFormat, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
 export { jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
 

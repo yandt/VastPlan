@@ -1,5 +1,5 @@
-import { Card, Divider as AntdDivider, Flex, Layout, Typography } from "antd";
-import type { ReactNode } from "react";
+import { Card, Col, Divider as AntdDivider, Flex, Layout, Row, Typography } from "antd";
+import { createContext, useContext, type ReactNode } from "react";
 import type { FilterBarProps, GridItemProps, GridProps, PageProps, PanelProps, PortalShellProps, ResponsiveColumns, SplitViewProps, StackProps } from "@vastplan/ui-primitives";
 import { gaps } from "./theme";
 
@@ -29,20 +29,31 @@ export function Stack({ direction = "column", gap = "md", align = "stretch", jus
   return <div style={{ display: "flex", width: "100%", minWidth: 0, flexDirection: direction, gap: gaps[gap], alignItems, justifyContent, flexWrap: wrap ? "wrap" : "nowrap" }}>{children}</div>;
 }
 
-function responsiveGrid(columns: ResponsiveColumns): string | Record<string, string> {
-  if (typeof columns === "number") return `repeat(${columns}, minmax(0, 1fr))`;
-  return Object.fromEntries(Object.entries(columns).map(([key, count]) => [key, `repeat(${count}, minmax(0, 1fr))`]));
+const breakpoints = ["xs", "sm", "md", "lg", "xl"] as const;
+type Breakpoint = typeof breakpoints[number];
+const GridColumnsContext = createContext<ResponsiveColumns>(1);
+
+function cascadeColumns(columns: ResponsiveColumns): Record<Breakpoint, number> {
+  const source = typeof columns === "number" ? { xs: columns } : columns;
+  let inherited = 1;
+  return Object.fromEntries(breakpoints.map((breakpoint) => {
+    inherited = source[breakpoint] ?? inherited;
+    return [breakpoint, Math.max(1, inherited)];
+  })) as Record<Breakpoint, number>;
+}
+
+function antColumnSpans(columns: ResponsiveColumns, span: ResponsiveColumns): Record<Breakpoint, { span: number }> {
+  const grid = cascadeColumns(columns);
+  const requested = cascadeColumns(span);
+  return Object.fromEntries(breakpoints.map((breakpoint) => [breakpoint, { span: Math.min(24, Math.max(1, Math.round(24 * requested[breakpoint] / grid[breakpoint]))) }])) as Record<Breakpoint, { span: number }>;
 }
 
 export function Grid({ columns = 1, gap = "md", children }: GridProps) {
-  const templates = responsiveGrid(columns);
-  const base = typeof templates === "string" ? templates : templates.xs ?? templates.sm ?? templates.md ?? templates.lg ?? templates.xl ?? "1fr";
-  return <div style={{ display: "grid", gridTemplateColumns: base, gap: gaps[gap], width: "100%", minWidth: 0 }}>{children}</div>;
+  return <GridColumnsContext.Provider value={columns}><Row gutter={[gaps[gap], gaps[gap]]} style={{ width: "100%", minWidth: 0 }}>{children}</Row></GridColumnsContext.Provider>;
 }
 
 export function GridItem({ span = 1, children }: GridItemProps) {
-  const value = typeof span === "number" ? span : span.xs ?? span.sm ?? span.md ?? span.lg ?? span.xl ?? 1;
-  return <div style={{ gridColumn: `span ${value}`, minWidth: 0 }}>{children}</div>;
+  return <Col {...antColumnSpans(useContext(GridColumnsContext), span)} style={{ minWidth: 0 }}>{children}</Col>;
 }
 
 export function Divider({ label }: { label?: ReactNode }) { return <AntdDivider titlePlacement={label === undefined ? undefined : "start"}>{label}</AntdDivider>; }

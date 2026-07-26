@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.35.0`
+当前制品版本：`0.35.1`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件按受信 Repository Profile 运行 local-test 或 remote 制品服务，并负责可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.33.0 增加 `artifact.repository.local-test.v1` Unix Socket 传输并让开发环境原位迁移；0.34.0 增加同仓库 workspace lease、TTL/容量治理与 Profile 绑定 Receipt 复核；0.34.2 增加只返回精确身份和已验签 Manifest 的 `describePlanning` 窄投影；0.35.0 增加候选级 Feature、有界 SemVer 回溯和复杂度限制。正式远端仍使用 `artifact.repository.remote.v1` HTTPS。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件按受信 Repository Profile 运行 local-test 或 remote 制品服务，并负责可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.33.0 增加 `artifact.repository.local-test.v1` Unix Socket 传输并让开发环境原位迁移；0.34.0 增加同仓库 workspace lease、TTL/容量治理与 Profile 绑定 Receipt 复核；0.34.2 增加只返回精确身份和已验签 Manifest 的 `describePlanning` 窄投影；0.35.0 增加候选级 Feature、有界 SemVer 回溯和复杂度限制；0.35.1 使用 Workbench 响应式筛选列配置。正式远端仍使用 `artifact.repository.remote.v1` HTTPS。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 

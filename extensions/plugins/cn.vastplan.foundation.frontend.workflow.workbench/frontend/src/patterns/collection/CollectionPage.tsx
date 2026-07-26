@@ -4,7 +4,7 @@ import { usePortalI18n, usePortalUI, type WorkbenchPreferencePort } from "@vastp
 import type { CollectionActionContext, CollectionPageDefinition, CollectionSummary, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
 import { CollectionCards } from "./CollectionCards.js";
 import { CollectionFilters } from "./CollectionFilters.js";
-import { CollectionPreferencesDialog } from "./CollectionPreferencesDialog.js";
+import { CollectionPreferencesPopover } from "./CollectionPreferencesPopover.js";
 import { CollectionTable } from "./CollectionTable.js";
 import { CollectionToolbar } from "./CollectionToolbar.js";
 import { collectionDensity, collectionDensityOptions } from "./density.js";
@@ -29,7 +29,6 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   const [summary, setSummary] = useState<CollectionSummary>();
   const [summaryFailure, setSummaryFailure] = useState<string>();
   const [selectedKeys, setSelectedKeys] = useState<readonly string[]>([]);
-  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const [columns, setColumns] = useState(() => readCollectionColumns(preferenceScope, collection, initialPreference));
   const [activeForm, setActiveForm] = useState<{ id: string; selected: readonly CollectionRow[] }>();
   const [activeOverlay, setActiveOverlay] = useState<{ id: string; selected: readonly CollectionRow[] }>();
@@ -97,6 +96,13 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   }, [i18n, page, refresh, ui]);
   const actions = collection.actions ?? [];
   const visibleAction = (action: ActionSpec) => action.visibleWhen === undefined || (selected[0] !== undefined && evaluateFormCondition(action.visibleWhen, selected[0]));
+  const updatePreferences = useCallback((nextColumns: typeof columns, nextDensity: CollectionDensity) => {
+    const previousColumns = columns;
+    const previousDensity = density;
+    setColumns([...nextColumns]);
+    setDensity(nextDensity);
+    persistPreference([...nextColumns], nextDensity, pageSize, () => { setColumns(previousColumns); setDensity(previousDensity); });
+  }, [columns, density, pageSize, persistPreference]);
   const toolbarActions = actions.filter((action) => action.placement === "collection.toolbar" && visibleAction(action));
   const bulkActions = actions.filter((action) => action.placement === "collection.bulk" && visibleAction(action));
   const hasFilters = collection.filters !== undefined && collection.filters.length > 0;
@@ -108,8 +114,8 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
 
   return <ui.Stack gap={density === "compact" ? "sm" : density === "comfortable" ? "lg" : "md"}>
     {summary === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Panel title={summary.title === undefined ? undefined : i18n.text(summary.title)}><ui.Descriptions columns={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 3 }} items={summary.metrics.map((metric) => ({ id: metric.id, label: i18n.text(metric.label), value: metric.tone === undefined ? metric.value : <ui.Status tone={metric.tone}>{metric.value}</ui.Status> }))} /></ui.Panel></div>}
-    {hasFilters ? <div style={{ width: "100%", minWidth: 0 }}><CollectionFilters filters={collection.filters!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div> : null}
-    <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} onColumns={collection.view === "table" && collection.preferences !== undefined ? () => setPreferencesOpen(true) : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
+    {hasFilters ? <div style={{ width: "100%", minWidth: 0 }}><CollectionFilters filters={collection.filters!} layout={collection.filterLayout} value={filters} querying={data.loading || data.refreshing || data.loadingMore} onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div> : null}
+    <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
     {data.failure === undefined && summaryFailure === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.ErrorState title={data.failure ?? summaryFailure!} retry={refresh} /></div>}
     <div style={{ width: "100%", minWidth: 0 }}>{collection.view === "cards"
       ? <CollectionCards collection={collection} rows={rows} selectedKeys={selectedKeys} loading={data.loading} loadingMore={data.loadingMore} nextCursor={data.nextCursor} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} onLoadMore={data.loadMore} />
@@ -122,13 +128,6 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
       if (nextSize !== previousSize) persistPreference(columns, density, nextSize, () => setPageSize(previousSize));
     }} /></div>}
     {collection.view !== "table" || collection.query.mode !== "cursor" || data.nextCursor === undefined ? null : <ui.Stack direction="row" justify="center"><ui.Button kind="secondary" loading={data.loadingMore} disabled={data.loadingMore} onClick={data.loadMore}>{i18n.text({ namespace: "cn.vastplan.foundation.frontend.workflow.workbench", key: "cursor.more", fallback: "加载更多" })}</ui.Button></ui.Stack>}
-    {collection.view !== "table" ? null : <CollectionPreferencesDialog open={preferencesOpen} collection={collection} columns={columns} density={density} densityOptions={densityOptions} onApply={(nextColumns, nextDensity) => {
-      const previousColumns = columns;
-      const previousDensity = density;
-      setColumns([...nextColumns]);
-      setDensity(nextDensity);
-      persistPreference([...nextColumns], nextDensity, pageSize, () => { setColumns(previousColumns); setDensity(previousDensity); });
-    }} onClose={() => setPreferencesOpen(false)} />}
     <CollectionFormWorkflow definition={page.forms?.find((form) => form.id === activeForm?.id)} selected={activeForm?.selected ?? []} open={activeForm !== undefined} onClose={() => setActiveForm(undefined)} onRefresh={refresh} />
     <CollectionOverlayWorkflow definition={page.overlays?.find((overlay) => overlay.id === activeOverlay?.id)} selected={activeOverlay?.selected ?? []} open={activeOverlay !== undefined} onClose={() => setActiveOverlay(undefined)} />
   </ui.Stack>;

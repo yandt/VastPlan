@@ -1,6 +1,6 @@
 {
   "name": "@vastplan/ui-render-adapter",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.tsx" },

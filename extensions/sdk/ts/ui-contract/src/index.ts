@@ -86,6 +86,8 @@ export type CollectionSelectionMode = "none" | "single" | "multiple";
 export type CollectionDensity = "compact" | "standard" | "comfortable";
 export type CollectionActionPlacement = "page.primary" | "page.secondary" | "collection.toolbar" | "collection.bulk" | "record.row" | "record.detail" | "card.footer";
 export type DataValueFormat = "text" | "number" | "date" | "datetime" | "boolean" | "status";
+/** 可跨 Portal、Runner 和 Mobile 使用的受治理响应式列数。 */
+export type ResponsiveColumnCount = number | { xs?: number; sm?: number; md?: number; lg?: number; xl?: number };
 
 export interface FilterOption { value: string; label: import("./i18n.js").LocalizedText; }
 export interface FilterSpec {
@@ -118,8 +120,12 @@ export interface CollectionCardSpec {
   status?: { labelKey: string; toneKey?: string };
   summary?: readonly CollectionCardFieldSpec[];
   content?: readonly CollectionCardFieldSpec[];
-  columns?: { xs?: number; sm?: number; md?: number; lg?: number; xl?: number };
+  columns?: ResponsiveColumnCount;
   loadMore?: "manual" | "viewport";
+}
+export interface CollectionFilterLayout {
+  /** 筛选区每个断点的列数；未指定时采用 xs=1、md=2、xl=3。 */
+  columns?: ResponsiveColumnCount;
 }
 export interface ActionSpec {
   id: string;
@@ -143,6 +149,7 @@ export interface CollectionSpec {
   view: CollectionView;
   query: { mode: CollectionQueryMode; defaultPageSize: number; pageSizeOptions: readonly number[] };
   filters?: readonly FilterSpec[];
+  filterLayout?: CollectionFilterLayout;
   columns: readonly ColumnSpec[];
   card?: CollectionCardSpec;
   selection?: CollectionSelectionMode;
