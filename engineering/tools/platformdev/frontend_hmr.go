@@ -503,16 +503,31 @@ func (h *frontendHMR) runtime(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "Portal Runtime upstream rejected request", response.StatusCode)
 		return
 	}
-	var document struct {
-		Portal  json.RawMessage  `json:"portal"`
-		Modules []map[string]any `json:"modules"`
-	}
+	var document map[string]json.RawMessage
 	if err := json.Unmarshal(body, &document); err != nil {
 		http.Error(w, "Portal Runtime upstream invalid", http.StatusBadGateway)
 		return
 	}
+	modulesRaw, hasModules := document["modules"]
+	// Current Portal RuntimeSpecs normally use trusted Module Graphs. A
+	// development overlay only knows how to replace legacy single-file module
+	// descriptors; decoding into the old shape used to erase moduleGraphs and
+	// serialize modules as null, leaving the browser with an invalid RuntimeSpec.
+	// Preserve graph-native specs exactly until the HMR overlay has graph-level
+	// replacement data.
+	if !hasModules || bytes.Equal(bytes.TrimSpace(modulesRaw), []byte("null")) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = w.Write(body)
+		return
+	}
+	var modules []map[string]any
+	if err := json.Unmarshal(modulesRaw, &modules); err != nil {
+		http.Error(w, "Portal Runtime upstream invalid", http.StatusBadGateway)
+		return
+	}
 	h.mu.RLock()
-	for _, descriptor := range document.Modules {
+	for _, descriptor := range modules {
 		id, _ := descriptor["id"].(string)
 		if module, ok := h.current[id]; ok {
 			descriptor["entry"] = module.Entry
@@ -522,9 +537,20 @@ func (h *frontendHMR) runtime(w http.ResponseWriter, request *http.Request) {
 		}
 	}
 	h.mu.RUnlock()
+	encodedModules, err := json.Marshal(modules)
+	if err != nil {
+		http.Error(w, "Portal Runtime overlay invalid", http.StatusInternalServerError)
+		return
+	}
+	document["modules"] = encodedModules
+	encodedDocument, err := json.Marshal(document)
+	if err != nil {
+		http.Error(w, "Portal Runtime overlay invalid", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(document)
+	_, _ = w.Write(encodedDocument)
 }
 
 func loopbackRequest(request *http.Request) bool {

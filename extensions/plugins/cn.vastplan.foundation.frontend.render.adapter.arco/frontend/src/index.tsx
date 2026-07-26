@@ -138,11 +138,13 @@ function Menu({ items, activeID, onSelect }: { items: MenuItem[]; activeID?: str
   return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)}>{renderMenuItems(items, onSelect)}</ArcoMenu>;
 }
 
-function CommandPalette({ open, commands, query, onQueryChange, onClose }: { open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }) {
+type OverlayContainerProps = { getPopupContainer?: () => Element };
+
+function CommandPalette({ open, commands, query, onQueryChange, onClose, getPopupContainer }: { open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void } & OverlayContainerProps) {
   const i18n = usePortalI18n();
   const term = query.trim().toLocaleLowerCase();
   const visible = term === "" ? commands : commands.filter((command) => [command.title, command.description, ...(command.keywords ?? [])].some((part) => part?.toLocaleLowerCase().includes(term)));
-  return <Modal visible={open} title={i18n.text(message(namespace, "command.title", "命令"))} footer={null} onCancel={onClose} unmountOnExit>
+  return <Modal visible={open} title={i18n.text(message(namespace, "command.title", "命令"))} footer={null} onCancel={onClose} unmountOnExit getPopupContainer={getPopupContainer}>
     <Space direction="vertical" size={12} style={{ width: "100%" }}>
       <Input autoFocus value={query} placeholder={i18n.text(message(namespace, "command.search", "搜索命令"))} onChange={onQueryChange} />
       {visible.length === 0 ? <Empty description={i18n.text(message(namespace, "command.empty", "没有匹配命令"))} /> : visible.map((command) => <Button
@@ -155,8 +157,8 @@ function CommandPalette({ open, commands, query, onQueryChange, onClose }: { ope
   </Modal>;
 }
 
-function Dialog({ open, title, children, footer, width = "md", onClose }: DialogProps) {
-  return <Modal visible={open} title={title} footer={footer ?? null} style={{ width: dialogWidths[width] }} onCancel={onClose} unmountOnExit>{children}</Modal>;
+function Dialog({ open, title, children, footer, width = "md", onClose, getPopupContainer }: DialogProps & OverlayContainerProps) {
+  return <Modal visible={open} title={title} footer={footer ?? null} style={{ width: dialogWidths[width] }} onCancel={onClose} unmountOnExit getPopupContainer={getPopupContainer}>{children}</Modal>;
 }
 
 function Popover({ open, trigger, children, placement = "bottom-start", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {
@@ -195,7 +197,7 @@ function Popover({ open, trigger, children, placement = "bottom-start", initialF
   })}</Trigger>;
 }
 
-function Drawer({ open, title, children, footer, width = "md", placement = "right", onClose }: DrawerProps) {
+function Drawer({ open, title, children, footer, width = "md", placement = "right", onClose, getPopupContainer }: DrawerProps & OverlayContainerProps) {
   const size = dialogWidths[width];
   return <ArcoDrawer
     visible={open}
@@ -206,6 +208,7 @@ function Drawer({ open, title, children, footer, width = "md", placement = "righ
     height={placement === "top" || placement === "bottom" ? size : undefined}
     onCancel={onClose}
     unmountOnExit
+    getPopupContainer={getPopupContainer}
   >{children}</ArcoDrawer>;
 }
 
@@ -437,6 +440,9 @@ function ArcoProvider({ children, locale, direction, themeTemplate, iconTheme }:
     ...arcoPortalUIComponents,
     Icon: ActiveIcon,
     IconButton: (props) => iconButtonWith(ActiveIcon, props),
+    CommandPalette: (props) => <CommandPalette {...props} getPopupContainer={requirePopupRoot} />,
+    Dialog: (props) => <Dialog {...props} getPopupContainer={requirePopupRoot} />,
+    Drawer: (props) => <Drawer {...props} getPopupContainer={requirePopupRoot} />,
     notify: ({ title, content, kind = "info" }) => notifications[kind]?.({ title, content: content ?? "" }),
     confirm: ({ title, content }) => new Promise((resolve) => {
       if (modals.confirm === undefined) { resolve(false); return; }

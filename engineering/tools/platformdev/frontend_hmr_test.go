@@ -77,6 +77,42 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 	}
 }
 
+func TestFrontendHMRPreservesGraphNativeRuntimeSpec(t *testing.T) {
+	payload := []byte(`{"portal":{"revision":7},"moduleGraphs":[{"id":"cn.vastplan.feature","version":"1.0.0","target":"browser"}]}`)
+	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		cookie, err := request.Cookie("vastplan_session")
+		if err != nil || cookie.Value != devAdminToken {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write(payload)
+	}))
+	defer upstream.Close()
+
+	hmr := &frontendHMR{
+		portalListen: strings.TrimPrefix(upstream.URL, "https://"), current: map[string]frontendHMRModule{
+			"cn.vastplan.feature": {ID: "cn.vastplan.feature", SHA256: strings.Repeat("a", 64)},
+		}, objects: map[string][]byte{}, subscribers: map[chan frontendHMREvent]struct{}{},
+	}
+	request := httptest.NewRequest(http.MethodGet, "/__vastplan_dev/runtime?path=%2Foperations", nil)
+	request.RemoteAddr = "127.0.0.1:43210"
+	response := httptest.NewRecorder()
+	hmr.runtime(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("runtime response: %d %s", response.Code, response.Body.String())
+	}
+	var runtime map[string]json.RawMessage
+	if err := json.Unmarshal(response.Body.Bytes(), &runtime); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := runtime["modules"]; exists {
+		t.Fatalf("图谱 RuntimeSpec 不得被降级为 modules: %s", response.Body.String())
+	}
+	if got := string(runtime["moduleGraphs"]); got != `[{"id":"cn.vastplan.feature","version":"1.0.0","target":"browser"}]` {
+		t.Fatalf("Module Graph 必须原样保留: %s", got)
+	}
+}
+
 func TestFrontendHMRRejectsNonLoopbackAndEscapingManifest(t *testing.T) {
 	hmr := &frontendHMR{current: map[string]frontendHMRModule{}, objects: map[string][]byte{}, subscribers: map[chan frontendHMREvent]struct{}{}}
 	request := httptest.NewRequest(http.MethodGet, "/__vastplan_dev/modules/"+strings.Repeat("a", 64)+".js", nil)
