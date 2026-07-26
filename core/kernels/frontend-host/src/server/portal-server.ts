@@ -21,10 +21,12 @@ import { AddressingAuthenticationBroker } from "../identity/authentication-broke
 import { AddressingSessionAuthorization } from "../identity/session-authorization-port";
 import { FileAPIExposureCatalog } from "../api-exposure/file-api-exposure-catalog";
 import { FileAPIContractCatalog } from "../api-exposure/file-api-contract-catalog";
+import { PortalGenerationCoordinator } from "../runtime/portal-generation-coordinator";
 
 interface PortalServerResources {
 	readonly addressing?: NodeAddressingRuntime;
 	readonly generations?: ServerGenerationManager;
+	readonly coordination?: PortalGenerationCoordinator;
 }
 
 const serverResources = new WeakMap<Server, PortalServerResources>();
@@ -34,6 +36,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
   const access = config.accessProfileCatalog === undefined ? undefined : await FileAccessProfileCatalog.open(config.accessProfileCatalog);
   const addressing = config.addressing === undefined ? undefined : await openNodeAddressing(config.addressing);
   let generations: ServerGenerationManager | undefined;
+  let coordination: PortalGenerationCoordinator | undefined;
   try {
     const invoker = addressing === undefined ? undefined : new AddressingCapabilityInvoker(addressing.client);
     if (config.apiExposureCatalog !== undefined && invoker === undefined) throw new Error("API Exposure Gateway 需要 Addressing 配置");
@@ -53,6 +56,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
     generations = composer === undefined || delivery === undefined ? undefined : new ServerGenerationManager(
       delivery, join(config.delivery!.cacheRoot, "server-generations"), join(__dirname, "server-generation-worker.cjs"),
     );
+    coordination = composer === undefined || generations === undefined ? undefined : new PortalGenerationCoordinator(composer, generations);
     const ssr = composer === undefined || generations === undefined ? undefined : new PortalSSRCoordinator(composer, identity, generations);
     const handler = createPortalHandler({
       assets, identity, secureCookies: config.tls !== undefined,
@@ -63,6 +67,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
       ...(interaction === undefined ? {} : { interaction }),
       ...(platform === undefined ? {} : { platform }),
       ...(delivery === undefined ? {} : { delivery }),
+      ...(coordination === undefined ? {} : { generations: coordination }),
       ...(ssr === undefined ? {} : { ssr }),
     });
     let server: Server;
@@ -71,9 +76,10 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
       const [cert, key] = await Promise.all([readFile(config.tls.certFile), readFile(config.tls.keyFile)]);
       server = createHTTPSServer({ cert, key, minVersion: "TLSv1.2" }, handler);
     }
-    serverResources.set(server, { ...(addressing === undefined ? {} : { addressing }), ...(generations === undefined ? {} : { generations }) });
+    serverResources.set(server, { ...(addressing === undefined ? {} : { addressing }), ...(generations === undefined ? {} : { generations }), ...(coordination === undefined ? {} : { coordination }) });
     return server;
   } catch (error) {
+    await coordination?.shutdown();
     await generations?.shutdown();
     await addressing?.close();
     throw error;
@@ -96,6 +102,7 @@ export async function closePortalServer(server: Server): Promise<void> {
   try {
     if (server.listening) await new Promise<void>((resolve, reject) => server.close((error) => error === undefined ? resolve() : reject(error)));
   } finally {
+    await resources?.coordination?.shutdown();
     await resources?.generations?.shutdown();
     await resources?.addressing?.close();
   }

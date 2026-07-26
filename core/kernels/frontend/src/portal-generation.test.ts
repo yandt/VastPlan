@@ -91,6 +91,22 @@ describe("PortalGenerationManager", () => {
     expect(candidateDisposed.mock.calls[0][0].signal.aborted).toBe(true);
   });
 
+  it("keeps the active Browser generation when the shared Server commit point rejects", async () => {
+    const candidateDisposed = vi.fn();
+    const beforeCommit = vi.fn(async (runtime: PortalRuntimeSpec) => {
+      if (runtime.portal.revision === 2) throw new Error("server commit rejected");
+    });
+    const manager = new PortalGenerationManager({
+      beforeCommit,
+      prepare: async (runtime) => prepared(runtime.portal.revision, runtime.portal.revision === 2 ? { dispose: candidateDisposed } : undefined),
+    });
+    const first = await manager.start(spec(1));
+    await expect(manager.replace(spec(2))).rejects.toThrow("server commit rejected");
+    expect(manager.active).toBe(first);
+    expect(first.signal.aborted).toBe(false);
+    expect(candidateDisposed).toHaveBeenCalledOnce();
+  });
+
   it("rejects non-JSON or oversized state before committing the candidate", async () => {
     for (const state of [new Date(), { text: "x".repeat(32) }]) {
       const manager = new PortalGenerationManager({

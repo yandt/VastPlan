@@ -14,7 +14,12 @@ export interface PortalRuntimeSpec {
   portal: PortalSpec;
   modules: FrontendModuleDescriptor[];
   moduleGraphs: FrontendModuleGraphDescriptor[];
+  coordination?: PortalGenerationCoordination;
 }
+
+export type PortalGenerationCoordination =
+  | { state: "prepared"; activationId: number; transactionId: string }
+  | { state: "committed"; activationId: number };
 
 export type ModuleDescriptorPolicy = "production" | "development";
 
@@ -62,7 +67,22 @@ function parseRuntimeSpec(value: unknown, policy: ModuleDescriptorPolicy): Porta
     return { ...graph, externals: [...graph.externals], nodes: graph.nodes.map((node) => ({ ...node, dependencies: node.dependencies.map((dependency) => ({ ...dependency })) })) };
   });
   if (modules.length === 0 && moduleGraphs.length === 0) throw new ModuleLoadError("RUNTIME_SPEC_INVALID", "Portal RuntimeSpec 没有前端模块");
-  return { portal: value.portal as unknown as PortalSpec, modules, moduleGraphs };
+  const portal = value.portal as unknown as PortalSpec;
+  const coordination = parseCoordination(value.coordination, portal.revision);
+  return { portal, modules, moduleGraphs, ...(coordination === undefined ? {} : { coordination }) };
+}
+
+function parseCoordination(value: unknown, revision: number): PortalGenerationCoordination | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || (value.state !== "prepared" && value.state !== "committed") || !Number.isSafeInteger(value.activationId)
+    || Number(value.activationId) !== revision) throw new ModuleLoadError("RUNTIME_SPEC_INVALID", "Portal Generation 协调信息无效");
+  if (value.state === "committed") {
+    if (Object.keys(value).some((key) => key !== "state" && key !== "activationId")) throw new ModuleLoadError("RUNTIME_SPEC_INVALID", "Portal Generation 协调信息无效");
+    return { state: "committed", activationId: revision };
+  }
+  if (Object.keys(value).some((key) => key !== "state" && key !== "activationId" && key !== "transactionId")
+    || typeof value.transactionId !== "string" || !/^[a-f0-9]{64}$/.test(value.transactionId)) throw new ModuleLoadError("RUNTIME_SPEC_INVALID", "Portal Generation 协调事务无效");
+  return { state: "prepared", activationId: revision, transactionId: value.transactionId };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

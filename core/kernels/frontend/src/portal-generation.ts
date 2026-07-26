@@ -30,6 +30,7 @@ export interface PortalGenerationManagerOptions {
   descriptorPolicy?: ModuleDescriptorPolicy;
   onDiagnostic?(diagnostic: PortalGenerationDiagnostic): void;
   prepare?(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<PreparedPortal>;
+  beforeCommit?(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<void>;
 }
 
 /** Serializes candidate preparation and commits only fully valid Portal generations. */
@@ -106,6 +107,7 @@ export class PortalGenerationManager {
       candidate = { id, prepared, signal: controller.signal, controller };
       const state = this.activeGeneration === undefined ? new Map<string, JSONValue | undefined>() : await this.capture(this.activeGeneration);
       await this.restore(candidate, state);
+      await this.options.beforeCommit?.(spec, { generation: id, signal: controller.signal, reason });
     } catch (error) {
       controller.abort(error);
       if (candidate !== undefined) await this.dispose(candidate, "replace");

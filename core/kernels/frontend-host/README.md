@@ -4,7 +4,7 @@
 
 代码按职责拆分：`config` 只解析启动输入，`identity` 实现身份提供方与密封会话，`assets` 只验证并冻结静态资产，`capabilities` 只适配 Go Backend 窄能力，`api-exposure` 负责治理式公共 API Catalog、匹配、Schema 与入口防护，`runtime` 负责 Activation、不可变快照、内容对象与更新协调，`http` 只处理浏览器协议边界，`workers` 承载服务端 Generation，`server` 只组装生命周期。禁止把这些逻辑重新集中到 `main.ts` 或单一路由文件。
 
-当前已提供安全静态宿主、健康检查、Portal/Interaction/平台管理强类型 BFF，以及认证后的 RuntimeSpec、Recovery、SSE 更新和内容寻址模块交付。交付层读取 Go 可信宿主生成的密封 Browser/Server 双图快照，逐次复核当前 Activation、`PortalSpec` 摘要和实际对象摘要；本机缺失完整 revision 时才从可信 origin 原子冷填充。Server Graph 只进入私有 SSR Worker，不能通过浏览器 API 读取。未实现的 `/v1` 路由仍返回 404，不代理任意 URL。
+当前已提供安全静态宿主、健康检查、Portal/Interaction/平台管理合同驱动 BFF，以及认证后的 RuntimeSpec、Recovery、SSE 更新和内容寻址模块交付。交付层读取 Go 可信宿主生成的密封 Browser/Server 双图快照，逐次复核当前 Activation、`PortalSpec` 摘要和实际对象摘要；本机缺失完整 revision 时才从可信 origin 原子冷填充。Server Graph 只进入私有 SSR Worker，不能通过浏览器 API 读取。Server Worker 先以不可见候选完成健康检查，Browser 候选验证后再通过会话、CSRF 与 Activation 复核进入唯一提交点；未提交 revision 的 SSR 只 bypass。未实现的 `/v1` 路由仍返回 404，不代理任意 URL。
 
 生产身份使用 Authentication Broker；具体企业协议不再配置到 Portal Host。Assertion 信任文件由 Broker 公钥生成，会话密钥、NKey seed 与 TLS 私钥文件必须是仅属主可读写的普通文件：
 

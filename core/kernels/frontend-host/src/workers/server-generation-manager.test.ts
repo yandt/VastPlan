@@ -6,7 +6,7 @@ import { createPortalDeliveryFixture, writePortalDeliveryRevision } from "../tes
 import { ServerGenerationManager } from "./server-generation-manager";
 
 describe("ServerGenerationManager", () => {
-  it("prepares a sealed candidate in a supervised worker and renders only after commit", async () => {
+  it("keeps a healthy sealed candidate invisible until an explicit commit", async () => {
     const fixture = await createPortalDeliveryFixture();
     const spec = {
       revision: 12, id: "operations", tenantId: "tenant-a", route: "/operations",
@@ -21,9 +21,15 @@ describe("ServerGenerationManager", () => {
     const delivery = await PortalDeliveryStore.open(fixture.cache, fixture.origin);
     const manager = new ServerGenerationManager(delivery, join(fixture.cache, "generations"), workerScript);
     try {
-      const rendered = await manager.render("tenant-a", spec, {
+      const input = {
         generation: 12, tenantId: "tenant-a", portalId: "operations", path: "/operations/settings", locale: "zh-CN", branding: {},
-      });
+      };
+      expect(await manager.renderActive("tenant-a", spec, input)).toBeUndefined();
+      const prepared = await manager.prepare("tenant-a", spec, input);
+      expect(prepared).toBeDefined();
+      expect(await manager.renderActive("tenant-a", spec, input)).toBeUndefined();
+      manager.commit(prepared!);
+      const rendered = await manager.renderActive("tenant-a", spec, input);
       expect(rendered?.html).toBe("<main>operations:/operations/settings</main>");
     } finally {
       await manager.shutdown();

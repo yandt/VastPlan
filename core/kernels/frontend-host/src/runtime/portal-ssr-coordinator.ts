@@ -6,6 +6,7 @@ import { SessionRejectedError } from "../identity/identity-provider";
 import { requestHostname } from "../http/platform-route-contract";
 import type { ServerGenerationManager } from "../workers/server-generation-manager";
 import { PortalActivationCatalog } from "./portal-activation-catalog";
+import { portalRenderInput } from "./portal-render-input";
 
 export interface PortalSSRPort {
   render(request: IncomingMessage, path: string): Promise<FrontendServerRenderResult | undefined>;
@@ -28,22 +29,6 @@ export class PortalSSRCoordinator implements PortalSSRPort {
     const activations = await this.activations.list(principal);
     const active = this.activations.selectCurrent(activations, principal, path, requestHostname(request));
     if (active === undefined || !this.activations.audienceAllows(active, principal)) return undefined;
-    return this.generations.render(principal.tenantId, active.resolved, {
-      generation: active.id,
-      tenantId: principal.tenantId,
-      portalId: active.portalId,
-      path,
-      locale: requestLocale(request),
-      branding: branding(active.resolved.branding),
-    });
+    return this.generations.renderActive(principal.tenantId, active.resolved, portalRenderInput(active, principal, path, request));
   }
-}
-
-function requestLocale(request: IncomingMessage): string {
-  const preferred = request.headers["accept-language"]?.split(",", 1)[0]?.split(";", 1)[0]?.trim();
-  return preferred !== undefined && /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(preferred) ? preferred : "zh-CN";
-}
-
-function branding(value: unknown): Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Readonly<Record<string, unknown>> : Object.freeze({});
 }

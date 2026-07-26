@@ -128,6 +128,19 @@ describe("VerifiedFrontendPluginLoader", () => {
     expect(() => parsePortalRuntimeSpec({ portal: {}, modules: [{ ...locked, url: "https://attacker.invalid/module.js" }] })).toThrowError(ModuleLoadError);
   });
 
+  it("binds a prepared dual-generation transaction to the RuntimeSpec revision", async () => {
+    const locked = await descriptor();
+    const parsed = parsePortalRuntimeSpec({
+      portal: { revision: 7 }, modules: [locked],
+      coordination: { state: "prepared", activationId: 7, transactionId: "a".repeat(64) },
+    });
+    expect(parsed.coordination).toEqual({ state: "prepared", activationId: 7, transactionId: "a".repeat(64) });
+    expect(() => parsePortalRuntimeSpec({
+      portal: { revision: 7 }, modules: [locked],
+      coordination: { state: "prepared", activationId: 8, transactionId: "a".repeat(64) },
+    })).toThrowError(ModuleLoadError);
+  });
+
   it("accepts a graph-only RuntimeSpec and preserves its locked node closure", async () => {
     const locked = await descriptor();
     const unsigned: FrontendModuleGraphDescriptor = {

@@ -64,7 +64,12 @@ export interface PortalRuntimeSpec extends Readonly<Record<string, unknown>> {
   readonly portal: PortalSpec;
   readonly modules?: readonly FrontendModule[];
   readonly moduleGraphs?: readonly FrontendModuleGraph[];
+  readonly coordination?: PortalGenerationCoordination;
 }
+
+export type PortalGenerationCoordination =
+  | { readonly state: "prepared"; readonly activationId: number; readonly transactionId: string }
+  | { readonly state: "committed"; readonly activationId: number };
 
 export interface FrontendObjectDescriptor {
   readonly id: string;
@@ -144,6 +149,7 @@ export function recoveryRuntime(runtime: PortalRuntimeSpec, activeRevision: numb
 }
 
 function validateRuntime(runtime: PortalRuntimeSpec): void {
+  if (runtime.coordination !== undefined) throw new PortalRuntimeContractError("Portal Generation 协调信息只能由在线可信宿主生成");
   if (!Number.isSafeInteger(runtime.portal.revision) || runtime.portal.revision < 1) throw new PortalRuntimeContractError("Portal RuntimeSpec revision 无效");
   if (!Array.isArray(runtime.modules ?? []) || !Array.isArray(runtime.moduleGraphs ?? [])) throw new PortalRuntimeContractError("Portal RuntimeSpec 模块列表无效");
   for (const module of runtime.modules ?? []) validateDescriptor(module, module.mediaType ?? "text/javascript", runtime.portal.revision);

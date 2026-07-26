@@ -8,6 +8,7 @@ import { PortalGenerationManager } from "./portal-generation";
 import { PortalRuntime, type PreparedPortal } from "./portal-runtime";
 import { AccessLoginPage } from "./access-login";
 import { PortalPreferenceSession } from "./portal-preferences";
+import { PortalGenerationCommitClient } from "./portal-generation-client";
 
 declare const __VASTPLAN_DEV_HMR__: boolean;
 
@@ -48,6 +49,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   const renderApplication = () => {
     if (prepared !== undefined) root.render(<PortalApplication prepared={prepared} initialPath={pathname} recoveryMode={recoveryMode} developmentError={developmentError} updateNotice={updateNotice} onApplyUpdate={() => globalThis.location?.reload()} onRendererChange={replaceRenderer} onShellTemplateChange={replaceShellTemplate} onThemeTemplateChange={replaceThemeTemplate} onIconThemeChange={replaceIconTheme} />);
   };
+  const generationCommits = new PortalGenerationCommitClient(fetcher);
   const manager = new PortalGenerationManager({
     fetcher,
     descriptorPolicy: __VASTPLAN_DEV_HMR__ ? "development" : "production",
@@ -56,6 +58,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
       const preference = preferenceSession?.resolve(spec.portal) ?? {};
       return new PortalRuntime(loader).prepare(spec.portal, { ...context, ...preference, preferences: preferenceSession });
     },
+    beforeCommit: (spec) => generationCommits.commit(spec),
     onDiagnostic: (diagnostic) => {
       if (!__VASTPLAN_DEV_HMR__) return;
       developmentError = `热替换 ${diagnostic.phase} 阶段异常：${errorMessage(diagnostic.error)}`;

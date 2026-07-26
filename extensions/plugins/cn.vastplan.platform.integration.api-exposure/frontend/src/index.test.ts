@@ -1,5 +1,5 @@
 import { describe,expect,it,vi } from "vitest";
-import { ManagementAPIClient, type PlatformFetch } from "@vastplan/platform-admin";
+import { ManagementAPIClient, type PlatformAdminClient, type PlatformFetch } from "@vastplan/platform-admin";
 import { createAPIExposurePage, createDataPlaneExposurePage } from "./index";
 import { APIExposureManagementClient, type APIExposureManagementPort } from "./management-client";
 

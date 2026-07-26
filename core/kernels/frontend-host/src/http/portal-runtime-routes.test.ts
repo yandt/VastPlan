@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { PortalAssets } from "../assets/portal-assets";
 import type { PortalComposerPort } from "../capabilities/portal-composer-client";
 import { FileIdentityProvider } from "../identity/file-identity-provider";
@@ -10,6 +10,7 @@ import { createPortalDeliveryFixture, writePortalDeliveryRevision } from "../tes
 import { createPortalFixture } from "../testing/portal-fixture";
 import { writeSessionFixture } from "../testing/session-fixture";
 import { createPortalHandler } from "./portal-handler";
+import type { PortalGenerationCoordinationPort } from "../runtime/portal-generation-coordinator";
 
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve())))));
@@ -86,9 +87,40 @@ describe("Portal runtime routes", () => {
     const future = await fetch(`${fixture.origin}/v1/portal-updates?path=/operations&revision=8`, { headers: fixture.headers });
     expect(future.status).toBe(400);
   });
+
+  it("projects a prepared Server transaction and commits it only through authenticated CSRF", async () => {
+    const transactionId = "a".repeat(64);
+    const prepare = vi.fn(async () => ({ state: "prepared" as const, activationId: 7, transactionId }));
+    const generations: PortalGenerationCoordinationPort = {
+      prepare,
+      commit: vi.fn(async (_principal, value) => {
+        expect(value).toBe(transactionId);
+        return { state: "committed" as const, activationId: 7 };
+      }),
+    };
+    const fixture = await startRuntimeServer({}, generations);
+    const runtimeResponse = await fetch(`${fixture.origin}/v1/portal-runtime?path=/operations`, { headers: fixture.headers });
+    expect((await runtimeResponse.json() as { coordination: unknown }).coordination).toEqual({ state: "prepared", activationId: 7, transactionId });
+    expect((await fetch(`${fixture.origin}/v1/portal-runtime?path=/operations`, { method: "HEAD", headers: fixture.headers })).status).toBe(200);
+    expect(prepare).toHaveBeenCalledOnce();
+    expect((await fetch(`${fixture.origin}/v1/portal-generation-commit`, {
+      method: "POST", headers: { ...fixture.headers, "Content-Type": "application/json" }, body: JSON.stringify({ transactionId }),
+    })).status).toBe(403);
+
+    const csrfResponse = await fetch(`${fixture.origin}/v1/csrf`, { headers: fixture.headers });
+    const { token } = await csrfResponse.json() as { token: string };
+    const csrfCookie = csrfResponse.headers.get("set-cookie")?.split(";", 1)[0];
+    const committed = await fetch(`${fixture.origin}/v1/portal-generation-commit`, {
+      method: "POST",
+      headers: { Cookie: `${fixture.headers.Cookie}; ${csrfCookie}`, "Content-Type": "application/json", "X-VastPlan-CSRF": token },
+      body: JSON.stringify({ transactionId }),
+    });
+    expect(committed.status).toBe(200);
+    expect(await committed.json()).toEqual({ state: "committed", activationId: 7 });
+  });
 });
 
-async function startRuntimeServer(activeOverrides: Readonly<Record<string, unknown>> = {}): Promise<{ origin: string; headers: { Cookie: string }; activeDigest: string; fallbackDigest: string }> {
+async function startRuntimeServer(activeOverrides: Readonly<Record<string, unknown>> = {}, generations?: PortalGenerationCoordinationPort): Promise<{ origin: string; headers: { Cookie: string }; activeDigest: string; fallbackDigest: string }> {
   const assetsRoot = await createPortalFixture();
   const sessionFile = join(assetsRoot, "sessions.json");
   await writeSessionFixture(sessionFile, "browser-token", new Date(Date.now() + 60_000), ["portal.read"]);
@@ -108,7 +140,7 @@ async function startRuntimeServer(activeOverrides: Readonly<Record<string, unkno
   const assets = await PortalAssets.load(assetsRoot);
   const identity = await FileIdentityProvider.open(sessionFile);
   const delivery = await PortalDeliveryStore.open(deliveryFixture.cache, deliveryFixture.origin);
-  const server = createServer(createPortalHandler({ assets, identity, composer, delivery, secureCookies: false }));
+  const server = createServer(createPortalHandler({ assets, identity, composer, delivery, secureCookies: false, ...(generations === undefined ? {} : { generations }) }));
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;

@@ -9,14 +9,18 @@ import { sendAPIError, sendJSON } from "./json-response";
 import { sendPortalModule } from "./portal-module-response";
 import { parsePortalModulePath, portalUpdateQuery, requestedPortalPath } from "./portal-runtime-path";
 import { requestHostname } from "./platform-route-contract";
+import { portalRenderInput } from "../runtime/portal-render-input";
+import { PortalGenerationCoordinationError, type PortalGenerationCoordinationPort } from "../runtime/portal-generation-coordinator";
+import { APIUnsupportedMediaTypeError, readAPIJSONBody } from "../api-exposure/api-invocation";
 
-const runtimePaths = new Set(["/v1/portal-runtime", "/v1/portal-recovery", "/v1/portal-updates"]);
+const generationCommitPath = "/v1/portal-generation-commit";
+const runtimePaths = new Set(["/v1/portal-runtime", "/v1/portal-recovery", "/v1/portal-updates", generationCommitPath]);
 
 export class PortalRuntimeRoutes {
   private readonly activations: PortalActivationCatalog;
   private readonly updates: PortalUpdateCoordinator;
 
-  public constructor(composer: PortalComposerPort, private readonly delivery: PortalDeliveryStore) {
+  public constructor(composer: PortalComposerPort, private readonly delivery: PortalDeliveryStore, private readonly generations?: PortalGenerationCoordinationPort) {
     this.activations = new PortalActivationCatalog(composer);
     this.updates = new PortalUpdateCoordinator(this.activations, delivery);
   }
@@ -25,10 +29,12 @@ export class PortalRuntimeRoutes {
     const moduleRequest = parsePortalModulePath(path);
     if (!runtimePaths.has(path) && moduleRequest === undefined) return false;
     const method = request.method ?? "GET";
-    if ((path === "/v1/portal-updates" && method !== "GET") || (path !== "/v1/portal-updates" && method !== "GET" && method !== "HEAD")) {
+    if ((path === "/v1/portal-updates" && method !== "GET") || (path === generationCommitPath && method !== "POST")
+      || (path !== "/v1/portal-updates" && path !== generationCommitPath && method !== "GET" && method !== "HEAD")) {
       sendAPIError(response, 405, "method_not_allowed", method === "HEAD");
       return true;
     }
+    if (path === generationCommitPath) return this.commitGeneration(principal, request, response, signal);
     let activations: readonly PortalActivation[];
     try { activations = await this.activations.list(principal, signal); }
     catch { sendAPIError(response, 502, "portal_service_unavailable", method === "HEAD"); return true; }
@@ -49,8 +55,33 @@ export class PortalRuntimeRoutes {
       return true;
     }
     return path === "/v1/portal-runtime"
-      ? this.runtime(active, principal, response, method === "HEAD")
+      ? this.runtime(active, principal, request, requested, response, method === "HEAD")
       : this.recovery(active, activations, principal, response, method === "HEAD");
+  }
+
+  private async commitGeneration(principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<true> {
+    if (this.generations === undefined) { sendAPIError(response, 404, "not_found"); return true; }
+    let transactionID: string;
+    try {
+      const value = await readAPIJSONBody(request, 4_096, "POST");
+      if (typeof value !== "object" || value === null || Array.isArray(value) || Object.keys(value).length !== 1
+        || typeof (value as Record<string, unknown>).transactionId !== "string" || !/^[a-f0-9]{64}$/.test((value as Record<string, string>).transactionId)) throw new Error("事务无效");
+      transactionID = (value as Record<string, string>).transactionId;
+    } catch (error) {
+      sendAPIError(response, error instanceof APIUnsupportedMediaTypeError ? 415 : 400, error instanceof APIUnsupportedMediaTypeError ? "unsupported_media_type" : "invalid_generation_commit");
+      return true;
+    }
+    try {
+      const result = await this.generations.commit(principal, transactionID, signal);
+      response.setHeader("Cache-Control", "no-store");
+      sendJSON(response, 200, result);
+    } catch (error) {
+      if (error instanceof PortalGenerationCoordinationError) {
+        const status = error.code === "portal_audience_forbidden" ? 403 : error.code === "activation_changed" ? 409 : 404;
+        sendAPIError(response, status, error.code);
+      } else sendAPIError(response, 502, "portal_generation_unavailable");
+    }
+    return true;
   }
 
   private async updateStream(activations: readonly PortalActivation[], principal: Principal, request: IncomingMessage, response: ServerResponse): Promise<true> {
@@ -77,9 +108,11 @@ export class PortalRuntimeRoutes {
     return true;
   }
 
-  private async runtime(active: PortalActivation, principal: Principal, response: ServerResponse, head: boolean): Promise<true> {
+  private async runtime(active: PortalActivation, principal: Principal, request: IncomingMessage, requestedPath: string, response: ServerResponse, head: boolean): Promise<true> {
     try {
       const runtime = projectExperience(await this.delivery.runtime(principal.tenantId, active.resolved), principal);
+      const coordination = head ? undefined : await this.generations?.prepare(principal, active, portalRenderInput(active, principal, requestedPath, request));
+      if (coordination !== undefined) (runtime as PortalRuntimeSpec & { coordination: typeof coordination }).coordination = coordination;
       response.setHeader("Cache-Control", "private, no-store");
       response.setHeader("Vary", "Cookie");
       addPreloads(response, runtime);

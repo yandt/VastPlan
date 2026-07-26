@@ -17,6 +17,7 @@ import type { APIContractCatalogPort, APIExposureCatalogPort } from "../api-expo
 import { APIExposureGateway } from "../api-exposure/api-exposure-gateway";
 import type { TrustedCapabilityInvoker } from "../capabilities/capability-invoker";
 import { sendAPIError, sendJSON } from "./json-response";
+import type { PortalGenerationCoordinationPort } from "../runtime/portal-generation-coordinator";
 
 export interface PortalHandlerOptions {
   assets: PortalAssets;
@@ -29,6 +30,7 @@ export interface PortalHandlerOptions {
   interaction?: InteractionPort;
   platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort; contractCatalog?: APIContractCatalogPort };
   delivery?: PortalDeliveryStore;
+  generations?: PortalGenerationCoordinationPort;
   ssr?: PortalSSRPort;
 }
 
@@ -41,6 +43,7 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     ...(options.interaction === undefined ? {} : { interaction: options.interaction }),
     ...(options.platform === undefined ? {} : { platform: options.platform }),
     ...(options.delivery === undefined ? {} : { delivery: options.delivery }),
+    ...(options.generations === undefined ? {} : { generations: options.generations }),
   });
   const apiExposure = options.identity === undefined || options.apiExposure === undefined ? undefined : new APIExposureGateway(
     options.apiExposure.catalog, options.identity, options.apiExposure.invoker, options.secureCookies ?? true,
