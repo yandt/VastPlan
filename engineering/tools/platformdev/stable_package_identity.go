@@ -66,13 +66,19 @@ func reconcileStablePackageIdentities(repositoryRoot, ledgerPath string) error {
 		}
 		known[key] = identity
 	}
+	drifts := make([]string, 0)
 	for _, identity := range current {
 		key := stablePackageIdentityKey(identity)
 		if previous, ok := known[key]; ok && previous.SHA256 != identity.SHA256 {
-			return fmt.Errorf("稳定制品身份漂移: %s 已记录 sha256=%s，本次为 sha256=%s；stable 精确引用不可覆盖，请提升插件 SemVer 后重试",
-				stablePackageIdentityLabel(identity), previous.SHA256, identity.SHA256)
+			drifts = append(drifts, fmt.Sprintf("%s 已记录 sha256=%s，本次为 sha256=%s",
+				stablePackageIdentityLabel(identity), previous.SHA256, identity.SHA256))
+			continue
 		}
 		known[key] = identity
+	}
+	if len(drifts) > 0 {
+		return fmt.Errorf("稳定制品身份漂移（共 %d 项）:\n- %s\nstable 精确引用不可覆盖，请分别提升插件 SemVer 后重试",
+			len(drifts), strings.Join(drifts, "\n- "))
 	}
 	merged := make([]stablePackageIdentity, 0, len(known))
 	for _, identity := range known {

@@ -237,6 +237,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0154 Portal 管理 API 合同驱动分发](decisions/ADR-0154-Portal管理API合同驱动分发.md)
 - [ADR-0155 Browser/Server 单一 Generation 协调提交](decisions/ADR-0155-Browser-Server单一Generation协调提交.md)
 - [ADR-0156 Authorization Policy 共享真相源与 Leader 接管](decisions/ADR-0156-Authorization-Policy共享真相源与Leader接管.md)
+- [ADR-0157 开发 Seed Runtime 的 Last-Known-Good 快照](decisions/ADR-0157-开发Seed-Runtime-LKG快照.md)
 
 ### 插件共享代码与能力复用
 

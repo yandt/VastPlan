@@ -64,7 +64,7 @@ func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, node
 // signPackageRepository upgrades the locally built development repository to a
 // signed Seed repository after it has been materialized from the reproducible
 // build cache. The signing key is generated per run and is never cached.
-func (r *runtime) signPackageRepository() error {
+func (r *runtime) signPackageRepository(expected []artifactrepository.Ref) error {
 	repository, err := artifactrepository.NewRepository(filepath.Join(r.runDir, "repository"))
 	if err != nil {
 		return err
@@ -81,11 +81,6 @@ func (r *runtime) signPackageRepository() error {
 	if err != nil {
 		return err
 	}
-	selection, err := r.seedSelection()
-	if err != nil {
-		return err
-	}
-	expected := selection.references()
 	if err := validateExactSeedRefs("待签", expected, refs); err != nil {
 		return err
 	}

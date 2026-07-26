@@ -57,6 +57,25 @@ func TestStablePackageIdentityLedgerFailsClosedWhenCorrupted(t *testing.T) {
 	}
 }
 
+func TestStablePackageIdentityLedgerReportsAllDrifts(t *testing.T) {
+	ledgerPath := filepath.Join(t.TempDir(), "stable.json")
+	first := writeStableIdentityMultiRepository(t, map[string]string{
+		"cn.vastplan.test.alpha": "alpha-first",
+		"cn.vastplan.test.beta":  "beta-first",
+	})
+	if err := reconcileStablePackageIdentities(first, ledgerPath); err != nil {
+		t.Fatal(err)
+	}
+	changed := writeStableIdentityMultiRepository(t, map[string]string{
+		"cn.vastplan.test.alpha": "alpha-changed",
+		"cn.vastplan.test.beta":  "beta-changed",
+	})
+	err := reconcileStablePackageIdentities(changed, ledgerPath)
+	if err == nil || !strings.Contains(err.Error(), "共 2 项") || !strings.Contains(err.Error(), "cn.vastplan.test.alpha") || !strings.Contains(err.Error(), "cn.vastplan.test.beta") {
+		t.Fatalf("必须一次报告全部稳定制品漂移: %v", err)
+	}
+}
+
 func TestStablePackageIdentityLedgerScopesDynamicGoByBuildFingerprint(t *testing.T) {
 	ledgerPath := filepath.Join(t.TempDir(), "stable.json")
 	firstFingerprint := strings.Repeat("a", 64)
@@ -83,13 +102,29 @@ func writeStableIdentityDynamicRepository(t *testing.T, fingerprint, content str
 
 func writeStableIdentityRepository(t *testing.T, version, content, fingerprint string) string {
 	t.Helper()
+	repositoryRoot := t.TempDir()
+	publishStableIdentityTestArtifact(t, repositoryRoot, "cn.vastplan.test.identity", version, content, fingerprint)
+	return repositoryRoot
+}
+
+func writeStableIdentityMultiRepository(t *testing.T, artifacts map[string]string) string {
+	t.Helper()
+	repositoryRoot := t.TempDir()
+	for pluginID, content := range artifacts {
+		publishStableIdentityTestArtifact(t, repositoryRoot, pluginID, "1.0.0", content, "")
+	}
+	return repositoryRoot
+}
+
+func publishStableIdentityTestArtifact(t *testing.T, repositoryRoot, pluginID, version, content, fingerprint string) {
+	t.Helper()
 	pluginDir := t.TempDir()
 	execution := ""
 	if fingerprint != "" {
 		execution = `,"execution":{"backend":{"driver":"native","minimumIsolation":"trusted-process","dynamicGo":{"entry":"backend/plugin.so","abi":"vastplan.dynamic-go.v1","fingerprint":"` + fingerprint + `","required":true}}}`
 	}
 	manifest := `{
-  "id":"cn.vastplan.test.identity",
+  "id":"` + pluginID + `",
   "name":"Stable identity test",
   "description":"stable identity fixture",
   "version":"` + version + `",
@@ -117,7 +152,6 @@ func writeStableIdentityRepository(t *testing.T, version, content, fingerprint s
 	if err != nil {
 		t.Fatal(err)
 	}
-	repositoryRoot := t.TempDir()
 	repository, err := artifactrepository.NewRepository(repositoryRoot)
 	if err != nil {
 		t.Fatal(err)
@@ -125,5 +159,4 @@ func writeStableIdentityRepository(t *testing.T, version, content, fingerprint s
 	if _, err := repository.Publish("stable", packageBytes); err != nil {
 		t.Fatal(err)
 	}
-	return repositoryRoot
 }

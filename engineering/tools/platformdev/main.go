@@ -50,18 +50,19 @@ type child struct {
 }
 
 type runtime struct {
-	options            options
-	runDir             string
-	nats               *natsserver.Server
-	vault              *http.Server
-	proxy              *http.Server
-	children           []*child
-	mu                 sync.RWMutex
-	ready              bool
-	hmr                *frontendHMR
-	backendInputDigest string
-	repositoryProfile  artifactrepositoryv1.Profile
-	seedArtifacts      seedArtifactSelection
+	options               options
+	runDir                string
+	nats                  *natsserver.Server
+	vault                 *http.Server
+	proxy                 *http.Server
+	children              []*child
+	mu                    sync.RWMutex
+	ready                 bool
+	hmr                   *frontendHMR
+	backendInputDigest    string
+	repositoryProfile     artifactrepositoryv1.Profile
+	seedArtifacts         seedArtifactSelection
+	seedSnapshotCandidate string
 }
 
 type packageSpec struct {
@@ -114,11 +115,6 @@ func run(opts options) error {
 		return fmt.Errorf("创建运行目录: %w", err)
 	}
 	r := &runtime{options: opts, runDir: runDir}
-	selection, err := r.seedSelection()
-	if err != nil {
-		return fmt.Errorf("解析最小 Seed 制品计划: %w", err)
-	}
-	log.Printf("最小 Seed 制品计划已确定: %d 个精确插件引用", len(selection.refs))
 	if err := r.prepare(ctx); err != nil {
 		return err
 	}
@@ -176,13 +172,32 @@ func (r *runtime) prepare(ctx context.Context) error {
 	if err := r.writeFixtures(ctx); err != nil {
 		return err
 	}
+	if !r.options.applyPlatform {
+		refs, restored, err := r.restoreOrMigrateSeedRuntimeSnapshot()
+		if err != nil {
+			return fmt.Errorf("恢复 Last-Known-Good Seed Runtime: %w", err)
+		}
+		if restored {
+			return r.signPackageRepository(refs)
+		}
+		log.Printf("尚无可复用的 Seed Runtime 快照，本次普通启动执行一次安全初始化构建")
+	}
+	selection, err := r.seedSelection()
+	if err != nil {
+		return fmt.Errorf("解析最小 Seed 制品计划: %w", err)
+	}
+	log.Printf("最小 Seed 制品计划已确定: %d 个精确插件引用", len(selection.refs))
 	if err := r.prepareCachedBuilds(ctx); err != nil {
 		return err
 	}
-	if err := r.signPackageRepository(); err != nil {
+	if err := r.signPackageRepository(selection.references()); err != nil {
 		return err
 	}
-	return nil
+	source := "bootstrap-build"
+	if !r.options.applyPlatform {
+		source = "initial-start-build"
+	}
+	return r.stageSeedRuntimeSnapshot(r.runDir, source)
 }
 
 func (r *runtime) command(ctx context.Context, extra map[string]string, name string, args ...string) error {
@@ -316,6 +331,9 @@ func (r *runtime) start(ctx context.Context) error {
 	if err := r.startProxy(); err != nil {
 		return err
 	}
+	if err := r.commitSeedRuntimeSnapshot(); err != nil {
+		return fmt.Errorf("提交已收敛的 Seed Runtime 快照: %w", err)
+	}
 	r.mu.Lock()
 	r.ready = true
 	r.mu.Unlock()
@@ -345,24 +363,29 @@ func (r *runtime) platformManagementDeployment() (string, int, error) {
 func (r *runtime) serviceEnv() map[string]string {
 	authorizationRoot := filepath.Join(r.persistentStateRoot(), "authorization")
 	return map[string]string{
-		"VASTPLAN_VAULT_ADDR":                           "http://" + r.options.vaultListen,
-		"VASTPLAN_VAULT_TRANSIT_KEY":                    "vastplan-local",
-		"VASTPLAN_VAULT_TOKEN_FILE":                     filepath.Join(r.runDir, "secrets", "vault-token"),
-		"VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE":      filepath.Join(r.persistentStateRoot(), "database-connections.json"),
-		"VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT":          r.testingRepositoryVolumes(),
-		"VASTPLAN_ARTIFACT_REPOSITORY":                  r.testingRepositoryData(),
-		"VASTPLAN_ARTIFACT_TRUST":                       r.testingRepositoryTrust(),
-		"VASTPLAN_ARTIFACT_TLS_CERT":                    filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
-		"VASTPLAN_ARTIFACT_TLS_KEY":                     filepath.Join(r.runDir, "secrets", "tls-key.pem"),
-		"VASTPLAN_ARTIFACT_READ_TOKEN":                  "vastplan-local-artifact-reader",
-		"VASTPLAN_ARTIFACT_PUBLISH_TOKEN":               "vastplan-local-artifact-publisher",
-		"VASTPLAN_ARTIFACT_BUNDLE_TOKEN":                "vastplan-local-artifact-bundle",
-		"VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN":            "vastplan-local-artifact-assessment",
-		"VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS":          r.testingAssessmentReports(),
-		"VASTPLAN_ARTIFACT_MIGRATION_STATE":             filepath.Join(r.testingRepositoryRoot(), "control", "repository-migration.json"),
-		"VASTPLAN_ARTIFACT_LOCAL_TOKEN_FILE":            r.testingRepositoryTokenFile(),
-		"VASTPLAN_DYNAMIC_GO_HOST":                      filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
-		"VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG":     filepath.Join(authorizationRoot, "permission-catalog.json"),
+		"VASTPLAN_VAULT_ADDR":                       "http://" + r.options.vaultListen,
+		"VASTPLAN_VAULT_TRANSIT_KEY":                "vastplan-local",
+		"VASTPLAN_VAULT_TOKEN_FILE":                 filepath.Join(r.runDir, "secrets", "vault-token"),
+		"VASTPLAN_DATABASE_CONNECTIONS_STATE_FILE":  filepath.Join(r.persistentStateRoot(), "database-connections.json"),
+		"VASTPLAN_ARTIFACT_FILE_PROVIDER_ROOT":      r.testingRepositoryVolumes(),
+		"VASTPLAN_ARTIFACT_REPOSITORY":              r.testingRepositoryData(),
+		"VASTPLAN_ARTIFACT_TRUST":                   r.testingRepositoryTrust(),
+		"VASTPLAN_ARTIFACT_TLS_CERT":                filepath.Join(r.runDir, "secrets", "tls-cert.pem"),
+		"VASTPLAN_ARTIFACT_TLS_KEY":                 filepath.Join(r.runDir, "secrets", "tls-key.pem"),
+		"VASTPLAN_ARTIFACT_READ_TOKEN":              "vastplan-local-artifact-reader",
+		"VASTPLAN_ARTIFACT_PUBLISH_TOKEN":           "vastplan-local-artifact-publisher",
+		"VASTPLAN_ARTIFACT_BUNDLE_TOKEN":            "vastplan-local-artifact-bundle",
+		"VASTPLAN_ARTIFACT_ASSESSMENT_TOKEN":        "vastplan-local-artifact-assessment",
+		"VASTPLAN_ARTIFACT_ASSESSMENT_REPORTS":      r.testingAssessmentReports(),
+		"VASTPLAN_ARTIFACT_MIGRATION_STATE":         filepath.Join(r.testingRepositoryRoot(), "control", "repository-migration.json"),
+		"VASTPLAN_ARTIFACT_LOCAL_TOKEN_FILE":        r.testingRepositoryTokenFile(),
+		"VASTPLAN_DYNAMIC_GO_HOST":                  filepath.Join(r.runDir, "dynamic", "vastplan-go-dynamic-host"),
+		"VASTPLAN_AUTHORIZATION_PERMISSION_CATALOG": filepath.Join(authorizationRoot, "permission-catalog.json"),
+		// Seed Runtime Snapshot v1 can restore the last healthy pre-Shared-State
+		// policy plugin and Assignment. Keep its exact host contract until every
+		// v1 snapshot has been replaced; the old Assignment allowlist prevents
+		// this alias from reaching the new plugin generation.
+		"VASTPLAN_AUTHORIZATION_POLICY_STATE":           filepath.Join(authorizationRoot, "policy-state.json"),
 		"VASTPLAN_AUTHORIZATION_POLICY_BOOTSTRAP_STATE": filepath.Join(authorizationRoot, "policy-state.json"),
 		"VASTPLAN_AUTHORIZATION_POLICY_KEY":             filepath.Join(authorizationRoot, "policy-key.json"),
 		"VASTPLAN_AUTHORIZATION_POLICY_SNAPSHOT":        filepath.Join(authorizationRoot, "policy-snapshot.json"),
