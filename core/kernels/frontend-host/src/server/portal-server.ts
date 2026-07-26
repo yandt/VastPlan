@@ -20,6 +20,7 @@ import { FileAccessProfileCatalog } from "../access/file-access-profile-catalog"
 import { AddressingAuthenticationBroker } from "../identity/authentication-broker-port";
 import { AddressingSessionAuthorization } from "../identity/session-authorization-port";
 import { FileAPIExposureCatalog } from "../api-exposure/file-api-exposure-catalog";
+import { FileAPIContractCatalog } from "../api-exposure/file-api-contract-catalog";
 
 interface PortalServerResources {
 	readonly addressing?: NodeAddressingRuntime;
@@ -37,6 +38,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
     const invoker = addressing === undefined ? undefined : new AddressingCapabilityInvoker(addressing.client);
     if (config.apiExposureCatalog !== undefined && invoker === undefined) throw new Error("API Exposure Gateway 需要 Addressing 配置");
     const apiExposureCatalog = config.apiExposureCatalog === undefined ? undefined : await FileAPIExposureCatalog.open(config.apiExposureCatalog);
+    const apiContractCatalog = config.apiContractCatalog === undefined ? undefined : await FileAPIContractCatalog.open(config.apiContractCatalog);
     const broker = invoker === undefined || config.identity.kind !== "broker" ? undefined : new AddressingAuthenticationBroker(invoker, config.identity.brokerLogicalService);
     const authorization = invoker === undefined || config.identity.kind !== "broker" ? undefined : new AddressingSessionAuthorization(invoker, config.identity.authorizationLogicalService);
     const identity = await openIdentityProvider(config.identity, { ...(access === undefined ? {} : { access }), ...(broker === undefined ? {} : { broker }), ...(authorization === undefined ? {} : { authorization }) });
@@ -45,6 +47,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
     const interaction = invoker === undefined ? undefined : new AddressingInteractionClient(invoker, config.addressing?.interactionLogicalService);
     const platform = invoker === undefined || composer === undefined ? undefined : {
       resolver: new PlatformManagementResolver(composer), client: new AddressingPlatformManagementClient(invoker),
+      ...(apiContractCatalog === undefined ? {} : { contractCatalog: apiContractCatalog }),
     };
     const delivery = config.delivery === undefined ? undefined : await PortalDeliveryStore.open(config.delivery.cacheRoot, config.delivery.originRoot);
     generations = composer === undefined || delivery === undefined ? undefined : new ServerGenerationManager(

@@ -96,6 +96,34 @@ func TestPortalPlatformCatalogResolvesProfileAndExactServiceGrants(t *testing.T)
 	}
 }
 
+func TestPortalPlatformCatalogValidatesExactManagementAPIReferences(t *testing.T) {
+	profile := validProfile(t)
+	binding := PortalBinding{
+		TenantID: "tenant-a", PortalID: "operations",
+		PlatformProfile: compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()},
+		Services: []ManagedService{{
+			ID: "api-exposure", LogicalService: "platform.api-exposure", RoutingDomain: "platform",
+			Capabilities: []CapabilityGrant{{Capability: "platform.api-exposure", Read: []string{"apiList"}}},
+			APIs: []ManagementAPI{{
+				ID: "primary", ContractID: "platform.api-exposure.management-api", ContractVersion: "1.0.0",
+				ContractDigest: "740b9847429ae4e42fc742f50043f7615633c1520d66bbd1f9548ae2dc7d9e19",
+			}},
+		}},
+	}
+	if err := ValidatePortalBinding(binding); err != nil {
+		t.Fatalf("精确 Management API 引用应有效: %v", err)
+	}
+
+	binding.Services[0].APIs = append(binding.Services[0].APIs, binding.Services[0].APIs[0])
+	if err := ValidatePortalBinding(binding); err == nil {
+		t.Fatal("重复 Management API 契约引用必须拒绝")
+	}
+	binding.Services[0].APIs = []ManagementAPI{{ID: "primary", ContractID: "invalid", ContractVersion: "latest", ContractDigest: "not-a-digest"}}
+	if err := ValidatePortalBinding(binding); err == nil {
+		t.Fatal("未治理的 Management API 契约引用必须拒绝")
+	}
+}
+
 func TestPortalPlatformCatalogRejectsWideningAndStaleProfileLocks(t *testing.T) {
 	profile := validProfile(t)
 	base := PortalPlatformCatalog{

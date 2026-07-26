@@ -13,6 +13,7 @@ import type { SignedAuthenticationAssertion } from "../identity/signed-authentic
 import { createPortalHandler } from "../http/portal-handler";
 import { createPortalFixture } from "./portal-fixture";
 import { writeSessionFixture } from "./session-fixture";
+import type { APIContractCatalogPort } from "../api-exposure/api-exposure-contract";
 
 export interface PlatformInvocation { capability: string; operation: string; payload: unknown; logicalService?: string }
 
@@ -23,7 +24,7 @@ export function recordingPlatformInvoker(calls: PlatformInvocation[], response: 
   } };
 }
 
-export async function startPlatformManagementTestServer(invoker: TrustedCapabilityInvoker, roles: string[], rawBinding: Record<string, unknown>, authenticationTestProof?: SignedAuthenticationAssertion): Promise<{
+export async function startPlatformManagementTestServer(invoker: TrustedCapabilityInvoker, roles: string[], rawBinding: Record<string, unknown>, authenticationTestProof?: SignedAuthenticationAssertion, contractCatalog?: APIContractCatalogPort): Promise<{
   origin: string; readHeaders: Record<string, string>; writeHeaders: Record<string, string>; close(): Promise<void>;
 }> {
   const binding = parseManagementBinding(rawBinding);
@@ -40,7 +41,7 @@ export async function startPlatformManagementTestServer(invoker: TrustedCapabili
     async authenticate() { return { id: "alice", tenantId: "tenant-a", roles }; },
     async authenticationTestProof() { return authenticationTestProof; },
   };
-  const platform = { resolver: new PlatformManagementResolver(composer), client: new AddressingPlatformManagementClient(invoker) };
+  const platform = { resolver: new PlatformManagementResolver(composer), client: new AddressingPlatformManagementClient(invoker), ...(contractCatalog === undefined ? {} : { contractCatalog }) };
   const server = createServer(createPortalHandler({ assets, identity, platform, secureCookies: false }));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;

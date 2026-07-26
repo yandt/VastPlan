@@ -4,12 +4,14 @@ const managementName = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
 
 export interface ManagementRef { id: string; revision: number; digest: string }
 export interface CapabilityGrant { capability: string; read: readonly string[]; write: readonly string[] }
+export interface ManagementAPI { id: string; contractId: string; contractVersion: string; contractDigest: string }
 export interface ManagedService {
   id: string;
   label?: string;
   logicalService: string;
   routingDomain: string;
   capabilities: readonly CapabilityGrant[];
+  apis?: readonly ManagementAPI[];
 }
 export interface ManagementBinding {
   tenantId: string;
@@ -41,8 +43,9 @@ export function parseManagementBinding(value: unknown): ManagementBinding {
     if (!Array.isArray(service.capabilities) || service.capabilities.length === 0) throw new Error(`受管服务 ${id} 没有 capability grant`);
     const seenCapabilities = new Set<string>();
     const capabilities = service.capabilities.map((value) => parseGrant(value, seenCapabilities));
+    const apis = parseAPIs(service.apis);
     const label = optionalString(service.label);
-    return Object.freeze({ id, ...(label === undefined ? {} : { label }), logicalService, routingDomain, capabilities: Object.freeze(capabilities) });
+    return Object.freeze({ id, ...(label === undefined ? {} : { label }), logicalService, routingDomain, capabilities: Object.freeze(capabilities), apis: Object.freeze(apis) });
   });
   return Object.freeze({ tenantId, portalId, platformProfile, services: Object.freeze(services) });
 }
@@ -62,9 +65,28 @@ export function managementBindingDigest(binding: ManagementBinding): string {
         ...(grant.read.length === 0 ? {} : { read: [...grant.read] }),
         ...(grant.write.length === 0 ? {} : { write: [...grant.write] }),
       })),
+      ...(service.apis === undefined || service.apis.length === 0 ? {} : { apis: service.apis.map((api) => ({ ...api })) }),
     })),
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+}
+
+function parseAPIs(value: unknown): ManagementAPI[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > 32) throw new Error("Management API 目录无效");
+  const ids = new Set<string>(), contracts = new Set<string>();
+  return value.map((item) => {
+    const api = record(item, "Management API");
+    const id = named(api.id, "Management API id");
+    const contractId = requiredString(api.contractId, "contractId");
+    const contractVersion = requiredString(api.contractVersion, "contractVersion");
+    const contractDigest = digest(api.contractDigest, "contractDigest");
+    if (!/^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$/.test(contractId) || !/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(contractVersion)) throw new Error(`Management API 契约格式无效: ${id}`);
+    const contractKey = `${contractId}\0${contractVersion}\0${contractDigest}`;
+    if (ids.has(id) || contracts.has(contractKey)) throw new Error(`Management API 重复: ${id}`);
+    ids.add(id); contracts.add(contractKey);
+    return Object.freeze({ id, contractId, contractVersion, contractDigest });
+  });
 }
 
 export function managementAllows(service: ManagedService, capability: string, operation: string, write: boolean): boolean {

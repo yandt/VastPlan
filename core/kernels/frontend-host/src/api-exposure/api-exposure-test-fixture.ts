@@ -1,4 +1,4 @@
-import type { APIContractContribution, APIExposureCatalog } from "./api-exposure-contract";
+import type { APIContractCatalog, APIContractContribution, APIExposureCatalog } from "./api-exposure-contract";
 import { apiContractDigest } from "./api-exposure-schema";
 
 export function exampleContract(): APIContractContribution {
@@ -10,6 +10,18 @@ export function exampleContract(): APIContractContribution {
       requestSchema: { type: "object", additionalProperties: false },
       responseSchema: { type: "object", additionalProperties: false, properties: { ok: { type: "boolean" } }, required: ["ok"] },
       successStatus: 200, errors: [{ code: "platform.demo.not_found", status: 404 }],
+    }],
+  };
+}
+
+export function exampleContractCatalog(contract = exampleContract()): APIContractCatalog {
+  return {
+    schemaVersion: "v1", generation: 1, dataPlaneServices: [], contracts: [{
+      reference: {
+        pluginId: "cn.vastplan.platform.demo", artifactSha256: "a".repeat(64), contributionId: contract.id,
+        contractId: contract.contractId, contractVersion: contract.contractVersion, contractDigest: apiContractDigest(contract),
+      },
+      contract,
     }],
   };
 }

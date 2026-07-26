@@ -1,19 +1,36 @@
 import { createHash } from "node:crypto";
 import Ajv2020, { type ValidateFunction } from "ajv/dist/2020.js";
 import apiExposureSchema from "../../../../../contracts/schemas/api/v1/vastplan.api-exposure.schema.json";
-import type { APIContractContribution, APIExposureCatalog, ResolvedAPIExposure } from "./api-exposure-contract";
+import type { APIContractCatalog, APIContractContribution, APIExposureCatalog, ResolvedAPIContract, ResolvedAPIExposure } from "./api-exposure-contract";
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 ajv.addFormat("uri", true);
 ajv.addFormat("date-time", true);
 ajv.addSchema(apiExposureSchema);
 const validateCatalog = requiredValidator(`${apiExposureSchema.$id}#/$defs/exposureCatalog`);
+const validateContractCatalog = requiredValidator(`${apiExposureSchema.$id}#/$defs/contractCatalog`);
 
 export class APIExposureContractError extends Error {
   public constructor(message: string) {
     super(message);
     this.name = "APIExposureContractError";
   }
+}
+
+export function parseAPIContractCatalog(raw: string): APIContractCatalog {
+  let value: unknown;
+  try { value = JSON.parse(raw) as unknown; }
+  catch { throw new APIExposureContractError("API Contract Catalog 不是有效 JSON"); }
+  if (!validateContractCatalog(value)) throw new APIExposureContractError(`API Contract Catalog 不符合 Schema: ${ajv.errorsText(validateContractCatalog.errors)}`);
+  const catalog = value as APIContractCatalog;
+  const identities = new Set<string>();
+  for (const resolved of catalog.contracts) {
+    validateResolvedContract(resolved);
+    const identity = `${resolved.reference.contractId}\0${resolved.reference.contractVersion}\0${resolved.reference.contractDigest}`;
+    if (identities.has(identity)) throw new APIExposureContractError(`API Contract 重复: ${resolved.reference.contractId}@${resolved.reference.contractVersion}`);
+    identities.add(identity);
+  }
+  return deepFreeze(structuredClone(catalog));
 }
 
 export function parseAPIExposureCatalog(raw: string): APIExposureCatalog {
@@ -71,9 +88,21 @@ function validateResolvedExposure(resolved: ResolvedAPIExposure): void {
   if (apiContractDigest(contract) !== reference.contractDigest) {
     throw new APIExposureContractError(`API Exposure ${resolved.exposure.id} 的契约摘要不一致`);
   }
+  validateContract(contract);
   if (resolved.exposure.hosts.some((host) => host !== host.toLowerCase() || host.endsWith("."))) {
     throw new APIExposureContractError(`API Exposure ${resolved.exposure.id} 的 Host 未规范化`);
   }
+}
+
+function validateResolvedContract(resolved: ResolvedAPIContract): void {
+  const reference = resolved.reference, contract = resolved.contract;
+  if (reference.contributionId !== contract.id || reference.contractId !== contract.contractId || reference.contractVersion !== contract.contractVersion || apiContractDigest(contract) !== reference.contractDigest) {
+    throw new APIExposureContractError(`API Contract ${reference.contractId}@${reference.contractVersion} 的引用不一致`);
+  }
+  validateContract(contract);
+}
+
+function validateContract(contract: APIContractContribution): void {
   for (const route of contract.routes) {
     validateRouteTemplate(route.path);
     rejectExternalReference(route.requestSchema);

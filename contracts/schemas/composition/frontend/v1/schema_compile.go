@@ -5,6 +5,7 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 )
@@ -17,6 +18,10 @@ func schemas() (*jsonschema.Schema, *jsonschema.Schema, *jsonschema.Schema, erro
 			return
 		}
 		if err := compositioncommonv1.AddResources(compiler); err != nil {
+			compileErr = err
+			return
+		}
+		if err := apiv1.AddResources(compiler); err != nil {
 			compileErr = err
 			return
 		}

@@ -234,6 +234,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0151 最小 Seed 装配与开发插件候选分流](decisions/ADR-0151-最小Seed装配与开发插件候选分流.md)
 - [ADR-0152 插件边界门禁与权限策略物理收敛](decisions/ADR-0152-插件边界门禁与权限策略物理收敛.md)
 - [ADR-0153 Kernel Service 可信授权编译](decisions/ADR-0153-Kernel-Service可信授权编译.md)
+- [ADR-0154 Portal 管理 API 合同驱动分发](decisions/ADR-0154-Portal管理API合同驱动分发.md)
 
 ### 插件共享代码与能力复用
 

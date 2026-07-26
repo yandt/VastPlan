@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PlatformAdminClient, PlatformAdminError, type PlatformFetch } from "./index";
+import { ManagementAPIClient, PlatformAdminClient, PlatformAdminError, type PlatformFetch } from "./index";
 
 describe("PlatformAdminClient", () => {
   it("obtains CSRF before a write and never places credential plaintext in the URL", async () => {
@@ -307,5 +307,30 @@ describe("PlatformAdminClient", () => {
     ]);
     expect(calls.some((call) => call.path.includes("authentication.delivery.webhook"))).toBe(false);
     expect(resourceId).toMatch(/^cfgp_/);
+  });
+});
+
+describe("ManagementAPIClient", () => {
+  it("uses only portal-local selectors and a contract-relative path", async () => {
+    const calls: Array<{ path: string; method?: string; body?: string }> = [];
+    const client = new ManagementAPIClient(async (path, init) => {
+      calls.push({ path, method: init?.method, body: init?.body });
+      return { ok: true, status: 200, json: async () => path === "/v1/csrf" ? { token: "safe" } : { id: 7 } };
+    }, "operations", "api-exposure", "primary");
+    await client.get("/api-exposures?status=Draft");
+    await client.mutate("/api-exposures", "POST", { name: "customer-api" });
+    expect(calls).toEqual([
+      { path: "/v1/portals/operations/platform/services/api-exposure/api/primary/api-exposures?status=Draft", method: "GET", body: undefined },
+      { path: "/v1/csrf", method: "GET", body: undefined },
+      { path: "/v1/portals/operations/platform/services/api-exposure/api/primary/api-exposures", method: "POST", body: JSON.stringify({ name: "customer-api" }) },
+    ]);
+    expect(calls.some(({ path }) => path.includes("capability=") || path.includes("operation="))).toBe(false);
+  });
+
+  it("rejects ambiguous selectors and relative-path traversal", async () => {
+    const fetcher: PlatformFetch = async () => ({ ok: true, status: 200, json: async () => ({}) });
+    expect(() => new ManagementAPIClient(fetcher, "operations", "bad/service", "primary")).toThrowError(PlatformAdminError);
+    const client = new ManagementAPIClient(fetcher, "operations", "api-exposure", "primary");
+    expect(() => client.get("/../credentials")).toThrowError(PlatformAdminError);
   });
 });

@@ -84,12 +84,20 @@ export interface PortalManagementCapability {
   write?: readonly string[];
 }
 
+export interface PortalManagementAPI {
+  id: string;
+  contractId: string;
+  contractVersion: string;
+  contractDigest: string;
+}
+
 export interface PortalManagementService {
   id: string;
   label?: string;
   logicalService: string;
   routingDomain: string;
   capabilities: readonly PortalManagementCapability[];
+  apis?: readonly PortalManagementAPI[];
 }
 
 export interface PortalPluginRuntime {
@@ -185,4 +193,3 @@ export interface ShellCompositionModel {
   shellSlots: Readonly<Partial<Record<ShellSlotID, readonly PortalRegisteredShellContribution[]>>>;
   pageSlots: Readonly<Partial<Record<PageSlotID, readonly PortalPageSlotContribution[]>>>;
 }
-

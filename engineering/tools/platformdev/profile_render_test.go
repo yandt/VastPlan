@@ -10,6 +10,7 @@ import (
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/configfile"
 )
 
@@ -105,6 +106,45 @@ func TestPortalPlatformBindingUsesCurrentProfileDigest(t *testing.T) {
 	digest := profile.Digest()
 	if binding.PlatformProfile.ID != profile.ID || binding.PlatformProfile.Revision != profile.Revision || binding.PlatformProfile.Digest != digest {
 		t.Fatalf("Portal Binding 未引用当前 Profile: want=%s@%d/%s got=%s@%d/%s", profile.ID, profile.Revision, digest, binding.PlatformProfile.ID, binding.PlatformProfile.Revision, binding.PlatformProfile.Digest)
+	}
+	if _, err := frontendcompositionv1.ValidatePortalPlatformCatalog(catalog); err != nil {
+		t.Fatalf("开发 Portal Catalog 无效: %v", err)
+	}
+}
+
+func TestPortalManagementAPIReferenceMatchesVerifiedManifestContract(t *testing.T) {
+	manifestRaw, err := os.ReadFile(filepath.Join("..", "..", "..", "extensions", "plugins", "cn.vastplan.platform.integration.api-exposure", "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := pluginv1.ParseManifest(manifestRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractCatalog, err := pluginv1.BuildAPIContractCatalog(1, []pluginv1.APIContractCatalogSource{{Manifest: manifest, ArtifactSHA256: strings.Repeat("a", 64)}})
+	if err != nil || len(contractCatalog.Contracts) != 1 {
+		t.Fatalf("API Contract Catalog 无效: %+v err=%v", contractCatalog, err)
+	}
+	portalRaw, err := os.ReadFile(filepath.Join("..", "..", "deploy", "portal-platform-catalog.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	portal, err := frontendcompositionv1.ParsePortalPlatformCatalog(portalRaw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reference *frontendcompositionv1.ManagementAPI
+	for _, service := range portal.Bindings[0].Services {
+		if service.ID == "api-exposure" && len(service.APIs) == 1 {
+			reference = &service.APIs[0]
+		}
+	}
+	if reference == nil {
+		t.Fatal("API Exposure 服务必须绑定唯一 Management API")
+	}
+	trusted := contractCatalog.Contracts[0].Reference
+	if reference.ContractID != trusted.ContractID || reference.ContractVersion != trusted.ContractVersion || reference.ContractDigest != trusted.ContractDigest {
+		t.Fatalf("Portal Management API 引用未锁定当前可信 Contract: portal=%+v trusted=%+v", *reference, trusted)
 	}
 }
 

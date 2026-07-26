@@ -59,6 +59,35 @@ export interface APIExposureCatalogPort {
   resolveDataPlane(host: string, routeKey: string): Promise<DataPlaneExposure | undefined>;
 }
 
+export interface ResolvedAPIContract {
+  readonly reference: {
+    readonly pluginId: string;
+    readonly artifactSha256: string;
+    readonly contributionId: string;
+    readonly contractId: string;
+    readonly contractVersion: string;
+    readonly contractDigest: string;
+  };
+  readonly contract: APIContractContribution;
+}
+
+export interface APIContractCatalog {
+  readonly schemaVersion: "v1";
+  readonly generation: number;
+  readonly contracts: readonly ResolvedAPIContract[];
+  readonly dataPlaneServices: readonly unknown[];
+}
+
+export interface APIContractReference {
+  readonly contractId: string;
+  readonly contractVersion: string;
+  readonly contractDigest: string;
+}
+
+export interface APIContractCatalogPort {
+  resolveContract(reference: APIContractReference): Promise<APIContractContribution | undefined>;
+}
+
 export interface DataPlaneExposure {
   readonly schemaVersion: "v1";
   readonly id: string;

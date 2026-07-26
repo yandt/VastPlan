@@ -173,6 +173,17 @@ type ManagedService struct {
 	LogicalService string            `json:"logicalService"`
 	RoutingDomain  string            `json:"routingDomain"`
 	Capabilities   []CapabilityGrant `json:"capabilities"`
+	APIs           []ManagementAPI   `json:"apis,omitempty"`
+}
+
+// ManagementAPI binds an opaque Portal-local route id to one exact contract
+// already derived from a verified plugin artifact. It deliberately omits the
+// plugin id and backend routing target from the browser-visible projection.
+type ManagementAPI struct {
+	ID              string `json:"id"`
+	ContractID      string `json:"contractId"`
+	ContractVersion string `json:"contractVersion"`
+	ContractDigest  string `json:"contractDigest"`
 }
 
 // CapabilityGrant separates read and write operations so a read-only portal

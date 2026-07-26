@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 41,
+  "revision": 42,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 41,
+      "revision": 42,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -72,7 +72,7 @@
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.3", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.3", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.34.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.3", "channel": "stable" },
+        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.4", "channel": "stable" },
         { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.20.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.2.0", "channel": "stable" }
       ],
@@ -85,8 +85,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 41,
-        "digest": "872eb791069acb4229ec06684de4f6348bbf1fcf2bd3d36c3e0dc64b7648d592"
+        "revision": 42,
+        "digest": "3f684a4c3eca55967318fe9d7fe2732cd422a9141b90bb866e83aedd272911c4"
       },
       "services": [
         {
@@ -131,7 +131,15 @@
           "logicalService": "platform.api-exposure",
           "routingDomain": "platform",
           "capabilities": [
-            { "capability": "platform.api-exposure", "read": ["list", "listDataPlanes"], "write": ["createDraft", "updateDraft", "submit", "approve", "publish", "retire", "createDataPlaneDraft", "submitDataPlane", "approveDataPlane", "publishDataPlane", "retireDataPlane"] }
+            { "capability": "platform.api-exposure", "read": ["list", "listDataPlanes", "apiList"], "write": ["createDraft", "updateDraft", "submit", "approve", "publish", "retire", "createDataPlaneDraft", "submitDataPlane", "approveDataPlane", "publishDataPlane", "retireDataPlane", "apiCreateDraft", "apiUpdateDraft", "apiSubmit", "apiApprove", "apiPublish", "apiRetire"] }
+          ],
+          "apis": [
+            {
+              "id": "primary",
+              "contractId": "platform.api-exposure.management-api",
+              "contractVersion": "1.0.0",
+              "contractDigest": "740b9847429ae4e42fc742f50043f7615633c1520d66bbd1f9548ae2dc7d9e19"
+            }
           ]
         },
         {

@@ -29,6 +29,7 @@ export interface PortalManagementBinding {
     logicalService: string;
     routingDomain: string;
     capabilities: PortalManagementGrant[];
+    apis?: Array<{ id: string; contractId: string; contractVersion: string; contractDigest: string }>;
   }>;
 }
 

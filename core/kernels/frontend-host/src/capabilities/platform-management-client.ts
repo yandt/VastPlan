@@ -1,6 +1,6 @@
 import type { Principal } from "../identity/identity-provider";
 import type { TrustedCapabilityInvoker } from "./capability-invoker";
-import { platformOperationAllowed } from "./platform-capability-policy";
+import { managementAllows } from "./management-binding";
 import type { PlatformManagementTarget } from "./platform-management-resolver";
 
 export class ManagementAuthorizationError extends Error {
@@ -16,7 +16,7 @@ export class AddressingPlatformManagementClient implements PlatformCapabilityPor
   public constructor(private readonly invoker: TrustedCapabilityInvoker) {}
 
   public authorize(target: PlatformManagementTarget, capability: string, operation: string, write: boolean): void {
-    if (!platformOperationAllowed(target.service, capability, operation, write)) throw new ManagementAuthorizationError();
+    if (!managementAllows(target.service, capability, operation, write)) throw new ManagementAuthorizationError();
   }
 
   public call(principal: Principal, target: PlatformManagementTarget, capability: string, operation: string, write: boolean, payload: Uint8Array, signal?: AbortSignal): Promise<Uint8Array> {

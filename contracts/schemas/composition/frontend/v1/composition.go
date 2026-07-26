@@ -160,6 +160,8 @@ func ValidatePortalBinding(binding PortalBinding) error {
 
 var managementName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$`)
 var templateName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
+var managementContractID = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$`)
+var managementContractVersion = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$`)
 
 func validateManagedServices(services []ManagedService) error {
 	seenIDs, seenTargets := map[string]struct{}{}, map[string]struct{}{}
@@ -201,6 +203,30 @@ func validateManagedServices(services []ManagedService) error {
 		}
 		if len(seenCapabilities) == 0 {
 			return fmt.Errorf("服务未授予任何 capability: %s", service.ID)
+		}
+		seenAPIs, seenContracts := map[string]struct{}{}, map[string]struct{}{}
+		if len(service.APIs) > 32 {
+			return fmt.Errorf("服务 %s 的 Management API 数量超过上限", service.ID)
+		}
+		for _, api := range service.APIs {
+			if !managementName.MatchString(api.ID) || !managementContractID.MatchString(api.ContractID) || !managementContractVersion.MatchString(api.ContractVersion) {
+				return fmt.Errorf("服务 %s 的 Management API 引用格式无效: %s", service.ID, api.ID)
+			}
+			if len(api.ContractDigest) != 64 {
+				return fmt.Errorf("服务 %s 的 Management API 摘要无效: %s", service.ID, api.ID)
+			}
+			if _, err := hex.DecodeString(api.ContractDigest); err != nil {
+				return fmt.Errorf("服务 %s 的 Management API 摘要无效: %s", service.ID, api.ID)
+			}
+			if _, duplicate := seenAPIs[api.ID]; duplicate {
+				return fmt.Errorf("服务 %s 的 Management API id 重复: %s", service.ID, api.ID)
+			}
+			seenAPIs[api.ID] = struct{}{}
+			contract := api.ContractID + "\x00" + api.ContractVersion + "\x00" + api.ContractDigest
+			if _, duplicate := seenContracts[contract]; duplicate {
+				return fmt.Errorf("服务 %s 的 Management API 契约重复: %s", service.ID, api.ContractID)
+			}
+			seenContracts[contract] = struct{}{}
 		}
 	}
 	return nil

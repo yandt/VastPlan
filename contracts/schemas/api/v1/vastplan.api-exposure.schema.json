@@ -71,8 +71,8 @@
       },
       "required": ["id", "service_role", "protocol", "purposes", "supportedModes", "healthPath", "maxObjectBytes"],
       "allOf": [{
-        "if": { "properties": { "supportedModes": { "contains": { "const": "ticket-redirect" } } } },
-        "then": { "required": ["ticketTarget"] }
+        "if": { "properties": { "supportedModes": { "type": "array", "contains": { "const": "ticket-redirect" } } } },
+        "then": { "required": ["ticketTarget"], "properties": { "ticketTarget": { "$ref": "#/$defs/capabilityTarget" } } }
       }]
     },
     "contractReference": {

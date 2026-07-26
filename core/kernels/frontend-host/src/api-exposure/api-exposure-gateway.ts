@@ -1,5 +1,4 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import Ajv2020, { type ValidateFunction } from "ajv/dist/2020.js";
 import { CapabilityApplicationError, type TrustedCapabilityInvoker } from "../capabilities/capability-invoker";
 import type { IdentityProvider, Principal } from "../identity/identity-provider";
 import { validCSRF } from "../security/csrf";
@@ -8,17 +7,16 @@ import type { APIExposureCatalogPort, APIRouteContract, GatewayInvocation, Resol
 import { matchAPIRoute } from "./api-route-matcher";
 import { APIExposureRateLimiter } from "./api-rate-limiter";
 import { DataPlaneTicketGateway } from "./data-plane-ticket-gateway";
+import { APIBodyTooLargeError, APIUnsupportedMediaTypeError, parseAPIQuery, readAPIJSONBody } from "./api-invocation";
+import { APIContractValidatorCache } from "./api-contract-validator-cache";
 
 const publicPath = /^\/api\/r\/([a-z2-7]{20})\/v([1-9][0-9]*)(\/.*)$/;
 const dataPlaneTicketPath = /^\/api\/d\/([a-z2-7]{20})\/ticket$/;
-const maximumQueryKeys = 64;
-const maximumQueryValues = 32;
-const maximumQueryValueBytes = 4_096;
 
 export class APIExposureGateway {
   private readonly rateLimiter: APIExposureRateLimiter;
   private readonly dataPlane: DataPlaneTicketGateway;
-  private readonly validators = new Map<string, { request: ValidateFunction; response: ValidateFunction }>();
+  private readonly validators = new APIContractValidatorCache();
 
   public constructor(
     private readonly catalog: APIExposureCatalogPort,
@@ -61,14 +59,14 @@ export class APIExposureGateway {
     let body: unknown;
     let query: Readonly<Record<string, readonly string[]>>;
     try {
-      body = await readJSONBody(request, resolved.exposure.limits.maxBodyBytes, method);
-      query = parseQuery(request.url ?? path);
+      body = await readAPIJSONBody(request, resolved.exposure.limits.maxBodyBytes, method);
+      query = parseAPIQuery(request.url ?? path);
     } catch (error) {
-      return sendAPIError(response, error instanceof UnsupportedMediaTypeError ? 415 : error instanceof BodyTooLargeError ? 413 : 400,
-        error instanceof UnsupportedMediaTypeError ? "unsupported_media_type" : error instanceof BodyTooLargeError ? "body_too_large" : "invalid_request");
+      return sendAPIError(response, error instanceof APIUnsupportedMediaTypeError ? 415 : error instanceof APIBodyTooLargeError ? 413 : 400,
+        error instanceof APIUnsupportedMediaTypeError ? "unsupported_media_type" : error instanceof APIBodyTooLargeError ? "body_too_large" : "invalid_request");
     }
 
-    const validators = this.routeValidators(resolved, matched.route);
+    const validators = this.validators.resolve(resolved.exposure.contract.contractDigest, matched.route);
     if (!validators.request(body)) return sendAPIError(response, 422, "request_schema_rejected");
     const invocation: GatewayInvocation = {
       schemaVersion: "v1", routeId: matched.route.id, method: matched.route.method,
@@ -127,51 +125,6 @@ export class APIExposureGateway {
     return exposure.requiredPermissions.every((permission) => principal.roles.includes(permission));
   }
 
-  private routeValidators(resolved: ResolvedAPIExposure, route: APIRouteContract): { request: ValidateFunction; response: ValidateFunction } {
-    const key = `${resolved.exposure.contract.contractDigest}\0${route.id}`;
-    const cached = this.validators.get(key);
-    if (cached !== undefined) return cached;
-    const ajv = new Ajv2020({ allErrors: false, strict: true });
-    const compiled = { request: ajv.compile(route.requestSchema), response: ajv.compile(route.responseSchema) };
-    if (this.validators.size >= 10_000) this.validators.clear();
-    this.validators.set(key, compiled);
-    return compiled;
-  }
-}
-
-async function readJSONBody(request: IncomingMessage, maximumBytes: number, method: string): Promise<unknown> {
-  const contentLength = request.headers["content-length"];
-  const declared = contentLength === undefined ? undefined : Number(contentLength);
-  if (declared !== undefined && (!Number.isSafeInteger(declared) || declared < 0)) throw new Error("Content-Length 无效");
-  if (declared !== undefined && declared > maximumBytes) throw new BodyTooLargeError();
-  if (method === "GET" && ((declared ?? 0) > 0 || request.headers["transfer-encoding"] !== undefined)) throw new Error("GET 不得包含请求体");
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
-    size += bytes.byteLength;
-    if (size > maximumBytes) throw new BodyTooLargeError();
-    chunks.push(bytes);
-  }
-  if (size === 0) return {};
-  const contentType = request.headers["content-type"]?.split(";", 1)[0].trim().toLowerCase();
-  if (contentType !== "application/json") throw new UnsupportedMediaTypeError();
-  try { return JSON.parse(Buffer.concat(chunks, size).toString("utf8")) as unknown; }
-  catch { throw new Error("请求 JSON 无效"); }
-}
-
-function parseQuery(rawURL: string): Readonly<Record<string, readonly string[]>> {
-  const url = new URL(rawURL, "https://gateway.invalid");
-  const result: Record<string, string[]> = {};
-  for (const [key, value] of url.searchParams) {
-    if (!/^[a-z][A-Za-z0-9._-]*$/.test(key) || Buffer.byteLength(key) > 160 || Buffer.byteLength(value) > maximumQueryValueBytes) throw new Error("query 超过上限");
-    const values = result[key] ?? [];
-    if (values.length >= maximumQueryValues) throw new Error("query 重复值超过上限");
-    values.push(value);
-    result[key] = values;
-  }
-  if (Object.keys(result).length > maximumQueryKeys) throw new Error("query key 超过上限");
-  return Object.freeze(Object.fromEntries(Object.entries(result).map(([key, values]) => [key, Object.freeze(values)])));
 }
 
 function sendCapabilityError(response: ServerResponse, route: APIRouteContract, code: string): void {
@@ -187,6 +140,3 @@ function reportGatewayFailure(resolved: ResolvedAPIExposure, route: APIRouteCont
     route_id: route.id, reason,
   })}\n`);
 }
-
-class BodyTooLargeError extends Error {}
-class UnsupportedMediaTypeError extends Error {}

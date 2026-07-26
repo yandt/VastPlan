@@ -8,6 +8,7 @@ export function snapshotPortal(portal: PortalSpec): Readonly<PortalSpec> {
       read: grant.read === undefined ? undefined : Object.freeze([...grant.read]),
       write: grant.write === undefined ? undefined : Object.freeze([...grant.write]),
     }))),
+    apis: service.apis === undefined ? undefined : Object.freeze(service.apis.map((api) => Object.freeze({ ...api }))),
   }));
   return Object.freeze({
     ...portal,

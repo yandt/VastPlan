@@ -266,6 +266,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"--session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json"),
 		"--portal-assets", filepath.Join(r.runDir, "portal-assets"),
 		"--access-profile-catalog", filepath.Join(r.runDir, "access-profile-catalog.json"),
+		"--api-contract-catalog", filepath.Join(r.persistentStateRoot(), "api-contract-catalog.json"),
 		"--frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
 		"--frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
 		"--nats-servers", natsURL, "--allow-insecure-nats",

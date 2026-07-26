@@ -13,7 +13,7 @@ import { setBaseSecurityHeaders, setIndexSecurityHeaders } from "./security-head
 import type { AccessCatalogPort } from "../access/access-catalog-port";
 import { serveAccessBootstrap } from "./access-bootstrap-route";
 import { serveAccessBrandAsset } from "./access-brand-asset-route";
-import type { APIExposureCatalogPort } from "../api-exposure/api-exposure-contract";
+import type { APIContractCatalogPort, APIExposureCatalogPort } from "../api-exposure/api-exposure-contract";
 import { APIExposureGateway } from "../api-exposure/api-exposure-gateway";
 import type { TrustedCapabilityInvoker } from "../capabilities/capability-invoker";
 import { sendAPIError, sendJSON } from "./json-response";
@@ -27,7 +27,7 @@ export interface PortalHandlerOptions {
   composer?: PortalComposerPort;
   preferences?: PortalPreferencePort;
   interaction?: InteractionPort;
-  platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort };
+  platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort; contractCatalog?: APIContractCatalogPort };
   delivery?: PortalDeliveryStore;
   ssr?: PortalSSRPort;
 }

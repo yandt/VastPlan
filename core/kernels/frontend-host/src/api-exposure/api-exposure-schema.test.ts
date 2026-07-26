@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { apiContractDigest, parseAPIExposureCatalog } from "./api-exposure-schema";
+import { apiContractDigest, parseAPIContractCatalog, parseAPIExposureCatalog } from "./api-exposure-schema";
 import type { APIContractContribution } from "./api-exposure-contract";
-import { exampleCatalog, exampleContract, type MutableCatalog, type MutableContract } from "./api-exposure-test-fixture";
+import { exampleCatalog, exampleContract, exampleContractCatalog, type MutableCatalog, type MutableContract } from "./api-exposure-test-fixture";
 
 describe("API Exposure Contract", () => {
   it("normalizes contract declaration order and parses a self-contained catalog", () => {
@@ -13,6 +13,12 @@ describe("API Exposure Contract", () => {
     const parsed = parseAPIExposureCatalog(JSON.stringify(exampleCatalog(contract)));
     expect(parsed.exposures[0].contract.contractId).toBe("platform.demo.api");
     expect(Object.isFrozen(parsed.exposures[0].contract)).toBe(true);
+  });
+
+  it("parses the signed-artifact contract catalog used by Portal management", () => {
+    const parsed = parseAPIContractCatalog(JSON.stringify(exampleContractCatalog()));
+    expect(parsed.contracts[0]?.reference.pluginId).toBe("cn.vastplan.platform.demo");
+    expect(Object.isFrozen(parsed.contracts[0]?.contract)).toBe(true);
   });
 
   it("rejects digest mismatch, external references, and route key collisions", () => {

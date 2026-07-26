@@ -15,6 +15,8 @@ import type { IdentityProvider } from "../identity/identity-provider";
 import { PlatformAPIExposureRoutes } from "./platform-api-exposure-routes";
 import { PlatformAuthorizationRoutes } from "./platform-authorization-routes";
 import { PlatformPluginConfigurationRoutes } from "./platform-plugin-configuration-routes";
+import type { APIContractCatalogPort } from "../api-exposure/api-exposure-contract";
+import { PlatformManagementAPIRoutes } from "./platform-management-api-routes";
 
 const prefix = "/v1/portals/";
 
@@ -29,8 +31,9 @@ export class PlatformManagementRoutes {
   private readonly apiExposures: PlatformAPIExposureRoutes;
   private readonly authorization: PlatformAuthorizationRoutes;
   private readonly pluginConfigurations: PlatformPluginConfigurationRoutes;
+  private readonly managementAPI?: PlatformManagementAPIRoutes;
 
-  public constructor(private readonly resolver: PlatformManagementResolver, client: PlatformCapabilityPort, identity: IdentityProvider) {
+  public constructor(private readonly resolver: PlatformManagementResolver, client: PlatformCapabilityPort, identity: IdentityProvider, contractCatalog?: APIContractCatalogPort) {
     this.settings = new PlatformSettingsRoutes(client);
     this.credentials = new PlatformCredentialsRoutes(client);
     this.database = new PlatformDatabaseRoutes(client);
@@ -41,6 +44,7 @@ export class PlatformManagementRoutes {
     this.apiExposures = new PlatformAPIExposureRoutes(client);
     this.authorization = new PlatformAuthorizationRoutes(client);
     this.pluginConfigurations = new PlatformPluginConfigurationRoutes(client);
+    this.managementAPI = contractCatalog === undefined ? undefined : new PlatformManagementAPIRoutes(contractCatalog, client);
   }
 
   public async handle(path: string, principal: Principal, request: IncomingMessage, response: ServerResponse, signal: AbortSignal): Promise<boolean> {
@@ -58,6 +62,7 @@ export class PlatformManagementRoutes {
       return reject(response, 502, "platform_service_unavailable", method);
     }
     const resourceParts = parts.slice(4);
+    if (this.managementAPI !== undefined && await this.managementAPI.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.settings.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.credentials.handle(resourceParts, principal, target, request, response, signal)) return true;
     if (await this.database.handle(resourceParts, principal, target, request, response, signal)) return true;

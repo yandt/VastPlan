@@ -1,4 +1,3 @@
-import type { PlatformAdminClient } from "@vastplan/platform-admin";
 import {
   defineCollectionPage,
   message,
@@ -11,6 +10,7 @@ import {
   toDraftRequest,
   type APIExposureRow,
 } from "./model";
+import type { APIExposureManagementPort } from "./management-client";
 
 const namespace = "cn.vastplan.platform.integration.api-exposure";
 const text = (key: string, fallback: string) => message(namespace, key, fallback);
@@ -25,7 +25,7 @@ const statusLabels = {
 };
 
 export function createAPIExposurePage(
-  client: PlatformAdminClient,
+  client: APIExposureManagementPort,
   serviceID: string,
   serviceLabel?: string,
 ): CollectionPageDefinition<APIExposureRow> {
@@ -77,7 +77,7 @@ export function createAPIExposurePage(
   });
 }
 
-function createForm(client: PlatformAdminClient): WorkbenchFormDefinition<APIExposureRow> {
+function createForm(client: APIExposureManagementPort): WorkbenchFormDefinition<APIExposureRow> {
   return {
     id: "create",
     schema: apiExposureFormSchema,
@@ -103,7 +103,7 @@ function createForm(client: PlatformAdminClient): WorkbenchFormDefinition<APIExp
   };
 }
 
-async function loadRows(client: PlatformAdminClient, query: CollectionQuery, signal: AbortSignal) {
+async function loadRows(client: APIExposureManagementPort, query: CollectionQuery, signal: AbortSignal) {
   const rows: APIExposureRow[] = (await client.listAPIExposures()).map((row) => ({
     ...row,
     displayName: row.exposure.displayName,

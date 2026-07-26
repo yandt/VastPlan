@@ -13,6 +13,7 @@ import { InteractionRoutes } from "./interaction-routes";
 import { PlatformManagementRoutes } from "./platform-management-routes";
 import { PortalRuntimeRoutes } from "./portal-runtime-routes";
 import { PortalPreferenceRoutes } from "./portal-preference-routes";
+import type { APIContractCatalogPort } from "../api-exposure/api-exposure-contract";
 
 export interface APIHandlerOptions {
   identity: IdentityProvider;
@@ -20,14 +21,14 @@ export interface APIHandlerOptions {
   composer?: PortalComposerPort;
   preferences?: PortalPreferencePort;
   interaction?: InteractionPort;
-  platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort };
+  platform?: { resolver: PlatformManagementResolver; client: PlatformCapabilityPort; contractCatalog?: APIContractCatalogPort };
   delivery?: PortalDeliveryStore;
 }
 
 export function createAPIHandler(options: APIHandlerOptions): (request: IncomingMessage, response: ServerResponse, path: string) => Promise<void> {
   const portalControl = options.composer === undefined ? undefined : new PortalControlRoutes(options.composer);
   const interactions = options.interaction === undefined ? undefined : new InteractionRoutes(options.interaction);
-  const platform = options.platform === undefined ? undefined : new PlatformManagementRoutes(options.platform.resolver, options.platform.client, options.identity);
+  const platform = options.platform === undefined ? undefined : new PlatformManagementRoutes(options.platform.resolver, options.platform.client, options.identity, options.platform.contractCatalog);
   const runtime = options.composer === undefined || options.delivery === undefined ? undefined : new PortalRuntimeRoutes(options.composer, options.delivery);
   const preferences = options.composer === undefined || options.preferences === undefined ? undefined : new PortalPreferenceRoutes(options.composer, options.preferences);
   return async (request, response, path) => {

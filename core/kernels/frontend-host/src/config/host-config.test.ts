@@ -26,6 +26,14 @@ describe("parseHostArguments", () => {
     expect(config.apiExposureCatalog).toBe("/srv/vastplan/config/api-exposures.json");
   });
 
+  it("accepts a signed-artifact API Contract Catalog for management routes", () => {
+    const config = parseHostArguments([
+      "--portal-assets", "bin/portal", "--session-file", "sessions.json", "--allow-insecure-http",
+      "--api-contract-catalog", "config/api-contracts.json",
+    ], "/srv/vastplan");
+    expect(config.apiContractCatalog).toBe("/srv/vastplan/config/api-contracts.json");
+  });
+
   it("requires Broker trust, session protection and pluggable service routing", () => {
     const base = ["--portal-assets", "bin/portal", "--tls-cert", "portal.crt", "--tls-key", "portal.key", "--identity-provider", "broker"];
     expect(() => parseHostArguments(base)).toThrow(/assertion-trust/i);
