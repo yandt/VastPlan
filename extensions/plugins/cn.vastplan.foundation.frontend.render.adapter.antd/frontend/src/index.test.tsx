@@ -67,12 +67,14 @@ describe("Ant Design portal UI renderer", () => {
   it("renders persistent collection labels inside the shared field width", () => {
     const Form = antdPortalUIComponents.FormRenderer;
     const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
-      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "" } } }}
+      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status", enum: ["ready", "offline"] } } }, uiSchema: { status: { "ui:placeholder": "" } } }}
       value={{}}
       onChange={() => undefined}
       presentation={{ layout: "compact", labelPlacement: "inside-inline" }}
     /></PortalI18nProvider>);
     expect(markup).toContain("vp-antd-inside-inline-field");
+    expect(markup).toContain("ant-select-outlined");
+    expect(markup).toContain(".vp-inside-inline-control&gt;.ant-select{width:100%;border:0!important");
     expect(markup).toContain('aria-label="Status"');
     expect(markup).toContain("white-space:nowrap");
     expect(markup).not.toContain("Filter root");
