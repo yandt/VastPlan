@@ -76,7 +76,7 @@ describe("deployment-manager Intent frontend contract", () => {
     const page = createDeploymentPage(client, "deployment", "/deployment", "Deployment");
     const selected = [{ id: 7 } as DeploymentRow];
     for (const id of ["refresh-plan", "submit", "approve", "publish", "rollback"]) {
-      await page.runAction?.({ action: { id, label: id, placement: "page.secondary" }, selected, refresh() {} }, new AbortController().signal);
+      await page.runAction?.({ action: { id, label: id, icon: "more", placement: "page.secondary" }, selected, refresh() {} }, new AbortController().signal);
     }
     expect(calls).toEqual(["refresh-plan:7", "submit:7", "approve:7", "publish:7", "rollback:7"]);
   });

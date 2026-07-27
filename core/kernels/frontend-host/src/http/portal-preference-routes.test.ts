@@ -28,7 +28,7 @@ describe("PortalPreference routes", () => {
     expect(response.status).toBe(200);
     const preference = await response.json() as { revision: number; scope: { portalId: string; renderer: { id: string; contractMajor: number } } };
     expect(preference.revision).toBe(0);
-    expect(preference.scope).toMatchObject({ portalId: "operations", renderer: { id: "cn.vastplan.render", contractMajor: 4 } });
+    expect(preference.scope).toMatchObject({ portalId: "operations", renderer: { id: "cn.vastplan.render", contractMajor: 5 } });
     expect(calls[0]?.payload).not.toHaveProperty("tenantId");
     expect(calls[0]?.payload).not.toHaveProperty("subjectId");
 
@@ -66,8 +66,8 @@ async function startPreferenceServer(preferences: PortalPreferencePort): Promise
   await writeSessionFixture(sessionFile, "browser-token", new Date(Date.now() + 60_000), ["portal.read"]);
   const resolved = {
     revision: 7, id: "operations", tenantId: "tenant-a", route: "/operations", audience: ["portal.read"],
-    renderAdapter: { id: "cn.vastplan.render", uiContract: "^4.0.0" },
-    shell: { id: "cn.vastplan.shell", uiContract: "^4.0.0" },
+    renderAdapter: { id: "cn.vastplan.render", uiContract: "^5.0.0" },
+    shell: { id: "cn.vastplan.shell", uiContract: "^5.0.0" },
     workbench: { id: "cn.vastplan.workbench", uiContract: "^4.1.0" },
   };
   const composer: PortalComposerPort = { async call(_principal, operation) {

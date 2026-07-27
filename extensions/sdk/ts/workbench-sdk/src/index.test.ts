@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage } from "./index.js";
+import type { ActionSpec } from "./index.js";
 
 describe("defineCollectionPage", () => {
   it("keeps the serializable collection contract and runtime loader together without exposing a component", async () => {
@@ -39,17 +40,25 @@ describe("defineCollectionPage", () => {
   it("rejects collection actions that escape the governed form registry", () => {
     expect(() => defineCollectionPage({
       id: "connections", path: "/connections", title: "Connections",
-      collection: { id: "connections", title: "Connections", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "edit", label: "Edit", placement: "record.row", form: "edit" }] },
+      collection: { id: "connections", title: "Connections", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "edit", label: "Edit", icon: "edit", placement: "record.row", form: "edit" }] },
       async load() { return { items: [], total: 0 }; },
     })).toThrow("未声明的表单");
   });
 
-  it("requires page actions to declare a semantic icon", () => {
+  it("requires every action placement to declare a semantic icon", () => {
     expect(() => defineCollectionPage({
       id: "connections", path: "/connections", title: "Connections",
-      collection: { id: "connections", title: "Connections", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "create", label: "Create", placement: "page.primary" }] },
+      collection: { id: "connections", title: "Connections", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "edit", label: "Edit", placement: "record.row" } as unknown as ActionSpec] },
       async load() { return { items: [], total: 0 }; },
     })).toThrow("语义图标");
+  });
+
+  it("requires executable actions to use the page-level runAction workflow port", () => {
+    expect(() => defineCollectionPage({
+      id: "connections", path: "/connections", title: "Connections",
+      collection: { id: "connections", title: "Connections", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "refresh", label: "Refresh", icon: "refresh", placement: "collection.toolbar" }] },
+      async load() { return { items: [], total: 0 }; },
+    })).toThrow("runAction");
   });
 
   it("requires credentialRef presentation to remain a reference-only schema field", () => {
@@ -87,7 +96,7 @@ describe("defineCollectionPage", () => {
   it("rejects actions that escape the governed overlay registry", () => {
     expect(() => defineCollectionPage({
       id: "revisions", path: "/revisions", title: "Revisions",
-      collection: { id: "revisions", title: "Revisions", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [{ key: "id", label: "ID" }], actions: [{ id: "audit", label: "Audit", placement: "record.row", overlay: "audit" }] },
+      collection: { id: "revisions", title: "Revisions", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [{ key: "id", label: "ID" }], actions: [{ id: "audit", label: "Audit", icon: "search", placement: "record.row", overlay: "audit" }] },
       async load() { return { items: [], total: 0 }; },
     })).toThrow("未声明的 Overlay");
   });
@@ -112,7 +121,8 @@ describe("record pattern definitions", () => {
       detail: { titleKey: "name", sections: [{ id: "main", fields: [{ key: "name", label: "Name" }, { key: "name", label: "Again" }] }] }, async load() { return undefined; },
     })).toThrow("重复");
     expect(() => defineRecordDetailPage({ id: "detail", path: "/detail", title: "Detail", pattern: "record-detail", detail,
-      actions: [{ id: "bad", label: "Bad", placement: "collection.toolbar" }], async load() { return undefined; },
+      actions: [{ id: "bad", label: "Bad", icon: "warning", placement: "collection.toolbar" }], async load() { return undefined; },
+      async runAction() {},
     })).toThrow("位置");
     expect(() => defineRecordDetailPage({ id: "detail", path: "/detail", title: "Detail", pattern: "record-detail", detail,
       editor: { id: "edit", schema: { id: "edit", schema: { type: "object" } }, workflow: { surface: "drawer", title: "Edit" }, async submit() {} }, async load() { return undefined; },

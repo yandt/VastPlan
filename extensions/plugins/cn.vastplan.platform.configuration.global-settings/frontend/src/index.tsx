@@ -74,8 +74,8 @@ export function createGlobalSettingsPage(client: PlatformAdminClient, serviceID:
       ],
       actions: [
         { id: "create", label: message(namespace, "action.create", "新增设置"), icon: "add", placement: "page.primary", tone: "primary", form: "create" },
-        { id: "edit", label: message(namespace, "action.edit", "编辑"), placement: "record.row", form: "edit" },
-        { id: "delete", label: message(namespace, "action.delete", "删除"), placement: "record.row", tone: "danger", confirm: message(namespace, "confirm.delete", "确认删除此设置？版本不匹配时系统会拒绝。") },
+        { id: "edit", label: message(namespace, "action.edit", "编辑"), icon: "edit", placement: "record.row", form: "edit" },
+        { id: "delete", label: message(namespace, "action.delete", "删除"), icon: "remove", placement: "record.row", tone: "danger", confirm: message(namespace, "confirm.delete", "确认删除此设置？版本不匹配时系统会拒绝。") },
       ],
     },
     forms: [form("create"), form("edit")],

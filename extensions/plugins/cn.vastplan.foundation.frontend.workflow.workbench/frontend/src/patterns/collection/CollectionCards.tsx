@@ -51,7 +51,7 @@ export function CollectionCards({ collection, rows, selectedKeys, loading, loadi
         const key = keyOf(row);
         const statusTone = card.status?.toneKey === undefined ? "neutral" : tone(row[card.status.toneKey]);
         const visibleActions = footerActions.filter((action) => action.visibleWhen === undefined || evaluateFormCondition(action.visibleWhen, row));
-        const actions = visibleActions.length === 0 ? undefined : <ui.Stack direction="row" gap="xs" wrap>{visibleActions.map((action) => <ui.Button key={action.id} kind={action.tone ?? "text"} onClick={() => onRunAction(action, [row])}>{i18n.text(action.label)}</ui.Button>)}</ui.Stack>;
+        const actions = visibleActions.length === 0 ? undefined : <ui.Stack direction="row" gap="xs" align="center" justify="center" wrap>{visibleActions.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onRunAction(action, [row])} />)}</ui.Stack>;
         return <ui.GridItem key={key} span={1}><ui.DataCard
           title={value(row[card.titleKey], { key: card.titleKey }, i18n)}
           subtitle={card.subtitleKey === undefined ? undefined : value(row[card.subtitleKey], { key: card.subtitleKey }, i18n)}

@@ -99,6 +99,7 @@ export function masterDetailPage(): MasterDetailPageDefinition<ServiceRecord> {
       return { items: filtered.slice(start, start + query.pageSize), total: filtered.length };
     },
     async loadRecord(key) { const item = services.find((candidate) => candidate.id === key); return item === undefined ? undefined : { ...item }; },
+    async runAction() {},
   });
 }
 

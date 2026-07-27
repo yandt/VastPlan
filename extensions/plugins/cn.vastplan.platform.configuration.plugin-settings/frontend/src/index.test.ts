@@ -94,7 +94,7 @@ describe("plugin configuration workbench", () => {
     } as unknown as PlatformAdminClient;
     const page = createPluginConfigurationPage(client, "configuration", "/settings/plugin-configurations", message("test", "title", "Plugin configuration"));
     const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
-    await page.runAction?.({ action: { id: "discard", label: "Discard", placement: "record.row" }, selected: result.items, refresh() {} }, new AbortController().signal);
+    await page.runAction?.({ action: { id: "discard", label: "Discard", icon: "remove", placement: "record.row" }, selected: result.items, refresh() {} }, new AbortController().signal);
     expect(discard).toHaveBeenCalledWith("pcfg_x", 3);
   });
 
@@ -122,7 +122,7 @@ describe("plugin configuration workbench", () => {
     const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
     const selected = result.items;
     for (const id of ["submit-profile", "approve-profile", "activate-profile", "abort-profile"]) {
-      await page.runAction?.({ action: { id, label: id, placement: "record.row" }, selected, refresh() {} }, new AbortController().signal);
+      await page.runAction?.({ action: { id, label: id, icon: "more", placement: "record.row" }, selected, refresh() {} }, new AbortController().signal);
     }
     expect(submit).toHaveBeenCalledWith("pcfg_x", 4);
     expect(approve).toHaveBeenCalledWith("pcfg_x", 4);
@@ -149,7 +149,7 @@ describe("plugin configuration workbench", () => {
     const page = createPluginConfigurationPage(client, "configuration", "/settings/plugin-configurations", message("test", "title", "Plugin configuration"));
     const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
     for (const id of ["submit-hot", "approve-hot", "activate-hot", "abort-hot"]) {
-      await page.runAction?.({ action: { id, label: id, placement: "record.row" }, selected: result.items, refresh() {} }, new AbortController().signal);
+      await page.runAction?.({ action: { id, label: id, icon: "more", placement: "record.row" }, selected: result.items, refresh() {} }, new AbortController().signal);
     }
     expect(submit).toHaveBeenCalledWith("pcfg_hot", 5);
     expect(approve).toHaveBeenCalledWith("pcfg_hot", 5);
@@ -174,7 +174,7 @@ describe("plugin configuration workbench", () => {
     const page = createPluginConfigurationPage(client, "configuration", "/settings/plugin-configurations", message("test", "title", "Plugin configuration"));
     const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
     for (const id of ["submit-scoped", "approve-scoped", "activate-scoped", "abort-scoped"]) {
-      await page.runAction?.({ action: { id, label: id, placement: "record.row" }, selected: result.items, refresh() {} }, new AbortController().signal);
+      await page.runAction?.({ action: { id, label: id, icon: "more", placement: "record.row" }, selected: result.items, refresh() {} }, new AbortController().signal);
     }
     expect(submit).toHaveBeenCalledWith("pcfg_scoped", 6);
     expect(approve).toHaveBeenCalledWith("pcfg_scoped", 6);
@@ -229,7 +229,7 @@ describe("plugin configuration workbench", () => {
     await page.editor?.submit({ value: { values: { displayName: "Enterprise SMS v2", endpoint: "https://notify.example.test" }, secrets: {} }, selected: [{ ...result.items[0]!, candidate: undefined }] }, new AbortController().signal);
     expect(update).toHaveBeenCalledWith(definition.id, resourceDefinition.resourceCollections![0]!.id, item.resourceId, definition.catalogDigest, { displayName: "Enterprise SMS v2", endpoint: "https://notify.example.test" }, {});
     for (const id of ["resource-submit", "resource-approve", "resource-activate", "resource-abort"]) {
-      await page.runAction?.({ action: { id, label: id, placement: "record.detail" }, record: result.items[0], refresh() {} }, new AbortController().signal);
+      await page.runAction?.({ action: { id, label: id, icon: "more", placement: "record.detail" }, record: result.items[0], refresh() {} }, new AbortController().signal);
     }
     expect(submit).toHaveBeenCalledWith("pcfg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 4);
     expect(approve).toHaveBeenCalledWith("pcfg_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", 4);

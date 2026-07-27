@@ -3,7 +3,7 @@ import adapter from "./index";
 
 describe("unified render adapter", () => {
   it("owns the complete first-party Renderer catalog", () => {
-    expect(adapter).toMatchObject({ id: "ui.render.adapter", uiContract: "4.0.0", defaultRenderer: "antd" });
+    expect(adapter).toMatchObject({ id: "ui.render.adapter", uiContract: "5.0.0", defaultRenderer: "antd" });
     expect(adapter.renderers.map((renderer) => renderer.id)).toEqual(["antd", "arco", "mui"]);
     expect(adapter.renderers.map((renderer) => renderer.module.id)).toEqual([
       "cn.vastplan.foundation.frontend.render.adapter.antd",

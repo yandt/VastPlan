@@ -23,7 +23,7 @@ export function CollectionTable({ collection, columns, rows, selectedKeys, loadi
   const rowActions = (collection.actions ?? []).filter((action) => action.placement === "record.row");
   const tableColumns = [
     ...visibleColumns.map((column) => ({ key: column.key, title: i18n.text(column.label), width: column.minWidth, render: (value: unknown) => <CollectionValue column={column} value={value} /> })),
-    ...(rowActions.length === 0 ? [] : [{ key: "__actions", title: i18n.text(message(namespace, "column.actions", "操作")), width: 200, align: "end" as const, fixed: "right" as const, render: (_value: unknown, row: CollectionRow) => <RowActions actions={rowActions} row={row} onRunAction={(action) => onRunAction(action, [row])} /> }]),
+    ...(rowActions.length === 0 ? [] : [{ key: "__actions", title: i18n.text(message(namespace, "column.actions", "操作")), width: 152, align: "center" as const, fixed: "right" as const, render: (_value: unknown, row: CollectionRow) => <RowActions actions={rowActions} row={row} onRunAction={(action) => onRunAction(action, [row])} /> }]),
   ];
   return <ui.Table appearance="collection" columns={tableColumns} rows={rows} rowKey={keyOf} selection={collection.selection ?? "none"} selectedRowKeys={selectedKeys} onSelectionChange={onSelectionChange} loading={loading} density={density} empty={<ui.EmptyState title={i18n.text(message(namespace, "empty.title", "暂无数据"))} />} />;
 }

@@ -292,7 +292,7 @@ export const standardShellCSS = `
 
 const namespace = "cn.vastplan.foundation.frontend.structure.layout.standard";
 export const shellLibrary = {
-  id: "standard", shell: "ui.structure.shell", uiContract: "4.0.0", Shell: StandardShell,
+  id: "standard", shell: "ui.structure.shell", uiContract: "5.0.0", Shell: StandardShell,
   localization: {
     defaultLocale: "zh-CN",
     messages: {

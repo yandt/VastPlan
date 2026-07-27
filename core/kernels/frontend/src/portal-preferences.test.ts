@@ -3,9 +3,9 @@ import { PortalPreferenceConflict, PortalPreferenceSession } from "./portal-pref
 
 const portal = {
   revision: 1, id: "operations", tenantId: "tenant-a", route: "/operations",
-  renderAdapter: { id: "cn.vastplan.render", uiContract: "^4.0.0", config: { defaultRenderer: "arco", allowedRenderers: ["arco", "mui"], userSelectable: true } },
-  shell: { id: "cn.vastplan.shell", uiContract: "^4.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true } },
-  workbench: { id: "cn.vastplan.workbench", uiContract: "^4.0.0" },
+  renderAdapter: { id: "cn.vastplan.render", uiContract: "^5.0.0", config: { defaultRenderer: "arco", allowedRenderers: ["arco", "mui"], userSelectable: true } },
+  shell: { id: "cn.vastplan.shell", uiContract: "^5.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true } },
+  workbench: { id: "cn.vastplan.workbench", uiContract: "^5.0.0" },
 } as any;
 
 beforeEach(() => {
@@ -59,5 +59,5 @@ describe("PortalPreferenceSession", () => {
 });
 
 function scope() {
-  return { portalId: "operations", renderer: { id: "cn.vastplan.render", contractMajor: 4 }, shell: { id: "cn.vastplan.shell", contractMajor: 4 }, workbench: { id: "cn.vastplan.workbench", contractMajor: 4 } };
+  return { portalId: "operations", renderer: { id: "cn.vastplan.render", contractMajor: 5 }, shell: { id: "cn.vastplan.shell", contractMajor: 5 }, workbench: { id: "cn.vastplan.workbench", contractMajor: 5 } };
 }

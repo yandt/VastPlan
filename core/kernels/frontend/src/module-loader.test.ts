@@ -52,7 +52,7 @@ describe("VerifiedFrontendPluginLoader", () => {
     const loader = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer: async () => ({
       default: {
         id: "ui.render.adapter",
-        uiContract: "4.0.0",
+        uiContract: "5.0.0",
         defaultRenderer: "arco",
         renderers: [{ id: "arco", Provider() {} }],
       },
@@ -103,7 +103,7 @@ describe("VerifiedFrontendPluginLoader", () => {
       shellLibrary: {
         id: "standard",
         shell: "ui.structure.shell",
-        uiContract: "4.0.0",
+        uiContract: "5.0.0",
         Shell,
       },
     }) });

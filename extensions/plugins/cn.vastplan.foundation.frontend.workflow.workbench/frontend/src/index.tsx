@@ -7,7 +7,7 @@ import { RecordPageActions } from "./patterns/record/RecordPageActions.js";
 
 export const workbench: UIWorkbenchAdapter = {
   id: "ui.workflow.workbench",
-  uiContract: "4.0.0",
+  uiContract: "5.0.0",
   CollectionPage,
   CollectionPageActions,
   FormPage,

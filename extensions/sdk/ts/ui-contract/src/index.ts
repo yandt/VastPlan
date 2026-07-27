@@ -1,5 +1,5 @@
 /** Serializable UI semantics shared by Web and Mobile renderers. */
-export const uiContractVersion = "4.0.0" as const;
+export const uiContractVersion = "5.0.0" as const;
 export const interactionContractVersion = "1.0.0" as const;
 export const jsonSchemaDialect = "http://json-schema.org/draft-07/schema#" as const;
 export * from "./i18n.js";
@@ -146,8 +146,8 @@ export interface FilterPanelSpec {
 export interface ActionSpec {
   id: string;
   label: import("./i18n.js").LocalizedText;
-  /** Semantic icon rendered consistently by every UI framework adapter. */
-  icon?: import("./icons.js").SemanticIconName;
+  /** Required semantic icon rendered consistently by every UI framework adapter. */
+  icon: import("./icons.js").SemanticIconName;
   placement: CollectionActionPlacement;
   tone?: "primary" | "secondary" | "danger";
   requiresSelection?: boolean;

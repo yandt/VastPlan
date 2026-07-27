@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { message, semanticIconNames } from "@vastplan/ui-primitives";
-import { defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage } from "@vastplan/workbench-sdk";
+import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage } from "@vastplan/workbench-sdk";
 import type {
   FrontendPluginContext,
   PluginLocalization,
@@ -180,12 +180,12 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
     addPage: (page) => registerPage(portal, ref, registration, page),
     addCollectionPage: (page) => {
 			if (!experienceAllows(portal, page.requiredPermissions) || !experienceAllowsAny(portal, page.requiredAnyPermissions)) return;
-			const projectedPage = projectCollectionActions(portal, page);
+			const projectedPage = projectCollectionActions(portal, validateCollectionPage(page));
       if (!projectedPage.id || !projectedPage.collection.id || !["table", "cards"].includes(projectedPage.collection.view) || !["page", "cursor"].includes(projectedPage.collection.query.mode) ||
           (projectedPage.collection.view === "table" && projectedPage.collection.columns.length === 0) || (projectedPage.collection.view === "cards" && projectedPage.collection.card === undefined) || typeof projectedPage.load !== "function" ||
           (projectedPage.loadSummary !== undefined && typeof projectedPage.loadSummary !== "function") || (projectedPage.runAction !== undefined && typeof projectedPage.runAction !== "function") ||
           (projectedPage.overlays ?? []).some((overlay) => !overlay.id || !["dialog", "drawer"].includes(overlay.surface) || typeof overlay.load !== "function") ||
-          (projectedPage.collection.actions ?? []).some((action) => (action.placement === "page.primary" || action.placement === "page.secondary") && (action.icon === undefined || !semanticIconNames.includes(action.icon)))) {
+          (projectedPage.collection.actions ?? []).some((action) => action.icon === undefined || !semanticIconNames.includes(action.icon))) {
         throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${projectedPage.id}`);
       }
       const Page = () => createElement(workbench.CollectionPage, { page: projectedPage, preferenceScope: `${portal.tenantId}/${portal.id}`, preferences, presentation: portal.workbench.config });
@@ -232,6 +232,14 @@ function experienceAllowsAny(portal: PortalSpec, required: readonly string[] | u
 function projectCollectionActions<Row extends Record<string, unknown>>(portal: PortalSpec, page: import("@vastplan/workbench-sdk").CollectionPageDefinition<Row>): import("@vastplan/workbench-sdk").CollectionPageDefinition<Row> {
 	const actions = page.collection.actions?.filter((action) => experienceAllows(portal, action.requiredPermissions));
 	return { ...page, collection: { ...page.collection, ...(actions === undefined ? {} : { actions }) } };
+}
+
+function validateCollectionPage<Row extends Record<string, unknown>>(page: import("@vastplan/workbench-sdk").CollectionPageDefinition<Row>): import("@vastplan/workbench-sdk").CollectionPageDefinition<Row> {
+  try {
+    return defineCollectionPage(page);
+  } catch (error) {
+    throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", error instanceof Error ? error.message : `集合页面定义无效: ${page.id}`);
+  }
 }
 
 function validateRecordPage<Row extends Record<string, unknown>>(page: import("@vastplan/workbench-sdk").RecordPageDefinition<Row>): import("@vastplan/workbench-sdk").RecordPageDefinition<Row> {

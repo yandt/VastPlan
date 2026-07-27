@@ -100,21 +100,25 @@ export function createAuthenticationProviderPage(
         {
           id: "validate",
           label: message(namespace, "action.validate", "验证配置"),
+          icon: "success",
           placement: "record.row",
         },
         {
           id: "test",
           label: message(namespace, "action.test", "认证测试"),
+          icon: "search",
           placement: "record.row",
         },
         {
           id: "approve",
           label: message(namespace, "action.approve", "批准"),
+          icon: "success",
           placement: "record.row",
         },
         {
           id: "retire",
           label: message(namespace, "action.retire", "退役"),
+          icon: "remove",
           placement: "record.row",
           tone: "danger",
           confirm: message(

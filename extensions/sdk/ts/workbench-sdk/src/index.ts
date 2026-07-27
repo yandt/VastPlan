@@ -214,11 +214,10 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
   const overlays = new Map((definition.overlays ?? []).map((overlay) => [overlay.id, overlay]));
   if (overlays.size !== (definition.overlays ?? []).length) throw new Error("Collection Overlay ID 必须唯一");
   for (const form of forms.values()) validateFormDefinition(form);
-  for (const action of definition.collection.actions ?? []) {
-		validatePermissionRequirements(action.requiredPermissions, `Action ${action.id} requiredPermissions`);
-    if ((action.placement === "page.primary" || action.placement === "page.secondary") && action.icon === undefined) {
-      throw new Error(`Page Action ${action.id} 必须声明语义图标`);
-    }
+  const actions = definition.collection.actions ?? [];
+  if (new Set(actions.map((action) => action.id)).size !== actions.length) throw new Error(`Collection ${definition.collection.id} 的 Action ID 必须唯一`);
+  for (const action of actions) {
+    validateAction(action, definition.runAction !== undefined);
     if (action.form !== undefined && !forms.has(action.form)) throw new Error(`Action ${action.id} 引用了未声明的表单 ${action.form}`);
     if (action.overlay !== undefined && !overlays.has(action.overlay)) throw new Error(`Action ${action.id} 引用了未声明的 Overlay ${action.overlay}`);
     if (action.form !== undefined && action.overlay !== undefined) throw new Error(`Action ${action.id} 不能同时打开表单和 Overlay`);
@@ -292,14 +291,22 @@ function validateRecordPage(definition: RecordPageDefinition): void {
   for (const form of forms.values()) validateFormDefinition(form);
   const overlays = new Map((definition.overlays ?? []).map((overlay) => [overlay.id, overlay]));
   if (overlays.size !== (definition.overlays ?? []).length) throw new Error(`Record page ${definition.id} 的 Overlay ID 必须唯一`);
-  for (const action of definition.actions ?? []) {
-    validatePermissionRequirements(action.requiredPermissions, `Action ${action.id} requiredPermissions`);
+  const actions = definition.actions ?? [];
+  if (new Set(actions.map((action) => action.id)).size !== actions.length) throw new Error(`Record page ${definition.id} 的 Action ID 必须唯一`);
+  for (const action of actions) {
+    validateAction(action, definition.runAction !== undefined);
     if (!validIdentifier(action.id) || !["page.primary", "page.secondary", "record.detail"].includes(action.placement)) throw new Error(`Record page ${definition.id} 的 Action 位置无效: ${action.id}`);
-    if ((action.placement === "page.primary" || action.placement === "page.secondary") && action.icon === undefined) throw new Error(`Page Action ${action.id} 必须声明语义图标`);
     if (action.form !== undefined && !forms.has(action.form)) throw new Error(`Action ${action.id} 引用了未声明的表单 ${action.form}`);
     if (action.overlay !== undefined && !overlays.has(action.overlay)) throw new Error(`Action ${action.id} 引用了未声明的 Overlay ${action.overlay}`);
     if (action.form !== undefined && action.overlay !== undefined) throw new Error(`Action ${action.id} 不能同时打开表单和 Overlay`);
   }
+}
+
+function validateAction(action: ActionSpec, hasRunAction: boolean): void {
+  validatePermissionRequirements(action.requiredPermissions, `Action ${action.id} requiredPermissions`);
+  if (!validIdentifier(action.id)) throw new Error(`Action ID 无效: ${action.id}`);
+  if (action.icon === undefined) throw new Error(`Action ${action.id} 必须声明语义图标`);
+  if (action.form === undefined && action.overlay === undefined && !hasRunAction) throw new Error(`Action ${action.id} 必须由页面 runAction 工作流处理`);
 }
 
 function validateMaster(master: RecordMasterSpec): void {

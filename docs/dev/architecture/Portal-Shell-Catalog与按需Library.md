@@ -1,6 +1,6 @@
 # Portal Shell Catalog 与按需 Library
 
-> 状态：UI Contract 4.x 与服务端跨设备偏好均已实施｜最后更新：2026-07-23
+> 状态：UI Contract 5.x 与服务端跨设备偏好均已实施｜最后更新：2026-07-28
 >
 > 本文是统一 Slot/Composition、Shell Catalog、按需 Shell Library、稳定 PageOutlet 和用户选择的单一真相源。历史单模块模板方案见 [ADR-0086](../decisions/ADR-0086-单Shell插件与可切换布局模板.md)，取代决策见 [ADR-0097](../decisions/ADR-0097-测试制品仓库与前端分级热升级.md)。
 
@@ -54,7 +54,7 @@ Portal Kernel 在稳定 React 位置持有当前页面、Workbench 和路由状�
     "id": "cn.vastplan.foundation.frontend.structure.shell",
     "version": "1.3.0",
     "channel": "stable",
-    "uiContract": "^4.0.0",
+    "uiContract": "^5.0.0",
     "config": {
       "defaultTemplate": "standard",
       "allowedTemplates": ["standard", "top-navigation"],
@@ -98,7 +98,7 @@ Portal Kernel 在稳定 React 位置持有当前页面、Workbench 和路由状�
 
 ## 7. 实施状态
 
-1. 已在当前 UI Contract 4.x 增加 Catalog/Library/LayoutPlan/PageOutlet 类型；没有为已经落地的兼容能力制造仅改版本号的 5.0 迁移。
+1. Catalog/Library/LayoutPlan/PageOutlet 类型继续由 UI Contract 5.x 统一承载；5.0 的破坏性升级来自 Workbench 动作数据契约收紧，而不是 Shell 结构分叉。
 2. 已完成服务端 Profile、Resolver、Catalog 和 RuntimeSpec 的 deferred Library 支持。
 3. 已完成 Portal Kernel 稳定 ShellSurface/PageOutlet 与候选选择事务。
 4. 已将 `standard`、`top-navigation` 转为独立签名、内容寻址、按需下载的 Library；唯一 Shell Catalog 继续拥有 Slot 与组合语义。生产物化和开发 HMR 构建清单都把两个 Library 标记为 deferred，且架构门禁禁止 Shell 重新通过 workspace 依赖另一个插件源码包。

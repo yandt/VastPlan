@@ -2,7 +2,7 @@
   "id": "cn.vastplan.example.frontend.workbench-gallery",
   "name": "VastPlan Workbench Pattern Gallery",
   "description": "展示 RecordDetail、MasterDetail 与 TreeDetail 三种受治理 Workbench 模式",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

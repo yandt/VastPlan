@@ -36,12 +36,12 @@ export function catalogPage(client: PlatformAdminClient, id: string, path: strin
         { key: "publishedAt", label: text("column.publishedAt", "发布时间"), format: "datetime", defaultVisible: true, minWidth: 190 },
       ],
       actions: [
-        { id: "lifecycle", label: text("action.lifecycle", "变更生命周期"), placement: "record.row", form: "lifecycle", requiredPermissions: ["platform.artifacts.lifecycle"], visibleWhen: { not: { pointer: "/lifecycle", equals: "revoked" } } },
-        { id: "publication", label: text("action.publication.submit", "提交发布审批"), placement: "record.row", form: "publication", requiredPermissions: ["platform.artifacts.publication.submit"], visibleWhen: { pointer: "/channel", equals: "testing" } },
-        { id: "evidence", label: text("action.evidence", "供应链证据"), placement: "record.row", overlay: "evidence", requiredPermissions: ["platform.artifacts.read"] },
+        { id: "lifecycle", label: text("action.lifecycle", "变更生命周期"), icon: "settings", placement: "record.row", form: "lifecycle", requiredPermissions: ["platform.artifacts.lifecycle"], visibleWhen: { not: { pointer: "/lifecycle", equals: "revoked" } } },
+        { id: "publication", label: text("action.publication.submit", "提交发布审批"), icon: "upload", placement: "record.row", form: "publication", requiredPermissions: ["platform.artifacts.publication.submit"], visibleWhen: { pointer: "/channel", equals: "testing" } },
+        { id: "evidence", label: text("action.evidence", "供应链证据"), icon: "info", placement: "record.row", overlay: "evidence", requiredPermissions: ["platform.artifacts.read"] },
         ...(reports === undefined ? [] : [
-          { id: "vulnerabilityReport", label: text("action.vulnerabilityReport", "下载漏洞报告"), placement: "record.row" as const, requiredPermissions: ["platform.artifacts.assessment.report.read"], visibleWhen: { not: { pointer: "/security", equals: "missing" } } },
-          { id: "licenseReport", label: text("action.licenseReport", "下载许可证报告"), placement: "record.row" as const, requiredPermissions: ["platform.artifacts.assessment.report.read"], visibleWhen: { not: { pointer: "/security", equals: "missing" } } },
+          { id: "vulnerabilityReport", label: text("action.vulnerabilityReport", "下载漏洞报告"), icon: "download" as const, placement: "record.row" as const, requiredPermissions: ["platform.artifacts.assessment.report.read"], visibleWhen: { not: { pointer: "/security", equals: "missing" } } },
+          { id: "licenseReport", label: text("action.licenseReport", "下载许可证报告"), icon: "download" as const, placement: "record.row" as const, requiredPermissions: ["platform.artifacts.assessment.report.read"], visibleWhen: { not: { pointer: "/security", equals: "missing" } } },
         ]),
       ],
       preferences: { allowedColumns: ["pluginId", "version", "channel", "publisher", "targets", "size", "lifecycle", "sbom", "pythonLock", "provenance", "security", "repositoryRevision", "publishedAt"], density: true },

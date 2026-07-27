@@ -6,7 +6,7 @@ const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "pri
 
 describe("top navigation shell layout", () => {
   it("exports an independent signed Shell Library", () => {
-    expect(adapter).toMatchObject({ id: "top-navigation", shell: "ui.structure.shell", uiContract: "4.0.0" });
+    expect(adapter).toMatchObject({ id: "top-navigation", shell: "ui.structure.shell", uiContract: "5.0.0" });
   });
 
   it("keeps the active root visible when navigation overflows", () => {

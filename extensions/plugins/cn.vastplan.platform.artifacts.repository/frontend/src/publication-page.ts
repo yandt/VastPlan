@@ -28,9 +28,9 @@ export function publicationPage(client: PlatformAdminClient, id: string, path: s
         { key: "terminalAt", label: text("column.publicationTerminalAt", "终止时间"), format: "datetime", defaultVisible: false, minWidth: 190 },
       ],
       actions: [
-        { id: "approve", label: text("action.publication.approve", "批准"), placement: "record.row", confirm: text("confirm.publication.approve", "确认该 testing 制品可晋级 stable？系统会强制提交人与批准人分离。"), requiredPermissions: ["platform.artifacts.publication.approve"], visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
-        { id: "reject", label: text("action.publication.reject", "驳回"), placement: "record.row", form: "reject", requiredPermissions: ["platform.artifacts.publication.approve"], visibleWhen: { pointer: "/status", in: ["PendingApproval", "Approved"] } },
-        { id: "cancel", label: text("action.publication.cancel", "撤销"), placement: "record.row", form: "cancel", requiredPermissions: ["platform.artifacts.publication.submit"], visibleWhen: { pointer: "/status", in: ["PendingApproval", "Approved"] } },
+        { id: "approve", label: text("action.publication.approve", "批准"), icon: "success", placement: "record.row", confirm: text("confirm.publication.approve", "确认该 testing 制品可晋级 stable？系统会强制提交人与批准人分离。"), requiredPermissions: ["platform.artifacts.publication.approve"], visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
+        { id: "reject", label: text("action.publication.reject", "驳回"), icon: "error", placement: "record.row", form: "reject", requiredPermissions: ["platform.artifacts.publication.approve"], visibleWhen: { pointer: "/status", in: ["PendingApproval", "Approved"] } },
+        { id: "cancel", label: text("action.publication.cancel", "撤销"), icon: "close", placement: "record.row", form: "cancel", requiredPermissions: ["platform.artifacts.publication.submit"], visibleWhen: { pointer: "/status", in: ["PendingApproval", "Approved"] } },
       ],
       preferences: { allowedColumns: ["pluginId", "version", "status", "publisher", "keyId", "reason", "sha256", "submittedBy", "approvedBy", "submittedAt", "expiresAt", "publishedAt", "terminalReason", "terminalBy", "terminalAt"], density: true },
     },
