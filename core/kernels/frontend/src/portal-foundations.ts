@@ -30,8 +30,8 @@ export interface LoadedPortalFoundations {
   shell: NonNullable<FrontendPluginModule["shell"]>;
   shellLibrary: NonNullable<FrontendPluginModule["shellLibrary"]>;
   loaded: readonly { ref: PluginRef; module: FrontendPluginModule }[];
-  rendererModuleKeys: ReadonlySet<string>;
-  shellLibraryModuleKeys: ReadonlySet<string>;
+  rendererModuleIDs: ReadonlySet<string>;
+  shellLibraryModuleIDs: ReadonlySet<string>;
 }
 
 export async function loadPortalFoundations(
@@ -112,8 +112,6 @@ export async function loadPortalFoundations(
     throw new PortalAssemblyError("SHELL_LIBRARY_INVALID", `Shell Library 导出与 Catalog 不一致: ${shellTemplateID}`);
   }
 
-  const rendererModuleKeys = new Set(renderAdapter.renderers.map((item) => moduleKey(item.module)));
-  const shellLibraryModuleKeys = new Set(shell.templates.map((item) => moduleKey(item.module)));
   const rendererModuleIDs = new Set(renderAdapter.renderers.map((item) => item.module.id));
   const shellLibraryModuleIDs = new Set(shell.templates.map((item) => item.module.id));
   const otherRefs = portal.plugins.filter((ref) =>
@@ -129,8 +127,8 @@ export async function loadPortalFoundations(
     iconThemeID,
     shell,
     shellLibrary,
-    rendererModuleKeys,
-    shellLibraryModuleKeys,
+    rendererModuleIDs,
+    shellLibraryModuleIDs,
     loaded: [
       { ref: portal.runtimeEngine, module: runtimeEngineModule },
       { ref: portal.renderAdapter, module: renderAdapterModule },

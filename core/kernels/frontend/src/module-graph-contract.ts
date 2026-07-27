@@ -1,6 +1,7 @@
 import type { PluginRef } from "./portal-contracts";
 import { ModuleLoadError } from "./module-errors";
 import { sha256Hex } from "./module-integrity";
+import type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 export interface FrontendModuleDependencyDescriptor {
   specifier: string;
@@ -28,15 +29,13 @@ export interface FrontendModuleGraphDescriptor extends PluginRef {
   deferred?: boolean;
 }
 
-export type ModuleGraphPolicy = "production" | "development";
-
 const allowedSharedExternals = new Set([
   "react", "react-dom", "react-dom/client", "react/jsx-runtime",
   "@vastplan/rjsf-csp-validator", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk", "@vastplan/frontend-engine-contract",
 ]);
 
 /** Validates the untrusted Browser RuntimeSpec projection before any fetch. */
-export function validateModuleGraphDescriptor(graph: FrontendModuleGraphDescriptor, policy: ModuleGraphPolicy = "production"): void {
+export function validateModuleGraphDescriptor(graph: FrontendModuleGraphDescriptor, protocol: FrontendRuntimeProtocol): void {
   if (!graph.id || !graph.version || graph.target !== "browser" || !/^[a-f0-9]{64}$/.test(graph.digest) || !/^[a-f0-9]{64}$/.test(graph.packageSha256) ||
       !validModulePath(graph.entry) || !Array.isArray(graph.externals) || !Array.isArray(graph.nodes) || graph.nodes.length === 0 || graph.nodes.length > 512) {
     throw new ModuleLoadError("MODULE_GRAPH_INVALID", `前端 Module Graph 描述无效: ${graph.id || "unknown"}`);
@@ -50,7 +49,7 @@ export function validateModuleGraphDescriptor(graph: FrontendModuleGraphDescript
   let totalSize = 0;
   for (const node of graph.nodes) {
     if (!validModulePath(node.path) || paths.has(node.path) || digests.has(node.sha256) || !Number.isSafeInteger(node.size) || node.size <= 0 || node.size > 16 * 1024 * 1024 ||
-        !/^[a-f0-9]{64}$/.test(node.sha256) || governedDigest(node.url, policy) !== node.sha256 || !validMediaType(node.mediaType) || !validPurpose(node.purpose) || !Array.isArray(node.dependencies) || node.dependencies.length > 128) {
+        !/^[a-f0-9]{64}$/.test(node.sha256) || protocol.governedDigest(node.url, "graph-node") !== node.sha256 || !validMediaType(node.mediaType) || !validPurpose(node.purpose) || !Array.isArray(node.dependencies) || node.dependencies.length > 128) {
       throw new ModuleLoadError("MODULE_GRAPH_INVALID", `Module Graph 节点无效或重复: ${graph.id}/${node.path}`);
     }
     totalSize += node.size;
@@ -125,14 +124,4 @@ function validMediaType(value: string): boolean {
 
 function validPurpose(value: string): boolean {
   return ["entry", "chunk", "style", "locale", "asset", "source-map"].includes(value);
-}
-
-export function isDevelopmentModuleGraphURL(url: string): boolean {
-  return /^\/__vastplan_dev\/modules\/[a-f0-9]{64}\.(?:js|css|json|wasm|bin)$/.test(url);
-}
-
-function governedDigest(url: string, policy: ModuleGraphPolicy): string | undefined {
-  return /^\/v1\/portal-modules\/[1-9]\d*\/([a-f0-9]{64})\.(?:js|css|json|wasm|bin)$/.exec(url)?.[1] ??
-    /^\/v1\/portal-recovery-modules\/[1-9]\d*\/[1-9]\d*\/([a-f0-9]{64})\.(?:js|css|json|wasm|bin)$/.exec(url)?.[1] ??
-    (policy === "development" ? /^\/__vastplan_dev\/modules\/([a-f0-9]{64})\.(?:js|css|json|wasm|bin)$/.exec(url)?.[1] : undefined);
 }

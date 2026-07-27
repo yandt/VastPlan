@@ -1,6 +1,7 @@
 import type { FrontendPluginLifecycleContext, JSONValue } from "@vastplan/ui-primitives";
-import { VerifiedFrontendPluginLoader, type ModuleDescriptorPolicy, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
+import { VerifiedFrontendPluginLoader, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
 import { PortalRuntime, type PreparedFrontendPlugin, type PreparedPortal } from "./portal-runtime";
+import { productionFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 const defaultStateLimit = 64 * 1024;
 const defaultStateDepth = 32;
@@ -27,7 +28,7 @@ export interface PortalGenerationManagerOptions {
   disposeTimeoutMs?: number;
   stateLimitBytes?: number;
   stateDepth?: number;
-  descriptorPolicy?: ModuleDescriptorPolicy;
+  runtimeProtocol?: FrontendRuntimeProtocol;
   onDiagnostic?(diagnostic: PortalGenerationDiagnostic): void;
   prepare?(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<PreparedPortal>;
   beforeCommit?(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<void>;
@@ -125,7 +126,7 @@ export class PortalGenerationManager {
 
   private prepare(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<PreparedPortal> {
     if (this.options.prepare !== undefined) return this.options.prepare(spec, context);
-    const loader = new VerifiedFrontendPluginLoader(spec, this.fetcher, undefined, this.options.descriptorPolicy ?? "production");
+    const loader = new VerifiedFrontendPluginLoader(spec, { protocol: this.options.runtimeProtocol ?? productionFrontendRuntimeProtocol, fetcher: this.fetcher });
     return new PortalRuntime(loader).prepare(spec.portal, context);
   }
 

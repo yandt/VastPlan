@@ -3,15 +3,24 @@ import { ModuleLoadError } from "./module-errors";
 import { normalizeFrontendModule } from "./module-exports";
 import { ownedBuffer, sha256Hex } from "./module-integrity";
 import { VerifiedModuleGraphLoader, type FrontendModuleGraphDescriptor } from "./module-graph-loader";
-import { isDevelopmentModuleURL, validateFrontendModuleDescriptor, type FrontendModuleDescriptor, type ModuleDescriptorPolicy, type PortalRuntimeSpec } from "./module-runtime-spec";
+import { RuntimeSpecModuleResolver, pluginKey } from "./module-resolution";
+import { validateFrontendModuleDescriptor, type FrontendModuleDescriptor, type PortalRuntimeSpec } from "./module-runtime-spec";
+import type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 export { ModuleLoadError } from "./module-errors";
 export type { FrontendModuleGraphDescriptor } from "./module-graph-loader";
 export { parseDevelopmentRuntimeSpec, parsePortalRuntimeSpec } from "./module-runtime-spec";
-export type { FrontendModuleDescriptor, ModuleDescriptorPolicy, PortalRuntimeSpec } from "./module-runtime-spec";
+export type { FrontendModuleDescriptor, PortalRuntimeSpec } from "./module-runtime-spec";
+export type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 export type ModuleFetcher = (input: string, init?: RequestInit) => Promise<Response>;
 export type ModuleImporter = (source: Uint8Array, sourceURL: string) => Promise<unknown>;
+
+export interface FrontendPluginLoaderOptions {
+  protocol: FrontendRuntimeProtocol;
+  fetcher?: ModuleFetcher;
+  importer?: ModuleImporter;
+}
 
 /**
  * Loads only modules listed in the trusted Portal-issued RuntimeSpec. The JavaScript is
@@ -19,50 +28,44 @@ export type ModuleImporter = (source: Uint8Array, sourceURL: string) => Promise<
  * from an opaque blob URL; a plugin cannot self-assert provenance.
  */
 export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
-  private readonly modules = new Map<string, FrontendModuleDescriptor>();
   private readonly pending = new Map<string, Promise<FrontendPluginModule>>();
   private readonly graphLoader: VerifiedModuleGraphLoader;
+  private readonly resolver: RuntimeSpecModuleResolver;
+  private readonly fetcher: ModuleFetcher;
+  private readonly importer: ModuleImporter;
+  private readonly protocol: FrontendRuntimeProtocol;
 
   public constructor(
     input: readonly FrontendModuleDescriptor[] | PortalRuntimeSpec,
-    private readonly fetcher: ModuleFetcher = globalThis.fetch.bind(globalThis),
-    private readonly importer: ModuleImporter = importModuleBytes,
-    private readonly policy: ModuleDescriptorPolicy = "production",
+    options: FrontendPluginLoaderOptions,
   ) {
+    this.protocol = options.protocol;
+    this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
+    this.importer = options.importer ?? importModuleBytes;
     const runtimeSpec = Array.isArray(input) ? undefined : input as PortalRuntimeSpec;
     const descriptors = runtimeSpec?.modules ?? input as readonly FrontendModuleDescriptor[];
     const graphs = runtimeSpec?.moduleGraphs ?? [];
     for (const descriptor of descriptors) {
-      validateFrontendModuleDescriptor(descriptor, policy);
-      const key = moduleKey(descriptor);
-      if (this.modules.has(key)) {
-        throw new ModuleLoadError("MODULE_DESCRIPTOR_DUPLICATE", `前端模块描述重复: ${key}`);
-      }
-      this.modules.set(key, { ...descriptor });
+      validateFrontendModuleDescriptor(descriptor, this.protocol);
     }
-    this.graphLoader = new VerifiedModuleGraphLoader(graphs, fetcher, undefined, policy);
+    this.graphLoader = new VerifiedModuleGraphLoader(graphs, { protocol: this.protocol, fetcher: this.fetcher });
+    this.resolver = new RuntimeSpecModuleResolver(descriptors, graphs, this.protocol);
   }
 
   public canLoad(ref: PluginRef): boolean {
-    return this.modules.has(moduleKey(ref)) || this.graphLoader.has(ref);
+    return this.resolver.resolve(ref) !== undefined;
   }
 
   public load(ref: PluginRef): Promise<FrontendPluginModule> {
-    const key = moduleKey(ref);
-    const descriptor = this.modules.get(key);
-    if (descriptor === undefined) {
-      const graph = this.graphLoader.resolve(ref);
-      if (graph === undefined) return Promise.reject(new ModuleLoadError("MODULE_NOT_LOCKED", `Portal 运行描述未锁定模块: ${key}`));
-      const graphKey = moduleKey(graph);
-      const existing = this.pending.get(graphKey);
-      if (existing !== undefined) return existing;
-      const started = this.loadVerifiedGraph(ref, graph);
-      this.pending.set(graphKey, started);
-      return started;
-    }
+    const candidate = this.resolver.resolve(ref);
+    if (candidate === undefined) return Promise.reject(new ModuleLoadError("MODULE_NOT_LOCKED", `Portal 运行描述未锁定模块: ${pluginKey(ref)}`));
+    const descriptor = candidate.descriptor;
+    const key = pluginKey(descriptor);
     const existing = this.pending.get(key);
     if (existing !== undefined) return existing;
-    const started = this.loadVerified(descriptor);
+    const started = candidate.kind === "module"
+      ? this.loadVerified(candidate.descriptor)
+      : this.loadVerifiedGraph(ref, candidate.descriptor);
     this.pending.set(key, started);
     return started;
   }
@@ -70,13 +73,13 @@ export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
   public dispose(): void { this.graphLoader.dispose(); }
 
   private async loadVerifiedGraph(ref: PluginRef, graph: FrontendModuleGraphDescriptor): Promise<FrontendPluginModule> {
-    const namespace = await this.graphLoader.load(ref);
+    const namespace = await this.graphLoader.load(graph);
     const entry = graph.nodes.find((node) => node.path === graph.entry)!;
     return normalizeFrontendModule(namespace, { id: ref.id, sha256: entry.sha256 });
   }
 
   private async loadVerified(descriptor: FrontendModuleDescriptor): Promise<FrontendPluginModule> {
-    const response = await this.fetcher(descriptor.url, { credentials: "include", cache: isDevelopmentModuleURL(descriptor.url) ? "no-store" : "force-cache" });
+    const response = await this.fetcher(descriptor.url, { credentials: "include", cache: this.protocol.requestCache(descriptor.url) });
     if (!response.ok) {
       throw new ModuleLoadError("MODULE_FETCH_FAILED", `前端模块获取失败: ${descriptor.id} (${response.status})`);
     }
@@ -104,8 +107,4 @@ async function importModuleBytes(source: Uint8Array, sourceURL: string): Promise
   } finally {
     URL.revokeObjectURL(objectURL);
   }
-}
-
-function moduleKey(ref: PluginRef): string {
-  return `${ref.id}@${ref.version}/${ref.channel ?? "stable"}`;
 }

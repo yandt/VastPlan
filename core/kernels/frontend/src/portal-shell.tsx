@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { PortalI18nProvider, message, usePortalI18n, usePortalUI, type PluginLocalization, type PortalLocalizationPolicy } from "@vastplan/ui-primitives";
-import { VerifiedFrontendPluginLoader, parsePortalRuntimeSpec, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
-import { startPortalDevelopmentUpdates } from "./portal-development";
+import { VerifiedFrontendPluginLoader, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
+import { parseRuntimeSpec } from "./module-runtime-spec";
+import { fetchDevelopmentRuntime, startPortalDevelopmentUpdates } from "./portal-development";
 import { startPortalActivationUpdates, type PortalActivationUpdate } from "./portal-updates";
 import { PortalGenerationManager } from "./portal-generation";
 import { PortalRuntime, type PreparedPortal } from "./portal-runtime";
 import { AccessLoginPage } from "./access-login";
 import { PortalPreferenceSession } from "./portal-preferences";
 import { PortalGenerationCommitClient } from "./portal-generation-client";
+import type { PortalRuntimeSource } from "./portal-runtime-source";
+import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 declare const __VASTPLAN_DEV_HMR__: boolean;
 
@@ -19,7 +22,9 @@ export interface PortalBootstrapOptions {
   pathname?: string;
   fetcher?: ModuleFetcher;
   runtimeEndpoint?: string;
+  developmentRuntimeEndpoint?: string;
   recoveryEndpoint?: string;
+  runtimeSource?: PortalRuntimeSource;
 }
 
 /** Fetches the governed runtime lock, verifies every remote module, then mounts. */
@@ -27,7 +32,9 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   const pathname = options.pathname ?? globalThis.location?.pathname ?? "/";
   const endpoint = options.runtimeEndpoint ?? "/v1/portal-runtime";
+  const developmentEndpoint = options.developmentRuntimeEndpoint ?? "/__vastplan_dev/runtime";
   const recoveryEndpoint = options.recoveryEndpoint ?? "/v1/portal-recovery";
+	const runtimeSource = options.runtimeSource ?? createBootstrapRuntimeSource(fetcher, endpoint, developmentEndpoint, __VASTPLAN_DEV_HMR__);
 	const hydrated = options.element.hasChildNodes();
 	const root = hydrated ? hydrateRoot(options.element, <PortalStarting />) : createRoot(options.element);
   if (pathname === "/auth/access") {
@@ -52,9 +59,9 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   const generationCommits = new PortalGenerationCommitClient(fetcher);
   const manager = new PortalGenerationManager({
     fetcher,
-    descriptorPolicy: __VASTPLAN_DEV_HMR__ ? "development" : "production",
+    runtimeProtocol: runtimeSource.protocol,
     prepare: async (spec, context) => {
-      const loader = new VerifiedFrontendPluginLoader(spec, fetcher, undefined, __VASTPLAN_DEV_HMR__ ? "development" : "production");
+      const loader = new VerifiedFrontendPluginLoader(spec, { protocol: runtimeSource.protocol, fetcher });
       const preference = preferenceSession?.resolve(spec.portal) ?? {};
       return new PortalRuntime(loader).prepare(spec.portal, { ...context, ...preference, preferences: preferenceSession });
     },
@@ -116,7 +123,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   replaceIconTheme = (value) => { void replaceRendererOption("icon", value); };
 	if (!hydrated) root.render(<PortalStarting />);
   try {
-    currentSpec = await fetchRuntimeSpec(fetcher, endpoint, pathname);
+    currentSpec = await runtimeSource.read(pathname);
     preferenceSession = await PortalPreferenceSession.open(fetcher, pathname, currentSpec.portal);
     await manager.start(currentSpec);
     commitHostEpoch(currentSpec.portal);
@@ -137,7 +144,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
         policy: updatePolicy,
         pathname: () => globalThis.location?.pathname ?? pathname,
         currentRevision: () => currentSpec?.portal.revision ?? 0,
-        fetchRuntime: (path) => fetchRuntimeSpec(fetcher, endpoint, path),
+        fetchRuntime: (path) => fetchRuntimeSpec(fetcher, endpoint, path, runtimeSource.protocol),
         onRuntime: (spec) => { currentSpec = spec; updateNotice = undefined; },
         onNotify: (update) => { updateNotice = update; renderApplication(); },
         onHostEpoch: (revision) => { if (currentSpec !== undefined) markHostEpochPending(currentSpec.portal, revision); },
@@ -147,7 +154,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
     if (__VASTPLAN_DEV_HMR__) {
       stopDevelopmentUpdates = startPortalDevelopmentUpdates({
         manager,
-        fetcher,
+        runtimeSource,
         pathname: () => globalThis.location?.pathname ?? pathname,
         onRuntime: (spec) => { currentSpec = spec; },
         onError: (error) => {
@@ -169,7 +176,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
     } else if (currentSpec !== undefined && failPendingHostEpoch(currentSpec.portal)) {
       try {
         recoveryMode = true;
-        currentSpec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname);
+        currentSpec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname, runtimeSource.protocol);
         await manager.start(currentSpec);
         renderApplication();
       } catch (recoveryError) {
@@ -178,7 +185,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
     } else {
       const recover = async () => {
         recoveryMode = true;
-        currentSpec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname);
+        currentSpec = await fetchRuntimeSpec(fetcher, recoveryEndpoint, pathname, runtimeSource.protocol);
         await manager.start(currentSpec);
       };
       root.render(<PortalRecovery error={error} onRecover={recover} />);
@@ -194,11 +201,19 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
 
 export async function preparePortal(fetcher: ModuleFetcher, endpoint: string, pathname: string): Promise<PreparedPortal> {
   const spec = await fetchRuntimeSpec(fetcher, endpoint, pathname);
-  const loader = new VerifiedFrontendPluginLoader(spec, fetcher);
+  const loader = new VerifiedFrontendPluginLoader(spec, { protocol: productionFrontendRuntimeProtocol, fetcher });
   return new PortalRuntime(loader).prepare(spec.portal);
 }
 
-export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string, pathname: string): Promise<PortalRuntimeSpec> {
+/** 组合根只选择一次 Runtime 协议，首次启动与后续替换共用该实例。 */
+export function createBootstrapRuntimeSource(fetcher: ModuleFetcher, endpoint: string, developmentEndpoint: string, development: boolean): PortalRuntimeSource {
+  const protocol = development ? developmentFrontendRuntimeProtocol : productionFrontendRuntimeProtocol;
+  return development
+    ? { protocol, read: (pathname) => fetchDevelopmentRuntime(fetcher, developmentEndpoint, pathname, protocol) }
+    : { protocol, read: (pathname) => fetchRuntimeSpec(fetcher, endpoint, pathname, protocol) };
+}
+
+export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string, pathname: string, protocol = productionFrontendRuntimeProtocol): Promise<PortalRuntimeSpec> {
   const separator = endpoint.includes("?") ? "&" : "?";
   const response = await fetcher(`${endpoint}${separator}path=${encodeURIComponent(pathname)}`, {
     credentials: "same-origin",
@@ -207,7 +222,7 @@ export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string,
   if (!response.ok) {
     throw new PortalBootstrapError("RUNTIME_FETCH_FAILED", `Portal 运行描述获取失败 (${response.status})`);
   }
-  return parsePortalRuntimeSpec(await response.json());
+  return parseRuntimeSpec(await response.json(), protocol);
 }
 
 export function PortalApplication({ prepared, initialPath, recoveryMode = false, developmentError, updateNotice, onApplyUpdate, onRendererChange, onShellTemplateChange, onThemeTemplateChange, onIconThemeChange }: { prepared: PreparedPortal; initialPath: string; recoveryMode?: boolean; developmentError?: string; updateNotice?: PortalActivationUpdate; onApplyUpdate?(): void; onRendererChange?(rendererID: string): void; onShellTemplateChange?(templateID: string): Promise<void>; onThemeTemplateChange?(themeTemplateID: string): void; onIconThemeChange?(iconThemeID: string): void }) {

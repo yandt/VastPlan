@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ModuleLoadError, VerifiedFrontendPluginLoader, parseDevelopmentRuntimeSpec, parsePortalRuntimeSpec, type FrontendModuleDescriptor } from "./module-loader";
 import { computeModuleGraphDigest, type FrontendModuleGraphDescriptor } from "./module-graph-loader";
+import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 const ref = { id: "cn.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 const source = new TextEncoder().encode("export default { register() {} }");
@@ -24,7 +25,7 @@ describe("VerifiedFrontendPluginLoader", () => {
     const register = vi.fn();
     const fetcher = vi.fn(async () => new Response(source, { status: 200, headers: { "X-VastPlan-Module-SHA256": locked.sha256 } }));
     const importer = vi.fn(async () => ({ default: { register, provenance: { signed: false } } }));
-    const loader = new VerifiedFrontendPluginLoader([locked], fetcher, importer);
+    const loader = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher, importer });
 
     const loaded = await loader.load(ref);
     expect(loaded.provenance).toEqual({ signed: true, firstParty: true, integrity: `sha256:${locked.sha256}` });
@@ -36,24 +37,24 @@ describe("VerifiedFrontendPluginLoader", () => {
   it("binds an optional hot lifecycle but rejects malformed hooks", async () => {
     const locked = await descriptor();
     const capture = vi.fn(function (this: { marker: string }) { return { marker: this.marker }; });
-    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({ default: { register() {}, hot: { marker: "bound", capture } } }));
+    const loader = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer: async () => ({ default: { register() {}, hot: { marker: "bound", capture } } }) });
     const loaded = await loader.load(ref);
     expect(await loaded.hot?.capture?.({ pluginID: ref.id, generation: "g1", signal: new AbortController().signal, reason: "replace" })).toEqual({ marker: "bound" });
 
-    const malformed = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({ default: { register() {}, hot: { dispose: true } } }));
+    const malformed = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer: async () => ({ default: { register() {}, hot: { dispose: true } } }) });
     await expect(malformed.load(ref)).rejects.toMatchObject({ code: "MODULE_HOT_INVALID" } satisfies Partial<ModuleLoadError>);
   });
 
   it("recognizes a unified render-adapter catalog without a top-level Provider", async () => {
     const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.render.adapter" });
-    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({
+    const loader = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer: async () => ({
       default: {
         id: "ui.render.adapter",
         uiContract: "4.0.0",
         defaultRenderer: "arco",
         renderers: [{ id: "arco", Provider() {} }],
       },
-    }));
+    }) });
 
     const loaded = await loader.load({ id: locked.id, version: locked.version });
     expect(loaded.renderAdapter).toMatchObject({
@@ -65,10 +66,10 @@ describe("VerifiedFrontendPluginLoader", () => {
 
   it("recognizes only a governed Runtime Engine export", async () => {
     const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.runtime.engine.react" });
-    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({
+    const loader = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer: async () => ({
       runtimeEngine: { id: "ui.runtime.engine", family: "react", engineContract: "1.0.0", capabilities: ["csr", "generation"] },
       localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { "engine.react": "React 运行引擎" } } },
-    }));
+    }) });
     const loaded = await loader.load({ id: locked.id, version: locked.version });
     expect(loaded.runtimeEngine).toMatchObject({ id: "ui.runtime.engine", family: "react" });
     expect(loaded.localization?.messages["zh-CN"]?.["engine.react"]).toBe("React 运行引擎");
@@ -76,7 +77,7 @@ describe("VerifiedFrontendPluginLoader", () => {
 
   it("recognizes a Renderer only from its explicit named module export", async () => {
     const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.render.adapter.arco" });
-    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({
+    const loader = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer: async () => ({
       renderer: {
         id: "arco",
         framework: "arco",
@@ -87,7 +88,7 @@ describe("VerifiedFrontendPluginLoader", () => {
         iconThemes: [{ id: "canonical", source: "canonical" }],
         defaultIconTheme: "canonical",
       },
-    }));
+    }) });
 
     const loaded = await loader.load({ id: locked.id, version: locked.version });
     expect(loaded.renderer).toMatchObject({ id: "arco", framework: "arco" });
@@ -96,14 +97,14 @@ describe("VerifiedFrontendPluginLoader", () => {
   it("recognizes a Shell Library only from its governed export", async () => {
     const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.structure.layout.standard" });
     const Shell = () => null;
-    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source), async () => ({
+    const loader = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer: async () => ({
       shellLibrary: {
         id: "standard",
         shell: "ui.structure.shell",
         uiContract: "4.0.0",
         Shell,
       },
-    }));
+    }) });
 
     const loaded = await loader.load({ id: locked.id, version: locked.version });
     expect(loaded.shellLibrary).toMatchObject({ id: "standard", shell: "ui.structure.shell", Shell });
@@ -112,13 +113,13 @@ describe("VerifiedFrontendPluginLoader", () => {
   it("fails closed before import when bytes do not match the runtime lock", async () => {
     const locked = await descriptor({ sha256: "b".repeat(64), url: `/v1/portal-modules/7/${"b".repeat(64)}.js` });
     const importer = vi.fn();
-    const loader = new VerifiedFrontendPluginLoader([locked], async () => new Response(source, { status: 200 }), importer);
+    const loader = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source, { status: 200 }), importer });
     await expect(loader.load(ref)).rejects.toMatchObject({ code: "MODULE_INTEGRITY_MISMATCH" } satisfies Partial<ModuleLoadError>);
     expect(importer).not.toHaveBeenCalled();
   });
 
   it("rejects modules absent from the trusted Portal-issued lock", async () => {
-    const loader = new VerifiedFrontendPluginLoader([await descriptor()], async () => new Response(source), async () => ({}));
+    const loader = new VerifiedFrontendPluginLoader([await descriptor()], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer: async () => ({}) });
     await expect(loader.load({ id: "cn.vastplan.product.other", version: "1.0.0" })).rejects.toMatchObject({ code: "MODULE_NOT_LOCKED" } satisfies Partial<ModuleLoadError>);
   });
 
@@ -167,7 +168,7 @@ describe("VerifiedFrontendPluginLoader", () => {
     expect(parseDevelopmentRuntimeSpec({ portal: {}, modules: [development] }).modules[0]).toEqual(development);
 
     const fetcher = vi.fn(async () => new Response(source));
-    const loader = new VerifiedFrontendPluginLoader([development], fetcher, async () => ({ default: { register() {} } }), "development");
+    const loader = new VerifiedFrontendPluginLoader([development], { protocol: developmentFrontendRuntimeProtocol, fetcher, importer: async () => ({ default: { register() {} } }) });
     await loader.load(ref);
     expect(fetcher).toHaveBeenCalledWith(development.url, { credentials: "include", cache: "no-store" });
 
@@ -178,5 +179,52 @@ describe("VerifiedFrontendPluginLoader", () => {
     const developmentGraph = { ...unsignedGraph, digest: await computeModuleGraphDigest(unsignedGraph) };
     expect(() => parsePortalRuntimeSpec({ portal: {}, moduleGraphs: [developmentGraph] })).toThrowError(ModuleLoadError);
     expect(parseDevelopmentRuntimeSpec({ portal: {}, moduleGraphs: [developmentGraph] }).moduleGraphs[0]).toEqual(developmentGraph);
+  });
+
+  it("uses one identity protocol for flat modules and graphs in development", async () => {
+    const base = await descriptor();
+    const flat = { ...base, url: `/__vastplan_dev/modules/${base.sha256}.js` };
+    const requested = { ...ref, version: "9.9.9" };
+    const importer = vi.fn(async () => ({ default: { register() {} } }));
+    const protocolCalls: string[] = [];
+    const protocol: FrontendRuntimeProtocol = {
+      id: "development",
+      governedDigest(url, kind) {
+        protocolCalls.push(`digest:${kind}`);
+        return developmentFrontendRuntimeProtocol.governedDigest(url, kind);
+      },
+      requestCache(url) {
+        protocolCalls.push("cache");
+        return developmentFrontendRuntimeProtocol.requestCache(url);
+      },
+      resolveCandidate(exact, sameID) {
+        protocolCalls.push("resolve");
+        return developmentFrontendRuntimeProtocol.resolveCandidate(exact, sameID);
+      },
+    };
+    const development = new VerifiedFrontendPluginLoader([flat], { protocol, fetcher: async () => new Response(source), importer });
+    expect(development.canLoad(requested)).toBe(true);
+    await development.load(requested);
+    expect(importer).toHaveBeenCalledOnce();
+
+    const production = new VerifiedFrontendPluginLoader([base], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer });
+    expect(production.canLoad(requested)).toBe(false);
+
+    const graphUnsigned: FrontendModuleGraphDescriptor = {
+      ...ref,
+      version: "2.0.0",
+      target: "browser",
+      entry: flat.entry,
+      digest: "0".repeat(64),
+      packageSha256: flat.packageSha256,
+      externals: [],
+      nodes: [{ path: flat.entry, url: flat.url, sha256: flat.sha256, size: source.byteLength, mediaType: "text/javascript", purpose: "entry", dependencies: [] }],
+    };
+    const graph = { ...graphUnsigned, digest: await computeModuleGraphDigest(graphUnsigned) };
+    const ambiguous = new VerifiedFrontendPluginLoader({ portal: {} as never, modules: [flat], moduleGraphs: [graph] }, { protocol, fetcher: async () => new Response(source), importer });
+    expect(ambiguous.canLoad(requested)).toBe(false);
+    expect(ambiguous.canLoad(ref)).toBe(true);
+    expect(ambiguous.canLoad({ ...ref, version: "2.0.0" })).toBe(true);
+    expect(protocolCalls).toEqual(expect.arrayContaining(["digest:entry", "digest:graph-node", "resolve", "cache"]));
   });
 });

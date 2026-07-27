@@ -82,7 +82,7 @@ export class PortalRuntime {
     const reason = options.reason ?? "bootstrap";
 
     for (const ref of portal.plugins) {
-      if (isFoundationOrDeferred(ref, portal, foundations.rendererModuleKeys, foundations.shellLibraryModuleKeys)) continue;
+      if (isFoundationOrDeferred(ref, portal, foundations.rendererModuleIDs, foundations.shellLibraryModuleIDs)) continue;
       const plugin = requiredModule(modules, ref);
       assertTrustedFirstParty(plugin, ref.id);
       if (plugin.runtimeEngine !== undefined || plugin.renderAdapter !== undefined || plugin.shell !== undefined || plugin.workbench !== undefined) {
@@ -301,9 +301,9 @@ function collectLocalization(
 function isFoundationOrDeferred(
   ref: PluginRef,
   portal: PortalSpec,
-  rendererModuleKeys: ReadonlySet<string>,
-  shellLibraryModuleKeys: ReadonlySet<string>,
+  rendererModuleIDs: ReadonlySet<string>,
+  shellLibraryModuleIDs: ReadonlySet<string>,
 ): boolean {
   return [portal.runtimeEngine, portal.renderAdapter, portal.shell, portal.workbench].some((foundation) => samePlugin(ref, foundation)) ||
-    rendererModuleKeys.has(moduleKey(ref)) || shellLibraryModuleKeys.has(moduleKey(ref));
+    rendererModuleIDs.has(ref.id) || shellLibraryModuleIDs.has(ref.id);
 }

@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { PreparedPortal } from "./portal-runtime";
-import { PortalBootstrapError, PortalRecovery, fetchRuntimeSpec, resolvePortalPath } from "./portal-shell";
+import { PortalBootstrapError, PortalRecovery, createBootstrapRuntimeSource, fetchRuntimeSpec, resolvePortalPath } from "./portal-shell";
 
 describe("Portal recovery shell", () => {
   it("renders without any design-system provider", () => {
@@ -24,6 +24,33 @@ describe("Portal recovery shell", () => {
     };
     await fetchRuntimeSpec(fetcher, "/v1/portal-recovery", "/settings/portals");
     expect(calls).toEqual(["/v1/portal-recovery?path=%2Fsettings%2Fportals"]);
+  });
+
+  it("boots development directly from the source runtime overlay", async () => {
+    const calls: string[] = [];
+    const digest = "a".repeat(64);
+    const fetcher = async (input: string) => {
+      calls.push(input);
+      return new Response(JSON.stringify({ portal: {}, modules: [{ id: "cn.vastplan.test", version: "1.0.0", entry: "frontend/dist/index.js", url: `/__vastplan_dev/modules/${digest}.js`, sha256: digest, packageSha256: "b".repeat(64) }] }), { status: 200 });
+    };
+    const source = createBootstrapRuntimeSource(fetcher, "/v1/portal-runtime", "/__vastplan_dev/runtime", true);
+    const spec = await source.read("/operations");
+    expect(source.protocol.id).toBe("development");
+    expect(calls).toEqual(["/__vastplan_dev/runtime?path=%2Foperations"]);
+    expect(spec.modules[0]?.url).toBe(`/__vastplan_dev/modules/${digest}.js`);
+  });
+
+  it("keeps production bootstrap on the governed stable runtime", async () => {
+    const calls: string[] = [];
+    const digest = "c".repeat(64);
+    const fetcher = async (input: string) => {
+      calls.push(input);
+      return new Response(JSON.stringify({ portal: {}, modules: [{ id: "cn.vastplan.test", version: "1.0.0", entry: "frontend/dist/index.js", url: `/v1/portal-modules/1/${digest}.js`, sha256: digest, packageSha256: "d".repeat(64) }] }), { status: 200 });
+    };
+    const source = createBootstrapRuntimeSource(fetcher, "/v1/portal-runtime", "/__vastplan_dev/runtime", false);
+    await source.read("/operations");
+    expect(source.protocol.id).toBe("production");
+    expect(calls).toEqual(["/v1/portal-runtime?path=%2Foperations"]);
   });
 });
 

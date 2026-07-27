@@ -1,7 +1,8 @@
 import type { PluginRef } from "./portal-contracts";
 import { ModuleLoadError } from "./module-errors";
 import { ownedBuffer, sha256Hex } from "./module-integrity";
-import { computeModuleGraphDigest, isDevelopmentModuleGraphURL, topologicalModuleOrder, validateModuleGraphDescriptor, type FrontendModuleGraphDescriptor, type ModuleGraphPolicy } from "./module-graph-contract";
+import { computeModuleGraphDigest, topologicalModuleOrder, validateModuleGraphDescriptor, type FrontendModuleGraphDescriptor } from "./module-graph-contract";
+import type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 export { computeModuleGraphDigest, validateModuleGraphDescriptor } from "./module-graph-contract";
 export type { FrontendModuleDependencyDescriptor, FrontendModuleGraphDescriptor, FrontendModuleNodeDescriptor } from "./module-graph-contract";
@@ -9,33 +10,35 @@ export type { FrontendModuleDependencyDescriptor, FrontendModuleGraphDescriptor,
 export type GraphFetcher = (input: string, init?: RequestInit) => Promise<Response>;
 export type GraphNamespaceImporter = (entryURL: string, sourceURL: string) => Promise<unknown>;
 
+export interface ModuleGraphLoaderOptions {
+  protocol: FrontendRuntimeProtocol;
+  fetcher: GraphFetcher;
+  importer?: GraphNamespaceImporter;
+}
+
 export class VerifiedModuleGraphLoader {
   private readonly graphs = new Map<string, FrontendModuleGraphDescriptor>();
-  /** Development overlays retain the active RuntimeSpec version as their lookup identity. */
-  private readonly developmentGraphsByID = new Map<string, FrontendModuleGraphDescriptor | null>();
   private readonly pending = new Map<string, Promise<unknown>>();
   private readonly objectURLs = new Set<string>();
+  private readonly fetcher: GraphFetcher;
+  private readonly importer: GraphNamespaceImporter;
+  private readonly protocol: FrontendRuntimeProtocol;
 
-  public constructor(
-    graphs: readonly FrontendModuleGraphDescriptor[],
-    private readonly fetcher: GraphFetcher,
-    private readonly importer: GraphNamespaceImporter = importGraphEntry,
-    private readonly policy: ModuleGraphPolicy = "production",
-  ) {
+  public constructor(graphs: readonly FrontendModuleGraphDescriptor[], options: ModuleGraphLoaderOptions) {
+    this.protocol = options.protocol;
+    this.fetcher = options.fetcher;
+    this.importer = options.importer ?? importGraphEntry;
     for (const graph of graphs) {
-      validateModuleGraphDescriptor(graph, policy);
+      validateModuleGraphDescriptor(graph, this.protocol);
       const key = pluginKey(graph);
       if (this.graphs.has(key)) throw new ModuleLoadError("MODULE_GRAPH_DUPLICATE", `前端 Module Graph 重复: ${key}`);
       this.graphs.set(key, graph);
-      if (policy === "development") this.recordDevelopmentGraph(graph);
     }
   }
 
-  public has(ref: PluginRef): boolean { return this.resolve(ref) !== undefined; }
-
-  /** Returns the exact lock in production, or one unambiguous same-ID development overlay. */
+  /** Graph Loader 只接收已由 FrontendModuleResolver 选定的精确身份。 */
   public resolve(ref: PluginRef): FrontendModuleGraphDescriptor | undefined {
-    return this.graphs.get(pluginKey(ref)) ?? (this.policy === "development" ? this.developmentGraphsByID.get(ref.id) ?? undefined : undefined);
+    return this.graphs.get(pluginKey(ref));
   }
 
   public load(ref: PluginRef): Promise<unknown> {
@@ -49,15 +52,6 @@ export class VerifiedModuleGraphLoader {
     return started;
   }
 
-  private recordDevelopmentGraph(graph: FrontendModuleGraphDescriptor): void {
-    if (!this.developmentGraphsByID.has(graph.id)) {
-      this.developmentGraphsByID.set(graph.id, graph);
-      return;
-    }
-    // Multiple active graphs for one ID have no safe ID-only resolution.
-    this.developmentGraphsByID.set(graph.id, null);
-  }
-
   public dispose(): void {
     for (const url of this.objectURLs) URL.revokeObjectURL(url);
     this.objectURLs.clear();
@@ -69,7 +63,7 @@ export class VerifiedModuleGraphLoader {
     const nodes = new Map(graph.nodes.map((node) => [node.path, node]));
     const bytes = new Map<string, Uint8Array>();
     await Promise.all(graph.nodes.map(async (node) => {
-      const response = await this.fetcher(node.url, { credentials: "include", cache: isDevelopmentModuleGraphURL(node.url) ? "no-store" : "force-cache" });
+      const response = await this.fetcher(node.url, { credentials: "include", cache: this.protocol.requestCache(node.url) });
       if (!response.ok) throw new ModuleLoadError("MODULE_FETCH_FAILED", `Module Graph 节点获取失败: ${graph.id}/${node.path} (${response.status})`);
       const content = new Uint8Array(await response.arrayBuffer());
       if (content.byteLength !== node.size || await sha256Hex(content) !== node.sha256) throw new ModuleLoadError("MODULE_INTEGRITY_MISMATCH", `Module Graph 节点摘要不匹配: ${graph.id}/${node.path}`);

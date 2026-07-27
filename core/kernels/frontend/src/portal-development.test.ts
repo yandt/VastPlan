@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { fetchDevelopmentRuntime, PortalDevelopmentError, startPortalDevelopmentUpdates, type DevelopmentEventSource } from "./portal-development";
 import type { PortalGenerationManager } from "./portal-generation";
+import type { PortalRuntimeSource } from "./portal-runtime-source";
+import type { ModuleFetcher } from "./module-loader";
+import { developmentFrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 class FakeEventSource implements DevelopmentEventSource {
   public closed = false;
@@ -23,6 +26,11 @@ const runtime = {
   modules: [{ id: "cn.vastplan.feature", version: "1.0.0", entry: "frontend/dist/index.js", url: `/__vastplan_dev/modules/${digest}.js`, sha256: digest, packageSha256: "b".repeat(64) }],
 };
 
+function developmentSource(fetcher: ModuleFetcher): PortalRuntimeSource {
+  const protocol = developmentFrontendRuntimeProtocol;
+  return { protocol, read: (pathname) => fetchDevelopmentRuntime(fetcher, "/__vastplan_dev/runtime", pathname, protocol) };
+}
+
 describe("portal development updates", () => {
   it("fetches only a validated development runtime overlay", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify(runtime), { status: 200, headers: { "Content-Type": "application/json" } }));
@@ -41,7 +49,7 @@ describe("portal development updates", () => {
     const replace = vi.fn(async () => { if (replace.mock.calls.length === 1) await blocked; return {} as never; });
     const manager = { replace } as unknown as PortalGenerationManager;
     const fetcher = vi.fn(async () => new Response(JSON.stringify(runtime), { status: 200, headers: { "Content-Type": "application/json" } }));
-    const stop = startPortalDevelopmentUpdates({ manager, pathname: () => "/operations", eventSource: source, fetcher, onError: (error) => errors.push(error) });
+    const stop = startPortalDevelopmentUpdates({ manager, runtimeSource: developmentSource(fetcher), pathname: () => "/operations", eventSource: source, onError: (error) => errors.push(error) });
 
     source.emit("generation", { generation: 1 });
     source.emit("generation", { generation: 2 });
@@ -61,9 +69,9 @@ describe("portal development updates", () => {
     const replace = vi.fn(async () => ({} as never));
     startPortalDevelopmentUpdates({
       manager: { replace } as unknown as PortalGenerationManager,
+      runtimeSource: developmentSource(async () => new Response(JSON.stringify(runtime), { status: 200, headers: { "Content-Type": "application/json" } })),
       pathname: () => "/",
       eventSource: source,
-      fetcher: async () => new Response(JSON.stringify(runtime), { status: 200, headers: { "Content-Type": "application/json" } }),
     });
     source.emit("generation", { generation: 2 });
     await vi.waitFor(() => expect(replace).toHaveBeenCalledOnce());
@@ -80,6 +88,7 @@ describe("portal development updates", () => {
     const errors: unknown[] = [];
     startPortalDevelopmentUpdates({
       manager: { replace } as unknown as PortalGenerationManager,
+      runtimeSource: developmentSource(async () => new Response(JSON.stringify(runtime), { status: 200, headers: { "Content-Type": "application/json" } })),
       pathname: () => "/operations",
       eventSource: source,
       reload,

@@ -1,5 +1,8 @@
-import { parseDevelopmentRuntimeSpec, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
+import type { ModuleFetcher, PortalRuntimeSpec } from "./module-loader";
+import { parseRuntimeSpec } from "./module-runtime-spec";
+import { developmentFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 import type { PortalGenerationManager } from "./portal-generation";
+import type { PortalRuntimeSource } from "./portal-runtime-source";
 
 export interface DevelopmentEventSource {
   addEventListener(type: string, listener: (event: MessageEvent<string>) => void): void;
@@ -8,12 +11,11 @@ export interface DevelopmentEventSource {
 
 export interface PortalDevelopmentOptions {
   manager: PortalGenerationManager;
+  runtimeSource: PortalRuntimeSource;
   pathname(): string;
-  fetcher?: ModuleFetcher;
   eventSource?: DevelopmentEventSource;
   eventSourceFactory?(url: string): DevelopmentEventSource;
   eventsEndpoint?: string;
-  runtimeEndpoint?: string;
   reload?(): void;
   onError?(error: unknown): void;
   onRuntime?(spec: PortalRuntimeSpec): void;
@@ -21,9 +23,7 @@ export interface PortalDevelopmentOptions {
 
 /** Coalesces local build events and never lets an older update overtake a newer one. */
 export function startPortalDevelopmentUpdates(options: PortalDevelopmentOptions): () => void {
-  const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
   const eventsEndpoint = options.eventsEndpoint ?? "/__vastplan_dev/events";
-  const runtimeEndpoint = options.runtimeEndpoint ?? "/__vastplan_dev/runtime";
   const source = options.eventSource ?? (options.eventSourceFactory ?? defaultEventSourceFactory)(eventsEndpoint);
   let requested = 0;
   let applied = 0;
@@ -36,7 +36,7 @@ export function startPortalDevelopmentUpdates(options: PortalDevelopmentOptions)
     try {
       while (!closed && applied < requested) {
         const target = requested;
-        const spec = await fetchDevelopmentRuntime(fetcher, runtimeEndpoint, options.pathname());
+        const spec = await options.runtimeSource.read(options.pathname());
         await options.manager.replace(spec);
         options.onRuntime?.(spec);
         applied = target;
@@ -84,11 +84,11 @@ export function startPortalDevelopmentUpdates(options: PortalDevelopmentOptions)
   return () => { closed = true; source.close(); };
 }
 
-export async function fetchDevelopmentRuntime(fetcher: ModuleFetcher, endpoint: string, pathname: string): Promise<PortalRuntimeSpec> {
+export async function fetchDevelopmentRuntime(fetcher: ModuleFetcher, endpoint: string, pathname: string, protocol: FrontendRuntimeProtocol = developmentFrontendRuntimeProtocol): Promise<PortalRuntimeSpec> {
   const separator = endpoint.includes("?") ? "&" : "?";
   const response = await fetcher(`${endpoint}${separator}path=${encodeURIComponent(pathname)}`, { credentials: "same-origin", cache: "no-store" });
   if (!response.ok) throw new PortalDevelopmentError("RUNTIME_FETCH_FAILED", `开发态 Portal 运行描述获取失败 (${response.status})`);
-  return parseDevelopmentRuntimeSpec(await response.json());
+  return parseRuntimeSpec(await response.json(), protocol);
 }
 
 function defaultEventSourceFactory(url: string): DevelopmentEventSource {

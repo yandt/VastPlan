@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { computeModuleGraphDigest, VerifiedModuleGraphLoader, type FrontendModuleGraphDescriptor, type FrontendModuleNodeDescriptor } from "./module-graph-loader";
 import { ownedBuffer, sha256Hex } from "./module-integrity";
+import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 const ref = { id: "cn.vastplan.product.graph-test", version: "1.0.0", channel: "stable" } as const;
 
@@ -36,7 +37,7 @@ describe("VerifiedModuleGraphLoader", () => {
       return new Response(ownedBuffer(content.get(node.path)!), { headers: { "X-VastPlan-Module-SHA256": node.sha256 } });
     });
     const importer = vi.fn(async () => ({ default: { register() {} } }));
-    const loader = new VerifiedModuleGraphLoader([graph], fetcher, importer);
+    const loader = new VerifiedModuleGraphLoader([graph], { protocol: productionFrontendRuntimeProtocol, fetcher, importer });
 
     await loader.load(ref);
 
@@ -51,11 +52,11 @@ describe("VerifiedModuleGraphLoader", () => {
 
   it("fails closed when one graph node has been modified", async () => {
     const { graph, content } = await fixture();
-    const loader = new VerifiedModuleGraphLoader([graph], async (url) => {
+    const loader = new VerifiedModuleGraphLoader([graph], { protocol: productionFrontendRuntimeProtocol, fetcher: async (url) => {
       const node = graph.nodes.find((candidate) => candidate.url === url)!;
       const bytes = node.purpose === "entry" ? new TextEncoder().encode("x".repeat(node.size)) : content.get(node.path)!;
       return new Response(ownedBuffer(bytes));
-    }, async () => ({}));
+    }, importer: async () => ({}) });
     await expect(loader.load(ref)).rejects.toMatchObject({ code: "MODULE_INTEGRITY_MISMATCH" });
   });
 
@@ -63,49 +64,40 @@ describe("VerifiedModuleGraphLoader", () => {
     const { graph, content } = await fixture();
     const developmentNodes = graph.nodes.map((node) => ({ ...node, url: `/__vastplan_dev/modules/${node.sha256}.js` }));
     const development = { ...graph, nodes: developmentNodes };
-    expect(() => new VerifiedModuleGraphLoader([development], async () => new Response())).toThrowError(/节点无效/);
+    expect(() => new VerifiedModuleGraphLoader([development], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response() })).toThrowError(/节点无效/);
 
     const fetcher = vi.fn(async (url: string) => {
       const node = development.nodes.find((candidate) => candidate.url === url)!;
       return new Response(ownedBuffer(content.get(node.path)!), { headers: { "X-VastPlan-Module-SHA256": node.sha256 } });
     });
-    const loader = new VerifiedModuleGraphLoader([development], fetcher, async () => ({ default: { register() {} } }), "development");
+    const loader = new VerifiedModuleGraphLoader([development], { protocol: developmentFrontendRuntimeProtocol, fetcher, importer: async () => ({ default: { register() {} } }) });
     await loader.load(ref);
     expect(fetcher).toHaveBeenCalledTimes(2);
     for (const node of development.nodes) expect(fetcher).toHaveBeenCalledWith(node.url, { credentials: "include", cache: "no-store" });
     loader.dispose();
   });
 
-  it("resolves one development graph by plugin ID when a source module declares a newer version", async () => {
+  it("keeps graph loading bound to the identity selected by the module resolver", async () => {
     const { graph, content } = await fixture();
     const unsigned = { ...graph, digest: "0".repeat(64), nodes: graph.nodes.map((node) => ({ ...node, url: `/__vastplan_dev/modules/${node.sha256}.js` })) };
     const development = { ...unsigned, digest: await computeModuleGraphDigest(unsigned) };
-    const sourceRef = { ...ref, version: "9.9.9" };
     const fetcher = vi.fn(async (url: string) => {
       const node = development.nodes.find((candidate) => candidate.url === url)!;
       return new Response(ownedBuffer(content.get(node.path)!), { headers: { "X-VastPlan-Module-SHA256": node.sha256 } });
     });
     const importer = vi.fn(async () => ({ default: { register() {} } }));
-    const developmentLoader = new VerifiedModuleGraphLoader([development], fetcher, importer, "development");
-    expect(developmentLoader.has(sourceRef)).toBe(true);
-    await developmentLoader.load(sourceRef);
+    const developmentLoader = new VerifiedModuleGraphLoader([development], { protocol: developmentFrontendRuntimeProtocol, fetcher, importer });
+    expect(developmentLoader.resolve({ ...ref, version: "9.9.9" })).toBeUndefined();
+    await developmentLoader.load(development);
     expect(importer).toHaveBeenCalledOnce();
-
-    const productionLoader = new VerifiedModuleGraphLoader([graph], fetcher, importer);
-    expect(productionLoader.has(sourceRef)).toBe(false);
-
-    const secondUnsigned = { ...unsigned, version: "2.0.0", digest: "0".repeat(64) };
-    const second = { ...secondUnsigned, digest: await computeModuleGraphDigest(secondUnsigned) };
-    const ambiguousLoader = new VerifiedModuleGraphLoader([development, second], fetcher, importer, "development");
-    expect(ambiguousLoader.has(sourceRef)).toBe(false);
   });
 
   it("rejects unknown externals and cyclic graphs before fetching", async () => {
     const { graph } = await fixture();
-    expect(() => new VerifiedModuleGraphLoader([{ ...graph, externals: ["unknown-runtime"] }], async () => new Response())).toThrowError(/未知共享依赖/);
+    expect(() => new VerifiedModuleGraphLoader([{ ...graph, externals: ["unknown-runtime"] }], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response() })).toThrowError(/未知共享依赖/);
     const cyclicNodes = graph.nodes.map((node) => node.purpose === "chunk" ? { ...node, dependencies: [{ specifier: "../main.js", path: graph.entry, kind: "static" as const }] } : node);
     const cyclic = { ...graph, nodes: cyclicNodes };
-    expect(() => new VerifiedModuleGraphLoader([cyclic], async () => new Response())).toThrowError(/循环依赖/);
+    expect(() => new VerifiedModuleGraphLoader([cyclic], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response() })).toThrowError(/循环依赖/);
   });
 
   it("enforces the browser dependency-depth limit", async () => {
@@ -119,6 +111,6 @@ describe("VerifiedModuleGraphLoader", () => {
         dependencies: index === 64 ? [] : [{ specifier: `node-${index + 1}.js`, path: `frontend/dist/node-${index + 1}.js`, kind: "static" }],
       };
     });
-    expect(() => new VerifiedModuleGraphLoader([{ ...graph, entry: nodes[0].path, nodes }], async () => new Response())).toThrowError(/深度/);
+    expect(() => new VerifiedModuleGraphLoader([{ ...graph, entry: nodes[0].path, nodes }], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response() })).toThrowError(/深度/);
   });
 });

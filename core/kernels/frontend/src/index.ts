@@ -5,3 +5,5 @@ export * from "./portal-generation";
 export * from "./portal-development";
 export * from "./portal-updates";
 export * from "./portal-generation-client";
+export * from "./portal-runtime-source";
+export * from "./frontend-runtime-protocol";
