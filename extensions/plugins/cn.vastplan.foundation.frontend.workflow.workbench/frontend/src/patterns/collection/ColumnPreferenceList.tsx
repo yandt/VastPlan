@@ -33,7 +33,7 @@ export function ColumnPreferenceList({ columns, labels, dragLabel, showLabel, hi
       const hidden = !column.visible;
       const visibilityLabel = hidden ? showLabel : hideLabel;
       return <div key={column.key} role="listitem" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setOverKey(column.key); }} onDrop={(event) => drop(event, column.key)} style={{
-        boxSizing: "border-box", minWidth: 0, minHeight: 32, display: "grid", gridTemplateColumns: "28px max-content 28px", alignItems: "center", gap: 4, padding: "2px 3px",
+        boxSizing: "border-box", minWidth: 0, minHeight: 32, display: "grid", gridTemplateColumns: "28px minmax(0,1fr) 28px", alignItems: "center", gap: 4, padding: "2px 3px",
         borderRadius: 5, outline: overKey === column.key && draggingKey !== column.key ? `1px solid ${ui.theme.tokens.color.primary}` : "none",
         background: hidden ? ui.theme.tokens.color.hover : "transparent", color: hidden ? ui.theme.tokens.color.mutedText : ui.theme.tokens.color.text,
         opacity: draggingKey === column.key ? 0.55 : 1,

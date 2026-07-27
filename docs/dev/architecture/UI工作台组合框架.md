@@ -109,7 +109,7 @@ CollectionLoader(query, signal) -> CollectionResult
 
 页面动作的 `icon` 必须来自 UI Contract 的稳定语义词表，不允许功能插件传入框架图标、任意 SVG 或 React 节点。`canonical` 图标主题由 VastPlan 自有 SVG 提供完整基线；`renderer-native` 主题由当前 Arco/MUI Renderer 按需映射，缺项回退基线。Platform Profile 只配置 `iconTheme`，不能传组件或资源 URL。Workbench 页面动作控制器只桥接当前选择、可见性和执行入口；功能插件仍不知道 Slot，Portal Kernel 才负责把动作宿主编译为 `page.header.end` 贡献。Slot 是 Shell 的结构协议，不因 Workbench 自动填充而删除。
 
-新增、导入、发布属于页面功能动作，必须放在 Page Header；刷新、列设置属于当前集合的展示控制，保留在集合工具区并同样使用图标与 Tooltip。列设置只有在 Collection 明确声明 `preferences` 时显示，不能把未声明的列暴露给用户；它以触发按钮附近的紧凑 Popover 呈现，无额外“确定”步骤。Popover 根据最长列名使用内容内在宽度并设置最大宽度，避免固定宽度浪费空间；列拖拽区最大高度为 256px，溢出时只滚动该区域，密度控制保持可见。显示密度使用 24px 高的按钮式单选组；列顺序通过拖拽句柄调整，并为键盘提供 ArrowUp/ArrowDown 等价入口；显隐只使用 `visibility/visibilityOff` 语义图标即时切换，隐藏列整行使用 muted 灰色但仍允许排序和恢复。所有变化即时应用并保存。
+新增、导入、发布属于页面功能动作，必须放在 Page Header；批量操作位于集合工具栏左侧，刷新、列设置属于当前集合的展示控制，必须归组并固定在集合工具栏右侧，使用图标与 Tooltip。列设置只有在 Collection 明确声明 `preferences` 时显示，不能把未声明的列暴露给用户；它以触发按钮附近的紧凑 Popover 呈现，无额外“确定”步骤。Popover 根据最长列名使用内容内在宽度并设置最大宽度，避免固定宽度浪费空间；列拖拽区最大高度为 256px，溢出时只滚动该区域，密度控制保持可见。显示密度使用 24px 高的按钮式单选组；列顺序通过拖拽句柄调整，并为键盘提供 ArrowUp/ArrowDown 等价入口；显隐只使用 `visibility/visibilityOff` 语义图标即时切换，隐藏列整行使用 muted 灰色但仍允许排序和恢复。所有变化即时应用并保存。
 
 ### 3.4 表单与 Overlay 工作流
 

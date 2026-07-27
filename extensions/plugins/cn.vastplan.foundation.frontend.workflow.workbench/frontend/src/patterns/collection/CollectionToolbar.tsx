@@ -22,20 +22,19 @@ export function CollectionToolbar({ hasFilters, refreshing, selectedCount, toolb
     if (bulkActionID !== undefined && !bulkActions.some((action) => action.id === bulkActionID)) setBulkActionID(undefined);
   }, [bulkActionID, bulkActions]);
   const selectedBulkAction = bulkActions.find((action) => action.id === bulkActionID);
-  return <>
-    <ui.Stack direction="row" gap="sm" wrap justify="between">
-      <ui.Stack direction="row" gap="sm" wrap>
+  const gap = ui.theme.tokens.spacing.sm;
+  return <div style={{ width: "100%", minWidth: 0, display: "flex", alignItems: "center", flexWrap: "wrap", gap }}>
+      <div style={{ minWidth: 0, flex: "1 1 auto", display: "flex", alignItems: "center", flexWrap: "wrap", gap }}>
         {bulkActions.length === 0 ? null : <>
           <span>{i18n.text(message(namespace, "selection.count", "已选择 {count} 项", { count: selectedCount }))}</span>
           <ui.Select ariaLabel={i18n.text(message(namespace, "bulk.select", "选择批量操作"))} placeholder={i18n.text(message(namespace, "bulk.placeholder", "选择批量操作"))} value={bulkActionID} disabled={selectedCount === 0} options={bulkActions.map((action) => ({ value: action.id, label: i18n.text(action.label) }))} onChange={setBulkActionID} />
           <ui.Button kind={selectedBulkAction?.tone ?? "secondary"} disabled={selectedCount === 0 || selectedBulkAction === undefined} onClick={() => selectedBulkAction === undefined ? undefined : onRunAction(selectedBulkAction)}>{i18n.text(message(namespace, "bulk.execute", "执行"))}</ui.Button>
         </>}
         {toolbarActions.map((action) => <ui.Button key={action.id} kind={action.tone ?? "primary"} disabled={Boolean(action.requiresSelection && selectedCount === 0)} onClick={() => onRunAction(action)}>{i18n.text(action.label)}</ui.Button>)}
-      </ui.Stack>
-      <ui.Stack direction="row" gap="sm" wrap>
+      </div>
+      <div style={{ flex: "0 0 auto", marginLeft: "auto", display: "flex", alignItems: "center", gap }}>
         {hasFilters ? null : <ui.IconButton icon="refresh" label={i18n.text(message(namespace, "action.refresh", "刷新"))} onClick={onRefresh} loading={refreshing} />}
         {preferences}
-      </ui.Stack>
-    </ui.Stack>
-  </>;
+      </div>
+    </div>;
 }
