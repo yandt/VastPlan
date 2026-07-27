@@ -23,6 +23,7 @@ export interface FormSchema {
 }
 
 export type FormLayout = "compact" | "horizontal" | "vertical";
+export type FormLabelPlacement = "default" | "inside-inline";
 export type FormWidget = "text" | "textarea" | "number" | "select" | "boolean" | "date" | "datetime" | "credentialRef" | "secretMaterial" | "hidden";
 export type FormCondition =
   | { pointer: string; equals: JSONPrimitive }
@@ -49,6 +50,8 @@ export interface FormSectionPresentation {
 }
 export interface FormPresentation {
   layout?: FormLayout;
+  /** Persistent label sharing one field width with its control; Renderer owns truncation and tooltip. */
+  labelPlacement?: FormLabelPlacement;
   navigation?: "sections" | "tabs" | "steps";
   sections?: readonly FormSectionPresentation[];
   fields?: readonly FormFieldPresentation[];

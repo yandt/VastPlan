@@ -79,6 +79,7 @@ import type {
 } from "@vastplan/ui-primitives";
 import { PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { MuiNativeIcon } from "./native-icons";
+import { MuiInsideInlineFieldTemplate, type MuiFieldTemplateProps } from "./inside-inline-field";
 
 const gaps = { xs: 0.5, sm: 1, md: 2, lg: 3 } as const;
 const widths = { sm: "sm", md: "md", lg: "lg" } as const;
@@ -290,7 +291,11 @@ function FormRenderer({ schema, value, onChange, presentation, presentationSecti
       validating: currentAsync.validating,
     });
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
-  const templates = useMemo(() => ({ ObjectFieldTemplate: (props: MuiObjectFieldTemplateProps) => <MuiObjectFieldTemplate {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
+  const templates = useMemo(() => ({
+    ...(presentation?.labelPlacement === "inside-inline" ? { FieldTemplate: MuiInsideInlineFieldTemplate } : {}),
+    ObjectFieldTemplate: (props: MuiObjectFieldTemplateProps) => <MuiObjectFieldTemplate {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />,
+    ButtonTemplates: { SubmitButton: () => null },
+  }), [onPresentationSectionChange, presentation, presentationSection]);
   const horizontal = presentation?.layout === "horizontal";
   const compact = presentation?.layout === "compact";
   const fieldGroupStyle = {

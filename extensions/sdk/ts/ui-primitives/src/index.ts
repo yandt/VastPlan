@@ -1,6 +1,6 @@
 export type { CollectionPreference } from "@vastplan/frontend-engine-contract";
 
-export type { FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormUISchema, FormValidationIssue, FormValidationResult, FormWidget, FormWorkflow, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
+export type { FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormUISchema, FormValidationIssue, FormValidationResult, FormWidget, FormWorkflow, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
 export { jsonSchemaDialect } from "@vastplan/ui-contract";
 export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contract";
 export { message } from "@vastplan/ui-contract";

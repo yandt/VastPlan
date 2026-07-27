@@ -6,7 +6,7 @@ import ArrayFieldTemplate from "@rjsf/antd/lib/templates/ArrayFieldTemplate/inde
 import CyclicSchemaExpandTemplate from "@rjsf/antd/lib/templates/CyclicSchemaExpandTemplate/index.js";
 import ErrorListTemplate from "@rjsf/antd/lib/templates/ErrorList/index.js";
 import FieldErrorTemplate from "@rjsf/antd/lib/templates/FieldErrorTemplate/index.js";
-import FieldTemplate from "@rjsf/antd/lib/templates/FieldTemplate/index.js";
+import AntdFieldTemplate from "@rjsf/antd/lib/templates/FieldTemplate/index.js";
 import GridTemplate from "@rjsf/antd/lib/templates/GridTemplate/index.js";
 import { AddButton, ClearButton, CopyButton, MoveDownButton, MoveUpButton, RemoveButton } from "@rjsf/antd/lib/templates/IconButton/index.js";
 import MultiSchemaFieldTemplate from "@rjsf/antd/lib/templates/MultiSchemaFieldTemplate/index.js";
@@ -24,13 +24,15 @@ export const safeAntdTemplates: Partial<TemplatesType> = {
   ErrorListTemplate,
   FieldErrorTemplate,
   FieldHelpTemplate,
-  FieldTemplate,
+  FieldTemplate: AntdFieldTemplate,
   GridTemplate,
   MultiSchemaFieldTemplate,
   OptionalDataControlsTemplate,
   TitleFieldTemplate,
   WrapIfAdditionalTemplate,
 };
+
+export { AntdFieldTemplate };
 
 function BaseInputTemplate({ disabled, id, htmlName, onBlur, onChange, onChangeOverride, onFocus, options, placeholder, readonly, required, schema, value, type }: BaseInputTemplateProps) {
   const inputProps = getInputProps(schema, type, options, false);

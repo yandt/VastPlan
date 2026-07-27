@@ -3,10 +3,11 @@ import { filterPanelActionSpan, filterPanelColumns, shouldAutoApplyFilterPanel }
 import { filterPanelSchema } from "./filter-schema.js";
 
 describe("FilterPanel", () => {
-  it("renders each field label as an accessible in-control placeholder", () => {
+  it("keeps each field label available for the persistent inside-inline renderer", () => {
     const schema = filterPanelSchema([{ id: "status", label: "状态", kind: "select" }]);
-    expect(schema.uiSchema).toEqual({ status: { "ui:placeholder": "", "ui:options": { label: false } } });
-    expect(schema.uiLocalization).toEqual({ "/status/ui:placeholder": "状态" });
+    expect(schema.localization).toEqual({ "/properties/status/title": "状态" });
+    expect(schema.uiSchema).toEqual({ status: { "ui:placeholder": "" } });
+    expect(schema.uiLocalization).toBeUndefined();
   });
 
   it("uses direct-query interaction while the desktop grid has fewer than two rows", () => {

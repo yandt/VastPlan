@@ -93,15 +93,17 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain('class="form-group rjsf-field rjsf-field-object"');
   });
 
-  it("keeps compact filter forms flush by suppressing root title and margin", () => {
+  it("keeps compact filter labels persistent, single-line and inside the shared width", () => {
     const Form = muiPortalUIComponents.FormRenderer;
     const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
-      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "Status", "ui:options": { label: false } } } }}
+      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "" } } }}
       value={{}}
       onChange={() => undefined}
-      presentation={{ layout: "compact" }}
+      presentation={{ layout: "compact", labelPlacement: "inside-inline" }}
     /></PortalI18nProvider>);
-    expect(markup).toContain('placeholder="Status"');
+    expect(markup).toContain("vp-mui-inside-inline-field");
+    expect(markup).toContain('aria-label="Status"');
+    expect(markup).toContain("white-space:nowrap");
     expect(markup).not.toContain("Filter root");
     expect(markup).toContain("margin-bottom:0");
   });

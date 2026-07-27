@@ -64,16 +64,17 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).not.toContain("Submit");
   });
 
-  it("renders collection filter labels inside controls instead of beside them", () => {
+  it("renders persistent collection labels inside the shared field width", () => {
     const Form = antdPortalUIComponents.FormRenderer;
     const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
-      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "Status", "ui:options": { label: false } } } }}
+      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "" } } }}
       value={{}}
       onChange={() => undefined}
-      presentation={{ layout: "compact" }}
+      presentation={{ layout: "compact", labelPlacement: "inside-inline" }}
     /></PortalI18nProvider>);
-    expect(markup).toContain('placeholder="Status"');
-    expect(markup).not.toContain('<label for="root_status">Status</label>');
+    expect(markup).toContain("vp-antd-inside-inline-field");
+    expect(markup).toContain('aria-label="Status"');
+    expect(markup).toContain("white-space:nowrap");
     expect(markup).not.toContain("Filter root");
   });
 

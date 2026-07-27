@@ -1,7 +1,7 @@
 import { Card, ConfigProvider, Input, Steps, Tabs, Typography } from "antd";
 import RJSFForm from "@rjsf/core/lib/components/Form.js";
 import { generateWidgets } from "@rjsf/antd/lib/widgets/index.js";
-import type { ObjectFieldTemplateProps, WidgetProps } from "@rjsf/utils";
+import type { FieldTemplateProps, ObjectFieldTemplateProps, WidgetProps } from "@rjsf/utils";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
@@ -9,6 +9,7 @@ import type { FormPresentation, FormRendererProps, FormSectionPresentation } fro
 import { localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 import { safeAntdTemplates } from "./safe-rjsf-theme";
+import { PresentedField, antdInsideInlineCSS } from "./inside-inline-field";
 
 const validator = cspJSONSchemaValidator;
 const emptyFormContext: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -92,7 +93,7 @@ export function FormRenderer({ schema, value, onChange, presentation, presentati
       validating: currentAsync.validating,
     });
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
-  const templates = useMemo(() => ({ ...safeAntdTemplates, ObjectFieldTemplate: (props: ObjectFieldTemplateProps) => <PresentedObject {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { ...safeAntdTemplates.ButtonTemplates, SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
+  const templates = useMemo(() => ({ ...safeAntdTemplates, FieldTemplate: (props: FieldTemplateProps) => <PresentedField {...props} placement={presentation?.labelPlacement} />, ObjectFieldTemplate: (props: ObjectFieldTemplateProps) => <PresentedObject {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { ...safeAntdTemplates.ButtonTemplates, SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
   const widgets = useMemo(() => ({ ...antdWidgets, secretRef: SecretRefWidget }), []);
   const compact = presentation?.layout === "compact";
   const form = <RJSFForm
@@ -113,9 +114,10 @@ export function FormRenderer({ schema, value, onChange, presentation, presentati
     widgets={widgets}
   ><></></RJSFForm>;
   return compact
-    ? <ConfigProvider componentSize="small" theme={compactFormTheme}><div>{form}</div></ConfigProvider>
+    ? <ConfigProvider componentSize="small" theme={compactFormTheme}><style>{antdInsideInlineCSS}</style><div>{form}</div></ConfigProvider>
     : <div style={presentation?.layout === "horizontal" ? { display: "block" } : undefined}>{form}</div>;
 }
+
 
 function formFieldName(pointer: string): string {
   const first = pointer.startsWith("/") ? pointer.slice(1).split("/")[0] ?? "" : pointer;

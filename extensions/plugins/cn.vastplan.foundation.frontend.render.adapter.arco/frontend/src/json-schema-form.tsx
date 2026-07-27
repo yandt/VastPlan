@@ -36,7 +36,6 @@ import type {
   BaseInputTemplateProps,
   ErrorListProps,
   ErrorSchema,
-  FieldTemplateProps,
   IconButtonProps,
   MultiSchemaFieldTemplateProps,
   ObjectFieldTemplateProps,
@@ -48,10 +47,11 @@ import type {
   WidgetProps,
   WrapIfAdditionalTemplateProps,
 } from "@rjsf/utils";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import type { FormPresentation, FormRendererProps, FormSectionPresentation, FormValidationIssue } from "@vastplan/ui-primitives";
 import { jsonSchemaDialect, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { ArcoFieldTemplate, CompactFormContext, InsideInlineLabelContext, arcoInsideInlineCSS } from "./inside-inline-field";
 
 type FormData = Record<string, unknown>;
 type FormContext = Readonly<Record<string, unknown>>;
@@ -59,7 +59,6 @@ type Schema = RJSFSchema;
 
 const emptyContext: FormContext = {};
 const namespace = "cn.vastplan.foundation.frontend.render.adapter";
-const CompactFormContext = createContext(false);
 
 export const arcoJSONSchemaValidator = cspJSONSchemaValidator;
 
@@ -269,23 +268,6 @@ export const arcoFormWidgets: RegistryWidgetsType<FormData, Schema, FormContext>
   HiddenWidget,
 };
 
-function FieldTemplate({ label, children, rawDescription, rawHelp, rawErrors, hidden, required, displayLabel, schema }: FieldTemplateProps) {
-  const compact = useContext(CompactFormContext);
-  if (hidden) return <div style={{ display: "none" }}>{children}</div>;
-  if (schema.type === "object" || schema.type === "array") return <>
-    {children}
-    {rawHelp === undefined ? null : <Typography.Paragraph type="secondary">{rawHelp}</Typography.Paragraph>}
-  </>;
-  return <Form.Item
-    label={displayLabel === false ? undefined : label}
-    required={required}
-    extra={rawHelp ?? rawDescription}
-    validateStatus={(rawErrors?.length ?? 0) > 0 ? "error" : undefined}
-    help={rawErrors?.[0]}
-    style={compact ? { marginBottom: 0 } : undefined}
-  >{children}</Form.Item>;
-}
-
 function ObjectFieldTemplate({ title, description, properties, schema, uiSchema, formData, onAddProperty, fieldPathId, readonly, disabled }: ObjectFieldTemplateProps) {
   const i18n = usePortalI18n();
   const content = <>{properties.filter((property) => !property.hidden).map((property) => property.content)}</>;
@@ -416,7 +398,7 @@ function IconButton({ icon, type, onClick, disabled, title, className, style, id
 
 export const arcoFormTemplates: Partial<TemplatesType<FormData, Schema, FormContext>> = {
   BaseInputTemplate,
-  FieldTemplate,
+  FieldTemplate: ArcoFieldTemplate,
   ObjectFieldTemplate,
   ArrayFieldTemplate,
   ArrayFieldItemTemplate,
@@ -562,6 +544,8 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, pres
   return <>
     {currentAsync.validating ? <Alert type="info" title={i18n.text(message(namespace,"form.validating","正在校验"))} style={{ marginBottom: 16 }} /> : null}
     <CompactFormContext.Provider value={presentation?.layout === "compact"}>
+    <InsideInlineLabelContext.Provider value={presentation?.labelPlacement === "inside-inline"}>
+    <style>{arcoInsideInlineCSS}</style>
     <Form layout={presentation?.layout === "horizontal" ? "horizontal" : "vertical"} size={presentation?.layout === "compact" ? "small" : undefined}>
       <RJSFForm<FormData, Schema, FormContext>
         tagName="div"
@@ -583,6 +567,7 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, pres
         onChange={(event) => onChange(event.formData ?? {})}
       ><></></RJSFForm>
     </Form>
+    </InsideInlineLabelContext.Provider>
     </CompactFormContext.Provider>
   </>;
 }

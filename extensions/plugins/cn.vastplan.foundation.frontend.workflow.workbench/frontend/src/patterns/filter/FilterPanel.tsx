@@ -70,7 +70,7 @@ export function FilterPanel({ panel, value, querying, onApply, inset = "flush" }
   return <WorkbenchComponentRegion inset={inset}><ui.FilterBar appearance="collection">
     <ui.Grid columns={columns} gap="xs">{fields.map((filter) => <ui.GridItem key={filter.id}>
       <div onKeyDown={(event) => { if (autoApply && filter.kind === "text" && event.key === "Enter") { event.preventDefault(); onApply(draft); } }}>
-        <ui.FormRenderer schema={filterPanelSchema([filter])} value={{ [filter.id]: draft[filter.id] }} presentation={{ layout: "compact" }} onChange={(patch) => update(filter, patch)} />
+        <ui.FormRenderer schema={filterPanelSchema([filter])} value={{ [filter.id]: draft[filter.id] }} presentation={{ layout: "compact", labelPlacement: "inside-inline" }} onChange={(patch) => update(filter, patch)} />
       </div>
     </ui.GridItem>)}{autoApply ? null : <ui.GridItem span={filterPanelActionSpan(fields, columns)}>
       <ui.Stack direction="column" gap="xs" align="end">
