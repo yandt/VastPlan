@@ -58,6 +58,9 @@ function glyph(name: SemanticIconName): ReactNode {
     case "publish": return [path("a", "M12 16V4"), path("b", "m7 9 5-5 5 5"), path("c", "M5 14v6h14v-6")];
     case "refresh": return [path("a", "M20 7v5h-5"), path("b", "M4 17v-5h5"), path("c", "M6.1 8.2A7 7 0 0 1 18.8 9L20 12"), path("d", "m4 12 1.2 3A7 7 0 0 0 17.9 15.8")];
     case "columns": return [rect("a", 3, 4, 18, 16, 1), path("b", "M9 4v16"), path("c", "M15 4v16")];
+    case "visibility": return [path("a", "M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"), circle("b", 12, 12, 2.5)];
+    case "visibilityOff": return [path("a", "m3 3 18 18"), path("b", "M10.6 6.1A9.8 9.8 0 0 1 12 6c6 0 9.5 6 9.5 6a15.2 15.2 0 0 1-2.1 2.8"), path("c", "M6.2 6.2A15 15 0 0 0 2.5 12s3.5 6 9.5 6a9.6 9.6 0 0 0 3-.5"), path("d", "M10.2 10.2a2.5 2.5 0 0 0 3.6 3.6")];
+    case "drag": return [circle("a", 9, 6, 1, true), circle("b", 15, 6, 1, true), circle("c", 9, 12, 1, true), circle("d", 15, 12, 1, true), circle("e", 9, 18, 1, true), circle("f", 15, 18, 1, true)];
     case "copy": return [rect("a", 8, 8, 12, 12, 2), path("b", "M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2")];
     case "download": return [path("a", "M12 3v12"), path("b", "m7 10 5 5 5-5"), path("c", "M5 21h14")];
     case "upload": return [path("a", "M12 15V3"), path("b", "m7 8 5-5 5 5"), path("c", "M5 21h14")];

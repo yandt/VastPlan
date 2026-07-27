@@ -20,6 +20,9 @@ import SettingsOutlined from "@mui/icons-material/SettingsOutlined";
 import UploadOutlined from "@mui/icons-material/UploadOutlined";
 import ViewColumnOutlined from "@mui/icons-material/ViewColumnOutlined";
 import WarningAmberOutlined from "@mui/icons-material/WarningAmberOutlined";
+import VisibilityOutlined from "@mui/icons-material/VisibilityOutlined";
+import VisibilityOffOutlined from "@mui/icons-material/VisibilityOffOutlined";
+import DragIndicatorOutlined from "@mui/icons-material/DragIndicatorOutlined";
 import { VastPlanIcon } from "@vastplan/ui-primitives";
 import type { SemanticIconName, VastPlanIconProps } from "@vastplan/ui-primitives";
 
@@ -40,6 +43,9 @@ const nativeIcons: Partial<Record<SemanticIconName, ComponentType<SvgIconProps>>
   publish: PublishOutlined,
   refresh: RefreshOutlined,
   columns: ViewColumnOutlined,
+  visibility: VisibilityOutlined,
+  visibilityOff: VisibilityOffOutlined,
+  drag: DragIndicatorOutlined,
   copy: ContentCopyOutlined,
   download: DownloadOutlined,
   upload: UploadOutlined,

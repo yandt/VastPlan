@@ -23,8 +23,10 @@ describe("Arco portal UI adapter", () => {
 
   it("offers an adapter-native icon theme behind the same semantic name", () => {
     const NativeIcon = arcoIconForTheme("renderer-native");
-    const html = renderToStaticMarkup(createElement(NativeIcon, { name: "publish", label: "Publish" }));
+    const html = renderToStaticMarkup(createElement("div", {}, createElement(NativeIcon, { name: "publish", label: "Publish" }), createElement(NativeIcon, { name: "visibilityOff", label: "Hidden" }), createElement(NativeIcon, { name: "drag", label: "Reorder" })));
     expect(html).toContain('data-vastplan-icon="publish"');
+    expect(html).toContain('data-vastplan-icon="visibilityOff"');
+    expect(html).toContain('data-vastplan-icon="drag"');
     expect(html).toContain('data-vastplan-icon-source="renderer-native"');
     expect(arcoRenderAdapter.iconThemes.map((theme) => theme.id)).toEqual(["canonical", "renderer-native"]);
     expect(arcoIconForTheme("missing")).toBe(arcoPortalUIComponents.Icon);

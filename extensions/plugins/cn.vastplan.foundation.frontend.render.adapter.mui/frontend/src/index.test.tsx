@@ -21,8 +21,10 @@ describe("MUI portal UI adapter", () => {
 
   it("offers a Material-native icon theme behind the same semantic name", () => {
     const NativeIcon = muiIconForTheme("renderer-native");
-    const markup = renderToStaticMarkup(<NativeIcon name="publish" label="Publish" />);
+    const markup = renderToStaticMarkup(<><NativeIcon name="publish" label="Publish" /><NativeIcon name="visibilityOff" label="Hidden" /><NativeIcon name="drag" label="Reorder" /></>);
     expect(markup).toContain('data-vastplan-icon="publish"');
+    expect(markup).toContain('data-vastplan-icon="visibilityOff"');
+    expect(markup).toContain('data-vastplan-icon="drag"');
     expect(markup).toContain('data-vastplan-icon-source="renderer-native"');
     expect(muiRenderAdapter.iconThemes.map((theme) => theme.id)).toEqual(["canonical", "renderer-native"]);
     expect(muiIconForTheme("missing")).toBe(muiPortalUIComponents.Icon);

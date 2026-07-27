@@ -21,6 +21,9 @@ import {
   IconSearch,
   IconSettings,
   IconUpload,
+  IconEye,
+  IconEyeInvisible,
+  IconDragDotVertical,
 } from "./arco-components";
 
 const nativeIcons: Partial<Record<SemanticIconName, ComponentType<Record<string, unknown>>>> = {
@@ -40,6 +43,9 @@ const nativeIcons: Partial<Record<SemanticIconName, ComponentType<Record<string,
   publish: IconUpload,
   refresh: IconRefresh,
   columns: IconLayout,
+  visibility: IconEye,
+  visibilityOff: IconEyeInvisible,
+  drag: IconDragDotVertical,
   copy: IconCopy,
   download: IconDownload,
   upload: IconUpload,

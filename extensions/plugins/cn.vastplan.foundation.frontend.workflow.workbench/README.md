@@ -10,8 +10,8 @@
 
 - `CollectionPage`：组合 FilterPanel、选择、摘要和动作的顶层编排；
 - `useCollectionData`：Table/Page 与 Card/Cursor 共用的加载、刷新、取消、游标和错误状态；
-- `CollectionToolbar`、`CollectionTable`、`CollectionCards`、`CollectionPreferencesPopover`：可独立演进的集合区域；
-- `density`、`preferences`：无框架私有依赖的策略与持久化辅助模块。
+- `CollectionToolbar`、`CollectionTable`、`CollectionCards`、`CollectionPreferencesPopover`：可独立演进的集合区域；列设置 Popover 使用紧凑密度按钮、可访问拖拽排序和眼睛图标显隐，隐藏列使用 muted 灰色；
+- `density`、`preferences`、`column-preference-actions`：无框架私有依赖的策略、排序与持久化辅助模块。
 
 这里的 `CollectionTable` / `CollectionCards` 是集合工作流的受控呈现区，不是 Arco/MUI 的基础组件。基础表格和卡片分别通过 `ui.Table` / `ui.DataCard` 由渲染适配器提供。`patterns/record/` 负责 RecordDetail、MasterDetail、TreeDetail 的详情加载、主从选择、树边界、URL 恢复、窄屏与页内编辑保护；`patterns/action/` 是 Collection/Record 共用的 Page Header 动作桥。`patterns/form/` 负责 Page/Dialog/Drawer 表单、条件投影、脏状态、校验与提交；校验和提交的字段错误使用 `LocalizedText`，统一在 Workbench 解析当前语言。`secret-material.ts` 统一识别和丢弃一次性秘密，禁止材料进入 baseline 或在提交/关闭后滞留。Render Adapter 只负责把同一语义映射为各框架的表单、分栏、列表和树，不允许功能插件直接组合基础 UI 组件。
 

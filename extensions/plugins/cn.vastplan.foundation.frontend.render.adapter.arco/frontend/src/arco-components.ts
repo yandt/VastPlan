@@ -57,3 +57,6 @@ export { default as IconSettings } from "@arco-design/web-react/icon/react-icon/
 export { default as IconUpload } from "@arco-design/web-react/icon/react-icon/IconUpload";
 export { default as IconLayout } from "@arco-design/web-react/icon/react-icon/IconLayout";
 export { default as IconUp } from "@arco-design/web-react/icon/react-icon/IconUp";
+export { default as IconEye } from "@arco-design/web-react/icon/react-icon/IconEye";
+export { default as IconEyeInvisible } from "@arco-design/web-react/icon/react-icon/IconEyeInvisible";
+export { default as IconDragDotVertical } from "@arco-design/web-react/icon/react-icon/IconDragDotVertical";

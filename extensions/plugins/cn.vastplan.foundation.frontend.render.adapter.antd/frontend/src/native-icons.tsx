@@ -18,13 +18,17 @@ import CopyOutlined from "@ant-design/icons/CopyOutlined";
 import DownloadOutlined from "@ant-design/icons/DownloadOutlined";
 import UploadOutlined from "@ant-design/icons/UploadOutlined";
 import MoreOutlined from "@ant-design/icons/MoreOutlined";
+import EyeOutlined from "@ant-design/icons/EyeOutlined";
+import EyeInvisibleOutlined from "@ant-design/icons/EyeInvisibleOutlined";
+import HolderOutlined from "@ant-design/icons/HolderOutlined";
 import type { SemanticIconName, VastPlanIconProps } from "@vastplan/ui-primitives";
 
 const icons: Record<SemanticIconName, typeof PlusOutlined> = {
   add: PlusOutlined, remove: MinusOutlined, edit: EditOutlined, search: SearchOutlined, settings: SettingOutlined,
   success: CheckCircleOutlined, warning: WarningOutlined, error: CloseCircleOutlined, info: InfoCircleOutlined,
   close: CloseOutlined, menu: MenuOutlined, import: ImportOutlined, export: ExportOutlined, publish: CloudUploadOutlined,
-  refresh: ReloadOutlined, columns: ColumnHeightOutlined, copy: CopyOutlined, download: DownloadOutlined, upload: UploadOutlined, more: MoreOutlined,
+  refresh: ReloadOutlined, columns: ColumnHeightOutlined, visibility: EyeOutlined, visibilityOff: EyeInvisibleOutlined, drag: HolderOutlined,
+  copy: CopyOutlined, download: DownloadOutlined, upload: UploadOutlined, more: MoreOutlined,
 };
 
 const pixels = { sm: 16, md: 20, lg: 24 } as const;
