@@ -66,7 +66,7 @@ export function createGlobalSettingsPage(client: PlatformAdminClient, serviceID:
       title,
       view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
-      filters: [{ id: "key", label: message(namespace, "filter.key", "设置键前缀"), kind: "text" }],
+      filterPanel: { fields: [{ id: "key", label: message(namespace, "filter.key", "设置键前缀"), kind: "text" }] },
       columns: [
         { key: "key", label: message(namespace, "column.key", "键"), defaultVisible: true, minWidth: 240 },
         { key: "version", label: message(namespace, "column.version", "版本"), format: "number", defaultVisible: true, minWidth: 90 },

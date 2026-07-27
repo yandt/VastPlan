@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import type { MasterDetailPageDefinition } from "@vastplan/workbench-sdk";
-import { CollectionFilters } from "../collection/CollectionFilters.js";
+import { FilterPanel } from "../filter/FilterPanel.js";
 import { useCollectionData, type CollectionDataSource } from "../collection/useCollectionData.js";
 import { initialRecordSelection, persistRecordSelection } from "./selection.js";
 import { RecordWorkspace } from "./RecordWorkspace.js";
@@ -43,7 +43,7 @@ export function MasterDetailPage({ page }: { page: MasterDetailPageDefinition })
     status: page.master.status === undefined ? undefined : <ui.Status tone={tone(page.master.status.toneField === undefined ? undefined : row[page.master.status.toneField])}>{String(row[page.master.status.labelField] ?? "")}</ui.Status>,
   }));
   const primary = <ui.Stack gap="sm">
-    {(page.master.filters?.length ?? 0) === 0 ? null : <CollectionFilters filters={page.master.filters!} value={filters} querying={master.loading || master.refreshing} onApply={(next) => { setFilters(next); setPageNumber(1); }} />}
+    {page.master.filterPanel === undefined ? null : <FilterPanel panel={page.master.filterPanel} value={filters} querying={master.loading || master.refreshing} onApply={(next) => { setFilters(next); setPageNumber(1); }} />}
     <ui.Stack direction="row" align="center" justify="between"><strong>{i18n.text(page.master.title)}</strong><ui.IconButton icon="refresh" label={i18n.text(message(namespace, "action.refresh", "刷新"))} loading={master.refreshing} onClick={master.refresh} /></ui.Stack>
     {master.failure === undefined ? null : <ui.ErrorState title={master.failure} retry={master.refresh} />}
     {master.loading ? <ui.Skeleton rows={6} /> : items.length === 0 ? <ui.EmptyState title={i18n.text(page.master.emptyTitle ?? message(namespace, "record.masterEmpty", "暂无记录"))} /> : <ui.RecordNavigationList items={items} selectedID={selected} ariaLabel={i18n.text(page.master.title)} onSelect={(id) => void choose(id)} />}

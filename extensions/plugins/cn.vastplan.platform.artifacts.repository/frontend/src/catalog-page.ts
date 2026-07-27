@@ -12,15 +12,14 @@ export function catalogPage(client: PlatformAdminClient, id: string, path: strin
     collection: {
       id: `${id}.collection`, title: text("panel.catalog", "制品目录"), view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50, 100] },
-      filters: [
+      filterPanel: { fields: [
         { id: "pluginPrefix", label: text("filter.plugin", "插件 ID / 命名空间"), kind: "text" },
         { id: "namespace", label: text("filter.namespace", "命名空间"), kind: "text" },
         { id: "publisher", label: text("filter.publisher", "发布者"), kind: "text" },
         { id: "channel", label: text("filter.channel", "通道"), kind: "select", options: ["stable", "testing"].map((value) => ({ value, label: text(`channel.${value}`, value) })) },
         { id: "target", label: text("filter.target", "目标内核"), kind: "select", options: targetOptions },
         { id: "lifecycle", label: text("filter.lifecycle", "生命周期"), kind: "select", options: lifecycleOptions },
-      ],
-      filterLayout: { columns: { xs: 1, md: 2, xl: 3 } },
+      ], layout: { columns: { xs: 1, md: 2, xl: 3 } } },
       columns: [
         { key: "pluginId", label: text("column.plugin", "插件 ID"), defaultVisible: true, minWidth: 270 },
         { key: "version", label: text("column.version", "版本"), defaultVisible: true, minWidth: 150 },

@@ -18,7 +18,6 @@ export function createCredentialAuditPage(client: PlatformAdminClient, serviceID
       title: message(namespace, "audit.title", "托管凭证审计"),
       view: "table",
       query: { mode: "cursor", defaultPageSize: 50, pageSizeOptions: [20, 50, 100] },
-      filters: [],
       columns: [
         { key: "occurredAt", label: message(namespace, "audit.column.time", "发生时间"), format: "datetime", defaultVisible: true, minWidth: 180 },
         { key: "credentialFingerprint", label: message(namespace, "audit.column.fingerprint", "凭证指纹"), defaultVisible: true, minWidth: 220 },

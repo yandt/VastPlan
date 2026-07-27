@@ -39,13 +39,13 @@ export function createAuthenticationProviderPage(
       title,
       view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50] },
-      filters: [
+      filterPanel: { fields: [
         {
           id: "id",
           label: message(namespace, "filter.id", "Profile ID"),
           kind: "text",
         },
-      ],
+      ] },
       columns: [
         {
           key: "id",

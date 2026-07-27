@@ -9,7 +9,7 @@ export function publicationPage(client: PlatformAdminClient, id: string, path: s
     navigation: { id, label: text("page.publication.navigation", "发布审批"), zone: "settings", groupID: "platform.artifacts", order: 55 },
     collection: {
       id: `${id}.collection`, title: text("panel.publications", "发布申请"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
-      filters: [{ id: "status", label: text("filter.publicationStatus", "审批状态"), kind: "select", options: ["PendingApproval", "Approved", "Published", "Rejected", "Cancelled", "Expired"].map((value) => ({ value, label: text(`publication.${value}`, value) })) }],
+      filterPanel: { fields: [{ id: "status", label: text("filter.publicationStatus", "审批状态"), kind: "select", options: ["PendingApproval", "Approved", "Published", "Rejected", "Cancelled", "Expired"].map((value) => ({ value, label: text(`publication.${value}`, value) })) }] },
       columns: [
         { key: "pluginId", label: text("column.plugin", "插件 ID"), defaultVisible: true, minWidth: 260 },
         { key: "version", label: text("column.version", "版本"), defaultVisible: true, minWidth: 150 },

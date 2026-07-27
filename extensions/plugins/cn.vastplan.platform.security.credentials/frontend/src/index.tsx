@@ -77,7 +77,7 @@ export function createCredentialsPage(client: PlatformAdminClient, serviceID: st
       title,
       view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
-      filters: [{ id: "name", label: message(namespace, "filter.name", "凭证名称前缀"), kind: "text", sensitive: false }],
+      filterPanel: { fields: [{ id: "name", label: message(namespace, "filter.name", "凭证名称前缀"), kind: "text", sensitive: false }] },
       columns: [
         { key: "name", label: message(namespace, "column.name", "名称"), defaultVisible: true, minWidth: 200 },
         { key: "version", label: message(namespace, "column.version", "版本"), format: "number", defaultVisible: true, minWidth: 80 },

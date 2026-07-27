@@ -65,7 +65,7 @@ export function createPluginConfigurationResourcePage(client: PlatformAdminClien
     master: {
       id: `plugin-configuration-resources.${serviceID}`, title: message(namespace, "resource.list", "Profile 列表"), keyField: "id", titleField: "name", subtitleField: "pluginName",
       status: { labelField: "status", toneField: "tone" }, query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
-      filters: [{ id: "keyword", label: message(namespace, "filter.keyword", "插件或 Profile"), kind: "text" }, { id: "status", label: message(namespace, "resource.status", "状态"), kind: "select", options: ["Active", "Draft", "Publishing", "Activating", "Failed", "RolledBack"].map((value) => ({ value, label: value })) }],
+      filterPanel: { fields: [{ id: "keyword", label: message(namespace, "filter.keyword", "插件或 Profile"), kind: "text" }, { id: "status", label: message(namespace, "resource.status", "状态"), kind: "select", options: ["Active", "Draft", "Publishing", "Activating", "Failed", "RolledBack"].map((value) => ({ value, label: value })) }] },
     },
     detail: {
       titleKey: "name", subtitleKey: "pluginName", status: { labelKey: "status", toneKey: "tone" }, emptyTitle: message(namespace, "resource.empty", "请选择一个 Profile"),

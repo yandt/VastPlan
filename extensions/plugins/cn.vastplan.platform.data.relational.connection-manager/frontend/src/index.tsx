@@ -105,7 +105,7 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
     navigation: { id: `platform.database-connections.${serviceID}`, label: title, zone: "settings", order: 40 },
     collection: {
       id: `platform.database-connections.${serviceID}`, title, view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
-      filters: [{ id: "name", label: message(namespace, "filter.name", "连接名称"), kind: "text" }, { id: "providerId", label: message(namespace, "filter.provider", "Provider"), kind: "select", options: [{ value: "postgresql", label: "PostgreSQL" }, { value: "mysql", label: "MySQL" }] }],
+      filterPanel: { fields: [{ id: "name", label: message(namespace, "filter.name", "连接名称"), kind: "text" }, { id: "providerId", label: message(namespace, "filter.provider", "Provider"), kind: "select", options: [{ value: "postgresql", label: "PostgreSQL" }, { value: "mysql", label: "MySQL" }] }] },
       columns: [
         { key: "name", label: message(namespace,"column.name","名称"), defaultVisible: true, minWidth: 180 }, { key: "providerId", label: message(namespace,"column.provider","Provider"), defaultVisible: true, minWidth: 120 }, { key: "endpoint", label: message(namespace,"column.endpoint","地址"), defaultVisible: true, minWidth: 220 },
         { key: "runtime", label: message(namespace,"column.runtime","Runtime"), format: "status", valueLabels: { ready: message(namespace,"runtime.ready","已就绪"), pending: message(namespace,"runtime.pending","待发布") }, statusTones: { ready: "success", pending: "warning" }, defaultVisible: true, minWidth: 100 },

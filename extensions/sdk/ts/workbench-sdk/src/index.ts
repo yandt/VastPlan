@@ -1,6 +1,6 @@
-import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, CollectionFilterLayout, ColumnSpec, DataValueFormat, FilterSpec, CollectionFilterKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
 export { jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
 
@@ -207,6 +207,7 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
   if (definition.collection.view === "cards" && definition.collection.card === undefined) {
     throw new Error("Card Collection 必须声明 card 呈现契约");
   }
+  validateFilterPanel(definition.collection.filterPanel, `Collection ${definition.collection.id}`);
   const forms = new Map((definition.forms ?? []).map((form) => [form.id, form]));
   if (forms.size !== (definition.forms ?? []).length) throw new Error("Collection 表单 ID 必须唯一");
   const overlays = new Map((definition.overlays ?? []).map((overlay) => [overlay.id, overlay]));
@@ -308,6 +309,18 @@ function validateMaster(master: RecordMasterSpec): void {
       !Number.isSafeInteger(master.query.defaultPageSize) || master.query.defaultPageSize < 1 || master.query.pageSizeOptions.length === 0 ||
       master.query.pageSizeOptions.some((size) => !Number.isSafeInteger(size) || size < 1)) {
     throw new Error(`MasterDetail ${master.id} 的列表定义无效`);
+  }
+  validateFilterPanel(master.filterPanel, `MasterDetail ${master.id}`);
+}
+
+function validateFilterPanel(panel: FilterPanelSpec | undefined, owner: string): void {
+  if (panel === undefined) return;
+  if (panel.fields.length === 0 || panel.apply?.actionsPlacement !== undefined && panel.apply.actionsPlacement !== "last-cell") {
+    throw new Error(`${owner} 的 FilterPanel 定义无效`);
+  }
+  const ids = panel.fields.map((field) => field.id);
+  if (new Set(ids).size !== ids.length || ids.some((id) => !validFieldKey(id))) {
+    throw new Error(`${owner} 的 FilterPanel 字段 ID 无效或重复`);
   }
 }
 

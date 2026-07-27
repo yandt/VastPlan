@@ -81,7 +81,7 @@ export type { SemanticIconName } from "./icons.js";
  */
 export type CollectionView = "table" | "cards";
 export type CollectionQueryMode = "page" | "cursor";
-export type CollectionFilterKind = "text" | "select" | "boolean" | "numberRange" | "dateRange";
+export type FilterFieldKind = "text" | "select" | "boolean" | "numberRange" | "dateRange";
 export type CollectionSelectionMode = "none" | "single" | "multiple";
 export type CollectionDensity = "compact" | "standard" | "comfortable";
 export type CollectionActionPlacement = "page.primary" | "page.secondary" | "collection.toolbar" | "collection.bulk" | "record.row" | "record.detail" | "card.footer";
@@ -93,7 +93,7 @@ export interface FilterOption { value: string; label: import("./i18n.js").Locali
 export interface FilterSpec {
   id: string;
   label: import("./i18n.js").LocalizedText;
-  kind: CollectionFilterKind;
+  kind: FilterFieldKind;
   options?: readonly FilterOption[];
   sensitive?: boolean;
 }
@@ -123,9 +123,21 @@ export interface CollectionCardSpec {
   columns?: ResponsiveColumnCount;
   loadMore?: "manual" | "viewport";
 }
-export interface CollectionFilterLayout {
+export interface FilterPanelLayout {
   /** 筛选区每个断点的列数；未指定时采用 xs=1、md=2、xl=4。 */
   columns?: ResponsiveColumnCount;
+}
+export type FilterPanelApplyMode = "auto-single-row" | "explicit";
+/** 可被 Collection、MasterDetail 等工作台组合复用的一级筛选面板。 */
+export interface FilterPanelSpec {
+  fields: readonly FilterSpec[];
+  layout?: FilterPanelLayout;
+  apply?: {
+    /** 默认单行直接提交、多行使用草稿；explicit 始终显示查询和清除操作。 */
+    mode?: FilterPanelApplyMode;
+    /** 当前仅允许受治理的末行末列位置，禁止业务插件自行注入操作区。 */
+    actionsPlacement?: "last-cell";
+  };
 }
 export interface ActionSpec {
   id: string;
@@ -148,8 +160,7 @@ export interface CollectionSpec {
   title: import("./i18n.js").LocalizedText;
   view: CollectionView;
   query: { mode: CollectionQueryMode; defaultPageSize: number; pageSizeOptions: readonly number[] };
-  filters?: readonly FilterSpec[];
-  filterLayout?: CollectionFilterLayout;
+  filterPanel?: FilterPanelSpec;
   columns: readonly ColumnSpec[];
   card?: CollectionCardSpec;
   selection?: CollectionSelectionMode;
@@ -189,7 +200,7 @@ export interface RecordMasterSpec {
   subtitleField?: string;
   status?: { labelField: string; toneField?: string };
   query: { mode: CollectionQueryMode; defaultPageSize: number; pageSizeOptions: readonly number[] };
-  filters?: readonly FilterSpec[];
+  filterPanel?: FilterPanelSpec;
   selectionParam?: string;
   emptyTitle?: import("./i18n.js").LocalizedText;
 }

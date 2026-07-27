@@ -64,13 +64,13 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
       view: "table",
       selection: "single",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
-      filters: [
+      filterPanel: { fields: [
         { id: "keyword", label: message(namespace, "filter.keyword", "插件或服务"), kind: "text" },
         { id: "applyMode", label: message(namespace, "filter.applyMode", "生效方式"), kind: "select", options: [
           { value: "restart", label: message(namespace, "mode.restart", "重启发布") }, { value: "hot", label: message(namespace, "mode.hot", "热配置") },
         ] },
 		{ id: "scopeSubjectId", label: message(namespace, "filter.scopeSubject", "用户主体 ID"), kind: "text" },
-      ],
+      ] },
       columns: [
         { key: "pluginName", label: message(namespace, "column.plugin", "插件"), defaultVisible: true, minWidth: 180 },
         { key: "deployment", label: message(namespace, "column.deployment", "部署"), defaultVisible: true, minWidth: 160 },

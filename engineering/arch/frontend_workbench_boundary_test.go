@@ -10,6 +10,7 @@ import (
 )
 
 var primitiveImport = regexp.MustCompile(`(?s)import\s+(?:type\s+)?\{([^}]*)\}\s+from\s+["']@vastplan/ui-primitives["']`)
+var legacyCollectionFilterField = regexp.MustCompile(`\b(?:filters\s*:\s*(?:\[|revisionFilters\s*\()|filterLayout\s*:)`)
 
 // Functional frontend plugins declare pages through Workbench. Only the
 // foundation frontend layer may own React/framework component trees.
@@ -63,6 +64,9 @@ func assertFunctionalFrontendPlugins(t *testing.T, repositoryRoot, pluginRoot st
 			}
 			text := string(content)
 			usesWorkbench = usesWorkbench || strings.Contains(text, `from "@vastplan/workbench-sdk"`) || strings.Contains(text, `from '@vastplan/workbench-sdk'`)
+			if legacyCollectionFilterField.MatchString(text) {
+				t.Errorf("%s: 功能插件必须通过一级 filterPanel 契约声明筛选，禁止遗留 filters/filterLayout 字段", relative(repositoryRoot, path))
+			}
 			for _, forbidden := range []string{`from "react"`, `from 'react'`, `from "react-dom`, `from 'react-dom`, `from "@arco-design/`, `from '@arco-design/`, `from "@mui/`, `from '@mui/`, "context.addPage("} {
 				if strings.Contains(text, forbidden) {
 					t.Errorf("%s: 功能插件越过 Workbench 边界，出现 %q", relative(repositoryRoot, path), forbidden)

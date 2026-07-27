@@ -17,7 +17,7 @@ export function auditPage(client: PlatformAdminClient): CollectionPageDefinition
       title: message(namespace, "audit.title", "授权审计"),
       view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
-      filters: [{ id: "search", label: message(namespace, "filter.audit", "对象、动作或操作人"), kind: "text" }],
+      filterPanel: { fields: [{ id: "search", label: message(namespace, "filter.audit", "对象、动作或操作人"), kind: "text" }] },
       columns: [
         { key: "action", label: message(namespace, "column.action", "动作"), defaultVisible: true },
         { key: "objectKind", label: message(namespace, "column.objectKind", "对象类型"), defaultVisible: true },

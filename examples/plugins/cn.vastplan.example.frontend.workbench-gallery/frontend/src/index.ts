@@ -85,10 +85,10 @@ export function masterDetailPage(): MasterDetailPageDefinition<ServiceRecord> {
   return defineMasterDetailPage({
     id: "example.master-detail", path: "/examples/workbench/master-detail", pattern: "master-detail",
     title: message(namespace, "page.master", "列表与编辑"), navigation: { id: "example.master-detail", label: message(namespace, "page.master", "列表与编辑"), zone: "secondary", order: 20 },
-    master: { id: "service", title: message(namespace, "master.services", "服务列表"), keyField: "id", titleField: "name", subtitleField: "owner", status: { labelField: "status", toneField: "tone" }, query: { mode: "page", defaultPageSize: 10, pageSizeOptions: [10, 20] }, filters: [
+    master: { id: "service", title: message(namespace, "master.services", "服务列表"), keyField: "id", titleField: "name", subtitleField: "owner", status: { labelField: "status", toneField: "tone" }, query: { mode: "page", defaultPageSize: 10, pageSizeOptions: [10, 20] }, filterPanel: { fields: [
       { id: "name", label: message(namespace, "filter.name", "服务名称"), kind: "text" },
       { id: "status", label: message(namespace, "filter.status", "状态"), kind: "select", options: ["运行中", "规划中", "待实施"].map((value) => ({ value, label: value })) },
-    ] },
+    ] } },
     detail, editor,
     actions: [{ id: "refresh-record", label: message(namespace, "action.refresh", "刷新记录"), icon: "refresh", placement: "record.detail" }],
     async loadMaster(query: CollectionQuery) {

@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：Collection、RecordDetail/MasterDetail/TreeDetail、表单、Overlay、首方页面迁移和导入门禁均已实施｜最后更新：2026-07-23
+> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、表单、Overlay、首方页面迁移和导入门禁均已实施｜最后更新：2026-07-27
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md) 与 [ADR-0104](../decisions/ADR-0104-Frontend-Runtime-Engine与React单实现.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -37,7 +37,7 @@ flowchart TB
 4. Workbench 故障和设计系统故障一样，进入 Portal Kernel 恢复路径，而不是让功能插件退回自行组合。
 5. 功能插件制品必须使用 `@vastplan/workbench-sdk`；构建门禁与 Go 架构适应度测试拒绝 React、Arco/MUI、裸 `context.addPage` 和 `@vastplan/ui-primitives` 视觉导入。当前唯一例外是尚在该包中的非视觉 `PortalControlClient` 与 `Portal*` 数据契约。
 
-`CollectionWorkbench` 共享一套查询、筛选、选择、动作、取消和错误状态机，并提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。可选 `loadSummary` 以纯数据指标提供一致概览，集合翻页/筛选不会重复请求概览，首次进入和显式刷新才更新。筛选可用 `filterLayout.columns` 声明固定或 `xs…xl` 响应式列数，默认 `xs=1 / md=2 / xl=3`；列偏好由工具栏锚定 Popover 即时写入，不使用阻断式确认 Dialog。表单工作流已提供 page/Dialog/Drawer、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏数据关闭保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表。全局设置、凭证、数据库连接、制品仓库、Portal 治理与部署管理均已迁移为真实 fixture。
+`FilterPanel` 是与 Collection、MasterDetail 平级的一级组合组件，统一字段 Schema、紧凑表单、草稿/提交策略、响应式分列和操作位置，但不发起数据请求。`CollectionWorkbench` 组合 FilterPanel，并共享查询、选择、动作、取消和错误状态机，提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动或视口触发的增量加载。FilterPanel 默认 `xs=1 / md=2 / xl=4`，可通过 `filterPanel.layout.columns` 覆盖；列偏好由工具栏锚定 Popover 即时写入，不使用阻断式确认 Dialog。表单工作流已提供 page/Dialog/Drawer、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏数据关闭保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表。
 
 Record 工作流共享详情字段投影、状态、页面/详情动作、表单、Overlay、取消和错误状态机，并提供 `record-detail`、`master-detail` 与 `tree-detail` 三种 Pattern。MasterDetail 的左侧列表复用 Collection 查询、筛选、page/cursor 和取消语义，右侧可以展示详情或 page-surface 编辑器；TreeDetail 对节点数、深度、ID 唯一性和默认展开层级做有界校验。选择写入受限 URL 参数，窄屏在主区/详情间切换，页内编辑存在脏数据时切换记录必须确认。功能插件不能提供 React render function、HTML、任意树组件或自行实现分栏。
 
@@ -49,7 +49,24 @@ Record 工作流共享详情字段投影、状态、页面/详情动作、表单
 
 ## 3. 契约模型
 
-### 3.1 数据集合
+### 3.1 FilterPanel 一级组合
+
+`FilterPanelSpec` 是可序列化的筛选面板契约，可被 Collection、MasterDetail 以及后续受治理 Pattern 组合：
+
+```text
+FilterPanelSpec
+├── fields[]: text | select | boolean | numberRange | dateRange
+├── layout.columns: 固定或 xs…xl 响应式列数
+└── apply
+    ├── mode: auto-single-row | explicit
+    └── actionsPlacement: last-cell
+```
+
+FilterPanel 只管理字段值、草稿、清除、提交和视觉编排，通过 `onApply(values)` 输出稳定值；分页、排序、请求取消、缓存与数据加载归组合它的上级工作流所有。功能插件不得提交 React 组件、自定义按钮或 UI 框架参数。开发阶段不保留旧 `filters` / `filterLayout` 字段，架构门禁拒绝其重新出现。
+
+默认 `auto-single-row`：不足两行时文本 Enter 提交，选择/布尔/范围完成即提交且不显示操作；达到两行时保留草稿并显示查询与清除。`explicit` 始终要求显式提交。操作单元跨越当前行剩余列并右对齐，因此在每个响应式断点都落于末行末列。Label 作为控件内本地化 placeholder，外置字段标题隐藏但保留可访问名称。
+
+### 3.2 数据集合
 
 每个集合有稳定 `collectionId`，是缓存、URL 状态与用户偏好的命名空间。插件声明能力上限，用户只可在上限内选择展示偏好。
 
@@ -57,7 +74,7 @@ Record 工作流共享详情字段投影、状态、页面/详情动作、表单
 CollectionSpec
 ├── id / title / view: table | cards
 ├── query: page | cursor
-├── filters[]: text | select | boolean | numberRange | dateRange
+├── filterPanel?: FilterPanelSpec
 ├── columns[]: key、标题、显示/排序/筛选能力、默认可见与宽度边界
 ├── selection: none | single | multiple
 ├── actions: toolbar | row | card | bulk
@@ -75,10 +92,9 @@ CollectionLoader(query, signal) -> CollectionResult
 - Workbench 通过 Portal Kernel 提供的窄 `WorkbenchPreferencePort` 保存列顺序、显隐、密度与 page size。服务端记录按 `tenant / subject / portal / catalog contract major / collectionId` 隔离并使用 revision CAS，localStorage 只作验证缓存；偏好无法新增未声明列，服务端也绝不依据它扩大数据字段或权限。
 - Workbench 统一渲染 loading、refreshing、empty、error、stale、selection 和 retry，不允许同一集合同时由插件再渲染另一套分页或工具栏。
 - Cursor 只来自上次成功结果的 `nextCursor`。加载更多会按稳定记录键去重并用新事实替换重复项；Loader 返回与请求相同的 cursor 时立即失败，避免无限请求。筛选或刷新会重新从首 cursor 装配，未提交请求由 `AbortSignal` 取消。
-- Collection 的默认管理工作区采用三列筛选栅格、主操作在左/次操作在右、浅色表头与行分隔、页脚右对齐分页。该视觉语义通过 `FilterBar`、`Table`、`Pagination` 的 `collection` 呈现能力交由渲染适配器实现，Workbench 不注入框架 CSS。
-- 筛选字段在当前 `filterLayout.columns` 的最大桌面列数中不足两行时采用直接查询：文本在 Enter 后提交，枚举/布尔/范围选择完成即提交，不显示“查询”或“清除”按钮；达到两行时保留草稿并同时显示“查询 + 重置”，避免复杂筛选编辑过程反复请求。筛选 Label 一律作为控件内的本地化 placeholder 显示，外置字段标题隐藏但保留可访问名称；窄屏仍按栅格折行，不改变已确定的查询安全语义。
+- Collection 的默认管理工作区组合一级 FilterPanel、主操作在左/次操作在右、浅色表头与行分隔、页脚右对齐分页。视觉语义通过 `FilterBar`、`Table`、`Pagination` 的 `collection` 呈现能力交由渲染适配器实现，Workbench 不注入框架 CSS。
 
-### 3.2 操作区
+### 3.3 操作区
 
 `ActionSpec` 只声明语义：`id`、本地化标题、图标、tone、placement、排序、selection 前置条件、confirm 文案和可见/禁用解释。处理器由插件在运行时以同一 action ID 注册。
 
@@ -95,7 +111,7 @@ CollectionLoader(query, signal) -> CollectionResult
 
 新增、导入、发布属于页面功能动作，必须放在 Page Header；刷新、列设置属于当前集合的展示控制，保留在集合工具区并同样使用图标与 Tooltip。列设置只有在 Collection 明确声明 `preferences` 时显示，不能把未声明的列暴露给用户；它以触发按钮附近的 Popover 呈现，勾选、排序和密度变化即时应用并保存，无额外“确定”步骤。
 
-### 3.3 表单与 Overlay 工作流
+### 3.4 表单与 Overlay 工作流
 
 `FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 4.x 提供：
 
@@ -122,7 +138,7 @@ FormWorkflow
 
 秘密输入分成两个互不混淆的语义：`credentialRef` 只接受同时声明 `format: vastplan-credential-ref + writeOnly` 的引用；`secretMaterial` 只接受 `type: string + format: vastplan-secret-material + writeOnly` 的一次性材料。后者禁止出现在 `initialValue`，若 loader 违规回填则 Workbench fail-closed 并丢弃该值；输入不会进入偏好或 dirty baseline，无论提交成功、字段拒绝还是网络异常，提交结束后都会立即从 Workbench 状态删除，取消/关闭同样删除。清理时按字段路径复制非敏感兄弟节点，跳过秘密节点，不会先把整个表单（连同明文）JSON 序列化。JavaScript 字符串无法原地覆写内存，因此这里保证的是最短引用生命周期，而不是虚假的“物理清零”。凭证 0.5 与数据库连接 0.5 已成为该边界的真实 fixture：数据库编辑从不回填秘密，留空保留托管凭证。
 
-### 3.4 卡片列表
+### 3.5 卡片列表
 
 Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为：标题/识别信息、状态区、受限摘要区、内容槽、footer 操作区。卡片同样必须使用 Collection 的筛选、cursor、空态、骨架屏、选择与动作规则；不得为卡片视图另造一套搜索和加载协议。
 
@@ -130,7 +146,7 @@ Card 不是任意仪表盘容器。它用于可扫描的实体集合，固定为
 
 密集管理场景默认优先 Table；只有摘要、状态和少量操作比多列对比更重要时使用 Card。详情仍进入详情页、Drawer 或 master-detail，不让卡片承载完整编辑器。
 
-### 3.5 记录详情与主从工作区
+### 3.6 记录详情与主从工作区
 
 `RecordDetailSpec` 只声明标题、副标题、状态和分区字段；字段沿用 Workbench 的标准文本、数字、日期、布尔和状态格式，不接受 HTML 或组件。三种页面定义为：
 
@@ -155,7 +171,7 @@ Record Foundation 使用 TypeScript + React：代码直接运行在现有浏览�
 ## 5. 实施顺序与验收
 
 1. 已完成：`ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与当前 `@vastplan/ui-contract` 4.x Collection 类型，以及 Arco/MUI 行选择语义。
-2. 已完成：`CollectionWorkbench` 的表格、数据概览、工具栏、筛选、分页、列偏好、行/批量操作；Portal revision 与制品仓库管理为已迁移 fixture。
+2. 已完成：一级 `FilterPanel` 契约、独立目录、紧凑表单、响应式提交策略，以及 Collection/MasterDetail 组合；`CollectionWorkbench` 的表格、数据概览、工具栏、分页、列偏好、行/批量操作均复用该面板。
 3. 已完成：Card cursor 模式、共享查询状态、稳定键去重、重复 cursor 防护、手动/视口增量加载，以及 Arco/MUI `DataCard` 语义组件。
 4. 已完成：`FormPresentation`、`FormWorkflow`、Page/Dialog/Drawer 表单，以及 Arco/MUI 的分区、标签、步骤、分栏和条件字段语义；全局设置是非敏感 fixture，凭证和数据库连接验证 `secretMaterial` 一次性秘密边界。
 5. 已完成：首方功能插件已迁移到当前 4.x 契约；Portal 治理按 Profile/Application/Binding/Activation 分页，部署管理复用动态 Form 和预览/审计 Overlay。生产构建与 `engineering/arch` 同时拒绝遗留基础组件 import、UI 框架 import 和裸页面注册。

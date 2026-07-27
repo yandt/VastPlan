@@ -3,7 +3,7 @@ import type { ActionSpec, CollectionDensity } from "@vastplan/ui-contract";
 import { usePortalI18n, usePortalUI, type WorkbenchPreferencePort } from "@vastplan/ui-primitives";
 import type { CollectionActionContext, CollectionPageDefinition, CollectionSummary, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
 import { CollectionCards } from "./CollectionCards.js";
-import { CollectionFilters } from "./CollectionFilters.js";
+import { FilterPanel } from "../filter/FilterPanel.js";
 import { CollectionPreferencesPopover } from "./CollectionPreferencesPopover.js";
 import { CollectionTable } from "./CollectionTable.js";
 import { CollectionToolbar } from "./CollectionToolbar.js";
@@ -105,7 +105,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   }, [columns, density, pageSize, persistPreference]);
   const toolbarActions = actions.filter((action) => action.placement === "collection.toolbar" && visibleAction(action));
   const bulkActions = actions.filter((action) => action.placement === "collection.bulk" && visibleAction(action));
-  const hasFilters = collection.filters !== undefined && collection.filters.length > 0;
+  const hasFilters = collection.filterPanel !== undefined;
 
   useEffect(() => pageActionController(page).bind({
     selectedCount: selected.length,
@@ -115,7 +115,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   return <ui.Stack gap={density === "compact" ? "sm" : density === "comfortable" ? "lg" : "md"}>
     {summary === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Panel title={summary.title === undefined ? undefined : i18n.text(summary.title)}><ui.Descriptions columns={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 3 }} items={summary.metrics.map((metric) => ({ id: metric.id, label: i18n.text(metric.label), value: metric.tone === undefined ? metric.value : <ui.Status tone={metric.tone}>{metric.value}</ui.Status> }))} /></ui.Panel></div>}
     {hasFilters ? <ui.Stack gap="sm">
-      <div style={{ width: "100%", minWidth: 0 }}><CollectionFilters filters={collection.filters!} layout={collection.filterLayout} value={filters} querying={data.loading || data.refreshing || data.loadingMore} onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div>
+      <div style={{ width: "100%", minWidth: 0 }}><FilterPanel panel={collection.filterPanel!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div>
       <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={hasFilters} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>
     </ui.Stack> : <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={false} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>}
     {data.failure === undefined && summaryFailure === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.ErrorState title={data.failure ?? summaryFailure!} retry={refresh} /></div>}

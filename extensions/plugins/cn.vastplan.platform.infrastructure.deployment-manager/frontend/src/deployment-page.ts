@@ -36,11 +36,11 @@ export function createDeploymentPage(client: PlatformAdminClient, serviceID: str
     navigation: { id: `platform.deployment.${serviceID}`, label: title, zone: "settings", order: 60 },
     collection: {
       id: `platform.deployment.${serviceID}`, title, view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
-      filters: [
+      filterPanel: { fields: [
         { id: "deployment", label: message("column.deployment", "部署"), kind: "text" },
         { id: "status", label: message("column.status", "修订状态"), kind: "select", options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })) },
         { id: "planStatus", label: message("column.planStatus", "规划状态"), kind: "select", options: Object.entries(planLabels).map(([value, label]) => ({ value, label })) },
-      ],
+      ] },
       columns: [
         { key: "id", label: "Revision", format: "number", defaultVisible: true, minWidth: 90 },
         { key: "deployment", label: message("column.deployment", "部署"), defaultVisible: true, minWidth: 180 },

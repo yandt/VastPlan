@@ -2,7 +2,7 @@ import type { FilterSpec } from "@vastplan/ui-contract";
 import { jsonSchemaDialect, type FormSchema } from "@vastplan/ui-primitives";
 
 /** Converts the governed filter declaration into the shared JSON Schema renderer input. */
-export function collectionFilterSchema(filters: readonly FilterSpec[]): FormSchema {
+export function filterPanelSchema(filters: readonly FilterSpec[]): FormSchema {
   const properties = Object.fromEntries(filters.map((filter) => [filter.id, { ...filterProperty(filter), title: filter.id }]));
   const localization = Object.fromEntries(filters.map((filter) => [`/properties/${escapePointer(filter.id)}/title`, filter.label]));
   const uiSchema = Object.fromEntries(filters.map((filter) => [filter.id, {

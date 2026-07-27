@@ -25,6 +25,17 @@ describe("defineCollectionPage", () => {
     })).toThrow("card");
   });
 
+  it("validates the reusable FilterPanel contract independently from the collection view", () => {
+    const base = {
+      id: "revisions", path: "/revisions", title: "Revisions",
+      collection: { id: "revisions", title: "Revisions", view: "table" as const, query: { mode: "page" as const, defaultPageSize: 20, pageSizeOptions: [20] }, columns: [{ key: "id", label: "ID" }] },
+      async load() { return { items: [], total: 0 }; },
+    };
+    expect(() => defineCollectionPage({ ...base, collection: { ...base.collection, filterPanel: { fields: [{ id: "status", label: "Status", kind: "select", options: [] }] } } })).not.toThrow();
+    expect(() => defineCollectionPage({ ...base, collection: { ...base.collection, filterPanel: { fields: [] } } })).toThrow("FilterPanel");
+    expect(() => defineCollectionPage({ ...base, collection: { ...base.collection, filterPanel: { fields: [{ id: "status", label: "One", kind: "text" }, { id: "status", label: "Two", kind: "text" }] } } })).toThrow("重复");
+  });
+
   it("rejects collection actions that escape the governed form registry", () => {
     expect(() => defineCollectionPage({
       id: "connections", path: "/connections", title: "Connections",

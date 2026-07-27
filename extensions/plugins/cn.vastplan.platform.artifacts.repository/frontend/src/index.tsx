@@ -28,7 +28,7 @@ function capacityPage(client: PlatformAdminClient, id: string, path: string): Co
     navigation: { id, label: text("page.capacity.navigation", "容量与配额"), zone: "settings", groupID: "platform.artifacts", order: 51 },
     collection: {
       id: `${id}.collection`, title: text("panel.quotas", "配额用量"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
-      filters: [{ id: "exceeded", label: text("filter.exceeded", "仅超限"), kind: "boolean" }],
+      filterPanel: { fields: [{ id: "exceeded", label: text("filter.exceeded", "仅超限"), kind: "boolean" }] },
       columns: [
         { key: "id", label: text("column.quota", "配额"), defaultVisible: true, minWidth: 160 },
         { key: "scope", label: text("column.scope", "作用范围"), defaultVisible: true, minWidth: 260 },
@@ -66,7 +66,7 @@ function referencesPage(client: PlatformAdminClient, id: string, path: string): 
     navigation: { id, label: text("page.references.navigation", "制品引用"), zone: "settings", groupID: "platform.artifacts", order: 52 },
     collection: {
       id: `${id}.collection`, title: text("panel.references", "引用快照"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
-      filters: [{ id: "ownerKind", label: text("filter.ownerKind", "Owner 类型"), kind: "select", options: ownerKinds.map((value) => ({ value, label: text(`owner.${value}`, value) })) }],
+      filterPanel: { fields: [{ id: "ownerKind", label: text("filter.ownerKind", "Owner 类型"), kind: "select", options: ownerKinds.map((value) => ({ value, label: text(`owner.${value}`, value) })) }] },
       columns: [
         { key: "tenant", label: text("column.tenant", "租户"), defaultVisible: true, minWidth: 120 },
         { key: "ownerKind", label: text("column.ownerKind", "Owner 类型"), defaultVisible: true, minWidth: 170 },
@@ -102,10 +102,10 @@ function garbageCollectionPage(client: PlatformAdminClient, id: string, path: st
     navigation: { id, label: text("page.gc.navigation", "垃圾回收"), zone: "settings", groupID: "platform.artifacts", order: 53 },
     collection: {
       id: `${id}.collection`, title: text("panel.gc", "隔离与清扫记录"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
-      filters: [
+      filterPanel: { fields: [
         { id: "status", label: text("filter.gcStatus", "回收状态"), kind: "select", options: ["quarantining", "quarantined", "sweeping", "swept"].map((value) => ({ value, label: text(`gc.${value}`, value) })) },
         { id: "lifecycle", label: text("filter.lifecycle", "生命周期"), kind: "select", options: lifecycleOptions.filter((option) => option.value === "yanked" || option.value === "revoked") },
-      ],
+      ] },
       columns: [
         { key: "pluginId", label: text("column.plugin", "插件 ID"), defaultVisible: true, minWidth: 270 },
         { key: "version", label: text("column.version", "版本"), defaultVisible: true, minWidth: 150 },

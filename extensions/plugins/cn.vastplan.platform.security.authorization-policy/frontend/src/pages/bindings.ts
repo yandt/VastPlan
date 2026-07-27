@@ -42,7 +42,7 @@ export function bindingsPage(client: PlatformAdminClient): CollectionPageDefinit
       title: message(namespace, "bindings.title", "主体绑定"),
       view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50] },
-      filters: [{ id: "search", label: message(namespace, "filter.binding", "主体、角色或 Binding ID"), kind: "text" }],
+      filterPanel: { fields: [{ id: "search", label: message(namespace, "filter.binding", "主体、角色或 Binding ID"), kind: "text" }] },
       columns: [
         { key: "id", label: "Binding ID", defaultVisible: true, minWidth: 220 },
         { key: "revision", label: "Revision", format: "number", defaultVisible: true },

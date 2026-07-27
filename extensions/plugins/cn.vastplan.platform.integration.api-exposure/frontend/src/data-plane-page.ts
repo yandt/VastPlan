@@ -26,10 +26,10 @@ export function createDataPlaneExposurePage(client: PlatformAdminClient, service
     collection: {
       id: `platform.data-plane-exposure.${serviceID}.collection`, title: "Data Plane Revisions", view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
-      filters: [
+      filterPanel: { fields: [
         { id: "routeKey", label: "Route Key", kind: "text" },
         { id: "status", label: "状态", kind: "select", options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })) },
-      ],
+      ] },
       columns: [
         { key: "id", label: "Revision", format: "number", defaultVisible: true },
         { key: "routeKey", label: "Route Key", minWidth: 190, defaultVisible: true },

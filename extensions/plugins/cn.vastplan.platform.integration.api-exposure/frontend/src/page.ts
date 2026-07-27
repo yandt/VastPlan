@@ -40,10 +40,10 @@ export function createAPIExposurePage(
       title: text("panel.revisions", "Exposure Revisions"),
       view: "table",
       query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
-      filters: [
+      filterPanel: { fields: [
         { id: "name", label: text("filter.name", "名称"), kind: "text" },
         { id: "status", label: text("filter.status", "状态"), kind: "select", options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })) },
-      ],
+      ] },
       columns: [
         { key: "id", label: "Revision", format: "number", defaultVisible: true },
         { key: "displayName", label: text("column.name", "名称"), defaultVisible: true, minWidth: 180 },
