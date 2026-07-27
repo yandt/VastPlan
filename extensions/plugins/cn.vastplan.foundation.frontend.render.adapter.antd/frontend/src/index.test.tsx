@@ -64,6 +64,18 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).not.toContain("Submit");
   });
 
+  it("renders collection filter labels inside controls instead of beside them", () => {
+    const Form = antdPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
+      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "Status", "ui:options": { label: false } } } }}
+      value={{}}
+      onChange={() => undefined}
+      presentation={{ layout: "horizontal" }}
+    /></PortalI18nProvider>);
+    expect(markup).toContain('placeholder="Status"');
+    expect(markup).not.toContain('<label for="root_status">Status</label>');
+  });
+
   it("maps the shared shell and interaction baselines", () => {
     expect(antdPortalUIComponents.theme.tokens).toMatchObject({
       shell: { barHeight: 64, railWidth: 64, navigationWidth: 240, navigationCompactWidth: 220 },

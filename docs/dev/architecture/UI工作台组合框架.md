@@ -76,7 +76,7 @@ CollectionLoader(query, signal) -> CollectionResult
 - Workbench 统一渲染 loading、refreshing、empty、error、stale、selection 和 retry，不允许同一集合同时由插件再渲染另一套分页或工具栏。
 - Cursor 只来自上次成功结果的 `nextCursor`。加载更多会按稳定记录键去重并用新事实替换重复项；Loader 返回与请求相同的 cursor 时立即失败，避免无限请求。筛选或刷新会重新从首 cursor 装配，未提交请求由 `AbortSignal` 取消。
 - Collection 的默认管理工作区采用三列筛选栅格、主操作在左/次操作在右、浅色表头与行分隔、页脚右对齐分页。该视觉语义通过 `FilterBar`、`Table`、`Pagination` 的 `collection` 呈现能力交由渲染适配器实现，Workbench 不注入框架 CSS。
-- 筛选字段在当前 `filterLayout.columns` 的最大桌面列数中不足两行时采用直接查询：文本在 Enter 后提交，枚举/布尔/范围选择完成即提交，不显示“查询”或“清除”按钮；达到两行时保留草稿并同时显示“查询 + 重置”，避免复杂筛选编辑过程反复请求。窄屏仍按栅格折行，但不改变已确定的查询安全语义。
+- 筛选字段在当前 `filterLayout.columns` 的最大桌面列数中不足两行时采用直接查询：文本在 Enter 后提交，枚举/布尔/范围选择完成即提交，不显示“查询”或“清除”按钮；达到两行时保留草稿并同时显示“查询 + 重置”，避免复杂筛选编辑过程反复请求。筛选 Label 一律作为控件内的本地化 placeholder 显示，外置字段标题隐藏但保留可访问名称；窄屏仍按栅格折行，不改变已确定的查询安全语义。
 
 ### 3.2 操作区
 

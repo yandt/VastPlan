@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CollectionSpec } from "@vastplan/ui-contract";
 import { collectionFilterColumns, shouldAutoApplyCollectionFilters } from "./CollectionFilters.js";
+import { collectionFilterSchema } from "./filter-schema.js";
 import { collectionDensity, collectionDensityOptions } from "./density.js";
 
 const collection: CollectionSpec = {
@@ -28,6 +29,12 @@ describe("collectionDensity", () => {
 });
 
 describe("collection filter interaction", () => {
+  it("renders each filter label as an accessible in-control placeholder", () => {
+    const schema = collectionFilterSchema([{ id: "status", label: "状态", kind: "select" }]);
+    expect(schema.uiSchema).toEqual({ status: { "ui:placeholder": "", "ui:options": { label: false } } });
+    expect(schema.uiLocalization).toEqual({ "/status/ui:placeholder": "状态" });
+  });
+
   it("uses direct-query interaction while the desktop filter grid has fewer than two rows", () => {
     expect(shouldAutoApplyCollectionFilters([{ id: "name", label: "Name", kind: "text" }, { id: "status", label: "Status", kind: "select" }])).toBe(true);
   });

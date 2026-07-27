@@ -5,10 +5,17 @@ import { jsonSchemaDialect, type FormSchema } from "@vastplan/ui-primitives";
 export function collectionFilterSchema(filters: readonly FilterSpec[]): FormSchema {
   const properties = Object.fromEntries(filters.map((filter) => [filter.id, { ...filterProperty(filter), title: filter.id }]));
   const localization = Object.fromEntries(filters.map((filter) => [`/properties/${escapePointer(filter.id)}/title`, filter.label]));
+  const uiSchema = Object.fromEntries(filters.map((filter) => [filter.id, {
+    "ui:placeholder": "",
+    "ui:options": { label: false },
+  }]));
+  const uiLocalization = Object.fromEntries(filters.map((filter) => [`/${escapePointer(filter.id)}/ui:placeholder`, filter.label]));
   return {
     id: "workbench.collection.filters",
     schema: { $schema: jsonSchemaDialect, type: "object", properties },
+    uiSchema,
     localization,
+    uiLocalization,
   } as unknown as FormSchema;
 }
 
