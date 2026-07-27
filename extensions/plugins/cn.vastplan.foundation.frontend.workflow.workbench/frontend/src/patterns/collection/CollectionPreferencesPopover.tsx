@@ -32,7 +32,7 @@ export function CollectionPreferencesPopover({ collection, columns, density, den
     onClick={trigger.onClick} onKeyDown={trigger.onKeyDown}
     style={{ width: 36, height: 36, display: "inline-grid", placeItems: "center", border: 0, borderRadius: 6, background: "transparent", color: "inherit", cursor: "pointer" }}
   ><ui.Icon name="columns" /></button>}>
-    <div style={{ boxSizing: "border-box", width: 292, display: "grid", gap: 7 }}>
+    <div style={{ boxSizing: "border-box", width: "max-content", maxWidth: 280, display: "grid", gap: 7 }}>
       <CollectionDensityButtons label={densityLabel} value={density} options={densityOptions} labels={densityLabels} onChange={(next) => onChange(columns, next)} />
       {densityOptions.length <= 1 ? null : <div style={{ height: 1, background: ui.theme.tokens.color.border }} />}
       <ColumnPreferenceList columns={columns} labels={columnLabels} dragLabel={i18n.text(message(namespace, "columns.drag", "拖动调整顺序"))} showLabel={i18n.text(message(namespace, "action.show", "显示"))} hideLabel={i18n.text(message(namespace, "action.hide", "隐藏"))} onChange={updateColumns} />

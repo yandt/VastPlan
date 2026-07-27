@@ -27,13 +27,13 @@ export function ColumnPreferenceList({ columns, labels, dragLabel, showLabel, hi
     if (sourceKey !== "") onChange(reorderColumns(columns, sourceKey, targetKey));
     finishDrag();
   };
-  return <div role="list" style={{ display: "grid", gap: 2, maxHeight: 320, overflowY: "auto" }}>
+  return <div role="list" style={{ minWidth: 0, width: "100%", maxHeight: 256, display: "grid", gap: 2, overflowX: "hidden", overflowY: "auto", overscrollBehavior: "contain", scrollbarGutter: "stable" }}>
     {columns.map((column, index) => {
       const label = labels[column.key] ?? column.key;
       const hidden = !column.visible;
       const visibilityLabel = hidden ? showLabel : hideLabel;
       return <div key={column.key} role="listitem" onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setOverKey(column.key); }} onDrop={(event) => drop(event, column.key)} style={{
-        boxSizing: "border-box", minHeight: 32, display: "grid", gridTemplateColumns: "28px minmax(0,1fr) 28px", alignItems: "center", gap: 4, padding: "2px 3px",
+        boxSizing: "border-box", minWidth: 0, minHeight: 32, display: "grid", gridTemplateColumns: "28px max-content 28px", alignItems: "center", gap: 4, padding: "2px 3px",
         borderRadius: 5, outline: overKey === column.key && draggingKey !== column.key ? `1px solid ${ui.theme.tokens.color.primary}` : "none",
         background: hidden ? ui.theme.tokens.color.hover : "transparent", color: hidden ? ui.theme.tokens.color.mutedText : ui.theme.tokens.color.text,
         opacity: draggingKey === column.key ? 0.55 : 1,
@@ -43,7 +43,7 @@ export function ColumnPreferenceList({ columns, labels, dragLabel, showLabel, hi
           event.dataTransfer.setData("text/plain", column.key);
           setDraggingKey(column.key);
         }} onDragEnd={finishDrag} onKeyDown={(event) => keyboardMove(event, index)} style={iconButtonStyle("grab")}><ui.Icon name="drag" size="sm" /></button>
-        <span title={label} style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{label}</span>
+        <span title={label} style={{ minWidth: 0, maxWidth: 196, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 13 }}>{label}</span>
         <button type="button" aria-label={`${visibilityLabel}: ${label}`} title={`${visibilityLabel}: ${label}`} aria-pressed={column.visible} onClick={() => onChange(toggleColumnVisibility(columns, column.key))} style={iconButtonStyle("pointer")}><ui.Icon name={column.visible ? "visibility" : "visibilityOff"} size="sm" /></button>
       </div>;
     })}
