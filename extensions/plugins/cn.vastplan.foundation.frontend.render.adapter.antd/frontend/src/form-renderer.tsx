@@ -36,7 +36,8 @@ type PresentedObjectProps = ObjectFieldTemplateProps & { presentation?: FormPres
 
 function PresentedObject({ presentation, activeSection, onSectionChange, ...props }: PresentedObjectProps) {
   const i18n = usePortalI18n();
-  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <section><Typography.Title level={5}>{props.title}</Typography.Title>{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <div key={property.name}>{property.content}</div>)}</section>;
+  const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
+  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <section>{compactRoot || props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <div key={property.name}>{property.content}</div>)}</section>;
   const sections = presentation.sections;
   const selected = sections.find((section) => section.id === activeSection) ?? sections[0]!;
   const assigned = new Set(sections.flatMap((section) => section.fields.map(formFieldName)));

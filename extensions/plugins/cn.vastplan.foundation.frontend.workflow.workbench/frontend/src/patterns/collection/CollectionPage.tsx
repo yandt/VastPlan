@@ -15,6 +15,7 @@ import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
 import { evaluateFormCondition } from "../form/presentation.js";
 import { CollectionOverlayWorkflow } from "../overlay/CollectionOverlayWorkflow.js";
 import { pageActionController } from "../action/page-action-controller.js";
+import { WorkbenchPageFlow } from "../layout/WorkbenchRhythm.js";
 
 export function CollectionPage({ page, preferenceScope, preferences, presentation }: { page: CollectionPageDefinition; preferenceScope: string; preferences?: WorkbenchPreferencePort; presentation?: WorkbenchPresentationConfig }) {
   const ui = usePortalUI();
@@ -112,7 +113,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
     visibleActionIDs: new Set(actions.filter(visibleAction).map((action) => action.id)),
   }, (action) => { void runAction(action, selected); }), [actions, page, runAction, selected]);
 
-  return <ui.Stack gap={density === "compact" ? "sm" : density === "comfortable" ? "lg" : "md"}>
+  return <WorkbenchPageFlow density={density}>
     {summary === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Panel title={summary.title === undefined ? undefined : i18n.text(summary.title)}><ui.Descriptions columns={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 3 }} items={summary.metrics.map((metric) => ({ id: metric.id, label: i18n.text(metric.label), value: metric.tone === undefined ? metric.value : <ui.Status tone={metric.tone}>{metric.value}</ui.Status> }))} /></ui.Panel></div>}
     {hasFilters ? <ui.Stack gap="sm">
       <div style={{ width: "100%", minWidth: 0 }}><FilterPanel panel={collection.filterPanel!} value={filters} querying={data.loading || data.refreshing || data.loadingMore} onApply={(value) => { setFilters(value); setPageNumber(1); }} /></div>
@@ -132,7 +133,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
     {collection.view !== "table" || collection.query.mode !== "cursor" || data.nextCursor === undefined ? null : <ui.Stack direction="row" justify="center"><ui.Button kind="secondary" loading={data.loadingMore} disabled={data.loadingMore} onClick={data.loadMore}>{i18n.text({ namespace: "cn.vastplan.foundation.frontend.workflow.workbench", key: "cursor.more", fallback: "加载更多" })}</ui.Button></ui.Stack>}
     <CollectionFormWorkflow definition={page.forms?.find((form) => form.id === activeForm?.id)} selected={activeForm?.selected ?? []} open={activeForm !== undefined} onClose={() => setActiveForm(undefined)} onRefresh={refresh} />
     <CollectionOverlayWorkflow definition={page.overlays?.find((overlay) => overlay.id === activeOverlay?.id)} selected={activeOverlay?.selected ?? []} open={activeOverlay !== undefined} onClose={() => setActiveOverlay(undefined)} />
-  </ui.Stack>;
+  </WorkbenchPageFlow>;
 }
 
 function validPageSize(collection: CollectionPageDefinition["collection"], preferred: number | undefined): number {

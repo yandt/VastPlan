@@ -6,7 +6,7 @@
 
 ## 内部组织
 
-`frontend/src/patterns/filter/` 是一级 `FilterPanel` 组合组件，持有字段 Schema、紧凑布局、草稿/提交和响应式操作位置；Collection 与 MasterDetail 都通过相同契约组合它。`frontend/src/patterns/collection/` 只负责集合工作流：
+`frontend/src/patterns/layout/` 统一 Workbench 页面根节奏：页面根不携带 margin/padding，一级区域间距由 density 控制；组件 inset 只有 `flush/compact` 两个受治理档位，不允许用 margin 抵消 Shell。`frontend/src/patterns/filter/` 是一级 `FilterPanel` 组合组件，持有字段 Schema、紧凑布局、草稿/提交和响应式操作位置；Collection 与 MasterDetail 都通过相同契约组合它。compact Form 的根 Object 标题与外边距由 Renderer 统一清除，避免空标题继续推低第一行控件。`frontend/src/patterns/collection/` 只负责集合工作流：
 
 - `CollectionPage`：组合 FilterPanel、选择、摘要和动作的顶层编排；
 - `useCollectionData`：Table/Page 与 Card/Cursor 共用的加载、刷新、取消、游标和错误状态；

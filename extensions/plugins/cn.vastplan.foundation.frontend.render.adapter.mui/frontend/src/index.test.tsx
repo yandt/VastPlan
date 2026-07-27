@@ -92,4 +92,17 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain(".form-group:not(.rjsf-field-object)");
     expect(markup).toContain('class="form-group rjsf-field rjsf-field-object"');
   });
+
+  it("keeps compact filter forms flush by suppressing root title and margin", () => {
+    const Form = muiPortalUIComponents.FormRenderer;
+    const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
+      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "Status", "ui:options": { label: false } } } }}
+      value={{}}
+      onChange={() => undefined}
+      presentation={{ layout: "compact" }}
+    /></PortalI18nProvider>);
+    expect(markup).toContain('placeholder="Status"');
+    expect(markup).not.toContain("Filter root");
+    expect(markup).toContain("margin-bottom:0");
+  });
 });

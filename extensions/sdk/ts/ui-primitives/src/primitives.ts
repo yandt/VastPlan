@@ -199,7 +199,7 @@ export interface RecordTreeProps {
 export interface FilterBarProps {
   children: ReactNode;
   actions?: ReactNode;
-  /** Collection uses the borderless, dense management-query treatment. */
+  /** Collection is borderless and must contribute no outer margin or inset. */
   appearance?: "default" | "collection";
 }
 
@@ -275,4 +275,3 @@ export interface PortalUI {
  * belongs to the selected adapter: for example Arco maps `dark` to its native
  * CSS theme attribute, while MUI maps it to `createTheme({ palette.mode })`.
  */
-

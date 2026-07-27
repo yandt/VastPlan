@@ -305,7 +305,8 @@ function ObjectFieldTemplate({ title, description, properties, schema, uiSchema,
 }
 
 function PresentedObjectFieldTemplate({ presentation, activeSection, onSectionChange, ...props }: ObjectFieldTemplateProps & { presentation?: FormPresentation; activeSection?: string; onSectionChange?(sectionID: string): void }) {
-  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <ObjectFieldTemplate {...props} />;
+  const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
+  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <ObjectFieldTemplate {...props} title={compactRoot ? "" : props.title} />;
   const i18n = usePortalI18n();
   const sections = presentation.sections;
   const selected = sections.find((section) => section.id === activeSection) ?? sections[0]!;

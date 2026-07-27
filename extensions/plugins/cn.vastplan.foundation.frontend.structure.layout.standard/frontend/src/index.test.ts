@@ -44,6 +44,7 @@ describe("standard shell layout", () => {
 
   it("uses the renderer surface token for the page body", () => {
     expect(standardShellCSS).toContain(".vp-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-shell-surface)}");
+    expect(standardShellCSS).toContain("padding:var(--vp-page-content-start) 24px 24px");
   });
 
   it("aligns the desktop brand, second-level title and page header to one shell bar height", () => {

@@ -67,13 +67,14 @@ describe("Ant Design portal UI renderer", () => {
   it("renders collection filter labels inside controls instead of beside them", () => {
     const Form = antdPortalUIComponents.FormRenderer;
     const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
-      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "Status", "ui:options": { label: false } } } }}
+      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "Status", "ui:options": { label: false } } } }}
       value={{}}
       onChange={() => undefined}
-      presentation={{ layout: "horizontal" }}
+      presentation={{ layout: "compact" }}
     /></PortalI18nProvider>);
     expect(markup).toContain('placeholder="Status"');
     expect(markup).not.toContain('<label for="root_status">Status</label>');
+    expect(markup).not.toContain("Filter root");
   });
 
   it("maps the shared shell and interaction baselines", () => {

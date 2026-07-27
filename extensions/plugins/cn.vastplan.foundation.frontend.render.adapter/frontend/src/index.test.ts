@@ -10,6 +10,7 @@ describe("unified render adapter", () => {
       "cn.vastplan.foundation.frontend.render.adapter.arco",
       "cn.vastplan.foundation.frontend.render.adapter.mui",
     ]);
+    expect(adapter.renderers.map((renderer) => renderer.module.version)).toEqual(["1.0.2", "1.6.4", "1.7.5"]);
   });
 
   it("keeps Renderer labels in the Adapter namespace", () => {

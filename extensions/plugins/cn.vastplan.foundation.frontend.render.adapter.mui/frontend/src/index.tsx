@@ -228,7 +228,8 @@ interface MuiObjectFieldTemplateProps {
 
 function MuiObjectFieldTemplate({ presentation, activeSection, onSectionChange, ...props }: MuiObjectFieldTemplateProps & { presentation?: FormPresentation; activeSection?: string; onSectionChange?(sectionID: string): void }) {
   const i18n = usePortalI18n();
-  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <Box sx={{ mb: 2 }}><Typography variant="subtitle1">{props.title}</Typography>{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <Box key={property.name}>{property.content}</Box>)}</Box>;
+  const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
+  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <Box sx={{ mb: compactRoot ? 0 : 2 }}>{compactRoot || props.title === "" ? null : <Typography variant="subtitle1">{props.title}</Typography>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <Box key={property.name}>{property.content}</Box>)}</Box>;
   const sections = presentation.sections;
   const selected = sections.find((section) => section.id === activeSection) ?? sections[0]!;
   const assigned = new Set(sections.flatMap((section) => section.fields.map(formFieldName)));

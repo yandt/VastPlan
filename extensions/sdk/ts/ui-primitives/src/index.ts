@@ -16,4 +16,5 @@ export * from "./form-renderer.js";
 export * from "./primitives.js";
 export * from "./renderer.js";
 export * from "./portal-runtime.js";
+export * from "./rhythm.js";
 export * from "./shell.js";

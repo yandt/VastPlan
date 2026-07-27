@@ -65,6 +65,19 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("right");
   });
 
+  it("keeps compact filter forms flush by suppressing the root object title", () => {
+    const Form = arcoPortalUIComponents.FormRenderer;
+    const html = renderToStaticMarkup(createElement(PortalI18nProvider, {
+      policy: { defaultLocale: "en-US", supportedLocales: ["en-US"] }, catalogs: {}, candidates: ["en-US"],
+      children: createElement(Form, {
+        schema: { id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "Status", "ui:options": { label: false } } } },
+        value: {}, onChange() {}, presentation: { layout: "compact" },
+      }),
+    }));
+    expect(html).toContain('placeholder="Status"');
+    expect(html).not.toContain("Filter root");
+  });
+
   it("cascades framework-neutral responsive columns across Arco breakpoints", () => {
     expect(cascadeResponsiveColumns({ xs: 1, lg: 2 })).toEqual({ xs: 1, sm: 1, md: 1, lg: 2, xl: 2 });
     expect(cascadeResponsiveColumns({ sm: 2, xl: 4 })).toEqual({ sm: 2, md: 2, lg: 2, xl: 4 });
