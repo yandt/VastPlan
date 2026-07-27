@@ -290,7 +290,17 @@ function FormRenderer({ schema, value, onChange, presentation, presentationSecti
     });
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
   const templates = useMemo(() => ({ ObjectFieldTemplate: (props: MuiObjectFieldTemplateProps) => <MuiObjectFieldTemplate {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
-  return <Box sx={presentation?.layout === "horizontal" ? { "& .form-group:not(.rjsf-field-object)": { display: "grid", gridTemplateColumns: "104px minmax(0, 1fr)", alignItems: "center", columnGap: 1.5 }, "& .form-group:not(.rjsf-field-object) > label": { margin: 0 }, "& .form-group:not(.rjsf-field-object) > .field-description": { gridColumn: "2" } } : undefined}><RJSFForm
+  const horizontal = presentation?.layout === "horizontal";
+  const compact = presentation?.layout === "compact";
+  const fieldGroupStyle = {
+    ...(horizontal ? { display: "grid", gridTemplateColumns: "104px minmax(0, 1fr)", alignItems: "center", columnGap: 1.5 } : {}),
+    ...(compact ? { marginBottom: 0 } : {}),
+  };
+  const formStyle = horizontal || compact ? {
+    "& .form-group:not(.rjsf-field-object)": fieldGroupStyle,
+    ...(horizontal ? { "& .form-group:not(.rjsf-field-object) > label": { margin: 0 }, "& .form-group:not(.rjsf-field-object) > .field-description": { gridColumn: "2" } } : {}),
+  } : undefined;
+  return <Box sx={formStyle}><RJSFForm
     schema={localizedSchema}
     uiSchema={localizedUISchema}
     formData={value}

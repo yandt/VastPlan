@@ -67,7 +67,7 @@ export function CollectionFilters({ filters, layout, value, querying, onApply }:
   return <ui.FilterBar appearance="collection">
     <ui.Grid columns={columns} gap="xs">{filters.map((filter) => <ui.GridItem key={filter.id}>
       <div onKeyDown={(event) => { if (autoApply && filter.kind === "text" && event.key === "Enter") { event.preventDefault(); onApply(draft); } }}>
-        <ui.FormRenderer schema={collectionFilterSchema([filter])} value={{ [filter.id]: draft[filter.id] }} presentation={{ layout: "horizontal" }} onChange={(patch) => update(filter, patch)} />
+        <ui.FormRenderer schema={collectionFilterSchema([filter])} value={{ [filter.id]: draft[filter.id] }} presentation={{ layout: "compact" }} onChange={(patch) => update(filter, patch)} />
       </div>
     </ui.GridItem>)}{autoApply ? null : <ui.GridItem span={collectionFilterActionSpan(filters, columns)}>
       <ui.Stack direction="column" gap="xs" align="end">

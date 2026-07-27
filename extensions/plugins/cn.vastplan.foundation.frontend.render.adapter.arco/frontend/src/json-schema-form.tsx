@@ -48,7 +48,7 @@ import type {
   WidgetProps,
   WrapIfAdditionalTemplateProps,
 } from "@rjsf/utils";
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import type { FormPresentation, FormRendererProps, FormSectionPresentation, FormValidationIssue } from "@vastplan/ui-primitives";
 import { jsonSchemaDialect, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
@@ -59,6 +59,7 @@ type Schema = RJSFSchema;
 
 const emptyContext: FormContext = {};
 const namespace = "cn.vastplan.foundation.frontend.render.adapter";
+const CompactFormContext = createContext(false);
 
 export const arcoJSONSchemaValidator = cspJSONSchemaValidator;
 
@@ -269,6 +270,7 @@ export const arcoFormWidgets: RegistryWidgetsType<FormData, Schema, FormContext>
 };
 
 function FieldTemplate({ label, children, rawDescription, rawHelp, rawErrors, hidden, required, displayLabel, schema }: FieldTemplateProps) {
+  const compact = useContext(CompactFormContext);
   if (hidden) return <div style={{ display: "none" }}>{children}</div>;
   if (schema.type === "object" || schema.type === "array") return <>
     {children}
@@ -280,6 +282,7 @@ function FieldTemplate({ label, children, rawDescription, rawHelp, rawErrors, hi
     extra={rawHelp ?? rawDescription}
     validateStatus={(rawErrors?.length ?? 0) > 0 ? "error" : undefined}
     help={rawErrors?.[0]}
+    style={compact ? { marginBottom: 0 } : undefined}
   >{children}</Form.Item>;
 }
 
@@ -557,6 +560,7 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, pres
   if (contractError !== undefined) return <Alert type="error" title={i18n.text(message(namespace,"form.unsupported","表单 Schema 不受支持"))} content={contractError} />;
   return <>
     {currentAsync.validating ? <Alert type="info" title={i18n.text(message(namespace,"form.validating","正在校验"))} style={{ marginBottom: 16 }} /> : null}
+    <CompactFormContext.Provider value={presentation?.layout === "compact"}>
     <Form layout={presentation?.layout === "horizontal" ? "horizontal" : "vertical"} size={presentation?.layout === "compact" ? "small" : undefined}>
       <RJSFForm<FormData, Schema, FormContext>
         tagName="div"
@@ -578,5 +582,6 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, pres
         onChange={(event) => onChange(event.formData ?? {})}
       ><></></RJSFForm>
     </Form>
+    </CompactFormContext.Provider>
   </>;
 }

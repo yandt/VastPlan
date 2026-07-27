@@ -1,4 +1,4 @@
-import { Card, Input, Steps, Tabs, Typography } from "antd";
+import { Card, ConfigProvider, Input, Steps, Tabs, Typography } from "antd";
 import RJSFForm from "@rjsf/core/lib/components/Form.js";
 import { generateWidgets } from "@rjsf/antd/lib/widgets/index.js";
 import type { ObjectFieldTemplateProps, WidgetProps } from "@rjsf/utils";
@@ -13,6 +13,7 @@ import { safeAntdTemplates } from "./safe-rjsf-theme";
 const validator = cspJSONSchemaValidator;
 const emptyFormContext: Readonly<Record<string, unknown>> = Object.freeze({});
 const antdWidgets = generateWidgets();
+const compactFormTheme = { components: { Form: { itemMarginBottom: 0 } } };
 
 function SecretRefWidget({ value, disabled, readonly, required, onChange, onBlur, onFocus, id, label }: WidgetProps) {
   const i18n = usePortalI18n();
@@ -92,7 +93,8 @@ export function FormRenderer({ schema, value, onChange, presentation, presentati
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
   const templates = useMemo(() => ({ ...safeAntdTemplates, ObjectFieldTemplate: (props: ObjectFieldTemplateProps) => <PresentedObject {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { ...safeAntdTemplates.ButtonTemplates, SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
   const widgets = useMemo(() => ({ ...antdWidgets, secretRef: SecretRefWidget }), []);
-  return <div style={presentation?.layout === "horizontal" ? { display: "block" } : undefined}><RJSFForm
+  const compact = presentation?.layout === "compact";
+  const form = <RJSFForm
     schema={localizedSchema}
     uiSchema={localizedUISchema}
     formData={value}
@@ -108,7 +110,10 @@ export function FormRenderer({ schema, value, onChange, presentation, presentati
     onChange={(event) => onChange((event.formData ?? {}) as Record<string, unknown>)}
     templates={templates}
     widgets={widgets}
-  ><></></RJSFForm></div>;
+  ><></></RJSFForm>;
+  return compact
+    ? <ConfigProvider componentSize="small" theme={compactFormTheme}><div>{form}</div></ConfigProvider>
+    : <div style={presentation?.layout === "horizontal" ? { display: "block" } : undefined}>{form}</div>;
 }
 
 function formFieldName(pointer: string): string {
