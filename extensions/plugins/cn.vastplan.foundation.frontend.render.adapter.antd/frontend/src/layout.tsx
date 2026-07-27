@@ -60,7 +60,7 @@ export function Divider({ label }: { label?: ReactNode }) { return <AntdDivider 
 
 export function FilterBar({ children, actions, appearance = "default" }: FilterBarProps) {
   return appearance === "collection"
-    ? <div style={{ display: "flex", gap: 24, alignItems: "stretch", flexWrap: "wrap", paddingBottom: 24, borderBottom: "1px solid var(--ant-color-border-secondary)" }}><div style={{ flex: "1 1 720px", minWidth: 0 }}>{children}</div>{actions === undefined ? null : <div style={{ display: "flex", alignItems: "stretch", paddingLeft: 24, borderLeft: "1px solid var(--ant-color-border-secondary)" }}>{actions}</div>}</div>
+    ? <div style={{ width: "100%", minWidth: 0 }}>{children}{actions}</div>
     : <Card size="small"><Flex gap={12} wrap>{children}</Flex>{actions}</Card>;
 }
 

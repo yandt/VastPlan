@@ -374,7 +374,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
   Drawer,
   FormRenderer: ArcoJSONSchemaForm,
   FilterBar: ({ children, actions, appearance = "default" }) => appearance === "collection"
-    ? <div style={{ display: "flex", gap: 24, alignItems: "stretch", flexWrap: "wrap", paddingBottom: 24, borderBottom: "1px solid var(--color-border-2)" }}><div style={{ flex: "1 1 720px", minWidth: 0 }}>{children}</div>{actions === undefined ? null : <div style={{ display: "flex", alignItems: "stretch", paddingLeft: 24, borderLeft: "1px solid var(--color-border-2)" }}>{actions}</div>}</div>
+    ? <div style={{ width: "100%", minWidth: 0 }}>{children}{actions}</div>
     : <Card size="small"><Space wrap size={12}>{children}</Space>{actions === undefined ? null : <div style={{ float: "right" }}>{actions}</div>}</Card>,
   Table,
   DataCard,

@@ -421,7 +421,7 @@ export const muiPortalUIComponents: MuiComponents = {
   Tabs: ({ items, activeID, onChange }) => <><MuiTabs value={activeID ?? false} onChange={(_, id: string) => onChange?.(id)}>{items.map((item) => <Tab key={item.id} value={item.id} label={item.label} disabled={item.disabled} />)}</MuiTabs>{items.find((item) => item.id === activeID)?.content}</>,
   CommandPalette, Popover, Dialog, Drawer, FormRenderer,
   FilterBar: ({ children, actions, appearance = "default" }) => appearance === "collection"
-    ? <Box sx={{ display: "flex", gap: 3, alignItems: "stretch", flexWrap: "wrap", pb: 3, borderBottom: 1, borderColor: "divider" }}><Box sx={{ flex: "1 1 720px", minWidth: 0 }}>{children}</Box>{actions === undefined ? null : <Box sx={{ display: "flex", alignItems: "stretch", pl: 3, borderLeft: 1, borderColor: "divider" }}>{actions}</Box>}</Box>
+    ? <Box sx={{ width: "100%", minWidth: 0 }}>{children}{actions}</Box>
     : <Paper variant="outlined" sx={{ p: 2 }}><MuiStack direction="row" gap={2} alignItems="center" flexWrap="wrap">{children}<Box sx={{ ml: "auto" }}>{actions}</Box></MuiStack></Paper>,
   Table,
   DataCard,
