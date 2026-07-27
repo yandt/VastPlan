@@ -45,7 +45,7 @@ UI Contract 4.0 暴露语义 token，适配器映射到具体框架。布局插�
 - `shell.header.*`、`shell.navigation.*`、`page.header.*`、`page.body.*`、`page.aside` 和 `shell.footer` 的拓扑由组合插件统一管理。
 - Shell Header、Aside、Footer 等没有内建内容且全部 Slot 为空时不创建 DOM 和占位；Page Header 因承担页面定位始终存在。
 - Page Header 位于 Page Body 滚动容器之外。正文滚动时保持可见，不依赖多层 `position: sticky`。Page Body 使用设计系统 `surface` 语义色：浅色主题为白色，深色主题由当前 Renderer 的深色表面色接管。
-- 页面间距使用唯一 `portalPageRhythm`：Shell 从 Page Header 底边到 Workbench 根容器统一保留 8px `contentStart`；Workbench 根容器固定 `margin: 0; padding: 0`，并按 compact/standard/comfortable 使用 8/16/24px `sectionGap` 管理一级组件间距。一级组件不得用外部 margin 改写位置；FilterPanel 等可通过 Workbench 内部的 `flush=0` 或 `compact=8px` inset 管理自身内容，但 inset 不得反向补偿 Shell。Collection 顶部 FilterPanel 默认 `flush`；三个 Renderer 的 compact Form 必须隐藏根 Object Schema 标题并清除根外边距，嵌套对象标题不受影响，从而使第一行控件与页面起始节奏可预测。
+- 页面间距使用唯一 `portalPageRhythm`：Shell 从 Page Header 底边到 Workbench 根容器统一保留 16px `contentStart`；Workbench 根容器固定 `margin: 0; padding: 0`，并按 compact/standard/comfortable 使用 8/16/24px `sectionGap` 管理一级组件间距。一级组件不得用外部 margin 改写位置；FilterPanel 等可通过 Workbench 内部的 `flush=0` 或 `compact=8px` inset 管理自身内容，但 inset 不得反向补偿 Shell。Collection 顶部 FilterPanel 默认 `flush`；三个 Renderer 的 compact Form 必须隐藏根 Object Schema 标题并清除根外边距，嵌套对象标题不受影响，从而使第一行控件与页面起始节奏可预测。
 - Page Header 右侧的页面功能动作使用 VastPlan 语义图标、Tooltip 和 `aria-label`，点击区至少 44px；桌面最多直接显示 4 个，超出后进入“更多”，不得在 Table 工具栏重复显示新增、导入或发布。
 - 图标风格由 Renderer 的 `iconTheme` 统一决定：`canonical` 保持跨框架几何一致，`renderer-native` 使用当前 UI 框架原生图形并在缺项时回退。单个页面和功能插件不得混指定图标来源。
 

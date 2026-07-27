@@ -5,7 +5,7 @@
  * Functional plugins never compensate these values with margins.
  */
 export const portalPageRhythm = Object.freeze({
-  contentStart: 8,
+  contentStart: 16,
   sectionGap: Object.freeze({ compact: 8, standard: 16, comfortable: 24 }),
   componentInset: Object.freeze({ flush: 0, compact: 8 }),
 });
