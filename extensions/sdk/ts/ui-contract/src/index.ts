@@ -3,6 +3,7 @@ export const uiContractVersion = "4.0.0" as const;
 export const interactionContractVersion = "1.0.0" as const;
 export const jsonSchemaDialect = "http://json-schema.org/draft-07/schema#" as const;
 export * from "./i18n.js";
+export * from "./dashboard.js";
 
 export type UICapability = "layout" | "menu" | "overlay" | "form" | "data" | "feedback" | "theme" | "approval" | "navigation";
 

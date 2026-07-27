@@ -18,8 +18,8 @@ export async function createFrontendModuleGraph({ target, pluginRoot, entry, met
         externals.add(dependency.path);
         continue;
       }
-      const dependencyAbsolute = resolve(dirname(absolutePath), dependency.path);
-      if (!outputByAbsolutePath.has(dependencyAbsolute)) throw new Error(`Module Graph 依赖不在构建闭包中: ${path} -> ${dependency.path}`);
+      const dependencyAbsolute = resolveOutputDependency(absolutePath, dependency.path, outputByAbsolutePath);
+      if (dependencyAbsolute === undefined) throw new Error(`Module Graph 依赖不在构建闭包中: ${path} -> ${dependency.path}`);
       dependencies.push({ specifier: dependency.path, path: packagePath(pluginRoot, dependencyAbsolute), kind: dependencyKind(dependency.kind) });
     }
     const content = await readFile(absolutePath);
@@ -38,6 +38,12 @@ export async function createFrontendModuleGraph({ target, pluginRoot, entry, met
   assertAcyclic(nodes);
   const graph = { schemaVersion: "v1", target, entry, externals: [...externals].sort(), nodes };
   return { ...graph, digest: computeFrontendModuleGraphDigest(graph) };
+}
+
+/** esbuild may report an output import relative to its importer or to absWorkingDir. */
+function resolveOutputDependency(importerAbsolute, dependencyPath, outputByAbsolutePath) {
+  const candidates = [resolve(dirname(importerAbsolute), dependencyPath), resolve(dependencyPath)];
+  return candidates.find((candidate) => outputByAbsolutePath.has(candidate));
 }
 
 function assertAcyclic(nodes) {

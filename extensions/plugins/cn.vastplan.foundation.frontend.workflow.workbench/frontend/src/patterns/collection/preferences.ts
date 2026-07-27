@@ -45,12 +45,3 @@ function restoreColumns(collection: CollectionSpec, fallback: readonly Collectio
   const missing = fallback.filter((column) => allowed.has(column.key) && !restored.some((item) => item.key === column.key)).map((column) => ({ ...column, visible: hiddenSet.has(column.key) ? false : column.visible }));
   return [...restored, ...missing];
 }
-
-export function moveItem<T>(items: readonly T[], index: number, offset: number): T[] {
-  const target = index + offset;
-  if (target < 0 || target >= items.length) return [...items];
-  const copy = [...items];
-  const [item] = copy.splice(index, 1);
-  copy.splice(target, 0, item!);
-  return copy;
-}

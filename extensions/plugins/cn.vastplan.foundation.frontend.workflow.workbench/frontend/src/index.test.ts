@@ -9,5 +9,10 @@ describe("UI Workbench", () => {
     expect(typeof workbench.FormPage).toBe("function");
     expect(typeof workbench.RecordPage).toBe("function");
     expect(typeof workbench.RecordPageActions).toBe("function");
+    expect(typeof workbench.loadDashboardGrid).toBe("function");
+  });
+
+  it("loads the dashboard grid from its deferred module boundary", async () => {
+    await expect(workbench.loadDashboardGrid?.()).resolves.toBeTypeOf("function");
   });
 });

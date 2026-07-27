@@ -6,6 +6,7 @@ import { basename, dirname, extname, resolve } from "node:path";
 import { createFrontendModuleGraph } from "./frontend-module-graph.mjs";
 import { isDeferredFrontendContribution } from "./frontend-plugin-contribution.mjs";
 import { buildFrontendServerGraph } from "./frontend-server-build.mjs";
+import { assertWorkbenchDeferredLayout } from "./workbench-deferred-layout.mjs";
 
 const outputRoot = option("--out-dir");
 const manifestPath = option("--manifest");
@@ -50,6 +51,10 @@ for (const { id, entry, source, serverEntry, serverSource, deferred, pluginRoot 
     metafile: true,
     outExtension: { ".js": extname(entry) },
   });
+  if (!developmentHMR && id === "cn.vastplan.foundation.frontend.workflow.workbench") {
+    const deferred = assertWorkbenchDeferredLayout(result.metafile);
+    console.log(`Workbench 按需加载校验通过: Dashboard ${deferred.layout.bytes}/${deferred.layout.budgetBytes} 字节，DnD ${deferred.dragDrop.bytes}/${deferred.dragDrop.budgetBytes} 字节`);
+  }
   const graph = await createFrontendModuleGraph({ target: "browser", pluginRoot: buildRoot, entry, metafile: result.metafile, allowedExternals });
   const graphFile = resolve(outdir, "vastplan.browser-graph.json");
   await writeFile(graphFile, `${JSON.stringify(graph, null, 2)}\n`);
@@ -91,8 +96,8 @@ async function enforceFunctionalPluginBoundary(id, frontendRoot) {
   for (const file of files) {
     const content = await readFile(file, "utf8");
     importsWorkbench ||= /from\s+["']@vastplan\/workbench-sdk["']/.test(content);
-    if (/from\s+["'](?:react|react-dom(?:\/[^"']*)?|antd(?:\/[^"']*)?|@ant-design\/[^"']+|@arco-design\/[^"']+|@mui\/[^"']+)["']/.test(content)) {
-      throw new Error(`${id}: 功能插件不得直接导入 React 或 UI 框架 (${file})`);
+    if (/from\s+["'](?:react|react-dom(?:\/[^"']*)?|antd(?:\/[^"']*)?|@ant-design\/[^"']+|@arco-design\/[^"']+|@mui\/[^"']+|@dnd-kit\/[^"']+|react-grid-layout(?:\/[^"']*)?|react-dnd(?:\/[^"']*)?|@hello-pangea\/dnd|@atlaskit\/pragmatic-drag-and-drop(?:\/[^"']*)?|react-sortablejs)["']/.test(content)) {
+      throw new Error(`${id}: 功能插件不得直接导入 React、UI 或拖拽框架 (${file})`);
     }
     if (/\bcontext\.addPage\s*\(/.test(content)) {
       throw new Error(`${id}: 功能插件必须通过 Workbench 注册页面，禁止 context.addPage (${file})`);

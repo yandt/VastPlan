@@ -242,6 +242,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0159 Ant Design 首选 Renderer 与按需交付](decisions/ADR-0159-Ant-Design首选Renderer与按需交付.md)
 - [ADR-0160 精确制品摘要贯穿与事件驱动依赖监督](decisions/ADR-0160-精确制品摘要贯穿与事件驱动依赖监督.md)
 - [ADR-0161 产品插件所有权与开发示例物理隔离](decisions/ADR-0161-产品插件所有权与开发示例物理隔离.md)
+- [ADR-0162 Workbench 拖拽内核与延迟 Dashboard 布局](decisions/ADR-0162-Workbench拖拽内核与延迟Dashboard布局.md)
 
 ### 插件共享代码与能力复用
 

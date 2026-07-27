@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import test from "node:test";
 import { computeFrontendModuleGraphDigest, createFrontendModuleGraph } from "./frontend-module-graph.mjs";
 
@@ -25,6 +25,23 @@ test("creates a closed deterministic graph from esbuild metadata", async () => {
   assert.deepEqual(graph.externals, ["react"]);
   assert.equal(graph.nodes.find((node) => node.purpose === "entry").dependencies[0].kind, "dynamic");
   assert.match(graph.digest, /^[a-f0-9]{64}$/);
+});
+
+test("accepts esbuild chunk imports reported relative to absWorkingDir", async () => {
+  const root = await mkdtemp(join(tmpdir(), "vastplan-graph-"));
+  await mkdir(join(root, "frontend", "dist", "chunks"), { recursive: true });
+  const entry = join(root, "frontend", "dist", "main.js");
+  const chunk = join(root, "frontend", "dist", "chunks", "lazy.js");
+  const entryContent = "import('./chunks/lazy.js');\n";
+  const chunkContent = "export {};\n";
+  await writeFile(entry, entryContent);
+  await writeFile(chunk, chunkContent);
+  const metafile = { outputs: {
+    [entry]: { bytes: Buffer.byteLength(entryContent), imports: [{ path: relative(process.cwd(), chunk), kind: "dynamic-import" }] },
+    [chunk]: { bytes: Buffer.byteLength(chunkContent), imports: [] },
+  } };
+  const graph = await createFrontendModuleGraph({ target: "browser", pluginRoot: root, entry: "frontend/dist/main.js", metafile, allowedExternals: new Set() });
+  assert.equal(graph.nodes.find((node) => node.purpose === "entry").dependencies[0].path, "frontend/dist/chunks/lazy.js");
 });
 
 test("rejects undeclared externals and output escape", async () => {

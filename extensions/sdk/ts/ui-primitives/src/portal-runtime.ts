@@ -1,6 +1,6 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { CollectionPreference } from "@vastplan/frontend-engine-contract";
-import type { JSONValue, LocalizedText, MessageDescriptor, MessageValues, PluginLocalization } from "@vastplan/ui-contract";
+import type { DashboardGridLayouts, DashboardGridSpec, JSONValue, LocalizedText, MessageDescriptor, MessageValues, PluginLocalization } from "@vastplan/ui-contract";
 import type { CollectionPageDefinition, FormPageDefinition, RecordPageDefinition } from "@vastplan/workbench-sdk";
 import type { SemanticIconName } from "./icon.js";
 
@@ -135,7 +135,18 @@ export interface UIWorkbenchAdapter {
   FormPage: ComponentType<{ page: FormPageDefinition }>;
   RecordPage: ComponentType<{ page: RecordPageDefinition }>;
   RecordPageActions: ComponentType<{ page: RecordPageDefinition }>;
+  /** Optional heavyweight dashboard Pattern. Its implementation must stay in a deferred module chunk. */
+  loadDashboardGrid?: () => Promise<ComponentType<DashboardGridRuntimeProps>>;
   localization?: PluginLocalization;
+}
+
+export interface DashboardGridRuntimeProps {
+  spec: DashboardGridSpec;
+  /** Trusted host-resolved card content; functional plugins never pass React nodes through the serialized contract. */
+  cards: Readonly<Record<string, ReactNode>>;
+  layouts?: DashboardGridLayouts;
+  editable?: boolean;
+  onLayoutChange?(layouts: DashboardGridLayouts): void;
 }
 
 /** Narrow user-preference boundary. Workbench never receives identity, transport, or the full Portal preference document. */

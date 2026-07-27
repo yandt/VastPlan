@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、表单、Overlay、首方页面迁移和导入门禁均已实施｜最后更新：2026-07-27
+> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、表单、Overlay、统一拖拽与延迟 Dashboard Grid 基础均已实施｜最后更新：2026-07-27
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md) 与 [ADR-0104](../decisions/ADR-0104-Frontend-Runtime-Engine与React单实现.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -38,6 +38,8 @@ flowchart TB
 5. 功能插件制品必须使用 `@vastplan/workbench-sdk`；构建门禁与 Go 架构适应度测试拒绝 React、Arco/MUI、裸 `context.addPage` 和 `@vastplan/ui-primitives` 视觉导入。当前唯一例外是尚在该包中的非视觉 `PortalControlClient` 与 `Portal*` 数据契约。
 
 `FilterPanel` 是与 Collection、MasterDetail 平级的一级组合组件，统一字段 Schema、紧凑表单、草稿/提交策略、响应式分列和操作位置，但不发起数据请求。`CollectionWorkbench` 组合 FilterPanel，并共享查询、选择、动作、取消和错误状态机，提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动/视口增量加载。Workbench Page 根使用统一零 margin/零 padding Flow，以受治理 `sectionGap` 排列一级区域；FilterPanel 的 `flush/compact` inset 由 Workbench 组合上下文决定，功能插件不能借此设置外部间距。Collection 顶部筛选固定 `flush`，避免 FilterBar 自身 padding 与 Shell 16px 起始节奏叠加。FilterPanel 默认 `xs=1 / md=2 / xl=4`，可通过 `filterPanel.layout.columns` 覆盖；列偏好由工具栏锚定 Popover 即时写入，不使用阻断式确认 Dialog。表单工作流已提供 page/Dialog/Drawer、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏状态保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表。视觉数值的唯一真相源是《[Portal 设计系统](../design/DESIGN.md)》的 `portalPageRhythm`。
+
+通用排序由 Workbench 内部 `patterns/interaction/SortableList` 统一承接，当前使用精确锁定的 dnd-kit；Pointer、Touch、自动滚动和碰撞反馈不再由各 Pattern 自行处理，键盘继续提供显式等价操作。第三方事件与 Sensor 不进入 UI Contract 或功能插件，dnd-kit 仅在 Sortable 表面实际挂载后加载。未来首页卡片使用 `DashboardGridSpec` 描述稳定卡片 ID 和响应式位置，可信宿主通过 `loadDashboardGrid()` 按需加载 `react-grid-layout` 并解析卡片内容；Grid 代码不进入普通 Workbench 页面入口。该基础不等于首页已经实现，卡片目录、偏好 CAS、权限裁剪和完整键盘缩放仍是正式启用前置项，详见 ADR-0162。
 
 Record 工作流共享详情字段投影、状态、页面/详情动作、表单、Overlay、取消和错误状态机，并提供 `record-detail`、`master-detail` 与 `tree-detail` 三种 Pattern。MasterDetail 的左侧列表复用 Collection 查询、筛选、page/cursor 和取消语义，右侧可以展示详情或 page-surface 编辑器；TreeDetail 对节点数、深度、ID 唯一性和默认展开层级做有界校验。选择写入受限 URL 参数，窄屏在主区/详情间切换，页内编辑存在脏数据时切换记录必须确认。功能插件不能提供 React render function、HTML、任意树组件或自行实现分栏。
 
@@ -176,5 +178,6 @@ Record Foundation 使用 TypeScript + React：代码直接运行在现有浏览�
 4. 已完成：`FormPresentation`、`FormWorkflow`、Page/Dialog/Drawer 表单，以及 Arco/MUI 的分区、标签、步骤、分栏和条件字段语义；全局设置是非敏感 fixture，凭证和数据库连接验证 `secretMaterial` 一次性秘密边界。
 5. 已完成：首方功能插件已迁移到当前 4.x 契约；Portal 治理按 Profile/Application/Binding/Activation 分页，部署管理复用动态 Form 和预览/审计 Overlay。生产构建与 `engineering/arch` 同时拒绝遗留基础组件 import、UI 框架 import 和裸页面注册。
 6. 已完成：`RecordDetail`、`MasterDetail`、`TreeDetail`，共享详情投影、列表查询、树边界、URL 选择、页内编辑脏状态、动作与 Overlay；Arco/MUI 实现等价 Split/List/Tree 语义，开发 Application 通过 `cn.vastplan.example.frontend.workbench-gallery` 展示三种模式。
+7. 已完成基础：dnd-kit 统一 Sortable 内核、列偏好迁移、`DashboardGridSpec` 校验、`react-grid-layout` 延迟 Library 与生产 Chunk 预算门禁；首页卡片贡献与偏好事务尚未开始。
 
 当前首方功能页已全部强制使用 Workbench。后续新增业务呈现若不适合 Collection/Record/Form/Overlay，必须先扩展 Foundation Workbench Pattern，不能在功能插件中恢复任意组件逃生口。

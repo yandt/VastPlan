@@ -92,6 +92,7 @@ UI Contract 4.0 暴露语义 token，适配器映射到具体框架。布局插�
 - 平台管理中心分为 `Platform Profiles` 与 `Portals` 两个工作区。
 - Table 列设置使用随最长列名变化、最大 280px 的紧凑 Popover：密度为最小按钮式单选，列顺序使用拖拽句柄且支持键盘移动，显隐使用眼睛/划线眼睛图标并固定右对齐；拖拽区最高 256px 并独立滚动，隐藏列统一使用 muted 灰色，不使用文字显隐按钮、上下箭头按钮或确认步骤。
 - 集合工具栏左侧只承载批量操作与集合动作；刷新、列设置等展示控制统一归组在右侧，换行后仍保持右对齐。
+- 拖拽句柄、目标反馈和排序结果由 Workbench 统一提供，业务插件不得自行选择拖拽库。未来首页卡片网格必须使用受治理断点、稳定卡片 ID 和用户布局偏好；普通管理资源页继续使用 Table/MasterDetail，不因引入 Dashboard Grid 改成卡片墙。
 - 使用 master-detail 或详情路由，不采用资源卡片网格。
 - Portal 详情顶部使用连续状态带展示当前 Activation、Profile、Application、Binding、健康状态与生效时间。
 - Application、Profile、Binding 的 Published 状态只表示可被引用。Activation 才使用“准备中、激活中、当前生效、已取代、失败”。
