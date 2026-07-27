@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CollectionSpec } from "@vastplan/ui-contract";
-import { collectionFilterColumns, shouldAutoApplyCollectionFilters } from "./CollectionFilters.js";
+import { collectionFilterActionSpan, collectionFilterColumns, shouldAutoApplyCollectionFilters } from "./CollectionFilters.js";
 import { collectionFilterSchema } from "./filter-schema.js";
 import { collectionDensity, collectionDensityOptions } from "./density.js";
 
@@ -39,8 +39,9 @@ describe("collection filter interaction", () => {
     expect(shouldAutoApplyCollectionFilters([{ id: "name", label: "Name", kind: "text" }, { id: "status", label: "Status", kind: "select" }])).toBe(true);
   });
 
-  it("requires an explicit query after the filter grid reaches two rows", () => {
-    expect(shouldAutoApplyCollectionFilters([{ id: "a", label: "A", kind: "text" }, { id: "b", label: "B", kind: "text" }, { id: "c", label: "C", kind: "text" }, { id: "d", label: "D", kind: "text" }])).toBe(false);
+  it("requires an explicit query after the default four-column grid reaches two rows", () => {
+    expect(shouldAutoApplyCollectionFilters([{ id: "a", label: "A", kind: "text" }, { id: "b", label: "B", kind: "text" }, { id: "c", label: "C", kind: "text" }, { id: "d", label: "D", kind: "text" }])).toBe(true);
+    expect(shouldAutoApplyCollectionFilters([{ id: "a", label: "A", kind: "text" }, { id: "b", label: "B", kind: "text" }, { id: "c", label: "C", kind: "text" }, { id: "d", label: "D", kind: "text" }, { id: "e", label: "E", kind: "text" }])).toBe(false);
   });
 
   it("honors explicit filter column counts when choosing direct-query mode", () => {
@@ -48,5 +49,11 @@ describe("collection filter interaction", () => {
     expect(shouldAutoApplyCollectionFilters(filters, 2)).toBe(false);
     expect(shouldAutoApplyCollectionFilters(filters, { xs: 1, md: 2, xl: 3 })).toBe(true);
     expect(collectionFilterColumns({ columns: 2 })).toBe(2);
+  });
+
+  it("spans the remaining row so multi-line filter actions end in the final column at every breakpoint", () => {
+    const filters = [{ id: "a", label: "A", kind: "text" }, { id: "b", label: "B", kind: "text" }, { id: "c", label: "C", kind: "text" }, { id: "d", label: "D", kind: "text" }, { id: "e", label: "E", kind: "text" }] as const;
+    expect(collectionFilterActionSpan(filters, 4)).toBe(3);
+    expect(collectionFilterActionSpan(filters, { xs: 1, md: 2, xl: 4 })).toEqual({ xs: 1, sm: 1, md: 1, lg: 1, xl: 3 });
   });
 });

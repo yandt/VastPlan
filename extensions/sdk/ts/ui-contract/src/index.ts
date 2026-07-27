@@ -124,7 +124,7 @@ export interface CollectionCardSpec {
   loadMore?: "manual" | "viewport";
 }
 export interface CollectionFilterLayout {
-  /** 筛选区每个断点的列数；未指定时采用 xs=1、md=2、xl=3。 */
+  /** 筛选区每个断点的列数；未指定时采用 xs=1、md=2、xl=4。 */
   columns?: ResponsiveColumnCount;
 }
 export interface ActionSpec {
