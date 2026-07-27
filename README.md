@@ -130,21 +130,21 @@ flowchart LR
 
 ```bash
 go run ./engineering/tools/pluginpackage \
-  -source extensions/plugins/cn.vastplan.hello-world \
-  -backend-bin bin/cn.vastplan.hello-world \
+  -source examples/plugins/cn.vastplan.example.backend.hello-world \
+  -backend-bin bin/cn.vastplan.example.backend.hello-world \
   -repository .vastplan/repository
 
 go run ./engineering/tools/pluginpackage \
-  -source extensions/plugins/cn.vastplan.demo-permission \
-  -backend-bin bin/cn.vastplan.demo-permission \
+  -source examples/plugins/cn.vastplan.example.backend.permission \
+  -backend-bin bin/cn.vastplan.example.backend.permission \
   -repository .vastplan/repository
 ```
 
-启动 Node Agent；修改 `engineering/deploy/local.desired-state.json` 的 revision、插件版本或 enabled 后会自动对账：
+将打包命令输出的版本、渠道和 SHA-256 写入 `examples/deploy/backend-local-desired-state.json`（文件中的 `aaaa…` 仅是通过 Schema 校验的占位值），再启动 Node Agent；修改 revision、插件引用或 enabled 后会自动对账：
 
 ```bash
 ./bin/backend-kernel reconcile \
-  -desired engineering/deploy/local.desired-state.json \
+  -desired examples/deploy/backend-local-desired-state.json \
   -repository .vastplan/repository \
   -labels environment=local
 ```
@@ -159,8 +159,8 @@ nats-server -js
 # 终端 A：解析平台配置与应用组合，并持续运行 Controller
 go run ./core/kernels/backend controlplane \
   -nats-url nats://127.0.0.1:4222 -nats-allow-insecure -bootstrap \
-  -platform-profile engineering/deploy/platform-profile.json \
-  -application-composition engineering/deploy/application-composition.json \
+  -platform-profile examples/deploy/backend-platform-profile.json \
+  -application-composition examples/deploy/backend-application-composition.json \
   -deployment-revision 1 -allow-development-plugins -controller \
   -repository .vastplan/repository
 
@@ -216,10 +216,10 @@ VastPlan 默认采用 fail-closed：无法确认身份、清单、依赖、版�
 
 | 插件 | 验证目标 |
 |---|---|
-| `cn.vastplan.hello-world` | 工具贡献、参数校验、插件回调宿主 |
-| `cn.vastplan.demo-permission` | select 权限语义、优先级和默认拒绝 |
-| `cn.vastplan.demo-audit` | fanout 事件分发与审计账本 |
-| `cn.vastplan.demo-quota` | before Hook 限流、after Hook 计量与有序分发 |
+| `cn.vastplan.example.backend.hello-world` | 工具贡献、参数校验、插件回调宿主 |
+| `cn.vastplan.example.backend.permission` | select 权限语义、优先级和默认拒绝 |
+| `cn.vastplan.example.backend.audit` | fanout 事件分发与审计账本 |
+| `cn.vastplan.example.backend.quota` | before Hook 限流、after Hook 计量与有序分发 |
 
 它们是内核机制样例，不是生产级基础服务实现。
 
@@ -227,9 +227,10 @@ VastPlan 默认采用 fail-closed：无法确认身份、清单、依赖、版�
 
 ```text
 core/          四内核与共享运行时
-extensions/    第一方全栈插件与 Go/Python/TypeScript SDK
+extensions/    可发布第一方全栈插件与 Go/Python/TypeScript SDK
 contracts/     Protobuf 与 JSON Schema 契约真源
-engineering/   架构守护、E2E、部署样例与构建发布工具
+engineering/   架构守护、E2E、Seed/正式模板与构建发布工具
+examples/      cn.vastplan.example.* 插件与配套开发配置
 docs/          架构、ADR、插件文档和开发指南
 ```
 

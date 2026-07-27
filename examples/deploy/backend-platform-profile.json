@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "revision": 1,
+  "id": "local-backend",
+  "target": {
+    "kernel": "backend"
+  },
+  "serviceClasses": [
+    "application.backend"
+  ],
+  "serviceBaselines": [
+    {
+      "id": "application-permission-demo",
+      "serviceClass": "application.backend",
+      "plugins": [
+        {
+          "id": "cn.vastplan.example.backend.permission",
+          "version": "0.1.1",
+          "channel": "stable"
+        }
+      ]
+    }
+  ],
+  "services": []
+}

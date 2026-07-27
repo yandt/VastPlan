@@ -15,7 +15,13 @@ var primitiveImport = regexp.MustCompile(`(?s)import\s+(?:type\s+)?\{([^}]*)\}\s
 // foundation frontend layer may own React/framework component trees.
 func TestFunctionalFrontendPluginsUseWorkbenchBoundary(t *testing.T) {
 	root := repoRoot(t)
-	pluginRoot := filepath.Join(root, "extensions", "plugins")
+	for _, relativeRoot := range []string{"extensions/plugins", "examples/plugins"} {
+		assertFunctionalFrontendPlugins(t, root, filepath.Join(root, filepath.FromSlash(relativeRoot)))
+	}
+}
+
+func assertFunctionalFrontendPlugins(t *testing.T, repositoryRoot, pluginRoot string) {
+	t.Helper()
 	entries, err := os.ReadDir(pluginRoot)
 	if err != nil {
 		t.Fatal(err)
@@ -40,7 +46,6 @@ func TestFunctionalFrontendPluginsUseWorkbenchBoundary(t *testing.T) {
 		if manifest.Entry.Frontend == "" {
 			continue
 		}
-
 		usesWorkbench := false
 		err = filepath.WalkDir(filepath.Join(root, "frontend", "src"), func(path string, item os.DirEntry, walkErr error) error {
 			if walkErr != nil {
@@ -60,7 +65,7 @@ func TestFunctionalFrontendPluginsUseWorkbenchBoundary(t *testing.T) {
 			usesWorkbench = usesWorkbench || strings.Contains(text, `from "@vastplan/workbench-sdk"`) || strings.Contains(text, `from '@vastplan/workbench-sdk'`)
 			for _, forbidden := range []string{`from "react"`, `from 'react'`, `from "react-dom`, `from 'react-dom`, `from "@arco-design/`, `from '@arco-design/`, `from "@mui/`, `from '@mui/`, "context.addPage("} {
 				if strings.Contains(text, forbidden) {
-					t.Errorf("%s: 功能插件越过 Workbench 边界，出现 %q", relative(root, path), forbidden)
+					t.Errorf("%s: 功能插件越过 Workbench 边界，出现 %q", relative(repositoryRoot, path), forbidden)
 				}
 			}
 			for _, match := range primitiveImport.FindAllStringSubmatch(text, -1) {
@@ -71,7 +76,7 @@ func TestFunctionalFrontendPluginsUseWorkbenchBoundary(t *testing.T) {
 					}
 					name = strings.Fields(name)[0]
 					if name != "" && !strings.HasPrefix(name, "Portal") {
-						t.Errorf("%s: 功能插件只能从 ui-primitives 导入非视觉 Portal 契约，发现 %s", relative(root, path), name)
+						t.Errorf("%s: 功能插件只能从 ui-primitives 导入非视觉 Portal 契约，发现 %s", relative(repositoryRoot, path), name)
 					}
 				}
 			}

@@ -1,6 +1,6 @@
 import type { ModuleFetcher, PortalRuntimeSpec } from "./module-loader";
 import { parseRuntimeSpec } from "./module-runtime-spec";
-import { developmentFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
+import type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 import type { PortalGenerationManager } from "./portal-generation";
 import type { PortalRuntimeSource } from "./portal-runtime-source";
 
@@ -84,7 +84,7 @@ export function startPortalDevelopmentUpdates(options: PortalDevelopmentOptions)
   return () => { closed = true; source.close(); };
 }
 
-export async function fetchDevelopmentRuntime(fetcher: ModuleFetcher, endpoint: string, pathname: string, protocol: FrontendRuntimeProtocol = developmentFrontendRuntimeProtocol): Promise<PortalRuntimeSpec> {
+export async function fetchDevelopmentRuntime(fetcher: ModuleFetcher, endpoint: string, pathname: string, protocol: FrontendRuntimeProtocol): Promise<PortalRuntimeSpec> {
   const separator = endpoint.includes("?") ? "&" : "?";
   const response = await fetcher(`${endpoint}${separator}path=${encodeURIComponent(pathname)}`, { credentials: "same-origin", cache: "no-store" });
   if (!response.ok) throw new PortalDevelopmentError("RUNTIME_FETCH_FAILED", `开发态 Portal 运行描述获取失败 (${response.status})`);

@@ -8,7 +8,7 @@ Python SDK 与 Go SDK 使用同一份 `contracts/proto/` 契约，负责握手�
 python3 -m pip install -e extensions/sdk/python
 ```
 
-插件入口只需创建 `Plugin`、登记 `Contribution`，最后调用 `serve()`。完整示例见 `extensions/plugins/cn.vastplan.python-hello/backend/main.py`。
+插件入口只需创建 `Plugin`、登记 `Contribution`，最后调用 `serve()`。完整示例见 `examples/plugins/cn.vastplan.example.runtime.python-hello/backend/main.py`。
 
 处理器收到的是宿主按受众裁剪后的统一 Wire `CallContext`。业务代码可用 `ContextViews.from_wire(call_context)` 读取与 Go SDK 同名的只读语义视图；清单 `contextAccess.required/optional/baggage` 只是申请，最终字段仍受扩展点、发布者和运行边界上限约束。委托引用由 SDK 在当前处理线程自动放入 HostCall 专用字段，不进入 `metadata`。
 

@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "revision": 1,
+  "metadata": {
+    "name": "local-development"
+  },
+  "units": [
+    {
+      "id": "backend-main",
+      "kind": "service",
+      "plugins": [
+        {
+          "id": "cn.vastplan.example.backend.permission",
+          "version": "0.1.1",
+          "channel": "stable",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "cn.vastplan.example.backend.hello-world",
+          "version": "0.2.1",
+          "channel": "stable",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "config": {
+        "kernel_service_grants": {
+          "cn.vastplan.example.backend.hello-world": ["kernel.info"]
+        },
+        "plugins": {
+          "cn.vastplan.example.backend.hello-world": {
+            "greetingTemplate": "你好，{{name}}！我是 VastPlan 租户级插件。"
+          }
+        }
+      },
+      "enabled": true,
+      "service_role": "backend",
+      "logical_service": "local.hello",
+      "instance_policy": "active-active",
+      "state_model": "external-shared",
+      "visibility": "cluster",
+      "routing": "queue",
+      "routing_domain": "application",
+      "replicas": 1,
+      "placement": {
+        "nodeSelector": {
+          "environment": "local"
+        }
+      }
+    }
+  ]
+}

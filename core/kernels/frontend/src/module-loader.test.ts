@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { ModuleLoadError, VerifiedFrontendPluginLoader, parseDevelopmentRuntimeSpec, parsePortalRuntimeSpec, type FrontendModuleDescriptor } from "./module-loader";
+import { ModuleLoadError, VerifiedFrontendPluginLoader, parseRuntimeSpec, type FrontendModuleDescriptor } from "./module-loader";
 import { computeModuleGraphDigest, type FrontendModuleGraphDescriptor } from "./module-graph-loader";
 import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 const ref = { id: "cn.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 const source = new TextEncoder().encode("export default { register() {} }");
+const parsePortalRuntimeSpec = (value: unknown) => parseRuntimeSpec(value, productionFrontendRuntimeProtocol);
+const parseDevelopmentRuntimeSpec = (value: unknown) => parseRuntimeSpec(value, developmentFrontendRuntimeProtocol);
 
 async function descriptor(overrides: Partial<FrontendModuleDescriptor> = {}): Promise<FrontendModuleDescriptor> {
   const digest = await crypto.subtle.digest("SHA-256", source);

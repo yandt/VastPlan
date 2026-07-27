@@ -62,7 +62,7 @@ func TestClassifyManagementUsesVerifiedIdentity(t *testing.T) {
 		{"cn.vastplan.product.agent.designer", "vastplan", ManagementApplication},
 		{"cn.vastplan.integration.database.postgresql", "vastplan", ManagementApplication},
 		{"cn.vastplan.example.demo.hello-world", "vastplan", ManagementDevelopment},
-		{"cn.vastplan.hello-world", "vastplan", ManagementDevelopment},
+		{"cn.vastplan.example.backend.hello-world", "vastplan", ManagementDevelopment},
 		{"com.example.tool", "example", ManagementApplication},
 	}
 	for _, test := range tests {

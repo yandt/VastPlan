@@ -18,9 +18,9 @@ import (
 	"strings"
 	"testing"
 
-	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/protocol"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
 const modulePath = "cdsoft.com.cn/VastPlan"
@@ -115,6 +115,8 @@ func TestArch_KernelsMustNotImportPlugins(t *testing.T) {
 	files := collectGoFiles(t)
 	assertNoImport(t, files, "core/kernels/", "extensions/plugins/",
 		"内核只提供骨架与扩展点，不得依赖任何具体插件（ADR-0001/0016）")
+	assertNoImport(t, files, "core/kernels/", "examples/plugins/",
+		"内核不得依赖开发示例插件（ADR-0018/0152）")
 }
 
 // 共享库不得反向依赖具体组件。
@@ -122,6 +124,7 @@ func TestArch_SharedMustNotImportComponents(t *testing.T) {
 	files := collectGoFiles(t)
 	assertNoImport(t, files, "core/shared/", "core/kernels/", "共享库不得反向依赖内核实现")
 	assertNoImport(t, files, "core/shared/", "extensions/plugins/", "共享库不得依赖具体插件")
+	assertNoImport(t, files, "core/shared/", "examples/plugins/", "共享库不得依赖开发示例插件")
 }
 
 // SDK 是给插件开发者用的，不该依赖内核实现。
@@ -130,6 +133,7 @@ func TestArch_SDKMustNotImportKernels(t *testing.T) {
 	assertNoImport(t, files, "extensions/sdk/", "core/kernels/",
 		"SDK 面向插件开发者，只能依赖公开 Contracts/Library，不得依赖内核实现")
 	assertNoImport(t, files, "extensions/sdk/", "extensions/plugins/", "SDK 不得依赖具体插件")
+	assertNoImport(t, files, "extensions/sdk/", "examples/plugins/", "SDK 不得依赖开发示例插件")
 }
 
 // Backend 普通子包不得横向抓取同级实现。组合只发生在根 main 与 commands；
@@ -168,19 +172,25 @@ func TestArch_BackendSiblingImportsAreExplicit(t *testing.T) {
 func TestArch_PluginsMustNotImportEachOther(t *testing.T) {
 	files := collectGoFiles(t)
 	for _, f := range files {
-		if !strings.HasPrefix(f.relPath, "extensions/plugins/") {
+		root := ""
+		for _, candidate := range []string{"extensions/plugins/", "examples/plugins/"} {
+			if strings.HasPrefix(f.relPath, candidate) {
+				root = candidate
+				break
+			}
+		}
+		if root == "" {
 			continue
 		}
-		// 本插件自身的目录，如 extensions/plugins/cn.vastplan.hello-world
-		rel := strings.TrimPrefix(f.relPath, "extensions/plugins/")
+		rel := strings.TrimPrefix(f.relPath, root)
 		parts := strings.SplitN(rel, "/", 2)
 		if len(parts) < 2 {
 			continue
 		}
-		own := modulePath + "/extensions/plugins/" + parts[0]
+		own := modulePath + "/" + strings.TrimSuffix(root, "/") + "/" + parts[0]
 
 		for _, imp := range f.imports {
-			if !strings.HasPrefix(imp, modulePath+"/extensions/plugins/") {
+			if !strings.HasPrefix(imp, modulePath+"/extensions/plugins/") && !strings.HasPrefix(imp, modulePath+"/examples/plugins/") {
 				continue
 			}
 			if !strings.HasPrefix(imp, own) {
@@ -320,7 +330,7 @@ func TestArch_StableDTOsHaveSingleStructSource(t *testing.T) {
 // 新服务、新语言或新测试类型都应先归入已有区域，不得继续平铺。
 func TestArch_TopLevelDirectoriesAreClosed(t *testing.T) {
 	allowed := map[string]bool{
-		"core": true, "extensions": true, "contracts": true, "engineering": true, "docs": true,
+		"core": true, "extensions": true, "contracts": true, "engineering": true, "docs": true, "examples": true,
 		".git": true, ".github": true, ".githooks": true, ".claude": true, ".codex": true,
 		".gstack": true, ".obsidian": true, ".vastplan": true,
 		"bin": true, "node_modules": true,
@@ -331,7 +341,7 @@ func TestArch_TopLevelDirectoriesAreClosed(t *testing.T) {
 	}
 	for _, entry := range entries {
 		if entry.IsDir() && !allowed[entry.Name()] {
-			t.Errorf("根目录越界：%s/ 不在顶层白名单中；请归入 core/extensions/contracts/engineering/docs 之一，或先更新 ADR-0060", entry.Name())
+			t.Errorf("根目录越界：%s/ 不在顶层白名单中；请归入 core/extensions/contracts/engineering/docs/examples 之一，或先更新 ADR-0060", entry.Name())
 		}
 	}
 }
@@ -390,29 +400,33 @@ func TestArch_ToolsMustNotContainProductionEntrypoints(t *testing.T) {
 // extensions/plugins/ 下只放产品插件，每个必须有清单；测试夹具插件应在 engineering/e2e/fixtures/。
 func TestArch_EveryPluginHasManifest(t *testing.T) {
 	root := repoRoot(t)
-	pluginsDir := filepath.Join(root, "extensions", "plugins")
-	entries, err := os.ReadDir(pluginsDir)
-	if err != nil {
-		t.Fatalf("读取 extensions/plugins/ 失败: %v", err)
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		manifest := filepath.Join(pluginsDir, e.Name(), "vastplan.plugin.json")
-		raw, err := os.ReadFile(manifest)
+	for _, relativeRoot := range []string{"extensions/plugins", "examples/plugins"} {
+		pluginsDir := filepath.Join(root, filepath.FromSlash(relativeRoot))
+		entries, err := os.ReadDir(pluginsDir)
 		if err != nil {
-			t.Errorf("插件缺少清单：extensions/plugins/%s 没有 vastplan.plugin.json\n  原因: extensions/plugins/ 只放产品插件且必须声明清单；"+
-				"测试夹具插件应放 engineering/e2e/fixtures/plugins/（ADR-0018 §3）", e.Name())
-			continue
+			t.Fatalf("读取 %s 失败: %v", relativeRoot, err)
 		}
-		parsed, err := pluginv1.ParseManifest(raw)
-		if err != nil {
-			t.Errorf("插件清单无效：extensions/plugins/%s/vastplan.plugin.json: %v", e.Name(), err)
-			continue
-		}
-		if parsed.License != "Apache-2.0" || parsed.LicenseFile != "LICENSE" || parsed.NoticeFile != "NOTICE" {
-			t.Errorf("第一方插件 %s 必须声明 license=Apache-2.0、licenseFile=LICENSE、noticeFile=NOTICE（ADR-0046）", e.Name())
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			manifest := filepath.Join(pluginsDir, e.Name(), "vastplan.plugin.json")
+			raw, err := os.ReadFile(manifest)
+			if err != nil {
+				t.Errorf("插件缺少清单：%s/%s 没有 vastplan.plugin.json", relativeRoot, e.Name())
+				continue
+			}
+			parsed, err := pluginv1.ParseManifest(raw)
+			if err != nil {
+				t.Errorf("插件清单无效：%s/%s/vastplan.plugin.json: %v", relativeRoot, e.Name(), err)
+				continue
+			}
+			if parsed.ID != e.Name() {
+				t.Errorf("插件目录与清单 ID 不一致：%s/%s 声明 %s", relativeRoot, e.Name(), parsed.ID)
+			}
+			if parsed.License != "Apache-2.0" || parsed.LicenseFile != "LICENSE" || parsed.NoticeFile != "NOTICE" {
+				t.Errorf("第一方插件 %s 必须声明 license=Apache-2.0、licenseFile=LICENSE、noticeFile=NOTICE（ADR-0046）", e.Name())
+			}
 		}
 	}
 }

@@ -1,0 +1,72 @@
+{
+  "version": 2,
+  "revision": 1,
+  "metadata": {
+    "name": "cluster-demo",
+    "tenant": "acme"
+  },
+  "resolution": {
+    "platform_profile": {
+      "id": "local-backend",
+      "revision": 1,
+      "digest": "b3758ea4a2201f5f37a476da7f66f969b6c097bae2e66aa145cb0baf7f12aab8"
+    },
+    "application_composition": {
+      "id": "cluster-demo",
+      "revision": 2,
+      "digest": "c76f2810d51ec19f2cb78f68a09c25c175e18a6547f2a04970265f1fe895d40e"
+    },
+    "development_mode": true,
+    "plugin_origins": {
+      "cn.vastplan.example.backend.permission": "platform-profile",
+      "cn.vastplan.example.backend.hello-world": "application"
+    },
+    "plugin_baselines": {
+      "cn.vastplan.example.backend.permission": "application-permission-demo"
+    }
+  },
+  "units": [
+    {
+      "id": "backend-main",
+      "kind": "service",
+      "enabled": true,
+      "service_role": "backend",
+      "logical_service": "cluster-demo.hello",
+      "instance_policy": "active-active",
+      "state_model": "external-shared",
+      "visibility": "cluster",
+      "routing": "queue",
+      "routing_domain": "application",
+      "replicas": 2,
+      "placement": {
+        "nodeSelector": {
+          "region": "cn"
+        }
+      },
+      "plugins": [
+        {
+          "id": "cn.vastplan.example.backend.permission",
+          "version": "0.1.1",
+          "channel": "stable",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        {
+          "id": "cn.vastplan.example.backend.hello-world",
+          "version": "0.2.1",
+          "channel": "stable",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ],
+      "config": {
+        "kernel_service_grants": {
+          "cn.vastplan.example.backend.hello-world": ["kernel.info"]
+        },
+        "plugins": {
+          "cn.vastplan.example.backend.hello-world": {
+            "greetingTemplate": "你好，{{name}}！我是 VastPlan 租户级插件。"
+          }
+        }
+      }
+    }
+  ]
+}

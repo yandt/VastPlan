@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	provider "cdsoft.com.cn/VastPlan/extensions/sdk/go/artifactassessmentprovider"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	provider "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.assessment.provider/assessmentruntime"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

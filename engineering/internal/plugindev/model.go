@@ -12,6 +12,7 @@ import (
 	semver "github.com/Masterminds/semver/v3"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
 )
 
 type Driver string
@@ -39,37 +40,13 @@ func Discover(repositoryRoot, selector string) (Spec, error) {
 	if err != nil {
 		return Spec{}, err
 	}
-	pluginsRoot := filepath.Join(repositoryRoot, "extensions", "plugins")
 	selector = strings.TrimSpace(selector)
 	if selector == "" {
 		return Spec{}, errors.New("插件选择器不能为空")
 	}
-	candidate := selector
-	if !filepath.IsAbs(candidate) {
-		if strings.Contains(candidate, string(filepath.Separator)) || strings.HasPrefix(candidate, ".") {
-			candidate = filepath.Join(repositoryRoot, candidate)
-		} else {
-			candidate = filepath.Join(pluginsRoot, candidate)
-		}
-	}
-	candidate, err = filepath.Abs(candidate)
+	realCandidate, sourceRoot, err := resolvePluginCandidate(repositoryRoot, selector)
 	if err != nil {
 		return Spec{}, err
-	}
-	realPlugins, err := filepath.EvalSymlinks(pluginsRoot)
-	if err != nil {
-		return Spec{}, fmt.Errorf("解析插件根目录: %w", err)
-	}
-	realCandidate, err := filepath.EvalSymlinks(candidate)
-	if err != nil {
-		return Spec{}, fmt.Errorf("解析插件目录: %w", err)
-	}
-	relativeToPlugins, err := filepath.Rel(realPlugins, realCandidate)
-	if err != nil || relativeToPlugins == "." || strings.HasPrefix(relativeToPlugins, ".."+string(filepath.Separator)) || filepath.IsAbs(relativeToPlugins) {
-		return Spec{}, errors.New("插件目录必须是 extensions/plugins 的直接子目录")
-	}
-	if strings.Contains(relativeToPlugins, string(filepath.Separator)) {
-		return Spec{}, errors.New("插件选择器必须指向一个插件根目录")
 	}
 	raw, err := os.ReadFile(filepath.Join(realCandidate, "vastplan.plugin.json"))
 	if err != nil {
@@ -81,6 +58,16 @@ func Discover(repositoryRoot, selector string) (Spec, error) {
 	}
 	if manifest.ID != filepath.Base(realCandidate) {
 		return Spec{}, errors.New("插件目录名与 Manifest ID 不一致")
+	}
+	class, err := pluginid.ClassifyManagement(manifest.ID, manifest.Publisher)
+	if err != nil {
+		return Spec{}, err
+	}
+	if sourceRoot == "examples/plugins" && class != pluginid.ManagementDevelopment {
+		return Spec{}, errors.New("examples/plugins 只允许 example/development 插件")
+	}
+	if sourceRoot == "extensions/plugins" && class == pluginid.ManagementDevelopment {
+		return Spec{}, errors.New("开发插件必须迁移到 examples/plugins")
 	}
 	version, err := semver.StrictNewVersion(manifest.Version)
 	if err != nil || version.Prerelease() != "" || version.Metadata() != "" {

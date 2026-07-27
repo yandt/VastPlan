@@ -78,6 +78,18 @@ func TestTrustedCatalogFallsBackOnlyWhenExactSeedRefIsAbsent(t *testing.T) {
 
 type contentVerifier struct{}
 
+func TestTrustedCatalogDevelopmentPolicyRequiresExplicitOption(t *testing.T) {
+	source := &failingCatalogSource{err: artifacttrust.ErrNotFound}
+	production, err := NewTrustedCatalog([]ArtifactSource{source}, contentVerifier{})
+	if err != nil || production.allowDevelopmentPlugins {
+		t.Fatalf("生产 Catalog 不得允许开发插件: allowed=%t err=%v", production.allowDevelopmentPlugins, err)
+	}
+	development, err := NewTrustedCatalog([]ArtifactSource{source}, contentVerifier{}, WithDevelopmentPlugins())
+	if err != nil || !development.allowDevelopmentPlugins {
+		t.Fatalf("开发 Catalog 必须由组合根显式启用: allowed=%t err=%v", development.allowDevelopmentPlugins, err)
+	}
+}
+
 func (contentVerifier) Verify(_ context.Context, ref pluginv1.ArtifactRef, envelope artifacttrust.Envelope) (pluginv1.Artifact, error) {
 	if envelope.Artifact.PluginID != ref.PluginID || envelope.Artifact.Version != ref.Version || envelope.Artifact.Channel != ref.Channel {
 		return pluginv1.Artifact{}, os.ErrNotExist

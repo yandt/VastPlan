@@ -6,4 +6,5 @@ packages:
   - "extensions/sdk/ts/*"
   - "extensions/plugins/*/backend"
   - "extensions/plugins/*/frontend"
+  - "examples/plugins/*/frontend"
   - "engineering/e2e/fixtures/plugins/*/backend"

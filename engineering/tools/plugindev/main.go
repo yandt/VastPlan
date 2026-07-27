@@ -24,7 +24,7 @@ func main() {
 	flag.StringVar(&root, "root", ".", "VastPlan 仓库根目录")
 	flag.StringVar(&stateRoot, "state-root", ".vastplan/dev-platform", "开发状态根目录")
 	flag.StringVar(&statusURL, "status-url", "http://127.0.0.1:18080/__vastplan_dev/status", "本地平台状态端点")
-	flag.StringVar(&selector, "plugin", "", "插件 ID 或 extensions/plugins 下的插件目录")
+	flag.StringVar(&selector, "plugin", "", "插件 ID，或 extensions/plugins、examples/plugins 下的插件目录")
 	flag.StringVar(&target, "backend-target", "", "已发布应用中的测试槽位：deployment/unit")
 	flag.StringVar(&binding, "backend-binding", "", "可选的既有 TestTargetBinding ID")
 	flag.DurationVar(&poll, "poll", 300*time.Millisecond, "源码扫描间隔")

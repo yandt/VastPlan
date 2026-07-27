@@ -5,15 +5,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	provider "cdsoft.com.cn/VastPlan/extensions/sdk/go/artifactassessmentprovider"
 )
 
 func TestMaterializerPublishesPinnedSnapshotAndReusesIt(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "staging")
 	prepareDatabase(t, source, "database-a")
-	revision, err := provider.TrivyDatabaseRevision(source)
+	revision, err := trivyRevision(source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +30,7 @@ func TestMaterializerPublishesPinnedSnapshotAndReusesIt(t *testing.T) {
 	if err != nil || second != first {
 		t.Fatalf("已发布 revision 必须按自身字节幂等复核: first=%+v second=%+v err=%v", first, second, err)
 	}
-	if got, err := provider.TrivyDatabaseRevision(materializer.config.SnapshotDirectory()); err != nil || got != revision {
+	if got, err := trivyRevision(materializer.config.SnapshotDirectory()); err != nil || got != revision {
 		t.Fatalf("发布目录摘要无效: got=%s err=%v", got, err)
 	}
 }

@@ -536,11 +536,11 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.1)
 
-  extensions/plugins/cn.vastplan.product.developer.workbench-gallery/frontend:
+  examples/plugins/cn.vastplan.example.frontend.workbench-gallery/frontend:
     dependencies:
       '@vastplan/workbench-sdk':
         specifier: workspace:*
-        version: link:../../../sdk/ts/workbench-sdk
+        version: link:../../../../extensions/sdk/ts/workbench-sdk
     devDependencies:
       typescript:
         specifier: ^5.8.3

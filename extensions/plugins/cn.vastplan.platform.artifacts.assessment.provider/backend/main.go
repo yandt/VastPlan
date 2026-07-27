@@ -5,7 +5,7 @@ import (
 	"log"
 
 	assessmentprovider "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.assessment.provider/assessmentprovider"
-	provider "cdsoft.com.cn/VastPlan/extensions/sdk/go/artifactassessmentprovider"
+	provider "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.assessment.provider/assessmentruntime"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 

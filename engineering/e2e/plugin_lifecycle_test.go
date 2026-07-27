@@ -128,10 +128,10 @@ func toolTarget(capability, op string) *contractv1.CallTarget {
 func TestFirstPartyReferencePluginsSupportCurrentBackend(t *testing.T) {
 	plugins := []string{
 		"./extensions/plugins/cn.vastplan.foundation.security.bootstrap-policy/backend",
-		"./extensions/plugins/cn.vastplan.demo-audit/backend",
-		"./extensions/plugins/cn.vastplan.demo-permission/backend",
-		"./extensions/plugins/cn.vastplan.demo-quota/backend",
-		"./extensions/plugins/cn.vastplan.hello-world/backend",
+		"./examples/plugins/cn.vastplan.example.backend.audit/backend",
+		"./examples/plugins/cn.vastplan.example.backend.permission/backend",
+		"./examples/plugins/cn.vastplan.example.backend.quota/backend",
+		"./examples/plugins/cn.vastplan.example.backend.hello-world/backend",
 	}
 	for _, pluginPath := range plugins {
 		t.Run(filepath.Base(filepath.Dir(filepath.Dir(pluginPath))), func(t *testing.T) {
@@ -253,7 +253,7 @@ func TestPluginMigrationLifecycle_ThreePhaseAndMissingHandlerFailClosed(t *testi
 	if err := host.Close(process); err != nil {
 		t.Fatal(err)
 	}
-	plain, err := host.Launch(ctx, buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend"))
+	plain, err := host.Launch(ctx, buildPlugin(t, "./examples/plugins/cn.vastplan.example.backend.hello-world/backend"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -353,7 +353,7 @@ func TestProtocolRuntime_StateMigrationCommitAndFailureRollback(t *testing.T) {
 
 // 完整生命周期：拉起 → 回连 → 握手 → engines 校验 → 贡献注册 → 激活 → 调用 → 摘除。
 func TestPluginLifecycle_HappyPath(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./examples/plugins/cn.vastplan.example.backend.hello-world/backend")
 	host := newHost(t, "0.1.0")  // 满足插件的 engines ^0.1
 	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 
@@ -371,8 +371,8 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 		t.Fatalf("装载插件失败: %v", err)
 	}
 
-	if p.PluginID != "cn.vastplan.hello-world" {
-		t.Fatalf("插件 id = %q，期望 cn.vastplan.hello-world", p.PluginID)
+	if p.PluginID != "cn.vastplan.example.backend.hello-world" {
+		t.Fatalf("插件 id = %q，期望 cn.vastplan.example.backend.hello-world", p.PluginID)
 	}
 	if p.SessionID == "" {
 		t.Fatal("宿主应签发会话票据")
@@ -411,7 +411,7 @@ func TestPluginLifecycle_HappyPath(t *testing.T) {
 // 插件回调宿主（§2.4）：经 capability 寻址内核能力，且 CallContext 在反方向同样透传。
 // 这是 Channel 双向流的核心价值——插件能用内核服务，而不只是被动被调。
 func TestPluginHostCall_PluginCallsBackIntoKernel(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./examples/plugins/cn.vastplan.example.backend.hello-world/backend")
 	host := newHost(t, "0.1.0")
 	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -446,14 +446,14 @@ func TestPluginHostCall_PluginCallsBackIntoKernel(t *testing.T) {
 	// 已认证 session 重建，不能让插件冒用原始 Agent 身份。
 	if got.HostReported["tenant"] != "acme" || got.HostReported["traceId"] != "trace-e2e" ||
 		got.HostReported["callerKind"] != "CALLER_KIND_PLUGIN" ||
-		got.HostReported["callerId"] != "cn.vastplan.hello-world" {
+		got.HostReported["callerId"] != "cn.vastplan.example.backend.hello-world" {
 		t.Fatalf("HostCall 信任边界裁剪错误，实际: %v", got.HostReported)
 	}
 }
 
 // 应用层错误须经 CallResult 返回，且与传输层错误严格区分（工程规范 §4.2）。
 func TestPluginInvoke_ApplicationErrorsAreNotTransportErrors(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./examples/plugins/cn.vastplan.example.backend.hello-world/backend")
 	host := newHost(t, "0.1.0")
 	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -497,7 +497,7 @@ func TestPluginInvoke_ApplicationErrorsAreNotTransportErrors(t *testing.T) {
 
 // 未注册能力的解析必须失败（fail-closed）。
 func TestPluginInvoke_UnregisteredCapabilityRejected(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./examples/plugins/cn.vastplan.example.backend.hello-world/backend")
 	host := newHost(t, "0.1.0")
 	allowAllPermissions(t, host) // 本测试不测权限，显式放行
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -519,7 +519,7 @@ func TestPluginInvoke_UnregisteredCapabilityRejected(t *testing.T) {
 // engines fail-closed：内核版本不满足插件声明范围时必须拒绝装载
 // （ADR-0017 §4 强制点 2）。这是版本机制的核心保障，必须由真实链路验证。
 func TestPluginLaunch_IncompatibleKernelVersionRejected(t *testing.T) {
-	bin := buildPlugin(t, "./extensions/plugins/cn.vastplan.hello-world/backend")
+	bin := buildPlugin(t, "./examples/plugins/cn.vastplan.example.backend.hello-world/backend")
 	host := newHost(t, "0.2.0") // 插件要求 ^0.1，0.2.0 不满足
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

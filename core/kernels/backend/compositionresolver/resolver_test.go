@@ -159,18 +159,18 @@ func TestResolveAllowsExactHostLocalPluginInMultiplePlatformServices(t *testing.
 
 func TestDeploySampleIsResolverOutput(t *testing.T) {
 	root := filepath.Join("..", "..", "..", "..")
-	profile, err := backendcompositionv1.ParsePlatformProfileFile(filepath.Join(root, "engineering", "deploy", "platform-profile.json"))
+	profile, err := backendcompositionv1.ParsePlatformProfileFile(filepath.Join(root, "examples", "deploy", "backend-platform-profile.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	application, err := backendcompositionv1.ParseApplicationCompositionFile(filepath.Join(root, "engineering", "deploy", "application-composition.json"))
+	application, err := backendcompositionv1.ParseApplicationCompositionFile(filepath.Join(root, "examples", "deploy", "backend-application-composition.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	reader := artifactReader{}
-	for _, item := range []struct{ id, version string }{{"cn.vastplan.demo-permission", "0.1.1"}, {"cn.vastplan.hello-world", "0.2.1"}} {
+	for _, item := range []struct{ id, version string }{{"cn.vastplan.example.backend.permission", "0.1.1"}, {"cn.vastplan.example.backend.hello-world", "0.2.1"}} {
 		id := item.id
-		raw, readErr := os.ReadFile(filepath.Join(root, "extensions", "plugins", id, "vastplan.plugin.json"))
+		raw, readErr := os.ReadFile(filepath.Join(root, "examples", "plugins", id, "vastplan.plugin.json"))
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
@@ -180,11 +180,11 @@ func TestDeploySampleIsResolverOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, err := deploymentv2.ParseFile(filepath.Join(root, "engineering", "deploy", "cluster.deployment.json"))
+	want, err := deploymentv2.ParseFile(filepath.Join(root, "examples", "deploy", "backend-cluster-deployment.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(resolved, want) {
-		t.Fatalf("engineering/deploy/cluster.deployment.json 必须由当前双输入精确生成\nresolved=%+v\nwant=%+v", resolved, want)
+		t.Fatalf("examples/deploy/backend-cluster-deployment.json 必须由当前双输入精确生成\nresolved=%+v\nwant=%+v", resolved, want)
 	}
 }

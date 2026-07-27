@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	provider "cdsoft.com.cn/VastPlan/extensions/sdk/go/artifactassessmentprovider"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/trivydatabase"
 )
 
 const (
@@ -83,7 +83,7 @@ func (m *Materializer) Materialize() (Status, error) {
 			return m.fail(err)
 		}
 	}
-	revision, err := provider.TrivyDatabaseRevision(candidate)
+	revision, err := trivyRevision(candidate)
 	if err != nil || revision != m.config.DatabaseRevision {
 		return m.fail(errors.New("Trivy database candidate 与配置 revision 不一致"))
 	}
@@ -120,12 +120,26 @@ func (m *Materializer) verify(root string) (Status, error) {
 		}
 		total += info.Size()
 	}
-	revision, err := provider.TrivyDatabaseRevision(root)
+	revision, err := trivyRevision(root)
 	if err != nil || revision != m.config.DatabaseRevision {
 		return m.fail(errors.New("已发布 Trivy database snapshot 摘要无效"))
 	}
 	m.status = Status{Ready: true, DatabaseRevision: revision, Files: 2, Bytes: total}
 	return m.status, nil
+}
+
+func trivyRevision(root string) (string, error) {
+	metadata, err := os.Open(filepath.Join(root, "db", "metadata.json"))
+	if err != nil {
+		return "", err
+	}
+	defer metadata.Close()
+	database, err := os.Open(filepath.Join(root, "db", "trivy.db"))
+	if err != nil {
+		return "", err
+	}
+	defer database.Close()
+	return trivydatabase.Revision(metadata, database)
 }
 
 func (m *Materializer) fail(err error) (Status, error) {

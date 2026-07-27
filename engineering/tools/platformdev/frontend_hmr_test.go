@@ -198,24 +198,25 @@ func TestFrontendHMRRejectsNonLoopbackAndEscapingManifest(t *testing.T) {
 func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
-		"extensions/plugins/cn.vastplan.feature/frontend/src/index.ts": "plugin-v1",
-		"extensions/sdk/ts/platform-admin/src/index.ts":                "admin-v1",
-		"extensions/sdk/ts/platform-admin/package.json":                "{}",
-		"core/kernels/frontend/src/browser.tsx":                        "host-v1",
-		"core/kernels/frontend/static/index.html":                      "host-v1",
-		"core/kernels/frontend/package.json":                           "{}",
-		"extensions/sdk/ts/ui-primitives/src/index.ts":                 "ui-primitives-v1",
-		"extensions/sdk/ts/ui-primitives/package.json":                 "{}",
-		"extensions/sdk/ts/rjsf-csp-validator/src/index.ts":            "rjsf-validator-v1",
-		"extensions/sdk/ts/rjsf-csp-validator/package.json":            "{}",
-		"extensions/sdk/ts/ui-contract/src/index.ts":                   "contract-v1",
-		"extensions/sdk/ts/ui-contract/package.json":                   "{}",
-		"extensions/sdk/ts/workbench-sdk/src/index.ts":                 "workbench-v1",
-		"extensions/sdk/ts/workbench-sdk/package.json":                 "{}",
-		"engineering/tools/build-frontend.sh":                          "build-v1",
-		"engineering/tools/build-frontend-plugins.mjs":                 "build-v1",
-		"engineering/tools/frontend-module-graph.mjs":                  "graph-v1",
-		"engineering/tools/frontend-server-build.mjs":                  "server-v1",
+		"extensions/plugins/cn.vastplan.feature/frontend/src/index.ts":                "plugin-v1",
+		"examples/plugins/cn.vastplan.example.frontend.gallery/frontend/src/index.ts": "example-v1",
+		"extensions/sdk/ts/platform-admin/src/index.ts":                               "admin-v1",
+		"extensions/sdk/ts/platform-admin/package.json":                               "{}",
+		"core/kernels/frontend/src/browser.tsx":                                       "host-v1",
+		"core/kernels/frontend/static/index.html":                                     "host-v1",
+		"core/kernels/frontend/package.json":                                          "{}",
+		"extensions/sdk/ts/ui-primitives/src/index.ts":                                "ui-primitives-v1",
+		"extensions/sdk/ts/ui-primitives/package.json":                                "{}",
+		"extensions/sdk/ts/rjsf-csp-validator/src/index.ts":                           "rjsf-validator-v1",
+		"extensions/sdk/ts/rjsf-csp-validator/package.json":                           "{}",
+		"extensions/sdk/ts/ui-contract/src/index.ts":                                  "contract-v1",
+		"extensions/sdk/ts/ui-contract/package.json":                                  "{}",
+		"extensions/sdk/ts/workbench-sdk/src/index.ts":                                "workbench-v1",
+		"extensions/sdk/ts/workbench-sdk/package.json":                                "{}",
+		"engineering/tools/build-frontend.sh":                                         "build-v1",
+		"engineering/tools/build-frontend-plugins.mjs":                                "build-v1",
+		"engineering/tools/frontend-module-graph.mjs":                                 "graph-v1",
+		"engineering/tools/frontend-server-build.mjs":                                 "server-v1",
 		"package.json":        "{}",
 		"pnpm-lock.yaml":      "lockfileVersion: 1",
 		"pnpm-workspace.yaml": "packages: []",
@@ -246,6 +247,12 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	if pluginChange.plugins == initial.plugins || pluginChange.host != initial.host {
 		t.Fatalf("plugin change signatures = %#v, initial = %#v", pluginChange, initial)
 	}
+	write("examples/plugins/cn.vastplan.example.frontend.gallery/frontend/src/index.ts", "example-v2")
+	exampleChange, err := hmr.sourceSignatures()
+	if err != nil || exampleChange.plugins == pluginChange.plugins || exampleChange.host != pluginChange.host {
+		t.Fatalf("example change signatures = %#v, plugin = %#v, err=%v", exampleChange, pluginChange, err)
+	}
+	pluginChange = exampleChange
 	write("extensions/sdk/ts/ui-primitives/src/index.ts", "ui-primitives-v2")
 	hostChange, err := hmr.sourceSignatures()
 	if err != nil {

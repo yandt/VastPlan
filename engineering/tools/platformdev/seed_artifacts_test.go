@@ -29,11 +29,11 @@ func TestSeedArtifactSelectionIsExactConfigurationClosure(t *testing.T) {
 		}
 	}
 	for _, ordinary := range []string{
-		"cn.vastplan.demo-audit",
-		"cn.vastplan.hello-world",
-		"cn.vastplan.product.developer.workbench-gallery",
+		"cn.vastplan.example.backend.audit",
+		"cn.vastplan.example.backend.hello-world",
+		"cn.vastplan.example.frontend.workbench-gallery",
 		"cn.vastplan.test.runtime.node-worker-hello",
-		"cn.vastplan.python-hello",
+		"cn.vastplan.example.runtime.python-hello",
 	} {
 		if selection.contains(ordinary) {
 			t.Fatalf("普通开发插件不得进入 Seed: %s", ordinary)
@@ -64,7 +64,7 @@ func TestSeedPackageSpecsExcludeOrdinaryPlugins(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, spec := range specs {
-		if spec.id == "cn.vastplan.demo-audit" || spec.id == "cn.vastplan.hello-world" {
+		if spec.id == "cn.vastplan.example.backend.audit" || spec.id == "cn.vastplan.example.backend.hello-world" {
 			t.Fatalf("普通插件进入 Seed 打包计划: %s", spec.id)
 		}
 	}
@@ -82,7 +82,7 @@ func TestGoBuildPlanOnlyContainsSeedPlugins(t *testing.T) {
 		if !r.seedArtifacts.contains(plugin.ID) {
 			t.Fatalf("Go 构建计划包含非 Seed 插件: %s", plugin.ID)
 		}
-		if plugin.ID == "cn.vastplan.demo-audit" {
+		if plugin.ID == "cn.vastplan.example.backend.audit" {
 			t.Fatal("demo-audit 不得随平台 Seed 构建")
 		}
 	}

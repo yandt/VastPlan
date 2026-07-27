@@ -109,7 +109,7 @@ func TestProtocolRuntimeLeaderRollingUpgradeKeepsMonotonicFencing(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-audit/backend", "extensions/plugins/cn.vastplan.demo-audit/vastplan.plugin.json")
+	ref := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.audit/backend", "examples/plugins/cn.vastplan.example.backend.audit/vastplan.plugin.json")
 	artifact, packageBytes, err := repository.Read(ref)
 	if err != nil {
 		t.Fatal(err)

@@ -30,7 +30,7 @@ var junkDrawerNames = map[string]bool{
 // sourceTrees 我们自己写的代码（生成物与夹具不在此列）。
 var sourceTrees = []string{
 	"core/kernels", "core/shared",
-	"extensions/sdk", "extensions/plugins",
+	"extensions/sdk", "extensions/plugins", "examples/plugins",
 	"contracts/schemas",
 	"engineering/arch", "engineering/e2e",
 }

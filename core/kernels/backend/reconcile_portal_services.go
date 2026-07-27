@@ -8,9 +8,9 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/portaltrust"
+	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
-	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
 )
 
 type portalArtifactVerifierAdapter struct{ verifier nodeagent.ArtifactVerifier }
@@ -29,6 +29,9 @@ func configurePortalHostServices(options reconcileOptions, artifacts artifactRes
 	}
 	sources := make([]portaltrust.ArtifactSource, 0, len(artifacts.sources))
 	catalogOptions := []portaltrust.TrustedCatalogOption{portaltrust.WithFrontendDeliveryRoot(options.frontendDeliveryOrigin)}
+	if options.allowDevelopmentPlugins {
+		catalogOptions = append(catalogOptions, portaltrust.WithDevelopmentPlugins())
+	}
 	for _, source := range artifacts.sources {
 		sources = append(sources, source)
 		if local, ok := source.(protocolArtifactSource); ok {

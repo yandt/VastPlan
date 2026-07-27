@@ -25,38 +25,43 @@ func (h *frontendHMR) pluginWatchState() (frontendPluginWatchState, error) {
 	if err != nil {
 		return frontendPluginWatchState{}, fmt.Errorf("扫描前端插件共享源码: %w", err)
 	}
-	directory := filepath.Join(h.root, "extensions", "plugins")
-	entries, err := os.ReadDir(directory)
-	if err != nil {
-		return frontendPluginWatchState{}, fmt.Errorf("列出前端插件: %w", err)
-	}
 	plugins := map[string]string{}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		manifestPath := filepath.Join(directory, entry.Name(), "vastplan.plugin.json")
-		raw, err := os.ReadFile(manifestPath)
+	for _, relativeRoot := range []string{"extensions/plugins", "examples/plugins"} {
+		directory := filepath.Join(h.root, filepath.FromSlash(relativeRoot))
+		entries, err := os.ReadDir(directory)
 		if err != nil {
-			return frontendPluginWatchState{}, fmt.Errorf("读取插件清单 %s: %w", entry.Name(), err)
+			return frontendPluginWatchState{}, fmt.Errorf("列出前端插件 %s: %w", relativeRoot, err)
 		}
-		var manifest struct {
-			Entry struct {
-				Frontend string `json:"frontend"`
-			} `json:"entry"`
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			manifestPath := filepath.Join(directory, entry.Name(), "vastplan.plugin.json")
+			raw, err := os.ReadFile(manifestPath)
+			if err != nil {
+				return frontendPluginWatchState{}, fmt.Errorf("读取插件清单 %s: %w", entry.Name(), err)
+			}
+			var manifest struct {
+				Entry struct {
+					Frontend string `json:"frontend"`
+				} `json:"entry"`
+			}
+			if err := json.Unmarshal(raw, &manifest); err != nil {
+				return frontendPluginWatchState{}, fmt.Errorf("解析插件清单 %s: %w", entry.Name(), err)
+			}
+			if strings.TrimSpace(manifest.Entry.Frontend) == "" {
+				continue
+			}
+			if _, duplicate := plugins[entry.Name()]; duplicate {
+				return frontendPluginWatchState{}, fmt.Errorf("产品与示例前端插件 ID 重复: %s", entry.Name())
+			}
+			relative := filepath.ToSlash(filepath.Join(relativeRoot, entry.Name()))
+			signature, err := sourceSignature(h.root, []string{relative})
+			if err != nil {
+				return frontendPluginWatchState{}, fmt.Errorf("扫描前端插件 %s: %w", entry.Name(), err)
+			}
+			plugins[entry.Name()] = signature
 		}
-		if err := json.Unmarshal(raw, &manifest); err != nil {
-			return frontendPluginWatchState{}, fmt.Errorf("解析插件清单 %s: %w", entry.Name(), err)
-		}
-		if strings.TrimSpace(manifest.Entry.Frontend) == "" {
-			continue
-		}
-		relative := filepath.ToSlash(filepath.Join("extensions", "plugins", entry.Name()))
-		signature, err := sourceSignature(h.root, []string{relative})
-		if err != nil {
-			return frontendPluginWatchState{}, fmt.Errorf("扫描前端插件 %s: %w", entry.Name(), err)
-		}
-		plugins[entry.Name()] = signature
 	}
 	return frontendPluginWatchState{shared: shared, plugins: plugins}, nil
 }
@@ -86,10 +91,14 @@ func (h *frontendHMR) sourceSignatures() (frontendSourceSignatures, error) {
 func (h *frontendHMR) sourceSignaturesFor(pluginIDs []string) (frontendSourceSignatures, error) {
 	pluginPaths := []string{"extensions/sdk/ts/platform-admin/src", "extensions/sdk/ts/platform-admin/package.json"}
 	if pluginIDs == nil {
-		pluginPaths = append(pluginPaths, "extensions/plugins")
+		pluginPaths = append(pluginPaths, "extensions/plugins", "examples/plugins")
 	} else {
 		for _, id := range pluginIDs {
-			pluginPaths = append(pluginPaths, filepath.ToSlash(filepath.Join("extensions", "plugins", id)))
+			path, err := developmentFrontendPluginPath(h.root, id)
+			if err != nil {
+				return frontendSourceSignatures{}, err
+			}
+			pluginPaths = append(pluginPaths, path)
 		}
 	}
 	plugins, err := sourceSignature(h.root, pluginPaths)
@@ -110,6 +119,16 @@ func (h *frontendHMR) sourceSignaturesFor(pluginIDs []string) (frontendSourceSig
 		return frontendSourceSignatures{}, fmt.Errorf("扫描 Portal 宿主源码: %w", err)
 	}
 	return frontendSourceSignatures{plugins: plugins, host: host}, nil
+}
+
+func developmentFrontendPluginPath(root, id string) (string, error) {
+	for _, relativeRoot := range []string{"extensions/plugins", "examples/plugins"} {
+		relative := filepath.ToSlash(filepath.Join(relativeRoot, id))
+		if info, err := os.Stat(filepath.Join(root, filepath.FromSlash(relative))); err == nil && info.IsDir() {
+			return relative, nil
+		}
+	}
+	return "", fmt.Errorf("找不到前端插件源码目录: %s", id)
 }
 
 func sourceSignature(root string, relativePaths []string) (string, error) {

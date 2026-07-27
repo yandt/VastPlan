@@ -15,6 +15,7 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginid"
 )
 
 func (r *runtime) packageArtifacts(ctx context.Context, repository, binDir, nodeBackendModulesDir, frontendModulesDir, dynamicDir string) error {
@@ -219,6 +220,13 @@ func discoverPackageSpecs(root string) ([]packageSpec, error) {
 		}
 		if manifest.ID != directory.Name() {
 			return nil, fmt.Errorf("插件目录 %s 与清单 id %s 不一致", directory.Name(), manifest.ID)
+		}
+		class, err := pluginid.ClassifyManagement(manifest.ID, manifest.Publisher)
+		if err != nil {
+			return nil, fmt.Errorf("分类插件 %s: %w", manifest.ID, err)
+		}
+		if class == pluginid.ManagementDevelopment {
+			return nil, fmt.Errorf("开发插件 %s 不得位于 extensions/plugins", manifest.ID)
 		}
 		frontendEntry := strings.TrimSpace(manifest.Entry["frontend"])
 		frontendServerEntry := strings.TrimSpace(manifest.Entry["frontendServer"])

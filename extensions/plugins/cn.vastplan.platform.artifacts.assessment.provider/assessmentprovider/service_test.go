@@ -24,7 +24,7 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
-	provider "cdsoft.com.cn/VastPlan/extensions/sdk/go/artifactassessmentprovider"
+	provider "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.assessment.provider/assessmentruntime"
 )
 
 type fixedDownloader struct{ raw []byte }

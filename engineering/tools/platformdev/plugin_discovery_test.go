@@ -9,7 +9,7 @@ import (
 
 func TestDiscoverPackageSpecsIncludesFrontendManifestWithoutAllowList(t *testing.T) {
 	root := t.TempDir()
-	pluginID := "cn.vastplan.example.frontend"
+	pluginID := "cn.vastplan.product.developer.frontend-fixture"
 	pluginRoot := filepath.Join(root, "extensions", "plugins", pluginID)
 	if err := os.MkdirAll(pluginRoot, 0o700); err != nil {
 		t.Fatal(err)

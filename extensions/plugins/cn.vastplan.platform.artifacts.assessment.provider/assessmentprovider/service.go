@@ -12,13 +12,13 @@ import (
 	"io"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreport"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
-	provider "cdsoft.com.cn/VastPlan/extensions/sdk/go/artifactassessmentprovider"
+	provider "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.assessment.provider/assessmentruntime"
 	credentialmaterial "cdsoft.com.cn/VastPlan/extensions/sdk/go/credentialmaterial"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )

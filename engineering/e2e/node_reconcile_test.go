@@ -45,8 +45,8 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	helloRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
+	permissionRef := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.permission/backend", "examples/plugins/cn.vastplan.example.backend.permission/vastplan.plugin.json")
+	helloRef := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.hello-world/backend", "examples/plugins/cn.vastplan.example.backend.hello-world/vastplan.plugin.json")
 	server := startE2ENATS(t)
 	admin, err := nats.Connect(server.ClientURL())
 	if err != nil {
@@ -91,7 +91,7 @@ func TestNodeAgent_ThreeNodeReplicaPlacementAndDriftRecovery(t *testing.T) {
 			RoutingDomain: "application",
 			Placement:     deploymentv2.Placement{NodeSelector: map[string]string{"region": "cn"}},
 			Config: map[string]any{"kernel_service_grants": map[string]any{
-				"cn.vastplan.hello-world": []any{"kernel.info"},
+				"cn.vastplan.example.backend.hello-world": []any{"kernel.info"},
 			}},
 			Plugins: []deploymentv1.PluginRef{
 				lockedPluginRef(t, repository, permissionRef),
@@ -159,8 +159,8 @@ func TestNodeAgent_RuntimePublishesRealPluginToNATSMesh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	helloRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.hello-world/backend", "extensions/plugins/cn.vastplan.hello-world/vastplan.plugin.json")
+	permissionRef := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.permission/backend", "examples/plugins/cn.vastplan.example.backend.permission/vastplan.plugin.json")
+	helloRef := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.hello-world/backend", "examples/plugins/cn.vastplan.example.backend.hello-world/vastplan.plugin.json")
 	verifier := nodeagent.NewLocalDevelopmentArtifactVerifier()
 	installer := nodeagent.LocalInstaller{Root: filepath.Join(t.TempDir(), "installed")}
 	permission := installPublishedPlugin(t, repository, verifier, installer, permissionRef)
@@ -213,7 +213,7 @@ func TestNodeAgent_RuntimePublishesRealPluginToNATSMesh(t *testing.T) {
 		InstancePolicy: "active-active", StateModel: "external-shared", Visibility: "cluster",
 		Routing: "queue", RoutingDomain: "application",
 		Plugins:             []nodeagent.InstalledPlugin{permission, hello},
-		KernelServiceGrants: map[string][]string{"cn.vastplan.hello-world": {"kernel.info"}},
+		KernelServiceGrants: map[string][]string{"cn.vastplan.example.backend.hello-world": {"kernel.info"}},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -240,8 +240,8 @@ func TestNodeAgent_RealProcessIdempotencyFailureAndRollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	quotaRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-quota/backend", "extensions/plugins/cn.vastplan.demo-quota/vastplan.plugin.json")
+	permissionRef := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.permission/backend", "examples/plugins/cn.vastplan.example.backend.permission/vastplan.plugin.json")
+	quotaRef := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.quota/backend", "examples/plugins/cn.vastplan.example.backend.quota/vastplan.plugin.json")
 	brokenRef := publishBrokenPlugin(t, repository)
 
 	runtime := nodeagent.NewProtocolRuntime("0.1.0", func(format string, args ...any) { t.Logf("[runtime] "+format, args...) })
@@ -316,7 +316,7 @@ func TestNodeAgent_ProcessCrashTriggersImmediateRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
+	permissionRef := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.permission/backend", "examples/plugins/cn.vastplan.example.backend.permission/vastplan.plugin.json")
 	crasherRef := publishCrasherPlugin(t, repository)
 	desired := deploymentv1.DesiredState{
 		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "crash-recovery"},
@@ -405,8 +405,8 @@ func TestNodeAgent_NATSKVWatchDrivesRealUnitAndReportsActualState(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	permissionRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-permission/backend", "extensions/plugins/cn.vastplan.demo-permission/vastplan.plugin.json")
-	quotaRef := publishBuiltPlugin(t, repository, "./extensions/plugins/cn.vastplan.demo-quota/backend", "extensions/plugins/cn.vastplan.demo-quota/vastplan.plugin.json")
+	permissionRef := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.permission/backend", "examples/plugins/cn.vastplan.example.backend.permission/vastplan.plugin.json")
+	quotaRef := publishBuiltPlugin(t, repository, "./examples/plugins/cn.vastplan.example.backend.quota/backend", "examples/plugins/cn.vastplan.example.backend.quota/vastplan.plugin.json")
 	desired := deploymentv1.DesiredState{
 		Version: 1, Revision: 1, Metadata: deploymentv1.Metadata{Name: "nats-e2e"},
 		Units: []deploymentv1.Unit{{

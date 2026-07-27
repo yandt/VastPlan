@@ -5,6 +5,8 @@ import "testing"
 func TestArch_PluginsMustNotImportCore(t *testing.T) {
 	assertNoImport(t, collectGoFiles(t), "extensions/plugins/", "core/",
 		"插件只能依赖公开 Contracts、SDK、Library 或 capability protocol，不得链接内核实现（ADR-0150）")
+	assertNoImport(t, collectGoFiles(t), "examples/plugins/", "core/",
+		"示例插件只能依赖公开 Contracts、SDK、Library 或 capability protocol，不得链接内核实现（ADR-0150）")
 }
 
 func TestArch_SDKMustNotImportCore(t *testing.T) {

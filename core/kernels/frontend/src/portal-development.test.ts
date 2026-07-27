@@ -34,11 +34,11 @@ function developmentSource(fetcher: ModuleFetcher): PortalRuntimeSource {
 describe("portal development updates", () => {
   it("fetches only a validated development runtime overlay", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify(runtime), { status: 200, headers: { "Content-Type": "application/json" } }));
-    const loaded = await fetchDevelopmentRuntime(fetcher, "/__vastplan_dev/runtime", "/operations/settings");
+    const loaded = await fetchDevelopmentRuntime(fetcher, "/__vastplan_dev/runtime", "/operations/settings", developmentFrontendRuntimeProtocol);
     expect(loaded.modules[0].url).toBe(runtime.modules[0].url);
     expect(fetcher).toHaveBeenCalledWith("/__vastplan_dev/runtime?path=%2Foperations%2Fsettings", { credentials: "same-origin", cache: "no-store" });
 
-    await expect(fetchDevelopmentRuntime(async () => new Response("", { status: 503 }), "/dev", "/")).rejects.toMatchObject({ code: "RUNTIME_FETCH_FAILED" } satisfies Partial<PortalDevelopmentError>);
+    await expect(fetchDevelopmentRuntime(async () => new Response("", { status: 503 }), "/dev", "/", developmentFrontendRuntimeProtocol)).rejects.toMatchObject({ code: "RUNTIME_FETCH_FAILED" } satisfies Partial<PortalDevelopmentError>);
   });
 
   it("coalesces generation events, applies them serially, and reports build errors", async () => {

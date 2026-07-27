@@ -15,7 +15,7 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
-	provider "cdsoft.com.cn/VastPlan/extensions/sdk/go/artifactassessmentprovider"
+	provider "cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.assessment.provider/assessmentruntime"
 )
 
 func main() {

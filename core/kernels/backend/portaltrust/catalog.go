@@ -37,10 +37,11 @@ type verifiedPortalPlugin struct {
 // source cannot make itself trusted: every candidate passes ArtifactVerifier
 // before its manifest is considered for a Portal composition.
 type TrustedCatalog struct {
-	sources   []ArtifactSource
-	verifier  ArtifactVerifier
-	delivery  *frontendDeliveryStore
-	testIndex TestArtifactIndex
+	sources                 []ArtifactSource
+	verifier                ArtifactVerifier
+	delivery                *frontendDeliveryStore
+	testIndex               TestArtifactIndex
+	allowDevelopmentPlugins bool
 }
 
 // ArtifactSource and ArtifactVerifier are stable trusted-host ports. The
@@ -61,6 +62,15 @@ func WithTestArtifactIndex(index TestArtifactIndex) TrustedCatalogOption {
 			return errors.New("Portal 测试制品索引不能为空")
 		}
 		c.testIndex = index
+		return nil
+	}
+}
+
+// WithDevelopmentPlugins is selected only by the Backend composition root for
+// a development Node. Production catalogs remain fail-closed.
+func WithDevelopmentPlugins() TrustedCatalogOption {
+	return func(c *TrustedCatalog) error {
+		c.allowDevelopmentPlugins = true
 		return nil
 	}
 }
@@ -170,7 +180,7 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 		if origin == compositioncommonv1.OriginApplication && class == pluginid.ManagementPlatform {
 			return nil, fmt.Errorf("Frontend Application Composition 不能选择平台插件 %s", ref.ID)
 		}
-		if class == pluginid.ManagementDevelopment {
+		if class == pluginid.ManagementDevelopment && !c.allowDevelopmentPlugins {
 			return nil, fmt.Errorf("Portal v1 不允许开发插件 %s", ref.ID)
 		}
 		isSelectedRuntimeEngine := samePortalRef(ref, spec.RuntimeEngine.PluginRef)

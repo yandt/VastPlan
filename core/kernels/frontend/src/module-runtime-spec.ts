@@ -1,7 +1,7 @@
 import type { PluginRef, PortalSpec } from "./portal-contracts";
 import { ModuleLoadError } from "./module-errors";
 import { validateModuleGraphDescriptor, type FrontendModuleGraphDescriptor } from "./module-graph-contract";
-import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
+import type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 export interface FrontendModuleDescriptor extends PluginRef {
   entry: string;
@@ -21,15 +21,6 @@ export interface PortalRuntimeSpec {
 export type PortalGenerationCoordination =
   | { state: "prepared"; activationId: number; transactionId: string }
   | { state: "committed"; activationId: number };
-
-export function parsePortalRuntimeSpec(value: unknown): PortalRuntimeSpec {
-  return parseRuntimeSpec(value, productionFrontendRuntimeProtocol);
-}
-
-/** Separate parser for local platformdev overlays; production URLs remain valid. */
-export function parseDevelopmentRuntimeSpec(value: unknown): PortalRuntimeSpec {
-  return parseRuntimeSpec(value, developmentFrontendRuntimeProtocol);
-}
 
 export function validateFrontendModuleDescriptor(descriptor: FrontendModuleDescriptor, protocol: FrontendRuntimeProtocol): void {
   const governedDigest = protocol.governedDigest(descriptor.url, "entry");

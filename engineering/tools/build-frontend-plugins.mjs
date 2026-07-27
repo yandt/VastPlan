@@ -11,6 +11,7 @@ const outputRoot = option("--out-dir");
 const manifestPath = option("--manifest");
 const selectedPlugins = new Set(stringOptions("--plugin"));
 const developmentHMR = process.argv.includes("--development-hmr");
+const includeExamples = process.argv.includes("--include-examples");
 
 const common = {
   bundle: true,
@@ -119,28 +120,35 @@ async function sourceFiles(root) {
 }
 
 async function discoverFrontendPlugins() {
-  const root = resolve("extensions/plugins");
-  const entries = await readdir(root, { withFileTypes: true });
   const plugins = [];
-  for (const directory of entries.filter((entry) => entry.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
-    if (selectedPlugins.size > 0 && !selectedPlugins.has(directory.name)) continue;
-    const pluginRoot = resolve(root, directory.name);
-    const manifestPath = resolve(pluginRoot, "vastplan.plugin.json");
-    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-    const id = typeof manifest.id === "string" ? manifest.id.trim() : "";
-    const entry = typeof manifest.entry?.frontend === "string" ? manifest.entry.frontend.trim() : "";
-    if (entry === "") continue;
-    if (id === "" || id !== directory.name) throw new Error(`${manifestPath} 的 id 必须等于插件目录名`);
-    if (!/^frontend\/dist\/[A-Za-z0-9._/-]+\.(?:m?js)$/.test(entry) || entry.includes("..")) {
-      throw new Error(`${manifestPath} 的 entry.frontend 必须是 frontend/dist/ 下的 JavaScript 文件`);
+  const roots = includeExamples || selectedPlugins.size > 0
+    ? [resolve("extensions/plugins"), resolve("examples/plugins")]
+    : [resolve("extensions/plugins")];
+  for (const root of roots) {
+    const exampleRoot = root === resolve("examples/plugins");
+    const entries = await readdir(root, { withFileTypes: true });
+    for (const directory of entries.filter((entry) => entry.isDirectory()).sort((left, right) => left.name.localeCompare(right.name))) {
+      if (selectedPlugins.size > 0 && !selectedPlugins.has(directory.name)) continue;
+      const pluginRoot = resolve(root, directory.name);
+      const manifestPath = resolve(pluginRoot, "vastplan.plugin.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      const id = typeof manifest.id === "string" ? manifest.id.trim() : "";
+      const entry = typeof manifest.entry?.frontend === "string" ? manifest.entry.frontend.trim() : "";
+      if (entry === "") continue;
+      if (id === "" || id !== directory.name) throw new Error(`${manifestPath} 的 id 必须等于插件目录名`);
+      if (exampleRoot !== id.startsWith("cn.vastplan.example.")) throw new Error(`${manifestPath} 的产品/示例目录与命名空间不一致`);
+      if (plugins.some((plugin) => plugin.id === id)) throw new Error(`产品与示例前端插件 ID 重复: ${id}`);
+      if (!/^frontend\/dist\/[A-Za-z0-9._/-]+\.(?:m?js)$/.test(entry) || entry.includes("..")) {
+        throw new Error(`${manifestPath} 的 entry.frontend 必须是 frontend/dist/ 下的 JavaScript 文件`);
+      }
+      const deferred = isDeferredFrontendContribution(manifest.contributes?.frontend);
+      const serverEntry = typeof manifest.entry?.frontendServer === "string" ? manifest.entry.frontendServer.trim() : undefined;
+      if (serverEntry !== undefined && (!/^frontend\/dist\/[A-Za-z0-9._/-]+\.(?:m?js)$/.test(serverEntry) || serverEntry.includes(".."))) {
+        throw new Error(`${manifestPath} 的 entry.frontendServer 必须是 frontend/dist/ 下的 JavaScript 文件`);
+      }
+      plugins.push({ id, entry, serverEntry, deferred, pluginRoot, source: await findFrontendSource(pluginRoot, id),
+        ...(serverEntry === undefined ? {} : { serverSource: await findFrontendServerSource(pluginRoot, id) }) });
     }
-    const deferred = isDeferredFrontendContribution(manifest.contributes?.frontend);
-    const serverEntry = typeof manifest.entry?.frontendServer === "string" ? manifest.entry.frontendServer.trim() : undefined;
-    if (serverEntry !== undefined && (!/^frontend\/dist\/[A-Za-z0-9._/-]+\.(?:m?js)$/.test(serverEntry) || serverEntry.includes(".."))) {
-      throw new Error(`${manifestPath} 的 entry.frontendServer 必须是 frontend/dist/ 下的 JavaScript 文件`);
-    }
-    plugins.push({ id, entry, serverEntry, deferred, pluginRoot, source: await findFrontendSource(pluginRoot, id),
-      ...(serverEntry === undefined ? {} : { serverSource: await findFrontendServerSource(pluginRoot, id) }) });
   }
   if (selectedPlugins.size > 0) {
     const discovered = new Set(plugins.map((plugin) => plugin.id));

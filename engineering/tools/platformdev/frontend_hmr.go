@@ -148,7 +148,7 @@ func (h *frontendHMR) buildPlugins(ctx context.Context, pluginIDs []string, rebu
 	h.mu.RUnlock()
 	directory := filepath.Join(h.runDir, fmt.Sprintf("generation-%06d", nextGeneration))
 	manifest := filepath.Join(directory, "manifest.json")
-	arguments := []string{"engineering/tools/build-frontend-plugins.mjs", "--development-hmr", "--out-dir", directory, "--manifest", manifest}
+	arguments := []string{"engineering/tools/build-frontend-plugins.mjs", "--development-hmr", "--include-examples", "--out-dir", directory, "--manifest", manifest}
 	if !rebuildAll {
 		for _, id := range pluginIDs {
 			arguments = append(arguments, "--plugin", id)
@@ -183,7 +183,7 @@ func (h *frontendHMR) buildHost(ctx context.Context) error {
 		return fmt.Errorf("Portal 宿主候选构建失败: %w", err)
 	}
 	manifest := filepath.Join(directory, "modules", "manifest.json")
-	if err := h.runCommand(ctx, nil, "node", "engineering/tools/build-frontend-plugins.mjs", "--development-hmr", "--out-dir", filepath.Dir(manifest), "--manifest", manifest); err != nil {
+	if err := h.runCommand(ctx, nil, "node", "engineering/tools/build-frontend-plugins.mjs", "--development-hmr", "--include-examples", "--out-dir", filepath.Dir(manifest), "--manifest", manifest); err != nil {
 		return fmt.Errorf("Portal 插件候选构建失败: %w", err)
 	}
 	candidate, err := h.loadCandidate(manifest)

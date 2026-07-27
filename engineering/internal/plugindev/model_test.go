@@ -14,8 +14,8 @@ func TestDiscoverUsesManifestAndDetectsCurrentBackendDrivers(t *testing.T) {
 		id     string
 		driver Driver
 	}{
-		{"cn.vastplan.hello-world", DriverNativeGo},
-		{"cn.vastplan.python-hello", DriverPython},
+		{"cn.vastplan.example.backend.hello-world", DriverNativeGo},
+		{"cn.vastplan.example.runtime.python-hello", DriverPython},
 		{"cn.vastplan.foundation.security.bootstrap-policy", DriverDynamicGo},
 	} {
 		spec, err := Discover(root, test.id)
@@ -54,7 +54,7 @@ func TestSourceDigestTracksPluginAndSharedSDKInputs(t *testing.T) {
 
 func TestCommandBuilderBuildsImmutableNativeWorkspaceCandidate(t *testing.T) {
 	root := repositoryRoot(t)
-	spec, err := Discover(root, "cn.vastplan.demo-quota")
+	spec, err := Discover(root, "cn.vastplan.example.backend.quota")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func fixtureRepository(t *testing.T) (string, Spec) {
 	t.Helper()
 	root := t.TempDir()
 	pluginID := "cn.vastplan.example.dev"
-	pluginRoot := filepath.Join(root, "extensions", "plugins", pluginID)
+	pluginRoot := filepath.Join(root, "examples", "plugins", pluginID)
 	for _, directory := range []string{
 		pluginRoot, filepath.Join(pluginRoot, "backend"), filepath.Join(root, "contracts"),
 		filepath.Join(root, "core", "shared", "go"), filepath.Join(root, "extensions", "sdk", "go"),

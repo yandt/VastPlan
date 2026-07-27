@@ -78,7 +78,7 @@ func TestControllerCancelsUncommittedBuildAndPublishesOnlyLatestDigest(t *testin
 	case <-ctx.Done():
 		t.Fatal("first build did not start")
 	}
-	source := filepath.Join(root, "extensions", "plugins", spec.ID, "backend", "main.go")
+	source := filepath.Join(spec.SourceRoot, "backend", "main.go")
 	if err := os.WriteFile(source, []byte("package main\nfunc main() { println(2) }\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestControllerFinishesPublishTransactionThenQueuesLatestSource(t *testing.T
 	done := make(chan error, 1)
 	go func() { done <- controller.Run(ctx) }()
 	first := <-publisher.started
-	source := filepath.Join(root, "extensions", "plugins", spec.ID, "backend", "main.go")
+	source := filepath.Join(spec.SourceRoot, "backend", "main.go")
 	if err := os.WriteFile(source, []byte("package main\nfunc main() { println(3) }\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

@@ -241,6 +241,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0158 应用插件兼容范围与精确运行锁](decisions/ADR-0158-应用插件兼容范围与精确运行锁.md)
 - [ADR-0159 Ant Design 首选 Renderer 与按需交付](decisions/ADR-0159-Ant-Design首选Renderer与按需交付.md)
 - [ADR-0160 精确制品摘要贯穿与事件驱动依赖监督](decisions/ADR-0160-精确制品摘要贯穿与事件驱动依赖监督.md)
+- [ADR-0161 产品插件所有权与开发示例物理隔离](decisions/ADR-0161-产品插件所有权与开发示例物理隔离.md)
 
 ### 插件共享代码与能力复用
 
@@ -252,7 +253,8 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 
 ### 插件（具体插件文档）
 - [说明](plugins/README.md) —— 具体插件文档规则
-- [Python Hello 参考插件](plugins/cn.vastplan.python-hello.md) —— Python SDK、事件发布与跨语言调用参考
+- [可运行示例目录](../../examples/README.md) —— `cn.vastplan.example.*` 插件、开发配置与生产隔离规则
+- [Python Hello 参考插件](plugins/cn.vastplan.example.runtime.python-hello.md) —— Python SDK、事件发布与跨语言调用参考
 - [自举权限基线](plugins/cn.vastplan.foundation.security.bootstrap-policy.md) —— 首方多级命名空间、settings 写保护与最低权限基线
 - [Authorization Enforcer](plugins/cn.vastplan.foundation.security.authorization-enforcer.md) —— 每内核签名策略强制、风险缓存与首方 workload Policy Bundle
 - [Native Authorization Engine](plugins/cn.vastplan.foundation.security.authorization-engine.native.md) —— 默认 Go Engine Provider 与有界 Decision Proof
@@ -271,7 +273,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [Trivy Database File Snapshot](plugins/cn.vastplan.platform.artifacts.assessment.database.file.md) —— 每节点本地、摘要钉死、原子物化的离线数据库快照
 - [API Exposure 治理插件](plugins/cn.vastplan.platform.integration.api-exposure.md) —— 受治理 API Contract、随机 Route Key、Gateway Catalog、Endpoint Lease 与一次性 Ticket
 - [Authorization Policy](plugins/cn.vastplan.platform.security.authorization-policy.md) —— Role/Binding revision、即时撤权、签名 Policy Snapshot 与 Workbench 管理面
-- [Workbench Pattern Gallery](plugins/cn.vastplan.product.developer.workbench-gallery.md) —— RecordDetail、MasterDetail 与 TreeDetail 的开发 Application 示例
+- [Workbench Pattern Gallery](plugins/cn.vastplan.example.frontend.workbench-gallery.md) —— RecordDetail、MasterDetail 与 TreeDetail 的开发 Application 示例
 - [本地文件制品存储 Provider](plugins/cn.vastplan.platform.artifacts.storage.file.md) —— 私有 volume 供给、路径隔离与非 RPC 数据面
 
 ### 指南

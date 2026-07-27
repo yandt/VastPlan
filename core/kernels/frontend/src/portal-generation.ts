@@ -1,7 +1,7 @@
 import type { FrontendPluginLifecycleContext, JSONValue } from "@vastplan/ui-primitives";
 import { VerifiedFrontendPluginLoader, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
 import { PortalRuntime, type PreparedFrontendPlugin, type PreparedPortal } from "./portal-runtime";
-import { productionFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
+import type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 const defaultStateLimit = 64 * 1024;
 const defaultStateDepth = 32;
@@ -28,7 +28,7 @@ export interface PortalGenerationManagerOptions {
   disposeTimeoutMs?: number;
   stateLimitBytes?: number;
   stateDepth?: number;
-  runtimeProtocol?: FrontendRuntimeProtocol;
+  runtimeProtocol: FrontendRuntimeProtocol;
   onDiagnostic?(diagnostic: PortalGenerationDiagnostic): void;
   prepare?(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<PreparedPortal>;
   beforeCommit?(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<void>;
@@ -45,7 +45,7 @@ export class PortalGenerationManager {
   private readonly stateLimitBytes: number;
   private readonly stateDepth: number;
 
-  public constructor(private readonly options: PortalGenerationManagerOptions = {}) {
+  public constructor(private readonly options: PortalGenerationManagerOptions) {
     this.fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
     this.disposeTimeoutMs = options.disposeTimeoutMs ?? 2_000;
     this.stateLimitBytes = options.stateLimitBytes ?? defaultStateLimit;
@@ -126,7 +126,7 @@ export class PortalGenerationManager {
 
   private prepare(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<PreparedPortal> {
     if (this.options.prepare !== undefined) return this.options.prepare(spec, context);
-    const loader = new VerifiedFrontendPluginLoader(spec, { protocol: this.options.runtimeProtocol ?? productionFrontendRuntimeProtocol, fetcher: this.fetcher });
+    const loader = new VerifiedFrontendPluginLoader(spec, { protocol: this.options.runtimeProtocol, fetcher: this.fetcher });
     return new PortalRuntime(loader).prepare(spec.portal, context);
   }
 

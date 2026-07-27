@@ -11,7 +11,7 @@ import (
 )
 
 func TestManagedServiceCompositionPinsCurrentHelloWorldArtifact(t *testing.T) {
-	compositionPath := filepath.Join("..", "..", "deploy", "managed-services-application.json")
+	compositionPath := filepath.Join("..", "..", "..", "examples", "deploy", "backend-managed-services-application.json")
 	composition, err := backendcompositionv1.ParseApplicationCompositionFile(compositionPath)
 	if err != nil {
 		t.Fatal(err)
@@ -20,11 +20,11 @@ func TestManagedServiceCompositionPinsCurrentHelloWorldArtifact(t *testing.T) {
 		t.Fatalf("本地在线服务组合身份无效: %+v", composition)
 	}
 	unit := composition.Units[0].Spec
-	if unit.Placement.NodeSelector["environment"] != "local-managed" || len(unit.Plugins) != 1 || unit.Plugins[0].ID != "cn.vastplan.hello-world" {
+	if unit.Placement.NodeSelector["environment"] != "local-managed" || len(unit.Plugins) != 1 || unit.Plugins[0].ID != "cn.vastplan.example.backend.hello-world" {
 		t.Fatalf("本地在线服务组合未精确绑定 hello-world: %+v", unit)
 	}
 
-	manifestPath := filepath.Join("..", "..", "..", "extensions", "plugins", "cn.vastplan.hello-world", "vastplan.plugin.json")
+	manifestPath := filepath.Join("..", "..", "..", "examples", "plugins", "cn.vastplan.example.backend.hello-world", "vastplan.plugin.json")
 	raw, err := os.ReadFile(manifestPath)
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestManagedServiceCompositionPinsCurrentHelloWorldArtifact(t *testing.T) {
 	if !ok {
 		t.Fatalf("hello-world Scoped Seed 容器缺失: %+v", unit.Config)
 	}
-	values, ok := plugins["cn.vastplan.hello-world"].(map[string]any)
+	values, ok := plugins["cn.vastplan.example.backend.hello-world"].(map[string]any)
 	if !ok || values["greetingTemplate"] == "" {
 		t.Fatalf("hello-world Scoped Seed 缺失: %+v", unit.Config)
 	}

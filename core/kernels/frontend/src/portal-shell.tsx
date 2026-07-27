@@ -11,7 +11,7 @@ import { AccessLoginPage } from "./access-login";
 import { PortalPreferenceSession } from "./portal-preferences";
 import { PortalGenerationCommitClient } from "./portal-generation-client";
 import type { PortalRuntimeSource } from "./portal-runtime-source";
-import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol } from "./frontend-runtime-protocol";
+import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 declare const __VASTPLAN_DEV_HMR__: boolean;
 
@@ -199,12 +199,6 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   return root;
 }
 
-export async function preparePortal(fetcher: ModuleFetcher, endpoint: string, pathname: string): Promise<PreparedPortal> {
-  const spec = await fetchRuntimeSpec(fetcher, endpoint, pathname);
-  const loader = new VerifiedFrontendPluginLoader(spec, { protocol: productionFrontendRuntimeProtocol, fetcher });
-  return new PortalRuntime(loader).prepare(spec.portal);
-}
-
 /** 组合根只选择一次 Runtime 协议，首次启动与后续替换共用该实例。 */
 export function createBootstrapRuntimeSource(fetcher: ModuleFetcher, endpoint: string, developmentEndpoint: string, development: boolean): PortalRuntimeSource {
   const protocol = development ? developmentFrontendRuntimeProtocol : productionFrontendRuntimeProtocol;
@@ -213,7 +207,7 @@ export function createBootstrapRuntimeSource(fetcher: ModuleFetcher, endpoint: s
     : { protocol, read: (pathname) => fetchRuntimeSpec(fetcher, endpoint, pathname, protocol) };
 }
 
-export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string, pathname: string, protocol = productionFrontendRuntimeProtocol): Promise<PortalRuntimeSpec> {
+export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string, pathname: string, protocol: FrontendRuntimeProtocol): Promise<PortalRuntimeSpec> {
   const separator = endpoint.includes("?") ? "&" : "?";
   const response = await fetcher(`${endpoint}${separator}path=${encodeURIComponent(pathname)}`, {
     credentials: "same-origin",

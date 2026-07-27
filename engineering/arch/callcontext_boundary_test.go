@@ -11,34 +11,19 @@ import (
 )
 
 func TestBackendPluginManifestsDeclareContextAccess(t *testing.T) {
-	pluginsDir := filepath.Join(repoRoot(t), "extensions", "plugins")
-	entries, err := os.ReadDir(pluginsDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		path := filepath.Join(pluginsDir, entry.Name(), "vastplan.plugin.json")
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		manifest, err := pluginv1.ParseManifest(raw)
-		if err != nil {
-			t.Fatalf("解析插件 %s: %v", entry.Name(), err)
-		}
-		if _, backend := manifest.Engines["backend"]; backend && manifest.ContextAccess == nil {
-			t.Errorf("Backend 插件 %s 必须显式声明 contextAccess，不能继承宽泛默认值", manifest.ID)
-		}
+	for _, root := range []string{"extensions/plugins", "examples/plugins"} {
+		forEachPluginManifest(t, root, func(_ string, manifest pluginv1.Manifest) {
+			if _, backend := manifest.Engines["backend"]; backend && manifest.ContextAccess == nil {
+				t.Errorf("Backend 插件 %s 必须显式声明 contextAccess，不能继承宽泛默认值", manifest.ID)
+			}
+		})
 	}
 }
 
 func TestHostControlDataDoesNotReturnToCallContextMetadata(t *testing.T) {
 	root := repoRoot(t)
 	reserved := [][]byte{[]byte("vastplan.internal."), []byte("vastplan.transport.")}
-	for _, tree := range []string{"core", "extensions"} {
+	for _, tree := range []string{"core", "extensions", "examples"} {
 		err := filepath.WalkDir(filepath.Join(root, tree), func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err

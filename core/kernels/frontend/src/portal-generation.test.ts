@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { FrontendPluginHotLifecycle } from "@vastplan/ui-primitives";
-import { PortalGenerationManager, type PortalGenerationDiagnostic } from "./portal-generation";
+import { PortalGenerationManager, type PortalGenerationDiagnostic, type PortalGenerationManagerOptions } from "./portal-generation";
 import type { PortalRuntimeSpec } from "./module-loader";
 import type { FrontendPluginModule, PreparedPortal } from "./portal-runtime";
+import { productionFrontendRuntimeProtocol } from "./frontend-runtime-protocol";
+
+function generationManager(options: Omit<PortalGenerationManagerOptions, "runtimeProtocol">): PortalGenerationManager {
+  return new PortalGenerationManager({ ...options, runtimeProtocol: productionFrontendRuntimeProtocol });
+}
 
 function spec(revision: number): PortalRuntimeSpec {
   return { portal: { revision } as PortalRuntimeSpec["portal"], modules: [], moduleGraphs: [] };
@@ -37,7 +42,7 @@ function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?
 describe("PortalGenerationManager", () => {
   it("preflights and disposes a Host Epoch candidate without replacing the active generation", async () => {
     const dispose = vi.fn();
-    const manager = new PortalGenerationManager({ prepare: async (runtime) => prepared(runtime.portal.revision, runtime.portal.revision === 2 ? { dispose } : undefined) });
+    const manager = generationManager({ prepare: async (runtime) => prepared(runtime.portal.revision, runtime.portal.revision === 2 ? { dispose } : undefined) });
     const active = await manager.start(spec(1));
     await manager.preflight(spec(2));
     expect(manager.active).toBe(active);
@@ -55,7 +60,7 @@ describe("PortalGenerationManager", () => {
       restore(state, context) { order.push(`restore:${context.generation}:${JSON.stringify(state)}`); },
     };
     const prepare = vi.fn(async (runtime: PortalRuntimeSpec) => prepared(runtime.portal.revision, runtime.portal.revision === 1 ? oldHot : nextHot));
-    const manager = new PortalGenerationManager({ prepare });
+    const manager = generationManager({ prepare });
     const committed: string[] = [];
     manager.subscribe((generation) => committed.push(generation.id));
 
@@ -75,7 +80,7 @@ describe("PortalGenerationManager", () => {
 
   it("keeps the active generation and cleans the candidate when restore fails", async () => {
     const candidateDisposed = vi.fn();
-    const manager = new PortalGenerationManager({
+    const manager = generationManager({
       prepare: async (runtime) => prepared(runtime.portal.revision,
         runtime.portal.revision === 1
           ? { capture: () => ({ count: 1 }) }
@@ -96,7 +101,7 @@ describe("PortalGenerationManager", () => {
     const beforeCommit = vi.fn(async (runtime: PortalRuntimeSpec) => {
       if (runtime.portal.revision === 2) throw new Error("server commit rejected");
     });
-    const manager = new PortalGenerationManager({
+    const manager = generationManager({
       beforeCommit,
       prepare: async (runtime) => prepared(runtime.portal.revision, runtime.portal.revision === 2 ? { dispose: candidateDisposed } : undefined),
     });
@@ -109,7 +114,7 @@ describe("PortalGenerationManager", () => {
 
   it("rejects non-JSON or oversized state before committing the candidate", async () => {
     for (const state of [new Date(), { text: "x".repeat(32) }]) {
-      const manager = new PortalGenerationManager({
+      const manager = generationManager({
         stateLimitBytes: 16,
         prepare: async (runtime) => prepared(runtime.portal.revision, runtime.portal.revision === 1 ? { capture: () => state as never } : { restore: vi.fn() }),
       });
@@ -123,7 +128,7 @@ describe("PortalGenerationManager", () => {
     let releaseSecond!: () => void;
     const secondReady = new Promise<void>((resolve) => { releaseSecond = resolve; });
     const calls: number[] = [];
-    const manager = new PortalGenerationManager({
+    const manager = generationManager({
       prepare: async (runtime) => {
         calls.push(runtime.portal.revision);
         if (runtime.portal.revision === 2) await secondReady;
@@ -143,7 +148,7 @@ describe("PortalGenerationManager", () => {
 
   it("reports listener and dispose failures without rolling back an already committed generation", async () => {
     const diagnostics: PortalGenerationDiagnostic[] = [];
-    const manager = new PortalGenerationManager({
+    const manager = generationManager({
       disposeTimeoutMs: 1,
       onDiagnostic: (item) => diagnostics.push(item),
       prepare: async (runtime) => prepared(runtime.portal.revision, runtime.portal.revision === 1 ? { dispose: () => new Promise(() => undefined) } : undefined),
@@ -159,7 +164,7 @@ describe("PortalGenerationManager", () => {
 
   it("aborts and disposes the active generation on shutdown in reverse plugin order", async () => {
     const order: string[] = [];
-    const manager = new PortalGenerationManager({
+    const manager = generationManager({
       prepare: async () => prepared(1, { dispose: () => { order.push("first"); } }, { dispose: () => { order.push("second"); } }),
     });
     const active = await manager.start(spec(1));
@@ -172,7 +177,7 @@ describe("PortalGenerationManager", () => {
   it("releases generation-owned module URLs after replacement and shutdown", async () => {
     const firstRelease = vi.fn();
     const secondRelease = vi.fn();
-    const manager = new PortalGenerationManager({
+    const manager = generationManager({
       prepare: async (runtime) => prepared(runtime.portal.revision, undefined, undefined, runtime.portal.revision === 1 ? firstRelease : secondRelease),
     });
     await manager.start(spec(1));

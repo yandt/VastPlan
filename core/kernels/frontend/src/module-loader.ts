@@ -9,7 +9,7 @@ import type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 export { ModuleLoadError } from "./module-errors";
 export type { FrontendModuleGraphDescriptor } from "./module-graph-loader";
-export { parseDevelopmentRuntimeSpec, parsePortalRuntimeSpec } from "./module-runtime-spec";
+export { parseRuntimeSpec } from "./module-runtime-spec";
 export type { FrontendModuleDescriptor, PortalRuntimeSpec } from "./module-runtime-spec";
 export type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 

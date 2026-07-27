@@ -12,8 +12,8 @@ func TestPluginBuildInputsFollowActualPublicDependencyClosure(t *testing.T) {
 	runtime := &runtime{options: options{root: root, stateRoot: t.TempDir()}}
 	goCache := filepath.Join(runtime.options.stateRoot, "go-cache")
 	inputs, err := runtime.listGoBinaryInputs(context.Background(), goCache,
-		"./extensions/plugins/cn.vastplan.demo-audit/backend",
-		[]string{"extensions/plugins/cn.vastplan.demo-audit/vastplan.plugin.json", "go.mod", "go.sum"})
+		"./examples/plugins/cn.vastplan.example.backend.audit/backend",
+		[]string{"examples/plugins/cn.vastplan.example.backend.audit/vastplan.plugin.json", "go.mod", "go.sum"})
 	if err != nil {
 		t.Fatal(err)
 	}
