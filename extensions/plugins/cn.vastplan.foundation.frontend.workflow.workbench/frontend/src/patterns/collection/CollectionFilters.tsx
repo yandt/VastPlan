@@ -42,8 +42,8 @@ export function CollectionFilters({ filters, layout, value, querying, onApply }:
     setDraft(next);
     if (autoApply && automaticFilterKinds.has(filter.kind)) onApply(next);
   };
-  const actions = <ui.Stack direction="column" gap="sm" justify="between">
-    {autoApply ? null : <ui.Button kind="primary" onClick={() => onApply(draft)} loading={querying}>{i18n.text(message(namespace, "action.query", "查询"))}</ui.Button>}
+  const actions = autoApply ? undefined : <ui.Stack direction="column" gap="sm" justify="between">
+    <ui.Button kind="primary" onClick={() => onApply(draft)} loading={querying}>{i18n.text(message(namespace, "action.query", "查询"))}</ui.Button>
     <ui.Button kind="secondary" onClick={clear}>{i18n.text(message(namespace, "action.clearFilters", "重置"))}</ui.Button>
   </ui.Stack>;
   return <ui.FilterBar appearance="collection" actions={actions}>
