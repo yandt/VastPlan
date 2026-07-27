@@ -23,7 +23,11 @@ test("creates a closed deterministic graph from esbuild metadata", async () => {
   const graph = await createFrontendModuleGraph({ target: "browser", pluginRoot: root, entry: "frontend/dist/main.js", metafile, allowedExternals: new Set(["react"]) });
   assert.equal(graph.nodes.length, 2);
   assert.deepEqual(graph.externals, ["react"]);
-  assert.equal(graph.nodes.find((node) => node.purpose === "entry").dependencies[0].kind, "dynamic");
+  assert.deepEqual(graph.nodes.find((node) => node.purpose === "entry").dependencies[0], {
+    specifier: "./chunks/lazy.js",
+    path: "frontend/dist/chunks/lazy.js",
+    kind: "dynamic",
+  });
   assert.match(graph.digest, /^[a-f0-9]{64}$/);
 });
 
@@ -41,7 +45,11 @@ test("accepts esbuild chunk imports reported relative to absWorkingDir", async (
     [chunk]: { bytes: Buffer.byteLength(chunkContent), imports: [] },
   } };
   const graph = await createFrontendModuleGraph({ target: "browser", pluginRoot: root, entry: "frontend/dist/main.js", metafile, allowedExternals: new Set() });
-  assert.equal(graph.nodes.find((node) => node.purpose === "entry").dependencies[0].path, "frontend/dist/chunks/lazy.js");
+  assert.deepEqual(graph.nodes.find((node) => node.purpose === "entry").dependencies[0], {
+    specifier: "./chunks/lazy.js",
+    path: "frontend/dist/chunks/lazy.js",
+    kind: "dynamic",
+  });
 });
 
 test("rejects undeclared externals and output escape", async () => {

@@ -20,7 +20,7 @@ export async function createFrontendModuleGraph({ target, pluginRoot, entry, met
       }
       const dependencyAbsolute = resolveOutputDependency(absolutePath, dependency.path, outputByAbsolutePath);
       if (dependencyAbsolute === undefined) throw new Error(`Module Graph 依赖不在构建闭包中: ${path} -> ${dependency.path}`);
-      dependencies.push({ specifier: dependency.path, path: packagePath(pluginRoot, dependencyAbsolute), kind: dependencyKind(dependency.kind) });
+      dependencies.push({ specifier: runtimeSpecifier(absolutePath, dependencyAbsolute), path: packagePath(pluginRoot, dependencyAbsolute), kind: dependencyKind(dependency.kind) });
     }
     const content = await readFile(absolutePath);
     if (content.byteLength !== metadata.bytes) throw new Error(`Module Graph 输出大小漂移: ${path}`);
@@ -44,6 +44,12 @@ export async function createFrontendModuleGraph({ target, pluginRoot, entry, met
 function resolveOutputDependency(importerAbsolute, dependencyPath, outputByAbsolutePath) {
   const candidates = [resolve(dirname(importerAbsolute), dependencyPath), resolve(dependencyPath)];
   return candidates.find((candidate) => outputByAbsolutePath.has(candidate));
+}
+
+/** Module Graph locks the specifier emitted into ESM, not esbuild's filesystem lookup path. */
+function runtimeSpecifier(importerAbsolute, dependencyAbsolute) {
+  const path = relative(dirname(importerAbsolute), dependencyAbsolute).split(sep).join("/");
+  return path.startsWith(".") ? path : `./${path}`;
 }
 
 function assertAcyclic(nodes) {

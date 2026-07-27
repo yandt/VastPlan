@@ -48,3 +48,7 @@
 
 上述单一提交协调器缺口已由 [ADR-0155](ADR-0155-Browser-Server单一Generation协调提交.md) 补齐。Server Worker 不再由 SSR 隐式提交；RuntimeSpec 返回前只准备候选，Browser 完成模块校验与状态恢复后通过会话、CSRF 和 Activation 复核进入 Node 线性化提交点，Node 成功响应后 Browser 才替换活动代。未提交节点的 SSR 只 bypass，不渲染错误 revision。
 - 现已建立跨进程 prepare transaction、Browser ready/commit acknowledgement、超时回收与旧代统一 drain，本 ADR 的代码实施状态更新为“已完成”。这里的“双端原子”明确指 Node 线性化提交与失败安全，不宣称网络两端物理同时写入。
+
+## 实施更新（2026-07-27）
+
+- Graph 依赖同时保留包内目标 `path` 与构建产物中真实存在的 ESM `specifier`。esbuild `metafile.outputs[*].imports[*].path` 只用于从工作目录或 importer 定位输出闭包，不得直接写入 Graph；构建器必须根据 importer 输出与目标输出生成规范化的 `./` 或 `../` 相对 specifier。Browser Loader 继续按该锁定字符串精确改写并在缺失时 fail-closed，开发 HMR 与正式制品共用同一生成规则。

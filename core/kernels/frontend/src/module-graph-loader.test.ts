@@ -16,7 +16,7 @@ async function fixture(): Promise<{ graph: FrontendModuleGraphDescriptor; conten
     return { path, url: `/v1/portal-modules/7/${sha256}.js`, sha256, size: bytes.byteLength, mediaType: "text/javascript", purpose, dependencies };
   };
   const nodes = [
-    await node("frontend/dist/main.js", "entry", [{ specifier: "chunks/lazy.js", path: "frontend/dist/chunks/lazy.js", kind: "dynamic" }]),
+    await node("frontend/dist/main.js", "entry", [{ specifier: "./chunks/lazy.js", path: "frontend/dist/chunks/lazy.js", kind: "dynamic" }]),
     await node("frontend/dist/chunks/lazy.js", "chunk", []),
   ];
   const unsigned = { ...ref, target: "browser" as const, entry: nodes[0].path, digest: "0".repeat(64), packageSha256: "a".repeat(64), externals: ["react"], nodes };
