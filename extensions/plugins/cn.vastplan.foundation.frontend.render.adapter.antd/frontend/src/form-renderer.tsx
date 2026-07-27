@@ -1,6 +1,7 @@
-import { Card, ConfigProvider, Input, Steps, Tabs, Typography } from "antd";
+import { Card, ConfigProvider, Input, Select as AntdSelect, Steps, Tabs, Typography } from "antd";
 import RJSFForm from "@rjsf/core/lib/components/Form.js";
 import { generateWidgets } from "@rjsf/antd/lib/widgets/index.js";
+import { enumOptionsIndexForValue, enumOptionsValueForIndex } from "@rjsf/utils";
 import type { FieldTemplateProps, ObjectFieldTemplateProps, WidgetProps } from "@rjsf/utils";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
@@ -30,6 +31,28 @@ function SecretRefWidget({ value, disabled, readonly, required, onChange, onBlur
     onChange={(event) => onChange(event.target.value)}
     onBlur={(event) => onBlur(id, event.target.value)}
     onFocus={(event) => onFocus(id, event.target.value)}
+  />;
+}
+
+/** FilterPanel opts into this through ui:options.allowClear; regular form selects retain their current behavior. */
+function SelectWidget({ id, value, multiple, placeholder, disabled, readonly, options, onChange, onBlur, onFocus }: WidgetProps) {
+  const enumOptions = options.enumOptions ?? [];
+  const selected = enumOptionsIndexForValue(value, enumOptions, multiple);
+  return <AntdSelect
+    id={id}
+    value={selected}
+    mode={multiple ? "multiple" : undefined}
+    placeholder={placeholder}
+    disabled={disabled || readonly}
+    allowClear={options.allowClear === true}
+    style={{ width: "100%" }}
+    options={enumOptions.map((option, index) => ({
+      value: String(index), label: option.label,
+      disabled: Array.isArray(options.enumDisabled) && options.enumDisabled.includes(option.value),
+    }))}
+    onChange={(next) => onChange(next === undefined ? options.emptyValue : enumOptionsValueForIndex(next, enumOptions, options.emptyValue))}
+    onBlur={() => onBlur(id, value)}
+    onFocus={() => onFocus(id, value)}
   />;
 }
 
@@ -94,7 +117,7 @@ export function FormRenderer({ schema, value, onChange, presentation, presentati
     });
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
   const templates = useMemo(() => ({ ...safeAntdTemplates, FieldTemplate: (props: FieldTemplateProps) => <PresentedField {...props} placement={presentation?.labelPlacement} />, ObjectFieldTemplate: (props: ObjectFieldTemplateProps) => <PresentedObject {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { ...safeAntdTemplates.ButtonTemplates, SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
-  const widgets = useMemo(() => ({ ...antdWidgets, secretRef: SecretRefWidget }), []);
+  const widgets = useMemo(() => ({ ...antdWidgets, SelectWidget, secretRef: SecretRefWidget }), []);
   const compact = presentation?.layout === "compact";
   const form = <RJSFForm
     schema={localizedSchema}

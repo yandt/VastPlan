@@ -98,13 +98,14 @@ describe("MUI portal UI adapter", () => {
   it("keeps compact filter labels persistent, single-line and inside the shared width", () => {
     const Form = muiPortalUIComponents.FormRenderer;
     const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
-      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "" } } }}
-      value={{}}
+      schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status", enum: ["ready", "offline"] } } }, uiSchema: { status: { "ui:placeholder": "", "ui:options": { allowClear: true } } } }}
+      value={{ status: "ready" }}
       onChange={() => undefined}
       presentation={{ layout: "compact", labelPlacement: "inside-inline" }}
     /></PortalI18nProvider>);
     expect(markup).toContain("vp-mui-inside-inline-field");
     expect(markup).toContain('aria-label="Status"');
+    expect(markup).toContain('aria-label="Clear selection"');
     expect(markup).toContain("white-space:nowrap");
     expect(markup).not.toContain("Filter root");
     expect(markup).toContain("margin-bottom:0");

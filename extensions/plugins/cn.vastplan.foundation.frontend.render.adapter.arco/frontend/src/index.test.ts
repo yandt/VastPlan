@@ -72,12 +72,13 @@ describe("Arco portal UI adapter", () => {
     const html = renderToStaticMarkup(createElement(PortalI18nProvider, {
       policy: { defaultLocale: "en-US", supportedLocales: ["en-US"] }, catalogs: {}, candidates: ["en-US"],
       children: createElement(Form, {
-        schema: { id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status" } } }, uiSchema: { status: { "ui:placeholder": "" } } },
-        value: {}, onChange() {}, presentation: { layout: "compact", labelPlacement: "inside-inline" },
+        schema: { id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", title: "Filter root", properties: { status: { type: "string", title: "Status", enum: ["ready", "offline"] } } }, uiSchema: { status: { "ui:placeholder": "", "ui:options": { allowClear: true } } } },
+        value: { status: "ready" }, onChange() {}, presentation: { layout: "compact", labelPlacement: "inside-inline" },
       }),
     }));
     expect(html).toContain("vp-arco-inside-inline-field");
     expect(html).toContain('aria-label="Status"');
+    expect(html).toContain("arco-select-clear");
     expect(html).toContain("white-space:nowrap");
     expect(html).not.toContain("Filter root");
   });

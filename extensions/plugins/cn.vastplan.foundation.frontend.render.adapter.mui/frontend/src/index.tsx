@@ -5,6 +5,8 @@ import { CacheProvider } from "@emotion/react";
 // RJSF 6.7 的根入口会静态导入仅供测试使用的 AJV8 Validator。
 // 生产 Renderer 直接使用公开 Form 子路径，保持自有 CSP Validator 为唯一验证器。
 import RJSFForm from "@rjsf/core/lib/components/Form.js";
+import { enumOptionsIndexForValue, enumOptionsValueForIndex } from "@rjsf/utils";
+import type { WidgetProps } from "@rjsf/utils";
 import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import {
   Alert,
@@ -134,6 +136,38 @@ function Select({ value, options, placeholder, ariaLabel, disabled, onChange }: 
     {placeholder === undefined ? null : <MuiMenuItem value="" disabled>{placeholder}</MuiMenuItem>}
     {options.map((option) => <MuiMenuItem key={option.value} value={option.value} disabled={option.disabled}>{option.label}</MuiMenuItem>)}
   </TextField>;
+}
+
+/** FilterPanel opts into this through ui:options.allowClear; regular form selects retain their current behavior. */
+function SelectWidget({ id, value, multiple, placeholder, disabled, readonly, options, onChange, onBlur, onFocus }: WidgetProps) {
+  const enumOptions = options.enumOptions ?? [];
+  const selected = enumOptionsIndexForValue(value, enumOptions, multiple);
+  const clearable = options.allowClear === true;
+  return <Box sx={{ position: "relative", minWidth: 0 }}>
+    <TextField
+      id={id}
+      select
+      fullWidth
+      size="small"
+      value={selected ?? ""}
+      disabled={disabled || readonly}
+      SelectProps={{ multiple, displayEmpty: clearable || placeholder !== undefined }}
+      onChange={(event) => onChange(event.target.value === "" ? options.emptyValue : enumOptionsValueForIndex(event.target.value, enumOptions, options.emptyValue))}
+      onBlur={() => onBlur(id, value)}
+      onFocus={() => onFocus(id, value)}
+    >
+      {clearable || placeholder === undefined ? null : <MuiMenuItem value="" disabled>{placeholder}</MuiMenuItem>}
+      {clearable ? <MuiMenuItem value="">{placeholder ?? ""}</MuiMenuItem> : null}
+      {enumOptions.map((option, index) => <MuiMenuItem key={String(index)} value={String(index)} disabled={Array.isArray(options.enumDisabled) && options.enumDisabled.includes(option.value)}>{option.label}</MuiMenuItem>)}
+    </TextField>
+    {!clearable || multiple || selected === undefined || selected === "" ? null : <MuiIconButton
+      size="small"
+      aria-label="Clear selection"
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={() => onChange(options.emptyValue)}
+      sx={{ position: "absolute", right: 28, top: "50%", transform: "translateY(-50%)", zIndex: 1 }}
+    ><MuiNativeIcon name="close" size="sm" /></MuiIconButton>}
+  </Box>;
 }
 
 function Grid({ columns = 1, gap = "md", children }: GridProps) {
@@ -320,6 +354,7 @@ function FormRenderer({ schema, value, onChange, presentation, presentationSecti
     noHtml5Validate
     onChange={(event) => onChange((event.formData ?? {}) as Record<string, unknown>)}
     templates={templates}
+    widgets={{ SelectWidget }}
   ><></></RJSFForm></Box>;
 }
 

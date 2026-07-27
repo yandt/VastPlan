@@ -1,6 +1,6 @@
 {
   "name": "@vastplan/ui-render-adapter-mui",
-  "version": "1.7.7",
+  "version": "1.7.8",
   "private": true,
   "type": "module",
   "exports": {
@@ -17,6 +17,7 @@
     "@mui/icons-material": "^7.3.11",
     "@mui/material": "^7.3.6",
     "@rjsf/core": "^6.7.0",
+    "@rjsf/utils": "^6.7.0",
     "@vastplan/rjsf-csp-validator": "workspace:*",
     "@vastplan/ui-primitives": "workspace:*",
     "react": "^18.3.1",

@@ -6,7 +6,7 @@ describe("FilterPanel", () => {
   it("keeps each field label available for the persistent inside-inline renderer", () => {
     const schema = filterPanelSchema([{ id: "status", label: "状态", kind: "select" }]);
     expect(schema.localization).toEqual({ "/properties/status/title": "状态" });
-    expect(schema.uiSchema).toEqual({ status: { "ui:placeholder": "" } });
+    expect(schema.uiSchema).toEqual({ status: { "ui:placeholder": "", "ui:options": { allowClear: true } } });
     expect(schema.uiLocalization).toBeUndefined();
   });
 

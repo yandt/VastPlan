@@ -66,7 +66,7 @@ FilterPanelSpec
 
 FilterPanel 只管理字段值、草稿、清除、提交和视觉编排，通过 `onApply(values)` 输出稳定值；分页、排序、请求取消、缓存与数据加载归组合它的上级工作流所有。功能插件不得提交 React 组件、自定义按钮或 UI 框架参数。开发阶段不保留旧 `filters` / `filterLayout` 字段，架构门禁拒绝其重新出现。
 
-默认 `auto-single-row`：不足两行时文本 Enter 提交，选择/布尔/范围完成即提交且不显示操作；达到两行时保留草稿并显示查询与清除。`explicit` 始终要求显式提交。操作单元跨越当前行剩余列并右对齐，因此在每个响应式断点都落于末行末列。FilterPanel 通过 `FormPresentation.labelPlacement=inside-inline` 使用持久 Label，而不是输入后消失的 placeholder：Label 与控件共享当前列宽，保持单行并在 40%/45% 上限内省略，框架 Tooltip 和可访问名称保留全文；功能插件不能覆盖该视觉策略。
+默认 `auto-single-row`：不足两行时文本 Enter 提交，选择/布尔/范围完成即提交且不显示操作；达到两行时保留草稿并显示查询与清除。`explicit` 始终要求显式提交。操作单元跨越当前行剩余列并右对齐，因此在每个响应式断点都落于末行末列。FilterPanel 通过 `FormPresentation.labelPlacement=inside-inline` 使用持久 Label，而不是输入后消失的 placeholder：Label 与控件共享当前列宽，保持单行并在 40%/45% 上限内省略，框架 Tooltip 和可访问名称保留全文；功能插件不能覆盖该视觉策略。Select 筛选项固定声明受治理的 `allowClear` 语义：Ant/Arco 使用各自原生清除入口，MUI 提供等价关闭图标和空选项；普通业务表单 Select 不会因此获得清除能力。
 
 ### 3.2 数据集合
 
