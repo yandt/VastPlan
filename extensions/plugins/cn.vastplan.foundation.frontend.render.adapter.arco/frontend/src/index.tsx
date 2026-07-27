@@ -27,7 +27,7 @@ import {
   Tooltip,
   Typography,
 } from "./arco-components";
-import { useEffect, useId, useMemo, useRef } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ComponentType, KeyboardEvent, ReactNode } from "react";
 import type {
   ButtonProps,
@@ -417,50 +417,53 @@ export const scopedArcoCSS = scopeDocumentCSS(arcoCSS);
 function ArcoProvider({ children, locale, direction, themeTemplate, iconTheme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string; iconTheme?: string }) {
   const activeTemplate = arcoThemeTemplate(themeTemplate);
   const activeIconTheme = arcoIconTheme(iconTheme);
-  const ActiveIcon = arcoIconForTheme(activeIconTheme.id);
-  const popupRoot = useRef<HTMLDivElement>(null);
+  const [popupRoot, setPopupRoot] = useState<HTMLDivElement>();
+  const setPopupHost = useCallback((node: HTMLDivElement | null) => setPopupRoot(node ?? undefined), []);
   // Arco's complete dark mode is the framework-provided [arco-theme=dark]
   // stylesheet, not a hand-maintained subset of CSS variables. The scoped
   // stylesheet maps body[arco-theme=dark] to :host(...), so set it on the
   // Portal Shadow DOM host rather than the document body.
   useEffect(() => {
-    const root = popupRoot.current?.getRootNode();
+    const root = popupRoot?.getRootNode();
     if (typeof ShadowRoot === "undefined" || !(root instanceof ShadowRoot)) return;
     if (activeTemplate.scheme === "dark") root.host.setAttribute("arco-theme", "dark");
     else root.host.removeAttribute("arco-theme");
     return () => root.host.removeAttribute("arco-theme");
-  }, [activeTemplate.scheme]);
-  const requirePopupRoot = () => {
-    if (popupRoot.current === null) throw new Error("Arco overlay root 尚未挂载");
-    return popupRoot.current;
-  };
-  const [notifications, notificationHolder] = Notification.useNotification({ getContainer: requirePopupRoot });
+  }, [activeTemplate.scheme, popupRoot]);
+
+  return <>
+    <style data-vastplan-design-system="arco">{scopedArcoCSS}</style>
+    <div ref={setPopupHost} data-vastplan-design-system="arco" data-vastplan-theme-template={activeTemplate.id} data-vastplan-icon-theme={activeIconTheme.id} lang={locale} dir={direction}>
+      {popupRoot === undefined ? null : <MountedArcoProvider popupRoot={popupRoot} locale={locale} activeTemplate={activeTemplate} activeIconThemeID={activeIconTheme.id}>{children}</MountedArcoProvider>}
+    </div>
+  </>;
+}
+
+function MountedArcoProvider({ children, popupRoot, locale, activeTemplate, activeIconThemeID }: { children: ReactNode; popupRoot: HTMLDivElement; locale: string; activeTemplate: ReturnType<typeof arcoThemeTemplate>; activeIconThemeID: string }) {
+  const ActiveIcon = arcoIconForTheme(activeIconThemeID);
+  const getPopupContainer = useCallback(() => popupRoot, [popupRoot]);
+  const [notifications, notificationHolder] = Notification.useNotification({ getContainer: getPopupContainer });
   const [modals, modalHolder] = Modal.useModal();
   const ui = useMemo<PortalUI>(() => ({
     ...arcoPortalUIComponents,
     Icon: ActiveIcon,
     IconButton: (props) => iconButtonWith(ActiveIcon, props),
-    CommandPalette: (props) => <CommandPalette {...props} getPopupContainer={requirePopupRoot} />,
-    Dialog: (props) => <Dialog {...props} getPopupContainer={requirePopupRoot} />,
-    Drawer: (props) => <Drawer {...props} getPopupContainer={requirePopupRoot} />,
+    CommandPalette: (props) => <CommandPalette {...props} getPopupContainer={getPopupContainer} />,
+    Dialog: (props) => <Dialog {...props} getPopupContainer={getPopupContainer} />,
+    Drawer: (props) => <Drawer {...props} getPopupContainer={getPopupContainer} />,
     notify: ({ title, content, kind = "info" }) => notifications[kind]?.({ title, content: content ?? "" }),
     confirm: ({ title, content }) => new Promise((resolve) => {
       if (modals.confirm === undefined) { resolve(false); return; }
       modals.confirm({ title, content, onOk: () => resolve(true), onCancel: () => resolve(false) });
     }),
     theme: { ...arcoPortalUIComponents.theme, mode: activeTemplate.scheme === "dark" ? "dark" : "light" },
-  }), [ActiveIcon, activeTemplate.scheme, modals, notifications]);
+  }), [ActiveIcon, activeTemplate.scheme, getPopupContainer, modals, notifications]);
 
-  return <>
-    <style data-vastplan-design-system="arco">{scopedArcoCSS}</style>
-    <div ref={popupRoot} data-vastplan-design-system="arco" data-vastplan-theme-template={activeTemplate.id} data-vastplan-icon-theme={activeIconTheme.id} lang={locale} dir={direction}>
-      <ConfigProvider getPopupContainer={requirePopupRoot} locale={locale.toLowerCase().startsWith("zh") ? zhCN : enUS}>
-        <PortalUIProvider ui={ui}>{children}</PortalUIProvider>
-        {notificationHolder}
-        {modalHolder}
-      </ConfigProvider>
-    </div>
-  </>;
+  return <ConfigProvider getPopupContainer={getPopupContainer} locale={locale.toLowerCase().startsWith("zh") ? zhCN : enUS}>
+    <PortalUIProvider ui={ui}>{children}</PortalUIProvider>
+    {notificationHolder}
+    {modalHolder}
+  </ConfigProvider>;
 }
 
 export const arcoRenderer: UIRenderer = {

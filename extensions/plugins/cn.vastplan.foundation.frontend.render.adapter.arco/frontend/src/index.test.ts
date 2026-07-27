@@ -36,6 +36,14 @@ describe("Arco portal UI adapter", () => {
     ]));
   });
 
+  it("does not resolve an overlay container before the Arco host has mounted", () => {
+    const Provider = arcoRenderAdapter.Provider;
+    expect(() => renderToStaticMarkup(createElement(PortalI18nProvider, {
+      policy: { defaultLocale: "en-US", supportedLocales: ["en-US"] }, catalogs: {}, candidates: ["en-US"],
+      children: createElement(Provider, { locale: "en-US", direction: "ltr", children: "Portal content" }),
+    }))).not.toThrow();
+  });
+
   it("maps the shared shell, overlay, focus and touch baselines", () => {
     expect(arcoPortalUIComponents.theme.tokens).toMatchObject({
       shell: { barHeight: 64, railWidth: 64, navigationWidth: 240, navigationCompactWidth: 220 },
