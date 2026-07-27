@@ -11,6 +11,8 @@ export type GraphNamespaceImporter = (entryURL: string, sourceURL: string) => Pr
 
 export class VerifiedModuleGraphLoader {
   private readonly graphs = new Map<string, FrontendModuleGraphDescriptor>();
+  /** Development overlays retain the active RuntimeSpec version as their lookup identity. */
+  private readonly developmentGraphsByID = new Map<string, FrontendModuleGraphDescriptor | null>();
   private readonly pending = new Map<string, Promise<unknown>>();
   private readonly objectURLs = new Set<string>();
 
@@ -25,20 +27,35 @@ export class VerifiedModuleGraphLoader {
       const key = pluginKey(graph);
       if (this.graphs.has(key)) throw new ModuleLoadError("MODULE_GRAPH_DUPLICATE", `前端 Module Graph 重复: ${key}`);
       this.graphs.set(key, graph);
+      if (policy === "development") this.recordDevelopmentGraph(graph);
     }
   }
 
-  public has(ref: PluginRef): boolean { return this.graphs.has(pluginKey(ref)); }
+  public has(ref: PluginRef): boolean { return this.resolve(ref) !== undefined; }
+
+  /** Returns the exact lock in production, or one unambiguous same-ID development overlay. */
+  public resolve(ref: PluginRef): FrontendModuleGraphDescriptor | undefined {
+    return this.graphs.get(pluginKey(ref)) ?? (this.policy === "development" ? this.developmentGraphsByID.get(ref.id) ?? undefined : undefined);
+  }
 
   public load(ref: PluginRef): Promise<unknown> {
-    const key = pluginKey(ref);
-    const graph = this.graphs.get(key);
-    if (graph === undefined) return Promise.reject(new ModuleLoadError("MODULE_NOT_LOCKED", `Portal 未锁定 Module Graph: ${key}`));
+    const graph = this.resolve(ref);
+    if (graph === undefined) return Promise.reject(new ModuleLoadError("MODULE_NOT_LOCKED", `Portal 未锁定 Module Graph: ${pluginKey(ref)}`));
+    const key = pluginKey(graph);
     const existing = this.pending.get(key);
     if (existing !== undefined) return existing;
     const started = this.loadGraph(graph);
     this.pending.set(key, started);
     return started;
+  }
+
+  private recordDevelopmentGraph(graph: FrontendModuleGraphDescriptor): void {
+    if (!this.developmentGraphsByID.has(graph.id)) {
+      this.developmentGraphsByID.set(graph.id, graph);
+      return;
+    }
+    // Multiple active graphs for one ID have no safe ID-only resolution.
+    this.developmentGraphsByID.set(graph.id, null);
   }
 
   public dispose(): void {

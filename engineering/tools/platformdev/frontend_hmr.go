@@ -81,6 +81,13 @@ func (r *runtime) startFrontendHMR(ctx context.Context) error {
 	if err := os.MkdirAll(hmr.runDir, 0o700); err != nil {
 		return fmt.Errorf("创建前端热替换目录: %w", err)
 	}
+	// 开发态不能让上一次 Seed 发布的 Portal 宿主或稳定前端制品遮蔽当前
+	// 工作区源码。先构建并原子切换宿主和全部插件的一代仅回环覆盖，再
+	// 记录监听基线；这样启动前已经存在的修改与后续保存的修改遵循同一条
+	// HMR 交付链路，Module Graph 解析器也不会落后于候选插件格式。
+	if err := hmr.buildHost(ctx); err != nil {
+		return fmt.Errorf("构建开发态前端源码基线: %w", err)
+	}
 	signatures, err := hmr.sourceSignatures()
 	if err != nil {
 		return err

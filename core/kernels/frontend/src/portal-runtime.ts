@@ -59,6 +59,14 @@ export class PortalRuntime {
     validatePortalShape(portal);
     const foundations = await loadPortalFoundations(this.loader, portal, options);
     const modules = new Map(foundations.loaded.map((item) => [moduleKey(item.ref), item.module]));
+    // A development source catalog may reference a newer SemVer while the
+    // active RuntimeSpec remains the canonical lookup identity. Only the
+    // trusted loader can opt into this alias; production loaders keep exact keys.
+    for (const { ref, module } of foundations.loaded) {
+      if (this.loader.canLoad?.(ref) !== true) continue;
+      const active = portal.plugins.find((candidate) => candidate.id === ref.id);
+      if (active !== undefined) modules.set(moduleKey(active), module);
+    }
     const workbenchModule = requiredModule(modules, portal.workbench);
     assertTrustedFirstParty(workbenchModule, portal.workbench.id);
     const workbench = workbenchModule.workbench;

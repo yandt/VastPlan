@@ -56,7 +56,7 @@ export async function loadPortalFoundations(
     ? options.rendererID : portal.renderAdapter.config.defaultRenderer;
   const rendererTemplate = renderAdapter.renderers.find((renderer) => renderer.id === rendererID);
   if (rendererTemplate === undefined) throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_INVALID", `渲染适配器不支持 Renderer: ${rendererID}`);
-  if (!portal.plugins.some((candidate) => samePlugin(candidate, rendererTemplate.module))) {
+  if (!portalContainsModule(loader, portal, rendererTemplate.module)) {
     throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_MODULE_MISSING", `Renderer 模块未包含在 Portal 解析锁中: ${rendererID}`);
   }
   if (portal.resolution.pluginOrigins[rendererTemplate.module.id] !== "platform-profile") {
@@ -104,7 +104,7 @@ export async function loadPortalFoundations(
     ? options.shellTemplateID : portal.shell.config.defaultTemplate;
   const shellTemplate = shell.templates.find((template) => template.id === shellTemplateID);
   if (shellTemplate === undefined) throw new PortalAssemblyError("SHELL_LIBRARY_MISSING", `Shell Library 不在目录中: ${shellTemplateID}`);
-  assertLockedPlatformModule(portal, shellTemplate.module, "SHELL_LIBRARY_MISSING", `Shell Library 未包含在 Platform Profile 解析锁中: ${shellTemplateID}`);
+  assertLockedPlatformModule(loader, portal, shellTemplate.module, "SHELL_LIBRARY_MISSING", `Shell Library 未包含在 Platform Profile 解析锁中: ${shellTemplateID}`);
   const shellLibraryModule = await loader.load(shellTemplate.module);
   assertTrustedFirstParty(shellLibraryModule, shellTemplate.module.id);
   const shellLibrary = shellLibraryModule.shellLibrary;
@@ -114,9 +114,11 @@ export async function loadPortalFoundations(
 
   const rendererModuleKeys = new Set(renderAdapter.renderers.map((item) => moduleKey(item.module)));
   const shellLibraryModuleKeys = new Set(shell.templates.map((item) => moduleKey(item.module)));
+  const rendererModuleIDs = new Set(renderAdapter.renderers.map((item) => item.module.id));
+  const shellLibraryModuleIDs = new Set(shell.templates.map((item) => item.module.id));
   const otherRefs = portal.plugins.filter((ref) =>
     !samePlugin(ref, portal.runtimeEngine) && !samePlugin(ref, portal.renderAdapter) && !samePlugin(ref, portal.shell) &&
-    !rendererModuleKeys.has(moduleKey(ref)) && !shellLibraryModuleKeys.has(moduleKey(ref)),
+    !rendererModuleIDs.has(ref.id) && !shellLibraryModuleIDs.has(ref.id),
   );
   const otherLoaded = await Promise.all(otherRefs.map(async (ref) => ({ ref, module: await loader.load(ref) })));
   return {
@@ -140,7 +142,11 @@ export async function loadPortalFoundations(
   };
 }
 
-function assertLockedPlatformModule(portal: PortalSpec, ref: PluginRef, code: string, message: string): void {
-  if (!portal.plugins.some((candidate) => samePlugin(candidate, ref))) throw new PortalAssemblyError(code, message);
+function assertLockedPlatformModule(loader: FrontendPluginLoader, portal: PortalSpec, ref: PluginRef, code: string, message: string): void {
+  if (!portalContainsModule(loader, portal, ref)) throw new PortalAssemblyError(code, message);
   if (portal.resolution.pluginOrigins[ref.id] !== "platform-profile") throw new PortalAssemblyError(code, message);
+}
+
+function portalContainsModule(loader: FrontendPluginLoader, portal: PortalSpec, ref: PluginRef): boolean {
+  return portal.plugins.some((candidate) => samePlugin(candidate, ref)) || loader.canLoad?.(ref) === true;
 }

@@ -112,6 +112,8 @@ export interface FrontendPluginModule {
 
 export interface FrontendPluginLoader {
   load(ref: PluginRef): Promise<FrontendPluginModule>;
+  /** Optional trusted lookup projection; development loaders may resolve one same-ID source overlay. */
+  canLoad?(ref: PluginRef): boolean;
   dispose?(): void;
 }
 

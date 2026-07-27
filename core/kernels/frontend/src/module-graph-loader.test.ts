@@ -76,6 +76,30 @@ describe("VerifiedModuleGraphLoader", () => {
     loader.dispose();
   });
 
+  it("resolves one development graph by plugin ID when a source module declares a newer version", async () => {
+    const { graph, content } = await fixture();
+    const unsigned = { ...graph, digest: "0".repeat(64), nodes: graph.nodes.map((node) => ({ ...node, url: `/__vastplan_dev/modules/${node.sha256}.js` })) };
+    const development = { ...unsigned, digest: await computeModuleGraphDigest(unsigned) };
+    const sourceRef = { ...ref, version: "9.9.9" };
+    const fetcher = vi.fn(async (url: string) => {
+      const node = development.nodes.find((candidate) => candidate.url === url)!;
+      return new Response(ownedBuffer(content.get(node.path)!), { headers: { "X-VastPlan-Module-SHA256": node.sha256 } });
+    });
+    const importer = vi.fn(async () => ({ default: { register() {} } }));
+    const developmentLoader = new VerifiedModuleGraphLoader([development], fetcher, importer, "development");
+    expect(developmentLoader.has(sourceRef)).toBe(true);
+    await developmentLoader.load(sourceRef);
+    expect(importer).toHaveBeenCalledOnce();
+
+    const productionLoader = new VerifiedModuleGraphLoader([graph], fetcher, importer);
+    expect(productionLoader.has(sourceRef)).toBe(false);
+
+    const secondUnsigned = { ...unsigned, version: "2.0.0", digest: "0".repeat(64) };
+    const second = { ...secondUnsigned, digest: await computeModuleGraphDigest(secondUnsigned) };
+    const ambiguousLoader = new VerifiedModuleGraphLoader([development, second], fetcher, importer, "development");
+    expect(ambiguousLoader.has(sourceRef)).toBe(false);
+  });
+
   it("rejects unknown externals and cyclic graphs before fetching", async () => {
     const { graph } = await fixture();
     expect(() => new VerifiedModuleGraphLoader([{ ...graph, externals: ["unknown-runtime"] }], async () => new Response())).toThrowError(/未知共享依赖/);

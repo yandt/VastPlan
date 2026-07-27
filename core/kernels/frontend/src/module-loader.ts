@@ -22,7 +22,6 @@ export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
   private readonly modules = new Map<string, FrontendModuleDescriptor>();
   private readonly pending = new Map<string, Promise<FrontendPluginModule>>();
   private readonly graphLoader: VerifiedModuleGraphLoader;
-  private readonly graphDescriptors = new Map<string, FrontendModuleGraphDescriptor>();
 
   public constructor(
     input: readonly FrontendModuleDescriptor[] | PortalRuntimeSpec,
@@ -41,19 +40,24 @@ export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
       }
       this.modules.set(key, { ...descriptor });
     }
-    for (const graph of graphs) this.graphDescriptors.set(moduleKey(graph), graph);
     this.graphLoader = new VerifiedModuleGraphLoader(graphs, fetcher, undefined, policy);
+  }
+
+  public canLoad(ref: PluginRef): boolean {
+    return this.modules.has(moduleKey(ref)) || this.graphLoader.has(ref);
   }
 
   public load(ref: PluginRef): Promise<FrontendPluginModule> {
     const key = moduleKey(ref);
     const descriptor = this.modules.get(key);
     if (descriptor === undefined) {
-      if (!this.graphLoader.has(ref)) return Promise.reject(new ModuleLoadError("MODULE_NOT_LOCKED", `Portal 运行描述未锁定模块: ${key}`));
-      const existing = this.pending.get(key);
+      const graph = this.graphLoader.resolve(ref);
+      if (graph === undefined) return Promise.reject(new ModuleLoadError("MODULE_NOT_LOCKED", `Portal 运行描述未锁定模块: ${key}`));
+      const graphKey = moduleKey(graph);
+      const existing = this.pending.get(graphKey);
       if (existing !== undefined) return existing;
-      const started = this.loadVerifiedGraph(ref);
-      this.pending.set(key, started);
+      const started = this.loadVerifiedGraph(ref, graph);
+      this.pending.set(graphKey, started);
       return started;
     }
     const existing = this.pending.get(key);
@@ -65,17 +69,10 @@ export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
 
   public dispose(): void { this.graphLoader.dispose(); }
 
-  private async loadVerifiedGraph(ref: PluginRef): Promise<FrontendPluginModule> {
+  private async loadVerifiedGraph(ref: PluginRef, graph: FrontendModuleGraphDescriptor): Promise<FrontendPluginModule> {
     const namespace = await this.graphLoader.load(ref);
-    const graph = this.runtimeGraph(ref);
     const entry = graph.nodes.find((node) => node.path === graph.entry)!;
     return normalizeFrontendModule(namespace, { id: ref.id, sha256: entry.sha256 });
-  }
-
-  private runtimeGraph(ref: PluginRef): FrontendModuleGraphDescriptor {
-    const graph = this.graphDescriptors.get(moduleKey(ref));
-    if (graph === undefined) throw new ModuleLoadError("MODULE_NOT_LOCKED", `Portal 未锁定 Module Graph: ${moduleKey(ref)}`);
-    return graph;
   }
 
   private async loadVerified(descriptor: FrontendModuleDescriptor): Promise<FrontendPluginModule> {

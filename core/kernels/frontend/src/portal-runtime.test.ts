@@ -81,6 +81,14 @@ describe("PortalRuntime shell", () => {
     expect(calls).not.toContain(muiRendererRef.id);
   });
 
+  it("allows a development loader to resolve a source Renderer with the same plugin ID", async () => {
+    const sourceRendererRef = { ...arcoRendererRef, version: "9.9.9" };
+    const sourceAdapter = { ...adapter, renderers: [{ ...adapter.renderers[0], module: sourceRendererRef }, adapter.renderers[1]] };
+    const base = loader({ [adapterRef.id]: { renderAdapter: sourceAdapter } });
+    const development: FrontendPluginLoader = { load: (ref) => base.load(ref), canLoad: (ref) => ref.id === arcoRendererRef.id || ref.id === muiRendererRef.id };
+    await expect(new PortalRuntime(development).prepare(portal)).resolves.toMatchObject({ renderAdapter: { id: "arco" } });
+  });
+
   it("loads only the selected Shell Library module", async () => {
     const calls: string[] = [];
     const base = loader();
