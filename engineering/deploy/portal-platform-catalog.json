@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 49,
+  "revision": 50,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 49,
+      "revision": 50,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -87,8 +87,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 49,
-        "digest": "36a5d97bdc9509dacde9b6ffa871e8626b5543b1f34ec57590b431de1be3937e"
+        "revision": 50,
+        "digest": "99f6c9b71fe3fa9217350f36e5b274f282154a837bb841c33d2952c41e72958b"
       },
       "services": [
         {
