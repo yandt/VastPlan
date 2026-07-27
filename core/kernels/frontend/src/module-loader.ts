@@ -42,7 +42,7 @@ export class VerifiedFrontendPluginLoader implements FrontendPluginLoader {
       this.modules.set(key, { ...descriptor });
     }
     for (const graph of graphs) this.graphDescriptors.set(moduleKey(graph), graph);
-    this.graphLoader = new VerifiedModuleGraphLoader(graphs, fetcher);
+    this.graphLoader = new VerifiedModuleGraphLoader(graphs, fetcher, undefined, policy);
   }
 
   public load(ref: PluginRef): Promise<FrontendPluginModule> {

@@ -42,7 +42,7 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 	defer upstream.Close()
 
 	hmr := &frontendHMR{
-		portalListen: strings.TrimPrefix(upstream.URL, "https://"), current: map[string]frontendHMRModule{}, objects: map[string][]byte{}, subscribers: map[chan frontendHMREvent]struct{}{},
+		portalListen: strings.TrimPrefix(upstream.URL, "https://"), current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{},
 	}
 	if err := hmr.install(manifestPath); err != nil {
 		t.Fatalf("install: %v", err)
@@ -77,8 +77,44 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 	}
 }
 
-func TestFrontendHMRPreservesGraphNativeRuntimeSpec(t *testing.T) {
-	payload := []byte(`{"portal":{"revision":7},"moduleGraphs":[{"id":"cn.vastplan.feature","version":"1.0.0","target":"browser"}]}`)
+func TestFrontendHMROverlaysGraphNativeRuntimeWithoutCandidateVersionValidation(t *testing.T) {
+	directory := t.TempDir()
+	pluginID := "cn.vastplan.feature"
+	pluginRoot := filepath.Join(directory, pluginID)
+	entryPath := filepath.Join(pluginRoot, "frontend", "dist", "index.js")
+	chunkPath := filepath.Join(pluginRoot, "frontend", "dist", "chunks", "lazy.js")
+	if err := os.MkdirAll(filepath.Dir(chunkPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	entryContent := []byte(`export { value } from "./chunks/lazy.js";`)
+	chunkContent := []byte(`export const value = "development";`)
+	if err := os.WriteFile(entryPath, entryContent, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(chunkPath, chunkContent, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	entryDigest := sha256.Sum256(entryContent)
+	chunkDigest := sha256.Sum256(chunkContent)
+	entrySHA, chunkSHA := hex.EncodeToString(entryDigest[:]), hex.EncodeToString(chunkDigest[:])
+	graphDigest := strings.Repeat("d", 64)
+	manifest := map[string]any{"version": 1, "modules": []map[string]any{{
+		"id": pluginID, "entry": "frontend/dist/index.js", "file": entryPath, "sha256": entrySHA,
+		"graph": map[string]any{
+			"target": "browser", "entry": "frontend/dist/index.js", "digest": graphDigest, "externals": []string{"react"},
+			"nodes": []map[string]any{
+				{"path": "frontend/dist/index.js", "sha256": entrySHA, "size": len(entryContent), "mediaType": "text/javascript", "purpose": "entry", "dependencies": []map[string]string{{"specifier": "./chunks/lazy.js", "path": "frontend/dist/chunks/lazy.js", "kind": "static"}}},
+				{"path": "frontend/dist/chunks/lazy.js", "sha256": chunkSHA, "size": len(chunkContent), "mediaType": "text/javascript", "purpose": "chunk", "dependencies": []any{}},
+			},
+		},
+	}}}
+	manifestRaw, _ := json.Marshal(manifest)
+	manifestPath := filepath.Join(directory, "manifest.json")
+	if err := os.WriteFile(manifestPath, manifestRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := []byte(`{"portal":{"revision":7},"moduleGraphs":[{"id":"cn.vastplan.feature","version":"2024.999.0","channel":"stable","target":"browser","entry":"frontend/dist/old.js","digest":"` + strings.Repeat("a", 64) + `","packageSha256":"` + strings.Repeat("b", 64) + `","externals":[],"nodes":[{"path":"frontend/dist/old.js","url":"/v1/portal-modules/7/` + strings.Repeat("c", 64) + `.js","sha256":"` + strings.Repeat("c", 64) + `","size":1,"mediaType":"text/javascript","purpose":"entry","dependencies":[]}]}]}`)
 	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		cookie, err := request.Cookie("vastplan_session")
 		if err != nil || cookie.Value != devAdminToken {
@@ -90,9 +126,10 @@ func TestFrontendHMRPreservesGraphNativeRuntimeSpec(t *testing.T) {
 	defer upstream.Close()
 
 	hmr := &frontendHMR{
-		portalListen: strings.TrimPrefix(upstream.URL, "https://"), current: map[string]frontendHMRModule{
-			"cn.vastplan.feature": {ID: "cn.vastplan.feature", SHA256: strings.Repeat("a", 64)},
-		}, objects: map[string][]byte{}, subscribers: map[chan frontendHMREvent]struct{}{},
+		portalListen: strings.TrimPrefix(upstream.URL, "https://"), current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{},
+	}
+	if err := hmr.install(manifestPath); err != nil {
+		t.Fatalf("install graph candidate: %v", err)
 	}
 	request := httptest.NewRequest(http.MethodGet, "/__vastplan_dev/runtime?path=%2Foperations", nil)
 	request.RemoteAddr = "127.0.0.1:43210"
@@ -101,20 +138,37 @@ func TestFrontendHMRPreservesGraphNativeRuntimeSpec(t *testing.T) {
 	if response.Code != http.StatusOK {
 		t.Fatalf("runtime response: %d %s", response.Code, response.Body.String())
 	}
-	var runtime map[string]json.RawMessage
+	var runtime struct {
+		Modules      json.RawMessage `json:"modules"`
+		ModuleGraphs []struct {
+			ID, Version, Digest, PackageSHA256 string
+			Nodes                              []frontendHMRGraphNode
+		} `json:"moduleGraphs"`
+	}
 	if err := json.Unmarshal(response.Body.Bytes(), &runtime); err != nil {
 		t.Fatal(err)
 	}
-	if _, exists := runtime["modules"]; exists {
+	if runtime.Modules != nil {
 		t.Fatalf("图谱 RuntimeSpec 不得被降级为 modules: %s", response.Body.String())
 	}
-	if got := string(runtime["moduleGraphs"]); got != `[{"id":"cn.vastplan.feature","version":"1.0.0","target":"browser"}]` {
-		t.Fatalf("Module Graph 必须原样保留: %s", got)
+	graph := runtime.ModuleGraphs[0]
+	if graph.ID != pluginID || graph.Version != "2024.999.0" || graph.PackageSHA256 != strings.Repeat("b", 64) || graph.Digest != graphDigest || len(graph.Nodes) != 2 {
+		t.Fatalf("开发图谱覆盖不得依赖候选版本并必须保留活动身份: %#v", graph)
+	}
+	if graph.Nodes[0].URL != "/__vastplan_dev/modules/"+entrySHA+".js" || graph.Nodes[1].URL != "/__vastplan_dev/modules/"+chunkSHA+".js" {
+		t.Fatalf("开发图谱节点 URL 未覆盖: %#v", graph.Nodes)
+	}
+	moduleRequest := httptest.NewRequest(http.MethodGet, graph.Nodes[1].URL, nil)
+	moduleRequest.RemoteAddr = "127.0.0.1:43210"
+	moduleResponse := httptest.NewRecorder()
+	hmr.module(moduleResponse, moduleRequest)
+	if moduleResponse.Code != http.StatusOK || moduleResponse.Body.String() != string(chunkContent) || moduleResponse.Header().Get("Content-Type") != "text/javascript; charset=utf-8" {
+		t.Fatalf("graph node response code=%d body=%q headers=%v", moduleResponse.Code, moduleResponse.Body.String(), moduleResponse.Header())
 	}
 }
 
 func TestFrontendHMRRejectsNonLoopbackAndEscapingManifest(t *testing.T) {
-	hmr := &frontendHMR{current: map[string]frontendHMRModule{}, objects: map[string][]byte{}, subscribers: map[chan frontendHMREvent]struct{}{}}
+	hmr := &frontendHMR{current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{}}
 	request := httptest.NewRequest(http.MethodGet, "/__vastplan_dev/modules/"+strings.Repeat("a", 64)+".js", nil)
 	request.RemoteAddr = "203.0.113.4:1234"
 	response := httptest.NewRecorder()
@@ -218,17 +272,48 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	}
 }
 
+func TestChangedFrontendPluginsSelectsOnlyChangedPluginAndEscalatesSharedChanges(t *testing.T) {
+	previous := frontendPluginWatchState{shared: "shared-v1", plugins: map[string]string{"cn.vastplan.a": "a-v1", "cn.vastplan.b": "b-v1"}}
+	next := frontendPluginWatchState{shared: "shared-v1", plugins: map[string]string{"cn.vastplan.a": "a-v2", "cn.vastplan.b": "b-v1"}}
+	changed, rebuildAll := changedFrontendPlugins(previous, next)
+	if rebuildAll || len(changed) != 1 || changed[0] != "cn.vastplan.a" {
+		t.Fatalf("changed=%v rebuildAll=%t", changed, rebuildAll)
+	}
+	next.shared = "shared-v2"
+	if changed, rebuildAll := changedFrontendPlugins(previous, next); !rebuildAll || len(changed) != 0 {
+		t.Fatalf("shared change must rebuild all: changed=%v rebuildAll=%t", changed, rebuildAll)
+	}
+}
+
+func TestFrontendHMRPartialCandidatePreservesPreviousPluginOverlay(t *testing.T) {
+	aDigest, bDigest := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	hmr := &frontendHMR{
+		current:     map[string]frontendHMRModule{"cn.vastplan.a": {ID: "cn.vastplan.a", Digests: []string{aDigest}}},
+		objects:     map[string]frontendHMRObject{aDigest: {Bytes: []byte("a"), MediaType: "text/javascript"}},
+		subscribers: map[chan frontendHMREvent]struct{}{},
+	}
+	candidate := frontendHMRCandidate{
+		current: map[string]frontendHMRModule{"cn.vastplan.b": {ID: "cn.vastplan.b", Digests: []string{bDigest}}},
+		objects: map[string]frontendHMRObject{bDigest: {Bytes: []byte("b"), MediaType: "text/javascript"}},
+	}
+	hmr.commitCandidate(candidate, "generation", nil, false)
+	if len(hmr.current) != 2 || hmr.current["cn.vastplan.a"].ID == "" || hmr.current["cn.vastplan.b"].ID == "" {
+		t.Fatalf("partial commit lost overlays: %#v", hmr.current)
+	}
+}
+
 func TestFrontendHMRCommitsHostAssetsAndModulesAsReload(t *testing.T) {
 	updates := make(chan frontendHMREvent, 1)
 	hmr := &frontendHMR{
 		current:     map[string]frontendHMRModule{},
-		objects:     map[string][]byte{},
+		objects:     map[string]frontendHMRObject{},
 		subscribers: map[chan frontendHMREvent]struct{}{updates: {}},
 		assets:      http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("old-vendor")) }),
 	}
-	module := frontendHMRModule{ID: "cn.vastplan.feature", SHA256: strings.Repeat("a", 64), Bytes: []byte("new-plugin")}
+	module := frontendHMRModule{ID: "cn.vastplan.feature", SHA256: strings.Repeat("a", 64), Digests: []string{strings.Repeat("a", 64)}}
+	object := frontendHMRObject{Bytes: []byte("new-plugin"), MediaType: "text/javascript"}
 	assets := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("new-vendor-with-message")) })
-	hmr.commitCandidate(frontendHMRCandidate{current: map[string]frontendHMRModule{module.ID: module}, digests: []string{module.SHA256}}, "reload", assets)
+	hmr.commitCandidate(frontendHMRCandidate{current: map[string]frontendHMRModule{module.ID: module}, objects: map[string]frontendHMRObject{module.SHA256: object}}, "reload", assets, true)
 
 	event := <-updates
 	if event.Name != "reload" {
@@ -237,7 +322,7 @@ func TestFrontendHMRCommitsHostAssetsAndModulesAsReload(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/assets/vendor/ui-primitives.js", nil)
 	response := httptest.NewRecorder()
 	hmr.portalAssets(response, request)
-	if response.Body.String() != "new-vendor-with-message" || string(hmr.objects[module.SHA256]) != "new-plugin" {
-		t.Fatalf("host/module commit was not atomic: body=%q module=%q", response.Body.String(), hmr.objects[module.SHA256])
+	if response.Body.String() != "new-vendor-with-message" || string(hmr.objects[module.SHA256].Bytes) != "new-plugin" {
+		t.Fatalf("host/module commit was not atomic: body=%q module=%q", response.Body.String(), hmr.objects[module.SHA256].Bytes)
 	}
 }

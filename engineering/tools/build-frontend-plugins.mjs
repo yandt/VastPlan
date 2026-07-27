@@ -10,6 +10,7 @@ import { buildFrontendServerGraph } from "./frontend-server-build.mjs";
 const outputRoot = option("--out-dir");
 const manifestPath = option("--manifest");
 const selectedPlugins = new Set(stringOptions("--plugin"));
+const developmentHMR = process.argv.includes("--development-hmr");
 
 const common = {
   bundle: true,
@@ -57,15 +58,15 @@ for (const { id, entry, source, serverEntry, serverSource, deferred, pluginRoot 
   if (serverEntry !== undefined && serverSource !== undefined) {
 		({ graph: serverGraph, graphFile: serverGraphFile } = await buildFrontendServerGraph({ buildRoot, serverEntry, serverSource }));
   }
-  if (id === "cn.vastplan.foundation.frontend.render.adapter.arco") {
+  if (!developmentHMR && id === "cn.vastplan.foundation.frontend.render.adapter.arco") {
     const result = spawnSync(process.execPath, ["engineering/tools/check-arco-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ARCO_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
-  if (id === "cn.vastplan.foundation.frontend.render.adapter.antd") {
+  if (!developmentHMR && id === "cn.vastplan.foundation.frontend.render.adapter.antd") {
     const result = spawnSync(process.execPath, ["engineering/tools/check-antd-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ANTD_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
-  if (id === "cn.vastplan.foundation.frontend.render.adapter.mui") {
+  if (!developmentHMR && id === "cn.vastplan.foundation.frontend.render.adapter.mui") {
     const result = spawnSync(process.execPath, ["engineering/tools/check-mui-icons-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, MUI_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }

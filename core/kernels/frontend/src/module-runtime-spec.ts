@@ -63,7 +63,7 @@ function parseRuntimeSpec(value: unknown, policy: ModuleDescriptorPolicy): Porta
   const moduleGraphs = (value.moduleGraphs ?? []).map((item) => {
     if (!isRecord(item)) throw new ModuleLoadError("RUNTIME_SPEC_INVALID", "Portal Module Graph 描述无效");
     const graph = item as unknown as FrontendModuleGraphDescriptor;
-    validateModuleGraphDescriptor(graph);
+    validateModuleGraphDescriptor(graph, policy);
     return { ...graph, externals: [...graph.externals], nodes: graph.nodes.map((node) => ({ ...node, dependencies: node.dependencies.map((dependency) => ({ ...dependency })) })) };
   });
   if (modules.length === 0 && moduleGraphs.length === 0) throw new ModuleLoadError("RUNTIME_SPEC_INVALID", "Portal RuntimeSpec 没有前端模块");

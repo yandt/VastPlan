@@ -59,6 +59,23 @@ describe("VerifiedModuleGraphLoader", () => {
     await expect(loader.load(ref)).rejects.toMatchObject({ code: "MODULE_INTEGRITY_MISMATCH" });
   });
 
+  it("accepts digest-bound development graph URLs only under the development policy and bypasses cache", async () => {
+    const { graph, content } = await fixture();
+    const developmentNodes = graph.nodes.map((node) => ({ ...node, url: `/__vastplan_dev/modules/${node.sha256}.js` }));
+    const development = { ...graph, nodes: developmentNodes };
+    expect(() => new VerifiedModuleGraphLoader([development], async () => new Response())).toThrowError(/节点无效/);
+
+    const fetcher = vi.fn(async (url: string) => {
+      const node = development.nodes.find((candidate) => candidate.url === url)!;
+      return new Response(ownedBuffer(content.get(node.path)!), { headers: { "X-VastPlan-Module-SHA256": node.sha256 } });
+    });
+    const loader = new VerifiedModuleGraphLoader([development], fetcher, async () => ({ default: { register() {} } }), "development");
+    await loader.load(ref);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    for (const node of development.nodes) expect(fetcher).toHaveBeenCalledWith(node.url, { credentials: "include", cache: "no-store" });
+    loader.dispose();
+  });
+
   it("rejects unknown externals and cyclic graphs before fetching", async () => {
     const { graph } = await fixture();
     expect(() => new VerifiedModuleGraphLoader([{ ...graph, externals: ["unknown-runtime"] }], async () => new Response())).toThrowError(/未知共享依赖/);

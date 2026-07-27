@@ -1,7 +1,7 @@
 import type { PluginRef } from "./portal-contracts";
 import { ModuleLoadError } from "./module-errors";
 import { ownedBuffer, sha256Hex } from "./module-integrity";
-import { computeModuleGraphDigest, topologicalModuleOrder, validateModuleGraphDescriptor, type FrontendModuleGraphDescriptor } from "./module-graph-contract";
+import { computeModuleGraphDigest, isDevelopmentModuleGraphURL, topologicalModuleOrder, validateModuleGraphDescriptor, type FrontendModuleGraphDescriptor, type ModuleGraphPolicy } from "./module-graph-contract";
 
 export { computeModuleGraphDigest, validateModuleGraphDescriptor } from "./module-graph-contract";
 export type { FrontendModuleDependencyDescriptor, FrontendModuleGraphDescriptor, FrontendModuleNodeDescriptor } from "./module-graph-contract";
@@ -18,9 +18,10 @@ export class VerifiedModuleGraphLoader {
     graphs: readonly FrontendModuleGraphDescriptor[],
     private readonly fetcher: GraphFetcher,
     private readonly importer: GraphNamespaceImporter = importGraphEntry,
+    private readonly policy: ModuleGraphPolicy = "production",
   ) {
     for (const graph of graphs) {
-      validateModuleGraphDescriptor(graph);
+      validateModuleGraphDescriptor(graph, policy);
       const key = pluginKey(graph);
       if (this.graphs.has(key)) throw new ModuleLoadError("MODULE_GRAPH_DUPLICATE", `前端 Module Graph 重复: ${key}`);
       this.graphs.set(key, graph);
@@ -51,7 +52,7 @@ export class VerifiedModuleGraphLoader {
     const nodes = new Map(graph.nodes.map((node) => [node.path, node]));
     const bytes = new Map<string, Uint8Array>();
     await Promise.all(graph.nodes.map(async (node) => {
-      const response = await this.fetcher(node.url, { credentials: "include", cache: "force-cache" });
+      const response = await this.fetcher(node.url, { credentials: "include", cache: isDevelopmentModuleGraphURL(node.url) ? "no-store" : "force-cache" });
       if (!response.ok) throw new ModuleLoadError("MODULE_FETCH_FAILED", `Module Graph 节点获取失败: ${graph.id}/${node.path} (${response.status})`);
       const content = new Uint8Array(await response.arrayBuffer());
       if (content.byteLength !== node.size || await sha256Hex(content) !== node.sha256) throw new ModuleLoadError("MODULE_INTEGRITY_MISMATCH", `Module Graph 节点摘要不匹配: ${graph.id}/${node.path}`);

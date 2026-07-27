@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,26 +24,28 @@ import (
 
 const retainedFrontendGenerations = 8
 
-var developmentModulePath = regexp.MustCompile(`^/__vastplan_dev/modules/([a-f0-9]{64})\.js$`)
+var (
+	developmentModulePath = regexp.MustCompile(`^/__vastplan_dev/modules/([a-f0-9]{64})\.(?:js|css|json|wasm|bin)$`)
+	sha256Value           = regexp.MustCompile(`^[a-f0-9]{64}$`)
+)
 
 type frontendHMR struct {
 	root, runDir, portalListen, portalAssetsDir string
 	mu                                          sync.RWMutex
 	generation                                  uint64
 	current                                     map[string]frontendHMRModule
-	objects                                     map[string][]byte
+	objects                                     map[string]frontendHMRObject
 	history                                     [][]string
 	subscribers                                 map[chan frontendHMREvent]struct{}
 	lastError                                   string
 	assets                                      http.Handler
 }
 
-type frontendSourceSignatures struct{ plugins, host string }
-
 type frontendHMRModule struct {
 	ID, Entry, SHA256 string
-	Bytes             []byte
 	Deferred          bool
+	Graph             *frontendHMRGraph
+	Digests           []string
 }
 
 type frontendHMRManifest struct {
@@ -51,12 +53,13 @@ type frontendHMRManifest struct {
 	Modules []struct {
 		ID, Entry, File, SHA256 string
 		Deferred                bool
+		Graph                   *frontendHMRGraph
 	} `json:"modules"`
 }
 
 type frontendHMRCandidate struct {
 	current map[string]frontendHMRModule
-	digests []string
+	objects map[string]frontendHMRObject
 }
 
 type frontendHMREvent struct {
@@ -72,7 +75,7 @@ func (r *runtime) startFrontendHMR(ctx context.Context) error {
 	}
 	hmr := &frontendHMR{
 		root: r.options.root, runDir: filepath.Join(r.runDir, "frontend-hmr"), portalListen: r.options.portalListen, portalAssetsDir: portalAssetsDir,
-		current: map[string]frontendHMRModule{}, objects: map[string][]byte{}, subscribers: map[chan frontendHMREvent]struct{}{},
+		current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{},
 		assets: assets,
 	}
 	if err := os.MkdirAll(hmr.runDir, 0o700); err != nil {
@@ -82,13 +85,17 @@ func (r *runtime) startFrontendHMR(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	pluginState, err := hmr.pluginWatchState()
+	if err != nil {
+		return err
+	}
 	r.hmr = hmr
-	go hmr.watch(ctx, signatures)
+	go hmr.watch(ctx, signatures, pluginState)
 	log.Printf("依赖感知前端热替换已启用")
 	return nil
 }
 
-func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignatures) {
+func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignatures, pluginState frontendPluginWatchState) {
 	ticker := time.NewTicker(350 * time.Millisecond)
 	defer ticker.Stop()
 	for {
@@ -110,7 +117,16 @@ func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignat
 			if hostChanged {
 				err = h.buildHost(ctx)
 			} else if pluginsChanged {
-				err = h.buildPlugins(ctx)
+				nextPluginState, stateErr := h.pluginWatchState()
+				if stateErr != nil {
+					h.publishError(stateErr)
+					continue
+				}
+				changed, rebuildAll := changedFrontendPlugins(pluginState, nextPluginState)
+				pluginState = nextPluginState
+				if rebuildAll || len(changed) > 0 {
+					err = h.buildPlugins(ctx, changed, rebuildAll)
+				}
 			}
 			if err != nil {
 				h.publishError(err)
@@ -119,99 +135,19 @@ func (h *frontendHMR) watch(ctx context.Context, signatures frontendSourceSignat
 	}
 }
 
-func (h *frontendHMR) sourceSignatures() (frontendSourceSignatures, error) {
-	return h.sourceSignaturesFor(nil)
-}
-
-func (h *frontendHMR) sourceSignaturesFor(pluginIDs []string) (frontendSourceSignatures, error) {
-	pluginPaths := []string{
-		"extensions/sdk/ts/platform-admin/src",
-		"extensions/sdk/ts/platform-admin/package.json",
-	}
-	if pluginIDs == nil {
-		pluginPaths = append(pluginPaths, "extensions/plugins")
-	} else {
-		for _, id := range pluginIDs {
-			pluginPaths = append(pluginPaths, filepath.ToSlash(filepath.Join("extensions", "plugins", id)))
-		}
-	}
-	plugins, err := sourceSignature(h.root, pluginPaths)
-	if err != nil {
-		return frontendSourceSignatures{}, fmt.Errorf("扫描前端插件源码: %w", err)
-	}
-	host, err := sourceSignature(h.root, []string{
-		"core/kernels/frontend/src",
-		"core/kernels/frontend/static",
-		"core/kernels/frontend/package.json",
-		"extensions/sdk/ts/ui-primitives/src",
-		"extensions/sdk/ts/ui-primitives/package.json",
-		"extensions/sdk/ts/rjsf-csp-validator/src",
-		"extensions/sdk/ts/rjsf-csp-validator/package.json",
-		"extensions/sdk/ts/ui-contract/src",
-		"extensions/sdk/ts/ui-contract/package.json",
-		"extensions/sdk/ts/workbench-sdk/src",
-		"extensions/sdk/ts/workbench-sdk/package.json",
-		"engineering/tools/build-frontend.sh",
-		"engineering/tools/build-frontend-plugins.mjs",
-		"engineering/tools/frontend-module-graph.mjs",
-		"engineering/tools/frontend-server-build.mjs",
-		"package.json",
-		"pnpm-lock.yaml",
-		"pnpm-workspace.yaml",
-		"tsconfig.base.json",
-	})
-	if err != nil {
-		return frontendSourceSignatures{}, fmt.Errorf("扫描 Portal 宿主源码: %w", err)
-	}
-	return frontendSourceSignatures{plugins: plugins, host: host}, nil
-}
-
-func sourceSignature(root string, relativePaths []string) (string, error) {
-	hash := sha256.New()
-	for _, relativeRoot := range relativePaths {
-		absoluteRoot := filepath.Join(root, filepath.FromSlash(relativeRoot))
-		err := filepath.WalkDir(absoluteRoot, func(path string, entry fs.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if entry.IsDir() {
-				if entry.Name() == "node_modules" || entry.Name() == "dist" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-			relative, err := filepath.Rel(root, path)
-			if err != nil {
-				return err
-			}
-			switch filepath.Ext(path) {
-			case ".ts", ".tsx", ".css", ".json", ".mjs", ".sh", ".html":
-			default:
-				return nil
-			}
-			content, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			_, _ = io.WriteString(hash, filepath.ToSlash(relative))
-			_, _ = hash.Write([]byte{0})
-			_, _ = hash.Write(content)
-			return nil
-		})
-		if err != nil {
-			return "", err
-		}
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-func (h *frontendHMR) buildPlugins(ctx context.Context) error {
+func (h *frontendHMR) buildPlugins(ctx context.Context, pluginIDs []string, rebuildAll bool) error {
 	h.mu.RLock()
 	nextGeneration := h.generation + 1
 	h.mu.RUnlock()
 	directory := filepath.Join(h.runDir, fmt.Sprintf("generation-%06d", nextGeneration))
 	manifest := filepath.Join(directory, "manifest.json")
-	command := exec.CommandContext(ctx, "node", "engineering/tools/build-frontend-plugins.mjs", "--out-dir", directory, "--manifest", manifest)
+	arguments := []string{"engineering/tools/build-frontend-plugins.mjs", "--development-hmr", "--out-dir", directory, "--manifest", manifest}
+	if !rebuildAll {
+		for _, id := range pluginIDs {
+			arguments = append(arguments, "--plugin", id)
+		}
+	}
+	command := exec.CommandContext(ctx, "node", arguments...)
 	command.Dir = h.root
 	var output bytes.Buffer
 	command.Stdout = io.MultiWriter(os.Stdout, &output)
@@ -219,10 +155,14 @@ func (h *frontendHMR) buildPlugins(ctx context.Context) error {
 	if err := command.Run(); err != nil {
 		return fmt.Errorf("前端插件候选构建失败: %w\n%s", err, strings.TrimSpace(output.String()))
 	}
-	if err := h.install(manifest); err != nil {
+	if err := h.installCandidate(manifest, rebuildAll); err != nil {
 		return err
 	}
-	log.Printf("前端插件热替换候选 generation=%d 已就绪", nextGeneration)
+	if rebuildAll {
+		log.Printf("前端插件热替换候选 generation=%d 已就绪（全量）", nextGeneration)
+	} else {
+		log.Printf("前端插件热替换候选 generation=%d 已就绪 plugins=%s", nextGeneration, strings.Join(pluginIDs, ","))
+	}
 	return nil
 }
 
@@ -236,7 +176,7 @@ func (h *frontendHMR) buildHost(ctx context.Context) error {
 		return fmt.Errorf("Portal 宿主候选构建失败: %w", err)
 	}
 	manifest := filepath.Join(directory, "modules", "manifest.json")
-	if err := h.runCommand(ctx, nil, "node", "engineering/tools/build-frontend-plugins.mjs", "--out-dir", filepath.Dir(manifest), "--manifest", manifest); err != nil {
+	if err := h.runCommand(ctx, nil, "node", "engineering/tools/build-frontend-plugins.mjs", "--development-hmr", "--out-dir", filepath.Dir(manifest), "--manifest", manifest); err != nil {
 		return fmt.Errorf("Portal 插件候选构建失败: %w", err)
 	}
 	candidate, err := h.loadCandidate(manifest)
@@ -250,7 +190,7 @@ func (h *frontendHMR) buildHost(ctx context.Context) error {
 	if err := replaceDirectory(portalCandidate, h.portalAssetsDir); err != nil {
 		return fmt.Errorf("切换 Portal 宿主候选: %w", err)
 	}
-	h.commitCandidate(candidate, "reload", assets)
+	h.commitCandidate(candidate, "reload", assets, true)
 	log.Printf("Portal 宿主与插件候选 generation=%d 已原子切换", nextGeneration)
 	return nil
 }
@@ -290,11 +230,15 @@ func replaceDirectory(candidate, target string) error {
 }
 
 func (h *frontendHMR) install(manifestPath string) error {
+	return h.installCandidate(manifestPath, true)
+}
+
+func (h *frontendHMR) installCandidate(manifestPath string, replaceAll bool) error {
 	candidate, err := h.loadCandidate(manifestPath)
 	if err != nil {
 		return err
 	}
-	h.commitCandidate(candidate, "generation", nil)
+	h.commitCandidate(candidate, "generation", nil, replaceAll)
 	return nil
 }
 
@@ -309,7 +253,7 @@ func (h *frontendHMR) loadCandidate(manifestPath string) (frontendHMRCandidate, 
 	}
 	directory := filepath.Dir(manifestPath)
 	current := make(map[string]frontendHMRModule, len(manifest.Modules))
-	digests := make([]string, 0, len(manifest.Modules))
+	objects := map[string]frontendHMRObject{}
 	for _, item := range manifest.Modules {
 		relative, err := filepath.Rel(directory, item.File)
 		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || !strings.HasPrefix(item.ID, "cn.vastplan.") || item.Entry != "frontend/dist/index.js" {
@@ -327,25 +271,59 @@ func (h *frontendHMR) loadCandidate(manifestPath string) (frontendHMRCandidate, 
 		if _, exists := current[item.ID]; exists {
 			return frontendHMRCandidate{}, fmt.Errorf("前端候选模块身份重复: %s", item.ID)
 		}
-		copied := append([]byte(nil), content...)
-		current[item.ID] = frontendHMRModule{ID: item.ID, Entry: item.Entry, SHA256: actual, Bytes: copied, Deferred: item.Deferred}
-		digests = append(digests, actual)
+		module := frontendHMRModule{ID: item.ID, Entry: item.Entry, SHA256: actual, Deferred: item.Deferred}
+		if item.Graph == nil {
+			object := frontendHMRObject{Bytes: append([]byte(nil), content...), MediaType: "text/javascript"}
+			if err := addFrontendHMRObject(objects, actual, object); err != nil {
+				return frontendHMRCandidate{}, fmt.Errorf("前端候选模块对象冲突: %s: %w", item.ID, err)
+			}
+			module.Digests = []string{actual}
+		} else {
+			graph, graphObjects, err := loadFrontendHMRGraph(directory, item.ID, item.Entry, actual, *item.Graph)
+			if err != nil {
+				return frontendHMRCandidate{}, fmt.Errorf("前端候选 Module Graph 无效: %s: %w", item.ID, err)
+			}
+			for digest, object := range graphObjects {
+				if err := addFrontendHMRObject(objects, digest, object); err != nil {
+					return frontendHMRCandidate{}, fmt.Errorf("前端候选 Module Graph 对象冲突: %s: %w", item.ID, err)
+				}
+				module.Digests = append(module.Digests, digest)
+			}
+			sort.Strings(module.Digests)
+			module.Graph = &graph
+		}
+		current[item.ID] = module
 	}
-	return frontendHMRCandidate{current: current, digests: digests}, nil
+	return frontendHMRCandidate{current: current, objects: objects}, nil
 }
 
-func (h *frontendHMR) commitCandidate(candidate frontendHMRCandidate, eventName string, assets http.Handler) {
+func (h *frontendHMR) commitCandidate(candidate frontendHMRCandidate, eventName string, assets http.Handler, replaceAll bool) {
 	h.mu.Lock()
 	h.generation++
-	h.current = candidate.current
+	if replaceAll {
+		h.current = candidate.current
+	} else {
+		merged := make(map[string]frontendHMRModule, len(h.current)+len(candidate.current))
+		for id, module := range h.current {
+			merged[id] = module
+		}
+		for id, module := range candidate.current {
+			merged[id] = module
+		}
+		h.current = merged
+	}
 	h.lastError = ""
 	if assets != nil {
 		h.assets = assets
 	}
-	for _, module := range candidate.current {
-		h.objects[module.SHA256] = module.Bytes
+	for digest, object := range candidate.objects {
+		h.objects[digest] = object
 	}
-	h.history = append(h.history, candidate.digests)
+	activeDigests := make([]string, 0)
+	for _, module := range h.current {
+		activeDigests = append(activeDigests, module.Digests...)
+	}
+	h.history = append(h.history, activeDigests)
 	if len(h.history) > retainedFrontendGenerations {
 		h.history = h.history[len(h.history)-retainedFrontendGenerations:]
 		retained := map[string]struct{}{}
@@ -464,16 +442,20 @@ func (h *frontendHMR) module(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	h.mu.RLock()
-	content, ok := h.objects[match[1]]
+	object, ok := h.objects[match[1]]
 	h.mu.RUnlock()
 	if !ok {
 		http.NotFound(w, request)
 		return
 	}
-	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	contentType := object.MediaType
+	if strings.HasPrefix(contentType, "text/") || contentType == "application/json" {
+		contentType += "; charset=utf-8"
+	}
+	w.Header().Set("Content-Type", contentType)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-VastPlan-Module-SHA256", match[1])
-	_, _ = w.Write(content)
+	_, _ = w.Write(object.Bytes)
 }
 
 func (h *frontendHMR) runtime(w http.ResponseWriter, request *http.Request) {
@@ -508,41 +490,64 @@ func (h *frontendHMR) runtime(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "Portal Runtime upstream invalid", http.StatusBadGateway)
 		return
 	}
-	modulesRaw, hasModules := document["modules"]
-	// Current Portal RuntimeSpecs normally use trusted Module Graphs. A
-	// development overlay only knows how to replace legacy single-file module
-	// descriptors; decoding into the old shape used to erase moduleGraphs and
-	// serialize modules as null, leaving the browser with an invalid RuntimeSpec.
-	// Preserve graph-native specs exactly until the HMR overlay has graph-level
-	// replacement data.
-	if !hasModules || bytes.Equal(bytes.TrimSpace(modulesRaw), []byte("null")) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "no-store")
-		_, _ = w.Write(body)
-		return
-	}
-	var modules []map[string]any
-	if err := json.Unmarshal(modulesRaw, &modules); err != nil {
-		http.Error(w, "Portal Runtime upstream invalid", http.StatusBadGateway)
-		return
-	}
 	h.mu.RLock()
-	for _, descriptor := range modules {
-		id, _ := descriptor["id"].(string)
-		if module, ok := h.current[id]; ok {
-			descriptor["entry"] = module.Entry
-			descriptor["url"] = "/__vastplan_dev/modules/" + module.SHA256 + ".js"
-			descriptor["sha256"] = module.SHA256
-			descriptor["deferred"] = module.Deferred
+	if modulesRaw, exists := document["modules"]; exists && !bytes.Equal(bytes.TrimSpace(modulesRaw), []byte("null")) {
+		var modules []map[string]any
+		if err := json.Unmarshal(modulesRaw, &modules); err != nil {
+			h.mu.RUnlock()
+			http.Error(w, "Portal Runtime upstream invalid", http.StatusBadGateway)
+			return
 		}
+		for _, descriptor := range modules {
+			id, _ := descriptor["id"].(string)
+			if module, ok := h.current[id]; ok {
+				descriptor["entry"] = module.Entry
+				descriptor["url"] = "/__vastplan_dev/modules/" + module.SHA256 + ".js"
+				descriptor["sha256"] = module.SHA256
+				descriptor["deferred"] = module.Deferred
+			}
+		}
+		encoded, err := json.Marshal(modules)
+		if err != nil {
+			h.mu.RUnlock()
+			http.Error(w, "Portal Runtime overlay invalid", http.StatusInternalServerError)
+			return
+		}
+		document["modules"] = encoded
+	}
+	if graphsRaw, exists := document["moduleGraphs"]; exists && !bytes.Equal(bytes.TrimSpace(graphsRaw), []byte("null")) {
+		var graphs []map[string]any
+		if err := json.Unmarshal(graphsRaw, &graphs); err != nil {
+			h.mu.RUnlock()
+			http.Error(w, "Portal Runtime upstream invalid", http.StatusBadGateway)
+			return
+		}
+		for _, descriptor := range graphs {
+			id, _ := descriptor["id"].(string)
+			module, ok := h.current[id]
+			if !ok || module.Graph == nil {
+				continue
+			}
+			descriptor["target"] = module.Graph.Target
+			descriptor["entry"] = module.Graph.Entry
+			descriptor["digest"] = module.Graph.Digest
+			descriptor["externals"] = module.Graph.Externals
+			descriptor["nodes"] = module.Graph.Nodes
+			if module.Deferred {
+				descriptor["deferred"] = true
+			} else {
+				delete(descriptor, "deferred")
+			}
+		}
+		encoded, err := json.Marshal(graphs)
+		if err != nil {
+			h.mu.RUnlock()
+			http.Error(w, "Portal Runtime overlay invalid", http.StatusInternalServerError)
+			return
+		}
+		document["moduleGraphs"] = encoded
 	}
 	h.mu.RUnlock()
-	encodedModules, err := json.Marshal(modules)
-	if err != nil {
-		http.Error(w, "Portal Runtime overlay invalid", http.StatusInternalServerError)
-		return
-	}
-	document["modules"] = encodedModules
 	encodedDocument, err := json.Marshal(document)
 	if err != nil {
 		http.Error(w, "Portal Runtime overlay invalid", http.StatusInternalServerError)

@@ -170,5 +170,13 @@ describe("VerifiedFrontendPluginLoader", () => {
     const loader = new VerifiedFrontendPluginLoader([development], fetcher, async () => ({ default: { register() {} } }), "development");
     await loader.load(ref);
     expect(fetcher).toHaveBeenCalledWith(development.url, { credentials: "include", cache: "no-store" });
+
+    const unsignedGraph: FrontendModuleGraphDescriptor = {
+      ...ref, target: "browser", entry: development.entry, digest: "0".repeat(64), packageSha256: development.packageSha256, externals: [],
+      nodes: [{ path: development.entry, url: development.url, sha256: development.sha256, size: source.byteLength, mediaType: "text/javascript", purpose: "entry", dependencies: [] }],
+    };
+    const developmentGraph = { ...unsignedGraph, digest: await computeModuleGraphDigest(unsignedGraph) };
+    expect(() => parsePortalRuntimeSpec({ portal: {}, moduleGraphs: [developmentGraph] })).toThrowError(ModuleLoadError);
+    expect(parseDevelopmentRuntimeSpec({ portal: {}, moduleGraphs: [developmentGraph] }).moduleGraphs[0]).toEqual(developmentGraph);
   });
 });
