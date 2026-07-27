@@ -14,6 +14,8 @@ export function Table({ columns, rows, rowKey = "id", selection = "none", select
     title: column.title,
     dataIndex: column.key,
     width: column.width,
+    fixed: column.fixed,
+    align: column.align === "end" ? "right" : column.align === "center" ? "center" : "left",
     render: column.render === undefined ? undefined : (value, row, index) => column.render?.(value, row, index),
   }));
   return <div style={{ width: "100%", overflowX: "auto" }}><AntdTable

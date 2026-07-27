@@ -253,6 +253,8 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
       title: column.title,
       dataIndex: column.key,
       width: column.width,
+      fixed: column.fixed,
+      align: column.align === "end" ? "right" : column.align === "center" ? "center" : "left",
       render: column.render === undefined ? undefined : (cell: unknown, row: Readonly<Record<string, unknown>>, index: number) => column.render?.(cell, row, index),
     }))}
     data={rows as Array<Record<string, unknown>>}

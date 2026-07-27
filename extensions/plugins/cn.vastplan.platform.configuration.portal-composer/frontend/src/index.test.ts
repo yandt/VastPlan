@@ -29,7 +29,9 @@ describe("Portal application composition", () => {
 
   it("registers every governance domain through Workbench contracts", () => {
     const client = new PortalControlClient({ fetch: async () => response([]) });
-    const pages = [createProfilePage(client), createApplicationPage(client), createBindingPage(client), createActivationPage(client)];
+    const profilePage = createProfilePage(client);
+    const bindingPage = createBindingPage(client);
+    const pages = [profilePage, createApplicationPage(client), bindingPage, createActivationPage(client)];
 
     expect(pages.map((page) => page.path)).toEqual([
       "/settings/portals/profiles", "/settings/portals", "/settings/portals/bindings", "/settings/portals/activations",
@@ -37,6 +39,8 @@ describe("Portal application composition", () => {
     expect(pages.every((page) => page.collection.selection === "single")).toBe(true);
     expect(pages.every((page) => (page.overlays?.length ?? 0) > 0)).toBe(true);
     expect(pages.flatMap((page) => page.collection.actions ?? []).filter((action) => action.visibleWhen !== undefined).length).toBeGreaterThan(8);
+    expect(profilePage.collection.actions?.filter((action) => action.id !== "profile.create").every((action) => action.placement === "record.row")).toBe(true);
+    expect(bindingPage.collection.actions?.filter((action) => action.id !== "binding.create").every((action) => action.placement === "page.secondary")).toBe(true);
   });
 
   it("offers Ant Design first in the governed Renderer choices", () => {

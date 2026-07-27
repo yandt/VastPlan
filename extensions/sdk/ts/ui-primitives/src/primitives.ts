@@ -128,6 +128,10 @@ export interface TableColumn {
   key: string;
   title: ReactNode;
   width?: number;
+  /** A governed alignment hint used by structural columns such as row actions. */
+  align?: "start" | "center" | "end";
+  /** Structural columns may stay visible while the collection scrolls horizontally. */
+  fixed?: "right";
   render?(value: unknown, row: Readonly<Record<string, unknown>>, index: number): ReactNode;
 }
 
