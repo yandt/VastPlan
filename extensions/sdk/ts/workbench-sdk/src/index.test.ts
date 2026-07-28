@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage } from "./index.js";
-import type { ActionSpec } from "./index.js";
+import type { ActionSpec, PageActionSpec } from "./index.js";
 
 describe("defineCollectionPage", () => {
   it("keeps the serializable collection contract and runtime loader together without exposing a component", async () => {
@@ -61,10 +61,27 @@ describe("defineCollectionPage", () => {
     })).toThrow("runAction");
   });
 
+  it("keeps page commands independent from collection selection and allows bounded display modes", () => {
+    const base = {
+      id: "connections", path: "/connections", title: "Connections",
+      collection: { id: "connections", title: "Connections", view: "table" as const, query: { mode: "page" as const, defaultPageSize: 20, pageSizeOptions: [20] }, columns: [] },
+      async load() { return { items: [], total: 0 }; },
+      async runPageAction() {},
+    };
+    expect(() => defineCollectionPage({ ...base, pageActions: [
+      { id: "refresh", label: "Refresh", icon: "refresh" as const },
+      { id: "export", label: "Export", icon: "download" as const, display: "icon-label" as const, overflow: "never" as const },
+    ] })).not.toThrow();
+    expect(() => defineCollectionPage({ ...base, pageActions: [
+      { id: "bad", label: "Bad", icon: "warning", requiresSelection: true } as unknown as PageActionSpec,
+    ] })).toThrow("不受支持的字段");
+  });
+
   it("requires credentialRef presentation to remain a reference-only schema field", () => {
     expect(() => defineCollectionPage({
       id: "connections", path: "/connections", title: "Connections",
-      collection: { id: "connections", title: "Connections", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "new", label: "New", icon: "add", placement: "page.primary", form: "new" }] },
+      collection: { id: "connections", title: "Connections", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [] },
+      pageActions: [{ id: "new", label: "New", icon: "add", form: "new" }],
       forms: [{
         id: "new",
         schema: { id: "new", schema: { type: "object", properties: { credential: { type: "string" } } } },
@@ -79,7 +96,8 @@ describe("defineCollectionPage", () => {
   it("accepts one-time secret material only for an uninitialized write-only field", () => {
     const definition = {
       id: "credentials", path: "/credentials", title: "Credentials",
-      collection: { id: "credentials", title: "Credentials", view: "table" as const, query: { mode: "page" as const, defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], actions: [{ id: "new", label: "New", icon: "add" as const, placement: "page.primary" as const, form: "new" }] },
+      collection: { id: "credentials", title: "Credentials", view: "table" as const, query: { mode: "page" as const, defaultPageSize: 20, pageSizeOptions: [20] }, columns: [] },
+      pageActions: [{ id: "new", label: "New", icon: "add" as const, form: "new" }],
       forms: [{
         id: "new",
         schema: { id: "new", schema: { type: "object", properties: { value: { type: "string", format: "vastplan-secret-material", writeOnly: true } } } },

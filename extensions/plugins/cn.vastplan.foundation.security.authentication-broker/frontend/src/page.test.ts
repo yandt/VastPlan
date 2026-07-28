@@ -74,7 +74,7 @@ describe("Authentication Provider Workbench", () => {
     );
     expect(validate).toHaveBeenCalledWith("corporate-oidc", 4);
     expect(
-      page.collection.actions?.map((item) => item.form).filter(Boolean),
+      page.pageActions?.map((item) => item.form).filter(Boolean),
     ).toEqual(["create", "publish"]);
   });
 

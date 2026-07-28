@@ -78,8 +78,8 @@ export function createPluginConfigurationResourcePage(client: PlatformAdminClien
       ],
     },
     editor, forms: [createForm],
+    pageActions: [{ id: "resource-create", label: message(namespace, "resource.create", "新增 Profile"), icon: "add", form: "resource-create", requiredPermissions: ["platform.plugin-configuration.write"] }],
     actions: [
-      { id: "resource-create", label: message(namespace, "resource.create", "新增 Profile"), icon: "add", placement: "page.primary", form: "resource-create", requiredPermissions: ["platform.plugin-configuration.write"] },
       { id: "resource-delete", label: message(namespace, "resource.delete", "删除 Profile"), icon: "remove", placement: "record.detail", tone: "danger", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.write"], confirm: message(namespace, "resource.deleteConfirm", "创建删除候选？Active Profile 只会在独立审批和提交后删除。"), visibleWhen: { pointer: "/status", equals: "Active" } },
       { id: "resource-submit", label: message(namespace, "resource.submit", "提交审批"), icon: "publish", placement: "record.detail", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.resource.publish"], visibleWhen: { pointer: "/status", equals: "Draft" } },
       { id: "resource-approve", label: message(namespace, "resource.approve", "批准候选"), icon: "success", placement: "record.detail", requiresSelection: true, requiredPermissions: ["platform.plugin-configuration.resource.publish"], visibleWhen: { pointer: "/status", equals: "Publishing" } },

@@ -88,7 +88,9 @@ export type CollectionQueryMode = "page" | "cursor";
 export type FilterFieldKind = "text" | "select" | "boolean" | "numberRange" | "dateRange";
 export type CollectionSelectionMode = "none" | "single" | "multiple";
 export type CollectionDensity = "compact" | "standard" | "comfortable";
-export type CollectionActionPlacement = "page.primary" | "page.secondary" | "collection.toolbar" | "collection.bulk" | "record.row" | "record.detail" | "card.footer";
+export type CollectionActionPlacement = "collection.toolbar" | "collection.bulk" | "record.row" | "record.detail" | "card.footer";
+export type PageActionDisplay = "icon" | "icon-label" | "label";
+export type PageActionOverflow = "auto" | "always" | "never";
 export type DataValueFormat = "text" | "number" | "date" | "datetime" | "boolean" | "status";
 /** 可跨 Portal、Runner 和 Mobile 使用的受治理响应式列数。 */
 export type ResponsiveColumnCount = number | { xs?: number; sm?: number; md?: number; lg?: number; xl?: number };
@@ -158,6 +160,23 @@ export interface ActionSpec {
   requiredPermissions?: readonly string[];
   /** Evaluated only against the selected record; authorization stays server-side. */
   visibleWhen?: FormCondition;
+}
+/** Page-scoped command rendered independently from Collection/Record state. */
+export interface PageActionSpec {
+  id: string;
+  label: import("./i18n.js").LocalizedText;
+  icon: import("./icons.js").SemanticIconName;
+  tone?: "primary" | "secondary" | "danger";
+  /** Defaults to a pure icon button with Tooltip. */
+  display?: PageActionDisplay;
+  /** Bounded placement control; automatic overflow remains the default. */
+  overflow?: PageActionOverflow;
+  order?: number;
+  confirm?: import("./i18n.js").LocalizedText;
+  form?: string;
+  overlay?: string;
+  /** UX projection only; Backend authorization remains authoritative. */
+  requiredPermissions?: readonly string[];
 }
 export interface CollectionSpec {
   id: string;

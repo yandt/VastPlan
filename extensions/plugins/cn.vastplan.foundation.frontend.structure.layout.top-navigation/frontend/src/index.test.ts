@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { uiContractVersion } from "@vastplan/ui-contract";
 import adapter, { prioritizeRoots, topNavigationShellCSS } from "./index";
 import type { PortalNavigationGroup } from "@vastplan/ui-primitives";
 
@@ -6,7 +7,7 @@ const root = (id: string): PortalNavigationGroup => ({ id, label: id, zone: "pri
 
 describe("top navigation shell layout", () => {
   it("exports an independent signed Shell Library", () => {
-    expect(adapter).toMatchObject({ id: "top-navigation", shell: "ui.structure.shell", uiContract: "5.0.0" });
+    expect(adapter).toMatchObject({ id: "top-navigation", shell: "ui.structure.shell", uiContract: uiContractVersion });
   });
 
   it("keeps the active root visible when navigation overflows", () => {

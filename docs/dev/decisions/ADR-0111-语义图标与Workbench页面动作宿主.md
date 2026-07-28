@@ -40,3 +40,4 @@ Table 行选择与 Card 选择统一由权限投影后的 `collection.bulk` 动�
 ## 后续修订
 
 - 2026-07-28：canonical 的“VastPlan 自有 SVG”来源决策由 [ADR-0164](ADR-0164-MIT图标目录与分片按需加载.md) 修订为精确锁定、MIT 许可的 Ant Design 图标目录。稳定语义词表、跨 Renderer 几何一致、原生主题回退和功能插件禁止传入 SVG 的边界保持不变。
+- 2026-07-28：页面动作的选择态控制器与 `page.primary/page.secondary` placement 由 [ADR-0166](ADR-0166-独立页面动作宿主与固定帮助入口.md) 取代。语义图标、统一 Tooltip、Slot 隔离和溢出上限继续有效。

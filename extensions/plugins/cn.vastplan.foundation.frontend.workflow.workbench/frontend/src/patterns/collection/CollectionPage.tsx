@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { ActionSpec, CollectionDensity } from "@vastplan/ui-contract";
-import { usePortalI18n, usePortalUI, type WorkbenchPreferencePort } from "@vastplan/ui-primitives";
+import { usePortalI18n, usePortalUI, type PageRefreshSignal, type WorkbenchPreferencePort } from "@vastplan/ui-primitives";
 import type { CollectionActionContext, CollectionPageDefinition, CollectionSummary, WorkbenchPresentationConfig } from "@vastplan/workbench-sdk";
 import { CollectionCards } from "./CollectionCards.js";
 import { FilterPanel } from "../filter/FilterPanel.js";
@@ -14,10 +14,11 @@ import { useCollectionData } from "./useCollectionData.js";
 import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
 import { evaluateFormCondition } from "../form/presentation.js";
 import { CollectionOverlayWorkflow } from "../overlay/CollectionOverlayWorkflow.js";
-import { pageActionController } from "../action/page-action-controller.js";
 import { WorkbenchPageFlow } from "../layout/WorkbenchRhythm.js";
 
-export function CollectionPage({ page, preferenceScope, preferences, presentation }: { page: CollectionPageDefinition; preferenceScope: string; preferences?: WorkbenchPreferencePort; presentation?: WorkbenchPresentationConfig }) {
+const emptyRefreshSignal: PageRefreshSignal = Object.freeze({ subscribe: () => () => undefined, getSnapshot: () => 0 });
+
+export function CollectionPage({ page, preferenceScope, preferences, presentation, refreshSignal = emptyRefreshSignal }: { page: CollectionPageDefinition; preferenceScope: string; preferences?: WorkbenchPreferencePort; presentation?: WorkbenchPresentationConfig; refreshSignal?: PageRefreshSignal }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   const collection = page.collection;
@@ -37,6 +38,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   const preferenceMutationRef = useRef(0);
   const keyOf = useCallback((row: CollectionRow) => String(row.id ?? row.key ?? ""), []);
   const data = useCollectionData({ page, pageNumber, pageSize, filters, keyOf });
+  const refreshRevision = useSyncExternalStore(refreshSignal.subscribe, refreshSignal.getSnapshot, refreshSignal.getSnapshot);
   const { rows } = data;
   const selected = useMemo(() => rows.filter((row) => selectedKeys.includes(keyOf(row))), [keyOf, rows, selectedKeys]);
 
@@ -68,6 +70,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
     void requestSummary(controller.signal);
   }, [requestSummary]);
   useEffect(() => { startSummaryRequest(); return () => summaryRequestRef.current?.abort(); }, [startSummaryRequest]);
+  useEffect(() => { if (refreshRevision > 0) { data.refresh(); startSummaryRequest(); } }, [data.refresh, refreshRevision, startSummaryRequest]);
   useEffect(() => { setSelectedKeys([]); }, [data.resetToken]);
   const refresh = useCallback(() => { data.refresh(); startSummaryRequest(); }, [data.refresh, startSummaryRequest]);
   const runAction = useCallback(async (action: ActionSpec, actionRows: readonly CollectionRow[]) => {
@@ -108,11 +111,6 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   const bulkActions = actions.filter((action) => action.placement === "collection.bulk" && visibleAction(action));
   const selectionMode = collectionSelectionMode(actions, collection.selection);
   const hasFilters = collection.filterPanel !== undefined;
-
-  useEffect(() => pageActionController(page).bind({
-    selectedCount: selected.length,
-    visibleActionIDs: new Set(actions.filter(visibleAction).map((action) => action.id)),
-  }, (action) => { void runAction(action, selected); }), [actions, page, runAction, selected]);
 
   return <WorkbenchPageFlow density={density}>
     {summary === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Panel title={summary.title === undefined ? undefined : i18n.text(summary.title)}><ui.Descriptions columns={{ xs: 1, sm: 1, md: 2, lg: 2, xl: 3 }} items={summary.metrics.map((metric) => ({ id: metric.id, label: i18n.text(metric.label), value: metric.tone === undefined ? metric.value : <ui.Status tone={metric.tone}>{metric.value}</ui.Status> }))} /></ui.Panel></div>}

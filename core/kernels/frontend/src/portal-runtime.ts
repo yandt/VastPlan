@@ -17,6 +17,8 @@ import type {
   PreparedPortal,
 } from "./portal-contracts";
 import { loadPortalFoundations } from "./portal-foundations";
+import { PageHelpButton } from "./page-help-button";
+import { createPageRefreshController } from "./page-refresh-controller";
 import { snapshotPortal } from "./portal-snapshot";
 import {
   assertTrustedFirstParty,
@@ -70,7 +72,7 @@ export class PortalRuntime {
     const workbenchModule = requiredModule(modules, portal.workbench);
     assertTrustedFirstParty(workbenchModule, portal.workbench.id);
     const workbench = workbenchModule.workbench;
-    if (workbench?.id !== "ui.workflow.workbench" || typeof workbench.CollectionPage !== "function" || typeof workbench.CollectionPageActions !== "function" || typeof workbench.RecordPage !== "function" || typeof workbench.RecordPageActions !== "function" || !contractSatisfies(workbench.uiContract, portal.workbench.uiContract)) {
+    if (workbench?.id !== "ui.workflow.workbench" || typeof workbench.CollectionPage !== "function" || typeof workbench.PageActionHost !== "function" || typeof workbench.RecordPage !== "function" || !contractSatisfies(workbench.uiContract, portal.workbench.uiContract)) {
       throw new PortalAssemblyError("WORKBENCH_INVALID", "UI Workbench 插件缺失或 UI 契约不兼容");
     }
 
@@ -185,13 +187,14 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
           (projectedPage.collection.view === "table" && projectedPage.collection.columns.length === 0) || (projectedPage.collection.view === "cards" && projectedPage.collection.card === undefined) || typeof projectedPage.load !== "function" ||
           (projectedPage.loadSummary !== undefined && typeof projectedPage.loadSummary !== "function") || (projectedPage.runAction !== undefined && typeof projectedPage.runAction !== "function") ||
           (projectedPage.overlays ?? []).some((overlay) => !overlay.id || !["dialog", "drawer"].includes(overlay.surface) || typeof overlay.load !== "function") ||
-          (projectedPage.collection.actions ?? []).some((action) => action.icon === undefined || !semanticIconNames.includes(action.icon))) {
+          [...(projectedPage.collection.actions ?? []), ...(projectedPage.pageActions ?? [])].some((action) => action.icon === undefined || !semanticIconNames.includes(action.icon))) {
         throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `集合页面定义无效: ${projectedPage.id}`);
       }
-      const Page = () => createElement(workbench.CollectionPage, { page: projectedPage, preferenceScope: `${portal.tenantId}/${portal.id}`, preferences, presentation: portal.workbench.config });
-      const PageActions = () => createElement(workbench.CollectionPageActions, { page: projectedPage });
+      const refresh = createPageRefreshController();
+      const Page = () => createElement(workbench.CollectionPage, { page: projectedPage, preferenceScope: `${portal.tenantId}/${portal.id}`, preferences, presentation: portal.workbench.config, refreshSignal: refresh });
+      const PageActions = () => createElement(workbench.PageActionHost, { definition: pageActionDefinition(projectedPage), onRefresh: refresh.invalidate });
       context.addPage({ id: projectedPage.id, path: projectedPage.path, title: projectedPage.title, description: projectedPage.description, navigation: projectedPage.navigation, slots: [
-        { id: "workbench.collection.actions", slot: "page.header.end", component: PageActions },
+        ...((projectedPage.pageActions?.length ?? 0) === 0 ? [] : [{ id: "page.actions", slot: "page.header.end" as const, component: PageActions, order: 100 }]),
         { id: "workbench.collection", slot: "page.body.main", component: Page },
       ] });
     },
@@ -200,16 +203,23 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
       if (!page.id || !page.form?.id || page.form.workflow.surface !== "page" || typeof page.form.submit !== "function") {
         throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `表单页面定义无效: ${page.id}`);
       }
-      const Page = () => createElement(workbench.FormPage, { page });
-      context.addPage({ id: page.id, path: page.path, title: page.title, description: page.description, navigation: page.navigation, slots: [{ id: "workbench.form", slot: "page.body.main", component: Page }] });
+      const projected = projectPageActions(portal, page);
+      const refresh = createPageRefreshController();
+      const Page = () => createElement(workbench.FormPage, { page: projected });
+      const PageActions = () => createElement(workbench.PageActionHost, { definition: pageActionDefinition(projected), onRefresh: refresh.invalidate });
+      context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, navigation: projected.navigation, slots: [
+        ...((projected.pageActions?.length ?? 0) === 0 ? [] : [{ id: "page.actions", slot: "page.header.end" as const, component: PageActions, order: 100 }]),
+        { id: "workbench.form", slot: "page.body.main", component: Page },
+      ] });
     },
     addRecordPage: (page) => {
       if (!experienceAllows(portal, page.requiredPermissions) || !experienceAllowsAny(portal, page.requiredAnyPermissions)) return;
       const projected = projectRecordActions(portal, validateRecordPage(page));
-      const Page = () => createElement(workbench.RecordPage, { page: projected });
-      const PageActions = () => createElement(workbench.RecordPageActions, { page: projected });
+      const refresh = createPageRefreshController();
+      const Page = () => createElement(workbench.RecordPage, { page: projected, refreshSignal: refresh });
+      const PageActions = () => createElement(workbench.PageActionHost, { definition: pageActionDefinition(projected), onRefresh: refresh.invalidate });
       context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, navigation: projected.navigation, slots: [
-        { id: "workbench.record.actions", slot: "page.header.end", component: PageActions },
+        ...((projected.pageActions?.length ?? 0) === 0 ? [] : [{ id: "page.actions", slot: "page.header.end" as const, component: PageActions, order: 100 }]),
         { id: "workbench.record", slot: "page.body.main", component: Page },
       ] });
     },
@@ -230,8 +240,8 @@ function experienceAllowsAny(portal: PortalSpec, required: readonly string[] | u
 }
 
 function projectCollectionActions<Row extends Record<string, unknown>>(portal: PortalSpec, page: import("@vastplan/workbench-sdk").CollectionPageDefinition<Row>): import("@vastplan/workbench-sdk").CollectionPageDefinition<Row> {
-	const actions = page.collection.actions?.filter((action) => experienceAllows(portal, action.requiredPermissions));
-	return { ...page, collection: { ...page.collection, ...(actions === undefined ? {} : { actions }) } };
+  const actions = page.collection.actions?.filter((action) => experienceAllows(portal, action.requiredPermissions));
+  return { ...projectPageActions(portal, page), collection: { ...page.collection, ...(actions === undefined ? {} : { actions }) } };
 }
 
 function validateCollectionPage<Row extends Record<string, unknown>>(page: import("@vastplan/workbench-sdk").CollectionPageDefinition<Row>): import("@vastplan/workbench-sdk").CollectionPageDefinition<Row> {
@@ -254,7 +264,17 @@ function validateRecordPage<Row extends Record<string, unknown>>(page: import("@
 
 function projectRecordActions<Row extends Record<string, unknown>>(portal: PortalSpec, page: import("@vastplan/workbench-sdk").RecordPageDefinition<Row>): import("@vastplan/workbench-sdk").RecordPageDefinition<Row> {
   const actions = page.actions?.filter((action) => experienceAllows(portal, action.requiredPermissions));
-  return { ...page, ...(actions === undefined ? {} : { actions }) };
+  return { ...projectPageActions(portal, page), ...(actions === undefined ? {} : { actions }) };
+}
+
+function projectPageActions<Page extends { pageActions?: readonly import("@vastplan/ui-contract").PageActionSpec[] }>(portal: PortalSpec, page: Page): Page {
+  const pageActions = page.pageActions?.filter((action) => experienceAllows(portal, action.requiredPermissions));
+  return { ...page, ...(pageActions === undefined ? {} : { pageActions }) };
+}
+
+function pageActionDefinition(page: import("@vastplan/workbench-sdk").CollectionPageDefinition | import("@vastplan/workbench-sdk").FormPageDefinition | import("@vastplan/workbench-sdk").RecordPageDefinition): import("@vastplan/workbench-sdk").PageActionHostDefinition {
+  const workflows = page as typeof page & { forms?: import("@vastplan/workbench-sdk").WorkbenchFormDefinition[]; overlays?: import("@vastplan/workbench-sdk").WorkbenchOverlayDefinition[] };
+  return Object.freeze({ id: page.id, actions: page.pageActions ?? [], ...(workflows.forms === undefined ? {} : { forms: workflows.forms }), ...(workflows.overlays === undefined ? {} : { overlays: workflows.overlays }), ...(page.runPageAction === undefined ? {} : { runAction: page.runPageAction }) });
 }
 
 function registerPage(
@@ -272,7 +292,8 @@ function registerPage(
       !["primary", "settings", "secondary"].includes(page.navigation.zone) || (page.navigation.groupID !== undefined && !managementName(page.navigation.groupID)))) {
     throw new PortalAssemblyError("NAVIGATION_REJECTED", `导航 ID 重复或语义区无效: ${page.navigation.id}`);
   }
-  for (const slot of page.slots) {
+  const slots = [...page.slots, { id: "system.page.help", slot: "page.header.end" as const, component: PageHelpButton, order: 1_000_000 }];
+  for (const slot of slots) {
     const slotKey = `${page.id}/${slot.id}`;
     if (!slot.id || !standardPageSlots.has(slot.slot) || state.slotIDs.has(slotKey) || typeof slot.component !== "function") {
       throw new PortalAssemblyError("SLOT_REJECTED", `Slot 贡献非法或重复: ${slotKey}`);
@@ -282,7 +303,7 @@ function registerPage(
   state.pageIDs.add(page.id);
   state.paths.add(mountedPath);
   if (page.navigation !== undefined) state.navigationIDs.add(page.navigation.id);
-  state.pages.push({ ...page, path: mountedPath, slots: [...page.slots], pluginID: ref.id });
+  state.pages.push({ ...page, path: mountedPath, slots, pluginID: ref.id });
 }
 
 function collectLocalization(

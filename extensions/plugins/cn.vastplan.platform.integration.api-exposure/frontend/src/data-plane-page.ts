@@ -41,14 +41,16 @@ export function createDataPlaneExposurePage(client: PlatformAdminClient, service
       ],
       selection: "single",
       actions: [
-        { id: "create", label: "新建草稿", icon: "add", placement: "page.primary", tone: "primary", form: "create" },
-        { id: "submit", label: "提交审批", icon: "upload", placement: "page.secondary", requiresSelection: true, visibleWhen: { pointer: "/status", equals: "Draft" } },
-        { id: "approve", label: "审批", icon: "success", placement: "page.secondary", requiresSelection: true, visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
-        { id: "publish", label: "发布", icon: "publish", placement: "page.secondary", tone: "primary", requiresSelection: true, visibleWhen: { pointer: "/status", equals: "Approved" } },
-        { id: "retire", label: "退役", icon: "remove", placement: "page.secondary", tone: "danger", requiresSelection: true, confirm: "退役会立即撤销 Lease 和未消费 Ticket，并永久墓碑化 Route Key。", visibleWhen: { pointer: "/status", equals: "Published" } },
+        { id: "submit", label: "提交审批", icon: "upload", placement: "record.row", visibleWhen: { pointer: "/status", equals: "Draft" } },
+        { id: "approve", label: "审批", icon: "success", placement: "record.row", visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
+        { id: "publish", label: "发布", icon: "publish", placement: "record.row", tone: "primary", visibleWhen: { pointer: "/status", equals: "Approved" } },
+        { id: "retire", label: "退役", icon: "remove", placement: "record.row", tone: "danger", confirm: "退役会立即撤销 Lease 和未消费 Ticket，并永久墓碑化 Route Key。", visibleWhen: { pointer: "/status", equals: "Published" } },
       ],
       preferences: { allowedColumns: ["id", "routeKey", "service", "modes", "hosts", "status", "updatedAt"], density: true },
     },
+    pageActions: [
+      { id: "create", label: "新建草稿", icon: "add", tone: "primary", form: "create" },
+    ],
     forms: [createForm(client)],
     load: (query, signal) => loadRows(client, query, signal),
     async runAction({ action, selected }) {

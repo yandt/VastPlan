@@ -17,6 +17,7 @@ import {
   IconMenu,
   IconMore,
   IconPlus,
+  IconQuestionCircle,
   IconRefresh,
   IconSearch,
   IconSettings,
@@ -50,6 +51,7 @@ const nativeIcons: Partial<Record<SemanticIconName, ComponentType<Record<string,
   download: IconDownload,
   upload: IconUpload,
   more: IconMore,
+  help: IconQuestionCircle,
 };
 
 const pixels = { sm: 16, md: 20, lg: 24 } as const;

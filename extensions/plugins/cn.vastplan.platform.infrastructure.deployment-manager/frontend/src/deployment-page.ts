@@ -34,6 +34,7 @@ export function createDeploymentPage(client: PlatformAdminClient, serviceID: str
     id: `platform.deployment.${serviceID}`, path, title,
     description: message("page.description", "声明应用意图，由 Planner 派生依赖与运行策略，经审批后发布到 Node Agent 集群"),
     navigation: { id: `platform.deployment.${serviceID}`, label: title, zone: "settings", order: 60 },
+    pageActions: [{ id: "create", label: message("action.new", "新建应用意图"), icon: "add", tone: "primary", form: "create" }],
     collection: {
       id: `platform.deployment.${serviceID}`, title, view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
       filterPanel: { fields: [
@@ -121,16 +122,15 @@ function deploymentActions() {
   const intentDraft = { all: [{ pointer: "/status", equals: "Draft" }, { pointer: "/revisionKind", equals: "Intent" }] } as const;
   const intentPending = { all: [{ pointer: "/status", equals: "PendingApproval" }, { pointer: "/revisionKind", equals: "Intent" }] } as const;
   return [
-    { id: "create", label: message("action.new", "新建应用意图"), icon: "add", placement: "page.primary", tone: "primary", form: "create" },
-    { id: "edit", label: message("action.edit", "编辑"), icon: "edit", placement: "page.secondary", requiresSelection: true, form: "edit", visibleWhen: intentDraft },
-    { id: "refresh-plan", label: message("action.refreshPlan", "重新解析计划"), icon: "refresh", placement: "page.secondary", requiresSelection: true, visibleWhen: intentDraft },
-    { id: "submit", label: message("action.submit", "提交审批"), icon: "upload", placement: "page.secondary", requiresSelection: true, confirm: message("confirm.submit", "提交前会再次调用 Planner；只有 Resolved 且未失效的计划才能进入审批。"), visibleWhen: { all: [...intentDraft.all, { pointer: "/planStatus", equals: "Resolved" }, { pointer: "/planningStale", equals: false }] } },
-    { id: "approve", label: message("action.approve", "批准"), icon: "success", placement: "page.secondary", requiresSelection: true, tone: "primary", confirm: message("confirm.approve", "审批人与提交人必须不同，审批将绑定当前计划摘要。"), visibleWhen: intentPending },
-    { id: "publish", label: message("action.publish", "发布"), icon: "publish", placement: "page.secondary", requiresSelection: true, tone: "primary", confirm: message("confirm.publish", "发布前会再次校验计划摘要，之后 Controller 才会调度 Node Agent。"), visibleWhen: { all: [{ pointer: "/status", in: ["Approved", "Publishing"] }, { pointer: "/revisionKind", equals: "Intent" }, { pointer: "/configurationCandidateId", exists: false }] } },
-    { id: "rollback", label: message("action.rollback", "回滚到此版本"), icon: "refresh", placement: "page.secondary", requiresSelection: true, tone: "danger", confirm: message("confirm.rollback", "回滚会从历史 Intent 创建并发布新的单调 revision。"), visibleWhen: { all: [{ pointer: "/status", equals: "Published" }, { pointer: "/active", equals: false }, { pointer: "/revisionKind", equals: "Intent" }] } },
-    { id: "resolution", label: message("action.resolution", "解析结果"), icon: "info", placement: "page.secondary", requiresSelection: true, overlay: "resolution", visibleWhen: { pointer: "/revisionKind", equals: "Intent" } },
-    { id: "graph", label: message("action.graph", "依赖图"), icon: "info", placement: "page.secondary", requiresSelection: true, overlay: "graph", visibleWhen: { pointer: "/revisionKind", equals: "Intent" } },
-    { id: "preview", label: message("action.preview", "最终部署预览"), icon: "search", placement: "page.secondary", requiresSelection: true, overlay: "preview" },
-    { id: "audit", label: message("action.audit", "审计记录"), icon: "search", placement: "page.secondary", requiresSelection: true, overlay: "audit" },
+    { id: "edit", label: message("action.edit", "编辑"), icon: "edit", placement: "record.row", form: "edit", visibleWhen: intentDraft },
+    { id: "refresh-plan", label: message("action.refreshPlan", "重新解析计划"), icon: "refresh", placement: "record.row", visibleWhen: intentDraft },
+    { id: "submit", label: message("action.submit", "提交审批"), icon: "upload", placement: "record.row", confirm: message("confirm.submit", "提交前会再次调用 Planner；只有 Resolved 且未失效的计划才能进入审批。"), visibleWhen: { all: [...intentDraft.all, { pointer: "/planStatus", equals: "Resolved" }, { pointer: "/planningStale", equals: false }] } },
+    { id: "approve", label: message("action.approve", "批准"), icon: "success", placement: "record.row", tone: "primary", confirm: message("confirm.approve", "审批人与提交人必须不同，审批将绑定当前计划摘要。"), visibleWhen: intentPending },
+    { id: "publish", label: message("action.publish", "发布"), icon: "publish", placement: "record.row", tone: "primary", confirm: message("confirm.publish", "发布前会再次校验计划摘要，之后 Controller 才会调度 Node Agent。"), visibleWhen: { all: [{ pointer: "/status", in: ["Approved", "Publishing"] }, { pointer: "/revisionKind", equals: "Intent" }, { pointer: "/configurationCandidateId", exists: false }] } },
+    { id: "rollback", label: message("action.rollback", "回滚到此版本"), icon: "refresh", placement: "record.row", tone: "danger", confirm: message("confirm.rollback", "回滚会从历史 Intent 创建并发布新的单调 revision。"), visibleWhen: { all: [{ pointer: "/status", equals: "Published" }, { pointer: "/active", equals: false }, { pointer: "/revisionKind", equals: "Intent" }] } },
+    { id: "resolution", label: message("action.resolution", "解析结果"), icon: "info", placement: "record.row", overlay: "resolution", visibleWhen: { pointer: "/revisionKind", equals: "Intent" } },
+    { id: "graph", label: message("action.graph", "依赖图"), icon: "info", placement: "record.row", overlay: "graph", visibleWhen: { pointer: "/revisionKind", equals: "Intent" } },
+    { id: "preview", label: message("action.preview", "最终部署预览"), icon: "search", placement: "record.row", overlay: "preview" },
+    { id: "audit", label: message("action.audit", "审计记录"), icon: "search", placement: "record.row", overlay: "audit" },
   ] as const;
 }

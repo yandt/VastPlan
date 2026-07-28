@@ -1,19 +1,17 @@
 import type { UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import { uiContractVersion } from "@vastplan/ui-contract";
 import { CollectionPage } from "./patterns/collection/CollectionPage.js";
-import { CollectionPageActions } from "./patterns/collection/CollectionPageActions.js";
+import { PageActionHost } from "./patterns/action/PageActionHost.js";
 import { FormPage } from "./patterns/form/FormPage.js";
 import { RecordPage } from "./patterns/record/RecordPage.js";
-import { RecordPageActions } from "./patterns/record/RecordPageActions.js";
 
 export const workbench: UIWorkbenchAdapter = {
   id: "ui.workflow.workbench",
   uiContract: uiContractVersion,
   CollectionPage,
-  CollectionPageActions,
+  PageActionHost,
   FormPage,
   RecordPage,
-  RecordPageActions,
   loadDashboardGrid: async () => (await import("./patterns/dashboard/DashboardGrid.js")).DashboardGrid,
   localization: {
     defaultLocale: "zh-CN",

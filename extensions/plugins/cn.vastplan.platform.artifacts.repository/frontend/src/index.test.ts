@@ -129,7 +129,7 @@ describe("artifact repository Workbench", () => {
   it("regenerates the GC plan immediately before quarantine", async () => {
     const stub = clientStub();
     const page = createArtifactRepositoryPages(stub.value, "artifacts")[3]!;
-    await page.runAction?.({ action: page.collection.actions![0]!, selected: [], refresh: () => undefined }, new AbortController().signal);
+    await page.runPageAction?.({ action: page.pageActions![0]!, refresh: () => undefined }, new AbortController().signal);
     expect(stub.planArtifactGarbageCollection).toHaveBeenCalledOnce();
     expect(stub.quarantineArtifacts).toHaveBeenCalledWith("b".repeat(64), 72);
   });

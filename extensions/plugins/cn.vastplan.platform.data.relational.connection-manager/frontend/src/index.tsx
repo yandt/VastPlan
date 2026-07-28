@@ -103,6 +103,7 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
     id: `platform.database-connections.${serviceID}`, path, title,
     description: message(namespace, "page.description", "在数据库插件内配置连接、Provider、连接池与托管凭证"),
     navigation: { id: `platform.database-connections.${serviceID}`, label: title, zone: "settings", order: 40 },
+    pageActions: [{ id: "create", label: message(namespace,"action.create","新增连接"), icon: "add", tone: "primary", form: "create" }],
     collection: {
       id: `platform.database-connections.${serviceID}`, title, view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20, 50, 100] },
       filterPanel: { fields: [{ id: "name", label: message(namespace, "filter.name", "连接名称"), kind: "text" }, { id: "providerId", label: message(namespace, "filter.provider", "Provider"), kind: "select", options: [{ value: "postgresql", label: "PostgreSQL" }, { value: "mysql", label: "MySQL" }] }] },
@@ -113,7 +114,7 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
         { key: "credentialVersion", label: message(namespace,"column.credentialVersion","凭证版本"), format: "number", defaultVisible: false, minWidth: 100 },
       ],
       actions: [
-        { id: "create", label: message(namespace,"action.create","新增连接"), icon: "add", placement: "page.primary", tone: "primary", form: "create" }, { id: "edit", label: message(namespace,"action.edit","编辑"), icon: "edit", placement: "record.row", form: "edit" }, { id: "probe", label: message(namespace,"action.probe","探测"), icon: "search", placement: "record.row" }, { id: "delete", label: message(namespace,"action.delete","删除"), icon: "remove", placement: "record.row", tone: "danger", confirm: message(namespace,"confirm.delete","确认删除此连接并退役其托管凭证？") },
+        { id: "edit", label: message(namespace,"action.edit","编辑"), icon: "edit", placement: "record.row", form: "edit" }, { id: "probe", label: message(namespace,"action.probe","探测"), icon: "search", placement: "record.row" }, { id: "delete", label: message(namespace,"action.delete","删除"), icon: "remove", placement: "record.row", tone: "danger", confirm: message(namespace,"confirm.delete","确认删除此连接并退役其托管凭证？") },
       ],
     },
     forms: [form("create"), form("edit")],

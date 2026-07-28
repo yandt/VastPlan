@@ -84,6 +84,7 @@ export function migrationPage(client: PlatformAdminClient, id: string, path: str
   return defineCollectionPage<Row>({
     id, path, title: text("page.migration.title", "存储迁移"), description: text("page.migration.description", "按阶段准备、同步、切换、观察、回滚并安全释放旧 Volume"),
     navigation: { id, label: text("page.migration.navigation", "存储迁移"), zone: "settings", groupID: "platform.artifacts", order: 54 },
+    pageActions: [{ id: "prepare", label: text("action.migration.prepare", "准备迁移"), icon: "add", tone: "primary", form: "prepare", requiredPermissions: ["platform.artifacts.migrate"] }],
     collection: {
       id: `${id}.collection`, title: text("panel.migration", "当前迁移"), view: "table", query: { mode: "page", defaultPageSize: 10, pageSizeOptions: [10] }, selection: "single",
       columns: [
@@ -99,7 +100,6 @@ export function migrationPage(client: PlatformAdminClient, id: string, path: str
         { key: "lastError", label: text("column.migrationError", "最近错误"), defaultVisible: true, minWidth: 160 },
       ],
       actions: [
-        { id: "prepare", label: text("action.migration.prepare", "准备迁移"), icon: "add", placement: "page.primary", tone: "primary", form: "prepare", requiredPermissions: ["platform.artifacts.migrate"] },
         { id: "sync", label: text("action.migration.sync", "增量同步"), icon: "refresh", placement: "record.row", requiredPermissions: ["platform.artifacts.migrate"], visibleWhen: { pointer: "/phase", in: ["prepared", "synced"] } },
         { id: "cutover", label: text("action.migration.cutover", "切换"), icon: "publish", placement: "record.row", form: "cutover", requiredPermissions: ["platform.artifacts.migrate"], visibleWhen: { pointer: "/phase", in: ["prepared", "synced"] } },
         { id: "rollback", label: text("action.migration.rollback", "回滚"), icon: "refresh", placement: "record.row", tone: "danger", confirm: text("confirm.migration.rollback", "确认回滚到源 Volume？观察期内的新写入已双写，可安全回退。"), requiredPermissions: ["platform.artifacts.migrate"], visibleWhen: { pointer: "/canRollback", equals: true } },

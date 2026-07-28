@@ -10,7 +10,8 @@ describe("global settings Workbench page", () => {
     const deleteSetting = vi.fn(async () => undefined);
     const client = { listSettings: vi.fn(async () => settings), putSetting, deleteSetting } as unknown as PlatformAdminClient;
     const page = createGlobalSettingsPage(client, "settings", "/settings/global", message("test", "title", "Settings"));
-    expect(page.collection.actions?.map((action) => [action.id, action.form])).toEqual([["create", "create"], ["edit", "edit"], ["delete", undefined]]);
+    expect(page.pageActions?.map((action) => [action.id, action.form])).toEqual([["create", "create"]]);
+    expect(page.collection.actions?.map((action) => [action.id, action.form])).toEqual([["edit", "edit"], ["delete", undefined]]);
     await expect(page.load({ mode: "page", page: 1, pageSize: 20, filters: { key: "portal" } }, new AbortController().signal)).resolves.toMatchObject({ total: 1 });
     const edit = page.forms?.find((form) => form.id === "edit")!;
     await edit.submit({ value: { key: "portal.locale", value: "{\"default\":\"en-US\"}" }, selected: settings as Array<Setting & Record<string, unknown>> }, new AbortController().signal);

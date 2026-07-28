@@ -89,7 +89,7 @@ CollectionLoader(query, signal) -> CollectionResult
 └── facets? / permittedActions?    # 服务端事实，不是浏览器猜测
 ```
 
-表格行操作由 Workbench 统一投影：功能插件只声明 `placement: record.row` 的语义动作，Workbench 自动追加不可隐藏的末列“操作”，在横向滚动时固定在右侧并保持内容居中；每行先按 `visibleWhen` 过滤，最多两个动作以图标 + Tooltip 直接显示，剩余动作进入同样只包含图标 + Tooltip 的“更多行操作”浮层。页面级操作继续只挂载至 `page.header.end`，不得与行操作混用来规避这一布局规则。
+表格行操作由 Workbench 统一投影：功能插件只声明 `placement: record.row` 的语义动作，Workbench 自动追加不可隐藏的末列“操作”，在横向滚动时固定在右侧并保持内容居中；每行先按 `visibleWhen` 过滤，最多两个动作以图标 + Tooltip 直接显示，剩余动作进入同样只包含图标 + Tooltip 的“更多行操作”浮层。页面级操作使用独立 `PageActionSpec` 并只挂载至 `page.header.end`，不得与行操作混用来规避这一布局规则。
 
 - Table 使用 `page` 或 `cursor` 二选一。需要总数、跳页和审计浏览的管理表使用 `page`；Card feed 和高数据量连续浏览使用 `cursor`。
 - Filter 的值、排序、页码/cursor 都属于 URL 可恢复状态；敏感筛选值不得进入 URL。查询切换时取消上一请求，保留已成功数据并展示刷新状态。
@@ -100,24 +100,24 @@ CollectionLoader(query, signal) -> CollectionResult
 
 ### 3.3 操作区
 
-`ActionSpec` 只声明语义：稳定 `id`、本地化标题、必填语义图标、tone、placement、selection 前置条件、confirm 文案和可见条件。页面不得提交按钮、React 节点或逐动作回调；表单与 Overlay 动作只引用已登记 ID，其他动作统一交给页面级 `runAction(context, signal)` 工作流端口，并以 `action.id` 分派。
+`ActionSpec` 只声明集合与记录语义：稳定 `id`、本地化标题、必填语义图标、tone、placement、selection 前置条件、confirm 文案和可见条件。页面不得提交按钮、React 节点或逐动作回调；表单与 Overlay 动作只引用已登记 ID，其他动作统一交给 `runAction(context, signal)` 工作流端口，并以 `action.id` 分派。独立的 `PageActionSpec` 只表达页面命令，不包含 selection 或 `visibleWhen`，由 `runPageAction(context, signal)` 执行。
 
 | Placement | 规则 |
 |---|---|
-| `page.primary` / `page.secondary` | 由可信宿主挂入 `page.header.end`；桌面为纯图标 + Tooltip，最多直接显示 4 个，其余进入更多菜单 |
+| 顶层 `pageActions` | 由可信宿主挂入 `page.header.end` 并整体右对齐；默认纯图标 + Tooltip，可选 `icon-label` / `label`，最多直接显示 4 个，其余进入更多菜单 |
 | `collection.toolbar` / `collection.bulk` | 集合局部工具保留在集合内；批量动作使用 Select 选择后再显式执行，且必须声明选择数量与对象状态前置条件 |
 | `record.row` / `card.footer` | 图标 + Tooltip 居中呈现；行操作最多两个直接可见，其余进入图标化 overflow |
 | `form.submit` / `form.cancel` / `form.danger` | 提交只有一个主操作；危险操作必须确认且保留失败上下文 |
 
 浏览器的可见/禁用状态只是体验提示。Action handler 每次执行仍经类型化 BFF 或 capability 调用，由服务端重新判定主体、租户、对象状态、并发版本和权限。
 
-所有动作的 `icon` 都必须来自 UI Contract 的稳定语义词表，不允许功能插件传入框架图标、任意 SVG、原始 `IconCatalogName` 或 React 节点，也不允许 Workbench 根据动作 ID 猜测图标。词表缺少准确语义时，先从完整 MIT 图标目录中提升语义名称，并同步 canonical、Ant Design、Arco 和 MUI 映射。`canonical` 图标主题由精确锁定的 Ant Design 语义入口提供跨框架一致基线；完整 846 图标目录只供 Foundation 工具按分片延迟读取。`renderer-native` 主题由当前 Renderer 按需映射，缺项回退基线。Platform Profile 只配置 `iconTheme`，不能传组件或资源 URL。Workbench 页面动作控制器只桥接当前选择、可见性和执行入口；功能插件仍不知道 Slot，Portal Kernel 才负责把动作宿主编译为 `page.header.end` 贡献。Slot 是 Shell 的结构协议，不因 Workbench 自动填充而删除。
+所有动作的 `icon` 都必须来自 UI Contract 的稳定语义词表，不允许功能插件传入框架图标、任意 SVG、原始 `IconCatalogName` 或 React 节点，也不允许 Workbench 根据动作 ID 猜测图标。词表缺少准确语义时，先从完整 MIT 图标目录中提升语义名称，并同步 canonical、Ant Design、Arco 和 MUI 映射。`canonical` 图标主题由精确锁定的 Ant Design 语义入口提供跨框架一致基线；完整 846 图标目录只供 Foundation 工具按分片延迟读取。`renderer-native` 主题由当前 Renderer 按需映射，缺项回退基线。Platform Profile 只配置 `iconTheme`，不能传组件或资源 URL。Page Action Host 不读取 Collection/Record 选择态，只通过宿主刷新信号通知正文重新加载；Portal Kernel 才负责把动作宿主编译为 `page.header.end` 贡献，并在最右侧固定追加统一帮助按钮。Slot 是 Shell 的结构协议，不因 Workbench 自动填充而删除。
 
 新增、导入、发布属于页面功能动作，必须放在 Page Header；批量操作位于集合工具栏左侧，刷新、列设置属于当前集合的展示控制，必须归组并固定在集合工具栏右侧，使用图标与 Tooltip。列设置只有在 Collection 明确声明 `preferences` 时显示，不能把未声明的列暴露给用户；它以触发按钮附近的紧凑 Popover 呈现，无额外“确定”步骤。Popover 根据最长列名使用内容内在宽度并设置最大宽度，避免固定宽度浪费空间；列拖拽区最大高度为 256px，溢出时只滚动该区域，密度控制保持可见。显示密度使用 24px 高的按钮式单选组；列顺序通过拖拽句柄调整，并为键盘提供 ArrowUp/ArrowDown 等价入口；显隐只使用 `visibility/visibilityOff` 语义图标即时切换，隐藏列整行使用 muted 灰色但仍允许排序和恢复。所有变化即时应用并保存。
 
 ### 3.4 表单与 Overlay 工作流
 
-`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 5.x 提供：
+`FormSchema` 保持 Draft 7 数据约束，不将分栏、步骤和条件可见性伪装成校验规则。当前 UI Contract 6.x 提供：
 
 ```text
 FormPresentation

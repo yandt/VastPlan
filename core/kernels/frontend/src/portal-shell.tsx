@@ -426,8 +426,8 @@ const kernelNamespace = "cn.vastplan.kernel.frontend";
 const kernelLocalization: PluginLocalization = {
   defaultLocale: "zh-CN",
   messages: {
-    "zh-CN": { "recovery.active": "正在运行上一条仍可信的已发布 revision #{revision}。", "development.notCommitted": "插件热替换未提交", "update.available": "Portal 新版本已就绪", "update.revision": "Activation #{revision}", "update.apply": "刷新并应用" },
-    "en-US": { "recovery.active": "Running the previous trusted published revision #{revision}.", "development.notCommitted": "Plugin hot update was not committed", "update.available": "A new Portal version is ready", "update.revision": "Activation #{revision}", "update.apply": "Refresh and apply" },
+    "zh-CN": { "recovery.active": "正在运行上一条仍可信的已发布 revision #{revision}。", "development.notCommitted": "插件热替换未提交", "update.available": "Portal 新版本已就绪", "update.revision": "Activation #{revision}", "update.apply": "刷新并应用", "page.help": "页面帮助", "page.helpPending": "此页面暂未配置帮助内容。" },
+    "en-US": { "recovery.active": "Running the previous trusted published revision #{revision}.", "development.notCommitted": "Plugin hot update was not committed", "update.available": "A new Portal version is ready", "update.revision": "Activation #{revision}", "update.apply": "Refresh and apply", "page.help": "Page help", "page.helpPending": "Help content has not been configured for this page yet." },
   },
 };
 

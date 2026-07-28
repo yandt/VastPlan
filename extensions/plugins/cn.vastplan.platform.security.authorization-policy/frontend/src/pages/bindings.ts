@@ -37,6 +37,7 @@ export function bindingsPage(client: PlatformAdminClient): CollectionPageDefinit
       groupID: "platform.authorization",
       order: 30,
     },
+    pageActions: [{ id: "create", label: message(namespace, "action.createBinding", "新建绑定"), icon: "add", tone: "primary", form: "create", requiredPermissions: ["platform.authorization.binding"] }],
     collection: {
       id: "authorization-bindings",
       title: message(namespace, "bindings.title", "主体绑定"),
@@ -55,7 +56,6 @@ export function bindingsPage(client: PlatformAdminClient): CollectionPageDefinit
       selection: "single",
       preferences: { allowedColumns: ["id", "revision", "subjectDisplay", "roleDisplay", "state", "expiresAt", "updatedAt"], density: true },
       actions: [
-        { id: "create", label: message(namespace, "action.createBinding", "新建绑定"), icon: "add", placement: "page.primary", tone: "primary", form: "create", requiredPermissions: ["platform.authorization.binding"] },
         { id: "edit", label: message(namespace, "action.edit", "编辑"), icon: "edit", placement: "record.row", form: "edit", requiredPermissions: ["platform.authorization.binding"], visibleWhen: { pointer: "/state", equals: "Draft" } },
         { id: "submit", label: message(namespace, "action.submit", "提交审批"), icon: "upload", placement: "record.row", requiredPermissions: ["platform.authorization.binding"], visibleWhen: { pointer: "/state", equals: "Draft" } },
         { id: "approve", label: message(namespace, "action.approve", "批准"), icon: "success", placement: "record.row", requiredPermissions: ["platform.authorization.approve"], visibleWhen: { pointer: "/state", equals: "PendingApproval" } },

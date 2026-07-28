@@ -1,6 +1,6 @@
-import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, PageActionSpec, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, PageActionDisplay, PageActionOverflow, PageActionSpec, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
 export { dashboardBreakpointOrder, dashboardDefaultBreakpoints, dashboardDefaultColumns, jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export { defineDashboardGrid } from "./dashboard.js";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
@@ -28,6 +28,19 @@ export interface CollectionActionContext<Row extends Record<string, unknown> = R
 
 export interface CollectionActionResult {
   notify?: { title: LocalizedText; content?: LocalizedText; kind?: "success" | "info" | "warning" | "error" };
+}
+
+export interface PageActionContext {
+  action: PageActionSpec;
+  refresh(): void;
+}
+
+export interface PageActionHostDefinition {
+  id: string;
+  actions: readonly PageActionSpec[];
+  forms?: readonly WorkbenchFormDefinition[];
+  overlays?: readonly WorkbenchOverlayDefinition[];
+  runAction?(context: PageActionContext, signal: AbortSignal): Promise<CollectionActionResult | void>;
 }
 
 export interface CollectionSummaryMetric {
@@ -102,12 +115,14 @@ export interface CollectionPageDefinition<Row extends Record<string, unknown> = 
   /** At least one permission is sufficient to expose a shared governance page. */
   requiredAnyPermissions?: readonly string[];
   navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
+  pageActions?: readonly PageActionSpec[];
   collection: CollectionSpec;
   load(query: CollectionQuery, signal: AbortSignal): Promise<CollectionResult<Row>>;
   loadSummary?(signal: AbortSignal): Promise<CollectionSummary>;
   forms?: readonly WorkbenchFormDefinition<Row>[];
   overlays?: readonly WorkbenchOverlayDefinition<Row>[];
   runAction?(context: CollectionActionContext<Row>, signal: AbortSignal): Promise<CollectionActionResult | void>;
+  runPageAction?(context: PageActionContext, signal: AbortSignal): Promise<CollectionActionResult | void>;
 }
 
 export interface FormPageDefinition {
@@ -118,6 +133,8 @@ export interface FormPageDefinition {
   requiredPermissions?: readonly string[];
   requiredAnyPermissions?: readonly string[];
   navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
+  pageActions?: readonly PageActionSpec[];
+  runPageAction?(context: PageActionContext, signal: AbortSignal): Promise<CollectionActionResult | void>;
   form: WorkbenchFormDefinition;
 }
 
@@ -144,6 +161,8 @@ interface RecordPageCommon<Row extends Record<string, unknown>> {
   requiredPermissions?: readonly string[];
   requiredAnyPermissions?: readonly string[];
   navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
+  pageActions?: readonly PageActionSpec[];
+  runPageAction?(context: PageActionContext, signal: AbortSignal): Promise<CollectionActionResult | void>;
   detail: RecordDetailSpec;
   /** Optional page-surface editor rendered in the detail pane. */
   editor?: WorkbenchFormDefinition<Row>;
@@ -218,10 +237,12 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
   if (new Set(actions.map((action) => action.id)).size !== actions.length) throw new Error(`Collection ${definition.collection.id} 的 Action ID 必须唯一`);
   for (const action of actions) {
     validateAction(action, definition.runAction !== undefined);
+    if (!["collection.toolbar", "collection.bulk", "record.row", "card.footer"].includes(action.placement)) throw new Error(`Collection ${definition.collection.id} 的 Action 位置无效: ${action.id}`);
     if (action.form !== undefined && !forms.has(action.form)) throw new Error(`Action ${action.id} 引用了未声明的表单 ${action.form}`);
     if (action.overlay !== undefined && !overlays.has(action.overlay)) throw new Error(`Action ${action.id} 引用了未声明的 Overlay ${action.overlay}`);
     if (action.form !== undefined && action.overlay !== undefined) throw new Error(`Action ${action.id} 不能同时打开表单和 Overlay`);
   }
+  validatePageActions(definition.pageActions, forms, overlays, definition.runPageAction !== undefined, definition.id);
   return Object.freeze({ ...definition, collection: Object.freeze({ ...definition.collection }) });
 }
 
@@ -230,6 +251,7 @@ export function defineFormPage(definition: FormPageDefinition): FormPageDefiniti
 	validatePermissionRequirements(definition.requiredAnyPermissions, "Form page requiredAnyPermissions");
   if (definition.form.workflow.surface !== "page") throw new Error("Form Page 的 workflow.surface 必须为 page");
   validateFormDefinition(definition.form);
+  validatePageActions(definition.pageActions, new Map(), new Map(), definition.runPageAction !== undefined, definition.id);
   return Object.freeze({ ...definition, form: Object.freeze({ ...definition.form }) });
 }
 
@@ -295,10 +317,35 @@ function validateRecordPage(definition: RecordPageDefinition): void {
   if (new Set(actions.map((action) => action.id)).size !== actions.length) throw new Error(`Record page ${definition.id} 的 Action ID 必须唯一`);
   for (const action of actions) {
     validateAction(action, definition.runAction !== undefined);
-    if (!validIdentifier(action.id) || !["page.primary", "page.secondary", "record.detail"].includes(action.placement)) throw new Error(`Record page ${definition.id} 的 Action 位置无效: ${action.id}`);
+    if (!validIdentifier(action.id) || action.placement !== "record.detail") throw new Error(`Record page ${definition.id} 的 Action 位置无效: ${action.id}`);
     if (action.form !== undefined && !forms.has(action.form)) throw new Error(`Action ${action.id} 引用了未声明的表单 ${action.form}`);
     if (action.overlay !== undefined && !overlays.has(action.overlay)) throw new Error(`Action ${action.id} 引用了未声明的 Overlay ${action.overlay}`);
     if (action.form !== undefined && action.overlay !== undefined) throw new Error(`Action ${action.id} 不能同时打开表单和 Overlay`);
+  }
+  validatePageActions(definition.pageActions, forms, overlays, definition.runPageAction !== undefined, definition.id);
+}
+
+function validatePageActions(
+  actions: readonly PageActionSpec[] | undefined,
+  forms: ReadonlyMap<string, WorkbenchFormDefinition>,
+  overlays: ReadonlyMap<string, WorkbenchOverlayDefinition>,
+  hasRunAction: boolean,
+  pageID: string,
+): void {
+  if (actions === undefined) return;
+  if (new Set(actions.map((action) => action.id)).size !== actions.length) throw new Error(`Page ${pageID} 的页面 Action ID 必须唯一`);
+  const allowedKeys = new Set(["id", "label", "icon", "tone", "display", "overflow", "order", "confirm", "form", "overlay", "requiredPermissions"]);
+  for (const action of actions) {
+    const unknownKey = Object.keys(action).find((key) => !allowedKeys.has(key));
+    if (unknownKey !== undefined) throw new Error(`Page Action ${action.id} 包含不受支持的字段: ${unknownKey}`);
+    validatePermissionRequirements(action.requiredPermissions, `Page Action ${action.id} requiredPermissions`);
+    if (!validIdentifier(action.id) || action.icon === undefined || action.order !== undefined && (!Number.isSafeInteger(action.order) || Math.abs(action.order) > 1_000_000)) throw new Error(`Page Action 无效: ${action.id}`);
+    if (action.display !== undefined && !["icon", "icon-label", "label"].includes(action.display)) throw new Error(`Page Action ${action.id} display 无效`);
+    if (action.overflow !== undefined && !["auto", "always", "never"].includes(action.overflow)) throw new Error(`Page Action ${action.id} overflow 无效`);
+    if (action.form !== undefined && !forms.has(action.form)) throw new Error(`Page Action ${action.id} 引用了未声明的表单 ${action.form}`);
+    if (action.overlay !== undefined && !overlays.has(action.overlay)) throw new Error(`Page Action ${action.id} 引用了未声明的 Overlay ${action.overlay}`);
+    if (action.form !== undefined && action.overlay !== undefined) throw new Error(`Page Action ${action.id} 不能同时打开表单和 Overlay`);
+    if (action.form === undefined && action.overlay === undefined && !hasRunAction) throw new Error(`Page Action ${action.id} 必须由页面 runPageAction 工作流处理`);
   }
 }
 

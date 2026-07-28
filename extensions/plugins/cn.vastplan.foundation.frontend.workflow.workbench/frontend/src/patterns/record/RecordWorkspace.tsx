@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type { ActionSpec } from "@vastplan/ui-contract";
 import { usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import type { RecordActionContext, RecordPageDefinition } from "@vastplan/workbench-sdk";
-import { pageActionController } from "../action/page-action-controller.js";
 import { evaluateFormCondition } from "../form/presentation.js";
 import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
 import { CollectionOverlayWorkflow } from "../overlay/CollectionOverlayWorkflow.js";
@@ -50,10 +49,6 @@ export function RecordWorkspace({ page, data, refresh, primary, primaryLabel, sp
       if (!controller.signal.aborted) ui.notify({ title, content: error instanceof Error ? error.message : String(error), kind: "error" });
     }
   }, [i18n, page, record, refresh, ui]);
-  useEffect(() => pageActionController(page).bind({
-    selectedCount: record === undefined ? 0 : 1,
-    visibleActionIDs: new Set(actions.filter(visible).map((action) => action.id)),
-  }, (action) => { void runAction(action); }), [actions, page, record, runAction, visible]);
   const secondary = <RecordPane detail={page.detail} record={record} editor={page.editor} actions={detailActions} loading={data.loading} failure={data.failure} onRetry={refresh} onAction={(action) => void runAction(action)} onDirtyChange={onDirtyChange} onBack={onBack} />;
   return <>
     <WorkbenchPageFlow>{primary === undefined ? secondary : <ui.SplitView primaryLabel={primaryLabel ?? "Records"} secondaryLabel={i18n.text(page.title)} primary={primary} secondary={secondary} mode={splitMode} primaryWidth="md" />}</WorkbenchPageFlow>

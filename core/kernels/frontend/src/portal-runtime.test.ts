@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
+import { uiContractRange, uiContractVersion } from "@vastplan/ui-contract";
 import { type FrontendPluginContext, type UIRenderAdapter, type UIShellAdapter, type UIShellLibrary, type UIWorkbenchAdapter } from "@vastplan/ui-primitives";
 import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type PluginRef, type PortalSpec } from "./portal-runtime";
 
@@ -15,22 +16,22 @@ const featureRef: PluginRef = { id: "cn.vastplan.platform.configuration.portal-c
 
 const renderer = (id: string) => ({ id, label: id, framework: id, capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"] as const, themeTemplates: [{ id: "light", label: "Light", scheme: "light" as const }], defaultThemeTemplate: "light", iconThemes: [{ id: "canonical", label: "Canonical", source: "canonical" as const }], defaultIconTheme: "canonical", Provider: ({ children }: { children: ReactNode }) => children, localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { label: "测试" }, "en-US": { label: "Test" } } } });
 const adapter: UIRenderAdapter = {
-  id: "ui.render.adapter", uiContract: "5.0.0", defaultRenderer: "arco",
+  id: "ui.render.adapter", uiContract: uiContractVersion, defaultRenderer: "arco",
   renderers: [
     { id: "arco", label: "Arco", framework: "arco", module: arcoRendererRef },
     { id: "mui", label: "MUI", framework: "mui", module: muiRendererRef },
   ],
 };
-const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: "5.0.0", templates: [{ id: "standard", label: "Standard", module: standardShellRef }, { id: "top-navigation", label: "Top", module: topShellRef }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
-const shellLibrary = (id: string): UIShellLibrary => ({ id, shell: "ui.structure.shell", uiContract: "5.0.0", Shell: () => null });
-const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: "5.0.0", CollectionPage: () => null, CollectionPageActions: () => null, FormPage: () => null, RecordPage: () => null, RecordPageActions: () => null };
+const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: uiContractVersion, templates: [{ id: "standard", label: "Standard", module: standardShellRef }, { id: "top-navigation", label: "Top", module: topShellRef }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
+const shellLibrary = (id: string): UIShellLibrary => ({ id, shell: "ui.structure.shell", uiContract: uiContractVersion, Shell: () => null });
+const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: uiContractVersion, CollectionPage: () => null, PageActionHost: () => null, FormPage: () => null, RecordPage: () => null };
 
 const portal: PortalSpec = {
   revision: 1, id: "admin", tenantId: "acme", route: "/",
   runtimeEngine: { ...engineRef, family: "react", engineContract: "^1.0.0" },
-  renderAdapter: { ...adapterRef, uiContract: "^5.0.0", config: { defaultRenderer: "arco", allowedRenderers: ["arco", "mui"], userSelectable: true } },
-  shell: { ...shellRef, uiContract: "^5.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true } },
-  workbench: { ...workbenchRef, uiContract: "^5.0.0" }, plugins: [engineRef, adapterRef, arcoRendererRef, muiRendererRef, shellRef, standardShellRef, topShellRef, workbenchRef, featureRef],
+  renderAdapter: { ...adapterRef, uiContract: uiContractRange, config: { defaultRenderer: "arco", allowedRenderers: ["arco", "mui"], userSelectable: true } },
+  shell: { ...shellRef, uiContract: uiContractRange, config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true } },
+  workbench: { ...workbenchRef, uiContract: uiContractRange }, plugins: [engineRef, adapterRef, arcoRendererRef, muiRendererRef, shellRef, standardShellRef, topShellRef, workbenchRef, featureRef],
   management: { tenantId: "acme", portalId: "admin", platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, services: [{ id: "settings", logicalService: "platform.settings", routingDomain: "platform", capabilities: [{ capability: "platform.settings", read: ["list"] }] }] },
   resolution: { platformCatalog: { id: "catalog", revision: 1, digest: "c".repeat(64) }, platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) }, managementBindingDigest: "d".repeat(64), pluginOrigins: { [engineRef.id]: "platform-profile", [adapterRef.id]: "platform-profile", [arcoRendererRef.id]: "platform-profile", [muiRendererRef.id]: "platform-profile", [shellRef.id]: "platform-profile", [standardShellRef.id]: "platform-profile", [topShellRef.id]: "platform-profile", [workbenchRef.id]: "platform-profile", [featureRef.id]: "platform-profile" } },
 };
@@ -57,6 +58,7 @@ describe("PortalRuntime shell", () => {
     expect(prepared.shell.id).toBe("ui.structure.shell");
     expect(prepared.shellLibrary.id).toBe("standard");
     expect(prepared.pages).toMatchObject([{ id: "home", path: "/home" }]);
+    expect(prepared.pages[0]?.slots.at(-1)).toMatchObject({ id: "system.page.help", slot: "page.header.end", order: 1_000_000 });
   });
 
   it("selects only an allowed user Renderer and keeps the Adapter singleton", async () => {
@@ -139,7 +141,9 @@ describe("PortalRuntime shell", () => {
     const prepared = await new PortalRuntime(loader({ [featureRef.id]: { register(context: FrontendPluginContext) {
       context.addCollectionPage({
         id: "cards", path: "/cards", title: "Cards",
-        collection: { id: "cards", title: "Cards", view: "cards", query: { mode: "cursor", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], card: { titleKey: "name" }, actions: [{ id: "publish", label: "Publish", icon: "publish", placement: "page.primary" }] },
+        collection: { id: "cards", title: "Cards", view: "cards", query: { mode: "cursor", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [], card: { titleKey: "name" } },
+        pageActions: [{ id: "publish", label: "Publish", icon: "publish" }],
+        async runPageAction() {},
         async load() { return { items: [] }; },
         async runAction() {},
       });
@@ -149,7 +153,11 @@ describe("PortalRuntime shell", () => {
       });
     } } })).prepare(portal);
     expect(prepared.pages.map((page) => page.id)).toEqual(["cards", "profile"]);
-    expect(prepared.pages[0]?.slots.map((slot) => slot.slot)).toEqual(["page.header.end", "page.body.main"]);
+    expect(prepared.pages[0]?.slots.map((slot) => [slot.id, slot.slot, slot.order ?? 0])).toEqual([
+      ["page.actions", "page.header.end", 100],
+      ["workbench.collection", "page.body.main", 0],
+      ["system.page.help", "page.header.end", 1_000_000],
+    ]);
   });
 
   it("projects session permissions into Workbench pages and actions", async () => {
@@ -182,16 +190,23 @@ describe("PortalRuntime shell", () => {
         id: "services", path: "/services", title: "Services", pattern: "master-detail", requiredPermissions: ["platform.demo.read"],
         master: { id: "services", title: "Services", keyField: "id", titleField: "name", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] } },
         detail: { titleKey: "name", sections: [{ id: "main", fields: [{ key: "name", label: "Name" }] }] },
+        pageActions: [
+          { id: "view", label: "View", icon: "info", requiredPermissions: ["platform.demo.read"] },
+        ],
         actions: [
-          { id: "view", label: "View", icon: "info", placement: "page.primary", requiredPermissions: ["platform.demo.read"] },
           { id: "delete", label: "Delete", icon: "remove", placement: "record.detail", requiredPermissions: ["platform.demo.write"] },
         ],
         async loadMaster() { return { items: [], total: 0 }; }, async loadRecord() { return undefined; },
+        async runPageAction() {},
         async runAction() {},
       });
     } } })).prepare(securedPortal);
     expect(prepared.pages.map((page) => page.id)).toContain("services");
-    expect(prepared.pages.find((page) => page.id === "services")?.slots.map((slot) => slot.slot)).toEqual(["page.header.end", "page.body.main"]);
+    expect(prepared.pages.find((page) => page.id === "services")?.slots.map((slot) => [slot.id, slot.slot, slot.order ?? 0])).toEqual([
+      ["page.actions", "page.header.end", 100],
+      ["workbench.record", "page.body.main", 0],
+      ["system.page.help", "page.header.end", 1_000_000],
+    ]);
   });
 
   it("rejects a malformed record pattern even when a plugin bypasses SDK helpers", async () => {

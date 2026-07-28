@@ -56,7 +56,7 @@ describe("deployment-manager Intent frontend contract", () => {
   it("keeps legacy revisions out of every mutating page action", () => {
     const page = createDeploymentPage({} as PlatformAdminClient, "deployment", "/deployment", "Deployment");
     const actions = Object.fromEntries((page.collection.actions ?? []).map((action) => [action.id, action]));
-    expect(actions.create?.form).toBe("create");
+    expect(page.pageActions?.find((action) => action.id === "create")?.form).toBe("create");
     for (const id of ["edit", "refresh-plan", "submit", "approve", "publish", "rollback"]) {
       expect(JSON.stringify(actions[id]?.visibleWhen), id).toContain('/revisionKind');
       expect(JSON.stringify(actions[id]?.visibleWhen), id).toContain('"Intent"');
@@ -76,7 +76,7 @@ describe("deployment-manager Intent frontend contract", () => {
     const page = createDeploymentPage(client, "deployment", "/deployment", "Deployment");
     const selected = [{ id: 7 } as DeploymentRow];
     for (const id of ["refresh-plan", "submit", "approve", "publish", "rollback"]) {
-      await page.runAction?.({ action: { id, label: id, icon: "more", placement: "page.secondary" }, selected, refresh() {} }, new AbortController().signal);
+      await page.runAction?.({ action: { id, label: id, icon: "more", placement: "record.row" }, selected, refresh() {} }, new AbortController().signal);
     }
     expect(calls).toEqual(["refresh-plan:7", "submit:7", "approve:7", "publish:7", "rollback:7"]);
   });

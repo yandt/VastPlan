@@ -34,6 +34,10 @@ export function createAuthenticationProviderPage(
       zone: "settings",
       order: 15,
     },
+    pageActions: [
+      { id: "create", label: message(namespace, "action.create", "新增 Provider"), icon: "add", tone: "primary", form: "create" },
+      { id: "publish", label: message(namespace, "action.publish", "发布目录"), icon: "publish", form: "publish" },
+    ],
     collection: {
       id: `authentication.providers.${serviceID}`,
       title,
@@ -82,21 +86,6 @@ export function createAuthenticationProviderPage(
         },
       ],
       actions: [
-        {
-          id: "create",
-          label: message(namespace, "action.create", "新增 Provider"),
-          icon: "add",
-          placement: "page.primary",
-          tone: "primary",
-          form: "create",
-        },
-        {
-          id: "publish",
-          label: message(namespace, "action.publish", "发布目录"),
-          icon: "publish",
-          placement: "page.secondary",
-          form: "publish",
-        },
         {
           id: "validate",
           label: message(namespace, "action.validate", "验证配置"),

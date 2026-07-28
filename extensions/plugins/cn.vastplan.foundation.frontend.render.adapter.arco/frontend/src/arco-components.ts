@@ -51,6 +51,7 @@ export { default as IconInfoCircle } from "@arco-design/web-react/icon/react-ico
 export { default as IconMenu } from "@arco-design/web-react/icon/react-icon/IconMenu";
 export { default as IconMore } from "@arco-design/web-react/icon/react-icon/IconMore";
 export { default as IconPlus } from "@arco-design/web-react/icon/react-icon/IconPlus";
+export { default as IconQuestionCircle } from "@arco-design/web-react/icon/react-icon/IconQuestionCircle";
 export { default as IconSearch } from "@arco-design/web-react/icon/react-icon/IconSearch";
 export { default as IconRefresh } from "@arco-design/web-react/icon/react-icon/IconRefresh";
 export { default as IconSettings } from "@arco-design/web-react/icon/react-icon/IconSettings";

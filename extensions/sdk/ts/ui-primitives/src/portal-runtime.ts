@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 import type { CollectionPreference } from "@vastplan/frontend-engine-contract";
 import type { DashboardGridLayouts, DashboardGridSpec, JSONValue, LocalizedText, MessageDescriptor, MessageValues, PluginLocalization } from "@vastplan/ui-contract";
-import type { CollectionPageDefinition, FormPageDefinition, RecordPageDefinition } from "@vastplan/workbench-sdk";
+import type { CollectionPageDefinition, FormPageDefinition, PageActionHostDefinition, RecordPageDefinition } from "@vastplan/workbench-sdk";
 import type { SemanticIconName } from "./icon.js";
 
 export type NavigationZone = "primary" | "settings" | "secondary";
@@ -126,15 +126,19 @@ export interface FrontendPluginContext {
 	addShellContribution(contribution: PortalShellContribution): void;
 }
 
-/** Foundation Workbench runtime; it owns collection query, selection and action state. */
+export interface PageRefreshSignal {
+  subscribe(listener: () => void): () => void;
+  getSnapshot(): number;
+}
+
+/** Foundation Workbench runtime; page actions are hosted independently from body patterns. */
 export interface UIWorkbenchAdapter {
   id: "ui.workflow.workbench";
   uiContract: string;
-  CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string; preferences?: WorkbenchPreferencePort; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } } }>;
-  CollectionPageActions: ComponentType<{ page: CollectionPageDefinition }>;
+  CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string; preferences?: WorkbenchPreferencePort; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } }; refreshSignal?: PageRefreshSignal }>;
+  PageActionHost: ComponentType<{ definition: PageActionHostDefinition; onRefresh(): void }>;
   FormPage: ComponentType<{ page: FormPageDefinition }>;
-  RecordPage: ComponentType<{ page: RecordPageDefinition }>;
-  RecordPageActions: ComponentType<{ page: RecordPageDefinition }>;
+  RecordPage: ComponentType<{ page: RecordPageDefinition; refreshSignal?: PageRefreshSignal }>;
   /** Optional heavyweight dashboard Pattern. Its implementation must stay in a deferred module chunk. */
   loadDashboardGrid?: () => Promise<ComponentType<DashboardGridRuntimeProps>>;
   localization?: PluginLocalization;

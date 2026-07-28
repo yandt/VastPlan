@@ -100,6 +100,10 @@ function garbageCollectionPage(client: PlatformAdminClient, id: string, path: st
   return defineCollectionPage<Row>({
     id, path, title: text("page.gc.title", "垃圾回收"), description: text("page.gc.description", "按计划隔离并在宽限期后复核清扫"),
     navigation: { id, label: text("page.gc.navigation", "垃圾回收"), zone: "settings", groupID: "platform.artifacts", order: 53 },
+    pageActions: [
+      { id: "quarantine", label: text("action.quarantine", "隔离当前计划"), icon: "warning", tone: "danger", confirm: text("confirm.quarantine", "将重新生成计划并隔离全部候选，默认宽限期为 72 小时。") },
+      { id: "sweep", label: text("action.sweep", "清扫到期制品"), icon: "remove", tone: "danger", confirm: text("confirm.sweep", "只会删除已超过宽限期且复核无引用的隔离制品。") },
+    ],
     collection: {
       id: `${id}.collection`, title: text("panel.gc", "隔离与清扫记录"), view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [10, 20, 50] },
       filterPanel: { fields: [
@@ -114,10 +118,6 @@ function garbageCollectionPage(client: PlatformAdminClient, id: string, path: st
         { key: "status", label: text("column.gcStatus", "回收状态"), defaultVisible: true, minWidth: 130 },
         { key: "size", label: text("column.size", "大小"), defaultVisible: true, minWidth: 100 },
         { key: "sweepAfter", label: text("column.sweepAfter", "最早清扫时间"), defaultVisible: true, minWidth: 190 },
-      ],
-      actions: [
-        { id: "quarantine", label: text("action.quarantine", "隔离当前计划"), icon: "warning", placement: "page.primary", tone: "danger", confirm: text("confirm.quarantine", "将重新生成计划并隔离全部候选，默认宽限期为 72 小时。") },
-        { id: "sweep", label: text("action.sweep", "清扫到期制品"), icon: "remove", placement: "page.secondary", tone: "danger", confirm: text("confirm.sweep", "只会删除已超过宽限期且复核无引用的隔离制品。") },
       ],
       preferences: { allowedColumns: ["pluginId", "version", "channel", "lifecycle", "status", "size", "sweepAfter"], density: true },
     },
@@ -142,7 +142,7 @@ function garbageCollectionPage(client: PlatformAdminClient, id: string, path: st
         { id: "blockers", label: text("metric.gcBlockers", "阻断原因"), value: plan.ready ? "-" : gcBlockerMessage(plan), tone: plan.ready ? "neutral" : "warning" },
       ] };
     },
-    async runAction({ action }) {
+    async runPageAction({ action }) {
       if (action.id === "quarantine") {
         const plan = await client.planArtifactGarbageCollection();
         if (!plan.ready || plan.planId === undefined || (plan.candidates ?? []).length === 0) throw new Error(gcBlockerMessage(plan));

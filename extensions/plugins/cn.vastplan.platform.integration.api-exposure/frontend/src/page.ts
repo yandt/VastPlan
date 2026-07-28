@@ -55,14 +55,16 @@ export function createAPIExposurePage(
       ],
       selection: "single",
       actions: [
-        { id: "create", label: text("action.create", "新建草稿"), icon: "add", placement: "page.primary", tone: "primary", form: "create" },
-        { id: "submit", label: text("action.submit", "提交审批"), icon: "upload", placement: "page.secondary", requiresSelection: true, visibleWhen: { pointer: "/status", equals: "Draft" } },
-        { id: "approve", label: text("action.approve", "审批"), icon: "success", placement: "page.secondary", requiresSelection: true, visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
-        { id: "publish", label: text("action.publish", "发布"), icon: "publish", placement: "page.secondary", tone: "primary", requiresSelection: true, visibleWhen: { pointer: "/status", equals: "Approved" } },
-        { id: "retire", label: text("action.retire", "退役"), icon: "remove", placement: "page.secondary", tone: "danger", requiresSelection: true, confirm: text("confirm.retire", "退役后公开 Route Key 永久墓碑化，不会重新分配。"), visibleWhen: { pointer: "/status", equals: "Published" } },
+        { id: "submit", label: text("action.submit", "提交审批"), icon: "upload", placement: "record.row", visibleWhen: { pointer: "/status", equals: "Draft" } },
+        { id: "approve", label: text("action.approve", "审批"), icon: "success", placement: "record.row", visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
+        { id: "publish", label: text("action.publish", "发布"), icon: "publish", placement: "record.row", tone: "primary", visibleWhen: { pointer: "/status", equals: "Approved" } },
+        { id: "retire", label: text("action.retire", "退役"), icon: "remove", placement: "record.row", tone: "danger", confirm: text("confirm.retire", "退役后公开 Route Key 永久墓碑化，不会重新分配。"), visibleWhen: { pointer: "/status", equals: "Published" } },
       ],
       preferences: { allowedColumns: ["id", "displayName", "routeKey", "contract", "hosts", "status", "updatedAt"], density: true },
     },
+    pageActions: [
+      { id: "create", label: text("action.create", "新建草稿"), icon: "add", tone: "primary", form: "create" },
+    ],
     forms: [createForm(client)],
     load: (query, signal) => loadRows(client, query, signal),
     async runAction({ action, selected }) {

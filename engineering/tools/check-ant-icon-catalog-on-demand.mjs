@@ -16,7 +16,7 @@ const catalogStartupIcons = iconInputs(catalogClosure, metafile.outputs);
 const allIcons = iconInputs(new Set(Object.keys(metafile.outputs).map((file) => resolve(file))), metafile.outputs);
 const delayedShards = dynamicDependencies(catalogClosure, metafile.outputs);
 
-if (semanticIcons.size !== 23) throw new Error(`语义入口必须只包含 23 个图标，实际 ${semanticIcons.size}`);
+if (semanticIcons.size !== 24) throw new Error(`语义入口必须只包含 24 个图标，实际 ${semanticIcons.size}`);
 if (catalogStartupIcons.size !== 0) throw new Error(`完整目录入口不得静态内联 SVG，实际 ${catalogStartupIcons.size}`);
 if (allIcons.size !== 846) throw new Error(`构建闭包必须包含完整 846 个图标，实际 ${allIcons.size}`);
 if (delayedShards.size !== 27) throw new Error(`完整目录必须生成 27 个延迟分片，实际 ${delayedShards.size}`);

@@ -13,6 +13,7 @@ import FileUploadOutlined from "@mui/icons-material/FileUploadOutlined";
 import InfoOutlined from "@mui/icons-material/InfoOutlined";
 import Menu from "@mui/icons-material/Menu";
 import MoreHoriz from "@mui/icons-material/MoreHoriz";
+import HelpOutline from "@mui/icons-material/HelpOutline";
 import PublishOutlined from "@mui/icons-material/PublishOutlined";
 import RefreshOutlined from "@mui/icons-material/RefreshOutlined";
 import SearchOutlined from "@mui/icons-material/SearchOutlined";
@@ -50,6 +51,7 @@ const nativeIcons: Partial<Record<SemanticIconName, ComponentType<SvgIconProps>>
   download: DownloadOutlined,
   upload: UploadOutlined,
   more: MoreHoriz,
+  help: HelpOutline,
 };
 
 const pixels = { sm: 16, md: 20, lg: 24 } as const;
