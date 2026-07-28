@@ -136,7 +136,7 @@ function renderMenuItems(items: MenuItem[], density: MenuProps["density"], onSel
 }
 
 function Menu({ items, activeID, density = "regular", onSelect }: MenuProps) {
-  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)} style={density === "compact" ? { minWidth: 180, padding: 6, borderRadius: 2 } : undefined}>{renderMenuItems(items, density, onSelect)}</ArcoMenu>;
+  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)} style={density === "compact" ? { minWidth: 180, padding: 3, borderRadius: 2 } : undefined}>{renderMenuItems(items, density, onSelect)}</ArcoMenu>;
 }
 
 type OverlayContainerProps = { getPopupContainer?: () => Element };
@@ -221,7 +221,7 @@ function buttonProps({ kind }: Pick<ButtonProps, "kind">): { type?: "primary" | 
 }
 
 function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
-  const edge = size === "compact" ? 16 : 44;
+  const edge = size === "compact" ? 18 : 44;
   return <Tooltip content={label}><Button
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}

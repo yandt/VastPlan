@@ -19,7 +19,7 @@ function menuItems(items: MenuItem[], density: MenuProps["density"], onSelect?: 
 }
 
 export function Menu({ items, activeID, density = "regular", onSelect }: MenuProps) {
-  const compactStyle: CSSProperties = density === "compact" ? { minWidth: 180, padding: 6, borderRadius: 2, ["--ant-menu-item-height" as string]: "28px" } : {};
+  const compactStyle: CSSProperties = density === "compact" ? { minWidth: 180, padding: 3, borderRadius: 2, ["--ant-menu-item-height" as string]: "28px" } : {};
   return <AntdMenu selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, density, onSelect)} onClick={({ key }) => onSelect?.(key)} style={compactStyle} />;
 }
 
