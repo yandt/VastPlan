@@ -238,6 +238,9 @@ importers:
 
   extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/frontend:
     dependencies:
+      '@vastplan/ui-contract':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/ui-contract
       '@vastplan/ui-primitives':
         specifier: workspace:*
         version: link:../../../sdk/ts/ui-primitives
@@ -282,6 +285,9 @@ importers:
 
   extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.standard/frontend:
     dependencies:
+      '@vastplan/ui-contract':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/ui-contract
       '@vastplan/ui-primitives':
         specifier: workspace:*
         version: link:../../../sdk/ts/ui-primitives
@@ -301,6 +307,9 @@ importers:
 
   extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.top-navigation/frontend:
     dependencies:
+      '@vastplan/ui-contract':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/ui-contract
       '@vastplan/ui-primitives':
         specifier: workspace:*
         version: link:../../../sdk/ts/ui-primitives
@@ -320,6 +329,9 @@ importers:
 
   extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/frontend:
     dependencies:
+      '@vastplan/ui-contract':
+        specifier: workspace:*
+        version: link:../../../sdk/ts/ui-contract
       '@vastplan/ui-primitives':
         specifier: workspace:*
         version: link:../../../sdk/ts/ui-primitives

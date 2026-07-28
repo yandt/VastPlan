@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"cdsoft.com.cn/VastPlan/contracts/generated/go/contractregistry"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
@@ -63,8 +64,8 @@ func TestPreferenceStoreTreatsRepeatedWriteAsIdempotent(t *testing.T) {
 func testPreferenceScope() portalapi.PortalPreferenceScope {
 	return portalapi.PortalPreferenceScope{
 		PortalID:  "operations",
-		Renderer:  portalapi.PreferenceCatalogScope{ID: "cn.vastplan.render", ContractMajor: 5},
-		Shell:     portalapi.PreferenceCatalogScope{ID: "cn.vastplan.shell", ContractMajor: 5},
-		Workbench: portalapi.PreferenceCatalogScope{ID: "cn.vastplan.workbench", ContractMajor: 5},
+		Renderer:  portalapi.PreferenceCatalogScope{ID: "cn.vastplan.render", ContractMajor: contractregistry.FrontendUIContractMajor},
+		Shell:     portalapi.PreferenceCatalogScope{ID: "cn.vastplan.shell", ContractMajor: contractregistry.FrontendUIContractMajor},
+		Workbench: portalapi.PreferenceCatalogScope{ID: "cn.vastplan.workbench", ContractMajor: contractregistry.FrontendUIContractMajor},
 	}
 }

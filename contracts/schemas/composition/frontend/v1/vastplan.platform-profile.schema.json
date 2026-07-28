@@ -52,7 +52,7 @@
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
         "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" },
-        "uiContract": { "type": "string", "pattern": "^(?:\\^)?5\\.", "maxLength": 128 },
+        "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.ui-contract.generated.schema.json" },
         "config": { "$ref": "#/$defs/renderAdapterConfig" }
       }
     },
@@ -62,7 +62,7 @@
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
         "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" },
-        "uiContract": { "type": "string", "pattern": "^(?:\\^)?5\\.", "maxLength": 128 },
+        "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.ui-contract.generated.schema.json" },
         "config": { "$ref": "#/$defs/shellConfig" }
       }
     },
@@ -72,7 +72,7 @@
         "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
         "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
         "channel": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/channel", "default": "stable" },
-        "uiContract": { "type": "string", "pattern": "^(?:\\^)?5\\.", "maxLength": 128 },
+        "uiContract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.ui-contract.generated.schema.json" },
         "config": { "$ref": "#/$defs/workbenchConfig" }
       }
     },

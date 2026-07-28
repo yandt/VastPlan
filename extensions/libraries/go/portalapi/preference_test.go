@@ -1,13 +1,17 @@
 package portalapi
 
-import "testing"
+import (
+	"testing"
+
+	"cdsoft.com.cn/VastPlan/contracts/generated/go/contractregistry"
+)
 
 func TestValidatePortalPreferenceRejectsOpenEndedValues(t *testing.T) {
 	scope := PortalPreferenceScope{
 		PortalID:  "operations",
-		Renderer:  PreferenceCatalogScope{ID: "cn.vastplan.render", ContractMajor: 5},
-		Shell:     PreferenceCatalogScope{ID: "cn.vastplan.shell", ContractMajor: 5},
-		Workbench: PreferenceCatalogScope{ID: "cn.vastplan.workbench", ContractMajor: 5},
+		Renderer:  PreferenceCatalogScope{ID: "cn.vastplan.render", ContractMajor: contractregistry.FrontendUIContractMajor},
+		Shell:     PreferenceCatalogScope{ID: "cn.vastplan.shell", ContractMajor: contractregistry.FrontendUIContractMajor},
+		Workbench: PreferenceCatalogScope{ID: "cn.vastplan.workbench", ContractMajor: contractregistry.FrontendUIContractMajor},
 	}
 	if err := ValidatePortalPreferenceScope(scope); err != nil {
 		t.Fatalf("valid scope rejected: %v", err)

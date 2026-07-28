@@ -1,5 +1,5 @@
 /** Serializable UI semantics shared by Web and Mobile renderers. */
-export const uiContractVersion = "5.0.0" as const;
+export { uiContractMajor, uiContractRange, uiContractVersion } from "./version.generated.js";
 export const interactionContractVersion = "1.0.0" as const;
 export const jsonSchemaDialect = "http://json-schema.org/draft-07/schema#" as const;
 export * from "./i18n.js";

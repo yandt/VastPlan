@@ -32,6 +32,30 @@ develop_backend_plugin() {
     -root "$ROOT" -state-root "$STATE_ROOT" -status-url "$STATUS_URL" -plugin "$selector" "$@")
 }
 
+release_plugins() {
+  local operation="$1"
+  local spec_file="$2"
+  shift 2
+  case "$operation" in
+    plan|prepare)
+      (cd "$ROOT" && env GOCACHE="$GO_CACHE" go run ./engineering/tools/pluginrelease "$operation" -root "$ROOT" -file "$spec_file" "$@")
+      ;;
+    execute)
+      ensure_state_dirs
+      (cd "$ROOT" && env GOCACHE="$GO_CACHE" go run ./engineering/tools/pluginrelease execute \
+        -root "$ROOT" -file "$spec_file" -state-root "$STATE_ROOT" -status-url "$STATUS_URL" "$@")
+      ;;
+    *)
+      fail "plugin-release 操作只允许 plan、prepare 或 execute"
+      return 2
+      ;;
+  esac
+}
+
+sync_contracts() {
+  (cd "$ROOT" && env GOCACHE="$GO_CACHE" go run ./engineering/tools/pluginrelease contracts -root "$ROOT" "$@")
+}
+
 clean_state() {
   local owned
   owned="$(owned_runtime_pids | unique_pids || true)"
@@ -56,4 +80,3 @@ clean_state() {
   rm -rf "$STATE_ROOT"
   success "已删除本地运行数据: $STATE_ROOT"
 }
-

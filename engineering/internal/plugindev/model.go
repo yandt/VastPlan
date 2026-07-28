@@ -18,6 +18,7 @@ import (
 type Driver string
 
 const (
+	DriverNone              Driver = ""
 	DriverNativeGo          Driver = "native-go"
 	DriverDynamicGo         Driver = "dynamic-go"
 	DriverNodeWorker        Driver = "node-worker"
@@ -26,13 +27,14 @@ const (
 )
 
 type Spec struct {
-	ID         string
-	Version    string
-	Entry      string
-	Driver     Driver
-	SourceRoot string
-	Relative   string
-	Manifest   pluginv1.Manifest
+	ID            string
+	Version       string
+	Entry         string
+	FrontendEntry string
+	Driver        Driver
+	SourceRoot    string
+	Relative      string
+	Manifest      pluginv1.Manifest
 }
 
 func Discover(repositoryRoot, selector string) (Spec, error) {
@@ -74,11 +76,21 @@ func Discover(repositoryRoot, selector string) (Spec, error) {
 		return Spec{}, errors.New("workspace 开发要求源 Manifest 使用无预发布/metadata 的严格 SemVer")
 	}
 	entry := strings.TrimSpace(manifest.Entry["backend"])
-	if entry == "" || strings.Contains(entry, "..") || filepath.IsAbs(filepath.FromSlash(entry)) {
+	frontendEntry := strings.TrimSpace(manifest.Entry["frontend"])
+	if entry == "" && frontendEntry == "" {
+		return Spec{}, errors.New("插件没有可构建的 Backend 或 Frontend 入口")
+	}
+	if entry != "" && (strings.Contains(entry, "..") || filepath.IsAbs(filepath.FromSlash(entry))) {
 		return Spec{}, errors.New("插件没有安全的 Backend 入口")
 	}
-	driver := DriverNativeGo
-	if manifest.Execution != nil && manifest.Execution.Backend != nil {
+	if frontendEntry != "" && (!strings.HasPrefix(frontendEntry, "frontend/dist/") || strings.Contains(frontendEntry, "..") || filepath.IsAbs(filepath.FromSlash(frontendEntry))) {
+		return Spec{}, errors.New("插件没有安全的 Frontend 入口")
+	}
+	driver := DriverNone
+	if entry != "" {
+		driver = DriverNativeGo
+	}
+	if entry != "" && manifest.Execution != nil && manifest.Execution.Backend != nil {
 		execution := manifest.Execution.Backend
 		switch {
 		case execution.DynamicGo != nil:
@@ -95,7 +107,7 @@ func Discover(repositoryRoot, selector string) (Spec, error) {
 			return Spec{}, fmt.Errorf("workspace-fast 暂不支持 Backend driver %q", execution.Driver)
 		}
 	}
-	if driver == DriverNativeGo {
+	if entry != "" && driver == DriverNativeGo {
 		if info, err := os.Stat(filepath.Join(realCandidate, "backend", "main.go")); err != nil || !info.Mode().IsRegular() {
 			return Spec{}, errors.New("native-go 插件缺少 backend/main.go")
 		}
@@ -105,7 +117,7 @@ func Discover(repositoryRoot, selector string) (Spec, error) {
 		return Spec{}, err
 	}
 	return Spec{
-		ID: manifest.ID, Version: manifest.Version, Entry: entry, Driver: driver,
+		ID: manifest.ID, Version: manifest.Version, Entry: entry, FrontendEntry: frontendEntry, Driver: driver,
 		SourceRoot: realCandidate, Relative: filepath.ToSlash(relative), Manifest: manifest,
 	}, nil
 }

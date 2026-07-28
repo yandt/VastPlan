@@ -1,0 +1,6 @@
+schemaVersion: 1
+mode: development
+plugins:
+  - id: cn.vastplan.foundation.frontend.workflow.workbench
+    frontendTarget: operations
+    frontendScope: platform-profile-plugin

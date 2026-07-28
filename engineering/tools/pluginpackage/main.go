@@ -27,6 +27,7 @@ func main() {
 	licenseFile := flag.String("license-file", "LICENSE", "清单声明 license 时注入制品的许可证文本；默认仓库根 LICENSE")
 	noticeFile := flag.String("notice-file", "NOTICE", "清单声明 noticeFile 时注入制品的归属告示；默认仓库根 NOTICE")
 	sbomFile := flag.String("sbom", "", "可选：注入并绑定标准 CycloneDX JSON SBOM")
+	sbomDependencySource := flag.String("sbom-dependency-source", "", "可选：只读解析 Node 精确依赖的原插件目录；候选 Manifest 仍从 -source 读取")
 	provenanceFile := flag.String("provenance", "", "可选：随远端发布上传包外 DSSE/in-toto 来源证明")
 	provenanceVerificationFile := flag.String("provenance-verification", "", "可选：外部 Verifier 签发的来源证明验证记录")
 	securityAdmissionFile := flag.String("security-admission", "", "可选：外部安全评估 Provider 签发的准入记录")
@@ -52,6 +53,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "用法: go run ./engineering/tools/pluginpackage (-source <插件目录> | -package <候选.tar.gz>) [-out <制品.tar.gz>] [-remote-repository <HTTPS 仓库>]")
 		os.Exit(2)
 	}
+	if *sbomDependencySource != "" && *sbomFile != "" {
+		fatalf("-sbom-dependency-source 只用于自动 SBOM，不能与 -sbom 同时使用")
+	}
 	if (*provenanceFile == "") != (*provenanceVerificationFile == "") {
 		fatalf("-provenance 与 -provenance-verification 必须同时提供")
 	}
@@ -65,7 +69,7 @@ func main() {
 	var packageBytes []byte
 	var manifestID, manifestVersion, manifestPublisher string
 	if *packageFile != "" {
-		if *backendBin != "" || *backendModule != "" || *frontendBundle != "" || *frontendGraph != "" || *frontendServerGraph != "" || *frontendGraphRoot != "" || *dynamicGoBin != "" || *dynamicGoFingerprint != "" || *sbomFile != "" {
+		if *backendBin != "" || *backendModule != "" || *frontendBundle != "" || *frontendGraph != "" || *frontendServerGraph != "" || *frontendGraphRoot != "" || *dynamicGoBin != "" || *dynamicGoFingerprint != "" || *sbomFile != "" || *sbomDependencySource != "" {
 			fatalf("-package 复用不可变候选时不能再注入 Backend、Frontend、dynamic-go 或 SBOM 内容")
 		}
 		var err error
@@ -76,7 +80,7 @@ func main() {
 	} else {
 		effectiveSBOM := *sbomFile
 		if effectiveSBOM == "" {
-			generated, cleanup, err := generateAutomaticSBOM(automaticSBOMInputs{Source: *source, BackendBin: *backendBin, NodeBackendModule: *backendModule, FrontendGraphRoot: *frontendGraphRoot, DynamicGoBin: *dynamicGoBin})
+			generated, cleanup, err := generateAutomaticSBOM(automaticSBOMInputs{Source: *source, DependencySource: *sbomDependencySource, BackendBin: *backendBin, NodeBackendModule: *backendModule, FrontendGraphRoot: *frontendGraphRoot, DynamicGoBin: *dynamicGoBin})
 			if err != nil {
 				fatalf("自动生成插件 SBOM 失败: %v", err)
 			}

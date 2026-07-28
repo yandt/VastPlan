@@ -28,7 +28,7 @@ func schemas() (*jsonschema.Schema, *jsonschema.Schema, *jsonschema.Schema, erro
 		for _, resource := range []struct {
 			url string
 			raw []byte
-		}{{PlatformProfileSchemaURL, platformSchemaJSON}, {ApplicationCompositionSchemaURL, applicationSchemaJSON}, {PortalPlatformCatalogSchemaURL, portalPlatformCatalogSchemaJSON}} {
+		}{{UIContractSchemaURL, uiContractSchemaJSON}, {PlatformProfileSchemaURL, platformSchemaJSON}, {ApplicationCompositionSchemaURL, applicationSchemaJSON}, {PortalPlatformCatalogSchemaURL, portalPlatformCatalogSchemaJSON}} {
 			doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(resource.raw))
 			if err != nil {
 				compileErr = err

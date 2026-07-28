@@ -12,16 +12,17 @@ import (
 	"strings"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/engineering/internal/cyclonedx"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pythonlock"
-	"cdsoft.com.cn/VastPlan/engineering/internal/cyclonedx"
 )
 
 type Options struct {
-	Root       string
-	PluginDir  string
-	GoBinaries []string
-	Metafiles  []string
+	Root          string
+	PluginDir     string
+	DependencyDir string
+	GoBinaries    []string
+	Metafiles     []string
 }
 
 type Result struct {
@@ -30,7 +31,7 @@ type Result struct {
 }
 
 func Generate(options Options) (Result, error) {
-	root, pluginDir, err := normalizeOptions(options)
+	root, pluginDir, dependencyDir, err := normalizeOptions(options)
 	if err != nil {
 		return Result{}, err
 	}
@@ -67,7 +68,7 @@ func Generate(options Options) (Result, error) {
 	}
 	metafiles := cleanPaths(options.Metafiles)
 	if len(metafiles) > 0 {
-		nodeValues, err := nodeDependencies(root, pluginDir, metafiles)
+		nodeValues, err := nodeDependencies(root, dependencyDir, metafiles)
 		if err != nil {
 			return Result{}, err
 		}
@@ -97,23 +98,34 @@ func Generate(options Options) (Result, error) {
 	return Result{Raw: raw, Components: len(document.Components)}, nil
 }
 
-func normalizeOptions(options Options) (string, string, error) {
+func normalizeOptions(options Options) (string, string, string, error) {
 	if strings.TrimSpace(options.Root) == "" || strings.TrimSpace(options.PluginDir) == "" {
-		return "", "", errors.New("插件 SBOM 必须提供工作区根和插件目录")
+		return "", "", "", errors.New("插件 SBOM 必须提供工作区根和插件目录")
 	}
 	root, err := filepath.Abs(options.Root)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 	pluginDir, err := filepath.Abs(options.PluginDir)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
+	}
+	dependencyDir := pluginDir
+	if strings.TrimSpace(options.DependencyDir) != "" {
+		dependencyDir, err = filepath.Abs(options.DependencyDir)
+		if err != nil {
+			return "", "", "", err
+		}
 	}
 	relative, err := filepath.Rel(root, pluginDir)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-		return "", "", errors.New("插件目录必须位于工作区根内")
+		return "", "", "", errors.New("插件目录必须位于工作区根内")
 	}
-	return root, pluginDir, nil
+	relative, err = filepath.Rel(root, dependencyDir)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", "", "", errors.New("插件依赖解析目录必须位于工作区根内")
+	}
+	return root, pluginDir, dependencyDir, nil
 }
 
 func cleanPaths(values []string) []string {

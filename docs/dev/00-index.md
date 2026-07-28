@@ -245,6 +245,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0162 Workbench 拖拽内核与延迟 Dashboard 布局](decisions/ADR-0162-Workbench拖拽内核与延迟Dashboard布局.md)
 - [ADR-0163 Workbench 动作数据契约与图标化操作面](decisions/ADR-0163-Workbench动作数据契约与图标化操作面.md)
 - [ADR-0164 MIT 图标目录与分片按需加载](decisions/ADR-0164-MIT图标目录与分片按需加载.md)
+- [ADR-0165 Contract Registry 与插件发布编排](decisions/ADR-0165-Contract-Registry与插件发布编排.md)
 
 ### 插件共享代码与能力复用
 
@@ -295,3 +296,4 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [Linux 节点 SSH 首次引导](guides/Linux节点SSH引导.md) —— strict known_hosts、内核摘要校验、systemd Node Agent 接管
 - [YAML 启动配置](guides/YAML启动配置.md) —— YAML/JSON 入口、嵌套 include 与规范 JSON 安全边界
 - [本地平台管理中心](guides/本地平台管理中心.md) —— 一键构建并启动本机平台服务、Node Portal Kernel 与管理页面
+- [插件统一升级与发布编排](guides/插件统一升级与发布编排.md) —— Contract Registry、Manifest 单一真源、影响计划、local-test/Test Release 与生产审批边界

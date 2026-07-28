@@ -1,4 +1,5 @@
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
+import { uiContractVersion } from "@vastplan/ui-contract";
 import {
   message,
   portalPageRhythm,
@@ -292,7 +293,7 @@ export const standardShellCSS = `
 
 const namespace = "cn.vastplan.foundation.frontend.structure.layout.standard";
 export const shellLibrary = {
-  id: "standard", shell: "ui.structure.shell", uiContract: "5.0.0", Shell: StandardShell,
+  id: "standard", shell: "ui.structure.shell", uiContract: uiContractVersion, Shell: StandardShell,
   localization: {
     defaultLocale: "zh-CN",
     messages: {

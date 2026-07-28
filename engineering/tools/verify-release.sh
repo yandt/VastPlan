@@ -7,6 +7,7 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cd "$ROOT"
 
+go run ./engineering/tools/pluginrelease contracts -root .
 ./engineering/tools/verify-reproducible-build.sh
 host_goos="$(go env GOHOSTOS)"
 host_goarch="$(go env GOHOSTARCH)"

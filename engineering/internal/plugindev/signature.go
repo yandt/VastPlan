@@ -25,6 +25,10 @@ func SourceDigest(repositoryRoot string, spec Spec) (string, error) {
 	case DriverPython, DriverPythonInterpreter:
 		roots = append(roots, "extensions/sdk/python", "contracts/proto")
 	}
+	if spec.FrontendEntry != "" {
+		roots = append(roots, "package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "extensions/sdk/ts", "core/kernels/frontend", "engineering/tools/build-frontend-plugins.mjs", "engineering/tools/frontend-module-graph.mjs")
+	}
+	roots = compactRoots(roots)
 	sort.Strings(roots)
 	hash := sha256.New()
 	for _, relativeRoot := range roots {
@@ -67,6 +71,19 @@ func SourceDigest(repositoryRoot string, spec Spec) (string, error) {
 		}
 	}
 	return hex.EncodeToString(hash.Sum(nil)), nil
+}
+
+func compactRoots(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func ignoredDevelopmentFile(relative string) bool {

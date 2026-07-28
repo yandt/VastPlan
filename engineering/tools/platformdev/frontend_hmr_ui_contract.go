@@ -4,23 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
-	"sort"
 	"strings"
+
+	"cdsoft.com.cn/VastPlan/engineering/internal/releaseorchestrator"
 )
 
 const (
 	frontendHMRUIFamilyRender    = "render"
 	frontendHMRUIFamilyShell     = "shell"
 	frontendHMRUIFamilyWorkbench = "workbench"
-)
-
-var (
-	frontendUIContractVersionPattern = regexp.MustCompile(`uiContractVersion\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"`)
-	frontendUIContractExportPattern  = regexp.MustCompile(`uiContract\s*:\s*"([0-9]+\.[0-9]+\.[0-9]+)"`)
 )
 
 type frontendHMRUIContract struct {
@@ -155,93 +149,15 @@ func frontendHMRActiveModuleIDs(document map[string]json.RawMessage) (map[string
 	return active, nil
 }
 
-// validateFrontendUIContractSources is the repository gate for a public UI
-// contract change. Canonical SDK version, plugin declarations, Foundation
-// module exports and the Seed Platform Catalog must move in one change.
+// validateFrontendUIContractSources delegates to the release orchestrator so
+// HMR, CI and release preparation enforce the same Contract Registry policy.
 func validateFrontendUIContractSources(root string) error {
-	canonicalRaw, err := os.ReadFile(filepath.Join(root, "extensions", "sdk", "ts", "ui-contract", "src", "index.ts"))
+	changes, err := releaseorchestrator.SyncContracts(root, false)
 	if err != nil {
 		return err
 	}
-	match := frontendUIContractVersionPattern.FindSubmatch(canonicalRaw)
-	if match == nil {
-		return errors.New("无法读取 canonical UI Contract 版本")
-	}
-	version, contractRange := string(match[1]), "^"+string(match[1])
-	var mismatches []string
-	pluginRoot := filepath.Join(root, "extensions", "plugins")
-	entries, err := os.ReadDir(pluginRoot)
-	if err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		pluginDir := filepath.Join(pluginRoot, entry.Name())
-		manifestRaw, readErr := os.ReadFile(filepath.Join(pluginDir, "vastplan.plugin.json"))
-		if readErr != nil {
-			return readErr
-		}
-		var manifest any
-		if err := json.Unmarshal(manifestRaw, &manifest); err != nil {
-			return fmt.Errorf("解析 %s 清单: %w", entry.Name(), err)
-		}
-		collectFrontendUIContractMismatches(manifest, contractRange, entry.Name()+" manifest", &mismatches)
-		if !strings.HasPrefix(entry.Name(), "cn.vastplan.foundation.frontend.") {
-			continue
-		}
-		sourceRoot := filepath.Join(pluginDir, "frontend", "src")
-		if walkErr := filepath.WalkDir(sourceRoot, func(path string, item fs.DirEntry, walkErr error) error {
-			if walkErr != nil || item.IsDir() || (filepath.Ext(path) != ".ts" && filepath.Ext(path) != ".tsx") {
-				return walkErr
-			}
-			raw, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			for _, exported := range frontendUIContractExportPattern.FindAllSubmatch(raw, -1) {
-				if string(exported[1]) != version {
-					relative, _ := filepath.Rel(root, path)
-					mismatches = append(mismatches, filepath.ToSlash(relative)+" exports "+string(exported[1]))
-				}
-			}
-			return nil
-		}); walkErr != nil {
-			return walkErr
-		}
-	}
-	catalogRaw, err := os.ReadFile(filepath.Join(root, "engineering", "deploy", "portal-platform-catalog.json"))
-	if err != nil {
-		return err
-	}
-	var catalog any
-	if err := json.Unmarshal(catalogRaw, &catalog); err != nil {
-		return err
-	}
-	collectFrontendUIContractMismatches(catalog, contractRange, "portal-platform-catalog.json", &mismatches)
-	if len(mismatches) > 0 {
-		sort.Strings(mismatches)
-		return fmt.Errorf("UI Contract %s 兼容性同步不完整:\n- %s", version, strings.Join(mismatches, "\n- "))
+	if len(changes) != 0 {
+		return fmt.Errorf("Contract Registry 派生文件未同步: %v", changes)
 	}
 	return nil
-}
-
-func collectFrontendUIContractMismatches(value any, expected, location string, mismatches *[]string) {
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, child := range typed {
-			if key == "uiContract" {
-				if actual, ok := child.(string); ok && actual != expected {
-					*mismatches = append(*mismatches, location+" declares "+actual)
-				}
-				continue
-			}
-			collectFrontendUIContractMismatches(child, expected, location, mismatches)
-		}
-	case []any:
-		for _, child := range typed {
-			collectFrontendUIContractMismatches(child, expected, location, mismatches)
-		}
-	}
 }

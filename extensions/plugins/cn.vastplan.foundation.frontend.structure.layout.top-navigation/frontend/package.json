@@ -5,6 +5,6 @@
   "type": "module",
   "exports": { ".": "./src/index.tsx" },
   "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
-  "dependencies": { "@vastplan/ui-primitives": "workspace:*", "react": "^18.3.1" },
+  "dependencies": { "@vastplan/ui-contract": "workspace:*", "@vastplan/ui-primitives": "workspace:*", "react": "^18.3.1" },
   "devDependencies": { "@types/react": "^18.3.23", "typescript": "^5.8.3", "vitest": "^3.2.4" }
 }

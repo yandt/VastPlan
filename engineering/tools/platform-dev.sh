@@ -63,6 +63,8 @@ VastPlan 本地平台管理中心
   $0 doctor
   $0 publish-test <插件制品.tar.gz> [--backend-target deployment/unit] [--frontend-target portal-id] [--frontend-scope application-plugin|platform-profile-plugin]
   $0 dev-plugin <插件ID或目录> --backend-target deployment/unit [--backend-binding id]
+  $0 plugin-release <plan|prepare|execute> <Release Spec YAML> [--out Release Plan JSON]
+  $0 sync-contracts [--write]
   $0 clean
   $0 help
 
@@ -76,6 +78,8 @@ VastPlan 本地平台管理中心
   doctor     检查依赖、运行状态和固定端口
   publish-test 以 testing channel 签名并上传唯一 dev.* 预发布制品；可选提交 Backend Test Release
   dev-plugin  监听一个 Backend 插件，增量构建 workspace 候选并通过 Test Release 热切换
+  plugin-release 从插件 Manifest 与 Contract Registry 生成影响计划；开发 execute 复用 local-test/Test Release 热切换
+  sync-contracts 检查 Contract Registry 全链条；--write 只更新机械派生文件
   clean      平台停止后删除 .vastplan/dev-platform 运行数据
 
 up/restart 参数:
@@ -345,6 +349,13 @@ case "$COMMAND" in
     selector="$1"
     shift
     develop_backend_plugin "$selector" "$@"
+    ;;
+  plugin-release)
+    [ "$#" -ge 2 ] || { fail "plugin-release 需要 <plan|prepare|execute> 与 Release Spec YAML"; exit 2; }
+    release_plugins "$@"
+    ;;
+  sync-contracts)
+    sync_contracts "$@"
     ;;
   clean)
     [ "$#" -eq 0 ] || { fail "clean 不接受参数"; exit 2; }

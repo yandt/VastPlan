@@ -75,8 +75,12 @@ func (b CommandBuilder) Build(ctx context.Context, spec Spec, digest string, gen
 		return Candidate{}, err
 	}
 
-	packageArgs := []string{"run", "./engineering/tools/pluginpackage", "-source", stagedSource, "-license-file", filepath.Join(root, "LICENSE"), "-notice-file", filepath.Join(root, "NOTICE")}
+	packageArgs := []string{"run", "./engineering/tools/pluginpackage", "-source", stagedSource, "-sbom-dependency-source", spec.SourceRoot, "-license-file", filepath.Join(root, "LICENSE"), "-notice-file", filepath.Join(root, "NOTICE")}
 	switch spec.Driver {
+	case DriverNone:
+		if spec.Entry != "" {
+			return Candidate{}, errors.New("Backend 入口缺少构建驱动")
+		}
 	case DriverNativeGo:
 		binary := filepath.Join(buildRoot, "backend", spec.ID)
 		if err := os.MkdirAll(filepath.Dir(binary), 0o700); err != nil {
@@ -121,6 +125,22 @@ func (b CommandBuilder) Build(ctx context.Context, spec Spec, digest string, gen
 		packageArgs = append(packageArgs, "-backend-bin", binary, "-dynamic-go-bin", module, "-dynamic-go-fingerprint", fingerprint)
 	default:
 		return Candidate{}, fmt.Errorf("不支持的开发构建驱动 %q", spec.Driver)
+	}
+	if spec.FrontendEntry != "" {
+		frontendRoot := filepath.Join(buildRoot, "frontend")
+		frontendManifest := filepath.Join(buildRoot, "frontend-modules.json")
+		if err := b.run(ctx, root, "pnpm", "install", "--offline", "--frozen-lockfile"); err != nil {
+			return Candidate{}, fmt.Errorf("复核 Frontend 依赖锁: %w", err)
+		}
+		if err := b.run(ctx, root, "node", "engineering/tools/build-frontend-plugins.mjs", "--out-dir", frontendRoot, "--manifest", frontendManifest, "--plugin", spec.ID); err != nil {
+			return Candidate{}, fmt.Errorf("构建 Frontend 候选: %w", err)
+		}
+		graphRoot := filepath.Join(frontendRoot, spec.ID)
+		graphFile := filepath.Join(graphRoot, "frontend", "dist", "vastplan.browser-graph.json")
+		packageArgs = append(packageArgs, "-frontend-graph", graphFile, "-frontend-graph-root", graphRoot)
+		if strings.TrimSpace(spec.Manifest.Entry["frontendServer"]) != "" {
+			packageArgs = append(packageArgs, "-frontend-server-graph", filepath.Join(graphRoot, "frontend", "dist", "vastplan.server-graph.json"))
+		}
 	}
 	packageFile := filepath.Join(buildRoot, spec.ID+"-"+version+".tar.gz")
 	packageArgs = append(packageArgs, "-out", packageFile)

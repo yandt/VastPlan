@@ -15,6 +15,7 @@ const (
 	PlatformProfileSchemaURL        = "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.platform-profile.schema.json"
 	ApplicationCompositionSchemaURL = "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.application-composition.schema.json"
 	PortalPlatformCatalogSchemaURL  = "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.portal-platform-catalog.schema.json"
+	UIContractSchemaURL             = "https://schemas.cdsoft.com.cn/vastplan/composition/frontend/v1/vastplan.ui-contract.generated.schema.json"
 )
 
 //go:embed vastplan.platform-profile.schema.json
@@ -25,6 +26,9 @@ var applicationSchemaJSON []byte
 
 //go:embed vastplan.portal-platform-catalog.schema.json
 var portalPlatformCatalogSchemaJSON []byte
+
+//go:embed vastplan.ui-contract.generated.schema.json
+var uiContractSchemaJSON []byte
 
 var compileOnce sync.Once
 var platformSchema, applicationSchema, portalPlatformCatalogSchema *jsonschema.Schema

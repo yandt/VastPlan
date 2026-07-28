@@ -8,12 +8,14 @@ import (
 	"sort"
 	"strings"
 
+	semver "github.com/Masterminds/semver/v3"
+
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/engineering/internal/pluginsbom"
 )
 
 type automaticSBOMInputs struct {
-	Source, BackendBin, NodeBackendModule, FrontendGraphRoot, DynamicGoBin string
+	Source, DependencySource, BackendBin, NodeBackendModule, FrontendGraphRoot, DynamicGoBin string
 }
 
 func generateAutomaticSBOM(inputs automaticSBOMInputs) (string, func(), error) {
@@ -23,6 +25,9 @@ func generateAutomaticSBOM(inputs automaticSBOMInputs) (string, func(), error) {
 	}
 	manifest, err := pluginv1.ParseManifest(manifestRaw)
 	if err != nil {
+		return "", func() {}, err
+	}
+	if err := validateSBOMDependencySource(manifest, inputs.DependencySource); err != nil {
 		return "", func() {}, err
 	}
 	if manifest.SupplyChain != nil && manifest.SupplyChain.SBOM != nil {
@@ -48,7 +53,11 @@ func generateAutomaticSBOM(inputs automaticSBOMInputs) (string, func(), error) {
 		}
 	}
 	metafiles := automaticMetafiles(inputs)
-	result, err := pluginsbom.Generate(pluginsbom.Options{Root: workspaceRoot, PluginDir: inputs.Source, GoBinaries: goBinaries, Metafiles: metafiles})
+	dependencySource := inputs.DependencySource
+	if dependencySource == "" {
+		dependencySource = inputs.Source
+	}
+	result, err := pluginsbom.Generate(pluginsbom.Options{Root: workspaceRoot, PluginDir: inputs.Source, DependencyDir: dependencySource, GoBinaries: goBinaries, Metafiles: metafiles})
 	if err != nil {
 		return "", func() {}, fmt.Errorf("自动生成 %s SBOM: %w", manifest.ID, err)
 	}
@@ -63,6 +72,28 @@ func generateAutomaticSBOM(inputs automaticSBOMInputs) (string, func(), error) {
 		return "", func() {}, err
 	}
 	return filename, cleanup, nil
+}
+
+func validateSBOMDependencySource(candidate pluginv1.Manifest, source string) error {
+	if strings.TrimSpace(source) == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(filepath.Join(source, "vastplan.plugin.json"))
+	if err != nil {
+		return fmt.Errorf("读取 SBOM 依赖源 Manifest: %w", err)
+	}
+	original, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		return fmt.Errorf("解析 SBOM 依赖源 Manifest: %w", err)
+	}
+	candidateVersion, candidateErr := semver.StrictNewVersion(candidate.Version)
+	originalVersion, originalErr := semver.StrictNewVersion(original.Version)
+	if candidateErr != nil || originalErr != nil || originalVersion.Prerelease() != "" || originalVersion.Metadata() != "" ||
+		candidate.ID != original.ID || candidate.Publisher != original.Publisher ||
+		candidateVersion.Major() != originalVersion.Major() || candidateVersion.Minor() != originalVersion.Minor() || candidateVersion.Patch() != originalVersion.Patch() {
+		return errors.New("SBOM 依赖源必须与候选使用相同插件身份、发布者和稳定基础版本")
+	}
+	return nil
 }
 
 func automaticMetafiles(inputs automaticSBOMInputs) []string {

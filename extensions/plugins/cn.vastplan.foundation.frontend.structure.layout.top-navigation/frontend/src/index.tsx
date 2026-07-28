@@ -1,4 +1,5 @@
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { uiContractVersion } from "@vastplan/ui-contract";
 import {
   message,
   portalPageRhythm,
@@ -196,7 +197,7 @@ export const topNavigationShellCSS = `
 
 const namespace = "cn.vastplan.foundation.frontend.structure.layout.top-navigation";
 export const shellLibrary = {
-  id: "top-navigation", shell: "ui.structure.shell", uiContract: "5.0.0", Shell: TopNavigationShell,
+  id: "top-navigation", shell: "ui.structure.shell", uiContract: uiContractVersion, Shell: TopNavigationShell,
   localization: { defaultLocale: "zh-CN", messages: {
     "zh-CN": { "page.notFound": "页面不存在", "page.pathMissing": "Portal 没有注册路径 {path}", "navigation.main": "主导航", "navigation.open": "打开主菜单", "navigation.mobile": "移动主菜单", "navigation.more": "更多" },
     "en-US": { "page.notFound": "Page not found", "page.pathMissing": "Portal has no registered route for {path}", "navigation.main": "Main navigation", "navigation.open": "Open main menu", "navigation.mobile": "Mobile main menu", "navigation.more": "More" },

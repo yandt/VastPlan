@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactsupplychain"
 )
 
@@ -53,5 +54,30 @@ packages=[{name="protobuf",version="4.25.8",wheels=[{path="python-wheels/protobu
 	summary, err := artifactsupplychain.InspectCycloneDX(raw)
 	if err != nil || summary.RootName != "cn.vastplan.python-auto" || summary.Components != 1 {
 		t.Fatalf("自动 SBOM 无效: summary=%+v err=%v", summary, err)
+	}
+}
+
+func TestValidateSBOMDependencySourceRequiresSameSignedIdentity(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	if err := os.MkdirAll(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"id":"cn.vastplan.demo","name":"demo","description":"demo","version":"1.2.3","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/dist/index.js"},"contributes":{"frontend":{"views":[]}}}`
+	if err := os.WriteFile(filepath.Join(source, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	original, err := pluginv1.ParseManifest([]byte(manifest))
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate := original
+	candidate.Version = "1.2.3-dev.workspace.0123456789abcdef"
+	if err := validateSBOMDependencySource(candidate, source); err != nil {
+		t.Fatalf("同一稳定基础版本应允许只读依赖解析: %v", err)
+	}
+	candidate.ID = "cn.vastplan.other"
+	if err := validateSBOMDependencySource(candidate, source); err == nil {
+		t.Fatal("不同插件身份不得复用依赖证据")
 	}
 }

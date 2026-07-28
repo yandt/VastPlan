@@ -1,4 +1,5 @@
 import type { UIWorkbenchAdapter } from "@vastplan/ui-primitives";
+import { uiContractVersion } from "@vastplan/ui-contract";
 import { CollectionPage } from "./patterns/collection/CollectionPage.js";
 import { CollectionPageActions } from "./patterns/collection/CollectionPageActions.js";
 import { FormPage } from "./patterns/form/FormPage.js";
@@ -7,7 +8,7 @@ import { RecordPageActions } from "./patterns/record/RecordPageActions.js";
 
 export const workbench: UIWorkbenchAdapter = {
   id: "ui.workflow.workbench",
-  uiContract: "5.0.0",
+  uiContract: uiContractVersion,
   CollectionPage,
   CollectionPageActions,
   FormPage,

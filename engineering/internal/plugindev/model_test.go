@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
 func TestDiscoverUsesManifestAndDetectsCurrentBackendDrivers(t *testing.T) {
@@ -22,6 +23,14 @@ func TestDiscoverUsesManifestAndDetectsCurrentBackendDrivers(t *testing.T) {
 		if err != nil || spec.ID != test.id || spec.Driver != test.driver || spec.Entry == "" {
 			t.Fatalf("Discover(%s) = %+v, %v", test.id, spec, err)
 		}
+	}
+}
+
+func TestDiscoverAcceptsFrontendOnlyPlugin(t *testing.T) {
+	root := repositoryRoot(t)
+	spec, err := Discover(root, "cn.vastplan.foundation.frontend.workflow.workbench")
+	if err != nil || spec.Entry != "" || spec.FrontendEntry == "" || spec.Driver != DriverNone {
+		t.Fatalf("Frontend-only discovery = %+v, %v", spec, err)
 	}
 }
 
@@ -76,6 +85,33 @@ func TestCommandBuilderBuildsImmutableNativeWorkspaceCandidate(t *testing.T) {
 	}
 	if artifact.PluginID != spec.ID || artifact.Version != candidate.Version || artifact.Channel != "workspace" {
 		t.Fatalf("workspace artifact identity mismatch: artifact=%+v candidate=%+v", artifact, candidate)
+	}
+}
+
+func TestCommandBuilderBuildsImmutableFrontendWorkspaceCandidate(t *testing.T) {
+	root := repositoryRoot(t)
+	spec, err := Discover(root, "cn.vastplan.foundation.frontend.workflow.workbench")
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest, err := SourceDigest(root, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidate, err := (CommandBuilder{RepositoryRoot: root, StateRoot: t.TempDir(), GoCache: filepath.Join(t.TempDir(), "go-cache")}).Build(t.Context(), spec, digest, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(candidate.PackageFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, _, err := artifacttrust.InspectPackage(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if manifest.ID != spec.ID || manifest.Version != candidate.Version || manifest.FrontendModuleGraphs == nil || manifest.FrontendModuleGraphs.Browser == nil || manifest.FrontendModuleGraphs.Browser.Entry == "" {
+		t.Fatalf("Frontend workspace graph 未锁定: manifest=%+v candidate=%+v", manifest, candidate)
 	}
 }
 

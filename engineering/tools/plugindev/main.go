@@ -47,6 +47,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if spec.Entry == "" {
+		log.Fatal("dev-plugin 当前只监听包含 Backend 入口的插件；Frontend-only 插件请使用 pluginrelease execute")
+	}
 	statusPath := filepath.Join(stateRoot, "plugin-dev", "status", safeName(spec.ID)+".json")
 	logger := func(format string, values ...any) { log.Printf(format, values...) }
 	controller := &plugindev.Controller{

@@ -8,6 +8,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+echo "── Contract Registry 与发布派生文件 ──"
+go run ./engineering/tools/pluginrelease contracts -root .
+
 echo "── 单元测试 ──"
 go test ./...
 
