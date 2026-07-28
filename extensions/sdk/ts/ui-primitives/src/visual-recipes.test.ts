@@ -13,6 +13,6 @@ describe("visual recipes", () => {
     expect(Object.isFrozen(componentSizeRecipes.control.sm)).toBe(true);
     expect(Object.isFrozen(componentSizeRecipes.menu.lg)).toBe(true);
     expect(componentVariantRecipes.menu.action).toEqual({ borderInlineEnd: 0, width: "max-content", minWidth: 112, maxWidth: 280, overflow: "hidden", padding: 0 });
-    expect(componentVariantRecipes.menu.actionItem).toEqual({ display: "flex", alignItems: "center", width: "100%", gap: "8px", paddingInline: "12px 6px" });
+    expect(componentVariantRecipes.menu.actionItem).toEqual({ display: "flex", alignItems: "center", width: "100%", gap: "6px", paddingInline: "12px 6px" });
   });
 });

@@ -36,7 +36,7 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain("overflow:hidden");
     expect(markup).toContain("display:flex");
     expect(markup).toContain("width:100%");
-    expect(markup).toContain("gap:8px");
+    expect(markup).toContain("gap:6px");
     expect(markup).toContain("padding-inline:12px 6px");
   });
 

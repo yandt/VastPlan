@@ -61,8 +61,10 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("max-width:280px");
     expect(markup).toContain("display:flex");
     expect(markup).toContain("width:100%");
-    expect(markup).toContain("gap:8px");
+    expect(markup).toContain("gap:6px");
     expect(markup).toContain("padding-inline:12px 6px");
+    expect(markup).toContain("vp-antd-action-menu");
+    expect(markup).toContain("margin-inline-start: 0 !important");
     expect(markup).toContain("height:28px");
   });
 

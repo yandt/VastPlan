@@ -42,7 +42,7 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("overflow:hidden");
     expect(html).toContain("display:flex");
     expect(html).toContain("width:100%");
-    expect(html).toContain("gap:8px");
+    expect(html).toContain("gap:6px");
     expect(html).toContain("padding-inline:12px 6px");
   });
 

@@ -7,6 +7,9 @@ import { componentSizeRecipes, componentVariantRecipes, message, usePortalI18n }
 import { namespace } from "./theme";
 import { antdComponentSize } from "./component-size";
 
+const actionMenuClass = "vp-antd-action-menu";
+const actionMenuCSS = `.${actionMenuClass} > .ant-menu-item > .ant-menu-title-content { margin-inline-start: 0 !important; }`;
+
 function menuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, variant: NonNullable<MenuProps["variant"]>, onSelect?: (id: string) => void, parentDisabled = false): NonNullable<AntdMenuProps["items"]> {
   const recipe = componentSizeRecipes.menu[size];
   return items.map((item) => {
@@ -29,7 +32,7 @@ export function Menu({ items, activeID, size = "md", variant = "navigation", onS
     ...(variant === "action" ? componentVariantRecipes.menu.action : {}),
     ["--ant-menu-item-height" as string]: `${recipe.itemHeight}px`,
   };
-  return <AntdMenu selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, size, variant, onSelect)} onClick={({ key }) => onSelect?.(key)} style={style} />;
+  return <>{variant === "action" ? <style>{actionMenuCSS}</style> : null}<AntdMenu className={variant === "action" ? actionMenuClass : undefined} selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, size, variant, onSelect)} onClick={({ key }) => onSelect?.(key)} style={style} /></>;
 }
 
 export function Breadcrumb({ items }: { items: Array<{ id: string; label: string; href?: string; onSelect?(): void }> }) {
