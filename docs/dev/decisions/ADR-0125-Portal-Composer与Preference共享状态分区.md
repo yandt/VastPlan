@@ -28,3 +28,12 @@ Portal Composer 旧版在同一 leader 进程中维护两个本地文件：一�
 
 - 原有异人审批、Activation、精确回滚、引用 outbox、Test Release 恢复与 Preference CAS 测试继续通过。
 - 新测试覆盖两个 Composer 实例共享治理状态、tenant 隔离、两个 Preference 实例共享用户状态、subject 隔离和 Store CAS 单赢家。
+
+## 2026-07-28 修订：区分业务 revision 与聚合文档 CAS
+
+PortalPreference 的单个 scope revision 与 `tenant + subject` 聚合文档 revision 属于两层并发控制，不再映射为同一种冲突：
+
+1. 目标 scope 的 `ExpectedRevision` 不匹配仍返回 `portal.preference.conflict`，表示同一偏好确实已由其他会话更新。
+2. Shared State 聚合文档 CAS 冲突由服务端有界重载最新文档、重新校验目标 scope revision 并合并写入；不同 scope 的并发更新不再产生虚假的“其他设备更新”。
+3. 重载后若目标 scope revision 已变化，立即返回真实业务冲突；若持续发生聚合文档争用，则按存储不可用处理，不伪装成业务 revision 冲突。
+4. 回归测试同时覆盖“不同 scope 自动重基后均保留”和“同一 scope 仍保持 CAS 单赢家”。

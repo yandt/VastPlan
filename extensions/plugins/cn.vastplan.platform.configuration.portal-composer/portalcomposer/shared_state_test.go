@@ -85,6 +85,49 @@ func TestPreferenceDocumentsArePerSubjectAndCASFenced(t *testing.T) {
 	}
 }
 
+func TestPreferenceDocumentsRebaseConcurrentWritesToDifferentScopes(t *testing.T) {
+	host := newStateOnlyHost(t)
+	principal := portalapi.Principal{ID: "alice", TenantID: "tenant-a"}
+	call := preferenceCall(principal)
+	first, err := newPreferenceStore(context.Background(), host, call, principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := newPreferenceStore(context.Background(), host, call, principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstScope := testPreferenceScope()
+	secondScope := testPreferenceScope()
+	secondScope.PortalID = "operations-secondary"
+	if _, err := first.Put(principal, portalapi.PutPortalPreferenceRequest{
+		Scope:  firstScope,
+		Values: portalapi.PortalPreferenceValues{RendererID: "arco"},
+	}); err != nil {
+		t.Fatalf("首个 scope 写入失败: %v", err)
+	}
+	if _, err := second.Put(principal, portalapi.PutPortalPreferenceRequest{
+		Scope:  secondScope,
+		Values: portalapi.PortalPreferenceValues{RendererID: "antd"},
+	}); err != nil {
+		t.Fatalf("不同 scope 应在 Shared State CAS 冲突后自动重基: %v", err)
+	}
+
+	reopened, err := newPreferenceStore(context.Background(), host, call, principal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for scope, renderer := range map[portalapi.PortalPreferenceScope]string{
+		firstScope:  "arco",
+		secondScope: "antd",
+	} {
+		preference, err := reopened.Get(principal, scope)
+		if err != nil || preference.Values.RendererID != renderer {
+			t.Fatalf("重基后偏好丢失: scope=%s value=%+v err=%v", scope.PortalID, preference, err)
+		}
+	}
+}
+
 func preferenceCall(principal portalapi.Principal) *contractv1.CallContext {
 	return &contractv1.CallContext{TenantId: principal.TenantID, Scene: "portal.bff", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: principal.ID}, Principal: &contractv1.Principal{UserId: principal.ID}}
 }

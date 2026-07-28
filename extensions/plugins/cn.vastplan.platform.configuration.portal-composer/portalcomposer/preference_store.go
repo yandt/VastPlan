@@ -55,6 +55,7 @@ type preferenceStore struct {
 	state     preferenceState
 	revision  uint64
 	principal portalapi.Principal
+	reload    func() (preferenceState, uint64, error)
 	persist   func(preferenceState, uint64) (uint64, error)
 	now       func() time.Time
 }
@@ -68,21 +69,28 @@ func newPreferenceStore(ctx context.Context, host sdk.Host, call *contractv1.Cal
 		return nil, err
 	}
 	key := preferenceDocumentKey(principal.ID)
-	value := emptyPreferenceState()
-	revision := uint64(0)
-	entry, err := client.Get(ctx, call, key)
-	if err == nil {
-		if err := decodePreferenceState(entry.Value, &value); err != nil {
-			return nil, err
+	load := func() (preferenceState, uint64, error) {
+		value := emptyPreferenceState()
+		entry, err := client.Get(ctx, call, key)
+		if err == nil {
+			if err := decodePreferenceState(entry.Value, &value); err != nil {
+				return preferenceState{}, 0, err
+			}
+			if err := validatePreferenceStateForPrincipal(value, principal); err != nil {
+				return preferenceState{}, 0, err
+			}
+			return value, entry.Revision, nil
 		}
-		revision = entry.Revision
-	} else if !sharedstatesdk.IsNotFound(err) {
-		return nil, fmt.Errorf("读取 PortalPreference Shared State: %w", err)
+		if !sharedstatesdk.IsNotFound(err) {
+			return preferenceState{}, 0, fmt.Errorf("读取 PortalPreference Shared State: %w", err)
+		}
+		return value, 0, nil
 	}
-	if err := validatePreferenceStateForPrincipal(value, principal); err != nil {
+	value, revision, err := load()
+	if err != nil {
 		return nil, err
 	}
-	store := &preferenceStore{state: value, revision: revision, principal: principal, now: time.Now}
+	store := &preferenceStore{state: value, revision: revision, principal: principal, reload: load, now: time.Now}
 	store.persist = func(next preferenceState, expected uint64) (uint64, error) {
 		raw, err := json.Marshal(next)
 		if err != nil {
@@ -98,7 +106,7 @@ func newPreferenceStore(ctx context.Context, host sdk.Host, call *contractv1.Cal
 			entry, err = client.Update(ctx, call, key, raw, expected)
 		}
 		if sharedstatesdk.IsConflict(err) {
-			return 0, portalapi.ErrPreferenceConflict
+			return 0, errPreferenceDocumentConflict
 		}
 		if err != nil {
 			return 0, fmt.Errorf("保存 PortalPreference Shared State: %w", err)
@@ -132,63 +140,6 @@ func (s *preferenceStore) Get(principal portalapi.Principal, scope portalapi.Por
 		return portalapi.PortalPreference{}, errors.New("PortalPreference 记录身份绑定无效")
 	}
 	return clonePortalPreference(record.Value), nil
-}
-
-func (s *preferenceStore) Put(principal portalapi.Principal, request portalapi.PutPortalPreferenceRequest) (portalapi.PortalPreference, error) {
-	if err := validatePreferencePrincipal(principal); err != nil {
-		return portalapi.PortalPreference{}, err
-	}
-	if s.principal.ID != "" && (s.principal.ID != principal.ID || s.principal.TenantID != principal.TenantID) {
-		return portalapi.PortalPreference{}, portalapi.ErrForbidden
-	}
-	if err := portalapi.ValidatePortalPreferenceScope(request.Scope); err != nil {
-		return portalapi.PortalPreference{}, err
-	}
-	if err := portalapi.ValidatePortalPreferenceValues(request.Values); err != nil {
-		return portalapi.PortalPreference{}, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	key := preferenceRecordKey(principal, request.Scope)
-	current, exists := s.state.Records[key]
-	currentRevision := uint64(0)
-	currentValues := emptyPreferenceValues()
-	if exists {
-		if current.TenantID != principal.TenantID || current.SubjectID != principal.ID {
-			return portalapi.PortalPreference{}, errors.New("PortalPreference 记录身份绑定无效")
-		}
-		currentRevision, currentValues = current.Value.Revision, current.Value.Values
-	}
-	if request.ExpectedRevision != currentRevision {
-		if exists && len(portalapi.PortalPreferenceChangedSections(currentValues, request.Values)) == 0 {
-			return clonePortalPreference(current.Value), nil
-		}
-		return portalapi.PortalPreference{}, portalapi.ErrPreferenceConflict
-	}
-	if !exists && len(s.state.Records) >= maximumPreferenceScopesPerUser {
-		return portalapi.PortalPreference{}, errors.New("PortalPreference 用户 scope 数超过上限")
-	}
-	sections := portalapi.PortalPreferenceChangedSections(currentValues, request.Values)
-	if exists && len(sections) == 0 {
-		return clonePortalPreference(current.Value), nil
-	}
-	updated := portalapi.PortalPreference{Revision: currentRevision + 1, Scope: request.Scope, Values: clonePreferenceValues(request.Values), UpdatedAt: s.now().UTC().Format(time.RFC3339Nano)}
-	next := clonePreferenceState(s.state)
-	next.Records[key] = storedPortalPreference{TenantID: principal.TenantID, SubjectID: principal.ID, Value: updated}
-	next.NextAudit++
-	next.Audit = append(next.Audit, preferenceAuditEvent{ID: next.NextAudit, TenantID: principal.TenantID, SubjectID: principal.ID, PortalID: request.Scope.PortalID, Revision: updated.Revision, Sections: append([]string(nil), sections...), UpdatedAt: updated.UpdatedAt})
-	if len(next.Audit) > maximumPreferenceAuditEvents {
-		next.Audit = append([]preferenceAuditEvent(nil), next.Audit[len(next.Audit)-maximumPreferenceAuditEvents:]...)
-	}
-	if s.persist == nil {
-		return portalapi.PortalPreference{}, errors.New("PortalPreference 写入缺少 Shared State 会话")
-	}
-	revision, err := s.persist(next, s.revision)
-	if err != nil {
-		return portalapi.PortalPreference{}, err
-	}
-	s.state, s.revision = next, revision
-	return clonePortalPreference(updated), nil
 }
 
 func decodePreferenceState(raw []byte, target *preferenceState) error {

@@ -63,8 +63,8 @@ func TestPreferenceStoreTreatsRepeatedWriteAsIdempotent(t *testing.T) {
 func testPreferenceScope() portalapi.PortalPreferenceScope {
 	return portalapi.PortalPreferenceScope{
 		PortalID:  "operations",
-		Renderer:  portalapi.PreferenceCatalogScope{ID: "cn.vastplan.render", ContractMajor: 4},
-		Shell:     portalapi.PreferenceCatalogScope{ID: "cn.vastplan.shell", ContractMajor: 4},
-		Workbench: portalapi.PreferenceCatalogScope{ID: "cn.vastplan.workbench", ContractMajor: 4},
+		Renderer:  portalapi.PreferenceCatalogScope{ID: "cn.vastplan.render", ContractMajor: 5},
+		Shell:     portalapi.PreferenceCatalogScope{ID: "cn.vastplan.shell", ContractMajor: 5},
+		Workbench: portalapi.PreferenceCatalogScope{ID: "cn.vastplan.workbench", ContractMajor: 5},
 	}
 }

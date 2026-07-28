@@ -5,9 +5,9 @@ import "testing"
 func TestValidatePortalPreferenceRejectsOpenEndedValues(t *testing.T) {
 	scope := PortalPreferenceScope{
 		PortalID:  "operations",
-		Renderer:  PreferenceCatalogScope{ID: "cn.vastplan.render", ContractMajor: 4},
-		Shell:     PreferenceCatalogScope{ID: "cn.vastplan.shell", ContractMajor: 4},
-		Workbench: PreferenceCatalogScope{ID: "cn.vastplan.workbench", ContractMajor: 4},
+		Renderer:  PreferenceCatalogScope{ID: "cn.vastplan.render", ContractMajor: 5},
+		Shell:     PreferenceCatalogScope{ID: "cn.vastplan.shell", ContractMajor: 5},
+		Workbench: PreferenceCatalogScope{ID: "cn.vastplan.workbench", ContractMajor: 5},
 	}
 	if err := ValidatePortalPreferenceScope(scope); err != nil {
 		t.Fatalf("valid scope rejected: %v", err)
