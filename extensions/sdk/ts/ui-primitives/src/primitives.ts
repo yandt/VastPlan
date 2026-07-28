@@ -11,6 +11,14 @@ export interface MenuItem {
   children?: MenuItem[];
 }
 
+/** Compact menus are for transient, repeated actions such as Table row overflow. */
+export interface MenuProps {
+  items: MenuItem[];
+  activeID?: string;
+  density?: "regular" | "compact";
+  onSelect?(id: string): void;
+}
+
 export interface PageProps {
   title?: string;
   children: ReactNode;
@@ -247,7 +255,7 @@ export interface PortalUI {
   Button: ComponentType<ButtonProps>;
   IconButton: ComponentType<IconButtonProps>;
   Select: ComponentType<SelectProps>;
-  Menu: ComponentType<{ items: MenuItem[]; activeID?: string; onSelect?(id: string): void }>;
+  Menu: ComponentType<MenuProps>;
   Breadcrumb: ComponentType<{ items: BreadcrumbItem[] }>;
   Tabs: ComponentType<{ items: TabItem[]; activeID?: string; onChange?(id: string): void }>;
   CommandPalette: ComponentType<{ open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }>;

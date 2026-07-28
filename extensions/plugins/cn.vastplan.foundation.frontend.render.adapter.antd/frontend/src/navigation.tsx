@@ -1,12 +1,12 @@
 import { Breadcrumb as AntdBreadcrumb, Button, Empty, Input, List, Menu as AntdMenu, Modal, Popover as AntdPopover, Tabs as AntdTabs, Typography } from "antd";
-import type { MenuProps } from "antd";
+import type { MenuProps as AntdMenuProps } from "antd";
 import { useEffect, useId, useRef } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
-import type { CommandItem, MenuItem, PopoverProps, RecordNavigationListProps, RecordTreeProps } from "@vastplan/ui-primitives";
+import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
+import type { CommandItem, MenuItem, MenuProps, PopoverProps, RecordNavigationListProps, RecordTreeProps } from "@vastplan/ui-primitives";
 import { message, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 
-function menuItems(items: MenuItem[], onSelect?: (id: string) => void, parentDisabled = false): NonNullable<MenuProps["items"]> {
+function menuItems(items: MenuItem[], density: MenuProps["density"], onSelect?: (id: string) => void, parentDisabled = false): NonNullable<AntdMenuProps["items"]> {
   return items.map((item) => {
     const disabled = parentDisabled || item.disabled === true;
     const label = item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
@@ -14,12 +14,13 @@ function menuItems(items: MenuItem[], onSelect?: (id: string) => void, parentDis
       event.stopPropagation();
       if (!disabled) onSelect?.(item.id);
     }}>{item.label}</a>;
-    return { key: item.id, label, icon: item.icon, disabled, children: item.children?.length ? menuItems(item.children, onSelect, disabled) : undefined };
+    return { key: item.id, label, icon: item.icon, disabled, style: density === "compact" ? { height: 28, lineHeight: "28px", margin: 0, paddingInline: 8 } : undefined, children: item.children?.length ? menuItems(item.children, density, onSelect, disabled) : undefined };
   });
 }
 
-export function Menu({ items, activeID, onSelect }: { items: MenuItem[]; activeID?: string; onSelect?(id: string): void }) {
-  return <AntdMenu selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, onSelect)} onClick={({ key }) => onSelect?.(key)} />;
+export function Menu({ items, activeID, density = "regular", onSelect }: MenuProps) {
+  const compactStyle: CSSProperties = density === "compact" ? { minWidth: 180, padding: 6, borderRadius: 2, ["--ant-menu-item-height" as string]: "28px" } : {};
+  return <AntdMenu selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, density, onSelect)} onClick={({ key }) => onSelect?.(key)} style={compactStyle} />;
 }
 
 export function Breadcrumb({ items }: { items: Array<{ id: string; label: string; href?: string; onSelect?(): void }> }) {

@@ -106,7 +106,7 @@ CollectionLoader(query, signal) -> CollectionResult
 |---|---|
 | 顶层 `pageActions` | 由可信宿主挂入 `page.header.end` 并整体右对齐；默认纯图标 + Tooltip，可选 `icon-label` / `label`，最多直接显示 4 个，其余进入更多菜单 |
 | `collection.toolbar` / `collection.bulk` | 集合局部工具保留在集合内；批量动作使用 Select 选择后再显式执行，且必须声明选择数量与对象状态前置条件 |
-| `record.row` / `card.footer` | 图标 + Tooltip 居中呈现；`record.row` 使用 16×16 的紧凑按钮盒、12×12 SVG 图标和 8px 间距，行操作最多两个直接可见。其余动作进入每行一个“图标 + 标签”的 overflow 菜单。行操作不使用实心 primary 背景，危险操作保留危险色；overflow 触发器以 flex 对齐。页面头部等其他区域仍使用常规 44×44 按钮 |
+| `record.row` / `card.footer` | 图标 + Tooltip 居中呈现；`record.row` 使用 16×16 的紧凑按钮盒、12×12 SVG 图标、2px 圆角和 8px 间距，行操作最多两个直接可见。其余动作进入每行一个“图标 + 标签”的紧凑 overflow 菜单（28px 行高、6px 容器内边距、2px 圆角）。行操作不使用实心 primary 背景，危险操作保留危险色；overflow 触发器以 flex 对齐。页面头部等其他区域仍使用常规 44×44 按钮 |
 | `form.submit` / `form.cancel` / `form.danger` | 提交只有一个主操作；危险操作必须确认且保留失败上下文 |
 
 浏览器的可见/禁用状态只是体验提示。Action handler 每次执行仍经类型化 BFF 或 capability 调用，由服务端重新判定主体、租户、对象状态、并发版本和权限。

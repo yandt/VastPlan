@@ -68,6 +68,7 @@ import type {
   GridProps,
   IconButtonProps,
   MenuItem,
+  MenuProps,
   PopoverProps,
   PortalShellProps,
   PortalUI,
@@ -125,7 +126,7 @@ function responsiveColumns(columns: GridProps["columns"]): string | Record<strin
 function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
   const color = tone === "danger" ? "error" : tone === "primary" ? "primary" : "default";
   const edge = size === "compact" ? 16 : 44;
-  return <Tooltip title={label}><span><MuiIconButton aria-label={label} color={color} disabled={disabled || loading} onClick={onClick} sx={{ width: edge, height: edge }}>
+  return <Tooltip title={label}><span><MuiIconButton aria-label={label} color={color} disabled={disabled || loading} onClick={onClick} sx={{ width: edge, height: edge, borderRadius: size === "compact" ? "2px" : undefined }}>
     {loading ? <CircularProgress size={size === "compact" ? 12 : 20} /> : <Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: 12, height: 12 } : undefined} />}
   </MuiIconButton></span></Tooltip>;
 }
@@ -180,15 +181,15 @@ function GridItem({ span = 1, children }: GridItemProps) {
   return <Box sx={{ gridColumn }}>{children}</Box>;
 }
 
-function MenuBranch({ items, activeID, onSelect, depth = 0 }: { items: MenuItem[]; activeID?: string; onSelect?(id: string): void; depth?: number }) {
+function MenuBranch({ items, activeID, density = "regular", onSelect, depth = 0 }: { items: MenuItem[]; activeID?: string; density?: MenuProps["density"]; onSelect?(id: string): void; depth?: number }) {
   return <>{items.map((item) => <Box key={item.id}>
     <ListItemButton component={item.href === undefined ? "div" : "a"} href={item.href} selected={activeID === item.id} disabled={item.disabled} onClick={(event: MouseEvent<HTMLElement>) => {
       if (item.href !== undefined) event.preventDefault();
       if (!item.children?.length) onSelect?.(item.id);
-    }} sx={{ pl: 2 + depth * 2 }}>
+    }} sx={density === "compact" ? { minHeight: 28, py: 0, px: 1, pl: 1 + depth * 2, borderRadius: "2px" } : { pl: 2 + depth * 2 }}>
       {item.icon}<ListItemText primary={item.label} />
     </ListItemButton>
-    {item.children?.length ? <MenuBranch items={item.children} activeID={activeID} onSelect={onSelect} depth={depth + 1} /> : null}
+    {item.children?.length ? <MenuBranch items={item.children} activeID={activeID} density={density} onSelect={onSelect} depth={depth + 1} /> : null}
   </Box>)}</>;
 }
 
@@ -476,7 +477,7 @@ export const muiPortalUIComponents: MuiComponents = {
   Button: ({ children, kind, loading, ...props }) => <MuiButton {...buttonVariant(kind)} {...props}>{loading ? <CircularProgress size={16} /> : children}</MuiButton>,
   IconButton,
   Select,
-  Menu: ({ items, activeID, onSelect }) => <List><MenuBranch items={items} activeID={activeID} onSelect={onSelect} /></List>,
+  Menu: ({ items, activeID, density = "regular", onSelect }) => <List disablePadding={density !== "compact"} dense={density === "compact"} sx={density === "compact" ? { minWidth: 180, p: 0.75, borderRadius: "2px" } : undefined}><MenuBranch items={items} activeID={activeID} density={density} onSelect={onSelect} /></List>,
   Breadcrumb: ({ items }) => <Breadcrumbs>{items.map((item) => <MuiButton key={item.id} href={item.href} onClick={item.onSelect} variant="text">{item.label}</MuiButton>)}</Breadcrumbs>,
   Tabs: ({ items, activeID, onChange }) => <><MuiTabs value={activeID ?? false} onChange={(_, id: string) => onChange?.(id)}>{items.map((item) => <Tab key={item.id} value={item.id} label={item.label} disabled={item.disabled} />)}</MuiTabs>{items.find((item) => item.id === activeID)?.content}</>,
   CommandPalette, Popover, Dialog, Drawer, FormRenderer,

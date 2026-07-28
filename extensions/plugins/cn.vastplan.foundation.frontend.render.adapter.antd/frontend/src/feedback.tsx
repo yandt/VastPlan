@@ -23,7 +23,7 @@ export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, l
     loading={loading}
     disabled={disabled}
     onClick={onClick}
-    style={{ width: edge, height: edge }}
+    style={{ width: edge, height: edge, borderRadius: size === "compact" ? 2 : undefined }}
   /></Tooltip>;
 }
 
