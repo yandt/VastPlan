@@ -14,12 +14,12 @@ function buttonStyle(kind: ButtonProps["kind"]): { type?: "primary" | "default" 
 export function Button({ children, kind, ...props }: ButtonProps) { return <AntdButton {...buttonStyle(kind)} {...props}>{children}</AntdButton>; }
 
 export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
-  const edge = size === "compact" ? 28 : 44;
+  const edge = size === "compact" ? 16 : 44;
   return <Tooltip title={label}><AntdButton
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}
     danger={tone === "danger"}
-    icon={<Icon name={icon} />}
+    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} />}
     loading={loading}
     disabled={disabled}
     onClick={onClick}

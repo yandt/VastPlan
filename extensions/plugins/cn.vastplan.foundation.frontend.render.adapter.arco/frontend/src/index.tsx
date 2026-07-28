@@ -220,7 +220,7 @@ function buttonProps({ kind }: Pick<ButtonProps, "kind">): { type?: "primary" | 
 }
 
 function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
-  const edge = size === "compact" ? 28 : 44;
+  const edge = size === "compact" ? 16 : 44;
   return <Tooltip content={label}><Button
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}
@@ -230,7 +230,7 @@ function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regula
     disabled={disabled}
     onClick={onClick}
     style={{ width: edge, height: edge }}
-    icon={<Icon name={icon} />}
+    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} />}
   /></Tooltip>;
 }
 

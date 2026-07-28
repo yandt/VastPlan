@@ -124,9 +124,9 @@ function responsiveColumns(columns: GridProps["columns"]): string | Record<strin
 
 function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
   const color = tone === "danger" ? "error" : tone === "primary" ? "primary" : "default";
-  const edge = size === "compact" ? 28 : 44;
+  const edge = size === "compact" ? 16 : 44;
   return <Tooltip title={label}><span><MuiIconButton aria-label={label} color={color} disabled={disabled || loading} onClick={onClick} sx={{ width: edge, height: edge }}>
-    {loading ? <CircularProgress size={20} /> : <Icon name={icon} />}
+    {loading ? <CircularProgress size={size === "compact" ? 16 : 20} /> : <Icon name={icon} size={size === "compact" ? "sm" : "md"} />}
   </MuiIconButton></span></Tooltip>;
 }
 
