@@ -28,6 +28,7 @@ export function ActionMenuPopover({ label, items, triggerSize = "sm", menuSize =
   return <ui.Popover
     open={open}
     placement={placement}
+    surface="compact"
     ariaLabel={label}
     initialFocus="first"
     onOpenChange={setOpen}

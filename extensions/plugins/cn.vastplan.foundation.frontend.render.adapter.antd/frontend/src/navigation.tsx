@@ -50,7 +50,7 @@ export function CommandPalette({ open, commands, query, onQueryChange, onClose }
   </Modal>;
 }
 
-export function Popover({ open, trigger, children, placement = "bottom-start", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {
+export function Popover({ open, trigger, children, placement = "bottom-start", surface = "default", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {
   const contentID = useId();
   const contentRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
@@ -71,7 +71,7 @@ export function Popover({ open, trigger, children, placement = "bottom-start", i
       if (event.key === "Escape" && open) { event.preventDefault(); close("escape"); }
     },
   });
-  return <AntdPopover open={open} trigger="click" placement={antdPlacement} afterOpenChange={(next) => { if (next) focusInitial(); }} onOpenChange={(next) => { if (!next) close("outside"); }} content={<div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div>}>{triggerNode}</AntdPopover>;
+  return <AntdPopover open={open} trigger="click" placement={antdPlacement} styles={surface === "compact" ? { content: { padding: 4 } } : undefined} afterOpenChange={(next) => { if (next) focusInitial(); }} onOpenChange={(next) => { if (!next) close("outside"); }} content={<div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div>}>{triggerNode}</AntdPopover>;
 }
 
 export function RecordNavigationList({ items, selectedID, ariaLabel, onSelect }: RecordNavigationListProps) {

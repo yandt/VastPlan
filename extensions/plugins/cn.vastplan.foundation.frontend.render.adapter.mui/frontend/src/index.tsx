@@ -210,7 +210,7 @@ function Dialog({ open, title, children, footer, width = "md", onClose }: Dialog
   return <MuiDialog open={open} onClose={onClose} fullWidth maxWidth={widths[width]}><DialogTitle>{title}</DialogTitle><DialogContent>{children}</DialogContent>{footer === undefined ? null : <DialogActions>{footer}</DialogActions>}</MuiDialog>;
 }
 
-function Popover({ open, trigger, children, placement = "bottom-start", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {
+function Popover({ open, trigger, children, placement = "bottom-start", surface = "default", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {
   const contentID = useId();
   const triggerRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -240,7 +240,7 @@ function Popover({ open, trigger, children, placement = "bottom-start", initialF
   })}<MuiPopover
     open={open}
     disableAutoFocus
-    slotProps={{ transition: { onEntered: focusInitial } }}
+    slotProps={{ transition: { onEntered: focusInitial }, paper: surface === "compact" ? { sx: { p: "4px" } } : undefined }}
     anchorEl={triggerRef.current}
     onClose={(_, reason) => close(reason === "escapeKeyDown" ? "escape" : "outside")}
     anchorOrigin={{ vertical, horizontal }}

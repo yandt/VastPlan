@@ -124,6 +124,8 @@ export interface PopoverProps {
   trigger(props: PopoverTriggerProps): ReactNode;
   children: ReactNode;
   placement?: PopoverPlacement;
+  /** Compact overlays reserve less outer whitespace while their child owns item spacing. */
+  surface?: "default" | "compact";
   initialFocus?: "current" | "first" | "none";
   ariaLabel?: string;
   onOpenChange(open: boolean, reason: PopoverCloseReason): void;

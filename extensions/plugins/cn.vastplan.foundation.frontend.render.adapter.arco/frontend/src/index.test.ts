@@ -42,6 +42,7 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("overflow:hidden");
     expect(html).toContain("display:flex");
     expect(html).toContain("gap:8px");
+    expect(html).toContain("padding-inline:12px");
   });
 
   it("offers an adapter-native icon theme behind the same semantic name", () => {
