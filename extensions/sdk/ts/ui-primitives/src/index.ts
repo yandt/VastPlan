@@ -18,3 +18,4 @@ export * from "./renderer.js";
 export * from "./portal-runtime.js";
 export * from "./rhythm.js";
 export * from "./shell.js";
+export * from "./visual-recipes.js";

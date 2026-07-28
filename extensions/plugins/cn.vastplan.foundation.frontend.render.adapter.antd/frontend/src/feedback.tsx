@@ -1,7 +1,7 @@
 import { Alert, Button as AntdButton, Drawer as AntdDrawer, Empty, Modal, Skeleton as AntdSkeleton, Spin, Tooltip } from "antd";
 import type { ComponentType } from "react";
 import type { ButtonProps, DialogProps, DrawerProps, IconButtonProps, VastPlanIconProps } from "@vastplan/ui-primitives";
-import { message, usePortalI18n, VastPlanIcon } from "@vastplan/ui-primitives";
+import { compactActionVisualRecipe, message, usePortalI18n, VastPlanIcon } from "@vastplan/ui-primitives";
 import { dialogWidths, namespace } from "./theme";
 
 function buttonStyle(kind: ButtonProps["kind"]): { type?: "primary" | "default" | "text"; danger?: boolean } {
@@ -14,16 +14,17 @@ function buttonStyle(kind: ButtonProps["kind"]): { type?: "primary" | "default" 
 export function Button({ children, kind, ...props }: ButtonProps) { return <AntdButton {...buttonStyle(kind)} {...props}>{children}</AntdButton>; }
 
 export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
-  const edge = size === "compact" ? 18 : 44;
+  const compact = compactActionVisualRecipe.control;
+  const edge = size === "compact" ? compact.edge : 44;
   return <Tooltip title={label}><AntdButton
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}
     danger={tone === "danger"}
-    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: 12, height: 12 } : undefined} />}
+    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: compact.iconEdge, height: compact.iconEdge } : undefined} />}
     loading={loading}
     disabled={disabled}
     onClick={onClick}
-    style={{ width: edge, height: edge, borderRadius: size === "compact" ? 2 : undefined }}
+    style={{ width: edge, height: edge, borderRadius: size === "compact" ? compact.radius : undefined }}
   /></Tooltip>;
 }
 

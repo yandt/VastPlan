@@ -89,7 +89,7 @@ CollectionLoader(query, signal) -> CollectionResult
 └── facets? / permittedActions?    # 服务端事实，不是浏览器猜测
 ```
 
-表格行操作由 Workbench 统一投影：功能插件只声明 `placement: record.row` 的语义动作，Workbench 自动追加不可隐藏的末列“操作”，在横向滚动时固定在右侧并保持内容居中；每行先按 `visibleWhen` 过滤，最多两个动作以图标 + Tooltip 直接显示，剩余动作进入同样只包含图标 + Tooltip 的“更多行操作”浮层。页面级操作使用独立 `PageActionSpec` 并只挂载至 `page.header.end`，不得与行操作混用来规避这一布局规则。
+表格行操作由 Workbench 统一投影：功能插件只声明 `placement: record.row` 的语义动作，Workbench 自动追加不可隐藏的末列“操作”，在横向滚动时固定在右侧并保持内容居中；每行先按 `visibleWhen` 过滤，最多两个动作以图标 + Tooltip 直接显示，剩余动作进入每行一个“图标 + 标签”的紧凑“更多行操作”浮层。页面级操作使用独立 `PageActionSpec` 并只挂载至 `page.header.end`，不得与行操作混用来规避这一布局规则。
 
 - Table 使用 `page` 或 `cursor` 二选一。需要总数、跳页和审计浏览的管理表使用 `page`；Card feed 和高数据量连续浏览使用 `cursor`。
 - Filter 的值、排序、页码/cursor 都属于 URL 可恢复状态；敏感筛选值不得进入 URL。查询切换时取消上一请求，保留已成功数据并展示刷新状态。
@@ -106,7 +106,7 @@ CollectionLoader(query, signal) -> CollectionResult
 |---|---|
 | 顶层 `pageActions` | 由可信宿主挂入 `page.header.end` 并整体右对齐；默认纯图标 + Tooltip，可选 `icon-label` / `label`，最多直接显示 4 个，其余进入更多菜单 |
 | `collection.toolbar` / `collection.bulk` | 集合局部工具保留在集合内；批量动作使用 Select 选择后再显式执行，且必须声明选择数量与对象状态前置条件 |
-| `record.row` / `card.footer` | 图标 + Tooltip 居中呈现；`record.row` 使用 18×18 的紧凑按钮盒、12×12 SVG 图标、2px 圆角和 8px 间距，行操作最多两个直接可见。其余动作进入每行一个“图标 + 标签”的紧凑 overflow 菜单（28px 行高、3px 容器内边距、2px 圆角）。行操作不使用实心 primary 背景，危险操作保留危险色；overflow 触发器以 flex 对齐。页面头部等其他区域仍使用常规 44×44 按钮 |
+| `record.row` / `card.footer` | 图标 + Tooltip 居中呈现；`record.row` 采用《[Portal 设计系统](../design/DESIGN.md)》的 `compactAction` recipe，行操作最多两个直接可见，其余动作进入每行一个“图标 + 标签”的紧凑 overflow 菜单。行操作不使用实心 primary 背景，危险操作保留危险色；overflow 触发器以 flex 对齐。页面头部等其他区域仍使用常规按钮 |
 | `form.submit` / `form.cancel` / `form.danger` | 提交只有一个主操作；危险操作必须确认且保留失败上下文 |
 
 浏览器的可见/禁用状态只是体验提示。Action handler 每次执行仍经类型化 BFF 或 capability 调用，由服务端重新判定主体、租户、对象状态、并发版本和权限。

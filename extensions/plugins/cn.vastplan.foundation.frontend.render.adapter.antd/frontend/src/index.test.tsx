@@ -52,6 +52,14 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain('aria-selected="true"');
   });
 
+  it("removes the navigation divider from compact action menus", () => {
+    const Menu = antdPortalUIComponents.Menu;
+    const markup = renderToStaticMarkup(<Menu density="compact" items={[{ id: "submit", label: "Submit" }]} />);
+    expect(markup).toContain("border-inline-end:0");
+    expect(markup).toContain("min-width:180px");
+    expect(markup).toContain("height:28px");
+  });
+
   it("renders JSON Schema through the Ant Design RJSF theme", () => {
     const Form = antdPortalUIComponents.FormRenderer;
     const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form

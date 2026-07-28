@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.frontend.render.adapter.antd",
   "name": "VastPlan Ant Design Renderer Source",
   "description": "供统一 Render Adapter 按需加载的 Ant Design Renderer 内部模块",
-  "version": "3.0.5",
+  "version": "3.0.6",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

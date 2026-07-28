@@ -53,7 +53,7 @@ import type {
   StatusTone,
   TableProps,
 } from "@vastplan/ui-primitives";
-import { PortalUIProvider, VastPlanIcon } from "@vastplan/ui-primitives";
+import { compactActionVisualRecipe, PortalUIProvider, VastPlanIcon } from "@vastplan/ui-primitives";
 import { message, usePortalI18n } from "@vastplan/ui-primitives";
 import enUS from "@arco-design/web-react/es/locale/en-US";
 import zhCN from "@arco-design/web-react/es/locale/zh-CN";
@@ -126,9 +126,10 @@ export function cascadeResponsiveColumns(columns: ResponsiveColumns): Responsive
 const GridItem = ArcoGrid.GridItem as unknown as ComponentType<GridItemProps>;
 
 function renderMenuItems(items: MenuItem[], density: MenuProps["density"], onSelect?: (id: string) => void, parentDisabled = false): ReactNode[] {
+  const compact = compactActionVisualRecipe.menu;
   return items.map((item) => item.children?.length
     ? <ArcoMenu.SubMenu key={item.id} title={item.label}>{renderMenuItems(item.children, density, onSelect, parentDisabled || item.disabled === true)}</ArcoMenu.SubMenu>
-    : <ArcoMenu.Item key={item.id} disabled={parentDisabled || item.disabled} style={density === "compact" ? { height: 28, lineHeight: "28px", margin: 0, paddingInline: 8 } : undefined}>{item.icon}{item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
+    : <ArcoMenu.Item key={item.id} disabled={parentDisabled || item.disabled} style={density === "compact" ? { height: compact.itemHeight, lineHeight: `${compact.itemHeight}px`, margin: 0, paddingInline: compact.itemInlinePadding } : undefined}>{item.icon}{item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
       event.preventDefault();
       event.stopPropagation();
       if (!parentDisabled && item.disabled !== true) onSelect?.(item.id);
@@ -136,7 +137,8 @@ function renderMenuItems(items: MenuItem[], density: MenuProps["density"], onSel
 }
 
 function Menu({ items, activeID, density = "regular", onSelect }: MenuProps) {
-  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)} style={density === "compact" ? { minWidth: 180, padding: 3, borderRadius: 2 } : undefined}>{renderMenuItems(items, density, onSelect)}</ArcoMenu>;
+  const compact = compactActionVisualRecipe.menu;
+  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)} style={density === "compact" ? { minWidth: compact.minWidth, padding: compact.surfacePadding, borderRadius: compact.radius, borderInlineEnd: compact.borderInlineEnd } : undefined}>{renderMenuItems(items, density, onSelect)}</ArcoMenu>;
 }
 
 type OverlayContainerProps = { getPopupContainer?: () => Element };
@@ -221,7 +223,8 @@ function buttonProps({ kind }: Pick<ButtonProps, "kind">): { type?: "primary" | 
 }
 
 function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
-  const edge = size === "compact" ? 18 : 44;
+  const compact = compactActionVisualRecipe.control;
+  const edge = size === "compact" ? compact.edge : 44;
   return <Tooltip content={label}><Button
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}
@@ -230,8 +233,8 @@ function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regula
     loading={loading}
     disabled={disabled}
     onClick={onClick}
-    style={{ width: edge, height: edge, borderRadius: size === "compact" ? 2 : undefined }}
-    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: 12, height: 12 } : undefined} />}
+    style={{ width: edge, height: edge, borderRadius: size === "compact" ? compact.radius : undefined }}
+    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: compact.iconEdge, height: compact.iconEdge } : undefined} />}
   /></Tooltip>;
 }
 
