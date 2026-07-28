@@ -1,0 +1,32 @@
+import type { IconCatalogEntry } from "../../types.js";
+
+export const shard16Entries = Object.freeze([
+  {"name":"audio-filled","component":"AudioFilled","sourceName":"audio","theme":"filled"},
+  {"name":"behance-square-outlined","component":"BehanceSquareOutlined","sourceName":"behance-square","theme":"outlined"},
+  {"name":"book-two-tone","component":"BookTwoTone","sourceName":"book","theme":"twotone"},
+  {"name":"bulb-filled","component":"BulbFilled","sourceName":"bulb","theme":"filled"},
+  {"name":"calculator-outlined","component":"CalculatorOutlined","sourceName":"calculator","theme":"outlined"},
+  {"name":"calculator-two-tone","component":"CalculatorTwoTone","sourceName":"calculator","theme":"twotone"},
+  {"name":"check-circle-outlined","component":"CheckCircleOutlined","sourceName":"check-circle","theme":"outlined"},
+  {"name":"cloud-outlined","component":"CloudOutlined","sourceName":"cloud","theme":"outlined"},
+  {"name":"code-two-tone","component":"CodeTwoTone","sourceName":"code","theme":"twotone"},
+  {"name":"container-filled","component":"ContainerFilled","sourceName":"container","theme":"filled"},
+  {"name":"copyright-outlined","component":"CopyrightOutlined","sourceName":"copyright","theme":"outlined"},
+  {"name":"dollar-circle-outlined","component":"DollarCircleOutlined","sourceName":"dollar-circle","theme":"outlined"},
+  {"name":"dot-net-outlined","component":"DotNetOutlined","sourceName":"dot-net","theme":"outlined"},
+  {"name":"exclamation-outlined","component":"ExclamationOutlined","sourceName":"exclamation","theme":"outlined"},
+  {"name":"file-search-outlined","component":"FileSearchOutlined","sourceName":"file-search","theme":"outlined"},
+  {"name":"funnel-plot-outlined","component":"FunnelPlotOutlined","sourceName":"funnel-plot","theme":"outlined"},
+  {"name":"idcard-filled","component":"IdcardFilled","sourceName":"idcard","theme":"filled"},
+  {"name":"import-outlined","component":"ImportOutlined","sourceName":"import","theme":"outlined"},
+  {"name":"message-filled","component":"MessageFilled","sourceName":"message","theme":"filled"},
+  {"name":"node-collapse-outlined","component":"NodeCollapseOutlined","sourceName":"node-collapse","theme":"outlined"},
+  {"name":"printer-two-tone","component":"PrinterTwoTone","sourceName":"printer","theme":"twotone"},
+  {"name":"qwen-filled","component":"QwenFilled","sourceName":"qwen","theme":"filled"},
+  {"name":"retweet-outlined","component":"RetweetOutlined","sourceName":"retweet","theme":"outlined"},
+  {"name":"shopping-outlined","component":"ShoppingOutlined","sourceName":"shopping","theme":"outlined"},
+  {"name":"sun-filled","component":"SunFilled","sourceName":"sun","theme":"filled"},
+  {"name":"switcher-outlined","component":"SwitcherOutlined","sourceName":"switcher","theme":"outlined"},
+  {"name":"to-top-outlined","component":"ToTopOutlined","sourceName":"to-top","theme":"outlined"},
+] as const) satisfies readonly IconCatalogEntry[];
+export type Shard16Name = (typeof shard16Entries)[number]["name"];

@@ -1,0 +1,31 @@
+import type { IconCatalogEntry } from "../../types.js";
+
+export const shard20Entries = Object.freeze([
+  {"name":"align-center-outlined","component":"AlignCenterOutlined","sourceName":"align-center","theme":"outlined"},
+  {"name":"amazon-circle-filled","component":"AmazonCircleFilled","sourceName":"amazon-circle","theme":"filled"},
+  {"name":"arrows-alt-outlined","component":"ArrowsAltOutlined","sourceName":"arrows-alt","theme":"outlined"},
+  {"name":"bulb-two-tone","component":"BulbTwoTone","sourceName":"bulb","theme":"twotone"},
+  {"name":"code-outlined","component":"CodeOutlined","sourceName":"code","theme":"outlined"},
+  {"name":"codepen-circle-outlined","component":"CodepenCircleOutlined","sourceName":"codepen-circle","theme":"outlined"},
+  {"name":"codepen-outlined","component":"CodepenOutlined","sourceName":"codepen","theme":"outlined"},
+  {"name":"credit-card-two-tone","component":"CreditCardTwoTone","sourceName":"credit-card","theme":"twotone"},
+  {"name":"crown-outlined","component":"CrownOutlined","sourceName":"crown","theme":"outlined"},
+  {"name":"dollar-two-tone","component":"DollarTwoTone","sourceName":"dollar","theme":"twotone"},
+  {"name":"dropbox-outlined","component":"DropboxOutlined","sourceName":"dropbox","theme":"outlined"},
+  {"name":"facebook-filled","component":"FacebookFilled","sourceName":"facebook","theme":"filled"},
+  {"name":"field-string-outlined","component":"FieldStringOutlined","sourceName":"field-string","theme":"outlined"},
+  {"name":"fork-outlined","component":"ForkOutlined","sourceName":"fork","theme":"outlined"},
+  {"name":"fullscreen-exit-outlined","component":"FullscreenExitOutlined","sourceName":"fullscreen-exit","theme":"outlined"},
+  {"name":"funnel-plot-filled","component":"FunnelPlotFilled","sourceName":"funnel-plot","theme":"filled"},
+  {"name":"instagram-filled","component":"InstagramFilled","sourceName":"instagram","theme":"filled"},
+  {"name":"like-two-tone","component":"LikeTwoTone","sourceName":"like","theme":"twotone"},
+  {"name":"mail-filled","component":"MailFilled","sourceName":"mail","theme":"filled"},
+  {"name":"moon-filled","component":"MoonFilled","sourceName":"moon","theme":"filled"},
+  {"name":"pushpin-filled","component":"PushpinFilled","sourceName":"pushpin","theme":"filled"},
+  {"name":"qq-square-filled","component":"QqSquareFilled","sourceName":"qq-square","theme":"filled"},
+  {"name":"reload-outlined","component":"ReloadOutlined","sourceName":"reload","theme":"outlined"},
+  {"name":"shopping-two-tone","component":"ShoppingTwoTone","sourceName":"shopping","theme":"twotone"},
+  {"name":"star-two-tone","component":"StarTwoTone","sourceName":"star","theme":"twotone"},
+  {"name":"unlock-filled","component":"UnlockFilled","sourceName":"unlock","theme":"filled"},
+] as const) satisfies readonly IconCatalogEntry[];
+export type Shard20Name = (typeof shard20Entries)[number]["name"];

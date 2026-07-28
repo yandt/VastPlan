@@ -22,7 +22,7 @@ const common = {
   legalComments: "none",
   minify: true,
   define: { "process.env.NODE_ENV": '"production"' },
-  external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "@vastplan/rjsf-csp-validator", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
+  external: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "@vastplan/icon-catalog", "@vastplan/icon-catalog/semantic", "@vastplan/rjsf-csp-validator", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk"],
 };
 const allowedExternals = new Set(common.external);
 
@@ -98,6 +98,9 @@ async function enforceFunctionalPluginBoundary(id, frontendRoot) {
     importsWorkbench ||= /from\s+["']@vastplan\/workbench-sdk["']/.test(content);
     if (/from\s+["'](?:react|react-dom(?:\/[^"']*)?|antd(?:\/[^"']*)?|@ant-design\/[^"']+|@arco-design\/[^"']+|@mui\/[^"']+|@dnd-kit\/[^"']+|react-grid-layout(?:\/[^"']*)?|react-dnd(?:\/[^"']*)?|@hello-pangea\/dnd|@atlaskit\/pragmatic-drag-and-drop(?:\/[^"']*)?|react-sortablejs)["']/.test(content)) {
       throw new Error(`${id}: 功能插件不得直接导入 React、UI 或拖拽框架 (${file})`);
+    }
+    if (/from\s+["']@vastplan\/icon-catalog(?:\/[^"']*)?["']/.test(content)) {
+      throw new Error(`${id}: 功能插件不得直接导入原始图标目录，必须使用 Workbench 语义图标 (${file})`);
     }
     if (/\bcontext\.addPage\s*\(/.test(content)) {
       throw new Error(`${id}: 功能插件必须通过 Workbench 注册页面，禁止 context.addPage (${file})`);

@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "v1",
+  "sourcePackage": "@ant-design/icons-svg",
+  "sourceVersion": "4.5.0",
+  "license": "MIT",
+  "iconCount": 846,
+  "shardCount": 27,
+  "sourceFileListSHA256": "54bb8b899bee2578d61c7d2cc9b570a52e557114ff4bfd12fc67862e0f595f6f",
+  "shards": [
+    {
+      "id": "00",
+      "iconCount": 25
+    },
+    {
+      "id": "01",
+      "iconCount": 34
+    },
+    {
+      "id": "02",
+      "iconCount": 30
+    },
+    {
+      "id": "03",
+      "iconCount": 22
+    },
+    {
+      "id": "04",
+      "iconCount": 29
+    },
+    {
+      "id": "05",
+      "iconCount": 36
+    },
+    {
+      "id": "06",
+      "iconCount": 44
+    },
+    {
+      "id": "07",
+      "iconCount": 23
+    },
+    {
+      "id": "08",
+      "iconCount": 29
+    },
+    {
+      "id": "09",
+      "iconCount": 28
+    },
+    {
+      "id": "10",
+      "iconCount": 40
+    },
+    {
+      "id": "11",
+      "iconCount": 37
+    },
+    {
+      "id": "12",
+      "iconCount": 24
+    },
+    {
+      "id": "13",
+      "iconCount": 30
+    },
+    {
+      "id": "14",
+      "iconCount": 31
+    },
+    {
+      "id": "15",
+      "iconCount": 20
+    },
+    {
+      "id": "16",
+      "iconCount": 27
+    },
+    {
+      "id": "17",
+      "iconCount": 30
+    },
+    {
+      "id": "18",
+      "iconCount": 38
+    },
+    {
+      "id": "19",
+      "iconCount": 34
+    },
+    {
+      "id": "20",
+      "iconCount": 26
+    },
+    {
+      "id": "21",
+      "iconCount": 35
+    },
+    {
+      "id": "22",
+      "iconCount": 30
+    },
+    {
+      "id": "23",
+      "iconCount": 40
+    },
+    {
+      "id": "24",
+      "iconCount": 32
+    },
+    {
+      "id": "25",
+      "iconCount": 32
+    },
+    {
+      "id": "26",
+      "iconCount": 40
+    }
+  ]
+}

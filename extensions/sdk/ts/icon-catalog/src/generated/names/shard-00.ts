@@ -1,0 +1,30 @@
+import type { IconCatalogEntry } from "../../types.js";
+
+export const shard00Entries = Object.freeze([
+  {"name":"ant-cloud-outlined","component":"AntCloudOutlined","sourceName":"ant-cloud","theme":"outlined"},
+  {"name":"bold-outlined","component":"BoldOutlined","sourceName":"bold","theme":"outlined"},
+  {"name":"caret-down-outlined","component":"CaretDownOutlined","sourceName":"caret-down","theme":"outlined"},
+  {"name":"check-square-two-tone","component":"CheckSquareTwoTone","sourceName":"check-square","theme":"twotone"},
+  {"name":"ci-circle-filled","component":"CiCircleFilled","sourceName":"ci-circle","theme":"filled"},
+  {"name":"clear-outlined","component":"ClearOutlined","sourceName":"clear","theme":"outlined"},
+  {"name":"close-square-outlined","component":"CloseSquareOutlined","sourceName":"close-square","theme":"outlined"},
+  {"name":"code-sandbox-outlined","component":"CodeSandboxOutlined","sourceName":"code-sandbox","theme":"outlined"},
+  {"name":"copy-filled","component":"CopyFilled","sourceName":"copy","theme":"filled"},
+  {"name":"down-square-filled","component":"DownSquareFilled","sourceName":"down-square","theme":"filled"},
+  {"name":"exclamation-circle-two-tone","component":"ExclamationCircleTwoTone","sourceName":"exclamation-circle","theme":"twotone"},
+  {"name":"file-exclamation-two-tone","component":"FileExclamationTwoTone","sourceName":"file-exclamation","theme":"twotone"},
+  {"name":"folder-open-outlined","component":"FolderOpenOutlined","sourceName":"folder-open","theme":"outlined"},
+  {"name":"fund-outlined","component":"FundOutlined","sourceName":"fund","theme":"outlined"},
+  {"name":"linkedin-filled","component":"LinkedinFilled","sourceName":"linkedin","theme":"filled"},
+  {"name":"lock-two-tone","component":"LockTwoTone","sourceName":"lock","theme":"twotone"},
+  {"name":"medicine-box-two-tone","component":"MedicineBoxTwoTone","sourceName":"medicine-box","theme":"twotone"},
+  {"name":"question-circle-outlined","component":"QuestionCircleOutlined","sourceName":"question-circle","theme":"outlined"},
+  {"name":"rest-two-tone","component":"RestTwoTone","sourceName":"rest","theme":"twotone"},
+  {"name":"right-outlined","component":"RightOutlined","sourceName":"right","theme":"outlined"},
+  {"name":"sliders-two-tone","component":"SlidersTwoTone","sourceName":"sliders","theme":"twotone"},
+  {"name":"snippets-filled","component":"SnippetsFilled","sourceName":"snippets","theme":"filled"},
+  {"name":"step-forward-outlined","component":"StepForwardOutlined","sourceName":"step-forward","theme":"outlined"},
+  {"name":"twitter-outlined","component":"TwitterOutlined","sourceName":"twitter","theme":"outlined"},
+  {"name":"up-circle-filled","component":"UpCircleFilled","sourceName":"up-circle","theme":"filled"},
+] as const) satisfies readonly IconCatalogEntry[];
+export type Shard00Name = (typeof shard00Entries)[number]["name"];

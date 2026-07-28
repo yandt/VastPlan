@@ -205,6 +205,8 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 		"core/kernels/frontend/src/browser.tsx":                                       "host-v1",
 		"core/kernels/frontend/static/index.html":                                     "host-v1",
 		"core/kernels/frontend/package.json":                                          "{}",
+		"extensions/sdk/ts/icon-catalog/src/index.ts":                                 "icon-catalog-v1",
+		"extensions/sdk/ts/icon-catalog/package.json":                                 "{}",
 		"extensions/sdk/ts/ui-primitives/src/index.ts":                                "ui-primitives-v1",
 		"extensions/sdk/ts/ui-primitives/package.json":                                "{}",
 		"extensions/sdk/ts/rjsf-csp-validator/src/index.ts":                           "rjsf-validator-v1",
@@ -215,6 +217,7 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 		"extensions/sdk/ts/workbench-sdk/package.json":                                "{}",
 		"engineering/tools/build-frontend.sh":                                         "build-v1",
 		"engineering/tools/build-frontend-plugins.mjs":                                "build-v1",
+		"engineering/tools/check-ant-icon-catalog-on-demand.mjs":                     "catalog-check-v1",
 		"engineering/tools/frontend-module-graph.mjs":                                 "graph-v1",
 		"engineering/tools/frontend-server-build.mjs":                                 "server-v1",
 		"package.json":        "{}",
@@ -261,6 +264,15 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 	if hostChange.host == pluginChange.host || hostChange.plugins != pluginChange.plugins {
 		t.Fatalf("host change signatures = %#v, plugin = %#v", hostChange, pluginChange)
 	}
+	write("extensions/sdk/ts/icon-catalog/src/index.ts", "icon-catalog-v2")
+	iconCatalogChange, err := hmr.sourceSignatures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if iconCatalogChange.host == hostChange.host || iconCatalogChange.plugins != hostChange.plugins {
+		t.Fatalf("icon catalog change signatures = %#v, host = %#v", iconCatalogChange, hostChange)
+	}
+	hostChange = iconCatalogChange
 	write("extensions/sdk/ts/workbench-sdk/src/index.ts", "workbench-v2")
 	workbenchChange, err := hmr.sourceSignatures()
 	if err != nil {

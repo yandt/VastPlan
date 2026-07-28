@@ -67,7 +67,7 @@ func assertFunctionalFrontendPlugins(t *testing.T, repositoryRoot, pluginRoot st
 			if legacyCollectionFilterField.MatchString(text) {
 				t.Errorf("%s: 功能插件必须通过一级 filterPanel 契约声明筛选，禁止遗留 filters/filterLayout 字段", relative(repositoryRoot, path))
 			}
-			for _, forbidden := range []string{`from "react"`, `from 'react'`, `from "react-dom`, `from 'react-dom`, `from "@arco-design/`, `from '@arco-design/`, `from "@mui/`, `from '@mui/`, `from "@dnd-kit/`, `from '@dnd-kit/`, `from "react-grid-layout`, `from 'react-grid-layout`, `from "react-dnd`, `from 'react-dnd`, `from "@hello-pangea/dnd"`, `from '@hello-pangea/dnd'`, `from "@atlaskit/pragmatic-drag-and-drop`, `from '@atlaskit/pragmatic-drag-and-drop`, `from "react-sortablejs"`, `from 'react-sortablejs'`, "context.addPage("} {
+			for _, forbidden := range []string{`from "react"`, `from 'react'`, `from "react-dom`, `from 'react-dom`, `from "@vastplan/icon-catalog`, `from '@vastplan/icon-catalog`, `from "@arco-design/`, `from '@arco-design/`, `from "@mui/`, `from '@mui/`, `from "@dnd-kit/`, `from '@dnd-kit/`, `from "react-grid-layout`, `from 'react-grid-layout`, `from "react-dnd`, `from 'react-dnd`, `from "@hello-pangea/dnd"`, `from '@hello-pangea/dnd'`, `from "@atlaskit/pragmatic-drag-and-drop`, `from '@atlaskit/pragmatic-drag-and-drop`, `from "react-sortablejs"`, `from 'react-sortablejs'`, "context.addPage("} {
 				if strings.Contains(text, forbidden) {
 					t.Errorf("%s: 功能插件越过 Workbench 边界，出现 %q", relative(repositoryRoot, path), forbidden)
 				}

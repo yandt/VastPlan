@@ -1,0 +1,33 @@
+import type { IconCatalogEntry } from "../../types.js";
+
+export const shard09Entries = Object.freeze([
+  {"name":"alert-two-tone","component":"AlertTwoTone","sourceName":"alert","theme":"twotone"},
+  {"name":"arrow-up-outlined","component":"ArrowUpOutlined","sourceName":"arrow-up","theme":"outlined"},
+  {"name":"audio-outlined","component":"AudioOutlined","sourceName":"audio","theme":"outlined"},
+  {"name":"backward-filled","component":"BackwardFilled","sourceName":"backward","theme":"filled"},
+  {"name":"barcode-outlined","component":"BarcodeOutlined","sourceName":"barcode","theme":"outlined"},
+  {"name":"close-circle-outlined","component":"CloseCircleOutlined","sourceName":"close-circle","theme":"outlined"},
+  {"name":"dribbble-circle-filled","component":"DribbbleCircleFilled","sourceName":"dribbble-circle","theme":"filled"},
+  {"name":"exclamation-circle-outlined","component":"ExclamationCircleOutlined","sourceName":"exclamation-circle","theme":"outlined"},
+  {"name":"expand-alt-outlined","component":"ExpandAltOutlined","sourceName":"expand-alt","theme":"outlined"},
+  {"name":"eye-invisible-filled","component":"EyeInvisibleFilled","sourceName":"eye-invisible","theme":"filled"},
+  {"name":"file-jpg-outlined","component":"FileJpgOutlined","sourceName":"file-jpg","theme":"outlined"},
+  {"name":"fund-view-outlined","component":"FundViewOutlined","sourceName":"fund-view","theme":"outlined"},
+  {"name":"gift-filled","component":"GiftFilled","sourceName":"gift","theme":"filled"},
+  {"name":"gitlab-filled","component":"GitlabFilled","sourceName":"gitlab","theme":"filled"},
+  {"name":"highlight-filled","component":"HighlightFilled","sourceName":"highlight","theme":"filled"},
+  {"name":"idcard-outlined","component":"IdcardOutlined","sourceName":"idcard","theme":"outlined"},
+  {"name":"java-script-outlined","component":"JavaScriptOutlined","sourceName":"java-script","theme":"outlined"},
+  {"name":"layout-two-tone","component":"LayoutTwoTone","sourceName":"layout","theme":"twotone"},
+  {"name":"login-outlined","component":"LoginOutlined","sourceName":"login","theme":"outlined"},
+  {"name":"property-safety-filled","component":"PropertySafetyFilled","sourceName":"property-safety","theme":"filled"},
+  {"name":"qrcode-outlined","component":"QrcodeOutlined","sourceName":"qrcode","theme":"outlined"},
+  {"name":"spotify-filled","component":"SpotifyFilled","sourceName":"spotify","theme":"filled"},
+  {"name":"sun-outlined","component":"SunOutlined","sourceName":"sun","theme":"outlined"},
+  {"name":"taobao-circle-outlined","component":"TaobaoCircleOutlined","sourceName":"taobao-circle","theme":"outlined"},
+  {"name":"threads-filled","component":"ThreadsFilled","sourceName":"threads","theme":"filled"},
+  {"name":"user-outlined","component":"UserOutlined","sourceName":"user","theme":"outlined"},
+  {"name":"wallet-filled","component":"WalletFilled","sourceName":"wallet","theme":"filled"},
+  {"name":"warning-two-tone","component":"WarningTwoTone","sourceName":"warning","theme":"twotone"},
+] as const) satisfies readonly IconCatalogEntry[];
+export type Shard09Name = (typeof shard09Entries)[number]["name"];

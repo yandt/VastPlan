@@ -48,7 +48,7 @@ UI Contract 5.0 暴露语义 token，适配器映射到具体框架。布局插�
 - 页面间距使用唯一 `portalPageRhythm`：Shell 从 Page Header 底边到 Workbench 根容器统一保留 16px `contentStart`；Workbench 根容器固定 `margin: 0; padding: 0`，并按 compact/standard/comfortable 使用 8/16/24px `sectionGap` 管理一级组件间距。一级组件不得用外部 margin 改写位置；FilterPanel 等可通过 Workbench 内部的 `flush=0` 或 `compact=8px` inset 管理自身内容，但 inset 不得反向补偿 Shell。Collection 顶部 FilterPanel 默认 `flush`；三个 Renderer 的 compact Form 必须隐藏根 Object Schema 标题并清除根外边距，嵌套对象标题不受影响，从而使第一行控件与页面起始节奏可预测。
 - FilterPanel 使用 `inside-inline` 持久 Label：Label 与输入控件共同消费一个筛选单元格宽度，Label 按内容取宽但桌面最多占 40%、移动端最多占 45%，始终单行；超长文案省略并由框架 Tooltip 与可访问名称提供全文。输入区域必须 `flex: 1; min-width: 0`，输入后 Label 不消失。Ant、Arco、MUI 必须映射同一语义，功能插件不能配置像素宽度或注入框架样式。
 - Page Header 右侧的页面功能动作使用 VastPlan 语义图标、Tooltip 和 `aria-label`，点击区至少 44px；桌面最多直接显示 4 个，超出后进入“更多”，不得在 Table 工具栏重复显示新增、导入或发布。
-- 图标风格由 Renderer 的 `iconTheme` 统一决定：`canonical` 保持跨框架几何一致，`renderer-native` 使用当前 UI 框架原生图形并在缺项时回退。单个页面和功能插件不得混指定图标来源。
+- 图标风格由 Renderer 的 `iconTheme` 统一决定：`canonical` 使用锁定的 MIT Ant Design 语义入口保持跨框架几何一致，`renderer-native` 使用当前 UI 框架原生图形并在缺项时回退。846 个原始目录名称不属于页面契约，只能由 Foundation 图标工具按 27 个分片延迟读取；单个页面和功能插件不得混指定图标来源。
 
 ### 4.2 顶部导航
 

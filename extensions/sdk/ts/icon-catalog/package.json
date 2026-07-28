@@ -1,0 +1,20 @@
+{
+  "name": "@vastplan/icon-catalog",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./semantic": "./src/semantic.ts"
+  },
+  "dependencies": {
+    "@ant-design/icons-svg": "4.5.0",
+    "@vastplan/ui-contract": "workspace:*"
+  },
+  "scripts": {
+    "generate": "node ../../../../engineering/tools/generate-ant-icon-catalog.mjs --source-root node_modules/@ant-design/icons-svg/es/asn --out src",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": { "typescript": "^5.8.3", "vitest": "^3.2.4" }
+}

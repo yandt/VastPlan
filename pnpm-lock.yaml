@@ -23,6 +23,9 @@ importers:
       '@vastplan/frontend-engine-contract':
         specifier: workspace:*
         version: link:../../../extensions/sdk/ts/frontend-engine-contract
+      '@vastplan/icon-catalog':
+        specifier: workspace:*
+        version: link:../../../extensions/sdk/ts/icon-catalog
       '@vastplan/rjsf-csp-validator':
         specifier: workspace:*
         version: link:../../../extensions/sdk/ts/rjsf-csp-validator
@@ -663,6 +666,22 @@ importers:
         specifier: ^3.2.4
         version: 3.2.7(@types/node@22.20.1)
 
+  extensions/sdk/ts/icon-catalog:
+    dependencies:
+      '@ant-design/icons-svg':
+        specifier: 4.5.0
+        version: 4.5.0
+      '@vastplan/ui-contract':
+        specifier: workspace:*
+        version: link:../ui-contract
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)
+
   extensions/sdk/ts/platform-admin:
     dependencies:
       '@vastplan/composition-planning':
@@ -706,6 +725,9 @@ importers:
       '@vastplan/frontend-engine-contract':
         specifier: workspace:*
         version: link:../frontend-engine-contract
+      '@vastplan/icon-catalog':
+        specifier: workspace:*
+        version: link:../icon-catalog
       '@vastplan/ui-contract':
         specifier: workspace:*
         version: link:../ui-contract

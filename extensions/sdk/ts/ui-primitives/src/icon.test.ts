@@ -8,6 +8,8 @@ describe("VastPlanIcon", () => {
     for (const name of semanticIconNames) {
       const markup = renderToStaticMarkup(createElement(VastPlanIcon, { name }));
       expect(markup).toContain(`<svg data-vastplan-icon="${name}"`);
+      expect(markup).toContain('data-vastplan-icon-source="canonical"');
+      expect(markup).toContain('viewBox="64 64 896 896"');
       expect(markup).toContain('aria-hidden="true"');
     }
   });

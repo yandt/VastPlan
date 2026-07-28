@@ -95,6 +95,8 @@ describe("VerifiedModuleGraphLoader", () => {
   it("rejects unknown externals and cyclic graphs before fetching", async () => {
     const { graph } = await fixture();
     expect(() => new VerifiedModuleGraphLoader([{ ...graph, externals: ["unknown-runtime"] }], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response() })).toThrowError(/未知共享依赖/);
+    expect(() => new VerifiedModuleGraphLoader([{ ...graph, externals: ["@vastplan/icon-catalog"] }], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response() })).toThrowError(/只有 Frontend Foundation/);
+    expect(() => new VerifiedModuleGraphLoader([{ ...graph, id: "cn.vastplan.foundation.frontend.icon-browser", externals: ["@vastplan/icon-catalog"] }], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response() })).not.toThrow();
     const cyclicNodes = graph.nodes.map((node) => node.purpose === "chunk" ? { ...node, dependencies: [{ specifier: "../main.js", path: graph.entry, kind: "static" as const }] } : node);
     const cyclic = { ...graph, nodes: cyclicNodes };
     expect(() => new VerifiedModuleGraphLoader([cyclic], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response() })).toThrowError(/循环依赖/);

@@ -107,11 +107,12 @@ func (h *frontendHMR) sourceSignaturesFor(pluginIDs []string) (frontendSourceSig
 	}
 	host, err := sourceSignature(h.root, []string{
 		"core/kernels/frontend/src", "core/kernels/frontend/static", "core/kernels/frontend/package.json",
+		"extensions/sdk/ts/icon-catalog/src", "extensions/sdk/ts/icon-catalog/package.json",
 		"extensions/sdk/ts/ui-primitives/src", "extensions/sdk/ts/ui-primitives/package.json",
 		"extensions/sdk/ts/rjsf-csp-validator/src", "extensions/sdk/ts/rjsf-csp-validator/package.json",
 		"extensions/sdk/ts/ui-contract/src", "extensions/sdk/ts/ui-contract/package.json",
 		"extensions/sdk/ts/workbench-sdk/src", "extensions/sdk/ts/workbench-sdk/package.json",
-		"engineering/tools/build-frontend.sh", "engineering/tools/build-frontend-plugins.mjs",
+		"engineering/tools/build-frontend.sh", "engineering/tools/build-frontend-plugins.mjs", "engineering/tools/check-ant-icon-catalog-on-demand.mjs",
 		"engineering/tools/frontend-module-graph.mjs", "engineering/tools/frontend-server-build.mjs",
 		"package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "tsconfig.base.json",
 	})

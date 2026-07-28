@@ -31,7 +31,7 @@ export interface FrontendModuleGraphDescriptor extends PluginRef {
 
 const allowedSharedExternals = new Set([
   "react", "react-dom", "react-dom/client", "react/jsx-runtime",
-  "@vastplan/rjsf-csp-validator", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk", "@vastplan/frontend-engine-contract",
+  "@vastplan/icon-catalog", "@vastplan/icon-catalog/semantic", "@vastplan/rjsf-csp-validator", "@vastplan/ui-primitives", "@vastplan/ui-contract", "@vastplan/workbench-sdk", "@vastplan/frontend-engine-contract",
 ]);
 
 /** Validates the untrusted Browser RuntimeSpec projection before any fetch. */
@@ -43,6 +43,10 @@ export function validateModuleGraphDescriptor(graph: FrontendModuleGraphDescript
   if (graph.externals.length > 32 || new Set(graph.externals).size !== graph.externals.length || graph.externals.some((external) => !allowedSharedExternals.has(external)) ||
       (graph.deferred !== undefined && typeof graph.deferred !== "boolean")) {
     throw new ModuleLoadError("MODULE_GRAPH_EXTERNAL_REJECTED", `Module Graph 请求重复或未知共享依赖: ${graph.id}`);
+  }
+  if (graph.externals.some((external) => external === "@vastplan/icon-catalog" || external === "@vastplan/icon-catalog/semantic") &&
+      !graph.id.startsWith("cn.vastplan.foundation.frontend.")) {
+    throw new ModuleLoadError("MODULE_GRAPH_EXTERNAL_REJECTED", `只有 Frontend Foundation 模块可以导入图标目录: ${graph.id}`);
   }
   const paths = new Set<string>();
   const digests = new Set<string>();

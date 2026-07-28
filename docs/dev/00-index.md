@@ -244,6 +244,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0161 产品插件所有权与开发示例物理隔离](decisions/ADR-0161-产品插件所有权与开发示例物理隔离.md)
 - [ADR-0162 Workbench 拖拽内核与延迟 Dashboard 布局](decisions/ADR-0162-Workbench拖拽内核与延迟Dashboard布局.md)
 - [ADR-0163 Workbench 动作数据契约与图标化操作面](decisions/ADR-0163-Workbench动作数据契约与图标化操作面.md)
+- [ADR-0164 MIT 图标目录与分片按需加载](decisions/ADR-0164-MIT图标目录与分片按需加载.md)
 
 ### 插件共享代码与能力复用
 
