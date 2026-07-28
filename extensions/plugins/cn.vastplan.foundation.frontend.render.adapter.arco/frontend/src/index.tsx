@@ -183,7 +183,7 @@ function Popover({ open, trigger, children, placement = "bottom-start", surface 
     position={position}
     unmountOnExit
     onVisibleChange={(visible) => onOpenChange(visible, visible ? "trigger" : "outside")}
-    popup={() => <div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} style={{ padding: surface === "compact" ? 4 : 12, color: "var(--color-text-1)", background: "var(--color-bg-2)", border: "1px solid var(--color-border-2)", borderRadius: 6, boxShadow: "0 8px 24px rgba(0,0,0,.12)" }} onKeyDown={(event) => {
+    popup={() => <div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} style={{ padding: surface === "compact" ? 0 : 12, color: "var(--color-text-1)", background: "var(--color-bg-2)", border: "1px solid var(--color-border-2)", borderRadius: 6, boxShadow: "0 8px 24px rgba(0,0,0,.12)" }} onKeyDown={(event) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       onOpenChange(false, "escape");

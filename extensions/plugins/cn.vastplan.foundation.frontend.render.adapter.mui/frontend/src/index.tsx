@@ -240,7 +240,7 @@ function Popover({ open, trigger, children, placement = "bottom-start", surface 
   })}<MuiPopover
     open={open}
     disableAutoFocus
-    slotProps={{ transition: { onEntered: focusInitial }, paper: surface === "compact" ? { sx: { p: "4px" } } : undefined }}
+    slotProps={{ transition: { onEntered: focusInitial }, paper: surface === "compact" ? { sx: { p: 0 } } : undefined }}
     anchorEl={triggerRef.current}
     onClose={(_, reason) => close(reason === "escapeKeyDown" ? "escape" : "outside")}
     anchorOrigin={{ vertical, horizontal }}

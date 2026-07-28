@@ -71,7 +71,7 @@ export function Popover({ open, trigger, children, placement = "bottom-start", s
       if (event.key === "Escape" && open) { event.preventDefault(); close("escape"); }
     },
   });
-  return <AntdPopover open={open} trigger="click" placement={antdPlacement} styles={surface === "compact" ? { content: { padding: 4 } } : undefined} afterOpenChange={(next) => { if (next) focusInitial(); }} onOpenChange={(next) => { if (!next) close("outside"); }} content={<div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div>}>{triggerNode}</AntdPopover>;
+  return <AntdPopover open={open} trigger="click" placement={antdPlacement} styles={surface === "compact" ? { container: { padding: 0 }, content: { padding: 0 } } : undefined} afterOpenChange={(next) => { if (next) focusInitial(); }} onOpenChange={(next) => { if (!next) close("outside"); }} content={<div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div>}>{triggerNode}</AntdPopover>;
 }
 
 export function RecordNavigationList({ items, selectedID, ariaLabel, onSelect }: RecordNavigationListProps) {
