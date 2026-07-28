@@ -19,7 +19,7 @@ export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, l
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}
     danger={tone === "danger"}
-    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} />}
+    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: 12, height: 12 } : undefined} />}
     loading={loading}
     disabled={disabled}
     onClick={onClick}

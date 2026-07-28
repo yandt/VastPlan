@@ -230,7 +230,7 @@ function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regula
     disabled={disabled}
     onClick={onClick}
     style={{ width: edge, height: edge }}
-    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} />}
+    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: 12, height: 12 } : undefined} />}
   /></Tooltip>;
 }
 

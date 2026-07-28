@@ -32,6 +32,10 @@ export function RowActions({ actions, row, onRunAction }: {
       ariaLabel={moreLabel}
       onOpenChange={setOverflowOpen}
       trigger={(props) => <span ref={props.ref} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown} style={{ display: "inline-flex", lineHeight: 0 }}><ui.IconButton icon="more" label={moreLabel} size="compact" /></span>}
-    ><ui.Stack direction="row" gap="xs" align="center" justify="center" wrap>{overflow.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} size="compact" tone={action.tone === "danger" ? "danger" : "normal"} onClick={() => { onRunAction(action); setOverflowOpen(false); }} />)}</ui.Stack></ui.Popover>}
+    ><ui.Menu items={overflow.map((action) => ({ id: action.id, label: i18n.text(action.label), icon: <ui.Icon name={action.icon} />, disabled: false }))} onSelect={(id) => {
+      const action = overflow.find((candidate) => candidate.id === id);
+      if (action !== undefined) onRunAction(action);
+      setOverflowOpen(false);
+    }} /></ui.Popover>}
   </ui.Stack>;
 }

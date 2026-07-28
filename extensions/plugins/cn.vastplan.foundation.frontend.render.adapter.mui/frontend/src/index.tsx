@@ -126,7 +126,7 @@ function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regula
   const color = tone === "danger" ? "error" : tone === "primary" ? "primary" : "default";
   const edge = size === "compact" ? 16 : 44;
   return <Tooltip title={label}><span><MuiIconButton aria-label={label} color={color} disabled={disabled || loading} onClick={onClick} sx={{ width: edge, height: edge }}>
-    {loading ? <CircularProgress size={size === "compact" ? 16 : 20} /> : <Icon name={icon} size={size === "compact" ? "sm" : "md"} />}
+    {loading ? <CircularProgress size={size === "compact" ? 12 : 20} /> : <Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: 12, height: 12 } : undefined} />}
   </MuiIconButton></span></Tooltip>;
 }
 

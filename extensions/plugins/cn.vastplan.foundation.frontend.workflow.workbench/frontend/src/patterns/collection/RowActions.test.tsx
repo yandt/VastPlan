@@ -9,6 +9,8 @@ vi.mock("@vastplan/ui-primitives", () => ({
   usePortalUI: () => ({
     Stack: ({ justify, gap, children }: { justify?: string; gap?: string; children: ReactNode }) => <div data-justify={justify} data-gap={gap}>{children}</div>,
     IconButton: ({ icon, label, size, tone }: { icon: string; label: string; size?: string; tone?: string }) => <button type="button" data-icon={icon} data-size={size} data-tone={tone} aria-label={label} />,
+    Icon: ({ name }: { name: string }) => <span data-icon-glyph={name} />,
+    Menu: ({ items }: { items: Array<{ id: string; label: ReactNode; icon?: ReactNode }> }) => <div data-menu>{items.map((item) => <button key={item.id} type="button" data-menu-item={item.id}>{item.icon}{item.label}</button>)}</div>,
     Popover: ({ children, trigger }: { children: ReactNode; trigger: (props: { ref: undefined; "aria-expanded": false; "aria-controls": string; onClick(): void; onKeyDown(): void }) => ReactNode }) => <div data-popover>{trigger({ ref: undefined, "aria-expanded": false, "aria-controls": "row-actions", onClick: () => undefined, onKeyDown: () => undefined })}{children}</div>,
   }),
 }));
@@ -32,8 +34,10 @@ describe("RowActions", () => {
     expect(html).toContain('data-icon="remove"');
     expect(html).toContain('aria-label="删除"');
     expect(html).toContain("data-popover");
-    expect(html).toContain('data-icon="download"');
-    expect(html).toContain('aria-label="下载"');
+    expect(html).toContain("data-menu");
+    expect(html).toContain('data-menu-item="download"');
+    expect(html).toContain('data-icon-glyph="download"');
+    expect(html).toContain(">下载</button>");
     expect(html).toContain("display:inline-flex");
     expect(html).toContain("line-height:0");
   });
