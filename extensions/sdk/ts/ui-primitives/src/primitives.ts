@@ -1,4 +1,5 @@
 import type { ComponentType, KeyboardEvent, ReactNode } from "react";
+import type { ComponentSize } from "@vastplan/ui-contract";
 import type { SemanticIconName } from "./icon.js";
 import type { FormRendererProps } from "./form-renderer.js";
 
@@ -11,11 +12,12 @@ export interface MenuItem {
   children?: MenuItem[];
 }
 
-/** Compact menus are for transient, repeated actions such as Table row overflow. */
 export interface MenuProps {
   items: MenuItem[];
   activeID?: string;
-  density?: "regular" | "compact";
+  size?: ComponentSize;
+  /** Navigation retains framework navigation treatment; action removes navigation-only chrome. */
+  variant?: "navigation" | "action";
   onSelect?(id: string): void;
 }
 
@@ -64,13 +66,13 @@ export interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   kind?: "primary" | "secondary" | "danger" | "text";
+  size?: ComponentSize;
 }
 
 export interface IconButtonProps {
   icon: SemanticIconName;
   label: string;
-  /** Compact is reserved for dense, repeated action surfaces such as Table rows. */
-  size?: "regular" | "compact";
+  size?: ComponentSize;
   onClick?(): void;
   disabled?: boolean;
   loading?: boolean;
@@ -89,11 +91,13 @@ export interface SelectProps {
   placeholder?: string;
   ariaLabel: string;
   disabled?: boolean;
+  size?: ComponentSize;
   onChange(value: string | undefined): void;
 }
 
 export interface BreadcrumbItem { id: string; label: string; href?: string; onSelect?(): void; }
 export interface TabItem { id: string; label: ReactNode; content: ReactNode; disabled?: boolean; }
+export interface TabsProps { items: TabItem[]; activeID?: string; size?: ComponentSize; onChange?(id: string): void; }
 
 export interface DialogProps {
   open: boolean;
@@ -224,6 +228,7 @@ export interface PaginationProps {
   total: number;
   disabled?: boolean;
   align?: "start" | "center" | "end";
+  size?: ComponentSize;
   onChange(page: number, pageSize: number): void;
 }
 
@@ -257,7 +262,7 @@ export interface PortalUI {
   Select: ComponentType<SelectProps>;
   Menu: ComponentType<MenuProps>;
   Breadcrumb: ComponentType<{ items: BreadcrumbItem[] }>;
-  Tabs: ComponentType<{ items: TabItem[]; activeID?: string; onChange?(id: string): void }>;
+  Tabs: ComponentType<TabsProps>;
   CommandPalette: ComponentType<{ open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }>;
   Popover: ComponentType<PopoverProps>;
   Dialog: ComponentType<DialogProps>;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { FilterPanelSpec, FilterSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
-import { message, usePortalI18n, usePortalUI, type WorkbenchComponentInset } from "@vastplan/ui-primitives";
+import { message, usePortalI18n, usePortalUI, type ComponentSize, type WorkbenchComponentInset } from "@vastplan/ui-primitives";
 import { filterPanelSchema } from "./filter-schema.js";
 import { WorkbenchComponentRegion } from "../layout/WorkbenchRhythm.js";
 
@@ -46,10 +46,11 @@ export function filterPanelActionSpan(fields: readonly FilterSpec[], columns: Re
   return spans;
 }
 
-export function FilterPanel({ panel, value, querying, onApply, inset = "flush" }: {
+export function FilterPanel({ panel, value, querying, size = "md", onApply, inset = "flush" }: {
   panel: FilterPanelSpec;
   value: Record<string, unknown>;
   querying: boolean;
+  size?: ComponentSize;
   onApply(value: Record<string, unknown>): void;
   /** Workbench composition decides inset; functional plugin definitions cannot override it. */
   inset?: WorkbenchComponentInset;
@@ -70,12 +71,12 @@ export function FilterPanel({ panel, value, querying, onApply, inset = "flush" }
   return <WorkbenchComponentRegion inset={inset}><ui.FilterBar appearance="collection">
     <ui.Grid columns={columns} gap="xs">{fields.map((filter) => <ui.GridItem key={filter.id}>
       <div onKeyDown={(event) => { if (autoApply && filter.kind === "text" && event.key === "Enter") { event.preventDefault(); onApply(draft); } }}>
-        <ui.FormRenderer schema={filterPanelSchema([filter])} value={{ [filter.id]: draft[filter.id] }} presentation={{ layout: "compact", labelPlacement: "inside-inline" }} onChange={(patch) => update(filter, patch)} />
+        <ui.FormRenderer size={size} schema={filterPanelSchema([filter])} value={{ [filter.id]: draft[filter.id] }} presentation={{ layout: "compact", labelPlacement: "inside-inline" }} onChange={(patch) => update(filter, patch)} />
       </div>
     </ui.GridItem>)}{autoApply ? null : <ui.GridItem span={filterPanelActionSpan(fields, columns)}>
       <ui.Stack direction="column" gap="xs" align="end">
-        <ui.Button kind="primary" onClick={() => onApply(draft)} loading={querying}>{i18n.text(message(namespace, "action.query", "查询"))}</ui.Button>
-        <ui.Button kind="secondary" onClick={clear}>{i18n.text(message(namespace, "action.clearFilters", "清除"))}</ui.Button>
+        <ui.Button size={size} kind="primary" onClick={() => onApply(draft)} loading={querying}>{i18n.text(message(namespace, "action.query", "查询"))}</ui.Button>
+        <ui.Button size={size} kind="secondary" onClick={clear}>{i18n.text(message(namespace, "action.clearFilters", "清除"))}</ui.Button>
       </ui.Stack>
     </ui.GridItem>}</ui.Grid>
   </ui.FilterBar></WorkbenchComponentRegion>;

@@ -1,6 +1,6 @@
 # VastPlan Portal 设计系统
 
-> 状态：设计基线 v3｜最后更新：2026-07-28
+> 状态：设计基线 v4｜最后更新：2026-07-28
 >
 > 本文是 Portal 跨布局、跨 Ant Design/Arco/MUI 的视觉与交互单一真相源。组件职责和安全边界见《[前端门户内核](../architecture/前端门户内核.md)》，架构取舍见 [ADR-0080](../decisions/ADR-0080-Portal三级导航与可切换布局.md) 与 [ADR-0081](../decisions/ADR-0081-Portal治理与不可变Activation.md)。
 
@@ -14,7 +14,7 @@
 
 ## 2. 基础 Token
 
-UI Contract 6.0 暴露语义 token，适配器映射到具体框架。布局插件不得读取 Ant Design/Arco/MUI 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
+UI Contract 7.0 暴露语义 token 与 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design/Arco/MUI 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
 
 | Token | 基线 | 用途 |
 |---|---:|---|
@@ -34,15 +34,17 @@ UI Contract 6.0 暴露语义 token，适配器映射到具体框架。布局插�
 ### 2.1 组件 Recipe 治理
 
 - 本文定义视觉意图和验收基线；`extensions/sdk/ts/ui-primitives/src/visual-recipes.ts` 保存必须跨 Renderer 一致的可执行数值。组件架构文档只描述职责和行为，不重复保存像素值。
-- Workbench 和功能插件只能选择 `regular`、`compact` 等语义密度，不得导入 Ant Design、Arco、MUI 或写框架私有样式。Renderer 使用当前框架的原生组件，并把语义密度映射到共享 recipe。
+- 基础控件统一使用 `size=sm/md/lg`；Collection 等组合组件保留 `density=compact/standard/comfortable`，由 Workbench 依次投影为 `sm/md/lg`。功能插件不得导入 Ant Design、Arco、MUI 或写框架私有样式。
 - 调整公共组件时，先更新本节的视觉基线和共享 recipe，再同步各 Renderer 映射、自动测试及浏览器截图验收；禁止在单个页面反复覆盖样式。
 - 只有通用语义确实不足时才扩展 UI Contract。不得为了修正某个框架的默认边框、间距或图标而让业务插件感知框架差异。
 
-| Recipe | 控件 | 图标 | 间距 | 菜单项 | 菜单表面 | 边界 |
-|---|---:|---:|---:|---:|---:|---|
-| `compactAction` | 18×18px，2px 圆角 | 12×12px | 同组 8px | 28px 高，水平内边距 8px | 最小宽 180px，内边距 3px，2px 圆角 | 不显示导航菜单专用的 inline-end 分隔线 |
+| Size | 通用控件高度 | IconButton / 图标 | 菜单项 | 菜单表面 |
+|---|---:|---:|---:|---:|
+| `sm` | 24px | 18px / 12px | 28px | 最小宽 180px，内边距 3px，2px 圆角 |
+| `md` | 32px | 32px / 16px | 36px | 最小宽 200px，内边距 4px，4px 圆角 |
+| `lg` | 40px | 44px / 20px | 44px | 最小宽 220px，内边距 6px，6px 圆角 |
 
-紧凑动作菜单每行固定为“图标 + 标签”，触发器使用图标 + Tooltip。危险动作保留语义危险色；普通动作不使用实心 primary 背景。Ant Design 的垂直 `Menu` 默认带右侧导航分隔线，Renderer 必须在 `compact` 动作菜单中显式消除；普通导航菜单不受影响。
+动作菜单每行固定为“图标 + 标签”，触发器使用图标 + Tooltip。危险动作保留语义危险色；普通动作不使用实心 primary 背景。Menu 的 `variant=action` 消除导航专用 inline-end 分隔线，`variant=navigation` 保留导航语义；variant 与 size 互不替代。
 
 ## 3. 排版
 
@@ -103,7 +105,7 @@ UI Contract 6.0 暴露语义 token，适配器映射到具体框架。布局插�
 ## 6. 管理工作区
 
 - 平台管理中心分为 `Platform Profiles` 与 `Portals` 两个工作区。
-- Table 行操作使用 `compactAction` recipe，直接动作最多两个且水平居中；剩余动作进入紧凑动作菜单。该菜单属于操作集合，不是导航树，不显示导航分隔线。
+- Table 行操作、筛选表单、工具栏与分页从 Collection density 自动获得同一级 ComponentSize；直接动作最多两个且水平居中，剩余动作进入 `variant=action` 菜单。
 - Table 列设置使用随最长列名变化、最大 280px 的紧凑 Popover：密度为最小按钮式单选，列顺序使用拖拽句柄且支持键盘移动，显隐使用眼睛/划线眼睛图标并固定右对齐；拖拽区最高 256px 并独立滚动，隐藏列统一使用 muted 灰色，不使用文字显隐按钮、上下箭头按钮或确认步骤。
 - 集合工具栏左侧只承载批量操作与集合动作；刷新、列设置等展示控制统一归组在右侧，换行后仍保持右对齐。
 - 拖拽句柄、目标反馈和排序结果由 Workbench 统一提供，业务插件不得自行选择拖拽库。未来首页卡片网格必须使用受治理断点、稳定卡片 ID 和用户布局偏好；普通管理资源页继续使用 Table/MasterDetail，不因引入 Dashboard Grid 改成卡片墙。

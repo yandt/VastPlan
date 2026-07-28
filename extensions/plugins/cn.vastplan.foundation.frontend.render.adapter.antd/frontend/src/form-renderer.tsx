@@ -11,6 +11,7 @@ import { localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primiti
 import { namespace } from "./theme";
 import { safeAntdTemplates } from "./safe-rjsf-theme";
 import { PresentedField, antdInsideInlineCSS } from "./inside-inline-field";
+import { antdComponentSize } from "./component-size";
 
 const validator = cspJSONSchemaValidator;
 const emptyFormContext: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -87,7 +88,7 @@ function PresentedObject({ presentation, activeSection, onSectionChange, ...prop
   return <div style={{ display: "grid", gap: 16 }}>{sections.map((section) => <div key={section.id}>{renderSection(section)}</div>)}{remaining}</div>;
 }
 
-export function FormRenderer({ schema, value, onChange, presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
+export function FormRenderer({ schema, value, onChange, size = "md", presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
   const i18n = usePortalI18n();
   const formContext = suppliedContext ?? emptyFormContext;
   const localizedSchema = useMemo(() => localizeJSONSchema(schema.schema, schema.localization, i18n.text), [i18n.text, schema.localization, schema.schema]);
@@ -136,9 +137,10 @@ export function FormRenderer({ schema, value, onChange, presentation, presentati
     templates={templates}
     widgets={widgets}
   ><></></RJSFForm>;
-  return compact
-    ? <ConfigProvider componentSize="small" theme={compactFormTheme}><style>{antdInsideInlineCSS}</style><div>{form}</div></ConfigProvider>
-    : <div style={presentation?.layout === "horizontal" ? { display: "block" } : undefined}>{form}</div>;
+  return <ConfigProvider componentSize={antdComponentSize[size]} theme={compact ? compactFormTheme : undefined}>
+    {compact ? <style>{antdInsideInlineCSS}</style> : null}
+    <div style={presentation?.layout === "horizontal" ? { display: "block" } : undefined}>{form}</div>
+  </ConfigProvider>;
 }
 
 

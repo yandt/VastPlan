@@ -247,6 +247,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0164 MIT 图标目录与分片按需加载](decisions/ADR-0164-MIT图标目录与分片按需加载.md)
 - [ADR-0165 Contract Registry 与插件发布编排](decisions/ADR-0165-Contract-Registry与插件发布编排.md)
 - [ADR-0166 独立页面动作宿主与固定帮助入口](decisions/ADR-0166-独立页面动作宿主与固定帮助入口.md)
+- [ADR-0167 三级组件尺寸与组合密度投影](decisions/ADR-0167-三级组件尺寸与组合密度投影.md)
 
 ### 插件共享代码与能力复用
 

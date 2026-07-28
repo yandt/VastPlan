@@ -2,12 +2,13 @@ import { Breadcrumb as AntdBreadcrumb, Button, Empty, Input, List, Menu as AntdM
 import type { MenuProps as AntdMenuProps } from "antd";
 import { useEffect, useId, useRef } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
-import type { CommandItem, MenuItem, MenuProps, PopoverProps, RecordNavigationListProps, RecordTreeProps } from "@vastplan/ui-primitives";
-import { compactActionVisualRecipe, message, usePortalI18n } from "@vastplan/ui-primitives";
+import type { CommandItem, MenuItem, MenuProps, PopoverProps, RecordNavigationListProps, RecordTreeProps, TabsProps } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, componentVariantRecipes, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
+import { antdComponentSize } from "./component-size";
 
-function menuItems(items: MenuItem[], density: MenuProps["density"], onSelect?: (id: string) => void, parentDisabled = false): NonNullable<AntdMenuProps["items"]> {
-  const compact = compactActionVisualRecipe.menu;
+function menuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, onSelect?: (id: string) => void, parentDisabled = false): NonNullable<AntdMenuProps["items"]> {
+  const recipe = componentSizeRecipes.menu[size];
   return items.map((item) => {
     const disabled = parentDisabled || item.disabled === true;
     const label = item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
@@ -15,28 +16,28 @@ function menuItems(items: MenuItem[], density: MenuProps["density"], onSelect?: 
       event.stopPropagation();
       if (!disabled) onSelect?.(item.id);
     }}>{item.label}</a>;
-    return { key: item.id, label, icon: item.icon, disabled, style: density === "compact" ? { height: compact.itemHeight, lineHeight: `${compact.itemHeight}px`, margin: 0, paddingInline: compact.itemInlinePadding } : undefined, children: item.children?.length ? menuItems(item.children, density, onSelect, disabled) : undefined };
+    return { key: item.id, label, icon: item.icon, disabled, style: { height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding }, children: item.children?.length ? menuItems(item.children, size, onSelect, disabled) : undefined };
   });
 }
 
-export function Menu({ items, activeID, density = "regular", onSelect }: MenuProps) {
-  const compact = compactActionVisualRecipe.menu;
-  const compactStyle: CSSProperties = density === "compact" ? {
-    minWidth: compact.minWidth,
-    padding: compact.surfacePadding,
-    borderRadius: compact.radius,
-    borderInlineEnd: compact.borderInlineEnd,
-    ["--ant-menu-item-height" as string]: `${compact.itemHeight}px`,
-  } : {};
-  return <AntdMenu selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, density, onSelect)} onClick={({ key }) => onSelect?.(key)} style={compactStyle} />;
+export function Menu({ items, activeID, size = "md", variant = "navigation", onSelect }: MenuProps) {
+  const recipe = componentSizeRecipes.menu[size];
+  const style: CSSProperties = {
+    minWidth: recipe.minWidth,
+    padding: recipe.surfacePadding,
+    borderRadius: recipe.radius,
+    ...(variant === "action" ? { borderInlineEnd: componentVariantRecipes.menu.action.borderInlineEnd } : {}),
+    ["--ant-menu-item-height" as string]: `${recipe.itemHeight}px`,
+  };
+  return <AntdMenu selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, size, onSelect)} onClick={({ key }) => onSelect?.(key)} style={style} />;
 }
 
 export function Breadcrumb({ items }: { items: Array<{ id: string; label: string; href?: string; onSelect?(): void }> }) {
   return <AntdBreadcrumb items={items.map((item) => ({ key: item.id, title: item.href === undefined ? item.label : <a href={item.href} onClick={(event) => { event.preventDefault(); item.onSelect?.(); }}>{item.label}</a> }))} />;
 }
 
-export function Tabs({ items, activeID, onChange }: { items: Array<{ id: string; label: ReactNode; content: ReactNode; disabled?: boolean }>; activeID?: string; onChange?(id: string): void }) {
-  return <AntdTabs activeKey={activeID} onChange={onChange} items={items.map((item) => ({ key: item.id, label: item.label, children: item.content, disabled: item.disabled }))} />;
+export function Tabs({ items, activeID, size = "md", onChange }: TabsProps) {
+  return <AntdTabs activeKey={activeID} size={antdComponentSize[size]} onChange={onChange} items={items.map((item) => ({ key: item.id, label: item.label, children: item.content, disabled: item.disabled }))} />;
 }
 
 export function CommandPalette({ open, commands, query, onQueryChange, onClose }: { open: boolean; commands: CommandItem[]; query: string; onQueryChange(query: string): void; onClose(): void }) {

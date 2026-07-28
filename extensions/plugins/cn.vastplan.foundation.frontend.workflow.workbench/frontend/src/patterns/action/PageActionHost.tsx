@@ -50,8 +50,8 @@ export function PageActionHost({ definition, onRefresh }: { definition: PageActi
         placement="bottom-end"
         ariaLabel={i18n.text(message(namespace, "action.more", "更多页面操作"))}
         onOpenChange={setOverflowOpen}
-        trigger={(props) => <span ref={props.ref} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.IconButton icon="more" label={i18n.text(message(namespace, "action.more", "更多页面操作"))} /></span>}
-      ><ui.Menu items={layout.overflow.map((action) => ({ id: action.id, label: i18n.text(action.label), icon: <ui.Icon name={action.icon} />, disabled: running !== undefined }))} onSelect={(id) => {
+        trigger={(props) => <span ref={props.ref} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.IconButton size="lg" icon="more" label={i18n.text(message(namespace, "action.more", "更多页面操作"))} /></span>}
+      ><ui.Menu size="md" variant="action" items={layout.overflow.map((action) => ({ id: action.id, label: i18n.text(action.label), icon: <ui.Icon name={action.icon} />, disabled: running !== undefined }))} onSelect={(id) => {
         const action = layout.overflow.find((candidate) => candidate.id === id);
         if (action !== undefined) void run(action);
         setOverflowOpen(false);
@@ -67,8 +67,8 @@ function PageActionButton({ action, loading, disabled, onRun }: { action: PageAc
   const i18n = usePortalI18n();
   const label = i18n.text(action.label);
   const display = action.display ?? "icon";
-  if (display === "icon") return <ui.IconButton icon={action.icon} label={label} loading={loading} disabled={disabled} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={onRun} />;
-  return <ui.Button kind={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "secondary"} loading={loading} disabled={disabled} onClick={onRun}>
+  if (display === "icon") return <ui.IconButton size="lg" icon={action.icon} label={label} loading={loading} disabled={disabled} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={onRun} />;
+  return <ui.Button size="lg" kind={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "secondary"} loading={loading} disabled={disabled} onClick={onRun}>
     {display === "label" ? null : <ui.Icon name={action.icon} />} {label}
   </ui.Button>;
 }

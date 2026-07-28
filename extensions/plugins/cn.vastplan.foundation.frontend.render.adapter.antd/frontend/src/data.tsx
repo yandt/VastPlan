@@ -2,9 +2,12 @@ import { Card, Checkbox, Descriptions as AntdDescriptions, Pagination as AntdPag
 import type { ColumnsType } from "antd/es/table";
 import type { ReactNode } from "react";
 import type { DataCardProps, PaginationProps, ResponsiveColumns, SelectProps, StatusTone, TableProps } from "@vastplan/ui-primitives";
+import { componentSizeRecipes } from "@vastplan/ui-primitives";
+import { antdComponentSize } from "./component-size";
 
-export function Select({ value, options, placeholder, ariaLabel, disabled, onChange }: SelectProps) {
-  return <AntdSelect aria-label={ariaLabel} value={value} placeholder={placeholder} disabled={disabled} allowClear style={{ minWidth: 180 }} options={options.map((option) => ({ value: option.value, label: option.label, disabled: option.disabled }))} onChange={(next) => onChange(next)} />;
+export function Select({ value, options, placeholder, ariaLabel, disabled, size = "md", onChange }: SelectProps) {
+  const recipe = componentSizeRecipes.control[size];
+  return <AntdSelect aria-label={ariaLabel} value={value} placeholder={placeholder} disabled={disabled} size={antdComponentSize[size]} allowClear style={{ minWidth: 180, height: recipe.height, fontSize: recipe.fontSize }} options={options.map((option) => ({ value: option.value, label: option.label, disabled: option.disabled }))} onChange={(next) => onChange(next)} />;
 }
 
 export function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", appearance = "default" }: TableProps) {
@@ -47,13 +50,16 @@ export function DataCard({ title, subtitle, status, summary, children, actions, 
   >{summary === undefined ? null : <div style={{ marginBottom: density === "comfortable" ? 20 : 12 }}>{summary}</div>}{children}</Card>;
 }
 
-export function Pagination({ page, pageSize, pageSizeOptions, total, disabled, align = "start", onChange }: PaginationProps) {
+export function Pagination({ page, pageSize, pageSizeOptions, total, disabled, align = "start", size = "md", onChange }: PaginationProps) {
+  const recipe = componentSizeRecipes.pagination[size];
   return <div style={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><AntdPagination
     current={page}
     pageSize={pageSize}
     pageSizeOptions={pageSizeOptions === undefined ? undefined : [...pageSizeOptions]}
     total={total}
     disabled={disabled}
+    size={size === "sm" ? "small" : undefined}
+    style={{ ["--ant-pagination-item-size" as string]: `${recipe.itemEdge}px`, fontSize: recipe.fontSize }}
     showSizeChanger={(pageSizeOptions?.length ?? 0) > 1}
     showTotal={(value) => `共 ${value} 条`}
     onChange={onChange}

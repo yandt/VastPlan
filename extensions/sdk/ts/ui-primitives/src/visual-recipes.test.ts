@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { compactActionVisualRecipe } from "./visual-recipes.js";
+import { componentSizeRecipes, componentVariantRecipes } from "./visual-recipes.js";
 
 describe("visual recipes", () => {
-  it("keeps compact record actions governed by one immutable recipe", () => {
-    expect(compactActionVisualRecipe).toEqual({
-      control: { edge: 18, iconEdge: 12, radius: 2 },
-      menu: { itemHeight: 28, itemInlinePadding: 8, minWidth: 180, surfacePadding: 3, radius: 2, borderInlineEnd: 0 },
-    });
-    expect(Object.isFrozen(compactActionVisualRecipe)).toBe(true);
-    expect(Object.isFrozen(compactActionVisualRecipe.control)).toBe(true);
-    expect(Object.isFrozen(compactActionVisualRecipe.menu)).toBe(true);
+  it("keeps all three component sizes governed by immutable recipes", () => {
+    expect(componentSizeRecipes.iconButton.sm).toEqual({ edge: 18, iconEdge: 12, radius: 2 });
+    expect(componentSizeRecipes.iconButton.md).toEqual({ edge: 32, iconEdge: 16, radius: 4 });
+    expect(componentSizeRecipes.iconButton.lg).toEqual({ edge: 44, iconEdge: 20, radius: 6 });
+    expect(componentSizeRecipes.menu.sm).toMatchObject({ itemHeight: 28, minWidth: 180, surfacePadding: 3 });
+    expect(componentSizeRecipes.menu.md).toMatchObject({ itemHeight: 36, minWidth: 200, surfacePadding: 4 });
+    expect(componentSizeRecipes.menu.lg).toMatchObject({ itemHeight: 44, minWidth: 220, surfacePadding: 6 });
+    expect(Object.isFrozen(componentSizeRecipes)).toBe(true);
+    expect(Object.isFrozen(componentSizeRecipes.control.sm)).toBe(true);
+    expect(Object.isFrozen(componentSizeRecipes.menu.lg)).toBe(true);
+    expect(componentVariantRecipes.menu.action.borderInlineEnd).toBe(0);
   });
 });

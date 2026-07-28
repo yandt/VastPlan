@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   ColorPicker,
+  ConfigProvider,
   DatePicker,
   Form,
   Grid as ArcoGrid,
@@ -52,6 +53,7 @@ import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import type { FormPresentation, FormRendererProps, FormSectionPresentation, FormValidationIssue } from "@vastplan/ui-primitives";
 import { jsonSchemaDialect, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { ArcoFieldTemplate, CompactFormContext, InsideInlineLabelContext, arcoInsideInlineCSS } from "./inside-inline-field";
+import { arcoComponentSize } from "./component-size";
 
 type FormData = Record<string, unknown>;
 type FormContext = Readonly<Record<string, unknown>>;
@@ -488,7 +490,7 @@ function schemaContractError(schema: FormRendererProps["schema"], english: boole
   return undefined;
 }
 
-export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
+export function ArcoJSONSchemaForm({ schema, value, onChange, size = "md", presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
   const i18n = usePortalI18n();
   const contractError = schemaContractError(schema,!i18n.locale.toLowerCase().startsWith("zh"));
   const validationSchema = schema.schema as Schema;
@@ -541,12 +543,12 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, pres
   const templates = useMemo(() => ({ ...arcoFormTemplates, ObjectFieldTemplate: (props: ObjectFieldTemplateProps<FormData, Schema, FormContext>) => <PresentedObjectFieldTemplate {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} /> }), [onPresentationSectionChange, presentation, presentationSection]);
 
   if (contractError !== undefined) return <Alert type="error" title={i18n.text(message(namespace,"form.unsupported","表单 Schema 不受支持"))} content={contractError} />;
-  return <>
+  return <ConfigProvider size={arcoComponentSize[size]}>
     {currentAsync.validating ? <Alert type="info" title={i18n.text(message(namespace,"form.validating","正在校验"))} style={{ marginBottom: 16 }} /> : null}
     <CompactFormContext.Provider value={presentation?.layout === "compact"}>
     <InsideInlineLabelContext.Provider value={presentation?.labelPlacement === "inside-inline"}>
     <style>{arcoInsideInlineCSS}</style>
-    <Form layout={presentation?.layout === "horizontal" ? "horizontal" : "vertical"} size={presentation?.layout === "compact" ? "small" : undefined}>
+    <Form layout={presentation?.layout === "horizontal" ? "horizontal" : "vertical"} size={arcoComponentSize[size]}>
       <RJSFForm<FormData, Schema, FormContext>
         tagName="div"
         schema={dataSchema}
@@ -569,5 +571,5 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, presentation, pres
     </Form>
     </InsideInlineLabelContext.Provider>
     </CompactFormContext.Provider>
-  </>;
+  </ConfigProvider>;
 }

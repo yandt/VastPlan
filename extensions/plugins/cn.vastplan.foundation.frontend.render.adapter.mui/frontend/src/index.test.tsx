@@ -19,6 +19,14 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain('aria-label="Publish"');
   });
 
+  it("maps the shared three-step component size scale", () => {
+    const IconButton = muiPortalUIComponents.IconButton;
+    const markup = renderToStaticMarkup(<><IconButton size="sm" icon="edit" label="Small" /><IconButton size="md" icon="edit" label="Medium" /><IconButton size="lg" icon="edit" label="Large" /></>);
+    expect(markup).toContain("width:18px;height:18px");
+    expect(markup).toContain("width:32px;height:32px");
+    expect(markup).toContain("width:44px;height:44px");
+  });
+
   it("offers a Material-native icon theme behind the same semantic name", () => {
     const NativeIcon = muiIconForTheme("renderer-native");
     const markup = renderToStaticMarkup(<><NativeIcon name="publish" label="Publish" /><NativeIcon name="visibilityOff" label="Hidden" /><NativeIcon name="drag" label="Reorder" /></>);

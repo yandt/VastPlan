@@ -6,6 +6,8 @@ export * from "./i18n.js";
 export * from "./dashboard.js";
 
 export type UICapability = "layout" | "menu" | "overlay" | "form" | "data" | "feedback" | "theme" | "approval" | "navigation";
+/** Shared three-step size language for framework-neutral interactive components. */
+export type ComponentSize = "sm" | "md" | "lg";
 
 export type JSONPrimitive = string | number | boolean | null;
 export type JSONValue = JSONPrimitive | readonly JSONValue[] | { readonly [key: string]: JSONValue };
@@ -61,7 +63,7 @@ export interface FormWorkflow {
   surface: "page" | "dialog" | "drawer";
   title: import("./i18n.js").LocalizedText;
   description?: import("./i18n.js").LocalizedText;
-  size?: "sm" | "md" | "lg";
+  size?: ComponentSize;
   submitLabel?: import("./i18n.js").LocalizedText;
   cancelLabel?: import("./i18n.js").LocalizedText;
   confirmBeforeSubmit?: import("./i18n.js").LocalizedText;

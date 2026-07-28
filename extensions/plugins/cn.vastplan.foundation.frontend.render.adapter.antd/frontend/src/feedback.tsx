@@ -1,7 +1,8 @@
 import { Alert, Button as AntdButton, Drawer as AntdDrawer, Empty, Modal, Skeleton as AntdSkeleton, Spin, Tooltip } from "antd";
 import type { ComponentType } from "react";
 import type { ButtonProps, DialogProps, DrawerProps, IconButtonProps, VastPlanIconProps } from "@vastplan/ui-primitives";
-import { compactActionVisualRecipe, message, usePortalI18n, VastPlanIcon } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, message, usePortalI18n, VastPlanIcon } from "@vastplan/ui-primitives";
+import { antdComponentSize } from "./component-size";
 import { dialogWidths, namespace } from "./theme";
 
 function buttonStyle(kind: ButtonProps["kind"]): { type?: "primary" | "default" | "text"; danger?: boolean } {
@@ -11,20 +12,23 @@ function buttonStyle(kind: ButtonProps["kind"]): { type?: "primary" | "default" 
   return { type: "default" };
 }
 
-export function Button({ children, kind, ...props }: ButtonProps) { return <AntdButton {...buttonStyle(kind)} {...props}>{children}</AntdButton>; }
+export function Button({ children, kind, size = "md", ...props }: ButtonProps) {
+  const recipe = componentSizeRecipes.control[size];
+  return <AntdButton {...buttonStyle(kind)} size={antdComponentSize[size]} style={{ height: recipe.height, paddingInline: recipe.inlinePadding, borderRadius: recipe.radius, fontSize: recipe.fontSize }} {...props}>{children}</AntdButton>;
+}
 
-export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
-  const compact = compactActionVisualRecipe.control;
-  const edge = size === "compact" ? compact.edge : 44;
+export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, label, size = "md", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
+  const recipe = componentSizeRecipes.iconButton[size];
   return <Tooltip title={label}><AntdButton
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}
     danger={tone === "danger"}
-    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: compact.iconEdge, height: compact.iconEdge } : undefined} />}
+    size={antdComponentSize[size]}
+    icon={<Icon name={icon} size={size} style={{ width: recipe.iconEdge, height: recipe.iconEdge }} />}
     loading={loading}
     disabled={disabled}
     onClick={onClick}
-    style={{ width: edge, height: edge, borderRadius: size === "compact" ? compact.radius : undefined }}
+    style={{ width: recipe.edge, height: recipe.edge, borderRadius: recipe.radius }}
   /></Tooltip>;
 }
 

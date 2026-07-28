@@ -53,13 +53,14 @@ import type {
   StatusTone,
   TableProps,
 } from "@vastplan/ui-primitives";
-import { compactActionVisualRecipe, PortalUIProvider, VastPlanIcon } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, componentVariantRecipes, PortalUIProvider, VastPlanIcon } from "@vastplan/ui-primitives";
 import { message, usePortalI18n } from "@vastplan/ui-primitives";
 import enUS from "@arco-design/web-react/es/locale/en-US";
 import zhCN from "@arco-design/web-react/es/locale/zh-CN";
 import { arcoCSS } from "./arco-styles";
 import { ArcoJSONSchemaForm } from "./json-schema-form";
 import { scopeDocumentCSS } from "./scope-css";
+import { arcoComponentSize } from "./component-size";
 import { ArcoNativeIcon } from "./native-icons";
 
 const gapPixels = { xs: 4, sm: 8, md: 16, lg: 24 } as const;
@@ -125,20 +126,20 @@ export function cascadeResponsiveColumns(columns: ResponsiveColumns): Responsive
 // so expose the native item through the framework-neutral contract.
 const GridItem = ArcoGrid.GridItem as unknown as ComponentType<GridItemProps>;
 
-function renderMenuItems(items: MenuItem[], density: MenuProps["density"], onSelect?: (id: string) => void, parentDisabled = false): ReactNode[] {
-  const compact = compactActionVisualRecipe.menu;
+function renderMenuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, onSelect?: (id: string) => void, parentDisabled = false): ReactNode[] {
+  const recipe = componentSizeRecipes.menu[size];
   return items.map((item) => item.children?.length
-    ? <ArcoMenu.SubMenu key={item.id} title={item.label}>{renderMenuItems(item.children, density, onSelect, parentDisabled || item.disabled === true)}</ArcoMenu.SubMenu>
-    : <ArcoMenu.Item key={item.id} disabled={parentDisabled || item.disabled} style={density === "compact" ? { height: compact.itemHeight, lineHeight: `${compact.itemHeight}px`, margin: 0, paddingInline: compact.itemInlinePadding } : undefined}>{item.icon}{item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
+    ? <ArcoMenu.SubMenu key={item.id} title={item.label}>{renderMenuItems(item.children, size, onSelect, parentDisabled || item.disabled === true)}</ArcoMenu.SubMenu>
+    : <ArcoMenu.Item key={item.id} disabled={parentDisabled || item.disabled} style={{ height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding }}>{item.icon}{item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
       event.preventDefault();
       event.stopPropagation();
       if (!parentDisabled && item.disabled !== true) onSelect?.(item.id);
     }}>{item.label}</a>}</ArcoMenu.Item>);
 }
 
-function Menu({ items, activeID, density = "regular", onSelect }: MenuProps) {
-  const compact = compactActionVisualRecipe.menu;
-  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)} style={density === "compact" ? { minWidth: compact.minWidth, padding: compact.surfacePadding, borderRadius: compact.radius, borderInlineEnd: compact.borderInlineEnd } : undefined}>{renderMenuItems(items, density, onSelect)}</ArcoMenu>;
+function Menu({ items, activeID, size = "md", variant = "navigation", onSelect }: MenuProps) {
+  const recipe = componentSizeRecipes.menu[size];
+  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)} style={{ minWidth: recipe.minWidth, padding: recipe.surfacePadding, borderRadius: recipe.radius, ...(variant === "action" ? { borderInlineEnd: componentVariantRecipes.menu.action.borderInlineEnd } : {}) }}>{renderMenuItems(items, size, onSelect)}</ArcoMenu>;
 }
 
 type OverlayContainerProps = { getPopupContainer?: () => Element };
@@ -222,32 +223,34 @@ function buttonProps({ kind }: Pick<ButtonProps, "kind">): { type?: "primary" | 
   return { type: "secondary" };
 }
 
-function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
-  const compact = compactActionVisualRecipe.control;
-  const edge = size === "compact" ? compact.edge : 44;
+function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "md", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
+  const recipe = componentSizeRecipes.iconButton[size];
   return <Tooltip content={label}><Button
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}
     status={tone === "danger" ? "danger" : undefined}
+    size={arcoComponentSize[size]}
     iconOnly
     loading={loading}
     disabled={disabled}
     onClick={onClick}
-    style={{ width: edge, height: edge, borderRadius: size === "compact" ? compact.radius : undefined }}
-    icon={<Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: compact.iconEdge, height: compact.iconEdge } : undefined} />}
+    style={{ width: recipe.edge, height: recipe.edge, borderRadius: recipe.radius }}
+    icon={<Icon name={icon} size={size} style={{ width: recipe.iconEdge, height: recipe.iconEdge }} />}
   /></Tooltip>;
 }
 
 function IconButton(props: IconButtonProps) { return iconButtonWith(VastPlanIcon, props); }
 
-function Select({ value, options, placeholder, ariaLabel, disabled, onChange }: SelectProps) {
+function Select({ value, options, placeholder, ariaLabel, disabled, size = "md", onChange }: SelectProps) {
+  const recipe = componentSizeRecipes.control[size];
   return <ArcoSelect
     aria-label={ariaLabel}
     value={value}
     placeholder={placeholder}
     disabled={disabled}
+    size={arcoComponentSize[size]}
     allowClear
-    style={{ minWidth: 180 }}
+    style={{ minWidth: 180, height: recipe.height, fontSize: recipe.fontSize, borderRadius: recipe.radius }}
     onChange={(next) => onChange(typeof next === "string" ? next : undefined)}
   >{options.map((option) => <ArcoSelect.Option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</ArcoSelect.Option>)}</ArcoSelect>;
 }
@@ -369,12 +372,15 @@ export const arcoPortalUIComponents: ArcoComponents = {
   Grid,
   GridItem,
   Divider: ({ label }) => <ArcoDivider orientation={label === undefined ? undefined : "left"}>{label}</ArcoDivider>,
-  Button: ({ children, kind, ...props }) => <Button {...buttonProps({ kind })} {...props}>{children}</Button>,
+  Button: ({ children, kind, size = "md", ...props }) => {
+    const recipe = componentSizeRecipes.control[size];
+    return <Button {...buttonProps({ kind })} size={arcoComponentSize[size]} style={{ height: recipe.height, paddingInline: recipe.inlinePadding, borderRadius: recipe.radius, fontSize: recipe.fontSize }} {...props}>{children}</Button>;
+  },
   IconButton,
   Select,
   Menu,
   Breadcrumb: ({ items }) => <ArcoBreadcrumb>{items.map((item) => <ArcoBreadcrumb.Item key={item.id} href={item.href} onClick={item.onSelect}>{item.label}</ArcoBreadcrumb.Item>)}</ArcoBreadcrumb>,
-  Tabs: ({ items, activeID, onChange }) => <ArcoTabs activeTab={activeID} onChange={onChange}>{items.map((item) => <ArcoTabs.TabPane key={item.id} title={item.label} disabled={item.disabled}>{item.content}</ArcoTabs.TabPane>)}</ArcoTabs>,
+  Tabs: ({ items, activeID, size = "md", onChange }) => <ArcoTabs activeTab={activeID} size={arcoComponentSize[size]} onChange={onChange}>{items.map((item) => <ArcoTabs.TabPane key={item.id} title={item.label} disabled={item.disabled}>{item.content}</ArcoTabs.TabPane>)}</ArcoTabs>,
   CommandPalette,
   Popover,
   Dialog,
@@ -388,7 +394,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
   SplitView,
   RecordNavigationList,
   RecordTree,
-  Pagination: ({ page, pageSize, pageSizeOptions, total, disabled, align = "start", onChange }) => <div style={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><ArcoPagination current={page} pageSize={pageSize} sizeOptions={pageSizeOptions === undefined ? undefined : [...pageSizeOptions]} total={total} disabled={disabled} showTotal sizeCanChange={(pageSizeOptions?.length ?? 0) > 1} onChange={onChange} /></div>,
+  Pagination: ({ page, pageSize, pageSizeOptions, total, disabled, align = "start", size = "md", onChange }) => <div style={{ display: "flex", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><ArcoPagination current={page} pageSize={pageSize} size={arcoComponentSize[size]} sizeOptions={pageSizeOptions === undefined ? undefined : [...pageSizeOptions]} total={total} disabled={disabled} showTotal sizeCanChange={(pageSizeOptions?.length ?? 0) > 1} onChange={onChange} /></div>,
   Descriptions: ({ title, items, columns }) => <ArcoDescriptions title={title} data={items.map((item) => ({ key: item.id, label: item.label, value: item.value }))} column={columnsForDescriptions(columns)} border />,
   Status: ({ tone = "neutral", children }) => <Tag color={statusColors[tone]}>{children}</Tag>,
   Icon: VastPlanIcon,

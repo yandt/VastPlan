@@ -21,6 +21,17 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain('aria-label="Publish"');
   });
 
+  it("maps the shared three-step component size scale", () => {
+    const html = renderToStaticMarkup(createElement("div", {},
+      createElement(arcoPortalUIComponents.IconButton, { size: "sm", icon: "edit", label: "Small" }),
+      createElement(arcoPortalUIComponents.IconButton, { size: "md", icon: "edit", label: "Medium" }),
+      createElement(arcoPortalUIComponents.IconButton, { size: "lg", icon: "edit", label: "Large" }),
+    ));
+    expect(html).toContain("width:18px;height:18px");
+    expect(html).toContain("width:32px;height:32px");
+    expect(html).toContain("width:44px;height:44px");
+  });
+
   it("offers an adapter-native icon theme behind the same semantic name", () => {
     const NativeIcon = arcoIconForTheme("renderer-native");
     const html = renderToStaticMarkup(createElement("div", {}, createElement(NativeIcon, { name: "publish", label: "Publish" }), createElement(NativeIcon, { name: "visibilityOff", label: "Hidden" }), createElement(NativeIcon, { name: "drag", label: "Reorder" })));

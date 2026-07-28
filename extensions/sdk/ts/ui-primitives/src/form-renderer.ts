@@ -1,9 +1,11 @@
-import type { FormPresentation, FormSchema, FormValidationResult } from "@vastplan/ui-contract";
+import type { ComponentSize, FormPresentation, FormSchema, FormValidationResult } from "@vastplan/ui-contract";
 
 export interface FormRendererProps {
   schema: FormSchema;
   value: Record<string, unknown>;
   onChange(value: Record<string, unknown>): void;
+  /** Component geometry only; form layout remains governed by presentation. */
+  size?: ComponentSize;
   /** A framework-neutral field-label arrangement for composed Workbench forms. */
   presentation?: FormPresentation;
   presentationSection?: string;
@@ -21,4 +23,3 @@ export interface FormRendererValidationState extends FormValidationResult {
   errors: Readonly<Record<string, string>>;
   validating: boolean;
 }
-

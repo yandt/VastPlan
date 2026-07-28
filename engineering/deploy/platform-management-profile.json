@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 52,
+  "revision": 53,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -412,7 +412,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.4.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.5.0", "channel": "stable" }
       ]
     },
     {

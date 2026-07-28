@@ -80,9 +80,10 @@ import type {
   StatusTone,
   TableProps,
 } from "@vastplan/ui-primitives";
-import { compactActionVisualRecipe, PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, componentVariantRecipes, PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { MuiNativeIcon } from "./native-icons";
 import { MuiInsideInlineFieldTemplate, type MuiFieldTemplateProps } from "./inside-inline-field";
+import { muiComponentSize } from "./component-size";
 
 const gaps = { xs: 0.5, sm: 1, md: 2, lg: 3 } as const;
 const widths = { sm: "sm", md: "md", lg: "lg" } as const;
@@ -123,19 +124,19 @@ function responsiveColumns(columns: GridProps["columns"]): string | Record<strin
   return Object.fromEntries(Object.entries(columns).map(([key, count]) => [key, `repeat(${count}, minmax(0, 1fr))`]));
 }
 
-function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
+function iconButtonWith(Icon: typeof VastPlanIcon, { icon, label, size = "md", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
   const color = tone === "danger" ? "error" : tone === "primary" ? "primary" : "default";
-  const compact = compactActionVisualRecipe.control;
-  const edge = size === "compact" ? compact.edge : 44;
-  return <Tooltip title={label}><span><MuiIconButton aria-label={label} color={color} disabled={disabled || loading} onClick={onClick} sx={{ width: edge, height: edge, borderRadius: size === "compact" ? `${compact.radius}px` : undefined }}>
-    {loading ? <CircularProgress size={size === "compact" ? compact.iconEdge : 20} /> : <Icon name={icon} size={size === "compact" ? "sm" : "md"} style={size === "compact" ? { width: compact.iconEdge, height: compact.iconEdge } : undefined} />}
+  const recipe = componentSizeRecipes.iconButton[size];
+  return <Tooltip title={label}><span><MuiIconButton aria-label={label} color={color} size={muiComponentSize[size]} disabled={disabled || loading} onClick={onClick} sx={{ width: recipe.edge, height: recipe.edge, borderRadius: `${recipe.radius}px` }}>
+    {loading ? <CircularProgress size={recipe.iconEdge} /> : <Icon name={icon} size={size} style={{ width: recipe.iconEdge, height: recipe.iconEdge }} />}
   </MuiIconButton></span></Tooltip>;
 }
 
 function IconButton(props: IconButtonProps) { return iconButtonWith(VastPlanIcon, props); }
 
-function Select({ value, options, placeholder, ariaLabel, disabled, onChange }: SelectProps) {
-  return <TextField select size="small" value={value ?? ""} disabled={disabled} inputProps={{ "aria-label": ariaLabel }} sx={{ minWidth: 180 }} onChange={(event) => onChange(event.target.value || undefined)}>
+function Select({ value, options, placeholder, ariaLabel, disabled, size = "md", onChange }: SelectProps) {
+  const recipe = componentSizeRecipes.control[size];
+  return <TextField select size={size === "sm" ? "small" : "medium"} value={value ?? ""} disabled={disabled} inputProps={{ "aria-label": ariaLabel }} sx={{ minWidth: 180, "& .MuiInputBase-root": { minHeight: recipe.height, fontSize: recipe.fontSize, borderRadius: `${recipe.radius}px` } }} onChange={(event) => onChange(event.target.value || undefined)}>
     {placeholder === undefined ? null : <MuiMenuItem value="" disabled>{placeholder}</MuiMenuItem>}
     {options.map((option) => <MuiMenuItem key={option.value} value={option.value} disabled={option.disabled}>{option.label}</MuiMenuItem>)}
   </TextField>;
@@ -182,16 +183,16 @@ function GridItem({ span = 1, children }: GridItemProps) {
   return <Box sx={{ gridColumn }}>{children}</Box>;
 }
 
-function MenuBranch({ items, activeID, density = "regular", onSelect, depth = 0 }: { items: MenuItem[]; activeID?: string; density?: MenuProps["density"]; onSelect?(id: string): void; depth?: number }) {
-  const compact = compactActionVisualRecipe.menu;
+function MenuBranch({ items, activeID, size = "md", onSelect, depth = 0 }: { items: MenuItem[]; activeID?: string; size?: MenuProps["size"]; onSelect?(id: string): void; depth?: number }) {
+  const recipe = componentSizeRecipes.menu[size];
   return <>{items.map((item) => <Box key={item.id}>
     <ListItemButton component={item.href === undefined ? "div" : "a"} href={item.href} selected={activeID === item.id} disabled={item.disabled} onClick={(event: MouseEvent<HTMLElement>) => {
       if (item.href !== undefined) event.preventDefault();
       if (!item.children?.length) onSelect?.(item.id);
-    }} sx={density === "compact" ? { minHeight: compact.itemHeight, py: 0, px: `${compact.itemInlinePadding}px`, pl: `${compact.itemInlinePadding + depth * 16}px`, borderRadius: `${compact.radius}px` } : { pl: 2 + depth * 2 }}>
+    }} sx={{ minHeight: recipe.itemHeight, py: 0, px: `${recipe.itemInlinePadding}px`, pl: `${recipe.itemInlinePadding + depth * 16}px`, borderRadius: `${recipe.radius}px` }}>
       {item.icon}<ListItemText primary={item.label} />
     </ListItemButton>
-    {item.children?.length ? <MenuBranch items={item.children} activeID={activeID} density={density} onSelect={onSelect} depth={depth + 1} /> : null}
+    {item.children?.length ? <MenuBranch items={item.children} activeID={activeID} size={size} onSelect={onSelect} depth={depth + 1} /> : null}
   </Box>)}</>;
 }
 
@@ -299,7 +300,7 @@ function formFieldName(pointer: string): string {
 
 const emptyFormContext: Readonly<Record<string, unknown>> = Object.freeze({});
 
-function FormRenderer({ schema, value, onChange, presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
+function FormRenderer({ schema, value, onChange, size = "md", presentation, presentationSection, onPresentationSectionChange, readOnly, submitting, errors: externalErrors = {}, context: suppliedContext, validate, validationDelayMs = 250, onValidationChange }: FormRendererProps) {
   const i18n = usePortalI18n();
   const formContext = suppliedContext ?? emptyFormContext;
   const localizedSchema = useMemo(() => localizeJSONSchema(schema.schema, schema.localization, i18n.text), [i18n.text, schema.localization, schema.schema]);
@@ -340,10 +341,12 @@ function FormRenderer({ schema, value, onChange, presentation, presentationSecti
     ...(horizontal ? { display: "grid", gridTemplateColumns: "104px minmax(0, 1fr)", alignItems: "center", columnGap: 1.5 } : {}),
     ...(compact ? { marginBottom: 0 } : {}),
   };
-  const formStyle = horizontal || compact ? {
+  const sizeRecipe = componentSizeRecipes.control[size];
+  const formStyle = {
+    "& .form-control, & .MuiInputBase-root": { minHeight: sizeRecipe.height, fontSize: sizeRecipe.fontSize, borderRadius: `${sizeRecipe.radius}px` },
     "& .form-group:not(.rjsf-field-object)": fieldGroupStyle,
     ...(horizontal ? { "& .form-group:not(.rjsf-field-object) > label": { margin: 0 }, "& .form-group:not(.rjsf-field-object) > .field-description": { gridColumn: "2" } } : {}),
-  } : undefined;
+  };
   return <Box sx={formStyle}><RJSFForm
     schema={localizedSchema}
     uiSchema={localizedUISchema}
@@ -476,15 +479,21 @@ type MuiComponents = Omit<PortalUI, "notify" | "confirm">;
 export const muiPortalUIComponents: MuiComponents = {
   PortalShell, Page, Panel, Stack, Grid, GridItem,
   Divider: ({ label }) => <MuiDivider>{label}</MuiDivider>,
-  Button: ({ children, kind, loading, ...props }) => <MuiButton {...buttonVariant(kind)} {...props}>{loading ? <CircularProgress size={16} /> : children}</MuiButton>,
+  Button: ({ children, kind, loading, size = "md", ...props }) => {
+    const recipe = componentSizeRecipes.control[size];
+    return <MuiButton {...buttonVariant(kind)} size={muiComponentSize[size]} sx={{ height: recipe.height, px: `${recipe.inlinePadding}px`, borderRadius: `${recipe.radius}px`, fontSize: recipe.fontSize }} {...props}>{loading ? <CircularProgress size={recipe.iconEdge} /> : children}</MuiButton>;
+  },
   IconButton,
   Select,
-  Menu: ({ items, activeID, density = "regular", onSelect }) => {
-    const compact = compactActionVisualRecipe.menu;
-    return <List disablePadding={density !== "compact"} dense={density === "compact"} sx={density === "compact" ? { minWidth: compact.minWidth, p: `${compact.surfacePadding}px`, borderRadius: `${compact.radius}px`, borderInlineEnd: compact.borderInlineEnd } : undefined}><MenuBranch items={items} activeID={activeID} density={density} onSelect={onSelect} /></List>;
+  Menu: ({ items, activeID, size = "md", variant = "navigation", onSelect }) => {
+    const recipe = componentSizeRecipes.menu[size];
+    return <List disablePadding dense={size === "sm"} sx={{ minWidth: recipe.minWidth, p: `${recipe.surfacePadding}px`, borderRadius: `${recipe.radius}px`, ...(variant === "action" ? { borderInlineEnd: componentVariantRecipes.menu.action.borderInlineEnd } : {}) }}><MenuBranch items={items} activeID={activeID} size={size} onSelect={onSelect} /></List>;
   },
   Breadcrumb: ({ items }) => <Breadcrumbs>{items.map((item) => <MuiButton key={item.id} href={item.href} onClick={item.onSelect} variant="text">{item.label}</MuiButton>)}</Breadcrumbs>,
-  Tabs: ({ items, activeID, onChange }) => <><MuiTabs value={activeID ?? false} onChange={(_, id: string) => onChange?.(id)}>{items.map((item) => <Tab key={item.id} value={item.id} label={item.label} disabled={item.disabled} />)}</MuiTabs>{items.find((item) => item.id === activeID)?.content}</>,
+  Tabs: ({ items, activeID, size = "md", onChange }) => {
+    const recipe = componentSizeRecipes.control[size];
+    return <><MuiTabs value={activeID ?? false} onChange={(_, id: string) => onChange?.(id)} sx={{ minHeight: recipe.height }}>{items.map((item) => <Tab key={item.id} value={item.id} label={item.label} disabled={item.disabled} sx={{ minHeight: recipe.height, minWidth: 0, px: `${recipe.inlinePadding}px`, fontSize: recipe.fontSize }} />)}</MuiTabs>{items.find((item) => item.id === activeID)?.content}</>;
+  },
   CommandPalette, Popover, Dialog, Drawer, FormRenderer,
   FilterBar: ({ children, actions, appearance = "default" }) => appearance === "collection"
     ? <Box sx={{ width: "100%", minWidth: 0 }}>{children}{actions}</Box>
@@ -494,7 +503,7 @@ export const muiPortalUIComponents: MuiComponents = {
   SplitView,
   RecordNavigationList,
   RecordTree,
-  Pagination: ({ page, total, pageSize, pageSizeOptions, disabled, align = "start", onChange }) => <Box sx={{ display: "flex", gap: 1, alignItems: "center", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><MuiPagination page={page} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} />{(pageSizeOptions?.length ?? 0) <= 1 ? null : <TextField select size="small" value={String(pageSize)} disabled={disabled} slotProps={{ htmlInput: { "aria-label": "Rows per page" } }} onChange={(event) => onChange(1, Number(event.target.value))}>{pageSizeOptions!.map((size) => <MuiMenuItem key={size} value={String(size)}>{size}</MuiMenuItem>)}</TextField>}</Box>,
+  Pagination: ({ page, total, pageSize, pageSizeOptions, disabled, align = "start", size = "md", onChange }) => <Box sx={{ display: "flex", gap: 1, alignItems: "center", justifyContent: align === "end" ? "flex-end" : align === "center" ? "center" : "flex-start" }}><MuiPagination page={page} size={muiComponentSize[size]} count={Math.max(1, Math.ceil(total / pageSize))} disabled={disabled} onChange={(_, next) => onChange(next, pageSize)} />{(pageSizeOptions?.length ?? 0) <= 1 ? null : <TextField select size={size === "sm" ? "small" : "medium"} value={String(pageSize)} disabled={disabled} slotProps={{ htmlInput: { "aria-label": "Rows per page" } }} onChange={(event) => onChange(1, Number(event.target.value))}>{pageSizeOptions!.map((option) => <MuiMenuItem key={option} value={String(option)}>{option}</MuiMenuItem>)}</TextField>}</Box>,
   Descriptions: ({ title, items, columns = 2 }) => <Box><Typography variant="h6">{title}</Typography><Grid columns={columns}>{items.map((item) => <Box key={item.id}><Typography variant="caption" color="text.secondary">{item.label}</Typography><Typography>{item.value}</Typography></Box>)}</Grid></Box>,
   Status: ({ tone = "neutral", children }) => <Chip color={tones[tone]} label={children} size="small" />,
   Icon: VastPlanIcon,
