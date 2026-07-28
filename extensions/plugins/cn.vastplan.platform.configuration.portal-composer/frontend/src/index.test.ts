@@ -40,6 +40,8 @@ describe("Portal application composition", () => {
     expect(pages.every((page) => (page.overlays?.length ?? 0) > 0)).toBe(true);
     expect(pages.flatMap((page) => page.collection.actions ?? []).filter((action) => action.visibleWhen !== undefined).length).toBeGreaterThan(8);
     expect(profilePage.collection.actions?.every((action) => action.placement === "record.row")).toBe(true);
+    expect(profilePage.collection.actions?.some((action) => action.id === "profile.create")).toBe(false);
+    expect(profilePage.pageActions?.map((action) => action.id)).toEqual(["profile.create"]);
     expect(bindingPage.collection.actions?.every((action) => action.placement === "record.row")).toBe(true);
     expect(createApplicationPage(client).pageActions?.map((action) => action.id)).toEqual(["application.create"]);
     expect(createActivationPage(client).pageActions?.map((action) => action.id)).toEqual(["activation.create"]);
