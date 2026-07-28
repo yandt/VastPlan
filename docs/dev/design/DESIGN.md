@@ -34,7 +34,7 @@ UI Contract 7.0 暴露语义 token 与 `ComponentSize`，适配器映射到具�
 ### 2.1 组件 Recipe 治理
 
 - 本文定义视觉意图和验收基线；`extensions/sdk/ts/ui-primitives/src/visual-recipes.ts` 保存必须跨 Renderer 一致的可执行数值。组件架构文档只描述职责和行为，不重复保存像素值。
-- 基础控件统一使用 `size=sm/md/lg`；Collection 等组合组件保留 `density=compact/standard/comfortable`，由 Workbench 依次投影为 `sm/md/lg`。功能插件不得导入 Ant Design、Arco、MUI 或写框架私有样式。
+- 基础控件统一使用 `size=sm/md/lg`。Table 单独保留 `density=compact/standard/comfortable`，只调整表格行高和单元格留白，不向内部图标或表格外组件传播。功能插件不得导入 Ant Design、Arco、MUI 或写框架私有样式。
 - 调整公共组件时，先更新本节的视觉基线和共享 recipe，再同步各 Renderer 映射、自动测试及浏览器截图验收；禁止在单个页面反复覆盖样式。
 - 只有通用语义确实不足时才扩展 UI Contract。不得为了修正某个框架的默认边框、间距或图标而让业务插件感知框架差异。
 
@@ -105,7 +105,7 @@ UI Contract 7.0 暴露语义 token 与 `ComponentSize`，适配器映射到具�
 ## 6. 管理工作区
 
 - 平台管理中心分为 `Platform Profiles` 与 `Portals` 两个工作区。
-- Table 行操作、筛选表单、工具栏与分页从 Collection density 自动获得同一级 ComponentSize；直接动作最多两个且水平居中，剩余动作进入 `variant=action` 菜单。
+- Table density 只改变表格自身行高与单元格留白。行操作按钮、图标和 action 菜单固定使用 `sm`；筛选表单固定使用自己的紧凑尺寸，工具栏、分页、卡片和页面间距均不受 Table density 影响。
 - Table 列设置使用随最长列名变化、最大 280px 的紧凑 Popover：密度为最小按钮式单选，列顺序使用拖拽句柄且支持键盘移动，显隐使用眼睛/划线眼睛图标并固定右对齐；拖拽区最高 256px 并独立滚动，隐藏列统一使用 muted 灰色，不使用文字显隐按钮、上下箭头按钮或确认步骤。
 - 集合工具栏左侧只承载批量操作与集合动作；刷新、列设置等展示控制统一归组在右侧，换行后仍保持右对齐。
 - 拖拽句柄、目标反馈和排序结果由 Workbench 统一提供，业务插件不得自行选择拖拽库。未来首页卡片网格必须使用受治理断点、稳定卡片 ID 和用户布局偏好；普通管理资源页继续使用 Table/MasterDetail，不因引入 Dashboard Grid 改成卡片墙。

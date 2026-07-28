@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CollectionSpec } from "@vastplan/ui-contract";
-import { collectionDensity, collectionDensityOptions, componentSizeForDensity } from "./density.js";
+import { collectionDensity, collectionDensityOptions } from "./density.js";
 
 const collection: CollectionSpec = {
   id: "units",
@@ -23,11 +23,5 @@ describe("collectionDensity", () => {
     expect(collectionDensity({ ...collection, preferences: { density: true } }, { collection: { defaultDensity: "standard", allowedDensities: ["compact", "standard"] } }, "compact")).toBe("compact");
     expect(collectionDensityOptions({ ...collection, preferences: { density: true } }, { collection: { allowedDensities: ["compact", "standard"] } })).toEqual(["compact", "standard"]);
     expect(collectionDensityOptions(collection, undefined)).toEqual([]);
-  });
-
-  it("projects collection density onto the shared component size scale", () => {
-    expect(componentSizeForDensity("compact")).toBe("sm");
-    expect(componentSizeForDensity("standard")).toBe("md");
-    expect(componentSizeForDensity("comfortable")).toBe("lg");
   });
 });

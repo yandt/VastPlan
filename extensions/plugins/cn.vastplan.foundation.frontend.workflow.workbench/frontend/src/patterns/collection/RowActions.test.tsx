@@ -24,7 +24,7 @@ describe("RowActions", () => {
       { id: "delete", label: "删除", icon: "remove", placement: "record.row", tone: "danger" },
       { id: "download", label: "下载", icon: "download", placement: "record.row", tone: "primary" },
     ];
-    const html = renderToStaticMarkup(<RowActions actions={actions} row={{ id: "one" }} size="sm" onRunAction={() => undefined} />);
+    const html = renderToStaticMarkup(<RowActions actions={actions} row={{ id: "one" }} onRunAction={() => undefined} />);
     expect(html).toContain('data-justify="center"');
     expect(html).toContain('data-gap="sm"');
     expect(html).toContain('data-icon="edit"');

@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import type { ActionSpec, CollectionCardFieldSpec, CollectionDensity, CollectionSelectionMode, CollectionSpec } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionCardFieldSpec, CollectionSelectionMode, CollectionSpec } from "@vastplan/ui-contract";
 import { message, usePortalI18n, usePortalUI, type PortalI18n, type StatusTone } from "@vastplan/ui-primitives";
 import type { CollectionRow } from "./model.js";
 import { evaluateFormCondition } from "../form/presentation.js";
-import { componentSizeForDensity } from "./density.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 const tones = new Set<StatusTone>(["neutral", "info", "success", "warning", "error"]);
 
-export function CollectionCards({ collection, selectionMode, rows, selectedKeys, loading, loadingMore, nextCursor, density, keyOf, onSelectionChange, onRunAction, onLoadMore }: {
+export function CollectionCards({ collection, selectionMode, rows, selectedKeys, loading, loadingMore, nextCursor, keyOf, onSelectionChange, onRunAction, onLoadMore }: {
   collection: CollectionSpec;
   selectionMode: CollectionSelectionMode;
   rows: readonly CollectionRow[];
@@ -16,7 +15,6 @@ export function CollectionCards({ collection, selectionMode, rows, selectedKeys,
   loading: boolean;
   loadingMore: boolean;
   nextCursor?: string;
-  density: CollectionDensity;
   keyOf(row: CollectionRow): string;
   onSelectionChange(keys: readonly string[]): void;
   onRunAction(action: ActionSpec, rows: readonly CollectionRow[]): void;
@@ -27,7 +25,6 @@ export function CollectionCards({ collection, selectionMode, rows, selectedKeys,
   const sentinel = useRef<HTMLDivElement>(null);
   const [viewportLoading, setViewportLoading] = useState(false);
   const card = collection.card;
-  const componentSize = componentSizeForDensity(density);
   useEffect(() => {
     setViewportLoading(false);
     if (card?.loadMore !== "viewport" || nextCursor === undefined || typeof IntersectionObserver === "undefined" || sentinel.current === null) return;
@@ -49,12 +46,12 @@ export function CollectionCards({ collection, selectionMode, rows, selectedKeys,
   };
   const columns = card.columns ?? { xs: 1, sm: 1, md: 2, lg: 3, xl: 4 };
   return <ui.Stack gap="md">
-    <ui.Grid columns={columns} gap={density === "comfortable" ? "lg" : "md"}>
+    <ui.Grid columns={columns} gap="md">
       {rows.map((row) => {
         const key = keyOf(row);
         const statusTone = card.status?.toneKey === undefined ? "neutral" : tone(row[card.status.toneKey]);
         const visibleActions = footerActions.filter((action) => action.visibleWhen === undefined || evaluateFormCondition(action.visibleWhen, row));
-        const actions = visibleActions.length === 0 ? undefined : <ui.Stack direction="row" gap="xs" align="center" justify="center" wrap>{visibleActions.map((action) => <ui.IconButton key={action.id} size={componentSize} icon={action.icon} label={i18n.text(action.label)} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onRunAction(action, [row])} />)}</ui.Stack>;
+        const actions = visibleActions.length === 0 ? undefined : <ui.Stack direction="row" gap="xs" align="center" justify="center" wrap>{visibleActions.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onRunAction(action, [row])} />)}</ui.Stack>;
         return <ui.GridItem key={key} span={1}><ui.DataCard
           title={value(row[card.titleKey], { key: card.titleKey }, i18n)}
           subtitle={card.subtitleKey === undefined ? undefined : value(row[card.subtitleKey], { key: card.subtitleKey }, i18n)}
@@ -64,13 +61,12 @@ export function CollectionCards({ collection, selectionMode, rows, selectedKeys,
           selectable={selectionMode !== "none"}
           selected={selected.has(key)}
           selectionLabel={i18n.text(message(namespace, "selection.card", "选择 {title}", { title: String(row[card.titleKey] ?? key) }))}
-          density={density}
           onSelectionChange={(checked) => select(key, checked)}
         >{fields(card.content, row, i18n, ui)}</ui.DataCard></ui.GridItem>;
       })}
     </ui.Grid>
     {nextCursor === undefined ? null : <div ref={sentinel}><ui.Stack direction="row" justify="center">
-      {card.loadMore === "viewport" && viewportLoading ? (loadingMore ? <ui.Busy label={i18n.text(message(namespace, "cursor.loading", "正在加载更多"))} /> : null) : <ui.Button size={componentSize} kind="secondary" loading={loadingMore} disabled={loadingMore} onClick={onLoadMore}>{i18n.text(message(namespace, "cursor.more", "加载更多"))}</ui.Button>}
+      {card.loadMore === "viewport" && viewportLoading ? (loadingMore ? <ui.Busy label={i18n.text(message(namespace, "cursor.loading", "正在加载更多"))} /> : null) : <ui.Button kind="secondary" loading={loadingMore} disabled={loadingMore} onClick={onLoadMore}>{i18n.text(message(namespace, "cursor.more", "加载更多"))}</ui.Button>}
     </ui.Stack></div>}
   </ui.Stack>;
 }

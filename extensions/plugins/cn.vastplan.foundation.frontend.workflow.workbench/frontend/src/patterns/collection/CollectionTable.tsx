@@ -3,7 +3,6 @@ import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import type { CollectionColumnPreference, CollectionRow } from "./model.js";
 import { CollectionValue } from "./CollectionValue.js";
 import { RowActions } from "./RowActions.js";
-import { componentSizeForDensity } from "./density.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
@@ -23,10 +22,9 @@ export function CollectionTable({ collection, selectionMode, columns, rows, sele
   const i18n = usePortalI18n();
   const visibleColumns = columns.filter((column) => column.visible).map((column) => collection.columns.find((candidate) => candidate.key === column.key)).filter((column): column is NonNullable<typeof column> => column !== undefined);
   const rowActions = (collection.actions ?? []).filter((action) => action.placement === "record.row");
-  const componentSize = componentSizeForDensity(density);
   const tableColumns = [
     ...visibleColumns.map((column) => ({ key: column.key, title: i18n.text(column.label), width: column.minWidth, render: (value: unknown) => <CollectionValue column={column} value={value} /> })),
-    ...(rowActions.length === 0 ? [] : [{ key: "__actions", title: i18n.text(message(namespace, "column.actions", "操作")), width: 152, align: "center" as const, fixed: "right" as const, render: (_value: unknown, row: CollectionRow) => <RowActions actions={rowActions} row={row} size={componentSize} onRunAction={(action) => onRunAction(action, [row])} /> }]),
+    ...(rowActions.length === 0 ? [] : [{ key: "__actions", title: i18n.text(message(namespace, "column.actions", "操作")), width: 152, align: "center" as const, fixed: "right" as const, render: (_value: unknown, row: CollectionRow) => <RowActions actions={rowActions} row={row} onRunAction={(action) => onRunAction(action, [row])} /> }]),
   ];
   return <ui.Table appearance="collection" columns={tableColumns} rows={rows} rowKey={keyOf} selection={selectionMode} selectedRowKeys={selectedKeys} onSelectionChange={onSelectionChange} loading={loading} density={density} empty={<ui.EmptyState title={i18n.text(message(namespace, "empty.title", "暂无数据"))} />} />;
 }
