@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ActionSpec, CollectionCardFieldSpec, CollectionDensity, CollectionSpec } from "@vastplan/ui-contract";
+import type { ActionSpec, CollectionCardFieldSpec, CollectionDensity, CollectionSelectionMode, CollectionSpec } from "@vastplan/ui-contract";
 import { message, usePortalI18n, usePortalUI, type PortalI18n, type StatusTone } from "@vastplan/ui-primitives";
 import type { CollectionRow } from "./model.js";
 import { evaluateFormCondition } from "../form/presentation.js";
@@ -7,8 +7,9 @@ import { evaluateFormCondition } from "../form/presentation.js";
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 const tones = new Set<StatusTone>(["neutral", "info", "success", "warning", "error"]);
 
-export function CollectionCards({ collection, rows, selectedKeys, loading, loadingMore, nextCursor, density, keyOf, onSelectionChange, onRunAction, onLoadMore }: {
+export function CollectionCards({ collection, selectionMode, rows, selectedKeys, loading, loadingMore, nextCursor, density, keyOf, onSelectionChange, onRunAction, onLoadMore }: {
   collection: CollectionSpec;
+  selectionMode: CollectionSelectionMode;
   rows: readonly CollectionRow[];
   selectedKeys: readonly string[];
   loading: boolean;
@@ -39,7 +40,7 @@ export function CollectionCards({ collection, rows, selectedKeys, loading, loadi
   const footerActions = (collection.actions ?? []).filter((action) => action.placement === "card.footer" || action.placement === "record.row");
   const selected = new Set(selectedKeys);
   const select = (key: string, checked: boolean) => {
-    if ((collection.selection ?? "none") === "single") { onSelectionChange(checked ? [key] : []); return; }
+    if (selectionMode === "single") { onSelectionChange(checked ? [key] : []); return; }
     const next = new Set(selected);
     checked ? next.add(key) : next.delete(key);
     onSelectionChange([...next]);
@@ -58,7 +59,7 @@ export function CollectionCards({ collection, rows, selectedKeys, loading, loadi
           status={card.status === undefined ? undefined : <ui.Status tone={statusTone}>{value(row[card.status.labelKey], { key: card.status.labelKey }, i18n)}</ui.Status>}
           summary={fields(card.summary, row, i18n, ui)}
           actions={actions}
-          selectable={(collection.selection ?? "none") !== "none"}
+          selectable={selectionMode !== "none"}
           selected={selected.has(key)}
           selectionLabel={i18n.text(message(namespace, "selection.card", "选择 {title}", { title: String(row[card.titleKey] ?? key) }))}
           density={density}

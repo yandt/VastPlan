@@ -8,7 +8,7 @@ import { CollectionPreferencesPopover } from "./CollectionPreferencesPopover.js"
 import { CollectionTable } from "./CollectionTable.js";
 import { CollectionToolbar } from "./CollectionToolbar.js";
 import { collectionDensity, collectionDensityOptions } from "./density.js";
-import type { CollectionRow } from "./model.js";
+import { collectionSelectionMode, type CollectionRow } from "./model.js";
 import { collectionPreferenceFromColumns, readCollectionColumns, writeCollectionColumns } from "./preferences.js";
 import { useCollectionData } from "./useCollectionData.js";
 import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
@@ -106,6 +106,7 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
   }, [columns, density, pageSize, persistPreference]);
   const toolbarActions = actions.filter((action) => action.placement === "collection.toolbar" && visibleAction(action));
   const bulkActions = actions.filter((action) => action.placement === "collection.bulk" && visibleAction(action));
+  const selectionMode = collectionSelectionMode(actions, collection.selection);
   const hasFilters = collection.filterPanel !== undefined;
 
   useEffect(() => pageActionController(page).bind({
@@ -121,8 +122,8 @@ export function CollectionPage({ page, preferenceScope, preferences, presentatio
     </ui.Stack> : <div style={{ width: "100%", minWidth: 0 }}><CollectionToolbar hasFilters={false} refreshing={data.refreshing} selectedCount={selected.length} toolbarActions={toolbarActions} bulkActions={bulkActions} onRefresh={refresh} preferences={collection.view === "table" && collection.preferences !== undefined ? <CollectionPreferencesPopover collection={collection} columns={columns} density={density} densityOptions={densityOptions} onChange={updatePreferences} /> : undefined} onRunAction={(action) => void runAction(action, selected)} /></div>}
     {data.failure === undefined && summaryFailure === undefined ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.ErrorState title={data.failure ?? summaryFailure!} retry={refresh} /></div>}
     <div style={{ width: "100%", minWidth: 0 }}>{collection.view === "cards"
-      ? <CollectionCards collection={collection} rows={rows} selectedKeys={selectedKeys} loading={data.loading} loadingMore={data.loadingMore} nextCursor={data.nextCursor} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} onLoadMore={data.loadMore} />
-      : <CollectionTable collection={collection} columns={columns} rows={rows} selectedKeys={selectedKeys} loading={data.loading} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} />}</div>
+      ? <CollectionCards collection={collection} selectionMode={selectionMode} rows={rows} selectedKeys={selectedKeys} loading={data.loading} loadingMore={data.loadingMore} nextCursor={data.nextCursor} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} onLoadMore={data.loadMore} />
+      : <CollectionTable collection={collection} selectionMode={selectionMode} columns={columns} rows={rows} selectedKeys={selectedKeys} loading={data.loading} density={density} keyOf={keyOf} onSelectionChange={setSelectedKeys} onRunAction={(action, actionRows) => void runAction(action, actionRows)} />}</div>
     {collection.query.mode !== "page" ? null : <div style={{ width: "100%", minWidth: 0 }}><ui.Pagination align="end" page={pageNumber} pageSize={pageSize} pageSizeOptions={collection.query.pageSizeOptions} total={data.total} disabled={data.loading} onChange={(nextPage, requestedSize) => {
       const nextSize = validPageSize(collection, requestedSize);
       const previousSize = pageSize;

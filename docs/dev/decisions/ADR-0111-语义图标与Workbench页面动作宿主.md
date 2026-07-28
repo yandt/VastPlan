@@ -17,6 +17,10 @@
 6. `collection.bulk` 留在集合范围内，使用“选择动作 + 明确执行”两步交互；新增、导入、发布等页面级动作不得回到 Table 工具栏。
 7. Slot 层继续保留为 Shell 的稳定结构契约，但功能插件不直接管理这个 Slot；可信 Portal Host 负责把 Workbench 语义动作编译成 Slot 贡献。
 
+## 2026-07-28 修订：选择面只服务批量动作
+
+Table 行选择与 Card 选择统一由权限投影后的 `collection.bulk` 动作驱动。没有有效批量动作时 Workbench 强制关闭选择面，不因历史 `selection` 配置、行操作或 Page Header 动作显示单选框/复选框；存在批量动作时显式 `single` 仍可保留，未声明或声明其他模式统一使用 `multiple`。功能插件不能直接控制 Renderer 的选择列可见性。
+
 ## 备选方案
 
 - **全部固定为自有 SVG**：跨 Renderer 最一致，但不能利用当前设计系统的完整图标生态，也无法提供用户选择。
