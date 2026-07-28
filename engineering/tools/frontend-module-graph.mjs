@@ -33,10 +33,10 @@ export async function createFrontendModuleGraph({ target, pluginRoot, entry, met
       dependencies: dependencies.sort(compareDependency),
     });
   }
-  nodes.sort((left, right) => left.path.localeCompare(right.path));
+  nodes.sort((left, right) => compareUTF8(left.path, right.path));
   if (!nodes.some((node) => node.path === entry && node.purpose === "entry")) throw new Error(`Module Graph 入口未生成: ${entry}`);
   assertAcyclic(nodes);
-  const graph = { schemaVersion: "v1", target, entry, externals: [...externals].sort(), nodes };
+  const graph = { schemaVersion: "v1", target, entry, externals: [...externals].sort(compareUTF8), nodes };
   return { ...graph, digest: computeFrontendModuleGraphDigest(graph) };
 }
 
@@ -77,8 +77,8 @@ export function computeFrontendModuleGraphDigest(graph) {
     schemaVersion: graph.schemaVersion,
     target: graph.target,
     entry: graph.entry,
-    externals: [...graph.externals].sort(),
-    nodes: graph.nodes.map((node) => ({ ...node, dependencies: [...node.dependencies].sort(compareDependency) })).sort((left, right) => left.path.localeCompare(right.path)),
+    externals: [...graph.externals].sort(compareUTF8),
+    nodes: graph.nodes.map((node) => ({ ...node, dependencies: [...node.dependencies].sort(compareDependency) })).sort((left, right) => compareUTF8(left.path, right.path)),
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
@@ -118,6 +118,12 @@ function purpose(path) {
 }
 
 function compareDependency(left, right) {
-  if (left.specifier !== right.specifier) return left.specifier.localeCompare(right.specifier);
-  return left.path === right.path ? left.kind.localeCompare(right.kind) : left.path.localeCompare(right.path);
+  if (left.specifier !== right.specifier) return compareUTF8(left.specifier, right.specifier);
+  return left.path === right.path ? compareUTF8(left.kind, right.kind) : compareUTF8(left.path, right.path);
+}
+
+// Go's signed-manifest validator sorts strings by UTF-8 bytes. localeCompare
+// is locale-dependent and orders mixed-case chunk names differently.
+function compareUTF8(left, right) {
+  return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
 }

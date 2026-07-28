@@ -54,6 +54,12 @@
 - 表单与 Overlay 动作只引用受治理的定义 ID；其他动作统一由页面级 `runAction(context, signal)` 工作流端口按 action ID 分派。Workbench 只负责布局、状态、Tooltip、确认流程和回调上下文，不承载业务分支。
 - TypeScript 类型、SDK 定义入口与 Portal Runtime 必须同时校验上述规则，确保编译期、第一方注册和绕过 Helper 的运行时注册使用同一协议。
 
+## UI 契约兼容性同步规则
+
+- 修改公共 UI Contract、Workbench 定义、Renderer/Shell/Workbench 导出形状或其 major/minor 兼容边界时，必须在同一次改动中同步 canonical SDK 版本、全部受影响插件 Manifest 与模块导出、Portal Platform Catalog/Profile 精确引用、插件 SemVer、测试夹具和设计文档；不得只修改调用端或单个 Renderer。
+- 开发态 HMR 必须把基础 UI 模块图与 RuntimeSpec 的 `uiContract` 作为同一 Generation 原子切换；同一契约族出现不同范围时必须拒绝提交，不能生成“新模块 + 旧 Profile”的混合运行描述。
+- 契约修改完成后必须运行仓库 UI 契约同步门禁、完整前端测试与 Portal 构建；本地已存在 Activation 时，还必须执行 `./engineering/tools/platform-dev.sh bootstrap --rebuild-seed` 并读取 `/__vastplan_dev/runtime` 验证 Render Adapter、Shell、Workbench 与实际模块导出兼容后，才可宣告完成。
+
 ## 插件边界与物理拆分规则
 
 - 新增插件前必须先写清楚它拥有的真实边界：独立替换/版本、在线配置、状态或凭证、外部系统适配、故障隔离、集群生命周期、按需下载中至少一项。全部不具备时，默认不得创建独立插件。

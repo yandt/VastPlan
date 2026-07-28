@@ -95,3 +95,12 @@ test("uses the same canonical digest as the Go manifest validator", () => {
   };
   assert.equal(computeFrontendModuleGraphDigest(graph), crossLanguageDigest);
 });
+
+test("uses Go-compatible UTF-8 byte ordering for mixed-case chunk paths", () => {
+  const node = (path) => ({ path, sha256: "a".repeat(64), size: 1, mediaType: "text/javascript", purpose: "chunk", dependencies: [] });
+  const graph = {
+    schemaVersion: "v1", target: "browser", entry: "frontend/dist/index.js", externals: [],
+    nodes: [node("frontend/dist/chunks/lower.js"), node("frontend/dist/Dashboard.js"), { ...node("frontend/dist/index.js"), purpose: "entry" }],
+  };
+  assert.equal(computeFrontendModuleGraphDigest(graph), "3b9560146cee15d783f205eec17f6badeeb03cecbad3df6a27e549d1a7a56f6d");
+});

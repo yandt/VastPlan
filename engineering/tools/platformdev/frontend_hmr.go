@@ -46,6 +46,7 @@ type frontendHMRModule struct {
 	Deferred          bool
 	Graph             *frontendHMRGraph
 	Digests           []string
+	UIContract        *frontendHMRUIContract
 }
 
 type frontendHMRManifest struct {
@@ -279,6 +280,11 @@ func (h *frontendHMR) loadCandidate(manifestPath string) (frontendHMRCandidate, 
 			return frontendHMRCandidate{}, fmt.Errorf("前端候选模块身份重复: %s", item.ID)
 		}
 		module := frontendHMRModule{ID: item.ID, Entry: item.Entry, SHA256: actual, Deferred: item.Deferred}
+		contract, err := readFrontendHMRUIContract(h.root, item.ID)
+		if err != nil {
+			return frontendHMRCandidate{}, fmt.Errorf("读取前端候选 UI 契约: %s: %w", item.ID, err)
+		}
+		module.UIContract = contract
 		if item.Graph == nil {
 			object := frontendHMRObject{Bytes: append([]byte(nil), content...), MediaType: "text/javascript"}
 			if err := addFrontendHMRObject(objects, actual, object); err != nil {
@@ -498,6 +504,11 @@ func (h *frontendHMR) runtime(w http.ResponseWriter, request *http.Request) {
 		return
 	}
 	h.mu.RLock()
+	if err := overlayFrontendHMRUIContracts(document, h.current); err != nil {
+		h.mu.RUnlock()
+		http.Error(w, "Portal Runtime UI contract overlay invalid: "+err.Error(), http.StatusConflict)
+		return
+	}
 	if modulesRaw, exists := document["modules"]; exists && !bytes.Equal(bytes.TrimSpace(modulesRaw), []byte("null")) {
 		var modules []map[string]any
 		if err := json.Unmarshal(modulesRaw, &modules); err != nil {

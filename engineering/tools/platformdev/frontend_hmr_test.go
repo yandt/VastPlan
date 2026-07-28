@@ -77,6 +77,64 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 	}
 }
 
+func TestFrontendHMROverlaysPublicUIContractsWithTheSameAtomicGeneration(t *testing.T) {
+	document := map[string]json.RawMessage{
+		"portal":       json.RawMessage(`{"renderAdapter":{"uiContract":"^4.0.0"},"shell":{"uiContract":"^4.0.0"},"workbench":{"uiContract":"^4.0.0"}}`),
+		"moduleGraphs": json.RawMessage(`[{"id":"cn.vastplan.render"},{"id":"cn.vastplan.renderer"},{"id":"cn.vastplan.shell"},{"id":"cn.vastplan.layout"},{"id":"cn.vastplan.workbench"}]`),
+	}
+	modules := map[string]frontendHMRModule{
+		"cn.vastplan.render":    {UIContract: &frontendHMRUIContract{Family: frontendHMRUIFamilyRender, Range: "^5.0.0"}},
+		"cn.vastplan.renderer":  {UIContract: &frontendHMRUIContract{Family: frontendHMRUIFamilyRender, Range: "^5.0.0"}},
+		"cn.vastplan.shell":     {UIContract: &frontendHMRUIContract{Family: frontendHMRUIFamilyShell, Range: "^5.0.0"}},
+		"cn.vastplan.layout":    {UIContract: &frontendHMRUIContract{Family: frontendHMRUIFamilyShell, Range: "^5.0.0"}},
+		"cn.vastplan.workbench": {UIContract: &frontendHMRUIContract{Family: frontendHMRUIFamilyWorkbench, Range: "^5.0.0"}},
+	}
+	if err := overlayFrontendHMRUIContracts(document, modules); err != nil {
+		t.Fatal(err)
+	}
+	var portal struct {
+		RenderAdapter struct {
+			UIContract string `json:"uiContract"`
+		} `json:"renderAdapter"`
+		Shell struct {
+			UIContract string `json:"uiContract"`
+		} `json:"shell"`
+		Workbench struct {
+			UIContract string `json:"uiContract"`
+		} `json:"workbench"`
+	}
+	if err := json.Unmarshal(document["portal"], &portal); err != nil {
+		t.Fatal(err)
+	}
+	if portal.RenderAdapter.UIContract != "^5.0.0" || portal.Shell.UIContract != "^5.0.0" || portal.Workbench.UIContract != "^5.0.0" {
+		t.Fatalf("UI contract overlay incomplete: %#v", portal)
+	}
+}
+
+func TestFrontendHMRRejectsPartiallySynchronizedUIContractFamily(t *testing.T) {
+	document := map[string]json.RawMessage{
+		"portal":       json.RawMessage(`{"renderAdapter":{"uiContract":"^4.0.0"}}`),
+		"moduleGraphs": json.RawMessage(`[{"id":"cn.vastplan.render"},{"id":"cn.vastplan.renderer"}]`),
+	}
+	modules := map[string]frontendHMRModule{
+		"cn.vastplan.render":   {UIContract: &frontendHMRUIContract{Family: frontendHMRUIFamilyRender, Range: "^5.0.0"}},
+		"cn.vastplan.renderer": {UIContract: &frontendHMRUIContract{Family: frontendHMRUIFamilyRender, Range: "^4.0.0"}},
+	}
+	if err := overlayFrontendHMRUIContracts(document, modules); err == nil || !strings.Contains(err.Error(), "UI 契约未同步") {
+		t.Fatalf("partial UI contract error = %v", err)
+	}
+}
+
+func TestFrontendUIContractSourcesStaySynchronized(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateFrontendUIContractSources(root); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestFrontendHMROverlaysGraphNativeRuntimeWithoutCandidateVersionValidation(t *testing.T) {
 	directory := t.TempDir()
 	pluginID := "cn.vastplan.feature"
@@ -217,7 +275,7 @@ func TestFrontendHMRSeparatesPluginAndHostSourceChanges(t *testing.T) {
 		"extensions/sdk/ts/workbench-sdk/package.json":                                "{}",
 		"engineering/tools/build-frontend.sh":                                         "build-v1",
 		"engineering/tools/build-frontend-plugins.mjs":                                "build-v1",
-		"engineering/tools/check-ant-icon-catalog-on-demand.mjs":                     "catalog-check-v1",
+		"engineering/tools/check-ant-icon-catalog-on-demand.mjs":                      "catalog-check-v1",
 		"engineering/tools/frontend-module-graph.mjs":                                 "graph-v1",
 		"engineering/tools/frontend-server-build.mjs":                                 "server-v1",
 		"package.json":        "{}",

@@ -101,17 +101,23 @@ export function topologicalModuleOrder(graph: FrontendModuleGraphDescriptor, nod
 
 function canonicalGraph(graph: FrontendModuleGraphDescriptor): object {
   return {
-    schemaVersion: "v1", target: graph.target, entry: graph.entry, externals: [...graph.externals].sort(),
+    schemaVersion: "v1", target: graph.target, entry: graph.entry, externals: [...graph.externals].sort(compareASCII),
     nodes: graph.nodes.map((node) => ({
       path: node.path, sha256: node.sha256, size: node.size, mediaType: node.mediaType, purpose: node.purpose,
       dependencies: [...node.dependencies].sort(compareDependency),
-    })).sort((left, right) => left.path.localeCompare(right.path)),
+    })).sort((left, right) => compareASCII(left.path, right.path)),
   };
 }
 
 function compareDependency(left: FrontendModuleDependencyDescriptor, right: FrontendModuleDependencyDescriptor): number {
-  if (left.specifier !== right.specifier) return left.specifier.localeCompare(right.specifier);
-  return left.path === right.path ? left.kind.localeCompare(right.kind) : left.path.localeCompare(right.path);
+  if (left.specifier !== right.specifier) return compareASCII(left.specifier, right.specifier);
+  return left.path === right.path ? compareASCII(left.kind, right.kind) : compareASCII(left.path, right.path);
+}
+
+// Governed paths, specifiers and external names are ASCII. Direct code-unit
+// ordering therefore matches the Go validator's UTF-8 byte ordering.
+function compareASCII(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function validModulePath(value: string): boolean {

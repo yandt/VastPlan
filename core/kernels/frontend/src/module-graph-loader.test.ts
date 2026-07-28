@@ -116,3 +116,16 @@ describe("VerifiedModuleGraphLoader", () => {
     expect(() => new VerifiedModuleGraphLoader([{ ...graph, entry: nodes[0].path, nodes }], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response() })).toThrowError(/深度/);
   });
 });
+
+it("uses the signed Go ordering for mixed-case chunk paths", async () => {
+  const node = (path: string, purpose: FrontendModuleNodeDescriptor["purpose"] = "chunk"): FrontendModuleNodeDescriptor => ({
+    path, url: `/__vastplan_dev/modules/${"a".repeat(64)}.js`, sha256: "a".repeat(64), size: 1,
+    mediaType: "text/javascript", purpose, dependencies: [],
+  });
+  const graph = {
+    id: "cn.vastplan.test", version: "1.0.0", channel: "testing", target: "browser" as const,
+    entry: "frontend/dist/index.js", digest: "", packageSha256: "b".repeat(64), externals: [],
+    nodes: [node("frontend/dist/chunks/lower.js"), node("frontend/dist/Dashboard.js"), node("frontend/dist/index.js", "entry")],
+  };
+  await expect(computeModuleGraphDigest(graph)).resolves.toBe("3b9560146cee15d783f205eec17f6badeeb03cecbad3df6a27e549d1a7a56f6d");
+});
