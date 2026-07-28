@@ -3,7 +3,7 @@ import { fetchDevelopmentRuntime, PortalDevelopmentError, startPortalDevelopment
 import type { PortalGenerationManager } from "./portal-generation";
 import type { PortalRuntimeSource } from "./portal-runtime-source";
 import type { ModuleFetcher } from "./module-loader";
-import { developmentFrontendRuntimeProtocol } from "./frontend-runtime-protocol";
+import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
 class FakeEventSource implements DevelopmentEventSource {
   public closed = false;
@@ -38,7 +38,24 @@ describe("portal development updates", () => {
     expect(loaded.modules[0].url).toBe(runtime.modules[0].url);
     expect(fetcher).toHaveBeenCalledWith("/__vastplan_dev/runtime?path=%2Foperations%2Fsettings", { credentials: "same-origin", cache: "no-store" });
 
-    await expect(fetchDevelopmentRuntime(async () => new Response("", { status: 503 }), "/dev", "/", developmentFrontendRuntimeProtocol)).rejects.toMatchObject({ code: "RUNTIME_FETCH_FAILED" } satisfies Partial<PortalDevelopmentError>);
+    await expect(fetchDevelopmentRuntime(async () => new Response("", { status: 400 }), "/dev", "/", developmentFrontendRuntimeProtocol)).rejects.toMatchObject({ code: "RUNTIME_FETCH_FAILED" } satisfies Partial<PortalDevelopmentError>);
+  });
+
+  it("waits for a transient platform-service restoration without weakening production", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn()
+        .mockResolvedValueOnce(new Response("", { status: 502 }))
+        .mockResolvedValueOnce(new Response("", { status: 503 }))
+        .mockResolvedValueOnce(new Response(JSON.stringify(runtime), { status: 200, headers: { "Content-Type": "application/json" } }));
+      const pending = fetchDevelopmentRuntime(fetcher, "/__vastplan_dev/runtime", "/operations", developmentFrontendRuntimeProtocol);
+      await vi.runAllTimersAsync();
+      await expect(pending).resolves.toMatchObject({ portal: { revision: 1 } });
+      expect(fetcher).toHaveBeenCalledTimes(3);
+      expect(productionFrontendRuntimeProtocol.runtimeRetryDelay(502, 0)).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("coalesces generation events, applies them serially, and reports build errors", async () => {

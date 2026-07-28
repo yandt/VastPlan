@@ -86,9 +86,16 @@ export function startPortalDevelopmentUpdates(options: PortalDevelopmentOptions)
 
 export async function fetchDevelopmentRuntime(fetcher: ModuleFetcher, endpoint: string, pathname: string, protocol: FrontendRuntimeProtocol): Promise<PortalRuntimeSpec> {
   const separator = endpoint.includes("?") ? "&" : "?";
-  const response = await fetcher(`${endpoint}${separator}path=${encodeURIComponent(pathname)}`, { credentials: "same-origin", cache: "no-store" });
-  if (!response.ok) throw new PortalDevelopmentError("RUNTIME_FETCH_FAILED", `开发态 Portal 运行描述获取失败 (${response.status})`);
-  return parseRuntimeSpec(await response.json(), protocol);
+  const url = `${endpoint}${separator}path=${encodeURIComponent(pathname)}`;
+  let retry = 0;
+  for (;;) {
+    const response = await fetcher(url, { credentials: "same-origin", cache: "no-store" });
+    if (response.ok) return parseRuntimeSpec(await response.json(), protocol);
+    const delay = protocol.runtimeRetryDelay(response.status, retry);
+    if (delay === undefined) throw new PortalDevelopmentError("RUNTIME_FETCH_FAILED", `开发态 Portal 运行描述获取失败 (${response.status})`);
+    retry++;
+    await new Promise((resolve) => setTimeout(resolve, delay));
+  }
 }
 
 function defaultEventSourceFactory(url: string): DevelopmentEventSource {

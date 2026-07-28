@@ -199,6 +199,9 @@ describe("VerifiedFrontendPluginLoader", () => {
         protocolCalls.push("cache");
         return developmentFrontendRuntimeProtocol.requestCache(url);
       },
+      runtimeRetryDelay(status, retry) {
+        return developmentFrontendRuntimeProtocol.runtimeRetryDelay(status, retry);
+      },
       resolveCandidate(exact, sameID) {
         protocolCalls.push("resolve");
         return developmentFrontendRuntimeProtocol.resolveCandidate(exact, sameID);

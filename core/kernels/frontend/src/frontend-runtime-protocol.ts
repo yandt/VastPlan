@@ -5,6 +5,7 @@ export interface FrontendRuntimeProtocol {
   readonly id: "production" | "development";
   governedDigest(url: string, kind: FrontendContentKind): string | undefined;
   requestCache(url: string): RequestCache;
+  runtimeRetryDelay(status: number, retry: number): number | undefined;
   resolveCandidate<T>(exact: T | undefined, sameID: readonly T[]): T | undefined;
 }
 
@@ -32,6 +33,7 @@ export const productionFrontendRuntimeProtocol: FrontendRuntimeProtocol = Object
   id: "production",
   governedDigest: productionDigest,
   requestCache: () => "force-cache",
+  runtimeRetryDelay: () => undefined,
   resolveCandidate<T>(exact: T | undefined): T | undefined { return exact; },
 });
 
@@ -43,6 +45,10 @@ export const developmentFrontendRuntimeProtocol: FrontendRuntimeProtocol = Objec
     return (kind === "entry" ? developmentEntryPattern : developmentGraphPattern).exec(url)?.[1];
   },
   requestCache: (url: string) => url.startsWith("/__vastplan_dev/modules/") ? "no-store" : "force-cache",
+  runtimeRetryDelay(status: number, retry: number): number | undefined {
+    if (![502, 503, 504].includes(status) || retry >= 18) return undefined;
+    return Math.min(250 * (2 ** Math.min(retry, 3)), 2_000);
+  },
   resolveCandidate<T>(exact: T | undefined, sameID: readonly T[]): T | undefined {
     return exact ?? (sameID.length === 1 ? sameID[0] : undefined);
   },
