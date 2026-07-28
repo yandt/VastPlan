@@ -38,6 +38,6 @@ export const componentSizeRecipes = Object.freeze({
 export const componentVariantRecipes = Object.freeze({
   menu: Object.freeze({
     action: Object.freeze({ borderInlineEnd: 0, width: "max-content", minWidth: 112, maxWidth: 280, overflow: "hidden", padding: 0 }),
-    actionItem: Object.freeze({ display: "flex", alignItems: "center", gap: "8px", paddingInline: "12px" }),
+    actionItem: Object.freeze({ display: "flex", alignItems: "center", width: "100%", gap: "8px", paddingInline: "12px 6px" }),
   }),
 });

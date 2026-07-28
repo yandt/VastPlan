@@ -44,7 +44,7 @@ UI Contract 7.0 暴露语义 token 与 `ComponentSize`，适配器映射到具�
 | `md` | 32px | 32px / 16px | 36px | 最小宽 200px，内边距 4px，4px 圆角 |
 | `lg` | 40px | 44px / 20px | 44px | 最小宽 220px，内边距 6px，6px 圆角 |
 
-动作菜单每行固定为“图标 + 标签”，触发器使用图标 + Tooltip。危险动作保留语义危险色；普通动作不使用实心 primary 背景。Menu 的 `variant=action` 消除导航专用 inline-end 分隔线，并采用内容内在宽度（最小 112px、最大 280px）；超长标签在 216px 后省略且保留完整 title。`sm` 动作菜单使用 28px 行高和 12px 项目水平内边距；紧凑动作菜单的 Popover 外层与菜单表面均不额外留白，避免出现双层边距。页面级与记录级“更多”都复用 Workbench 的同一紧凑动作菜单。`variant=navigation` 保留导航语义；variant 与 size 互不替代。
+动作菜单每行固定为“图标 + 标签”，触发器使用图标 + Tooltip。危险动作保留语义危险色；普通动作不使用实心 primary 背景。Menu 的 `variant=action` 消除导航专用 inline-end 分隔线，并采用内容内在宽度（最小 112px、最大 280px）；超长标签在 216px 后省略且保留完整 title。`sm` 动作菜单使用 28px 行高，项目内边距为 inline-start 12px、inline-end 6px，且项目必须占满菜单容器；紧凑动作菜单的 Popover 外层与菜单表面均不额外留白，避免出现双层边距或框架默认项宽造成右侧空带。页面级与记录级“更多”都复用 Workbench 的同一紧凑动作菜单。`variant=navigation` 保留导航语义；variant 与 size 互不替代。
 
 ## 3. 排版
 

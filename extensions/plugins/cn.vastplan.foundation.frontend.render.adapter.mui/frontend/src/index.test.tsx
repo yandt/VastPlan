@@ -35,8 +35,9 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain("max-width:280px");
     expect(markup).toContain("overflow:hidden");
     expect(markup).toContain("display:flex");
+    expect(markup).toContain("width:100%");
     expect(markup).toContain("gap:8px");
-    expect(markup).toContain("padding-inline:12px");
+    expect(markup).toContain("padding-inline:12px 6px");
   });
 
   it("offers a Material-native icon theme behind the same semantic name", () => {
