@@ -37,6 +37,7 @@ export const componentSizeRecipes = Object.freeze({
 /** Visual treatment is orthogonal to size: a small navigation menu is still navigation. */
 export const componentVariantRecipes = Object.freeze({
   menu: Object.freeze({
-    action: Object.freeze({ borderInlineEnd: 0 }),
+    action: Object.freeze({ borderInlineEnd: 0, width: "max-content", minWidth: 112, maxWidth: 280, overflow: "hidden" }),
+    actionItem: Object.freeze({ display: "flex", alignItems: "center", gap: "8px" }),
   }),
 });

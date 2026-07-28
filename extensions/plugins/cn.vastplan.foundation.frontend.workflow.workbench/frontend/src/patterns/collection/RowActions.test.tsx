@@ -38,7 +38,8 @@ describe("RowActions", () => {
     expect(html).toContain('data-variant="action"');
     expect(html).toContain('data-menu-item="download"');
     expect(html).toContain('data-icon-glyph="download"');
-    expect(html).toContain(">下载</button>");
+    expect(html).toContain('title="下载"');
+    expect(html).toContain(">下载</span>");
     expect(html).toContain("display:inline-flex");
     expect(html).toContain("line-height:0");
   });

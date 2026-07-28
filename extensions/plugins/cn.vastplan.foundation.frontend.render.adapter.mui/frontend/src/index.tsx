@@ -183,16 +183,16 @@ function GridItem({ span = 1, children }: GridItemProps) {
   return <Box sx={{ gridColumn }}>{children}</Box>;
 }
 
-function MenuBranch({ items, activeID, size = "md", onSelect, depth = 0 }: { items: MenuItem[]; activeID?: string; size?: MenuProps["size"]; onSelect?(id: string): void; depth?: number }) {
+function MenuBranch({ items, activeID, size = "md", variant = "navigation", onSelect, depth = 0 }: { items: MenuItem[]; activeID?: string; size?: MenuProps["size"]; variant?: MenuProps["variant"]; onSelect?(id: string): void; depth?: number }) {
   const recipe = componentSizeRecipes.menu[size];
   return <>{items.map((item) => <Box key={item.id}>
     <ListItemButton component={item.href === undefined ? "div" : "a"} href={item.href} selected={activeID === item.id} disabled={item.disabled} onClick={(event: MouseEvent<HTMLElement>) => {
       if (item.href !== undefined) event.preventDefault();
       if (!item.children?.length) onSelect?.(item.id);
-    }} sx={{ minHeight: recipe.itemHeight, py: 0, px: `${recipe.itemInlinePadding}px`, pl: `${recipe.itemInlinePadding + depth * 16}px`, borderRadius: `${recipe.radius}px` }}>
+    }} sx={{ minHeight: recipe.itemHeight, py: 0, px: `${recipe.itemInlinePadding}px`, pl: `${recipe.itemInlinePadding + depth * 16}px`, borderRadius: `${recipe.radius}px`, ...(variant === "action" ? componentVariantRecipes.menu.actionItem : {}) }}>
       {item.icon}<ListItemText primary={item.label} />
     </ListItemButton>
-    {item.children?.length ? <MenuBranch items={item.children} activeID={activeID} size={size} onSelect={onSelect} depth={depth + 1} /> : null}
+    {item.children?.length ? <MenuBranch items={item.children} activeID={activeID} size={size} variant={variant} onSelect={onSelect} depth={depth + 1} /> : null}
   </Box>)}</>;
 }
 
@@ -214,12 +214,14 @@ function Popover({ open, trigger, children, placement = "bottom-start", initialF
   const contentID = useId();
   const triggerRef = useRef<HTMLElement | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!open || initialFocus === "none") return;
-    const selector = initialFocus === "current" ? "[aria-current='page']" : "button,a[href],[tabindex]:not([tabindex='-1'])";
-    const target = contentRef.current?.querySelector<HTMLElement>(selector) ?? contentRef.current?.querySelector<HTMLElement>("button,a[href],[tabindex]:not([tabindex='-1'])");
+  const focusInitial = () => {
+    if (initialFocus === "none") return;
+    const firstFocusable = "[role='menuitem']:not([aria-disabled='true']),button:not([disabled]),a[href],[tabindex]:not([tabindex='-1'])";
+    const selector = initialFocus === "current" ? "[aria-current='page']" : firstFocusable;
+    const target = contentRef.current?.querySelector<HTMLElement>(selector) ?? contentRef.current?.querySelector<HTMLElement>(firstFocusable);
     target?.focus();
-  }, [initialFocus, open]);
+  };
+  useEffect(() => { if (open) focusInitial(); }, [initialFocus, open]);
   const horizontal = placement.endsWith("-start") ? "left" : placement.endsWith("-end") ? "right" : "center";
   const vertical = placement.startsWith("top") ? "top" : "bottom";
   const close = (reason: "escape" | "outside") => {
@@ -237,6 +239,8 @@ function Popover({ open, trigger, children, placement = "bottom-start", initialF
     },
   })}<MuiPopover
     open={open}
+    disableAutoFocus
+    slotProps={{ transition: { onEntered: focusInitial } }}
     anchorEl={triggerRef.current}
     onClose={(_, reason) => close(reason === "escapeKeyDown" ? "escape" : "outside")}
     anchorOrigin={{ vertical, horizontal }}
@@ -487,7 +491,7 @@ export const muiPortalUIComponents: MuiComponents = {
   Select,
   Menu: ({ items, activeID, size = "md", variant = "navigation", onSelect }) => {
     const recipe = componentSizeRecipes.menu[size];
-    return <List disablePadding dense={size === "sm"} sx={{ minWidth: recipe.minWidth, p: `${recipe.surfacePadding}px`, borderRadius: `${recipe.radius}px`, ...(variant === "action" ? { borderInlineEnd: componentVariantRecipes.menu.action.borderInlineEnd } : {}) }}><MenuBranch items={items} activeID={activeID} size={size} onSelect={onSelect} /></List>;
+    return <List disablePadding dense={size === "sm"} sx={{ minWidth: recipe.minWidth, p: `${recipe.surfacePadding}px`, borderRadius: `${recipe.radius}px`, ...(variant === "action" ? componentVariantRecipes.menu.action : {}) }}><MenuBranch items={items} activeID={activeID} size={size} variant={variant} onSelect={onSelect} /></List>;
   },
   Breadcrumb: ({ items }) => <Breadcrumbs>{items.map((item) => <MuiButton key={item.id} href={item.href} onClick={item.onSelect} variant="text">{item.label}</MuiButton>)}</Breadcrumbs>,
   Tabs: ({ items, activeID, size = "md", onChange }) => {

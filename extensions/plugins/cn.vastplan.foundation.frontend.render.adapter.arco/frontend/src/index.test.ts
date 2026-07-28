@@ -32,6 +32,18 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("width:44px;height:44px");
   });
 
+  it("maps the complete content-sized action menu recipe", () => {
+    const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.Menu, {
+      size: "sm", variant: "action", items: [{ id: "submit", label: "Submit" }],
+    }));
+    expect(html).toContain("width:max-content");
+    expect(html).toContain("min-width:112px");
+    expect(html).toContain("max-width:280px");
+    expect(html).toContain("overflow:hidden");
+    expect(html).toContain("display:flex");
+    expect(html).toContain("gap:8px");
+  });
+
   it("offers an adapter-native icon theme behind the same semantic name", () => {
     const NativeIcon = arcoIconForTheme("renderer-native");
     const html = renderToStaticMarkup(createElement("div", {}, createElement(NativeIcon, { name: "publish", label: "Publish" }), createElement(NativeIcon, { name: "visibilityOff", label: "Hidden" }), createElement(NativeIcon, { name: "drag", label: "Reorder" })));

@@ -7,7 +7,7 @@ import { componentSizeRecipes, componentVariantRecipes, message, usePortalI18n }
 import { namespace } from "./theme";
 import { antdComponentSize } from "./component-size";
 
-function menuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, onSelect?: (id: string) => void, parentDisabled = false): NonNullable<AntdMenuProps["items"]> {
+function menuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, variant: NonNullable<MenuProps["variant"]>, onSelect?: (id: string) => void, parentDisabled = false): NonNullable<AntdMenuProps["items"]> {
   const recipe = componentSizeRecipes.menu[size];
   return items.map((item) => {
     const disabled = parentDisabled || item.disabled === true;
@@ -16,7 +16,7 @@ function menuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, onSe
       event.stopPropagation();
       if (!disabled) onSelect?.(item.id);
     }}>{item.label}</a>;
-    return { key: item.id, label, icon: item.icon, disabled, style: { height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding }, children: item.children?.length ? menuItems(item.children, size, onSelect, disabled) : undefined };
+    return { key: item.id, label, icon: item.icon, disabled, style: { height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding, ...(variant === "action" ? componentVariantRecipes.menu.actionItem : {}) }, children: item.children?.length ? menuItems(item.children, size, variant, onSelect, disabled) : undefined };
   });
 }
 
@@ -26,10 +26,10 @@ export function Menu({ items, activeID, size = "md", variant = "navigation", onS
     minWidth: recipe.minWidth,
     padding: recipe.surfacePadding,
     borderRadius: recipe.radius,
-    ...(variant === "action" ? { borderInlineEnd: componentVariantRecipes.menu.action.borderInlineEnd } : {}),
+    ...(variant === "action" ? componentVariantRecipes.menu.action : {}),
     ["--ant-menu-item-height" as string]: `${recipe.itemHeight}px`,
   };
-  return <AntdMenu selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, size, onSelect)} onClick={({ key }) => onSelect?.(key)} style={style} />;
+  return <AntdMenu selectedKeys={activeID === undefined ? [] : [activeID]} items={menuItems(items, size, variant, onSelect)} onClick={({ key }) => onSelect?.(key)} style={style} />;
 }
 
 export function Breadcrumb({ items }: { items: Array<{ id: string; label: string; href?: string; onSelect?(): void }> }) {
@@ -54,11 +54,13 @@ export function Popover({ open, trigger, children, placement = "bottom-start", i
   const contentID = useId();
   const contentRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (!open || initialFocus === "none") return;
-    const selector = initialFocus === "current" ? "[aria-current='page']" : "button,a[href],[tabindex]:not([tabindex='-1'])";
-    (contentRef.current?.querySelector<HTMLElement>(selector) ?? contentRef.current?.querySelector<HTMLElement>("button,a[href],[tabindex]:not([tabindex='-1'])"))?.focus();
-  }, [initialFocus, open]);
+  const focusInitial = () => {
+    if (initialFocus === "none") return;
+    const firstFocusable = "[role='menuitem']:not([aria-disabled='true']),button:not([disabled]),a[href],[tabindex]:not([tabindex='-1'])";
+    const selector = initialFocus === "current" ? "[aria-current='page']" : firstFocusable;
+    (contentRef.current?.querySelector<HTMLElement>(selector) ?? contentRef.current?.querySelector<HTMLElement>(firstFocusable))?.focus();
+  };
+  useEffect(() => { if (open) focusInitial(); }, [initialFocus, open]);
   const antdPlacement = ({ "bottom-start": "bottomLeft", bottom: "bottom", "bottom-end": "bottomRight", "top-start": "topLeft", top: "top", "top-end": "topRight" } as const)[placement];
   const close = (reason: "escape" | "outside") => { onOpenChange(false, reason); triggerRef.current?.focus(); };
   const triggerNode = trigger({
@@ -69,7 +71,7 @@ export function Popover({ open, trigger, children, placement = "bottom-start", i
       if (event.key === "Escape" && open) { event.preventDefault(); close("escape"); }
     },
   });
-  return <AntdPopover open={open} trigger="click" placement={antdPlacement} onOpenChange={(next) => { if (!next) close("outside"); }} content={<div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div>}>{triggerNode}</AntdPopover>;
+  return <AntdPopover open={open} trigger="click" placement={antdPlacement} afterOpenChange={(next) => { if (next) focusInitial(); }} onOpenChange={(next) => { if (!next) close("outside"); }} content={<div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); close("escape"); } }}>{children}</div>}>{triggerNode}</AntdPopover>;
 }
 
 export function RecordNavigationList({ items, selectedID, ariaLabel, onSelect }: RecordNavigationListProps) {

@@ -27,6 +27,17 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain("width:44px;height:44px");
   });
 
+  it("maps the complete content-sized action menu recipe", () => {
+    const Menu = muiPortalUIComponents.Menu;
+    const markup = renderToStaticMarkup(<Menu size="sm" variant="action" items={[{ id: "submit", label: "Submit" }]} />);
+    expect(markup).toContain("width:max-content");
+    expect(markup).toContain("min-width:112px");
+    expect(markup).toContain("max-width:280px");
+    expect(markup).toContain("overflow:hidden");
+    expect(markup).toContain("display:flex");
+    expect(markup).toContain("gap:8px");
+  });
+
   it("offers a Material-native icon theme behind the same semantic name", () => {
     const NativeIcon = muiIconForTheme("renderer-native");
     const markup = renderToStaticMarkup(<><NativeIcon name="publish" label="Publish" /><NativeIcon name="visibilityOff" label="Hidden" /><NativeIcon name="drag" label="Reorder" /></>);

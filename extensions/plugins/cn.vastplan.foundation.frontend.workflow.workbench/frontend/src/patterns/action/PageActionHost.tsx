@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PageActionSpec } from "@vastplan/ui-contract";
 import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import type { PageActionHostDefinition } from "@vastplan/workbench-sdk";
+import { ActionMenuPopover } from "./ActionMenuPopover.js";
 import { CollectionFormWorkflow } from "../form/CollectionFormWorkflow.js";
 import { CollectionOverlayWorkflow } from "../overlay/CollectionOverlayWorkflow.js";
 
@@ -12,7 +13,6 @@ const emptySelection: readonly Record<string, unknown>[] = Object.freeze([]);
 export function PageActionHost({ definition, onRefresh }: { definition: PageActionHostDefinition; onRefresh(): void }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
-  const [overflowOpen, setOverflowOpen] = useState(false);
   const [activeForm, setActiveForm] = useState<string>();
   const [activeOverlay, setActiveOverlay] = useState<string>();
   const [running, setRunning] = useState<string>();
@@ -45,17 +45,14 @@ export function PageActionHost({ definition, onRefresh }: { definition: PageActi
   return <>
     <div data-vastplan-page-actions style={{ width: "100%", minWidth: 0, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 4 }}>
       {layout.direct.map((action) => <PageActionButton key={action.id} action={action} loading={running === action.id} disabled={running !== undefined && running !== action.id} onRun={() => void run(action)} />)}
-      {layout.overflow.length === 0 ? null : <ui.Popover
-        open={overflowOpen}
-        placement="bottom-end"
-        ariaLabel={i18n.text(message(namespace, "action.more", "更多页面操作"))}
-        onOpenChange={setOverflowOpen}
-        trigger={(props) => <span ref={props.ref} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.IconButton size="lg" icon="more" label={i18n.text(message(namespace, "action.more", "更多页面操作"))} /></span>}
-      ><ui.Menu size="md" variant="action" items={layout.overflow.map((action) => ({ id: action.id, label: i18n.text(action.label), icon: <ui.Icon name={action.icon} />, disabled: running !== undefined }))} onSelect={(id) => {
+      <ActionMenuPopover
+        label={i18n.text(message(namespace, "action.more", "更多页面操作"))}
+        triggerSize="lg"
+        items={layout.overflow.map((action) => ({ id: action.id, label: i18n.text(action.label), icon: action.icon, disabled: running !== undefined, tone: action.tone === "danger" ? "danger" : "normal" }))}
+        onSelect={(id) => {
         const action = layout.overflow.find((candidate) => candidate.id === id);
         if (action !== undefined) void run(action);
-        setOverflowOpen(false);
-      }} /></ui.Popover>}
+      }} />
     </div>
     <CollectionFormWorkflow definition={definition.forms?.find((form) => form.id === activeForm)} selected={emptySelection} open={activeForm !== undefined} onClose={() => setActiveForm(undefined)} onRefresh={onRefresh} />
     <CollectionOverlayWorkflow definition={definition.overlays?.find((overlay) => overlay.id === activeOverlay)} selected={emptySelection} open={activeOverlay !== undefined} onClose={() => setActiveOverlay(undefined)} />

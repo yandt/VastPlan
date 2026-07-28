@@ -12,6 +12,7 @@ describe("visual recipes", () => {
     expect(Object.isFrozen(componentSizeRecipes)).toBe(true);
     expect(Object.isFrozen(componentSizeRecipes.control.sm)).toBe(true);
     expect(Object.isFrozen(componentSizeRecipes.menu.lg)).toBe(true);
-    expect(componentVariantRecipes.menu.action.borderInlineEnd).toBe(0);
+    expect(componentVariantRecipes.menu.action).toEqual({ borderInlineEnd: 0, width: "max-content", minWidth: 112, maxWidth: 280, overflow: "hidden" });
+    expect(componentVariantRecipes.menu.actionItem).toEqual({ display: "flex", alignItems: "center", gap: "8px" });
   });
 });

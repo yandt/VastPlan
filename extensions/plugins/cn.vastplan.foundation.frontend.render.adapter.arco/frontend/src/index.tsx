@@ -126,11 +126,11 @@ export function cascadeResponsiveColumns(columns: ResponsiveColumns): Responsive
 // so expose the native item through the framework-neutral contract.
 const GridItem = ArcoGrid.GridItem as unknown as ComponentType<GridItemProps>;
 
-function renderMenuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, onSelect?: (id: string) => void, parentDisabled = false): ReactNode[] {
+function renderMenuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>, variant: NonNullable<MenuProps["variant"]>, onSelect?: (id: string) => void, parentDisabled = false): ReactNode[] {
   const recipe = componentSizeRecipes.menu[size];
   return items.map((item) => item.children?.length
-    ? <ArcoMenu.SubMenu key={item.id} title={item.label}>{renderMenuItems(item.children, size, onSelect, parentDisabled || item.disabled === true)}</ArcoMenu.SubMenu>
-    : <ArcoMenu.Item key={item.id} disabled={parentDisabled || item.disabled} style={{ height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding }}>{item.icon}{item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
+    ? <ArcoMenu.SubMenu key={item.id} title={item.label}>{renderMenuItems(item.children, size, variant, onSelect, parentDisabled || item.disabled === true)}</ArcoMenu.SubMenu>
+    : <ArcoMenu.Item key={item.id} disabled={parentDisabled || item.disabled} style={{ height: recipe.itemHeight, lineHeight: `${recipe.itemHeight}px`, margin: 0, paddingInline: recipe.itemInlinePadding, ...(variant === "action" ? componentVariantRecipes.menu.actionItem : {}) }}>{item.icon}{item.href === undefined ? item.label : <a href={item.href} onClick={(event) => {
       event.preventDefault();
       event.stopPropagation();
       if (!parentDisabled && item.disabled !== true) onSelect?.(item.id);
@@ -139,7 +139,7 @@ function renderMenuItems(items: MenuItem[], size: NonNullable<MenuProps["size"]>
 
 function Menu({ items, activeID, size = "md", variant = "navigation", onSelect }: MenuProps) {
   const recipe = componentSizeRecipes.menu[size];
-  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)} style={{ minWidth: recipe.minWidth, padding: recipe.surfacePadding, borderRadius: recipe.radius, ...(variant === "action" ? { borderInlineEnd: componentVariantRecipes.menu.action.borderInlineEnd } : {}) }}>{renderMenuItems(items, size, onSelect)}</ArcoMenu>;
+  return <ArcoMenu selectedKeys={activeID ? [activeID] : []} onClickMenuItem={(key) => onSelect?.(key)} style={{ minWidth: recipe.minWidth, padding: recipe.surfacePadding, borderRadius: recipe.radius, ...(variant === "action" ? componentVariantRecipes.menu.action : {}) }}>{renderMenuItems(items, size, variant, onSelect)}</ArcoMenu>;
 }
 
 type OverlayContainerProps = { getPopupContainer?: () => Element };
@@ -171,8 +171,9 @@ function Popover({ open, trigger, children, placement = "bottom-start", initialF
   const triggerRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!open || initialFocus === "none") return;
-    const selector = initialFocus === "current" ? "[aria-current='page']" : "button,a[href],[tabindex]:not([tabindex='-1'])";
-    const target = contentRef.current?.querySelector<HTMLElement>(selector) ?? contentRef.current?.querySelector<HTMLElement>("button,a[href],[tabindex]:not([tabindex='-1'])");
+    const firstFocusable = "[role='menuitem']:not([aria-disabled='true']),button:not([disabled]),a[href],[tabindex]:not([tabindex='-1'])";
+    const selector = initialFocus === "current" ? "[aria-current='page']" : firstFocusable;
+    const target = contentRef.current?.querySelector<HTMLElement>(selector) ?? contentRef.current?.querySelector<HTMLElement>(firstFocusable);
     target?.focus();
   }, [initialFocus, open]);
   const position = ({ "bottom-start": "bl", bottom: "bottom", "bottom-end": "br", "top-start": "tl", top: "top", "top-end": "tr" } as const)[placement];
@@ -182,7 +183,7 @@ function Popover({ open, trigger, children, placement = "bottom-start", initialF
     position={position}
     unmountOnExit
     onVisibleChange={(visible) => onOpenChange(visible, visible ? "trigger" : "outside")}
-    popup={() => <div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} onKeyDown={(event) => {
+    popup={() => <div id={contentID} ref={contentRef} role="region" aria-label={ariaLabel} style={{ padding: 12, color: "var(--color-text-1)", background: "var(--color-bg-2)", border: "1px solid var(--color-border-2)", borderRadius: 6, boxShadow: "0 8px 24px rgba(0,0,0,.12)" }} onKeyDown={(event) => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       onOpenChange(false, "escape");

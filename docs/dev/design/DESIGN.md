@@ -44,7 +44,7 @@ UI Contract 7.0 暴露语义 token 与 `ComponentSize`，适配器映射到具�
 | `md` | 32px | 32px / 16px | 36px | 最小宽 200px，内边距 4px，4px 圆角 |
 | `lg` | 40px | 44px / 20px | 44px | 最小宽 220px，内边距 6px，6px 圆角 |
 
-动作菜单每行固定为“图标 + 标签”，触发器使用图标 + Tooltip。危险动作保留语义危险色；普通动作不使用实心 primary 背景。Menu 的 `variant=action` 消除导航专用 inline-end 分隔线，`variant=navigation` 保留导航语义；variant 与 size 互不替代。
+动作菜单每行固定为“图标 + 标签”，触发器使用图标 + Tooltip。危险动作保留语义危险色；普通动作不使用实心 primary 背景。Menu 的 `variant=action` 消除导航专用 inline-end 分隔线，并采用内容内在宽度（最小 112px、最大 280px）；超长标签在 216px 后省略且保留完整 title。`sm` 动作菜单使用 28px 行高和 3px 表面内边距，页面级与记录级“更多”都复用 Workbench 的同一紧凑动作菜单。`variant=navigation` 保留导航语义；variant 与 size 互不替代。
 
 ## 3. 排版
 
@@ -96,7 +96,7 @@ UI Contract 7.0 暴露语义 token 与 `ComponentSize`，适配器映射到具�
 
 ## 5. Overlay 与导航交互
 
-- `Popover` 为受控语义组件，适配器拥有定位、碰撞翻转、外部点击、ESC、焦点恢复、Shadow DOM Portal 和 z-index。
+- `Popover` 为受控语义组件，适配器拥有定位、碰撞翻转、外部点击、ESC、焦点恢复、Shadow DOM Portal 和 z-index。普通工作区 Popover 使用语义 overlay surface、1px 边框、6px 圆角、12px 内容内边距和 overlay 阴影；内部组合再管理自己的紧凑间距，不能把内容直接叠在页面上。
 - 顶部导航采用 disclosure pattern：Enter、Space、ArrowDown 打开；Escape 关闭；Left/Right/Home/End 在根组间移动。
 - 打开后优先聚焦当前页面链接，否则聚焦第一个链接。页面保持正常链接语义并使用 `aria-current="page"`。
 - 标准图标轨支持 Up/Down/Home/End；ArrowRight 进入面板，ArrowLeft 返回原根组。

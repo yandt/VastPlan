@@ -89,7 +89,7 @@ CollectionLoader(query, signal) -> CollectionResult
 └── facets? / permittedActions?    # 服务端事实，不是浏览器猜测
 ```
 
-表格行操作由 Workbench 统一投影：功能插件只声明 `placement: record.row` 的语义动作，Workbench 自动追加不可隐藏的末列“操作”，在横向滚动时固定在右侧并保持内容居中；每行先按 `visibleWhen` 过滤，最多两个动作以图标 + Tooltip 直接显示，剩余动作进入每行一个“图标 + 标签”的紧凑“更多行操作”浮层。页面级操作使用独立 `PageActionSpec` 并只挂载至 `page.header.end`，不得与行操作混用来规避这一布局规则。
+表格行操作由 Workbench 统一投影：功能插件只声明 `placement: record.row` 的语义动作，Workbench 自动追加不可隐藏的末列“操作”，在横向滚动时固定在右侧并保持内容居中；每行先按 `visibleWhen` 过滤，最多两个动作以图标 + Tooltip 直接显示，剩余动作进入每行一个“图标 + 标签”的紧凑“更多行操作”浮层。`ActionMenuPopover` 是 Workbench 内部通用组合，统一记录级和页面级溢出动作的数据投影、内容宽度、截断、危险/禁用态、初始焦点和选择后关闭；具体 Pattern 不再自行拼装 Popover + Menu。页面级操作使用独立 `PageActionSpec` 并只挂载至 `page.header.end`，不得与行操作混用来规避这一布局规则。
 
 - Table 使用 `page` 或 `cursor` 二选一。需要总数、跳页和审计浏览的管理表使用 `page`；Card feed 和高数据量连续浏览使用 `cursor`。
 - Filter 的值、排序、页码/cursor 都属于 URL 可恢复状态；敏感筛选值不得进入 URL。查询切换时取消上一请求，保留已成功数据并展示刷新状态。

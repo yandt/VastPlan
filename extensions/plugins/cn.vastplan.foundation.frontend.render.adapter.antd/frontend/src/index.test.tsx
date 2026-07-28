@@ -56,7 +56,11 @@ describe("Ant Design portal UI renderer", () => {
     const Menu = antdPortalUIComponents.Menu;
     const markup = renderToStaticMarkup(<Menu size="sm" variant="action" items={[{ id: "submit", label: "Submit" }]} />);
     expect(markup).toContain("border-inline-end:0");
-    expect(markup).toContain("min-width:180px");
+    expect(markup).toContain("width:max-content");
+    expect(markup).toContain("min-width:112px");
+    expect(markup).toContain("max-width:280px");
+    expect(markup).toContain("display:flex");
+    expect(markup).toContain("gap:8px");
     expect(markup).toContain("height:28px");
   });
 
