@@ -12,6 +12,7 @@ import { requestHostname } from "./platform-route-contract";
 import { portalRenderInput } from "../runtime/portal-render-input";
 import { PortalGenerationCoordinationError, type PortalGenerationCoordinationPort } from "../runtime/portal-generation-coordinator";
 import { APIUnsupportedMediaTypeError, readAPIJSONBody } from "../api-exposure/api-invocation";
+import { preferenceScopeForPortal } from "../runtime/portal-preference-contract";
 
 const generationCommitPath = "/v1/portal-generation-commit";
 const runtimePaths = new Set(["/v1/portal-runtime", "/v1/portal-recovery", "/v1/portal-updates", generationCommitPath]);
@@ -161,7 +162,12 @@ export class PortalRuntimeRoutes {
 export function projectExperience(runtime: PortalRuntimeSpec, principal: Principal): PortalRuntimeSpec {
   const projected = structuredClone(runtime) as PortalRuntimeSpec;
   const permissions = [...new Set(principal.roles)].sort();
-  (projected.portal as PortalRuntimeSpec["portal"] & { experience: { permissions: string[] } }).experience = { permissions };
+  const portal = projected.portal as PortalRuntimeSpec["portal"] & {
+    experience: { permissions: string[] };
+    preferenceScope: ReturnType<typeof preferenceScopeForPortal>;
+  };
+  portal.experience = { permissions };
+  portal.preferenceScope = preferenceScopeForPortal(projected.portal);
   return projected;
 }
 

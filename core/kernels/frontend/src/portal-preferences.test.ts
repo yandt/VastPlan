@@ -56,6 +56,29 @@ describe("PortalPreferenceSession", () => {
     expect(puts[1]?.values.collections).toEqual({ audit: { pageSize: 50 }, services: { columns: ["name", "id"], hiddenColumns: ["id"], density: "compact", pageSize: 20 } });
     expect(session.readCollection("audit")).toEqual({ pageSize: 50 });
   });
+
+  it("uses the server-authored preference scope when HMR overlays newer UI contracts", async () => {
+    const storedScope = {
+      portalId: "operations",
+      renderer: { id: "cn.vastplan.render", contractMajor: 4 },
+      shell: { id: "cn.vastplan.shell", contractMajor: 4 },
+      workbench: { id: "cn.vastplan.workbench", contractMajor: 4 },
+    };
+    const hmrPortal = { ...portal, preferenceScope: storedScope };
+    let put: Record<string, any> | undefined;
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/v1/csrf") return new Response(JSON.stringify({ token: "c".repeat(64) }), { status: 200 });
+      if (init?.method === "PUT") {
+        put = JSON.parse(String(init.body)) as Record<string, any>;
+        return new Response(JSON.stringify({ revision: 29, scope: storedScope, values: put.values }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ revision: 28, scope: storedScope, values: { collections: {} } }), { status: 200 });
+    });
+    const session = await PortalPreferenceSession.open(fetcher, "/operations/settings/portals/profiles", hmrPortal);
+    await session.writeCollection("portal-profiles", { columns: ["id", "status"], hiddenColumns: ["status"] });
+    expect(put?.expectedRevision).toBe(28);
+    expect(session.readCollection("portal-profiles")).toEqual({ columns: ["id", "status"], hiddenColumns: ["status"] });
+  });
 });
 
 function scope() {

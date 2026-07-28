@@ -177,12 +177,38 @@ export class PortalPreferenceUnavailable extends Error {
 }
 
 function preferenceScope(portal: PortalRuntimeSpec["portal"]): PortalPreferenceScope {
+  const projected = (portal as PortalRuntimeSpec["portal"] & { preferenceScope?: unknown }).preferenceScope;
+  if (projected !== undefined) return parseProjectedPreferenceScope(projected, portal.id);
   return Object.freeze({
     portalId: portal.id,
     renderer: Object.freeze({ id: portal.renderAdapter.id, contractMajor: contractMajor(portal.renderAdapter.uiContract) }),
     shell: Object.freeze({ id: portal.shell.id, contractMajor: contractMajor(portal.shell.uiContract) }),
     workbench: Object.freeze({ id: portal.workbench.id, contractMajor: contractMajor(portal.workbench.uiContract) }),
   });
+}
+
+function parseProjectedPreferenceScope(value: unknown, portalID: string): PortalPreferenceScope {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new PortalPreferenceUnavailable("PortalPreference 投影 scope 无效");
+  const record = value as Readonly<Record<string, unknown>>;
+  if (Object.keys(record).some((key) => !["portalId", "renderer", "shell", "workbench"].includes(key)) || validID(record.portalId) !== portalID) {
+    throw new PortalPreferenceUnavailable("PortalPreference 投影 portalId 无效");
+  }
+  return Object.freeze({
+    portalId: portalID,
+    renderer: parseProjectedCatalogScope(record.renderer),
+    shell: parseProjectedCatalogScope(record.shell),
+    workbench: parseProjectedCatalogScope(record.workbench),
+  });
+}
+
+function parseProjectedCatalogScope(value: unknown): PortalPreferenceScope["renderer"] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) throw new PortalPreferenceUnavailable("PortalPreference 投影 catalog scope 无效");
+  const record = value as Readonly<Record<string, unknown>>;
+  const id = validID(record.id);
+  if (Object.keys(record).some((key) => key !== "id" && key !== "contractMajor") || id === undefined || !Number.isSafeInteger(record.contractMajor) || Number(record.contractMajor) < 1 || Number(record.contractMajor) > 65_535) {
+    throw new PortalPreferenceUnavailable("PortalPreference 投影 catalog scope 无效");
+  }
+  return Object.freeze({ id, contractMajor: Number(record.contractMajor) });
 }
 
 function preferredValues(remote: PortalPreference | undefined, cache: PortalPreference | undefined): PortalPreferenceValues {

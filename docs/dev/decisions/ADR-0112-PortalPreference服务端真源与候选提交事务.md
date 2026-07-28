@@ -36,3 +36,7 @@ Portal 已允许用户切换 Renderer、Shell Library、主题、图标风格和
 ## 后续实施
 
 - 2026-07-23：Portal Composer 1.6.0 已按 [ADR-0125](ADR-0125-Portal-Composer与Preference共享状态分区.md) 将偏好迁移为 `tenant + subject` Shared State 文档，并将组合治理迁移为 tenant CAS 聚合；插件切换为 active-active。上文独立状态文件描述保留为本 ADR 采纳时的历史记录。
+
+## 2026-07-28 修订：RuntimeSpec 携带服务端偏好分区
+
+开发态 HMR 可以覆盖 Renderer、Shell、Workbench 的公开 UI 契约，但不得因此让浏览器重新推导一个尚未由 Activation 发布的偏好分区。Node Portal Host 现在从真实活动 Activation 生成只读 `portal.preferenceScope`，并随 RuntimeSpec 一起投影；浏览器只验证和使用该服务端字段，不提交 scope。HMR 继续覆盖模块兼容契约，但必须原样保留偏好分区。这样开发源码可运行在较新的 UI 契约上，同时 CAS 仍命中服务端真实 revision；正式 Activation 升级 contract major 后，Portal Host 才会自然切换到新的隔离分区。

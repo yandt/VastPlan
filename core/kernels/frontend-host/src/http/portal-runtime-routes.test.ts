@@ -21,9 +21,10 @@ describe("Portal runtime routes", () => {
     const runtimeResponse = await fetch(`${fixture.origin}/v1/portal-runtime?path=/operations/settings`, { headers: fixture.headers });
     expect(runtimeResponse.status).toBe(200);
     expect(runtimeResponse.headers.get("link")).toContain("crossorigin=use-credentials");
-    const runtime = await runtimeResponse.json() as { portal: { revision: number; experience: { permissions: string[] } }; modules: Array<{ url: string; sha256: string }> };
+    const runtime = await runtimeResponse.json() as { portal: { revision: number; experience: { permissions: string[] }; preferenceScope: unknown }; modules: Array<{ url: string; sha256: string }> };
     expect(runtime.portal.revision).toBe(7);
     expect(runtime.portal.experience.permissions).toEqual(["portal.read"]);
+    expect(runtime.portal.preferenceScope).toEqual(preferenceScope());
     expect(runtimeResponse.headers.get("cache-control")).toContain("no-store");
     expect(runtimeResponse.headers.get("vary")).toContain("Cookie");
     expect(runtime.modules[0]?.sha256).toBe(fixture.activeDigest);
@@ -125,7 +126,12 @@ async function startRuntimeServer(activeOverrides: Readonly<Record<string, unkno
   const sessionFile = join(assetsRoot, "sessions.json");
   await writeSessionFixture(sessionFile, "browser-token", new Date(Date.now() + 60_000), ["portal.read"]);
   const deliveryFixture = await createPortalDeliveryFixture();
-  const base = { id: "operations", tenantId: "tenant-a", route: "/operations", audience: ["portal.read"], updates: { mode: "generation" } } as const;
+  const base = {
+    id: "operations", tenantId: "tenant-a", route: "/operations", audience: ["portal.read"], updates: { mode: "generation" },
+    renderAdapter: { id: "cn.vastplan.render", uiContract: "^4.0.0" },
+    shell: { id: "cn.vastplan.shell", uiContract: "^4.0.0" },
+    workbench: { id: "cn.vastplan.workbench", uiContract: "^4.0.0" },
+  } as const;
   const active = await writePortalDeliveryRevision(deliveryFixture, { ...base, revision: 7 }, "export const state = 'active';\n");
   const fallback = await writePortalDeliveryRevision(deliveryFixture, { ...base, revision: 6 }, "export const state = 'fallback';\n");
   const activations = [
@@ -145,4 +151,13 @@ async function startRuntimeServer(activeOverrides: Readonly<Record<string, unkno
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address() as AddressInfo;
   return { origin: `http://127.0.0.1:${address.port}`, headers: { Cookie: "vastplan_session=browser-token" }, activeDigest: active.digest, fallbackDigest: fallback.digest };
+}
+
+function preferenceScope() {
+  return {
+    portalId: "operations",
+    renderer: { id: "cn.vastplan.render", contractMajor: 4 },
+    shell: { id: "cn.vastplan.shell", contractMajor: 4 },
+    workbench: { id: "cn.vastplan.workbench", contractMajor: 4 },
+  };
 }
