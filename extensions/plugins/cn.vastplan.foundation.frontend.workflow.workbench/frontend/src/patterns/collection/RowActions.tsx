@@ -24,14 +24,14 @@ export function RowActions({ actions, row, onRunAction }: {
   const direct = visible.slice(0, directActionLimit);
   const overflow = visible.slice(direct.length);
   const moreLabel = i18n.text(message(namespace, "action.moreRow", "更多行操作"));
-  return <ui.Stack direction="row" gap="xs" align="center" justify="center">
-    {direct.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} size="compact" tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => onRunAction(action)} />)}
+  return <ui.Stack direction="row" gap="sm" align="center" justify="center">
+    {direct.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} size="compact" tone={action.tone === "danger" ? "danger" : "normal"} onClick={() => onRunAction(action)} />)}
     {overflow.length === 0 ? null : <ui.Popover
       open={overflowOpen}
       placement="bottom-end"
       ariaLabel={moreLabel}
       onOpenChange={setOverflowOpen}
-      trigger={(props) => <span ref={props.ref} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.IconButton icon="more" label={moreLabel} size="compact" /></span>}
-    ><ui.Stack direction="row" gap="xs" align="center" justify="center" wrap>{overflow.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} size="compact" tone={action.tone === "danger" ? "danger" : action.tone === "primary" ? "primary" : "normal"} onClick={() => { onRunAction(action); setOverflowOpen(false); }} />)}</ui.Stack></ui.Popover>}
+      trigger={(props) => <span ref={props.ref} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown} style={{ display: "inline-flex", lineHeight: 0 }}><ui.IconButton icon="more" label={moreLabel} size="compact" /></span>}
+    ><ui.Stack direction="row" gap="xs" align="center" justify="center" wrap>{overflow.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} size="compact" tone={action.tone === "danger" ? "danger" : "normal"} onClick={() => { onRunAction(action); setOverflowOpen(false); }} />)}</ui.Stack></ui.Popover>}
   </ui.Stack>;
 }
