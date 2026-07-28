@@ -33,6 +33,7 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain("width:max-content");
     expect(markup).toContain("min-width:112px");
     expect(markup).toContain("max-width:280px");
+    expect(markup).toContain("padding:4px");
     expect(markup).toContain("overflow:hidden");
     expect(markup).toContain("display:flex");
     expect(markup).toContain("width:100%");

@@ -39,6 +39,7 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("width:max-content");
     expect(html).toContain("min-width:112px");
     expect(html).toContain("max-width:280px");
+    expect(html).toContain("padding:4px");
     expect(html).toContain("overflow:hidden");
     expect(html).toContain("display:flex");
     expect(html).toContain("width:100%");
