@@ -13,7 +13,8 @@ function buttonStyle(kind: ButtonProps["kind"]): { type?: "primary" | "default" 
 
 export function Button({ children, kind, ...props }: ButtonProps) { return <AntdButton {...buttonStyle(kind)} {...props}>{children}</AntdButton>; }
 
-export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, label, onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
+export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, label, size = "regular", onClick, disabled, loading, tone = "normal" }: IconButtonProps) {
+  const edge = size === "compact" ? 28 : 44;
   return <Tooltip title={label}><AntdButton
     aria-label={label}
     type={tone === "primary" ? "primary" : "text"}
@@ -22,7 +23,7 @@ export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, l
     loading={loading}
     disabled={disabled}
     onClick={onClick}
-    style={{ width: 44, height: 44 }}
+    style={{ width: edge, height: edge }}
   /></Tooltip>;
 }
 

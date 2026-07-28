@@ -61,6 +61,8 @@ export interface ButtonProps {
 export interface IconButtonProps {
   icon: SemanticIconName;
   label: string;
+  /** Compact is reserved for dense, repeated action surfaces such as Table rows. */
+  size?: "regular" | "compact";
   onClick?(): void;
   disabled?: boolean;
   loading?: boolean;

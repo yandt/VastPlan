@@ -8,7 +8,7 @@ vi.mock("@vastplan/ui-primitives", () => ({
   usePortalI18n: () => ({ text: (value: unknown) => typeof value === "string" ? value : String((value as { fallback?: string }).fallback ?? "") }),
   usePortalUI: () => ({
     Stack: ({ justify, children }: { justify?: string; children: ReactNode }) => <div data-justify={justify}>{children}</div>,
-    IconButton: ({ icon, label }: { icon: string; label: string }) => <button type="button" data-icon={icon} aria-label={label} />,
+    IconButton: ({ icon, label, size }: { icon: string; label: string; size?: string }) => <button type="button" data-icon={icon} data-size={size} aria-label={label} />,
     Popover: ({ children }: { children: ReactNode }) => <div data-popover>{children}</div>,
   }),
 }));
@@ -25,6 +25,7 @@ describe("RowActions", () => {
     const html = renderToStaticMarkup(<RowActions actions={actions} row={{ id: "one" }} onRunAction={() => undefined} />);
     expect(html).toContain('data-justify="center"');
     expect(html).toContain('data-icon="edit"');
+    expect(html).toContain('data-size="compact"');
     expect(html).toContain('aria-label="编辑"');
     expect(html).toContain('data-icon="remove"');
     expect(html).toContain('aria-label="删除"');
