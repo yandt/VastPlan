@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,7 +22,8 @@ import (
 const developmentAuthorizationAudience = "development:local"
 
 func (r *runtime) writeSessionsFromPublishedAuthorization() error {
-	catalogPath := filepath.Join(r.persistentStateRoot(), "authorization", "permission-catalog.json")
+	root := filepath.Join(r.persistentStateRoot(), "authorization")
+	catalogPath := filepath.Join(root, "permission-catalog.json")
 	raw, err := os.ReadFile(catalogPath)
 	if errors.Is(err, os.ErrNotExist) {
 		// A fresh zero-publication startup intentionally has no platform roles yet.
@@ -40,7 +42,17 @@ func (r *runtime) writeSessionsFromPublishedAuthorization() error {
 			ownerPermissions = append(ownerPermissions, permission.Code)
 		}
 	}
-	return writeSessions(filepath.Join(r.runDir, "secrets", "portal-sessions.json"), ownerPermissions)
+	if err := writeSessions(filepath.Join(r.runDir, "secrets", "portal-sessions.json"), ownerPermissions); err != nil {
+		return err
+	}
+	renewed, err := renewPublishedDevelopmentAuthorization(root, catalog, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	if renewed {
+		log.Printf("已续签开发授权 Snapshot 与 Seed 访问租约（未执行平台或业务发布）")
+	}
+	return nil
 }
 
 func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Repository, refs []artifactrepository.Ref) error {
