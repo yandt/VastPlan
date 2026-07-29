@@ -81,7 +81,6 @@ function createForm(
       ],
     },
     workflow: {
-      surface: "drawer",
       title: message(namespace, "create.title", "创建 Provider 草稿"),
       size: "lg",
       submitLabel: message(namespace, "create.submit", "创建草稿"),
@@ -161,7 +160,6 @@ function publishForm(
       ],
     },
     workflow: {
-      surface: "drawer",
       title: message(
         namespace,
         "publish.title",

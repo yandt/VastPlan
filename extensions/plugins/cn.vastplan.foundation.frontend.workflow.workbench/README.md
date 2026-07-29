@@ -17,7 +17,7 @@
 
 这里的 `CollectionTable` / `CollectionCards` 是集合工作流的受控呈现区，不是 Ant/Arco/MUI 的基础组件。基础表格和卡片分别通过 `ui.Table` / `ui.DataCard` 由渲染适配器提供。`patterns/record/` 负责 RecordDetail、MasterDetail、TreeDetail 的详情加载、主从选择、树边界、URL 恢复、窄屏与页内编辑保护；`patterns/action/` 是 Collection/Record 共用的 Page Header 动作桥。
 
-`patterns/form/` 把动态表单拆为 `useFormWorkflow`（加载、脏状态、校验和提交生命周期）、`FormContent`（纯 Schema 表单）、`FormActions`（步骤与提交操作）和 `FormSurface`（Page/Dialog/Drawer 容器）。调用方只提交数据定义：`preset` 选择 compact/standard/comfortable/guided，`labelPlacement` 选择 inline（默认）、stacked 或筛选专用 inside-inline；根表单和 Section 均支持 1–4 列及合计 100 的 `columnWidths` 百分比权重。`beforeSubmit → submit → afterSubmit` 顺序由 Workbench 统一执行，字段错误规范化后显示在对应输入框下方，表单级错误才进入全局错误区。`secret-material.ts` 统一识别和丢弃一次性秘密，禁止材料进入 baseline 或在提交/关闭后滞留。Render Adapter 只负责把同一语义映射为各框架的表单、分栏、列表和树，不允许功能插件直接组合基础 UI 组件。
+`patterns/form/` 把动态表单拆为 `useFormWorkflow`（加载、脏状态、校验和提交生命周期）、`FormContent`（纯 Schema 表单）、`FormActions`（步骤与提交操作）、默认 `FormDialog` 组合和显式 `FormPagePanel`。功能插件省略 `workflow.surface` 时统一打开 Dialog；只有独立表单页和记录页内编辑器显式使用 `surface: "page"`，表单不再支持 Drawer。调用方只提交数据定义：`preset` 选择 compact/standard/comfortable/guided，`labelPlacement` 选择 inline（默认）、stacked 或筛选专用 inside-inline；根表单和 Section 均支持 1–4 列及合计 100 的 `columnWidths` 百分比权重。`beforeSubmit → submit → afterSubmit` 顺序由 Workbench 统一执行，字段错误规范化后显示在对应输入框下方，表单级错误才进入全局错误区。`secret-material.ts` 统一识别和丢弃一次性秘密，禁止材料进入 baseline 或在提交/关闭后滞留。Render Adapter 只负责把同一语义映射为各框架的表单、分栏、列表和树，不允许功能插件直接组合基础 UI 组件。
 
 功能插件的调用保持数据驱动：
 
@@ -31,7 +31,7 @@ const form: WorkbenchFormDefinition = {
     columns: 2,
     columnWidths: [35, 65],
   },
-  workflow: { surface: "dialog", size: "md", title: "编辑 Profile" },
+  workflow: { size: "md", title: "编辑 Profile" }, // 省略 surface，默认使用 FormDialog
   async beforeSubmit({ value }) { return { value: normalize(value) }; },
   async validate({ value }) { return validateProfile(value); },
   async submit({ value }, signal) { return client.save(value, signal); },

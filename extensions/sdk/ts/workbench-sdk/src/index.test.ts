@@ -143,7 +143,7 @@ describe("record pattern definitions", () => {
       async runAction() {},
     })).toThrow("位置");
     expect(() => defineRecordDetailPage({ id: "detail", path: "/detail", title: "Detail", pattern: "record-detail", detail,
-      editor: { id: "edit", schema: { id: "edit", schema: { type: "object" } }, workflow: { surface: "drawer", title: "Edit" }, async submit() {} }, async load() { return undefined; },
+      editor: { id: "edit", schema: { id: "edit", schema: { type: "object" } }, workflow: { title: "Edit" }, async submit() {} }, async load() { return undefined; },
     })).toThrow("page surface");
   });
 });

@@ -99,7 +99,7 @@ function intentForm(client: PlatformAdminClient, id: "create" | "edit"): Workben
       fields: [{ pointer: "/deployment" }, { pointer: "/services" }],
     },
     workflow: {
-      surface: "drawer", size: "lg", title: message(id === "create" ? "panel.new" : "panel.edit", id === "create" ? "新建应用意图草稿" : "编辑应用意图草稿"),
+      size: "lg", title: message(id === "create" ? "panel.new" : "panel.edit", id === "create" ? "新建应用意图草稿" : "编辑应用意图草稿"),
       submitLabel: message(id === "create" ? "action.create" : "action.save", id === "create" ? "创建草稿" : "保存草稿"),
       success: { notify: message(id === "create" ? "notice.created" : "notice.saved", id === "create" ? "应用意图草稿已创建" : "应用意图草稿已保存"), refreshCollection: true, close: true },
     },

@@ -75,7 +75,7 @@ export function createDatabaseConnectionsPage(client: PlatformAdminClient, servi
       ],
     },
     workflow: {
-      surface: "drawer", size: "lg",
+      size: "lg",
       title: message(namespace, id === "create" ? "form.createTitle" : "form.editTitle", id === "create" ? "新增数据库连接" : "编辑数据库连接"),
       description: message(namespace, "form.description", "连接定义和池策略保存在数据库插件中；凭证明文仅用于本次 TLS 请求。"),
       submitLabel: message(namespace, "action.save", "保存"),

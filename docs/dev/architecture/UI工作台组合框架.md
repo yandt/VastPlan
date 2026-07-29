@@ -37,7 +37,7 @@ flowchart TB
 4. Workbench 故障和设计系统故障一样，进入 Portal Kernel 恢复路径，而不是让功能插件退回自行组合。
 5. 功能插件制品必须使用 `@vastplan/workbench-sdk`；构建门禁与 Go 架构适应度测试拒绝 React、Arco/MUI、裸 `context.addPage` 和 `@vastplan/ui-primitives` 视觉导入。当前唯一例外是尚在该包中的非视觉 `PortalControlClient` 与 `Portal*` 数据契约。
 
-`FilterPanel` 是与 Collection、MasterDetail 平级的一级组合组件，统一字段 Schema、紧凑表单、草稿/提交策略、响应式分列和操作位置，但不发起数据请求。`CollectionWorkbench` 组合 FilterPanel，并共享查询、选择、动作、取消和错误状态机，提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动/视口增量加载。Workbench Page 根使用统一零 margin/零 padding Flow，以受治理 `sectionGap` 排列一级区域；FilterPanel 的 `flush/compact` inset 由 Workbench 组合上下文决定，功能插件不能借此设置外部间距。Collection 顶部筛选固定 `flush`，避免 FilterBar 自身 padding 与 Shell 16px 起始节奏叠加。FilterPanel 默认 `xs=1 / md=2 / xl=4`，可通过 `filterPanel.layout.columns` 覆盖；列偏好由工具栏锚定 Popover 即时写入，不使用阻断式确认 Dialog。表单工作流已提供 page/Dialog/Drawer、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏状态保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表。视觉数值的唯一真相源是《[Portal 设计系统](../design/DESIGN.md)》的 `portalPageRhythm`。
+`FilterPanel` 是与 Collection、MasterDetail 平级的一级组合组件，统一字段 Schema、紧凑表单、草稿/提交策略、响应式分列和操作位置，但不发起数据请求。`CollectionWorkbench` 组合 FilterPanel，并共享查询、选择、动作、取消和错误状态机，提供 table/page 与 card/cursor 两种受控呈现：Table 保留列显示与顺序偏好、页码和总数；Card 固定标题、状态、摘要、内容与 footer 动作区，支持手动/视口增量加载。Workbench Page 根使用统一零 margin/零 padding Flow，以受治理 `sectionGap` 排列一级区域；FilterPanel 的 `flush/compact` inset 由 Workbench 组合上下文决定，功能插件不能借此设置外部间距。Collection 顶部筛选固定 `flush`，避免 FilterBar 自身 padding 与 Shell 16px 起始节奏叠加。FilterPanel 默认 `xs=1 / md=2 / xl=4`，可通过 `filterPanel.layout.columns` 覆盖；列偏好由工具栏锚定 Popover 即时写入，不使用阻断式确认 Dialog。表单工作流已提供默认 FormDialog 和显式 page、打开时动态 Schema/枚举准备、分区/标签/步骤、1–4 列、有限条件 DSL、脏状态保护、同步/异步/服务端字段错误、一次性提交和成功刷新。Overlay 统一承载 JSON 预览和审计表，并可按信息形态选择 Dialog 或 Drawer。视觉数值的唯一真相源是《[Portal 设计系统](../design/DESIGN.md)》的 `portalPageRhythm`。
 
 通用排序由 Workbench 内部 `patterns/interaction/SortableList` 统一承接，当前使用精确锁定的 dnd-kit；Pointer、Touch、自动滚动和碰撞反馈不再由各 Pattern 自行处理，键盘继续提供显式等价操作。第三方事件与 Sensor 不进入 UI Contract 或功能插件，dnd-kit 仅在 Sortable 表面实际挂载后加载。未来首页卡片使用 `DashboardGridSpec` 描述稳定卡片 ID 和响应式位置，可信宿主通过 `loadDashboardGrid()` 按需加载 `react-grid-layout` 并解析卡片内容；Grid 代码不进入普通 Workbench 页面入口。该基础不等于首页已经实现，卡片目录、偏好 CAS、权限裁剪和完整键盘缩放仍是正式启用前置项，详见 ADR-0162。
 
@@ -127,7 +127,7 @@ FormPresentation
 └── actions: 表单内 action ID 和顺序
 
 FormWorkflow
-├── surface: page | dialog | drawer
+├── surface?: dialog（默认）| page（仅显式页内表单）
 ├── title / description / size
 ├── submitAction / cancelAction / confirmBeforeSubmit?
 ├── success: notify、refreshCollection、close、navigate
@@ -136,7 +136,7 @@ FormWorkflow
 
 `visibleWhen` / `readOnlyWhen` 使用有限 DSL：字段 JSON Pointer、`equals`、`in`、`exists`、`all`、`any`、`not`。它不能读取环境、调用网络、执行脚本或访问其他插件状态。需要复杂业务判断时，插件把已裁剪的只读 `context` 传给 Workbench，并由服务端在提交时再次验证。
 
-`FormDialog` / `FormDrawer` 由 Workbench 统一处理标题、焦点、ESC、关闭确认、校验、提交中禁用、一次性提交、字段级错误、成功刷新、失败保留和本地化。插件只给出 Schema、Presentation、Workflow 与 `submit(values, signal)` 处理器；处理器是运行时代码，绝不写入 Portal 发布配置。
+`FormDialog` 是非页面表单唯一的默认组合，由 Workbench 统一处理标题、焦点、ESC、关闭确认、校验、提交中禁用、一次性提交、字段级错误、成功刷新、失败保留和本地化。插件省略 `workflow.surface` 即使用 Dialog；只有独立表单页和记录页内编辑器可显式声明 `page`。Drawer 只保留给只读详情、审计和辅助 Overlay，不再承载表单。插件只给出 Schema、Presentation、Workflow 与 `submit(values, signal)` 处理器；处理器是运行时代码，绝不写入 Portal 发布配置。
 
 当前实现中，Collection Action 只能通过已登记的 `form` ID 打开表单，不能携带组件或任意回调；独立表单页通过 `defineFormPage()` 注册。Workbench 在打开时加载值、在切换/关闭时取消请求，并拒绝重复提交。异步校验和提交返回的字段错误保持为 `LocalizedText`，只由 Workbench 按当前 Portal locale 翻译，功能插件与 UI Adapter 均不能提前固化语言。
 
@@ -177,7 +177,7 @@ Record Foundation 使用 TypeScript + React：代码直接运行在现有浏览�
 1. 已完成：`ui.workflow.workbench` descriptor、Platform Profile/Catalog 单例校验、`@vastplan/workbench-sdk` 与当前 `@vastplan/ui-contract` 4.x Collection 类型，以及 Arco/MUI 行选择语义。
 2. 已完成：一级 `FilterPanel` 契约、独立目录、紧凑表单、响应式提交策略，以及 Collection/MasterDetail 组合；`CollectionWorkbench` 的表格、数据概览、工具栏、分页、列偏好、行/批量操作均复用该面板。
 3. 已完成：Card cursor 模式、共享查询状态、稳定键去重、重复 cursor 防护、手动/视口增量加载，以及 Arco/MUI `DataCard` 语义组件。
-4. 已完成：`FormPresentation`、`FormWorkflow`、Page/Dialog/Drawer 表单，以及 Arco/MUI 的分区、标签、步骤、分栏和条件字段语义；全局设置是非敏感 fixture，凭证和数据库连接验证 `secretMaterial` 一次性秘密边界。
+4. 已完成：`FormPresentation`、`FormWorkflow`、默认 FormDialog 与显式 Page 表单，以及 Ant/Arco/MUI 的分区、标签、步骤、分栏和条件字段语义；全局设置是非敏感 fixture，凭证和数据库连接验证 `secretMaterial` 一次性秘密边界。
 5. 已完成：首方功能插件已迁移到当前 4.x 契约；Portal 治理按 Profile/Application/Binding/Activation 分页，部署管理复用动态 Form 和预览/审计 Overlay。生产构建与 `engineering/arch` 同时拒绝遗留基础组件 import、UI 框架 import 和裸页面注册。
 6. 已完成：`RecordDetail`、`MasterDetail`、`TreeDetail`，共享详情投影、列表查询、树边界、URL 选择、页内编辑脏状态、动作与 Overlay；Arco/MUI 实现等价 Split/List/Tree 语义，开发 Application 通过 `cn.vastplan.example.frontend.workbench-gallery` 展示三种模式。
 7. 已完成基础：dnd-kit 统一 Sortable 内核、列偏好迁移、`DashboardGridSpec` 校验、`react-grid-layout` 延迟 Library 与生产 Chunk 预算门禁；首页卡片贡献与偏好事务尚未开始。

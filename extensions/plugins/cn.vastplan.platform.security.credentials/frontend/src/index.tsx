@@ -47,7 +47,6 @@ export function createCredentialsPage(client: PlatformAdminClient, serviceID: st
       ],
     },
     workflow: {
-      surface: "drawer",
       title: message(namespace, "form.title", "安全保存凭证"),
       description: message(namespace, "form.description", "列表和读取 API 永远不会返回明文或密文。使用同名凭证会创建新版本。"),
       size: "md",

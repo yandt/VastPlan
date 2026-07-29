@@ -69,7 +69,8 @@ export interface FormPresentation {
   fields?: readonly FormFieldPresentation[];
 }
 export interface FormWorkflow {
-  surface: "page" | "dialog" | "drawer";
+  /** Defaults to dialog. Page forms must opt in explicitly. */
+  surface?: "page" | "dialog";
   title: import("./i18n.js").LocalizedText;
   description?: import("./i18n.js").LocalizedText;
   size?: ComponentSize;

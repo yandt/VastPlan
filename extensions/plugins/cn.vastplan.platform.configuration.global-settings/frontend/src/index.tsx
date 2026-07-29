@@ -32,7 +32,6 @@ export function createGlobalSettingsPage(client: PlatformAdminClient, serviceID:
       ],
     },
     workflow: {
-      surface: "drawer",
       title: message(namespace, id === "edit" ? "form.editTitle" : "form.createTitle", id === "edit" ? "编辑全局设置" : "新增全局设置"),
       description: message(namespace, "form.description", "这里只保存非敏感平台配置；密码、令牌和密钥必须交给凭证插件。"),
       size: "md",

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "revision": 53,
+  "revision": 54,
   "id": "local-platform-management",
   "target": { "kernel": "backend" },
   "serviceClasses": ["application.backend"],
@@ -30,7 +30,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.security.bootstrap-policy", "version": "0.1.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.6", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.7", "channel": "stable" }
       ]
     },
     {
@@ -60,7 +60,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.5", "channel": "stable" }
+        { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.6", "channel": "stable" }
       ]
     },
     {
@@ -120,7 +120,7 @@
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
         { "id": "cn.vastplan.platform.artifacts.storage.file", "version": "0.2.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.35.3", "channel": "stable" }
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.35.4", "channel": "stable" }
       ]
     },
     {
@@ -195,7 +195,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.6", "channel": "stable" }
+        { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.7", "channel": "stable" }
       ]
     },
     {
@@ -250,7 +250,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.6", "channel": "stable" }
+        { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.7", "channel": "stable" }
       ]
     },
     {
@@ -305,7 +305,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.21.2", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.21.3", "channel": "stable" }
       ]
     },
     {
@@ -331,7 +331,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.3", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.4", "channel": "stable" }
       ]
     },
     {
@@ -362,7 +362,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.7.3", "channel": "stable" }
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "1.7.4", "channel": "stable" }
       ]
     },
     {
@@ -412,7 +412,7 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.security.authorization-enforcer", "version": "0.2.0", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.5.0", "channel": "stable" }
+        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.5.1", "channel": "stable" }
       ]
     },
     {

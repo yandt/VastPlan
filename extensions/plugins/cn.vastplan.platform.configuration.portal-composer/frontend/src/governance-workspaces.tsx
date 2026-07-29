@@ -70,7 +70,7 @@ export function createProfilePage(client: PortalControlClient): CollectionPageDe
   const form = (id: "create" | "edit"): WorkbenchFormDefinition<ProfileRow> => ({
     id, schema: profileSchema,
     presentation: { layout: "vertical", navigation: "sections", sections: [{ id: "profile", title: message(namespace, "panel.profile", "Profile 版本"), columns: 2, fields: ["/name", "/defaultRenderer", "/allowedRenderers", "/userSelectableRenderer", "/defaultTemplate", "/pageBodyWidth", "/navigationGroups"] }], fields: [{ pointer: "/navigationGroups", span: 2 }] },
-    workflow: { surface: "drawer", size: "lg", title: message(namespace, id === "create" ? "action.createVersion" : "action.edit", id === "create" ? "新建版本" : "编辑草稿"), submitLabel: message(namespace, "action.save", "保存草稿"), success: { notify: message(namespace, "notice.saved", "治理资源已保存"), refreshCollection: true, close: true } },
+    workflow: { size: "lg", title: message(namespace, id === "create" ? "action.createVersion" : "action.edit", id === "create" ? "新建版本" : "编辑草稿"), submitLabel: message(namespace, "action.save", "保存草稿"), success: { notify: message(namespace, "notice.saved", "治理资源已保存"), refreshCollection: true, close: true } },
     async load(selected, signal) { return profileValue((await profileSource(client, selected, signal)).profile); },
     async submit({ value, selected }, signal) {
       const base = await profileSource(client, selected, signal);
@@ -91,7 +91,7 @@ export function createProfilePage(client: PortalControlClient): CollectionPageDe
 export function createBindingPage(client: PortalControlClient): CollectionPageDefinition<BindingRow> {
   const form = (id: "create" | "edit"): WorkbenchFormDefinition<BindingRow> => ({
     id, schema: bindingSchema([]), presentation: { layout: "vertical", sections: [{ id: "binding", title: message(namespace, "panel.binding", "Binding 版本"), columns: 1, fields: ["/portalId", "/profileRevisionId", "/services"] }] },
-    workflow: { surface: "drawer", size: "lg", title: message(namespace, id === "create" ? "action.createBinding" : "action.edit", id === "create" ? "新建 Binding" : "编辑草稿"), submitLabel: message(namespace, "action.save", "保存草稿"), success: { notify: message(namespace, "notice.saved", "治理资源已保存"), refreshCollection: true, close: true } },
+    workflow: { size: "lg", title: message(namespace, id === "create" ? "action.createBinding" : "action.edit", id === "create" ? "新建 Binding" : "编辑草稿"), submitLabel: message(namespace, "action.save", "保存草稿"), success: { notify: message(namespace, "notice.saved", "治理资源已保存"), refreshCollection: true, close: true } },
     async prepare() { const snapshot = await client.governance(); return { schema: bindingSchema(snapshot.profiles) }; },
     async load(selected) { return selected[0] === undefined ? {} : bindingValue(selected[0]); },
     async submit({ value, selected }) { const base = selected[0]; if (base === undefined) return; const profileRevisionId = Number(value.profileRevisionId); const binding = buildBinding(base.binding, value); if (id === "create") await client.createBinding(profileRevisionId, binding); else await client.updateBinding(base.id, profileRevisionId, binding); },
@@ -108,7 +108,7 @@ export function createBindingPage(client: PortalControlClient): CollectionPageDe
 export function createActivationPage(client: PortalControlClient): CollectionPageDefinition<ActivationRow> {
   const form: WorkbenchFormDefinition<ActivationRow> = {
     id: "activate", schema: activationSchema(emptySnapshot()), presentation: { layout: "vertical", sections: [{ id: "activation", title: message(namespace, "panel.activation", "Activation"), columns: 2, fields: ["/portalId", "/applicationRevisionId", "/profileRevisionId", "/bindingRevisionId", "/expectedCurrentId", "/reason"] }], fields: [{ pointer: "/reason", span: 2 }] },
-    workflow: { surface: "drawer", size: "lg", title: message(namespace, "action.activate", "创建 Activation"), submitLabel: message(namespace, "governance.action.activate", "校验并激活"), success: { notify: message(namespace, "notice.activated", "Portal 已激活"), refreshCollection: true, close: true } },
+    workflow: { size: "lg", title: message(namespace, "action.activate", "创建 Activation"), submitLabel: message(namespace, "governance.action.activate", "校验并激活"), success: { notify: message(namespace, "notice.activated", "Portal 已激活"), refreshCollection: true, close: true } },
     async prepare() { const snapshot = await client.governance(); return { schema: activationSchema(snapshot), initialValue: activationDefaults(snapshot) }; },
     async submit({ value }) { const result = await client.activate({ portalId: String(value.portalId ?? ""), applicationRevisionId: Number(value.applicationRevisionId), profileRevisionId: Number(value.profileRevisionId), bindingRevisionId: Number(value.bindingRevisionId), expectedCurrentId: Number(value.expectedCurrentId ?? 0), reason: typeof value.reason === "string" ? value.reason : undefined }); if (result.status === "Failed") throw new Error(result.phases.find((phase) => phase.status === "Failed")?.message ?? "Activation failed"); },
   };

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { formControlSize, message, resolveFormPresentation, usePortalI18n, usePortalUI, type FormRendererProps, type FormRendererValidationState } from "@vastplan/ui-primitives";
-import { validateFormPresentation, type WorkbenchFormDefinition, type WorkbenchFormPreparation } from "@vastplan/workbench-sdk";
+import { resolveFormWorkflowSurface, validateFormPresentation, type WorkbenchFormDefinition, type WorkbenchFormPreparation } from "@vastplan/workbench-sdk";
 import type { CollectionRow } from "../collection/model.js";
 import { projectFormPresentation } from "./presentation.js";
 import { containsSecretMaterial, discardSecretMaterial, secretMaterialPointers } from "./secret-material.js";
@@ -108,7 +108,7 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
     if (submitting || definition === undefined) return;
     if (dirty && !await ui.confirm({ title: i18n.text(message(namespace, "form.discardTitle", "放弃未保存的修改？")), content: i18n.text(message(namespace, "form.discardContent", "关闭后，本次输入不会保留。")) })) return;
     setFieldErrors({}); setFailure(undefined);
-    if (definition.workflow.surface === "page") setValue(JSON.parse(baseline) as Record<string, unknown>);
+    if (resolveFormWorkflowSurface(definition.workflow) === "page") setValue(JSON.parse(baseline) as Record<string, unknown>);
     else {
       const sanitized = discardSecretMaterial(value, secretPointers);
       setValue(sanitized); setBaseline(JSON.stringify(sanitized)); onClose?.();
@@ -138,7 +138,7 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
       if (controller.signal.aborted) return;
       if (definition.workflow.success?.notify !== undefined) ui.notify({ title: i18n.text(definition.workflow.success.notify), kind: "success" });
       if (definition.workflow.success?.refreshCollection === true) onRefresh();
-      if (definition.workflow.surface !== "page" && definition.workflow.success?.close !== false) onClose?.();
+      if (resolveFormWorkflowSurface(definition.workflow) === "dialog" && definition.workflow.success?.close !== false) onClose?.();
     } catch (error) {
       if (!controller.signal.aborted) setFailure(errorText(error));
     } finally {

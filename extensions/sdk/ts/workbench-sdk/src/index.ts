@@ -102,6 +102,12 @@ export interface WorkbenchFormDefinition<Row extends Record<string, unknown> = R
   afterSubmit?(context: WorkbenchFormAfterSubmitContext<Row>, signal: AbortSignal): Promise<void>;
 }
 
+export function resolveFormWorkflowSurface(workflow: FormWorkflow): "page" | "dialog" {
+  const surface = workflow.surface ?? "dialog";
+  if (surface !== "page" && surface !== "dialog") throw new Error(`表单工作流 surface 不受支持: ${String(surface)}`);
+  return surface;
+}
+
 export type WorkbenchOverlayContent =
   | { kind: "json"; documents: readonly { title?: LocalizedText; value: JSONValue }[] }
   | { kind: "table"; columns: readonly ColumnSpec[]; rows: readonly Readonly<Record<string, unknown>>[]; rowKey?: string };
@@ -398,6 +404,7 @@ function validFieldKey(value: string): boolean { return /^[A-Za-z0-9][A-Za-z0-9.
 function validSelectionParam(value: string): boolean { return /^[a-z][a-z0-9_-]{0,39}$/.test(value); }
 
 function validateFormDefinition(form: WorkbenchFormDefinition): void {
+  resolveFormWorkflowSurface(form.workflow);
   validateFormPresentation(form.presentation, form.id);
   const sections = form.presentation?.sections ?? [];
   for (const field of form.presentation?.fields ?? []) {

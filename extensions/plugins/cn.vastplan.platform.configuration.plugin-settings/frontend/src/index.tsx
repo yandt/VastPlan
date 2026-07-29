@@ -21,7 +21,6 @@ export function createPluginConfigurationPage(client: PlatformAdminClient, servi
     id: "draft",
     schema: placeholderSchema,
     workflow: {
-      surface: "drawer",
       title: message(namespace, "form.title", "编辑配置草稿"),
       description: message(namespace, "form.description", "保存只创建候选草稿，不会立即重启服务或改变活动配置。"),
       size: "lg",

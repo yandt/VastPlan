@@ -1,8 +1,7 @@
-import type { WorkbenchFormDefinition } from "@vastplan/workbench-sdk";
+import { resolveFormWorkflowSurface, type WorkbenchFormDefinition } from "@vastplan/workbench-sdk";
 import type { CollectionRow } from "../collection/model.js";
-import { FormActions } from "./FormActions.js";
-import { FormContent } from "./FormContent.js";
-import { FormSurface } from "./FormSurface.js";
+import { FormDialog } from "./FormDialog.js";
+import { FormPagePanel } from "./FormPagePanel.js";
 import { useFormWorkflow } from "./useFormWorkflow.js";
 
 export function CollectionFormWorkflow({ definition, selected, open, onClose, onRefresh, onDirtyChange }: {
@@ -15,8 +14,7 @@ export function CollectionFormWorkflow({ definition, selected, open, onClose, on
 }) {
   const form = useFormWorkflow({ definition, selected, open, onClose, onRefresh, onDirtyChange });
   if (definition === undefined) return null;
-  const actions = <FormActions form={form} />;
-  return <FormSurface definition={definition} open={open} submitting={form.submitting} actions={actions} onClose={form.requestClose}>
-    <FormContent form={form} />
-  </FormSurface>;
+  return resolveFormWorkflowSurface(definition.workflow) === "page"
+    ? <FormPagePanel form={form} />
+    : <FormDialog form={form} open={open} />;
 }
