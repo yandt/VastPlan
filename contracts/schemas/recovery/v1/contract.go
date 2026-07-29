@@ -18,8 +18,13 @@ type Plan struct {
 }
 
 type Stage struct {
-	ID    string   `json:"id"`
-	Units []string `json:"units"`
+	ID    string            `json:"id"`
+	Units []UnitRequirement `json:"units"`
+}
+
+type UnitRequirement struct {
+	ID       string `json:"id"`
+	MinReady uint16 `json:"minReady"`
 }
 
 // Capsule binds a reviewed Plan to the exact Bootstrap LKG artifacts that can

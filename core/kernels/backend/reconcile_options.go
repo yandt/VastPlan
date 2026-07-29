@@ -18,6 +18,7 @@ type reconcileOptions struct {
 	repositoryProfile, repositoryTokenFile                                                                  string
 	bootstrapRepository                                                                                     string
 	bootstrapInventory                                                                                      string
+	recoveryCapsule, recoveryStatus, recoveryListen                                                         string
 	runtimeRoot, actualPath, lockPath, nodeID, labelsRaw                                                    string
 	credentialRoot                                                                                          string
 	backendPlatformCatalog                                                                                  string
@@ -71,6 +72,9 @@ func newReconcileFlagSet(options *reconcileOptions) *flag.FlagSet {
 	flags.StringVar(&options.repositoryCA, "repository-ca", "", "远端制品仓库自定义 CA PEM")
 	flags.StringVar(&options.bootstrapRepository, "bootstrap-repository", "", "预置签名种子仓库；精确命中时优先于远端源")
 	flags.StringVar(&options.bootstrapInventory, "bootstrap-inventory", "", "root-owned Bootstrap Inventory（Seed/LKG 精确引用与单调 generation）")
+	flags.StringVar(&options.recoveryCapsule, "recovery-capsule", "", "与 Bootstrap LKG 精确绑定的 Seed Recovery Capsule")
+	flags.StringVar(&options.recoveryStatus, "recovery-status", "", "owner-only Recovery 状态文件；默认与 actual-state 同目录")
+	flags.StringVar(&options.recoveryListen, "recovery-listen", "", "可选 loopback Recovery 只读 HTTP 地址")
 	flags.BoolVar(&options.bootstrapUpgrade, "bootstrap-upgrade", false, "由可信宿主事务式镜像仓库关键插件并在健康后推进 LKG")
 	flags.BoolVar(&options.publishBootstrapReferences, "publish-bootstrap-references", false, "由本节点以信任文档授权的 SYSTEM 子身份发布 Seed/LKG 引用")
 	flags.StringVar(&options.runtimeRoot, "runtime-root", ".vastplan/runtime/plugins", "内容寻址安装目录")
@@ -212,6 +216,22 @@ func finalizeReconcileOptions(options reconcileOptions, visited map[string]bool)
 	}
 	if options.bootstrapInventory != "" && options.bootstrapRepository == "" {
 		return reconcileOptions{}, errors.New("-bootstrap-inventory 必须与 -bootstrap-repository 同时配置")
+	}
+	if options.recoveryCapsule != "" {
+		if !filepath.IsAbs(options.recoveryCapsule) || filepath.Clean(options.recoveryCapsule) != options.recoveryCapsule || !filepath.IsAbs(options.actualPath) || filepath.Clean(options.actualPath) != options.actualPath {
+			return reconcileOptions{}, errors.New("Recovery Capsule 与 actual-state 必须使用规范绝对路径")
+		}
+		if options.recoveryStatus == "" {
+			options.recoveryStatus = filepath.Join(filepath.Dir(options.actualPath), "recovery-status.json")
+		}
+		if !filepath.IsAbs(options.recoveryStatus) || filepath.Clean(options.recoveryStatus) != options.recoveryStatus {
+			return reconcileOptions{}, errors.New("-recovery-status 必须是规范绝对路径")
+		}
+	} else if options.recoveryStatus != "" || options.recoveryListen != "" {
+		return reconcileOptions{}, errors.New("-recovery-status/-recovery-listen 只能与 -recovery-capsule 同时配置")
+	}
+	if options.recoveryCapsule != "" && options.bootstrapUpgrade && !options.natsAllowInsecure {
+		return reconcileOptions{}, errors.New("生产 Recovery Capsule 节点禁止未配对 Capsule 的自动 Bootstrap LKG 推进；请通过签名内核发行事务升级")
 	}
 	if options.repositoryURL != "" && options.repositoryProfile != "" {
 		return reconcileOptions{}, errors.New("-repository-url 与 -repository-profile 不能同时配置")

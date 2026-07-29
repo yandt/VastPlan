@@ -17,12 +17,14 @@ import (
 	"strings"
 	"time"
 
+	recoveryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/recovery/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 )
 
 const (
-	maxActualStateBytes = 16 << 20
-	maxDiagnosticsBytes = 4 << 20
+	maxActualStateBytes    = 16 << 20
+	maxDiagnosticsBytes    = 4 << 20
+	maxRecoveryStatusBytes = 1 << 20
 )
 
 type supportBundleManifest struct {
@@ -79,12 +81,13 @@ func RunSupportBundle(output io.Writer, version string, args []string) error {
 	actualStatePath := flags.String("actual-state", "", "Node Agent 实际态 JSON")
 	outputPath := flags.String("output", "", "输出 .tar.gz")
 	diagnosticsPath := flags.String("diagnostics", "", "可选 kernel.diagnostics JSON")
+	recoveryStatusPath := flags.String("recovery-status", "", "可选 Recovery 状态 JSON")
 	binaryPath := flags.String("binary", "", "Backend 二进制；默认当前进程")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 || *actualStatePath == "" || *outputPath == "" {
-		return errors.New("用法: support-bundle -actual-state <实际态.json> -output <支持包.tar.gz> [-diagnostics <诊断.json>] [-binary <backend-kernel>]")
+		return errors.New("用法: support-bundle -actual-state <实际态.json> -output <支持包.tar.gz> [-diagnostics <诊断.json>] [-recovery-status <状态.json>] [-binary <backend-kernel>]")
 	}
 	if *binaryPath == "" {
 		path, err := os.Executable()
@@ -101,6 +104,11 @@ func RunSupportBundle(output io.Writer, version string, args []string) error {
 			return fmt.Errorf("诊断文件: %w", err)
 		}
 	}
+	if *recoveryStatusPath != "" {
+		if err := checkRegularFile(*recoveryStatusPath, maxRecoveryStatusBytes); err != nil {
+			return fmt.Errorf("Recovery 状态文件: %w", err)
+		}
+	}
 
 	state, err := (nodeagent.FileStateStore{Path: *actualStatePath}).Load()
 	if err != nil {
@@ -113,6 +121,12 @@ func RunSupportBundle(output io.Writer, version string, args []string) error {
 	}
 	if *diagnosticsPath != "" {
 		files["kernel-diagnostics.json"], err = readAndRedactDiagnostics(*diagnosticsPath)
+		if err != nil {
+			return err
+		}
+	}
+	if *recoveryStatusPath != "" {
+		files["recovery-status-summary.json"], err = readRecoveryStatusSummary(*recoveryStatusPath)
 		if err != nil {
 			return err
 		}
@@ -139,6 +153,32 @@ func RunSupportBundle(output io.Writer, version string, args []string) error {
 	}
 	_, err = fmt.Fprintf(output, "支持包已生成: %s（%d 个文件，未包含配置、凭证或错误正文）\n", *outputPath, len(files))
 	return err
+}
+
+func readRecoveryStatusSummary(path string) ([]byte, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	var status recoveryv1.Status
+	if err := decoder.Decode(&status); err != nil {
+		return nil, fmt.Errorf("解析 Recovery 状态: %w", err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, errors.New("Recovery 状态只能包含一个 JSON 文档")
+	}
+	return marshalJSON(struct {
+		SchemaVersion    int                      `json:"schemaVersion"`
+		Overall          string                   `json:"overall"`
+		Scope            string                   `json:"scope"`
+		ClusterAvailable bool                     `json:"clusterAvailable"`
+		Nodes            int                      `json:"nodes"`
+		Stages           []recoveryv1.StageStatus `json:"stages"`
+		UpdatedAt        time.Time                `json:"updatedAt"`
+	}{status.SchemaVersion, status.Overall, status.Scope, status.ClusterAvailable, status.Nodes, status.Stages, status.UpdatedAt})
 }
 
 func checkRegularFile(path string, maxBytes int64) error {

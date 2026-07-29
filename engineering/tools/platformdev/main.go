@@ -35,12 +35,12 @@ const (
 )
 
 type options struct {
-	root, stateRoot                                                                   string
-	listen, portalListen, artifactListen, seedArtifactListen, vaultListen, natsListen string
-	artifactProtocol                                                                  string
-	hot                                                                               bool
-	applyPlatform                                                                     bool
-	rebuildSeed                                                                       bool
+	root, stateRoot                                                                                   string
+	listen, portalListen, artifactListen, seedArtifactListen, vaultListen, recoveryListen, natsListen string
+	artifactProtocol                                                                                  string
+	hot                                                                                               bool
+	applyPlatform                                                                                     bool
+	rebuildSeed                                                                                       bool
 }
 
 type child struct {
@@ -66,6 +66,7 @@ type runtime struct {
 	seedArtifacts         seedArtifactSelection
 	seedSnapshotCandidate string
 	seedSnapshotMigration bool
+	seedHostRefresh       bool
 	recovery              recoveryStatus
 }
 
@@ -85,6 +86,7 @@ func main() {
 	flag.StringVar(&opts.artifactProtocol, "artifact-protocol", "local-test", "development repository protocol: local-test or remote-compat")
 	flag.StringVar(&opts.seedArtifactListen, "seed-artifact-listen", "127.0.0.1:18442", "seed artifact repository address")
 	flag.StringVar(&opts.vaultListen, "vault-listen", "127.0.0.1:18200", "development Vault Transit stub address")
+	flag.StringVar(&opts.recoveryListen, "recovery-listen", "127.0.0.1:18441", "internal Kernel Recovery status address")
 	flag.StringVar(&opts.natsListen, "nats-listen", "127.0.0.1:0", "development NATS address; port 0 chooses a free port")
 	flag.BoolVar(&opts.hot, "hot", true, "enable transactional frontend plugin hot replacement")
 	flag.BoolVar(&opts.applyPlatform, "apply-platform", false, "explicitly publish the development platform baseline")
@@ -196,11 +198,23 @@ func (r *runtime) prepare(ctx context.Context) error {
 				}
 				log.Printf("Bootstrap Profile 的精确引用未变化，复用 stable LKG；源码调试应通过 workspace Test Release")
 			}
+			refreshed, err := r.refreshDevelopmentBackendKernel(ctx)
+			if err != nil {
+				return fmt.Errorf("刷新开发态 Backend Kernel 宿主: %w", err)
+			}
+			r.seedHostRefresh = refreshed
+			if refreshed {
+				log.Printf("已刷新与当前编排器配对的 Backend Kernel；stable 插件仓库保持不变")
+			}
 			if err := r.signPackageRepository(refs); err != nil {
 				return err
 			}
-			if r.seedSnapshotMigration {
-				return r.stageSeedRuntimeSnapshot(r.runDir, "recovery-capsule-v1-migration")
+			if r.seedSnapshotMigration || r.seedHostRefresh {
+				source := "development-host-refresh"
+				if r.seedSnapshotMigration {
+					source = "recovery-capsule-v1-migration"
+				}
+				return r.stageSeedRuntimeSnapshot(r.runDir, source)
 			}
 			return nil
 		}
@@ -263,6 +277,9 @@ func (r *runtime) start(ctx context.Context) error {
 		"-frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
 		"-transport-seed", filepath.Join(r.runDir, "secrets", platformNodeTransportSeed),
 		"-transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
+		"-recovery-capsule", filepath.Join(r.runDir, recoveryCapsuleFilename),
+		"-recovery-status", filepath.Join(r.persistentStateRoot(), "recovery-status.json"),
+		"-recovery-listen", r.options.recoveryListen,
 	}
 	nodeArgs = append(nodeArgs, r.nodeBootstrapCredentialArgs()...)
 	nodeArgs = append(nodeArgs, r.managedArtifactSourceArgs()...)
@@ -318,6 +335,7 @@ func (r *runtime) start(ctx context.Context) error {
 		"--transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
 		"--composer-logical-service", "platform.portal-composer",
 		"--interaction-logical-service", "platform.interaction-broker",
+		"--kernel-recovery-url", "http://" + r.options.recoveryListen,
 	}
 	portalArgs, err = appendPublishedAPIExposureCatalog(portalArgs, filepath.Join(r.persistentStateRoot(), "api-exposure-gateway.json"))
 	if err != nil {

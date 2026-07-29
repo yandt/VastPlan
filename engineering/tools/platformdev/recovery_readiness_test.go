@@ -9,9 +9,9 @@ import (
 
 func TestEvaluateRecoveryCapsuleReportsCumulativeStages(t *testing.T) {
 	capsule := recoveryv1.Capsule{ID: "platform", Stages: []recoveryv1.Stage{
-		{ID: recoveryv1.StageRecovery, Units: []string{"repository"}},
-		{ID: recoveryv1.StageControlPlane, Units: []string{"deployment"}},
-		{ID: recoveryv1.StagePlatform, Units: []string{"database"}},
+		{ID: recoveryv1.StageRecovery, Units: []recoveryv1.UnitRequirement{{ID: "repository", MinReady: 1}}},
+		{ID: recoveryv1.StageControlPlane, Units: []recoveryv1.UnitRequirement{{ID: "deployment", MinReady: 1}}},
+		{ID: recoveryv1.StagePlatform, Units: []recoveryv1.UnitRequirement{{ID: "database", MinReady: 1}}},
 	}}
 	startedAt := time.Now().UTC()
 	state := readinessState{
@@ -31,9 +31,9 @@ func TestEvaluateRecoveryCapsuleReportsCumulativeStages(t *testing.T) {
 func TestEvaluateRecoveryCapsuleRejectsStaleActualState(t *testing.T) {
 	startedAt := time.Now().UTC()
 	capsule := recoveryv1.Capsule{ID: "platform", Stages: []recoveryv1.Stage{
-		{ID: recoveryv1.StageRecovery, Units: []string{"repository"}},
-		{ID: recoveryv1.StageControlPlane, Units: []string{"deployment"}},
-		{ID: recoveryv1.StagePlatform, Units: []string{"database"}},
+		{ID: recoveryv1.StageRecovery, Units: []recoveryv1.UnitRequirement{{ID: "repository", MinReady: 1}}},
+		{ID: recoveryv1.StageControlPlane, Units: []recoveryv1.UnitRequirement{{ID: "deployment", MinReady: 1}}},
+		{ID: recoveryv1.StagePlatform, Units: []recoveryv1.UnitRequirement{{ID: "database", MinReady: 1}}},
 	}}
 	status := evaluateRecoveryCapsule(capsule, readinessState{
 		ObservedRevision: 2, AppliedRevision: 2, UpdatedAt: startedAt.Add(-time.Second),

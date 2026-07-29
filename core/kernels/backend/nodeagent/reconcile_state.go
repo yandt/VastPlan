@@ -149,7 +149,15 @@ func (r *Reconciler) failCandidate(state *UnitState, unitID string, cause error)
 func (r *Reconciler) checkpoint(actual *ActualState) error {
 	actual.Version = actualStateVersion
 	actual.UpdatedAt = r.now()
-	return r.StateStore.Save(*actual)
+	if err := r.StateStore.Save(*actual); err != nil {
+		return err
+	}
+	if r.StateObserver != nil {
+		if err := r.StateObserver(cloneState(*actual)); err != nil {
+			return fmt.Errorf("投影实际态观察结果: %w", err)
+		}
+	}
+	return nil
 }
 
 func referencedSHA256(actual ActualState) []string {

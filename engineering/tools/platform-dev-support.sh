@@ -34,6 +34,7 @@ validate_configuration() {
   validate_port "制品服务端口" "$ARTIFACT_PORT"
   validate_port "Seed 制品仓库端口" "$SEED_ARTIFACT_PORT"
   validate_port "Vault 桩端口" "$VAULT_PORT"
+  validate_port "Kernel Recovery 端口" "$RECOVERY_PORT"
   if [ "$GATEWAY_PORT" = "$PORTAL_PORT" ] ||
      [ "$GATEWAY_PORT" = "$ARTIFACT_PORT" ] ||
      [ "$GATEWAY_PORT" = "$SEED_ARTIFACT_PORT" ] ||
@@ -43,7 +44,12 @@ validate_configuration() {
      [ "$PORTAL_PORT" = "$VAULT_PORT" ] ||
      [ "$ARTIFACT_PORT" = "$SEED_ARTIFACT_PORT" ] ||
      [ "$ARTIFACT_PORT" = "$VAULT_PORT" ] ||
-     [ "$SEED_ARTIFACT_PORT" = "$VAULT_PORT" ]; then
+     [ "$SEED_ARTIFACT_PORT" = "$VAULT_PORT" ] ||
+     [ "$GATEWAY_PORT" = "$RECOVERY_PORT" ] ||
+     [ "$PORTAL_PORT" = "$RECOVERY_PORT" ] ||
+     [ "$ARTIFACT_PORT" = "$RECOVERY_PORT" ] ||
+     [ "$SEED_ARTIFACT_PORT" = "$RECOVERY_PORT" ] ||
+     [ "$VAULT_PORT" = "$RECOVERY_PORT" ]; then
     fail "开发服务端口必须互不相同"
     return 1
   fi
@@ -283,6 +289,7 @@ Portal-Kernel $PORTAL_PORT
 制品服务 $ARTIFACT_PORT
 Seed制品仓库 $SEED_ARTIFACT_PORT
 Vault-Transit桩 $VAULT_PORT
+Kernel-Recovery $RECOVERY_PORT
 EOF
   if [ "$failed" -ne 0 ]; then
     fail "不会自动终止端口占用者；请确认进程后手工处理，或先运行 '$0 down' 清理本项目残留"
@@ -361,6 +368,7 @@ runtime_arguments() {
 	-artifact-protocol "$ARTIFACT_PROTOCOL"
     -seed-artifact-listen "127.0.0.1:$SEED_ARTIFACT_PORT"
     -vault-listen "127.0.0.1:$VAULT_PORT"
+    -recovery-listen "127.0.0.1:$RECOVERY_PORT"
 	-hot="$HOT_MODE"
 	-apply-platform="$APPLY_PLATFORM"
 	-rebuild-seed="$REBUILD_SEED"

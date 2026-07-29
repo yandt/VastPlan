@@ -45,21 +45,11 @@ func (r *runtime) computeGoBuildPlan(ctx context.Context, goIdentity, goCache st
 	if err != nil {
 		return goBuildPlan{}, err
 	}
-	kernelVersionRaw, err := os.ReadFile(filepath.Join(r.options.root, "core", "kernels", "backend", "VERSION"))
+	kernel, err := r.computeBackendKernelBuild(ctx, goIdentity, goCache)
 	if err != nil {
 		return goBuildPlan{}, err
 	}
-	kernelVersion := strings.TrimSpace(string(kernelVersionRaw))
-	kernelDigest, err := r.digestGoBinary(ctx, goCache, "./core/kernels/backend", []string{
-		"core/kernels/backend/VERSION", "go.mod", "go.sum",
-	}, goIdentity, "backend-kernel-v2", kernelVersion)
-	if err != nil {
-		return goBuildPlan{}, fmt.Errorf("计算 Backend Kernel 构建摘要: %w", err)
-	}
-	plan := goBuildPlan{Kernel: goBinaryBuild{
-		ID: "backend-kernel", Package: "./core/kernels/backend", Version: kernelVersion,
-		Category: "backend-kernel", Digest: kernelDigest,
-	}}
+	plan := goBuildPlan{Kernel: kernel}
 	specs, err := discoverPackageSpecs(r.options.root)
 	if err != nil {
 		return goBuildPlan{}, err
@@ -91,6 +81,24 @@ func (r *runtime) computeGoBuildPlan(ctx context.Context, goIdentity, goCache st
 	}
 	plan.Aggregate = digestStrings(parts...)
 	return plan, nil
+}
+
+func (r *runtime) computeBackendKernelBuild(ctx context.Context, goIdentity, goCache string) (goBinaryBuild, error) {
+	kernelVersionRaw, err := os.ReadFile(filepath.Join(r.options.root, "core", "kernels", "backend", "VERSION"))
+	if err != nil {
+		return goBinaryBuild{}, err
+	}
+	kernelVersion := strings.TrimSpace(string(kernelVersionRaw))
+	kernelDigest, err := r.digestGoBinary(ctx, goCache, "./core/kernels/backend", []string{
+		"core/kernels/backend/VERSION", "go.mod", "go.sum",
+	}, goIdentity, "backend-kernel-v2", kernelVersion)
+	if err != nil {
+		return goBinaryBuild{}, fmt.Errorf("计算 Backend Kernel 构建摘要: %w", err)
+	}
+	return goBinaryBuild{
+		ID: "backend-kernel", Package: "./core/kernels/backend", Version: kernelVersion,
+		Category: "backend-kernel", Digest: kernelDigest,
+	}, nil
 }
 
 func (r *runtime) digestGoBinary(ctx context.Context, goCache, packagePath string, extraFiles []string, salts ...string) (string, error) {
@@ -196,23 +204,7 @@ func (r *runtime) prepareCachedGoBinaries(ctx context.Context, cacheRoot, goCach
 	}
 	builds := append([]goBinaryBuild{plan.Kernel}, plan.Plugins...)
 	for _, build := range builds {
-		build := build
-		cached, err := ensureCachedBuild(cacheRoot, build.Category, build.Digest, func(candidate string) error {
-			binDir := filepath.Join(candidate, "bin")
-			if err := os.MkdirAll(binDir, 0o700); err != nil {
-				return err
-			}
-			versionSymbol := "main.pluginVersion"
-			if build.ID == "backend-kernel" {
-				versionSymbol = "main.version"
-			}
-			return r.command(ctx, map[string]string{"CGO_ENABLED": "1", "GOCACHE": goCache},
-				"go", "build", "-trimpath", "-buildvcs=false",
-				"-ldflags", "-s -w -buildid= -X "+versionSymbol+"="+build.Version,
-				"-o", filepath.Join(binDir, build.ID), build.Package)
-		}, func(candidate string) error {
-			return requireCachedFiles(filepath.Join(candidate, "bin"), build.ID)
-		})
+		cached, err := r.ensureCachedGoBinary(ctx, cacheRoot, goCache, build)
 		if err != nil {
 			return "", err
 		}
@@ -222,6 +214,98 @@ func (r *runtime) prepareCachedGoBinaries(ctx context.Context, cacheRoot, goCach
 		}
 	}
 	return plan.Aggregate, nil
+}
+
+func (r *runtime) ensureCachedGoBinary(ctx context.Context, cacheRoot, goCache string, build goBinaryBuild) (cachedBuild, error) {
+	return ensureCachedBuild(cacheRoot, build.Category, build.Digest, func(candidate string) error {
+		binDir := filepath.Join(candidate, "bin")
+		if err := os.MkdirAll(binDir, 0o700); err != nil {
+			return err
+		}
+		versionSymbol := "main.pluginVersion"
+		if build.ID == "backend-kernel" {
+			versionSymbol = "main.version"
+		}
+		return r.command(ctx, map[string]string{"CGO_ENABLED": "1", "GOCACHE": goCache},
+			"go", "build", "-trimpath", "-buildvcs=false",
+			"-ldflags", "-s -w -buildid= -X "+versionSymbol+"="+build.Version,
+			"-o", filepath.Join(binDir, build.ID), build.Package)
+	}, func(candidate string) error {
+		return requireCachedFiles(filepath.Join(candidate, "bin"), build.ID)
+	})
+}
+
+// refreshDevelopmentBackendKernel keeps an immutable Seed plugin repository
+// while pairing it with the current development orchestrator's Backend host.
+// Production releases do this pairing in the signed release manifest instead.
+func (r *runtime) refreshDevelopmentBackendKernel(ctx context.Context) (bool, error) {
+	cacheRoot := filepath.Join(r.options.stateRoot, "build-cache")
+	goCache := filepath.Join(r.options.stateRoot, "go-cache")
+	if err := os.MkdirAll(goCache, 0o700); err != nil {
+		return false, err
+	}
+	identity, err := developmentGoIdentity(ctx)
+	if err != nil {
+		return false, err
+	}
+	build, err := r.computeBackendKernelBuild(ctx, identity, goCache)
+	if err != nil {
+		return false, err
+	}
+	cached, err := r.ensureCachedGoBinary(ctx, cacheRoot, goCache, build)
+	if err != nil {
+		return false, err
+	}
+	logBuildCacheResult("Backend Kernel 宿主", cached)
+	return replaceCachedFileIfChanged(
+		filepath.Join(cached.Path, "bin", build.ID),
+		filepath.Join(r.runDir, "dynamic", build.ID),
+	)
+}
+
+func replaceCachedFileIfChanged(source, target string) (bool, error) {
+	equal, err := regularFilesEqual(source, target)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return false, err
+	}
+	if equal {
+		return false, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+		return false, err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(target), ".host-candidate-")
+	if err != nil {
+		return false, err
+	}
+	temporaryPath := temporary.Name()
+	if err := temporary.Close(); err != nil {
+		_ = os.Remove(temporaryPath)
+		return false, err
+	}
+	if err := os.Remove(temporaryPath); err != nil {
+		return false, err
+	}
+	defer func() { _ = os.Remove(temporaryPath) }()
+	if err := materializeCachedFile(source, temporaryPath); err != nil {
+		return false, err
+	}
+	if err := os.Rename(temporaryPath, target); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func regularFilesEqual(left, right string) (bool, error) {
+	leftRaw, err := os.ReadFile(left)
+	if err != nil {
+		return false, err
+	}
+	rightRaw, err := os.ReadFile(right)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(leftRaw, rightRaw), nil
 }
 
 func materializeCachedFile(source, target string) error {

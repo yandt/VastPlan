@@ -9,29 +9,37 @@ import (
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
+
+	recoveryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/recovery/v1"
 )
 
 // NodeRecord 是调度器可见的节点租约内容。KV bucket TTL 是存活真相，UpdatedAt 仅供审计。
 type NodeRecord struct {
-	SchemaVersion      int               `json:"schema_version"`
-	NodeID             string            `json:"node_id"`
-	TenantID           string            `json:"tenant_id"`
-	Deployment         string            `json:"deployment"`
-	Labels             map[string]string `json:"labels,omitempty"`
-	Capacity           ResourceCapacity  `json:"capacity,omitempty"`
-	UpdatedAt          time.Time         `json:"updated_at"`
-	TransportPublicKey string            `json:"transport_public_key,omitempty"`
-	TransportTimestamp string            `json:"transport_timestamp,omitempty"`
-	TransportNonce     string            `json:"transport_nonce,omitempty"`
-	TransportSignature string            `json:"transport_signature,omitempty"`
+	SchemaVersion      int                    `json:"schema_version"`
+	NodeID             string                 `json:"node_id"`
+	TenantID           string                 `json:"tenant_id"`
+	Deployment         string                 `json:"deployment"`
+	Labels             map[string]string      `json:"labels,omitempty"`
+	Capacity           ResourceCapacity       `json:"capacity,omitempty"`
+	UpdatedAt          time.Time              `json:"updated_at"`
+	TransportPublicKey string                 `json:"transport_public_key,omitempty"`
+	TransportTimestamp string                 `json:"transport_timestamp,omitempty"`
+	TransportNonce     string                 `json:"transport_nonce,omitempty"`
+	TransportSignature string                 `json:"transport_signature,omitempty"`
+	Recovery           *recoveryv1.NodeReport `json:"recovery,omitempty"`
 }
 
 func (r NodeRecord) ValidateBasic() error {
-	if r.SchemaVersion != 3 || r.NodeID == "" || r.TenantID == "" || r.Deployment == "" || r.UpdatedAt.IsZero() {
-		return errors.New("节点租约必须是 v3 且包含 node、tenant、deployment 与更新时间")
+	if r.SchemaVersion != 4 || r.NodeID == "" || r.TenantID == "" || r.Deployment == "" || r.UpdatedAt.IsZero() {
+		return errors.New("节点租约必须是 v4 且包含 node、tenant、deployment 与更新时间")
 	}
 	if r.Capacity.CPUMillis < 0 || r.Capacity.MemoryBytes < 0 || r.Capacity.GPU < 0 {
 		return errors.New("节点资源容量不能为负数")
+	}
+	if r.Recovery != nil {
+		if err := recoveryv1.ValidateNodeReport(*r.Recovery); err != nil || r.Recovery.NodeID != r.NodeID {
+			return errors.New("节点租约 Recovery 报告无效")
+		}
 	}
 	return nil
 }
@@ -63,6 +71,7 @@ type NodeLease struct {
 	done   chan struct{}
 	lost   chan error
 	once   sync.Once
+	mu     sync.RWMutex
 }
 
 func StartNodeLease(parent context.Context, kv jetstream.KeyValue, nodeID string, labels map[string]string, options NodeLeaseOptions) (*NodeLease, error) {
@@ -81,7 +90,7 @@ func StartNodeLease(parent context.Context, kv jetstream.KeyValue, nodeID string
 	ctx, cancel := context.WithCancel(parent)
 	lease := &NodeLease{
 		kv: kv, key: NodeKey(options.TenantID, options.Deployment, nodeID), attest: options.Attest, cancel: cancel, done: make(chan struct{}), lost: make(chan error, 1),
-		record: NodeRecord{SchemaVersion: 3, NodeID: nodeID, TenantID: options.TenantID, Deployment: options.Deployment, Labels: cloneLabels(labels), Capacity: options.Capacity},
+		record: NodeRecord{SchemaVersion: 4, NodeID: nodeID, TenantID: options.TenantID, Deployment: options.Deployment, Labels: cloneLabels(labels), Capacity: options.Capacity},
 	}
 	lease.record.UpdatedAt = time.Now().UTC()
 	if err := lease.record.ValidateBasic(); err != nil {
@@ -101,6 +110,22 @@ func StartNodeLease(parent context.Context, kv jetstream.KeyValue, nodeID string
 }
 
 func (l *NodeLease) Lost() <-chan error { return l.lost }
+
+// UpdateRecovery atomically replaces the bounded Capsule report that will be
+// covered by the next transport-signed heartbeat.
+func (l *NodeLease) UpdateRecovery(report recoveryv1.NodeReport) error {
+	if err := recoveryv1.ValidateNodeReport(report); err != nil {
+		return err
+	}
+	if report.NodeID != l.record.NodeID {
+		return errors.New("Recovery 报告与节点租约身份不一致")
+	}
+	clone := recoveryv1.CloneNodeReport(report)
+	l.mu.Lock()
+	l.record.Recovery = &clone
+	l.mu.Unlock()
+	return nil
+}
 
 func (l *NodeLease) Close(ctx context.Context) error {
 	var closeErr error
@@ -149,9 +174,15 @@ func (l *NodeLease) run(ctx context.Context, options NodeLeaseOptions) {
 }
 
 func (l *NodeLease) heartbeat(ctx context.Context) error {
+	l.mu.RLock()
 	record := l.record
+	if l.record.Recovery != nil {
+		clone := recoveryv1.CloneNodeReport(*l.record.Recovery)
+		record.Recovery = &clone
+	}
+	l.mu.RUnlock()
 	record.UpdatedAt = time.Now().UTC()
-	if l.record.TransportPublicKey != "" {
+	if record.TransportPublicKey != "" {
 		record.TransportPublicKey = ""
 		record.TransportTimestamp = ""
 		record.TransportNonce = ""

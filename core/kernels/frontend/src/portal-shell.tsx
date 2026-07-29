@@ -12,6 +12,7 @@ import { PortalPreferenceSession } from "./portal-preferences";
 import { PortalGenerationCommitClient } from "./portal-generation-client";
 import type { PortalRuntimeSource } from "./portal-runtime-source";
 import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
+import { useKernelRecoveryStatus } from "./kernel-recovery";
 
 declare const __VASTPLAN_DEV_HMR__: boolean;
 
@@ -370,6 +371,7 @@ export function PortalRecovery({ error, onRecover }: { error: unknown; onRecover
   const code = error instanceof PortalBootstrapError ? error.code : error instanceof Error && "code" in error ? String(error.code) : "PORTAL_START_FAILED";
   const [recovering, setRecovering] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string>();
+  const kernelRecovery = useKernelRecoveryStatus();
   const recover = async () => {
     if (onRecover === undefined) return;
     setRecovering(true);
@@ -386,12 +388,30 @@ export function PortalRecovery({ error, onRecover }: { error: unknown; onRecover
     <h1>{bootstrapText("Portal 无法安全启动", "Portal could not start safely")}</h1>
     <p>{errorText}</p>
     <p><code>{code}</code></p>
+    <section aria-label={bootstrapText("内核恢复状态", "Kernel recovery status")} style={{ margin: "20px 0", padding: 16, borderRadius: 8, background: "#f7f8fa" }}>
+      <strong>{bootstrapText("内核恢复状态", "Kernel recovery status")}</strong>
+      {kernelRecovery.status === undefined ? <p>{kernelRecovery.unavailable ? bootstrapText("恢复状态暂不可用。", "Recovery status is currently unavailable.") : bootstrapText("正在读取恢复状态…", "Loading recovery status…")}</p> : <>
+        <p>{kernelRecovery.status.overall} · {kernelRecovery.status.scope} · {bootstrapText(`${kernelRecovery.status.nodes} 个可信节点`, `${kernelRecovery.status.nodes} trusted node(s)`)}</p>
+        <div style={{ display: "grid", gap: 8 }}>
+          {kernelRecovery.status.stages.map((stage) => <div key={stage.id} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <span>{stageLabel(stage.id)}</span><span>{stage.status} · {stage.ready}/{stage.required}</span>
+          </div>)}
+        </div>
+      </>}
+    </section>
     {recoveryError === undefined ? null : <p style={{ color: "#cb2634" }}>{recoveryError}</p>}
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
       <button type="button" onClick={() => globalThis.location?.reload()}>{bootstrapText("重试当前版本", "Retry current version")}</button>
       {onRecover === undefined ? null : <button type="button" disabled={recovering} onClick={() => void recover()}>{recovering ? bootstrapText("正在验证…", "Verifying…") : bootstrapText("启动上一安全版本", "Start previous safe version")}</button>}
     </div>
   </main>;
+}
+
+function stageLabel(id: string): string {
+  if (id === "recovery") return bootstrapText("恢复基础", "Recovery foundation");
+  if (id === "control-plane") return bootstrapText("控制面", "Control plane");
+  if (id === "platform") return bootstrapText("完整平台", "Full platform");
+  return id;
 }
 
 function selectPage(prepared: PreparedPortal, pathname: string) {

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cdsoft.com.cn/vastplan/schemas/recovery/v1/status.json",
+  "title": "VastPlan Seed Recovery Status v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "capsuleId", "repositoryId", "generation", "artifactCount", "overall", "scope", "clusterAvailable", "nodes", "stages", "updatedAt"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "capsuleId": { "type": "string", "minLength": 1 },
+    "repositoryId": { "type": "string", "minLength": 1 },
+    "generation": { "type": "integer", "minimum": 1 },
+    "artifactCount": { "type": "integer", "minimum": 1 },
+    "overall": { "enum": ["Starting", "RecoveryReady", "ControlPlaneReady", "PlatformReady"] },
+    "scope": { "enum": ["local", "cluster"] },
+    "clusterAvailable": { "type": "boolean" },
+    "nodes": { "type": "integer", "minimum": 0, "maximum": 4096 },
+    "stages": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "ready", "required"],
+        "properties": {
+          "id": { "enum": ["recovery", "control-plane", "platform"] },
+          "status": { "enum": ["Pending", "Ready", "Degraded", "Failed"] },
+          "ready": { "type": "integer", "minimum": 0 },
+          "required": { "type": "integer", "minimum": 1 },
+          "issues": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

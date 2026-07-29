@@ -69,6 +69,8 @@ func (n *Notifier) Ready(status string) error {
 	return n.notify("READY=1", statusField(status))
 }
 
+func (n *Notifier) Status(status string) error { return n.notify(statusField(status)) }
+
 func (n *Notifier) Stopping(status string) error {
 	return n.notify("STOPPING=1", statusField(status))
 }

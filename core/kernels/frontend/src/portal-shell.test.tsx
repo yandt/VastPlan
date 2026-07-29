@@ -14,6 +14,7 @@ describe("Portal recovery shell", () => {
     expect(html).toContain("VASTPLAN SAFE MODE");
     expect(html).toMatch(/启动上一安全版本|Start previous safe version/);
     expect(html).toContain("RUNTIME_FETCH_FAILED");
+    expect(html).toMatch(/内核恢复状态|Kernel recovery status/);
   });
 
   it("requests a server-governed recovery spec with the original path", async () => {

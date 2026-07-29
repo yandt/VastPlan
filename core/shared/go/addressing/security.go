@@ -252,7 +252,7 @@ func (s *TransportSecurity) VerifyNodeLease(record controlplane.NodeRecord) (Tra
 }
 
 func nodeLeaseSubject(tenant, deployment, nodeID string) string {
-	return "vastplan.node-lease.v3:" + controlplane.NodeKey(tenant, deployment, nodeID)
+	return "vastplan.node-lease.v4:" + controlplane.NodeKey(tenant, deployment, nodeID)
 }
 
 func nodeTransportRole(role string) bool {

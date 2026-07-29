@@ -86,8 +86,8 @@ func NormalizeCapsule(value Capsule) (Capsule, error) {
 
 func UnitStage(plan Plan, unitID string) (string, bool) {
 	for _, stage := range plan.Stages {
-		index := sort.SearchStrings(stage.Units, unitID)
-		if index < len(stage.Units) && stage.Units[index] == unitID {
+		index := sort.Search(len(stage.Units), func(index int) bool { return stage.Units[index].ID >= unitID })
+		if index < len(stage.Units) && stage.Units[index].ID == unitID {
 			return stage.ID, true
 		}
 	}
@@ -98,9 +98,24 @@ func UnitStage(plan Plan, unitID string) (string, bool) {
 func RequiredUnits(stages []Stage, stageID string) ([]string, error) {
 	result := make([]string, 0)
 	for _, stage := range stages {
-		result = append(result, stage.Units...)
+		for _, unit := range stage.Units {
+			result = append(result, unit.ID)
+		}
 		if stage.ID == stageID {
 			sort.Strings(result)
+			return result, nil
+		}
+	}
+	return nil, fmt.Errorf("Recovery Capsule 不包含阶段 %q", stageID)
+}
+
+// RequiredUnitRequirements returns the cumulative quorum requirements for a stage.
+func RequiredUnitRequirements(stages []Stage, stageID string) ([]UnitRequirement, error) {
+	result := make([]UnitRequirement, 0)
+	for _, stage := range stages {
+		result = append(result, stage.Units...)
+		if stage.ID == stageID {
+			sort.Slice(result, func(i, j int) bool { return result[i].ID < result[j].ID })
 			return result, nil
 		}
 	}
@@ -118,18 +133,18 @@ func normalizeStages(stages []Stage) ([]Stage, error) {
 		if stage.ID != expected || len(stage.Units) == 0 {
 			return nil, fmt.Errorf("Recovery Capsule 阶段 %d 必须是非空 %s", index, expected)
 		}
-		stage.Units = append([]string(nil), stage.Units...)
+		stage.Units = append([]UnitRequirement(nil), stage.Units...)
 		for unitIndex := range stage.Units {
-			stage.Units[unitIndex] = strings.TrimSpace(stage.Units[unitIndex])
-			if stage.Units[unitIndex] == "" {
+			stage.Units[unitIndex].ID = strings.TrimSpace(stage.Units[unitIndex].ID)
+			if stage.Units[unitIndex].ID == "" || stage.Units[unitIndex].MinReady == 0 || stage.Units[unitIndex].MinReady > 1024 {
 				return nil, fmt.Errorf("Recovery Capsule 阶段 %s 包含空 unit", stage.ID)
 			}
-			if _, exists := seen[stage.Units[unitIndex]]; exists {
-				return nil, fmt.Errorf("Recovery Capsule unit %s 被重复分级", stage.Units[unitIndex])
+			if _, exists := seen[stage.Units[unitIndex].ID]; exists {
+				return nil, fmt.Errorf("Recovery Capsule unit %s 被重复分级", stage.Units[unitIndex].ID)
 			}
-			seen[stage.Units[unitIndex]] = struct{}{}
+			seen[stage.Units[unitIndex].ID] = struct{}{}
 		}
-		sort.Strings(stage.Units)
+		sort.Slice(stage.Units, func(i, j int) bool { return stage.Units[i].ID < stage.Units[j].ID })
 		out[index] = stage
 	}
 	return out, nil

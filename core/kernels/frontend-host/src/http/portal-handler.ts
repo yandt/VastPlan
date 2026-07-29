@@ -18,6 +18,7 @@ import { APIExposureGateway } from "../api-exposure/api-exposure-gateway";
 import type { TrustedCapabilityInvoker } from "../capabilities/capability-invoker";
 import { sendAPIError, sendJSON } from "./json-response";
 import type { PortalGenerationCoordinationPort } from "../runtime/portal-generation-coordinator";
+import { KernelRecoveryClient, serveKernelRecovery, serveKernelRecoveryPage } from "./kernel-recovery-route";
 
 export interface PortalHandlerOptions {
   assets: PortalAssets;
@@ -32,6 +33,7 @@ export interface PortalHandlerOptions {
   delivery?: PortalDeliveryStore;
   generations?: PortalGenerationCoordinationPort;
   ssr?: PortalSSRPort;
+  recovery?: KernelRecoveryClient;
 }
 
 export function createPortalHandler(options: PortalHandlerOptions): (request: IncomingMessage, response: ServerResponse) => void {
@@ -53,6 +55,16 @@ export function createPortalHandler(options: PortalHandlerOptions): (request: In
     const method = request.method ?? "GET";
     const path = requestPath(request.url);
     if (path === undefined) return sendEmpty(response, 400);
+    if (path === "/recovery") {
+      if (options.recovery === undefined) return sendEmpty(response, 404);
+      void serveKernelRecoveryPage(options.recovery, request, response);
+      return;
+    }
+    if (path === "/v1/kernel-recovery") {
+      if (options.recovery === undefined) return sendEmpty(response, 404);
+      void serveKernelRecovery(options.recovery, request, response);
+      return;
+    }
     if (path === "/api" || path.startsWith("/api/")) {
       if (apiExposure === undefined) return sendEmpty(response, 404);
       void apiExposure.handle(request, response, path).catch((error: unknown) => {

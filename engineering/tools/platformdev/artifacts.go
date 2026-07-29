@@ -103,10 +103,13 @@ func (r *runtime) signPackageRepository(expected []artifactrepository.Ref) error
 			return err
 		}
 	}
+	// The contract catalog is a deterministic projection of the verified Seed
+	// artifacts, not published business state. Rebuild it on every start so a
+	// missing derived file cannot prevent the minimal recovery Portal opening.
+	if err := r.writeAPIExposureConfiguration(signed, refs); err != nil {
+		return err
+	}
 	if r.options.applyPlatform {
-		if err := r.writeAPIExposureConfiguration(signed, refs); err != nil {
-			return err
-		}
 		if err := r.writeAuthorizationBootstrap(repository, refs); err != nil {
 			return fmt.Errorf("生成开发授权策略: %w", err)
 		}

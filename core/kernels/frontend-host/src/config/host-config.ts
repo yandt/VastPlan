@@ -9,6 +9,7 @@ export interface PortalHostConfig {
   accessProfileCatalog?: string;
   apiExposureCatalog?: string;
   apiContractCatalog?: string;
+  kernelRecoveryURL?: string;
   identity: PortalIdentityConfig;
   tls?: { certFile: string; keyFile: string };
   allowInsecureHTTP: boolean;
@@ -40,7 +41,7 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
   const allowed = new Set([
     "--listen", "--portal-assets", "--tls-cert", "--tls-key",
     "--access-profile-catalog", "--api-exposure-catalog", "--api-contract-catalog",
-    "--frontend-delivery-cache", "--frontend-delivery-origin", ...identityValueArguments, ...addressingValueArguments,
+    "--frontend-delivery-cache", "--frontend-delivery-origin", "--kernel-recovery-url", ...identityValueArguments, ...addressingValueArguments,
   ]);
   for (const name of values.keys()) if (!allowed.has(name)) throw new Error(`未知启动参数: ${name}`);
 
@@ -64,6 +65,8 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
   const accessProfileCatalog = values.get("--access-profile-catalog");
   const apiExposureCatalog = values.get("--api-exposure-catalog");
   const apiContractCatalog = values.get("--api-contract-catalog");
+  const kernelRecoveryURL = values.get("--kernel-recovery-url");
+  if (kernelRecoveryURL !== undefined) validateKernelRecoveryURL(kernelRecoveryURL);
   if (originRoot !== undefined && cacheRoot === undefined) throw new Error("配置 delivery origin 时必须同时配置本机 cache");
   return Object.freeze({
     listenHost,
@@ -72,6 +75,7 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
     ...(accessProfileCatalog === undefined ? {} : { accessProfileCatalog: absolutePath(accessProfileCatalog, cwd) }),
     ...(apiExposureCatalog === undefined ? {} : { apiExposureCatalog: absolutePath(apiExposureCatalog, cwd) }),
     ...(apiContractCatalog === undefined ? {} : { apiContractCatalog: absolutePath(apiContractCatalog, cwd) }),
+    ...(kernelRecoveryURL === undefined ? {} : { kernelRecoveryURL }),
     identity,
     tls: certFile === undefined ? undefined : Object.freeze({ certFile: absolutePath(certFile, cwd), keyFile: absolutePath(keyFile!, cwd) }),
     allowInsecureHTTP,
@@ -83,6 +87,15 @@ export function parseHostArguments(args: readonly string[], cwd = process.cwd())
       }),
     }),
   });
+}
+
+function validateKernelRecoveryURL(raw: string): void {
+  let url: URL;
+  try { url = new URL(raw); }
+  catch { throw new Error("--kernel-recovery-url 必须是 loopback HTTP URL"); }
+  if (url.protocol !== "http:" || (url.hostname !== "127.0.0.1" && url.hostname !== "[::1]" && url.hostname !== "::1") || url.username !== "" || url.password !== "" || url.pathname !== "/" || url.search !== "" || url.hash !== "") {
+    throw new Error("--kernel-recovery-url 必须是无凭证、无路径的 loopback HTTP URL");
+  }
 }
 
 function absolutePath(path: string, cwd: string): string {

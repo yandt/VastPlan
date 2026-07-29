@@ -22,6 +22,7 @@ import { AddressingSessionAuthorization } from "../identity/session-authorizatio
 import { FileAPIExposureCatalog } from "../api-exposure/file-api-exposure-catalog";
 import { FileAPIContractCatalog } from "../api-exposure/file-api-contract-catalog";
 import { PortalGenerationCoordinator } from "../runtime/portal-generation-coordinator";
+import { KernelRecoveryClient } from "../http/kernel-recovery-route";
 
 interface PortalServerResources {
 	readonly addressing?: NodeAddressingRuntime;
@@ -53,6 +54,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
       ...(apiContractCatalog === undefined ? {} : { contractCatalog: apiContractCatalog }),
     };
     const delivery = config.delivery === undefined ? undefined : await PortalDeliveryStore.open(config.delivery.cacheRoot, config.delivery.originRoot);
+    const recovery = config.kernelRecoveryURL === undefined ? undefined : new KernelRecoveryClient(config.kernelRecoveryURL);
     generations = composer === undefined || delivery === undefined ? undefined : new ServerGenerationManager(
       delivery, join(config.delivery!.cacheRoot, "server-generations"), join(__dirname, "server-generation-worker.cjs"),
     );
@@ -69,6 +71,7 @@ export async function createPortalServer(config: PortalHostConfig): Promise<Serv
       ...(delivery === undefined ? {} : { delivery }),
       ...(coordination === undefined ? {} : { generations: coordination }),
       ...(ssr === undefined ? {} : { ssr }),
+      ...(recovery === undefined ? {} : { recovery }),
     });
     let server: Server;
     if (config.tls === undefined) server = createHTTPServer(handler);

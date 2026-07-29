@@ -53,6 +53,13 @@ func RenderSystemdUnit(request Request) (string, error) {
 	if node.Labels != "" {
 		args = append(args, "-labels", node.Labels)
 	}
+	if request.Release.RecoveryCapsule != nil {
+		args = append(args,
+			"-recovery-capsule", RecoveryCapsulePath,
+			"-recovery-status", RecoveryStatusPath,
+			"-recovery-listen", RecoveryListen,
+		)
+	}
 	for i := range args {
 		args[i] = systemdArgument(args[i])
 	}
@@ -157,6 +164,16 @@ func RenderInstallScript(request Request, secrets []SecretPayload) ([]byte, erro
 	script.WriteString("curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --output \"$kernel_tmp\" \"$kernel_url\"\n")
 	script.WriteString("printf '%s  %s\\n' '" + request.Release.SHA256 + "' \"$kernel_tmp\" | sha256sum --check --status\n")
 	script.WriteString("install -m 0755 \"$kernel_tmp\" " + versionDir + "/backend-kernel\n")
+	if request.Release.RecoveryCapsule != nil {
+		capsule := request.Release.RecoveryCapsule
+		script.WriteString("capsule_tmp=$(mktemp " + ConfigRoot + "/.recovery-capsule.XXXXXX)\n")
+		script.WriteString("trap 'rm -f \"$kernel_tmp\" \"$capsule_tmp\"' EXIT HUP INT TERM\n")
+		script.WriteString("capsule_url=$(printf '%s' '" + base64.StdEncoding.EncodeToString([]byte(capsule.URL)) + "' | base64 -d)\n")
+		script.WriteString("curl --fail --location --silent --show-error --proto '=https' --tlsv1.2 --output \"$capsule_tmp\" \"$capsule_url\"\n")
+		script.WriteString("printf '%s  %s\\n' '" + capsule.SHA256 + "' \"$capsule_tmp\" | sha256sum --check --status\n")
+		script.WriteString("install -o root -g " + ServiceUser + " -m 0440 \"$capsule_tmp\" " + RecoveryCapsulePath + "\n")
+		script.WriteString("rm -f \"$capsule_tmp\"\n")
+	}
 	script.WriteString("ln -sfn releases/" + request.Release.Version + "/backend-kernel " + InstallRoot + "/current.next\n")
 	script.WriteString("mv -Tf " + InstallRoot + "/current.next " + InstallRoot + "/current\n")
 	writeBase64File(&script, []byte(unit), SystemdUnitPath, 0o644, "root:root")

@@ -66,7 +66,7 @@ func TestTransportSecuritySignsAndDetectsReplay(t *testing.T) {
 func TestTransportSecurityAttestsNodeLeaseIdentity(t *testing.T) {
 	security, identity := newTestTransportSecurity(t)
 	defer security.Close()
-	record := controlplane.NodeRecord{SchemaVersion: 3, NodeID: "node-a", TenantID: "tenant-a", Deployment: "prod", UpdatedAt: time.Now().UTC()}
+	record := controlplane.NodeRecord{SchemaVersion: 4, NodeID: "node-a", TenantID: "tenant-a", Deployment: "prod", UpdatedAt: time.Now().UTC()}
 	signed, err := security.AttestNodeLease(record)
 	if err != nil || signed.TransportPublicKey != identity.PublicKey || signed.TransportSignature == "" {
 		t.Fatalf("节点 lease 签名失败: %+v %v", signed, err)

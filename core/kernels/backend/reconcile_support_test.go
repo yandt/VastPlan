@@ -1,11 +1,12 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/internal/callcontext"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 	"cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
@@ -57,6 +58,34 @@ func TestParseReconcileOptionsSupportsYAMLStartupFileAlias(t *testing.T) {
 	}
 	if _, err := parseReconcileOptions([]string{"-desired", "desired.json", "-startup-file", "desired.yaml"}); err == nil {
 		t.Fatal("两个配置入口同时设置必须拒绝")
+	}
+}
+
+func TestParseReconcileOptionsBindsRecoveryCapsuleToAbsoluteKernelState(t *testing.T) {
+	root := t.TempDir()
+	configured, err := parseReconcileOptions([]string{
+		"-desired", "desired.json",
+		"-actual-state", filepath.Join(root, "actual.json"),
+		"-recovery-capsule", filepath.Join(root, "recovery-capsule.json"),
+		"-recovery-listen", "127.0.0.1:19090",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configured.recoveryStatus != filepath.Join(root, "recovery-status.json") {
+		t.Fatalf("unexpected default Recovery status path: %s", configured.recoveryStatus)
+	}
+	if _, err := parseReconcileOptions([]string{"-desired", "desired.json", "-recovery-capsule", "relative.json"}); err == nil {
+		t.Fatal("relative Recovery Capsule must fail")
+	}
+	if _, err := parseReconcileOptions([]string{"-desired", "desired.json", "-recovery-listen", "127.0.0.1:19090"}); err == nil {
+		t.Fatal("Recovery listener without Capsule must fail")
+	}
+	if _, err := parseReconcileOptions([]string{
+		"-nats-url", "tls://nats.example.test:4222", "-actual-state", filepath.Join(root, "actual.json"),
+		"-recovery-capsule", filepath.Join(root, "capsule.json"), "-bootstrap-upgrade",
+	}); err == nil || !strings.Contains(err.Error(), "未配对") {
+		t.Fatalf("production LKG advancement without a paired Capsule must fail: %v", err)
 	}
 }
 

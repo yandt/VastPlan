@@ -33,7 +33,7 @@ func TestObserverWaitsForMissingLeaseAndAcceptsExactIdentity(t *testing.T) {
 		t.Fatalf("缺失 lease 应等待: %+v %v", got, err)
 	}
 
-	record := controlplane.NodeRecord{SchemaVersion: 3, NodeID: "node-a", TenantID: "tenant-a", Deployment: "prod", UpdatedAt: now, TransportPublicKey: testTransportPublicKey, TransportTimestamp: "signed", TransportNonce: "nonce", TransportSignature: "signature"}
+	record := controlplane.NodeRecord{SchemaVersion: 4, NodeID: "node-a", TenantID: "tenant-a", Deployment: "prod", UpdatedAt: now, TransportPublicKey: testTransportPublicKey, TransportTimestamp: "signed", TransportNonce: "nonce", TransportSignature: "signature"}
 	raw, _ := json.Marshal(record)
 	observer.lookup = func(context.Context, nodebootstrap.ReadinessExpectation) ([]byte, error) { return raw, nil }
 	observer.verify = func(controlplane.NodeRecord) (addressing.TransportIdentity, error) {
@@ -47,7 +47,7 @@ func TestObserverWaitsForMissingLeaseAndAcceptsExactIdentity(t *testing.T) {
 
 func TestObserverRejectsSignatureAndIdentityMismatch(t *testing.T) {
 	now := time.Now().UTC()
-	record := controlplane.NodeRecord{SchemaVersion: 3, NodeID: "node-a", TenantID: "tenant-b", Deployment: "prod", UpdatedAt: now, TransportPublicKey: testTransportPublicKey}
+	record := controlplane.NodeRecord{SchemaVersion: 4, NodeID: "node-a", TenantID: "tenant-b", Deployment: "prod", UpdatedAt: now, TransportPublicKey: testTransportPublicKey}
 	raw, _ := json.Marshal(record)
 	observer := &Observer{
 		now: func() time.Time { return now }, maxAge: defaultMaxLeaseAge,

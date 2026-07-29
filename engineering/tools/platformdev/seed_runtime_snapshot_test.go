@@ -123,6 +123,50 @@ func TestSeedRuntimeSnapshotRestoresVerifiedV1ForCapsuleMigration(t *testing.T) 
 	}
 }
 
+func TestDevelopmentHostRefreshReplacesOnlyBackendKernel(t *testing.T) {
+	root := platformDevTestProjectRoot(t)
+	stateRoot := filepath.Join(t.TempDir(), "state-root")
+	first := &runtime{options: options{root: root, stateRoot: stateRoot}, runDir: filepath.Join(stateRoot, "runs", "first")}
+	if err := first.stageSeedRuntimeSnapshot(writeSeedRuntimeSnapshotTestSource(t, root, "stable"), "test-build"); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.commitSeedRuntimeSnapshot(); err != nil {
+		t.Fatal(err)
+	}
+
+	runDir := filepath.Join(stateRoot, "runs", "current")
+	if err := os.MkdirAll(runDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	current := &runtime{options: first.options, runDir: runDir}
+	if _, restored, err := current.restoreSeedRuntimeSnapshot(); err != nil || !restored {
+		t.Fatalf("restore stable snapshot: restored=%v err=%v", restored, err)
+	}
+	repositoryDigestBefore, err := seedRuntimeTreeDigest(filepath.Join(runDir, "repository"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	newKernel := filepath.Join(t.TempDir(), "backend-kernel")
+	if err := os.WriteFile(newKernel, []byte("current-orchestrator-kernel"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := replaceCachedFileIfChanged(newKernel, filepath.Join(runDir, "dynamic", "backend-kernel"))
+	if err != nil || !changed {
+		t.Fatalf("host refresh must replace an old kernel: changed=%v err=%v", changed, err)
+	}
+	changed, err = replaceCachedFileIfChanged(newKernel, filepath.Join(runDir, "dynamic", "backend-kernel"))
+	if err != nil || changed {
+		t.Fatalf("identical host refresh must be a no-op: changed=%v err=%v", changed, err)
+	}
+	repositoryDigestAfter, err := seedRuntimeTreeDigest(filepath.Join(runDir, "repository"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repositoryDigestAfter != repositoryDigestBefore {
+		t.Fatal("refreshing the development host must not mutate stable plugin artifacts")
+	}
+}
+
 func TestSeedRuntimeSnapshotFailsClosedAfterTampering(t *testing.T) {
 	root := platformDevTestProjectRoot(t)
 	stateRoot := filepath.Join(t.TempDir(), "state-root")
@@ -254,9 +298,9 @@ func writeSeedRuntimeSnapshotTestSource(t *testing.T, projectRoot, label string)
 		Inventory: recoveryv1.InventoryBinding{RepositoryID: "seed-test", Generation: 1},
 		Artifacts: []recoveryv1.Artifact{{Ref: item.Ref, SHA256: item.SHA256}},
 		Stages: []recoveryv1.Stage{
-			{ID: recoveryv1.StageRecovery, Units: []string{"repository"}},
-			{ID: recoveryv1.StageControlPlane, Units: []string{"deployment"}},
-			{ID: recoveryv1.StagePlatform, Units: []string{"platform"}},
+			{ID: recoveryv1.StageRecovery, Units: []recoveryv1.UnitRequirement{{ID: "repository", MinReady: 1}}},
+			{ID: recoveryv1.StageControlPlane, Units: []recoveryv1.UnitRequirement{{ID: "deployment", MinReady: 1}}},
+			{ID: recoveryv1.StagePlatform, Units: []recoveryv1.UnitRequirement{{ID: "platform", MinReady: 1}}},
 		},
 	}); err != nil {
 		t.Fatal(err)

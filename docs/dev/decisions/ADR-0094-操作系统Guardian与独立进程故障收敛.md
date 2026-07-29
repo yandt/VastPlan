@@ -45,3 +45,7 @@ Backend Kernel 会直接启动独立插件进程，也会启动承载多个逻�
 - Kernel 被关闭、强杀或卡死后，插件进程不会成为不受管的后台服务；共享 Host 内多个逻辑插件仍由协议层分别判活。
 - 生产故障恢复复用 systemd，不增加每插件常驻进程，也避免自监督递归。
 - `PDEATHSIG` 只是一层快速收敛保护，最终清理由 systemd cgroup 和显式进程组信号共同保证；不能把它单独当成完整服务管理器。
+
+## 2026-07-29 补充：Recovery 阶段只投影 STATUS
+
+配置 Recovery Capsule 后，Node Agent 在每个持久化 ActualState 检查点更新 owner-only 状态文件、Node Lease 报告和 `sd_notify STATUS=`。`READY=1` 的含义仍是“控制面连接与租约守护已接管”，不是 Recovery/Platform Ready；systemd watchdog 仍只由 Agent/Reconciler 进展驱动。这样阶段故障可被运维观察，但不会形成第二套 Supervisor 或用业务插件健康错误触发无条件内核重启。

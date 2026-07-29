@@ -34,6 +34,13 @@ describe("parseHostArguments", () => {
     expect(config.apiContractCatalog).toBe("/srv/vastplan/config/api-contracts.json");
   });
 
+  it("accepts only a loopback Kernel Recovery endpoint", () => {
+    const base = ["--portal-assets", "bin/portal", "--session-file", "sessions.json", "--allow-insecure-http"];
+    expect(parseHostArguments([...base, "--kernel-recovery-url", "http://127.0.0.1:19090"], "/srv/vastplan").kernelRecoveryURL).toBe("http://127.0.0.1:19090");
+    expect(() => parseHostArguments([...base, "--kernel-recovery-url", "https://recovery.example.test"])).toThrow(/loopback/);
+    expect(() => parseHostArguments([...base, "--kernel-recovery-url", "http://127.0.0.1:19090/private"])).toThrow(/loopback/);
+  });
+
   it("requires Broker trust, session protection and pluggable service routing", () => {
     const base = ["--portal-assets", "bin/portal", "--tls-cert", "portal.crt", "--tls-key", "portal.key", "--identity-provider", "broker"];
     expect(() => parseHostArguments(base)).toThrow(/assertion-trust/i);

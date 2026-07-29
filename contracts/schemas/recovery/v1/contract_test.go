@@ -12,9 +12,9 @@ func TestNormalizeCapsuleAndCumulativeUnits(t *testing.T) {
 		Version: Version, ID: "platform", Inventory: InventoryBinding{RepositoryID: "seed", Generation: 7},
 		Artifacts: []Artifact{{Ref: pluginv1.ArtifactRef{PluginID: "plugin.a", Version: "1.0.0", Channel: "stable"}, SHA256: strings.Repeat("a", 64)}},
 		Stages: []Stage{
-			{ID: StageRecovery, Units: []string{"repository"}},
-			{ID: StageControlPlane, Units: []string{"deployment"}},
-			{ID: StagePlatform, Units: []string{"database"}},
+			{ID: StageRecovery, Units: []UnitRequirement{{ID: "repository", MinReady: 1}}},
+			{ID: StageControlPlane, Units: []UnitRequirement{{ID: "deployment", MinReady: 1}}},
+			{ID: StagePlatform, Units: []UnitRequirement{{ID: "database", MinReady: 1}}},
 		},
 	})
 	if err != nil {
@@ -28,9 +28,9 @@ func TestNormalizeCapsuleAndCumulativeUnits(t *testing.T) {
 
 func TestNormalizePlanRejectsMissingOrDuplicateClassification(t *testing.T) {
 	_, err := NormalizePlan(Plan{Version: Version, ID: "platform", Stages: []Stage{
-		{ID: StageRecovery, Units: []string{"repository"}},
-		{ID: StageControlPlane, Units: []string{"repository"}},
-		{ID: StagePlatform, Units: []string{"database"}},
+		{ID: StageRecovery, Units: []UnitRequirement{{ID: "repository", MinReady: 1}}},
+		{ID: StageControlPlane, Units: []UnitRequirement{{ID: "repository", MinReady: 1}}},
+		{ID: StagePlatform, Units: []UnitRequirement{{ID: "database", MinReady: 1}}},
 	}})
 	if err == nil {
 		t.Fatal("duplicate unit classification must fail")

@@ -92,6 +92,38 @@ func TestRenderInstallScriptIsFixedAndSystemdHardened(t *testing.T) {
 	}
 }
 
+func TestRenderSystemdUnitInstallsOptionalRecoveryCapsule(t *testing.T) {
+	request := validRequest()
+	request.Release.RecoveryCapsule = &ReleaseArtifact{URL: "https://releases.example.test/recovery-capsule.json", SHA256: strings.Repeat("b", 64)}
+	unit, err := RenderSystemdUnit(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"-recovery-capsule", RecoveryCapsulePath, "-recovery-status", RecoveryStatusPath, "-recovery-listen", RecoveryListen} {
+		if !strings.Contains(unit, expected) {
+			t.Fatalf("Recovery systemd unit missing %q", expected)
+		}
+	}
+	payloads := make([]SecretPayload, 0, len(request.SecretFiles))
+	for _, file := range request.SecretFiles {
+		content := []byte("secret-material")
+		if file.Destination == ArtifactTokenFile {
+			content = []byte("VASTPLAN_ARTIFACT_READ_TOKEN=artifact-secret-1234\n")
+		}
+		payloads = append(payloads, SecretPayload{Destination: file.Destination, Mode: file.Mode, Content: content})
+	}
+	script, err := RenderInstallScript(request, payloads)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := string(script)
+	for _, expected := range []string{RecoveryCapsulePath, request.Release.RecoveryCapsule.SHA256, base64.StdEncoding.EncodeToString([]byte(request.Release.RecoveryCapsule.URL)), `rm -f "$kernel_tmp" "$capsule_tmp"`} {
+		if !strings.Contains(raw, expected) {
+			t.Fatalf("Recovery install script missing %q", expected)
+		}
+	}
+}
+
 func validRequest() Request {
 	node := NodeAgent{
 		ID: "node-a", Tenant: "acme", Deployment: "prod", Labels: "region=cn,tier=platform",

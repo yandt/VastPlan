@@ -6,6 +6,7 @@ import (
 	"time"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	recoveryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/recovery/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/compositionresolver"
 	backendconfigurationauthority "cdsoft.com.cn/VastPlan/core/kernels/backend/configurationauthority"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/configurationcatalog"
@@ -16,6 +17,7 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodebootstrapobserver"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/platformcatalog"
 	kernelprofileactivation "cdsoft.com.cn/VastPlan/core/kernels/backend/profileactivation"
+	"cdsoft.com.cn/VastPlan/core/kernels/backend/recoverycontroller"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/sharedstate"
@@ -26,6 +28,7 @@ type reconcilePreparation struct {
 	artifacts artifactResolution
 	inventory *bootstrapinventory.Inventory
 	upgrade   nodeagent.BootstrapUpgradeCoordinator
+	capsule   *recoveryv1.Capsule
 }
 
 func prepareReconcile(options reconcileOptions) (reconcilePreparation, error) {
@@ -48,11 +51,24 @@ func prepareReconcile(options reconcileOptions) (reconcilePreparation, error) {
 		}
 		inventory = &parsed
 	}
+	var capsule *recoveryv1.Capsule
+	if options.recoveryCapsule != "" {
+		parsed, err := recoverycontroller.LoadCapsule(options.recoveryCapsule)
+		if err != nil {
+			return reconcilePreparation{}, fmt.Errorf("读取 Recovery Capsule: %w", err)
+		}
+		if inventory != nil {
+			if err := recoverycontroller.ValidateInventory(parsed, *inventory); err != nil {
+				return reconcilePreparation{}, err
+			}
+		}
+		capsule = &parsed
+	}
 	upgrade, err := buildBootstrapUpgrade(options, artifacts)
 	if err != nil {
 		return reconcilePreparation{}, err
 	}
-	return reconcilePreparation{labels: labels, artifacts: artifacts, inventory: inventory, upgrade: upgrade}, nil
+	return reconcilePreparation{labels: labels, artifacts: artifacts, inventory: inventory, upgrade: upgrade, capsule: capsule}, nil
 }
 
 func buildReconcileRuntime(options reconcileOptions, artifacts artifactResolution, plane *nodeControlPlane, logf func(string, ...any)) (*nodeagent.ProtocolRuntime, error) {

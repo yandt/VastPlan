@@ -89,6 +89,8 @@ chmod 0600 node-a.bootstrap.json /secure/ssh/node-bootstrap.key /secure/node-a/*
 
 新生成的 unit 使用 `Type=notify`：Node Agent 只有在接入控制面并启动 Node Lease Guard 后才发送 `READY=1`。`WatchdogSec=60s` 只在 Agent/Reconciler 控制循环真实推进，或处于与 reconcile deadline 相同的 15 分钟有界工作租约时收到存活通知；普通卡死会快速触发失败重启，长任务不会被 60 秒阈值误杀，超过租约仍未返回则停止喂狗。`KillMode=control-group` 会在服务退出时回收 Kernel、Runtime Host、独立插件及其子孙进程。完整分层见 [ADR-0094](../decisions/ADR-0094-操作系统Guardian与独立进程故障收敛.md)。
 
+种子节点 Release 可以增加 `recoveryCapsule { url, sha256 }`。固定 SSH 脚本只接受 HTTPS 和 64 位小写摘要，下载复验后安装为 `/etc/vastplan/recovery-capsule.json`（`root:vastplan 0440`），并给 systemd 增加 `-recovery-status /var/lib/vastplan/recovery-status.json` 与 loopback `-recovery-listen 127.0.0.1:19090`。`systemctl status` 的 STATUS 会显示当前 Recovery 阶段；详细只读状态通过本机端点或 Portal `/recovery` 查看。生产 Capsule 节点禁止没有配对 Capsule 的自动 LKG 推进。
+
 已经安装的旧 unit 不会因 Kernel 二进制升级自动获得这些 systemd 属性。升级到本决策后的首个版本时，必须通过受控引导/升级流程原子重装 unit、执行 `systemctl daemon-reload` 并重启服务；随后检查 `systemctl show vastplan-node-agent.service` 中 `Type=notify`、`WatchdogUSec=1min` 和 `KillMode=control-group` 已生效。
 
 ## 4. 失败与重试

@@ -24,6 +24,10 @@ SSH 返回和 systemd `active` 只能证明远端进程已启动，不能证明 
 - **只检查 node ID**：改动最小，但无法区分租户、Deployment 和传输身份；拒绝。
 - **Deployment Manager 直接读取 NATS KV**：插件会获得控制面凭证和存储耦合；拒绝。
 - **systemd active 直接视为 Ready**：无法证明 Node Agent 已接管；拒绝。
+
+## 2026-07-29 补充：Node Lease v4 Recovery 报告
+
+[ADR-0169](ADR-0169-Seed-Recovery-Capsule与分阶段可用性.md) 将 Node Lease 升级为 v4。传输签名现在同时覆盖一个有界 Recovery `NodeReport`：只含 Capsule/Inventory 身份、节点、revision、四态 unit 投影和更新时间，不含错误正文、路径、PID、配置或秘密。Bootstrap Ready 仍按本 ADR 的精确节点身份判断；Recovery 集群聚合是另一层按 Capsule generation、45 秒新鲜度和 unit `minReady` 执行的判断，二者不得互相替代。
 - **首期即建立完整事件投影**：长期更主动，但会同时引入持久消费、幂等和恢复机制；本期保留兼容事件化的窄观察接口，先完成安全闭环。
 
 ## 影响

@@ -17,14 +17,17 @@ import (
 )
 
 const (
-	InstallRoot       = "/opt/vastplan/backend"
-	StateRoot         = "/var/lib/vastplan"
-	FenceRoot         = "/var/lib/vastplan-fencing"
-	ConfigRoot        = "/etc/vastplan"
-	SecretsRoot       = ConfigRoot + "/secrets"
-	SystemdUnitPath   = "/etc/systemd/system/vastplan-node-agent.service"
-	ArtifactTokenFile = SecretsRoot + "/artifact.env"
-	ServiceUser       = "vastplan"
+	InstallRoot         = "/opt/vastplan/backend"
+	StateRoot           = "/var/lib/vastplan"
+	FenceRoot           = "/var/lib/vastplan-fencing"
+	ConfigRoot          = "/etc/vastplan"
+	SecretsRoot         = ConfigRoot + "/secrets"
+	SystemdUnitPath     = "/etc/systemd/system/vastplan-node-agent.service"
+	ArtifactTokenFile   = SecretsRoot + "/artifact.env"
+	RecoveryCapsulePath = ConfigRoot + "/recovery-capsule.json"
+	RecoveryStatusPath  = StateRoot + "/recovery-status.json"
+	RecoveryListen      = "127.0.0.1:19090"
+	ServiceUser         = "vastplan"
 
 	maxBootstrapSecretFiles      = 32
 	maxBootstrapSecretTotalBytes = 16 << 20
@@ -68,9 +71,15 @@ type Target struct {
 }
 
 type Release struct {
-	Version string `json:"version"`
-	URL     string `json:"url"`
-	SHA256  string `json:"sha256"`
+	Version         string           `json:"version"`
+	URL             string           `json:"url"`
+	SHA256          string           `json:"sha256"`
+	RecoveryCapsule *ReleaseArtifact `json:"recoveryCapsule,omitempty"`
+}
+
+type ReleaseArtifact struct {
+	URL    string `json:"url"`
+	SHA256 string `json:"sha256"`
 }
 
 type NodeAgent struct {
@@ -177,6 +186,14 @@ func (r Release) Validate() error {
 	}
 	if !digestPattern.MatchString(r.SHA256) {
 		return errors.New("内核 SHA-256 必须是 64 位小写十六进制")
+	}
+	if r.RecoveryCapsule != nil {
+		if err := secureURL(r.RecoveryCapsule.URL); err != nil {
+			return fmt.Errorf("Recovery Capsule 下载地址: %w", err)
+		}
+		if !digestPattern.MatchString(r.RecoveryCapsule.SHA256) {
+			return errors.New("Recovery Capsule SHA-256 必须是 64 位小写十六进制")
+		}
 	}
 	return nil
 }

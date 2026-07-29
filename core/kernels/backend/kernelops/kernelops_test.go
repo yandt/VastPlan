@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	recoveryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/recovery/v1"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
 )
 
@@ -97,6 +98,15 @@ func TestRunSupportBundleRedactsSensitiveData(t *testing.T) {
 	if err := os.WriteFile(diagnosticsPath, []byte(`{"healthy":true,"counter":9007199254740993,"token":"abc","nested":{"config":{"password":"hunter2"}},"payload":"private"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	recoveryPath := filepath.Join(directory, "recovery-status.json")
+	recoveryRaw, _ := json.Marshal(recoveryv1.Status{
+		SchemaVersion: 1, CapsuleID: "private-capsule", RepositoryID: "private-repository", Generation: 9, ArtifactCount: 3,
+		Overall: recoveryv1.OverallRecoveryReady, Scope: "local", Nodes: 1, UpdatedAt: now,
+		Stages: []recoveryv1.StageStatus{{ID: recoveryv1.StageRecovery, Status: recoveryv1.UnitReady, Ready: 1, Required: 1}},
+	})
+	if err := os.WriteFile(recoveryPath, recoveryRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	binaryPath, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +114,7 @@ func TestRunSupportBundleRedactsSensitiveData(t *testing.T) {
 	bundlePath := filepath.Join(directory, "support", "support.tar.gz")
 	var output bytes.Buffer
 	if err := RunSupportBundle(&output, "1.0.0", []string{
-		"-actual-state", actualPath, "-diagnostics", diagnosticsPath,
+		"-actual-state", actualPath, "-diagnostics", diagnosticsPath, "-recovery-status", recoveryPath,
 		"-binary", binaryPath, "-output", bundlePath,
 	}); err != nil {
 		t.Fatal(err)
@@ -115,6 +125,9 @@ func TestRunSupportBundleRedactsSensitiveData(t *testing.T) {
 		if strings.Contains(joined, forbidden) {
 			t.Fatalf("支持包泄露敏感内容 %q: %s", forbidden, joined)
 		}
+	}
+	if summary := string(contents["recovery-status-summary.json"]); strings.Contains(summary, "private-capsule") || strings.Contains(summary, "private-repository") || !strings.Contains(summary, recoveryv1.OverallRecoveryReady) {
+		t.Fatalf("Recovery support summary leaked identity or lost status: %s", summary)
 	}
 	if !strings.Contains(string(contents["kernel-diagnostics.json"]), "[REDACTED]") {
 		t.Fatalf("诊断字段未脱敏: %s", contents["kernel-diagnostics.json"])

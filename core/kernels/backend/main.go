@@ -27,6 +27,7 @@ import (
 	"syscall"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	artifactservercommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/artifactserver"
 	controlplanecommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/controlplane"
 	nodebootstrapcommand "cdsoft.com.cn/VastPlan/core/kernels/backend/commands/nodebootstrap"
@@ -34,7 +35,6 @@ import (
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/hostfactory"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/kernelops"
 	"cdsoft.com.cn/VastPlan/core/kernels/backend/nodeagent"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/servicewatchdog"
 )
 
@@ -257,6 +257,14 @@ func runReconcile(args []string) (runErr error) {
 	if err != nil {
 		return err
 	}
+	recovery, err := buildReconcileRecovery(options, prepared, plane, serviceNotifier, logf)
+	if err != nil {
+		return err
+	}
+	if recovery != nil {
+		reconciler.StateObserver = recovery.controller.Observe
+		defer func() { runErr = errors.Join(runErr, recovery.close()) }()
+	}
 	liveness := &servicewatchdog.Liveness{}
 	reconciler.Pulse = liveness.Pulse
 	agent := &nodeagent.Agent{
@@ -272,7 +280,16 @@ func runReconcile(args []string) (runErr error) {
 		return err
 	}
 	defer leaseGuard.closeEventually()
-	if err := serviceNotifier.Ready("Node Agent 已加入控制面并启动对账"); err != nil {
+	if recovery != nil {
+		if err := recovery.start(options, leaseGuard, reconciler.StateStore); err != nil {
+			return fmt.Errorf("启动 Recovery Controller: %w", err)
+		}
+	}
+	readyMessage := "Node Agent 已加入控制面并启动对账"
+	if recovery != nil {
+		readyMessage += "；Recovery Capsule 状态已接管"
+	}
+	if err := serviceNotifier.Ready(readyMessage); err != nil {
 		return fmt.Errorf("通知 systemd 就绪: %w", err)
 	}
 	defer func() {

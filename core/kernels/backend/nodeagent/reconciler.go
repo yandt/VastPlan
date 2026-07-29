@@ -28,6 +28,9 @@ type Reconciler struct {
 	// Pulse marks progress through potentially long multi-unit reconciliation.
 	// It is deliberately host-only and never enters DesiredState.
 	Pulse func()
+	// StateObserver receives each durably saved checkpoint. It is a kernel-only
+	// projection hook for recovery/readiness and must not mutate desired state.
+	StateObserver func(ActualState) error
 }
 
 func (r *Reconciler) pulse() {
