@@ -98,23 +98,26 @@ describe("MUI portal UI adapter", () => {
       schema={{ id: "node", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { name: { type: "string", title: "Name" }, region: { type: "string", title: "Region" } } } }}
       value={{}}
       onChange={() => undefined}
-      presentation={{ navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, fields: ["/name", "/region"] }] }}
+      presentation={{ navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, columnWidths: [35, 65], fields: ["/name", "/region"] }] }}
+      errors={{ name: "Name is already used" }}
     /></PortalI18nProvider>);
     expect(markup).toContain("Identity");
     expect(markup).toContain("Name");
     expect(markup).toContain("Region");
+    expect(markup).toContain("minmax(0, 35fr) minmax(0, 65fr)");
+    expect(markup).toContain("Name is already used");
+    expect(markup.match(/Name is already used/g)).toHaveLength(1);
   });
 
-  it("keeps horizontal layout on leaf fields instead of collapsing the root object grid", () => {
+  it("defaults labels to inline on leaf fields without collapsing the root object grid", () => {
     const Form = muiPortalUIComponents.FormRenderer;
     const markup = renderToStaticMarkup(<PortalI18nProvider policy={{ defaultLocale: "en-US", supportedLocales: ["en-US"] }} catalogs={{}} candidates={["en-US"]}><Form
       schema={{ id: "filter", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { profile: { type: "string", title: "Profile" } } } }}
       value={{}}
       onChange={() => undefined}
-      presentation={{ layout: "horizontal" }}
     /></PortalI18nProvider>);
-    expect(markup).toContain(".form-group:not(.rjsf-field-object)");
-    expect(markup).toContain('class="form-group rjsf-field rjsf-field-object"');
+    expect(markup).toContain("112px minmax(0,1fr)");
+    expect(markup).toContain('aria-label="Profile"');
   });
 
   it("keeps compact filter labels persistent, single-line and inside the shared width", () => {

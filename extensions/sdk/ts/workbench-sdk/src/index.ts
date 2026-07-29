@@ -1,6 +1,6 @@
 import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, PageActionSpec, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
 
-export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardFieldSpec, CollectionCardValueFormat, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, PageActionDisplay, PageActionOverflow, PageActionSpec, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
+export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, PageActionDisplay, PageActionOverflow, PageActionSpec, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
 export { dashboardBreakpointOrder, dashboardDefaultBreakpoints, dashboardDefaultColumns, jsonSchemaDialect, message } from "@vastplan/ui-contract";
 export { defineDashboardGrid } from "./dashboard.js";
 export type { LocalizedText, MessageDescriptor, MessageValues } from "@vastplan/ui-contract";
@@ -58,10 +58,22 @@ export interface CollectionSummary {
 export interface WorkbenchFormSubmitContext<Row extends Record<string, unknown> = Record<string, unknown>> {
   value: Readonly<Record<string, unknown>>;
   selected: readonly Row[];
+  context?: Readonly<Record<string, unknown>>;
 }
 
 export interface WorkbenchFormSubmitResult {
   fieldErrors?: WorkbenchFormFieldErrors;
+  data?: JSONValue;
+}
+
+export interface WorkbenchFormBeforeSubmitResult {
+  cancelled?: boolean;
+  value?: Readonly<Record<string, unknown>>;
+  fieldErrors?: WorkbenchFormFieldErrors;
+}
+
+export interface WorkbenchFormAfterSubmitContext<Row extends Record<string, unknown> = Record<string, unknown>> extends WorkbenchFormSubmitContext<Row> {
+  result?: WorkbenchFormSubmitResult;
 }
 
 /** Field errors stay semantic until Workbench resolves them for the active locale. */
@@ -85,7 +97,9 @@ export interface WorkbenchFormDefinition<Row extends Record<string, unknown> = R
   prepare?(selected: readonly Row[], signal: AbortSignal): Promise<WorkbenchFormPreparation>;
   load?(selected: readonly Row[], signal: AbortSignal): Promise<Readonly<Record<string, unknown>>>;
   validate?(request: { value: Readonly<Record<string, unknown>>; context: Readonly<Record<string, unknown>>; signal: AbortSignal }): Promise<WorkbenchFormFieldErrors>;
+  beforeSubmit?(context: WorkbenchFormSubmitContext<Row>, signal: AbortSignal): Promise<WorkbenchFormBeforeSubmitResult | void>;
   submit(context: WorkbenchFormSubmitContext<Row>, signal: AbortSignal): Promise<WorkbenchFormSubmitResult | void>;
+  afterSubmit?(context: WorkbenchFormAfterSubmitContext<Row>, signal: AbortSignal): Promise<void>;
 }
 
 export type WorkbenchOverlayContent =
@@ -384,11 +398,8 @@ function validFieldKey(value: string): boolean { return /^[A-Za-z0-9][A-Za-z0-9.
 function validSelectionParam(value: string): boolean { return /^[a-z][a-z0-9_-]{0,39}$/.test(value); }
 
 function validateFormDefinition(form: WorkbenchFormDefinition): void {
+  validateFormPresentation(form.presentation, form.id);
   const sections = form.presentation?.sections ?? [];
-  if (new Set(sections.map((section) => section.id)).size !== sections.length) throw new Error(`表单 ${form.id} 的 section ID 必须唯一`);
-  for (const section of sections) {
-    if (!Number.isSafeInteger(section.columns ?? 1) || (section.columns ?? 1) < 1 || (section.columns ?? 1) > 4) throw new Error(`表单 ${form.id} 的 section.columns 必须在 1..4`);
-  }
   for (const field of form.presentation?.fields ?? []) {
     if (!field.pointer.startsWith("/") || field.pointer.startsWith("/context/")) throw new Error(`表单 ${form.id} 的字段 pointer 无效: ${field.pointer}`);
     if (field.span !== undefined && (!Number.isSafeInteger(field.span) || field.span < 1 || field.span > 4)) throw new Error(`表单 ${form.id} 的字段 span 必须在 1..4`);
@@ -401,6 +412,30 @@ function validateFormDefinition(form: WorkbenchFormDefinition): void {
       if (node?.type !== "string" || node.format !== "vastplan-secret-material" || node.writeOnly !== true) throw new Error(`表单 ${form.id} 的 secretMaterial 字段必须声明 type=string、format=vastplan-secret-material 且 writeOnly=true`);
       if (pointerValue(form.initialValue, field.pointer).found) throw new Error(`表单 ${form.id} 的 secretMaterial 字段禁止出现在 initialValue`);
     }
+  }
+}
+
+export function validateFormPresentation(presentation: FormPresentation | undefined, formID = "dynamic-form"): void {
+  if (presentation === undefined) return;
+  if (presentation.preset !== undefined && !["compact", "standard", "comfortable", "guided"].includes(presentation.preset)) throw new Error(`表单 ${formID} 的 preset 无效`);
+  if (presentation.labelPlacement !== undefined && !["inline", "stacked", "inside-inline"].includes(presentation.labelPlacement)) throw new Error(`表单 ${formID} 的 labelPlacement 无效`);
+  if (presentation.navigation !== undefined && !["sections", "tabs", "steps"].includes(presentation.navigation)) throw new Error(`表单 ${formID} 的 navigation 无效`);
+  validateFormColumns(formID, presentation.columns, presentation.columnWidths, "presentation");
+  const sections = presentation.sections ?? [];
+  if (new Set(sections.map((section) => section.id)).size !== sections.length) throw new Error(`表单 ${formID} 的 section ID 必须唯一`);
+  for (const section of sections) {
+    if (!validIdentifier(section.id) || section.fields.length === 0 || section.fields.some((field) => !field.startsWith("/"))) throw new Error(`表单 ${formID} 的 section ${section.id} 无效`);
+    validateFormColumns(formID, section.columns, section.columnWidths, `section ${section.id}`);
+  }
+}
+
+function validateFormColumns(formID: string, columns: number | undefined, widths: readonly number[] | undefined, owner: string): void {
+  const count = columns ?? 1;
+  if (!Number.isSafeInteger(count) || count < 1 || count > 4) throw new Error(`表单 ${formID} 的 ${owner}.columns 必须在 1..4`);
+  if (widths === undefined) return;
+  const total = widths.reduce((sum, value) => sum + value, 0);
+  if (widths.length !== count || widths.some((value) => !Number.isFinite(value) || value <= 0 || value > 100) || Math.abs(total - 100) > 0.01) {
+    throw new Error(`表单 ${formID} 的 ${owner}.columnWidths 数量必须匹配列数、每项大于 0 且合计 100`);
   }
 }
 

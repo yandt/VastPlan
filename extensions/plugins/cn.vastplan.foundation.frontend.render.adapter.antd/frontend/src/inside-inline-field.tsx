@@ -1,21 +1,33 @@
-import { Form, Tooltip } from "antd";
+import { Form, Tooltip, Typography } from "antd";
 import type { FieldTemplateProps } from "@rjsf/utils";
 import type { FormLabelPlacement } from "@vastplan/ui-primitives";
 import { AntdFieldTemplate } from "./safe-rjsf-theme";
 
 export function PresentedField(props: FieldTemplateProps & { placement?: FormLabelPlacement }) {
-  if (props.placement !== "inside-inline" || props.hidden || props.schema.type === "object" || props.schema.type === "array") return <AntdFieldTemplate {...props} />;
+  if (props.hidden || props.schema.type === "object" || props.schema.type === "array" || props.placement === "stacked") return <AntdFieldTemplate {...props} />;
   const label = props.displayLabel === false ? "" : props.label;
+  const error = props.rawErrors?.[0];
+  if (props.placement === "inline") return <Form.Item
+    label={label === "" ? undefined : label}
+    required={props.required}
+    extra={props.rawHelp ?? props.rawDescription}
+    validateStatus={(props.rawErrors?.length ?? 0) > 0 ? "error" : undefined}
+    help={null}
+    labelCol={{ flex: "0 0 112px" }}
+    wrapperCol={{ flex: "1 1 0", style: { minWidth: 0 } }}
+    colon={false}
+    style={{ marginBottom: 16 }}
+  ><div>{props.children}{error === undefined ? null : <Typography.Text id={`${props.id}__error`} type="danger" role="alert" style={{ display: "block", marginTop: 4 }}>{error}</Typography.Text>}</div></Form.Item>;
   return <Form.Item
     required={props.required}
     extra={props.rawHelp ?? props.rawDescription}
     validateStatus={(props.rawErrors?.length ?? 0) > 0 ? "error" : undefined}
-    help={props.rawErrors?.[0]}
+    help={null}
     style={{ marginBottom: 0 }}
   ><div className="vp-antd-inside-inline-field">
     {label === "" ? null : <Tooltip title={label}><label className="vp-inside-inline-label" htmlFor={props.id} aria-label={label}>{label}{props.required ? <span aria-hidden style={{ color: "var(--ant-color-error)" }}> *</span> : null}</label></Tooltip>}
     <div className="vp-inside-inline-control">{props.children}</div>
-  </div></Form.Item>;
+  </div>{error === undefined ? null : <Typography.Text id={`${props.id}__error`} type="danger" role="alert" style={{ display: "block", marginTop: 4 }}>{error}</Typography.Text>}</Form.Item>;
 }
 
 export const antdInsideInlineCSS = `

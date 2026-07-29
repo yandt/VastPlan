@@ -51,7 +51,7 @@ import type {
 import { useEffect, useMemo, useState } from "react";
 import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import type { FormPresentation, FormRendererProps, FormSectionPresentation, FormValidationIssue } from "@vastplan/ui-primitives";
-import { jsonSchemaDialect, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { formGridClassName, formGridColumns, formGridCSS, formGridStyle, formLabelPlacement, jsonSchemaDialect, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { ArcoFieldTemplate, CompactFormContext, InsideInlineLabelContext, arcoInsideInlineCSS } from "./inside-inline-field";
 import { arcoComponentSize } from "./component-size";
 
@@ -290,7 +290,14 @@ function ObjectFieldTemplate({ title, description, properties, schema, uiSchema,
 
 function PresentedObjectFieldTemplate({ presentation, activeSection, onSectionChange, ...props }: ObjectFieldTemplateProps & { presentation?: FormPresentation; activeSection?: string; onSectionChange?(sectionID: string): void }) {
   const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
-  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <ObjectFieldTemplate {...props} title={compactRoot ? "" : props.title} />;
+  if (props.fieldPathId.path.length !== 0) return <ObjectFieldTemplate {...props} />;
+  if (presentation?.sections === undefined || presentation.sections.length === 0) {
+    const columns = formGridColumns(presentation);
+    return <>{compactRoot || props.title === "" ? null : <Typography.Title heading={6}>{props.title}</Typography.Title>}{props.description}<div className={formGridClassName} style={formGridStyle(presentation)}>{props.properties.filter((property) => !property.hidden).map((property) => {
+      const span = presentation?.fields?.find((field) => fieldName(field.pointer) === property.name)?.span ?? 1;
+      return <div key={property.name} style={{ gridColumn: `span ${Math.min(Math.max(1, span), columns)}` }}>{property.content}</div>;
+    })}</div></>;
+  }
   const i18n = usePortalI18n();
   const sections = presentation.sections;
   const selected = sections.find((section) => section.id === activeSection) ?? sections[0]!;
@@ -298,10 +305,11 @@ function PresentedObjectFieldTemplate({ presentation, activeSection, onSectionCh
   const remainder = props.properties.filter((property) => !assigned.has(property.name));
   const section = (value: FormSectionPresentation) => {
     const fields = value.fields.map(fieldName);
-    const content = <ArcoGrid cols={value.columns ?? 1} rowGap={12} colGap={16}>{props.properties.filter((property) => fields.includes(property.name) && !property.hidden).map((property) => {
+    const columns = formGridColumns(presentation, value);
+    const content = <div className={formGridClassName} style={formGridStyle(presentation, value)}>{props.properties.filter((property) => fields.includes(property.name) && !property.hidden).map((property) => {
       const span = presentation.fields?.find((field) => fieldName(field.pointer) === property.name)?.span ?? 1;
-      return <ArcoGrid.GridItem key={property.name} span={Math.min(Math.max(1, span), value.columns ?? 1)}>{property.content}</ArcoGrid.GridItem>;
-    })}</ArcoGrid>;
+      return <div key={property.name} style={{ gridColumn: `span ${Math.min(Math.max(1, span), columns)}` }}>{property.content}</div>;
+    })}</div>;
     const body = <>{value.description === undefined ? null : <Typography.Paragraph type="secondary">{i18n.text(value.description)}</Typography.Paragraph>}{content}</>;
     if (presentation.navigation !== "sections") return body;
     return value.collapsible
@@ -546,9 +554,9 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, size = "md", prese
   return <ConfigProvider size={arcoComponentSize[size]}>
     {currentAsync.validating ? <Alert type="info" title={i18n.text(message(namespace,"form.validating","正在校验"))} style={{ marginBottom: 16 }} /> : null}
     <CompactFormContext.Provider value={presentation?.layout === "compact"}>
-    <InsideInlineLabelContext.Provider value={presentation?.labelPlacement === "inside-inline"}>
-    <style>{arcoInsideInlineCSS}</style>
-    <Form layout={presentation?.layout === "horizontal" ? "horizontal" : "vertical"} size={arcoComponentSize[size]}>
+    <InsideInlineLabelContext.Provider value={formLabelPlacement(presentation) === "inside-inline"}>
+    <style>{formGridCSS}{formLabelPlacement(presentation) === "inside-inline" ? arcoInsideInlineCSS : ""}</style>
+    <Form layout={formLabelPlacement(presentation) === "inline" ? "horizontal" : "vertical"} size={arcoComponentSize[size]}>
       <RJSFForm<FormData, Schema, FormContext>
         tagName="div"
         schema={dataSchema}
@@ -561,7 +569,7 @@ export function ArcoJSONSchemaForm({ schema, value, onChange, size = "md", prese
         readonly={readOnly}
         disabled={submitting}
         liveValidate="onChange"
-        showErrorList="top"
+        showErrorList={false}
         extraErrors={errorSchemaFromPaths(allExternalErrors)}
         extraErrorsBlockSubmit
         noHtml5Validate

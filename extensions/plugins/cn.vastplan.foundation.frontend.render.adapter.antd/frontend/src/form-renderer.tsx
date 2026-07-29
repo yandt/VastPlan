@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { cspJSONSchemaValidator } from "@vastplan/rjsf-csp-validator";
 import type { FormPresentation, FormRendererProps, FormSectionPresentation } from "@vastplan/ui-primitives";
-import { localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { formGridClassName, formGridColumns, formGridCSS, formGridStyle, formLabelPlacement, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { namespace } from "./theme";
 import { safeAntdTemplates } from "./safe-rjsf-theme";
 import { PresentedField, antdInsideInlineCSS } from "./inside-inline-field";
@@ -62,16 +62,24 @@ type PresentedObjectProps = ObjectFieldTemplateProps & { presentation?: FormPres
 function PresentedObject({ presentation, activeSection, onSectionChange, ...props }: PresentedObjectProps) {
   const i18n = usePortalI18n();
   const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
-  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <section>{compactRoot || props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <div key={property.name}>{property.content}</div>)}</section>;
+  if (props.fieldPathId.path.length !== 0) return <section>{props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <div key={property.name}>{property.content}</div>)}</section>;
+  if (presentation?.sections === undefined || presentation.sections.length === 0) {
+    const columns = formGridColumns(presentation);
+    return <section>{compactRoot || props.title === "" ? null : <Typography.Title level={5}>{props.title}</Typography.Title>}{props.description}<div className={formGridClassName} style={formGridStyle(presentation)}>{props.properties.filter((property) => !property.hidden).map((property) => {
+      const span = presentation?.fields?.find((field) => formFieldName(field.pointer) === property.name)?.span ?? 1;
+      return <div key={property.name} style={{ gridColumn: `span ${Math.min(Math.max(1, span), columns)}` }}>{property.content}</div>;
+    })}</div></section>;
+  }
   const sections = presentation.sections;
   const selected = sections.find((section) => section.id === activeSection) ?? sections[0]!;
   const assigned = new Set(sections.flatMap((section) => section.fields.map(formFieldName)));
   const remainder = props.properties.filter((property) => !assigned.has(property.name) && !property.hidden);
   const renderSection = (section: FormSectionPresentation) => {
     const fields = section.fields.map(formFieldName);
-    const body = <div style={{ display: "grid", gridTemplateColumns: `repeat(${section.columns ?? 1}, minmax(0, 1fr))`, gap: 16 }}>{props.properties.filter((property) => fields.includes(property.name) && !property.hidden).map((property) => {
+    const columns = formGridColumns(presentation, section);
+    const body = <div className={formGridClassName} style={formGridStyle(presentation, section)}>{props.properties.filter((property) => fields.includes(property.name) && !property.hidden).map((property) => {
       const span = presentation.fields?.find((field) => formFieldName(field.pointer) === property.name)?.span ?? 1;
-      return <div key={property.name} style={{ gridColumn: `span ${Math.min(Math.max(1, span), section.columns ?? 1)}` }}>{property.content}</div>;
+      return <div key={property.name} style={{ gridColumn: `span ${Math.min(Math.max(1, span), columns)}` }}>{property.content}</div>;
     })}</div>;
     const description = section.description === undefined ? null : <Typography.Paragraph type="secondary">{i18n.text(section.description)}</Typography.Paragraph>;
     if (presentation.navigation !== "sections") return <>{description}{body}</>;
@@ -117,7 +125,7 @@ export function FormRenderer({ schema, value, onChange, size = "md", presentatio
       validating: currentAsync.validating,
     });
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
-  const templates = useMemo(() => ({ ...safeAntdTemplates, FieldTemplate: (props: FieldTemplateProps) => <PresentedField {...props} placement={presentation?.labelPlacement} />, ObjectFieldTemplate: (props: ObjectFieldTemplateProps) => <PresentedObject {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { ...safeAntdTemplates.ButtonTemplates, SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
+  const templates = useMemo(() => ({ ...safeAntdTemplates, FieldTemplate: (props: FieldTemplateProps) => <PresentedField {...props} placement={formLabelPlacement(presentation)} />, ObjectFieldTemplate: (props: ObjectFieldTemplateProps) => <PresentedObject {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />, ButtonTemplates: { ...safeAntdTemplates.ButtonTemplates, SubmitButton: () => null } }), [onPresentationSectionChange, presentation, presentationSection]);
   const widgets = useMemo(() => ({ ...antdWidgets, SelectWidget, secretRef: SecretRefWidget }), []);
   const compact = presentation?.layout === "compact";
   const form = <RJSFForm
@@ -128,7 +136,7 @@ export function FormRenderer({ schema, value, onChange, size = "md", presentatio
     readonly={readOnly}
     disabled={submitting}
     liveValidate="onChange"
-    showErrorList="top"
+    showErrorList={false}
     extraErrors={errorSchema(combinedExternalErrors) as never}
     extraErrorsBlockSubmit
     noHtml5Validate
@@ -138,8 +146,8 @@ export function FormRenderer({ schema, value, onChange, size = "md", presentatio
     widgets={widgets}
   ><></></RJSFForm>;
   return <ConfigProvider componentSize={antdComponentSize[size]} theme={compact ? compactFormTheme : undefined}>
-    {compact ? <style>{antdInsideInlineCSS}</style> : null}
-    <div style={presentation?.layout === "horizontal" ? { display: "block" } : undefined}>{form}</div>
+    <style>{formGridCSS}{formLabelPlacement(presentation) === "inside-inline" ? antdInsideInlineCSS : ""}</style>
+    {form}
   </ConfigProvider>;
 }
 

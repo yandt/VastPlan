@@ -80,9 +80,9 @@ import type {
   StatusTone,
   TableProps,
 } from "@vastplan/ui-primitives";
-import { componentSizeRecipes, componentVariantRecipes, PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, componentVariantRecipes, formGridColumns, formGridTemplate, formLabelPlacement, PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { MuiNativeIcon } from "./native-icons";
-import { MuiInsideInlineFieldTemplate, type MuiFieldTemplateProps } from "./inside-inline-field";
+import { MuiInlineFieldTemplate, MuiInsideInlineFieldTemplate, type MuiFieldTemplateProps } from "./inside-inline-field";
 import { muiComponentSize } from "./component-size";
 
 const gaps = { xs: 0.5, sm: 1, md: 2, lg: 3 } as const;
@@ -273,16 +273,24 @@ interface MuiObjectFieldTemplateProps {
 function MuiObjectFieldTemplate({ presentation, activeSection, onSectionChange, ...props }: MuiObjectFieldTemplateProps & { presentation?: FormPresentation; activeSection?: string; onSectionChange?(sectionID: string): void }) {
   const i18n = usePortalI18n();
   const compactRoot = props.fieldPathId.path.length === 0 && presentation?.layout === "compact";
-  if (props.fieldPathId.path.length !== 0 || presentation?.sections === undefined || presentation.sections.length === 0) return <Box sx={{ mb: compactRoot ? 0 : 2 }}>{compactRoot || props.title === "" ? null : <Typography variant="subtitle1">{props.title}</Typography>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <Box key={property.name}>{property.content}</Box>)}</Box>;
+  if (props.fieldPathId.path.length !== 0) return <Box sx={{ mb: 2 }}>{props.title === "" ? null : <Typography variant="subtitle1">{props.title}</Typography>}{props.description}{props.properties.filter((property) => !property.hidden).map((property) => <Box key={property.name}>{property.content}</Box>)}</Box>;
+  if (presentation?.sections === undefined || presentation.sections.length === 0) {
+    const columns = formGridColumns(presentation);
+    return <Box sx={{ mb: compactRoot ? 0 : 2 }}>{compactRoot || props.title === "" ? null : <Typography variant="subtitle1">{props.title}</Typography>}{props.description}<Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", md: formGridTemplate(presentation) }, gap: 2 }}>{props.properties.filter((property) => !property.hidden).map((property) => {
+      const span = presentation?.fields?.find((field) => formFieldName(field.pointer) === property.name)?.span ?? 1;
+      return <Box key={property.name} sx={{ minWidth: 0, gridColumn: { xs: "span 1", md: `span ${Math.min(Math.max(1, span), columns)}` } }}>{property.content}</Box>;
+    })}</Box></Box>;
+  }
   const sections = presentation.sections;
   const selected = sections.find((section) => section.id === activeSection) ?? sections[0]!;
   const assigned = new Set(sections.flatMap((section) => section.fields.map(formFieldName)));
   const remainder = props.properties.filter((property) => !assigned.has(property.name));
   const section = (item: FormSectionPresentation) => {
     const fields = item.fields.map(formFieldName);
-    const body = <><Box sx={{ display: "grid", gridTemplateColumns: `repeat(${item.columns ?? 1}, minmax(0, 1fr))`, gap: 2 }}>{props.properties.filter((property) => fields.includes(property.name) && !property.hidden).map((property) => {
+    const columns = formGridColumns(presentation, item);
+    const body = <><Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", md: formGridTemplate(presentation, item) }, gap: 2 }}>{props.properties.filter((property) => fields.includes(property.name) && !property.hidden).map((property) => {
       const span = presentation.fields?.find((field) => formFieldName(field.pointer) === property.name)?.span ?? 1;
-      return <Box key={property.name} sx={{ gridColumn: `span ${Math.min(Math.max(1, span), item.columns ?? 1)}` }}>{property.content}</Box>;
+      return <Box key={property.name} sx={{ minWidth: 0, gridColumn: { xs: "span 1", md: `span ${Math.min(Math.max(1, span), columns)}` } }}>{property.content}</Box>;
     })}</Box></>;
     if (presentation.navigation !== "sections") return <>{item.description === undefined ? null : <Typography color="text.secondary" sx={{ mb: 2 }}>{i18n.text(item.description)}</Typography>}{body}</>;
     const content = <>{item.description === undefined ? null : <Typography color="text.secondary" sx={{ mb: 2 }}>{i18n.text(item.description)}</Typography>}{body}</>;
@@ -335,21 +343,15 @@ function FormRenderer({ schema, value, onChange, size = "md", presentation, pres
     });
   }, [combinedExternalErrors, currentAsync.validating, onValidationChange, syncErrors, validation.errors]);
   const templates = useMemo(() => ({
-    ...(presentation?.labelPlacement === "inside-inline" ? { FieldTemplate: MuiInsideInlineFieldTemplate } : {}),
+    ...(formLabelPlacement(presentation) === "inside-inline" ? { FieldTemplate: MuiInsideInlineFieldTemplate } : formLabelPlacement(presentation) === "inline" ? { FieldTemplate: MuiInlineFieldTemplate } : {}),
     ObjectFieldTemplate: (props: MuiObjectFieldTemplateProps) => <MuiObjectFieldTemplate {...props} presentation={presentation} activeSection={presentationSection} onSectionChange={onPresentationSectionChange} />,
     ButtonTemplates: { SubmitButton: () => null },
   }), [onPresentationSectionChange, presentation, presentationSection]);
-  const horizontal = presentation?.layout === "horizontal";
   const compact = presentation?.layout === "compact";
-  const fieldGroupStyle = {
-    ...(horizontal ? { display: "grid", gridTemplateColumns: "104px minmax(0, 1fr)", alignItems: "center", columnGap: 1.5 } : {}),
-    ...(compact ? { marginBottom: 0 } : {}),
-  };
   const sizeRecipe = componentSizeRecipes.control[size];
   const formStyle = {
     "& .form-control, & .MuiInputBase-root": { minHeight: sizeRecipe.height, fontSize: sizeRecipe.fontSize, borderRadius: `${sizeRecipe.radius}px` },
-    "& .form-group:not(.rjsf-field-object)": fieldGroupStyle,
-    ...(horizontal ? { "& .form-group:not(.rjsf-field-object) > label": { margin: 0 }, "& .form-group:not(.rjsf-field-object) > .field-description": { gridColumn: "2" } } : {}),
+    ...(compact ? { "& .form-group:not(.rjsf-field-object)": { marginBottom: 0 } } : {}),
   };
   return <Box sx={formStyle}><RJSFForm
     schema={localizedSchema}
@@ -359,7 +361,7 @@ function FormRenderer({ schema, value, onChange, size = "md", presentation, pres
     readonly={readOnly}
     disabled={submitting}
     liveValidate="onChange"
-    showErrorList="top"
+    showErrorList={false}
     extraErrors={muiErrorSchema(combinedExternalErrors) as never}
     extraErrorsBlockSubmit
     noHtml5Validate

@@ -1,6 +1,6 @@
 export type { CollectionPreference } from "@vastplan/frontend-engine-contract";
 
-export type { ComponentSize, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormSchema, FormSectionPresentation, FormUISchema, FormValidationIssue, FormValidationResult, FormWidget, FormWorkflow, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
+export type { ComponentSize, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormUISchema, FormValidationIssue, FormValidationResult, FormWidget, FormWorkflow, InteractionAuditEvent, InteractionRecord, InteractionResponse, InteractionState, JSONPrimitive, JSONSchema, JSONValue, LocalizedText, LocaleDirection, MessageDescriptor, MessageValues, PluginLocalization, PortalLocalizationPolicy, UICapability } from "@vastplan/ui-contract";
 export { jsonSchemaDialect } from "@vastplan/ui-contract";
 export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contract";
 export { message } from "@vastplan/ui-contract";
@@ -13,6 +13,7 @@ export { VastPlanIcon, semanticIconNames } from "./icon.js";
 export type { SemanticIconName, VastPlanIconProps } from "./icon.js";
 export type { PortalActivation, PortalActivationPhase, PortalActivationRequest, PortalActivationStatus, PortalApplicationComposition, PortalArtifactRepositoryReceipt, PortalAuditEvent, PortalBindingRevision, PortalCompositionRef, PortalControlClientOptions, PortalGovernanceSnapshot, PortalManagementBinding, PortalManagementGrant, PortalPlatformProfile, PortalPluginRef, PortalProfileRevision, PortalPutTestTargetBindingRequest, PortalResolvedSpec, PortalRevision, PortalRevisionStatus, PortalTestRelease, PortalTestReleaseRequest, PortalTestReleaseStatus, PortalTestTargetBinding, PortalTestTargetScope } from "./portal-control-client.js";
 export * from "./form-renderer.js";
+export * from "./form-presentation.js";
 export * from "./primitives.js";
 export * from "./renderer.js";
 export * from "./portal-runtime.js";

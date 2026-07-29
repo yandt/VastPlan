@@ -199,12 +199,17 @@ describe("Arco portal UI adapter", () => {
     const form = createElement(arcoPortalUIComponents.FormRenderer, {
       schema: { id: "node", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { name: { type: "string", title: "Name" }, region: { type: "string", title: "Region" } } } },
       value: {}, onChange: () => undefined,
-      presentation: { navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, fields: ["/name", "/region"] }], fields: [{ pointer: "/name", span: 2 }] },
+      presentation: { navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, columnWidths: [35, 65], fields: ["/name", "/region"] }], fields: [{ pointer: "/name", span: 2 }] },
+      errors: { name: "Name is already used" },
     });
     const html = renderToStaticMarkup(createElement(PortalI18nProvider, { policy: { defaultLocale: "en-US", supportedLocales: ["en-US"] }, catalogs: {}, candidates: ["en-US"], children: form }));
     expect(html).toContain("Identity");
     expect(html).toContain("Name");
     expect(html).toContain("Region");
+    expect(html).toContain("minmax(0, 35fr) minmax(0, 65fr)");
+    expect(html).toContain("Name is already used");
+    expect(html).toContain("arco-form-horizontal");
+    expect(html.match(/Name is already used/g)).toHaveLength(1);
   });
 
   it("renders one-time secret material as a non-autofilled password input", () => {

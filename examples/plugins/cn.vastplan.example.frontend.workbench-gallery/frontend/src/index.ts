@@ -63,9 +63,11 @@ const editorSchema: FormSchema = {
 
 const editor: WorkbenchFormDefinition<ServiceRecord> = {
   id: "service-editor", schema: editorSchema,
-  presentation: { layout: "vertical", navigation: "sections", sections: [{ id: "service", columns: 2, fields: ["/name", "/owner", "/description", "/active"] }], fields: [{ pointer: "/description", span: 2, widget: "textarea" }] },
+  presentation: { preset: "standard", labelPlacement: "inline", navigation: "sections", sections: [{ id: "service", columns: 2, columnWidths: [35, 65], fields: ["/name", "/owner", "/description", "/active"] }], fields: [{ pointer: "/description", span: 2, widget: "textarea" }] },
   workflow: { surface: "page", title: message(namespace, "editor.title", "编辑服务"), submitLabel: message(namespace, "action.save", "保存"), success: { notify: message(namespace, "notice.saved", "示例记录已保存"), refreshCollection: true } },
   async load(selected) { const row = selected[0]; return row === undefined ? {} : { name: row.name, owner: row.owner, description: row.description, active: row.active }; },
+  async beforeSubmit({ value }) { return { value: { ...value, name: String(value.name ?? "").trim(), owner: String(value.owner ?? "").trim() } }; },
+  async validate({ value }) { const errors: Record<string, ReturnType<typeof message>> = {}; if (String(value.owner ?? "").trim().length < 2) errors["/owner"] = message(namespace, "validation.owner", "责任团队至少需要 2 个字符"); return errors; },
   async submit({ value, selected }) {
     const row = selected[0];
     if (row === undefined) return;

@@ -83,11 +83,16 @@ describe("Ant Design portal UI renderer", () => {
       schema={{ id: "node", schema: { $schema: "http://json-schema.org/draft-07/schema#", type: "object", properties: { name: { type: "string", title: "Name" }, credential: { type: "string", title: "Credential", format: "vastplan-credential-ref", writeOnly: true } }, required: ["name"] }, uiSchema: { credential: { "ui:widget": "secretRef" } } }}
       value={{}}
       onChange={() => undefined}
-      presentation={{ navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, fields: ["/name", "/credential"] }] }}
+      presentation={{ navigation: "sections", sections: [{ id: "identity", title: "Identity", columns: 2, columnWidths: [35, 65], fields: ["/name", "/credential"] }] }}
+      errors={{ name: "Name is already used" }}
     /></PortalI18nProvider>);
     expect(markup).toContain("Identity");
     expect(markup).toContain("Name");
     expect(markup).toContain("credential://");
+    expect(markup).toContain("minmax(0, 35fr) minmax(0, 65fr)");
+    expect(markup).toContain("Name is already used");
+    expect(markup).toContain("flex:0 0 112px");
+    expect(markup.match(/Name is already used/g)).toHaveLength(1);
     expect(markup).not.toContain("Submit");
   });
 

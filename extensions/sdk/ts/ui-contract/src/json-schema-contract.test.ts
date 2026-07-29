@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { jsonSchemaDialect } from "./index.js";
-import type { FormSchema } from "./index.js";
+import type { FormPresentation, FormSchema } from "./index.js";
 
 describe("JSON Schema form contract", () => {
   it("keeps the data schema and presentation hints serializable", () => {
@@ -23,5 +23,13 @@ describe("JSON Schema form contract", () => {
 
     expect(JSON.parse(JSON.stringify(form))).toEqual(form);
     expect(form.schema.$schema).toBe(jsonSchemaDialect);
+  });
+
+  it("keeps form presets and percentage column weights data-only", () => {
+    const presentation: FormPresentation = {
+      preset: "standard", labelPlacement: "inline", columns: 2, columnWidths: [35, 65],
+      sections: [{ id: "main", columns: 3, columnWidths: [20, 30, 50], fields: ["/name", "/credential"] }],
+    };
+    expect(JSON.parse(JSON.stringify(presentation))).toEqual(presentation);
   });
 });

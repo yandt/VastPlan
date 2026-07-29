@@ -33,3 +33,13 @@ export function MuiInsideInlineFieldTemplate(props: MuiFieldTemplateProps) {
     <Box className="vp-inside-inline-control">{props.children}</Box>
   </Box>{props.description}{props.errors}{props.help}</Box>;
 }
+
+export function MuiInlineFieldTemplate(props: MuiFieldTemplateProps) {
+  if (props.hidden) return <Box sx={{ display: "none" }}>{props.children}</Box>;
+  if (props.schema.type === "object" || props.schema.type === "array") return <>{props.children}{props.help}</>;
+  const label = props.displayLabel === false ? "" : props.label;
+  return <Box sx={{ mb: 2, display: "grid", gridTemplateColumns: { xs: "minmax(0,1fr)", sm: "112px minmax(0,1fr)" }, columnGap: 1.5, alignItems: "start" }}>
+    {label === "" ? <Box /> : <Tooltip title={label}><Box component="label" htmlFor={props.id} sx={{ minWidth: 0, pt: 1, color: "text.secondary", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{label}{props.required ? <Box component="span" aria-hidden color="error.main"> *</Box> : null}</Box></Tooltip>}
+    <Box sx={{ minWidth: 0 }}>{props.children}{props.description}{props.errors}{props.help}</Box>
+  </Box>;
+}

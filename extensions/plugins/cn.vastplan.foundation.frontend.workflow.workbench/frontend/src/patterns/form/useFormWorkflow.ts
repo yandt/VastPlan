@@ -1,0 +1,157 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formControlSize, message, resolveFormPresentation, usePortalI18n, usePortalUI, type FormRendererProps, type FormRendererValidationState } from "@vastplan/ui-primitives";
+import { validateFormPresentation, type WorkbenchFormDefinition, type WorkbenchFormPreparation } from "@vastplan/workbench-sdk";
+import type { CollectionRow } from "../collection/model.js";
+import { projectFormPresentation } from "./presentation.js";
+import { containsSecretMaterial, discardSecretMaterial, secretMaterialPointers } from "./secret-material.js";
+import { useStableSelection } from "./stable-selection.js";
+import { localizeFormFieldErrors } from "./field-errors.js";
+import { runAfterSubmit, submitFormDefinition } from "./submit-lifecycle.js";
+
+const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
+const emptyValidation: FormRendererValidationState = { valid: false, validating: false, issues: [], errors: {} };
+const emptyContext: Readonly<Record<string, unknown>> = Object.freeze({});
+
+interface UseFormWorkflowInput {
+  definition?: WorkbenchFormDefinition;
+  selected: readonly CollectionRow[];
+  open: boolean;
+  onClose?(): void;
+  onRefresh(): void;
+  onDirtyChange?(dirty: boolean): void;
+}
+
+export interface FormWorkflowController {
+  definition?: WorkbenchFormDefinition;
+  presentation: ReturnType<typeof resolveFormPresentation>;
+  controlSize: ReturnType<typeof formControlSize>;
+  schema?: NonNullable<WorkbenchFormDefinition["schema"]>;
+  context: Readonly<Record<string, unknown>>;
+  value: Record<string, unknown>;
+  loading: boolean;
+  submitting: boolean;
+  failure?: string;
+  fieldErrors: Readonly<Record<string, string>>;
+  validation: FormRendererValidationState;
+  activeSection?: string;
+  validate?: FormRendererProps["validate"];
+  change(value: Record<string, unknown>): void;
+  setValidation(value: FormRendererValidationState): void;
+  setActiveSection(value: string | undefined): void;
+  requestClose(): Promise<void>;
+  submit(): Promise<void>;
+}
+
+export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowController {
+  const { definition, open, onClose, onRefresh, onDirtyChange } = input;
+  const ui = usePortalUI();
+  const i18n = usePortalI18n();
+  const [value, setValue] = useState<Record<string, unknown>>({});
+  const [baseline, setBaseline] = useState("{}");
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [failure, setFailure] = useState<string>();
+  const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
+  const [validation, setValidation] = useState<FormRendererValidationState>(emptyValidation);
+  const [activeSection, setActiveSection] = useState<string>();
+  const [preparation, setPreparation] = useState<WorkbenchFormPreparation>();
+  const loadRef = useRef<AbortController>();
+  const submitRef = useRef<AbortController>();
+  const stableSelected = useStableSelection(input.selected);
+  const presentation = useMemo(() => resolveFormPresentation(preparation?.presentation ?? definition?.presentation), [definition?.presentation, preparation?.presentation]);
+  const context = preparation?.context ?? definition?.context ?? emptyContext;
+  const secretPointers = useMemo(() => secretMaterialPointers(presentation), [presentation]);
+
+  useEffect(() => {
+    if (!open || definition === undefined) {
+      setValue({}); setBaseline("{}"); setFieldErrors({}); setFailure(undefined); setPreparation(undefined);
+      return;
+    }
+    loadRef.current?.abort();
+    const controller = new AbortController();
+    loadRef.current = controller;
+    setLoading(true); setFailure(undefined); setFieldErrors({}); setValidation(emptyValidation); setPreparation(undefined);
+    void (async () => {
+      const prepared = await definition.prepare?.(stableSelected, controller.signal) ?? {};
+      if (controller.signal.aborted) return;
+      validateFormPresentation(prepared.presentation, definition.id);
+      const resolvedPresentation = resolveFormPresentation(prepared.presentation ?? definition.presentation);
+      const pointers = secretMaterialPointers(resolvedPresentation);
+      const loaded = definition.load === undefined ? prepared.initialValue ?? definition.initialValue ?? {} : await definition.load(stableSelected, controller.signal);
+      if (controller.signal.aborted) return;
+      if (containsSecretMaterial(loaded, pointers)) setFailure(i18n.text(message(namespace, "form.secretLoadRejected", "一次性秘密字段禁止从存储中回填；已安全丢弃该值。")));
+      const next = discardSecretMaterial(loaded, pointers);
+      setPreparation(prepared); setActiveSection(resolvedPresentation.sections?.[0]?.id);
+      setValue(next); setBaseline(JSON.stringify(next));
+    })().catch((error: unknown) => { if (!controller.signal.aborted) setFailure(errorText(error)); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [definition, i18n.text, open, stableSelected]);
+
+  useEffect(() => () => submitRef.current?.abort(), []);
+  const schema = useMemo(() => definition === undefined ? undefined : projectFormPresentation(preparation?.schema ?? definition.schema, presentation, value, context, i18n.text), [context, definition, i18n.text, preparation?.schema, presentation, value]);
+  const validate = useMemo<FormRendererProps["validate"]>(() => definition?.validate === undefined ? undefined : async ({ value: next, context: nextContext, signal }) => {
+    return localizeFormFieldErrors(await definition.validate!({ value: next, context: nextContext, signal }), i18n.text);
+  }, [definition, i18n.text]);
+  const dirty = JSON.stringify(discardSecretMaterial(value, secretPointers)) !== baseline || containsSecretMaterial(value, secretPointers);
+
+  useEffect(() => {
+    onDirtyChange?.(open && definition !== undefined && dirty);
+    return () => onDirtyChange?.(false);
+  }, [definition, dirty, onDirtyChange, open]);
+
+  const change = useCallback((next: Record<string, unknown>) => {
+    setValue(next); setFieldErrors({}); setFailure(undefined);
+  }, []);
+
+  const requestClose = useCallback(async () => {
+    if (submitting || definition === undefined) return;
+    if (dirty && !await ui.confirm({ title: i18n.text(message(namespace, "form.discardTitle", "放弃未保存的修改？")), content: i18n.text(message(namespace, "form.discardContent", "关闭后，本次输入不会保留。")) })) return;
+    setFieldErrors({}); setFailure(undefined);
+    if (definition.workflow.surface === "page") setValue(JSON.parse(baseline) as Record<string, unknown>);
+    else {
+      const sanitized = discardSecretMaterial(value, secretPointers);
+      setValue(sanitized); setBaseline(JSON.stringify(sanitized)); onClose?.();
+    }
+  }, [baseline, definition, dirty, i18n.text, onClose, secretPointers, submitting, ui, value]);
+
+  const submit = useCallback(async () => {
+    if (definition === undefined || submitting || !validation.valid || validation.validating) return;
+    if (definition.workflow.confirmBeforeSubmit !== undefined && !await ui.confirm({ title: i18n.text(definition.workflow.title), content: i18n.text(definition.workflow.confirmBeforeSubmit) })) return;
+    submitRef.current?.abort();
+    const controller = new AbortController();
+    submitRef.current = controller;
+    setSubmitting(true); setFailure(undefined); setFieldErrors({});
+    try {
+      const outcome = await submitFormDefinition(definition, { value, selected: stableSelected, context }, controller.signal);
+      if (outcome.kind === "cancelled") return;
+      if (outcome.kind === "field-errors") { setFieldErrors(localizeFormFieldErrors(outcome.fieldErrors, i18n.text)); return; }
+      const submittedValue = outcome.context.value;
+      const sanitized = discardSecretMaterial(submittedValue, secretPointers);
+      setValue(sanitized); setBaseline(JSON.stringify(sanitized));
+      try {
+        await runAfterSubmit(definition, outcome, controller.signal);
+      } catch (error) {
+        if (!controller.signal.aborted) setFailure(i18n.text(message(namespace, "form.afterSubmitFailed", "数据已提交，但提交后的处理失败：{reason}", { reason: errorText(error) })));
+        return;
+      }
+      if (controller.signal.aborted) return;
+      if (definition.workflow.success?.notify !== undefined) ui.notify({ title: i18n.text(definition.workflow.success.notify), kind: "success" });
+      if (definition.workflow.success?.refreshCollection === true) onRefresh();
+      if (definition.workflow.surface !== "page" && definition.workflow.success?.close !== false) onClose?.();
+    } catch (error) {
+      if (!controller.signal.aborted) setFailure(errorText(error));
+    } finally {
+      setValue((current) => discardSecretMaterial(current, secretPointers));
+      if (!controller.signal.aborted) setSubmitting(false);
+    }
+  }, [context, definition, i18n.text, onClose, onRefresh, secretPointers, stableSelected, submitting, ui, validation.valid, validation.validating, value]);
+
+  return {
+    definition, presentation, controlSize: formControlSize(presentation), schema, context, value, loading, submitting,
+    ...(failure === undefined ? {} : { failure }), fieldErrors, validation, ...(activeSection === undefined ? {} : { activeSection }),
+    ...(validate === undefined ? {} : { validate }), change, setValidation, setActiveSection, requestClose, submit,
+  };
+}
+
+function errorText(value: unknown): string { return value instanceof Error ? value.message : String(value); }
