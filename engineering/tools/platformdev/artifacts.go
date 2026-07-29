@@ -122,10 +122,9 @@ func (r *runtime) signPackageRepository(expected []artifactrepository.Ref) error
 
 func (r *runtime) writeBootstrapInventory(repository *artifactrepository.Repository, refs []artifactrepository.Ref) error {
 	items := make([]bootstrapinventory.Item, 0, len(refs))
-	lkgIDs := map[string]struct{}{
-		"cn.vastplan.foundation.security.authorization-enforcer": {},
-		"cn.vastplan.platform.artifacts.storage.file":            {},
-		"cn.vastplan.platform.artifacts.repository":              {},
+	lkgIDs, err := r.recoveryPluginIDs()
+	if err != nil {
+		return err
 	}
 	lkg := make([]bootstrapinventory.Item, 0, len(lkgIDs))
 	for _, ref := range refs {
@@ -139,6 +138,9 @@ func (r *runtime) writeBootstrapInventory(repository *artifactrepository.Reposit
 			lkg = append(lkg, item)
 		}
 	}
+	if len(lkg) != len(lkgIDs) {
+		return fmt.Errorf("Recovery Capsule 插件闭包与 Seed 制品不一致: required=%d resolved=%d", len(lkgIDs), len(lkg))
+	}
 	inventory, err := bootstrapinventory.Normalize(bootstrapinventory.Inventory{
 		Version: bootstrapinventory.Version, Generation: uint64(time.Now().UTC().UnixNano()), RepositoryID: "local-seed",
 		Seed: items, LastKnownGood: lkg,
@@ -150,7 +152,10 @@ func (r *runtime) writeBootstrapInventory(repository *artifactrepository.Reposit
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(r.runDir, "seed-inventory.json"), append(raw, '\n'), 0o600)
+	if err := os.WriteFile(filepath.Join(r.runDir, "seed-inventory.json"), append(raw, '\n'), 0o600); err != nil {
+		return err
+	}
+	return r.writeRecoveryCapsule(inventory)
 }
 
 func packageRepositoryRefs(root string) ([]artifactrepository.Ref, error) {

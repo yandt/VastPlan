@@ -19,7 +19,7 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
-var seedRuntimeSnapshotFiles = []string{"access-profile-catalog.json", "backend-platform-catalog.json", "seed-inventory.json"}
+var seedRuntimeSnapshotFiles = []string{"access-profile-catalog.json", "backend-platform-catalog.json", "seed-inventory.json", recoveryCapsuleFilename}
 
 func copySeedRuntimeSnapshotPayload(source, target string) error {
 	for _, directory := range []string{"dynamic", "portal-assets"} {
@@ -62,7 +62,15 @@ func materializeSeedRuntimeSnapshot(snapshot, runDir string, restoreCatalogs boo
 }
 
 func validateSeedRuntimeSnapshot(root string) ([]artifactrepository.Ref, error) {
-	marker, err := readSeedRuntimeSnapshotMarker(root)
+	return validateSeedRuntimeSnapshotVersion(root, seedRuntimeSnapshotSchema, true)
+}
+
+func validateLegacySeedRuntimeSnapshot(root string) ([]artifactrepository.Ref, error) {
+	return validateSeedRuntimeSnapshotVersion(root, 1, false)
+}
+
+func validateSeedRuntimeSnapshotVersion(root string, schema int, requireCapsule bool) ([]artifactrepository.Ref, error) {
+	marker, err := readSeedRuntimeSnapshotMarkerForSchema(root, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +96,15 @@ func validateSeedRuntimeSnapshot(root string) ([]artifactrepository.Ref, error) 
 	inventory, err := bootstrapinventory.ParseFile(filepath.Join(root, "seed-inventory.json"))
 	if err != nil {
 		return nil, err
+	}
+	if requireCapsule {
+		capsuleRaw, err := os.ReadFile(filepath.Join(root, recoveryCapsuleFilename))
+		if err != nil {
+			return nil, err
+		}
+		if err := validateRecoveryCapsuleAgainstInventory(capsuleRaw, inventory); err != nil {
+			return nil, err
+		}
 	}
 	repository, err := artifactrepository.NewRepository(filepath.Join(root, "repository"))
 	if err != nil {

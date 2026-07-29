@@ -21,6 +21,10 @@ Bootstrap Inventory 中的 LKG 是托管仓库自举引用的业务契约，不�
 7. stable 身份账本仍是“Profile 已引用新 stable 版本而实际生产候选”路径的强制门禁，不能删除或改写来绕过 SemVer。工作区源码调试使用 `dev-plugin` 生成唯一 workspace 候选，不通过重建同 ref stable Seed 完成。一次构建存在多个漂移时必须聚合报告全部精确 ref，避免逐个修改、逐次失败。
 8. 本 ADR 只规定本地开发编排器的运行材料。生产 Kernel/systemd 发布、Seed Bundle、仓库插件 LKG 和在线 Deployment 各自继续使用既有签名发布事务，不能复制本地快照机制作为生产升级旁路。
 
+## 2026-07-29 补充：Recovery Capsule 纳入快照
+
+[ADR-0169](ADR-0169-Seed-Recovery-Capsule与分阶段可用性.md) 将 `recovery-capsule.json` 纳入 Seed Runtime Snapshot v2 的内容摘要与恢复校验。Capsule 精确绑定本次 Bootstrap Inventory generation 和 LKG 制品摘要；v2 快照缺失 Capsule、Capsule 与 Inventory 漂移或恢复计划未覆盖全部启用 Seed unit 时均 fail-closed。旧 v1 活动快照仍先按其原始摘要和内容白名单完整复验，随后只在新的 Inventory/Capsule、Kernel 和 Portal 健康启动后提交为独立 v2 内容寻址快照；不修改旧目录，也不从未被 ActualState 引用的历史运行冒充恢复。每次启动重新签署 Seed 后仍重新生成 Inventory 与 Capsule，不直接复制旧运行目录中的短时身份绑定。
+
 ## 影响
 
 普通启动恢复的是最近一次已证明可启动的完整 Seed Runtime，不再受工作区中未完成的下一版插件影响；源码构建、SemVer 校验与进程恢复成为两个可独立诊断的阶段。修改 Seed 插件源码后通过 workspace Test Release 调试；只有准备晋级新的 stable 版本时才更新 Profile 并由 `bootstrap` 重建 Seed。`clean/--fresh` 删除开发运行状态后，首次启动需要重新建立快照，但 stable 身份账本仍按 ADR-0146 保留。

@@ -23,6 +23,7 @@ import (
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
+	recoveryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/recovery/v1"
 	sharedcontrolplane "cdsoft.com.cn/VastPlan/core/shared/go/controlplane"
 )
 
@@ -64,6 +65,8 @@ type runtime struct {
 	repositoryProfile     artifactrepositoryv1.Profile
 	seedArtifacts         seedArtifactSelection
 	seedSnapshotCandidate string
+	seedSnapshotMigration bool
+	recovery              recoveryStatus
 }
 
 type packageSpec struct {
@@ -187,14 +190,19 @@ func (r *runtime) prepare(ctx context.Context) error {
 			return fmt.Errorf("恢复 Last-Known-Good Seed Runtime: %w", err)
 		}
 		if restored {
-			if !r.options.applyPlatform {
-				return r.signPackageRepository(refs)
+			if r.options.applyPlatform {
+				if err := validateExactSeedRefs("Bootstrap Profile", selection.references(), refs); err != nil {
+					return fmt.Errorf("Bootstrap Profile 已引用新的 stable 版本，请显式使用 bootstrap --rebuild-seed: %w", err)
+				}
+				log.Printf("Bootstrap Profile 的精确引用未变化，复用 stable LKG；源码调试应通过 workspace Test Release")
 			}
-			if err := validateExactSeedRefs("Bootstrap Profile", selection.references(), refs); err != nil {
-				return fmt.Errorf("Bootstrap Profile 已引用新的 stable 版本，请显式使用 bootstrap --rebuild-seed: %w", err)
+			if err := r.signPackageRepository(refs); err != nil {
+				return err
 			}
-			log.Printf("Bootstrap Profile 的精确引用未变化，复用 stable LKG；源码调试应通过 workspace Test Release")
-			return r.signPackageRepository(refs)
+			if r.seedSnapshotMigration {
+				return r.stageSeedRuntimeSnapshot(r.runDir, "recovery-capsule-v1-migration")
+			}
+			return nil
 		}
 		if !r.options.applyPlatform {
 			log.Printf("尚无可复用的 Seed Runtime 快照，本次普通启动执行一次安全初始化构建")
@@ -264,7 +272,7 @@ func (r *runtime) start(ctx context.Context) error {
 		return err
 	}
 	time.Sleep(750 * time.Millisecond)
-	platformRevision, platformUnitCount, err := r.platformManagementDeployment()
+	platformRevision, _, err := r.platformManagementDeployment()
 	if err != nil {
 		return err
 	}
@@ -286,9 +294,12 @@ func (r *runtime) start(ctx context.Context) error {
 	if _, err := r.startChild("controller", env, kernel, controllerArgs...); err != nil {
 		return err
 	}
+	if err := r.startRecoveryMonitor(ctx, platformNodeStartedAt); err != nil {
+		return fmt.Errorf("启动 Seed Recovery Capsule 观察器: %w", err)
+	}
 	if r.options.applyPlatform {
-		if err := waitForUnits(ctx, filepath.Join(r.persistentStateRoot(), "actual-state.json"), platformUnitCount, platformNodeStartedAt, 120*time.Second); err != nil {
-			return fmt.Errorf("显式发布的平台 Backend 未收敛: %w", err)
+		if err := r.waitForRecoveryStage(ctx, recoveryv1.StageRecovery, platformNodeStartedAt, 120*time.Second); err != nil {
+			return fmt.Errorf("显式发布的平台 Recovery 阶段未收敛: %w", err)
 		}
 	}
 	portalArgs := []string{
@@ -319,9 +330,15 @@ func (r *runtime) start(ctx context.Context) error {
 		return fmt.Errorf("Node Portal Kernel 未就绪: %w", err)
 	}
 	if r.options.applyPlatform {
+		if err := r.waitForRecoveryStage(ctx, recoveryv1.StageControlPlane, platformNodeStartedAt, 120*time.Second); err != nil {
+			return fmt.Errorf("显式发布的平台控制面未收敛: %w", err)
+		}
 		if err := publishPortal("https://"+r.options.portalListen,
 			filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json")); err != nil {
 			return fmt.Errorf("显式发布初始 Portal 组合: %w", err)
+		}
+		if err := r.waitForRecoveryStage(ctx, recoveryv1.StagePlatform, platformNodeStartedAt, 120*time.Second); err != nil {
+			return fmt.Errorf("显式发布的平台完整能力未收敛: %w", err)
 		}
 	}
 	// Business deployments are never published by startup. This agent may join

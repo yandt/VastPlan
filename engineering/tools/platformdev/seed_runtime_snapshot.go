@@ -12,7 +12,7 @@ import (
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
 
-const seedRuntimeSnapshotSchema = 1
+const seedRuntimeSnapshotSchema = 2
 
 type seedRuntimeSnapshotMarker struct {
 	Schema    int       `json:"schema"`
@@ -103,28 +103,45 @@ func (r *runtime) restoreSeedRuntimeSnapshot() ([]artifactrepository.Ref, bool, 
 		return nil, false, err
 	}
 	var pointer seedRuntimeSnapshotPointer
-	if err := json.Unmarshal(raw, &pointer); err != nil || pointer.Schema != seedRuntimeSnapshotSchema || !validSnapshotDigest(pointer.Digest) {
+	if err := json.Unmarshal(raw, &pointer); err != nil || !validSnapshotDigest(pointer.Digest) {
 		return nil, false, errors.New("Seed Runtime 活动快照指针无效")
 	}
+	var refs []artifactrepository.Ref
+	switch pointer.Schema {
+	case 1:
+		refs, err = validateLegacySeedRuntimeSnapshot(filepath.Join(r.seedRuntimeSnapshotRoot(), pointer.Digest))
+		r.seedSnapshotMigration = err == nil
+	case seedRuntimeSnapshotSchema:
+		refs, err = validateSeedRuntimeSnapshot(filepath.Join(r.seedRuntimeSnapshotRoot(), pointer.Digest))
+	default:
+		return nil, false, errors.New("Seed Runtime 活动快照 schema 不受支持")
+	}
 	snapshot := filepath.Join(r.seedRuntimeSnapshotRoot(), pointer.Digest)
-	refs, err := validateSeedRuntimeSnapshot(snapshot)
 	if err != nil {
 		return nil, false, fmt.Errorf("活动 Seed Runtime 快照损坏: %w", err)
 	}
 	if err := materializeSeedRuntimeSnapshot(snapshot, r.runDir, !r.options.applyPlatform); err != nil {
 		return nil, false, err
 	}
-	log.Printf("普通启动复用 Last-Known-Good Seed Runtime 快照 digest=%s", pointer.Digest[:12])
+	if r.seedSnapshotMigration {
+		log.Printf("复用已验证的 v1 Seed Runtime，并在本次健康启动后迁移 Recovery Capsule v2 digest=%s", pointer.Digest[:12])
+	} else {
+		log.Printf("普通启动复用 Last-Known-Good Seed Runtime 快照 digest=%s", pointer.Digest[:12])
+	}
 	return refs, true, nil
 }
 
 func readSeedRuntimeSnapshotMarker(root string) (seedRuntimeSnapshotMarker, error) {
+	return readSeedRuntimeSnapshotMarkerForSchema(root, seedRuntimeSnapshotSchema)
+}
+
+func readSeedRuntimeSnapshotMarkerForSchema(root string, schema int) (seedRuntimeSnapshotMarker, error) {
 	raw, err := readOwnerOnlyJSONFile(filepath.Join(root, ".complete.json"))
 	if err != nil {
 		return seedRuntimeSnapshotMarker{}, err
 	}
 	var marker seedRuntimeSnapshotMarker
-	if json.Unmarshal(raw, &marker) != nil || marker.Schema != seedRuntimeSnapshotSchema || !validSnapshotDigest(marker.Digest) || marker.CreatedAt.IsZero() || marker.Source == "" {
+	if json.Unmarshal(raw, &marker) != nil || marker.Schema != schema || !validSnapshotDigest(marker.Digest) || marker.CreatedAt.IsZero() || marker.Source == "" {
 		return seedRuntimeSnapshotMarker{}, errors.New("Seed Runtime 快照完成标记无效")
 	}
 	return marker, nil

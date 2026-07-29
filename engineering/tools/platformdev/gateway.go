@@ -137,6 +137,7 @@ func isPortalKernelRoute(path string) bool {
 func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 	r.mu.RLock()
 	ready := r.ready
+	recovery := r.recovery
 	r.mu.RUnlock()
 	w.Header().Set("Content-Type", "application/json")
 	status := map[string]any{
@@ -152,6 +153,7 @@ func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 			},
 		},
 	}
+	status["recoveryCapsule"] = recovery
 	status["backendPluginDevelopment"] = backendPluginDevelopmentStatus(r.options.stateRoot)
 	if r.hmr != nil {
 		generation, lastError := r.hmr.status()

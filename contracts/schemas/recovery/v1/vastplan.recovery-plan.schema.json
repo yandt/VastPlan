@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cdsoft.com.cn/vastplan/schemas/recovery/v1/plan.json",
+  "title": "VastPlan Seed Recovery Plan v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "stages"],
+  "properties": {
+    "version": { "const": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "stages": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        { "$ref": "#/$defs/recovery" },
+        { "$ref": "#/$defs/controlPlane" },
+        { "$ref": "#/$defs/platform" }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "units": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "units"],
+      "properties": { "id": { "const": "recovery" }, "units": { "$ref": "#/$defs/units" } }
+    },
+    "controlPlane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "units"],
+      "properties": { "id": { "const": "control-plane" }, "units": { "$ref": "#/$defs/units" } }
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "units"],
+      "properties": { "id": { "const": "platform" }, "units": { "$ref": "#/$defs/units" } }
+    }
+  }
+}

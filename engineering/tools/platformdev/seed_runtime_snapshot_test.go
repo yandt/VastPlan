@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
+	recoveryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/recovery/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/bootstrapinventory"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 )
@@ -78,6 +80,46 @@ func TestBootstrapRestoresStableRuntimeWithoutOverwritingFreshCatalogs(t *testin
 		if err != nil || string(raw) != "fresh-"+name {
 			t.Fatalf("bootstrap 必须保留本次配置物化的 %s: %q err=%v", name, raw, err)
 		}
+	}
+}
+
+func TestSeedRuntimeSnapshotRestoresVerifiedV1ForCapsuleMigration(t *testing.T) {
+	root := platformDevTestProjectRoot(t)
+	stateRoot := filepath.Join(t.TempDir(), "state-root")
+	source := writeSeedRuntimeSnapshotTestSource(t, root, "legacy")
+	if err := os.Remove(filepath.Join(source, recoveryCapsuleFilename)); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := seedRuntimeTreeDigest(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAtomicOwnerJSON(filepath.Join(source, ".complete.json"), seedRuntimeSnapshotMarker{
+		Schema: 1, Digest: digest, Source: "legacy-test", CreatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(stateRoot, "state", "seed-runtime-snapshots", digest)
+	if err := materializeMutableCachedDirectory(source, target); err != nil {
+		t.Fatal(err)
+	}
+	if err := copySnapshotFile(filepath.Join(source, ".complete.json"), filepath.Join(target, ".complete.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAtomicOwnerJSON(filepath.Join(stateRoot, "state", "seed-runtime-active.json"), seedRuntimeSnapshotPointer{Schema: 1, Digest: digest}); err != nil {
+		t.Fatal(err)
+	}
+	runDir := filepath.Join(stateRoot, "runs", "current")
+	if err := os.MkdirAll(runDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r := &runtime{options: options{root: root, stateRoot: stateRoot}, runDir: runDir}
+	refs, restored, err := r.restoreSeedRuntimeSnapshot()
+	if err != nil || !restored || len(refs) != 1 || !r.seedSnapshotMigration {
+		t.Fatalf("v1 snapshot should restore only as pending v2 migration: refs=%v restored=%v migration=%v err=%v", refs, restored, r.seedSnapshotMigration, err)
+	}
+	if _, err := os.Stat(filepath.Join(target, recoveryCapsuleFilename)); !os.IsNotExist(err) {
+		t.Fatalf("v1 content-addressed snapshot must remain immutable: %v", err)
 	}
 }
 
@@ -204,6 +246,18 @@ func writeSeedRuntimeSnapshotTestSource(t *testing.T, projectRoot, label string)
 	item := bootstrapinventory.Item{Ref: refs[0], SHA256: artifact.SHA256}
 	if err := writeAtomicOwnerJSON(filepath.Join(root, "seed-inventory.json"), bootstrapinventory.Inventory{
 		Version: 1, Generation: 1, RepositoryID: "seed-test", Seed: []bootstrapinventory.Item{item}, LastKnownGood: []bootstrapinventory.Item{item},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAtomicOwnerJSON(filepath.Join(root, recoveryCapsuleFilename), recoveryv1.Capsule{
+		Version: recoveryv1.Version, ID: "snapshot-test",
+		Inventory: recoveryv1.InventoryBinding{RepositoryID: "seed-test", Generation: 1},
+		Artifacts: []recoveryv1.Artifact{{Ref: item.Ref, SHA256: item.SHA256}},
+		Stages: []recoveryv1.Stage{
+			{ID: recoveryv1.StageRecovery, Units: []string{"repository"}},
+			{ID: recoveryv1.StageControlPlane, Units: []string{"deployment"}},
+			{ID: recoveryv1.StagePlatform, Units: []string{"platform"}},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}

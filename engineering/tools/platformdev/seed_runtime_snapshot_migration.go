@@ -93,7 +93,7 @@ func historicalRunNameForInstalledRoot(runsRoot, installedRoot string) (string, 
 }
 
 func validateHistoricalSeedRuntimeSource(root string) error {
-	for _, path := range []string{"dynamic/backend-kernel", "dynamic/vastplan-go-dynamic-host", "portal-assets/index.html", "repository", "seed-inventory.json", "access-profile-catalog.json", "backend-platform-catalog.json"} {
+	for _, path := range []string{"dynamic/backend-kernel", "dynamic/vastplan-go-dynamic-host", "portal-assets/index.html", "repository", "seed-inventory.json", recoveryCapsuleFilename, "access-profile-catalog.json", "backend-platform-catalog.json"} {
 		if _, err := os.Lstat(filepath.Join(root, filepath.FromSlash(path))); err != nil {
 			return err
 		}

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "id": "platform-management",
+  "stages": [
+    {
+      "id": "recovery",
+      "units": [
+        "platform-artifacts"
+      ]
+    },
+    {
+      "id": "control-plane",
+      "units": [
+        "platform-authorization",
+        "platform-authorization-engine-native",
+        "platform-composition-planner",
+        "platform-credentials",
+        "platform-deployment",
+        "platform-interaction-broker",
+        "platform-plugin-configuration",
+        "platform-portal-composer",
+        "platform-settings"
+      ]
+    },
+    {
+      "id": "platform",
+      "units": [
+        "platform-api-exposure",
+        "platform-authentication-delivery",
+        "platform-database",
+        "platform-database-runtime"
+      ]
+    }
+  ]
+}
