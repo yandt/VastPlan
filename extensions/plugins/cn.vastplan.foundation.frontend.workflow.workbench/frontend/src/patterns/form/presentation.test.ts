@@ -1,7 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { evaluateFormCondition, projectFormPresentation } from "./presentation.js";
+import { evaluateFormCondition, projectFormPresentation, resolveWorkbenchFormPresentation } from "./presentation.js";
 
 describe("FormPresentation", () => {
+  it("keeps every Workbench business form inline unless explicitly overridden", () => {
+    expect(resolveWorkbenchFormPresentation(undefined).labelPlacement).toBe("inline");
+    expect(resolveWorkbenchFormPresentation({ layout: "vertical" }).labelPlacement).toBe("inline");
+    expect(resolveWorkbenchFormPresentation({ preset: "guided" }).labelPlacement).toBe("inline");
+    expect(resolveWorkbenchFormPresentation({ labelPlacement: "stacked" }).labelPlacement).toBe("stacked");
+    expect(resolveWorkbenchFormPresentation({ layout: "compact", labelPlacement: "inside-inline" }).labelPlacement).toBe("inside-inline");
+  });
+
   it("evaluates the bounded condition DSL against values and read-only context", () => {
     const value = { mode: "advanced", enabled: true };
     expect(evaluateFormCondition({ all: [{ pointer: "/mode", equals: "advanced" }, { pointer: "/enabled", exists: true }] }, value)).toBe(true);

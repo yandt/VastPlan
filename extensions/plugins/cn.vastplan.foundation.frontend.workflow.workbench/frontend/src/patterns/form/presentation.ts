@@ -1,4 +1,10 @@
 import type { FormCondition, FormPresentation, FormSchema, FormWidget } from "@vastplan/ui-contract";
+import { resolveFormPresentation } from "@vastplan/ui-primitives";
+
+/** Workbench policy: every business form is inline unless it explicitly opts into another label placement. */
+export function resolveWorkbenchFormPresentation(source: FormPresentation | undefined): FormPresentation {
+  return resolveFormPresentation({ ...source, labelPlacement: source?.labelPlacement ?? "inline" });
+}
 
 export function evaluateFormCondition(condition: FormCondition, value: Readonly<Record<string, unknown>>, context: Readonly<Record<string, unknown>> = {}): boolean {
   if ("all" in condition) return condition.all.every((item) => evaluateFormCondition(item, value, context));

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { formControlSize, message, resolveFormPresentation, usePortalI18n, usePortalUI, type FormRendererProps, type FormRendererValidationState } from "@vastplan/ui-primitives";
+import { formControlSize, message, usePortalI18n, usePortalUI, type FormRendererProps, type FormRendererValidationState } from "@vastplan/ui-primitives";
 import { resolveFormWorkflowSurface, validateFormPresentation, type WorkbenchFormDefinition, type WorkbenchFormPreparation } from "@vastplan/workbench-sdk";
 import type { CollectionRow } from "../collection/model.js";
-import { projectFormPresentation } from "./presentation.js";
+import { projectFormPresentation, resolveWorkbenchFormPresentation } from "./presentation.js";
 import { containsSecretMaterial, discardSecretMaterial, secretMaterialPointers } from "./secret-material.js";
 import { useStableSelection } from "./stable-selection.js";
 import { localizeFormFieldErrors } from "./field-errors.js";
@@ -23,7 +23,7 @@ interface UseFormWorkflowInput {
 
 export interface FormWorkflowController {
   definition?: WorkbenchFormDefinition;
-  presentation: ReturnType<typeof resolveFormPresentation>;
+  presentation: ReturnType<typeof resolveWorkbenchFormPresentation>;
   controlSize: ReturnType<typeof formControlSize>;
   schema?: NonNullable<WorkbenchFormDefinition["schema"]>;
   context: Readonly<Record<string, unknown>>;
@@ -58,7 +58,7 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
   const loadRef = useRef<AbortController>();
   const submitRef = useRef<AbortController>();
   const stableSelected = useStableSelection(input.selected);
-  const presentation = useMemo(() => resolveFormPresentation(preparation?.presentation ?? definition?.presentation), [definition?.presentation, preparation?.presentation]);
+  const presentation = useMemo(() => resolveWorkbenchFormPresentation(preparation?.presentation ?? definition?.presentation), [definition?.presentation, preparation?.presentation]);
   const context = preparation?.context ?? definition?.context ?? emptyContext;
   const secretPointers = useMemo(() => secretMaterialPointers(presentation), [presentation]);
 
@@ -75,7 +75,7 @@ export function useFormWorkflow(input: UseFormWorkflowInput): FormWorkflowContro
       const prepared = await definition.prepare?.(stableSelected, controller.signal) ?? {};
       if (controller.signal.aborted) return;
       validateFormPresentation(prepared.presentation, definition.id);
-      const resolvedPresentation = resolveFormPresentation(prepared.presentation ?? definition.presentation);
+      const resolvedPresentation = resolveWorkbenchFormPresentation(prepared.presentation ?? definition.presentation);
       const pointers = secretMaterialPointers(resolvedPresentation);
       const loaded = definition.load === undefined ? prepared.initialValue ?? definition.initialValue ?? {} : await definition.load(stableSelected, controller.signal);
       if (controller.signal.aborted) return;

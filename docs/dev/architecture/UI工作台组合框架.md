@@ -138,6 +138,8 @@ FormWorkflow
 
 `FormDialog` 是非页面表单唯一的默认组合，由 Workbench 统一处理标题、焦点、ESC、关闭确认、校验、提交中禁用、一次性提交、字段级错误、成功刷新、失败保留和本地化。插件省略 `workflow.surface` 即使用 Dialog；只有独立表单页和记录页内编辑器可显式声明 `page`。Drawer 只保留给只读详情、审计和辅助 Overlay，不再承载表单。插件只给出 Schema、Presentation、Workflow 与 `submit(values, signal)` 处理器；处理器是运行时代码，绝不写入 Portal 发布配置。
 
+所有 Workbench 业务表单默认采用单行字段布局，即 Label 与输入控件同行。`layout` 只管理表单区块和导航排列，`vertical` 不得再被解释为 Label 上下布局；功能插件确有长说明型表单需求时必须显式声明 `labelPlacement: stacked`。FilterPanel 不是普通业务表单，继续显式使用 `inside-inline` 紧凑语义。
+
 当前实现中，Collection Action 只能通过已登记的 `form` ID 打开表单，不能携带组件或任意回调；独立表单页通过 `defineFormPage()` 注册。Workbench 在打开时加载值、在切换/关闭时取消请求，并拒绝重复提交。异步校验和提交返回的字段错误保持为 `LocalizedText`，只由 Workbench 按当前 Portal locale 翻译，功能插件与 UI Adapter 均不能提前固化语言。
 
 秘密输入分成两个互不混淆的语义：`credentialRef` 只接受同时声明 `format: vastplan-credential-ref + writeOnly` 的引用；`secretMaterial` 只接受 `type: string + format: vastplan-secret-material + writeOnly` 的一次性材料。后者禁止出现在 `initialValue`，若 loader 违规回填则 Workbench fail-closed 并丢弃该值；输入不会进入偏好或 dirty baseline，无论提交成功、字段拒绝还是网络异常，提交结束后都会立即从 Workbench 状态删除，取消/关闭同样删除。清理时按字段路径复制非敏感兄弟节点，跳过秘密节点，不会先把整个表单（连同明文）JSON 序列化。JavaScript 字符串无法原地覆写内存，因此这里保证的是最短引用生命周期，而不是虚假的“物理清零”。凭证 0.5 与数据库连接 0.5 已成为该边界的真实 fixture：数据库编辑从不回填秘密，留空保留托管凭证。
