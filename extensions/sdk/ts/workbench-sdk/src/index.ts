@@ -247,6 +247,12 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
   if (definition.collection.view === "cards" && definition.collection.card === undefined) {
     throw new Error("Card Collection 必须声明 card 呈现契约");
   }
+  if (definition.collection.table?.virtualization !== undefined && !["auto", "always", "off"].includes(definition.collection.table.virtualization)) {
+    throw new Error(`Collection ${definition.collection.id} 的表格虚拟化策略无效`);
+  }
+  if (definition.collection.view !== "table" && definition.collection.table !== undefined) {
+    throw new Error(`Collection ${definition.collection.id} 只有 Table 视图可声明表格策略`);
+  }
   validateFilterPanel(definition.collection.filterPanel, `Collection ${definition.collection.id}`);
   const forms = new Map((definition.forms ?? []).map((form) => [form.id, form]));
   if (forms.size !== (definition.forms ?? []).length) throw new Error("Collection 表单 ID 必须唯一");

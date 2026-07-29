@@ -10,8 +10,10 @@ export function Select({ value, options, placeholder, ariaLabel, disabled, size 
   return <AntdSelect aria-label={ariaLabel} value={value} placeholder={placeholder} disabled={disabled} size={antdComponentSize[size]} allowClear style={{ minWidth: 180, height: recipe.height, fontSize: recipe.fontSize }} options={options.map((option) => ({ value: option.value, label: option.label, disabled: option.disabled }))} onChange={(next) => onChange(next)} />;
 }
 
-export function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", appearance = "default" }: TableProps) {
+export function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", virtualization, appearance = "default" }: TableProps) {
   const keyOf = (row: Readonly<Record<string, unknown>>) => typeof rowKey === "string" ? String(row[rowKey]) : rowKey(row);
+  const virtualized = virtualization?.enabled === true && !loading && rows.length > 0;
+  const scrollWidth = columns.reduce((width, column) => width + (column.width ?? 160), selection === "none" ? 0 : 48);
   const antdColumns: ColumnsType<Readonly<Record<string, unknown>>> = columns.map((column) => ({
     key: column.key,
     title: column.title,
@@ -35,7 +37,8 @@ export function Table({ columns, rows, rowKey = "id", selection = "none", select
     locale={{ emptyText: empty }}
     size={density === "comfortable" ? "large" : density === "compact" ? "small" : "middle"}
     bordered={appearance !== "collection"}
-    scroll={{ x: "max-content" }}
+    virtual={virtualized}
+    scroll={{ x: virtualized ? scrollWidth : "max-content", y: virtualized ? virtualization!.viewportHeight : undefined }}
   /></div>;
 }
 

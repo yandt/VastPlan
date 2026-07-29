@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { PortalI18nProvider, type PortalUI } from "@vastplan/ui-primitives";
 import { antdIconForTheme, antdPortalUIComponents, antdRenderer } from "./index";
 
@@ -32,6 +32,18 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("ant-btn-primary");
     expect(markup).toContain("ant-card");
     expect(markup).toContain("Select Node A");
+  });
+
+  it("maps governed table virtualization to the native Ant virtual table", () => {
+    const Table = antdPortalUIComponents.Table;
+    const rows = Array.from({ length: 100 }, (_, id) => ({ id, name: `Row ${id}` }));
+    const serverLayoutWarning = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const markup = renderToStaticMarkup(<Table columns={[{ key: "name", title: "Name", width: 200 }]} rows={rows} virtualization={{ enabled: true, viewportHeight: 480, rowHeight: 40, overscan: 4 }} />);
+      expect(markup).toContain("ant-table-virtual");
+    } finally {
+      serverLayoutWarning.mockRestore();
+    }
   });
 
   it("maps responsive grid columns to Ant breakpoint spans", () => {

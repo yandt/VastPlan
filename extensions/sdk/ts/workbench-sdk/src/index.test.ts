@@ -3,6 +3,19 @@ import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, d
 import type { ActionSpec, PageActionSpec } from "./index.js";
 
 describe("defineCollectionPage", () => {
+  it("validates the governed table virtualization policy", () => {
+    const base = {
+      id: "virtual-table",
+      path: "/virtual-table",
+      title: "Virtual table",
+      collection: { id: "items", title: "Items", view: "table" as const, query: { mode: "page" as const, defaultPageSize: 20, pageSizeOptions: [20] }, columns: [] },
+      load: async () => ({ items: [], total: 0 }),
+    };
+    expect(() => defineCollectionPage({ ...base, collection: { ...base.collection, table: { virtualization: "always" as const } } })).not.toThrow();
+    expect(() => defineCollectionPage({ ...base, collection: { ...base.collection, table: { virtualization: "invalid" as "auto" } } })).toThrow("虚拟化策略无效");
+    expect(() => defineCollectionPage({ ...base, collection: { ...base.collection, view: "cards", query: { ...base.collection.query, mode: "cursor" }, card: { titleKey: "name" }, table: { virtualization: "off" } } })).toThrow("只有 Table 视图");
+  });
+
   it("keeps the serializable collection contract and runtime loader together without exposing a component", async () => {
     const page = defineCollectionPage({
       id: "revisions", path: "/revisions", title: "Revisions",

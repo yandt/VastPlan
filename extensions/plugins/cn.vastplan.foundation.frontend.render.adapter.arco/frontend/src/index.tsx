@@ -256,7 +256,8 @@ function Select({ value, options, placeholder, ariaLabel, disabled, size = "md",
   >{options.map((option) => <ArcoSelect.Option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</ArcoSelect.Option>)}</ArcoSelect>;
 }
 
-function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", appearance = "default" }: TableProps) {
+function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", virtualization, appearance = "default" }: TableProps) {
+  const virtualized = virtualization?.enabled === true && !loading && rows.length > 0;
   return <ArcoTable
     columns={columns.map((column) => ({
       title: column.title,
@@ -277,7 +278,9 @@ function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKe
     pagination={false}
     noDataElement={empty}
     size={density === "compact" ? "small" : undefined}
-    scroll={{ x: "max-content" }}
+    virtualized={virtualized}
+    virtualListProps={virtualized ? { height: virtualization!.viewportHeight, itemHeight: virtualization!.rowHeight, threshold: 0, isStaticItemHeight: true } : undefined}
+    scroll={{ x: "max-content", y: virtualized ? virtualization!.viewportHeight : undefined }}
     border={appearance === "collection" ? false : undefined}
   />;
 }

@@ -60,6 +60,15 @@ describe("MUI portal UI adapter", () => {
     expect(markup).toContain("保存");
   });
 
+  it("uses the shared virtual-table contract for large MUI collections", () => {
+    const Table = muiPortalUIComponents.Table;
+    const rows = Array.from({ length: 100 }, (_, id) => ({ id, name: `Row ${id}` }));
+    const markup = renderToStaticMarkup(<Table columns={[{ key: "name", title: "Name" }]} rows={rows} virtualization={{ enabled: true, viewportHeight: 480, rowHeight: 40, overscan: 4 }} />);
+    expect(markup).toContain('data-virtualized="true"');
+    expect(markup).toContain("Row 0");
+    expect(markup).not.toContain("Row 99");
+  });
+
   it("renders accessible record navigation and tree semantics", () => {
     const List = muiPortalUIComponents.RecordNavigationList;
     const Tree = muiPortalUIComponents.RecordTree;

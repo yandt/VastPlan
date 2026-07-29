@@ -3,6 +3,7 @@ import { message, usePortalI18n, usePortalUI } from "@vastplan/ui-primitives";
 import type { CollectionColumnPreference, CollectionRow } from "./model.js";
 import { CollectionValue } from "./CollectionValue.js";
 import { RowActions } from "./RowActions.js";
+import { resolveTableVirtualization } from "./table-virtualization.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 
@@ -26,5 +27,6 @@ export function CollectionTable({ collection, selectionMode, columns, rows, sele
     ...visibleColumns.map((column) => ({ key: column.key, title: i18n.text(column.label), width: column.minWidth, render: (value: unknown) => <CollectionValue column={column} value={value} /> })),
     ...(rowActions.length === 0 ? [] : [{ key: "__actions", title: i18n.text(message(namespace, "column.actions", "操作")), width: 152, align: "center" as const, fixed: "right" as const, render: (_value: unknown, row: CollectionRow) => <RowActions actions={rowActions} row={row} onRunAction={(action) => onRunAction(action, [row])} /> }]),
   ];
-  return <ui.Table appearance="collection" columns={tableColumns} rows={rows} rowKey={keyOf} selection={selectionMode} selectedRowKeys={selectedKeys} onSelectionChange={onSelectionChange} loading={loading} density={density} empty={<ui.EmptyState title={i18n.text(message(namespace, "empty.title", "暂无数据"))} />} />;
+  const virtualization = resolveTableVirtualization(collection, rows.length, density);
+  return <ui.Table appearance="collection" columns={tableColumns} rows={rows} rowKey={keyOf} selection={selectionMode} selectedRowKeys={selectedKeys} onSelectionChange={onSelectionChange} loading={loading} density={density} virtualization={virtualization} empty={<ui.EmptyState title={i18n.text(message(namespace, "empty.title", "暂无数据"))} />} />;
 }

@@ -125,6 +125,15 @@ describe("Arco portal UI adapter", () => {
     expect(html).toContain("width:max-content");
   });
 
+  it("maps governed table virtualization to the native Arco virtual list", () => {
+    const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.Table, {
+      columns: [{ key: "name", title: "Name", width: 200 }],
+      rows: Array.from({ length: 100 }, (_, id) => ({ id, name: `Row ${id}` })),
+      virtualization: { enabled: true, viewportHeight: 480, rowHeight: 40, overscan: 4 },
+    }));
+    expect(html).toContain("arco-table-virtualized");
+  });
+
   it("maps the semantic data card to native selectable Arco markup", () => {
     const html = renderToStaticMarkup(createElement(arcoPortalUIComponents.DataCard, {
       title: "Node A", subtitle: "linux", status: "Ready", selectable: true, selected: true, selectionLabel: "Select Node A", children: "4 cores",

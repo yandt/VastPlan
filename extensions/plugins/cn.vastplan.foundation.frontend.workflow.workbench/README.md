@@ -12,6 +12,7 @@
 - `useCollectionData`：Table/Page 与 Card/Cursor 共用的加载、刷新、取消、游标和错误状态；
 - `CollectionToolbar`、`CollectionTable`、`CollectionCards`、`CollectionPreferencesPopover`：可独立演进的集合区域；列设置 Popover 使用紧凑密度按钮、可访问拖拽排序和眼睛图标显隐，隐藏列使用 muted 灰色；
 - `density`、`preferences`、`column-preference-actions`：无框架私有依赖的展示与持久化策略；
+- `table-virtualization`：把 `auto / always / off` 语义解析为统一阈值、density 行高、视口和 overscan；功能插件不接触框架虚拟列表参数；
 - `patterns/interaction/`：封装 dnd-kit 的统一 Sortable 边界和不可变排序模型，Pattern 不读取第三方事件；
 - `patterns/dashboard/`：JSON-only Dashboard 布局映射与延迟 `DashboardGrid`，只有可信宿主调用 `loadDashboardGrid()` 后才加载 react-grid-layout。
 

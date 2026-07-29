@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、表单、Overlay、统一拖拽与延迟 Dashboard Grid 基础均已实施｜最后更新：2026-07-27
+> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、表单、Overlay、Table 行虚拟化、统一拖拽与延迟 Dashboard Grid 基础均已实施｜最后更新：2026-07-30
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md) 与 [ADR-0104](../decisions/ADR-0104-Frontend-Runtime-Engine与React单实现.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -77,6 +77,7 @@ CollectionSpec
 ├── id / title / view: table | cards
 ├── query: page | cursor
 ├── filterPanel?: FilterPanelSpec
+├── table.virtualization?: auto | always | off
 ├── columns[]: key、标题、显示/排序/筛选能力、默认可见与宽度边界
 ├── selection: none | single | multiple
 ├── actions: toolbar | row | card | bulk
@@ -97,6 +98,7 @@ CollectionLoader(query, signal) -> CollectionResult
 - Workbench 统一渲染 loading、refreshing、empty、error、stale、selection 和 retry，不允许同一集合同时由插件再渲染另一套分页或工具栏。行/卡片选择是 `collection.bulk` 的专用输入面：权限投影后不存在批量动作时，即使 Collection 留有 `selection` 配置也必须隐藏选择控件；存在批量动作时沿用 `single`，其他情况统一为 `multiple`。行操作、卡片操作和 Page Header 动作不得借选择列制造伪批量入口。
 - Cursor 只来自上次成功结果的 `nextCursor`。加载更多会按稳定记录键去重并用新事实替换重复项；Loader 返回与请求相同的 cursor 时立即失败，避免无限请求。筛选或刷新会重新从首 cursor 装配，未提交请求由 `AbortSignal` 取消。
 - Collection 的默认管理工作区组合一级 FilterPanel、主操作在左/次操作在右、浅色表头与行分隔、页脚右对齐分页。视觉语义通过 `FilterBar`、`Table`、`Pagination` 的 `collection` 呈现能力交由渲染适配器实现，Workbench 不注入框架 CSS。
+- Table 行虚拟化默认使用 `auto`：当前页达到 80 行后启用，少量数据保持普通表格；功能插件只可选择 `auto / always / off`，不能传入像素、overscan 或框架私有属性。Workbench 按 density 统一解析 40/48/56px 固定行高、12 行视口与 4 行 overscan，再通过 `ui.Table` 契约交给 Adapter。Ant Design 与 Arco 使用各自原生虚拟表格，MUI 使用精确锁定的 TanStack Virtual，仅渲染可视行；三者继续保持服务端分页、全页选择键集合、固定操作列和原始记录索引语义。虚拟化不替代服务端筛选、排序或分页，也不允许用超大 page size 绕开数据面限额。
 
 ### 3.3 操作区
 

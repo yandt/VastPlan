@@ -161,6 +161,13 @@ export interface TableProps {
   loading?: boolean;
   empty?: ReactNode;
   density?: "compact" | "standard" | "comfortable";
+  /** Resolved by Workbench; functional plugins never pass framework-specific virtual-list props. */
+  virtualization?: {
+    enabled: boolean;
+    viewportHeight: number;
+    rowHeight: number;
+    overscan: number;
+  };
   /** A governed visual treatment owned by the render adapter, never by a functional plugin. */
   appearance?: "default" | "collection";
 }

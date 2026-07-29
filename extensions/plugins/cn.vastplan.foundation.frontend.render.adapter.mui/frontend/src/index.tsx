@@ -40,11 +40,6 @@ import {
   Snackbar,
   Stack as MuiStack,
   Tab,
-  Table as MuiTable,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Tabs as MuiTabs,
   TextField,
   Tooltip,
@@ -78,12 +73,12 @@ import type {
   SplitViewProps,
   StackProps,
   StatusTone,
-  TableProps,
 } from "@vastplan/ui-primitives";
 import { componentSizeRecipes, componentVariantRecipes, formGridColumns, formGridTemplate, formLabelPlacement, PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { MuiNativeIcon } from "./native-icons";
 import { MuiInlineFieldTemplate, MuiInsideInlineFieldTemplate, type MuiFieldTemplateProps } from "./inside-inline-field";
 import { muiComponentSize } from "./component-size";
+import { Table } from "./data-table";
 
 const gaps = { xs: 0.5, sm: 1, md: 2, lg: 3 } as const;
 const widths = { sm: "sm", md: "md", lg: "lg" } as const;
@@ -390,31 +385,6 @@ function muiErrorSchema(errors: Readonly<Record<string, string>>): Record<string
     node.__errors = [...(Array.isArray(node.__errors) ? node.__errors as string[] : []), value];
   }
   return root;
-}
-
-function Table({ columns, rows, rowKey = "id", selection = "none", selectedRowKeys = [], onSelectionChange, loading, empty, density = "standard", appearance = "default" }: TableProps) {
-  const keyOf = (row: Readonly<Record<string, unknown>>) => typeof rowKey === "string" ? String(row[rowKey]) : rowKey(row);
-  const selected = new Set(selectedRowKeys);
-  const toggle = (key: string) => {
-    if (selection === "single") { onSelectionChange?.(selected.has(key) ? [] : [key]); return; }
-    const next = new Set(selected); next.has(key) ? next.delete(key) : next.add(key); onSelectionChange?.([...next]);
-  };
-  const toggleAll = () => onSelectionChange?.(selected.size === rows.length ? [] : rows.map(keyOf));
-  const alignment = (column: TableProps["columns"][number]): "left" | "center" | "right" => column.align === "end" ? "right" : column.align === "center" ? "center" : "left";
-  const cellStyle = (column: TableProps["columns"][number], header = false) => ({
-    ...(column.width === undefined ? {} : { width: column.width }),
-    textAlign: alignment(column),
-    ...(header && appearance === "collection" ? { fontWeight: 600 } : {}),
-    ...(column.fixed === "right" ? { position: "sticky" as const, right: 0, zIndex: header ? 3 : 1, bgcolor: header ? "action.hover" : "background.paper", boxShadow: "-1px 0 0 rgba(5, 5, 5, 0.06)" } : {}),
-  });
-  const columnCount = columns.length + (selection === "none" ? 0 : 1);
-  const content = <MuiTable size={density === "compact" ? "small" : "medium"}><TableHead sx={appearance === "collection" ? { bgcolor: "action.hover" } : undefined}><TableRow>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={rows.length > 0 && selected.size === rows.length} indeterminate={selected.size > 0 && selected.size < rows.length} onChange={toggleAll} inputProps={{ "aria-label": "select rows" }} /></TableCell>}{columns.map((column) => <TableCell key={column.key} align={alignment(column)} sx={cellStyle(column, true)}>{column.title}</TableCell>)}</TableRow></TableHead><TableBody>
-    {loading ? <TableRow><TableCell colSpan={columnCount}><CircularProgress size={20} /></TableCell></TableRow> : rows.length === 0 ? <TableRow><TableCell colSpan={columnCount}>{empty}</TableCell></TableRow> : rows.map((row, index) => {
-      const key = keyOf(row);
-      return <TableRow key={key} selected={selected.has(key)}>{selection === "none" ? null : <TableCell padding="checkbox"><Checkbox checked={selected.has(key)} onChange={() => toggle(key)} inputProps={{ "aria-label": `select ${key}` }} /></TableCell>}{columns.map((column) => <TableCell key={column.key} align={alignment(column)} sx={cellStyle(column)}>{column.render?.(row[column.key], row, index) ?? String(row[column.key] ?? "")}</TableCell>)}</TableRow>;
-    })}
-  </TableBody></MuiTable>;
-  return appearance === "collection" ? <Box sx={{ width: "100%", overflowX: "auto" }}>{content}</Box> : <Paper variant="outlined">{content}</Paper>;
 }
 
 function DataCard({ title, subtitle, status, summary, children, actions, selectable = false, selected = false, selectionLabel, density = "standard", onSelectionChange }: DataCardProps) {

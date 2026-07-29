@@ -200,6 +200,11 @@ export interface CollectionSpec {
   card?: CollectionCardSpec;
   selection?: CollectionSelectionMode;
   actions?: readonly ActionSpec[];
+  /** Table-only rendering policy. Workbench resolves framework-specific sizing and overscan. */
+  table?: {
+    /** auto enables row virtualization only after the governed large-data threshold. */
+    virtualization?: "auto" | "always" | "off";
+  };
   /** A governed presentation preference, never arbitrary CSS or framework props. */
   presentation?: { density?: CollectionDensity };
   preferences?: { allowedColumns?: readonly string[]; density?: boolean };
