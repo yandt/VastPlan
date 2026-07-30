@@ -75,3 +75,31 @@ func TestClientPreservesStableServiceError(t *testing.T) {
 		t.Fatalf("错误可重试属性不一致: %+v", serviceErr)
 	}
 }
+
+func TestClientCreatesHeadThroughNeutralCapability(t *testing.T) {
+	stream := versioningv1.StreamKey{Namespace: "portal.configuration", StreamID: "admin"}
+	versionID, _ := versioningv1.DeriveVersionID("tenant-a", stream, "portal-version:1")
+	digest, _ := versioningv1.ContentDigest(json.RawMessage(`{"name":"admin"}`))
+	target := versioningv1.VersionRef{Stream: stream, VersionID: versionID, Sequence: 1, ContentDigest: digest}
+	client, err := versionledgersdk.New(ledgerHost{call: func(targetCall *contractv1.CallTarget, _ *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if targetCall.GetOperation() != versioningv1.OperationCreateHead {
+			t.Fatalf("错误调用目标: %+v", targetCall)
+		}
+		parsed, parseErr := versioningv1.ParseRequest(versioningv1.OperationCreateHead, payload)
+		if parseErr != nil {
+			t.Fatal(parseErr)
+		}
+		request := parsed.(*versioningv1.CreateHeadRequest)
+		response, _ := json.Marshal(versioningv1.CreateHeadResult{Head: versioningv1.Head{
+			Protocol: versioningv1.Protocol, Stream: request.Stream, Name: request.Name, Target: request.Target, Revision: 1, UpdatedAt: time.Now().UTC(),
+		}})
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, response, nil
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := client.CreateHead(context.Background(), &contractv1.CallContext{TenantId: "tenant-a"}, versioningv1.CreateHeadRequest{Stream: stream, Name: "draft", Target: target})
+	if err != nil || created.Head.Target != target {
+		t.Fatalf("CreateHead SDK 失败: %+v err=%v", created, err)
+	}
+}

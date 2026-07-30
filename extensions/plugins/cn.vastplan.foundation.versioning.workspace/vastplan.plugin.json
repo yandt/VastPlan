@@ -1,0 +1,123 @@
+{
+  "id": "cn.vastplan.foundation.versioning.workspace",
+  "name": "VastPlan Version Workspace",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "提供受信版本环境、Snapshot 编辑会话、Lease、配额、CAS 和资源 Adapter 编排",
+  "engines": { "backend": "^0.1" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": {
+    "required": ["caller", "scope.tenant"],
+    "optional": ["scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"]
+  },
+  "runtime": {
+    "instancePolicy": "leader",
+    "stateModel": "leader-owned",
+    "visibility": "cluster",
+    "routing": "leader",
+    "routingDomain": "platform",
+    "requires": [
+      {
+        "capability": "foundation.versioning.ledger",
+        "scope": "remote",
+        "kind": "strong",
+        "ready": "readiness",
+        "failurePolicy": "fail",
+        "logicalService": "foundation.versioning.ledger",
+        "routingDomain": "platform"
+      }
+    ],
+    "provides": [
+      {
+        "extensionPoint": "tool.package",
+        "capability": "foundation.versioning.workspace",
+        "visibility": "cluster",
+        "routing": "leader",
+        "routingDomain": "platform"
+      }
+    ]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "restart",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environments"],
+      "properties": {
+        "environments": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["protocol", "id", "revision", "bindings", "limits"],
+            "properties": {
+              "protocol": { "const": "version.resource.v1" },
+              "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
+              "revision": { "type": "integer", "minimum": 1 },
+              "bindings": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 256,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["resourceType", "namespace", "adapter", "allowedModes", "defaultMode", "projectionPolicy"],
+                  "properties": {
+                    "resourceType": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" },
+                    "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" },
+                    "adapter": { "const": "version.resource.json.v1" },
+                    "allowedModes": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "const": "snapshot" } },
+                    "defaultMode": { "const": "snapshot" },
+                    "projectionPolicy": { "enum": ["none", "domain-hot", "current-only"] },
+                    "adapterConfig": { "type": "object", "additionalProperties": false }
+                  }
+                }
+              },
+              "limits": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["maxSessionsPerTenant", "maxLeaseSeconds", "maxSnapshotBytes", "maxOverlayBytes"],
+                "properties": {
+                  "maxSessionsPerTenant": { "type": "integer", "minimum": 1, "maximum": 10000 },
+                  "maxLeaseSeconds": { "type": "integer", "minimum": 30, "maximum": 86400 },
+                  "maxSnapshotBytes": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+                  "maxOverlayBytes": { "type": "integer", "minimum": 1 }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/version-workspace" },
+  "contributes": {
+    "backend": {
+      "tools": [
+        {
+          "id": "foundation.versioning.workspace",
+          "service_role": "backend",
+          "title": "Version Workspace",
+          "subcommands": [
+            { "name": "open", "description": "打开有 Lease 的版本编辑会话" },
+            { "name": "status", "description": "读取会话状态" },
+            { "name": "readSnapshot", "description": "读取隔离快照" },
+            { "name": "writeSnapshot", "description": "以 CAS 写入隔离快照" },
+            { "name": "changes", "description": "读取确定性变更摘要" },
+            { "name": "commit", "description": "幂等提交版本并以 CAS 更新 Head" },
+            { "name": "discard", "description": "丢弃编辑会话" },
+            { "name": "renew", "description": "在环境配额内续租" }
+          ]
+        }
+      ]
+    }
+  }
+}

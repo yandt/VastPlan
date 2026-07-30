@@ -15,6 +15,14 @@ func (c *Client) GetHead(ctx context.Context, call *contractv1.CallContext, requ
 	return *result.(*versioningv1.GetHeadResult), nil
 }
 
+func (c *Client) CreateHead(ctx context.Context, call *contractv1.CallContext, request versioningv1.CreateHeadRequest) (versioningv1.CreateHeadResult, error) {
+	result, err := c.call(ctx, call, versioningv1.OperationCreateHead, request)
+	if err != nil {
+		return versioningv1.CreateHeadResult{}, err
+	}
+	return *result.(*versioningv1.CreateHeadResult), nil
+}
+
 func (c *Client) MoveHead(ctx context.Context, call *contractv1.CallContext, request versioningv1.MoveHeadRequest) (versioningv1.MoveHeadResult, error) {
 	result, err := c.call(ctx, call, versioningv1.OperationMoveHead, request)
 	if err != nil {
