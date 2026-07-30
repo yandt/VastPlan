@@ -262,7 +262,7 @@ func decode(raw []byte, target any) error {
 // minimum fields required by the portal API.
 func Contribution(service *Service) sdk.Contribution {
 	handlers := map[string]sdk.Handler{}
-	for _, operation := range []string{"createDraft", "updateDraft", "list", "submit", "approve", "publish", "audit", "governance", "createProfileDraft", "updateProfileDraft", "deleteProfileDraft", "transitionProfile", "createBindingDraft", "updateBindingDraft", "transitionBinding", "activate", "rollbackActivation", "listActivations", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease"} {
+	for _, operation := range signedToolOperationNames(Capability) {
 		op := operation
 		handlers[op] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 			if err := service.ensureConfigured(ctx, host, callCtx); err != nil {
@@ -302,7 +302,7 @@ func composerStateError(code string, err error, retryable bool) *contractv1.Call
 }
 
 func Descriptor() []byte {
-	return []byte(`{"title":"门户组合治理","subcommands":[{"name":"governance","description":"读取完整 Portal 治理工作区"},{"name":"createDraft","description":"创建 Application 草稿"},{"name":"updateDraft","description":"更新 Application 草稿"},{"name":"list","description":"列出 Application revisions"},{"name":"submit","description":"提交 Application 审批"},{"name":"approve","description":"审批 Application"},{"name":"publish","description":"发布 Application 输入"},{"name":"createProfileDraft","description":"创建 Profile 草稿"},{"name":"updateProfileDraft","description":"更新 Profile 草稿"},{"name":"deleteProfileDraft","description":"删除 Profile 草稿"},{"name":"transitionProfile","description":"推进 Profile 生命周期"},{"name":"createBindingDraft","description":"创建 Binding 草稿"},{"name":"updateBindingDraft","description":"更新 Binding 草稿"},{"name":"transitionBinding","description":"推进 Binding 生命周期"},{"name":"activate","description":"CAS 激活 Published 输入"},{"name":"rollbackActivation","description":"由历史 Activation 创建新激活"},{"name":"listActivations","description":"列出不可变 Activation"},{"name":"listTestTargetBindings","description":"列出 Frontend 测试目标绑定"},{"name":"putTestTargetBinding","description":"CAS 保存 Frontend 应用插件测试目标"},{"name":"listTestReleases","description":"列出 Frontend Test Release"},{"name":"createTestRelease","description":"提交精确 Frontend 测试制品"},{"name":"rollbackTestRelease","description":"恢复中断的 Frontend Test Release"},{"name":"audit","description":"读取 revision 审计"}]}`)
+	return signedToolDescriptor(Capability)
 }
 func projectPrincipal(callCtx *contractv1.CallContext) (portalapi.Principal, error) {
 	if callCtx == nil || callCtx.Principal == nil || callCtx.Principal.UserId == "" || callCtx.TenantId == "" {

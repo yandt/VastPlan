@@ -120,6 +120,9 @@ func ParseManifest(raw []byte) (Manifest, error) {
 			return Manifest{}, errors.New("configuration.managedCredentials 要求声明 kernel.config.credential-ref")
 		}
 	}
+	if _, err := ManifestToolCapabilityContracts(manifest); err != nil {
+		return Manifest{}, err
+	}
 	if err := validateAuthorization(manifest); err != nil {
 		return Manifest{}, err
 	}

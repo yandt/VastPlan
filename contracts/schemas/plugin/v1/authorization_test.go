@@ -20,6 +20,7 @@ func TestParseManifestAuthorizationContract(t *testing.T) {
 	invalid := map[string][]byte{
 		"高风险离线授权":      authorizationManifest("cn.vastplan.platform.infrastructure.demo", "platform.demo", "platform.demo.read", "listItems", true),
 		"外部插件占用平台命名空间": []byte(`{"id":"com.example.demo","name":"demo","description":"demo","version":"1.0.0","publisher":"example","engines":{"backend":"^0.1"},"authorization":{"namespace":"platform.demo","permissions":[{"code":"platform.demo.read","title":"read","scope":"platform","risk":"low","assignable":true,"offlineAllowed":false}],"operationGuards":[{"extensionPoint":"tool.package","capability":"platform.demo","operation":"listItems","permissions":["platform.demo.read"],"access":"read","approval":"none"}]},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[{"id":"platform.demo","service_role":"backend","subcommands":[{"name":"listItems","description":"list"}]}]}}}`),
+		"外部插件扩展能力所有权":  []byte(`{"id":"com.example.demo","name":"demo","description":"demo","version":"1.0.0","publisher":"example","engines":{"backend":"^0.1"},"authorization":{"namespace":"com.example.demo","capabilities":["other.capability"],"permissions":[{"code":"com.example.demo.read","title":"read","scope":"tenant","risk":"low","assignable":true,"offlineAllowed":false}],"operationGuards":[{"extensionPoint":"tool.package","capability":"other.capability","operation":"listItems","permissions":["com.example.demo.read"],"access":"read","approval":"none"}]},"activation":["onStartup"],"entry":{"backend":"backend/main"},"contributes":{"backend":{"tools":[{"id":"other.capability","service_role":"backend","subcommands":[{"name":"listItems","description":"list"}]}]}}}`),
 	}
 	for name, raw := range invalid {
 		t.Run(name, func(t *testing.T) {
@@ -113,6 +114,30 @@ func TestBuildPermissionCatalogFromSystemManagementPlugins(t *testing.T) {
 	}
 	if catalog.SchemaVersion != PermissionCatalogSchemaVersion || len(catalog.Permissions) != 21 || len(catalog.Operations) != 75 || len(catalog.Digest) != 64 {
 		t.Fatalf("系统管理权限目录不完整: permissions=%d operations=%d digest=%s", len(catalog.Permissions), len(catalog.Operations), catalog.Digest)
+	}
+}
+
+func TestPortalComposerPermissionCatalogUsesSignedOperations(t *testing.T) {
+	path := filepath.Join("..", "..", "..", "..", "extensions", "plugins", "cn.vastplan.platform.configuration.portal-composer", "vastplan.plugin.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := BuildPermissionCatalog([]PermissionCatalogSource{{Manifest: manifest, ArtifactSHA256: strings.Repeat("a", 64)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(catalog.Permissions) != 4 || len(catalog.Operations) != 27 {
+		t.Fatalf("Portal 权限目录必须覆盖全部签名用户操作: permissions=%d operations=%d", len(catalog.Permissions), len(catalog.Operations))
+	}
+	for _, operation := range catalog.Operations {
+		if operation.Capability != "platform.portal-composer" || operation.Operation == "transitionProfile" || operation.Operation == "transitionBinding" {
+			t.Fatalf("Portal 权限目录包含旧或错误操作: %+v", operation)
+		}
 	}
 }
 

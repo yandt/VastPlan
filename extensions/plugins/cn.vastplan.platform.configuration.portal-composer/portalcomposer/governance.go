@@ -84,7 +84,7 @@ func (s *Service) Governance(ctx context.Context, principal portalapi.Principal)
 }
 
 func (s *Service) CreateProfileDraft(_ context.Context, principal portalapi.Principal, profile frontendcompositionv1.PlatformProfile) (portalapi.PlatformProfileRevision, error) {
-	if err := require(principal, "portal.compose"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.PlatformProfileRevision{}, err
 	}
 	profile, err := validateProfile(profile)
@@ -102,7 +102,7 @@ func (s *Service) CreateProfileDraft(_ context.Context, principal portalapi.Prin
 }
 
 func (s *Service) UpdateProfileDraft(_ context.Context, principal portalapi.Principal, id uint64, profile frontendcompositionv1.PlatformProfile) (portalapi.PlatformProfileRevision, error) {
-	if err := require(principal, "portal.compose"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.PlatformProfileRevision{}, err
 	}
 	profile, err := validateProfile(profile)
@@ -128,7 +128,7 @@ func (s *Service) UpdateProfileDraft(_ context.Context, principal portalapi.Prin
 }
 
 func (s *Service) DeleteProfileDraft(_ context.Context, principal portalapi.Principal, id uint64) (portalapi.PlatformProfileRevision, error) {
-	if err := require(principal, "portal.compose"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.PlatformProfileRevision{}, err
 	}
 	s.mu.Lock()
@@ -171,7 +171,7 @@ func (s *Service) TransitionProfile(_ context.Context, principal portalapi.Princ
 }
 
 func (s *Service) CreateBindingDraft(_ context.Context, principal portalapi.Principal, request portalapi.BindingDraftRequest) (portalapi.BindingRevision, error) {
-	if err := require(principal, "portal.compose"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.BindingRevision{}, err
 	}
 	s.mu.Lock()
@@ -189,7 +189,7 @@ func (s *Service) CreateBindingDraft(_ context.Context, principal portalapi.Prin
 }
 
 func (s *Service) UpdateBindingDraft(_ context.Context, principal portalapi.Principal, id uint64, request portalapi.BindingDraftRequest) (portalapi.BindingRevision, error) {
-	if err := require(principal, "portal.compose"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.BindingRevision{}, err
 	}
 	s.mu.Lock()
@@ -230,7 +230,7 @@ func (s *Service) TransitionBinding(_ context.Context, principal portalapi.Princ
 }
 
 func (s *Service) Activate(ctx context.Context, principal portalapi.Principal, request portalapi.ActivationRequest) (portalapi.PortalActivation, error) {
-	if err := require(principal, "portal.publish"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.PortalActivation{}, err
 	}
 	s.mu.Lock()
@@ -503,21 +503,21 @@ func validateProfile(profile frontendcompositionv1.PlatformProfile) (frontendcom
 }
 
 func transitionStatus(principal portalapi.Principal, current portalapi.Status, submittedBy, action string) (portalapi.Status, error) {
-	role, expected, next := "portal.compose", portalapi.StatusDraft, portalapi.StatusPendingApproval
+	if err := requireTrustedPrincipal(principal); err != nil {
+		return "", err
+	}
+	expected, next := portalapi.StatusDraft, portalapi.StatusPendingApproval
 	switch action {
 	case "submit":
 	case "approve":
-		role, expected, next = "portal.approve", portalapi.StatusPendingApproval, portalapi.StatusApproved
+		expected, next = portalapi.StatusPendingApproval, portalapi.StatusApproved
 		if principal.ID == submittedBy {
 			return "", ErrSelfApproval
 		}
 	case "publish":
-		role, expected, next = "portal.publish", portalapi.StatusApproved, portalapi.StatusPublished
+		expected, next = portalapi.StatusApproved, portalapi.StatusPublished
 	default:
 		return "", fmt.Errorf("未知资源状态动作 %q", action)
-	}
-	if err := require(principal, role); err != nil {
-		return "", err
 	}
 	if current != expected {
 		return "", ErrInvalidState

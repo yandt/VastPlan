@@ -71,12 +71,38 @@ func TestDiscoverPackageSpecsLeavesDynamicGoToDedicatedPackager(t *testing.T) {
 }
 
 func TestPluginManifestVersionUsesManifestAsSourceOfTruth(t *testing.T) {
-	version, err := pluginManifestVersion(repositoryRoot(t), "cn.vastplan.platform.configuration.portal-composer")
+	pluginID := "cn.vastplan.platform.configuration.portal-composer"
+	reference := filepath.Join(repositoryRoot(t), "extensions", "plugins", pluginID, "vastplan.plugin.json")
+	raw, err := os.ReadFile(reference)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != "1.7.6" {
-		t.Fatalf("version = %q, want 1.7.6", version)
+	root := t.TempDir()
+	pluginRoot := filepath.Join(root, "extensions", "plugins", pluginID)
+	if err := os.MkdirAll(pluginRoot, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	manifest := string(raw)
+	marker := `"version": "`
+	versionStart := strings.Index(manifest, marker)
+	if versionStart < 0 {
+		t.Fatal("参考 Manifest 缺少 version")
+	}
+	versionStart += len(marker)
+	versionEnd := strings.Index(manifest[versionStart:], `"`)
+	if versionEnd < 0 {
+		t.Fatal("参考 Manifest version 未结束")
+	}
+	manifest = manifest[:versionStart] + "9.8.7" + manifest[versionStart+versionEnd:]
+	if err := os.WriteFile(filepath.Join(pluginRoot, "vastplan.plugin.json"), []byte(manifest), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	version, err := pluginManifestVersion(root, pluginID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version != "9.8.7" {
+		t.Fatalf("version = %q, want Manifest value 9.8.7", version)
 	}
 }
 

@@ -44,7 +44,7 @@ func (s *Service) ListTestTargetBindings(_ context.Context, principal portalapi.
 }
 
 func (s *Service) PutTestTargetBinding(_ context.Context, principal portalapi.Principal, id string, request portalapi.PutTestTargetBindingRequest) (portalapi.TestTargetBinding, error) {
-	if err := require(principal, "portal.compose"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.TestTargetBinding{}, err
 	}
 	id = strings.TrimSpace(id)
@@ -118,7 +118,7 @@ func (s *Service) ListTestReleases(_ context.Context, principal portalapi.Princi
 }
 
 func (s *Service) CreateTestRelease(ctx context.Context, principal portalapi.Principal, request portalapi.CreateTestReleaseRequest) (portalapi.TestRelease, error) {
-	if err := require(principal, "portal.publish"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.TestRelease{}, err
 	}
 	if err := validatePortalTestArtifactRequest(request); err != nil {
@@ -247,7 +247,7 @@ func (s *Service) executePortalTestRelease(ctx context.Context, principal portal
 }
 
 func (s *Service) RollbackTestRelease(ctx context.Context, principal portalapi.Principal, id uint64) (portalapi.TestRelease, error) {
-	if err := require(principal, "portal.publish"); err != nil || id == 0 {
+	if err := requireTrustedPrincipal(principal); err != nil || id == 0 {
 		return portalapi.TestRelease{}, ErrForbidden
 	}
 	release, err := s.portalTestRelease(principal, id)

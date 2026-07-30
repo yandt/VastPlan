@@ -3,6 +3,7 @@ package portalcomposer
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
@@ -12,9 +13,9 @@ func (s *Service) handlePortalOperation(ctx context.Context, principal portalapi
 	switch operation {
 	case "createDraft", "updateDraft", "list", "governance":
 		return s.handleCompositionOperation(ctx, principal, operation, payload)
-	case "createProfileDraft", "updateProfileDraft", "deleteProfileDraft", "transitionProfile":
+	case "createProfileDraft", "updateProfileDraft", "deleteProfileDraft", "submitProfile", "approveProfile", "publishProfile":
 		return s.handleProfileOperation(ctx, principal, operation, payload)
-	case "createBindingDraft", "updateBindingDraft", "transitionBinding", "activate", "rollbackActivation", "listActivations":
+	case "createBindingDraft", "updateBindingDraft", "submitBinding", "approveBinding", "publishBinding", "activate", "rollbackActivation", "listActivations":
 		return s.handleBindingOperation(ctx, principal, operation, payload)
 	case "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease":
 		return s.handleTestReleaseOperation(ctx, principal, operation, payload)
@@ -110,15 +111,14 @@ func (s *Service) handleProfileOperation(ctx context.Context, principal portalap
 			return nil, err
 		}
 		result = value
-	case "transitionProfile":
+	case "submitProfile", "approveProfile", "publishProfile":
 		var request struct {
 			RevisionID uint64 `json:"revisionId"`
-			Action     string `json:"action"`
 		}
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		value, err := s.TransitionProfile(ctx, principal, request.RevisionID, request.Action)
+		value, err := s.TransitionProfile(ctx, principal, request.RevisionID, strings.TrimSuffix(operation, "Profile"))
 		if err != nil {
 			return nil, err
 		}
@@ -155,15 +155,14 @@ func (s *Service) handleBindingOperation(ctx context.Context, principal portalap
 			return nil, err
 		}
 		result = value
-	case "transitionBinding":
+	case "submitBinding", "approveBinding", "publishBinding":
 		var request struct {
 			RevisionID uint64 `json:"revisionId"`
-			Action     string `json:"action"`
 		}
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		value, err := s.TransitionBinding(ctx, principal, request.RevisionID, request.Action)
+		value, err := s.TransitionBinding(ctx, principal, request.RevisionID, strings.TrimSuffix(operation, "Binding"))
 		if err != nil {
 			return nil, err
 		}

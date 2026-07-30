@@ -39,10 +39,10 @@ describe("Portal governance routes", () => {
       { operation: "createProfileDraft", payload: { id: "standard" } },
       { operation: "updateProfileDraft", payload: { revisionId: 3, profile: { id: "standard-v2" } } },
       { operation: "deleteProfileDraft", payload: { revisionId: 4 } },
-      { operation: "transitionProfile", payload: { revisionId: 3, action: "approve" } },
+      { operation: "approveProfile", payload: { revisionId: 3 } },
       { operation: "createBindingDraft", payload: { profileRevisionId: 3, binding: { portalId: "admin" } } },
       { operation: "updateBindingDraft", payload: { revisionId: 5, draft: { profileRevisionId: 3, binding: { portalId: "ops" } } } },
-      { operation: "transitionBinding", payload: { revisionId: 5, action: "publish" } },
+      { operation: "publishBinding", payload: { revisionId: 5 } },
       { operation: "activate", payload: { portalId: "admin", expectedCurrentId: 0 } },
       { operation: "rollbackActivation", payload: { sourceId: 9, expectedCurrentId: 10, reason: "restore" } },
     ]);

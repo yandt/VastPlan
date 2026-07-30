@@ -208,6 +208,13 @@
       "required": ["namespace", "permissions", "operationGuards"],
       "properties": {
         "namespace": { "$ref": "#/$defs/authorizationName" },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/authorizationName" }
+        },
         "permissions": {
           "type": "array",
           "minItems": 1,
@@ -633,6 +640,7 @@
                   "properties": {
                     "name": { "type": "string", "minLength": 1 },
                     "description": { "type": "string", "minLength": 1 },
+                    "audience": { "enum": ["user", "workload", "system"] },
                     "paramsSchema": { "type": "object" },
                     "resultSchema": { "type": "object" }
                   }

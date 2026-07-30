@@ -137,6 +137,14 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 	if err != nil {
 		return ReleasePlan{}, err
 	}
+	capabilityChanges, err := SyncCapabilityContractProjections(repositoryRoot, workspace, false)
+	if err != nil {
+		return ReleasePlan{}, err
+	}
+	packageVersionChanges, err := SyncSelectedPluginPackageVersions(repositoryRoot, workspace, versions, false)
+	if err != nil {
+		return ReleasePlan{}, err
+	}
 	plan := ReleasePlan{
 		SchemaVersion: 1, Mode: spec.Mode, ContractRegistry: ContractRegistryPath,
 		Contracts: map[string]string{}, DeploymentChanges: deploymentChanges,
@@ -152,6 +160,12 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 		plan.Contracts[id] = registry.Contracts[id].Version
 	}
 	for _, change := range generatedChanges {
+		plan.GeneratedFiles = append(plan.GeneratedFiles, change.Path)
+	}
+	for _, change := range capabilityChanges {
+		plan.GeneratedFiles = append(plan.GeneratedFiles, change.Path)
+	}
+	for _, change := range packageVersionChanges {
 		plan.GeneratedFiles = append(plan.GeneratedFiles, change.Path)
 	}
 	for _, change := range contractChanges {
@@ -175,7 +189,7 @@ func BuildReleasePlan(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, err
 			FrontendTarget: request.FrontendTarget, FrontendBinding: request.FrontendBinding, FrontendScope: request.FrontendScope,
 		})
 	}
-	plan.Actions = []string{"sync-contract-registry", "sync-generated-plugin-catalogs", "sync-deployment-exact-references", "validate-dependency-impact", "build-immutable-candidates"}
+	plan.Actions = []string{"sync-contract-registry", "sync-generated-plugin-catalogs", "sync-capability-contract-projections", "sync-package-version-projections", "sync-deployment-exact-references", "validate-dependency-impact", "build-immutable-candidates"}
 	if spec.Mode == ReleaseModeDevelopment {
 		plan.Actions = append(plan.Actions, "publish-local-test-workspace", "submit-test-release", "activate-candidate-generation")
 	} else {

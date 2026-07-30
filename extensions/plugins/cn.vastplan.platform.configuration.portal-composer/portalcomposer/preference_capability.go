@@ -99,7 +99,7 @@ func mapPreferenceStoreError(err error) *contractv1.CallResult {
 }
 
 func PreferenceDescriptor() []byte {
-	return []byte(`{"title":"Portal 用户偏好","subcommands":[{"name":"get","description":"读取当前主体的 Portal 偏好"},{"name":"put","description":"以 CAS 保存当前主体的 Portal 偏好"}]}`)
+	return signedToolDescriptor(portalapi.PreferenceCapability)
 }
 
 func trustedPreferenceCaller(callCtx *contractv1.CallContext) bool {

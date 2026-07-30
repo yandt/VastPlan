@@ -200,3 +200,4 @@
 - [ADR-0167 三级组件尺寸与组合密度投影](ADR-0167-三级组件尺寸与组合密度投影.md)
 - [ADR-0168 表格密度与内部控件尺寸隔离](ADR-0168-表格密度与内部控件尺寸隔离.md)
 - [ADR-0169 Seed Recovery Capsule 与分阶段可用性](ADR-0169-Seed-Recovery-Capsule与分阶段可用性.md)
+- [ADR-0170 统一 Capability Contract 与可信 ArtifactIdentity](ADR-0170-统一Capability-Contract与可信ArtifactIdentity.md)

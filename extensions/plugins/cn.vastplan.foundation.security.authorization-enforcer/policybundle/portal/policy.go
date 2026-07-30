@@ -48,39 +48,10 @@ func decide(c *contractv1.CallContext, request extpoint.PermissionRequest) (extp
 	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_SYSTEM {
 		return extpoint.DecisionAllow, "系统 break-glass 调用"
 	}
-	if c.Caller.Kind != contractv1.CallerKind_CALLER_KIND_USER {
-		return extpoint.DecisionDeny, "仅已认证用户可调用门户组合"
+	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_USER {
+		return extpoint.DecisionAbstain, "用户 Portal Composer 操作由签名 Permission Catalog 判定"
 	}
-	needed := map[string][]string{
-		"createDraft": {"portal.compose"}, "updateDraft": {"portal.compose"}, "submit": {"portal.compose"},
-		"approve": {"portal.approve"}, "publish": {"portal.publish"},
-		"createProfileDraft": {"portal.compose"}, "updateProfileDraft": {"portal.compose"}, "deleteProfileDraft": {"portal.compose"},
-		"createBindingDraft": {"portal.compose"}, "updateBindingDraft": {"portal.compose"},
-		// Transition payloads are decoded and finally authorized by Composer;
-		// this outer policy admits only the three lifecycle roles.
-		"transitionProfile": {"portal.compose", "portal.approve", "portal.publish"},
-		"transitionBinding": {"portal.compose", "portal.approve", "portal.publish"},
-		"activate":          {"portal.publish"}, "rollbackActivation": {"portal.publish"},
-		"putTestTargetBinding": {"portal.compose"},
-		"createTestRelease":    {"portal.publish"}, "rollbackTestRelease": {"portal.publish"},
-		"list":                   {"portal.read", "portal.compose", "portal.approve", "portal.publish"},
-		"audit":                  {"portal.read", "portal.compose", "portal.approve", "portal.publish"},
-		"governance":             {"portal.read", "portal.compose", "portal.approve", "portal.publish"},
-		"listActivations":        {"portal.read", "portal.compose", "portal.approve", "portal.publish"},
-		"listTestTargetBindings": {"portal.read", "portal.compose", "portal.publish"},
-		"listTestReleases":       {"portal.read", "portal.compose", "portal.publish"},
-	}[request.Operation]
-	if len(needed) == 0 {
-		return extpoint.DecisionDeny, "未知门户操作"
-	}
-	for _, actual := range c.GetPrincipal().GetSystemRoles() {
-		for _, allowed := range needed {
-			if actual == allowed {
-				return extpoint.DecisionAllow, "角色授权"
-			}
-		}
-	}
-	return extpoint.DecisionDeny, "缺少门户角色"
+	return extpoint.DecisionDeny, "仅已认证用户可调用门户组合"
 }
 
 func composerSharedStateCapability(capability string) bool {

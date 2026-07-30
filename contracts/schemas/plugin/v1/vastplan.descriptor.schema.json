@@ -42,6 +42,7 @@
       "properties": {
         "name": { "type": "string", "minLength": 1, "maxLength": 160 },
         "description": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "audience": { "enum": ["user", "workload", "system"] },
         "paramsSchema": { "type": "object" },
         "resultSchema": { "type": "object" }
       }

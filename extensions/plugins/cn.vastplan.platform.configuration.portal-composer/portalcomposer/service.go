@@ -18,8 +18,6 @@ import (
 )
 
 const (
-	PluginID                 = "cn.vastplan.platform.configuration.portal-composer"
-	PluginVersion            = "1.7.6"
 	Capability               = portalapi.ComposerCapability
 	PlatformCatalogConfigKey = "platform.portal-composer.platformCatalog"
 )
@@ -173,7 +171,7 @@ func (s *Service) closeStateSession() {
 }
 
 func (s *Service) CreateDraft(ctx context.Context, principal portalapi.Principal, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
-	if err := require(principal, "portal.compose"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.Revision{}, err
 	}
 	composition, err := frontendcompositionv1.ValidateApplicationComposition(composition)
@@ -205,7 +203,7 @@ func (s *Service) CreateDraft(ctx context.Context, principal portalapi.Principal
 }
 
 func (s *Service) UpdateDraft(ctx context.Context, principal portalapi.Principal, id uint64, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
-	if err := require(principal, "portal.compose"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.Revision{}, err
 	}
 	composition, err := frontendcompositionv1.ValidateApplicationComposition(composition)
@@ -257,7 +255,7 @@ func (s *Service) List(_ context.Context, principal portalapi.Principal) ([]port
 }
 
 func (s *Service) Submit(ctx context.Context, principal portalapi.Principal, id uint64) (portalapi.Revision, error) {
-	if err := require(principal, "portal.compose"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.Revision{}, err
 	}
 	s.mu.Lock()
@@ -289,7 +287,7 @@ func (s *Service) Submit(ctx context.Context, principal portalapi.Principal, id 
 }
 
 func (s *Service) Approve(_ context.Context, principal portalapi.Principal, id uint64) (portalapi.Revision, error) {
-	if err := require(principal, "portal.approve"); err != nil {
+	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.Revision{}, err
 	}
 	s.mu.Lock()
@@ -325,7 +323,7 @@ func (s *Service) Publish(ctx context.Context, principal portalapi.Principal, id
 	r := &s.state.Revisions[i]
 	breakGlass := principal.System
 	if !breakGlass {
-		if err := require(principal, "portal.publish"); err != nil {
+		if err := requireTrustedPrincipal(principal); err != nil {
 			return portalapi.Revision{}, err
 		}
 		if r.Status != portalapi.StatusApproved {
@@ -388,19 +386,17 @@ func (s *Service) auditLocked(r portalapi.Revision, action string, p portalapi.P
 	s.state.NextAudit++
 	s.state.Audit = append(s.state.Audit, portalapi.AuditEvent{ID: s.state.NextAudit, TenantID: r.TenantID, PortalID: r.PortalID, RevisionID: r.ID, Action: action, ActorID: p.ID, Reason: reason, Priority: priority, At: s.now().UTC().Format(time.RFC3339Nano)})
 }
-func require(p portalapi.Principal, role string) error {
+
+// requireTrustedPrincipal validates only the identity and tenant established
+// by the trusted host. Operation authorization is evaluated once at the
+// kernel boundary from the signed Capability Contract; duplicating role names
+// here would make online Role/Binding policy ineffective. Domain state,
+// ownership and separation-of-duties checks remain in the service.
+func requireTrustedPrincipal(p portalapi.Principal) error {
 	if p.ID == "" || p.TenantID == "" {
 		return ErrForbidden
 	}
-	if p.System {
-		return nil
-	}
-	for _, r := range p.Roles {
-		if r == role {
-			return nil
-		}
-	}
-	return ErrForbidden
+	return nil
 }
 func (s *Service) resolveCurrent(composition frontendcompositionv1.ApplicationComposition, tenantID string, revision uint64) (portalapi.PortalSpec, error) {
 	if !s.catalogConfigured {

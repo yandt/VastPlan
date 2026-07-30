@@ -47,6 +47,39 @@ func TestDescriptorMatchesSignedManifest(t *testing.T) {
 	}
 }
 
+func TestComposerCapabilityContractClassifiesAndGuardsEveryUserOperation(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "vastplan.plugin.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := pluginv1.ParseManifest(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contracts, err := pluginv1.ManifestToolCapabilityContracts(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, contract := range contracts {
+		if contract.Capability != portalapi.ComposerCapability {
+			continue
+		}
+		if len(contract.Operations) != len(signedToolOperationNames(portalapi.ComposerCapability)) {
+			t.Fatalf("生成操作与签名契约数量不一致: signed=%d generated=%d", len(contract.Operations), len(signedToolOperationNames(portalapi.ComposerCapability)))
+		}
+		for _, operation := range contract.Operations {
+			if operation.Audience != "user" || operation.Guard == nil {
+				t.Fatalf("用户操作必须完成受众和权限闭包: %+v", operation)
+			}
+			if operation.Name == "transitionProfile" || operation.Name == "transitionBinding" {
+				t.Fatalf("权限依赖 payload 的旧 transition 操作不得保留: %s", operation.Name)
+			}
+		}
+		return
+	}
+	t.Fatal("签名 Manifest 缺少 Portal Composer Capability Contract")
+}
+
 func (acceptingCatalog) ValidatePortal(context.Context, string, portalapi.PortalSpec) error {
 	return nil
 }
@@ -104,6 +137,17 @@ func newTestService(t *testing.T) *Service {
 		t.Fatal(err)
 	}
 	return s
+}
+
+func TestAuthorizedBoundaryDoesNotRepeatLegacyTokenRolePolicy(t *testing.T) {
+	service := newTestService(t)
+	// Kernel Enforcer has already authorized this operation from the online
+	// Role/Binding policy. The domain service must not require legacy role
+	// strings to be copied into the identity token as a second policy source.
+	trusted := principal("online-role-user")
+	if _, err := service.CreateDraft(context.Background(), trusted, spec("/online-role")); err != nil {
+		t.Fatalf("已在 Kernel 边界授权的可信主体不应被旧 Token 角色表拒绝: %v", err)
+	}
 }
 
 func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) {

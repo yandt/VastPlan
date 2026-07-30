@@ -30,3 +30,18 @@ func TestFoundationCatalogVersionsMatchWorkspace(t *testing.T) {
 		t.Fatalf("Foundation Catalog 版本未由 Manifest 收敛: changes=%+v err=%v", changes, err)
 	}
 }
+
+func TestCapabilityContractProjectionsMatchWorkspace(t *testing.T) {
+	root, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := LoadPluginWorkspace(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changes, err := SyncCapabilityContractProjections(root, workspace, false)
+	if err != nil || len(changes) != 0 {
+		t.Fatalf("Capability Contract 投影未由 Manifest 收敛: changes=%+v err=%v", changes, err)
+	}
+}

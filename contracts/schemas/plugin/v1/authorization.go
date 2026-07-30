@@ -1,7 +1,6 @@
 package pluginv1
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -11,6 +10,7 @@ import (
 // policy service composes catalog permissions into separately versioned roles.
 type AuthorizationContract struct {
 	Namespace       string                  `json:"namespace"`
+	Capabilities    []string                `json:"capabilities,omitempty"`
 	Permissions     []PermissionDeclaration `json:"permissions"`
 	OperationGuards []OperationGuard        `json:"operationGuards"`
 }
@@ -73,6 +73,16 @@ func validateAuthorization(manifest Manifest) error {
 		return err
 	}
 	used := make(map[string]struct{}, len(declared))
+	if len(contract.Capabilities) != 0 && manifest.Publisher != "vastplan" {
+		return fmt.Errorf("外部发布者不得通过 authorization.capabilities 扩展权限所有权")
+	}
+	guardedCapabilities := make(map[string]struct{}, len(contract.Capabilities))
+	for _, capability := range contract.Capabilities {
+		if _, duplicate := guardedCapabilities[capability]; duplicate {
+			return fmt.Errorf("authorization capability 重复: %s", capability)
+		}
+		guardedCapabilities[capability] = struct{}{}
+	}
 	seenGuards := make(map[string]struct{}, len(contract.OperationGuards))
 	for _, guard := range contract.OperationGuards {
 		key := guard.ExtensionPoint + "\x00" + guard.Capability + "\x00" + guard.Operation
@@ -83,7 +93,8 @@ func validateAuthorization(manifest Manifest) error {
 		if _, exists := operations[key]; !exists {
 			return fmt.Errorf("操作权限守卫未绑定本插件已声明操作: %s/%s#%s", guard.ExtensionPoint, guard.Capability, guard.Operation)
 		}
-		if guard.Capability != contract.Namespace && !strings.HasPrefix(guard.Capability, contract.Namespace+".") && !strings.HasPrefix(contract.Namespace, guard.Capability+".") {
+		_, explicitlyOwned := guardedCapabilities[guard.Capability]
+		if !explicitlyOwned && guard.Capability != contract.Namespace && !strings.HasPrefix(guard.Capability, contract.Namespace+".") && !strings.HasPrefix(contract.Namespace, guard.Capability+".") {
 			return fmt.Errorf("守卫 capability %q 与权限命名空间 %q 无关", guard.Capability, contract.Namespace)
 		}
 		for _, code := range guard.Permissions {
@@ -98,27 +109,30 @@ func validateAuthorization(manifest Manifest) error {
 			return fmt.Errorf("权限 %s 未绑定任何操作", code)
 		}
 	}
+	for capability := range guardedCapabilities {
+		foundGuard := false
+		for _, guard := range contract.OperationGuards {
+			if guard.Capability == capability {
+				foundGuard = true
+				break
+			}
+		}
+		if !foundGuard {
+			return fmt.Errorf("authorization capability %s 未绑定任何操作", capability)
+		}
+	}
 	return nil
 }
 
 func backendToolOperations(manifest Manifest) (map[string]struct{}, error) {
-	var backend struct {
-		Tools []struct {
-			ID          string `json:"id"`
-			Subcommands []struct {
-				Name string `json:"name"`
-			} `json:"subcommands"`
-		} `json:"tools"`
-	}
-	if raw := manifest.Contributes["backend"]; len(raw) != 0 {
-		if err := json.Unmarshal(raw, &backend); err != nil {
-			return nil, fmt.Errorf("解析授权目标 backend contributions: %w", err)
-		}
+	contracts, err := ManifestToolCapabilityContracts(manifest)
+	if err != nil {
+		return nil, err
 	}
 	out := map[string]struct{}{}
-	for _, tool := range backend.Tools {
-		for _, operation := range tool.Subcommands {
-			out["tool.package\x00"+tool.ID+"\x00"+operation.Name] = struct{}{}
+	for _, contract := range contracts {
+		for _, operation := range contract.Operations {
+			out["tool.package\x00"+contract.Capability+"\x00"+operation.Name] = struct{}{}
 		}
 	}
 	return out, nil

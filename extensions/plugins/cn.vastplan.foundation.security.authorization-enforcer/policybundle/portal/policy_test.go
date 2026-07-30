@@ -24,45 +24,16 @@ func decisionFor(t *testing.T, ctx *contractv1.CallContext, capability, operatio
 	return result
 }
 
-func TestPortalRolesAndSystemBreakGlass(t *testing.T) {
+func TestPortalUsersDeferToSignedCatalogAndSystemBreakGlass(t *testing.T) {
 	user := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "author"}, Principal: &contractv1.Principal{SystemRoles: []string{"portal.compose"}}}
-	if got := decisionFor(t, user, portalapi.ComposerCapability, "createDraft"); got.Decision != extpoint.DecisionAllow {
-		t.Fatalf("compose 应放行: %+v", got)
-	}
-	if got := decisionFor(t, user, portalapi.ComposerCapability, "updateDraft"); got.Decision != extpoint.DecisionAllow {
-		t.Fatalf("compose 应允许更新草稿: %+v", got)
-	}
-	if got := decisionFor(t, user, portalapi.ComposerCapability, "publish"); got.Decision != extpoint.DecisionDeny {
-		t.Fatalf("publish 应拒绝: %+v", got)
+	for _, operation := range []string{"createDraft", "updateDraft", "publish", "deleteProfileDraft"} {
+		if got := decisionFor(t, user, portalapi.ComposerCapability, operation); got.Decision != extpoint.DecisionAbstain {
+			t.Fatalf("用户操作 %s 必须交给签名 Permission Catalog: %+v", operation, got)
+		}
 	}
 	system := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "system"}}
 	if got := decisionFor(t, system, portalapi.ComposerCapability, "publish"); got.Decision != extpoint.DecisionAllow {
 		t.Fatalf("system break-glass 应放行: %+v", got)
-	}
-}
-
-func TestGovernanceOperationsAreExplicitlyRoleBound(t *testing.T) {
-	cases := []struct {
-		operation string
-		role      string
-	}{
-		{"governance", "portal.read"}, {"listActivations", "portal.read"},
-		{"createProfileDraft", "portal.compose"}, {"updateProfileDraft", "portal.compose"}, {"deleteProfileDraft", "portal.compose"},
-		{"createBindingDraft", "portal.compose"}, {"updateBindingDraft", "portal.compose"},
-		{"transitionProfile", "portal.approve"}, {"transitionBinding", "portal.publish"},
-		{"activate", "portal.publish"}, {"rollbackActivation", "portal.publish"},
-	}
-	for _, test := range cases {
-		ctx := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "user"}, Principal: &contractv1.Principal{SystemRoles: []string{test.role}}}
-		if got := decisionFor(t, ctx, portalapi.ComposerCapability, test.operation); got.Decision != extpoint.DecisionAllow {
-			t.Fatalf("operation %s with role %s should be allowed: %+v", test.operation, test.role, got)
-		}
-	}
-	reader := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "reader"}, Principal: &contractv1.Principal{SystemRoles: []string{"portal.read"}}}
-	for _, operation := range []string{"createProfileDraft", "deleteProfileDraft", "transitionBinding", "activate", "rollbackActivation"} {
-		if got := decisionFor(t, reader, portalapi.ComposerCapability, operation); got.Decision != extpoint.DecisionDeny {
-			t.Fatalf("reader must not execute %s: %+v", operation, got)
-		}
 	}
 }
 
