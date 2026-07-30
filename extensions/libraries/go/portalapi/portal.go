@@ -187,20 +187,24 @@ const (
 )
 
 type Revision struct {
-	ID                uint64                                       `json:"id"`
-	Number            uint64                                       `json:"number,omitempty"`
-	TenantID          string                                       `json:"tenantId"`
-	PortalID          string                                       `json:"portalId"`
-	ProfileRevisionID uint64                                       `json:"profileRevisionId,omitempty"`
-	BindingRevisionID uint64                                       `json:"bindingRevisionId,omitempty"`
-	Status            Status                                       `json:"status"`
-	Composition       frontendcompositionv1.ApplicationComposition `json:"composition"`
-	Spec              PortalSpec                                   `json:"resolved"`
-	SubmittedBy       string                                       `json:"submittedBy,omitempty"`
-	ApprovedBy        string                                       `json:"approvedBy,omitempty"`
-	PublishedBy       string                                       `json:"publishedBy,omitempty"`
-	CreatedAt         string                                       `json:"createdAt"`
-	UpdatedAt         string                                       `json:"updatedAt"`
+	ID                  uint64                                       `json:"id"`
+	Number              uint64                                       `json:"number,omitempty"`
+	TenantID            string                                       `json:"tenantId"`
+	PortalID            string                                       `json:"portalId"`
+	ProfileRevisionID   uint64                                       `json:"profileRevisionId,omitempty"`
+	BindingRevisionID   uint64                                       `json:"bindingRevisionId,omitempty"`
+	Status              Status                                       `json:"status"`
+	WorkingRevision     uint64                                       `json:"workingRevision,omitempty"`
+	ConfigurationDigest string                                       `json:"configurationDigest,omitempty"`
+	UpdatedBy           string                                       `json:"updatedBy,omitempty"`
+	Composition         frontendcompositionv1.ApplicationComposition `json:"composition"`
+	Spec                PortalSpec                                   `json:"resolved"`
+	SubmittedBy         string                                       `json:"submittedBy,omitempty"`
+	SubmittedAt         string                                       `json:"submittedAt,omitempty"`
+	ApprovedBy          string                                       `json:"approvedBy,omitempty"`
+	PublishedBy         string                                       `json:"publishedBy,omitempty"`
+	CreatedAt           string                                       `json:"createdAt"`
+	UpdatedAt           string                                       `json:"updatedAt"`
 }
 
 type PlatformProfileRevision struct {
@@ -387,6 +391,12 @@ type TestReleaseService interface {
 // through an authenticated Portal BFF adapter. Every method scopes itself to principal.TenantID.
 type Service interface {
 	CreatePortal(context.Context, Principal, PortalVersionRequest) (Portal, error)
+	CreatePortalWorkingCopy(context.Context, Principal, string, PortalConfiguration) (PortalWorkingCopy, error)
+	SavePortalWorkingCopy(context.Context, Principal, string, SavePortalWorkingCopyRequest) (PortalWorkingCopy, error)
+	SubmitPortalPublication(context.Context, Principal, string, SubmitPortalPublicationRequest) (PortalPublication, error)
+	ApprovePortalPublication(context.Context, Principal, string, uint64) (PortalPublication, error)
+	PublishPortalPublication(context.Context, Principal, string, uint64) (PortalPublication, error)
+	ReleasePortalPublication(context.Context, Principal, string, PortalPublicationReleaseRequest) (PortalRelease, error)
 	CreatePortalVersion(context.Context, Principal, string, PortalConfiguration) (PortalVersion, error)
 	UpdatePortalVersion(context.Context, Principal, string, uint64, PortalConfiguration) (PortalVersion, error)
 	DeletePortalVersion(context.Context, Principal, string, uint64) (PortalVersion, error)

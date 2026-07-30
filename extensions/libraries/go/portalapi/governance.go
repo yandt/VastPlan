@@ -5,17 +5,66 @@ import (
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
-// PortalConfiguration is the complete editable input of one Portal version.
-// Platform settings and service bindings are version-owned configuration, not
-// independently governed resources.
+// PortalConfiguration is the complete editable input of a Portal WorkingCopy
+// and the frozen inline source of a Publication when version control is off.
 type PortalConfiguration struct {
 	Platform    frontendcompositionv1.PlatformProfile        `json:"platform"`
 	Application frontendcompositionv1.ApplicationComposition `json:"application"`
 	Services    []frontendcompositionv1.ManagedService       `json:"services"`
 }
 
-// PortalVersion is an immutable version after publication. ID is the opaque
-// storage identity; Number is monotonic only inside one Portal lineage.
+type PortalWorkingCopy struct {
+	TenantID      string              `json:"tenantId"`
+	PortalID      string              `json:"portalId"`
+	Revision      uint64              `json:"revision"`
+	Configuration PortalConfiguration `json:"configuration"`
+	Digest        string              `json:"digest"`
+	UpdatedBy     string              `json:"updatedBy,omitempty"`
+	CreatedAt     string              `json:"createdAt"`
+	UpdatedAt     string              `json:"updatedAt"`
+}
+
+type PortalPublicationSourceKind string
+
+const PortalPublicationSourceInline PortalPublicationSourceKind = "inline"
+
+type PortalPublicationSource struct {
+	Kind          PortalPublicationSourceKind `json:"kind"`
+	Configuration *PortalConfiguration        `json:"configuration,omitempty"`
+}
+
+type PortalPublication struct {
+	ID              uint64                  `json:"id"`
+	TenantID        string                  `json:"tenantId"`
+	PortalID        string                  `json:"portalId"`
+	WorkingRevision uint64                  `json:"workingRevision"`
+	Status          Status                  `json:"status"`
+	Digest          string                  `json:"digest"`
+	Source          PortalPublicationSource `json:"source"`
+	Resolved        PortalSpec              `json:"resolved"`
+	SubmittedBy     string                  `json:"submittedBy"`
+	ApprovedBy      string                  `json:"approvedBy,omitempty"`
+	PublishedBy     string                  `json:"publishedBy,omitempty"`
+	CreatedAt       string                  `json:"createdAt"`
+	UpdatedAt       string                  `json:"updatedAt"`
+}
+
+type PortalVersionControlAvailability string
+
+const (
+	PortalVersionControlDisabled    PortalVersionControlAvailability = "disabled"
+	PortalVersionControlAvailable   PortalVersionControlAvailability = "available"
+	PortalVersionControlUnavailable PortalVersionControlAvailability = "unavailable"
+)
+
+type PortalVersionControlStatus struct {
+	Enabled      bool                             `json:"enabled"`
+	Availability PortalVersionControlAvailability `json:"availability"`
+	Capabilities []string                         `json:"capabilities"`
+}
+
+// PortalVersion is the temporary v2 API projection retained until P2.3c.
+// New consumers use PortalWorkingCopy and PortalPublication.
 type PortalVersion struct {
 	ID            uint64              `json:"id"`
 	Number        uint64              `json:"number"`
@@ -34,13 +83,14 @@ type PortalVersion struct {
 type PortalReleaseStatus = ActivationStatus
 type PortalReleasePhase = ActivationPhase
 
-// PortalRelease records that one exact, published PortalVersion became live.
-// Rollback creates another release and never mutates version history.
+// PortalRelease records that one exact, published Publication became live.
+// Rollback creates another release and never mutates earlier release facts.
 type PortalRelease struct {
 	ID                 uint64                       `json:"id"`
 	TenantID           string                       `json:"tenantId"`
 	PortalID           string                       `json:"portalId"`
-	PortalVersionID    uint64                       `json:"portalVersionId"`
+	PublicationID      uint64                       `json:"publicationId"`
+	PortalVersionID    uint64                       `json:"portalVersionId,omitempty"`
 	Status             PortalReleaseStatus          `json:"status"`
 	PreviousReleaseID  uint64                       `json:"previousReleaseId,omitempty"`
 	Resolved           PortalSpec                   `json:"resolved"`
@@ -54,13 +104,19 @@ type PortalRelease struct {
 
 // Portal is the only online governance aggregate exposed to administrators.
 type Portal struct {
-	ID               string          `json:"id"`
-	TenantID         string          `json:"tenantId"`
-	Versions         []PortalVersion `json:"versions"`
-	Releases         []PortalRelease `json:"releases"`
-	CurrentReleaseID uint64          `json:"currentReleaseId,omitempty"`
-	CreatedAt        string          `json:"createdAt"`
-	UpdatedAt        string          `json:"updatedAt"`
+	ID                   string                     `json:"id"`
+	TenantID             string                     `json:"tenantId"`
+	WorkingCopy          *PortalWorkingCopy         `json:"workingCopy,omitempty"`
+	PendingPublication   *PortalPublication         `json:"pendingPublication,omitempty"`
+	PublishedPublication *PortalPublication         `json:"publishedPublication,omitempty"`
+	VersionControl       PortalVersionControlStatus `json:"versionControl"`
+	Releases             []PortalRelease            `json:"releases"`
+	CurrentReleaseID     uint64                     `json:"currentReleaseId,omitempty"`
+	CreatedAt            string                     `json:"createdAt"`
+	UpdatedAt            string                     `json:"updatedAt"`
+	// Versions is a temporary v2 API projection removed in P2.3c. It is
+	// derived from the same aggregate rows and is never a second truth source.
+	Versions []PortalVersion `json:"versions,omitempty"`
 }
 
 type PortalVersionRequest struct {
@@ -70,6 +126,21 @@ type PortalVersionRequest struct {
 
 type PortalReleaseRequest struct {
 	PortalVersionID          uint64 `json:"portalVersionId"`
+	ExpectedCurrentReleaseID uint64 `json:"expectedCurrentReleaseId"`
+	Reason                   string `json:"reason,omitempty"`
+}
+
+type SavePortalWorkingCopyRequest struct {
+	ExpectedRevision uint64              `json:"expectedRevision"`
+	Configuration    PortalConfiguration `json:"configuration"`
+}
+
+type SubmitPortalPublicationRequest struct {
+	ExpectedWorkingRevision uint64 `json:"expectedWorkingRevision"`
+}
+
+type PortalPublicationReleaseRequest struct {
+	PublicationID            uint64 `json:"publicationId"`
 	ExpectedCurrentReleaseID uint64 `json:"expectedCurrentReleaseId"`
 	Reason                   string `json:"reason,omitempty"`
 }

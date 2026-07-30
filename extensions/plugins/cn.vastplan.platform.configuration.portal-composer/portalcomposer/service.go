@@ -284,7 +284,8 @@ func (s *Service) Audit(_ context.Context, principal portalapi.Principal, portal
 	}
 	out := make([]portalapi.AuditEvent, 0)
 	for _, e := range s.state.Audit {
-		if e.TenantID == principal.TenantID && e.RevisionID == id && strings.HasPrefix(e.Action, "portal.version.") {
+		formalAction := strings.HasPrefix(e.Action, "portal.version.") || strings.HasPrefix(e.Action, "portal.working-copy.") || strings.HasPrefix(e.Action, "portal.publication.")
+		if e.TenantID == principal.TenantID && e.RevisionID == id && formalAction {
 			out = append(out, e)
 		}
 	}

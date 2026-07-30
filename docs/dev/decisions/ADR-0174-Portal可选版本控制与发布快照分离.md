@@ -1,6 +1,6 @@
 # ADR-0174 Portal 可选版本控制与发布快照分离
 
-- 状态：已采纳，P2.3 待实施
+- 状态：已采纳，P2.3a 已实施
 - 日期：2026-07-31
 - 修订：[ADR-0171](ADR-0171-Portal单聚合版本与上线子流程.md) 中“Portal 天然以 PortalVersion 为工作对象”的部分、[ADR-0172](ADR-0172-通用版本账本与可插拔存储Provider.md) 与 [ADR-0173](ADR-0173-版本环境与资源适配.md) 中“Portal 必然迁入版本账本”的部分
 - 关联：[ADR-0142](ADR-0142-内核启动与业务发布完全分离.md)、[ADR-0173](ADR-0173-版本环境与资源适配.md)
@@ -51,3 +51,5 @@ PortalRelease: Preparing → Current → Superseded
 ## 后续扩展
 
 2026-07-31：[ADR-0175](ADR-0175-统一版本生命周期与Resource-Adapter能力协商.md) 规定 Portal 也必须通过 `describeResource` 消费 Adapter 能力，不能因为首个 JSON Adapter 支持 diff 就把 compare 硬编码成所有版本资源的共同能力。
+
+2026-07-31：P2.3a 已实施无版本路径。WorkingCopy 使用独立 revision CAS；submit 冻结规范配置、digest 和提交者形成 Publication；审批期间 WorkingCopy 不存在；Release 引用 Publication。Shared State 提升至 format 3 和独立 v3 namespace，不迁移开发期 v2 数据。旧 PortalVersion operations 只作为 P2.3c 前由同一状态派生的临时 API 投影。

@@ -10,7 +10,7 @@ import (
 
 func (s *Service) handlePortalOperation(ctx context.Context, principal portalapi.Principal, operation string, payload []byte) (any, error) {
 	switch operation {
-	case "createPortal", "createPortalVersion", "updatePortalVersion", "deletePortalVersion", "submitPortalVersion", "approvePortalVersion", "publishPortalVersion", "releasePortalVersion", "rollbackPortalRelease", "portalGovernance", "listPortalReleases", "audit":
+	case "createPortal", "createPortalWorkingCopy", "savePortalWorkingCopy", "submitPortalPublication", "approvePortalPublication", "publishPortalPublication", "releasePortalPublication", "createPortalVersion", "updatePortalVersion", "deletePortalVersion", "submitPortalVersion", "approvePortalVersion", "publishPortalVersion", "releasePortalVersion", "rollbackPortalRelease", "portalGovernance", "listPortalReleases", "audit":
 		return s.handlePortalAggregateOperation(ctx, principal, operation, payload)
 	case "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease":
 		return s.handleTestReleaseOperation(ctx, principal, operation, payload)
@@ -31,6 +31,51 @@ func (s *Service) handlePortalAggregateOperation(ctx context.Context, principal 
 			return nil, err
 		}
 		return s.CreatePortal(ctx, principal, request)
+	case "createPortalWorkingCopy":
+		var request portalapi.PortalVersionRequest
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.CreatePortalWorkingCopy(ctx, principal, request.PortalID, request.Configuration)
+	case "savePortalWorkingCopy":
+		var request struct {
+			PortalID    string                                 `json:"portalId"`
+			WorkingCopy portalapi.SavePortalWorkingCopyRequest `json:"workingCopy"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.SavePortalWorkingCopy(ctx, principal, request.PortalID, request.WorkingCopy)
+	case "submitPortalPublication":
+		var request struct {
+			PortalID    string                                   `json:"portalId"`
+			Publication portalapi.SubmitPortalPublicationRequest `json:"publication"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.SubmitPortalPublication(ctx, principal, request.PortalID, request.Publication)
+	case "approvePortalPublication", "publishPortalPublication":
+		var request struct {
+			PortalID      string `json:"portalId"`
+			PublicationID uint64 `json:"publicationId"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		if operation == "approvePortalPublication" {
+			return s.ApprovePortalPublication(ctx, principal, request.PortalID, request.PublicationID)
+		}
+		return s.PublishPortalPublication(ctx, principal, request.PortalID, request.PublicationID)
+	case "releasePortalPublication":
+		var request struct {
+			PortalID string                                    `json:"portalId"`
+			Release  portalapi.PortalPublicationReleaseRequest `json:"release"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.ReleasePortalPublication(ctx, principal, request.PortalID, request.Release)
 	case "createPortalVersion":
 		var request portalapi.PortalVersionRequest
 		if err := decode(payload, &request); err != nil {

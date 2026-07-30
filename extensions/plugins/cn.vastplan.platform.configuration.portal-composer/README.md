@@ -2,9 +2,11 @@
 
 `cn.vastplan.platform.configuration.portal-composer` 是 Portal 在线组合与发布治理插件。管理中心只注册一个 `/settings/portals` Workbench 页面，一行代表一个 Portal。
 
-每个 `PortalVersion` 保存完整配置：平台运行栈、Renderer、Shell、Workbench、路由、受众、品牌、应用插件、非敏感配置及管理服务授权。原 Platform Profile、Application 和 Binding 不再拥有独立在线草稿或菜单，避免管理员手工拼装多份 revision。
+每个 Portal 由一个可变 `WorkingCopy`、至多一个待结束 `Publication`、最近 Published Publication 和 `PortalRelease` 历史组成。完整配置包括平台运行栈、Renderer、Shell、Workbench、路由、受众、品牌、应用插件、非敏感配置及管理服务授权。
 
-PortalVersion 执行 `Draft → PendingApproval → Approved → Published`。Published 只冻结版本，不代表线上生效。`PortalRelease` 引用一个精确 Published PortalVersion，重新执行可信 Catalog 校验、制品物化、引用保护、路由冲突检查和 CAS 后才改变线上 Portal。回滚使用历史 Release 对应的 PortalVersion 创建新 Release，不修改历史。
+WorkingCopy 保存使用独立 revision CAS，不产生业务版本；提交时冻结规范配置和 SHA-256 digest，形成 `PendingApproval → Approved → Published` Publication。审批期间没有可编辑 WorkingCopy。`PortalRelease` 引用精确 Published Publication，重新执行可信 Catalog 校验、制品物化、引用保护、路由冲突检查和 CAS 后才改变线上 Portal。
+
+当前 P2.3a 未配置 Version Workspace，`versionControl` 明确返回 `enabled=false / disabled`，不创建 VersionRef、Head 或通用历史。旧 PortalVersion operations 仅作为 P2.3c 前的同状态兼容投影，不保存第二份数据。
 
 静态 Platform Catalog 仅为创建首个 PortalVersion 提供种子模板。它不会被灌入在线 Profile/Binding 治理状态。内核 Recovery Baseline 独立于 Portal 配置，错误 PortalVersion 不能覆盖最小安全启动和恢复入口。
 
@@ -19,4 +21,4 @@ pnpm --filter @vastplan/portal-composer typecheck
 pnpm --filter @vastplan/portal-composer test
 ```
 
-完整边界见《[前端门户内核](../../../docs/dev/architecture/前端门户内核.md)》和 [ADR-0171](../../../docs/dev/decisions/ADR-0171-Portal单聚合版本与上线子流程.md)。
+完整边界见[Portal 可选版本控制接入](../../../docs/dev/architecture/Portal可选版本控制接入.md)和 [ADR-0174](../../../docs/dev/decisions/ADR-0174-Portal可选版本控制与发布快照分离.md)。

@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	composerStateNamespace  = "portal.composition.v2"
+	composerStateNamespace  = "portal.composition.v3"
 	composerStateKey        = "tenant"
 	composerBlobPrefix      = "blob/"
-	composerRootFormat      = "portal-composer-root.v1"
+	composerRootFormat      = "portal-composer-root.v2"
 	composerChunkBytes      = 512 << 10
 	maximumComposerSnapshot = 64 << 20
 )
@@ -210,9 +210,37 @@ func validateComposerTenantState(value state, tenant string) error {
 	if tenant == "" || value.TestBindings == nil || value.TestVersionOwners == nil {
 		return errors.New("Portal Composer tenant 状态无效")
 	}
+	openPublications := map[string]int{}
 	for _, revision := range value.Revisions {
 		if revision.TenantID != tenant {
 			return errors.New("Portal Composer Application 跨 tenant")
+		}
+		if _, testRevision := value.TestVersionOwners[revision.ID]; testRevision {
+			continue
+		}
+		if revision.WorkingRevision == 0 {
+			return errors.New("Portal WorkingCopy revision 无效")
+		}
+		if revision.Status == portalapi.StatusDraft {
+			if revision.ConfigurationDigest != "" || revision.SubmittedBy != "" || revision.SubmittedAt != "" {
+				return errors.New("Portal WorkingCopy 不得携带 Publication 冻结状态")
+			}
+			openPublications[revision.PortalID]++
+			continue
+		}
+		if len(revision.ConfigurationDigest) != 64 || revision.SubmittedBy == "" || revision.SubmittedAt == "" {
+			return errors.New("Portal Publication 冻结身份无效")
+		}
+		if _, err := hex.DecodeString(revision.ConfigurationDigest); err != nil {
+			return errors.New("Portal Publication 摘要无效")
+		}
+		if revision.Status == portalapi.StatusPendingApproval || revision.Status == portalapi.StatusApproved {
+			openPublications[revision.PortalID]++
+		}
+	}
+	for portalID, count := range openPublications {
+		if portalID == "" || count > 1 {
+			return errors.New("Portal 只能有一个 WorkingCopy 或待结束 Publication")
 		}
 	}
 	for _, revision := range value.Profiles {
