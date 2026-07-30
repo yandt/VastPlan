@@ -45,7 +45,7 @@ func (m *Manager) Commit(ctx context.Context, scope Scope, ledger Ledger, reques
 	}
 	put, err := ledger.PutVersion(ctx, versioningv1.PutVersionRequest{
 		Stream:         versioningv1.StreamKey{Namespace: session.Namespace, StreamID: session.Resource.ID},
-		IdempotencyKey: commitIdempotencyKey(session.ID, request.ExpectedRevision), Parents: parents,
+		IdempotencyKey: request.OperationID, Parents: parents,
 		Content: content, Message: request.Message, Labels: cloneLabels(request.Labels),
 	})
 	if err != nil {
@@ -71,7 +71,7 @@ func (m *Manager) Commit(ctx context.Context, scope Scope, ledger Ledger, reques
 		record.session.HeadRevision = head.Revision
 	}
 	result := workspacev1.CommitResult{Session: cloneSession(record.session), Version: put.Version, Head: head}
-	record.commitRequest = &workspacev1.CommitRequest{SessionID: request.SessionID, ExpectedRevision: request.ExpectedRevision, Message: request.Message, Labels: cloneLabels(request.Labels)}
+	record.commitRequest = &workspacev1.CommitRequest{SessionID: request.SessionID, ExpectedRevision: request.ExpectedRevision, OperationID: request.OperationID, Message: request.Message, Labels: cloneLabels(request.Labels)}
 	cloned := cloneCommitResult(result)
 	record.commitResult = &cloned
 	return cloneCommitResult(result), nil
@@ -82,7 +82,7 @@ func (m *Manager) committedRetryLocked(scope Scope, request workspacev1.CommitRe
 	if record == nil || record.owner != scope || record.commitRequest == nil || record.commitResult == nil {
 		return workspacev1.CommitResult{}, false
 	}
-	if record.commitRequest.SessionID != request.SessionID || record.commitRequest.ExpectedRevision != request.ExpectedRevision || record.commitRequest.Message != request.Message || !equalLabels(record.commitRequest.Labels, request.Labels) {
+	if record.commitRequest.SessionID != request.SessionID || record.commitRequest.ExpectedRevision != request.ExpectedRevision || record.commitRequest.OperationID != request.OperationID || record.commitRequest.Message != request.Message || !equalLabels(record.commitRequest.Labels, request.Labels) {
 		return workspacev1.CommitResult{}, false
 	}
 	return cloneCommitResult(*record.commitResult), true
@@ -125,22 +125,4 @@ func commitHead(ctx context.Context, ledger Ledger, session workspacev1.Session,
 		return nil, workspaceError(workspacev1.ErrorBaseConflict, false, errors.New("Version Head 已被其他编辑会话更新"))
 	}
 	return nil, mapLedgerFailure(err, workspacev1.ErrorBaseConflict)
-}
-
-func commitIdempotencyKey(sessionID string, revision uint64) string {
-	return sessionID + ":commit:" + fmtUint(revision)
-}
-
-func fmtUint(value uint64) string {
-	if value == 0 {
-		return "0"
-	}
-	var buffer [20]byte
-	index := len(buffer)
-	for value > 0 {
-		index--
-		buffer[index] = byte('0' + value%10)
-		value /= 10
-	}
-	return string(buffer[index:])
 }

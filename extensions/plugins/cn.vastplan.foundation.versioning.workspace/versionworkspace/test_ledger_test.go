@@ -1,6 +1,7 @@
 package versionworkspace
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 type memoryLedger struct {
 	versions         map[string]versioningv1.VersionRecord
 	idempotency      map[string]versioningv1.PutVersionResult
+	requests         map[string]versioningv1.PutVersionRequest
 	heads            map[string]versioningv1.Head
 	nextSequence     uint64
 	failPutOnce      bool
@@ -19,7 +21,7 @@ type memoryLedger struct {
 }
 
 func newMemoryLedger() *memoryLedger {
-	return &memoryLedger{versions: map[string]versioningv1.VersionRecord{}, idempotency: map[string]versioningv1.PutVersionResult{}, heads: map[string]versioningv1.Head{}}
+	return &memoryLedger{versions: map[string]versioningv1.VersionRecord{}, idempotency: map[string]versioningv1.PutVersionResult{}, requests: map[string]versioningv1.PutVersionRequest{}, heads: map[string]versioningv1.Head{}}
 }
 
 func (l *memoryLedger) PutVersion(_ context.Context, request versioningv1.PutVersionRequest) (versioningv1.PutVersionResult, error) {
@@ -27,7 +29,11 @@ func (l *memoryLedger) PutVersion(_ context.Context, request versioningv1.PutVer
 		l.failPutOnce = false
 		return versioningv1.PutVersionResult{}, ledgerError(versioningv1.ErrorProviderUnavailable, true, errors.New("temporary"))
 	}
-	if result, ok := l.idempotency[request.IdempotencyKey]; ok {
+	key := request.Stream.Namespace + "/" + request.Stream.StreamID + ":" + request.IdempotencyKey
+	if result, ok := l.idempotency[key]; ok {
+		if !samePutRequest(l.requests[key], request) {
+			return versioningv1.PutVersionResult{}, ledgerError(versioningv1.ErrorConflict, false, errors.New("idempotency conflict"))
+		}
 		result.Reused = true
 		return result, nil
 	}
@@ -56,8 +62,28 @@ func (l *memoryLedger) PutVersion(_ context.Context, request versioningv1.PutVer
 	}
 	result := versioningv1.PutVersionResult{Version: record}
 	l.versions[versionID] = record
-	l.idempotency[request.IdempotencyKey] = result
+	l.idempotency[key] = result
+	l.requests[key] = clonePutRequest(request)
 	return result, nil
+}
+
+func samePutRequest(left, right versioningv1.PutVersionRequest) bool {
+	if left.Stream != right.Stream || left.IdempotencyKey != right.IdempotencyKey || left.Message != right.Message || !bytes.Equal(left.Content, right.Content) || len(left.Parents) != len(right.Parents) || !equalLabels(left.Labels, right.Labels) {
+		return false
+	}
+	for index := range left.Parents {
+		if left.Parents[index] != right.Parents[index] {
+			return false
+		}
+	}
+	return true
+}
+
+func clonePutRequest(request versioningv1.PutVersionRequest) versioningv1.PutVersionRequest {
+	request.Content = append(json.RawMessage(nil), request.Content...)
+	request.Parents = append([]versioningv1.VersionRef(nil), request.Parents...)
+	request.Labels = cloneLabels(request.Labels)
+	return request
 }
 
 func (l *memoryLedger) GetVersion(_ context.Context, request versioningv1.GetVersionRequest) (versioningv1.GetVersionResult, error) {

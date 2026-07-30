@@ -82,6 +82,18 @@ func (s *Service) handle(operation string) sdk.Handler {
 			var session workspacev1.Session
 			session, err = s.manager.Renew(scope, *request)
 			value = workspacev1.SessionResult{Session: session}
+		case *workspacev1.CommittedRequest:
+			ledger, callErr := newHostLedger(host, call)
+			if callErr == nil {
+				value, callErr = s.manager.ReadCommitted(ctx, scope, ledger, *request)
+			}
+			err = callErr
+		case *workspacev1.CompareCommittedRequest:
+			ledger, callErr := newHostLedger(host, call)
+			if callErr == nil {
+				value, callErr = s.manager.CompareCommitted(ctx, scope, ledger, *request)
+			}
+			err = callErr
 		default:
 			err = workspaceError(workspacev1.ErrorInvalidRequest, false, errors.New("Version Workspace 操作未实现"))
 		}
@@ -96,7 +108,7 @@ func serviceResult(operation string, value any, err error) (*contractv1.CallResu
 		switch code {
 		case workspacev1.ErrorInvalidRequest, workspacev1.ErrorEnvironmentNotFound, workspacev1.ErrorResourceNotBound,
 			workspacev1.ErrorSessionNotFound, workspacev1.ErrorSessionConflict, workspacev1.ErrorLeaseExpired,
-			workspacev1.ErrorReadOnly, workspacev1.ErrorLimitExceeded, workspacev1.ErrorBaseConflict:
+			workspacev1.ErrorReadOnly, workspacev1.ErrorLimitExceeded, workspacev1.ErrorBaseConflict, workspacev1.ErrorVersionNotFound:
 			message = err.Error()
 		}
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: message, Retryable: retryable}}, nil, nil
@@ -119,10 +131,11 @@ func (s *Service) Contribution() sdk.Contribution {
 			workspacev1.OperationReadSnapshot: s.handle(workspacev1.OperationReadSnapshot), workspacev1.OperationWriteSnapshot: s.handle(workspacev1.OperationWriteSnapshot),
 			workspacev1.OperationChanges: s.handle(workspacev1.OperationChanges), workspacev1.OperationCommit: s.handle(workspacev1.OperationCommit),
 			workspacev1.OperationDiscard: s.handle(workspacev1.OperationDiscard), workspacev1.OperationRenew: s.handle(workspacev1.OperationRenew),
+			workspacev1.OperationReadCommitted: s.handle(workspacev1.OperationReadCommitted), workspacev1.OperationCompareCommitted: s.handle(workspacev1.OperationCompareCommitted),
 		},
 	}
 }
 
 func serviceDescriptor() []byte {
-	return []byte(`{"title":"Version Workspace","subcommands":[{"name":"open","description":"打开有 Lease 的版本编辑会话"},{"name":"status","description":"读取会话状态"},{"name":"readSnapshot","description":"读取隔离快照"},{"name":"writeSnapshot","description":"以 CAS 写入隔离快照"},{"name":"changes","description":"读取确定性变更摘要"},{"name":"commit","description":"幂等提交版本并以 CAS 更新 Head"},{"name":"discard","description":"丢弃编辑会话"},{"name":"renew","description":"在环境配额内续租"}]}`)
+	return []byte(`{"title":"Version Workspace","subcommands":[{"name":"open","description":"打开有 Lease 的版本编辑会话"},{"name":"status","description":"读取会话状态"},{"name":"readSnapshot","description":"读取隔离快照"},{"name":"writeSnapshot","description":"以 CAS 写入隔离快照"},{"name":"changes","description":"读取确定性变更摘要"},{"name":"commit","description":"以稳定 operationId 幂等提交版本并可选更新 Head"},{"name":"discard","description":"丢弃编辑会话"},{"name":"renew","description":"在环境配额内续租"},{"name":"readCommitted","description":"读取并规范化精确已提交版本"},{"name":"compareCommitted","description":"经资源 Adapter 比较两个精确已提交版本"}]}`)
 }

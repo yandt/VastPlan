@@ -26,6 +26,10 @@ func ParseRequest(operation string, raw []byte) (any, error) {
 		target = &RevisionRequest{}
 	case OperationRenew:
 		target = &RenewRequest{}
+	case OperationReadCommitted:
+		target = &CommittedRequest{}
+	case OperationCompareCommitted:
+		target = &CompareCommittedRequest{}
 	default:
 		return nil, fmt.Errorf("不支持的 Version Workspace 操作 %q", operation)
 	}
@@ -49,6 +53,10 @@ func ParseResult(operation string, raw []byte) (any, error) {
 		target = &ChangesResult{}
 	case OperationCommit:
 		target = &CommitResult{}
+	case OperationReadCommitted:
+		target = &CommittedSnapshotResult{}
+	case OperationCompareCommitted:
+		target = &CompareCommittedResult{}
 	default:
 		return nil, fmt.Errorf("不支持的 Version Workspace 结果 %q", operation)
 	}
@@ -84,6 +92,10 @@ func validateRequest(target any) error {
 		if !sessionPattern.MatchString(request.SessionID) || request.ExpectedRevision == 0 || request.LeaseSeconds < 30 || request.LeaseSeconds > 86400 {
 			return errors.New("续租版本工作区请求无效")
 		}
+	case *CommittedRequest:
+		return ValidateCommittedRequest(*request)
+	case *CompareCommittedRequest:
+		return ValidateCompareCommittedRequest(*request)
 	default:
 		return errors.New("Version Workspace 请求类型无效")
 	}
@@ -117,6 +129,10 @@ func validateResult(target any) error {
 		if result.Head != nil && (versioningv1.ValidateHead(*result.Head) != nil || result.Head.Target != result.Version.Ref || result.Head.Name != result.Session.TargetHead) {
 			return errors.New("Version Workspace commit Head 无效")
 		}
+	case *CommittedSnapshotResult:
+		return ValidateCommittedSnapshotResult(*result, MaxWireSnapshotBytes)
+	case *CompareCommittedResult:
+		return ValidateCompareCommittedResult(*result)
 	default:
 		return errors.New("Version Workspace 结果类型无效")
 	}

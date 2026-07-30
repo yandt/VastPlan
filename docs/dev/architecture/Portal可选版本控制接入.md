@@ -93,12 +93,12 @@ P2.3 不移动通用 Head。Portal 聚合保存的 VersionRef 列表是可见历
 现有 `open/readSnapshot/writeSnapshot/changes/commit/discard/renew` 结构保持不变，但完整 P2.3 需要三个收窄调整：
 
 1. `CommitRequest` 增加必填 `operationId`。它由可信领域插件生成并在外部调用前持久化；Ledger 继续以可信 tenant、Workspace 解析的 stream 和稳定 operationId 派生逻辑版本身份，不再只依赖临时 sessionId/revision。Workspace Leader 丢失 Session 后，Portal 可用同一 operationId 重开并安全重试。
-2. 增加 `readCommitted`：输入 Environment、Resource 与精确 VersionRef，经绑定 Adapter 规范化后返回 Snapshot。Portal 不解析 Ledger 内容编码，也不直调 Provider。
-3. 增加 `compareCommitted`：输入同一资源的两个 VersionRef，读取后交给 Resource Adapter diff，返回确定性路径与统计。
+2. 增加 `readCommitted`：输入 Environment ID、提交时固定的 Environment digest、Resource 与精确 VersionRef，经原始绑定 Adapter 规范化后返回 Snapshot。Portal 不解析 Ledger 内容编码，也不直调 Provider；原始 digest 未加载时失败关闭。
+3. 增加 `compareCommitted`：输入同一环境摘要、同一资源的两个 VersionRef，读取后交给 Resource Adapter diff，返回确定性路径与统计。
 
 历史列表不进入 Workspace。Portal 只列出自己聚合 CAS 已确认的轻量 VersionRef 元数据，防止 Ledger 中不可达版本或其他领域记录绕过 Portal 权限、审批和可见性规则。
 
-恢复历史版本使用现有能力组合：`readCommitted` 读取历史快照，经过当前 Catalog 校验后覆盖 WorkingCopy；它只是一次新的工作副本变更，后续提交会产生新 VersionRef，不能修改旧版本。
+恢复历史版本使用现有能力组合：`readCommitted` 按历史记录固定的 Environment digest 读取历史快照，再经过当前领域规则校验后覆盖 WorkingCopy；它只是一次新的工作副本变更，后续提交会产生新 VersionRef，不能修改旧版本。
 
 ## Workspace P2.2.2 能力协商前置调整
 
@@ -150,7 +150,7 @@ Workbench 在 `enabled=false` 时完全隐藏 commit/history/diff/restore；保�
 
 ## 实施分解
 
-1. **P2.2.1**：补 operationId、readCommitted、compareCommitted 的契约、SDK、Manager 与故障测试。
+1. **P2.2.1（已完成）**：补 operationId、readCommitted、compareCommitted 的契约、SDK、Manager、Environment 多修订精确解析与故障测试。
 2. **P2.2.2**：补 describeResource、可选 diff 结果、Adapter 能力校验和不支持操作的稳定错误。
 3. **P2.3a**：Portal 聚合拆为 WorkingCopy/Publication/Release/可选 VersionControlBinding，先完成无版本路径。
 4. **P2.3b**：实现中立 `PortalVersionControl` 端口和 Workspace Adapter，接通 detached commit、历史读取、比较与恢复。

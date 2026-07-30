@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,7 +67,7 @@ func TestManagerSnapshotLifecycleAndIdempotentCommit(t *testing.T) {
 	if err != nil || !changes.Dirty || changes.Summary.Added != 2 {
 		t.Fatalf("changes 无效: %+v err=%v", changes, err)
 	}
-	request := workspacev1.CommitRequest{SessionID: session.ID, ExpectedRevision: session.Revision, Message: "create portal"}
+	request := workspacev1.CommitRequest{SessionID: session.ID, ExpectedRevision: session.Revision, OperationID: "portal-publication:0001", Message: "create portal"}
 	committed, err := manager.Commit(context.Background(), scope, ledger, request)
 	if err != nil {
 		t.Fatal(err)
@@ -81,6 +82,86 @@ func TestManagerSnapshotLifecycleAndIdempotentCommit(t *testing.T) {
 	raw, _ := json.Marshal(committed)
 	if _, err := workspacev1.ParseResult(workspacev1.OperationCommit, raw); err != nil {
 		t.Fatalf("commit 结果不符合 Wire 契约: %v", err)
+	}
+}
+
+func TestManagerOperationIdentitySurvivesSessionLossAndCommittedReads(t *testing.T) {
+	now := time.Date(2026, 7, 30, 12, 0, 0, 0, time.UTC)
+	ledger := newMemoryLedger()
+	scope := Scope{TenantID: "tenant-a", ActorID: "plugin:portal"}
+	firstManager := testManager(t, &now, 4)
+	firstSession, err := firstManager.Open(context.Background(), scope, ledger, openRequest(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstSession = writeJSON(t, firstManager, scope, firstSession, `{"name":"main","revision":1}`)
+	operationID := "portal-publication:stable-retry"
+	first, err := firstManager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{
+		SessionID: firstSession.ID, ExpectedRevision: firstSession.Revision, OperationID: operationID, Message: "submit portal",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := firstManager.ReadCommitted(context.Background(), scope, ledger, workspacev1.CommittedRequest{
+		EnvironmentID: "platform-development", EnvironmentDigest: first.Session.EnvironmentDigest, Resource: firstSession.Resource, Ref: first.Version.Ref,
+	})
+	if err != nil || read.Version.Ref != first.Version.Ref || string(read.Snapshot.JSON) != `{"name":"main","revision":1}` {
+		t.Fatalf("读取已提交版本失败: %+v err=%v", read, err)
+	}
+
+	// 模拟 Workspace Leader 重启：新 Manager 不含原 Session，先消耗一个 ID，
+	// 确保重试发生在不同 Session 中。
+	secondManager := testManager(t, &now, 4)
+	dummy := openRequest("")
+	dummy.Resource.ID = "dummy"
+	dummy.ReadOnly = true
+	if _, err := secondManager.Open(context.Background(), scope, ledger, dummy); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := secondManager.Open(context.Background(), scope, ledger, openRequest(""))
+	if err != nil || reopened.ID == firstSession.ID {
+		t.Fatalf("未建立不同的重试 Session: %+v err=%v", reopened, err)
+	}
+	reopened = writeJSON(t, secondManager, scope, reopened, `{"name":"main","revision":1}`)
+	retried, err := secondManager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{
+		SessionID: reopened.ID, ExpectedRevision: reopened.Revision, OperationID: operationID, Message: "submit portal",
+	})
+	if err != nil || retried.Version.Ref != first.Version.Ref || len(ledger.versions) != 1 {
+		t.Fatalf("跨 Session operationId 重试未复用版本: %+v err=%v versions=%d", retried, err, len(ledger.versions))
+	}
+
+	nextRequest := openRequest("")
+	nextRequest.BaseRef = &first.Version.Ref
+	next, err := secondManager.Open(context.Background(), scope, ledger, nextRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next = writeJSON(t, secondManager, scope, next, `{"name":"main","revision":2}`)
+	second, err := secondManager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{
+		SessionID: next.ID, ExpectedRevision: next.Revision, OperationID: "portal-publication:next", Message: "submit portal v2",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	compared, err := secondManager.CompareCommitted(context.Background(), scope, ledger, workspacev1.CompareCommittedRequest{
+		EnvironmentID: "platform-development", EnvironmentDigest: second.Session.EnvironmentDigest, Resource: next.Resource, Left: first.Version.Ref, Right: second.Version.Ref,
+	})
+	if err != nil || !compared.Dirty || !compared.DiffAvailable || len(compared.ChangedPaths) != 1 || compared.ChangedPaths[0] != "/revision" {
+		t.Fatalf("比较已提交版本失败: %+v err=%v", compared, err)
+	}
+	for operation, value := range map[string]any{workspacev1.OperationReadCommitted: read, workspacev1.OperationCompareCommitted: compared} {
+		raw, _ := json.Marshal(value)
+		if _, err := workspacev1.ParseResult(operation, raw); err != nil {
+			t.Fatalf("%s 结果不符合 Wire 契约: %v", operation, err)
+		}
+	}
+	missing := second.Version.Ref
+	missing.VersionID = strings.Repeat("f", 64)
+	if _, err := secondManager.ReadCommitted(context.Background(), scope, ledger, workspacev1.CommittedRequest{EnvironmentID: "platform-development", EnvironmentDigest: second.Session.EnvironmentDigest, Resource: next.Resource, Ref: missing}); errorCode(err) != workspacev1.ErrorVersionNotFound {
+		t.Fatalf("缺失 VersionRef 错误未稳定映射: %v", err)
+	}
+	if _, err := secondManager.ReadCommitted(context.Background(), scope, ledger, workspacev1.CommittedRequest{EnvironmentID: "platform-development", EnvironmentDigest: strings.Repeat("0", 64), Resource: next.Resource, Ref: second.Version.Ref}); errorCode(err) != workspacev1.ErrorEnvironmentNotFound {
+		t.Fatalf("缺失 Environment digest 必须失败关闭: %v", err)
 	}
 }
 
@@ -123,7 +204,7 @@ func TestManagerRestoresTransientCommitAndRecoversLostHeadResponse(t *testing.T)
 		t.Fatal(err)
 	}
 	session = writeJSON(t, manager, scope, session, `{"name":"main"}`)
-	request := workspacev1.CommitRequest{SessionID: session.ID, ExpectedRevision: session.Revision}
+	request := workspacev1.CommitRequest{SessionID: session.ID, ExpectedRevision: session.Revision, OperationID: "portal-publication:0002"}
 	ledger.failPutOnce = true
 	if _, err := manager.Commit(context.Background(), scope, ledger, request); errorCode(err) != workspacev1.ErrorLedgerUnavailable {
 		t.Fatalf("暂时 Ledger 错误未映射: %v", err)
@@ -148,7 +229,7 @@ func TestManagerRejectsStaleHeadWithoutLosingSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	root = writeJSON(t, manager, scope, root, `{"revision":1}`)
-	if _, err := manager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{SessionID: root.ID, ExpectedRevision: root.Revision}); err != nil {
+	if _, err := manager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{SessionID: root.ID, ExpectedRevision: root.Revision, OperationID: "portal-publication:root"}); err != nil {
 		t.Fatal(err)
 	}
 	left, err := manager.Open(context.Background(), scope, ledger, openRequest("draft"))
@@ -161,10 +242,10 @@ func TestManagerRejectsStaleHeadWithoutLosingSession(t *testing.T) {
 	}
 	left = writeJSON(t, manager, scope, left, `{"revision":2,"editor":"left"}`)
 	right = writeJSON(t, manager, scope, right, `{"revision":2,"editor":"right"}`)
-	if _, err := manager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{SessionID: left.ID, ExpectedRevision: left.Revision}); err != nil {
+	if _, err := manager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{SessionID: left.ID, ExpectedRevision: left.Revision, OperationID: "portal-publication:left"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{SessionID: right.ID, ExpectedRevision: right.Revision}); errorCode(err) != workspacev1.ErrorBaseConflict {
+	if _, err := manager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{SessionID: right.ID, ExpectedRevision: right.Revision, OperationID: "portal-publication:right"}); errorCode(err) != workspacev1.ErrorBaseConflict {
 		t.Fatalf("陈旧 Head 必须产生 base_conflict: %v", err)
 	}
 	status, err := manager.Status(scope, workspacev1.SessionRequest{SessionID: right.ID})

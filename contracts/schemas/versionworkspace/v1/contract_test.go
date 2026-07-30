@@ -64,3 +64,43 @@ func TestChangesMustBeDeterministicAndConsistent(t *testing.T) {
 		t.Fatal("变更路径必须确定性排序")
 	}
 }
+
+func TestCommitRequiresStableOperationIdentity(t *testing.T) {
+	request := workspacev1.CommitRequest{SessionID: "ws_1234567890abcdef", ExpectedRevision: 2, OperationID: "portal-publication:0001"}
+	if err := workspacev1.ValidateCommitRequest(request); err != nil {
+		t.Fatal(err)
+	}
+	request.OperationID = "short"
+	if err := workspacev1.ValidateCommitRequest(request); err == nil {
+		t.Fatal("commit 必须携带可持久化的稳定 operationId")
+	}
+}
+
+func TestCommittedRequestsAndResultsBindOneResourceStream(t *testing.T) {
+	stream := versioningv1.StreamKey{Namespace: "portal.configuration", StreamID: "admin"}
+	left := versioningv1.VersionRef{Stream: stream, VersionID: strings.Repeat("a", 64), Sequence: 1, ContentDigest: strings.Repeat("b", 64)}
+	right := versioningv1.VersionRef{Stream: stream, VersionID: strings.Repeat("c", 64), Sequence: 2, ContentDigest: strings.Repeat("d", 64)}
+	resource := resourcev1.ResourceKey{Type: "portal.configuration", ID: "admin"}
+	environmentDigest := strings.Repeat("e", 64)
+	if err := workspacev1.ValidateCommittedRequest(workspacev1.CommittedRequest{EnvironmentID: "platform-development", EnvironmentDigest: environmentDigest, Resource: resource, Ref: left}); err != nil {
+		t.Fatal(err)
+	}
+	if err := workspacev1.ValidateCompareCommittedRequest(workspacev1.CompareCommittedRequest{EnvironmentID: "platform-development", EnvironmentDigest: environmentDigest, Resource: resource, Left: left, Right: right}); err != nil {
+		t.Fatal(err)
+	}
+	resolution := workspacev1.ResourceResolution{
+		EnvironmentID: "platform-development", EnvironmentDigest: environmentDigest, Resource: resource,
+		Namespace: stream.Namespace, Adapter: "version.resource.json.v1", Mode: resourcev1.ModeSnapshot,
+	}
+	result := workspacev1.CompareCommittedResult{
+		Resolution: resolution, Left: left, Right: right, LeftDigest: left.ContentDigest, RightDigest: right.ContentDigest,
+		Dirty: true, DiffAvailable: true, ChangedPaths: []string{"/name"}, Summary: workspacev1.ChangeSummary{Modified: 1, Total: 1},
+	}
+	if err := workspacev1.ValidateCompareCommittedResult(result); err != nil {
+		t.Fatal(err)
+	}
+	result.Resolution.Resource.ID = "other"
+	if err := workspacev1.ValidateCompareCommittedResult(result); err == nil {
+		t.Fatal("比较结果不得跨越 Resource stream")
+	}
+}

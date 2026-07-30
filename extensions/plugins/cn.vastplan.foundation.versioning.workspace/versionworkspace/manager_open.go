@@ -134,22 +134,39 @@ func resolveOpenReferences(ctx context.Context, ledger Ledger, stream versioning
 func loadBaseSnapshot(ctx context.Context, ledger Ledger, adapter Adapter, binding resourcev1.ResourceBinding, resource resourcev1.ResourceKey, mode string, baseRef *versioningv1.VersionRef, maxBytes int64) (resourcev1.Snapshot, string, error) {
 	snapshot := resourcev1.Snapshot{Kind: resourcev1.ContentJSON, MediaType: "application/json", JSON: json.RawMessage(`{}`)}
 	if baseRef != nil {
-		result, err := ledger.GetVersion(ctx, versioningv1.GetVersionRequest{Ref: *baseRef})
-		if err != nil {
-			return resourcev1.Snapshot{}, "", mapLedgerFailure(err, workspacev1.ErrorBaseConflict)
-		}
-		descriptor := adapter.Descriptor()
-		switch descriptor.ContentKind {
-		case resourcev1.ContentJSON:
-			snapshot = resourcev1.Snapshot{Kind: resourcev1.ContentJSON, MediaType: "application/json", JSON: append(json.RawMessage(nil), result.Version.Content...)}
-		case resourcev1.ContentFiles:
-			if err := json.Unmarshal(result.Version.Content, &snapshot); err != nil {
-				return resourcev1.Snapshot{}, "", workspaceError(workspacev1.ErrorLedgerUnavailable, false, errors.New("Ledger 文件 Snapshot 内容损坏"))
-			}
-		default:
-			return resourcev1.Snapshot{}, "", workspaceError(workspacev1.ErrorAdapterUnavailable, false, errors.New("Adapter 内容类型不受支持"))
-		}
+		_, stored, digest, err := loadCommittedVersion(ctx, ledger, adapter, binding, resource, mode, *baseRef, maxBytes, workspacev1.ErrorBaseConflict)
+		return stored, digest, err
 	}
+	return normalizeSnapshot(ctx, adapter, binding, resource, mode, snapshot, maxBytes)
+}
+
+func loadCommittedVersion(ctx context.Context, ledger Ledger, adapter Adapter, binding resourcev1.ResourceBinding, resource resourcev1.ResourceKey, mode string, ref versioningv1.VersionRef, maxBytes int64, notFoundCode string) (versioningv1.VersionRecord, resourcev1.Snapshot, string, error) {
+	result, err := ledger.GetVersion(ctx, versioningv1.GetVersionRequest{Ref: ref})
+	if err != nil {
+		return versioningv1.VersionRecord{}, resourcev1.Snapshot{}, "", mapLedgerFailure(err, notFoundCode)
+	}
+	snapshot := resourcev1.Snapshot{}
+	switch adapter.Descriptor().ContentKind {
+	case resourcev1.ContentJSON:
+		snapshot = resourcev1.Snapshot{Kind: resourcev1.ContentJSON, MediaType: "application/json", JSON: append(json.RawMessage(nil), result.Version.Content...)}
+	case resourcev1.ContentFiles:
+		if err := json.Unmarshal(result.Version.Content, &snapshot); err != nil {
+			return versioningv1.VersionRecord{}, resourcev1.Snapshot{}, "", workspaceError(workspacev1.ErrorLedgerUnavailable, false, errors.New("Ledger 文件 Snapshot 内容损坏"))
+		}
+	default:
+		return versioningv1.VersionRecord{}, resourcev1.Snapshot{}, "", workspaceError(workspacev1.ErrorAdapterUnavailable, false, errors.New("Adapter 内容类型不受支持"))
+	}
+	normalized, digest, err := normalizeSnapshot(ctx, adapter, binding, resource, mode, snapshot, maxBytes)
+	if err != nil {
+		return versioningv1.VersionRecord{}, resourcev1.Snapshot{}, "", err
+	}
+	if digest != result.Version.Ref.ContentDigest {
+		return versioningv1.VersionRecord{}, resourcev1.Snapshot{}, "", workspaceError(workspacev1.ErrorLedgerUnavailable, false, errors.New("Ledger 版本与 Resource Snapshot 摘要不匹配"))
+	}
+	return result.Version, normalized, digest, nil
+}
+
+func normalizeSnapshot(ctx context.Context, adapter Adapter, binding resourcev1.ResourceBinding, resource resourcev1.ResourceKey, mode string, snapshot resourcev1.Snapshot, maxBytes int64) (resourcev1.Snapshot, string, error) {
 	normalized, err := adapter.Normalize(ctx, resourcev1.AdapterNormalizeRequest{Resource: resource, Mode: mode, Configuration: binding.AdapterConfig, Snapshot: snapshot})
 	if err != nil {
 		return resourcev1.Snapshot{}, "", workspaceError(workspacev1.ErrorAdapterUnavailable, false, err)

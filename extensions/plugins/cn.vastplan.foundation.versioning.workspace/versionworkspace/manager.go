@@ -182,12 +182,17 @@ func equalLabels(left, right map[string]string) bool {
 
 func cloneCommitResult(result workspacev1.CommitResult) workspacev1.CommitResult {
 	result.Session = cloneSession(result.Session)
-	result.Version.Content = append(json.RawMessage(nil), result.Version.Content...)
-	result.Version.Parents = append([]versioningv1.VersionRef(nil), result.Version.Parents...)
-	result.Version.Labels = cloneLabels(result.Version.Labels)
+	result.Version = cloneVersionRecord(result.Version)
 	if result.Head != nil {
 		head := *result.Head
 		result.Head = &head
 	}
 	return result
+}
+
+func cloneVersionRecord(record versioningv1.VersionRecord) versioningv1.VersionRecord {
+	record.Content = append(json.RawMessage(nil), record.Content...)
+	record.Parents = append([]versioningv1.VersionRef(nil), record.Parents...)
+	record.Labels = cloneLabels(record.Labels)
+	return record
 }

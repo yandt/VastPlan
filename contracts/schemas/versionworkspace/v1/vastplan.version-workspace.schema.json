@@ -59,12 +59,34 @@
       }
     },
     "commitRequest": {
-      "type": "object", "additionalProperties": false, "required": ["sessionId", "expectedRevision"],
+      "type": "object", "additionalProperties": false, "required": ["sessionId", "expectedRevision", "operationId"],
       "properties": {
         "sessionId": { "type": "string", "pattern": "^ws_[A-Za-z0-9_-]{16,96}$" },
         "expectedRevision": { "type": "integer", "minimum": 1 },
+        "operationId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$" },
         "message": { "type": "string", "maxLength": 1024 },
         "labels": { "type": "object", "maxProperties": 16, "additionalProperties": { "type": "string", "maxLength": 256 } }
+      }
+    },
+    "committedRequest": {
+      "type": "object", "additionalProperties": false, "required": ["environmentId", "environmentDigest", "resource", "ref"],
+      "properties": {
+        "environmentId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$" },
+        "environmentDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "resource": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/version-resource/v1/vastplan.version-resource.schema.json#/$defs/resourceKey" },
+        "requestedMode": { "enum": ["snapshot", "overlay", "git"] },
+        "ref": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/versioning/v1/vastplan.version-ledger.schema.json#/$defs/versionRef" }
+      }
+    },
+    "compareCommittedRequest": {
+      "type": "object", "additionalProperties": false, "required": ["environmentId", "environmentDigest", "resource", "left", "right"],
+      "properties": {
+        "environmentId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$" },
+        "environmentDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "resource": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/version-resource/v1/vastplan.version-resource.schema.json#/$defs/resourceKey" },
+        "requestedMode": { "enum": ["snapshot", "overlay", "git"] },
+        "left": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/versioning/v1/vastplan.version-ledger.schema.json#/$defs/versionRef" },
+        "right": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/versioning/v1/vastplan.version-ledger.schema.json#/$defs/versionRef" }
       }
     },
     "renewRequest": {
@@ -98,6 +120,42 @@
       "type": "object", "additionalProperties": false, "required": ["session", "dirty", "summary"],
       "properties": {
         "session": { "$ref": "#/$defs/session" }, "dirty": { "type": "boolean" },
+        "changedPaths": { "type": "array", "maxItems": 10000, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 1024 } },
+        "summary": { "$ref": "#/$defs/changeSummary" }
+      }
+    },
+    "resourceResolution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["environmentId", "environmentDigest", "resource", "namespace", "adapter", "mode"],
+      "properties": {
+        "environmentId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$" },
+        "environmentDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "resource": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/version-resource/v1/vastplan.version-resource.schema.json#/$defs/resourceKey" },
+        "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 128 },
+        "adapter": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 128 },
+        "mode": { "enum": ["snapshot", "overlay", "git"] }
+      }
+    },
+    "committedSnapshotResult": {
+      "type": "object", "additionalProperties": false, "required": ["resolution", "version", "snapshot", "digest"],
+      "properties": {
+        "resolution": { "$ref": "#/$defs/resourceResolution" },
+        "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/versioning/v1/vastplan.version-ledger.schema.json#/$defs/versionRecord" },
+        "snapshot": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/version-resource/v1/vastplan.version-resource.schema.json#/$defs/snapshot" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "compareCommittedResult": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resolution", "left", "right", "leftDigest", "rightDigest", "dirty", "diffAvailable", "summary"],
+      "properties": {
+        "resolution": { "$ref": "#/$defs/resourceResolution" },
+        "left": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/versioning/v1/vastplan.version-ledger.schema.json#/$defs/versionRef" },
+        "right": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/versioning/v1/vastplan.version-ledger.schema.json#/$defs/versionRef" },
+        "leftDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "rightDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "dirty": { "type": "boolean" },
+        "diffAvailable": { "type": "boolean" },
         "changedPaths": { "type": "array", "maxItems": 10000, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 1024 } },
         "summary": { "$ref": "#/$defs/changeSummary" }
       }

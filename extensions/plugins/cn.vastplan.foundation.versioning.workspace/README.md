@@ -9,7 +9,9 @@
 - `version.workspace.v1`：open/status/readSnapshot/writeSnapshot/changes/commit/discard/renew；
 - `version.resource.json.v1`：JSON object 规范化、摘要、确定性变化路径和疑似秘密明文拒绝；
 - Session revision CAS、tenant + actor 所有权、Lease、租户活动 Session 配额；
-- 提交先以 Session 派生幂等键写不可变版本，再创建或 CAS 移动 Head；
+- 提交使用可信领域持久化的稳定 operationId 写不可变版本，Session 丢失后可重开并取得同一逻辑 VersionRef，再按需创建或 CAS 移动 Head；
+- `readCommitted/compareCommitted`：按提交时固定的 Environment digest，经原始 Binding 和 Resource Adapter 读取或比较精确 VersionRef，调用方不解析 Ledger 内容编码；
+- Environment Catalog 保留同 ID 的多修订，新会话选择最高 revision，历史摘要不存在时失败关闭；
 - Head 写响应丢失时执行 read-after-error，区分已成功、真实冲突和暂时不可用；
 - Manager 每个服务宿主共享，当前 Session 仅保存在 leader 内存中。
 

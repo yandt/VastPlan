@@ -14,14 +14,16 @@ const (
 	Protocol   = "version.workspace.v1"
 	Capability = "foundation.versioning.workspace"
 
-	OperationOpen          = "open"
-	OperationStatus        = "status"
-	OperationReadSnapshot  = "readSnapshot"
-	OperationWriteSnapshot = "writeSnapshot"
-	OperationChanges       = "changes"
-	OperationCommit        = "commit"
-	OperationDiscard       = "discard"
-	OperationRenew         = "renew"
+	OperationOpen             = "open"
+	OperationStatus           = "status"
+	OperationReadSnapshot     = "readSnapshot"
+	OperationWriteSnapshot    = "writeSnapshot"
+	OperationChanges          = "changes"
+	OperationCommit           = "commit"
+	OperationDiscard          = "discard"
+	OperationRenew            = "renew"
+	OperationReadCommitted    = "readCommitted"
+	OperationCompareCommitted = "compareCommitted"
 
 	ErrorInvalidRequest      = "version.workspace.invalid_request"
 	ErrorEnvironmentNotFound = "version.workspace.environment_not_found"
@@ -34,6 +36,7 @@ const (
 	ErrorLedgerUnavailable   = "version.workspace.ledger_unavailable"
 	ErrorLimitExceeded       = "version.workspace.limit_exceeded"
 	ErrorBaseConflict        = "version.workspace.base_conflict"
+	ErrorVersionNotFound     = "version.workspace.version_not_found"
 
 	StateClean      = "Clean"
 	StateDirty      = "Dirty"
@@ -49,7 +52,7 @@ const (
 var knownErrorCodes = map[string]struct{}{
 	ErrorInvalidRequest: {}, ErrorEnvironmentNotFound: {}, ErrorResourceNotBound: {},
 	ErrorSessionNotFound: {}, ErrorSessionConflict: {}, ErrorLeaseExpired: {}, ErrorReadOnly: {},
-	ErrorAdapterUnavailable: {}, ErrorLedgerUnavailable: {}, ErrorLimitExceeded: {}, ErrorBaseConflict: {},
+	ErrorAdapterUnavailable: {}, ErrorLedgerUnavailable: {}, ErrorLimitExceeded: {}, ErrorBaseConflict: {}, ErrorVersionNotFound: {},
 }
 
 func KnownErrorCode(code string) bool { _, ok := knownErrorCodes[code]; return ok }
@@ -118,6 +121,7 @@ type ChangesResult struct {
 type CommitRequest struct {
 	SessionID        string            `json:"sessionId"`
 	ExpectedRevision uint64            `json:"expectedRevision"`
+	OperationID      string            `json:"operationId"`
 	Message          string            `json:"message,omitempty"`
 	Labels           map[string]string `json:"labels,omitempty"`
 }
@@ -136,4 +140,49 @@ type RenewRequest struct {
 
 type SessionResult struct {
 	Session Session `json:"session"`
+}
+
+type CommittedRequest struct {
+	EnvironmentID     string                        `json:"environmentId"`
+	EnvironmentDigest string                        `json:"environmentDigest"`
+	Resource          versionresourcev1.ResourceKey `json:"resource"`
+	RequestedMode     string                        `json:"requestedMode,omitempty"`
+	Ref               versioningv1.VersionRef       `json:"ref"`
+}
+
+type CompareCommittedRequest struct {
+	EnvironmentID     string                        `json:"environmentId"`
+	EnvironmentDigest string                        `json:"environmentDigest"`
+	Resource          versionresourcev1.ResourceKey `json:"resource"`
+	RequestedMode     string                        `json:"requestedMode,omitempty"`
+	Left              versioningv1.VersionRef       `json:"left"`
+	Right             versioningv1.VersionRef       `json:"right"`
+}
+
+type ResourceResolution struct {
+	EnvironmentID     string                        `json:"environmentId"`
+	EnvironmentDigest string                        `json:"environmentDigest"`
+	Resource          versionresourcev1.ResourceKey `json:"resource"`
+	Namespace         string                        `json:"namespace"`
+	Adapter           string                        `json:"adapter"`
+	Mode              string                        `json:"mode"`
+}
+
+type CommittedSnapshotResult struct {
+	Resolution ResourceResolution         `json:"resolution"`
+	Version    versioningv1.VersionRecord `json:"version"`
+	Snapshot   versionresourcev1.Snapshot `json:"snapshot"`
+	Digest     string                     `json:"digest"`
+}
+
+type CompareCommittedResult struct {
+	Resolution    ResourceResolution      `json:"resolution"`
+	Left          versioningv1.VersionRef `json:"left"`
+	Right         versioningv1.VersionRef `json:"right"`
+	LeftDigest    string                  `json:"leftDigest"`
+	RightDigest   string                  `json:"rightDigest"`
+	Dirty         bool                    `json:"dirty"`
+	DiffAvailable bool                    `json:"diffAvailable"`
+	ChangedPaths  []string                `json:"changedPaths,omitempty"`
+	Summary       ChangeSummary           `json:"summary"`
 }

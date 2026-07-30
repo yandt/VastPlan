@@ -18,12 +18,19 @@ type environmentEntry struct {
 
 type Catalog struct {
 	mu           sync.RWMutex
-	environments map[string]environmentEntry
+	environments map[string]map[string]environmentEntry
+	current      map[string]string
+	revisions    map[string]map[uint64]string
 	adapters     map[string]Adapter
 }
 
 func NewCatalog() *Catalog {
-	return &Catalog{environments: map[string]environmentEntry{}, adapters: map[string]Adapter{}}
+	return &Catalog{
+		environments: map[string]map[string]environmentEntry{},
+		current:      map[string]string{},
+		revisions:    map[string]map[uint64]string{},
+		adapters:     map[string]Adapter{},
+	}
 }
 
 func (c *Catalog) RegisterAdapter(adapter Adapter) error {
@@ -57,9 +64,6 @@ func (c *Catalog) RegisterEnvironment(profile resourcev1.EnvironmentProfile) err
 	profile = cloneProfile(profile)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if _, exists := c.environments[profile.ID]; exists {
-		return fmt.Errorf("Version Environment %q 重复", profile.ID)
-	}
 	bindings := make(map[string]resourcev1.ResourceBinding, len(profile.Bindings))
 	for _, binding := range profile.Bindings {
 		adapter, ok := c.adapters[binding.Adapter]
@@ -71,22 +75,56 @@ func (c *Catalog) RegisterEnvironment(profile resourcev1.EnvironmentProfile) err
 		}
 		bindings[binding.ResourceType] = cloneBinding(binding)
 	}
-	c.environments[profile.ID] = environmentEntry{profile: profile, digest: digest, bindings: bindings}
+	if c.environments[profile.ID] == nil {
+		c.environments[profile.ID] = map[string]environmentEntry{}
+		c.revisions[profile.ID] = map[uint64]string{}
+	}
+	if existingDigest, exists := c.revisions[profile.ID][profile.Revision]; exists {
+		if existingDigest == digest {
+			return fmt.Errorf("Version Environment %q revision %d 重复", profile.ID, profile.Revision)
+		}
+		return fmt.Errorf("Version Environment %q revision %d 已绑定其他摘要", profile.ID, profile.Revision)
+	}
+	c.environments[profile.ID][digest] = environmentEntry{profile: profile, digest: digest, bindings: bindings}
+	c.revisions[profile.ID][profile.Revision] = digest
+	currentDigest, hasCurrent := c.current[profile.ID]
+	if !hasCurrent || profile.Revision > c.environments[profile.ID][currentDigest].profile.Revision {
+		c.current[profile.ID] = digest
+	}
 	return nil
 }
 
 func (c *Catalog) resolve(environmentID, resourceType string) (environmentEntry, resourcev1.ResourceBinding, Adapter, error) {
+	return c.resolveEntry(environmentID, "", resourceType)
+}
+
+func (c *Catalog) resolveExact(environmentID, environmentDigest, resourceType string) (environmentEntry, resourcev1.ResourceBinding, Adapter, error) {
+	return c.resolveEntry(environmentID, environmentDigest, resourceType)
+}
+
+func (c *Catalog) resolveEntry(environmentID, environmentDigest, resourceType string) (environmentEntry, resourcev1.ResourceBinding, Adapter, error) {
 	if c == nil {
 		return environmentEntry{}, resourcev1.ResourceBinding{}, nil, workspaceError(workspacev1.ErrorEnvironmentNotFound, false, errors.New("Version Environment Catalog 不可用"))
 	}
 	c.mu.RLock()
-	entry, exists := c.environments[environmentID]
+	versions, exists := c.environments[environmentID]
 	if !exists {
 		c.mu.RUnlock()
 		return environmentEntry{}, resourcev1.ResourceBinding{}, nil, workspaceError(workspacev1.ErrorEnvironmentNotFound, false, fmt.Errorf("Version Environment %q 不存在", environmentID))
 	}
+	if environmentDigest == "" {
+		environmentDigest = c.current[environmentID]
+	}
+	entry, exists := versions[environmentDigest]
+	if !exists {
+		c.mu.RUnlock()
+		return environmentEntry{}, resourcev1.ResourceBinding{}, nil, workspaceError(workspacev1.ErrorEnvironmentNotFound, false, fmt.Errorf("Version Environment %q 摘要 %q 不存在", environmentID, environmentDigest))
+	}
 	binding, exists := entry.bindings[resourceType]
-	adapter := c.adapters[binding.Adapter]
+	var adapter Adapter
+	if exists {
+		adapter = c.adapters[binding.Adapter]
+	}
 	c.mu.RUnlock()
 	if !exists {
 		return environmentEntry{}, resourcev1.ResourceBinding{}, nil, workspaceError(workspacev1.ErrorResourceNotBound, false, fmt.Errorf("资源类型 %q 未绑定到环境 %q", resourceType, environmentID))

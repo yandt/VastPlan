@@ -14,7 +14,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.versioning.workspace"
-	PluginVersion = "0.1.0"
+	PluginVersion = "0.2.0"
 	JSONAdapterID = "version.resource.json.v1"
 )
 

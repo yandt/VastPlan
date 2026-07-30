@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.versioning.workspace",
   "name": "VastPlan Version Workspace",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -112,9 +112,11 @@
             { "name": "readSnapshot", "description": "读取隔离快照" },
             { "name": "writeSnapshot", "description": "以 CAS 写入隔离快照" },
             { "name": "changes", "description": "读取确定性变更摘要" },
-            { "name": "commit", "description": "幂等提交版本并以 CAS 更新 Head" },
+            { "name": "commit", "description": "以稳定 operationId 幂等提交版本并可选更新 Head" },
             { "name": "discard", "description": "丢弃编辑会话" },
-            { "name": "renew", "description": "在环境配额内续租" }
+            { "name": "renew", "description": "在环境配额内续租" },
+            { "name": "readCommitted", "description": "读取并规范化精确已提交版本" },
+            { "name": "compareCommitted", "description": "经资源 Adapter 比较两个精确已提交版本" }
           ]
         }
       ]
