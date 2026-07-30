@@ -46,7 +46,7 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 	if err != nil {
 		t.Fatal(err)
 	}
-	publishBuiltPlugin(t, repository,
+	composerRef := publishBuiltPlugin(t, repository,
 		"./extensions/plugins/cn.vastplan.platform.configuration.portal-composer/backend",
 		"extensions/plugins/cn.vastplan.platform.configuration.portal-composer/vastplan.plugin.json")
 	for _, plugin := range portalPlatformBackendPlugins() {
@@ -58,9 +58,7 @@ func startPortalComposerFixture(t *testing.T, root string, addressing *portalAdd
 
 	verifier := nodeagent.NewLocalDevelopmentArtifactVerifier()
 	installer := nodeagent.LocalInstaller{Root: filepath.Join(temporary, "installed")}
-	composer := installPortalFixturePlugin(t, repository, verifier, installer, pluginv1.ArtifactRef{
-		PluginID: "cn.vastplan.platform.configuration.portal-composer", Version: "1.7.1", Channel: "stable",
-	})
+	composer := installPortalFixturePlugin(t, repository, verifier, installer, composerRef)
 	platformCatalog := portalPlatformCatalogForTenant(t, root, "acme")
 	config, err := kernelspi.NewMapConfig(map[string]any{
 		"platform.portal-composer.platformCatalog": string(platformCatalog),

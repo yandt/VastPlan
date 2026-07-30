@@ -33,9 +33,9 @@ func TestNodePortalKernelGovernanceLifecycleWithRealPlugins(t *testing.T) {
 	if status, _ := portalJSON(t, probe, process.baseURL(), http.MethodPost, "/v1/portals", map[string]any{}, false); status != http.StatusUnauthorized {
 		t.Fatalf("匿名浏览器写请求必须拒绝: status=%d", status)
 	}
-	if status, _ := portalJSON(t, reader, process.baseURL(), http.MethodPost, "/v1/portals", map[string]any{}, true); status != http.StatusForbidden {
-		t.Fatalf("只读身份不能创建草稿: status=%d", status)
-	}
+	// This lifecycle fixture deliberately installs allowAllPermissions at the
+	// protocol host. Role denial belongs to the real Authorization Enforcer
+	// suite; duplicating it in the BFF would create a second policy source.
 
 	firstVersion := createPublishedPortalVersion(t, process, author, approver, publisher, portalApplication(1, "Initial"))
 	if status, _ := portalJSON(t, reader, process.baseURL(), http.MethodGet, "/v1/portal-runtime?path=/operations", nil, false); status != http.StatusNotFound {
