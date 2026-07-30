@@ -1,5 +1,7 @@
 # Authentication Delivery Webhook
 
+当前制品版本：`0.2.2`
+
 该插件把 `authentication.delivery.v1` 请求发送到企业自有 HTTPS 邮件、短信或消息网关，使 OTP Provider 不依赖具体供应商 SDK。
 
 - 仅接受来自 `enterprise-one-time-code` Provider 调用链的 `deliver` 请求；浏览器和普通业务插件不能直接把它当公开发信接口。

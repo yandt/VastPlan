@@ -1,7 +1,7 @@
 # Native Authorization Engine
 
 插件 ID：`cn.vastplan.foundation.security.authorization-engine.native`
-当前制品版本：`0.1.2`
+当前制品版本：`0.1.3`
 
 该 foundation Provider 插件实现默认 Go `authorization.engine.v1`，提供 prepare、evaluate、explain、health 和最长五分钟的 Decision Proof。它只接受可信 system caller，并与每内核 Enforcer、外置共享状态的 Authorization Policy 分开部署：Enforcer 因此保持纯 permission checker，可合法重复附着多个 platform service unit；Engine Provider 使用独立的 `platform-authorization-engine-native` 服务单元，保持签名清单声明的 `leader / leader-owned / cluster / security` 运行策略。
 

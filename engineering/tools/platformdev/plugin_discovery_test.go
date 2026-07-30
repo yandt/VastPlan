@@ -75,8 +75,8 @@ func TestPluginManifestVersionUsesManifestAsSourceOfTruth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version != "1.7.5" {
-		t.Fatalf("version = %q, want 1.7.5", version)
+	if version != "1.7.6" {
+		t.Fatalf("version = %q, want 1.7.6", version)
 	}
 }
 

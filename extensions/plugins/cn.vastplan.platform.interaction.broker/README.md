@@ -1,5 +1,7 @@
 # Interaction Broker
 
+当前制品版本：`0.1.3`
+
 `cn.vastplan.platform.interaction.broker` 是平台级基础插件：它持久化并裁决跨 Portal、Mobile 与 Runner 的人机交互任务。
 
 - 发起方只能通过 `platform.interaction-broker/open` 创建与其可信调用身份同名的来源任务；

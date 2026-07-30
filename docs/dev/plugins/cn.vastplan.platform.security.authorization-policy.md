@@ -1,7 +1,7 @@
 # Authorization Policy
 
 插件 ID：`cn.vastplan.platform.security.authorization-policy`
-当前制品版本：`0.2.2`
+当前制品版本：`0.5.3`
 
 该平台全栈插件的 Backend 是在线授权唯一写入真相源，以 `leader + external-shared + cluster` 运行。它消费签名制品构建的 Permission Catalog，管理 Role revision、Subject Binding revision、不同主体审批、即时撤权、审计和 Ed25519 Policy Snapshot。运行期账本写入受内核治理的 service-scope Shared State，使用 leader fence、Store CAS 与独立业务 generation；插件不直接持有 NATS 凭据。可选本地 bootstrap 文件只允许在权威 key 不存在时导入一次，Shared State 故障绝不回退。
 

@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.infrastructure.deployment-manager`
 
-当前制品版本：`0.21.1`
+当前制品版本：`0.21.5`
 
 该 platform 基础插件以 `leader + external-shared + cluster + leader routing` 运行，持有租户隔离的节点计划、Bootstrap Job、Application Intent/Plan 快照、服务组合 revision、Test Target Binding、Test Release 和审计记录。它依赖 settings、credentials、artifact repository、Composition Planner 与窄内核服务，但只保存不透明 CredentialRef、已编译 Application Composition 和精确制品身份，永远不能读取 SSH/NATS/制品令牌 material、Platform Catalog、信任根或 KV 句柄。
 

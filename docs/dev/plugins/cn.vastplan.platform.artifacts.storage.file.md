@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.artifacts.storage.file`  
 能力：`tool.package/platform.artifacts.storage.file`  
-当前制品版本：`0.2.2`
+当前制品版本：`0.2.3`
 
 ## 职责
 

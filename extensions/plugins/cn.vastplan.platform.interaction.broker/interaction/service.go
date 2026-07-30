@@ -20,7 +20,7 @@ import (
 
 const (
 	PluginID           = "cn.vastplan.platform.interaction.broker"
-	PluginVersion      = "0.1.2"
+	PluginVersion      = "0.1.3"
 	Capability         = interactionapi.Capability
 	StateFileConfigKey = "platform.interaction-broker.stateFile"
 )
