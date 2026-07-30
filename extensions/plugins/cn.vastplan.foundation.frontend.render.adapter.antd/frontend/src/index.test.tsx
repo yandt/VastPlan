@@ -14,8 +14,10 @@ describe("Ant Design portal UI renderer", () => {
 
   it("offers canonical and native Ant Design icon themes", () => {
     const NativeIcon = antdIconForTheme("renderer-native");
-    const markup = renderToStaticMarkup(<><NativeIcon name="publish" label="Publish" /><NativeIcon name="visibilityOff" label="Hidden" /><NativeIcon name="drag" label="Reorder" /></>);
+    const markup = renderToStaticMarkup(<><NativeIcon name="publish" label="Publish" /><NativeIcon name="remove" label="Delete" /><NativeIcon name="visibilityOff" label="Hidden" /><NativeIcon name="drag" label="Reorder" /></>);
     expect(markup).toContain('data-vastplan-icon="publish"');
+    expect(markup).toContain('data-vastplan-icon="remove"');
+    expect(markup).toContain("anticon-delete");
     expect(markup).toContain('data-vastplan-icon="visibilityOff"');
     expect(markup).toContain('data-vastplan-icon="drag"');
     expect(markup).toContain('data-vastplan-icon-source="renderer-native"');

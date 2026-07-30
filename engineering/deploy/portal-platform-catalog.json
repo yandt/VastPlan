@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 76,
+  "revision": 77,
   "id": "local-portal-platform",
   "profiles": [
     {
       "version": 1,
-      "revision": 76,
+      "revision": 77,
       "id": "portal-default",
       "target": { "kernel": "frontend" },
       "updates": { "mode": "automatic" },
@@ -18,7 +18,7 @@
       },
       "renderAdapter": {
         "id": "cn.vastplan.foundation.frontend.render.adapter",
-        "version": "5.1.1",
+        "version": "5.1.2",
         "channel": "stable",
         "uiContract": "^8.0.0",
         "config": {
@@ -60,8 +60,8 @@
       },
       "plugins": [
         { "id": "cn.vastplan.foundation.frontend.runtime.engine.react", "version": "1.1.2", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "5.1.1", "channel": "stable" },
-        { "id": "cn.vastplan.foundation.frontend.render.adapter.antd", "version": "5.1.1", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.render.adapter", "version": "5.1.2", "channel": "stable" },
+        { "id": "cn.vastplan.foundation.frontend.render.adapter.antd", "version": "5.1.2", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.render.adapter.arco", "version": "5.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.render.adapter.mui", "version": "5.1.1", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.shell", "version": "5.1.0", "channel": "stable" },
@@ -87,8 +87,8 @@
       "portalId": "operations",
       "platformProfile": {
         "id": "portal-default",
-        "revision": 76,
-        "digest": "2de9c711a90de445c66564f982d493bb67101879c28c94387505b4a1f7665fff"
+        "revision": 77,
+        "digest": "b7615efdb365c6d5499bf5cbbeded8e85a3d4563b0bede7e266ee1f7b2819d64"
       },
       "services": [
         {

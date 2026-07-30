@@ -1,5 +1,5 @@
 import PlusOutlined from "@ant-design/icons/PlusOutlined";
-import MinusOutlined from "@ant-design/icons/MinusOutlined";
+import DeleteOutlined from "@ant-design/icons/DeleteOutlined";
 import EditOutlined from "@ant-design/icons/EditOutlined";
 import SearchOutlined from "@ant-design/icons/SearchOutlined";
 import SettingOutlined from "@ant-design/icons/SettingOutlined";
@@ -25,7 +25,7 @@ import HolderOutlined from "@ant-design/icons/HolderOutlined";
 import type { SemanticIconName, VastPlanIconProps } from "@vastplan/ui-primitives";
 
 const icons: Record<SemanticIconName, typeof PlusOutlined> = {
-  add: PlusOutlined, remove: MinusOutlined, edit: EditOutlined, search: SearchOutlined, settings: SettingOutlined,
+  add: PlusOutlined, remove: DeleteOutlined, edit: EditOutlined, search: SearchOutlined, settings: SettingOutlined,
   success: CheckCircleOutlined, warning: WarningOutlined, error: CloseCircleOutlined, info: InfoCircleOutlined,
   close: CloseOutlined, menu: MenuOutlined, import: ImportOutlined, export: ExportOutlined, publish: CloudUploadOutlined,
   refresh: ReloadOutlined, columns: ColumnHeightOutlined, visibility: EyeOutlined, visibilityOff: EyeInvisibleOutlined, drag: HolderOutlined,
