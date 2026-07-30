@@ -71,13 +71,17 @@ export class PortalRoutes {
       return true;
     }
     if (tail.length === 2 && tail[1] === "audit" && (method === "GET" || method === "HEAD")) {
-      await this.call("audit", { revisionId: versionId }, principal, response, signal, method === "HEAD");
+      await this.call("audit", { portalId, revisionId: versionId }, principal, response, signal, method === "HEAD");
       return true;
     }
     const action = tail.length === 2 ? parseLifecycleAction(tail[1]) : undefined;
     if (action !== undefined && method === "POST") {
       const operation = `${action}PortalVersion` as PortalComposerOperation;
-      await this.call(operation, { portalId, versionId }, principal, response, signal);
+      await withRequestJSON(request, response, async (body) => {
+        const value = requireJSONObject(body);
+        const breakGlassReason = value.breakGlassReason;
+        await this.call(operation, { portalId, versionId, ...(typeof breakGlassReason === "string" ? { breakGlassReason } : {}) }, principal, response, signal);
+      });
       return true;
     }
     sendAPIError(response, 405, "method_not_allowed", method === "HEAD");
@@ -91,7 +95,15 @@ export class PortalRoutes {
     }
     const releaseId = parseRevisionID(tail[0]);
     if (releaseId !== undefined && tail.length === 2 && tail[1] === "rollback" && method === "POST") {
-      await withRequestJSON(request, response, async (body) => this.call("rollbackPortalRelease", { portalId, releaseId, ...requireJSONObject(body) }, principal, response, signal));
+      await withRequestJSON(request, response, async (body) => {
+        const value = requireJSONObject(body);
+        await this.call("rollbackPortalRelease", {
+          portalId,
+          releaseId,
+          expectedCurrentReleaseId: value.expectedCurrentReleaseId,
+          reason: value.reason,
+        }, principal, response, signal);
+      });
       return true;
     }
     sendAPIError(response, 405, "method_not_allowed", method === "HEAD");

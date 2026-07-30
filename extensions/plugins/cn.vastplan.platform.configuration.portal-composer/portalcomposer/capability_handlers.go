@@ -58,11 +58,15 @@ func (s *Service) handlePortalAggregateOperation(ctx context.Context, principal 
 		return s.DeletePortalVersion(ctx, principal, request.PortalID, request.VersionID)
 	case "submitPortalVersion", "approvePortalVersion", "publishPortalVersion":
 		var request struct {
-			PortalID  string `json:"portalId"`
-			VersionID uint64 `json:"versionId"`
+			PortalID         string `json:"portalId"`
+			VersionID        uint64 `json:"versionId"`
+			BreakGlassReason string `json:"breakGlassReason,omitempty"`
 		}
 		if err := decode(payload, &request); err != nil {
 			return nil, err
+		}
+		if operation == "publishPortalVersion" && principal.System {
+			return s.breakGlassPublishPortalVersion(ctx, principal, request.PortalID, request.VersionID, request.BreakGlassReason)
 		}
 		return s.TransitionPortalVersion(ctx, principal, request.PortalID, request.VersionID, strings.TrimSuffix(operation, "PortalVersion"))
 	case "releasePortalVersion":
@@ -87,12 +91,13 @@ func (s *Service) handlePortalAggregateOperation(ctx context.Context, principal 
 		return s.RollbackPortalRelease(ctx, principal, request.PortalID, request.ReleaseID, request.ExpectedCurrentReleaseID, request.Reason)
 	case "audit":
 		var request struct {
+			PortalID   string `json:"portalId"`
 			RevisionID uint64 `json:"revisionId"`
 		}
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
-		return s.Audit(ctx, principal, request.RevisionID)
+		return s.Audit(ctx, principal, request.PortalID, request.RevisionID)
 	default:
 		return nil, fmt.Errorf("不支持 Portal 聚合操作 %q", operation)
 	}

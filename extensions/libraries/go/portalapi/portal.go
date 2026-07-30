@@ -395,5 +395,5 @@ type Service interface {
 	RollbackPortalRelease(context.Context, Principal, string, uint64, uint64, string) (PortalRelease, error)
 	PortalGovernance(context.Context, Principal) (PortalGovernanceSnapshot, error)
 	ListPortalReleases(context.Context, Principal) ([]PortalRelease, error)
-	Audit(context.Context, Principal, uint64) ([]AuditEvent, error)
+	Audit(context.Context, Principal, string, uint64) ([]AuditEvent, error)
 }

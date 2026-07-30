@@ -25,6 +25,22 @@ describe("Portal aggregate workspace", () => {
     expect(updated.platform.shell.config.defaultTemplate).toBe("top-navigation");
     expect(updated.services).toEqual([{ id: "backend" }]);
   });
+
+  it("can prepare the first Portal from the trusted creation template", async () => {
+    const template = configuration();
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [], creationTemplate: template }) }));
+    const form = page.forms?.find((candidate) => candidate.id === "create");
+    const prepared = await form?.prepare?.([], new AbortController().signal);
+    expect(prepared?.initialValue).toMatchObject({ portalId: "", route: "/", defaultRenderer: "antd" });
+  });
+
+  it("tolerates legacy Portal payloads whose release history is null", async () => {
+    const version = { id: 1, tenantId: "tenant-a", portalId: "operations", number: 1, status: "Published", configuration: configuration(), actorId: "author", createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
+    const portal = { id: "operations", tenantId: "tenant-a", versions: [version], releases: null, createdAt: version.createdAt, updatedAt: version.updatedAt };
+    const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [portal] }) }));
+    const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
+    expect(result).toMatchObject({ total: 1, items: [{ id: "operations", releaseAvailable: true }] });
+  });
 });
 
 describe("PortalControlClient", () => {

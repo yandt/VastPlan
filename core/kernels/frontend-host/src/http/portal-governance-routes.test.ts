@@ -27,9 +27,10 @@ describe("Portal aggregate routes", () => {
       ["/v1/portals/operations/versions/7", "PUT", '{"route":"/operations-v3"}'],
       ["/v1/portals/operations/versions/7/submit", "POST", "{}"],
       ["/v1/portals/operations/versions/7/approve", "POST", "{}"],
-      ["/v1/portals/operations/versions/7/publish", "POST", "{}"],
+      ["/v1/portals/operations/versions/7/publish", "POST", '{"breakGlassReason":"emergency repair"}'],
+      ["/v1/portals/operations/versions/7/audit", "GET", undefined],
       ["/v1/portals/operations/releases", "POST", '{"portalVersionId":7,"expectedCurrentReleaseId":0}'],
-      ["/v1/portals/operations/releases/9/rollback", "POST", '{"expectedCurrentReleaseId":10,"reason":"restore"}'],
+      ["/v1/portals/operations/releases/9/rollback", "POST", '{"portalId":"forged","releaseId":77,"expectedCurrentReleaseId":10,"reason":"restore"}'],
     ];
     for (const [path, method, body] of requests) {
       const response = await fetch(`${origin}${path}`, { method, headers, ...(body === undefined ? {} : { body }) });
@@ -42,7 +43,8 @@ describe("Portal aggregate routes", () => {
       { operation: "updatePortalVersion", payload: { portalId: "operations", versionId: 7, configuration: { route: "/operations-v3" } } },
       { operation: "submitPortalVersion", payload: { portalId: "operations", versionId: 7 } },
       { operation: "approvePortalVersion", payload: { portalId: "operations", versionId: 7 } },
-      { operation: "publishPortalVersion", payload: { portalId: "operations", versionId: 7 } },
+      { operation: "publishPortalVersion", payload: { portalId: "operations", versionId: 7, breakGlassReason: "emergency repair" } },
+      { operation: "audit", payload: { portalId: "operations", revisionId: 7 } },
       { operation: "releasePortalVersion", payload: { portalId: "operations", release: { portalVersionId: 7, expectedCurrentReleaseId: 0 } } },
       { operation: "rollbackPortalRelease", payload: { portalId: "operations", releaseId: 9, expectedCurrentReleaseId: 10, reason: "restore" } },
     ]);

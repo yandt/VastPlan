@@ -75,5 +75,6 @@ type PortalReleaseRequest struct {
 }
 
 type PortalGovernanceSnapshot struct {
-	Portals []Portal `json:"portals"`
+	Portals          []Portal             `json:"portals"`
+	CreationTemplate *PortalConfiguration `json:"creationTemplate,omitempty"`
 }

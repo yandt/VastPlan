@@ -182,7 +182,7 @@ func TestGovernedPublishRequiresDifferentApproverAndPersistsAudit(t *testing.T) 
 	if err != nil || activation.Status != portalapi.ActivationCurrent {
 		t.Fatalf("激活失败: %+v %v", activation, err)
 	}
-	audit, err := s.Audit(context.Background(), publisher, draft.ID)
+	audit, err := s.Audit(context.Background(), publisher, draft.PortalID, draft.ID)
 	if err != nil || len(audit) != 4 {
 		t.Fatalf("审计事件应完整保留: %+v %v", audit, err)
 	}
@@ -244,7 +244,7 @@ func TestDraftCanBeUpdatedOnlyBeforeSubmission(t *testing.T) {
 	if err != nil || updated.Composition.Route != "/new" || updated.Spec.Route != "/new" {
 		t.Fatalf("更新草稿失败: revision=%+v err=%v", updated, err)
 	}
-	audit, err := s.Audit(context.Background(), author, draft.ID)
+	audit, err := s.Audit(context.Background(), author, draft.PortalID, draft.ID)
 	if err != nil || len(audit) != 2 || audit[1].Action != "portal.version.updated" {
 		t.Fatalf("更新草稿审计缺失: %+v %v", audit, err)
 	}
@@ -267,6 +267,10 @@ func TestPortalIDIsUniqueAndLineageAllowsOnlyOneOpenVersion(t *testing.T) {
 	if err != nil || len(portal.Versions) != 1 || portal.Versions[0].Number != 1 {
 		t.Fatalf("创建 Portal 失败: %+v %v", portal, err)
 	}
+	raw, err := json.Marshal(portal)
+	if err != nil || !strings.Contains(string(raw), `"releases":[]`) {
+		t.Fatalf("空上线历史必须编码为 []，避免前端聚合崩溃: %s err=%v", raw, err)
+	}
 	if _, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration}); !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("同一 tenant 的 portalId 必须唯一: %v", err)
 	}
@@ -276,6 +280,74 @@ func TestPortalIDIsUniqueAndLineageAllowsOnlyOneOpenVersion(t *testing.T) {
 	deleted, err := s.DeletePortalVersion(context.Background(), author, "admin", portal.Versions[0].ID)
 	if err != nil || deleted.ID != portal.Versions[0].ID {
 		t.Fatalf("删除 PortalVersion 草稿失败: %+v %v", deleted, err)
+	}
+}
+
+func TestPortalAuditAndBreakGlassKeepTrustedPortalIdentity(t *testing.T) {
+	s := newTestService(t)
+	author := principal("author", "portal.compose")
+	configuration, err := s.configurationFromCatalog(spec("/"), author.TenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	portal, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := portal.Versions[0]
+	system := portalapi.Principal{ID: "system", TenantID: author.TenantID, System: true}
+	if _, err := s.breakGlassPublishPortalVersion(context.Background(), system, "forged", version.ID, "incident recovery"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("URL Portal 身份不得被版本 ID 绕过: %v", err)
+	}
+	published, err := s.breakGlassPublishPortalVersion(context.Background(), system, portal.ID, version.ID, "incident recovery")
+	if err != nil || published.Status != portalapi.StatusPublished {
+		t.Fatalf("带原因的系统 break-glass 发布失败: %+v err=%v", published, err)
+	}
+	audit, err := s.Audit(context.Background(), author, portal.ID, version.ID)
+	if err != nil || len(audit) != 2 || audit[1].Reason != "incident recovery" || audit[1].Priority != "high" {
+		t.Fatalf("break-glass 原因和高危审计未完整保留: %+v err=%v", audit, err)
+	}
+	if _, err := s.Audit(context.Background(), author, "forged", version.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("审计查询必须校验 Portal 路径身份: %v", err)
+	}
+}
+
+func TestReleaseRejectsHistoricalPublishedVersion(t *testing.T) {
+	s := newTestService(t)
+	author := principal("author", "portal.compose")
+	approver := principal("approver", "portal.approve")
+	publisher := principal("publisher", "portal.publish")
+	configuration, err := s.configurationFromCatalog(spec("/"), author.TenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	portal, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publish := func(version portalapi.PortalVersion) portalapi.PortalVersion {
+		t.Helper()
+		var transitionErr error
+		for _, step := range []struct {
+			principal portalapi.Principal
+			action    string
+		}{{author, "submit"}, {approver, "approve"}, {publisher, "publish"}} {
+			version, transitionErr = s.TransitionPortalVersion(context.Background(), step.principal, portal.ID, version.ID, step.action)
+			if transitionErr != nil {
+				t.Fatal(transitionErr)
+			}
+		}
+		return version
+	}
+	first := publish(portal.Versions[0])
+	configuration.Application.Route = "/new"
+	second, err := s.CreatePortalVersion(context.Background(), author, portal.ID, configuration)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = publish(second)
+	if _, err := s.ReleasePortalVersion(context.Background(), publisher, portal.ID, portalapi.PortalReleaseRequest{PortalVersionID: first.ID}); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("普通上线不得用旧 Published 版本伪装回滚: %v", err)
 	}
 }
 

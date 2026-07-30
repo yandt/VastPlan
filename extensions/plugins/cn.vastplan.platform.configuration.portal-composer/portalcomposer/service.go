@@ -248,9 +248,6 @@ func (s *Service) Approve(ctx context.Context, principal portalapi.Principal, id
 }
 
 func (s *Service) Publish(ctx context.Context, principal portalapi.Principal, id uint64, request portalapi.PublishRequest) (portalapi.Revision, error) {
-	if principal.System {
-		return s.breakGlassPublishPortalVersion(ctx, principal, id, request.BreakGlassReason)
-	}
 	s.mu.Lock()
 	i, err := s.revisionIndex(principal.TenantID, id)
 	if err != nil {
@@ -259,20 +256,30 @@ func (s *Service) Publish(ctx context.Context, principal portalapi.Principal, id
 	}
 	portalID := s.state.Revisions[i].PortalID
 	s.mu.Unlock()
+	if principal.System {
+		if _, err := s.breakGlassPublishPortalVersion(ctx, principal, portalID, id, request.BreakGlassReason); err != nil {
+			return portalapi.Revision{}, err
+		}
+		return s.legacyRevision(principal.TenantID, id)
+	}
 	if _, err := s.TransitionPortalVersion(ctx, principal, portalID, id, "publish"); err != nil {
 		return portalapi.Revision{}, err
 	}
 	return s.legacyRevision(principal.TenantID, id)
 }
 
-func (s *Service) Audit(_ context.Context, principal portalapi.Principal, id uint64) ([]portalapi.AuditEvent, error) {
+func (s *Service) Audit(_ context.Context, principal portalapi.Principal, portalID string, id uint64) ([]portalapi.AuditEvent, error) {
 	if principal.TenantID == "" || principal.ID == "" {
 		return nil, ErrForbidden
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, err := s.revisionIndex(principal.TenantID, id); err != nil {
+	index, err := s.revisionIndex(principal.TenantID, id)
+	if err != nil {
 		return nil, err
+	}
+	if s.state.Revisions[index].PortalID != portalID {
+		return nil, ErrNotFound
 	}
 	out := make([]portalapi.AuditEvent, 0)
 	for _, e := range s.state.Audit {

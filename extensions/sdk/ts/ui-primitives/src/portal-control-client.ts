@@ -142,6 +142,7 @@ export interface Portal {
 
 export interface PortalGovernance {
   portals: Portal[];
+  creationTemplate?: PortalConfiguration;
 }
 
 export interface PortalReleaseRequest {
@@ -253,8 +254,8 @@ export class PortalControlClient {
     return this.mutate<PortalVersion>(this.versionPath(portalId, id), "DELETE", {});
   }
 
-  public transitionPortalVersion(portalId: string, id: number, action: "submit" | "approve" | "publish"): Promise<PortalVersion> {
-    return this.mutate<PortalVersion>(`${this.versionPath(portalId, id)}/${action}`, "POST", {});
+  public transitionPortalVersion(portalId: string, id: number, action: "submit" | "approve" | "publish", breakGlassReason?: string): Promise<PortalVersion> {
+    return this.mutate<PortalVersion>(`${this.versionPath(portalId, id)}/${action}`, "POST", breakGlassReason === undefined ? {} : { breakGlassReason });
   }
 
   public releasePortalVersion(portalId: string, request: PortalReleaseRequest): Promise<PortalRelease> {

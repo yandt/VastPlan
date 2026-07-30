@@ -48,7 +48,7 @@ export function createPortalPage(client: PortalControlClient): CollectionPageDef
         const release = await client.releasePortalVersion(row.id, { portalVersionId: row.releaseVersionId, expectedCurrentReleaseId: row.currentReleaseId, reason: "管理员从 Portal 管理页上线" });
         failRelease(release);
       } else if (action.id === "portal.rollback") {
-        const source = row.portal.releases.find((release) => release.status === "Superseded");
+        const source = (row.portal.releases ?? []).find((release) => release.status === "Superseded");
         if (source === undefined) throw new Error("没有可回滚的历史上线记录");
         failRelease(await client.rollbackPortalRelease(row.id, source.id, row.currentReleaseId, "管理员从 Portal 管理页回滚"));
       } else return;
@@ -70,15 +70,15 @@ function portalForm(client: PortalControlClient, kind: "create" | "edit" | "new-
     async prepare(selected, signal) {
       const row = selected[0];
       if (row !== undefined) return { initialValue: configurationToForm(row.id, row.version.configuration) };
-      const { portals } = await client.governance();
+      const governance = await client.governance();
       if (signal.aborted) throw new DOMException("Portal template request cancelled", "AbortError");
-      const source = portals.flatMap((portal) => portal.versions).sort((a, b) => b.id - a.id)[0];
+      const source = governance.creationTemplate ?? governance.portals.flatMap((portal) => portal.versions).sort((a, b) => b.id - a.id)[0]?.configuration;
       if (source === undefined) throw new Error("当前没有可复制的平台配置模板");
-      return { initialValue: { ...configurationToForm("", source.configuration), portalId: "", route: "/" } };
+      return { initialValue: { ...configurationToForm("", source), portalId: "", route: "/" } };
     },
     async submit({ value, selected }) {
       const row = selected[0];
-      const base = row?.version.configuration ?? await latestConfiguration(client);
+      const base = row?.version.configuration ?? await creationTemplate(client);
       const configuration = buildPortalConfiguration(base, value);
       const portalId = typeof value.portalId === "string" ? value.portalId : row?.id ?? "";
       if (kind === "create") await client.createPortal(portalId, configuration);
@@ -124,8 +124,11 @@ function toPortalRow(portal: Portal): PortalRow[] {
   const version = portal.versions[0];
   if (version === undefined) return [];
   const summary = profileSummary(version.configuration.platform);
-  const current = portal.releases.find((release) => release.status === "Current");
-  const releaseVersion = portal.versions.find((candidate) => candidate.status === "Published" && candidate.id !== current?.portalVersionId);
+  const releases = portal.releases ?? [];
+  const current = releases.find((release) => release.status === "Current");
+  const releasedVersionIds = new Set(releases.filter((release) => release.status === "Current" || release.status === "Superseded").map((release) => release.portalVersionId));
+  const currentVersion = portal.versions.find((candidate) => candidate.id === current?.portalVersionId);
+  const releaseVersion = portal.versions.find((candidate) => candidate.status === "Published" && !releasedVersionIds.has(candidate.id) && (currentVersion === undefined || candidate.number > currentVersion.number));
   return [{
     id: portal.id,
     portal,
@@ -139,9 +142,9 @@ function toPortalRow(portal: Portal): PortalRow[] {
     currentReleaseId: portal.currentReleaseId ?? 0,
     releaseVersionId: releaseVersion?.id ?? 0,
     releaseAvailable: releaseVersion !== undefined,
-    hasRollback: portal.releases.some((release) => release.status === "Superseded"),
+    hasRollback: releases.some((release) => release.status === "Superseded"),
     updatedAt: portal.updatedAt,
   }];
 }
-async function latestConfiguration(client: PortalControlClient): Promise<PortalConfiguration> { const { portals } = await client.governance(); const version = portals.flatMap((portal) => portal.versions).sort((a, b) => b.id - a.id)[0]; if (version === undefined) throw new Error("当前没有可复制的平台配置模板"); return version.configuration; }
+async function creationTemplate(client: PortalControlClient): Promise<PortalConfiguration> { const governance = await client.governance(); const template = governance.creationTemplate ?? governance.portals.flatMap((portal) => portal.versions).sort((a, b) => b.id - a.id)[0]?.configuration; if (template === undefined) throw new Error("当前没有可用的平台配置模板"); return template; }
 function failRelease(release: PortalRelease): void { if (release.status === "Failed") throw new Error(release.phases.find((phase) => phase.status === "Failed")?.message ?? "Portal 上线失败"); }
