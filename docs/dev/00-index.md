@@ -254,11 +254,13 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0171 Portal 单聚合版本与上线子流程](decisions/ADR-0171-Portal单聚合版本与上线子流程.md)
 - [ADR-0172 通用版本账本与可插拔存储 Provider](decisions/ADR-0172-通用版本账本与可插拔存储Provider.md)
 - [ADR-0173 版本环境与资源适配](decisions/ADR-0173-版本环境与资源适配.md)
+- [ADR-0174 Portal 可选版本控制与发布快照分离](decisions/ADR-0174-Portal可选版本控制与发布快照分离.md)
 
 ### 通用版本账本
 
 - [通用版本账本](architecture/通用版本账本.md) —— 不可变配置版本、领域 CAS、Provider 路由、File/Git/Relational 存储与 Portal 接入边界
 - [版本环境与资源适配](architecture/版本环境与资源适配.md) —— Snapshot/Overlay/Git 工作区、Resource Adapter、Environment Profile、热投影与数据库资源接入
+- [P2.3 Portal 可选版本控制接入](architecture/Portal可选版本控制接入.md) —— 无版本工作副本、发布快照、可选 Workspace 历史及故障恢复边界
 
 ### 插件共享代码与能力复用
 

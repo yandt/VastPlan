@@ -203,3 +203,5 @@
 - [ADR-0170 统一 Capability Contract 与可信 ArtifactIdentity](ADR-0170-统一Capability-Contract与可信ArtifactIdentity.md)
 - [ADR-0171 Portal 单聚合版本与上线子流程](ADR-0171-Portal单聚合版本与上线子流程.md)
 - [ADR-0172 通用版本账本与可插拔存储 Provider](ADR-0172-通用版本账本与可插拔存储Provider.md)
+- [ADR-0173 版本环境与资源适配](ADR-0173-版本环境与资源适配.md)
+- [ADR-0174 Portal 可选版本控制与发布快照分离](ADR-0174-Portal可选版本控制与发布快照分离.md)

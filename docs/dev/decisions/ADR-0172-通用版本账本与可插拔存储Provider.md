@@ -53,3 +53,7 @@ Portal Composer、Deployment Manager、Plugin Settings 等领域都保存不可�
 正面：版本语义、摘要和 Provider 切换形成单一协议；Portal 保持领域内聚；开发文件、企业数据库和 GitOps 可以按 namespace 选择；Provider 可共享进程而不制造进程风暴。
 
 代价：Portal 与 Ledger 之间需要可恢复 outbox；版本内容读取增加一次能力调用；未实施安全 GC 前，不可达版本只能保守保留。Ledger 故障会阻止新的治理写，但不得影响已发布 Portal Runtime 使用现有 Activation。
+
+## 后续修订
+
+2026-07-31：[ADR-0174](ADR-0174-Portal可选版本控制与发布快照分离.md) 修订本文 Portal 必然迁入 Ledger 的描述。Ledger/Provider 边界不变；只有显式配置 VersionControlBinding 的 Portal 才写 `portal.configuration`。P2.3 使用 detached VersionRef，领域 CAS 成功前不移动 Head；未配置时 Portal 不创建本地替代版本。

@@ -47,3 +47,7 @@ PortalRelease: Preparing → Current → Superseded
 - 只合并四个页面：底层仍要求拼装四份 revision，复杂度只是被 UI 隐藏。
 - 保留共享 Profile 并允许 Portal 覆盖：需要继承、合并、影响分析和历史重放规则，超出当前需要。
 - 发布即上线：无法在不改变线上状态的情况下审批和预检候选，也破坏启动与业务发布分离。
+
+## 后续修订
+
+2026-07-31：[ADR-0174](ADR-0174-Portal可选版本控制与发布快照分离.md) 保留本文“单一 Portal 聚合”和“上线是独立 Release 子流程”的决定，但修订 Portal 必然以 PortalVersion 为工作对象的部分。P2.3 将可变 WorkingCopy、冻结 Publication、PortalRelease 与可选 VersionControlBinding 分离；未配置 Workspace 时不生成通用版本历史。

@@ -32,3 +32,7 @@
 - `POST /v1/portals/{portalId}/releases/{releaseId}/rollback`：由历史版本创建新上线记录。
 
 所有写操作均重新取得 CSRF token；tenant 与 Principal 只能由可信会话和 CallContext 投影。Portal、Version 与 Release 身份只取 URL 并在 Composer 交叉校验，正文不能覆盖；system break-glass 必须携带原因并写入高优先级审计。完整边界见《[前端门户内核](../architecture/前端门户内核.md)》、[ADR-0171](../decisions/ADR-0171-Portal单聚合版本与上线子流程.md) 和 [ADR-0125](../decisions/ADR-0125-Portal-Composer与Preference共享状态分区.md)。
+
+## P2.3 规划说明
+
+上文描述当前 `2.0.1` 制品。P2.3 将按 [Portal 可选版本控制接入](../architecture/Portal可选版本控制接入.md)进行开发期破坏性升级：PortalVersion 拆为 WorkingCopy、Publication、Release 与可选 VersionControlBinding。未配置 Workspace 时没有通用版本历史，但审批冻结和 Release 安全语义继续存在；该规划尚未进入当前插件代码和 BFF API。
