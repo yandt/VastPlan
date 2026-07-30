@@ -37,3 +37,15 @@ PortalPreference 的单个 scope revision 与 `tenant + subject` 聚合文档 re
 2. Shared State 聚合文档 CAS 冲突由服务端有界重载最新文档、重新校验目标 scope revision 并合并写入；不同 scope 的并发更新不再产生虚假的“其他设备更新”。
 3. 重载后若目标 scope revision 已变化，立即返回真实业务冲突；若持续发生聚合文档争用，则按存储不可用处理，不伪装成业务 revision 冲突。
 4. 回归测试同时覆盖“不同 scope 自动重基后均保留”和“同一 scope 仍保持 CAS 单赢家”。
+
+## 2026-07-30 修订：组合治理 Root CAS 与内容寻址快照
+
+原“每 tenant 单文档”在 PortalVersion、Release、Test Release 与审计历史增长后会触达 Shared State 的 1 MiB 单值上限，故升级为仍保持单提交点的分块快照：
+
+1. `tenant` key 改存带 format、完整大小、完整 SHA-256 和 chunk 清单的小型 Root；Root revision 继续作为治理聚合唯一 CAS fence。
+2. 完整状态序列化后按 512 KiB 切分，以 `blob/<sha256>` 不可变写入。全部 chunk 完成且复核冲突内容一致后才 CAS Root，因此读者只会看到旧完整快照或新完整快照。
+3. 读取必须逐块复核 key、大小、chunk 摘要和完整快照摘要，任一缺失或篡改均 fail-closed。当前快照安全上限为 64 MiB，Root 本身仍远低于单值上限。
+4. 旧版直接存放在 `tenant` key 的 JSON 文档继续严格可读；下一次成功治理写使用同一 key revision 原位提交 Root，不要求停机迁移或双写。
+5. Frontend Test Release 的候选归属与候选版本在同一次 Root CAS 中提交。内部 `TestVersionOwners` 把测试候选排除于正式 PortalVersion、PortalRelease、普通发布和普通回滚入口；测试 Runtime Activation 仍由专用 Test Release 状态机管理。
+
+该修订不改变 active-active、tenant scope、状态机或浏览器契约，也不把跨 key 事务伪装成原子操作：chunk 是提交前不可变准备数据，只有 Root CAS 决定可达快照。失败 CAS 可能留下不可达 chunk，后续应沿用 Credentials 的“宽限期 + Root 二次复核”方式做独立清理，清理能力不得进入写事务关键路径。

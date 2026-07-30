@@ -184,6 +184,38 @@ func (s *Service) projectActivationsLocked(tenantID string) []portalapi.PortalAc
 	return out
 }
 
+// projectPortalActivationsLocked keeps Test Release activations out of the
+// formal Portal lineage. The most recent stable activation remains the
+// governance baseline while a test candidate is live through its own API.
+func (s *Service) projectPortalActivationsLocked(tenantID string) []portalapi.PortalActivation {
+	latest := map[string]uint64{}
+	for _, activation := range s.state.Activations {
+		if activation.TenantID != tenantID || s.isTestVersionLocked(activation.ApplicationRevisionID) || activation.Status == portalapi.ActivationFailed {
+			continue
+		}
+		if activation.ID > latest[activation.PortalID] {
+			latest[activation.PortalID] = activation.ID
+		}
+	}
+	out := make([]portalapi.PortalActivation, 0)
+	for _, activation := range s.state.Activations {
+		if activation.TenantID != tenantID || s.isTestVersionLocked(activation.ApplicationRevisionID) {
+			continue
+		}
+		copy := cloneJSON(activation)
+		if copy.Status != portalapi.ActivationFailed {
+			if copy.ID == latest[copy.PortalID] {
+				copy.Status = portalapi.ActivationCurrent
+			} else {
+				copy.Status = portalapi.ActivationSuperseded
+			}
+		}
+		out = append(out, copy)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+	return out
+}
+
 func (s *Service) activationInputsLocked(tenantID string, request portalapi.ActivationRequest) (portalapi.Revision, portalapi.PlatformProfileRevision, portalapi.BindingRevision, error) {
 	applicationIndex, err := s.revisionIndex(tenantID, request.ApplicationRevisionID)
 	if err != nil {

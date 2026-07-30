@@ -137,6 +137,64 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 	if activations[0].Spec.Plugins[len(activations[0].Spec.Plugins)-1].Version != request.Receipt.Ref.Version {
 		t.Fatalf("候选未锁定测试版本: %+v", activations[0].Spec.Plugins)
 	}
+	if owner := service.state.TestVersionOwners[release.CandidatePortalVersionID]; owner != release.ID {
+		t.Fatalf("测试候选必须与 Test Release 在同一次状态提交中建立归属: owner=%d release=%d", owner, release.ID)
+	}
+	governance, err := service.PortalGovernance(context.Background(), admin)
+	if err != nil || len(governance.Portals) != 1 {
+		t.Fatalf("读取 Portal 聚合失败: %+v err=%v", governance, err)
+	}
+	portal := governance.Portals[0]
+	if len(portal.Versions) != 1 || portal.Versions[0].ID == release.CandidatePortalVersionID || len(portal.Releases) != 1 || portal.CurrentReleaseID != first.ID {
+		t.Fatalf("Test Release 不得进入正式 Portal 版本和上线谱系: %+v", portal)
+	}
+	if _, err := service.ReleasePortalVersion(context.Background(), publisher, portal.ID, portalapi.PortalReleaseRequest{PortalVersionID: release.CandidatePortalVersionID, ExpectedCurrentReleaseID: release.CandidateReleaseID}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("测试候选不得通过普通 PortalRelease 晋级: %v", err)
+	}
+	next, err := service.CreatePortalVersion(context.Background(), author, portal.ID, portal.Versions[0].Configuration)
+	if err != nil || next.Number != 2 {
+		t.Fatalf("隔离的测试候选不得占用正式版本号或阻塞新草稿: %+v err=%v", next, err)
+	}
+}
+
+func TestFrontendTestReleaseCandidateAssociationIsAtomic(t *testing.T) {
+	catalog := &acceptingTestCatalog{}
+	service, err := openTestService(filepath.Join(t.TempDir(), "portals.json"), catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.BindPlatformCatalog(testPlatformCatalog()); err != nil {
+		t.Fatal(err)
+	}
+	author, approver := principal("author", "portal.compose"), principal("approver", "portal.approve")
+	publisher, admin := principal("publisher", "portal.publish"), principal("admin", "portal.compose")
+	publishTestPortalApplication(t, service, author, approver, publisher)
+	zero := int64(0)
+	binding, err := service.PutTestTargetBinding(context.Background(), admin, "admin-ui", portalapi.PutTestTargetBindingRequest{
+		Scope: portalapi.TestTargetApplicationPlugin, PortalID: "admin", PluginID: "cn.vastplan.product.frontend.admin",
+		AllowedPublishers: []string{"vastplan"}, Enabled: true, IfVersion: &zero,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stableVersions := len(service.state.Revisions)
+	persist := service.testSave
+	service.testSave = func(value state) error {
+		if len(value.TestVersionOwners) != 0 {
+			return errors.New("injected candidate commit failure")
+		}
+		return persist(value)
+	}
+	release, err := service.CreateTestRelease(context.Background(), publisher, portalapi.CreateTestReleaseRequest{
+		BindingID: binding.ID,
+		Receipt:   portalTestReceipt(pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.8.abcdef0", Channel: "testing"}, strings.Repeat("8", 64), 17),
+	})
+	if err != nil || release.Status != portalapi.TestReleaseFailed || release.CandidatePortalVersionID != 0 {
+		t.Fatalf("候选原子提交失败必须形成已关联的失败结果且不暴露候选: %+v err=%v", release, err)
+	}
+	if len(service.state.TestVersionOwners) != 0 || len(service.state.Revisions) != stableVersions {
+		t.Fatalf("候选与 Test Release 关联写入失败后不得留下孤儿版本: owners=%v revisions=%d", service.state.TestVersionOwners, len(service.state.Revisions))
+	}
 }
 
 func TestFrontendTestReleaseRejectsProfileSlotAndPreservesCurrentActivation(t *testing.T) {

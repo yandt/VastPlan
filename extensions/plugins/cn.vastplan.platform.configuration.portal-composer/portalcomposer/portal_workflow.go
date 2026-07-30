@@ -55,7 +55,7 @@ func (s *Service) CreatePortalVersion(ctx context.Context, principal portalapi.P
 	}
 	number := uint64(1)
 	for _, revision := range s.state.Revisions {
-		if revision.TenantID != principal.TenantID || revision.PortalID != portalID {
+		if revision.TenantID != principal.TenantID || revision.PortalID != portalID || s.isTestVersionLocked(revision.ID) {
 			continue
 		}
 		if revision.Status != portalapi.StatusPublished {
@@ -163,10 +163,14 @@ func (s *Service) DeletePortalVersion(_ context.Context, principal portalapi.Pri
 }
 
 func (s *Service) TransitionPortalVersion(ctx context.Context, principal portalapi.Principal, portalID string, id uint64, action string) (portalapi.PortalVersion, error) {
+	return s.transitionPortalVersion(ctx, principal, portalID, id, action, false)
+}
+
+func (s *Service) transitionPortalVersion(ctx context.Context, principal portalapi.Principal, portalID string, id uint64, action string, allowTest bool) (portalapi.PortalVersion, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.revisionIndex(principal.TenantID, id)
-	if err != nil || s.state.Revisions[index].PortalID != portalID {
+	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(id) != allowTest {
 		return portalapi.PortalVersion{}, ErrNotFound
 	}
 	revision := &s.state.Revisions[index]
@@ -213,7 +217,7 @@ func (s *Service) breakGlassPublishPortalVersion(ctx context.Context, principal 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.revisionIndex(principal.TenantID, id)
-	if err != nil || s.state.Revisions[index].PortalID != portalID {
+	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(id) {
 		return portalapi.PortalVersion{}, ErrNotFound
 	}
 	revision := &s.state.Revisions[index]
@@ -255,7 +259,7 @@ func (s *Service) legacyRevision(tenantID string, id uint64) (portalapi.Revision
 func (s *Service) ReleasePortalVersion(ctx context.Context, principal portalapi.Principal, portalID string, request portalapi.PortalReleaseRequest) (portalapi.PortalRelease, error) {
 	s.mu.Lock()
 	index, err := s.revisionIndex(principal.TenantID, request.PortalVersionID)
-	if err != nil || s.state.Revisions[index].PortalID != portalID {
+	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(request.PortalVersionID) {
 		s.mu.Unlock()
 		return portalapi.PortalRelease{}, ErrNotFound
 	}
@@ -276,7 +280,7 @@ func (s *Service) RollbackPortalRelease(ctx context.Context, principal portalapi
 	s.mu.Lock()
 	valid := false
 	for _, release := range s.state.Activations {
-		if release.TenantID == principal.TenantID && release.PortalID == portalID && release.ID == sourceID {
+		if release.TenantID == principal.TenantID && release.PortalID == portalID && release.ID == sourceID && !s.isTestVersionLocked(release.ApplicationRevisionID) {
 			valid = true
 			break
 		}
@@ -298,7 +302,7 @@ func (s *Service) PortalGovernance(ctx context.Context, principal portalapi.Prin
 	defer s.mu.Unlock()
 	ids := map[string]struct{}{}
 	for _, revision := range s.state.Revisions {
-		if revision.TenantID == principal.TenantID {
+		if revision.TenantID == principal.TenantID && !s.isTestVersionLocked(revision.ID) {
 			ids[revision.PortalID] = struct{}{}
 		}
 	}
@@ -333,7 +337,7 @@ func (s *Service) ListPortalReleases(ctx context.Context, principal portalapi.Pr
 func (s *Service) portalLocked(tenantID, portalID string) (portalapi.Portal, error) {
 	portal := portalapi.Portal{ID: portalID, TenantID: tenantID, Versions: []portalapi.PortalVersion{}, Releases: []portalapi.PortalRelease{}}
 	for _, revision := range s.state.Revisions {
-		if revision.TenantID != tenantID || revision.PortalID != portalID {
+		if revision.TenantID != tenantID || revision.PortalID != portalID || s.isTestVersionLocked(revision.ID) {
 			continue
 		}
 		version, err := s.portalVersionLocked(tenantID, revision)
@@ -352,7 +356,7 @@ func (s *Service) portalLocked(tenantID, portalID string) (portalapi.Portal, err
 		return portalapi.Portal{}, ErrNotFound
 	}
 	sort.Slice(portal.Versions, func(i, j int) bool { return portal.Versions[i].Number > portal.Versions[j].Number })
-	for _, activation := range s.projectActivationsLocked(tenantID) {
+	for _, activation := range s.projectPortalActivationsLocked(tenantID) {
 		if activation.PortalID != portalID {
 			continue
 		}
@@ -391,7 +395,7 @@ func (s *Service) portalCreationTemplateLocked(tenantID string) *portalapi.Porta
 
 func (s *Service) isLatestPublishedVersionLocked(tenantID, portalID string, candidate portalapi.Revision) bool {
 	for _, revision := range s.state.Revisions {
-		if revision.TenantID == tenantID && revision.PortalID == portalID && revision.Status == portalapi.StatusPublished && revision.Number > candidate.Number {
+		if revision.TenantID == tenantID && revision.PortalID == portalID && !s.isTestVersionLocked(revision.ID) && revision.Status == portalapi.StatusPublished && revision.Number > candidate.Number {
 			return false
 		}
 	}
@@ -399,7 +403,7 @@ func (s *Service) isLatestPublishedVersionLocked(tenantID, portalID string, cand
 }
 
 func (s *Service) wasReleasedLocked(tenantID, portalID string, versionID uint64) bool {
-	for _, release := range s.projectActivationsLocked(tenantID) {
+	for _, release := range s.projectPortalActivationsLocked(tenantID) {
 		if release.PortalID == portalID && release.ApplicationRevisionID == versionID && (release.Status == portalapi.ActivationCurrent || release.Status == portalapi.ActivationSuperseded) {
 			return true
 		}
@@ -437,11 +441,16 @@ func (s *Service) versionPartsLocked(tenantID string, revision portalapi.Revisio
 
 func (s *Service) portalExistsLocked(tenantID, portalID string) bool {
 	for _, revision := range s.state.Revisions {
-		if revision.TenantID == tenantID && revision.PortalID == portalID {
+		if revision.TenantID == tenantID && revision.PortalID == portalID && !s.isTestVersionLocked(revision.ID) {
 			return true
 		}
 	}
 	return false
+}
+
+func (s *Service) isTestVersionLocked(versionID uint64) bool {
+	_, ok := s.state.TestVersionOwners[versionID]
+	return ok
 }
 
 func (s *Service) normalizePortalConfiguration(portalID, tenantID string, number, resolvedRevision uint64, configuration portalapi.PortalConfiguration) (portalapi.PortalConfiguration, portalapi.PortalSpec, frontendcompositionv1.PortalBinding, error) {

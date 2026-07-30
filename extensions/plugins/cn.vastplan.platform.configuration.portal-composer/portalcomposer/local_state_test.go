@@ -22,6 +22,9 @@ func openTestService(path string, catalog Catalog) (*Service, error) {
 		if service.state.TestBindings == nil {
 			service.state.TestBindings = map[string]portalapi.TestTargetBinding{}
 		}
+		if service.state.TestVersionOwners == nil {
+			service.state.TestVersionOwners = map[uint64]uint64{}
+		}
 		changed := service.recoverInterruptedTestReleases()
 		if service.markCurrentReferencesPendingLocked() {
 			changed = true
@@ -43,7 +46,7 @@ func saveTestComposerState(path string, value state) error {
 	if err != nil {
 		return err
 	}
-	if len(raw) > maximumComposerState {
+	if len(raw) > maximumComposerSnapshot {
 		return errors.New("测试 Portal Composer 状态超过上限")
 	}
 	temporary, err := os.CreateTemp(filepath.Dir(path), ".portal-composer-test-*")

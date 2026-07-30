@@ -540,7 +540,7 @@ func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) 
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("通过可信宿主创建草稿失败: result=%+v err=%v", result, err)
 	}
-	if len(host.calls) != 4 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.state.shared.get" || host.calls[2] != portalapi.KernelCatalogValidationCapability || host.calls[3] != "kernel.state.shared.create" {
+	if len(host.calls) != 5 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.state.shared.get" || host.calls[2] != portalapi.KernelCatalogValidationCapability || host.calls[3] != "kernel.state.shared.create" || host.calls[4] != "kernel.state.shared.create" {
 		t.Fatalf("宿主调用路径错误: %v", host.calls)
 	}
 	var portal portalapi.Portal

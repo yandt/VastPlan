@@ -204,14 +204,12 @@ func (s *Service) executePortalTestRelease(ctx context.Context, principal portal
 		s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.preview_failed", err, false)
 		return
 	}
-	published, err := s.TransitionPortalVersion(ctx, principal, binding.PortalID, candidateVersion.ID, "publish")
+	published, err := s.transitionPortalVersion(ctx, principal, binding.PortalID, candidateVersion.ID, "publish", true)
 	if err != nil {
 		s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.publish_failed", err, false)
 		return
 	}
-	if err := s.transitionPortalTestRelease(principal.TenantID, releaseID, portalapi.TestReleaseActivating, func(item *portalapi.TestRelease) {
-		item.CandidatePortalVersionID = published.ID
-	}); err != nil {
+	if err := s.transitionPortalTestRelease(principal.TenantID, releaseID, portalapi.TestReleaseActivating, nil); err != nil {
 		return
 	}
 	candidateRevision, err := s.legacyRevision(principal.TenantID, published.ID)
@@ -276,10 +274,20 @@ func (s *Service) RollbackTestRelease(ctx context.Context, principal portalapi.P
 func (s *Service) createAuthorizedTestVersion(ctx context.Context, principal portalapi.Principal, portalID string, configuration portalapi.PortalConfiguration, releaseID uint64, bindingID string) (portalapi.PortalVersion, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	releaseIndex := -1
+	for i := range s.state.TestReleases {
+		if s.state.TestReleases[i].ID == releaseID && s.state.TestReleases[i].TenantID == principal.TenantID {
+			releaseIndex = i
+			break
+		}
+	}
+	if releaseIndex < 0 {
+		return portalapi.PortalVersion{}, ErrNotFound
+	}
 	number := uint64(1)
 	for _, revision := range s.state.Revisions {
-		if revision.TenantID == principal.TenantID && revision.PortalID == portalID && revision.Number >= number {
-			number = revision.Number + 1
+		if revision.TenantID == principal.TenantID && revision.PortalID == portalID && !s.isTestVersionLocked(revision.ID) && revision.Number > number {
+			number = revision.Number
 		}
 	}
 	configuration, spec, management, err := s.normalizePortalConfiguration(portalID, principal.TenantID, number, s.state.NextRevision+1, configuration)
@@ -303,8 +311,21 @@ func (s *Service) createAuthorizedTestVersion(ctx context.Context, principal por
 	s.state.Profiles = append(s.state.Profiles, profile)
 	s.state.Bindings = append(s.state.Bindings, bindingRevision)
 	s.state.Revisions = append(s.state.Revisions, revision)
+	s.state.TestVersionOwners[versionID] = releaseID
+	previousRelease := cloneJSON(s.state.TestReleases[releaseIndex])
+	s.state.TestReleases[releaseIndex].CandidatePortalVersionID = versionID
+	s.state.TestReleases[releaseIndex].UpdatedAt = now
+	auditLength, nextAudit := len(s.state.Audit), s.state.NextAudit
 	s.auditLocked(revision, "portal.version.test_target_authorized", portalapi.Principal{ID: approver, TenantID: principal.TenantID}, "", "normal")
 	if err := s.save(); err != nil {
+		s.state.NextRevision--
+		s.state.NextGovernance -= 2
+		s.state.Profiles = s.state.Profiles[:len(s.state.Profiles)-1]
+		s.state.Bindings = s.state.Bindings[:len(s.state.Bindings)-1]
+		s.state.Revisions = s.state.Revisions[:len(s.state.Revisions)-1]
+		delete(s.state.TestVersionOwners, versionID)
+		s.state.TestReleases[releaseIndex] = previousRelease
+		s.state.Audit, s.state.NextAudit = s.state.Audit[:auditLength], nextAudit
 		return portalapi.PortalVersion{}, err
 	}
 	version, err := s.portalVersionLocked(principal.TenantID, revision)
@@ -316,7 +337,7 @@ func (s *Service) transitionPortalTestRelease(tenant string, id uint64, status p
 	defer s.mu.Unlock()
 	for i := range s.state.TestReleases {
 		item := &s.state.TestReleases[i]
-		if item.ID != id {
+		if item.ID != id || item.TenantID != tenant {
 			continue
 		}
 		old := cloneJSON(*item)

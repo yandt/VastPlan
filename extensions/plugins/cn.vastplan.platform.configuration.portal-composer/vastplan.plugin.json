@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.configuration.portal-composer",
   "name": "VastPlan Portal Composer",
   "description": "以单一 Portal 聚合治理完整版本、上线历史与用户级 PortalPreference",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

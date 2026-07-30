@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`2.0.0`
+当前制品版本：`2.0.1`
 
 该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal。对管理员只暴露一个聚合：每个 `portalId` 一条 Portal 记录，完整平台设置、应用插件、路由、品牌和管理服务绑定均保存在其 `PortalVersion` 内。
 
@@ -11,10 +11,12 @@
 - Portal 创建及完整配置版本管理；同一 Portal 最多一个未发布候选；
 - `Draft → PendingApproval → Approved → Published` 异人审批，Published 只冻结版本，不直接上线；
 - `PortalRelease` 上线、历史回滚、制品物化、引用保护和 CAS；普通上线只接受最新且从未上线的 Published 版本，历史恢复必须走显式回滚；
-- Frontend Test Release 在完整 PortalVersion 上替换一个获授权插件，并形成隔离候选；
+- Frontend Test Release 在完整 Portal 配置上替换一个获授权插件，并形成带原子归属的隔离候选；候选版本和 Activation 不进入正式 PortalVersion/PortalRelease 谱系，不能占用正式版本号或由普通上线入口晋级；
 - 只通过 `kernel.portal.catalog.*` 窄服务取得可信校验与已验签制品引用；
 - `referencePending` outbox 在管理读取和进程重启后幂等收敛；
 - Portal 用户偏好按 tenant、subject 与 Portal scope 独立保存。
+
+组合治理状态使用“小型 Root CAS + 512 KiB 内容寻址 chunk”。Root 是唯一提交点并绑定完整快照 SHA-256，读路径逐块复核大小和摘要；旧的单值租户文档保持可读，并在下一次成功 CAS 时原位升级。当前单租户快照安全上限为 64 MiB，不再受 Shared State 单值 1 MiB 限制。
 
 静态 `portal-platform-catalog.json` 仅为首个 PortalVersion 提供种子配置，不再形成可在线编辑的 Platform Profile 或 PortalBinding。治理读取会返回可信 `creationTemplate`，因此租户尚无 Portal 时也能创建第一条记录；空版本和上线历史统一编码为 `[]`。内核 Recovery Baseline 继续独立于 Portal，确保错误配置不能破坏最小管理与恢复入口。
 

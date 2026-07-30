@@ -13,8 +13,8 @@
       "domains": ["127.0.0.1", "localhost"],
       "platformProfile": {
         "id": "portal-default",
-        "revision": 80,
-        "digest": "7099c5d48bbb78067cbde26702b811edc641934c916696c5f63727a3ead2e643"
+        "revision": 81,
+        "digest": "941c11cc503dfeda54d72106177a375c343ed3a5cc64ee08db33e63d942ee92b"
       },
       "accessTemplate": "access",
       "localization": {
