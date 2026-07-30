@@ -23,7 +23,7 @@ export function Table({ columns, rows, rowKey = "id", selection = "none", select
     align: column.align === "end" ? "right" : column.align === "center" ? "center" : "left",
     render: column.render === undefined ? undefined : (value, row, index) => column.render?.(value, row, index),
   }));
-  return <div style={{ width: "100%", overflowX: "auto" }}><AntdTable
+  return <div data-table-scroll="horizontal" style={{ width: "100%", overflowX: "auto", overflowY: "hidden" }}><AntdTable
     columns={antdColumns}
     dataSource={rows}
     rowKey={keyOf}

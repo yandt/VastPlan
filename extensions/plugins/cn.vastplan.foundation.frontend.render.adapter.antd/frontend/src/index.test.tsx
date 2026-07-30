@@ -34,6 +34,13 @@ describe("Ant Design portal UI renderer", () => {
     expect(markup).toContain("Select Node A");
   });
 
+  it("does not turn a one-row table into a vertical scroll container", () => {
+    const Table = antdPortalUIComponents.Table;
+    const markup = renderToStaticMarkup(<Table columns={[{ key: "name", title: "Name" }]} rows={[{ id: "one", name: "Only row" }]} />);
+    expect(markup).toContain('data-table-scroll="horizontal"');
+    expect(markup).toContain("overflow-x:auto;overflow-y:hidden");
+  });
+
   it("maps governed table virtualization to the native Ant virtual table", () => {
     const Table = antdPortalUIComponents.Table;
     const rows = Array.from({ length: 100 }, (_, id) => ({ id, name: `Row ${id}` }));

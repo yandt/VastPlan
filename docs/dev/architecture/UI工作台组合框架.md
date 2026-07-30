@@ -99,6 +99,7 @@ CollectionLoader(query, signal) -> CollectionResult
 - Cursor 只来自上次成功结果的 `nextCursor`。加载更多会按稳定记录键去重并用新事实替换重复项；Loader 返回与请求相同的 cursor 时立即失败，避免无限请求。筛选或刷新会重新从首 cursor 装配，未提交请求由 `AbortSignal` 取消。
 - Collection 的默认管理工作区组合一级 FilterPanel、主操作在左/次操作在右、浅色表头与行分隔、页脚右对齐分页。视觉语义通过 `FilterBar`、`Table`、`Pagination` 的 `collection` 呈现能力交由渲染适配器实现，Workbench 不注入框架 CSS。
 - Table 行虚拟化默认使用 `auto`：当前页达到 80 行后启用，少量数据保持普通表格；功能插件只可选择 `auto / always / off`，不能传入像素、overscan 或框架私有属性。Workbench 按 density 统一解析 40/48/56px 固定行高、12 行视口与 4 行 overscan，再通过 `ui.Table` 契约交给 Adapter。Ant Design 与 Arco 使用各自原生虚拟表格，MUI 使用精确锁定的 TanStack Virtual，仅渲染可视行；三者继续保持服务端分页、全页选择键集合、固定操作列和原始记录索引语义。虚拟化不替代服务端筛选、排序或分页，也不允许用超大 page size 绕开数据面限额。
+- Table 的横纵溢出必须分轴治理：普通表格只拥有横向滚动，明确禁止产生内部纵向滚动容器；只有启用虚拟化后，Renderer 才能按受治理视口打开纵向滚动。禁止只设置 `overflow-x: auto` 或使用无方向的 `overflow: auto`，因为 CSS 会把另一轴从 `visible` 提升为 `auto`，在系统固定显示滚动条时产生无数据也存在的纵向轨道。
 
 ### 3.3 操作区
 

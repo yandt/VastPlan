@@ -59,6 +59,6 @@ export function Table({ columns, rows, rowKey = "id", selection = "none", select
       </>}
     </TableBody>
   </MuiTable>;
-  const scroll = <Box ref={scrollRef} data-virtualized={virtualized ? "true" : undefined} sx={{ width: "100%", overflow: "auto", maxHeight: virtualized ? virtualization!.viewportHeight : undefined }}>{content}</Box>;
+  const scroll = <Box ref={scrollRef} data-table-scroll={virtualized ? "both" : "horizontal"} data-virtualized={virtualized ? "true" : undefined} sx={{ width: "100%", overflowX: "auto", overflowY: virtualized ? "auto" : "hidden", maxHeight: virtualized ? virtualization!.viewportHeight : undefined }}>{content}</Box>;
   return appearance === "collection" ? scroll : <Paper variant="outlined">{scroll}</Paper>;
 }

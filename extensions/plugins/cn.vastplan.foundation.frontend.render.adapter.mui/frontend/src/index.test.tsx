@@ -69,6 +69,14 @@ describe("MUI portal UI adapter", () => {
     expect(markup).not.toContain("Row 99");
   });
 
+  it("keeps vertical overflow disabled for a non-virtual one-row table", () => {
+    const Table = muiPortalUIComponents.Table;
+    const markup = renderToStaticMarkup(<Table columns={[{ key: "name", title: "Name" }]} rows={[{ id: "one", name: "Only row" }]} />);
+    expect(markup).toContain('data-table-scroll="horizontal"');
+    expect(markup).toContain("overflow-x:auto");
+    expect(markup).toContain("overflow-y:hidden");
+  });
+
   it("renders accessible record navigation and tree semantics", () => {
     const List = muiPortalUIComponents.RecordNavigationList;
     const Tree = muiPortalUIComponents.RecordTree;
