@@ -25,24 +25,34 @@ var requestDefinitions = map[string]string{
 	OperationProviders: "providerListRequest", OperationPutVersion: "putVersionRequest",
 	OperationGetVersion: "getVersionRequest", OperationListHistory: "listHistoryRequest",
 	OperationGetHead: "getHeadRequest", OperationMoveHead: "moveHeadRequest",
+	OperationListHeads: "listHeadsRequest", OperationCreateHead: "createHeadRequest", OperationDeleteHead: "deleteHeadRequest",
+	OperationCreateTag: "createTagRequest", OperationGetTag: "getTagRequest", OperationListTags: "listTagsRequest",
+	OperationCompare: "compareVersionsRequest", OperationIsAncestor: "isAncestorRequest", OperationCommonAncestor: "findCommonAncestorRequest",
 }
 
 var resultDefinitions = map[string]string{
 	OperationProviders: "providerListResult", OperationPutVersion: "putVersionResult",
 	OperationGetVersion: "getVersionResult", OperationListHistory: "listHistoryResult",
 	OperationGetHead: "getHeadResult", OperationMoveHead: "moveHeadResult",
+	OperationListHeads: "listHeadsResult", OperationCreateHead: "createHeadResult", OperationDeleteHead: "deleteHeadResult",
+	OperationCreateTag: "createTagResult", OperationGetTag: "getTagResult", OperationListTags: "listTagsResult",
+	OperationCompare: "compareVersionsResult", OperationIsAncestor: "isAncestorResult", OperationCommonAncestor: "findCommonAncestorResult",
 }
 
 var providerRequestDefinitions = map[string]string{
 	ProviderOperationDescribe: "providerDescribeRequest", ProviderOperationPutVersion: "providerPutVersionRequest",
 	ProviderOperationGetVersion: "getVersionRequest", ProviderOperationHistory: "listHistoryRequest",
 	ProviderOperationGetHead: "getHeadRequest", ProviderOperationMoveHead: "moveHeadRequest",
+	ProviderOperationListHeads: "listHeadsRequest", ProviderOperationCreateHead: "createHeadRequest", ProviderOperationDeleteHead: "deleteHeadRequest",
+	ProviderOperationCreateTag: "providerCreateTagRequest", ProviderOperationGetTag: "getTagRequest", ProviderOperationListTags: "listTagsRequest",
 }
 
 var providerResultDefinitions = map[string]string{
 	ProviderOperationDescribe: "providerDescribeResult", ProviderOperationPutVersion: "putVersionResult",
 	ProviderOperationGetVersion: "getVersionResult", ProviderOperationHistory: "listHistoryResult",
 	ProviderOperationGetHead: "getHeadResult", ProviderOperationMoveHead: "moveHeadResult",
+	ProviderOperationListHeads: "listHeadsResult", ProviderOperationCreateHead: "createHeadResult", ProviderOperationDeleteHead: "deleteHeadResult",
+	ProviderOperationCreateTag: "createTagResult", ProviderOperationGetTag: "getTagResult", ProviderOperationListTags: "listTagsResult",
 }
 
 func compileSchemas() {
@@ -57,10 +67,14 @@ func compileSchemas() {
 		return
 	}
 	names := []string{
-		"streamKey", "versionRef", "versionRecord", "head", "providerDescriptor", "providerVersionCandidate",
+		"streamKey", "versionRef", "versionRecord", "head", "tag", "providerDescriptor", "providerVersionCandidate",
 		"providerListRequest", "providerListResult", "putVersionRequest", "putVersionResult",
 		"getVersionRequest", "getVersionResult", "listHistoryRequest", "listHistoryResult",
 		"getHeadRequest", "getHeadResult", "moveHeadRequest", "moveHeadResult",
+		"listHeadsRequest", "listHeadsResult", "createHeadRequest", "createHeadResult", "deleteHeadRequest", "deleteHeadResult",
+		"createTagRequest", "providerCreateTagRequest", "createTagResult", "getTagRequest", "getTagResult", "listTagsRequest", "listTagsResult",
+		"jsonPatchOperation", "changeSummary", "compareVersionsRequest", "compareVersionsResult",
+		"isAncestorRequest", "isAncestorResult", "findCommonAncestorRequest", "findCommonAncestorResult",
 		"providerDescribeRequest", "providerDescribeResult", "providerPutVersionRequest",
 	}
 	schemas = make(map[string]*jsonschema.Schema, len(names))

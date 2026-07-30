@@ -46,6 +46,8 @@ func ParseProviderRequest(operation string, raw []byte) (any, error) {
 		target = &ProviderDescribeRequest{}
 	case ProviderOperationPutVersion:
 		target = &ProviderPutVersionRequest{}
+	case ProviderOperationCreateTag:
+		target = &ProviderCreateTagRequest{}
 	default:
 		target = requestTarget(operation)
 	}
@@ -60,6 +62,9 @@ func ParseProviderRequest(operation string, raw []byte) (any, error) {
 			return nil, err
 		}
 		return target, nil
+	}
+	if request, ok := target.(*ProviderCreateTagRequest); ok {
+		return target, validateProviderCreateTagRequest(*request)
 	}
 	return target, validateRequest(target)
 }
@@ -95,8 +100,26 @@ func requestTarget(operation string) any {
 		return &ListHistoryRequest{}
 	case OperationGetHead:
 		return &GetHeadRequest{}
+	case OperationListHeads:
+		return &ListHeadsRequest{}
+	case OperationCreateHead:
+		return &CreateHeadRequest{}
 	case OperationMoveHead:
 		return &MoveHeadRequest{}
+	case OperationDeleteHead:
+		return &DeleteHeadRequest{}
+	case OperationCreateTag:
+		return &CreateTagRequest{}
+	case OperationGetTag:
+		return &GetTagRequest{}
+	case OperationListTags:
+		return &ListTagsRequest{}
+	case OperationCompare:
+		return &CompareVersionsRequest{}
+	case OperationIsAncestor:
+		return &IsAncestorRequest{}
+	case OperationCommonAncestor:
+		return &FindCommonAncestorRequest{}
 	default:
 		return nil
 	}
@@ -114,8 +137,26 @@ func resultTarget(operation string) any {
 		return &ListHistoryResult{}
 	case OperationGetHead:
 		return &GetHeadResult{}
+	case OperationListHeads:
+		return &ListHeadsResult{}
+	case OperationCreateHead:
+		return &CreateHeadResult{}
 	case OperationMoveHead:
 		return &MoveHeadResult{}
+	case OperationDeleteHead:
+		return &DeleteHeadResult{}
+	case OperationCreateTag:
+		return &CreateTagResult{}
+	case OperationGetTag:
+		return &GetTagResult{}
+	case OperationListTags:
+		return &ListTagsResult{}
+	case OperationCompare:
+		return &CompareVersionsResult{}
+	case OperationIsAncestor:
+		return &IsAncestorResult{}
+	case OperationCommonAncestor:
+		return &FindCommonAncestorResult{}
 	default:
 		return nil
 	}

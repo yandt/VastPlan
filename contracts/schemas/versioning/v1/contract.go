@@ -23,19 +23,34 @@ const (
 	DurabilityLocal         = "local"
 	DurabilityShared        = "shared"
 
-	OperationProviders   = "providers"
-	OperationPutVersion  = "putVersion"
-	OperationGetVersion  = "getVersion"
-	OperationListHistory = "listHistory"
-	OperationGetHead     = "getHead"
-	OperationMoveHead    = "moveHead"
+	OperationProviders      = "providers"
+	OperationPutVersion     = "putVersion"
+	OperationGetVersion     = "getVersion"
+	OperationListHistory    = "listHistory"
+	OperationGetHead        = "getHead"
+	OperationListHeads      = "listHeads"
+	OperationCreateHead     = "createHead"
+	OperationMoveHead       = "moveHead"
+	OperationDeleteHead     = "deleteHead"
+	OperationCreateTag      = "createTag"
+	OperationGetTag         = "getTag"
+	OperationListTags       = "listTags"
+	OperationCompare        = "compareVersions"
+	OperationIsAncestor     = "isAncestor"
+	OperationCommonAncestor = "findCommonAncestor"
 
 	ProviderOperationDescribe   = "describe"
 	ProviderOperationPutVersion = OperationPutVersion
 	ProviderOperationGetVersion = OperationGetVersion
 	ProviderOperationHistory    = OperationListHistory
 	ProviderOperationGetHead    = OperationGetHead
+	ProviderOperationListHeads  = OperationListHeads
+	ProviderOperationCreateHead = OperationCreateHead
 	ProviderOperationMoveHead   = OperationMoveHead
+	ProviderOperationDeleteHead = OperationDeleteHead
+	ProviderOperationCreateTag  = OperationCreateTag
+	ProviderOperationGetTag     = OperationGetTag
+	ProviderOperationListTags   = OperationListTags
 
 	ErrorInvalidRequest      = "version.ledger.invalid_request"
 	ErrorProviderNotFound    = "version.ledger.provider_not_found"
@@ -47,14 +62,20 @@ const (
 	ErrorLimitExceeded       = "version.ledger.limit_exceeded"
 	ErrorUnsupported         = "version.ledger.unsupported"
 
-	MaxContentBytes = 1 << 20
-	MaxHistoryPage  = 200
+	MaxContentBytes    = 1 << 20
+	MaxHistoryPage     = 200
+	MaxParents         = 2
+	MaxRefsPage        = 200
+	MaxAncestryNodes   = 10000
+	MaxPatchOperations = 10000
 )
 
 type ProviderCapabilities struct {
 	DetachedVersions bool `json:"detachedVersions"`
 	NamedHeads       bool `json:"namedHeads"`
 	StableHistory    bool `json:"stableHistory"`
+	ImmutableTags    bool `json:"immutableTags"`
+	DAGParents       bool `json:"dagParents"`
 }
 
 type ProviderDescriptor struct {
@@ -86,7 +107,7 @@ type VersionRef struct {
 type VersionRecord struct {
 	Protocol  string            `json:"protocol"`
 	Ref       VersionRef        `json:"ref"`
-	Parent    *VersionRef       `json:"parent,omitempty"`
+	Parents   []VersionRef      `json:"parents,omitempty"`
 	Content   json.RawMessage   `json:"content"`
 	Message   string            `json:"message,omitempty"`
 	Labels    map[string]string `json:"labels,omitempty"`
@@ -111,7 +132,7 @@ type ProviderListResult struct {
 type PutVersionRequest struct {
 	Stream         StreamKey         `json:"stream"`
 	IdempotencyKey string            `json:"idempotencyKey"`
-	Parent         *VersionRef       `json:"parent,omitempty"`
+	Parents        []VersionRef      `json:"parents,omitempty"`
 	Content        json.RawMessage   `json:"content"`
 	Message        string            `json:"message,omitempty"`
 	Labels         map[string]string `json:"labels,omitempty"`
@@ -168,7 +189,7 @@ type MoveHeadResult struct {
 type ProviderVersionCandidate struct {
 	VersionID string            `json:"versionId"`
 	Stream    StreamKey         `json:"stream"`
-	Parent    *VersionRef       `json:"parent,omitempty"`
+	Parents   []VersionRef      `json:"parents,omitempty"`
 	Content   json.RawMessage   `json:"content"`
 	Message   string            `json:"message,omitempty"`
 	Labels    map[string]string `json:"labels,omitempty"`

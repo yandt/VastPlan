@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	fileProviderFormatVersion = 1
+	fileProviderFormatVersion = 2
 	maxVersionFileBytes       = versioningv1.MaxContentBytes + 64<<10
 	maxHeadFileBytes          = 16 << 10
 )
@@ -30,6 +30,12 @@ type fileVersionEnvelope struct {
 type fileHeadEnvelope struct {
 	FormatVersion int               `json:"formatVersion"`
 	Head          versioningv1.Head `json:"head"`
+	Deleted       bool              `json:"deleted,omitempty"`
+}
+
+type fileTagEnvelope struct {
+	FormatVersion int              `json:"formatVersion"`
+	Tag           versioningv1.Tag `json:"tag"`
 }
 
 type loadedFileStream struct {
@@ -183,15 +189,17 @@ func loadFileStream(streamDir string, stream versioningv1.StreamKey) (loadedFile
 		}
 	}
 	for _, record := range loaded.versions {
-		if record.Parent == nil {
+		if len(record.Parents) == 0 {
 			if record.Ref.Sequence != 1 {
-				return loaded, errors.New("非首个版本缺少父版本")
+				return loaded, errors.New("非首个版本缺少父节点")
 			}
 			continue
 		}
-		parent, ok := loaded.versions[record.Parent.VersionID]
-		if !ok || parent.Ref != *record.Parent {
-			return loaded, errors.New("版本父链不闭合")
+		for _, parentRef := range record.Parents {
+			parent, ok := loaded.versions[parentRef.VersionID]
+			if !ok || parent.Ref != parentRef {
+				return loaded, errors.New("版本父链不闭合")
+			}
 		}
 	}
 	return loaded, nil
@@ -267,6 +275,10 @@ func writeJSONFile(directory, prefix, finalName string, value any, createOnly bo
 	} else if err := os.Rename(temporaryName, finalPath); err != nil {
 		return err
 	}
+	return syncDirectory(directory)
+}
+
+func syncDirectory(directory string) error {
 	handle, err := os.Open(directory)
 	if err != nil {
 		return err

@@ -1,12 +1,12 @@
 {
   "id": "cn.vastplan.foundation.versioning.ledger",
   "name": "VastPlan Version Ledger",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "提供不可变 JSON 版本、父链历史、命名 Head CAS 与可插拔存储 Provider 的基础插件",
+  "description": "提供不可变 JSON 版本 DAG、Head、Tag、差异与祖先查询及可插拔存储 Provider 的基础插件",
   "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": {
@@ -86,7 +86,16 @@
             { "name": "getVersion", "description": "精确读取不可变版本" },
             { "name": "listHistory", "description": "沿父链分页读取版本历史" },
             { "name": "getHead", "description": "读取命名 Head" },
-            { "name": "moveHead", "description": "以 CAS 移动命名 Head" }
+            { "name": "listHeads", "description": "按名称分页列出 Head" },
+            { "name": "createHead", "description": "幂等创建命名 Head" },
+            { "name": "moveHead", "description": "以 CAS 移动命名 Head" },
+            { "name": "deleteHead", "description": "以 CAS 删除命名 Head" },
+            { "name": "createTag", "description": "创建不可变 Tag" },
+            { "name": "getTag", "description": "读取不可变 Tag" },
+            { "name": "listTags", "description": "按名称分页列出 Tag" },
+            { "name": "compareVersions", "description": "生成确定性 JSON Patch 与变更统计" },
+            { "name": "isAncestor", "description": "判断 DAG 祖先关系与距离" },
+            { "name": "findCommonAncestor", "description": "查找确定性的最近共同祖先" }
           ]
         }
       ]

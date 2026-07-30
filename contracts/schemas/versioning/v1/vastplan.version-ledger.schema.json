@@ -37,7 +37,7 @@
       "properties": {
         "protocol": { "const": "version.ledger.v1" },
         "ref": { "$ref": "#/$defs/versionRef" },
-        "parent": { "$ref": "#/$defs/versionRef" },
+        "parents": { "type": "array", "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/versionRef" } },
         "content": { "type": "object" },
         "message": { "type": "string", "maxLength": 1024 },
         "labels": { "$ref": "#/$defs/labels" },
@@ -76,11 +76,13 @@
         "capabilities": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["detachedVersions", "namedHeads", "stableHistory"],
+          "required": ["detachedVersions", "namedHeads", "stableHistory", "immutableTags", "dagParents"],
           "properties": {
             "detachedVersions": { "type": "boolean" },
             "namedHeads": { "type": "boolean" },
-            "stableHistory": { "type": "boolean" }
+            "stableHistory": { "type": "boolean" },
+            "immutableTags": { "type": "boolean" },
+            "dagParents": { "type": "boolean" }
           }
         }
       }
@@ -95,7 +97,7 @@
       "properties": {
         "stream": { "$ref": "#/$defs/streamKey" },
         "idempotencyKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$" },
-        "parent": { "$ref": "#/$defs/versionRef" },
+        "parents": { "type": "array", "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/versionRef" } },
         "content": { "type": "object" },
         "message": { "type": "string", "maxLength": 1024 },
         "labels": { "$ref": "#/$defs/labels" }
@@ -150,6 +152,102 @@
       "type": "object", "additionalProperties": false, "required": ["head"],
       "properties": { "head": { "$ref": "#/$defs/head" } }
     },
+    "tag": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "stream", "name", "target", "actorId", "createdAt"],
+      "properties": {
+        "protocol": { "const": "version.ledger.v1" },
+        "stream": { "$ref": "#/$defs/streamKey" },
+        "name": { "$ref": "#/$defs/headName" },
+        "target": { "$ref": "#/$defs/versionRef" },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "listHeadsRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "limit"],
+      "properties": { "stream": { "$ref": "#/$defs/streamKey" }, "limit": { "type": "integer", "minimum": 1, "maximum": 200 }, "cursor": { "$ref": "#/$defs/headName" } }
+    },
+    "listHeadsResult": {
+      "type": "object", "additionalProperties": false, "required": ["heads"],
+      "properties": { "heads": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/head" } }, "nextCursor": { "$ref": "#/$defs/headName" } }
+    },
+    "createHeadRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "name", "target"],
+      "properties": { "stream": { "$ref": "#/$defs/streamKey" }, "name": { "$ref": "#/$defs/headName" }, "target": { "$ref": "#/$defs/versionRef" } }
+    },
+    "createHeadResult": {
+      "type": "object", "additionalProperties": false, "required": ["head", "reused"],
+      "properties": { "head": { "$ref": "#/$defs/head" }, "reused": { "type": "boolean" } }
+    },
+    "deleteHeadRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "name", "expectedRevision"],
+      "properties": { "stream": { "$ref": "#/$defs/streamKey" }, "name": { "$ref": "#/$defs/headName" }, "expectedRevision": { "type": "integer", "minimum": 1 } }
+    },
+    "deleteHeadResult": {
+      "type": "object", "additionalProperties": false, "required": ["previous"],
+      "properties": { "previous": { "$ref": "#/$defs/head" } }
+    },
+    "createTagRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "name", "target"],
+      "properties": { "stream": { "$ref": "#/$defs/streamKey" }, "name": { "$ref": "#/$defs/headName" }, "target": { "$ref": "#/$defs/versionRef" } }
+    },
+    "providerCreateTagRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "name", "target", "actorId"],
+      "properties": { "stream": { "$ref": "#/$defs/streamKey" }, "name": { "$ref": "#/$defs/headName" }, "target": { "$ref": "#/$defs/versionRef" }, "actorId": { "type": "string", "minLength": 1, "maxLength": 160 } }
+    },
+    "createTagResult": {
+      "type": "object", "additionalProperties": false, "required": ["tag", "reused"],
+      "properties": { "tag": { "$ref": "#/$defs/tag" }, "reused": { "type": "boolean" } }
+    },
+    "getTagRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "name"],
+      "properties": { "stream": { "$ref": "#/$defs/streamKey" }, "name": { "$ref": "#/$defs/headName" } }
+    },
+    "getTagResult": {
+      "type": "object", "additionalProperties": false, "required": ["tag"],
+      "properties": { "tag": { "$ref": "#/$defs/tag" } }
+    },
+    "listTagsRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "limit"],
+      "properties": { "stream": { "$ref": "#/$defs/streamKey" }, "limit": { "type": "integer", "minimum": 1, "maximum": 200 }, "cursor": { "$ref": "#/$defs/headName" } }
+    },
+    "listTagsResult": {
+      "type": "object", "additionalProperties": false, "required": ["tags"],
+      "properties": { "tags": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/tag" } }, "nextCursor": { "$ref": "#/$defs/headName" } }
+    },
+    "jsonPatchOperation": {
+      "type": "object", "additionalProperties": false, "required": ["op", "path"],
+      "properties": { "op": { "enum": ["add", "remove", "replace"] }, "path": { "type": "string", "maxLength": 4096 }, "value": {} }
+    },
+    "changeSummary": {
+      "type": "object", "additionalProperties": false, "required": ["added", "removed", "replaced", "total"],
+      "properties": { "added": { "type": "integer", "minimum": 0 }, "removed": { "type": "integer", "minimum": 0 }, "replaced": { "type": "integer", "minimum": 0 }, "total": { "type": "integer", "minimum": 0, "maximum": 10000 } }
+    },
+    "compareVersionsRequest": {
+      "type": "object", "additionalProperties": false, "required": ["left", "right"],
+      "properties": { "left": { "$ref": "#/$defs/versionRef" }, "right": { "$ref": "#/$defs/versionRef" } }
+    },
+    "compareVersionsResult": {
+      "type": "object", "additionalProperties": false, "required": ["left", "right", "patch", "summary"],
+      "properties": { "left": { "$ref": "#/$defs/versionRef" }, "right": { "$ref": "#/$defs/versionRef" }, "patch": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/jsonPatchOperation" } }, "summary": { "$ref": "#/$defs/changeSummary" } }
+    },
+    "isAncestorRequest": {
+      "type": "object", "additionalProperties": false, "required": ["ancestor", "descendant"],
+      "properties": { "ancestor": { "$ref": "#/$defs/versionRef" }, "descendant": { "$ref": "#/$defs/versionRef" } }
+    },
+    "isAncestorResult": {
+      "type": "object", "additionalProperties": false, "required": ["isAncestor", "distance"],
+      "properties": { "isAncestor": { "type": "boolean" }, "distance": { "type": "integer", "minimum": -1, "maximum": 10000 } }
+    },
+    "findCommonAncestorRequest": {
+      "type": "object", "additionalProperties": false, "required": ["left", "right"],
+      "properties": { "left": { "$ref": "#/$defs/versionRef" }, "right": { "$ref": "#/$defs/versionRef" } }
+    },
+    "findCommonAncestorResult": {
+      "type": "object", "additionalProperties": false, "required": ["found", "leftDistance", "rightDistance"],
+      "properties": { "found": { "type": "boolean" }, "ancestor": { "$ref": "#/$defs/versionRef" }, "leftDistance": { "type": "integer", "minimum": -1, "maximum": 10000 }, "rightDistance": { "type": "integer", "minimum": -1, "maximum": 10000 } }
+    },
     "providerDescribeRequest": { "type": "object", "additionalProperties": false },
     "providerDescribeResult": {
       "type": "object", "additionalProperties": false, "required": ["provider"],
@@ -160,7 +258,7 @@
       "properties": {
         "versionId": { "$ref": "#/$defs/sha256" },
         "stream": { "$ref": "#/$defs/streamKey" },
-        "parent": { "$ref": "#/$defs/versionRef" },
+        "parents": { "type": "array", "maxItems": 2, "uniqueItems": true, "items": { "$ref": "#/$defs/versionRef" } },
         "content": { "type": "object" },
         "message": { "type": "string", "maxLength": 1024 },
         "labels": { "$ref": "#/$defs/labels" },

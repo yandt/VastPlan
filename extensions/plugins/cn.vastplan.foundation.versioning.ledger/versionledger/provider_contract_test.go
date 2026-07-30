@@ -85,6 +85,77 @@ func runProviderContract(t *testing.T, provider Provider) {
 	if err != nil || len(last.Versions) != 1 || last.Versions[0].Ref != first.Version.Ref || last.NextCursor != "" {
 		t.Fatalf("历史续页无效: %+v %v", last, err)
 	}
+	branch, err := provider.PutVersion(ctx, scope, putRequest("portal-main:branch:0001", &first.Version.Ref, `{"layout":"branch"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mergeRequest := putRequestWithParents("portal-main:merge:0001", []versioningv1.VersionRef{third.Version.Ref, branch.Version.Ref}, `{"layout":"merged"}`)
+	merge, err := provider.PutVersion(ctx, scope, mergeRequest)
+	if err != nil || len(merge.Version.Parents) != 2 || merge.Version.Parents[0] != third.Version.Ref || merge.Version.Parents[1] != branch.Version.Ref {
+		t.Fatalf("双父版本写入失败: %+v %v", merge, err)
+	}
+
+	feature, err := provider.CreateHead(ctx, scope, versioningv1.CreateHeadRequest{Stream: first.Version.Ref.Stream, Name: "feature", Target: branch.Version.Ref})
+	if err != nil || feature.Head.Revision != 1 || feature.Reused {
+		t.Fatalf("创建 Head 失败: %+v %v", feature, err)
+	}
+	featureAgain, err := provider.CreateHead(ctx, scope, versioningv1.CreateHeadRequest{Stream: first.Version.Ref.Stream, Name: "feature", Target: branch.Version.Ref})
+	if err != nil || !featureAgain.Reused {
+		t.Fatalf("重复创建相同 Head 必须幂等: %+v %v", featureAgain, err)
+	}
+	if _, err := provider.CreateHead(ctx, scope, versioningv1.CreateHeadRequest{Stream: first.Version.Ref.Stream, Name: "feature", Target: merge.Version.Ref}); errorCode(err) != versioningv1.ErrorConflict {
+		t.Fatalf("创建同名不同目标 Head 必须冲突: %v", err)
+	}
+	if _, err := provider.CreateHead(ctx, scope, versioningv1.CreateHeadRequest{Stream: first.Version.Ref.Stream, Name: "release", Target: third.Version.Ref}); err != nil {
+		t.Fatal(err)
+	}
+	heads, err := provider.ListHeads(ctx, scope, versioningv1.ListHeadsRequest{Stream: first.Version.Ref.Stream, Limit: 1})
+	if err != nil || len(heads.Heads) != 1 || heads.Heads[0].Name != "feature" || heads.NextCursor != "feature" {
+		t.Fatalf("Head 分页无效: %+v %v", heads, err)
+	}
+	if _, err := provider.DeleteHead(ctx, scope, versioningv1.DeleteHeadRequest{Stream: first.Version.Ref.Stream, Name: "feature", ExpectedRevision: 2}); errorCode(err) != versioningv1.ErrorConflict {
+		t.Fatalf("过期 Head 删除必须冲突: %v", err)
+	}
+	deleted, err := provider.DeleteHead(ctx, scope, versioningv1.DeleteHeadRequest{Stream: first.Version.Ref.Stream, Name: "feature", ExpectedRevision: 1})
+	if err != nil || deleted.Previous.Target != branch.Version.Ref {
+		t.Fatalf("Head CAS 删除失败: %+v %v", deleted, err)
+	}
+	recreated, err := provider.CreateHead(ctx, scope, versioningv1.CreateHeadRequest{Stream: first.Version.Ref.Stream, Name: "feature", Target: merge.Version.Ref})
+	if err != nil || recreated.Head.Revision != 2 || recreated.Reused {
+		t.Fatalf("Head 删除后重建必须延续 revision 以阻止 ABA: %+v %v", recreated, err)
+	}
+	if _, err := provider.DeleteHead(ctx, scope, versioningv1.DeleteHeadRequest{Stream: first.Version.Ref.Stream, Name: "feature", ExpectedRevision: 1}); errorCode(err) != versioningv1.ErrorConflict {
+		t.Fatalf("删除前的旧 revision 不得命中新 Head: %v", err)
+	}
+	if _, err := provider.DeleteHead(ctx, scope, versioningv1.DeleteHeadRequest{Stream: first.Version.Ref.Stream, Name: "feature", ExpectedRevision: 2}); err != nil {
+		t.Fatal(err)
+	}
+	movedAfterDelete, err := provider.MoveHead(ctx, scope, versioningv1.MoveHeadRequest{Stream: first.Version.Ref.Stream, Name: "feature", Target: branch.Version.Ref})
+	if err != nil || movedAfterDelete.Head.Revision != 3 {
+		t.Fatalf("Head 删除后以 move 重建必须延续 revision: %+v %v", movedAfterDelete, err)
+	}
+
+	tagRequest := versioningv1.ProviderCreateTagRequest{Stream: first.Version.Ref.Stream, Name: "release-1", Target: third.Version.Ref, ActorID: "plugin:portal-composer"}
+	tag, err := provider.CreateTag(ctx, scope, tagRequest)
+	if err != nil || tag.Reused || tag.Tag.Target != third.Version.Ref {
+		t.Fatalf("创建不可变 Tag 失败: %+v %v", tag, err)
+	}
+	tagAgain, err := provider.CreateTag(ctx, scope, tagRequest)
+	if err != nil || !tagAgain.Reused || !tagAgain.Tag.CreatedAt.Equal(tag.Tag.CreatedAt) {
+		t.Fatalf("重复创建相同 Tag 必须幂等: %+v %v", tagAgain, err)
+	}
+	tagRequest.Target = merge.Version.Ref
+	if _, err := provider.CreateTag(ctx, scope, tagRequest); errorCode(err) != versioningv1.ErrorConflict {
+		t.Fatalf("Tag 不得改指其他版本: %v", err)
+	}
+	readTag, err := provider.GetTag(ctx, scope, versioningv1.GetTagRequest{Stream: first.Version.Ref.Stream, Name: "release-1"})
+	if err != nil || readTag.Tag.Target != third.Version.Ref {
+		t.Fatalf("读取 Tag 失败: %+v %v", readTag, err)
+	}
+	tags, err := provider.ListTags(ctx, scope, versioningv1.ListTagsRequest{Stream: first.Version.Ref.Stream, Limit: 10})
+	if err != nil || len(tags.Tags) != 1 || tags.Tags[0].Name != "release-1" {
+		t.Fatalf("Tag 列表无效: %+v %v", tags, err)
+	}
 
 	head, err := provider.MoveHead(ctx, scope, versioningv1.MoveHeadRequest{Stream: first.Version.Ref.Stream, Name: "published", Target: first.Version.Ref})
 	if err != nil || head.Head.Revision != 1 {
@@ -131,6 +202,10 @@ func runProviderContract(t *testing.T, provider Provider) {
 }
 
 func putRequest(key string, parent *versioningv1.VersionRef, content string) versioningv1.ProviderPutVersionRequest {
+	return putRequestWithParents(key, providerRefs(parent), content)
+}
+
+func putRequestWithParents(key string, parents []versioningv1.VersionRef, content string) versioningv1.ProviderPutVersionRequest {
 	stream := versioningv1.StreamKey{Namespace: "portal.configuration", StreamID: "portal-main"}
 	versionID, err := versioningv1.DeriveVersionID("tenant-a", stream, key)
 	if err != nil {
@@ -140,9 +215,16 @@ func putRequest(key string, parent *versioningv1.VersionRef, content string) ver
 		IdempotencyKey: key,
 		Candidate: versioningv1.ProviderVersionCandidate{
 			VersionID: versionID, Stream: stream,
-			Parent: parent, Content: json.RawMessage(content), ActorID: "plugin:portal-composer",
+			Parents: cloneRefs(parents), Content: json.RawMessage(content), ActorID: "plugin:portal-composer",
 		},
 	}
+}
+
+func providerRefs(parent *versioningv1.VersionRef) []versioningv1.VersionRef {
+	if parent == nil {
+		return nil
+	}
+	return []versioningv1.VersionRef{*parent}
 }
 
 func fixedClock() func() time.Time {

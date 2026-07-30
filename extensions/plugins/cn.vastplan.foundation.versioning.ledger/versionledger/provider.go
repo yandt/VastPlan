@@ -11,7 +11,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.versioning.ledger"
-	PluginVersion = "0.1.1"
+	PluginVersion = "0.2.0"
 )
 
 type Scope struct {
@@ -34,7 +34,13 @@ type Provider interface {
 	GetVersion(context.Context, Scope, versioningv1.GetVersionRequest) (versioningv1.GetVersionResult, error)
 	ListHistory(context.Context, Scope, versioningv1.ListHistoryRequest) (versioningv1.ListHistoryResult, error)
 	GetHead(context.Context, Scope, versioningv1.GetHeadRequest) (versioningv1.GetHeadResult, error)
+	ListHeads(context.Context, Scope, versioningv1.ListHeadsRequest) (versioningv1.ListHeadsResult, error)
+	CreateHead(context.Context, Scope, versioningv1.CreateHeadRequest) (versioningv1.CreateHeadResult, error)
 	MoveHead(context.Context, Scope, versioningv1.MoveHeadRequest) (versioningv1.MoveHeadResult, error)
+	DeleteHead(context.Context, Scope, versioningv1.DeleteHeadRequest) (versioningv1.DeleteHeadResult, error)
+	CreateTag(context.Context, Scope, versioningv1.ProviderCreateTagRequest) (versioningv1.CreateTagResult, error)
+	GetTag(context.Context, Scope, versioningv1.GetTagRequest) (versioningv1.GetTagResult, error)
+	ListTags(context.Context, Scope, versioningv1.ListTagsRequest) (versioningv1.ListTagsResult, error)
 }
 
 type ProviderError struct {

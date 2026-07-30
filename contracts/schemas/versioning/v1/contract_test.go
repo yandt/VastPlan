@@ -134,7 +134,7 @@ func TestVersionRecordDigestParentAndHistoryAreFailClosed(t *testing.T) {
 	broken := child
 	wrongParent := root.Ref
 	wrongParent.VersionID = strings.Repeat("c", 64)
-	broken.Parent = &wrongParent
+	broken.Parents = []versioningv1.VersionRef{wrongParent}
 	if err := versioningv1.ValidateHistory([]versioningv1.VersionRecord{broken, root}); err == nil {
 		t.Fatal("不闭合的父链必须被拒绝")
 	}
@@ -256,7 +256,7 @@ func record(t *testing.T, sequence uint64, parent *versioningv1.VersionRef, cont
 			Stream: stream("portal.configuration", "portal-main"), VersionID: strings.Repeat(versionIDSeed, 64),
 			Sequence: sequence, ContentDigest: digest,
 		},
-		Parent: parent, Content: json.RawMessage(content), ActorID: "user:platform-admin", CreatedAt: fixedTime,
+		Parents: refs(parent), Content: json.RawMessage(content), ActorID: "user:platform-admin", CreatedAt: fixedTime,
 	}
 }
 
@@ -267,7 +267,9 @@ func provider(protocol string) versioningv1.ProviderDescriptor {
 		Consistency:       versioningv1.ConsistencySingleWriter, Durability: versioningv1.DurabilityLocal,
 		MaxContentBytes:     versioningv1.MaxContentBytes,
 		ConfigurationSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
-		Capabilities:        versioningv1.ProviderCapabilities{DetachedVersions: true, NamedHeads: true, StableHistory: true},
+		Capabilities: versioningv1.ProviderCapabilities{
+			DetachedVersions: true, NamedHeads: true, StableHistory: true, ImmutableTags: true, DAGParents: true,
+		},
 	}
 	switch protocol {
 	case versioningv1.StorageProtocolGit:
@@ -284,6 +286,13 @@ func provider(protocol string) versioningv1.ProviderDescriptor {
 		descriptor.ClusterSafe = true
 	}
 	return descriptor
+}
+
+func refs(parent *versioningv1.VersionRef) []versioningv1.VersionRef {
+	if parent == nil {
+		return nil
+	}
+	return []versioningv1.VersionRef{*parent}
 }
 
 func marshal(t *testing.T, value any) []byte {

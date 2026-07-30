@@ -42,6 +42,20 @@ func validateScopedRequest(scope Scope, operation string, request any) error {
 	return nil
 }
 
+func validateProviderTagRequest(scope Scope, request versioningv1.ProviderCreateTagRequest) error {
+	if err := scope.Validate(); err != nil {
+		return providerError(versioningv1.ErrorInvalidRequest, false, err)
+	}
+	raw, err := json.Marshal(request)
+	if err != nil {
+		return providerError(versioningv1.ErrorInvalidRequest, false, err)
+	}
+	if _, err := versioningv1.ParseProviderRequest(versioningv1.ProviderOperationCreateTag, raw); err != nil {
+		return providerError(versioningv1.ErrorInvalidRequest, false, err)
+	}
+	return nil
+}
+
 func candidateDigest(candidate versioningv1.ProviderVersionCandidate) (string, error) {
 	raw, err := json.Marshal(candidate)
 	if err != nil {
@@ -53,13 +67,13 @@ func candidateDigest(candidate versioningv1.ProviderVersionCandidate) (string, e
 
 func candidateFromRecord(record versioningv1.VersionRecord) versioningv1.ProviderVersionCandidate {
 	return versioningv1.ProviderVersionCandidate{
-		VersionID: record.Ref.VersionID, Stream: record.Ref.Stream, Parent: record.Parent, Content: append([]byte(nil), record.Content...),
+		VersionID: record.Ref.VersionID, Stream: record.Ref.Stream, Parents: cloneRefs(record.Parents), Content: append([]byte(nil), record.Content...),
 		Message: record.Message, Labels: cloneLabels(record.Labels), ActorID: record.ActorID,
 	}
 }
 
 func sameCandidate(record versioningv1.VersionRecord, candidate versioningv1.ProviderVersionCandidate) bool {
-	if record.Ref.VersionID != candidate.VersionID || record.Ref.Stream != candidate.Stream || record.ActorID != candidate.ActorID || record.Message != candidate.Message || !equalVersionRef(record.Parent, candidate.Parent) {
+	if record.Ref.VersionID != candidate.VersionID || record.Ref.Stream != candidate.Stream || record.ActorID != candidate.ActorID || record.Message != candidate.Message || !equalVersionRefs(record.Parents, candidate.Parents) {
 		return false
 	}
 	leftContent, leftErr := versioningv1.CanonicalizeContent(record.Content)
@@ -70,11 +84,16 @@ func sameCandidate(record versioningv1.VersionRecord, candidate versioningv1.Pro
 	return equalLabels(record.Labels, candidate.Labels)
 }
 
-func equalVersionRef(left, right *versioningv1.VersionRef) bool {
-	if left == nil || right == nil {
-		return left == nil && right == nil
+func equalVersionRefs(left, right []versioningv1.VersionRef) bool {
+	if len(left) != len(right) {
+		return false
 	}
-	return *left == *right
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func equalLabels(left, right map[string]string) bool {
@@ -91,10 +110,7 @@ func equalLabels(left, right map[string]string) bool {
 
 func cloneRecord(record versioningv1.VersionRecord) versioningv1.VersionRecord {
 	record.Content = append([]byte(nil), record.Content...)
-	if record.Parent != nil {
-		parent := *record.Parent
-		record.Parent = &parent
-	}
+	record.Parents = cloneRefs(record.Parents)
 	if record.Labels != nil {
 		record.Labels = make(map[string]string, len(record.Labels))
 		for key, value := range record.Labels {
@@ -104,16 +120,25 @@ func cloneRecord(record versioningv1.VersionRecord) versioningv1.VersionRecord {
 	return record
 }
 
-func requireStoredParent(versions map[string]versioningv1.VersionRecord, sequence uint64, candidate versioningv1.ProviderVersionCandidate) error {
-	if candidate.Parent == nil {
+func requireStoredParents(versions map[string]versioningv1.VersionRecord, sequence uint64, candidate versioningv1.ProviderVersionCandidate) error {
+	if len(candidate.Parents) == 0 {
 		if sequence != 1 {
-			return providerError(versioningv1.ErrorConflict, false, errors.New("非首个版本必须引用父版本"))
+			return providerError(versioningv1.ErrorConflict, false, errors.New("非首个版本必须引用父节点"))
 		}
 		return nil
 	}
-	stored, ok := versions[candidate.Parent.VersionID]
-	if !ok || stored.Ref != *candidate.Parent {
-		return providerError(versioningv1.ErrorNotFound, false, errors.New("父版本不存在或引用不精确"))
+	for _, parent := range candidate.Parents {
+		stored, ok := versions[parent.VersionID]
+		if !ok || stored.Ref != parent {
+			return providerError(versioningv1.ErrorNotFound, false, errors.New("父版本不存在或引用不精确"))
+		}
 	}
 	return nil
+}
+
+func cloneRefs(refs []versioningv1.VersionRef) []versioningv1.VersionRef {
+	if refs == nil {
+		return nil
+	}
+	return append([]versioningv1.VersionRef(nil), refs...)
 }

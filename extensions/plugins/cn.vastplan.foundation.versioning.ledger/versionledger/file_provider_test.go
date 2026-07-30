@@ -48,6 +48,35 @@ func TestFileProviderRecoversCommittedVersionsAndIgnoresCrashTemps(t *testing.T)
 	}
 }
 
+func TestFileProviderPersistsDeletedHeadRevisionAcrossRestart(t *testing.T) {
+	root := privateTempDir(t)
+	provider, err := openFileProvider(root, fixedClock())
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := Scope{TenantID: "tenant-a"}
+	version, err := provider.PutVersion(context.Background(), scope, putRequest("portal-main:revision:0001", nil, `{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := provider.CreateHead(context.Background(), scope, versioningv1.CreateHeadRequest{Stream: version.Version.Ref.Stream, Name: "draft", Target: version.Version.Ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := provider.DeleteHead(context.Background(), scope, versioningv1.DeleteHeadRequest{Stream: version.Version.Ref.Stream, Name: "draft", ExpectedRevision: created.Head.Revision}); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := openFileProvider(root, fixedClock())
+	if err != nil {
+		t.Fatal(err)
+	}
+	recreated, err := reopened.CreateHead(context.Background(), scope, versioningv1.CreateHeadRequest{Stream: version.Version.Ref.Stream, Name: "draft", Target: version.Version.Ref})
+	if err != nil || recreated.Head.Revision != 2 {
+		t.Fatalf("重启后 Head revision 未延续: %+v %v", recreated, err)
+	}
+}
+
 func TestFileProviderFailsClosedOnCommittedCorruption(t *testing.T) {
 	root := privateTempDir(t)
 	provider, err := openFileProvider(root, fixedClock())

@@ -23,7 +23,7 @@ func ValidateProviderDescriptor(descriptor ProviderDescriptor) error {
 	if err != nil || version.Prerelease() != "" || version.Metadata() != "" {
 		return errors.New("Version Provider version 必须是稳定严格 SemVer")
 	}
-	if !descriptor.Capabilities.DetachedVersions || !descriptor.Capabilities.NamedHeads || !descriptor.Capabilities.StableHistory || descriptor.MaxContentBytes > MaxContentBytes {
+	if !descriptor.Capabilities.DetachedVersions || !descriptor.Capabilities.NamedHeads || !descriptor.Capabilities.StableHistory || !descriptor.Capabilities.ImmutableTags || !descriptor.Capabilities.DAGParents || descriptor.MaxContentBytes > MaxContentBytes {
 		return errors.New("Version Provider 缺少 v1 必需能力或内容上限无效")
 	}
 	if err := validateStorageSemantics(descriptor); err != nil {

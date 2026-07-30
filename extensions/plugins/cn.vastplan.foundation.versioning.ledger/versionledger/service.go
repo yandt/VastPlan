@@ -85,7 +85,7 @@ func (s *Service) handle(operation string) sdk.Handler {
 				return serviceResult(operation, nil, providerError(versioningv1.ErrorInvalidRequest, false, callErr))
 			}
 			candidate := versioningv1.ProviderVersionCandidate{
-				VersionID: versionID, Stream: request.Stream, Parent: request.Parent, Content: request.Content, Message: request.Message,
+				VersionID: versionID, Stream: request.Stream, Parents: cloneRefs(request.Parents), Content: request.Content, Message: request.Message,
 				Labels: request.Labels, ActorID: actorID,
 			}
 			value, callErr := provider.PutVersion(ctx, scope, versioningv1.ProviderPutVersionRequest{IdempotencyKey: request.IdempotencyKey, Candidate: candidate})
@@ -123,15 +123,84 @@ func (s *Service) handle(operation string) sdk.Handler {
 				callErr = providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider 返回了错误的 Version Head"))
 			}
 			return serviceResult(operation, value, callErr)
+		case *versioningv1.ListHeadsRequest:
+			provider, callErr := s.provider(request.Stream.Namespace)
+			if callErr != nil {
+				return serviceResult(operation, nil, callErr)
+			}
+			value, callErr := provider.ListHeads(ctx, scope, *request)
+			if callErr == nil {
+				callErr = validateProviderHeadPage(*request, value)
+			}
+			return serviceResult(operation, value, callErr)
+		case *versioningv1.CreateHeadRequest:
+			provider, callErr := s.provider(request.Stream.Namespace)
+			if callErr != nil {
+				return serviceResult(operation, nil, callErr)
+			}
+			value, callErr := provider.CreateHead(ctx, scope, *request)
+			if callErr == nil && (value.Head.Stream != request.Stream || value.Head.Name != request.Name || value.Head.Target != request.Target) {
+				callErr = providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider 返回了错误的 Head 创建结果"))
+			}
+			return serviceResult(operation, value, callErr)
 		case *versioningv1.MoveHeadRequest:
 			provider, callErr := s.provider(request.Stream.Namespace)
 			if callErr != nil {
 				return serviceResult(operation, nil, callErr)
 			}
 			value, callErr := provider.MoveHead(ctx, scope, *request)
-			if callErr == nil && (value.Head.Stream != request.Stream || value.Head.Name != request.Name || value.Head.Target != request.Target || value.Head.Revision != request.ExpectedRevision+1) {
+			if callErr == nil && (value.Head.Stream != request.Stream || value.Head.Name != request.Name || value.Head.Target != request.Target || !validMoveRevision(request.ExpectedRevision, value.Head.Revision)) {
 				callErr = providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider 返回了错误的 Head CAS 结果"))
 			}
+			return serviceResult(operation, value, callErr)
+		case *versioningv1.DeleteHeadRequest:
+			provider, callErr := s.provider(request.Stream.Namespace)
+			if callErr != nil {
+				return serviceResult(operation, nil, callErr)
+			}
+			value, callErr := provider.DeleteHead(ctx, scope, *request)
+			if callErr == nil && (value.Previous.Stream != request.Stream || value.Previous.Name != request.Name || value.Previous.Revision != request.ExpectedRevision) {
+				callErr = providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider 返回了错误的 Head 删除结果"))
+			}
+			return serviceResult(operation, value, callErr)
+		case *versioningv1.CreateTagRequest:
+			provider, callErr := s.provider(request.Stream.Namespace)
+			if callErr != nil {
+				return serviceResult(operation, nil, callErr)
+			}
+			value, callErr := provider.CreateTag(ctx, scope, versioningv1.ProviderCreateTagRequest{Stream: request.Stream, Name: request.Name, Target: request.Target, ActorID: actorID})
+			if callErr == nil && (value.Tag.Stream != request.Stream || value.Tag.Name != request.Name || value.Tag.Target != request.Target || value.Tag.ActorID != actorID) {
+				callErr = providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider 返回了错误的 Tag 创建结果"))
+			}
+			return serviceResult(operation, value, callErr)
+		case *versioningv1.GetTagRequest:
+			provider, callErr := s.provider(request.Stream.Namespace)
+			if callErr != nil {
+				return serviceResult(operation, nil, callErr)
+			}
+			value, callErr := provider.GetTag(ctx, scope, *request)
+			if callErr == nil && (value.Tag.Stream != request.Stream || value.Tag.Name != request.Name) {
+				callErr = providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider 返回了错误的 Version Tag"))
+			}
+			return serviceResult(operation, value, callErr)
+		case *versioningv1.ListTagsRequest:
+			provider, callErr := s.provider(request.Stream.Namespace)
+			if callErr != nil {
+				return serviceResult(operation, nil, callErr)
+			}
+			value, callErr := provider.ListTags(ctx, scope, *request)
+			if callErr == nil {
+				callErr = validateProviderTagPage(*request, value)
+			}
+			return serviceResult(operation, value, callErr)
+		case *versioningv1.CompareVersionsRequest:
+			value, callErr := s.compareVersions(ctx, scope, *request)
+			return serviceResult(operation, value, callErr)
+		case *versioningv1.IsAncestorRequest:
+			value, callErr := s.isAncestor(ctx, scope, *request)
+			return serviceResult(operation, value, callErr)
+		case *versioningv1.FindCommonAncestorRequest:
+			value, callErr := s.findCommonAncestor(ctx, scope, *request)
 			return serviceResult(operation, value, callErr)
 		default:
 			return serviceResult(operation, nil, providerError(versioningv1.ErrorUnsupported, false, errors.New("Version Ledger 操作尚未开放")))
@@ -149,6 +218,43 @@ func validateProviderHistory(request versioningv1.ListHistoryRequest, result ver
 		}
 	}
 	return nil
+}
+
+func validateProviderHeadPage(request versioningv1.ListHeadsRequest, result versioningv1.ListHeadsResult) error {
+	if len(result.Heads) > request.Limit {
+		return providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider Head 列表超过请求上限"))
+	}
+	for _, head := range result.Heads {
+		if head.Stream != request.Stream || head.Name <= request.Cursor {
+			return providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider Head 列表与请求不匹配"))
+		}
+	}
+	if result.NextCursor != "" && (len(result.Heads) == 0 || result.NextCursor != result.Heads[len(result.Heads)-1].Name) {
+		return providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider Head 分页游标无效"))
+	}
+	return nil
+}
+
+func validateProviderTagPage(request versioningv1.ListTagsRequest, result versioningv1.ListTagsResult) error {
+	if len(result.Tags) > request.Limit {
+		return providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider Tag 列表超过请求上限"))
+	}
+	for _, tag := range result.Tags {
+		if tag.Stream != request.Stream || tag.Name <= request.Cursor {
+			return providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider Tag 列表与请求不匹配"))
+		}
+	}
+	if result.NextCursor != "" && (len(result.Tags) == 0 || result.NextCursor != result.Tags[len(result.Tags)-1].Name) {
+		return providerError(versioningv1.ErrorCorrupted, false, errors.New("Provider Tag 分页游标无效"))
+	}
+	return nil
+}
+
+func validMoveRevision(expected, actual uint64) bool {
+	if expected == 0 {
+		return actual > 0
+	}
+	return actual == expected+1
 }
 
 func validateProviderPutResult(candidate versioningv1.ProviderVersionCandidate, result versioningv1.PutVersionResult) error {
@@ -185,16 +291,25 @@ func (s *Service) Contribution() sdk.Contribution {
 	return sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage, ID: versioningv1.LedgerCapability, Descriptor: serviceDescriptor(),
 		Handlers: map[string]sdk.Handler{
-			versioningv1.OperationProviders:   s.handle(versioningv1.OperationProviders),
-			versioningv1.OperationPutVersion:  s.handle(versioningv1.OperationPutVersion),
-			versioningv1.OperationGetVersion:  s.handle(versioningv1.OperationGetVersion),
-			versioningv1.OperationListHistory: s.handle(versioningv1.OperationListHistory),
-			versioningv1.OperationGetHead:     s.handle(versioningv1.OperationGetHead),
-			versioningv1.OperationMoveHead:    s.handle(versioningv1.OperationMoveHead),
+			versioningv1.OperationProviders:      s.handle(versioningv1.OperationProviders),
+			versioningv1.OperationPutVersion:     s.handle(versioningv1.OperationPutVersion),
+			versioningv1.OperationGetVersion:     s.handle(versioningv1.OperationGetVersion),
+			versioningv1.OperationListHistory:    s.handle(versioningv1.OperationListHistory),
+			versioningv1.OperationGetHead:        s.handle(versioningv1.OperationGetHead),
+			versioningv1.OperationListHeads:      s.handle(versioningv1.OperationListHeads),
+			versioningv1.OperationCreateHead:     s.handle(versioningv1.OperationCreateHead),
+			versioningv1.OperationMoveHead:       s.handle(versioningv1.OperationMoveHead),
+			versioningv1.OperationDeleteHead:     s.handle(versioningv1.OperationDeleteHead),
+			versioningv1.OperationCreateTag:      s.handle(versioningv1.OperationCreateTag),
+			versioningv1.OperationGetTag:         s.handle(versioningv1.OperationGetTag),
+			versioningv1.OperationListTags:       s.handle(versioningv1.OperationListTags),
+			versioningv1.OperationCompare:        s.handle(versioningv1.OperationCompare),
+			versioningv1.OperationIsAncestor:     s.handle(versioningv1.OperationIsAncestor),
+			versioningv1.OperationCommonAncestor: s.handle(versioningv1.OperationCommonAncestor),
 		},
 	}
 }
 
 func serviceDescriptor() []byte {
-	return []byte(`{"title":"Version Ledger","subcommands":[{"name":"providers","description":"列出已注册的版本存储 Provider 类型","paramsSchema":{"type":"object","additionalProperties":false,"maxProperties":0}},{"name":"putVersion","description":"幂等创建不可变版本"},{"name":"getVersion","description":"精确读取不可变版本"},{"name":"listHistory","description":"沿父链分页读取版本历史"},{"name":"getHead","description":"读取命名 Head"},{"name":"moveHead","description":"以 CAS 移动命名 Head"}]}`)
+	return []byte(`{"title":"Version Ledger","subcommands":[{"name":"providers","description":"列出已注册的版本存储 Provider 类型","paramsSchema":{"type":"object","additionalProperties":false,"maxProperties":0}},{"name":"putVersion","description":"幂等创建不可变版本"},{"name":"getVersion","description":"精确读取不可变版本"},{"name":"listHistory","description":"沿父链分页读取版本历史"},{"name":"getHead","description":"读取命名 Head"},{"name":"listHeads","description":"按名称分页列出 Head"},{"name":"createHead","description":"幂等创建命名 Head"},{"name":"moveHead","description":"以 CAS 移动命名 Head"},{"name":"deleteHead","description":"以 CAS 删除命名 Head"},{"name":"createTag","description":"创建不可变 Tag"},{"name":"getTag","description":"读取不可变 Tag"},{"name":"listTags","description":"按名称分页列出 Tag"},{"name":"compareVersions","description":"生成确定性 JSON Patch 与变更统计"},{"name":"isAncestor","description":"判断 DAG 祖先关系与距离"},{"name":"findCommonAncestor","description":"查找确定性的最近共同祖先"}]}`)
 }

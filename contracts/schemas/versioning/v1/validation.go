@@ -33,12 +33,7 @@ func validateRequest(target any) error {
 			return err
 		}
 		request.Content = canonical
-		if request.Parent != nil {
-			if err := ValidateVersionRef(*request.Parent); err != nil || request.Parent.Stream != request.Stream {
-				return errors.New("父版本必须属于同一 stream")
-			}
-		}
-		return nil
+		return validateParents(request.Stream, request.Parents, 0)
 	case *GetVersionRequest:
 		return ValidateVersionRef(request.Ref)
 	case *ListHistoryRequest:
@@ -54,6 +49,10 @@ func validateRequest(target any) error {
 		return nil
 	case *GetHeadRequest:
 		return validateHeadIdentity(request.Stream, request.Name)
+	case *ListHeadsRequest:
+		return validateReferencePage(request.Stream, request.Limit, request.Cursor)
+	case *CreateHeadRequest:
+		return validateReferenceTarget(request.Stream, request.Name, request.Target)
 	case *MoveHeadRequest:
 		if err := validateHeadIdentity(request.Stream, request.Name); err != nil {
 			return err
@@ -62,6 +61,23 @@ func validateRequest(target any) error {
 			return errors.New("Head 目标必须属于同一 stream")
 		}
 		return nil
+	case *DeleteHeadRequest:
+		if request.ExpectedRevision == 0 {
+			return errors.New("删除 Head 必须提供 expectedRevision")
+		}
+		return validateHeadIdentity(request.Stream, request.Name)
+	case *CreateTagRequest:
+		return validateReferenceTarget(request.Stream, request.Name, request.Target)
+	case *GetTagRequest:
+		return validateHeadIdentity(request.Stream, request.Name)
+	case *ListTagsRequest:
+		return validateReferencePage(request.Stream, request.Limit, request.Cursor)
+	case *CompareVersionsRequest:
+		return validateVersionPair(request.Left, request.Right)
+	case *IsAncestorRequest:
+		return validateVersionPair(request.Ancestor, request.Descendant)
+	case *FindCommonAncestorRequest:
+		return validateVersionPair(request.Left, request.Right)
 	default:
 		return errors.New("Version Ledger 请求类型无效")
 	}
@@ -89,8 +105,26 @@ func validateResult(target any) error {
 		return ValidateHistory(result.Versions)
 	case *GetHeadResult:
 		return ValidateHead(result.Head)
+	case *ListHeadsResult:
+		return validateHeadPage(*result)
+	case *CreateHeadResult:
+		return ValidateHead(result.Head)
 	case *MoveHeadResult:
 		return ValidateHead(result.Head)
+	case *DeleteHeadResult:
+		return ValidateHead(result.Previous)
+	case *CreateTagResult:
+		return ValidateTag(result.Tag)
+	case *GetTagResult:
+		return ValidateTag(result.Tag)
+	case *ListTagsResult:
+		return validateTagPage(*result)
+	case *CompareVersionsResult:
+		return ValidateComparisonResult(*result)
+	case *IsAncestorResult:
+		return ValidateIsAncestorResult(*result)
+	case *FindCommonAncestorResult:
+		return ValidateCommonAncestorResult(*result)
 	default:
 		return errors.New("Version Ledger 结果类型无效")
 	}
@@ -117,10 +151,8 @@ func ValidateVersionRecord(record VersionRecord) error {
 	if err := ValidateVersionRef(record.Ref); err != nil {
 		return err
 	}
-	if record.Parent != nil {
-		if err := ValidateVersionRef(*record.Parent); err != nil || record.Parent.Stream != record.Ref.Stream || record.Parent.Sequence >= record.Ref.Sequence {
-			return errors.New("VersionRecord 父版本无效")
-		}
+	if err := validateParents(record.Ref.Stream, record.Parents, record.Ref.Sequence); err != nil {
+		return err
 	}
 	digest, err := ContentDigest(record.Content)
 	if err != nil || digest != record.Ref.ContentDigest {
@@ -141,12 +173,7 @@ func ValidateProviderVersionCandidate(candidate *ProviderVersionCandidate) error
 		return err
 	}
 	candidate.Content = canonical
-	if candidate.Parent != nil {
-		if err := ValidateVersionRef(*candidate.Parent); err != nil || candidate.Parent.Stream != candidate.Stream {
-			return errors.New("Provider version candidate 父版本无效")
-		}
-	}
-	return nil
+	return validateParents(candidate.Stream, candidate.Parents, 0)
 }
 
 func validActorID(actorID string) bool { return actorID != "" && len(actorID) <= 160 }
@@ -164,6 +191,13 @@ func ValidateHead(head Head) error {
 	return nil
 }
 
+func ValidateTag(tag Tag) error {
+	if tag.Protocol != Protocol || !validActorID(tag.ActorID) || tag.CreatedAt.IsZero() {
+		return errors.New("Version Tag 协议、actor 或时间无效")
+	}
+	return validateReferenceTarget(tag.Stream, tag.Name, tag.Target)
+}
+
 func ValidateHistory(versions []VersionRecord) error {
 	for index := range versions {
 		if err := ValidateVersionRecord(versions[index]); err != nil {
@@ -174,9 +208,85 @@ func ValidateHistory(versions []VersionRecord) error {
 		}
 		previous := versions[index-1]
 		current := versions[index]
-		if previous.Parent == nil || *previous.Parent != current.Ref {
+		if len(previous.Parents) == 0 || previous.Parents[0] != current.Ref {
 			return errors.New("Version history 未按父链降序返回")
 		}
+	}
+	return nil
+}
+
+func validateParents(stream StreamKey, parents []VersionRef, childSequence uint64) error {
+	if len(parents) > MaxParents {
+		return errors.New("版本父节点超过限制")
+	}
+	seen := map[string]struct{}{}
+	for _, parent := range parents {
+		if err := ValidateVersionRef(parent); err != nil || parent.Stream != stream || (childSequence > 0 && parent.Sequence >= childSequence) {
+			return errors.New("版本父节点无效")
+		}
+		if _, duplicate := seen[parent.VersionID]; duplicate {
+			return errors.New("版本父节点重复")
+		}
+		seen[parent.VersionID] = struct{}{}
+	}
+	return nil
+}
+
+func validateReferenceTarget(stream StreamKey, name string, target VersionRef) error {
+	if err := validateHeadIdentity(stream, name); err != nil {
+		return err
+	}
+	if err := ValidateVersionRef(target); err != nil || target.Stream != stream {
+		return errors.New("版本引用目标必须属于同一 stream")
+	}
+	return nil
+}
+
+func validateReferencePage(stream StreamKey, limit int, cursor string) error {
+	if err := ValidateStreamKey(stream); err != nil || limit < 1 || limit > MaxRefsPage {
+		return errors.New("版本引用分页请求无效")
+	}
+	if cursor != "" && !headPattern.MatchString(cursor) {
+		return errors.New("版本引用 cursor 无效")
+	}
+	return nil
+}
+
+func validateVersionPair(left, right VersionRef) error {
+	if err := ValidateVersionRef(left); err != nil {
+		return err
+	}
+	if err := ValidateVersionRef(right); err != nil || left.Stream != right.Stream {
+		return errors.New("两个版本必须属于同一 stream")
+	}
+	return nil
+}
+
+func validateProviderCreateTagRequest(request ProviderCreateTagRequest) error {
+	if !validActorID(request.ActorID) {
+		return errors.New("Provider Tag actor 无效")
+	}
+	return validateReferenceTarget(request.Stream, request.Name, request.Target)
+}
+
+func validateHeadPage(result ListHeadsResult) error {
+	previous := ""
+	for _, head := range result.Heads {
+		if err := ValidateHead(head); err != nil || (previous != "" && head.Name <= previous) {
+			return errors.New("Head 列表无效或未按名称升序")
+		}
+		previous = head.Name
+	}
+	return nil
+}
+
+func validateTagPage(result ListTagsResult) error {
+	previous := ""
+	for _, tag := range result.Tags {
+		if err := ValidateTag(tag); err != nil || (previous != "" && tag.Name <= previous) {
+			return errors.New("Tag 列表无效或未按名称升序")
+		}
+		previous = tag.Name
 	}
 	return nil
 }

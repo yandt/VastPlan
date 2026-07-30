@@ -16,10 +16,12 @@ type memoryStreamKey struct {
 }
 
 type memoryStream struct {
-	sequence    uint64
-	versions    map[string]versioningv1.VersionRecord
-	idempotency map[string]string
-	heads       map[string]versioningv1.Head
+	sequence      uint64
+	versions      map[string]versioningv1.VersionRecord
+	idempotency   map[string]string
+	heads         map[string]versioningv1.Head
+	headRevisions map[string]uint64
+	tags          map[string]versioningv1.Tag
 }
 
 // MemoryProvider is a deterministic conformance Provider for tests and
@@ -45,7 +47,9 @@ func (p *MemoryProvider) Descriptor() versioningv1.ProviderDescriptor {
 		Consistency:       versioningv1.ConsistencySingleWriter, Durability: versioningv1.DurabilityLocal,
 		MaxContentBytes:     versioningv1.MaxContentBytes,
 		ConfigurationSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
-		Capabilities:        versioningv1.ProviderCapabilities{DetachedVersions: true, NamedHeads: true, StableHistory: true},
+		Capabilities: versioningv1.ProviderCapabilities{
+			DetachedVersions: true, NamedHeads: true, StableHistory: true, ImmutableTags: true, DAGParents: true,
+		},
 	}
 }
 
@@ -61,7 +65,10 @@ func (p *MemoryProvider) PutVersion(ctx context.Context, scope Scope, request ve
 	defer p.mu.Unlock()
 	stream := p.streams[key]
 	if stream == nil {
-		stream = &memoryStream{versions: map[string]versioningv1.VersionRecord{}, idempotency: map[string]string{}, heads: map[string]versioningv1.Head{}}
+		stream = &memoryStream{
+			versions: map[string]versioningv1.VersionRecord{}, idempotency: map[string]string{},
+			heads: map[string]versioningv1.Head{}, headRevisions: map[string]uint64{}, tags: map[string]versioningv1.Tag{},
+		}
 		p.streams[key] = stream
 	}
 	if versionID, exists := stream.idempotency[request.IdempotencyKey]; exists {
@@ -75,7 +82,7 @@ func (p *MemoryProvider) PutVersion(ctx context.Context, scope Scope, request ve
 		return versioningv1.PutVersionResult{}, providerError(versioningv1.ErrorLimitExceeded, false, errors.New("版本 sequence 已耗尽"))
 	}
 	next := stream.sequence + 1
-	if err := requireStoredParent(stream.versions, next, request.Candidate); err != nil {
+	if err := requireStoredParents(stream.versions, next, request.Candidate); err != nil {
 		return versioningv1.PutVersionResult{}, err
 	}
 	digest, err := versioningv1.ContentDigest(request.Candidate.Content)
@@ -85,7 +92,7 @@ func (p *MemoryProvider) PutVersion(ctx context.Context, scope Scope, request ve
 	record := versioningv1.VersionRecord{
 		Protocol: versioningv1.Protocol,
 		Ref:      versioningv1.VersionRef{Stream: request.Candidate.Stream, VersionID: request.Candidate.VersionID, Sequence: next, ContentDigest: digest},
-		Parent:   request.Candidate.Parent, Content: append([]byte(nil), request.Candidate.Content...), Message: request.Candidate.Message,
+		Parents:  cloneRefs(request.Candidate.Parents), Content: append([]byte(nil), request.Candidate.Content...), Message: request.Candidate.Message,
 		Labels: cloneLabels(request.Candidate.Labels), ActorID: request.Candidate.ActorID, CreatedAt: p.now(),
 	}
 	if err := versioningv1.ValidateVersionRecord(record); err != nil {
@@ -133,11 +140,12 @@ func (p *MemoryProvider) ListHistory(ctx context.Context, scope Scope, request v
 	result := versioningv1.ListHistoryResult{Versions: make([]versioningv1.VersionRecord, 0, request.Limit)}
 	for len(result.Versions) < request.Limit {
 		result.Versions = append(result.Versions, cloneRecord(current))
-		if current.Parent == nil {
+		if len(current.Parents) == 0 {
 			break
 		}
-		next, exists := stream.versions[current.Parent.VersionID]
-		if !exists || next.Ref != *current.Parent {
+		firstParent := current.Parents[0]
+		next, exists := stream.versions[firstParent.VersionID]
+		if !exists || next.Ref != firstParent {
 			return versioningv1.ListHistoryResult{}, providerError(versioningv1.ErrorCorrupted, false, errors.New("版本父链损坏"))
 		}
 		if len(result.Versions) == request.Limit {
@@ -190,15 +198,17 @@ func (p *MemoryProvider) MoveHead(ctx context.Context, scope Scope, request vers
 	if (!exists && request.ExpectedRevision != 0) || (exists && current.Revision != request.ExpectedRevision) {
 		return versioningv1.MoveHeadResult{}, providerError(versioningv1.ErrorConflict, false, errors.New("Version Head CAS 冲突"))
 	}
-	revision := uint64(1)
+	revision := stream.headRevisions[request.Name]
 	if exists {
-		if current.Revision == math.MaxUint64 {
-			return versioningv1.MoveHeadResult{}, providerError(versioningv1.ErrorLimitExceeded, false, errors.New("Head revision 已耗尽"))
-		}
-		revision = current.Revision + 1
+		revision = current.Revision
 	}
+	if revision == math.MaxUint64 {
+		return versioningv1.MoveHeadResult{}, providerError(versioningv1.ErrorLimitExceeded, false, errors.New("Head revision 已耗尽"))
+	}
+	revision++
 	head := versioningv1.Head{Protocol: versioningv1.Protocol, Stream: request.Stream, Name: request.Name, Target: request.Target, Revision: revision, UpdatedAt: p.now()}
 	stream.heads[request.Name] = head
+	stream.headRevisions[request.Name] = revision
 	return versioningv1.MoveHeadResult{Head: head}, nil
 }
 

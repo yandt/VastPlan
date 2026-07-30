@@ -42,7 +42,9 @@ func (p *FileProvider) Descriptor() versioningv1.ProviderDescriptor {
 		Consistency:       versioningv1.ConsistencySingleWriter, Durability: versioningv1.DurabilityLocal,
 		MaxContentBytes:     versioningv1.MaxContentBytes,
 		ConfigurationSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["root"],"properties":{"root":{"type":"string","minLength":1}}}`),
-		Capabilities:        versioningv1.ProviderCapabilities{DetachedVersions: true, NamedHeads: true, StableHistory: true},
+		Capabilities: versioningv1.ProviderCapabilities{
+			DetachedVersions: true, NamedHeads: true, StableHistory: true, ImmutableTags: true, DAGParents: true,
+		},
 	}
 }
 
@@ -74,7 +76,7 @@ func (p *FileProvider) PutVersion(ctx context.Context, scope Scope, request vers
 		return versioningv1.PutVersionResult{}, providerError(versioningv1.ErrorLimitExceeded, false, errors.New("版本 sequence 已耗尽"))
 	}
 	next := loaded.sequence + 1
-	if err := requireStoredParent(loaded.versions, next, request.Candidate); err != nil {
+	if err := requireStoredParents(loaded.versions, next, request.Candidate); err != nil {
 		return versioningv1.PutVersionResult{}, err
 	}
 	contentDigest, err := versioningv1.ContentDigest(request.Candidate.Content)
@@ -84,7 +86,7 @@ func (p *FileProvider) PutVersion(ctx context.Context, scope Scope, request vers
 	record := versioningv1.VersionRecord{
 		Protocol: versioningv1.Protocol,
 		Ref:      versioningv1.VersionRef{Stream: request.Candidate.Stream, VersionID: versionID, Sequence: next, ContentDigest: contentDigest},
-		Parent:   request.Candidate.Parent, Content: append([]byte(nil), request.Candidate.Content...), Message: request.Candidate.Message,
+		Parents:  cloneRefs(request.Candidate.Parents), Content: append([]byte(nil), request.Candidate.Content...), Message: request.Candidate.Message,
 		Labels: cloneLabels(request.Candidate.Labels), ActorID: request.Candidate.ActorID, CreatedAt: p.now(),
 	}
 	if err := versioningv1.ValidateVersionRecord(record); err != nil {
@@ -157,11 +159,12 @@ func (p *FileProvider) ListHistory(ctx context.Context, scope Scope, request ver
 	result := versioningv1.ListHistoryResult{Versions: make([]versioningv1.VersionRecord, 0, request.Limit)}
 	for len(result.Versions) < request.Limit {
 		result.Versions = append(result.Versions, cloneRecord(current))
-		if current.Parent == nil {
+		if len(current.Parents) == 0 {
 			break
 		}
-		next, exists := loaded.versions[current.Parent.VersionID]
-		if !exists || next.Ref != *current.Parent {
+		firstParent := current.Parents[0]
+		next, exists := loaded.versions[firstParent.VersionID]
+		if !exists || next.Ref != firstParent {
 			return versioningv1.ListHistoryResult{}, providerError(versioningv1.ErrorCorrupted, false, errors.New("版本父链损坏"))
 		}
 		if len(result.Versions) == request.Limit {
@@ -221,7 +224,7 @@ func (p *FileProvider) MoveHead(ctx context.Context, scope Scope, request versio
 	if !ok || target.Ref != request.Target {
 		return versioningv1.MoveHeadResult{}, providerError(versioningv1.ErrorNotFound, false, errors.New("Head 目标版本不存在"))
 	}
-	current, exists, err := readOptionalFileHead(streamDir, request.Stream, request.Name)
+	current, exists, persisted, err := readFileHeadState(streamDir, request.Stream, request.Name)
 	if err != nil {
 		return versioningv1.MoveHeadResult{}, err
 	}
@@ -233,13 +236,17 @@ func (p *FileProvider) MoveHead(ctx context.Context, scope Scope, request versio
 	if (!exists && request.ExpectedRevision != 0) || (exists && current.Revision != request.ExpectedRevision) {
 		return versioningv1.MoveHeadResult{}, providerError(versioningv1.ErrorConflict, false, errors.New("Version Head CAS 冲突"))
 	}
-	revision := uint64(1)
-	if exists {
-		if current.Revision == math.MaxUint64 {
-			return versioningv1.MoveHeadResult{}, providerError(versioningv1.ErrorLimitExceeded, false, errors.New("Head revision 已耗尽"))
-		}
-		revision = current.Revision + 1
+	revision := uint64(0)
+	if persisted {
+		revision = current.Revision
 	}
+	if exists {
+		revision = current.Revision
+	}
+	if revision == math.MaxUint64 {
+		return versioningv1.MoveHeadResult{}, providerError(versioningv1.ErrorLimitExceeded, false, errors.New("Head revision 已耗尽"))
+	}
+	revision++
 	head := versioningv1.Head{Protocol: versioningv1.Protocol, Stream: request.Stream, Name: request.Name, Target: request.Target, Revision: revision, UpdatedAt: p.now()}
 	headsDir, err := secureChildDirectory(streamDir, "heads")
 	if err != nil {
@@ -275,27 +282,32 @@ func readFileHead(streamDir string, request versioningv1.GetHeadRequest) (versio
 }
 
 func readOptionalFileHead(streamDir string, stream versioningv1.StreamKey, name string) (versioningv1.Head, bool, error) {
+	head, active, _, err := readFileHeadState(streamDir, stream, name)
+	return head, active, err
+}
+
+func readFileHeadState(streamDir string, stream versioningv1.StreamKey, name string) (versioningv1.Head, bool, bool, error) {
 	headsDir := filepath.Join(streamDir, "heads")
 	if err := validatePrivateDirectory(headsDir); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return versioningv1.Head{}, false, nil
+			return versioningv1.Head{}, false, false, nil
 		}
-		return versioningv1.Head{}, false, fileProviderError(err)
+		return versioningv1.Head{}, false, false, fileProviderError(err)
 	}
 	var envelope fileHeadEnvelope
 	if err := readPrivateJSON(filepath.Join(headsDir, name+".json"), maxHeadFileBytes, &envelope); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return versioningv1.Head{}, false, nil
+			return versioningv1.Head{}, false, false, nil
 		}
-		return versioningv1.Head{}, false, providerError(versioningv1.ErrorCorrupted, false, err)
+		return versioningv1.Head{}, false, false, providerError(versioningv1.ErrorCorrupted, false, err)
 	}
 	if envelope.FormatVersion != fileProviderFormatVersion || envelope.Head.Stream != stream || envelope.Head.Name != name {
-		return versioningv1.Head{}, false, providerError(versioningv1.ErrorCorrupted, false, errors.New("Version Head 文件身份不一致"))
+		return versioningv1.Head{}, false, false, providerError(versioningv1.ErrorCorrupted, false, errors.New("Version Head 文件身份不一致"))
 	}
 	if err := versioningv1.ValidateHead(envelope.Head); err != nil {
-		return versioningv1.Head{}, false, providerError(versioningv1.ErrorCorrupted, false, err)
+		return versioningv1.Head{}, false, false, providerError(versioningv1.ErrorCorrupted, false, err)
 	}
-	return envelope.Head, true, nil
+	return envelope.Head, !envelope.Deleted, true, nil
 }
 
 func fileProviderError(err error) error {
