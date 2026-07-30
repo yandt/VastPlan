@@ -81,7 +81,7 @@ function loadersModule() {
 
 function semanticModule(values) {
   const mapping = {
-    add: "PlusOutlined", remove: "MinusOutlined", edit: "EditOutlined", search: "SearchOutlined", settings: "SettingOutlined",
+    add: "PlusOutlined", remove: "DeleteOutlined", edit: "EditOutlined", search: "SearchOutlined", settings: "SettingOutlined",
     success: "CheckCircleOutlined", warning: "WarningOutlined", error: "CloseCircleOutlined", info: "InfoCircleOutlined",
     close: "CloseOutlined", menu: "MenuOutlined", import: "ImportOutlined", export: "ExportOutlined", publish: "CloudUploadOutlined",
     refresh: "ReloadOutlined", columns: "ColumnHeightOutlined", visibility: "EyeOutlined", visibilityOff: "EyeInvisibleOutlined",

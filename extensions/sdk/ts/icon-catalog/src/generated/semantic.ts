@@ -2,7 +2,7 @@ import type { SemanticIconName } from "@vastplan/ui-contract";
 import { normalizeAntIcon } from "../normalize.js";
 import type { IconGlyphDefinition } from "../types.js";
 import icon0 from "@ant-design/icons-svg/es/asn/PlusOutlined.js";
-import icon1 from "@ant-design/icons-svg/es/asn/MinusOutlined.js";
+import icon1 from "@ant-design/icons-svg/es/asn/DeleteOutlined.js";
 import icon2 from "@ant-design/icons-svg/es/asn/EditOutlined.js";
 import icon3 from "@ant-design/icons-svg/es/asn/SearchOutlined.js";
 import icon4 from "@ant-design/icons-svg/es/asn/SettingOutlined.js";

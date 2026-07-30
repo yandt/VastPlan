@@ -21,6 +21,10 @@ describe("Ant Design icon catalog", () => {
     }
   });
 
+  it("uses a trash glyph for the destructive remove semantic", async () => {
+    expect(semanticIconGlyph("remove")).toEqual(await loadIconGlyph("delete-outlined"));
+  });
+
   it("loads outlined, two-tone and filtered-source icons through delayed shards", async () => {
     const [outlined, twoTone, twitch] = await Promise.all([
       loadIconGlyph("plus-outlined"), loadIconGlyph("warning-two-tone"), loadIconGlyph("twitch-filled"),
