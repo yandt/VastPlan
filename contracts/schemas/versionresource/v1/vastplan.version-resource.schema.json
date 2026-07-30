@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/version-resource/v1/vastplan.version-resource.schema.json",
+  "title": "VastPlan Version Resource v1",
+  "$defs": {
+    "resourceKey": {
+      "type": "object", "additionalProperties": false, "required": ["type", "id"],
+      "properties": {
+        "type": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 128 },
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" }
+      }
+    },
+    "fileEntry": {
+      "type": "object", "additionalProperties": false, "required": ["path", "digest", "size", "mode"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size": { "type": "integer", "minimum": 0 },
+        "mode": { "type": "integer", "minimum": 0, "maximum": 511 }
+      }
+    },
+    "snapshot": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "mediaType"],
+      "properties": {
+        "kind": { "enum": ["json", "files"] },
+        "mediaType": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "json": { "type": "object" },
+        "files": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/$defs/fileEntry" } }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "json" } } }, "then": { "required": ["json"], "not": { "required": ["files"] } } },
+        { "if": { "properties": { "kind": { "const": "files" } } }, "then": { "required": ["files"], "not": { "required": ["json"] } } }
+      ]
+    },
+    "adapterCapabilities": {
+      "type": "object", "additionalProperties": false, "required": ["normalize", "diff", "materialize", "merge"],
+      "properties": {
+        "normalize": { "type": "boolean" }, "diff": { "type": "boolean" },
+        "materialize": { "type": "boolean" }, "merge": { "type": "boolean" }
+      }
+    },
+    "adapterDescriptor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "id", "version", "contentKind", "supportedModes", "defaultMode", "maxSnapshotBytes", "secretPolicy", "capabilities", "configurationSchema"],
+      "properties": {
+        "protocol": { "const": "version.resource.v1" },
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 128 },
+        "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+        "contentKind": { "enum": ["json", "files"] },
+        "supportedModes": { "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": { "enum": ["snapshot", "overlay", "git"] } },
+        "defaultMode": { "enum": ["snapshot", "overlay", "git"] },
+        "maxSnapshotBytes": { "type": "integer", "minimum": 1 },
+        "secretPolicy": { "enum": ["forbidden", "credential-refs-only"] },
+        "capabilities": { "$ref": "#/$defs/adapterCapabilities" },
+        "configurationSchema": { "type": "object" }
+      }
+    },
+    "adapterDescribeRequest": { "type": "object", "additionalProperties": false, "maxProperties": 0 },
+    "adapterDescribeResult": {
+      "type": "object", "additionalProperties": false, "required": ["adapter"],
+      "properties": { "adapter": { "$ref": "#/$defs/adapterDescriptor" } }
+    },
+    "adapterNormalizeRequest": {
+      "type": "object", "additionalProperties": false, "required": ["resource", "mode", "snapshot"],
+      "properties": {
+        "resource": { "$ref": "#/$defs/resourceKey" }, "mode": { "enum": ["snapshot", "overlay", "git"] },
+        "configuration": { "type": "object" }, "snapshot": { "$ref": "#/$defs/snapshot" }
+      }
+    },
+    "adapterNormalizeResult": {
+      "type": "object", "additionalProperties": false, "required": ["snapshot", "digest"],
+      "properties": { "snapshot": { "$ref": "#/$defs/snapshot" }, "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" } }
+    },
+    "changeSummary": {
+      "type": "object", "additionalProperties": false, "required": ["added", "modified", "removed", "total"],
+      "properties": {
+        "added": { "type": "integer", "minimum": 0 }, "modified": { "type": "integer", "minimum": 0 },
+        "removed": { "type": "integer", "minimum": 0 }, "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "adapterDiffRequest": {
+      "type": "object", "additionalProperties": false, "required": ["resource", "mode", "left", "right"],
+      "properties": {
+        "resource": { "$ref": "#/$defs/resourceKey" }, "mode": { "enum": ["snapshot", "overlay", "git"] },
+        "left": { "$ref": "#/$defs/snapshot" }, "right": { "$ref": "#/$defs/snapshot" }
+      }
+    },
+    "adapterDiffResult": {
+      "type": "object", "additionalProperties": false, "required": ["summary"],
+      "properties": {
+        "changedPaths": { "type": "array", "maxItems": 10000, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 1024 } },
+        "summary": { "$ref": "#/$defs/changeSummary" }
+      }
+    },
+    "adapterMaterializeRequest": {
+      "type": "object", "additionalProperties": false, "required": ["resource", "mode", "snapshot"],
+      "properties": {
+        "resource": { "$ref": "#/$defs/resourceKey" }, "mode": { "enum": ["overlay", "git"] },
+        "snapshot": { "allOf": [{ "$ref": "#/$defs/snapshot" }, { "properties": { "kind": { "const": "files" } } }] }
+      }
+    },
+    "materializationRef": {
+      "type": "object", "additionalProperties": false, "required": ["id", "digest", "size"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^mat_[A-Za-z0-9_-]{16,96}$" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "size": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "adapterMaterializeResult": {
+      "type": "object", "additionalProperties": false, "required": ["materialization"],
+      "properties": { "materialization": { "$ref": "#/$defs/materializationRef" } }
+    },
+    "resourceBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["resourceType", "namespace", "adapter", "allowedModes", "defaultMode", "projectionPolicy"],
+      "properties": {
+        "resourceType": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 128 },
+        "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 128 },
+        "adapter": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 128 },
+        "allowedModes": { "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true, "items": { "enum": ["snapshot", "overlay", "git"] } },
+        "defaultMode": { "enum": ["snapshot", "overlay", "git"] },
+        "projectionPolicy": { "enum": ["none", "domain-hot", "current-only"] },
+        "adapterConfig": { "type": "object" }
+      }
+    },
+    "environmentProfile": {
+      "type": "object", "additionalProperties": false, "required": ["protocol", "id", "revision", "bindings", "limits"],
+      "properties": {
+        "protocol": { "const": "version.resource.v1" },
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "bindings": { "type": "array", "minItems": 1, "maxItems": 256, "items": { "$ref": "#/$defs/resourceBinding" } },
+        "limits": {
+          "type": "object", "additionalProperties": false,
+          "required": ["maxSessionsPerTenant", "maxLeaseSeconds", "maxSnapshotBytes", "maxOverlayBytes"],
+          "properties": {
+            "maxSessionsPerTenant": { "type": "integer", "minimum": 1, "maximum": 10000 },
+            "maxLeaseSeconds": { "type": "integer", "minimum": 30, "maximum": 86400 },
+            "maxSnapshotBytes": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+            "maxOverlayBytes": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}

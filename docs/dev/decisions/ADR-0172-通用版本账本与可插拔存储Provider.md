@@ -44,7 +44,7 @@ Portal Composer、Deployment Manager、Plugin Settings 等领域都保存不可�
 1. P0：固化 JSON Schema、Go 强类型、请求/响应解析、稳定错误码和 Provider RPC SPI。
 2. P1（已完成）：建立 Ledger 插件骨架、内存契约 Provider 和 File Provider，完成崩溃恢复与一致性测试。
 3. P1.5（已完成）：补齐双父 DAG、Head 全生命周期与防 ABA 墓碑、不可变 Tag、确定性 JSON Patch、祖先判断和共同祖先查询；不实施三方内容合并。
-4. P2：Portal Composer 通过 VersionRef 保存配置；先写不可变版本，再 Root CAS，再 outbox 镜像 Head。
+4. P2：先按 [ADR-0173](ADR-0173-版本环境与资源适配.md) 建立 Workspace/Resource 协议与 Snapshot Manager，再由 Portal 通过 Workspace 保存配置；先写不可变版本，再 Root CAS 保存 VersionRef 与有限热投影，最后由 outbox 镜像 Head。
 5. P3：通过 Database Runtime 实施 Relational Provider，完成 active-active 与故障矩阵。
 6. P4：按真实 GitOps 需求选型并实施 Git Provider，不让 Git 依赖进入 File/Relational 运行闭包。
 
