@@ -1,0 +1,26 @@
+[
+  {
+    "name": "object-key-order",
+    "input": "{\"z\":2,\"a\":1}",
+    "canonical": "{\"a\":1,\"z\":2}",
+    "sha256": "99168216144c7fed5d4c54916cf98d9c66096280c04a499822a99b6658bd177a"
+  },
+  {
+    "name": "unicode-and-string-escaping",
+    "input": "{\"nested\":{\"β\":2,\"a\":1},\"message\":\"<safe>\"}",
+    "canonical": "{\"message\":\"\\u003csafe\\u003e\",\"nested\":{\"a\":1,\"β\":2}}",
+    "sha256": "2556d7c3ac097f51990f4dd5c92f6ec984b2cd7fbe8344f8db3cfb7fcfa5b010"
+  },
+  {
+    "name": "number-token-identity",
+    "input": "{\"scientific\":1e3,\"integer\":1,\"fraction\":1.0}",
+    "canonical": "{\"fraction\":1.0,\"integer\":1,\"scientific\":1e3}",
+    "sha256": "58fc40db9b6d0dbdd401f4de368c64c8218b88419d97ea451bf124839e38905f"
+  },
+  {
+    "name": "array-order-is-preserved",
+    "input": "{\"items\":[{\"b\":2,\"a\":1},true,null]}",
+    "canonical": "{\"items\":[{\"a\":1,\"b\":2},true,null]}",
+    "sha256": "788ab14d6e3bc9d7abf08d578e5fe7d307591728c7f78916a02a0f7e18db5c93"
+  }
+]

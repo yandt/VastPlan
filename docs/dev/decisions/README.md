@@ -202,3 +202,4 @@
 - [ADR-0169 Seed Recovery Capsule 与分阶段可用性](ADR-0169-Seed-Recovery-Capsule与分阶段可用性.md)
 - [ADR-0170 统一 Capability Contract 与可信 ArtifactIdentity](ADR-0170-统一Capability-Contract与可信ArtifactIdentity.md)
 - [ADR-0171 Portal 单聚合版本与上线子流程](ADR-0171-Portal单聚合版本与上线子流程.md)
+- [ADR-0172 通用版本账本与可插拔存储 Provider](ADR-0172-通用版本账本与可插拔存储Provider.md)

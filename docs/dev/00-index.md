@@ -252,6 +252,11 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0169 Seed Recovery Capsule 与分阶段可用性](decisions/ADR-0169-Seed-Recovery-Capsule与分阶段可用性.md)
 - [ADR-0170 统一 Capability Contract 与可信 ArtifactIdentity](decisions/ADR-0170-统一Capability-Contract与可信ArtifactIdentity.md)
 - [ADR-0171 Portal 单聚合版本与上线子流程](decisions/ADR-0171-Portal单聚合版本与上线子流程.md)
+- [ADR-0172 通用版本账本与可插拔存储 Provider](decisions/ADR-0172-通用版本账本与可插拔存储Provider.md)
+
+### 通用版本账本
+
+- [通用版本账本](architecture/通用版本账本.md) —— 不可变配置版本、领域 CAS、Provider 路由、File/Git/Relational 存储与 Portal 接入边界
 
 ### 插件共享代码与能力复用
 

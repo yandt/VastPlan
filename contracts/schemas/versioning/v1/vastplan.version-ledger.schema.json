@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/versioning/v1/vastplan.version-ledger.schema.json",
+  "title": "VastPlan Version Ledger v1",
+  "$defs": {
+    "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 128 },
+    "resourceId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$" },
+    "headName": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "streamKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["namespace", "streamId"],
+      "properties": { "namespace": { "$ref": "#/$defs/namespace" }, "streamId": { "$ref": "#/$defs/resourceId" } }
+    },
+    "versionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stream", "versionId", "sequence", "contentDigest"],
+      "properties": {
+        "stream": { "$ref": "#/$defs/streamKey" },
+        "versionId": { "$ref": "#/$defs/sha256" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "contentDigest": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "maxProperties": 16,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+      "additionalProperties": { "type": "string", "maxLength": 256 }
+    },
+    "versionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "ref", "content", "actorId", "createdAt"],
+      "properties": {
+        "protocol": { "const": "version.ledger.v1" },
+        "ref": { "$ref": "#/$defs/versionRef" },
+        "parent": { "$ref": "#/$defs/versionRef" },
+        "content": { "type": "object" },
+        "message": { "type": "string", "maxLength": 1024 },
+        "labels": { "$ref": "#/$defs/labels" },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "head": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protocol", "stream", "name", "target", "revision", "updatedAt"],
+      "properties": {
+        "protocol": { "const": "version.ledger.v1" },
+        "stream": { "$ref": "#/$defs/streamKey" },
+        "name": { "$ref": "#/$defs/headName" },
+        "target": { "$ref": "#/$defs/versionRef" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "providerDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "protocol", "version", "displayName", "consistency", "durability", "clusterSafe", "maxContentBytes", "configurationSchema", "capabilities"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
+        "protocol": { "enum": ["version.storage.file.v1", "version.storage.git.v1", "version.storage.relational.v1"] },
+        "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "consistency": { "enum": ["single-writer", "ref-cas", "linearizable"] },
+        "durability": { "enum": ["local", "shared"] },
+        "clusterSafe": { "type": "boolean" },
+        "maxContentBytes": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        "configurationSchema": { "type": "object" },
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["detachedVersions", "namedHeads", "stableHistory"],
+          "properties": {
+            "detachedVersions": { "type": "boolean" },
+            "namedHeads": { "type": "boolean" },
+            "stableHistory": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "providerListRequest": { "type": "object", "additionalProperties": false },
+    "providerListResult": {
+      "type": "object", "additionalProperties": false, "required": ["providers"],
+      "properties": { "providers": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/providerDescriptor" } } }
+    },
+    "putVersionRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "idempotencyKey", "content"],
+      "properties": {
+        "stream": { "$ref": "#/$defs/streamKey" },
+        "idempotencyKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$" },
+        "parent": { "$ref": "#/$defs/versionRef" },
+        "content": { "type": "object" },
+        "message": { "type": "string", "maxLength": 1024 },
+        "labels": { "$ref": "#/$defs/labels" }
+      }
+    },
+    "putVersionResult": {
+      "type": "object", "additionalProperties": false, "required": ["version", "reused"],
+      "properties": { "version": { "$ref": "#/$defs/versionRecord" }, "reused": { "type": "boolean" } }
+    },
+    "getVersionRequest": {
+      "type": "object", "additionalProperties": false, "required": ["ref"],
+      "properties": { "ref": { "$ref": "#/$defs/versionRef" } }
+    },
+    "getVersionResult": {
+      "type": "object", "additionalProperties": false, "required": ["version"],
+      "properties": { "version": { "$ref": "#/$defs/versionRecord" } }
+    },
+    "listHistoryRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "limit"],
+      "properties": {
+        "stream": { "$ref": "#/$defs/streamKey" },
+        "start": { "$ref": "#/$defs/versionRef" },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "cursor": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    },
+    "listHistoryResult": {
+      "type": "object", "additionalProperties": false, "required": ["versions"],
+      "properties": {
+        "versions": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/versionRecord" } },
+        "nextCursor": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    },
+    "getHeadRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "name"],
+      "properties": { "stream": { "$ref": "#/$defs/streamKey" }, "name": { "$ref": "#/$defs/headName" } }
+    },
+    "getHeadResult": {
+      "type": "object", "additionalProperties": false, "required": ["head"],
+      "properties": { "head": { "$ref": "#/$defs/head" } }
+    },
+    "moveHeadRequest": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "name", "target", "expectedRevision"],
+      "properties": {
+        "stream": { "$ref": "#/$defs/streamKey" },
+        "name": { "$ref": "#/$defs/headName" },
+        "target": { "$ref": "#/$defs/versionRef" },
+        "expectedRevision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "moveHeadResult": {
+      "type": "object", "additionalProperties": false, "required": ["head"],
+      "properties": { "head": { "$ref": "#/$defs/head" } }
+    },
+    "providerDescribeRequest": { "type": "object", "additionalProperties": false },
+    "providerDescribeResult": {
+      "type": "object", "additionalProperties": false, "required": ["provider"],
+      "properties": { "provider": { "$ref": "#/$defs/providerDescriptor" } }
+    },
+    "providerPutVersionRequest": {
+      "type": "object", "additionalProperties": false, "required": ["idempotencyKey", "version"],
+      "properties": {
+        "idempotencyKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$" },
+        "version": { "$ref": "#/$defs/versionRecord" }
+      }
+    }
+  }
+}
