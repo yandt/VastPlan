@@ -47,7 +47,7 @@ func TestGovernanceOperationsAreExplicitlyRoleBound(t *testing.T) {
 		role      string
 	}{
 		{"governance", "portal.read"}, {"listActivations", "portal.read"},
-		{"createProfileDraft", "portal.compose"}, {"updateProfileDraft", "portal.compose"},
+		{"createProfileDraft", "portal.compose"}, {"updateProfileDraft", "portal.compose"}, {"deleteProfileDraft", "portal.compose"},
 		{"createBindingDraft", "portal.compose"}, {"updateBindingDraft", "portal.compose"},
 		{"transitionProfile", "portal.approve"}, {"transitionBinding", "portal.publish"},
 		{"activate", "portal.publish"}, {"rollbackActivation", "portal.publish"},
@@ -59,7 +59,7 @@ func TestGovernanceOperationsAreExplicitlyRoleBound(t *testing.T) {
 		}
 	}
 	reader := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "reader"}, Principal: &contractv1.Principal{SystemRoles: []string{"portal.read"}}}
-	for _, operation := range []string{"createProfileDraft", "transitionBinding", "activate", "rollbackActivation"} {
+	for _, operation := range []string{"createProfileDraft", "deleteProfileDraft", "transitionBinding", "activate", "rollbackActivation"} {
 		if got := decisionFor(t, reader, portalapi.ComposerCapability, operation); got.Decision != extpoint.DecisionDeny {
 			t.Fatalf("reader must not execute %s: %+v", operation, got)
 		}

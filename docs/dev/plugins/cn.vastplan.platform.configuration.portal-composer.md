@@ -2,13 +2,14 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`1.7.0`
+当前制品版本：`1.7.6`
 
 该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal Application、Platform Profile、PortalBinding 和不可变 Activation。发布输入只代表可选择；只有通过 Backend `portaltrust` 校验/物化并完成 `expectedCurrentId` CAS 的 Activation 才是线上事实。
 
 主要能力：
 
 - Application/Profile/Binding 分域草稿、异人审批与发布；
+- Profile 草稿可在未提交前删除；已提交、已批准、已发布版本保持不可变，删除同时保留审计事件；
 - Portal Activation、历史精确回滚和 Frontend Test Release；
 - 只通过 `kernel.portal.catalog.*` 窄服务取得可信校验和已验签包的精确引用，不接触仓库令牌、签名密钥或制品字节；
 - 激活前发布“旧活动 + 新候选”引用并集，激活后先保护回滚历史、再收敛活动精确引用；

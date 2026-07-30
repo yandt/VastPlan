@@ -5,7 +5,7 @@ export { CapabilityApplicationError } from "./capability-invoker";
 const composerCapability = "platform.portal-composer";
 const allowedOperations = new Set([
   "governance", "createDraft", "updateDraft", "list", "submit", "approve", "publish", "audit",
-  "createProfileDraft", "updateProfileDraft", "transitionProfile", "createBindingDraft", "updateBindingDraft", "transitionBinding",
+  "createProfileDraft", "updateProfileDraft", "deleteProfileDraft", "transitionProfile", "createBindingDraft", "updateBindingDraft", "transitionBinding",
   "activate", "rollbackActivation", "listActivations", "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease",
 ]);
 

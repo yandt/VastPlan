@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
@@ -210,6 +210,42 @@ func TestDraftCanBeUpdatedOnlyBeforeSubmission(t *testing.T) {
 	}
 	if _, err := s.UpdateDraft(context.Background(), author, draft.ID, spec("/forbidden")); !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("提交后不得更新草稿: %v", err)
+	}
+}
+
+func TestProfileDraftCanBeDeletedOnlyByItsTenantBeforeSubmission(t *testing.T) {
+	s := newTestService(t)
+	author := principal("author", "portal.compose")
+	profile := s.state.Profiles[0].Profile
+	profile.ID, profile.Revision = "temporary-profile", 1
+	draft, err := s.CreateProfileDraft(context.Background(), author, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := s.DeleteProfileDraft(context.Background(), author, draft.ID)
+	if err != nil || deleted.ID != draft.ID {
+		t.Fatalf("删除 Profile 草稿失败: revision=%+v err=%v", deleted, err)
+	}
+	if _, err := s.profileIndexLocked(author.TenantID, draft.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("已删除草稿仍可被读取: %v", err)
+	}
+	if event := s.state.Audit[len(s.state.Audit)-1]; event.Action != "profile.draft.deleted" || event.RevisionID != draft.ID || event.ActorID != author.ID {
+		t.Fatalf("删除草稿必须保留审计记录: %+v", event)
+	}
+
+	second, err := s.CreateProfileDraft(context.Background(), author, profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.TransitionProfile(context.Background(), author, second.ID, "submit"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.DeleteProfileDraft(context.Background(), author, second.ID); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("已提交 Profile 不得删除: %v", err)
+	}
+	otherTenant := portalapi.Principal{ID: "other", TenantID: "tenant-b", Roles: []string{"portal.compose"}}
+	if _, err := s.DeleteProfileDraft(context.Background(), otherTenant, second.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("跨租户删除必须隐藏资源存在性: %v", err)
 	}
 }
 

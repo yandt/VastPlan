@@ -26,6 +26,8 @@ export class PortalProfileRoutes {
     }
     if (parts.length === 1 && method === "PUT") {
       await withRequestJSON(request, response, async (profile) => this.call("updateProfileDraft", { revisionId: revisionID, profile }, principal, response, signal));
+    } else if (parts.length === 1 && method === "DELETE") {
+      await this.call("deleteProfileDraft", { revisionId: revisionID }, principal, response, signal);
     } else if (parts.length === 2 && lifecycleActions.has(parts[1]!) && method === "POST") {
       await withRequestJSON(request, response, async () => this.call("transitionProfile", { revisionId: revisionID, action: parts[1] }, principal, response, signal));
     } else sendAPIError(response, 405, "method_not_allowed", method === "HEAD");

@@ -127,6 +127,28 @@ func (s *Service) UpdateProfileDraft(_ context.Context, principal portalapi.Prin
 	return cloneJSON(*revision), s.save()
 }
 
+func (s *Service) DeleteProfileDraft(_ context.Context, principal portalapi.Principal, id uint64) (portalapi.PlatformProfileRevision, error) {
+	if err := require(principal, "portal.compose"); err != nil {
+		return portalapi.PlatformProfileRevision{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	index, err := s.profileIndexLocked(principal.TenantID, id)
+	if err != nil {
+		return portalapi.PlatformProfileRevision{}, err
+	}
+	revision := s.state.Profiles[index]
+	if revision.TenantID != principal.TenantID {
+		return portalapi.PlatformProfileRevision{}, ErrForbidden
+	}
+	if revision.Status != portalapi.StatusDraft {
+		return portalapi.PlatformProfileRevision{}, ErrInvalidState
+	}
+	s.auditResourceLocked(principal.TenantID, revision.Profile.ID, id, "profile.draft.deleted", principal)
+	s.state.Profiles = append(s.state.Profiles[:index], s.state.Profiles[index+1:]...)
+	return cloneJSON(revision), s.save()
+}
+
 func (s *Service) TransitionProfile(_ context.Context, principal portalapi.Principal, id uint64, action string) (portalapi.PlatformProfileRevision, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

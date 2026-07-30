@@ -12,7 +12,7 @@ func (s *Service) handlePortalOperation(ctx context.Context, principal portalapi
 	switch operation {
 	case "createDraft", "updateDraft", "list", "governance":
 		return s.handleCompositionOperation(ctx, principal, operation, payload)
-	case "createProfileDraft", "updateProfileDraft", "transitionProfile":
+	case "createProfileDraft", "updateProfileDraft", "deleteProfileDraft", "transitionProfile":
 		return s.handleProfileOperation(ctx, principal, operation, payload)
 	case "createBindingDraft", "updateBindingDraft", "transitionBinding", "activate", "rollbackActivation", "listActivations":
 		return s.handleBindingOperation(ctx, principal, operation, payload)
@@ -94,6 +94,18 @@ func (s *Service) handleProfileOperation(ctx context.Context, principal portalap
 			return nil, err
 		}
 		value, err := s.UpdateProfileDraft(ctx, principal, request.RevisionID, request.Profile)
+		if err != nil {
+			return nil, err
+		}
+		result = value
+	case "deleteProfileDraft":
+		var request struct {
+			RevisionID uint64 `json:"revisionId"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		value, err := s.DeleteProfileDraft(ctx, principal, request.RevisionID)
 		if err != nil {
 			return nil, err
 		}

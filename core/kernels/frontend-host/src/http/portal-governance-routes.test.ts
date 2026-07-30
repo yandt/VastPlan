@@ -20,9 +20,10 @@ describe("Portal governance routes", () => {
       return new TextEncoder().encode('{"id":11}');
     } };
     const { origin, headers } = await startServer(composer);
-    const requests: [string, "POST" | "PUT", string][] = [
+    const requests: [string, "POST" | "PUT" | "DELETE", string][] = [
       ["/v1/portal-governance/profiles", "POST", '{"id":"standard"}'],
       ["/v1/portal-governance/profiles/3", "PUT", '{"id":"standard-v2"}'],
+      ["/v1/portal-governance/profiles/4", "DELETE", "{}"],
       ["/v1/portal-governance/profiles/3/approve", "POST", "{}"],
       ["/v1/portal-governance/bindings", "POST", '{"profileRevisionId":3,"binding":{"portalId":"admin"}}'],
       ["/v1/portal-governance/bindings/5", "PUT", '{"profileRevisionId":3,"binding":{"portalId":"ops"}}'],
@@ -37,6 +38,7 @@ describe("Portal governance routes", () => {
     expect(calls).toEqual([
       { operation: "createProfileDraft", payload: { id: "standard" } },
       { operation: "updateProfileDraft", payload: { revisionId: 3, profile: { id: "standard-v2" } } },
+      { operation: "deleteProfileDraft", payload: { revisionId: 4 } },
       { operation: "transitionProfile", payload: { revisionId: 3, action: "approve" } },
       { operation: "createBindingDraft", payload: { profileRevisionId: 3, binding: { portalId: "admin" } } },
       { operation: "updateBindingDraft", payload: { revisionId: 5, draft: { profileRevisionId: 3, binding: { portalId: "ops" } } } },

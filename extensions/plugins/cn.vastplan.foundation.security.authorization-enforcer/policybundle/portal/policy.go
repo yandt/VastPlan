@@ -54,7 +54,7 @@ func decide(c *contractv1.CallContext, request extpoint.PermissionRequest) (extp
 	needed := map[string][]string{
 		"createDraft": {"portal.compose"}, "updateDraft": {"portal.compose"}, "submit": {"portal.compose"},
 		"approve": {"portal.approve"}, "publish": {"portal.publish"},
-		"createProfileDraft": {"portal.compose"}, "updateProfileDraft": {"portal.compose"},
+		"createProfileDraft": {"portal.compose"}, "updateProfileDraft": {"portal.compose"}, "deleteProfileDraft": {"portal.compose"},
 		"createBindingDraft": {"portal.compose"}, "updateBindingDraft": {"portal.compose"},
 		// Transition payloads are decoded and finally authorized by Composer;
 		// this outer policy admits only the three lifecycle roles.

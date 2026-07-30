@@ -33,6 +33,7 @@ const revisionStatusLabels = {
 const revisionStatusTones = { Draft: "neutral", PendingApproval: "warning", Approved: "info", Published: "success" } as const;
 const revisionActions = (prefix: string) => [
   { id: `${prefix}.edit`, label: message(namespace, "action.edit", "编辑草稿"), icon: "edit" as const, placement: "record.row" as const, form: "edit", visibleWhen: { pointer: "/status", equals: "Draft" } },
+  ...(prefix === "profile" ? [{ id: "profile.delete", label: message(namespace, "action.deleteDraft", "删除草稿"), icon: "remove" as const, placement: "record.row" as const, tone: "danger" as const, confirm: message(namespace, "confirm.deleteDraft", "确定删除该草稿吗？删除后无法恢复。"), visibleWhen: { pointer: "/status", equals: "Draft" } }] : []),
   { id: `${prefix}.submit`, label: message(namespace, "governance.action.submit", "提交审批"), icon: "upload" as const, placement: "record.row" as const, confirm: message(namespace, "confirm.submit", "提交后不能继续编辑，需要由另一位审批人处理。"), visibleWhen: { pointer: "/status", equals: "Draft" } },
   { id: `${prefix}.approve`, label: message(namespace, "governance.action.approve", "批准"), icon: "success" as const, placement: "record.row" as const, tone: "primary" as const, visibleWhen: { pointer: "/status", equals: "PendingApproval" } },
   { id: `${prefix}.publish`, label: message(namespace, "governance.action.publishInput", "发布为可选输入"), icon: "publish" as const, placement: "record.row" as const, tone: "primary" as const, confirm: message(namespace, "confirm.inputPublish", "发布只会使该版本可被 Activation 引用，不会直接改变线上 Portal。"), visibleWhen: { pointer: "/status", equals: "Approved" } },
@@ -49,8 +50,8 @@ export const governanceMessages = {
     "governance.option.standardLayout": "标准侧栏布局", "governance.option.topLayout": "顶部导航布局", "governance.option.fluid": "自适应", "governance.option.contained": "最大 1280px",
     "column.profile": "Profile", "column.portal": "Portal", "column.status": "状态", "column.updated": "更新时间", "column.inputs": "组合输入", "column.references": "制品引用", "column.time": "时间",
     "status.draft": "草稿", "status.pendingApproval": "待审批", "status.approved": "已批准", "status.published": "已发布", "status.preparing": "准备中", "status.activating": "激活中", "status.current": "当前", "status.superseded": "历史", "status.failed": "失败",
-    "status.referencesPending": "同步中", "status.referencesReady": "已保护", "action.edit": "编辑草稿", "action.preview": "查看内容", "action.activate": "创建 Activation", "action.rollback": "回滚", "action.createVersion": "新建版本", "action.createBinding": "新建 Binding",
-    "panel.profile": "Profile 版本", "panel.binding": "Binding 版本", "panel.activation": "Activation", "notice.saved": "治理资源已保存", "notice.transitioned": "治理状态已更新", "notice.activated": "Portal 已激活", "notice.rolledBack": "Portal 已回滚", "dialog.preview": "不可变内容预览",
+    "status.referencesPending": "同步中", "status.referencesReady": "已保护", "action.edit": "编辑草稿", "action.deleteDraft": "删除草稿", "action.preview": "查看内容", "action.activate": "创建 Activation", "action.rollback": "回滚", "action.createVersion": "新建版本", "action.createBinding": "新建 Binding",
+    "confirm.deleteDraft": "确定删除该草稿吗？删除后无法恢复。", "panel.profile": "Profile 版本", "panel.binding": "Binding 版本", "panel.activation": "Activation", "notice.saved": "治理资源已保存", "notice.deleted": "草稿已删除", "notice.transitioned": "治理状态已更新", "notice.activated": "Portal 已激活", "notice.rolledBack": "Portal 已回滚", "dialog.preview": "不可变内容预览",
   },
   "en-US": {
     "page.profiles.title": "Portal Platform Profiles", "page.profiles.description": "Govern UI frameworks, Shell templates, and navigation baselines", "page.profiles.navigation": "Portal Profiles",
@@ -61,8 +62,8 @@ export const governanceMessages = {
     "governance.option.standardLayout": "Standard sidebar layout", "governance.option.topLayout": "Top navigation layout", "governance.option.fluid": "Fluid", "governance.option.contained": "Maximum 1280px",
     "column.profile": "Profile", "column.portal": "Portal", "column.status": "Status", "column.updated": "Updated", "column.inputs": "Composition inputs", "column.references": "Artifact references", "column.time": "Time",
     "status.draft": "Draft", "status.pendingApproval": "Pending approval", "status.approved": "Approved", "status.published": "Published", "status.preparing": "Preparing", "status.activating": "Activating", "status.current": "Current", "status.superseded": "Superseded", "status.failed": "Failed",
-    "status.referencesPending": "Syncing", "status.referencesReady": "Protected", "action.edit": "Edit draft", "action.preview": "View content", "action.activate": "Create Activation", "action.rollback": "Rollback", "action.createVersion": "New version", "action.createBinding": "New Binding",
-    "panel.profile": "Profile version", "panel.binding": "Binding version", "panel.activation": "Activation", "notice.saved": "Governance resource saved", "notice.transitioned": "Governance state updated", "notice.activated": "Portal activated", "notice.rolledBack": "Portal rolled back", "dialog.preview": "Immutable content preview",
+    "status.referencesPending": "Syncing", "status.referencesReady": "Protected", "action.edit": "Edit draft", "action.deleteDraft": "Delete draft", "action.preview": "View content", "action.activate": "Create Activation", "action.rollback": "Rollback", "action.createVersion": "New version", "action.createBinding": "New Binding",
+    "confirm.deleteDraft": "Delete this draft? This action cannot be undone.", "panel.profile": "Profile version", "panel.binding": "Binding version", "panel.activation": "Activation", "notice.saved": "Governance resource saved", "notice.deleted": "Draft deleted", "notice.transitioned": "Governance state updated", "notice.activated": "Portal activated", "notice.rolledBack": "Portal rolled back", "dialog.preview": "Immutable content preview",
   },
 } as const;
 
@@ -84,7 +85,7 @@ export function createProfilePage(client: PortalControlClient): CollectionPageDe
     pageActions: [{ id: "profile.create", label: message(namespace, "action.createVersion", "新建版本"), icon: "add", tone: "primary", form: "create" }],
     forms: [form("create"), form("edit")], overlays: [jsonPreview<ProfileRow>((row) => row.profile as unknown as JSONValue)],
     async load(query, signal) { const snapshot = await client.governance(); const rows = snapshot.profiles.map((row) => ({ ...row, profileId: row.profile.id })) as ProfileRow[]; return selectPage(rows, query, signal, (row, text) => row.profile.id.toLowerCase().includes(text)); },
-    async runAction({ action, selected }) { const row = selected[0]; if (row === undefined) return; const transition = action.id.split(".")[1]; if (transition === "submit" || transition === "approve" || transition === "publish") await client.transitionProfile(row.id, transition); return { notify: { title: message(namespace, "notice.transitioned", "治理状态已更新"), kind: "success" } }; },
+    async runAction({ action, selected }) { const row = selected[0]; if (row === undefined) return; const transition = action.id.split(".")[1]; if (transition === "delete") { await client.deleteProfile(row.id); return { notify: { title: message(namespace, "notice.deleted", "草稿已删除"), kind: "success" } }; } if (transition === "submit" || transition === "approve" || transition === "publish") await client.transitionProfile(row.id, transition); return { notify: { title: message(namespace, "notice.transitioned", "治理状态已更新"), kind: "success" } }; },
   });
 }
 

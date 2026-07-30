@@ -41,10 +41,26 @@ describe("Portal application composition", () => {
     expect(pages.flatMap((page) => page.collection.actions ?? []).filter((action) => action.visibleWhen !== undefined).length).toBeGreaterThan(8);
     expect(profilePage.collection.actions?.every((action) => action.placement === "record.row")).toBe(true);
     expect(profilePage.collection.actions?.some((action) => action.id === "profile.create")).toBe(false);
+    expect(profilePage.collection.actions?.find((action) => action.id === "profile.delete")).toMatchObject({
+      icon: "remove", tone: "danger", visibleWhen: { pointer: "/status", equals: "Draft" },
+    });
     expect(profilePage.pageActions?.map((action) => action.id)).toEqual(["profile.create"]);
     expect(bindingPage.collection.actions?.every((action) => action.placement === "record.row")).toBe(true);
     expect(createApplicationPage(client).pageActions?.map((action) => action.id)).toEqual(["application.create"]);
     expect(createActivationPage(client).pageActions?.map((action) => action.id)).toEqual(["activation.create"]);
+  });
+
+  it("routes the Profile draft delete row action through the typed client", async () => {
+    const client = new PortalControlClient({ fetch: async () => response([]) });
+    const remove = vi.spyOn(client, "deleteProfile").mockResolvedValue({ id: 7 } as never);
+    const page = createProfilePage(client);
+    const action = page.collection.actions?.find((candidate) => candidate.id === "profile.delete");
+    expect(action).toBeDefined();
+
+    const result = await page.runAction?.({ action: action!, selected: [{ id: 7, status: "Draft" } as never], refresh() {} }, new AbortController().signal);
+
+    expect(remove).toHaveBeenCalledWith(7);
+    expect(result?.notify?.kind).toBe("success");
   });
 
   it("offers Ant Design first in the governed Renderer choices", () => {
@@ -91,6 +107,15 @@ describe("PortalControlClient", () => {
     await client.activate(request);
     expect(fetch).toHaveBeenNthCalledWith(2, "/v1/portal-governance/activations", {
       method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": "csrf-token" }, body: JSON.stringify(request),
+    });
+  });
+
+  it("deletes Profile drafts through a CSRF-protected DELETE request", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(response({ token: "csrf-token" })).mockResolvedValueOnce(response({ id: 7, status: "Draft" }));
+    const client = new PortalControlClient({ fetch });
+    await client.deleteProfile(7);
+    expect(fetch).toHaveBeenNthCalledWith(2, "/v1/portal-governance/profiles/7", {
+      method: "DELETE", credentials: "include", headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": "csrf-token" }, body: "{}",
     });
   });
 });

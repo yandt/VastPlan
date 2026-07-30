@@ -289,6 +289,9 @@ export class PortalControlClient {
   public updateProfile(id: number, profile: PortalPlatformProfile): Promise<PortalProfileRevision> {
     return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles/${this.validID(id)}`, "PUT", profile);
   }
+  public deleteProfile(id: number): Promise<PortalProfileRevision> {
+    return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles/${this.validID(id)}`, "DELETE", {});
+  }
   public transitionProfile(id: number, action: "submit" | "approve" | "publish"): Promise<PortalProfileRevision> {
     return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles/${this.validID(id)}/${action}`, "POST", {});
   }
@@ -337,7 +340,7 @@ export class PortalControlClient {
     return id;
   }
 
-  private async mutate<T>(path: string, method: "POST" | "PUT", body: unknown): Promise<T> {
+  private async mutate<T>(path: string, method: "POST" | "PUT" | "DELETE", body: unknown): Promise<T> {
     const csrf = await this.call<{ token: string }>(this.csrfPath, { method: "GET" });
     if (!csrf.token) throw new PortalControlError(403, "csrf_required");
     return this.call<T>(path, {
