@@ -1,0 +1,29 @@
+{
+  "algorithm": "version.identity.v1",
+  "vectors": [
+    {
+      "name": "portal-production",
+      "tenantId": "tenant-a",
+      "namespace": "portal.configuration",
+      "streamId": "portal-main",
+      "idempotencyKey": "portal-main:revision:0001",
+      "versionId": "9f4f9b312d98a5c75b9f81deb03f1415093bd9aae31cd751a99e57b7fd098ddb"
+    },
+    {
+      "name": "unicode-tenant",
+      "tenantId": "企业-甲",
+      "namespace": "plugin.settings",
+      "streamId": "setting-1",
+      "idempotencyKey": "request:2026-07-30:0001",
+      "versionId": "a979a9e31c29f0b04c7668cb76b1e16fda618c025a84d7e40b4a5028b53b96f8"
+    },
+    {
+      "name": "portal-test-isolation",
+      "tenantId": "tenant-a",
+      "namespace": "portal.test.configuration",
+      "streamId": "portal-main",
+      "idempotencyKey": "portal-main:test:0001",
+      "versionId": "7b4203e98665ecea3759e20c15b8caf442f33eb5c7df90aa544625aa14cdebbe"
+    }
+  ]
+}

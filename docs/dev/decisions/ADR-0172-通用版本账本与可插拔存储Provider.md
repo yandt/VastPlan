@@ -20,7 +20,7 @@ Portal Composer、Deployment Manager、Plugin Settings 等领域都保存不可�
    - `version.storage.git.v1`：以 commit/ref 表达不可变版本和 CAS Head，主要用于审阅、导入导出与 GitOps；
    - `version.storage.relational.v1`：使用事务和唯一约束提供线性一致 CAS，是生产集群首选，且通过 Database Runtime 支持多种数据库，不绑定 PostgreSQL。
 5. namespace 到 Provider 实例的路由属于 Ledger 的受信插件配置。调用方只提交 namespace、stream 和版本内容，不能选择 Provider、连接、仓库路径或凭证。
-6. 版本写入分为 create-only `putVersion` 与独立 `moveHead`。Ledger 校验并规范候选内容、投影可信 actor；Provider 在持久化原子边界内分配 sequence、versionId、createdAt，避免多实例在事务外争抢序号。领域插件可以先幂等写入不可变版本，再提交自己的聚合 CAS，最后通过 outbox 镜像 Head；因此不伪造跨插件事务。失败写入最多留下不可达版本，不会提前改变业务当前值。
+6. 版本写入分为 create-only `putVersion` 与独立 `moveHead`。Ledger 校验并规范候选内容、投影可信 actor，并按 `version.identity.v1 = SHA-256(domain + tenant + namespace + streamId + idempotencyKey)` 统一派生逻辑 versionId；Provider 使用可信 tenant 复核 ID，并在持久化原子边界内落实唯一约束及分配 sequence、createdAt，避免不同存储协议产生不同身份或多实例在事务外争抢序号。领域插件可以先幂等写入不可变版本，再提交自己的聚合 CAS，最后通过 outbox 镜像 Head；因此不伪造跨插件事务。失败写入最多留下不可达版本，不会提前改变业务当前值。
 7. Portal Composer 后续只把完整 `PortalConfiguration` 内容迁入 `portal.configuration` namespace；其 Root CAS 继续保存 PortalVersion 状态、VersionRef、Release、Test Release 和审计。正式 Portal Head 是镜像/检索加速，不取代 Portal 聚合真相源；测试候选使用隔离 namespace，不进入正式 Head。
 8. Ledger v1 不保存密文或明文秘密。版本内容只能是有界规范 JSON；密码、token、私钥等必须留在 Credentials 插件，版本内容只保存 `CredentialRef`。摘要只由可信 Ledger 按协议规范化结果计算，异构 Provider 必须使用官方 SDK 与 golden vectors，不能依赖各语言默认 JSON 序列化。大于 1 MiB 的二进制或包体继续进入制品/对象仓库。
 9. 每个 Provider 必须通过同一契约套件：create-only 幂等、同 key 不同内容冲突、内容摘要复核、父链闭合、Head CAS 单赢家、跨 stream/tenant 拒绝、损坏 fail-closed、分页稳定和重启恢复。

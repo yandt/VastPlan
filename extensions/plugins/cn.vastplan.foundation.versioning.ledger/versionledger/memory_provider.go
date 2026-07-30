@@ -41,7 +41,8 @@ func newMemoryProvider(now func() time.Time) *MemoryProvider {
 func (p *MemoryProvider) Descriptor() versioningv1.ProviderDescriptor {
 	return versioningv1.ProviderDescriptor{
 		ID: "memory", Protocol: versioningv1.StorageProtocolFile, Version: "1.0.0", DisplayName: "In-memory conformance provider",
-		Consistency: versioningv1.ConsistencySingleWriter, Durability: versioningv1.DurabilityLocal,
+		IdentityAlgorithm: versioningv1.VersionIdentityAlgorithm,
+		Consistency:       versioningv1.ConsistencySingleWriter, Durability: versioningv1.DurabilityLocal,
 		MaxContentBytes:     versioningv1.MaxContentBytes,
 		ConfigurationSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
 		Capabilities:        versioningv1.ProviderCapabilities{DetachedVersions: true, NamedHeads: true, StableHistory: true},
@@ -83,7 +84,7 @@ func (p *MemoryProvider) PutVersion(ctx context.Context, scope Scope, request ve
 	}
 	record := versioningv1.VersionRecord{
 		Protocol: versioningv1.Protocol,
-		Ref:      versioningv1.VersionRef{Stream: request.Candidate.Stream, VersionID: deterministicVersionID(scope, request.Candidate.Stream, request.IdempotencyKey), Sequence: next, ContentDigest: digest},
+		Ref:      versioningv1.VersionRef{Stream: request.Candidate.Stream, VersionID: request.Candidate.VersionID, Sequence: next, ContentDigest: digest},
 		Parent:   request.Candidate.Parent, Content: append([]byte(nil), request.Candidate.Content...), Message: request.Candidate.Message,
 		Labels: cloneLabels(request.Candidate.Labels), ActorID: request.Candidate.ActorID, CreatedAt: p.now(),
 	}

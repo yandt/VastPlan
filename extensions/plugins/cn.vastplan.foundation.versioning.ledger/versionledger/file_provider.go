@@ -38,7 +38,8 @@ func openFileProvider(root string, now func() time.Time) (*FileProvider, error) 
 func (p *FileProvider) Descriptor() versioningv1.ProviderDescriptor {
 	return versioningv1.ProviderDescriptor{
 		ID: "file", Protocol: versioningv1.StorageProtocolFile, Version: "1.0.0", DisplayName: "Local file",
-		Consistency: versioningv1.ConsistencySingleWriter, Durability: versioningv1.DurabilityLocal,
+		IdentityAlgorithm: versioningv1.VersionIdentityAlgorithm,
+		Consistency:       versioningv1.ConsistencySingleWriter, Durability: versioningv1.DurabilityLocal,
 		MaxContentBytes:     versioningv1.MaxContentBytes,
 		ConfigurationSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["root"],"properties":{"root":{"type":"string","minLength":1}}}`),
 		Capabilities:        versioningv1.ProviderCapabilities{DetachedVersions: true, NamedHeads: true, StableHistory: true},
@@ -62,7 +63,7 @@ func (p *FileProvider) PutVersion(ctx context.Context, scope Scope, request vers
 	if err != nil {
 		return versioningv1.PutVersionResult{}, providerError(versioningv1.ErrorCorrupted, false, err)
 	}
-	versionID := deterministicVersionID(scope, request.Candidate.Stream, request.IdempotencyKey)
+	versionID := request.Candidate.VersionID
 	if record, exists := loaded.versions[versionID]; exists {
 		if !sameCandidate(record, request.Candidate) {
 			return versioningv1.PutVersionResult{}, providerError(versioningv1.ErrorConflict, false, errors.New("idempotencyKey 已绑定不同版本候选"))

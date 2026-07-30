@@ -61,11 +61,12 @@
     "providerDescriptor": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "protocol", "version", "displayName", "consistency", "durability", "clusterSafe", "maxContentBytes", "configurationSchema", "capabilities"],
+      "required": ["id", "protocol", "version", "identityAlgorithm", "displayName", "consistency", "durability", "clusterSafe", "maxContentBytes", "configurationSchema", "capabilities"],
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,127}$" },
         "protocol": { "enum": ["version.storage.file.v1", "version.storage.git.v1", "version.storage.relational.v1"] },
         "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+        "identityAlgorithm": { "const": "version.identity.v1" },
         "displayName": { "type": "string", "minLength": 1, "maxLength": 128 },
         "consistency": { "enum": ["single-writer", "ref-cas", "linearizable"] },
         "durability": { "enum": ["local", "shared"] },
@@ -155,8 +156,9 @@
       "properties": { "provider": { "$ref": "#/$defs/providerDescriptor" } }
     },
     "providerVersionCandidate": {
-      "type": "object", "additionalProperties": false, "required": ["stream", "content", "actorId"],
+      "type": "object", "additionalProperties": false, "required": ["versionId", "stream", "content", "actorId"],
       "properties": {
+        "versionId": { "$ref": "#/$defs/sha256" },
         "stream": { "$ref": "#/$defs/streamKey" },
         "parent": { "$ref": "#/$defs/versionRef" },
         "content": { "type": "object" },

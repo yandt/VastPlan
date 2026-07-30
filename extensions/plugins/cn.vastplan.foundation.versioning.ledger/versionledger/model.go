@@ -22,6 +22,9 @@ func validateProviderRequest(scope Scope, request *versioningv1.ProviderPutVersi
 		return providerError(versioningv1.ErrorInvalidRequest, false, err)
 	}
 	*request = *parsed.(*versioningv1.ProviderPutVersionRequest)
+	if err := versioningv1.ValidateDerivedVersionID(request.Candidate.VersionID, scope.TenantID, request.Candidate.Stream, request.IdempotencyKey); err != nil {
+		return providerError(versioningv1.ErrorDigestMismatch, false, err)
+	}
 	return nil
 }
 
@@ -50,18 +53,13 @@ func candidateDigest(candidate versioningv1.ProviderVersionCandidate) (string, e
 
 func candidateFromRecord(record versioningv1.VersionRecord) versioningv1.ProviderVersionCandidate {
 	return versioningv1.ProviderVersionCandidate{
-		Stream: record.Ref.Stream, Parent: record.Parent, Content: append([]byte(nil), record.Content...),
+		VersionID: record.Ref.VersionID, Stream: record.Ref.Stream, Parent: record.Parent, Content: append([]byte(nil), record.Content...),
 		Message: record.Message, Labels: cloneLabels(record.Labels), ActorID: record.ActorID,
 	}
 }
 
-func deterministicVersionID(scope Scope, stream versioningv1.StreamKey, idempotencyKey string) string {
-	sum := sha256.Sum256([]byte(scope.TenantID + "\x00" + stream.Namespace + "\x00" + stream.StreamID + "\x00" + idempotencyKey))
-	return hex.EncodeToString(sum[:])
-}
-
 func sameCandidate(record versioningv1.VersionRecord, candidate versioningv1.ProviderVersionCandidate) bool {
-	if record.Ref.Stream != candidate.Stream || record.ActorID != candidate.ActorID || record.Message != candidate.Message || !equalVersionRef(record.Parent, candidate.Parent) {
+	if record.Ref.VersionID != candidate.VersionID || record.Ref.Stream != candidate.Stream || record.ActorID != candidate.ActorID || record.Message != candidate.Message || !equalVersionRef(record.Parent, candidate.Parent) {
 		return false
 	}
 	leftContent, leftErr := versioningv1.CanonicalizeContent(record.Content)

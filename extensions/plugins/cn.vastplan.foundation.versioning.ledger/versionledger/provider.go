@@ -11,7 +11,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.versioning.ledger"
-	PluginVersion = "0.1.0"
+	PluginVersion = "0.1.1"
 )
 
 type Scope struct {
@@ -19,15 +19,15 @@ type Scope struct {
 }
 
 func (s Scope) Validate() error {
-	if s.TenantID == "" || len(s.TenantID) > 256 {
+	if err := versioningv1.ValidateVersionIdentityTenant(s.TenantID); err != nil {
 		return errors.New("Version Ledger tenant 无效")
 	}
 	return nil
 }
 
-// Provider owns the atomic storage boundary. Implementations assign sequence,
-// version ID and creation time inside PutVersion; the coordinator never
-// allocates durable identity outside a Provider transaction.
+// Provider owns the atomic storage boundary. Implementations verify the
+// Ledger-derived logical version ID, then assign sequence and creation time
+// inside PutVersion.
 type Provider interface {
 	Descriptor() versioningv1.ProviderDescriptor
 	PutVersion(context.Context, Scope, versioningv1.ProviderPutVersionRequest) (versioningv1.PutVersionResult, error)

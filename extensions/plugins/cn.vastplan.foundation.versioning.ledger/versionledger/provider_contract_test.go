@@ -25,8 +25,13 @@ func runProviderContract(t *testing.T, provider Provider) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Reused || first.Version.Ref.Sequence != 1 {
+	if first.Reused || first.Version.Ref.Sequence != 1 || first.Version.Ref.VersionID != firstRequest.Candidate.VersionID {
 		t.Fatalf("首个版本身份无效: %+v", first)
+	}
+	forgedIdentity := firstRequest
+	forgedIdentity.Candidate.VersionID = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+	if _, err := provider.PutVersion(ctx, scope, forgedIdentity); errorCode(err) != versioningv1.ErrorDigestMismatch {
+		t.Fatalf("Provider 必须拒绝不符合统一算法的 versionId: %v", err)
 	}
 	if err := versioningv1.ValidateVersionRecord(first.Version); err != nil {
 		t.Fatal(err)
@@ -126,10 +131,15 @@ func runProviderContract(t *testing.T, provider Provider) {
 }
 
 func putRequest(key string, parent *versioningv1.VersionRef, content string) versioningv1.ProviderPutVersionRequest {
+	stream := versioningv1.StreamKey{Namespace: "portal.configuration", StreamID: "portal-main"}
+	versionID, err := versioningv1.DeriveVersionID("tenant-a", stream, key)
+	if err != nil {
+		panic(err)
+	}
 	return versioningv1.ProviderPutVersionRequest{
 		IdempotencyKey: key,
 		Candidate: versioningv1.ProviderVersionCandidate{
-			Stream: versioningv1.StreamKey{Namespace: "portal.configuration", StreamID: "portal-main"},
+			VersionID: versionID, Stream: stream,
 			Parent: parent, Content: json.RawMessage(content), ActorID: "plugin:portal-composer",
 		},
 	}

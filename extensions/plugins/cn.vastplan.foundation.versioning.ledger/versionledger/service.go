@@ -80,8 +80,12 @@ func (s *Service) handle(operation string) sdk.Handler {
 			if callErr != nil {
 				return serviceResult(operation, nil, callErr)
 			}
+			versionID, callErr := versioningv1.DeriveVersionID(scope.TenantID, request.Stream, request.IdempotencyKey)
+			if callErr != nil {
+				return serviceResult(operation, nil, providerError(versioningv1.ErrorInvalidRequest, false, callErr))
+			}
 			candidate := versioningv1.ProviderVersionCandidate{
-				Stream: request.Stream, Parent: request.Parent, Content: request.Content, Message: request.Message,
+				VersionID: versionID, Stream: request.Stream, Parent: request.Parent, Content: request.Content, Message: request.Message,
 				Labels: request.Labels, ActorID: actorID,
 			}
 			value, callErr := provider.PutVersion(ctx, scope, versioningv1.ProviderPutVersionRequest{IdempotencyKey: request.IdempotencyKey, Candidate: candidate})

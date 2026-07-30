@@ -167,6 +167,11 @@ func TestProviderDescriptorsDeclareHonestStorageSemantics(t *testing.T) {
 	if err := versioningv1.ValidateProviderDescriptor(file); err != nil {
 		t.Fatalf("有效 File Provider 被拒绝: %v", err)
 	}
+	withoutIdentity := file
+	withoutIdentity.IdentityAlgorithm = ""
+	if err := versioningv1.ValidateProviderDescriptor(withoutIdentity); err == nil {
+		t.Fatal("Provider 必须声明统一 version identity algorithm")
+	}
 	file.ClusterSafe = true
 	if err := versioningv1.ValidateProviderDescriptor(file); err == nil {
 		t.Fatal("File Provider 不得虚假声明 clusterSafe")
@@ -193,7 +198,7 @@ func TestProviderSPIAcceptsOnlyLedgerValidatedCandidates(t *testing.T) {
 	request := versioningv1.ProviderPutVersionRequest{
 		IdempotencyKey: "portal-main:revision:0001",
 		Candidate: versioningv1.ProviderVersionCandidate{
-			Stream: root.Ref.Stream, Content: root.Content, ActorID: root.ActorID,
+			VersionID: root.Ref.VersionID, Stream: root.Ref.Stream, Content: root.Content, ActorID: root.ActorID,
 		},
 	}
 	parsed, err := versioningv1.ParseProviderRequest(versioningv1.ProviderOperationPutVersion, marshal(t, request))
@@ -258,7 +263,8 @@ func record(t *testing.T, sequence uint64, parent *versioningv1.VersionRef, cont
 func provider(protocol string) versioningv1.ProviderDescriptor {
 	descriptor := versioningv1.ProviderDescriptor{
 		ID: "local-file", Protocol: protocol, Version: "1.0.0", DisplayName: "Local file",
-		Consistency: versioningv1.ConsistencySingleWriter, Durability: versioningv1.DurabilityLocal,
+		IdentityAlgorithm: versioningv1.VersionIdentityAlgorithm,
+		Consistency:       versioningv1.ConsistencySingleWriter, Durability: versioningv1.DurabilityLocal,
 		MaxContentBytes:     versioningv1.MaxContentBytes,
 		ConfigurationSchema: json.RawMessage(`{"type":"object","additionalProperties":false}`),
 		Capabilities:        versioningv1.ProviderCapabilities{DetachedVersions: true, NamedHeads: true, StableHistory: true},

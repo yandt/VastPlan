@@ -7,6 +7,7 @@
 ## 当前能力
 
 - `version.ledger.v1`：幂等写入、精确读取、父链分页、Head CAS。
+- `version.identity.v1`：所有 Provider 使用相同的逻辑 versionId 派生规则和跨语言 golden vectors。
 - `version.storage.file.v1`：本地私有目录、单 writer、版本文件不可变、Head 原子替换。
 - 内存 Provider：只用于契约测试，不允许从生产配置启用。
 - namespace 精确路由：调用方不能在请求中指定 Provider。
@@ -31,7 +32,7 @@ File Provider 会把 tenant 和 stream 标识哈希后写入目录；配置的 r
 }
 ```
 
-P1 清单采用 leader / leader-owned 拓扑，明确不把 File Provider 宣称为集群共享存储。未来 Relational Provider 即使接入，也必须通过同一 Provider SPI 在数据库事务内分配 sequence、versionId 和 createdAt。
+P1 清单采用 leader / leader-owned 拓扑，明确不把 File Provider 宣称为集群共享存储。未来 Relational Provider 即使接入，也必须复核 Ledger 按 `version.identity.v1` 派生的 versionId，并通过同一 Provider SPI 在数据库事务内分配 sequence 和 createdAt。
 
 ## 开发验证
 

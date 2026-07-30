@@ -130,7 +130,7 @@ func ValidateVersionRecord(record VersionRecord) error {
 }
 
 func ValidateProviderVersionCandidate(candidate *ProviderVersionCandidate) error {
-	if candidate == nil || !validActorID(candidate.ActorID) {
+	if candidate == nil || !sha256Pattern.MatchString(candidate.VersionID) || !validActorID(candidate.ActorID) {
 		return errors.New("Provider version candidate actor 无效")
 	}
 	if err := ValidateStreamKey(candidate.Stream); err != nil {

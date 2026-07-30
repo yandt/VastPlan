@@ -61,6 +61,7 @@ type ProviderDescriptor struct {
 	ID                  string               `json:"id"`
 	Protocol            string               `json:"protocol"`
 	Version             string               `json:"version"`
+	IdentityAlgorithm   string               `json:"identityAlgorithm"`
 	DisplayName         string               `json:"displayName"`
 	Consistency         string               `json:"consistency"`
 	Durability          string               `json:"durability"`
@@ -161,16 +162,17 @@ type MoveHeadResult struct {
 	Head Head `json:"head"`
 }
 
-// ProviderVersionCandidate contains canonical content and the trusted actor
-// projected by Ledger. The Provider atomically assigns sequence, version ID
-// and creation time with the durable write.
+// ProviderVersionCandidate contains the logical version ID, canonical content
+// and trusted actor projected by Ledger. The Provider verifies that ID, then
+// atomically assigns sequence and creation time with the durable write.
 type ProviderVersionCandidate struct {
-	Stream  StreamKey         `json:"stream"`
-	Parent  *VersionRef       `json:"parent,omitempty"`
-	Content json.RawMessage   `json:"content"`
-	Message string            `json:"message,omitempty"`
-	Labels  map[string]string `json:"labels,omitempty"`
-	ActorID string            `json:"actorId"`
+	VersionID string            `json:"versionId"`
+	Stream    StreamKey         `json:"stream"`
+	Parent    *VersionRef       `json:"parent,omitempty"`
+	Content   json.RawMessage   `json:"content"`
+	Message   string            `json:"message,omitempty"`
+	Labels    map[string]string `json:"labels,omitempty"`
+	ActorID   string            `json:"actorId"`
 }
 
 type ProviderPutVersionRequest struct {
