@@ -63,6 +63,8 @@ Portal Composer 清单对 `foundation.versioning.workspace` 使用 `soft + degra
 - 已配置但能力不可用：当前工作副本、已发布 Publication、Release 列表和线上 Runtime 可读，新的版本提交及冷历史读取返回稳定 `version_control_unavailable`；
 - 不运行后台轮询。能力目录事件更新可用性，实际操作仍以调用结果为准。
 
+启用时 Portal 先调用 `describeResource` 解析该 Environment/Resource 的语义能力，再只向浏览器投影 `history/read/diff/restore` 等产品能力。Adapter ID、配置和存储路由不进入浏览器；若 Adapter 不支持 diff，版本历史和恢复仍可用，但 UI 不显示 compare。
+
 ## 两条写入路径
 
 ### 未启用版本控制
@@ -97,6 +99,16 @@ P2.3 不移动通用 Head。Portal 聚合保存的 VersionRef 列表是可见历
 历史列表不进入 Workspace。Portal 只列出自己聚合 CAS 已确认的轻量 VersionRef 元数据，防止 Ledger 中不可达版本或其他领域记录绕过 Portal 权限、审批和可见性规则。
 
 恢复历史版本使用现有能力组合：`readCommitted` 读取历史快照，经过当前 Catalog 校验后覆盖 WorkingCopy；它只是一次新的工作副本变更，后续提交会产生新 VersionRef，不能修改旧版本。
+
+## Workspace P2.2.2 能力协商前置调整
+
+按 [ADR-0175](../decisions/ADR-0175-统一版本生命周期与Resource-Adapter能力协商.md) 增加：
+
+1. `describeResource`：返回受信绑定解析后的 contentKind、允许模式、大小上限和 normalize/diff/materialize/merge 能力位。
+2. `ChangesResult/CompareCommittedResult` 将摘要变化与详细 diff 分开：`dirty` 永远由 digest 决定；`diffAvailable=false` 时路径为空、统计为零，不能把变化伪装成 clean。
+3. Adapter SPI 强制 `describe + normalize/validate`，其他操作按 Descriptor 协商；不支持的操作返回稳定 `operation_unsupported`。
+
+P2.3 的 JSON Adapter 支持详细 diff，但 Portal 端口不能硬编码这一事实，必须消费 Workspace 返回的能力，确保以后 Text、Blob、Files 或领域 Adapter 接入时不分叉 API。
 
 ## 一致性与恢复
 
@@ -139,9 +151,10 @@ Workbench 在 `enabled=false` 时完全隐藏 commit/history/diff/restore；保�
 ## 实施分解
 
 1. **P2.2.1**：补 operationId、readCommitted、compareCommitted 的契约、SDK、Manager 与故障测试。
-2. **P2.3a**：Portal 聚合拆为 WorkingCopy/Publication/Release/可选 VersionControlBinding，先完成无版本路径。
-3. **P2.3b**：实现中立 `PortalVersionControl` 端口和 Workspace Adapter，接通 detached commit、历史读取、比较与恢复。
-4. **P2.3c**：升级 BFF、权限操作、Workbench 数据契约与 UI；删除旧 PortalVersion API 和状态。
-5. **P2.3d**：覆盖两种模式、软依赖缺失、Leader 重启、响应丢失、聚合 CAS 冲突、历史冷读失败、Release 不依赖 Ledger 等故障矩阵。
+2. **P2.2.2**：补 describeResource、可选 diff 结果、Adapter 能力校验和不支持操作的稳定错误。
+3. **P2.3a**：Portal 聚合拆为 WorkingCopy/Publication/Release/可选 VersionControlBinding，先完成无版本路径。
+4. **P2.3b**：实现中立 `PortalVersionControl` 端口和 Workspace Adapter，接通 detached commit、历史读取、比较与恢复。
+5. **P2.3c**：升级 BFF、权限操作、Workbench 数据契约与 UI；删除旧 PortalVersion API 和状态。
+6. **P2.3d**：覆盖两种模式、能力差异、软依赖缺失、Leader 重启、响应丢失、聚合 CAS 冲突、历史冷读失败、Release 不依赖 Ledger 等故障矩阵。
 
-P2.3 不实施手工 checkpoint、branch、merge、在线 attach/detach、历史迁移、Head 镜像或生产 Session 持久化。
+P2.3 不实施手工 checkpoint、branch、merge、在线 attach/detach、历史迁移、Head 镜像、生产 Session 持久化或 P2.4 的二进制 Content Staging。

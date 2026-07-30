@@ -205,3 +205,4 @@
 - [ADR-0172 通用版本账本与可插拔存储 Provider](ADR-0172-通用版本账本与可插拔存储Provider.md)
 - [ADR-0173 版本环境与资源适配](ADR-0173-版本环境与资源适配.md)
 - [ADR-0174 Portal 可选版本控制与发布快照分离](ADR-0174-Portal可选版本控制与发布快照分离.md)
+- [ADR-0175 统一版本生命周期与 Resource Adapter 能力协商](ADR-0175-统一版本生命周期与Resource-Adapter能力协商.md)

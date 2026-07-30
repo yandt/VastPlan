@@ -47,3 +47,7 @@ PortalRelease: Preparing → Current → Superseded
 正面：未启用版本控制时产品模型和运行负担都最小；启用后获得统一历史、diff 和恢复；发布安全不依赖 Workspace 可用性；Portal Runtime 继续只消费当前 Release 热快照。
 
 代价：当前 `PortalVersion` 聚合需要在 P2.3 拆分；BFF/Workbench API 与权限操作要同步升级；Workspace 需先补稳定 operation ID 和已提交版本读取/比较两个窄能力。
+
+## 后续扩展
+
+2026-07-31：[ADR-0175](ADR-0175-统一版本生命周期与Resource-Adapter能力协商.md) 规定 Portal 也必须通过 `describeResource` 消费 Adapter 能力，不能因为首个 JSON Adapter 支持 diff 就把 compare 硬编码成所有版本资源的共同能力。
