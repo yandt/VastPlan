@@ -57,7 +57,7 @@ func compileSchemas() {
 		return
 	}
 	names := []string{
-		"streamKey", "versionRef", "versionRecord", "head", "providerDescriptor",
+		"streamKey", "versionRef", "versionRecord", "head", "providerDescriptor", "providerVersionCandidate",
 		"providerListRequest", "providerListResult", "putVersionRequest", "putVersionResult",
 		"getVersionRequest", "getVersionResult", "listHistoryRequest", "listHistoryResult",
 		"getHeadRequest", "getHeadResult", "moveHeadRequest", "moveHeadResult",

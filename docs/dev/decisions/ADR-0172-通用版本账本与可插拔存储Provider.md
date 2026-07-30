@@ -1,6 +1,6 @@
 # ADR-0172 通用版本账本与可插拔存储 Provider
 
-- 状态：已采纳，P0 协议已实施
+- 状态：已采纳，P1 Ledger 与 File Provider 已实施
 - 日期：2026-07-30
 - 关联：[ADR-0081](ADR-0081-Portal治理与不可变Activation.md)、[ADR-0123](ADR-0123-插件共享状态与可信Provider.md)、[ADR-0150](ADR-0150-插件共享代码与能力复用边界.md)、[ADR-0152](ADR-0152-插件边界门禁与权限策略物理收敛.md)、[ADR-0171](ADR-0171-Portal单聚合版本与上线子流程.md)
 
@@ -20,7 +20,7 @@ Portal Composer、Deployment Manager、Plugin Settings 等领域都保存不可�
    - `version.storage.git.v1`：以 commit/ref 表达不可变版本和 CAS Head，主要用于审阅、导入导出与 GitOps；
    - `version.storage.relational.v1`：使用事务和唯一约束提供线性一致 CAS，是生产集群首选，且通过 Database Runtime 支持多种数据库，不绑定 PostgreSQL。
 5. namespace 到 Provider 实例的路由属于 Ledger 的受信插件配置。调用方只提交 namespace、stream 和版本内容，不能选择 Provider、连接、仓库路径或凭证。
-6. 版本写入分为 create-only `putVersion` 与独立 `moveHead`。领域插件可以先幂等写入不可变版本，再提交自己的聚合 CAS，最后通过 outbox 镜像 Head；因此不伪造跨插件事务。失败写入最多留下不可达版本，不会提前改变业务当前值。
+6. 版本写入分为 create-only `putVersion` 与独立 `moveHead`。Ledger 校验并规范候选内容、投影可信 actor；Provider 在持久化原子边界内分配 sequence、versionId、createdAt，避免多实例在事务外争抢序号。领域插件可以先幂等写入不可变版本，再提交自己的聚合 CAS，最后通过 outbox 镜像 Head；因此不伪造跨插件事务。失败写入最多留下不可达版本，不会提前改变业务当前值。
 7. Portal Composer 后续只把完整 `PortalConfiguration` 内容迁入 `portal.configuration` namespace；其 Root CAS 继续保存 PortalVersion 状态、VersionRef、Release、Test Release 和审计。正式 Portal Head 是镜像/检索加速，不取代 Portal 聚合真相源；测试候选使用隔离 namespace，不进入正式 Head。
 8. Ledger v1 不保存密文或明文秘密。版本内容只能是有界规范 JSON；密码、token、私钥等必须留在 Credentials 插件，版本内容只保存 `CredentialRef`。摘要只由可信 Ledger 按协议规范化结果计算，异构 Provider 必须使用官方 SDK 与 golden vectors，不能依赖各语言默认 JSON 序列化。大于 1 MiB 的二进制或包体继续进入制品/对象仓库。
 9. 每个 Provider 必须通过同一契约套件：create-only 幂等、同 key 不同内容冲突、内容摘要复核、父链闭合、Head CAS 单赢家、跨 stream/tenant 拒绝、损坏 fail-closed、分页稳定和重启恢复。
@@ -41,7 +41,7 @@ Portal Composer、Deployment Manager、Plugin Settings 等领域都保存不可�
 ## 实施顺序
 
 1. P0：固化 JSON Schema、Go 强类型、请求/响应解析、稳定错误码和 Provider RPC SPI。
-2. P1：建立 Ledger 插件骨架、内存契约 Provider 和 File Provider，完成崩溃恢复与一致性测试。
+2. P1（已完成）：建立 Ledger 插件骨架、内存契约 Provider 和 File Provider，完成崩溃恢复与一致性测试。
 3. P2：Portal Composer 通过 VersionRef 保存配置；先写不可变版本，再 Root CAS，再 outbox 镜像 Head。
 4. P3：通过 Database Runtime 实施 Relational Provider，完成 active-active 与故障矩阵。
 5. P4：按真实 GitOps 需求选型并实施 Git Provider，不让 Git 依赖进入 File/Relational 运行闭包。

@@ -161,11 +161,21 @@ type MoveHeadResult struct {
 	Head Head `json:"head"`
 }
 
-// ProviderPutVersionRequest contains a record whose identity, actor and time
-// were already assigned by the trusted Ledger service.
+// ProviderVersionCandidate contains canonical content and the trusted actor
+// projected by Ledger. The Provider atomically assigns sequence, version ID
+// and creation time with the durable write.
+type ProviderVersionCandidate struct {
+	Stream  StreamKey         `json:"stream"`
+	Parent  *VersionRef       `json:"parent,omitempty"`
+	Content json.RawMessage   `json:"content"`
+	Message string            `json:"message,omitempty"`
+	Labels  map[string]string `json:"labels,omitempty"`
+	ActorID string            `json:"actorId"`
+}
+
 type ProviderPutVersionRequest struct {
-	IdempotencyKey string        `json:"idempotencyKey"`
-	Version        VersionRecord `json:"version"`
+	IdempotencyKey string                   `json:"idempotencyKey"`
+	Candidate      ProviderVersionCandidate `json:"candidate"`
 }
 
 type ProviderPutVersionResult = PutVersionResult

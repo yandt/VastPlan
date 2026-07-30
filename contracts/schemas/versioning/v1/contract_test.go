@@ -188,23 +188,25 @@ func TestProviderDescriptorsDeclareHonestStorageSemantics(t *testing.T) {
 	}
 }
 
-func TestProviderSPIAcceptsOnlyLedgerAssignedRecords(t *testing.T) {
+func TestProviderSPIAcceptsOnlyLedgerValidatedCandidates(t *testing.T) {
 	root := record(t, 1, nil, `{"layout":"standard"}`)
 	request := versioningv1.ProviderPutVersionRequest{
 		IdempotencyKey: "portal-main:revision:0001",
-		Version:        root,
+		Candidate: versioningv1.ProviderVersionCandidate{
+			Stream: root.Ref.Stream, Content: root.Content, ActorID: root.ActorID,
+		},
 	}
 	parsed, err := versioningv1.ParseProviderRequest(versioningv1.ProviderOperationPutVersion, marshal(t, request))
 	if err != nil {
 		t.Fatalf("有效 Provider 写入被拒绝: %v", err)
 	}
-	if parsed.(*versioningv1.ProviderPutVersionRequest).Version.ActorID != root.ActorID {
+	if parsed.(*versioningv1.ProviderPutVersionRequest).Candidate.ActorID != root.ActorID {
 		t.Fatal("Provider SPI 丢失 Ledger 已赋予的可信 actor")
 	}
 
-	request.Version.Ref.ContentDigest = strings.Repeat("0", 64)
+	request.Candidate.Content = json.RawMessage(`{"layout":"standard","layout":"attacker"}`)
 	if _, err := versioningv1.ParseProviderRequest(versioningv1.ProviderOperationPutVersion, marshal(t, request)); err == nil {
-		t.Fatal("Provider 必须复核 Ledger 记录摘要")
+		t.Fatal("Provider SPI 必须拒绝有歧义的候选内容")
 	}
 	describe := versioningv1.ProviderDescribeResult{Provider: provider(versioningv1.StorageProtocolRelational)}
 	if _, err := versioningv1.ParseProviderResult(versioningv1.ProviderOperationDescribe, marshal(t, describe)); err != nil {

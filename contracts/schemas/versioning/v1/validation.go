@@ -45,6 +45,9 @@ func validateRequest(target any) error {
 		if err := ValidateStreamKey(request.Stream); err != nil {
 			return err
 		}
+		if request.Start != nil && request.Cursor != "" {
+			return errors.New("历史请求不能同时指定 start 和 cursor")
+		}
 		if request.Start != nil && (ValidateVersionRef(*request.Start) != nil || request.Start.Stream != request.Stream) {
 			return errors.New("历史起点必须属于同一 stream")
 		}
@@ -108,7 +111,7 @@ func ValidateVersionRef(ref VersionRef) error {
 }
 
 func ValidateVersionRecord(record VersionRecord) error {
-	if record.Protocol != Protocol || record.ActorID == "" || len(record.ActorID) > 160 || record.CreatedAt.IsZero() {
+	if record.Protocol != Protocol || !validActorID(record.ActorID) || record.CreatedAt.IsZero() {
 		return errors.New("VersionRecord 协议、actor 或时间无效")
 	}
 	if err := ValidateVersionRef(record.Ref); err != nil {
@@ -125,6 +128,28 @@ func ValidateVersionRecord(record VersionRecord) error {
 	}
 	return nil
 }
+
+func ValidateProviderVersionCandidate(candidate *ProviderVersionCandidate) error {
+	if candidate == nil || !validActorID(candidate.ActorID) {
+		return errors.New("Provider version candidate actor 无效")
+	}
+	if err := ValidateStreamKey(candidate.Stream); err != nil {
+		return err
+	}
+	canonical, err := CanonicalizeContent(candidate.Content)
+	if err != nil {
+		return err
+	}
+	candidate.Content = canonical
+	if candidate.Parent != nil {
+		if err := ValidateVersionRef(*candidate.Parent); err != nil || candidate.Parent.Stream != candidate.Stream {
+			return errors.New("Provider version candidate 父版本无效")
+		}
+	}
+	return nil
+}
+
+func validActorID(actorID string) bool { return actorID != "" && len(actorID) <= 160 }
 
 func ValidateHead(head Head) error {
 	if head.Protocol != Protocol || head.Revision == 0 || head.UpdatedAt.IsZero() {

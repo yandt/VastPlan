@@ -154,11 +154,22 @@
       "type": "object", "additionalProperties": false, "required": ["provider"],
       "properties": { "provider": { "$ref": "#/$defs/providerDescriptor" } }
     },
+    "providerVersionCandidate": {
+      "type": "object", "additionalProperties": false, "required": ["stream", "content", "actorId"],
+      "properties": {
+        "stream": { "$ref": "#/$defs/streamKey" },
+        "parent": { "$ref": "#/$defs/versionRef" },
+        "content": { "type": "object" },
+        "message": { "type": "string", "maxLength": 1024 },
+        "labels": { "$ref": "#/$defs/labels" },
+        "actorId": { "type": "string", "minLength": 1, "maxLength": 160 }
+      }
+    },
     "providerPutVersionRequest": {
-      "type": "object", "additionalProperties": false, "required": ["idempotencyKey", "version"],
+      "type": "object", "additionalProperties": false, "required": ["idempotencyKey", "candidate"],
       "properties": {
         "idempotencyKey": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$" },
-        "version": { "$ref": "#/$defs/versionRecord" }
+        "candidate": { "$ref": "#/$defs/providerVersionCandidate" }
       }
     }
   }

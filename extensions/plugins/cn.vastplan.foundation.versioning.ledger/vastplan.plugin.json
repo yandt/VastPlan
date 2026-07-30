@@ -1,0 +1,95 @@
+{
+  "id": "cn.vastplan.foundation.versioning.ledger",
+  "name": "VastPlan Version Ledger",
+  "version": "0.1.0",
+  "publisher": "vastplan",
+  "license": "Apache-2.0",
+  "licenseFile": "LICENSE",
+  "noticeFile": "NOTICE",
+  "description": "提供不可变 JSON 版本、父链历史、命名 Head CAS 与可插拔存储 Provider 的基础插件",
+  "engines": { "backend": "^0.1" },
+  "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
+  "contextAccess": {
+    "required": ["caller", "scope.tenant"],
+    "optional": ["scope.project", "scene", "trace", "request.deadline", "request.idempotency", "propagation.callPath"]
+  },
+  "runtime": {
+    "instancePolicy": "leader",
+    "stateModel": "leader-owned",
+    "visibility": "cluster",
+    "routing": "leader",
+    "routingDomain": "platform",
+    "provides": [
+      {
+        "extensionPoint": "tool.package",
+        "capability": "foundation.versioning.ledger",
+        "visibility": "cluster",
+        "routing": "leader",
+        "routingDomain": "platform"
+      }
+    ]
+  },
+  "execution": { "backend": { "driver": "native", "minimumIsolation": "trusted-process" } },
+  "configuration": {
+    "scope": "service",
+    "applyMode": "restart",
+    "schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaultProvider", "providers"],
+      "properties": {
+        "defaultProvider": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+        "providers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "protocol", "root"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+              "protocol": { "const": "version.storage.file.v1" },
+              "root": { "type": "string", "pattern": "^/", "maxLength": 4096 }
+            }
+          }
+        },
+        "routes": {
+          "type": "array",
+          "maxItems": 256,
+          "default": [],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["namespace", "provider"],
+            "properties": {
+              "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 128 },
+              "provider": { "type": "string", "pattern": "^[a-z][a-z0-9._-]{0,63}$" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "activation": ["onStartup"],
+  "entry": { "backend": "backend/version-ledger" },
+  "contributes": {
+    "backend": {
+      "tools": [
+        {
+          "id": "foundation.versioning.ledger",
+          "service_role": "backend",
+          "title": "Version Ledger",
+          "subcommands": [
+            { "name": "providers", "description": "列出已注册的版本存储 Provider 类型", "paramsSchema": { "type": "object", "additionalProperties": false, "maxProperties": 0 } },
+            { "name": "putVersion", "description": "幂等创建不可变版本" },
+            { "name": "getVersion", "description": "精确读取不可变版本" },
+            { "name": "listHistory", "description": "沿父链分页读取版本历史" },
+            { "name": "getHead", "description": "读取命名 Head" },
+            { "name": "moveHead", "description": "以 CAS 移动命名 Head" }
+          ]
+        }
+      ]
+    }
+  }
+}

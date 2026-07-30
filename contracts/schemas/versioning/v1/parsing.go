@@ -56,7 +56,10 @@ func ParseProviderRequest(operation string, raw []byte) (any, error) {
 		if !idempotencyPattern.MatchString(request.IdempotencyKey) {
 			return nil, errors.New("Provider idempotencyKey 无效")
 		}
-		return target, ValidateVersionRecord(request.Version)
+		if err := ValidateProviderVersionCandidate(&request.Candidate); err != nil {
+			return nil, err
+		}
+		return target, nil
 	}
 	return target, validateRequest(target)
 }
