@@ -35,7 +35,7 @@
     "adapterCapabilities": {
       "type": "object", "additionalProperties": false, "required": ["normalize", "diff", "materialize", "merge"],
       "properties": {
-        "normalize": { "type": "boolean" }, "diff": { "type": "boolean" },
+        "normalize": { "const": true }, "diff": { "type": "boolean" },
         "materialize": { "type": "boolean" }, "merge": { "type": "boolean" }
       }
     },

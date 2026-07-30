@@ -3,7 +3,6 @@ package versionworkspace
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	resourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
@@ -52,16 +51,14 @@ func (m *Manager) CompareCommitted(ctx context.Context, scope Scope, ledger Ledg
 	if err != nil {
 		return workspacev1.CompareCommittedResult{}, err
 	}
-	diff, err := resolved.adapter.Diff(ctx, resourcev1.AdapterDiffRequest{Resource: request.Resource, Mode: resolved.resolution.Mode, Left: left, Right: right})
+	dirty := leftDigest != rightDigest
+	diff, err := calculateDiff(ctx, resolved.adapter, resourcev1.AdapterDiffRequest{Resource: request.Resource, Mode: resolved.resolution.Mode, Left: left, Right: right}, dirty)
 	if err != nil {
-		return workspacev1.CompareCommittedResult{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, err)
-	}
-	if err := resourcev1.ValidateAdapterDiffResult(diff); err != nil {
-		return workspacev1.CompareCommittedResult{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, err)
+		return workspacev1.CompareCommittedResult{}, err
 	}
 	result := workspacev1.CompareCommittedResult{
 		Resolution: resolved.resolution, Left: request.Left, Right: request.Right, LeftDigest: leftDigest, RightDigest: rightDigest,
-		Dirty: leftDigest != rightDigest, DiffAvailable: true, ChangedPaths: append([]string(nil), diff.ChangedPaths...), Summary: diff.Summary,
+		Dirty: dirty, DiffAvailable: diff.available, ChangedPaths: diff.paths, Summary: diff.summary,
 	}
 	if err := workspacev1.ValidateCompareCommittedResult(result); err != nil {
 		return workspacev1.CompareCommittedResult{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, err)
@@ -74,12 +71,9 @@ func (m *Manager) resolveCommittedContext(environmentID, environmentDigest strin
 	if err != nil {
 		return committedContext{}, err
 	}
-	mode := requestedMode
-	if mode == "" {
-		mode = binding.DefaultMode
-	}
-	if !containsMode(binding.AllowedModes, mode) {
-		return committedContext{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, fmt.Errorf("环境不允许资源模式 %q", mode))
+	mode, err := resolveBindingMode(binding, requestedMode)
+	if err != nil {
+		return committedContext{}, err
 	}
 	expected := versioningv1.StreamKey{Namespace: binding.Namespace, StreamID: resource.ID}
 	if stream != expected {
@@ -89,5 +83,5 @@ func (m *Manager) resolveCommittedContext(environmentID, environmentDigest strin
 		EnvironmentID: environmentID, EnvironmentDigest: environment.digest, Resource: resource,
 		Namespace: binding.Namespace, Adapter: binding.Adapter, Mode: mode,
 	}
-	return committedContext{resolution: resolution, binding: binding, adapter: adapter, maxBytes: environment.profile.Limits.MaxSnapshotBytes}, nil
+	return committedContext{resolution: resolution, binding: binding, adapter: adapter, maxBytes: resolvedMaxBytes(environment.profile, adapter.Descriptor(), mode)}, nil
 }

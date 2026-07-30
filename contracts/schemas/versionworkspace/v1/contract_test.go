@@ -54,7 +54,7 @@ func TestChangesMustBeDeterministicAndConsistent(t *testing.T) {
 			Resource:          resourcev1.ResourceKey{Type: "script.bundle", ID: "daily"}, Namespace: "script.bundle", Adapter: "version.resource.files.v1",
 			Mode: resourcev1.ModeOverlay, State: workspacev1.StateDirty, Revision: 2, CreatedAt: now, LeaseExpiresAt: now.Add(time.Hour),
 		},
-		Dirty: true, ChangedPaths: []string{"README.md", "src/main.ts"}, Summary: workspacev1.ChangeSummary{Added: 1, Modified: 1, Total: 2},
+		Dirty: true, DiffAvailable: true, ChangedPaths: []string{"README.md", "src/main.ts"}, Summary: workspacev1.ChangeSummary{Added: 1, Modified: 1, Total: 2},
 	}
 	if err := workspacev1.ValidateChangesResult(result); err != nil {
 		t.Fatal(err)
@@ -62,6 +62,42 @@ func TestChangesMustBeDeterministicAndConsistent(t *testing.T) {
 	result.ChangedPaths[0], result.ChangedPaths[1] = result.ChangedPaths[1], result.ChangedPaths[0]
 	if err := workspacev1.ValidateChangesResult(result); err == nil {
 		t.Fatal("变更路径必须确定性排序")
+	}
+}
+
+func TestResourceDescriptionAndDigestOnlyChanges(t *testing.T) {
+	resource := resourcev1.ResourceKey{Type: "archive.bundle", ID: "daily"}
+	request := workspacev1.DescribeResourceRequest{EnvironmentID: "platform-development", Resource: resource, RequestedMode: resourcev1.ModeOverlay}
+	if err := workspacev1.ValidateDescribeResourceRequest(request); err != nil {
+		t.Fatal(err)
+	}
+	description := workspacev1.ResourceDescription{
+		Resolution: workspacev1.ResourceResolution{
+			EnvironmentID: request.EnvironmentID, EnvironmentDigest: strings.Repeat("a", 64), Resource: resource,
+			Namespace: "archive.bundle", Adapter: "version.resource.blob.v1", Mode: resourcev1.ModeOverlay,
+		},
+		ContentKind: resourcev1.ContentFiles, AllowedModes: []string{resourcev1.ModeOverlay}, DefaultMode: resourcev1.ModeOverlay,
+		MaxBytes: 64 << 20, SecretPolicy: resourcev1.SecretPolicyForbidden,
+		Capabilities: resourcev1.AdapterCapabilities{Normalize: true},
+	}
+	if err := workspacev1.ValidateResourceDescription(description); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	changes := workspacev1.ChangesResult{
+		Session: workspacev1.Session{
+			Protocol: workspacev1.Protocol, ID: "ws_1234567890abcdef", EnvironmentID: request.EnvironmentID, EnvironmentDigest: strings.Repeat("a", 64),
+			Resource: resource, Namespace: "archive.bundle", Adapter: "version.resource.blob.v1", Mode: resourcev1.ModeOverlay,
+			State: workspacev1.StateDirty, Revision: 2, CreatedAt: now, LeaseExpiresAt: now.Add(time.Hour),
+		},
+		Dirty: true, DiffAvailable: false,
+	}
+	if err := workspacev1.ValidateChangesResult(changes); err != nil {
+		t.Fatal(err)
+	}
+	changes.ChangedPaths = []string{"payload.bin"}
+	if err := workspacev1.ValidateChangesResult(changes); err == nil {
+		t.Fatal("diffAvailable=false 时不得伪造详细变化")
 	}
 }
 

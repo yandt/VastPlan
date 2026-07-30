@@ -38,6 +38,16 @@ func ValidateOpenRequest(request OpenRequest) error {
 	return nil
 }
 
+func ValidateDescribeResourceRequest(request DescribeResourceRequest) error {
+	if !identityPattern.MatchString(request.EnvironmentID) || versionresourcev1.ValidateResourceKey(request.Resource) != nil {
+		return errors.New("描述版本资源请求无效")
+	}
+	if request.RequestedMode != "" && !validMode(request.RequestedMode) {
+		return errors.New("描述版本资源模式无效")
+	}
+	return nil
+}
+
 func ValidateSession(session Session) error {
 	if session.Protocol != Protocol || !sessionPattern.MatchString(session.ID) || !identityPattern.MatchString(session.EnvironmentID) || !digestPattern.MatchString(session.EnvironmentDigest) || versionresourcev1.ValidateResourceKey(session.Resource) != nil {
 		return errors.New("版本工作区 Session 身份无效")
@@ -71,6 +81,12 @@ func ValidateSnapshotResult(result SnapshotResult, maxBytes int64) error {
 func ValidateChangesResult(result ChangesResult) error {
 	if err := ValidateSession(result.Session); err != nil {
 		return err
+	}
+	if !result.DiffAvailable {
+		if len(result.ChangedPaths) != 0 || result.Summary != (ChangeSummary{}) {
+			return errors.New("Version Workspace 不可用 diff 不得返回详细变化")
+		}
+		return nil
 	}
 	return validateChangeDetails(result.ChangedPaths, result.Summary, result.Dirty)
 }
@@ -113,6 +129,33 @@ func ValidateResourceResolution(resolution ResourceResolution) error {
 	}
 	stream := versioningv1.StreamKey{Namespace: resolution.Namespace, StreamID: resolution.Resource.ID}
 	return versioningv1.ValidateStreamKey(stream)
+}
+
+func ValidateResourceDescription(description ResourceDescription) error {
+	if ValidateResourceResolution(description.Resolution) != nil || description.MaxBytes < 1 || !description.Capabilities.Normalize {
+		return errors.New("Version Workspace 资源描述无效")
+	}
+	if description.ContentKind != versionresourcev1.ContentJSON && description.ContentKind != versionresourcev1.ContentFiles {
+		return errors.New("Version Workspace 资源内容类型无效")
+	}
+	if description.SecretPolicy != versionresourcev1.SecretPolicyForbidden && description.SecretPolicy != versionresourcev1.SecretPolicyCredentialRefsOnly {
+		return errors.New("Version Workspace 资源秘密策略无效")
+	}
+	if !validMode(description.DefaultMode) || len(description.AllowedModes) == 0 || len(description.AllowedModes) > 3 || !sort.StringsAreSorted(description.AllowedModes) {
+		return errors.New("Version Workspace 资源模式目录无效")
+	}
+	seenDefault, seenResolution := false, false
+	for index, mode := range description.AllowedModes {
+		if !validMode(mode) || index > 0 && description.AllowedModes[index-1] == mode {
+			return errors.New("Version Workspace 资源模式无效或重复")
+		}
+		seenDefault = seenDefault || mode == description.DefaultMode
+		seenResolution = seenResolution || mode == description.Resolution.Mode
+	}
+	if !seenDefault || !seenResolution {
+		return errors.New("Version Workspace 默认或解析模式不在允许范围")
+	}
+	return nil
 }
 
 func ValidateCommittedSnapshotResult(result CommittedSnapshotResult, maxBytes int64) error {

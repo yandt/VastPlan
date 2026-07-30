@@ -1,6 +1,6 @@
 # ADR-0175 统一版本生命周期与 Resource Adapter 能力协商
 
-- 状态：已采纳，P2.2.2 待实施
+- 状态：已采纳，P2.2.2 已实施
 - 日期：2026-07-31
 - 关联：[ADR-0172](ADR-0172-通用版本账本与可插拔存储Provider.md)、[ADR-0173](ADR-0173-版本环境与资源适配.md)、[ADR-0174](ADR-0174-Portal可选版本控制与发布快照分离.md)
 
@@ -48,3 +48,10 @@ Portal 只是第一个 Version Workspace 消费者。未来系统设置、数据
 正面：所有插件获得一致版本生命周期；新资源通常只需配置绑定；任意文件类型可安全版本化；UI 能按能力隐藏不适用操作；多语言 SDK 不分叉。
 
 代价：P2.2.2 需要调整 ChangesResult、Adapter 接口和能力发现；Text/Blob/Files 还需要 P2.4 Content Staging、对象存储端口、安全准入和各自契约测试，不能只创建空清单插件。
+
+## P2.2.2 实施结果
+
+- `describeResource` 按当前 Environment 最高 revision 解析 Resource Binding，返回固定 digest、内容形态、选定/允许模式、有效大小上限、秘密策略和能力位；不返回 AdapterConfig 或任何存储细节。
+- Adapter 基础接口只强制 `Descriptor + Normalize`，`DiffAdapter` 是可选窄接口；注册时校验 `capabilities.diff` 与真实接口实现一致，避免“声明支持但运行时缺失”。
+- `changes/compareCommitted` 的 `dirty` 只由规范摘要决定。无 diff 能力时返回 `diffAvailable=false`、空路径和零统计；有能力时详细 diff 必须与摘要结果一致，否则按 Adapter 故障拒绝。
+- `operation_unsupported` 已进入稳定错误码目录，留给后续显式 materialize/merge 操作；P2.2.2 不提前增加尚无真实消费者的操作面。

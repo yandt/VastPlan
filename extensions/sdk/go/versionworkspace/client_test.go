@@ -116,3 +116,36 @@ func TestClientReadsAndComparesCommittedVersions(t *testing.T) {
 		t.Fatalf("CompareCommitted SDK 失败: %+v err=%v calls=%d", compared, err, host.calls)
 	}
 }
+
+func TestClientDescribesResourceCapabilities(t *testing.T) {
+	request := workspacev1.DescribeResourceRequest{
+		EnvironmentID: "platform-development", Resource: resourcev1.ResourceKey{Type: "portal.configuration", ID: "admin"},
+	}
+	description := workspacev1.ResourceDescription{
+		Resolution: workspacev1.ResourceResolution{
+			EnvironmentID: request.EnvironmentID, EnvironmentDigest: strings.Repeat("d", 64), Resource: request.Resource,
+			Namespace: "portal.configuration", Adapter: "version.resource.json.v1", Mode: resourcev1.ModeSnapshot,
+		},
+		ContentKind: resourcev1.ContentJSON, AllowedModes: []string{resourcev1.ModeSnapshot}, DefaultMode: resourcev1.ModeSnapshot,
+		MaxBytes: 1 << 20, SecretPolicy: resourcev1.SecretPolicyCredentialRefsOnly,
+		Capabilities: resourcev1.AdapterCapabilities{Normalize: true, Diff: true},
+	}
+	host := &workspaceHost{call: func(target *contractv1.CallTarget, payload []byte) (*contractv1.CallResult, []byte, error) {
+		if target.GetOperation() != workspacev1.OperationDescribeResource {
+			t.Fatalf("错误 Workspace describe 目标: %+v", target)
+		}
+		if _, err := workspacev1.ParseRequest(target.GetOperation(), payload); err != nil {
+			t.Fatal(err)
+		}
+		raw, _ := json.Marshal(description)
+		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, raw, nil
+	}}
+	client, err := workspace.New(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := client.DescribeResource(context.Background(), &contractv1.CallContext{TenantId: "tenant-a"}, request)
+	if err != nil || !result.Capabilities.Diff || result.Resolution.EnvironmentDigest != description.Resolution.EnvironmentDigest {
+		t.Fatalf("DescribeResource SDK 失败: %+v err=%v", result, err)
+	}
+}

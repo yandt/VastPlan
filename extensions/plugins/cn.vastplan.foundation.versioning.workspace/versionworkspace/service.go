@@ -45,6 +45,8 @@ func (s *Service) handle(operation string) sdk.Handler {
 		}
 		var value any
 		switch request := parsed.(type) {
+		case *workspacev1.DescribeResourceRequest:
+			value, err = s.manager.DescribeResource(scope, *request)
 		case *workspacev1.OpenRequest:
 			ledger, callErr := newHostLedger(host, call)
 			if callErr == nil {
@@ -108,7 +110,7 @@ func serviceResult(operation string, value any, err error) (*contractv1.CallResu
 		switch code {
 		case workspacev1.ErrorInvalidRequest, workspacev1.ErrorEnvironmentNotFound, workspacev1.ErrorResourceNotBound,
 			workspacev1.ErrorSessionNotFound, workspacev1.ErrorSessionConflict, workspacev1.ErrorLeaseExpired,
-			workspacev1.ErrorReadOnly, workspacev1.ErrorLimitExceeded, workspacev1.ErrorBaseConflict, workspacev1.ErrorVersionNotFound:
+			workspacev1.ErrorReadOnly, workspacev1.ErrorLimitExceeded, workspacev1.ErrorBaseConflict, workspacev1.ErrorVersionNotFound, workspacev1.ErrorOperationUnsupported:
 			message = err.Error()
 		}
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_ERROR, Error: &contractv1.Error{Code: code, Message: message, Retryable: retryable}}, nil, nil
@@ -127,7 +129,8 @@ func (s *Service) Contribution() sdk.Contribution {
 	return sdk.Contribution{
 		ExtensionPoint: extpoint.ToolPackage, ID: workspacev1.Capability, Descriptor: serviceDescriptor(),
 		Handlers: map[string]sdk.Handler{
-			workspacev1.OperationOpen: s.handle(workspacev1.OperationOpen), workspacev1.OperationStatus: s.handle(workspacev1.OperationStatus),
+			workspacev1.OperationDescribeResource: s.handle(workspacev1.OperationDescribeResource),
+			workspacev1.OperationOpen:             s.handle(workspacev1.OperationOpen), workspacev1.OperationStatus: s.handle(workspacev1.OperationStatus),
 			workspacev1.OperationReadSnapshot: s.handle(workspacev1.OperationReadSnapshot), workspacev1.OperationWriteSnapshot: s.handle(workspacev1.OperationWriteSnapshot),
 			workspacev1.OperationChanges: s.handle(workspacev1.OperationChanges), workspacev1.OperationCommit: s.handle(workspacev1.OperationCommit),
 			workspacev1.OperationDiscard: s.handle(workspacev1.OperationDiscard), workspacev1.OperationRenew: s.handle(workspacev1.OperationRenew),
@@ -137,5 +140,5 @@ func (s *Service) Contribution() sdk.Contribution {
 }
 
 func serviceDescriptor() []byte {
-	return []byte(`{"title":"Version Workspace","subcommands":[{"name":"open","description":"打开有 Lease 的版本编辑会话"},{"name":"status","description":"读取会话状态"},{"name":"readSnapshot","description":"读取隔离快照"},{"name":"writeSnapshot","description":"以 CAS 写入隔离快照"},{"name":"changes","description":"读取确定性变更摘要"},{"name":"commit","description":"以稳定 operationId 幂等提交版本并可选更新 Head"},{"name":"discard","description":"丢弃编辑会话"},{"name":"renew","description":"在环境配额内续租"},{"name":"readCommitted","description":"读取并规范化精确已提交版本"},{"name":"compareCommitted","description":"经资源 Adapter 比较两个精确已提交版本"}]}`)
+	return []byte(`{"title":"Version Workspace","subcommands":[{"name":"describeResource","description":"解析资源绑定与可选能力"},{"name":"open","description":"打开有 Lease 的版本编辑会话"},{"name":"status","description":"读取会话状态"},{"name":"readSnapshot","description":"读取隔离快照"},{"name":"writeSnapshot","description":"以 CAS 写入隔离快照"},{"name":"changes","description":"读取摘要变化与可选详细 diff"},{"name":"commit","description":"以稳定 operationId 幂等提交版本并可选更新 Head"},{"name":"discard","description":"丢弃编辑会话"},{"name":"renew","description":"在环境配额内续租"},{"name":"readCommitted","description":"读取并规范化精确已提交版本"},{"name":"compareCommitted","description":"比较摘要并按 Adapter 能力返回详细 diff"}]}`)
 }

@@ -22,21 +22,23 @@ const (
 	OperationCommit           = "commit"
 	OperationDiscard          = "discard"
 	OperationRenew            = "renew"
+	OperationDescribeResource = "describeResource"
 	OperationReadCommitted    = "readCommitted"
 	OperationCompareCommitted = "compareCommitted"
 
-	ErrorInvalidRequest      = "version.workspace.invalid_request"
-	ErrorEnvironmentNotFound = "version.workspace.environment_not_found"
-	ErrorResourceNotBound    = "version.workspace.resource_not_bound"
-	ErrorSessionNotFound     = "version.workspace.session_not_found"
-	ErrorSessionConflict     = "version.workspace.session_conflict"
-	ErrorLeaseExpired        = "version.workspace.lease_expired"
-	ErrorReadOnly            = "version.workspace.read_only"
-	ErrorAdapterUnavailable  = "version.workspace.adapter_unavailable"
-	ErrorLedgerUnavailable   = "version.workspace.ledger_unavailable"
-	ErrorLimitExceeded       = "version.workspace.limit_exceeded"
-	ErrorBaseConflict        = "version.workspace.base_conflict"
-	ErrorVersionNotFound     = "version.workspace.version_not_found"
+	ErrorInvalidRequest       = "version.workspace.invalid_request"
+	ErrorEnvironmentNotFound  = "version.workspace.environment_not_found"
+	ErrorResourceNotBound     = "version.workspace.resource_not_bound"
+	ErrorSessionNotFound      = "version.workspace.session_not_found"
+	ErrorSessionConflict      = "version.workspace.session_conflict"
+	ErrorLeaseExpired         = "version.workspace.lease_expired"
+	ErrorReadOnly             = "version.workspace.read_only"
+	ErrorAdapterUnavailable   = "version.workspace.adapter_unavailable"
+	ErrorLedgerUnavailable    = "version.workspace.ledger_unavailable"
+	ErrorLimitExceeded        = "version.workspace.limit_exceeded"
+	ErrorBaseConflict         = "version.workspace.base_conflict"
+	ErrorVersionNotFound      = "version.workspace.version_not_found"
+	ErrorOperationUnsupported = "version.workspace.operation_unsupported"
 
 	StateClean      = "Clean"
 	StateDirty      = "Dirty"
@@ -52,7 +54,7 @@ const (
 var knownErrorCodes = map[string]struct{}{
 	ErrorInvalidRequest: {}, ErrorEnvironmentNotFound: {}, ErrorResourceNotBound: {},
 	ErrorSessionNotFound: {}, ErrorSessionConflict: {}, ErrorLeaseExpired: {}, ErrorReadOnly: {},
-	ErrorAdapterUnavailable: {}, ErrorLedgerUnavailable: {}, ErrorLimitExceeded: {}, ErrorBaseConflict: {}, ErrorVersionNotFound: {},
+	ErrorAdapterUnavailable: {}, ErrorLedgerUnavailable: {}, ErrorLimitExceeded: {}, ErrorBaseConflict: {}, ErrorVersionNotFound: {}, ErrorOperationUnsupported: {},
 }
 
 func KnownErrorCode(code string) bool { _, ok := knownErrorCodes[code]; return ok }
@@ -112,10 +114,11 @@ type WriteSnapshotRequest struct {
 type ChangeSummary = versionresourcev1.ChangeSummary
 
 type ChangesResult struct {
-	Session      Session       `json:"session"`
-	Dirty        bool          `json:"dirty"`
-	ChangedPaths []string      `json:"changedPaths,omitempty"`
-	Summary      ChangeSummary `json:"summary"`
+	Session       Session       `json:"session"`
+	Dirty         bool          `json:"dirty"`
+	DiffAvailable bool          `json:"diffAvailable"`
+	ChangedPaths  []string      `json:"changedPaths,omitempty"`
+	Summary       ChangeSummary `json:"summary"`
 }
 
 type CommitRequest struct {
@@ -142,6 +145,12 @@ type SessionResult struct {
 	Session Session `json:"session"`
 }
 
+type DescribeResourceRequest struct {
+	EnvironmentID string                        `json:"environmentId"`
+	Resource      versionresourcev1.ResourceKey `json:"resource"`
+	RequestedMode string                        `json:"requestedMode,omitempty"`
+}
+
 type CommittedRequest struct {
 	EnvironmentID     string                        `json:"environmentId"`
 	EnvironmentDigest string                        `json:"environmentDigest"`
@@ -166,6 +175,16 @@ type ResourceResolution struct {
 	Namespace         string                        `json:"namespace"`
 	Adapter           string                        `json:"adapter"`
 	Mode              string                        `json:"mode"`
+}
+
+type ResourceDescription struct {
+	Resolution   ResourceResolution                    `json:"resolution"`
+	ContentKind  string                                `json:"contentKind"`
+	AllowedModes []string                              `json:"allowedModes"`
+	DefaultMode  string                                `json:"defaultMode"`
+	MaxBytes     int64                                 `json:"maxBytes"`
+	SecretPolicy string                                `json:"secretPolicy"`
+	Capabilities versionresourcev1.AdapterCapabilities `json:"capabilities"`
 }
 
 type CommittedSnapshotResult struct {

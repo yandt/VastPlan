@@ -24,6 +24,7 @@ func TestConfiguredServiceRegistersContractSurface(t *testing.T) {
 	}
 	contribution := service.Contribution()
 	for _, operation := range []string{
+		workspacev1.OperationDescribeResource,
 		workspacev1.OperationOpen, workspacev1.OperationStatus, workspacev1.OperationReadSnapshot, workspacev1.OperationWriteSnapshot,
 		workspacev1.OperationChanges, workspacev1.OperationCommit, workspacev1.OperationDiscard, workspacev1.OperationRenew,
 		workspacev1.OperationReadCommitted, workspacev1.OperationCompareCommitted,

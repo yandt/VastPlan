@@ -14,7 +14,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.foundation.versioning.workspace"
-	PluginVersion = "0.2.0"
+	PluginVersion = "0.3.0"
 	JSONAdapterID = "version.resource.json.v1"
 )
 
@@ -45,6 +45,10 @@ type Ledger interface {
 type Adapter interface {
 	Descriptor() resourcev1.AdapterDescriptor
 	Normalize(context.Context, resourcev1.AdapterNormalizeRequest) (resourcev1.AdapterNormalizeResult, error)
+}
+
+// DiffAdapter is optional and must agree with AdapterDescriptor.Capabilities.
+type DiffAdapter interface {
 	Diff(context.Context, resourcev1.AdapterDiffRequest) (resourcev1.AdapterDiffResult, error)
 }
 

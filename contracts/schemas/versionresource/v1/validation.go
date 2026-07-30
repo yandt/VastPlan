@@ -70,6 +70,9 @@ func ValidateAdapterDescriptor(descriptor AdapterDescriptor) error {
 	if descriptor.ContentKind != ContentJSON && descriptor.ContentKind != ContentFiles || !validSecretPolicy(descriptor.SecretPolicy) {
 		return errors.New("版本资源 Adapter 内容或秘密策略无效")
 	}
+	if !descriptor.Capabilities.Normalize {
+		return errors.New("版本资源 Adapter 必须支持 normalize")
+	}
 	if err := validateModes(descriptor.SupportedModes, descriptor.DefaultMode); err != nil {
 		return err
 	}

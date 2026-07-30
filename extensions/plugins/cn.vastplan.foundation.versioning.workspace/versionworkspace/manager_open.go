@@ -20,13 +20,11 @@ func (m *Manager) Open(ctx context.Context, scope Scope, ledger Ledger, request 
 	if err != nil {
 		return workspacev1.Session{}, err
 	}
-	mode := request.RequestedMode
-	if mode == "" {
-		mode = binding.DefaultMode
+	mode, err := resolveBindingMode(binding, request.RequestedMode)
+	if err != nil {
+		return workspacev1.Session{}, err
 	}
-	if !containsMode(binding.AllowedModes, mode) {
-		return workspacev1.Session{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, fmt.Errorf("环境不允许资源模式 %q", mode))
-	}
+	maxBytes := resolvedMaxBytes(environment.profile, adapter.Descriptor(), mode)
 	leaseSeconds, err := resolveLeaseSeconds(request.LeaseSeconds, environment.profile.Limits.MaxLeaseSeconds)
 	if err != nil {
 		return workspacev1.Session{}, err
@@ -43,7 +41,7 @@ func (m *Manager) Open(ctx context.Context, scope Scope, ledger Ledger, request 
 	if err != nil {
 		return workspacev1.Session{}, err
 	}
-	base, digest, err := loadBaseSnapshot(ctx, ledger, adapter, binding, request.Resource, mode, baseRef, environment.profile.Limits.MaxSnapshotBytes)
+	base, digest, err := loadBaseSnapshot(ctx, ledger, adapter, binding, request.Resource, mode, baseRef, maxBytes)
 	if err != nil {
 		return workspacev1.Session{}, err
 	}
@@ -68,7 +66,7 @@ func (m *Manager) Open(ctx context.Context, scope Scope, ledger Ledger, request 
 		return workspacev1.Session{}, workspaceError(workspacev1.ErrorInvalidRequest, false, err)
 	}
 	record := &sessionRecord{
-		session: session, owner: scope, binding: binding, adapter: adapter, maxBytes: environment.profile.Limits.MaxSnapshotBytes, maxLease: environment.profile.Limits.MaxLeaseSeconds,
+		session: session, owner: scope, binding: binding, adapter: adapter, maxBytes: maxBytes, maxLease: environment.profile.Limits.MaxLeaseSeconds,
 		base: cloneSnapshot(base), baseDigest: digest, current: cloneSnapshot(base), currentDigest: digest,
 	}
 	m.mu.Lock()

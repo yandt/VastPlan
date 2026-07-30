@@ -41,6 +41,10 @@ func (c *Catalog) RegisterAdapter(adapter Adapter) error {
 	if err := resourcev1.ValidateAdapterDescriptor(descriptor); err != nil {
 		return fmt.Errorf("Version Resource Adapter 描述无效: %w", err)
 	}
+	_, hasDiff := adapter.(DiffAdapter)
+	if descriptor.Capabilities.Diff != hasDiff {
+		return fmt.Errorf("Version Resource Adapter %q 的 diff 能力声明与实现不一致", descriptor.ID)
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, exists := c.adapters[descriptor.ID]; exists {

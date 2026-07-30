@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.versioning.workspace",
   "name": "VastPlan Version Workspace",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -107,16 +107,17 @@
           "service_role": "backend",
           "title": "Version Workspace",
           "subcommands": [
+            { "name": "describeResource", "description": "解析资源绑定与可选能力" },
             { "name": "open", "description": "打开有 Lease 的版本编辑会话" },
             { "name": "status", "description": "读取会话状态" },
             { "name": "readSnapshot", "description": "读取隔离快照" },
             { "name": "writeSnapshot", "description": "以 CAS 写入隔离快照" },
-            { "name": "changes", "description": "读取确定性变更摘要" },
+            { "name": "changes", "description": "读取摘要变化与可选详细 diff" },
             { "name": "commit", "description": "以稳定 operationId 幂等提交版本并可选更新 Head" },
             { "name": "discard", "description": "丢弃编辑会话" },
             { "name": "renew", "description": "在环境配额内续租" },
             { "name": "readCommitted", "description": "读取并规范化精确已提交版本" },
-            { "name": "compareCommitted", "description": "经资源 Adapter 比较两个精确已提交版本" }
+            { "name": "compareCommitted", "description": "比较摘要并按 Adapter 能力返回详细 diff" }
           ]
         }
       ]

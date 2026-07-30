@@ -36,8 +36,8 @@ func TestWorkspaceSchemaCompilesWithExactExternalContracts(t *testing.T) {
 		}
 	}
 	for _, definition := range []string{
-		"session", "openRequest", "sessionRequest", "revisionRequest", "writeSnapshotRequest", "commitRequest", "committedRequest", "compareCommittedRequest", "renewRequest",
-		"sessionResult", "snapshotResult", "changeSummary", "changesResult", "resourceResolution", "committedSnapshotResult", "compareCommittedResult", "commitResult",
+		"session", "openRequest", "describeResourceRequest", "sessionRequest", "revisionRequest", "writeSnapshotRequest", "commitRequest", "committedRequest", "compareCommittedRequest", "renewRequest",
+		"sessionResult", "snapshotResult", "changeSummary", "changesResult", "resourceResolution", "resourceDescription", "committedSnapshotResult", "compareCommittedResult", "commitResult",
 	} {
 		if _, err := compiler.Compile(SchemaURL + "#/$defs/" + definition); err != nil {
 			t.Fatalf("编译 Workspace Schema %s: %v", definition, err)

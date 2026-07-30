@@ -79,20 +79,15 @@ func (m *Manager) Changes(ctx context.Context, scope Scope, request workspacev1.
 		return workspacev1.ChangesResult{}, err
 	}
 	session := cloneSession(record.session)
-	base, current, adapter, maxBytes := cloneSnapshot(record.base), cloneSnapshot(record.current), record.adapter, record.maxBytes
+	base, current, adapter := cloneSnapshot(record.base), cloneSnapshot(record.current), record.adapter
+	dirty := record.baseDigest != record.currentDigest
 	m.mu.Unlock()
 
-	result, err := adapter.Diff(ctx, resourcev1.AdapterDiffRequest{Resource: session.Resource, Mode: session.Mode, Left: base, Right: current})
+	diff, err := calculateDiff(ctx, adapter, resourcev1.AdapterDiffRequest{Resource: session.Resource, Mode: session.Mode, Left: base, Right: current}, dirty)
 	if err != nil {
-		return workspacev1.ChangesResult{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, err)
+		return workspacev1.ChangesResult{}, err
 	}
-	if err := resourcev1.ValidateAdapterDiffResult(result); err != nil {
-		return workspacev1.ChangesResult{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, err)
-	}
-	if _, err := resourcev1.SnapshotDigest(current, maxBytes); err != nil {
-		return workspacev1.ChangesResult{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, err)
-	}
-	return workspacev1.ChangesResult{Session: session, Dirty: result.Summary.Total > 0, ChangedPaths: result.ChangedPaths, Summary: result.Summary}, nil
+	return workspacev1.ChangesResult{Session: session, Dirty: dirty, DiffAvailable: diff.available, ChangedPaths: diff.paths, Summary: diff.summary}, nil
 }
 
 func (m *Manager) Renew(scope Scope, request workspacev1.RenewRequest) (workspacev1.Session, error) {

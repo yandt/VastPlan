@@ -74,6 +74,22 @@ func TestJSONAdapterCannotAccidentallyMakeGitTheDefault(t *testing.T) {
 	}
 }
 
+func TestAdapterMustDeclareNormalizeCapability(t *testing.T) {
+	descriptor := resourcev1.AdapterDescriptor{
+		Protocol: resourcev1.Protocol, ID: "version.resource.blob.v1", Version: "1.0.0", ContentKind: resourcev1.ContentFiles,
+		SupportedModes: []string{resourcev1.ModeOverlay}, DefaultMode: resourcev1.ModeOverlay,
+		MaxSnapshotBytes: 1 << 20, SecretPolicy: resourcev1.SecretPolicyForbidden,
+		ConfigurationSchema: json.RawMessage(`{"type":"object"}`),
+	}
+	if err := resourcev1.ValidateAdapterDescriptor(descriptor); err == nil {
+		t.Fatal("Adapter 必须显式声明 normalize 强制能力")
+	}
+	descriptor.Capabilities.Normalize = true
+	if err := resourcev1.ValidateAdapterDescriptor(descriptor); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAdapterResultsAreDigestBoundAndPathOpaque(t *testing.T) {
 	snapshot := resourcev1.Snapshot{Kind: resourcev1.ContentJSON, MediaType: "application/json", JSON: json.RawMessage(`{"enabled":true}`)}
 	digest, err := resourcev1.SnapshotDigest(snapshot, 1024)

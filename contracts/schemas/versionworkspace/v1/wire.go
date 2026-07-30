@@ -14,6 +14,8 @@ import (
 func ParseRequest(operation string, raw []byte) (any, error) {
 	var target any
 	switch operation {
+	case OperationDescribeResource:
+		target = &DescribeResourceRequest{}
 	case OperationOpen:
 		target = &OpenRequest{}
 	case OperationStatus, OperationReadSnapshot, OperationChanges:
@@ -45,6 +47,8 @@ func ParseRequest(operation string, raw []byte) (any, error) {
 func ParseResult(operation string, raw []byte) (any, error) {
 	var target any
 	switch operation {
+	case OperationDescribeResource:
+		target = &ResourceDescription{}
 	case OperationOpen, OperationStatus, OperationWriteSnapshot, OperationDiscard, OperationRenew:
 		target = &SessionResult{}
 	case OperationReadSnapshot:
@@ -71,6 +75,8 @@ func ParseResult(operation string, raw []byte) (any, error) {
 
 func validateRequest(target any) error {
 	switch request := target.(type) {
+	case *DescribeResourceRequest:
+		return ValidateDescribeResourceRequest(*request)
 	case *OpenRequest:
 		return ValidateOpenRequest(*request)
 	case *SessionRequest:
@@ -104,6 +110,8 @@ func validateRequest(target any) error {
 
 func validateResult(target any) error {
 	switch result := target.(type) {
+	case *ResourceDescription:
+		return ValidateResourceDescription(*result)
 	case *SessionResult:
 		return ValidateSession(result.Session)
 	case *SnapshotResult:
