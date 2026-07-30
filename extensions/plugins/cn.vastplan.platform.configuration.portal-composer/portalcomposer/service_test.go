@@ -496,15 +496,23 @@ func (h *configuredHost) Call(ctx context.Context, target *contractv1.CallTarget
 	h.calls = append(h.calls, target.GetCapability())
 	switch target.GetCapability() {
 	case "kernel.config.get":
-		var request map[string]string
+		var request struct {
+			Key      string `json:"key"`
+			Optional bool   `json:"optional"`
+		}
 		if err := json.Unmarshal(payload, &request); err != nil {
 			return nil, nil, errors.New("unexpected state configuration request")
 		}
 		var value string
-		switch request["key"] {
+		switch request.Key {
 		case PlatformCatalogConfigKey:
 			raw, _ := json.Marshal(testPlatformCatalog())
 			value = string(raw)
+		case VersionControlConfigKey:
+			if !request.Optional {
+				return nil, nil, errors.New("version control lookup must be optional")
+			}
+			return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte("null"), nil
 		default:
 			return nil, nil, errors.New("unexpected configuration key")
 		}
@@ -540,7 +548,7 @@ func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) 
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("通过可信宿主创建草稿失败: result=%+v err=%v", result, err)
 	}
-	if len(host.calls) != 5 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.state.shared.get" || host.calls[2] != portalapi.KernelCatalogValidationCapability || host.calls[3] != "kernel.state.shared.create" || host.calls[4] != "kernel.state.shared.create" {
+	if len(host.calls) != 6 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.config.get" || host.calls[2] != "kernel.state.shared.get" || host.calls[3] != portalapi.KernelCatalogValidationCapability || host.calls[4] != "kernel.state.shared.create" || host.calls[5] != "kernel.state.shared.create" {
 		t.Fatalf("宿主调用路径错误: %v", host.calls)
 	}
 	var portal portalapi.Portal

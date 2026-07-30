@@ -19,6 +19,7 @@ import (
 const (
 	Capability               = portalapi.ComposerCapability
 	PlatformCatalogConfigKey = "platform.portal-composer.platformCatalog"
+	VersionControlConfigKey  = "platform.portal-composer.versionControl"
 )
 
 var (
@@ -57,18 +58,21 @@ type state struct {
 	TestReleases      []portalapi.TestRelease                `json:"testReleases"`
 	TestVersionOwners map[uint64]uint64                      `json:"testVersionOwners"`
 	Audit             []portalapi.AuditEvent                 `json:"audit"`
+	VersionControls   map[string]portalVersionControlState   `json:"versionControls"`
 }
 
 type Service struct {
-	mu                sync.Mutex
-	workflowMu        sync.Mutex
-	state             state
-	session           *composerStateSession
-	testSave          func(state) error
-	artifactCatalog   Catalog
-	platformCatalog   frontendcompositionv1.PortalPlatformCatalog
-	catalogConfigured bool
-	now               func() time.Time
+	mu                         sync.Mutex
+	workflowMu                 sync.Mutex
+	state                      state
+	session                    *composerStateSession
+	testSave                   func(state) error
+	artifactCatalog            Catalog
+	platformCatalog            frontendcompositionv1.PortalPlatformCatalog
+	catalogConfigured          bool
+	versionControlDefault      *PortalVersionControlBinding
+	versionControlConfigLoaded bool
+	now                        func() time.Time
 }
 
 func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatformCatalog) error {
@@ -90,6 +94,29 @@ func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatfo
 
 func New(catalog Catalog) *Service {
 	return &Service{state: emptyState(), artifactCatalog: catalog, now: time.Now}
+}
+
+func (s *Service) BindVersionControl(binding *PortalVersionControlBinding) error {
+	if binding != nil {
+		value := *binding
+		value.EnvironmentID = strings.TrimSpace(value.EnvironmentID)
+		value.ResourceType = strings.TrimSpace(value.ResourceType)
+		if err := value.validate(); err != nil {
+			return err
+		}
+		binding = &value
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.versionControlConfigLoaded {
+		if (s.versionControlDefault == nil) != (binding == nil) || (binding != nil && *s.versionControlDefault != *binding) {
+			return errors.New("Portal VersionControl 默认绑定不允许在运行中切换")
+		}
+		return nil
+	}
+	s.versionControlDefault = binding
+	s.versionControlConfigLoaded = true
+	return nil
 }
 
 func (s *Service) save() error {

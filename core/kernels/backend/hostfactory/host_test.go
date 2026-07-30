@@ -10,22 +10,22 @@ import (
 	"testing"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
+	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
 	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	backendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/backend/v1"
 	deploymentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v1"
 	deploymentv2 "cdsoft.com.cn/VastPlan/contracts/schemas/deployment/v2"
+	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
+	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/credentiallease"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/deploymentpublication"
-	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
-	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformprofileactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfig"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/pluginconfiguration"
-	"cdsoft.com.cn/VastPlan/core/internal/runtimeidentity"
 )
 
 type bootstrapBroker struct{ called bool }
@@ -275,6 +275,10 @@ func TestKernelConfigGetRequiresAuthenticatedPluginAndReturnsFrozenValue(t *test
 	otherCtx := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "plugin.b"}}
 	if _, _, err := service(context.Background(), otherCtx, []byte(`{"key":"retries"}`)); !errors.Is(err, kernelspi.ErrNotFound) {
 		t.Fatalf("同一宿主内的其他插件不得读取 plugin.a 配置: %v", err)
+	}
+	result, payload, err = service(context.Background(), pluginCtx, []byte(`{"key":"missing","optional":true}`))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK || string(payload) != "null" {
+		t.Fatalf("可选配置缺失必须与 Provider 故障区分: result=%+v payload=%s err=%v", result, payload, err)
 	}
 }
 

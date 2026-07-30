@@ -9,7 +9,10 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+
+	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 )
 
 type DeploymentReferenceChange struct {
@@ -103,7 +106,90 @@ func syncDeploymentReferences(repositoryRoot string, versions map[string]string,
 		}
 		return changes[left].FromVersion < changes[right].FromVersion
 	})
+	if write {
+		if err := syncPortalProfileDigestReferences(repositoryRoot); err != nil {
+			return nil, err
+		}
+	}
 	return changes, nil
+}
+
+// syncPortalProfileDigestReferences closes the derived-reference chain after a
+// plugin version changes a Frontend Platform Profile digest. Portal bindings
+// and Access Profiles must move together; callers must never repair these
+// locks manually after plugin-release prepare.
+func syncPortalProfileDigestReferences(repositoryRoot string) error {
+	catalogPath := filepath.Join(repositoryRoot, "engineering", "deploy", "portal-platform-catalog.json")
+	raw, err := os.ReadFile(catalogPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var catalog frontendcompositionv1.PortalPlatformCatalog
+	if err := json.Unmarshal(raw, &catalog); err != nil {
+		return fmt.Errorf("解析 Portal Platform Catalog: %w", err)
+	}
+	files, err := filepath.Glob(filepath.Join(repositoryRoot, "engineering", "deploy", "*.json"))
+	if err != nil {
+		return err
+	}
+	for _, profile := range catalog.Profiles {
+		digest := profile.Digest()
+		pattern := regexp.MustCompile(`("id"\s*:\s*"` + regexp.QuoteMeta(profile.ID) + `"\s*,\s*"revision"\s*:\s*` + strconv.FormatUint(profile.Revision, 10) + `\s*,\s*"digest"\s*:\s*")([a-f0-9]{64})(")`)
+		for _, path := range files {
+			value, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			var document any
+			if err := json.Unmarshal(value, &document); err != nil {
+				return fmt.Errorf("解析 %s: %w", path, err)
+			}
+			expected := countPortalProfileReferences(document, profile.ID, profile.Revision)
+			updated := 0
+			next := pattern.ReplaceAllFunc(value, func(match []byte) []byte {
+				updated++
+				parts := pattern.FindSubmatch(match)
+				return append(append(append([]byte(nil), parts[1]...), digest...), parts[3]...)
+			})
+			if updated != expected {
+				return fmt.Errorf("%s 中 Portal Profile %s@%d 的摘要锁布局无法安全更新", path, profile.ID, profile.Revision)
+			}
+			if !bytes.Equal(value, next) {
+				if err := os.WriteFile(path, next, 0o644); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func countPortalProfileReferences(value any, profileID string, revision uint64) int {
+	switch typed := value.(type) {
+	case map[string]any:
+		count := 0
+		id, idOK := typed["id"].(string)
+		digest, digestOK := typed["digest"].(string)
+		revisionValue, revisionOK := typed["revision"].(float64)
+		if idOK && digestOK && revisionOK && id == profileID && revisionValue == float64(revision) && len(digest) == 64 {
+			count++
+		}
+		for _, child := range typed {
+			count += countPortalProfileReferences(child, profileID, revision)
+		}
+		return count
+	case []any:
+		count := 0
+		for _, child := range typed {
+			count += countPortalProfileReferences(child, profileID, revision)
+		}
+		return count
+	default:
+		return 0
+	}
 }
 
 func collectDeploymentReferences(value any, versions map[string]string, found map[string]map[string]int) {

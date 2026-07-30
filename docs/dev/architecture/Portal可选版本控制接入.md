@@ -153,7 +153,7 @@ Workbench 在 `enabled=false` 时完全隐藏 commit/history/diff/restore；保�
 1. **P2.2.1（已完成）**：补 operationId、readCommitted、compareCommitted 的契约、SDK、Manager、Environment 多修订精确解析与故障测试。
 2. **P2.2.2（已完成）**：补 describeResource、可选 diff 结果、Adapter 能力校验和不支持操作的稳定错误。
 3. **P2.3a（已完成）**：Portal 聚合拆为 WorkingCopy/Publication/Release/版本控制语义状态，完成无版本路径、WorkingCopy revision CAS、Publication 冻结摘要和 v3 Shared State；旧 v2 operations 暂作同状态投影。
-4. **P2.3b**：实现中立 `PortalVersionControl` 端口和 Workspace Adapter，接通 detached commit、历史读取、比较与恢复。
+4. **P2.3b（已完成）**：实现中立 `PortalVersionControl` 端口和 Workspace Adapter，接通 detached commit、历史读取、比较与恢复。提交前先在 Portal Shared State 持久化 operation ID；聚合 CAS 只确认 Workspace 返回的精确 VersionRef。普通管理读取只对已绑定 Portal 按请求执行能力发现，不运行后台轮询。
 5. **P2.3c**：升级 BFF、权限操作、Workbench 数据契约与 UI；删除旧 PortalVersion API 和状态。
 6. **P2.3d**：覆盖两种模式、能力差异、软依赖缺失、Leader 重启、响应丢失、聚合 CAS 冲突、历史冷读失败、Release 不依赖 Ledger 等故障矩阵。
 

@@ -11,8 +11,8 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/core/shared/go/kernelspi"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 	"cdsoft.com.cn/VastPlan/core/shared/go/protocolbus"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/nodebootstrap"
 )
 
 func decodeStrict(payload []byte, target any) error {
@@ -97,7 +97,8 @@ func kernelNodeBootstrap(broker nodebootstrap.Broker) protocolbus.HostService {
 }
 
 type configGetRequest struct {
-	Key string `json:"key"`
+	Key      string `json:"key"`
+	Optional bool   `json:"optional,omitempty"`
 }
 
 type managedCredentialRefRequest struct {
@@ -142,6 +143,9 @@ func kernelConfigGet(provider kernelspi.ConfigProvider) protocolbus.HostService 
 			return nil, nil, err
 		}
 		if !ok {
+			if request.Optional {
+				return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, []byte("null"), nil
+			}
 			return nil, nil, kernelspi.ErrNotFound
 		}
 		return &contractv1.CallResult{Status: contractv1.CallResult_STATUS_OK}, value, nil

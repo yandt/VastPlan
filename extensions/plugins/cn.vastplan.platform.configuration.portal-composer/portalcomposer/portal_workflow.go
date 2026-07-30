@@ -90,6 +90,11 @@ func (s *Service) createPortalVersionLocked(ctx context.Context, principal porta
 	s.state.Profiles = append(s.state.Profiles, profile)
 	s.state.Bindings = append(s.state.Bindings, management)
 	s.state.Revisions = append(s.state.Revisions, revision)
+	if number == 1 && s.versionControlDefault != nil {
+		s.state.VersionControls[portalID] = portalVersionControlState{
+			Binding: *s.versionControlDefault, History: []portalVersionHistoryRecord{},
+		}
+	}
 	s.auditLocked(revision, "portal.version.created", principal, "", "normal")
 	if err := s.save(); err != nil {
 		return portalapi.PortalVersion{}, err
@@ -127,6 +132,9 @@ func (s *Service) DeletePortalVersion(_ context.Context, principal portalapi.Pri
 	if revision.Status != portalapi.StatusDraft {
 		return portalapi.PortalVersion{}, ErrInvalidState
 	}
+	if control, enabled := s.state.VersionControls[portalID]; enabled && control.Pending != nil {
+		return portalapi.PortalVersion{}, fmt.Errorf("%w: Portal 版本提交正在恢复，WorkingCopy 暂不可删除", ErrInvalidState)
+	}
 	value, err := s.portalVersionLocked(principal.TenantID, revision)
 	if err != nil {
 		return portalapi.PortalVersion{}, err
@@ -138,6 +146,9 @@ func (s *Service) DeletePortalVersion(_ context.Context, principal portalapi.Pri
 	s.state.Revisions = append(s.state.Revisions[:index], s.state.Revisions[index+1:]...)
 	s.state.Profiles = append(s.state.Profiles[:profileIndex], s.state.Profiles[profileIndex+1:]...)
 	s.state.Bindings = append(s.state.Bindings[:bindingIndex], s.state.Bindings[bindingIndex+1:]...)
+	if !s.portalExistsLocked(principal.TenantID, portalID) {
+		delete(s.state.VersionControls, portalID)
+	}
 	s.auditLocked(revision, "portal.version.deleted", principal, "", "normal")
 	return value, s.save()
 }
@@ -147,6 +158,26 @@ func (s *Service) TransitionPortalVersion(ctx context.Context, principal portala
 }
 
 func (s *Service) transitionPortalVersion(ctx context.Context, principal portalapi.Principal, portalID string, id uint64, action string, allowTest bool) (portalapi.PortalVersion, error) {
+	if action == "submit" && !allowTest {
+		s.mu.Lock()
+		index, err := s.revisionIndex(principal.TenantID, id)
+		if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(id) {
+			s.mu.Unlock()
+			return portalapi.PortalVersion{}, ErrNotFound
+		}
+		expected := s.state.Revisions[index].WorkingRevision
+		s.mu.Unlock()
+		if _, err := s.SubmitPortalPublication(ctx, principal, portalID, portalapi.SubmitPortalPublicationRequest{ExpectedWorkingRevision: expected}); err != nil {
+			return portalapi.PortalVersion{}, err
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		index, err = s.revisionIndex(principal.TenantID, id)
+		if err != nil {
+			return portalapi.PortalVersion{}, err
+		}
+		return s.portalVersionLocked(principal.TenantID, s.state.Revisions[index])
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	index, err := s.revisionIndex(principal.TenantID, id)
@@ -205,6 +236,9 @@ func (s *Service) breakGlassPublishPortalVersion(ctx context.Context, principal 
 	index, err := s.revisionIndex(principal.TenantID, id)
 	if err != nil || s.state.Revisions[index].PortalID != portalID || s.isTestVersionLocked(id) {
 		return portalapi.PortalVersion{}, ErrNotFound
+	}
+	if _, versioned := s.state.VersionControls[portalID]; versioned {
+		return portalapi.PortalVersion{}, errors.New("启用版本控制的 Portal 不允许绕过 Workspace 直接发布")
 	}
 	revision := &s.state.Revisions[index]
 	profileIndex, bindingIndex, err := s.versionPartsLocked(principal.TenantID, *revision)
@@ -289,7 +323,6 @@ func (s *Service) PortalGovernance(ctx context.Context, principal portalapi.Prin
 	}
 	_ = s.reconcilePortalReferences(ctx, principal)
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	ids := map[string]struct{}{}
 	for _, revision := range s.state.Revisions {
 		if revision.TenantID == principal.TenantID && !s.isTestVersionLocked(revision.ID) {
@@ -300,13 +333,46 @@ func (s *Service) PortalGovernance(ctx context.Context, principal portalapi.Prin
 	for id := range ids {
 		portal, err := s.portalLocked(principal.TenantID, id)
 		if err != nil {
+			s.mu.Unlock()
 			return portalapi.PortalGovernanceSnapshot{}, err
 		}
 		portals = append(portals, portal)
 	}
 	sort.Slice(portals, func(i, j int) bool { return portals[i].ID < portals[j].ID })
 	template := s.portalCreationTemplateLocked(principal.TenantID)
+	bindings := make(map[string]PortalVersionControlBinding, len(s.state.VersionControls))
+	for portalID, control := range s.state.VersionControls {
+		bindings[portalID] = control.Binding
+	}
+	s.mu.Unlock()
+	if len(bindings) != 0 {
+		control, controlErr := versionControlFromContext(ctx)
+		for index := range portals {
+			binding, enabled := bindings[portals[index].ID]
+			if !enabled {
+				continue
+			}
+			if controlErr != nil {
+				portals[index].VersionControl.Availability = portalapi.PortalVersionControlUnavailable
+				continue
+			}
+			capabilities, err := control.Describe(ctx, binding, portals[index].ID)
+			if err != nil {
+				portals[index].VersionControl.Availability = portalapi.PortalVersionControlUnavailable
+				continue
+			}
+			portals[index].VersionControl = portalVersionControlStatus(capabilities)
+		}
+	}
 	return portalapi.PortalGovernanceSnapshot{Portals: portals, CreationTemplate: template}, nil
+}
+
+func portalVersionControlStatus(capabilities PortalVersionControlCapabilities) portalapi.PortalVersionControlStatus {
+	values := []string{"history", "read", "restore"}
+	if capabilities.Diff {
+		values = append(values, "diff")
+	}
+	return portalapi.PortalVersionControlStatus{Enabled: true, Availability: portalapi.PortalVersionControlAvailable, Capabilities: values}
 }
 
 func (s *Service) ListPortalReleases(ctx context.Context, principal portalapi.Principal) ([]portalapi.PortalRelease, error) {
@@ -328,6 +394,17 @@ func (s *Service) portalLocked(tenantID, portalID string) (portalapi.Portal, err
 	portal := portalapi.Portal{
 		ID: portalID, TenantID: tenantID, Versions: []portalapi.PortalVersion{}, Releases: []portalapi.PortalRelease{},
 		VersionControl: portalapi.PortalVersionControlStatus{Enabled: false, Availability: portalapi.PortalVersionControlDisabled, Capabilities: []string{}},
+	}
+	if control, enabled := s.state.VersionControls[portalID]; enabled {
+		capabilities := []string{"history", "read", "restore"}
+		if control.Capabilities.Diff {
+			capabilities = append(capabilities, "diff")
+		}
+		availability := portalapi.PortalVersionControlUnavailable
+		if control.Capabilities.Read && control.Capabilities.Restore {
+			availability = portalapi.PortalVersionControlAvailable
+		}
+		portal.VersionControl = portalapi.PortalVersionControlStatus{Enabled: true, Availability: availability, Capabilities: capabilities}
 	}
 	var publishedNumber uint64
 	for _, revision := range s.state.Revisions {

@@ -53,15 +53,33 @@ func (s *Service) SubmitPortalPublication(ctx context.Context, principal portala
 		return portalapi.PortalPublication{}, ErrInvalidState
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	index, err := s.workingCopyIndexLocked(principal.TenantID, portalID)
 	if err != nil {
+		// A successful response may be lost after the aggregate CAS. Returning
+		// the already frozen candidate makes an identical submit retry safe.
+		for _, revision := range s.state.Revisions {
+			if revision.TenantID == principal.TenantID && revision.PortalID == portalID && revision.WorkingRevision == request.ExpectedWorkingRevision && revision.Status != portalapi.StatusDraft {
+				publication, projectionErr := s.portalPublicationLocked(principal.TenantID, revision)
+				s.mu.Unlock()
+				return publication, projectionErr
+			}
+		}
+		s.mu.Unlock()
 		return portalapi.PortalPublication{}, err
 	}
 	if s.state.Revisions[index].WorkingRevision != request.ExpectedWorkingRevision {
+		s.mu.Unlock()
 		return portalapi.PortalPublication{}, fmt.Errorf("%w: WorkingCopy revision 已从 %d 变为 %d", ErrInvalidState, request.ExpectedWorkingRevision, s.state.Revisions[index].WorkingRevision)
 	}
-	return s.transitionPublicationLocked(ctx, principal, index, "submit", "portal.publication.")
+	control, versioned := s.state.VersionControls[portalID]
+	if !versioned {
+		publication, transitionErr := s.transitionPublicationLocked(ctx, principal, index, "submit", "portal.publication.")
+		s.mu.Unlock()
+		return publication, transitionErr
+	}
+	publication, err := s.submitVersionedPortalPublicationLocked(ctx, principal, index, control)
+	s.mu.Unlock()
+	return publication, err
 }
 
 func (s *Service) ApprovePortalPublication(ctx context.Context, principal portalapi.Principal, portalID string, publicationID uint64) (portalapi.PortalPublication, error) {
@@ -95,6 +113,9 @@ func (s *Service) updateWorkingCopyLocked(ctx context.Context, principal portala
 	revision := &s.state.Revisions[index]
 	if revision.Status != portalapi.StatusDraft || s.isTestVersionLocked(revision.ID) {
 		return ErrInvalidState
+	}
+	if control, enabled := s.state.VersionControls[revision.PortalID]; enabled && control.Pending != nil {
+		return fmt.Errorf("%w: Portal 版本提交正在恢复，WorkingCopy 暂不可修改", ErrInvalidState)
 	}
 	configuration, spec, binding, err := s.normalizePortalConfiguration(revision.PortalID, principal.TenantID, revision.Number, revision.ID, configuration)
 	if err != nil {

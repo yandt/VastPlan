@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	composerStateNamespace  = "portal.composition.v3"
+	composerStateNamespace  = "portal.composition.v4"
 	composerStateKey        = "tenant"
 	composerBlobPrefix      = "blob/"
-	composerRootFormat      = "portal-composer-root.v2"
+	composerRootFormat      = "portal-composer-root.v3"
 	composerChunkBytes      = 512 << 10
 	maximumComposerSnapshot = 64 << 20
 )
@@ -203,11 +203,15 @@ func decodeComposerJSON(raw []byte, target any) error {
 func composerDigest(raw []byte) string { return fmt.Sprintf("%x", sha256.Sum256(raw)) }
 
 func emptyState() state {
-	return state{TestBindings: map[string]portalapi.TestTargetBinding{}, TestVersionOwners: map[uint64]uint64{}}
+	return state{
+		TestBindings:      map[string]portalapi.TestTargetBinding{},
+		TestVersionOwners: map[uint64]uint64{},
+		VersionControls:   map[string]portalVersionControlState{},
+	}
 }
 
 func validateComposerTenantState(value state, tenant string) error {
-	if tenant == "" || value.TestBindings == nil || value.TestVersionOwners == nil {
+	if tenant == "" || value.TestBindings == nil || value.TestVersionOwners == nil || value.VersionControls == nil {
 		return errors.New("Portal Composer tenant 状态无效")
 	}
 	openPublications := map[string]int{}
@@ -288,5 +292,30 @@ func validateComposerTenantState(value state, tenant string) error {
 			return errors.New("Portal Composer Audit 跨 tenant")
 		}
 	}
+	for portalID, control := range value.VersionControls {
+		if portalID == "" || !portalExistsInState(value, tenant, portalID) || control.Binding.validate() != nil {
+			return errors.New("Portal VersionControl 绑定无效")
+		}
+		for _, record := range control.History {
+			entry := record.Entry
+			if entry.EnvironmentID != control.Binding.EnvironmentID || entry.PublicationID == 0 || entry.VersionRef.VersionID == "" || len(entry.ConfigurationDigest) != 64 || record.OperationID == "" {
+				return errors.New("Portal VersionControl 历史无效")
+			}
+		}
+		if control.Pending != nil && (control.Pending.OperationID == "" || control.Pending.PublicationID == 0 || control.Pending.WorkingRevision == 0 || len(control.Pending.Digest) != 64) {
+			return errors.New("Portal VersionControl 待提交操作无效")
+		}
+	}
 	return nil
+}
+
+func portalExistsInState(value state, tenant, portalID string) bool {
+	for _, revision := range value.Revisions {
+		if revision.TenantID == tenant && revision.PortalID == portalID {
+			if _, test := value.TestVersionOwners[revision.ID]; !test {
+				return true
+			}
+		}
+	}
+	return false
 }

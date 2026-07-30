@@ -7,6 +7,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
@@ -80,11 +81,17 @@ func TestOnlyComposerCanUseRestrictedKernelServices(t *testing.T) {
 			t.Fatalf("Composer Shared State 回调 %s 应放行: %+v", capability, got)
 		}
 	}
+	if got := decisionFor(t, composer, workspacev1.Capability, workspacev1.OperationCommit); got.Decision != extpoint.DecisionAllow {
+		t.Fatalf("Composer VersionControl 端口调用应放行: %+v", got)
+	}
 	other := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "evil"}}
 	if got := decisionFor(t, other, portalapi.KernelCatalogValidationCapability, "validate"); got.Decision != extpoint.DecisionAbstain {
 		t.Fatalf("非 Composer 必须不获授权: %+v", got)
 	}
 	if got := decisionFor(t, other, "kernel.state.shared.get", ""); got.Decision != extpoint.DecisionAbstain {
 		t.Fatalf("非 Composer 不得继承 Shared State 授权: %+v", got)
+	}
+	if got := decisionFor(t, other, workspacev1.Capability, workspacev1.OperationCommit); got.Decision != extpoint.DecisionAbstain {
+		t.Fatalf("非 Composer 不得继承 VersionControl 端口授权: %+v", got)
 	}
 }

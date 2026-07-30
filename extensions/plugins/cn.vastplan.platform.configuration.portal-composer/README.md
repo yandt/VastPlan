@@ -6,7 +6,18 @@
 
 WorkingCopy 保存使用独立 revision CAS，不产生业务版本；提交时冻结规范配置和 SHA-256 digest，形成 `PendingApproval → Approved → Published` Publication。审批期间没有可编辑 WorkingCopy。`PortalRelease` 引用精确 Published Publication，重新执行可信 Catalog 校验、制品物化、引用保护、路由冲突检查和 CAS 后才改变线上 Portal。
 
-当前 P2.3a 未配置 Version Workspace，`versionControl` 明确返回 `enabled=false / disabled`，不创建 VersionRef、Head 或通用历史。旧 PortalVersion operations 仅作为 P2.3c 前的同状态兼容投影，不保存第二份数据。
+版本控制是可选能力。未配置 `platform.portal-composer.versionControl` 时，`versionControl` 明确返回 `enabled=false / disabled`，不发出 Workspace 调用，也不创建 VersionRef、Head 或通用历史。配置可信 `environmentId + resourceType` 后，Portal 创建时固定绑定；提交 Publication 使用持久 operation ID 创建 detached VersionRef，Portal 聚合只公开自身 CAS 已确认的轻量历史。旧 PortalVersion operations 仅作为 P2.3c 前的同状态兼容投影，不保存第二份数据。
+
+```json
+{
+  "platform.portal-composer.versionControl": {
+    "environmentId": "platform-production",
+    "resourceType": "portal.configuration"
+  }
+}
+```
+
+历史读取和比较通过中立 `PortalVersionControl` 端口完成。恢复历史只覆盖现有 WorkingCopy，并继续执行当前配置规范化、Catalog 校验与 working revision CAS；它不会修改旧版本。Workspace 不可用时，当前配置、Publication 热投影、Release 和运行交付仍可读，但提交与冷历史操作失败关闭。
 
 静态 Platform Catalog 仅为创建首个 PortalVersion 提供种子模板。它不会被灌入在线 Profile/Binding 治理状态。内核 Recovery Baseline 独立于 Portal 配置，错误 PortalVersion 不能覆盖最小安全启动和恢复入口。
 

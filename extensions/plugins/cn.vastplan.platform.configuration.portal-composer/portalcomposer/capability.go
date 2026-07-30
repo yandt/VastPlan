@@ -205,24 +205,44 @@ func (c hostCatalog) call(ctx context.Context, tenantID string, spec portalapi.P
 
 func (s *Service) ensureConfigured(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext) error {
 	s.mu.Lock()
-	configured := s.catalogConfigured
+	catalogConfigured := s.catalogConfigured
+	versionControlConfigured := s.versionControlConfigLoaded
 	s.mu.Unlock()
-	if configured {
+	if catalogConfigured && versionControlConfigured {
 		return nil
 	}
-	catalogRaw, err := readConfig(ctx, host, callCtx, PlatformCatalogConfigKey)
+	if !catalogConfigured {
+		catalogRaw, err := readConfig(ctx, host, callCtx, PlatformCatalogConfigKey)
+		if err != nil {
+			return err
+		}
+		var encodedCatalog string
+		if err := json.Unmarshal(catalogRaw, &encodedCatalog); err != nil || strings.TrimSpace(encodedCatalog) == "" {
+			return fmt.Errorf("%s 必须是非空 JSON 字符串", PlatformCatalogConfigKey)
+		}
+		catalog, err := frontendcompositionv1.ParsePortalPlatformCatalog([]byte(encodedCatalog))
+		if err != nil {
+			return err
+		}
+		if err := s.BindPlatformCatalog(catalog); err != nil {
+			return err
+		}
+	}
+	if versionControlConfigured {
+		return nil
+	}
+	versionRaw, found, err := readOptionalConfig(ctx, host, callCtx, VersionControlConfigKey)
 	if err != nil {
 		return err
 	}
-	var encodedCatalog string
-	if err := json.Unmarshal(catalogRaw, &encodedCatalog); err != nil || strings.TrimSpace(encodedCatalog) == "" {
-		return fmt.Errorf("%s 必须是非空 JSON 字符串", PlatformCatalogConfigKey)
+	if !found {
+		return s.BindVersionControl(nil)
 	}
-	catalog, err := frontendcompositionv1.ParsePortalPlatformCatalog([]byte(encodedCatalog))
+	binding, err := parseVersionControlBinding(versionRaw)
 	if err != nil {
 		return err
 	}
-	return s.BindPlatformCatalog(catalog)
+	return s.BindVersionControl(&binding)
 }
 
 func readConfig(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, key string) ([]byte, error) {
@@ -236,6 +256,42 @@ func readConfig(ctx context.Context, host sdk.Host, callCtx *contractv1.CallCont
 		return nil, fmt.Errorf("未提供 Portal Composer 部署配置 %s", key)
 	}
 	return raw, nil
+}
+
+func readOptionalConfig(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, key string) ([]byte, bool, error) {
+	op := "get"
+	payload, _ := json.Marshal(struct {
+		Key      string `json:"key"`
+		Optional bool   `json:"optional"`
+	}{Key: key, Optional: true})
+	result, raw, err := host.Call(ctx, &contractv1.CallTarget{ExtensionPoint: extpoint.KernelService, Capability: "kernel.config.get", Operation: &op}, callCtx, payload)
+	if err != nil {
+		return nil, false, fmt.Errorf("读取 Portal Composer 可选部署配置 %s: %w", key, err)
+	}
+	if result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		return nil, false, fmt.Errorf("读取 Portal Composer 可选部署配置 %s 失败", key)
+	}
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, false, nil
+	}
+	return raw, true, nil
+}
+
+func parseVersionControlBinding(raw []byte) (PortalVersionControlBinding, error) {
+	var encoded string
+	if json.Unmarshal(raw, &encoded) == nil {
+		raw = []byte(encoded)
+	}
+	var binding PortalVersionControlBinding
+	if err := decodeComposerJSON(raw, &binding); err != nil {
+		return PortalVersionControlBinding{}, fmt.Errorf("解析 %s: %w", VersionControlConfigKey, err)
+	}
+	binding.EnvironmentID = strings.TrimSpace(binding.EnvironmentID)
+	binding.ResourceType = strings.TrimSpace(binding.ResourceType)
+	if err := binding.validate(); err != nil {
+		return PortalVersionControlBinding{}, err
+	}
+	return binding, nil
 }
 
 // Handle is the wire boundary used by the plugin capability adapter. Principal
@@ -273,9 +329,15 @@ func Contribution(service *Service) sdk.Contribution {
 				return nil, nil, err
 			}
 			var raw []byte
+			versionControl, err := newWorkspacePortalVersionControl(host, callCtx)
+			if err != nil {
+				return nil, nil, err
+			}
 			err = service.withTenantState(ctx, host, callCtx, principal.TenantID, func() error {
 				var handleErr error
-				raw, handleErr = service.Handle(withCatalog(ctx, hostCatalog{host: host, callCtx: callCtx}), principal, op, payload)
+				requestContext := withCatalog(ctx, hostCatalog{host: host, callCtx: callCtx})
+				requestContext = withVersionControl(requestContext, versionControl)
+				raw, handleErr = service.Handle(requestContext, principal, op, payload)
 				return handleErr
 			})
 			if err != nil {
@@ -284,6 +346,9 @@ func Contribution(service *Service) sdk.Contribution {
 				}
 				if errors.Is(err, ErrStateConflict) {
 					return composerStateError("portal.composer.conflict", err, true), nil, nil
+				}
+				if errors.Is(err, ErrVersionControlUnavailable) {
+					return composerStateError("portal.version_control_unavailable", err, true), nil, nil
 				}
 				var stateError *sharedstatesdk.ServiceError
 				if errors.As(err, &stateError) {

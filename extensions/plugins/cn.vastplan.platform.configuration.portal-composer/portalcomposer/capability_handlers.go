@@ -10,7 +10,7 @@ import (
 
 func (s *Service) handlePortalOperation(ctx context.Context, principal portalapi.Principal, operation string, payload []byte) (any, error) {
 	switch operation {
-	case "createPortal", "createPortalWorkingCopy", "savePortalWorkingCopy", "submitPortalPublication", "approvePortalPublication", "publishPortalPublication", "releasePortalPublication", "createPortalVersion", "updatePortalVersion", "deletePortalVersion", "submitPortalVersion", "approvePortalVersion", "publishPortalVersion", "releasePortalVersion", "rollbackPortalRelease", "portalGovernance", "listPortalReleases", "audit":
+	case "createPortal", "createPortalWorkingCopy", "savePortalWorkingCopy", "submitPortalPublication", "approvePortalPublication", "publishPortalPublication", "releasePortalPublication", "portalVersionHistory", "readPortalVersion", "comparePortalVersions", "restorePortalVersion", "createPortalVersion", "updatePortalVersion", "deletePortalVersion", "submitPortalVersion", "approvePortalVersion", "publishPortalVersion", "releasePortalVersion", "rollbackPortalRelease", "portalGovernance", "listPortalReleases", "audit":
 		return s.handlePortalAggregateOperation(ctx, principal, operation, payload)
 	case "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease":
 		return s.handleTestReleaseOperation(ctx, principal, operation, payload)
@@ -20,6 +20,10 @@ func (s *Service) handlePortalOperation(ctx context.Context, principal portalapi
 }
 
 func (s *Service) handlePortalAggregateOperation(ctx context.Context, principal portalapi.Principal, operation string, payload []byte) (any, error) {
+	switch operation {
+	case "portalVersionHistory", "readPortalVersion", "comparePortalVersions", "restorePortalVersion":
+		return s.handlePortalVersionControlOperation(ctx, principal, operation, payload)
+	}
 	switch operation {
 	case "portalGovernance":
 		return s.PortalGovernance(ctx, principal)
@@ -145,6 +149,49 @@ func (s *Service) handlePortalAggregateOperation(ctx context.Context, principal 
 		return s.Audit(ctx, principal, request.PortalID, request.RevisionID)
 	default:
 		return nil, fmt.Errorf("不支持 Portal 聚合操作 %q", operation)
+	}
+}
+
+func (s *Service) handlePortalVersionControlOperation(ctx context.Context, principal portalapi.Principal, operation string, payload []byte) (any, error) {
+	switch operation {
+	case "portalVersionHistory":
+		var request struct {
+			PortalID string `json:"portalId"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.PortalVersionHistory(ctx, principal, request.PortalID)
+	case "readPortalVersion":
+		var request struct {
+			PortalID  string `json:"portalId"`
+			VersionID string `json:"versionId"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.ReadPortalVersion(ctx, principal, request.PortalID, request.VersionID)
+	case "comparePortalVersions":
+		var request struct {
+			PortalID       string `json:"portalId"`
+			LeftVersionID  string `json:"leftVersionId"`
+			RightVersionID string `json:"rightVersionId"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.ComparePortalVersions(ctx, principal, request.PortalID, request.LeftVersionID, request.RightVersionID)
+	case "restorePortalVersion":
+		var request struct {
+			PortalID string                                `json:"portalId"`
+			Restore  portalapi.RestorePortalVersionRequest `json:"restore"`
+		}
+		if err := decode(payload, &request); err != nil {
+			return nil, err
+		}
+		return s.RestorePortalVersion(ctx, principal, request.PortalID, request.Restore)
+	default:
+		return nil, fmt.Errorf("不支持 Portal 版本控制操作 %q", operation)
 	}
 }
 

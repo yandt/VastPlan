@@ -25,6 +25,9 @@ func openTestService(path string, catalog Catalog) (*Service, error) {
 		if service.state.TestVersionOwners == nil {
 			service.state.TestVersionOwners = map[uint64]uint64{}
 		}
+		if service.state.VersionControls == nil {
+			service.state.VersionControls = map[string]portalVersionControlState{}
+		}
 		changed := service.recoverInterruptedTestReleases()
 		if service.markCurrentReferencesPendingLocked() {
 			changed = true

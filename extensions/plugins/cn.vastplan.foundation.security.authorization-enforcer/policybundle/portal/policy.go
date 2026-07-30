@@ -8,6 +8,7 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
@@ -32,6 +33,9 @@ func decide(c *contractv1.CallContext, request extpoint.PermissionRequest) (extp
 	}
 	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && (request.Capability == "kernel.config.get" || request.Capability == portalapi.KernelCatalogValidationCapability || request.Capability == portalapi.KernelCatalogMaterializationCapability || request.Capability == portalapi.KernelArtifactReferencePublicationCapability || request.Capability == portalapi.KernelTestArtifactValidationCapability || composerSharedStateCapability(request.Capability)) {
 		return extpoint.DecisionAllow, "Composer 受限宿主回调"
+	}
+	if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_PLUGIN && c.Caller.Id == PluginIDForComposer() && request.Capability == workspacev1.Capability {
+		return extpoint.DecisionAllow, "Composer 可选版本控制端口"
 	}
 	if request.Capability == portalapi.PreferenceCapability {
 		if c.Caller.Kind == contractv1.CallerKind_CALLER_KIND_USER && c.GetScene() == "portal.bff" && c.GetPrincipal().GetUserId() != "" {

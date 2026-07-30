@@ -57,9 +57,24 @@ func (s *Service) portalPublicationLocked(tenantID string, revision portalapi.Re
 	if err != nil || digest != revision.ConfigurationDigest {
 		return portalapi.PortalPublication{}, errors.New("Portal Publication 冻结内容摘要无效")
 	}
+	source := portalapi.PortalPublicationSource{Kind: portalapi.PortalPublicationSourceInline, Configuration: &configuration}
+	if control, enabled := s.state.VersionControls[revision.PortalID]; enabled {
+		for _, record := range control.History {
+			entry := record.Entry
+			if entry.PublicationID != revision.ID {
+				continue
+			}
+			ref := entry.VersionRef
+			source = portalapi.PortalPublicationSource{
+				Kind: portalapi.PortalPublicationSourceWorkspace, Configuration: &configuration,
+				EnvironmentID: entry.EnvironmentID, EnvironmentDigest: entry.EnvironmentDigest, VersionRef: &ref,
+			}
+			break
+		}
+	}
 	return portalapi.PortalPublication{
 		ID: revision.ID, TenantID: revision.TenantID, PortalID: revision.PortalID, WorkingRevision: revision.WorkingRevision,
-		Status: revision.Status, Digest: digest, Source: portalapi.PortalPublicationSource{Kind: portalapi.PortalPublicationSourceInline, Configuration: &configuration},
+		Status: revision.Status, Digest: digest, Source: source,
 		Resolved: cloneSpec(revision.Spec), SubmittedBy: revision.SubmittedBy, ApprovedBy: revision.ApprovedBy, PublishedBy: revision.PublishedBy,
 		CreatedAt: revision.SubmittedAt, UpdatedAt: revision.UpdatedAt,
 	}, nil
