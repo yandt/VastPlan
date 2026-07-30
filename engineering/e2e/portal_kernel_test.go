@@ -56,13 +56,13 @@ func TestNodePortalKernelMTLSPrincipalProjection(t *testing.T) {
 	if sessionResponse.StatusCode != http.StatusOK || session["subject"] != "alice" || session["tenantId"] != "acme" {
 		t.Fatalf("BFF Session 无效: status=%d body=%v", sessionResponse.StatusCode, session)
 	}
-	drafts, err := browser.Get(process.baseURL() + "/v1/portal-drafts")
+	portals, err := browser.Get(process.baseURL() + "/v1/portals")
 	if err != nil {
 		t.Fatal(err)
 	}
-	draftsBody := readPortalResponse(t, drafts)
-	if drafts.StatusCode != http.StatusOK || !bytes.Equal(bytes.TrimSpace(draftsBody), []byte("[]")) {
-		t.Fatalf("Node Portal Kernel BFF 调用失败: status=%d body=%s", drafts.StatusCode, draftsBody)
+	portalsBody := readPortalResponse(t, portals)
+	if portals.StatusCode != http.StatusOK || !bytes.Equal(bytes.TrimSpace(portalsBody), []byte(`{"portals":[]}`)) {
+		t.Fatalf("Node Portal Kernel BFF 调用失败: status=%d body=%s", portals.StatusCode, portalsBody)
 	}
 	requirePortalPrincipal(t, observed)
 	for _, cookie := range browser.Jar.Cookies(page.Request.URL) {

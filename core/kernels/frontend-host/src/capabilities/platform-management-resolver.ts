@@ -14,7 +14,7 @@ export class PlatformManagementResolver {
   public constructor(private readonly composer: PortalComposerPort) {}
 
   public async resolve(principal: Principal, portalId: string, serviceId: string, requestHost: string, signal?: AbortSignal): Promise<PlatformManagementTarget> {
-    const raw = await this.composer.call(principal, "listActivations", this.emptyPayload, signal);
+    const raw = await this.composer.call(principal, "listPortalReleases", this.emptyPayload, signal);
     let value: unknown;
     try { value = JSON.parse(new TextDecoder().decode(raw)) as unknown; }
     catch { throw new ManagementResolutionError("portal_activation_invalid"); }

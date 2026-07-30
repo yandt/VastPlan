@@ -73,19 +73,16 @@ describe("createPortalHandler", () => {
     const calls: string[] = [];
     const composer: PortalComposerPort = { async call(principal, operation) {
       calls.push(`${principal.tenantId}/${operation}`);
-      return new TextEncoder().encode(operation === "list" ? "[]" : '{"profiles":[]}');
+      return new TextEncoder().encode(operation === "portalGovernance" ? '{"portals":[]}' : "[]");
     } };
     const origin = await startFixtureServer(identity, composer);
     const headers = { Cookie: "vastplan_session=browser-token" };
-    const drafts = await fetch(`${origin}/v1/portal-drafts`, { headers });
-    expect(drafts.status).toBe(200);
-    expect(await drafts.json()).toEqual([]);
-    const governance = await fetch(`${origin}/v1/portal-governance`, { headers });
+    const governance = await fetch(`${origin}/v1/portals`, { headers });
     expect(governance.status).toBe(200);
-    expect(await governance.json()).toEqual({ profiles: [] });
+    expect(await governance.json()).toEqual({ portals: [] });
     const unknown = await fetch(`${origin}/v1/arbitrary`, { headers });
     expect(unknown.status).toBe(404);
-    expect(calls).toEqual(["tenant-a/list", "tenant-a/governance"]);
+    expect(calls).toEqual(["tenant-a/portalGovernance"]);
   });
 
 	it("embeds authenticated SSR output in a declarative shadow root", async () => {

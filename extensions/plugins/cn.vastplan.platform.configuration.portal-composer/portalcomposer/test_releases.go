@@ -183,52 +183,46 @@ func (s *Service) executePortalTestRelease(ctx context.Context, principal portal
 	}
 	composition := cloneJSON(application.Composition)
 	profileValue := cloneJSON(profile.Profile)
+	configuration := portalapi.PortalConfiguration{Platform: profileValue, Application: composition, Services: cloneJSON(portalBinding.Binding.Services)}
 	s.mu.Unlock()
-	if binding.Scope == portalapi.TestTargetApplicationPlugin && !replaceApplicationPlugin(&composition, binding.PluginID, request.Receipt.Ref) {
+	if binding.Scope == portalapi.TestTargetApplicationPlugin {
+		if !replaceApplicationPlugin(&configuration.Application, binding.PluginID, request.Receipt.Ref) {
+			s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.target_changed", errTestArtifact, false)
+			return
+		}
+	} else if !replaceProfilePlugin(&configuration.Platform, binding.PluginID, request.Receipt.Ref) {
 		s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.target_changed", errTestArtifact, false)
 		return
 	}
 	if err := s.transitionPortalTestRelease(principal.TenantID, releaseID, portalapi.TestReleaseValidating, func(item *portalapi.TestRelease) {
-		item.PreviousActivationID = activation.ID
+		item.PreviousReleaseID = activation.ID
 	}); err != nil {
 		return
 	}
-	candidateApplicationID, candidateProfileID, candidateBindingID := application.ID, profile.ID, portalBinding.ID
-	if binding.Scope == portalapi.TestTargetApplicationPlugin {
-		draft, err := s.createAuthorizedTestDraft(ctx, principal, composition, releaseID, binding.ID)
-		if err != nil {
-			s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.preview_failed", err, false)
-			return
-		}
-		published, err := s.Publish(ctx, principal, draft.ID, portalapi.PublishRequest{})
-		if err != nil {
-			s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.publish_failed", err, false)
-			return
-		}
-		candidateApplicationID = published.ID
-	} else {
-		if !replaceProfilePlugin(&profileValue, binding.PluginID, request.Receipt.Ref) {
-			s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.target_changed", errTestArtifact, false)
-			return
-		}
-		var profileErr error
-		candidateProfileID, candidateBindingID, profileErr = s.createAuthorizedTestProfileAndBinding(principal, profileValue, portalBinding, releaseID, binding.ID)
-		if profileErr != nil {
-			s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.profile_failed", profileErr, false)
-			return
-		}
+	candidateVersion, err := s.createAuthorizedTestVersion(ctx, principal, binding.PortalID, configuration, releaseID, binding.ID)
+	if err != nil {
+		s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.preview_failed", err, false)
+		return
+	}
+	published, err := s.TransitionPortalVersion(ctx, principal, binding.PortalID, candidateVersion.ID, "publish")
+	if err != nil {
+		s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.publish_failed", err, false)
+		return
 	}
 	if err := s.transitionPortalTestRelease(principal.TenantID, releaseID, portalapi.TestReleaseActivating, func(item *portalapi.TestRelease) {
-		item.CandidateApplicationRevisionID = candidateApplicationID
-		item.CandidateProfileRevisionID = candidateProfileID
-		item.CandidateBindingRevisionID = candidateBindingID
+		item.CandidatePortalVersionID = published.ID
 	}); err != nil {
+		return
+	}
+	candidateRevision, err := s.legacyRevision(principal.TenantID, published.ID)
+	if err != nil {
+		s.failPortalTestRelease(principal.TenantID, releaseID, "platform.portal_test_release.publish_failed", err, false)
 		return
 	}
 	candidate, err := s.Activate(ctx, principal, portalapi.ActivationRequest{
-		PortalID: binding.PortalID, ApplicationRevisionID: candidateApplicationID, ProfileRevisionID: candidateProfileID,
-		BindingRevisionID: candidateBindingID, ExpectedCurrentID: activation.ID,
-		Reason: fmt.Sprintf("test-release:%d binding:%s", releaseID, binding.ID),
+		PortalID: binding.PortalID, ApplicationRevisionID: published.ID, ProfileRevisionID: candidateRevision.ProfileRevisionID, BindingRevisionID: candidateRevision.BindingRevisionID,
+		ExpectedCurrentID: activation.ID,
+		Reason:            fmt.Sprintf("test-release:%d binding:%s", releaseID, binding.ID),
 	})
 	if err != nil || candidate.Status != portalapi.ActivationCurrent {
 		cause := err
@@ -236,13 +230,13 @@ func (s *Service) executePortalTestRelease(ctx context.Context, principal portal
 			cause = fmt.Errorf("候选 Activation 状态为 %s", candidate.Status)
 		}
 		_ = s.transitionPortalTestRelease(principal.TenantID, releaseID, portalapi.TestReleaseRolledBack, func(item *portalapi.TestRelease) {
-			item.CandidateActivationID = candidate.ID
+			item.CandidateReleaseID = candidate.ID
 			item.ErrorCode, item.ErrorMessage = "platform.portal_test_release.activation_failed", cause.Error()
 		})
 		return
 	}
 	_ = s.transitionPortalTestRelease(principal.TenantID, releaseID, portalapi.TestReleaseReady, func(item *portalapi.TestRelease) {
-		item.CandidateActivationID = candidate.ID
+		item.CandidateReleaseID = candidate.ID
 	})
 }
 
@@ -251,111 +245,70 @@ func (s *Service) RollbackTestRelease(ctx context.Context, principal portalapi.P
 		return portalapi.TestRelease{}, ErrForbidden
 	}
 	release, err := s.portalTestRelease(principal, id)
-	if err != nil || release.Status != portalapi.TestReleaseFailed || !release.RollbackRequired || release.PreviousActivationID == 0 {
+	if err != nil || release.Status != portalapi.TestReleaseFailed || !release.RollbackRequired || release.PreviousReleaseID == 0 {
 		return portalapi.TestRelease{}, ErrInvalidState
 	}
 	s.mu.Lock()
 	binding := s.state.TestBindings[testBindingKey(principal.TenantID, release.BindingID)]
 	currentID := s.currentActivationIDLocked(principal.TenantID, binding.PortalID)
 	s.mu.Unlock()
-	if currentID == release.PreviousActivationID {
+	if currentID == release.PreviousReleaseID {
 		_ = s.transitionPortalTestRelease(principal.TenantID, id, portalapi.TestReleaseRolledBack, func(item *portalapi.TestRelease) { item.RollbackRequired = false })
 		return s.portalTestRelease(principal, id)
 	}
-	if release.CandidateActivationID != 0 && currentID != release.CandidateActivationID {
+	if release.CandidateReleaseID != 0 && currentID != release.CandidateReleaseID {
 		return portalapi.TestRelease{}, ErrInvalidState
 	}
 	if err := s.transitionPortalTestRelease(principal.TenantID, id, portalapi.TestReleaseRollingBack, nil); err != nil {
 		return portalapi.TestRelease{}, err
 	}
-	rolledBack, rollbackErr := s.RollbackActivation(ctx, principal, release.PreviousActivationID, currentID, fmt.Sprintf("recover test-release:%d", id))
+	rolledBack, rollbackErr := s.RollbackActivation(ctx, principal, release.PreviousReleaseID, currentID, fmt.Sprintf("recover test-release:%d", id))
 	if rollbackErr != nil || rolledBack.Status != portalapi.ActivationCurrent {
 		s.failPortalTestRelease(principal.TenantID, id, "platform.portal_test_release.rollback_failed", coalescePortalError(rollbackErr, ErrInvalidState), true)
 		return s.portalTestRelease(principal, id)
 	}
 	_ = s.transitionPortalTestRelease(principal.TenantID, id, portalapi.TestReleaseRolledBack, func(item *portalapi.TestRelease) {
-		item.RollbackActivationID, item.RollbackRequired = rolledBack.ID, false
+		item.RollbackReleaseID, item.RollbackRequired = rolledBack.ID, false
 	})
 	return s.portalTestRelease(principal, id)
 }
 
-func (s *Service) createAuthorizedTestDraft(ctx context.Context, principal portalapi.Principal, composition frontendcompositionv1.ApplicationComposition, releaseID uint64, bindingID string) (portalapi.Revision, error) {
-	composition, err := frontendcompositionv1.ValidateApplicationComposition(composition)
-	if err != nil {
-		return portalapi.Revision{}, err
-	}
-	preview, err := s.resolveCurrent(composition, principal.TenantID, 1)
-	if err != nil {
-		return portalapi.Revision{}, err
-	}
-	if err := s.validateCatalog(ctx, principal.TenantID, preview); err != nil {
-		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
-	}
+func (s *Service) createAuthorizedTestVersion(ctx context.Context, principal portalapi.Principal, portalID string, configuration portalapi.PortalConfiguration, releaseID uint64, bindingID string) (portalapi.PortalVersion, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	number := uint64(1)
+	for _, revision := range s.state.Revisions {
+		if revision.TenantID == principal.TenantID && revision.PortalID == portalID && revision.Number >= number {
+			number = revision.Number + 1
+		}
+	}
+	configuration, spec, management, err := s.normalizePortalConfiguration(portalID, principal.TenantID, number, s.state.NextRevision+1, configuration)
+	if err != nil {
+		return portalapi.PortalVersion{}, err
+	}
+	if err := s.validateCatalog(ctx, principal.TenantID, spec); err != nil {
+		return portalapi.PortalVersion{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
+	}
+	now := s.now().UTC().Format(time.RFC3339Nano)
 	s.state.NextRevision++
-	resolved, err := s.resolveCurrent(composition, principal.TenantID, s.state.NextRevision)
-	if err != nil {
-		s.state.NextRevision--
-		return portalapi.Revision{}, err
-	}
-	now := s.now().UTC().Format(time.RFC3339Nano)
-	revision := portalapi.Revision{
-		ID: s.state.NextRevision, TenantID: principal.TenantID, PortalID: composition.ID, Status: portalapi.StatusApproved,
-		Composition: cloneJSON(composition), Spec: cloneSpec(resolved), CreatedAt: now, UpdatedAt: now,
-	}
-	revision.SubmittedBy = fmt.Sprintf("test-release:%d", releaseID)
-	revision.ApprovedBy = "test-target-binding:" + bindingID
-	s.state.Revisions = append(s.state.Revisions, revision)
-	auditLength, nextAudit := len(s.state.Audit), s.state.NextAudit
-	s.auditLocked(revision, "application.test_target_authorized", portalapi.Principal{ID: revision.ApprovedBy, TenantID: principal.TenantID}, "", "normal")
-	if err := s.save(); err != nil {
-		s.state.Revisions = s.state.Revisions[:len(s.state.Revisions)-1]
-		s.state.NextRevision--
-		s.state.Audit, s.state.NextAudit = s.state.Audit[:auditLength], nextAudit
-		return portalapi.Revision{}, err
-	}
-	return cloneRevision(revision), nil
-}
-
-func (s *Service) createAuthorizedTestProfileAndBinding(principal portalapi.Principal, profile frontendcompositionv1.PlatformProfile, currentBinding portalapi.BindingRevision, releaseID uint64, testBindingID string) (uint64, uint64, error) {
-	profile, err := validateProfile(profile)
-	if err != nil {
-		return 0, 0, err
-	}
-	portalBinding := cloneJSON(currentBinding.Binding)
-	portalBinding.PlatformProfile = compositioncommonv1.Ref{ID: profile.ID, Revision: profile.Revision, Digest: profile.Digest()}
-	if err := frontendcompositionv1.ValidatePortalBinding(portalBinding); err != nil {
-		return 0, 0, err
-	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	startGovernance, auditLength, nextAudit := s.state.NextGovernance, len(s.state.Audit), s.state.NextAudit
-	now := s.now().UTC().Format(time.RFC3339Nano)
+	versionID := s.state.NextRevision
 	s.state.NextGovernance++
-	profileRevision := portalapi.PlatformProfileRevision{
-		ID: s.state.NextGovernance, TenantID: principal.TenantID, Status: portalapi.StatusPublished, Profile: profile,
-		SubmittedBy: fmt.Sprintf("test-release:%d", releaseID), ApprovedBy: "test-target-binding:" + testBindingID,
-		PublishedBy: principal.ID, CreatedAt: now, UpdatedAt: now,
-	}
+	profileID := s.state.NextGovernance
 	s.state.NextGovernance++
-	bindingRevision := portalapi.BindingRevision{
-		ID: s.state.NextGovernance, TenantID: principal.TenantID, PortalID: currentBinding.PortalID, ProfileRevisionID: profileRevision.ID,
-		Status: portalapi.StatusPublished, Binding: portalBinding, SubmittedBy: profileRevision.SubmittedBy,
-		ApprovedBy: profileRevision.ApprovedBy, PublishedBy: principal.ID, CreatedAt: now, UpdatedAt: now,
-	}
-	s.state.Profiles = append(s.state.Profiles, profileRevision)
+	bindingRevisionID := s.state.NextGovernance
+	submitter, approver := fmt.Sprintf("test-release:%d", releaseID), "test-target-binding:"+bindingID
+	profile := portalapi.PlatformProfileRevision{ID: profileID, TenantID: principal.TenantID, Status: portalapi.StatusApproved, Profile: configuration.Platform, SubmittedBy: submitter, ApprovedBy: approver, CreatedAt: now, UpdatedAt: now}
+	bindingRevision := portalapi.BindingRevision{ID: bindingRevisionID, TenantID: principal.TenantID, PortalID: portalID, ProfileRevisionID: profileID, Status: portalapi.StatusApproved, Binding: management, SubmittedBy: submitter, ApprovedBy: approver, CreatedAt: now, UpdatedAt: now}
+	revision := portalapi.Revision{ID: versionID, Number: number, TenantID: principal.TenantID, PortalID: portalID, ProfileRevisionID: profileID, BindingRevisionID: bindingRevisionID, Status: portalapi.StatusApproved, Composition: configuration.Application, Spec: spec, SubmittedBy: submitter, ApprovedBy: approver, CreatedAt: now, UpdatedAt: now}
+	s.state.Profiles = append(s.state.Profiles, profile)
 	s.state.Bindings = append(s.state.Bindings, bindingRevision)
-	s.auditResourceLocked(principal.TenantID, profile.ID, profileRevision.ID, "profile.test_target_authorized", portalapi.Principal{ID: profileRevision.ApprovedBy, TenantID: principal.TenantID})
-	s.auditResourceLocked(principal.TenantID, portalBinding.PortalID, bindingRevision.ID, "binding.test_target_authorized", portalapi.Principal{ID: bindingRevision.ApprovedBy, TenantID: principal.TenantID})
+	s.state.Revisions = append(s.state.Revisions, revision)
+	s.auditLocked(revision, "portal.version.test_target_authorized", portalapi.Principal{ID: approver, TenantID: principal.TenantID}, "", "normal")
 	if err := s.save(); err != nil {
-		s.state.Profiles = s.state.Profiles[:len(s.state.Profiles)-1]
-		s.state.Bindings = s.state.Bindings[:len(s.state.Bindings)-1]
-		s.state.NextGovernance = startGovernance
-		s.state.Audit, s.state.NextAudit = s.state.Audit[:auditLength], nextAudit
-		return 0, 0, err
+		return portalapi.PortalVersion{}, err
 	}
-	return profileRevision.ID, bindingRevision.ID, nil
+	version, err := s.portalVersionLocked(principal.TenantID, revision)
+	return version, err
 }
 
 func (s *Service) transitionPortalTestRelease(tenant string, id uint64, status portalapi.TestReleaseStatus, change func(*portalapi.TestRelease)) error {
@@ -538,16 +491,14 @@ func (s *Service) recoverInterruptedTestReleases() bool {
 		for _, activation := range s.state.Activations {
 			if activation.TenantID == release.TenantID && activation.PortalID == binding.PortalID && activation.Status == portalapi.ActivationCurrent && activation.ID > currentID {
 				currentID = activation.ID
-				if release.CandidateApplicationRevisionID != 0 && activation.ApplicationRevisionID == release.CandidateApplicationRevisionID &&
-					(release.CandidateProfileRevisionID == 0 || activation.ProfileRevisionID == release.CandidateProfileRevisionID) &&
-					(release.CandidateBindingRevisionID == 0 || activation.BindingRevisionID == release.CandidateBindingRevisionID) {
-					release.CandidateActivationID = activation.ID
+				if release.CandidatePortalVersionID != 0 && activation.ApplicationRevisionID == release.CandidatePortalVersionID {
+					release.CandidateReleaseID = activation.ID
 				}
 			}
 		}
 		release.Status = portalapi.TestReleaseFailed
 		release.ErrorCode, release.ErrorMessage = "platform.portal_test_release.interrupted", "Portal Test Release 在非终态时重启，已 fail-closed"
-		release.RollbackRequired = release.CandidateActivationID != 0 && currentID == release.CandidateActivationID && currentID != release.PreviousActivationID
+		release.RollbackRequired = release.CandidateReleaseID != 0 && currentID == release.CandidateReleaseID && currentID != release.PreviousReleaseID
 		release.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
 	}
 	return changed

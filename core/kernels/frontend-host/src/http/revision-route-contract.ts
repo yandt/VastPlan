@@ -1,19 +1,5 @@
-import type { PortalComposerOperation } from "../capabilities/portal-composer-operations.generated";
-
 const lifecycleActionNames = ["submit", "approve", "publish"] as const;
 export type LifecycleAction = (typeof lifecycleActionNames)[number];
-
-export const profileLifecycleOperations = Object.freeze({
-  submit: "submitProfile",
-  approve: "approveProfile",
-  publish: "publishProfile",
-} satisfies Record<LifecycleAction, PortalComposerOperation>);
-
-export const bindingLifecycleOperations = Object.freeze({
-  submit: "submitBinding",
-  approve: "approveBinding",
-  publish: "publishBinding",
-} satisfies Record<LifecycleAction, PortalComposerOperation>);
 
 export function parseLifecycleAction(value: string | undefined): LifecycleAction | undefined {
   return lifecycleActionNames.includes(value as LifecycleAction) ? value as LifecycleAction : undefined;

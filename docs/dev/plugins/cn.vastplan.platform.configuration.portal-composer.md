@@ -2,26 +2,31 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`1.8.0`
+当前制品版本：`2.0.0`
 
-该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal Application、Platform Profile、PortalBinding 和不可变 Activation。发布输入只代表可选择；只有通过 Backend `portaltrust` 校验/物化并完成 `expectedCurrentId` CAS 的 Activation 才是线上事实。
+该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal。对管理员只暴露一个聚合：每个 `portalId` 一条 Portal 记录，完整平台设置、应用插件、路由、品牌和管理服务绑定均保存在其 `PortalVersion` 内。
 
 主要能力：
 
-- Application/Profile/Binding 分域草稿、异人审批与发布；
-- Profile 草稿可在未提交前删除；已提交、已批准、已发布版本保持不可变，删除同时保留审计事件；
-- Portal Activation、历史精确回滚和 Frontend Test Release；
-- 只通过 `kernel.portal.catalog.*` 窄服务取得可信校验和已验签包的精确引用，不接触仓库令牌、签名密钥或制品字节；
-- 激活前发布“旧活动 + 新候选”引用并集，激活后先保护回滚历史、再收敛活动精确引用；
-- 持久化 `referencePending` outbox 在管理读取及控制器重启后幂等重试；
-- Frontend Test Release 在候选验证和激活前发布独立的精确 `artifact-lock`，仓库不可用时 fail-closed。
-- Test Release 请求保存完整 Repository Receipt；可信 Portal Host 用活动 Adapter 复核 Profile 身份、精确 Catalog 与 workspace lease，Composer 不接触仓库凭证。
-- Platform Profile 以 `updates.mode=refresh|notify|automatic` 决定已打开页面如何消费新 Activation；生产未配置时默认只在用户刷新时更新。
-- Profile 编辑器支持 Ant Design、Arco 与 Material UI，默认首选 Ant Design；选择仍通过不可变 Profile revision 和安全整代刷新生效。
-- `platform.portal-composer` 的全部用户 operation、受众和 `platform.portal.*` 权限守卫来自签名 Manifest；Go descriptor/handler 与 Node Portal Host 白名单由发布编排器生成。Profile/Binding 的提交、审批、发布使用独立 operation，Kernel Enforcer 判定后业务层只保留可信主体、租户、状态机、CAS 与异人审批校验。
+- Portal 创建及完整配置版本管理；同一 Portal 最多一个未发布候选；
+- `Draft → PendingApproval → Approved → Published` 异人审批，Published 只冻结版本，不直接上线；
+- `PortalRelease` 上线、历史回滚、制品物化、引用保护和 CAS；
+- Frontend Test Release 在完整 PortalVersion 上替换一个获授权插件，并形成隔离候选；
+- 只通过 `kernel.portal.catalog.*` 窄服务取得可信校验与已验签制品引用；
+- `referencePending` outbox 在管理读取和进程重启后幂等收敛；
+- Portal 用户偏好按 tenant、subject 与 Portal scope 独立保存。
 
-1.3.0 起，管理中心不再由插件直接拼装 React 基础组件，而是注册四个受治理的 Workbench Collection：Platform Profile、Application、Binding 与 Activation。动态枚举只在表单打开时读取，状态迁移动作只在选中版本且状态匹配时显示，差异、审计与不可变内容统一通过 Overlay 呈现。
+静态 `portal-platform-catalog.json` 仅为首个 PortalVersion 提供种子配置，不再形成可在线编辑的 Platform Profile 或 PortalBinding。内核 Recovery Baseline 继续独立于 Portal，确保错误配置不能破坏最小管理与恢复入口。
 
-Backend `portaltrust` 通过 `kernel.portal.artifact-references.publish` 将已密封快照路由到集群仓库。该服务只接受经宿主认证的 Composer 插件、当前租户，以及 `portal/*` owner 命名空间；它不是通用 capability 代理。仅显式开发模式且没有集群仓库时可使用内存校验发布器，生产环境缺少仓库路由会拒绝 Activation。
+管理中心只注册 `/settings/portals` 一个 Workbench Collection。一行代表一个 Portal；编辑表单一次修改完整配置，版本历史、上线历史、审计和完整配置通过该行的子视图打开。独立 Profile、Binding 和 Activation 菜单及浏览器 API 已删除。
 
-组合治理按 tenant 保存为单个 Shared State CAS 聚合；用户偏好按 tenant + subject 摘要独立分文档。状态只保存治理数据、精确制品引用、outbox 标记和稳定偏好 ID，不保存任何凭证 material。完整 Portal 边界见《[前端门户内核](../architecture/前端门户内核.md)》、《[制品仓库与测试发布](../architecture/制品仓库与测试发布.md)》、[ADR-0100](../decisions/ADR-0100-制品生命周期引用保护与垃圾回收.md) 和 [ADR-0125](../decisions/ADR-0125-Portal-Composer与Preference共享状态分区.md)。
+可信 BFF API：
+
+- `GET|POST /v1/portals`：读取聚合或创建 Portal；
+- `POST /v1/portals/{portalId}/versions`：创建新版本；
+- `PUT|DELETE /v1/portals/{portalId}/versions/{versionId}`：编辑或删除草稿；
+- `POST .../submit|approve|publish`：推进版本状态；
+- `POST /v1/portals/{portalId}/releases`：上线一个 Published PortalVersion；
+- `POST /v1/portals/{portalId}/releases/{releaseId}/rollback`：由历史版本创建新上线记录。
+
+所有写操作均重新取得 CSRF token；tenant 与 Principal 只能由可信会话和 CallContext 投影。完整边界见《[前端门户内核](../architecture/前端门户内核.md)》、[ADR-0171](../decisions/ADR-0171-Portal单聚合版本与上线子流程.md) 和 [ADR-0125](../decisions/ADR-0125-Portal-Composer与Preference共享状态分区.md)。

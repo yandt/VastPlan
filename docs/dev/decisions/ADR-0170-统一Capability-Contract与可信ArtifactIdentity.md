@@ -15,7 +15,7 @@
 2. Tool 可按工具逐步启用受众闭包。一旦任一 operation 声明 `audience`，同一 Tool 全部 operation 都必须分类为 `user/workload/system`；用户操作必须且只能由 Manifest 的 `authorization.operationGuards` 绑定权限，非用户操作不得伪装用户权限守卫。
 3. 权限 namespace 与 capability 名不同的首方插件，必须通过 `authorization.capabilities` 显式声明所有权关系；不能靠字符串相似度或 Host 特例放行。
 4. 运行时 descriptor、插件处理器注册集合、Portal Host 可调用操作联合类型和运行时白名单均由归一化契约生成。发布 `plan/prepare` 把缺失或漂移的投影列为同一发布计划的派生改动。
-5. 需要按请求字段区分权限的接口必须拆成稳定 operation，例如 `submitProfile/approveProfile/publishProfile`，不得在 Enforcer 之后再从 payload 猜测权限。
+5. 需要按状态动作区分权限的接口必须拆成稳定 operation，例如 `submitPortalVersion/approvePortalVersion/publishPortalVersion`，不得在 Enforcer 之后再从 payload 猜测权限。
 6. 用户授权只在 Kernel Enforcer 执行一次。业务插件继续校验可信主体、租户、资源所有权、对象状态、CAS 和职责分离，但不得再以 Token 中的旧角色名重复授权，否则在线 Role/Binding 会失效。workload/system 仍由窄 Policy Bundle 和 Kernel Service Grant 处理。
 7. 插件 Manifest SemVer 同步投影到选中插件的语言包版本和部署精确引用；这些文件不再是可独立编辑的版本源。
 8. 可信宿主继续使用现有 `runtimeidentity.Identity` 绑定 `pluginId/publisher/version/artifactSha256/node/runtime/instance`。身份来自已验证制品和 LaunchPolicy，绝不接受插件自报。后续 Node Worker、Python 子解释器和独立进程 SDK 只消费宿主注入的只读投影；调用和审计以宿主身份为准。

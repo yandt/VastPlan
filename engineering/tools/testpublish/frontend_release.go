@@ -37,7 +37,7 @@ func submitFrontendTestRelease(ctx context.Context, status developmentStatus, op
 	}
 	switch release.Status {
 	case portalapi.TestReleaseReady:
-		fmt.Printf("Frontend 测试发布已就绪 binding=%s release=%d applicationRevision=%d activation=%d\n", bindingID, release.ID, release.CandidateApplicationRevisionID, release.CandidateActivationID)
+		fmt.Printf("Frontend 测试发布已就绪 binding=%s release=%d portalVersion=%d portalRelease=%d\n", bindingID, release.ID, release.CandidatePortalVersionID, release.CandidateReleaseID)
 		return nil
 	case portalapi.TestReleaseRolledBack:
 		return fmt.Errorf("Frontend 测试候选失败且已保留或恢复上一 Activation: release=%d code=%s message=%s", release.ID, release.ErrorCode, release.ErrorMessage)

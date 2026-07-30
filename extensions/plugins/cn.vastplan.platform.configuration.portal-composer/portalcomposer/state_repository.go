@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	composerStateNamespace = "portal.composition"
+	composerStateNamespace = "portal.composition.v2"
 	composerStateKey       = "tenant"
 	maximumComposerState   = 1 << 20
 )

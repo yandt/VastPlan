@@ -4,7 +4,6 @@ package portalcomposer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -85,23 +84,6 @@ func (s *Service) BindPlatformCatalog(catalog frontendcompositionv1.PortalPlatfo
 		return nil
 	}
 	s.platformCatalog, s.catalogConfigured = catalog, true
-	if s.testSave != nil {
-		tenants := map[string]struct{}{}
-		for _, binding := range catalog.Bindings {
-			tenants[binding.TenantID] = struct{}{}
-		}
-		changed := false
-		for tenant := range tenants {
-			seeded, err := s.seedPublishedCatalogLocked(catalog, tenant)
-			if err != nil {
-				return err
-			}
-			changed = changed || seeded
-		}
-		if changed {
-			return s.save()
-		}
-	}
 	return nil
 }
 
@@ -147,11 +129,9 @@ func (s *Service) withTenantState(ctx context.Context, host sdk.Host, call *cont
 	s.mu.Lock()
 	s.state = value
 	s.session = &composerStateSession{ctx: ctx, call: call, repository: repository, tenant: tenant, revision: revision}
-	changed, seedErr := s.seedPublishedCatalogLocked(s.platformCatalog, tenant)
-	if seedErr == nil && s.recoverInterruptedTestReleases() {
-		changed = true
-	}
-	if seedErr == nil && changed {
+	changed := s.recoverInterruptedTestReleases()
+	var seedErr error
+	if changed {
 		seedErr = s.save()
 	}
 	s.mu.Unlock()
@@ -171,71 +151,54 @@ func (s *Service) closeStateSession() {
 }
 
 func (s *Service) CreateDraft(ctx context.Context, principal portalapi.Principal, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
-	if err := requireTrustedPrincipal(principal); err != nil {
-		return portalapi.Revision{}, err
-	}
 	composition, err := frontendcompositionv1.ValidateApplicationComposition(composition)
 	if err != nil {
 		return portalapi.Revision{}, err
 	}
-	preview, err := s.resolveCurrent(composition, principal.TenantID, 1)
+	configuration, err := s.configurationFromCatalog(composition, principal.TenantID)
 	if err != nil {
 		return portalapi.Revision{}, err
-	}
-	if err := s.validateCatalog(ctx, principal.TenantID, preview); err != nil {
-		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := s.now().UTC().Format(time.RFC3339Nano)
-	s.state.NextRevision++
-	resolved, err := s.resolveCurrent(composition, principal.TenantID, s.state.NextRevision)
+	exists := s.portalExistsLocked(principal.TenantID, composition.ID)
+	s.mu.Unlock()
+	var version portalapi.PortalVersion
+	if exists {
+		version, err = s.CreatePortalVersion(ctx, principal, composition.ID, configuration)
+	} else {
+		var portal portalapi.Portal
+		portal, err = s.CreatePortal(ctx, principal, portalapi.PortalVersionRequest{PortalID: composition.ID, Configuration: configuration})
+		if err == nil {
+			version = portal.Versions[0]
+		}
+	}
 	if err != nil {
 		return portalapi.Revision{}, err
 	}
-	r := portalapi.Revision{ID: s.state.NextRevision, TenantID: principal.TenantID, PortalID: composition.ID, Status: portalapi.StatusDraft, Composition: cloneComposition(composition), Spec: cloneSpec(resolved), CreatedAt: now, UpdatedAt: now}
-	s.state.Revisions = append(s.state.Revisions, r)
-	s.auditLocked(r, "draft.created", principal, "", "normal")
-	if err := s.save(); err != nil {
-		return portalapi.Revision{}, err
-	}
-	return r, nil
+	return s.legacyRevision(principal.TenantID, version.ID)
 }
 
 func (s *Service) UpdateDraft(ctx context.Context, principal portalapi.Principal, id uint64, composition frontendcompositionv1.ApplicationComposition) (portalapi.Revision, error) {
-	if err := requireTrustedPrincipal(principal); err != nil {
-		return portalapi.Revision{}, err
-	}
 	composition, err := frontendcompositionv1.ValidateApplicationComposition(composition)
 	if err != nil {
 		return portalapi.Revision{}, err
 	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	i, err := s.revisionIndex(principal.TenantID, id)
 	if err != nil {
+		s.mu.Unlock()
 		return portalapi.Revision{}, err
 	}
-	r := &s.state.Revisions[i]
-	if r.Status != portalapi.StatusDraft {
-		return portalapi.Revision{}, ErrInvalidState
-	}
-	resolved, err := s.resolveCurrent(composition, principal.TenantID, r.ID)
+	version, err := s.portalVersionLocked(principal.TenantID, s.state.Revisions[i])
+	s.mu.Unlock()
 	if err != nil {
 		return portalapi.Revision{}, err
 	}
-	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
-		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
-	}
-	r.PortalID = composition.ID
-	r.Composition = cloneComposition(composition)
-	r.Spec = cloneSpec(resolved)
-	r.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
-	s.auditLocked(*r, "draft.updated", principal, "", "normal")
-	if err := s.save(); err != nil {
+	version.Configuration.Application = composition
+	if _, err := s.UpdatePortalVersion(ctx, principal, version.PortalID, id, version.Configuration); err != nil {
 		return portalapi.Revision{}, err
 	}
-	return cloneRevision(*r), nil
+	return s.legacyRevision(principal.TenantID, id)
 }
 
 func (s *Service) List(_ context.Context, principal portalapi.Principal) ([]portalapi.Revision, error) {
@@ -255,105 +218,51 @@ func (s *Service) List(_ context.Context, principal portalapi.Principal) ([]port
 }
 
 func (s *Service) Submit(ctx context.Context, principal portalapi.Principal, id uint64) (portalapi.Revision, error) {
-	if err := requireTrustedPrincipal(principal); err != nil {
-		return portalapi.Revision{}, err
-	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	i, err := s.revisionIndex(principal.TenantID, id)
 	if err != nil {
+		s.mu.Unlock()
 		return portalapi.Revision{}, err
 	}
-	r := &s.state.Revisions[i]
-	if r.Status != portalapi.StatusDraft {
-		return portalapi.Revision{}, ErrInvalidState
-	}
-	resolved, err := s.resolveCurrent(r.Composition, principal.TenantID, r.ID)
-	if err != nil {
+	portalID := s.state.Revisions[i].PortalID
+	s.mu.Unlock()
+	if _, err := s.TransitionPortalVersion(ctx, principal, portalID, id, "submit"); err != nil {
 		return portalapi.Revision{}, err
 	}
-	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
-		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
-	}
-	r.Status = portalapi.StatusPendingApproval
-	r.Spec = cloneSpec(resolved)
-	r.SubmittedBy = principal.ID
-	r.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
-	s.auditLocked(*r, "draft.submitted", principal, "", "normal")
-	if err := s.save(); err != nil {
-		return portalapi.Revision{}, err
-	}
-	return cloneRevision(*r), nil
+	return s.legacyRevision(principal.TenantID, id)
 }
 
-func (s *Service) Approve(_ context.Context, principal portalapi.Principal, id uint64) (portalapi.Revision, error) {
-	if err := requireTrustedPrincipal(principal); err != nil {
-		return portalapi.Revision{}, err
-	}
+func (s *Service) Approve(ctx context.Context, principal portalapi.Principal, id uint64) (portalapi.Revision, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	i, err := s.revisionIndex(principal.TenantID, id)
 	if err != nil {
+		s.mu.Unlock()
 		return portalapi.Revision{}, err
 	}
-	r := &s.state.Revisions[i]
-	if r.Status != portalapi.StatusPendingApproval {
-		return portalapi.Revision{}, ErrInvalidState
-	}
-	if r.SubmittedBy == principal.ID {
-		return portalapi.Revision{}, ErrSelfApproval
-	}
-	r.Status = portalapi.StatusApproved
-	r.ApprovedBy = principal.ID
-	r.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
-	s.auditLocked(*r, "draft.approved", principal, "", "normal")
-	if err := s.save(); err != nil {
+	portalID := s.state.Revisions[i].PortalID
+	s.mu.Unlock()
+	if _, err := s.TransitionPortalVersion(ctx, principal, portalID, id, "approve"); err != nil {
 		return portalapi.Revision{}, err
 	}
-	return cloneRevision(*r), nil
+	return s.legacyRevision(principal.TenantID, id)
 }
 
 func (s *Service) Publish(ctx context.Context, principal portalapi.Principal, id uint64, request portalapi.PublishRequest) (portalapi.Revision, error) {
+	if principal.System {
+		return s.breakGlassPublishPortalVersion(ctx, principal, id, request.BreakGlassReason)
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	i, err := s.revisionIndex(principal.TenantID, id)
 	if err != nil {
+		s.mu.Unlock()
 		return portalapi.Revision{}, err
 	}
-	r := &s.state.Revisions[i]
-	breakGlass := principal.System
-	if !breakGlass {
-		if err := requireTrustedPrincipal(principal); err != nil {
-			return portalapi.Revision{}, err
-		}
-		if r.Status != portalapi.StatusApproved {
-			return portalapi.Revision{}, ErrInvalidState
-		}
-	} else if strings.TrimSpace(request.BreakGlassReason) == "" {
-		return portalapi.Revision{}, errors.New("system break-glass 发布必须说明原因")
-	}
-	resolved, err := s.resolveCurrent(r.Composition, principal.TenantID, r.ID)
-	if err != nil {
+	portalID := s.state.Revisions[i].PortalID
+	s.mu.Unlock()
+	if _, err := s.TransitionPortalVersion(ctx, principal, portalID, id, "publish"); err != nil {
 		return portalapi.Revision{}, err
 	}
-	if err := s.validateCatalog(ctx, principal.TenantID, resolved); err != nil {
-		return portalapi.Revision{}, fmt.Errorf("%w: %v", ErrCatalogRejected, err)
-	}
-	r.Status = portalapi.StatusPublished
-	r.Spec = cloneSpec(resolved)
-	r.PublishedBy = principal.ID
-	r.UpdatedAt = s.now().UTC().Format(time.RFC3339Nano)
-	priority := "normal"
-	action := "application.published"
-	if breakGlass {
-		priority = "high"
-		action = "application.break_glass_published"
-	}
-	s.auditLocked(*r, action, principal, request.BreakGlassReason, priority)
-	if err := s.save(); err != nil {
-		return portalapi.Revision{}, err
-	}
-	return cloneRevision(*r), nil
+	return s.legacyRevision(principal.TenantID, id)
 }
 
 func (s *Service) Audit(_ context.Context, principal portalapi.Principal, id uint64) ([]portalapi.AuditEvent, error) {
@@ -367,7 +276,7 @@ func (s *Service) Audit(_ context.Context, principal portalapi.Principal, id uin
 	}
 	out := make([]portalapi.AuditEvent, 0)
 	for _, e := range s.state.Audit {
-		if e.TenantID == principal.TenantID && e.RevisionID == id && (strings.HasPrefix(e.Action, "draft.") || strings.HasPrefix(e.Action, "application.")) {
+		if e.TenantID == principal.TenantID && e.RevisionID == id && strings.HasPrefix(e.Action, "portal.version.") {
 			out = append(out, e)
 		}
 	}

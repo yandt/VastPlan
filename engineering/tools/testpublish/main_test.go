@@ -16,8 +16,8 @@ import (
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactapi"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository/localtest"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
@@ -384,7 +384,7 @@ func TestSubmitFrontendTestReleaseCreatesApplicationBindingAndPublishesExactRece
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(portalapi.TestRelease{ID: 4, BindingID: releaseRequest.BindingID, Receipt: releaseRequest.Receipt, Status: portalapi.TestReleaseReady, CandidateApplicationRevisionID: 9, CandidateActivationID: 12})
+			_ = json.NewEncoder(w).Encode(portalapi.TestRelease{ID: 4, BindingID: releaseRequest.BindingID, Receipt: releaseRequest.Receipt, Status: portalapi.TestReleaseReady, CandidatePortalVersionID: 9, CandidateReleaseID: 12})
 		default:
 			http.NotFound(w, request)
 		}

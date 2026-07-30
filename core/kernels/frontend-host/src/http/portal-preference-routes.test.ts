@@ -71,7 +71,7 @@ async function startPreferenceServer(preferences: PortalPreferencePort): Promise
     workbench: { id: "cn.vastplan.workbench", uiContract: "^4.1.0" },
   };
   const composer: PortalComposerPort = { async call(_principal, operation) {
-    if (operation !== "listActivations") throw new Error("unexpected operation");
+    if (operation !== "listPortalReleases") throw new Error("unexpected operation");
     return new TextEncoder().encode(JSON.stringify([{ id: 7, tenantId: "tenant-a", portalId: "operations", status: "Current", resolved }]));
   } };
   const assets = await PortalAssets.load(root);

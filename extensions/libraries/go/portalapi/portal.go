@@ -187,17 +187,20 @@ const (
 )
 
 type Revision struct {
-	ID          uint64                                       `json:"id"`
-	TenantID    string                                       `json:"tenantId"`
-	PortalID    string                                       `json:"portalId"`
-	Status      Status                                       `json:"status"`
-	Composition frontendcompositionv1.ApplicationComposition `json:"composition"`
-	Spec        PortalSpec                                   `json:"resolved"`
-	SubmittedBy string                                       `json:"submittedBy,omitempty"`
-	ApprovedBy  string                                       `json:"approvedBy,omitempty"`
-	PublishedBy string                                       `json:"publishedBy,omitempty"`
-	CreatedAt   string                                       `json:"createdAt"`
-	UpdatedAt   string                                       `json:"updatedAt"`
+	ID                uint64                                       `json:"id"`
+	Number            uint64                                       `json:"number,omitempty"`
+	TenantID          string                                       `json:"tenantId"`
+	PortalID          string                                       `json:"portalId"`
+	ProfileRevisionID uint64                                       `json:"profileRevisionId,omitempty"`
+	BindingRevisionID uint64                                       `json:"bindingRevisionId,omitempty"`
+	Status            Status                                       `json:"status"`
+	Composition       frontendcompositionv1.ApplicationComposition `json:"composition"`
+	Spec              PortalSpec                                   `json:"resolved"`
+	SubmittedBy       string                                       `json:"submittedBy,omitempty"`
+	ApprovedBy        string                                       `json:"approvedBy,omitempty"`
+	PublishedBy       string                                       `json:"publishedBy,omitempty"`
+	CreatedAt         string                                       `json:"createdAt"`
+	UpdatedAt         string                                       `json:"updatedAt"`
 }
 
 type PlatformProfileRevision struct {
@@ -348,23 +351,21 @@ const (
 )
 
 type TestRelease struct {
-	ID                             uint64                       `json:"id"`
-	TenantID                       string                       `json:"tenantId"`
-	BindingID                      string                       `json:"bindingId"`
-	Receipt                        artifactrepositoryv1.Receipt `json:"receipt"`
-	Status                         TestReleaseStatus            `json:"status"`
-	PreviousActivationID           uint64                       `json:"previousActivationId,omitempty"`
-	CandidateApplicationRevisionID uint64                       `json:"candidateApplicationRevisionId,omitempty"`
-	CandidateProfileRevisionID     uint64                       `json:"candidateProfileRevisionId,omitempty"`
-	CandidateBindingRevisionID     uint64                       `json:"candidateBindingRevisionId,omitempty"`
-	CandidateActivationID          uint64                       `json:"candidateActivationId,omitempty"`
-	RollbackActivationID           uint64                       `json:"rollbackActivationId,omitempty"`
-	RollbackRequired               bool                         `json:"rollbackRequired,omitempty"`
-	ErrorCode                      string                       `json:"errorCode,omitempty"`
-	ErrorMessage                   string                       `json:"errorMessage,omitempty"`
-	RequestedBy                    string                       `json:"requestedBy"`
-	CreatedAt                      string                       `json:"createdAt"`
-	UpdatedAt                      string                       `json:"updatedAt"`
+	ID                       uint64                       `json:"id"`
+	TenantID                 string                       `json:"tenantId"`
+	BindingID                string                       `json:"bindingId"`
+	Receipt                  artifactrepositoryv1.Receipt `json:"receipt"`
+	Status                   TestReleaseStatus            `json:"status"`
+	PreviousReleaseID        uint64                       `json:"previousReleaseId,omitempty"`
+	CandidatePortalVersionID uint64                       `json:"candidatePortalVersionId,omitempty"`
+	CandidateReleaseID       uint64                       `json:"candidateReleaseId,omitempty"`
+	RollbackReleaseID        uint64                       `json:"rollbackReleaseId,omitempty"`
+	RollbackRequired         bool                         `json:"rollbackRequired,omitempty"`
+	ErrorCode                string                       `json:"errorCode,omitempty"`
+	ErrorMessage             string                       `json:"errorMessage,omitempty"`
+	RequestedBy              string                       `json:"requestedBy"`
+	CreatedAt                string                       `json:"createdAt"`
+	UpdatedAt                string                       `json:"updatedAt"`
 }
 
 type CreateTestReleaseRequest struct {
@@ -385,21 +386,14 @@ type TestReleaseService interface {
 // Service is implemented by the configuration/composition plugin and consumed
 // through an authenticated Portal BFF adapter. Every method scopes itself to principal.TenantID.
 type Service interface {
-	CreateDraft(context.Context, Principal, frontendcompositionv1.ApplicationComposition) (Revision, error)
-	UpdateDraft(context.Context, Principal, uint64, frontendcompositionv1.ApplicationComposition) (Revision, error)
-	List(context.Context, Principal) ([]Revision, error)
-	Submit(context.Context, Principal, uint64) (Revision, error)
-	Approve(context.Context, Principal, uint64) (Revision, error)
-	Publish(context.Context, Principal, uint64, PublishRequest) (Revision, error)
+	CreatePortal(context.Context, Principal, PortalVersionRequest) (Portal, error)
+	CreatePortalVersion(context.Context, Principal, string, PortalConfiguration) (PortalVersion, error)
+	UpdatePortalVersion(context.Context, Principal, string, uint64, PortalConfiguration) (PortalVersion, error)
+	DeletePortalVersion(context.Context, Principal, string, uint64) (PortalVersion, error)
+	TransitionPortalVersion(context.Context, Principal, string, uint64, string) (PortalVersion, error)
+	ReleasePortalVersion(context.Context, Principal, string, PortalReleaseRequest) (PortalRelease, error)
+	RollbackPortalRelease(context.Context, Principal, string, uint64, uint64, string) (PortalRelease, error)
+	PortalGovernance(context.Context, Principal) (PortalGovernanceSnapshot, error)
+	ListPortalReleases(context.Context, Principal) ([]PortalRelease, error)
 	Audit(context.Context, Principal, uint64) ([]AuditEvent, error)
-	Governance(context.Context, Principal) (GovernanceSnapshot, error)
-	CreateProfileDraft(context.Context, Principal, frontendcompositionv1.PlatformProfile) (PlatformProfileRevision, error)
-	UpdateProfileDraft(context.Context, Principal, uint64, frontendcompositionv1.PlatformProfile) (PlatformProfileRevision, error)
-	TransitionProfile(context.Context, Principal, uint64, string) (PlatformProfileRevision, error)
-	CreateBindingDraft(context.Context, Principal, BindingDraftRequest) (BindingRevision, error)
-	UpdateBindingDraft(context.Context, Principal, uint64, BindingDraftRequest) (BindingRevision, error)
-	TransitionBinding(context.Context, Principal, uint64, string) (BindingRevision, error)
-	Activate(context.Context, Principal, ActivationRequest) (PortalActivation, error)
-	RollbackActivation(context.Context, Principal, uint64, uint64, string) (PortalActivation, error)
-	ListActivations(context.Context, Principal) ([]PortalActivation, error)
 }

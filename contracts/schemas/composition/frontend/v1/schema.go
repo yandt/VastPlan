@@ -152,9 +152,9 @@ type ApplicationComposition struct {
 	Config   map[string]any             `json:"config,omitempty"`
 }
 
-// PortalPlatformCatalog is the platform-owned authority for selecting a shared
-// Frontend Platform Profile and granting a portal access to exact backend
-// logical services. Application Composition cannot alter these bindings.
+// PortalPlatformCatalog is the platform-owned seed catalog used to create a
+// Portal's first complete version. Profiles and bindings are copied into that
+// PortalVersion and are not independently governed online.
 type PortalPlatformCatalog struct {
 	compositioncommonv1.Document
 	Profiles []PlatformProfile `json:"profiles"`

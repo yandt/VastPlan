@@ -73,7 +73,7 @@ describe("PortalGenerationCoordinator", () => {
 
 function composer(values: () => readonly PortalActivation[]): PortalComposerPort {
   return { async call(_principal, operation) {
-    if (operation !== "listActivations") throw new Error("unexpected operation");
+    if (operation !== "listPortalReleases") throw new Error("unexpected operation");
     return new TextEncoder().encode(JSON.stringify(values()));
   } };
 }

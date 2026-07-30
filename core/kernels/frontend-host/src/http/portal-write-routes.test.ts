@@ -12,40 +12,18 @@ import { createPortalHandler } from "./portal-handler";
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve())))));
 
-describe("Portal draft write routes", () => {
-  it("requires CSRF and projects server-owned revision envelopes", async () => {
-    const calls: { operation: string; payload: unknown }[] = [];
-    const composer: PortalComposerPort = { async call(_principal, operation, payload) {
-      calls.push({ operation, payload: JSON.parse(new TextDecoder().decode(payload)) as unknown });
-      return new TextEncoder().encode('{"id":7}');
-    } };
+describe("Portal aggregate write routes", () => {
+  it("requires CSRF before creating a Portal", async () => {
+    let calls = 0;
+    const composer: PortalComposerPort = { async call() { calls += 1; return new TextEncoder().encode('{"id":"operations"}'); } };
     const origin = await startServer(composer);
-    const sessionCookie = "vastplan_session=browser-token";
-
-    const rejected = await fetch(`${origin}/v1/portal-drafts`, { method: "POST", headers: { Cookie: sessionCookie, "Content-Type": "application/json" }, body: "{}" });
+    const rejected = await fetch(`${origin}/v1/portals`, { method: "POST", headers: { Cookie: "vastplan_session=browser-token", "Content-Type": "application/json" }, body: "{}" });
     expect(rejected.status).toBe(403);
     expect(await rejected.json()).toEqual({ error: "csrf_rejected" });
-    expect(calls).toEqual([]);
-
-    const csrf = await fetch(`${origin}/v1/csrf`, { headers: { Cookie: sessionCookie } });
-    const token = (await csrf.json() as { token: string }).token;
-    const headers = { Cookie: `${sessionCookie}; vastplan_csrf=${token}`, "X-VastPlan-CSRF": token, "Content-Type": "application/json" };
-    expect((await fetch(`${origin}/v1/portal-drafts`, { method: "POST", headers, body: '{"version":1}' })).status).toBe(200);
-    expect((await fetch(`${origin}/v1/portal-drafts/7`, { method: "PUT", headers, body: '{"version":2}' })).status).toBe(200);
-    expect((await fetch(`${origin}/v1/portal-drafts/7/submit`, { method: "POST", headers, body: "{}" })).status).toBe(200);
-    expect((await fetch(`${origin}/v1/portal-drafts/7/publish`, { method: "POST", headers, body: '{"revisionId":99,"breakGlassReason":"approved"}' })).status).toBe(200);
-    expect((await fetch(`${origin}/v1/portal-drafts/7/audit`, { headers: { Cookie: sessionCookie } })).status).toBe(200);
-
-    expect(calls).toEqual([
-      { operation: "createDraft", payload: { version: 1 } },
-      { operation: "updateDraft", payload: { revisionId: 7, composition: { version: 2 } } },
-      { operation: "submit", payload: { revisionId: 7 } },
-      { operation: "publish", payload: { revisionId: 7, breakGlassReason: "approved" } },
-      { operation: "audit", payload: { revisionId: 7 } },
-    ]);
+    expect(calls).toBe(0);
   });
 
-  it("rejects invalid JSON and unsafe revision identifiers before capability invocation", async () => {
+  it("rejects malformed JSON and unsafe version identifiers", async () => {
     let calls = 0;
     const composer: PortalComposerPort = { async call() { calls += 1; return new TextEncoder().encode("{}"); } };
     const origin = await startServer(composer);
@@ -53,13 +31,10 @@ describe("Portal draft write routes", () => {
     const csrf = await fetch(`${origin}/v1/csrf`, { headers: { Cookie: sessionCookie } });
     const token = (await csrf.json() as { token: string }).token;
     const headers = { Cookie: `${sessionCookie}; vastplan_csrf=${token}`, "X-VastPlan-CSRF": token, "Content-Type": "application/json" };
-
-    const invalid = await fetch(`${origin}/v1/portal-drafts`, { method: "POST", headers, body: "{" });
-    expect(invalid.status).toBe(400);
-    expect(await invalid.json()).toEqual({ error: "invalid_json" });
-    const unsafe = await fetch(`${origin}/v1/portal-drafts/9007199254740992`, { method: "PUT", headers, body: "{}" });
+    expect((await fetch(`${origin}/v1/portals`, { method: "POST", headers, body: "{" })).status).toBe(400);
+    const unsafe = await fetch(`${origin}/v1/portals/operations/versions/9007199254740992`, { method: "PUT", headers, body: "{}" });
     expect(unsafe.status).toBe(400);
-    expect(await unsafe.json()).toEqual({ error: "invalid_revision" });
+    expect(await unsafe.json()).toEqual({ error: "invalid_portal_version" });
     expect(calls).toBe(0);
   });
 });

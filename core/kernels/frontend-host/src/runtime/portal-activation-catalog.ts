@@ -16,7 +16,7 @@ export class PortalActivationCatalog {
   public constructor(private readonly composer: PortalComposerPort) {}
 
   public async list(principal: Principal, signal?: AbortSignal): Promise<readonly PortalActivation[]> {
-    const raw = await this.composer.call(principal, "listActivations", this.emptyPayload, signal);
+    const raw = await this.composer.call(principal, "listPortalReleases", this.emptyPayload, signal);
     let value: unknown;
     try { value = JSON.parse(new TextDecoder().decode(raw)) as unknown; }
     catch { throw new Error("Portal Activation 响应 JSON 无效"); }

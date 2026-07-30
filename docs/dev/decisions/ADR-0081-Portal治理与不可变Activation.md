@@ -39,3 +39,6 @@ Application Composition、Platform Profile 与 PortalBinding 都需要在线版�
 - 代价：现有 Portal Composer、BFF、状态存储和客户端 API 需要按领域重构。
 - 代价：需要覆盖 CAS 冲突、崩溃点、leader fencing、跨租户授权、撤销恢复和多 Edge 预热的测试。
 
+## 后续修订
+
+2026-07-30 的 [ADR-0171](ADR-0171-Portal单聚合版本与上线子流程.md) 废止了 Application、Platform Profile、PortalBinding 三个独立在线治理领域及独立 Activation 管理面的决定。两阶段物化、精确制品锁、CAS、历史回滚、引用保护和内核恢复安全性质继续保留，但现在由 `PortalVersion` 和其子流程 `PortalRelease` 承载。

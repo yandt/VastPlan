@@ -26,13 +26,13 @@ func decisionFor(t *testing.T, ctx *contractv1.CallContext, capability, operatio
 
 func TestPortalUsersDeferToSignedCatalogAndSystemBreakGlass(t *testing.T) {
 	user := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "author"}, Principal: &contractv1.Principal{SystemRoles: []string{"portal.compose"}}}
-	for _, operation := range []string{"createDraft", "updateDraft", "publish", "deleteProfileDraft"} {
+	for _, operation := range []string{"createPortal", "updatePortalVersion", "publishPortalVersion", "deletePortalVersion"} {
 		if got := decisionFor(t, user, portalapi.ComposerCapability, operation); got.Decision != extpoint.DecisionAbstain {
 			t.Fatalf("用户操作 %s 必须交给签名 Permission Catalog: %+v", operation, got)
 		}
 	}
 	system := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "system"}}
-	if got := decisionFor(t, system, portalapi.ComposerCapability, "publish"); got.Decision != extpoint.DecisionAllow {
+	if got := decisionFor(t, system, portalapi.ComposerCapability, "publishPortalVersion"); got.Decision != extpoint.DecisionAllow {
 		t.Fatalf("system break-glass 应放行: %+v", got)
 	}
 }

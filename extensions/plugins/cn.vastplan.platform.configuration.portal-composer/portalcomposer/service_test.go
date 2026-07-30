@@ -12,7 +12,6 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
-	compositioncommonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/common/v1"
 	frontendcompositionv1 "cdsoft.com.cn/VastPlan/contracts/schemas/composition/frontend/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
@@ -246,7 +245,7 @@ func TestDraftCanBeUpdatedOnlyBeforeSubmission(t *testing.T) {
 		t.Fatalf("更新草稿失败: revision=%+v err=%v", updated, err)
 	}
 	audit, err := s.Audit(context.Background(), author, draft.ID)
-	if err != nil || len(audit) != 2 || audit[1].Action != "draft.updated" {
+	if err != nil || len(audit) != 2 || audit[1].Action != "portal.version.updated" {
 		t.Fatalf("更新草稿审计缺失: %+v %v", audit, err)
 	}
 	if _, err := s.Submit(context.Background(), author, draft.ID); err != nil {
@@ -257,39 +256,26 @@ func TestDraftCanBeUpdatedOnlyBeforeSubmission(t *testing.T) {
 	}
 }
 
-func TestProfileDraftCanBeDeletedOnlyByItsTenantBeforeSubmission(t *testing.T) {
+func TestPortalIDIsUniqueAndLineageAllowsOnlyOneOpenVersion(t *testing.T) {
 	s := newTestService(t)
 	author := principal("author", "portal.compose")
-	profile := s.state.Profiles[0].Profile
-	profile.ID, profile.Revision = "temporary-profile", 1
-	draft, err := s.CreateProfileDraft(context.Background(), author, profile)
+	configuration, err := s.configurationFromCatalog(spec("/"), author.TenantID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	deleted, err := s.DeleteProfileDraft(context.Background(), author, draft.ID)
-	if err != nil || deleted.ID != draft.ID {
-		t.Fatalf("删除 Profile 草稿失败: revision=%+v err=%v", deleted, err)
+	portal, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
+	if err != nil || len(portal.Versions) != 1 || portal.Versions[0].Number != 1 {
+		t.Fatalf("创建 Portal 失败: %+v %v", portal, err)
 	}
-	if _, err := s.profileIndexLocked(author.TenantID, draft.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("已删除草稿仍可被读取: %v", err)
+	if _, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration}); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("同一 tenant 的 portalId 必须唯一: %v", err)
 	}
-	if event := s.state.Audit[len(s.state.Audit)-1]; event.Action != "profile.draft.deleted" || event.RevisionID != draft.ID || event.ActorID != author.ID {
-		t.Fatalf("删除草稿必须保留审计记录: %+v", event)
+	if _, err := s.CreatePortalVersion(context.Background(), author, "admin", configuration); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("存在草稿时不得创建第二个候选版本: %v", err)
 	}
-
-	second, err := s.CreateProfileDraft(context.Background(), author, profile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.TransitionProfile(context.Background(), author, second.ID, "submit"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.DeleteProfileDraft(context.Background(), author, second.ID); !errors.Is(err, ErrInvalidState) {
-		t.Fatalf("已提交 Profile 不得删除: %v", err)
-	}
-	otherTenant := portalapi.Principal{ID: "other", TenantID: "tenant-b", Roles: []string{"portal.compose"}}
-	if _, err := s.DeleteProfileDraft(context.Background(), otherTenant, second.ID); !errors.Is(err, ErrNotFound) {
-		t.Fatalf("跨租户删除必须隐藏资源存在性: %v", err)
+	deleted, err := s.DeletePortalVersion(context.Background(), author, "admin", portal.Versions[0].ID)
+	if err != nil || deleted.ID != portal.Versions[0].ID {
+		t.Fatalf("删除 PortalVersion 草稿失败: %+v %v", deleted, err)
 	}
 }
 
@@ -298,68 +284,44 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 	author := principal("author", "portal.compose")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
-	publish := func(id string, expected uint64) portalapi.PortalActivation {
-		d, e := s.CreateDraft(context.Background(), author, spec("/"))
-		if e != nil {
-			t.Fatal(e)
+	configuration, err := s.configurationFromCatalog(spec("/"), author.TenantID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publish := func(id string, checkBreakGlass bool) portalapi.PortalRelease {
+		candidate := cloneJSON(configuration)
+		candidate.Application.ID = id
+		portal, createErr := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: id, Configuration: candidate})
+		if createErr != nil {
+			t.Fatal(createErr)
 		}
-		s.state.Revisions[len(s.state.Revisions)-1].PortalID = id
-		if _, e = s.Submit(context.Background(), author, d.ID); e != nil {
-			t.Fatal(e)
-		}
-		if _, e = s.Approve(context.Background(), approver, d.ID); e != nil {
-			t.Fatal(e)
-		}
-		published, e := s.Publish(context.Background(), publisher, d.ID, portalapi.PublishRequest{})
-		if e != nil {
-			t.Fatal(e)
-		}
-		request := activationRequest(s, published, expected)
-		request.PortalID = id
-		request.ApplicationRevisionID = published.ID
-		for _, binding := range s.state.Bindings {
-			if binding.PortalID == id {
-				request.BindingRevisionID, request.ProfileRevisionID = binding.ID, binding.ProfileRevisionID
+		version := portal.Versions[0]
+		if checkBreakGlass {
+			if _, publishErr := s.Publish(context.Background(), portalapi.Principal{ID: "system", TenantID: "tenant-a", System: true}, version.ID, portalapi.PublishRequest{}); publishErr == nil {
+				t.Fatal("break-glass 缺原因必须拒绝")
 			}
 		}
-		activation, e := s.Activate(context.Background(), publisher, request)
-		if e != nil {
-			t.Fatal(e)
+		for _, step := range []struct {
+			principal portalapi.Principal
+			action    string
+		}{{author, "submit"}, {approver, "approve"}, {publisher, "publish"}} {
+			if _, transitionErr := s.TransitionPortalVersion(context.Background(), step.principal, id, version.ID, step.action); transitionErr != nil {
+				t.Fatal(transitionErr)
+			}
 		}
-		return activation
+		release, releaseErr := s.ReleasePortalVersion(context.Background(), publisher, id, portalapi.PortalReleaseRequest{PortalVersionID: version.ID, ExpectedCurrentReleaseID: 0})
+		if releaseErr != nil {
+			t.Fatal(releaseErr)
+		}
+		return release
 	}
-	first := publish("admin", 0)
-	d, err := s.CreateDraft(context.Background(), author, spec("/"))
-	if err != nil {
-		t.Fatal(err)
+	first := publish("admin", false)
+	failed := publish("two", true)
+	if failed.Status != portalapi.ActivationFailed || first.Status != portalapi.ActivationCurrent {
+		t.Fatalf("同租户跨 Portal 路由冲突必须产生持久失败 Release: %+v", failed)
 	}
-	s.state.Revisions[len(s.state.Revisions)-1].PortalID = "two"
-	if _, err = s.Publish(context.Background(), portalapi.Principal{ID: "system", TenantID: "tenant-a", System: true}, d.ID, portalapi.PublishRequest{}); err == nil {
+	if _, err = s.Publish(context.Background(), portalapi.Principal{ID: "system", TenantID: "tenant-a", System: true}, first.PortalVersionID, portalapi.PublishRequest{}); err == nil {
 		t.Fatal("break-glass 缺原因必须拒绝")
-	}
-	if _, err = s.Submit(context.Background(), author, d.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.Approve(context.Background(), approver, d.ID); err != nil {
-		t.Fatal(err)
-	}
-	published, err := s.Publish(context.Background(), publisher, d.ID, portalapi.PublishRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	request := activationRequest(s, published, 0)
-	request.PortalID = "two"
-	request.ExpectedCurrentID = 0
-	request.ApplicationRevisionID = published.ID
-	// The fixture catalog has one binding; clone it as a published binding for the second Portal.
-	binding := s.state.Bindings[0]
-	s.state.NextGovernance++
-	binding.ID, binding.PortalID, binding.Binding.PortalID = s.state.NextGovernance, "two", "two"
-	s.state.Bindings = append(s.state.Bindings, binding)
-	request.BindingRevisionID, request.ProfileRevisionID = binding.ID, binding.ProfileRevisionID
-	failed, err := s.Activate(context.Background(), publisher, request)
-	if err != nil || failed.Status != portalapi.ActivationFailed || first.Status != portalapi.ActivationCurrent {
-		t.Fatalf("同租户跨 Portal 路由冲突必须产生持久失败 Activation: %+v %v", failed, err)
 	}
 }
 
@@ -401,73 +363,40 @@ func TestRollbackCreatesNewImmutableActivation(t *testing.T) {
 	}
 }
 
-func TestProfileAndBindingPublishingDoesNotGoLiveBeforeActivationCAS(t *testing.T) {
+func TestPublishedPortalVersionDoesNotGoLiveBeforeReleaseCAS(t *testing.T) {
 	s := newTestService(t)
 	author := principal("author", "portal.compose")
 	approver := principal("approver", "portal.approve")
 	publisher := principal("publisher", "portal.publish")
-
-	baseProfile := s.state.Profiles[0].Profile
-	profile := baseProfile
-	profile.ID, profile.Revision = "portal-top", 1
-	profile.Shell.Config.DefaultTemplate = "top-navigation"
-	profileDraft, err := s.CreateProfileDraft(context.Background(), author, profile)
+	configuration, err := s.configurationFromCatalog(spec("/"), author.TenantID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = s.TransitionProfile(context.Background(), author, profileDraft.ID, "submit"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.TransitionProfile(context.Background(), approver, profileDraft.ID, "approve"); err != nil {
-		t.Fatal(err)
-	}
-	publishedProfile, err := s.TransitionProfile(context.Background(), publisher, profileDraft.ID, "publish")
+	configuration.Platform.Shell.Config.DefaultTemplate = "top-navigation"
+	portal, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	binding := s.state.Bindings[0].Binding
-	binding.PlatformProfile = compositioncommonv1.Ref{}
-	bindingDraft, err := s.CreateBindingDraft(context.Background(), author, portalapi.BindingDraftRequest{ProfileRevisionID: publishedProfile.ID, Binding: binding})
-	if err != nil {
-		t.Fatal(err)
+	version := portal.Versions[0]
+	for _, step := range []struct {
+		principal portalapi.Principal
+		action    string
+	}{{author, "submit"}, {approver, "approve"}, {publisher, "publish"}} {
+		version, err = s.TransitionPortalVersion(context.Background(), step.principal, portal.ID, version.ID, step.action)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
-	if _, err = s.TransitionBinding(context.Background(), author, bindingDraft.ID, "submit"); err != nil {
-		t.Fatal(err)
+	if got, err := s.ListPortalReleases(context.Background(), publisher); err != nil || len(got) != 0 {
+		t.Fatalf("Published PortalVersion 不得自动上线: %+v %v", got, err)
 	}
-	if _, err = s.TransitionBinding(context.Background(), approver, bindingDraft.ID, "approve"); err != nil {
-		t.Fatal(err)
+	request := portalapi.PortalReleaseRequest{PortalVersionID: version.ID, ExpectedCurrentReleaseID: 0, Reason: "切换到顶部导航"}
+	current, err := s.ReleasePortalVersion(context.Background(), publisher, portal.ID, request)
+	if err != nil || current.Status != portalapi.ActivationCurrent || current.Resolved.Shell.ID != configuration.Platform.Shell.ID || current.Resolved.Shell.Config.DefaultTemplate != "top-navigation" {
+		t.Fatalf("Release 未使用精确 PortalVersion: %+v %v", current, err)
 	}
-	publishedBinding, err := s.TransitionBinding(context.Background(), publisher, bindingDraft.ID, "publish")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	applicationDraft, err := s.CreateDraft(context.Background(), author, spec("/"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.Submit(context.Background(), author, applicationDraft.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = s.Approve(context.Background(), approver, applicationDraft.ID); err != nil {
-		t.Fatal(err)
-	}
-	publishedApplication, err := s.Publish(context.Background(), publisher, applicationDraft.ID, portalapi.PublishRequest{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, err := s.ListActivations(context.Background(), publisher); err != nil || len(got) != 0 {
-		t.Fatalf("Published 输入不得自动上线: %+v %v", got, err)
-	}
-
-	request := portalapi.ActivationRequest{PortalID: publishedApplication.PortalID, ApplicationRevisionID: publishedApplication.ID, ProfileRevisionID: publishedProfile.ID, BindingRevisionID: publishedBinding.ID, ExpectedCurrentID: 0, Reason: "切换到顶部导航"}
-	current, err := s.Activate(context.Background(), publisher, request)
-	if err != nil || current.Status != portalapi.ActivationCurrent || current.Spec.Shell.ID != profile.Shell.ID || current.Spec.Shell.Config.DefaultTemplate != "top-navigation" {
-		t.Fatalf("Activation 未使用精确发布输入: %+v %v", current, err)
-	}
-	if _, err := s.Activate(context.Background(), publisher, request); !errors.Is(err, ErrInvalidState) {
-		t.Fatalf("过期 expectedCurrentId 必须被 CAS 拒绝: %v", err)
+	if _, err := s.ReleasePortalVersion(context.Background(), publisher, portal.ID, request); !errors.Is(err, ErrInvalidState) {
+		t.Fatalf("过期 expectedCurrentReleaseId 必须被 CAS 拒绝: %v", err)
 	}
 }
 
@@ -533,17 +462,17 @@ func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) 
 		TenantId:  "tenant-a",
 		Principal: &contractv1.Principal{UserId: "author", SystemRoles: []string{"portal.compose"}},
 	}
-	payload, _ := json.Marshal(spec("/"))
-	handler := Contribution(service).Handlers["createDraft"]
+	payload, _ := json.Marshal(portalapi.PortalVersionRequest{PortalID: "admin", Configuration: portalapi.PortalConfiguration{Application: spec("/")}})
+	handler := Contribution(service).Handlers["createPortal"]
 	result, raw, err := handler(context.Background(), host, callCtx, payload)
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("通过可信宿主创建草稿失败: result=%+v err=%v", result, err)
 	}
-	if len(host.calls) != 5 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.state.shared.get" || host.calls[2] != "kernel.state.shared.create" || host.calls[3] != portalapi.KernelCatalogValidationCapability || host.calls[4] != "kernel.state.shared.update" {
+	if len(host.calls) != 4 || host.calls[0] != "kernel.config.get" || host.calls[1] != "kernel.state.shared.get" || host.calls[2] != portalapi.KernelCatalogValidationCapability || host.calls[3] != "kernel.state.shared.create" {
 		t.Fatalf("宿主调用路径错误: %v", host.calls)
 	}
-	var revision portalapi.Revision
-	if err := json.Unmarshal(raw, &revision); err != nil || revision.ID != 1 {
+	var portal portalapi.Portal
+	if err := json.Unmarshal(raw, &portal); err != nil || portal.ID != "admin" || len(portal.Versions) != 1 || portal.Versions[0].ID != 1 {
 		t.Fatalf("创建草稿响应错误: %s %v", raw, err)
 	}
 }

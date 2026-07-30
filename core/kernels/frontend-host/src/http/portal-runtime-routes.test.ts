@@ -140,7 +140,7 @@ async function startRuntimeServer(activeOverrides: Readonly<Record<string, unkno
     { id: 5, tenantId: "tenant-a", portalId: "operations", status: "Failed", resolved: {} },
   ];
   const composer: PortalComposerPort = { async call(_principal, operation) {
-    if (operation !== "listActivations") throw new Error("unexpected operation");
+    if (operation !== "listPortalReleases") throw new Error("unexpected operation");
     return new TextEncoder().encode(JSON.stringify(activations));
   } };
   const assets = await PortalAssets.load(assetsRoot);

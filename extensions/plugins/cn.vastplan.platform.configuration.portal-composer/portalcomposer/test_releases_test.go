@@ -106,7 +106,7 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 		Receipt:   portalTestReceipt(pluginv1.ArtifactRef{PluginID: binding.PluginID, Version: "1.1.0-dev.20260721.1.abcdef0", Channel: "testing"}, strings.Repeat("a", 64), 17),
 	}
 	release, err := service.CreateTestRelease(context.Background(), publisher, request)
-	if err != nil || release.Status != portalapi.TestReleaseReady || release.PreviousActivationID != first.ID || release.CandidateActivationID == 0 || release.CandidateApplicationRevisionID == 0 {
+	if err != nil || release.Status != portalapi.TestReleaseReady || release.PreviousReleaseID != first.ID || release.CandidateReleaseID == 0 || release.CandidatePortalVersionID == 0 {
 		t.Fatalf("Frontend Test Release 未完成: release=%+v err=%v", release, err)
 	}
 	if catalog.calls != 1 {
@@ -128,7 +128,7 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 		t.Fatalf("Frontend Test Release 终态必须释放临时 artifact-lock: %+v", catalog.snapshots)
 	}
 	activations, err := service.ListActivations(context.Background(), publisher)
-	if err != nil || len(activations) != 2 || activations[0].ID != release.CandidateActivationID || activations[0].Status != portalapi.ActivationCurrent || activations[1].Status != portalapi.ActivationSuperseded {
+	if err != nil || len(activations) != 2 || activations[0].ID != release.CandidateReleaseID || activations[0].Status != portalapi.ActivationCurrent || activations[1].Status != portalapi.ActivationSuperseded {
 		t.Fatalf("候选 Activation 未以 CAS 成为当前版本: %+v err=%v", activations, err)
 	}
 	if got := activations[0].Spec.Resolution.PluginOrigins[binding.PluginID]; got != "application" {
@@ -255,8 +255,8 @@ func TestFrontendProfileTestReleaseCreatesDedicatedProfileAndBindingRevisions(t 
 	release, err := service.CreateTestRelease(context.Background(), publisher, portalapi.CreateTestReleaseRequest{
 		BindingID: binding.ID, Receipt: portalTestReceipt(pluginv1.ArtifactRef{PluginID: pluginID, Version: "1.1.0-dev.20260721.4.abcdef0", Channel: "testing"}, strings.Repeat("e", 64), 17),
 	})
-	if err != nil || release.Status != portalapi.TestReleaseReady || release.CandidateProfileRevisionID == first.ProfileRevisionID || release.CandidateBindingRevisionID == first.BindingRevisionID || release.CandidateApplicationRevisionID != first.ApplicationRevisionID {
-		t.Fatalf("平台插件应使用专用测试 Profile/Binding revisions: release=%+v err=%v", release, err)
+	if err != nil || release.Status != portalapi.TestReleaseReady || release.CandidatePortalVersionID == first.ApplicationRevisionID {
+		t.Fatalf("平台插件应形成完整的专用测试 PortalVersion: release=%+v err=%v", release, err)
 	}
 	activations, err := service.ListActivations(context.Background(), publisher)
 	if err != nil || len(activations) != 2 || activations[0].Spec.Workbench.Version != "1.1.0-dev.20260721.4.abcdef0" || activations[0].Spec.Workbench.Channel != "testing" {

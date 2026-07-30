@@ -60,14 +60,21 @@ export interface PortalPlatformProfile {
   security: { firstPartyOnly: true; requireIntegrity: true };
 }
 
+export interface PortalConfiguration {
+  platform: PortalPlatformProfile;
+  application: PortalApplicationComposition;
+  services: PortalManagementBinding["services"];
+}
+
 export type PortalRevisionStatus = "Draft" | "PendingApproval" | "Approved" | "Published";
 
-export interface PortalRevision {
+export interface PortalVersion {
   id: number;
+  number: number;
   tenantId: string;
   portalId: string;
   status: PortalRevisionStatus;
-  composition: PortalApplicationComposition;
+  configuration: PortalConfiguration;
   resolved: PortalResolvedSpec;
   submittedBy?: string;
   approvedBy?: string;
@@ -100,70 +107,46 @@ export interface PortalResolvedSpec {
     };
 }
 
-export interface PortalProfileRevision {
-  id: number;
-  tenantId: string;
-  status: PortalRevisionStatus;
-  profile: PortalPlatformProfile;
-  submittedBy?: string;
-  approvedBy?: string;
-  publishedBy?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PortalBindingRevision {
-  id: number;
-  tenantId: string;
-  portalId: string;
-  profileRevisionId: number;
-  status: PortalRevisionStatus;
-  binding: PortalManagementBinding;
-  submittedBy?: string;
-  approvedBy?: string;
-  publishedBy?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type PortalActivationStatus = "Preparing" | "Activating" | "Current" | "Superseded" | "Failed";
-export interface PortalActivationPhase { name: string; status: "Succeeded" | "Failed"; message?: string; startedAt: string; endedAt?: string; }
+export type PortalReleaseStatus = "Preparing" | "Activating" | "Current" | "Superseded" | "Failed";
+export interface PortalReleasePhase { name: string; status: "Succeeded" | "Failed"; message?: string; startedAt: string; endedAt?: string; }
 export interface PortalArtifactReference {
   ref: { pluginId: string; version: string; channel: string };
   sha256: string;
   purpose: string;
 }
-export interface PortalActivation {
+export interface PortalRelease {
   id: number;
   tenantId: string;
   portalId: string;
-  status: PortalActivationStatus;
-  applicationRevisionId: number;
-  profileRevisionId: number;
-  bindingRevisionId: number;
-  previousActivationId?: number;
+  portalVersionId: number;
+  status: PortalReleaseStatus;
+  previousReleaseId?: number;
   resolved: PortalResolvedSpec;
   artifactReferences?: PortalArtifactReference[];
   referencePending?: boolean;
-  phases: PortalActivationPhase[];
+  phases: PortalReleasePhase[];
   actorId: string;
   reason?: string;
   createdAt: string;
 }
 
-export interface PortalGovernanceSnapshot {
-  profiles: PortalProfileRevision[];
-  applications: PortalRevision[];
-  bindings: PortalBindingRevision[];
-  activations: PortalActivation[];
+export interface Portal {
+  id: string;
+  tenantId: string;
+  versions: PortalVersion[];
+  releases: PortalRelease[];
+  currentReleaseId?: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface PortalActivationRequest {
-  portalId: string;
-  applicationRevisionId: number;
-  profileRevisionId: number;
-  bindingRevisionId: number;
-  expectedCurrentId: number;
+export interface PortalGovernance {
+  portals: Portal[];
+}
+
+export interface PortalReleaseRequest {
+  portalVersionId: number;
+  expectedCurrentReleaseId: number;
   reason?: string;
 }
 
@@ -208,12 +191,10 @@ export interface PortalTestRelease extends PortalTestReleaseRequest {
   id: number;
   tenantId: string;
   status: PortalTestReleaseStatus;
-  previousActivationId?: number;
-  candidateApplicationRevisionId?: number;
-  candidateProfileRevisionId?: number;
-  candidateBindingRevisionId?: number;
-  candidateActivationId?: number;
-  rollbackActivationId?: number;
+  previousReleaseId?: number;
+  candidatePortalVersionId?: number;
+  candidateReleaseId?: number;
+  rollbackReleaseId?: number;
   rollbackRequired?: boolean;
   errorCode?: string;
   errorMessage?: string;
@@ -244,90 +225,71 @@ export interface PortalControlClientOptions {
 export class PortalControlClient {
   private readonly basePath: string;
   private readonly csrfPath: string;
-  private readonly governancePath: string;
+  private readonly testingPath: string;
 
   public constructor(private readonly options: PortalControlClientOptions) {
-    this.basePath = options.basePath ?? "/v1/portal-drafts";
+    this.basePath = options.basePath ?? "/v1/portals";
     this.csrfPath = options.csrfPath ?? "/v1/csrf";
-    this.governancePath = "/v1/portal-governance";
+    this.testingPath = "/v1/portal-governance";
   }
 
-  public list(): Promise<PortalRevision[]> {
-    return this.call<PortalRevision[]>(this.basePath, { method: "GET" });
+  public governance(): Promise<PortalGovernance> {
+    return this.call<PortalGovernance>(this.basePath, { method: "GET" });
   }
 
-  public create(composition: PortalApplicationComposition): Promise<PortalRevision> {
-    return this.mutate<PortalRevision>(this.basePath, "POST", composition);
+  public createPortal(portalId: string, configuration: PortalConfiguration): Promise<Portal> {
+    return this.mutate<Portal>(this.basePath, "POST", { portalId: this.validResourceID(portalId), configuration });
   }
 
-  public update(id: number, composition: PortalApplicationComposition): Promise<PortalRevision> {
-    return this.mutate<PortalRevision>(this.revisionPath(id), "PUT", composition);
+  public createPortalVersion(portalId: string, configuration: PortalConfiguration): Promise<PortalVersion> {
+    return this.mutate<PortalVersion>(`${this.portalPath(portalId)}/versions`, "POST", { configuration });
   }
 
-  public submit(id: number): Promise<PortalRevision> {
-    return this.mutate<PortalRevision>(`${this.revisionPath(id)}/submit`, "POST", {});
+  public updatePortalVersion(portalId: string, id: number, configuration: PortalConfiguration): Promise<PortalVersion> {
+    return this.mutate<PortalVersion>(this.versionPath(portalId, id), "PUT", { configuration });
   }
 
-  public approve(id: number): Promise<PortalRevision> {
-    return this.mutate<PortalRevision>(`${this.revisionPath(id)}/approve`, "POST", {});
+  public deletePortalVersion(portalId: string, id: number): Promise<PortalVersion> {
+    return this.mutate<PortalVersion>(this.versionPath(portalId, id), "DELETE", {});
   }
 
-  public publish(id: number, breakGlassReason = ""): Promise<PortalRevision> {
-    return this.mutate<PortalRevision>(`${this.revisionPath(id)}/publish`, "POST", { breakGlassReason });
+  public transitionPortalVersion(portalId: string, id: number, action: "submit" | "approve" | "publish"): Promise<PortalVersion> {
+    return this.mutate<PortalVersion>(`${this.versionPath(portalId, id)}/${action}`, "POST", {});
   }
 
-  public audit(id: number): Promise<PortalAuditEvent[]> {
-    return this.call<PortalAuditEvent[]>(`${this.revisionPath(id)}/audit`, { method: "GET" });
+  public releasePortalVersion(portalId: string, request: PortalReleaseRequest): Promise<PortalRelease> {
+    return this.mutate<PortalRelease>(`${this.portalPath(portalId)}/releases`, "POST", request);
   }
 
-  public governance(): Promise<PortalGovernanceSnapshot> {
-    return this.call<PortalGovernanceSnapshot>(this.governancePath, { method: "GET" });
+  public rollbackPortalRelease(portalId: string, sourceId: number, expectedCurrentReleaseId: number, reason: string): Promise<PortalRelease> {
+    return this.mutate<PortalRelease>(`${this.portalPath(portalId)}/releases/${this.validID(sourceId)}/rollback`, "POST", { expectedCurrentReleaseId, reason });
   }
-  public createProfile(profile: PortalPlatformProfile): Promise<PortalProfileRevision> {
-    return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles`, "POST", profile);
-  }
-  public updateProfile(id: number, profile: PortalPlatformProfile): Promise<PortalProfileRevision> {
-    return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles/${this.validID(id)}`, "PUT", profile);
-  }
-  public deleteProfile(id: number): Promise<PortalProfileRevision> {
-    return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles/${this.validID(id)}`, "DELETE", {});
-  }
-  public transitionProfile(id: number, action: "submit" | "approve" | "publish"): Promise<PortalProfileRevision> {
-    return this.mutate<PortalProfileRevision>(`${this.governancePath}/profiles/${this.validID(id)}/${action}`, "POST", {});
-  }
-  public createBinding(profileRevisionId: number, binding: PortalManagementBinding): Promise<PortalBindingRevision> {
-    return this.mutate<PortalBindingRevision>(`${this.governancePath}/bindings`, "POST", { profileRevisionId: this.validID(profileRevisionId), binding });
-  }
-  public updateBinding(id: number, profileRevisionId: number, binding: PortalManagementBinding): Promise<PortalBindingRevision> {
-    return this.mutate<PortalBindingRevision>(`${this.governancePath}/bindings/${this.validID(id)}`, "PUT", { profileRevisionId: this.validID(profileRevisionId), binding });
-  }
-  public transitionBinding(id: number, action: "submit" | "approve" | "publish"): Promise<PortalBindingRevision> {
-    return this.mutate<PortalBindingRevision>(`${this.governancePath}/bindings/${this.validID(id)}/${action}`, "POST", {});
-  }
-  public activate(request: PortalActivationRequest): Promise<PortalActivation> {
-    return this.mutate<PortalActivation>(`${this.governancePath}/activations`, "POST", request);
-  }
-  public rollbackActivation(sourceId: number, expectedCurrentId: number, reason: string): Promise<PortalActivation> {
-    return this.mutate<PortalActivation>(`${this.governancePath}/activations/${this.validID(sourceId)}/rollback`, "POST", { expectedCurrentId, reason });
+
+  public auditPortalVersion(portalId: string, id: number): Promise<PortalAuditEvent[]> {
+    return this.call<PortalAuditEvent[]>(`${this.versionPath(portalId, id)}/audit`, { method: "GET" });
   }
   public listTestTargetBindings(): Promise<PortalTestTargetBinding[]> {
-    return this.call<PortalTestTargetBinding[]>(`${this.governancePath}/test-target-bindings`, { method: "GET" });
+    return this.call<PortalTestTargetBinding[]>(`${this.testingPath}/test-target-bindings`, { method: "GET" });
   }
   public putTestTargetBinding(id: string, request: PortalPutTestTargetBindingRequest): Promise<PortalTestTargetBinding> {
-    return this.mutate<PortalTestTargetBinding>(`${this.governancePath}/test-target-bindings/${this.validResourceID(id)}`, "PUT", request);
+    return this.mutate<PortalTestTargetBinding>(`${this.testingPath}/test-target-bindings/${this.validResourceID(id)}`, "PUT", request);
   }
   public listTestReleases(): Promise<PortalTestRelease[]> {
-    return this.call<PortalTestRelease[]>(`${this.governancePath}/test-releases`, { method: "GET" });
+    return this.call<PortalTestRelease[]>(`${this.testingPath}/test-releases`, { method: "GET" });
   }
   public createTestRelease(request: PortalTestReleaseRequest): Promise<PortalTestRelease> {
-    return this.mutate<PortalTestRelease>(`${this.governancePath}/test-releases`, "POST", request);
+    return this.mutate<PortalTestRelease>(`${this.testingPath}/test-releases`, "POST", request);
   }
   public rollbackTestRelease(id: number): Promise<PortalTestRelease> {
-    return this.mutate<PortalTestRelease>(`${this.governancePath}/test-releases/${this.validID(id)}/rollback`, "POST", {});
+    return this.mutate<PortalTestRelease>(`${this.testingPath}/test-releases/${this.validID(id)}/rollback`, "POST", {});
   }
 
-  private revisionPath(id: number): string {
-	return `${this.basePath}/${this.validID(id)}`;
+  private portalPath(portalId: string): string {
+	return `${this.basePath}/${this.validResourceID(portalId)}`;
+  }
+
+  private versionPath(portalId: string, id: number): string {
+	return `${this.portalPath(portalId)}/versions/${this.validID(id)}`;
   }
 
   private validID(id: number): number {

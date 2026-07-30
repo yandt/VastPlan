@@ -1,21 +1,22 @@
 # Portal Composer Plugin
 
-`cn.vastplan.platform.configuration.portal-composer` 是 Portal 在线组合与发布治理插件。管理中心通过 Workbench 提供 Platform Profile、Application、Binding 和不可变 Activation 四个受治理页面。Application 草稿只编辑 Portal 路由、受众、品牌、非敏感配置和应用功能插件，不能替换 Profile 治理的设计系统、Shell 组合或布局。
+`cn.vastplan.platform.configuration.portal-composer` 是 Portal 在线组合与发布治理插件。管理中心只注册一个 `/settings/portals` Workbench 页面，一行代表一个 Portal。
 
-Profile 页的“新建版本”是页面级操作，位于 Page Header 右侧；它以当前最新的 Profile revision 作为草稿来源，再由管理员修改并提交。逐行操作只保留与该 revision 直接相关的编辑、查看、审批和发布，避免在每一行重复显示新增按钮。
+每个 `PortalVersion` 保存完整配置：平台运行栈、Renderer、Shell、Workbench、路由、受众、品牌、应用插件、非敏感配置及管理服务授权。原 Platform Profile、Application 和 Binding 不再拥有独立在线草稿或菜单，避免管理员手工拼装多份 revision。
 
-Profile、Application 和 Binding 均执行 `Draft → PendingApproval → Approved → Published`，且 Published 只表示可被引用，不代表线上生效。Activation 精确引用三类 Published revision，服务端重新解析并锁定输入摘要、逐插件来源和管理绑定；随后依次执行输入校验、快照生成、Portal Kernel 就绪与 CAS 激活。Backend `portaltrust` 复核精确制品、发布者分类、单一设计系统和 UI 契约，Composer 本身不接触仓库凭据或验签密钥。
+PortalVersion 执行 `Draft → PendingApproval → Approved → Published`。Published 只冻结版本，不代表线上生效。`PortalRelease` 引用一个精确 Published PortalVersion，重新执行可信 Catalog 校验、制品物化、引用保护、路由冲突检查和 CAS 后才改变线上 Portal。回滚使用历史 Release 对应的 PortalVersion 创建新 Release，不修改历史。
 
-只有 `PortalActivation` 是线上事实。成功 Activation 记录不可修改；更晚的成功记录会把旧记录投影为 `Superseded`。回滚引用历史 Activation 的精确输入创建一条新 Activation，不会复活或改写旧记录。请求必须携带 `expectedCurrentId`，并发管理员使用过期值时会被 CAS 拒绝。
+静态 Platform Catalog 仅为创建首个 PortalVersion 提供种子模板。它不会被灌入在线 Profile/Binding 治理状态。内核 Recovery Baseline 独立于 Portal 配置，错误 PortalVersion 不能覆盖最小安全启动和恢复入口。
 
-该插件只负责呈现与提交意图；校验、双人审批、发布、Activation、回滚与审计均通过 Node Portal Kernel/BFF 的受保护 API 完成。浏览器不得直接获得服务凭据、内部服务地址或原始身份令牌。生产插件仅经已认证的 `kernel.config.get` 取得签名 Platform Catalog，并通过窄化的 Catalog 能力请求内核验证和物化制品；状态路径不再是配置项。
+Frontend Test Release 也形成完整候选 PortalVersion：获得授权的应用或平台插件槽位被替换后，候选整体校验、发布和上线，不产生对外可见的独立测试 Profile/Binding。
 
-Frontend Test Release 也在本插件中复用同一组 revision/Activation 分配器。`application-plugin` 只替换当前 Application 已有槽位；`platform-profile-plugin` 创建 tenant 专用测试 Profile 与 Binding，不原地修改共享基线。制品摘要、repository revision、发布者与 frontend target 由 Backend `portaltrust` 回调验证，Composer 进程不持有仓库凭证。
+该插件从可信 `CallContext` 取得 tenant 与 Principal，通过 `kernel.portal.catalog.*` 窄能力校验和物化制品，不接触仓库凭据或验签密钥。全部用户 operation 与权限守卫由插件 Manifest 机械投影。
 
-同一 active-active 逻辑服务还发布独立的 `platform.portal-preference` 能力，但它不属于 Portal 发布治理状态。偏好按认证 tenant + subject 摘要独立保存 Shared State 文档，再按 Portal 和三个 UI Catalog contract major 隔离 scope，只保存 Renderer、主题、图标、Shell Library 与 Workbench 集合的稳定 ID。只有 Node Portal Kernel 投影的 `portal.bff` 用户场景可读写；浏览器不能提交身份或 scope。业务 revision CAS 与 Store CAS 同时阻止跨设备和跨实例覆盖。
+同一 active-active 逻辑服务还提供独立 `platform.portal-preference` 能力。偏好按 tenant、subject、Portal 与 UI Contract scope 保存，不属于 PortalVersion 发布状态。
 
 ```bash
 pnpm --filter @vastplan/portal-composer typecheck
+pnpm --filter @vastplan/portal-composer test
 ```
 
-完整治理流程与安全边界见《[前端门户内核](../../../docs/dev/architecture/前端门户内核.md)》。
+完整边界见《[前端门户内核](../../../docs/dev/architecture/前端门户内核.md)》和 [ADR-0171](../../../docs/dev/decisions/ADR-0171-Portal单聚合版本与上线子流程.md)。

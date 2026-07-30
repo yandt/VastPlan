@@ -12,51 +12,50 @@ import { createPortalHandler } from "./portal-handler";
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve())))));
 
-describe("Portal governance routes", () => {
-  it("maps Profile, Binding and Activation workflows to isolated Composer operations", async () => {
+describe("Portal aggregate routes", () => {
+  it("maps versions, publication and releases through one Portal resource", async () => {
     const calls: { operation: string; payload: unknown }[] = [];
     const composer: PortalComposerPort = { async call(_principal, operation, payload) {
       calls.push({ operation, payload: JSON.parse(new TextDecoder().decode(payload)) as unknown });
       return new TextEncoder().encode('{"id":11}');
     } };
     const { origin, headers } = await startServer(composer);
-    const requests: [string, "POST" | "PUT" | "DELETE", string][] = [
-      ["/v1/portal-governance/profiles", "POST", '{"id":"standard"}'],
-      ["/v1/portal-governance/profiles/3", "PUT", '{"id":"standard-v2"}'],
-      ["/v1/portal-governance/profiles/4", "DELETE", "{}"],
-      ["/v1/portal-governance/profiles/3/approve", "POST", "{}"],
-      ["/v1/portal-governance/bindings", "POST", '{"profileRevisionId":3,"binding":{"portalId":"admin"}}'],
-      ["/v1/portal-governance/bindings/5", "PUT", '{"profileRevisionId":3,"binding":{"portalId":"ops"}}'],
-      ["/v1/portal-governance/bindings/5/publish", "POST", "{}"],
-      ["/v1/portal-governance/activations", "POST", '{"portalId":"admin","expectedCurrentId":0}'],
-      ["/v1/portal-governance/activations/9/rollback", "POST", '{"sourceId":99,"expectedCurrentId":10,"reason":"restore"}'],
+    const requests: [string, "GET" | "POST" | "PUT" | "DELETE", string | undefined][] = [
+      ["/v1/portals", "GET", undefined],
+      ["/v1/portals", "POST", '{"portalId":"operations","configuration":{"route":"/operations"}}'],
+      ["/v1/portals/operations/versions", "POST", '{"route":"/operations-v2"}'],
+      ["/v1/portals/operations/versions/7", "PUT", '{"route":"/operations-v3"}'],
+      ["/v1/portals/operations/versions/7/submit", "POST", "{}"],
+      ["/v1/portals/operations/versions/7/approve", "POST", "{}"],
+      ["/v1/portals/operations/versions/7/publish", "POST", "{}"],
+      ["/v1/portals/operations/releases", "POST", '{"portalVersionId":7,"expectedCurrentReleaseId":0}'],
+      ["/v1/portals/operations/releases/9/rollback", "POST", '{"expectedCurrentReleaseId":10,"reason":"restore"}'],
     ];
     for (const [path, method, body] of requests) {
-      const response = await fetch(`${origin}${path}`, { method, headers, body });
+      const response = await fetch(`${origin}${path}`, { method, headers, ...(body === undefined ? {} : { body }) });
       expect(response.status, path).toBe(200);
     }
     expect(calls).toEqual([
-      { operation: "createProfileDraft", payload: { id: "standard" } },
-      { operation: "updateProfileDraft", payload: { revisionId: 3, profile: { id: "standard-v2" } } },
-      { operation: "deleteProfileDraft", payload: { revisionId: 4 } },
-      { operation: "approveProfile", payload: { revisionId: 3 } },
-      { operation: "createBindingDraft", payload: { profileRevisionId: 3, binding: { portalId: "admin" } } },
-      { operation: "updateBindingDraft", payload: { revisionId: 5, draft: { profileRevisionId: 3, binding: { portalId: "ops" } } } },
-      { operation: "publishBinding", payload: { revisionId: 5 } },
-      { operation: "activate", payload: { portalId: "admin", expectedCurrentId: 0 } },
-      { operation: "rollbackActivation", payload: { sourceId: 9, expectedCurrentId: 10, reason: "restore" } },
+      { operation: "portalGovernance", payload: {} },
+      { operation: "createPortal", payload: { portalId: "operations", configuration: { route: "/operations" } } },
+      { operation: "createPortalVersion", payload: { portalId: "operations", configuration: { route: "/operations-v2" } } },
+      { operation: "updatePortalVersion", payload: { portalId: "operations", versionId: 7, configuration: { route: "/operations-v3" } } },
+      { operation: "submitPortalVersion", payload: { portalId: "operations", versionId: 7 } },
+      { operation: "approvePortalVersion", payload: { portalId: "operations", versionId: 7 } },
+      { operation: "publishPortalVersion", payload: { portalId: "operations", versionId: 7 } },
+      { operation: "releasePortalVersion", payload: { portalId: "operations", release: { portalVersionId: 7, expectedCurrentReleaseId: 0 } } },
+      { operation: "rollbackPortalRelease", payload: { portalId: "operations", releaseId: 9, expectedCurrentReleaseId: 10, reason: "restore" } },
     ]);
   });
 
-  it("rejects unknown governance resources and invalid revision paths without invoking Composer", async () => {
+  it("rejects unknown children and invalid identities before Composer invocation", async () => {
     let calls = 0;
     const composer: PortalComposerPort = { async call() { calls += 1; return new TextEncoder().encode("{}"); } };
     const { origin, headers } = await startServer(composer);
-    const unknown = await fetch(`${origin}/v1/portal-governance/secrets`, { headers });
-    expect(unknown.status).toBe(404);
-    const invalid = await fetch(`${origin}/v1/portal-governance/profiles/not-a-number`, { method: "PUT", headers, body: "{}" });
+    expect((await fetch(`${origin}/v1/portals/operations/profiles`, { headers })).status).toBe(404);
+    const invalid = await fetch(`${origin}/v1/portals/operations/versions/not-a-number`, { method: "PUT", headers, body: "{}" });
     expect(invalid.status).toBe(400);
-    expect(await invalid.json()).toEqual({ error: "invalid_revision" });
+    expect(await invalid.json()).toEqual({ error: "invalid_portal_version" });
     expect(calls).toBe(0);
   });
 });

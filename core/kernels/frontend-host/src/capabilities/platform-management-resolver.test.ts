@@ -28,7 +28,7 @@ describe("PlatformManagementResolver", () => {
 
 function composerWith(activations: unknown[]): PortalComposerPort {
   return { async call(_principal, operation) {
-    expect(operation).toBe("listActivations");
+    expect(operation).toBe("listPortalReleases");
     return new TextEncoder().encode(JSON.stringify(activations));
   } };
 }
