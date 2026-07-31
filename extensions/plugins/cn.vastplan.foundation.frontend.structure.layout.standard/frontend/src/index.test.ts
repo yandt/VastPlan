@@ -60,6 +60,13 @@ describe("standard shell layout", () => {
     expect(standardShellCSS).toContain(".vp-navigation-link[aria-current=page]");
   });
 
+  it("keeps direct and expandable second-level items visually aligned without separators", () => {
+    expect(standardShellCSS).toContain(".vp-navigation-link,.vp-navigation-child-trigger{min-height:var(--vp-shell-touch-minimum)");
+    expect(standardShellCSS).toContain(".vp-navigation-root-pages{margin:0}");
+    expect(standardShellCSS).not.toContain(".vp-navigation-root-pages{border-bottom");
+    expect(standardShellCSS).not.toContain(".vp-navigation-child[data-active]");
+  });
+
   it("keeps semantic zone order while returning normalized groups", () => {
     const model = composition({ navigation: {
       primary: [{ id: "operations", label: "运行", zone: "primary", icon: "menu", pages: [], children: [] }],

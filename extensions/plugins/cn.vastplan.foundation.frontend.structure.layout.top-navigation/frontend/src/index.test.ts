@@ -27,4 +27,11 @@ describe("top navigation shell layout", () => {
     expect(topNavigationShellCSS).toContain(".vp-top-page-scroller{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;background:var(--vp-top-surface)}");
     expect(topNavigationShellCSS).toContain("padding:var(--vp-page-content-start) 24px 24px");
   });
+
+  it("keeps direct and nested second-level entries in one visual rhythm", () => {
+    expect(topNavigationShellCSS).toContain(".vp-top-direct-pages,.vp-top-child-grid{display:grid");
+    expect(topNavigationShellCSS).toContain(".vp-top-child-group h3{box-sizing:border-box;display:flex;align-items:center;min-height:var(--vp-top-touch-minimum)");
+    expect(topNavigationShellCSS).not.toContain(".vp-top-direct-pages{display:flex");
+    expect(topNavigationShellCSS).not.toContain(".vp-top-direct-pages{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;padding-bottom:12px;border-bottom");
+  });
 });
