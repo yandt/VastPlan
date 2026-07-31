@@ -23,13 +23,14 @@ func TestRuntimeDescriptorAndVersionMatchSignedManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	contributions, err := pluginv1.BackendRuntimeContributions(manifest)
-	if err != nil || len(contributions) != 2 {
+	if err != nil || len(contributions) != 3 {
 		t.Fatalf("manifest contribution 无效: %+v %v", contributions, err)
 	}
 	service := staging.NewService(nil)
 	runtimeContributions := map[string][]byte{
-		stagingv1.Capability: service.Contribution().Descriptor,
-		contentv1.Capability: service.ContentReferenceContribution().Descriptor,
+		stagingv1.Capability:                service.Contribution().Descriptor,
+		contentv1.Capability:                service.ContentReferenceContribution().Descriptor,
+		stagingv1.UploadDataPlaneCapability: uploadDataPlaneContribution(nil).Descriptor,
 	}
 	for _, contribution := range contributions {
 		var signed, runtime any

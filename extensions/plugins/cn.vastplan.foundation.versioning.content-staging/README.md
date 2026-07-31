@@ -17,10 +17,15 @@
 - Provider、Admission 与 Manager 通过窄端口隔离，后续可以替换为对象存储和企业安全扫描实现。
 - `version.content-reference.v1`：在 Ledger 写入前持久化 `Prepared` 保护，在精确 VersionRef 返回后幂等转为 `Confirmed`；上传 Lease 过期不会删除仍受版本保护的 CAS 对象；
 - Prepared 保护有 tenant 数量配额和最长保护时间，重试会续展；Confirmed 保护不随 Head 移动或临时 Lease 回收。
+- 可选 `version-content-upload` HTTPS 数据面：复用平台 `EndpointLease + ticket-redirect`，接受浏览器经同站 BFF 取得的一次性 Ticket，并把请求体直接流入 Manager；
+- Ticket 精确绑定 tenant、用户、Exposure、实例、`PUT /v1/uploads/{uploadId}`、预期 SHA-256 和 30 秒有效期，原子消费一次，拒绝额外 query、明文 HTTP 与重放；
+- 数据面接收成功后仍需调用 Workspace `completeContentUpload`，不会绕过摘要、大小和 Admission 准入。
 
 ## 当前边界
 
-P2.4c2 已由 Workspace 接入持久版本引用事务并开放 Files commit，但仍未把真实字节流接到浏览器、Runner 或 Backend Host。当前没有 `writeChunk` 或临时 HTTP 上传接口。P2.4d 再提供同站 BFF、Host streaming SDK、对象存储 Provider 与恶意内容/DLP 扫描。
+P2.4d1 已把真实字节流接到浏览器：Node Portal Kernel 复用通用 `/api/d/{routeKey}/ticket` BFF，Content Staging 提供受 EndpointLease 管理的 HTTPS 流式入口。它不是普通 JSON API，也没有 `writeChunk`；Node 不代理文件内容。
+
+Backend/Runner 的 `private-direct` Host streaming SDK、对象存储 Provider、恶意内容/DLP 扫描和跨节点传输故障矩阵尚未实现。当前插件只声明 `ticket-redirect`，不得把内部 Go `io.Reader` 端口当成已完成的跨进程 SDK。
 
 内置 `IntegrityAdmission` 会再次顺序读取暂存内容，并配合 Manager 完成大小、SHA-256、mediaType 声明和 tenant/Lease 校验；它不是恶意软件扫描器。要求内容扫描的生产环境必须等待或配置 P2.4d 的 Admission Provider，不能把完整性校验误称为安全扫描。
 
@@ -44,11 +49,30 @@ P2.4c2 已由 Workspace 接入持久版本引用事务并开放 Files commit，�
     "preparedProtectionSeconds": 86400,
     "terminalRetentionSeconds": 86400
   },
-  "reclaimIntervalSeconds": 60
+  "reclaimIntervalSeconds": 60,
+  "dataPlane": {
+    "listen": "127.0.0.1:9444",
+    "endpoint": "https://content.internal:9444",
+    "instanceId": "content-staging-1",
+    "tlsIdentity": "spiffe://vastplan/content/content-staging-1",
+    "allowedBrowserOrigins": ["https://portal.example.com"],
+    "exposures": [
+      { "tenantId": "tenant-a", "exposureId": "dpx_aaaaaaaaaaaaaaaaaaaa" }
+    ]
+  }
 }
 ```
 
 协议允许的 1 TiB 只是硬上限，不是推荐配置。服务配置必须根据磁盘容量、扫描吞吐和并发基线设置更低限额。
+
+`dataPlane` 可省略；省略后控制面和内部 Go 流端口仍可用，但不会登记浏览器上传 EndpointLease。启用时还必须：
+
+1. 在 API Exposure 中发布引用本插件 `version-content-upload` 服务的 Data Plane Exposure，只批准实际 HTTPS origin、SPIFFE identity prefix、认证 Profile、所需权限和 `ticket-redirect`；
+2. 通过 `VASTPLAN_CONTENT_UPLOAD_TLS_CERT` 与 `VASTPLAN_CONTENT_UPLOAD_TLS_KEY` 向受管进程提供证书和私钥路径；
+3. 保证 `endpoint` 是客户端可达且与 `listen` 对应的无路径 HTTPS origin；在 `exposures` 中为每个启用浏览器上传的 tenant 绑定其已发布且唯一的 Exposure ID，EndpointLease 按 tenant 独立注册和续租；
+4. 把实际 Portal origin 加入 `allowedBrowserOrigins`。只接受规范小写 HTTPS origin；本地开发仅允许 `localhost/127.0.0.1/[::1]` 使用 HTTP。未配置的 Origin 和额外预检 Header 均拒绝，禁止使用通配符 `*`。
+
+浏览器流程为：Workspace `beginContentUpload` → 同站 `POST /api/d/{routeKey}/ticket`（body 指定 `PUT`、`/v1/uploads/{uploadId}`、`contentSha256`）→ `PUT {endpoint}/v1/uploads/{uploadId}?vp_ticket=...` → Workspace `completeContentUpload`。Ticket URL 不得写日志、缓存或持久状态。
 
 ## 开发验证
 

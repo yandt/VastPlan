@@ -9,6 +9,7 @@ import (
 	configurationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configuration/v1"
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
+	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
@@ -243,6 +244,9 @@ func TestAPIExposureManagementAndRuntimeBoundaries(t *testing.T) {
 	}
 	if got, _ := decide(exposure, extpoint.PermissionRequest{Capability: platformadminapi.ArtifactsCapability, Operation: "installAssessmentReportTicket"}); got != extpoint.DecisionAllow {
 		t.Fatalf("Exposure 控制面应能安装独立评估报告 Ticket: %s", got)
+	}
+	if got, _ := decide(exposure, extpoint.PermissionRequest{Capability: stagingv1.UploadDataPlaneCapability, Operation: stagingv1.OperationInstallDataPlaneTicket}); got != extpoint.DecisionAllow {
+		t.Fatalf("Exposure 控制面应能安装版本内容上传 Ticket: %s", got)
 	}
 }
 

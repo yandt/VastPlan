@@ -64,16 +64,17 @@ describe("APIExposureGateway", () => {
       },
     }, true);
     const token = "c".repeat(64);
+    const digest = "d".repeat(64);
     const response = await fetch(`${origin}/api/d/bbbbbbbbbbbbbbbbbbbb/ticket`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Cookie: `vastplan_csrf=${token}`, "X-VastPlan-CSRF": token },
-      body: JSON.stringify({ method: "GET", resource: "/v1/artifacts/demo?channel=testing" }),
+      body: JSON.stringify({ method: "PUT", resource: "/v1/uploads/stg_abcdefghijklmnop", contentSha256: digest }),
     });
     expect(response.status).toBe(200);
     expect(calls).toEqual([{
       route: { capability: "platform.api-exposure", logicalService: "platform.api-exposure", routingDomain: "platform" },
       operation: "issueDataPlaneTicket",
-      payload: { dataPlaneExposureId: "dpx_bbbbbbbbbbbbbbbbbbbb", method: "GET", resource: "/v1/artifacts/demo?channel=testing" },
+      payload: { dataPlaneExposureId: "dpx_bbbbbbbbbbbbbbbbbbbb", method: "PUT", resource: "/v1/uploads/stg_abcdefghijklmnop", contentSha256: digest },
     }]);
   });
 });

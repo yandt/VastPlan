@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -16,9 +17,19 @@ import (
 
 const workspacePluginID = "cn.vastplan.foundation.versioning.workspace"
 
-type Service struct{ manager *Manager }
+// ControlObserver runs after a successful trusted control-plane operation. It
+// lets the process transport renew its EndpointLease without leaking transport
+// concepts into the staging Manager or its wire contract.
+type ControlObserver func(context.Context, sdk.Host, *contractv1.CallContext)
+
+type Service struct {
+	manager         *Manager
+	controlObserver ControlObserver
+}
 
 func NewService(manager *Manager) *Service { return &Service{manager: manager} }
+
+func (s *Service) SetControlObserver(observer ControlObserver) { s.controlObserver = observer }
 
 func requestScope(call *contractv1.CallContext) (Scope, error) {
 	if call == nil || call.GetTenantId() == "" || call.GetCaller().GetKind() != contractv1.CallerKind_CALLER_KIND_PLUGIN || call.GetCaller().GetId() != workspacePluginID {
@@ -35,7 +46,7 @@ func requestScope(call *contractv1.CallContext) (Scope, error) {
 }
 
 func (s *Service) handle(operation string) sdk.Handler {
-	return func(ctx context.Context, _ sdk.Host, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
+	return func(ctx context.Context, host sdk.Host, call *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 		parsed, err := stagingv1.ParseRequest(operation, payload)
 		if err != nil {
 			return serviceResult(operation, stagingv1.UploadStatusResult{}, stagingError(stagingv1.ErrorInvalidRequest, false, err))
@@ -61,8 +72,25 @@ func (s *Service) handle(operation string) sdk.Handler {
 		default:
 			err = stagingError(stagingv1.ErrorOperationUnsupported, false, errors.New("Content Staging 操作未实现"))
 		}
+		if err == nil && s.controlObserver != nil {
+			s.controlObserver(ctx, host, call)
+		}
 		return serviceResult(operation, result, err)
 	}
+}
+
+func (s *Service) UploadStatus(ctx context.Context, scope Scope, uploadID string) (stagingv1.UploadStatusResult, error) {
+	if s == nil || s.manager == nil {
+		return stagingv1.UploadStatusResult{}, stagingError(stagingv1.ErrorStorageUnavailable, true, errors.New("Content Staging 服务未初始化"))
+	}
+	return s.manager.Status(ctx, scope, stagingv1.UploadStatusRequest{UploadID: uploadID})
+}
+
+func (s *Service) StreamUpload(ctx context.Context, scope Scope, uploadID string, reader io.Reader) (stagingv1.UploadStatusResult, error) {
+	if s == nil || s.manager == nil {
+		return stagingv1.UploadStatusResult{}, stagingError(stagingv1.ErrorStorageUnavailable, true, errors.New("Content Staging 服务未初始化"))
+	}
+	return s.manager.Stream(ctx, scope, uploadID, reader)
 }
 
 func serviceResult(operation string, result stagingv1.UploadStatusResult, err error) (*contractv1.CallResult, []byte, error) {

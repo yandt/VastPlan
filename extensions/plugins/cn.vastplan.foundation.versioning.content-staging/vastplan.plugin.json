@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.versioning.content-staging",
   "name": "VastPlan Version Content Staging",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -32,6 +32,24 @@
         "capability": "foundation.versioning.content-reference",
         "visibility": "cluster",
         "routing": "leader",
+        "routingDomain": "platform"
+      },
+      {
+        "extensionPoint": "tool.package",
+        "capability": "foundation.versioning.content-upload",
+        "visibility": "cluster",
+        "routing": "leader",
+        "routingDomain": "platform"
+      }
+    ],
+    "requires": [
+      {
+        "capability": "platform.api-exposure",
+        "scope": "remote",
+        "kind": "soft",
+        "ready": "readiness",
+        "failurePolicy": "degrade",
+        "logicalService": "platform.api-exposure",
         "routingDomain": "platform"
       }
     ]
@@ -69,6 +87,37 @@
             "terminalRetentionSeconds": { "type": "integer", "minimum": 60, "maximum": 2592000 }
           }
         },
+        "dataPlane": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["listen", "endpoint", "instanceId", "tlsIdentity", "exposures"],
+          "properties": {
+            "listen": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "endpoint": { "type": "string", "pattern": "^https://", "maxLength": 2048 },
+            "instanceId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$" },
+            "tlsIdentity": { "type": "string", "pattern": "^spiffe://", "maxLength": 512 },
+            "allowedBrowserOrigins": {
+              "type": "array",
+              "maxItems": 32,
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1, "maxLength": 2048 }
+            },
+            "exposures": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1000,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["tenantId", "exposureId"],
+                "properties": {
+                  "tenantId": { "type": "string", "minLength": 1, "maxLength": 160 },
+                  "exposureId": { "type": "string", "pattern": "^dpx_[a-z2-7]{20}$" }
+                }
+              }
+            }
+          }
+        },
         "reclaimIntervalSeconds": { "type": "integer", "minimum": 5, "maximum": 3600 }
       }
     }
@@ -100,6 +149,27 @@
             { "name": "confirmVersion", "description": "将保护幂等确认给精确 VersionRef" },
             { "name": "abortProtection", "description": "显式终止未确认保护" }
           ]
+        },
+        {
+          "id": "foundation.versioning.content-upload",
+          "service_role": "backend",
+          "title": "Version Content Upload",
+          "subcommands": [
+            { "name": "installDataPlaneTicket", "description": "安装 API Exposure 签发的一次性内容上传 Ticket" }
+          ]
+        }
+      ],
+      "dataPlaneServices": [
+        {
+          "id": "version-content-upload",
+          "service_role": "backend",
+          "title": "版本内容 HTTPS 流式上传数据面",
+          "protocol": "https",
+          "purposes": ["version-content-upload"],
+          "supportedModes": ["ticket-redirect"],
+          "healthPath": "/healthz",
+          "maxObjectBytes": 1099511627776,
+          "ticketTarget": { "capability": "foundation.versioning.content-upload", "operation": "installDataPlaneTicket" }
         }
       ]
     }

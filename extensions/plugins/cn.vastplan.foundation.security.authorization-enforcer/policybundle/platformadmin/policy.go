@@ -15,6 +15,7 @@ import (
 	configurationscopedv1 "cdsoft.com.cn/VastPlan/contracts/schemas/configurationscoped/v1"
 	databasev1 "cdsoft.com.cn/VastPlan/contracts/schemas/database/v1"
 	sharedstatev1 "cdsoft.com.cn/VastPlan/contracts/schemas/sharedstate/v1"
+	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationactivation"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/configurationauthority"
@@ -244,7 +245,13 @@ func apiExposureTicketAllowed(c *v1.CallContext, request extpoint.PermissionRequ
 }
 
 func apiExposureTicketInstallationAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
-	return c.GetCaller().GetKind() == v1.CallerKind_CALLER_KIND_PLUGIN && c.GetCaller().GetId() == "cn.vastplan.platform.integration.api-exposure" && request.Capability == platformadminapi.ArtifactsCapability && (request.Operation == "installDataPlaneTicket" || request.Operation == "installAssessmentReportTicket")
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || c.GetCaller().GetId() != "cn.vastplan.platform.integration.api-exposure" {
+		return false
+	}
+	if request.Capability == platformadminapi.ArtifactsCapability {
+		return request.Operation == "installDataPlaneTicket" || request.Operation == "installAssessmentReportTicket"
+	}
+	return request.Capability == stagingv1.UploadDataPlaneCapability && request.Operation == stagingv1.OperationInstallDataPlaneTicket
 }
 
 func materialLeaseAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {

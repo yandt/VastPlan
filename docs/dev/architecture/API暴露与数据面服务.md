@@ -87,6 +87,8 @@ Endpoint 不得携带 userinfo、query 或 fragment，并且其 HTTPS origin 与
 
 Portal 对 Ticket 请求先执行 Host、tenant、认证 Profile、权限、CSRF 和有界 JSON 校验，再调用 API Exposure leader。控制面选择带 `ticket-redirect` 模式的有效 Lease，并通过当前可信委托主动调用清单声明的 `ticketTarget`，把 30 秒一次性 Ticket 安装到精确数据面实例；安装失败会撤销 Ticket。随后客户端携带 `vp_ticket` 访问数据面，Ticket 在数据面本地按租户、主体、实例、方法与资源原子消费一次。这样不会要求独立 HTTP 数据面从公网请求反向伪造插件 CallContext。
 
+Version Content Staging 是第二个正式消费者。浏览器先通过上述同站入口申请绑定 `PUT /v1/uploads/{uploadId}` 和 `contentSha256` 的 Ticket，再把请求体直接流向 Content Staging HTTPS 实例；数据面消费 Ticket 后仍复核 Upload Lease 所有者、摘要、声明大小和 Lease 到期时间。接收字节与完成上传是两个显式步骤，数据面不代替 Workspace 执行 `completeContentUpload`。当前只启用 `ticket-redirect`；Backend/Runner 的受信直连必须等 `private-direct` streaming SDK 完成后再声明。
+
 ## 6. 发布与演进
 
 Exposure 使用 `Draft → PendingApproval → Approved → Published → Retired`。发布产生新 generation，并以 CAS 原子替换 Gateway Catalog；Gateway 保留最近可用 generation，错误快照不得覆盖当前版本。Route Key 只标识公开 Exposure，契约兼容性由 URL 中的 major 和 Contract semver 控制。实现插件升级、迁移或替换不改变 Route Key，只更新受信 Contract Reference 和目标绑定。

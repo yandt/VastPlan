@@ -71,3 +71,13 @@ Files commit 固定执行以下事务链：
 `Prepared` 是有界崩溃保护，不是永久垃圾保留：每次有效重试会续展保护，超过配置时限仍未确认则进入 `Expired`，待 Upload Lease 和其他保护均消失后回收 CAS 对象。过期后仍可用同一 `operationId` 和完全相同的 Manifest 重新上传缺失内容并恢复 Prepared，不会创建第二个 Ledger 版本。`Confirmed` 当前永久保留；未来只有在 Version Ledger 增加明确的版本删除/保留策略后，才可通过单独的 release 协议减少引用，不能根据 Head 移动推断版本已无用。
 
 Workspace Session 仍是临时编辑区，不引入持久 Session 状态。跨 Leader 恢复通过“调用方重开 Session、重新上传缺失候选、复用同一领域 `operationId`”完成；Content Reference 的逻辑幂等比较忽略新的 Session 和临时 Upload ID，但严格固定 tenant、actor、Environment、Resource、stream、Manifest 摘要和全部内容描述。
+
+## 实施记录：P2.4d1（2026-07-31）
+
+P2.4d 按传输入口、可信客户端直连、存储 Provider 和安全准入分阶段实施。P2.4d1 不新增专属 BFF 协议，而是复用 ADR-0110 已落地的 `dataPlaneServices + EndpointLease + ticket-redirect` 通用数据面：Content Staging 以第三项能力 `foundation.versioning.content-upload` 接受 API Exposure 主动安装的一次性 Ticket，并通过独立 TLS 1.3 HTTPS 入口流式写入同一 Manager。
+
+浏览器先经同站 Node Portal Kernel 的 `POST /api/d/{routeKey}/ticket` 请求精确 `PUT` Ticket。BFF 负责会话、tenant、认证 Profile、权限、CSRF 和有界请求校验；API Exposure 只从已发布 Data Plane Exposure 选择健康 EndpointLease，并把 30 秒 Ticket 安装到精确实例。数据面再次严格绑定 tenant、principal、Exposure、实例、HTTP 方法、Upload ID、预期 SHA-256 和有效期，Ticket 原子消费一次且拒绝额外 query。插件 ID、内部 capability、Provider、物理路径和存储凭据均不进入浏览器可配置输入。
+
+上传入口固定为 `PUT /v1/uploads/{uploadId}?vp_ticket=...`。它要求 TLS，跨 Origin 浏览器只允许服务配置中的精确 Origin 白名单并以最小 `OPTIONS` 预检响应放行 `PUT/Content-Type`，不使用通配 CORS。入口按 Upload Lease 到期时间约束流持续时间，直接把请求体交给 Manager 的有界 `io.Reader` 单一写入边界，不设置会误杀大文件的固定 30 秒响应超时。声明 Content-Length 时必须精确等于 begin 中的 expectedSize；chunked 流超量会进入可审计 `Rejected/size_mismatch`。上传成功只表示字节流已接收，调用方仍必须通过 Workspace 执行 `completeContentUpload`，由既有摘要、大小与 Admission 流程决定 Ready。
+
+EndpointLease 在任一成功的可信 Staging 控制调用后注册或续租，并按显式 `tenant → Exposure` 绑定分别维护，不能让 leader 的首个租户垄断单一 Lease。未配置绑定或 API Exposure 不可用时，控制面上传 Lease 仍可建立，但 Ticket 签发失败关闭，不回退为公开静态 token 或绕过认证的端口。本阶段只声明 `ticket-redirect`，不谎称已支持 Backend/Runner 的 `private-direct`、对象存储 Provider、企业恶意内容/DLP 扫描或跨节点传输接管；这些属于 P2.4d2 之后的独立交付。

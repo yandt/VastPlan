@@ -9,9 +9,11 @@ import (
 )
 
 const (
-	SchemaURL  = "https://schemas.cdsoft.com.cn/vastplan/version-staging/v1/vastplan.version-staging.schema.json"
-	Protocol   = "version.staging.v1"
-	Capability = "foundation.versioning.content-staging"
+	SchemaURL                       = "https://schemas.cdsoft.com.cn/vastplan/version-staging/v1/vastplan.version-staging.schema.json"
+	Protocol                        = "version.staging.v1"
+	Capability                      = "foundation.versioning.content-staging"
+	UploadDataPlaneCapability       = "foundation.versioning.content-upload"
+	OperationInstallDataPlaneTicket = "installDataPlaneTicket"
 
 	OperationBeginUpload    = "beginUpload"
 	OperationUploadStatus   = "uploadStatus"
