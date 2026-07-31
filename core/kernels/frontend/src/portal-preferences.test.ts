@@ -38,6 +38,8 @@ describe("PortalPreferenceSession", () => {
   it("uses the server-authored preference scope when HMR overlays newer UI contracts", async () => {
     const storedScope = {
       portalId: "operations",
+      renderer: { id: "cn.vastplan.render", contractMajor: 4 },
+      shell: { id: "cn.vastplan.shell", contractMajor: 4 },
       workbench: { id: "cn.vastplan.workbench", contractMajor: 4 },
     };
     const hmrPortal = { ...portal, preferenceScope: storedScope };

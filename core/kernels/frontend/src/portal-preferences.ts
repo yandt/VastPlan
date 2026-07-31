@@ -113,9 +113,14 @@ function preferenceScope(portal: PortalRuntimeSpec["portal"]): PortalPreferenceS
 function parseProjectedPreferenceScope(value: unknown, portalID: string): PortalPreferenceScope {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new PortalPreferenceUnavailable("PortalPreference 投影 scope 无效");
   const record = value as Readonly<Record<string, unknown>>;
-  if (Object.keys(record).some((key) => !["portalId", "workbench"].includes(key)) || validID(record.portalId) !== portalID) {
+  if (Object.keys(record).some((key) => !["portalId", "workbench", "renderer", "shell"].includes(key)) || validID(record.portalId) !== portalID) {
     throw new PortalPreferenceUnavailable("PortalPreference 投影 portalId 无效");
   }
+  // UI Contract 8.2 and earlier projected Renderer/Shell into this scope.
+  // Validate those legacy fields when present, then deliberately discard them:
+  // appearance is local-only in 8.3, while rolling Host/asset restarts remain safe.
+  if (record.renderer !== undefined) parseProjectedCatalogScope(record.renderer);
+  if (record.shell !== undefined) parseProjectedCatalogScope(record.shell);
   return Object.freeze({
     portalId: portalID,
     workbench: parseProjectedCatalogScope(record.workbench),
@@ -183,7 +188,10 @@ function readStorage(key: string, scope: PortalPreferenceScope): unknown {
 function writeStorage(key: string, value: unknown): void { try { globalThis.localStorage?.setItem(key, JSON.stringify(value)); } catch { /* privacy mode */ } }
 function cacheKey(portal: PortalRuntimeSpec["portal"], scope: PortalPreferenceScope): string { return `vastplan.portal-preference.${portal.tenantId}.${scopeKey(scope)}`; }
 function scopeKey(scope: PortalPreferenceScope): string { return [scope.portalId, scope.workbench.id, scope.workbench.contractMajor].join("."); }
-function sameScope(left: unknown, right: PortalPreferenceScope): boolean { try { return JSON.stringify(left) === JSON.stringify(right); } catch { return false; } }
+function sameScope(left: unknown, right: PortalPreferenceScope): boolean {
+  try { return JSON.stringify(parseProjectedPreferenceScope(left, right.portalId)) === JSON.stringify(right); }
+  catch { return false; }
+}
 function contractMajor(value: string): number { const match = value.trim().match(/^(?:\^|~|>=?)?\s*([1-9][0-9]{0,4})(?:\.|$)/); if (match === null) throw new PortalPreferenceUnavailable("UI contract major 无效"); return Number(match[1]); }
 function validID(value: unknown): string | undefined { return typeof value === "string" && idPattern.test(value) ? value : undefined; }
 

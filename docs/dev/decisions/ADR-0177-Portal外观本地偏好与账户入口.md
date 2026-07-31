@@ -15,6 +15,7 @@ Portal 外观包含 Renderer、Shell 布局、明暗模式、主题模板、图�
 1. 所有外观选择统一交给可信 Portal Host 的 `PortalAppearanceSession`。它只读写浏览器 `localStorage`，不具备 HTTP、Capability、数据库或服务端缓存端口。
 2. 存储键按 `tenant + authenticated subject + portal` 隔离，值使用有界、版本化、白名单结构。只接受活动 Profile 允许的 Renderer、Shell、主题和图标 ID；颜色只接受固定语义字段与六位十六进制值。
 3. 服务端 `PortalPreference` 只保留 Workbench Collection 的列顺序、隐藏列、密度和分页大小。其 scope 只包含 Portal 与 Workbench catalog；服务端解析器明确拒绝 `rendererId`、`rendererOptions`、`shellTemplateId` 等外观字段。
+   滚动重启期间，新浏览器内核可以接收旧 Portal Host 投影的 `renderer/shell` scope 字段，但必须先验证再丢弃；内部 scope 和后续偏好处理仍只有 `portalId + workbench`，不得因此恢复服务端外观语义。
 4. Profile 继续定义默认值和允许目录，但不保存用户选择。Renderer 切换写入本地后刷新 Host Epoch；Shell Library 通过同一 Generation 管理器切换；主题、颜色和图标在当前 Generation 内更新。
 5. 明暗模式支持跟随系统、浅色和深色。每个用户分别保存浅色/深色模板与语义色覆盖；跟随系统只监听 `prefers-color-scheme`，不向服务器发请求。
 6. Shell 只显示一个圆形账户头像。账户菜单包含“用户信息”和“用户设置”；外观入口位于用户设置。系统管理作为最后一个一级导航项，与账户入口物理分离。
