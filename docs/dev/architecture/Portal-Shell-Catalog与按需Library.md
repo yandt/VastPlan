@@ -90,7 +90,7 @@ Portal Kernel 在稳定 React 位置持有当前页面、Workbench 和路由状�
 
 ## 5. Renderer 与 Host Epoch
 
-同一 Renderer family、相同 UI Contract major 的 Shell Library 可以无刷新切换。Arco/MUI 等 Renderer family 切换必须进入新 Host Epoch：先校验候选目录与模块，保存 `pending` 偏好，刷新文档，成功启动后提交 `active`；失败清除 pending 并恢复 `lastKnownGood`，不得形成刷新循环。
+同一 Renderer family、相同 UI Contract major 的 Shell Library 可以无刷新切换。未来不同 Renderer family 的切换必须进入新 Host Epoch：先校验候选目录与模块，保存 `pending` 偏好，刷新文档，成功启动后提交 `active`；失败清除 pending 并恢复 `lastKnownGood`，不得形成刷新循环。当前产品只交付 Ant Design，不展示 Renderer 切换入口。
 
 ## 6. 开发与制品升级
 
@@ -113,4 +113,4 @@ Portal Kernel 在稳定 React 位置持有当前页面、Workbench 和路由状�
 - 摘要、导出、契约、Renderer 兼容或渲染失败时活动 Shell 不变；
 - 用户偏好只在候选提交后保存；
 - 任意 Library 都不能删除、重命名或静默丢弃已填充标准 Slot；
-- Arco/MUI 能消费相同 Catalog 与 Composition，不向 Shell 泄漏框架私有主题对象。
+- 抽象主/备 Renderer fixture 能消费相同 Catalog 与 Composition，不向 Shell 泄漏框架私有主题对象；产品 Catalog 当前只包含 Ant Design。

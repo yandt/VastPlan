@@ -53,16 +53,16 @@ describe("VerifiedFrontendPluginLoader", () => {
       default: {
         id: "ui.render.adapter",
         uiContract: "5.0.0",
-        defaultRenderer: "arco",
-        renderers: [{ id: "arco", Provider() {} }],
+        defaultRenderer: "primary",
+        renderers: [{ id: "primary", Provider() {} }],
       },
     }) });
 
     const loaded = await loader.load({ id: locked.id, version: locked.version });
     expect(loaded.renderAdapter).toMatchObject({
       id: "ui.render.adapter",
-      defaultRenderer: "arco",
-      renderers: [{ id: "arco" }],
+      defaultRenderer: "primary",
+      renderers: [{ id: "primary" }],
     });
   });
 
@@ -78,11 +78,11 @@ describe("VerifiedFrontendPluginLoader", () => {
   });
 
   it("recognizes a Renderer only from its explicit named module export", async () => {
-    const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.render.adapter.arco" });
+    const locked = await descriptor({ id: "cn.vastplan.foundation.frontend.render.adapter.test-primary" });
     const loader = new VerifiedFrontendPluginLoader([locked], { protocol: productionFrontendRuntimeProtocol, fetcher: async () => new Response(source), importer: async () => ({
       renderer: {
-        id: "arco",
-        framework: "arco",
+        id: "primary",
+        framework: "test-primary",
         Provider() {},
         capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"],
         themeTemplates: [{ id: "light" }],
@@ -93,7 +93,7 @@ describe("VerifiedFrontendPluginLoader", () => {
     }) });
 
     const loaded = await loader.load({ id: locked.id, version: locked.version });
-    expect(loaded.renderer).toMatchObject({ id: "arco", framework: "arco" });
+    expect(loaded.renderer).toMatchObject({ id: "primary", framework: "test-primary" });
   });
 
   it("recognizes a Shell Library only from its governed export", async () => {

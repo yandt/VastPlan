@@ -42,7 +42,7 @@ type PluginRef struct {
 
 // RuntimeEngine selects the single trusted browser/server framework runtime
 // for a Portal. It is independent from the visual RenderAdapter: React/Vue are
-// engine families while Arco/MUI are renderer implementations.
+// engine families while concrete UI frameworks are renderer implementations.
 type RuntimeEngine struct {
 	PluginRef
 	EngineContract string `json:"engineContract"`

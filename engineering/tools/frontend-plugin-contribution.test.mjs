@@ -4,7 +4,7 @@ import { isDeferredFrontendContribution } from "./frontend-plugin-contribution.m
 
 test("classifies governed Renderer modules and Shell Libraries as deferred", () => {
   assert.equal(isDeferredFrontendContribution({ rendererModules: [{
-    id: "arco", adapter: "ui.render.adapter", uiContract: "^4.0.0", framework: "react",
+    id: "alternate", adapter: "ui.render.adapter", uiContract: "^4.0.0", framework: "react",
   }] }), true);
   assert.equal(isDeferredFrontendContribution({ shellLibraries: [{
     id: "standard", shell: "ui.structure.shell", uiContract: "^4.0.0",

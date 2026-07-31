@@ -316,9 +316,7 @@ func portalFoundationFrontendManifests() []string {
 	return []string{
 		"extensions/plugins/cn.vastplan.foundation.frontend.runtime.engine.react/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.render.adapter/vastplan.plugin.json",
-		"extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.antd/vastplan.plugin.json",
-		"extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.mui/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.structure.shell/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.standard/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.top-navigation/vastplan.plugin.json",

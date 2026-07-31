@@ -4,15 +4,11 @@ import adapter from "./index";
 import { rendererPluginVersions } from "./renderer-versions.generated";
 
 describe("unified render adapter", () => {
-  it("owns the complete first-party Renderer catalog", () => {
+  it("publishes an Ant-only product catalog through the generic Renderer protocol", () => {
     expect(adapter).toMatchObject({ id: "ui.render.adapter", uiContract: uiContractVersion, defaultRenderer: "antd" });
-    expect(adapter.renderers.map((renderer) => renderer.id)).toEqual(["antd", "arco", "mui"]);
-    expect(adapter.renderers.map((renderer) => renderer.module.id)).toEqual([
-      "cn.vastplan.foundation.frontend.render.adapter.antd",
-      "cn.vastplan.foundation.frontend.render.adapter.arco",
-      "cn.vastplan.foundation.frontend.render.adapter.mui",
-    ]);
-    expect(adapter.renderers.map((renderer) => renderer.module.version)).toEqual([rendererPluginVersions.antd, rendererPluginVersions.arco, rendererPluginVersions.mui]);
+    expect(adapter.renderers.map((renderer) => renderer.id)).toEqual(["antd"]);
+    expect(adapter.renderers.map((renderer) => renderer.module.id)).toEqual(["cn.vastplan.foundation.frontend.render.adapter.antd"]);
+    expect(adapter.renderers.map((renderer) => renderer.module.version)).toEqual([rendererPluginVersions.antd]);
   });
 
   it("keeps Renderer labels in the Adapter namespace", () => {

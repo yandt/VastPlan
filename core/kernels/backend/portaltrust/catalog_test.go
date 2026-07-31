@@ -188,7 +188,7 @@ func TestTrustedCatalogRequiresVerifiedFrontendRenderAdapterContribution(t *test
 }
 
 func TestFrontendRendererModuleIsDeferredFromTrustedManifest(t *testing.T) {
-	manifestRaw := `{"id":"cn.vastplan.foundation.frontend.render.adapter.arco.test","name":"renderer","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"rendererModules":[{"id":"arco","adapter":"ui.render.adapter","uiContract":"^4.0.0","engineFamily":"react","framework":"arco"}]}}}`
+	manifestRaw := `{"id":"cn.vastplan.foundation.frontend.render.adapter.deferred-test","name":"renderer","description":"test","version":"1.0.0","publisher":"vastplan","engines":{"frontend":"^1.0"},"activation":["onPortalStartup"],"entry":{"frontend":"frontend/main.js"},"contributes":{"frontend":{"rendererModules":[{"id":"deferred-test","adapter":"ui.render.adapter","uiContract":"^4.0.0","engineFamily":"react","framework":"test"}]}}}`
 	artifact, packageBytes := packageFrontendFixture(t, manifestRaw, []byte(`export const renderer = {};`))
 	manifest, err := pluginv1.ParseManifest([]byte(manifestRaw))
 	if err != nil {

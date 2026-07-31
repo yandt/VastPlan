@@ -6,4 +6,4 @@
 
 同一制品的 `entry.frontendServer` 是真实的 Server Runtime Provider：它使用 `react-dom/server` 提供 SSR 启动壳，并由 Node Portal Kernel 按 Server Module Graph 物化到隔离 Worker Generation。该服务端生命周期、内容摘要和故障边界是本制品继续独立存在的依据。未来只有引入第二个 Browser Engine 时，才把 Root/Hydration/Generation 的浏览器桥接完整移入同一 Engine 契约。
 
-该插件不是 UI 设计系统。Arco/MUI 仍由 `ui.render.adapter` 管理；功能页面继续通过 Workbench 声明。
+该插件不是 UI 设计系统。具体 Renderer 仍由 `ui.render.adapter` 管理，当前产品只交付 Ant Design；功能页面继续通过 Workbench 声明。

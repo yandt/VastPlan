@@ -53,11 +53,11 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [**插件配置与托管凭证**](architecture/插件配置与托管凭证.md)
   - 插件私有配置信封、可信配置目录、内联秘密输入、CredentialRef 句柄、分路径生效与 Provider 选择
 - [**前端门户内核**](architecture/前端门户内核.md)
-  - Portal 启动壳、设计系统插件、多 UI 框架、动态表单与在线组合发布治理
+  - Portal 启动壳、通用 Renderer 插件协议、Ant Design 单实现、动态表单与在线组合发布治理
 - [**Portal Shell Catalog 与按需 Library**](architecture/Portal-Shell-Catalog与按需Library.md)
   - 稳定 Slot/Composition、按需 Shell Library、PageOutlet 与用户级候选切换
 - [**统一 Render Adapter 与可切换 Renderer**](decisions/ADR-0087-统一Render-Adapter与可切换Renderer.md)
-  - Ant Design（首选）/Arco/MUI 内部 Renderer、Profile 治理与安全整代切换边界
+  - 通用 Renderer Catalog、Profile 治理与安全整代切换边界；当前只交付 Ant Design
 - [**UI 工作台组合框架**](architecture/UI工作台组合框架.md)
   - 跨插件的列表、卡片、动作、表单与 Overlay 工作流组合规范（目标设计）
 - [**平台管理中心**](architecture/平台管理中心.md)
@@ -259,6 +259,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0176 租约式 Content Staging 与流式数据面](decisions/ADR-0176-租约式Content-Staging与流式数据面.md)
 - [ADR-0177 Portal 外观本地偏好与账户入口](decisions/ADR-0177-Portal外观本地偏好与账户入口.md)
 - [ADR-0178 插件专属扩展点与可信扩展图](decisions/ADR-0178-插件专属扩展点与可信扩展图.md)
+- [ADR-0179 Ant Design 单实现与 Renderer 协议保留](decisions/ADR-0179-Ant-Design单实现与Renderer协议保留.md)
 
 ### 通用版本账本
 

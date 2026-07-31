@@ -2,7 +2,7 @@ import type { PortalConfiguration, PortalPlatformProfile } from "@vastplan/ui-pr
 import { jsonSchemaDialect, message, type FormSchema, type JSONValue } from "@vastplan/workbench-sdk";
 
 const namespace = "cn.vastplan.platform.configuration.portal-composer";
-const rendererChoices = [{ const: "antd", title: "Ant Design" }, { const: "arco", title: "Arco Design" }, { const: "mui", title: "Material UI" }] as const;
+const rendererChoices = [{ const: "antd", title: "Ant Design" }] as const;
 type KnownRenderer = (typeof rendererChoices)[number]["const"];
 
 export const portalConfigurationSchema: FormSchema = {
@@ -106,7 +106,7 @@ export function profileSummary(profile: PortalPlatformProfile): { renderer: stri
 function pluginRefSchema(): Record<string, JSONValue> {
   return { type: "object", additionalProperties: false, required: ["id", "version"], properties: { id: { type: "string" }, version: { type: "string" }, channel: { type: "string", default: "stable" } } };
 }
-function isKnownRenderer(value: unknown): value is KnownRenderer { return value === "antd" || value === "arco" || value === "mui"; }
+function isKnownRenderer(value: unknown): value is KnownRenderer { return value === "antd"; }
 function knownRenderer(value: unknown): KnownRenderer { return isKnownRenderer(value) ? value : "antd"; }
 function jsonArray(value: unknown): JSONValue[] { return Array.isArray(value) ? JSON.parse(JSON.stringify(value)) as JSONValue[] : []; }
 function jsonRecord(value: unknown): Record<string, JSONValue> { return typeof value === "object" && value !== null && !Array.isArray(value) ? JSON.parse(JSON.stringify(value)) as Record<string, JSONValue> : {}; }

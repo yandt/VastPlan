@@ -304,6 +304,6 @@ export interface PortalUI {
  * A named, framework-neutral presentation template exposed by a render adapter.
  *
  * The descriptor deliberately contains semantic intent only.  Its implementation
- * belongs to the selected adapter: for example Arco maps `dark` to its native
- * CSS theme attribute, while MUI maps it to `createTheme({ palette.mode })`.
+ * belongs to the selected adapter: the current Ant Design implementation maps
+ * `dark` to its native theme algorithm; future Renderers own their mapping.
  */

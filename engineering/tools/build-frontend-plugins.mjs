@@ -64,16 +64,8 @@ for (const { id, entry, source, serverEntry, serverSource, deferred, pluginRoot 
   if (serverEntry !== undefined && serverSource !== undefined) {
 		({ graph: serverGraph, graphFile: serverGraphFile } = await buildFrontendServerGraph({ buildRoot, serverEntry, serverSource }));
   }
-  if (!developmentHMR && id === "cn.vastplan.foundation.frontend.render.adapter.arco") {
-    const result = spawnSync(process.execPath, ["engineering/tools/check-arco-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ARCO_BUNDLE_FILE: outfile } });
-    if (result.status !== 0) process.exit(result.status ?? 1);
-  }
   if (!developmentHMR && id === "cn.vastplan.foundation.frontend.render.adapter.antd") {
     const result = spawnSync(process.execPath, ["engineering/tools/check-antd-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, ANTD_BUNDLE_FILE: outfile } });
-    if (result.status !== 0) process.exit(result.status ?? 1);
-  }
-  if (!developmentHMR && id === "cn.vastplan.foundation.frontend.render.adapter.mui") {
-    const result = spawnSync(process.execPath, ["engineering/tools/check-mui-icons-on-demand.mjs"], { stdio: "inherit", env: { ...process.env, MUI_BUNDLE_FILE: outfile } });
     if (result.status !== 0) process.exit(result.status ?? 1);
   }
   if (outputRoot !== undefined) {

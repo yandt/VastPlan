@@ -6,8 +6,8 @@ import { PortalAssemblyError, PortalRuntime, type FrontendPluginLoader, type Plu
 
 const engineRef: PluginRef = { id: "cn.vastplan.foundation.frontend.runtime.engine.react", version: "1.0.0" };
 const adapterRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter", version: "1.0.0" };
-const arcoRendererRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.arco", version: "1.0.0" };
-const muiRendererRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.mui", version: "1.0.0" };
+const primaryRendererRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.test-primary", version: "1.0.0" };
+const alternateRendererRef: PluginRef = { id: "cn.vastplan.foundation.frontend.render.adapter.test-alternate", version: "1.0.0" };
 const shellRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.shell", version: "1.0.0" };
 const standardShellRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.layout.standard", version: "1.0.0" };
 const topShellRef: PluginRef = { id: "cn.vastplan.foundation.frontend.structure.layout.top-navigation", version: "1.0.0" };
@@ -16,10 +16,10 @@ const featureRef: PluginRef = { id: "cn.vastplan.platform.configuration.portal-c
 
 const renderer = (id: string) => ({ id, label: id, framework: id, capabilities: ["layout", "menu", "overlay", "form", "data", "feedback", "theme"] as const, themeTemplates: [{ id: "light", label: "Light", scheme: "light" as const }], defaultThemeTemplate: "light", iconThemes: [{ id: "canonical", label: "Canonical", source: "canonical" as const }], defaultIconTheme: "canonical", Provider: ({ children }: { children: ReactNode }) => children, localization: { defaultLocale: "zh-CN", messages: { "zh-CN": { label: "测试" }, "en-US": { label: "Test" } } } });
 const adapter: UIRenderAdapter = {
-  id: "ui.render.adapter", uiContract: uiContractVersion, defaultRenderer: "arco",
+  id: "ui.render.adapter", uiContract: uiContractVersion, defaultRenderer: "primary",
   renderers: [
-    { id: "arco", label: "Arco", framework: "arco", module: arcoRendererRef },
-    { id: "mui", label: "MUI", framework: "mui", module: muiRendererRef },
+    { id: "primary", label: "Primary", framework: "primary", module: primaryRendererRef },
+    { id: "alternate", label: "Alternate", framework: "alternate", module: alternateRendererRef },
   ],
 };
 const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: uiContractVersion, templates: [{ id: "standard", label: "Standard", module: standardShellRef }, { id: "top-navigation", label: "Top", module: topShellRef }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
@@ -29,11 +29,11 @@ const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract:
 const portal: PortalSpec = {
   revision: 1, id: "admin", tenantId: "acme", route: "/",
   runtimeEngine: { ...engineRef, family: "react", engineContract: "^1.0.0" },
-  renderAdapter: { ...adapterRef, uiContract: uiContractRange, config: { defaultRenderer: "arco", allowedRenderers: ["arco", "mui"], userSelectable: true } },
+  renderAdapter: { ...adapterRef, uiContract: uiContractRange, config: { defaultRenderer: "primary", allowedRenderers: ["primary", "alternate"], userSelectable: true } },
   shell: { ...shellRef, uiContract: uiContractRange, config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true } },
-  workbench: { ...workbenchRef, uiContract: uiContractRange }, plugins: [engineRef, adapterRef, arcoRendererRef, muiRendererRef, shellRef, standardShellRef, topShellRef, workbenchRef, featureRef],
+  workbench: { ...workbenchRef, uiContract: uiContractRange }, plugins: [engineRef, adapterRef, primaryRendererRef, alternateRendererRef, shellRef, standardShellRef, topShellRef, workbenchRef, featureRef],
   management: { tenantId: "acme", portalId: "admin", platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, services: [{ id: "settings", logicalService: "platform.settings", routingDomain: "platform", capabilities: [{ capability: "platform.settings", read: ["list"] }] }] },
-  resolution: { platformCatalog: { id: "catalog", revision: 1, digest: "c".repeat(64) }, platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) }, managementBindingDigest: "d".repeat(64), pluginOrigins: { [engineRef.id]: "platform-profile", [adapterRef.id]: "platform-profile", [arcoRendererRef.id]: "platform-profile", [muiRendererRef.id]: "platform-profile", [shellRef.id]: "platform-profile", [standardShellRef.id]: "platform-profile", [topShellRef.id]: "platform-profile", [workbenchRef.id]: "platform-profile", [featureRef.id]: "platform-profile" } },
+  resolution: { platformCatalog: { id: "catalog", revision: 1, digest: "c".repeat(64) }, platformProfile: { id: "portal-default", revision: 1, digest: "a".repeat(64) }, applicationComposition: { id: "admin", revision: 1, digest: "b".repeat(64) }, managementBindingDigest: "d".repeat(64), pluginOrigins: { [engineRef.id]: "platform-profile", [adapterRef.id]: "platform-profile", [primaryRendererRef.id]: "platform-profile", [alternateRendererRef.id]: "platform-profile", [shellRef.id]: "platform-profile", [standardShellRef.id]: "platform-profile", [topShellRef.id]: "platform-profile", [workbenchRef.id]: "platform-profile", [featureRef.id]: "platform-profile" } },
 };
 
 function loader(overrides: Record<string, object> = {}): FrontendPluginLoader {
@@ -41,8 +41,8 @@ function loader(overrides: Record<string, object> = {}): FrontendPluginLoader {
   return { async load(ref) {
     if (ref.id === engineRef.id) return { ...base, runtimeEngine: { id: "ui.runtime.engine" as const, family: "react", engineContract: "1.0.0", capabilities: ["csr", "generation"] as const }, ...overrides[ref.id] };
     if (ref.id === adapterRef.id) return { ...base, renderAdapter: adapter, ...overrides[ref.id] };
-    if (ref.id === arcoRendererRef.id) return { ...base, renderer: renderer("arco"), ...overrides[ref.id] };
-    if (ref.id === muiRendererRef.id) return { ...base, renderer: renderer("mui"), ...overrides[ref.id] };
+    if (ref.id === primaryRendererRef.id) return { ...base, renderer: renderer("primary"), ...overrides[ref.id] };
+    if (ref.id === alternateRendererRef.id) return { ...base, renderer: renderer("alternate"), ...overrides[ref.id] };
     if (ref.id === shellRef.id) return { ...base, shell, ...overrides[ref.id] };
     if (ref.id === standardShellRef.id) return { ...base, shellLibrary: shellLibrary("standard"), ...overrides[ref.id] };
     if (ref.id === topShellRef.id) return { ...base, shellLibrary: shellLibrary("top-navigation"), ...overrides[ref.id] };
@@ -62,14 +62,14 @@ describe("PortalRuntime shell", () => {
   });
 
   it("selects only an allowed user Renderer and keeps the Adapter singleton", async () => {
-    const prepared = await new PortalRuntime(loader()).prepare(portal, { rendererID: "mui" });
-    expect(prepared.renderAdapter.id).toBe("mui");
-    await expect(new PortalRuntime(loader()).prepare({ ...portal, renderAdapter: { ...portal.renderAdapter, config: { ...portal.renderAdapter.config, allowedRenderers: ["arco"], defaultRenderer: "mui" } } }))
+    const prepared = await new PortalRuntime(loader()).prepare(portal, { rendererID: "alternate" });
+    expect(prepared.renderAdapter.id).toBe("alternate");
+    await expect(new PortalRuntime(loader()).prepare({ ...portal, renderAdapter: { ...portal.renderAdapter, config: { ...portal.renderAdapter.config, allowedRenderers: ["primary"], defaultRenderer: "alternate" } } }))
       .rejects.toMatchObject({ code: "DESIGN_SYSTEM_RENDERER_CATALOG_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
 
   it("rejects an icon theme not declared by the selected Renderer", async () => {
-    const invalid = { ...portal, renderAdapter: { ...portal.renderAdapter, config: { ...portal.renderAdapter.config, rendererOptions: { arco: { iconTheme: "missing" } } } } };
+    const invalid = { ...portal, renderAdapter: { ...portal.renderAdapter, config: { ...portal.renderAdapter.config, rendererOptions: { primary: { iconTheme: "missing" } } } } };
     await expect(new PortalRuntime(loader()).prepare(invalid))
       .rejects.toMatchObject({ code: "DESIGN_SYSTEM_ICON_THEME_INVALID" } satisfies Partial<PortalAssemblyError>);
   });
@@ -79,20 +79,20 @@ describe("PortalRuntime shell", () => {
     const base = loader();
     const tracked: FrontendPluginLoader = { async load(ref) { calls.push(ref.id); return base.load(ref); } };
     await new PortalRuntime(tracked).prepare(portal);
-    expect(calls).toContain(arcoRendererRef.id);
-    expect(calls).not.toContain(muiRendererRef.id);
+    expect(calls).toContain(primaryRendererRef.id);
+    expect(calls).not.toContain(alternateRendererRef.id);
   });
 
   it("allows a development loader to resolve a source Renderer with the same plugin ID", async () => {
-    const sourceRendererRef = { ...arcoRendererRef, version: "9.9.9" };
-    const sourceInactiveRendererRef = { ...muiRendererRef, version: "9.9.9" };
+    const sourceRendererRef = { ...primaryRendererRef, version: "9.9.9" };
+    const sourceInactiveRendererRef = { ...alternateRendererRef, version: "9.9.9" };
     const sourceAdapter = { ...adapter, renderers: [{ ...adapter.renderers[0], module: sourceRendererRef }, { ...adapter.renderers[1], module: sourceInactiveRendererRef }] };
     const base = loader({ [adapterRef.id]: { renderAdapter: sourceAdapter } });
     const calls: string[] = [];
-    const development: FrontendPluginLoader = { load: (ref) => { calls.push(ref.id); return base.load(ref); }, canLoad: (ref) => ref.id === arcoRendererRef.id || ref.id === muiRendererRef.id };
-    await expect(new PortalRuntime(development).prepare(portal)).resolves.toMatchObject({ renderAdapter: { id: "arco" } });
-    expect(calls).toContain(arcoRendererRef.id);
-    expect(calls).not.toContain(muiRendererRef.id);
+    const development: FrontendPluginLoader = { load: (ref) => { calls.push(ref.id); return base.load(ref); }, canLoad: (ref) => ref.id === primaryRendererRef.id || ref.id === alternateRendererRef.id };
+    await expect(new PortalRuntime(development).prepare(portal)).resolves.toMatchObject({ renderAdapter: { id: "primary" } });
+    expect(calls).toContain(primaryRendererRef.id);
+    expect(calls).not.toContain(alternateRendererRef.id);
   });
 
   it("loads only the selected Shell Library module", async () => {

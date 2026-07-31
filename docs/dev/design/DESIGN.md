@@ -2,7 +2,7 @@
 
 > 状态：设计基线 v4｜最后更新：2026-07-31
 >
-> 本文是 Portal 跨布局、跨 Ant Design/Arco/MUI 的视觉与交互单一真相源。组件职责和安全边界见《[前端门户内核](../architecture/前端门户内核.md)》，架构取舍见 [ADR-0080](../decisions/ADR-0080-Portal三级导航与可切换布局.md) 与 [ADR-0081](../decisions/ADR-0081-Portal治理与不可变Activation.md)。
+> 本文是 Portal 跨布局、基于 Ant Design 当前实现的视觉与交互单一真相源。组件职责和安全边界见《[前端门户内核](../architecture/前端门户内核.md)》，Renderer 收敛见 [ADR-0179](../decisions/ADR-0179-Ant-Design单实现与Renderer协议保留.md)。
 
 ## 1. 设计原则
 
@@ -14,7 +14,7 @@
 
 ## 2. 基础 Token
 
-UI Contract 8.3 暴露语义 token、账户外观契约与 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design/Arco/MUI 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
+UI Contract 8.3 暴露语义 token、账户外观契约与 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
 
 | Token | 基线 | 用途 |
 |---|---:|---|
@@ -34,7 +34,7 @@ UI Contract 8.3 暴露语义 token、账户外观契约与 `ComponentSize`，适
 ### 2.1 组件 Recipe 治理
 
 - 本文定义视觉意图和验收基线；`extensions/sdk/ts/ui-primitives/src/visual-recipes.ts` 保存必须跨 Renderer 一致的可执行数值。组件架构文档只描述职责和行为，不重复保存像素值。
-- 基础控件统一使用 `size=sm/md/lg`。Table 单独保留 `density=compact/standard/comfortable`，只调整表格行高和单元格留白，不向内部图标或表格外组件传播。功能插件不得导入 Ant Design、Arco、MUI 或写框架私有样式。
+- 基础控件统一使用 `size=sm/md/lg`。Table 单独保留 `density=compact/standard/comfortable`，只调整表格行高和单元格留白，不向内部图标或表格外组件传播。功能插件不得导入 Ant Design 或写框架私有样式。
 - 调整公共组件时，先更新本节的视觉基线和共享 recipe，再同步各 Renderer 映射、自动测试及浏览器截图验收；禁止在单个页面反复覆盖样式。
 - 只有通用语义确实不足时才扩展 UI Contract。不得为了修正某个框架的默认边框、间距或图标而让业务插件感知框架差异。
 
@@ -61,7 +61,7 @@ UI Contract 8.3 暴露语义 token、账户外观契约与 `ComponentSize`，适
 - Shell Header、Aside、Footer 等没有内建内容且全部 Slot 为空时不创建 DOM 和占位；Page Header 因承担页面定位始终存在。
 - Page Header 位于 Page Body 滚动容器之外。正文滚动时保持可见，不依赖多层 `position: sticky`。Page Body 使用设计系统 `surface` 语义色：浅色主题为白色，深色主题由当前 Renderer 的深色表面色接管。
 - 页面间距使用唯一 `portalPageRhythm`：Shell 从 Page Header 底边到 Workbench 根容器统一保留 16px `contentStart`；Workbench 根容器固定 `margin: 0; padding: 0`，并按 compact/standard/comfortable 使用 8/16/24px `sectionGap` 管理一级组件间距。一级组件不得用外部 margin 改写位置；FilterPanel 等可通过 Workbench 内部的 `flush=0` 或 `compact=8px` inset 管理自身内容，但 inset 不得反向补偿 Shell。Collection 顶部 FilterPanel 默认 `flush`；三个 Renderer 的 compact Form 必须隐藏根 Object Schema 标题并清除根外边距，嵌套对象标题不受影响，从而使第一行控件与页面起始节奏可预测。
-- FilterPanel 使用 `inside-inline` 持久 Label：Label 与输入控件共同消费一个筛选单元格宽度，Label 按内容取宽但桌面最多占 40%、移动端最多占 45%，始终单行；超长文案省略并由框架 Tooltip 与可访问名称提供全文。输入区域必须 `flex: 1; min-width: 0`，输入后 Label 不消失。Ant、Arco、MUI 必须映射同一语义，功能插件不能配置像素宽度或注入框架样式。
+- FilterPanel 使用 `inside-inline` 持久 Label：Label 与输入控件共同消费一个筛选单元格宽度，Label 按内容取宽但桌面最多占 40%、移动端最多占 45%，始终单行；超长文案省略并由 Tooltip 与可访问名称提供全文。输入区域必须 `flex: 1; min-width: 0`，输入后 Label 不消失。Ant Design 实现必须遵守该语义，功能插件不能配置像素宽度或注入框架样式。
 - Page Header 右侧的页面功能动作使用 VastPlan 语义图标、Tooltip 和 `aria-label`，点击区至少 44px；桌面最多直接显示 4 个，超出后进入“更多”，不得在 Table 工具栏重复显示新增、导入或发布。
 - 图标风格由 Renderer 的 `iconTheme` 统一决定：`canonical` 使用锁定的 MIT Ant Design 语义入口保持跨框架几何一致，`renderer-native` 使用当前 UI 框架原生图形并在缺项时回退。846 个原始目录名称不属于页面契约，只能由 Foundation 图标工具按 27 个分片延迟读取；单个页面和功能插件不得混指定图标来源。
 - 已认证 Shell 只提供一个圆形账户头像入口；头像固定映射到统一组合模型中的 `account` 根分组。标准侧栏点击后在右侧常驻面板加载二级/三级菜单，顶部布局复用同一分组数据；头像本身不得硬编码功能项。Frontend Platform Profile 通过必填 `accountCenter` 选择个人中心实现，默认基础插件 `cn.vastplan.foundation.frontend.identity.account-center` 注册“用户信息”和“用户设置/外观”页面，且不能由 Application 删除或覆盖；后续账户功能继续走相同页面契约。`settings` 区域显示为“系统管理”，必须是最后一个一级导航项；企业用户、组织和角色管理属于该区域，不与个人中心合并。外观配置只保存在当前浏览器，并明确提示不会上传服务器。
@@ -129,6 +129,6 @@ UI Contract 8.3 暴露语义 token、账户外观契约与 `ComponentSize`，适
 
 - 375px、768px、1199px、1200px 和宽屏容器。
 - 200% 缩放、RTL、47 字符菜单名、全部键盘操作、读屏与 reduced-motion。
-- Ant Design/Arco/MUI 的 ESC、外部点击、焦点恢复、碰撞翻转和 Shadow DOM 行为一致。
+- Ant Design 的 ESC、外部点击、焦点恢复、碰撞翻转和 Shadow DOM 行为必须符合统一 Overlay 语义；未来 Renderer 接入同一门禁。
 - 顶部“更多”、标准侧栏多开分组、活动路径和权限裁剪在两种布局下结果一致。
 - 未保存表单遇到内部导航或刷新提示时不会被自动丢弃。

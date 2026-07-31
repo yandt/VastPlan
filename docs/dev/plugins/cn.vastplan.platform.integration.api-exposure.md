@@ -27,7 +27,7 @@ Endpoint Lease 与 Ticket 只保存在内存中，进程重启后失效；发布
 
 ## Portal
 
-平台 Profile 把该插件绑定为 `platform.api-exposure` leader 服务。Portal Binding 以 `apiId=primary` 锁定 `platform.api-exposure.management-api@1.0.0` 的精确摘要，并只允许 Contract 目标对应的 operation grant。Node Portal Kernel 从私有 Contract Catalog 分发请求，不在内核硬编码该插件的业务路由；插件前端通过自己的窄类型管理 Port 使用通用 SDK，不能提交 capability、operation 或插件 ID。Data Plane 管理端点暂时保留类型路由，待其管理 Contract 齐备后迁移。用户仍必须拥有 `platform.api-exposure.read/edit/approve/publish` 中对应权限，Backend PEP 作最终裁决。管理页面完全使用 Workbench Collection 和动态表单契约，不直接导入 React、Arco 或 MUI。
+平台 Profile 把该插件绑定为 `platform.api-exposure` leader 服务。Portal Binding 以 `apiId=primary` 锁定 `platform.api-exposure.management-api@1.0.0` 的精确摘要，并只允许 Contract 目标对应的 operation grant。Node Portal Kernel 从私有 Contract Catalog 分发请求，不在内核硬编码该插件的业务路由；插件前端通过自己的窄类型管理 Port 使用通用 SDK，不能提交 capability、operation 或插件 ID。Data Plane 管理端点暂时保留类型路由，待其管理 Contract 齐备后迁移。用户仍必须拥有对应权限，Backend PEP 作最终裁决。管理页面完全使用 Workbench Collection 和动态表单契约，不直接导入 React 或具体 UI 框架。
 
 普通 HTTP 公开入口为 `/api/r/{routeKey}/v{major}/{contractPath}`；数据面 Ticket 入口为 `/api/d/{routeKey}/ticket`。公开响应和错误均不得包含插件、capability、逻辑服务、节点、NATS 或 gRPC 信息。
 

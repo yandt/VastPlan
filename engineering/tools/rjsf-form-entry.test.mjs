@@ -3,9 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const rendererEntries = [
-  "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.arco/frontend/src/json-schema-form.tsx",
   "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.antd/frontend/src/form-renderer.tsx",
-  "extensions/plugins/cn.vastplan.foundation.frontend.render.adapter.mui/frontend/src/index.tsx",
 ];
 
 test("production renderers bypass the RJSF test registry entry", async () => {

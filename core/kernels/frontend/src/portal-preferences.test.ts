@@ -3,7 +3,7 @@ import { PortalPreferenceSession } from "./portal-preferences";
 
 const portal = {
   revision: 1, id: "operations", tenantId: "tenant-a", route: "/operations",
-  renderAdapter: { id: "cn.vastplan.render", uiContract: "^5.0.0", config: { defaultRenderer: "arco", allowedRenderers: ["arco", "mui"], userSelectable: true } },
+  renderAdapter: { id: "cn.vastplan.render", uiContract: "^5.0.0", config: { defaultRenderer: "primary", allowedRenderers: ["primary", "alternate"], userSelectable: true } },
   shell: { id: "cn.vastplan.shell", uiContract: "^5.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true } },
   workbench: { id: "cn.vastplan.workbench", uiContract: "^5.0.0" },
 } as any;

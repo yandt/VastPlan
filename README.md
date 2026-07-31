@@ -18,7 +18,7 @@ VastPlan 已经完成一套**可运行、可扩展、可部署、可验证的 Ba
 | 插件机制 | 已完成 | 已有 4 个示例插件验证工具、权限、审计和 Hook 机制 |
 | 平台基础插件 | 首批已实现 | 全局设置、凭证、数据库连接、HTTPS 制品仓库和节点部署均已按插件边界提供；Seed Inventory/LKG、离线 Bundle 和仓库自升级事务已实现，生产发行用签名种子 Bundle 仍待完成 |
 | Backend 正式 1.0 | 待真实负载验证 | 版本仍为 `0.1.0`，Soak 已主动延期，不使用无代表性的空载结果 |
-| Portal 前端内核 | 目标代码路径已基本完成 | Node Portal Kernel、UI Contract 4.0、React Runtime Engine、标准/顶部动态布局、Arco/MUI 按需适配、Workbench、插件多语种、OIDC BFF、可信 Browser/Server Module Graph、SSR 与不可变 Activation 已落地；健康/就绪端点已提供，仍需真实企业 IdP、受信证书和多副本环境验收 |
+| Portal 前端内核 | 目标代码路径已基本完成 | Node Portal Kernel、UI Contract、React Runtime Engine、Ant Design 按需 Renderer、标准/顶部动态布局、Workbench、插件多语种、OIDC BFF、可信 Browser/Server Module Graph、SSR 与不可变 Activation 已落地；Renderer 多插件协议继续保留，但当前产品只维护 Ant Design |
 | 第三方插件 | 当前不开放 | 已预留三态全局策略和发布者级覆盖；真正隔离驱动仍是开放前置条件 |
 
 面向管理层和非技术人员的阶段成果说明见[当前系统开发成果](docs/dev/guides/当前系统开发成果.md)。

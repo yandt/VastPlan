@@ -209,3 +209,4 @@
 - [ADR-0176 租约式 Content Staging 与流式数据面](ADR-0176-租约式Content-Staging与流式数据面.md)
 - [ADR-0177 Portal 外观本地偏好与账户入口](ADR-0177-Portal外观本地偏好与账户入口.md)
 - [ADR-0178 插件专属扩展点与可信扩展图](ADR-0178-插件专属扩展点与可信扩展图.md)
+- [ADR-0179 Ant Design 单实现与 Renderer 协议保留](ADR-0179-Ant-Design单实现与Renderer协议保留.md)
