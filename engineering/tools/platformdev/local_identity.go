@@ -19,6 +19,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -34,16 +35,17 @@ func writeSessions(filename string, ownerPermissions []string) error {
 		Roles       []string `json:"roles"`
 		ExpiresAt   string   `json:"expiresAt"`
 	}
-	ownerRoles := append([]string{"portal.read", "portal.compose", "portal.approve", "portal.publish"}, ownerPermissions...)
+	ownerRoles := append([]string{"platform.portal.read", "platform.portal.compose", "platform.portal.approve", "platform.portal.publish"}, ownerPermissions...)
 	sort.Strings(ownerRoles)
+	ownerRoles = slices.Compact(ownerRoles)
 	sessions := []struct {
 		token, id string
 		roles     []string
 	}{
 		{devAdminToken, "local-admin", ownerRoles},
-		{authorToken, "local-author", []string{"portal.read", "portal.compose", "platform.deployment.read", "platform.deployment.compose"}},
-		{approverToken, "local-approver", []string{"portal.read", "portal.approve", "platform.deployment.read", "platform.deployment.approve"}},
-		{publisherToken, "local-publisher", []string{"portal.read", "portal.publish", "platform.deployment.read", "platform.deployment.publish"}},
+		{authorToken, "local-author", []string{"platform.portal.read", "platform.portal.compose", "platform.deployment.read", "platform.deployment.compose"}},
+		{approverToken, "local-approver", []string{"platform.portal.read", "platform.portal.approve", "platform.deployment.read", "platform.deployment.approve"}},
+		{publisherToken, "local-publisher", []string{"platform.portal.read", "platform.portal.publish", "platform.deployment.read", "platform.deployment.publish"}},
 	}
 	doc := struct {
 		Sessions []record `json:"sessions"`

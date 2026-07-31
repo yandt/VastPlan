@@ -53,7 +53,8 @@ describe("BrokerIdentityProvider", () => {
       }
       throw new Error(`unexpected operation ${operation}`);
     } };
-    const authorization: SessionAuthorizationPort = { async resolve(assertion) { return { subjectId: "enterprise.alice", tenantId: assertion.tenantId, roles: ["platform.settings.read", "foundation.security.authentication.providers.test"], policy: { id: "platform.root", revision: 7, digest: "a".repeat(64) }, expiresAt: new Date(Date.now() + 300_000).toISOString() }; } };
+    const roles = ["platform.settings.read", "foundation.security.authentication.providers.test", ...Array.from({ length: 60 }, (_, index) => `platform.generated.permission.${index}`)];
+    const authorization: SessionAuthorizationPort = { async resolve(assertion) { return { subjectId: "enterprise.alice", tenantId: assertion.tenantId, roles, policy: { id: "platform.root", revision: 7, digest: "a".repeat(64) }, expiresAt: new Date(Date.now() + 300_000).toISOString() }; } };
     const generation = createAccessGeneration({
       version: 1, revision: 1, id: "operations-access", tenantId: "acme", portalId: "operations", route: "/", domains: ["127.0.0.1"],
       platformProfile: { id: "portal", revision: 1, digest: "b".repeat(64) }, accessTemplate: "access",
@@ -82,10 +83,16 @@ describe("BrokerIdentityProvider", () => {
     expect(complete.status).toBe(200);
     expect(await complete.json()).toMatchObject({ result: { state: "authenticated" }, returnTo: "/operations" });
     const session = cookieFrom(complete.headers, "vastplan_session");
+    const authenticationProof = cookieFrom(complete.headers, "vastplan_auth_proof");
     expect(session).not.toContain("alice");
 		expect(session).not.toBe("attacker-fixed");
+    expect(session.length).toBeLessThanOrEqual(3800);
+    expect(authenticationProof.length).toBeLessThanOrEqual(3800);
     const current = await fetch(`${portal}/auth/session`, { headers: { Cookie: `vastplan_session=${session}` } });
-    expect(await current.json()).toEqual({ authenticated: true, subject: "enterprise.alice", tenantId: "acme", roles: ["platform.settings.read", "foundation.security.authentication.providers.test"] });
+    expect(await current.json()).toEqual({ authenticated: true, subject: "enterprise.alice", tenantId: "acme", roles });
+
+    expect(await identity.authenticationProof({ headers: { cookie: `vastplan_session=${session}; vastplan_auth_proof=${authenticationProof}` } } as never)).toMatchObject({ payload: { subject: { id: "alice" } } });
+    expect(await identity.authenticationProof({ headers: { cookie: `vastplan_session=${session}` } } as never)).toBeUndefined();
 
     const testHeaders = { ...headers, Cookie: `vastplan_session=${session}; vastplan_csrf=${csrfCookie}` };
     const beginTest = await fetch(`${portal}/auth/v1/provider-tests`, { method: "POST", headers: testHeaders, body: JSON.stringify({ providerProfileId: "draft-provider", methodId: "password", locale: "zh-CN", returnTo: "/settings/providers?providerTestReceipt=draft-provider" }) });

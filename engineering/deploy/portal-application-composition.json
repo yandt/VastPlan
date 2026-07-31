@@ -4,7 +4,7 @@
   "id": "operations",
   "target": { "kernel": "frontend" },
   "route": "/operations",
-  "audience": ["portal.read"],
+  "audience": ["platform.portal.read"],
   "plugins": [],
   "config": {},
   "branding": { "title": "VastPlan 平台管理中心" }

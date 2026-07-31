@@ -41,10 +41,11 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 	// Host-only runtime identity is attached only for a locally registered
 	// kernel service. It is never copied into CallContext or forwarded to a
 	// remote capability when the local service is absent.
-	h.mu.RLock()
-	_, localKernelService := h.services[req.Target.Capability]
-	h.mu.RUnlock()
-	if !localKernelService && !h.externalHostCallAllowed() {
+	localKernelService := h.localKernelService(req.Target.Capability)
+	// The execution fence protects calls that leave this Runtime Host. A local
+	// plugin contribution is already inside the fenced unit and must not be
+	// mistaken for an external call merely because it is not a kernel service.
+	if !h.localHostCall(req.Target) && !h.externalHostCallAllowed() {
 		h.replyHostCall(sess, req.RequestId, errorResponse(errorcode.PermissionDenied,
 			"leader runtime 已失去当前 execution fence", true))
 		return
@@ -61,6 +62,31 @@ func (h *Host) serveHostCall(sess *session, req *pluginhostv1.InvokeRequest) {
 		return
 	}
 	h.replyHostCall(sess, req.RequestId, resp)
+}
+
+func (h *Host) localKernelService(capability string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	_, ok := h.services[capability]
+	return ok
+}
+
+func (h *Host) localHostCall(target *contractv1.CallTarget) bool {
+	if target == nil {
+		return false
+	}
+	if target.ExtensionPoint == extpoint.KernelService && h.localKernelService(target.Capability) {
+		return true
+	}
+	contribution, ok := h.Registry.Lookup(target.ExtensionPoint, target.Capability)
+	if !ok || contribution.PluginID == "" {
+		return false
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	_, processLocal := h.byPlugin[contribution.PluginID]
+	_, embeddedLocal := h.embeddedByPlugin[contribution.PluginID]
+	return processLocal || embeddedLocal
 }
 
 // externalHostCallAllowed closes the stale-leader window before a plugin call

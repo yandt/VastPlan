@@ -8,7 +8,7 @@ import { readRequestJSON, requireJSONObject, RequestJSONError } from "../http/re
 import { issueCSRF, validCSRF } from "../security/csrf";
 import type { AuthenticationBrokerPort } from "./authentication-broker-port";
 import { parseContinueInput, parseDescribe, parseResultEnvelope } from "./broker-identity-contract";
-import { createBrokerSession, createBrokerTransaction, parseBrokerTransaction, principalFromBrokerSession, validReturnTo } from "./broker-identity-session";
+import { authenticationProofFromBrokerSession, createBrokerAuthenticationProof, createBrokerSession, createBrokerTransaction, parseBrokerTransaction, principalFromBrokerSession, validReturnTo } from "./broker-identity-session";
 import type { IdentityProvider, Principal } from "./identity-provider";
 import { SessionRejectedError } from "./identity-provider";
 import type { SessionAuthorizationPort } from "./session-authorization-port";
@@ -16,6 +16,7 @@ import { AuthenticationAssertionVerifier, parseSignedAuthenticationAssertion } f
 import { SealedCookieCodec } from "./sealed-cookie";
 
 const sessionCookie = "vastplan_session";
+const authenticationProofCookie = "vastplan_auth_proof";
 const transactionCookie = "vastplan_auth_tx";
 const providerTestCookie = "vastplan_auth_test";
 
@@ -45,9 +46,12 @@ export class BrokerIdentityProvider implements IdentityProvider {
   }
 
   public async authenticationProof(request: IncomingMessage) {
-    const token = onlyCookie(request, sessionCookie);
-    if (token === undefined) return undefined;
-    try { return parseSignedAuthenticationAssertion(this.cookies.unseal(token).authenticationProof); }
+    const sessionToken = onlyCookie(request, sessionCookie), proofToken = onlyCookie(request, authenticationProofCookie);
+    if (sessionToken === undefined || proofToken === undefined) return undefined;
+    try {
+      const proof = authenticationProofFromBrokerSession(this.cookies.unseal(sessionToken), this.cookies.unseal(proofToken));
+      return parseSignedAuthenticationAssertion(proof);
+    }
     catch { return undefined; }
   }
 
@@ -173,8 +177,10 @@ export class BrokerIdentityProvider implements IdentityProvider {
       }
       const authorization = await this.authorization.resolve(signed.payload);
       const session = createBrokerSession(signed, authorization, this.config.sessionMaxAgeSeconds);
+      const proof = createBrokerAuthenticationProof(signed);
       appendSetCookie(response, clearCookie(transactionCookie, "/auth", secure, "Lax"));
       appendSetCookie(response, cookie(sessionCookie, this.cookies.seal(session), Number(session.exp) - nowSeconds(), "/", secure, "Lax"));
+      appendSetCookie(response, cookie(authenticationProofCookie, this.cookies.seal(proof), Number(proof.exp) - nowSeconds(), "/", secure, "Strict"));
       if (redirect === undefined) sendJSON(response, 200, { transactionId: id, result: { state: "authenticated" }, returnTo: transaction.returnTo });
       else { response.statusCode = 303; response.setHeader("Location", transaction.returnTo); response.setHeader("Cache-Control", "no-store"); response.end(); }
     } catch (error) {
@@ -222,6 +228,7 @@ export class BrokerIdentityProvider implements IdentityProvider {
     if (request.method !== "POST") return apiError(response, 405, "method_not_allowed");
     if (!validMutation(request, secure)) return apiError(response, 403, "csrf_rejected");
     appendSetCookie(response, clearCookie(sessionCookie, "/", secure, "Lax"));
+    appendSetCookie(response, clearCookie(authenticationProofCookie, "/", secure, "Strict"));
     appendSetCookie(response, clearCookie("vastplan_csrf", "/", secure, "Strict"));
     response.statusCode = 204; response.setHeader("Cache-Control", "no-store"); response.end();
     return true;

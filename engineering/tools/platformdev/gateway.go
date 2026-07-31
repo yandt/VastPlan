@@ -89,15 +89,13 @@ func devTransit(w http.ResponseWriter, request *http.Request) {
 }
 
 func (r *runtime) startProxy() error {
-	target, _ := url.Parse("https://" + r.options.portalListen)
+	target, _ := url.Parse("http://" + r.options.portalListen)
 	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.Transport = &http.Transport{TLSClientConfig: insecureLocalTLS()}
 	original := proxy.Director
 	proxy.Director = func(request *http.Request) {
+		source := request.Clone(request.Context())
 		original(request)
-		if _, err := request.Cookie("vastplan_session"); err != nil {
-			request.AddCookie(&http.Cookie{Name: "vastplan_session", Value: devAdminToken})
-		}
+		r.identity.decorateUpstream(source, request)
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/__vastplan_dev/status", r.status)
@@ -106,13 +104,10 @@ func (r *runtime) startProxy() error {
 		mux.HandleFunc("/__vastplan_dev/runtime", r.hmr.runtime)
 		mux.HandleFunc("/__vastplan_dev/modules/", r.hmr.module)
 		mux.HandleFunc("/assets/", r.hmr.portalAssets)
-		mux.HandleFunc("/", func(w http.ResponseWriter, request *http.Request) {
-			if isPortalKernelRoute(request.URL.Path) {
-				proxy.ServeHTTP(w, request)
-				return
-			}
-			r.hmr.portalAssets(w, request)
-		})
+		// Page requests must always cross the Portal Host identity boundary. HMR
+		// owns immutable development assets only; it must never become a second,
+		// unauthenticated page server.
+		mux.Handle("/", proxy)
 	} else {
 		mux.Handle("/", proxy)
 	}
@@ -143,7 +138,8 @@ func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 	status := map[string]any{
 		"ready": ready, "portal": "http://" + r.options.listen + "/operations", "runDir": r.runDir,
 		"mode": "local-development", "productionEquivalent": false,
-		"hot": r.options.hot, "startupPublication": r.options.applyPlatform,
+		"identity": map[string]any{"protocol": r.identity.name(), "autoLogin": r.options.autoLogin},
+		"hot":      r.options.hot, "startupPublication": r.options.applyPlatform,
 		"repositories": map[string]any{
 			"seed": map[string]any{"url": "https://" + r.options.seedArtifactListen, "persistent": false},
 			"testing": map[string]any{

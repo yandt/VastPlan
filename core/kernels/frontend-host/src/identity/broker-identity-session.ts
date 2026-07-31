@@ -42,8 +42,23 @@ export function createBrokerSession(signed: SignedAuthenticationAssertion, autho
     kind: "broker-session", exp: Math.floor(expiresAt / 1000), sessionId: assertion.assertionId,
     subjectId: authorization.subjectId, tenantId: authorization.tenantId, portalId: assertion.portalId, roles: authorization.roles,
     providerProfileId: assertion.providerProfileId, issuer: assertion.subject.issuer, externalSubject: assertion.subject.id,
-    amr: assertion.amr, acr: assertion.acr, policy: authorization.policy, authenticationProof: signed,
+    amr: assertion.amr, acr: assertion.acr, policy: authorization.policy,
   });
+}
+
+export function createBrokerAuthenticationProof(signed: SignedAuthenticationAssertion): Readonly<Record<string, unknown>> {
+  return Object.freeze({
+    kind: "broker-authentication-proof",
+    exp: Math.floor(Date.parse(signed.payload.expiresAt) / 1000),
+    sessionId: signed.payload.assertionId,
+    assertion: signed,
+  });
+}
+
+export function authenticationProofFromBrokerSession(session: Readonly<Record<string, unknown>>, proof: Readonly<Record<string, unknown>>): SignedAuthenticationAssertion {
+  if (session.kind !== "broker-session" || proof.kind !== "broker-authentication-proof" || !safeID(session.sessionId)
+    || proof.sessionId !== session.sessionId) throw new Error("Broker authentication proof 与会话不匹配");
+  return proof.assertion as SignedAuthenticationAssertion;
 }
 
 export function principalFromBrokerSession(value: Readonly<Record<string, unknown>>): Principal {

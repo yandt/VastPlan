@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.security.authorization-session",
   "name": "VastPlan Authorization Session",
   "description": "将企业认证稳定主体映射到受签名策略约束的内部会话权限",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",

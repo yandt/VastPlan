@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 )
 
 func TestProviderDescriptorMatchesManifest(t *testing.T) {
@@ -45,10 +45,18 @@ func TestSeedProviderUsesGenericAuthenticationMethod(t *testing.T) {
 	provider, _ := NewProvider(authority)
 	provider.now = authority.now
 	contribution := provider.Contribution()
+	result, response, err := contribution.Handlers[authenticationv1.OperationDescribe](context.Background(), nil, &contractv1.CallContext{}, []byte(`{}`))
+	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
+		t.Fatalf("describe 失败: %+v %v", result, err)
+	}
+	described, err := authenticationv1.ParseMethodResult(authenticationv1.OperationDescribe, response)
+	if err != nil || len(described.(*authenticationv1.DescribeResult).Methods) != 1 {
+		t.Fatalf("describe 响应无效: %s %v", response, err)
+	}
 
 	begin := authenticationv1.BeginRequest{TransactionID: strings.Repeat("t", 32), MethodID: MethodID, Audience: "portal.example.test", TenantID: "platform", PortalID: "management", Locale: "zh-CN", ClientContextDigest: strings.Repeat("a", 64)}
 	beginRaw, _ := json.Marshal(begin)
-	result, response, err := contribution.Handlers[authenticationv1.OperationBegin](context.Background(), nil, &contractv1.CallContext{}, beginRaw)
+	result, response, err = contribution.Handlers[authenticationv1.OperationBegin](context.Background(), nil, &contractv1.CallContext{}, beginRaw)
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("begin 失败: %+v %v", result, err)
 	}

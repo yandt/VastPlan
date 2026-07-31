@@ -31,7 +31,7 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		cookie, err := request.Cookie("vastplan_session")
 		if err != nil || cookie.Value != devAdminToken {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -49,7 +49,8 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 	defer upstream.Close()
 
 	hmr := &frontendHMR{
-		portalListen: strings.TrimPrefix(upstream.URL, "https://"), current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{},
+		portalURL: upstream.URL, current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{},
+		identity: autoLoginIdentityProtocol{},
 	}
 	if err := hmr.install(manifestPath); err != nil {
 		t.Fatalf("install: %v", err)
@@ -202,7 +203,7 @@ func TestFrontendHMROverlaysGraphNativeRuntimeWithoutCandidateVersionValidation(
 	}
 
 	payload := []byte(`{"portal":{"revision":7},"moduleGraphs":[{"id":"cn.vastplan.feature","version":"2024.999.0","channel":"stable","target":"browser","entry":"frontend/dist/old.js","digest":"` + strings.Repeat("a", 64) + `","packageSha256":"` + strings.Repeat("b", 64) + `","externals":[],"nodes":[{"path":"frontend/dist/old.js","url":"/v1/portal-modules/7/` + strings.Repeat("c", 64) + `.js","sha256":"` + strings.Repeat("c", 64) + `","size":1,"mediaType":"text/javascript","purpose":"entry","dependencies":[]}]}]}`)
-	upstream := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		cookie, err := request.Cookie("vastplan_session")
 		if err != nil || cookie.Value != devAdminToken {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -213,7 +214,8 @@ func TestFrontendHMROverlaysGraphNativeRuntimeWithoutCandidateVersionValidation(
 	defer upstream.Close()
 
 	hmr := &frontendHMR{
-		portalListen: strings.TrimPrefix(upstream.URL, "https://"), current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{},
+		portalURL: upstream.URL, current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{},
+		identity: autoLoginIdentityProtocol{},
 	}
 	if err := hmr.install(manifestPath); err != nil {
 		t.Fatalf("install graph candidate: %v", err)

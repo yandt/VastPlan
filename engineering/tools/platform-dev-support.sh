@@ -402,10 +402,50 @@ runtime_arguments() {
     -vault-listen "127.0.0.1:$VAULT_PORT"
     -recovery-listen "127.0.0.1:$RECOVERY_PORT"
 	-hot="$HOT_MODE"
+	-auto-login="$AUTO_LOGIN"
 	-detach="$detach"
 	-apply-platform="$APPLY_PLATFORM"
 	-rebuild-seed="$REBUILD_SEED"
   )
+}
+
+build_seedaccessctl() {
+  local output="$STATE_ROOT/seedaccessctl"
+  info "[准备] 构建 Seed 管理员本机工具..."
+  if ! (cd "$ROOT" && GOCACHE="$GO_CACHE" go build -o "$output" ./engineering/tools/seedaccessctl); then
+    fail "Seed 管理员工具构建失败"
+    return 1
+  fi
+  chmod 700 "$output"
+}
+
+manage_seed_admin() {
+  local action="${1:-}"
+  shift || true
+  local operator="" password_file=""
+  case "$action" in
+    init|status) ;;
+    *) fail "seed-admin 只支持 init 或 status"; return 2 ;;
+  esac
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --operator) [ "$#" -ge 2 ] || { fail "--operator 缺少账号"; return 2; }; operator="$2"; shift ;;
+      --password-file) [ "$#" -ge 2 ] || { fail "--password-file 缺少文件"; return 2; }; password_file="$2"; shift ;;
+      *) fail "未知 seed-admin 参数: $1"; return 2 ;;
+    esac
+    shift
+  done
+  if [ "$action" = init ] && { [ -z "$operator" ] || [ -z "$password_file" ]; }; then
+    fail "seed-admin init 必须提供 --operator 与 --password-file"
+    return 2
+  fi
+  ensure_state_dirs
+  mkdir -p "$STATE_ROOT/state/authentication"
+  build_seedaccessctl
+  local args=(-state-file "$STATE_ROOT/state/authentication/seed-access.json")
+  [ -z "$operator" ] || args+=(-operator "$operator")
+  [ -z "$password_file" ] || args+=(-password-file "$password_file")
+  "$STATE_ROOT/seedaccessctl" "${args[@]}" "$action"
 }
 
 show_recent_log() {

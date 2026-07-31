@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "revision": 77,
+  "revision": 78,
   "id": "local-portal-access",
   "profiles": [
     {
       "version": 1,
-      "revision": 77,
+      "revision": 78,
       "id": "local-operations-login",
       "tenantId": "local",
       "portalId": "operations",
@@ -22,8 +22,8 @@
         "supportedLocales": ["zh-CN", "en-US"]
       },
       "authentication": {
-        "allowedMethods": ["password", "one-time-code"],
-        "defaultMethod": "password",
+        "allowedMethods": ["seed-password"],
+        "defaultMethod": "seed-password",
         "reuseIdentifier": true
       },
       "branding": {

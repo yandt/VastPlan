@@ -30,15 +30,16 @@ var (
 )
 
 type frontendHMR struct {
-	root, runDir, portalListen, portalAssetsDir string
-	mu                                          sync.RWMutex
-	generation                                  uint64
-	current                                     map[string]frontendHMRModule
-	objects                                     map[string]frontendHMRObject
-	history                                     [][]string
-	subscribers                                 map[chan frontendHMREvent]struct{}
-	lastError                                   string
-	assets                                      http.Handler
+	root, runDir, portalURL, portalAssetsDir string
+	mu                                       sync.RWMutex
+	generation                               uint64
+	current                                  map[string]frontendHMRModule
+	objects                                  map[string]frontendHMRObject
+	history                                  [][]string
+	subscribers                              map[chan frontendHMREvent]struct{}
+	lastError                                string
+	assets                                   http.Handler
+	identity                                 developmentIdentityProtocol
 }
 
 type frontendHMRModule struct {
@@ -77,9 +78,9 @@ func (r *runtime) startFrontendHMR(ctx context.Context) error {
 		return fmt.Errorf("加载开发态 Portal 静态产物: %w", err)
 	}
 	hmr := &frontendHMR{
-		root: r.options.root, runDir: filepath.Join(r.runDir, "frontend-hmr"), portalListen: r.options.portalListen, portalAssetsDir: portalAssetsDir,
+		root: r.options.root, runDir: filepath.Join(r.runDir, "frontend-hmr"), portalURL: "http://" + r.options.portalListen, portalAssetsDir: portalAssetsDir,
 		current: map[string]frontendHMRModule{}, objects: map[string]frontendHMRObject{}, subscribers: map[chan frontendHMREvent]struct{}{},
-		assets: assets,
+		assets: assets, identity: r.identity,
 	}
 	if err := os.MkdirAll(hmr.runDir, 0o700); err != nil {
 		return fmt.Errorf("创建前端热替换目录: %w", err)
@@ -478,117 +479,6 @@ func (h *frontendHMR) module(w http.ResponseWriter, request *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-VastPlan-Module-SHA256", match[1])
 	_, _ = w.Write(object.Bytes)
-}
-
-func (h *frontendHMR) runtime(w http.ResponseWriter, request *http.Request) {
-	if !loopbackRequest(request) || request.Method != http.MethodGet {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-	query := request.URL.Query()
-	if strings.TrimSpace(query.Get("path")) == "" {
-		query.Set("path", "/operations")
-	}
-	target := "https://" + h.portalListen + "/v1/portal-runtime?" + query.Encode()
-	upstream, err := http.NewRequestWithContext(request.Context(), http.MethodGet, target, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	upstream.AddCookie(&http.Cookie{Name: "vastplan_session", Value: devAdminToken})
-	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{TLSClientConfig: insecureLocalTLS()}}
-	response, err := client.Do(upstream)
-	if err != nil {
-		http.Error(w, "Portal Runtime upstream unavailable", http.StatusBadGateway)
-		return
-	}
-	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
-	if err != nil || response.StatusCode != http.StatusOK {
-		http.Error(w, "Portal Runtime upstream rejected request", response.StatusCode)
-		return
-	}
-	var document map[string]json.RawMessage
-	if err := json.Unmarshal(body, &document); err != nil {
-		http.Error(w, "Portal Runtime upstream invalid", http.StatusBadGateway)
-		return
-	}
-	h.mu.RLock()
-	if err := overlayFrontendHMRUIContracts(document, h.current); err != nil {
-		h.mu.RUnlock()
-		http.Error(w, "Portal Runtime UI contract overlay invalid: "+err.Error(), http.StatusConflict)
-		return
-	}
-	if modulesRaw, exists := document["modules"]; exists && !bytes.Equal(bytes.TrimSpace(modulesRaw), []byte("null")) {
-		var modules []map[string]any
-		if err := json.Unmarshal(modulesRaw, &modules); err != nil {
-			h.mu.RUnlock()
-			http.Error(w, "Portal Runtime upstream invalid", http.StatusBadGateway)
-			return
-		}
-		for _, descriptor := range modules {
-			id, _ := descriptor["id"].(string)
-			if module, ok := h.current[id]; ok {
-				descriptor["entry"] = module.Entry
-				descriptor["url"] = "/__vastplan_dev/modules/" + module.SHA256 + ".js"
-				descriptor["sha256"] = module.SHA256
-				descriptor["deferred"] = module.Deferred
-			}
-		}
-		encoded, err := json.Marshal(modules)
-		if err != nil {
-			h.mu.RUnlock()
-			http.Error(w, "Portal Runtime overlay invalid", http.StatusInternalServerError)
-			return
-		}
-		document["modules"] = encoded
-	}
-	if graphsRaw, exists := document["moduleGraphs"]; exists && !bytes.Equal(bytes.TrimSpace(graphsRaw), []byte("null")) {
-		var graphs []map[string]any
-		if err := json.Unmarshal(graphsRaw, &graphs); err != nil {
-			h.mu.RUnlock()
-			http.Error(w, "Portal Runtime upstream invalid", http.StatusBadGateway)
-			return
-		}
-		for _, descriptor := range graphs {
-			id, _ := descriptor["id"].(string)
-			module, ok := h.current[id]
-			if !ok || module.Graph == nil {
-				continue
-			}
-			descriptor["target"] = module.Graph.Target
-			descriptor["entry"] = module.Graph.Entry
-			descriptor["digest"] = module.Graph.Digest
-			descriptor["externals"] = module.Graph.Externals
-			descriptor["nodes"] = module.Graph.Nodes
-			if module.Deferred {
-				descriptor["deferred"] = true
-			} else {
-				delete(descriptor, "deferred")
-			}
-		}
-		encoded, err := json.Marshal(graphs)
-		if err != nil {
-			h.mu.RUnlock()
-			http.Error(w, "Portal Runtime overlay invalid", http.StatusInternalServerError)
-			return
-		}
-		document["moduleGraphs"] = encoded
-	}
-	if err := overlayFrontendHMRContributions(document, h.current); err != nil {
-		h.mu.RUnlock()
-		http.Error(w, "Portal Runtime contribution overlay invalid: "+err.Error(), http.StatusConflict)
-		return
-	}
-	h.mu.RUnlock()
-	encodedDocument, err := json.Marshal(document)
-	if err != nil {
-		http.Error(w, "Portal Runtime overlay invalid", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write(encodedDocument)
 }
 
 func loopbackRequest(request *http.Request) bool {

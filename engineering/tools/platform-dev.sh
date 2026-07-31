@@ -55,9 +55,11 @@ usage() {
 VastPlan 本地平台管理中心
 
 用法:
-  $0 up [--debug] [--fresh] [--no-hot] [--timeout 秒]
-  $0 restart [--debug] [--fresh] [--no-hot] [--timeout 秒]
-  $0 bootstrap [--rebuild-seed] [--debug] [--fresh] [--no-hot] [--timeout 秒]
+  $0 up [--debug] [--fresh] [--no-hot] [--auto-login] [--timeout 秒]
+  $0 restart [--debug] [--fresh] [--no-hot] [--auto-login] [--timeout 秒]
+  $0 bootstrap [--rebuild-seed] [--debug] [--fresh] [--no-hot] [--auto-login] [--timeout 秒]
+  $0 seed-admin init --operator 账号 --password-file owner-only文件
+  $0 seed-admin status
   $0 down
   $0 status
   $0 logs [--follow] [--lines 行数]
@@ -74,6 +76,7 @@ VastPlan 本地平台管理中心
   up         只启动内核并恢复已有期望态，不执行任何发布（默认命令）
   restart    优雅停止后按无发布模式重新启动
   bootstrap  显式发布/更新平台基础组合后启动；默认复用 stable LKG，不发布示例业务服务
+  seed-admin 在本机初始化或查看数据库无关的 Seed 管理员；密码只从 owner-only 文件读取
   down       优雅停止当前平台及其受管子进程
   status     显示编排器与开发网关状态
   logs       显示最近日志；加 --follow/-f 持续跟踪
@@ -89,6 +92,7 @@ up/restart 参数:
   --debug, -d       前台运行并实时显示日志，Ctrl+C 停止
   --fresh           启动前删除旧运行数据和构建缓存
   --no-hot          关闭默认启用的前端插件事务式热替换
+  --auto-login      显式启用仅限 UI 调试的管理员自动登录；默认使用真实 Broker 登录
   --rebuild-seed     仅 bootstrap：按新 stable refs 重建并晋级 Seed Runtime
   --timeout 秒      启动等待时间，默认 ${VASTPLAN_DEV_TIMEOUT:-300} 秒
 
@@ -255,6 +259,7 @@ START_TIMEOUT="${VASTPLAN_DEV_TIMEOUT:-300}"
 LOG_FOLLOW=false
 LOG_LINES=100
 HOT_MODE=true
+AUTO_LOGIN=false
 APPLY_PLATFORM=false
 REBUILD_SEED=false
 
@@ -264,6 +269,7 @@ parse_start_options() {
       --debug|-d) DEBUG_MODE=true ;;
       --fresh) FRESH_MODE=true ;;
       --no-hot) HOT_MODE=false ;;
+      --auto-login) AUTO_LOGIN=true ;;
       --rebuild-seed) REBUILD_SEED=true ;;
       --timeout)
         if [ "$#" -lt 2 ]; then
@@ -326,6 +332,9 @@ case "$COMMAND" in
     parse_start_options "$@"
     stop_runtime
     start_runtime "$DEBUG_MODE" "$FRESH_MODE" "$START_TIMEOUT"
+    ;;
+  seed-admin)
+    manage_seed_admin "$@"
     ;;
   down)
     [ "$#" -eq 0 ] || { fail "down 不接受参数"; exit 2; }

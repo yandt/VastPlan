@@ -11,17 +11,18 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
-	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	authenticationv1 "cdsoft.com.cn/VastPlan/contracts/schemas/authentication/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
 const (
 	PluginID                   = "cn.vastplan.foundation.security.authentication-broker"
-	PluginVersion              = "0.4.4"
+	PluginVersion              = "0.4.8"
 	Capability                 = "foundation.security.authentication.broker"
 	OperationConsumeAssertion  = "consumeAssertion"
 	OperationBeginProviderTest = "beginProviderTest"
@@ -191,13 +192,28 @@ func (b *Broker) describe(ctx context.Context, host sdk.Host, callCtx *contractv
 		return brokerError("foundation.authentication.binding_not_found", errors.New("门户未绑定认证 Provider")), nil, nil
 	}
 	byMethod := map[string]authenticationv1.MethodDescriptor{}
+	failures := make([]string, 0, len(providers))
 	for _, provider := range providers {
 		result, raw, callErr := callProvider(ctx, host, callCtx, provider.ContributionID, authenticationv1.OperationDescribe, []byte(`{}`))
-		if callErr != nil || result == nil || result.Status != contractv1.CallResult_STATUS_OK {
+		if callErr != nil {
+			failures = append(failures, provider.ContributionID+": "+callErr.Error())
+			continue
+		}
+		if result == nil {
+			failures = append(failures, provider.ContributionID+": 返回空 CallResult")
+			continue
+		}
+		if result.Status != contractv1.CallResult_STATUS_OK {
+			message := result.GetError().GetMessage()
+			if message == "" {
+				message = result.Status.String()
+			}
+			failures = append(failures, provider.ContributionID+": "+message)
 			continue
 		}
 		parsed, parseErr := authenticationv1.ParseMethodResult(authenticationv1.OperationDescribe, raw)
 		if parseErr != nil {
+			failures = append(failures, provider.ContributionID+": "+parseErr.Error())
 			continue
 		}
 		allowed := map[string]struct{}{}
@@ -209,6 +225,13 @@ func (b *Broker) describe(ctx context.Context, host sdk.Host, callCtx *contractv
 				byMethod[method.MethodID] = method
 			}
 		}
+	}
+	if len(byMethod) == 0 {
+		reason := "已绑定 Provider 未返回可用认证方式"
+		if len(failures) != 0 {
+			reason += ": " + strings.Join(failures, "; ")
+		}
+		return brokerError("foundation.authentication.provider_unavailable", errors.New(reason)), nil, nil
 	}
 	methods := make([]authenticationv1.MethodDescriptor, 0, len(byMethod))
 	for _, method := range byMethod {

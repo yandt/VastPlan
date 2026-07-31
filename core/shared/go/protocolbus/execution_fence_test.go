@@ -6,8 +6,8 @@ import (
 
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
 	"cdsoft.com.cn/VastPlan/core/shared/go/registry"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/operationfence"
 )
 
 type testFenceProvider struct {
@@ -54,5 +54,24 @@ func TestExternalHostCallsStopImmediatelyAfterLeaderLeaseLoss(t *testing.T) {
 	provider.current = false
 	if host.externalHostCallAllowed() {
 		t.Fatal("失去 leader lease 后必须在 Runtime Host 阻止外部能力调用")
+	}
+}
+
+func TestLocalPluginHostCallDoesNotRequireExternalExecutionFence(t *testing.T) {
+	reg := registry.New()
+	reg.DefinePoint(registry.ExtensionPoint{Name: extpoint.AuthenticationProvider, Dispatch: registry.DispatchSingle})
+	if err := reg.Register(registry.Contribution{ExtensionPoint: extpoint.AuthenticationProvider, ID: "seed-local", PluginID: "cn.vastplan.seed"}); err != nil {
+		t.Fatal(err)
+	}
+	host := NewHost("backend", "1.0.0", reg, nil)
+	host.byPlugin["cn.vastplan.seed"] = &session{}
+	host.SetExecutionFenceProvider(&testFenceProvider{current: false})
+	local := &contractv1.CallTarget{ExtensionPoint: extpoint.AuthenticationProvider, Capability: "seed-local"}
+	if !host.localHostCall(local) {
+		t.Fatal("同一 Runtime Host 的插件贡献必须识别为本地调用")
+	}
+	remote := &contractv1.CallTarget{ExtensionPoint: extpoint.AuthenticationProvider, Capability: "remote-provider"}
+	if host.localHostCall(remote) {
+		t.Fatal("未在本 Host 注册的能力不得绕过外部 execution fence")
 	}
 }

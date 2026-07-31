@@ -39,6 +39,7 @@ type options struct {
 	listen, portalListen, artifactListen, seedArtifactListen, vaultListen, recoveryListen, natsListen string
 	artifactProtocol                                                                                  string
 	hot                                                                                               bool
+	autoLogin                                                                                         bool
 	detach                                                                                            bool
 	applyPlatform                                                                                     bool
 	rebuildSeed                                                                                       bool
@@ -69,6 +70,7 @@ type runtime struct {
 	seedSnapshotMigration bool
 	seedHostRefresh       bool
 	recovery              recoveryStatus
+	identity              developmentIdentityProtocol
 }
 
 type packageSpec struct {
@@ -90,6 +92,7 @@ func main() {
 	flag.StringVar(&opts.recoveryListen, "recovery-listen", "127.0.0.1:18441", "internal Kernel Recovery status address")
 	flag.StringVar(&opts.natsListen, "nats-listen", "127.0.0.1:0", "development NATS address; port 0 chooses a free port")
 	flag.BoolVar(&opts.hot, "hot", true, "enable transactional frontend plugin hot replacement")
+	flag.BoolVar(&opts.autoLogin, "auto-login", false, "explicitly bypass interactive login for local UI-only development")
 	flag.BoolVar(&opts.detach, "detach", false, "detach background runtime from the launching terminal session")
 	flag.BoolVar(&opts.applyPlatform, "apply-platform", false, "explicitly publish the development platform baseline")
 	flag.BoolVar(&opts.rebuildSeed, "rebuild-seed", false, "explicitly rebuild and promote the stable development Seed Runtime")
@@ -131,7 +134,7 @@ func run(opts options) error {
 	if err := os.MkdirAll(runDir, 0o700); err != nil {
 		return fmt.Errorf("创建运行目录: %w", err)
 	}
-	r := &runtime{options: opts, runDir: runDir}
+	r := &runtime{options: opts, runDir: runDir, identity: selectDevelopmentIdentityProtocol(opts.autoLogin)}
 	if err := r.prepare(ctx); err != nil {
 		return err
 	}
@@ -144,7 +147,11 @@ func run(opts options) error {
 	if !opts.applyPlatform {
 		log.Printf("本次启动未执行任何 Deployment、Portal Activation 或业务服务发布")
 	}
-	log.Printf("本地会话由开发网关注入；不要把这些端口暴露到非本机网络")
+	if opts.autoLogin {
+		log.Printf("警告: 已显式启用 auto-login，开发网关会注入本地管理员会话；不要把这些端口暴露到非本机网络")
+	} else {
+		log.Printf("Portal 已启用 Authentication Broker 登录链路")
+	}
 	select {
 	case <-ctx.Done():
 		log.Printf("收到停止信号，正在关闭本地平台管理中心")
@@ -184,6 +191,9 @@ func (r *runtime) prepare(ctx context.Context) error {
 		if err := ensurePrivateDirectory(dir); err != nil {
 			return fmt.Errorf("准备持久化开发目录: %w", err)
 		}
+	}
+	if err := r.identity.prepare(r); err != nil {
+		return fmt.Errorf("准备开发身份协议 %s: %w", r.identity.name(), err)
 	}
 	log.Printf("[1/6] 生成仅限本地开发的 TLS、session、Seed 仓库配置与签名身份")
 	if err := r.writeFixtures(ctx); err != nil {
@@ -326,43 +336,19 @@ func (r *runtime) start(ctx context.Context) error {
 			return fmt.Errorf("显式发布的平台 Recovery 阶段未收敛: %w", err)
 		}
 	}
-	portalArgs := []string{
-		filepath.Join(r.options.root, "core", "kernels", "frontend-host", "dist", "portal-host.cjs"),
-		"--listen", r.options.portalListen,
-		"--tls-cert", filepath.Join(r.runDir, "secrets", "tls-cert.pem"), "--tls-key", filepath.Join(r.runDir, "secrets", "tls-key.pem"),
-		"--session-file", filepath.Join(r.runDir, "secrets", "portal-sessions.json"),
-		"--portal-assets", filepath.Join(r.runDir, "portal-assets"),
-		"--access-profile-catalog", filepath.Join(r.runDir, "access-profile-catalog.json"),
-		"--api-contract-catalog", filepath.Join(r.persistentStateRoot(), "api-contract-catalog.json"),
-		"--frontend-delivery-origin", filepath.Join(r.persistentStateRoot(), "frontend-delivery-origin"),
-		"--frontend-delivery-cache", filepath.Join(r.runDir, "frontend-delivery-cache"),
-		"--nats-servers", natsURL, "--allow-insecure-nats",
-		"--addressing-contracts", filepath.Join(r.options.root, "contracts", "proto"),
-		"--transport-seed", filepath.Join(r.runDir, "secrets", portalHostTransportSeed),
-		"--transport-trust", filepath.Join(r.runDir, "secrets", transportTrustDocument),
-		"--composer-logical-service", "platform.portal-composer",
-		"--interaction-logical-service", "platform.interaction-broker",
-		"--kernel-recovery-url", "http://" + r.options.recoveryListen,
+	beforePortalPublication := func() error { return nil }
+	if r.options.applyPlatform {
+		beforePortalPublication = func() error {
+			if err := r.waitForRecoveryStage(ctx, recoveryv1.StageControlPlane, platformNodeStartedAt, 120*time.Second); err != nil {
+				return fmt.Errorf("显式发布的平台控制面未收敛: %w", err)
+			}
+			return nil
+		}
 	}
-	portalArgs, err = appendPublishedAPIExposureCatalog(portalArgs, filepath.Join(r.persistentStateRoot(), "api-exposure-gateway.json"))
-	if err != nil {
+	if err := r.startPortalKernel(ctx, env, natsURL, beforePortalPublication); err != nil {
 		return err
-	}
-	if _, err := r.startChild("portal-kernel", env, "node", portalArgs...); err != nil {
-		return err
-	}
-	if err := waitHTTP(ctx, "https://"+r.options.portalListen+"/v1/csrf", 45*time.Second, true); err != nil {
-		return fmt.Errorf("Node Portal Kernel 未就绪: %w", err)
 	}
 	if r.options.applyPlatform {
-		if err := r.waitForRecoveryStage(ctx, recoveryv1.StageControlPlane, platformNodeStartedAt, 120*time.Second); err != nil {
-			return fmt.Errorf("显式发布的平台控制面未收敛: %w", err)
-		}
-		if err := publishPortal("https://"+r.options.portalListen,
-			filepath.Join(r.options.root, "engineering", "deploy", "portal-application-composition.json"),
-			filepath.Join(r.options.root, "engineering", "deploy", "portal-platform-catalog.json")); err != nil {
-			return fmt.Errorf("显式发布初始 Portal 组合: %w", err)
-		}
 		if err := r.waitForRecoveryStage(ctx, recoveryv1.StagePlatform, platformNodeStartedAt, 120*time.Second); err != nil {
 			return fmt.Errorf("显式发布的平台完整能力未收敛: %w", err)
 		}
@@ -457,6 +443,10 @@ func (r *runtime) serviceEnv() map[string]string {
 		"VASTPLAN_AUTHORIZATION_POLICY_TRUST":           filepath.Join(authorizationRoot, "policy-trust.json"),
 		"VASTPLAN_AUTHORIZATION_POLICY_AUDIENCE":        developmentAuthorizationAudience,
 		"VASTPLAN_AUTHORIZATION_DIRECTORY_GROUPS":       filepath.Join(authorizationRoot, "directory-groups.json"),
+		"VASTPLAN_AUTHENTICATION_PROVIDER_STATE":        r.authenticationProviderStatePath(),
+		"VASTPLAN_AUTHENTICATION_ASSERTION_KEY_FILE":    r.authenticationAssertionKeyPath(),
+		"VASTPLAN_AUTHENTICATION_ASSERTION_TRUST":       r.authenticationAssertionTrustPath(),
+		"VASTPLAN_SEED_ACCESS_STATE_FILE":               r.seedAccessStatePath(),
 	}
 }
 

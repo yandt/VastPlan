@@ -21,6 +21,8 @@ import (
 
 const developmentAuthorizationAudience = "development:local"
 
+var developmentAuthorizationAudiences = []string{developmentAuthorizationAudience, "portal:local:operations"}
+
 func (r *runtime) writeSessionsFromPublishedAuthorization() error {
 	root := filepath.Join(r.persistentStateRoot(), "authorization")
 	catalogPath := filepath.Join(root, "permission-catalog.json")
@@ -95,6 +97,11 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 	if err := writeOwnerJSON(catalogPath, catalog); err != nil {
 		return err
 	}
+	seedSubjectID, err := r.developmentSeedSubjectID()
+	if err != nil {
+		return err
+	}
+	grants := developmentGrants(catalog, seedSubjectID)
 	ownerPermissions := make([]string, 0, len(catalog.Permissions))
 	for _, permission := range catalog.Permissions {
 		if permission.Assignable {
@@ -116,11 +123,11 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 	statePath, snapshotPath := filepath.Join(root, "policy-state.json"), filepath.Join(root, "policy-snapshot.json")
 	store := &policy.FileStore{Path: statePath}
 	if _, err := os.Stat(statePath); errors.Is(err, os.ErrNotExist) {
-		state, buildErr := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{domain}, developmentGrants(catalog), time.Now().UTC())
+		state, buildErr := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{domain}, grants, time.Now().UTC())
 		if buildErr != nil {
 			return buildErr
 		}
-		snapshot, compileErr := policy.CompileSnapshot(state, []string{developmentAuthorizationAudience}, time.Now().UTC(), 24*time.Hour)
+		snapshot, compileErr := policy.CompileSnapshot(state, developmentAuthorizationAudiences, time.Now().UTC(), 24*time.Hour)
 		if compileErr != nil {
 			return compileErr
 		}
@@ -139,10 +146,10 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 		return err
 	} else {
 		transitionTime := time.Now().UTC()
-		if err := reconcileDevelopmentGrantsBeforeCatalogUpdate(store, catalog, transitionTime); err != nil {
+		if err := reconcileDevelopmentGrantsBeforeCatalogUpdate(store, catalog, grants, transitionTime); err != nil {
 			return err
 		}
-		service, initErr := policy.NewService(policy.ServiceOptions{Store: store, Signer: signer, SnapshotWriter: policy.FileSnapshotWriter{Path: snapshotPath}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{domain}, DefaultAudience: []string{developmentAuthorizationAudience}, DefaultTTL: 24 * time.Hour})
+		service, initErr := policy.NewService(policy.ServiceOptions{Store: store, Signer: signer, SnapshotWriter: policy.FileSnapshotWriter{Path: snapshotPath}, Catalog: catalog, ProviderProfile: profile, Domains: []authorizationv1.PolicyDomain{domain}, DefaultAudience: developmentAuthorizationAudiences, DefaultTTL: 24 * time.Hour})
 		if initErr != nil {
 			return initErr
 		}
@@ -151,9 +158,9 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 		if loadErr != nil {
 			return loadErr
 		}
-		reconcileDevelopmentGrants(&state, catalog, transitionTime)
+		reconcileDevelopmentGrants(&state, grants, transitionTime)
 		state.PolicyRevision++
-		snapshot, compileErr := policy.CompileSnapshot(state, []string{developmentAuthorizationAudience}, time.Now().UTC(), 24*time.Hour)
+		snapshot, compileErr := policy.CompileSnapshot(state, developmentAuthorizationAudiences, time.Now().UTC(), 24*time.Hour)
 		if compileErr != nil {
 			return compileErr
 		}
@@ -180,7 +187,7 @@ func (r *runtime) writeAuthorizationBootstrap(repository *artifactrepository.Rep
 // catalog transition. User-created or subsequently revised roles retain the
 // production fail-closed behavior and still block removal of permissions they
 // actively use.
-func reconcileDevelopmentGrantsBeforeCatalogUpdate(store *policy.FileStore, catalog pluginv1.PermissionCatalog, now time.Time) error {
+func reconcileDevelopmentGrantsBeforeCatalogUpdate(store *policy.FileStore, catalog pluginv1.PermissionCatalog, grants []policy.BootstrapGrant, now time.Time) error {
 	state, err := store.Load()
 	if err != nil {
 		return err
@@ -189,7 +196,7 @@ func reconcileDevelopmentGrantsBeforeCatalogUpdate(store *policy.FileStore, cata
 		return nil
 	}
 	previousGeneration := state.Generation
-	reconcileDevelopmentGrants(&state, catalog, now)
+	reconcileDevelopmentGrants(&state, grants, now)
 	state.Generation++
 	state.Audit = append(state.Audit, policy.AuditEvent{
 		ID: fmt.Sprintf("audit.dev.catalog-transition.%d", now.UnixNano()), Action: "developmentSeedGrantReconcile",
@@ -199,8 +206,7 @@ func reconcileDevelopmentGrantsBeforeCatalogUpdate(store *policy.FileStore, cata
 	return err
 }
 
-func reconcileDevelopmentGrants(state *policy.State, catalog pluginv1.PermissionCatalog, now time.Time) {
-	grants := developmentGrants(catalog)
+func reconcileDevelopmentGrants(state *policy.State, grants []policy.BootstrapGrant, now time.Time) {
 	byRole := make(map[string]policy.BootstrapGrant, len(grants))
 	for _, grant := range grants {
 		byRole[grant.RoleID] = grant
@@ -223,7 +229,7 @@ func reconcileDevelopmentGrants(state *policy.State, catalog pluginv1.Permission
 	}
 }
 
-func developmentGrants(catalog pluginv1.PermissionCatalog) []policy.BootstrapGrant {
+func developmentGrants(catalog pluginv1.PermissionCatalog, seedSubjectID string) []policy.BootstrapGrant {
 	all := []string{}
 	known := map[string]struct{}{}
 	for _, permission := range catalog.Permissions {
@@ -242,12 +248,16 @@ func developmentGrants(catalog pluginv1.PermissionCatalog) []policy.BootstrapGra
 		}
 		return result
 	}
-	return []policy.BootstrapGrant{
+	grants := []policy.BootstrapGrant{
 		{RoleID: "platform.owner", Title: "Development Platform Owner", SubjectID: "local-admin", Permissions: all},
 		{RoleID: "platform.deployment-author", Title: "Development Deployment Author", SubjectID: "local-author", Permissions: filter("platform.deployment.read", "platform.deployment.compose", "platform.portal.read", "platform.portal.compose")},
 		{RoleID: "platform.deployment-approver", Title: "Development Deployment Approver", SubjectID: "local-approver", Permissions: filter("platform.deployment.read", "platform.deployment.approve", "platform.portal.read", "platform.portal.approve")},
 		{RoleID: "platform.deployment-publisher", Title: "Development Deployment Publisher", SubjectID: "local-publisher", Permissions: filter("platform.deployment.read", "platform.deployment.publish", "platform.portal.read", "platform.portal.publish")},
 	}
+	if seedSubjectID != "" {
+		grants = append(grants, policy.BootstrapGrant{RoleID: "platform.seed-owner", Title: "Development Seed Platform Owner", SubjectID: seedSubjectID, Permissions: all})
+	}
+	return grants
 }
 
 func ensureAuthorizationSigner(root string) (policy.Ed25519Signer, error) {

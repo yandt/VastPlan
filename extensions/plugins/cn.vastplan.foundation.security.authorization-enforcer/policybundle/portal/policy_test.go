@@ -62,6 +62,58 @@ func TestPortalPreferenceOnlyAllowsPortalBFFUser(t *testing.T) {
 	}
 }
 
+func TestPortalAuthenticationWorkloadIsNarrowlyAuthorized(t *testing.T) {
+	portal := &contractv1.CallContext{
+		Scene:  "portal.bff",
+		Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "portal-host"},
+	}
+	for _, operation := range []string{"describe", "begin", "continue", "resend", "cancel", "health", "consumeAssertion", "beginProviderTest"} {
+		if got := decisionFor(t, portal, authenticationBrokerCapability, operation); got.Decision != extpoint.DecisionAllow {
+			t.Fatalf("Portal BFF Broker %s should be allowed: %+v", operation, got)
+		}
+	}
+	if got := decisionFor(t, portal, authorizationSessionCapability, "resolve"); got.Decision != extpoint.DecisionAllow {
+		t.Fatalf("Portal BFF Authorization Session resolve should be allowed: %+v", got)
+	}
+	for name, context := range map[string]*contractv1.CallContext{
+		"wrong caller": {Scene: "portal.bff", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "other-host"}},
+		"wrong scene":  {Scene: "plugin.call", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_SYSTEM, Id: "portal-host"}},
+		"user":         {Scene: "portal.bff", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "alice"}},
+	} {
+		if got := decisionFor(t, context, authenticationBrokerCapability, "begin"); got.Decision != extpoint.DecisionDeny {
+			t.Fatalf("%s must not call Broker: %+v", name, got)
+		}
+	}
+	if got := decisionFor(t, portal, authenticationBrokerCapability, "unknown"); got.Decision != extpoint.DecisionDeny {
+		t.Fatalf("unknown Broker operation must be denied: %+v", got)
+	}
+}
+
+func TestOnlyAuthenticationBrokerCanCallMethodProviders(t *testing.T) {
+	broker := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: authenticationBrokerPluginID}}
+	for _, operation := range []string{"describe", "begin", "continue", "resend", "cancel", "health"} {
+		raw, _ := json.Marshal(extpoint.PermissionRequest{ExtensionPoint: extpoint.AuthenticationProvider, Capability: "seed-local", Operation: operation})
+		_, out, err := Check(context.Background(), broker, raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got extpoint.PermissionResponse
+		if err := json.Unmarshal(out, &got); err != nil || got.Decision != extpoint.DecisionAllow {
+			t.Fatalf("Broker Provider %s should be allowed: %+v err=%v", operation, got, err)
+		}
+	}
+	other := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: "cn.vastplan.other"}}
+	raw, _ := json.Marshal(extpoint.PermissionRequest{ExtensionPoint: extpoint.AuthenticationProvider, Capability: "seed-local", Operation: "begin"})
+	_, out, err := Check(context.Background(), other, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got extpoint.PermissionResponse
+	if err := json.Unmarshal(out, &got); err != nil || got.Decision != extpoint.DecisionDeny {
+		t.Fatalf("non-Broker Provider call must be denied: %+v err=%v", got, err)
+	}
+}
+
 func TestOnlyComposerCanUseRestrictedKernelServices(t *testing.T) {
 	composer := &contractv1.CallContext{Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_PLUGIN, Id: PluginIDForComposer()}}
 	if got := decisionFor(t, composer, portalapi.KernelCatalogValidationCapability, "validate"); got.Decision != extpoint.DecisionAllow {

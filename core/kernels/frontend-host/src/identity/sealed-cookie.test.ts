@@ -19,4 +19,12 @@ describe("SealedCookieCodec", () => {
     const expired = codec.seal({ kind: "session", exp: 999, sub: "alice" });
     expect(() => codec.unseal(expired)).toThrow(/过期/);
   });
+
+  it("rejects values whose sealed representation cannot fit in a browser cookie", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vastplan-sealed-cookie-"));
+    const key = join(root, "session.key");
+    await writeFile(key, randomBytes(32), { mode: 0o600 });
+    const codec = await SealedCookieCodec.open(key, "issuer\0client");
+    expect(() => codec.seal({ exp: Math.floor(Date.now() / 1000) + 60, value: "x".repeat(2850) })).toThrow("超过浏览器安全上限");
+  });
 });

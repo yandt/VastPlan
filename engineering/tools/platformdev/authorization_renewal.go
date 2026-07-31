@@ -56,9 +56,16 @@ func renewPublishedDevelopmentAuthorization(root string, catalog pluginv1.Permis
 		return false, err
 	}
 	previousGeneration := state.Generation
-	reconcileDevelopmentGrants(&state, catalog, now)
+	seedSubjectID := ""
+	for _, binding := range state.Bindings {
+		if binding.RoleID == "platform.seed-owner" {
+			seedSubjectID = binding.Subject.ID
+			break
+		}
+	}
+	reconcileDevelopmentGrants(&state, developmentGrants(catalog, seedSubjectID), now)
 	state.PolicyRevision++
-	snapshot, err := policy.CompileSnapshot(state, []string{developmentAuthorizationAudience}, now, developmentAuthorizationTTL)
+	snapshot, err := policy.CompileSnapshot(state, developmentAuthorizationAudiences, now, developmentAuthorizationTTL)
 	if err != nil {
 		return false, fmt.Errorf("编译开发授权续签 Snapshot: %w", err)
 	}

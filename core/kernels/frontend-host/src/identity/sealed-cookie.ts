@@ -20,7 +20,9 @@ export class SealedCookieCodec {
     const plaintext = Buffer.from(JSON.stringify(value));
     if (plaintext.byteLength > 4096) throw new Error("Portal session 内容超过上限");
     const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()]);
-    return `v1.${nonce.toString("base64url")}.${ciphertext.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}`;
+    const sealed = `v1.${nonce.toString("base64url")}.${ciphertext.toString("base64url")}.${cipher.getAuthTag().toString("base64url")}`;
+    if (sealed.length > 3800) throw new Error("Portal session cookie 超过浏览器安全上限");
+    return sealed;
   }
 
   public unseal(value: string): Readonly<Record<string, unknown>> {

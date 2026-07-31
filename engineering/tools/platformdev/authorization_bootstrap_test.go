@@ -28,7 +28,7 @@ func TestReconcileDevelopmentGrantsOnlyChangesSeedOwnedRoles(t *testing.T) {
 			Statements: []authorizationv1.PolicyStatement{{Permissions: []string{"platform.removed"}}},
 		},
 	}}
-	reconcileDevelopmentGrants(&state, catalog, now)
+	reconcileDevelopmentGrants(&state, developmentGrants(catalog, ""), now)
 	if got := state.Roles[0].Statements[0].Permissions; len(got) != 1 || got[0] != "platform.current" {
 		t.Fatalf("Seed owner 权限未按当前目录收敛: %v", got)
 	}
@@ -44,7 +44,7 @@ func TestDevelopmentGrantsKeepPortalLifecycleSeparated(t *testing.T) {
 		{PermissionDeclaration: pluginv1.PermissionDeclaration{Code: "platform.portal.approve", Assignable: true}},
 		{PermissionDeclaration: pluginv1.PermissionDeclaration{Code: "platform.portal.publish", Assignable: true}},
 	}}
-	grants := developmentGrants(catalog)
+	grants := developmentGrants(catalog, "")
 	if len(grants) != 4 {
 		t.Fatalf("开发引导角色数量错误: %d", len(grants))
 	}
@@ -73,7 +73,7 @@ func TestRenewPublishedDevelopmentAuthorizationWithoutPlatformPublication(t *tes
 		t.Fatal(err)
 	}
 	issuedAt := now.Add(-48 * time.Hour)
-	state, err := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{domain}, developmentGrants(catalog), issuedAt)
+	state, err := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{domain}, developmentGrants(catalog, ""), issuedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestRenewPublishedDevelopmentAuthorizationRejectsCatalogDrift(t *testing.T)
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 7, 29, 6, 0, 0, 0, time.UTC)
-	state, err := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{domain}, developmentGrants(catalog), now.Add(-48*time.Hour))
+	state, err := policy.BuildBootstrapState(catalog, profile, []authorizationv1.PolicyDomain{domain}, developmentGrants(catalog, ""), now.Add(-48*time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
