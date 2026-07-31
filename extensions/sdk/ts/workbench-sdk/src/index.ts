@@ -443,7 +443,12 @@ function validFieldKey(value: string): boolean { return /^[A-Za-z0-9][A-Za-z0-9.
 function validSelectionParam(value: string): boolean { return /^[a-z][a-z0-9_-]{0,39}$/.test(value); }
 
 function validateFormDefinition(form: WorkbenchFormDefinition): void {
-  resolveFormWorkflowSurface(form.workflow);
+  const surface = resolveFormWorkflowSurface(form.workflow);
+  const dialogHeight = form.workflow.dialogHeight;
+  if (dialogHeight !== undefined && (!Number.isSafeInteger(dialogHeight) || dialogHeight < 160 || dialogHeight > 10_000)) {
+    throw new Error(`表单 ${form.id} 的 dialogHeight 必须是 160..10000 之间的整数像素值`);
+  }
+  if (surface === "page" && dialogHeight !== undefined) throw new Error(`表单 ${form.id} 的 dialogHeight 仅可用于 dialog surface`);
   validateFormPresentation(form.presentation, form.id);
   const sections = form.presentation?.sections ?? [];
   for (const field of form.presentation?.fields ?? []) {

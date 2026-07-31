@@ -74,6 +74,8 @@ export interface FormWorkflow {
   title: import("./i18n.js").LocalizedText;
   description?: import("./i18n.js").LocalizedText;
   size?: ComponentSize;
+  /** Optional Dialog-only height in pixels; adaptive sizing remains the default. */
+  dialogHeight?: number;
   submitLabel?: import("./i18n.js").LocalizedText;
   cancelLabel?: import("./i18n.js").LocalizedText;
   confirmBeforeSubmit?: import("./i18n.js").LocalizedText;

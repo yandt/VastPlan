@@ -1,7 +1,7 @@
 import { Alert, Button as AntdButton, Drawer as AntdDrawer, Empty, Modal, Skeleton as AntdSkeleton, Spin, Tooltip } from "antd";
 import type { ComponentType } from "react";
 import type { ButtonProps, DialogProps, DrawerProps, IconButtonProps, VastPlanIconProps } from "@vastplan/ui-primitives";
-import { componentSizeRecipes, message, usePortalI18n, VastPlanIcon } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, dialogBodyStyle, dialogFrameStyle, message, usePortalI18n, VastPlanIcon } from "@vastplan/ui-primitives";
 import { antdComponentSize } from "./component-size";
 import { dialogWidths, namespace } from "./theme";
 
@@ -34,8 +34,12 @@ export function iconButtonWith(Icon: ComponentType<VastPlanIconProps>, { icon, l
 
 export function IconButton(props: IconButtonProps) { return iconButtonWith(VastPlanIcon, props); }
 
-export function Dialog({ open, title, children, footer, width = "md", onClose }: DialogProps) {
-  return <Modal open={open} title={title} footer={footer ?? null} width={dialogWidths[width]} onCancel={onClose} destroyOnHidden>{children}</Modal>;
+export function Dialog({ open, title, children, footer, width = "md", height, contentOverflow = "scroll", onClose }: DialogProps) {
+  const scrollable = contentOverflow === "scroll";
+  return <Modal open={open} title={title} footer={footer ?? null} width={dialogWidths[width]} onCancel={onClose} destroyOnHidden styles={{
+    container: { ...dialogFrameStyle(height), display: "flex", flexDirection: "column", overflow: "hidden" },
+    body: { ...dialogBodyStyle(contentOverflow), ...(scrollable ? { flex: "1 1 auto" } : {}) },
+  }}>{children}</Modal>;
 }
 
 export function Drawer({ open, title, children, footer, width = "md", placement = "right", onClose }: DrawerProps) {

@@ -74,7 +74,7 @@ import type {
   StackProps,
   StatusTone,
 } from "@vastplan/ui-primitives";
-import { componentSizeRecipes, componentVariantRecipes, formGridColumns, formGridTemplate, formLabelPlacement, PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, componentVariantRecipes, dialogBodyStyle, dialogFrameStyle, formGridColumns, formGridTemplate, formLabelPlacement, PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { MuiNativeIcon } from "./native-icons";
 import { MuiInlineFieldTemplate, MuiInsideInlineFieldTemplate, type MuiFieldTemplateProps } from "./inside-inline-field";
 import { muiComponentSize } from "./component-size";
@@ -201,8 +201,13 @@ function CommandPalette({ open, commands, query, onQueryChange, onClose }: { ope
   </DialogContent></MuiDialog>;
 }
 
-function Dialog({ open, title, children, footer, width = "md", onClose }: DialogProps) {
-  return <MuiDialog open={open} onClose={onClose} fullWidth maxWidth={widths[width]}><DialogTitle>{title}</DialogTitle><DialogContent>{children}</DialogContent>{footer === undefined ? null : <DialogActions>{footer}</DialogActions>}</MuiDialog>;
+function Dialog({ open, title, children, footer, width = "md", height, contentOverflow = "scroll", onClose }: DialogProps) {
+  const scrollable = contentOverflow === "scroll";
+  return <MuiDialog open={open} onClose={onClose} fullWidth maxWidth={widths[width]} scroll="paper" slotProps={{ paper: { sx: { ...dialogFrameStyle(height), display: "flex", flexDirection: "column", overflow: "hidden" } } }}>
+    <DialogTitle sx={{ flex: "0 0 auto" }}>{title}</DialogTitle>
+    <DialogContent sx={{ ...dialogBodyStyle(contentOverflow), ...(scrollable ? { flex: "1 1 auto" } : {}) }}>{children}</DialogContent>
+    {footer === undefined ? null : <DialogActions sx={{ flex: "0 0 auto" }}>{footer}</DialogActions>}
+  </MuiDialog>;
 }
 
 function Popover({ open, trigger, children, placement = "bottom-start", surface = "default", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {

@@ -14,6 +14,7 @@ export type { SemanticIconName, VastPlanIconProps } from "./icon.js";
 export type { Portal, PortalApplicationComposition, PortalArtifactRepositoryReceipt, PortalAuditEvent, PortalCompositionRef, PortalConfiguration, PortalControlClientOptions, PortalGovernance, PortalManagementBinding, PortalManagementGrant, PortalPlatformProfile, PortalPluginRef, PortalPublication, PortalPublicationSource, PortalPutTestTargetBindingRequest, PortalRelease, PortalReleasePhase, PortalReleaseRequest, PortalReleaseStatus, PortalResolvedSpec, PortalRevisionStatus, PortalTestRelease, PortalTestReleaseRequest, PortalTestReleaseStatus, PortalTestTargetBinding, PortalTestTargetScope, PortalVersionComparison, PortalVersionHistory, PortalVersionHistoryEntry, PortalVersionRef, PortalVersionSnapshot, PortalWorkingCopy } from "./portal-control-client.js";
 export * from "./form-renderer.js";
 export * from "./form-presentation.js";
+export * from "./dialog-layout.js";
 export * from "./primitives.js";
 export * from "./renderer.js";
 export * from "./portal-runtime.js";

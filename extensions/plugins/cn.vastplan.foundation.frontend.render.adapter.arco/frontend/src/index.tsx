@@ -53,7 +53,7 @@ import type {
   StatusTone,
   TableProps,
 } from "@vastplan/ui-primitives";
-import { componentSizeRecipes, componentVariantRecipes, PortalUIProvider, VastPlanIcon } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, componentVariantRecipes, dialogBodyStyle, dialogFrameStyle, PortalUIProvider, VastPlanIcon } from "@vastplan/ui-primitives";
 import { message, usePortalI18n } from "@vastplan/ui-primitives";
 import enUS from "@arco-design/web-react/es/locale/en-US";
 import zhCN from "@arco-design/web-react/es/locale/zh-CN";
@@ -161,8 +161,10 @@ function CommandPalette({ open, commands, query, onQueryChange, onClose, getPopu
   </Modal>;
 }
 
-function Dialog({ open, title, children, footer, width = "md", onClose, getPopupContainer }: DialogProps & OverlayContainerProps) {
-  return <Modal visible={open} title={title} footer={footer ?? null} style={{ width: dialogWidths[width] }} onCancel={onClose} unmountOnExit getPopupContainer={getPopupContainer}>{children}</Modal>;
+function Dialog({ open, title, children, footer, width = "md", height, contentOverflow = "scroll", onClose, getPopupContainer }: DialogProps & OverlayContainerProps) {
+  return <Modal visible={open} title={title} footer={footer ?? null} style={{ width: dialogWidths[width], ...dialogFrameStyle(height), overflow: "hidden" }} onCancel={onClose} unmountOnExit getPopupContainer={getPopupContainer}>
+    <div style={dialogBodyStyle(contentOverflow)}>{children}</div>
+  </Modal>;
 }
 
 function Popover({ open, trigger, children, placement = "bottom-start", surface = "default", initialFocus = "first", ariaLabel, onOpenChange }: PopoverProps) {

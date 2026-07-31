@@ -16,12 +16,12 @@ describe("Workbench form definition", () => {
     const form: WorkbenchFormDefinition = {
       id: "edit", schema,
       presentation: { preset: "standard", labelPlacement: "inline", columns: 2, columnWidths: [35, 65] },
-      workflow: { title: "Edit" },
+      workflow: { title: "Edit", dialogHeight: 640 },
       async beforeSubmit({ value }) { return { value: { ...value, normalized: true } }; },
       async submit() { return { data: { revision: 2 } }; },
       async afterSubmit() { /* application callback */ },
     };
-    expect(defineCollectionPage(page(form)).forms?.[0]?.presentation).toMatchObject({ columns: 2, columnWidths: [35, 65] });
+    expect(defineCollectionPage(page(form)).forms?.[0]?.workflow).toMatchObject({ dialogHeight: 640 });
     expect(resolveFormWorkflowSurface(form.workflow)).toBe("dialog");
   });
 
@@ -35,5 +35,10 @@ describe("Workbench form definition", () => {
     expect(resolveFormWorkflowSurface({ title: "Create" })).toBe("dialog");
     expect(resolveFormWorkflowSurface({ surface: "page", title: "Edit" })).toBe("page");
     expect(() => resolveFormWorkflowSurface({ surface: "drawer", title: "Legacy" } as unknown as Parameters<typeof resolveFormWorkflowSurface>[0])).toThrow("不受支持");
+  });
+
+  it("only accepts a bounded pixel height for dialog forms", () => {
+    expect(() => defineCollectionPage(page({ id: "edit", schema, workflow: { title: "Edit", dialogHeight: 159 }, async submit() {} }))).toThrow("160..10000");
+    expect(() => defineCollectionPage(page({ id: "edit", schema, workflow: { surface: "page", title: "Edit", dialogHeight: 640 }, async submit() {} }))).toThrow("仅可用于 dialog");
   });
 });

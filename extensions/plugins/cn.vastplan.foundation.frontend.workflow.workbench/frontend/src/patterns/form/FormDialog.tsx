@@ -3,7 +3,7 @@ import { FormActions } from "./FormActions.js";
 import { FormContent } from "./FormContent.js";
 import type { FormWorkflowController } from "./useFormWorkflow.js";
 
-/** The default governed composition for every non-page form workflow. */
+/** The default governed composition for every non-page form workflow. The adapter keeps only this body scrollable. */
 export function FormDialog({ form, open }: { form: FormWorkflowController; open: boolean }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
@@ -13,6 +13,8 @@ export function FormDialog({ form, open }: { form: FormWorkflowController; open:
     open={open}
     title={i18n.text(definition.workflow.title)}
     width={definition.workflow.size}
+    height={definition.workflow.dialogHeight}
+    contentOverflow="scroll"
     footer={<FormActions form={form} />}
     onClose={() => { if (!form.submitting) void form.requestClose(); }}
   >

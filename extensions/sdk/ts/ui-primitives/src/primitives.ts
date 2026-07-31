@@ -105,6 +105,10 @@ export interface DialogProps {
   children: ReactNode;
   footer?: ReactNode;
   width?: "sm" | "md" | "lg";
+  /** Optional governed pixel height. Renderers always clamp it to 90vh. */
+  height?: number;
+  /** Defaults to scroll so a Dialog body, not its containing page, owns overflow. */
+  contentOverflow?: "visible" | "scroll";
   onClose(): void;
 }
 
