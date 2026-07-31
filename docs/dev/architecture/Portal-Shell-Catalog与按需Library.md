@@ -1,6 +1,6 @@
 # Portal Shell Catalog 与按需 Library
 
-> 状态：UI Contract 6.x 与服务端跨设备偏好均已实施｜最后更新：2026-07-28
+> 状态：Contribution Index 自发现与按需 Library 已实施｜最后更新：2026-08-01
 >
 > 本文是统一 Slot/Composition、Shell Catalog、按需 Shell Library、稳定 PageOutlet 和用户选择的单一真相源。历史单模块模板方案见 [ADR-0086](../decisions/ADR-0086-单Shell插件与可切换布局模板.md)，取代决策见 [ADR-0097](../decisions/ADR-0097-测试制品仓库与前端分级热升级.md)。
 
@@ -14,7 +14,8 @@ Shell 切换不能让功能插件控制布局，也不能因为 React 父组件�
 
 ```mermaid
 flowchart TB
-  P["Platform Profile"] --> C["Shell Catalog\n允许范围与精确模块引用"]
+  I["Manifest Contribution Index\n精确制品与 Library 声明"] --> C["Shell Catalog\n语义与兼容候选"]
+  P["Platform Profile"] --> C
   U["PortalPreference\n用户选择"] --> C
   F["功能插件"] --> M["Composition Core\n页面、导航、Slot、活动路径"]
   C --> L1["Shell Library: standard"]
@@ -32,7 +33,7 @@ flowchart TB
 
 ### 2.2 Shell Catalog
 
-Catalog 是可信 foundation 模块，声明稳定 ID、UI Contract、默认 Library 和可发现 Library 目录。目录项包含稳定 ID、本地化标签、精确插件 ref、兼容 Renderer family、Shell Contract 和受限展示元数据。Catalog 不执行未选择 Library 的代码。
+Catalog 是可信 foundation 模块，声明稳定 ID、UI Contract、默认 Library、组合逻辑和本地化资源，但不再保存插件 ID/版本表。可信宿主从已验证 Manifest Contribution Index 选择 `frontend.shellLibraries`，把稳定 ID、标题、精确插件 ref、Shell Contract 与包摘要组装为当前 Generation 的只读目录。Catalog 不执行未选择 Library 的代码。
 
 ### 2.3 Shell Library
 
@@ -99,7 +100,7 @@ Portal Kernel 在稳定 React 位置持有当前页面、Workbench 和路由状�
 ## 7. 实施状态
 
 1. Catalog/Library/LayoutPlan/PageOutlet 类型继续由 UI Contract 6.x 统一承载；6.0 的破坏性升级来自页面动作与 Collection/Record 选择态解耦，而不是 Shell 结构分叉。
-2. 已完成服务端 Profile、Resolver、Catalog 和 RuntimeSpec 的 deferred Library 支持。
+2. 已完成服务端 Profile、Resolver、Manifest Contribution Index 和 RuntimeSpec 的 deferred Library 支持；Shell Manifest 与源码不再重复精确 Library 版本。
 3. 已完成 Portal Kernel 稳定 ShellSurface/PageOutlet 与候选选择事务。
 4. 已将 `standard`、`top-navigation` 转为独立签名、内容寻址、按需下载的 Library；唯一 Shell Catalog 继续拥有 Slot 与组合语义。生产物化和开发 HMR 构建清单都把两个 Library 标记为 deferred，且架构门禁禁止 Shell 重新通过 workspace 依赖另一个插件源码包。
 5. 已完成受允许范围约束的跨设备 `PortalPreference`、候选提交后 CAS 保存、验证缓存和失败回退；Workbench 集合偏好通过窄端口复用同一真源。

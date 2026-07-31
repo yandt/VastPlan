@@ -22,10 +22,6 @@ func PrepareRelease(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, error
 	if err != nil {
 		return ReleasePlan{}, err
 	}
-	catalogChanges, err := SyncFoundationCatalogVersions(repositoryRoot, workspace, true)
-	if err != nil {
-		return ReleasePlan{}, err
-	}
 	capabilityChanges, err := SyncCapabilityContractProjections(repositoryRoot, workspace, true)
 	if err != nil {
 		return ReleasePlan{}, err
@@ -43,11 +39,6 @@ func PrepareRelease(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, error
 	} else if len(changes) != 0 {
 		return ReleasePlan{}, fmt.Errorf("Contract Registry 生成结果未收敛: changes=%v", changes)
 	}
-	if changes, err := SyncFoundationCatalogVersions(repositoryRoot, workspace, false); err != nil {
-		return ReleasePlan{}, err
-	} else if len(changes) != 0 {
-		return ReleasePlan{}, fmt.Errorf("Foundation Catalog 生成结果未收敛: changes=%v", changes)
-	}
 	if changes, err := SyncCapabilityContractProjections(repositoryRoot, workspace, false); err != nil {
 		return ReleasePlan{}, err
 	} else if len(changes) != 0 {
@@ -63,13 +54,12 @@ func PrepareRelease(repositoryRoot string, spec ReleaseSpec) (ReleasePlan, error
 		return ReleasePlan{}, err
 	}
 	plan.DeploymentChanges = deploymentChanges
-	generated := make(map[string]struct{}, len(plan.GeneratedFiles)+len(contractChanges)+len(catalogChanges)+len(capabilityChanges)+len(packageVersionChanges))
+	generated := make(map[string]struct{}, len(plan.GeneratedFiles)+len(contractChanges)+len(capabilityChanges)+len(packageVersionChanges))
 	for _, path := range plan.GeneratedFiles {
 		generated[path] = struct{}{}
 	}
-	derivedChanges := make([]DerivedChange, 0, len(contractChanges)+len(catalogChanges)+len(capabilityChanges)+len(packageVersionChanges))
+	derivedChanges := make([]DerivedChange, 0, len(contractChanges)+len(capabilityChanges)+len(packageVersionChanges))
 	derivedChanges = append(derivedChanges, contractChanges...)
-	derivedChanges = append(derivedChanges, catalogChanges...)
 	derivedChanges = append(derivedChanges, capabilityChanges...)
 	derivedChanges = append(derivedChanges, packageVersionChanges...)
 	for _, change := range derivedChanges {

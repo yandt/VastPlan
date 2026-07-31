@@ -5,8 +5,10 @@ import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol, 
 
 const ref = { id: "cn.vastplan.platform.configuration.portal-composer", version: "1.0.0" };
 const source = new TextEncoder().encode("export default { register() {} }");
-const parsePortalRuntimeSpec = (value: unknown) => parseRuntimeSpec(value, productionFrontendRuntimeProtocol);
-const parseDevelopmentRuntimeSpec = (value: unknown) => parseRuntimeSpec(value, developmentFrontendRuntimeProtocol);
+const emptyContributions = { schemaVersion: 1 as const, generation: 1, inventoryDigest: "c".repeat(64), contributions: [], digest: "d".repeat(64) };
+const runtimeDocument = (value: unknown) => ({ ...(value as Record<string, unknown>), contributions: emptyContributions });
+const parsePortalRuntimeSpec = (value: unknown) => parseRuntimeSpec(runtimeDocument(value), productionFrontendRuntimeProtocol);
+const parseDevelopmentRuntimeSpec = (value: unknown) => parseRuntimeSpec(runtimeDocument(value), developmentFrontendRuntimeProtocol);
 
 async function descriptor(overrides: Partial<FrontendModuleDescriptor> = {}): Promise<FrontendModuleDescriptor> {
   const digest = await crypto.subtle.digest("SHA-256", source);
@@ -226,7 +228,7 @@ describe("VerifiedFrontendPluginLoader", () => {
       nodes: [{ path: flat.entry, url: flat.url, sha256: flat.sha256, size: source.byteLength, mediaType: "text/javascript", purpose: "entry", dependencies: [] }],
     };
     const graph = { ...graphUnsigned, digest: await computeModuleGraphDigest(graphUnsigned) };
-    const ambiguous = new VerifiedFrontendPluginLoader({ portal: {} as never, modules: [flat], moduleGraphs: [graph] }, { protocol, fetcher: async () => new Response(source), importer });
+    const ambiguous = new VerifiedFrontendPluginLoader({ portal: {} as never, modules: [flat], moduleGraphs: [graph], contributions: emptyContributions }, { protocol, fetcher: async () => new Response(source), importer });
     expect(ambiguous.canLoad(requested)).toBe(false);
     expect(ambiguous.canLoad(ref)).toBe(true);
     expect(ambiguous.canLoad({ ...ref, version: "2.0.0" })).toBe(true);

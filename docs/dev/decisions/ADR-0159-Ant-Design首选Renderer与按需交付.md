@@ -18,6 +18,8 @@ Portal 已以 React Runtime Engine、统一 Render Adapter、Shell 和 Workbench
 6. 动态表单复用共享 CSP JSON Schema Validator。生产入口直接使用 RJSF Form 子路径，只选择安全的 Ant Design widgets/templates，不允许根入口间接引入测试 Registry 或运行时代码生成。
 7. Renderer 切换仍是 Host Epoch 边界：先验证目标精确制品，再刷新并装配新 Generation；同一 React 树不得同时承载两个 Renderer。
 
+2026-08-01 修订：第 3 条中“Adapter 保存精确模块引用”的实现方式已由 [ADR-0180](ADR-0180-Catalog驱动的统一插件自发现与本地插件库.md) 取代。Adapter 现在只保存选择语义、默认值和本地化；精确 Ant Design 模块引用由可信宿主从已验证 Manifest Contribution Index 与 Platform Profile 解析锁派生，按需加载和 Host Epoch 边界不变。
+
 ## 备选方案
 
 - 把 Ant Design 做成第二个完整 Adapter：会复制 Catalog、Profile、偏好和切换逻辑，破坏统一治理，拒绝。

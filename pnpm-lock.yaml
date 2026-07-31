@@ -29,6 +29,9 @@ importers:
       '@vastplan/plugin-extension-contract':
         specifier: workspace:*
         version: link:../../../extensions/sdk/ts/plugin-extension-contract
+      '@vastplan/plugin-inventory-contract':
+        specifier: workspace:*
+        version: link:../../../extensions/sdk/ts/plugin-inventory-contract
       '@vastplan/rjsf-csp-validator':
         specifier: workspace:*
         version: link:../../../extensions/sdk/ts/rjsf-csp-validator
@@ -72,6 +75,9 @@ importers:
       '@vastplan/plugin-extension-contract':
         specifier: workspace:*
         version: link:../../../extensions/sdk/ts/plugin-extension-contract
+      '@vastplan/plugin-inventory-contract':
+        specifier: workspace:*
+        version: link:../../../extensions/sdk/ts/plugin-inventory-contract
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
@@ -651,6 +657,15 @@ importers:
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
+
+  extensions/sdk/ts/plugin-inventory-contract:
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)
 
   extensions/sdk/ts/rjsf-csp-validator:
     dependencies:

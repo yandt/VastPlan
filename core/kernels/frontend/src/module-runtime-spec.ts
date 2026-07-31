@@ -4,6 +4,7 @@ import { validateModuleGraphDescriptor, type FrontendModuleGraphDescriptor } fro
 import type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 import { parsePortalExtensionGraph } from "@vastplan/plugin-extension-contract";
 import type { PortalExtensionGraph } from "@vastplan/plugin-extension-contract";
+import { parseContributionIndex, type ContributionIndexSnapshot } from "@vastplan/plugin-inventory-contract";
 
 export interface FrontendModuleDescriptor extends PluginRef {
   entry: string;
@@ -18,6 +19,7 @@ export interface PortalRuntimeSpec {
   modules: FrontendModuleDescriptor[];
   moduleGraphs: FrontendModuleGraphDescriptor[];
   extensions?: PortalExtensionGraph;
+  contributions: ContributionIndexSnapshot;
   coordination?: PortalGenerationCoordination;
 }
 
@@ -57,8 +59,26 @@ export function parseRuntimeSpec(value: unknown, protocol: FrontendRuntimeProtoc
   let extensions: PortalExtensionGraph;
   try { extensions = parsePortalExtensionGraph(value.extensions); }
   catch (error) { throw new ModuleLoadError("EXTENSION_GRAPH_INVALID", String(error)); }
+  let contributions: ContributionIndexSnapshot;
+  try { contributions = parseContributionIndex(value.contributions); }
+  catch (error) { throw new ModuleLoadError("CONTRIBUTION_INDEX_INVALID", String(error)); }
+  validateContributionOwners(contributions, modules, moduleGraphs);
   const coordination = parseCoordination(value.coordination, portal.revision);
-  return { portal, modules, moduleGraphs, extensions, ...(coordination === undefined ? {} : { coordination }) };
+  return { portal, modules, moduleGraphs, extensions, contributions, ...(coordination === undefined ? {} : { coordination }) };
+}
+
+function validateContributionOwners(index: ContributionIndexSnapshot, modules: readonly FrontendModuleDescriptor[], graphs: readonly FrontendModuleGraphDescriptor[]): void {
+  const packages = new Map<string, string>();
+  for (const module of modules) packages.set(pluginKey(module), module.packageSha256);
+  for (const graph of graphs) packages.set(pluginKey(graph), graph.packageSha256);
+  for (const contribution of index.contributions) {
+    const key = `${contribution.owner.ref.pluginId}@${contribution.owner.ref.version}/${contribution.owner.ref.channel || "stable"}`;
+    if (packages.get(key) !== contribution.owner.sha256) throw new ModuleLoadError("CONTRIBUTION_OWNER_INVALID", `Contribution 所有者未绑定已交付模块: ${contribution.kind}/${contribution.id}`);
+  }
+}
+
+function pluginKey(ref: { id: string; version: string; channel?: string }): string {
+  return `${ref.id}@${ref.version}/${ref.channel || "stable"}`;
 }
 
 function parseCoordination(value: unknown, revision: number): PortalGenerationCoordination | undefined {

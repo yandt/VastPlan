@@ -10,7 +10,7 @@ function generationManager(options: Omit<PortalGenerationManagerOptions, "runtim
 }
 
 function spec(revision: number): PortalRuntimeSpec {
-  return { portal: { revision } as PortalRuntimeSpec["portal"], modules: [], moduleGraphs: [] };
+  return { portal: { revision } as PortalRuntimeSpec["portal"], modules: [], moduleGraphs: [], contributions: { schemaVersion: 1, generation: revision, inventoryDigest: "a".repeat(64), contributions: [], digest: "b".repeat(64) } };
 }
 
 function prepared(revision: number, hot?: FrontendPluginHotLifecycle, secondHot?: FrontendPluginHotLifecycle, release?: () => void): PreparedPortal {

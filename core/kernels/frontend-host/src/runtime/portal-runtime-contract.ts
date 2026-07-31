@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { parsePortalExtensionGraph, type PortalExtensionGraph } from "@vastplan/plugin-extension-contract";
+import { parseContributionIndex, type ContributionIndexSnapshot } from "@vastplan/plugin-inventory-contract";
 
 export interface PortalSpec extends Readonly<Record<string, unknown>> {
   readonly revision: number;
@@ -66,6 +67,7 @@ export interface PortalRuntimeSpec extends Readonly<Record<string, unknown>> {
   readonly modules?: readonly FrontendModule[];
   readonly moduleGraphs?: readonly FrontendModuleGraph[];
   readonly extensions?: PortalExtensionGraph;
+  readonly contributions: ContributionIndexSnapshot;
   readonly coordination?: PortalGenerationCoordination;
 }
 
@@ -156,6 +158,9 @@ function validateRuntime(runtime: PortalRuntimeSpec): void {
   if (!Array.isArray(runtime.modules ?? []) || !Array.isArray(runtime.moduleGraphs ?? [])) throw new PortalRuntimeContractError("Portal RuntimeSpec 模块列表无效");
   try { parsePortalExtensionGraph(runtime.extensions); }
   catch (error) { throw new PortalRuntimeContractError(`Portal 插件扩展图无效: ${String(error)}`); }
+  let contributions: ContributionIndexSnapshot;
+  try { contributions = parseContributionIndex(runtime.contributions); }
+  catch (error) { throw new PortalRuntimeContractError(`Portal Contribution Index 无效: ${String(error)}`); }
   for (const module of runtime.modules ?? []) validateDescriptor(module, module.mediaType ?? "text/javascript", runtime.portal.revision);
   for (const graph of runtime.moduleGraphs ?? []) {
 		if (graph.target !== "browser") throw new PortalRuntimeContractError("浏览器 RuntimeSpec 只能包含 browser Module Graph");
@@ -168,6 +173,21 @@ function validateRuntime(runtime: PortalRuntimeSpec): void {
       validateDescriptor({ ...node, id: graph.id, version: graph.version, packageSha256: graph.packageSha256, entry: node.path }, node.mediaType, runtime.portal.revision);
     }
   }
+  validateContributionOwners(runtime, contributions);
+}
+
+function validateContributionOwners(runtime: PortalRuntimeSpec, index: ContributionIndexSnapshot): void {
+  const packages = new Map<string, string>();
+  for (const module of runtime.modules ?? []) packages.set(pluginKey(module), module.packageSha256);
+  for (const graph of runtime.moduleGraphs ?? []) packages.set(pluginKey(graph), graph.packageSha256);
+  for (const contribution of index.contributions) {
+    const key = `${contribution.owner.ref.pluginId}@${contribution.owner.ref.version}/${contribution.owner.ref.channel || "stable"}`;
+    if (packages.get(key) !== contribution.owner.sha256) throw new PortalRuntimeContractError(`Portal Contribution 所有者未绑定模块: ${contribution.kind}/${contribution.id}`);
+  }
+}
+
+function pluginKey(ref: { id: string; version: string; channel?: string }): string {
+  return `${ref.id}@${ref.version}/${ref.channel || "stable"}`;
 }
 
 const serverExternalAllowlist = new Set(["stream", "util", "node:stream", "node:util"]);

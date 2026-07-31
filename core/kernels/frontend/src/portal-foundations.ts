@@ -8,6 +8,7 @@ import type {
   PortalSpec,
 } from "./portal-contracts";
 import { prepareRuntimeEngine } from "./runtime-engine";
+import { renderAdapterCatalogFromIndex, shellCatalogFromIndex } from "./foundation-contribution-catalog";
 import {
   assertTrustedFirstParty,
   moduleKey,
@@ -44,10 +45,11 @@ export async function loadPortalFoundations(
 
   const renderAdapterModule = await loader.load(portal.renderAdapter);
   assertTrustedFirstParty(renderAdapterModule, portal.renderAdapter.id);
-  const renderAdapter = renderAdapterModule.renderAdapter;
-  if (renderAdapter === undefined) throw new PortalAssemblyError("DESIGN_SYSTEM_MISSING", "指定插件没有 ui.render.adapter 贡献");
-  if (renderAdapter.id !== "ui.render.adapter") throw new PortalAssemblyError("DESIGN_SYSTEM_INVALID", "设计系统贡献 ID 必须为 ui.render.adapter");
-  if (!contractSatisfies(renderAdapter.uiContract, portal.renderAdapter.uiContract)) throw new PortalAssemblyError("UI_CONTRACT_INCOMPATIBLE", "设计系统与 Portal 的 UI 契约不兼容");
+  const declaredRenderAdapter = renderAdapterModule.renderAdapter;
+  if (declaredRenderAdapter === undefined) throw new PortalAssemblyError("DESIGN_SYSTEM_MISSING", "指定插件没有 ui.render.adapter 贡献");
+  if (declaredRenderAdapter.id !== "ui.render.adapter") throw new PortalAssemblyError("DESIGN_SYSTEM_INVALID", "设计系统贡献 ID 必须为 ui.render.adapter");
+  if (!contractSatisfies(declaredRenderAdapter.uiContract, portal.renderAdapter.uiContract)) throw new PortalAssemblyError("UI_CONTRACT_INCOMPATIBLE", "设计系统与 Portal 的 UI 契约不兼容");
+  const renderAdapter = renderAdapterCatalogFromIndex(declaredRenderAdapter, options.contributions, portal);
   if (!validRendererCatalog(renderAdapter) || !validRenderAdapterConfig(portal.renderAdapter.config, renderAdapter)) {
     throw new PortalAssemblyError("DESIGN_SYSTEM_RENDERER_CATALOG_INVALID", "渲染适配器目录或 Platform Profile 配置无效");
   }
@@ -93,10 +95,11 @@ export async function loadPortalFoundations(
 
   const shellModule = await loader.load(portal.shell);
   assertTrustedFirstParty(shellModule, portal.shell.id);
-  const shell = shellModule.shell;
-  if (shell?.id !== "ui.structure.shell" || typeof shell.compose !== "function" || !contractSatisfies(shell.uiContract, portal.shell.uiContract)) {
+  const declaredShell = shellModule.shell;
+  if (declaredShell?.id !== "ui.structure.shell" || typeof declaredShell.compose !== "function" || !contractSatisfies(declaredShell.uiContract, portal.shell.uiContract)) {
     throw new PortalAssemblyError("SHELL_INVALID", "Shell Catalog 缺失或 UI 契约不兼容");
   }
+  const shell = shellCatalogFromIndex(declaredShell, options.contributions, portal);
   if (!validShellTemplateCatalog(shell) || !validShellConfig(portal.shell.config, shell)) {
     throw new PortalAssemblyError("SHELL_TEMPLATE_INVALID", "Shell Library 目录或 Platform Profile 配置无效");
   }

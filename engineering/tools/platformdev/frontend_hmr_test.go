@@ -4,12 +4,15 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 )
 
 func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
@@ -126,6 +129,28 @@ func TestFrontendHMRRejectsPartiallySynchronizedUIContractFamily(t *testing.T) {
 	}
 	if err := overlayFrontendHMRUIContracts(document, modules); err == nil || !strings.Contains(err.Error(), "UI 契约未同步") {
 		t.Fatalf("partial UI contract error = %v", err)
+	}
+}
+
+func TestOverlayFrontendHMRContributionsReplacesActivePluginDescriptors(t *testing.T) {
+	packageSHA := strings.Repeat("a", 64)
+	document := map[string]json.RawMessage{
+		"modules":       json.RawMessage(fmt.Sprintf(`[{"id":"cn.vastplan.renderer","version":"1.0.0","channel":"stable","packageSha256":%q}]`, packageSHA)),
+		"contributions": json.RawMessage(fmt.Sprintf(`{"schemaVersion":1,"generation":7,"inventoryDigest":%q,"digest":%q,"contributions":[{"kind":"frontend.rendererModules","surface":"frontend","id":"old","contract":"^8.0.0","owner":{"ref":{"pluginId":"cn.vastplan.renderer","version":"1.0.0","channel":"stable"},"sha256":%q,"publisher":"vastplan"},"descriptor":{"id":"old"}}]}`, strings.Repeat("b", 64), strings.Repeat("c", 64), packageSHA)),
+	}
+	modules := map[string]frontendHMRModule{"cn.vastplan.renderer": {
+		ID: "cn.vastplan.renderer", Publisher: "vastplan",
+		Contributions: []frontendHMRContribution{{Kind: "frontend.rendererModules", Surface: "frontend", ID: "new", Contract: "^8.0.0", Descriptor: json.RawMessage(`{"id":"new","adapter":"ui.render.adapter","uiContract":"^8.0.0","engineFamily":"react","framework":"test"}`)}},
+	}}
+	if err := overlayFrontendHMRContributions(document, modules); err != nil {
+		t.Fatal(err)
+	}
+	var index pluginv1.ContributionIndexSnapshot
+	if err := json.Unmarshal(document["contributions"], &index); err != nil {
+		t.Fatal(err)
+	}
+	if len(index.Contributions) != 1 || index.Contributions[0].ID != "new" || index.Contributions[0].Owner.SHA256 != packageSHA {
+		t.Fatalf("开发 Contribution Index 未原子替换: %+v", index)
 	}
 }
 

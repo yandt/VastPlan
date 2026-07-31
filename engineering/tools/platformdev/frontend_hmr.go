@@ -47,6 +47,8 @@ type frontendHMRModule struct {
 	Graph             *frontendHMRGraph
 	Digests           []string
 	UIContract        *frontendHMRUIContract
+	Publisher         string
+	Contributions     []frontendHMRContribution
 }
 
 type frontendHMRManifest struct {
@@ -280,6 +282,13 @@ func (h *frontendHMR) loadCandidate(manifestPath string) (frontendHMRCandidate, 
 			return frontendHMRCandidate{}, fmt.Errorf("前端候选模块身份重复: %s", item.ID)
 		}
 		module := frontendHMRModule{ID: item.ID, Entry: item.Entry, SHA256: actual, Deferred: item.Deferred}
+		if h.root != "" {
+			publisher, contributions, err := readFrontendHMRContributions(h.root, item.ID)
+			if err != nil {
+				return frontendHMRCandidate{}, fmt.Errorf("读取前端候选贡献: %s: %w", item.ID, err)
+			}
+			module.Publisher, module.Contributions = publisher, contributions
+		}
 		contract, err := readFrontendHMRUIContract(h.root, item.ID)
 		if err != nil {
 			return frontendHMRCandidate{}, fmt.Errorf("读取前端候选 UI 契约: %s: %w", item.ID, err)
@@ -565,6 +574,11 @@ func (h *frontendHMR) runtime(w http.ResponseWriter, request *http.Request) {
 			return
 		}
 		document["moduleGraphs"] = encoded
+	}
+	if err := overlayFrontendHMRContributions(document, h.current); err != nil {
+		h.mu.RUnlock()
+		http.Error(w, "Portal Runtime contribution overlay invalid: "+err.Error(), http.StatusConflict)
+		return
 	}
 	h.mu.RUnlock()
 	encodedDocument, err := json.Marshal(document)

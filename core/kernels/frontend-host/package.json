@@ -18,6 +18,7 @@
     "@vastplan/addressing-node": "workspace:*",
     "@vastplan/frontend-engine-contract": "workspace:*",
     "@vastplan/plugin-extension-contract": "workspace:*",
+    "@vastplan/plugin-inventory-contract": "workspace:*",
     "ajv": "^8.20.0"
   }
 }

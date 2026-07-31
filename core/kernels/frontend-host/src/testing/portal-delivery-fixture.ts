@@ -30,6 +30,7 @@ export async function writePortalDeliveryRevision(fixture: PortalDeliveryFixture
   const digest = createHash("sha256").update(content).digest("hex");
   const runtime: PortalRuntimeSpec = {
     portal: spec,
+    contributions: { schemaVersion: 1, generation: spec.revision, inventoryDigest: "e".repeat(64), contributions: [], digest: "f".repeat(64) },
     modules: [{
       id: "cn.vastplan.example", version: "1.0.0", channel: "stable", entry: "frontend/dist/index.js",
       url: `/v1/portal-modules/${spec.revision}/${digest}.js`, sha256: digest,

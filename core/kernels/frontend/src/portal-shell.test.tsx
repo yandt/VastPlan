@@ -5,6 +5,11 @@ import type { PreparedPortal } from "./portal-runtime";
 import { PortalBootstrapError, PortalRecovery, createBootstrapRuntimeSource, fetchRuntimeSpec, resolvePortalPath } from "./portal-shell";
 import { productionFrontendRuntimeProtocol } from "./frontend-runtime-protocol";
 
+const runtimeDocument = (portal: Record<string, unknown>, modules: readonly Record<string, unknown>[]) => ({
+  portal, modules,
+  contributions: { schemaVersion: 1, generation: 1, inventoryDigest: "e".repeat(64), contributions: [], digest: "f".repeat(64) },
+});
+
 describe("Portal recovery shell", () => {
   it("renders without any design-system provider", () => {
     const html = renderToStaticMarkup(createElement(PortalRecovery, {
@@ -22,7 +27,7 @@ describe("Portal recovery shell", () => {
     const fetcher = async (input: string) => {
       calls.push(input);
       const digest = "a".repeat(64);
-      return new Response(JSON.stringify({ portal: {}, modules: [{ id: "cn.vastplan.test", version: "1.0.0", entry: "frontend/dist/index.js", url: `/v1/portal-recovery-modules/8/7/${digest}.js`, sha256: digest, packageSha256: "b".repeat(64) }] }), { status: 200 });
+      return new Response(JSON.stringify(runtimeDocument({}, [{ id: "cn.vastplan.test", version: "1.0.0", entry: "frontend/dist/index.js", url: `/v1/portal-recovery-modules/8/7/${digest}.js`, sha256: digest, packageSha256: "b".repeat(64) }])), { status: 200 });
     };
     await fetchRuntimeSpec(fetcher, "/v1/portal-recovery", "/settings/portals", productionFrontendRuntimeProtocol);
     expect(calls).toEqual(["/v1/portal-recovery?path=%2Fsettings%2Fportals"]);
@@ -33,7 +38,7 @@ describe("Portal recovery shell", () => {
     const digest = "a".repeat(64);
     const fetcher = async (input: string) => {
       calls.push(input);
-      return new Response(JSON.stringify({ portal: {}, modules: [{ id: "cn.vastplan.test", version: "1.0.0", entry: "frontend/dist/index.js", url: `/__vastplan_dev/modules/${digest}.js`, sha256: digest, packageSha256: "b".repeat(64) }] }), { status: 200 });
+      return new Response(JSON.stringify(runtimeDocument({}, [{ id: "cn.vastplan.test", version: "1.0.0", entry: "frontend/dist/index.js", url: `/__vastplan_dev/modules/${digest}.js`, sha256: digest, packageSha256: "b".repeat(64) }])), { status: 200 });
     };
     const source = createBootstrapRuntimeSource(fetcher, "/v1/portal-runtime", "/__vastplan_dev/runtime", true);
     const spec = await source.read("/operations");
@@ -47,7 +52,7 @@ describe("Portal recovery shell", () => {
     const digest = "c".repeat(64);
     const fetcher = async (input: string) => {
       calls.push(input);
-      return new Response(JSON.stringify({ portal: {}, modules: [{ id: "cn.vastplan.test", version: "1.0.0", entry: "frontend/dist/index.js", url: `/v1/portal-modules/1/${digest}.js`, sha256: digest, packageSha256: "d".repeat(64) }] }), { status: 200 });
+      return new Response(JSON.stringify(runtimeDocument({}, [{ id: "cn.vastplan.test", version: "1.0.0", entry: "frontend/dist/index.js", url: `/v1/portal-modules/1/${digest}.js`, sha256: digest, packageSha256: "d".repeat(64) }])), { status: 200 });
     };
     const source = createBootstrapRuntimeSource(fetcher, "/v1/portal-runtime", "/__vastplan_dev/runtime", false);
     await source.read("/operations");

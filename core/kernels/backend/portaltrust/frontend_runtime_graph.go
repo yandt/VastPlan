@@ -3,6 +3,7 @@ package portaltrust
 import (
 	"fmt"
 
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
@@ -22,6 +23,10 @@ func cloneFrontendRuntime(runtime portalapi.RuntimeSpec) portalapi.RuntimeSpec {
 	cloned.ModuleGraphs = make([]portalapi.FrontendModuleGraph, len(runtime.ModuleGraphs))
 	for graphIndex, graph := range runtime.ModuleGraphs {
 		cloned.ModuleGraphs[graphIndex] = cloneFrontendModuleGraph(graph)
+	}
+	cloned.Contributions.Contributions = append([]pluginv1.IndexedContribution(nil), runtime.Contributions.Contributions...)
+	for index := range cloned.Contributions.Contributions {
+		cloned.Contributions.Contributions[index].Descriptor = append([]byte(nil), runtime.Contributions.Contributions[index].Descriptor...)
 	}
 	return cloned
 }

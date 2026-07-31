@@ -24,6 +24,7 @@ const digest = "a".repeat(64);
 const runtime = {
   portal: { revision: 1 },
   modules: [{ id: "cn.vastplan.feature", version: "1.0.0", entry: "frontend/dist/index.js", url: `/__vastplan_dev/modules/${digest}.js`, sha256: digest, packageSha256: "b".repeat(64) }],
+  contributions: { schemaVersion: 1, generation: 1, inventoryDigest: "c".repeat(64), contributions: [], digest: "d".repeat(64) },
 };
 
 function developmentSource(fetcher: ModuleFetcher): PortalRuntimeSource {

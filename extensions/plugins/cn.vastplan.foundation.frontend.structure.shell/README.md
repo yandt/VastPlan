@@ -1,6 +1,6 @@
 # VastPlan Portal Shell
 
-首方 `ui.structure.shell` 基础插件。它是 Portal 唯一的结构基础：固定 Slot、页面/导航归并和活动路径，并提供受签名清单约束的 Shell Library Catalog。`1.1.0` 将 `standard` 与 `top-navigation` Library 精确锁定到各自的 `1.1.0` 制品。
+首方 `ui.structure.shell` 基础插件。它是 Portal 唯一的结构基础：固定 Slot、页面/导航归并和活动路径，并提供 Shell Library 选择语义。精确 Library 目录不写在本插件源码或 Manifest 中，而由可信宿主从已验证 `frontend.shellLibraries` Contribution 与 Platform Profile 解析锁派生。
 
 Composition Core 是本插件的内部源码模块，不再作为另一个可安装插件或 workspace package 发布。Shell 可以在编译期直接拥有统一语义，但视觉 Library 仍保持独立制品和按需加载。
 

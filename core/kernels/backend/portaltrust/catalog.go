@@ -146,7 +146,6 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 	}
 	seen := map[string]struct{}{}
 	selected := map[string]pluginv1.Manifest{}
-	manifestsByID := map[string]pluginv1.Manifest{}
 	verified := make([]verifiedPortalPlugin, 0, len(spec.Plugins))
 	for _, ref := range spec.Plugins {
 		if !pluginid.IsFirstPartyID(ref.ID) {
@@ -162,7 +161,6 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 			return nil, err
 		}
 		verified = append(verified, verifiedPortalPlugin{ref: ref, artifact: artifact, packageBytes: packageBytes, manifest: manifest})
-		manifestsByID[manifest.ID] = manifest
 		if manifest.Engines["frontend"] == "" {
 			return nil, fmt.Errorf("插件 %s 未声明 frontend engine", ref.ID)
 		}
@@ -260,7 +258,7 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 			if !hasShellFoundationContribution(selected["workbench"], "workbenches", "ui.workflow.workbench", spec.Workbench.UIContract, spec.RuntimeEngine.Family) {
 				return nil, errors.New("Workbench 插件未提供匹配的 ui.workflow.workbench 贡献")
 			}
-			if err := validateShellLibraryCatalog(selected["shell"], manifestsByID, spec); err != nil {
+			if _, err := projectPortalContributionIndex(spec, verified); err != nil {
 				return nil, err
 			}
 			return verified, nil
@@ -290,66 +288,6 @@ func hasRuntimeEngineContribution(manifest pluginv1.Manifest, selection portalap
 	return false
 }
 
-func validateShellLibraryCatalog(shellManifest pluginv1.Manifest, manifests map[string]pluginv1.Manifest, spec portalapi.PortalSpec) error {
-	var frontend struct {
-		Shells []struct {
-			ID         string `json:"id"`
-			UIContract string `json:"uiContract"`
-			Libraries  []struct {
-				ID     string              `json:"id"`
-				Module portalapi.PluginRef `json:"module"`
-			} `json:"libraries"`
-		} `json:"shells"`
-	}
-	if json.Unmarshal(shellManifest.Contributes["frontend"], &frontend) != nil {
-		return errors.New("解析 Shell Library Catalog 失败")
-	}
-	var libraries []struct {
-		ID     string              `json:"id"`
-		Module portalapi.PluginRef `json:"module"`
-	}
-	for _, shell := range frontend.Shells {
-		if shell.ID == "ui.structure.shell" && shell.UIContract == spec.Shell.UIContract {
-			libraries = shell.Libraries
-			break
-		}
-	}
-	if len(libraries) == 0 {
-		return errors.New("Shell Catalog 未声明已签名 Library 模块")
-	}
-	allowed := map[string]struct{}{}
-	for _, id := range spec.Shell.Config.AllowedTemplates {
-		allowed[id] = struct{}{}
-	}
-	seenIDs, seenModules := map[string]struct{}{}, map[string]struct{}{}
-	for _, library := range libraries {
-		key := library.Module.ID + "@" + library.Module.Version + "/" + channel(library.Module.Channel)
-		if library.ID == "" || library.Module.ID == "" {
-			return errors.New("Shell Catalog Library 身份不完整")
-		}
-		if _, duplicate := seenIDs[library.ID]; duplicate {
-			return fmt.Errorf("Shell Catalog Library ID 重复: %s", library.ID)
-		}
-		if _, duplicate := seenModules[key]; duplicate {
-			return fmt.Errorf("Shell Catalog Library 模块重复: %s", key)
-		}
-		seenIDs[library.ID], seenModules[key] = struct{}{}, struct{}{}
-		if !containsPortalRef(spec.Plugins, library.Module) || spec.Resolution.PluginOrigins[library.Module.ID] != compositioncommonv1.OriginPlatformProfile {
-			return fmt.Errorf("Shell Library 未由 Platform Profile 精确锁定: %s", library.ID)
-		}
-		manifest := manifests[library.Module.ID]
-		if !manifestProvidesShellLibrary(manifest, library.ID, spec.Shell.UIContract) {
-			return fmt.Errorf("Shell Library 清单与 Catalog 不一致: %s", library.ID)
-		}
-	}
-	for id := range allowed {
-		if _, ok := seenIDs[id]; !ok {
-			return fmt.Errorf("Platform Profile 允许了 Shell Catalog 未声明的 Library: %s", id)
-		}
-	}
-	return nil
-}
-
 func containsPortalRef(values []portalapi.PluginRef, target portalapi.PluginRef) bool {
 	for _, value := range values {
 		if samePortalRef(value, target) {
@@ -357,21 +295,6 @@ func containsPortalRef(values []portalapi.PluginRef, target portalapi.PluginRef)
 		}
 	}
 	return false
-}
-
-func manifestProvidesShellLibrary(manifest pluginv1.Manifest, id, contract string) bool {
-	var frontend struct {
-		Libraries []struct {
-			ID         string `json:"id"`
-			Shell      string `json:"shell"`
-			UIContract string `json:"uiContract"`
-		} `json:"shellLibraries"`
-	}
-	if json.Unmarshal(manifest.Contributes["frontend"], &frontend) != nil || len(frontend.Libraries) != 1 {
-		return false
-	}
-	library := frontend.Libraries[0]
-	return library.ID == id && library.Shell == "ui.structure.shell" && library.UIContract == contract
 }
 
 func hasShellFoundationContribution(manifest pluginv1.Manifest, field, id, contract, engineFamily string) bool {

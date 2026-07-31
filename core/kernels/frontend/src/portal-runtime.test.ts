@@ -52,6 +52,23 @@ function loader(overrides: Record<string, object> = {}): FrontendPluginLoader {
 }
 
 describe("PortalRuntime shell", () => {
+  it("derives Renderer and Shell Library catalogs from the trusted Contribution Index", async () => {
+    const owner = (ref: PluginRef) => ({ ref: { pluginId: ref.id, version: ref.version, channel: "stable" }, sha256: "e".repeat(64), publisher: "vastplan" });
+    const contributions = {
+      schemaVersion: 1 as const, generation: 1, inventoryDigest: "a".repeat(64), digest: "b".repeat(64),
+      contributions: [
+        { kind: "frontend.rendererModules", surface: "frontend", id: "primary", contract: uiContractRange, owner: owner(primaryRendererRef), descriptor: { id: "primary", title: "Primary", adapter: "ui.render.adapter", uiContract: uiContractRange, engineFamily: "react", framework: "primary" } },
+        { kind: "frontend.rendererModules", surface: "frontend", id: "alternate", contract: uiContractRange, owner: owner(alternateRendererRef), descriptor: { id: "alternate", title: "Alternate", adapter: "ui.render.adapter", uiContract: uiContractRange, engineFamily: "react", framework: "alternate" } },
+        { kind: "frontend.shellLibraries", surface: "frontend", id: "standard", contract: uiContractRange, owner: owner(standardShellRef), descriptor: { id: "standard", title: "Standard", shell: "ui.structure.shell", uiContract: uiContractRange } },
+        { kind: "frontend.shellLibraries", surface: "frontend", id: "top-navigation", contract: uiContractRange, owner: owner(topShellRef), descriptor: { id: "top-navigation", title: "Top", shell: "ui.structure.shell", uiContract: uiContractRange } },
+      ],
+    };
+    const source = loader({ [adapterRef.id]: { renderAdapter: { ...adapter, renderers: [] } }, [shellRef.id]: { shell: { ...shell, templates: [] } } });
+    const prepared = await new PortalRuntime(source).prepare(portal, { contributions });
+    expect(prepared.renderAdapterCatalog.renderers.map((item) => item.module.id)).toEqual([primaryRendererRef.id, alternateRendererRef.id]);
+    expect(prepared.shell.templates.map((item) => item.module.id)).toEqual([standardShellRef.id, topShellRef.id]);
+  });
+
   it("assembles one signed shell and the functional page", async () => {
     const prepared = await new PortalRuntime(loader()).prepare(portal);
     expect(prepared.runtimeEngine.family).toBe("react");

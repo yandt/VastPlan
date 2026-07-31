@@ -19,7 +19,11 @@ func materializeFrontendRuntime(spec portalapi.PortalSpec, verified []verifiedPo
 	if err != nil {
 		return portalapi.RuntimeSpec{}, serverRuntimeSpec{}, nil, nil, fmt.Errorf("解析 Portal 插件扩展图: %w", err)
 	}
-	runtime := portalapi.RuntimeSpec{Portal: spec, Extensions: extensions}
+	contributions, err := projectPortalContributionIndex(spec, verified)
+	if err != nil {
+		return portalapi.RuntimeSpec{}, serverRuntimeSpec{}, nil, nil, err
+	}
+	runtime := portalapi.RuntimeSpec{Portal: spec, Extensions: extensions, Contributions: contributions}
 	server := serverRuntimeSpec{}
 	assets := make([]FrontendModuleAsset, 0, len(spec.Plugins))
 	references := make([]pluginv1.ArtifactReference, 0, len(spec.Plugins))
