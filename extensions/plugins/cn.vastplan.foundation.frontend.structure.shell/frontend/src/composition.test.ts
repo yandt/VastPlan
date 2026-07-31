@@ -59,6 +59,14 @@ describe("shell composition core", () => {
     expect(model.activeNavigationPath).toEqual({ zone: "secondary", rootGroupID: "account", childGroupID: "account.settings", pageID: "account.appearance" });
   });
 
+  it("keeps the account root available when the account feature plugin is absent", () => {
+    const model = compose({ pages: [], shellContributions: [] });
+    const account = model.navigation.secondary.find((group) => group.id === "account");
+    expect(account).toMatchObject({ id: "account", zone: "secondary" });
+    expect(account?.pages).toEqual([]);
+    expect(account?.children).toEqual([]);
+  });
+
   it("rejects unknown parents, cross-zone children, and a third group level", () => {
     const attempt = (navigationGroups: unknown[]) => () => compose({ pages: [], shellContributions: [], config: { navigationGroups } });
     expect(attempt([{ id: "child", parentID: "missing", label: "子组", zone: "primary", icon: "menu" }])).toThrow("未知根组");

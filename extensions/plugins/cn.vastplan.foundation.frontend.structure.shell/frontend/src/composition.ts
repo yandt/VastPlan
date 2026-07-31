@@ -63,7 +63,9 @@ export function compose(input: ShellCompositionInput): ShellCompositionModel {
       children.push(Object.freeze({ ...child, parentID: descriptor.id, pages: Object.freeze(childPages) }));
     }
     const orderedChildren = ordered(children);
-    if (rootPages.length === 0 && orderedChildren.length === 0) continue;
+    // 账户根分组同时承载 Shell 的稳定身份入口。即使账户功能插件尚未装配，
+    // 也必须保留该分组，让布局继续显示头像并给出明确的未装配状态。
+    if (rootPages.length === 0 && orderedChildren.length === 0 && descriptor.id !== accountNavigationGroupID) continue;
     navigation[descriptor.zone].push(Object.freeze({ ...descriptor, parentID: undefined, pages: Object.freeze(rootPages), children: Object.freeze(orderedChildren) }));
   }
   for (const zone of navigationZones) navigation[zone] = [...ordered(navigation[zone])];
