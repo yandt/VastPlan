@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contributionsByKind, parseContributionIndex } from "./index";
+import { contributionsByKind, parseContributionIndex, parsePluginReconciliationPlan } from "./index";
 
 const digest = "a".repeat(64);
 
@@ -13,5 +13,11 @@ describe("plugin inventory contract", () => {
   it("rejects duplicate kind identities", () => {
     const contribution = { kind: "frontend.futureWidgets", surface: "frontend", id: "future", owner: { ref: { pluginId: "cn.vastplan.future", version: "1.0.0", channel: "stable" }, sha256: digest, publisher: "vastplan" }, descriptor: { id: "future" } };
     expect(() => parseContributionIndex({ schemaVersion: 1, generation: 1, inventoryDigest: digest, digest, contributions: [contribution, contribution] })).toThrow(/重复/);
+  });
+
+  it("parses the same target-neutral reconciliation plan for every kernel", () => {
+    for (const target of ["backend", "frontend", "runner", "mobile"] as const) {
+      expect(parsePluginReconciliationPlan({ schemaVersion: 1, target, generation: 1, selectionDigest: digest, contributionDigest: digest, digest, actions: [{ pluginId: "cn.vastplan.test", operation: "activate", strategy: `${target}.test` }] }).target).toBe(target);
+    }
   });
 });

@@ -46,6 +46,9 @@ export function contributionsByKind(index: ContributionIndexSnapshot, kind: stri
   return index.contributions.filter((item) => item.kind === kind);
 }
 
+export type { ActivationSelection, PluginReconciliationAction, PluginReconciliationPlan, PluginTarget } from "./reconciliation.js";
+export { parsePluginReconciliationPlan } from "./reconciliation.js";
+
 function parseContribution(value: unknown): IndexedPluginContribution {
   if (!isRecord(value) || !name(value.surface) || typeof value.kind !== "string" || !value.kind.startsWith(`${value.surface}.`) || !name(value.id) ||
       (value.contract !== undefined && typeof value.contract !== "string") || !isRecord(value.owner) || !isRecord(value.owner.ref) ||
