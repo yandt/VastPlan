@@ -323,5 +323,6 @@ func portalFoundationFrontendManifests() []string {
 		"extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.standard/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.structure.layout.top-navigation/vastplan.plugin.json",
 		"extensions/plugins/cn.vastplan.foundation.frontend.workflow.workbench/vastplan.plugin.json",
+		"extensions/plugins/cn.vastplan.foundation.frontend.identity.account-center/vastplan.plugin.json",
 	}
 }

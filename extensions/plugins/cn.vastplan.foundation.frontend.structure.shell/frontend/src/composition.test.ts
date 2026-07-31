@@ -43,6 +43,22 @@ describe("shell composition core", () => {
     expect(model.activeNavigationPath).toEqual({ zone: "primary", rootGroupID: "operations", childGroupID: "compute", pageID: "workers" });
   });
 
+  it("composes account plugins through the same root-child-page navigation pipeline", () => {
+    const model = compose({
+      activePageID: "appearance",
+      shellContributions: [],
+      pages: [
+        { id: "profile", pluginID: "cn.vastplan.foundation.frontend.identity.account-center", path: "/account/profile", title: "用户信息", navigation: { id: "account.profile", label: "用户信息", zone: "secondary", groupID: "account" }, slots: [{ id: "body", slot: "page.body.main", component: () => null }] },
+        { id: "appearance", pluginID: "cn.vastplan.foundation.frontend.identity.account-center", path: "/account/settings/appearance", title: "外观", navigation: { id: "account.appearance", label: "外观", zone: "secondary", groupID: "account.settings" }, slots: [{ id: "body", slot: "page.body.main", component: () => null }] },
+      ],
+    });
+    const account = model.navigation.secondary.find((group) => group.id === "account");
+    expect(account?.pages.map((page) => page.id)).toEqual(["account.profile"]);
+    expect(account?.children[0]).toMatchObject({ id: "account.settings", parentID: "account" });
+    expect(account?.children[0].pages.map((page) => page.id)).toEqual(["account.appearance"]);
+    expect(model.activeNavigationPath).toEqual({ zone: "secondary", rootGroupID: "account", childGroupID: "account.settings", pageID: "account.appearance" });
+  });
+
   it("rejects unknown parents, cross-zone children, and a third group level", () => {
     const attempt = (navigationGroups: unknown[]) => () => compose({ pages: [], shellContributions: [], config: { navigationGroups } });
     expect(attempt([{ id: "child", parentID: "missing", label: "子组", zone: "primary", icon: "menu" }])).toThrow("未知根组");

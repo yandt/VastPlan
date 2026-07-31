@@ -1,6 +1,7 @@
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { uiContractVersion } from "@vastplan/ui-contract";
 import {
+  accountNavigationGroupID,
   message,
   portalPageRhythm,
   PortalAccountControl,
@@ -25,7 +26,8 @@ export function TopNavigationShell(props: UIShellProps) {
   const [openRootID, setOpenRootID] = useState<string>();
   const centerRef = useRef<HTMLDivElement>(null);
   const centerWidth = useContainerWidth(centerRef, 1200);
-  const mainRoots = useMemo(() => [...composition.navigation.primary, ...composition.navigation.secondary], [composition]);
+  const accountRoot = composition.navigation.secondary.find((group) => group.id === accountNavigationGroupID);
+  const mainRoots = useMemo(() => [...composition.navigation.primary, ...composition.navigation.secondary.filter((group) => group.id !== accountNavigationGroupID)], [composition]);
   const settingsRoots = composition.navigation.settings;
   const activeRootID = composition.activeNavigationPath?.rootGroupID;
   const capacity = Math.max(1, Math.floor(centerWidth / 120));
@@ -89,9 +91,9 @@ export function TopNavigationShell(props: UIShellProps) {
       <div className="vp-top-end">
         {settingsRoots.map((group) => <RootPopover key={group.id} group={group} composition={composition} open={openRootID === group.id} active={activeRootID === group.id} onOpenChange={(open) => setOpenRootID(open ? group.id : undefined)} onNavigate={navigate} />)}
         {shellSlot(composition.shellSlots, "shell.navigation.end")}
-        <PortalAccountControl {...props} placement="bottom-end" />
+        {accountRoot === undefined ? null : <AccountPopover group={accountRoot} account={props.account} composition={composition} open={openRootID === accountRoot.id} active={activeRootID === accountRoot.id} onOpenChange={(open) => setOpenRootID(open ? accountRoot.id : undefined)} onNavigate={navigate} />}
       </div>
-      <div className="vp-top-mobile-controls"><PortalAccountControl {...props} placement="bottom-end" /><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></div>
+      <div className="vp-top-mobile-controls"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></div>
     </header>
     <div className="vp-top-content">
       {page === undefined ? null : <header className="vp-top-page-header">
@@ -117,6 +119,23 @@ function RootPopover({ group, composition, open, active, onOpenChange, onNavigat
   const ui = usePortalUI();
   const i18n = usePortalI18n();
   return <ui.Popover open={open} placement="bottom-start" ariaLabel={i18n.text(group.label)} initialFocus="current" onOpenChange={(next) => onOpenChange(next)} trigger={(props) => <button ref={(node) => props.ref(node)} type="button" className="vp-top-root-trigger" data-zone={group.zone} data-active={active || undefined} aria-current={active ? "location" : undefined} aria-expanded={props["aria-expanded"]} aria-controls={props["aria-controls"]} onClick={props.onClick} onKeyDown={props.onKeyDown}><ui.Icon name={group.icon} /><span>{i18n.text(group.label)}</span></button>}>
+    <MegaGroup group={group} composition={composition} onNavigate={onNavigate} />
+  </ui.Popover>;
+}
+
+/** Top layout reuses the same composed account group; only its visual carrier differs. */
+function AccountPopover({ group, account, composition, open, active, onOpenChange, onNavigate }: {
+  group: PortalNavigationGroup;
+  account: UIShellProps["account"];
+  composition: UIShellProps["composition"];
+  open: boolean;
+  active: boolean;
+  onOpenChange(open: boolean): void;
+  onNavigate(id: string): void;
+}) {
+  const ui = usePortalUI();
+  const i18n = usePortalI18n();
+  return <ui.Popover open={open} placement="bottom-end" ariaLabel={i18n.text(group.label)} initialFocus="current" onOpenChange={onOpenChange} trigger={(trigger) => <PortalAccountControl account={account} selected={active} trigger={trigger} />}>
     <MegaGroup group={group} composition={composition} onNavigate={onNavigate} />
   </ui.Popover>;
 }

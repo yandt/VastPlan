@@ -1,4 +1,4 @@
-import { message, pageSlotIDs, semanticIconNames, shellSlotIDs } from "@vastplan/ui-primitives";
+import { accountNavigationGroupID, accountSettingsNavigationGroupID, message, pageSlotIDs, semanticIconNames, shellSlotIDs } from "@vastplan/ui-primitives";
 import type {
   NavigationZone,
   PageSlotID,
@@ -23,6 +23,8 @@ const defaultGroups: readonly PortalNavigationGroupDescriptor[] = [
   { id: "primary", label: message(namespace, "navigation.primary", "主要功能"), zone: "primary", icon: "menu", order: 10 },
   { id: "secondary", label: message(namespace, "navigation.secondary", "辅助功能"), zone: "secondary", icon: "info", order: 20 },
   { id: "settings", label: message(namespace, "navigation.settings", "系统管理"), zone: "settings", icon: "settings", order: 100 },
+  { id: accountNavigationGroupID, label: message(namespace, "navigation.account", "用户"), zone: "secondary", icon: "info", order: 1000 },
+  { id: accountSettingsNavigationGroupID, parentID: accountNavigationGroupID, label: message(namespace, "navigation.accountSettings", "用户设置"), zone: "secondary", icon: "settings", order: 20 },
 ];
 
 function ordered<T extends { id: string; order?: number }>(values: readonly T[]): readonly T[] {

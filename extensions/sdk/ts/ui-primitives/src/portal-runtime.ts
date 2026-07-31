@@ -6,6 +6,10 @@ import type { SemanticIconName } from "./icon.js";
 
 export type NavigationZone = "primary" | "settings" | "secondary";
 
+/** Governed account-navigation identities shared by plugins, composition and Shell libraries. */
+export const accountNavigationGroupID = "account" as const;
+export const accountSettingsNavigationGroupID = "account.settings" as const;
+
 export const shellSlotIDs = Object.freeze([
   "shell.header.start", "shell.header.center", "shell.header.end",
   "shell.navigation.start", "shell.navigation.center", "shell.navigation.end",

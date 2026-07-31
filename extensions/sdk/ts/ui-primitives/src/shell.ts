@@ -45,7 +45,9 @@ export interface UIShellProps {
   onNavigate(pageID: string): void;
 }
 
-export { PortalAccountControl } from "./portal-account-control.js";
+export {
+  PortalAccountControl,
+} from "./portal-account-control.js";
 
 /** Owns stable shell semantics and a governed catalog of visual templates. */
 export interface UIShellAdapter {

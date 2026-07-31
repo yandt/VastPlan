@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
-import { PortalI18nProvider, message, resolveAppearanceColors, usePortalI18n, usePortalUI, type PluginLocalization, type PortalAppearanceSettings, type PortalLocalizationPolicy } from "@vastplan/ui-primitives";
+import { PortalI18nProvider, PortalPersonalizationProvider, message, resolveAppearanceColors, usePortalI18n, usePortalUI, type PluginLocalization, type PortalAppearanceSettings, type PortalLocalizationPolicy } from "@vastplan/ui-primitives";
 import { VerifiedFrontendPluginLoader, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
 import { parseRuntimeSpec } from "./module-runtime-spec";
 import { fetchDevelopmentRuntime, startPortalDevelopmentUpdates } from "./portal-development";
@@ -225,15 +225,14 @@ export function PortalApplication({ prepared, appearanceSession, initialPath, re
   useEffect(() => {
     if (landingPath !== initialPath) globalThis.history?.replaceState({}, "", landingPath);
   }, [initialPath, landingPath]);
-  const page = useMemo(() => selectPage(prepared, pathname), [prepared, pathname]);
   const policy = prepared.portal.localization ?? defaultPortalLocalization;
   const catalogs = useMemo(() => ({ ...prepared.messageCatalogs, [kernelNamespace]: kernelLocalization }), [prepared.messageCatalogs]);
   return <PortalI18nProvider policy={policy} catalogs={catalogs} candidates={globalThis.navigator?.languages ?? []} storageKey={`vastplan.locale.${prepared.portal.tenantId}.${prepared.portal.id}`}>
-    <LocalizedPortalApplication prepared={prepared} appearanceSession={appearanceSession} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} developmentError={developmentError} updateNotice={updateNotice} onApplyUpdate={onApplyUpdate} onRendererChange={onRendererChange ?? (() => undefined)} onShellTemplateChange={onShellTemplateChange} onIconThemeChange={onIconThemeChange} onAppearanceChange={onAppearanceChange} />
+    <LocalizedPortalApplication prepared={prepared} appearanceSession={appearanceSession} pathname={pathname} onNavigate={setPathname} recoveryMode={recoveryMode} developmentError={developmentError} updateNotice={updateNotice} onApplyUpdate={onApplyUpdate} onRendererChange={onRendererChange ?? (() => undefined)} onShellTemplateChange={onShellTemplateChange} onIconThemeChange={onIconThemeChange} onAppearanceChange={onAppearanceChange} />
   </PortalI18nProvider>;
 }
 
-function LocalizedPortalApplication({ prepared, appearanceSession, pathname, onNavigate, page, recoveryMode, developmentError, updateNotice, onApplyUpdate, onRendererChange, onShellTemplateChange, onIconThemeChange, onAppearanceChange }: Omit<PortalApplicationProps, "initialPath"> & { pathname: string; onNavigate(path: string): void; page: PreparedPortal["pages"][number] | undefined; recoveryMode: boolean }) {
+function LocalizedPortalApplication({ prepared, appearanceSession, pathname, onNavigate, recoveryMode, developmentError, updateNotice, onApplyUpdate, onRendererChange, onShellTemplateChange, onIconThemeChange, onAppearanceChange }: Omit<PortalApplicationProps, "initialPath"> & { pathname: string; onNavigate(path: string): void; recoveryMode: boolean }) {
   const Provider = prepared.renderAdapter.Provider;
   const i18n = usePortalI18n();
   const appearance = appearanceSession.appearance(prepared.renderAdapter.id);
@@ -243,7 +242,7 @@ function LocalizedPortalApplication({ prepared, appearanceSession, pathname, onN
   const themeColors = useMemo(() => resolveAppearanceColors(themeTemplateID, appearance[scheme].colors), [appearance, scheme, themeTemplateID]);
   const iconThemeID = appearanceSession.resolve(prepared.portal).iconThemeID ?? prepared.iconThemeID;
   return <Provider locale={i18n.locale} direction={i18n.direction} themeTemplate={themeTemplateID} themeColors={themeColors} iconTheme={iconThemeID}>
-    <PortalContent prepared={prepared} appearance={appearance} themeTemplateID={themeTemplateID} iconThemeID={iconThemeID} pathname={pathname} onNavigate={onNavigate} page={page} recoveryMode={recoveryMode} onRendererChange={onRendererChange ?? (() => undefined)} onShellTemplateChange={onShellTemplateChange} onIconThemeChange={onIconThemeChange} onAppearanceChange={onAppearanceChange} />
+    <PortalContent prepared={prepared} appearance={appearance} themeTemplateID={themeTemplateID} iconThemeID={iconThemeID} pathname={pathname} onNavigate={onNavigate} recoveryMode={recoveryMode} onRendererChange={onRendererChange ?? (() => undefined)} onShellTemplateChange={onShellTemplateChange} onIconThemeChange={onIconThemeChange} onAppearanceChange={onAppearanceChange} />
     {developmentError === undefined ? null : <PortalDevelopmentNotice message={developmentError} />}
     {updateNotice === undefined ? null : <PortalUpdateNotice update={updateNotice} onApply={onApplyUpdate} />}
   </Provider>;
@@ -266,14 +265,13 @@ function PortalDevelopmentNotice({ message }: { message: string }) {
   </aside>;
 }
 
-function PortalContent({ prepared, appearance, themeTemplateID, iconThemeID, pathname, onNavigate, page, recoveryMode, onRendererChange, onShellTemplateChange, onIconThemeChange, onAppearanceChange }: {
+function PortalContent({ prepared, appearance, themeTemplateID, iconThemeID, pathname, onNavigate, recoveryMode, onRendererChange, onShellTemplateChange, onIconThemeChange, onAppearanceChange }: {
   prepared: PreparedPortal;
   appearance: PortalAppearanceSettings;
   themeTemplateID: string;
   iconThemeID: string;
   pathname: string;
   onNavigate(path: string): void;
-  page: PreparedPortal["pages"][number] | undefined;
   recoveryMode: boolean;
   onRendererChange(rendererID: string): void;
   onShellTemplateChange?(templateID: string): Promise<void>;
@@ -282,40 +280,59 @@ function PortalContent({ prepared, appearance, themeTemplateID, iconThemeID, pat
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
+  const templateID = prepared.shellLibrary.id;
+  const rendererOptions = prepared.portal.renderAdapter.config.rendererOptions?.[prepared.renderAdapter.id];
+  const account = prepared.portal.account ?? { subjectID: "anonymous", tenantID: prepared.portal.tenantId, displayName: "User" };
+  const availableTemplates = prepared.portal.shell.config.userSelectable ? prepared.shell.templates.filter((template) => prepared.portal.shell.config.allowedTemplates.includes(template.id)) : [];
+  const renderers = prepared.portal.renderAdapter.config.userSelectable ? prepared.renderAdapterCatalog.renderers.filter((renderer) => prepared.portal.renderAdapter.config.allowedRenderers.includes(renderer.id)).map((renderer) => ({ id: renderer.id, label: renderer.label, framework: renderer.framework })) : [];
+  const iconThemes = rendererOptions?.iconUserSelectable === true ? prepared.renderAdapter.iconThemes.filter((item) => rendererOptions.allowedIconThemes?.includes(item.id) === true) : [];
+  const page = selectPage(prepared, pathname);
   const composition = prepared.shell.compose({
     pages: prepared.pages,
     shellContributions: prepared.shellContributions,
     activePageID: page?.id,
     config: prepared.portal.shell.config,
   });
-  const templateID = prepared.shellLibrary.id;
   const changeTemplate = (next: string) => {
     if (!prepared.portal.shell.config.userSelectable || !prepared.portal.shell.config.allowedTemplates.includes(next)) return;
     void onShellTemplateChange?.(next);
   };
   const navigate = (pageID: string) => {
-    const target = prepared.pages.find((candidate) => candidate.id === pageID);
+    const target = composition.pages.find((candidate) => candidate.id === pageID);
     if (target === undefined) return;
     globalThis.history?.pushState({}, "", target.path);
     onNavigate(target.path);
   };
   const branding = prepared.portal.branding ?? {};
   const Shell = prepared.shellLibrary.Shell;
-  const rendererOptions = prepared.portal.renderAdapter.config.rendererOptions?.[prepared.renderAdapter.id];
-  return <Shell
+  const personalization = {
+    account,
+    appearance,
+    availableTemplates,
+    template: { id: templateID, options: prepared.portal.shell.config.templateOptions?.[templateID] ?? {} },
+    onTemplateChange: prepared.portal.shell.config.userSelectable ? changeTemplate : undefined,
+    renderers,
+    renderer: { id: prepared.renderAdapter.id, options: prepared.portal.renderAdapter.config.rendererOptions?.[prepared.renderAdapter.id] ?? {} },
+    onRendererChange: prepared.portal.renderAdapter.config.userSelectable ? onRendererChange : undefined,
+    iconThemes,
+    iconThemeID,
+    onIconThemeChange: rendererOptions?.iconUserSelectable === true ? onIconThemeChange : undefined,
+    onAppearanceChange,
+  };
+  return <PortalPersonalizationProvider value={personalization}><Shell
     composition={composition}
     template={{ id: templateID, options: prepared.portal.shell.config.templateOptions?.[templateID] ?? {} }}
-    availableTemplates={prepared.portal.shell.config.userSelectable ? prepared.shell.templates.filter((template) => prepared.portal.shell.config.allowedTemplates.includes(template.id)) : []}
+    availableTemplates={availableTemplates}
     onTemplateChange={prepared.portal.shell.config.userSelectable ? changeTemplate : undefined}
-    renderers={prepared.portal.renderAdapter.config.userSelectable ? prepared.renderAdapterCatalog.renderers.filter((renderer) => prepared.portal.renderAdapter.config.allowedRenderers.includes(renderer.id)).map((renderer) => ({ id: renderer.id, label: renderer.label, framework: renderer.framework })) : []}
+    renderers={renderers}
     renderer={{ id: prepared.renderAdapter.id, options: prepared.portal.renderAdapter.config.rendererOptions?.[prepared.renderAdapter.id] ?? {} }}
     onRendererChange={prepared.portal.renderAdapter.config.userSelectable ? onRendererChange : undefined}
     themeTemplates={rendererOptions?.themeUserSelectable === true ? prepared.renderAdapter.themeTemplates.filter((item) => rendererOptions.allowedThemeTemplates?.includes(item.id) === true) : []}
     themeTemplateID={themeTemplateID}
-    iconThemes={rendererOptions?.iconUserSelectable === true ? prepared.renderAdapter.iconThemes.filter((item) => rendererOptions.allowedIconThemes?.includes(item.id) === true) : []}
+    iconThemes={iconThemes}
     iconThemeID={iconThemeID}
     onIconThemeChange={rendererOptions?.iconUserSelectable === true ? onIconThemeChange : undefined}
-    account={prepared.portal.account ?? { subjectID: "anonymous", tenantID: prepared.portal.tenantId, displayName: "User" }}
+    account={account}
     appearance={appearance}
     onAppearanceChange={onAppearanceChange}
     branding={{
@@ -326,7 +343,7 @@ function PortalContent({ prepared, appearance, themeTemplateID, iconThemeID, pat
     pathname={pathname}
     onNavigate={navigate}
     recoveryNotice={recoveryMode ? <ui.Status tone="warning">{i18n.text(message(kernelNamespace, "recovery.active", "正在运行上一条仍可信的已发布 revision #{revision}。", { revision: prepared.portal.revision }))}</ui.Status> : undefined}
-  />;
+  /></PortalPersonalizationProvider>;
 }
 
 function useSystemScheme(): "light" | "dark" {

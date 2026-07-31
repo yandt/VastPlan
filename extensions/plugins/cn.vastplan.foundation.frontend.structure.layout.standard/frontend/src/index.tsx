@@ -1,6 +1,7 @@
 import { createElement, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from "react";
 import { uiContractVersion } from "@vastplan/ui-contract";
 import {
+  accountNavigationGroupID,
   message,
   portalPageRhythm,
   PortalAccountControl,
@@ -54,7 +55,8 @@ export function StandardShell(props: UIShellProps) {
   const shellHeaderVisible = hasRegionContent(composition, { shellSlots: shellHeaderSlots });
   const navigationVisible = hasRegionContent(composition, { intrinsic: branding.name !== "", navigationGroups: true, shellSlots: shellNavigationSlots });
   const settingsGroups = composition.navigation.settings;
-  const mainGroups = [...composition.navigation.primary, ...composition.navigation.secondary];
+  const accountGroup = composition.navigation.secondary.find((group) => group.id === accountNavigationGroupID);
+  const mainGroups = [...composition.navigation.primary, ...composition.navigation.secondary.filter((group) => group.id !== accountNavigationGroupID)];
   const brand = <Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} compact />;
 
   const header = shellHeaderVisible ? <header className="vp-shell-header">
@@ -105,12 +107,12 @@ export function StandardShell(props: UIShellProps) {
         mainGroups={mainGroups}
         settingsGroups={settingsGroups}
         selectedGroup={selectedGroup}
-        account={<PortalAccountControl {...props} />}
+        account={accountGroup === undefined ? null : <PortalAccountControl account={props.account} selected={selectedGroup?.id === accountGroup.id} onSelect={() => setSelectedGroupID(accountGroup.id)} />}
         onSelectGroup={setSelectedGroupID}
         onNavigate={navigate}
       /> : null}
       <div className="vp-shell-content">
-        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalAccountControl {...props} /></span></div> : null}
+        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalAccountControl account={props.account} onSelect={() => setMobileOpen(true)} /></span></div> : null}
         {pageHeader}
         {pageBody}
       </div>
