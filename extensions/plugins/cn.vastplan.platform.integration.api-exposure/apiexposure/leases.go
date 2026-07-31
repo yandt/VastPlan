@@ -99,21 +99,27 @@ func (s *Service) RevokeEndpointLease(_ context.Context, caller RuntimeCaller, r
 func (s *Service) IssueTicket(_ context.Context, principal Principal, request TicketRequest) (TicketGrant, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	grant, _, err := s.issueTicketLocked(principal, request)
+	grant, _, err := s.issueTicketLocked(principal, request, apiv1.ModeTicketRedirect)
 	return grant, err
 }
 
 func (s *Service) IssueTicketInstallation(_ context.Context, principal Principal, request TicketRequest) (TicketGrant, TicketInstallation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.issueTicketLocked(principal, request)
+	return s.issueTicketLocked(principal, request, apiv1.ModeTicketRedirect)
 }
 
-func (s *Service) issueTicketLocked(principal Principal, request TicketRequest) (TicketGrant, TicketInstallation, error) {
+func (s *Service) IssuePrivateTicketInstallation(_ context.Context, principal Principal, request TicketRequest) (TicketGrant, TicketInstallation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.issueTicketLocked(principal, request, apiv1.ModePrivateDirect)
+}
+
+func (s *Service) issueTicketLocked(principal Principal, request TicketRequest, mode string) (TicketGrant, TicketInstallation, error) {
 	now := s.now().UTC()
 	s.pruneEphemeralLocked(now)
 	exposure, ok := s.activeDataPlaneLocked(principal.TenantID, request.DataPlaneExposureID)
-	if !ok || !hasAll(principal.Roles, exposure.RequiredPermissions) || !validTicketResource(request) {
+	if !ok || !slices.Contains(exposure.AllowedModes, mode) || !hasAll(principal.Roles, exposure.RequiredPermissions) || !validTicketResource(request) {
 		return TicketGrant{}, TicketInstallation{}, ErrForbidden
 	}
 	service, err := s.resolveDataPlaneService(exposure.Service)
@@ -123,7 +129,7 @@ func (s *Service) issueTicketLocked(principal Principal, request TicketRequest) 
 	candidates := make([]apiv1.EndpointLease, 0)
 	for id, lease := range s.leases {
 		owner := s.leaseOwners[id]
-		if lease.DataPlaneExposureID == exposure.ID && owner.TenantID == principal.TenantID && slices.Contains(lease.Modes, apiv1.ModeTicketRedirect) {
+		if lease.DataPlaneExposureID == exposure.ID && owner.TenantID == principal.TenantID && slices.Contains(lease.Modes, mode) {
 			candidates = append(candidates, lease)
 		}
 	}
@@ -140,7 +146,7 @@ func (s *Service) issueTicketLocked(principal Principal, request TicketRequest) 
 		return TicketGrant{}, TicketInstallation{}, err
 	}
 	expires := now.Add(30 * time.Second)
-	claims := TicketClaims{TenantID: principal.TenantID, PrincipalID: principal.ID, DataPlaneExposureID: exposure.ID, InstanceID: lease.InstanceID, Method: request.Method, Resource: request.Resource, ContentSHA256: request.ContentSHA256, ExpiresAt: expires}
+	claims := TicketClaims{TenantID: principal.TenantID, PrincipalID: principal.ID, Mode: mode, DataPlaneExposureID: exposure.ID, InstanceID: lease.InstanceID, Method: request.Method, Resource: request.Resource, ContentSHA256: request.ContentSHA256, ExpiresAt: expires}
 	s.tickets[token] = ticketRecord{Claims: claims, LeaseID: lease.LeaseID, PluginID: s.leaseOwners[lease.LeaseID].PluginID}
 	grant := TicketGrant{Endpoint: lease.Endpoint, LeaseID: lease.LeaseID, Ticket: token, ExpiresAt: expires}
 	installation := TicketInstallation{Target: *service.Service.TicketTarget, Ticket: token, Claims: claims}

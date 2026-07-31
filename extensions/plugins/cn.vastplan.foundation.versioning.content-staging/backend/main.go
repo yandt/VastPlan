@@ -24,13 +24,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("初始化 Version Content Staging: %v", err)
 	}
-	var tickets *uploadTicketStore
+	tickets := uploadTicketRegistry{}
+	var browserTickets, privateTickets *uploadTicketStore
 	if configuration.DataPlane != nil {
-		tickets = newUploadTicketStore(*configuration.DataPlane, service)
+		browserTickets = newUploadTicketStore(*configuration.DataPlane, service)
+		tickets[configuration.DataPlane.InstanceID] = browserTickets
+		privateTickets = newPrivateTicketStore(*configuration.DataPlane, service)
+		if privateTickets != nil {
+			tickets[configuration.DataPlane.Private.InstanceID] = privateTickets
+		}
 	}
-	transport, err := startUploadTransport(configuration.DataPlane, service, tickets)
+	transport, err := startUploadTransport(configuration.DataPlane, service, browserTickets)
 	if err != nil {
 		log.Fatalf("初始化 Content Upload 数据面: %v", err)
+	}
+	privateTransport, err := startPrivateUploadTransport(configuration.DataPlane, service, privateTickets)
+	if err != nil {
+		log.Fatalf("初始化 Content Upload Private 数据面: %v", err)
 	}
 	registrar := &uploadLeaseRegistrar{configuration: configuration.DataPlane}
 	service.SetControlObserver(registrar.ensure)
@@ -38,7 +48,7 @@ func main() {
 		<-ctx.Done()
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer shutdownCancel()
-		_ = transport.Shutdown(shutdownCtx)
+		_ = shutdownUploadTransports(shutdownCtx, transport, privateTransport)
 	}()
 	go service.RunReclaimer(ctx, reclaimInterval)
 	plugin := sdk.New(staging.PluginID, pluginVersion, map[string]string{"backend": "^0.1"})

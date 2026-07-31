@@ -100,7 +100,7 @@ func TestDataPlaneLeaseAndTicketAreBoundShortLivedAndSingleUse(t *testing.T) {
 	publisher := Principal{ID: "carol", TenantID: "tenant-a", Roles: []string{"platform.api-exposure.publish"}}
 	reference := testDataPlaneReference()
 	draft, err := service.CreateDataPlaneDraft(context.Background(), creator, CreateDataPlaneDraftRequest{Input: DataPlaneInput{
-		Hosts: []string{"artifacts.example.com"}, Service: reference, AllowedModes: []string{apiv1.ModeTicketRedirect},
+		Hosts: []string{"artifacts.example.com"}, Service: reference, AllowedModes: []string{apiv1.ModeTicketRedirect, apiv1.ModePrivateDirect},
 		AllowedEndpointOrigins: []string{"https://repository.internal:9443"}, TLSIdentityPrefix: "spiffe://vastplan/repository/",
 		Authentication: apiv1.AuthenticationPolicy{ProfileID: "auth.file"}, RequiredPermissions: []string{"platform.artifacts.read"}, MaxObjectBytes: 1 << 30,
 	}})
@@ -141,6 +141,11 @@ func TestDataPlaneLeaseAndTicketAreBoundShortLivedAndSingleUse(t *testing.T) {
 	if lease.ExpiresAt.Sub(lease.IssuedAt) != 2*time.Minute {
 		t.Fatalf("租期错误: %+v", lease)
 	}
+	if _, err := service.RegisterEndpointLease(context.Background(), caller, EndpointLeaseRequest{
+		DataPlaneExposureID: published.Exposure.ID, InstanceID: "repository-private-1", Endpoint: "https://repository.internal:9443", TLSIdentity: "spiffe://vastplan/repository/repository-private-1", Modes: []string{apiv1.ModePrivateDirect}, TTLSeconds: 120,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	grant, err := service.IssueTicket(context.Background(), Principal{ID: "reader", TenantID: "tenant-a", Roles: []string{"platform.artifacts.read"}}, TicketRequest{DataPlaneExposureID: published.Exposure.ID, Method: "GET", Resource: "/v1/artifacts/demo"})
 	if err != nil {
 		t.Fatal(err)
@@ -151,6 +156,10 @@ func TestDataPlaneLeaseAndTicketAreBoundShortLivedAndSingleUse(t *testing.T) {
 	}
 	if _, err := service.ConsumeTicket(context.Background(), caller, TicketConsumption{Ticket: grant.Ticket, InstanceID: "repository-1"}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("Ticket 必须单次消费: %v", err)
+	}
+	privateGrant, privateInstallation, err := service.IssuePrivateTicketInstallation(context.Background(), Principal{ID: "reader", TenantID: "tenant-a", Roles: []string{"platform.artifacts.read"}}, TicketRequest{DataPlaneExposureID: published.Exposure.ID, Method: "PUT", Resource: "/v1/uploads/stg_abcdefghijklmnop", ContentSHA256: strings.Repeat("d", 64)})
+	if err != nil || privateGrant.Endpoint != "https://repository.internal:9443" || privateInstallation.Claims.Mode != apiv1.ModePrivateDirect || privateInstallation.Claims.InstanceID != "repository-private-1" {
+		t.Fatalf("Private Direct Ticket 错误: grant=%+v installation=%+v err=%v", privateGrant, privateInstallation, err)
 	}
 	if _, err := service.RegisterEndpointLease(context.Background(), RuntimeCaller{PluginID: "cn.example.attacker", TenantID: "tenant-a"}, EndpointLeaseRequest{DataPlaneExposureID: published.Exposure.ID}); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("非拥有插件不得登记 Lease: %v", err)
@@ -257,7 +266,7 @@ func testContractCatalog() apiv1.ContractCatalog {
 	contract := apiv1.ContractContribution{ID: "management-api", ServiceRole: "backend", ContractID: "platform.demo.api", ContractVersion: "1.0.0", Protocol: apiv1.ProtocolHTTPJSON, Routes: []apiv1.RouteContract{{ID: "platform.demo.list", Method: "GET", Path: "/items", Target: apiv1.CapabilityTarget{Capability: "platform.demo", Operation: "list"}, RequestSchema: json.RawMessage(`{"type":"object"}`), ResponseSchema: json.RawMessage(`{"type":"object"}`), SuccessStatus: 200}}}
 	digest, _ := apiv1.ContractDigest(contract)
 	selector := testContractSelector()
-	return apiv1.ContractCatalog{SchemaVersion: apiv1.SchemaVersion, Generation: 1, Contracts: []apiv1.ResolvedContract{{Reference: apiv1.ContractReference{PluginID: selector.PluginID, ArtifactSHA256: selector.ArtifactSHA256, ContributionID: selector.ContributionID, ContractID: contract.ContractID, ContractVersion: contract.ContractVersion, ContractDigest: digest}, Contract: contract}}, DataPlaneServices: []apiv1.ResolvedDataPlaneService{{Reference: testDataPlaneReference(), Service: apiv1.DataPlaneServiceContribution{ID: "artifact-data", ServiceRole: "backend", Protocol: "https", Purposes: []string{"artifact-download"}, SupportedModes: []string{apiv1.ModeTicketRedirect}, HealthPath: "/healthz", MaxObjectBytes: 1 << 30, TicketTarget: &apiv1.CapabilityTarget{Capability: "platform.artifacts.repository", Operation: "installDataPlaneTicket"}}}}}
+	return apiv1.ContractCatalog{SchemaVersion: apiv1.SchemaVersion, Generation: 1, Contracts: []apiv1.ResolvedContract{{Reference: apiv1.ContractReference{PluginID: selector.PluginID, ArtifactSHA256: selector.ArtifactSHA256, ContributionID: selector.ContributionID, ContractID: contract.ContractID, ContractVersion: contract.ContractVersion, ContractDigest: digest}, Contract: contract}}, DataPlaneServices: []apiv1.ResolvedDataPlaneService{{Reference: testDataPlaneReference(), Service: apiv1.DataPlaneServiceContribution{ID: "artifact-data", ServiceRole: "backend", Protocol: "https", Purposes: []string{"artifact-download"}, SupportedModes: []string{apiv1.ModeTicketRedirect, apiv1.ModePrivateDirect}, HealthPath: "/healthz", MaxObjectBytes: 1 << 30, TicketTarget: &apiv1.CapabilityTarget{Capability: "platform.artifacts.repository", Operation: "installDataPlaneTicket"}}}}}
 }
 
 func testContractSelector() ContractSelector {

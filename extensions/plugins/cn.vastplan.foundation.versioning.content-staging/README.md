@@ -25,7 +25,7 @@
 
 P2.4d1 已把真实字节流接到浏览器：Node Portal Kernel 复用通用 `/api/d/{routeKey}/ticket` BFF，Content Staging 提供受 EndpointLease 管理的 HTTPS 流式入口。它不是普通 JSON API，也没有 `writeChunk`；Node 不代理文件内容。
 
-Backend/Runner 的 `private-direct` Host streaming SDK、对象存储 Provider、恶意内容/DLP 扫描和跨节点传输故障矩阵尚未实现。当前插件只声明 `ticket-redirect`，不得把内部 Go `io.Reader` 端口当成已完成的跨进程 SDK。
+P2.4d2 已提供携带可信用户委托的 Backend/Runner `private-direct` Go SDK 和独立 mTLS 入口。无用户委托的后台 workload grant、Node/Python SDK、对象存储 Provider、恶意内容/DLP 扫描和完整跨节点故障矩阵仍未实现；它们不能回退为静态共享 token。
 
 内置 `IntegrityAdmission` 会再次顺序读取暂存内容，并配合 Manager 完成大小、SHA-256、mediaType 声明和 tenant/Lease 校验；它不是恶意软件扫描器。要求内容扫描的生产环境必须等待或配置 P2.4d 的 Admission Provider，不能把完整性校验误称为安全扫描。
 
@@ -58,7 +58,14 @@ Backend/Runner 的 `private-direct` Host streaming SDK、对象存储 Provider�
     "allowedBrowserOrigins": ["https://portal.example.com"],
     "exposures": [
       { "tenantId": "tenant-a", "exposureId": "dpx_aaaaaaaaaaaaaaaaaaaa" }
-    ]
+    ],
+    "private": {
+      "listen": "127.0.0.1:9445",
+      "endpoint": "https://content-private.internal:9445",
+      "instanceId": "content-staging-private-1",
+      "tlsIdentity": "spiffe://vastplan/content/content-staging-private-1",
+      "clientIdentityPrefixes": ["spiffe://vastplan/backend/", "spiffe://vastplan/runner/"]
+    }
   }
 }
 ```
@@ -71,6 +78,8 @@ Backend/Runner 的 `private-direct` Host streaming SDK、对象存储 Provider�
 2. 通过 `VASTPLAN_CONTENT_UPLOAD_TLS_CERT` 与 `VASTPLAN_CONTENT_UPLOAD_TLS_KEY` 向受管进程提供证书和私钥路径；
 3. 保证 `endpoint` 是客户端可达且与 `listen` 对应的无路径 HTTPS origin；在 `exposures` 中为每个启用浏览器上传的 tenant 绑定其已发布且唯一的 Exposure ID，EndpointLease 按 tenant 独立注册和续租；
 4. 把实际 Portal origin 加入 `allowedBrowserOrigins`。只接受规范小写 HTTPS origin；本地开发仅允许 `localhost/127.0.0.1/[::1]` 使用 HTTP。未配置的 Origin 和额外预检 Header 均拒绝，禁止使用通配符 `*`。
+
+启用 `private` 后，还需通过 `VASTPLAN_CONTENT_UPLOAD_PRIVATE_TLS_CERT`、`VASTPLAN_CONTENT_UPLOAD_PRIVATE_TLS_KEY` 和 `VASTPLAN_CONTENT_UPLOAD_PRIVATE_CLIENT_CA` 配置服务证书、私钥与客户端 CA。Private 监听强制 TLS 1.3 mTLS，客户端证书 URI SAN 必须命中显式 SPIFFE 前缀；服务端证书校验、mTLS 身份和一次性 Ticket 任一失败都会拒绝上传。
 
 浏览器流程为：Workspace `beginContentUpload` → 同站 `POST /api/d/{routeKey}/ticket`（body 指定 `PUT`、`/v1/uploads/{uploadId}`、`contentSha256`）→ `PUT {endpoint}/v1/uploads/{uploadId}?vp_ticket=...` → Workspace `completeContentUpload`。Ticket URL 不得写日志、缓存或持久状态。
 

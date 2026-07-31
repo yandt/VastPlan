@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
+	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
-	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 )
 
@@ -72,7 +72,7 @@ func (i *assessmentLeaseIssuer) issue(callCtx *contractv1.CallContext, raw []byt
 	now := i.now().UTC()
 	expiresAt := now.Add(artifactassessment.ScanLeaseTTL)
 	claims := apiv1.DataPlaneTicketClaims{
-		TenantID: callCtx.GetTenantId(), PrincipalID: artifactassessment.AssessmentProviderPluginID,
+		TenantID: callCtx.GetTenantId(), PrincipalID: artifactassessment.AssessmentProviderPluginID, Mode: apiv1.ModeTicketRedirect,
 		DataPlaneExposureID: i.exposureID, InstanceID: i.tickets.instanceID, Method: http.MethodGet, Resource: resource, ExpiresAt: expiresAt,
 	}
 	if err := i.tickets.installClaims(ticket, claims); err != nil {

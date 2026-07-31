@@ -229,7 +229,14 @@ func databaseRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionReques
 }
 
 func apiExposureRuntimeAllowed(c *v1.CallContext, request extpoint.PermissionRequest) bool {
-	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN || c.GetCaller().GetId() == "" || request.Capability != "platform.api-exposure" {
+	if c.GetCaller().GetId() == "" || request.Capability != "platform.api-exposure" {
+		return false
+	}
+	if request.Operation == "issuePrivateDataPlaneTicket" {
+		kind := c.GetCaller().GetKind()
+		return c.GetPrincipal().GetUserId() != "" && (kind == v1.CallerKind_CALLER_KIND_PLUGIN || kind == v1.CallerKind_CALLER_KIND_RUNNER || kind == v1.CallerKind_CALLER_KIND_SYSTEM)
+	}
+	if c.GetCaller().GetKind() != v1.CallerKind_CALLER_KIND_PLUGIN {
 		return false
 	}
 	switch request.Operation {

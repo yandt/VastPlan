@@ -40,29 +40,35 @@ func (r *uploadLeaseRegistrar) ensure(ctx context.Context, host sdk.Host, call *
 	if r.leases == nil {
 		r.leases, r.lastErrors = map[string]apiv1.EndpointLease{}, map[string]string{}
 	}
-	lease := r.leases[tenantID]
+	r.ensureProfile(ctx, host, call, tenantID+"\x00"+r.configuration.InstanceID, exposureID, r.configuration.InstanceID, r.configuration.Endpoint, r.configuration.TLSIdentity, apiv1.ModeTicketRedirect)
+	if private := r.configuration.Private; private != nil {
+		r.ensureProfile(ctx, host, call, tenantID+"\x00"+private.InstanceID, exposureID, private.InstanceID, private.Endpoint, private.TLSIdentity, apiv1.ModePrivateDirect)
+	}
+}
+
+func (r *uploadLeaseRegistrar) ensureProfile(ctx context.Context, host sdk.Host, call *contractv1.CallContext, key, exposureID, instanceID, endpoint, identity, mode string) {
+	lease := r.leases[key]
 	if lease.LeaseID != "" && time.Until(lease.ExpiresAt) > 90*time.Second {
 		return
 	}
 	if lease.LeaseID != "" {
 		raw, _ := json.Marshal(apiv1.EndpointLeaseRenewal{LeaseID: lease.LeaseID, TTLSeconds: uploadEndpointLeaseTTL})
 		if renewed, err := callUploadEndpointLease(ctx, host, call, "renewEndpointLease", raw); err == nil {
-			r.leases[tenantID], r.lastErrors[tenantID] = renewed, ""
+			r.leases[key], r.lastErrors[key] = renewed, ""
 			return
 		}
-		delete(r.leases, tenantID)
+		delete(r.leases, key)
 	}
 	raw, _ := json.Marshal(apiv1.EndpointLeaseRegistration{
-		DataPlaneExposureID: exposureID, InstanceID: r.configuration.InstanceID,
-		Endpoint: r.configuration.Endpoint, TLSIdentity: r.configuration.TLSIdentity,
-		Modes: []string{apiv1.ModeTicketRedirect}, TTLSeconds: uploadEndpointLeaseTTL,
+		DataPlaneExposureID: exposureID, InstanceID: instanceID, Endpoint: endpoint, TLSIdentity: identity,
+		Modes: []string{mode}, TTLSeconds: uploadEndpointLeaseTTL,
 	})
 	lease, err := callUploadEndpointLease(ctx, host, call, "registerEndpointLease", raw)
 	if err != nil {
-		r.lastErrors[tenantID] = err.Error()
+		r.lastErrors[key] = err.Error()
 		return
 	}
-	r.leases[tenantID], r.lastErrors[tenantID] = lease, ""
+	r.leases[key], r.lastErrors[key] = lease, ""
 }
 
 func callUploadEndpointLease(ctx context.Context, host sdk.Host, call *contractv1.CallContext, operation string, payload []byte) (apiv1.EndpointLease, error) {

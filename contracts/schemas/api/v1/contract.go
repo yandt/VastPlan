@@ -198,6 +198,7 @@ type EndpointLeaseRevocation struct {
 type DataPlaneTicketClaims struct {
 	TenantID            string    `json:"tenantId"`
 	PrincipalID         string    `json:"principalId"`
+	Mode                string    `json:"mode"`
 	DataPlaneExposureID string    `json:"dataPlaneExposureId"`
 	InstanceID          string    `json:"instanceId"`
 	Method              string    `json:"method"`

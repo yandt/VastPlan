@@ -81,3 +81,9 @@ P2.4d 按传输入口、可信客户端直连、存储 Provider 和安全准入�
 上传入口固定为 `PUT /v1/uploads/{uploadId}?vp_ticket=...`。它要求 TLS，跨 Origin 浏览器只允许服务配置中的精确 Origin 白名单并以最小 `OPTIONS` 预检响应放行 `PUT/Content-Type`，不使用通配 CORS。入口按 Upload Lease 到期时间约束流持续时间，直接把请求体交给 Manager 的有界 `io.Reader` 单一写入边界，不设置会误杀大文件的固定 30 秒响应超时。声明 Content-Length 时必须精确等于 begin 中的 expectedSize；chunked 流超量会进入可审计 `Rejected/size_mismatch`。上传成功只表示字节流已接收，调用方仍必须通过 Workspace 执行 `completeContentUpload`，由既有摘要、大小与 Admission 流程决定 Ready。
 
 EndpointLease 在任一成功的可信 Staging 控制调用后注册或续租，并按显式 `tenant → Exposure` 绑定分别维护，不能让 leader 的首个租户垄断单一 Lease。未配置绑定或 API Exposure 不可用时，控制面上传 Lease 仍可建立，但 Ticket 签发失败关闭，不回退为公开静态 token 或绕过认证的端口。本阶段只声明 `ticket-redirect`，不谎称已支持 Backend/Runner 的 `private-direct`、对象存储 Provider、企业恶意内容/DLP 扫描或跨节点传输接管；这些属于 P2.4d2 之后的独立交付。
+
+## 实施记录：P2.4d2（2026-07-31）
+
+Backend/Runner 不复用浏览器 CORS 入口，也不把大字节塞入 Capability Bus 或共享 PluginHost 通道。API Exposure 新增受控 `issuePrivateDataPlaneTicket`：只接受 Plugin、Runner 或 System 工作负载，并强制同时携带可信 Principal；Exposure 权限、`private-direct` 模式和健康 EndpointLease 全部满足后，才向精确实例安装 30 秒一次性 Ticket。无用户委托的后台工作负载失败关闭，未来必须增加单独的 workload allowlist，不能自动继承用户权限。
+
+Content Staging 可选启动第二个 TLS 1.3 mTLS 监听，与浏览器监听使用不同 instance ID 和 EndpointLease。客户端证书必须由配置 CA 验证且 URI SAN 命中显式 SPIFFE 前缀；Ticket 还绑定 tenant、用户、模式、实例、方法、Upload ID 和摘要。Go `dataplane` SDK 只依赖最小 Capability Caller 接口，因此插件 Host、Backend 与 Runner 可共用；它负责申请 Private Grant、强制客户端 mTLS 并流式 PUT，不暴露静态共享 token。

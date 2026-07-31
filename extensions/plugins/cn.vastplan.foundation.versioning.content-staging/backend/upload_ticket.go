@@ -33,6 +33,7 @@ type uploadTicket struct {
 type uploadTicketStore struct {
 	mu         sync.Mutex
 	instanceID string
+	mode       string
 	exposures  map[string]string
 	service    *staging.Service
 	items      map[string]uploadTicket
@@ -40,11 +41,15 @@ type uploadTicketStore struct {
 }
 
 func newUploadTicketStore(configuration staging.DataPlaneConfiguration, service *staging.Service) *uploadTicketStore {
+	return newModeUploadTicketStore(configuration, configuration.InstanceID, apiv1.ModeTicketRedirect, service)
+}
+
+func newModeUploadTicketStore(configuration staging.DataPlaneConfiguration, instanceID, mode string, service *staging.Service) *uploadTicketStore {
 	exposures := make(map[string]string, len(configuration.Exposures))
 	for _, binding := range configuration.Exposures {
 		exposures[binding.TenantID] = binding.ExposureID
 	}
-	return &uploadTicketStore{instanceID: configuration.InstanceID, exposures: exposures, service: service, items: map[string]uploadTicket{}, now: time.Now}
+	return &uploadTicketStore{instanceID: instanceID, mode: mode, exposures: exposures, service: service, items: map[string]uploadTicket{}, now: time.Now}
 }
 
 func (s *uploadTicketStore) install(ctx context.Context, call *contractv1.CallContext, raw []byte) error {
@@ -62,7 +67,7 @@ func (s *uploadTicketStore) install(ctx context.Context, call *contractv1.CallCo
 	match := uploadResourcePattern.FindStringSubmatch(claims.Resource)
 	now := s.now().UTC()
 	exposureID, bound := s.exposures[claims.TenantID]
-	if !uploadTicketPattern.MatchString(installation.Ticket) || len(match) != 2 || !bound || claims.TenantID != call.GetTenantId() || claims.PrincipalID == "" || claims.DataPlaneExposureID != exposureID || claims.InstanceID != s.instanceID || claims.Method != http.MethodPut || !sha256Pattern.MatchString(claims.ContentSHA256) || !claims.ExpiresAt.After(now) || claims.ExpiresAt.Sub(now) > 35*time.Second {
+	if !uploadTicketPattern.MatchString(installation.Ticket) || len(match) != 2 || !bound || claims.TenantID != call.GetTenantId() || claims.PrincipalID == "" || claims.Mode != s.mode || claims.DataPlaneExposureID != exposureID || claims.InstanceID != s.instanceID || claims.Method != http.MethodPut || !sha256Pattern.MatchString(claims.ContentSHA256) || !claims.ExpiresAt.After(now) || claims.ExpiresAt.Sub(now) > 35*time.Second {
 		return errors.New("Content Upload Ticket 声明无效")
 	}
 	scope := staging.Scope{TenantID: claims.TenantID, ActorID: "user:" + claims.PrincipalID}

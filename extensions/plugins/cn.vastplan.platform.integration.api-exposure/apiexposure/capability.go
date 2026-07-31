@@ -10,10 +10,10 @@ import (
 	"strconv"
 	"strings"
 
-	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
 	contractv1 "cdsoft.com.cn/VastPlan/contracts/generated/go/contract/v1"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/errorcode"
 	"cdsoft.com.cn/VastPlan/contracts/runtime/go/extpoint"
+	apiv1 "cdsoft.com.cn/VastPlan/contracts/schemas/api/v1"
 	sdk "cdsoft.com.cn/VastPlan/extensions/sdk/go/plugin"
 )
 
@@ -22,7 +22,7 @@ var operations = []string{
 	"listDataPlanes", "createDataPlaneDraft", "submitDataPlane", "approveDataPlane", "publishDataPlane",
 	"retireDataPlane",
 	"registerEndpointLease", "renewEndpointLease", "revokeEndpointLease",
-	"issueDataPlaneTicket", "consumeDataPlaneTicket", "listAudit",
+	"issueDataPlaneTicket", "issuePrivateDataPlaneTicket", "consumeDataPlaneTicket", "listAudit",
 	"apiList", "apiCreateDraft", "apiUpdateDraft", "apiSubmit", "apiApprove", "apiPublish", "apiRetire",
 }
 
@@ -33,7 +33,13 @@ func Contribution(service *Service) sdk.Contribution {
 		handlers[operation] = func(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, payload []byte) (*contractv1.CallResult, []byte, error) {
 			var raw []byte
 			var err error
-			if runtimeOperation(operation) {
+			if operation == "issuePrivateDataPlaneTicket" {
+				principal, projectErr := projectPrivatePrincipal(callCtx)
+				if projectErr != nil {
+					return nil, nil, projectErr
+				}
+				raw, err = service.issueAndInstallPrivateTicket(ctx, host, callCtx, principal, payload)
+			} else if runtimeOperation(operation) {
 				caller, projectErr := projectRuntimeCaller(callCtx)
 				if projectErr != nil {
 					return nil, nil, projectErr
@@ -78,6 +84,22 @@ func (s *Service) issueAndInstallTicket(ctx context.Context, host sdk.Host, call
 	if err != nil {
 		return nil, err
 	}
+	return s.installIssuedTicket(ctx, host, callCtx, grant, installation)
+}
+
+func (s *Service) issueAndInstallPrivateTicket(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, principal Principal, payload []byte) ([]byte, error) {
+	var request TicketRequest
+	if err := decode(payload, &request); err != nil {
+		return nil, err
+	}
+	grant, installation, err := s.IssuePrivateTicketInstallation(ctx, principal, request)
+	if err != nil {
+		return nil, err
+	}
+	return s.installIssuedTicket(ctx, host, callCtx, grant, installation)
+}
+
+func (s *Service) installIssuedTicket(ctx context.Context, host sdk.Host, callCtx *contractv1.CallContext, grant TicketGrant, installation TicketInstallation) ([]byte, error) {
 	raw, err := json.Marshal(struct {
 		Ticket string       `json:"ticket"`
 		Claims TicketClaims `json:"claims"`
@@ -160,7 +182,7 @@ func Descriptor() []byte {
 		"list": "列出 HTTP API Exposure revisions", "createDraft": "创建 HTTP API Exposure 草稿", "updateDraft": "CAS 更新 HTTP API Exposure 草稿", "submit": "提交 HTTP API Exposure 审批", "approve": "审批 HTTP API Exposure", "publish": "发布 HTTP API Exposure", "retire": "退役 HTTP API Exposure",
 		"listDataPlanes": "列出 Data Plane Exposure revisions", "createDataPlaneDraft": "创建 Data Plane Exposure 草稿", "submitDataPlane": "提交 Data Plane Exposure 审批", "approveDataPlane": "审批 Data Plane Exposure", "publishDataPlane": "发布 Data Plane Exposure", "retireDataPlane": "退役 Data Plane Exposure",
 		"registerEndpointLease": "登记短时 Data Plane Endpoint Lease", "renewEndpointLease": "续租 Data Plane Endpoint", "revokeEndpointLease": "撤销 Data Plane Endpoint Lease",
-		"issueDataPlaneTicket": "签发一次性 Data Plane Ticket", "consumeDataPlaneTicket": "原子消费 Data Plane Ticket", "listAudit": "读取 API Exposure 审计",
+		"issueDataPlaneTicket": "签发一次性 Data Plane Ticket", "issuePrivateDataPlaneTicket": "为受信工作负载签发一次性 Private Data Plane Ticket", "consumeDataPlaneTicket": "原子消费 Data Plane Ticket", "listAudit": "读取 API Exposure 审计",
 		"apiList": "HTTP API 查询适配器", "apiCreateDraft": "HTTP API 创建草稿适配器", "apiUpdateDraft": "HTTP API 更新草稿适配器", "apiSubmit": "HTTP API 提交适配器", "apiApprove": "HTTP API 审批适配器", "apiPublish": "HTTP API 发布适配器", "apiRetire": "HTTP API 退役适配器",
 	}
 	subcommands := make([]map[string]string, 0, len(operations))
@@ -188,6 +210,18 @@ func projectRuntimeCaller(callCtx *contractv1.CallContext) (RuntimeCaller, error
 		return RuntimeCaller{}, errors.New("Endpoint Lease 只接受可信插件调用方")
 	}
 	return RuntimeCaller{PluginID: callCtx.Caller.Id, TenantID: callCtx.TenantId}, nil
+}
+
+func projectPrivatePrincipal(callCtx *contractv1.CallContext) (Principal, error) {
+	if callCtx == nil || callCtx.Caller == nil || callCtx.TenantId == "" || callCtx.Principal == nil || callCtx.Principal.UserId == "" {
+		return Principal{}, errors.New("Private Data Plane 必须携带可信工作负载与用户委托")
+	}
+	switch callCtx.Caller.Kind {
+	case contractv1.CallerKind_CALLER_KIND_PLUGIN, contractv1.CallerKind_CALLER_KIND_RUNNER, contractv1.CallerKind_CALLER_KIND_SYSTEM:
+	default:
+		return Principal{}, errors.New("Private Data Plane 只接受 Backend、Runner 或可信系统调用")
+	}
+	return projectPrincipal(callCtx)
 }
 
 func decode(raw []byte, target any) error {

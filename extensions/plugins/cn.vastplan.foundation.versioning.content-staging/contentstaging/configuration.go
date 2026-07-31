@@ -24,12 +24,21 @@ type StartupConfiguration struct {
 }
 
 type DataPlaneConfiguration struct {
-	Listen                string                     `json:"listen"`
-	Endpoint              string                     `json:"endpoint"`
-	InstanceID            string                     `json:"instanceId"`
-	TLSIdentity           string                     `json:"tlsIdentity"`
-	AllowedBrowserOrigins []string                   `json:"allowedBrowserOrigins,omitempty"`
-	Exposures             []DataPlaneExposureBinding `json:"exposures"`
+	Listen                string                         `json:"listen"`
+	Endpoint              string                         `json:"endpoint"`
+	InstanceID            string                         `json:"instanceId"`
+	TLSIdentity           string                         `json:"tlsIdentity"`
+	AllowedBrowserOrigins []string                       `json:"allowedBrowserOrigins,omitempty"`
+	Exposures             []DataPlaneExposureBinding     `json:"exposures"`
+	Private               *PrivateDataPlaneConfiguration `json:"private,omitempty"`
+}
+
+type PrivateDataPlaneConfiguration struct {
+	Listen                 string   `json:"listen"`
+	Endpoint               string   `json:"endpoint"`
+	InstanceID             string   `json:"instanceId"`
+	TLSIdentity            string   `json:"tlsIdentity"`
+	ClientIdentityPrefixes []string `json:"clientIdentityPrefixes"`
 }
 
 type DataPlaneExposureBinding struct {
@@ -80,6 +89,26 @@ func ValidateDataPlaneConfiguration(configuration *DataPlaneConfiguration) error
 			return errors.New("Content Upload 浏览器 Origin 白名单重复")
 		}
 		seen[origin] = struct{}{}
+	}
+	if configuration.Private != nil {
+		private := configuration.Private
+		endpoint, err := url.Parse(private.Endpoint)
+		if err != nil || endpoint.Scheme != "https" || endpoint.Host == "" || endpoint.User != nil || endpoint.Path != "" || endpoint.RawQuery != "" || endpoint.Fragment != "" || strings.TrimSpace(private.Listen) == "" || private.InstanceID == "" || private.InstanceID == configuration.InstanceID {
+			return errors.New("Content Upload Private 数据面配置无效")
+		}
+		identity, err := url.Parse(private.TLSIdentity)
+		if err != nil || identity.Scheme != "spiffe" || identity.Host == "" || identity.RawQuery != "" || identity.Fragment != "" {
+			return errors.New("Content Upload Private tlsIdentity 无效")
+		}
+		if len(private.ClientIdentityPrefixes) == 0 || len(private.ClientIdentityPrefixes) > 32 {
+			return errors.New("Content Upload Private 必须配置客户端 SPIFFE 前缀")
+		}
+		for _, prefix := range private.ClientIdentityPrefixes {
+			parsed, err := url.Parse(prefix)
+			if err != nil || parsed.Scheme != "spiffe" || parsed.Host == "" || !strings.HasSuffix(parsed.Path, "/") || parsed.RawQuery != "" || parsed.Fragment != "" {
+				return errors.New("Content Upload Private 客户端 SPIFFE 前缀无效")
+			}
+		}
 	}
 	return nil
 }

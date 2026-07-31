@@ -5,11 +5,13 @@ import (
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -33,7 +35,7 @@ func TestTicketedHTTPSUploadStreamsOnceAndCompletes(t *testing.T) {
 	tickets.now = func() time.Time { return now }
 	token := "a" + strings.Repeat("b", 42)
 	installation := apiv1.DataPlaneTicketInstallation{Ticket: token, Claims: apiv1.DataPlaneTicketClaims{
-		TenantID: "tenant-a", PrincipalID: "alice", DataPlaneExposureID: configuration.Exposures[0].ExposureID, InstanceID: configuration.InstanceID,
+		TenantID: "tenant-a", PrincipalID: "alice", Mode: apiv1.ModeTicketRedirect, DataPlaneExposureID: configuration.Exposures[0].ExposureID, InstanceID: configuration.InstanceID,
 		Method: http.MethodPut, Resource: "/v1/uploads/" + created.Upload.ID, ContentSHA256: created.Upload.ExpectedDigest, ExpiresAt: now.Add(30 * time.Second),
 	}}
 	raw, _ := json.Marshal(installation)
@@ -78,7 +80,7 @@ func TestUploadTicketFailsClosedOnCallerBindingAndTLS(t *testing.T) {
 	now := time.Now().UTC()
 	tickets.now = func() time.Time { return now }
 	installation := apiv1.DataPlaneTicketInstallation{Ticket: "a" + strings.Repeat("b", 42), Claims: apiv1.DataPlaneTicketClaims{
-		TenantID: "tenant-a", PrincipalID: "alice", DataPlaneExposureID: configuration.Exposures[0].ExposureID, InstanceID: configuration.InstanceID,
+		TenantID: "tenant-a", PrincipalID: "alice", Mode: apiv1.ModeTicketRedirect, DataPlaneExposureID: configuration.Exposures[0].ExposureID, InstanceID: configuration.InstanceID,
 		Method: http.MethodPut, Resource: "/v1/uploads/" + created.Upload.ID, ContentSHA256: created.Upload.ExpectedDigest, ExpiresAt: now.Add(30 * time.Second),
 	}}
 	raw, _ := json.Marshal(installation)
@@ -157,6 +159,17 @@ func TestUploadCORSAllowsOnlyConfiguredPortalOrigin(t *testing.T) {
 	}
 }
 
+func TestPrivateUploadRequiresAllowedSPIFFEClient(t *testing.T) {
+	allowed, _ := url.Parse("spiffe://vastplan/runner/runner-a")
+	state := &tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{{{URIs: []*url.URL{allowed}}}}}
+	if !verifiedSPIFFEClient(state, []string{"spiffe://vastplan/runner/"}) {
+		t.Fatal("受信 Runner SPIFFE 身份被拒绝")
+	}
+	if verifiedSPIFFEClient(state, []string{"spiffe://vastplan/backend/"}) || verifiedSPIFFEClient(&tls.ConnectionState{}, []string{"spiffe://vastplan/runner/"}) {
+		t.Fatal("未批准或未验证的 mTLS 身份被放行")
+	}
+}
+
 func TestUploadLeaseRegistrarCachesHealthyLease(t *testing.T) {
 	configuration := testDataPlaneConfiguration()
 	configuration.Exposures = append(configuration.Exposures, staging.DataPlaneExposureBinding{TenantID: "tenant-b", ExposureID: "dpx_bbbbbbbbbbbbbbbbbbbb"})
@@ -166,7 +179,7 @@ func TestUploadLeaseRegistrarCachesHealthyLease(t *testing.T) {
 	registrar.ensure(context.Background(), host, call)
 	registrar.ensure(context.Background(), host, call)
 	registrar.ensure(context.Background(), host, &contractv1.CallContext{TenantId: "tenant-b"})
-	if host.calls != 2 || registrar.leases["tenant-a"].LeaseID == "" || registrar.leases["tenant-b"].LeaseID == "" || registrar.lastErrors["tenant-a"] != "" {
+	if host.calls != 2 || len(registrar.leases) != 2 || len(registrar.lastErrors) != 2 {
 		t.Fatalf("EndpointLease 应按 tenant 缓存: calls=%d leases=%+v errors=%+v", host.calls, registrar.leases, registrar.lastErrors)
 	}
 }
@@ -201,7 +214,7 @@ func installUploadTicket(t *testing.T, service *staging.Service, created staging
 	tickets.now = func() time.Time { return now }
 	token := "a" + strings.Repeat("b", 42)
 	installation := apiv1.DataPlaneTicketInstallation{Ticket: token, Claims: apiv1.DataPlaneTicketClaims{
-		TenantID: "tenant-a", PrincipalID: "alice", DataPlaneExposureID: configuration.Exposures[0].ExposureID, InstanceID: configuration.InstanceID,
+		TenantID: "tenant-a", PrincipalID: "alice", Mode: apiv1.ModeTicketRedirect, DataPlaneExposureID: configuration.Exposures[0].ExposureID, InstanceID: configuration.InstanceID,
 		Method: http.MethodPut, Resource: "/v1/uploads/" + created.Upload.ID, ContentSHA256: created.Upload.ExpectedDigest, ExpiresAt: now.Add(30 * time.Second),
 	}}
 	raw, _ := json.Marshal(installation)

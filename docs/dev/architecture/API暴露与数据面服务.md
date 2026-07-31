@@ -87,7 +87,9 @@ Endpoint 不得携带 userinfo、query 或 fragment，并且其 HTTPS origin 与
 
 Portal 对 Ticket 请求先执行 Host、tenant、认证 Profile、权限、CSRF 和有界 JSON 校验，再调用 API Exposure leader。控制面选择带 `ticket-redirect` 模式的有效 Lease，并通过当前可信委托主动调用清单声明的 `ticketTarget`，把 30 秒一次性 Ticket 安装到精确数据面实例；安装失败会撤销 Ticket。随后客户端携带 `vp_ticket` 访问数据面，Ticket 在数据面本地按租户、主体、实例、方法与资源原子消费一次。这样不会要求独立 HTTP 数据面从公网请求反向伪造插件 CallContext。
 
-Version Content Staging 是第二个正式消费者。浏览器先通过上述同站入口申请绑定 `PUT /v1/uploads/{uploadId}` 和 `contentSha256` 的 Ticket，再把请求体直接流向 Content Staging HTTPS 实例；数据面消费 Ticket 后仍复核 Upload Lease 所有者、摘要、声明大小和 Lease 到期时间。接收字节与完成上传是两个显式步骤，数据面不代替 Workspace 执行 `completeContentUpload`。当前只启用 `ticket-redirect`；Backend/Runner 的受信直连必须等 `private-direct` streaming SDK 完成后再声明。
+Version Content Staging 是第二个正式消费者。浏览器先通过上述同站入口申请绑定 `PUT /v1/uploads/{uploadId}` 和 `contentSha256` 的 Ticket，再把请求体直接流向 Content Staging HTTPS 实例；数据面消费 Ticket 后仍复核 Upload Lease 所有者、摘要、声明大小和 Lease 到期时间。接收字节与完成上传是两个显式步骤，数据面不代替 Workspace 执行 `completeContentUpload`。P2.4d2 另为携带可信用户委托的 Backend/Runner 启用 `private-direct`。
+
+`private-direct` 不等于静态内网 token。当前 Version Content Staging 首个实现要求 TLS 1.3 mTLS、经 CA 验证的 SPIFFE 客户端身份以及 API Exposure 安装的一次性资源 Ticket；只支持携带可信用户委托的 Backend/Runner。后台 workload 必须等 Exposure 增加独立 allowlist 后再开放。
 
 ## 6. 发布与演进
 
