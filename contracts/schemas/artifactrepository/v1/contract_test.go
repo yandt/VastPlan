@@ -89,8 +89,44 @@ func TestProtocolCapabilitiesCannotDriftAcrossModes(t *testing.T) {
 	if !Supports(ProtocolLocalTest, OperationExpireWorkspace) || Supports(ProtocolRemote, OperationExpireWorkspace) {
 		t.Fatal("workspace 生命周期只能属于 local-test 协议")
 	}
+	if !Supports(ProtocolLocalTest, OperationImportExact) || Supports(ProtocolRemote, OperationImportExact) {
+		t.Fatal("精确导入只能属于 Local Plugin Library")
+	}
 	if Supports(ProtocolLocalTest, OperationPromote) || !Supports(ProtocolRemote, OperationPromote) {
 		t.Fatal("正式晋级只能属于 remote 协议")
+	}
+}
+
+func TestLocalLibraryCanReadImportedStableButCannotPublishItDirectly(t *testing.T) {
+	profile, err := ValidateProfile(Profile{
+		Version: ProfileVersion, ID: "local-testing", Protocol: ProtocolLocalTest,
+		Endpoint: "unix:///tmp/vastplan/repository.sock", Channels: []string{"stable", "testing"}, DevelopmentOnly: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := pluginv1.ArtifactRef{PluginID: "cn.example.plugin", Version: "1.0.0", Channel: "stable"}
+	if err := ValidateRef(profile, ref); err != nil {
+		t.Fatalf("导入的 stable 应可被本地库读取: %v", err)
+	}
+	if err := ValidatePublishRef(profile, ref); err == nil {
+		t.Fatal("local-test 普通发布不得创建 stable")
+	}
+}
+
+func TestImportRecordBindsRemoteSourceAndLocalDestination(t *testing.T) {
+	local, _ := ValidateProfile(Profile{Version: 1, ID: "local", Protocol: ProtocolLocalTest, Endpoint: "unix:///tmp/local.sock", Channels: []string{"stable", "testing"}, DevelopmentOnly: true})
+	remote, _ := ValidateProfile(Profile{Version: 1, ID: "remote", Protocol: ProtocolRemote, Endpoint: "https://repo.example", Channels: []string{"stable", "testing"}})
+	ref := pluginv1.ArtifactRef{PluginID: "cn.example.plugin", Version: "1.0.0", Channel: "stable"}
+	source := Receipt{SchemaVersion: 1, RepositoryID: remote.ID, Protocol: remote.Protocol, ProfileDigest: remote.Digest(), Ref: ref, SHA256: strings.Repeat("a", 64), Revision: 7}
+	destination := Receipt{SchemaVersion: 1, RepositoryID: local.ID, Protocol: local.Protocol, ProfileDigest: local.Digest(), Ref: ref, SHA256: source.SHA256, Revision: 11}
+	record := ImportRecord{SchemaVersion: 1, Source: source, Destination: destination, ImportedAt: time.Now().UTC()}
+	if err := ValidateImportRecord(remote, local, record); err != nil {
+		t.Fatal(err)
+	}
+	record.Destination.SHA256 = strings.Repeat("b", 64)
+	if err := ValidateImportRecord(remote, local, record); err == nil {
+		t.Fatal("导入不得改变远端摘要")
 	}
 }
 

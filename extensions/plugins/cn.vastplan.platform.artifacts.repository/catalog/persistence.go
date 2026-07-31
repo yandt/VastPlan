@@ -40,6 +40,7 @@ func (s *Store) rebuild() error {
 			}
 			entry.RepositoryRevision = prior.RepositoryRevision
 			entry.PublishedAt = prior.PublishedAt
+			entry.ImportSource = cloneReceipt(prior.ImportSource)
 			applyLifecycle(&entry, lifecycleAt(s.lifecycle[key], s.revision))
 			s.entries[key] = entry
 			continue
@@ -107,13 +108,14 @@ func (s *Store) loadJournal() error {
 		s.revision = revision
 		s.events = append(s.events, event)
 		switch event.Type {
-		case "artifact.published":
+		case "artifact.published", "artifact.imported":
 			if _, duplicate := s.entries[key]; duplicate {
 				return fmt.Errorf("发布流水账重复引用: %s", key)
 			}
 			s.entries[key] = Entry{
 				Ref: event.Ref, SHA256: event.SHA256, Size: event.Size, Publisher: event.Publisher, KeyID: event.KeyID,
 				SignedAt: event.SignedAt, PublishedAt: event.OccurredAt, RepositoryRevision: event.Revision, LifecycleStatus: LifecycleActive,
+				ImportSource: cloneReceipt(event.ImportSource),
 			}
 		case "artifact.lifecycle":
 			entry, exists := s.entries[key]

@@ -34,6 +34,7 @@ const (
 	OperationReadExact       = "readExact"
 	OperationPublish         = "publish"
 	OperationCatalogSnapshot = "catalogSnapshot"
+	OperationImportExact     = "importExact"
 	OperationExpireWorkspace = "expireWorkspace"
 	OperationJournal         = "journal"
 	OperationResolveLock     = "resolveLock"
@@ -46,7 +47,7 @@ const (
 
 var protocolOperations = map[string][]string{
 	ProtocolLocalTest: {
-		OperationReadExact, OperationPublish, OperationCatalogSnapshot, OperationExpireWorkspace,
+		OperationReadExact, OperationPublish, OperationCatalogSnapshot, OperationImportExact, OperationExpireWorkspace,
 	},
 	ProtocolRemote: {
 		OperationReadExact, OperationPublish, OperationCatalogSnapshot, OperationJournal,
@@ -94,6 +95,17 @@ type CatalogSnapshot struct {
 	ProfileDigest string    `json:"profileDigest"`
 	Revision      uint64    `json:"revision"`
 	Items         []Receipt `json:"items"`
+}
+
+// ImportRecord proves that one exact artifact was copied from a governed
+// remote Catalog into a Local Plugin Library without changing its publisher,
+// channel or content identity. The destination receipt is a local inventory
+// fact; it never replaces the source publisher proof carried by the artifact.
+type ImportRecord struct {
+	SchemaVersion int       `json:"schemaVersion"`
+	Source        Receipt   `json:"source"`
+	Destination   Receipt   `json:"destination"`
+	ImportedAt    time.Time `json:"importedAt"`
 }
 
 type ExpireWorkspaceResult struct {
@@ -219,7 +231,7 @@ func ValidateReceiptShape(receipt Receipt) error {
 	if receipt.SchemaVersion != ProfileVersion || !validResourceID(receipt.RepositoryID) || len(protocolOperations[receipt.Protocol]) == 0 || !commonv1.IsSHA256(receipt.ProfileDigest) || !validPluginID(receipt.Ref.PluginID) || !validSemver(receipt.Ref.Version) || !commonv1.IsSHA256(receipt.SHA256) || receipt.Revision == 0 {
 		return errors.New("制品仓库回执基础字段无效")
 	}
-	allowedChannel := receipt.Ref.Channel == "testing" || receipt.Protocol == ProtocolRemote && (receipt.Ref.Channel == "candidate" || receipt.Ref.Channel == "stable") || receipt.Protocol == ProtocolLocalTest && receipt.Ref.Channel == "workspace"
+	allowedChannel := receipt.Ref.Channel == "testing" || receipt.Ref.Channel == "candidate" || receipt.Ref.Channel == "stable" || receipt.Protocol == ProtocolLocalTest && receipt.Ref.Channel == "workspace"
 	if !allowedChannel {
 		return errors.New("制品仓库回执 channel 与协议不匹配")
 	}
@@ -229,6 +241,47 @@ func ValidateReceiptShape(receipt Receipt) error {
 		}
 	} else if receipt.WorkspaceLease != "" || receipt.ExpiresAt != nil {
 		return errors.New("非 workspace 回执不得携带 workspace lease")
+	}
+	return nil
+}
+
+// ValidatePublishRef applies the writable-channel boundary. A local library
+// may expose imported candidate/stable artifacts for discovery and reads, but
+// its ordinary development publisher can only create testing/workspace refs.
+func ValidatePublishRef(profile Profile, ref pluginv1.ArtifactRef) error {
+	profile, err := ValidateProfile(profile)
+	if err != nil {
+		return err
+	}
+	if err := ValidateRef(profile, ref); err != nil {
+		return err
+	}
+	if profile.Protocol == ProtocolLocalTest && ref.Channel != "testing" && ref.Channel != "workspace" {
+		return errors.New("local-test 普通发布只允许 testing/workspace channel")
+	}
+	return nil
+}
+
+func ValidateImportRecord(sourceProfile, destinationProfile Profile, record ImportRecord) error {
+	sourceProfile, err := ValidateProfile(sourceProfile)
+	if err != nil {
+		return err
+	}
+	destinationProfile, err = ValidateProfile(destinationProfile)
+	if err != nil {
+		return err
+	}
+	if sourceProfile.Protocol != ProtocolRemote || destinationProfile.Protocol != ProtocolLocalTest || record.SchemaVersion != ProfileVersion || record.ImportedAt.IsZero() {
+		return errors.New("插件导入记录的协议或基础字段无效")
+	}
+	if err := ValidateReceipt(sourceProfile, record.Source); err != nil {
+		return fmt.Errorf("插件导入源回执无效: %w", err)
+	}
+	if err := ValidateReceipt(destinationProfile, record.Destination); err != nil {
+		return fmt.Errorf("插件导入目标回执无效: %w", err)
+	}
+	if record.Source.Ref != record.Destination.Ref || record.Source.SHA256 != record.Destination.SHA256 || record.Source.Ref.Channel == "workspace" {
+		return errors.New("插件导入没有保持精确 ref 与摘要")
 	}
 	return nil
 }
@@ -283,7 +336,7 @@ func validateChannels(protocol string, input []string) ([]string, error) {
 	if len(input) == 0 || len(input) > 8 {
 		return nil, errors.New("制品仓库 channels 数量无效")
 	}
-	allowed := map[string]bool{"testing": true, "candidate": protocol == ProtocolRemote, "stable": protocol == ProtocolRemote, "workspace": protocol == ProtocolLocalTest}
+	allowed := map[string]bool{"testing": true, "candidate": true, "stable": true, "workspace": protocol == ProtocolLocalTest}
 	channels := append([]string(nil), input...)
 	if !sort.StringsAreSorted(channels) {
 		return nil, errors.New("制品仓库 channels 必须按字典序排列")

@@ -88,3 +88,7 @@ Renderer、Shell Library、Runtime Provider、数据库 Provider、认证/授权
 - 本地开发和生产使用同一消费链，只在来源与 ActivationPolicy 上不同；
 - Local Plugin Library 成为可由源码、远端和 Bundle 扩充的本地安装事实源；
 - 代价是需要引入可恢复的撤销、来源追踪和跨内核调和契约，并逐步移除现有 Foundation 生成目录。
+
+## 实施记录
+
+- 2026-08-01（P1）：local-test Profile 可把 `candidate/stable` 作为只读/导入 channel，但普通发布仍由独立校验限制为 `workspace/testing`。新增 remote HTTPS Adapter/Resolver、Remote → Local Artifact Lock 同步器、Unix Socket 导入操作和 `platform-dev.sh plugin-library install`；安装先锁定远端 Catalog revision，再逐项下载完整依赖闭包，由共享契约校验锁的根、SemVer、闭包与依赖环，并由本地信任根复验证明、摘要、来源和安全状态。安全准入/复扫引用的原始报告先按摘要同步到本地私有归档，之后才允许制品入库。Catalog 以 `artifact.imported` Journal 事件持久保存上游 Receipt。相同远端来源幂等，跨来源、Catalog/Lock/Object 漂移、yanked/revoked 和直接本地 stable 发布均拒绝。导入不修改 Deployment 或 Portal Activation。

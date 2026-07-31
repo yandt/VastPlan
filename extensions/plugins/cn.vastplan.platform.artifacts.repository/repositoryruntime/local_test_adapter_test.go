@@ -8,7 +8,9 @@ import (
 	"time"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
+	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 )
 
 func TestLocalTestAdapterUsesManagedRepositoryAndBoundReceipts(t *testing.T) {
@@ -47,6 +49,56 @@ func TestLocalTestAdapterUsesManagedRepositoryAndBoundReceipts(t *testing.T) {
 	}
 	if _, err := adapter.Publish(context.Background(), artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof, SecurityStatusChain: []byte(`[]`)}); err == nil {
 		t.Fatal("发布路径不得覆盖追加式 security status chain")
+	}
+}
+
+func TestLocalPluginLibraryImportsRemoteStableWithoutAllowingDirectStablePublish(t *testing.T) {
+	volume, _ := migrationVolumes(t, "repository.local-library")
+	trust, privateKey := migrationTrust(t)
+	manager, err := Open(volume, trust, filepath.Join(t.TempDir(), "state", "migration.json"), Options{SupplyChain: SupplyChainPolicy{RequiredSBOMChannels: []string{}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	local, _ := artifactrepositoryv1.ValidateProfile(artifactrepositoryv1.Profile{
+		Version: 1, ID: "local-testing", Protocol: artifactrepositoryv1.ProtocolLocalTest,
+		Endpoint: "unix:///tmp/vastplan-local-test.sock", Channels: []string{"stable", "testing"}, DevelopmentOnly: true,
+	})
+	remote, _ := artifactrepositoryv1.ValidateProfile(artifactrepositoryv1.Profile{
+		Version: 1, ID: "enterprise", Protocol: artifactrepositoryv1.ProtocolRemote,
+		Endpoint: "https://repo.example", Channels: []string{"stable", "testing"},
+	})
+	adapter, err := NewLocalTestAdapter(local, manager)
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, proof, packageBytes := migrationArtifactForChannel(t, privateKey, "12.0.0", "stable")
+	ref := pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+	source := artifactrepositoryv1.Receipt{
+		SchemaVersion: 1, RepositoryID: remote.ID, Protocol: remote.Protocol, ProfileDigest: remote.Digest(),
+		Ref: ref, SHA256: artifact.SHA256, Revision: 7,
+	}
+	envelope := artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof}
+	record, err := adapter.ImportExact(context.Background(), remote, source, envelope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.Source != source || record.Destination.Ref != ref || record.Destination.SHA256 != artifact.SHA256 {
+		t.Fatalf("导入记录没有保持远端身份: %+v", record)
+	}
+	if _, err := adapter.Publish(context.Background(), envelope); err == nil {
+		t.Fatal("普通 local-test 发布不得创建 stable")
+	}
+	read, err := adapter.ReadExact(context.Background(), ref)
+	if err != nil || read.Artifact.SHA256 != artifact.SHA256 {
+		t.Fatalf("本地插件库不能读取已导入 stable: %v", err)
+	}
+	page := manager.Query(catalog.Query{PluginID: ref.PluginID, Version: ref.Version, Channel: ref.Channel, Page: 1, PageSize: 2})
+	if len(page.Items) != 1 || page.Items[0].ImportSource == nil || *page.Items[0].ImportSource != source {
+		t.Fatalf("Catalog 没有保存远端导入来源: %+v", page.Items)
+	}
+	repeated, err := adapter.ImportExact(context.Background(), remote, source, envelope)
+	if err != nil || repeated.Destination.Revision != record.Destination.Revision {
+		t.Fatalf("相同远端精确制品导入必须幂等: record=%+v err=%v", repeated, err)
 	}
 }
 

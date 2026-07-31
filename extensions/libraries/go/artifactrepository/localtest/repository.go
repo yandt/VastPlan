@@ -32,6 +32,16 @@ type WorkspaceRepository interface {
 	ExpireWorkspace(context.Context) (artifactrepositoryv1.ExpireWorkspaceResult, error)
 }
 
+type ImportRepository interface {
+	Repository
+	ImportExact(context.Context, artifactrepositoryv1.Profile, artifactrepositoryv1.Receipt, artifacttrust.Envelope) (artifactrepositoryv1.ImportRecord, error)
+}
+
+type AssessmentReportImportRepository interface {
+	Repository
+	PutAssessmentReport(context.Context, string, []byte) error
+}
+
 func validateBinding(profile artifactrepositoryv1.Profile, token string) (artifactrepositoryv1.Profile, error) {
 	profile, err := artifactrepositoryv1.ValidateProfile(profile)
 	if err != nil {

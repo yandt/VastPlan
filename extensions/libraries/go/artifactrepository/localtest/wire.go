@@ -78,12 +78,22 @@ func readEnvelope(body io.Reader, contentType string) (artifacttrust.Envelope, e
 	if err != nil || !strings.EqualFold(mediaType, "multipart/form-data") || parameters["boundary"] == "" {
 		return artifacttrust.Envelope{}, errors.New("local-test Envelope 必须使用 multipart/form-data")
 	}
-	reader := multipart.NewReader(body, parameters["boundary"])
+	values, err := readMultipartValues(multipart.NewReader(body, parameters["boundary"]), nil)
+	if err != nil {
+		return artifacttrust.Envelope{}, err
+	}
+	return envelopeFromValues(values)
+}
+
+func readMultipartValues(reader *multipart.Reader, extraLimits map[string]int64) (map[string][]byte, error) {
 	values := map[string][]byte{}
 	limits := map[string]int64{
 		"artifact": maxMetadataBytes, "package": MaxPackageBytes, "proof": maxProofBytes,
 		"provenance": maxProvenanceBytes, "provenance-verification": maxVerificationBytes,
 		"security-admission": maxAdmissionBytes, "security-status-chain": maxStatusBytes,
+	}
+	for name, limit := range extraLimits {
+		limits[name] = limit
 	}
 	for {
 		part, partErr := reader.NextPart()
@@ -91,21 +101,25 @@ func readEnvelope(body io.Reader, contentType string) (artifacttrust.Envelope, e
 			break
 		}
 		if partErr != nil {
-			return artifacttrust.Envelope{}, fmt.Errorf("读取 local-test multipart: %w", partErr)
+			return nil, fmt.Errorf("读取 local-test multipart: %w", partErr)
 		}
 		name := part.FormName()
 		limit, known := limits[name]
 		if !known || values[name] != nil {
 			_ = part.Close()
-			return artifacttrust.Envelope{}, fmt.Errorf("local-test multipart 字段未知或重复: %q", name)
+			return nil, fmt.Errorf("local-test multipart 字段未知或重复: %q", name)
 		}
 		value, readErr := readLimited(part, limit)
 		_ = part.Close()
 		if readErr != nil {
-			return artifacttrust.Envelope{}, readErr
+			return nil, readErr
 		}
 		values[name] = value
 	}
+	return values, nil
+}
+
+func envelopeFromValues(values map[string][]byte) (artifacttrust.Envelope, error) {
 	if len(values["artifact"]) == 0 || len(values["package"]) == 0 || len(values["proof"]) == 0 {
 		return artifacttrust.Envelope{}, errors.New("local-test Envelope 缺少 artifact、package 或 proof")
 	}
@@ -160,6 +174,13 @@ func validateEnvelopeForProfile(profile artifactrepositoryv1.Profile, envelope a
 	return artifactrepositoryv1.ValidateRef(profile, exactRef(envelope))
 }
 
+func validatePublishEnvelopeForProfile(profile artifactrepositoryv1.Profile, envelope artifacttrust.Envelope) error {
+	if err := validateEnvelopeForProfile(profile, envelope); err != nil {
+		return err
+	}
+	return artifactrepositoryv1.ValidatePublishRef(profile, exactRef(envelope))
+}
+
 func readLimited(reader io.Reader, limit int64) ([]byte, error) {
 	value, err := io.ReadAll(io.LimitReader(reader, limit+1))
 	if err != nil {
@@ -174,6 +195,8 @@ func readLimited(reader io.Reader, limit int64) ([]byte, error) {
 func maxRequestBytes() int64 {
 	return MaxPackageBytes + maxMetadataBytes + maxProofBytes + maxProvenanceBytes + maxVerificationBytes + maxAdmissionBytes + maxStatusBytes + maxMultipartOverhead
 }
+
+func maxImportRequestBytes() int64 { return maxRequestBytes() + 2*maxImportBindingBytes }
 
 func exactRef(envelope artifacttrust.Envelope) pluginv1.ArtifactRef {
 	return pluginv1.ArtifactRef{PluginID: envelope.Artifact.PluginID, Version: envelope.Artifact.Version, Channel: envelope.Artifact.Channel}

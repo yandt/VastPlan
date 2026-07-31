@@ -1,7 +1,9 @@
 package localtest
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +14,9 @@ import (
 	"strings"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
+	commonv1 "cdsoft.com.cn/VastPlan/contracts/schemas/common/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactreport"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 )
 
@@ -54,6 +58,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	switch {
 	case req.Method == http.MethodPost && req.URL.Path == "/v1/artifacts":
 		s.publish(w, req)
+	case req.Method == http.MethodPost && req.URL.Path == "/v1/imports":
+		s.importExact(w, req)
+	case req.Method == http.MethodPut && strings.HasPrefix(req.URL.Path, "/v1/imports/assessment-reports/"):
+		s.importAssessmentReport(w, req)
 	case req.Method == http.MethodGet && req.URL.Path == "/v1/catalog":
 		s.catalog(w, req)
 	case req.Method == http.MethodPost && req.URL.Path == "/v1/workspace/expire":
@@ -65,6 +73,60 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
+func (s *Server) importAssessmentReport(w http.ResponseWriter, req *http.Request) {
+	repository, ok := s.repository.(AssessmentReportImportRepository)
+	if !ok {
+		http.NotFound(w, req)
+		return
+	}
+	const prefix = "/v1/imports/assessment-reports/"
+	digest := strings.TrimPrefix(req.URL.Path, prefix)
+	if !commonv1.IsSHA256(digest) || strings.TrimSpace(strings.Split(req.Header.Get("Content-Type"), ";")[0]) != "application/json" {
+		http.Error(w, "invalid assessment report", http.StatusBadRequest)
+		return
+	}
+	limited := http.MaxBytesReader(w, req.Body, artifactreport.MaxBytes)
+	raw, err := io.ReadAll(limited)
+	actual := sha256.Sum256(raw)
+	if err != nil || len(raw) == 0 || hex.EncodeToString(actual[:]) != digest {
+		http.Error(w, "invalid assessment report", http.StatusBadRequest)
+		return
+	}
+	if err := repository.PutAssessmentReport(req.Context(), digest, raw); err != nil {
+		http.Error(w, "assessment report import rejected", http.StatusUnprocessableEntity)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) importExact(w http.ResponseWriter, req *http.Request) {
+	repository, ok := s.repository.(ImportRepository)
+	if !ok {
+		http.NotFound(w, req)
+		return
+	}
+	limited := http.MaxBytesReader(w, req.Body, maxImportRequestBytes())
+	sourceProfile, sourceReceipt, envelope, err := readImport(limited, req.Header.Get("Content-Type"))
+	if err != nil {
+		http.Error(w, "invalid import envelope", http.StatusBadRequest)
+		return
+	}
+	if err := validateEnvelopeForProfile(s.profile, envelope); err != nil {
+		http.Error(w, "artifact rejected by local library profile", http.StatusUnprocessableEntity)
+		return
+	}
+	record, err := repository.ImportExact(req.Context(), sourceProfile, sourceReceipt, envelope)
+	if err != nil {
+		http.Error(w, "artifact import rejected", http.StatusUnprocessableEntity)
+		return
+	}
+	if err := artifactrepositoryv1.ValidateImportRecord(sourceProfile, s.profile, record); err != nil {
+		http.Error(w, "repository returned invalid import record", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusCreated, record)
+}
+
 func (s *Server) publish(w http.ResponseWriter, req *http.Request) {
 	limited := http.MaxBytesReader(w, req.Body, maxRequestBytes())
 	envelope, err := readEnvelope(limited, req.Header.Get("Content-Type"))
@@ -72,7 +134,7 @@ func (s *Server) publish(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "invalid artifact envelope", http.StatusBadRequest)
 		return
 	}
-	if err := validateEnvelopeForProfile(s.profile, envelope); err != nil {
+	if err := validatePublishEnvelopeForProfile(s.profile, envelope); err != nil {
 		http.Error(w, "artifact rejected by repository profile", http.StatusUnprocessableEntity)
 		return
 	}

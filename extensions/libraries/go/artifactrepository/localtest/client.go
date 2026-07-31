@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net"
 	"net/http"
+	"net/url"
 	"time"
 
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
@@ -89,7 +90,7 @@ func (c *Client) ReadExact(ctx context.Context, ref pluginv1.ArtifactRef) (artif
 func (c *Client) CloseIdleConnections() { c.http.CloseIdleConnections() }
 
 func (c *Client) Publish(ctx context.Context, envelope artifacttrust.Envelope) (artifactrepositoryv1.Receipt, error) {
-	if err := validateEnvelopeForProfile(c.profile, envelope); err != nil {
+	if err := validatePublishEnvelopeForProfile(c.profile, envelope); err != nil {
 		return artifactrepositoryv1.Receipt{}, err
 	}
 	body, contentType := streamEnvelope(envelope)
@@ -109,6 +110,57 @@ func (c *Client) Publish(ctx context.Context, envelope artifacttrust.Envelope) (
 		return artifactrepositoryv1.Receipt{}, errors.New("local-test 发布回执与请求不匹配")
 	}
 	return receipt, nil
+}
+
+func (c *Client) ImportExact(ctx context.Context, sourceProfile artifactrepositoryv1.Profile, sourceReceipt artifactrepositoryv1.Receipt, envelope artifacttrust.Envelope) (artifactrepositoryv1.ImportRecord, error) {
+	sourceProfile, err := artifactrepositoryv1.ValidateProfile(sourceProfile)
+	if err != nil || sourceProfile.Protocol != artifactrepositoryv1.ProtocolRemote {
+		return artifactrepositoryv1.ImportRecord{}, errors.New("local-test 导入只接受 remote.v1 来源")
+	}
+	if err := artifactrepositoryv1.ValidateReceipt(sourceProfile, sourceReceipt); err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	if err := validateEnvelopeForProfile(c.profile, envelope); err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	reader, pipe := io.Pipe()
+	writer := multipart.NewWriter(pipe)
+	contentType := writer.FormDataContentType()
+	go func() {
+		err := writeImport(writer, sourceProfile, sourceReceipt, envelope)
+		if closeErr := writer.Close(); err == nil {
+			err = closeErr
+		}
+		_ = pipe.CloseWithError(err)
+	}()
+	response, err := c.do(ctx, http.MethodPost, "/v1/imports", contentType, reader)
+	if err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusCreated {
+		return artifactrepositoryv1.ImportRecord{}, responseError(response)
+	}
+	var record artifactrepositoryv1.ImportRecord
+	if err := decodeJSON(response.Body, &record); err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	if err := artifactrepositoryv1.ValidateImportRecord(sourceProfile, c.profile, record); err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	return record, nil
+}
+
+func (c *Client) PutAssessmentReport(ctx context.Context, digest string, raw []byte) error {
+	response, err := c.do(ctx, http.MethodPut, "/v1/imports/assessment-reports/"+url.PathEscape(digest), "application/json", bytes.NewReader(raw))
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		return responseError(response)
+	}
+	return nil
 }
 
 func streamEnvelope(envelope artifacttrust.Envelope) (io.ReadCloser, string) {

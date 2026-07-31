@@ -26,6 +26,33 @@ type WorkspaceAdapter interface {
 	ExpireWorkspace(context.Context) (artifactrepositoryv1.ExpireWorkspaceResult, error)
 }
 
+// ImportAdapter is implemented only by a Local Plugin Library. Import keeps
+// the upstream publisher proof and exact ref; it is deliberately separate
+// from ordinary development Publish so candidate/stable cannot be fabricated
+// through the local-test publisher path.
+type ImportAdapter interface {
+	Adapter
+	ImportExact(context.Context, artifactrepositoryv1.Profile, artifactrepositoryv1.Receipt, artifacttrust.Envelope) (artifactrepositoryv1.ImportRecord, error)
+}
+
+type LockResolver interface {
+	Adapter
+	ResolveLock(context.Context, pluginv1.ArtifactResolveRequest) (pluginv1.ArtifactLock, error)
+}
+
+// AssessmentReportSource exposes immutable scanner-native evidence referenced
+// by a signed admission or security status record.
+type AssessmentReportSource interface {
+	ReadAssessmentReport(context.Context, string) ([]byte, error)
+}
+
+// AssessmentReportImporter is an optional Local Plugin Library port. Reports
+// are imported before their referencing artifact, so repository admission can
+// remain fail-closed without weakening the evidence archive boundary.
+type AssessmentReportImporter interface {
+	PutAssessmentReport(context.Context, string, []byte) error
+}
+
 type Factory func(artifactrepositoryv1.Profile) (Adapter, error)
 
 type Registry struct {

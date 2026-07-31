@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
@@ -66,6 +67,7 @@ type Event struct {
 	Status         string                        `json:"status,omitempty"`
 	Reason         string                        `json:"reason,omitempty"`
 	Replacement    *pluginv1.ArtifactRequirement `json:"replacement,omitempty"`
+	ImportSource   *artifactrepositoryv1.Receipt `json:"importSource,omitempty"`
 }
 
 type Entry struct {
@@ -98,6 +100,7 @@ type Entry struct {
 	LifecycleRevision    uint64                                                 `json:"lifecycleRevision,omitempty"`
 	LifecycleReason      string                                                 `json:"lifecycleReason,omitempty"`
 	Replacement          *pluginv1.ArtifactRequirement                          `json:"replacement,omitempty"`
+	ImportSource         *artifactrepositoryv1.Receipt                          `json:"importSource,omitempty"`
 }
 
 type Query struct {
@@ -178,6 +181,23 @@ func Open(repositoryRoot string, repository VerifiedRepository, retired ...Missi
 }
 
 func (s *Store) RecordPublished(artifact artifactrepository.Artifact, attestationRaw []byte, occurredAt time.Time) (uint64, error) {
+	return s.recordArtifact(artifact, attestationRaw, nil, occurredAt)
+}
+
+// RecordImported records the upstream Catalog receipt that authorized a
+// remote artifact to enter this local library. The receipt is provenance for
+// the copy operation; publisher trust still comes from the original proof.
+func (s *Store) RecordImported(artifact artifactrepository.Artifact, attestationRaw []byte, source artifactrepositoryv1.Receipt, occurredAt time.Time) (uint64, error) {
+	if source.Protocol != artifactrepositoryv1.ProtocolRemote || source.Ref != (pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}) || source.SHA256 != artifact.SHA256 {
+		return 0, errors.New("远端导入来源与制品身份不一致")
+	}
+	if err := artifactrepositoryv1.ValidateReceiptShape(source); err != nil {
+		return 0, fmt.Errorf("远端导入来源回执无效: %w", err)
+	}
+	return s.recordArtifact(artifact, attestationRaw, &source, occurredAt)
+}
+
+func (s *Store) recordArtifact(artifact artifactrepository.Artifact, attestationRaw []byte, source *artifactrepositoryv1.Receipt, occurredAt time.Time) (uint64, error) {
 	entry, err := entryFrom(artifact, attestationRaw)
 	if err != nil {
 		return 0, err
@@ -191,11 +211,12 @@ func (s *Store) RecordPublished(artifact artifactrepository.Artifact, attestatio
 	if occurredAt.IsZero() {
 		occurredAt = time.Now().UTC()
 	}
+	entry.ImportSource = cloneReceipt(source)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := refKey(entry.Ref)
 	if existing, ok := s.entries[key]; ok {
-		if !sameIdentity(existing, entry) {
+		if !sameIdentity(existing, entry) || !sameReceipt(existing.ImportSource, entry.ImportSource) {
 			return 0, fmt.Errorf("Catalog 中的不可变引用 %s 与新制品不一致", key)
 		}
 		if err := s.writeSnapshotLocked(); err != nil {
@@ -204,6 +225,9 @@ func (s *Store) RecordPublished(artifact artifactrepository.Artifact, attestatio
 		return existing.RepositoryRevision, nil
 	}
 	event := eventFrom(entry, occurredAt.UTC(), false)
+	if entry.ImportSource != nil {
+		event.Type = "artifact.imported"
+	}
 	if err := s.appendEventLocked(&event); err != nil {
 		return 0, err
 	}
@@ -215,6 +239,25 @@ func (s *Store) RecordPublished(artifact artifactrepository.Artifact, attestatio
 		return 0, err
 	}
 	return event.Revision, nil
+}
+
+func cloneReceipt(value *artifactrepositoryv1.Receipt) *artifactrepositoryv1.Receipt {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	if value.ExpiresAt != nil {
+		expiresAt := *value.ExpiresAt
+		copy.ExpiresAt = &expiresAt
+	}
+	return &copy
+}
+
+func sameReceipt(left, right *artifactrepositoryv1.Receipt) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return *left == *right
 }
 
 func (s *Store) Query(query Query) Page {

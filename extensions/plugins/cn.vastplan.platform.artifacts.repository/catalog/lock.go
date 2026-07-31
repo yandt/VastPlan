@@ -2,11 +2,7 @@ package catalog
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
-	"slices"
 	"sort"
-	"strings"
 
 	semver "github.com/Masterminds/semver/v3"
 
@@ -72,75 +68,7 @@ func deprecatedReplacement(entry Entry) *pluginv1.ArtifactRequirement {
 }
 
 func ValidateLock(lock pluginv1.ArtifactLock) error {
-	raw, err := json.Marshal(lock)
-	if err != nil {
-		return err
-	}
-	if err := pluginv1.ValidateArtifactLock(raw); err != nil {
-		return err
-	}
-	digest, err := artifactLockDigest(lock)
-	if err != nil {
-		return err
-	}
-	if digest != lock.Digest {
-		return errors.New("制品锁 digest 与规范内容不一致")
-	}
-	seen := map[string]struct{}{}
-	locked := map[string]pluginv1.ArtifactLockPackage{}
-	previous := ""
-	for _, item := range lock.Packages {
-		if _, duplicate := seen[item.Ref.PluginID]; duplicate {
-			return fmt.Errorf("制品锁包含重复插件 ID: %s", item.Ref.PluginID)
-		}
-		if previous != "" && item.Ref.PluginID <= previous {
-			return errors.New("制品锁 packages 必须按 pluginId 严格升序排列")
-		}
-		if item.RepositoryRevision > lock.RepositoryRevision {
-			return fmt.Errorf("制品 %s 晚于锁定的 Catalog revision", item.Ref.PluginID)
-		}
-		seen[item.Ref.PluginID] = struct{}{}
-		locked[item.Ref.PluginID] = item
-		previous = item.Ref.PluginID
-	}
-	for _, item := range lock.Packages {
-		for dependency, rawConstraint := range item.Dependencies {
-			selected, ok := locked[dependency]
-			if !ok {
-				return fmt.Errorf("制品锁缺少依赖 %s -> %s", item.Ref.PluginID, dependency)
-			}
-			constraint, err := semver.NewConstraint(rawConstraint)
-			version, versionErr := semver.NewVersion(selected.Ref.Version)
-			if err != nil || versionErr != nil || !constraint.Check(version) {
-				return fmt.Errorf("制品锁依赖不满足 %s -> %s %s", item.Ref.PluginID, dependency, rawConstraint)
-			}
-		}
-	}
-	rootPrevious := ""
-	for _, root := range lock.Roots {
-		if rootPrevious != "" && root.PluginID <= rootPrevious {
-			return errors.New("制品锁 roots 必须按 pluginId 严格升序排列")
-		}
-		normalized, normalizeErr := pluginv1.NormalizeArtifactRequirement(root)
-		if normalizeErr != nil || normalized.PluginID != root.PluginID || normalized.Constraint != root.Constraint || normalized.Channel != root.Channel || !slices.Equal(normalized.Features, root.Features) {
-			return fmt.Errorf("制品锁根 Requirement 未规范化: %s", root.PluginID)
-		}
-		selected, ok := locked[root.PluginID]
-		constraint, constraintErr := semver.NewConstraint(root.Constraint)
-		version, versionErr := semver.NewVersion(selected.Ref.Version)
-		if !ok || constraintErr != nil || versionErr != nil || !constraint.Check(version) || root.Channel != "" && selected.Ref.Channel != root.Channel {
-			return fmt.Errorf("制品锁根依赖不满足: %s %s", root.PluginID, root.Constraint)
-		}
-		rootPrevious = root.PluginID
-	}
-	entries := make(map[string]Entry, len(lock.Packages))
-	for _, item := range lock.Packages {
-		entries[item.Ref.PluginID] = Entry{Ref: item.Ref, Dependencies: item.Dependencies}
-	}
-	if cycle := dependencyCycle(entries); len(cycle) > 0 {
-		return errors.New("制品锁包含依赖环: " + strings.Join(cycle, " -> "))
-	}
-	return nil
+	return pluginv1.ValidateArtifactLockSemantics(lock)
 }
 
 func artifactLockDigest(lock pluginv1.ArtifactLock) (string, error) {

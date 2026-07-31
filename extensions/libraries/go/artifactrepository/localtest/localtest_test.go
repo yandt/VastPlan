@@ -26,6 +26,7 @@ type memoryRepository struct {
 	profile  artifactrepositoryv1.Profile
 	envelope artifacttrust.Envelope
 	receipt  artifactrepositoryv1.Receipt
+	reports  map[string][]byte
 }
 
 func (r *memoryRepository) ReadExact(_ context.Context, ref pluginv1.ArtifactRef) (artifacttrust.Envelope, error) {
@@ -59,6 +60,27 @@ func (r *memoryRepository) CatalogSnapshot(context.Context) (artifactrepositoryv
 		SchemaVersion: 1, RepositoryID: r.profile.ID, Protocol: r.profile.Protocol,
 		ProfileDigest: r.profile.Digest(), Revision: r.receipt.Revision, Items: items,
 	}, nil
+}
+
+func (r *memoryRepository) ImportExact(_ context.Context, _ artifactrepositoryv1.Profile, source artifactrepositoryv1.Receipt, envelope artifacttrust.Envelope) (artifactrepositoryv1.ImportRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.envelope = envelope
+	r.receipt = artifactrepositoryv1.Receipt{
+		SchemaVersion: 1, RepositoryID: r.profile.ID, Protocol: r.profile.Protocol,
+		ProfileDigest: r.profile.Digest(), Ref: exactRef(envelope), SHA256: envelope.Artifact.SHA256, Revision: 1,
+	}
+	return artifactrepositoryv1.ImportRecord{SchemaVersion: 1, Source: source, Destination: r.receipt, ImportedAt: time.Now().UTC()}, nil
+}
+
+func (r *memoryRepository) PutAssessmentReport(_ context.Context, digest string, raw []byte) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.reports == nil {
+		r.reports = map[string][]byte{}
+	}
+	r.reports[digest] = append([]byte(nil), raw...)
+	return nil
 }
 
 func (*memoryRepository) ExpireWorkspace(context.Context) (artifactrepositoryv1.ExpireWorkspaceResult, error) {
@@ -109,6 +131,45 @@ func TestUnixSocketClientServerRoundTrip(t *testing.T) {
 	result, err := client.ExpireWorkspace(context.Background())
 	if err != nil || result.Revision != 2 {
 		t.Fatalf("workspace 过期失败: result=%+v err=%v", result, err)
+	}
+}
+
+func TestUnixSocketImportsRemoteArtifactWithoutUsingPublish(t *testing.T) {
+	directory := shortTempDir(t)
+	profile := testProfile(t, filepath.Join(directory, "repository.sock"), false)
+	repository := &memoryRepository{profile: profile}
+	server, _ := NewServer(profile, repository, testToken)
+	listener, err := Listen(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = listener.Close(); _ = os.Remove(filepath.Join(directory, "repository.sock")) }()
+	httpServer := &http.Server{Handler: server}
+	go func() { _ = httpServer.Serve(listener) }()
+	defer httpServer.Close()
+
+	remote, _ := artifactrepositoryv1.ValidateProfile(artifactrepositoryv1.Profile{
+		Version: 1, ID: "enterprise", Protocol: artifactrepositoryv1.ProtocolRemote,
+		Endpoint: "https://repo.example", Channels: []string{"testing"},
+	})
+	envelope := testEnvelope(t)
+	source := artifactrepositoryv1.Receipt{
+		SchemaVersion: 1, RepositoryID: remote.ID, Protocol: remote.Protocol, ProfileDigest: remote.Digest(),
+		Ref: exactRef(envelope), SHA256: envelope.Artifact.SHA256, Revision: 4,
+	}
+	client, _ := NewClient(profile, testToken)
+	report := []byte(`{"Results":[]}`)
+	reportHash := sha256.Sum256(report)
+	reportDigest := hex.EncodeToString(reportHash[:])
+	if err := client.PutAssessmentReport(context.Background(), reportDigest, report); err != nil {
+		t.Fatalf("安全评估报告导入失败: %v", err)
+	}
+	record, err := client.ImportExact(context.Background(), remote, source, envelope)
+	if err != nil || record.Source != source || record.Destination.Ref != exactRef(envelope) {
+		t.Fatalf("Unix Socket 远端导入失败: record=%+v err=%v", record, err)
+	}
+	if string(repository.reports[reportDigest]) != string(report) {
+		t.Fatal("安全评估报告未通过 local-test 导入端口保存")
 	}
 }
 

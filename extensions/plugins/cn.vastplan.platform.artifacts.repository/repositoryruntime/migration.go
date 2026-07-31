@@ -11,8 +11,10 @@ import (
 	"path/filepath"
 	"time"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/garbagecollection"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/references"
@@ -262,6 +264,21 @@ func (s *repositorySet) publishWithSupplyChain(attestationRaw, packageBytes, pro
 	}
 	if _, err := s.catalog.RecordPublished(artifact, attestationRaw, time.Now().UTC()); err != nil {
 		return artifactrepository.Artifact{}, fmt.Errorf("记录发布流水账: %w", err)
+	}
+	return artifact, nil
+}
+
+func (s *repositorySet) importWithSupplyChain(source artifactrepositoryv1.Receipt, envelope artifacttrust.Envelope) (artifactrepository.Artifact, error) {
+	var attestation artifactrepository.Attestation
+	if err := json.Unmarshal(envelope.Proof, &attestation); err != nil {
+		return artifactrepository.Artifact{}, errors.New("解析远端导入制品证明失败")
+	}
+	artifact, err := s.signed.PublishWithSupplyChain(attestation, envelope.PackageBytes, envelope.Provenance, envelope.ProvenanceVerification, envelope.SecurityAdmission)
+	if err != nil {
+		return artifactrepository.Artifact{}, err
+	}
+	if _, err := s.catalog.RecordImported(artifact, envelope.Proof, source, time.Now().UTC()); err != nil {
+		return artifactrepository.Artifact{}, fmt.Errorf("记录远端导入流水账: %w", err)
 	}
 	return artifact, nil
 }

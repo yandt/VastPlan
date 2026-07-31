@@ -32,6 +32,17 @@ develop_backend_plugin() {
     -root "$ROOT" -state-root "$STATE_ROOT" -status-url "$STATUS_URL" -plugin "$selector" "$@")
 }
 
+install_remote_plugin() {
+  local pid
+  if ! pid="$(running_pid)"; then
+    fail "平台管理中心尚未运行；请先执行 '$0 up' 或 '$0 bootstrap'"
+    return 1
+  fi
+  ensure_state_dirs
+  (cd "$ROOT" && env GOCACHE="$GO_CACHE" go run ./engineering/tools/pluginlibrary \
+    -state-root "$STATE_ROOT" -status-url "$STATUS_URL" "$@")
+}
+
 release_plugins() {
   local operation="$1"
   local spec_file="$2"

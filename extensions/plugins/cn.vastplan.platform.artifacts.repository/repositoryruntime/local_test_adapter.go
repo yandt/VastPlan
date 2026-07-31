@@ -83,7 +83,7 @@ func (a *LocalTestAdapter) Publish(ctx context.Context, envelope artifacttrust.E
 		return artifactrepositoryv1.Receipt{}, err
 	}
 	ref := pluginv1.ArtifactRef{PluginID: envelope.Artifact.PluginID, Version: envelope.Artifact.Version, Channel: envelope.Artifact.Channel}
-	if err := artifactrepositoryv1.ValidateRef(a.profile, ref); err != nil {
+	if err := artifactrepositoryv1.ValidatePublishRef(a.profile, ref); err != nil {
 		return artifactrepositoryv1.Receipt{}, err
 	}
 	if len(envelope.SecurityStatusChain) != 0 {
@@ -114,6 +114,49 @@ func (a *LocalTestAdapter) Publish(ctx context.Context, envelope artifacttrust.E
 		return a.workspaceReceipt(entry, lease), nil
 	}
 	return a.receipt(entry.Ref, entry.SHA256, entry.RepositoryRevision), nil
+}
+
+func (a *LocalTestAdapter) ImportExact(ctx context.Context, sourceProfile artifactrepositoryv1.Profile, source artifactrepositoryv1.Receipt, envelope artifacttrust.Envelope) (artifactrepositoryv1.ImportRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	sourceProfile, err := artifactrepositoryv1.ValidateProfile(sourceProfile)
+	if err != nil || sourceProfile.Protocol != artifactrepositoryv1.ProtocolRemote {
+		return artifactrepositoryv1.ImportRecord{}, errors.New("Local Plugin Library 只接受 remote.v1 导入")
+	}
+	if err := artifactrepositoryv1.ValidateReceipt(sourceProfile, source); err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	ref := pluginv1.ArtifactRef{PluginID: envelope.Artifact.PluginID, Version: envelope.Artifact.Version, Channel: envelope.Artifact.Channel}
+	if ref.Channel == "workspace" || source.Ref != ref || source.SHA256 != envelope.Artifact.SHA256 {
+		return artifactrepositoryv1.ImportRecord{}, errors.New("远端导入没有保持精确制品身份")
+	}
+	if err := artifactrepositoryv1.ValidateRef(a.profile, ref); err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	published, err := a.manager.ImportRemote(source, envelope)
+	if err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	entry, found := a.entry(ref)
+	if !found || published.SHA256 != entry.SHA256 || entry.SHA256 != source.SHA256 {
+		return artifactrepositoryv1.ImportRecord{}, errors.New("远端导入完成后 Catalog 未形成精确回执")
+	}
+	record := artifactrepositoryv1.ImportRecord{
+		SchemaVersion: artifactrepositoryv1.ProfileVersion,
+		Source:        source, Destination: a.receipt(entry.Ref, entry.SHA256, entry.RepositoryRevision), ImportedAt: time.Now().UTC(),
+	}
+	if err := artifactrepositoryv1.ValidateImportRecord(sourceProfile, a.profile, record); err != nil {
+		return artifactrepositoryv1.ImportRecord{}, err
+	}
+	return record, nil
+}
+
+func (a *LocalTestAdapter) PutAssessmentReport(ctx context.Context, digest string, raw []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return a.manager.PutAssessmentReport(digest, raw)
 }
 
 func (a *LocalTestAdapter) CatalogSnapshot(ctx context.Context) (artifactrepositoryv1.CatalogSnapshot, error) {

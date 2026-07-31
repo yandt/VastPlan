@@ -15,6 +15,7 @@ import (
 
 	semver "github.com/Masterminds/semver/v3"
 
+	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactprovenance"
@@ -190,12 +191,12 @@ func eventFrom(entry Entry, occurredAt time.Time, recovered bool) Event {
 	return Event{
 		Type: "artifact.published",
 		Ref:  entry.Ref, SHA256: entry.SHA256, Size: entry.Size, Publisher: entry.Publisher, KeyID: entry.KeyID,
-		SignedAt: entry.SignedAt, OccurredAt: occurredAt.UTC(), Recovered: recovered,
+		SignedAt: entry.SignedAt, OccurredAt: occurredAt.UTC(), Recovered: recovered, ImportSource: cloneReceipt(entry.ImportSource),
 	}
 }
 
 func validateEvent(event Event, revision uint64) error {
-	if event.SchemaVersion != schemaVersion || event.Revision != revision || (event.Type != "artifact.published" && event.Type != "artifact.lifecycle") {
+	if event.SchemaVersion != schemaVersion || event.Revision != revision || (event.Type != "artifact.published" && event.Type != "artifact.imported" && event.Type != "artifact.lifecycle") {
 		return errors.New("不支持的流水账事件")
 	}
 	if event.Ref.PluginID == "" || event.Ref.Version == "" || event.Ref.Channel == "" {
@@ -205,8 +206,18 @@ func validateEvent(event Event, revision uint64) error {
 	if err != nil || len(digest) != 32 || event.OccurredAt.IsZero() {
 		return errors.New("流水账事件的摘要、大小或时间无效")
 	}
-	if event.Type == "artifact.published" && (event.Size <= 0 || event.Publisher == "" || event.KeyID == "" || event.SignedAt.IsZero()) {
+	if (event.Type == "artifact.published" || event.Type == "artifact.imported") && (event.Size <= 0 || event.Publisher == "" || event.KeyID == "" || event.SignedAt.IsZero()) {
 		return errors.New("发布流水账事件缺少签名身份")
+	}
+	if event.Type == "artifact.imported" {
+		if event.ImportSource == nil || event.ImportSource.Ref != event.Ref || event.ImportSource.SHA256 != event.SHA256 || event.ImportSource.Protocol != artifactrepositoryv1.ProtocolRemote {
+			return errors.New("导入流水账事件缺少远端来源")
+		}
+		if err := artifactrepositoryv1.ValidateReceiptShape(*event.ImportSource); err != nil {
+			return fmt.Errorf("导入流水账来源无效: %w", err)
+		}
+	} else if event.ImportSource != nil {
+		return errors.New("非导入流水账不得携带远端来源")
 	}
 	if event.Type == "artifact.lifecycle" && (!validLifecycleStatus(event.PreviousStatus) || !validLifecycleStatus(event.Status) || event.PreviousStatus == event.Status || strings.TrimSpace(event.Reason) == "") {
 		return errors.New("生命周期流水账事件无效")
