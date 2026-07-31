@@ -1,6 +1,6 @@
 # ADR-0180 Catalog 驱动的统一插件自发现与本地插件库
 
-- 状态：已采纳，分阶段实施
+- 状态：已采纳，P0-P5 已实施
 - 日期：2026-08-01
 - 关联：[ADR-0003](ADR-0003-插件装载模型.md)、[ADR-0098](ADR-0098-制品依赖解析锁与离线Bundle.md)、[ADR-0145](ADR-0145-本地测试与正式远端制品仓库双协议.md)、[ADR-0151](ADR-0151-最小Seed装配与开发插件候选分流.md)、[ADR-0179](ADR-0179-Ant-Design单实现与Renderer协议保留.md)
 
@@ -95,3 +95,4 @@ Renderer、Shell Library、Runtime Provider、数据库 Provider、认证/授权
 - 2026-08-01（P2）：默认热开发模式启动独立的源码输入适配器，扫描 `extensions/plugins` 与 `examples/plugins` 的直接子目录并持久保存源状态。新增或修改在防抖后构建内容寻址的 workspace 候选，只发布到 Local Plugin Library，不自动激活；更新遵循“发布新候选 → 持久记录待撤回引用 → 撤回旧候选”，重启可继续未完成撤回。目录删除产生单调 `artifact.withdrawn` Journal 事件；新 Catalog 快照与 Resolver 排除该候选，但活动 lease 的精确读取和引用保护继续有效，之后才进入普通 GC。同一内容的目录重新出现时会以受控生命周期事务恢复原不可变 ref，不需要伪造新版本。首次启用只建立现有源码基线并接管已经存在的 workspace 候选，不批量重建全部插件；stable/Seed 候选纳入统一 Inventory 由 P3 完成。
 - 2026-08-01（P3）：新增语言中立的 `PluginInventorySnapshot` 与 `ContributionIndexSnapshot`。投影器遍历已验证 Manifest 的全部 `contributes.<surface>.<group>[]`，未知 kind 也进入不可变索引，但在没有兼容消费者时保持不可激活；每项贡献绑定精确 ref、包摘要和发布者。Portal 物化把该索引与 Module Graph 放入同一密封 RuntimeSpec，Go Catalog、Node Portal Host 和 Browser Kernel 分别复核所有者与已交付模块的精确包摘要。Render Adapter 与 Shell 只保留语义、默认值和本地化，Renderer/Shell Library 候选由索引按 kind、adapter/shell、engine family、UI contract 和 Platform Profile 来源生成；构建期精确版本源码文件及 Shell Manifest 中的重复模块目录已删除。开发 HMR 在同一候选代内从当前 Manifest 重投影活动模块贡献，不再形成“新模块、旧索引”。
 - 2026-08-01（P4）：新增统一 `ActivationPolicy -> ActivationSelection -> ReconciliationPlan` 协议。生产使用精确 Profile/Application 根策略，开发策略只自动选择当前 Inventory 中无歧义的 workspace 候选；两者共用依赖闭包、目标内核校验、摘要与失败语义，后续层不再接收 development 布尔值自行分支。通用 Planner 只比较当前/目标精确制品并生成 activate/replace/deactivate/retain；Backend、Frontend、Runner、Mobile 的注入式 Adapter 分别把动作解释为 rolling/drain、Portal Generation/Host Epoch、Runner App Profile 和 Mobile Bundle Publication。现有 Backend/Frontend 可直接消费具体运行产物；Runner 已可生成并复验 App Profile，尚未建立完整 Mobile 内核，因此当前只交付带精确摘要的 Bundle Plan，不伪装成已经上线的 Mobile 分发器。
+- 2026-08-01（P5）：增加统一生命周期 E2E，连续验证首次发现产生 activate、版本更新产生 rolling replace、目录撤销产生 drain-stop、旧精确版本回退、相同快照重启恢复相同 plan digest、workspace 同 ID 多候选拒绝静默选择，以及 remote.v1 制品保持原 ref/摘要导入 local-test.v1。源码 Controller 原有测试继续验证“先发布新候选、再撤回旧候选”和删除恢复；Portal 单元/治理测试继续验证 Contribution Index 按需选择、未选模块不加载和所有者摘要绑定。
