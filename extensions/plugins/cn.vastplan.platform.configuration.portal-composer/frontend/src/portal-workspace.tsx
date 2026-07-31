@@ -67,12 +67,12 @@ export function createPortalPage(client: PortalControlClient): CollectionPageDef
 
 function portalActions() {
   return [
-    { id: "portal.edit", label: "编辑工作副本", icon: "edit" as const, placement: "record.row" as const, form: "edit", visibleWhen: { pointer: "/canEdit", equals: true } },
+    { id: "portal.edit", label: "编辑", icon: "edit" as const, placement: "record.row" as const, form: "edit", visibleWhen: { pointer: "/canEdit", equals: true } },
     { id: "portal.submit", label: "提交审批", icon: "upload" as const, placement: "record.row" as const, visibleWhen: { pointer: "/canSubmit", equals: true } },
     { id: "portal.approve", label: "批准", icon: "success" as const, placement: "record.row" as const, tone: "primary" as const, visibleWhen: { pointer: "/canApprove", equals: true } },
     { id: "portal.publish", label: "发布", icon: "publish" as const, placement: "record.row" as const, tone: "primary" as const, confirm: "发布只冻结该候选，不会改变线上 Portal。", visibleWhen: { pointer: "/canPublish", equals: true } },
     { id: "portal.release", label: "上线", icon: "publish" as const, placement: "record.row" as const, tone: "primary" as const, confirm: "将最近尚未上线的 Published Publication 上线。", visibleWhen: { pointer: "/releaseAvailable", equals: true } },
-    { id: "portal.newWorkingCopy", label: "创建工作副本", icon: "copy" as const, placement: "record.row" as const, form: "new-working-copy", visibleWhen: { pointer: "/canCreateWorkingCopy", equals: true } },
+    { id: "portal.newWorkingCopy", label: "编辑", icon: "edit" as const, placement: "record.row" as const, form: "new-working-copy", visibleWhen: { pointer: "/canCreateWorkingCopy", equals: true } },
     { id: "portal.rollback", label: "回滚上线", icon: "refresh" as const, placement: "record.row" as const, tone: "danger" as const, confirm: "从历史 Release 创建一条新的上线记录。", visibleWhen: { pointer: "/hasRollback", equals: true } },
     { id: "portal.history", label: "版本历史", icon: "info" as const, placement: "record.row" as const, overlay: "history", visibleWhen: { pointer: "/historyAvailable", equals: true } },
     { id: "portal.compare", label: "比较最近版本", icon: "search" as const, placement: "record.row" as const, overlay: "compare", visibleWhen: { pointer: "/diffAvailable", equals: true } },

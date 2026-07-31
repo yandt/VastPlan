@@ -11,6 +11,10 @@ describe("Portal aggregate workspace", () => {
     expect(page.collection.actions?.map((action) => action.id)).toEqual(expect.arrayContaining([
       "portal.edit", "portal.newWorkingCopy", "portal.publish", "portal.release", "portal.history", "portal.compare", "portal.restore", "portal.releases",
     ]));
+    expect(page.collection.actions?.filter((action) => action.id === "portal.edit" || action.id === "portal.newWorkingCopy"))
+      .toEqual([{ id: "portal.edit", label: "编辑", icon: "edit", placement: "record.row", form: "edit", visibleWhen: { pointer: "/canEdit", equals: true } }, {
+        id: "portal.newWorkingCopy", label: "编辑", icon: "edit", placement: "record.row", form: "new-working-copy", visibleWhen: { pointer: "/canCreateWorkingCopy", equals: true },
+      }]);
     expect(page.overlays?.map((overlay) => overlay.id)).toEqual(["history", "compare", "releases", "audit", "configuration"]);
   });
 

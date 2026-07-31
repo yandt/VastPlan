@@ -18,8 +18,8 @@ function configurationForm(client: PortalControlClient, kind: "create" | "edit" 
     ], fields: [{ pointer: "/applicationPlugins" }, { pointer: "/branding" }, { pointer: "/config" }, { pointer: "/services" }] },
     workflow: {
       size: "lg",
-      title: kind === "create" ? "新建 Portal" : kind === "edit" ? "编辑工作副本" : "创建下一轮工作副本",
-      submitLabel: kind === "edit" ? "保存" : "创建",
+      title: kind === "create" ? "新建 Portal" : "编辑 Portal",
+      submitLabel: kind === "create" ? "创建" : "保存",
       success: { notify: "Portal 配置已保存", refreshCollection: true, close: true },
     },
     async prepare(selected, signal) {
