@@ -24,16 +24,16 @@ func TestReconcilePlatformPortalResumesPendingApproval(t *testing.T) {
 	if got, want := fixture.writes, []string{"approve", "publish", "release"}; !equalStrings(got, want) {
 		t.Fatalf("部分生命周期应从持久状态继续: got=%v want=%v", got, want)
 	}
-	if fixture.portal.Versions[0].Status != portalapi.StatusPublished || fixture.portal.CurrentReleaseID == 0 {
+	if fixture.portal.PublishedPublication == nil || fixture.portal.PublishedPublication.Status != portalapi.StatusPublished || fixture.portal.CurrentReleaseID == 0 {
 		t.Fatalf("恢复后未发布上线: %+v", fixture.portal)
 	}
 }
 
-func TestReconcilePlatformPortalIsNoopWhenDesiredVersionIsCurrent(t *testing.T) {
+func TestReconcilePlatformPortalIsNoopWhenDesiredPublicationIsCurrent(t *testing.T) {
 	desired := reconcileTestApplication("/operations")
 	fixture := newPortalReconcileFixture(desired, portalapi.StatusPublished)
 	fixture.portal.CurrentReleaseID = 9
-	fixture.portal.Releases = []portalapi.PortalRelease{{ID: 9, PortalID: desired.ID, PortalVersionID: 7, Status: portalapi.ActivationCurrent}}
+	fixture.portal.Releases = []portalapi.PortalRelease{{ID: 9, PortalID: desired.ID, PublicationID: 7, Status: portalapi.ActivationCurrent}}
 	server := httptest.NewServer(fixture)
 	defer server.Close()
 
@@ -45,7 +45,7 @@ func TestReconcilePlatformPortalIsNoopWhenDesiredVersionIsCurrent(t *testing.T) 
 	}
 }
 
-func TestReconcilePlatformPortalDoesNotOverwriteDifferentDraft(t *testing.T) {
+func TestReconcilePlatformPortalDoesNotOverwriteDifferentWorkingCopy(t *testing.T) {
 	desired := reconcileTestApplication("/operations")
 	fixture := newPortalReconcileFixture(reconcileTestApplication("/other"), portalapi.StatusDraft)
 	server := httptest.NewServer(fixture)
@@ -53,10 +53,10 @@ func TestReconcilePlatformPortalDoesNotOverwriteDifferentDraft(t *testing.T) {
 
 	err := reconcilePlatformPortal(server.Client(), server.URL, desired)
 	if err == nil || !strings.Contains(err.Error(), "拒绝自动覆盖") {
-		t.Fatalf("内容不同的人工草稿必须 fail-closed: %v", err)
+		t.Fatalf("内容不同的人工 WorkingCopy 必须 fail-closed: %v", err)
 	}
 	if len(fixture.writes) != 0 {
-		t.Fatalf("冲突草稿不得被修改: %v", fixture.writes)
+		t.Fatalf("冲突 WorkingCopy 不得被修改: %v", fixture.writes)
 	}
 }
 
@@ -67,8 +67,26 @@ type portalReconcileFixture struct {
 
 func newPortalReconcileFixture(application frontendcompositionv1.ApplicationComposition, status portalapi.Status) *portalReconcileFixture {
 	now := "2026-07-30T00:00:00Z"
-	version := portalapi.PortalVersion{ID: 7, Number: 1, TenantID: "local", PortalID: application.ID, Status: status, Configuration: portalapi.PortalConfiguration{Application: application}, CreatedAt: now, UpdatedAt: now}
-	return &portalReconcileFixture{portal: portalapi.Portal{ID: application.ID, TenantID: "local", Versions: []portalapi.PortalVersion{version}, Releases: []portalapi.PortalRelease{}, CreatedAt: now, UpdatedAt: now}}
+	configuration := portalapi.PortalConfiguration{Application: application}
+	portal := portalapi.Portal{
+		ID: application.ID, TenantID: "local", Releases: []portalapi.PortalRelease{},
+		VersionControl: portalapi.PortalVersionControlStatus{Availability: portalapi.PortalVersionControlDisabled, Capabilities: []string{}},
+		CreatedAt:      now, UpdatedAt: now,
+	}
+	if status == portalapi.StatusDraft {
+		portal.WorkingCopy = &portalapi.PortalWorkingCopy{TenantID: "local", PortalID: application.ID, Revision: 1, Configuration: configuration, Digest: strings.Repeat("a", 64), CreatedAt: now, UpdatedAt: now}
+	} else {
+		publication := portalapi.PortalPublication{
+			ID: 7, TenantID: "local", PortalID: application.ID, WorkingRevision: 1, Status: status, Digest: strings.Repeat("a", 64),
+			Source: portalapi.PortalPublicationSource{Kind: portalapi.PortalPublicationSourceInline, Configuration: &configuration}, SubmittedBy: "author", CreatedAt: now, UpdatedAt: now,
+		}
+		if status == portalapi.StatusPublished {
+			portal.PublishedPublication = &publication
+		} else {
+			portal.PendingPublication = &publication
+		}
+	}
+	return &portalReconcileFixture{portal: portal}
 }
 
 func (f *portalReconcileFixture) ServeHTTP(response http.ResponseWriter, request *http.Request) {
@@ -81,20 +99,25 @@ func (f *portalReconcileFixture) ServeHTTP(response http.ResponseWriter, request
 		_ = json.NewEncoder(response).Encode(portalapi.PortalGovernanceSnapshot{Portals: []portalapi.Portal{f.portal}})
 		return
 	}
-	version := &f.portal.Versions[0]
 	switch {
+	case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/publications"):
+		f.writes = append(f.writes, "submit")
+		publication := portalapi.PortalPublication{ID: 7, PortalID: f.portal.ID, WorkingRevision: f.portal.WorkingCopy.Revision, Status: portalapi.StatusPendingApproval, Source: portalapi.PortalPublicationSource{Kind: portalapi.PortalPublicationSourceInline, Configuration: &f.portal.WorkingCopy.Configuration}}
+		f.portal.WorkingCopy, f.portal.PendingPublication = nil, &publication
+		_ = json.NewEncoder(response).Encode(publication)
 	case strings.HasSuffix(request.URL.Path, "/approve"):
 		f.writes = append(f.writes, "approve")
-		version.Status = portalapi.StatusApproved
-		_ = json.NewEncoder(response).Encode(version)
+		f.portal.PendingPublication.Status = portalapi.StatusApproved
+		_ = json.NewEncoder(response).Encode(f.portal.PendingPublication)
 	case strings.HasSuffix(request.URL.Path, "/publish"):
 		f.writes = append(f.writes, "publish")
-		version.Status = portalapi.StatusPublished
-		_ = json.NewEncoder(response).Encode(version)
+		f.portal.PendingPublication.Status = portalapi.StatusPublished
+		f.portal.PublishedPublication, f.portal.PendingPublication = f.portal.PendingPublication, nil
+		_ = json.NewEncoder(response).Encode(f.portal.PublishedPublication)
 	case request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/releases"):
 		f.writes = append(f.writes, "release")
 		f.portal.CurrentReleaseID = 9
-		release := portalapi.PortalRelease{ID: 9, PortalID: f.portal.ID, PortalVersionID: version.ID, Status: portalapi.ActivationCurrent}
+		release := portalapi.PortalRelease{ID: 9, PortalID: f.portal.ID, PublicationID: f.portal.PublishedPublication.ID, Status: portalapi.ActivationCurrent}
 		f.portal.Releases = append(f.portal.Releases, release)
 		_ = json.NewEncoder(response).Encode(release)
 	default:

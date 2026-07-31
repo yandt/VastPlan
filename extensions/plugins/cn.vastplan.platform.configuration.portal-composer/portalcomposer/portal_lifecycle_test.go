@@ -17,7 +17,7 @@ func TestPortalNoVersionLifecycleUsesWorkingCopyPublicationAndRelease(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	portal, err := service.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
+	portal, err := service.CreatePortal(context.Background(), author, portalapi.CreatePortalRequest{PortalID: "admin", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}

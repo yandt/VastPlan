@@ -12,21 +12,18 @@ import (
 
 // reconcilePlatformPortal is the retry-safe implementation behind the
 // explicit --apply-platform command. Every durable lifecycle state is a valid
-// resume point; a conflicting open draft is never overwritten automatically.
+// resume point; a conflicting WorkingCopy or Publication is never overwritten.
 func reconcilePlatformPortal(client *http.Client, baseURL string, desired frontendcompositionv1.ApplicationComposition) error {
 	governance, err := readPortalGovernance(client, baseURL)
 	if err != nil {
 		return err
 	}
-	portal := findPortal(governance.Portals, desired.ID)
-	version, err := selectPlatformPortalVersion(client, baseURL, portal, desired)
+	portal, err := selectPlatformPortal(client, baseURL, findPortal(governance.Portals, desired.ID), desired)
 	if err != nil {
 		return err
 	}
-	if version.ID == 0 {
-		return errors.New("Composer 未返回有效 PortalVersion")
-	}
-	if err := resumePortalVersion(client, baseURL, desired.ID, &version); err != nil {
+	publication, err := resumePortalPublication(client, baseURL, portal)
+	if err != nil {
 		return err
 	}
 
@@ -34,22 +31,22 @@ func reconcilePlatformPortal(client *http.Client, baseURL string, desired fronte
 	if err != nil {
 		return err
 	}
-	portal = findPortal(governance.Portals, desired.ID)
-	if portal == nil {
+	current := findPortal(governance.Portals, desired.ID)
+	if current == nil {
 		return errors.New("发布后 Portal 聚合不存在")
 	}
-	for _, release := range portal.Releases {
-		if release.PortalVersionID != version.ID {
+	for _, release := range current.Releases {
+		if release.PublicationID != publication.ID {
 			continue
 		}
 		if release.Status == portalapi.ActivationCurrent {
 			return nil
 		}
 		if release.Status == portalapi.ActivationSuperseded {
-			return errors.New("目标 PortalVersion 已进入历史上线记录；重新启用必须走显式 rollback")
+			return errors.New("目标 Publication 已进入历史上线记录；重新启用必须走显式 rollback")
 		}
 	}
-	request := portalapi.PortalReleaseRequest{PortalVersionID: version.ID, ExpectedCurrentReleaseID: portal.CurrentReleaseID, Reason: "platformdev explicit release"}
+	request := portalapi.PortalPublicationReleaseRequest{PublicationID: publication.ID, ExpectedCurrentReleaseID: current.CurrentReleaseID, Reason: "platformdev explicit release"}
 	status, raw, err := portalRequest(client, baseURL, publisherToken, http.MethodPost, fmt.Sprintf("/v1/portals/%s/releases", desired.ID), request, true)
 	if err != nil || status != http.StatusOK {
 		return fmt.Errorf("release status=%d body=%s: %w", status, raw, err)
@@ -64,72 +61,102 @@ func reconcilePlatformPortal(client *http.Client, baseURL string, desired fronte
 	return nil
 }
 
-func selectPlatformPortalVersion(client *http.Client, baseURL string, portal *portalapi.Portal, desired frontendcompositionv1.ApplicationComposition) (portalapi.PortalVersion, error) {
+func selectPlatformPortal(client *http.Client, baseURL string, portal *portalapi.Portal, desired frontendcompositionv1.ApplicationComposition) (*portalapi.Portal, error) {
 	if portal == nil {
-		status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, "/v1/portals", portalapi.PortalVersionRequest{PortalID: desired.ID, Configuration: portalapi.PortalConfiguration{Application: desired}}, true)
+		status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, "/v1/portals", portalapi.CreatePortalRequest{PortalID: desired.ID, Configuration: portalapi.PortalConfiguration{Application: desired}}, true)
 		if err != nil || status != http.StatusOK {
-			return portalapi.PortalVersion{}, fmt.Errorf("create Portal status=%d body=%s: %w", status, raw, err)
+			return nil, fmt.Errorf("create Portal status=%d body=%s: %w", status, raw, err)
 		}
 		var created portalapi.Portal
-		if err := json.Unmarshal(raw, &created); err != nil || len(created.Versions) == 0 {
-			return portalapi.PortalVersion{}, fmt.Errorf("Composer 未返回有效 Portal: %w", err)
+		if err := json.Unmarshal(raw, &created); err != nil || created.WorkingCopy == nil {
+			return nil, fmt.Errorf("Composer 未返回有效 Portal WorkingCopy: %w", err)
 		}
-		return created.Versions[0], nil
+		return &created, nil
 	}
-	if len(portal.Versions) == 0 {
-		return portalapi.PortalVersion{}, errors.New("现有 Portal 没有配置版本")
+	configuration, status := currentPortalConfiguration(portal)
+	if configuration == nil {
+		return nil, errors.New("现有 Portal 没有可管理配置")
 	}
-	latest := portal.Versions[0]
-	if samePortalApplication(latest.Configuration.Application, desired) {
-		return latest, nil
+	if samePortalApplication(configuration.Application, desired) {
+		return portal, nil
 	}
-	if latest.Status != portalapi.StatusPublished {
-		return portalapi.PortalVersion{}, fmt.Errorf("Portal 已有内容不同的未完成版本 #%d (%s)，拒绝自动覆盖", latest.Number, latest.Status)
+	if portal.WorkingCopy != nil || portal.PendingPublication != nil {
+		return nil, fmt.Errorf("Portal 已有内容不同的未完成 %s，拒绝自动覆盖", status)
 	}
-	configuration := latest.Configuration
-	configuration.Application = desired
-	status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, fmt.Sprintf("/v1/portals/%s/versions", desired.ID), map[string]any{"configuration": configuration}, true)
-	if err != nil || status != http.StatusOK {
-		return portalapi.PortalVersion{}, fmt.Errorf("create PortalVersion status=%d body=%s: %w", status, raw, err)
+	if portal.PublishedPublication == nil {
+		return nil, errors.New("现有 Portal 没有可复制的 Published Publication")
 	}
-	var version portalapi.PortalVersion
-	if err := json.Unmarshal(raw, &version); err != nil {
-		return portalapi.PortalVersion{}, fmt.Errorf("Composer 未返回有效 PortalVersion: %w", err)
+	next := *configuration
+	next.Application = desired
+	statusCode, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, fmt.Sprintf("/v1/portals/%s/working-copy", desired.ID), map[string]any{"configuration": next}, true)
+	if err != nil || statusCode != http.StatusOK {
+		return nil, fmt.Errorf("create WorkingCopy status=%d body=%s: %w", statusCode, raw, err)
 	}
-	return version, nil
+	var working portalapi.PortalWorkingCopy
+	if err := json.Unmarshal(raw, &working); err != nil || working.Revision == 0 {
+		return nil, fmt.Errorf("Composer 未返回有效 WorkingCopy: %w", err)
+	}
+	portal.WorkingCopy = &working
+	return portal, nil
 }
 
-func resumePortalVersion(client *http.Client, baseURL, portalID string, version *portalapi.PortalVersion) error {
-	steps := []struct {
-		from      portalapi.Status
-		to        portalapi.Status
-		token     string
-		operation string
-	}{
-		{portalapi.StatusDraft, portalapi.StatusPendingApproval, authorToken, "submit"},
-		{portalapi.StatusPendingApproval, portalapi.StatusApproved, approverToken, "approve"},
-		{portalapi.StatusApproved, portalapi.StatusPublished, publisherToken, "publish"},
+func resumePortalPublication(client *http.Client, baseURL string, portal *portalapi.Portal) (portalapi.PortalPublication, error) {
+	if portal.WorkingCopy != nil {
+		status, raw, err := portalRequest(client, baseURL, authorToken, http.MethodPost, fmt.Sprintf("/v1/portals/%s/publications", portal.ID), portalapi.SubmitPortalPublicationRequest{ExpectedWorkingRevision: portal.WorkingCopy.Revision}, true)
+		if err != nil || status != http.StatusOK {
+			return portalapi.PortalPublication{}, fmt.Errorf("submit status=%d body=%s: %w", status, raw, err)
+		}
+		var publication portalapi.PortalPublication
+		if err := json.Unmarshal(raw, &publication); err != nil {
+			return portalapi.PortalPublication{}, fmt.Errorf("decode submit Publication: %w", err)
+		}
+		portal.WorkingCopy, portal.PendingPublication = nil, &publication
 	}
+	publication := portal.PendingPublication
+	if publication == nil {
+		publication = portal.PublishedPublication
+	}
+	if publication == nil {
+		return portalapi.PortalPublication{}, errors.New("Portal 没有可继续的 Publication")
+	}
+	steps := []struct {
+		from, to portalapi.Status
+		token    string
+		action   string
+	}{{portalapi.StatusPendingApproval, portalapi.StatusApproved, approverToken, "approve"}, {portalapi.StatusApproved, portalapi.StatusPublished, publisherToken, "publish"}}
 	for _, step := range steps {
-		if version.Status != step.from {
+		if publication.Status != step.from {
 			continue
 		}
-		path := fmt.Sprintf("/v1/portals/%s/versions/%d/%s", portalID, version.ID, step.operation)
+		path := fmt.Sprintf("/v1/portals/%s/publications/%d/%s", portal.ID, publication.ID, step.action)
 		status, raw, err := portalRequest(client, baseURL, step.token, http.MethodPost, path, map[string]any{}, true)
 		if err != nil || status != http.StatusOK {
-			return fmt.Errorf("%s status=%d body=%s: %w", step.operation, status, raw, err)
+			return portalapi.PortalPublication{}, fmt.Errorf("%s status=%d body=%s: %w", step.action, status, raw, err)
 		}
-		if err := json.Unmarshal(raw, version); err != nil {
-			return fmt.Errorf("decode %s PortalVersion: %w", step.operation, err)
+		if err := json.Unmarshal(raw, publication); err != nil {
+			return portalapi.PortalPublication{}, fmt.Errorf("decode %s Publication: %w", step.action, err)
 		}
-		if version.Status != step.to {
-			return fmt.Errorf("%s 后 PortalVersion 状态错误: %s", step.operation, version.Status)
+		if publication.Status != step.to {
+			return portalapi.PortalPublication{}, fmt.Errorf("%s 后 Publication 状态错误: %s", step.action, publication.Status)
 		}
 	}
-	if version.Status != portalapi.StatusPublished {
-		return fmt.Errorf("PortalVersion 无法从状态 %s 继续发布", version.Status)
+	if publication.Status != portalapi.StatusPublished {
+		return portalapi.PortalPublication{}, fmt.Errorf("Publication 无法从状态 %s 继续发布", publication.Status)
 	}
-	return nil
+	return *publication, nil
+}
+
+func currentPortalConfiguration(portal *portalapi.Portal) (*portalapi.PortalConfiguration, string) {
+	if portal.WorkingCopy != nil {
+		return &portal.WorkingCopy.Configuration, "WorkingCopy"
+	}
+	if portal.PendingPublication != nil && portal.PendingPublication.Source.Configuration != nil {
+		return portal.PendingPublication.Source.Configuration, "Publication"
+	}
+	if portal.PublishedPublication != nil && portal.PublishedPublication.Source.Configuration != nil {
+		return portal.PublishedPublication.Source.Configuration, "Published Publication"
+	}
+	return nil, "configuration"
 }
 
 func readPortalGovernance(client *http.Client, baseURL string) (portalapi.PortalGovernanceSnapshot, error) {

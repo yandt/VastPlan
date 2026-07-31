@@ -8,9 +8,9 @@ describe("Portal aggregate workspace", () => {
     expect(page.path).toBe("/settings/portals");
     expect(page.pageActions?.map((action) => action.id)).toEqual(["portal.create"]);
     expect(page.collection.actions?.map((action) => action.id)).toEqual(expect.arrayContaining([
-      "portal.edit", "portal.newVersion", "portal.publish", "portal.release", "portal.versions", "portal.releases",
+      "portal.edit", "portal.newWorkingCopy", "portal.publish", "portal.release", "portal.history", "portal.compare", "portal.restore", "portal.releases",
     ]));
-    expect(page.overlays?.map((overlay) => overlay.id)).toEqual(["versions", "releases", "audit", "configuration"]);
+    expect(page.overlays?.map((overlay) => overlay.id)).toEqual(["history", "compare", "releases", "audit", "configuration"]);
   });
 
   it("edits platform, application and services as one data-driven configuration", () => {
@@ -34,33 +34,40 @@ describe("Portal aggregate workspace", () => {
     expect(prepared?.initialValue).toMatchObject({ portalId: "", route: "/", defaultRenderer: "antd" });
   });
 
-  it("tolerates legacy Portal payloads whose release history is null", async () => {
-    const version = { id: 1, tenantId: "tenant-a", portalId: "operations", number: 1, status: "Published", configuration: configuration(), actorId: "author", createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
-    const portal = { id: "operations", tenantId: "tenant-a", versions: [version], releases: null, createdAt: version.createdAt, updatedAt: version.updatedAt };
+  it("projects one Portal row from its working copy without a compatibility versions array", async () => {
+    const workingCopy = { tenantId: "tenant-a", portalId: "operations", revision: 2, configuration: configuration(), digest: "a".repeat(64), createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
+    const portal = { id: "operations", tenantId: "tenant-a", workingCopy, versionControl: { enabled: false, availability: "disabled", capabilities: [] }, releases: [], createdAt: workingCopy.createdAt, updatedAt: workingCopy.updatedAt };
     const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [portal] }) }));
     const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
-    expect(result).toMatchObject({ total: 1, items: [{ id: "operations", releaseAvailable: true }] });
+    expect(result).toMatchObject({ total: 1, items: [{ id: "operations", workingRevision: 2, status: "Draft", releaseAvailable: false }] });
   });
 });
 
 describe("PortalControlClient", () => {
-  it("updates a PortalVersion through the aggregate route with fresh CSRF", async () => {
+  it("saves a WorkingCopy through revision CAS with fresh CSRF", async () => {
     const fetch = vi.fn().mockResolvedValueOnce(response({ token: "csrf-token" })).mockResolvedValueOnce(response({ id: 7 }));
     const client = new PortalControlClient({ fetch });
-    await client.updatePortalVersion("operations", 7, configuration());
-    expect(fetch).toHaveBeenNthCalledWith(2, "/v1/portals/operations/versions/7", {
-      method: "PUT", credentials: "include", headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": "csrf-token" }, body: JSON.stringify({ configuration: configuration() }),
+    await client.savePortalWorkingCopy("operations", 7, configuration());
+    expect(fetch).toHaveBeenNthCalledWith(2, "/v1/portals/operations/working-copy", {
+      method: "PUT", credentials: "include", headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": "csrf-token" }, body: JSON.stringify({ expectedRevision: 7, configuration: configuration() }),
     });
   });
 
-  it("uses one exact PortalVersion reference for release", async () => {
+  it("uses one exact Publication reference for release", async () => {
     const fetch = vi.fn().mockResolvedValueOnce(response({ token: "csrf-token" })).mockResolvedValueOnce(response({ id: 9, status: "Current" }));
     const client = new PortalControlClient({ fetch });
-    const request = { portalVersionId: 7, expectedCurrentReleaseId: 8, reason: "上线完整版本" };
-    await client.releasePortalVersion("operations", request);
+    const request = { publicationId: 7, expectedCurrentReleaseId: 8, reason: "上线完整候选" };
+    await client.releasePortalPublication("operations", request);
     expect(fetch).toHaveBeenNthCalledWith(2, "/v1/portals/operations/releases", {
       method: "POST", credentials: "include", headers: { "Content-Type": "application/json", "X-VastPlan-CSRF": "csrf-token" }, body: JSON.stringify(request),
     });
+  });
+
+  it("addresses version history by opaque ID and compares through query parameters", async () => {
+    const fetch = vi.fn().mockResolvedValue(response({ dirty: true }));
+    const client = new PortalControlClient({ fetch });
+    await client.comparePortalVersions("operations", "version:1", "version:2");
+    expect(fetch).toHaveBeenCalledWith("/v1/portals/operations/compare?left=version%3A1&right=version%3A2", { method: "GET", credentials: "include" });
   });
 
   it("preserves stable BFF error codes", async () => {

@@ -145,13 +145,13 @@ func TestFrontendTestReleaseReusesImmutableApplicationAndActivation(t *testing.T
 		t.Fatalf("读取 Portal 聚合失败: %+v err=%v", governance, err)
 	}
 	portal := governance.Portals[0]
-	if len(portal.Versions) != 1 || portal.Versions[0].ID == release.CandidatePortalVersionID || len(portal.Releases) != 1 || portal.CurrentReleaseID != first.ID {
+	if portal.PublishedPublication == nil || portal.PublishedPublication.ID == release.CandidatePortalVersionID || len(portal.Releases) != 1 || portal.CurrentReleaseID != first.ID {
 		t.Fatalf("Test Release 不得进入正式 Portal 版本和上线谱系: %+v", portal)
 	}
 	if _, err := service.ReleasePortalVersion(context.Background(), publisher, portal.ID, portalapi.PortalReleaseRequest{PortalVersionID: release.CandidatePortalVersionID, ExpectedCurrentReleaseID: release.CandidateReleaseID}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("测试候选不得通过普通 PortalRelease 晋级: %v", err)
 	}
-	next, err := service.CreatePortalVersion(context.Background(), author, portal.ID, portal.Versions[0].Configuration)
+	next, err := service.CreatePortalVersion(context.Background(), author, portal.ID, latestPortalVersionForTest(t, service, author.TenantID, portal.ID).Configuration)
 	if err != nil || next.Number != 2 {
 		t.Fatalf("隔离的测试候选不得占用正式版本号或阻塞新草稿: %+v err=%v", next, err)
 	}

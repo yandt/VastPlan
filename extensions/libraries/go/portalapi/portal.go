@@ -390,18 +390,13 @@ type TestReleaseService interface {
 // Service is implemented by the configuration/composition plugin and consumed
 // through an authenticated Portal BFF adapter. Every method scopes itself to principal.TenantID.
 type Service interface {
-	CreatePortal(context.Context, Principal, PortalVersionRequest) (Portal, error)
+	CreatePortal(context.Context, Principal, CreatePortalRequest) (Portal, error)
 	CreatePortalWorkingCopy(context.Context, Principal, string, PortalConfiguration) (PortalWorkingCopy, error)
 	SavePortalWorkingCopy(context.Context, Principal, string, SavePortalWorkingCopyRequest) (PortalWorkingCopy, error)
 	SubmitPortalPublication(context.Context, Principal, string, SubmitPortalPublicationRequest) (PortalPublication, error)
 	ApprovePortalPublication(context.Context, Principal, string, uint64) (PortalPublication, error)
 	PublishPortalPublication(context.Context, Principal, string, uint64) (PortalPublication, error)
 	ReleasePortalPublication(context.Context, Principal, string, PortalPublicationReleaseRequest) (PortalRelease, error)
-	CreatePortalVersion(context.Context, Principal, string, PortalConfiguration) (PortalVersion, error)
-	UpdatePortalVersion(context.Context, Principal, string, uint64, PortalConfiguration) (PortalVersion, error)
-	DeletePortalVersion(context.Context, Principal, string, uint64) (PortalVersion, error)
-	TransitionPortalVersion(context.Context, Principal, string, uint64, string) (PortalVersion, error)
-	ReleasePortalVersion(context.Context, Principal, string, PortalReleaseRequest) (PortalRelease, error)
 	RollbackPortalRelease(context.Context, Principal, string, uint64, uint64, string) (PortalRelease, error)
 	PortalGovernance(context.Context, Principal) (PortalGovernanceSnapshot, error)
 	ListPortalReleases(context.Context, Principal) ([]PortalRelease, error)

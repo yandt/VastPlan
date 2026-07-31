@@ -14,7 +14,7 @@ import (
 )
 
 // CreatePortal creates the stable Portal lineage and its first draft version.
-func (s *Service) CreatePortal(ctx context.Context, principal portalapi.Principal, request portalapi.PortalVersionRequest) (portalapi.Portal, error) {
+func (s *Service) CreatePortal(ctx context.Context, principal portalapi.Principal, request portalapi.CreatePortalRequest) (portalapi.Portal, error) {
 	if err := requireTrustedPrincipal(principal); err != nil {
 		return portalapi.Portal{}, err
 	}
@@ -392,7 +392,7 @@ func (s *Service) ListPortalReleases(ctx context.Context, principal portalapi.Pr
 
 func (s *Service) portalLocked(tenantID, portalID string) (portalapi.Portal, error) {
 	portal := portalapi.Portal{
-		ID: portalID, TenantID: tenantID, Versions: []portalapi.PortalVersion{}, Releases: []portalapi.PortalRelease{},
+		ID: portalID, TenantID: tenantID, Releases: []portalapi.PortalRelease{},
 		VersionControl: portalapi.PortalVersionControlStatus{Enabled: false, Availability: portalapi.PortalVersionControlDisabled, Capabilities: []string{}},
 	}
 	if control, enabled := s.state.VersionControls[portalID]; enabled {
@@ -407,15 +407,12 @@ func (s *Service) portalLocked(tenantID, portalID string) (portalapi.Portal, err
 		portal.VersionControl = portalapi.PortalVersionControlStatus{Enabled: true, Availability: availability, Capabilities: capabilities}
 	}
 	var publishedNumber uint64
+	found := false
 	for _, revision := range s.state.Revisions {
 		if revision.TenantID != tenantID || revision.PortalID != portalID || s.isTestVersionLocked(revision.ID) {
 			continue
 		}
-		version, err := s.portalVersionLocked(tenantID, revision)
-		if err != nil {
-			return portalapi.Portal{}, err
-		}
-		portal.Versions = append(portal.Versions, version)
+		found = true
 		switch revision.Status {
 		case portalapi.StatusDraft:
 			workingCopy, err := s.portalWorkingCopyLocked(tenantID, revision)
@@ -438,17 +435,16 @@ func (s *Service) portalLocked(tenantID, portalID string) (portalapi.Portal, err
 				portal.PublishedPublication, publishedNumber = &publication, revision.Number
 			}
 		}
-		if portal.CreatedAt == "" || version.CreatedAt < portal.CreatedAt {
-			portal.CreatedAt = version.CreatedAt
+		if portal.CreatedAt == "" || revision.CreatedAt < portal.CreatedAt {
+			portal.CreatedAt = revision.CreatedAt
 		}
-		if version.UpdatedAt > portal.UpdatedAt {
-			portal.UpdatedAt = version.UpdatedAt
+		if revision.UpdatedAt > portal.UpdatedAt {
+			portal.UpdatedAt = revision.UpdatedAt
 		}
 	}
-	if len(portal.Versions) == 0 {
+	if !found {
 		return portalapi.Portal{}, ErrNotFound
 	}
-	sort.Slice(portal.Versions, func(i, j int) bool { return portal.Versions[i].Number > portal.Versions[j].Number })
 	for _, activation := range s.projectPortalActivationsLocked(tenantID) {
 		if activation.PortalID != portalID {
 			continue
@@ -579,7 +575,7 @@ func (s *Service) configurationFromCatalog(application frontendcompositionv1.App
 
 func projectRelease(value portalapi.PortalActivation) portalapi.PortalRelease {
 	return portalapi.PortalRelease{
-		ID: value.ID, TenantID: value.TenantID, PortalID: value.PortalID, PublicationID: value.ApplicationRevisionID, PortalVersionID: value.ApplicationRevisionID,
+		ID: value.ID, TenantID: value.TenantID, PortalID: value.PortalID, PublicationID: value.ApplicationRevisionID,
 		Status: value.Status, PreviousReleaseID: value.PreviousActivationID, Resolved: cloneSpec(value.Spec), ArtifactReferences: cloneJSON(value.ArtifactReferences),
 		ReferencePending: value.ReferencePending, Phases: cloneJSON(value.Phases), ActorID: value.ActorID, Reason: value.Reason, CreatedAt: value.CreatedAt,
 	}

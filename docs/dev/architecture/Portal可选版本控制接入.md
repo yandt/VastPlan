@@ -154,7 +154,7 @@ Workbench 在 `enabled=false` 时完全隐藏 commit/history/diff/restore；保�
 2. **P2.2.2（已完成）**：补 describeResource、可选 diff 结果、Adapter 能力校验和不支持操作的稳定错误。
 3. **P2.3a（已完成）**：Portal 聚合拆为 WorkingCopy/Publication/Release/版本控制语义状态，完成无版本路径、WorkingCopy revision CAS、Publication 冻结摘要和 v3 Shared State；旧 v2 operations 暂作同状态投影。
 4. **P2.3b（已完成）**：实现中立 `PortalVersionControl` 端口和 Workspace Adapter，接通 detached commit、历史读取、比较与恢复。提交前先在 Portal Shared State 持久化 operation ID；聚合 CAS 只确认 Workspace 返回的精确 VersionRef。普通管理读取只对已绑定 Portal 按请求执行能力发现，不运行后台轮询。
-5. **P2.3c**：升级 BFF、权限操作、Workbench 数据契约与 UI；删除旧 PortalVersion API 和状态。
+5. **P2.3c（已完成）**：BFF、TypeScript SDK 与 Workbench 已切换到 WorkingCopy/Publication/Release 和可选 history/read/compare/restore；删除 `/versions`、旧 PortalVersion 用户操作与 `Portal.versions` 兼容状态。Portal Composer 提升到 4.0.0。
 6. **P2.3d**：覆盖两种模式、能力差异、软依赖缺失、Leader 重启、响应丢失、聚合 CAS 冲突、历史冷读失败、Release 不依赖 Ledger 等故障矩阵。
 
 P2.3 不实施手工 checkpoint、branch、merge、在线 attach/detach、历史迁移、Head 镜像、生产 Session 持久化或 P2.4 的二进制 Content Staging。

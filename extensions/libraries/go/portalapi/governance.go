@@ -103,8 +103,8 @@ type PortalVersionComparison struct {
 	Summary       versionresourcev1.ChangeSummary `json:"summary"`
 }
 
-// PortalVersion is the temporary v2 API projection retained until P2.3c.
-// New consumers use PortalWorkingCopy and PortalPublication.
+// PortalVersion is an internal transition record used by test-release and
+// activation workflows. It is not part of the Portal governance wire model.
 type PortalVersion struct {
 	ID            uint64              `json:"id"`
 	Number        uint64              `json:"number"`
@@ -130,7 +130,6 @@ type PortalRelease struct {
 	TenantID           string                       `json:"tenantId"`
 	PortalID           string                       `json:"portalId"`
 	PublicationID      uint64                       `json:"publicationId"`
-	PortalVersionID    uint64                       `json:"portalVersionId,omitempty"`
 	Status             PortalReleaseStatus          `json:"status"`
 	PreviousReleaseID  uint64                       `json:"previousReleaseId,omitempty"`
 	Resolved           PortalSpec                   `json:"resolved"`
@@ -154,12 +153,9 @@ type Portal struct {
 	CurrentReleaseID     uint64                     `json:"currentReleaseId,omitempty"`
 	CreatedAt            string                     `json:"createdAt"`
 	UpdatedAt            string                     `json:"updatedAt"`
-	// Versions is a temporary v2 API projection removed in P2.3c. It is
-	// derived from the same aggregate rows and is never a second truth source.
-	Versions []PortalVersion `json:"versions,omitempty"`
 }
 
-type PortalVersionRequest struct {
+type CreatePortalRequest struct {
 	PortalID      string              `json:"portalId"`
 	Configuration PortalConfiguration `json:"configuration"`
 }

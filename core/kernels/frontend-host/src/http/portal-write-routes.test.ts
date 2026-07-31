@@ -23,7 +23,7 @@ describe("Portal aggregate write routes", () => {
     expect(calls).toBe(0);
   });
 
-  it("rejects malformed JSON and unsafe version identifiers", async () => {
+  it("rejects malformed JSON and unsafe publication identifiers", async () => {
     let calls = 0;
     const composer: PortalComposerPort = { async call() { calls += 1; return new TextEncoder().encode("{}"); } };
     const origin = await startServer(composer);
@@ -32,9 +32,9 @@ describe("Portal aggregate write routes", () => {
     const token = (await csrf.json() as { token: string }).token;
     const headers = { Cookie: `${sessionCookie}; vastplan_csrf=${token}`, "X-VastPlan-CSRF": token, "Content-Type": "application/json" };
     expect((await fetch(`${origin}/v1/portals`, { method: "POST", headers, body: "{" })).status).toBe(400);
-    const unsafe = await fetch(`${origin}/v1/portals/operations/versions/9007199254740992`, { method: "PUT", headers, body: "{}" });
+    const unsafe = await fetch(`${origin}/v1/portals/operations/publications/9007199254740992/approve`, { method: "POST", headers, body: "{}" });
     expect(unsafe.status).toBe(400);
-    expect(await unsafe.json()).toEqual({ error: "invalid_portal_version" });
+    expect(await unsafe.json()).toEqual({ error: "invalid_publication" });
     expect(calls).toBe(0);
   });
 });

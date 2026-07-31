@@ -68,15 +68,42 @@ export interface PortalConfiguration {
 
 export type PortalRevisionStatus = "Draft" | "PendingApproval" | "Approved" | "Published";
 
-export interface PortalVersion {
-  id: number;
-  number: number;
+export interface PortalWorkingCopy {
   tenantId: string;
   portalId: string;
-  status: PortalRevisionStatus;
+  revision: number;
   configuration: PortalConfiguration;
+  digest: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PortalVersionRef {
+  stream: { namespace: string; streamId: string };
+  versionId: string;
+  sequence: number;
+  contentDigest: string;
+}
+
+export interface PortalPublicationSource {
+  kind: "inline" | "workspace";
+  configuration?: PortalConfiguration;
+  environmentId?: string;
+  environmentDigest?: string;
+  versionRef?: PortalVersionRef;
+}
+
+export interface PortalPublication {
+  id: number;
+  tenantId: string;
+  portalId: string;
+  workingRevision: number;
+  status: PortalRevisionStatus;
+  digest: string;
+  source: PortalPublicationSource;
   resolved: PortalResolvedSpec;
-  submittedBy?: string;
+  submittedBy: string;
   approvedBy?: string;
   publishedBy?: string;
   createdAt: string;
@@ -118,7 +145,7 @@ export interface PortalRelease {
   id: number;
   tenantId: string;
   portalId: string;
-  portalVersionId: number;
+  publicationId: number;
   status: PortalReleaseStatus;
   previousReleaseId?: number;
   resolved: PortalResolvedSpec;
@@ -133,7 +160,10 @@ export interface PortalRelease {
 export interface Portal {
   id: string;
   tenantId: string;
-  versions: PortalVersion[];
+  workingCopy?: PortalWorkingCopy;
+  pendingPublication?: PortalPublication;
+  publishedPublication?: PortalPublication;
+  versionControl: { enabled: boolean; availability: "disabled" | "available" | "unavailable"; capabilities: string[] };
   releases: PortalRelease[];
   currentReleaseId?: number;
   createdAt: string;
@@ -146,9 +176,30 @@ export interface PortalGovernance {
 }
 
 export interface PortalReleaseRequest {
-  portalVersionId: number;
+  publicationId: number;
   expectedCurrentReleaseId: number;
   reason?: string;
+}
+
+export interface PortalVersionHistoryEntry {
+  publicationId: number;
+  environmentId: string;
+  environmentDigest: string;
+  versionRef: PortalVersionRef;
+  configurationDigest: string;
+  actorId: string;
+  createdAt: string;
+}
+
+export interface PortalVersionHistory { portalId: string; entries: PortalVersionHistoryEntry[]; }
+export interface PortalVersionSnapshot { entry: PortalVersionHistoryEntry; configuration: PortalConfiguration; }
+export interface PortalVersionComparison {
+  left: PortalVersionHistoryEntry;
+  right: PortalVersionHistoryEntry;
+  dirty: boolean;
+  diffAvailable: boolean;
+  changedPaths?: string[];
+  summary: { added: number; modified: number; removed: number; total: number };
 }
 
 export type PortalTestTargetScope = "application-plugin" | "platform-profile-plugin";
@@ -242,23 +293,27 @@ export class PortalControlClient {
     return this.mutate<Portal>(this.basePath, "POST", { portalId: this.validResourceID(portalId), configuration });
   }
 
-  public createPortalVersion(portalId: string, configuration: PortalConfiguration): Promise<PortalVersion> {
-    return this.mutate<PortalVersion>(`${this.portalPath(portalId)}/versions`, "POST", { configuration });
+  public createPortalWorkingCopy(portalId: string, configuration: PortalConfiguration): Promise<PortalWorkingCopy> {
+    return this.mutate<PortalWorkingCopy>(`${this.portalPath(portalId)}/working-copy`, "POST", { configuration });
   }
 
-  public updatePortalVersion(portalId: string, id: number, configuration: PortalConfiguration): Promise<PortalVersion> {
-    return this.mutate<PortalVersion>(this.versionPath(portalId, id), "PUT", { configuration });
+  public savePortalWorkingCopy(portalId: string, expectedRevision: number, configuration: PortalConfiguration): Promise<PortalWorkingCopy> {
+    return this.mutate<PortalWorkingCopy>(`${this.portalPath(portalId)}/working-copy`, "PUT", { expectedRevision: this.validID(expectedRevision), configuration });
   }
 
-  public deletePortalVersion(portalId: string, id: number): Promise<PortalVersion> {
-    return this.mutate<PortalVersion>(this.versionPath(portalId, id), "DELETE", {});
+  public submitPortalPublication(portalId: string, expectedWorkingRevision: number): Promise<PortalPublication> {
+    return this.mutate<PortalPublication>(`${this.portalPath(portalId)}/publications`, "POST", { expectedWorkingRevision: this.validID(expectedWorkingRevision) });
   }
 
-  public transitionPortalVersion(portalId: string, id: number, action: "submit" | "approve" | "publish", breakGlassReason?: string): Promise<PortalVersion> {
-    return this.mutate<PortalVersion>(`${this.versionPath(portalId, id)}/${action}`, "POST", breakGlassReason === undefined ? {} : { breakGlassReason });
+  public approvePortalPublication(portalId: string, publicationId: number): Promise<PortalPublication> {
+    return this.mutate<PortalPublication>(`${this.portalPath(portalId)}/publications/${this.validID(publicationId)}/approve`, "POST", {});
   }
 
-  public releasePortalVersion(portalId: string, request: PortalReleaseRequest): Promise<PortalRelease> {
+  public publishPortalPublication(portalId: string, publicationId: number): Promise<PortalPublication> {
+    return this.mutate<PortalPublication>(`${this.portalPath(portalId)}/publications/${this.validID(publicationId)}/publish`, "POST", {});
+  }
+
+  public releasePortalPublication(portalId: string, request: PortalReleaseRequest): Promise<PortalRelease> {
     return this.mutate<PortalRelease>(`${this.portalPath(portalId)}/releases`, "POST", request);
   }
 
@@ -266,8 +321,23 @@ export class PortalControlClient {
     return this.mutate<PortalRelease>(`${this.portalPath(portalId)}/releases/${this.validID(sourceId)}/rollback`, "POST", { expectedCurrentReleaseId, reason });
   }
 
-  public auditPortalVersion(portalId: string, id: number): Promise<PortalAuditEvent[]> {
-    return this.call<PortalAuditEvent[]>(`${this.versionPath(portalId, id)}/audit`, { method: "GET" });
+  public auditPortalPublication(portalId: string, id: number): Promise<PortalAuditEvent[]> {
+    return this.call<PortalAuditEvent[]>(`${this.portalPath(portalId)}/publications/${this.validID(id)}/audit`, { method: "GET" });
+  }
+  public portalVersionHistory(portalId: string): Promise<PortalVersionHistory> {
+    return this.call<PortalVersionHistory>(`${this.portalPath(portalId)}/history`, { method: "GET" });
+  }
+  public readPortalVersion(portalId: string, versionId: string): Promise<PortalVersionSnapshot> {
+    return this.call<PortalVersionSnapshot>(`${this.portalPath(portalId)}/history/${encodeURIComponent(this.validVersionID(versionId))}`, { method: "GET" });
+  }
+  public comparePortalVersions(portalId: string, leftVersionId: string, rightVersionId: string): Promise<PortalVersionComparison> {
+    const query = new URLSearchParams({ left: this.validVersionID(leftVersionId), right: this.validVersionID(rightVersionId) });
+    return this.call<PortalVersionComparison>(`${this.portalPath(portalId)}/compare?${query.toString()}`, { method: "GET" });
+  }
+  public restorePortalVersion(portalId: string, versionId: string, expectedWorkingRevision: number): Promise<PortalWorkingCopy> {
+    return this.mutate<PortalWorkingCopy>(`${this.portalPath(portalId)}/history/${encodeURIComponent(this.validVersionID(versionId))}/restore`, "POST", {
+      expectedWorkingRevision: this.validID(expectedWorkingRevision),
+    });
   }
   public listTestTargetBindings(): Promise<PortalTestTargetBinding[]> {
     return this.call<PortalTestTargetBinding[]>(`${this.testingPath}/test-target-bindings`, { method: "GET" });
@@ -289,10 +359,6 @@ export class PortalControlClient {
 	return `${this.basePath}/${this.validResourceID(portalId)}`;
   }
 
-  private versionPath(portalId: string, id: number): string {
-	return `${this.portalPath(portalId)}/versions/${this.validID(id)}`;
-  }
-
   private validID(id: number): number {
     if (!Number.isSafeInteger(id) || id <= 0) throw new PortalControlError(400, "invalid_revision");
     return id;
@@ -300,6 +366,11 @@ export class PortalControlClient {
 
   private validResourceID(id: string): string {
     if (!/^[a-z0-9][a-z0-9._-]{0,127}$/.test(id)) throw new PortalControlError(400, "invalid_resource_id");
+    return id;
+  }
+
+  private validVersionID(id: string): string {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(id)) throw new PortalControlError(400, "invalid_version_id");
     return id;
   }
 

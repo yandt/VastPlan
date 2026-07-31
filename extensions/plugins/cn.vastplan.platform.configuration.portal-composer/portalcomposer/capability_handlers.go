@@ -3,14 +3,13 @@ package portalcomposer
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/portalapi"
 )
 
 func (s *Service) handlePortalOperation(ctx context.Context, principal portalapi.Principal, operation string, payload []byte) (any, error) {
 	switch operation {
-	case "createPortal", "createPortalWorkingCopy", "savePortalWorkingCopy", "submitPortalPublication", "approvePortalPublication", "publishPortalPublication", "releasePortalPublication", "portalVersionHistory", "readPortalVersion", "comparePortalVersions", "restorePortalVersion", "createPortalVersion", "updatePortalVersion", "deletePortalVersion", "submitPortalVersion", "approvePortalVersion", "publishPortalVersion", "releasePortalVersion", "rollbackPortalRelease", "portalGovernance", "listPortalReleases", "audit":
+	case "createPortal", "createPortalWorkingCopy", "savePortalWorkingCopy", "submitPortalPublication", "approvePortalPublication", "publishPortalPublication", "releasePortalPublication", "portalVersionHistory", "readPortalVersion", "comparePortalVersions", "restorePortalVersion", "rollbackPortalRelease", "portalGovernance", "listPortalReleases", "audit":
 		return s.handlePortalAggregateOperation(ctx, principal, operation, payload)
 	case "listTestTargetBindings", "putTestTargetBinding", "listTestReleases", "createTestRelease", "rollbackTestRelease":
 		return s.handleTestReleaseOperation(ctx, principal, operation, payload)
@@ -30,13 +29,13 @@ func (s *Service) handlePortalAggregateOperation(ctx context.Context, principal 
 	case "listPortalReleases":
 		return s.ListPortalReleases(ctx, principal)
 	case "createPortal":
-		var request portalapi.PortalVersionRequest
+		var request portalapi.CreatePortalRequest
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
 		return s.CreatePortal(ctx, principal, request)
 	case "createPortalWorkingCopy":
-		var request portalapi.PortalVersionRequest
+		var request portalapi.CreatePortalRequest
 		if err := decode(payload, &request); err != nil {
 			return nil, err
 		}
@@ -80,53 +79,6 @@ func (s *Service) handlePortalAggregateOperation(ctx context.Context, principal 
 			return nil, err
 		}
 		return s.ReleasePortalPublication(ctx, principal, request.PortalID, request.Release)
-	case "createPortalVersion":
-		var request portalapi.PortalVersionRequest
-		if err := decode(payload, &request); err != nil {
-			return nil, err
-		}
-		return s.CreatePortalVersion(ctx, principal, request.PortalID, request.Configuration)
-	case "updatePortalVersion":
-		var request struct {
-			PortalID      string                        `json:"portalId"`
-			VersionID     uint64                        `json:"versionId"`
-			Configuration portalapi.PortalConfiguration `json:"configuration"`
-		}
-		if err := decode(payload, &request); err != nil {
-			return nil, err
-		}
-		return s.UpdatePortalVersion(ctx, principal, request.PortalID, request.VersionID, request.Configuration)
-	case "deletePortalVersion":
-		var request struct {
-			PortalID  string `json:"portalId"`
-			VersionID uint64 `json:"versionId"`
-		}
-		if err := decode(payload, &request); err != nil {
-			return nil, err
-		}
-		return s.DeletePortalVersion(ctx, principal, request.PortalID, request.VersionID)
-	case "submitPortalVersion", "approvePortalVersion", "publishPortalVersion":
-		var request struct {
-			PortalID         string `json:"portalId"`
-			VersionID        uint64 `json:"versionId"`
-			BreakGlassReason string `json:"breakGlassReason,omitempty"`
-		}
-		if err := decode(payload, &request); err != nil {
-			return nil, err
-		}
-		if operation == "publishPortalVersion" && principal.System {
-			return s.breakGlassPublishPortalVersion(ctx, principal, request.PortalID, request.VersionID, request.BreakGlassReason)
-		}
-		return s.TransitionPortalVersion(ctx, principal, request.PortalID, request.VersionID, strings.TrimSuffix(operation, "PortalVersion"))
-	case "releasePortalVersion":
-		var request struct {
-			PortalID string                         `json:"portalId"`
-			Release  portalapi.PortalReleaseRequest `json:"release"`
-		}
-		if err := decode(payload, &request); err != nil {
-			return nil, err
-		}
-		return s.ReleasePortalVersion(ctx, principal, request.PortalID, request.Release)
 	case "rollbackPortalRelease":
 		var request struct {
 			PortalID                 string `json:"portalId"`

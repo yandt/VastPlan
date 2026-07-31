@@ -37,18 +37,18 @@ func TestNodePortalKernelGovernanceLifecycleWithRealPlugins(t *testing.T) {
 	// protocol host. Role denial belongs to the real Authorization Enforcer
 	// suite; duplicating it in the BFF would create a second policy source.
 
-	firstVersion := createPublishedPortalVersion(t, process, author, approver, publisher, portalApplication(1, "Initial"))
+	firstPublication := createPublishedPortalPublication(t, process, author, approver, publisher, portalApplication(1, "Initial"))
 	if status, _ := portalJSON(t, reader, process.baseURL(), http.MethodGet, "/v1/portal-runtime?path=/operations", nil, false); status != http.StatusNotFound {
-		t.Fatalf("Published PortalVersion 在上线前不得生效: status=%d", status)
+		t.Fatalf("Published Publication 在上线前不得生效: status=%d", status)
 	}
-	firstRelease := releasePortalVersion(t, process, publisher, "operations", portalapi.PortalReleaseRequest{
-		PortalVersionID: firstVersion.ID, ExpectedCurrentReleaseID: 0, Reason: "Node Portal Kernel E2E initial release",
+	firstRelease := releasePortalPublication(t, process, publisher, "operations", portalapi.PortalPublicationReleaseRequest{
+		PublicationID: firstPublication.ID, ExpectedCurrentReleaseID: 0, Reason: "Node Portal Kernel E2E initial release",
 	})
 	assertPortalRuntime(t, process, reader, firstRelease.ID)
 
-	secondVersion := createPublishedPortalVersion(t, process, author, approver, publisher, portalApplication(2, "Changed"))
-	secondRelease := releasePortalVersion(t, process, publisher, "operations", portalapi.PortalReleaseRequest{
-		PortalVersionID: secondVersion.ID, ExpectedCurrentReleaseID: firstRelease.ID, Reason: "Node Portal Kernel E2E second release",
+	secondPublication := createPublishedPortalPublication(t, process, author, approver, publisher, portalApplication(2, "Changed"))
+	secondRelease := releasePortalPublication(t, process, publisher, "operations", portalapi.PortalPublicationReleaseRequest{
+		PublicationID: secondPublication.ID, ExpectedCurrentReleaseID: firstRelease.ID, Reason: "Node Portal Kernel E2E second release",
 	})
 	assertPortalRuntime(t, process, reader, secondRelease.ID)
 
@@ -60,8 +60,8 @@ func TestNodePortalKernelGovernanceLifecycleWithRealPlugins(t *testing.T) {
 	}
 	var rollback portalapi.PortalRelease
 	decodePortalJSON(t, raw, &rollback)
-	if rollback.Status != portalapi.ActivationCurrent || rollback.PreviousReleaseID != secondRelease.ID || rollback.PortalVersionID != firstVersion.ID {
-		t.Fatalf("回滚未基于历史 PortalVersion 创建新 Release: %+v", rollback)
+	if rollback.Status != portalapi.ActivationCurrent || rollback.PreviousReleaseID != secondRelease.ID || rollback.PublicationID != firstPublication.ID {
+		t.Fatalf("回滚未基于历史 Publication 创建新 Release: %+v", rollback)
 	}
 	assertPortalRuntime(t, process, reader, rollback.ID)
 }
@@ -80,7 +80,7 @@ func loginPortalUser(t *testing.T, process *portalKernelProcess, identity *porta
 	return client
 }
 
-func createPublishedPortalVersion(t *testing.T, process *portalKernelProcess, author, approver, publisher *http.Client, composition frontendcompositionv1.ApplicationComposition) portalapi.PortalVersion {
+func createPublishedPortalPublication(t *testing.T, process *portalKernelProcess, author, approver, publisher *http.Client, composition frontendcompositionv1.ApplicationComposition) portalapi.PortalPublication {
 	t.Helper()
 	governance := readGovernance(t, process, author)
 	var portal *portalapi.Portal
@@ -90,54 +90,73 @@ func createPublishedPortalVersion(t *testing.T, process *portalKernelProcess, au
 			break
 		}
 	}
-	var status int
-	var raw []byte
+	var workingCopy portalapi.PortalWorkingCopy
 	if portal == nil {
-		status, raw = portalJSON(t, author, process.baseURL(), http.MethodPost, "/v1/portals", portalapi.PortalVersionRequest{PortalID: composition.ID, Configuration: portalapi.PortalConfiguration{Application: composition}}, true)
-	} else {
-		configuration := portal.Versions[0].Configuration
-		configuration.Application = composition
-		status, raw = portalJSON(t, author, process.baseURL(), http.MethodPost, fmt.Sprintf("/v1/portals/%s/versions", composition.ID), map[string]any{"configuration": configuration}, true)
-	}
-	if status != http.StatusOK {
-		t.Fatalf("创建 Portal 草稿失败: status=%d body=%s", status, raw)
-	}
-	var version portalapi.PortalVersion
-	if portal == nil {
+		status, raw := portalJSON(t, author, process.baseURL(), http.MethodPost, "/v1/portals", portalapi.CreatePortalRequest{
+			PortalID: composition.ID, Configuration: portalapi.PortalConfiguration{Application: composition},
+		}, true)
+		if status != http.StatusOK {
+			t.Fatalf("创建 Portal 失败: status=%d body=%s", status, raw)
+		}
 		var created portalapi.Portal
 		decodePortalJSON(t, raw, &created)
-		version = created.Versions[0]
+		if created.WorkingCopy == nil {
+			t.Fatalf("新 Portal 未返回 WorkingCopy: %+v", created)
+		}
+		workingCopy = *created.WorkingCopy
 	} else {
-		decodePortalJSON(t, raw, &version)
+		if portal.PublishedPublication == nil || portal.PublishedPublication.Source.Configuration == nil {
+			t.Fatalf("已发布 Portal 缺少可编辑的 inline Publication: %+v", portal)
+		}
+		configuration := *portal.PublishedPublication.Source.Configuration
+		configuration.Application = composition
+		status, raw := portalJSON(t, author, process.baseURL(), http.MethodPost,
+			fmt.Sprintf("/v1/portals/%s/working-copy", composition.ID), map[string]any{"configuration": configuration}, true)
+		if status != http.StatusOK {
+			t.Fatalf("创建下一轮 WorkingCopy 失败: status=%d body=%s", status, raw)
+		}
+		decodePortalJSON(t, raw, &workingCopy)
 	}
-	if version.ID == 0 || version.Status != portalapi.StatusDraft {
-		t.Fatalf("PortalVersion 草稿无效: %+v", version)
+	if workingCopy.Revision == 0 {
+		t.Fatalf("Portal WorkingCopy 无效: %+v", workingCopy)
+	}
+
+	status, raw := portalJSON(t, author, process.baseURL(), http.MethodPost,
+		fmt.Sprintf("/v1/portals/%s/publications", composition.ID), portalapi.SubmitPortalPublicationRequest{
+			ExpectedWorkingRevision: workingCopy.Revision,
+		}, true)
+	if status != http.StatusOK {
+		t.Fatalf("Portal submit 失败: status=%d body=%s", status, raw)
+	}
+	var publication portalapi.PortalPublication
+	decodePortalJSON(t, raw, &publication)
+	if publication.ID == 0 || publication.Status != portalapi.StatusPendingApproval {
+		t.Fatalf("Portal Publication 提交结果无效: %+v", publication)
+	}
+
+	status, _ = portalJSON(t, author, process.baseURL(), http.MethodPost,
+		fmt.Sprintf("/v1/portals/%s/publications/%d/approve", composition.ID, publication.ID), map[string]any{}, true)
+	if status != http.StatusForbidden {
+		t.Fatalf("提交人不得审批自身 Publication: status=%d", status)
 	}
 	for _, transition := range []struct {
 		client    *http.Client
 		operation string
 	}{
-		{author, "submit"},
 		{approver, "approve"},
 		{publisher, "publish"},
 	} {
-		if transition.operation == "approve" {
-			status, _ := portalJSON(t, author, process.baseURL(), http.MethodPost, fmt.Sprintf("/v1/portals/%s/versions/%d/approve", composition.ID, version.ID), map[string]any{}, true)
-			if status != http.StatusForbidden {
-				t.Fatalf("提交人不得审批自身草稿: status=%d", status)
-			}
-		}
 		status, raw = portalJSON(t, transition.client, process.baseURL(), http.MethodPost,
-			fmt.Sprintf("/v1/portals/%s/versions/%d/%s", composition.ID, version.ID, transition.operation), map[string]any{}, true)
+			fmt.Sprintf("/v1/portals/%s/publications/%d/%s", composition.ID, publication.ID, transition.operation), map[string]any{}, true)
 		if status != http.StatusOK {
 			t.Fatalf("Portal %s 失败: status=%d body=%s", transition.operation, status, raw)
 		}
-		decodePortalJSON(t, raw, &version)
+		decodePortalJSON(t, raw, &publication)
 	}
-	if version.Status != portalapi.StatusPublished {
-		t.Fatalf("PortalVersion 未发布: %+v", version)
+	if publication.Status != portalapi.StatusPublished {
+		t.Fatalf("Portal Publication 未发布: %+v", publication)
 	}
-	return version
+	return publication
 }
 
 func readGovernance(t *testing.T, process *portalKernelProcess, client *http.Client) portalapi.PortalGovernanceSnapshot {
@@ -151,7 +170,7 @@ func readGovernance(t *testing.T, process *portalKernelProcess, client *http.Cli
 	return snapshot
 }
 
-func releasePortalVersion(t *testing.T, process *portalKernelProcess, publisher *http.Client, portalID string, request portalapi.PortalReleaseRequest) portalapi.PortalRelease {
+func releasePortalPublication(t *testing.T, process *portalKernelProcess, publisher *http.Client, portalID string, request portalapi.PortalPublicationReleaseRequest) portalapi.PortalRelease {
 	t.Helper()
 	status, raw := portalJSON(t, publisher, process.baseURL(), http.MethodPost, fmt.Sprintf("/v1/portals/%s/releases", portalID), request, true)
 	if status != http.StatusOK {

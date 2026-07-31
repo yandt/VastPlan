@@ -138,6 +138,30 @@ func newTestService(t *testing.T) *Service {
 	return s
 }
 
+func latestPortalVersionForTest(t *testing.T, service *Service, tenantID, portalID string) portalapi.PortalVersion {
+	t.Helper()
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	var latest *portalapi.Revision
+	for index := range service.state.Revisions {
+		revision := &service.state.Revisions[index]
+		if revision.TenantID != tenantID || revision.PortalID != portalID || service.isTestVersionLocked(revision.ID) {
+			continue
+		}
+		if latest == nil || revision.Number > latest.Number {
+			latest = revision
+		}
+	}
+	if latest == nil {
+		t.Fatalf("Portal %s 没有正式配置记录", portalID)
+	}
+	version, err := service.portalVersionLocked(tenantID, *latest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return version
+}
+
 func TestAuthorizedBoundaryDoesNotRepeatLegacyTokenRolePolicy(t *testing.T) {
 	service := newTestService(t)
 	// Kernel Enforcer has already authorized this operation from the online
@@ -263,22 +287,23 @@ func TestPortalIDIsUniqueAndLineageAllowsOnlyOneOpenVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	portal, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
-	if err != nil || len(portal.Versions) != 1 || portal.Versions[0].Number != 1 {
+	portal, err := s.CreatePortal(context.Background(), author, portalapi.CreatePortalRequest{PortalID: "admin", Configuration: configuration})
+	if err != nil || portal.WorkingCopy == nil || portal.WorkingCopy.Revision != 1 {
 		t.Fatalf("创建 Portal 失败: %+v %v", portal, err)
 	}
+	initial := latestPortalVersionForTest(t, s, author.TenantID, portal.ID)
 	raw, err := json.Marshal(portal)
 	if err != nil || !strings.Contains(string(raw), `"releases":[]`) {
 		t.Fatalf("空上线历史必须编码为 []，避免前端聚合崩溃: %s err=%v", raw, err)
 	}
-	if _, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration}); !errors.Is(err, ErrInvalidState) {
+	if _, err := s.CreatePortal(context.Background(), author, portalapi.CreatePortalRequest{PortalID: "admin", Configuration: configuration}); !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("同一 tenant 的 portalId 必须唯一: %v", err)
 	}
 	if _, err := s.CreatePortalVersion(context.Background(), author, "admin", configuration); !errors.Is(err, ErrInvalidState) {
 		t.Fatalf("存在草稿时不得创建第二个候选版本: %v", err)
 	}
-	deleted, err := s.DeletePortalVersion(context.Background(), author, "admin", portal.Versions[0].ID)
-	if err != nil || deleted.ID != portal.Versions[0].ID {
+	deleted, err := s.DeletePortalVersion(context.Background(), author, "admin", initial.ID)
+	if err != nil || deleted.ID != initial.ID {
 		t.Fatalf("删除 PortalVersion 草稿失败: %+v %v", deleted, err)
 	}
 }
@@ -290,11 +315,11 @@ func TestPortalAuditAndBreakGlassKeepTrustedPortalIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	portal, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
+	portal, err := s.CreatePortal(context.Background(), author, portalapi.CreatePortalRequest{PortalID: "admin", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}
-	version := portal.Versions[0]
+	version := latestPortalVersionForTest(t, s, author.TenantID, portal.ID)
 	system := portalapi.Principal{ID: "system", TenantID: author.TenantID, System: true}
 	if _, err := s.breakGlassPublishPortalVersion(context.Background(), system, "forged", version.ID, "incident recovery"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("URL Portal 身份不得被版本 ID 绕过: %v", err)
@@ -321,7 +346,7 @@ func TestReleaseRejectsHistoricalPublishedVersion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	portal, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
+	portal, err := s.CreatePortal(context.Background(), author, portalapi.CreatePortalRequest{PortalID: "admin", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +364,7 @@ func TestReleaseRejectsHistoricalPublishedVersion(t *testing.T) {
 		}
 		return version
 	}
-	first := publish(portal.Versions[0])
+	first := publish(latestPortalVersionForTest(t, s, author.TenantID, portal.ID))
 	configuration.Application.Route = "/new"
 	second, err := s.CreatePortalVersion(context.Background(), author, portal.ID, configuration)
 	if err != nil {
@@ -363,11 +388,11 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 	publish := func(id string, checkBreakGlass bool) portalapi.PortalRelease {
 		candidate := cloneJSON(configuration)
 		candidate.Application.ID = id
-		portal, createErr := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: id, Configuration: candidate})
+		portal, createErr := s.CreatePortal(context.Background(), author, portalapi.CreatePortalRequest{PortalID: id, Configuration: candidate})
 		if createErr != nil {
 			t.Fatal(createErr)
 		}
-		version := portal.Versions[0]
+		version := latestPortalVersionForTest(t, s, author.TenantID, portal.ID)
 		if checkBreakGlass {
 			if _, publishErr := s.Publish(context.Background(), portalapi.Principal{ID: "system", TenantID: "tenant-a", System: true}, version.ID, portalapi.PublishRequest{}); publishErr == nil {
 				t.Fatal("break-glass 缺原因必须拒绝")
@@ -392,7 +417,7 @@ func TestPublishRejectsCrossPortalRouteAndBreakGlassNeedsReason(t *testing.T) {
 	if failed.Status != portalapi.ActivationFailed || first.Status != portalapi.ActivationCurrent {
 		t.Fatalf("同租户跨 Portal 路由冲突必须产生持久失败 Release: %+v", failed)
 	}
-	if _, err = s.Publish(context.Background(), portalapi.Principal{ID: "system", TenantID: "tenant-a", System: true}, first.PortalVersionID, portalapi.PublishRequest{}); err == nil {
+	if _, err = s.Publish(context.Background(), portalapi.Principal{ID: "system", TenantID: "tenant-a", System: true}, first.PublicationID, portalapi.PublishRequest{}); err == nil {
 		t.Fatal("break-glass 缺原因必须拒绝")
 	}
 }
@@ -445,11 +470,11 @@ func TestPublishedPortalVersionDoesNotGoLiveBeforeReleaseCAS(t *testing.T) {
 		t.Fatal(err)
 	}
 	configuration.Platform.Shell.Config.DefaultTemplate = "top-navigation"
-	portal, err := s.CreatePortal(context.Background(), author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
+	portal, err := s.CreatePortal(context.Background(), author, portalapi.CreatePortalRequest{PortalID: "admin", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}
-	version := portal.Versions[0]
+	version := latestPortalVersionForTest(t, s, author.TenantID, portal.ID)
 	for _, step := range []struct {
 		principal portalapi.Principal
 		action    string
@@ -542,7 +567,7 @@ func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) 
 		TenantId:  "tenant-a",
 		Principal: &contractv1.Principal{UserId: "author", SystemRoles: []string{"portal.compose"}},
 	}
-	payload, _ := json.Marshal(portalapi.PortalVersionRequest{PortalID: "admin", Configuration: portalapi.PortalConfiguration{Application: spec("/")}})
+	payload, _ := json.Marshal(portalapi.CreatePortalRequest{PortalID: "admin", Configuration: portalapi.PortalConfiguration{Application: spec("/")}})
 	handler := Contribution(service).Handlers["createPortal"]
 	result, raw, err := handler(context.Background(), host, callCtx, payload)
 	if err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
@@ -552,7 +577,7 @@ func TestContributionGetsStateAndCatalogOnlyFromAuthenticatedHost(t *testing.T) 
 		t.Fatalf("宿主调用路径错误: %v", host.calls)
 	}
 	var portal portalapi.Portal
-	if err := json.Unmarshal(raw, &portal); err != nil || portal.ID != "admin" || len(portal.Versions) != 1 || portal.Versions[0].ID != 1 {
+	if err := json.Unmarshal(raw, &portal); err != nil || portal.ID != "admin" || portal.WorkingCopy == nil || portal.WorkingCopy.Revision != 1 {
 		t.Fatalf("创建草稿响应错误: %s %v", raw, err)
 	}
 }

@@ -79,7 +79,7 @@ func TestPortalOptionalVersionControlCommitHistoryCompareAndRestore(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	portal, err := service.CreatePortal(ctx, author, portalapi.PortalVersionRequest{PortalID: "admin", Configuration: configuration})
+	portal, err := service.CreatePortal(ctx, author, portalapi.CreatePortalRequest{PortalID: "admin", Configuration: configuration})
 	if err != nil {
 		t.Fatal(err)
 	}

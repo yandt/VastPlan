@@ -194,10 +194,15 @@ func (s *Service) CreateDraft(ctx context.Context, principal portalapi.Principal
 	if exists {
 		version, err = s.CreatePortalVersion(ctx, principal, composition.ID, configuration)
 	} else {
-		var portal portalapi.Portal
-		portal, err = s.CreatePortal(ctx, principal, portalapi.PortalVersionRequest{PortalID: composition.ID, Configuration: configuration})
+		_, err = s.CreatePortal(ctx, principal, portalapi.CreatePortalRequest{PortalID: composition.ID, Configuration: configuration})
 		if err == nil {
-			version = portal.Versions[0]
+			s.mu.Lock()
+			index, indexErr := s.workingCopyIndexLocked(principal.TenantID, composition.ID)
+			if indexErr == nil {
+				version, indexErr = s.portalVersionLocked(principal.TenantID, s.state.Revisions[index])
+			}
+			s.mu.Unlock()
+			err = indexErr
 		}
 	}
 	if err != nil {

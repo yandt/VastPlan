@@ -14,8 +14,8 @@ describe("AddressingPortalComposerClient", () => {
     const client = new AddressingPortalComposerClient(invoker);
     const principal = { id: "alice", tenantId: "tenant-a", roles: [] };
 
-    await client.call(principal, "deletePortalVersion", new Uint8Array());
+    await client.call(principal, "restorePortalVersion", new Uint8Array());
     await expect(client.call(principal, "futureOperation" as never, new Uint8Array())).rejects.toThrow("签名 Capability Contract");
-    expect(observed).toEqual(["deletePortalVersion"]);
+    expect(observed).toEqual(["restorePortalVersion"]);
   });
 });

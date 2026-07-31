@@ -1,6 +1,6 @@
 {
   "name": "@vastplan/portal-composer",
-  "version": "3.1.0",
+  "version": "4.0.0",
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.tsx" },

@@ -34,7 +34,7 @@ export const portalConfigurationSchema: FormSchema = {
     defaultRenderer: { "ui:widget": "select" },
     defaultTemplate: { "ui:widget": "select" },
     pageBodyWidth: { "ui:widget": "select" },
-    applicationPlugins: { "ui:help": "这里只选择应用插件；平台运行栈随同 PortalVersion 保存。" },
+    applicationPlugins: { "ui:help": "这里只选择应用插件；平台运行栈随同 Portal 工作副本和 Publication 保存。" },
     config: { "ui:help": "禁止写入密码、令牌或凭证明文。" },
   },
   localization: {

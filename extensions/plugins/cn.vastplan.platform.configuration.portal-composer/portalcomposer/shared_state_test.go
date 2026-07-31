@@ -14,13 +14,13 @@ func TestComposerStateIsSharedAcrossInstancesAndTenantIsolated(t *testing.T) {
 	host := &configuredHost{state: newStateOnlyHost(t)}
 	callA := &contractv1.CallContext{TenantId: "tenant-a", Principal: &contractv1.Principal{UserId: "author", SystemRoles: []string{"portal.compose"}}}
 	first := New(nil)
-	request := portalapi.PortalVersionRequest{PortalID: "admin", Configuration: portalapi.PortalConfiguration{Application: spec("/")}}
+	request := portalapi.CreatePortalRequest{PortalID: "admin", Configuration: portalapi.PortalConfiguration{Application: spec("/")}}
 	created, raw, err := Contribution(first).Handlers["createPortal"](context.Background(), host, callA, mustJSON(t, request))
 	if err != nil || created.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("首次实例创建失败: result=%+v err=%v", created, err)
 	}
 	var portal portalapi.Portal
-	if err := json.Unmarshal(raw, &portal); err != nil || portal.ID != "admin" || len(portal.Versions) != 1 {
+	if err := json.Unmarshal(raw, &portal); err != nil || portal.ID != "admin" || portal.WorkingCopy == nil {
 		t.Fatalf("首次实例响应错误: %s %v", raw, err)
 	}
 	second := New(nil)
