@@ -145,6 +145,23 @@ export interface CollectionPageDefinition<Row extends Record<string, unknown> = 
   runPageAction?(context: PageActionContext, signal: AbortSignal): Promise<CollectionActionResult | void>;
 }
 
+/** A single routed page that composes several independently governed collections. */
+export interface WorkspaceSectionDefinition {
+  id: string;
+  page: CollectionPageDefinition<any>;
+}
+
+export interface WorkspacePageDefinition {
+  id: string;
+  path: string;
+  title: LocalizedText;
+  description?: LocalizedText;
+  requiredPermissions?: readonly string[];
+  requiredAnyPermissions?: readonly string[];
+  navigation?: { id: string; label: LocalizedText; zone: "primary" | "settings" | "secondary"; groupID?: string; order?: number };
+  sections: readonly WorkspaceSectionDefinition[];
+}
+
 export interface FormPageDefinition {
   id: string;
   path: string;
@@ -219,6 +236,7 @@ export type RecordPageDefinition<Row extends Record<string, unknown> = Record<st
 /** The only registration surface a functional Collection page receives. */
 export interface WorkbenchPluginContext {
   addCollectionPage<Row extends Record<string, unknown>>(page: CollectionPageDefinition<Row>): void;
+  addWorkspacePage(page: WorkspacePageDefinition): void;
   addFormPage(page: FormPageDefinition): void;
   addRecordPage<Row extends Record<string, unknown>>(page: RecordPageDefinition<Row>): void;
 }
@@ -270,6 +288,21 @@ export function defineCollectionPage<Row extends Record<string, unknown>>(defini
   }
   validatePageActions(definition.pageActions, forms, overlays, definition.runPageAction !== undefined, definition.id);
   return Object.freeze({ ...definition, collection: Object.freeze({ ...definition.collection }) });
+}
+
+export function defineWorkspacePage(definition: WorkspacePageDefinition): WorkspacePageDefinition {
+  validatePermissionRequirements(definition.requiredPermissions, "Workspace page requiredPermissions");
+  validatePermissionRequirements(definition.requiredAnyPermissions, "Workspace page requiredAnyPermissions");
+  if (!validIdentifier(definition.id) || definition.sections.length === 0) throw new Error(`Workspace 页面定义无效: ${definition.id}`);
+  const sectionIDs = definition.sections.map((section) => section.id);
+  if (new Set(sectionIDs).size !== sectionIDs.length || sectionIDs.some((id) => !validIdentifier(id))) throw new Error(`Workspace ${definition.id} 的 Section ID 无效或重复`);
+  const sections = definition.sections.map((section) => Object.freeze({ ...section, page: defineCollectionPage(section.page) }));
+  const pageActions = sections.flatMap((section) => section.page.pageActions ?? []);
+  if (new Set(pageActions.map((action) => action.id)).size !== pageActions.length) throw new Error(`Workspace ${definition.id} 的 Page Action ID 必须跨 Section 唯一`);
+  const referencedForms = pageActions.flatMap((action) => action.form === undefined ? [] : [action.form]);
+  const referencedOverlays = pageActions.flatMap((action) => action.overlay === undefined ? [] : [action.overlay]);
+  if (new Set(referencedForms).size !== referencedForms.length || new Set(referencedOverlays).size !== referencedOverlays.length) throw new Error(`Workspace ${definition.id} 的页面工作流 ID 必须跨 Section 唯一`);
+  return Object.freeze({ ...definition, sections: Object.freeze(sections) });
 }
 
 export function defineFormPage(definition: FormPageDefinition): FormPageDefinition {

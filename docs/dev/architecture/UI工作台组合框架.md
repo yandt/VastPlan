@@ -1,6 +1,6 @@
 # UI 工作台组合框架
 
-> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、表单、Overlay、Table 行虚拟化、统一拖拽与延迟 Dashboard Grid 基础均已实施｜最后更新：2026-07-30
+> 状态：FilterPanel、Collection、RecordDetail/MasterDetail/TreeDetail、WorkspacePage、表单、Overlay、Table 行虚拟化、统一拖拽与延迟 Dashboard Grid 基础均已实施｜最后更新：2026-07-31
 >
 > 本文是 Portal 列表、卡片、动作、表单与 Overlay 工作流组合规范的单一真相源。架构取舍见 [ADR-0082](../decisions/ADR-0082-前端工作台组合框架.md)；命名边界见 [ADR-0083](../decisions/ADR-0083-前端UI分层术语与插件命名空间.md) 与 [ADR-0104](../decisions/ADR-0104-Frontend-Runtime-Engine与React单实现.md)；Portal 装载与基础插件边界见《[前端门户内核](前端门户内核.md)》，视觉基线见《[Portal 设计系统](../design/DESIGN.md)》。
 
@@ -45,7 +45,7 @@ Record 工作流共享详情字段投影、状态、页面/详情动作、表单
 
 ### 2.1 严格入口与受控 Pattern 演进
 
-每个页面必须通过 `defineCollectionPage()` 或 `defineFormPage()` 提供 Workbench 定义。定义可以引用 Collection、Form、Overlay、Action、Status 和后续已批准的 Pattern；它不接受任意 React `Component`、DOM 节点或基础组件实例。运行时函数仅限 Loader、ActionHandler、SubmitHandler 等数据/命令端口，不能直接构造视觉树。
+每个页面必须通过 `defineCollectionPage()`、`defineWorkspacePage()` 或 `defineFormPage()` 提供 Workbench 定义。`WorkspacePage` 把多个独立校验的 Collection 固定组合为一个路由页面：Section ID、页面动作、表单和 Overlay ID 均跨 Section 唯一，宿主按各 Section 权限裁剪，并共享同一个页面动作区和刷新信号。定义可以引用 Collection、Form、Overlay、Action、Status 和后续已批准的 Pattern；它不接受任意 React `Component`、DOM 节点或基础组件实例。运行时函数仅限 Loader、ActionHandler、SubmitHandler 等数据/命令端口，不能直接构造视觉树。
 
 这不是允许“自由 custom block”的例外。某个业务需要图编辑器、代码编辑器、GIS、时间轴或拓扑图时，先提出新的 Workbench Pattern：说明数据模型、选择/动作、焦点、错误、i18n、窄屏、性能和安全边界；由 foundation Workbench 同步实现 Arco/MUI 语义。V1 不加载独立 Pattern 插件，避免未经治理的业务模块重新取得底层 UI 能力；未来独立 Pattern 的可信来源与 SDK 必须另立 ADR。
 
@@ -186,5 +186,6 @@ Record Foundation 使用 TypeScript + React：代码直接运行在现有浏览�
 5. 已完成：首方功能插件已迁移到当前 4.x 契约；Portal 治理按 Profile/Application/Binding/Activation 分页，部署管理复用动态 Form 和预览/审计 Overlay。生产构建与 `engineering/arch` 同时拒绝遗留基础组件 import、UI 框架 import 和裸页面注册。
 6. 已完成：`RecordDetail`、`MasterDetail`、`TreeDetail`，共享详情投影、列表查询、树边界、URL 选择、页内编辑脏状态、动作与 Overlay；Arco/MUI 实现等价 Split/List/Tree 语义，开发 Application 通过 `cn.vastplan.example.frontend.workbench-gallery` 展示三种模式。
 7. 已完成基础：dnd-kit 统一 Sortable 内核、列偏好迁移、`DashboardGridSpec` 校验、`react-grid-layout` 延迟 Library 与生产 Chunk 预算门禁；首页卡片贡献与偏好事务尚未开始。
+8. 已完成：`WorkspacePage` 将多个独立 Collection Section 组合为一个受治理路由，继续复用每个 Section 的查询、筛选、偏好、动作和刷新语义；功能插件不获得直接拼装布局或底层组件的权限。
 
 当前首方功能页已全部强制使用 Workbench。后续新增业务呈现若不适合 Collection/Record/Form/Overlay，必须先扩展 Foundation Workbench Pattern，不能在功能插件中恢复任意组件逃生口。

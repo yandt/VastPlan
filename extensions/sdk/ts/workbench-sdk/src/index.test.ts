@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage } from "./index.js";
+import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage, defineWorkspacePage } from "./index.js";
 import type { ActionSpec, PageActionSpec } from "./index.js";
 
 describe("defineCollectionPage", () => {
@@ -130,6 +130,29 @@ describe("defineCollectionPage", () => {
       collection: { id: "revisions", title: "Revisions", view: "table", query: { mode: "page", defaultPageSize: 20, pageSizeOptions: [20] }, columns: [{ key: "id", label: "ID" }], actions: [{ id: "audit", label: "Audit", icon: "search", placement: "record.row", overlay: "audit" }] },
       async load() { return { items: [], total: 0 }; },
     })).toThrow("未声明的 Overlay");
+  });
+});
+
+describe("defineWorkspacePage", () => {
+  const section = (id: string) => ({
+    id,
+    page: {
+      id: `page.${id}`, path: `/workspace/${id}`, title: id,
+      collection: { id: `collection.${id}`, title: id, view: "table" as const, query: { mode: "page" as const, defaultPageSize: 10, pageSizeOptions: [10] }, columns: [{ key: "id", label: "ID" }] },
+      async load() { return { items: [], total: 0 }; },
+    },
+  });
+
+  it("composes independently validated collections into one routed page", () => {
+    const page = defineWorkspacePage({ id: "portal.governance", path: "/portals", title: "Portals", sections: [section("profiles"), section("applications")] });
+    expect(Object.isFrozen(page)).toBe(true);
+    expect(Object.isFrozen(page.sections)).toBe(true);
+    expect(page.sections.map((candidate) => candidate.id)).toEqual(["profiles", "applications"]);
+  });
+
+  it("rejects empty and duplicate workspace sections", () => {
+    expect(() => defineWorkspacePage({ id: "portal.governance", path: "/portals", title: "Portals", sections: [] })).toThrow("Workspace");
+    expect(() => defineWorkspacePage({ id: "portal.governance", path: "/portals", title: "Portals", sections: [section("profiles"), section("profiles")] })).toThrow("重复");
   });
 });
 

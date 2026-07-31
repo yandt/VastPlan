@@ -4,11 +4,13 @@ import { CollectionPage } from "./patterns/collection/CollectionPage.js";
 import { PageActionHost } from "./patterns/action/PageActionHost.js";
 import { FormPage } from "./patterns/form/FormPage.js";
 import { RecordPage } from "./patterns/record/RecordPage.js";
+import { WorkspacePage } from "./patterns/workspace/WorkspacePage.js";
 
 export const workbench: UIWorkbenchAdapter = {
   id: "ui.workflow.workbench",
   uiContract: uiContractVersion,
   CollectionPage,
+  WorkspacePage,
   PageActionHost,
   FormPage,
   RecordPage,

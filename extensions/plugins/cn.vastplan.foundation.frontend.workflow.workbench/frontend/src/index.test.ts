@@ -6,6 +6,7 @@ describe("UI Workbench", () => {
   it("contributes the unique collection workflow extension point", () => {
     expect(workbench).toMatchObject({ id: "ui.workflow.workbench", uiContract: uiContractVersion });
     expect(typeof workbench.CollectionPage).toBe("function");
+    expect(typeof workbench.WorkspacePage).toBe("function");
     expect(typeof workbench.PageActionHost).toBe("function");
     expect(typeof workbench.FormPage).toBe("function");
     expect(typeof workbench.RecordPage).toBe("function");

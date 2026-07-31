@@ -24,7 +24,7 @@ const adapter: UIRenderAdapter = {
 };
 const shell: UIShellAdapter = { id: "ui.structure.shell", uiContract: uiContractVersion, templates: [{ id: "standard", label: "Standard", module: standardShellRef }, { id: "top-navigation", label: "Top", module: topShellRef }], defaultTemplate: "standard", compose: ({ pages }) => ({ pages, navigation: { primary: [], settings: [], secondary: [] }, shellSlots: {}, pageSlots: {} }) };
 const shellLibrary = (id: string): UIShellLibrary => ({ id, shell: "ui.structure.shell", uiContract: uiContractVersion, Shell: () => null });
-const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: uiContractVersion, CollectionPage: () => null, PageActionHost: () => null, FormPage: () => null, RecordPage: () => null };
+const workbench: UIWorkbenchAdapter = { id: "ui.workflow.workbench", uiContract: uiContractVersion, CollectionPage: () => null, WorkspacePage: () => null, PageActionHost: () => null, FormPage: () => null, RecordPage: () => null };
 
 const portal: PortalSpec = {
   revision: 1, id: "admin", tenantId: "acme", route: "/",

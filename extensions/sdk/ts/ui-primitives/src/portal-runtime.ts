@@ -1,7 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 import type { CollectionPreference } from "@vastplan/frontend-engine-contract";
 import type { DashboardGridLayouts, DashboardGridSpec, JSONValue, LocalizedText, MessageDescriptor, MessageValues, PluginLocalization } from "@vastplan/ui-contract";
-import type { CollectionPageDefinition, FormPageDefinition, PageActionHostDefinition, RecordPageDefinition } from "@vastplan/workbench-sdk";
+import type { CollectionPageDefinition, FormPageDefinition, PageActionHostDefinition, RecordPageDefinition, WorkspacePageDefinition } from "@vastplan/workbench-sdk";
 import type { SemanticIconName } from "./icon.js";
 
 export type NavigationZone = "primary" | "settings" | "secondary";
@@ -120,6 +120,7 @@ export interface FrontendPluginContext {
 	addPage(page: PortalPageDefinition): void;
 	/** Registers a governed collection page. Functional plugins should prefer this over addPage. */
 	addCollectionPage<Row extends Record<string, unknown>>(page: CollectionPageDefinition<Row>): void;
+	addWorkspacePage(page: WorkspacePageDefinition): void;
 	addFormPage(page: FormPageDefinition): void;
 	addRecordPage<Row extends Record<string, unknown>>(page: RecordPageDefinition<Row>): void;
 	/** Platform-profile plugins only; application plugins cannot mutate global Shell regions. */
@@ -136,6 +137,7 @@ export interface UIWorkbenchAdapter {
   id: "ui.workflow.workbench";
   uiContract: string;
   CollectionPage: ComponentType<{ page: CollectionPageDefinition; preferenceScope: string; preferences?: WorkbenchPreferencePort; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } }; refreshSignal?: PageRefreshSignal }>;
+  WorkspacePage: ComponentType<{ page: WorkspacePageDefinition; preferenceScope: string; preferences?: WorkbenchPreferencePort; presentation?: { collection?: { defaultDensity?: "compact" | "standard" | "comfortable"; allowedDensities?: readonly ("compact" | "standard" | "comfortable")[] } }; refreshSignal?: PageRefreshSignal }>;
   PageActionHost: ComponentType<{ definition: PageActionHostDefinition; onRefresh(): void }>;
   FormPage: ComponentType<{ page: FormPageDefinition }>;
   RecordPage: ComponentType<{ page: RecordPageDefinition; refreshSignal?: PageRefreshSignal }>;

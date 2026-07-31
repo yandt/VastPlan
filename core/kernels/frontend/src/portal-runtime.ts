@@ -1,6 +1,6 @@
 import { createElement } from "react";
 import { message, semanticIconNames } from "@vastplan/ui-primitives";
-import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage } from "@vastplan/workbench-sdk";
+import { defineCollectionPage, defineMasterDetailPage, defineRecordDetailPage, defineTreeDetailPage, defineWorkspacePage } from "@vastplan/workbench-sdk";
 import type {
   FrontendPluginContext,
   PluginLocalization,
@@ -72,7 +72,7 @@ export class PortalRuntime {
     const workbenchModule = requiredModule(modules, portal.workbench);
     assertTrustedFirstParty(workbenchModule, portal.workbench.id);
     const workbench = workbenchModule.workbench;
-    if (workbench?.id !== "ui.workflow.workbench" || typeof workbench.CollectionPage !== "function" || typeof workbench.PageActionHost !== "function" || typeof workbench.RecordPage !== "function" || !contractSatisfies(workbench.uiContract, portal.workbench.uiContract)) {
+    if (workbench?.id !== "ui.workflow.workbench" || typeof workbench.CollectionPage !== "function" || typeof workbench.WorkspacePage !== "function" || typeof workbench.PageActionHost !== "function" || typeof workbench.RecordPage !== "function" || !contractSatisfies(workbench.uiContract, portal.workbench.uiContract)) {
       throw new PortalAssemblyError("WORKBENCH_INVALID", "UI Workbench 插件缺失或 UI 契约不兼容");
     }
 
@@ -198,6 +198,27 @@ function createPluginContext(input: ContextInput): FrontendPluginContext {
         { id: "workbench.collection", slot: "page.body.main", component: Page },
       ] });
     },
+    addWorkspacePage: (page) => {
+      if (!experienceAllows(portal, page.requiredPermissions) || !experienceAllowsAny(portal, page.requiredAnyPermissions)) return;
+      const validated = validateWorkspace(page);
+      const sections = validated.sections
+        .filter((section) => experienceAllows(portal, section.page.requiredPermissions) && experienceAllowsAny(portal, section.page.requiredAnyPermissions))
+        .map((section) => ({ ...section, page: projectCollectionActions(portal, section.page) }));
+      if (sections.length === 0) return;
+      const projected = { ...validated, sections };
+      const actions = sections.flatMap((section) => [...(section.page.collection.actions ?? []), ...(section.page.pageActions ?? [])]);
+      if (actions.some((action) => action.icon === undefined || !semanticIconNames.includes(action.icon))) {
+        throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", `Workspace 页面动作定义无效: ${projected.id}`);
+      }
+      const refresh = createPageRefreshController();
+      const Page = () => createElement(workbench.WorkspacePage, { page: projected, preferenceScope: `${portal.tenantId}/${portal.id}`, preferences, presentation: portal.workbench.config, refreshSignal: refresh });
+      const definition = workspacePageActionDefinition(projected);
+      const PageActions = () => createElement(workbench.PageActionHost, { definition, onRefresh: refresh.invalidate });
+      context.addPage({ id: projected.id, path: projected.path, title: projected.title, description: projected.description, navigation: projected.navigation, slots: [
+        ...(definition.actions.length === 0 ? [] : [{ id: "page.actions", slot: "page.header.end" as const, component: PageActions, order: 100 }]),
+        { id: "workbench.workspace", slot: "page.body.main", component: Page },
+      ] });
+    },
     addFormPage: (page) => {
       if (!experienceAllows(portal, page.requiredPermissions) || !experienceAllowsAny(portal, page.requiredAnyPermissions)) return;
       if (!page.id || !page.form?.id || page.form.workflow.surface !== "page" || typeof page.form.submit !== "function") {
@@ -252,6 +273,14 @@ function validateCollectionPage<Row extends Record<string, unknown>>(page: impor
   }
 }
 
+function validateWorkspace(page: import("@vastplan/workbench-sdk").WorkspacePageDefinition): import("@vastplan/workbench-sdk").WorkspacePageDefinition {
+  try {
+    return defineWorkspacePage(page);
+  } catch (error) {
+    throw new PortalAssemblyError("WORKBENCH_PAGE_REJECTED", error instanceof Error ? error.message : `Workspace 页面定义无效: ${page.id}`);
+  }
+}
+
 function validateRecordPage<Row extends Record<string, unknown>>(page: import("@vastplan/workbench-sdk").RecordPageDefinition<Row>): import("@vastplan/workbench-sdk").RecordPageDefinition<Row> {
   try {
     if (page.pattern === "master-detail") return defineMasterDetailPage(page);
@@ -275,6 +304,19 @@ function projectPageActions<Page extends { pageActions?: readonly import("@vastp
 function pageActionDefinition(page: import("@vastplan/workbench-sdk").CollectionPageDefinition | import("@vastplan/workbench-sdk").FormPageDefinition | import("@vastplan/workbench-sdk").RecordPageDefinition): import("@vastplan/workbench-sdk").PageActionHostDefinition {
   const workflows = page as typeof page & { forms?: import("@vastplan/workbench-sdk").WorkbenchFormDefinition[]; overlays?: import("@vastplan/workbench-sdk").WorkbenchOverlayDefinition[] };
   return Object.freeze({ id: page.id, actions: page.pageActions ?? [], ...(workflows.forms === undefined ? {} : { forms: workflows.forms }), ...(workflows.overlays === undefined ? {} : { overlays: workflows.overlays }), ...(page.runPageAction === undefined ? {} : { runAction: page.runPageAction }) });
+}
+
+function workspacePageActionDefinition(page: import("@vastplan/workbench-sdk").WorkspacePageDefinition): import("@vastplan/workbench-sdk").PageActionHostDefinition {
+  const actions = page.sections.flatMap((section) => section.page.pageActions ?? []);
+  const formIDs = new Set(actions.flatMap((action) => action.form === undefined ? [] : [action.form]));
+  const overlayIDs = new Set(actions.flatMap((action) => action.overlay === undefined ? [] : [action.overlay]));
+  const forms = page.sections.flatMap((section) => section.page.forms?.filter((form) => formIDs.has(form.id)) ?? []);
+  const overlays = page.sections.flatMap((section) => section.page.overlays?.filter((overlay) => overlayIDs.has(overlay.id)) ?? []);
+  const runAction = async (context: import("@vastplan/workbench-sdk").PageActionContext, signal: AbortSignal) => {
+    const section = page.sections.find((candidate) => candidate.page.pageActions?.some((action) => action.id === context.action.id));
+    return section?.page.runPageAction?.(context, signal);
+  };
+  return Object.freeze({ id: page.id, actions: Object.freeze(actions), ...(forms.length === 0 ? {} : { forms: Object.freeze(forms) }), ...(overlays.length === 0 ? {} : { overlays: Object.freeze(overlays) }), ...(actions.some((action) => action.form === undefined && action.overlay === undefined) ? { runAction } : {}) });
 }
 
 function registerPage(
