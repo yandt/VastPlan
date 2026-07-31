@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	contentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioncontent/v1"
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
@@ -19,6 +20,26 @@ type StagingError struct {
 	Code      string
 	Retryable bool
 	Err       error
+}
+
+type ContentReferenceError struct {
+	Code      string
+	Retryable bool
+	Err       error
+}
+
+func (e *ContentReferenceError) Error() string {
+	if e == nil || e.Err == nil {
+		return "Version Content Reference 调用失败"
+	}
+	return e.Err.Error()
+}
+
+func (e *ContentReferenceError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
 }
 
 func (e *StagingError) Error() string {
@@ -106,5 +127,22 @@ func mapStagingFailure(err error) error {
 		return workspaceError(workspacev1.ErrorLimitExceeded, false, err)
 	default:
 		return workspaceError(workspacev1.ErrorContentUnavailable, stagingErr.Retryable, err)
+	}
+}
+
+func mapContentReferenceFailure(err error) error {
+	var referenceErr *ContentReferenceError
+	if !errors.As(err, &referenceErr) {
+		return workspaceError(workspacev1.ErrorContentUnavailable, true, err)
+	}
+	switch referenceErr.Code {
+	case contentv1.ErrorInvalidRequest:
+		return workspaceError(workspacev1.ErrorInvalidRequest, false, err)
+	case contentv1.ErrorLimitExceeded:
+		return workspaceError(workspacev1.ErrorLimitExceeded, false, err)
+	case contentv1.ErrorConflict:
+		return workspaceError(workspacev1.ErrorSessionConflict, false, err)
+	default:
+		return workspaceError(workspacev1.ErrorContentUnavailable, referenceErr.Retryable, err)
 	}
 }

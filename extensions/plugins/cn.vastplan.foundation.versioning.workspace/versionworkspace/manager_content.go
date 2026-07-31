@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	contentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioncontent/v1"
 	resourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
@@ -184,4 +185,20 @@ func (m *Manager) validateManifestContentLocked(record *sessionRecord, revision 
 
 func sameContentEntry(left, right resourcev1.FileEntry) bool {
 	return left.Path == right.Path && left.Digest == right.Digest && left.Size == right.Size && left.MediaType == right.MediaType
+}
+
+func (m *Manager) contentProtectionEntriesLocked(record *sessionRecord) []contentv1.ContentEntry {
+	entries := make([]contentv1.ContentEntry, len(record.current.Files))
+	for index, entry := range record.current.Files {
+		protected := contentv1.ContentEntry{Path: entry.Path, Digest: entry.Digest, Size: entry.Size, MediaType: entry.MediaType}
+		for uploadID, binding := range record.uploads {
+			if binding.status.Upload.State == stagingv1.StateReady && binding.status.Content != nil && m.now().Before(binding.status.Upload.LeaseExpiresAt) &&
+				binding.status.Upload.Path == entry.Path && binding.status.Content.Digest == entry.Digest && binding.status.Content.Size == entry.Size && binding.status.Content.MediaType == entry.MediaType {
+				protected.UploadID = uploadID
+				break
+			}
+		}
+		entries[index] = protected
+	}
+	return entries
 }

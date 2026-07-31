@@ -26,6 +26,8 @@ type LimitConfiguration struct {
 	MaxTotalBytes             int64 `json:"maxTotalBytes"`
 	MaxActiveUploadsPerTenant int   `json:"maxActiveUploadsPerTenant"`
 	MaxLeaseSeconds           int   `json:"maxLeaseSeconds"`
+	MaxPreparedPerTenant      int   `json:"maxPreparedPerTenant"`
+	PreparedProtectionSeconds int   `json:"preparedProtectionSeconds"`
 	TerminalRetentionSeconds  int   `json:"terminalRetentionSeconds"`
 }
 
@@ -39,8 +41,9 @@ func BuildConfiguredService(ctx context.Context, configuration StartupConfigurat
 	limits := Limits{
 		MaxFileBytes: configuration.Limits.MaxFileBytes, MaxTenantBytes: configuration.Limits.MaxTenantBytes,
 		MaxTotalBytes: configuration.Limits.MaxTotalBytes, MaxActiveUploadsPerTenant: configuration.Limits.MaxActiveUploadsPerTenant,
-		MaxLeaseSeconds:   configuration.Limits.MaxLeaseSeconds,
-		TerminalRetention: time.Duration(configuration.Limits.TerminalRetentionSeconds) * time.Second,
+		MaxLeaseSeconds: configuration.Limits.MaxLeaseSeconds, MaxPreparedPerTenant: configuration.Limits.MaxPreparedPerTenant,
+		PreparedProtection: time.Duration(configuration.Limits.PreparedProtectionSeconds) * time.Second,
+		TerminalRetention:  time.Duration(configuration.Limits.TerminalRetentionSeconds) * time.Second,
 	}
 	if configuration.Limits.TerminalRetentionSeconds < 60 {
 		return nil, 0, errors.New("Content Staging 终态至少保留 60 秒")

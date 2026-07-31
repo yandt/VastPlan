@@ -26,6 +26,7 @@ func main() {
 	go service.RunReclaimer(ctx, reclaimInterval)
 	plugin := sdk.New(staging.PluginID, pluginVersion, map[string]string{"backend": "^0.1"})
 	plugin.Contribute(service.Contribution())
+	plugin.Contribute(service.ContentReferenceContribution())
 	plugin.OnLifecycle(func(_ context.Context, lifecycle *pluginhostv1.Lifecycle) error {
 		if lifecycle.GetOp() == pluginhostv1.Lifecycle_OP_SHUTDOWN {
 			cancel()

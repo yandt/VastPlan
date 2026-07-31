@@ -55,3 +55,19 @@ Go 适合首个 Manager/File Provider：流式 I/O、SHA-256、文件权限、�
 P2.4c 拆为两个可独立失败关闭的子阶段。P2.4c1 已完成 Workspace begin/status/renew/complete/abort 内容上传代理，并按 Session revision 记录 Ready 绑定。Files Manifest 只接受同 tenant、Session、Environment、Resource、path、digest、size、mediaType 且 Lease 未过期的内容，或基线/当前已验证候选中仍受保护的相同内容。
 
 同时实现 `text.v1/blob.v1/files.v1` 标准 Adapter 和文件级确定性 diff。P2.4c1 显式阻止 Files commit，避免 durable reference 尚未建立时产生可提交但随后丢失对象的历史。P2.4c2 再增加提交前持久保护、Ledger 提交、版本引用确认与响应丢失恢复 outbox，完成后开放 Files commit。
+
+## 实施记录：P2.4c2（2026-07-31）
+
+P2.4c2 已完成。新增中立 `version.content-reference.v1`，并由 Content Staging 插件以第二项集群能力 `foundation.versioning.content-reference` 提供；既有 `version.staging.v1` 上传协议保持不变。版本内容保护记录和 CAS 对象由同一 Provider 持久化，避免把 outbox 放入 Workspace 内存或另建第二套存储真相。
+
+Files commit 固定执行以下事务链：
+
+1. Workspace 冻结规范化 Manifest，以稳定 `operationId` 调用 `prepareVersion`；Manager 校验每个新条目来自同 tenant、Session、Environment、Resource 和内容身份完全一致的 Ready Upload，已被确认版本保护的 CAS 对象可省略临时 Upload ID；
+2. Content Staging 先原子持久化 `Prepared` 保护，再允许 Workspace 调用幂等 `Ledger.PutVersion`；
+3. Ledger 返回精确 `VersionRef` 后，Workspace 调用 `confirmVersion`，要求 stream 和 `contentDigest` 与准备的 Manifest 完全一致；确认记录不再随 Upload Lease 或 Prepared 时限过期；
+4. 内容确认完成后才执行可选 Head create/move。Head 冲突会留下可追溯的 detached version，不回滚不可变版本或已确认内容；
+5. 任何模糊错误均不自动 abort。调用方以同一 `operationId` 重试，prepare、Ledger 写入和 confirm 都幂等；确认响应丢失不会产生第二个版本。
+
+`Prepared` 是有界崩溃保护，不是永久垃圾保留：每次有效重试会续展保护，超过配置时限仍未确认则进入 `Expired`，待 Upload Lease 和其他保护均消失后回收 CAS 对象。过期后仍可用同一 `operationId` 和完全相同的 Manifest 重新上传缺失内容并恢复 Prepared，不会创建第二个 Ledger 版本。`Confirmed` 当前永久保留；未来只有在 Version Ledger 增加明确的版本删除/保留策略后，才可通过单独的 release 协议减少引用，不能根据 Head 移动推断版本已无用。
+
+Workspace Session 仍是临时编辑区，不引入持久 Session 状态。跨 Leader 恢复通过“调用方重开 Session、重新上传缺失候选、复用同一领域 `operationId`”完成；Content Reference 的逻辑幂等比较忽略新的 Session 和临时 Upload ID，但严格固定 tenant、actor、Environment、Resource、stream、Manifest 摘要和全部内容描述。

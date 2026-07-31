@@ -15,7 +15,10 @@ import (
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 )
 
-const uploadRecordFormatVersion = 1
+const (
+	uploadRecordFormatVersion     = 1
+	protectionRecordFormatVersion = 1
+)
 
 type ManagerOptions struct {
 	Limits Limits
@@ -23,13 +26,14 @@ type ManagerOptions struct {
 }
 
 type Manager struct {
-	mu        sync.Mutex
-	provider  Provider
-	admission Admission
-	limits    Limits
-	now       func() time.Time
-	uploads   map[string]*uploadRecord
-	writers   map[string]struct{}
+	mu          sync.Mutex
+	provider    Provider
+	admission   Admission
+	limits      Limits
+	now         func() time.Time
+	uploads     map[string]*uploadRecord
+	protections map[string]*protectionRecord
+	writers     map[string]struct{}
 }
 
 func NewManager(ctx context.Context, provider Provider, admission Admission, options ManagerOptions) (*Manager, error) {
@@ -46,7 +50,11 @@ func NewManager(ctx context.Context, provider Provider, admission Admission, opt
 	if err != nil {
 		return nil, fmt.Errorf("加载 Content Staging 状态: %w", err)
 	}
-	manager := &Manager{provider: provider, admission: admission, limits: options.Limits, now: options.Now, uploads: map[string]*uploadRecord{}, writers: map[string]struct{}{}}
+	protectionRecords, err := provider.LoadProtections(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("加载 Content Reference 状态: %w", err)
+	}
+	manager := &Manager{provider: provider, admission: admission, limits: options.Limits, now: options.Now, uploads: map[string]*uploadRecord{}, protections: map[string]*protectionRecord{}, writers: map[string]struct{}{}}
 	for _, record := range records {
 		if err := validateStoredRecord(record); err != nil {
 			return nil, fmt.Errorf("加载 Content Staging Lease %q: %w", record.Upload.ID, err)
@@ -57,6 +65,16 @@ func NewManager(ctx context.Context, provider Provider, admission Admission, opt
 		copy := cloneRecord(record)
 		manager.uploads[record.Upload.ID] = &copy
 	}
+	for _, record := range protectionRecords {
+		if err := validateStoredProtection(record); err != nil {
+			return nil, fmt.Errorf("加载 Content Reference %q: %w", record.Protection.ID, err)
+		}
+		if _, duplicate := manager.protections[record.Protection.ID]; duplicate {
+			return nil, fmt.Errorf("Content Reference %q 重复", record.Protection.ID)
+		}
+		copy := cloneProtectionRecord(record)
+		manager.protections[record.Protection.ID] = &copy
+	}
 	if _, err := manager.Reclaim(ctx); err != nil {
 		return nil, fmt.Errorf("启动时回收 Content Staging Lease: %w", err)
 	}
@@ -64,34 +82,6 @@ func NewManager(ctx context.Context, provider Provider, admission Admission, opt
 		return nil, err
 	}
 	return manager, nil
-}
-
-func validateStoredRecord(record uploadRecord) error {
-	if record.FormatVersion != uploadRecordFormatVersion || record.Owner.Validate() != nil || !validSHA256(record.BeginDigest) || record.SessionRevision == 0 ||
-		record.BeginLeaseSeconds < stagingv1.MinimumLeaseSeconds || record.BeginLeaseSeconds > stagingv1.MaximumLeaseSeconds || stagingv1.ValidateUploadStatusResult(record.result()) != nil {
-		return errors.New("持久化 Upload 记录无效")
-	}
-	if record.Upload.State == stagingv1.StateReady && (!record.Written || record.ActualDigest != record.Upload.ExpectedDigest) {
-		return errors.New("Ready Upload 缺少已校验内容")
-	}
-	if record.Written && (!validSHA256(record.ActualDigest) || record.Upload.ReceivedSize < 0) {
-		return errors.New("Upload 写入结果无效")
-	}
-	return nil
-}
-
-func (m *Manager) verifyReadyContent(ctx context.Context) error {
-	for _, record := range m.uploads {
-		if record.Upload.State == stagingv1.StateReady {
-			if err := m.provider.VerifyContent(ctx, record.Owner, *record.Content); err != nil {
-				return fmt.Errorf("Ready Content %s 不可用: %w", record.Upload.ID, err)
-			}
-			if err := m.provider.RemoveStaged(ctx, record.Owner, record.Upload.ID); err != nil {
-				return fmt.Errorf("清理 Ready Content %s 的暂存副本: %w", record.Upload.ID, err)
-			}
-		}
-	}
-	return nil
 }
 
 func (m *Manager) Begin(ctx context.Context, scope Scope, idempotencyKey string, request stagingv1.BeginUploadRequest) (stagingv1.UploadStatusResult, error) {

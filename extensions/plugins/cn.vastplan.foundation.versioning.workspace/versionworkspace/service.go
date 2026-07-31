@@ -99,7 +99,11 @@ func (s *Service) handle(operation string) sdk.Handler {
 		case *workspacev1.CommitRequest:
 			ledger, callErr := newHostLedger(host, call)
 			if callErr == nil {
-				value, callErr = s.manager.Commit(ctx, scope, ledger, *request)
+				var references *hostContentReference
+				references, callErr = newHostContentReference(host, call)
+				if callErr == nil {
+					value, callErr = s.manager.CommitWithContent(ctx, scope, ledger, references, *request)
+				}
 			}
 			err = callErr
 		case *workspacev1.RevisionRequest:

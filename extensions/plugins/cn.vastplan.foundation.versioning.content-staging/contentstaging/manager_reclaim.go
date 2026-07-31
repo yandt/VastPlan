@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	contentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioncontent/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 )
 
@@ -13,6 +14,29 @@ func (m *Manager) Reclaim(ctx context.Context) (int, error) {
 	defer m.mu.Unlock()
 	count := 0
 	var combined error
+	for id, record := range m.protections {
+		if record.Protection.State == contentv1.StatePrepared && record.Protection.ExpiresAt != nil && !m.now().Before(*record.Protection.ExpiresAt) {
+			before := cloneProtectionRecord(*record)
+			record.Protection.State = contentv1.StateExpired
+			record.Protection.Revision++
+			record.Protection.UpdatedAt = m.now().UTC()
+			record.Protection.ExpiresAt = nil
+			if err := m.provider.SaveProtection(ctx, *record); err != nil {
+				*record = before
+				combined = errors.Join(combined, err)
+				continue
+			}
+			count++
+		}
+		if protectionTerminal(record.Protection.State) && m.now().Sub(record.Protection.UpdatedAt) >= m.limits.TerminalRetention {
+			if err := m.provider.DeleteProtection(ctx, record.Owner, id); err != nil {
+				combined = errors.Join(combined, err)
+				continue
+			}
+			delete(m.protections, id)
+			count++
+		}
+	}
 	for id, record := range m.uploads {
 		if protectedState(record.Upload.State) && !m.now().Before(record.Upload.LeaseExpiresAt) {
 			wasReady := record.Upload.State == stagingv1.StateReady
@@ -87,6 +111,16 @@ func (m *Manager) expireIfNeededLocked(ctx context.Context, record *uploadRecord
 }
 
 func (m *Manager) removeUnreferencedContentLocked(ctx context.Context, scope Scope, digest string) error {
+	for _, protection := range m.protections {
+		if protection.Owner.TenantID != scope.TenantID || !protectionActive(protection.Protection.State) {
+			continue
+		}
+		for _, entry := range protection.Protection.Entries {
+			if entry.Digest == digest {
+				return nil
+			}
+		}
+	}
 	for _, candidate := range m.uploads {
 		if candidate.Owner.TenantID == scope.TenantID && candidate.Upload.State == stagingv1.StateReady && candidate.Content != nil && candidate.Content.Digest == digest {
 			return nil

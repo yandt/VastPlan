@@ -156,7 +156,7 @@ func TestWorkspaceBindsReadyUploadBeforeAcceptingFilesManifest(t *testing.T) {
 		t.Fatalf("后续 revision 应保留仍受 Lease 保护的当前内容: %v", err)
 	}
 	if _, err := manager.Commit(context.Background(), scope, ledger, workspacev1.CommitRequest{SessionID: session.ID, ExpectedRevision: updated.Revision, OperationID: "script-publication:0001"}); errorCode(err) != workspacev1.ErrorOperationUnsupported {
-		t.Fatalf("c1 未建立 durable reference 前必须阻止 Files commit: %v", err)
+		t.Fatalf("未提供 durable reference 的内部调用路径必须阻止 Files commit: %v", err)
 	}
 }
 

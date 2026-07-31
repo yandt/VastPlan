@@ -4,12 +4,17 @@ import (
 	"context"
 	"errors"
 
+	contentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioncontent/v1"
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	resourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
 	workspacev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionworkspace/v1"
 )
 
 func (m *Manager) Commit(ctx context.Context, scope Scope, ledger Ledger, request workspacev1.CommitRequest) (workspacev1.CommitResult, error) {
+	return m.CommitWithContent(ctx, scope, ledger, nil, request)
+}
+
+func (m *Manager) CommitWithContent(ctx context.Context, scope Scope, ledger Ledger, references ContentReference, request workspacev1.CommitRequest) (workspacev1.CommitResult, error) {
 	if m == nil || ledger == nil || scope.Validate() != nil || workspacev1.ValidateCommitRequest(request) != nil {
 		return workspacev1.CommitResult{}, workspaceError(workspacev1.ErrorInvalidRequest, false, errors.New("提交 Version Workspace 请求无效"))
 	}
@@ -28,14 +33,17 @@ func (m *Manager) Commit(ctx context.Context, scope Scope, ledger Ledger, reques
 		m.mu.Unlock()
 		return workspacev1.CommitResult{}, workspaceError(workspacev1.ErrorReadOnly, false, errors.New("只读 Version Workspace 不允许提交"))
 	}
-	if record.adapter.Descriptor().ContentKind == resourcev1.ContentFiles {
+	isFiles := record.adapter.Descriptor().ContentKind == resourcev1.ContentFiles
+	if isFiles && references == nil {
 		m.mu.Unlock()
-		return workspacev1.CommitResult{}, workspaceError(workspacev1.ErrorOperationUnsupported, false, errors.New("Files 资源提交需等待 P2.4c2 持久版本引用保护"))
+		return workspacev1.CommitResult{}, workspaceError(workspacev1.ErrorOperationUnsupported, false, errors.New("该调用路径未提供 Files 持久版本内容保护能力"))
 	}
+	protectionEntries := m.contentProtectionEntriesLocked(record)
 	record.preCommitState = record.session.State
 	record.session.State = workspacev1.StateCommitting
 	session := cloneSession(record.session)
 	snapshot := cloneSnapshot(record.current)
+	snapshotDigest := record.currentDigest
 	maxBytes := record.maxBytes
 	m.mu.Unlock()
 
@@ -43,6 +51,24 @@ func (m *Manager) Commit(ctx context.Context, scope Scope, ledger Ledger, reques
 	if err != nil {
 		m.restoreCommitState(scope, request.SessionID, request.ExpectedRevision)
 		return workspacev1.CommitResult{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, err)
+	}
+	contentDigest, err := versioningv1.ContentDigest(content)
+	if err != nil || contentDigest != snapshotDigest {
+		m.restoreCommitState(scope, request.SessionID, request.ExpectedRevision)
+		return workspacev1.CommitResult{}, workspaceError(workspacev1.ErrorAdapterUnavailable, false, errors.New("Workspace Snapshot 内容摘要不一致"))
+	}
+	var protection contentv1.ProtectionResult
+	if isFiles {
+		protection, err = references.Prepare(ctx, contentv1.PrepareRequest{
+			OperationID: request.OperationID, SessionID: session.ID, ExpectedSessionRevision: request.ExpectedRevision,
+			EnvironmentDigest: session.EnvironmentDigest, Resource: session.Resource,
+			Stream:         versioningv1.StreamKey{Namespace: session.Namespace, StreamID: session.Resource.ID},
+			ManifestDigest: contentDigest, Entries: protectionEntries,
+		})
+		if err != nil {
+			m.restoreCommitState(scope, request.SessionID, request.ExpectedRevision)
+			return workspacev1.CommitResult{}, mapContentReferenceFailure(err)
+		}
 	}
 	parents := []versioningv1.VersionRef(nil)
 	if session.BaseRef != nil {
@@ -56,6 +82,15 @@ func (m *Manager) Commit(ctx context.Context, scope Scope, ledger Ledger, reques
 	if err != nil {
 		m.restoreCommitState(scope, request.SessionID, request.ExpectedRevision)
 		return workspacev1.CommitResult{}, mapLedgerFailure(err, workspacev1.ErrorBaseConflict)
+	}
+	if isFiles {
+		_, err = references.Confirm(ctx, contentv1.ConfirmRequest{
+			ProtectionID: protection.Protection.ID, ExpectedRevision: protection.Protection.Revision, Version: put.Version.Ref,
+		})
+		if err != nil {
+			m.restoreCommitState(scope, request.SessionID, request.ExpectedRevision)
+			return workspacev1.CommitResult{}, mapContentReferenceFailure(err)
+		}
 	}
 
 	head, err := commitHead(ctx, ledger, session, put.Version.Ref)

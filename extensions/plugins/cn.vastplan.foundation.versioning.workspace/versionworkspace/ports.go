@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 
+	contentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioncontent/v1"
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	resourcev1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionresource/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
@@ -15,7 +16,7 @@ import (
 
 const (
 	PluginID       = "cn.vastplan.foundation.versioning.workspace"
-	PluginVersion  = "0.4.0"
+	PluginVersion  = "0.5.0"
 	JSONAdapterID  = "version.resource.json.v1"
 	TextAdapterID  = "version.resource.text.v1"
 	BlobAdapterID  = "version.resource.blob.v1"
@@ -52,6 +53,16 @@ type Staging interface {
 	RenewUpload(context.Context, stagingv1.RenewUploadRequest) (stagingv1.UploadStatusResult, error)
 	CompleteUpload(context.Context, stagingv1.UploadRevisionRequest) (stagingv1.UploadStatusResult, error)
 	AbortUpload(context.Context, stagingv1.UploadRevisionRequest) (stagingv1.UploadStatusResult, error)
+}
+
+// ContentReference is the durable prepare/confirm boundary around Ledger.
+// It protects bytes before a version exists and binds them to the exact
+// VersionRef afterwards, so lease reclamation cannot race a commit.
+type ContentReference interface {
+	Prepare(context.Context, contentv1.PrepareRequest) (contentv1.ProtectionResult, error)
+	Status(context.Context, string) (contentv1.ProtectionResult, error)
+	Confirm(context.Context, contentv1.ConfirmRequest) (contentv1.ProtectionResult, error)
+	Abort(context.Context, contentv1.AbortRequest) (contentv1.ProtectionResult, error)
 }
 
 // Adapter is deliberately the same semantic surface as version.resource.v1.

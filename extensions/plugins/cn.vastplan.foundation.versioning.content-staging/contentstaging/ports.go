@@ -16,8 +16,11 @@ type WriteResult struct {
 // paths, credentials and provider identities never cross the public protocol.
 type Provider interface {
 	LoadUploads(context.Context) ([]uploadRecord, error)
+	LoadProtections(context.Context) ([]protectionRecord, error)
 	SaveUpload(context.Context, uploadRecord) error
+	SaveProtection(context.Context, protectionRecord) error
 	DeleteUpload(context.Context, Scope, string) error
+	DeleteProtection(context.Context, Scope, string) error
 	WriteStaged(context.Context, Scope, string, int64, io.Reader) (WriteResult, error)
 	OpenStaged(context.Context, Scope, string) (io.ReadCloser, error)
 	Promote(context.Context, Scope, string, stagingv1.ContentDescriptor) error

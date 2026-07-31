@@ -13,7 +13,7 @@ func TestBuildConfiguredServiceRequiresBoundedFileProvider(t *testing.T) {
 	}
 	configuration := StartupConfiguration{
 		Provider:               ProviderConfiguration{Protocol: FileProviderProtocol, Root: root},
-		Limits:                 LimitConfiguration{MaxFileBytes: 1024, MaxTenantBytes: 2048, MaxTotalBytes: 4096, MaxActiveUploadsPerTenant: 2, MaxLeaseSeconds: 300, TerminalRetentionSeconds: 3600},
+		Limits:                 LimitConfiguration{MaxFileBytes: 1024, MaxTenantBytes: 2048, MaxTotalBytes: 4096, MaxActiveUploadsPerTenant: 2, MaxLeaseSeconds: 300, MaxPreparedPerTenant: 8, PreparedProtectionSeconds: 3600, TerminalRetentionSeconds: 3600},
 		ReclaimIntervalSeconds: 30,
 	}
 	service, interval, err := BuildConfiguredService(context.Background(), configuration)

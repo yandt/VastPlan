@@ -39,7 +39,7 @@ func newManagerFixture(t *testing.T, admission Admission) *managerFixture {
 	}
 	fixture := &managerFixture{
 		root: root, now: time.Date(2026, 7, 31, 8, 0, 0, 0, time.UTC),
-		limits: Limits{MaxFileBytes: 1024, MaxTenantBytes: 2048, MaxTotalBytes: 4096, MaxActiveUploadsPerTenant: 2, MaxLeaseSeconds: 300, TerminalRetention: time.Hour},
+		limits: Limits{MaxFileBytes: 1024, MaxTenantBytes: 2048, MaxTotalBytes: 4096, MaxActiveUploadsPerTenant: 2, MaxLeaseSeconds: 300, MaxPreparedPerTenant: 8, PreparedProtection: time.Hour, TerminalRetention: time.Hour},
 	}
 	provider, err := OpenFileProvider(fixture.root)
 	if err != nil {

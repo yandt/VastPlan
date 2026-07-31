@@ -4,7 +4,7 @@
 
 该基础插件在 Version Workspace 与真实文件字节之间提供受信暂存边界。它管理短时 Upload Lease、流式摘要与大小校验、tenant 配额、本地内容寻址对象和过期回收；它不把文件字节、物理路径、存储 Provider、endpoint、凭据、token 或上传 URL 放进 JSON Capability Bus。
 
-## P2.4b 能力
+## 当前能力
 
 - `version.staging.v1` 控制面：`beginUpload/uploadStatus/renewUpload/completeUpload/abortUpload`，`beginUpload` 强制使用可信 `CallContext` 的 idempotency key 防止响应丢失后重复预留；
 - 仅接受 `cn.vastplan.foundation.versioning.workspace` 的受信控制调用，并从 `CallContext` 取得 tenant 与 subject；
@@ -15,10 +15,12 @@
 - 启动恢复会复核全部 Ready 对象，缺失或摘要不符时失败关闭；
 - 后台周期回收和启动回收会清理过期 Lease、无引用临时对象及超过保留期的终态记录；
 - Provider、Admission 与 Manager 通过窄端口隔离，后续可以替换为对象存储和企业安全扫描实现。
+- `version.content-reference.v1`：在 Ledger 写入前持久化 `Prepared` 保护，在精确 VersionRef 返回后幂等转为 `Confirmed`；上传 Lease 过期不会删除仍受版本保护的 CAS 对象；
+- Prepared 保护有 tenant 数量配额和最长保护时间，重试会续展；Confirmed 保护不随 Head 移动或临时 Lease 回收。
 
 ## 当前边界
 
-P2.4c1 已由 Workspace 接入 Lease 控制面和 Files Manifest Ready 校验，但仍未把真实字节流接到浏览器、Runner 或 Backend Host。当前没有 `writeChunk` 或临时 HTTP 上传接口。P2.4c2 将补齐 durable version-reference outbox 并开放 Files commit；P2.4d 再提供同站 BFF、Host streaming SDK、对象存储 Provider 与恶意内容/DLP 扫描。
+P2.4c2 已由 Workspace 接入持久版本引用事务并开放 Files commit，但仍未把真实字节流接到浏览器、Runner 或 Backend Host。当前没有 `writeChunk` 或临时 HTTP 上传接口。P2.4d 再提供同站 BFF、Host streaming SDK、对象存储 Provider 与恶意内容/DLP 扫描。
 
 内置 `IntegrityAdmission` 会再次顺序读取暂存内容，并配合 Manager 完成大小、SHA-256、mediaType 声明和 tenant/Lease 校验；它不是恶意软件扫描器。要求内容扫描的生产环境必须等待或配置 P2.4d 的 Admission Provider，不能把完整性校验误称为安全扫描。
 
@@ -38,6 +40,8 @@ P2.4c1 已由 Workspace 接入 Lease 控制面和 Files Manifest Ready 校验，
     "maxTotalBytes": 107374182400,
     "maxActiveUploadsPerTenant": 64,
     "maxLeaseSeconds": 3600,
+    "maxPreparedPerTenant": 256,
+    "preparedProtectionSeconds": 86400,
     "terminalRetentionSeconds": 86400
   },
   "reclaimIntervalSeconds": 60

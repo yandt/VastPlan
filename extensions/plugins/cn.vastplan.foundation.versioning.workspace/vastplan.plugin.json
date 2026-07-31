@@ -1,7 +1,7 @@
 {
   "id": "cn.vastplan.foundation.versioning.workspace",
   "name": "VastPlan Version Workspace",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -36,6 +36,15 @@
         "ready": "readiness",
         "failurePolicy": "degrade",
         "logicalService": "foundation.versioning.content-staging",
+        "routingDomain": "platform"
+      },
+      {
+        "capability": "foundation.versioning.content-reference",
+        "scope": "remote",
+        "kind": "soft",
+        "ready": "readiness",
+        "failurePolicy": "degrade",
+        "logicalService": "foundation.versioning.content-reference",
         "routingDomain": "platform"
       }
     ],
@@ -81,7 +90,7 @@
                   "properties": {
                     "resourceType": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" },
                     "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$" },
-                    "adapter": { "const": "version.resource.json.v1" },
+                    "adapter": { "enum": ["version.resource.json.v1", "version.resource.text.v1", "version.resource.blob.v1", "version.resource.files.v1"] },
                     "allowedModes": { "type": "array", "minItems": 1, "maxItems": 1, "items": { "const": "snapshot" } },
                     "defaultMode": { "const": "snapshot" },
                     "projectionPolicy": { "enum": ["none", "domain-hot", "current-only"] },

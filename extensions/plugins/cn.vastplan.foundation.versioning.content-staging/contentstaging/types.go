@@ -7,13 +7,14 @@ import (
 	"strings"
 	"time"
 
+	contentv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioncontent/v1"
 	versioningv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versioning/v1"
 	stagingv1 "cdsoft.com.cn/VastPlan/contracts/schemas/versionstaging/v1"
 )
 
 const (
 	PluginID      = "cn.vastplan.foundation.versioning.content-staging"
-	PluginVersion = "0.1.0"
+	PluginVersion = "0.2.0"
 )
 
 type Scope struct {
@@ -34,6 +35,8 @@ type Limits struct {
 	MaxTotalBytes             int64
 	MaxActiveUploadsPerTenant int
 	MaxLeaseSeconds           int
+	MaxPreparedPerTenant      int
+	PreparedProtection        time.Duration
 	TerminalRetention         time.Duration
 }
 
@@ -44,10 +47,48 @@ func (l Limits) Validate() error {
 	if l.MaxActiveUploadsPerTenant <= 0 || l.MaxActiveUploadsPerTenant > 10000 || l.MaxLeaseSeconds < stagingv1.MinimumLeaseSeconds || l.MaxLeaseSeconds > stagingv1.MaximumLeaseSeconds {
 		return errors.New("Content Staging 并发或 Lease 配额无效")
 	}
+	if l.MaxPreparedPerTenant <= 0 || l.MaxPreparedPerTenant > 10000 || l.PreparedProtection < 5*time.Minute || l.PreparedProtection > 7*24*time.Hour {
+		return errors.New("Content Staging 版本保护配额无效")
+	}
 	if l.TerminalRetention < 0 || l.TerminalRetention > 30*24*time.Hour {
 		return errors.New("Content Staging 终态保留时间无效")
 	}
 	return nil
+}
+
+type protectionRecord struct {
+	FormatVersion         int                  `json:"formatVersion"`
+	Owner                 Scope                `json:"owner"`
+	SourceSessionID       string               `json:"sourceSessionId"`
+	SourceSessionRevision uint64               `json:"sourceSessionRevision"`
+	SourceUploadIDs       map[string]string    `json:"sourceUploadIds,omitempty"`
+	Protection            contentv1.Protection `json:"protection"`
+}
+
+func cloneProtectionRecord(record protectionRecord) protectionRecord {
+	copy := record
+	copy.Protection.Entries = append([]contentv1.ContentEntry(nil), record.Protection.Entries...)
+	if record.Protection.Version != nil {
+		version := *record.Protection.Version
+		copy.Protection.Version = &version
+	}
+	if record.Protection.ExpiresAt != nil {
+		expires := *record.Protection.ExpiresAt
+		copy.Protection.ExpiresAt = &expires
+	}
+	copy.SourceUploadIDs = make(map[string]string, len(record.SourceUploadIDs))
+	for path, id := range record.SourceUploadIDs {
+		copy.SourceUploadIDs[path] = id
+	}
+	return copy
+}
+
+func protectionActive(state string) bool {
+	return state == contentv1.StatePrepared || state == contentv1.StateConfirmed
+}
+
+func protectionTerminal(state string) bool {
+	return state == contentv1.StateAborted || state == contentv1.StateExpired
 }
 
 type uploadRecord struct {

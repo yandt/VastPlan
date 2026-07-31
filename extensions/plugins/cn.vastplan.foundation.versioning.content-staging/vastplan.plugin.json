@@ -1,12 +1,12 @@
 {
   "id": "cn.vastplan.foundation.versioning.content-staging",
   "name": "VastPlan Version Content Staging",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
   "noticeFile": "NOTICE",
-  "description": "提供绑定 Workspace Session 的内容暂存 Lease、本地内容寻址存储、流式完整性校验与安全回收",
+  "description": "提供绑定 Workspace Session 的内容暂存 Lease、持久版本内容引用、本地内容寻址存储、流式完整性校验与安全回收",
   "engines": { "backend": "^0.1" },
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "contextAccess": {
@@ -23,6 +23,13 @@
       {
         "extensionPoint": "tool.package",
         "capability": "foundation.versioning.content-staging",
+        "visibility": "cluster",
+        "routing": "leader",
+        "routingDomain": "platform"
+      },
+      {
+        "extensionPoint": "tool.package",
+        "capability": "foundation.versioning.content-reference",
         "visibility": "cluster",
         "routing": "leader",
         "routingDomain": "platform"
@@ -50,13 +57,15 @@
         "limits": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["maxFileBytes", "maxTenantBytes", "maxTotalBytes", "maxActiveUploadsPerTenant", "maxLeaseSeconds", "terminalRetentionSeconds"],
+          "required": ["maxFileBytes", "maxTenantBytes", "maxTotalBytes", "maxActiveUploadsPerTenant", "maxLeaseSeconds", "maxPreparedPerTenant", "preparedProtectionSeconds", "terminalRetentionSeconds"],
           "properties": {
             "maxFileBytes": { "type": "integer", "minimum": 1, "maximum": 1099511627776 },
             "maxTenantBytes": { "type": "integer", "minimum": 1, "maximum": 1099511627776 },
             "maxTotalBytes": { "type": "integer", "minimum": 1, "maximum": 1099511627776 },
             "maxActiveUploadsPerTenant": { "type": "integer", "minimum": 1, "maximum": 10000 },
             "maxLeaseSeconds": { "type": "integer", "minimum": 30, "maximum": 86400 },
+            "maxPreparedPerTenant": { "type": "integer", "minimum": 1, "maximum": 10000 },
+            "preparedProtectionSeconds": { "type": "integer", "minimum": 300, "maximum": 604800 },
             "terminalRetentionSeconds": { "type": "integer", "minimum": 60, "maximum": 2592000 }
           }
         },
@@ -79,6 +88,17 @@
             { "name": "renewUpload", "description": "以 CAS 续租临时内容保护" },
             { "name": "completeUpload", "description": "封闭输入并校验摘要、大小与安全准入" },
             { "name": "abortUpload", "description": "以 CAS 终止上传并进入安全回收" }
+          ]
+        },
+        {
+          "id": "foundation.versioning.content-reference",
+          "service_role": "backend",
+          "title": "Version Content Reference",
+          "subcommands": [
+            { "name": "prepareVersion", "description": "在 Ledger 提交前持久保护 manifest 内容" },
+            { "name": "protectionStatus", "description": "读取持久保护状态" },
+            { "name": "confirmVersion", "description": "将保护幂等确认给精确 VersionRef" },
+            { "name": "abortProtection", "description": "显式终止未确认保护" }
           ]
         }
       ]
