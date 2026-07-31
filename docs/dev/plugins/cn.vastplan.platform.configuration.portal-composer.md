@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`4.0.4`
+当前制品版本：`4.0.7`
 
 该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal。每个 `portalId` 只有一个聚合，内部包含 WorkingCopy、Publication、Release 和版本控制语义状态。
 

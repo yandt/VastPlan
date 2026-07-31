@@ -78,7 +78,7 @@ func loadSeedArtifactSelection(root string) (seedArtifactSelection, error) {
 	}
 	for _, profile := range portal.Profiles {
 		platformRefs := []frontendcompositionv1.PluginRef{
-			profile.RuntimeEngine.PluginRef, profile.RenderAdapter.PluginRef, profile.Shell.PluginRef, profile.Workbench.PluginRef,
+			profile.RuntimeEngine.PluginRef, profile.RenderAdapter.PluginRef, profile.Shell.PluginRef, profile.Workbench.PluginRef, *profile.AccountCenter,
 		}
 		platformRefs = append(platformRefs, profile.Plugins...)
 		for _, ref := range platformRefs {

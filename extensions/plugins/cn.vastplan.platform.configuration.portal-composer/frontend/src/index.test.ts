@@ -28,7 +28,22 @@ describe("Portal aggregate workspace", () => {
     expect(updated.application.route).toBe("/new");
     expect(updated.platform.renderAdapter.config.defaultRenderer).toBe("arco");
     expect(updated.platform.shell.config.defaultTemplate).toBe("top-navigation");
+    expect(updated.platform.plugins).toContainEqual(updated.platform.accountCenter);
     expect(updated.services).toEqual([{ id: "backend" }]);
+  });
+
+  it("completes a missing account center from the trusted platform default", () => {
+    const base = configuration();
+    const platformDefault = configuration().platform;
+    const accountCenter = { id: "cn.vastplan.foundation.frontend.identity.account-center", version: "0.1.2", channel: "stable" };
+    platformDefault.accountCenter = accountCenter;
+    platformDefault.plugins = [...platformDefault.plugins, accountCenter];
+    delete (base.platform as Partial<typeof base.platform>).accountCenter;
+    base.platform.plugins = base.platform.plugins.filter((plugin) => plugin.id !== accountCenter.id);
+
+    const updated = buildPortalConfiguration(base, {}, platformDefault);
+    expect(updated.platform.accountCenter).toEqual(accountCenter);
+    expect(updated.platform.plugins.filter((plugin) => plugin.id === accountCenter.id)).toEqual([accountCenter]);
   });
 
   it("can prepare the first Portal from the trusted creation template", async () => {
@@ -101,7 +116,7 @@ function configuration(): PortalConfiguration {
       runtimeEngine: { ...ref, engineContract: "^1.0.0", family: "react" },
       renderAdapter: { ...ref, uiContract: "^8.0.0", config: { defaultRenderer: "antd", allowedRenderers: ["antd"], userSelectable: true } },
       shell: { ...ref, uiContract: "^8.0.0", config: { defaultTemplate: "standard", allowedTemplates: ["standard", "top-navigation"], userSelectable: true, templateOptions: { standard: {} } } },
-      workbench: { ...ref, uiContract: "^8.0.0" }, plugins: [ref], security: { firstPartyOnly: true, requireIntegrity: true },
+      workbench: { ...ref, uiContract: "^8.0.0" }, accountCenter: { ...ref }, plugins: [ref], security: { firstPartyOnly: true, requireIntegrity: true },
     },
     application: { version: 1, revision: 1, id: "operations", target: { kernel: "frontend" }, route: "/operations", plugins: [], config: {} },
     services: [{ id: "backend", logicalService: "backend", routingDomain: "platform", capabilities: [{ capability: "health", read: ["get"] }] }],

@@ -135,6 +135,7 @@ type PlatformProfile struct {
 	RenderAdapter RenderAdapter              `json:"renderAdapter"`
 	Shell         Shell                      `json:"shell"`
 	Workbench     Workbench                  `json:"workbench"`
+	AccountCenter *PluginRef                 `json:"accountCenter,omitempty"`
 	Localization  *LocalizationPolicy        `json:"localization,omitempty"`
 	Updates       *UpdatePolicy              `json:"updates,omitempty"`
 	Plugins       []PluginRef                `json:"plugins"`

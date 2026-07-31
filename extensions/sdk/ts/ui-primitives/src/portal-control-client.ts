@@ -55,6 +55,7 @@ export interface PortalPlatformProfile {
   renderAdapter: PortalPluginRef & { uiContract: string; config: { defaultRenderer: string; allowedRenderers: string[]; userSelectable: boolean; rendererOptions?: Record<string, { themeTemplate?: string; allowedThemeTemplates?: string[]; themeUserSelectable?: boolean; iconTheme?: string; allowedIconThemes?: string[]; iconUserSelectable?: boolean }> } };
   shell: PortalPluginRef & { uiContract: string; config: { navigationGroups?: JSONValue; defaultTemplate: string; allowedTemplates: string[]; userSelectable: boolean; templateOptions?: Record<string, Record<string, JSONValue>> } };
   workbench: PortalPluginRef & { uiContract: string };
+  accountCenter: PortalPluginRef;
   localization?: { defaultLocale: string; supportedLocales: string[] };
   plugins: PortalPluginRef[];
   security: { firstPartyOnly: true; requireIntegrity: true };

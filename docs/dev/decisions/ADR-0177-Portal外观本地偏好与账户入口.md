@@ -36,3 +36,10 @@ Portal 外观包含 Renderer、Shell 布局、明暗模式、主题模板、图�
 - 清理浏览器站点数据会恢复 Profile 默认外观。企业管理员仍可通过 Profile 收窄允许目录，但不能读取或强制保存个人颜色。
 - 账户头像属于 Shell 的稳定身份界面，始终显示，不随个人中心插件的装配状态消失。个人中心插件未装配时，头像打开统一 `account` 根分组并显示明确的“尚未装配”状态；装配后仅由该插件贡献具体页面，页面加载仍完全遵循统一插件机制。
 - UI Contract 8.3.0 增加账户摘要、外观设置和语义颜色 Provider 输入；所有第一方 Renderer 与 Shell Library 必须同步升级。
+
+## 修订：个人中心成为必备 Foundation 选择（2026-07-31）
+
+- Frontend Platform Profile 增加必填 `accountCenter` 语义引用，并要求平台 `plugins` 精确包含同一制品。默认实现为 `cn.vastplan.foundation.frontend.identity.account-center`。
+- `accountCenter` 与 Runtime Engine、Renderer、Shell、Workbench 同属平台基础组合，不进入应用插件选择面；任何新建、编辑或发布的 Portal 都不能删除、降级或由 Application 覆盖个人中心。
+- 该字段只约束“必须存在一个个人中心实现”，不把具体实现硬编码进内核。替代实现仍须使用统一页面、导航与本地个性化契约。
+- 已发布 Portal 继续保持不可变，不能因种子 Profile 更新而在启动时偷偷改变；它必须通过显式 WorkingCopy、Publication 和 Release 升级到新平台基线。

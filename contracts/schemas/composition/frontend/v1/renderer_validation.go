@@ -31,6 +31,7 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	value.RenderAdapter.Channel = channel(value.RenderAdapter.Channel)
 	value.Shell.Channel = channel(value.Shell.Channel)
 	value.Workbench.Channel = channel(value.Workbench.Channel)
+	value.AccountCenter.Channel = channel(value.AccountCenter.Channel)
 	if !templateName.MatchString(value.RuntimeEngine.Family) || strings.TrimSpace(value.RuntimeEngine.EngineContract) == "" {
 		return PlatformProfile{}, fmt.Errorf("Frontend Runtime Engine family 或 engineContract 无效")
 	}
@@ -46,11 +47,11 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 	if value.Updates != nil && value.Updates.Mode != "refresh" && value.Updates.Mode != "notify" && value.Updates.Mode != "automatic" {
 		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile updates.mode 无效: %s", value.Updates.Mode)
 	}
-	selectedFoundations := []PluginRef{value.RuntimeEngine.PluginRef, value.RenderAdapter.PluginRef, value.Shell.PluginRef, value.Workbench.PluginRef}
+	selectedFoundations := []PluginRef{value.RuntimeEngine.PluginRef, value.RenderAdapter.PluginRef, value.Shell.PluginRef, value.Workbench.PluginRef, *value.AccountCenter}
 	foundationIDs := map[string]struct{}{}
 	for _, selected := range selectedFoundations {
 		if _, exists := foundationIDs[selected.ID]; exists {
-			return PlatformProfile{}, fmt.Errorf("Runtime Engine、设计系统、Shell 与 Workbench 必须由独立插件提供")
+			return PlatformProfile{}, fmt.Errorf("Runtime Engine、设计系统、Shell、Workbench 与个人中心必须由独立插件提供")
 		}
 		foundationIDs[selected.ID] = struct{}{}
 	}
@@ -62,8 +63,8 @@ func ParsePlatformProfile(raw []byte) (PlatformProfile, error) {
 			}
 		}
 	}
-	if !found[value.RuntimeEngine.ID] || !found[value.RenderAdapter.ID] || !found[value.Shell.ID] || !found[value.Workbench.ID] {
-		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含 Runtime Engine、设计系统、Shell 与 Workbench 插件")
+	if !found[value.RuntimeEngine.ID] || !found[value.RenderAdapter.ID] || !found[value.Shell.ID] || !found[value.Workbench.ID] || !found[value.AccountCenter.ID] {
+		return PlatformProfile{}, fmt.Errorf("Frontend Platform Profile plugins 必须精确包含 Runtime Engine、设计系统、Shell、Workbench 与个人中心插件")
 	}
 	return value, nil
 }

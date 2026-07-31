@@ -4,7 +4,7 @@
   "title": "VastPlan Frontend Platform Profile v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "revision", "id", "target", "runtimeEngine", "renderAdapter", "shell", "workbench", "plugins", "security"],
+  "required": ["version", "revision", "id", "target", "runtimeEngine", "renderAdapter", "shell", "workbench", "accountCenter", "plugins", "security"],
   "properties": {
     "version": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/version" },
     "revision": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/composition/common/v1/vastplan.composition-common.schema.json#/$defs/revision" },
@@ -14,6 +14,7 @@
     "renderAdapter": { "$ref": "#/$defs/renderAdapter" },
     "shell": { "$ref": "#/$defs/shellSelection" },
     "workbench": { "$ref": "#/$defs/workbenchSelection" },
+    "accountCenter": { "$ref": "#/$defs/pluginRef" },
     "localization": { "$ref": "#/$defs/localizationPolicy" },
     "updates": {
       "type": "object", "additionalProperties": false, "required": ["mode"],

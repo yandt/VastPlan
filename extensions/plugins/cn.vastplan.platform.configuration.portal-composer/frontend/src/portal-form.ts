@@ -68,7 +68,7 @@ export function configurationToForm(portalId: string, configuration: PortalConfi
   };
 }
 
-export function buildPortalConfiguration(base: PortalConfiguration, value: Readonly<Record<string, unknown>>): PortalConfiguration {
+export function buildPortalConfiguration(base: PortalConfiguration, value: Readonly<Record<string, unknown>>, platformDefault: PortalPlatformProfile = base.platform): PortalConfiguration {
   const defaultRenderer = knownRenderer(value.defaultRenderer);
   const allowedRenderers = Array.isArray(value.allowedRenderers) ? value.allowedRenderers.filter(isKnownRenderer) : [defaultRenderer];
   if (!allowedRenderers.includes(defaultRenderer)) allowedRenderers.unshift(defaultRenderer);
@@ -77,9 +77,12 @@ export function buildPortalConfiguration(base: PortalConfiguration, value: Reado
     ...(base.platform.shell.config.templateOptions ?? {}),
     [defaultTemplate]: { ...(base.platform.shell.config.templateOptions?.[defaultTemplate] ?? {}), pageBodyWidth: value.pageBodyWidth === "contained" ? "contained" : "fluid" },
   };
+  const accountCenter = base.platform.accountCenter ?? platformDefault.accountCenter;
   return {
     platform: {
       ...base.platform,
+      accountCenter: { ...accountCenter },
+      plugins: withAccountCenter(base.platform.plugins, accountCenter),
       renderAdapter: { ...base.platform.renderAdapter, config: { ...base.platform.renderAdapter.config, defaultRenderer, allowedRenderers, userSelectable: value.userSelectableRenderer === true } },
       shell: { ...base.platform.shell, config: { ...base.platform.shell.config, defaultTemplate, navigationGroups: jsonArray(value.navigationGroups), templateOptions } },
     },
@@ -108,4 +111,8 @@ function knownRenderer(value: unknown): KnownRenderer { return isKnownRenderer(v
 function jsonArray(value: unknown): JSONValue[] { return Array.isArray(value) ? JSON.parse(JSON.stringify(value)) as JSONValue[] : []; }
 function jsonRecord(value: unknown): Record<string, JSONValue> { return typeof value === "object" && value !== null && !Array.isArray(value) ? JSON.parse(JSON.stringify(value)) as Record<string, JSONValue> : {}; }
 function pluginRefs(value: unknown): PortalConfiguration["application"]["plugins"] { return Array.isArray(value) ? value.flatMap((candidate) => { if (typeof candidate !== "object" || candidate === null) return []; const item = candidate as Record<string, unknown>; return typeof item.id === "string" && typeof item.version === "string" ? [{ id: item.id, version: item.version, ...(typeof item.channel === "string" ? { channel: item.channel } : {}) }] : []; }) : []; }
+function withAccountCenter(plugins: PortalPlatformProfile["plugins"], accountCenter: PortalPlatformProfile["accountCenter"]): PortalPlatformProfile["plugins"] {
+  const withoutSelected = plugins.filter((plugin) => plugin.id !== accountCenter.id);
+  return [...withoutSelected, { ...accountCenter }];
+}
 function optionalStrings<K extends "domains" | "audience">(key: K, value: unknown): Partial<Pick<PortalConfiguration["application"], K>> { const values = Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item !== "") : []; return values.length === 0 ? { [key]: undefined } as Partial<Pick<PortalConfiguration["application"], K>> : { [key]: values } as Partial<Pick<PortalConfiguration["application"], K>>; }

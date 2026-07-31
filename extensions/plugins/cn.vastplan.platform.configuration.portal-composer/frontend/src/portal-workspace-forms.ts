@@ -30,8 +30,9 @@ function configurationForm(client: PortalControlClient, kind: "create" | "edit" 
     },
     async submit({ value, selected }) {
       const row = selected[0];
-      const base = row?.configuration ?? await creationTemplate(client);
-      const configuration = buildPortalConfiguration(base, value);
+      const template = await creationTemplate(client);
+      const base = row?.configuration ?? template;
+      const configuration = buildPortalConfiguration(base, value, template.platform);
       const portalId = typeof value.portalId === "string" ? value.portalId : row?.id ?? "";
       if (kind === "create") await client.createPortal(portalId, configuration);
       else if (kind === "new-working-copy" && row !== undefined) await client.createPortalWorkingCopy(row.id, configuration);

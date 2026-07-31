@@ -64,7 +64,7 @@ UI Contract 8.3 暴露语义 token、账户外观契约与 `ComponentSize`，适
 - FilterPanel 使用 `inside-inline` 持久 Label：Label 与输入控件共同消费一个筛选单元格宽度，Label 按内容取宽但桌面最多占 40%、移动端最多占 45%，始终单行；超长文案省略并由框架 Tooltip 与可访问名称提供全文。输入区域必须 `flex: 1; min-width: 0`，输入后 Label 不消失。Ant、Arco、MUI 必须映射同一语义，功能插件不能配置像素宽度或注入框架样式。
 - Page Header 右侧的页面功能动作使用 VastPlan 语义图标、Tooltip 和 `aria-label`，点击区至少 44px；桌面最多直接显示 4 个，超出后进入“更多”，不得在 Table 工具栏重复显示新增、导入或发布。
 - 图标风格由 Renderer 的 `iconTheme` 统一决定：`canonical` 使用锁定的 MIT Ant Design 语义入口保持跨框架几何一致，`renderer-native` 使用当前 UI 框架原生图形并在缺项时回退。846 个原始目录名称不属于页面契约，只能由 Foundation 图标工具按 27 个分片延迟读取；单个页面和功能插件不得混指定图标来源。
-- 已认证 Shell 只提供一个圆形账户头像入口；头像固定映射到统一组合模型中的 `account` 根分组。标准侧栏点击后在右侧常驻面板加载二级/三级菜单，顶部布局复用同一分组数据；头像本身不得硬编码功能项。独立基础插件 `cn.vastplan.foundation.frontend.identity.account-center` 注册“用户信息”和“用户设置/外观”页面，后续账户功能继续走相同页面契约。`settings` 区域显示为“系统管理”，必须是最后一个一级导航项；企业用户、组织和角色管理属于该区域，不与个人中心合并。外观配置只保存在当前浏览器，并明确提示不会上传服务器。
+- 已认证 Shell 只提供一个圆形账户头像入口；头像固定映射到统一组合模型中的 `account` 根分组。标准侧栏点击后在右侧常驻面板加载二级/三级菜单，顶部布局复用同一分组数据；头像本身不得硬编码功能项。Frontend Platform Profile 通过必填 `accountCenter` 选择个人中心实现，默认基础插件 `cn.vastplan.foundation.frontend.identity.account-center` 注册“用户信息”和“用户设置/外观”页面，且不能由 Application 删除或覆盖；后续账户功能继续走相同页面契约。`settings` 区域显示为“系统管理”，必须是最后一个一级导航项；企业用户、组织和角色管理属于该区域，不与个人中心合并。外观配置只保存在当前浏览器，并明确提示不会上传服务器。
 
 ### 4.2 顶部导航
 
