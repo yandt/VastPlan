@@ -149,4 +149,23 @@ func TestLocalTestAdapterPersistsWorkspaceLeaseAndRejectsReceiptDrift(t *testing
 	if _, err := restarted.ReadExact(context.Background(), receipt.Ref); err != nil {
 		t.Fatalf("活动 workspace lease 应允许精确读取: %v", err)
 	}
+	withdrawal, err := restarted.WithdrawWorkspace(context.Background(), receipt.Ref)
+	if err != nil || withdrawal.Ref != receipt.Ref || withdrawal.WithdrawalRevision <= withdrawal.PublishedRevision {
+		t.Fatalf("workspace 撤回失败: record=%+v err=%v", withdrawal, err)
+	}
+	snapshot, err := restarted.CatalogSnapshot(context.Background())
+	if err != nil || len(snapshot.Items) != 0 {
+		t.Fatalf("withdrawn 制品不得继续出现在发现快照: snapshot=%+v err=%v", snapshot, err)
+	}
+	if _, err := restarted.ReadExact(context.Background(), receipt.Ref); err != nil {
+		t.Fatalf("撤回后活动代仍应可按精确 lease 读取: %v", err)
+	}
+	restored, err := restarted.Publish(context.Background(), artifacttrust.Envelope{Artifact: artifact, PackageBytes: packageBytes, Proof: proof})
+	if err != nil || restored.Ref != receipt.Ref {
+		t.Fatalf("同内容源码恢复应重新激活原不可变 ref: receipt=%+v err=%v", restored, err)
+	}
+	snapshot, err = restarted.CatalogSnapshot(context.Background())
+	if err != nil || len(snapshot.Items) != 1 || snapshot.Items[0].Ref != receipt.Ref {
+		t.Fatalf("恢复后的 workspace 候选未回到发现快照: snapshot=%+v err=%v", snapshot, err)
+	}
 }

@@ -32,6 +32,11 @@ type WorkspaceRepository interface {
 	ExpireWorkspace(context.Context) (artifactrepositoryv1.ExpireWorkspaceResult, error)
 }
 
+type WorkspaceWithdrawalRepository interface {
+	Repository
+	WithdrawWorkspace(context.Context, pluginv1.ArtifactRef) (artifactrepositoryv1.WorkspaceWithdrawalRecord, error)
+}
+
 type ImportRepository interface {
 	Repository
 	ImportExact(context.Context, artifactrepositoryv1.Profile, artifactrepositoryv1.Receipt, artifacttrust.Envelope) (artifactrepositoryv1.ImportRecord, error)

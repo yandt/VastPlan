@@ -170,6 +170,40 @@ func TestLifecycleIsCASAuditedSnapshotAwareAndRestartSafe(t *testing.T) {
 	}
 }
 
+func TestWorkspaceWithdrawalIsAuditedResolvableAndRestartSafe(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "repository")
+	repository, privateKey := testSignedRepository(t, root)
+	artifact, proof := publishTestArtifactForChannel(t, repository, privateKey, "1.0.0-dev.workspace.0123456789ab", "workspace")
+	store, err := Open(root, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.RecordPublished(artifact, proof, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	ref := pluginv1.ArtifactRef{PluginID: artifact.PluginID, Version: artifact.Version, Channel: artifact.Channel}
+	entry, revision, err := store.WithdrawWorkspace(ref, time.Now().UTC())
+	if err != nil || entry.LifecycleStatus != LifecycleWithdrawn || revision != 2 {
+		t.Fatalf("workspace 撤回失败: entry=%+v revision=%d err=%v", entry, revision, err)
+	}
+	request := pluginv1.ArtifactResolveRequest{Roots: []pluginv1.ArtifactRequirement{{PluginID: ref.PluginID, Constraint: "=" + ref.Version, Channel: "workspace"}}, Target: "backend", KernelVersion: "0.1.0", AllowedChannels: []string{"workspace"}, AllowedPublishers: []string{"example"}, AllowedPluginPrefixes: []string{"com.example"}}
+	if _, err := store.Resolve(request); err == nil {
+		t.Fatal("withdrawn workspace 不得进入新解析")
+	}
+	journal := store.Journal(0, 10)
+	if len(journal.Items) != 2 || journal.Items[1].Type != "artifact.withdrawn" {
+		t.Fatalf("撤回未形成独立 Journal 事件: %+v", journal.Items)
+	}
+	reopened, err := Open(root, repository)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := reopened.Query(Query{PluginID: ref.PluginID, Page: 1, PageSize: 10})
+	if len(page.Items) != 1 || page.Items[0].LifecycleStatus != LifecycleWithdrawn {
+		t.Fatalf("重启丢失 withdrawn 状态: %+v", page.Items)
+	}
+}
+
 func testSignedRepository(t *testing.T, root string) (*artifactrepository.SignedRepository, ed25519.PrivateKey) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(nil)
@@ -190,10 +224,18 @@ func testSignedRepository(t *testing.T, root string) (*artifactrepository.Signed
 }
 
 func publishTestArtifact(t *testing.T, repository *artifactrepository.SignedRepository, privateKey ed25519.PrivateKey, version string) (artifactrepository.Artifact, []byte) {
-	return publishTestArtifactWithSupplyChain(t, repository, privateKey, version, false)
+	return publishTestArtifactWithSupplyChainForChannel(t, repository, privateKey, version, false, "testing")
 }
 
 func publishTestArtifactWithSupplyChain(t *testing.T, repository *artifactrepository.SignedRepository, privateKey ed25519.PrivateKey, version string, includeSBOM bool) (artifactrepository.Artifact, []byte) {
+	return publishTestArtifactWithSupplyChainForChannel(t, repository, privateKey, version, includeSBOM, "testing")
+}
+
+func publishTestArtifactForChannel(t *testing.T, repository *artifactrepository.SignedRepository, privateKey ed25519.PrivateKey, version, channel string) (artifactrepository.Artifact, []byte) {
+	return publishTestArtifactWithSupplyChainForChannel(t, repository, privateKey, version, false, channel)
+}
+
+func publishTestArtifactWithSupplyChainForChannel(t *testing.T, repository *artifactrepository.SignedRepository, privateKey ed25519.PrivateKey, version string, includeSBOM bool, channel string) (artifactrepository.Artifact, []byte) {
 	t.Helper()
 	directory := t.TempDir()
 	supplyChain := ""
@@ -226,7 +268,7 @@ func publishTestArtifactWithSupplyChain(t *testing.T, repository *artifactreposi
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifact, err := artifactrepository.Describe("testing", packageBytes)
+	artifact, err := artifactrepository.Describe(channel, packageBytes)
 	if err != nil {
 		t.Fatal(err)
 	}

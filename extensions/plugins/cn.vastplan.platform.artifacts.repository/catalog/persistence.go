@@ -57,7 +57,7 @@ func (s *Store) rebuild() error {
 	for key := range s.entries {
 		if _, ok := seen[key]; !ok {
 			entry := s.entries[key]
-			if s.retired == nil || !s.retired.AllowsMissing(entry.Ref, entry.SHA256) || (entry.LifecycleStatus != LifecycleYanked && entry.LifecycleStatus != LifecycleRevoked) {
+			if s.retired == nil || !s.retired.AllowsMissing(entry.Ref, entry.SHA256) || (entry.LifecycleStatus != LifecycleYanked && entry.LifecycleStatus != LifecycleRevoked && entry.LifecycleStatus != LifecycleWithdrawn) {
 				return fmt.Errorf("发布流水账引用的制品缺失: %s", key)
 			}
 		}
@@ -117,7 +117,7 @@ func (s *Store) loadJournal() error {
 				SignedAt: event.SignedAt, PublishedAt: event.OccurredAt, RepositoryRevision: event.Revision, LifecycleStatus: LifecycleActive,
 				ImportSource: cloneReceipt(event.ImportSource),
 			}
-		case "artifact.lifecycle":
+		case "artifact.lifecycle", "artifact.withdrawn":
 			entry, exists := s.entries[key]
 			if !exists || entry.SHA256 != event.SHA256 || currentLifecycleStatus(s.lifecycle[key]) != event.PreviousStatus {
 				return fmt.Errorf("生命周期流水账前置状态不一致: %s", key)

@@ -336,7 +336,7 @@ func (s *Store) GarbageCandidates() (uint64, []Entry) {
 	defer s.mu.RUnlock()
 	items := make([]Entry, 0)
 	for _, entry := range s.entries {
-		if entry.LifecycleStatus == LifecycleYanked || entry.LifecycleStatus == LifecycleRevoked {
+		if entry.LifecycleStatus == LifecycleYanked || entry.LifecycleStatus == LifecycleRevoked || entry.LifecycleStatus == LifecycleWithdrawn {
 			items = append(items, entry)
 		}
 	}
@@ -348,7 +348,7 @@ func (s *Store) GarbageCandidate(ref pluginv1.ArtifactRef, sha256 string) (Entry
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	entry, ok := s.entries[refKey(ref)]
-	if !ok || entry.SHA256 != sha256 || (entry.LifecycleStatus != LifecycleYanked && entry.LifecycleStatus != LifecycleRevoked) {
+	if !ok || entry.SHA256 != sha256 || (entry.LifecycleStatus != LifecycleYanked && entry.LifecycleStatus != LifecycleRevoked && entry.LifecycleStatus != LifecycleWithdrawn) {
 		return Entry{}, false
 	}
 	return entry, true

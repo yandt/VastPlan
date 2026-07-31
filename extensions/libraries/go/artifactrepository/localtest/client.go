@@ -218,6 +218,35 @@ func (c *Client) ExpireWorkspace(ctx context.Context) (artifactrepositoryv1.Expi
 	return result, nil
 }
 
+func (c *Client) WithdrawWorkspace(ctx context.Context, ref pluginv1.ArtifactRef) (artifactrepositoryv1.WorkspaceWithdrawalRecord, error) {
+	if c.profile.Workspace == nil || ref.Channel != "workspace" {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, errors.New("local-test Profile 未启用 workspace 或引用不是 workspace")
+	}
+	if err := artifactrepositoryv1.ValidateRef(c.profile, ref); err != nil {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, err
+	}
+	raw, err := json.Marshal(ref)
+	if err != nil {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, err
+	}
+	response, err := c.do(ctx, http.MethodPost, "/v1/workspace/withdraw", "application/json", bytes.NewReader(raw))
+	if err != nil {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, responseError(response)
+	}
+	var record artifactrepositoryv1.WorkspaceWithdrawalRecord
+	if err := decodeJSON(response.Body, &record); err != nil {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, err
+	}
+	if err := artifactrepositoryv1.ValidateWorkspaceWithdrawalRecord(c.profile, record); err != nil || record.Ref != ref {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, errors.New("local-test workspace 撤回记录与请求不一致")
+	}
+	return record, nil
+}
+
 func (c *Client) do(ctx context.Context, method, path, contentType string, body io.Reader) (*http.Response, error) {
 	request, err := http.NewRequestWithContext(ctx, method, "http://local-test"+path, body)
 	if err != nil {

@@ -15,6 +15,7 @@ const (
 	LifecycleDeprecated = "deprecated"
 	LifecycleYanked     = "yanked"
 	LifecycleRevoked    = "revoked"
+	LifecycleWithdrawn  = "withdrawn"
 )
 
 type LifecycleTransition struct {
@@ -38,7 +39,7 @@ func (s *Store) SetLifecycle(request LifecycleRequest, occurredAt time.Time) (En
 		return Entry{}, 0, errors.New("Catalog 不可用")
 	}
 	request.Reason = strings.TrimSpace(request.Reason)
-	if !validLifecycleStatus(request.Status) || request.Reason == "" || len([]rune(request.Reason)) > 500 {
+	if !validLifecycleStatus(request.Status) || request.Status == LifecycleWithdrawn || request.Reason == "" || len([]rune(request.Reason)) > 500 {
 		return Entry{}, 0, errors.New("生命周期状态或原因无效")
 	}
 	if request.Replacement != nil {
@@ -91,6 +92,52 @@ func (s *Store) SetLifecycle(request LifecycleRequest, occurredAt time.Time) (En
 	return entry, s.revision, nil
 }
 
+// WithdrawWorkspace removes one source-produced candidate from future
+// discovery without deleting its immutable object or breaking existing exact
+// references. It is deliberately not exposed through the administrative
+// lifecycle API; only the local workspace protocol may invoke it.
+func (s *Store) WithdrawWorkspace(ref pluginv1.ArtifactRef, occurredAt time.Time) (Entry, uint64, error) {
+	if s == nil || ref.Channel != "workspace" {
+		return Entry{}, 0, errors.New("只有 workspace 制品可以撤回")
+	}
+	if occurredAt.IsZero() {
+		occurredAt = time.Now().UTC()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := refKey(ref)
+	entry, ok := s.entries[key]
+	if !ok || entry.ImportSource != nil {
+		return Entry{}, s.revision, errors.New("workspace 制品不存在或来源不允许撤回")
+	}
+	previous := entry.LifecycleStatus
+	if previous == "" {
+		previous = LifecycleActive
+	}
+	if previous == LifecycleWithdrawn {
+		return entry, entry.LifecycleRevision, nil
+	}
+	if previous == LifecycleRevoked || previous == LifecycleYanked {
+		return Entry{}, s.revision, errors.New("已由更强生命周期状态终止的制品不能改写为 withdrawn")
+	}
+	event := Event{
+		Type: "artifact.withdrawn", Ref: entry.Ref, SHA256: entry.SHA256,
+		OccurredAt: occurredAt.UTC(), PreviousStatus: previous, Status: LifecycleWithdrawn,
+		Reason: "development source removed or superseded",
+	}
+	if err := s.appendEventLocked(&event); err != nil {
+		return Entry{}, s.revision, err
+	}
+	transition := LifecycleTransition{Revision: event.Revision, Status: LifecycleWithdrawn, Reason: event.Reason, OccurredAt: event.OccurredAt}
+	s.lifecycle[key] = append(s.lifecycle[key], transition)
+	applyLifecycle(&entry, transition)
+	s.entries[key] = entry
+	if err := s.writeSnapshotLocked(); err != nil {
+		return Entry{}, s.revision, err
+	}
+	return entry, event.Revision, nil
+}
+
 func (s *Store) RequireDelivery(ref pluginv1.ArtifactRef) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -101,6 +148,8 @@ func (s *Store) RequireDelivery(ref pluginv1.ArtifactRef) error {
 	switch entry.LifecycleStatus {
 	case LifecycleYanked:
 		return errors.New("制品已 yanked，禁止新的交付")
+	case LifecycleWithdrawn:
+		return errors.New("workspace 制品已 withdrawn，禁止新的交付")
 	case LifecycleRevoked:
 		return errors.New("制品已 revoked，验证与交付已撤销")
 	default:
@@ -128,7 +177,7 @@ func (s *Store) ValidateKnownReferences(values []pluginv1.ArtifactReference) err
 
 func validLifecycleStatus(status string) bool {
 	switch status {
-	case LifecycleActive, LifecycleDeprecated, LifecycleYanked, LifecycleRevoked:
+	case LifecycleActive, LifecycleDeprecated, LifecycleYanked, LifecycleRevoked, LifecycleWithdrawn:
 		return true
 	default:
 		return false

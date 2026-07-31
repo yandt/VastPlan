@@ -30,7 +30,9 @@ func (p CommandPublisher) Publish(ctx context.Context, candidate Candidate) erro
 		"-channel", "workspace",
 		"-state-root", p.StateRoot,
 		"-status-url", p.StatusURL,
-		"-backend-target", p.BackendTarget,
+	}
+	if strings.TrimSpace(p.BackendTarget) != "" {
+		arguments = append(arguments, "-backend-target", p.BackendTarget)
 	}
 	if strings.TrimSpace(p.BackendBinding) != "" {
 		arguments = append(arguments, "-backend-binding", p.BackendBinding)
@@ -44,7 +46,7 @@ func (p CommandPublisher) Publish(ctx context.Context, candidate Candidate) erro
 	var output bytes.Buffer
 	command.Stdout, command.Stderr = &output, &output
 	if err := command.Run(); err != nil {
-		return fmt.Errorf("提交 workspace Test Release: %w\n%s", err, strings.TrimSpace(output.String()))
+		return fmt.Errorf("发布 workspace 候选: %w\n%s", err, strings.TrimSpace(output.String()))
 	}
 	if p.Logf != nil && strings.TrimSpace(output.String()) != "" {
 		p.Logf("%s", strings.TrimSpace(output.String()))

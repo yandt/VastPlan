@@ -26,6 +26,11 @@ type WorkspaceAdapter interface {
 	ExpireWorkspace(context.Context) (artifactrepositoryv1.ExpireWorkspaceResult, error)
 }
 
+type WorkspaceWithdrawalAdapter interface {
+	Adapter
+	WithdrawWorkspace(context.Context, pluginv1.ArtifactRef) (artifactrepositoryv1.WorkspaceWithdrawalRecord, error)
+}
+
 // ImportAdapter is implemented only by a Local Plugin Library. Import keeps
 // the upstream publisher proof and exact ref; it is deliberately separate
 // from ordinary development Publish so candidate/stable cannot be fabricated

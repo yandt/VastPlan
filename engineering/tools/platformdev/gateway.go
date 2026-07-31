@@ -155,6 +155,7 @@ func (r *runtime) status(w http.ResponseWriter, _ *http.Request) {
 	}
 	status["recoveryCapsule"] = recovery
 	status["backendPluginDevelopment"] = backendPluginDevelopmentStatus(r.options.stateRoot)
+	status["pluginLibrarySource"] = pluginLibrarySourceStatus(r.options.stateRoot)
 	if r.hmr != nil {
 		generation, lastError := r.hmr.status()
 		status["hotGeneration"], status["hotError"] = generation, lastError

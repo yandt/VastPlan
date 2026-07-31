@@ -1,7 +1,7 @@
 # 制品仓库基础插件
 
 插件 ID：`cn.vastplan.platform.artifacts.repository`
-当前制品版本：`0.36.0`
+当前制品版本：`0.37.0`
 
 仓库的数据面由存储 Provider 在配置/启动阶段供给。当前开发组合使用 `cn.vastplan.platform.artifacts.storage.file`，仓库状态 API 会返回实际 `storageProvider`；对象发布和读取仍直接使用已供给的本地数据面，不逐对象调用 Provider。设计原因见 [ADR-0091](../decisions/ADR-0091-制品存储Provider供给边界.md)。
 
@@ -9,7 +9,7 @@
 
 ## 边界
 
-该第一方基础插件按受信 Repository Profile 运行 local-test 或 remote 制品服务，并负责可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.33.0 增加 `artifact.repository.local-test.v1` Unix Socket 传输并让开发环境原位迁移；0.34.0 增加同仓库 workspace lease、TTL/容量治理与 Profile 绑定 Receipt 复核；0.34.2 增加只返回精确身份和已验签 Manifest 的 `describePlanning` 窄投影；0.35.0 增加候选级 Feature、有界 SemVer 回溯和复杂度限制；0.36.0 将 local-test 演进为 Local Plugin Library，可受控导入 remote.v1 的精确 candidate/stable 制品并在 Catalog Journal 中保留上游回执。正式远端仍使用 `artifact.repository.remote.v1` HTTPS。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
+该第一方基础插件按受信 Repository Profile 运行 local-test 或 remote 制品服务，并负责可重建 Catalog、单调 Publish Journal、确定性依赖解析、`deprecated/yanked/revoked/withdrawn` 生命周期、消费者引用快照、离线 Bundle、累积配额与容量统计、可回滚 File Volume 迁移，以及 fail-closed 的 `plan -> quarantine -> sweep` 垃圾回收。0.33.0 增加 `artifact.repository.local-test.v1` Unix Socket 传输并让开发环境原位迁移；0.34.0 增加同仓库 workspace lease、TTL/容量治理与 Profile 绑定 Receipt 复核；0.34.2 增加只返回精确身份和已验签 Manifest 的 `describePlanning` 窄投影；0.35.0 增加候选级 Feature、有界 SemVer 回溯和复杂度限制；0.36.0 将 local-test 演进为 Local Plugin Library，可受控导入 remote.v1 的精确 candidate/stable 制品并在 Catalog Journal 中保留上游回执；0.37.0 增加开发源码自动发现与 workspace 安全撤回，目录更新先发布新候选再撤回旧候选。正式远端仍使用 `artifact.repository.remote.v1` HTTPS。对象存储与 OCI 通过供给 Provider 增加；审批和市场 API 仍在仓库领域扩展。
 
 插件**不拥有信任解释权**：每次发布都交给内核 `SignedRepository` 校验清单、SHA-256、发布者证明、撤销状态和不可变版本；每次读取也只转发内核已验证的包与原始证明。Node Agent 对从任何来源取得的 `Envelope` 仍会在自己的强制点再次验证，不能把本服务的 HTTPS 或“已读取”当作可信标志。
 
@@ -56,7 +56,7 @@
 
 ## 传输协议
 
-开发默认的 local-test 使用私有 `0600` Unix Socket、有界 multipart、Bearer 短期令牌和逐请求精确协议头，开放精确读取、普通开发发布、远端精确导入、按摘要导入安全评估报告、Catalog 快照与 workspace 过期。普通发布只能创建 `testing/workspace`；导入操作只接受绑定 remote.v1 Profile/Catalog receipt 的 `candidate/stable/testing` 原始 Envelope，并由本地仓库信任根重新验证发布者、摘要、来源证明和安全状态。准入或复扫引用的原始报告必须先从远端读取、核对 SHA-256 并写入本地私有归档，不能用缺失报告的摘要记录绕过检查。workspace lease 在同一仓库卷内原子持久化，默认 30 分钟、最多 256 个活动候选；到期后停止新读取，只清理没有精确引用保护的 lease 元数据。Node Agent、Controller 和发布器收到 Envelope 后仍独立复验证明与内容，Test Release 还会让仓库按活动 Profile 重新复核完整 Receipt。
+开发默认的 local-test 使用私有 `0600` Unix Socket、有界 multipart、Bearer 短期令牌和逐请求精确协议头，开放精确读取、普通开发发布、远端精确导入、按摘要导入安全评估报告、Catalog 快照、workspace 撤回与过期。普通发布只能创建 `testing/workspace`；导入操作只接受绑定 remote.v1 Profile/Catalog receipt 的 `candidate/stable/testing` 原始 Envelope，并由本地仓库信任根重新验证发布者、摘要、来源证明和安全状态。准入或复扫引用的原始报告必须先从远端读取、核对 SHA-256 并写入本地私有归档，不能用缺失报告的摘要记录绕过检查。源码撤回只接受精确 workspace ref，形成 `artifact.withdrawn` 后停止新的发现和解析；活动 lease 仍可精确读取，包体由引用保护和 GC 稍后处理。workspace lease 在同一仓库卷内原子持久化，默认 30 分钟、最多 256 个活动候选；到期后停止新读取，只清理没有精确引用保护的 lease 元数据。Node Agent、Controller 和发布器收到 Envelope 后仍独立复验证明与内容，Test Release 还会让仓库按活动 Profile 重新复核完整 Receipt。
 
 正式 remote 服务强制 TLS：
 

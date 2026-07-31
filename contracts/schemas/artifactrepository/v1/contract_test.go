@@ -130,6 +130,22 @@ func TestImportRecordBindsRemoteSourceAndLocalDestination(t *testing.T) {
 	}
 }
 
+func TestWorkspaceWithdrawalRecordKeepsImmutableIdentity(t *testing.T) {
+	profile, _ := ValidateProfile(Profile{Version: 1, ID: "local", Protocol: ProtocolLocalTest, Endpoint: "unix:///tmp/local.sock", Channels: []string{"testing", "workspace"}, DevelopmentOnly: true, Workspace: &WorkspacePolicy{TTLSeconds: 60, MaxArtifacts: 2}})
+	record := WorkspaceWithdrawalRecord{
+		SchemaVersion: 1,
+		Ref:           pluginv1.ArtifactRef{PluginID: "cn.example.plugin", Version: "1.0.0-dev.workspace.0123456789ab", Channel: "workspace"},
+		SHA256:        strings.Repeat("a", 64), PublishedRevision: 4, WithdrawalRevision: 5, WithdrawnAt: time.Now().UTC(),
+	}
+	if err := ValidateWorkspaceWithdrawalRecord(profile, record); err != nil {
+		t.Fatal(err)
+	}
+	record.Ref.Channel = "testing"
+	if err := ValidateWorkspaceWithdrawalRecord(profile, record); err == nil {
+		t.Fatal("源码撤回不得作用于 testing 制品")
+	}
+}
+
 func TestProfilesRejectProtocolBoundaryCrossing(t *testing.T) {
 	tests := []Profile{
 		{Version: 1, ID: "local", Protocol: ProtocolLocalTest, Endpoint: "https://localhost", Channels: []string{"testing"}, DevelopmentOnly: true},

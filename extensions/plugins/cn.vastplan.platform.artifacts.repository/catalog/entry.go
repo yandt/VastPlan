@@ -196,7 +196,7 @@ func eventFrom(entry Entry, occurredAt time.Time, recovered bool) Event {
 }
 
 func validateEvent(event Event, revision uint64) error {
-	if event.SchemaVersion != schemaVersion || event.Revision != revision || (event.Type != "artifact.published" && event.Type != "artifact.imported" && event.Type != "artifact.lifecycle") {
+	if event.SchemaVersion != schemaVersion || event.Revision != revision || (event.Type != "artifact.published" && event.Type != "artifact.imported" && event.Type != "artifact.lifecycle" && event.Type != "artifact.withdrawn") {
 		return errors.New("不支持的流水账事件")
 	}
 	if event.Ref.PluginID == "" || event.Ref.Version == "" || event.Ref.Channel == "" {
@@ -219,8 +219,11 @@ func validateEvent(event Event, revision uint64) error {
 	} else if event.ImportSource != nil {
 		return errors.New("非导入流水账不得携带远端来源")
 	}
-	if event.Type == "artifact.lifecycle" && (!validLifecycleStatus(event.PreviousStatus) || !validLifecycleStatus(event.Status) || event.PreviousStatus == event.Status || strings.TrimSpace(event.Reason) == "") {
+	if (event.Type == "artifact.lifecycle" || event.Type == "artifact.withdrawn") && (!validLifecycleStatus(event.PreviousStatus) || !validLifecycleStatus(event.Status) || event.PreviousStatus == event.Status || strings.TrimSpace(event.Reason) == "") {
 		return errors.New("生命周期流水账事件无效")
+	}
+	if event.Type == "artifact.withdrawn" && (event.Ref.Channel != "workspace" || event.Status != LifecycleWithdrawn || event.Replacement != nil) {
+		return errors.New("workspace 撤回流水账事件无效")
 	}
 	return nil
 }

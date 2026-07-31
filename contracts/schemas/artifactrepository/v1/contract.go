@@ -31,23 +31,24 @@ const (
 )
 
 const (
-	OperationReadExact       = "readExact"
-	OperationPublish         = "publish"
-	OperationCatalogSnapshot = "catalogSnapshot"
-	OperationImportExact     = "importExact"
-	OperationExpireWorkspace = "expireWorkspace"
-	OperationJournal         = "journal"
-	OperationResolveLock     = "resolveLock"
-	OperationPromote         = "promote"
-	OperationRetire          = "retire"
-	OperationEvidence        = "evidence"
-	OperationReferences      = "references"
-	OperationGarbageCollect  = "garbageCollect"
+	OperationReadExact         = "readExact"
+	OperationPublish           = "publish"
+	OperationCatalogSnapshot   = "catalogSnapshot"
+	OperationImportExact       = "importExact"
+	OperationExpireWorkspace   = "expireWorkspace"
+	OperationWithdrawWorkspace = "withdrawWorkspace"
+	OperationJournal           = "journal"
+	OperationResolveLock       = "resolveLock"
+	OperationPromote           = "promote"
+	OperationRetire            = "retire"
+	OperationEvidence          = "evidence"
+	OperationReferences        = "references"
+	OperationGarbageCollect    = "garbageCollect"
 )
 
 var protocolOperations = map[string][]string{
 	ProtocolLocalTest: {
-		OperationReadExact, OperationPublish, OperationCatalogSnapshot, OperationImportExact, OperationExpireWorkspace,
+		OperationReadExact, OperationPublish, OperationCatalogSnapshot, OperationImportExact, OperationExpireWorkspace, OperationWithdrawWorkspace,
 	},
 	ProtocolRemote: {
 		OperationReadExact, OperationPublish, OperationCatalogSnapshot, OperationJournal,
@@ -112,6 +113,18 @@ type ExpireWorkspaceResult struct {
 	SchemaVersion int    `json:"schemaVersion"`
 	Revision      uint64 `json:"revision"`
 	Expired       int    `json:"expired"`
+}
+
+// WorkspaceWithdrawalRecord makes source removal a monotonic Catalog fact.
+// The immutable object remains readable by exact references until normal GC
+// proves that active, rollback and lease owners have released it.
+type WorkspaceWithdrawalRecord struct {
+	SchemaVersion      int                  `json:"schemaVersion"`
+	Ref                pluginv1.ArtifactRef `json:"ref"`
+	SHA256             string               `json:"sha256"`
+	PublishedRevision  uint64               `json:"publishedRevision"`
+	WithdrawalRevision uint64               `json:"withdrawalRevision"`
+	WithdrawnAt        time.Time            `json:"withdrawnAt"`
 }
 
 func ParseProfile(raw []byte) (Profile, error) {
@@ -282,6 +295,23 @@ func ValidateImportRecord(sourceProfile, destinationProfile Profile, record Impo
 	}
 	if record.Source.Ref != record.Destination.Ref || record.Source.SHA256 != record.Destination.SHA256 || record.Source.Ref.Channel == "workspace" {
 		return errors.New("插件导入没有保持精确 ref 与摘要")
+	}
+	return nil
+}
+
+func ValidateWorkspaceWithdrawalRecord(profile Profile, record WorkspaceWithdrawalRecord) error {
+	profile, err := ValidateProfile(profile)
+	if err != nil {
+		return err
+	}
+	if profile.Protocol != ProtocolLocalTest || record.SchemaVersion != ProfileVersion || record.WithdrawnAt.IsZero() || record.PublishedRevision == 0 || record.WithdrawalRevision < record.PublishedRevision || !commonv1.IsSHA256(record.SHA256) {
+		return errors.New("workspace 撤回记录的协议或基础字段无效")
+	}
+	if err := ValidateRef(profile, record.Ref); err != nil {
+		return err
+	}
+	if record.Ref.Channel != "workspace" {
+		return errors.New("只有 workspace 制品可以由源码适配器撤回")
 	}
 	return nil
 }

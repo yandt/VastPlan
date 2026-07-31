@@ -9,6 +9,7 @@ import (
 	artifactrepositoryv1 "cdsoft.com.cn/VastPlan/contracts/schemas/artifactrepository/v1"
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifacttrust"
+	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/workspacelease"
 )
 
@@ -60,14 +61,28 @@ func (a *LocalTestAdapter) ReadExact(ctx context.Context, ref pluginv1.ArtifactR
 			return artifacttrust.Envelope{}, fmt.Errorf("%w: workspace lease 已过期或不存在", artifacttrust.ErrNotFound)
 		}
 	}
-	if _, found := a.entry(ref); !found {
+	entry, found := a.entry(ref)
+	if !found {
 		return artifacttrust.Envelope{}, fmt.Errorf("%w: %s@%s/%s", artifacttrust.ErrNotFound, ref.PluginID, ref.Version, ref.Channel)
 	}
-	artifact, packageBytes, proof, provenance, verification, admission, err := a.manager.ReadWithSupplyChain(ref)
+	readRetained := ref.Channel == "workspace" && entry.LifecycleStatus == catalog.LifecycleWithdrawn
+	var artifact pluginv1.Artifact
+	var packageBytes, proof, provenance, verification, admission []byte
+	var err error
+	if readRetained {
+		artifact, packageBytes, proof, provenance, verification, admission, err = a.manager.readRetainedWithSupplyChain(ref)
+	} else {
+		artifact, packageBytes, proof, provenance, verification, admission, err = a.manager.ReadWithSupplyChain(ref)
+	}
 	if err != nil {
 		return artifacttrust.Envelope{}, err
 	}
-	status, err := a.manager.ReadSecurityStatusChain(ref)
+	var status []byte
+	if readRetained {
+		status, err = a.manager.readRetainedSecurityStatusChain(ref)
+	} else {
+		status, err = a.manager.ReadSecurityStatusChain(ref)
+	}
 	if err != nil {
 		return artifacttrust.Envelope{}, err
 	}
@@ -103,6 +118,12 @@ func (a *LocalTestAdapter) Publish(ctx context.Context, envelope artifacttrust.E
 		return artifactrepositoryv1.Receipt{}, err
 	}
 	entry, found := a.entry(ref)
+	if found && ref.Channel == "workspace" && entry.LifecycleStatus == catalog.LifecycleWithdrawn {
+		if _, _, err := a.manager.RestoreWorkspace(ref, time.Now().UTC()); err != nil {
+			return artifactrepositoryv1.Receipt{}, err
+		}
+		entry, found = a.entry(ref)
+	}
 	if !found || published.SHA256 != entry.SHA256 {
 		return artifactrepositoryv1.Receipt{}, errors.New("local-test 发布完成后 Catalog 未形成精确回执")
 	}
@@ -171,6 +192,9 @@ func (a *LocalTestAdapter) CatalogSnapshot(ctx context.Context) (artifactreposit
 		if artifactrepositoryv1.ValidateRef(a.profile, entry.Ref) != nil {
 			continue
 		}
+		if entry.LifecycleStatus == catalog.LifecycleYanked || entry.LifecycleStatus == catalog.LifecycleRevoked || entry.LifecycleStatus == catalog.LifecycleWithdrawn {
+			continue
+		}
 		if entry.Ref.Channel == "workspace" {
 			lease, active := a.leases.Active(entry.Ref, time.Now().UTC())
 			if !active || lease.SHA256 != entry.SHA256 {
@@ -202,6 +226,31 @@ func (a *LocalTestAdapter) ExpireWorkspace(ctx context.Context) (artifactreposit
 	return artifactrepositoryv1.ExpireWorkspaceResult{SchemaVersion: artifactrepositoryv1.ProfileVersion, Revision: revision, Expired: expired}, nil
 }
 
+func (a *LocalTestAdapter) WithdrawWorkspace(ctx context.Context, ref pluginv1.ArtifactRef) (artifactrepositoryv1.WorkspaceWithdrawalRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, err
+	}
+	if a.leases == nil || a.profile.Workspace == nil || ref.Channel != "workspace" {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, errors.New("local-test Profile 未启用 workspace 或引用不是 workspace")
+	}
+	if err := artifactrepositoryv1.ValidateRef(a.profile, ref); err != nil {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, err
+	}
+	now := time.Now().UTC()
+	entry, revision, err := a.manager.WithdrawWorkspace(ref, now)
+	if err != nil {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, err
+	}
+	record := artifactrepositoryv1.WorkspaceWithdrawalRecord{
+		SchemaVersion: artifactrepositoryv1.ProfileVersion, Ref: entry.Ref, SHA256: entry.SHA256,
+		PublishedRevision: entry.RepositoryRevision, WithdrawalRevision: revision, WithdrawnAt: now,
+	}
+	if err := artifactrepositoryv1.ValidateWorkspaceWithdrawalRecord(a.profile, record); err != nil {
+		return artifactrepositoryv1.WorkspaceWithdrawalRecord{}, err
+	}
+	return record, nil
+}
+
 func (a *LocalTestAdapter) ValidateReceipt(receipt artifactrepositoryv1.Receipt, now time.Time) error {
 	if err := artifactrepositoryv1.ValidateReceipt(a.profile, receipt); err != nil {
 		return err
@@ -226,13 +275,14 @@ func (a *LocalTestAdapter) entry(ref pluginv1.ArtifactRef) (entry catalogEntry, 
 	if !found {
 		return catalogEntry{}, false
 	}
-	return catalogEntry{Ref: value.Ref, SHA256: value.SHA256, RepositoryRevision: value.RepositoryRevision}, true
+	return catalogEntry{Ref: value.Ref, SHA256: value.SHA256, RepositoryRevision: value.RepositoryRevision, LifecycleStatus: value.LifecycleStatus}, true
 }
 
 type catalogEntry struct {
 	Ref                pluginv1.ArtifactRef
 	SHA256             string
 	RepositoryRevision uint64
+	LifecycleStatus    string
 }
 
 func (a *LocalTestAdapter) receipt(ref pluginv1.ArtifactRef, digest string, revision uint64) artifactrepositoryv1.Receipt {

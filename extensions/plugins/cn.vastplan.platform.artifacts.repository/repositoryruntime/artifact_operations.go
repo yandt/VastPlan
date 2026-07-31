@@ -7,8 +7,8 @@ import (
 	"time"
 
 	pluginv1 "cdsoft.com.cn/VastPlan/contracts/schemas/plugin/v1"
-	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactassessment"
+	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactrepository"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/artifactstorage"
 	"cdsoft.com.cn/VastPlan/extensions/libraries/go/platformadminapi"
 	"cdsoft.com.cn/VastPlan/extensions/plugins/cn.vastplan.platform.artifacts.repository/catalog"
@@ -327,6 +327,15 @@ func (m *Manager) ReadWithSupplyChain(ref artifactrepository.Ref) (artifactrepos
 	return m.active.adapter.ReadWithSupplyChain(ref)
 }
 
+func (m *Manager) readRetainedWithSupplyChain(ref artifactrepository.Ref) (artifactrepository.Artifact, []byte, []byte, []byte, []byte, []byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.active == nil || ref.Channel != "workspace" {
+		return artifactrepository.Artifact{}, nil, nil, nil, nil, nil, errors.New("保留制品读取只允许 workspace")
+	}
+	return m.active.adapter.ReadWithSupplyChain(ref)
+}
+
 func (m *Manager) ReadSecurityStatusChain(ref artifactrepository.Ref) ([]byte, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -335,6 +344,15 @@ func (m *Manager) ReadSecurityStatusChain(ref artifactrepository.Ref) ([]byte, e
 	}
 	if err := m.active.catalog.RequireDelivery(ref); err != nil {
 		return nil, err
+	}
+	return m.active.signed.ReadSecurityStatusChain(ref)
+}
+
+func (m *Manager) readRetainedSecurityStatusChain(ref artifactrepository.Ref) ([]byte, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if m.active == nil || ref.Channel != "workspace" {
+		return nil, errors.New("保留安全状态读取只允许 workspace")
 	}
 	return m.active.signed.ReadSecurityStatusChain(ref)
 }

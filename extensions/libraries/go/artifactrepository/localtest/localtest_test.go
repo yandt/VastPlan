@@ -22,11 +22,12 @@ import (
 const testToken = "0123456789abcdef0123456789abcdef"
 
 type memoryRepository struct {
-	mu       sync.Mutex
-	profile  artifactrepositoryv1.Profile
-	envelope artifacttrust.Envelope
-	receipt  artifactrepositoryv1.Receipt
-	reports  map[string][]byte
+	mu        sync.Mutex
+	profile   artifactrepositoryv1.Profile
+	envelope  artifacttrust.Envelope
+	receipt   artifactrepositoryv1.Receipt
+	reports   map[string][]byte
+	withdrawn []pluginv1.ArtifactRef
 }
 
 func (r *memoryRepository) ReadExact(_ context.Context, ref pluginv1.ArtifactRef) (artifacttrust.Envelope, error) {
@@ -45,6 +46,10 @@ func (r *memoryRepository) Publish(_ context.Context, envelope artifacttrust.Env
 	r.receipt = artifactrepositoryv1.Receipt{
 		SchemaVersion: 1, RepositoryID: r.profile.ID, Protocol: r.profile.Protocol,
 		ProfileDigest: r.profile.Digest(), Ref: exactRef(envelope), SHA256: envelope.Artifact.SHA256, Revision: 1,
+	}
+	if r.receipt.Ref.Channel == "workspace" {
+		expiresAt := time.Now().UTC().Add(time.Minute)
+		r.receipt.WorkspaceLease, r.receipt.ExpiresAt = "memory-workspace-lease", &expiresAt
 	}
 	return r.receipt, nil
 }
@@ -87,6 +92,16 @@ func (*memoryRepository) ExpireWorkspace(context.Context) (artifactrepositoryv1.
 	return artifactrepositoryv1.ExpireWorkspaceResult{SchemaVersion: 1, Revision: 2, Expired: 0}, nil
 }
 
+func (r *memoryRepository) WithdrawWorkspace(_ context.Context, ref pluginv1.ArtifactRef) (artifactrepositoryv1.WorkspaceWithdrawalRecord, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.withdrawn = append(r.withdrawn, ref)
+	return artifactrepositoryv1.WorkspaceWithdrawalRecord{
+		SchemaVersion: 1, Ref: ref, SHA256: r.receipt.SHA256,
+		PublishedRevision: r.receipt.Revision, WithdrawalRevision: r.receipt.Revision + 1, WithdrawnAt: time.Now().UTC(),
+	}, nil
+}
+
 func TestUnixSocketClientServerRoundTrip(t *testing.T) {
 	directory := shortTempDir(t)
 	profile := testProfile(t, filepath.Join(directory, "repository.sock"), true)
@@ -116,6 +131,7 @@ func TestUnixSocketClientServerRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	envelope := testEnvelope(t)
+	envelope.Artifact.Channel = "workspace"
 	receipt, err := client.Publish(context.Background(), envelope)
 	if err != nil || receipt.Ref != exactRef(envelope) {
 		t.Fatalf("发布失败: receipt=%+v err=%v", receipt, err)
@@ -127,6 +143,10 @@ func TestUnixSocketClientServerRoundTrip(t *testing.T) {
 	snapshot, err := client.CatalogSnapshot(context.Background())
 	if err != nil || snapshot.Revision != 1 || len(snapshot.Items) != 1 {
 		t.Fatalf("Catalog 快照失败: snapshot=%+v err=%v", snapshot, err)
+	}
+	withdrawal, err := client.WithdrawWorkspace(context.Background(), receipt.Ref)
+	if err != nil || withdrawal.Ref != receipt.Ref || len(repository.withdrawn) != 1 {
+		t.Fatalf("workspace 撤回失败: record=%+v err=%v", withdrawal, err)
 	}
 	result, err := client.ExpireWorkspace(context.Background())
 	if err != nil || result.Revision != 2 {

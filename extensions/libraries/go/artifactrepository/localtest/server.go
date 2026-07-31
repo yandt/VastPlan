@@ -66,11 +66,42 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		s.catalog(w, req)
 	case req.Method == http.MethodPost && req.URL.Path == "/v1/workspace/expire":
 		s.expireWorkspace(w, req)
+	case req.Method == http.MethodPost && req.URL.Path == "/v1/workspace/withdraw":
+		s.withdrawWorkspace(w, req)
 	case req.Method == http.MethodGet && strings.HasPrefix(req.URL.Path, "/v1/artifacts/"):
 		s.read(w, req)
 	default:
 		http.NotFound(w, req)
 	}
+}
+
+func (s *Server) withdrawWorkspace(w http.ResponseWriter, req *http.Request) {
+	repository, ok := s.repository.(WorkspaceWithdrawalRepository)
+	if !ok || s.profile.Workspace == nil {
+		http.NotFound(w, req)
+		return
+	}
+	var ref pluginv1.ArtifactRef
+	decoder := json.NewDecoder(io.LimitReader(req.Body, maxMetadataBytes+1))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&ref); err != nil {
+		http.Error(w, "invalid workspace withdrawal", http.StatusBadRequest)
+		return
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) || artifactrepositoryv1.ValidateRef(s.profile, ref) != nil || ref.Channel != "workspace" {
+		http.Error(w, "invalid workspace withdrawal", http.StatusBadRequest)
+		return
+	}
+	record, err := repository.WithdrawWorkspace(req.Context(), ref)
+	if err != nil {
+		http.Error(w, "workspace withdrawal rejected", http.StatusUnprocessableEntity)
+		return
+	}
+	if err := artifactrepositoryv1.ValidateWorkspaceWithdrawalRecord(s.profile, record); err != nil || record.Ref != ref {
+		http.Error(w, "repository returned invalid withdrawal record", http.StatusBadGateway)
+		return
+	}
+	writeJSON(w, http.StatusOK, record)
 }
 
 func (s *Server) importAssessmentReport(w http.ResponseWriter, req *http.Request) {

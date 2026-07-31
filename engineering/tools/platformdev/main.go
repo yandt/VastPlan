@@ -396,6 +396,11 @@ func (r *runtime) start(ctx context.Context) error {
 	r.mu.Lock()
 	r.ready = true
 	r.mu.Unlock()
+	if r.options.hot {
+		if err := r.startPluginLibrarySource(ctx); err != nil {
+			return fmt.Errorf("启动 Local Plugin Library 源控制器: %w", err)
+		}
+	}
 	return nil
 }
 

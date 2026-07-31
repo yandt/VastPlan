@@ -221,7 +221,7 @@ func validateResolveRequest(current uint64, request pluginv1.ArtifactResolveRequ
 }
 
 func entryAllowed(entry Entry, request pluginv1.ArtifactResolveRequest, kernelVersion *semver.Version, channelRank map[string]int, publishers map[string]struct{}, prefixes []string) bool {
-	if entry.LifecycleStatus == LifecycleYanked || entry.LifecycleStatus == LifecycleRevoked {
+	if entry.LifecycleStatus == LifecycleYanked || entry.LifecycleStatus == LifecycleRevoked || entry.LifecycleStatus == LifecycleWithdrawn {
 		return false
 	}
 	if _, ok := channelRank[entry.Ref.Channel]; !ok {
