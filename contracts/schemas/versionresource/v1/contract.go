@@ -20,8 +20,9 @@ const (
 	ModeOverlay  = "overlay"
 	ModeGit      = "git"
 
-	ContentJSON  = "json"
-	ContentFiles = "files"
+	ContentJSON            = "json"
+	ContentFiles           = "files"
+	FilesManifestMediaType = "application/vnd.vastplan.files+json"
 
 	SecretPolicyForbidden          = "forbidden"
 	SecretPolicyCredentialRefsOnly = "credential-refs-only"
@@ -40,10 +41,11 @@ type ResourceKey struct {
 }
 
 type FileEntry struct {
-	Path   string `json:"path"`
-	Digest string `json:"digest"`
-	Size   int64  `json:"size"`
-	Mode   uint32 `json:"mode"`
+	Path      string `json:"path"`
+	Digest    string `json:"digest"`
+	Size      int64  `json:"size"`
+	Mode      uint32 `json:"mode"`
+	MediaType string `json:"mediaType"`
 }
 
 // Snapshot carries either canonical JSON or a content-addressed file manifest.

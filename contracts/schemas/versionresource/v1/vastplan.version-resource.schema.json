@@ -11,12 +11,13 @@
       }
     },
     "fileEntry": {
-      "type": "object", "additionalProperties": false, "required": ["path", "digest", "size", "mode"],
+      "type": "object", "additionalProperties": false, "required": ["path", "digest", "size", "mode", "mediaType"],
       "properties": {
         "path": { "type": "string", "minLength": 1, "maxLength": 1024 },
         "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "size": { "type": "integer", "minimum": 0 },
-        "mode": { "type": "integer", "minimum": 0, "maximum": 511 }
+        "mode": { "type": "integer", "minimum": 0, "maximum": 511 },
+        "mediaType": { "type": "string", "minLength": 1, "maxLength": 128 }
       }
     },
     "snapshot": {

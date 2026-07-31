@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.cdsoft.com.cn/vastplan/version-staging/v1/vastplan.version-staging.schema.json",
+  "title": "VastPlan Version Content Staging v1",
+  "$defs": {
+    "beginUploadRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sessionId", "expectedSessionRevision", "environmentDigest", "resource", "path", "mediaType", "expectedDigest", "expectedSize", "leaseSeconds"],
+      "properties": {
+        "sessionId": { "type": "string", "pattern": "^ws_[A-Za-z0-9_-]{16,96}$" },
+        "expectedSessionRevision": { "type": "integer", "minimum": 1 },
+        "environmentDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "resource": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/version-resource/v1/vastplan.version-resource.schema.json#/$defs/resourceKey" },
+        "path": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "mediaType": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "expectedDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "expectedSize": { "type": "integer", "minimum": 0, "maximum": 1099511627776 },
+        "leaseSeconds": { "type": "integer", "minimum": 30, "maximum": 86400 }
+      }
+    },
+    "uploadLease": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "id", "sessionId", "environmentDigest", "resource", "path", "mediaType", "expectedDigest", "expectedSize", "receivedSize", "state", "revision", "createdAt", "updatedAt", "leaseExpiresAt"],
+      "properties": {
+        "protocol": { "const": "version.staging.v1" },
+        "id": { "type": "string", "pattern": "^stg_[A-Za-z0-9_-]{16,96}$" },
+        "sessionId": { "type": "string", "pattern": "^ws_[A-Za-z0-9_-]{16,96}$" },
+        "environmentDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "resource": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/version-resource/v1/vastplan.version-resource.schema.json#/$defs/resourceKey" },
+        "path": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "mediaType": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "expectedDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "expectedSize": { "type": "integer", "minimum": 0, "maximum": 1099511627776 },
+        "receivedSize": { "type": "integer", "minimum": 0, "maximum": 1099511627776 },
+        "state": { "enum": ["Pending", "Uploading", "Verifying", "Ready", "Rejected", "Aborted", "Expired"] },
+        "revision": { "type": "integer", "minimum": 1 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "leaseExpiresAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "uploadStatusRequest": {
+      "type": "object", "additionalProperties": false, "required": ["uploadId"],
+      "properties": { "uploadId": { "type": "string", "pattern": "^stg_[A-Za-z0-9_-]{16,96}$" } }
+    },
+    "uploadRevisionRequest": {
+      "type": "object", "additionalProperties": false, "required": ["uploadId", "expectedRevision"],
+      "properties": {
+        "uploadId": { "type": "string", "pattern": "^stg_[A-Za-z0-9_-]{16,96}$" },
+        "expectedRevision": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "renewUploadRequest": {
+      "type": "object", "additionalProperties": false, "required": ["uploadId", "expectedRevision", "leaseSeconds"],
+      "properties": {
+        "uploadId": { "type": "string", "pattern": "^stg_[A-Za-z0-9_-]{16,96}$" },
+        "expectedRevision": { "type": "integer", "minimum": 1 },
+        "leaseSeconds": { "type": "integer", "minimum": 30, "maximum": 86400 }
+      }
+    },
+    "contentDescriptor": {
+      "type": "object", "additionalProperties": false, "required": ["digest", "size", "mediaType"],
+      "properties": {
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "size": { "type": "integer", "minimum": 0, "maximum": 1099511627776 },
+        "mediaType": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "uploadStatusResult": {
+      "type": "object", "additionalProperties": false, "required": ["upload"],
+      "properties": {
+        "upload": { "$ref": "#/$defs/uploadLease" },
+        "content": { "$ref": "#/$defs/contentDescriptor" },
+        "failureCode": { "enum": ["digest_mismatch", "size_mismatch", "admission_rejected"] }
+      }
+    }
+  }
+}

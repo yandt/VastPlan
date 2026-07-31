@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"mime"
 	"path"
 	"regexp"
 	"sort"
@@ -39,13 +40,13 @@ func ValidateSnapshot(snapshot Snapshot, maxBytes int64) error {
 			return errors.New("JSON 版本资源快照无效")
 		}
 	case ContentFiles:
-		if snapshot.MediaType == "" || len(snapshot.JSON) != 0 || len(snapshot.Files) > MaxFileEntries {
+		if snapshot.MediaType != FilesManifestMediaType || len(snapshot.JSON) != 0 || len(snapshot.Files) > MaxFileEntries {
 			return errors.New("文件版本资源快照无效")
 		}
 		var total int64
 		previous := ""
 		for _, entry := range snapshot.Files {
-			if !validRelativePath(entry.Path) || !digestPattern.MatchString(entry.Digest) || entry.Size < 0 || entry.Mode&^0o777 != 0 || entry.Path <= previous {
+			if ValidateFilePath(entry.Path) != nil || ValidateMediaType(entry.MediaType) != nil || !digestPattern.MatchString(entry.Digest) || entry.Size < 0 || entry.Mode&^0o777 != 0 || entry.Path <= previous {
 				return errors.New("文件版本资源清单无效或未排序")
 			}
 			if total > maxBytes-entry.Size {
@@ -176,8 +177,22 @@ func validateModes(modes []string, defaultMode string) error {
 	return nil
 }
 
-func validRelativePath(value string) bool {
-	return value != "" && len(value) <= 1024 && !strings.Contains(value, "\\") && !strings.HasPrefix(value, "/") && path.Clean(value) == value && value != "." && !strings.HasPrefix(value, "../")
+func ValidateFilePath(value string) error {
+	if value == "" || len(value) > 1024 || strings.Contains(value, "\\") || strings.HasPrefix(value, "/") || path.Clean(value) != value || value == "." || strings.HasPrefix(value, "../") {
+		return errors.New("版本资源文件路径无效")
+	}
+	return nil
+}
+
+func ValidateMediaType(value string) error {
+	if value == "" || len(value) > 128 {
+		return errors.New("版本资源媒体类型无效")
+	}
+	mediaType, parameters, err := mime.ParseMediaType(value)
+	if err != nil || value != mime.FormatMediaType(strings.ToLower(mediaType), parameters) {
+		return errors.New("版本资源媒体类型必须使用规范格式")
+	}
+	return nil
 }
 
 func validMode(value string) bool {

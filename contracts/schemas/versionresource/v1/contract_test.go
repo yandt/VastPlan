@@ -46,9 +46,9 @@ func TestSnapshotValidationSeparatesJSONFromFileManifest(t *testing.T) {
 	if err != nil || string(canonical) != `{"enabled":true}` {
 		t.Fatalf("JSON 资源规范化失败: %s %v", canonical, err)
 	}
-	files := resourcev1.Snapshot{Kind: resourcev1.ContentFiles, MediaType: "application/vnd.vastplan.files+json", Files: []resourcev1.FileEntry{
-		{Path: "README.md", Digest: strings.Repeat("a", 64), Size: 12, Mode: 0o644},
-		{Path: "src/main.ts", Digest: strings.Repeat("b", 64), Size: 42, Mode: 0o644},
+	files := resourcev1.Snapshot{Kind: resourcev1.ContentFiles, MediaType: resourcev1.FilesManifestMediaType, Files: []resourcev1.FileEntry{
+		{Path: "README.md", Digest: strings.Repeat("a", 64), Size: 12, Mode: 0o644, MediaType: "text/markdown; charset=utf-8"},
+		{Path: "src/main.ts", Digest: strings.Repeat("b", 64), Size: 42, Mode: 0o644, MediaType: "text/typescript; charset=utf-8"},
 	}}
 	if err := resourcev1.ValidateSnapshot(files, 1024); err != nil {
 		t.Fatal(err)
@@ -59,6 +59,11 @@ func TestSnapshotValidationSeparatesJSONFromFileManifest(t *testing.T) {
 	files.Files[1].Path = "../escape"
 	if err := resourcev1.ValidateSnapshot(files, 1024); err == nil {
 		t.Fatal("文件清单必须拒绝目录穿越")
+	}
+	files.Files[1].Path = "src/main.ts"
+	files.Files[1].MediaType = "Text/Plain"
+	if err := resourcev1.ValidateSnapshot(files, 1024); err == nil {
+		t.Fatal("文件清单必须拒绝非规范媒体类型")
 	}
 }
 
