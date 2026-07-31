@@ -6,6 +6,7 @@ import type { CollectionRow } from "./model.js";
 
 const namespace = "cn.vastplan.foundation.frontend.workflow.workbench";
 const directActionLimit = 2;
+const rowActionSize = "sm" as const;
 
 /**
  * The collection owns row-action layout. Functional plugins only declare actions
@@ -24,13 +25,13 @@ export function RowActions({ actions, row, onRunAction }: {
   const overflow = visible.slice(direct.length);
   const moreLabel = i18n.text(message(namespace, "action.moreRow", "更多行操作"));
   return <ui.Stack direction="row" gap="sm" align="center" justify="center">
-    {direct.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} size="sm" tone={action.tone === "danger" ? "danger" : "normal"} onClick={() => onRunAction(action)} />)}
+    {direct.map((action) => <ui.IconButton key={action.id} icon={action.icon} label={i18n.text(action.label)} size={rowActionSize} tone={action.tone === "danger" ? "danger" : "normal"} onClick={() => onRunAction(action)} />)}
     <ActionMenuPopover label={moreLabel} items={overflow.map((action) => ({
       id: action.id,
       label: i18n.text(action.label),
       icon: action.icon,
       tone: action.tone === "danger" ? "danger" : "normal",
-    }))} onSelect={(id) => {
+    }))} triggerSize={rowActionSize} menuSize={rowActionSize} iconSize={rowActionSize} onSelect={(id) => {
       const action = overflow.find((candidate) => candidate.id === id);
       if (action !== undefined) onRunAction(action);
     }} />

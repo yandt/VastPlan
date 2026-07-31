@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ComponentSize, PopoverPlacement, SemanticIconName } from "@vastplan/ui-primitives";
-import { usePortalUI } from "@vastplan/ui-primitives";
+import { componentSizeRecipes, usePortalUI } from "@vastplan/ui-primitives";
 
 export interface ActionMenuEntry {
   id: string;
@@ -14,16 +14,19 @@ export interface ActionMenuEntry {
  * Governed overflow menu shared by Workbench patterns. Callers provide action
  * data only; the component owns compact layout, focus, closing, and truncation.
  */
-export function ActionMenuPopover({ label, items, triggerSize = "sm", menuSize = "sm", placement = "bottom-end", onSelect }: {
+export function ActionMenuPopover({ label, items, triggerSize = "sm", menuSize = "sm", iconSize = menuSize, placement = "bottom-end", onSelect }: {
   label: string;
   items: readonly ActionMenuEntry[];
   triggerSize?: ComponentSize;
   menuSize?: ComponentSize;
+  /** Menu action glyphs follow the same governed scale as their trigger. */
+  iconSize?: ComponentSize;
   placement?: PopoverPlacement;
   onSelect(id: string): void;
 }) {
   const ui = usePortalUI();
   const [open, setOpen] = useState(false);
+  const iconEdge = componentSizeRecipes.iconButton[iconSize].iconEdge;
   if (items.length === 0) return null;
   return <ui.Popover
     open={open}
@@ -50,7 +53,7 @@ export function ActionMenuPopover({ label, items, triggerSize = "sm", menuSize =
       return {
         id: item.id,
         disabled: item.disabled,
-        icon: <span style={{ display: "inline-flex", color }}><ui.Icon name={item.icon} /></span>,
+        icon: <span style={{ display: "inline-flex", color }}><ui.Icon name={item.icon} size={iconSize} style={{ width: iconEdge, height: iconEdge }} /></span>,
         label: <span title={item.label} style={{ display: "block", maxWidth: 216, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color }}>{item.label}</span>,
       };
     })}

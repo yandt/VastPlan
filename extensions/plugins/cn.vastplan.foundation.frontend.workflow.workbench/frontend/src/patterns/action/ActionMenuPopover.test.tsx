@@ -3,10 +3,11 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@vastplan/ui-primitives", () => ({
+  componentSizeRecipes: { iconButton: { sm: { iconEdge: 12 }, md: { iconEdge: 16 }, lg: { iconEdge: 20 } } },
   usePortalUI: () => ({
     theme: { tokens: { color: { danger: "#d00", mutedText: "#777" } } },
     IconButton: ({ icon, label, size }: { icon: string; label: string; size?: string }) => <button type="button" data-icon={icon} data-size={size} aria-label={label} />,
-    Icon: ({ name }: { name: string }) => <span data-icon-glyph={name} />,
+    Icon: ({ name, size, style }: { name: string; size?: string; style?: { width?: number; height?: number } }) => <span data-icon-glyph={name} data-icon-size={size} style={style} />,
     Menu: ({ size, variant, items }: { size?: string; variant?: string; items: Array<{ id: string; label: ReactNode; icon?: ReactNode; disabled?: boolean }> }) => <div data-menu data-size={size} data-variant={variant}>{items.map((item) => <button key={item.id} type="button" disabled={item.disabled} data-menu-item={item.id}>{item.icon}{item.label}</button>)}</div>,
     Popover: ({ children, initialFocus, placement, surface, trigger }: { children: ReactNode; initialFocus?: string; placement?: string; surface?: string; trigger(props: { ref: undefined; "aria-expanded": false; "aria-controls": string; onClick(): void; onKeyDown(): void }): ReactNode }) => <div data-popover data-focus={initialFocus} data-placement={placement} data-surface={surface}>{trigger({ ref: undefined, "aria-expanded": false, "aria-controls": "action-menu", onClick: () => undefined, onKeyDown: () => undefined })}{children}</div>,
   }),
@@ -34,6 +35,9 @@ describe("ActionMenuPopover", () => {
     expect(html).toContain('data-variant="action"');
     expect(html).toContain('data-menu-item="publish"');
     expect(html).toContain('data-icon-glyph="remove"');
+    expect(html).toContain('data-icon-size="sm"');
+    expect(html).toContain('width:12px');
+    expect(html).toContain('height:12px');
     expect(html).toContain('color:#d00');
     expect(html).toContain('color:#777');
     expect(html).toContain('text-overflow:ellipsis');
