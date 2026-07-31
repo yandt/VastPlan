@@ -37,6 +37,29 @@ func TestReconcileDevelopmentGrantsOnlyChangesSeedOwnedRoles(t *testing.T) {
 	}
 }
 
+func TestDevelopmentGrantsKeepPortalLifecycleSeparated(t *testing.T) {
+	catalog := pluginv1.PermissionCatalog{Permissions: []pluginv1.PermissionCatalogEntry{
+		{PermissionDeclaration: pluginv1.PermissionDeclaration{Code: "platform.portal.read", Assignable: true}},
+		{PermissionDeclaration: pluginv1.PermissionDeclaration{Code: "platform.portal.compose", Assignable: true}},
+		{PermissionDeclaration: pluginv1.PermissionDeclaration{Code: "platform.portal.approve", Assignable: true}},
+		{PermissionDeclaration: pluginv1.PermissionDeclaration{Code: "platform.portal.publish", Assignable: true}},
+	}}
+	grants := developmentGrants(catalog)
+	if len(grants) != 4 {
+		t.Fatalf("开发引导角色数量错误: %d", len(grants))
+	}
+	want := map[string][]string{
+		"local-author":    {"platform.portal.read", "platform.portal.compose"},
+		"local-approver":  {"platform.portal.read", "platform.portal.approve"},
+		"local-publisher": {"platform.portal.read", "platform.portal.publish"},
+	}
+	for _, grant := range grants[1:] {
+		if got := grant.Permissions; !equalStrings(got, want[grant.SubjectID]) {
+			t.Fatalf("主体 %s 的 Portal 权限未与签名目录同步: got=%v want=%v", grant.SubjectID, got, want[grant.SubjectID])
+		}
+	}
+}
+
 func TestRenewPublishedDevelopmentAuthorizationWithoutPlatformPublication(t *testing.T) {
 	now := time.Date(2026, 7, 29, 6, 0, 0, 0, time.UTC)
 	root := t.TempDir()

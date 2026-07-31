@@ -39,6 +39,7 @@ type options struct {
 	listen, portalListen, artifactListen, seedArtifactListen, vaultListen, recoveryListen, natsListen string
 	artifactProtocol                                                                                  string
 	hot                                                                                               bool
+	detach                                                                                            bool
 	applyPlatform                                                                                     bool
 	rebuildSeed                                                                                       bool
 }
@@ -89,6 +90,7 @@ func main() {
 	flag.StringVar(&opts.recoveryListen, "recovery-listen", "127.0.0.1:18441", "internal Kernel Recovery status address")
 	flag.StringVar(&opts.natsListen, "nats-listen", "127.0.0.1:0", "development NATS address; port 0 chooses a free port")
 	flag.BoolVar(&opts.hot, "hot", true, "enable transactional frontend plugin hot replacement")
+	flag.BoolVar(&opts.detach, "detach", false, "detach background runtime from the launching terminal session")
 	flag.BoolVar(&opts.applyPlatform, "apply-platform", false, "explicitly publish the development platform baseline")
 	flag.BoolVar(&opts.rebuildSeed, "rebuild-seed", false, "explicitly rebuild and promote the stable development Seed Runtime")
 	flag.Parse()
@@ -108,6 +110,11 @@ func run(opts options) error {
 	}
 	if opts.rebuildSeed && !opts.applyPlatform {
 		return errors.New("-rebuild-seed 只能与显式 -apply-platform 一起使用")
+	}
+	if opts.detach {
+		if err := detachManagedRuntime(); err != nil {
+			return fmt.Errorf("脱离启动终端会话: %w", err)
+		}
 	}
 	if !filepath.IsAbs(opts.stateRoot) {
 		opts.stateRoot = filepath.Join(opts.root, opts.stateRoot)
@@ -466,6 +473,7 @@ func (r *runtime) nodeBootstrapCredentialArgs() []string {
 
 func (r *runtime) startChild(name string, env map[string]string, executable string, args ...string) (*child, error) {
 	cmd := exec.Command(executable, args...)
+	configureManagedChild(cmd)
 	cmd.Dir = r.options.root
 	cmd.Env = mergedEnv(env)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr

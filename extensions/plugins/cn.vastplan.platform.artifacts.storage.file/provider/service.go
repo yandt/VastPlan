@@ -22,7 +22,7 @@ import (
 
 const (
 	PluginID      = "cn.vastplan.platform.artifacts.storage.file"
-	PluginVersion = "0.2.3"
+	PluginVersion = "0.2.4"
 	Capability    = "platform.artifacts.storage.file"
 )
 

@@ -68,15 +68,15 @@
         { "id": "cn.vastplan.foundation.frontend.structure.layout.standard", "version": "5.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.structure.layout.top-navigation", "version": "5.1.0", "channel": "stable" },
         { "id": "cn.vastplan.foundation.frontend.workflow.workbench", "version": "5.2.1", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.0.2", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.9", "channel": "stable" },
-        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.6", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.portal-composer", "version": "4.0.3", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.global-settings", "version": "0.8.10", "channel": "stable" },
+        { "id": "cn.vastplan.platform.configuration.plugin-settings", "version": "0.13.7", "channel": "stable" },
         { "id": "cn.vastplan.platform.security.credentials", "version": "0.12.9", "channel": "stable" },
         { "id": "cn.vastplan.platform.data.relational.connection-manager", "version": "0.9.9", "channel": "stable" },
-        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.35.6", "channel": "stable" },
+        { "id": "cn.vastplan.platform.artifacts.repository", "version": "0.35.7", "channel": "stable" },
         { "id": "cn.vastplan.platform.integration.api-exposure", "version": "0.5.9", "channel": "stable" },
-        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.21.5", "channel": "stable" },
-        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.5.3", "channel": "stable" }
+        { "id": "cn.vastplan.platform.infrastructure.deployment-manager", "version": "0.21.6", "channel": "stable" },
+        { "id": "cn.vastplan.platform.security.authorization-policy", "version": "0.5.4", "channel": "stable" }
       ],
       "security": { "firstPartyOnly": true, "requireIntegrity": true }
     }
@@ -88,7 +88,7 @@
       "platformProfile": {
         "id": "portal-default",
           "revision": 81,
-          "digest": "5cb1b209ad0483c211ab5bc10fc3c7d81f1b53ad9e774d9db52d1b917c6d4255"
+          "digest": "9051f3d02e83a0d06880ac3a6613a80b9edec32fae4e89a6f39f8b109d781a55"
       },
       "services": [
         {

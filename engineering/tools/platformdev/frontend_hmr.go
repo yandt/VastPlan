@@ -476,10 +476,11 @@ func (h *frontendHMR) runtime(w http.ResponseWriter, request *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	target := "https://" + h.portalListen + "/v1/portal-runtime"
-	if request.URL.RawQuery != "" {
-		target += "?" + request.URL.RawQuery
+	query := request.URL.Query()
+	if strings.TrimSpace(query.Get("path")) == "" {
+		query.Set("path", "/operations")
 	}
+	target := "https://" + h.portalListen + "/v1/portal-runtime?" + query.Encode()
 	upstream, err := http.NewRequestWithContext(request.Context(), http.MethodGet, target, nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

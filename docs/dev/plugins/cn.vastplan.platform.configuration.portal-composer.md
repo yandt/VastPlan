@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`4.0.2`
+当前制品版本：`4.0.3`
 
 该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal。每个 `portalId` 只有一个聚合，内部包含 WorkingCopy、Publication、Release 和版本控制语义状态。
 
@@ -16,7 +16,7 @@
 - `referencePending` outbox 在管理读取和进程重启后幂等收敛；
 - Portal 用户偏好按 tenant、subject 与 Portal scope 独立保存。
 
-组合治理状态使用 v3 namespace 下的“小型 Root CAS + 512 KiB 内容寻址 chunk”。Root 是唯一提交点并绑定完整快照 SHA-256，读路径逐块复核大小和摘要。当前处于开发阶段，不读取或迁移 v2 状态；单租户快照安全上限为 64 MiB。
+组合治理状态使用 v4 namespace 下的“小型 Root CAS + 512 KiB 内容寻址 chunk”。Root 是唯一提交点并绑定完整快照 SHA-256，读路径逐块复核大小和摘要。当前处于开发阶段，不读取或迁移早期状态；单租户快照安全上限为 64 MiB。
 
 静态 `portal-platform-catalog.json` 仅为首个 Portal WorkingCopy 提供种子配置，不再形成可在线编辑的 Platform Profile 或 PortalBinding。治理读取会返回可信 `creationTemplate`，因此租户尚无 Portal 时也能创建第一条记录；空上线历史统一编码为 `[]`。内核 Recovery Baseline 继续独立于 Portal，确保错误配置不能破坏最小管理与恢复入口。
 
@@ -37,4 +37,4 @@
 
 ## P2.3 实施状态
 
-P2.3a 至 P2.3e 已完成：后端聚合、中立版本控制端口、Workspace Adapter、BFF、TypeScript SDK 与 Workbench 均使用 WorkingCopy/Publication/Release；旧 `/versions` 与 PortalVersion 用户操作已删除。确定性故障矩阵已覆盖无版本与 Workspace 模式、能力差异、软依赖缺失、跨重启幂等恢复、聚合冲突、冷历史故障和 Release 独立性。真实进程 E2E 会同时启动 Portal Composer、Version Workspace、Version Ledger 与 Node Portal Kernel，并经浏览器 BFF 验证提交、历史、比较、恢复和上线完整链；长期混沌与 soak 留待具备真实插件负载后执行。
+P2.3a 至 P2.3e 已完成：后端聚合、中立版本控制端口、Workspace Adapter、BFF、TypeScript SDK 与 Workbench 均使用 WorkingCopy/Publication/Release；旧 `/versions` 与 PortalVersion 用户操作已删除。确定性故障矩阵已覆盖无版本与 Workspace 模式、能力差异、惰性依赖缺失、跨重启幂等恢复、聚合冲突、冷历史故障和 Release 独立性。真实进程 E2E 会同时启动 Portal Composer、Version Workspace、Version Ledger 与 Node Portal Kernel，并经浏览器 BFF 验证提交、历史、比较、恢复和上线完整链；长期混沌与 soak 留待具备真实插件负载后执行。

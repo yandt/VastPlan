@@ -359,6 +359,11 @@ build_portal_host() {
 }
 
 runtime_arguments() {
+  local debug="$1"
+  local detach=true
+  if [ "$debug" = true ]; then
+    detach=false
+  fi
   RUNTIME_ARGS=(
     -root "$ROOT"
     -state-root "$STATE_ROOT"
@@ -370,6 +375,7 @@ runtime_arguments() {
     -vault-listen "127.0.0.1:$VAULT_PORT"
     -recovery-listen "127.0.0.1:$RECOVERY_PORT"
 	-hot="$HOT_MODE"
+	-detach="$detach"
 	-apply-platform="$APPLY_PLATFORM"
 	-rebuild-seed="$REBUILD_SEED"
   )

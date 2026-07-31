@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.configuration.portal-composer",
   "name": "VastPlan Portal Composer",
   "description": "以单一 Portal 聚合治理 WorkingCopy、Publication、Release 与用户级 PortalPreference",
-  "version": "4.0.2",
+  "version": "4.0.3",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -49,7 +49,7 @@
     "routing": "queue",
     "routingDomain": "platform",
     "requires": [
-      { "capability": "foundation.versioning.workspace", "scope": "remote", "kind": "soft", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "foundation.versioning.workspace", "routingDomain": "platform" }
+      { "capability": "foundation.versioning.workspace", "scope": "remote", "kind": "lazy", "ready": "readiness", "failurePolicy": "degrade", "logicalService": "foundation.versioning.workspace", "routingDomain": "platform" }
     ],
     "provides": [
       { "extensionPoint": "tool.package", "capability": "platform.portal-composer", "visibility": "cluster", "routing": "queue", "routingDomain": "platform" },

@@ -244,9 +244,9 @@ func developmentGrants(catalog pluginv1.PermissionCatalog) []policy.BootstrapGra
 	}
 	return []policy.BootstrapGrant{
 		{RoleID: "platform.owner", Title: "Development Platform Owner", SubjectID: "local-admin", Permissions: all},
-		{RoleID: "platform.deployment-author", Title: "Development Deployment Author", SubjectID: "local-author", Permissions: filter("platform.deployment.read", "platform.deployment.compose")},
-		{RoleID: "platform.deployment-approver", Title: "Development Deployment Approver", SubjectID: "local-approver", Permissions: filter("platform.deployment.read", "platform.deployment.approve")},
-		{RoleID: "platform.deployment-publisher", Title: "Development Deployment Publisher", SubjectID: "local-publisher", Permissions: filter("platform.deployment.read", "platform.deployment.publish")},
+		{RoleID: "platform.deployment-author", Title: "Development Deployment Author", SubjectID: "local-author", Permissions: filter("platform.deployment.read", "platform.deployment.compose", "platform.portal.read", "platform.portal.compose")},
+		{RoleID: "platform.deployment-approver", Title: "Development Deployment Approver", SubjectID: "local-approver", Permissions: filter("platform.deployment.read", "platform.deployment.approve", "platform.portal.read", "platform.portal.approve")},
+		{RoleID: "platform.deployment-publisher", Title: "Development Deployment Publisher", SubjectID: "local-publisher", Permissions: filter("platform.deployment.read", "platform.deployment.publish", "platform.portal.read", "platform.portal.publish")},
 	}
 }
 

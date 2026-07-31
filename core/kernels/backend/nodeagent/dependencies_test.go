@@ -28,6 +28,21 @@ func TestValidateRuntimeRequirements_LocalAndDegraded(t *testing.T) {
 	}
 }
 
+func TestValidateRuntimeRequirementsLazyProviderDoesNotDegradeUnit(t *testing.T) {
+	plugins := []InstalledPlugin{{
+		ID: "portal-composer", Version: "1.0.0", Contract: PluginRuntimeContract{Requires: []pluginv1.RuntimeRequirement{{
+			Capability: "foundation.versioning.workspace", Scope: "remote", Kind: "lazy", Ready: "readiness", FailurePolicy: "degrade",
+		}}},
+	}}
+	status, err := validateRuntimeRequirements(context.Background(), plugins, nil, 10)
+	if err != nil {
+		t.Fatalf("未配置的惰性 Provider 不应阻断基础能力: %v", err)
+	}
+	if len(status.Degraded) != 0 {
+		t.Fatalf("惰性 Provider 应在首次真实调用时解析，不应降级整个 unit: %v", status.Degraded)
+	}
+}
+
 func TestVersionsMatch(t *testing.T) {
 	if !versionsMatch([]string{"1.2.3"}, "^1.0.0") {
 		t.Fatal("semver range 应匹配")

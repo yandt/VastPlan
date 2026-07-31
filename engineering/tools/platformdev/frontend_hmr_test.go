@@ -34,6 +34,10 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
+		if request.URL.Query().Get("path") != "/operations" {
+			http.Error(w, "portal path missing", http.StatusBadRequest)
+			return
+		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"portal":  map[string]any{"revision": 7},
 			"modules": []map[string]any{{"id": "cn.vastplan.feature", "version": "1.0.0", "entry": "frontend/dist/index.js", "url": "/v1/portal-modules/7/" + strings.Repeat("b", 64) + ".js", "sha256": strings.Repeat("b", 64), "packageSha256": strings.Repeat("c", 64)}},
@@ -59,7 +63,7 @@ func TestFrontendHMRInstallsDigestBoundModuleAndOverlaysRuntime(t *testing.T) {
 		t.Fatalf("module response code=%d body=%q headers=%v", moduleResponse.Code, moduleResponse.Body.String(), moduleResponse.Header())
 	}
 
-	runtimeRequest := httptest.NewRequest(http.MethodGet, "/__vastplan_dev/runtime?path=%2Foperations", nil)
+	runtimeRequest := httptest.NewRequest(http.MethodGet, "/__vastplan_dev/runtime", nil)
 	runtimeRequest.RemoteAddr = "127.0.0.1:43210"
 	runtimeResponse := httptest.NewRecorder()
 	hmr.runtime(runtimeResponse, runtimeRequest)

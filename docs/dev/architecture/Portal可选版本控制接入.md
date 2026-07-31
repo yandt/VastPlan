@@ -56,12 +56,14 @@ portalComposer:
 
 P2.3 首版按 Portal Composer 服务配置解析一个受信默认绑定，并在 Portal 创建时固定是否启用；浏览器不能切换。在线 attach/detach、不同 Portal 的覆盖规则和历史迁移不进入 P2.3，避免在没有生产数据前建立迁移状态机。
 
-Portal Composer 清单对 `foundation.versioning.workspace` 使用 `soft + degrade`：
+Portal Composer 清单对 `foundation.versioning.workspace` 使用 `lazy + degrade`：
 
 - 未配置绑定：不发出 Workspace 调用，Portal readiness 正常，UI 不显示版本入口；
 - 已配置且能力健康：返回 `history/read/diff/restore` 能力；
 - 已配置但能力不可用：当前工作副本、已发布 Publication、Release 列表和线上 Runtime 可读，新的版本提交及冷历史读取返回稳定 `version_control_unavailable`；
 - 不运行后台轮询。能力目录事件更新可用性，实际操作仍以调用结果为准。
+
+`lazy` 表示缺少 Workspace 不影响 Portal Composer 的基础 readiness，也不阻断 Seed Recovery Capsule 的 PlatformReady；只有启用版本控制后的真实 Workspace 操作才解析该能力并 fail-closed。
 
 启用时 Portal 先调用 `describeResource` 解析该 Environment/Resource 的语义能力，再只向浏览器投影 `history/read/diff/restore` 等产品能力。Adapter ID、配置和存储路由不进入浏览器；若 Adapter 不支持 diff，版本历史和恢复仍可用，但 UI 不显示 compare。
 

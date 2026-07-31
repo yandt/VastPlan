@@ -2,7 +2,7 @@
   "id": "cn.vastplan.platform.security.authorization-policy",
   "name": "VastPlan Authorization Policy",
   "description": "管理版本化角色、主体绑定、撤权、签名授权快照及其在线管理工作台",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
