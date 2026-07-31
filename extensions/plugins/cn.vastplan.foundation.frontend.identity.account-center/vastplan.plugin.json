@@ -2,7 +2,7 @@
   "id": "cn.vastplan.foundation.frontend.identity.account-center",
   "name": "VastPlan 个人中心",
   "description": "以标准 Portal 页面契约提供用户信息、用户设置和本地外观管理",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "vastplan",
   "license": "Apache-2.0",
   "licenseFile": "LICENSE",
@@ -11,6 +11,23 @@
   "capabilities": { "kernelServices": [], "credentials": [], "resources": [] },
   "activation": ["onPortalStartup"],
   "entry": { "frontend": "frontend/dist/index.js" },
+  "extensionPoints": [{
+    "id": "cn.vastplan.foundation.frontend.identity.account-center.page",
+    "surface": "frontend",
+    "contract": "1.0.0",
+    "kind": "frontend.page",
+    "dispatch": "mount",
+    "targets": ["account", "account.settings"],
+    "descriptorSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pageId", "groupId"],
+      "properties": {
+        "pageId": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 160 },
+        "groupId": { "enum": ["account", "account.settings"] }
+      }
+    }
+  }],
   "contributes": {
     "frontend": {
       "views": [

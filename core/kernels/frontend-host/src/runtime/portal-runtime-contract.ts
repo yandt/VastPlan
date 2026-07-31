@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { parsePortalExtensionGraph, type PortalExtensionGraph } from "@vastplan/plugin-extension-contract";
 
 export interface PortalSpec extends Readonly<Record<string, unknown>> {
   readonly revision: number;
@@ -64,6 +65,7 @@ export interface PortalRuntimeSpec extends Readonly<Record<string, unknown>> {
   readonly portal: PortalSpec;
   readonly modules?: readonly FrontendModule[];
   readonly moduleGraphs?: readonly FrontendModuleGraph[];
+  readonly extensions?: PortalExtensionGraph;
   readonly coordination?: PortalGenerationCoordination;
 }
 
@@ -152,6 +154,8 @@ function validateRuntime(runtime: PortalRuntimeSpec): void {
   if (runtime.coordination !== undefined) throw new PortalRuntimeContractError("Portal Generation 协调信息只能由在线可信宿主生成");
   if (!Number.isSafeInteger(runtime.portal.revision) || runtime.portal.revision < 1) throw new PortalRuntimeContractError("Portal RuntimeSpec revision 无效");
   if (!Array.isArray(runtime.modules ?? []) || !Array.isArray(runtime.moduleGraphs ?? [])) throw new PortalRuntimeContractError("Portal RuntimeSpec 模块列表无效");
+  try { parsePortalExtensionGraph(runtime.extensions); }
+  catch (error) { throw new PortalRuntimeContractError(`Portal 插件扩展图无效: ${String(error)}`); }
   for (const module of runtime.modules ?? []) validateDescriptor(module, module.mediaType ?? "text/javascript", runtime.portal.revision);
   for (const graph of runtime.moduleGraphs ?? []) {
 		if (graph.target !== "browser") throw new PortalRuntimeContractError("浏览器 RuntimeSpec 只能包含 browser Module Graph");

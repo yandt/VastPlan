@@ -1,5 +1,6 @@
 import {
   accountNavigationGroupID,
+  accountPageExtensionPointID,
   accountSettingsNavigationGroupID,
   PortalAccountProfilePage,
   PortalAppearanceSettingsPage,
@@ -32,6 +33,7 @@ export const localization = {
 
 export default {
   register(context: FrontendPluginContext) {
+    if (!context.extensions.owns(accountPageExtensionPointID)) throw new Error("个人中心扩展点未由可信 Portal Runtime 装配");
     context.addPage({
       id: "account.profile",
       path: "/account/profile",

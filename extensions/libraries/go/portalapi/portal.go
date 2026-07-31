@@ -172,9 +172,10 @@ type FrontendModule struct {
 // RuntimeSpec is the only browser bootstrap input. The browser never receives
 // raw manifests or repository credentials and does not resolve compositions.
 type RuntimeSpec struct {
-	Portal       PortalSpec            `json:"portal"`
-	Modules      []FrontendModule      `json:"modules,omitempty"`
-	ModuleGraphs []FrontendModuleGraph `json:"moduleGraphs,omitempty"`
+	Portal       PortalSpec              `json:"portal"`
+	Modules      []FrontendModule        `json:"modules,omitempty"`
+	ModuleGraphs []FrontendModuleGraph   `json:"moduleGraphs,omitempty"`
+	Extensions   pluginv1.ExtensionGraph `json:"extensions"`
 }
 
 type Status string

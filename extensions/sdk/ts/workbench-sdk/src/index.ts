@@ -1,4 +1,5 @@
 import type { ActionSpec, CollectionDensity, CollectionSpec, ColumnSpec, ComponentSize, FilterPanelSpec, FormPresentation, FormSchema, FormWorkflow, JSONValue, LocalizedText, PageActionSpec, RecordDetailSpec, RecordMasterSpec, RecordTreeSpec } from "@vastplan/ui-contract";
+import type { PluginExtensionAccess } from "@vastplan/plugin-extension-contract";
 
 export type { ActionSpec, CollectionSpec, CollectionCardSpec, CollectionCardValueFormat, CollectionCardFieldSpec, ComponentSize, DashboardBreakpoint, DashboardCompaction, DashboardGridItem, DashboardGridLayouts, DashboardGridSpec, FilterPanelApplyMode, FilterPanelLayout, FilterPanelSpec, ColumnSpec, DataValueFormat, FilterSpec, FilterFieldKind, CollectionQueryMode, CollectionSelectionMode, CollectionView, FormCondition, FormFieldPresentation, FormLabelPlacement, FormLayout, FormPresentation, FormPresentationPreset, FormSchema, FormSectionPresentation, FormWidget, FormWorkflow, JSONValue, PageActionDisplay, PageActionOverflow, PageActionSpec, RecordDetailSpec, RecordFieldSpec, RecordMasterSpec, RecordSectionSpec, RecordTreeSpec, ResponsiveColumnCount } from "@vastplan/ui-contract";
 export { dashboardBreakpointOrder, dashboardDefaultBreakpoints, dashboardDefaultColumns, jsonSchemaDialect, message } from "@vastplan/ui-contract";
@@ -249,6 +250,7 @@ export interface WorkbenchFrontendPluginContext extends WorkbenchPluginContext {
   readonly portal: Readonly<WorkbenchPortalRuntime>;
   readonly lifecycle: Readonly<{ pluginID: string; generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" | "shutdown" }>;
   readonly i18n: Readonly<{ message(key: string, fallback: string, values?: import("@vastplan/ui-contract").MessageValues): import("@vastplan/ui-contract").MessageDescriptor }>;
+  readonly extensions: PluginExtensionAccess;
 }
 
 export function managementServicesFor(portal: Readonly<WorkbenchPortalRuntime>, capability: string): readonly WorkbenchManagementService[] {

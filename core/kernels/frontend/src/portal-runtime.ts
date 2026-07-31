@@ -19,6 +19,7 @@ import type {
 import { loadPortalFoundations } from "./portal-foundations";
 import { PageHelpButton } from "./page-help-button";
 import { createPageRefreshController } from "./page-refresh-controller";
+import { createPluginExtensionAccess, emptyPortalExtensionGraph, validateExtensionGraphForPortal, validateFrontendPageExtensions } from "./plugin-extensions";
 import { snapshotPortal } from "./portal-snapshot";
 import {
   assertTrustedFirstParty,
@@ -59,6 +60,8 @@ export class PortalRuntime {
 
   private async assemble(portal: PortalSpec, options: PortalPrepareOptions): Promise<PreparedPortal> {
     validatePortalShape(portal);
+    const extensionGraph = options.extensions ?? emptyPortalExtensionGraph;
+    validateExtensionGraphForPortal(extensionGraph, portal.plugins);
     const foundations = await loadPortalFoundations(this.loader, portal, options);
     const modules = new Map(foundations.loaded.map((item) => [moduleKey(item.ref), item.module]));
     // A development source catalog may reference a newer SemVer while the
@@ -100,9 +103,11 @@ export class PortalRuntime {
         workbench,
         preferences: options.preferences,
         registration,
+        extensionGraph,
       });
       await plugin.register?.(context);
     }
+    validateFrontendPageExtensions(registration.pages, extensionGraph);
 
     const preparedModules = foundations.loaded.map(({ ref, module }) => Object.freeze({ ref: Object.freeze({ ...ref }), module }));
     return Object.freeze({
@@ -160,14 +165,16 @@ interface ContextInput {
   workbench: NonNullable<ReturnType<typeof requiredModule>["workbench"]>;
   preferences?: import("@vastplan/ui-primitives").WorkbenchPreferencePort;
   registration: RegistrationState;
+  extensionGraph: import("@vastplan/plugin-extension-contract").PortalExtensionGraph;
 }
 
 function createPluginContext(input: ContextInput): FrontendPluginContext {
-  const { portal, portalSnapshot, ref, generation, signal, reason, workbench, preferences, registration } = input;
+  const { portal, portalSnapshot, ref, generation, signal, reason, workbench, preferences, registration, extensionGraph } = input;
   const context: FrontendPluginContext = {
     portal: portalSnapshot,
     lifecycle: Object.freeze({ pluginID: ref.id, generation, signal, reason }),
     i18n: Object.freeze({ message: (key, fallback, values) => message(ref.id, key, fallback, values) }),
+    extensions: createPluginExtensionAccess(extensionGraph, ref.id),
     addShellContribution: (contribution) => {
       const key = `${ref.id}/${contribution.id}`;
       if (portal.resolution.pluginOrigins[ref.id] !== "platform-profile") {

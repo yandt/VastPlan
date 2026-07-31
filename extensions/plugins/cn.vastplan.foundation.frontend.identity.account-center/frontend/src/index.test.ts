@@ -7,6 +7,7 @@ describe("account center plugin", () => {
     accountCenter.register({
       addPage,
       i18n: { message: (_key: string, fallback: string) => fallback },
+      extensions: { owns: () => true, contributes: () => false, list: () => [] },
     } as never);
     expect(addPage).toHaveBeenCalledTimes(2);
     expect(addPage.mock.calls.map(([page]) => page.navigation)).toEqual([

@@ -258,6 +258,7 @@ VastPlan 是一套**基于 LLM 的通用 Agent 系统**，面向企业级客户�
 - [ADR-0175 统一版本生命周期与 Resource Adapter 能力协商](decisions/ADR-0175-统一版本生命周期与Resource-Adapter能力协商.md)
 - [ADR-0176 租约式 Content Staging 与流式数据面](decisions/ADR-0176-租约式Content-Staging与流式数据面.md)
 - [ADR-0177 Portal 外观本地偏好与账户入口](decisions/ADR-0177-Portal外观本地偏好与账户入口.md)
+- [ADR-0178 插件专属扩展点与可信扩展图](decisions/ADR-0178-插件专属扩展点与可信扩展图.md)
 
 ### 通用版本账本
 

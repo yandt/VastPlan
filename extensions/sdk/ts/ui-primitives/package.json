@@ -9,6 +9,7 @@
   "dependencies": {
     "@vastplan/frontend-engine-contract": "workspace:*",
     "@vastplan/icon-catalog": "workspace:*",
+    "@vastplan/plugin-extension-contract": "workspace:*",
     "@vastplan/ui-contract": "workspace:*",
     "@vastplan/workbench-sdk": "workspace:*"
   },

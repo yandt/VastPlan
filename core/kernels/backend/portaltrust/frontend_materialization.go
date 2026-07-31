@@ -11,7 +11,15 @@ import (
 // immutable browser RuntimeSpec. Package verification remains in Catalog;
 // graph projection and object encoding remain in their dedicated adapters.
 func materializeFrontendRuntime(spec portalapi.PortalSpec, verified []verifiedPortalPlugin) (portalapi.RuntimeSpec, serverRuntimeSpec, []FrontendModuleAsset, []pluginv1.ArtifactReference, error) {
-	runtime := portalapi.RuntimeSpec{Portal: spec}
+	manifests := make([]pluginv1.Manifest, 0, len(verified))
+	for _, plugin := range verified {
+		manifests = append(manifests, plugin.manifest)
+	}
+	extensions, err := pluginv1.ResolveExtensionGraph(manifests, "frontend")
+	if err != nil {
+		return portalapi.RuntimeSpec{}, serverRuntimeSpec{}, nil, nil, fmt.Errorf("解析 Portal 插件扩展图: %w", err)
+	}
+	runtime := portalapi.RuntimeSpec{Portal: spec, Extensions: extensions}
 	server := serverRuntimeSpec{}
 	assets := make([]FrontendModuleAsset, 0, len(spec.Plugins))
 	references := make([]pluginv1.ArtifactReference, 0, len(spec.Plugins))

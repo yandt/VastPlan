@@ -233,6 +233,13 @@ func (c *TrustedCatalog) verifyPortal(ctx context.Context, tenantID string, spec
 	if !hasRuntimeEngineContribution(selected["engine"], spec.RuntimeEngine) {
 		return nil, errors.New("Runtime Engine 插件未提供匹配且完整的 ui.runtime.engine 贡献")
 	}
+	manifests := make([]pluginv1.Manifest, 0, len(verified))
+	for _, plugin := range verified {
+		manifests = append(manifests, plugin.manifest)
+	}
+	if _, err := pluginv1.ResolveExtensionGraph(manifests, "frontend"); err != nil {
+		return nil, fmt.Errorf("Portal 插件扩展图无效: %w", err)
+	}
 	var contribution struct {
 		RenderAdapters []struct {
 			ID           string   `json:"id"`

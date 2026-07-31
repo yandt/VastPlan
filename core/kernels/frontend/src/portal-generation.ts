@@ -127,7 +127,7 @@ export class PortalGenerationManager {
   private prepare(spec: PortalRuntimeSpec, context: { generation: string; signal: AbortSignal; reason: "bootstrap" | "replace" }): Promise<PreparedPortal> {
     if (this.options.prepare !== undefined) return this.options.prepare(spec, context);
     const loader = new VerifiedFrontendPluginLoader(spec, { protocol: this.options.runtimeProtocol, fetcher: this.fetcher });
-    return new PortalRuntime(loader).prepare(spec.portal, context);
+    return new PortalRuntime(loader).prepare(spec.portal, { ...context, extensions: spec.extensions });
   }
 
   private async capture(generation: OwnedPortalGeneration): Promise<Map<string, JSONValue | undefined>> {

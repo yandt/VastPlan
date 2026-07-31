@@ -2,6 +2,8 @@ import type { PluginRef, PortalSpec } from "./portal-contracts";
 import { ModuleLoadError } from "./module-errors";
 import { validateModuleGraphDescriptor, type FrontendModuleGraphDescriptor } from "./module-graph-contract";
 import type { FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
+import { parsePortalExtensionGraph } from "@vastplan/plugin-extension-contract";
+import type { PortalExtensionGraph } from "@vastplan/plugin-extension-contract";
 
 export interface FrontendModuleDescriptor extends PluginRef {
   entry: string;
@@ -15,6 +17,7 @@ export interface PortalRuntimeSpec {
   portal: PortalSpec;
   modules: FrontendModuleDescriptor[];
   moduleGraphs: FrontendModuleGraphDescriptor[];
+  extensions?: PortalExtensionGraph;
   coordination?: PortalGenerationCoordination;
 }
 
@@ -51,8 +54,11 @@ export function parseRuntimeSpec(value: unknown, protocol: FrontendRuntimeProtoc
   });
   if (modules.length === 0 && moduleGraphs.length === 0) throw new ModuleLoadError("RUNTIME_SPEC_INVALID", "Portal RuntimeSpec 没有前端模块");
   const portal = value.portal as unknown as PortalSpec;
+  let extensions: PortalExtensionGraph;
+  try { extensions = parsePortalExtensionGraph(value.extensions); }
+  catch (error) { throw new ModuleLoadError("EXTENSION_GRAPH_INVALID", String(error)); }
   const coordination = parseCoordination(value.coordination, portal.revision);
-  return { portal, modules, moduleGraphs, ...(coordination === undefined ? {} : { coordination }) };
+  return { portal, modules, moduleGraphs, extensions, ...(coordination === undefined ? {} : { coordination }) };
 }
 
 function parseCoordination(value: unknown, revision: number): PortalGenerationCoordination | undefined {

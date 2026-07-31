@@ -46,6 +46,16 @@
     "configuration": { "$ref": "#/$defs/configurationContract" },
     "authorization": { "$ref": "#/$defs/authorizationContract" },
     "activation": { "$ref": "#/$defs/stringList" },
+    "extensionPoints": {
+      "type": "array",
+      "maxItems": 64,
+      "items": { "$ref": "#/$defs/extensionPointDeclaration" }
+    },
+    "extensions": {
+      "type": "array",
+      "maxItems": 256,
+      "items": { "$ref": "#/$defs/extensionContribution" }
+    },
     "dependencies": {
       "type": "object",
       "propertyNames": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
@@ -91,6 +101,45 @@
     { "if": { "required": ["noticeFile"] }, "then": { "required": ["license"] } }
   ],
   "$defs": {
+    "extensionPointDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "surface", "contract", "kind", "dispatch", "descriptorSchema"],
+      "properties": {
+        "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "surface": { "enum": ["backend", "frontend", "runner", "mobile"] },
+        "contract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/semver" },
+        "kind": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)+$", "maxLength": 160 },
+        "dispatch": { "enum": ["single", "select", "fanout", "mount"] },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$", "maxLength": 160 }
+        },
+        "descriptorSchema": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "frontend.page" } }, "required": ["kind"] },
+          "then": { "required": ["targets"] }
+        }
+      ]
+    },
+    "extensionContribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["point", "surface", "contract", "id", "descriptor"],
+      "properties": {
+        "point": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "surface": { "enum": ["backend", "frontend", "runner", "mobile"] },
+        "contract": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/versionRange" },
+        "id": { "$ref": "https://schemas.cdsoft.com.cn/vastplan/common/v1/identifiers.schema.json#/$defs/pluginId" },
+        "order": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "descriptor": { "type": "object" }
+      }
+    },
     "supplyChain": {
       "type": "object",
       "additionalProperties": false,

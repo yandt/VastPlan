@@ -1,4 +1,5 @@
 import type { FrontendRuntimeEngine } from "@vastplan/frontend-engine-contract";
+import type { PortalExtensionGraph } from "@vastplan/plugin-extension-contract";
 import type {
   FrontendPluginContext,
   FrontendPluginHotLifecycle,
@@ -150,4 +151,5 @@ export interface PortalPrepareOptions {
   themeTemplateID?: string;
   iconThemeID?: string;
   preferences?: WorkbenchPreferencePort;
+  extensions?: PortalExtensionGraph;
 }

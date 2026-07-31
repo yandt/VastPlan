@@ -106,6 +106,9 @@ func ParseManifest(raw []byte) (Manifest, error) {
 	if err := validateCompositionFeatures(manifest); err != nil {
 		return Manifest{}, err
 	}
+	if err := validatePluginExtensions(manifest); err != nil {
+		return Manifest{}, err
+	}
 	if manifest.Configuration != nil && len(manifest.Configuration.ManagedCredentials) > 0 {
 		found := false
 		if manifest.Capabilities != nil {

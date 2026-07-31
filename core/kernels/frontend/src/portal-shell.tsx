@@ -66,7 +66,7 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
     prepare: async (spec, context) => {
       const loader = new VerifiedFrontendPluginLoader(spec, { protocol: runtimeSource.protocol, fetcher });
       const appearance = appearanceSession?.resolve(spec.portal) ?? {};
-      return new PortalRuntime(loader).prepare(spec.portal, { ...context, ...appearance, preferences: preferenceSession });
+      return new PortalRuntime(loader).prepare(spec.portal, { ...context, ...appearance, preferences: preferenceSession, extensions: spec.extensions });
     },
     beforeCommit: (spec) => generationCommits.commit(spec),
     onDiagnostic: (diagnostic) => {

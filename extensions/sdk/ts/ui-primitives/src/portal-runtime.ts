@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import type { CollectionPreference } from "@vastplan/frontend-engine-contract";
+import type { PluginExtensionAccess } from "@vastplan/plugin-extension-contract";
 import type { DashboardGridLayouts, DashboardGridSpec, JSONValue, LocalizedText, MessageDescriptor, MessageValues, PluginLocalization } from "@vastplan/ui-contract";
 import type { CollectionPageDefinition, FormPageDefinition, PageActionHostDefinition, RecordPageDefinition, WorkspacePageDefinition } from "@vastplan/workbench-sdk";
 import type { SemanticIconName } from "./icon.js";
@@ -9,6 +10,7 @@ export type NavigationZone = "primary" | "settings" | "secondary";
 /** Governed account-navigation identities shared by plugins, composition and Shell libraries. */
 export const accountNavigationGroupID = "account" as const;
 export const accountSettingsNavigationGroupID = "account.settings" as const;
+export const accountPageExtensionPointID = "cn.vastplan.foundation.frontend.identity.account-center.page" as const;
 
 export const shellSlotIDs = Object.freeze([
   "shell.header.start", "shell.header.center", "shell.header.end",
@@ -118,9 +120,11 @@ export interface FrontendPluginContext {
 	readonly portal: Readonly<PortalPluginRuntime>;
 	/** Host-owned scope. Long-lived work must stop when this signal is aborted. */
 	readonly lifecycle: Readonly<FrontendPluginLifecycleContext>;
-	readonly i18n: Readonly<{
-		message(key: string, fallback: string, values?: MessageValues): MessageDescriptor;
-	}>;
+		readonly i18n: Readonly<{
+			message(key: string, fallback: string, values?: MessageValues): MessageDescriptor;
+		}>;
+		/** Signed, Generation-scoped plugin-extension graph visible to this plugin. */
+		readonly extensions: PluginExtensionAccess;
 	addPage(page: PortalPageDefinition): void;
 	/** Registers a governed collection page. Functional plugins should prefer this over addPage. */
 	addCollectionPage<Row extends Record<string, unknown>>(page: CollectionPageDefinition<Row>): void;

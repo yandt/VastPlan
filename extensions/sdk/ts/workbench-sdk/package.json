@@ -5,6 +5,6 @@
   "type": "module",
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run" },
-  "dependencies": { "@vastplan/ui-contract": "workspace:*" },
+  "dependencies": { "@vastplan/plugin-extension-contract": "workspace:*", "@vastplan/ui-contract": "workspace:*" },
   "devDependencies": { "typescript": "^5.8.3", "vitest": "^3.2.4" }
 }
