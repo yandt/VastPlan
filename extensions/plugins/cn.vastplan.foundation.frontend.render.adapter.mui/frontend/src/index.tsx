@@ -74,7 +74,7 @@ import type {
   StackProps,
   StatusTone,
 } from "@vastplan/ui-primitives";
-import { componentSizeRecipes, componentVariantRecipes, dialogBodyStyle, dialogFrameStyle, formGridColumns, formGridTemplate, formLabelPlacement, PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
+import { builtinAppearanceTemplates, componentSizeRecipes, componentVariantRecipes, dialogBodyStyle, dialogFrameStyle, formGridColumns, formGridTemplate, formLabelPlacement, PortalUIProvider, VastPlanIcon, localizeJSONSchema, message, usePortalI18n } from "@vastplan/ui-primitives";
 import { MuiNativeIcon } from "./native-icons";
 import { MuiInlineFieldTemplate, MuiInsideInlineFieldTemplate, type MuiFieldTemplateProps } from "./inside-inline-field";
 import { muiComponentSize } from "./component-size";
@@ -444,10 +444,7 @@ function treeKeyboard(event: KeyboardEvent<HTMLDivElement>, id: string, hasChild
   if (target !== undefined) { event.preventDefault(); target.focus(); }
 }
 
-const muiThemeTemplates = Object.freeze([
-  { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
-  { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
-]);
+const muiThemeTemplates = builtinAppearanceTemplates;
 const muiIconThemes = Object.freeze([
   { id: "canonical", label: message(namespace, "iconTheme.canonical", "VastPlan 图标"), source: "canonical" as const },
   { id: "renderer-native", label: message(namespace, "iconTheme.native", "Material 原生图标"), source: "renderer-native" as const },
@@ -500,7 +497,7 @@ export const muiPortalUIComponents: MuiComponents = {
   Busy: ({ label }) => <MuiStack direction="row" gap={1} alignItems="center"><CircularProgress size={20} /><span>{label}</span></MuiStack>,
 };
 
-function MuiProvider({ children, locale, direction, themeTemplate, iconTheme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string; iconTheme?: string }) {
+function MuiProvider({ children, locale, direction, themeTemplate, themeColors, iconTheme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string; themeColors?: PortalUI["theme"]["tokens"]["color"]; iconTheme?: string }) {
   const activeTemplate = muiThemeTemplate(themeTemplate);
   const activeIconTheme = muiIconTheme(iconTheme);
   const ActiveIcon = muiIconForTheme(activeIconTheme.id);
@@ -515,8 +512,8 @@ function MuiProvider({ children, locale, direction, themeTemplate, iconTheme }: 
     IconButton: (props) => iconButtonWith(ActiveIcon, props),
     notify: ({ title, content, kind = "info" }) => setNotice({ title, content, kind }),
     confirm: ({ title, content }) => new Promise((resolve) => setConfirmation({ title, content, resolve })),
-    theme: { ...muiPortalUIComponents.theme, mode: activeTemplate.scheme === "dark" ? "dark" : "light" },
-  }), [ActiveIcon, activeTemplate.scheme]);
+    theme: { ...muiPortalUIComponents.theme, mode: activeTemplate.scheme === "dark" ? "dark" : "light", tokens: { ...muiPortalUIComponents.theme.tokens, ...(themeColors === undefined ? {} : { color: themeColors }) } },
+  }), [ActiveIcon, activeTemplate.scheme, themeColors]);
   const finishConfirmation = (accepted: boolean) => {
     confirmation?.resolve(accepted);
     setConfirmation(undefined);
@@ -528,13 +525,13 @@ function MuiProvider({ children, locale, direction, themeTemplate, iconTheme }: 
     const overlayContainer = boundary.current;
     setShadowRuntime({
       cache: createCache({ key: "vastplan-mui", container: styleContainer, prepend: true }),
-      theme: createTheme({ direction, palette: { mode: activeTemplate.scheme === "dark" ? "dark" : "light" }, components: {
+      theme: createTheme({ direction, palette: { mode: activeTemplate.scheme === "dark" ? "dark" : "light", ...(themeColors === undefined ? {} : { background: { default: themeColors.canvas, paper: themeColors.surface }, text: { primary: themeColors.text, secondary: themeColors.mutedText }, primary: { main: themeColors.primary }, error: { main: themeColors.danger }, warning: { main: themeColors.warning }, success: { main: themeColors.success }, divider: themeColors.border }) }, components: {
         MuiModal: { defaultProps: { container: overlayContainer } },
         MuiPopover: { defaultProps: { container: overlayContainer } },
         MuiPopper: { defaultProps: { container: overlayContainer } },
       } }, locale.toLowerCase().startsWith("zh") ? zhCN : enUS),
     });
-  }, [activeTemplate.id, activeTemplate.scheme, direction, locale]);
+  }, [activeTemplate.id, activeTemplate.scheme, direction, locale, themeColors]);
   return <div ref={boundary} data-vastplan-design-system="mui" data-vastplan-theme-template={activeTemplate.id} data-vastplan-icon-theme={activeIconTheme.id} lang={locale} dir={direction}>{shadowRuntime === undefined ? null : <CacheProvider value={shadowRuntime.cache}><ThemeProvider theme={shadowRuntime.theme}><ScopedCssBaseline><PortalUIProvider ui={ui}>{children}</PortalUIProvider>
     <Snackbar open={notice !== undefined} autoHideDuration={5000} onClose={() => setNotice(undefined)}><Alert severity={notice?.kind ?? "info"} onClose={() => setNotice(undefined)}><strong>{notice?.title}</strong>{notice?.content === undefined ? null : ` — ${notice.content}`}</Alert></Snackbar>
     <MuiDialog open={confirmation !== undefined} onClose={() => finishConfirmation(false)}><DialogTitle>{confirmation?.title}</DialogTitle><DialogContent>{confirmation?.content}</DialogContent><DialogActions><MuiButton onClick={() => finishConfirmation(false)}>{i18n.text(message(namespace, "action.cancel", "取消"))}</MuiButton><MuiButton variant="contained" onClick={() => finishConfirmation(true)}>{i18n.text(message(namespace, "action.confirm", "确认"))}</MuiButton></DialogActions></MuiDialog>

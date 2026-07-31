@@ -22,7 +22,7 @@ const namespace = "cn.vastplan.foundation.frontend.structure.shell";
 const defaultGroups: readonly PortalNavigationGroupDescriptor[] = [
   { id: "primary", label: message(namespace, "navigation.primary", "主要功能"), zone: "primary", icon: "menu", order: 10 },
   { id: "secondary", label: message(namespace, "navigation.secondary", "辅助功能"), zone: "secondary", icon: "info", order: 20 },
-  { id: "settings", label: message(namespace, "navigation.settings", "系统设置"), zone: "settings", icon: "settings", order: 100 },
+  { id: "settings", label: message(namespace, "navigation.settings", "系统管理"), zone: "settings", icon: "settings", order: 100 },
 ];
 
 function ordered<T extends { id: string; order?: number }>(values: readonly T[]): readonly T[] {

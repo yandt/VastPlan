@@ -13,9 +13,9 @@ import { antdIconTheme, antdThemeTemplate } from "./theme";
 
 export function antdIconForTheme(id: string | undefined) { return antdIconTheme(id).source === "renderer-native" ? AntdNativeIcon : VastPlanIcon; }
 
-interface ProviderProps { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string; iconTheme?: string; }
+interface ProviderProps { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string; themeColors?: PortalUI["theme"]["tokens"]["color"]; iconTheme?: string; }
 
-export function AntdProvider({ children, locale, direction, themeTemplate, iconTheme }: ProviderProps) {
+export function AntdProvider({ children, locale, direction, themeTemplate, themeColors, iconTheme }: ProviderProps) {
   const boundary = useRef<HTMLDivElement>(null);
   const [styleContainer, setStyleContainer] = useState<Element | ShadowRoot>();
   const activeTemplate = antdThemeTemplate(themeTemplate);
@@ -34,12 +34,12 @@ export function AntdProvider({ children, locale, direction, themeTemplate, iconT
       locale={locale.toLowerCase().startsWith("zh") ? zhCN : enUS}
       direction={direction}
       getPopupContainer={popupContainer}
-      theme={{ algorithm: activeTemplate.scheme === "dark" ? theme.darkAlgorithm : theme.defaultAlgorithm, cssVar: { key: "vastplan" }, token: { borderRadius: 6, controlHeight: 36 } }}
-    ><AntdApp><AntdPortalRuntime themeMode={activeTemplate.scheme === "dark" ? "dark" : "light"} iconTheme={activeIconTheme.id}>{children}</AntdPortalRuntime></AntdApp></ConfigProvider></StyleProvider>}
+      theme={{ algorithm: activeTemplate.scheme === "dark" ? theme.darkAlgorithm : theme.defaultAlgorithm, cssVar: { key: "vastplan" }, token: { borderRadius: 6, controlHeight: 36, ...(themeColors === undefined ? {} : { colorBgLayout: themeColors.canvas, colorBgContainer: themeColors.surface, colorBgElevated: themeColors.overlaySurface, colorText: themeColors.text, colorTextSecondary: themeColors.mutedText, colorBorderSecondary: themeColors.border, colorPrimary: themeColors.primary, colorError: themeColors.danger, colorWarning: themeColors.warning, colorSuccess: themeColors.success }) } }}
+    ><AntdApp><AntdPortalRuntime themeMode={activeTemplate.scheme === "dark" ? "dark" : "light"} themeColors={themeColors} iconTheme={activeIconTheme.id}>{children}</AntdPortalRuntime></AntdApp></ConfigProvider></StyleProvider>}
   </div>;
 }
 
-function AntdPortalRuntime({ children, themeMode, iconTheme }: { children: ReactNode; themeMode: "light" | "dark"; iconTheme: string }) {
+function AntdPortalRuntime({ children, themeMode, themeColors, iconTheme }: { children: ReactNode; themeMode: "light" | "dark"; themeColors?: PortalUI["theme"]["tokens"]["color"]; iconTheme: string }) {
   const { modal, notification } = AntdApp.useApp();
   const ActiveIcon = antdIconForTheme(iconTheme);
   const ui = useMemo<PortalUI>(() => ({
@@ -54,7 +54,7 @@ function AntdPortalRuntime({ children, themeMode, iconTheme }: { children: React
       else notification.info(options);
     },
     confirm: ({ title, content }) => new Promise((resolve) => modal.confirm({ title, content, onOk: () => resolve(true), onCancel: () => resolve(false) })),
-    theme: { ...antdPortalUIComponents.theme, mode: themeMode },
-  }), [ActiveIcon, modal, notification, themeMode]);
+    theme: { ...antdPortalUIComponents.theme, mode: themeMode, tokens: { ...antdPortalUIComponents.theme.tokens, ...(themeColors === undefined ? {} : { color: themeColors }) } },
+  }), [ActiveIcon, modal, notification, themeColors, themeMode]);
   return <PortalUIProvider ui={ui}>{children}</PortalUIProvider>;
 }

@@ -1,6 +1,6 @@
 # VastPlan Portal 设计系统
 
-> 状态：设计基线 v4｜最后更新：2026-07-28
+> 状态：设计基线 v4｜最后更新：2026-07-31
 >
 > 本文是 Portal 跨布局、跨 Ant Design/Arco/MUI 的视觉与交互单一真相源。组件职责和安全边界见《[前端门户内核](../architecture/前端门户内核.md)》，架构取舍见 [ADR-0080](../decisions/ADR-0080-Portal三级导航与可切换布局.md) 与 [ADR-0081](../decisions/ADR-0081-Portal治理与不可变Activation.md)。
 
@@ -14,7 +14,7 @@
 
 ## 2. 基础 Token
 
-UI Contract 7.0 暴露语义 token 与 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design/Arco/MUI 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
+UI Contract 8.3 暴露语义 token、账户外观契约与 `ComponentSize`，适配器映射到具体框架。布局插件不得读取 Ant Design/Arco/MUI 私有 token。列表、卡片、表单和操作区的一致性交给《[UI 工作台组合框架](../architecture/UI工作台组合框架.md)》；布局只决定它们所在区域的视觉位置。
 
 | Token | 基线 | 用途 |
 |---|---:|---|
@@ -64,6 +64,7 @@ UI Contract 7.0 暴露语义 token 与 `ComponentSize`，适配器映射到具�
 - FilterPanel 使用 `inside-inline` 持久 Label：Label 与输入控件共同消费一个筛选单元格宽度，Label 按内容取宽但桌面最多占 40%、移动端最多占 45%，始终单行；超长文案省略并由框架 Tooltip 与可访问名称提供全文。输入区域必须 `flex: 1; min-width: 0`，输入后 Label 不消失。Ant、Arco、MUI 必须映射同一语义，功能插件不能配置像素宽度或注入框架样式。
 - Page Header 右侧的页面功能动作使用 VastPlan 语义图标、Tooltip 和 `aria-label`，点击区至少 44px；桌面最多直接显示 4 个，超出后进入“更多”，不得在 Table 工具栏重复显示新增、导入或发布。
 - 图标风格由 Renderer 的 `iconTheme` 统一决定：`canonical` 使用锁定的 MIT Ant Design 语义入口保持跨框架几何一致，`renderer-native` 使用当前 UI 框架原生图形并在缺项时回退。846 个原始目录名称不属于页面契约，只能由 Foundation 图标工具按 27 个分片延迟读取；单个页面和功能插件不得混指定图标来源。
+- 已认证 Shell 只提供一个圆形账户头像入口；菜单固定包含“用户信息”和“用户设置”，外观位于用户设置内。`settings` 区域显示为“系统管理”，必须是最后一个一级导航项，不能与账户菜单合并。外观配置只保存在当前浏览器，并明确提示不会上传服务器。
 
 ### 4.2 顶部导航
 

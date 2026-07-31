@@ -14,7 +14,7 @@ func TestPreferenceContributionRequiresPortalBFFAndDerivesSubject(t *testing.T) 
 	host := newStateOnlyHost(t)
 	contribution := PreferenceContribution(service)
 	handler := contribution.Handlers["put"]
-	payload, _ := json.Marshal(portalapi.PutPortalPreferenceRequest{Scope: testPreferenceScope(), Values: portalapi.PortalPreferenceValues{RendererID: "mui"}})
+	payload, _ := json.Marshal(portalapi.PutPortalPreferenceRequest{Scope: testPreferenceScope(), Values: collectionValues("services")})
 	untrusted := &contractv1.CallContext{TenantId: "tenant-a", Scene: "other", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "mallory"}, Principal: &contractv1.Principal{UserId: "alice"}}
 	result, _, err := handler(context.Background(), host, untrusted, payload)
 	if err != nil || result.GetError().GetCode() != "permission.denied" {
@@ -26,7 +26,7 @@ func TestPreferenceContributionRequiresPortalBFFAndDerivesSubject(t *testing.T) 
 		t.Fatalf("trusted put failed: result=%+v err=%v", result, err)
 	}
 	var saved portalapi.PortalPreference
-	if err := json.Unmarshal(raw, &saved); err != nil || saved.Revision != 1 || saved.Values.RendererID != "mui" {
+	if err := json.Unmarshal(raw, &saved); err != nil || saved.Revision != 1 || saved.Values.Collections["services"].Density != "compact" {
 		t.Fatalf("unexpected response: value=%+v err=%v", saved, err)
 	}
 }
@@ -36,11 +36,11 @@ func TestPreferenceContributionReturnsStableConflict(t *testing.T) {
 	host := newStateOnlyHost(t)
 	handler := PreferenceContribution(service).Handlers["put"]
 	callContext := &contractv1.CallContext{TenantId: "tenant-a", Scene: "portal.bff", Caller: &contractv1.Caller{Kind: contractv1.CallerKind_CALLER_KIND_USER, Id: "alice"}, Principal: &contractv1.Principal{UserId: "alice"}}
-	first, _ := json.Marshal(portalapi.PutPortalPreferenceRequest{Scope: testPreferenceScope(), Values: portalapi.PortalPreferenceValues{RendererID: "mui"}})
+	first, _ := json.Marshal(portalapi.PutPortalPreferenceRequest{Scope: testPreferenceScope(), Values: collectionValues("first")})
 	if result, _, err := handler(context.Background(), host, callContext, first); err != nil || result.GetStatus() != contractv1.CallResult_STATUS_OK {
 		t.Fatalf("initial put failed: result=%+v err=%v", result, err)
 	}
-	stale, _ := json.Marshal(portalapi.PutPortalPreferenceRequest{Scope: testPreferenceScope(), Values: portalapi.PortalPreferenceValues{RendererID: "arco"}})
+	stale, _ := json.Marshal(portalapi.PutPortalPreferenceRequest{Scope: testPreferenceScope(), Values: collectionValues("stale")})
 	result, _, err := handler(context.Background(), host, callContext, stale)
 	if err != nil || result.GetError().GetCode() != preferenceConflictCode {
 		t.Fatalf("conflict code mismatch: result=%+v err=%v", result, err)

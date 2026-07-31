@@ -5,7 +5,6 @@ import type {
   PortalPreferenceScope,
   PreferenceCatalogScope,
   PortalPreferenceValues,
-  RendererPreference,
 } from "@vastplan/frontend-engine-contract";
 
 export type { PortalPreference, PortalPreferenceScope, PortalPreferenceValues } from "@vastplan/frontend-engine-contract";
@@ -13,13 +12,9 @@ export type { PortalPreference, PortalPreferenceScope, PortalPreferenceValues } 
 const idPattern = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 
 export function preferenceScopeForPortal(portal: PortalSpec): PortalPreferenceScope {
-  const renderAdapter = objectField(portal, "renderAdapter");
-  const shell = objectField(portal, "shell");
   const workbench = objectField(portal, "workbench");
   return Object.freeze({
     portalId: requiredID(portal.id, "PortalPreference portalId"),
-    renderer: catalogScope(renderAdapter, "Renderer"),
-    shell: catalogScope(shell, "Shell"),
     workbench: catalogScope(workbench, "Workbench"),
   });
 }
@@ -41,10 +36,10 @@ export function parsePreferencePutBody(value: unknown): { readonly expectedRevis
 }
 
 function parseScope(value: unknown): PortalPreferenceScope {
-  const record = exactObject(value, ["portalId", "renderer", "shell", "workbench"], "PortalPreference scope 无效");
+  const record = exactObject(value, ["portalId", "workbench"], "PortalPreference scope 无效");
   return Object.freeze({
     portalId: requiredID(record.portalId, "PortalPreference portalId"),
-    renderer: parseCatalogScope(record.renderer), shell: parseCatalogScope(record.shell), workbench: parseCatalogScope(record.workbench),
+    workbench: parseCatalogScope(record.workbench),
   });
 }
 
@@ -55,26 +50,9 @@ function parseCatalogScope(value: unknown): PreferenceCatalogScope {
 }
 
 function parseValues(value: unknown): PortalPreferenceValues {
-  const record = exactObject(value, ["rendererId", "rendererOptions", "shellTemplateId", "collections"], "PortalPreference values 无效");
-  const rendererId = optionalID(record.rendererId, "rendererId");
-  const shellTemplateId = optionalID(record.shellTemplateId, "shellTemplateId");
-  const rendererOptions = record.rendererOptions === undefined ? undefined : parseRendererOptions(record.rendererOptions);
+  const record = exactObject(value, ["collections"], "PortalPreference values 无效");
   const collections = record.collections === undefined ? undefined : parseCollections(record.collections);
-  return Object.freeze({ ...(rendererId === undefined ? {} : { rendererId }), ...(rendererOptions === undefined ? {} : { rendererOptions }), ...(shellTemplateId === undefined ? {} : { shellTemplateId }), ...(collections === undefined ? {} : { collections }) });
-}
-
-function parseRendererOptions(value: unknown): Readonly<Record<string, RendererPreference>> {
-  const record = object(value, "PortalPreference rendererOptions 无效");
-  if (Object.keys(record).length > 16) throw new Error("PortalPreference rendererOptions 超过上限");
-  const out: Record<string, RendererPreference> = {};
-  for (const [rendererID, raw] of Object.entries(record)) {
-    requiredID(rendererID, "PortalPreference renderer ID");
-    const option = exactObject(raw, ["themeTemplateId", "iconThemeId"], "PortalPreference renderer option 无效");
-    const themeTemplateId = optionalID(option.themeTemplateId, "themeTemplateId");
-    const iconThemeId = optionalID(option.iconThemeId, "iconThemeId");
-    out[rendererID] = Object.freeze({ ...(themeTemplateId === undefined ? {} : { themeTemplateId }), ...(iconThemeId === undefined ? {} : { iconThemeId }) });
-  }
-  return Object.freeze(out);
+  return Object.freeze({ ...(collections === undefined ? {} : { collections }) });
 }
 
 function parseCollections(value: unknown): Readonly<Record<string, CollectionPreference>> {
@@ -119,6 +97,5 @@ function objectField(value: Readonly<Record<string, unknown>>, key: string): Rea
 function object(value: unknown, message: string): Readonly<Record<string, unknown>> { if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(message); return value as Readonly<Record<string, unknown>>; }
 function exactObject(value: unknown, allowed: readonly string[], message: string): Readonly<Record<string, unknown>> { const record = object(value, message); if (Object.keys(record).some((key) => !allowed.includes(key))) throw new Error(`${message}: 包含未知字段`); return record; }
 function requiredID(value: unknown, label: string): string { if (typeof value !== "string" || !idPattern.test(value)) throw new Error(`${label} 无效`); return value; }
-function optionalID(value: unknown, label: string): string | undefined { return value === undefined ? undefined : requiredID(value, `PortalPreference ${label}`); }
 function positiveInteger(value: unknown): value is number { return Number.isSafeInteger(value) && (value as number) > 0; }
 function nonnegativeInteger(value: unknown): value is number { return Number.isSafeInteger(value) && (value as number) >= 0; }

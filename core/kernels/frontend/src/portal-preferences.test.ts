@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { PortalPreferenceConflict, PortalPreferenceSession } from "./portal-preferences";
+import { PortalPreferenceSession } from "./portal-preferences";
 
 const portal = {
   revision: 1, id: "operations", tenantId: "tenant-a", route: "/operations",
@@ -14,28 +14,6 @@ beforeEach(() => {
 });
 
 describe("PortalPreferenceSession", () => {
-  it("uses the remote preference before local cache and filters revoked choices", async () => {
-    const fetcher = vi.fn(async () => new Response(JSON.stringify({ revision: 3, scope: scope(), values: { rendererId: "mui", shellTemplateId: "revoked" } }), { status: 200 }));
-    const session = await PortalPreferenceSession.open(fetcher, "/operations", portal);
-    expect(session.resolve(portal)).toEqual({ rendererID: "mui" });
-  });
-
-  it("keeps renderer changes pending until the server CAS succeeds", async () => {
-    let conflict = false;
-    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input) === "/v1/csrf") return new Response(JSON.stringify({ token: "a".repeat(64) }), { status: 200 });
-      if (init?.method === "PUT") return new Response(conflict ? JSON.stringify({ error: "portal_preference_conflict" }) : JSON.stringify({ revision: 1, scope: scope(), values: { rendererId: "mui" } }), { status: conflict ? 409 : 200 });
-      return new Response(JSON.stringify({ revision: 0, scope: scope(), values: {} }), { status: 200 });
-    });
-    const session = await PortalPreferenceSession.open(fetcher, "/operations", portal);
-    session.stageRenderer("mui", portal);
-    expect(session.resolve(portal).rendererID).toBe("mui");
-    conflict = true;
-    await expect(session.commitPendingRenderer(portal)).rejects.toBeInstanceOf(PortalPreferenceConflict);
-    session.discardPendingRenderer(portal);
-    expect(session.resolve(portal).rendererID).toBeUndefined();
-  });
-
   it("serializes collection writes and merges again after a concurrent CAS update", async () => {
     let getRevision = 1;
     const puts: Array<Record<string, any>> = [];
@@ -60,8 +38,6 @@ describe("PortalPreferenceSession", () => {
   it("uses the server-authored preference scope when HMR overlays newer UI contracts", async () => {
     const storedScope = {
       portalId: "operations",
-      renderer: { id: "cn.vastplan.render", contractMajor: 4 },
-      shell: { id: "cn.vastplan.shell", contractMajor: 4 },
       workbench: { id: "cn.vastplan.workbench", contractMajor: 4 },
     };
     const hmrPortal = { ...portal, preferenceScope: storedScope };
@@ -82,5 +58,5 @@ describe("PortalPreferenceSession", () => {
 });
 
 function scope() {
-  return { portalId: "operations", renderer: { id: "cn.vastplan.render", contractMajor: 5 }, shell: { id: "cn.vastplan.shell", contractMajor: 5 }, workbench: { id: "cn.vastplan.workbench", contractMajor: 5 } };
+  return { portalId: "operations", workbench: { id: "cn.vastplan.workbench", contractMajor: 5 } };
 }

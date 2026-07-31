@@ -28,7 +28,7 @@ import {
   Typography,
 } from "./arco-components";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { ComponentType, KeyboardEvent, ReactNode } from "react";
+import type { ComponentType, CSSProperties, KeyboardEvent, ReactNode } from "react";
 import type {
   ButtonProps,
   CommandItem,
@@ -53,7 +53,7 @@ import type {
   StatusTone,
   TableProps,
 } from "@vastplan/ui-primitives";
-import { componentSizeRecipes, componentVariantRecipes, dialogBodyStyle, dialogFrameStyle, PortalUIProvider, VastPlanIcon } from "@vastplan/ui-primitives";
+import { builtinAppearanceTemplates, componentSizeRecipes, componentVariantRecipes, dialogBodyStyle, dialogFrameStyle, hexToRGBTriplet, PortalUIProvider, VastPlanIcon } from "@vastplan/ui-primitives";
 import { message, usePortalI18n } from "@vastplan/ui-primitives";
 import enUS from "@arco-design/web-react/es/locale/en-US";
 import zhCN from "@arco-design/web-react/es/locale/zh-CN";
@@ -342,10 +342,7 @@ function treeKeyboard(event: KeyboardEvent<HTMLButtonElement>, id: string, hasCh
   if (target !== undefined) { event.preventDefault(); target.focus(); }
 }
 
-const arcoThemeTemplates = Object.freeze([
-  { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
-  { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
-]);
+const arcoThemeTemplates = builtinAppearanceTemplates;
 
 const arcoIconThemes = Object.freeze([
   { id: "canonical", label: message(namespace, "iconTheme.canonical", "VastPlan 图标"), source: "canonical" as const },
@@ -433,7 +430,7 @@ export const arcoPortalUIComponents: ArcoComponents = {
 // shadow host instead of leaking into the surrounding page.
 export const scopedArcoCSS = scopeDocumentCSS(arcoCSS);
 
-function ArcoProvider({ children, locale, direction, themeTemplate, iconTheme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string; iconTheme?: string }) {
+function ArcoProvider({ children, locale, direction, themeTemplate, themeColors, iconTheme }: { children: ReactNode; locale: string; direction: "ltr" | "rtl"; themeTemplate?: string; themeColors?: PortalUI["theme"]["tokens"]["color"]; iconTheme?: string }) {
   const activeTemplate = arcoThemeTemplate(themeTemplate);
   const activeIconTheme = arcoIconTheme(iconTheme);
   const [popupRoot, setPopupRoot] = useState<HTMLDivElement>();
@@ -452,13 +449,13 @@ function ArcoProvider({ children, locale, direction, themeTemplate, iconTheme }:
 
   return <>
     <style data-vastplan-design-system="arco">{scopedArcoCSS}</style>
-    <div ref={setPopupHost} data-vastplan-design-system="arco" data-vastplan-theme-template={activeTemplate.id} data-vastplan-icon-theme={activeIconTheme.id} lang={locale} dir={direction}>
-      {popupRoot === undefined ? null : <MountedArcoProvider popupRoot={popupRoot} locale={locale} activeTemplate={activeTemplate} activeIconThemeID={activeIconTheme.id}>{children}</MountedArcoProvider>}
+    <div ref={setPopupHost} style={themeColors === undefined ? undefined : { "--color-bg-1": themeColors.canvas, "--color-bg-2": themeColors.surface, "--color-text-1": themeColors.text, "--color-text-3": themeColors.mutedText, "--color-border-2": themeColors.border, "--primary-6": hexToRGBTriplet(themeColors.primary) } as CSSProperties} data-vastplan-design-system="arco" data-vastplan-theme-template={activeTemplate.id} data-vastplan-icon-theme={activeIconTheme.id} lang={locale} dir={direction}>
+      {popupRoot === undefined ? null : <MountedArcoProvider popupRoot={popupRoot} locale={locale} activeTemplate={activeTemplate} themeColors={themeColors} activeIconThemeID={activeIconTheme.id}>{children}</MountedArcoProvider>}
     </div>
   </>;
 }
 
-function MountedArcoProvider({ children, popupRoot, locale, activeTemplate, activeIconThemeID }: { children: ReactNode; popupRoot: HTMLDivElement; locale: string; activeTemplate: ReturnType<typeof arcoThemeTemplate>; activeIconThemeID: string }) {
+function MountedArcoProvider({ children, popupRoot, locale, activeTemplate, themeColors, activeIconThemeID }: { children: ReactNode; popupRoot: HTMLDivElement; locale: string; activeTemplate: ReturnType<typeof arcoThemeTemplate>; themeColors?: PortalUI["theme"]["tokens"]["color"]; activeIconThemeID: string }) {
   const ActiveIcon = arcoIconForTheme(activeIconThemeID);
   const getPopupContainer = useCallback(() => popupRoot, [popupRoot]);
   const [notifications, notificationHolder] = Notification.useNotification({ getContainer: getPopupContainer });
@@ -475,8 +472,8 @@ function MountedArcoProvider({ children, popupRoot, locale, activeTemplate, acti
       if (modals.confirm === undefined) { resolve(false); return; }
       modals.confirm({ title, content, onOk: () => resolve(true), onCancel: () => resolve(false) });
     }),
-    theme: { ...arcoPortalUIComponents.theme, mode: activeTemplate.scheme === "dark" ? "dark" : "light" },
-  }), [ActiveIcon, activeTemplate.scheme, getPopupContainer, modals, notifications]);
+    theme: { ...arcoPortalUIComponents.theme, mode: activeTemplate.scheme === "dark" ? "dark" : "light", tokens: { ...arcoPortalUIComponents.theme.tokens, ...(themeColors === undefined ? {} : { color: themeColors }) } },
+  }), [ActiveIcon, activeTemplate.scheme, getPopupContainer, modals, notifications, themeColors]);
 
   return <ConfigProvider getPopupContainer={getPopupContainer} locale={locale.toLowerCase().startsWith("zh") ? zhCN : enUS}>
     <PortalUIProvider ui={ui}>{children}</PortalUIProvider>

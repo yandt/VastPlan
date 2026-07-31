@@ -40,3 +40,7 @@ Portal 已允许用户切换 Renderer、Shell Library、主题、图标风格和
 ## 2026-07-28 修订：RuntimeSpec 携带服务端偏好分区
 
 开发态 HMR 可以覆盖 Renderer、Shell、Workbench 的公开 UI 契约，但不得因此让浏览器重新推导一个尚未由 Activation 发布的偏好分区。Node Portal Host 现在从真实活动 Activation 生成只读 `portal.preferenceScope`，并随 RuntimeSpec 一起投影；浏览器只验证和使用该服务端字段，不提交 scope。HMR 继续覆盖模块兼容契约，但必须原样保留偏好分区。这样开发源码可运行在较新的 UI 契约上，同时 CAS 仍命中服务端真实 revision；正式 Activation 升级 contract major 后，Portal Host 才会自然切换到新的隔离分区。
+
+## 2026-07-31 后续决策
+
+[ADR-0177](ADR-0177-Portal外观本地偏好与账户入口.md) 已取代本 ADR 中 Renderer、Shell Library、主题和图标作为服务端真源的部分。服务端 PortalPreference 现只保存 Workbench Collection 展示偏好；外观统一由浏览器本地协议管理。本文其余有关 Collection CAS、可信身份投影和服务端存储隔离的决策继续有效。

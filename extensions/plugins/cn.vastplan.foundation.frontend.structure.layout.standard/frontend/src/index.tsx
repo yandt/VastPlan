@@ -3,7 +3,7 @@ import { uiContractVersion } from "@vastplan/ui-contract";
 import {
   message,
   portalPageRhythm,
-  PortalPreferenceControl,
+  PortalAccountControl,
   usePortalI18n,
   usePortalUI,
   type MenuItem,
@@ -105,12 +105,12 @@ export function StandardShell(props: UIShellProps) {
         mainGroups={mainGroups}
         settingsGroups={settingsGroups}
         selectedGroup={selectedGroup}
-        preferences={<PortalPreferenceControl {...props} />}
+        account={<PortalAccountControl {...props} />}
         onSelectGroup={setSelectedGroupID}
         onNavigate={navigate}
       /> : null}
       <div className="vp-shell-content">
-        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalPreferenceControl {...props} /></span></div> : null}
+        {navigationVisible ? <div className="vp-mobile-header"><button type="button" className="vp-mobile-menu-button" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button><Brand name={branding.name} shortName={branding.shortName} logoURL={branding.logoURL} /><span className="vp-mobile-preferences"><PortalAccountControl {...props} /></span></div> : null}
         {pageHeader}
         {pageBody}
       </div>
@@ -122,13 +122,13 @@ export function StandardShell(props: UIShellProps) {
   </div>;
 }
 
-function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, selectedGroup, preferences, onSelectGroup, onNavigate }: {
+function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, selectedGroup, account, onSelectGroup, onNavigate }: {
   branding: ReactNode;
   composition: UIShellProps["composition"];
   mainGroups: readonly PortalNavigationGroup[];
   settingsGroups: readonly PortalNavigationGroup[];
   selectedGroup: PortalNavigationGroup | undefined;
-  preferences: ReactNode;
+  account: ReactNode;
   onSelectGroup(id: string): void;
   onNavigate(id: string): void;
 }) {
@@ -150,7 +150,7 @@ function DesktopNavigation({ branding, composition, mainGroups, settingsGroups, 
     <aside className="vp-navigation-rail" aria-label={i18n.text(message(namespace, "navigation.groups", "主菜单分组"))} onKeyDown={moveRailFocus}>
       <div className="vp-navigation-start">{branding}{shellSlot(composition.shellSlots, "shell.navigation.start")}</div>
       <div className="vp-navigation-center">{shellSlot(composition.shellSlots, "shell.navigation.center")}{mainGroups.map(groupButton)}</div>
-      <div className="vp-navigation-end">{settingsGroups.map(groupButton)}{preferences}{shellSlot(composition.shellSlots, "shell.navigation.end")}</div>
+      <div className="vp-navigation-end">{shellSlot(composition.shellSlots, "shell.navigation.end")}{settingsGroups.map(groupButton)}<div className="vp-navigation-account">{account}</div></div>
     </aside>
     {selectedGroup === undefined ? null : <aside id={panelID} ref={panelRef} className="vp-navigation-panel" aria-label={i18n.text(message(namespace, "navigation.secondaryLabel", "{group}二级导航", { group: i18n.text(selectedGroup.label) }))} onKeyDown={(event) => returnToRail(event, selectedButtonRef)}>
       <header className="vp-navigation-panel-header"><span className="vp-navigation-panel-icon"><IconForGroup group={selectedGroup} /></span><strong>{i18n.text(selectedGroup.label)}</strong></header>

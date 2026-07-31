@@ -21,14 +21,7 @@ type PreferenceCatalogScope struct {
 
 type PortalPreferenceScope struct {
 	PortalID  string                 `json:"portalId"`
-	Renderer  PreferenceCatalogScope `json:"renderer"`
-	Shell     PreferenceCatalogScope `json:"shell"`
 	Workbench PreferenceCatalogScope `json:"workbench"`
-}
-
-type RendererPreference struct {
-	ThemeTemplateID string `json:"themeTemplateId,omitempty"`
-	IconThemeID     string `json:"iconThemeId,omitempty"`
 }
 
 type CollectionPreference struct {
@@ -39,9 +32,6 @@ type CollectionPreference struct {
 }
 
 type PortalPreferenceValues struct {
-	RendererID      string                          `json:"rendererId,omitempty"`
-	RendererOptions map[string]RendererPreference   `json:"rendererOptions,omitempty"`
-	ShellTemplateID string                          `json:"shellTemplateId,omitempty"`
 	Collections     map[string]CollectionPreference `json:"collections,omitempty"`
 }
 
@@ -67,7 +57,7 @@ func ValidatePortalPreferenceScope(scope PortalPreferenceScope) error {
 		return errors.New("PortalPreference portalId 无效")
 	}
 	for label, catalog := range map[string]PreferenceCatalogScope{
-		"renderer": scope.Renderer, "shell": scope.Shell, "workbench": scope.Workbench,
+		"workbench": scope.Workbench,
 	} {
 		if !preferenceIDPattern.MatchString(catalog.ID) || catalog.ContractMajor == 0 || catalog.ContractMajor > 65535 {
 			return fmt.Errorf("PortalPreference %s catalog scope 无效", label)
@@ -77,26 +67,6 @@ func ValidatePortalPreferenceScope(scope PortalPreferenceScope) error {
 }
 
 func ValidatePortalPreferenceValues(values PortalPreferenceValues) error {
-	if err := optionalPreferenceID("rendererId", values.RendererID); err != nil {
-		return err
-	}
-	if err := optionalPreferenceID("shellTemplateId", values.ShellTemplateID); err != nil {
-		return err
-	}
-	if len(values.RendererOptions) > 16 {
-		return errors.New("PortalPreference rendererOptions 超过上限")
-	}
-	for rendererID, option := range values.RendererOptions {
-		if !preferenceIDPattern.MatchString(rendererID) {
-			return errors.New("PortalPreference rendererOptions key 无效")
-		}
-		if err := optionalPreferenceID("themeTemplateId", option.ThemeTemplateID); err != nil {
-			return err
-		}
-		if err := optionalPreferenceID("iconThemeId", option.IconThemeID); err != nil {
-			return err
-		}
-	}
 	if len(values.Collections) > 128 {
 		return errors.New("PortalPreference collections 超过上限")
 	}
@@ -141,46 +111,19 @@ func ValidatePortalPreferenceValues(values PortalPreferenceValues) error {
 }
 
 func PortalPreferenceScopeKey(scope PortalPreferenceScope) string {
-	return fmt.Sprintf("%s\x00%s\x00%d\x00%s\x00%d\x00%s\x00%d",
+	return fmt.Sprintf("%s\x00%s\x00%d",
 		scope.PortalID,
-		scope.Renderer.ID, scope.Renderer.ContractMajor,
-		scope.Shell.ID, scope.Shell.ContractMajor,
 		scope.Workbench.ID, scope.Workbench.ContractMajor,
 	)
 }
 
 func PortalPreferenceChangedSections(before, after PortalPreferenceValues) []string {
-	sections := make([]string, 0, 3)
-	if before.RendererID != after.RendererID || !rendererOptionsEqual(before.RendererOptions, after.RendererOptions) {
-		sections = append(sections, "renderer")
-	}
-	if before.ShellTemplateID != after.ShellTemplateID {
-		sections = append(sections, "shell")
-	}
+	sections := make([]string, 0, 1)
 	if !collectionsEqual(before.Collections, after.Collections) {
 		sections = append(sections, "workbench")
 	}
 	sort.Strings(sections)
 	return sections
-}
-
-func optionalPreferenceID(label, value string) error {
-	if value != "" && !preferenceIDPattern.MatchString(value) {
-		return fmt.Errorf("PortalPreference %s 无效", label)
-	}
-	return nil
-}
-
-func rendererOptionsEqual(left, right map[string]RendererPreference) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for key, value := range left {
-		if right[key] != value {
-			return false
-		}
-	}
-	return true
 }
 
 func collectionsEqual(left, right map[string]CollectionPreference) bool {

@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 import type { LocalizedText, PluginLocalization } from "@vastplan/ui-contract";
 import type { IconThemeTemplate, ThemeTemplate, UIRendererChoice } from "./renderer.js";
 import type { ShellCompositionInput, ShellCompositionModel } from "./portal-runtime.js";
+import type { PortalAccountSummary, PortalAppearanceSettings } from "./appearance.js";
 
 export interface ShellBranding {
   name: string;
@@ -35,13 +36,16 @@ export interface UIShellProps {
   iconThemes?: readonly IconThemeTemplate[];
   iconThemeID?: string;
   onIconThemeChange?(iconThemeID: string): void;
+  account: PortalAccountSummary;
+  appearance: PortalAppearanceSettings;
+  onAppearanceChange?(appearance: PortalAppearanceSettings): void;
   branding: ShellBranding;
   pathname: string;
   recoveryNotice?: ReactNode;
   onNavigate(pageID: string): void;
 }
 
-export { PortalPreferenceControl } from "./portal-preference-control.js";
+export { PortalAccountControl } from "./portal-account-control.js";
 
 /** Owns stable shell semantics and a governed catalog of visual templates. */
 export interface UIShellAdapter {
@@ -63,4 +67,3 @@ export interface UIShellLibrary {
 }
 
 export { PortalUIProvider, usePortalUI } from "./portal-ui-context.js";
-

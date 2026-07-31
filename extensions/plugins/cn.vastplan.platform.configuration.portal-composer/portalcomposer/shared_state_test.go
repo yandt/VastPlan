@@ -49,7 +49,7 @@ func TestPreferenceDocumentsArePerSubjectAndCASFenced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := first.Put(alice, portalapi.PutPortalPreferenceRequest{Scope: scope, Values: portalapi.PortalPreferenceValues{RendererID: "mui"}})
+	created, err := first.Put(alice, portalapi.PutPortalPreferenceRequest{Scope: scope, Values: collectionValues("first")})
 	if err != nil || created.Revision != 1 {
 		t.Fatalf("首次偏好写入失败: %+v %v", created, err)
 	}
@@ -58,7 +58,7 @@ func TestPreferenceDocumentsArePerSubjectAndCASFenced(t *testing.T) {
 		t.Fatal(err)
 	}
 	loaded, err := reopened.Get(alice, scope)
-	if err != nil || loaded.Values.RendererID != "mui" {
+	if err != nil || loaded.Values.Collections["first"].Density != "compact" {
 		t.Fatalf("第二实例未读取用户偏好: %+v %v", loaded, err)
 	}
 	bobStore, err := newPreferenceStore(context.Background(), host, preferenceCall(bob), bob)
@@ -74,10 +74,10 @@ func TestPreferenceDocumentsArePerSubjectAndCASFenced(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := reopened.Put(alice, portalapi.PutPortalPreferenceRequest{Scope: scope, ExpectedRevision: 1, Values: portalapi.PortalPreferenceValues{RendererID: "arco"}}); err != nil {
+	if _, err := reopened.Put(alice, portalapi.PutPortalPreferenceRequest{Scope: scope, ExpectedRevision: 1, Values: collectionValues("winner")}); err != nil {
 		t.Fatal(err)
 	}
-	_, err = competitor.Put(alice, portalapi.PutPortalPreferenceRequest{Scope: scope, ExpectedRevision: 1, Values: portalapi.PortalPreferenceValues{RendererID: "mui", ShellTemplateID: "standard"}})
+	_, err = competitor.Put(alice, portalapi.PutPortalPreferenceRequest{Scope: scope, ExpectedRevision: 1, Values: collectionValues("loser")})
 	if !errors.Is(err, portalapi.ErrPreferenceConflict) {
 		t.Fatalf("并发偏好 CAS 必须单赢家: %v", err)
 	}
@@ -103,13 +103,13 @@ func TestPreferenceDocumentsRebaseConcurrentWritesToDifferentScopes(t *testing.T
 	secondScope.PortalID = "operations-secondary"
 	if _, err := first.Put(principal, portalapi.PutPortalPreferenceRequest{
 		Scope:  firstScope,
-		Values: portalapi.PortalPreferenceValues{RendererID: "arco"},
+		Values: collectionValues("first"),
 	}); err != nil {
 		t.Fatalf("首个 scope 写入失败: %v", err)
 	}
 	if _, err := second.Put(principal, portalapi.PutPortalPreferenceRequest{
 		Scope:  secondScope,
-		Values: portalapi.PortalPreferenceValues{RendererID: "antd"},
+		Values: collectionValues("second"),
 	}); err != nil {
 		t.Fatalf("不同 scope 应在 Shared State CAS 冲突后自动重基: %v", err)
 	}
@@ -118,15 +118,19 @@ func TestPreferenceDocumentsRebaseConcurrentWritesToDifferentScopes(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	for scope, renderer := range map[portalapi.PortalPreferenceScope]string{
-		firstScope:  "arco",
-		secondScope: "antd",
+	for scope, expected := range map[portalapi.PortalPreferenceScope]string{
+		firstScope:  "first",
+		secondScope: "second",
 	} {
 		preference, err := reopened.Get(principal, scope)
-		if err != nil || preference.Values.RendererID != renderer {
+		if err != nil || preference.Values.Collections[expected].Density != "compact" {
 			t.Fatalf("重基后偏好丢失: scope=%s value=%+v err=%v", scope.PortalID, preference, err)
 		}
 	}
+}
+
+func collectionValues(id string) portalapi.PortalPreferenceValues {
+	return portalapi.PortalPreferenceValues{Collections: map[string]portalapi.CollectionPreference{id: {Density: "compact"}}}
 }
 
 func preferenceCall(principal portalapi.Principal) *contractv1.CallContext {

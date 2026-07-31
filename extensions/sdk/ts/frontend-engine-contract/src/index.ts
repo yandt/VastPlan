@@ -6,7 +6,6 @@ export type {
   PortalPreferenceScope,
   PortalPreferenceValues,
   PreferenceCatalogScope,
-  RendererPreference,
 } from "./portal-preference.js";
 
 export type FrontendEngineCapability =

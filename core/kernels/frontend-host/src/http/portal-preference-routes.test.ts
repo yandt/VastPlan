@@ -26,9 +26,9 @@ describe("PortalPreference routes", () => {
 
     const response = await fetch(`${fixture.origin}/v1/portal-preference?path=/operations/settings`, { headers: fixture.headers });
     expect(response.status).toBe(200);
-    const preference = await response.json() as { revision: number; scope: { portalId: string; renderer: { id: string; contractMajor: number } } };
+    const preference = await response.json() as { revision: number; scope: { portalId: string; workbench: { id: string; contractMajor: number } } };
     expect(preference.revision).toBe(0);
-    expect(preference.scope).toMatchObject({ portalId: "operations", renderer: { id: "cn.vastplan.render", contractMajor: 5 } });
+    expect(preference.scope).toMatchObject({ portalId: "operations", workbench: { id: "cn.vastplan.workbench", contractMajor: 4 } });
     expect(calls[0]?.payload).not.toHaveProperty("tenantId");
     expect(calls[0]?.payload).not.toHaveProperty("subjectId");
 
@@ -41,11 +41,17 @@ describe("PortalPreference routes", () => {
 
     const updated = await fetch(`${fixture.origin}/v1/portal-preference?path=/operations`, {
       method: "PUT", headers: { Cookie: `${fixture.headers.Cookie}; ${csrf.cookie}`, "X-VastPlan-CSRF": csrf.token, "Content-Type": "application/json" },
-      body: JSON.stringify({ expectedRevision: 0, values: { rendererId: "mui", shellTemplateId: "top-navigation" } }),
+      body: JSON.stringify({ expectedRevision: 0, values: { collections: { services: { pageSize: 20 } } } }),
     });
     expect(updated.status).toBe(200);
     expect(calls.at(-1)?.operation).toBe("put");
-    expect(calls.at(-1)?.payload).toMatchObject({ expectedRevision: 0, values: { rendererId: "mui", shellTemplateId: "top-navigation" } });
+    expect(calls.at(-1)?.payload).toMatchObject({ expectedRevision: 0, values: { collections: { services: { pageSize: 20 } } } });
+
+    const appearanceRejected = await fetch(`${fixture.origin}/v1/portal-preference?path=/operations`, {
+      method: "PUT", headers: { Cookie: `${fixture.headers.Cookie}; ${csrf.cookie}`, "X-VastPlan-CSRF": csrf.token, "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedRevision: 1, values: { rendererId: "mui" } }),
+    });
+    expect(appearanceRejected.status).toBe(400);
   });
 
   it("maps capability CAS conflicts without exposing backend detail", async () => {

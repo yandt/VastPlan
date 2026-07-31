@@ -22,16 +22,16 @@ func TestPreferenceStorePersistsCASAndIsolatesSubjects(t *testing.T) {
 	bob := portalapi.Principal{ID: "bob", TenantID: "tenant-a"}
 	created, err := store.Put(alice, portalapi.PutPortalPreferenceRequest{
 		Scope: scope, ExpectedRevision: 0,
-		Values: portalapi.PortalPreferenceValues{RendererID: "mui", Collections: map[string]portalapi.CollectionPreference{"services": {Columns: []string{"name", "id"}, Density: "compact", PageSize: 20}}},
+		Values: portalapi.PortalPreferenceValues{Collections: map[string]portalapi.CollectionPreference{"services": {Columns: []string{"name", "id"}, Density: "compact", PageSize: 20}}},
 	})
 	if err != nil || created.Revision != 1 || created.UpdatedAt == "" {
 		t.Fatalf("create failed: value=%+v err=%v", created, err)
 	}
-	if _, err := store.Put(alice, portalapi.PutPortalPreferenceRequest{Scope: scope, ExpectedRevision: 0, Values: portalapi.PortalPreferenceValues{RendererID: "arco"}}); !errors.Is(err, portalapi.ErrPreferenceConflict) {
+	if _, err := store.Put(alice, portalapi.PutPortalPreferenceRequest{Scope: scope, ExpectedRevision: 0, Values: portalapi.PortalPreferenceValues{Collections: map[string]portalapi.CollectionPreference{"services": {PageSize: 50}}}}); !errors.Is(err, portalapi.ErrPreferenceConflict) {
 		t.Fatalf("stale CAS must conflict: %v", err)
 	}
 	missing, err := store.Get(bob, scope)
-	if err != nil || missing.Revision != 0 || missing.Values.RendererID != "" {
+	if err != nil || missing.Revision != 0 || len(missing.Values.Collections) != 0 {
 		t.Fatalf("subject isolation failed: value=%+v err=%v", missing, err)
 	}
 	reopened, err := openPreferenceStore(path)
@@ -39,7 +39,7 @@ func TestPreferenceStorePersistsCASAndIsolatesSubjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	loaded, err := reopened.Get(alice, scope)
-	if err != nil || loaded.Revision != 1 || loaded.Values.RendererID != "mui" || loaded.Values.Collections["services"].Density != "compact" {
+	if err != nil || loaded.Revision != 1 || loaded.Values.Collections["services"].Density != "compact" {
 		t.Fatalf("persisted preference mismatch: value=%+v err=%v", loaded, err)
 	}
 }
@@ -50,7 +50,7 @@ func TestPreferenceStoreTreatsRepeatedWriteAsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 	principal := portalapi.Principal{ID: "alice", TenantID: "tenant-a"}
-	request := portalapi.PutPortalPreferenceRequest{Scope: testPreferenceScope(), Values: portalapi.PortalPreferenceValues{ShellTemplateID: "standard"}}
+	request := portalapi.PutPortalPreferenceRequest{Scope: testPreferenceScope(), Values: portalapi.PortalPreferenceValues{Collections: map[string]portalapi.CollectionPreference{"services": {PageSize: 20}}}}
 	first, err := store.Put(principal, request)
 	if err != nil {
 		t.Fatal(err)
@@ -64,8 +64,6 @@ func TestPreferenceStoreTreatsRepeatedWriteAsIdempotent(t *testing.T) {
 func testPreferenceScope() portalapi.PortalPreferenceScope {
 	return portalapi.PortalPreferenceScope{
 		PortalID:  "operations",
-		Renderer:  portalapi.PreferenceCatalogScope{ID: "cn.vastplan.render", ContractMajor: contractregistry.FrontendUIContractMajor},
-		Shell:     portalapi.PreferenceCatalogScope{ID: "cn.vastplan.shell", ContractMajor: contractregistry.FrontendUIContractMajor},
 		Workbench: portalapi.PreferenceCatalogScope{ID: "cn.vastplan.workbench", ContractMajor: contractregistry.FrontendUIContractMajor},
 	}
 }

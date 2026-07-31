@@ -3,7 +3,7 @@ import { uiContractVersion } from "@vastplan/ui-contract";
 import {
   message,
   portalPageRhythm,
-  PortalPreferenceControl,
+  PortalAccountControl,
   usePortalI18n,
   usePortalUI,
   type MenuItem,
@@ -89,9 +89,9 @@ export function TopNavigationShell(props: UIShellProps) {
       <div className="vp-top-end">
         {settingsRoots.map((group) => <RootPopover key={group.id} group={group} composition={composition} open={openRootID === group.id} active={activeRootID === group.id} onOpenChange={(open) => setOpenRootID(open ? group.id : undefined)} onNavigate={navigate} />)}
         {shellSlot(composition.shellSlots, "shell.navigation.end")}
-        <PortalPreferenceControl {...props} />
+        <PortalAccountControl {...props} placement="bottom-end" />
       </div>
-      <div className="vp-top-mobile-controls"><PortalPreferenceControl {...props} /><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></div>
+      <div className="vp-top-mobile-controls"><PortalAccountControl {...props} placement="bottom-end" /><button type="button" className="vp-top-mobile-trigger" aria-label={i18n.text(message(namespace, "navigation.open", "打开主菜单"))} onClick={() => setMobileOpen(true)}><ui.Icon name="menu" /></button></div>
     </header>
     <div className="vp-top-content">
       {page === undefined ? null : <header className="vp-top-page-header">

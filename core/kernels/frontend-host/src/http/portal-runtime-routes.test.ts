@@ -21,9 +21,10 @@ describe("Portal runtime routes", () => {
     const runtimeResponse = await fetch(`${fixture.origin}/v1/portal-runtime?path=/operations/settings`, { headers: fixture.headers });
     expect(runtimeResponse.status).toBe(200);
     expect(runtimeResponse.headers.get("link")).toContain("crossorigin=use-credentials");
-    const runtime = await runtimeResponse.json() as { portal: { revision: number; experience: { permissions: string[] }; preferenceScope: unknown }; modules: Array<{ url: string; sha256: string }> };
+    const runtime = await runtimeResponse.json() as { portal: { revision: number; experience: { permissions: string[] }; account: unknown; preferenceScope: unknown }; modules: Array<{ url: string; sha256: string }> };
     expect(runtime.portal.revision).toBe(7);
     expect(runtime.portal.experience.permissions).toEqual(["portal.read"]);
+    expect(runtime.portal.account).toEqual({ subjectID: "alice", tenantID: "tenant-a", displayName: "alice" });
     expect(runtime.portal.preferenceScope).toEqual(preferenceScope());
     expect(runtimeResponse.headers.get("cache-control")).toContain("no-store");
     expect(runtimeResponse.headers.get("vary")).toContain("Cookie");
@@ -156,8 +157,6 @@ async function startRuntimeServer(activeOverrides: Readonly<Record<string, unkno
 function preferenceScope() {
   return {
     portalId: "operations",
-    renderer: { id: "cn.vastplan.render", contractMajor: 4 },
-    shell: { id: "cn.vastplan.shell", contractMajor: 4 },
     workbench: { id: "cn.vastplan.workbench", contractMajor: 4 },
   };
 }

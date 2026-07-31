@@ -1,13 +1,10 @@
-import { message, type SemanticThemeTokens } from "@vastplan/ui-primitives";
+import { builtinAppearanceTemplates, message, type SemanticThemeTokens } from "@vastplan/ui-primitives";
 
 export const namespace = "cn.vastplan.foundation.frontend.render.adapter";
 export const gaps = { xs: 4, sm: 8, md: 16, lg: 24 } as const;
 export const dialogWidths = { sm: 480, md: 720, lg: 960 } as const;
 
-export const antdThemeTemplates = Object.freeze([
-  { id: "light", label: message(namespace, "theme.light", "浅色"), scheme: "light" as const },
-  { id: "dark", label: message(namespace, "theme.dark", "深色"), scheme: "dark" as const },
-]);
+export const antdThemeTemplates = builtinAppearanceTemplates;
 
 export const antdIconThemes = Object.freeze([
   { id: "canonical", label: message(namespace, "iconTheme.canonical", "VastPlan 图标"), source: "canonical" as const },

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
-import { PortalI18nProvider, message, usePortalI18n, usePortalUI, type PluginLocalization, type PortalLocalizationPolicy } from "@vastplan/ui-primitives";
+import { PortalI18nProvider, message, resolveAppearanceColors, usePortalI18n, usePortalUI, type PluginLocalization, type PortalAppearanceSettings, type PortalLocalizationPolicy } from "@vastplan/ui-primitives";
 import { VerifiedFrontendPluginLoader, type ModuleFetcher, type PortalRuntimeSpec } from "./module-loader";
 import { parseRuntimeSpec } from "./module-runtime-spec";
 import { fetchDevelopmentRuntime, startPortalDevelopmentUpdates } from "./portal-development";
@@ -9,6 +9,7 @@ import { PortalGenerationManager } from "./portal-generation";
 import { PortalRuntime, type PreparedPortal } from "./portal-runtime";
 import { AccessLoginPage } from "./access-login";
 import { PortalPreferenceSession } from "./portal-preferences";
+import { PortalAppearanceSession, resolveSystemScheme } from "./portal-appearance";
 import { PortalGenerationCommitClient } from "./portal-generation-client";
 import type { PortalRuntimeSource } from "./portal-runtime-source";
 import { developmentFrontendRuntimeProtocol, productionFrontendRuntimeProtocol, type FrontendRuntimeProtocol } from "./frontend-runtime-protocol";
@@ -48,14 +49,15 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
   let updateNotice: PortalActivationUpdate | undefined;
   let currentSpec: PortalRuntimeSpec | undefined;
   let preferenceSession: PortalPreferenceSession | undefined;
+  let appearanceSession: PortalAppearanceSession | undefined;
   let replaceShellTemplate: (templateID: string) => Promise<void> = async () => undefined;
   let replaceRenderer: (rendererID: string) => void = () => undefined;
-  let replaceThemeTemplate: (themeTemplateID: string) => void = () => undefined;
   let replaceIconTheme: (iconThemeID: string) => void = () => undefined;
+  let replaceAppearance: (appearance: PortalAppearanceSettings) => void = () => undefined;
   let stopDevelopmentUpdates: (() => void) | undefined;
   let stopActivationUpdates: (() => void) | undefined;
   const renderApplication = () => {
-    if (prepared !== undefined) root.render(<PortalApplication prepared={prepared} initialPath={pathname} recoveryMode={recoveryMode} developmentError={developmentError} updateNotice={updateNotice} onApplyUpdate={() => globalThis.location?.reload()} onRendererChange={replaceRenderer} onShellTemplateChange={replaceShellTemplate} onThemeTemplateChange={replaceThemeTemplate} onIconThemeChange={replaceIconTheme} />);
+    if (prepared !== undefined && appearanceSession !== undefined) root.render(<PortalApplication prepared={prepared} appearanceSession={appearanceSession} initialPath={pathname} recoveryMode={recoveryMode} developmentError={developmentError} updateNotice={updateNotice} onApplyUpdate={() => globalThis.location?.reload()} onRendererChange={replaceRenderer} onShellTemplateChange={replaceShellTemplate} onIconThemeChange={replaceIconTheme} onAppearanceChange={replaceAppearance} />);
   };
   const generationCommits = new PortalGenerationCommitClient(fetcher);
   const manager = new PortalGenerationManager({
@@ -63,8 +65,8 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
     runtimeProtocol: runtimeSource.protocol,
     prepare: async (spec, context) => {
       const loader = new VerifiedFrontendPluginLoader(spec, { protocol: runtimeSource.protocol, fetcher });
-      const preference = preferenceSession?.resolve(spec.portal) ?? {};
-      return new PortalRuntime(loader).prepare(spec.portal, { ...context, ...preference, preferences: preferenceSession });
+      const appearance = appearanceSession?.resolve(spec.portal) ?? {};
+      return new PortalRuntime(loader).prepare(spec.portal, { ...context, ...appearance, preferences: preferenceSession });
     },
     beforeCommit: (spec) => generationCommits.commit(spec),
     onDiagnostic: (diagnostic) => {
@@ -79,65 +81,43 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
     renderApplication();
   });
   replaceShellTemplate = async (templateID) => {
-    if (prepared === undefined || currentSpec === undefined || preferenceSession === undefined || templateID === prepared.shellLibrary.id || !prepared.portal.shell.config.userSelectable || !prepared.portal.shell.config.allowedTemplates.includes(templateID)) return;
-    const previous = preferenceSession.resolve(prepared.portal).shellTemplateID ?? prepared.portal.shell.config.defaultTemplate;
+    if (prepared === undefined || currentSpec === undefined || appearanceSession === undefined || templateID === prepared.shellLibrary.id || !prepared.portal.shell.config.userSelectable || !prepared.portal.shell.config.allowedTemplates.includes(templateID)) return;
+    const previous = prepared.shellLibrary.id;
     try {
-      preferenceSession.preview({ shellTemplateId: templateID });
+      appearanceSession.setShellTemplate(templateID);
       await manager.replace(currentSpec);
-      await preferenceSession.commit({ shellTemplateId: templateID }, currentSpec.portal);
     } catch (error) {
-      preferenceSession.clearPreview();
-      preferenceSession.preview({ shellTemplateId: previous });
-      try { await manager.replace(currentSpec); } finally { preferenceSession.clearPreview(); }
+      appearanceSession.setShellTemplate(previous);
+      await manager.replace(currentSpec);
       developmentError = errorMessage(error);
       renderApplication();
     }
   };
   replaceRenderer = (rendererID) => {
-    if (prepared === undefined || preferenceSession === undefined) return;
+    if (prepared === undefined || appearanceSession === undefined) return;
     const config = prepared.portal.renderAdapter.config;
     if (!config.userSelectable || !config.allowedRenderers.includes(rendererID) || rendererID === prepared.renderAdapter.id) return;
-    preferenceSession.stageRenderer(rendererID, prepared.portal);
+    appearanceSession.setRenderer(rendererID);
     globalThis.location?.reload();
   };
-  const replaceRendererOption = async (kind: "theme" | "icon", value: string) => {
-    if (prepared === undefined || currentSpec === undefined || preferenceSession === undefined) return;
-    const rendererID = prepared.renderAdapter.id;
-    const allowed = kind === "theme" ? prepared.renderAdapter.themeTemplates.some((item) => item.id === value) : prepared.renderAdapter.iconThemes.some((item) => item.id === value);
-    const previous = kind === "theme" ? prepared.themeTemplateID : prepared.iconThemeID;
-    if (!allowed || value === previous) return;
-    const patch = kind === "theme" ? { themeTemplateId: value } : { iconThemeId: value };
-    const rollback = kind === "theme" ? { themeTemplateId: previous } : { iconThemeId: previous };
-    try {
-      preferenceSession.previewRendererOption(rendererID, patch);
-      await manager.replace(currentSpec);
-      await preferenceSession.commitRendererOption(rendererID, patch, currentSpec.portal);
-    } catch (error) {
-      preferenceSession.clearPreview();
-      preferenceSession.previewRendererOption(rendererID, rollback);
-      try { await manager.replace(currentSpec); } finally { preferenceSession.clearPreview(); }
-      developmentError = errorMessage(error);
-      renderApplication();
-    }
+  replaceIconTheme = (iconThemeID) => {
+    if (prepared === undefined || appearanceSession === undefined) return;
+    appearanceSession.setIconTheme(prepared.renderAdapter.id, iconThemeID);
+    renderApplication();
   };
-  replaceThemeTemplate = (value) => { void replaceRendererOption("theme", value); };
-  replaceIconTheme = (value) => { void replaceRendererOption("icon", value); };
+  replaceAppearance = (appearance) => {
+    if (prepared === undefined || appearanceSession === undefined) return;
+    appearanceSession.setAppearance(prepared.renderAdapter.id, appearance);
+    renderApplication();
+  };
 	if (!hydrated) root.render(<PortalStarting />);
   try {
     currentSpec = await runtimeSource.read(pathname);
+    appearanceSession = PortalAppearanceSession.open(currentSpec.portal);
     preferenceSession = await PortalPreferenceSession.open(fetcher, pathname, currentSpec.portal);
     await manager.start(currentSpec);
+    appearanceSession.commitPendingRenderer();
     commitHostEpoch(currentSpec.portal);
-    if (preferenceSession.hasPendingRenderer()) {
-      try { await preferenceSession.commitPendingRenderer(currentSpec.portal); }
-      catch {
-        preferenceSession.discardPendingRenderer(currentSpec.portal);
-        globalThis.location?.reload();
-        return root;
-      }
-    } else {
-      void preferenceSession.migrateCache(currentSpec.portal).catch(() => undefined);
-    }
     const updatePolicy = currentSpec.portal.updates?.mode ?? "refresh";
     if (updatePolicy !== "refresh") {
       stopActivationUpdates = startPortalActivationUpdates({
@@ -165,9 +145,9 @@ export async function bootstrapPortal(options: PortalBootstrapOptions): Promise<
       });
     }
   } catch (error) {
-    if (currentSpec !== undefined && preferenceSession?.hasPendingRenderer()) {
+    if (currentSpec !== undefined && appearanceSession?.hasPendingRenderer()) {
       try {
-        preferenceSession.discardPendingRenderer(currentSpec.portal);
+        appearanceSession.discardPendingRenderer();
         await manager.start(currentSpec);
         commitHostEpoch(currentSpec.portal);
         renderApplication();
@@ -220,7 +200,21 @@ export async function fetchRuntimeSpec(fetcher: ModuleFetcher, endpoint: string,
   return parseRuntimeSpec(await response.json(), protocol);
 }
 
-export function PortalApplication({ prepared, initialPath, recoveryMode = false, developmentError, updateNotice, onApplyUpdate, onRendererChange, onShellTemplateChange, onThemeTemplateChange, onIconThemeChange }: { prepared: PreparedPortal; initialPath: string; recoveryMode?: boolean; developmentError?: string; updateNotice?: PortalActivationUpdate; onApplyUpdate?(): void; onRendererChange?(rendererID: string): void; onShellTemplateChange?(templateID: string): Promise<void>; onThemeTemplateChange?(themeTemplateID: string): void; onIconThemeChange?(iconThemeID: string): void }) {
+interface PortalApplicationProps {
+  prepared: PreparedPortal;
+  appearanceSession: PortalAppearanceSession;
+  initialPath: string;
+  recoveryMode?: boolean;
+  developmentError?: string;
+  updateNotice?: PortalActivationUpdate;
+  onApplyUpdate?(): void;
+  onRendererChange?(rendererID: string): void;
+  onShellTemplateChange?(templateID: string): Promise<void>;
+  onIconThemeChange?(iconThemeID: string): void;
+  onAppearanceChange?(appearance: PortalAppearanceSettings): void;
+}
+
+export function PortalApplication({ prepared, appearanceSession, initialPath, recoveryMode = false, developmentError, updateNotice, onApplyUpdate, onRendererChange, onShellTemplateChange, onIconThemeChange, onAppearanceChange }: PortalApplicationProps) {
   const landingPath = useMemo(() => resolvePortalPath(prepared, initialPath), [prepared, initialPath]);
   const [pathname, setPathname] = useState(landingPath);
   useEffect(() => {
@@ -235,15 +229,21 @@ export function PortalApplication({ prepared, initialPath, recoveryMode = false,
   const policy = prepared.portal.localization ?? defaultPortalLocalization;
   const catalogs = useMemo(() => ({ ...prepared.messageCatalogs, [kernelNamespace]: kernelLocalization }), [prepared.messageCatalogs]);
   return <PortalI18nProvider policy={policy} catalogs={catalogs} candidates={globalThis.navigator?.languages ?? []} storageKey={`vastplan.locale.${prepared.portal.tenantId}.${prepared.portal.id}`}>
-    <LocalizedPortalApplication prepared={prepared} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} developmentError={developmentError} updateNotice={updateNotice} onApplyUpdate={onApplyUpdate} onRendererChange={onRendererChange ?? (() => undefined)} onShellTemplateChange={onShellTemplateChange} onThemeTemplateChange={onThemeTemplateChange} onIconThemeChange={onIconThemeChange} />
+    <LocalizedPortalApplication prepared={prepared} appearanceSession={appearanceSession} pathname={pathname} onNavigate={setPathname} page={page} recoveryMode={recoveryMode} developmentError={developmentError} updateNotice={updateNotice} onApplyUpdate={onApplyUpdate} onRendererChange={onRendererChange ?? (() => undefined)} onShellTemplateChange={onShellTemplateChange} onIconThemeChange={onIconThemeChange} onAppearanceChange={onAppearanceChange} />
   </PortalI18nProvider>;
 }
 
-function LocalizedPortalApplication({ prepared, pathname, onNavigate, page, recoveryMode, developmentError, updateNotice, onApplyUpdate, onRendererChange, onShellTemplateChange, onThemeTemplateChange, onIconThemeChange }: { prepared: PreparedPortal; pathname: string; onNavigate(path: string): void; page: PreparedPortal["pages"][number] | undefined; recoveryMode: boolean; developmentError?: string; updateNotice?: PortalActivationUpdate; onApplyUpdate?(): void; onRendererChange(rendererID: string): void; onShellTemplateChange?(templateID: string): Promise<void>; onThemeTemplateChange?(themeTemplateID: string): void; onIconThemeChange?(iconThemeID: string): void }) {
+function LocalizedPortalApplication({ prepared, appearanceSession, pathname, onNavigate, page, recoveryMode, developmentError, updateNotice, onApplyUpdate, onRendererChange, onShellTemplateChange, onIconThemeChange, onAppearanceChange }: Omit<PortalApplicationProps, "initialPath"> & { pathname: string; onNavigate(path: string): void; page: PreparedPortal["pages"][number] | undefined; recoveryMode: boolean }) {
   const Provider = prepared.renderAdapter.Provider;
   const i18n = usePortalI18n();
-  return <Provider locale={i18n.locale} direction={i18n.direction} themeTemplate={prepared.themeTemplateID} iconTheme={prepared.iconThemeID}>
-    <PortalContent prepared={prepared} pathname={pathname} onNavigate={onNavigate} page={page} recoveryMode={recoveryMode} onRendererChange={onRendererChange} onShellTemplateChange={onShellTemplateChange} onThemeTemplateChange={onThemeTemplateChange} onIconThemeChange={onIconThemeChange} />
+  const appearance = appearanceSession.appearance(prepared.renderAdapter.id);
+  const systemScheme = useSystemScheme();
+  const scheme = appearance.mode === "system" ? systemScheme : appearance.mode;
+  const themeTemplateID = appearance[scheme].templateID;
+  const themeColors = useMemo(() => resolveAppearanceColors(themeTemplateID, appearance[scheme].colors), [appearance, scheme, themeTemplateID]);
+  const iconThemeID = appearanceSession.resolve(prepared.portal).iconThemeID ?? prepared.iconThemeID;
+  return <Provider locale={i18n.locale} direction={i18n.direction} themeTemplate={themeTemplateID} themeColors={themeColors} iconTheme={iconThemeID}>
+    <PortalContent prepared={prepared} appearance={appearance} themeTemplateID={themeTemplateID} iconThemeID={iconThemeID} pathname={pathname} onNavigate={onNavigate} page={page} recoveryMode={recoveryMode} onRendererChange={onRendererChange ?? (() => undefined)} onShellTemplateChange={onShellTemplateChange} onIconThemeChange={onIconThemeChange} onAppearanceChange={onAppearanceChange} />
     {developmentError === undefined ? null : <PortalDevelopmentNotice message={developmentError} />}
     {updateNotice === undefined ? null : <PortalUpdateNotice update={updateNotice} onApply={onApplyUpdate} />}
   </Provider>;
@@ -266,16 +266,19 @@ function PortalDevelopmentNotice({ message }: { message: string }) {
   </aside>;
 }
 
-function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode, onRendererChange, onShellTemplateChange, onThemeTemplateChange, onIconThemeChange }: {
+function PortalContent({ prepared, appearance, themeTemplateID, iconThemeID, pathname, onNavigate, page, recoveryMode, onRendererChange, onShellTemplateChange, onIconThemeChange, onAppearanceChange }: {
   prepared: PreparedPortal;
+  appearance: PortalAppearanceSettings;
+  themeTemplateID: string;
+  iconThemeID: string;
   pathname: string;
   onNavigate(path: string): void;
   page: PreparedPortal["pages"][number] | undefined;
   recoveryMode: boolean;
   onRendererChange(rendererID: string): void;
   onShellTemplateChange?(templateID: string): Promise<void>;
-  onThemeTemplateChange?(themeTemplateID: string): void;
   onIconThemeChange?(iconThemeID: string): void;
+  onAppearanceChange?(appearance: PortalAppearanceSettings): void;
 }) {
   const ui = usePortalUI();
   const i18n = usePortalI18n();
@@ -308,11 +311,13 @@ function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode, onR
     renderer={{ id: prepared.renderAdapter.id, options: prepared.portal.renderAdapter.config.rendererOptions?.[prepared.renderAdapter.id] ?? {} }}
     onRendererChange={prepared.portal.renderAdapter.config.userSelectable ? onRendererChange : undefined}
     themeTemplates={rendererOptions?.themeUserSelectable === true ? prepared.renderAdapter.themeTemplates.filter((item) => rendererOptions.allowedThemeTemplates?.includes(item.id) === true) : []}
-    themeTemplateID={prepared.themeTemplateID}
-    onThemeTemplateChange={rendererOptions?.themeUserSelectable === true ? onThemeTemplateChange : undefined}
+    themeTemplateID={themeTemplateID}
     iconThemes={rendererOptions?.iconUserSelectable === true ? prepared.renderAdapter.iconThemes.filter((item) => rendererOptions.allowedIconThemes?.includes(item.id) === true) : []}
-    iconThemeID={prepared.iconThemeID}
+    iconThemeID={iconThemeID}
     onIconThemeChange={rendererOptions?.iconUserSelectable === true ? onIconThemeChange : undefined}
+    account={prepared.portal.account ?? { subjectID: "anonymous", tenantID: prepared.portal.tenantId, displayName: "User" }}
+    appearance={appearance}
+    onAppearanceChange={onAppearanceChange}
     branding={{
       name: typeof branding.name === "string" && branding.name !== "" ? branding.name : typeof branding.title === "string" && branding.title !== "" ? branding.title : prepared.portal.id,
       shortName: typeof branding.shortName === "string" ? branding.shortName : undefined,
@@ -322,6 +327,18 @@ function PortalContent({ prepared, pathname, onNavigate, page, recoveryMode, onR
     onNavigate={navigate}
     recoveryNotice={recoveryMode ? <ui.Status tone="warning">{i18n.text(message(kernelNamespace, "recovery.active", "正在运行上一条仍可信的已发布 revision #{revision}。", { revision: prepared.portal.revision }))}</ui.Status> : undefined}
   />;
+}
+
+function useSystemScheme(): "light" | "dark" {
+  const [scheme, setScheme] = useState<"light" | "dark">(() => resolveSystemScheme("system"));
+  useEffect(() => {
+    const media = globalThis.matchMedia?.("(prefers-color-scheme: dark)");
+    if (media === undefined) return;
+    const update = () => setScheme(media.matches ? "dark" : "light");
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return scheme;
 }
 
 interface HostEpochState { active?: number; lastKnownGood?: number; pending?: number; failed?: number; }

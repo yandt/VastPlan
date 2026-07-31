@@ -205,13 +205,7 @@ func clonePortalPreference(value portalapi.PortalPreference) portalapi.PortalPre
 }
 
 func clonePreferenceValues(value portalapi.PortalPreferenceValues) portalapi.PortalPreferenceValues {
-	out := portalapi.PortalPreferenceValues{RendererID: value.RendererID, ShellTemplateID: value.ShellTemplateID}
-	if len(value.RendererOptions) > 0 {
-		out.RendererOptions = make(map[string]portalapi.RendererPreference, len(value.RendererOptions))
-		for key, option := range value.RendererOptions {
-			out.RendererOptions[key] = option
-		}
-	}
+	out := portalapi.PortalPreferenceValues{}
 	if len(value.Collections) > 0 {
 		out.Collections = make(map[string]portalapi.CollectionPreference, len(value.Collections))
 		for key, preference := range value.Collections {

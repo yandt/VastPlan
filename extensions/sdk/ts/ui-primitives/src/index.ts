@@ -5,6 +5,7 @@ export { jsonSchemaDialect } from "@vastplan/ui-contract";
 export { uiContractVersion as portalUIContractVersion } from "@vastplan/ui-contract";
 export { message } from "@vastplan/ui-contract";
 export { PortalI18nProvider, localizeJSONSchema, translate, usePortalI18n, usePortalMessages } from "./i18n.js";
+export * from "./appearance.js";
 export type { PortalI18n, PortalI18nProviderProps, PortalMessageCatalogs } from "./i18n.js";
 export { PortalInteractionClient, PortalInteractionError } from "./interaction-client.js";
 export type { PortalFetch, PortalFetchResponse, PortalInteractionClientOptions } from "./interaction-client.js";

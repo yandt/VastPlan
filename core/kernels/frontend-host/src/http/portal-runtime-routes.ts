@@ -164,9 +164,11 @@ export function projectExperience(runtime: PortalRuntimeSpec, principal: Princip
   const permissions = [...new Set(principal.roles)].sort();
   const portal = projected.portal as PortalRuntimeSpec["portal"] & {
     experience: { permissions: string[] };
+    account: { subjectID: string; tenantID: string; displayName: string };
     preferenceScope: ReturnType<typeof preferenceScopeForPortal>;
   };
   portal.experience = { permissions };
+  portal.account = { subjectID: principal.id, tenantID: principal.tenantId, displayName: principal.id };
   portal.preferenceScope = preferenceScopeForPortal(projected.portal);
   return projected;
 }

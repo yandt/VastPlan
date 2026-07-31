@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import type { LocalizedText, LocaleDirection, PluginLocalization, UICapability } from "@vastplan/ui-contract";
+import type { SemanticThemeTokens } from "./primitives.js";
 
 export type ThemeTemplateScheme = "light" | "dark" | "high-contrast";
 
@@ -7,6 +8,7 @@ export interface ThemeTemplate {
   id: string;
   label: LocalizedText;
   scheme: ThemeTemplateScheme;
+  preview?: { readonly background: string; readonly accent: string };
 }
 
 /** Selects icon geometry without exposing a framework package to consumers. */
@@ -26,7 +28,7 @@ export interface UIRenderer {
   defaultThemeTemplate: string;
   iconThemes: readonly IconThemeTemplate[];
   defaultIconTheme: string;
-  Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection; themeTemplate?: string; iconTheme?: string }>;
+  Provider: ComponentType<{ children: ReactNode; locale: string; direction: LocaleDirection; themeTemplate?: string; themeColors?: SemanticThemeTokens["color"]; iconTheme?: string }>;
   localization?: PluginLocalization;
 }
 
@@ -58,4 +60,3 @@ export interface UIRenderAdapter {
   defaultRenderer: string;
   localization?: PluginLocalization;
 }
-

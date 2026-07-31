@@ -1,16 +1,9 @@
-export interface PreferenceCatalogScope { readonly id: string; readonly contractMajor: number }
-
 export interface PortalPreferenceScope {
   readonly portalId: string;
-  readonly renderer: PreferenceCatalogScope;
-  readonly shell: PreferenceCatalogScope;
   readonly workbench: PreferenceCatalogScope;
 }
 
-export interface RendererPreference {
-  readonly themeTemplateId?: string;
-  readonly iconThemeId?: string;
-}
+export interface PreferenceCatalogScope { readonly id: string; readonly contractMajor: number }
 
 export interface CollectionPreference {
   readonly columns?: readonly string[];
@@ -20,9 +13,6 @@ export interface CollectionPreference {
 }
 
 export interface PortalPreferenceValues {
-  readonly rendererId?: string;
-  readonly rendererOptions?: Readonly<Record<string, RendererPreference>>;
-  readonly shellTemplateId?: string;
   readonly collections?: Readonly<Record<string, CollectionPreference>>;
 }
 
