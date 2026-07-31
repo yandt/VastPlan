@@ -1,6 +1,6 @@
 # ADR-0174 Portal 可选版本控制与发布快照分离
 
-- 状态：已采纳，P2.3a—P2.3c 已实施
+- 状态：已采纳，P2.3a—P2.3d 已实施
 - 日期：2026-07-31
 - 修订：[ADR-0171](ADR-0171-Portal单聚合版本与上线子流程.md) 中“Portal 天然以 PortalVersion 为工作对象”的部分、[ADR-0172](ADR-0172-通用版本账本与可插拔存储Provider.md) 与 [ADR-0173](ADR-0173-版本环境与资源适配.md) 中“Portal 必然迁入版本账本”的部分
 - 关联：[ADR-0142](ADR-0142-内核启动与业务发布完全分离.md)、[ADR-0173](ADR-0173-版本环境与资源适配.md)
@@ -55,3 +55,5 @@ PortalRelease: Preparing → Current → Superseded
 2026-07-31：P2.3a 已实施无版本路径。WorkingCopy 使用独立 revision CAS；submit 冻结规范配置、digest 和提交者形成 Publication；审批期间 WorkingCopy 不存在；Release 引用 Publication。Shared State 提升至 format 3 和独立 v3 namespace，不迁移开发期 v2 数据。旧 PortalVersion operations 只作为 P2.3c 前由同一状态派生的临时 API 投影。
 
 2026-07-31：P2.3b/P2.3c 已实施。Portal Composer 通过中立端口接入 Workspace，并只确认聚合 CAS 已接纳的 VersionRef；BFF、TypeScript SDK、Workbench 和平台 apply 已统一到 WorkingCopy/Publication/Release。旧 `/versions`、PortalVersion 用户操作和 `Portal.versions` 投影已删除，Composer 能力版本提升至 4.0.0；`PortalVersion` 仅可作为插件内部迁移实现类型存在，不得重新进入外部契约。
+
+2026-07-31：P2.3d 已以确定性故障矩阵封板，Portal Composer 补丁版本提升至 4.0.1。测试证明 operationId 可跨 Leader 重启和响应丢失复用，聚合未确认的外部版本不可见，冷历史故障不影响 Published Publication、ReleaseHistory 与上线；能力投影不再默认伪造 read/restore，UI 只开放实时协商成功的版本动作。长期混沌和 soak 留待具备真实插件负载后执行。

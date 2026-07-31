@@ -2,7 +2,7 @@
 
 插件 ID：`cn.vastplan.platform.configuration.portal-composer`
 
-当前制品版本：`4.0.0`
+当前制品版本：`4.0.1`
 
 该平台基础插件以 `active-active + external-shared + queue` 方式治理 Portal。每个 `portalId` 只有一个聚合，内部包含 WorkingCopy、Publication、Release 和版本控制语义状态。
 
@@ -37,4 +37,4 @@
 
 ## P2.3 实施状态
 
-P2.3a 至 P2.3c 已完成：后端聚合、中立版本控制端口、Workspace Adapter、BFF、TypeScript SDK 与 Workbench 均使用 WorkingCopy/Publication/Release；旧 `/versions` 与 PortalVersion 用户操作已删除。下一阶段 P2.3d 只补两种模式和故障恢复矩阵，不再改变在线对象模型。
+P2.3a 至 P2.3d 已完成：后端聚合、中立版本控制端口、Workspace Adapter、BFF、TypeScript SDK 与 Workbench 均使用 WorkingCopy/Publication/Release；旧 `/versions` 与 PortalVersion 用户操作已删除。确定性故障矩阵已覆盖无版本与 Workspace 模式、能力差异、软依赖缺失、跨重启幂等恢复、聚合冲突、冷历史故障和 Release 独立性；长期混沌与 soak 留待具备真实插件负载后执行。

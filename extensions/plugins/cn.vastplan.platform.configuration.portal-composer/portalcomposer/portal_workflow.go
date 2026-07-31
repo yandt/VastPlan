@@ -368,11 +368,24 @@ func (s *Service) PortalGovernance(ctx context.Context, principal portalapi.Prin
 }
 
 func portalVersionControlStatus(capabilities PortalVersionControlCapabilities) portalapi.PortalVersionControlStatus {
-	values := []string{"history", "read", "restore"}
+	return portalapi.PortalVersionControlStatus{
+		Enabled: true, Availability: portalapi.PortalVersionControlAvailable,
+		Capabilities: portalVersionControlCapabilityNames(capabilities),
+	}
+}
+
+func portalVersionControlCapabilityNames(capabilities PortalVersionControlCapabilities) []string {
+	values := []string{"history"}
+	if capabilities.Read {
+		values = append(values, "read")
+	}
 	if capabilities.Diff {
 		values = append(values, "diff")
 	}
-	return portalapi.PortalVersionControlStatus{Enabled: true, Availability: portalapi.PortalVersionControlAvailable, Capabilities: values}
+	if capabilities.Read && capabilities.Restore {
+		values = append(values, "restore")
+	}
+	return values
 }
 
 func (s *Service) ListPortalReleases(ctx context.Context, principal portalapi.Principal) ([]portalapi.PortalRelease, error) {
@@ -396,15 +409,14 @@ func (s *Service) portalLocked(tenantID, portalID string) (portalapi.Portal, err
 		VersionControl: portalapi.PortalVersionControlStatus{Enabled: false, Availability: portalapi.PortalVersionControlDisabled, Capabilities: []string{}},
 	}
 	if control, enabled := s.state.VersionControls[portalID]; enabled {
-		capabilities := []string{"history", "read", "restore"}
-		if control.Capabilities.Diff {
-			capabilities = append(capabilities, "diff")
-		}
 		availability := portalapi.PortalVersionControlUnavailable
-		if control.Capabilities.Read && control.Capabilities.Restore {
+		if control.LatestRef != nil {
 			availability = portalapi.PortalVersionControlAvailable
 		}
-		portal.VersionControl = portalapi.PortalVersionControlStatus{Enabled: true, Availability: availability, Capabilities: capabilities}
+		portal.VersionControl = portalapi.PortalVersionControlStatus{
+			Enabled: true, Availability: availability,
+			Capabilities: portalVersionControlCapabilityNames(control.Capabilities),
+		}
 	}
 	var publishedNumber uint64
 	found := false

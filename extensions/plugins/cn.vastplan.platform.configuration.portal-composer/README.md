@@ -19,6 +19,8 @@ WorkingCopy 保存使用独立 revision CAS，不产生业务版本；提交时�
 
 历史读取和比较通过中立 `PortalVersionControl` 端口完成。恢复历史只覆盖现有 WorkingCopy，并继续执行当前配置规范化、Catalog 校验与 working revision CAS；它不会修改旧版本。Workspace 不可用时，当前配置、Publication 热投影、Release 和运行交付仍可读，但提交与冷历史操作失败关闭。
 
+版本能力按 Adapter 实际协商结果逐项投影，不默认假设 read、diff 或 restore 可用。确定性故障测试覆盖跨重启 operation ID 恢复、响应丢失、聚合冲突、软依赖缺失和冷历史离线；Release 只使用 Published Publication 热快照，不要求 Workspace/Ledger 在线。
+
 静态 Platform Catalog 仅为创建首个 WorkingCopy 提供种子模板。它不会被灌入在线 Profile/Binding 治理状态。内核 Recovery Baseline 独立于 Portal 配置，错误 Publication 不能覆盖最小安全启动和恢复入口。
 
 Frontend Test Release 也形成完整候选 Portal 配置快照：获得授权的应用或平台插件槽位被替换后，候选整体校验、发布和上线，不产生对外可见的独立测试 Profile/Binding，也不进入正式 Publication/Release 谱系。

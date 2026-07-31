@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { PortalControlClient, PortalControlError, type PortalConfiguration } from "@vastplan/ui-primitives";
+import { PortalControlClient, PortalControlError, type Portal, type PortalConfiguration } from "@vastplan/ui-primitives";
 import { buildPortalConfiguration, createPortalPage, portalConfigurationSchema } from "./index";
+import { toPortalRow } from "./portal-model";
 
 describe("Portal aggregate workspace", () => {
   it("registers one Portal page instead of four independent governance domains", () => {
@@ -40,6 +41,18 @@ describe("Portal aggregate workspace", () => {
     const page = createPortalPage(new PortalControlClient({ fetch: async () => response({ portals: [portal] }) }));
     const result = await page.load({ mode: "page", page: 1, pageSize: 20, filters: {} }, new AbortController().signal);
     expect(result).toMatchObject({ total: 1, items: [{ id: "operations", workingRevision: 2, status: "Draft", releaseAvailable: false }] });
+  });
+
+  it("shows only negotiated version actions and hides all of them while unavailable", () => {
+    const workingCopy = { tenantId: "tenant-a", portalId: "operations", revision: 2, configuration: configuration(), digest: "a".repeat(64), createdAt: "2026-07-30T00:00:00Z", updatedAt: "2026-07-30T00:00:00Z" };
+    const portal: Portal = {
+      id: "operations", tenantId: "tenant-a", workingCopy,
+      versionControl: { enabled: true, availability: "available", capabilities: ["history", "read"] },
+      releases: [], createdAt: workingCopy.createdAt, updatedAt: workingCopy.updatedAt,
+    };
+    expect(toPortalRow(portal)[0]).toMatchObject({ historyAvailable: true, diffAvailable: false, restoreAvailable: false });
+    portal.versionControl = { enabled: true, availability: "unavailable", capabilities: ["history", "read", "diff", "restore"] };
+    expect(toPortalRow(portal)[0]).toMatchObject({ historyAvailable: false, diffAvailable: false, restoreAvailable: false });
   });
 });
 

@@ -148,6 +148,23 @@ P2.3 是开发期破坏性重构，Portal Composer 提升能力主版本和 Shar
 
 Workbench 在 `enabled=false` 时完全隐藏 commit/history/diff/restore；保留保存、提交审批、发布、上线和 ReleaseHistory。`enabled=true` 但 unavailable 时显示明确状态，不把操作静默改成普通保存。
 
+## P2.3d 故障验证矩阵
+
+P2.3d 使用确定性故障注入，不引入依赖计时的长时间混沌测试。进程级混沌和压力验证留到真实插件负载具备后执行。
+
+| 场景 | 必须保持的性质 | 自动化证据 |
+|---|---|---|
+| 未配置 Workspace | 不调用版本端口，Publication 使用 inline 冻结源 | `TestPortalNoVersionLifecycleUsesWorkingCopyPublicationAndRelease` |
+| Adapter 能力不同 | 只投影受支持的 read/diff/restore；history 仍来自 Portal 聚合 | `TestPortalVersionControlProjectsOnlySupportedCapabilities`、Workbench 能力动作测试 |
+| 已绑定但软依赖缺失 | 明确 unavailable，保留 WorkingCopy 热投影，提交失败关闭且不退回 inline | `TestPortalVersionControlMissingSoftDependencyFailsOnlyBoundPortal` |
+| Leader 重启、Workspace 已提交但响应丢失 | 持久 operationId 跨重启复用，同一逻辑提交只产生一个 VersionRef | `TestPortalVersionSubmitRecoversAfterLeaderRestartAndLostResponse`、Workspace `TestManagerOperationIdentitySurvivesSessionLossAndCommittedReads` |
+| VersionRef 成功后聚合冲突 | 未确认版本不进入 Portal 历史；重试幂等确认原版本 | `TestPortalVersionAggregateConflictKeepsExternalCommitUnreachableUntilRetry` |
+| 聚合提交成功但调用方未收到响应 | 相同请求直接返回同一 Publication，不再次调用 Workspace | `TestPortalVersionSubmitRecoversAfterLeaderRestartAndLostResponse` |
+| 冷历史读取失败 | 当前 Published Publication、Release 和本地轻量历史仍可读 | `TestPortalReleaseAndHotProjectionSurviveColdVersionControlFailure` |
+| Workspace/Ledger 离线时上线 | Release 只消费 Published Publication 热快照，不 hydrate Ledger | `TestPortalReleaseAndHotProjectionSurviveColdVersionControlFailure` |
+
+能力可用性由实时 `describeResource` 的成功与能力位共同决定。`history` 是 Portal 聚合自身已确认的轻量索引；`read`、`diff` 和 `restore` 必须逐项协商，其中 restore 还要求 read。已配置但不可用时，UI 隐藏版本动作并显示 unavailable，不影响 ReleaseHistory 和当前运行交付。
+
 ## 实施分解
 
 1. **P2.2.1（已完成）**：补 operationId、readCommitted、compareCommitted 的契约、SDK、Manager、Environment 多修订精确解析与故障测试。
@@ -155,6 +172,6 @@ Workbench 在 `enabled=false` 时完全隐藏 commit/history/diff/restore；保�
 3. **P2.3a（已完成）**：Portal 聚合拆为 WorkingCopy/Publication/Release/版本控制语义状态，完成无版本路径、WorkingCopy revision CAS、Publication 冻结摘要和 v3 Shared State；旧 v2 operations 暂作同状态投影。
 4. **P2.3b（已完成）**：实现中立 `PortalVersionControl` 端口和 Workspace Adapter，接通 detached commit、历史读取、比较与恢复。提交前先在 Portal Shared State 持久化 operation ID；聚合 CAS 只确认 Workspace 返回的精确 VersionRef。普通管理读取只对已绑定 Portal 按请求执行能力发现，不运行后台轮询。
 5. **P2.3c（已完成）**：BFF、TypeScript SDK 与 Workbench 已切换到 WorkingCopy/Publication/Release 和可选 history/read/compare/restore；删除 `/versions`、旧 PortalVersion 用户操作与 `Portal.versions` 兼容状态。Portal Composer 提升到 4.0.0。
-6. **P2.3d**：覆盖两种模式、能力差异、软依赖缺失、Leader 重启、响应丢失、聚合 CAS 冲突、历史冷读失败、Release 不依赖 Ledger 等故障矩阵。
+6. **P2.3d（已完成）**：已覆盖两种模式、能力差异、软依赖缺失、Leader 重启、响应丢失、聚合 CAS 冲突、历史冷读失败和 Release 不依赖 Ledger；采用确定性故障注入，未引入 soak 或依赖时序的混沌测试。
 
 P2.3 不实施手工 checkpoint、branch、merge、在线 attach/detach、历史迁移、Head 镜像、生产 Session 持久化或 P2.4 的二进制 Content Staging。

@@ -11,21 +11,28 @@ import (
 )
 
 type fakePortalVersionControl struct {
-	failNext bool
-	calls    []PortalVersionCommitRequest
-	results  map[string]PortalVersionCommitResult
-	content  map[string]portalapi.PortalConfiguration
+	failNext        bool
+	failAfterCommit bool
+	describeErr     error
+	readErr         error
+	compareErr      error
+	afterCommit     func(PortalVersionCommitRequest)
+	capabilities    PortalVersionControlCapabilities
+	calls           []PortalVersionCommitRequest
+	results         map[string]PortalVersionCommitResult
+	content         map[string]portalapi.PortalConfiguration
 }
 
 func newFakePortalVersionControl() *fakePortalVersionControl {
 	return &fakePortalVersionControl{
-		results: map[string]PortalVersionCommitResult{},
-		content: map[string]portalapi.PortalConfiguration{},
+		capabilities: PortalVersionControlCapabilities{Read: true, Diff: true, Restore: true},
+		results:      map[string]PortalVersionCommitResult{},
+		content:      map[string]portalapi.PortalConfiguration{},
 	}
 }
 
-func (*fakePortalVersionControl) Describe(context.Context, PortalVersionControlBinding, string) (PortalVersionControlCapabilities, error) {
-	return PortalVersionControlCapabilities{Read: true, Diff: true, Restore: true}, nil
+func (f *fakePortalVersionControl) Describe(context.Context, PortalVersionControlBinding, string) (PortalVersionControlCapabilities, error) {
+	return f.capabilities, f.describeErr
 }
 
 func (f *fakePortalVersionControl) Commit(_ context.Context, request PortalVersionCommitRequest) (PortalVersionCommitResult, error) {
@@ -44,14 +51,26 @@ func (f *fakePortalVersionControl) Commit(_ context.Context, request PortalVersi
 			Stream:    versioningv1.StreamKey{Namespace: "portal.configuration", StreamID: request.PortalID},
 			VersionID: versionID, Sequence: uint64(len(f.results) + 1), ContentDigest: versionID + "-digest",
 		},
-		Capabilities: PortalVersionControlCapabilities{Read: true, Diff: true, Restore: true},
+		Capabilities: f.capabilities,
 	}
 	f.results[request.OperationID] = result
 	f.content[versionID] = request.Configuration
+	if f.afterCommit != nil {
+		afterCommit := f.afterCommit
+		f.afterCommit = nil
+		afterCommit(request)
+	}
+	if f.failAfterCommit {
+		f.failAfterCommit = false
+		return PortalVersionCommitResult{}, ErrVersionControlUnavailable
+	}
 	return result, nil
 }
 
 func (f *fakePortalVersionControl) Read(_ context.Context, request PortalVersionReadRequest) (portalapi.PortalConfiguration, error) {
+	if f.readErr != nil {
+		return portalapi.PortalConfiguration{}, f.readErr
+	}
 	configuration, ok := f.content[request.VersionRef.VersionID]
 	if !ok {
 		return portalapi.PortalConfiguration{}, ErrVersionControlUnavailable
@@ -59,7 +78,10 @@ func (f *fakePortalVersionControl) Read(_ context.Context, request PortalVersion
 	return configuration, nil
 }
 
-func (*fakePortalVersionControl) Compare(_ context.Context, request PortalVersionCompareRequest) (PortalVersionCompareResult, error) {
+func (f *fakePortalVersionControl) Compare(_ context.Context, request PortalVersionCompareRequest) (PortalVersionCompareResult, error) {
+	if f.compareErr != nil {
+		return PortalVersionCompareResult{}, f.compareErr
+	}
 	return PortalVersionCompareResult{
 		Dirty: request.Left.VersionID != request.Right.VersionID, DiffAvailable: true,
 		ChangedPaths: []string{"/application/route"}, Summary: versionresourcev1.ChangeSummary{Modified: 1},
