@@ -1,6 +1,6 @@
 # ADR-0176 租约式 Content Staging 与流式数据面
 
-- 状态：已采纳，P2.4a 已实施
+- 状态：已采纳，P2.4b 已实施
 - 日期：2026-07-31
 - 关联：[ADR-0172](ADR-0172-通用版本账本与可插拔存储Provider.md)、[ADR-0173](ADR-0173-版本环境与资源适配.md)、[ADR-0175](ADR-0175-统一版本生命周期与Resource-Adapter能力协商.md)
 
@@ -46,6 +46,6 @@ Go 适合首个 Manager/File Provider：流式 I/O、SHA-256、文件权限、�
 ## 实施分解
 
 1. **P2.4a（已完成）**：冻结 `version.staging.v1` Go DTO、JSON Schema、严格 Wire、错误码、Lease 状态和 FileEntry mediaType。
-2. **P2.4b**：实现 Go Staging Manager、本地内容寻址 File Provider、流式写入、原子完成、租约回收和容量配额。
+2. **P2.4b（已完成）**：实现 Go Staging Manager、本地内容寻址 File Provider、`io.Reader` 流式写入、原子完成、启动/周期租约回收和文件/tenant/服务/并发容量配额。控制面只接受可信 Workspace，begin 通过 `CallContext.idempotencyKey` 防止响应丢失后重复预留；本地 Provider 使用 tenant 哈希分区、私有权限、严格持久状态、CAS 硬链接发布和 Ready 启动复核。内置 Admission 只提供完整性基线，不冒充恶意软件扫描。
 3. **P2.4c**：Workspace 接入 begin/complete/manifest 验证、临时保护转版本引用 outbox，并实现 Text/Blob/Files Adapter。
 4. **P2.4d**：增加浏览器 BFF 与 Backend/Runner streaming SDK、对象存储 Provider、安全扫描准入和跨节点故障矩阵。
